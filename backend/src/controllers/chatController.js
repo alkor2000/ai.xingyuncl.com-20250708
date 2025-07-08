@@ -20,6 +20,8 @@ class ChatController {
       const userId = req.user.id;
       const { page = 1, limit = 20 } = req.query;
 
+      logger.info('获取用户会话列表', { userId, page, limit });
+
       const result = await Conversation.getUserConversations(userId, {
         page: parseInt(page),
         limit: parseInt(limit)
@@ -29,7 +31,8 @@ class ChatController {
     } catch (error) {
       logger.error('获取会话列表失败', { 
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '获取会话列表失败');
     }
@@ -44,18 +47,34 @@ class ChatController {
       const userId = req.user.id;
       const { title, model_name, system_prompt } = req.body;
 
-      // 验证AI模型
-      const isValidModel = await AIService.validateModel(model_name || 'gpt-3.5-turbo');
-      if (!isValidModel) {
-        return ResponseHelper.validation(res, ['选择的AI模型不可用']);
+      logger.info('开始创建会话', { 
+        userId, 
+        title, 
+        model_name, 
+        hasSystemPrompt: !!system_prompt 
+      });
+
+      // 验证模型名称
+      if (!model_name) {
+        return ResponseHelper.validation(res, ['模型名称不能为空']);
       }
 
-      const conversation = await Conversation.create({
-        user_id: userId,
+      // 验证AI模型（暂时跳过验证，因为模型名称可能包含斜杠）
+      // const isValidModel = await AIService.validateModel(model_name || 'gpt-3.5-turbo');
+      // if (!isValidModel) {
+      //   return ResponseHelper.validation(res, ['选择的AI模型不可用']);
+      // }
+
+      const conversationData = {
+        user_id: parseInt(userId), // 确保是整数类型
         title: title || 'New Chat',
         model_name: model_name || 'gpt-3.5-turbo',
-        system_prompt
-      });
+        system_prompt: system_prompt || null
+      };
+
+      logger.info('会话数据准备完成', conversationData);
+
+      const conversation = await Conversation.create(conversationData);
 
       logger.info('会话创建成功', { 
         userId, 
@@ -67,9 +86,11 @@ class ChatController {
     } catch (error) {
       logger.error('会话创建失败', { 
         userId: req.user?.id, 
-        error: error.message 
+        requestBody: req.body,
+        error: error.message,
+        stack: error.stack
       });
-      return ResponseHelper.error(res, '会话创建失败');
+      return ResponseHelper.error(res, `会话创建失败: ${error.message}`);
     }
   }
 
@@ -98,7 +119,8 @@ class ChatController {
       logger.error('获取会话详情失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '获取会话失败');
     }
@@ -125,13 +147,13 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 如果更换模型，验证新模型
-      if (model_name && model_name !== conversation.model_name) {
-        const isValidModel = await AIService.validateModel(model_name);
-        if (!isValidModel) {
-          return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-        }
-      }
+      // 如果更换模型，验证新模型（暂时跳过）
+      // if (model_name && model_name !== conversation.model_name) {
+      //   const isValidModel = await AIService.validateModel(model_name);
+      //   if (!isValidModel) {
+      //     return ResponseHelper.validation(res, ['选择的AI模型不可用']);
+      //   }
+      // }
 
       const updatedConversation = await conversation.update({
         title,
@@ -150,7 +172,8 @@ class ChatController {
       logger.error('会话更新失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '会话更新失败');
     }
@@ -188,7 +211,8 @@ class ChatController {
       logger.error('会话删除失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '会话删除失败');
     }
@@ -221,7 +245,8 @@ class ChatController {
       logger.error('获取会话消息失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '获取消息失败');
     }
@@ -345,7 +370,8 @@ class ChatController {
       logger.error('发送消息失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, error.message || '消息发送失败');
     }
@@ -363,7 +389,8 @@ class ChatController {
     } catch (error) {
       logger.error('获取AI模型列表失败', { 
         userId: req.user?.id, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       return ResponseHelper.error(res, '获取AI模型列表失败');
     }

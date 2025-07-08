@@ -23,7 +23,7 @@ class Message {
    */
   static async create(messageData) {
     try {
-      const { conversation_id, role, content, tokens = 0, file_id } = messageData;
+      const { conversation_id, role, content, tokens = 0, file_id = null } = messageData;
       const id = uuidv4();
 
       const sql = `
@@ -31,13 +31,32 @@ class Message {
         VALUES (?, ?, ?, ?, ?, ?)
       `;
       
-      await dbConnection.query(sql, [id, conversation_id, role, content, tokens, file_id]);
+      // 确保所有参数都有值，null值用JS null而不是undefined
+      const params = [
+        id, 
+        conversation_id, 
+        role, 
+        content, 
+        parseInt(tokens) || 0, 
+        file_id || null
+      ];
+
+      logger.info('创建消息', { 
+        messageId: id, 
+        conversationId: conversation_id, 
+        role,
+        tokens: params[4],
+        hasFileId: !!file_id,
+        params
+      });
+
+      await dbConnection.query(sql, params);
 
       logger.info('消息创建成功', { 
         messageId: id, 
         conversationId: conversation_id, 
         role,
-        tokens
+        tokens: params[4]
       });
 
       return await Message.findById(id);
@@ -55,7 +74,7 @@ class Message {
       const sql = 'SELECT * FROM messages WHERE id = ?';
       const { rows } = await dbConnection.query(sql, [id]);
       
-      if (!rows || rows.length === 0) {
+      if (rows.length === 0) {
         return null;
       }
       
@@ -78,22 +97,24 @@ class Message {
       const { rows: totalRows } = await dbConnection.query(countSql, [conversationId]);
       const total = totalRows[0].total;
       
-      // 获取消息列表
-      const offset = (page - 1) * limit;
+      // 获取消息列表  
+      const offset = parseInt((page - 1) * limit);
+      const limitNum = parseInt(limit);
+      
       const listSql = `
         SELECT * FROM messages 
         WHERE conversation_id = ? 
-        ORDER BY created_at ${order}
-        LIMIT ? OFFSET ?
+        ORDER BY created_at ${order === 'ASC' ? 'ASC' : 'DESC'}
+        LIMIT ${limitNum} OFFSET ${offset}
       `;
       
-      const { rows } = await dbConnection.query(listSql, [conversationId, limit, offset]);
+      const { rows } = await dbConnection.query(listSql, [conversationId]);
       
       return {
         messages: rows.map(row => new Message(row)),
         pagination: {
-          page,
-          limit,
+          page: parseInt(page),
+          limit: parseInt(limit),
           total,
           totalPages: Math.ceil(total / limit)
         }
@@ -109,14 +130,26 @@ class Message {
    */
   static async getRecentMessages(conversationId, limit = 20) {
     try {
+      const limitNum = parseInt(limit);
+      
       const sql = `
         SELECT * FROM messages 
         WHERE conversation_id = ? 
         ORDER BY created_at DESC
-        LIMIT ?
+        LIMIT ${limitNum}
       `;
       
-      const { rows } = await dbConnection.query(sql, [conversationId, limit]);
+      logger.info('获取最近消息', { 
+        conversationId, 
+        limit: limitNum 
+      });
+      
+      const { rows } = await dbConnection.query(sql, [conversationId]);
+      
+      logger.info('获取最近消息成功', { 
+        conversationId, 
+        messageCount: rows.length 
+      });
       
       // 按时间正序返回（最老的在前）
       return rows.reverse().map(row => new Message(row));
@@ -164,7 +197,9 @@ class Message {
    * 计算消息Token数量（简单估算）
    */
   static estimateTokens(content) {
-    if (!content) return 0;
+    if (!content || typeof content !== 'string') {
+      return 0;
+    }
     // 简单的Token估算：英文约4字符=1token，中文约1.5字符=1token
     const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length;
     const otherChars = content.length - chineseChars;
@@ -178,7 +213,7 @@ class Message {
   toAIFormat() {
     return {
       role: this.role,
-      content: this.content
+      content: this.content || ''
     };
   }
 
