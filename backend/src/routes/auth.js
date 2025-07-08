@@ -9,29 +9,14 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
-// 登录限流配置
-const loginLimiter = rateLimit({
+// 认证相关的限流配置
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 5, // 每15分钟最多5次登录尝试
+  max: 10, // 每15分钟最多10次认证请求
   message: {
     success: false,
     code: 429,
-    message: '登录尝试次数过多，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 注册限流配置
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1小时
-  max: 3, // 每小时最多3次注册
-  message: {
-    success: false,
-    code: 429,
-    message: '注册次数过多，请稍后再试',
+    message: '认证请求过于频繁，请稍后再试',
     data: null,
     timestamp: new Date().toISOString()
   },
@@ -44,14 +29,14 @@ const registerLimiter = rateLimit({
  * @desc 用户登录
  * @access Public
  */
-router.post('/login', loginLimiter, AuthController.login);
+router.post('/login', authLimiter, AuthController.login);
 
 /**
  * @route POST /api/auth/register
  * @desc 用户注册
  * @access Public
  */
-router.post('/register', registerLimiter, AuthController.register);
+router.post('/register', authLimiter, AuthController.register);
 
 /**
  * @route GET /api/auth/me
@@ -63,9 +48,9 @@ router.get('/me', authenticate, AuthController.getCurrentUser);
 /**
  * @route POST /api/auth/refresh
  * @desc 刷新访问令牌
- * @access Private
+ * @access Public
  */
-router.post('/refresh', AuthController.refreshToken);
+router.post('/refresh', authLimiter, AuthController.refreshToken);
 
 /**
  * @route POST /api/auth/logout
@@ -73,19 +58,5 @@ router.post('/refresh', AuthController.refreshToken);
  * @access Private
  */
 router.post('/logout', authenticate, AuthController.logout);
-
-/**
- * @route GET /api/auth/check-email
- * @desc 检查邮箱可用性
- * @access Public
- */
-router.get('/check-email', AuthController.checkEmailAvailable);
-
-/**
- * @route GET /api/auth/check-username
- * @desc 检查用户名可用性
- * @access Public
- */
-router.get('/check-username', AuthController.checkUsernameAvailable);
 
 module.exports = router;

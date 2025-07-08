@@ -1,166 +1,119 @@
 import React, { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Checkbox,
-  Alert,
-  Space,
-  Typography
-} from 'antd'
-import {
-  UserOutlined,
-  LockOutlined,
-  MailOutlined
-} from '@ant-design/icons'
+import { Form, Input, Button, Card, message, Typography, Space } from 'antd'
+import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons'
+import { Link, useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
 
 const { Title, Text } = Typography
 
 const Login = () => {
+  const [loading, setLoading] = useState(false)
+  const { login } = useAuthStore()
   const navigate = useNavigate()
-  const location = useLocation()
-  const { login, loading } = useAuthStore()
-  const [form] = Form.useForm()
-  const [error, setError] = useState('')
 
-  // 获取重定向路径
-  const from = location.state?.from?.pathname || '/dashboard'
-
-  // 处理登录
   const handleSubmit = async (values) => {
-    setError('')
-    
-    const result = await login({
-      email: values.email,
-      password: values.password
-    })
-
-    if (result.success) {
-      navigate(from, { replace: true })
-    } else {
-      setError(result.message)
+    try {
+      setLoading(true)
+      await login(values)
+      message.success('登录成功')
+      navigate('/')
+    } catch (error) {
+      console.error('登录失败:', error)
+      message.error(error.response?.data?.message || '登录失败，请检查用户名和密码')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <Card className="auth-card">
-      <div className="auth-header">
-        <div className="auth-logo">AI Platform</div>
-        <Title level={4} className="auth-title">
-          登录您的账户
-        </Title>
-      </div>
-
-      {error && (
-        <Alert
-          message={error}
-          type="error"
-          showIcon
-          style={{ marginBottom: 24 }}
-          closable
-          onClose={() => setError('')}
-        />
-      )}
-
-      <Form
-        form={form}
-        name="login"
-        layout="vertical"
-        onFinish={handleSubmit}
-        autoComplete="off"
-        size="large"
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px'
+    }}>
+      <Card
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px'
+        }}
       >
-        <Form.Item
-          name="email"
-          label="邮箱地址"
-          rules={[
-            {
-              required: true,
-              message: '请输入邮箱地址'
-            },
-            {
-              type: 'email',
-              message: '请输入有效的邮箱地址'
-            }
-          ]}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+            AI Platform
+          </Title>
+          <Text type="secondary">企业级AI应用聚合平台</Text>
+        </div>
+
+        <Form
+          name="login"
+          onFinish={handleSubmit}
+          autoComplete="off"
+          size="large"
         >
-          <Input
-            prefix={<MailOutlined />}
-            placeholder="请输入邮箱地址"
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="password"
-          label="密码"
-          rules={[
-            {
-              required: true,
-              message: '请输入密码'
-            }
-          ]}
-        >
-          <Input.Password
-            prefix={<LockOutlined />}
-            placeholder="请输入密码"
-          />
-        </Form.Item>
-
-        <Form.Item>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center' 
-          }}>
-            <Form.Item name="remember" valuePropName="checked" noStyle>
-              <Checkbox>记住我</Checkbox>
-            </Form.Item>
-            
-            <Button type="link" size="small">
-              忘记密码？
-            </Button>
-          </div>
-        </Form.Item>
-
-        <Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={loading}
-            block
-            size="large"
+          <Form.Item
+            name="email"
+            rules={[
+              { required: true, message: '请输入邮箱地址' },
+              { type: 'email', message: '请输入有效的邮箱地址' }
+            ]}
           >
-            登录
-          </Button>
-        </Form.Item>
+            <Input
+              prefix={<UserOutlined />}
+              placeholder="邮箱地址"
+              autoComplete="email"
+            />
+          </Form.Item>
 
-        <div className="text-center">
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: '请输入密码' }]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="密码"
+              autoComplete="current-password"
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: '16px' }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              block
+              icon={<LoginOutlined />}
+            >
+              登录
+            </Button>
+          </Form.Item>
+        </Form>
+
+        <div style={{ textAlign: 'center' }}>
           <Space>
-            <Text type="secondary">还没有账户？</Text>
+            <Text type="secondary">还没有账号？</Text>
             <Link to="/register">立即注册</Link>
           </Space>
         </div>
-      </Form>
 
-      {/* 测试账户信息 */}
-      <Card 
-        size="small" 
-        title="测试账户" 
-        style={{ marginTop: 24, fontSize: 12 }}
-      >
-        <div style={{ fontSize: 12, lineHeight: 1.4 }}>
-          <div><strong>超级管理员:</strong></div>
-          <div>邮箱: admin@ai.xingyuncl.com</div>
-          <div>密码: admin123</div>
-          <div style={{ marginTop: 8 }}><strong>普通用户:</strong></div>
-          <div>邮箱: user@example.com</div>
-          <div>密码: admin123</div>
+        <div style={{ 
+          marginTop: '30px', 
+          padding: '16px', 
+          background: '#f6f8fa', 
+          borderRadius: '4px' 
+        }}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            <strong>测试账户：</strong><br />
+            邮箱: admin@ai.xingyuncl.com<br />
+            密码: admin123
+          </Text>
         </div>
       </Card>
-    </Card>
+    </div>
   )
 }
 

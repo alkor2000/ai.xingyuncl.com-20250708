@@ -4,7 +4,7 @@
 
 const express = require('express');
 const ChatController = require('../controllers/chatController');
-const { authenticate, requirePermission, checkTokenQuota } = require('../middleware/authMiddleware');
+const { authenticate, requirePermission } = require('../middleware/authMiddleware');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
@@ -102,7 +102,7 @@ router.get('/conversations/:id/messages',
 router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
-  checkTokenQuota(100), // 预估每次对话消耗100个token
+  // 移除了checkTokenQuota中间件，在控制器内部处理
   ChatController.sendMessage
 );
 

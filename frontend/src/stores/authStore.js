@@ -9,138 +9,165 @@ const useAuthStore = create(
       user: null,
       permissions: [],
       accessToken: null,
+      refreshToken: null,
       isAuthenticated: false,
       loading: false,
-      
+
       // 登录
       login: async (credentials) => {
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/login', credentials)
-          const { user, permissions, accessToken } = response.data.data
-          
+          const { user, permissions = [], accessToken, refreshToken } = response.data.data
+
           set({
             user,
-            permissions,
+            permissions: permissions || [],
             accessToken,
+            refreshToken,
             isAuthenticated: true,
             loading: false
           })
-          
-          // 设置API客户端的默认头部
+
+          // 设置默认请求头
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-          
-          return { success: true }
+
+          return response.data
         } catch (error) {
           set({ loading: false })
-          const message = error.response?.data?.message || '登录失败'
-          return { success: false, message }
+          throw error
         }
       },
-      
+
       // 注册
       register: async (userData) => {
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/register', userData)
           set({ loading: false })
-          return { success: true, data: response.data.data }
+          return response.data
         } catch (error) {
           set({ loading: false })
-          const message = error.response?.data?.message || '注册失败'
-          return { success: false, message }
+          throw error
         }
       },
-      
+
       // 登出
       logout: async () => {
         try {
-          await apiClient.post('/auth/logout')
+          const state = get()
+          if (state.accessToken) {
+            await apiClient.post('/auth/logout')
+          }
         } catch (error) {
-          console.warn('登出请求失败:', error)
+          console.warn('登出API调用失败:', error)
         } finally {
+          // 清除状态
           set({
             user: null,
             permissions: [],
             accessToken: null,
+            refreshToken: null,
             isAuthenticated: false
           })
-          
-          // 清除API客户端的认证头部
+
+          // 清除默认请求头
           delete apiClient.defaults.headers.common['Authorization']
         }
       },
-      
-      // 刷新用户信息
-      refreshUserInfo: async () => {
+
+      // 获取当前用户信息
+      getCurrentUser: async () => {
         try {
           const response = await apiClient.get('/auth/me')
-          const { user, permissions } = response.data.data
-          
-          set({ user, permissions })
-          return { success: true }
+          const { user, permissions = [] } = response.data.data
+
+          set({
+            user,
+            permissions: permissions || []
+          })
+
+          return response.data
         } catch (error) {
-          // 如果刷新失败，可能token已过期，执行登出
+          // 如果获取用户信息失败，可能token已过期，执行登出
           get().logout()
-          return { success: false }
+          throw error
         }
       },
-      
-      // 检查权限
-      hasPermission: (permission) => {
-        const { permissions, user } = get()
-        
-        // 超级管理员拥有所有权限
-        if (user?.role === 'super_admin') {
-          return true
+
+      // 刷新令牌
+      refreshAccessToken: async () => {
+        const state = get()
+        if (!state.refreshToken) {
+          throw new Error('没有有效的刷新令牌')
         }
-        
+
+        try {
+          const response = await apiClient.post('/auth/refresh', {
+            refreshToken: state.refreshToken
+          })
+          
+          const { accessToken } = response.data.data
+
+          set({ accessToken })
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+
+          return accessToken
+        } catch (error) {
+          // 刷新令牌也失败了，执行登出
+          get().logout()
+          throw error
+        }
+      },
+
+      // 检查是否有权限
+      hasPermission: (permission) => {
+        const state = get()
+        const permissions = state.permissions || []
         return permissions.includes(permission)
       },
-      
-      // 检查角色
-      hasRole: (roles) => {
-        const { user } = get()
-        const roleArray = Array.isArray(roles) ? roles : [roles]
-        return user && roleArray.includes(user.role)
+
+      // 检查是否有角色
+      hasRole: (role) => {
+        const state = get()
+        return state.user?.role === role
       },
-      
-      // 检查邮箱可用性
-      checkEmailAvailable: async (email) => {
-        try {
-          const response = await apiClient.get(`/auth/check-email?email=${email}`)
-          return response.data.data.available
-        } catch (error) {
-          return false
-        }
+
+      // 检查是否有任一角色
+      hasAnyRole: (roles) => {
+        const state = get()
+        return roles.includes(state.user?.role)
       },
-      
-      // 检查用户名可用性
-      checkUsernameAvailable: async (username) => {
-        try {
-          const response = await apiClient.get(`/auth/check-username?username=${username}`)
-          return response.data.data.available
-        } catch (error) {
-          return false
-        }
-      },
-      
+
       // 初始化认证状态
-      initAuth: () => {
-        const { accessToken } = get()
-        if (accessToken) {
-          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+      initializeAuth: () => {
+        const state = get()
+        if (state.accessToken) {
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${state.accessToken}`
+          // 验证token并获取最新用户信息
+          get().getCurrentUser().catch(() => {
+            // 如果验证失败，清除认证状态
+            get().logout()
+          })
         }
       }
     }),
     {
       name: 'auth-storage',
+      // 只持久化必要的字段
       partialize: (state) => ({
         user: state.user,
-        permissions: state.permissions,
+        permissions: state.permissions || [],
         accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated
-      })
+      }),
+      onRehydrateStorage: () => (state) => {
+        // 存储恢复后初始化认证状态
+        if (state?.accessToken) {
+          state.initializeAuth()
+        }
+      }
     }
   )
 )
