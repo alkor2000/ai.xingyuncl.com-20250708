@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { 
   Layout, 
   Card, 
@@ -61,12 +61,30 @@ const Chat = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [conversationToDelete, setConversationToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // 消息列表自动滚动引用
+  const messagesEndRef = useRef(null)
+  const messagesContainerRef = useRef(null)
 
   // 组件加载时获取数据
   useEffect(() => {
     getConversations()
     getAIModels()
   }, [])
+
+  // 自动滚动到消息底部
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, typing])
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end'
+      })
+    }
+  }
 
   // 创建新会话
   const handleCreateConversation = async (values) => {
@@ -93,8 +111,24 @@ const Chat = () => {
     try {
       await sendMessage(messageInput.trim())
       setMessageInput('')
+      // 发送后立即滚动到底部
+      setTimeout(scrollToBottom, 100)
     } catch (error) {
       message.error('消息发送失败')
+    }
+  }
+
+  // 处理Enter键发送
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift+Enter 换行，保持默认行为
+        return
+      } else {
+        // Enter 发送消息
+        e.preventDefault()
+        handleSendMessage()
+      }
     }
   }
 
@@ -257,7 +291,7 @@ const Chat = () => {
   )
 
   return (
-    <Layout style={{ height: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       {/* 侧边栏 - 会话列表 */}
       <Sider width={350} style={{ backgroundColor: 'white', borderRight: '1px solid #f0f0f0' }}>
         <div style={{ padding: '16px' }}>
@@ -346,15 +380,21 @@ const Chat = () => {
         </div>
       </Sider>
 
-      {/* 聊天区域 */}
-      <Content style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* 聊天区域 - 优化布局结构 */}
+      <Content style={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden'
+      }}>
         {currentConversation ? (
           <>
-            {/* 会话头部 - 移除删除按钮 */}
+            {/* 会话头部 - 固定高度 */}
             <div style={{ 
               padding: '16px 24px', 
               borderBottom: '1px solid #f0f0f0',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
+              flexShrink: 0  // 防止被压缩
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -368,17 +408,27 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* 消息列表 */}
-            <div style={{ 
-              flex: 1, 
-              padding: '16px 24px', 
-              overflowY: 'auto',
-              backgroundColor: '#fafafa'
-            }}>
+            {/* 消息列表 - 可滚动区域 */}
+            <div 
+              ref={messagesContainerRef}
+              style={{ 
+                flex: 1, 
+                padding: '16px 24px', 
+                overflowY: 'auto',
+                backgroundColor: '#fafafa',
+                position: 'relative'
+              }}
+            >
               {messages.length === 0 ? (
                 <Empty 
                   description="开始新的对话吧"
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)'
+                  }}
                 />
               ) : (
                 <div>
@@ -389,27 +439,32 @@ const Chat = () => {
                       <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
                     </div>
                   )}
+                  {/* 滚动锚点 */}
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
 
-            {/* 输入框 */}
+            {/* 输入框 - 固定底部，增加高度 */}
             <div style={{ 
               padding: '16px 24px', 
               borderTop: '1px solid #f0f0f0',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
+              flexShrink: 0  // 防止被压缩
             }}>
-              <Space.Compact style={{ width: '100%' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                 <TextArea
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
-                  placeholder="输入消息..."
-                  autoSize={{ minRows: 1, maxRows: 4 }}
-                  onPressEnter={(e) => {
-                    if (!e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
+                  placeholder="输入消息... (Enter发送，Shift+Enter换行)"
+                  autoSize={{ minRows: 3, maxRows: 8 }}  // 增加最小高度到3行
+                  onKeyDown={handleKeyPress}
+                  disabled={typing}
+                  style={{ 
+                    flex: 1,
+                    resize: 'none',
+                    fontSize: '14px',
+                    lineHeight: '1.5'
                   }}
                 />
                 <Button 
@@ -417,10 +472,28 @@ const Chat = () => {
                   icon={<SendOutlined />}
                   loading={typing}
                   onClick={handleSendMessage}
+                  disabled={!messageInput.trim() || typing}
+                  style={{
+                    height: 'auto',
+                    minHeight: '40px',
+                    padding: '8px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
                   发送
                 </Button>
-              </Space.Compact>
+              </div>
+              {/* 输入提示 */}
+              <div style={{ 
+                marginTop: '8px', 
+                fontSize: '12px', 
+                color: '#999',
+                textAlign: 'center'
+              }}>
+                Enter 发送 • Shift + Enter 换行 • 支持多行输入
+              </div>
             </div>
           </>
         ) : (
