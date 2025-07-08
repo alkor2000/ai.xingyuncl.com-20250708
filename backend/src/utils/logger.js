@@ -1,67 +1,68 @@
 /**
- * 日志工具
+ * 日志工具模块
  */
 
 const winston = require('winston');
-const config = require('../config');
 const path = require('path');
 const fs = require('fs');
 
+// 使用固定的日志目录路径
+const logDir = path.resolve(__dirname, '../../../logs/backend/auth');
+
 // 确保日志目录存在
-const logDir = config.logging.dir;
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
 }
 
-// 日志格式
+// 定义日志格式
 const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss'
+  }),
   winston.format.errors({ stack: true }),
-  winston.format.json()
-);
-
-// 控制台格式
-const consoleFormat = winston.format.combine(
-  winston.format.colorize(),
-  winston.format.timestamp({ format: 'HH:mm:ss' }),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}] ${message}`;
-    if (Object.keys(meta).length > 0) {
-      msg += ` ${JSON.stringify(meta)}`;
-    }
-    return msg;
+  winston.format.printf(({ timestamp, level, message, stack }) => {
+    return stack 
+      ? `${timestamp} ${level}: ${message}\n${stack}`
+      : `${timestamp} ${level}: ${message}`;
   })
 );
 
-// 创建logger
+// 创建 Winston logger 实例
 const logger = winston.createLogger({
-  level: config.logging.level,
+  level: 'info',
   format: logFormat,
+  defaultMeta: { service: 'ai-platform-backend' },
   transports: [
     // 错误日志文件
     new winston.transports.File({
-      filename: path.join(logDir, config.logging.file.error),
+      filename: path.join(logDir, 'error.log'),
       level: 'error',
-      maxsize: 20971520, // 20MB
-      maxFiles: 5,
-      tailable: true
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
     }),
     
-    // 综合日志文件
+    // 所有日志文件
     new winston.transports.File({
-      filename: path.join(logDir, config.logging.file.combined),
-      maxsize: 20971520, // 20MB
-      maxFiles: 5,
-      tailable: true
+      filename: path.join(logDir, 'combined.log'),
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    
+    // 控制台输出
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
     })
   ]
 });
 
-// 开发环境添加控制台输出
-if (config.app.env !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: consoleFormat
-  }));
-}
+// 扩展 logger 功能
+logger.stream = {
+  write: function(message) {
+    logger.info(message.trim());
+  }
+};
 
 module.exports = logger;

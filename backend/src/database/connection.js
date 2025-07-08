@@ -17,70 +17,41 @@ class DatabaseConnection {
    */
   async initialize() {
     try {
+      logger.info('开始初始化数据库连接池...');
+      
+      const dbConfig = config.database;
+      
+      // 验证配置
+      if (!dbConfig || !dbConfig.host) {
+        throw new Error('数据库配置缺失');
+      }
+      
       this.pool = mysql.createPool({
-        host: config.database.mysql.host,
-        port: config.database.mysql.port,
-        user: config.database.mysql.user,
-        password: config.database.mysql.password,
-        database: config.database.mysql.database,
-        charset: config.database.mysql.charset,
-        connectionLimit: config.database.mysql.connectionLimit,
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        database: dbConfig.database,
+        waitForConnections: true,
+        connectionLimit: dbConfig.connectionLimit || 10,
         queueLimit: 0,
-        acquireTimeout: 60000,
-        timeout: 60000,
-        reconnect: true,
-        idleTimeout: 900000
+        charset: dbConfig.charset || 'utf8mb4',
+        timezone: '+08:00'
       });
 
       // 测试连接
-      await this.testConnection();
-      this.isConnected = true;
-      
-      logger.info('数据库连接池初始化成功', {
-        host: config.database.mysql.host,
-        database: config.database.mysql.database,
-        connectionLimit: config.database.mysql.connectionLimit
-      });
-
-      // 监听连接池事件
-      this.pool.on('connection', (connection) => {
-        logger.debug(`新的数据库连接建立: ${connection.threadId}`);
-      });
-
-      this.pool.on('error', (err) => {
-        logger.error('数据库连接池错误:', err);
-        this.isConnected = false;
-      });
-
-    } catch (error) {
-      logger.error('数据库连接池初始化失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 测试数据库连接
-   */
-  async testConnection() {
-    try {
       const connection = await this.pool.getConnection();
       await connection.ping();
       connection.release();
-      logger.info('数据库连接测试成功');
+      
+      this.isConnected = true;
+      logger.info('数据库连接池初始化成功');
+      
     } catch (error) {
-      logger.error('数据库连接测试失败:', error);
+      this.isConnected = false;
+      logger.error('数据库连接池初始化失败:', error.message);
       throw error;
     }
-  }
-
-  /**
-   * 获取连接池
-   */
-  getPool() {
-    if (!this.pool) {
-      throw new Error('数据库连接池未初始化');
-    }
-    return this.pool;
   }
 
   /**
@@ -88,31 +59,18 @@ class DatabaseConnection {
    */
   async query(sql, params = []) {
     try {
+      if (!this.pool) {
+        throw new Error('数据库连接池未初始化');
+      }
+      
       const [rows, fields] = await this.pool.execute(sql, params);
       return { rows, fields };
     } catch (error) {
-      logger.error('数据库查询失败:', { sql: sql.substring(0, 100), error: error.message });
+      logger.error('数据库查询失败:', {
+        sql: sql.substring(0, 100),
+        error: error.message
+      });
       throw error;
-    }
-  }
-
-  /**
-   * 执行事务
-   */
-  async transaction(callback) {
-    const connection = await this.pool.getConnection();
-    
-    try {
-      await connection.beginTransaction();
-      const result = await callback(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      logger.error('事务执行失败:', error);
-      throw error;
-    } finally {
-      connection.release();
     }
   }
 
@@ -120,17 +78,10 @@ class DatabaseConnection {
    * 获取连接状态
    */
   getStatus() {
-    if (!this.pool) {
-      return { connected: false, pool: null };
-    }
-
     return {
       connected: this.isConnected,
-      pool: {
-        allConnections: this.pool.pool?.allConnections?.length || 0,
-        freeConnections: this.pool.pool?.freeConnections?.length || 0,
-        connectionQueue: this.pool.pool?.connectionQueue?.length || 0
-      }
+      poolConnections: this.pool ? this.pool._poolConnections : 0,
+      promiseConnections: this.pool ? this.pool._promiseConnections : 0
     };
   }
 
@@ -138,10 +89,14 @@ class DatabaseConnection {
    * 关闭连接池
    */
   async close() {
-    if (this.pool) {
-      await this.pool.end();
-      this.isConnected = false;
-      logger.info('数据库连接池已关闭');
+    try {
+      if (this.pool) {
+        await this.pool.end();
+        this.isConnected = false;
+        logger.info('数据库连接池已关闭');
+      }
+    } catch (error) {
+      logger.error('关闭数据库连接池失败:', error.message);
     }
   }
 }

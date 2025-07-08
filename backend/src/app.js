@@ -14,20 +14,11 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 const dbConnection = require('./database/connection');
-const redisConnection = require('./database/redis');
-
-// 导入中间件
-const { 
-  notFoundHandler, 
-  globalErrorHandler, 
-  setupProcessHandlers 
-} = require('./middleware/errorHandler');
 
 // 导入路由
 const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
-const fileRoutes = require('./routes/file');
 
 class App {
   constructor() {
@@ -40,14 +31,10 @@ class App {
    */
   async initialize() {
     try {
-      // 设置进程异常处理
-      setupProcessHandlers();
+      logger.info('开始初始化AI Platform应用...');
 
       // 初始化数据库连接
       await this.initializeDatabase();
-
-      // 初始化Redis连接
-      await this.initializeRedis();
 
       // 配置Express中间件
       this.setupMiddleware();
@@ -79,23 +66,10 @@ class App {
   }
 
   /**
-   * 初始化Redis连接
-   */
-  async initializeRedis() {
-    try {
-      await redisConnection.initialize();
-      logger.info('Redis连接初始化成功');
-    } catch (error) {
-      logger.warn('Redis连接初始化失败，部分功能可能受影响:', error);
-      // Redis连接失败不阻止应用启动，但会记录警告
-    }
-  }
-
-  /**
    * 配置Express中间件
    */
   setupMiddleware() {
-    // 信任代理（用于正确获取客户端IP）
+    // 信任代理
     this.app.set('trust proxy', 1);
 
     // 安全头部中间件
@@ -111,41 +85,16 @@ class App {
     this.app.use(cookieParser());
 
     // JSON解析中间件
-    this.app.use(express.json({ 
-      limit: '10mb',
-      type: 'application/json'
-    }));
+    this.app.use(express.json({ limit: '10mb' }));
 
     // URL编码解析中间件
-    this.app.use(express.urlencoded({ 
-      extended: true, 
-      limit: '10mb' 
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // HTTP请求日志
+    this.app.use(morgan('combined', {
+      stream: logger.stream,
+      skip: (req, res) => req.url === '/health' || req.url === '/favicon.ico'
     }));
-
-    // 静态文件服务（用户上传文件）
-    this.app.use('/uploads', express.static(path.join(__dirname, '../../../storage/uploads')));
-
-    // HTTP请求日志中间件
-    const morganFormat = config.app.env === 'production' 
-      ? 'combined' 
-      : 'dev';
-    
-    this.app.use(morgan(morganFormat, {
-      stream: {
-        write: (message) => logger.info(message.trim(), { type: 'access' })
-      },
-      skip: (req, res) => {
-        // 跳过健康检查等请求的日志
-        return req.url === '/health' || req.url === '/favicon.ico';
-      }
-    }));
-
-    // 请求ID中间件（用于追踪）
-    this.app.use((req, res, next) => {
-      req.requestId = Math.random().toString(36).substring(2, 15);
-      res.set('X-Request-ID', req.requestId);
-      next();
-    });
 
     logger.info('Express中间件配置完成');
   }
@@ -157,7 +106,6 @@ class App {
     // 健康检查接口
     this.app.get('/health', (req, res) => {
       const dbStatus = dbConnection.getStatus();
-      const redisStatus = redisConnection.getStatus();
       
       res.json({
         success: true,
@@ -167,7 +115,6 @@ class App {
           environment: config.app.env,
           version: config.app.version,
           database: dbStatus,
-          redis: redisStatus,
           memory: process.memoryUsage(),
           uptime: process.uptime()
         }
@@ -196,9 +143,6 @@ class App {
     
     // 管理员相关路由
     this.app.use('/api/admin', adminRoutes);
-    
-    // 文件管理相关路由
-    this.app.use('/api/files', fileRoutes);
 
     logger.info('路由配置完成');
   }
@@ -208,10 +152,28 @@ class App {
    */
   setupErrorHandling() {
     // 404错误处理
-    this.app.use(notFoundHandler);
+    this.app.use((req, res, next) => {
+      res.status(404).json({
+        success: false,
+        code: 404,
+        message: '请求的资源不存在',
+        data: null,
+        timestamp: new Date().toISOString()
+      });
+    });
 
     // 全局错误处理
-    this.app.use(globalErrorHandler);
+    this.app.use((err, req, res, next) => {
+      logger.error('全局错误处理:', err);
+      
+      res.status(err.status || 500).json({
+        success: false,
+        code: err.status || 500,
+        message: err.message || '内部服务器错误',
+        data: null,
+        timestamp: new Date().toISOString()
+      });
+    });
 
     logger.info('错误处理配置完成');
   }
@@ -224,12 +186,7 @@ class App {
       const port = config.app.port;
       
       this.server = this.app.listen(port, () => {
-        logger.info(`AI Platform服务器启动成功`, {
-          port,
-          environment: config.app.env,
-          domain: config.app.domain,
-          processId: process.pid
-        });
+        logger.info(`AI Platform服务器启动成功 - 端口:${port}`);
         
         console.log(`
 🚀 AI Platform 服务器启动成功!
@@ -258,40 +215,6 @@ API地址: http://localhost:${port}/api
       logger.error('启动服务器失败:', error);
       process.exit(1);
     }
-  }
-
-  /**
-   * 优雅关闭服务器
-   */
-  async shutdown() {
-    logger.info('开始优雅关闭服务器...');
-
-    if (this.server) {
-      this.server.close(async () => {
-        logger.info('HTTP服务器已关闭');
-
-        try {
-          // 关闭数据库连接
-          await dbConnection.close();
-          
-          // 关闭Redis连接
-          await redisConnection.close();
-          
-          logger.info('所有连接已关闭，服务器安全退出');
-          process.exit(0);
-        } catch (error) {
-          logger.error('关闭连接时发生错误:', error);
-          process.exit(1);
-        }
-      });
-    }
-  }
-
-  /**
-   * 获取Express应用实例
-   */
-  getApp() {
-    return this.app;
   }
 }
 
