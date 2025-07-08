@@ -1,0 +1,31 @@
+{
+  "name": "ai-platform-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI Platform Frontend Application",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000 --force",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "echo 'Linting...'",
+    "type-check": "echo 'Type checking...'"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "antd": "^5.12.8",
+    "@ant-design/icons": "^5.2.6",
+    "axios": "^1.6.2",
+    "react-router-dom": "^6.20.1",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8"
+  },
+  "keywords": ["react", "vite", "antd", "ai-platform"],
+  "author": "AI Platform Team",
+  "license": "MIT"
+}
