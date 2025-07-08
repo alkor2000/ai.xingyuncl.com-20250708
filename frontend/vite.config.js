@@ -26,6 +26,10 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       output: {
+        // 添加hash强制版本更新
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'antd-vendor': ['antd', '@ant-design/icons'],

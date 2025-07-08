@@ -24,7 +24,8 @@ import {
   EditOutlined,
   DeleteOutlined,
   RobotOutlined,
-  UserOutlined
+  UserOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
@@ -55,6 +56,11 @@ const Chat = () => {
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [form] = Form.useForm()
   const [editingConversation, setEditingConversation] = useState(null)
+  
+  // 添加删除确认对话框状态
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [conversationToDelete, setConversationToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   // 组件加载时获取数据
   useEffect(() => {
@@ -80,34 +86,15 @@ const Chat = () => {
 
   // 发送消息
   const handleSendMessage = async () => {
-    if (!messageInput.trim()) return
-    
-    if (!currentConversation) {
-      // 如果没有当前会话，先创建一个
-      try {
-        const newConversation = await createConversation({
-          title: messageInput.substring(0, 30),
-          model_name: 'gpt-3.5-turbo'
-        })
-        // 会话创建后再发送消息
-        setTimeout(() => {
-          handleSendMessage()
-        }, 100)
-        return
-      } catch (error) {
-        message.error('创建会话失败')
-        return
-      }
+    if (!messageInput.trim() || !currentConversation) {
+      return
     }
 
-    const content = messageInput
-    setMessageInput('')
-
     try {
-      await sendMessage(content)
+      await sendMessage(messageInput.trim())
+      setMessageInput('')
     } catch (error) {
-      message.error(error.response?.data?.message || '消息发送失败')
-      setMessageInput(content) // 恢复消息内容
+      message.error('消息发送失败')
     }
   }
 
@@ -135,43 +122,81 @@ const Chat = () => {
     }
   }
 
-  // 删除会话
+  // 删除会话 - 显示自定义确认对话框
   const handleDeleteConversation = (conversationId) => {
-    Modal.confirm({
-      title: '删除会话',
-      content: '确定要删除这个会话吗？此操作无法撤销。',
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await deleteConversation(conversationId)
-          message.success('会话删除成功')
-        } catch (error) {
-          message.error('会话删除失败')
-        }
-      }
-    })
+    console.log('🗑️ 删除会话被调用:', conversationId)
+    console.log('🔧 deleteConversation 方法:', typeof deleteConversation)
+    
+    const targetConversation = conversations.find(c => c.id === conversationId)
+    console.log('📦 目标会话:', targetConversation)
+    
+    setConversationToDelete(targetConversation)
+    setDeleteModalVisible(true)
+    console.log('✅ 删除确认对话框应该显示了')
+  }
+
+  // 确认删除会话
+  const confirmDeleteConversation = async () => {
+    if (!conversationToDelete) return
+    
+    try {
+      console.log('🚀 开始执行删除操作:', conversationToDelete.id)
+      setDeleting(true)
+      
+      await deleteConversation(conversationToDelete.id)
+      
+      console.log('✅ 删除操作成功')
+      setDeleteModalVisible(false)
+      setConversationToDelete(null)
+      setDeleting(false)
+      message.success('会话删除成功')
+      
+      // 手动刷新会话列表
+      await getConversations()
+      
+    } catch (error) {
+      console.error('❌ 删除操作失败:', error)
+      setDeleting(false)
+      message.error(`会话删除失败: ${error.message || '未知错误'}`)
+    }
+  }
+
+  // 取消删除
+  const cancelDeleteConversation = () => {
+    console.log('❌ 用户取消删除操作')
+    setDeleteModalVisible(false)
+    setConversationToDelete(null)
   }
 
   // 会话菜单
-  const getConversationMenu = (conversation) => ({
-    items: [
-      {
-        key: 'edit',
-        label: '编辑会话',
-        icon: <EditOutlined />,
-        onClick: () => handleEditConversation(conversation)
-      },
-      {
-        key: 'delete',
-        label: '删除会话',
-        icon: <DeleteOutlined />,
-        danger: true,
-        onClick: () => handleDeleteConversation(conversation.id)
-      }
-    ]
-  })
+  const getConversationMenu = (conversation) => {
+    console.log('🎯 生成会话菜单:', conversation.id)
+    return {
+      items: [
+        {
+          key: 'edit',
+          label: '编辑会话',
+          icon: <EditOutlined />,
+          onClick: (e) => {
+            console.log('✏️ 编辑会话被点击:', conversation.id)
+            e?.domEvent?.stopPropagation()
+            handleEditConversation(conversation)
+          }
+        },
+        {
+          key: 'delete',
+          label: '删除会话',
+          icon: <DeleteOutlined />,
+          danger: true,
+          onClick: (e) => {
+            console.log('🗑️ 删除菜单项被点击:', conversation.id)
+            e?.domEvent?.stopPropagation()
+            handleDeleteConversation(conversation.id)
+          }
+        }
+      ]
+    }
+  }
 
   // 渲染消息
   const renderMessage = (msg) => (
@@ -189,44 +214,42 @@ const Chat = () => {
           style={{ 
             backgroundColor: '#1677ff',
             marginRight: 8,
-            flexShrink: 0
+            alignSelf: 'flex-start'
           }} 
         />
       )}
       
-      <div style={{ maxWidth: '70%' }}>
-        <div
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: msg.role === 'user' ? '#1677ff' : '#f5f5f5',
-            color: msg.role === 'user' ? 'white' : 'inherit',
-            wordBreak: 'break-word'
-          }}
-        >
-          <div style={{ whiteSpace: 'pre-wrap' }}>
-            {msg.content}
+      <Card
+        size="small"
+        style={{
+          maxWidth: '70%',
+          backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
+          color: msg.role === 'user' ? 'white' : 'inherit'
+        }}
+        bodyStyle={{ padding: '8px 12px' }}
+      >
+        <div style={{ fontSize: 13, lineHeight: '1.5' }}>
+          {msg.content}
+        </div>
+        {msg.tokens > 0 && (
+          <div style={{ 
+            fontSize: 11, 
+            marginTop: 4, 
+            opacity: 0.7,
+            textAlign: 'right'
+          }}>
+            {msg.tokens} tokens
           </div>
-        </div>
-        <div 
-          style={{ 
-            fontSize: 12, 
-            color: '#999', 
-            marginTop: 4,
-            textAlign: msg.role === 'user' ? 'right' : 'left'
-          }}
-        >
-          {new Date(msg.created_at).toLocaleTimeString()}
-        </div>
-      </div>
-
+        )}
+      </Card>
+      
       {msg.role === 'user' && (
         <Avatar 
           icon={<UserOutlined />} 
           style={{ 
             backgroundColor: '#52c41a',
             marginLeft: 8,
-            flexShrink: 0
+            alignSelf: 'flex-start'
           }} 
         />
       )}
@@ -234,34 +257,35 @@ const Chat = () => {
   )
 
   return (
-    <div className="page-container" style={{ padding: 0, height: 'calc(100vh - 64px)' }}>
-      <Layout style={{ height: '100%' }}>
-        {/* 会话列表侧栏 */}
-        <Sider width={320} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
-          <div style={{ padding: 16 }}>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              block
-              onClick={() => {
-                setEditingConversation(null)
-                form.resetFields()
-                setIsModalVisible(true)
-              }}
-            >
-              新建会话
-            </Button>
-          </div>
-
-          <div style={{ height: 'calc(100% - 80px)', overflowY: 'auto' }}>
-            {loading && conversations.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 32 }}>
+    <Layout style={{ height: '100vh' }}>
+      {/* 侧边栏 - 会话列表 */}
+      <Sider width={350} style={{ backgroundColor: 'white', borderRight: '1px solid #f0f0f0' }}>
+        <div style={{ padding: '16px' }}>
+          <Button 
+            type="primary" 
+            block 
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditingConversation(null)
+              form.resetFields()
+              setIsModalVisible(true)
+            }}
+          >
+            新建对话
+          </Button>
+        </div>
+        
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div style={{ height: '100%', overflowY: 'auto', padding: '0 8px' }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
                 <Spin />
               </div>
             ) : conversations.length === 0 ? (
               <Empty 
-                description="暂无会话"
-                style={{ marginTop: 32 }}
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无对话"
+                style={{ marginTop: '50px' }}
               />
             ) : (
               <List
@@ -269,10 +293,12 @@ const Chat = () => {
                 renderItem={conv => (
                   <List.Item
                     style={{ 
-                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: currentConversation?.id === conv.id ? '#f0f7ff' : 'transparent',
+                      borderRadius: 6,
                       cursor: 'pointer',
-                      backgroundColor: currentConversation?.id === conv.id ? '#f6ffed' : 'transparent',
-                      borderLeft: currentConversation?.id === conv.id ? '3px solid #52c41a' : '3px solid transparent'
+                      padding: '8px',
+                      border: currentConversation?.id === conv.id ? '1px solid #d9ecff' : '1px solid transparent'
                     }}
                     onClick={() => selectConversation(conv.id)}
                   >
@@ -283,12 +309,20 @@ const Chat = () => {
                           <span style={{ fontSize: 14, fontWeight: 500 }}>
                             {conv.title}
                           </span>
-                          <Dropdown menu={getConversationMenu(conv)} trigger={['click']}>
+                          <Dropdown 
+                            menu={getConversationMenu(conv)} 
+                            trigger={['click']}
+                            placement="bottomRight"
+                            onOpenChange={(open) => console.log('📖 Dropdown 状态:', open, conv.id)}
+                          >
                             <Button 
                               type="text" 
                               size="small" 
                               icon={<MoreOutlined />}
-                              onClick={e => e.stopPropagation()}
+                              onClick={e => {
+                                e.stopPropagation()
+                                console.log('🔘 更多按钮被点击:', conv.id)
+                              }}
                             />
                           </Dropdown>
                         </div>
@@ -309,131 +343,116 @@ const Chat = () => {
               />
             )}
           </div>
-        </Sider>
+        </div>
+      </Sider>
 
-        {/* 聊天区域 */}
-        <Content style={{ display: 'flex', flexDirection: 'column' }}>
-          {currentConversation ? (
-            <>
-              {/* 会话头部 */}
-              <div style={{ 
-                padding: '16px 24px', 
-                borderBottom: '1px solid #f0f0f0',
-                backgroundColor: 'white'
-              }}>
-                <Title level={5} style={{ margin: 0 }}>
-                  {currentConversation.title}
-                </Title>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {currentConversation.model_name} • Token: {currentConversation.total_tokens}
-                </Text>
-              </div>
-
-              {/* 消息列表 */}
-              <div style={{ 
-                flex: 1, 
-                padding: '16px 24px', 
-                overflowY: 'auto',
-                backgroundColor: '#fafafa'
-              }}>
-                {messages.length === 0 ? (
-                  <div style={{ textAlign: 'center', marginTop: 32 }}>
-                    <RobotOutlined style={{ fontSize: 48, color: '#ccc', marginBottom: 16 }} />
-                    <div style={{ color: '#999' }}>开始与AI对话吧！</div>
-                  </div>
-                ) : (
-                  <div>
-                    {messages.map(renderMessage)}
-                    {typing && (
-                      <div style={{ display: 'flex', marginBottom: 16 }}>
-                        <Avatar 
-                          icon={<RobotOutlined />} 
-                          style={{ backgroundColor: '#1677ff', marginRight: 8 }} 
-                        />
-                        <div style={{
-                          padding: '8px 12px',
-                          borderRadius: 8,
-                          backgroundColor: '#f5f5f5'
-                        }}>
-                          <div className="typing-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* 输入区域 */}
-              <div style={{ 
-                padding: '16px 24px', 
-                borderTop: '1px solid #f0f0f0',
-                backgroundColor: 'white'
-              }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <TextArea
-                    value={messageInput}
-                    onChange={e => setMessageInput(e.target.value)}
-                    placeholder="输入您的消息..."
-                    autoSize={{ minRows: 1, maxRows: 4 }}
-                    onPressEnter={(e) => {
-                      if (e.shiftKey) return
-                      e.preventDefault()
-                      handleSendMessage()
-                    }}
-                    disabled={typing}
-                  />
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    onClick={handleSendMessage}
-                    loading={typing}
-                    disabled={!messageInput.trim() || typing}
-                  >
-                    发送
-                  </Button>
-                </div>
-                <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
-                  按 Enter 发送，Shift + Enter 换行
-                </div>
-              </div>
-            </>
-          ) : (
-            // 未选择会话时的欢迎页面
+      {/* 聊天区域 */}
+      <Content style={{ display: 'flex', flexDirection: 'column' }}>
+        {currentConversation ? (
+          <>
+            {/* 会话头部 - 移除删除按钮 */}
             <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              justifyContent: 'center', 
-              alignItems: 'center',
-              height: '100%',
+              padding: '16px 24px', 
+              borderBottom: '1px solid #f0f0f0',
+              backgroundColor: 'white'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Title level={4} style={{ margin: 0 }}>
+                    {currentConversation.title}
+                  </Title>
+                  <Text type="secondary">
+                    {currentConversation.model_name} • {messages.length} 条消息
+                  </Text>
+                </div>
+              </div>
+            </div>
+
+            {/* 消息列表 */}
+            <div style={{ 
+              flex: 1, 
+              padding: '16px 24px', 
+              overflowY: 'auto',
               backgroundColor: '#fafafa'
             }}>
-              <RobotOutlined style={{ fontSize: 80, color: '#1677ff', marginBottom: 24 }} />
-              <Title level={3}>欢迎使用AI Platform</Title>
-              <Paragraph type="secondary" style={{ textAlign: 'center', marginBottom: 32 }}>
-                选择一个会话开始对话，或创建新的会话与AI助手交流
-              </Paragraph>
-              <Button 
-                type="primary" 
-                size="large"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditingConversation(null)
-                  form.resetFields()
-                  setIsModalVisible(true)
-                }}
-              >
-                创建新会话
-              </Button>
+              {messages.length === 0 ? (
+                <Empty 
+                  description="开始新的对话吧"
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              ) : (
+                <div>
+                  {messages.map(renderMessage)}
+                  {typing && (
+                    <div style={{ textAlign: 'left', marginTop: 16 }}>
+                      <Spin size="small" />
+                      <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </Content>
-      </Layout>
 
-      {/* 创建/编辑会话弹窗 */}
+            {/* 输入框 */}
+            <div style={{ 
+              padding: '16px 24px', 
+              borderTop: '1px solid #f0f0f0',
+              backgroundColor: 'white'
+            }}>
+              <Space.Compact style={{ width: '100%' }}>
+                <TextArea
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  placeholder="输入消息..."
+                  autoSize={{ minRows: 1, maxRows: 4 }}
+                  onPressEnter={(e) => {
+                    if (!e.shiftKey) {
+                      e.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                />
+                <Button 
+                  type="primary" 
+                  icon={<SendOutlined />}
+                  loading={typing}
+                  onClick={handleSendMessage}
+                >
+                  发送
+                </Button>
+              </Space.Compact>
+            </div>
+          </>
+        ) : (
+          /* 无会话选择时的空状态 */
+          <div style={{ 
+            flex: 1, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            flexDirection: 'column'
+          }}>
+            <Empty 
+              description="选择一个对话开始聊天"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />}
+              style={{ marginTop: 16 }}
+              onClick={() => {
+                setEditingConversation(null)
+                form.resetFields()
+                setIsModalVisible(true)
+              }}
+            >
+              创建新对话
+            </Button>
+          </div>
+        )}
+      </Content>
+
+      {/* 创建/编辑会话对话框 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
@@ -454,16 +473,15 @@ const Chat = () => {
             label="会话标题"
             rules={[{ required: true, message: '请输入会话标题' }]}
           >
-            <Input placeholder="请输入会话标题" />
+            <Input placeholder="输入会话标题" />
           </Form.Item>
 
           <Form.Item
             name="model_name"
             label="AI模型"
             rules={[{ required: true, message: '请选择AI模型' }]}
-            initialValue="gpt-3.5-turbo"
           >
-            <Select placeholder="请选择AI模型">
+            <Select placeholder="选择AI模型">
               {aiModels.map(model => (
                 <Select.Option key={model.name} value={model.name}>
                   {model.display_name}
@@ -477,8 +495,8 @@ const Chat = () => {
             label="系统提示词"
           >
             <TextArea 
-              rows={4} 
-              placeholder="可选：设置AI助手的角色和行为规则"
+              placeholder="可选：设置AI的角色和行为方式"
+              autoSize={{ minRows: 3, maxRows: 6 }}
             />
           </Form.Item>
 
@@ -499,33 +517,33 @@ const Chat = () => {
         </Form>
       </Modal>
 
-      <style jsx>{`
-        .typing-dots {
-          display: flex;
-          gap: 4px;
-        }
-        .typing-dots span {
-          width: 6px;
-          height: 6px;
-          background: #999;
-          border-radius: 50%;
-          animation: typing 1.4s infinite both;
-        }
-        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-        
-        @keyframes typing {
-          0%, 80%, 100% {
-            transform: scale(0);
-            opacity: 0.3;
-          }
-          40% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-      `}</style>
-    </div>
+      {/* 删除确认对话框 */}
+      <Modal
+        title="删除会话"
+        open={deleteModalVisible}
+        onOk={confirmDeleteConversation}
+        onCancel={cancelDeleteConversation}
+        okText="确认删除"
+        cancelText="取消"
+        okType="danger"
+        confirmLoading={deleting}
+        centered
+      >
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: 22, marginRight: 8 }} />
+          <span>确定要删除会话吗？</span>
+        </div>
+        {conversationToDelete && (
+          <div>
+            <p><strong>会话标题:</strong> {conversationToDelete.title}</p>
+            <p><strong>消息数量:</strong> {conversationToDelete.message_count} 条</p>
+            <p style={{ color: '#ff4d4f', marginTop: 16 }}>
+              <strong>注意：此操作无法撤销，所有聊天记录将被永久删除！</strong>
+            </p>
+          </div>
+        )}
+      </Modal>
+    </Layout>
   )
 }
 
