@@ -21,7 +21,6 @@ class DatabaseConnection {
       
       const dbConfig = config.database;
       
-      // 验证配置
       if (!dbConfig || !dbConfig.host) {
         throw new Error('数据库配置缺失');
       }
@@ -55,7 +54,7 @@ class DatabaseConnection {
   }
 
   /**
-   * 执行查询
+   * 执行查询 - 使用execute预编译查询
    */
   async query(sql, params = []) {
     try {
@@ -67,6 +66,36 @@ class DatabaseConnection {
       return { rows, fields };
     } catch (error) {
       logger.error('数据库查询失败:', {
+        sql: sql.substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 执行简单查询 - 使用非预编译查询解决LIMIT/OFFSET问题
+   */
+  async simpleQuery(sql, params = []) {
+    try {
+      if (!this.pool) {
+        throw new Error('数据库连接池未初始化');
+      }
+      
+      // 对于有LIMIT/OFFSET的查询，使用字符串替换而非参数绑定
+      let finalSql = sql;
+      if (params.length > 0) {
+        params.forEach((param, index) => {
+          const placeholder = '?';
+          const value = mysql.escape(param);
+          finalSql = finalSql.replace(placeholder, value);
+        });
+      }
+      
+      const [rows, fields] = await this.pool.query(finalSql);
+      return { rows, fields };
+    } catch (error) {
+      logger.error('简单查询失败:', {
         sql: sql.substring(0, 100),
         error: error.message
       });
