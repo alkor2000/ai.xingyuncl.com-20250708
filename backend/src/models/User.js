@@ -14,30 +14,17 @@ class User {
     this.password_hash = data.password_hash || null;
     this.role = data.role || 'user';
     this.status = data.status || 'active';
-    this.token_quota = data.token_quota || 0;
+    this.email_verified = data.email_verified || false;
+    this.email_verification_token = data.email_verification_token || null;
+    this.password_reset_token = data.password_reset_token || null;
+    this.password_reset_expires = data.password_reset_expires || null;
+    this.avatar_url = data.avatar_url || null;
+    this.token_quota = data.token_quota || 10000;
+    this.login_attempts = data.login_attempts || 0;
     this.used_tokens = data.used_tokens || 0;
     this.last_login_at = data.last_login_at || null;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
-  }
-
-  /**
-   * 根据邮箱查找用户
-   */
-  static async findByEmail(email) {
-    try {
-      const sql = 'SELECT * FROM users WHERE email = ?';
-      const { rows } = await dbConnection.query(sql, [email]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-      
-      return new User(rows[0]);
-    } catch (error) {
-      logger.error('根据邮箱查找用户失败:', error);
-      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
-    }
   }
 
   /**
@@ -60,50 +47,51 @@ class User {
   }
 
   /**
-   * 创建新用户
+   * 根据邮箱查找用户
    */
-  static async create(userData) {
+  static async findByEmail(email) {
     try {
-      const { email, username, password, role = 'user', status = 'active', token_quota = 10000 } = userData;
-
-      const sql = `
-        INSERT INTO users (email, username, password_hash, role, status, token_quota) 
-        VALUES (?, ?, ?, ?, ?, ?)
-      `;
+      const sql = 'SELECT * FROM users WHERE email = ?';
+      const { rows } = await dbConnection.query(sql, [email]);
       
-      // 使用明文密码
-      const { rows } = await dbConnection.query(sql, [
-        email, 
-        username, 
-        password, // 直接存储明文密码
-        role, 
-        status, 
-        token_quota
-      ]);
-
-      logger.info('用户创建成功', { 
-        userId: rows.insertId, 
-        email, 
-        username, 
-        role 
-      });
-
-      return await User.findById(rows.insertId);
-    } catch (error) {
-      logger.error('用户创建失败:', error);
-      if (error.code === 'ER_DUP_ENTRY') {
-        throw new DatabaseError('邮箱或用户名已被使用', error);
+      if (rows.length === 0) {
+        return null;
       }
-      throw new DatabaseError(`用户创建失败: ${error.message}`, error);
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据邮箱查找用户失败:', error);
+      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
     }
   }
 
   /**
-   * 获取用户列表
+   * 根据用户名查找用户
+   */
+  static async findByUsername(username) {
+    try {
+      const sql = 'SELECT * FROM users WHERE username = ?';
+      const { rows } = await dbConnection.query(sql, [username]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据用户名查找用户失败:', error);
+      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取用户列表 - 修复LIMIT/OFFSET参数绑定问题
    */
   static async getList(options = {}) {
     try {
       const { page = 1, limit = 20, role = null, status = null, search = null } = options;
+      
+      logger.info('开始获取用户列表', { page, limit, role, status, search });
       
       let whereConditions = [];
       let params = [];
@@ -123,35 +111,158 @@ class User {
         params.push(`%${search}%`, `%${search}%`);
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      const whereClause = whereConditions.length > 0 
+        ? `WHERE ${whereConditions.join(' AND ')}` 
+        : '';
 
-      // 获取总数
+      // 获取总数 - 使用普通查询
       const countSql = `SELECT COUNT(*) as total FROM users ${whereClause}`;
       const { rows: totalRows } = await dbConnection.query(countSql, params);
       const total = totalRows[0].total;
 
-      // 获取用户列表
+      logger.info('获取用户总数成功', { total, page, limit });
+
+      // 获取用户列表 - 使用simpleQuery避免LIMIT/OFFSET参数绑定问题
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT * FROM users ${whereClause} 
         ORDER BY created_at DESC 
         LIMIT ? OFFSET ?
       `;
+      
+      logger.info('执行用户列表查询', { 
+        limit, 
+        offset, 
+        whereClause,
+        paramsCount: params.length 
+      });
 
-      const { rows } = await dbConnection.query(listSql, [...params, limit, offset]);
+      // 使用simpleQuery方法处理LIMIT/OFFSET
+      const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
+
+      logger.info('获取用户列表成功', { count: rows.length, total });
 
       return {
         users: rows.map(row => new User(row)),
         pagination: {
-          page,
-          limit,
+          page: parseInt(page),
+          limit: parseInt(limit),
           total,
           totalPages: Math.ceil(total / limit)
         }
       };
     } catch (error) {
-      logger.error('获取用户列表失败:', error);
+      logger.error('获取用户列表失败:', {
+        error: error.message,
+        stack: error.stack,
+        options
+      });
       throw new DatabaseError(`获取用户列表失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 创建新用户
+   */
+  static async create(userData) {
+    try {
+      const {
+        email,
+        username,
+        password,
+        role = 'user',
+        status = 'active',
+        token_quota = 10000
+      } = userData;
+
+      const sql = `
+        INSERT INTO users (email, username, password_hash, role, status, token_quota) 
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+
+      const { rows } = await dbConnection.query(sql, [
+        email.toLowerCase(),
+        username,
+        password, // 明文密码存储
+        role,
+        status,
+        token_quota
+      ]);
+
+      const insertId = rows.insertId;
+
+      logger.info('用户创建成功', { 
+        userId: insertId,
+        email, 
+        username, 
+        role 
+      });
+
+      return await User.findById(insertId);
+    } catch (error) {
+      logger.error('创建用户失败:', error);
+      throw new DatabaseError(`创建用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 更新用户
+   */
+  async update(updateData) {
+    try {
+      const fields = [];
+      const values = [];
+      
+      const allowedFields = [
+        'username', 'password_hash', 'role', 'status', 
+        'email_verified', 'avatar_url', 'token_quota', 'used_tokens'
+      ];
+      
+      allowedFields.forEach(field => {
+        if (updateData.hasOwnProperty(field)) {
+          fields.push(`${field} = ?`);
+          values.push(updateData[field]);
+        }
+      });
+      
+      if (fields.length === 0) {
+        return this;
+      }
+      
+      fields.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(this.id);
+      
+      const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
+      
+      await dbConnection.query(sql, values);
+
+      logger.info('用户更新成功', { 
+        userId: this.id,
+        updateFields: Object.keys(updateData)
+      });
+
+      return await User.findById(this.id);
+    } catch (error) {
+      logger.error('更新用户失败:', error);
+      throw new DatabaseError(`更新用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 删除用户
+   */
+  async delete() {
+    try {
+      const sql = 'DELETE FROM users WHERE id = ?';
+      await dbConnection.query(sql, [this.id]);
+
+      logger.info('用户删除成功', { 
+        userId: this.id,
+        email: this.email
+      });
+    } catch (error) {
+      logger.error('删除用户失败:', error);
+      throw new DatabaseError(`删除用户失败: ${error.message}`, error);
     }
   }
 
@@ -162,10 +273,10 @@ class User {
     try {
       const sql = 'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?';
       await dbConnection.query(sql, [this.id]);
-      this.last_login_at = new Date();
+      
+      logger.info('更新用户最后登录时间', { userId: this.id });
     } catch (error) {
       logger.error('更新最后登录时间失败:', error);
-      // 非关键错误，不抛出异常
     }
   }
 
@@ -176,24 +287,18 @@ class User {
     try {
       const sql = 'UPDATE users SET used_tokens = used_tokens + ? WHERE id = ?';
       await dbConnection.query(sql, [tokens, this.id]);
-      this.used_tokens += tokens;
-
-      logger.info('用户Token使用量更新', { 
+      
+      // 更新当前对象的used_tokens值
+      this.used_tokens = (this.used_tokens || 0) + tokens;
+      
+      logger.info('更新用户Token使用量', { 
         userId: this.id, 
-        addedTokens: tokens, 
-        totalUsed: this.used_tokens 
+        tokens,
+        totalUsed: this.used_tokens
       });
     } catch (error) {
       logger.error('更新Token使用量失败:', error);
-      throw new DatabaseError(`更新Token使用量失败: ${error.message}`, error);
     }
-  }
-
-  /**
-   * 检查Token配额
-   */
-  hasTokenQuota(requiredTokens) {
-    return (this.used_tokens + requiredTokens) <= this.token_quota;
   }
 
   /**
@@ -201,71 +306,79 @@ class User {
    */
   async getPermissions() {
     try {
-      const sql = 'SELECT permission_type FROM permissions WHERE user_id = ?';
-      const { rows } = await dbConnection.query(sql, [this.id]);
-      
-      const permissions = rows.map(row => row.permission_type);
-      
-      // 根据角色添加默认权限
+      // 超级管理员拥有所有权限
       if (this.role === 'super_admin') {
-        permissions.push('system.all', 'user.manage', 'chat.use', 'file.upload');
-      } else if (this.role === 'admin') {
-        permissions.push('user.manage', 'chat.use', 'file.upload');
-      } else if (this.role === 'user') {
-        permissions.push('chat.use', 'file.upload');
+        return ['chat.use', 'file.upload', 'system.all', 'user.manage', 'admin.*'];
       }
-      
-      // 去重
-      return [...new Set(permissions)];
+
+      // 管理员权限
+      if (this.role === 'admin') {
+        return ['chat.use', 'file.upload', 'user.manage'];
+      }
+
+      // 普通用户权限
+      if (this.role === 'user') {
+        return ['chat.use', 'file.upload'];
+      }
+
+      return [];
     } catch (error) {
       logger.error('获取用户权限失败:', error);
-      throw new DatabaseError(`获取用户权限失败: ${error.message}`, error);
+      return [];
     }
   }
 
   /**
-   * 检查用户是否有特定权限
+   * 检查用户状态
    */
-  async hasPermission(permission) {
-    const permissions = await this.getPermissions();
-    return permissions.includes(permission);
+  isActive() {
+    return this.status === 'active';
   }
 
   /**
-   * 转换为JSON（隐藏敏感信息）
+   * 检查邮箱是否已验证
+   */
+  isEmailVerified() {
+    return this.email_verified === 1 || this.email_verified === true;
+  }
+
+  /**
+   * 检查Token配额 - 修复chatController依赖的方法
+   */
+  hasTokenQuota(requiredTokens = 1) {
+    const currentUsed = this.used_tokens || 0;
+    const quota = this.token_quota || 10000;
+    return (currentUsed + requiredTokens) <= quota;
+  }
+
+  /**
+   * 检查是否超出Token配额 - 兼容性方法
+   */
+  isTokenQuotaExceeded() {
+    return !this.hasTokenQuota();
+  }
+
+  /**
+   * 获取剩余Token配额
+   */
+  getRemainingTokens() {
+    return Math.max(0, (this.token_quota || 10000) - (this.used_tokens || 0));
+  }
+
+  /**
+   * 检查Token配额是否足够 - 别名方法，确保兼容性
+   */
+  checkTokenQuota(requiredTokens = 1) {
+    return this.hasTokenQuota(requiredTokens);
+  }
+
+  /**
+   * 转换为JSON
    */
   toJSON() {
-    return {
-      id: this.id,
-      email: this.email,
-      username: this.username,
-      role: this.role,
-      status: this.status,
-      token_quota: this.token_quota,
-      used_tokens: this.used_tokens,
-      last_login_at: this.last_login_at,
-      created_at: this.created_at,
-      updated_at: this.updated_at
-    };
-  }
-
-  /**
-   * 获取完整信息（包含敏感数据，仅供内部使用）
-   */
-  toFullJSON() {
-    return {
-      id: this.id,
-      email: this.email,
-      username: this.username,
-      password_hash: this.password_hash,
-      role: this.role,
-      status: this.status,
-      token_quota: this.token_quota,
-      used_tokens: this.used_tokens,
-      last_login_at: this.last_login_at,
-      created_at: this.created_at,
-      updated_at: this.updated_at
-    };
+    const userData = { ...this };
+    delete userData.password_hash; // 不返回密码
+    return userData;
   }
 }
 
