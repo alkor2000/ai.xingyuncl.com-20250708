@@ -1,51 +1,59 @@
 import React, { useEffect, useState } from 'react'
-import { 
-  Card, 
-  Form, 
-  Input, 
-  Switch, 
-  Button, 
-  Space, 
-  Divider, 
+import {
+  Card,
+  Form,
+  Input,
+  Button,
+  Switch,
   InputNumber,
-  message,
-  Tabs,
+  Select,
   Table,
   Modal,
-  Select,
-  Tag,
-  Popconfirm,
+  Space,
   Row,
   Col,
   Statistic,
-  Tooltip
+  Typography,
+  Tag,
+  Tabs,
+  message,
+  Tooltip,
+  Popconfirm,
+  Badge
 } from 'antd'
-import { 
-  SettingOutlined, 
-  SaveOutlined, 
+import {
+  SaveOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  ExperimentOutlined,
+  SettingOutlined,
   RobotOutlined,
   BarChartOutlined,
-  ExperimentOutlined,
-  EyeInvisibleOutlined,
   EyeOutlined,
+  EyeInvisibleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   QuestionCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  AppstoreOutlined,
+  LinkOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
+  ApiOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 
 const { TextArea } = Input
 const { TabPane } = Tabs
+const { Title, Text } = Typography
 
 const Settings = () => {
   const { hasPermission } = useAuthStore()
   const {
     aiModels,
+    modules,
     systemStats,
     systemSettings,
     loading,
@@ -54,6 +62,11 @@ const Settings = () => {
     updateAIModel,
     deleteAIModel,
     testAIModel,
+    getModules,
+    createModule,
+    updateModule,
+    deleteModule,
+    checkModuleHealth,
     getSystemStats,
     getSystemSettings,
     updateSystemSettings
@@ -61,27 +74,30 @@ const Settings = () => {
 
   const [settingsForm] = Form.useForm()
   const [modelForm] = Form.useForm()
+  const [moduleForm] = Form.useForm()
+  
   const [isModelModalVisible, setIsModelModalVisible] = useState(false)
+  const [isModuleModalVisible, setIsModuleModalVisible] = useState(false)
   const [editingModel, setEditingModel] = useState(null)
+  const [editingModule, setEditingModule] = useState(null)
   const [testingModelId, setTestingModelId] = useState(null)
+  const [checkingModuleId, setCheckingModuleId] = useState(null)
   const [showApiKey, setShowApiKey] = useState({})
-  const [showApiEndpoint, setShowApiEndpoint] = useState({})
 
-  // 组件加载时获取数据
   useEffect(() => {
     if (hasPermission('system.all')) {
-      getAIModels()
       getSystemStats()
+      getAIModels()
+      getModules()
       getSystemSettings()
     }
-  }, [])
+  }, [hasPermission])
 
-  // 当系统设置加载完成后，设置表单值
   useEffect(() => {
     if (systemSettings && Object.keys(systemSettings).length > 0) {
       settingsForm.setFieldsValue(systemSettings)
     }
-  }, [systemSettings])
+  }, [systemSettings, settingsForm])
 
   // 保存系统设置
   const handleSaveSettings = async (values) => {
@@ -131,28 +147,21 @@ const Settings = () => {
   // 测试AI模型
   const handleTestModel = async (modelId) => {
     setTestingModelId(modelId)
-    
     try {
       const result = await testAIModel(modelId)
-      
       if (result.success && result.data) {
         if (result.data.success) {
           message.success('连通性测试成功')
         } else {
           message.warning(`连通性测试失败：${result.data.message}`)
         }
-        // 重新获取模型列表以更新状态
         await getAIModels()
       } else {
         message.error(result.message || '测试失败')
       }
     } catch (error) {
       console.error('测试失败:', error)
-      if (error.message === '认证失败，请重新登录') {
-        message.error('认证失败，请刷新页面重新登录')
-      } else {
-        message.error(error.message || '连通性测试出错')
-      }
+      message.error(error.message || '连通性测试出错')
     } finally {
       setTestingModelId(null)
     }
@@ -164,12 +173,94 @@ const Settings = () => {
     modelForm.setFieldsValue({
       name: model.name,
       display_name: model.display_name,
-      api_key: '', // 不回显API密钥
-      api_endpoint: '', // 不回显API端点
+      api_key: '',
+      api_endpoint: '',
       is_active: model.is_active,
       sort_order: model.sort_order
     })
     setIsModelModalVisible(true)
+  }
+
+  // 创建系统模块
+  const handleCreateModule = async (values) => {
+    try {
+      await createModule(values)
+      setIsModuleModalVisible(false)
+      moduleForm.resetFields()
+      message.success('系统模块创建成功')
+    } catch (error) {
+      message.error(error.response?.data?.message || '系统模块创建失败')
+    }
+  }
+
+  // 更新系统模块
+  const handleUpdateModule = async (values) => {
+    try {
+      await updateModule(editingModule.id, values)
+      setIsModuleModalVisible(false)
+      setEditingModule(null)
+      moduleForm.resetFields()
+      message.success('系统模块更新成功')
+    } catch (error) {
+      message.error(error.response?.data?.message || '系统模块更新失败')
+    }
+  }
+
+  // 删除系统模块
+  const handleDeleteModule = async (moduleId) => {
+    try {
+      await deleteModule(moduleId)
+      message.success('系统模块删除成功')
+    } catch (error) {
+      message.error(error.response?.data?.message || '系统模块删除失败')
+    }
+  }
+
+  // 编辑系统模块
+  const handleEditModule = (module) => {
+    setEditingModule(module)
+    moduleForm.setFieldsValue({
+      name: module.name,
+      display_name: module.display_name,
+      description: module.description,
+      module_type: module.module_type,
+      api_endpoint: module.api_endpoint,
+      frontend_url: module.frontend_url,
+      proxy_path: module.proxy_path,
+      auth_mode: module.auth_mode,
+      is_active: module.is_active,
+      permissions: module.permissions || [],
+      config: module.config || {},
+      health_check_url: module.health_check_url
+    })
+    setIsModuleModalVisible(true)
+  }
+
+  // 检查模块健康状态
+  const handleCheckModuleHealth = async (moduleId) => {
+    setCheckingModuleId(moduleId)
+    try {
+      const result = await checkModuleHealth(moduleId)
+      if (result.success) {
+        message.success(`健康检查完成：${result.data.message}`)
+      } else {
+        message.warning('健康检查失败')
+      }
+    } catch (error) {
+      message.error('健康检查出错')
+    } finally {
+      setCheckingModuleId(null)
+    }
+  }
+
+  // 切换模块启用状态
+  const handleToggleModuleStatus = async (moduleId, isActive) => {
+    try {
+      await updateModule(moduleId, { is_active: isActive })
+      message.success(isActive ? '模块已启用' : '模块已禁用')
+    } catch (error) {
+      message.error('操作失败')
+    }
   }
 
   // 渲染测试状态
@@ -185,19 +276,15 @@ const Settings = () => {
     switch (status) {
       case 'success':
         return (
-          <Tooltip title={`最后测试时间: ${new Date(lastTestedAt).toLocaleString()}`}>
-            <Tag icon={<CheckCircleOutlined />} color="success">
-              已测试
-            </Tag>
-          </Tooltip>
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            正常
+          </Tag>
         )
       case 'failed':
         return (
-          <Tooltip title={`最后测试时间: ${new Date(lastTestedAt).toLocaleString()}`}>
-            <Tag icon={<CloseCircleOutlined />} color="error">
-              测试失败
-            </Tag>
-          </Tooltip>
+          <Tag icon={<CloseCircleOutlined />} color="error">
+            失败
+          </Tag>
         )
       default:
         return (
@@ -205,6 +292,20 @@ const Settings = () => {
             未测试
           </Tag>
         )
+    }
+  }
+
+  // 渲染模块状态
+  const renderModuleStatus = (status) => {
+    switch (status) {
+      case 'online':
+        return <Tag color="success">在线</Tag>
+      case 'offline':
+        return <Tag color="error">离线</Tag>
+      case 'error':
+        return <Tag color="error">错误</Tag>
+      default:
+        return <Tag color="default">未知</Tag>
     }
   }
 
@@ -229,128 +330,181 @@ const Settings = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ minWidth: 100 }}>
             {showApiKey[record.id] ? 
-              (apiKey && apiKey !== '***已配置***' ? apiKey : '未配置') : 
-              (apiKey ? '***已配置***' : '未配置')
+              (apiKey ? `${apiKey.substring(0, 20)}...` : '未配置') : 
+              '••••••••••••••••••••'
             }
           </span>
-          {apiKey && (
-            <Button
-              type="text"
-              size="small"
-              icon={showApiKey[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-              onClick={() => {
-                setShowApiKey(prev => ({
-                  ...prev,
-                  [record.id]: !prev[record.id]
-                }))
-              }}
-            />
-          )}
-        </div>
-      )
-    },
-    {
-      title: 'API端点',
-      dataIndex: 'api_endpoint',
-      key: 'api_endpoint',
-      render: (endpoint, record) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ minWidth: 100 }}>
-            {showApiEndpoint[record.id] ? 
-              (endpoint && endpoint !== '***已配置***' ? endpoint : '未配置') : 
-              (endpoint ? '***已配置***' : '未配置')
-            }
-          </span>
-          {endpoint && (
-            <Button
-              type="text"
-              size="small"
-              icon={showApiEndpoint[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-              onClick={() => {
-                setShowApiEndpoint(prev => ({
-                  ...prev,
-                  [record.id]: !prev[record.id]
-                }))
-              }}
-            />
-          )}
+          <Button
+            type="text"
+            size="small"
+            icon={showApiKey[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+            onClick={() => setShowApiKey(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
+          />
         </div>
       )
     },
     {
       title: '状态',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? '启用' : '禁用'}
-        </Tag>
+      key: 'status',
+      render: (_, record) => (
+        <Space>
+          {record.is_active ? (
+            <Tag color="success">启用</Tag>
+          ) : (
+            <Tag color="default">禁用</Tag>
+          )}
+          {renderTestStatus(record.test_status, record.last_tested_at, record.id)}
+        </Space>
       )
     },
     {
-      title: '测试状态',
-      key: 'test_status',
-      render: (_, record) => renderTestStatus(record.test_status, record.last_tested_at, record.id)
-    },
-    {
-      title: '使用次数',
-      dataIndex: 'usage_count',
-      key: 'usage_count',
-      render: (count) => count?.toLocaleString() || 0
-    },
-    {
-      title: '排序',
-      dataIndex: 'sort_order',
-      key: 'sort_order'
-    },
-    {
       title: '操作',
-      key: 'action',
-      width: 200,
+      key: 'actions',
       render: (_, record) => (
-        <Space>
-          <Button 
-            size="small" 
-            icon={<ExperimentOutlined />}
-            loading={testingModelId === record.id}
-            onClick={() => handleTestModel(record.id)}
-            title="测试连通性"
-            type={testingModelId === record.id ? 'primary' : 'default'}
-          >
-            测试
-          </Button>
-          <Button 
-            size="small" 
-            icon={<EditOutlined />}
-            onClick={() => handleEditModel(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这个模型吗？"
-            onConfirm={() => handleDeleteModel(record.id)}
-            okText="删除"
-            cancelText="取消"
-          >
-            <Button 
-              size="small" 
-              danger 
-              icon={<DeleteOutlined />}
+        <Space size="small">
+          <Tooltip title="测试连通性">
+            <Button
+              type="text"
+              size="small"
+              icon={<ExperimentOutlined />}
+              loading={testingModelId === record.id}
+              onClick={() => handleTestModel(record.id)}
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditModel(record)}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Popconfirm
+              title="确定删除这个AI模型吗？"
+              onConfirm={() => handleDeleteModel(record.id)}
+              okText="确定"
+              cancelText="取消"
             >
-              删除
-            </Button>
-          </Popconfirm>
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          </Tooltip>
         </Space>
       )
     }
   ]
 
+  // 系统模块表格列
+  const moduleColumns = [
+    {
+      title: '模块名称',
+      dataIndex: 'display_name', 
+      key: 'display_name',
+      render: (text, record) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{text}</div>
+          <div style={{ fontSize: 12, color: '#999' }}>{record.name}</div>
+        </div>
+      )
+    },
+    {
+      title: '类型',
+      dataIndex: 'module_type',
+      key: 'module_type',
+      render: (type) => {
+        const typeMap = {
+          'frontend': { color: 'blue', text: '前端' },
+          'backend': { color: 'green', text: '后端' },
+          'fullstack': { color: 'purple', text: '全栈' }
+        }
+        const config = typeMap[type] || { color: 'default', text: type }
+        return <Tag color={config.color}>{config.text}</Tag>
+      }
+    },
+    {
+      title: '代理路径',
+      dataIndex: 'proxy_path',
+      key: 'proxy_path',
+      render: (path) => (
+        <span style={{ fontFamily: 'monospace', fontSize: 12, backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
+          {path}
+        </span>
+      )
+    },
+    {
+      title: '状态',
+      key: 'status',
+      render: (_, record) => (
+        <Space>
+          <Badge 
+            status={record.is_active ? 'success' : 'default'} 
+            text={record.is_active ? '启用' : '禁用'} 
+          />
+          {renderModuleStatus(record.status)}
+        </Space>
+      )
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="健康检查">
+            <Button
+              type="text"
+              size="small"
+              icon={<ApiOutlined />}
+              loading={checkingModuleId === record.id}
+              onClick={() => handleCheckModuleHealth(record.id)}
+            />
+          </Tooltip>
+          <Tooltip title={record.is_active ? '禁用' : '启用'}>
+            <Button
+              type="text"
+              size="small"
+              icon={record.is_active ? <StopOutlined /> : <PlayCircleOutlined />}
+              onClick={() => handleToggleModuleStatus(record.id, !record.is_active)}
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditModule(record)}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Popconfirm
+              title="确定删除这个模块吗？"
+              onConfirm={() => handleDeleteModule(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      )
+    }
+  ]
+
+  // 权限检查
   if (!hasPermission('system.all')) {
     return (
       <div className="page-container">
         <Card>
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <h3>权限不足</h3>
+          <div style={{ textAlign: 'center', padding: '50px 0' }}>
             <p>您没有访问系统设置的权限</p>
           </div>
         </Card>
@@ -364,7 +518,6 @@ const Settings = () => {
         {/* 系统统计 */}
         <TabPane tab={<span><BarChartOutlined />系统统计</span>} key="statistics">
           <Row gutter={[16, 16]}>
-            {/* 用户统计 */}
             <Col xs={24} lg={12}>
               <Card title="用户统计" size="small">
                 <Row gutter={16}>
@@ -384,23 +537,22 @@ const Settings = () => {
                   </Col>
                   <Col span={12}>
                     <Statistic 
-                      title="今日新增" 
-                      value={systemStats.users?.today_new_users || 0} 
-                      valueStyle={{ color: '#722ed1' }}
+                      title="管理员" 
+                      value={systemStats.users?.admin_users || 0} 
+                      valueStyle={{ color: '#fa8c16' }}
                     />
                   </Col>
                   <Col span={12}>
                     <Statistic 
-                      title="管理员" 
-                      value={(systemStats.users?.admins || 0) + (systemStats.users?.super_admins || 0)} 
-                      valueStyle={{ color: '#fa8c16' }}
+                      title="总Token使用" 
+                      value={systemStats.users?.total_tokens_used || 0} 
+                      valueStyle={{ color: '#722ed1' }}
                     />
                   </Col>
                 </Row>
               </Card>
             </Col>
 
-            {/* 对话统计 */}
             <Col xs={24} lg={12}>
               <Card title="对话统计" size="small">
                 <Row gutter={16}>
@@ -418,17 +570,11 @@ const Settings = () => {
                       valueStyle={{ color: '#52c41a' }}
                     />
                   </Col>
-                  <Col span={12}>
+                  <Col span={24}>
                     <Statistic 
-                      title="今日对话" 
-                      value={systemStats.conversations?.today_conversations || 0} 
-                      valueStyle={{ color: '#722ed1' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title="今日活跃" 
-                      value={systemStats.active?.daily_active_users || 0} 
+                      title="平均每会话消息" 
+                      value={systemStats.conversations?.avg_messages_per_conversation || 0} 
+                      precision={1}
                       valueStyle={{ color: '#fa8c16' }}
                     />
                   </Col>
@@ -436,50 +582,18 @@ const Settings = () => {
               </Card>
             </Col>
 
-            {/* Token统计 */}
-            <Col xs={24} lg={12}>
-              <Card title="Token使用统计" size="small">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Statistic 
-                      title="总配额" 
-                      value={systemStats.tokens?.total_quota_tokens || 0} 
-                      valueStyle={{ color: '#1677ff' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title="已使用" 
-                      value={systemStats.tokens?.total_used_tokens || 0} 
-                      valueStyle={{ color: '#ff4d4f' }}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Statistic 
-                      title="平均使用率" 
-                      value={systemStats.tokens?.total_quota_tokens ? 
-                        ((systemStats.tokens.total_used_tokens / systemStats.tokens.total_quota_tokens) * 100).toFixed(2) : 0
-                      } 
-                      suffix="%" 
-                      valueStyle={{ color: '#fa541c' }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-
-            {/* 模型使用统计 */}
-            <Col xs={24} lg={12}>
-              <Card title="模型使用排行" size="small">
-                <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            <Col xs={24}>
+              <Card title="AI模型使用排行" size="small">
+                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                   {systemStats.models?.map((model, index) => (
                     <div key={model.model_name} style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
+                      alignItems: 'center',
                       padding: '8px 0',
                       borderBottom: index < systemStats.models.length - 1 ? '1px solid #f0f0f0' : 'none'
                     }}>
-                      <span>{model.model_name}</span>
+                      <span>#{index + 1} {model.model_name}</span>
                       <Space>
                         <span>{model.conversation_count} 次</span>
                         <span style={{ color: '#999' }}>{model.total_tokens?.toLocaleString()} tokens</span>
@@ -522,7 +636,37 @@ const Settings = () => {
           </Card>
         </TabPane>
 
-        {/* 系统设置 */}
+        {/* 模块接入 */}
+        <TabPane tab={<span><AppstoreOutlined />模块接入</span>} key="modules">
+          <Card
+            title="系统模块管理"
+            extra={
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingModule(null)
+                  moduleForm.resetFields()
+                  setIsModuleModalVisible(true)
+                }}
+              >
+                添加模块
+              </Button>
+            }
+          >
+            <Table
+              columns={moduleColumns}
+              dataSource={modules}
+              rowKey="id"
+              loading={loading}
+              pagination={false}
+              size="small"
+              scroll={{ x: 'max-content' }}
+            />
+          </Card>
+        </TabPane>
+
+        {/* 基础设置 */}
         <TabPane tab={<span><SettingOutlined />基础设置</span>} key="settings">
           <Form
             form={settingsForm}
@@ -551,7 +695,7 @@ const Settings = () => {
                   </Form.Item>
                   
                   <Form.Item name={['user', 'default_token_quota']} label="默认Token配额">
-                    <InputNumber 
+                    <InputNumber
                       style={{ width: '100%' }}
                       min={0}
                       formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -588,19 +732,17 @@ const Settings = () => {
                   </Form.Item>
                   
                   <Form.Item name={['security', 'max_login_attempts']} label="最大登录尝试次数">
-                    <InputNumber style={{ width: '100%' }} min={3} max={10} />
+                    <InputNumber style={{ width: '100%' }} min={1} max={10} />
                   </Form.Item>
                   
-                  <Form.Item name={['security', 'enable_rate_limit']} label="启用API限流" valuePropName="checked">
+                  <Form.Item name={['security', 'enable_rate_limit']} label="启用访问限流" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Card>
               </Col>
             </Row>
 
-            <Divider />
-            
-            <Form.Item>
+            <Form.Item style={{ textAlign: 'center', marginTop: 24 }}>
               <Space>
                 <Button type="primary" icon={<SaveOutlined />} htmlType="submit" loading={loading}>
                   保存设置
@@ -653,57 +795,176 @@ const Settings = () => {
             </Col>
           </Row>
 
-          <Form.Item
-            name="api_key"
-            label="API密钥"
-            rules={[
-              editingModel ? 
-                { required: false } : 
-                { required: true, message: '请输入API密钥' }
-            ]}
-          >
-            <Input.Password 
-              placeholder={editingModel ? "留空则不修改" : "请输入API密钥"} 
-              visibilityToggle={false}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="api_endpoint"
-            label="API端点"
-            rules={[
-              editingModel ? 
-                { required: false } : 
-                { required: true, message: '请输入API端点' }
-            ]}
-          >
-            <Input placeholder={editingModel ? "留空则不修改" : "如: https://api.openai.com/v1"} />
-          </Form.Item>
-
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="sort_order" label="排序" initialValue={0}>
-                <InputNumber style={{ width: '100%' }} />
+              <Form.Item
+                name="api_key"
+                label="API密钥"
+                rules={[{ required: !editingModel, message: '请输入API密钥' }]}
+              >
+                <Input.Password placeholder="sk-..." />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="is_active" label="启用状态" valuePropName="checked" initialValue={true}>
-                <Switch />
+              <Form.Item
+                name="api_endpoint"
+                label="API端点"
+                rules={[{ required: !editingModel, message: '请输入API端点' }]}
+              >
+                <Input placeholder="https://api.openai.com/v1" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="is_active" label="启用状态" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="sort_order" label="排序">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
             <Space>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {editingModel ? '更新' : '创建'}
-              </Button>
               <Button onClick={() => {
                 setIsModelModalVisible(false)
                 setEditingModel(null)
                 modelForm.resetFields()
               }}>
                 取消
+              </Button>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                {editingModel ? '更新' : '创建'}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 系统模块创建/编辑弹窗 */}
+      <Modal
+        title={editingModule ? '编辑系统模块' : '创建系统模块'}
+        open={isModuleModalVisible}
+        onCancel={() => {
+          setIsModuleModalVisible(false)
+          setEditingModule(null)
+          moduleForm.resetFields()
+        }}
+        footer={null}
+        destroyOnClose
+        width={800}
+      >
+        <Form
+          form={moduleForm}
+          layout="vertical"
+          onFinish={editingModule ? handleUpdateModule : handleCreateModule}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="模块标识"
+                rules={[{ required: true, message: '请输入模块标识' }]}
+              >
+                <Input placeholder="如: ai-image-generator" disabled={!!editingModule} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="display_name"
+                label="显示名称"
+                rules={[{ required: true, message: '请输入显示名称' }]}
+              >
+                <Input placeholder="如: AI图像生成" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="description" label="模块描述">
+            <TextArea rows={2} placeholder="描述模块的功能和用途" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="module_type" label="模块类型" rules={[{ required: true }]}>
+                <Select>
+                  <Select.Option value="frontend">前端模块</Select.Option>
+                  <Select.Option value="backend">后端模块</Select.Option>
+                  <Select.Option value="fullstack">全栈模块</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="auth_mode" label="认证模式" rules={[{ required: true }]}>
+                <Select>
+                  <Select.Option value="jwt">JWT认证</Select.Option>
+                  <Select.Option value="oauth">OAuth认证</Select.Option>
+                  <Select.Option value="none">无认证</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="proxy_path"
+                label="代理路径"
+                rules={[{ required: true, message: '请输入代理路径' }]}
+              >
+                <Input placeholder="/image-generation" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="api_endpoint" label="后端API地址">
+                <Input placeholder="http://localhost:5000/api" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="frontend_url" label="前端地址">
+                <Input placeholder="http://localhost:5001" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="health_check_url" label="健康检查地址">
+            <Input placeholder="http://localhost:5000/health" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="permissions" label="所需权限">
+                <Select mode="tags" placeholder="添加权限标识">
+                  <Select.Option value="image.generate">image.generate</Select.Option>
+                  <Select.Option value="image.view">image.view</Select.Option>
+                  <Select.Option value="code.generate">code.generate</Select.Option>
+                  <Select.Option value="document.process">document.process</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="is_active" label="启用状态" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+            <Space>
+              <Button onClick={() => {
+                setIsModuleModalVisible(false)
+                setEditingModule(null)
+                moduleForm.resetFields()
+              }}>
+                取消
+              </Button>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                {editingModule ? '更新' : '创建'}
               </Button>
             </Space>
           </Form.Item>

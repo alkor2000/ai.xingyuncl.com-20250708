@@ -12,12 +12,10 @@ const router = express.Router();
 // 管理员操作限流配置
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 100, // 每15分钟最多100次操作
+  max: 100, // 限制每个IP最多100个管理请求
   message: {
     success: false,
-    code: 429,
-    message: '管理操作频率过高，请稍后再试',
-    data: null,
+    message: '管理操作过于频繁，请稍后再试',
     timestamp: new Date().toISOString()
   }
 });
@@ -144,6 +142,61 @@ router.delete('/models/:id',
   adminLimiter,
   requirePermission('system.all'),
   AdminController.deleteAIModel
+);
+
+/**
+ * @route GET /api/admin/modules
+ * @desc 获取系统模块列表
+ * @access SuperAdmin
+ */
+router.get('/modules',
+  adminLimiter,
+  requirePermission('system.all'),
+  AdminController.getModules
+);
+
+/**
+ * @route POST /api/admin/modules
+ * @desc 创建系统模块
+ * @access SuperAdmin
+ */
+router.post('/modules',
+  adminLimiter,
+  requirePermission('system.all'),
+  AdminController.createModule
+);
+
+/**
+ * @route PUT /api/admin/modules/:id
+ * @desc 更新系统模块
+ * @access SuperAdmin
+ */
+router.put('/modules/:id',
+  adminLimiter,
+  requirePermission('system.all'),
+  AdminController.updateModule
+);
+
+/**
+ * @route DELETE /api/admin/modules/:id
+ * @desc 删除系统模块
+ * @access SuperAdmin
+ */
+router.delete('/modules/:id',
+  adminLimiter,
+  requirePermission('system.all'),
+  AdminController.deleteModule
+);
+
+/**
+ * @route POST /api/admin/modules/:id/health-check
+ * @desc 检查模块健康状态
+ * @access SuperAdmin
+ */
+router.post('/modules/:id/health-check',
+  adminLimiter,
+  requirePermission('system.all'),
+  AdminController.checkModuleHealth
 );
 
 /**

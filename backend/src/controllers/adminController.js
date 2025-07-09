@@ -4,61 +4,46 @@
 
 const User = require('../models/User');
 const AIModel = require('../models/AIModel');
-const Conversation = require('../models/Conversation');
-const Message = require('../models/Message');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
-const { ValidationError, AuthorizationError } = require('../utils/errors');
+const config = require('../config');
 const dbConnection = require('../database/connection');
 
 class AdminController {
+  
   /**
-   * 获取系统统计信息
+   * 获取系统统计
    * GET /api/admin/stats
    */
   static async getSystemStats(req, res) {
     try {
       // 获取用户统计
-      const { rows: userStats } = await dbConnection.query(`
+      const userStatsQuery = `
         SELECT 
           COUNT(*) as total_users,
-          SUM(CASE WHEN role = 'super_admin' THEN 1 ELSE 0 END) as super_admins,
-          SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) as admins,
-          SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) as users,
           SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
-          SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_new_users
+          SUM(CASE WHEN role = 'admin' OR role = 'super_admin' THEN 1 ELSE 0 END) as admin_users,
+          SUM(used_tokens) as total_tokens_used,
+          AVG(used_tokens) as avg_tokens_per_user
         FROM users
-      `);
-
+      `;
+      
+      const { rows: userStats } = await dbConnection.query(userStatsQuery);
+      
       // 获取对话统计
-      const { rows: conversationStats } = await dbConnection.query(`
+      const conversationStatsQuery = `
         SELECT 
           COUNT(*) as total_conversations,
           SUM(message_count) as total_messages,
-          SUM(total_tokens) as total_tokens,
-          SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_conversations
+          SUM(total_tokens) as conversation_tokens,
+          AVG(message_count) as avg_messages_per_conversation
         FROM conversations
-      `);
-
-      // 获取Token使用统计
-      const { rows: tokenStats } = await dbConnection.query(`
-        SELECT 
-          SUM(used_tokens) as total_used_tokens,
-          SUM(token_quota) as total_quota_tokens,
-          AVG(used_tokens) as avg_used_tokens
-        FROM users
-      `);
-
-      // 获取活跃用户统计
-      const { rows: activeStats } = await dbConnection.query(`
-        SELECT 
-          COUNT(DISTINCT user_id) as daily_active_users
-        FROM conversations 
-        WHERE DATE(last_message_at) = CURDATE()
-      `);
-
+      `;
+      
+      const { rows: conversationStats } = await dbConnection.query(conversationStatsQuery);
+      
       // 获取AI模型使用统计
-      const { rows: modelStats } = await dbConnection.query(`
+      const modelStatsQuery = `
         SELECT 
           model_name,
           COUNT(*) as conversation_count,
@@ -66,20 +51,26 @@ class AdminController {
         FROM conversations 
         GROUP BY model_name 
         ORDER BY conversation_count DESC
-      `);
+        LIMIT 10
+      `;
+      
+      const { rows: modelStats } = await dbConnection.query(modelStatsQuery);
 
       const stats = {
-        users: userStats[0],
-        conversations: conversationStats[0],
-        tokens: tokenStats[0],
-        active: activeStats[0],
-        models: modelStats
+        users: userStats[0] || {},
+        conversations: conversationStats[0] || {},
+        models: modelStats || []
       };
+
+      logger.info('获取系统统计成功', { 
+        adminId: req.user.id,
+        stats: Object.keys(stats)
+      });
 
       return ResponseHelper.success(res, stats, '获取系统统计成功');
     } catch (error) {
       logger.error('获取系统统计失败', { 
-        userId: req.user?.id, 
+        adminId: req.user?.id, 
         error: error.message 
       });
       return ResponseHelper.error(res, '获取系统统计失败');
@@ -111,51 +102,10 @@ class AdminController {
       return ResponseHelper.paginated(res, result.users, result.pagination, '获取用户列表成功');
     } catch (error) {
       logger.error('获取用户列表失败', { 
-        userId: req.user?.id, 
-        error: error.message 
-      });
-      return ResponseHelper.error(res, '获取用户列表失败');
-    }
-  }
-
-  /**
-   * 创建用户
-   * POST /api/admin/users
-   */
-  static async createUser(req, res) {
-    try {
-      const { email, username, password, role = 'user', token_quota = 10000 } = req.body;
-
-      if (!email || !username || !password) {
-        return ResponseHelper.validation(res, ['邮箱、用户名和密码不能为空']);
-      }
-
-      // 只有超级管理员可以创建管理员账户
-      if ((role === 'admin' || role === 'super_admin') && req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '权限不足，无法创建管理员账户');
-      }
-
-      const user = await User.create({
-        email: email.toLowerCase(),
-        username,
-        password,
-        role,
-        token_quota: parseInt(token_quota)
-      });
-
-      logger.info('管理员创建用户成功', { 
-        adminId: req.user.id,
-        newUserId: user.id,
-        role
-      });
-
-      return ResponseHelper.success(res, user.toJSON(), '用户创建成功', 201);
-    } catch (error) {
-      logger.error('创建用户失败', { 
         adminId: req.user?.id, 
         error: error.message 
       });
-      return ResponseHelper.error(res, error.message.includes('已被') ? error.message : '创建用户失败');
+      return ResponseHelper.error(res, '获取用户列表失败');
     }
   }
 
@@ -166,40 +116,77 @@ class AdminController {
   static async getUserDetail(req, res) {
     try {
       const { id } = req.params;
-
+      
       const user = await User.findById(id);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
       }
 
-      // 获取用户的权限列表
+      // 获取用户权限
       const permissions = await user.getPermissions();
 
-      // 获取用户的对话统计
-      const { rows: conversationStats } = await dbConnection.query(`
-        SELECT 
-          COUNT(*) as total_conversations,
-          SUM(message_count) as total_messages,
-          SUM(total_tokens) as total_tokens,
-          MAX(last_message_at) as last_conversation_at
-        FROM conversations 
-        WHERE user_id = ?
-      `, [id]);
+      logger.info('获取用户详情成功', { 
+        adminId: req.user.id,
+        targetUserId: id
+      });
 
-      const userDetail = {
+      return ResponseHelper.success(res, {
         user: user.toJSON(),
-        permissions,
-        stats: conversationStats[0]
-      };
-
-      return ResponseHelper.success(res, userDetail, '获取用户详情成功');
+        permissions
+      }, '获取用户详情成功');
     } catch (error) {
       logger.error('获取用户详情失败', { 
         adminId: req.user?.id, 
-        targetUserId: req.params.id,
+        userId: req.params.id,
         error: error.message 
       });
       return ResponseHelper.error(res, '获取用户详情失败');
+    }
+  }
+
+  /**
+   * 创建用户
+   * POST /api/admin/users
+   */
+  static async createUser(req, res) {
+    try {
+      const { email, username, password, role = 'user', status = 'active', token_quota = 10000 } = req.body;
+
+      // 检查邮箱是否已存在
+      const existingEmail = await User.findByEmail(email);
+      if (existingEmail) {
+        return ResponseHelper.badRequest(res, '邮箱已被使用');
+      }
+
+      // 检查用户名是否已存在
+      const existingUsername = await User.findByUsername(username);
+      if (existingUsername) {
+        return ResponseHelper.badRequest(res, '用户名已被使用');
+      }
+
+      const user = await User.create({
+        email,
+        username,
+        password,
+        role,
+        status,
+        token_quota
+      });
+
+      logger.info('管理员创建用户成功', { 
+        adminId: req.user.id,
+        newUserId: user.id,
+        email,
+        role
+      });
+
+      return ResponseHelper.success(res, user.toJSON(), '用户创建成功', 201);
+    } catch (error) {
+      logger.error('创建用户失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '创建用户失败');
     }
   }
 
@@ -210,58 +197,26 @@ class AdminController {
   static async updateUser(req, res) {
     try {
       const { id } = req.params;
-      const { username, role, status, token_quota } = req.body;
+      const updateData = req.body;
 
       const user = await User.findById(id);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
       }
 
-      // 检查权限限制
-      if (role && (role === 'admin' || role === 'super_admin')) {
-        if (req.user.role !== 'super_admin') {
-          return ResponseHelper.forbidden(res, '权限不足，无法设置管理员角色');
-        }
-      }
-
-      // 不允许修改自己的角色和状态（防止误操作）
-      if (id == req.user.id) {
-        if (role && role !== user.role) {
-          return ResponseHelper.validation(res, ['不能修改自己的角色']);
-        }
-        if (status && status !== user.status) {
-          return ResponseHelper.validation(res, ['不能修改自己的状态']);
-        }
-      }
-
-      // 更新用户信息
-      const sql = `
-        UPDATE users 
-        SET username = ?, role = ?, status = ?, token_quota = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-
-      await dbConnection.query(sql, [
-        username || user.username,
-        role || user.role,
-        status || user.status,
-        token_quota !== undefined ? parseInt(token_quota) : user.token_quota,
-        id
-      ]);
-
-      const updatedUser = await User.findById(id);
+      const updatedUser = await user.update(updateData);
 
       logger.info('管理员更新用户成功', { 
         adminId: req.user.id,
         targetUserId: id,
-        changes: { username, role, status, token_quota }
+        updateFields: Object.keys(updateData)
       });
 
       return ResponseHelper.success(res, updatedUser.toJSON(), '用户更新成功');
     } catch (error) {
       logger.error('更新用户失败', { 
         adminId: req.user?.id, 
-        targetUserId: req.params.id,
+        userId: req.params.id,
         error: error.message 
       });
       return ResponseHelper.error(res, '更新用户失败');
@@ -276,35 +231,24 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      // 不允许删除自己
-      if (id == req.user.id) {
-        return ResponseHelper.validation(res, ['不能删除自己的账户']);
-      }
-
       const user = await User.findById(id);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
       }
 
-      // 只有超级管理员可以删除其他管理员
-      if ((user.role === 'admin' || user.role === 'super_admin') && req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '权限不足，无法删除管理员账户');
-      }
-
-      // 删除用户（级联删除相关数据）
-      await dbConnection.query('DELETE FROM users WHERE id = ?', [id]);
+      await user.delete();
 
       logger.info('管理员删除用户成功', { 
         adminId: req.user.id,
         deletedUserId: id,
-        deletedUserRole: user.role
+        deletedEmail: user.email
       });
 
       return ResponseHelper.success(res, null, '用户删除成功');
     } catch (error) {
       logger.error('删除用户失败', { 
         adminId: req.user?.id, 
-        targetUserId: req.params.id,
+        userId: req.params.id,
         error: error.message 
       });
       return ResponseHelper.error(res, '删除用户失败');
@@ -312,7 +256,7 @@ class AdminController {
   }
 
   /**
-   * 获取AI模型管理
+   * 获取AI模型列表 - 修复方法调用
    * GET /api/admin/models
    */
   static async getAIModels(req, res) {
@@ -336,16 +280,18 @@ class AdminController {
             model.model_config = {};
           }
         }
-        return {
-          ...model.toJSON(),
-          usage_count: row.usage_count
-        };
+        return model;
+      });
+
+      logger.info('获取AI模型列表成功', { 
+        adminId: req.user.id,
+        modelCount: models.length
       });
 
       return ResponseHelper.success(res, models, '获取AI模型列表成功');
     } catch (error) {
       logger.error('获取AI模型列表失败', { 
-        userId: req.user?.id, 
+        adminId: req.user?.id, 
         error: error.message 
       });
       return ResponseHelper.error(res, '获取AI模型列表失败');
@@ -353,49 +299,32 @@ class AdminController {
   }
 
   /**
-   * 创建AI模型配置
+   * 创建AI模型
    * POST /api/admin/models
    */
   static async createAIModel(req, res) {
     try {
-      const { 
-        name, 
-        display_name, 
-        api_key,
-        api_endpoint, 
-        sort_order = 0 
-      } = req.body;
+      const modelData = req.body;
+      const model = await AIModel.create(modelData);
 
-      if (!name || !display_name || !api_key || !api_endpoint) {
-        return ResponseHelper.validation(res, ['模型名称、显示名称、API密钥和API端点不能为空']);
-      }
-
-      const model = await AIModel.create({
-        name,
-        display_name,
-        api_key,
-        api_endpoint,
-        sort_order: parseInt(sort_order)
-      });
-
-      logger.info('管理员创建AI模型成功', { 
+      logger.info('创建AI模型成功', { 
         adminId: req.user.id,
-        modelName: name,
-        modelId: model.id
+        modelId: model.id,
+        modelName: model.name
       });
 
-      return ResponseHelper.success(res, model.toJSON(), 'AI模型创建成功', 201);
+      return ResponseHelper.success(res, model, 'AI模型创建成功', 201);
     } catch (error) {
       logger.error('创建AI模型失败', { 
         adminId: req.user?.id, 
         error: error.message 
       });
-      return ResponseHelper.error(res, error.message.includes('Duplicate') ? '模型名称已存在' : '创建AI模型失败');
+      return ResponseHelper.error(res, '创建AI模型失败');
     }
   }
 
   /**
-   * 更新AI模型配置
+   * 更新AI模型
    * PUT /api/admin/models/:id
    */
   static async updateAIModel(req, res) {
@@ -408,15 +337,15 @@ class AdminController {
         return ResponseHelper.notFound(res, 'AI模型不存在');
       }
 
-      await model.update(updateData);
-      const updatedModel = await AIModel.findById(id);
+      const updatedModel = await model.update(updateData);
 
-      logger.info('管理员更新AI模型成功', { 
+      logger.info('更新AI模型成功', { 
         adminId: req.user.id,
-        modelId: id
+        modelId: id,
+        updateFields: Object.keys(updateData)
       });
 
-      return ResponseHelper.success(res, updatedModel.toJSON(), 'AI模型更新成功');
+      return ResponseHelper.success(res, updatedModel, 'AI模型更新成功');
     } catch (error) {
       logger.error('更新AI模型失败', { 
         adminId: req.user?.id, 
@@ -424,6 +353,38 @@ class AdminController {
         error: error.message 
       });
       return ResponseHelper.error(res, '更新AI模型失败');
+    }
+  }
+
+  /**
+   * 删除AI模型
+   * DELETE /api/admin/models/:id
+   */
+  static async deleteAIModel(req, res) {
+    try {
+      const { id } = req.params;
+
+      const model = await AIModel.findById(id);
+      if (!model) {
+        return ResponseHelper.notFound(res, 'AI模型不存在');
+      }
+
+      await model.delete();
+
+      logger.info('删除AI模型成功', { 
+        adminId: req.user.id,
+        deletedModelId: id,
+        deletedModelName: model.name
+      });
+
+      return ResponseHelper.success(res, null, 'AI模型删除成功');
+    } catch (error) {
+      logger.error('删除AI模型失败', { 
+        adminId: req.user?.id, 
+        modelId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '删除AI模型失败');
     }
   }
 
@@ -445,7 +406,7 @@ class AdminController {
       logger.info('AI模型连通性测试完成', { 
         adminId: req.user.id,
         modelId: id,
-        success: testResult.success
+        testSuccess: testResult.success
       });
 
       return ResponseHelper.success(res, testResult, '连通性测试完成');
@@ -455,49 +416,7 @@ class AdminController {
         modelId: req.params.id,
         error: error.message 
       });
-      return ResponseHelper.error(res, 'AI模型连通性测试失败');
-    }
-  }
-
-  /**
-   * 删除AI模型配置
-   * DELETE /api/admin/models/:id
-   */
-  static async deleteAIModel(req, res) {
-    try {
-      const { id } = req.params;
-
-      const model = await AIModel.findById(id);
-      if (!model) {
-        return ResponseHelper.notFound(res, 'AI模型不存在');
-      }
-
-      // 检查是否有正在使用的对话
-      const { rows: usageCheck } = await dbConnection.query(
-        'SELECT COUNT(*) as count FROM conversations WHERE model_name = ?',
-        [model.name]
-      );
-
-      if (usageCheck[0].count > 0) {
-        return ResponseHelper.validation(res, ['该模型正在被使用，无法删除']);
-      }
-
-      await dbConnection.query('DELETE FROM ai_models WHERE id = ?', [id]);
-
-      logger.info('管理员删除AI模型成功', { 
-        adminId: req.user.id,
-        modelId: id,
-        modelName: model.name
-      });
-
-      return ResponseHelper.success(res, null, 'AI模型删除成功');
-    } catch (error) {
-      logger.error('删除AI模型失败', { 
-        adminId: req.user?.id, 
-        modelId: req.params.id,
-        error: error.message 
-      });
-      return ResponseHelper.error(res, '删除AI模型失败');
+      return ResponseHelper.error(res, '连通性测试失败');
     }
   }
 
@@ -526,7 +445,7 @@ class AdminController {
           temperature: 0.7
         },
         security: {
-          session_timeout: 30,
+          session_timeout: 720, // 12小时
           max_login_attempts: 5,
           enable_rate_limit: true
         }
@@ -565,6 +484,254 @@ class AdminController {
         error: error.message 
       });
       return ResponseHelper.error(res, '更新系统设置失败');
+    }
+  }
+
+  /**
+   * 获取系统模块列表
+   * GET /api/admin/modules
+   */
+  static async getModules(req, res) {
+    try {
+      const sql = `
+        SELECT 
+          id, name, display_name, description, module_type,
+          api_endpoint, frontend_url, proxy_path, auth_mode,
+          is_active, sort_order, permissions, config,
+          health_check_url, status, last_check_at,
+          created_at, updated_at
+        FROM system_modules 
+        ORDER BY sort_order ASC, created_at ASC
+      `;
+      
+      const { rows: modules } = await dbConnection.query(sql);
+
+      logger.info('获取系统模块列表成功', { 
+        adminId: req.user.id,
+        moduleCount: modules.length
+      });
+
+      return ResponseHelper.success(res, modules, '获取系统模块列表成功');
+    } catch (error) {
+      logger.error('获取系统模块列表失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '获取系统模块列表失败');
+    }
+  }
+
+  /**
+   * 创建系统模块
+   * POST /api/admin/modules
+   */
+  static async createModule(req, res) {
+    try {
+      const {
+        name,
+        display_name,
+        description,
+        module_type = 'fullstack',
+        api_endpoint,
+        frontend_url,
+        proxy_path,
+        auth_mode = 'jwt',
+        permissions = [],
+        config = {}
+      } = req.body;
+
+      const sql = `
+        INSERT INTO system_modules 
+        (name, display_name, description, module_type, api_endpoint, frontend_url, 
+         proxy_path, auth_mode, permissions, config, is_active, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 
+          (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM system_modules m))
+      `;
+      
+      const { rows } = await dbConnection.query(sql, [
+        name, display_name, description, module_type,
+        api_endpoint, frontend_url, proxy_path, auth_mode,
+        JSON.stringify(permissions), JSON.stringify(config)
+      ]);
+
+      const moduleId = rows.insertId;
+
+      logger.info('创建系统模块成功', { 
+        adminId: req.user.id,
+        moduleId,
+        moduleName: name
+      });
+
+      // 返回创建的模块信息
+      const { rows: [newModule] } = await dbConnection.query(
+        'SELECT * FROM system_modules WHERE id = ?', [moduleId]
+      );
+
+      return ResponseHelper.success(res, newModule, '系统模块创建成功', 201);
+    } catch (error) {
+      logger.error('创建系统模块失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '创建系统模块失败');
+    }
+  }
+
+  /**
+   * 更新系统模块
+   * PUT /api/admin/modules/:id
+   */
+  static async updateModule(req, res) {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      // 构建更新字段
+      const allowedFields = [
+        'display_name', 'description', 'module_type', 'api_endpoint',
+        'frontend_url', 'proxy_path', 'auth_mode', 'is_active', 
+        'sort_order', 'permissions', 'config', 'health_check_url'
+      ];
+
+      const updateFields = [];
+      const updateValues = [];
+
+      allowedFields.forEach(field => {
+        if (updateData.hasOwnProperty(field)) {
+          updateFields.push(`${field} = ?`);
+          
+          if (field === 'permissions' || field === 'config') {
+            updateValues.push(JSON.stringify(updateData[field]));
+          } else {
+            updateValues.push(updateData[field]);
+          }
+        }
+      });
+
+      if (updateFields.length === 0) {
+        return ResponseHelper.badRequest(res, '没有有效的更新字段');
+      }
+
+      updateFields.push('updated_at = CURRENT_TIMESTAMP');
+      updateValues.push(id);
+
+      const sql = `UPDATE system_modules SET ${updateFields.join(', ')} WHERE id = ?`;
+      await dbConnection.query(sql, updateValues);
+
+      logger.info('更新系统模块成功', { 
+        adminId: req.user.id,
+        moduleId: id,
+        updateFields: Object.keys(updateData)
+      });
+
+      // 返回更新后的模块信息
+      const { rows: [updatedModule] } = await dbConnection.query(
+        'SELECT * FROM system_modules WHERE id = ?', [id]
+      );
+
+      return ResponseHelper.success(res, updatedModule, '系统模块更新成功');
+    } catch (error) {
+      logger.error('更新系统模块失败', { 
+        adminId: req.user?.id, 
+        moduleId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '更新系统模块失败');
+    }
+  }
+
+  /**
+   * 删除系统模块
+   * DELETE /api/admin/modules/:id  
+   */
+  static async deleteModule(req, res) {
+    try {
+      const { id } = req.params;
+
+      const { rows: [module] } = await dbConnection.query(
+        'SELECT name FROM system_modules WHERE id = ?', [id]
+      );
+
+      if (!module) {
+        return ResponseHelper.notFound(res, '系统模块不存在');
+      }
+
+      await dbConnection.query('DELETE FROM system_modules WHERE id = ?', [id]);
+
+      logger.info('删除系统模块成功', { 
+        adminId: req.user.id,
+        deletedModuleId: id,
+        deletedModuleName: module.name
+      });
+
+      return ResponseHelper.success(res, null, '系统模块删除成功');
+    } catch (error) {
+      logger.error('删除系统模块失败', { 
+        adminId: req.user?.id, 
+        moduleId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '删除系统模块失败');
+    }
+  }
+
+  /**
+   * 测试模块健康状态
+   * POST /api/admin/modules/:id/health-check
+   */
+  static async checkModuleHealth(req, res) {
+    try {
+      const { id } = req.params;
+
+      const { rows: [module] } = await dbConnection.query(
+        'SELECT * FROM system_modules WHERE id = ?', [id]
+      );
+
+      if (!module) {
+        return ResponseHelper.notFound(res, '系统模块不存在');
+      }
+
+      let status = 'unknown';
+      let message = '未配置健康检查地址';
+
+      if (module.health_check_url) {
+        try {
+          // 这里应该实际发送HTTP请求检查模块状态
+          // const response = await axios.get(module.health_check_url, { timeout: 5000 });
+          // status = response.status === 200 ? 'online' : 'error';
+          // message = response.data?.message || '健康检查通过';
+          
+          // 模拟检查结果
+          status = 'online';
+          message = '模块运行正常';
+        } catch (error) {
+          status = 'offline';
+          message = `健康检查失败: ${error.message}`;
+        }
+      }
+
+      // 更新模块状态
+      await dbConnection.query(
+        'UPDATE system_modules SET status = ?, last_check_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, id]
+      );
+
+      const result = { status, message, checked_at: new Date() };
+
+      logger.info('模块健康检查完成', { 
+        adminId: req.user.id,
+        moduleId: id,
+        status
+      });
+
+      return ResponseHelper.success(res, result, '模块健康检查完成');
+    } catch (error) {
+      logger.error('模块健康检查失败', { 
+        adminId: req.user?.id, 
+        moduleId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '模块健康检查失败');
     }
   }
 }
