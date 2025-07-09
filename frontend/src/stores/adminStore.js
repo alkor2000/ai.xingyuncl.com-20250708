@@ -1,5 +1,5 @@
 /**
- * 管理员状态管理
+ * 管理员状态管理 - 支持用户分组管理
  */
 
 import { create } from 'zustand'
@@ -9,6 +9,7 @@ const useAdminStore = create((set, get) => ({
   // 状态
   users: [],
   userDetail: null,
+  userGroups: [],
   aiModels: [],
   modules: [],
   systemStats: {},
@@ -31,7 +32,7 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
-  // 获取用户列表
+  // 获取用户列表 (支持分组过滤)
   getUsers: async (params = {}) => {
     set({ loading: true })
     try {
@@ -65,7 +66,7 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
-  // 创建用户
+  // 创建用户 (支持分组设置)
   createUser: async (userData) => {
     try {
       const response = await apiClient.post('/admin/users', userData)
@@ -82,7 +83,7 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
-  // 更新用户
+  // 更新用户 (支持分组更新)
   updateUser: async (userId, userData) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}`, userData)
@@ -115,6 +116,68 @@ const useAdminStore = create((set, get) => ({
       }))
     } catch (error) {
       console.error('删除用户失败:', error)
+      throw error
+    }
+  },
+
+  // 获取用户分组列表
+  getUserGroups: async () => {
+    try {
+      const response = await apiClient.get('/admin/user-groups')
+      set({ userGroups: response.data.data })
+      return response.data.data
+    } catch (error) {
+      console.error('获取用户分组失败:', error)
+      throw error
+    }
+  },
+
+  // 创建用户分组
+  createUserGroup: async (groupData) => {
+    try {
+      const response = await apiClient.post('/admin/user-groups', groupData)
+      const newGroup = response.data.data
+      
+      set(state => ({
+        userGroups: [...state.userGroups, newGroup]
+      }))
+      
+      return newGroup
+    } catch (error) {
+      console.error('创建用户分组失败:', error)
+      throw error
+    }
+  },
+
+  // 更新用户分组
+  updateUserGroup: async (groupId, groupData) => {
+    try {
+      const response = await apiClient.put(`/admin/user-groups/${groupId}`, groupData)
+      const updatedGroup = response.data.data
+      
+      set(state => ({
+        userGroups: state.userGroups.map(group => 
+          group.id === groupId ? updatedGroup : group
+        )
+      }))
+      
+      return updatedGroup
+    } catch (error) {
+      console.error('更新用户分组失败:', error)
+      throw error
+    }
+  },
+
+  // 删除用户分组
+  deleteUserGroup: async (groupId) => {
+    try {
+      await apiClient.delete(`/admin/user-groups/${groupId}`)
+      
+      set(state => ({
+        userGroups: state.userGroups.filter(group => group.id !== groupId)
+      }))
+    } catch (error) {
+      console.error('删除用户分组失败:', error)
       throw error
     }
   },
@@ -320,6 +383,7 @@ const useAdminStore = create((set, get) => ({
     set({
       users: [],
       userDetail: null,
+      userGroups: [],
       aiModels: [],
       modules: [],
       systemStats: {},

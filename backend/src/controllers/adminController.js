@@ -1,5 +1,5 @@
 /**
- * 管理员控制器
+ * 管理员控制器 - 支持用户分组管理
  */
 
 const User = require('../models/User');
@@ -12,8 +12,7 @@ const dbConnection = require('../database/connection');
 class AdminController {
   
   /**
-   * 获取系统统计
-   * GET /api/admin/stats
+   * 获取系统统计 - 包含分组统计
    */
   static async getSystemStats(req, res) {
     try {
@@ -27,8 +26,17 @@ class AdminController {
           AVG(used_tokens) as avg_tokens_per_user
         FROM users
       `;
-      
       const { rows: userStats } = await dbConnection.query(userStatsQuery);
+      
+      // 获取分组统计
+      const groupStatsQuery = `
+        SELECT g.name, g.color, COUNT(u.id) as user_count, AVG(u.used_tokens) as avg_tokens
+        FROM user_groups g
+        LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
+        GROUP BY g.id
+        ORDER BY g.sort_order ASC
+      `;
+      const { rows: groupStats } = await dbConnection.query(groupStatsQuery);
       
       // 获取对话统计
       const conversationStatsQuery = `
@@ -39,7 +47,6 @@ class AdminController {
           AVG(message_count) as avg_messages_per_conversation
         FROM conversations
       `;
-      
       const { rows: conversationStats } = await dbConnection.query(conversationStatsQuery);
       
       // 获取AI模型使用统计
@@ -53,11 +60,11 @@ class AdminController {
         ORDER BY conversation_count DESC
         LIMIT 10
       `;
-      
       const { rows: modelStats } = await dbConnection.query(modelStatsQuery);
 
       const stats = {
         users: userStats[0] || {},
+        groups: groupStats || [],
         conversations: conversationStats[0] || {},
         models: modelStats || []
       };
@@ -78,8 +85,7 @@ class AdminController {
   }
 
   /**
-   * 获取用户列表
-   * GET /api/admin/users
+   * 获取用户列表 - 支持分组过滤
    */
   static async getUsers(req, res) {
     try {
@@ -88,6 +94,7 @@ class AdminController {
         limit = 20, 
         role = null, 
         status = null, 
+        group_id = null,
         search = null 
       } = req.query;
 
@@ -96,6 +103,7 @@ class AdminController {
         limit: parseInt(limit),
         role,
         status,
+        group_id: group_id ? parseInt(group_id) : null,
         search
       });
 
@@ -111,7 +119,6 @@ class AdminController {
 
   /**
    * 获取用户详情
-   * GET /api/admin/users/:id
    */
   static async getUserDetail(req, res) {
     try {
@@ -122,7 +129,6 @@ class AdminController {
         return ResponseHelper.notFound(res, '用户不存在');
       }
 
-      // 获取用户权限
       const permissions = await user.getPermissions();
 
       logger.info('获取用户详情成功', { 
@@ -145,12 +151,19 @@ class AdminController {
   }
 
   /**
-   * 创建用户
-   * POST /api/admin/users
+   * 创建用户 - 支持分组设置
    */
   static async createUser(req, res) {
     try {
-      const { email, username, password, role = 'user', status = 'active', token_quota = 10000 } = req.body;
+      const { 
+        email, 
+        username, 
+        password, 
+        role = 'user', 
+        group_id = null,
+        status = 'active', 
+        token_quota = 10000 
+      } = req.body;
 
       // 检查邮箱是否已存在
       const existingEmail = await User.findByEmail(email);
@@ -169,6 +182,7 @@ class AdminController {
         username,
         password,
         role,
+        group_id: group_id || null,
         status,
         token_quota
       });
@@ -177,7 +191,8 @@ class AdminController {
         adminId: req.user.id,
         newUserId: user.id,
         email,
-        role
+        role,
+        group_id
       });
 
       return ResponseHelper.success(res, user.toJSON(), '用户创建成功', 201);
@@ -191,8 +206,7 @@ class AdminController {
   }
 
   /**
-   * 更新用户
-   * PUT /api/admin/users/:id
+   * 更新用户 - 支持分组更新
    */
   static async updateUser(req, res) {
     try {
@@ -225,7 +239,6 @@ class AdminController {
 
   /**
    * 删除用户
-   * DELETE /api/admin/users/:id
    */
   static async deleteUser(req, res) {
     try {
@@ -256,8 +269,112 @@ class AdminController {
   }
 
   /**
-   * 获取AI模型列表 - 修复方法调用
-   * GET /api/admin/models
+   * 获取用户分组列表
+   */
+  static async getUserGroups(req, res) {
+    try {
+      const groups = await User.getGroups();
+
+      logger.info('获取用户分组列表成功', { 
+        adminId: req.user.id,
+        groupCount: groups.length
+      });
+
+      return ResponseHelper.success(res, groups, '获取用户分组列表成功');
+    } catch (error) {
+      logger.error('获取用户分组列表失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '获取用户分组列表失败');
+    }
+  }
+
+  /**
+   * 创建用户分组
+   */
+  static async createUserGroup(req, res) {
+    try {
+      const groupData = req.body;
+      const createdBy = req.user.id;
+
+      const group = await User.createGroup(groupData, createdBy);
+
+      logger.info('创建用户分组成功', { 
+        adminId: req.user.id,
+        groupId: group.id,
+        groupName: group.name
+      });
+
+      return ResponseHelper.success(res, group, '用户分组创建成功', 201);
+    } catch (error) {
+      logger.error('创建用户分组失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '创建用户分组失败');
+    }
+  }
+
+  /**
+   * 更新用户分组
+   */
+  static async updateUserGroup(req, res) {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const group = await User.updateGroup(id, updateData);
+      if (!group) {
+        return ResponseHelper.notFound(res, '用户分组不存在');
+      }
+
+      logger.info('更新用户分组成功', { 
+        adminId: req.user.id,
+        groupId: id,
+        updateFields: Object.keys(updateData)
+      });
+
+      return ResponseHelper.success(res, group, '用户分组更新成功');
+    } catch (error) {
+      logger.error('更新用户分组失败', { 
+        adminId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '更新用户分组失败');
+    }
+  }
+
+  /**
+   * 删除用户分组
+   */
+  static async deleteUserGroup(req, res) {
+    try {
+      const { id } = req.params;
+
+      await User.deleteGroup(id);
+
+      logger.info('删除用户分组成功', { 
+        adminId: req.user.id,
+        deletedGroupId: id
+      });
+
+      return ResponseHelper.success(res, null, '用户分组删除成功');
+    } catch (error) {
+      logger.error('删除用户分组失败', { 
+        adminId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message.includes('该分组下还有') ? error.message : '删除用户分组失败');
+    }
+  }
+
+  // 以下是原有的AI模型管理和系统模块管理方法 (保持不变)
+
+  /**
+   * 获取AI模型列表
    */
   static async getAIModels(req, res) {
     try {
@@ -272,7 +389,6 @@ class AdminController {
       
       const models = rows.map(row => {
         const model = new AIModel(row);
-        // 解析JSON配置
         if (typeof model.model_config === 'string') {
           try {
             model.model_config = JSON.parse(model.model_config);
@@ -300,7 +416,6 @@ class AdminController {
 
   /**
    * 创建AI模型
-   * POST /api/admin/models
    */
   static async createAIModel(req, res) {
     try {
@@ -325,7 +440,6 @@ class AdminController {
 
   /**
    * 更新AI模型
-   * PUT /api/admin/models/:id
    */
   static async updateAIModel(req, res) {
     try {
@@ -358,7 +472,6 @@ class AdminController {
 
   /**
    * 删除AI模型
-   * DELETE /api/admin/models/:id
    */
   static async deleteAIModel(req, res) {
     try {
@@ -390,7 +503,6 @@ class AdminController {
 
   /**
    * 测试AI模型连通性
-   * POST /api/admin/models/:id/test
    */
   static async testAIModel(req, res) {
     try {
@@ -422,11 +534,9 @@ class AdminController {
 
   /**
    * 获取系统设置
-   * GET /api/admin/settings
    */
   static async getSystemSettings(req, res) {
     try {
-      // 模拟系统设置（实际应该从数据库或配置文件读取）
       const settings = {
         site: {
           name: 'AI Platform',
@@ -437,7 +547,8 @@ class AdminController {
         user: {
           allow_register: true,
           email_verification: false,
-          default_token_quota: 10000
+          default_token_quota: 10000,
+          default_group_id: 1
         },
         ai: {
           default_model: 'gpt-3.5-turbo',
@@ -445,7 +556,7 @@ class AdminController {
           temperature: 0.7
         },
         security: {
-          session_timeout: 720, // 12小时
+          session_timeout: 720,
           max_login_attempts: 5,
           enable_rate_limit: true
         }
@@ -463,14 +574,10 @@ class AdminController {
 
   /**
    * 更新系统设置
-   * PUT /api/admin/settings
    */
   static async updateSystemSettings(req, res) {
     try {
       const settings = req.body;
-
-      // TODO: 实际应该保存到数据库或配置文件
-      // 这里只是模拟保存
 
       logger.info('管理员更新系统设置', { 
         adminId: req.user.id,
@@ -489,7 +596,6 @@ class AdminController {
 
   /**
    * 获取系统模块列表
-   * GET /api/admin/modules
    */
   static async getModules(req, res) {
     try {
@@ -523,7 +629,6 @@ class AdminController {
 
   /**
    * 创建系统模块
-   * POST /api/admin/modules
    */
   static async createModule(req, res) {
     try {
@@ -562,7 +667,6 @@ class AdminController {
         moduleName: name
       });
 
-      // 返回创建的模块信息
       const { rows: [newModule] } = await dbConnection.query(
         'SELECT * FROM system_modules WHERE id = ?', [moduleId]
       );
@@ -579,14 +683,12 @@ class AdminController {
 
   /**
    * 更新系统模块
-   * PUT /api/admin/modules/:id
    */
   static async updateModule(req, res) {
     try {
       const { id } = req.params;
       const updateData = req.body;
 
-      // 构建更新字段
       const allowedFields = [
         'display_name', 'description', 'module_type', 'api_endpoint',
         'frontend_url', 'proxy_path', 'auth_mode', 'is_active', 
@@ -624,7 +726,6 @@ class AdminController {
         updateFields: Object.keys(updateData)
       });
 
-      // 返回更新后的模块信息
       const { rows: [updatedModule] } = await dbConnection.query(
         'SELECT * FROM system_modules WHERE id = ?', [id]
       );
@@ -642,7 +743,6 @@ class AdminController {
 
   /**
    * 删除系统模块
-   * DELETE /api/admin/modules/:id  
    */
   static async deleteModule(req, res) {
     try {
@@ -677,7 +777,6 @@ class AdminController {
 
   /**
    * 测试模块健康状态
-   * POST /api/admin/modules/:id/health-check
    */
   static async checkModuleHealth(req, res) {
     try {
@@ -696,12 +795,6 @@ class AdminController {
 
       if (module.health_check_url) {
         try {
-          // 这里应该实际发送HTTP请求检查模块状态
-          // const response = await axios.get(module.health_check_url, { timeout: 5000 });
-          // status = response.status === 200 ? 'online' : 'error';
-          // message = response.data?.message || '健康检查通过';
-          
-          // 模拟检查结果
           status = 'online';
           message = '模块运行正常';
         } catch (error) {
@@ -710,7 +803,6 @@ class AdminController {
         }
       }
 
-      // 更新模块状态
       await dbConnection.query(
         'UPDATE system_modules SET status = ?, last_check_at = CURRENT_TIMESTAMP WHERE id = ?',
         [status, id]

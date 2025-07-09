@@ -1,5 +1,5 @@
 /**
- * 管理员路由
+ * 管理员路由 - 支持用户分组管理
  */
 
 const express = require('express');
@@ -25,7 +25,7 @@ router.use(authenticate);
 
 /**
  * @route GET /api/admin/stats
- * @desc 获取系统统计信息
+ * @desc 获取系统统计信息 (包含分组统计)
  * @access Admin / SuperAdmin
  */
 router.get('/stats',
@@ -36,7 +36,7 @@ router.get('/stats',
 
 /**
  * @route GET /api/admin/users
- * @desc 获取用户列表
+ * @desc 获取用户列表 (支持分组过滤)
  * @access Admin / SuperAdmin
  */
 router.get('/users',
@@ -47,7 +47,7 @@ router.get('/users',
 
 /**
  * @route POST /api/admin/users
- * @desc 创建用户
+ * @desc 创建用户 (支持分组设置)
  * @access Admin / SuperAdmin
  */
 router.post('/users',
@@ -69,7 +69,7 @@ router.get('/users/:id',
 
 /**
  * @route PUT /api/admin/users/:id
- * @desc 更新用户
+ * @desc 更新用户 (支持分组更新)
  * @access Admin / SuperAdmin
  */
 router.put('/users/:id',
@@ -87,6 +87,50 @@ router.delete('/users/:id',
   adminLimiter,
   requirePermission('user.manage'),
   AdminController.deleteUser
+);
+
+/**
+ * @route GET /api/admin/user-groups
+ * @desc 获取用户分组列表
+ * @access Admin / SuperAdmin
+ */
+router.get('/user-groups',
+  adminLimiter,
+  requirePermission('user.manage'),
+  AdminController.getUserGroups
+);
+
+/**
+ * @route POST /api/admin/user-groups
+ * @desc 创建用户分组
+ * @access SuperAdmin
+ */
+router.post('/user-groups',
+  adminLimiter,
+  requirePermission('group.manage'),
+  AdminController.createUserGroup
+);
+
+/**
+ * @route PUT /api/admin/user-groups/:id
+ * @desc 更新用户分组
+ * @access SuperAdmin
+ */
+router.put('/user-groups/:id',
+  adminLimiter,
+  requirePermission('group.manage'),
+  AdminController.updateUserGroup
+);
+
+/**
+ * @route DELETE /api/admin/user-groups/:id
+ * @desc 删除用户分组
+ * @access SuperAdmin
+ */
+router.delete('/user-groups/:id',
+  adminLimiter,
+  requirePermission('group.manage'),
+  AdminController.deleteUserGroup
 );
 
 /**
