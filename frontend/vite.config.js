@@ -31,12 +31,31 @@ export default defineConfig({
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
+          // 核心依赖
           'react-vendor': ['react', 'react-dom'],
-          'antd-vendor': ['antd', '@ant-design/icons'],
           'router-vendor': ['react-router-dom'],
-          'utils-vendor': ['axios', 'zustand']
+          'utils-vendor': ['axios', 'zustand'],
+          // Antd分离但保持统一
+          'antd-vendor': ['antd', '@ant-design/icons'],
+          // 大页面组件按功能分离
+          'admin-vendor': [
+            // 会在懒加载时单独创建chunk，这里预留
+          ]
         }
       }
-    }
+    },
+    // 调整chunk大小警告阈值
+    chunkSizeWarningLimit: 800
+  },
+  // 优化依赖预构建
+  optimizeDeps: {
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      'antd',
+      'axios',
+      'zustand'
+    ]
   }
 })

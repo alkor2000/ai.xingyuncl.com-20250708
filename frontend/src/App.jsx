@@ -1,19 +1,42 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, Spin } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import useAuthStore from './stores/authStore'
 
-// 页面组件（使用正确的路径）
+// 核心页面组件 - 保持同步加载以确保最佳性能
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
-import UserManagement from './pages/admin/Users'
-import Settings from './pages/admin/Settings'
+
+// Admin页面组件 - 懒加载隔离管理功能
+const UserManagement = React.lazy(() => import('./pages/admin/Users'))
+const Settings = React.lazy(() => import('./pages/admin/Settings'))
 
 // 布局组件
 import MainLayout from './components/Layout/MainLayout'
+
+// 懒加载Loading组件
+const LazyLoadingWrapper = ({ children }) => (
+  <Suspense fallback={
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '60vh',
+      flexDirection: 'column',
+      gap: '16px'
+    }}>
+      <Spin size="large" tip="加载模块中..." />
+      <div style={{ color: '#666', fontSize: '14px' }}>
+        正在加载管理功能...
+      </div>
+    </div>
+  }>
+    {children}
+  </Suspense>
+)
 
 // 路由守卫组件
 const ProtectedRoute = ({ children }) => {
@@ -27,7 +50,7 @@ const ProtectedRoute = ({ children }) => {
         alignItems: 'center', 
         height: '100vh' 
       }}>
-        加载中...
+        <Spin size="large" tip="初始化中..." />
       </div>
     )
   }
@@ -52,7 +75,15 @@ function App() {
   }, [initializeAuth])
 
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider 
+      locale={zhCN}
+      theme={{
+        token: {
+          colorPrimary: '#1677ff',
+          borderRadius: 6,
+        },
+      }}
+    >
       <Router>
         <div className="app">
           <Routes>
@@ -83,8 +114,25 @@ function App() {
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/chat" element={<Chat />} />
-                      <Route path="/admin/users" element={<UserManagement />} />
-                      <Route path="/admin/settings" element={<Settings />} />
+                      
+                      {/* Admin路由 - 懒加载隔离 */}
+                      <Route 
+                        path="/admin/users" 
+                        element={
+                          <LazyLoadingWrapper>
+                            <UserManagement />
+                          </LazyLoadingWrapper>
+                        } 
+                      />
+                      <Route 
+                        path="/admin/settings" 
+                        element={
+                          <LazyLoadingWrapper>
+                            <Settings />
+                          </LazyLoadingWrapper>
+                        } 
+                      />
+                      
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </MainLayout>
