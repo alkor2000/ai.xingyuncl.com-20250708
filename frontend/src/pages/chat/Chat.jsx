@@ -14,7 +14,11 @@ import {
   Select,
   message,
   Spin,
-  Empty
+  Empty,
+  Tag,
+  Progress,
+  Alert,
+  Statistic
 } from 'antd'
 import {
   MessageOutlined,
@@ -25,7 +29,10 @@ import {
   DeleteOutlined,
   RobotOutlined,
   UserOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  WalletOutlined,
+  DollarOutlined,
+  CrownOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
@@ -41,15 +48,20 @@ const Chat = () => {
     currentConversation,
     messages,
     aiModels,
+    userCredits,
     loading,
     typing,
+    creditsLoading,
     getConversations,
     createConversation,
     selectConversation,
     sendMessage,
     updateConversation,
     deleteConversation,
-    getAIModels
+    getAIModels,
+    getUserCredits,
+    checkCreditsForModel,
+    getModelCredits
   } = useChatStore()
 
   const [messageInput, setMessageInput] = useState('')
@@ -70,6 +82,16 @@ const Chat = () => {
   useEffect(() => {
     getConversations()
     getAIModels()
+    getUserCredits()
+  }, [])
+
+  // 定时刷新积分状态
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getUserCredits()
+    }, 30000) // 每30秒刷新一次积分状态
+
+    return () => clearInterval(interval)
   }, [])
 
   // 自动滚动到消息底部
@@ -89,6 +111,13 @@ const Chat = () => {
   // 创建新会话
   const handleCreateConversation = async (values) => {
     try {
+      // 检查积分是否足够
+      const requiredCredits = getModelCredits(values.model_name)
+      if (!checkCreditsForModel(values.model_name)) {
+        message.error(`积分不足！创建会话需要 ${requiredCredits} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`)
+        return
+      }
+
       await createConversation({
         title: values.title || 'New Chat',
         model_name: values.model_name || 'gpt-3.5-turbo',
@@ -98,23 +127,42 @@ const Chat = () => {
       form.resetFields()
       message.success('会话创建成功')
     } catch (error) {
-      message.error('会话创建失败')
+      message.error(error.response?.data?.message || '会话创建失败')
     }
   }
 
-  // 发送消息
+  // 发送消息 - 增强积分检查
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !currentConversation) {
       return
     }
 
+    // 检查积分是否充足
+    const requiredCredits = getModelCredits(currentConversation.model_name)
+    if (!checkCreditsForModel(currentConversation.model_name)) {
+      message.error(`积分不足！发送消息需要 ${requiredCredits} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`)
+      return
+    }
+
     try {
-      await sendMessage(messageInput.trim())
+      const response = await sendMessage(messageInput.trim())
       setMessageInput('')
+      
+      // 显示积分消费信息
+      if (response.credits_info) {
+        message.success(`消息发送成功！消耗 ${response.credits_info.credits_consumed} 积分，余额 ${response.credits_info.credits_remaining} 积分`, 3)
+      }
+      
       // 发送后立即滚动到底部
       setTimeout(scrollToBottom, 100)
     } catch (error) {
-      message.error('消息发送失败')
+      const errorMessage = error.response?.data?.message || '消息发送失败'
+      message.error(errorMessage)
+      
+      // 如果是积分相关错误，刷新积分状态
+      if (errorMessage.includes('积分')) {
+        getUserCredits()
+      }
     }
   }
 
@@ -158,15 +206,9 @@ const Chat = () => {
 
   // 删除会话 - 显示自定义确认对话框
   const handleDeleteConversation = (conversationId) => {
-    console.log('🗑️ 删除会话被调用:', conversationId)
-    console.log('🔧 deleteConversation 方法:', typeof deleteConversation)
-    
     const targetConversation = conversations.find(c => c.id === conversationId)
-    console.log('📦 目标会话:', targetConversation)
-    
     setConversationToDelete(targetConversation)
     setDeleteModalVisible(true)
-    console.log('✅ 删除确认对话框应该显示了')
   }
 
   // 确认删除会话
@@ -174,12 +216,9 @@ const Chat = () => {
     if (!conversationToDelete) return
     
     try {
-      console.log('🚀 开始执行删除操作:', conversationToDelete.id)
       setDeleting(true)
-      
       await deleteConversation(conversationToDelete.id)
       
-      console.log('✅ 删除操作成功')
       setDeleteModalVisible(false)
       setConversationToDelete(null)
       setDeleting(false)
@@ -197,14 +236,12 @@ const Chat = () => {
 
   // 取消删除
   const cancelDeleteConversation = () => {
-    console.log('❌ 用户取消删除操作')
     setDeleteModalVisible(false)
     setConversationToDelete(null)
   }
 
   // 会话菜单
   const getConversationMenu = (conversation) => {
-    console.log('🎯 生成会话菜单:', conversation.id)
     return {
       items: [
         {
@@ -212,7 +249,6 @@ const Chat = () => {
           label: '编辑会话',
           icon: <EditOutlined />,
           onClick: (e) => {
-            console.log('✏️ 编辑会话被点击:', conversation.id)
             e?.domEvent?.stopPropagation()
             handleEditConversation(conversation)
           }
@@ -223,7 +259,6 @@ const Chat = () => {
           icon: <DeleteOutlined />,
           danger: true,
           onClick: (e) => {
-            console.log('🗑️ 删除菜单项被点击:', conversation.id)
             e?.domEvent?.stopPropagation()
             handleDeleteConversation(conversation.id)
           }
@@ -290,11 +325,96 @@ const Chat = () => {
     </div>
   )
 
+  // 渲染积分状态卡片
+  const renderCreditsCard = () => {
+    if (creditsLoading) {
+      return (
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <div style={{ textAlign: 'center' }}>
+            <Spin size="small" />
+            <Text style={{ marginLeft: 8 }}>加载积分信息...</Text>
+          </div>
+        </Card>
+      )
+    }
+
+    if (!userCredits) {
+      return (
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <Alert message="无法获取积分信息" type="warning" size="small" showIcon />
+        </Card>
+      )
+    }
+
+    const { credits_stats } = userCredits
+    const usagePercentage = credits_stats.quota > 0 ? (credits_stats.used / credits_stats.quota * 100) : 0
+    const isLowCredits = credits_stats.remaining < 50
+
+    return (
+      <Card 
+        size="small" 
+        style={{ 
+          marginBottom: 16,
+          borderColor: isLowCredits ? '#ff4d4f' : '#d9d9d9'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <WalletOutlined style={{ 
+              color: isLowCredits ? '#ff4d4f' : '#52c41a',
+              marginRight: 8 
+            }} />
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 'bold' }}>
+                {credits_stats.remaining?.toLocaleString()} 积分
+              </div>
+              <div style={{ fontSize: 12, color: '#666' }}>
+                {credits_stats.used?.toLocaleString()} / {credits_stats.quota?.toLocaleString()} 已用
+              </div>
+            </div>
+          </div>
+          <div style={{ minWidth: 60 }}>
+            <Progress 
+              type="circle" 
+              size={40}
+              percent={Math.round(usagePercentage)}
+              strokeColor={isLowCredits ? '#ff4d4f' : '#52c41a'}
+              format={() => `${Math.round(usagePercentage)}%`}
+            />
+          </div>
+        </div>
+        
+        {isLowCredits && (
+          <Alert
+            message="积分不足"
+            description="积分余额较低，请及时充值"
+            type="warning"
+            size="small"
+            showIcon
+            style={{ marginTop: 8 }}
+          />
+        )}
+      </Card>
+    )
+  }
+
+  // 检查是否可以发送消息
+  const canSendMessage = () => {
+    if (!currentConversation || !messageInput.trim() || typing) return false
+    return checkCreditsForModel(currentConversation.model_name)
+  }
+
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       {/* 侧边栏 - 会话列表 */}
       <Sider width={350} style={{ backgroundColor: 'white', borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ padding: '16px' }}>
+        {/* 积分状态显示 */}
+        <div style={{ padding: '16px 16px 0 16px' }}>
+          {renderCreditsCard()}
+        </div>
+
+        {/* 新建对话按钮 */}
+        <div style={{ padding: '0 16px 16px 16px' }}>
           <Button 
             type="primary" 
             block 
@@ -324,56 +444,62 @@ const Chat = () => {
             ) : (
               <List
                 dataSource={conversations}
-                renderItem={conv => (
-                  <List.Item
-                    style={{ 
-                      marginBottom: 8,
-                      background: currentConversation?.id === conv.id ? '#f0f7ff' : 'transparent',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      padding: '8px',
-                      border: currentConversation?.id === conv.id ? '1px solid #d9ecff' : '1px solid transparent'
-                    }}
-                    onClick={() => selectConversation(conv.id)}
-                  >
-                    <List.Item.Meta
-                      avatar={<MessageOutlined style={{ color: '#1677ff' }} />}
-                      title={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 14, fontWeight: 500 }}>
-                            {conv.title}
-                          </span>
-                          <Dropdown 
-                            menu={getConversationMenu(conv)} 
-                            trigger={['click']}
-                            placement="bottomRight"
-                            onOpenChange={(open) => console.log('📖 Dropdown 状态:', open, conv.id)}
-                          >
-                            <Button 
-                              type="text" 
-                              size="small" 
-                              icon={<MoreOutlined />}
-                              onClick={e => {
-                                e.stopPropagation()
-                                console.log('🔘 更多按钮被点击:', conv.id)
-                              }}
-                            />
-                          </Dropdown>
-                        </div>
-                      }
-                      description={
-                        <div>
-                          <div style={{ fontSize: 12, color: '#999' }}>
-                            {conv.model_name} • {conv.message_count} 条消息
+                renderItem={conv => {
+                  const modelCredits = getModelCredits(conv.model_name)
+                  return (
+                    <List.Item
+                      style={{ 
+                        marginBottom: 8,
+                        background: currentConversation?.id === conv.id ? '#f0f7ff' : 'transparent',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        padding: '8px',
+                        border: currentConversation?.id === conv.id ? '1px solid #d9ecff' : '1px solid transparent'
+                      }}
+                      onClick={() => selectConversation(conv.id)}
+                    >
+                      <List.Item.Meta
+                        avatar={
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <MessageOutlined style={{ color: '#1677ff' }} />
+                            <Tag color="blue" size="small" style={{ fontSize: 10, marginTop: 2 }}>
+                              {modelCredits}💰
+                            </Tag>
                           </div>
-                          <div style={{ fontSize: 11, color: '#ccc' }}>
-                            {new Date(conv.updated_at).toLocaleString()}
+                        }
+                        title={
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 14, fontWeight: 500 }}>
+                              {conv.title}
+                            </span>
+                            <Dropdown 
+                              menu={getConversationMenu(conv)} 
+                              trigger={['click']}
+                              placement="bottomRight"
+                            >
+                              <Button 
+                                type="text" 
+                                size="small" 
+                                icon={<MoreOutlined />}
+                                onClick={e => e.stopPropagation()}
+                              />
+                            </Dropdown>
                           </div>
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                )}
+                        }
+                        description={
+                          <div>
+                            <div style={{ fontSize: 12, color: '#999' }}>
+                              {conv.model_name} • {conv.message_count} 条消息
+                            </div>
+                            <div style={{ fontSize: 11, color: '#ccc' }}>
+                              {new Date(conv.updated_at).toLocaleString()}
+                            </div>
+                          </div>
+                        }
+                      />
+                    </List.Item>
+                  )
+                }}
               />
             )}
           </div>
@@ -389,21 +515,39 @@ const Chat = () => {
       }}>
         {currentConversation ? (
           <>
-            {/* 会话头部 - 固定高度 */}
+            {/* 会话头部 - 固定高度，添加积分信息 */}
             <div style={{ 
               padding: '16px 24px', 
               borderBottom: '1px solid #f0f0f0',
               backgroundColor: 'white',
-              flexShrink: 0  // 防止被压缩
+              flexShrink: 0
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Title level={4} style={{ margin: 0 }}>
                     {currentConversation.title}
                   </Title>
-                  <Text type="secondary">
-                    {currentConversation.model_name} • {messages.length} 条消息
-                  </Text>
+                  <Space>
+                    <Text type="secondary">
+                      {currentConversation.model_name} • {messages.length} 条消息
+                    </Text>
+                    <Tag color="gold" icon={<DollarOutlined />}>
+                      {getModelCredits(currentConversation.model_name)} 积分/次
+                    </Tag>
+                  </Space>
+                </div>
+                
+                <div style={{ textAlign: 'right' }}>
+                  <Statistic
+                    title="积分余额"
+                    value={userCredits?.credits_stats?.remaining || 0}
+                    precision={0}
+                    valueStyle={{ 
+                      color: (userCredits?.credits_stats?.remaining || 0) < 50 ? '#ff4d4f' : '#52c41a',
+                      fontSize: 18
+                    }}
+                    prefix={<WalletOutlined />}
+                  />
                 </div>
               </div>
             </div>
@@ -445,19 +589,34 @@ const Chat = () => {
               )}
             </div>
 
-            {/* 输入框 - 固定底部，增加高度 */}
+            {/* 输入框 - 固定底部，增加积分提示 */}
             <div style={{ 
               padding: '16px 24px', 
               borderTop: '1px solid #f0f0f0',
               backgroundColor: 'white',
-              flexShrink: 0  // 防止被压缩
+              flexShrink: 0
             }}>
+              {/* 积分不足警告 */}
+              {currentConversation && !checkCreditsForModel(currentConversation.model_name) && (
+                <Alert
+                  message={`积分不足！发送消息需要 ${getModelCredits(currentConversation.model_name)} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`}
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  action={
+                    <Button size="small" type="primary" ghost>
+                      充值积分
+                    </Button>
+                  }
+                />
+              )}
+
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                 <TextArea
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder="输入消息... (Enter发送，Shift+Enter换行)"
-                  autoSize={{ minRows: 3, maxRows: 8 }}  // 增加最小高度到3行
+                  autoSize={{ minRows: 3, maxRows: 8 }}
                   onKeyDown={handleKeyPress}
                   disabled={typing}
                   style={{ 
@@ -472,7 +631,7 @@ const Chat = () => {
                   icon={<SendOutlined />}
                   loading={typing}
                   onClick={handleSendMessage}
-                  disabled={!messageInput.trim() || typing}
+                  disabled={!canSendMessage()}
                   style={{
                     height: 'auto',
                     minHeight: '40px',
@@ -485,14 +644,22 @@ const Chat = () => {
                   发送
                 </Button>
               </div>
-              {/* 输入提示 */}
+              
+              {/* 输入提示和积分消费提示 */}
               <div style={{ 
                 marginTop: '8px', 
                 fontSize: '12px', 
                 color: '#999',
-                textAlign: 'center'
+                textAlign: 'center',
+                display: 'flex',
+                justifyContent: 'space-between'
               }}>
-                Enter 发送 • Shift + Enter 换行 • 支持多行输入
+                <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
+                {currentConversation && (
+                  <span>
+                    消费: {getModelCredits(currentConversation.model_name)} 积分/次
+                  </span>
+                )}
               </div>
             </div>
           </>
@@ -525,7 +692,7 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 */}
+      {/* 创建/编辑会话对话框 - 增强积分显示 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
@@ -553,11 +720,21 @@ const Chat = () => {
             name="model_name"
             label="AI模型"
             rules={[{ required: true, message: '请选择AI模型' }]}
+            extra={
+              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                选择不同模型会有不同的积分消费
+              </div>
+            }
           >
             <Select placeholder="选择AI模型">
               {aiModels.map(model => (
                 <Select.Option key={model.name} value={model.name}>
-                  {model.display_name}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{model.display_name}</span>
+                    <Tag color="blue" size="small">
+                      {model.credits_per_chat} 积分/次
+                    </Tag>
+                  </div>
                 </Select.Option>
               ))}
             </Select>

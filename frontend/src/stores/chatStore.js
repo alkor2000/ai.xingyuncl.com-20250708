@@ -7,8 +7,10 @@ const useChatStore = create((set, get) => ({
   currentConversation: null,
   messages: [],
   aiModels: [],
+  userCredits: null,
   loading: false,
   typing: false,
+  creditsLoading: false,
   
   // 获取会话列表
   getConversations: async () => {
@@ -22,6 +24,22 @@ const useChatStore = create((set, get) => ({
     } catch (error) {
       console.error('获取会话列表失败:', error)
       set({ loading: false })
+    }
+  },
+
+  // 获取用户积分状态
+  getUserCredits: async () => {
+    set({ creditsLoading: true })
+    try {
+      const response = await apiClient.get('/chat/credits')
+      set({ 
+        userCredits: response.data.data,
+        creditsLoading: false 
+      })
+      return response.data.data
+    } catch (error) {
+      console.error('获取用户积分失败:', error)
+      set({ creditsLoading: false })
     }
   },
   
@@ -69,7 +87,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 发送消息
+  // 发送消息 - 集成积分扣减
   sendMessage: async (content, fileId = null) => {
     if (!get().currentConversation) return
     
@@ -105,6 +123,20 @@ const useChatStore = create((set, get) => ({
         ],
         typing: false
       }))
+      
+      // 更新积分状态
+      if (responseData.credits_info) {
+        set(state => ({
+          userCredits: state.userCredits ? {
+            ...state.userCredits,
+            credits_stats: {
+              ...state.userCredits.credits_stats,
+              remaining: responseData.credits_info.credits_remaining,
+              used: state.userCredits.credits_stats.used + responseData.credits_info.credits_consumed
+            }
+          } : null
+        }))
+      }
       
       // 更新会话信息
       if (responseData.conversation) {
@@ -171,7 +203,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 获取AI模型列表
+  // 获取AI模型列表 - 包含积分信息
   getAIModels: async () => {
     try {
       const response = await apiClient.get('/chat/models')
@@ -179,6 +211,24 @@ const useChatStore = create((set, get) => ({
     } catch (error) {
       console.error('获取AI模型列表失败:', error)
     }
+  },
+
+  // 检查积分是否充足
+  checkCreditsForModel: (modelName) => {
+    const state = get()
+    if (!state.userCredits || !state.aiModels.length) return false
+    
+    const model = state.aiModels.find(m => m.name === modelName)
+    const requiredCredits = model?.credits_per_chat || 10
+    
+    return state.userCredits.credits_stats.remaining >= requiredCredits
+  },
+
+  // 获取模型所需积分
+  getModelCredits: (modelName) => {
+    const state = get()
+    const model = state.aiModels.find(m => m.name === modelName)
+    return model?.credits_per_chat || 10
   },
   
   // 清除当前会话
@@ -196,8 +246,10 @@ const useChatStore = create((set, get) => ({
       currentConversation: null,
       messages: [],
       aiModels: [],
+      userCredits: null,
       loading: false,
-      typing: false
+      typing: false,
+      creditsLoading: false
     })
   }
 }))

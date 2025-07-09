@@ -1,11 +1,12 @@
 /**
- * 对话控制器
+ * 对话控制器 - 集成积分扣减系统
  */
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AIService = require('../services/aiService');
 const User = require('../models/User');
+const AIModel = require('../models/AIModel');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
@@ -59,14 +60,14 @@ class ChatController {
         return ResponseHelper.validation(res, ['模型名称不能为空']);
       }
 
-      // 验证AI模型（暂时跳过验证，因为模型名称可能包含斜杠）
-      // const isValidModel = await AIService.validateModel(model_name || 'gpt-3.5-turbo');
-      // if (!isValidModel) {
-      //   return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-      // }
+      // 验证AI模型是否存在且启用
+      const aiModel = await AIModel.findByName(model_name);
+      if (!aiModel || !aiModel.is_active) {
+        return ResponseHelper.validation(res, ['选择的AI模型不可用']);
+      }
 
       const conversationData = {
-        user_id: parseInt(userId), // 确保是整数类型
+        user_id: parseInt(userId),
         title: title || 'New Chat',
         model_name: model_name || 'gpt-3.5-turbo',
         system_prompt: system_prompt || null
@@ -147,13 +148,13 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 如果更换模型，验证新模型（暂时跳过）
-      // if (model_name && model_name !== conversation.model_name) {
-      //   const isValidModel = await AIService.validateModel(model_name);
-      //   if (!isValidModel) {
-      //     return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-      //   }
-      // }
+      // 如果更换模型，验证新模型
+      if (model_name && model_name !== conversation.model_name) {
+        const aiModel = await AIModel.findByName(model_name);
+        if (!aiModel || !aiModel.is_active) {
+          return ResponseHelper.validation(res, ['选择的AI模型不可用']);
+        }
+      }
 
       const updatedConversation = await conversation.update({
         title,
@@ -253,10 +254,13 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复
+   * 发送消息并获取AI回复 - 集成积分扣减系统
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
+    let creditsConsumed = 0;
+    let conversationBackup = null;
+    
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -277,13 +281,56 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 检查用户Token配额
-      const user = req.user;
-      const estimatedTokens = Message.estimateTokens(content);
+      // 🔥 获取AI模型积分配置
+      const aiModel = await AIModel.findByName(conversation.model_name);
+      if (!aiModel || !aiModel.is_active) {
+        return ResponseHelper.error(res, '当前AI模型不可用');
+      }
+
+      const requiredCredits = aiModel.credits_per_chat || 10;
       
+      // 🔥 检查用户积分余额
+      const user = await User.findById(userId);
+      if (!user.hasCredits(requiredCredits)) {
+        return ResponseHelper.forbidden(res, `积分不足，需要 ${requiredCredits} 积分，当前余额 ${user.getCredits()} 积分`);
+      }
+
+      // 检查用户Token配额
+      const estimatedTokens = Message.estimateTokens(content);
       if (!user.hasTokenQuota(estimatedTokens * 2)) { // 估算请求和响应Token
         return ResponseHelper.forbidden(res, 'Token配额不足');
       }
+
+      // 备份对话状态，用于失败回滚
+      conversationBackup = {
+        message_count: conversation.message_count,
+        total_tokens: conversation.total_tokens
+      };
+
+      logger.info('预扣减积分开始', {
+        userId,
+        conversationId: id,
+        modelName: conversation.model_name,
+        requiredCredits,
+        currentBalance: user.getCredits()
+      });
+
+      // 🔥 预先扣减积分 - 防止并发重复消费
+      const creditsResult = await user.consumeCredits(
+        requiredCredits, 
+        aiModel.id, 
+        id, 
+        `AI对话消费 - ${aiModel.display_name}`
+      );
+      
+      creditsConsumed = requiredCredits;
+
+      logger.info('积分预扣减成功', {
+        userId,
+        conversationId: id,
+        creditsConsumed,
+        balanceAfter: creditsResult.balanceAfter
+      });
 
       // 创建用户消息
       const userMessage = await Message.create({
@@ -317,75 +364,123 @@ class ChatController {
         userId,
         conversationId: id,
         modelName: conversation.model_name,
-        messageCount: aiMessages.length
+        messageCount: aiMessages.length,
+        creditsCharged: requiredCredits
       });
 
-      // 调用AI服务
-      const aiResponse = await AIService.sendMessage(
-        conversation.model_name,
-        aiMessages
-      );
+      try {
+        // 调用AI服务
+        const aiResponse = await AIService.sendMessage(
+          conversation.model_name,
+          aiMessages
+        );
 
-      // 创建AI回复消息
-      const assistantMessage = await Message.create({
-        conversation_id: id,
-        role: 'assistant',
-        content: aiResponse.content,
-        tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content)
-      });
+        // 创建AI回复消息
+        const assistantMessage = await Message.create({
+          conversation_id: id,
+          role: 'assistant',
+          content: aiResponse.content,
+          tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content)
+        });
 
-      // 更新会话统计
-      const totalTokens = userMessage.tokens + assistantMessage.tokens;
-      await conversation.updateStats(2, totalTokens);
+        // 更新会话统计
+        const totalTokens = userMessage.tokens + assistantMessage.tokens;
+        await conversation.updateStats(2, totalTokens);
 
-      // 更新用户Token使用量
-      await user.updateTokenUsage(totalTokens);
+        // 更新用户Token使用量
+        await user.updateTokenUsage(totalTokens);
 
-      // 如果是第一条消息且标题是默认的，自动生成标题
-      if (conversation.title === 'New Chat' && conversation.message_count === 0) {
-        const autoTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
-        await conversation.update({ title: autoTitle });
-      }
-
-      logger.info('AI对话成功', { 
-        userId,
-        conversationId: id,
-        requestTokens: userMessage.tokens,
-        responseTokens: assistantMessage.tokens,
-        totalTokens
-      });
-
-      return ResponseHelper.success(res, {
-        user_message: userMessage.toJSON(),
-        assistant_message: assistantMessage.toJSON(),
-        conversation: conversation.toJSON(),
-        usage: {
-          total_tokens: totalTokens,
-          user_tokens: userMessage.tokens,
-          assistant_tokens: assistantMessage.tokens
+        // 如果是第一条消息且标题是默认的，自动生成标题
+        if (conversation.title === 'New Chat' && conversation.message_count === 0) {
+          const autoTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+          await conversation.update({ title: autoTitle });
         }
-      }, '消息发送成功');
+
+        logger.info('AI对话成功完成', { 
+          userId,
+          conversationId: id,
+          requestTokens: userMessage.tokens,
+          responseTokens: assistantMessage.tokens,
+          totalTokens,
+          creditsConsumed,
+          balanceAfter: creditsResult.balanceAfter
+        });
+
+        return ResponseHelper.success(res, {
+          user_message: userMessage.toJSON(),
+          assistant_message: assistantMessage.toJSON(),
+          conversation: conversation.toJSON(),
+          usage: {
+            total_tokens: totalTokens,
+            user_tokens: userMessage.tokens,
+            assistant_tokens: assistantMessage.tokens
+          },
+          credits_info: {
+            credits_consumed: creditsConsumed,
+            credits_remaining: creditsResult.balanceAfter,
+            model_credits_per_chat: requiredCredits
+          }
+        }, 'AI对话完成');
+
+      } catch (aiError) {
+        // 🔥 AI调用失败，退还积分
+        logger.error('AI调用失败，开始退还积分', {
+          userId,
+          conversationId: id,
+          creditsToRefund: creditsConsumed,
+          aiError: aiError.message
+        });
+
+        try {
+          // 退还积分 - 增加配额
+          await user.addCredits(creditsConsumed, `AI调用失败退款 - ${aiError.message}`);
+          
+          logger.info('积分退还成功', {
+            userId,
+            creditsRefunded: creditsConsumed
+          });
+
+        } catch (refundError) {
+          logger.error('积分退还失败', {
+            userId,
+            creditsToRefund: creditsConsumed,
+            refundError: refundError.message
+          });
+        }
+
+        // 抛出原始AI错误
+        throw aiError;
+      }
 
     } catch (error) {
       logger.error('发送消息失败', { 
         conversationId: req.params.id,
         userId: req.user?.id, 
+        creditsConsumed,
         error: error.message,
         stack: error.stack
       });
+
       return ResponseHelper.error(res, error.message || '消息发送失败');
     }
   }
 
   /**
-   * 获取可用的AI模型列表
+   * 获取可用的AI模型列表 - 增强积分信息
    * GET /api/chat/models
    */
   static async getModels(req, res) {
     try {
       const models = await AIService.getAvailableModels();
       
-      return ResponseHelper.success(res, models, '获取AI模型列表成功');
+      // 添加积分信息到模型列表
+      const modelsWithCredits = models.map(model => ({
+        ...model,
+        credits_per_chat: model.credits_per_chat || 10,
+        credits_display: `${model.credits_per_chat || 10} 积分/次`
+      }));
+      
+      return ResponseHelper.success(res, modelsWithCredits, '获取AI模型列表成功');
     } catch (error) {
       logger.error('获取AI模型列表失败', { 
         userId: req.user?.id, 
@@ -393,6 +488,36 @@ class ChatController {
         stack: error.stack
       });
       return ResponseHelper.error(res, '获取AI模型列表失败');
+    }
+  }
+
+  /**
+   * 获取用户积分状态 - 新增接口
+   * GET /api/chat/credits
+   */
+  static async getUserCredits(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await User.findById(userId);
+      
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+      
+      const creditsStats = user.getCreditsStats();
+      
+      return ResponseHelper.success(res, {
+        user_id: userId,
+        credits_stats: creditsStats,
+        can_chat: user.hasCredits(10) // 假设最小需要10积分
+      }, '获取用户积分状态成功');
+      
+    } catch (error) {
+      logger.error('获取用户积分状态失败', {
+        userId: req.user?.id,
+        error: error.message
+      });
+      return ResponseHelper.error(res, '获取积分状态失败');
     }
   }
 }

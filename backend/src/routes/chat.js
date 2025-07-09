@@ -1,5 +1,5 @@
 /**
- * 对话路由
+ * 对话路由 - 集成积分管理
  */
 
 const express = require('express');
@@ -9,14 +9,29 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
-// AI对话限流配置
+// AI对话限流配置 - 调整限流，考虑积分限制
 const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
-  max: 20, // 每分钟最多20次对话请求
+  max: 15, // 每分钟最多15次对话请求（积分已经是天然限流）
   message: {
     success: false,
     code: 429,
     message: '对话频率过高，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 用户积分查询限流 - 较宽松
+const creditsLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分钟
+  max: 60, // 每分钟最多60次积分查询
+  message: {
+    success: false,
+    code: 429,
+    message: '积分查询过于频繁，请稍后再试',
     data: null,
     timestamp: new Date().toISOString()
   },
@@ -29,10 +44,21 @@ router.use(authenticate);
 
 /**
  * @route GET /api/chat/models
- * @desc 获取可用的AI模型列表
+ * @desc 获取可用的AI模型列表 (含积分信息)
  * @access Private
  */
 router.get('/models', ChatController.getModels);
+
+/**
+ * @route GET /api/chat/credits
+ * @desc 获取用户积分状态
+ * @access Private
+ */
+router.get('/credits',
+  creditsLimiter,
+  requirePermission('chat.use'),
+  ChatController.getUserCredits
+);
 
 /**
  * @route GET /api/chat/conversations
@@ -96,13 +122,12 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复
+ * @desc 发送消息并获取AI回复 (积分扣减)
  * @access Private
  */
 router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
-  // 移除了checkTokenQuota中间件，在控制器内部处理
   ChatController.sendMessage
 );
 
