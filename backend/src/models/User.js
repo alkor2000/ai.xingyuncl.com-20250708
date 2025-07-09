@@ -1,5 +1,5 @@
 /**
- * 用户数据模型 - 支持用户分组
+ * 用户数据模型 - 支持用户分组和积分管理 (事务优化版)
  */
 
 const dbConnection = require('../database/connection');
@@ -21,8 +21,10 @@ class User {
     this.password_reset_expires = data.password_reset_expires || null;
     this.avatar_url = data.avatar_url || null;
     this.token_quota = data.token_quota || 10000;
+    this.credits_quota = data.credits_quota || 1000;
     this.login_attempts = data.login_attempts || 0;
     this.used_tokens = data.used_tokens || 0;
+    this.used_credits = data.used_credits || 0;
     this.last_login_at = data.last_login_at || null;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
@@ -204,12 +206,13 @@ class User {
         role = 'user',
         group_id = null,
         status = 'active',
-        token_quota = 10000
+        token_quota = 10000,
+        credits_quota = 1000
       } = userData;
 
       const sql = `
-        INSERT INTO users (email, username, password_hash, role, group_id, status, token_quota) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (email, username, password_hash, role, group_id, status, token_quota, credits_quota) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const { rows } = await dbConnection.query(sql, [
@@ -219,7 +222,8 @@ class User {
         role,
         group_id,
         status,
-        token_quota
+        token_quota,
+        credits_quota
       ]);
 
       const insertId = rows.insertId;
@@ -229,7 +233,8 @@ class User {
         email, 
         username, 
         role,
-        group_id
+        group_id,
+        credits_quota
       });
 
       return await User.findById(insertId);
@@ -249,7 +254,8 @@ class User {
       
       const allowedFields = [
         'username', 'password_hash', 'role', 'group_id', 'status', 
-        'email_verified', 'avatar_url', 'token_quota', 'used_tokens'
+        'email_verified', 'avatar_url', 'token_quota', 'used_tokens',
+        'credits_quota', 'used_credits'
       ];
       
       allowedFields.forEach(field => {
@@ -300,6 +306,389 @@ class User {
     }
   }
 
+  // ===== 积分管理方法 (事务优化版) =====
+
+  /**
+   * 获取用户积分余额
+   */
+  getCredits() {
+    return Math.max(0, (this.credits_quota || 0) - (this.used_credits || 0));
+  }
+
+  /**
+   * 检查积分配额
+   */
+  hasCredits(requiredCredits = 1) {
+    return this.getCredits() >= requiredCredits;
+  }
+
+  /**
+   * 获取积分使用统计
+   */
+  getCreditsStats() {
+    return {
+      quota: this.credits_quota || 0,
+      used: this.used_credits || 0,
+      remaining: this.getCredits(),
+      usageRate: this.credits_quota ? ((this.used_credits || 0) / this.credits_quota * 100).toFixed(2) : 0
+    };
+  }
+
+  /**
+   * 增加积分 (管理员操作) - 使用事务
+   */
+  async addCredits(amount, reason = '管理员充值', operatorId = null) {
+    try {
+      if (amount <= 0) {
+        throw new Error('积分数量必须大于0');
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
+        const updateSql = `
+          UPDATE users 
+          SET credits_quota = credits_quota + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [amount, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_add', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, amount, balanceAfter, reason, operatorId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.credits_quota += amount;
+
+      logger.info('用户积分充值成功', {
+        userId: this.id,
+        amount,
+        newQuota: this.credits_quota,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        amount,
+        newQuota: this.credits_quota,
+        balanceAfter: result.balanceAfter,
+        message: '积分充值成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分充值失败:', {
+        userId: this.id,
+        amount,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分充值失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 扣减积分 (管理员操作) - 使用事务
+   */
+  async deductCredits(amount, reason = '管理员扣减', operatorId = null) {
+    try {
+      if (amount <= 0) {
+        throw new Error('扣减积分数量必须大于0');
+      }
+
+      // 检查余额是否充足
+      if (!this.hasCredits(amount)) {
+        throw new Error(`积分余额不足，当前余额: ${this.getCredits()}，需要: ${amount}`);
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户已使用积分
+        const updateSql = `
+          UPDATE users 
+          SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [amount, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_deduct', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, -amount, balanceAfter, reason, operatorId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.used_credits += amount;
+
+      logger.info('用户积分扣减成功', {
+        userId: this.id,
+        amount,
+        newUsed: this.used_credits,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        amount,
+        newUsed: this.used_credits,
+        balanceAfter: result.balanceAfter,
+        message: '积分扣减成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分扣减失败:', {
+        userId: this.id,
+        amount,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分扣减失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 消耗积分 (AI对话) - 使用事务
+   */
+  async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费') {
+    try {
+      if (amount <= 0) {
+        throw new Error('消费积分数量必须大于0');
+      }
+
+      // 检查余额是否充足
+      if (!this.hasCredits(amount)) {
+        throw new Error(`积分余额不足，当前余额: ${this.getCredits()}，需要: ${amount}`);
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户已使用积分
+        const updateSql = `
+          UPDATE users 
+          SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [amount, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分消费历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, 
+           related_model_id, related_conversation_id)
+          VALUES (?, ?, ?, 'chat_consume', ?, ?, ?)
+        `;
+        await query(historySql, [
+          this.id, -amount, balanceAfter, reason, modelId, conversationId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.used_credits += amount;
+
+      logger.info('用户积分消费成功', {
+        userId: this.id,
+        amount,
+        modelId,
+        conversationId,
+        balanceAfter: result.balanceAfter,
+        reason
+      });
+
+      return {
+        success: true,
+        amount,
+        balanceAfter: result.balanceAfter,
+        message: '积分消费成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分消费失败:', {
+        userId: this.id,
+        amount,
+        modelId,
+        conversationId,
+        error: error.message
+      });
+      throw new DatabaseError(`积分消费失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 设置积分配额 (管理员操作) - 使用事务
+   */
+  async setCreditsQuota(newQuota, reason = '管理员设置配额', operatorId = null) {
+    try {
+      if (newQuota < 0) {
+        throw new Error('积分配额不能为负数');
+      }
+
+      const oldQuota = this.credits_quota || 0;
+      const quotaDiff = newQuota - oldQuota;
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
+        const updateSql = `
+          UPDATE users 
+          SET credits_quota = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [newQuota, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_set', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, quotaDiff, balanceAfter, `${reason} (从 ${oldQuota} 调整为 ${newQuota})`, operatorId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.credits_quota = newQuota;
+
+      logger.info('用户积分配额设置成功', {
+        userId: this.id,
+        oldQuota,
+        newQuota,
+        quotaDiff,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        oldQuota,
+        newQuota,
+        quotaDiff,
+        balanceAfter: result.balanceAfter,
+        message: '积分配额设置成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分配额设置失败:', {
+        userId: this.id,
+        newQuota,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分配额设置失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取积分使用历史
+   */
+  static async getCreditHistory(userId, options = {}) {
+    try {
+      const { page = 1, limit = 20, transaction_type = null } = options;
+      
+      let whereConditions = ['ct.user_id = ?'];
+      let params = [userId];
+
+      if (transaction_type) {
+        whereConditions.push('ct.transaction_type = ?');
+        params.push(transaction_type);
+      }
+
+      const whereClause = whereConditions.join(' AND ');
+
+      // 获取总数
+      const countSql = `SELECT COUNT(*) as total FROM credit_transactions ct WHERE ${whereClause}`;
+      const { rows: totalRows } = await dbConnection.query(countSql, params);
+      const total = totalRows[0].total;
+
+      // 获取历史记录
+      const offset = (page - 1) * limit;
+      const listSql = `
+        SELECT ct.*, am.display_name as model_name, u.username as operator_name
+        FROM credit_transactions ct
+        LEFT JOIN ai_models am ON ct.related_model_id = am.id
+        LEFT JOIN users u ON ct.operator_id = u.id
+        WHERE ${whereClause}
+        ORDER BY ct.created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+
+      const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
+
+      logger.info('获取积分历史成功', { userId, count: rows.length, total });
+
+      return {
+        history: rows,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+
+    } catch (error) {
+      logger.error('获取积分历史失败:', {
+        userId,
+        error: error.message
+      });
+      throw new DatabaseError(`获取积分历史失败: ${error.message}`, error);
+    }
+  }
+
+  // ===== 分组管理方法 (保持不变) =====
+
   /**
    * 获取用户分组列表
    */
@@ -308,7 +697,8 @@ class User {
       const sql = `
         SELECT g.*, 
                COUNT(u.id) as user_count,
-               AVG(u.used_tokens) as avg_tokens_used
+               AVG(u.used_tokens) as avg_tokens_used,
+               AVG(u.used_credits) as avg_credits_used
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
         GROUP BY g.id
@@ -365,7 +755,8 @@ class User {
       const sql = `
         SELECT g.*, 
                COUNT(u.id) as user_count,
-               AVG(u.used_tokens) as avg_tokens_used
+               AVG(u.used_tokens) as avg_tokens_used,
+               AVG(u.used_credits) as avg_credits_used
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
         WHERE g.id = ?
@@ -448,6 +839,8 @@ class User {
     }
   }
 
+  // ===== 其他方法 (保持不变) =====
+
   /**
    * 更新最后登录时间
    */
@@ -489,12 +882,12 @@ class User {
     try {
       // 超级管理员拥有所有权限
       if (this.role === 'super_admin') {
-        return ['chat.use', 'file.upload', 'system.all', 'user.manage', 'group.manage', 'admin.*'];
+        return ['chat.use', 'file.upload', 'system.all', 'user.manage', 'group.manage', 'credits.manage', 'admin.*'];
       }
 
-      // 管理员权限 (包含分组管理)
+      // 管理员权限 (包含分组管理和积分管理)
       if (this.role === 'admin') {
-        return ['chat.use', 'file.upload', 'user.manage', 'group.manage'];
+        return ['chat.use', 'file.upload', 'user.manage', 'group.manage', 'credits.manage'];
       }
 
       // 普通用户权限
@@ -554,12 +947,15 @@ class User {
   }
 
   /**
-   * 转换为JSON (包含分组信息)
+   * 转换为JSON (包含分组信息和积分信息)
    */
   toJSON() {
     const userData = { ...this };
     delete userData.password_hash;
-    return userData;
+    return {
+      ...userData,
+      credits_stats: this.getCreditsStats()
+    };
   }
 }
 

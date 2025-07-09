@@ -1,5 +1,5 @@
 /**
- * 管理员路由 - 支持用户分组管理
+ * 管理员路由 - 支持用户分组管理和积分管理
  */
 
 const express = require('express');
@@ -25,7 +25,7 @@ router.use(authenticate);
 
 /**
  * @route GET /api/admin/stats
- * @desc 获取系统统计信息 (包含分组统计)
+ * @desc 获取系统统计信息 (包含分组统计和积分统计)
  * @access Admin / SuperAdmin
  */
 router.get('/stats',
@@ -47,7 +47,7 @@ router.get('/users',
 
 /**
  * @route POST /api/admin/users
- * @desc 创建用户 (支持分组设置)
+ * @desc 创建用户 (支持分组设置和积分配额)
  * @access Admin / SuperAdmin
  */
 router.post('/users',
@@ -58,7 +58,7 @@ router.post('/users',
 
 /**
  * @route GET /api/admin/users/:id
- * @desc 获取用户详情
+ * @desc 获取用户详情 (包含积分信息)
  * @access Admin / SuperAdmin
  */
 router.get('/users/:id',
@@ -69,7 +69,7 @@ router.get('/users/:id',
 
 /**
  * @route PUT /api/admin/users/:id
- * @desc 更新用户 (支持分组更新)
+ * @desc 更新用户 (支持分组更新和积分配额)
  * @access Admin / SuperAdmin
  */
 router.put('/users/:id',
@@ -88,6 +88,65 @@ router.delete('/users/:id',
   requirePermission('user.manage'),
   AdminController.deleteUser
 );
+
+// ===== 积分管理路由 (新增核心功能) =====
+
+/**
+ * @route GET /api/admin/users/:id/credits
+ * @desc 获取用户积分信息
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.get('/users/:id/credits',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.getUserCredits
+);
+
+/**
+ * @route PUT /api/admin/users/:id/credits
+ * @desc 设置用户积分配额
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.put('/users/:id/credits',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.setUserCredits
+);
+
+/**
+ * @route POST /api/admin/users/:id/credits/add
+ * @desc 充值用户积分
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.post('/users/:id/credits/add',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.addUserCredits
+);
+
+/**
+ * @route POST /api/admin/users/:id/credits/deduct
+ * @desc 扣减用户积分
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.post('/users/:id/credits/deduct',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.deductUserCredits
+);
+
+/**
+ * @route GET /api/admin/users/:id/credits/history
+ * @desc 获取用户积分使用历史
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.get('/users/:id/credits/history',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.getUserCreditsHistory
+);
+
+// ===== 用户分组管理路由 (保持不变) =====
 
 /**
  * @route GET /api/admin/user-groups
@@ -133,6 +192,8 @@ router.delete('/user-groups/:id',
   AdminController.deleteUserGroup
 );
 
+// ===== AI模型管理路由 (保持不变) =====
+
 /**
  * @route GET /api/admin/models
  * @desc 获取AI模型管理
@@ -157,7 +218,7 @@ router.post('/models',
 
 /**
  * @route PUT /api/admin/models/:id
- * @desc 更新AI模型配置
+ * @desc 更新AI模型配置 (支持积分配置)
  * @access SuperAdmin
  */
 router.put('/models/:id',
@@ -187,6 +248,8 @@ router.delete('/models/:id',
   requirePermission('system.all'),
   AdminController.deleteAIModel
 );
+
+// ===== 系统模块管理路由 (保持不变) =====
 
 /**
  * @route GET /api/admin/modules
@@ -243,9 +306,11 @@ router.post('/modules/:id/health-check',
   AdminController.checkModuleHealth
 );
 
+// ===== 系统设置路由 (包含积分设置) =====
+
 /**
  * @route GET /api/admin/settings
- * @desc 获取系统设置
+ * @desc 获取系统设置 (包含积分设置)
  * @access SuperAdmin
  */
 router.get('/settings',
@@ -256,7 +321,7 @@ router.get('/settings',
 
 /**
  * @route PUT /api/admin/settings
- * @desc 更新系统设置
+ * @desc 更新系统设置 (包含积分设置)
  * @access SuperAdmin
  */
 router.put('/settings',

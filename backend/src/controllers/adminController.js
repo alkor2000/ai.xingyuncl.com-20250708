@@ -1,5 +1,5 @@
 /**
- * 管理员控制器 - 支持用户分组管理
+ * 管理员控制器 - 支持用户分组管理和积分管理
  */
 
 const User = require('../models/User');
@@ -12,7 +12,7 @@ const dbConnection = require('../database/connection');
 class AdminController {
   
   /**
-   * 获取系统统计 - 包含分组统计
+   * 获取系统统计 - 包含分组统计和积分统计
    */
   static async getSystemStats(req, res) {
     try {
@@ -23,14 +23,20 @@ class AdminController {
           SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
           SUM(CASE WHEN role = 'admin' OR role = 'super_admin' THEN 1 ELSE 0 END) as admin_users,
           SUM(used_tokens) as total_tokens_used,
-          AVG(used_tokens) as avg_tokens_per_user
+          AVG(used_tokens) as avg_tokens_per_user,
+          SUM(credits_quota) as total_credits_quota,
+          SUM(used_credits) as total_credits_used,
+          AVG(credits_quota - used_credits) as avg_credits_remaining
         FROM users
       `;
       const { rows: userStats } = await dbConnection.query(userStatsQuery);
       
       // 获取分组统计
       const groupStatsQuery = `
-        SELECT g.name, g.color, COUNT(u.id) as user_count, AVG(u.used_tokens) as avg_tokens
+        SELECT g.name, g.color, COUNT(u.id) as user_count, 
+               AVG(u.used_tokens) as avg_tokens,
+               AVG(u.used_credits) as avg_credits,
+               SUM(u.credits_quota - u.used_credits) as total_credits_remaining
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
         GROUP BY g.id
@@ -49,14 +55,20 @@ class AdminController {
       `;
       const { rows: conversationStats } = await dbConnection.query(conversationStatsQuery);
       
-      // 获取AI模型使用统计
+      // 获取AI模型使用统计 (包含积分消费)
       const modelStatsQuery = `
         SELECT 
-          model_name,
-          COUNT(*) as conversation_count,
-          SUM(total_tokens) as total_tokens
-        FROM conversations 
-        GROUP BY model_name 
+          am.display_name as model_name,
+          am.credits_per_chat,
+          COUNT(c.id) as conversation_count,
+          SUM(c.total_tokens) as total_tokens,
+          COUNT(ct.id) as credit_transactions,
+          SUM(ABS(ct.amount)) as total_credits_consumed
+        FROM ai_models am
+        LEFT JOIN conversations c ON am.name = c.model_name 
+        LEFT JOIN credit_transactions ct ON am.id = ct.related_model_id
+        WHERE am.is_active = 1
+        GROUP BY am.id
         ORDER BY conversation_count DESC
         LIMIT 10
       `;
@@ -118,7 +130,7 @@ class AdminController {
   }
 
   /**
-   * 获取用户详情
+   * 获取用户详情 (包含积分信息)
    */
   static async getUserDetail(req, res) {
     try {
@@ -151,7 +163,7 @@ class AdminController {
   }
 
   /**
-   * 创建用户 - 支持分组设置
+   * 创建用户 - 支持分组设置和积分配额
    */
   static async createUser(req, res) {
     try {
@@ -162,7 +174,8 @@ class AdminController {
         role = 'user', 
         group_id = null,
         status = 'active', 
-        token_quota = 10000 
+        token_quota = 10000,
+        credits_quota = 1000
       } = req.body;
 
       // 检查邮箱是否已存在
@@ -184,7 +197,8 @@ class AdminController {
         role,
         group_id: group_id || null,
         status,
-        token_quota
+        token_quota,
+        credits_quota
       });
 
       logger.info('管理员创建用户成功', { 
@@ -192,7 +206,8 @@ class AdminController {
         newUserId: user.id,
         email,
         role,
-        group_id
+        group_id,
+        credits_quota
       });
 
       return ResponseHelper.success(res, user.toJSON(), '用户创建成功', 201);
@@ -206,7 +221,7 @@ class AdminController {
   }
 
   /**
-   * 更新用户 - 支持分组更新
+   * 更新用户 - 支持分组更新和积分配额
    */
   static async updateUser(req, res) {
     try {
@@ -267,6 +282,203 @@ class AdminController {
       return ResponseHelper.error(res, '删除用户失败');
     }
   }
+
+  // ===== 积分管理接口 (新增核心功能) =====
+
+  /**
+   * 获取用户积分信息
+   * GET /api/admin/users/:id/credits
+   */
+  static async getUserCredits(req, res) {
+    try {
+      const { id } = req.params;
+      
+      const user = await User.findById(id);
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      const creditsInfo = {
+        user_id: user.id,
+        user_email: user.email,
+        credits_quota: user.credits_quota,
+        used_credits: user.used_credits,
+        credits_stats: user.getCreditsStats()
+      };
+
+      logger.info('获取用户积分信息成功', { 
+        adminId: req.user.id,
+        targetUserId: id,
+        creditsInfo
+      });
+
+      return ResponseHelper.success(res, creditsInfo, '获取用户积分信息成功');
+    } catch (error) {
+      logger.error('获取用户积分信息失败', { 
+        adminId: req.user?.id, 
+        userId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '获取用户积分信息失败');
+    }
+  }
+
+  /**
+   * 设置用户积分配额
+   * PUT /api/admin/users/:id/credits
+   */
+  static async setUserCredits(req, res) {
+    try {
+      const { id } = req.params;
+      const { credits_quota, reason = '管理员调整积分配额' } = req.body;
+      
+      if (typeof credits_quota !== 'number' || credits_quota < 0) {
+        return ResponseHelper.badRequest(res, '积分配额必须是非负数字');
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      const result = await user.setCreditsQuota(credits_quota, reason, req.user.id);
+
+      logger.info('管理员设置用户积分配额成功', { 
+        adminId: req.user.id,
+        targetUserId: id,
+        newQuota: credits_quota,
+        reason
+      });
+
+      return ResponseHelper.success(res, result, '积分配额设置成功');
+    } catch (error) {
+      logger.error('设置用户积分配额失败', { 
+        adminId: req.user?.id, 
+        userId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '设置积分配额失败');
+    }
+  }
+
+  /**
+   * 充值用户积分
+   * POST /api/admin/users/:id/credits/add
+   */
+  static async addUserCredits(req, res) {
+    try {
+      const { id } = req.params;
+      const { amount, reason = '管理员充值积分' } = req.body;
+      
+      if (typeof amount !== 'number' || amount <= 0) {
+        return ResponseHelper.badRequest(res, '充值金额必须是正数');
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      const result = await user.addCredits(amount, reason, req.user.id);
+
+      logger.info('管理员充值用户积分成功', { 
+        adminId: req.user.id,
+        targetUserId: id,
+        amount,
+        reason
+      });
+
+      return ResponseHelper.success(res, result, '积分充值成功');
+    } catch (error) {
+      logger.error('充值用户积分失败', { 
+        adminId: req.user?.id, 
+        userId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '积分充值失败');
+    }
+  }
+
+  /**
+   * 扣减用户积分
+   * POST /api/admin/users/:id/credits/deduct
+   */
+  static async deductUserCredits(req, res) {
+    try {
+      const { id } = req.params;
+      const { amount, reason = '管理员扣减积分' } = req.body;
+      
+      if (typeof amount !== 'number' || amount <= 0) {
+        return ResponseHelper.badRequest(res, '扣减金额必须是正数');
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      const result = await user.deductCredits(amount, reason, req.user.id);
+
+      logger.info('管理员扣减用户积分成功', { 
+        adminId: req.user.id,
+        targetUserId: id,
+        amount,
+        reason
+      });
+
+      return ResponseHelper.success(res, result, '积分扣减成功');
+    } catch (error) {
+      logger.error('扣减用户积分失败', { 
+        adminId: req.user?.id, 
+        userId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '积分扣减失败');
+    }
+  }
+
+  /**
+   * 获取用户积分使用历史
+   * GET /api/admin/users/:id/credits/history
+   */
+  static async getUserCreditsHistory(req, res) {
+    try {
+      const { id } = req.params;
+      const { 
+        page = 1, 
+        limit = 20, 
+        transaction_type = null 
+      } = req.query;
+
+      const user = await User.findById(id);
+      if (!user) {
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      const result = await User.getCreditHistory(id, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        transaction_type
+      });
+
+      logger.info('获取用户积分历史成功', { 
+        adminId: req.user.id,
+        targetUserId: id,
+        historyCount: result.history.length
+      });
+
+      return ResponseHelper.paginated(res, result.history, result.pagination, '获取积分历史成功');
+    } catch (error) {
+      logger.error('获取用户积分历史失败', { 
+        adminId: req.user?.id, 
+        userId: req.params.id,
+        error: error.message 
+      });
+      return ResponseHelper.error(res, '获取积分历史失败');
+    }
+  }
+
+  // ===== 用户分组管理 (保持不变) =====
 
   /**
    * 获取用户分组列表
@@ -371,7 +583,7 @@ class AdminController {
     }
   }
 
-  // 以下是原有的AI模型管理和系统模块管理方法 (保持不变)
+  // ===== AI模型管理 (支持积分配置) =====
 
   /**
    * 获取AI模型列表
@@ -439,7 +651,7 @@ class AdminController {
   }
 
   /**
-   * 更新AI模型
+   * 更新AI模型 (支持积分配置)
    */
   static async updateAIModel(req, res) {
     try {
@@ -548,12 +760,19 @@ class AdminController {
           allow_register: true,
           email_verification: false,
           default_token_quota: 10000,
-          default_group_id: 1
+          default_group_id: 1,
+          default_credits_quota: 1000
         },
         ai: {
           default_model: 'gpt-3.5-turbo',
           max_tokens: 4096,
           temperature: 0.7
+        },
+        credits: {
+          enable_credits: true,
+          default_credits: 1000,
+          max_credits: 100000,
+          min_credits_for_chat: 1
         },
         security: {
           session_timeout: 720,

@@ -1,5 +1,5 @@
 /**
- * MySQL数据库连接池管理
+ * MySQL数据库连接池管理 - 支持事务操作
  */
 
 const mysql = require('mysql2/promise');
@@ -35,7 +35,9 @@ class DatabaseConnection {
         connectionLimit: dbConfig.connectionLimit || 10,
         queueLimit: 0,
         charset: dbConfig.charset || 'utf8mb4',
-        timezone: '+08:00'
+        timezone: '+08:00',
+        acquireTimeout: 30000,
+        timeout: 30000
       });
 
       // 测试连接
@@ -104,13 +106,89 @@ class DatabaseConnection {
   }
 
   /**
+   * 开启事务 - 积分操作核心方法
+   */
+  async beginTransaction() {
+    try {
+      if (!this.pool) {
+        throw new Error('数据库连接池未初始化');
+      }
+      
+      const connection = await this.pool.getConnection();
+      await connection.beginTransaction();
+      
+      return {
+        connection,
+        query: async (sql, params = []) => {
+          const [rows, fields] = await connection.execute(sql, params);
+          return { rows, fields };
+        },
+        commit: async () => {
+          await connection.commit();
+          connection.release();
+        },
+        rollback: async () => {
+          await connection.rollback();
+          connection.release();
+        },
+        release: () => {
+          connection.release();
+        }
+      };
+    } catch (error) {
+      logger.error('开启事务失败:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行事务操作 - 自动管理事务生命周期
+   */
+  async transaction(callback) {
+    let connection = null;
+    try {
+      if (!this.pool) {
+        throw new Error('数据库连接池未初始化');
+      }
+      
+      connection = await this.pool.getConnection();
+      await connection.beginTransaction();
+      
+      const transactionQuery = async (sql, params = []) => {
+        const [rows, fields] = await connection.execute(sql, params);
+        return { rows, fields };
+      };
+      
+      // 执行回调函数
+      const result = await callback(transactionQuery);
+      
+      await connection.commit();
+      connection.release();
+      
+      return result;
+    } catch (error) {
+      if (connection) {
+        try {
+          await connection.rollback();
+          connection.release();
+        } catch (rollbackError) {
+          logger.error('事务回滚失败:', rollbackError.message);
+        }
+      }
+      
+      logger.error('事务执行失败:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * 获取连接状态
    */
   getStatus() {
     return {
       connected: this.isConnected,
-      poolConnections: this.pool ? this.pool._poolConnections : 0,
-      promiseConnections: this.pool ? this.pool._promiseConnections : 0
+      poolConnections: this.pool ? this.pool._activeConnections?.size || 0 : 0,
+      freeConnections: this.pool ? this.pool._freeConnections?.length || 0 : 0
     };
   }
 

@@ -1,5 +1,5 @@
 /**
- * AI模型数据模型
+ * AI模型数据模型 - 支持积分消费配置
  */
 
 const dbConnection = require('../database/connection');
@@ -15,6 +15,7 @@ class AIModel {
     this.provider = data.provider || null;
     this.api_endpoint = data.api_endpoint || null;
     this.model_config = data.model_config || {};
+    this.credits_per_chat = data.credits_per_chat || 10;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.sort_order = data.sort_order || 0;
     this.test_status = data.test_status || 'untested';
@@ -74,6 +75,8 @@ class AIModel {
       return 'google';
     } else if (modelName.includes('llama')) {
       return 'meta';
+    } else if (modelName.includes('deepseek')) {
+      return 'deepseek';
     } else {
       return 'custom';
     }
@@ -90,6 +93,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config = {},
+        credits_per_chat = 10,
         sort_order = 0 
       } = modelData;
 
@@ -97,8 +101,9 @@ class AIModel {
       const provider = AIModel.inferProvider(name);
 
       const sql = `
-        INSERT INTO ai_models (name, display_name, api_key, provider, api_endpoint, model_config, sort_order, test_status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'untested')
+        INSERT INTO ai_models (name, display_name, api_key, provider, api_endpoint, 
+                              model_config, credits_per_chat, sort_order, test_status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'untested')
       `;
       
       const { rows } = await dbConnection.query(sql, [
@@ -108,6 +113,7 @@ class AIModel {
         provider,
         api_endpoint, 
         JSON.stringify(model_config),
+        credits_per_chat,
         sort_order
       ]);
 
@@ -115,7 +121,8 @@ class AIModel {
         modelId: rows.insertId, 
         name, 
         display_name,
-        provider
+        provider,
+        credits_per_chat
       });
 
       return await AIModel.findById(rows.insertId);
@@ -156,7 +163,7 @@ class AIModel {
   }
 
   /**
-   * 更新AI模型
+   * 更新AI模型 (支持积分配置)
    */
   async update(updateData) {
     try {
@@ -165,6 +172,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config, 
+        credits_per_chat,
         is_active, 
         sort_order 
       } = updateData;
@@ -172,8 +180,8 @@ class AIModel {
       const sql = `
         UPDATE ai_models 
         SET display_name = ?, api_key = ?, api_endpoint = ?, 
-            model_config = ?, is_active = ?, sort_order = ?, 
-            test_status = 'untested', updated_at = CURRENT_TIMESTAMP
+            model_config = ?, credits_per_chat = ?, is_active = ?, 
+            sort_order = ?, test_status = 'untested', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `;
       
@@ -182,15 +190,37 @@ class AIModel {
         api_key !== undefined ? api_key : this.api_key,
         api_endpoint !== undefined ? api_endpoint : this.api_endpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
+        credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
         is_active !== undefined ? is_active : this.is_active,
         sort_order !== undefined ? sort_order : this.sort_order,
         this.id
       ]);
 
-      logger.info('AI模型更新成功', { modelId: this.id });
+      logger.info('AI模型更新成功', { 
+        modelId: this.id,
+        credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat
+      });
     } catch (error) {
       logger.error('AI模型更新失败:', error);
       throw new DatabaseError(`AI模型更新失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 删除AI模型
+   */
+  async delete() {
+    try {
+      const sql = 'DELETE FROM ai_models WHERE id = ?';
+      await dbConnection.query(sql, [this.id]);
+
+      logger.info('AI模型删除成功', { 
+        modelId: this.id,
+        modelName: this.name
+      });
+    } catch (error) {
+      logger.error('AI模型删除失败:', error);
+      throw new DatabaseError(`AI模型删除失败: ${error.message}`, error);
     }
   }
 
@@ -284,6 +314,18 @@ class AIModel {
   }
 
   /**
+   * 获取积分消费配置
+   */
+  getCreditsConfig() {
+    return {
+      credits_per_chat: this.credits_per_chat || 10,
+      model_name: this.name,
+      display_name: this.display_name,
+      provider: this.provider
+    };
+  }
+
+  /**
    * 获取模型的默认配置
    */
   getDefaultConfig() {
@@ -313,6 +355,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint ? '***已配置***' : null,
       model_config: this.model_config,
+      credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,
       test_status: this.test_status,
@@ -334,6 +377,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint,
       model_config: this.model_config,
+      credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,
       test_status: this.test_status,

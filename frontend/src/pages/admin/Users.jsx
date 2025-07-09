@@ -15,7 +15,11 @@ import {
   Popconfirm,
   Drawer,
   Row,
-  Col
+  Col,
+  Statistic,
+  Progress,
+  Tabs,
+  Divider
 } from 'antd'
 import { 
   UserAddOutlined, 
@@ -24,10 +28,18 @@ import {
   EyeOutlined,
   ReloadOutlined,
   TeamOutlined,
-  PlusOutlined
+  PlusOutlined,
+  WalletOutlined,
+  DollarOutlined,
+  MinusCircleOutlined,
+  PlusCircleOutlined,
+  HistoryOutlined,
+  TrophyOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
+
+const { TabPane } = Tabs
 
 const Users = () => {
   const { user: currentUser, hasPermission } = useAuthStore()
@@ -36,6 +48,9 @@ const Users = () => {
     userDetail,
     userGroups,
     loading,
+    userCredits,
+    creditsHistory,
+    creditsLoading,
     getUsers,
     getUserDetail,
     createUser,
@@ -44,15 +59,27 @@ const Users = () => {
     getUserGroups,
     createUserGroup,
     updateUserGroup,
-    deleteUserGroup
+    deleteUserGroup,
+    // 积分管理方法
+    getUserCredits,
+    setUserCreditsQuota,
+    addUserCredits,
+    deductUserCredits,
+    getUserCreditsHistory
   } = useAdminStore()
 
   const [form] = Form.useForm()
   const [groupForm] = Form.useForm()
   const [searchForm] = Form.useForm()
+  const [creditsForm] = Form.useForm()
+  
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isGroupModalVisible, setIsGroupModalVisible] = useState(false)
   const [isDetailVisible, setIsDetailVisible] = useState(false)
+  const [isCreditsModalVisible, setIsCreditsModalVisible] = useState(false)
+  const [creditsModalType, setCreditsModalType] = useState('add') // 'add', 'deduct', 'set'
+  const [selectedUserId, setSelectedUserId] = useState(null)
+  
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
@@ -142,6 +169,9 @@ const Users = () => {
   const handleViewDetail = async (userId) => {
     try {
       await getUserDetail(userId)
+      if (hasPermission('credits.manage')) {
+        await getUserCredits(userId)
+      }
       setIsDetailVisible(true)
     } catch (error) {
       message.error('获取用户详情失败')
@@ -156,10 +186,60 @@ const Users = () => {
       role: user.role,
       group_id: user.group_id,
       status: user.status,
-      token_quota: user.token_quota
+      token_quota: user.token_quota,
+      credits_quota: user.credits_quota
     })
     setIsModalVisible(true)
   }
+
+  // ===== 积分管理方法 =====
+
+  // 打开积分管理模态框
+  const handleManageCredits = (userId, type) => {
+    setSelectedUserId(userId)
+    setCreditsModalType(type)
+    creditsForm.resetFields()
+    setIsCreditsModalVisible(true)
+  }
+
+  // 积分操作提交
+  const handleCreditsSubmit = async (values) => {
+    try {
+      const { amount, reason } = values
+      let result = null
+
+      switch (creditsModalType) {
+        case 'add':
+          result = await addUserCredits(selectedUserId, amount, reason || '管理员充值')
+          message.success(`积分充值成功！充值 ${amount} 积分`)
+          break
+        case 'deduct':
+          result = await deductUserCredits(selectedUserId, amount, reason || '管理员扣减')
+          message.success(`积分扣减成功！扣减 ${amount} 积分`)
+          break
+        case 'set':
+          result = await setUserCreditsQuota(selectedUserId, amount, reason || '管理员设置配额')
+          message.success(`积分配额设置成功！新配额 ${amount} 积分`)
+          break
+      }
+
+      setIsCreditsModalVisible(false)
+      creditsForm.resetFields()
+      
+      // 如果用户详情窗口打开，刷新积分信息
+      if (isDetailVisible && selectedUserId) {
+        await getUserCredits(selectedUserId)
+      }
+      
+      // 刷新用户列表
+      loadUsers()
+      
+    } catch (error) {
+      message.error(error.response?.data?.message || '积分操作失败')
+    }
+  }
+
+  // ===== 分组管理方法 =====
 
   // 创建分组
   const handleCreateGroup = async (values) => {
@@ -230,7 +310,19 @@ const Users = () => {
     inactive: 'red'
   }
 
-  // 用户表格列
+  const creditsModalTitles = {
+    add: '充值积分',
+    deduct: '扣减积分',
+    set: '设置配额'
+  }
+
+  const creditsModalIcons = {
+    add: <PlusCircleOutlined style={{ color: '#52c41a' }} />,
+    deduct: <MinusCircleOutlined style={{ color: '#ff4d4f' }} />,
+    set: <WalletOutlined style={{ color: '#1677ff' }} />
+  }
+
+  // 用户表格列 (增强积分显示)
   const userColumns = [
     {
       title: 'ID',
@@ -279,16 +371,35 @@ const Users = () => {
       )
     },
     {
+      title: '积分余额',
+      key: 'credits',
+      render: (_, record) => {
+        const remaining = (record.credits_quota || 0) - (record.used_credits || 0)
+        const usageRate = record.credits_quota > 0 ? (record.used_credits / record.credits_quota * 100) : 0
+        
+        return (
+          <div style={{ minWidth: 120 }}>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: remaining > 0 ? '#52c41a' : '#ff4d4f' }}>
+              {remaining?.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {record.used_credits?.toLocaleString()} / {record.credits_quota?.toLocaleString()}
+            </div>
+            <Progress 
+              percent={Math.round(usageRate)} 
+              size="small" 
+              strokeColor={usageRate > 80 ? '#ff4d4f' : '#52c41a'}
+              showInfo={false}
+            />
+          </div>
+        )
+      }
+    },
+    {
       title: 'Token配额',
       dataIndex: 'token_quota',
       key: 'token_quota',
       render: (quota) => quota?.toLocaleString()
-    },
-    {
-      title: '已使用',
-      dataIndex: 'used_tokens',
-      key: 'used_tokens',
-      render: (used) => used?.toLocaleString()
     },
     {
       title: '创建时间',
@@ -309,6 +420,20 @@ const Users = () => {
             <Button type="text" size="small" icon={<EditOutlined />} 
               onClick={() => handleEditUser(record)} />
           </Tooltip>
+          {hasPermission('credits.manage') && (
+            <>
+              <Tooltip title="积分充值">
+                <Button type="text" size="small" icon={<PlusCircleOutlined />}
+                  style={{ color: '#52c41a' }}
+                  onClick={() => handleManageCredits(record.id, 'add')} />
+              </Tooltip>
+              <Tooltip title="积分扣减">
+                <Button type="text" size="small" icon={<MinusCircleOutlined />}
+                  style={{ color: '#ff4d4f' }}
+                  onClick={() => handleManageCredits(record.id, 'deduct')} />
+              </Tooltip>
+            </>
+          )}
           {record.id !== currentUser?.id && (
             <Tooltip title="删除">
               <Popconfirm
@@ -326,7 +451,7 @@ const Users = () => {
     }
   ]
 
-  // 分组表格列
+  // 分组表格列 (增强积分统计)
   const groupColumns = [
     {
       title: 'ID',
@@ -364,6 +489,12 @@ const Users = () => {
       title: '平均Token使用',
       dataIndex: 'avg_tokens_used',
       key: 'avg_tokens_used',
+      render: (avg) => Math.round(avg || 0).toLocaleString()
+    },
+    {
+      title: '平均积分使用',
+      dataIndex: 'avg_credits_used',
+      key: 'avg_credits_used',
       render: (avg) => Math.round(avg || 0).toLocaleString()
     },
     {
@@ -525,6 +656,7 @@ const Users = () => {
                   setPagination(prev => ({ ...prev, current: page, pageSize }))
                 }
               }}
+              scroll={{ x: 'max-content' }}
             />
           </Card>
         </>
@@ -571,6 +703,7 @@ const Users = () => {
         }}
         footer={null}
         destroyOnClose
+        width={600}
       >
         <Form
           form={form}
@@ -652,20 +785,40 @@ const Users = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item
-            name="token_quota"
-            label="Token配额"
-            rules={[{ required: true, message: '请设置Token配额' }]}
-            initialValue={10000}
-          >
-            <InputNumber 
-              placeholder="Token配额"
-              min={0}
-              style={{ width: '100%' }}
-              formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              parser={value => value.replace(/\$\s?|(,*)/g, '')}
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="token_quota"
+                label="Token配额"
+                rules={[{ required: true, message: '请设置Token配额' }]}
+                initialValue={10000}
+              >
+                <InputNumber 
+                  placeholder="Token配额"
+                  min={0}
+                  style={{ width: '100%' }}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="credits_quota"
+                label="积分配额"
+                rules={[{ required: true, message: '请设置积分配额' }]}
+                initialValue={1000}
+              >
+                <InputNumber 
+                  placeholder="积分配额"
+                  min={0}
+                  style={{ width: '100%' }}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item>
             <Space>
@@ -676,6 +829,97 @@ const Users = () => {
                 setIsModalVisible(false)
                 setEditingUser(null)
                 form.resetFields()
+              }}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 积分管理弹窗 */}
+      <Modal
+        title={
+          <Space>
+            {creditsModalIcons[creditsModalType]}
+            {creditsModalTitles[creditsModalType]}
+          </Space>
+        }
+        open={isCreditsModalVisible}
+        onCancel={() => {
+          setIsCreditsModalVisible(false)
+          creditsForm.resetFields()
+        }}
+        footer={null}
+        destroyOnClose
+        width={500}
+      >
+        <Form
+          form={creditsForm}
+          layout="vertical"
+          onFinish={handleCreditsSubmit}
+        >
+          <Form.Item
+            name="amount"
+            label={creditsModalType === 'set' ? '新配额' : '积分数量'}
+            rules={[
+              { required: true, message: '请输入积分数量' },
+              { pattern: /^\d+$/, message: '请输入有效的正整数' }
+            ]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={1}
+              max={creditsModalType === 'set' ? 1000000 : 100000}
+              placeholder={creditsModalType === 'set' ? '请输入新的积分配额' : '请输入积分数量'}
+              formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={value => value.replace(/\$\s?|(,*)/g, '')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="reason"
+            label="操作原因"
+            rules={[{ required: true, message: '请输入操作原因' }]}
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder="请描述此次积分操作的原因..."
+              showCount
+              maxLength={200}
+            />
+          </Form.Item>
+
+          <div style={{ 
+            backgroundColor: '#f6f8fa', 
+            padding: '12px 16px', 
+            borderRadius: '6px',
+            marginBottom: '16px',
+            border: '1px solid #e1e4e8'
+          }}>
+            <div style={{ fontSize: '14px', color: '#586069' }}>
+              {creditsModalType === 'add' && '💡 充值后，用户的积分配额将增加相应数量'}
+              {creditsModalType === 'deduct' && '⚠️ 扣减后，用户的已使用积分将增加相应数量'}
+              {creditsModalType === 'set' && '🔧 设置后，用户的积分配额将变更为新数值'}
+            </div>
+          </div>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Space>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                loading={creditsLoading}
+                style={{ 
+                  backgroundColor: creditsModalType === 'deduct' ? '#ff4d4f' : undefined,
+                  borderColor: creditsModalType === 'deduct' ? '#ff4d4f' : undefined 
+                }}
+              >
+                确认{creditsModalTitles[creditsModalType]}
+              </Button>
+              <Button onClick={() => {
+                setIsCreditsModalVisible(false)
+                creditsForm.resetFields()
               }}>
                 取消
               </Button>
@@ -785,10 +1029,10 @@ const Users = () => {
         </Form>
       </Modal>
 
-      {/* 用户详情抽屉 */}
+      {/* 用户详情抽屉 (增强积分展示) */}
       <Drawer
         title="用户详情"
-        width={600}
+        width={700}
         open={isDetailVisible}
         onClose={() => setIsDetailVisible(false)}
       >
@@ -850,28 +1094,115 @@ const Users = () => {
               </Row>
             </Card>
 
-            <Card title="Token使用情况" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16} style={{ textAlign: 'center' }}>
-                <Col span={8}>
-                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
-                    {userDetail.user.token_quota?.toLocaleString()}
-                  </div>
-                  <div style={{ color: '#666', fontSize: 12 }}>Token配额</div>
-                </Col>
-                <Col span={8}>
-                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                    {userDetail.user.used_tokens?.toLocaleString()}
-                  </div>
-                  <div style={{ color: '#666', fontSize: 12 }}>已使用</div>
-                </Col>
-                <Col span={8}>
-                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
-                    {((userDetail.user.token_quota || 0) - (userDetail.user.used_tokens || 0)).toLocaleString()}
-                  </div>
-                  <div style={{ color: '#666', fontSize: 12 }}>剩余</div>
-                </Col>
-              </Row>
-            </Card>
+            <Tabs defaultActiveKey="tokens" style={{ marginBottom: 16 }}>
+              <TabPane tab={<span><TrophyOutlined />Token统计</span>} key="tokens">
+                <Card size="small">
+                  <Row gutter={16} style={{ textAlign: 'center' }}>
+                    <Col span={8}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
+                        {userDetail.user.token_quota?.toLocaleString()}
+                      </div>
+                      <div style={{ color: '#666', fontSize: 12 }}>Token配额</div>
+                    </Col>
+                    <Col span={8}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
+                        {userDetail.user.used_tokens?.toLocaleString()}
+                      </div>
+                      <div style={{ color: '#666', fontSize: 12 }}>已使用</div>
+                    </Col>
+                    <Col span={8}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
+                        {((userDetail.user.token_quota || 0) - (userDetail.user.used_tokens || 0)).toLocaleString()}
+                      </div>
+                      <div style={{ color: '#666', fontSize: 12 }}>剩余</div>
+                    </Col>
+                  </Row>
+                </Card>
+              </TabPane>
+
+              {hasPermission('credits.manage') && userCredits[userDetail.user.id] && (
+                <TabPane tab={<span><WalletOutlined />积分统计</span>} key="credits">
+                  <Card size="small">
+                    <Row gutter={16} style={{ textAlign: 'center' }}>
+                      <Col span={8}>
+                        <Statistic
+                          title="积分配额"
+                          value={userCredits[userDetail.user.id]?.credits_quota || 0}
+                          valueStyle={{ color: '#1677ff', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic
+                          title="已使用"
+                          value={userCredits[userDetail.user.id]?.used_credits || 0}
+                          valueStyle={{ color: '#ff4d4f', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic
+                          title="余额"
+                          value={userCredits[userDetail.user.id]?.credits_stats?.remaining || 0}
+                          valueStyle={{ color: '#52c41a', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={24} style={{ marginTop: 16 }}>
+                        <div style={{ marginBottom: 8 }}>
+                          <span>积分使用率: {userCredits[userDetail.user.id]?.credits_stats?.usageRate}%</span>
+                        </div>
+                        <Progress 
+                          percent={parseFloat(userCredits[userDetail.user.id]?.credits_stats?.usageRate || 0)}
+                          strokeColor={{
+                            '0%': '#87d068',
+                            '50%': '#ffe58f', 
+                            '100%': '#ff4d4f'
+                          }}
+                        />
+                      </Col>
+                      <Col span={24} style={{ marginTop: 16 }}>
+                        <Space>
+                          <Button 
+                            type="primary" 
+                            icon={<PlusCircleOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'add')}
+                          >
+                            充值积分
+                          </Button>
+                          <Button 
+                            danger 
+                            icon={<MinusCircleOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'deduct')}
+                          >
+                            扣减积分
+                          </Button>
+                          <Button 
+                            icon={<WalletOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'set')}
+                          >
+                            设置配额
+                          </Button>
+                          <Button 
+                            icon={<HistoryOutlined />}
+                            onClick={async () => {
+                              try {
+                                await getUserCreditsHistory(userDetail.user.id)
+                                message.success('积分历史已刷新')
+                              } catch (error) {
+                                message.error('获取积分历史失败')
+                              }
+                            }}
+                          >
+                            查看历史
+                          </Button>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
+                </TabPane>
+              )}
+            </Tabs>
 
             <Card title="权限信息" size="small">
               <div>

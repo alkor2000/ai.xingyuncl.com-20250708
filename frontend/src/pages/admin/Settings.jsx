@@ -40,7 +40,9 @@ import {
   LinkOutlined,
   PlayCircleOutlined,
   StopOutlined,
-  ApiOutlined
+  ApiOutlined,
+  WalletOutlined,
+  DollarOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
@@ -175,6 +177,7 @@ const Settings = () => {
       display_name: model.display_name,
       api_key: '',
       api_endpoint: '',
+      credits_per_chat: model.credits_per_chat,
       is_active: model.is_active,
       sort_order: model.sort_order
     })
@@ -309,7 +312,7 @@ const Settings = () => {
     }
   }
 
-  // AI模型表格列
+  // AI模型表格列 (增强积分配置显示)
   const modelColumns = [
     {
       title: '模型名称',
@@ -321,6 +324,20 @@ const Settings = () => {
       title: '显示名称',
       dataIndex: 'display_name',
       key: 'display_name'
+    },
+    {
+      title: '积分消费',
+      dataIndex: 'credits_per_chat',
+      key: 'credits_per_chat',
+      width: 120,
+      render: (credits) => (
+        <Space>
+          <WalletOutlined style={{ color: '#1677ff' }} />
+          <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
+            {credits}/次
+          </span>
+        </Space>
+      )
     },
     {
       title: 'API密钥',
@@ -515,7 +532,7 @@ const Settings = () => {
   return (
     <div className="page-container">
       <Tabs defaultActiveKey="statistics" type="card">
-        {/* 系统统计 */}
+        {/* 系统统计 (增强积分统计) */}
         <TabPane tab={<span><BarChartOutlined />系统统计</span>} key="statistics">
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
@@ -537,16 +554,18 @@ const Settings = () => {
                   </Col>
                   <Col span={12}>
                     <Statistic 
-                      title="管理员" 
-                      value={systemStats.users?.admin_users || 0} 
-                      valueStyle={{ color: '#fa8c16' }}
+                      title="总积分配额" 
+                      value={systemStats.users?.total_credits_quota || 0} 
+                      valueStyle={{ color: '#722ed1' }}
+                      formatter={value => value?.toLocaleString()}
                     />
                   </Col>
                   <Col span={12}>
                     <Statistic 
-                      title="总Token使用" 
-                      value={systemStats.users?.total_tokens_used || 0} 
-                      valueStyle={{ color: '#722ed1' }}
+                      title="已用积分" 
+                      value={systemStats.users?.total_credits_used || 0} 
+                      valueStyle={{ color: '#fa8c16' }}
+                      formatter={value => value?.toLocaleString()}
                     />
                   </Col>
                 </Row>
@@ -593,10 +612,24 @@ const Settings = () => {
                       padding: '8px 0',
                       borderBottom: index < systemStats.models.length - 1 ? '1px solid #f0f0f0' : 'none'
                     }}>
-                      <span>#{index + 1} {model.model_name}</span>
                       <Space>
-                        <span>{model.conversation_count} 次</span>
-                        <span style={{ color: '#999' }}>{model.total_tokens?.toLocaleString()} tokens</span>
+                        <span>#{index + 1} {model.model_name}</span>
+                        {model.credits_per_chat && (
+                          <Tag color="blue" size="small">
+                            💰 {model.credits_per_chat} 积分/次
+                          </Tag>
+                        )}
+                      </Space>
+                      <Space>
+                        <span>{model.conversation_count} 次对话</span>
+                        {model.total_credits_consumed && (
+                          <span style={{ color: '#722ed1' }}>
+                            🪙 {model.total_credits_consumed?.toLocaleString()} 积分
+                          </span>
+                        )}
+                        <span style={{ color: '#999' }}>
+                          {model.total_tokens?.toLocaleString()} tokens
+                        </span>
                       </Space>
                     </div>
                   )) || <div style={{ color: '#999' }}>暂无数据</div>}
@@ -606,10 +639,16 @@ const Settings = () => {
           </Row>
         </TabPane>
 
-        {/* AI模型管理 */}
+        {/* AI模型管理 (增强积分配置) */}
         <TabPane tab={<span><RobotOutlined />AI模型管理</span>} key="models">
           <Card 
-            title="AI模型配置"
+            title={
+              <Space>
+                <RobotOutlined />
+                <span>AI模型配置</span>
+                <Tag color="blue">💰 积分计费</Tag>
+              </Space>
+            }
             extra={
               <Button 
                 type="primary" 
@@ -666,7 +705,7 @@ const Settings = () => {
           </Card>
         </TabPane>
 
-        {/* 基础设置 */}
+        {/* 基础设置 (增强积分设置) */}
         <TabPane tab={<span><SettingOutlined />基础设置</span>} key="settings">
           <Form
             form={settingsForm}
@@ -702,6 +741,15 @@ const Settings = () => {
                       parser={value => value.replace(/\$\s?|(,*)/g, '')}
                     />
                   </Form.Item>
+
+                  <Form.Item name={['user', 'default_credits_quota']} label="默认积分配额">
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      min={0}
+                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                    />
+                  </Form.Item>
                 </Card>
               </Col>
 
@@ -711,7 +759,10 @@ const Settings = () => {
                     <Select>
                       {aiModels.filter(m => m.is_active).map(model => (
                         <Select.Option key={model.name} value={model.name}>
-                          {model.display_name}
+                          <Space>
+                            <span>{model.display_name}</span>
+                            <Tag color="blue" size="small">{model.credits_per_chat}积分</Tag>
+                          </Space>
                         </Select.Option>
                       ))}
                     </Select>
@@ -723,6 +774,26 @@ const Settings = () => {
                   
                   <Form.Item name={['ai', 'temperature']} label="默认Temperature">
                     <InputNumber style={{ width: '100%' }} min={0} max={2} step={0.1} />
+                  </Form.Item>
+                </Card>
+
+                <Card title="积分设置" size="small" style={{ marginBottom: 16 }}>
+                  <Form.Item name={['credits', 'enable_credits']} label="启用积分系统" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  
+                  <Form.Item name={['credits', 'default_credits']} label="新用户默认积分">
+                    <InputNumber 
+                      style={{ width: '100%' }} 
+                      min={0} 
+                      max={100000}
+                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                    />
+                  </Form.Item>
+                  
+                  <Form.Item name={['credits', 'min_credits_for_chat']} label="对话最低积分要求">
+                    <InputNumber style={{ width: '100%' }} min={1} max={100} />
                   </Form.Item>
                 </Card>
 
@@ -756,7 +827,7 @@ const Settings = () => {
         </TabPane>
       </Tabs>
 
-      {/* AI模型创建/编辑弹窗 */}
+      {/* AI模型创建/编辑弹窗 (增强积分配置) */}
       <Modal
         title={editingModel ? '编辑AI模型' : '创建AI模型'}
         open={isModelModalVisible}
@@ -767,7 +838,7 @@ const Settings = () => {
         }}
         footer={null}
         destroyOnClose
-        width={600}
+        width={700}
       >
         <Form
           form={modelForm}
@@ -816,6 +887,54 @@ const Settings = () => {
             </Col>
           </Row>
 
+          {/* 积分配置区域 */}
+          <Row gutter={16}>
+            <Col span={24}>
+              <Card 
+                title={
+                  <Space>
+                    <WalletOutlined style={{ color: '#1677ff' }} />
+                    <span>积分消费配置</span>
+                  </Space>
+                } 
+                size="small" 
+                style={{ marginBottom: 16 }}
+              >
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="credits_per_chat"
+                      label="每次对话积分消费"
+                      rules={[{ required: true, message: '请设置积分消费' }]}
+                      initialValue={10}
+                    >
+                      <InputNumber
+                        style={{ width: '100%' }}
+                        min={1}
+                        max={1000}
+                        addonAfter="积分/次"
+                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ 
+                      marginTop: 30, 
+                      padding: '8px 12px',
+                      backgroundColor: '#f6f8fa',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      color: '#586069'
+                    }}>
+                      💡 建议范围：基础模型1-20积分，高级模型20-100积分
+                    </div>
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+          </Row>
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="is_active" label="启用状态" valuePropName="checked">
@@ -846,7 +965,7 @@ const Settings = () => {
         </Form>
       </Modal>
 
-      {/* 系统模块创建/编辑弹窗 */}
+      {/* 系统模块创建/编辑弹窗 (保持不变) */}
       <Modal
         title={editingModule ? '编辑系统模块' : '创建系统模块'}
         open={isModuleModalVisible}

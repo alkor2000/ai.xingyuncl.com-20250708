@@ -1,5 +1,5 @@
 /**
- * 管理员状态管理 - 支持用户分组管理
+ * 管理员状态管理 - 支持用户分组管理和积分管理
  */
 
 import { create } from 'zustand'
@@ -15,6 +15,11 @@ const useAdminStore = create((set, get) => ({
   systemStats: {},
   systemSettings: {},
   loading: false,
+  
+  // 积分管理状态
+  userCredits: {},
+  creditsHistory: {},
+  creditsLoading: false,
   
   // 获取系统统计
   getSystemStats: async () => {
@@ -120,6 +125,176 @@ const useAdminStore = create((set, get) => ({
     }
   },
 
+  // ===== 积分管理方法 (新增核心功能) =====
+
+  /**
+   * 获取用户积分信息
+   */
+  getUserCredits: async (userId) => {
+    set({ creditsLoading: true })
+    try {
+      const response = await apiClient.get(`/admin/users/${userId}/credits`)
+      
+      set(state => ({
+        userCredits: {
+          ...state.userCredits,
+          [userId]: response.data.data
+        },
+        creditsLoading: false
+      }))
+      
+      return response.data.data
+    } catch (error) {
+      console.error('获取用户积分信息失败:', error)
+      set({ creditsLoading: false })
+      throw error
+    }
+  },
+
+  /**
+   * 设置用户积分配额
+   */
+  setUserCreditsQuota: async (userId, credits_quota, reason = '管理员调整配额') => {
+    try {
+      const response = await apiClient.put(`/admin/users/${userId}/credits`, {
+        credits_quota,
+        reason
+      })
+      
+      // 更新本地状态
+      set(state => ({
+        userCredits: {
+          ...state.userCredits,
+          [userId]: {
+            ...state.userCredits[userId],
+            credits_quota: response.data.data.newQuota,
+            credits_stats: {
+              ...state.userCredits[userId]?.credits_stats,
+              quota: response.data.data.newQuota,
+              remaining: response.data.data.balanceAfter
+            }
+          }
+        },
+        // 同时更新用户列表中的数据
+        users: state.users.map(user => 
+          user.id === userId ? { ...user, credits_quota: response.data.data.newQuota } : user
+        ),
+        // 更新用户详情
+        userDetail: state.userDetail?.user.id === userId 
+          ? { 
+              ...state.userDetail, 
+              user: { ...state.userDetail.user, credits_quota: response.data.data.newQuota }
+            }
+          : state.userDetail
+      }))
+      
+      return response.data.data
+    } catch (error) {
+      console.error('设置用户积分配额失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 充值用户积分
+   */
+  addUserCredits: async (userId, amount, reason = '管理员充值') => {
+    try {
+      const response = await apiClient.post(`/admin/users/${userId}/credits/add`, {
+        amount,
+        reason
+      })
+      
+      // 更新本地状态
+      set(state => ({
+        userCredits: {
+          ...state.userCredits,
+          [userId]: {
+            ...state.userCredits[userId],
+            credits_quota: response.data.data.newQuota,
+            credits_stats: {
+              ...state.userCredits[userId]?.credits_stats,
+              quota: response.data.data.newQuota,
+              remaining: response.data.data.balanceAfter
+            }
+          }
+        },
+        // 同时更新用户列表中的数据
+        users: state.users.map(user => 
+          user.id === userId ? { ...user, credits_quota: response.data.data.newQuota } : user
+        )
+      }))
+      
+      return response.data.data
+    } catch (error) {
+      console.error('充值用户积分失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 扣减用户积分
+   */
+  deductUserCredits: async (userId, amount, reason = '管理员扣减') => {
+    try {
+      const response = await apiClient.post(`/admin/users/${userId}/credits/deduct`, {
+        amount,
+        reason
+      })
+      
+      // 更新本地状态
+      set(state => ({
+        userCredits: {
+          ...state.userCredits,
+          [userId]: {
+            ...state.userCredits[userId],
+            used_credits: response.data.data.newUsed,
+            credits_stats: {
+              ...state.userCredits[userId]?.credits_stats,
+              used: response.data.data.newUsed,
+              remaining: response.data.data.balanceAfter
+            }
+          }
+        },
+        // 同时更新用户列表中的数据
+        users: state.users.map(user => 
+          user.id === userId ? { ...user, used_credits: response.data.data.newUsed } : user
+        )
+      }))
+      
+      return response.data.data
+    } catch (error) {
+      console.error('扣减用户积分失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取用户积分历史
+   */
+  getUserCreditsHistory: async (userId, params = {}) => {
+    set({ creditsLoading: true })
+    try {
+      const response = await apiClient.get(`/admin/users/${userId}/credits/history`, { params })
+      
+      set(state => ({
+        creditsHistory: {
+          ...state.creditsHistory,
+          [userId]: response.data
+        },
+        creditsLoading: false
+      }))
+      
+      return response.data
+    } catch (error) {
+      console.error('获取用户积分历史失败:', error)
+      set({ creditsLoading: false })
+      throw error
+    }
+  },
+
+  // ===== 用户分组管理 (保持不变) =====
+
   // 获取用户分组列表
   getUserGroups: async () => {
     try {
@@ -182,6 +357,8 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
+  // ===== AI模型管理 (支持积分配置) =====
+
   // 获取AI模型列表
   getAIModels: async () => {
     set({ loading: true })
@@ -388,7 +565,10 @@ const useAdminStore = create((set, get) => ({
       modules: [],
       systemStats: {},
       systemSettings: {},
-      loading: false
+      loading: false,
+      userCredits: {},
+      creditsHistory: {},
+      creditsLoading: false
     })
   }
 }))
