@@ -37,10 +37,10 @@ export default defineConfig({
           'utils-vendor': ['axios', 'zustand'],
           // Antd分离但保持统一
           'antd-vendor': ['antd', '@ant-design/icons'],
-          // 大页面组件按功能分离
-          'admin-vendor': [
-            // 会在懒加载时单独创建chunk，这里预留
-          ]
+          // Prism.js 单独分块，支持动态加载
+          'prism-vendor': ['prismjs'],
+          // Markdown 分块
+          'markdown-vendor': ['react-markdown']
         }
       }
     },
@@ -55,7 +55,11 @@ export default defineConfig({
       'react-router-dom',
       'antd',
       'axios',
-      'zustand'
+      'zustand',
+      'react-markdown'
+    ],
+    exclude: [
+      'prismjs/components/*'  // 排除 Prism 组件，让它们动态加载
     ]
   }
 })

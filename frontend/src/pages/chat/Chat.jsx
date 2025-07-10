@@ -40,6 +40,7 @@ import {
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
+import MessageContent from '../../components/chat/MessageContent'
 
 const { Sider, Content } = Layout
 const { Title, Text, Paragraph } = Typography
@@ -275,7 +276,7 @@ const Chat = () => {
     }
   }
 
-  // 渲染消息
+  // 渲染消息 - 使用新的MessageContent组件支持代码高亮
   const renderMessage = (msg) => (
     <div 
       key={msg.id} 
@@ -303,15 +304,15 @@ const Chat = () => {
           backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
           color: msg.role === 'user' ? 'white' : 'inherit'
         }}
-        bodyStyle={{ padding: '8px 12px' }}
+        bodyStyle={{ padding: '12px 16px' }}
       >
-        <div style={{ fontSize: 13, lineHeight: '1.5' }}>
-          {msg.content}
-        </div>
+        {/* 使用MessageContent组件渲染消息内容，支持markdown和代码高亮 */}
+        <MessageContent content={msg.content} role={msg.role} />
+        
         {msg.tokens > 0 && (
           <div style={{ 
             fontSize: 11, 
-            marginTop: 4, 
+            marginTop: 8, 
             opacity: 0.7,
             textAlign: 'right'
           }}>
