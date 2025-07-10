@@ -115,7 +115,7 @@ const MainLayout = ({ children }) => {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="main-layout-root">
       {/* 侧边栏 */}
       <Sider
         trigger={null}
@@ -123,23 +123,10 @@ const MainLayout = ({ children }) => {
         collapsed={collapsed}
         theme="light"
         width={240}
-        style={{
-          boxShadow: '2px 0 8px rgba(0, 0, 0, 0.06)',
-          zIndex: 100
-        }}
+        className="main-layout-sider"
       >
         {/* Logo区域 */}
-        <div style={{
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? 0 : '0 24px',
-          borderBottom: '1px solid #f0f0f0',
-          fontWeight: 'bold',
-          fontSize: 18,
-          color: '#1890ff'
-        }}>
+        <div className="main-layout-logo">
           {collapsed ? 'AI' : 'AI Platform'}
         </div>
 
@@ -150,26 +137,19 @@ const MainLayout = ({ children }) => {
           defaultOpenKeys={location.pathname.includes('/admin') ? ['admin'] : []}
           items={filteredMenuItems}
           onClick={handleMenuClick}
-          style={{ border: 'none', paddingTop: 16 }}
+          className="main-layout-menu"
         />
       </Sider>
 
-      <Layout>
+      <Layout className="main-layout-container">
         {/* 顶部导航 */}
-        <Header style={{
-          padding: '0 24px',
-          background: '#fff',
-          borderBottom: '1px solid #f0f0f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <Header className="main-layout-header">
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
-              style={{ fontSize: '16px', width: 40, height: 40 }}
+              className="main-layout-trigger"
             />
           </div>
 
@@ -208,14 +188,8 @@ const MainLayout = ({ children }) => {
           </div>
         </Header>
 
-        {/* 内容区域 */}
-        <Content style={{ 
-          margin: 0, 
-          background: '#f5f5f5',
-          overflow: 'auto',
-          height: 'calc(100vh - 64px)',
-          padding: '24px'
-        }}>
+        {/* 内容区域 - 移除滚动，让子组件完全控制 */}
+        <Content className="main-layout-content">
           {children}
         </Content>
       </Layout>

@@ -430,9 +430,9 @@ const Chat = () => {
   }
 
   return (
-    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+    <Layout className="chat-layout">
       {/* 侧边栏 - 会话列表 */}
-      <Sider width={350} style={{ backgroundColor: 'white', borderRight: '1px solid #f0f0f0' }}>
+      <Sider width={350} className="chat-sidebar">
         {/* 积分状态显示 */}
         <div style={{ padding: '16px 16px 0 16px' }}>
           {renderCreditsCard()}
@@ -454,8 +454,8 @@ const Chat = () => {
           </Button>
         </div>
         
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <div style={{ height: '100%', overflowY: 'auto', padding: '0 8px' }}>
+        <div className="chat-conversations-container">
+          <div className="chat-conversations-list">
             {loading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <Spin />
@@ -540,22 +540,12 @@ const Chat = () => {
         </div>
       </Sider>
 
-      {/* 聊天区域 - 优化布局结构 */}
-      <Content style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden'
-      }}>
+      {/* 聊天区域 - 新的固定布局结构 */}
+      <Content className="chat-main">
         {currentConversation ? (
           <>
-            {/* 会话头部 - 固定高度，添加积分信息、上下文信息和temperature信息 */}
-            <div style={{ 
-              padding: '16px 24px', 
-              borderBottom: '1px solid #f0f0f0',
-              backgroundColor: 'white',
-              flexShrink: 0
-            }}>
+            {/* 会话头部 - 固定在顶部 */}
+            <div className="chat-header">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Title level={4} style={{ margin: 0 }}>
@@ -599,50 +589,34 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* 消息列表 - 可滚动区域 */}
-            <div 
-              ref={messagesContainerRef}
-              style={{ 
-                flex: 1, 
-                padding: '16px 24px', 
-                overflowY: 'auto',
-                backgroundColor: '#fafafa',
-                position: 'relative'
-              }}
-            >
-              {messages.length === 0 ? (
-                <Empty 
-                  description="开始新的对话吧"
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)'
-                  }}
-                />
-              ) : (
-                <div>
-                  {messages.map(renderMessage)}
-                  {typing && (
-                    <div style={{ textAlign: 'left', marginTop: 16 }}>
-                      <Spin size="small" />
-                      <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
-                    </div>
-                  )}
-                  {/* 滚动锚点 */}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
+            {/* 消息列表 - 固定可滚动区域 */}
+            <div className="chat-messages" ref={messagesContainerRef}>
+              <div className="chat-messages-content">
+                {messages.length === 0 ? (
+                  <div className="chat-empty">
+                    <Empty 
+                      description="开始新的对话吧"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  </div>
+                ) : (
+                  <div className="chat-messages-list">
+                    {messages.map(renderMessage)}
+                    {typing && (
+                      <div style={{ textAlign: 'left', marginTop: 16 }}>
+                        <Spin size="small" />
+                        <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
+                      </div>
+                    )}
+                    {/* 滚动锚点 */}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* 输入框 - 固定底部，增加积分提示 */}
-            <div style={{ 
-              padding: '16px 24px', 
-              borderTop: '1px solid #f0f0f0',
-              backgroundColor: 'white',
-              flexShrink: 0
-            }}>
+            {/* 输入框 - 固定在底部 */}
+            <div className="chat-input">
               {/* 积分不足警告 */}
               {currentConversation && !checkCreditsForModel(currentConversation.model_name) && (
                 <Alert
@@ -658,7 +632,7 @@ const Chat = () => {
                 />
               )}
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <div className="chat-input-container">
                 <TextArea
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
@@ -666,12 +640,7 @@ const Chat = () => {
                   autoSize={{ minRows: 3, maxRows: 8 }}
                   onKeyDown={handleKeyPress}
                   disabled={typing}
-                  style={{ 
-                    flex: 1,
-                    resize: 'none',
-                    fontSize: '14px',
-                    lineHeight: '1.5'
-                  }}
+                  className="chat-input-textarea"
                 />
                 <Button 
                   type="primary" 
@@ -679,28 +648,14 @@ const Chat = () => {
                   loading={typing}
                   onClick={handleSendMessage}
                   disabled={!canSendMessage()}
-                  style={{
-                    height: 'auto',
-                    minHeight: '40px',
-                    padding: '8px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
+                  className="chat-input-send-button"
                 >
                   发送
                 </Button>
               </div>
               
               {/* 输入提示和积分消费提示 */}
-              <div style={{ 
-                marginTop: '8px', 
-                fontSize: '12px', 
-                color: '#999',
-                textAlign: 'center',
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}>
+              <div className="chat-input-tip">
                 <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
                 {currentConversation && (
                   <span>
@@ -713,14 +668,7 @@ const Chat = () => {
             </div>
           </>
         ) : (
-          /* 无会话选择时的空状态 */
-          <div style={{ 
-            flex: 1, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            flexDirection: 'column'
-          }}>
+          <div className="chat-empty-state">
             <Empty 
               description="选择一个对话开始聊天"
               image={Empty.PRESENTED_IMAGE_SIMPLE}

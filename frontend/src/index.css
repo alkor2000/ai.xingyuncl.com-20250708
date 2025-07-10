@@ -38,7 +38,202 @@ body {
   background: #f5f5f5;
 }
 
-/* 登录页面样式 */
+/* ===== MainLayout 布局优化 ===== */
+
+/* 主布局根容器 - 占满整个视窗 */
+.main-layout-root {
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* 主布局容器 - 确保高度正确 */
+.main-layout-container {
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* 侧边栏样式 */
+.main-layout-sider {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06) !important;
+  z-index: 100 !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* Logo区域 */
+.main-layout-logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  border-bottom: 1px solid #f0f0f0;
+  font-weight: bold;
+  font-size: 18px;
+  color: #1890ff;
+  flex-shrink: 0;
+}
+
+/* 菜单样式 */
+.main-layout-menu {
+  border: none !important;
+  padding-top: 16px !important;
+  height: calc(100vh - 64px) !important;
+  overflow-y: auto !important;
+}
+
+/* 顶部导航样式 */
+.main-layout-header {
+  padding: 0 24px !important;
+  background: #fff !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  height: 64px !important;
+  flex-shrink: 0 !important;
+}
+
+/* 折叠按钮 */
+.main-layout-trigger {
+  font-size: 16px !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* 内容区域 - 关键：移除所有滚动和padding，让子组件完全控制 */
+.main-layout-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #f5f5f5 !important;
+  overflow: hidden !important;
+  height: calc(100vh - 64px) !important;
+  position: relative !important;
+}
+
+/* ===== 聊天界面固定布局样式 ===== */
+
+/* 聊天主布局 - 占满MainLayout内容区域 */
+.chat-layout {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* 聊天侧边栏 */
+.chat-sidebar {
+  background: white !important;
+  border-right: 1px solid #f0f0f0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.chat-conversations-container {
+  flex: 1 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.chat-conversations-list {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 0 8px !important;
+}
+
+/* 聊天主区域 - 三段式布局 */
+.chat-main {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  background: #fafafa !important;
+}
+
+/* 聊天头部 - 固定在顶部 */
+.chat-header {
+  flex-shrink: 0 !important;
+  padding: 16px 24px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  background: white !important;
+}
+
+/* 消息区域 - 可滚动，自动占满剩余空间 */
+.chat-messages {
+  flex: 1 !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.chat-messages-content {
+  height: 100% !important;
+  overflow-y: auto !important;
+  padding: 16px 24px !important;
+}
+
+.chat-messages-list {
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 空状态居中 */
+.chat-empty {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.chat-empty-state {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: column !important;
+}
+
+/* 输入框区域 - 固定在底部 */
+.chat-input {
+  flex-shrink: 0 !important;
+  padding: 16px 24px !important;
+  border-top: 1px solid #f0f0f0 !important;
+  background: white !important;
+}
+
+.chat-input-container {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: flex-end !important;
+}
+
+.chat-input-textarea {
+  flex: 1 !important;
+  resize: none !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+.chat-input-send-button {
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 8px 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.chat-input-tip {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  color: #999 !important;
+  text-align: center !important;
+  display: flex !important;
+  justify-content: space-between !important;
+}
+
+/* ===== 登录页面样式 ===== */
 .auth-container {
   height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -74,55 +269,15 @@ body {
   margin: 0;
 }
 
-/* 主布局样式 */
-.layout-header {
-  background: #fff;
-  padding: 0 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.header-logo {
-  font-size: 20px;
-  font-weight: bold;
-  color: #1677ff;
-  margin-right: 16px;
-}
-
-.header-nav {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(0, 0, 0, 0.65);
-}
-
-/* 内容区域样式 */
+/* ===== 页面容器样式 (非聊天页面) ===== */
 .page-container {
   padding: 24px;
   background: #fff;
   margin: 24px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  min-height: calc(100vh - 124px);
+  height: calc(100% - 48px);
+  overflow-y: auto;
 }
 
 .page-header {
@@ -310,7 +465,7 @@ body {
   margin-top: 24px;
 }
 
-/* 响应式样式 */
+/* ===== 移动端适配 ===== */
 @media (max-width: 768px) {
   .auth-card {
     width: 90%;
@@ -320,29 +475,97 @@ body {
   .page-container {
     margin: 16px;
     padding: 16px;
+    height: calc(100% - 32px);
   }
   
-  .layout-header {
-    padding: 0 16px;
+  .main-layout-header {
+    padding: 0 16px !important;
   }
   
-  .header-nav {
-    gap: 16px;
+  .main-layout-logo {
+    padding: 0 16px !important;
+    font-size: 16px !important;
+  }
+
+  /* 移动端聊天界面 */
+  .chat-layout {
+    flex-direction: column !important;
+  }
+  
+  .chat-sidebar {
+    height: auto !important;
+    max-height: 300px !important;
+  }
+  
+  .chat-conversations-container {
+    max-height: 250px !important;
+  }
+  
+  .chat-main {
+    flex: 1 !important;
+    height: calc(100% - 300px) !important;
+  }
+  
+  .chat-header {
+    padding: 12px 16px !important;
+  }
+  
+  .chat-header .ant-statistic {
+    display: none !important; /* 移动端隐藏积分显示 */
+  }
+  
+  .chat-messages-content {
+    padding: 12px 16px !important;
+  }
+  
+  .chat-input {
+    padding: 12px 16px !important;
+  }
+  
+  .chat-input-tip {
+    font-size: 11px !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    text-align: center !important;
+  }
+  
+  /* 移动端消息样式调整 */
+  .chat-messages-list .ant-card {
+    max-width: 85% !important;
   }
 
   /* 移动端代码块优化 */
   .code-block-content pre {
-    font-size: 12px;
-    padding: 12px;
+    font-size: 12px !important;
+    padding: 12px !important;
   }
   
   .code-block-header {
-    padding: 6px 8px;
+    padding: 6px 8px !important;
   }
   
   .copy-button {
-    padding: 2px 6px;
-    font-size: 10px;
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+  }
+}
+
+/* ===== 窄屏适配 ===== */
+@media (max-width: 992px) and (min-width: 769px) {
+  .chat-sidebar {
+    width: 280px !important;
+  }
+  
+  .chat-header {
+    padding: 14px 20px !important;
+  }
+  
+  .chat-messages-content {
+    padding: 14px 20px !important;
+  }
+  
+  .chat-input {
+    padding: 14px 20px !important;
   }
 }
 
@@ -389,6 +612,61 @@ body {
   background: #a8a8a8;
 }
 
+/* 聊天消息区域滚动条样式 */
+.chat-messages-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.chat-messages-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.chat-messages-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 侧边栏会话列表滚动条 */
+.chat-conversations-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-conversations-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-conversations-list::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 2px;
+}
+
+.chat-conversations-list::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 主菜单滚动条 */
+.main-layout-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.main-layout-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-layout-menu::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 2px;
+}
+
+.main-layout-menu::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
 /* 代码块水平滚动条样式 */
 .code-block-content::-webkit-scrollbar {
   height: 6px;
@@ -410,7 +688,7 @@ body {
 /* 安全区域适配 */
 @supports (padding: max(0px)) {
   .auth-container,
-  .layout-header,
+  .main-layout-header,
   .page-container {
     padding-left: max(env(safe-area-inset-left), 16px);
     padding-right: max(env(safe-area-inset-right), 16px);
