@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统
+ * 对话控制器 - 集成积分扣减系统和动态上下文数量
  */
 
 const Conversation = require('../models/Conversation');
@@ -40,18 +40,19 @@ class ChatController {
   }
 
   /**
-   * 创建新会话
+   * 创建新会话 - 支持上下文数量设置
    * POST /api/chat/conversations
    */
   static async createConversation(req, res) {
     try {
       const userId = req.user.id;
-      const { title, model_name, system_prompt } = req.body;
+      const { title, model_name, system_prompt, context_length } = req.body;
 
       logger.info('开始创建会话', { 
         userId, 
         title, 
         model_name, 
+        context_length,
         hasSystemPrompt: !!system_prompt 
       });
 
@@ -66,11 +67,17 @@ class ChatController {
         return ResponseHelper.validation(res, ['选择的AI模型不可用']);
       }
 
+      // 验证上下文数量
+      let validContextLength = parseInt(context_length) || 20;
+      if (validContextLength < 0) validContextLength = 0;
+      if (validContextLength > 1000) validContextLength = 1000;
+
       const conversationData = {
         user_id: parseInt(userId),
         title: title || 'New Chat',
         model_name: model_name || 'gpt-3.5-turbo',
-        system_prompt: system_prompt || null
+        system_prompt: system_prompt || null,
+        context_length: validContextLength
       };
 
       logger.info('会话数据准备完成', conversationData);
@@ -80,7 +87,8 @@ class ChatController {
       logger.info('会话创建成功', { 
         userId, 
         conversationId: conversation.id,
-        modelName: conversation.model_name 
+        modelName: conversation.model_name,
+        contextLength: conversation.context_length
       });
 
       return ResponseHelper.success(res, conversation.toJSON(), '会话创建成功', 201);
@@ -128,14 +136,14 @@ class ChatController {
   }
 
   /**
-   * 更新会话
+   * 更新会话 - 支持上下文数量更新
    * PUT /api/chat/conversations/:id
    */
   static async updateConversation(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { title, model_name, system_prompt, is_pinned } = req.body;
+      const { title, model_name, system_prompt, is_pinned, context_length } = req.body;
 
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -156,16 +164,22 @@ class ChatController {
         }
       }
 
-      const updatedConversation = await conversation.update({
-        title,
-        model_name,
-        system_prompt,
-        is_pinned
-      });
+      // 验证上下文数量
+      let updateData = { title, model_name, system_prompt, is_pinned };
+      
+      if (context_length !== undefined) {
+        let validContextLength = parseInt(context_length) || 20;
+        if (validContextLength < 0) validContextLength = 0;
+        if (validContextLength > 1000) validContextLength = 1000;
+        updateData.context_length = validContextLength;
+      }
+
+      const updatedConversation = await conversation.update(updateData);
 
       logger.info('会话更新成功', { 
         userId, 
-        conversationId: id 
+        conversationId: id,
+        updateData
       });
 
       return ResponseHelper.success(res, updatedConversation.toJSON(), '会话更新成功');
@@ -254,7 +268,7 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复 - 集成积分扣减系统
+   * 发送消息并获取AI回复 - 集成积分扣减系统和动态上下文
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
@@ -311,6 +325,7 @@ class ChatController {
         userId,
         conversationId: id,
         modelName: conversation.model_name,
+        contextLength: conversation.getContextLength(),
         requiredCredits,
         currentBalance: user.getCredits()
       });
@@ -341,8 +356,8 @@ class ChatController {
         file_id
       });
 
-      // 获取会话历史消息用于AI上下文
-      const recentMessages = await Message.getRecentMessages(id, 20);
+      // 🔥 获取会话历史消息用于AI上下文 - 使用会话配置的上下文数量
+      const recentMessages = await Message.getRecentMessages(id); // 自动使用会话的context_length配置
       
       // 构造AI请求消息
       const aiMessages = [];
@@ -364,6 +379,7 @@ class ChatController {
         userId,
         conversationId: id,
         modelName: conversation.model_name,
+        contextLength: conversation.getContextLength(),
         messageCount: aiMessages.length,
         creditsCharged: requiredCredits
       });
@@ -399,6 +415,7 @@ class ChatController {
         logger.info('AI对话成功完成', { 
           userId,
           conversationId: id,
+          contextLength: conversation.getContextLength(),
           requestTokens: userMessage.tokens,
           responseTokens: assistantMessage.tokens,
           totalTokens,

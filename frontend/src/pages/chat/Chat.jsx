@@ -18,7 +18,9 @@ import {
   Tag,
   Progress,
   Alert,
-  Statistic
+  Statistic,
+  InputNumber,
+  Tooltip
 } from 'antd'
 import {
   MessageOutlined,
@@ -32,7 +34,8 @@ import {
   ExclamationCircleOutlined,
   WalletOutlined,
   DollarOutlined,
-  CrownOutlined
+  HistoryOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
@@ -121,7 +124,8 @@ const Chat = () => {
       await createConversation({
         title: values.title || 'New Chat',
         model_name: values.model_name || 'gpt-3.5-turbo',
-        system_prompt: values.system_prompt
+        system_prompt: values.system_prompt,
+        context_length: values.context_length || 20
       })
       setIsModalVisible(false)
       form.resetFields()
@@ -186,7 +190,8 @@ const Chat = () => {
     form.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
-      system_prompt: conversation.system_prompt
+      system_prompt: conversation.system_prompt,
+      context_length: conversation.context_length || 20
     })
     setIsModalVisible(true)
   }
@@ -490,6 +495,9 @@ const Chat = () => {
                           <div>
                             <div style={{ fontSize: 12, color: '#999' }}>
                               {conv.model_name} • {conv.message_count} 条消息
+                              {conv.context_length && (
+                                <span> • 上下文{conv.context_length}条</span>
+                              )}
                             </div>
                             <div style={{ fontSize: 11, color: '#ccc' }}>
                               {new Date(conv.updated_at).toLocaleString()}
@@ -515,7 +523,7 @@ const Chat = () => {
       }}>
         {currentConversation ? (
           <>
-            {/* 会话头部 - 固定高度，添加积分信息 */}
+            {/* 会话头部 - 固定高度，添加积分信息和上下文信息 */}
             <div style={{ 
               padding: '16px 24px', 
               borderBottom: '1px solid #f0f0f0',
@@ -534,6 +542,11 @@ const Chat = () => {
                     <Tag color="gold" icon={<DollarOutlined />}>
                       {getModelCredits(currentConversation.model_name)} 积分/次
                     </Tag>
+                    <Tooltip title="当前对话携带的上下文数量，影响AI的记忆长度">
+                      <Tag color="cyan" icon={<HistoryOutlined />}>
+                        上下文 {currentConversation.context_length || 20} 条
+                      </Tag>
+                    </Tooltip>
                   </Space>
                 </div>
                 
@@ -657,7 +670,8 @@ const Chat = () => {
                 <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
                 {currentConversation && (
                   <span>
-                    消费: {getModelCredits(currentConversation.model_name)} 积分/次
+                    消费: {getModelCredits(currentConversation.model_name)} 积分/次 • 
+                    上下文: {currentConversation.context_length || 20} 条
                   </span>
                 )}
               </div>
@@ -692,7 +706,7 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 增强积分显示 */}
+      {/* 创建/编辑会话对话框 - 增强积分显示和上下文设置 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
@@ -702,11 +716,15 @@ const Chat = () => {
           form.resetFields()
         }}
         footer={null}
+        width={600}
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={editingConversation ? handleUpdateConversation : handleCreateConversation}
+          initialValues={{
+            context_length: 20
+          }}
         >
           <Form.Item
             name="title"
@@ -738,6 +756,37 @@ const Chat = () => {
                 </Select.Option>
               ))}
             </Select>
+          </Form.Item>
+
+          {/* 新增：上下文数量设置 */}
+          <Form.Item
+            name="context_length"
+            label={
+              <Space>
+                <span>上下文数量</span>
+                <Tooltip title="设置AI对话时携带的历史消息数量。数量越多，AI记忆越长，但可能消耗更多Token。每轮对话（一问一答）算1条。">
+                  <InfoCircleOutlined style={{ color: '#999' }} />
+                </Tooltip>
+              </Space>
+            }
+            rules={[
+              { required: true, message: '请设置上下文数量' },
+              { type: 'number', min: 0, max: 1000, message: '上下文数量范围：0-1000' }
+            ]}
+            extra={
+              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                推荐设置：短对话 10-20 条，长对话 50-100 条，复杂任务 200-500 条。设置为 0 表示不携带历史消息。
+              </div>
+            }
+          >
+            <InputNumber
+              min={0}
+              max={1000}
+              style={{ width: '100%' }}
+              placeholder="设置携带的上下文消息数量"
+              formatter={value => `${value} 条`}
+              parser={value => value.replace(' 条', '')}
+            />
           </Form.Item>
 
           <Form.Item
@@ -787,6 +836,7 @@ const Chat = () => {
           <div>
             <p><strong>会话标题:</strong> {conversationToDelete.title}</p>
             <p><strong>消息数量:</strong> {conversationToDelete.message_count} 条</p>
+            <p><strong>上下文设置:</strong> {conversationToDelete.context_length || 20} 条</p>
             <p style={{ color: '#ff4d4f', marginTop: 16 }}>
               <strong>注意：此操作无法撤销，所有聊天记录将被永久删除！</strong>
             </p>

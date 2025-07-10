@@ -43,7 +43,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 创建新会话
+  // 创建新会话 - 支持上下文数量设置
   createConversation: async (conversationData) => {
     set({ loading: true })
     try {
@@ -163,7 +163,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 更新会话
+  // 更新会话 - 支持上下文数量更新
   updateConversation: async (conversationId, updateData) => {
     try {
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)

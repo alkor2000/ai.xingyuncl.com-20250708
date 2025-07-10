@@ -1,5 +1,5 @@
 /**
- * 消息数据模型
+ * 消息数据模型 - 支持动态上下文数量
  */
 
 const dbConnection = require('../database/connection');
@@ -126,11 +126,25 @@ class Message {
   }
 
   /**
-   * 获取会话的最近消息（用于AI对话上下文）
+   * 获取会话的最近消息（用于AI对话上下文）- 支持动态上下文数量
    */
-  static async getRecentMessages(conversationId, limit = 20) {
+  static async getRecentMessages(conversationId, limit = null) {
     try {
-      const limitNum = parseInt(limit);
+      let contextLimit = limit;
+      
+      // 如果没有指定limit，则从会话配置中获取
+      if (contextLimit === null) {
+        const conversationSql = 'SELECT context_length FROM conversations WHERE id = ?';
+        const { rows: convRows } = await dbConnection.query(conversationSql, [conversationId]);
+        
+        if (convRows.length > 0) {
+          contextLimit = parseInt(convRows[0].context_length) || 20;
+        } else {
+          contextLimit = 20; // 默认值
+        }
+      }
+      
+      const limitNum = parseInt(contextLimit);
       
       const sql = `
         SELECT * FROM messages 
@@ -141,14 +155,17 @@ class Message {
       
       logger.info('获取最近消息', { 
         conversationId, 
-        limit: limitNum 
+        contextLimit: limitNum,
+        source: limit !== null ? 'parameter' : 'conversation_config'
       });
       
       const { rows } = await dbConnection.query(sql, [conversationId]);
       
       logger.info('获取最近消息成功', { 
         conversationId, 
-        messageCount: rows.length 
+        messageCount: rows.length,
+        requestedLimit: limitNum,
+        actualCount: rows.length
       });
       
       // 按时间正序返回（最老的在前）

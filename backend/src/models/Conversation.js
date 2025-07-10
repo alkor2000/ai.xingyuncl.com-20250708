@@ -1,5 +1,5 @@
 /**
- * 对话会话数据模型
+ * 对话会话数据模型 - 支持动态上下文数量配置
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -18,6 +18,7 @@ class Conversation {
     this.message_count = data.message_count || 0;
     this.total_tokens = data.total_tokens || 0;
     this.last_message_at = data.last_message_at || null;
+    this.context_length = data.context_length || 20; // 新增：上下文携带数量
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
   }
@@ -61,7 +62,7 @@ class Conversation {
   }
 
   /**
-   * 创建新会话
+   * 创建新会话 - 支持上下文数量设置
    */
   static async create(conversationData) {
     try {
@@ -69,14 +70,15 @@ class Conversation {
         user_id,
         title = 'New Chat',
         model_name,
-        system_prompt = null
+        system_prompt = null,
+        context_length = 20 // 新增：默认20条上下文
       } = conversationData;
 
       const conversationId = uuidv4();
       
       const sql = `
-        INSERT INTO conversations (id, user_id, title, model_name, system_prompt)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, context_length)
+        VALUES (?, ?, ?, ?, ?, ?)
       `;
       
       await dbConnection.query(sql, [
@@ -84,13 +86,15 @@ class Conversation {
         user_id,
         title,
         model_name,
-        system_prompt
+        system_prompt,
+        parseInt(context_length) || 20
       ]);
 
       logger.info('会话创建成功', { 
         conversationId,
         userId: user_id,
-        modelName: model_name 
+        modelName: model_name,
+        contextLength: context_length
       });
 
       return await Conversation.findById(conversationId);
@@ -155,23 +159,44 @@ class Conversation {
   }
 
   /**
-   * 更新会话
+   * 更新会话 - 支持上下文数量更新 (修复undefined值问题)
    */
   async update(updateData) {
     try {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'context_length'];
       
+      logger.info('开始更新会话', { 
+        conversationId: this.id,
+        updateData 
+      });
+
       allowedFields.forEach(field => {
-        if (updateData.hasOwnProperty(field)) {
+        // 检查字段是否存在且不为undefined
+        if (updateData.hasOwnProperty(field) && updateData[field] !== undefined) {
           fields.push(`${field} = ?`);
-          values.push(updateData[field]);
+          
+          if (field === 'context_length') {
+            // 确保上下文数量在合理范围内
+            const contextLength = parseInt(updateData[field]) || 20;
+            values.push(Math.max(0, Math.min(1000, contextLength)));
+          } else if (field === 'system_prompt') {
+            // system_prompt 可以是null，但不能是undefined
+            values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
+          } else if (field === 'is_pinned') {
+            // is_pinned 转换为布尔值
+            values.push(updateData[field] ? 1 : 0);
+          } else {
+            // 其他字段：将undefined转换为null
+            values.push(updateData[field] === undefined ? null : updateData[field]);
+          }
         }
       });
       
       if (fields.length === 0) {
+        logger.info('没有需要更新的字段', { conversationId: this.id });
         return this;
       }
       
@@ -180,6 +205,12 @@ class Conversation {
       
       const sql = `UPDATE conversations SET ${fields.join(', ')} WHERE id = ?`;
       
+      logger.info('执行更新SQL', { 
+        conversationId: this.id,
+        sql,
+        values: values.map(v => v === null ? 'NULL' : v)
+      });
+
       await dbConnection.query(sql, values);
 
       logger.info('会话更新成功', { 
@@ -189,7 +220,12 @@ class Conversation {
 
       return await Conversation.findById(this.id);
     } catch (error) {
-      logger.error('更新会话失败:', error);
+      logger.error('更新会话失败:', {
+        conversationId: this.id,
+        updateData,
+        error: error.message,
+        stack: error.stack
+      });
       throw new DatabaseError(`更新会话失败: ${error.message}`, error);
     }
   }
@@ -258,6 +294,13 @@ class Conversation {
   }
 
   /**
+   * 获取上下文数量 - 新增方法
+   */
+  getContextLength() {
+    return parseInt(this.context_length) || 20;
+  }
+
+  /**
    * 转换为JSON
    */
   toJSON() {
@@ -270,6 +313,7 @@ class Conversation {
       is_pinned: this.is_pinned,
       message_count: this.message_count,
       total_tokens: this.total_tokens,
+      context_length: this.context_length, // 新增：返回上下文数量
       last_message_at: this.last_message_at,
       created_at: this.created_at,
       updated_at: this.updated_at
