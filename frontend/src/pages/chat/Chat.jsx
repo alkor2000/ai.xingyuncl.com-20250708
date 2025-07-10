@@ -20,7 +20,8 @@ import {
   Alert,
   Statistic,
   InputNumber,
-  Tooltip
+  Tooltip,
+  Slider
 } from 'antd'
 import {
   MessageOutlined,
@@ -35,7 +36,8 @@ import {
   WalletOutlined,
   DollarOutlined,
   HistoryOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  FireOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
@@ -76,6 +78,9 @@ const Chat = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [conversationToDelete, setConversationToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // 🔧 修复: 使用setState来监控温度值变化，避免Form.useWatch错误
+  const [currentTemperature, setCurrentTemperature] = useState(0.0)
   
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
@@ -125,10 +130,12 @@ const Chat = () => {
         title: values.title || 'New Chat',
         model_name: values.model_name || 'gpt-3.5-turbo',
         system_prompt: values.system_prompt,
-        context_length: values.context_length || 20
+        context_length: values.context_length || 20,
+        ai_temperature: values.ai_temperature !== undefined ? values.ai_temperature : 0.0
       })
       setIsModalVisible(false)
       form.resetFields()
+      setCurrentTemperature(0.0) // 重置温度状态
       message.success('会话创建成功')
     } catch (error) {
       message.error(error.response?.data?.message || '会话创建失败')
@@ -187,11 +194,14 @@ const Chat = () => {
   // 编辑会话
   const handleEditConversation = (conversation) => {
     setEditingConversation(conversation)
+    const tempValue = conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0
+    setCurrentTemperature(tempValue) // 设置当前温度值
     form.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
       system_prompt: conversation.system_prompt,
-      context_length: conversation.context_length || 20
+      context_length: conversation.context_length || 20,
+      ai_temperature: tempValue
     })
     setIsModalVisible(true)
   }
@@ -203,6 +213,7 @@ const Chat = () => {
       setIsModalVisible(false)
       setEditingConversation(null)
       form.resetFields()
+      setCurrentTemperature(0.0) // 重置温度状态
       message.success('会话更新成功')
     } catch (error) {
       message.error('会话更新失败')
@@ -409,6 +420,27 @@ const Chat = () => {
     return checkCreditsForModel(currentConversation.model_name)
   }
 
+  // 获取temperature标签颜色
+  const getTemperatureTagColor = (temp) => {
+    if (temp === 0) return 'purple'
+    if (temp <= 0.3) return 'blue'
+    if (temp <= 0.7) return 'cyan'
+    return 'volcano'
+  }
+
+  // 获取temperature描述
+  const getTemperatureDesc = (temp) => {
+    if (temp === 0) return '严格模式'
+    if (temp <= 0.3) return '精准模式'
+    if (temp <= 0.7) return '平衡模式'
+    return '创意模式'
+  }
+
+  // 🔧 修复: 温度值变化处理函数
+  const handleTemperatureChange = (value) => {
+    setCurrentTemperature(value || 0.0)
+  }
+
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       {/* 侧边栏 - 会话列表 */}
@@ -426,6 +458,7 @@ const Chat = () => {
             icon={<PlusOutlined />}
             onClick={() => {
               setEditingConversation(null)
+              setCurrentTemperature(0.0) // 重置温度状态
               form.resetFields()
               setIsModalVisible(true)
             }}
@@ -451,6 +484,7 @@ const Chat = () => {
                 dataSource={conversations}
                 renderItem={conv => {
                   const modelCredits = getModelCredits(conv.model_name)
+                  const temperature = conv.ai_temperature !== undefined ? conv.ai_temperature : 0.0
                   return (
                     <List.Item
                       style={{ 
@@ -499,6 +533,11 @@ const Chat = () => {
                                 <span> • 上下文{conv.context_length}条</span>
                               )}
                             </div>
+                            <div style={{ marginTop: 4 }}>
+                              <Tag color={getTemperatureTagColor(temperature)} size="small" icon={<FireOutlined />}>
+                                {getTemperatureDesc(temperature)} {temperature}
+                              </Tag>
+                            </div>
                             <div style={{ fontSize: 11, color: '#ccc' }}>
                               {new Date(conv.updated_at).toLocaleString()}
                             </div>
@@ -523,7 +562,7 @@ const Chat = () => {
       }}>
         {currentConversation ? (
           <>
-            {/* 会话头部 - 固定高度，添加积分信息和上下文信息 */}
+            {/* 会话头部 - 固定高度，添加积分信息、上下文信息和temperature信息 */}
             <div style={{ 
               padding: '16px 24px', 
               borderBottom: '1px solid #f0f0f0',
@@ -545,6 +584,14 @@ const Chat = () => {
                     <Tooltip title="当前对话携带的上下文数量，影响AI的记忆长度">
                       <Tag color="cyan" icon={<HistoryOutlined />}>
                         上下文 {currentConversation.context_length || 20} 条
+                      </Tag>
+                    </Tooltip>
+                    <Tooltip title="AI创造性参数：0=严格，0.3=精准，0.7=平衡，1.0=最创意">
+                      <Tag 
+                        color={getTemperatureTagColor(currentConversation.ai_temperature || 0.0)} 
+                        icon={<FireOutlined />}
+                      >
+                        {getTemperatureDesc(currentConversation.ai_temperature || 0.0)} {currentConversation.ai_temperature || 0.0}
                       </Tag>
                     </Tooltip>
                   </Space>
@@ -671,7 +718,8 @@ const Chat = () => {
                 {currentConversation && (
                   <span>
                     消费: {getModelCredits(currentConversation.model_name)} 积分/次 • 
-                    上下文: {currentConversation.context_length || 20} 条
+                    上下文: {currentConversation.context_length || 20} 条 • 
+                    {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0}
                   </span>
                 )}
               </div>
@@ -696,6 +744,7 @@ const Chat = () => {
               style={{ marginTop: 16 }}
               onClick={() => {
                 setEditingConversation(null)
+                setCurrentTemperature(0.0) // 重置温度状态
                 form.resetFields()
                 setIsModalVisible(true)
               }}
@@ -706,13 +755,14 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 增强积分显示和上下文设置 */}
+      {/* 创建/编辑会话对话框 - 修复temperature设置 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false)
           setEditingConversation(null)
+          setCurrentTemperature(0.0) // 重置温度状态
           form.resetFields()
         }}
         footer={null}
@@ -723,7 +773,8 @@ const Chat = () => {
           layout="vertical"
           onFinish={editingConversation ? handleUpdateConversation : handleCreateConversation}
           initialValues={{
-            context_length: 20
+            context_length: 20,
+            ai_temperature: 0.0
           }}
         >
           <Form.Item
@@ -758,7 +809,7 @@ const Chat = () => {
             </Select>
           </Form.Item>
 
-          {/* 新增：上下文数量设置 */}
+          {/* 上下文数量设置 */}
           <Form.Item
             name="context_length"
             label={
@@ -789,6 +840,75 @@ const Chat = () => {
             />
           </Form.Item>
 
+          {/* 🔧 修复: Temperature设置 - 移除Form.useWatch */}
+          <Form.Item
+            name="ai_temperature"
+            label={
+              <Space>
+                <FireOutlined style={{ color: '#ff7a00' }} />
+                <span>AI创造性 (Temperature)</span>
+                <Tooltip title="控制AI回复的创造性和随机性。0=最严格精准，0.3=保守准确，0.7=平衡，1.0=最有创意。推荐：翻译、代码0-0.3；问答0.3-0.7；创作0.7-1.0">
+                  <InfoCircleOutlined style={{ color: '#999' }} />
+                </Tooltip>
+              </Space>
+            }
+            rules={[
+              { required: true, message: '请设置AI创造性参数' }
+            ]}
+            extra={
+              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ color: '#722ed1' }}>●</span> 0.0 严格模式：翻译、代码生成、数据分析
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ color: '#1677ff' }}>●</span> 0.1-0.3 精准模式：技术问答、学术讨论
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ color: '#13c2c2' }}>●</span> 0.4-0.7 平衡模式：日常对话、客服
+                </div>
+                <div>
+                  <span style={{ color: '#fa541c' }}>●</span> 0.8-1.0 创意模式：创意写作、头脑风暴
+                </div>
+              </div>
+            }
+          >
+            <div>
+              <Slider
+                min={0}
+                max={1}
+                step={0.1}
+                value={currentTemperature}
+                onChange={handleTemperatureChange}
+                marks={{
+                  0: { style: { color: '#722ed1' }, label: '严格' },
+                  0.3: { style: { color: '#1677ff' }, label: '精准' },
+                  0.7: { style: { color: '#13c2c2' }, label: '平衡' },
+                  1: { style: { color: '#fa541c' }, label: '创意' }
+                }}
+                tooltip={{
+                  formatter: (value) => `${value} (${getTemperatureDesc(value)})`
+                }}
+              />
+              <div style={{ marginTop: 8, textAlign: 'center' }}>
+                <Form.Item noStyle name="ai_temperature">
+                  <InputNumber
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    precision={1}
+                    placeholder="0.0"
+                    style={{ width: 80 }}
+                    value={currentTemperature}
+                    onChange={handleTemperatureChange}
+                  />
+                </Form.Item>
+                <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
+                  当前：{getTemperatureDesc(currentTemperature)}
+                </span>
+              </div>
+            </div>
+          </Form.Item>
+
           <Form.Item
             name="system_prompt"
             label="系统提示词"
@@ -807,6 +927,7 @@ const Chat = () => {
               <Button onClick={() => {
                 setIsModalVisible(false)
                 setEditingConversation(null)
+                setCurrentTemperature(0.0) // 重置温度状态
                 form.resetFields()
               }}>
                 取消
@@ -837,6 +958,7 @@ const Chat = () => {
             <p><strong>会话标题:</strong> {conversationToDelete.title}</p>
             <p><strong>消息数量:</strong> {conversationToDelete.message_count} 条</p>
             <p><strong>上下文设置:</strong> {conversationToDelete.context_length || 20} 条</p>
+            <p><strong>创造性设置:</strong> {getTemperatureDesc(conversationToDelete.ai_temperature || 0.0)} ({conversationToDelete.ai_temperature || 0.0})</p>
             <p style={{ color: '#ff4d4f', marginTop: 16 }}>
               <strong>注意：此操作无法撤销，所有聊天记录将被永久删除！</strong>
             </p>

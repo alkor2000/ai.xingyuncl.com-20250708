@@ -1,6 +1,6 @@
 /**
  * AI服务
- * 统一管理不同AI模型的调用 - 移除maxToken限制版本
+ * 统一管理不同AI模型的调用 - 支持会话级temperature设置
  */
 
 const axios = require('axios');
@@ -11,13 +11,14 @@ const { ExternalServiceError } = require('../utils/errors');
 
 class AIService {
   /**
-   * 发送消息到AI模型
+   * 发送消息到AI模型 - 支持会话级temperature
    */
   static async sendMessage(modelName, messages, options = {}) {
     try {
       logger.info('开始AI服务调用', { 
         model: modelName, 
-        messageCount: messages.length 
+        messageCount: messages.length,
+        customTemperature: options.temperature 
       });
 
       // 获取AI模型配置
@@ -50,7 +51,7 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 移除maxToken限制
+   * 调用模型API - 支持会话级temperature
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -58,24 +59,30 @@ class AIService {
         throw new Error(`模型 ${model.name} 的API密钥或端点未配置`);
       }
 
-      // 合并配置 - 移除maxToken限制
+      // 合并配置 - 优先使用会话级temperature
       const modelConfig = model.getDefaultConfig();
       const requestConfig = {
         ...modelConfig,
         ...options
       };
 
+      // 🔥 使用会话级temperature，如果没有则使用默认值0.7
+      const finalTemperature = options.temperature !== undefined ? 
+        parseFloat(options.temperature) : 
+        (requestConfig.temperature || 0.7);
+
       logger.info('调用AI模型API', { 
         model: model.name, 
         endpoint: model.api_endpoint,
-        messageCount: messages.length 
+        messageCount: messages.length,
+        temperature: finalTemperature
       });
 
-      // 构造请求数据 - 不设置max_tokens让模型自由输出
+      // 构造请求数据 - 使用会话级temperature
       const requestData = {
         model: model.name,
         messages: messages,
-        temperature: requestConfig.temperature || 0.7,
+        temperature: finalTemperature, // 🔥 使用会话配置的temperature
         top_p: requestConfig.top_p || 1,
         presence_penalty: requestConfig.presence_penalty || 0,
         frequency_penalty: requestConfig.frequency_penalty || 0,

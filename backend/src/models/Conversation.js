@@ -1,5 +1,5 @@
 /**
- * 对话会话数据模型 - 支持动态上下文数量配置
+ * 对话会话数据模型 - 支持动态上下文数量配置和temperature设置
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -18,7 +18,8 @@ class Conversation {
     this.message_count = data.message_count || 0;
     this.total_tokens = data.total_tokens || 0;
     this.last_message_at = data.last_message_at || null;
-    this.context_length = data.context_length || 20; // 新增：上下文携带数量
+    this.context_length = data.context_length || 20; // 上下文携带数量
+    this.ai_temperature = data.ai_temperature || 0.0; // 新增：AI温度参数
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
   }
@@ -62,7 +63,7 @@ class Conversation {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量设置
+   * 创建新会话 - 支持上下文数量和temperature设置
    */
   static async create(conversationData) {
     try {
@@ -71,14 +72,15 @@ class Conversation {
         title = 'New Chat',
         model_name,
         system_prompt = null,
-        context_length = 20 // 新增：默认20条上下文
+        context_length = 20, // 默认20条上下文
+        ai_temperature = 0.0 // 新增：默认temperature为0.0
       } = conversationData;
 
       const conversationId = uuidv4();
       
       const sql = `
-        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, context_length)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, context_length, ai_temperature)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       
       await dbConnection.query(sql, [
@@ -87,14 +89,16 @@ class Conversation {
         title,
         model_name,
         system_prompt,
-        parseInt(context_length) || 20
+        parseInt(context_length) || 20,
+        parseFloat(ai_temperature) || 0.0
       ]);
 
       logger.info('会话创建成功', { 
         conversationId,
         userId: user_id,
         modelName: model_name,
-        contextLength: context_length
+        contextLength: context_length,
+        aiTemperature: ai_temperature
       });
 
       return await Conversation.findById(conversationId);
@@ -159,14 +163,14 @@ class Conversation {
   }
 
   /**
-   * 更新会话 - 支持上下文数量更新 (修复undefined值问题)
+   * 更新会话 - 支持上下文数量和temperature更新
    */
   async update(updateData) {
     try {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'context_length'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'context_length', 'ai_temperature'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -182,6 +186,14 @@ class Conversation {
             // 确保上下文数量在合理范围内
             const contextLength = parseInt(updateData[field]) || 20;
             values.push(Math.max(0, Math.min(1000, contextLength)));
+          } else if (field === 'ai_temperature') {
+            // 新增：确保temperature在0.0-1.0范围内
+            const temperature = parseFloat(updateData[field]);
+            if (isNaN(temperature)) {
+              values.push(0.0);
+            } else {
+              values.push(Math.max(0.0, Math.min(1.0, temperature)));
+            }
           } else if (field === 'system_prompt') {
             // system_prompt 可以是null，但不能是undefined
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
@@ -294,10 +306,17 @@ class Conversation {
   }
 
   /**
-   * 获取上下文数量 - 新增方法
+   * 获取上下文数量
    */
   getContextLength() {
     return parseInt(this.context_length) || 20;
+  }
+
+  /**
+   * 获取AI温度参数 - 新增方法
+   */
+  getTemperature() {
+    return parseFloat(this.ai_temperature) || 0.0;
   }
 
   /**
@@ -313,7 +332,8 @@ class Conversation {
       is_pinned: this.is_pinned,
       message_count: this.message_count,
       total_tokens: this.total_tokens,
-      context_length: this.context_length, // 新增：返回上下文数量
+      context_length: this.context_length, // 返回上下文数量
+      ai_temperature: this.ai_temperature, // 新增：返回温度参数
       last_message_at: this.last_message_at,
       created_at: this.created_at,
       updated_at: this.updated_at

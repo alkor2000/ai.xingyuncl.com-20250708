@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统和动态上下文数量
+ * 对话控制器 - 集成积分扣减系统和动态上下文数量和temperature设置
  */
 
 const Conversation = require('../models/Conversation');
@@ -40,19 +40,20 @@ class ChatController {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量设置
+   * 创建新会话 - 支持上下文数量和temperature设置
    * POST /api/chat/conversations
    */
   static async createConversation(req, res) {
     try {
       const userId = req.user.id;
-      const { title, model_name, system_prompt, context_length } = req.body;
+      const { title, model_name, system_prompt, context_length, ai_temperature } = req.body;
 
       logger.info('开始创建会话', { 
         userId, 
         title, 
         model_name, 
         context_length,
+        ai_temperature,
         hasSystemPrompt: !!system_prompt 
       });
 
@@ -72,12 +73,19 @@ class ChatController {
       if (validContextLength < 0) validContextLength = 0;
       if (validContextLength > 1000) validContextLength = 1000;
 
+      // 验证temperature参数
+      let validTemperature = parseFloat(ai_temperature);
+      if (isNaN(validTemperature)) validTemperature = 0.0;
+      if (validTemperature < 0.0) validTemperature = 0.0;
+      if (validTemperature > 1.0) validTemperature = 1.0;
+
       const conversationData = {
         user_id: parseInt(userId),
         title: title || 'New Chat',
         model_name: model_name || 'gpt-3.5-turbo',
         system_prompt: system_prompt || null,
-        context_length: validContextLength
+        context_length: validContextLength,
+        ai_temperature: validTemperature
       };
 
       logger.info('会话数据准备完成', conversationData);
@@ -88,7 +96,8 @@ class ChatController {
         userId, 
         conversationId: conversation.id,
         modelName: conversation.model_name,
-        contextLength: conversation.context_length
+        contextLength: conversation.context_length,
+        aiTemperature: conversation.ai_temperature
       });
 
       return ResponseHelper.success(res, conversation.toJSON(), '会话创建成功', 201);
@@ -136,14 +145,14 @@ class ChatController {
   }
 
   /**
-   * 更新会话 - 支持上下文数量更新
+   * 更新会话 - 支持上下文数量和temperature更新
    * PUT /api/chat/conversations/:id
    */
   static async updateConversation(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { title, model_name, system_prompt, is_pinned, context_length } = req.body;
+      const { title, model_name, system_prompt, is_pinned, context_length, ai_temperature } = req.body;
 
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -172,6 +181,15 @@ class ChatController {
         if (validContextLength < 0) validContextLength = 0;
         if (validContextLength > 1000) validContextLength = 1000;
         updateData.context_length = validContextLength;
+      }
+
+      // 验证temperature参数
+      if (ai_temperature !== undefined) {
+        let validTemperature = parseFloat(ai_temperature);
+        if (isNaN(validTemperature)) validTemperature = 0.0;
+        if (validTemperature < 0.0) validTemperature = 0.0;
+        if (validTemperature > 1.0) validTemperature = 1.0;
+        updateData.ai_temperature = validTemperature;
       }
 
       const updatedConversation = await conversation.update(updateData);
@@ -268,7 +286,7 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复 - 集成积分扣减系统和动态上下文
+   * 发送消息并获取AI回复 - 集成积分扣减系统和动态上下文和temperature
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
@@ -326,6 +344,7 @@ class ChatController {
         conversationId: id,
         modelName: conversation.model_name,
         contextLength: conversation.getContextLength(),
+        aiTemperature: conversation.getTemperature(),
         requiredCredits,
         currentBalance: user.getCredits()
       });
@@ -380,15 +399,17 @@ class ChatController {
         conversationId: id,
         modelName: conversation.model_name,
         contextLength: conversation.getContextLength(),
+        aiTemperature: conversation.getTemperature(),
         messageCount: aiMessages.length,
         creditsCharged: requiredCredits
       });
 
       try {
-        // 调用AI服务
+        // 🔥 调用AI服务 - 传递会话级temperature
         const aiResponse = await AIService.sendMessage(
           conversation.model_name,
-          aiMessages
+          aiMessages,
+          { temperature: conversation.getTemperature() }
         );
 
         // 创建AI回复消息
@@ -416,6 +437,7 @@ class ChatController {
           userId,
           conversationId: id,
           contextLength: conversation.getContextLength(),
+          aiTemperature: conversation.getTemperature(),
           requestTokens: userMessage.tokens,
           responseTokens: assistantMessage.tokens,
           totalTokens,
