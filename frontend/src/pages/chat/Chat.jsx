@@ -20,8 +20,7 @@ import {
   Alert,
   Statistic,
   InputNumber,
-  Tooltip,
-  Slider
+  Tooltip
 } from 'antd'
 import {
   MessageOutlined,
@@ -79,9 +78,6 @@ const Chat = () => {
   const [conversationToDelete, setConversationToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   
-  // 🔧 修复: 使用setState来监控温度值变化，避免Form.useWatch错误
-  const [currentTemperature, setCurrentTemperature] = useState(0.0)
-  
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
@@ -135,7 +131,6 @@ const Chat = () => {
       })
       setIsModalVisible(false)
       form.resetFields()
-      setCurrentTemperature(0.0) // 重置温度状态
       message.success('会话创建成功')
     } catch (error) {
       message.error(error.response?.data?.message || '会话创建失败')
@@ -194,14 +189,12 @@ const Chat = () => {
   // 编辑会话
   const handleEditConversation = (conversation) => {
     setEditingConversation(conversation)
-    const tempValue = conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0
-    setCurrentTemperature(tempValue) // 设置当前温度值
     form.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
       system_prompt: conversation.system_prompt,
       context_length: conversation.context_length || 20,
-      ai_temperature: tempValue
+      ai_temperature: conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0
     })
     setIsModalVisible(true)
   }
@@ -213,7 +206,6 @@ const Chat = () => {
       setIsModalVisible(false)
       setEditingConversation(null)
       form.resetFields()
-      setCurrentTemperature(0.0) // 重置温度状态
       message.success('会话更新成功')
     } catch (error) {
       message.error('会话更新失败')
@@ -436,11 +428,6 @@ const Chat = () => {
     return '创意模式'
   }
 
-  // 🔧 修复: 温度值变化处理函数
-  const handleTemperatureChange = (value) => {
-    setCurrentTemperature(value || 0.0)
-  }
-
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       {/* 侧边栏 - 会话列表 */}
@@ -458,7 +445,6 @@ const Chat = () => {
             icon={<PlusOutlined />}
             onClick={() => {
               setEditingConversation(null)
-              setCurrentTemperature(0.0) // 重置温度状态
               form.resetFields()
               setIsModalVisible(true)
             }}
@@ -744,7 +730,6 @@ const Chat = () => {
               style={{ marginTop: 16 }}
               onClick={() => {
                 setEditingConversation(null)
-                setCurrentTemperature(0.0) // 重置温度状态
                 form.resetFields()
                 setIsModalVisible(true)
               }}
@@ -755,14 +740,13 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 修复temperature设置 */}
+      {/* 创建/编辑会话对话框 - 简化temperature设置 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false)
           setEditingConversation(null)
-          setCurrentTemperature(0.0) // 重置温度状态
           form.resetFields()
         }}
         footer={null}
@@ -840,7 +824,7 @@ const Chat = () => {
             />
           </Form.Item>
 
-          {/* 🔧 修复: Temperature设置 - 移除Form.useWatch */}
+          {/* 简化版Temperature设置 - 移除滑块，只保留数字输入 */}
           <Form.Item
             name="ai_temperature"
             label={
@@ -853,60 +837,66 @@ const Chat = () => {
               </Space>
             }
             rules={[
-              { required: true, message: '请设置AI创造性参数' }
+              { required: true, message: '请设置AI创造性参数' },
+              { type: 'number', min: 0, max: 1, message: 'Temperature范围：0.0-1.0' }
             ]}
             extra={
               <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: '#722ed1' }}>●</span> 0.0 严格模式：翻译、代码生成、数据分析
-                </div>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: '#1677ff' }}>●</span> 0.1-0.3 精准模式：技术问答、学术讨论
-                </div>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: '#13c2c2' }}>●</span> 0.4-0.7 平衡模式：日常对话、客服
-                </div>
-                <div>
-                  <span style={{ color: '#fa541c' }}>●</span> 0.8-1.0 创意模式：创意写作、头脑风暴
+                <div style={{ marginBottom: 4, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  <span><span style={{ color: '#722ed1' }}>●</span> 0.0 严格模式：翻译、代码生成</span>
+                  <span><span style={{ color: '#1677ff' }}>●</span> 0.1-0.3 精准模式：技术问答</span>
+                  <span><span style={{ color: '#13c2c2' }}>●</span> 0.4-0.7 平衡模式：日常对话</span>
+                  <span><span style={{ color: '#fa541c' }}>●</span> 0.8-1.0 创意模式：创意写作</span>
                 </div>
               </div>
             }
           >
-            <div>
-              <Slider
-                min={0}
-                max={1}
-                step={0.1}
-                value={currentTemperature}
-                onChange={handleTemperatureChange}
-                marks={{
-                  0: { style: { color: '#722ed1' }, label: '严格' },
-                  0.3: { style: { color: '#1677ff' }, label: '精准' },
-                  0.7: { style: { color: '#13c2c2' }, label: '平衡' },
-                  1: { style: { color: '#fa541c' }, label: '创意' }
-                }}
-                tooltip={{
-                  formatter: (value) => `${value} (${getTemperatureDesc(value)})`
-                }}
-              />
-              <div style={{ marginTop: 8, textAlign: 'center' }}>
-                <Form.Item noStyle name="ai_temperature">
-                  <InputNumber
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    precision={1}
-                    placeholder="0.0"
-                    style={{ width: 80 }}
-                    value={currentTemperature}
-                    onChange={handleTemperatureChange}
-                  />
-                </Form.Item>
-                <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
-                  当前：{getTemperatureDesc(currentTemperature)}
-                </span>
-              </div>
-            </div>
+            <InputNumber
+              min={0}
+              max={1}
+              step={0.1}
+              precision={1}
+              placeholder="0.0"
+              style={{ width: 200 }}
+              addonAfter={
+                <Tooltip title="常用值快速设置">
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <Button 
+                      size="small" 
+                      type="text" 
+                      style={{ padding: '0 4px', fontSize: 11, color: '#722ed1' }}
+                      onClick={() => form.setFieldValue('ai_temperature', 0.0)}
+                    >
+                      严格
+                    </Button>
+                    <Button 
+                      size="small" 
+                      type="text" 
+                      style={{ padding: '0 4px', fontSize: 11, color: '#1677ff' }}
+                      onClick={() => form.setFieldValue('ai_temperature', 0.3)}
+                    >
+                      精准
+                    </Button>
+                    <Button 
+                      size="small" 
+                      type="text" 
+                      style={{ padding: '0 4px', fontSize: 11, color: '#13c2c2' }}
+                      onClick={() => form.setFieldValue('ai_temperature', 0.7)}
+                    >
+                      平衡
+                    </Button>
+                    <Button 
+                      size="small" 
+                      type="text" 
+                      style={{ padding: '0 4px', fontSize: 11, color: '#fa541c' }}
+                      onClick={() => form.setFieldValue('ai_temperature', 1.0)}
+                    >
+                      创意
+                    </Button>
+                  </div>
+                </Tooltip>
+              }
+            />
           </Form.Item>
 
           <Form.Item
@@ -927,7 +917,6 @@ const Chat = () => {
               <Button onClick={() => {
                 setIsModalVisible(false)
                 setEditingConversation(null)
-                setCurrentTemperature(0.0) // 重置温度状态
                 form.resetFields()
               }}>
                 取消
