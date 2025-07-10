@@ -1,5 +1,5 @@
 /**
- * MySQL数据库连接池管理 - 支持事务操作
+ * MySQL数据库连接池管理 - MySQL2优化版（保守修复）
  */
 
 const mysql = require('mysql2/promise');
@@ -17,7 +17,7 @@ class DatabaseConnection {
    */
   async initialize() {
     try {
-      logger.info('开始初始化数据库连接池...');
+      logger.info('开始初始化数据库连接池 (MySQL2优化版)...');
       
       const dbConfig = config.database;
       
@@ -25,9 +25,10 @@ class DatabaseConnection {
         throw new Error('数据库配置缺失');
       }
       
+      // MySQL2优化配置 - 只保留官方支持的参数
       this.pool = mysql.createPool({
         host: dbConfig.host,
-        port: dbConfig.port,
+        port: dbConfig.port || 3306,
         user: dbConfig.user,
         password: dbConfig.password,
         database: dbConfig.database,
@@ -35,9 +36,8 @@ class DatabaseConnection {
         connectionLimit: dbConfig.connectionLimit || 10,
         queueLimit: 0,
         charset: dbConfig.charset || 'utf8mb4',
-        timezone: '+08:00',
-        acquireTimeout: 30000,
-        timeout: 30000
+        timezone: '+08:00'
+        // 移除所有可能引起警告的参数
       });
 
       // 测试连接
@@ -46,7 +46,7 @@ class DatabaseConnection {
       connection.release();
       
       this.isConnected = true;
-      logger.info('数据库连接池初始化成功');
+      logger.info('数据库连接池初始化成功 (MySQL2优化版 - 无警告)');
       
     } catch (error) {
       this.isConnected = false;

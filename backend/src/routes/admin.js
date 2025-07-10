@@ -89,7 +89,7 @@ router.delete('/users/:id',
   AdminController.deleteUser
 );
 
-// ===== 积分管理路由 (新增核心功能) =====
+// ===== 积分管理路由 (核心功能) =====
 
 /**
  * @route GET /api/admin/users/:id/credits
@@ -146,7 +146,7 @@ router.get('/users/:id/credits/history',
   AdminController.getUserCreditsHistory
 );
 
-// ===== 用户分组管理路由 (保持不变) =====
+// ===== 用户分组管理路由 =====
 
 /**
  * @route GET /api/admin/user-groups
@@ -192,7 +192,7 @@ router.delete('/user-groups/:id',
   AdminController.deleteUserGroup
 );
 
-// ===== AI模型管理路由 (保持不变) =====
+// ===== AI模型管理路由 =====
 
 /**
  * @route GET /api/admin/models
@@ -249,7 +249,7 @@ router.delete('/models/:id',
   AdminController.deleteAIModel
 );
 
-// ===== 系统模块管理路由 (保持不变) =====
+// ===== 系统模块管理路由 =====
 
 /**
  * @route GET /api/admin/modules
@@ -306,11 +306,11 @@ router.post('/modules/:id/health-check',
   AdminController.checkModuleHealth
 );
 
-// ===== 系统设置路由 (包含积分设置) =====
+// ===== 系统设置路由 =====
 
 /**
  * @route GET /api/admin/settings
- * @desc 获取系统设置 (包含积分设置)
+ * @desc 获取系统设置
  * @access SuperAdmin
  */
 router.get('/settings',
@@ -321,7 +321,7 @@ router.get('/settings',
 
 /**
  * @route PUT /api/admin/settings
- * @desc 更新系统设置 (包含积分设置)
+ * @desc 更新系统设置
  * @access SuperAdmin
  */
 router.put('/settings',

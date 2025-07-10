@@ -1,5 +1,5 @@
 /**
- * 应用配置文件
+ * 应用配置文件 - MySQL2优化版
  */
 
 const path = require('path');
@@ -12,7 +12,7 @@ module.exports = {
     env: process.env.NODE_ENV || 'production'
   },
 
-  // 数据库配置
+  // 数据库配置 - MySQL2 v3.14+ 优化
   database: {
     host: 'localhost',
     port: 3306,
@@ -20,7 +20,12 @@ module.exports = {
     password: 'AiPlatform@2025!',
     database: 'ai_platform',
     charset: 'utf8mb4',
-    connectionLimit: 10
+    connectionLimit: 10,
+    // 连接池性能优化配置
+    idleTimeout: 30000,      // 空闲超时30秒
+    maxIdle: 5,              // 最大空闲连接5个
+    enableKeepAlive: true,   // 启用TCP保活
+    queueLimit: 0            // 无限制排队
   },
 
   // Redis配置 (可选)
