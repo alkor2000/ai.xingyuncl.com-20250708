@@ -37,10 +37,12 @@ import {
   QuestionCircleOutlined,
   ClockCircleOutlined,
   AppstoreOutlined,
+  LinkOutlined,
   PlayCircleOutlined,
   StopOutlined,
   ApiOutlined,
-  WalletOutlined
+  WalletOutlined,
+  DollarOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
@@ -637,7 +639,7 @@ const Settings = () => {
           </Row>
         </TabPane>
 
-        {/* AI模型管理 (增强积分配置，移除maxToken) */}
+        {/* AI模型管理 (增强积分配置) */}
         <TabPane tab={<span><RobotOutlined />AI模型管理</span>} key="models">
           <Card 
             title={
@@ -645,7 +647,6 @@ const Settings = () => {
                 <RobotOutlined />
                 <span>AI模型配置</span>
                 <Tag color="blue">💰 积分计费</Tag>
-                <Tag color="green">🚀 无输出限制</Tag>
               </Space>
             }
             extra={
@@ -704,7 +705,7 @@ const Settings = () => {
           </Card>
         </TabPane>
 
-        {/* 基础设置 (移除maxToken设置) */}
+        {/* 基础设置 (增强积分设置) */}
         <TabPane tab={<span><SettingOutlined />基础设置</span>} key="settings">
           <Form
             form={settingsForm}
@@ -767,10 +768,13 @@ const Settings = () => {
                     </Select>
                   </Form.Item>
                   
+                  <Form.Item name={['ai', 'max_tokens']} label="默认最大Token数">
+                    <InputNumber style={{ width: '100%' }} min={1} max={32768} />
+                  </Form.Item>
+                  
                   <Form.Item name={['ai', 'temperature']} label="默认Temperature">
                     <InputNumber style={{ width: '100%' }} min={0} max={2} step={0.1} />
                   </Form.Item>
-                  {/* 已移除 max_tokens 设置 */}
                 </Card>
 
                 <Card title="积分设置" size="small" style={{ marginBottom: 16 }}>
@@ -823,7 +827,7 @@ const Settings = () => {
         </TabPane>
       </Tabs>
 
-      {/* AI模型创建/编辑弹窗 (移除maxToken配置) */}
+      {/* AI模型创建/编辑弹窗 (增强积分配置) */}
       <Modal
         title={editingModel ? '编辑AI模型' : '创建AI模型'}
         open={isModelModalVisible}
@@ -891,7 +895,6 @@ const Settings = () => {
                   <Space>
                     <WalletOutlined style={{ color: '#1677ff' }} />
                     <span>积分消费配置</span>
-                    <Tag color="green">🚀 无输出限制</Tag>
                   </Space>
                 } 
                 size="small" 
@@ -919,14 +922,12 @@ const Settings = () => {
                     <div style={{ 
                       marginTop: 30, 
                       padding: '8px 12px',
-                      backgroundColor: '#f0f9ff',
+                      backgroundColor: '#f6f8fa',
                       borderRadius: '4px',
-                      bordeLeft: '3px solid #1677ff',
                       fontSize: '12px',
-                      color: '#1677ff'
+                      color: '#586069'
                     }}>
-                      🚀 当前模型已移除输出长度限制，让AI自由输出！<br/>
-                      💡 建议：基础模型10-30积分，高级模型30-100积分
+                      💡 建议范围：基础模型1-20积分，高级模型20-100积分
                     </div>
                   </Col>
                 </Row>

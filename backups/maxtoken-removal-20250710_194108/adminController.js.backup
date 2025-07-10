@@ -1,5 +1,5 @@
 /**
- * 管理员控制器 - 支持用户分组管理和积分管理（移除maxToken限制版本）
+ * 管理员控制器 - 支持用户分组管理和积分管理
  */
 
 const User = require('../models/User');
@@ -181,13 +181,13 @@ class AdminController {
       // 检查邮箱是否已存在
       const existingEmail = await User.findByEmail(email);
       if (existingEmail) {
-        return ResponseHelper.validation(res, ['邮箱已被使用']);
+        return ResponseHelper.badRequest(res, '邮箱已被使用');
       }
 
       // 检查用户名是否已存在
       const existingUsername = await User.findByUsername(username);
       if (existingUsername) {
-        return ResponseHelper.validation(res, ['用户名已被使用']);
+        return ResponseHelper.badRequest(res, '用户名已被使用');
       }
 
       const user = await User.create({
@@ -283,7 +283,7 @@ class AdminController {
     }
   }
 
-  // ===== 积分管理接口 (核心功能) =====
+  // ===== 积分管理接口 (新增核心功能) =====
 
   /**
    * 获取用户积分信息
@@ -333,7 +333,7 @@ class AdminController {
       const { credits_quota, reason = '管理员调整积分配额' } = req.body;
       
       if (typeof credits_quota !== 'number' || credits_quota < 0) {
-        return ResponseHelper.validation(res, ['积分配额必须是非负数字']);
+        return ResponseHelper.badRequest(res, '积分配额必须是非负数字');
       }
 
       const user = await User.findById(id);
@@ -371,7 +371,7 @@ class AdminController {
       const { amount, reason = '管理员充值积分' } = req.body;
       
       if (typeof amount !== 'number' || amount <= 0) {
-        return ResponseHelper.validation(res, ['充值金额必须是正数']);
+        return ResponseHelper.badRequest(res, '充值金额必须是正数');
       }
 
       const user = await User.findById(id);
@@ -409,7 +409,7 @@ class AdminController {
       const { amount, reason = '管理员扣减积分' } = req.body;
       
       if (typeof amount !== 'number' || amount <= 0) {
-        return ResponseHelper.validation(res, ['扣减金额必须是正数']);
+        return ResponseHelper.badRequest(res, '扣减金额必须是正数');
       }
 
       const user = await User.findById(id);
@@ -478,7 +478,7 @@ class AdminController {
     }
   }
 
-  // ===== 用户分组管理 =====
+  // ===== 用户分组管理 (保持不变) =====
 
   /**
    * 获取用户分组列表
@@ -583,7 +583,7 @@ class AdminController {
     }
   }
 
-  // ===== AI模型管理 (移除maxToken相关) =====
+  // ===== AI模型管理 (支持积分配置) =====
 
   /**
    * 获取AI模型列表
@@ -745,7 +745,7 @@ class AdminController {
   }
 
   /**
-   * 获取系统设置 - 移除maxToken相关设置
+   * 获取系统设置
    */
   static async getSystemSettings(req, res) {
     try {
@@ -765,8 +765,8 @@ class AdminController {
         },
         ai: {
           default_model: 'gpt-3.5-turbo',
+          max_tokens: 4096,
           temperature: 0.7
-          // 移除 max_tokens 设置
         },
         credits: {
           enable_credits: true,
@@ -930,7 +930,7 @@ class AdminController {
       });
 
       if (updateFields.length === 0) {
-        return ResponseHelper.validation(res, ['没有有效的更新字段']);
+        return ResponseHelper.badRequest(res, '没有有效的更新字段');
       }
 
       updateFields.push('updated_at = CURRENT_TIMESTAMP');

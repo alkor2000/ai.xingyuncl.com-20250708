@@ -1,5 +1,5 @@
 /**
- * 管理员路由 - 支持用户分组管理和积分管理
+ * 管理员路由 - 支持用户分组管理和积分管理（修复版本，移除maxToken限制）
  */
 
 const express = require('express');
@@ -306,7 +306,7 @@ router.post('/modules/:id/health-check',
   AdminController.checkModuleHealth
 );
 
-// ===== 系统设置路由 =====
+// ===== 系统设置路由 (移除maxToken相关设置) =====
 
 /**
  * @route GET /api/admin/settings
