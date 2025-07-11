@@ -16,9 +16,7 @@ import {
   Spin,
   Empty,
   Tag,
-  Progress,
   Alert,
-  Statistic,
   InputNumber,
   Tooltip
 } from 'antd'
@@ -32,8 +30,6 @@ import {
   RobotOutlined,
   UserOutlined,
   ExclamationCircleOutlined,
-  WalletOutlined,
-  DollarOutlined,
   HistoryOutlined,
   InfoCircleOutlined,
   FireOutlined
@@ -83,20 +79,11 @@ const Chat = () => {
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
 
-  // 组件加载时获取数据
+  // 组件加载时获取数据 - 移除积分自动获取
   useEffect(() => {
     getConversations()
     getAIModels()
-    getUserCredits()
-  }, [])
-
-  // 定时刷新积分状态
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getUserCredits()
-    }, 30000) // 每30秒刷新一次积分状态
-
-    return () => clearInterval(interval)
+    // 移除: getUserCredits() - 只在需要时获取
   }, [])
 
   // 自动滚动到消息底部
@@ -113,13 +100,15 @@ const Chat = () => {
     }
   }
 
-  // 创建新会话
+  // 创建新会话 - 保留积分检查但不显示详细信息
   const handleCreateConversation = async (values) => {
     try {
-      // 检查积分是否足够
-      const requiredCredits = getModelCredits(values.model_name)
+      // 静默检查积分是否足够
       if (!checkCreditsForModel(values.model_name)) {
-        message.error(`积分不足！创建会话需要 ${requiredCredits} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`)
+        // 此时获取一次积分状态用于错误提示
+        await getUserCredits()
+        const requiredCredits = getModelCredits(values.model_name)
+        message.error(`积分不足，无法创建会话`)
         return
       }
 
@@ -138,16 +127,15 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 增强积分检查
+  // 发送消息 - 保留积分检查但简化提示
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !currentConversation) {
       return
     }
 
-    // 检查积分是否充足
-    const requiredCredits = getModelCredits(currentConversation.model_name)
+    // 静默检查积分是否充足
     if (!checkCreditsForModel(currentConversation.model_name)) {
-      message.error(`积分不足！发送消息需要 ${requiredCredits} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`)
+      message.error('积分不足，无法发送消息')
       return
     }
 
@@ -155,10 +143,8 @@ const Chat = () => {
       const response = await sendMessage(messageInput.trim())
       setMessageInput('')
       
-      // 显示积分消费信息
-      if (response.credits_info) {
-        message.success(`消息发送成功！消耗 ${response.credits_info.credits_consumed} 积分，余额 ${response.credits_info.credits_remaining} 积分`, 3)
-      }
+      // 简化成功提示 - 不显示具体积分数量
+      message.success('消息发送成功！')
       
       // 发送后立即滚动到底部
       setTimeout(scrollToBottom, 100)
@@ -166,7 +152,7 @@ const Chat = () => {
       const errorMessage = error.response?.data?.message || '消息发送失败'
       message.error(errorMessage)
       
-      // 如果是积分相关错误，刷新积分状态
+      // 如果是积分相关错误，静默刷新积分状态
       if (errorMessage.includes('积分')) {
         getUserCredits()
       }
@@ -334,79 +320,6 @@ const Chat = () => {
     </div>
   )
 
-  // 渲染积分状态卡片
-  const renderCreditsCard = () => {
-    if (creditsLoading) {
-      return (
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <div style={{ textAlign: 'center' }}>
-            <Spin size="small" />
-            <Text style={{ marginLeft: 8 }}>加载积分信息...</Text>
-          </div>
-        </Card>
-      )
-    }
-
-    if (!userCredits) {
-      return (
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <Alert message="无法获取积分信息" type="warning" size="small" showIcon />
-        </Card>
-      )
-    }
-
-    const { credits_stats } = userCredits
-    const usagePercentage = credits_stats.quota > 0 ? (credits_stats.used / credits_stats.quota * 100) : 0
-    const isLowCredits = credits_stats.remaining < 50
-
-    return (
-      <Card 
-        size="small" 
-        style={{ 
-          marginBottom: 16,
-          borderColor: isLowCredits ? '#ff4d4f' : '#d9d9d9'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <WalletOutlined style={{ 
-              color: isLowCredits ? '#ff4d4f' : '#52c41a',
-              marginRight: 8 
-            }} />
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 'bold' }}>
-                {credits_stats.remaining?.toLocaleString()} 积分
-              </div>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                {credits_stats.used?.toLocaleString()} / {credits_stats.quota?.toLocaleString()} 已用
-              </div>
-            </div>
-          </div>
-          <div style={{ minWidth: 60 }}>
-            <Progress 
-              type="circle" 
-              size={40}
-              percent={Math.round(usagePercentage)}
-              strokeColor={isLowCredits ? '#ff4d4f' : '#52c41a'}
-              format={() => `${Math.round(usagePercentage)}%`}
-            />
-          </div>
-        </div>
-        
-        {isLowCredits && (
-          <Alert
-            message="积分不足"
-            description="积分余额较低，请及时充值"
-            type="warning"
-            size="small"
-            showIcon
-            style={{ marginTop: 8 }}
-          />
-        )}
-      </Card>
-    )
-  }
-
   // 检查是否可以发送消息
   const canSendMessage = () => {
     if (!currentConversation || !messageInput.trim() || typing) return false
@@ -433,13 +346,8 @@ const Chat = () => {
     <Layout className="chat-layout">
       {/* 侧边栏 - 会话列表 */}
       <Sider width={350} className="chat-sidebar">
-        {/* 积分状态显示 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          {renderCreditsCard()}
-        </div>
-
         {/* 新建对话按钮 */}
-        <div style={{ padding: '0 16px 16px 16px' }}>
+        <div style={{ padding: '16px 16px 16px 16px' }}>
           <Button 
             type="primary" 
             block 
@@ -470,8 +378,8 @@ const Chat = () => {
               <List
                 dataSource={conversations}
                 renderItem={conv => {
-                  const modelCredits = getModelCredits(conv.model_name)
-                  const temperature = conv.ai_temperature !== undefined ? conv.ai_temperature : 0.0
+                  // 🔥 移除temperature相关变量，不再在列表中显示
+                  // const temperature = conv.ai_temperature !== undefined ? conv.ai_temperature : 0.0
                   return (
                     <List.Item
                       style={{ 
@@ -486,12 +394,8 @@ const Chat = () => {
                     >
                       <List.Item.Meta
                         avatar={
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <MessageOutlined style={{ color: '#1677ff' }} />
-                            <Tag color="blue" size="small" style={{ fontSize: 10, marginTop: 2 }}>
-                              {modelCredits}💰
-                            </Tag>
-                          </div>
+                          // 移除积分标签，只保留消息图标
+                          <MessageOutlined style={{ color: '#1677ff', fontSize: 18 }} />
                         }
                         title={
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -520,11 +424,12 @@ const Chat = () => {
                                 <span> • 上下文{conv.context_length}条</span>
                               )}
                             </div>
-                            <div style={{ marginTop: 4 }}>
+                            {/* 🔥 移除Temperature标签显示 */}
+                            {/* <div style={{ marginTop: 4 }}>
                               <Tag color={getTemperatureTagColor(temperature)} size="small" icon={<FireOutlined />}>
                                 {getTemperatureDesc(temperature)} {temperature}
                               </Tag>
-                            </div>
+                            </div> */}
                             <div style={{ fontSize: 11, color: '#ccc' }}>
                               {new Date(conv.updated_at).toLocaleString()}
                             </div>
@@ -544,7 +449,7 @@ const Chat = () => {
       <Content className="chat-main">
         {currentConversation ? (
           <>
-            {/* 会话头部 - 固定在顶部 */}
+            {/* 会话头部 - 固定在顶部，简化显示 */}
             <div className="chat-header">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -555,36 +460,21 @@ const Chat = () => {
                     <Text type="secondary">
                       {currentConversation.model_name} • {messages.length} 条消息
                     </Text>
-                    <Tag color="gold" icon={<DollarOutlined />}>
-                      {getModelCredits(currentConversation.model_name)} 积分/次
-                    </Tag>
                     <Tooltip title="当前对话携带的上下文数量，影响AI的记忆长度">
                       <Tag color="cyan" icon={<HistoryOutlined />}>
                         上下文 {currentConversation.context_length || 20} 条
                       </Tag>
                     </Tooltip>
-                    <Tooltip title="AI创造性参数：0=严格，0.3=精准，0.7=平衡，1.0=最创意">
+                    {/* 🔥 移除Temperature标签显示 */}
+                    {/* <Tooltip title="AI创造性参数：0=严格，0.3=精准，0.7=平衡，1.0=最创意">
                       <Tag 
                         color={getTemperatureTagColor(currentConversation.ai_temperature || 0.0)} 
                         icon={<FireOutlined />}
                       >
                         {getTemperatureDesc(currentConversation.ai_temperature || 0.0)} {currentConversation.ai_temperature || 0.0}
                       </Tag>
-                    </Tooltip>
+                    </Tooltip> */}
                   </Space>
-                </div>
-                
-                <div style={{ textAlign: 'right' }}>
-                  <Statistic
-                    title="积分余额"
-                    value={userCredits?.credits_stats?.remaining || 0}
-                    precision={0}
-                    valueStyle={{ 
-                      color: (userCredits?.credits_stats?.remaining || 0) < 50 ? '#ff4d4f' : '#52c41a',
-                      fontSize: 18
-                    }}
-                    prefix={<WalletOutlined />}
-                  />
                 </div>
               </div>
             </div>
@@ -617,16 +507,16 @@ const Chat = () => {
 
             {/* 输入框 - 固定在底部 */}
             <div className="chat-input">
-              {/* 积分不足警告 */}
+              {/* 积分不足警告 - 简化显示*/}
               {currentConversation && !checkCreditsForModel(currentConversation.model_name) && (
                 <Alert
-                  message={`积分不足！发送消息需要 ${getModelCredits(currentConversation.model_name)} 积分，当前余额 ${userCredits?.credits_stats?.remaining || 0} 积分`}
+                  message="积分不足，无法发送消息"
                   type="error"
                   showIcon
                   style={{ marginBottom: 12 }}
                   action={
                     <Button size="small" type="primary" ghost>
-                      充值积分
+                      联系管理员
                     </Button>
                   }
                 />
@@ -654,14 +544,14 @@ const Chat = () => {
                 </Button>
               </div>
               
-              {/* 输入提示和积分消费提示 */}
+              {/* 输入提示 - 进一步简化 */}
               <div className="chat-input-tip">
                 <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
                 {currentConversation && (
                   <span>
-                    消费: {getModelCredits(currentConversation.model_name)} 积分/次 • 
-                    上下文: {currentConversation.context_length || 20} 条 • 
-                    {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0}
+                    上下文: {currentConversation.context_length || 20} 条
+                    {/* 🔥 移除Temperature显示 */}
+                    {/* • {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0} */}
                   </span>
                 )}
               </div>
@@ -689,7 +579,7 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 简化temperature设置 */}
+      {/* 创建/编辑会话对话框 - 保留Temperature设置但不在列表显示 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
@@ -722,21 +612,11 @@ const Chat = () => {
             name="model_name"
             label="AI模型"
             rules={[{ required: true, message: '请选择AI模型' }]}
-            extra={
-              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                选择不同模型会有不同的积分消费
-              </div>
-            }
           >
             <Select placeholder="选择AI模型">
               {aiModels.map(model => (
                 <Select.Option key={model.name} value={model.name}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{model.display_name}</span>
-                    <Tag color="blue" size="small">
-                      {model.credits_per_chat} 积分/次
-                    </Tag>
-                  </div>
+                  <span>{model.display_name}</span>
                 </Select.Option>
               ))}
             </Select>
@@ -773,7 +653,7 @@ const Chat = () => {
             />
           </Form.Item>
 
-          {/* 简化版Temperature设置 - 移除滑块，只保留数字输入 */}
+          {/* Temperature设置 - 保留在创建/编辑对话框中 */}
           <Form.Item
             name="ai_temperature"
             label={
@@ -875,7 +755,7 @@ const Chat = () => {
         </Form>
       </Modal>
 
-      {/* 删除确认对话框 */}
+      {/* 删除确认对话框 - 移除Temperature显示 */}
       <Modal
         title="删除会话"
         open={deleteModalVisible}
@@ -896,7 +776,8 @@ const Chat = () => {
             <p><strong>会话标题:</strong> {conversationToDelete.title}</p>
             <p><strong>消息数量:</strong> {conversationToDelete.message_count} 条</p>
             <p><strong>上下文设置:</strong> {conversationToDelete.context_length || 20} 条</p>
-            <p><strong>创造性设置:</strong> {getTemperatureDesc(conversationToDelete.ai_temperature || 0.0)} ({conversationToDelete.ai_temperature || 0.0})</p>
+            {/* 🔥 移除Temperature显示 */}
+            {/* <p><strong>创造性设置:</strong> {getTemperatureDesc(conversationToDelete.ai_temperature || 0.0)} ({conversationToDelete.ai_temperature || 0.0})</p> */}
             <p style={{ color: '#ff4d4f', marginTop: 16 }}>
               <strong>注意：此操作无法撤销，所有聊天记录将被永久删除！</strong>
             </p>

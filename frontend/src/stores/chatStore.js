@@ -27,7 +27,7 @@ const useChatStore = create((set, get) => ({
     }
   },
 
-  // 获取用户积分状态
+  // 获取用户积分状态 - 改为按需调用，不再自动定时刷新
   getUserCredits: async () => {
     set({ creditsLoading: true })
     try {
@@ -47,6 +47,12 @@ const useChatStore = create((set, get) => ({
   createConversation: async (conversationData) => {
     set({ loading: true })
     try {
+      // 创建会话前确保有积分状态用于验证
+      const state = get()
+      if (!state.userCredits) {
+        await get().getUserCredits()
+      }
+      
       const response = await apiClient.post('/chat/conversations', conversationData)
       const newConversation = response.data.data
       
@@ -93,6 +99,12 @@ const useChatStore = create((set, get) => ({
     
     set({ typing: true })
     
+    // 确保有积分状态用于发送前验证
+    const state = get()
+    if (!state.userCredits) {
+      await get().getUserCredits()
+    }
+    
     // 立即添加用户消息到界面
     const userMessage = {
       id: `temp-${Date.now()}`,
@@ -124,7 +136,7 @@ const useChatStore = create((set, get) => ({
         typing: false
       }))
       
-      // 更新积分状态
+      // 🔥 更新积分状态 - 静默更新，不触发界面刷新
       if (responseData.credits_info) {
         set(state => ({
           userCredits: state.userCredits ? {
@@ -213,10 +225,18 @@ const useChatStore = create((set, get) => ({
     }
   },
 
-  // 检查积分是否充足
+  // 检查积分是否充足 - 如果没有积分状态，先获取一次
   checkCreditsForModel: (modelName) => {
     const state = get()
-    if (!state.userCredits || !state.aiModels.length) return false
+    
+    // 如果没有积分状态，可能需要获取积分状态
+    if (!state.userCredits || !state.aiModels.length) {
+      // 静默获取一次积分状态
+      if (!state.creditsLoading) {
+        get().getUserCredits().catch(() => {})
+      }
+      return false
+    }
     
     const model = state.aiModels.find(m => m.name === modelName)
     const requiredCredits = model?.credits_per_chat || 10
