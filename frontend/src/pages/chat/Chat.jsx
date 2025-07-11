@@ -118,7 +118,7 @@ const Chat = () => {
         model_name: values.model_name || 'gpt-3.5-turbo',
         system_prompt: values.system_prompt,
         context_length: values.context_length || 20,
-        ai_temperature: values.ai_temperature !== undefined ? values.ai_temperature : 0.0
+        ai_temperature: parseFloat(values.ai_temperature) || 0.0
       })
       setIsModalVisible(false)
       form.resetFields()
@@ -188,7 +188,13 @@ const Chat = () => {
   // 更新会话
   const handleUpdateConversation = async (values) => {
     try {
-      await updateConversation(editingConversation.id, values)
+      // 确保ai_temperature是数字类型
+      const updateData = {
+        ...values,
+        ai_temperature: parseFloat(values.ai_temperature) || 0.0
+      }
+      
+      await updateConversation(editingConversation.id, updateData)
       setIsModalVisible(false)
       setEditingConversation(null)
       form.resetFields()
@@ -315,6 +321,24 @@ const Chat = () => {
     if (temp <= 0.3) return '精准模式'
     if (temp <= 0.7) return '平衡模式'
     return '创意模式'
+  }
+
+  // 自定义Temperature验证函数
+  const validateTemperature = (_, value) => {
+    if (value === '' || value === null || value === undefined) {
+      return Promise.reject(new Error('请设置Temperature参数'))
+    }
+    
+    const numValue = parseFloat(value)
+    if (isNaN(numValue)) {
+      return Promise.reject(new Error('请输入有效的数字'))
+    }
+    
+    if (numValue < 0 || numValue > 1) {
+      return Promise.reject(new Error('范围：0-1'))
+    }
+    
+    return Promise.resolve()
   }
 
   return (
@@ -472,7 +496,7 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 🔥 会话设置对话框 - 简化Temperature输入 */}
+      {/* 🔥 会话设置对话框 - 修复Temperature验证 */}
       <Modal
         title={editingConversation ? '会话设置' : '创建新会话'}
         open={isModalVisible}
@@ -521,26 +545,26 @@ const Chat = () => {
             label={
               <Space>
                 <span>上下文数量</span>
-                <Tooltip title="设置AI对话时携带的历史消息数量，0表示不携带历史消息">
+                <Tooltip title="设置AI对话时携带的历史消息数量，1-500表示携带对应数量的历史消息">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
             }
             rules={[
               { required: true, message: '请设置上下文数量' },
-              { type: 'number', min: 1, max: 1000, message: '范围：1-1000' }
+              { type: 'number', min: 1, max: 500, message: '范围：1-500' }
             ]}
-            extra="范围：1-1000"
+            extra="范围：1-500"
           >
             <InputNumber
               min={1}
-              max={1000}
+              max={500}
               style={{ width: '100%' }}
               placeholder="20"
             />
           </Form.Item>
 
-          {/* 🔥 简化Temperature设置 - 改为纯文本输入 */}
+          {/* 🔥 修复Temperature设置 - 使用自定义验证 */}
           <Form.Item
             name="ai_temperature"
             label={
@@ -553,25 +577,13 @@ const Chat = () => {
               </Space>
             }
             rules={[
-              { required: true, message: '请设置Temperature参数' },
-              { type: 'number', min: 0, max: 1, message: '范围：0-1' }
+              { validator: validateTemperature }
             ]}
             extra="范围：0-1，推荐：翻译代码0，日常对话0.3，创意写作0.7"
           >
             <Input
               placeholder="0.0"
               style={{ width: 200 }}
-              type="number"
-              min="0"
-              max="1"
-              step="0.1"
-              onChange={(e) => {
-                const value = parseFloat(e.target.value)
-                if (!isNaN(value)) {
-                  const clampedValue = Math.max(0, Math.min(1, value))
-                  form.setFieldValue('ai_temperature', clampedValue)
-                }
-              }}
             />
           </Form.Item>
 
