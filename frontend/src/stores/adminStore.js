@@ -1,5 +1,5 @@
 /**
- * 管理员状态管理 - 支持用户分组管理和积分管理
+ * 管理员状态管理 - 支持用户分组管理和积分管理（修复流式开关Bug版本）
  */
 
 import { create } from 'zustand'
@@ -392,21 +392,39 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
-  // 更新AI模型
+  // 🔥 更新AI模型 (修复Bug: 增强错误处理和null值过滤)
   updateAIModel: async (modelId, modelData) => {
     try {
       const response = await apiClient.put(`/admin/models/${modelId}`, modelData)
       const updatedModel = response.data.data
       
+      // 🔥 验证后端返回的数据完整性
+      if (!updatedModel || !updatedModel.id) {
+        console.error('后端返回的模型数据不完整:', updatedModel)
+        throw new Error('后端返回的模型数据格式错误')
+      }
+      
       set(state => ({
-        aiModels: state.aiModels.map(model => 
-          model.id === modelId ? updatedModel : model
-        )
+        // 🔥 安全的状态更新：确保不会产生null值
+        aiModels: state.aiModels
+          .filter(model => model && model.id) // 🔥 过滤掉可能的null值
+          .map(model => 
+            model.id === modelId ? updatedModel : model
+          )
       }))
       
       return updatedModel
     } catch (error) {
       console.error('更新AI模型失败:', error)
+      
+      // 🔥 出错时重新获取模型列表，确保状态一致性  
+      try {
+        console.log('尝试重新获取AI模型列表...')
+        await get().getAIModels()
+      } catch (refetchError) {
+        console.error('重新获取模型列表也失败:', refetchError)
+      }
+      
       throw error
     }
   },
@@ -417,7 +435,7 @@ const useAdminStore = create((set, get) => ({
       await apiClient.delete(`/admin/models/${modelId}`)
       
       set(state => ({
-        aiModels: state.aiModels.filter(model => model.id !== modelId)
+        aiModels: state.aiModels.filter(model => model && model.id !== modelId)
       }))
     } catch (error) {
       console.error('删除AI模型失败:', error)

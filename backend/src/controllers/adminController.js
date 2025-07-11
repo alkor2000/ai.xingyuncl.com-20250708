@@ -1,5 +1,5 @@
 /**
- * 管理员控制器 - 支持用户分组管理和积分管理（移除maxToken限制版本）
+ * 管理员控制器 - 支持用户分组管理和积分管理（修复流式开关Bug版本）
  */
 
 const User = require('../models/User');
@@ -640,7 +640,7 @@ class AdminController {
         modelName: model.name
       });
 
-      return ResponseHelper.success(res, model, 'AI模型创建成功', 201);
+      return ResponseHelper.success(res, model.toJSON(), 'AI模型创建成功', 201);
     } catch (error) {
       logger.error('创建AI模型失败', { 
         adminId: req.user?.id, 
@@ -651,7 +651,7 @@ class AdminController {
   }
 
   /**
-   * 更新AI模型 (支持积分配置)
+   * 🔥 更新AI模型 (修复Bug: 确保返回完整模型数据)
    */
   static async updateAIModel(req, res) {
     try {
@@ -663,15 +663,25 @@ class AdminController {
         return ResponseHelper.notFound(res, 'AI模型不存在');
       }
 
-      const updatedModel = await model.update(updateData);
+      // 🔥 执行更新操作
+      await model.update(updateData);
+      
+      // 🔥 重新获取更新后的完整模型数据
+      const updatedModel = await AIModel.findById(id);
+      if (!updatedModel) {
+        logger.error('更新后重新获取模型失败', { modelId: id });
+        return ResponseHelper.error(res, '更新后获取模型数据失败');
+      }
 
       logger.info('更新AI模型成功', { 
         adminId: req.user.id,
         modelId: id,
-        updateFields: Object.keys(updateData)
+        updateFields: Object.keys(updateData),
+        streamEnabled: updatedModel.stream_enabled
       });
 
-      return ResponseHelper.success(res, updatedModel, 'AI模型更新成功');
+      // 🔥 返回完整的模型JSON数据
+      return ResponseHelper.success(res, updatedModel.toJSON(), 'AI模型更新成功');
     } catch (error) {
       logger.error('更新AI模型失败', { 
         adminId: req.user?.id, 

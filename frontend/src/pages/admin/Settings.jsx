@@ -40,7 +40,9 @@ import {
   PlayCircleOutlined,
   StopOutlined,
   ApiOutlined,
-  WalletOutlined
+  WalletOutlined,
+  ThunderboltOutlined,
+  FireOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
@@ -175,6 +177,7 @@ const Settings = () => {
       display_name: model.display_name,
       api_key: '',
       api_endpoint: '',
+      stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true, // 🆕 流式开关
       credits_per_chat: model.credits_per_chat,
       is_active: model.is_active,
       sort_order: model.sort_order
@@ -264,6 +267,16 @@ const Settings = () => {
     }
   }
 
+  // 🆕 快速切换流式输出状态
+  const handleToggleStreamEnabled = async (modelId, streamEnabled) => {
+    try {
+      await updateAIModel(modelId, { stream_enabled: streamEnabled })
+      message.success(streamEnabled ? '流式输出已启用' : '流式输出已禁用')
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
   // 渲染测试状态
   const renderTestStatus = (status, lastTestedAt, modelId) => {
     if (testingModelId === modelId) {
@@ -310,24 +323,25 @@ const Settings = () => {
     }
   }
 
-  // AI模型表格列 (增强积分配置显示)
+  // 🆕 AI模型表格列 - 增强流式输出显示
   const modelColumns = [
     {
       title: '模型名称',
       dataIndex: 'name',
       key: 'name',
-      width: 150
+      width: 140
     },
     {
       title: '显示名称',
       dataIndex: 'display_name',
-      key: 'display_name'
+      key: 'display_name',
+      width: 180
     },
     {
       title: '积分消费',
       dataIndex: 'credits_per_chat',
       key: 'credits_per_chat',
-      width: 120,
+      width: 100,
       render: (credits) => (
         <Space>
           <WalletOutlined style={{ color: '#1677ff' }} />
@@ -338,15 +352,43 @@ const Settings = () => {
       )
     },
     {
+      title: '🆕 流式输出',
+      dataIndex: 'stream_enabled',
+      key: 'stream_enabled',
+      width: 120,
+      render: (streamEnabled, record) => (
+        <Space>
+          <Switch
+            checked={streamEnabled}
+            size="small"
+            loading={loading}
+            onChange={(checked) => handleToggleStreamEnabled(record.id, checked)}
+            checkedChildren={<ThunderboltOutlined />}
+            unCheckedChildren={<CloseCircleOutlined />}
+          />
+          {streamEnabled ? (
+            <Tag color="processing" icon={<ThunderboltOutlined />} size="small">
+              流式
+            </Tag>
+          ) : (
+            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
+              标准
+            </Tag>
+          )}
+        </Space>
+      )
+    },
+    {
       title: 'API密钥',
       dataIndex: 'api_key',
       key: 'api_key',
+      width: 120,
       render: (apiKey, record) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ minWidth: 100 }}>
+          <span style={{ minWidth: 80 }}>
             {showApiKey[record.id] ? 
-              (apiKey ? `${apiKey.substring(0, 20)}...` : '未配置') : 
-              '••••••••••••••••••••'
+              (apiKey ? `${apiKey.substring(0, 15)}...` : '未配置') : 
+              '••••••••••••••••'
             }
           </span>
           <Button
@@ -361,20 +403,24 @@ const Settings = () => {
     {
       title: '状态',
       key: 'status',
+      width: 140,
       render: (_, record) => (
-        <Space>
-          {record.is_active ? (
-            <Tag color="success">启用</Tag>
-          ) : (
-            <Tag color="default">禁用</Tag>
-          )}
-          {renderTestStatus(record.test_status, record.last_tested_at, record.id)}
+        <Space direction="vertical" size="small">
+          <div>
+            {record.is_active ? (
+              <Tag color="success" size="small">启用</Tag>
+            ) : (
+              <Tag color="default" size="small">禁用</Tag>
+            )}
+            {renderTestStatus(record.test_status, record.last_tested_at, record.id)}
+          </div>
         </Space>
       )
     },
     {
       title: '操作',
       key: 'actions',
+      width: 120,
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="测试连通性">
@@ -637,7 +683,7 @@ const Settings = () => {
           </Row>
         </TabPane>
 
-        {/* AI模型管理 (增强积分配置，移除maxToken) */}
+        {/* 🆕 AI模型管理 - 增强流式输出配置 */}
         <TabPane tab={<span><RobotOutlined />AI模型管理</span>} key="models">
           <Card 
             title={
@@ -645,7 +691,8 @@ const Settings = () => {
                 <RobotOutlined />
                 <span>AI模型配置</span>
                 <Tag color="blue">💰 积分计费</Tag>
-                <Tag color="green">🚀 无输出限制</Tag>
+                <Tag color="processing" icon={<ThunderboltOutlined />}>🚀 流式输出</Tag>
+                <Tag color="green">🔓 无输出限制</Tag>
               </Space>
             }
             extra={
@@ -761,6 +808,9 @@ const Settings = () => {
                           <Space>
                             <span>{model.display_name}</span>
                             <Tag color="blue" size="small">{model.credits_per_chat}积分</Tag>
+                            {model.stream_enabled && (
+                              <Tag color="processing" icon={<ThunderboltOutlined />} size="small">流式</Tag>
+                            )}
                           </Space>
                         </Select.Option>
                       ))}
@@ -770,7 +820,6 @@ const Settings = () => {
                   <Form.Item name={['ai', 'temperature']} label="默认Temperature">
                     <InputNumber style={{ width: '100%' }} min={0} max={2} step={0.1} />
                   </Form.Item>
-                  {/* 已移除 max_tokens 设置 */}
                 </Card>
 
                 <Card title="积分设置" size="small" style={{ marginBottom: 16 }}>
@@ -823,7 +872,7 @@ const Settings = () => {
         </TabPane>
       </Tabs>
 
-      {/* AI模型创建/编辑弹窗 (移除maxToken配置) */}
+      {/* 🆕 AI模型创建/编辑弹窗 - 新增流式输出配置 */}
       <Modal
         title={editingModel ? '编辑AI模型' : '创建AI模型'}
         open={isModelModalVisible}
@@ -883,6 +932,53 @@ const Settings = () => {
             </Col>
           </Row>
 
+          {/* 🆕 流式输出配置区域 */}
+          <Row gutter={16}>
+            <Col span={24}>
+              <Card 
+                title={
+                  <Space>
+                    <ThunderboltOutlined style={{ color: '#1677ff' }} />
+                    <span>流式输出配置</span>
+                    <Tag color="processing">🚀 第1阶段功能</Tag>
+                  </Space>
+                } 
+                size="small" 
+                style={{ marginBottom: 16 }}
+              >
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="stream_enabled"
+                      label="启用流式输出"
+                      valuePropName="checked"
+                      initialValue={true}
+                    >
+                      <Switch
+                        checkedChildren={<ThunderboltOutlined />}
+                        unCheckedChildren={<CloseCircleOutlined />}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ 
+                      marginTop: 30, 
+                      padding: '8px 12px',
+                      backgroundColor: '#f0f9ff',
+                      borderRadius: '4px',
+                      borderLeft: '3px solid #1677ff',
+                      fontSize: '12px',
+                      color: '#1677ff'
+                    }}>
+                      ⚡ 流式输出：AI边生成边显示，提供实时体验<br/>
+                      📝 标准模式：等待完整生成后一次性显示
+                    </div>
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+          </Row>
+
           {/* 积分配置区域 */}
           <Row gutter={16}>
             <Col span={24}>
@@ -921,7 +1017,7 @@ const Settings = () => {
                       padding: '8px 12px',
                       backgroundColor: '#f0f9ff',
                       borderRadius: '4px',
-                      bordeLeft: '3px solid #1677ff',
+                      borderLeft: '3px solid #1677ff',
                       fontSize: '12px',
                       color: '#1677ff'
                     }}>

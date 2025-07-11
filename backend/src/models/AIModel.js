@@ -1,5 +1,5 @@
 /**
- * AI模型数据模型 - 支持积分消费配置（移除maxToken限制版本）
+ * AI模型数据模型 - 支持积分消费配置和流式输出（第1阶段：流式字段支持）
  */
 
 const dbConnection = require('../database/connection');
@@ -15,6 +15,7 @@ class AIModel {
     this.provider = data.provider || null;
     this.api_endpoint = data.api_endpoint || null;
     this.model_config = data.model_config || {};
+    this.stream_enabled = data.stream_enabled !== undefined ? data.stream_enabled : true; // 🆕 流式输出开关
     this.credits_per_chat = data.credits_per_chat || 10;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.sort_order = data.sort_order || 0;
@@ -83,7 +84,7 @@ class AIModel {
   }
 
   /**
-   * 创建新的AI模型配置
+   * 创建新的AI模型配置（支持流式输出配置）
    */
   static async create(modelData) {
     try {
@@ -93,6 +94,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config = {},
+        stream_enabled = true, // 🆕 流式输出开关，默认启用
         credits_per_chat = 10,
         sort_order = 0 
       } = modelData;
@@ -102,8 +104,8 @@ class AIModel {
 
       const sql = `
         INSERT INTO ai_models (name, display_name, api_key, provider, api_endpoint, 
-                              model_config, credits_per_chat, sort_order, test_status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'untested')
+                              model_config, stream_enabled, credits_per_chat, sort_order, test_status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'untested')
       `;
       
       const { rows } = await dbConnection.query(sql, [
@@ -113,6 +115,7 @@ class AIModel {
         provider,
         api_endpoint, 
         JSON.stringify(model_config),
+        stream_enabled, // 🆕 流式输出配置
         credits_per_chat,
         sort_order
       ]);
@@ -122,6 +125,7 @@ class AIModel {
         name, 
         display_name,
         provider,
+        stream_enabled,
         credits_per_chat
       });
 
@@ -163,7 +167,7 @@ class AIModel {
   }
 
   /**
-   * 更新AI模型 (支持积分配置)
+   * 更新AI模型（支持流式输出配置）
    */
   async update(updateData) {
     try {
@@ -172,6 +176,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config, 
+        stream_enabled, // 🆕 流式输出开关
         credits_per_chat,
         is_active, 
         sort_order 
@@ -180,7 +185,7 @@ class AIModel {
       const sql = `
         UPDATE ai_models 
         SET display_name = ?, api_key = ?, api_endpoint = ?, 
-            model_config = ?, credits_per_chat = ?, is_active = ?, 
+            model_config = ?, stream_enabled = ?, credits_per_chat = ?, is_active = ?, 
             sort_order = ?, test_status = 'untested', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `;
@@ -190,6 +195,7 @@ class AIModel {
         api_key !== undefined ? api_key : this.api_key,
         api_endpoint !== undefined ? api_endpoint : this.api_endpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
+        stream_enabled !== undefined ? stream_enabled : this.stream_enabled, // 🆕 流式配置
         credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
         is_active !== undefined ? is_active : this.is_active,
         sort_order !== undefined ? sort_order : this.sort_order,
@@ -198,6 +204,7 @@ class AIModel {
 
       logger.info('AI模型更新成功', { 
         modelId: this.id,
+        stream_enabled: stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat
       });
     } catch (error) {
@@ -269,8 +276,8 @@ class AIModel {
         messages: [
           { role: 'user', content: 'Hello, please respond with a short greeting.' }
         ],
-        temperature: 0.7
-        // 不设置 max_tokens 让模型自由输出
+        temperature: 0.7,
+        stream: false // 测试时不使用流式，避免复杂处理
       };
 
       const response = await axios.post(
@@ -327,6 +334,24 @@ class AIModel {
   }
 
   /**
+   * 获取流式输出配置（预留）
+   */
+  getStreamConfig() {
+    return {
+      stream_enabled: this.stream_enabled,
+      model_name: this.name,
+      provider: this.provider
+    };
+  }
+
+  /**
+   * 检查是否支持流式输出
+   */
+  isStreamEnabled() {
+    return this.stream_enabled === true;
+  }
+
+  /**
    * 获取模型的默认配置 - 移除maxToken限制
    */
   getDefaultConfig() {
@@ -335,7 +360,6 @@ class AIModel {
       top_p: 1,
       presence_penalty: 0,
       frequency_penalty: 0
-      // 完全移除 max_tokens 默认值
     };
 
     return {
@@ -356,6 +380,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint ? '***已配置***' : null,
       model_config: this.model_config,
+      stream_enabled: this.stream_enabled, // 🆕 流式输出状态
       credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,
@@ -378,6 +403,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint,
       model_config: this.model_config,
+      stream_enabled: this.stream_enabled, // 🆕 流式输出状态
       credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,
