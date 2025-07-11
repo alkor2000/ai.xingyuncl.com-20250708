@@ -192,9 +192,9 @@ const Chat = () => {
       setIsModalVisible(false)
       setEditingConversation(null)
       form.resetFields()
-      message.success('会话更新成功')
+      message.success('会话设置更新成功')
     } catch (error) {
-      message.error('会话更新失败')
+      message.error('会话设置更新失败')
     }
   }
 
@@ -472,9 +472,9 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 保留完整功能 */}
+      {/* 🔥 会话设置对话框 - 简化Temperature输入 */}
       <Modal
-        title={editingConversation ? '编辑会话' : '创建新会话'}
+        title={editingConversation ? '会话设置' : '创建新会话'}
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false)
@@ -515,92 +515,63 @@ const Chat = () => {
             </Select>
           </Form.Item>
 
+          {/* 🔥 简化上下文数量设置 - 修改备注信息 */}
           <Form.Item
             name="context_length"
             label={
               <Space>
                 <span>上下文数量</span>
-                <Tooltip title="设置AI对话时携带的历史消息数量。数量越多，AI记忆越长，但可能消耗更多Token。每轮对话（一问一答）算1条。">
+                <Tooltip title="设置AI对话时携带的历史消息数量，0表示不携带历史消息">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
             }
             rules={[
               { required: true, message: '请设置上下文数量' },
-              { type: 'number', min: 0, max: 1000, message: '上下文数量范围：0-1000' }
+              { type: 'number', min: 1, max: 1000, message: '范围：1-1000' }
             ]}
+            extra="范围：1-1000"
           >
             <InputNumber
-              min={0}
+              min={1}
               max={1000}
               style={{ width: '100%' }}
-              placeholder="设置携带的上下文消息数量"
-              formatter={value => `${value} 条`}
-              parser={value => value.replace(' 条', '')}
+              placeholder="20"
             />
           </Form.Item>
 
+          {/* 🔥 简化Temperature设置 - 改为纯文本输入 */}
           <Form.Item
             name="ai_temperature"
             label={
               <Space>
                 <FireOutlined style={{ color: '#ff7a00' }} />
-                <span>AI创造性 (Temperature)</span>
-                <Tooltip title="控制AI回复的创造性和随机性。0=最严格精准，0.3=保守准确，0.7=平衡，1.0=最有创意。">
+                <span>Temperature参数</span>
+                <Tooltip title="控制AI回复的创造性和随机性，0=最严格，1=最有创意">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
             }
             rules={[
-              { required: true, message: '请设置AI创造性参数' },
-              { type: 'number', min: 0, max: 1, message: 'Temperature范围：0.0-1.0' }
+              { required: true, message: '请设置Temperature参数' },
+              { type: 'number', min: 0, max: 1, message: '范围：0-1' }
             ]}
+            extra="范围：0-1，推荐：翻译代码0，日常对话0.3，创意写作0.7"
           >
-            <InputNumber
-              min={0}
-              max={1}
-              step={0.1}
-              precision={1}
+            <Input
               placeholder="0.0"
               style={{ width: 200 }}
-              addonAfter={
-                <Tooltip title="常用值快速设置">
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <Button 
-                      size="small" 
-                      type="text" 
-                      style={{ padding: '0 4px', fontSize: 11, color: '#722ed1' }}
-                      onClick={() => form.setFieldValue('ai_temperature', 0.0)}
-                    >
-                      严格
-                    </Button>
-                    <Button 
-                      size="small" 
-                      type="text" 
-                      style={{ padding: '0 4px', fontSize: 11, color: '#1677ff' }}
-                      onClick={() => form.setFieldValue('ai_temperature', 0.3)}
-                    >
-                      精准
-                    </Button>
-                    <Button 
-                      size="small" 
-                      type="text" 
-                      style={{ padding: '0 4px', fontSize: 11, color: '#13c2c2' }}
-                      onClick={() => form.setFieldValue('ai_temperature', 0.7)}
-                    >
-                      平衡
-                    </Button>
-                    <Button 
-                      size="small" 
-                      type="text" 
-                      style={{ padding: '0 4px', fontSize: 11, color: '#fa541c' }}
-                      onClick={() => form.setFieldValue('ai_temperature', 1.0)}
-                    >
-                      创意
-                    </Button>
-                  </div>
-                </Tooltip>
-              }
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              onChange={(e) => {
+                const value = parseFloat(e.target.value)
+                if (!isNaN(value)) {
+                  const clampedValue = Math.max(0, Math.min(1, value))
+                  form.setFieldValue('ai_temperature', clampedValue)
+                }
+              }}
             />
           </Form.Item>
 
@@ -617,7 +588,7 @@ const Chat = () => {
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                {editingConversation ? '更新' : '创建'}
+                {editingConversation ? '保存设置' : '创建'}
               </Button>
               <Button onClick={() => {
                 setIsModalVisible(false)

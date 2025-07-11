@@ -9,7 +9,7 @@ import {
 import {
   PlusOutlined,
   MoreOutlined,
-  EditOutlined,
+  SettingOutlined,
   DeleteOutlined
 } from '@ant-design/icons'
 
@@ -29,8 +29,8 @@ const ConversationList = ({
       items: [
         {
           key: 'edit',
-          label: '编辑会话',
-          icon: <EditOutlined />,
+          label: '会话设置',
+          icon: <SettingOutlined />,
           onClick: (e) => {
             e?.domEvent?.stopPropagation()
             onEditConversation(conversation)
