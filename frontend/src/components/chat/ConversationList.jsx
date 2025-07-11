@@ -1,0 +1,151 @@
+import React from 'react'
+import { 
+  Button, 
+  List, 
+  Empty, 
+  Spin, 
+  Dropdown
+} from 'antd'
+import {
+  PlusOutlined,
+  MoreOutlined,
+  EditOutlined,
+  DeleteOutlined
+} from '@ant-design/icons'
+
+const ConversationList = ({ 
+  conversations, 
+  conversationsLoading,
+  currentConversationId,
+  onSelectConversation,
+  onEditConversation,
+  onDeleteConversation,
+  onCreateConversation
+}) => {
+
+  // 会话菜单
+  const getConversationMenu = (conversation) => {
+    return {
+      items: [
+        {
+          key: 'edit',
+          label: '编辑会话',
+          icon: <EditOutlined />,
+          onClick: (e) => {
+            e?.domEvent?.stopPropagation()
+            onEditConversation(conversation)
+          }
+        },
+        {
+          key: 'delete',
+          label: '删除会话',
+          icon: <DeleteOutlined />,
+          danger: true,
+          onClick: (e) => {
+            e?.domEvent?.stopPropagation()
+            onDeleteConversation(conversation.id)
+          }
+        }
+      ]
+    }
+  }
+
+  return (
+    <div className="chat-sidebar">
+      {/* 新建对话按钮 */}
+      <div style={{ padding: '16px 16px 16px 16px' }}>
+        <Button 
+          type="primary" 
+          block 
+          icon={<PlusOutlined />}
+          onClick={onCreateConversation}
+        >
+          新建对话
+        </Button>
+      </div>
+      
+      <div className="chat-conversations-container">
+        <div className="chat-conversations-list">
+          {conversationsLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Spin />
+              <div style={{ marginTop: 8, color: '#666' }}>加载对话列表...</div>
+            </div>
+          ) : conversations.length === 0 ? (
+            <Empty 
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="暂无对话"
+              style={{ marginTop: '50px' }}
+            />
+          ) : (
+            <List
+              dataSource={conversations}
+              renderItem={conv => {
+                const isSelected = currentConversationId === conv.id
+                
+                return (
+                  <List.Item
+                    style={{ 
+                      marginBottom: 8,
+                      background: isSelected ? '#f0f7ff' : 'transparent',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      padding: '12px 8px',
+                      border: isSelected ? '1px solid #d9ecff' : '1px solid transparent',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => onSelectConversation(conv.id)}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ 
+                            fontSize: 14, 
+                            fontWeight: isSelected ? 600 : 500,
+                            color: isSelected ? '#1677ff' : 'inherit',
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            marginRight: 8
+                          }}>
+                            {conv.title}
+                          </span>
+                          <Dropdown 
+                            menu={getConversationMenu(conv)} 
+                            trigger={['click']}
+                            placement="bottomRight"
+                          >
+                            <Button 
+                              type="text" 
+                              size="small" 
+                              icon={<MoreOutlined />}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </Dropdown>
+                        </div>
+                      }
+                      description={
+                        <div style={{ fontSize: 12, color: '#999' }}>
+                          {new Date(conv.updated_at).toLocaleString('zh-CN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default ConversationList

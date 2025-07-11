@@ -4,11 +4,9 @@ import {
   Card, 
   Input, 
   Button, 
-  List, 
   Typography, 
   Space, 
   Avatar,
-  Dropdown,
   Modal,
   Form,
   Select,
@@ -21,36 +19,35 @@ import {
   Tooltip
 } from 'antd'
 import {
-  MessageOutlined,
-  PlusOutlined,
   SendOutlined,
-  MoreOutlined,
-  EditOutlined,
-  DeleteOutlined,
   RobotOutlined,
   UserOutlined,
   ExclamationCircleOutlined,
   HistoryOutlined,
   InfoCircleOutlined,
-  FireOutlined
+  FireOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageContent from '../../components/chat/MessageContent'
+import ConversationList from '../../components/chat/ConversationList'
 
 const { Sider, Content } = Layout
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { TextArea } = Input
 
 const Chat = () => {
   const { user } = useAuthStore()
   const {
     conversations,
+    conversationsLoading,
+    currentConversationId,
     currentConversation,
     messages,
+    messagesLoading,
     aiModels,
     userCredits,
-    loading,
     typing,
     creditsLoading,
     getConversations,
@@ -70,20 +67,19 @@ const Chat = () => {
   const [form] = Form.useForm()
   const [editingConversation, setEditingConversation] = useState(null)
   
-  // 添加删除确认对话框状态
+  // 删除确认对话框状态
   const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [conversationToDelete, setConversationToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
-  const messagesContainerRef = useRef(null)
 
-  // 组件加载时获取数据 - 移除积分自动获取
+  // 🔥 组件加载时获取数据 - 优化加载策略
   useEffect(() => {
+    // 立即加载对话列表和AI模型，积分按需获取
     getConversations()
     getAIModels()
-    // 移除: getUserCredits() - 只在需要时获取
   }, [])
 
   // 自动滚动到消息底部
@@ -98,6 +94,11 @@ const Chat = () => {
         block: 'end'
       })
     }
+  }
+
+  // 🔥 选择会话处理 - 简化逻辑
+  const handleSelectConversation = (conversationId) => {
+    selectConversation(conversationId)
   }
 
   // 创建新会话 - 保留积分检查但不显示详细信息
@@ -163,10 +164,8 @@ const Chat = () => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       if (e.shiftKey) {
-        // Shift+Enter 换行，保持默认行为
         return
       } else {
-        // Enter 发送消息
         e.preventDefault()
         handleSendMessage()
       }
@@ -199,7 +198,7 @@ const Chat = () => {
     }
   }
 
-  // 删除会话 - 显示自定义确认对话框
+  // 删除会话
   const handleDeleteConversation = (conversationId) => {
     const targetConversation = conversations.find(c => c.id === conversationId)
     setConversationToDelete(targetConversation)
@@ -219,9 +218,6 @@ const Chat = () => {
       setDeleting(false)
       message.success('会话删除成功')
       
-      // 手动刷新会话列表
-      await getConversations()
-      
     } catch (error) {
       console.error('❌ 删除操作失败:', error)
       setDeleting(false)
@@ -235,34 +231,14 @@ const Chat = () => {
     setConversationToDelete(null)
   }
 
-  // 会话菜单
-  const getConversationMenu = (conversation) => {
-    return {
-      items: [
-        {
-          key: 'edit',
-          label: '编辑会话',
-          icon: <EditOutlined />,
-          onClick: (e) => {
-            e?.domEvent?.stopPropagation()
-            handleEditConversation(conversation)
-          }
-        },
-        {
-          key: 'delete',
-          label: '删除会话',
-          icon: <DeleteOutlined />,
-          danger: true,
-          onClick: (e) => {
-            e?.domEvent?.stopPropagation()
-            handleDeleteConversation(conversation.id)
-          }
-        }
-      ]
-    }
+  // 创建新对话处理
+  const handleCreateNew = () => {
+    setEditingConversation(null)
+    form.resetFields()
+    setIsModalVisible(true)
   }
 
-  // 渲染消息 - 使用新的MessageContent组件支持代码高亮
+  // 渲染消息
   const renderMessage = (msg) => (
     <div 
       key={msg.id} 
@@ -292,7 +268,6 @@ const Chat = () => {
         }}
         bodyStyle={{ padding: '12px 16px' }}
       >
-        {/* 使用MessageContent组件渲染消息内容，支持markdown和代码高亮 */}
         <MessageContent content={msg.content} role={msg.role} />
         
         {msg.tokens > 0 && (
@@ -344,110 +319,35 @@ const Chat = () => {
 
   return (
     <Layout className="chat-layout">
-      {/* 侧边栏 - 会话列表 */}
-      <Sider width={350} className="chat-sidebar">
-        {/* 新建对话按钮 */}
-        <div style={{ padding: '16px 16px 16px 16px' }}>
-          <Button 
-            type="primary" 
-            block 
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditingConversation(null)
-              form.resetFields()
-              setIsModalVisible(true)
-            }}
-          >
-            新建对话
-          </Button>
-        </div>
-        
-        <div className="chat-conversations-container">
-          <div className="chat-conversations-list">
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
-                <Spin />
-              </div>
-            ) : conversations.length === 0 ? (
-              <Empty 
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="暂无对话"
-                style={{ marginTop: '50px' }}
-              />
-            ) : (
-              <List
-                dataSource={conversations}
-                renderItem={conv => {
-                  // 🔥 移除temperature相关变量，不再在列表中显示
-                  // const temperature = conv.ai_temperature !== undefined ? conv.ai_temperature : 0.0
-                  return (
-                    <List.Item
-                      style={{ 
-                        marginBottom: 8,
-                        background: currentConversation?.id === conv.id ? '#f0f7ff' : 'transparent',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        padding: '8px',
-                        border: currentConversation?.id === conv.id ? '1px solid #d9ecff' : '1px solid transparent'
-                      }}
-                      onClick={() => selectConversation(conv.id)}
-                    >
-                      <List.Item.Meta
-                        avatar={
-                          // 移除积分标签，只保留消息图标
-                          <MessageOutlined style={{ color: '#1677ff', fontSize: 18 }} />
-                        }
-                        title={
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 14, fontWeight: 500 }}>
-                              {conv.title}
-                            </span>
-                            <Dropdown 
-                              menu={getConversationMenu(conv)} 
-                              trigger={['click']}
-                              placement="bottomRight"
-                            >
-                              <Button 
-                                type="text" 
-                                size="small" 
-                                icon={<MoreOutlined />}
-                                onClick={e => e.stopPropagation()}
-                              />
-                            </Dropdown>
-                          </div>
-                        }
-                        description={
-                          <div>
-                            <div style={{ fontSize: 12, color: '#999' }}>
-                              {conv.model_name} • {conv.message_count} 条消息
-                              {conv.context_length && (
-                                <span> • 上下文{conv.context_length}条</span>
-                              )}
-                            </div>
-                            {/* 🔥 移除Temperature标签显示 */}
-                            {/* <div style={{ marginTop: 4 }}>
-                              <Tag color={getTemperatureTagColor(temperature)} size="small" icon={<FireOutlined />}>
-                                {getTemperatureDesc(temperature)} {temperature}
-                              </Tag>
-                            </div> */}
-                            <div style={{ fontSize: 11, color: '#ccc' }}>
-                              {new Date(conv.updated_at).toLocaleString()}
-                            </div>
-                          </div>
-                        }
-                      />
-                    </List.Item>
-                  )
-                }}
-              />
-            )}
-          </div>
-        </div>
+      {/* 🔥 侧边栏 - 使用独立组件，状态完全隔离 */}
+      <Sider width={350}>
+        <ConversationList 
+          conversations={conversations}
+          conversationsLoading={conversationsLoading}
+          currentConversationId={currentConversationId}
+          onSelectConversation={handleSelectConversation}
+          onEditConversation={handleEditConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onCreateConversation={handleCreateNew}
+          getModelCredits={getModelCredits}
+        />
       </Sider>
 
-      {/* 聊天区域 - 新的固定布局结构 */}
+      {/* 🔥 聊天区域 - 新的简洁加载状态 */}
       <Content className="chat-main">
-        {currentConversation ? (
+        {messagesLoading ? (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '100%',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <Spin size="large" tip="加载对话中..." />
+            <Text type="secondary">正在获取消息历史...</Text>
+          </div>
+        ) : currentConversation ? (
           <>
             {/* 会话头部 - 固定在顶部，简化显示 */}
             <div className="chat-header">
@@ -465,22 +365,21 @@ const Chat = () => {
                         上下文 {currentConversation.context_length || 20} 条
                       </Tag>
                     </Tooltip>
-                    {/* 🔥 移除Temperature标签显示 */}
-                    {/* <Tooltip title="AI创造性参数：0=严格，0.3=精准，0.7=平衡，1.0=最创意">
+                    <Tooltip title="AI创造性参数：0=严格，0.3=精准，0.7=平衡，1.0=最创意">
                       <Tag 
                         color={getTemperatureTagColor(currentConversation.ai_temperature || 0.0)} 
                         icon={<FireOutlined />}
                       >
                         {getTemperatureDesc(currentConversation.ai_temperature || 0.0)} {currentConversation.ai_temperature || 0.0}
                       </Tag>
-                    </Tooltip> */}
+                    </Tooltip>
                   </Space>
                 </div>
               </div>
             </div>
 
             {/* 消息列表 - 固定可滚动区域 */}
-            <div className="chat-messages" ref={messagesContainerRef}>
+            <div className="chat-messages">
               <div className="chat-messages-content">
                 {messages.length === 0 ? (
                   <div className="chat-empty">
@@ -498,7 +397,6 @@ const Chat = () => {
                         <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
                       </div>
                     )}
-                    {/* 滚动锚点 */}
                     <div ref={messagesEndRef} />
                   </div>
                 )}
@@ -549,9 +447,8 @@ const Chat = () => {
                 <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
                 {currentConversation && (
                   <span>
-                    上下文: {currentConversation.context_length || 20} 条
-                    {/* 🔥 移除Temperature显示 */}
-                    {/* • {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0} */}
+                    上下文: {currentConversation.context_length || 20} 条 • 
+                    {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0}
                   </span>
                 )}
               </div>
@@ -567,11 +464,7 @@ const Chat = () => {
               type="primary" 
               icon={<PlusOutlined />}
               style={{ marginTop: 16 }}
-              onClick={() => {
-                setEditingConversation(null)
-                form.resetFields()
-                setIsModalVisible(true)
-              }}
+              onClick={handleCreateNew}
             >
               创建新对话
             </Button>
@@ -579,7 +472,7 @@ const Chat = () => {
         )}
       </Content>
 
-      {/* 创建/编辑会话对话框 - 保留Temperature设置但不在列表显示 */}
+      {/* 创建/编辑会话对话框 - 保留完整功能 */}
       <Modal
         title={editingConversation ? '编辑会话' : '创建新会话'}
         open={isModalVisible}
@@ -622,7 +515,6 @@ const Chat = () => {
             </Select>
           </Form.Item>
 
-          {/* 上下文数量设置 */}
           <Form.Item
             name="context_length"
             label={
@@ -637,11 +529,6 @@ const Chat = () => {
               { required: true, message: '请设置上下文数量' },
               { type: 'number', min: 0, max: 1000, message: '上下文数量范围：0-1000' }
             ]}
-            extra={
-              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                推荐设置：短对话 10-20 条，长对话 50-100 条，复杂任务 200-500 条。设置为 0 表示不携带历史消息。
-              </div>
-            }
           >
             <InputNumber
               min={0}
@@ -653,14 +540,13 @@ const Chat = () => {
             />
           </Form.Item>
 
-          {/* Temperature设置 - 保留在创建/编辑对话框中 */}
           <Form.Item
             name="ai_temperature"
             label={
               <Space>
                 <FireOutlined style={{ color: '#ff7a00' }} />
                 <span>AI创造性 (Temperature)</span>
-                <Tooltip title="控制AI回复的创造性和随机性。0=最严格精准，0.3=保守准确，0.7=平衡，1.0=最有创意。推荐：翻译、代码0-0.3；问答0.3-0.7；创作0.7-1.0">
+                <Tooltip title="控制AI回复的创造性和随机性。0=最严格精准，0.3=保守准确，0.7=平衡，1.0=最有创意。">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
@@ -669,16 +555,6 @@ const Chat = () => {
               { required: true, message: '请设置AI创造性参数' },
               { type: 'number', min: 0, max: 1, message: 'Temperature范围：0.0-1.0' }
             ]}
-            extra={
-              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                <div style={{ marginBottom: 4, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                  <span><span style={{ color: '#722ed1' }}>●</span> 0.0 严格模式：翻译、代码生成</span>
-                  <span><span style={{ color: '#1677ff' }}>●</span> 0.1-0.3 精准模式：技术问答</span>
-                  <span><span style={{ color: '#13c2c2' }}>●</span> 0.4-0.7 平衡模式：日常对话</span>
-                  <span><span style={{ color: '#fa541c' }}>●</span> 0.8-1.0 创意模式：创意写作</span>
-                </div>
-              </div>
-            }
           >
             <InputNumber
               min={0}
@@ -755,7 +631,7 @@ const Chat = () => {
         </Form>
       </Modal>
 
-      {/* 删除确认对话框 - 移除Temperature显示 */}
+      {/* 删除确认对话框 */}
       <Modal
         title="删除会话"
         open={deleteModalVisible}
@@ -776,8 +652,6 @@ const Chat = () => {
             <p><strong>会话标题:</strong> {conversationToDelete.title}</p>
             <p><strong>消息数量:</strong> {conversationToDelete.message_count} 条</p>
             <p><strong>上下文设置:</strong> {conversationToDelete.context_length || 20} 条</p>
-            {/* 🔥 移除Temperature显示 */}
-            {/* <p><strong>创造性设置:</strong> {getTemperatureDesc(conversationToDelete.ai_temperature || 0.0)} ({conversationToDelete.ai_temperature || 0.0})</p> */}
             <p style={{ color: '#ff4d4f', marginTop: 16 }}>
               <strong>注意：此操作无法撤销，所有聊天记录将被永久删除！</strong>
             </p>

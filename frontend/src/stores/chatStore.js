@@ -2,28 +2,45 @@ import { create } from 'zustand'
 import apiClient from '../utils/api'
 
 const useChatStore = create((set, get) => ({
-  // 状态
+  // 🔥 状态分离 - 对话列表状态独立
   conversations: [],
+  conversationsLoading: false,
+  conversationsLoaded: false,
+  
+  // 🔥 当前对话状态独立
+  currentConversationId: null,
   currentConversation: null,
   messages: [],
+  messagesLoading: false,
+  
+  // 其他状态保持不变
   aiModels: [],
   userCredits: null,
-  loading: false,
   typing: false,
   creditsLoading: false,
   
-  // 获取会话列表
-  getConversations: async () => {
-    set({ loading: true })
+  // 🔥 获取会话列表 - 只在首次或手动刷新时调用
+  getConversations: async (force = false) => {
+    const state = get()
+    
+    // 如果已加载过且不是强制刷新，跳过
+    if (state.conversationsLoaded && !force) {
+      return state.conversations
+    }
+    
+    set({ conversationsLoading: true })
     try {
       const response = await apiClient.get('/chat/conversations')
       set({ 
         conversations: response.data.data,
-        loading: false 
+        conversationsLoading: false,
+        conversationsLoaded: true
       })
+      return response.data.data
     } catch (error) {
       console.error('获取会话列表失败:', error)
-      set({ loading: false })
+      set({ conversationsLoading: false })
+      throw error
     }
   },
 
@@ -43,9 +60,9 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 创建新会话 - 支持上下文数量和temperature设置
+  // 🔥 创建新会话 - 支持上下文数量和temperature设置
   createConversation: async (conversationData) => {
-    set({ loading: true })
+    set({ conversationsLoading: true })
     try {
       // 创建会话前确保有积分状态用于验证
       const state = get()
@@ -58,38 +75,57 @@ const useChatStore = create((set, get) => ({
       
       set(state => ({
         conversations: [newConversation, ...state.conversations],
+        currentConversationId: newConversation.id,
         currentConversation: newConversation,
         messages: [],
-        loading: false
+        conversationsLoading: false
       }))
       
       return newConversation
     } catch (error) {
       console.error('创建会话失败:', error)
-      set({ loading: false })
+      set({ conversationsLoading: false })
       throw error
     }
   },
   
-  // 选择会话
+  // 🔥 选择会话 - 优化为只加载消息，不触碰对话列表
   selectConversation: async (conversationId) => {
-    set({ loading: true })
+    const state = get()
+    
+    // 如果选择的是当前会话，跳过
+    if (state.currentConversationId === conversationId && state.currentConversation) {
+      return
+    }
+    
+    set({ 
+      messagesLoading: true,
+      currentConversationId: conversationId
+    })
+    
     try {
-      const response = await apiClient.get(`/chat/conversations/${conversationId}`)
-      const conversation = response.data.data
+      // 并行加载会话详情和消息
+      const [conversationResponse, messagesResponse] = await Promise.all([
+        apiClient.get(`/chat/conversations/${conversationId}`),
+        apiClient.get(`/chat/conversations/${conversationId}/messages`)
+      ])
       
-      // 获取会话消息
-      const messagesResponse = await apiClient.get(`/chat/conversations/${conversationId}/messages`)
+      const conversation = conversationResponse.data.data
       const messages = messagesResponse.data.data
       
       set({
         currentConversation: conversation,
         messages: messages,
-        loading: false
+        messagesLoading: false
       })
     } catch (error) {
       console.error('获取会话失败:', error)
-      set({ loading: false })
+      set({ 
+        messagesLoading: false,
+        currentConversationId: null,
+        currentConversation: null,
+        messages: []
+      })
     }
   },
   
@@ -150,7 +186,7 @@ const useChatStore = create((set, get) => ({
         }))
       }
       
-      // 更新会话信息
+      // 🔥 更新会话信息 - 只更新对话列表中的统计，不重新加载
       if (responseData.conversation) {
         set(state => ({
           currentConversation: responseData.conversation,
@@ -185,7 +221,7 @@ const useChatStore = create((set, get) => ({
         conversations: state.conversations.map(conv =>
           conv.id === conversationId ? updatedConversation : conv
         ),
-        currentConversation: state.currentConversation?.id === conversationId 
+        currentConversation: state.currentConversationId === conversationId 
           ? updatedConversation 
           : state.currentConversation
       }))
@@ -197,17 +233,17 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 删除会话
+  // 🔥 删除会话 - 优化状态管理
   deleteConversation: async (conversationId) => {
     try {
       await apiClient.delete(`/chat/conversations/${conversationId}`)
       
       set(state => ({
         conversations: state.conversations.filter(conv => conv.id !== conversationId),
-        currentConversation: state.currentConversation?.id === conversationId 
-          ? null 
-          : state.currentConversation,
-        messages: state.currentConversation?.id === conversationId ? [] : state.messages
+        // 如果删除的是当前会话，清空当前会话状态
+        currentConversationId: state.currentConversationId === conversationId ? null : state.currentConversationId,
+        currentConversation: state.currentConversationId === conversationId ? null : state.currentConversation,
+        messages: state.currentConversationId === conversationId ? [] : state.messages
       }))
     } catch (error) {
       console.error('删除会话失败:', error)
@@ -251,9 +287,15 @@ const useChatStore = create((set, get) => ({
     return model?.credits_per_chat || 10
   },
   
+  // 🔥 手动刷新会话列表 - 新增方法
+  refreshConversations: async () => {
+    return await get().getConversations(true)
+  },
+  
   // 清除当前会话
   clearCurrentConversation: () => {
     set({
+      currentConversationId: null,
       currentConversation: null,
       messages: []
     })
@@ -263,11 +305,14 @@ const useChatStore = create((set, get) => ({
   reset: () => {
     set({
       conversations: [],
+      conversationsLoading: false,
+      conversationsLoaded: false,
+      currentConversationId: null,
       currentConversation: null,
       messages: [],
+      messagesLoading: false,
       aiModels: [],
       userCredits: null,
-      loading: false,
       typing: false,
       creditsLoading: false
     })
