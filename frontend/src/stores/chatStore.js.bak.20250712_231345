@@ -296,7 +296,6 @@ const useChatStore = create((set, get) => ({
       let realUserMessage = null
       let realAiMessageId = null
       let fullContent = ''
-      let isCancelled = false
       
       // 使用流式POST请求 - 重要：这里要传递 stream: true
       await apiClient.postStream(
@@ -334,13 +333,6 @@ const useChatStore = create((set, get) => ({
           },
           
           onMessage: (data) => {
-            // 检查是否已取消
-            const currentState = get()
-            if (!currentState.isStreaming) {
-              isCancelled = true
-              return
-            }
-            
             console.log('收到流式片段:', data.content)
             // 累加内容
             fullContent += data.content || ''
@@ -358,55 +350,27 @@ const useChatStore = create((set, get) => ({
           
           onComplete: (data) => {
             console.log('流式完成:', data)
-            
-            // 如果被取消了，显示部分内容
-            if (isCancelled || data.cancelled) {
-              const finalContent = fullContent || data.content || ''
-              
-              // 创建最终的AI消息（被中断的）
-              const finalAiMessage = {
-                id: realAiMessageId,
-                role: 'assistant',
-                content: finalContent + '\n\n[已停止生成]',
-                tokens: data.tokens || 0,
-                created_at: new Date().toISOString(),
-                streaming: false
-              }
-              
-              set(state => ({
-                messages: state.messages.map(msg => 
-                  msg.id === realAiMessageId
-                    ? finalAiMessage
-                    : msg
-                ),
-                typing: false,
-                isStreaming: false,
-                streamingContent: '',
-                streamingMessageId: null
-              }))
-            } else {
-              // 正常完成
-              const finalAiMessage = {
-                id: data.messageId || realAiMessageId,
-                role: 'assistant',
-                content: data.content || fullContent,
-                tokens: data.tokens || 0,
-                created_at: new Date().toISOString(),
-                streaming: false
-              }
-              
-              set(state => ({
-                messages: state.messages.map(msg => 
-                  msg.id === realAiMessageId
-                    ? finalAiMessage
-                    : msg
-                ),
-                typing: false,
-                isStreaming: false,
-                streamingContent: '',
-                streamingMessageId: null
-              }))
+            // 创建最终的AI消息
+            const finalAiMessage = {
+              id: data.messageId || realAiMessageId,
+              role: 'assistant',
+              content: data.content || fullContent,
+              tokens: data.tokens || 0,
+              created_at: new Date().toISOString(),
+              streaming: false
             }
+            
+            set(state => ({
+              messages: state.messages.map(msg => 
+                msg.id === realAiMessageId
+                  ? finalAiMessage
+                  : msg
+              ),
+              typing: false,
+              isStreaming: false,
+              streamingContent: '',
+              streamingMessageId: null
+            }))
             
             // 更新会话信息
             if (data.conversationId) {
@@ -451,17 +415,13 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 停止流式传输 - 真正取消请求
+  // 停止流式传输
   stopStreaming: () => {
-    console.log('停止流式传输')
-    
-    // 取消当前的流式请求
-    apiClient.cancelStream()
-    
-    // 更新状态
+    const state = get()
     set({
       isStreaming: false,
-      typing: false
+      typing: false,
+      streamingMessageId: null
     })
   },
   

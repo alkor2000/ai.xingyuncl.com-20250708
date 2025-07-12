@@ -20,9 +20,6 @@ let failedQueue = []
 let refreshAttempts = 0
 const MAX_REFRESH_ATTEMPTS = 3
 
-// 存储当前的流式请求控制器
-let currentStreamController = null
-
 // 处理队列中的请求
 const processQueue = (error, token = null) => {
   failedQueue.forEach(prom => {
@@ -356,7 +353,7 @@ apiClient.getTokenInfo = () => {
   }
 }
 
-// 流式请求处理 - 添加取消支持
+// 流式请求处理 - 修复SSE数据解析
 apiClient.postStream = async (url, data, options = {}) => {
   const authData = getAuthData()
   if (!authData.accessToken) {
@@ -364,10 +361,6 @@ apiClient.postStream = async (url, data, options = {}) => {
   }
 
   const { onMessage, onError, onComplete, onInit } = options
-  
-  // 创建AbortController用于取消请求
-  const controller = new AbortController()
-  currentStreamController = controller
   
   try {
     const response = await fetch(`/api${url}`, {
@@ -378,8 +371,7 @@ apiClient.postStream = async (url, data, options = {}) => {
         'Accept': 'text/event-stream',
         'X-Request-ID': Math.random().toString(36).substring(2)
       },
-      body: JSON.stringify(data),
-      signal: controller.signal // 添加信号以支持取消
+      body: JSON.stringify(data)
     })
 
     if (!response.ok) {
@@ -477,28 +469,9 @@ apiClient.postStream = async (url, data, options = {}) => {
     }
 
   } catch (error) {
-    // 如果是取消操作，不算错误
-    if (error.name === 'AbortError') {
-      console.log('流式请求已取消')
-      if (onComplete) {
-        onComplete({ cancelled: true })
-      }
-    } else {
-      console.error('流式请求失败:', error)
-      if (onError) onError(error)
-      throw error
-    }
-  } finally {
-    currentStreamController = null
-  }
-}
-
-// 添加取消流式请求的方法
-apiClient.cancelStream = () => {
-  if (currentStreamController) {
-    currentStreamController.abort()
-    currentStreamController = null
-    console.log('流式请求已被取消')
+    console.error('流式请求失败:', error)
+    if (onError) onError(error)
+    throw error
   }
 }
 
