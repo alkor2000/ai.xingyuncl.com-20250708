@@ -56,10 +56,7 @@ const MessageContent = ({ content, role, isStreaming = false }) => {
       return (
         <div className="code-block-wrapper">
           <div className="code-block-header">
-            {/* 如果语言是text，不显示语言标记 */}
-            {match?.[1] && match[1] !== 'text' && (
-              <span className="code-language">{match[1]}</span>
-            )}
+            <span className="code-language">{match?.[1] || 'text'}</span>
             <Button
               type="text"
               size="small"

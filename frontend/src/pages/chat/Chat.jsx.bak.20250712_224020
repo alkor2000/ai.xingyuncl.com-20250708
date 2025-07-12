@@ -77,12 +77,8 @@ const Chat = () => {
   const [conversationToDelete, setConversationToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   
-  // 用户手动滚动标志
-  const [userScrolled, setUserScrolled] = useState(false)
-  
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
-  const messagesContainerRef = useRef(null)
 
   // 🔥 组件加载时获取数据 - 优化加载策略
   useEffect(() => {
@@ -91,45 +87,15 @@ const Chat = () => {
     getAIModels()
   }, [])
 
-  // 修改滚动函数，检查用户是否手动滚动
+  // 修改滚动函数，流式输出时使用instant滚动
   const scrollToBottom = (instant = false) => {
-    if (messagesEndRef.current && !userScrolled) {
+    if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ 
         behavior: instant || isStreaming ? 'instant' : 'smooth',
         block: 'end'
       })
     }
   }
-
-  // 监听用户滚动
-  useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50 // 50px容差
-      
-      // 如果用户手动向上滚动了，设置标志
-      if (!isAtBottom && isStreaming) {
-        setUserScrolled(true)
-      }
-      // 如果滚动到底部了，清除标志
-      else if (isAtBottom) {
-        setUserScrolled(false)
-      }
-    }
-
-    container.addEventListener('scroll', handleScroll)
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [isStreaming])
-
-  // 流式输出结束时，重置用户滚动标志
-  useEffect(() => {
-    if (!isStreaming) {
-      setUserScrolled(false)
-    }
-  }, [isStreaming])
 
   // 自动滚动到消息底部
   useEffect(() => {
@@ -139,14 +105,14 @@ const Chat = () => {
   
   // 流式输出时降低滚动频率
   useEffect(() => {
-    if (isStreaming && streamingMessageId && !userScrolled) {
+    if (isStreaming && streamingMessageId) {
       const scrollInterval = setInterval(() => {
         scrollToBottom(true)
       }, 500) // 每500ms滚动一次
       
       return () => clearInterval(scrollInterval)
     }
-  }, [isStreaming, streamingMessageId, userScrolled])
+  }, [isStreaming, streamingMessageId])
 
   // 🔥 选择会话处理 - 简化逻辑
   const handleSelectConversation = (conversationId) => {
@@ -193,9 +159,6 @@ const Chat = () => {
     }
 
     try {
-      // 发送前重置用户滚动标志
-      setUserScrolled(false)
-      
       // sendMessage方法会自动判断是否使用流式
       await sendMessage(messageInput.trim())
       setMessageInput('')
@@ -496,7 +459,7 @@ const Chat = () => {
             </div>
 
             {/* 消息列表 - 固定可滚动区域 */}
-            <div className="chat-messages" ref={messagesContainerRef}>
+            <div className="chat-messages">
               <div className="chat-messages-content">
                 {messages.length === 0 ? (
                   <div className="chat-empty">
