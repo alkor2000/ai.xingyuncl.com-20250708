@@ -1,5 +1,5 @@
 /**
- * 对话路由 - 集成积分管理和流式输出
+ * 对话路由 - 集成积分管理
  */
 
 const express = require('express');
@@ -122,7 +122,7 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复 (支持流式和非流式)
+ * @desc 发送消息并获取AI回复 (积分扣减)
  * @access Private
  */
 router.post('/conversations/:id/messages',

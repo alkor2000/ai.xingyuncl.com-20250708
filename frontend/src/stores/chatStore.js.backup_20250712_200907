@@ -75,11 +75,6 @@ const useChatStore = create((set, get) => ({
         await get().getUserCredits()
       }
       
-      // 创建会话后立即刷新模型列表，确保流式设置最新
-      if (!state.aiModels.length) {
-        await get().getAIModels()
-      }
-      
       const response = await apiClient.post('/chat/conversations', conversationData)
       const newConversation = response.data.data
       
@@ -128,12 +123,6 @@ const useChatStore = create((set, get) => ({
         messages: messages,
         messagesLoading: false
       })
-      
-      // 选择会话后，如果没有模型列表，加载一次
-      if (!state.aiModels.length) {
-        get().getAIModels()
-      }
-      
     } catch (error) {
       console.error('获取会话失败:', error)
       set({ 
@@ -150,32 +139,15 @@ const useChatStore = create((set, get) => ({
     const state = get()
     if (!state.currentConversation) return
     
-    // 确保有最新的模型列表
-    if (!state.aiModels.length) {
-      await get().getAIModels()
-    }
-    
-    // 检查模型是否支持流式 - 修复判断逻辑
+    // 检查模型是否支持流式
     const model = state.aiModels.find(m => m.name === state.currentConversation.model_name)
-    // 🔥 关键修复：处理数字1和布尔true的情况
-    const useStream = !!(model?.stream_enabled)
-    
-    // 添加调试日志
-    console.log('发送消息调试:', {
-      currentModel: state.currentConversation.model_name,
-      foundModel: model,
-      streamEnabled: model?.stream_enabled,
-      streamEnabledType: typeof model?.stream_enabled,
-      useStream
-    })
+    const useStream = model?.stream_enabled === true
     
     if (useStream) {
       // 使用流式发送
-      console.log('使用流式发送')
       return get().sendStreamMessage(content, fileId)
     }
     
-    console.log('使用非流式发送')
     set({ typing: true })
     
     // 确保有积分状态用于发送前验证
@@ -258,7 +230,6 @@ const useChatStore = create((set, get) => ({
     const state = get()
     if (!state.currentConversation) return
     
-    console.log('开始流式发送消息')
     set({ typing: true, isStreaming: true, streamingContent: '' })
     
     // 确保有积分状态
@@ -295,12 +266,11 @@ const useChatStore = create((set, get) => ({
     try {
       let realUserMessage = null
       let realAiMessageId = null
-      let fullContent = ''
       
-      // 使用流式POST请求 - 重要：这里要传递 stream: true
+      // 使用流式POST请求
       await apiClient.postStream(
         `/chat/conversations/${state.currentConversation.id}/messages`,
-        { content, file_id: fileId, stream: true }, // 🔥 关键修改：确保传递 stream: true
+        { content, file_id: fileId, stream: true },
         {
           onInit: (data) => {
             console.log('流式初始化:', data)
@@ -308,12 +278,10 @@ const useChatStore = create((set, get) => ({
             realUserMessage = data.user_message
             realAiMessageId = data.ai_message_id
             
-            // 更新为真实的用户消息，保留AI占位消息
+            // 更新为真实的用户消息
             set(state => ({
               messages: state.messages.map(msg => 
-                msg.id === tempUserMessageId ? realUserMessage : 
-                msg.id === tempAiMessageId ? { ...msg, id: realAiMessageId } : 
-                msg
+                msg.id === tempUserMessageId ? realUserMessage : msg
               ),
               streamingMessageId: realAiMessageId
             }))
@@ -333,16 +301,12 @@ const useChatStore = create((set, get) => ({
           },
           
           onMessage: (data) => {
-            console.log('收到流式片段:', data.content)
-            // 累加内容
-            fullContent += data.content || ''
-            
-            // 更新流式内容 - 实时更新消息内容
+            // 更新流式内容
             set(state => ({
-              streamingContent: fullContent,
+              streamingContent: state.streamingContent + (data.content || ''),
               messages: state.messages.map(msg => 
-                msg.id === realAiMessageId
-                  ? { ...msg, content: fullContent, streaming: true }
+                msg.id === tempAiMessageId || msg.id === realAiMessageId
+                  ? { ...msg, content: state.streamingContent + (data.content || '') }
                   : msg
               )
             }))
@@ -352,17 +316,16 @@ const useChatStore = create((set, get) => ({
             console.log('流式完成:', data)
             // 创建最终的AI消息
             const finalAiMessage = {
-              id: data.messageId || realAiMessageId,
+              id: data.messageId || realAiMessageId || tempAiMessageId,
               role: 'assistant',
-              content: data.content || fullContent,
+              content: data.content || state.streamingContent,
               tokens: data.tokens || 0,
-              created_at: new Date().toISOString(),
-              streaming: false
+              created_at: new Date().toISOString()
             }
             
             set(state => ({
               messages: state.messages.map(msg => 
-                msg.id === realAiMessageId
+                msg.id === tempAiMessageId || msg.id === realAiMessageId
                   ? finalAiMessage
                   : msg
               ),
@@ -375,7 +338,7 @@ const useChatStore = create((set, get) => ({
             // 更新会话信息
             if (data.conversationId) {
               // 可以选择性地刷新会话信息
-              // get().selectConversation(data.conversationId)
+              get().selectConversation(data.conversationId)
             }
           },
           
@@ -385,9 +348,7 @@ const useChatStore = create((set, get) => ({
             // 移除临时消息
             set(state => ({
               messages: state.messages.filter(msg => 
-                msg.id !== tempUserMessageId && 
-                msg.id !== tempAiMessageId &&
-                msg.id !== realAiMessageId
+                msg.id !== tempUserMessageId && msg.id !== tempAiMessageId
               ),
               typing: false,
               isStreaming: false,
@@ -403,7 +364,7 @@ const useChatStore = create((set, get) => ({
     } catch (error) {
       // 清理状态
       set(state => ({
-        messages: state.messages.filter(msg => !msg.temp && !msg.streaming),
+        messages: state.messages.filter(msg => !msg.temp),
         typing: false,
         isStreaming: false,
         streamingContent: '',
@@ -469,13 +430,7 @@ const useChatStore = create((set, get) => ({
   getAIModels: async () => {
     try {
       const response = await apiClient.get('/chat/models')
-      const models = response.data.data
-      
-      // 添加调试日志
-      console.log('获取到的AI模型列表:', models)
-      
-      set({ aiModels: models })
-      return models
+      set({ aiModels: response.data.data })
     } catch (error) {
       console.error('获取AI模型列表失败:', error)
     }

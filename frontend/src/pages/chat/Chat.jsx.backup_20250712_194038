@@ -26,9 +26,7 @@ import {
   HistoryOutlined,
   InfoCircleOutlined,
   FireOutlined,
-  PlusOutlined,
-  LoadingOutlined,
-  StopOutlined
+  PlusOutlined
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
@@ -52,13 +50,10 @@ const Chat = () => {
     userCredits,
     typing,
     creditsLoading,
-    streamingMessageId,
-    isStreaming,
     getConversations,
     createConversation,
     selectConversation,
     sendMessage,
-    stopStreaming,
     updateConversation,
     deleteConversation,
     getAIModels,
@@ -133,7 +128,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 自动处理流式/非流式
+  // 发送消息 - 保留积分检查但简化提示
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !currentConversation) {
       return
@@ -146,20 +141,16 @@ const Chat = () => {
     }
 
     try {
-      // sendMessage方法会自动判断是否使用流式
-      await sendMessage(messageInput.trim())
+      const response = await sendMessage(messageInput.trim())
       setMessageInput('')
       
-      // 非流式时显示成功提示
-      const model = aiModels.find(m => m.name === currentConversation.model_name)
-      if (!model?.stream_enabled) {
-        message.success('消息发送成功！')
-      }
+      // 简化成功提示 - 不显示具体积分数量
+      message.success('消息发送成功！')
       
       // 发送后立即滚动到底部
       setTimeout(scrollToBottom, 100)
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || '消息发送失败'
+      const errorMessage = error.response?.data?.message || '消息发送失败'
       message.error(errorMessage)
       
       // 如果是积分相关错误，静默刷新积分状态
@@ -169,12 +160,6 @@ const Chat = () => {
     }
   }
 
-  // 停止流式传输
-  const handleStopStreaming = () => {
-    stopStreaming()
-    message.info('已停止生成')
-  }
-
   // 处理Enter键发送
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
@@ -182,9 +167,7 @@ const Chat = () => {
         return
       } else {
         e.preventDefault()
-        if (!isStreaming) {
-          handleSendMessage()
-        }
+        handleSendMessage()
       }
     }
   }
@@ -262,79 +245,65 @@ const Chat = () => {
   }
 
   // 渲染消息
-  const renderMessage = (msg) => {
-    const isStreamingMsg = msg.id === streamingMessageId || msg.streaming
-    
-    return (
-      <div 
-        key={msg.id} 
-        style={{ 
-          display: 'flex', 
-          marginBottom: 16,
-          justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
+  const renderMessage = (msg) => (
+    <div 
+      key={msg.id} 
+      style={{ 
+        display: 'flex', 
+        marginBottom: 16,
+        justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
+      }}
+    >
+      {msg.role === 'assistant' && (
+        <Avatar 
+          icon={<RobotOutlined />} 
+          style={{ 
+            backgroundColor: '#1677ff',
+            marginRight: 8,
+            alignSelf: 'flex-start'
+          }} 
+        />
+      )}
+      
+      <Card
+        size="small"
+        style={{
+          maxWidth: '70%',
+          backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
+          color: msg.role === 'user' ? 'white' : 'inherit'
         }}
+        bodyStyle={{ padding: '12px 16px' }}
       >
-        {msg.role === 'assistant' && (
-          <Avatar 
-            icon={<RobotOutlined />} 
-            style={{ 
-              backgroundColor: '#1677ff',
-              marginRight: 8,
-              alignSelf: 'flex-start'
-            }} 
-          />
-        )}
+        <MessageContent content={msg.content} role={msg.role} />
         
-        <Card
-          size="small"
-          style={{
-            maxWidth: '70%',
-            backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
-            color: msg.role === 'user' ? 'white' : 'inherit'
-          }}
-          bodyStyle={{ padding: '12px 16px' }}
-        >
-          <MessageContent content={msg.content} role={msg.role} />
-          
-          {/* 流式加载指示器 */}
-          {isStreamingMsg && isStreaming && (
-            <div style={{ marginTop: 8 }}>
-              <LoadingOutlined style={{ marginRight: 4 }} />
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                生成中...
-              </Text>
-            </div>
-          )}
-          
-          {msg.tokens > 0 && !isStreamingMsg && (
-            <div style={{ 
-              fontSize: 11, 
-              marginTop: 8, 
-              opacity: 0.7,
-              textAlign: 'right'
-            }}>
-              {msg.tokens} tokens
-            </div>
-          )}
-        </Card>
-        
-        {msg.role === 'user' && (
-          <Avatar 
-            icon={<UserOutlined />} 
-            style={{ 
-              backgroundColor: '#52c41a',
-              marginLeft: 8,
-              alignSelf: 'flex-start'
-            }} 
-          />
+        {msg.tokens > 0 && (
+          <div style={{ 
+            fontSize: 11, 
+            marginTop: 8, 
+            opacity: 0.7,
+            textAlign: 'right'
+          }}>
+            {msg.tokens} tokens
+          </div>
         )}
-      </div>
-    )
-  }
+      </Card>
+      
+      {msg.role === 'user' && (
+        <Avatar 
+          icon={<UserOutlined />} 
+          style={{ 
+            backgroundColor: '#52c41a',
+            marginLeft: 8,
+            alignSelf: 'flex-start'
+          }} 
+        />
+      )}
+    </div>
+  )
 
   // 检查是否可以发送消息
   const canSendMessage = () => {
-    if (!currentConversation || !messageInput.trim() || typing || isStreaming) return false
+    if (!currentConversation || !messageInput.trim() || typing) return false
     return checkCreditsForModel(currentConversation.model_name)
   }
 
@@ -370,13 +339,6 @@ const Chat = () => {
     }
     
     return Promise.resolve()
-  }
-
-  // 获取当前模型是否支持流式
-  const isStreamEnabled = () => {
-    if (!currentConversation) return false
-    const model = aiModels.find(m => m.name === currentConversation.model_name)
-    return model?.stream_enabled === true
   }
 
   return (
@@ -422,11 +384,6 @@ const Chat = () => {
                     <Text type="secondary">
                       {currentConversation.model_name} • {messages.length} 条消息
                     </Text>
-                    {isStreamEnabled() && (
-                      <Tag color="green" icon={<LoadingOutlined />}>
-                        流式输出
-                      </Tag>
-                    )}
                     <Tooltip title="当前对话携带的上下文数量，影响AI的记忆长度">
                       <Tag color="cyan" icon={<HistoryOutlined />}>
                         上下文 {currentConversation.context_length || 20} 条
@@ -458,12 +415,10 @@ const Chat = () => {
                 ) : (
                   <div className="chat-messages-list">
                     {messages.map(renderMessage)}
-                    {typing && !isStreaming && (
+                    {typing && (
                       <div style={{ textAlign: 'left', marginTop: 16 }}>
                         <Spin size="small" />
-                        <span style={{ marginLeft: 8, color: '#999' }}>
-                          AI 正在思考...
-                        </span>
+                        <span style={{ marginLeft: 8, color: '#999' }}>AI 正在思考...</span>
                       </div>
                     )}
                     <div ref={messagesEndRef} />
@@ -499,28 +454,16 @@ const Chat = () => {
                   disabled={typing}
                   className="chat-input-textarea"
                 />
-                {isStreaming ? (
-                  <Button 
-                    type="primary"
-                    danger
-                    icon={<StopOutlined />}
-                    onClick={handleStopStreaming}
-                    className="chat-input-send-button"
-                  >
-                    停止
-                  </Button>
-                ) : (
-                  <Button 
-                    type="primary" 
-                    icon={<SendOutlined />}
-                    loading={typing}
-                    onClick={handleSendMessage}
-                    disabled={!canSendMessage()}
-                    className="chat-input-send-button"
-                  >
-                    发送
-                  </Button>
-                )}
+                <Button 
+                  type="primary" 
+                  icon={<SendOutlined />}
+                  loading={typing}
+                  onClick={handleSendMessage}
+                  disabled={!canSendMessage()}
+                  className="chat-input-send-button"
+                >
+                  发送
+                </Button>
               </div>
               
               {/* 输入提示 - 进一步简化 */}
@@ -528,7 +471,6 @@ const Chat = () => {
                 <span>Enter 发送 • Shift + Enter 换行 • 支持多行输入</span>
                 {currentConversation && (
                   <span>
-                    {isStreamEnabled() ? '流式输出已启用' : '标准输出模式'} • 
                     上下文: {currentConversation.context_length || 20} 条 • 
                     {getTemperatureDesc(currentConversation.ai_temperature || 0.0)}: {currentConversation.ai_temperature || 0.0}
                   </span>
@@ -591,12 +533,7 @@ const Chat = () => {
             <Select placeholder="选择AI模型">
               {aiModels.map(model => (
                 <Select.Option key={model.name} value={model.name}>
-                  <Space>
-                    <span>{model.display_name}</span>
-                    {model.stream_enabled && (
-                      <Tag color="green" size="small">流式</Tag>
-                    )}
-                  </Space>
+                  <span>{model.display_name}</span>
                 </Select.Option>
               ))}
             </Select>

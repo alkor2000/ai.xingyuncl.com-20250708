@@ -24,6 +24,21 @@ const chatLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 流式对话限流 - 更严格
+const streamLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分钟
+  max: 10, // 每分钟最多10次流式请求
+  message: {
+    success: false,
+    code: 429,
+    message: '流式对话频率过高，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // 用户积分查询限流 - 较宽松
 const creditsLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
@@ -122,13 +137,24 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复 (支持流式和非流式)
+ * @desc 发送消息并获取AI回复 (积分扣减) - 非流式
  * @access Private
  */
 router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
   ChatController.sendMessage
+);
+
+/**
+ * @route POST /api/chat/stream-messages/:id
+ * @desc 发送流式消息并获取AI回复 (SSE)
+ * @access Private
+ */
+router.post('/stream-messages/:id',
+  streamLimiter,
+  requirePermission('chat.use'),
+  ChatController.sendStreamMessage
 );
 
 module.exports = router;

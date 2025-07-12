@@ -9,20 +9,27 @@ const logger = require('../utils/logger');
 const config = require('../config');
 
 /**
- * JWT认证中间件
+ * JWT认证中间件 - 支持SSE查询参数认证
  */
 const authenticate = async (req, res, next) => {
   try {
+    let token = null;
+    
+    // 1. 优先从请求头获取token（标准方式）
     const authHeader = req.header('Authorization');
-    
-    if (!authHeader) {
-      return ResponseHelper.unauthorized(res, '缺少认证令牌');
+    if (authHeader) {
+      token = authHeader.replace('Bearer ', '');
     }
-
-    const token = authHeader.replace('Bearer ', '');
     
+    // 2. 如果请求头没有，尝试从查询参数获取（SSE支持）
+    if (!token && req.query.token) {
+      token = req.query.token;
+      logger.info('使用查询参数中的Token进行认证');
+    }
+    
+    // 3. 检查是否有token
     if (!token) {
-      return ResponseHelper.unauthorized(res, '无效的令牌格式');
+      return ResponseHelper.unauthorized(res, '缺少认证令牌');
     }
 
     try {
@@ -32,18 +39,17 @@ const authenticate = async (req, res, next) => {
       if (decoded.type !== 'access') {
         return ResponseHelper.unauthorized(res, '无效的令牌类型');
       }
-
+      
       // 获取用户信息
       const user = await User.findById(decoded.userId);
-      
       if (!user) {
         return ResponseHelper.unauthorized(res, '用户不存在');
       }
-
+      
       if (user.status !== 'active') {
         return ResponseHelper.unauthorized(res, '用户账户已被禁用');
       }
-
+      
       // 将用户信息添加到request对象
       req.user = user;
       req.token = token;
@@ -74,14 +80,14 @@ const requireRole = (roles) => {
       if (!req.user) {
         return ResponseHelper.unauthorized(res, '用户未认证');
       }
-
+      
       const userRole = req.user.role;
       const allowedRoles = Array.isArray(roles) ? roles : [roles];
-
+      
       if (!allowedRoles.includes(userRole)) {
         return ResponseHelper.forbidden(res, '权限不足');
       }
-
+      
       next();
     } catch (error) {
       logger.error('角色检查中间件错误:', error);
@@ -99,7 +105,7 @@ const requirePermission = (permission) => {
       if (!req.user) {
         return ResponseHelper.unauthorized(res, '用户未认证');
       }
-
+      
       // 获取用户权限
       const userPermissions = await req.user.getPermissions();
       
@@ -112,14 +118,13 @@ const requirePermission = (permission) => {
           const prefix = p.slice(0, -1);
           return permission.startsWith(prefix);
         }
-        
         return false;
       });
-
+      
       if (!hasPermission) {
         return ResponseHelper.forbidden(res, '权限不足');
       }
-
+      
       next();
     } catch (error) {
       logger.error('权限检查中间件错误:', error);
@@ -137,11 +142,11 @@ const checkTokenQuota = (estimatedTokens) => {
       if (!req.user) {
         return ResponseHelper.unauthorized(res, '用户未认证');
       }
-
+      
       if (!req.user.hasTokenQuota(estimatedTokens)) {
         return ResponseHelper.forbidden(res, 'Token配额不足');
       }
-
+      
       next();
     } catch (error) {
       logger.error('Token配额检查中间件错误:', error);

@@ -1,5 +1,5 @@
 /**
- * API 客户端配置 - 支持智能Token自动刷新和流式响应
+ * API 客户端配置 - 支持智能Token自动刷新和流式SSE
  */
 
 import axios from 'axios'
@@ -353,128 +353,6 @@ apiClient.getTokenInfo = () => {
   }
 }
 
-// 流式请求处理 - 修复SSE数据解析
-apiClient.postStream = async (url, data, options = {}) => {
-  const authData = getAuthData()
-  if (!authData.accessToken) {
-    throw new Error('未认证，无法创建流式连接')
-  }
-
-  const { onMessage, onError, onComplete, onInit } = options
-  
-  try {
-    const response = await fetch(`/api${url}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authData.accessToken}`,
-        'Accept': 'text/event-stream',
-        'X-Request-ID': Math.random().toString(36).substring(2)
-      },
-      body: JSON.stringify(data)
-    })
-
-    if (!response.ok) {
-      // 处理非200响应
-      if (response.status === 401) {
-        message.error('登录已过期，请重新登录')
-        setTimeout(() => {
-          window.location.href = '/auth/login'
-        }, 1000)
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.message || `请求失败: ${response.status}`)
-      }
-      return
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    // 处理流式数据
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      // 解码新的数据块
-      buffer += decoder.decode(value, { stream: true })
-      
-      // 按行分割，保留未完成的行在buffer中
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      // 处理完整的行
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-
-        // SSE格式: event: eventName\ndata: jsonData\n\n
-        if (line.startsWith('event:')) {
-          const eventType = line.slice(6).trim()
-          
-          // 查找对应的data行
-          if (i + 1 < lines.length) {
-            const dataLine = lines[i + 1].trim()
-            if (dataLine.startsWith('data:')) {
-              const dataStr = dataLine.slice(5).trim()
-              
-              try {
-                const jsonData = JSON.parse(dataStr)
-                
-                // 根据事件类型调用不同的回调
-                switch (eventType) {
-                  case 'connected':
-                    console.log('SSE连接成功')
-                    break
-                    
-                  case 'init':
-                    console.log('流式初始化数据:', jsonData)
-                    if (onInit) onInit(jsonData)
-                    break
-                    
-                  case 'message':
-                    // 接收到内容片段
-                    if (onMessage) onMessage(jsonData)
-                    break
-                    
-                  case 'done':
-                    console.log('流式传输完成:', jsonData)
-                    if (onComplete) onComplete(jsonData)
-                    break
-                    
-                  case 'error':
-                    console.error('流式传输错误:', jsonData)
-                    if (onError) onError(new Error(jsonData.error || '未知错误'))
-                    break
-                    
-                  default:
-                    console.warn('未知的SSE事件类型:', eventType)
-                }
-              } catch (e) {
-                console.error('解析SSE JSON数据失败:', e, 'dataStr:', dataStr)
-              }
-              
-              // 跳过已处理的data行
-              i++
-            }
-          }
-        }
-      }
-    }
-
-    // 处理剩余的buffer数据
-    if (buffer.trim()) {
-      console.warn('未处理的流式数据:', buffer)
-    }
-
-  } catch (error) {
-    console.error('流式请求失败:', error)
-    if (onError) onError(error)
-    throw error
-  }
-}
-
 // 调试模式
 apiClient.debug = (enabled = true) => {
   if (enabled) {
@@ -515,6 +393,73 @@ apiClient.debug = (enabled = true) => {
       }
     )
   }
+}
+
+// 创建EventSource流式连接
+apiClient.createEventSource = (url, options = {}) => {
+  const authData = getAuthData()
+  if (!authData.accessToken) {
+    throw new Error('未认证，无法创建流式连接')
+  }
+
+  // 构建完整URL
+  const baseURL = window.location.origin
+  const fullURL = `${baseURL}/api${url}`
+  
+  // 创建EventSource，通过查询参数传递token
+  const urlWithToken = `${fullURL}?token=${encodeURIComponent(authData.accessToken)}`
+  const eventSource = new EventSource(urlWithToken)
+  
+  // 设置事件处理器
+  const { onMessage, onError, onComplete, onConnected } = options
+  
+  // 连接成功
+  eventSource.addEventListener('connected', (event) => {
+    console.log('✅ 流式连接已建立')
+    if (onConnected) onConnected(event)
+  })
+  
+  // 接收消息
+  eventSource.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (onMessage) onMessage(data)
+    } catch (error) {
+      console.error('解析流式数据失败:', error)
+    }
+  })
+  
+  // 完成事件
+  eventSource.addEventListener('done', (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      console.log('✅ 流式传输完成')
+      if (onComplete) onComplete(data)
+      eventSource.close()
+    } catch (error) {
+      console.error('解析完成数据失败:', error)
+    }
+  })
+  
+  // 错误处理
+  eventSource.addEventListener('error', (event) => {
+    console.error('❌ 流式连接错误:', event)
+    if (onError) onError(event)
+    
+    // 如果是认证错误，自动刷新token
+    if (event.data && event.data.includes('401')) {
+      eventSource.close()
+      message.error('认证失败，请重新发送')
+    }
+  })
+  
+  eventSource.onerror = (error) => {
+    console.error('❌ EventSource错误:', error)
+    if (onError) onError(error)
+    eventSource.close()
+  }
+  
+  return eventSource
 }
 
 // 在开发环境启用调试
