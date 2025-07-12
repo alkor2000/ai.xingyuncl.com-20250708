@@ -108,7 +108,7 @@ const Chat = () => {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100 // 100px容差
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50 // 50px容差
       
       // 如果用户手动向上滚动了，设置标志
       if (!isAtBottom && isStreaming) {
@@ -131,20 +131,17 @@ const Chat = () => {
     }
   }, [isStreaming])
 
-  // 自动滚动到消息底部 - 只在不是用户手动滚动时才执行
+  // 自动滚动到消息底部
   useEffect(() => {
-    if (!userScrolled) {
-      scrollToBottom(isStreaming)
-    }
-  }, [messages, typing, isStreaming, userScrolled])
+    // 流式输出时使用instant滚动避免跳动
+    scrollToBottom(isStreaming)
+  }, [messages, typing, isStreaming])
   
   // 流式输出时降低滚动频率
   useEffect(() => {
     if (isStreaming && streamingMessageId && !userScrolled) {
       const scrollInterval = setInterval(() => {
-        if (!userScrolled) {
-          scrollToBottom(true)
-        }
+        scrollToBottom(true)
       }, 500) // 每500ms滚动一次
       
       return () => clearInterval(scrollInterval)
@@ -499,8 +496,8 @@ const Chat = () => {
             </div>
 
             {/* 消息列表 - 固定可滚动区域 */}
-            <div className="chat-messages">
-              <div className="chat-messages-content" ref={messagesContainerRef}>
+            <div className="chat-messages" ref={messagesContainerRef}>
+              <div className="chat-messages-content">
                 {messages.length === 0 ? (
                   <div className="chat-empty">
                     <Empty 
