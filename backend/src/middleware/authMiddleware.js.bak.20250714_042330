@@ -7,10 +7,9 @@ const User = require('../models/User');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const config = require('../config');
-const redisConnection = require('../database/redis');
 
 /**
- * JWT认证中间件 - 支持SSE查询参数认证和Token黑名单
+ * JWT认证中间件 - 支持SSE查询参数认证
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -41,15 +40,6 @@ const authenticate = async (req, res, next) => {
         return ResponseHelper.unauthorized(res, '无效的令牌类型');
       }
       
-      // 检查token是否在黑名单中
-      if (decoded.jti && redisConnection.isConnected) {
-        const isBlacklisted = await redisConnection.exists(`token_blacklist:${decoded.jti}`);
-        if (isBlacklisted) {
-          logger.warn('使用已注销的token', { userId: decoded.userId, jti: decoded.jti });
-          return ResponseHelper.unauthorized(res, '令牌已失效，请重新登录');
-        }
-      }
-      
       // 获取用户信息
       const user = await User.findById(decoded.userId);
       if (!user) {
@@ -63,7 +53,6 @@ const authenticate = async (req, res, next) => {
       // 将用户信息添加到request对象
       req.user = user;
       req.token = token;
-      req.tokenPayload = decoded;
       
       next();
     } catch (jwtError) {

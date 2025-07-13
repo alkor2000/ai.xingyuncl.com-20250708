@@ -1,5 +1,5 @@
 /**
- * 应用配置文件 - MySQL2优化版 + Redis集成
+ * 应用配置文件 - MySQL2优化版
  */
 
 const path = require('path');
@@ -7,8 +7,6 @@ const path = require('path');
 module.exports = {
   // 应用配置
   app: {
-    name: 'AI Platform',
-    version: '1.0.0',
     port: 4000,
     domain: 'ai.xingyuncl.com',
     env: process.env.NODE_ENV || 'production'
@@ -27,18 +25,14 @@ module.exports = {
     idleTimeout: 30000,      // 空闲超时30秒
     maxIdle: 5,              // 最大空闲连接5个
     enableKeepAlive: true,   // 启用TCP保活
-    queueLimit: 0,           // 无限制排队
-    
-    // Redis配置移到这里
-    redis: {
-      host: 'localhost',
-      port: 6379,
-      password: '',  // 如果有密码在这里设置
-      db: 0,
-      keyPrefix: 'ai_platform:',  // 键前缀
-      maxRetriesPerRequest: 3,    // 最大重试次数
-      retryDelayOnFailover: 100   // 重试延迟
-    }
+    queueLimit: 0            // 无限制排队
+  },
+
+  // Redis配置 (可选)
+  redis: {
+    host: 'localhost',
+    port: 6379,
+    db: 0
   },
 
   // JWT认证配置 - 延长Token有效期，适合AI对话长时间使用
@@ -47,9 +41,7 @@ module.exports = {
       accessSecret: 'your-super-secret-key-2025',
       refreshSecret: 'your-refresh-secret-key-2025',
       accessExpiresIn: '12h',   // 12小时，适合长时间AI对话
-      refreshExpiresIn: '14d',  // 14天，减少用户重新登录频率
-      issuer: 'ai-platform',
-      audience: 'ai-platform-users'
+      refreshExpiresIn: '14d'   // 14天，减少用户重新登录频率
     }
   },
 

@@ -7,7 +7,6 @@ const jwt = require('jsonwebtoken');
 const ResponseHelper = require('../utils/response');
 const config = require('../config');
 const logger = require('../utils/logger');
-const redisConnection = require('../database/redis');
 const { ValidationError } = require('../utils/errors');
 
 class AuthController {
@@ -53,39 +52,32 @@ class AuthController {
       const permissions = await user.getPermissions();
 
       // 生成JWT令牌
-      const tokenPayload = {
-        userId: user.id,
-        email: user.email,
-        username: user.username,
-        role: user.role,
-        type: 'access'
-      };
-      
-      // 添加唯一标识符，用于token管理
-      const jti = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
-      tokenPayload.jti = jti;
-
       const accessToken = jwt.sign(
-        tokenPayload,
+        {
+          userId: user.id,
+          email: user.email,
+          username: user.username,
+          role: user.role,
+          type: 'access'
+        },
         config.auth.jwt.accessSecret,
         {
           expiresIn: config.auth.jwt.accessExpiresIn,
-          issuer: config.auth.jwt.issuer,
-          audience: config.auth.jwt.audience
+          issuer: 'ai-platform',
+          audience: 'ai-platform-users'
         }
       );
 
       const refreshToken = jwt.sign(
         {
           userId: user.id,
-          type: 'refresh',
-          jti: `refresh-${jti}`
+          type: 'refresh'
         },
         config.auth.jwt.refreshSecret,
         {
           expiresIn: config.auth.jwt.refreshExpiresIn,
-          issuer: config.auth.jwt.issuer,
-          audience: config.auth.jwt.audience
+          issuer: 'ai-platform',
+          audience: 'ai-platform-users'
         }
       );
 
@@ -213,14 +205,6 @@ class AuthController {
         return ResponseHelper.unauthorized(res, '无效的刷新令牌');
       }
 
-      // 检查refresh token是否在黑名单中
-      if (redisConnection.isConnected) {
-        const isBlacklisted = await redisConnection.exists(`token_blacklist:${decoded.jti}`);
-        if (isBlacklisted) {
-          return ResponseHelper.unauthorized(res, '刷新令牌已失效');
-        }
-      }
-
       // 获取用户信息
       const user = await User.findById(decoded.userId);
       if (!user || user.status !== 'active') {
@@ -228,21 +212,19 @@ class AuthController {
       }
 
       // 生成新的访问令牌
-      const jti = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
       const newAccessToken = jwt.sign(
         {
           userId: user.id,
           email: user.email,
           username: user.username,
           role: user.role,
-          type: 'access',
-          jti: jti
+          type: 'access'
         },
         config.auth.jwt.accessSecret,
         {
           expiresIn: config.auth.jwt.accessExpiresIn,
-          issuer: config.auth.jwt.issuer,
-          audience: config.auth.jwt.audience
+          issuer: 'ai-platform',
+          audience: 'ai-platform-users'
         }
       );
 
@@ -254,9 +236,6 @@ class AuthController {
       }, '令牌刷新成功');
 
     } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        return ResponseHelper.unauthorized(res, '刷新令牌已过期');
-      }
       logger.error('令牌刷新失败:', error);
       return ResponseHelper.unauthorized(res, '刷新令牌无效或已过期');
     }
@@ -269,33 +248,18 @@ class AuthController {
   static async logout(req, res) {
     try {
       const userId = req.user?.id;
-      const token = req.token;
 
-      if (!userId || !token) {
-        return ResponseHelper.success(res, null, '退出登录成功');
+      if (userId) {
+        logger.info('用户登出', { userId });
       }
 
-      // 解析token获取jti和过期时间
-      const decoded = jwt.decode(token);
-      if (decoded && decoded.jti && redisConnection.isConnected) {
-        // 计算token剩余有效时间
-        const now = Math.floor(Date.now() / 1000);
-        const ttl = decoded.exp - now;
-        
-        if (ttl > 0) {
-          // 将token加入黑名单，过期时间与token过期时间一致
-          await redisConnection.set(`token_blacklist:${decoded.jti}`, userId, ttl);
-          logger.info('Token已加入黑名单', { userId, jti: decoded.jti, ttl });
-        }
-      }
-
-      logger.info('用户登出成功', { userId });
+      // 这里可以将令牌加入黑名单，但简单起见直接返回成功
+      // TODO: 实现令牌黑名单机制
 
       return ResponseHelper.success(res, null, '退出登录成功');
     } catch (error) {
       logger.error('登出处理失败:', error);
-      // 即使失败也返回成功，避免暴露内部错误
-      return ResponseHelper.success(res, null, '退出登录成功');
+      return ResponseHelper.error(res, '退出登录失败');
     }
   }
 }

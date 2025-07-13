@@ -14,7 +14,6 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 const dbConnection = require('./database/connection');
-const redisConnection = require('./database/redis');
 
 // 导入路由
 const authRoutes = require('./routes/auth');
@@ -36,9 +35,6 @@ class App {
 
       // 初始化数据库连接
       await this.initializeDatabase();
-      
-      // 初始化Redis连接
-      await this.initializeRedis();
 
       // 配置Express中间件
       this.setupMiddleware();
@@ -66,20 +62,6 @@ class App {
     } catch (error) {
       logger.error('数据库连接初始化失败:', error);
       throw error;
-    }
-  }
-  
-  /**
-   * 初始化Redis连接
-   */
-  async initializeRedis() {
-    try {
-      await redisConnection.initialize();
-      logger.info('Redis连接初始化成功');
-    } catch (error) {
-      logger.error('Redis连接初始化失败:', error);
-      // Redis失败不影响主服务，仅记录警告
-      logger.warn('应用将在无Redis缓存的情况下运行');
     }
   }
 
@@ -124,7 +106,6 @@ class App {
     // 健康检查接口
     this.app.get('/health', (req, res) => {
       const dbStatus = dbConnection.getStatus();
-      const redisStatus = redisConnection.getStatus();
       
       res.json({
         success: true,
@@ -134,7 +115,6 @@ class App {
           environment: config.app.env,
           version: config.app.version,
           database: dbStatus,
-          redis: redisStatus,
           memory: process.memoryUsage(),
           uptime: process.uptime()
         }
@@ -231,43 +211,8 @@ API地址: http://localhost:${port}/api
         process.exit(1);
       });
 
-      // 优雅关闭处理
-      process.on('SIGTERM', async () => {
-        logger.info('收到SIGTERM信号，开始优雅关闭...');
-        await this.gracefulShutdown();
-      });
-
-      process.on('SIGINT', async () => {
-        logger.info('收到SIGINT信号，开始优雅关闭...');
-        await this.gracefulShutdown();
-      });
-
     } catch (error) {
       logger.error('启动服务器失败:', error);
-      process.exit(1);
-    }
-  }
-  
-  /**
-   * 优雅关闭
-   */
-  async gracefulShutdown() {
-    try {
-      // 关闭HTTP服务器
-      if (this.server) {
-        this.server.close();
-      }
-      
-      // 关闭数据库连接
-      await dbConnection.close();
-      
-      // 关闭Redis连接
-      await redisConnection.close();
-      
-      logger.info('服务器已优雅关闭');
-      process.exit(0);
-    } catch (error) {
-      logger.error('优雅关闭失败:', error);
       process.exit(1);
     }
   }
