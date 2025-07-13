@@ -43,18 +43,19 @@ const { TextArea } = Input
 // 输入框组件 - 单独管理输入状态
 const ChatInput = React.memo(({ 
   onSendMessage, 
-  isGenerating, // 改为isGenerating，包含流式和非流式
+  isStreaming, 
+  typing, 
   disabled,
-  onStopGeneration // 改为通用的停止生成
+  onStopStreaming 
 }) => {
   const [messageInput, setMessageInput] = useState('')
   const { t } = useTranslation()
   
   const handleSend = useCallback(() => {
-    if (!messageInput.trim() || isGenerating) return
+    if (!messageInput.trim() || typing || isStreaming) return
     onSendMessage(messageInput.trim())
     setMessageInput('')
-  }, [messageInput, isGenerating, onSendMessage])
+  }, [messageInput, typing, isStreaming, onSendMessage])
   
   const handleKeyPress = useCallback((e) => {
     if (e.key === 'Enter') {
@@ -62,12 +63,12 @@ const ChatInput = React.memo(({
         return
       } else {
         e.preventDefault()
-        if (!isGenerating) {
+        if (!isStreaming) {
           handleSend()
         }
       }
     }
-  }, [isGenerating, handleSend])
+  }, [isStreaming, handleSend])
   
   return (
     <div className="chat-input-container">
@@ -77,15 +78,15 @@ const ChatInput = React.memo(({
         placeholder={t('chat.input.placeholder')}
         autoSize={{ minRows: 3, maxRows: 8 }}
         onKeyDown={handleKeyPress}
-        disabled={disabled || isGenerating}
+        disabled={disabled || typing}
         className="chat-input-textarea"
       />
-      {isGenerating ? (
+      {isStreaming ? (
         <Button 
           type="primary"
           danger
           icon={<StopOutlined />}
-          onClick={onStopGeneration}
+          onClick={onStopStreaming}
           className="chat-input-send-button"
         >
           {t('chat.stop')}
@@ -94,8 +95,9 @@ const ChatInput = React.memo(({
         <Button 
           type="primary" 
           icon={<SendOutlined />}
+          loading={typing}
           onClick={handleSend}
-          disabled={disabled || !messageInput.trim()}
+          disabled={disabled || !messageInput.trim() || typing}
           className="chat-input-send-button"
         >
           {t('chat.send')}
@@ -127,7 +129,7 @@ const Chat = () => {
     createConversation,
     selectConversation,
     sendMessage,
-    stopGeneration,
+    stopStreaming,
     updateConversation,
     deleteConversation,
     getAIModels,
@@ -154,9 +156,6 @@ const Chat = () => {
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
-
-  // 🔥 判断是否正在生成（包括流式和非流式）
-  const isGenerating = typing || isStreaming
 
   // 🔥 组件加载时获取数据 - 同时加载积分信息避免首次显示积分不足
   useEffect(() => {
@@ -317,11 +316,11 @@ const Chat = () => {
     }
   }, [currentConversation, checkCreditsForModel, sendMessage, aiModels, scrollToBottom, getUserCredits, t])
 
-  // 🔥 停止生成（支持流式和非流式）
-  const handleStopGeneration = useCallback(() => {
-    stopGeneration()
+  // 停止流式传输
+  const handleStopStreaming = useCallback(() => {
+    stopStreaming()
     message.info(t('chat.message.stopped'))
-  }, [stopGeneration, t])
+  }, [stopStreaming, t])
 
   // 编辑会话
   const handleEditConversation = useCallback((conversation) => {
@@ -544,9 +543,10 @@ const Chat = () => {
 
               <ChatInput 
                 onSendMessage={handleSendMessage}
-                isGenerating={isGenerating}
+                isStreaming={isStreaming}
+                typing={typing}
                 disabled={!canSendMessage}
-                onStopGeneration={handleStopGeneration}
+                onStopStreaming={handleStopStreaming}
               />
               
               {/* 输入提示 - 进一步简化 */}

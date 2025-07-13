@@ -24,9 +24,6 @@ const useChatStore = create((set, get) => ({
   streamingContent: '',
   isStreaming: false,
   
-  // 🔥 新增：存储当前活跃的非流式请求
-  activeRequest: null,
-  
   // 🔥 获取会话列表 - 只在首次或手动刷新时调用
   getConversations: async (force = false) => {
     const state = get()
@@ -200,16 +197,11 @@ const useChatStore = create((set, get) => ({
     }))
     
     try {
-      // 🔥 创建可取消的请求
-      const request = apiClient.post(
+      const response = await apiClient.post(
         `/chat/conversations/${state.currentConversation.id}/messages`,
         { content, file_id: fileId, stream: false }
       )
       
-      // 保存请求引用
-      set({ activeRequest: request })
-      
-      const response = await request
       const responseData = response.data.data
       
       // 移除临时消息，添加真实的用户消息和AI回复
@@ -219,8 +211,7 @@ const useChatStore = create((set, get) => ({
           responseData.user_message,
           responseData.assistant_message
         ],
-        typing: false,
-        activeRequest: null
+        typing: false
       }))
       
       // 🔥 更新积分状态 - 静默更新，不触发界面刷新
@@ -254,8 +245,7 @@ const useChatStore = create((set, get) => ({
       // 移除临时消息
       set(state => ({
         messages: state.messages.filter(msg => !msg.temp),
-        typing: false,
-        activeRequest: null
+        typing: false
       }))
       
       console.error('发送消息失败:', error)
@@ -461,33 +451,18 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 停止生成 - 支持流式和非流式
-  stopGeneration: () => {
-    console.log('停止生成')
+  // 停止流式传输 - 真正取消请求
+  stopStreaming: () => {
+    console.log('停止流式传输')
     
-    const state = get()
-    
-    // 如果是流式，取消流式请求
-    if (state.isStreaming) {
-      apiClient.cancelStream()
-    }
-    
-    // 如果有活跃的非流式请求，取消它
-    if (state.activeRequest && state.activeRequest.cancel) {
-      state.activeRequest.cancel()
-    }
+    // 取消当前的流式请求
+    apiClient.cancelStream()
     
     // 更新状态
     set({
       isStreaming: false,
-      typing: false,
-      activeRequest: null
+      typing: false
     })
-  },
-  
-  // 兼容旧的停止流式传输方法
-  stopStreaming: () => {
-    get().stopGeneration()
   },
   
   // 更新会话 - 支持上下文数量和temperature更新
@@ -588,13 +563,6 @@ const useChatStore = create((set, get) => ({
   
   // 重置store
   reset: () => {
-    // 取消所有活跃的请求
-    const state = get()
-    if (state.activeRequest && state.activeRequest.cancel) {
-      state.activeRequest.cancel()
-    }
-    apiClient.cancelStream()
-    
     set({
       conversations: [],
       conversationsLoading: false,
@@ -609,8 +577,7 @@ const useChatStore = create((set, get) => ({
       creditsLoading: false,
       streamingMessageId: null,
       streamingContent: '',
-      isStreaming: false,
-      activeRequest: null
+      isStreaming: false
     })
   }
 }))

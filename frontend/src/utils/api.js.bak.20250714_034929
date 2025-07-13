@@ -8,7 +8,7 @@ import { message } from 'antd'
 // 创建 axios 实例
 const apiClient = axios.create({
   baseURL: '/api',
-  timeout: 0, // 去掉全局超时限制，让请求可以运行任意时长
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,9 +22,6 @@ const MAX_REFRESH_ATTEMPTS = 3
 
 // 存储当前的流式请求控制器
 let currentStreamController = null
-
-// 存储所有活跃的请求控制器（支持多对话）
-const activeRequestControllers = new Map()
 
 // 处理队列中的请求
 const processQueue = (error, token = null) => {
@@ -162,11 +159,6 @@ apiClient.interceptors.request.use(
     // 添加时间戳用于调试
     config.metadata = { requestTime: Date.now() }
     
-    // 为特定请求设置超时（如刷新token等管理请求）
-    if (config.url?.includes('/auth/') || config.url?.includes('/admin/')) {
-      config.timeout = 30000 // 30秒超时
-    }
-    
     return config
   },
   (error) => {
@@ -287,13 +279,9 @@ apiClient.interceptors.response.use(
           }
       }
     } else if (error.request) {
-      // 网络错误或请求被取消
-      if (error.code === 'ERR_CANCELED' || error.message === 'canceled') {
-        console.log('请求已取消')
-      } else {
-        console.error('网络错误:', error.message)
-        message.error('网络连接失败，请检查网络')
-      }
+      // 网络错误
+      console.error('网络错误:', error.message)
+      message.error('网络连接失败，请检查网络')
     } else {
       // 其他错误
       console.error('请求配置错误:', error.message)
@@ -303,71 +291,33 @@ apiClient.interceptors.response.use(
   }
 )
 
-// 扩展 apiClient 添加完整的HTTP方法（支持取消）
-const createCancelableRequest = (method, url, dataOrConfig, config) => {
-  // 创建取消控制器
-  const controller = new AbortController()
-  
-  // 生成请求ID
-  const requestId = `${method}-${url}-${Date.now()}`
-  
-  // 存储控制器
-  activeRequestControllers.set(requestId, controller)
-  
-  // 合并配置
-  const finalConfig = {
-    ...config,
-    signal: controller.signal
-  }
-  
-  // 执行请求
-  const request = method === 'GET' || method === 'DELETE' || method === 'HEAD' || method === 'OPTIONS'
-    ? apiClient.request({ method, url, ...dataOrConfig, ...finalConfig })
-    : apiClient.request({ method, url, data: dataOrConfig, ...finalConfig })
-  
-  // 请求完成后清理控制器
-  request.finally(() => {
-    activeRequestControllers.delete(requestId)
-  })
-  
-  // 添加取消方法
-  request.cancel = () => {
-    controller.abort()
-    activeRequestControllers.delete(requestId)
-  }
-  
-  // 添加请求ID
-  request.requestId = requestId
-  
-  return request
-}
-
+// 扩展 apiClient 添加完整的HTTP方法
 apiClient.get = (url, config) => {
-  return createCancelableRequest('GET', url, config)
+  return apiClient.request({ method: 'GET', url, ...config })
 }
 
 apiClient.post = (url, data, config) => {
-  return createCancelableRequest('POST', url, data, config)
+  return apiClient.request({ method: 'POST', url, data, ...config })
 }
 
 apiClient.put = (url, data, config) => {
-  return createCancelableRequest('PUT', url, data, config)
+  return apiClient.request({ method: 'PUT', url, data, ...config })
 }
 
 apiClient.patch = (url, data, config) => {
-  return createCancelableRequest('PATCH', url, data, config)
+  return apiClient.request({ method: 'PATCH', url, data, ...config })
 }
 
 apiClient.delete = (url, config) => {
-  return createCancelableRequest('DELETE', url, config)
+  return apiClient.request({ method: 'DELETE', url, ...config })
 }
 
 apiClient.head = (url, config) => {
-  return createCancelableRequest('HEAD', url, config)
+  return apiClient.request({ method: 'HEAD', url, ...config })
 }
 
 apiClient.options = (url, config) => {
-  return createCancelableRequest('OPTIONS', url, config)
+  return apiClient.request({ method: 'OPTIONS', url, ...config })
 }
 
 // 添加工具方法
@@ -550,29 +500,6 @@ apiClient.cancelStream = () => {
     currentStreamController = null
     console.log('流式请求已被取消')
   }
-}
-
-// 取消所有活跃的请求
-apiClient.cancelAllRequests = () => {
-  activeRequestControllers.forEach((controller, requestId) => {
-    controller.abort()
-    console.log(`取消请求: ${requestId}`)
-  })
-  activeRequestControllers.clear()
-  
-  // 同时取消流式请求
-  apiClient.cancelStream()
-}
-
-// 取消特定URL的请求
-apiClient.cancelRequestByUrl = (url) => {
-  activeRequestControllers.forEach((controller, requestId) => {
-    if (requestId.includes(url)) {
-      controller.abort()
-      activeRequestControllers.delete(requestId)
-      console.log(`取消请求: ${requestId}`)
-    }
-  })
 }
 
 // 调试模式

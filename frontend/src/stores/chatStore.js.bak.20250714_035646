@@ -16,16 +16,42 @@ const useChatStore = create((set, get) => ({
   // 其他状态保持不变
   aiModels: [],
   userCredits: null,
-  typing: false,
   creditsLoading: false,
   
-  // 流式相关状态
-  streamingMessageId: null,
-  streamingContent: '',
-  isStreaming: false,
+  // 🔥 每个对话的独立生成状态
+  conversationStates: new Map(), // conversationId -> { typing, isStreaming, streamingMessageId, activeRequest }
   
-  // 🔥 新增：存储当前活跃的非流式请求
-  activeRequest: null,
+  // 🔥 获取特定对话的状态
+  getConversationState: (conversationId) => {
+    const state = get().conversationStates.get(conversationId)
+    return state || { typing: false, isStreaming: false, streamingMessageId: null, activeRequest: null }
+  },
+  
+  // 🔥 更新特定对话的状态
+  updateConversationState: (conversationId, updates) => {
+    set(state => {
+      const newStates = new Map(state.conversationStates)
+      const currentState = newStates.get(conversationId) || { typing: false, isStreaming: false, streamingMessageId: null, activeRequest: null }
+      newStates.set(conversationId, { ...currentState, ...updates })
+      return { conversationStates: newStates }
+    })
+  },
+  
+  // 🔥 获取当前对话的生成状态
+  get typing() {
+    const state = get()
+    return state.getConversationState(state.currentConversationId).typing
+  },
+  
+  get isStreaming() {
+    const state = get()
+    return state.getConversationState(state.currentConversationId).isStreaming
+  },
+  
+  get streamingMessageId() {
+    const state = get()
+    return state.getConversationState(state.currentConversationId).streamingMessageId
+  },
   
   // 🔥 获取会话列表 - 只在首次或手动刷新时调用
   getConversations: async (force = false) => {
@@ -153,6 +179,8 @@ const useChatStore = create((set, get) => ({
     const state = get()
     if (!state.currentConversation) return
     
+    const conversationId = state.currentConversation.id
+    
     // 确保有最新的模型列表
     if (!state.aiModels.length) {
       await get().getAIModels()
@@ -179,7 +207,9 @@ const useChatStore = create((set, get) => ({
     }
     
     console.log('使用非流式发送')
-    set({ typing: true })
+    
+    // 更新当前对话的typing状态
+    get().updateConversationState(conversationId, { typing: true })
     
     // 确保有积分状态用于发送前验证
     if (!state.userCredits) {
@@ -199,16 +229,16 @@ const useChatStore = create((set, get) => ({
       messages: [...state.messages, userMessage]
     }))
     
+    // 创建可取消的请求
+    const request = apiClient.post(
+      `/chat/conversations/${conversationId}/messages`,
+      { content, file_id: fileId, stream: false }
+    )
+    
+    // 保存请求引用
+    get().updateConversationState(conversationId, { activeRequest: request })
+    
     try {
-      // 🔥 创建可取消的请求
-      const request = apiClient.post(
-        `/chat/conversations/${state.currentConversation.id}/messages`,
-        { content, file_id: fileId, stream: false }
-      )
-      
-      // 保存请求引用
-      set({ activeRequest: request })
-      
       const response = await request
       const responseData = response.data.data
       
@@ -218,10 +248,11 @@ const useChatStore = create((set, get) => ({
           ...state.messages.filter(msg => !msg.temp),
           responseData.user_message,
           responseData.assistant_message
-        ],
-        typing: false,
-        activeRequest: null
+        ]
       }))
+      
+      // 清除typing状态和请求引用
+      get().updateConversationState(conversationId, { typing: false, activeRequest: null })
       
       // 🔥 更新积分状态 - 静默更新，不触发界面刷新
       if (responseData.credits_info) {
@@ -253,10 +284,11 @@ const useChatStore = create((set, get) => ({
     } catch (error) {
       // 移除临时消息
       set(state => ({
-        messages: state.messages.filter(msg => !msg.temp),
-        typing: false,
-        activeRequest: null
+        messages: state.messages.filter(msg => !msg.temp)
       }))
+      
+      // 清除typing状态和请求引用
+      get().updateConversationState(conversationId, { typing: false, activeRequest: null })
       
       console.error('发送消息失败:', error)
       throw error
@@ -268,8 +300,16 @@ const useChatStore = create((set, get) => ({
     const state = get()
     if (!state.currentConversation) return
     
+    const conversationId = state.currentConversation.id
+    
     console.log('开始流式发送消息')
-    set({ typing: true, isStreaming: true, streamingContent: '' })
+    
+    // 更新当前对话的流式状态
+    get().updateConversationState(conversationId, { 
+      typing: true, 
+      isStreaming: true, 
+      streamingContent: '' 
+    })
     
     // 确保有积分状态
     if (!state.userCredits) {
@@ -298,9 +338,11 @@ const useChatStore = create((set, get) => ({
     }
     
     set(state => ({
-      messages: [...state.messages, tempUserMessage, tempAiMessage],
-      streamingMessageId: tempAiMessageId
+      messages: [...state.messages, tempUserMessage, tempAiMessage]
     }))
+    
+    // 更新流式消息ID
+    get().updateConversationState(conversationId, { streamingMessageId: tempAiMessageId })
     
     try {
       let realUserMessage = null
@@ -310,7 +352,7 @@ const useChatStore = create((set, get) => ({
       
       // 使用流式POST请求 - 重要：这里要传递 stream: true
       await apiClient.postStream(
-        `/chat/conversations/${state.currentConversation.id}/messages`,
+        `/chat/conversations/${conversationId}/messages`,
         { content, file_id: fileId, stream: true }, // 🔥 关键修改：确保传递 stream: true
         {
           onInit: (data) => {
@@ -325,9 +367,11 @@ const useChatStore = create((set, get) => ({
                 msg.id === tempUserMessageId ? realUserMessage : 
                 msg.id === tempAiMessageId ? { ...msg, id: realAiMessageId } : 
                 msg
-              ),
-              streamingMessageId: realAiMessageId
+              )
             }))
+            
+            // 更新流式消息ID
+            get().updateConversationState(conversationId, { streamingMessageId: realAiMessageId })
             
             // 更新积分信息
             if (data.credits_info) {
@@ -345,7 +389,7 @@ const useChatStore = create((set, get) => ({
           
           onMessage: (data) => {
             // 检查是否已取消
-            const currentState = get()
+            const currentState = get().getConversationState(conversationId)
             if (!currentState.isStreaming) {
               isCancelled = true
               return
@@ -357,7 +401,6 @@ const useChatStore = create((set, get) => ({
             
             // 更新流式内容 - 实时更新消息内容
             set(state => ({
-              streamingContent: fullContent,
               messages: state.messages.map(msg => 
                 msg.id === realAiMessageId
                   ? { ...msg, content: fullContent, streaming: true }
@@ -388,11 +431,7 @@ const useChatStore = create((set, get) => ({
                   msg.id === realAiMessageId
                     ? finalAiMessage
                     : msg
-                ),
-                typing: false,
-                isStreaming: false,
-                streamingContent: '',
-                streamingMessageId: null
+                )
               }))
             } else {
               // 正常完成
@@ -410,13 +449,17 @@ const useChatStore = create((set, get) => ({
                   msg.id === realAiMessageId
                     ? finalAiMessage
                     : msg
-                ),
-                typing: false,
-                isStreaming: false,
-                streamingContent: '',
-                streamingMessageId: null
+                )
               }))
             }
+            
+            // 清除当前对话的流式状态
+            get().updateConversationState(conversationId, {
+              typing: false,
+              isStreaming: false,
+              streamingContent: '',
+              streamingMessageId: null
+            })
             
             // 更新会话信息
             if (data.conversationId) {
@@ -434,12 +477,16 @@ const useChatStore = create((set, get) => ({
                 msg.id !== tempUserMessageId && 
                 msg.id !== tempAiMessageId &&
                 msg.id !== realAiMessageId
-              ),
+              )
+            }))
+            
+            // 清除当前对话的流式状态
+            get().updateConversationState(conversationId, {
               typing: false,
               isStreaming: false,
               streamingContent: '',
               streamingMessageId: null
-            }))
+            })
             
             throw error
           }
@@ -449,12 +496,16 @@ const useChatStore = create((set, get) => ({
     } catch (error) {
       // 清理状态
       set(state => ({
-        messages: state.messages.filter(msg => !msg.temp && !msg.streaming),
+        messages: state.messages.filter(msg => !msg.temp && !msg.streaming)
+      }))
+      
+      // 清除当前对话的流式状态
+      get().updateConversationState(conversationId, {
         typing: false,
         isStreaming: false,
         streamingContent: '',
         streamingMessageId: null
-      }))
+      })
       
       console.error('流式消息发送失败:', error)
       throw error
@@ -463,22 +514,26 @@ const useChatStore = create((set, get) => ({
   
   // 🔥 停止生成 - 支持流式和非流式
   stopGeneration: () => {
-    console.log('停止生成')
-    
     const state = get()
+    const conversationId = state.currentConversationId
+    if (!conversationId) return
     
-    // 如果是流式，取消流式请求
-    if (state.isStreaming) {
+    const convState = state.getConversationState(conversationId)
+    
+    console.log('停止生成', { conversationId, convState })
+    
+    // 如果是流式请求，取消流式
+    if (convState.isStreaming) {
       apiClient.cancelStream()
     }
     
     // 如果有活跃的非流式请求，取消它
-    if (state.activeRequest && state.activeRequest.cancel) {
-      state.activeRequest.cancel()
+    if (convState.activeRequest && convState.activeRequest.cancel) {
+      convState.activeRequest.cancel()
     }
     
     // 更新状态
-    set({
+    get().updateConversationState(conversationId, {
       isStreaming: false,
       typing: false,
       activeRequest: null
@@ -517,8 +572,14 @@ const useChatStore = create((set, get) => ({
     try {
       await apiClient.delete(`/chat/conversations/${conversationId}`)
       
+      // 清除该对话的状态
+      const state = get()
+      const newStates = new Map(state.conversationStates)
+      newStates.delete(conversationId)
+      
       set(state => ({
         conversations: state.conversations.filter(conv => conv.id !== conversationId),
+        conversationStates: newStates,
         // 如果删除的是当前会话，清空当前会话状态
         currentConversationId: state.currentConversationId === conversationId ? null : state.currentConversationId,
         currentConversation: state.currentConversationId === conversationId ? null : state.currentConversation,
@@ -589,11 +650,13 @@ const useChatStore = create((set, get) => ({
   // 重置store
   reset: () => {
     // 取消所有活跃的请求
-    const state = get()
-    if (state.activeRequest && state.activeRequest.cancel) {
-      state.activeRequest.cancel()
-    }
-    apiClient.cancelStream()
+    get().conversationStates.forEach((state) => {
+      if (state.activeRequest && state.activeRequest.cancel) {
+        state.activeRequest.cancel()
+      }
+    })
+    
+    apiClient.cancelAllRequests()
     
     set({
       conversations: [],
@@ -605,12 +668,8 @@ const useChatStore = create((set, get) => ({
       messagesLoading: false,
       aiModels: [],
       userCredits: null,
-      typing: false,
       creditsLoading: false,
-      streamingMessageId: null,
-      streamingContent: '',
-      isStreaming: false,
-      activeRequest: null
+      conversationStates: new Map()
     })
   }
 }))
