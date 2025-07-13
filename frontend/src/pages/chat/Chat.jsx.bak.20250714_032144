@@ -157,17 +157,12 @@ const Chat = () => {
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
 
-  // 🔥 组件加载时获取数据 - 同时加载积分信息避免首次显示积分不足
+  // 🔥 组件加载时获取数据 - 优化加载策略
   useEffect(() => {
-    // 并行加载所有必要数据
-    Promise.all([
-      getConversations(),
-      getAIModels(),
-      getUserCredits() // 立即加载积分信息
-    ]).catch(error => {
-      console.error('初始化数据加载失败:', error)
-    })
-  }, [getConversations, getAIModels, getUserCredits])
+    // 立即加载对话列表和AI模型，积分按需获取
+    getConversations()
+    getAIModels()
+  }, [])
 
   // 修改滚动函数，支持强制立即滚动
   const scrollToBottom = useCallback((instant = false, force = false) => {
@@ -394,15 +389,11 @@ const Chat = () => {
     setIsModalVisible(true)
   }, [form])
 
-  // 🔥 检查是否可以发送消息 - 改进逻辑，考虑加载状态
+  // 检查是否可以发送消息
   const canSendMessage = useMemo(() => {
     if (!currentConversation) return false
-    
-    // 如果积分正在加载中，暂时允许（不显示积分不足警告）
-    if (creditsLoading || !userCredits) return true
-    
     return checkCreditsForModel(currentConversation.model_name)
-  }, [currentConversation, checkCreditsForModel, creditsLoading, userCredits])
+  }, [currentConversation, checkCreditsForModel])
 
   // 获取temperature标签颜色
   const getTemperatureTagColor = (temp) => {
@@ -526,8 +517,8 @@ const Chat = () => {
 
             {/* 输入框 - 固定在底部 */}
             <div className="chat-input">
-              {/* 🔥 积分不足警告 - 只在积分已加载且确实不足时显示 */}
-              {currentConversation && userCredits && !checkCreditsForModel(currentConversation.model_name) && (
+              {/* 积分不足警告 - 简化显示*/}
+              {currentConversation && !canSendMessage && (
                 <Alert
                   message={t('chat.credits.insufficient')}
                   type="error"

@@ -176,6 +176,7 @@ const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
       >
         {processedContent}
       </ReactMarkdown>
+      {isStreaming && <span className="streaming-cursor">▊</span>}
     </div>
   )
 }, (prevProps, nextProps) => {

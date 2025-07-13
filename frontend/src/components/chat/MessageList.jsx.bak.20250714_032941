@@ -40,10 +40,13 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
       >
         <MessageContent content={msg.content} role={msg.role} isStreaming={isStreamingMsg && isStreaming} />
         
-        {/* 流式加载指示器 - 去掉文字，只保留图标 */}
+        {/* 流式加载指示器 */}
         {isStreamingMsg && isStreaming && (
           <div style={{ marginTop: 8 }}>
-            <LoadingOutlined style={{ fontSize: 14 }} />
+            <LoadingOutlined style={{ marginRight: 4 }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('chat.message.generating')}
+            </Text>
           </div>
         )}
         
@@ -115,10 +118,12 @@ const MessageList = React.memo(({
         )
       })}
       
-      {/* typing状态时只显示转圈图标，不显示文字 */}
       {typing && !isStreaming && (
         <div style={{ textAlign: 'left', marginTop: 16 }}>
           <Spin size="small" />
+          <span style={{ marginLeft: 8, color: '#999' }}>
+            {t('chat.message.thinking')}
+          </span>
         </div>
       )}
       
