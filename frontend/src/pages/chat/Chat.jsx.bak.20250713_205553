@@ -147,9 +147,6 @@ const Chat = () => {
   // 用户手动滚动标志
   const [userScrolled, setUserScrolled] = useState(false)
   
-  // 对话切换标志
-  const [isConversationSwitching, setIsConversationSwitching] = useState(false)
-  
   // 消息列表自动滚动引用
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
@@ -161,13 +158,11 @@ const Chat = () => {
     getAIModels()
   }, [])
 
-  // 修改滚动函数，支持强制立即滚动
-  const scrollToBottom = useCallback((instant = false, force = false) => {
-    if (messagesEndRef.current && (!userScrolled || force)) {
-      // 如果是对话切换或强制滚动，使用instant
-      const behavior = instant || force ? 'instant' : (isStreaming ? 'instant' : 'smooth')
+  // 修改滚动函数，检查用户是否手动滚动
+  const scrollToBottom = useCallback((instant = false) => {
+    if (messagesEndRef.current && !userScrolled) {
       messagesEndRef.current.scrollIntoView({ 
-        behavior,
+        behavior: instant || isStreaming ? 'instant' : 'smooth',
         block: 'end'
       })
     }
@@ -203,27 +198,16 @@ const Chat = () => {
     }
   }, [isStreaming])
 
-  // 对话切换完成后，重置切换标志
+  // 自动滚动到消息底部 - 只在不是用户手动滚动时才执行
   useEffect(() => {
-    if (!messagesLoading && isConversationSwitching) {
-      // 对话切换完成，直接跳到底部
-      setTimeout(() => {
-        scrollToBottom(true, true)
-        setIsConversationSwitching(false)
-      }, 50)
-    }
-  }, [messagesLoading, isConversationSwitching, scrollToBottom])
-
-  // 自动滚动到消息底部 - 只在不是用户手动滚动且不是切换对话时执行
-  useEffect(() => {
-    if (!userScrolled && !isConversationSwitching) {
+    if (!userScrolled) {
       scrollToBottom(isStreaming)
     }
-  }, [messages, typing, isStreaming, userScrolled, isConversationSwitching, scrollToBottom])
+  }, [messages, typing, isStreaming, userScrolled, scrollToBottom])
   
   // 流式输出时降低滚动频率
   useEffect(() => {
-    if (isStreaming && streamingMessageId && !userScrolled && !isConversationSwitching) {
+    if (isStreaming && streamingMessageId && !userScrolled) {
       const scrollInterval = setInterval(() => {
         if (!userScrolled) {
           scrollToBottom(true)
@@ -232,16 +216,12 @@ const Chat = () => {
       
       return () => clearInterval(scrollInterval)
     }
-  }, [isStreaming, streamingMessageId, userScrolled, isConversationSwitching, scrollToBottom])
+  }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
 
-  // 🔥 选择会话处理 - 设置切换标志
+  // 🔥 选择会话处理 - 使用 useCallback
   const handleSelectConversation = useCallback((conversationId) => {
-    if (conversationId !== currentConversationId) {
-      setIsConversationSwitching(true)
-      setUserScrolled(false) // 重置用户滚动状态
-    }
     selectConversation(conversationId)
-  }, [selectConversation, currentConversationId])
+  }, [selectConversation])
 
   // 创建新会话 - 保留积分检查但不显示详细信息
   const handleCreateConversation = async (values) => {
