@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { 
   Layout, 
   Card, 
@@ -32,80 +32,12 @@ import {
 } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
-import MessageList from '../../components/chat/MessageList'
+import MessageContent from '../../components/chat/MessageContent'
 import ConversationList from '../../components/chat/ConversationList'
 
 const { Sider, Content } = Layout
 const { Title, Text } = Typography
 const { TextArea } = Input
-
-// 输入框组件 - 单独管理输入状态
-const ChatInput = React.memo(({ 
-  onSendMessage, 
-  isStreaming, 
-  typing, 
-  disabled,
-  onStopStreaming 
-}) => {
-  const [messageInput, setMessageInput] = useState('')
-  
-  const handleSend = useCallback(() => {
-    if (!messageInput.trim() || typing || isStreaming) return
-    onSendMessage(messageInput.trim())
-    setMessageInput('')
-  }, [messageInput, typing, isStreaming, onSendMessage])
-  
-  const handleKeyPress = useCallback((e) => {
-    if (e.key === 'Enter') {
-      if (e.shiftKey) {
-        return
-      } else {
-        e.preventDefault()
-        if (!isStreaming) {
-          handleSend()
-        }
-      }
-    }
-  }, [isStreaming, handleSend])
-  
-  return (
-    <div className="chat-input-container">
-      <TextArea
-        value={messageInput}
-        onChange={(e) => setMessageInput(e.target.value)}
-        placeholder="输入消息... (Enter发送，Shift+Enter换行)"
-        autoSize={{ minRows: 3, maxRows: 8 }}
-        onKeyDown={handleKeyPress}
-        disabled={disabled || typing}
-        className="chat-input-textarea"
-      />
-      {isStreaming ? (
-        <Button 
-          type="primary"
-          danger
-          icon={<StopOutlined />}
-          onClick={onStopStreaming}
-          className="chat-input-send-button"
-        >
-          停止
-        </Button>
-      ) : (
-        <Button 
-          type="primary" 
-          icon={<SendOutlined />}
-          loading={typing}
-          onClick={handleSend}
-          disabled={disabled || !messageInput.trim() || typing}
-          className="chat-input-send-button"
-        >
-          发送
-        </Button>
-      )}
-    </div>
-  )
-})
-
-ChatInput.displayName = 'ChatInput'
 
 const Chat = () => {
   const { user } = useAuthStore()
@@ -135,6 +67,7 @@ const Chat = () => {
     getModelCredits
   } = useChatStore()
 
+  const [messageInput, setMessageInput] = useState('')
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [form] = Form.useForm()
   const [editingConversation, setEditingConversation] = useState(null)
@@ -159,14 +92,14 @@ const Chat = () => {
   }, [])
 
   // 修改滚动函数，检查用户是否手动滚动
-  const scrollToBottom = useCallback((instant = false) => {
+  const scrollToBottom = (instant = false) => {
     if (messagesEndRef.current && !userScrolled) {
       messagesEndRef.current.scrollIntoView({ 
         behavior: instant || isStreaming ? 'instant' : 'smooth',
         block: 'end'
       })
     }
-  }, [userScrolled, isStreaming])
+  }
 
   // 监听用户滚动
   useEffect(() => {
@@ -203,7 +136,7 @@ const Chat = () => {
     if (!userScrolled) {
       scrollToBottom(isStreaming)
     }
-  }, [messages, typing, isStreaming, userScrolled, scrollToBottom])
+  }, [messages, typing, isStreaming, userScrolled])
   
   // 流式输出时降低滚动频率
   useEffect(() => {
@@ -216,12 +149,12 @@ const Chat = () => {
       
       return () => clearInterval(scrollInterval)
     }
-  }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
+  }, [isStreaming, streamingMessageId, userScrolled])
 
-  // 🔥 选择会话处理 - 使用 useCallback
-  const handleSelectConversation = useCallback((conversationId) => {
+  // 🔥 选择会话处理 - 简化逻辑
+  const handleSelectConversation = (conversationId) => {
     selectConversation(conversationId)
-  }, [selectConversation])
+  }
 
   // 创建新会话 - 保留积分检查但不显示详细信息
   const handleCreateConversation = async (values) => {
@@ -250,9 +183,9 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 使用 useCallback
-  const handleSendMessage = useCallback(async (content) => {
-    if (!content || !currentConversation) {
+  // 发送消息 - 自动处理流式/非流式
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !currentConversation) {
       return
     }
 
@@ -267,7 +200,8 @@ const Chat = () => {
       setUserScrolled(false)
       
       // sendMessage方法会自动判断是否使用流式
-      await sendMessage(content)
+      await sendMessage(messageInput.trim())
+      setMessageInput('')
       
       // 非流式时显示成功提示
       const model = aiModels.find(m => m.name === currentConversation.model_name)
@@ -286,16 +220,30 @@ const Chat = () => {
         getUserCredits()
       }
     }
-  }, [currentConversation, checkCreditsForModel, sendMessage, aiModels, scrollToBottom, getUserCredits])
+  }
 
   // 停止流式传输
-  const handleStopStreaming = useCallback(() => {
+  const handleStopStreaming = () => {
     stopStreaming()
     message.info('已停止生成')
-  }, [stopStreaming])
+  }
+
+  // 处理Enter键发送
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        return
+      } else {
+        e.preventDefault()
+        if (!isStreaming) {
+          handleSendMessage()
+        }
+      }
+    }
+  }
 
   // 编辑会话
-  const handleEditConversation = useCallback((conversation) => {
+  const handleEditConversation = (conversation) => {
     setEditingConversation(conversation)
     form.setFieldsValue({
       title: conversation.title,
@@ -305,7 +253,7 @@ const Chat = () => {
       ai_temperature: conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0
     })
     setIsModalVisible(true)
-  }, [form])
+  }
 
   // 更新会话
   const handleUpdateConversation = async (values) => {
@@ -327,11 +275,11 @@ const Chat = () => {
   }
 
   // 删除会话
-  const handleDeleteConversation = useCallback((conversationId) => {
+  const handleDeleteConversation = (conversationId) => {
     const targetConversation = conversations.find(c => c.id === conversationId)
     setConversationToDelete(targetConversation)
     setDeleteModalVisible(true)
-  }, [conversations])
+  }
 
   // 确认删除会话
   const confirmDeleteConversation = async () => {
@@ -360,17 +308,88 @@ const Chat = () => {
   }
 
   // 创建新对话处理
-  const handleCreateNew = useCallback(() => {
+  const handleCreateNew = () => {
     setEditingConversation(null)
     form.resetFields()
     setIsModalVisible(true)
-  }, [form])
+  }
+
+  // 渲染消息
+  const renderMessage = (msg) => {
+    const isStreamingMsg = msg.id === streamingMessageId || msg.streaming
+    
+    return (
+      <div 
+        key={msg.id} 
+        style={{ 
+          display: 'flex', 
+          marginBottom: 16,
+          justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
+        }}
+      >
+        {msg.role === 'assistant' && (
+          <Avatar 
+            icon={<RobotOutlined />} 
+            style={{ 
+              backgroundColor: '#1677ff',
+              marginRight: 8,
+              alignSelf: 'flex-start'
+            }} 
+          />
+        )}
+        
+        <Card
+          size="small"
+          style={{
+            maxWidth: '70%',
+            backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
+            color: msg.role === 'user' ? 'white' : 'inherit'
+          }}
+          bodyStyle={{ padding: '12px 16px' }}
+        >
+          <MessageContent content={msg.content} role={msg.role} isStreaming={isStreamingMsg && isStreaming} />
+          
+          {/* 流式加载指示器 */}
+          {isStreamingMsg && isStreaming && (
+            <div style={{ marginTop: 8 }}>
+              <LoadingOutlined style={{ marginRight: 4 }} />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                生成中...
+              </Text>
+            </div>
+          )}
+          
+          {msg.tokens > 0 && !isStreamingMsg && (
+            <div style={{ 
+              fontSize: 11, 
+              marginTop: 8, 
+              opacity: 0.7,
+              textAlign: 'right'
+            }}>
+              {msg.tokens} tokens
+            </div>
+          )}
+        </Card>
+        
+        {msg.role === 'user' && (
+          <Avatar 
+            icon={<UserOutlined />} 
+            style={{ 
+              backgroundColor: '#52c41a',
+              marginLeft: 8,
+              alignSelf: 'flex-start'
+            }} 
+          />
+        )}
+      </div>
+    )
+  }
 
   // 检查是否可以发送消息
-  const canSendMessage = useMemo(() => {
-    if (!currentConversation) return false
+  const canSendMessage = () => {
+    if (!currentConversation || !messageInput.trim() || typing || isStreaming) return false
     return checkCreditsForModel(currentConversation.model_name)
-  }, [currentConversation, checkCreditsForModel])
+  }
 
   // 获取temperature标签颜色
   const getTemperatureTagColor = (temp) => {
@@ -482,20 +501,34 @@ const Chat = () => {
             {/* 消息列表 - 固定可滚动区域 */}
             <div className="chat-messages">
               <div className="chat-messages-content" ref={messagesContainerRef}>
-                <MessageList 
-                  messages={messages}
-                  typing={typing}
-                  isStreaming={isStreaming}
-                  streamingMessageId={streamingMessageId}
-                  messagesEndRef={messagesEndRef}
-                />
+                {messages.length === 0 ? (
+                  <div className="chat-empty">
+                    <Empty 
+                      description="开始新的对话吧"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  </div>
+                ) : (
+                  <div className="chat-messages-list">
+                    {messages.map(renderMessage)}
+                    {typing && !isStreaming && (
+                      <div style={{ textAlign: 'left', marginTop: 16 }}>
+                        <Spin size="small" />
+                        <span style={{ marginLeft: 8, color: '#999' }}>
+                          AI 正在思考...
+                        </span>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
               </div>
             </div>
 
             {/* 输入框 - 固定在底部 */}
             <div className="chat-input">
               {/* 积分不足警告 - 简化显示*/}
-              {currentConversation && !canSendMessage && (
+              {currentConversation && !checkCreditsForModel(currentConversation.model_name) && (
                 <Alert
                   message="积分不足，无法发送消息"
                   type="error"
@@ -509,13 +542,39 @@ const Chat = () => {
                 />
               )}
 
-              <ChatInput 
-                onSendMessage={handleSendMessage}
-                isStreaming={isStreaming}
-                typing={typing}
-                disabled={!canSendMessage}
-                onStopStreaming={handleStopStreaming}
-              />
+              <div className="chat-input-container">
+                <TextArea
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  placeholder="输入消息... (Enter发送，Shift+Enter换行)"
+                  autoSize={{ minRows: 3, maxRows: 8 }}
+                  onKeyDown={handleKeyPress}
+                  disabled={typing}
+                  className="chat-input-textarea"
+                />
+                {isStreaming ? (
+                  <Button 
+                    type="primary"
+                    danger
+                    icon={<StopOutlined />}
+                    onClick={handleStopStreaming}
+                    className="chat-input-send-button"
+                  >
+                    停止
+                  </Button>
+                ) : (
+                  <Button 
+                    type="primary" 
+                    icon={<SendOutlined />}
+                    loading={typing}
+                    onClick={handleSendMessage}
+                    disabled={!canSendMessage()}
+                    className="chat-input-send-button"
+                  >
+                    发送
+                  </Button>
+                )}
+              </div>
               
               {/* 输入提示 - 进一步简化 */}
               <div className="chat-input-tip">

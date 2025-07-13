@@ -13,7 +13,7 @@ import {
   DeleteOutlined
 } from '@ant-design/icons'
 
-const ConversationList = React.memo(({ 
+const ConversationList = ({ 
   conversations, 
   conversationsLoading,
   currentConversationId,
@@ -146,8 +146,6 @@ const ConversationList = React.memo(({
       </div>
     </div>
   )
-})
-
-ConversationList.displayName = 'ConversationList'
+}
 
 export default ConversationList

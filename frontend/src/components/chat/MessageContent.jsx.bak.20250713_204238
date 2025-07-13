@@ -6,7 +6,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Button, message } from 'antd'
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons'
 
-const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
+const MessageContent = ({ content, role, isStreaming = false }) => {
   const [copiedCode, setCopiedCode] = React.useState({})
 
   const handleCopyCode = (code, index) => {
@@ -177,13 +177,6 @@ const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
       {isStreaming && <span className="streaming-cursor">▊</span>}
     </div>
   )
-}, (prevProps, nextProps) => {
-  // 自定义比较函数，只有内容或流式状态改变时才重新渲染
-  return prevProps.content === nextProps.content && 
-         prevProps.isStreaming === nextProps.isStreaming &&
-         prevProps.role === nextProps.role
-})
-
-MessageContent.displayName = 'MessageContent'
+}
 
 export default MessageContent
