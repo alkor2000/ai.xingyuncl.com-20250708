@@ -1,0 +1,8 @@
+{
+  "error.network": "Network error, please check your connection",
+  "error.server": "Server error, please try again later",
+  "error.unauthorized": "Unauthorized, please login again",
+  "error.forbidden": "Access forbidden",
+  "error.notFound": "Resource not found",
+  "error.unknown": "Unknown error"
+}

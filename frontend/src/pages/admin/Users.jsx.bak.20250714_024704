@@ -36,14 +36,12 @@ import {
   HistoryOutlined,
   TrophyOutlined
 } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 
 const { TabPane } = Tabs
 
 const Users = () => {
-  const { t } = useTranslation()
   const { user: currentUser, hasPermission } = useAuthStore()
   const {
     users,
@@ -135,10 +133,10 @@ const Users = () => {
       await createUser(values)
       setIsModalVisible(false)
       form.resetFields()
-      message.success(t('admin.users.create.success'))
+      message.success('用户创建成功')
       loadUsers()
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.users.create.failed'))
+      message.error(error.response?.data?.message || '用户创建失败')
     }
   }
 
@@ -149,10 +147,10 @@ const Users = () => {
       setIsModalVisible(false)
       setEditingUser(null)
       form.resetFields()
-      message.success(t('admin.users.update.success'))
+      message.success('用户更新成功')
       loadUsers()
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.users.update.failed'))
+      message.error(error.response?.data?.message || '用户更新失败')
     }
   }
 
@@ -160,10 +158,10 @@ const Users = () => {
   const handleDeleteUser = async (userId) => {
     try {
       await deleteUser(userId)
-      message.success(t('admin.users.delete.success'))
+      message.success('用户删除成功')
       loadUsers()
     } catch (error) {
-      message.error(t('admin.users.delete.failed'))
+      message.error('用户删除失败')
     }
   }
 
@@ -213,15 +211,15 @@ const Users = () => {
       switch (creditsModalType) {
         case 'add':
           result = await addUserCredits(selectedUserId, amount, reason || '管理员充值')
-          message.success(t('admin.credits.recharge.success', { amount }))
+          message.success(`积分充值成功！充值 ${amount} 积分`)
           break
         case 'deduct':
           result = await deductUserCredits(selectedUserId, amount, reason || '管理员扣减')
-          message.success(t('admin.credits.deduct.success', { amount }))
+          message.success(`积分扣减成功！扣减 ${amount} 积分`)
           break
         case 'set':
           result = await setUserCreditsQuota(selectedUserId, amount, reason || '管理员设置配额')
-          message.success(t('admin.credits.setQuota.success', { amount }))
+          message.success(`积分配额设置成功！新配额 ${amount} 积分`)
           break
       }
 
@@ -237,7 +235,7 @@ const Users = () => {
       loadUsers()
       
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.credits.failed'))
+      message.error(error.response?.data?.message || '积分操作失败')
     }
   }
 
@@ -294,6 +292,13 @@ const Users = () => {
     setIsGroupModalVisible(true)
   }
 
+  // 角色和状态映射
+  const roleNames = {
+    super_admin: '超级管理员',
+    admin: '管理员', 
+    user: '普通用户'
+  }
+
   const roleColors = {
     super_admin: 'red',
     admin: 'blue',
@@ -306,9 +311,9 @@ const Users = () => {
   }
 
   const creditsModalTitles = {
-    add: t('admin.credits.recharge'),
-    deduct: t('admin.credits.deduct'),
-    set: t('admin.credits.setQuota')
+    add: '充值积分',
+    deduct: '扣减积分',
+    set: '设置配额'
   }
 
   const creditsModalIcons = {
@@ -316,56 +321,57 @@ const Users = () => {
     deduct: <MinusCircleOutlined style={{ color: '#ff4d4f' }} />,
     set: <WalletOutlined style={{ color: '#1677ff' }} />
   }
+
   // 用户表格列 (增强积分显示)
   const userColumns = [
     {
-      title: t('admin.users.table.id'),
+      title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 80
     },
     {
-      title: t('admin.users.table.username'),
+      title: '用户名',
       dataIndex: 'username',
       key: 'username'
     },
     {
-      title: t('admin.users.table.email'),
+      title: '邮箱',
       dataIndex: 'email', 
       key: 'email'
     },
     {
-      title: t('admin.users.table.role'),
+      title: '角色',
       dataIndex: 'role',
       key: 'role',
       render: (role) => (
-        <Tag color={roleColors[role]}>{t(`role.${role}`)}</Tag>
+        <Tag color={roleColors[role]}>{roleNames[role]}</Tag>
       )
     },
     {
-      title: t('admin.users.table.group'),
+      title: '用户分组',
       dataIndex: 'group_name',
       key: 'group_name',
       render: (groupName, record) => (
         groupName ? (
           <Tag color={record.group_color || '#1677ff'}>{groupName}</Tag>
         ) : (
-          <span style={{ color: '#999' }}>{t('admin.users.noGroup')}</span>
+          <span style={{ color: '#999' }}>未分组</span>
         )
       )
     },
     {
-      title: t('admin.users.table.status'),
+      title: '状态',
       dataIndex: 'status',
       key: 'status',
       render: (status) => (
         <Tag color={statusColors[status]}>
-          {t(`status.${status}`)}
+          {status === 'active' ? '正常' : '禁用'}
         </Tag>
       )
     },
     {
-      title: t('admin.users.table.credits'),
+      title: '积分余额',
       key: 'credits',
       render: (_, record) => {
         const remaining = (record.credits_quota || 0) - (record.used_credits || 0)
@@ -390,38 +396,38 @@ const Users = () => {
       }
     },
     {
-      title: t('admin.users.table.tokenQuota'),
+      title: 'Token配额',
       dataIndex: 'token_quota',
       key: 'token_quota',
       render: (quota) => quota?.toLocaleString()
     },
     {
-      title: t('admin.users.table.createdAt'),
+      title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
       render: (time) => new Date(time).toLocaleString()
     },
     {
-      title: t('admin.users.table.actions'),
+      title: '操作',
       key: 'actions',
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title={t('admin.users.viewDetail')}>
+          <Tooltip title="查看详情">
             <Button type="text" size="small" icon={<EyeOutlined />} 
               onClick={() => handleViewDetail(record.id)} />
           </Tooltip>
-          <Tooltip title={t('button.edit')}>
+          <Tooltip title="编辑">
             <Button type="text" size="small" icon={<EditOutlined />} 
               onClick={() => handleEditUser(record)} />
           </Tooltip>
           {hasPermission('credits.manage') && (
             <>
-              <Tooltip title={t('admin.credits.recharge')}>
+              <Tooltip title="积分充值">
                 <Button type="text" size="small" icon={<PlusCircleOutlined />}
                   style={{ color: '#52c41a' }}
                   onClick={() => handleManageCredits(record.id, 'add')} />
               </Tooltip>
-              <Tooltip title={t('admin.credits.deduct')}>
+              <Tooltip title="积分扣减">
                 <Button type="text" size="small" icon={<MinusCircleOutlined />}
                   style={{ color: '#ff4d4f' }}
                   onClick={() => handleManageCredits(record.id, 'deduct')} />
@@ -429,12 +435,12 @@ const Users = () => {
             </>
           )}
           {record.id !== currentUser?.id && (
-            <Tooltip title={t('button.delete')}>
+            <Tooltip title="删除">
               <Popconfirm
-                title={t('admin.users.delete.confirm')}
+                title="确定删除这个用户吗？"
                 onConfirm={() => handleDeleteUser(record.id)}
-                okText={t('button.confirm')}
-                cancelText={t('button.cancel')}
+                okText="确定"
+                cancelText="取消"
               >
                 <Button type="text" size="small" danger icon={<DeleteOutlined />} />
               </Popconfirm>
@@ -448,13 +454,13 @@ const Users = () => {
   // 分组表格列 (增强积分统计)
   const groupColumns = [
     {
-      title: t('admin.users.table.id'),
+      title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 80
     },
     {
-      title: t('admin.groups.table.name'),
+      title: '分组名称',
       dataIndex: 'name',
       key: 'name',
       render: (name, record) => (
@@ -464,12 +470,12 @@ const Users = () => {
       )
     },
     {
-      title: t('admin.groups.table.description'),
+      title: '描述',
       dataIndex: 'description',
       key: 'description'
     },
     {
-      title: t('admin.groups.table.userCount'),
+      title: '用户数量',
       dataIndex: 'user_count',
       key: 'user_count',
       render: (count) => (
@@ -480,48 +486,48 @@ const Users = () => {
       )
     },
     {
-      title: t('admin.groups.table.avgTokens'),
+      title: '平均Token使用',
       dataIndex: 'avg_tokens_used',
       key: 'avg_tokens_used',
       render: (avg) => Math.round(avg || 0).toLocaleString()
     },
     {
-      title: t('admin.groups.table.avgCredits'),
+      title: '平均积分使用',
       dataIndex: 'avg_credits_used',
       key: 'avg_credits_used',
       render: (avg) => Math.round(avg || 0).toLocaleString()
     },
     {
-      title: t('admin.groups.table.status'),
+      title: '状态',
       dataIndex: 'is_active',
       key: 'is_active',
       render: (isActive) => (
         <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? t('status.active') : t('status.inactive')}
+          {isActive ? '启用' : '禁用'}
         </Tag>
       )
     },
     {
-      title: t('admin.groups.table.sort'),
+      title: '排序',
       dataIndex: 'sort_order',
       key: 'sort_order'
     },
     {
-      title: t('table.actions'),
+      title: '操作',
       key: 'actions',
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title={t('button.edit')}>
+          <Tooltip title="编辑">
             <Button type="text" size="small" icon={<EditOutlined />} 
               onClick={() => handleEditGroup(record)} />
           </Tooltip>
-          <Tooltip title={t('button.delete')}>
+          <Tooltip title="删除">
             <Popconfirm
-              title={t('admin.groups.delete.confirm')}
-              description={t('admin.groups.delete.desc')}
+              title="确定删除这个分组吗？"
+              description="分组下的用户将变为未分组状态"
               onConfirm={() => handleDeleteGroup(record.id)}
-              okText={t('button.confirm')}
-              cancelText={t('button.cancel')}
+              okText="确定"
+              cancelText="取消"
             >
               <Button type="text" size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -537,7 +543,7 @@ const Users = () => {
       <div className="page-container">
         <Card>
           <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <p>{t('admin.noPermission')}</p>
+            <p>您没有访问用户管理的权限</p>
           </div>
         </Card>
       </div>
@@ -553,13 +559,13 @@ const Users = () => {
             type={activeTab === 'users' ? 'primary' : 'default'}
             onClick={() => setActiveTab('users')}
           >
-            {t('admin.users.title')}
+            用户管理
           </Button>
           <Button 
             type={activeTab === 'groups' ? 'primary' : 'default'}
             onClick={() => setActiveTab('groups')}
           >
-            {t('admin.groups.title')}
+            分组管理
           </Button>
         </Space>
       </Card>
@@ -574,17 +580,17 @@ const Users = () => {
               onFinish={handleSearch}
             >
               <Form.Item name="search">
-                <Input placeholder={t('admin.users.searchPlaceholder')} style={{ width: 200 }} />
+                <Input placeholder="搜索用户名或邮箱" style={{ width: 200 }} />
               </Form.Item>
               <Form.Item name="role">
-                <Select placeholder={t('admin.users.form.role')} style={{ width: 120 }} allowClear>
-                  <Select.Option value="super_admin">{t('role.super_admin')}</Select.Option>
-                  <Select.Option value="admin">{t('role.admin')}</Select.Option>
-                  <Select.Option value="user">{t('role.user')}</Select.Option>
+                <Select placeholder="角色" style={{ width: 120 }} allowClear>
+                  <Select.Option value="super_admin">超级管理员</Select.Option>
+                  <Select.Option value="admin">管理员</Select.Option>
+                  <Select.Option value="user">普通用户</Select.Option>
                 </Select>
               </Form.Item>
               <Form.Item name="group_id">
-                <Select placeholder={t('admin.users.form.group')} style={{ width: 150 }} allowClear>
+                <Select placeholder="用户分组" style={{ width: 150 }} allowClear>
                   {userGroups.map(group => (
                     <Select.Option key={group.id} value={group.id}>
                       <Tag color={group.color} style={{ margin: 0 }}>{group.name}</Tag>
@@ -593,15 +599,15 @@ const Users = () => {
                 </Select>
               </Form.Item>
               <Form.Item name="status">
-                <Select placeholder={t('admin.users.form.status')} style={{ width: 100 }} allowClear>
-                  <Select.Option value="active">{t('status.active')}</Select.Option>
-                  <Select.Option value="inactive">{t('status.inactive')}</Select.Option>
+                <Select placeholder="状态" style={{ width: 100 }} allowClear>
+                  <Select.Option value="active">正常</Select.Option>
+                  <Select.Option value="inactive">禁用</Select.Option>
                 </Select>
               </Form.Item>
               <Form.Item>
                 <Space>
                   <Button type="primary" htmlType="submit">
-                    {t('button.search')}
+                    搜索
                   </Button>
                   <Button 
                     icon={<ReloadOutlined />}
@@ -610,7 +616,7 @@ const Users = () => {
                       loadUsers()
                     }}
                   >
-                    {t('button.reset')}
+                    重置
                   </Button>
                 </Space>
               </Form.Item>
@@ -619,7 +625,7 @@ const Users = () => {
 
           {/* 用户列表 */}
           <Card 
-            title={t('admin.users.userList')}
+            title="用户列表"
             extra={
               <Button 
                 type="primary" 
@@ -630,7 +636,7 @@ const Users = () => {
                   setIsModalVisible(true)
                 }}
               >
-                {t('admin.users.addUser')}
+                添加用户
               </Button>
             }
           >
@@ -645,7 +651,7 @@ const Users = () => {
                 total: pagination.total,
                 showSizeChanger: true,
                 showQuickJumper: true,
-                showTotal: (total) => t('table.total', { total }),
+                showTotal: (total) => `共 ${total} 条记录`,
                 onChange: (page, pageSize) => {
                   setPagination(prev => ({ ...prev, current: page, pageSize }))
                 }
@@ -658,7 +664,7 @@ const Users = () => {
         <>
           {/* 分组列表 */}
           <Card 
-            title={t('admin.groups.title')}
+            title="用户分组列表"
             extra={
               hasPermission('group.manage') && (
                 <Button 
@@ -670,7 +676,7 @@ const Users = () => {
                     setIsGroupModalVisible(true)
                   }}
                 >
-                  {t('admin.groups.addGroup')}
+                  添加分组
                 </Button>
               )
             }
@@ -688,7 +694,7 @@ const Users = () => {
 
       {/* 创建/编辑用户弹窗 */}
       <Modal
-        title={editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}
+        title={editingUser ? '编辑用户' : '创建用户'}
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false)
@@ -708,48 +714,48 @@ const Users = () => {
             <>
               <Form.Item
                 name="email"
-                label={t('admin.users.form.email')}
+                label="邮箱地址"
                 rules={[
-                  { required: true, message: t('admin.users.form.email.required') },
-                  { type: 'email', message: t('admin.users.form.email.invalid') }
+                  { required: true, message: '请输入邮箱地址' },
+                  { type: 'email', message: '请输入有效的邮箱地址' }
                 ]}
               >
-                <Input placeholder={t('admin.users.form.email.required')} />
+                <Input placeholder="请输入邮箱地址" />
               </Form.Item>
 
               <Form.Item
                 name="password"
-                label={t('admin.users.form.password')}
+                label="密码"
                 rules={[
-                  { required: true, message: t('admin.users.form.password.required') },
-                  { min: 6, message: t('admin.users.form.password.min') }
+                  { required: true, message: '请输入密码' },
+                  { min: 6, message: '密码至少6位' }
                 ]}
               >
-                <Input.Password placeholder={t('admin.users.form.password.required')} />
+                <Input.Password placeholder="请输入密码" />
               </Form.Item>
             </>
           )}
 
           <Form.Item
             name="username"
-            label={t('admin.users.form.username')}
-            rules={[{ required: true, message: t('admin.users.form.username.required') }]}
+            label="用户名"
+            rules={[{ required: true, message: '请输入用户名' }]}
           >
-            <Input placeholder={t('admin.users.form.username.required')} />
+            <Input placeholder="请输入用户名" />
           </Form.Item>
 
           <Form.Item
             name="role"
-            label={t('admin.users.form.role')}
-            rules={[{ required: true, message: t('admin.users.form.role.required') }]}
+            label="角色"
+            rules={[{ required: true, message: '请选择角色' }]}
             initialValue="user"
           >
-            <Select placeholder={t('admin.users.form.role.required')}>
-              <Select.Option value="user">{t('role.user')}</Select.Option>
+            <Select placeholder="请选择角色">
+              <Select.Option value="user">普通用户</Select.Option>
               {currentUser?.role === 'super_admin' && (
                 <>
-                  <Select.Option value="admin">{t('role.admin')}</Select.Option>
-                  <Select.Option value="super_admin">{t('role.super_admin')}</Select.Option>
+                  <Select.Option value="admin">管理员</Select.Option>
+                  <Select.Option value="super_admin">超级管理员</Select.Option>
                 </>
               )}
             </Select>
@@ -757,9 +763,9 @@ const Users = () => {
 
           <Form.Item
             name="group_id"
-            label={t('admin.users.form.group')}
+            label="用户分组"
           >
-            <Select placeholder={t('admin.users.form.group.placeholder')} allowClear>
+            <Select placeholder="请选择用户分组" allowClear>
               {userGroups.filter(g => g.is_active).map(group => (
                 <Select.Option key={group.id} value={group.id}>
                   <Tag color={group.color} style={{ margin: 0 }}>{group.name}</Tag>
@@ -770,12 +776,12 @@ const Users = () => {
 
           <Form.Item
             name="status"
-            label={t('admin.users.form.status')}
+            label="状态"
             initialValue="active"
           >
             <Select>
-              <Select.Option value="active">{t('status.active')}</Select.Option>
-              <Select.Option value="inactive">{t('status.inactive')}</Select.Option>
+              <Select.Option value="active">正常</Select.Option>
+              <Select.Option value="inactive">禁用</Select.Option>
             </Select>
           </Form.Item>
 
@@ -783,12 +789,12 @@ const Users = () => {
             <Col span={12}>
               <Form.Item
                 name="token_quota"
-                label={t('admin.users.form.tokenQuota')}
-                rules={[{ required: true, message: t('admin.users.form.tokenQuota.required') }]}
+                label="Token配额"
+                rules={[{ required: true, message: '请设置Token配额' }]}
                 initialValue={10000}
               >
                 <InputNumber 
-                  placeholder={t('admin.users.form.tokenQuota')}
+                  placeholder="Token配额"
                   min={0}
                   style={{ width: '100%' }}
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -799,12 +805,12 @@ const Users = () => {
             <Col span={12}>
               <Form.Item
                 name="credits_quota"
-                label={t('admin.users.form.creditsQuota')}
-                rules={[{ required: true, message: t('admin.users.form.creditsQuota.required') }]}
+                label="积分配额"
+                rules={[{ required: true, message: '请设置积分配额' }]}
                 initialValue={1000}
               >
                 <InputNumber 
-                  placeholder={t('admin.users.form.creditsQuota')}
+                  placeholder="积分配额"
                   min={0}
                   style={{ width: '100%' }}
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -817,14 +823,14 @@ const Users = () => {
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
-                {editingUser ? t('button.update') : t('button.create')}
+                {editingUser ? '更新' : '创建'}
               </Button>
               <Button onClick={() => {
                 setIsModalVisible(false)
                 setEditingUser(null)
                 form.resetFields()
               }}>
-                {t('button.cancel')}
+                取消
               </Button>
             </Space>
           </Form.Item>
@@ -855,17 +861,17 @@ const Users = () => {
         >
           <Form.Item
             name="amount"
-            label={creditsModalType === 'set' ? t('admin.credits.form.newQuota') : t('admin.credits.form.amount')}
+            label={creditsModalType === 'set' ? '新配额' : '积分数量'}
             rules={[
-              { required: true, message: t('admin.credits.form.amount.required') },
-              { pattern: /^\d+$/, message: t('admin.credits.form.amount.invalid') }
+              { required: true, message: '请输入积分数量' },
+              { pattern: /^\d+$/, message: '请输入有效的正整数' }
             ]}
           >
             <InputNumber
               style={{ width: '100%' }}
               min={1}
               max={creditsModalType === 'set' ? 1000000 : 100000}
-              placeholder={creditsModalType === 'set' ? t('admin.credits.form.newQuota') : t('admin.credits.form.amount')}
+              placeholder={creditsModalType === 'set' ? '请输入新的积分配额' : '请输入积分数量'}
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={value => value.replace(/\$\s?|(,*)/g, '')}
             />
@@ -873,12 +879,12 @@ const Users = () => {
 
           <Form.Item
             name="reason"
-            label={t('admin.credits.form.reason')}
-            rules={[{ required: true, message: t('admin.credits.form.reason.required') }]}
+            label="操作原因"
+            rules={[{ required: true, message: '请输入操作原因' }]}
           >
             <Input.TextArea
               rows={3}
-              placeholder={t('admin.credits.form.reason.placeholder')}
+              placeholder="请描述此次积分操作的原因..."
               showCount
               maxLength={200}
             />
@@ -892,9 +898,9 @@ const Users = () => {
             border: '1px solid #e1e4e8'
           }}>
             <div style={{ fontSize: '14px', color: '#586069' }}>
-              {creditsModalType === 'add' && t('admin.credits.tip.recharge')}
-              {creditsModalType === 'deduct' && t('admin.credits.tip.deduct')}
-              {creditsModalType === 'set' && t('admin.credits.tip.setQuota')}
+              {creditsModalType === 'add' && '💡 充值后，用户的积分配额将增加相应数量'}
+              {creditsModalType === 'deduct' && '⚠️ 扣减后，用户的已使用积分将增加相应数量'}
+              {creditsModalType === 'set' && '🔧 设置后，用户的积分配额将变更为新数值'}
             </div>
           </div>
 
@@ -909,13 +915,13 @@ const Users = () => {
                   borderColor: creditsModalType === 'deduct' ? '#ff4d4f' : undefined 
                 }}
               >
-                {t('button.confirm')}{creditsModalTitles[creditsModalType]}
+                确认{creditsModalTitles[creditsModalType]}
               </Button>
               <Button onClick={() => {
                 setIsCreditsModalVisible(false)
                 creditsForm.resetFields()
               }}>
-                {t('button.cancel')}
+                取消
               </Button>
             </Space>
           </Form.Item>
@@ -924,7 +930,7 @@ const Users = () => {
 
       {/* 创建/编辑分组弹窗 */}
       <Modal
-        title={editingGroup ? t('admin.groups.editGroup') : t('admin.groups.createGroup')}
+        title={editingGroup ? '编辑用户分组' : '创建用户分组'}
         open={isGroupModalVisible}
         onCancel={() => {
           setIsGroupModalVisible(false)
@@ -941,24 +947,24 @@ const Users = () => {
         >
           <Form.Item
             name="name"
-            label={t('admin.groups.form.name')}
-            rules={[{ required: true, message: t('admin.groups.form.name.required') }]}
+            label="分组名称"
+            rules={[{ required: true, message: '请输入分组名称' }]}
           >
-            <Input placeholder={t('admin.groups.form.name.placeholder')} />
+            <Input placeholder="如：VIP客户、内部员工" />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label={t('admin.groups.form.description')}
+            label="分组描述"
           >
-            <Input.TextArea rows={3} placeholder={t('admin.groups.form.description.placeholder')} />
+            <Input.TextArea rows={3} placeholder="描述这个分组的用途和特点" />
           </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="color"
-                label={t('admin.groups.form.color')}
+                label="标识颜色"
                 initialValue="#1677ff"
               >
                 <Select>
@@ -986,7 +992,7 @@ const Users = () => {
             <Col span={12}>
               <Form.Item
                 name="sort_order"
-                label={t('admin.groups.form.sort')}
+                label="排序"
                 initialValue={0}
               >
                 <InputNumber min={0} style={{ width: '100%' }} />
@@ -996,27 +1002,27 @@ const Users = () => {
 
           <Form.Item
             name="is_active"
-            label={t('admin.groups.form.status')}
+            label="状态"
             initialValue={true}
             valuePropName="checked"
           >
             <Select>
-              <Select.Option value={true}>{t('admin.groups.form.enable')}</Select.Option>
-              <Select.Option value={false}>{t('admin.groups.form.disable')}</Select.Option>
+              <Select.Option value={true}>启用</Select.Option>
+              <Select.Option value={false}>禁用</Select.Option>
             </Select>
           </Form.Item>
 
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
-                {editingGroup ? t('button.update') : t('button.create')}
+                {editingGroup ? '更新' : '创建'}
               </Button>
               <Button onClick={() => {
                 setIsGroupModalVisible(false)
                 setEditingGroup(null)
                 groupForm.resetFields()
               }}>
-                {t('button.cancel')}
+                取消
               </Button>
             </Space>
           </Form.Item>
@@ -1025,63 +1031,63 @@ const Users = () => {
 
       {/* 用户详情抽屉 (增强积分展示) */}
       <Drawer
-        title={t('admin.users.detail.title')}
+        title="用户详情"
         width={700}
         open={isDetailVisible}
         onClose={() => setIsDetailVisible(false)}
       >
         {userDetail && (
           <div>
-            <Card title={t('admin.users.detail.basicInfo')} size="small" style={{ marginBottom: 16 }}>
+            <Card title="基本信息" size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>{t('admin.users.table.id')}:</strong> {userDetail.user.id}</div>
+                  <div><strong>ID:</strong> {userDetail.user.id}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>{t('admin.users.table.username')}:</strong> {userDetail.user.username}</div>
+                  <div><strong>用户名:</strong> {userDetail.user.username}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>{t('admin.users.table.email')}:</strong> {userDetail.user.email}</div>
+                  <div><strong>邮箱:</strong> {userDetail.user.email}</div>
                 </Col>
                 <Col span={12}>
                   <div>
-                    <strong>{t('admin.users.table.role')}:</strong> 
+                    <strong>角色:</strong> 
                     <Tag color={roleColors[userDetail.user.role]} style={{ marginLeft: 8 }}>
-                      {t(`role.${userDetail.user.role}`)}
+                      {roleNames[userDetail.user.role]}
                     </Tag>
                   </div>
                 </Col>
                 <Col span={12}>
                   <div>
-                    <strong>{t('admin.users.table.group')}:</strong>
+                    <strong>分组:</strong>
                     {userDetail.user.group_name ? (
                       <Tag color={userDetail.user.group_color} style={{ marginLeft: 8 }}>
                         {userDetail.user.group_name}
                       </Tag>
                     ) : (
-                      <span style={{ marginLeft: 8, color: '#999' }}>{t('admin.users.noGroup')}</span>
+                      <span style={{ marginLeft: 8, color: '#999' }}>未分组</span>
                     )}
                   </div>
                 </Col>
                 <Col span={12}>
                   <div>
-                    <strong>{t('admin.users.table.status')}:</strong>
+                    <strong>状态:</strong>
                     <Tag color={statusColors[userDetail.user.status]} style={{ marginLeft: 8 }}>
-                      {t(`status.${userDetail.user.status}`)}
+                      {userDetail.user.status === 'active' ? '正常' : '禁用'}
                     </Tag>
                   </div>
                 </Col>
                 <Col span={24}>
                   <div style={{ marginTop: 8 }}>
-                    <strong>{t('admin.users.table.createdAt')}:</strong> {new Date(userDetail.user.created_at).toLocaleString()}
+                    <strong>创建时间:</strong> {new Date(userDetail.user.created_at).toLocaleString()}
                   </div>
                 </Col>
                 <Col span={24}>
                   <div style={{ marginTop: 4 }}>
-                    <strong>{t('admin.users.detail.lastLogin')}:</strong> {
+                    <strong>最后登录:</strong> {
                       userDetail.user.last_login_at 
                         ? new Date(userDetail.user.last_login_at).toLocaleString() 
-                        : t('admin.users.detail.neverLogin')
+                        : '从未登录'
                     }
                   </div>
                 </Col>
@@ -1089,33 +1095,116 @@ const Users = () => {
             </Card>
 
             <Tabs defaultActiveKey="tokens" style={{ marginBottom: 16 }}>
-              <TabPane tab={<span><TrophyOutlined />{t('admin.users.detail.tokenStats')}</span>} key="tokens">
+              <TabPane tab={<span><TrophyOutlined />Token统计</span>} key="tokens">
                 <Card size="small">
                   <Row gutter={16} style={{ textAlign: 'center' }}>
                     <Col span={8}>
                       <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
                         {userDetail.user.token_quota?.toLocaleString()}
                       </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.form.tokenQuota')}</div>
+                      <div style={{ color: '#666', fontSize: 12 }}>Token配额</div>
                     </Col>
                     <Col span={8}>
                       <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
                         {userDetail.user.used_tokens?.toLocaleString()}
                       </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
+                      <div style={{ color: '#666', fontSize: 12 }}>已使用</div>
                     </Col>
                     <Col span={8}>
                       <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
                         {((userDetail.user.token_quota || 0) - (userDetail.user.used_tokens || 0)).toLocaleString()}
                       </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
+                      <div style={{ color: '#666', fontSize: 12 }}>剩余</div>
                     </Col>
                   </Row>
                 </Card>
               </TabPane>
+
+              {hasPermission('credits.manage') && userCredits[userDetail.user.id] && (
+                <TabPane tab={<span><WalletOutlined />积分统计</span>} key="credits">
+                  <Card size="small">
+                    <Row gutter={16} style={{ textAlign: 'center' }}>
+                      <Col span={8}>
+                        <Statistic
+                          title="积分配额"
+                          value={userCredits[userDetail.user.id]?.credits_quota || 0}
+                          valueStyle={{ color: '#1677ff', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic
+                          title="已使用"
+                          value={userCredits[userDetail.user.id]?.used_credits || 0}
+                          valueStyle={{ color: '#ff4d4f', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <Statistic
+                          title="余额"
+                          value={userCredits[userDetail.user.id]?.credits_stats?.remaining || 0}
+                          valueStyle={{ color: '#52c41a', fontSize: 24, fontWeight: 'bold' }}
+                          formatter={value => value.toLocaleString()}
+                        />
+                      </Col>
+                      <Col span={24} style={{ marginTop: 16 }}>
+                        <div style={{ marginBottom: 8 }}>
+                          <span>积分使用率: {userCredits[userDetail.user.id]?.credits_stats?.usageRate}%</span>
+                        </div>
+                        <Progress 
+                          percent={parseFloat(userCredits[userDetail.user.id]?.credits_stats?.usageRate || 0)}
+                          strokeColor={{
+                            '0%': '#87d068',
+                            '50%': '#ffe58f', 
+                            '100%': '#ff4d4f'
+                          }}
+                        />
+                      </Col>
+                      <Col span={24} style={{ marginTop: 16 }}>
+                        <Space>
+                          <Button 
+                            type="primary" 
+                            icon={<PlusCircleOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'add')}
+                          >
+                            充值积分
+                          </Button>
+                          <Button 
+                            danger 
+                            icon={<MinusCircleOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'deduct')}
+                          >
+                            扣减积分
+                          </Button>
+                          <Button 
+                            icon={<WalletOutlined />}
+                            onClick={() => handleManageCredits(userDetail.user.id, 'set')}
+                          >
+                            设置配额
+                          </Button>
+                          <Button 
+                            icon={<HistoryOutlined />}
+                            onClick={async () => {
+                              try {
+                                await getUserCreditsHistory(userDetail.user.id)
+                                message.success('积分历史已刷新')
+                              } catch (error) {
+                                message.error('获取积分历史失败')
+                              }
+                            }}
+                          >
+                            查看历史
+                          </Button>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
+                </TabPane>
+              )}
             </Tabs>
 
-            <Card title={t('admin.users.detail.permissions')} size="small">
+            <Card title="权限信息" size="small">
               <div>
                 {userDetail.permissions?.map(permission => (
                   <Tag key={permission} style={{ marginBottom: 4 }}>

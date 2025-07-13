@@ -1,0 +1,8 @@
+{
+  "error.network": "网络错误，请检查网络连接",
+  "error.server": "服务器错误，请稍后重试",
+  "error.unauthorized": "未授权，请重新登录",
+  "error.forbidden": "无权限访问",
+  "error.notFound": "资源不存在",
+  "error.unknown": "未知错误"
+}

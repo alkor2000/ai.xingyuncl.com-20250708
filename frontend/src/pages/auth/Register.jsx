@@ -15,12 +15,15 @@ import {
   LockOutlined,
   MailOutlined
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
+import LanguageSwitch from '../../components/common/LanguageSwitch'
 
 const { Title, Text } = Typography
 
 const Register = () => {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { register, checkEmailAvailable, checkUsernameAvailable, loading } = useAuthStore()
   const [form] = Form.useForm()
   const [error, setError] = useState('')
@@ -37,7 +40,7 @@ const Register = () => {
     })
 
     if (result.success) {
-      message.success('注册成功！请使用您的账户登录')
+      message.success(t('auth.register.success'))
       navigate('/login')
     } else {
       setError(result.message)
@@ -50,7 +53,7 @@ const Register = () => {
     
     const available = await checkEmailAvailable(value)
     if (!available) {
-      return Promise.reject(new Error('该邮箱已被注册'))
+      return Promise.reject(new Error(t('auth.register.email.exists')))
     }
     return Promise.resolve()
   }
@@ -61,150 +64,172 @@ const Register = () => {
     
     const available = await checkUsernameAvailable(value)
     if (!available) {
-      return Promise.reject(new Error('该用户名已被使用'))
+      return Promise.reject(new Error(t('auth.register.username.exists')))
     }
     return Promise.resolve()
   }
 
   return (
-    <Card className="auth-card">
-      <div className="auth-header">
-        <div className="auth-logo">AI Platform</div>
-        <Title level={4} className="auth-title">
-          创建您的账户
-        </Title>
-      </div>
-
-      {error && (
-        <Alert
-          message={error}
-          type="error"
-          showIcon
-          style={{ marginBottom: 24 }}
-          closable
-          onClose={() => setError('')}
-        />
-      )}
-
-      <Form
-        form={form}
-        name="register"
-        layout="vertical"
-        onFinish={handleSubmit}
-        autoComplete="off"
-        size="large"
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px'
+    }}>
+      <Card
+        style={{
+          width: '100%',
+          maxWidth: '450px',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px'
+        }}
       >
-        <Form.Item
-          name="email"
-          label="邮箱地址"
-          rules={[
-            {
-              required: true,
-              message: '请输入邮箱地址'
-            },
-            {
-              type: 'email',
-              message: '请输入有效的邮箱地址'
-            },
-            {
-              validator: validateEmail
-            }
-          ]}
-        >
-          <Input
-            prefix={<MailOutlined />}
-            placeholder="请输入邮箱地址"
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="username"
-          label="用户名"
-          rules={[
-            {
-              required: true,
-              message: '请输入用户名'
-            },
-            {
-              pattern: /^[a-zA-Z0-9_-]{3,20}$/,
-              message: '用户名只能包含字母、数字、下划线和横线，长度3-20个字符'
-            },
-            {
-              validator: validateUsername
-            }
-          ]}
-        >
-          <Input
-            prefix={<UserOutlined />}
-            placeholder="请输入用户名"
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="password"
-          label="密码"
-          rules={[
-            {
-              required: true,
-              message: '请输入密码'
-            },
-            {
-              min: 6,
-              message: '密码长度至少6个字符'
-            }
-          ]}
-        >
-          <Input.Password
-            prefix={<LockOutlined />}
-            placeholder="请输入密码"
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="confirmPassword"
-          label="确认密码"
-          dependencies={['password']}
-          rules={[
-            {
-              required: true,
-              message: '请确认密码'
-            },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('password') === value) {
-                  return Promise.resolve()
-                }
-                return Promise.reject(new Error('两次输入的密码不一致'))
-              }
-            })
-          ]}
-        >
-          <Input.Password
-            prefix={<LockOutlined />}
-            placeholder="请再次输入密码"
-          />
-        </Form.Item>
-
-        <Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={loading}
-            block
-            size="large"
-          >
-            注册
-          </Button>
-        </Form.Item>
-
-        <div className="text-center">
-          <Space>
-            <Text type="secondary">已有账户？</Text>
-            <Link to="/login">立即登录</Link>
-          </Space>
+        <div style={{ position: 'absolute', top: 16, right: 16 }}>
+          <LanguageSwitch />
         </div>
-      </Form>
-    </Card>
+        
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+            {t('app.name')}
+          </Title>
+          <Title level={4} style={{ marginTop: 0, fontWeight: 'normal' }}>
+            {t('auth.register.title')}
+          </Title>
+        </div>
+
+        {error && (
+          <Alert
+            message={error}
+            type="error"
+            showIcon
+            style={{ marginBottom: 24 }}
+            closable
+            onClose={() => setError('')}
+          />
+        )}
+
+        <Form
+          form={form}
+          name="register"
+          layout="vertical"
+          onFinish={handleSubmit}
+          autoComplete="off"
+          size="large"
+        >
+          <Form.Item
+            name="email"
+            label={t('auth.register.email')}
+            rules={[
+              {
+                required: true,
+                message: t('auth.register.email.required')
+              },
+              {
+                type: 'email',
+                message: t('auth.register.email.invalid')
+              },
+              {
+                validator: validateEmail
+              }
+            ]}
+          >
+            <Input
+              prefix={<MailOutlined />}
+              placeholder={t('auth.register.email.required')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="username"
+            label={t('auth.register.username')}
+            rules={[
+              {
+                required: true,
+                message: t('auth.register.username.required')
+              },
+              {
+                pattern: /^[a-zA-Z0-9_-]{3,20}$/,
+                message: t('auth.register.username.pattern')
+              },
+              {
+                validator: validateUsername
+              }
+            ]}
+          >
+            <Input
+              prefix={<UserOutlined />}
+              placeholder={t('auth.register.username.required')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            label={t('auth.register.password')}
+            rules={[
+              {
+                required: true,
+                message: t('auth.register.password.required')
+              },
+              {
+                min: 6,
+                message: t('auth.register.password.min')
+              }
+            ]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder={t('auth.register.password.required')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="confirmPassword"
+            label={t('auth.register.confirmPassword')}
+            dependencies={['password']}
+            rules={[
+              {
+                required: true,
+                message: t('auth.register.confirmPassword.required')
+              },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve()
+                  }
+                  return Promise.reject(new Error(t('auth.register.confirmPassword.mismatch')))
+                }
+              })
+            ]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder={t('auth.register.confirmPassword.required')}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              block
+              size="large"
+            >
+              {t('auth.register.button')}
+            </Button>
+          </Form.Item>
+
+          <div style={{ textAlign: 'center' }}>
+            <Space>
+              <Text type="secondary">{t('auth.register.hasAccount')}</Text>
+              <Link to="/login">{t('auth.register.login')}</Link>
+            </Space>
+          </div>
+        </Form>
+      </Card>
+    </div>
   )
 }
 

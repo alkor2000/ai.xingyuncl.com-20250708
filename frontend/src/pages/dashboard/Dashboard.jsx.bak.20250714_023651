@@ -8,44 +8,52 @@ import {
   TrophyOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
 
 const { Title, Paragraph } = Typography
 
 const Dashboard = () => {
   const { user, permissions } = useAuthStore()
-  const { t } = useTranslation()
-  const navigate = useNavigate()
 
   // 示例数据
   const stats = [
     {
-      title: t('dashboard.stats.todayChat'),
+      title: '今日对话',
       value: 12,
       prefix: <MessageOutlined />,
-      suffix: t('unit.times')
+      suffix: '次'
     },
     {
-      title: t('dashboard.stats.tokenUsed'),
+      title: 'Token消耗',
       value: user?.used_tokens || 0,
       prefix: <ApiOutlined />,
-      suffix: t('unit.tokens')
+      suffix: 'tokens'
     },
     {
-      title: t('dashboard.stats.tokenRemaining'),
+      title: '剩余配额',
       value: (user?.token_quota || 0) - (user?.used_tokens || 0),
       prefix: <DollarOutlined />,
-      suffix: t('unit.tokens')
+      suffix: 'tokens'
     },
     {
-      title: t('dashboard.stats.daysUsed'),
+      title: '使用天数',
       value: 5,
       prefix: <ClockCircleOutlined />,
-      suffix: t('unit.days')
+      suffix: '天'
     }
   ]
+
+  const roleNames = {
+    'super_admin': '超级管理员',
+    'admin': '管理员',
+    'user': '普通用户'
+  }
+
+  const roleColors = {
+    'super_admin': 'red',
+    'admin': 'blue',
+    'user': 'green'
+  }
 
   const tokenUsagePercent = user?.token_quota 
     ? Math.round((user.used_tokens / user.token_quota) * 100)
@@ -55,10 +63,10 @@ const Dashboard = () => {
     <div className="page-container">
       <div className="page-header">
         <Title level={2} className="page-title">
-          {t('dashboard.title')}
+          工作台
         </Title>
         <Paragraph type="secondary">
-          {t('dashboard.welcome', { name: user?.username })}
+          欢迎回来，{user?.username}！这里是您的AI助手控制面板。
         </Paragraph>
       </div>
 
@@ -86,11 +94,8 @@ const Dashboard = () => {
                 {user?.username}
               </Title>
               <Space style={{ marginTop: 4 }}>
-                <Tag color={
-                  user?.role === 'super_admin' ? 'red' :
-                  user?.role === 'admin' ? 'blue' : 'green'
-                }>
-                  {t(`role.${user?.role}`)}
+                <Tag color={roleColors[user?.role]}>
+                  {roleNames[user?.role]}
                 </Tag>
                 <span style={{ color: '#666' }}>{user?.email}</span>
               </Space>
@@ -98,7 +103,7 @@ const Dashboard = () => {
           </Col>
           <Col>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: '#666' }}>{t('dashboard.userInfo.tokenUsage')}</div>
+              <div style={{ fontSize: 12, color: '#666' }}>Token使用率</div>
               <Progress
                 type="circle"
                 percent={tokenUsagePercent}
@@ -131,32 +136,22 @@ const Dashboard = () => {
       {/* 快速操作 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title={t('dashboard.quickStart')} extra={<TrophyOutlined />}>
+          <Card title="快速开始" extra={<TrophyOutlined />}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Card 
-                size="small" 
-                hoverable
-                onClick={() => navigate('/chat')}
-                style={{ cursor: 'pointer' }}
-              >
+              <Card size="small" hoverable>
                 <Card.Meta
                   avatar={<MessageOutlined style={{ color: '#1677ff' }} />}
-                  title={t('dashboard.quickStart.chat')}
-                  description={t('dashboard.quickStart.chat.desc')}
+                  title="开始AI对话"
+                  description="与AI助手进行智能对话，获取您需要的答案"
                 />
               </Card>
               
               {permissions.includes('user.manage') && (
-                <Card 
-                  size="small" 
-                  hoverable
-                  onClick={() => navigate('/admin/users')}
-                  style={{ cursor: 'pointer' }}
-                >
+                <Card size="small" hoverable>
                   <Card.Meta
                     avatar={<UserOutlined style={{ color: '#52c41a' }} />}
-                    title={t('dashboard.quickStart.users')}
-                    description={t('dashboard.quickStart.users.desc')}
+                    title="用户管理"
+                    description="管理系统用户和权限分配"
                   />
                 </Card>
               )}
@@ -165,11 +160,11 @@ const Dashboard = () => {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title={t('dashboard.stats.title')}>
+          <Card title="使用统计">
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               <div>
                 <div style={{ marginBottom: 8 }}>
-                  <span>{t('dashboard.stats.tokenQuota')}</span>
+                  <span>Token配额使用情况</span>
                   <span style={{ float: 'right', color: '#666' }}>
                     {user?.used_tokens || 0} / {user?.token_quota || 0}
                   </span>
@@ -183,7 +178,7 @@ const Dashboard = () => {
               
               <div style={{ padding: 16, background: '#fafafa', borderRadius: 6 }}>
                 <Title level={5} style={{ margin: 0 }}>
-                  {t('dashboard.permissions')}
+                  权限列表
                 </Title>
                 <div style={{ marginTop: 8 }}>
                   {permissions.map(permission => (

@@ -1,15 +1,12 @@
 import React from 'react'
 import { Avatar, Card, Spin, Empty, Typography } from 'antd'
 import { RobotOutlined, UserOutlined, LoadingOutlined } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
 import MessageContent from './MessageContent'
 
 const { Text } = Typography
 
 // 单个消息组件
 const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
-  const { t } = useTranslation()
-  
   return (
     <div 
       style={{ 
@@ -45,7 +42,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
           <div style={{ marginTop: 8 }}>
             <LoadingOutlined style={{ marginRight: 4 }} />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {t('chat.message.generating')}
+              生成中...
             </Text>
           </div>
         )}
@@ -57,7 +54,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
             opacity: 0.7,
             textAlign: 'right'
           }}>
-            {t('chat.tokens', { count: msg.tokens })}
+            {msg.tokens} tokens
           </div>
         )}
       </Card>
@@ -91,13 +88,11 @@ const MessageList = React.memo(({
   streamingMessageId,
   messagesEndRef 
 }) => {
-  const { t } = useTranslation()
-  
   if (messages.length === 0) {
     return (
       <div className="chat-empty">
         <Empty 
-          description={t('chat.startChat')}
+          description="开始新的对话吧"
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -122,7 +117,7 @@ const MessageList = React.memo(({
         <div style={{ textAlign: 'left', marginTop: 16 }}>
           <Spin size="small" />
           <span style={{ marginLeft: 8, color: '#999' }}>
-            {t('chat.message.thinking')}
+            AI 正在思考...
           </span>
         </div>
       )}

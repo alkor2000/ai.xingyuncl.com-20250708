@@ -20,9 +20,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined
 } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
-import LanguageSwitch from '../common/LanguageSwitch'
 
 const { Header, Sider, Content } = Layout
 
@@ -30,7 +28,6 @@ const MainLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, hasPermission } = useAuthStore()
-  const { t } = useTranslation()
   const [collapsed, setCollapsed] = React.useState(false)
 
   // 菜单项配置
@@ -38,29 +35,29 @@ const MainLayout = ({ children }) => {
     {
       key: '/',
       icon: <DashboardOutlined />,
-      label: t('nav.dashboard'),
+      label: '工作台',
       permission: null
     },
     {
       key: '/chat',
       icon: <MessageOutlined />,
-      label: t('nav.chat'),
+      label: 'AI对话',
       permission: 'chat.use'
     },
     {
       key: 'admin',
       icon: <SettingOutlined />,
-      label: t('nav.admin'),
+      label: '系统管理',
       permission: 'user.manage',
       children: [
         {
           key: '/admin/users',
-          label: t('nav.users'),
+          label: '用户管理',
           permission: 'user.manage'
         },
         {
           key: '/admin/settings',
-          label: t('nav.settings'),
+          label: '系统设置',
           permission: 'system.all'
         }
       ]
@@ -97,7 +94,7 @@ const MainLayout = ({ children }) => {
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: t('nav.profile'),
+      label: '个人信息',
       onClick: () => navigate('/profile')
     },
     {
@@ -106,7 +103,7 @@ const MainLayout = ({ children }) => {
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: t('nav.logout'),
+      label: '退出登录',
       onClick: () => handleLogout()
     }
   ]
@@ -130,7 +127,7 @@ const MainLayout = ({ children }) => {
       >
         {/* Logo区域 */}
         <div className="main-layout-logo">
-          {collapsed ? 'AI' : t('app.name')}
+          {collapsed ? 'AI' : 'AI Platform'}
         </div>
 
         {/* 菜单 */}
@@ -158,11 +155,8 @@ const MainLayout = ({ children }) => {
 
           <div>
             <Space size="middle">
-              {/* 语言切换 */}
-              <LanguageSwitch />
-              
               {/* 通知图标 */}
-              <Tooltip title={t('nav.notifications')}>
+              <Tooltip title="通知">
                 <Badge count={0} size="small">
                   <Button 
                     type="text" 

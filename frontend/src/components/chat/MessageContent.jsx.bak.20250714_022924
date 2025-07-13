@@ -5,21 +5,19 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Button, message } from 'antd'
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
 
 const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
   const [copiedCode, setCopiedCode] = React.useState({})
-  const { t } = useTranslation()
 
   const handleCopyCode = (code, index) => {
     navigator.clipboard.writeText(code).then(() => {
       setCopiedCode({ ...copiedCode, [index]: true })
-      message.success(t('chat.message.copy.success'))
+      message.success('代码已复制到剪贴板')
       setTimeout(() => {
         setCopiedCode({ ...copiedCode, [index]: false })
       }, 2000)
     }).catch(() => {
-      message.error(t('chat.message.copy.failed'))
+      message.error('复制失败')
     })
   }
 
@@ -69,7 +67,7 @@ const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
               onClick={() => handleCopyCode(codeString, codeIndex)}
               className="copy-button"
             >
-              {copiedCode[codeIndex] ? t('chat.message.copied') : t('chat.message.copy')}
+              {copiedCode[codeIndex] ? '已复制' : '复制'}
             </Button>
           </div>
           <SyntaxHighlighter
