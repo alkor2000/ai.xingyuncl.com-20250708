@@ -1,52 +1,29 @@
-import React, { useEffect } from 'react'
-import { Card, Row, Col, Statistic, Typography, Space, Tag, Progress, Spin } from 'antd'
+import React from 'react'
+import { Card, Row, Col, Statistic, Typography, Space, Tag, Progress } from 'antd'
 import {
   UserOutlined,
   MessageOutlined,
   ApiOutlined,
   DollarOutlined,
   TrophyOutlined,
-  ClockCircleOutlined,
-  TeamOutlined,
-  FireOutlined,
-  RobotOutlined,
-  RiseOutlined
+  ClockCircleOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
-import useStatsStore from '../../stores/statsStore'
 
 const { Title, Paragraph } = Typography
 
 const Dashboard = () => {
   const { user, permissions } = useAuthStore()
-  const { 
-    realtimeStats, 
-    loading, 
-    fetchRealtimeStats,
-    formatNumber 
-  } = useStatsStore()
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  // 加载实时统计
-  useEffect(() => {
-    fetchRealtimeStats()
-    
-    // 每分钟刷新一次
-    const interval = setInterval(() => {
-      fetchRealtimeStats()
-    }, 60000)
-    
-    return () => clearInterval(interval)
-  }, [fetchRealtimeStats])
-
-  // 用户个人统计
-  const userStats = [
+  // 示例数据
+  const stats = [
     {
       title: t('dashboard.stats.todayChat'),
-      value: user?.today_messages || 0,
+      value: 12,
       prefix: <MessageOutlined />,
       suffix: t('unit.times')
     },
@@ -64,41 +41,9 @@ const Dashboard = () => {
     },
     {
       title: t('dashboard.stats.daysUsed'),
-      value: user?.days_used || 0,
+      value: 5,
       prefix: <ClockCircleOutlined />,
       suffix: t('unit.days')
-    }
-  ]
-
-  // 实时统计
-  const systemStats = [
-    {
-      title: t('dashboard.stats.onlineUsers'),
-      value: realtimeStats.online_users,
-      prefix: <TeamOutlined />,
-      suffix: t('unit.users'),
-      color: '#52c41a'
-    },
-    {
-      title: t('dashboard.stats.todayActiveUsers'),
-      value: realtimeStats.today_active_users,
-      prefix: <UserOutlined />,
-      suffix: t('unit.users'),
-      color: '#1677ff'
-    },
-    {
-      title: t('dashboard.stats.todayMessages'),
-      value: formatNumber(realtimeStats.today_messages),
-      prefix: <MessageOutlined />,
-      suffix: '',
-      color: '#fa8c16'
-    },
-    {
-      title: t('dashboard.stats.todayTokens'),
-      value: formatNumber(realtimeStats.today_tokens),
-      prefix: <ApiOutlined />,
-      suffix: '',
-      color: '#a0d911'
     }
   ]
 
@@ -166,77 +111,9 @@ const Dashboard = () => {
         </Row>
       </Card>
 
-      {/* 实时统计卡片 */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 50 }}>
-          <Spin size="large" tip={t('status.loading')} />
-        </div>
-      ) : (
-        <>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <RiseOutlined /> {t('dashboard.stats.realtimeTitle')}
-          </Title>
-          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-            {systemStats.map((stat, index) => (
-              <Col xs={24} sm={12} lg={6} key={index}>
-                <Card>
-                  <Statistic
-                    title={stat.title}
-                    value={stat.value}
-                    prefix={stat.prefix}
-                    suffix={stat.suffix}
-                    valueStyle={{ color: stat.color }}
-                  />
-                </Card>
-              </Col>
-            ))}
-          </Row>
-
-          {/* 热门模型 */}
-          {realtimeStats.popular_models.length > 0 && (
-            <Card 
-              title={
-                <Space>
-                  <FireOutlined style={{ color: '#fa541c' }} />
-                  {t('dashboard.stats.popularModels')}
-                </Space>
-              }
-              style={{ marginBottom: 24 }}
-            >
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {realtimeStats.popular_models.map((model, index) => (
-                  <div key={index}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Space>
-                        <RobotOutlined />
-                        <span>{model.model_name}</span>
-                      </Space>
-                      <span style={{ color: '#666' }}>
-                        {model.usage_count} {t('unit.times')}
-                      </span>
-                    </div>
-                    <Progress
-                      percent={Math.round((model.usage_count / realtimeStats.today_messages) * 100)}
-                      size="small"
-                      strokeColor={{
-                        '0%': '#108ee9',
-                        '100%': '#87d068',
-                      }}
-                    />
-                  </div>
-                ))}
-              </Space>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* 个人统计 */}
-      <Title level={4} style={{ marginBottom: 16 }}>
-        <UserOutlined /> {t('dashboard.stats.personalTitle')}
-      </Title>
+      {/* 统计卡片 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {userStats.map((stat, index) => (
+        {stats.map((stat, index) => (
           <Col xs={24} sm={12} lg={6} key={index}>
             <Card>
               <Statistic

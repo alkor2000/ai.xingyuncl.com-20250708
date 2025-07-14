@@ -81,3 +81,13 @@
   "unit.tokens": "tokens",
   "unit.days": "days"
 }
+,
+  "stats.onlineUsers": "{{count}} online",
+  "dashboard.stats.realtimeTitle": "Realtime Stats",
+  "dashboard.stats.onlineUsers": "Online Users",
+  "dashboard.stats.todayActiveUsers": "Today Active",
+  "dashboard.stats.todayMessages": "Today Messages",
+  "dashboard.stats.todayTokens": "Today Tokens",
+  "dashboard.stats.popularModels": "Popular Models",
+  "dashboard.stats.personalTitle": "Personal Stats",
+  "unit.users": "users"

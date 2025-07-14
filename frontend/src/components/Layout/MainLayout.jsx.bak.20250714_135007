@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Layout,
@@ -8,8 +8,7 @@ import {
   Button,
   Space,
   Badge,
-  Tooltip,
-  Tag
+  Tooltip
 } from 'antd'
 import {
   DashboardOutlined,
@@ -19,12 +18,10 @@ import {
   LogoutOutlined,
   BellOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  CheckCircleOutlined
+  MenuUnfoldOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
-import useStatsStore from '../../stores/statsStore'
 import LanguageSwitch from '../common/LanguageSwitch'
 
 const { Header, Sider, Content } = Layout
@@ -33,18 +30,8 @@ const MainLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, hasPermission } = useAuthStore()
-  const { onlineCount, connected, initializeSocket, disconnectSocket } = useStatsStore()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = React.useState(false)
-
-  // 初始化WebSocket连接
-  useEffect(() => {
-    initializeSocket()
-    
-    return () => {
-      disconnectSocket()
-    }
-  }, [initializeSocket, disconnectSocket])
 
   // 菜单项配置
   const menuItems = [
@@ -160,28 +147,13 @@ const MainLayout = ({ children }) => {
       <Layout className="main-layout-container">
         {/* 顶部导航 */}
         <Header className="main-layout-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
               className="main-layout-trigger"
             />
-            
-            {/* 在线状态指示 */}
-            <Tag 
-              icon={<CheckCircleOutlined />}
-              color={connected ? 'success' : 'default'}
-            >
-              {connected ? t('status.online') : t('status.offline')}
-            </Tag>
-            
-            {/* 在线人数 */}
-            {onlineCount > 0 && (
-              <Tag color="blue">
-                {t('stats.onlineUsers', { count: onlineCount })}
-              </Tag>
-            )}
           </div>
 
           <div>
@@ -208,17 +180,11 @@ const MainLayout = ({ children }) => {
                 arrow
               >
                 <Space style={{ cursor: 'pointer' }}>
-                  <Badge 
-                    dot 
-                    status={connected ? 'success' : 'default'}
-                    offset={[-2, 2]}
-                  >
-                    <Avatar 
-                      size="small" 
-                      icon={<UserOutlined />}
-                      src={user?.avatar_url}
-                    />
-                  </Badge>
+                  <Avatar 
+                    size="small" 
+                    icon={<UserOutlined />}
+                    src={user?.avatar_url}
+                  />
                   <span>
                     {user?.username || user?.email}
                   </span>
