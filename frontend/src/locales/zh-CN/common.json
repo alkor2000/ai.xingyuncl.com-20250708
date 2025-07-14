@@ -79,9 +79,9 @@
   
   "unit.times": "次",
   "unit.tokens": "tokens",
-  "unit.days": "天"
-}
-,
+  "unit.days": "天",
+  "unit.users": "人",
+  
   "stats.onlineUsers": "在线 {{count}} 人",
   "dashboard.stats.realtimeTitle": "实时统计",
   "dashboard.stats.onlineUsers": "在线用户",
@@ -89,5 +89,5 @@
   "dashboard.stats.todayMessages": "今日消息",
   "dashboard.stats.todayTokens": "今日Tokens",
   "dashboard.stats.popularModels": "热门模型",
-  "dashboard.stats.personalTitle": "个人统计",
-  "unit.users": "人"
+  "dashboard.stats.personalTitle": "个人统计"
+}

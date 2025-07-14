@@ -79,9 +79,9 @@
   
   "unit.times": "times",
   "unit.tokens": "tokens",
-  "unit.days": "days"
-}
-,
+  "unit.days": "days",
+  "unit.users": "users",
+  
   "stats.onlineUsers": "{{count}} online",
   "dashboard.stats.realtimeTitle": "Realtime Stats",
   "dashboard.stats.onlineUsers": "Online Users",
@@ -89,5 +89,5 @@
   "dashboard.stats.todayMessages": "Today Messages",
   "dashboard.stats.todayTokens": "Today Tokens",
   "dashboard.stats.popularModels": "Popular Models",
-  "dashboard.stats.personalTitle": "Personal Stats",
-  "unit.users": "users"
+  "dashboard.stats.personalTitle": "Personal Stats"
+}
