@@ -78,9 +78,5 @@
   "chat.delete.warning": "Warning: This action cannot be undone, all messages will be permanently deleted!",
   "chat.delete.confirmButton": "Confirm Delete",
   
-  "chat.draft.saving": "Saving draft...",
-  "chat.draft.saved": "Draft saved",
-  "chat.draft.unsaved": "Draft not saved",
-  
   "chat.tokens": "{{count}} tokens"
 }

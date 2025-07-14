@@ -694,3 +694,24 @@ body {
     padding-right: max(env(safe-area-inset-right), 16px);
   }
 }
+
+/* 草稿保存相关样式 */
+.chat-input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 8px;
+}
+
+.draft-indicator {
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.draft-indicator .anticon {
+  margin-right: 4px;
+}

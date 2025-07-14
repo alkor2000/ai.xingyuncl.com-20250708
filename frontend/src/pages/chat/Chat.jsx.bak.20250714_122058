@@ -28,11 +28,9 @@ import {
   FireOutlined,
   PlusOutlined,
   LoadingOutlined,
-  StopOutlined,
-  SaveOutlined
+  StopOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { debounce } from 'lodash'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
@@ -42,61 +40,20 @@ const { Sider, Content } = Layout
 const { Title, Text } = Typography
 const { TextArea } = Input
 
-// 输入框组件 - 支持自动保存草稿
+// 输入框组件 - 单独管理输入状态
 const ChatInput = React.memo(({ 
   onSendMessage, 
-  isGenerating,
+  isGenerating, // 改为isGenerating，包含流式和非流式
   disabled,
-  onStopGeneration,
-  conversationId // 新增：用于保存草稿
+  onStopGeneration // 改为通用的停止生成
 }) => {
   const [messageInput, setMessageInput] = useState('')
   const { t } = useTranslation()
-  const { saveDraft, getDraft, draftSaving } = useChatStore()
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  
-  // 加载草稿
-  useEffect(() => {
-    if (conversationId) {
-      const draft = getDraft(conversationId)
-      if (draft) {
-        setMessageInput(draft)
-        setHasUnsavedChanges(false)
-      } else {
-        setMessageInput('')
-        setHasUnsavedChanges(false)
-      }
-    }
-  }, [conversationId, getDraft])
-  
-  // 防抖保存草稿（1秒后保存）
-  const debouncedSaveDraft = useCallback(
-    debounce(async (convId, content) => {
-      if (convId && content.trim()) {
-        await saveDraft(convId, content)
-        setHasUnsavedChanges(false)
-      }
-    }, 1000),
-    [saveDraft]
-  )
-  
-  // 输入变化时触发自动保存
-  const handleInputChange = useCallback((e) => {
-    const newValue = e.target.value
-    setMessageInput(newValue)
-    setHasUnsavedChanges(true)
-    
-    // 触发防抖保存
-    if (conversationId) {
-      debouncedSaveDraft(conversationId, newValue)
-    }
-  }, [conversationId, debouncedSaveDraft])
   
   const handleSend = useCallback(() => {
     if (!messageInput.trim() || isGenerating) return
     onSendMessage(messageInput.trim())
     setMessageInput('')
-    setHasUnsavedChanges(false)
   }, [messageInput, isGenerating, onSendMessage])
   
   const handleKeyPress = useCallback((e) => {
@@ -112,71 +69,38 @@ const ChatInput = React.memo(({
     }
   }, [isGenerating, handleSend])
   
-  // 组件卸载时保存草稿
-  useEffect(() => {
-    return () => {
-      debouncedSaveDraft.cancel()
-    }
-  }, [debouncedSaveDraft])
-  
   return (
     <div className="chat-input-container">
       <TextArea
         value={messageInput}
-        onChange={handleInputChange}
+        onChange={(e) => setMessageInput(e.target.value)}
         placeholder={t('chat.input.placeholder')}
         autoSize={{ minRows: 3, maxRows: 8 }}
         onKeyDown={handleKeyPress}
         disabled={disabled || isGenerating}
         className="chat-input-textarea"
       />
-      <div className="chat-input-actions">
-        {isGenerating ? (
-          <Button 
-            type="primary"
-            danger
-            icon={<StopOutlined />}
-            onClick={onStopGeneration}
-            className="chat-input-send-button"
-          >
-            {t('chat.stop')}
-          </Button>
-        ) : (
-          <Button 
-            type="primary" 
-            icon={<SendOutlined />}
-            onClick={handleSend}
-            disabled={disabled || !messageInput.trim()}
-            className="chat-input-send-button"
-          >
-            {t('chat.send')}
-          </Button>
-        )}
-        {/* 草稿保存指示器 */}
-        {messageInput.trim() && (
-          <div className="draft-indicator">
-            {draftSaving ? (
-              <Space size="small">
-                <LoadingOutlined style={{ fontSize: 12 }} />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('chat.draft.saving')}
-                </Text>
-              </Space>
-            ) : hasUnsavedChanges ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t('chat.draft.unsaved')}
-              </Text>
-            ) : (
-              <Space size="small">
-                <SaveOutlined style={{ fontSize: 12, color: '#52c41a' }} />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('chat.draft.saved')}
-                </Text>
-              </Space>
-            )}
-          </div>
-        )}
-      </div>
+      {isGenerating ? (
+        <Button 
+          type="primary"
+          danger
+          icon={<StopOutlined />}
+          onClick={onStopGeneration}
+          className="chat-input-send-button"
+        >
+          {t('chat.stop')}
+        </Button>
+      ) : (
+        <Button 
+          type="primary" 
+          icon={<SendOutlined />}
+          onClick={handleSend}
+          disabled={disabled || !messageInput.trim()}
+          className="chat-input-send-button"
+        >
+          {t('chat.send')}
+        </Button>
+      )}
     </div>
   )
 })
@@ -623,7 +547,6 @@ const Chat = () => {
                 isGenerating={isGenerating}
                 disabled={!canSendMessage}
                 onStopGeneration={handleStopGeneration}
-                conversationId={currentConversationId}
               />
               
               {/* 输入提示 - 进一步简化 */}

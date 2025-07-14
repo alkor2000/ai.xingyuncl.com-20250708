@@ -1,5 +1,5 @@
 /**
- * 对话路由 - 集成积分管理、流式输出和草稿功能
+ * 对话路由 - 集成积分管理和流式输出
  */
 
 const express = require('express');
@@ -32,21 +32,6 @@ const creditsLimiter = rateLimit({
     success: false,
     code: 429,
     message: '积分查询过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 草稿操作限流 - 适度限流
-const draftLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 120, // 每分钟最多120次草稿操作（自动保存需要）
-  message: {
-    success: false,
-    code: 429,
-    message: '草稿操作过于频繁，请稍后再试',
     data: null,
     timestamp: new Date().toISOString()
   },
@@ -144,37 +129,6 @@ router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
   ChatController.sendMessage
-);
-
-/**
- * @route POST /api/chat/conversations/:id/draft
- * @desc 保存对话草稿
- * @access Private
- */
-router.post('/conversations/:id/draft',
-  draftLimiter,
-  requirePermission('chat.use'),
-  ChatController.saveDraft
-);
-
-/**
- * @route GET /api/chat/conversations/:id/draft
- * @desc 获取对话草稿
- * @access Private
- */
-router.get('/conversations/:id/draft',
-  requirePermission('chat.use'),
-  ChatController.getDraft
-);
-
-/**
- * @route DELETE /api/chat/conversations/:id/draft
- * @desc 删除对话草稿
- * @access Private
- */
-router.delete('/conversations/:id/draft',
-  requirePermission('chat.use'),
-  ChatController.deleteDraft
 );
 
 module.exports = router;
