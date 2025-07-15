@@ -1,5 +1,5 @@
 /**
- * 对话会话数据模型 - 支持动态上下文数量配置、temperature设置和优先级排序
+ * 对话会话数据模型 - 支持动态上下文数量配置和temperature设置
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -15,12 +15,11 @@ class Conversation {
     this.model_name = data.model_name || null;
     this.system_prompt = data.system_prompt || null;
     this.is_pinned = data.is_pinned || 0;
-    this.priority = data.priority || 0; // 新增：优先级字段
     this.message_count = data.message_count || 0;
     this.total_tokens = data.total_tokens || 0;
     this.last_message_at = data.last_message_at || null;
     this.context_length = data.context_length || 20; // 上下文携带数量
-    this.ai_temperature = data.ai_temperature || 0.0; // AI温度参数
+    this.ai_temperature = data.ai_temperature || 0.0; // 新增：AI温度参数
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
   }
@@ -64,7 +63,7 @@ class Conversation {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置和优先级
+   * 创建新会话 - 支持上下文数量和temperature设置
    */
   static async create(conversationData) {
     try {
@@ -74,15 +73,14 @@ class Conversation {
         model_name,
         system_prompt = null,
         context_length = 20, // 默认20条上下文
-        ai_temperature = 0.0, // 默认temperature为0.0
-        priority = 0 // 默认优先级为0
+        ai_temperature = 0.0 // 新增：默认temperature为0.0
       } = conversationData;
 
       const conversationId = uuidv4();
       
       const sql = `
-        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, priority, context_length, ai_temperature)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, context_length, ai_temperature)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       
       await dbConnection.query(sql, [
@@ -91,7 +89,6 @@ class Conversation {
         title,
         model_name,
         system_prompt,
-        Math.max(0, Math.min(10, parseInt(priority) || 0)), // 确保优先级在0-10范围内
         parseInt(context_length) || 20,
         parseFloat(ai_temperature) || 0.0
       ]);
@@ -101,8 +98,7 @@ class Conversation {
         userId: user_id,
         modelName: model_name,
         contextLength: context_length,
-        aiTemperature: ai_temperature,
-        priority: priority
+        aiTemperature: ai_temperature
       });
 
       return await Conversation.findById(conversationId);
@@ -128,12 +124,12 @@ class Conversation {
       
       logger.info('获取会话总数成功', { userId, total });
       
-      // 获取会话列表 - 按优先级和更新时间排序
+      // 获取会话列表 - 使用simpleQuery避免LIMIT/OFFSET参数绑定问题
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT * FROM conversations 
         WHERE user_id = ? 
-        ORDER BY priority DESC, is_pinned DESC, updated_at DESC
+        ORDER BY is_pinned DESC, last_message_at DESC
         LIMIT ? OFFSET ?
       `;
       
@@ -167,14 +163,14 @@ class Conversation {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature和优先级更新
+   * 更新会话 - 支持上下文数量和temperature更新
    */
   async update(updateData) {
     try {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'priority', 'context_length', 'ai_temperature'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'context_length', 'ai_temperature'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -191,17 +187,13 @@ class Conversation {
             const contextLength = parseInt(updateData[field]) || 20;
             values.push(Math.max(0, Math.min(1000, contextLength)));
           } else if (field === 'ai_temperature') {
-            // 确保temperature在0.0-1.0范围内
+            // 新增：确保temperature在0.0-1.0范围内
             const temperature = parseFloat(updateData[field]);
             if (isNaN(temperature)) {
               values.push(0.0);
             } else {
               values.push(Math.max(0.0, Math.min(1.0, temperature)));
             }
-          } else if (field === 'priority') {
-            // 确保优先级在0-10范围内
-            const priority = parseInt(updateData[field]) || 0;
-            values.push(Math.max(0, Math.min(10, priority)));
           } else if (field === 'system_prompt') {
             // system_prompt 可以是null，但不能是undefined
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
@@ -321,7 +313,7 @@ class Conversation {
   }
 
   /**
-   * 获取AI温度参数
+   * 获取AI温度参数 - 新增方法
    */
   getTemperature() {
     return parseFloat(this.ai_temperature) || 0.0;
@@ -338,11 +330,10 @@ class Conversation {
       model_name: this.model_name,
       system_prompt: this.system_prompt,
       is_pinned: this.is_pinned,
-      priority: this.priority, // 返回优先级
       message_count: this.message_count,
       total_tokens: this.total_tokens,
-      context_length: this.context_length,
-      ai_temperature: this.ai_temperature,
+      context_length: this.context_length, // 返回上下文数量
+      ai_temperature: this.ai_temperature, // 新增：返回温度参数
       last_message_at: this.last_message_at,
       created_at: this.created_at,
       updated_at: this.updated_at

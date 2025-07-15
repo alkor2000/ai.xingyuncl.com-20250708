@@ -31,8 +31,8 @@ const useChatStore = create((set, get) => ({
   drafts: {}, // conversationId -> draft content
   draftSaving: false,
   
-  // 🔥 获取会话列表 - 添加自动选择逻辑
-  getConversations: async (force = false, autoSelectFirst = false) => {
+  // 🔥 获取会话列表 - 只在首次或手动刷新时调用
+  getConversations: async (force = false) => {
     const state = get()
     
     // 如果已加载过且不是强制刷新，跳过
@@ -43,22 +43,12 @@ const useChatStore = create((set, get) => ({
     set({ conversationsLoading: true })
     try {
       const response = await apiClient.get('/chat/conversations')
-      const conversations = response.data.data
-      
       set({ 
-        conversations: conversations,
+        conversations: response.data.data,
         conversationsLoading: false,
         conversationsLoaded: true
       })
-      
-      // 🔥 新增：如果需要自动选择且没有当前选中的对话
-      if (autoSelectFirst && conversations.length > 0 && !state.currentConversationId) {
-        // 选择优先级最高的对话（后端已经按优先级排序）
-        const firstConversation = conversations[0]
-        get().selectConversation(firstConversation.id)
-      }
-      
-      return conversations
+      return response.data.data
     } catch (error) {
       console.error('获取会话列表失败:', error)
       set({ conversationsLoading: false })
@@ -82,7 +72,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 创建新会话 - 支持上下文数量、temperature设置和优先级
+  // 🔥 创建新会话 - 支持上下文数量和temperature设置
   createConversation: async (conversationData) => {
     set({ conversationsLoading: true })
     try {
@@ -100,25 +90,13 @@ const useChatStore = create((set, get) => ({
       const response = await apiClient.post('/chat/conversations', conversationData)
       const newConversation = response.data.data
       
-      // 根据优先级插入到正确的位置
-      const conversations = [...state.conversations]
-      const insertIndex = conversations.findIndex(c => 
-        (c.priority || 0) < (newConversation.priority || 0)
-      )
-      
-      if (insertIndex === -1) {
-        conversations.push(newConversation)
-      } else {
-        conversations.splice(insertIndex, 0, newConversation)
-      }
-      
-      set({
-        conversations: conversations,
+      set(state => ({
+        conversations: [newConversation, ...state.conversations],
         currentConversationId: newConversation.id,
         currentConversation: newConversation,
         messages: [],
         conversationsLoading: false
-      })
+      }))
       
       return newConversation
     } catch (error) {
@@ -571,33 +549,20 @@ const useChatStore = create((set, get) => ({
     get().stopGeneration()
   },
   
-  // 更新会话 - 支持上下文数量、temperature和优先级更新
+  // 更新会话 - 支持上下文数量和temperature更新
   updateConversation: async (conversationId, updateData) => {
     try {
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)
       const updatedConversation = response.data.data
       
-      // 更新会话列表，考虑优先级变化后的排序
-      const state = get()
-      let conversations = state.conversations.filter(conv => conv.id !== conversationId)
-      
-      // 找到正确的插入位置
-      const insertIndex = conversations.findIndex(c => 
-        (c.priority || 0) < (updatedConversation.priority || 0)
-      )
-      
-      if (insertIndex === -1) {
-        conversations.push(updatedConversation)
-      } else {
-        conversations.splice(insertIndex, 0, updatedConversation)
-      }
-      
-      set({
-        conversations: conversations,
+      set(state => ({
+        conversations: state.conversations.map(conv =>
+          conv.id === conversationId ? updatedConversation : conv
+        ),
         currentConversation: state.currentConversationId === conversationId 
           ? updatedConversation 
           : state.currentConversation
-      })
+      }))
       
       return updatedConversation
     } catch (error) {

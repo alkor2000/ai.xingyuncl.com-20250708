@@ -29,8 +29,7 @@ import {
   PlusOutlined,
   LoadingOutlined,
   StopOutlined,
-  SaveOutlined,
-  PushpinOutlined
+  SaveOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { debounce } from 'lodash'
@@ -235,11 +234,11 @@ const Chat = () => {
   // 🔥 判断是否正在生成（包括流式和非流式）
   const isGenerating = typing || isStreaming
 
-  // 🔥 组件加载时获取数据 - 添加自动选择逻辑
+  // 🔥 组件加载时获取数据 - 同时加载积分信息避免首次显示积分不足
   useEffect(() => {
-    // 并行加载所有必要数据，并自动选择第一个对话
+    // 并行加载所有必要数据
     Promise.all([
-      getConversations(false, true), // 第二个参数true表示自动选择
+      getConversations(),
       getAIModels(),
       getUserCredits() // 立即加载积分信息
     ]).catch(error => {
@@ -346,8 +345,7 @@ const Chat = () => {
         model_name: values.model_name || 'gpt-3.5-turbo',
         system_prompt: values.system_prompt,
         context_length: values.context_length || 20,
-        ai_temperature: parseFloat(values.ai_temperature) || 0.0,
-        priority: values.priority || 0
+        ai_temperature: parseFloat(values.ai_temperature) || 0.0
       })
       setIsModalVisible(false)
       form.resetFields()
@@ -409,8 +407,7 @@ const Chat = () => {
       model_name: conversation.model_name,
       system_prompt: conversation.system_prompt,
       context_length: conversation.context_length || 20,
-      ai_temperature: conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0,
-      priority: conversation.priority || 0
+      ai_temperature: conversation.ai_temperature !== undefined ? conversation.ai_temperature : 0.0
     })
     setIsModalVisible(true)
   }, [form])
@@ -678,8 +675,7 @@ const Chat = () => {
           onFinish={editingConversation ? handleUpdateConversation : handleCreateConversation}
           initialValues={{
             context_length: 20,
-            ai_temperature: 0.0,
-            priority: 0
+            ai_temperature: 0.0
           }}
         >
           <Form.Item
@@ -754,31 +750,6 @@ const Chat = () => {
             <Input
               placeholder="0.0"
               style={{ width: 200 }}
-            />
-          </Form.Item>
-
-          {/* 优先级设置 */}
-          <Form.Item
-            name="priority"
-            label={
-              <Space>
-                <PushpinOutlined style={{ color: '#fa541c' }} />
-                <span>{t('chat.settings.priority')}</span>
-                <Tooltip title={t('chat.settings.priority.tooltip')}>
-                  <InfoCircleOutlined style={{ color: '#999' }} />
-                </Tooltip>
-              </Space>
-            }
-            rules={[
-              { type: 'number', min: 0, max: 10, message: t('chat.settings.priority.range') }
-            ]}
-            extra={t('chat.settings.priority.tip')}
-          >
-            <InputNumber
-              min={0}
-              max={10}
-              style={{ width: 200 }}
-              placeholder="0"
             />
           </Form.Item>
 

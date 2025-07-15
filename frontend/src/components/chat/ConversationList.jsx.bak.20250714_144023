@@ -4,15 +4,13 @@ import {
   List, 
   Empty, 
   Spin, 
-  Dropdown,
-  Tag
+  Dropdown
 } from 'antd'
 import {
   PlusOutlined,
   MoreOutlined,
   SettingOutlined,
-  DeleteOutlined,
-  PushpinOutlined
+  DeleteOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -52,14 +50,6 @@ const ConversationList = React.memo(({
         }
       ]
     }
-  }
-
-  // 获取优先级标签颜色
-  const getPriorityColor = (priority) => {
-    if (priority >= 8) return 'red'
-    if (priority >= 5) return 'orange'
-    if (priority >= 3) return 'blue'
-    return 'default'
   }
 
   return (
@@ -111,38 +101,18 @@ const ConversationList = React.memo(({
                     <List.Item.Meta
                       title={
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ 
+                          <span style={{ 
+                            fontSize: 14, 
+                            fontWeight: isSelected ? 600 : 500,
+                            color: isSelected ? '#1677ff' : 'inherit',
                             flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            overflow: 'hidden'
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            marginRight: 8
                           }}>
-                            {conv.priority > 0 && (
-                              <Tag 
-                                color={getPriorityColor(conv.priority)}
-                                style={{ 
-                                  margin: 0,
-                                  fontSize: 11,
-                                  padding: '0 4px',
-                                  lineHeight: '18px'
-                                }}
-                              >
-                                <PushpinOutlined style={{ fontSize: 10, marginRight: 2 }} />
-                                {conv.priority}
-                              </Tag>
-                            )}
-                            <span style={{ 
-                              fontSize: 14, 
-                              fontWeight: isSelected ? 600 : 500,
-                              color: isSelected ? '#1677ff' : 'inherit',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {conv.title}
-                            </span>
-                          </div>
+                            {conv.title}
+                          </span>
                           <Dropdown 
                             menu={getConversationMenu(conv)} 
                             trigger={['click']}

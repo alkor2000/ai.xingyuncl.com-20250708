@@ -82,5 +82,10 @@
   "chat.draft.saved": "Draft saved",
   "chat.draft.unsaved": "Draft not saved",
   
-  "chat.tokens": "{{count}} tokens"
+  "chat.tokens": "{{count}} tokens",
+  
+  "chat.settings.priority": "Priority",
+  "chat.settings.priority.tooltip": "Set conversation priority (0-10), higher numbers appear first",
+  "chat.settings.priority.range": "Priority must be between 0-10",
+  "chat.settings.priority.tip": "0 is default priority, 10 is highest priority"
 }

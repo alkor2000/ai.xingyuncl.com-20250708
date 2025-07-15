@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存和优先级排序
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出和缓存
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -8,7 +8,6 @@ const Message = require('../models/Message');
 const AIService = require('../services/aiService');
 const AIStreamService = require('../services/aiStreamService');
 const CacheService = require('../services/cacheService');
-const StatsService = require('../services/statsService');
 const User = require('../models/User');
 const AIModel = require('../models/AIModel');
 const ResponseHelper = require('../utils/response');
@@ -44,13 +43,13 @@ class ChatController {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置和优先级
+   * 创建新会话 - 支持上下文数量和temperature设置
    * POST /api/chat/conversations
    */
   static async createConversation(req, res) {
     try {
       const userId = req.user.id;
-      const { title, model_name, system_prompt, context_length, ai_temperature, priority } = req.body;
+      const { title, model_name, system_prompt, context_length, ai_temperature } = req.body;
 
       logger.info('开始创建会话', { 
         userId, 
@@ -58,7 +57,6 @@ class ChatController {
         model_name, 
         context_length,
         ai_temperature,
-        priority,
         hasSystemPrompt: !!system_prompt 
       });
 
@@ -90,8 +88,7 @@ class ChatController {
         model_name: model_name || 'gpt-3.5-turbo',
         system_prompt: system_prompt || null,
         context_length: validContextLength,
-        ai_temperature: validTemperature,
-        priority: parseInt(priority) || 0
+        ai_temperature: validTemperature
       };
 
       logger.info('会话数据准备完成', conversationData);
@@ -103,8 +100,7 @@ class ChatController {
         conversationId: conversation.id,
         modelName: conversation.model_name,
         contextLength: conversation.context_length,
-        aiTemperature: conversation.ai_temperature,
-        priority: conversation.priority
+        aiTemperature: conversation.ai_temperature
       });
 
       return ResponseHelper.success(res, conversation.toJSON(), '会话创建成功', 201);
@@ -159,14 +155,14 @@ class ChatController {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature和优先级更新
+   * 更新会话 - 支持上下文数量和temperature更新
    * PUT /api/chat/conversations/:id
    */
   static async updateConversation(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { title, model_name, system_prompt, is_pinned, context_length, ai_temperature, priority } = req.body;
+      const { title, model_name, system_prompt, is_pinned, context_length, ai_temperature } = req.body;
 
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -204,11 +200,6 @@ class ChatController {
         if (validTemperature < 0.0) validTemperature = 0.0;
         if (validTemperature > 1.0) validTemperature = 1.0;
         updateData.ai_temperature = validTemperature;
-      }
-
-      // 验证优先级
-      if (priority !== undefined) {
-        updateData.priority = parseInt(priority) || 0;
       }
 
       const updatedConversation = await conversation.update(updateData);
@@ -473,15 +464,6 @@ class ChatController {
                 // 清除消息缓存（有新消息）
                 await CacheService.clearConversationCache(userId, id);
 
-                // 更新统计数据
-                await StatsService.updateUserDailyStats(userId, {
-                  messages: 1,
-                  tokens: totalTokens
-                });
-                
-                // 记录模型使用
-                await StatsService.recordModelUsage(conversation.model_name);
-
                 // 如果是第一条消息且标题是默认的，自动生成标题
                 if (conversation.title === 'New Chat' && conversationBackup.message_count === 0) {
                   const autoTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
@@ -547,15 +529,6 @@ class ChatController {
 
           // 清除消息缓存（有新消息）
           await CacheService.clearConversationCache(userId, id);
-
-          // 更新统计数据
-          await StatsService.updateUserDailyStats(userId, {
-            messages: 1,
-            tokens: totalTokens
-          });
-          
-          // 记录模型使用
-          await StatsService.recordModelUsage(conversation.model_name);
 
           // 如果是第一条消息且标题是默认的，自动生成标题
           if (conversation.title === 'New Chat' && conversationBackup.message_count === 0) {
