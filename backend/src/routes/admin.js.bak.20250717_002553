@@ -79,17 +79,6 @@ router.put('/users/:id',
 );
 
 /**
- * @route PUT /api/admin/users/:id/password
- * @desc 重置用户密码
- * @access Admin / SuperAdmin
- */
-router.put('/users/:id/password',
-  adminLimiter,
-  requirePermission('user.manage'),
-  AdminController.resetUserPassword
-);
-
-/**
  * @route DELETE /api/admin/users/:id
  * @desc 删除用户
  * @access Admin / SuperAdmin

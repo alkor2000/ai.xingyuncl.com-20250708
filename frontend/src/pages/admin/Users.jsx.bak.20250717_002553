@@ -163,19 +163,10 @@ const Users = () => {
   // 更新用户（包括积分管理）
   const handleUpdateUser = async (values) => {
     try {
-      const { creditsOperation, creditsAmount, creditsReason, newPassword, confirmPassword, ...updateData } = values
+      const { creditsOperation, creditsAmount, creditsReason, ...updateData } = values
       
       // 更新基本信息
       await updateUser(editingUser.id, updateData)
-      
-      
-      // 处理密码重置
-      if (newPassword) {
-        const { resetUserPassword } = useAdminStore.getState()
-        await resetUserPassword(editingUser.id, newPassword)
-      }
-      
-
       
       // 处理积分操作
       if (creditsOperation && creditsAmount && creditsReason) {
@@ -957,49 +948,6 @@ const Users = () => {
                 </Timeline>
               </TabPane>
             )}
-
-            {editingUser && (
-              <TabPane tab={t('admin.users.tabs.password')} key="password">
-                <Alert
-                  message={t('admin.users.password.resetWarning')}
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-                
-                <Form.Item
-                  name="newPassword"
-                  label={t('admin.users.password.new')}
-                  rules={[
-                    { min: 6, message: t('admin.users.password.min')} 
-                  ]}
-                >
-                  <Input.Password placeholder={t('admin.users.password.newPlaceholder')} />
-                </Form.Item>
-
-                <Form.Item
-                  name="confirmPassword"
-                  label={t('admin.users.password.confirm')}
-                  dependencies={['newPassword']}
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      validator(_, value) {
-                        if (!getFieldValue('newPassword')) {
-                          return Promise.resolve()
-                        }
-                        if (!value || getFieldValue('newPassword') === value) {
-                          return Promise.resolve()
-                        }
-                        return Promise.reject(new Error(t('admin.users.password.mismatch')))
-                      }
-                    })
-                  ]}
-                >
-                  <Input.Password placeholder={t('admin.users.password.confirmPlaceholder')} />
-                </Form.Item>
-              </TabPane>
-            )}
-
           </Tabs>
 
           <Form.Item style={{ marginTop: 24 }}>

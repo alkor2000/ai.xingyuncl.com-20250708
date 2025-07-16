@@ -168,15 +168,12 @@ const Users = () => {
       // 更新基本信息
       await updateUser(editingUser.id, updateData)
       
-      
       // 处理密码重置
       if (newPassword) {
         const { resetUserPassword } = useAdminStore.getState()
         await resetUserPassword(editingUser.id, newPassword)
       }
-      
 
-      
       // 处理积分操作
       if (creditsOperation && creditsAmount && creditsReason) {
         switch (creditsOperation) {
@@ -957,6 +954,41 @@ const Users = () => {
                 </Timeline>
               </TabPane>
             )}
+          </Tabs>
+
+          <Form.Item style={{ marginTop: 24 }}>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                {editingUser ? t('button.update') : t('button.create')}
+              </Button>
+              <Button onClick={() => {
+                setIsModalVisible(false)
+                setEditingUser(null)
+                form.resetFields()
+                setCreditHistoryData([])
+              }}>
+                {t('button.cancel')}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 创建/编辑分组弹窗 */}
+      <Modal
+        title={editingGroup ? t('admin.groups.editGroup') : t('admin.groups.createGroup')}
+        open={isGroupModalVisible}
+        onCancel={() => {
+          setIsGroupModalVisible(false)
+          setEditingGroup(null)
+          groupForm.resetFields()
+        }}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={groupForm}
+          layout="vertical"
 
             {editingUser && (
               <TabPane tab={t('admin.users.tabs.password')} key="password">
@@ -999,42 +1031,6 @@ const Users = () => {
                 </Form.Item>
               </TabPane>
             )}
-
-          </Tabs>
-
-          <Form.Item style={{ marginTop: 24 }}>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {editingUser ? t('button.update') : t('button.create')}
-              </Button>
-              <Button onClick={() => {
-                setIsModalVisible(false)
-                setEditingUser(null)
-                form.resetFields()
-                setCreditHistoryData([])
-              }}>
-                {t('button.cancel')}
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 创建/编辑分组弹窗 */}
-      <Modal
-        title={editingGroup ? t('admin.groups.editGroup') : t('admin.groups.createGroup')}
-        open={isGroupModalVisible}
-        onCancel={() => {
-          setIsGroupModalVisible(false)
-          setEditingGroup(null)
-          groupForm.resetFields()
-        }}
-        footer={null}
-        destroyOnClose
-      >
-        <Form
-          form={groupForm}
-          layout="vertical"
           onFinish={editingGroup ? handleUpdateGroup : handleCreateGroup}
         >
           <Form.Item

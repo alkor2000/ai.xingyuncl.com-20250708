@@ -561,49 +561,6 @@ class AdminController {
   /**
    * 删除用户分组
    */
-  /**
-   * 重置用户密码
-   * PUT /api/admin/users/:id/password
-   */
-  static async resetUserPassword(req, res) {
-    try {
-      const { id } = req.params;
-      const { newPassword } = req.body;
-
-      if (!newPassword || newPassword.length < 6) {
-        return ResponseHelper.validation(res, ['密码长度至少6位']);
-      }
-
-      const user = await User.findById(id);
-      if (!user) {
-        return ResponseHelper.notFound(res, '用户不存在');
-      }
-
-      // 加密新密码
-      const bcrypt = require('bcryptjs');
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-      // 更新密码
-      await user.update({ password_hash: hashedPassword });
-
-      logger.info('管理员重置用户密码成功', { 
-        adminId: req.user.id,
-        targetUserId: id,
-        targetEmail: user.email
-      });
-
-      return ResponseHelper.success(res, null, '密码重置成功');
-    } catch (error) {
-      logger.error('重置用户密码失败', { 
-        adminId: req.user?.id, 
-        userId: req.params.id,
-        error: error.message 
-      });
-      return ResponseHelper.error(res, '密码重置失败');
-    }
-  }
-
-
   static async deleteUserGroup(req, res) {
     try {
       const { id } = req.params;

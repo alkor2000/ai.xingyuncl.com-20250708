@@ -89,6 +89,32 @@ const useAdminStore = create((set, get) => ({
   },
   
   // 更新用户 (支持分组更新)
+  // 重置用户密码
+  resetUserPassword: async (userId, newPassword) => {
+    try {
+      const response = await apiClient.put(`/admin/users/${userId}/password`, { newPassword })
+      return response.data
+    } catch (error) {
+      console.error('重置用户密码失败:', error)
+      throw error
+    }
+  },
+
+
+    // 重置用户密码
+  resetUserPassword: async (userId, newPassword) => {
+    try {
+      const response = await apiClient.put(`/admin/users/${userId}/password`, { newPassword })
+      return response.data
+    } catch (error) {
+      console.error('重置用户密码失败:', error)
+      throw error
+    }
+  },
+
+
+
+
   updateUser: async (userId, userData) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}`, userData)

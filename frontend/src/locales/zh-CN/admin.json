@@ -36,6 +36,7 @@
   
   "admin.users.tabs.basic": "基本信息",
   "admin.users.tabs.credits": "积分管理",
+  "admin.users.tabs.password": "重置密码",
   
   "admin.users.form.email": "邮箱地址",
   "admin.users.form.email.required": "请输入邮箱地址",
@@ -77,6 +78,17 @@
   "admin.users.credits.operator": "操作人",
   "admin.users.credits.balanceAfter": "操作后余额",
   "admin.users.credits.noHistory": "暂无积分修改记录",
+  
+  "admin.users.password": "密码管理",
+  "admin.users.password.resetWarning": "⚠️ 重置密码后，用户需要使用新密码登录",
+  "admin.users.password.new": "新密码",
+  "admin.users.password.newPlaceholder": "请输入新密码",
+  "admin.users.password.confirm": "确认新密码",
+  "admin.users.password.confirmPlaceholder": "请再次输入新密码",
+  "admin.users.password.min": "密码长度至少6位",
+  "admin.users.password.mismatch": "两次输入的密码不一致",
+  "admin.users.password.reset.success": "密码重置成功",
+  "admin.users.password.reset.failed": "密码重置失败",
   
   "admin.credits.recharge": "积分充值",
   "admin.credits.deduct": "积分扣减",

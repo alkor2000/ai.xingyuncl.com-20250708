@@ -36,6 +36,7 @@
   
   "admin.users.tabs.basic": "Basic Info",
   "admin.users.tabs.credits": "Credit Management",
+  "admin.users.tabs.password": "Reset Password",
   
   "admin.users.form.email": "Email",
   "admin.users.form.email.required": "Please enter email",
@@ -77,6 +78,17 @@
   "admin.users.credits.operator": "Operator",
   "admin.users.credits.balanceAfter": "Balance After",
   "admin.users.credits.noHistory": "No credit history",
+  
+  "admin.users.password": "Password Management",
+  "admin.users.password.resetWarning": "⚠️ After resetting the password, the user needs to log in with the new password",
+  "admin.users.password.new": "New Password",
+  "admin.users.password.newPlaceholder": "Enter new password",
+  "admin.users.password.confirm": "Confirm Password",
+  "admin.users.password.confirmPlaceholder": "Re-enter new password",
+  "admin.users.password.min": "Password must be at least 6 characters",
+  "admin.users.password.mismatch": "Passwords do not match",
+  "admin.users.password.reset.success": "Password reset successfully",
+  "admin.users.password.reset.failed": "Failed to reset password",
   
   "admin.credits.recharge": "Recharge Credits",
   "admin.credits.deduct": "Deduct Credits",
