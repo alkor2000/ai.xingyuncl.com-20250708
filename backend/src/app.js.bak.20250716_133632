@@ -1,0 +1,491 @@
+/**
+ * AI Platform 主应用入口 - 支持WebSocket和动态模块代理
+ */
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const compression = require('compression');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+// 导入配置和工具
+const config = require('./config');
+const logger = require('./utils/logger');
+const dbConnection = require('./database/connection');
+const redisConnection = require('./database/redis');
+const StatsService = require('./services/statsService');
+
+// 导入路由
+const authRoutes = require('./routes/auth');
+const chatRoutes = require('./routes/chat');
+const adminRoutes = require('./routes/admin');
+const statsRoutes = require('./routes/stats');
+
+// 导入动态模块代理管理器
+const moduleProxyManager = require('./middleware/moduleProxy');
+
+// 导入认证中间件用于Socket.IO
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
+
+class App {
+  constructor() {
+    this.app = express();
+    this.server = null;
+    this.io = null;
+    this.onlineUsers = new Map(); // userId -> socketId
+  }
+
+  /**
+   * 初始化应用
+   */
+  async initialize() {
+    try {
+      logger.info('开始初始化AI Platform应用...');
+
+      // 初始化数据库连接
+      await this.initializeDatabase();
+      
+      // 初始化Redis连接
+      await this.initializeRedis();
+
+      // 配置Express中间件
+      this.setupMiddleware();
+
+      // 配置路由
+      this.setupRoutes();
+
+      // 初始化动态模块代理
+      await this.initializeModuleProxy();
+
+      // 配置错误处理
+      this.setupErrorHandling();
+
+      // 创建HTTP服务器
+      this.server = createServer(this.app);
+
+      // 初始化Socket.IO
+      this.initializeSocketIO();
+
+      // 启动定时任务
+      this.startScheduledTasks();
+
+      logger.info('AI Platform应用初始化完成');
+    } catch (error) {
+      logger.error('应用初始化失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 初始化数据库连接
+   */
+  async initializeDatabase() {
+    try {
+      await dbConnection.initialize();
+      logger.info('数据库连接初始化成功');
+    } catch (error) {
+      logger.error('数据库连接初始化失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 初始化Redis连接
+   */
+  async initializeRedis() {
+    try {
+      await redisConnection.initialize();
+      logger.info('Redis连接初始化成功');
+    } catch (error) {
+      logger.error('Redis连接初始化失败:', error);
+      // Redis失败不影响主服务，仅记录警告
+      logger.warn('应用将在无Redis缓存的情况下运行');
+    }
+  }
+
+  /**
+   * 初始化动态模块代理
+   */
+  async initializeModuleProxy() {
+    try {
+      await moduleProxyManager.initialize(this.app);
+      logger.info('动态模块代理初始化成功');
+    } catch (error) {
+      logger.error('动态模块代理初始化失败:', error);
+      // 代理失败不影响主服务，仅记录警告
+      logger.warn('应用将在无动态模块代理的情况下运行');
+    }
+  }
+
+  /**
+   * 初始化Socket.IO
+   */
+  initializeSocketIO() {
+    this.io = new Server(this.server, {
+      cors: config.security.cors,
+      path: '/socket.io/',
+      transports: ['websocket', 'polling']
+    });
+
+    // Socket.IO认证中间件
+    this.io.use(async (socket, next) => {
+      try {
+        const token = socket.handshake.auth.token || socket.handshake.query.token;
+        
+        if (!token) {
+          return next(new Error('Authentication error: No token'));
+        }
+
+        const decoded = jwt.verify(token, config.auth.jwt.accessSecret);
+        
+        if (decoded.type !== 'access') {
+          return next(new Error('Authentication error: Invalid token type'));
+        }
+
+        const user = await User.findById(decoded.userId);
+        if (!user || user.status !== 'active') {
+          return next(new Error('Authentication error: User not found or inactive'));
+        }
+
+        socket.userId = user.id;
+        socket.user = user;
+        next();
+      } catch (err) {
+        logger.error('Socket.IO认证失败:', err);
+        next(new Error('Authentication error'));
+      }
+    });
+
+    // Socket.IO连接处理
+    this.io.on('connection', (socket) => {
+      const userId = socket.userId;
+      
+      logger.info('用户WebSocket连接', { userId, socketId: socket.id });
+      
+      // 记录在线用户
+      this.onlineUsers.set(userId, socket.id);
+      
+      // 更新在线状态
+      StatsService.updateUserOnlineStatus(userId, true);
+      
+      // 加入用户房间
+      socket.join(`user:${userId}`);
+      
+      // 广播在线用户数更新
+      this.broadcastOnlineCount();
+
+      // 处理断开连接
+      socket.on('disconnect', () => {
+        logger.info('用户WebSocket断开', { userId, socketId: socket.id });
+        
+        this.onlineUsers.delete(userId);
+        StatsService.updateUserOnlineStatus(userId, false);
+        
+        // 广播在线用户数更新
+        this.broadcastOnlineCount();
+      });
+
+      // 处理心跳
+      socket.on('heartbeat', () => {
+        StatsService.updateUserOnlineStatus(userId, true);
+        socket.emit('heartbeat:ack', { timestamp: new Date().toISOString() });
+      });
+
+      // 处理获取统计数据请求
+      socket.on('stats:get', async () => {
+        const stats = await StatsService.getRealtimeStats();
+        socket.emit('stats:update', stats);
+      });
+    });
+
+    logger.info('Socket.IO初始化完成');
+  }
+
+  /**
+   * 广播在线用户数
+   */
+  async broadcastOnlineCount() {
+    const count = await StatsService.getOnlineCount();
+    this.io.emit('online:count', { count });
+  }
+
+  /**
+   * 广播实时统计更新
+   */
+  async broadcastStatsUpdate() {
+    const stats = await StatsService.getRealtimeStats();
+    this.io.emit('stats:update', stats);
+  }
+
+  /**
+   * 启动定时任务
+   */
+  startScheduledTasks() {
+    // 每30秒广播一次统计数据
+    setInterval(() => {
+      this.broadcastStatsUpdate();
+    }, 30000);
+
+    // 每分钟清理一次过期的在线状态
+    setInterval(() => {
+      StatsService.cleanupExpiredOnlineStatus();
+    }, 60000);
+
+    logger.info('定时任务启动完成');
+  }
+
+  /**
+   * 配置Express中间件
+   */
+  setupMiddleware() {
+    // 信任代理
+    this.app.set('trust proxy', 1);
+
+    // 安全头部中间件
+    this.app.use(helmet(config.security.helmet));
+
+    // CORS跨域中间件
+    this.app.use(cors(config.security.cors));
+
+    // Gzip压缩中间件
+    this.app.use(compression());
+
+    // Cookie解析中间件
+    this.app.use(cookieParser());
+
+    // JSON解析中间件
+    this.app.use(express.json({ limit: '10mb' }));
+
+    // URL编码解析中间件
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // HTTP请求日志
+    this.app.use(morgan('combined', {
+      stream: logger.stream,
+      skip: (req, res) => req.url === '/health' || req.url === '/favicon.ico'
+    }));
+
+    logger.info('Express中间件配置完成');
+  }
+
+  /**
+   * 配置路由
+   */
+  setupRoutes() {
+    // 健康检查接口
+    this.app.get('/health', (req, res) => {
+      const dbStatus = dbConnection.getStatus();
+      const redisStatus = redisConnection.getStatus();
+      
+      res.json({
+        success: true,
+        message: 'AI Platform服务运行正常',
+        data: {
+          timestamp: new Date().toISOString(),
+          environment: config.app.env,
+          version: config.app.version,
+          database: dbStatus,
+          redis: redisStatus,
+          websocket: this.io ? 'connected' : 'disconnected',
+          onlineUsers: this.onlineUsers.size,
+          memory: process.memoryUsage(),
+          uptime: process.uptime()
+        }
+      });
+    });
+
+    // API根路径信息
+    this.app.get('/api', (req, res) => {
+      res.json({
+        success: true,
+        message: 'AI Platform API',
+        data: {
+          name: config.app.name,
+          version: config.app.version,
+          environment: config.app.env,
+          timestamp: new Date().toISOString()
+        }
+      });
+    });
+
+    // 认证相关路由
+    this.app.use('/api/auth', authRoutes);
+    
+    // AI对话相关路由
+    this.app.use('/api/chat', chatRoutes);
+    
+    // 管理员相关路由
+    this.app.use('/api/admin', adminRoutes);
+    
+    // 统计相关路由
+    this.app.use('/api/stats', statsRoutes);
+
+    // 模块代理信息接口（调试用）
+    this.app.get('/api/admin/proxy-info', (req, res) => {
+      const proxyInfo = moduleProxyManager.getProxyInfo();
+      res.json({
+        success: true,
+        message: '获取代理信息成功',
+        data: proxyInfo
+      });
+    });
+
+    logger.info('路由配置完成');
+  }
+
+  /**
+   * 配置错误处理
+   */
+  setupErrorHandling() {
+    // 404错误处理
+    this.app.use((req, res, next) => {
+      res.status(404).json({
+        success: false,
+        code: 404,
+        message: '请求的资源不存在',
+        data: null,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // 全局错误处理
+    this.app.use((err, req, res, next) => {
+      logger.error('全局错误处理:', err);
+      
+      res.status(err.status || 500).json({
+        success: false,
+        code: err.status || 500,
+        message: err.message || '内部服务器错误',
+        data: null,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    logger.info('错误处理配置完成');
+  }
+
+  /**
+   * 启动服务器
+   */
+  async start() {
+    try {
+      const port = config.app.port;
+      
+      this.server.listen(port, () => {
+        logger.info(`AI Platform服务器启动成功 - 端口:${port}`);
+        
+        console.log(`
+🚀 AI Platform 服务器启动成功!
+📡 端口: ${port}
+🌍 域名: ${config.app.domain}
+🔧 环境: ${config.app.env}
+📋 进程ID: ${process.pid}
+⏰ 启动时间: ${new Date().toLocaleString()}
+🔌 WebSocket: 已启用
+🔀 动态代理: 已启用
+
+API地址: http://localhost:${port}/api
+健康检查: http://localhost:${port}/health
+WebSocket: ws://localhost:${port}/socket.io/
+代理信息: http://localhost:${port}/api/admin/proxy-info
+        `);
+      });
+
+      // 处理服务器错误
+      this.server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          logger.error(`端口 ${port} 已被占用`);
+        } else {
+          logger.error('服务器启动失败:', error);
+        }
+        process.exit(1);
+      });
+
+      // 优雅关闭处理
+      process.on('SIGTERM', async () => {
+        logger.info('收到SIGTERM信号，开始优雅关闭...');
+        await this.gracefulShutdown();
+      });
+
+      process.on('SIGINT', async () => {
+        logger.info('收到SIGINT信号，开始优雅关闭...');
+        await this.gracefulShutdown();
+      });
+
+    } catch (error) {
+      logger.error('启动服务器失败:', error);
+      process.exit(1);
+    }
+  }
+  
+  /**
+   * 优雅关闭
+   */
+  async gracefulShutdown() {
+    try {
+      // 关闭Socket.IO
+      if (this.io) {
+        this.io.close();
+      }
+
+      // 关闭HTTP服务器
+      if (this.server) {
+        this.server.close();
+      }
+      
+      // 关闭数据库连接
+      await dbConnection.close();
+      
+      // 关闭Redis连接
+      await redisConnection.close();
+      
+      logger.info('服务器已优雅关闭');
+      process.exit(0);
+    } catch (error) {
+      logger.error('优雅关闭失败:', error);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * 获取Socket.IO实例（供其他模块使用）
+   */
+  getIO() {
+    return this.io;
+  }
+
+  /**
+   * 获取Express应用实例（供其他模块使用）
+   */
+  getApp() {
+    return this.app;
+  }
+}
+
+// 创建并启动应用
+async function bootstrap() {
+  const app = new App();
+  
+  try {
+    await app.initialize();
+    await app.start();
+    
+    // 导出app实例供其他模块使用
+    module.exports.appInstance = app;
+  } catch (error) {
+    logger.error('应用启动失败:', error);
+    process.exit(1);
+  }
+}
+
+// 如果直接运行此文件，则启动应用
+if (require.main === module) {
+  bootstrap();
+}
+
+module.exports = App;

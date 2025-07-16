@@ -1,190 +1,100 @@
-import React, { useMemo } from 'react'
+import React, { useState } from 'react'
+import { Typography, Image, Spin } from 'antd'
+import { UserOutlined, RobotOutlined, LoadingOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Button, message } from 'antd'
-import { CopyOutlined, CheckOutlined } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import './MessageContent.less'
 
-const MessageContent = React.memo(({ content, role, isStreaming = false }) => {
-  const [copiedCode, setCopiedCode] = React.useState({})
-  const { t } = useTranslation()
+const { Text } = Typography
 
-  const handleCopyCode = (code, index) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedCode({ ...copiedCode, [index]: true })
-      message.success(t('chat.message.copy.success'))
-      setTimeout(() => {
-        setCopiedCode({ ...copiedCode, [index]: false })
-      }, 2000)
-    }).catch(() => {
-      message.error(t('chat.message.copy.failed'))
-    })
-  }
-
-  // 处理流式内容，确保未完成的代码块也能渲染
-  const processedContent = useMemo(() => {
-    if (!isStreaming) return content
-
-    // 计算开始标记的数量
-    const codeBlockStarts = (content.match(/```/g) || []).length
-    
-    // 如果代码块标记是奇数，说明有未闭合的代码块
-    if (codeBlockStarts % 2 === 1) {
-      // 添加临时的结束标记，让代码块能够渲染
-      return content + '\n```'
-    }
-    
-    return content
-  }, [content, isStreaming])
-
-  const components = {
+const MessageContent = ({ message, isStreaming = false }) => {
+  const [imageLoading, setImageLoading] = useState(true)
+  
+  const isUser = message.role === 'user'
+  
+  // Markdown 渲染配置
+  const markdownComponents = {
     code({ node, inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '')
-      const codeString = String(children).replace(/\n$/, '')
-      const codeIndex = `${match?.[1] || 'text'}-${codeString.substring(0, 50)}`
-      
-      // 如果是行内代码
-      if (inline) {
-        return (
-          <code className="inline-code" {...props}>
-            {children}
-          </code>
-        )
-      }
-      
-      // 代码块
-      return (
-        <div className="code-block-wrapper">
-          <div className="code-block-header">
-            {/* 如果语言是text，不显示语言标记 */}
-            {match?.[1] && match[1] !== 'text' && (
-              <span className="code-language">{match[1]}</span>
-            )}
-            <Button
-              type="text"
-              size="small"
-              icon={copiedCode[codeIndex] ? <CheckOutlined /> : <CopyOutlined />}
-              onClick={() => handleCopyCode(codeString, codeIndex)}
-              className="copy-button"
-            >
-              {copiedCode[codeIndex] ? t('chat.message.copied') : t('chat.message.copy')}
-            </Button>
-          </div>
-          <SyntaxHighlighter
-            style={oneDark}
-            language={match?.[1] || 'text'}
-            PreTag="div"
-            customStyle={{
-              margin: 0,
-              borderRadius: '0 0 6px 6px',
-              fontSize: '14px'
-            }}
-            {...props}
-          >
-            {codeString}
-          </SyntaxHighlighter>
-        </div>
-      )
-    },
-    p({ children }) {
-      return <p className="message-paragraph">{children}</p>
-    },
-    ul({ children }) {
-      return <ul className="message-list">{children}</ul>
-    },
-    ol({ children }) {
-      return <ol className="message-list message-list-ordered">{children}</ol>
-    },
-    li({ children }) {
-      return <li className="message-list-item">{children}</li>
-    },
-    blockquote({ children }) {
-      return <blockquote className="message-blockquote">{children}</blockquote>
-    },
-    h1({ children }) {
-      return <h1 className="message-heading message-h1">{children}</h1>
-    },
-    h2({ children }) {
-      return <h2 className="message-heading message-h2">{children}</h2>
-    },
-    h3({ children }) {
-      return <h3 className="message-heading message-h3">{children}</h3>
-    },
-    h4({ children }) {
-      return <h4 className="message-heading message-h4">{children}</h4>
-    },
-    h5({ children }) {
-      return <h5 className="message-heading message-h5">{children}</h5>
-    },
-    h6({ children }) {
-      return <h6 className="message-heading message-h6">{children}</h6>
-    },
-    table({ children }) {
-      return (
-        <div className="table-wrapper">
-          <table className="message-table">{children}</table>
-        </div>
-      )
-    },
-    thead({ children }) {
-      return <thead className="message-table-head">{children}</thead>
-    },
-    tbody({ children }) {
-      return <tbody className="message-table-body">{children}</tbody>
-    },
-    tr({ children }) {
-      return <tr className="message-table-row">{children}</tr>
-    },
-    th({ children }) {
-      return <th className="message-table-header">{children}</th>
-    },
-    td({ children }) {
-      return <td className="message-table-cell">{children}</td>
-    },
-    a({ href, children }) {
-      return (
-        <a 
-          href={href} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="message-link"
+      return !inline && match ? (
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+          {...props}
         >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      ) : (
+        <code className={className} {...props}>
           {children}
-        </a>
+        </code>
       )
-    },
-    hr() {
-      return <hr className="message-divider" />
-    },
-    pre({ children }) {
-      // 对于pre标签，如果children是code组件，则直接返回children
-      // 这样可以避免额外的包装
-      if (React.isValidElement(children) && children.type === 'code') {
-        return <>{children}</>
-      }
-      return <pre className="message-pre">{children}</pre>
     }
   }
-
+  
   return (
-    <div className={`message-content ${isStreaming ? 'streaming' : ''}`}>
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        components={components}
-      >
-        {processedContent}
-      </ReactMarkdown>
+    <div className={`message-content ${isUser ? 'user-message' : 'assistant-message'}`}>
+      <div className="message-avatar">
+        {isUser ? <UserOutlined /> : <RobotOutlined />}
+      </div>
+      
+      <div className="message-body">
+        {/* 显示图片（如果有） */}
+        {message.file && (
+          <div className="message-image">
+            <Image
+              src={message.file.url}
+              alt={message.file.original_name}
+              width={300}
+              placeholder={
+                <div className="image-loading">
+                  <Spin />
+                </div>
+              }
+              onLoad={() => setImageLoading(false)}
+              onError={() => setImageLoading(false)}
+            />
+            <Text type="secondary" className="image-name">
+              {message.file.original_name}
+            </Text>
+          </div>
+        )}
+        
+        {/* 消息文本内容 */}
+        <div className="message-text">
+          {isUser ? (
+            <Text>{message.content}</Text>
+          ) : (
+            <>
+              {isStreaming && message.streaming ? (
+                <div className="streaming-content">
+                  <ReactMarkdown components={markdownComponents}>
+                    {message.content || ''}
+                  </ReactMarkdown>
+                  <span className="streaming-cursor">
+                    <LoadingOutlined />
+                  </span>
+                </div>
+              ) : (
+                <ReactMarkdown components={markdownComponents}>
+                  {message.content}
+                </ReactMarkdown>
+              )}
+            </>
+          )}
+        </div>
+        
+        {/* 消息时间 */}
+        <div className="message-time">
+          <Text type="secondary" className="time-text">
+            {new Date(message.created_at).toLocaleTimeString()}
+          </Text>
+        </div>
+      </div>
     </div>
   )
-}, (prevProps, nextProps) => {
-  // 自定义比较函数，只有内容或流式状态改变时才重新渲染
-  return prevProps.content === nextProps.content && 
-         prevProps.isStreaming === nextProps.isStreaming &&
-         prevProps.role === nextProps.role
-})
-
-MessageContent.displayName = 'MessageContent'
+}
 
 export default MessageContent

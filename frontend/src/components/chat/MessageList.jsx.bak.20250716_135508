@@ -38,7 +38,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
         }}
         bodyStyle={{ padding: '12px 16px' }}
       >
-        <MessageContent message={msg} isStreaming={isStreamingMsg && isStreaming} />
+        <MessageContent content={msg.content} role={msg.role} isStreaming={isStreamingMsg && isStreaming} />
         
         {/* 流式加载指示器 - 去掉文字，只保留图标 */}
         {isStreamingMsg && isStreaming && (

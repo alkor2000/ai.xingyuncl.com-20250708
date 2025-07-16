@@ -1,11 +1,10 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序和图片上传
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存和优先级排序
  */
 
 const { v4: uuidv4 } = require('uuid');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
-const File = require('../models/File');
 const AIService = require('../services/aiService');
 const AIStreamService = require('../services/aiStreamService');
 const CacheService = require('../services/cacheService');
@@ -15,7 +14,6 @@ const AIModel = require('../models/AIModel');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
-const { getFileUrl } = require('../middleware/uploadMiddleware');
 
 class ChatController {
   /**
@@ -296,19 +294,7 @@ class ChatController {
         const cachedMessages = await CacheService.getCachedMessages(userId, id);
         if (cachedMessages) {
           logger.info('从缓存返回消息', { conversationId: id, count: cachedMessages.length });
-          
-          // 处理带图片的消息
-          const messagesWithFiles = await Promise.all(cachedMessages.map(async msg => {
-            if (msg.file_id) {
-              const file = await File.findById(msg.file_id);
-              if (file) {
-                msg.file = file.toJSON();
-              }
-            }
-            return msg;
-          }));
-          
-          return ResponseHelper.success(res, messagesWithFiles, '获取消息列表成功');
+          return ResponseHelper.success(res, cachedMessages, '获取消息列表成功');
         }
       }
 
@@ -319,24 +305,12 @@ class ChatController {
         order: 'ASC'
       });
 
-      // 处理带图片的消息
-      const messagesWithFiles = await Promise.all(result.messages.map(async msg => {
-        const msgData = msg.toJSON();
-        if (msgData.file_id) {
-          const file = await File.findById(msgData.file_id);
-          if (file) {
-            msgData.file = file.toJSON();
-          }
-        }
-        return msgData;
-      }));
-
       // 缓存消息（只缓存第一页）
-      if (page == 1 && messagesWithFiles.length > 0) {
-        await CacheService.cacheMessages(userId, id, messagesWithFiles);
+      if (page == 1 && result.messages.length > 0) {
+        await CacheService.cacheMessages(userId, id, result.messages);
       }
 
-      return ResponseHelper.paginated(res, messagesWithFiles, result.pagination, '获取消息列表成功');
+      return ResponseHelper.paginated(res, result.messages, result.pagination, '获取消息列表成功');
     } catch (error) {
       logger.error('获取会话消息失败', { 
         conversationId: req.params.id,
@@ -349,48 +323,7 @@ class ChatController {
   }
 
   /**
-   * 上传图片
-   * POST /api/chat/upload-image
-   */
-  static async uploadImage(req, res) {
-    try {
-      const userId = req.user.id;
-      
-      if (!req.file) {
-        return ResponseHelper.validation(res, ['请选择要上传的图片']);
-      }
-      
-      const { filename, originalname, mimetype, size, path: filePath } = req.file;
-      
-      // 创建文件记录
-      const file = await File.create({
-        user_id: userId,
-        filename: filename,
-        original_name: originalname,
-        mime_type: mimetype,
-        size: size,
-        path: filePath,
-        url: getFileUrl(filePath)
-      });
-      
-      logger.info('图片上传成功', {
-        userId,
-        fileId: file.id,
-        filename
-      });
-      
-      return ResponseHelper.success(res, file.toJSON(), '图片上传成功');
-    } catch (error) {
-      logger.error('图片上传失败', {
-        userId: req.user?.id,
-        error: error.message
-      });
-      return ResponseHelper.error(res, '图片上传失败');
-    }
-  }
-
-  /**
-   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片）
+   * 发送消息并获取AI回复 - 统一处理流式和非流式
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
@@ -422,19 +355,6 @@ class ChatController {
       const aiModel = await AIModel.findByName(conversation.model_name);
       if (!aiModel || !aiModel.is_active) {
         return ResponseHelper.error(res, '当前AI模型不可用');
-      }
-
-      // 如果有图片，检查模型是否支持
-      if (file_id) {
-        if (!aiModel.image_upload_enabled) {
-          return ResponseHelper.validation(res, ['当前AI模型不支持图片识别']);
-        }
-        
-        // 验证文件所有权
-        const fileOwnership = await File.checkOwnership(file_id, userId);
-        if (!fileOwnership) {
-          return ResponseHelper.forbidden(res, '无权使用此文件');
-        }
       }
 
       // 判断是否使用流式输出
@@ -469,8 +389,7 @@ class ChatController {
         modelName: conversation.model_name,
         useStream,
         requiredCredits,
-        currentBalance: user.getCredits(),
-        hasImage: !!file_id
+        currentBalance: user.getCredits()
       });
 
       // 预先扣减积分
@@ -495,7 +414,7 @@ class ChatController {
       // 获取会话历史消息
       const recentMessages = await Message.getRecentMessages(id);
       
-      // 构造AI请求消息（包含图片）
+      // 构造AI请求消息
       const aiMessages = [];
       
       if (conversation.system_prompt) {
@@ -505,27 +424,16 @@ class ChatController {
         });
       }
       
-      for (const msg of recentMessages) {
-        const aiMsg = msg.toAIFormat();
-        
-        // 如果消息有图片，添加图片信息
-        if (msg.file_id && aiModel.image_upload_enabled) {
-          const file = await File.findById(msg.file_id);
-          if (file) {
-            aiMsg.image_url = file.url;
-          }
-        }
-        
-        aiMessages.push(aiMsg);
-      }
+      recentMessages.forEach(msg => {
+        aiMessages.push(msg.toAIFormat());
+      });
 
       logger.info('发送AI请求', { 
         userId,
         conversationId: id,
         modelName: conversation.model_name,
         useStream,
-        messageCount: aiMessages.length,
-        hasImage: !!file_id
+        messageCount: aiMessages.length
       });
 
       // 处理流式或非流式响应
@@ -662,20 +570,9 @@ class ChatController {
             creditsConsumed
           });
 
-          // 处理响应中的文件信息
-          const userMessageData = userMessage.toJSON();
-          const assistantMessageData = assistantMessage.toJSON();
-          
-          if (userMessageData.file_id) {
-            const file = await File.findById(userMessageData.file_id);
-            if (file) {
-              userMessageData.file = file.toJSON();
-            }
-          }
-
           return ResponseHelper.success(res, {
-            user_message: userMessageData,
-            assistant_message: assistantMessageData,
+            user_message: userMessage.toJSON(),
+            assistant_message: assistantMessage.toJSON(),
             conversation: conversation.toJSON(),
             usage: {
               total_tokens: totalTokens,
@@ -726,22 +623,21 @@ class ChatController {
   }
 
   /**
-   * 获取可用的AI模型列表 - 增强积分和图片支持信息
+   * 获取可用的AI模型列表 - 增强积分信息
    * GET /api/chat/models
    */
   static async getModels(req, res) {
     try {
       const models = await AIService.getAvailableModels();
       
-      // 添加积分和图片支持信息到模型列表
-      const modelsWithInfo = models.map(model => ({
+      // 添加积分信息到模型列表
+      const modelsWithCredits = models.map(model => ({
         ...model,
         credits_per_chat: model.credits_per_chat || 10,
-        credits_display: `${model.credits_per_chat || 10} 积分/次`,
-        image_upload_enabled: model.image_upload_enabled || false
+        credits_display: `${model.credits_per_chat || 10} 积分/次`
       }));
       
-      return ResponseHelper.success(res, modelsWithInfo, '获取AI模型列表成功');
+      return ResponseHelper.success(res, modelsWithCredits, '获取AI模型列表成功');
     } catch (error) {
       logger.error('获取AI模型列表失败', { 
         userId: req.user?.id, 

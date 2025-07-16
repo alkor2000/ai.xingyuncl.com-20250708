@@ -110,16 +110,14 @@ class AIStreamService {
         endpoint: model.api_endpoint,
         messageCount: messages.length,
         temperature: finalTemperature,
-        supportsImages: model.image_upload_enabled,
-        provider: model.provider
+        supportsImages: model.image_upload_enabled
       });
 
       // 处理包含图片的消息
       const processedMessages = messages.map(msg => {
         if (msg.image_url && model.image_upload_enabled) {
           // 根据不同的模型API格式处理图片
-          if (model.provider === 'openai' || model.provider === 'google') {
-            // OpenAI 和 Google 格式相同
+          if (model.provider === 'openai') {
             return {
               role: msg.role,
               content: [
@@ -131,40 +129,19 @@ class AIStreamService {
             // Claude格式（如果需要）
             return {
               role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { 
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: msg.image_url
-                  }
-                }
-              ]
+              content: msg.content,
+              // Claude的图片处理方式可能不同
             };
           } else {
-            // 其他模型默认使用OpenAI格式
+            // 其他模型保持原格式
             return {
               role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
+              content: msg.content
             };
           }
         }
         return msg;
       });
-
-      // 记录处理后的消息（用于调试）
-      if (messages.some(m => m.image_url)) {
-        logger.info('处理后的图片消息', {
-          provider: model.provider,
-          processedMessage: JSON.stringify(processedMessages.find(m => 
-            Array.isArray(m.content) && m.content.some(c => c.type === 'image_url' || c.type === 'image')
-          ))
-        });
-      }
 
       // 构造请求数据
       const requestData = {

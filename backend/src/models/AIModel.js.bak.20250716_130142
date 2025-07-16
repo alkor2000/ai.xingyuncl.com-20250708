@@ -1,5 +1,5 @@
 /**
- * AI模型数据模型 - 支持积分消费配置、流式输出和图片上传
+ * AI模型数据模型 - 支持积分消费配置和流式输出（第1阶段：流式字段支持）
  */
 
 const dbConnection = require('../database/connection');
@@ -15,8 +15,7 @@ class AIModel {
     this.provider = data.provider || null;
     this.api_endpoint = data.api_endpoint || null;
     this.model_config = data.model_config || {};
-    this.stream_enabled = data.stream_enabled !== undefined ? data.stream_enabled : true;
-    this.image_upload_enabled = data.image_upload_enabled !== undefined ? data.image_upload_enabled : false; // 🆕 图片上传支持
+    this.stream_enabled = data.stream_enabled !== undefined ? data.stream_enabled : true; // 🆕 流式输出开关
     this.credits_per_chat = data.credits_per_chat || 10;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.sort_order = data.sort_order || 0;
@@ -85,7 +84,7 @@ class AIModel {
   }
 
   /**
-   * 创建新的AI模型配置（支持流式输出和图片上传配置）
+   * 创建新的AI模型配置（支持流式输出配置）
    */
   static async create(modelData) {
     try {
@@ -95,8 +94,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config = {},
-        stream_enabled = true,
-        image_upload_enabled = false, // 🆕 图片上传支持，默认关闭
+        stream_enabled = true, // 🆕 流式输出开关，默认启用
         credits_per_chat = 10,
         sort_order = 0 
       } = modelData;
@@ -106,8 +104,8 @@ class AIModel {
 
       const sql = `
         INSERT INTO ai_models (name, display_name, api_key, provider, api_endpoint, 
-                              model_config, stream_enabled, image_upload_enabled, credits_per_chat, sort_order, test_status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'untested')
+                              model_config, stream_enabled, credits_per_chat, sort_order, test_status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'untested')
       `;
       
       const { rows } = await dbConnection.query(sql, [
@@ -117,8 +115,7 @@ class AIModel {
         provider,
         api_endpoint, 
         JSON.stringify(model_config),
-        stream_enabled,
-        image_upload_enabled, // 🆕 图片上传配置
+        stream_enabled, // 🆕 流式输出配置
         credits_per_chat,
         sort_order
       ]);
@@ -129,7 +126,6 @@ class AIModel {
         display_name,
         provider,
         stream_enabled,
-        image_upload_enabled,
         credits_per_chat
       });
 
@@ -171,7 +167,7 @@ class AIModel {
   }
 
   /**
-   * 更新AI模型（支持流式输出和图片上传配置）
+   * 更新AI模型（支持流式输出配置）
    */
   async update(updateData) {
     try {
@@ -180,8 +176,7 @@ class AIModel {
         api_key,
         api_endpoint, 
         model_config, 
-        stream_enabled,
-        image_upload_enabled, // 🆕 图片上传开关
+        stream_enabled, // 🆕 流式输出开关
         credits_per_chat,
         is_active, 
         sort_order 
@@ -190,7 +185,7 @@ class AIModel {
       const sql = `
         UPDATE ai_models 
         SET display_name = ?, api_key = ?, api_endpoint = ?, 
-            model_config = ?, stream_enabled = ?, image_upload_enabled = ?, credits_per_chat = ?, is_active = ?, 
+            model_config = ?, stream_enabled = ?, credits_per_chat = ?, is_active = ?, 
             sort_order = ?, test_status = 'untested', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `;
@@ -200,8 +195,7 @@ class AIModel {
         api_key !== undefined ? api_key : this.api_key,
         api_endpoint !== undefined ? api_endpoint : this.api_endpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
-        stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
-        image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled, // 🆕 图片配置
+        stream_enabled !== undefined ? stream_enabled : this.stream_enabled, // 🆕 流式配置
         credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
         is_active !== undefined ? is_active : this.is_active,
         sort_order !== undefined ? sort_order : this.sort_order,
@@ -211,7 +205,6 @@ class AIModel {
       logger.info('AI模型更新成功', { 
         modelId: this.id,
         stream_enabled: stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
-        image_upload_enabled: image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
         credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat
       });
     } catch (error) {
@@ -355,14 +348,7 @@ class AIModel {
    * 检查是否支持流式输出
    */
   isStreamEnabled() {
-    return this.stream_enabled === true || this.stream_enabled === 1;
-  }
-
-  /**
-   * 检查是否支持图片上传
-   */
-  isImageUploadEnabled() {
-    return this.image_upload_enabled === true || this.image_upload_enabled === 1;
+    return this.stream_enabled === true;
   }
 
   /**
@@ -394,8 +380,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint ? '***已配置***' : null,
       model_config: this.model_config,
-      stream_enabled: this.stream_enabled,
-      image_upload_enabled: this.image_upload_enabled, // 🆕 图片上传状态
+      stream_enabled: this.stream_enabled, // 🆕 流式输出状态
       credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,
@@ -418,8 +403,7 @@ class AIModel {
       provider: this.provider,
       api_endpoint: this.api_endpoint,
       model_config: this.model_config,
-      stream_enabled: this.stream_enabled,
-      image_upload_enabled: this.image_upload_enabled, // 🆕 图片上传状态
+      stream_enabled: this.stream_enabled, // 🆕 流式输出状态
       credits_per_chat: this.credits_per_chat,
       is_active: this.is_active,
       sort_order: this.sort_order,

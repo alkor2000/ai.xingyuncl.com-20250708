@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import apiClient from '../utils/api';
+import socketManager from '../utils/socket';
 
 const useStatsStore = create((set, get) => ({
   // 状态
@@ -19,44 +20,40 @@ const useStatsStore = create((set, get) => ({
   },
   onlineCount: 0,
   loading: false,
-  connected: true, // 默认设为 true，避免显示离线状态
+  connected: false,
 
-  // 空的初始化函数（保持接口兼容）
+  // 初始化WebSocket连接
   initializeSocket: () => {
-    // 不再使用 WebSocket，改为定期轮询
-    get().startPolling();
+    const socket = socketManager.connect();
+    
+    if (!socket) return;
+
+    // 监听在线人数更新
+    socket.on('online:count', (data) => {
+      set({ onlineCount: data.count });
+    });
+
+    // 监听统计数据更新
+    socket.on('stats:update', (data) => {
+      set({ realtimeStats: data });
+    });
+
+    // 监听连接状态
+    socket.on('connect', () => {
+      set({ connected: true });
+      // 请求最新统计数据
+      socket.emit('stats:get');
+    });
+
+    socket.on('disconnect', () => {
+      set({ connected: false });
+    });
   },
 
-  // 空的断开函数（保持接口兼容）
+  // 断开WebSocket连接
   disconnectSocket: () => {
-    get().stopPolling();
-  },
-
-  // 轮询定时器
-  pollingTimer: null,
-
-  // 开始轮询
-  startPolling: () => {
-    const state = get();
-    
-    // 立即获取一次数据
-    state.fetchRealtimeStats();
-    
-    // 每30秒更新一次
-    const timer = setInterval(() => {
-      state.fetchRealtimeStats();
-    }, 30000);
-    
-    set({ pollingTimer: timer });
-  },
-
-  // 停止轮询
-  stopPolling: () => {
-    const state = get();
-    if (state.pollingTimer) {
-      clearInterval(state.pollingTimer);
-      set({ pollingTimer: null });
-    }
+    socketManager.disconnect();
+    set({ connected: false });
   },
 
   // 获取实时统计（通过API）
@@ -64,17 +61,15 @@ const useStatsStore = create((set, get) => ({
     set({ loading: true });
     try {
       const response = await apiClient.get('/stats/realtime');
-      const data = response.data.data;
       set({ 
-        realtimeStats: data,
-        onlineCount: data.online_users || 0,
+        realtimeStats: response.data.data,
         loading: false 
       });
-      return data;
+      return response.data.data;
     } catch (error) {
       console.error('获取实时统计失败:', error);
       set({ loading: false });
-      // 失败时不抛出错误，避免影响用户体验
+      throw error;
     }
   },
 

@@ -1,24 +1,24 @@
 /**
- * AI服务层
- * 负责与AI模型交互（非流式版本）
+ * AI服务
+ * 统一管理不同AI模型的调用 - 支持会话级temperature设置
  */
 
 const axios = require('axios');
+const config = require('../config');
 const AIModel = require('../models/AIModel');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
 class AIService {
   /**
-   * 发送消息到AI模型 - 支持会话级temperature和图片
+   * 发送消息到AI模型 - 支持会话级temperature
    */
   static async sendMessage(modelName, messages, options = {}) {
     try {
       logger.info('开始AI服务调用', { 
         model: modelName, 
         messageCount: messages.length,
-        customTemperature: options.temperature,
-        hasImages: messages.some(m => m.image_url)
+        customTemperature: options.temperature 
       });
 
       // 获取AI模型配置
@@ -51,7 +51,7 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 支持会话级temperature和图片
+   * 调用模型API - 支持会话级temperature
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -66,7 +66,7 @@ class AIService {
         ...options
       };
 
-      // 使用会话级temperature，如果没有则使用默认值0.7
+      // 🔥 使用会话级temperature，如果没有则使用默认值0.7
       const finalTemperature = options.temperature !== undefined ? 
         parseFloat(options.temperature) : 
         (requestConfig.temperature || 0.7);
@@ -75,68 +75,14 @@ class AIService {
         model: model.name, 
         endpoint: model.api_endpoint,
         messageCount: messages.length,
-        temperature: finalTemperature,
-        supportsImages: model.image_upload_enabled,
-        provider: model.provider
+        temperature: finalTemperature
       });
-
-      // 处理包含图片的消息
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          // 根据不同的模型API格式处理图片
-          if (model.provider === 'openai' || model.provider === 'google') {
-            // OpenAI 和 Google 格式相同
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          } else if (model.provider === 'anthropic') {
-            // Claude格式
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { 
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: msg.image_url
-                  }
-                }
-              ]
-            };
-          } else {
-            // 其他模型默认使用OpenAI格式
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          }
-        }
-        return msg;
-      });
-
-      // 记录处理后的消息（用于调试）
-      if (messages.some(m => m.image_url)) {
-        logger.info('处理后的图片消息', {
-          provider: model.provider,
-          processedMessage: JSON.stringify(processedMessages.find(m => 
-            Array.isArray(m.content) && m.content.some(c => c.type === 'image_url' || c.type === 'image')
-          ))
-        });
-      }
 
       // 构造请求数据 - 使用会话级temperature
       const requestData = {
         model: model.name,
-        messages: processedMessages,
-        temperature: finalTemperature,
+        messages: messages,
+        temperature: finalTemperature, // 🔥 使用会话配置的temperature
         top_p: requestConfig.top_p || 1,
         presence_penalty: requestConfig.presence_penalty || 0,
         frequency_penalty: requestConfig.frequency_penalty || 0,
@@ -153,7 +99,7 @@ class AIService {
           'Authorization': `Bearer ${model.api_key}`,
           'Content-Type': 'application/json'
         },
-        timeout: 120000 // 延长超时时间以支持图片处理和更长的输出
+        timeout: 60000 // 延长超时时间以支持更长的输出
       });
 
       return AIService.formatResponse(response.data, model.name);
@@ -169,25 +115,26 @@ class AIService {
   }
 
   /**
-   * 格式化响应
+   * 格式化AI响应
    */
-  static formatResponse(response, modelName) {
-    try {
-      const choice = response.choices?.[0];
-      if (!choice) {
-        throw new Error('AI响应格式错误: 没有找到choices');
-      }
-
-      return {
-        content: choice.message?.content || '',
-        finish_reason: choice.finish_reason,
-        usage: response.usage,
-        model: modelName
-      };
-    } catch (error) {
-      logger.error('格式化AI响应失败:', error);
-      throw new Error(`格式化AI响应失败: ${error.message}`);
+  static formatResponse(responseData, modelName) {
+    const choice = responseData.choices?.[0];
+    if (!choice) {
+      throw new Error('AI响应格式错误：缺少选择项');
     }
+
+    return {
+      content: choice.message?.content || choice.text || '',
+      role: choice.message?.role || 'assistant',
+      finish_reason: choice.finish_reason,
+      usage: responseData.usage || {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0
+      },
+      model: responseData.model || modelName,
+      created: responseData.created || Date.now()
+    };
   }
 
   /**
@@ -203,11 +150,7 @@ class AIService {
       // 简单估算：英文约4字符=1token，中文约1.5字符=1token
       const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length;
       const otherChars = content.length - chineseChars;
-      
-      // 如果有图片，额外增加token估算
-      const imageTokens = message.image_url ? 100 : 0;
-      
-      return total + Math.ceil(chineseChars * 0.67 + otherChars * 0.25) + imageTokens;
+      return total + Math.ceil(chineseChars * 0.67 + otherChars * 0.25);
     }, 0);
   }
 
@@ -229,42 +172,18 @@ class AIService {
   static async validateModel(modelName) {
     try {
       const model = await AIModel.findByName(modelName);
-      if (!model || !model.is_active) {
-        return false;
+      if (model) {
+        return true;
       }
-      return true;
+      
+      // 尝试查找相似模型
+      const allModels = await AIModel.getAvailableModels();
+      return allModels.some(m => 
+        modelName.includes(m.name) || m.name.includes(modelName)
+      );
     } catch (error) {
       logger.error('验证模型失败:', error);
       return false;
-    }
-  }
-
-  /**
-   * 测试AI模型连接
-   */
-  static async testModel(modelName) {
-    try {
-      const testMessages = [
-        {
-          role: 'user',
-          content: 'Hello, this is a test message. Please respond with "Test successful".'
-        }
-      ];
-
-      const response = await AIService.sendMessage(modelName, testMessages);
-      
-      return {
-        success: true,
-        response: response.content,
-        model: modelName
-      };
-    } catch (error) {
-      logger.error('测试模型失败:', error);
-      return {
-        success: false,
-        error: error.message,
-        model: modelName
-      };
     }
   }
 }

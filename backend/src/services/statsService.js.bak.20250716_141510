@@ -1,10 +1,11 @@
 /**
  * 统计服务
- * 处理各类统计数据（无 Redis 版本）
+ * 处理各类统计数据
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
+const redisConnection = require('../database/redisConnection');
 
 class StatsService {
   /**
@@ -12,14 +13,14 @@ class StatsService {
    */
   static async getOnlineUsersCount() {
     try {
-      // 简化实现：获取最近5分钟活跃的用户数
-      const sql = `
-        SELECT COUNT(DISTINCT user_id) as count
-        FROM user_activities
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-      `;
-      const { rows } = await dbConnection.query(sql);
-      return rows[0]?.count || 0;
+      if (!redisConnection.isConnected) {
+        // Redis未连接时返回0
+        return 0;
+      }
+      
+      const key = 'online:users';
+      const count = await redisConnection.getClient().sCard(key);
+      return count || 0;
     } catch (error) {
       logger.error('获取在线用户数失败:', error);
       return 0;
@@ -31,9 +32,21 @@ class StatsService {
    */
   static async updateUserOnlineStatus(userId, isOnline = true) {
     try {
+      if (!redisConnection.isConnected) {
+        return;
+      }
+      
+      const key = 'online:users';
+      const userKey = `user:${userId}:lastActive`;
+      
       if (isOnline) {
-        // 记录用户活动
-        await this.recordUserActivity(userId);
+        await redisConnection.getClient().sAdd(key, userId.toString());
+        await redisConnection.getClient().set(userKey, Date.now(), {
+          EX: 300 // 5分钟过期
+        });
+      } else {
+        await redisConnection.getClient().sRem(key, userId.toString());
+        await redisConnection.getClient().del(userKey);
       }
     } catch (error) {
       logger.error('更新用户在线状态失败:', error);
@@ -51,7 +64,7 @@ class StatsService {
         WHERE DATE(created_at) = CURDATE()
       `;
       const { rows } = await dbConnection.query(sql);
-      return rows[0]?.count || 0;
+      return rows[0].count || 0;
     } catch (error) {
       logger.error('获取今日活跃用户数失败:', error);
       return 0;
@@ -65,10 +78,26 @@ class StatsService {
     try {
       const { messages = 0, tokens = 0 } = stats;
       
-      // 直接记录到数据库
-      if (messages > 0 || tokens > 0) {
-        await this.recordUserActivity(userId);
+      if (!redisConnection.isConnected) {
+        return;
       }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const userKey = `stats:user:${userId}:daily:${today}`;
+      const globalKey = `stats:global:daily:${today}`;
+      
+      // 更新用户统计
+      await redisConnection.getClient().hIncrBy(userKey, 'messages', messages);
+      await redisConnection.getClient().hIncrBy(userKey, 'tokens', tokens);
+      await redisConnection.getClient().expire(userKey, 86400 * 7); // 7天过期
+      
+      // 更新全局统计
+      await redisConnection.getClient().hIncrBy(globalKey, 'messages', messages);
+      await redisConnection.getClient().hIncrBy(globalKey, 'tokens', tokens);
+      await redisConnection.getClient().expire(globalKey, 86400 * 30); // 30天过期
+      
+      // 记录活跃用户
+      await this.recordUserActivity(userId);
     } catch (error) {
       logger.error('更新用户每日统计失败:', error);
     }
@@ -95,8 +124,15 @@ class StatsService {
    */
   static async recordModelUsage(modelName) {
     try {
-      // 直接写入数据库日志表
-      logger.info('记录模型使用', { modelName });
+      if (!redisConnection.isConnected) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const key = `model:usage:daily:${today}`;
+      
+      await redisConnection.getClient().hIncrBy(key, modelName, 1);
+      await redisConnection.getClient().expire(key, 86400 * 30); // 30天过期
     } catch (error) {
       logger.error('记录模型使用失败:', error);
     }
@@ -107,17 +143,33 @@ class StatsService {
    */
   static async getPopularModels(limit = 5) {
     try {
-      // 从数据库获取
-      const sql = `
-        SELECT model_name, COUNT(*) as usage_count
-        FROM billing_logs
-        WHERE DATE(created_at) = CURDATE()
-        GROUP BY model_name
-        ORDER BY usage_count DESC
-        LIMIT ${parseInt(limit)}
-      `;
-      const { rows } = await dbConnection.simpleQuery(sql);
-      return rows || [];
+      if (!redisConnection.isConnected) {
+        // 从数据库获取 - 使用 simpleQuery 避免参数绑定问题
+        const sql = `
+          SELECT model_name, COUNT(*) as usage_count
+          FROM billing_logs
+          WHERE DATE(created_at) = CURDATE()
+          GROUP BY model_name
+          ORDER BY usage_count DESC
+          LIMIT ${parseInt(limit)}
+        `;
+        const { rows } = await dbConnection.simpleQuery(sql);
+        return rows;
+      }
+
+      const key = `model:usage:daily:${new Date().toISOString().split('T')[0]}`;
+      const models = await redisConnection.getClient().hGetAll(key);
+      
+      // 转换并排序
+      const modelArray = Object.entries(models)
+        .map(([model_name, usage_count]) => ({
+          model_name,
+          usage_count: parseInt(usage_count)
+        }))
+        .sort((a, b) => b.usage_count - a.usage_count)
+        .slice(0, limit);
+      
+      return modelArray;
     } catch (error) {
       logger.error('获取热门模型失败:', error);
       return [];
@@ -164,10 +216,10 @@ class StatsService {
       return {
         online_users: onlineCount,
         today_active_users: todayActiveCount,
-        today_messages: parseInt(todayRows[0]?.today_messages) || 0,
-        today_tokens: parseInt(todayRows[0]?.today_tokens) || 0,
-        today_conversations: parseInt(todayRows[0]?.today_conversations) || 0,
-        total_users: parseInt(totalRows[0]?.total_users) || 0,
+        today_messages: todayRows[0].today_messages || 0,
+        today_tokens: todayRows[0].today_tokens || 0,
+        today_conversations: todayRows[0].today_conversations || 0,
+        total_users: totalRows[0].total_users || 0,
         popular_models: popularModels,
         timestamp: new Date().toISOString()
       };

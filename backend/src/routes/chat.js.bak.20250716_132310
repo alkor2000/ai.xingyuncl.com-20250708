@@ -1,11 +1,10 @@
 /**
- * 对话路由 - 集成积分管理、流式输出、草稿功能和图片上传
+ * 对话路由 - 集成积分管理、流式输出和草稿功能
  */
 
 const express = require('express');
 const ChatController = require('../controllers/chatController');
 const { authenticate, requirePermission } = require('../middleware/authMiddleware');
-const { uploadImage } = require('../middleware/uploadMiddleware');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
@@ -18,21 +17,6 @@ const chatLimiter = rateLimit({
     success: false,
     code: 429,
     message: '对话频率过高，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 文件上传限流
-const uploadLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 30, // 每分钟最多30次上传
-  message: {
-    success: false,
-    code: 429,
-    message: '上传频率过高，请稍后再试',
     data: null,
     timestamp: new Date().toISOString()
   },
@@ -75,7 +59,7 @@ router.use(authenticate);
 
 /**
  * @route GET /api/chat/models
- * @desc 获取可用的AI模型列表 (含积分和图片支持信息)
+ * @desc 获取可用的AI模型列表 (含积分信息)
  * @access Private
  */
 router.get('/models', ChatController.getModels);
@@ -89,18 +73,6 @@ router.get('/credits',
   creditsLimiter,
   requirePermission('chat.use'),
   ChatController.getUserCredits
-);
-
-/**
- * @route POST /api/chat/upload-image
- * @desc 上传聊天图片
- * @access Private
- */
-router.post('/upload-image',
-  uploadLimiter,
-  requirePermission('chat.use'),
-  uploadImage,
-  ChatController.uploadImage
 );
 
 /**
@@ -165,7 +137,7 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复 (支持流式、非流式和图片)
+ * @desc 发送消息并获取AI回复 (支持流式和非流式)
  * @access Private
  */
 router.post('/conversations/:id/messages',

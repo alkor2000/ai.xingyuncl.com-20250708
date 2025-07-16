@@ -1,11 +1,10 @@
 /**
  * 流式AI服务
- * 处理流式API调用和Server-Sent Events - 支持图片识别
+ * 处理流式API调用和Server-Sent Events
  */
 
 const axios = require('axios');
 const AIModel = require('../models/AIModel');
-const File = require('../models/File');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
@@ -23,8 +22,7 @@ class AIStreamService {
       logger.info('开始流式AI服务调用', { 
         model: modelName, 
         messageCount: messages.length,
-        customTemperature: options.temperature,
-        hasImages: messages.some(m => m.image_url)
+        customTemperature: options.temperature 
       });
 
       // 获取AI模型配置
@@ -109,67 +107,13 @@ class AIStreamService {
         model: model.name, 
         endpoint: model.api_endpoint,
         messageCount: messages.length,
-        temperature: finalTemperature,
-        supportsImages: model.image_upload_enabled,
-        provider: model.provider
+        temperature: finalTemperature
       });
-
-      // 处理包含图片的消息
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          // 根据不同的模型API格式处理图片
-          if (model.provider === 'openai' || model.provider === 'google') {
-            // OpenAI 和 Google 格式相同
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          } else if (model.provider === 'anthropic') {
-            // Claude格式（如果需要）
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { 
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: msg.image_url
-                  }
-                }
-              ]
-            };
-          } else {
-            // 其他模型默认使用OpenAI格式
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          }
-        }
-        return msg;
-      });
-
-      // 记录处理后的消息（用于调试）
-      if (messages.some(m => m.image_url)) {
-        logger.info('处理后的图片消息', {
-          provider: model.provider,
-          processedMessage: JSON.stringify(processedMessages.find(m => 
-            Array.isArray(m.content) && m.content.some(c => c.type === 'image_url' || c.type === 'image')
-          ))
-        });
-      }
 
       // 构造请求数据
       const requestData = {
         model: model.name,
-        messages: processedMessages,
+        messages: messages,
         temperature: finalTemperature,
         top_p: requestConfig.top_p || 1,
         presence_penalty: requestConfig.presence_penalty || 0,
@@ -192,7 +136,7 @@ class AIStreamService {
           'Accept': 'text/event-stream'
         },
         responseType: 'stream',
-        timeout: 180000 // 3分钟超时，图片处理可能需要更长时间
+        timeout: 120000 // 2分钟超时
       });
 
       logger.info('流式响应开始接收');
@@ -333,7 +277,7 @@ class AIStreamService {
             res.end();
           }
           reject(new Error('流式响应超时'));
-        }, 180000);
+        }, 120000);
 
         response.data.on('end', () => clearTimeout(timeoutId));
         response.data.on('error', () => clearTimeout(timeoutId));

@@ -42,9 +42,7 @@ import {
   ApiOutlined,
   WalletOutlined,
   ThunderboltOutlined,
-  FireOutlined,
-  PictureOutlined,
-  FileImageOutlined
+  FireOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -182,7 +180,6 @@ const Settings = () => {
       api_key: '',
       api_endpoint: '',
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
-      image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
       credits_per_chat: model.credits_per_chat,
       is_active: model.is_active,
       sort_order: model.sort_order
@@ -282,16 +279,6 @@ const Settings = () => {
     }
   }
 
-  // 🆕 快速切换图片上传状态
-  const handleToggleImageUploadEnabled = async (modelId, imageUploadEnabled) => {
-    try {
-      await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
-      message.success(imageUploadEnabled ? '图片上传已启用' : '图片上传已禁用')
-    } catch (error) {
-      message.error('操作失败')
-    }
-  }
-
   // 渲染测试状态
   const renderTestStatus = (status, lastTestedAt, modelId) => {
     if (testingModelId === modelId) {
@@ -337,8 +324,7 @@ const Settings = () => {
         return <Tag color="default">{t('status.error')}</Tag>
     }
   }
-  
-  // 🆕 AI模型表格列 - 增强流式输出和图片上传显示
+  // 🆕 AI模型表格列 - 增强流式输出显示
   const modelColumns = [
     {
       title: t('admin.models.table.name'),
@@ -350,7 +336,7 @@ const Settings = () => {
       title: t('admin.models.table.displayName'),
       dataIndex: 'display_name',
       key: 'display_name',
-      width: 160
+      width: 180
     },
     {
       title: t('admin.models.table.credits'),
@@ -388,33 +374,6 @@ const Settings = () => {
           ) : (
             <Tag color="default" icon={<CloseCircleOutlined />} size="small">
               {t('admin.models.standard')}
-            </Tag>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: t('admin.models.table.imageUploadEnabled'),
-      dataIndex: 'image_upload_enabled',
-      key: 'image_upload_enabled',
-      width: 120,
-      render: (imageUploadEnabled, record) => (
-        <Space>
-          <Switch
-            checked={imageUploadEnabled}
-            size="small"
-            loading={loading}
-            onChange={(checked) => handleToggleImageUploadEnabled(record.id, checked)}
-            checkedChildren={<PictureOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {imageUploadEnabled ? (
-            <Tag color="success" icon={<FileImageOutlined />} size="small">
-              {t('admin.models.image')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.textOnly')}
             </Tag>
           )}
         </Space>
@@ -614,7 +573,6 @@ const Settings = () => {
       </div>
     )
   }
-  
   return (
     <div className="page-container">
       <Tabs defaultActiveKey="statistics" type="card">
@@ -725,7 +683,7 @@ const Settings = () => {
           </Row>
         </TabPane>
 
-        {/* 🆕 AI模型管理 - 增强流式输出和图片上传配置 */}
+        {/* 🆕 AI模型管理 - 增强流式输出配置 */}
         <TabPane tab={<span><RobotOutlined />{t('admin.settings.tabs.models')}</span>} key="models">
           <Card 
             title={
@@ -734,7 +692,6 @@ const Settings = () => {
                 <span>{t('admin.models.config')}</span>
                 <Tag color="blue">💰 {t('admin.models.creditsSystem')}</Tag>
                 <Tag color="processing" icon={<ThunderboltOutlined />}>🚀 {t('admin.models.streamOutput')}</Tag>
-                <Tag color="success" icon={<FileImageOutlined />}>🖼️ {t('admin.models.imageUpload')}</Tag>
                 <Tag color="green">🔓 {t('admin.models.noOutputLimit')}</Tag>
               </Space>
             }
@@ -854,9 +811,6 @@ const Settings = () => {
                             {model.stream_enabled && (
                               <Tag color="processing" icon={<ThunderboltOutlined />} size="small">{t('admin.models.stream')}</Tag>
                             )}
-                            {model.image_upload_enabled && (
-                              <Tag color="success" icon={<FileImageOutlined />} size="small">{t('admin.models.image')}</Tag>
-                            )}
                           </Space>
                         </Select.Option>
                       ))}
@@ -918,7 +872,7 @@ const Settings = () => {
         </TabPane>
       </Tabs>
 
-      {/* 🆕 AI模型创建/编辑弹窗 - 新增图片上传配置 */}
+      {/* 🆕 AI模型创建/编辑弹窗 - 新增流式输出配置 */}
       <Modal
         title={editingModel ? t('admin.models.editModel') : t('admin.models.createModel')}
         open={isModelModalVisible}
@@ -941,7 +895,7 @@ const Settings = () => {
               <Form.Item
                 name="name"
                 label={t('admin.models.form.name')}
-                rules={[{ required: true, message: t('admin.models.form.name.required') }]}
+                rules={[{ required: true, message: t('admin.models.form.name.required', { defaultValue: '请输入模型名称' }) }]}
               >
                 <Input placeholder={t('admin.models.form.name.placeholder')} disabled={!!editingModel} />
               </Form.Item>
@@ -950,7 +904,7 @@ const Settings = () => {
               <Form.Item
                 name="display_name"
                 label={t('admin.models.form.displayName')}
-                rules={[{ required: true, message: t('admin.models.form.displayName.required') }]}
+                rules={[{ required: true, message: t('admin.models.form.displayName.required', { defaultValue: '请输入显示名称' }) }]}
               >
                 <Input placeholder={t('admin.models.form.displayName.placeholder')} />
               </Form.Item>
@@ -962,7 +916,7 @@ const Settings = () => {
               <Form.Item
                 name="api_key"
                 label={t('admin.models.form.apiKey')}
-                rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required') }]}
+                rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required', { defaultValue: '请输入API密钥' }) }]}
               >
                 <Input.Password placeholder="sk-..." />
               </Form.Item>
@@ -971,7 +925,7 @@ const Settings = () => {
               <Form.Item
                 name="api_endpoint"
                 label={t('admin.models.form.apiEndpoint')}
-                rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required') }]}
+                rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required', { defaultValue: '请输入API端点' }) }]}
               >
                 <Input placeholder="https://api.openai.com/v1" />
               </Form.Item>
@@ -1026,54 +980,6 @@ const Settings = () => {
             </Col>
           </Row>
 
-          {/* 🆕 图片识别配置区域 */}
-          <Row gutter={16}>
-            <Col span={24}>
-              <Card 
-                title={
-                  <Space>
-                    <FileImageOutlined style={{ color: '#52c41a' }} />
-                    <span>{t('admin.models.form.imageConfig')}</span>
-                    <Tag color="success">🖼️ {t('admin.models.imageUpload')}</Tag>
-                  </Space>
-                } 
-                size="small" 
-                style={{ marginBottom: 16 }}
-              >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="image_upload_enabled"
-                      label={t('admin.models.form.enableImageUpload')}
-                      valuePropName="checked"
-                      initialValue={false}
-                    >
-                      <Switch
-                        checkedChildren={<PictureOutlined />}
-                        unCheckedChildren={<CloseCircleOutlined />}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <div style={{ 
-                      marginTop: 30, 
-                      padding: '8px 12px',
-                      backgroundColor: '#f0fff7',
-                      borderRadius: '4px',
-                      borderLeft: '3px solid #52c41a',
-                      fontSize: '12px',
-                      color: '#52c41a'
-                    }}
-                    dangerouslySetInnerHTML={{ 
-                      __html: t('admin.models.form.imageTip')
-                    }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
-
           {/* 积分配置区域 */}
           <Row gutter={16}>
             <Col span={24}>
@@ -1093,7 +999,7 @@ const Settings = () => {
                     <Form.Item
                       name="credits_per_chat"
                       label={t('admin.models.form.creditsPerChat')}
-                      rules={[{ required: true, message: t('admin.models.form.creditsPerChat.required') }]}
+                      rules={[{ required: true, message: t('admin.models.form.creditsPerChat.required', { defaultValue: '请设置积分消费' }) }]}
                       initialValue={10}
                     >
                       <InputNumber

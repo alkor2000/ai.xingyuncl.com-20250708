@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'ai-platform-auth',
-      script: '/var/www/ai-platform/backend/src/server.js',
+      script: '/var/www/ai-platform/backend/src/app.js',
       cwd: '/var/www/ai-platform/backend',
       instances: 1,
       exec_mode: 'fork',

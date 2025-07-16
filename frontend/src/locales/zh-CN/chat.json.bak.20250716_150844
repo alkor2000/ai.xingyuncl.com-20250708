@@ -24,12 +24,10 @@
   
   "chat.model.noImageSupport": "当前模型不支持图片识别",
   
-  "chat.conversation.settings": "对话设置",
   "chat.conversation.create.success": "对话创建成功",
   "chat.conversation.create.failed": "对话创建失败",
   "chat.conversation.update.success": "对话更新成功",
   "chat.conversation.update.failed": "对话更新失败",
-  "chat.conversation.delete": "删除对话",
   "chat.conversation.delete.title": "删除对话",
   "chat.conversation.delete.confirm": "确定要删除这个对话吗？删除后无法恢复。",
   "chat.conversation.delete.success": "对话删除成功",
@@ -77,7 +75,9 @@
   "chat.model.gpt35": "GPT-3.5",
   "chat.model.gpt4": "GPT-4",
   "chat.model.claude": "Claude",
-  "chat.model.gemini": "Gemini",
-  
-  "unit.credits": "积分"
+  "chat.model.gemini": "Gemini"
 }
+,
+  "chat.conversation.settings": "对话设置",
+  "chat.conversation.delete": "删除对话",
+  "unit.credits": "积分"

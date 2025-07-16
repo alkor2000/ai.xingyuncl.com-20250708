@@ -325,19 +325,6 @@ const Chat = () => {
     }
   }
 
-  // 编辑对话（用于对话列表的设置按钮）
-  const handleEditConversation = (conversation) => {
-    settingsForm.setFieldsValue({
-      title: conversation.title,
-      model_name: conversation.model_name,
-      system_prompt: conversation.system_prompt,
-      context_length: conversation.context_length,
-      ai_temperature: conversation.ai_temperature,
-      priority: conversation.priority
-    })
-    setShowSettings(true)
-  }
-
   // 固定/取消固定对话
   const handleTogglePin = async (conversationId, isPinned) => {
     try {
@@ -377,17 +364,6 @@ const Chat = () => {
             <span className="title-text">{conversation.title}</span>
           </div>
           <div className="conversation-actions">
-            <Tooltip title={t('chat.conversation.settings')}>
-              <Button
-                type="text"
-                size="small"
-                icon={<SettingOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEditConversation(conversation)
-                }}
-              />
-            </Tooltip>
             <Tooltip title={conversation.is_pinned ? t('chat.conversation.unpin') : t('chat.conversation.pin')}>
               <Button
                 type="text"
@@ -433,25 +409,18 @@ const Chat = () => {
     <Layout className="chat-container">
       {/* 侧边栏 - 对话列表 */}
       <Sider
-        width={300}
+        width={280}
         collapsed={sidebarCollapsed}
         collapsedWidth={0}
-        breakpoint="xl"
-        onBreakpoint={(broken) => {
-          // 只在大屏幕下自动折叠
-          if (window.innerWidth > 1600) {
-            setSidebarCollapsed(broken)
-          }
-        }}
+        breakpoint="lg"
+        onBreakpoint={(broken) => setSidebarCollapsed(broken)}
         className="chat-sidebar"
-        trigger={null}
       >
         <div className="sidebar-header">
           <Button
             type="primary"
             icon={<PlusOutlined />}
             block
-            size="large"
             onClick={() => setShowNewChatModal(true)}
           >
             {t('chat.newConversation')}
@@ -535,8 +504,6 @@ const Chat = () => {
                     icon={<MenuOutlined />}
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                     className="menu-button"
-                    type="text"
-                    size="large"
                   />
                   <Title level={4} className="conversation-title">
                     {currentConversation.title}
@@ -548,15 +515,20 @@ const Chat = () => {
                 </div>
                 <div className="header-right">
                   <Button
-                    type="primary"
                     icon={<SettingOutlined />}
                     onClick={() => {
-                      if (currentConversation) {
-                        handleEditConversation(currentConversation)
-                      }
+                      settingsForm.setFieldsValue({
+                        title: currentConversation.title,
+                        model_name: currentConversation.model_name,
+                        system_prompt: currentConversation.system_prompt,
+                        context_length: currentConversation.context_length,
+                        ai_temperature: currentConversation.ai_temperature,
+                        priority: currentConversation.priority
+                      })
+                      setShowSettings(true)
                     }}
                   >
-                    {t('chat.conversation.settings')}
+                    {t('chat.settings')}
                   </Button>
                 </div>
               </div>
@@ -682,9 +654,9 @@ const Chat = () => {
 
       {/* 对话设置抽屉 */}
       <Drawer
-        title={t('chat.conversation.settings')}
+        title={t('chat.settings')}
         placement="right"
-        width={500}
+        width={400}
         open={showSettings}
         onClose={() => setShowSettings(false)}
         footer={
