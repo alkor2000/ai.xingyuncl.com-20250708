@@ -110,6 +110,20 @@ const useAdminStore = create((set, get) => ({
     }
   },
   
+  // 删除用户
+  deleteUser: async (userId) => {
+    try {
+      await apiClient.delete(`/admin/users/${userId}`)
+      
+      set(state => ({
+        users: state.users.filter(user => user.id !== userId),
+        userDetail: state.userDetail?.user.id === userId ? null : state.userDetail
+      }))
+    } catch (error) {
+      console.error('删除用户失败:', error)
+      throw error
+    }
+  },
 
   // ===== 积分管理方法 (新增核心功能) =====
 
@@ -266,12 +280,12 @@ const useAdminStore = create((set, get) => ({
       set(state => ({
         creditsHistory: {
           ...state.creditsHistory,
-          [userId]: response.data.data
+          [userId]: response.data
         },
         creditsLoading: false
       }))
       
-      return response.data.data
+      return response.data
     } catch (error) {
       console.error('获取用户积分历史失败:', error)
       set({ creditsLoading: false })
@@ -329,6 +343,19 @@ const useAdminStore = create((set, get) => ({
     }
   },
 
+  // 删除用户分组
+  deleteUserGroup: async (groupId) => {
+    try {
+      await apiClient.delete(`/admin/user-groups/${groupId}`)
+      
+      set(state => ({
+        userGroups: state.userGroups.filter(group => group.id !== groupId)
+      }))
+    } catch (error) {
+      console.error('删除用户分组失败:', error)
+      throw error
+    }
+  },
   
   // ===== AI模型管理 (支持积分配置) =====
 

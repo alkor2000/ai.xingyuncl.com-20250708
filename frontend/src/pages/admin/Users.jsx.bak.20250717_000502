@@ -193,23 +193,14 @@ const Users = () => {
     }
   }
 
-  // 切换用户状态（禁用/启用）
-  const handleToggleUserStatus = async (userId, currentStatus) => {
+  // 删除用户
+  const handleDeleteUser = async (userId) => {
     try {
-      const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
-      await updateUser(userId, { status: newStatus })
-      message.success(
-        newStatus === 'active' 
-          ? t('admin.users.enable.success') 
-          : t('admin.users.disable.success')
-      )
+      await deleteUser(userId)
+      message.success(t('admin.users.delete.success'))
       loadUsers()
     } catch (error) {
-      message.error(
-        newStatus === 'active' 
-          ? t('admin.users.enable.failed') 
-          : t('admin.users.disable.failed')
-      )
+      message.error(t('admin.users.delete.failed'))
     }
   }
 
@@ -410,19 +401,14 @@ const Users = () => {
               onClick={() => handleEditUser(record)} />
           </Tooltip>
           {record.id !== currentUser?.id && (
-            <Tooltip title={record.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}>
+            <Tooltip title={t('button.delete')}>
               <Popconfirm
-                title={record.status === 'active' ? t('admin.users.disable.confirm') : t('admin.users.enable.confirm')}
-                onConfirm={() => handleToggleUserStatus(record.id, record.status)}
+                title={t('admin.users.delete.confirm')}
+                onConfirm={() => handleDeleteUser(record.id)}
                 okText={t('button.confirm')}
                 cancelText={t('button.cancel')}
               >
-                <Button 
-                  type="text" 
-                  size="small" 
-                  danger={record.status === 'active'}
-                  icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
-                />
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
               </Popconfirm>
             </Tooltip>
           )}
