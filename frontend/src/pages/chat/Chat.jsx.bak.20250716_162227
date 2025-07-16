@@ -446,6 +446,17 @@ const Chat = () => {
         className="chat-sidebar"
         trigger={null}
       >
+        <div className="sidebar-header">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            block
+            size="large"
+            onClick={() => setShowNewChatModal(true)}
+          >
+            {t('chat.newConversation')}
+          </Button>
+        </div>
         
         <div className="conversations-list">
           {conversationsLoading ? (

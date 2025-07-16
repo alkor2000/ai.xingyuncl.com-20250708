@@ -446,6 +446,17 @@ const Chat = () => {
         className="chat-sidebar"
         trigger={null}
       >
+        <div className="sidebar-header">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            block
+            size="large"
+            onClick={() => setShowNewChatModal(true)}
+          >
+            {t('chat.newConversation')}
+          </Button>
+        </div>
         
         <div className="conversations-list">
           {conversationsLoading ? (
@@ -537,12 +548,6 @@ const Chat = () => {
                 </div>
                 <div className="header-right">
                   <Button
-                    icon={<PlusOutlined />}
-                    onClick={() => setShowNewChatModal(true)}
-                  >
-                    {t("chat.newConversation")}
-                  </Button>
-                  <Button
                     type="primary"
                     icon={<SettingOutlined />}
                     onClick={() => {
@@ -551,7 +556,7 @@ const Chat = () => {
                       }
                     }}
                   >
-                    {t("chat.conversation.settings")}
+                    {t('chat.conversation.settings')}
                   </Button>
                 </div>
               </div>
