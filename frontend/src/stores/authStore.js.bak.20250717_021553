@@ -52,15 +52,6 @@ const useAuthStore = create(
           // 设置默认请求头
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
-          // 🔥 重要：登录成功后清理之前用户的聊天数据
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除之前的聊天数据...')
-              chatStore.reset()
-            }
-          }
-
           console.log('✅ 用户登录成功:', {
             user: user.email,
             role: user.role,
@@ -99,15 +90,6 @@ const useAuthStore = create(
 
           // 清除默认请求头
           delete apiClient.defaults.headers.common['Authorization']
-          
-          // 🔥 重要：清除聊天相关的所有状态
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除聊天数据...')
-              chatStore.reset()
-            }
-          }
           
           console.log('🚪 用户已登出')
         }

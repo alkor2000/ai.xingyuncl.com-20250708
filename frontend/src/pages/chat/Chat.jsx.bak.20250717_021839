@@ -1,9 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-// 设置全局引用供authStore使用
-if (typeof window !== "undefined") {
-  window.useChatStore = useChatStore;
-}
-
 import {
   Layout,
   Input,
