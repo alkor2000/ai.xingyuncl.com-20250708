@@ -1,5 +1,5 @@
 /**
- * AI Platform 主应用入口 - 支持WebSocket和动态模块代理
+ * AI Platform 主应用入口 - 支持WebSocket
  */
 
 const express = require('express');
@@ -24,9 +24,6 @@ const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
 const statsRoutes = require('./routes/stats');
-
-// 导入动态模块代理管理器
-const moduleProxyManager = require('./middleware/moduleProxy');
 
 // 导入认证中间件用于Socket.IO
 const jwt = require('jsonwebtoken');
@@ -58,9 +55,6 @@ class App {
 
       // 配置路由
       this.setupRoutes();
-
-      // 初始化动态模块代理
-      await this.initializeModuleProxy();
 
       // 配置错误处理
       this.setupErrorHandling();
@@ -105,20 +99,6 @@ class App {
       logger.error('Redis连接初始化失败:', error);
       // Redis失败不影响主服务，仅记录警告
       logger.warn('应用将在无Redis缓存的情况下运行');
-    }
-  }
-
-  /**
-   * 初始化动态模块代理
-   */
-  async initializeModuleProxy() {
-    try {
-      await moduleProxyManager.initialize(this.app);
-      logger.info('动态模块代理初始化成功');
-    } catch (error) {
-      logger.error('动态模块代理初始化失败:', error);
-      // 代理失败不影响主服务，仅记录警告
-      logger.warn('应用将在无动态模块代理的情况下运行');
     }
   }
 
@@ -325,16 +305,6 @@ class App {
     // 统计相关路由
     this.app.use('/api/stats', statsRoutes);
 
-    // 模块代理信息接口（调试用）
-    this.app.get('/api/admin/proxy-info', (req, res) => {
-      const proxyInfo = moduleProxyManager.getProxyInfo();
-      res.json({
-        success: true,
-        message: '获取代理信息成功',
-        data: proxyInfo
-      });
-    });
-
     logger.info('路由配置完成');
   }
 
@@ -387,12 +357,10 @@ class App {
 📋 进程ID: ${process.pid}
 ⏰ 启动时间: ${new Date().toLocaleString()}
 🔌 WebSocket: 已启用
-🔀 动态代理: 已启用
 
 API地址: http://localhost:${port}/api
 健康检查: http://localhost:${port}/health
 WebSocket: ws://localhost:${port}/socket.io/
-代理信息: http://localhost:${port}/api/admin/proxy-info
         `);
       });
 
@@ -457,13 +425,6 @@ WebSocket: ws://localhost:${port}/socket.io/
    */
   getIO() {
     return this.io;
-  }
-
-  /**
-   * 获取Express应用实例（供其他模块使用）
-   */
-  getApp() {
-    return this.app;
   }
 }
 
