@@ -1,5 +1,5 @@
 /**
- * 认证状态管理 - 支持智能Token管理
+ * 认证状态管理
  */
 
 import { create } from 'zustand'
@@ -111,23 +111,108 @@ const useAuthStore = create(
         } catch (error) {
           console.error('获取用户信息失败:', error)
           // 如果获取用户信息失败，可能token已过期，执行登出
-          get().logout()
+          if (error.response?.status === 401) {
+            get().logout()
+          }
           throw error
         }
       },
 
-      // 手动刷新令牌 (通常由API拦截器自动调用)
+      // 更新个人信息
+      updateProfile: async (profileData) => {
+        try {
+          const response = await apiClient.put('/auth/profile', profileData)
+          const { user } = response.data.data
+
+          set({ user })
+
+          console.log('✅ 个人信息更新成功')
+          return response.data
+        } catch (error) {
+          console.error('更新个人信息失败:', error)
+          throw error
+        }
+      },
+
+      // 修改密码
+      changePassword: async (oldPassword, newPassword) => {
+        try {
+          const response = await apiClient.put('/auth/password', {
+            oldPassword,
+            newPassword
+          })
+
+          console.log('✅ 密码修改成功')
+          return response.data
+        } catch (error) {
+          console.error('修改密码失败:', error)
+          throw error
+        }
+      },
+
+      // 获取积分历史
+      getCreditHistory: async (page = 1, limit = 20) => {
+        try {
+          const response = await apiClient.get('/auth/credit-history', {
+            params: { page, limit }
+          })
+
+          console.log('📊 获取积分历史成功')
+          return response.data.data
+        } catch (error) {
+          console.error('获取积分历史失败:', error)
+          throw error
+        }
+      },
+
+      // 注册
+      register: async (userData) => {
+        set({ loading: true })
+        try {
+          const response = await apiClient.post('/auth/register', userData)
+          console.log('✅ 注册成功')
+          set({ loading: false })
+          return { success: true, data: response.data }
+        } catch (error) {
+          set({ loading: false })
+          console.error('❌ 注册失败:', error)
+          const message = error.response?.data?.message || '注册失败'
+          return { success: false, message }
+        }
+      },
+
+      // 检查邮箱是否可用
+      checkEmailAvailable: async (email) => {
+        try {
+          const response = await apiClient.post('/auth/check-email', { email })
+          return response.data.data.available
+        } catch (error) {
+          return false
+        }
+      },
+
+      // 检查用户名是否可用
+      checkUsernameAvailable: async (username) => {
+        try {
+          const response = await apiClient.post('/auth/check-username', { username })
+          return response.data.data.available
+        } catch (error) {
+          return false
+        }
+      },
+
+      // 刷新令牌
       refreshAccessToken: async () => {
         const state = get()
         if (!state.refreshToken) {
-          throw new Error('没有有效的刷新令牌')
+          throw new Error('No refresh token available')
         }
 
         try {
           const response = await apiClient.post('/auth/refresh', {
             refreshToken: state.refreshToken
           })
-          
+
           const { accessToken, expiresIn } = response.data.data
 
           // 计算新的过期时间
@@ -137,112 +222,84 @@ const useAuthStore = create(
             tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
           }
 
-          set({ 
+          set({
             accessToken,
-            tokenExpiresAt 
+            tokenExpiresAt
           })
-          
+
+          // 更新默认请求头
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
-          console.log('🔄 Token手动刷新成功')
+          console.log('🔄 Token刷新成功')
           return accessToken
         } catch (error) {
-          console.error('Token手动刷新失败:', error)
-          // 刷新令牌也失败了，执行登出
+          console.error('Token刷新失败:', error)
+          // 刷新失败，执行登出
           get().logout()
           throw error
         }
       },
 
-      // 检查Token是否即将过期（提前10分钟提醒）
-      isTokenExpiringSoon: () => {
-        const state = get()
-        if (!state.tokenExpiresAt) return false
-        
-        const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000)
-        return state.tokenExpiresAt < tenMinutesFromNow
-      },
-
-      // 获取Token剩余时间（分钟）
-      getTokenTimeRemaining: () => {
-        const state = get()
-        if (!state.tokenExpiresAt) return 0
-        
-        const remainingMs = state.tokenExpiresAt.getTime() - Date.now()
-        return Math.max(0, Math.floor(remainingMs / (1000 * 60)))
-      },
-
-      // 检查是否有权限
+      // 检查权限
       hasPermission: (permission) => {
-        const state = get()
-        const permissions = state.permissions || []
-        return permissions.includes(permission)
+        const { permissions } = get()
+        return permissions.includes(permission) || 
+               permissions.includes('system.all') ||
+               permissions.some(p => p.endsWith('.*') && permission.startsWith(p.slice(0, -1)))
       },
 
-      // 检查是否有角色
+      // 检查角色
       hasRole: (role) => {
-        const state = get()
-        return state.user?.role === role
+        const { user } = get()
+        if (!user) return false
+        
+        if (Array.isArray(role)) {
+          return role.includes(user.role)
+        }
+        return user.role === role
       },
 
-      // 检查是否有任一角色
-      hasAnyRole: (roles) => {
-        const state = get()
-        const userRole = state.user?.role
-        return roles.includes(userRole)
-      },
-
-      // 检查是否是管理员
-      isAdmin: () => {
-        const state = get()
-        return ['super_admin', 'admin'].includes(state.user?.role)
+      // 检查Token是否过期
+      isTokenExpired: () => {
+        const { tokenExpiresAt } = get()
+        if (!tokenExpiresAt) return true
+        return new Date() >= new Date(tokenExpiresAt)
       },
 
       // 初始化认证状态
-      initializeAuth: () => {
+      initializeAuth: async () => {
         const state = get()
-        if (state.accessToken) {
-          apiClient.defaults.headers.common['Authorization'] = `Bearer ${state.accessToken}`
-          
-          // 检查Token是否过期
-          if (state.tokenExpiresAt && new Date() > state.tokenExpiresAt) {
-            console.log('🔄 检测到Token已过期，清除认证状态')
-            get().logout()
+        
+        if (!state.accessToken) {
+          console.log('🔐 无访问令牌，跳过初始化')
+          return
+        }
+
+        // 设置默认请求头
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${state.accessToken}`
+
+        // 检查Token是否过期
+        if (state.isTokenExpired()) {
+          console.log('⏰ Token已过期，尝试刷新...')
+          try {
+            await state.refreshAccessToken()
+          } catch (error) {
+            console.error('Token刷新失败，需要重新登录')
             return
           }
-          
-          // 验证token并获取最新用户信息
-          get().getCurrentUser().catch(() => {
-            console.log('🔄 Token验证失败，清除认证状态')
-            get().logout()
-          })
         }
-      },
 
-      // 获取用户显示信息
-      getUserDisplayInfo: () => {
-        const state = get()
-        if (!state.user) return null
-        
-        return {
-          name: state.user.username || state.user.email,
-          email: state.user.email,
-          role: state.user.role,
-          roleText: {
-            'super_admin': '超级管理员',
-            'admin': '管理员',
-            'user': '用户'
-          }[state.user.role] || '未知',
-          avatar: state.user.avatar,
-          tokenQuota: state.user.token_quota,
-          usedTokens: state.user.used_tokens,
-          tokenRemaining: state.user.token_quota - (state.user.used_tokens || 0)
+        // 获取最新用户信息
+        try {
+          await state.getCurrentUser()
+          console.log('✅ 认证状态初始化成功')
+        } catch (error) {
+          console.error('❌ 获取用户信息失败:', error)
         }
       }
     }),
     {
       name: 'auth-storage',
-      // 只持久化必要的字段
       partialize: (state) => ({
         user: state.user,
         permissions: state.permissions || [],

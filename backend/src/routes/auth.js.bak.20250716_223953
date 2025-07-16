@@ -46,27 +46,6 @@ router.post('/register', authLimiter, AuthController.register);
 router.get('/me', authenticate, AuthController.getCurrentUser);
 
 /**
- * @route PUT /api/auth/profile
- * @desc 更新个人信息
- * @access Private
- */
-router.put('/profile', authenticate, AuthController.updateProfile);
-
-/**
- * @route PUT /api/auth/password
- * @desc 修改密码
- * @access Private
- */
-router.put('/password', authenticate, AuthController.changePassword);
-
-/**
- * @route GET /api/auth/credit-history
- * @desc 获取积分历史
- * @access Private
- */
-router.get('/credit-history', authenticate, AuthController.getCreditHistory);
-
-/**
  * @route POST /api/auth/refresh
  * @desc 刷新访问令牌
  * @access Public

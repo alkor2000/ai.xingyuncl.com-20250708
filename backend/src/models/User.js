@@ -10,6 +10,7 @@ class User {
   constructor(data = {}) {
     this.id = data.id || null;
     this.email = data.email || null;
+    this.phone = data.phone || null;
     this.username = data.username || null;
     this.password_hash = data.password_hash || null;
     this.role = data.role || 'user';
@@ -254,6 +255,7 @@ class User {
       
       const allowedFields = [
         'username', 'password_hash', 'role', 'group_id', 'status', 
+        'phone',
         'email_verified', 'avatar_url', 'token_quota', 'used_tokens',
         'credits_quota', 'used_credits'
       ];
