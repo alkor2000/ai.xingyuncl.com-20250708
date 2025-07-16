@@ -105,16 +105,6 @@ const Settings = () => {
     }
   }, [systemSettings, settingsForm])
 
-  // 设置默认模型为第一个激活的模型
-  useEffect(() => {
-    if (aiModels.length > 0 && systemSettings?.ai && !systemSettings.ai.default_model) {
-      const firstActiveModel = aiModels.find(m => m.is_active)
-      if (firstActiveModel) {
-        settingsForm.setFieldValue(['ai', 'default_model'], firstActiveModel.name)
-      }
-    }
-  }, [aiModels, systemSettings, settingsForm])
-
   // 保存系统设置
   const handleSaveSettings = async (values) => {
     try {
@@ -804,7 +794,7 @@ const Settings = () => {
           </Card>
         </TabPane>
 
-        {/* 简化后的基础设置 */}
+        {/* 基础设置 (移除maxToken设置) */}
         <TabPane tab={<span><SettingOutlined />{t('admin.settings.tabs.basic')}</span>} key="settings">
           <Form
             form={settingsForm}
@@ -825,6 +815,10 @@ const Settings = () => {
 
                 <Card title={t('admin.settings.user.title')} size="small">
                   <Form.Item name={['user', 'allow_register']} label={t('admin.settings.user.allowRegister')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  
+                  <Form.Item name={['user', 'email_verification']} label={t('admin.settings.user.emailVerification')} valuePropName="checked">
                     <Switch />
                   </Form.Item>
                   
@@ -869,12 +863,16 @@ const Settings = () => {
                     </Select>
                   </Form.Item>
                   
-                  <Form.Item name={['ai', 'temperature']} label={t('admin.settings.ai.temperature')} initialValue={0.0}>
+                  <Form.Item name={['ai', 'temperature']} label={t('admin.settings.ai.temperature')}>
                     <InputNumber style={{ width: '100%' }} min={0} max={2} step={0.1} />
                   </Form.Item>
                 </Card>
 
-                <Card title={t('admin.settings.credits.title')} size="small">
+                <Card title={t('admin.settings.credits.title')} size="small" style={{ marginBottom: 16 }}>
+                  <Form.Item name={['credits', 'enable_credits']} label={t('admin.settings.credits.enable')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  
                   <Form.Item name={['credits', 'default_credits']} label={t('admin.settings.credits.default')}>
                     <InputNumber 
                       style={{ width: '100%' }} 
@@ -887,6 +885,20 @@ const Settings = () => {
                   
                   <Form.Item name={['credits', 'min_credits_for_chat']} label={t('admin.settings.credits.minForChat')}>
                     <InputNumber style={{ width: '100%' }} min={1} max={100} />
+                  </Form.Item>
+                </Card>
+
+                <Card title={t('admin.settings.security.title')} size="small">
+                  <Form.Item name={['security', 'session_timeout']} label={t('admin.settings.security.sessionTimeout')}>
+                    <InputNumber style={{ width: '100%' }} min={5} max={1440} />
+                  </Form.Item>
+                  
+                  <Form.Item name={['security', 'max_login_attempts']} label={t('admin.settings.security.maxLoginAttempts')}>
+                    <InputNumber style={{ width: '100%' }} min={1} max={10} />
+                  </Form.Item>
+                  
+                  <Form.Item name={['security', 'enable_rate_limit']} label={t('admin.settings.security.enableRateLimit')} valuePropName="checked">
+                    <Switch />
                   </Form.Item>
                 </Card>
               </Col>
