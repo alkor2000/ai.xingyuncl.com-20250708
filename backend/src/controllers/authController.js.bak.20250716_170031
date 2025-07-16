@@ -4,7 +4,6 @@
 
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const ResponseHelper = require('../utils/response');
 const config = require('../config');
 const logger = require('../utils/logger');
@@ -34,9 +33,8 @@ class AuthController {
         return ResponseHelper.unauthorized(res, '邮箱或密码错误');
       }
 
-      // 验证密码（使用bcrypt）
-      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-      if (!isPasswordValid) {
+      // 验证密码（明文比较）
+      if (password !== user.password_hash) {
         logger.warn('登录失败：密码错误', { email, userId: user.id });
         return ResponseHelper.unauthorized(res, '邮箱或密码错误');
       }
@@ -140,19 +138,14 @@ class AuthController {
         return ResponseHelper.validation(res, ['邮箱已被注册']);
       }
 
-      // 加密密码
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-      // 创建用户（使用加密后的密码）
+      // 创建用户（明文密码）
       const user = await User.create({
         email: email.toLowerCase(),
         username,
-        password: hashedPassword, // 使用加密后的密码
+        password, // 直接使用明文密码
         role: 'user',
         status: 'active',
-        token_quota: 10000,
-        credits_quota: 1000
+        token_quota: 10000
       });
 
       // 获取新用户权限
@@ -221,7 +214,7 @@ class AuthController {
       }
 
       // 检查refresh token是否在黑名单中
-      if (decoded.jti && redisConnection.isConnected) {
+      if (redisConnection.isConnected) {
         const isBlacklisted = await redisConnection.exists(`token_blacklist:${decoded.jti}`);
         if (isBlacklisted) {
           return ResponseHelper.unauthorized(res, '刷新令牌已失效');
