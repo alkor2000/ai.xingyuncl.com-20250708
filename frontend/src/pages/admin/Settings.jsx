@@ -1,58 +1,34 @@
+/**
+ * 系统设置主页面 - 重构版
+ * 将原来1000+行的代码拆分为6个子组件
+ */
+
 import React, { useEffect, useState } from 'react'
+import { Card, Button, Tabs, Form, message, Space, Tag } from 'antd'
 import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Switch,
-  InputNumber,
-  Select,
-  Table,
-  Modal,
-  Space,
-  Row,
-  Col,
-  Statistic,
-  Typography,
-  Tag,
-  Tabs,
-  message,
-  Tooltip,
-  Popconfirm,
-  Badge
-} from 'antd'
-import {
-  SaveOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  ExperimentOutlined,
-  SettingOutlined,
-  RobotOutlined,
   BarChartOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  QuestionCircleOutlined,
-  ClockCircleOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  PlusOutlined,
   AppstoreOutlined,
-  PlayCircleOutlined,
-  StopOutlined,
-  ApiOutlined,
-  WalletOutlined,
   ThunderboltOutlined,
-  FireOutlined,
-  PictureOutlined,
   FileImageOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 
-const { TextArea } = Input
+// 导入子组件
+import {
+  SystemStats,
+  AIModelTable,
+  AIModelFormModal,
+  SystemModuleTable,
+  SystemModuleFormModal,
+  BasicSettings
+} from '../../components/admin/settings'
+
 const { TabPane } = Tabs
-const { Title, Text } = Typography
 
 const Settings = () => {
   const { t } = useTranslation()
@@ -78,18 +54,20 @@ const Settings = () => {
     updateSystemSettings
   } = useAdminStore()
 
+  // 表单实例
   const [settingsForm] = Form.useForm()
   const [modelForm] = Form.useForm()
   const [moduleForm] = Form.useForm()
   
+  // 状态管理
   const [isModelModalVisible, setIsModelModalVisible] = useState(false)
   const [isModuleModalVisible, setIsModuleModalVisible] = useState(false)
   const [editingModel, setEditingModel] = useState(null)
   const [editingModule, setEditingModule] = useState(null)
   const [testingModelId, setTestingModelId] = useState(null)
   const [checkingModuleId, setCheckingModuleId] = useState(null)
-  const [showApiKey, setShowApiKey] = useState({})
 
+  // 初始化加载数据
   useEffect(() => {
     if (hasPermission('system.all')) {
       getSystemStats()
@@ -99,13 +77,14 @@ const Settings = () => {
     }
   }, [hasPermission])
 
+  // 设置表单初始值
   useEffect(() => {
     if (systemSettings && Object.keys(systemSettings).length > 0) {
       settingsForm.setFieldsValue(systemSettings)
     }
   }, [systemSettings, settingsForm])
 
-  // 设置默认模型为第一个激活的模型
+  // 设置默认模型
   useEffect(() => {
     if (aiModels.length > 0 && systemSettings?.ai && !systemSettings.ai.default_model) {
       const firstActiveModel = aiModels.find(m => m.is_active)
@@ -125,7 +104,7 @@ const Settings = () => {
     }
   }
 
-  // 创建AI模型
+  // AI模型相关方法
   const handleCreateModel = async (values) => {
     try {
       await createAIModel(values)
@@ -137,7 +116,6 @@ const Settings = () => {
     }
   }
 
-  // 更新AI模型
   const handleUpdateModel = async (values) => {
     try {
       await updateAIModel(editingModel.id, values)
@@ -150,7 +128,6 @@ const Settings = () => {
     }
   }
 
-  // 删除AI模型
   const handleDeleteModel = async (modelId) => {
     try {
       await deleteAIModel(modelId)
@@ -160,7 +137,6 @@ const Settings = () => {
     }
   }
 
-  // 测试AI模型
   const handleTestModel = async (modelId) => {
     setTestingModelId(modelId)
     try {
@@ -183,7 +159,6 @@ const Settings = () => {
     }
   }
 
-  // 编辑AI模型
   const handleEditModel = (model) => {
     setEditingModel(model)
     modelForm.setFieldsValue({
@@ -200,7 +175,25 @@ const Settings = () => {
     setIsModelModalVisible(true)
   }
 
-  // 创建系统模块
+  const handleToggleStreamEnabled = async (modelId, streamEnabled) => {
+    try {
+      await updateAIModel(modelId, { stream_enabled: streamEnabled })
+      message.success(streamEnabled ? '流式输出已启用' : '流式输出已禁用')
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
+  const handleToggleImageUploadEnabled = async (modelId, imageUploadEnabled) => {
+    try {
+      await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
+      message.success(imageUploadEnabled ? '图片上传已启用' : '图片上传已禁用')
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
+  // 系统模块相关方法
   const handleCreateModule = async (values) => {
     try {
       await createModule(values)
@@ -212,7 +205,6 @@ const Settings = () => {
     }
   }
 
-  // 更新系统模块
   const handleUpdateModule = async (values) => {
     try {
       await updateModule(editingModule.id, values)
@@ -225,7 +217,6 @@ const Settings = () => {
     }
   }
 
-  // 删除系统模块
   const handleDeleteModule = async (moduleId) => {
     try {
       await deleteModule(moduleId)
@@ -235,7 +226,6 @@ const Settings = () => {
     }
   }
 
-  // 编辑系统模块
   const handleEditModule = (module) => {
     setEditingModule(module)
     moduleForm.setFieldsValue({
@@ -255,7 +245,6 @@ const Settings = () => {
     setIsModuleModalVisible(true)
   }
 
-  // 检查模块健康状态
   const handleCheckModuleHealth = async (moduleId) => {
     setCheckingModuleId(moduleId)
     try {
@@ -272,7 +261,6 @@ const Settings = () => {
     }
   }
 
-  // 切换模块启用状态
   const handleToggleModuleStatus = async (moduleId, isActive) => {
     try {
       await updateModule(moduleId, { is_active: isActive })
@@ -281,336 +269,6 @@ const Settings = () => {
       message.error('操作失败')
     }
   }
-
-  // 🆕 快速切换流式输出状态
-  const handleToggleStreamEnabled = async (modelId, streamEnabled) => {
-    try {
-      await updateAIModel(modelId, { stream_enabled: streamEnabled })
-      message.success(streamEnabled ? '流式输出已启用' : '流式输出已禁用')
-    } catch (error) {
-      message.error('操作失败')
-    }
-  }
-
-  // 🆕 快速切换图片上传状态
-  const handleToggleImageUploadEnabled = async (modelId, imageUploadEnabled) => {
-    try {
-      await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
-      message.success(imageUploadEnabled ? '图片上传已启用' : '图片上传已禁用')
-    } catch (error) {
-      message.error('操作失败')
-    }
-  }
-
-  // 渲染测试状态
-  const renderTestStatus = (status, lastTestedAt, modelId) => {
-    if (testingModelId === modelId) {
-      return (
-        <Tag icon={<ClockCircleOutlined />} color="processing">
-          {t('status.loading')}
-        </Tag>
-      )
-    }
-
-    switch (status) {
-      case 'success':
-        return (
-          <Tag icon={<CheckCircleOutlined />} color="success">
-            {t('status.success')}
-          </Tag>
-        )
-      case 'failed':
-        return (
-          <Tag icon={<CloseCircleOutlined />} color="error">
-            {t('status.failed')}
-          </Tag>
-        )
-      default:
-        return (
-          <Tag icon={<QuestionCircleOutlined />} color="default">
-            {t('status.error')}
-          </Tag>
-        )
-    }
-  }
-
-  // 渲染模块状态
-  const renderModuleStatus = (status) => {
-    switch (status) {
-      case 'online':
-        return <Tag color="success">{t('status.online')}</Tag>
-      case 'offline':
-        return <Tag color="error">{t('status.offline')}</Tag>
-      case 'error':
-        return <Tag color="error">{t('status.error')}</Tag>
-      default:
-        return <Tag color="default">{t('status.error')}</Tag>
-    }
-  }
-  
-  // 🆕 AI模型表格列 - 增强流式输出和图片上传显示
-  const modelColumns = [
-    {
-      title: t('admin.models.table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      width: 140
-    },
-    {
-      title: t('admin.models.table.displayName'),
-      dataIndex: 'display_name',
-      key: 'display_name',
-      width: 160
-    },
-    {
-      title: t('admin.models.table.credits'),
-      dataIndex: 'credits_per_chat',
-      key: 'credits_per_chat',
-      width: 100,
-      render: (credits) => (
-        <Space>
-          <WalletOutlined style={{ color: '#1677ff' }} />
-          <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
-            {credits}{t('admin.models.perChat')}
-          </span>
-        </Space>
-      )
-    },
-    {
-      title: t('admin.models.table.streamEnabled'),
-      dataIndex: 'stream_enabled',
-      key: 'stream_enabled',
-      width: 120,
-      render: (streamEnabled, record) => (
-        <Space>
-          <Switch
-            checked={streamEnabled}
-            size="small"
-            loading={loading}
-            onChange={(checked) => handleToggleStreamEnabled(record.id, checked)}
-            checkedChildren={<ThunderboltOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {streamEnabled ? (
-            <Tag color="processing" icon={<ThunderboltOutlined />} size="small">
-              {t('admin.models.stream')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.standard')}
-            </Tag>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: t('admin.models.table.imageUploadEnabled'),
-      dataIndex: 'image_upload_enabled',
-      key: 'image_upload_enabled',
-      width: 120,
-      render: (imageUploadEnabled, record) => (
-        <Space>
-          <Switch
-            checked={imageUploadEnabled}
-            size="small"
-            loading={loading}
-            onChange={(checked) => handleToggleImageUploadEnabled(record.id, checked)}
-            checkedChildren={<PictureOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {imageUploadEnabled ? (
-            <Tag color="success" icon={<FileImageOutlined />} size="small">
-              {t('admin.models.image')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.textOnly')}
-            </Tag>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: t('admin.models.table.apiKey'),
-      dataIndex: 'api_key',
-      key: 'api_key',
-      width: 120,
-      render: (apiKey, record) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ minWidth: 80 }}>
-            {showApiKey[record.id] ? 
-              (apiKey ? `${apiKey.substring(0, 15)}...` : t('admin.models.notConfigured')) : 
-              '••••••••••••••••'
-            }
-          </span>
-          <Button
-            type="text"
-            size="small"
-            icon={showApiKey[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-            onClick={() => setShowApiKey(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
-          />
-        </div>
-      )
-    },
-    {
-      title: t('admin.models.table.status'),
-      key: 'status',
-      width: 140,
-      render: (_, record) => (
-        <Space direction="vertical" size="small">
-          <div>
-            {record.is_active ? (
-              <Tag color="success" size="small">{t('status.active')}</Tag>
-            ) : (
-              <Tag color="default" size="small">{t('status.inactive')}</Tag>
-            )}
-            {renderTestStatus(record.test_status, record.last_tested_at, record.id)}
-          </div>
-        </Space>
-      )
-    },
-    {
-      title: t('admin.models.table.actions'),
-      key: 'actions',
-      width: 120,
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title={t('admin.models.testConnection')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<ExperimentOutlined />}
-              loading={testingModelId === record.id}
-              onClick={() => handleTestModel(record.id)}
-            />
-          </Tooltip>
-          <Tooltip title={t('button.edit')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditModel(record)}
-            />
-          </Tooltip>
-          <Tooltip title={t('button.delete')}>
-            <Popconfirm
-              title={t('admin.models.delete.confirm')}
-              onConfirm={() => handleDeleteModel(record.id)}
-              okText={t('button.confirm')}
-              cancelText={t('button.cancel')}
-            >
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              />
-            </Popconfirm>
-          </Tooltip>
-        </Space>
-      )
-    }
-  ]
-
-  // 系统模块表格列
-  const moduleColumns = [
-    {
-      title: t('admin.modules.table.name'),
-      dataIndex: 'display_name', 
-      key: 'display_name',
-      render: (text, record) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{text}</div>
-          <div style={{ fontSize: 12, color: '#999' }}>{record.name}</div>
-        </div>
-      )
-    },
-    {
-      title: t('admin.modules.table.type'),
-      dataIndex: 'module_type',
-      key: 'module_type',
-      render: (type) => {
-        const typeMap = {
-          'frontend': { color: 'blue', text: t('admin.modules.type.frontend') },
-          'backend': { color: 'green', text: t('admin.modules.type.backend') },
-          'fullstack': { color: 'purple', text: t('admin.modules.type.fullstack') }
-        }
-        const config = typeMap[type] || { color: 'default', text: type }
-        return <Tag color={config.color}>{config.text}</Tag>
-      }
-    },
-    {
-      title: t('admin.modules.table.proxyPath'),
-      dataIndex: 'proxy_path',
-      key: 'proxy_path',
-      render: (path) => (
-        <span style={{ fontFamily: 'monospace', fontSize: 12, backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
-          {path}
-        </span>
-      )
-    },
-    {
-      title: t('admin.modules.table.status'),
-      key: 'status',
-      render: (_, record) => (
-        <Space>
-          <Badge 
-            status={record.is_active ? 'success' : 'default'} 
-            text={record.is_active ? t('status.active') : t('status.inactive')} 
-          />
-          {renderModuleStatus(record.status)}
-        </Space>
-      )
-    },
-    {
-      title: t('table.actions'),
-      key: 'actions',
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title={t('admin.modules.healthCheck')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<ApiOutlined />}
-              loading={checkingModuleId === record.id}
-              onClick={() => handleCheckModuleHealth(record.id)}
-            />
-          </Tooltip>
-          <Tooltip title={record.is_active ? t('admin.modules.disable') : t('admin.modules.enable')}>
-            <Button
-              type="text"
-              size="small"
-              icon={record.is_active ? <StopOutlined /> : <PlayCircleOutlined />}
-              onClick={() => handleToggleModuleStatus(record.id, !record.is_active)}
-            />
-          </Tooltip>
-          <Tooltip title={t('button.edit')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditModule(record)}
-            />
-          </Tooltip>
-          <Tooltip title={t('button.delete')}>
-            <Popconfirm
-              title="确定删除这个模块吗？"
-              onConfirm={() => handleDeleteModule(record.id)}
-              okText={t('button.confirm')}
-              cancelText={t('button.cancel')}
-            >
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              />
-            </Popconfirm>
-          </Tooltip>
-        </Space>
-      )
-    }
-  ]
 
   // 权限检查
   if (!hasPermission('system.all')) {
@@ -628,123 +286,41 @@ const Settings = () => {
   return (
     <div className="page-container">
       <Tabs defaultActiveKey="statistics" type="card">
-        {/* 系统统计 (增强积分统计) */}
-        <TabPane tab={<span><BarChartOutlined />{t('admin.settings.tabs.statistics')}</span>} key="statistics">
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={12}>
-              <Card title={t('admin.settings.userStats')} size="small">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.totalUsers')} 
-                      value={systemStats.users?.total_users || 0} 
-                      valueStyle={{ color: '#1677ff' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.activeUsers')} 
-                      value={systemStats.users?.active_users || 0} 
-                      valueStyle={{ color: '#52c41a' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.totalCreditsQuota')} 
-                      value={systemStats.users?.total_credits_quota || 0} 
-                      valueStyle={{ color: '#722ed1' }}
-                      formatter={value => value?.toLocaleString()}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.totalCreditsUsed')} 
-                      value={systemStats.users?.total_credits_used || 0} 
-                      valueStyle={{ color: '#fa8c16' }}
-                      formatter={value => value?.toLocaleString()}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-
-            <Col xs={24} lg={12}>
-              <Card title={t('admin.settings.conversationStats')} size="small">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.totalConversations')} 
-                      value={systemStats.conversations?.total_conversations || 0} 
-                      valueStyle={{ color: '#1677ff' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic 
-                      title={t('admin.settings.totalMessages')} 
-                      value={systemStats.conversations?.total_messages || 0} 
-                      valueStyle={{ color: '#52c41a' }}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Statistic 
-                      title={t('admin.settings.avgMessagesPerConversation')} 
-                      value={systemStats.conversations?.avg_messages_per_conversation || 0} 
-                      precision={1}
-                      valueStyle={{ color: '#fa8c16' }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-
-            <Col xs={24}>
-              <Card title={t('admin.settings.modelUsage')} size="small">
-                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                  {systemStats.models?.map((model, index) => (
-                    <div key={model.model_name} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      padding: '8px 0',
-                      borderBottom: index < systemStats.models.length - 1 ? '1px solid #f0f0f0' : 'none'
-                    }}>
-                      <Space>
-                        <span>#{index + 1} {model.model_name}</span>
-                        {model.credits_per_chat && (
-                          <Tag color="blue" size="small">
-                            💰 {model.credits_per_chat} {t('admin.models.perChat')}
-                          </Tag>
-                        )}
-                      </Space>
-                      <Space>
-                        <span>{model.conversation_count} {t('admin.settings.conversations')}</span>
-                        {model.total_credits_consumed && (
-                          <span style={{ color: '#722ed1' }}>
-                            🪙 {model.total_credits_consumed?.toLocaleString()} {t('unit.credits', { defaultValue: '积分' })}
-                          </span>
-                        )}
-                        <span style={{ color: '#999' }}>
-                          {model.total_tokens?.toLocaleString()} {t('unit.tokens')}
-                        </span>
-                      </Space>
-                    </div>
-                  )) || <div style={{ color: '#999' }}>{t('message.noData')}</div>}
-                </div>
-              </Card>
-            </Col>
-          </Row>
+        {/* 系统统计 */}
+        <TabPane 
+          tab={
+            <span>
+              <BarChartOutlined />
+              {t('admin.settings.tabs.statistics')}
+            </span>
+          } 
+          key="statistics"
+        >
+          <SystemStats systemStats={systemStats} />
         </TabPane>
 
-        {/* 🆕 AI模型管理 - 增强流式输出和图片上传配置 */}
-        <TabPane tab={<span><RobotOutlined />{t('admin.settings.tabs.models')}</span>} key="models">
+        {/* AI模型管理 */}
+        <TabPane 
+          tab={
+            <span>
+              <RobotOutlined />
+              {t('admin.settings.tabs.models')}
+            </span>
+          } 
+          key="models"
+        >
           <Card 
             title={
               <Space>
                 <RobotOutlined />
                 <span>{t('admin.models.config')}</span>
                 <Tag color="blue">💰 {t('admin.models.creditsSystem')}</Tag>
-                <Tag color="processing" icon={<ThunderboltOutlined />}>🚀 {t('admin.models.streamOutput')}</Tag>
-                <Tag color="success" icon={<FileImageOutlined />}>🖼️ {t('admin.models.imageUpload')}</Tag>
+                <Tag color="processing" icon={<ThunderboltOutlined />}>
+                  🚀 {t('admin.models.streamOutput')}
+                </Tag>
+                <Tag color="success" icon={<FileImageOutlined />}>
+                  🖼️ {t('admin.models.imageUpload')}
+                </Tag>
                 <Tag color="green">🔓 {t('admin.models.noOutputLimit')}</Tag>
               </Space>
             }
@@ -762,20 +338,29 @@ const Settings = () => {
               </Button>
             }
           >
-            <Table
-              columns={modelColumns}
-              dataSource={aiModels}
-              rowKey="id"
+            <AIModelTable
+              models={aiModels}
               loading={loading}
-              pagination={false}
-              size="small"
-              scroll={{ x: 'max-content' }}
+              testingModelId={testingModelId}
+              onTest={handleTestModel}
+              onEdit={handleEditModel}
+              onDelete={handleDeleteModel}
+              onToggleStreamEnabled={handleToggleStreamEnabled}
+              onToggleImageUploadEnabled={handleToggleImageUploadEnabled}
             />
           </Card>
         </TabPane>
 
         {/* 模块接入 */}
-        <TabPane tab={<span><AppstoreOutlined />{t('admin.settings.tabs.modules')}</span>} key="modules">
+        <TabPane 
+          tab={
+            <span>
+              <AppstoreOutlined />
+              {t('admin.settings.tabs.modules')}
+            </span>
+          } 
+          key="modules"
+        >
           <Card
             title={t('admin.modules.title')}
             extra={
@@ -792,482 +377,64 @@ const Settings = () => {
               </Button>
             }
           >
-            <Table
-              columns={moduleColumns}
-              dataSource={modules}
-              rowKey="id"
+            <SystemModuleTable
+              modules={modules}
               loading={loading}
-              pagination={false}
-              size="small"
-              scroll={{ x: 'max-content' }}
+              checkingModuleId={checkingModuleId}
+              onCheckHealth={handleCheckModuleHealth}
+              onToggleStatus={handleToggleModuleStatus}
+              onEdit={handleEditModule}
+              onDelete={handleDeleteModule}
             />
           </Card>
         </TabPane>
 
-        {/* 简化后的基础设置 */}
-        <TabPane tab={<span><SettingOutlined />{t('admin.settings.tabs.basic')}</span>} key="settings">
-          <Form
+        {/* 基础设置 */}
+        <TabPane 
+          tab={
+            <span>
+              <SettingOutlined />
+              {t('admin.settings.tabs.basic')}
+            </span>
+          } 
+          key="settings"
+        >
+          <BasicSettings
             form={settingsForm}
-            layout="vertical"
-            onFinish={handleSaveSettings}
-          >
-            <Row gutter={24}>
-              <Col xs={24} lg={12}>
-                <Card title={t('admin.settings.site.title')} size="small" style={{ marginBottom: 16 }}>
-                  <Form.Item name={['site', 'name']} label={t('admin.settings.site.name')}>
-                    <Input placeholder="AI Platform" />
-                  </Form.Item>
-                  
-                  <Form.Item name={['site', 'description']} label={t('admin.settings.site.description')}>
-                    <TextArea rows={3} placeholder={t('app.description')} />
-                  </Form.Item>
-                </Card>
-
-                <Card title={t('admin.settings.user.title')} size="small">
-                  <Form.Item name={['user', 'allow_register']} label={t('admin.settings.user.allowRegister')} valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                  
-                  <Form.Item name={['user', 'default_token_quota']} label={t('admin.settings.user.defaultTokenQuota')}>
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                    />
-                  </Form.Item>
-
-                  <Form.Item name={['user', 'default_credits_quota']} label={t('admin.settings.user.defaultCreditsQuota')}>
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                    />
-                  </Form.Item>
-                </Card>
-              </Col>
-
-              <Col xs={24} lg={12}>
-                <Card title={t('admin.settings.ai.title')} size="small" style={{ marginBottom: 16 }}>
-                  <Form.Item name={['ai', 'default_model']} label={t('admin.settings.ai.defaultModel')}>
-                    <Select>
-                      {aiModels.filter(m => m.is_active).map(model => (
-                        <Select.Option key={model.name} value={model.name}>
-                          <Space>
-                            <span>{model.display_name}</span>
-                            <Tag color="blue" size="small">{model.credits_per_chat}{t('unit.credits', { defaultValue: '积分' })}</Tag>
-                            {model.stream_enabled && (
-                              <Tag color="processing" icon={<ThunderboltOutlined />} size="small">{t('admin.models.stream')}</Tag>
-                            )}
-                            {model.image_upload_enabled && (
-                              <Tag color="success" icon={<FileImageOutlined />} size="small">{t('admin.models.image')}</Tag>
-                            )}
-                          </Space>
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  
-                  <Form.Item name={['ai', 'temperature']} label={t('admin.settings.ai.temperature')} initialValue={0.0}>
-                    <InputNumber style={{ width: '100%' }} min={0} max={2} step={0.1} />
-                  </Form.Item>
-                </Card>
-
-                <Card title={t('admin.settings.credits.title')} size="small">
-                  <Form.Item name={['credits', 'default_credits']} label={t('admin.settings.credits.default')}>
-                    <InputNumber 
-                      style={{ width: '100%' }} 
-                      min={0} 
-                      max={100000}
-                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                    />
-                  </Form.Item>
-                  
-                  <Form.Item name={['credits', 'min_credits_for_chat']} label={t('admin.settings.credits.minForChat')}>
-                    <InputNumber style={{ width: '100%' }} min={1} max={100} />
-                  </Form.Item>
-                </Card>
-              </Col>
-            </Row>
-
-            <Form.Item style={{ textAlign: 'center', marginTop: 24 }}>
-              <Space>
-                <Button type="primary" icon={<SaveOutlined />} htmlType="submit" loading={loading}>
-                  {t('button.save')}
-                </Button>
-                <Button onClick={() => settingsForm.resetFields()}>
-                  {t('button.reset')}
-                </Button>
-              </Space>
-            </Form.Item>
-          </Form>
+            aiModels={aiModels}
+            loading={loading}
+            onSubmit={handleSaveSettings}
+          />
         </TabPane>
       </Tabs>
 
-      {/* 🆕 AI模型创建/编辑弹窗 - 新增图片上传配置 */}
-      <Modal
-        title={editingModel ? t('admin.models.editModel') : t('admin.models.createModel')}
-        open={isModelModalVisible}
+      {/* AI模型弹窗 */}
+      <AIModelFormModal
+        visible={isModelModalVisible}
+        editingModel={editingModel}
+        form={modelForm}
+        loading={loading}
+        onSubmit={editingModel ? handleUpdateModel : handleCreateModel}
         onCancel={() => {
           setIsModelModalVisible(false)
           setEditingModel(null)
           modelForm.resetFields()
         }}
-        footer={null}
-        destroyOnClose
-        width={700}
-      >
-        <Form
-          form={modelForm}
-          layout="vertical"
-          onFinish={editingModel ? handleUpdateModel : handleCreateModel}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="name"
-                label={t('admin.models.form.name')}
-                rules={[{ required: true, message: t('admin.models.form.name.required') }]}
-              >
-                <Input placeholder={t('admin.models.form.name.placeholder')} disabled={!!editingModel} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="display_name"
-                label={t('admin.models.form.displayName')}
-                rules={[{ required: true, message: t('admin.models.form.displayName.required') }]}
-              >
-                <Input placeholder={t('admin.models.form.displayName.placeholder')} />
-              </Form.Item>
-            </Col>
-          </Row>
+      />
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="api_key"
-                label={t('admin.models.form.apiKey')}
-                rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required') }]}
-              >
-                <Input.Password placeholder="sk-..." />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="api_endpoint"
-                label={t('admin.models.form.apiEndpoint')}
-                rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required') }]}
-              >
-                <Input placeholder="https://api.openai.com/v1" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {/* 🆕 流式输出配置区域 */}
-          <Row gutter={16}>
-            <Col span={24}>
-              <Card 
-                title={
-                  <Space>
-                    <ThunderboltOutlined style={{ color: '#1677ff' }} />
-                    <span>{t('admin.models.form.streamConfig')}</span>
-                    <Tag color="processing">🚀 {t('admin.models.streamOutput')}</Tag>
-                  </Space>
-                } 
-                size="small" 
-                style={{ marginBottom: 16 }}
-              >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="stream_enabled"
-                      label={t('admin.models.form.enableStream')}
-                      valuePropName="checked"
-                      initialValue={true}
-                    >
-                      <Switch
-                        checkedChildren={<ThunderboltOutlined />}
-                        unCheckedChildren={<CloseCircleOutlined />}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <div style={{ 
-                      marginTop: 30, 
-                      padding: '8px 12px',
-                      backgroundColor: '#f0f9ff',
-                      borderRadius: '4px',
-                      borderLeft: '3px solid #1677ff',
-                      fontSize: '12px',
-                      color: '#1677ff'
-                    }}
-                    dangerouslySetInnerHTML={{ 
-                      __html: t('admin.models.form.streamTip')
-                    }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
-
-          {/* 🆕 图片识别配置区域 */}
-          <Row gutter={16}>
-            <Col span={24}>
-              <Card 
-                title={
-                  <Space>
-                    <FileImageOutlined style={{ color: '#52c41a' }} />
-                    <span>{t('admin.models.form.imageConfig')}</span>
-                    <Tag color="success">🖼️ {t('admin.models.imageUpload')}</Tag>
-                  </Space>
-                } 
-                size="small" 
-                style={{ marginBottom: 16 }}
-              >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="image_upload_enabled"
-                      label={t('admin.models.form.enableImageUpload')}
-                      valuePropName="checked"
-                      initialValue={false}
-                    >
-                      <Switch
-                        checkedChildren={<PictureOutlined />}
-                        unCheckedChildren={<CloseCircleOutlined />}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <div style={{ 
-                      marginTop: 30, 
-                      padding: '8px 12px',
-                      backgroundColor: '#f0fff7',
-                      borderRadius: '4px',
-                      borderLeft: '3px solid #52c41a',
-                      fontSize: '12px',
-                      color: '#52c41a'
-                    }}
-                    dangerouslySetInnerHTML={{ 
-                      __html: t('admin.models.form.imageTip')
-                    }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
-
-          {/* 积分配置区域 */}
-          <Row gutter={16}>
-            <Col span={24}>
-              <Card 
-                title={
-                  <Space>
-                    <WalletOutlined style={{ color: '#1677ff' }} />
-                    <span>{t('admin.models.form.creditsConfig')}</span>
-                    <Tag color="green">🚀 {t('admin.models.noOutputLimit')}</Tag>
-                  </Space>
-                } 
-                size="small" 
-                style={{ marginBottom: 16 }}
-              >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="credits_per_chat"
-                      label={t('admin.models.form.creditsPerChat')}
-                      rules={[{ required: true, message: t('admin.models.form.creditsPerChat.required') }]}
-                      initialValue={10}
-                    >
-                      <InputNumber
-                        style={{ width: '100%' }}
-                        min={1}
-                        max={1000}
-                        addonAfter={t('admin.models.perChat')}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <div style={{ 
-                      marginTop: 30, 
-                      padding: '8px 12px',
-                      backgroundColor: '#f0f9ff',
-                      borderRadius: '4px',
-                      borderLeft: '3px solid #1677ff',
-                      fontSize: '12px',
-                      color: '#1677ff'
-                    }}
-                    dangerouslySetInnerHTML={{ 
-                      __html: t('admin.models.form.creditsTip')
-                    }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="is_active" label={t('admin.models.form.status')} valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="sort_order" label={t('admin.models.form.sort')}>
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
-            <Space>
-              <Button onClick={() => {
-                setIsModelModalVisible(false)
-                setEditingModel(null)
-                modelForm.resetFields()
-              }}>
-                {t('button.cancel')}
-              </Button>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {editingModel ? t('button.update') : t('button.create')}
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 系统模块创建/编辑弹窗 (保持不变) */}
-      <Modal
-        title={editingModule ? '编辑系统模块' : '创建系统模块'}
-        open={isModuleModalVisible}
+      {/* 系统模块弹窗 */}
+      <SystemModuleFormModal
+        visible={isModuleModalVisible}
+        editingModule={editingModule}
+        form={moduleForm}
+        loading={loading}
+        onSubmit={editingModule ? handleUpdateModule : handleCreateModule}
         onCancel={() => {
           setIsModuleModalVisible(false)
           setEditingModule(null)
           moduleForm.resetFields()
         }}
-        footer={null}
-        destroyOnClose
-        width={800}
-      >
-        <Form
-          form={moduleForm}
-          layout="vertical"
-          onFinish={editingModule ? handleUpdateModule : handleCreateModule}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="name"
-                label="模块标识"
-                rules={[{ required: true, message: '请输入模块标识' }]}
-              >
-                <Input placeholder="如: ai-image-generator" disabled={!!editingModule} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="display_name"
-                label="显示名称"
-                rules={[{ required: true, message: '请输入显示名称' }]}
-              >
-                <Input placeholder="如: AI图像生成" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item name="description" label="模块描述">
-            <TextArea rows={2} placeholder="描述模块的功能和用途" />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="module_type" label="模块类型" rules={[{ required: true }]}>
-                <Select>
-                  <Select.Option value="frontend">前端模块</Select.Option>
-                  <Select.Option value="backend">后端模块</Select.Option>
-                  <Select.Option value="fullstack">全栈模块</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="auth_mode" label="认证模式" rules={[{ required: true }]}>
-                <Select>
-                  <Select.Option value="jwt">JWT认证</Select.Option>
-                  <Select.Option value="oauth">OAuth认证</Select.Option>
-                  <Select.Option value="none">无认证</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="proxy_path"
-                label="代理路径"
-                rules={[{ required: true, message: '请输入代理路径' }]}
-              >
-                <Input placeholder="/image-generation" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="api_endpoint" label="后端API地址">
-                <Input placeholder="http://localhost:5000/api" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="frontend_url" label="前端地址">
-                <Input placeholder="http://localhost:5001" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item name="health_check_url" label="健康检查地址">
-            <Input placeholder="http://localhost:5000/health" />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="permissions" label="所需权限">
-                <Select mode="tags" placeholder="添加权限标识">
-                  <Select.Option value="image.generate">image.generate</Select.Option>
-                  <Select.Option value="image.view">image.view</Select.Option>
-                  <Select.Option value="code.generate">code.generate</Select.Option>
-                  <Select.Option value="document.process">document.process</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="is_active" label="启用状态" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
-            <Space>
-              <Button onClick={() => {
-                setIsModuleModalVisible(false)
-                setEditingModule(null)
-                moduleForm.resetFields()
-              }}>
-                {t('button.cancel')}
-              </Button>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {editingModule ? t('button.update') : t('button.create')}
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+      />
     </div>
   )
 }

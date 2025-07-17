@@ -20,57 +20,22 @@ const SystemStatsController = require('../controllers/admin/SystemStatsControlle
 
 const router = express.Router();
 
-// 管理员操作限流配置 - 调整为更宽松的限制
+// 管理员操作限流配置
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 1000, // 限制每个IP最多1000个管理请求（原来是100，太严格了）
+  max: 100, // 限制每个IP最多100个管理请求
   message: {
     success: false,
     message: '管理操作过于频繁，请稍后再试',
     timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // 跳过成功的请求，只计算失败的请求
-  skipSuccessfulRequests: false,
-  // 跳过失败的请求
-  skipFailedRequests: false
-});
-
-// 为读取操作设置更宽松的限流（GET请求）
-const adminReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 2000, // GET请求限制更宽松
-  message: {
-    success: false,
-    message: '读取操作过于频繁，请稍后再试',
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.method !== 'GET' // 只对GET请求生效
-});
-
-// 为写入操作设置严格的限流（POST/PUT/DELETE请求）
-const adminWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 200, // 写操作限制相对严格
-  message: {
-    success: false,
-    message: '写入操作过于频繁，请稍后再试',
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.method === 'GET' // 跳过GET请求
+  }
 });
 
 // 所有路由都需要认证
 router.use(authenticate);
 
-// 应用分层限流中间件
-router.use(adminReadLimiter);  // 读操作限流
-router.use(adminWriteLimiter); // 写操作限流
+// 应用限流中间件
+router.use(adminLimiter);
 
 // ===== 路由挂载 =====
 
