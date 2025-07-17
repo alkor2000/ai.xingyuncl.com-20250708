@@ -482,16 +482,6 @@ const Chat = () => {
                     <Text type="secondary">{t('chat.credits.remaining')}:</Text>
                     <Text strong className="credits-value">
                       {userCredits.credits_stats.remaining.toLocaleString()}
-                  {userCredits.credits_stats?.isExpired && (
-                    <div style={{ color: "#ff4d4f", fontSize: 12, marginTop: 4 }}>
-                      <ExclamationCircleOutlined /> 积分已过期
-                    </div>
-                  )}
-                  {userCredits.credits_stats?.remainingDays !== null && userCredits.credits_stats.remainingDays <= 7 && !userCredits.credits_stats.isExpired && (
-                    <div style={{ color: "#fa8c16", fontSize: 12, marginTop: 4 }}>
-                      <ClockCircleOutlined /> {userCredits.credits_stats.remainingDays}天后过期
-                    </div>
-                  )}
                     </Text>
                   </div>
                   <div className="credits-item">

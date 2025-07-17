@@ -22,9 +22,7 @@ import {
   Divider,
   Timeline,
   Alert,
-  Descriptions,
-  DatePicker,
-  Badge
+  Descriptions
 } from 'antd'
 import { 
   UserAddOutlined, 
@@ -41,15 +39,11 @@ import {
   HistoryOutlined,
   TrophyOutlined,
   ClockCircleOutlined,
-  UserOutlined,
-  CalendarOutlined,
-  ExclamationCircleOutlined,
-  CheckCircleOutlined
+  UserOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
-import moment from 'moment'
 
 const { TabPane } = Tabs
 
@@ -78,8 +72,7 @@ const Users = () => {
     setUserCreditsQuota,
     addUserCredits,
     deductUserCredits,
-    getUserCreditsHistory,
-    setUserCreditsExpire
+    getUserCreditsHistory
   } = useAdminStore()
 
   const [form] = Form.useForm()
@@ -157,18 +150,7 @@ const Users = () => {
   // 创建用户
   const handleCreateUser = async (values) => {
     try {
-      // 如果设置了积分有效期，计算天数
-      let credits_expire_days = 365 // 默认365天
-      if (values.credits_expire_at) {
-        const days = values.credits_expire_at.diff(moment(), 'days')
-        credits_expire_days = Math.max(1, days)
-      }
-      
-      await createUser({
-        ...values,
-        credits_expire_days
-      })
-      
+      await createUser(values)
       setIsModalVisible(false)
       form.resetFields()
       message.success(t('admin.users.create.success'))
@@ -181,19 +163,11 @@ const Users = () => {
   // 更新用户（包括积分管理）
   const handleUpdateUser = async (values) => {
     try {
-      const { 
-        creditsOperation, 
-        creditsAmount, 
-        creditsReason, 
-        newPassword, 
-        confirmPassword,
-        credits_expire_at,
-        extend_days,
-        ...updateData 
-      } = values
+      const { creditsOperation, creditsAmount, creditsReason, newPassword, confirmPassword, ...updateData } = values
       
       // 更新基本信息
       await updateUser(editingUser.id, updateData)
+      
       
       // 处理密码重置
       if (newPassword) {
@@ -201,11 +175,13 @@ const Users = () => {
         await resetUserPassword(editingUser.id, newPassword)
       }
       
+
+      
       // 处理积分操作
       if (creditsOperation && creditsAmount && creditsReason) {
         switch (creditsOperation) {
           case 'add':
-            await addUserCredits(editingUser.id, creditsAmount, creditsReason, extend_days)
+            await addUserCredits(editingUser.id, creditsAmount, creditsReason)
             break
           case 'deduct':
             await deductUserCredits(editingUser.id, creditsAmount, creditsReason)
@@ -214,19 +190,6 @@ const Users = () => {
             await setUserCreditsQuota(editingUser.id, creditsAmount, creditsReason)
             break
         }
-      }
-      
-      // 处理积分有效期
-      if (credits_expire_at) {
-        await setUserCreditsExpire(editingUser.id, {
-          expire_date: credits_expire_at.format('YYYY-MM-DD HH:mm:ss'),
-          reason: creditsReason || '管理员设置积分有效期'
-        })
-      } else if (extend_days && !creditsOperation) {
-        await setUserCreditsExpire(editingUser.id, {
-          extend_days: extend_days,
-          reason: creditsReason || '管理员延长积分有效期'
-        })
       }
       
       setIsModalVisible(false)
@@ -281,8 +244,7 @@ const Users = () => {
       group_id: user.group_id,
       status: user.status,
       token_quota: user.token_quota,
-      credits_quota: user.credits_quota,
-      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null
+      credits_quota: user.credits_quota
     })
     
     // 加载用户积分信息和历史
@@ -345,25 +307,6 @@ const Users = () => {
       sort_order: group.sort_order
     })
     setIsGroupModalVisible(true)
-  }
-
-  // 获取积分状态标签
-  const getCreditsStatusTag = (user) => {
-    const stats = user.credits_stats || {}
-    
-    if (stats.isExpired) {
-      return <Tag color="error" icon={<ExclamationCircleOutlined />}>已过期</Tag>
-    }
-    
-    if (stats.remainingDays !== null && stats.remainingDays <= 7) {
-      return <Tag color="warning" icon={<ClockCircleOutlined />}>{stats.remainingDays}天后过期</Tag>
-    }
-    
-    if (stats.remaining > 0) {
-      return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
-    }
-    
-    return <Tag color="default">无积分</Tag>
   }
 
   const roleColors = {
@@ -429,17 +372,13 @@ const Users = () => {
       title: t('admin.users.table.credits'),
       key: 'credits',
       render: (_, record) => {
-        const stats = record.credits_stats || {}
-        const remaining = stats.remaining || 0
+        const remaining = (record.credits_quota || 0) - (record.used_credits || 0)
         const usageRate = record.credits_quota > 0 ? (record.used_credits / record.credits_quota * 100) : 0
         
         return (
-          <div style={{ minWidth: 150 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: stats.isExpired ? '#ff4d4f' : (remaining > 0 ? '#52c41a' : '#ff4d4f') }}>
-                {remaining.toLocaleString()}
-              </div>
-              {getCreditsStatusTag(record)}
+          <div style={{ minWidth: 120 }}>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: remaining > 0 ? '#52c41a' : '#ff4d4f' }}>
+              {remaining?.toLocaleString()}
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
               {record.used_credits?.toLocaleString()} / {record.credits_quota?.toLocaleString()}
@@ -447,14 +386,9 @@ const Users = () => {
             <Progress 
               percent={Math.round(usageRate)} 
               size="small" 
-              strokeColor={stats.isExpired ? '#ff4d4f' : (usageRate > 80 ? '#ff4d4f' : '#52c41a')}
+              strokeColor={usageRate > 80 ? '#ff4d4f' : '#52c41a'}
               showInfo={false}
             />
-            {record.credits_expire_at && (
-              <div style={{ fontSize: '11px', color: stats.isExpired ? '#ff4d4f' : '#999', marginTop: 2 }}>
-                <CalendarOutlined /> {moment(record.credits_expire_at).format('YYYY-MM-DD')}
-              </div>
-            )}
           </div>
         )
       }
@@ -469,7 +403,7 @@ const Users = () => {
       title: t('admin.users.table.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (time) => moment(time).format('YYYY-MM-DD HH:mm')
+      render: (time) => new Date(time).toLocaleString()
     },
     {
       title: t('admin.users.table.actions'),
@@ -878,27 +812,6 @@ const Users = () => {
                   </Form.Item>
                 </Col>
               </Row>
-
-              {/* 积分有效期设置 */}
-              <Form.Item
-                name="credits_expire_at"
-                label={
-                  <Space>
-                    {t('admin.users.form.creditsExpire')}
-                    <Tooltip title={t('admin.users.form.creditsExpire.tooltip')}>
-                      <ExclamationCircleOutlined />
-                    </Tooltip>
-                  </Space>
-                }
-              >
-                <DatePicker 
-                  style={{ width: '100%' }}
-                  showTime
-                  format="YYYY-MM-DD HH:mm:ss"
-                  placeholder={t('admin.users.form.creditsExpire.placeholder')}
-                  disabledDate={(current) => current && current < moment().startOf('day')}
-                />
-              </Form.Item>
             </TabPane>
 
             {editingUser && hasPermission('credits.manage') && (
@@ -909,16 +822,10 @@ const Users = () => {
                   description={
                     <Descriptions column={2} size="small" style={{ marginTop: 8 }}>
                       <Descriptions.Item label={t('admin.users.credits.currentBalance')}>
-                        <span style={{ 
-                          fontSize: 18, 
-                          fontWeight: 'bold', 
-                          color: userCredits[editingUser.id]?.credits_stats?.isExpired ? '#ff4d4f' : '#52c41a' 
-                        }}>
-                          {userCredits[editingUser.id]?.credits_stats?.remaining?.toLocaleString() || 0}
+                        <span style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
+                          {((userCredits[editingUser.id]?.credits_quota || 0) - 
+                            (userCredits[editingUser.id]?.used_credits || 0)).toLocaleString()}
                         </span>
-                        {userCredits[editingUser.id]?.credits_stats?.isExpired && (
-                          <Tag color="error" style={{ marginLeft: 8 }}>已过期</Tag>
-                        )}
                       </Descriptions.Item>
                       <Descriptions.Item label={t('admin.users.credits.quota')}>
                         {userCredits[editingUser.id]?.credits_quota?.toLocaleString() || 0}
@@ -929,30 +836,9 @@ const Users = () => {
                       <Descriptions.Item label={t('admin.users.credits.usageRate')}>
                         {userCredits[editingUser.id]?.credits_stats?.usageRate || 0}%
                       </Descriptions.Item>
-                      <Descriptions.Item label={t('admin.users.credits.expireAt')} span={2}>
-                        {userCredits[editingUser.id]?.credits_expire_at ? (
-                          <Space>
-                            <CalendarOutlined />
-                            {moment(userCredits[editingUser.id].credits_expire_at).format('YYYY-MM-DD HH:mm:ss')}
-                            {userCredits[editingUser.id]?.credits_stats?.remainingDays !== null && (
-                              <Tag color={
-                                userCredits[editingUser.id].credits_stats.isExpired ? 'error' :
-                                userCredits[editingUser.id].credits_stats.remainingDays <= 7 ? 'warning' : 'success'
-                              }>
-                                {userCredits[editingUser.id].credits_stats.isExpired 
-                                  ? '已过期' 
-                                  : `剩余${userCredits[editingUser.id].credits_stats.remainingDays}天`
-                                }
-                              </Tag>
-                            )}
-                          </Space>
-                        ) : (
-                          <Tag color="success">永不过期</Tag>
-                        )}
-                      </Descriptions.Item>
                     </Descriptions>
                   }
-                  type={userCredits[editingUser.id]?.credits_stats?.isExpired ? 'error' : 'info'}
+                  type="info"
                   showIcon
                   style={{ marginBottom: 16 }}
                 />
@@ -1016,20 +902,6 @@ const Users = () => {
                           />
                         </Form.Item>
 
-                        {operation === 'add' && (
-                          <Form.Item
-                            name="extend_days"
-                            label={t('admin.credits.form.extendDays')}
-                          >
-                            <InputNumber
-                              style={{ width: '100%' }}
-                              min={0}
-                              max={3650}
-                              placeholder={t('admin.credits.form.extendDays.placeholder')}
-                            />
-                          </Form.Item>
-                        )}
-
                         <Form.Item
                           name="creditsReason"
                           label={t('admin.credits.form.reason')}
@@ -1047,39 +919,6 @@ const Users = () => {
                   }}
                 </Form.Item>
 
-                {/* 积分有效期管理 */}
-                <Divider>{t('admin.users.credits.expire.title')}</Divider>
-                
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="credits_expire_at"
-                      label={t('admin.users.credits.expire.setDate')}
-                    >
-                      <DatePicker 
-                        style={{ width: '100%' }}
-                        showTime
-                        format="YYYY-MM-DD HH:mm:ss"
-                        placeholder={t('admin.users.credits.expire.setDate.placeholder')}
-                        disabledDate={(current) => current && current < moment().startOf('day')}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="extend_days"
-                      label={t('admin.users.credits.expire.extendDays')}
-                    >
-                      <InputNumber
-                        style={{ width: '100%' }}
-                        min={1}
-                        max={3650}
-                        placeholder={t('admin.users.credits.expire.extendDays.placeholder')}
-                      />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
                 {/* 积分历史 */}
                 <Divider>{t('admin.users.credits.history')}</Divider>
                 
@@ -1092,7 +931,7 @@ const Users = () => {
                         dot={<ClockCircleOutlined />}
                       >
                         <div>
-                          <strong>{moment(record.created_at).format('YYYY-MM-DD HH:mm:ss')}</strong>
+                          <strong>{new Date(record.created_at).toLocaleString()}</strong>
                         </div>
                         <div>
                           <Tag color={record.amount > 0 ? 'green' : 'red'}>
@@ -1332,14 +1171,14 @@ const Users = () => {
                 </Col>
                 <Col span={24}>
                   <div style={{ marginTop: 8 }}>
-                    <strong>{t('admin.users.table.createdAt')}:</strong> {moment(userDetail.user.created_at).format('YYYY-MM-DD HH:mm:ss')}
+                    <strong>{t('admin.users.table.createdAt')}:</strong> {new Date(userDetail.user.created_at).toLocaleString()}
                   </div>
                 </Col>
                 <Col span={24}>
                   <div style={{ marginTop: 4 }}>
                     <strong>{t('admin.users.detail.lastLogin')}:</strong> {
                       userDetail.user.last_login_at 
-                        ? moment(userDetail.user.last_login_at).format('YYYY-MM-DD HH:mm:ss')
+                        ? new Date(userDetail.user.last_login_at).toLocaleString() 
                         : t('admin.users.detail.neverLogin')
                     }
                   </div>
@@ -1390,41 +1229,10 @@ const Users = () => {
                         <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
                       </Col>
                       <Col span={8}>
-                        <div style={{ 
-                          fontSize: 24, 
-                          fontWeight: 'bold', 
-                          color: userDetail.user.credits_stats?.isExpired ? '#ff4d4f' : '#52c41a' 
-                        }}>
-                          {userDetail.user.credits_stats?.remaining?.toLocaleString() || 0}
+                        <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
+                          {((userDetail.user.credits_quota || 0) - (userDetail.user.used_credits || 0)).toLocaleString()}
                         </div>
                         <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
-                      </Col>
-                    </Row>
-                    <Divider />
-                    <Row gutter={16}>
-                      <Col span={24}>
-                        <div style={{ textAlign: 'center' }}>
-                          <strong>{t('admin.users.credits.expire.title')}:</strong>
-                          {userDetail.user.credits_expire_at ? (
-                            <div style={{ marginTop: 8 }}>
-                              <CalendarOutlined style={{ marginRight: 8 }} />
-                              {moment(userDetail.user.credits_expire_at).format('YYYY-MM-DD HH:mm:ss')}
-                              {userDetail.user.credits_stats?.isExpired ? (
-                                <Tag color="error" style={{ marginLeft: 8 }}>已过期</Tag>
-                              ) : userDetail.user.credits_stats?.remainingDays <= 7 ? (
-                                <Tag color="warning" style={{ marginLeft: 8 }}>
-                                  {userDetail.user.credits_stats.remainingDays}天后过期
-                                </Tag>
-                              ) : (
-                                <Tag color="success" style={{ marginLeft: 8 }}>
-                                  剩余{userDetail.user.credits_stats.remainingDays}天
-                                </Tag>
-                              )}
-                            </div>
-                          ) : (
-                            <Tag color="success" style={{ marginTop: 8 }}>永不过期</Tag>
-                          )}
-                        </div>
                       </Col>
                     </Row>
                   </Card>

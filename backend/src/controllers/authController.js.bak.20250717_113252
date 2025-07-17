@@ -152,8 +152,7 @@ class AuthController {
         role: 'user',
         status: 'active',
         token_quota: 10000,
-        credits_quota: 1000,
-        credits_expire_days: 365 // 默认365天有效期
+        credits_quota: 1000
       });
 
       // 获取新用户权限

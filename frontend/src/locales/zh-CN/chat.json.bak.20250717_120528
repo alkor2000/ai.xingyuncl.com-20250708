@@ -63,8 +63,6 @@
   "chat.credits.insufficient.title": "积分不足",
   "chat.credits.insufficient.content": "当前对话需要 {{required}} 积分，您的余额为 {{current}} 积分",
   "chat.credits.recharge": "去充值",
-  "chat.credits.expired": "积分已过期",
-  "chat.credits.expireSoon": "{{days}}天后过期",
   
   "chat.message.user": "你",
   "chat.message.assistant": "AI助手",

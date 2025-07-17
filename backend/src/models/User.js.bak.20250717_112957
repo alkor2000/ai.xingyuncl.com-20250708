@@ -1,5 +1,5 @@
 /**
- * 用户数据模型 - 支持用户分组、积分管理和积分有效期 (事务优化版)
+ * 用户数据模型 - 支持用户分组和积分管理 (事务优化版)
  */
 
 const dbConnection = require('../database/connection');
@@ -26,7 +26,6 @@ class User {
     this.login_attempts = data.login_attempts || 0;
     this.used_tokens = data.used_tokens || 0;
     this.used_credits = data.used_credits || 0;
-    this.credits_expire_at = data.credits_expire_at || null; // 新增：积分过期时间
     this.last_login_at = data.last_login_at || null;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
@@ -152,7 +151,7 @@ class User {
       `;
       const { rows: totalRows } = await dbConnection.query(countSql, params);
       const total = totalRows[0].total;
-      
+
       logger.info('获取用户总数成功', { total, page, limit });
 
       // 获取用户列表 (包含分组信息)
@@ -197,7 +196,7 @@ class User {
   }
 
   /**
-   * 创建新用户 - 支持分组设置和积分有效期
+   * 创建新用户 - 支持分组设置
    */
   static async create(userData) {
     try {
@@ -209,17 +208,12 @@ class User {
         group_id = null,
         status = 'active',
         token_quota = 10000,
-        credits_quota = 1000,
-        credits_expire_days = 365 // 默认365天有效期
+        credits_quota = 1000
       } = userData;
 
-      // 计算积分过期时间
-      const credits_expire_at = new Date();
-      credits_expire_at.setDate(credits_expire_at.getDate() + credits_expire_days);
-
       const sql = `
-        INSERT INTO users (email, username, password_hash, role, group_id, status, token_quota, credits_quota, credits_expire_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (email, username, password_hash, role, group_id, status, token_quota, credits_quota) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const { rows } = await dbConnection.query(sql, [
@@ -230,8 +224,7 @@ class User {
         group_id,
         status,
         token_quota,
-        credits_quota,
-        credits_expire_at
+        credits_quota
       ]);
 
       const insertId = rows.insertId;
@@ -242,8 +235,7 @@ class User {
         username, 
         role,
         group_id,
-        credits_quota,
-        credits_expire_at
+        credits_quota
       });
 
       return await User.findById(insertId);
@@ -254,7 +246,7 @@ class User {
   }
 
   /**
-   * 更新用户 - 支持分组更新和积分有效期
+   * 更新用户 - 支持分组更新
    */
   async update(updateData) {
     try {
@@ -265,7 +257,7 @@ class User {
         'username', 'password_hash', 'role', 'group_id', 'status', 
         'phone',
         'email_verified', 'avatar_url', 'token_quota', 'used_tokens',
-        'credits_quota', 'used_credits', 'credits_expire_at'
+        'credits_quota', 'used_credits'
       ];
       
       allowedFields.forEach(field => {
@@ -316,160 +308,38 @@ class User {
     }
   }
 
-  // ===== 积分管理方法 (支持有效期检查) =====
+  // ===== 积分管理方法 (事务优化版) =====
 
   /**
-   * 检查积分是否过期
-   */
-  isCreditsExpired() {
-    if (!this.credits_expire_at) {
-      return false; // 没有设置过期时间的不过期
-    }
-    return new Date() > new Date(this.credits_expire_at);
-  }
-
-  /**
-   * 获取积分剩余天数
-   */
-  getCreditsRemainingDays() {
-    if (!this.credits_expire_at) {
-      return null; // 永不过期
-    }
-    const now = new Date();
-    const expireDate = new Date(this.credits_expire_at);
-    const diffTime = expireDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  }
-
-  /**
-   * 获取用户积分余额（考虑过期）
+   * 获取用户积分余额
    */
   getCredits() {
-    if (this.isCreditsExpired()) {
-      return 0; // 过期则余额为0
-    }
     return Math.max(0, (this.credits_quota || 0) - (this.used_credits || 0));
   }
 
   /**
-   * 检查积分配额（考虑过期）
+   * 检查积分配额
    */
   hasCredits(requiredCredits = 1) {
-    if (this.isCreditsExpired()) {
-      return false; // 过期则不可用
-    }
     return this.getCredits() >= requiredCredits;
   }
 
   /**
-   * 获取积分使用统计（包含过期信息）
+   * 获取积分使用统计
    */
   getCreditsStats() {
-    const isExpired = this.isCreditsExpired();
-    const remainingDays = this.getCreditsRemainingDays();
-    
     return {
       quota: this.credits_quota || 0,
       used: this.used_credits || 0,
       remaining: this.getCredits(),
-      usageRate: this.credits_quota ? ((this.used_credits || 0) / this.credits_quota * 100).toFixed(2) : 0,
-      isExpired,
-      expireAt: this.credits_expire_at,
-      remainingDays,
-      expireStatus: isExpired ? 'expired' : (remainingDays && remainingDays <= 7 ? 'expiring_soon' : 'active')
+      usageRate: this.credits_quota ? ((this.used_credits || 0) / this.credits_quota * 100).toFixed(2) : 0
     };
   }
 
   /**
-   * 设置积分有效期
+   * 增加积分 (管理员操作) - 使用事务
    */
-  async setCreditsExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
-    try {
-      // 使用事务确保原子性
-      const result = await dbConnection.transaction(async (query) => {
-        // 更新用户积分有效期
-        const updateSql = `
-          UPDATE users 
-          SET credits_expire_at = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `;
-        await query(updateSql, [expireDate, this.id]);
-
-        // 记录操作历史
-        const historySql = `
-          INSERT INTO credit_transactions 
-          (user_id, amount, balance_after, transaction_type, description, operator_id)
-          VALUES (?, 0, ?, 'admin_set', ?, ?)
-        `;
-        
-        const balance = this.getCredits();
-        await query(historySql, [
-          this.id, 
-          balance, 
-          `${reason} (有效期设置为: ${new Date(expireDate).toLocaleDateString()})`, 
-          operatorId
-        ]);
-
-        return { expireDate };
-      });
-
-      // 更新当前对象
-      this.credits_expire_at = expireDate;
-
-      logger.info('用户积分有效期设置成功', {
-        userId: this.id,
-        expireDate,
-        reason,
-        operatorId
-      });
-
-      return {
-        success: true,
-        expireDate,
-        message: '积分有效期设置成功'
-      };
-
-    } catch (error) {
-      logger.error('用户积分有效期设置失败:', {
-        userId: this.id,
-        expireDate,
-        error: error.message
-      });
-      throw new DatabaseError(`积分有效期设置失败: ${error.message}`, error);
-    }
-  }
-
-  /**
-   * 延长积分有效期
-   */
-  async extendCreditsExpireDate(days, reason = '管理员延期', operatorId = null) {
-    try {
-      let currentExpireDate = this.credits_expire_at ? new Date(this.credits_expire_at) : new Date();
-      
-      // 如果已过期，从今天开始计算
-      if (this.isCreditsExpired()) {
-        currentExpireDate = new Date();
-      }
-      
-      const newExpireDate = new Date(currentExpireDate);
-      newExpireDate.setDate(newExpireDate.getDate() + days);
-      
-      return await this.setCreditsExpireDate(newExpireDate, `${reason} (延长${days}天)`, operatorId);
-    } catch (error) {
-      logger.error('延长积分有效期失败:', {
-        userId: this.id,
-        days,
-        error: error.message
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * 增加积分 (管理员操作) - 使用事务，同时更新有效期
-   */
-  async addCredits(amount, reason = '管理员充值', operatorId = null, extendDays = null) {
+  async addCredits(amount, reason = '管理员充值', operatorId = null) {
     try {
       if (amount <= 0) {
         throw new Error('积分数量必须大于0');
@@ -478,63 +348,35 @@ class User {
       // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
         // 更新用户积分配额
-        let updateSql = `
+        const updateSql = `
           UPDATE users 
           SET credits_quota = credits_quota + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
         `;
-        const updateParams = [amount];
-        
-        // 如果需要延长有效期
-        if (extendDays && extendDays > 0) {
-          updateSql = `
-            UPDATE users 
-            SET credits_quota = credits_quota + ?, 
-                credits_expire_at = CASE 
-                  WHEN credits_expire_at IS NULL OR credits_expire_at < NOW() 
-                  THEN DATE_ADD(NOW(), INTERVAL ? DAY)
-                  ELSE DATE_ADD(credits_expire_at, INTERVAL ? DAY)
-                END,
-                updated_at = CURRENT_TIMESTAMP
-          `;
-          updateParams.push(extendDays, extendDays);
-        }
-        
-        updateSql += ' WHERE id = ?';
-        updateParams.push(this.id);
-        
-        await query(updateSql, updateParams);
+        await query(updateSql, [amount, this.id]);
 
         // 获取更新后的余额
         const { rows: balanceRows } = await query(
-          'SELECT credits_quota - used_credits as balance, credits_expire_at FROM users WHERE id = ?',
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
           [this.id]
         );
         const balanceAfter = balanceRows[0].balance;
-        const newExpireAt = balanceRows[0].credits_expire_at;
 
         // 记录积分历史
-        let description = reason;
-        if (extendDays) {
-          description += ` (同时延长有效期${extendDays}天)`;
-        }
-        
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
           VALUES (?, ?, ?, 'admin_add', ?, ?)
         `;
         await query(historySql, [
-          this.id, amount, balanceAfter, description, operatorId
+          this.id, amount, balanceAfter, reason, operatorId
         ]);
 
-        return { balanceAfter, newExpireAt };
+        return { balanceAfter };
       });
 
       // 更新当前对象
       this.credits_quota += amount;
-      if (result.newExpireAt) {
-        this.credits_expire_at = result.newExpireAt;
-      }
 
       logger.info('用户积分充值成功', {
         userId: this.id,
@@ -542,8 +384,7 @@ class User {
         newQuota: this.credits_quota,
         balanceAfter: result.balanceAfter,
         reason,
-        operatorId,
-        extendDays
+        operatorId
       });
 
       return {
@@ -551,7 +392,6 @@ class User {
         amount,
         newQuota: this.credits_quota,
         balanceAfter: result.balanceAfter,
-        newExpireAt: result.newExpireAt,
         message: '积分充值成功'
       };
 
@@ -573,11 +413,6 @@ class User {
     try {
       if (amount <= 0) {
         throw new Error('扣减积分数量必须大于0');
-      }
-
-      // 检查是否过期
-      if (this.isCreditsExpired()) {
-        throw new Error('积分已过期，无法扣减');
       }
 
       // 检查余额是否充足
@@ -653,12 +488,6 @@ class User {
     try {
       if (amount <= 0) {
         throw new Error('消费积分数量必须大于0');
-      }
-
-      // 检查是否过期
-      if (this.isCreditsExpired()) {
-        const remainingDays = this.getCreditsRemainingDays();
-        throw new Error(`积分已过期${remainingDays === 0 ? '今天' : Math.abs(remainingDays) + '天前'}，请联系管理员续期`);
       }
 
       // 检查余额是否充足

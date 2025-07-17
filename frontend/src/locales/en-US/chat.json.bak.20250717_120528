@@ -24,12 +24,10 @@
   
   "chat.model.noImageSupport": "Current model does not support image recognition",
   
-  "chat.conversation.settings": "Conversation Settings",
   "chat.conversation.create.success": "Conversation created successfully",
   "chat.conversation.create.failed": "Failed to create conversation",
   "chat.conversation.update.success": "Conversation updated successfully",
   "chat.conversation.update.failed": "Failed to update conversation",
-  "chat.conversation.delete": "Delete Conversation",
   "chat.conversation.delete.title": "Delete Conversation",
   "chat.conversation.delete.confirm": "Are you sure you want to delete this conversation? This cannot be undone.",
   "chat.conversation.delete.success": "Conversation deleted successfully",
@@ -63,8 +61,6 @@
   "chat.credits.insufficient.title": "Insufficient Credits",
   "chat.credits.insufficient.content": "This conversation requires {{required}} credits, your balance is {{current}} credits",
   "chat.credits.recharge": "Recharge",
-  "chat.credits.expired": "Credits expired",
-  "chat.credits.expireSoon": "Expires in {{days}} days",
   
   "chat.message.user": "You",
   "chat.message.assistant": "AI Assistant",
@@ -79,7 +75,5 @@
   "chat.model.gpt35": "GPT-3.5",
   "chat.model.gpt4": "GPT-4",
   "chat.model.claude": "Claude",
-  "chat.model.gemini": "Gemini",
-  
-  "unit.credits": "credits"
+  "chat.model.gemini": "Gemini"
 }
