@@ -199,13 +199,13 @@ const Users = () => {
         ...updateData 
       } = values
       
-      // 更新基本信息（管理员不能修改角色、组、积分等，但可以修改备注）
+      // 更新基本信息（管理员不能修改角色、组、积分等）
       if (isGroupAdmin) {
         delete updateData.role
         delete updateData.group_id
         delete updateData.credits_quota
         delete updateData.token_quota
-        // 不再删除 remark，允许组管理员修改备注
+        delete updateData.remark
       }
       
       await updateUser(editingUser.id, updateData)
@@ -654,20 +654,13 @@ const Users = () => {
     )
   }
 
-  // 检查是否可以编辑备注（组管理员需要是同组，超级管理员都可以）
-  const canEditRemark = (user) => {
-    if (isSuperAdmin) return true
-    if (isGroupAdmin && currentUser.group_id === user?.group_id) return true
-    return false
-  }
-
   return (
     <div className="page-container">
       {/* 权限提示 */}
       {isGroupAdmin && (
         <Alert
           message="权限说明"
-          description="作为组管理员，您可以查看和管理本组用户，可以重置密码、禁用/启用账户、修改用户备注，但不能修改积分相关设置。"
+          description="作为组管理员，您只能查看和管理本组用户，可以重置密码和禁用/启用账户，但不能修改积分相关设置和用户备注。"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -933,8 +926,8 @@ const Users = () => {
                 </Select>
               </Form.Item>
 
-              {/* 备注字段 - 超级管理员和同组管理员都可以编辑 */}
-              {(editingUser ? canEditRemark(editingUser) : true) && (
+              {/* 备注字段 - 只有超级管理员可以编辑 */}
+              {isSuperAdmin && (
                 <Form.Item
                   name="remark"
                   label={

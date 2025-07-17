@@ -1,5 +1,5 @@
 /**
- * 管理员控制器 - 支持基于用户组的权限管理和用户备注
+ * 管理员控制器 - 支持基于用户组的权限管理
  */
 
 const User = require('../models/User');
@@ -236,8 +236,7 @@ class AdminController {
         group_id = null,
         status = 'active', 
         token_quota = 10000,
-        credits_quota = 1000,
-        remark = null
+        credits_quota = 1000
       } = req.body;
 
       // 权限检查
@@ -258,8 +257,7 @@ class AdminController {
           group_id: finalGroupId,
           status,
           token_quota,
-          credits_quota,
-          remark // 允许管理员设置备注
+          credits_quota
         });
 
         logger.info('管理员创建同组用户成功', { 
@@ -274,7 +272,7 @@ class AdminController {
         return ResponseHelper.success(res, user.toJSON(), '用户创建成功', 201);
       }
 
-      // 超级管理员可以创建任何用户并设置备注
+      // 超级管理员可以创建任何用户
       const user = await User.create({
         email,
         username,
@@ -283,8 +281,7 @@ class AdminController {
         group_id: group_id || null,
         status,
         token_quota,
-        credits_quota,
-        remark
+        credits_quota
       });
 
       logger.info('超级管理员创建用户成功', { 
@@ -332,7 +329,7 @@ class AdminController {
           return ResponseHelper.forbidden(res, '无权更新其他组用户');
         }
 
-        // 管理员不能修改的字段（移除了remark，允许管理员修改备注）
+        // 管理员不能修改的字段
         const restrictedFields = ['role', 'group_id', 'credits_quota', 'token_quota', 'credits_expire_at'];
         restrictedFields.forEach(field => {
           if (field in updateData) {
