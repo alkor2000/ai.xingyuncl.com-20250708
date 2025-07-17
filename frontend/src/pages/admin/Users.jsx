@@ -1,60 +1,29 @@
+/**
+ * 用户管理主页面 - 重构版（修复版）
+ * 将原来4000+行的代码拆分成多个子组件
+ */
+
 import React, { useEffect, useState } from 'react'
-import { 
-  Card, 
-  Table, 
-  Button, 
-  Space, 
-  Tag, 
-  Modal, 
-  Form, 
-  Input, 
-  Select, 
-  InputNumber,
-  message,
-  Tooltip,
-  Popconfirm,
-  Drawer,
-  Row,
-  Col,
-  Statistic,
-  Progress,
-  Tabs,
-  Divider,
-  Timeline,
-  Alert,
-  Descriptions,
-  DatePicker,
-  Badge
-} from 'antd'
+import { Card, Button, Space, Alert, Form, message } from 'antd'
 import { 
   UserAddOutlined, 
-  EditOutlined, 
-  DeleteOutlined,
-  EyeOutlined,
-  ReloadOutlined,
-  TeamOutlined,
   PlusOutlined,
-  WalletOutlined,
-  DollarOutlined,
-  MinusCircleOutlined,
-  PlusCircleOutlined,
-  HistoryOutlined,
-  TrophyOutlined,
-  ClockCircleOutlined,
-  UserOutlined,
-  CalendarOutlined,
-  ExclamationCircleOutlined,
-  CheckCircleOutlined,
-  LockOutlined,
-  FileTextOutlined
+  LockOutlined 
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 import moment from 'moment'
 
-const { TabPane } = Tabs
-const { TextArea } = Input
+// 导入子组件
+import {
+  UserSearchForm,
+  UserTable,
+  UserFormModal,
+  UserDetailDrawer,
+  UserGroupTable,
+  UserGroupFormModal
+} from '../../components/admin/users'
 
 const Users = () => {
   const { t } = useTranslation()
@@ -66,7 +35,6 @@ const Users = () => {
     loading,
     userCredits,
     creditsHistory,
-    creditsLoading,
     getUsers,
     getUserDetail,
     createUser,
@@ -85,15 +53,14 @@ const Users = () => {
     resetUserPassword
   } = useAdminStore()
 
-  const [form] = Form.useForm()
+  // 表单实例
+  const [userForm] = Form.useForm()
   const [groupForm] = Form.useForm()
-  const [searchForm] = Form.useForm()
-  const [creditsForm] = Form.useForm()
   
-  const [isModalVisible, setIsModalVisible] = useState(false)
+  // 状态管理
+  const [isUserModalVisible, setIsUserModalVisible] = useState(false)
   const [isGroupModalVisible, setIsGroupModalVisible] = useState(false)
   const [isDetailVisible, setIsDetailVisible] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
@@ -105,11 +72,11 @@ const Users = () => {
   const [creditHistoryData, setCreditHistoryData] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  // 判断是否是管理员（非超级管理员）
+  // 用户角色判断
   const isGroupAdmin = currentUser?.role === 'admin'
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
-  // 加载数据
+  // 加载用户列表
   const loadUsers = async (params = {}) => {
     try {
       const result = await getUsers({
@@ -126,6 +93,7 @@ const Users = () => {
     }
   }
 
+  // 加载用户分组
   const loadUserGroups = async () => {
     try {
       await getUserGroups()
@@ -134,7 +102,7 @@ const Users = () => {
     }
   }
 
-  // 加载用户积分历史
+  // 加载积分历史
   const loadCreditHistory = async (userId) => {
     setHistoryLoading(true)
     try {
@@ -148,6 +116,7 @@ const Users = () => {
     }
   }
 
+  // 初始化加载
   useEffect(() => {
     if (hasPermission('user.manage') || hasPermission('user.manage.group')) {
       loadUsers()
@@ -155,7 +124,7 @@ const Users = () => {
     }
   }, [pagination.current, pagination.pageSize, hasPermission])
 
-  // 搜索用户
+  // 用户搜索
   const handleSearch = (values) => {
     setPagination(prev => ({ ...prev, current: 1 }))
     loadUsers(values)
@@ -164,8 +133,7 @@ const Users = () => {
   // 创建用户
   const handleCreateUser = async (values) => {
     try {
-      // 如果设置了积分有效期，计算天数
-      let credits_expire_days = 365 // 默认365天
+      let credits_expire_days = 365
       if (values.credits_expire_at) {
         const days = values.credits_expire_at.diff(moment(), 'days')
         credits_expire_days = Math.max(1, days)
@@ -176,8 +144,8 @@ const Users = () => {
         credits_expire_days
       })
       
-      setIsModalVisible(false)
-      form.resetFields()
+      setIsUserModalVisible(false)
+      userForm.resetFields()
       message.success(t('admin.users.create.success'))
       loadUsers()
     } catch (error) {
@@ -185,7 +153,7 @@ const Users = () => {
     }
   }
 
-  // 更新用户（基于权限限制）
+  // 更新用户
   const handleUpdateUser = async (values) => {
     try {
       const { 
@@ -199,23 +167,22 @@ const Users = () => {
         ...updateData 
       } = values
       
-      // 更新基本信息（管理员不能修改角色、组、积分等，但可以修改备注）
+      // 基础信息更新
       if (isGroupAdmin) {
         delete updateData.role
         delete updateData.group_id
         delete updateData.credits_quota
         delete updateData.token_quota
-        // 不再删除 remark，允许组管理员修改备注
       }
       
       await updateUser(editingUser.id, updateData)
       
-      // 处理密码重置（管理员可以重置同组用户密码）
+      // 密码重置
       if (newPassword) {
         await resetUserPassword(editingUser.id, newPassword)
       }
       
-      // 处理积分操作（只有超级管理员可以）
+      // 积分操作（仅超级管理员）
       if (isSuperAdmin && creditsOperation && creditsAmount && creditsReason) {
         switch (creditsOperation) {
           case 'add':
@@ -230,22 +197,24 @@ const Users = () => {
         }
       }
       
-      // 处理积分有效期（只有超级管理员可以）
-      if (isSuperAdmin && credits_expire_at) {
-        await setUserCreditsExpire(editingUser.id, {
-          expire_date: credits_expire_at.format('YYYY-MM-DD HH:mm:ss'),
-          reason: creditsReason || '管理员设置积分有效期'
-        })
-      } else if (isSuperAdmin && extend_days && !creditsOperation) {
-        await setUserCreditsExpire(editingUser.id, {
-          extend_days: extend_days,
-          reason: creditsReason || '管理员延长积分有效期'
-        })
+      // 积分有效期设置
+      if (isSuperAdmin) {
+        if (credits_expire_at) {
+          await setUserCreditsExpire(editingUser.id, {
+            expire_date: credits_expire_at.format('YYYY-MM-DD HH:mm:ss'),
+            reason: creditsReason || '管理员设置积分有效期'
+          })
+        } else if (extend_days && !creditsOperation) {
+          await setUserCreditsExpire(editingUser.id, {
+            extend_days: extend_days,
+            reason: creditsReason || '管理员延长积分有效期'
+          })
+        }
       }
       
-      setIsModalVisible(false)
+      setIsUserModalVisible(false)
       setEditingUser(null)
-      form.resetFields()
+      userForm.resetFields()
       message.success(t('admin.users.update.success'))
       loadUsers()
     } catch (error) {
@@ -253,7 +222,7 @@ const Users = () => {
     }
   }
 
-  // 切换用户状态（禁用/启用）
+  // 切换用户状态
   const handleToggleUserStatus = async (userId, currentStatus) => {
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
@@ -266,9 +235,10 @@ const Users = () => {
       loadUsers()
     } catch (error) {
       message.error(
-        newStatus === 'active' 
-          ? t('admin.users.enable.failed') 
-          : t('admin.users.disable.failed')
+        error.response?.data?.message || 
+        (currentStatus === 'active' 
+          ? t('admin.users.disable.failed') 
+          : t('admin.users.enable.failed'))
       )
     }
   }
@@ -284,10 +254,10 @@ const Users = () => {
     }
   }
 
-  // 编辑用户（加载积分信息）
+  // 编辑用户
   const handleEditUser = async (user) => {
     setEditingUser(user)
-    form.setFieldsValue({
+    userForm.setFieldsValue({
       username: user.username,
       role: user.role,
       group_id: user.group_id,
@@ -298,16 +268,26 @@ const Users = () => {
       remark: user.remark
     })
     
-    // 加载用户积分信息和历史
-    if (isSuperAdmin) { await getUserCredits(user.id) }
-    if (isSuperAdmin) { await loadCreditHistory(user.id) }
+    if (isSuperAdmin) {
+      await getUserCredits(user.id)
+      await loadCreditHistory(user.id)
+    }
     
-    setIsModalVisible(true)
+    setIsUserModalVisible(true)
   }
 
-  // ===== 分组管理方法 =====
+  // 删除用户
+  const handleDeleteUser = async (userId) => {
+    try {
+      await deleteUser(userId)
+      message.success(t('admin.users.delete.success'))
+      loadUsers()
+    } catch (error) {
+      message.error(error.response?.data?.message || t('admin.users.delete.failed'))
+    }
+  }
 
-  // 创建分组
+  // 分组管理方法
   const handleCreateGroup = async (values) => {
     try {
       await createUserGroup(values)
@@ -320,7 +300,6 @@ const Users = () => {
     }
   }
 
-  // 更新分组
   const handleUpdateGroup = async (values) => {
     try {
       await updateUserGroup(editingGroup.id, values)
@@ -334,7 +313,6 @@ const Users = () => {
     }
   }
 
-  // 删除分组
   const handleDeleteGroup = async (groupId) => {
     try {
       await deleteUserGroup(groupId)
@@ -345,7 +323,6 @@ const Users = () => {
     }
   }
 
-  // 编辑分组
   const handleEditGroup = (group) => {
     setEditingGroup(group)
     groupForm.setFieldsValue({
@@ -358,289 +335,6 @@ const Users = () => {
     setIsGroupModalVisible(true)
   }
 
-  // 获取积分状态标签
-  const getCreditsStatusTag = (user) => {
-    const stats = user.credits_stats || {}
-    
-    if (stats.isExpired) {
-      return <Tag color="error" icon={<ExclamationCircleOutlined />}>已过期</Tag>
-    }
-    
-    if (stats.remainingDays !== null && stats.remainingDays <= 7) {
-      return <Tag color="warning" icon={<ClockCircleOutlined />}>{stats.remainingDays}天后过期</Tag>
-    }
-    
-    if (stats.remaining > 0) {
-      return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
-    }
-    
-    return <Tag color="default">无积分</Tag>
-  }
-
-  const roleColors = {
-    super_admin: 'red',
-    admin: 'blue',
-    user: 'green'
-  }
-
-  const statusColors = {
-    active: 'green',
-    inactive: 'red'
-  }
-
-  // 用户表格列
-  const userColumns = [
-    {
-      title: t('admin.users.table.id'),
-      dataIndex: 'id',
-      key: 'id',
-      width: 80
-    },
-    {
-      title: t('admin.users.table.username'),
-      dataIndex: 'username',
-      key: 'username'
-    },
-    {
-      title: t('admin.users.table.email'),
-      dataIndex: 'email', 
-      key: 'email'
-    },
-    {
-      title: t('admin.users.table.role'),
-      dataIndex: 'role',
-      key: 'role',
-      render: (role) => (
-        <Tag color={roleColors[role]}>{t(`role.${role}`)}</Tag>
-      )
-    },
-    {
-      title: t('admin.users.table.group'),
-      dataIndex: 'group_name',
-      key: 'group_name',
-      render: (groupName, record) => (
-        groupName ? (
-          <Tag color={record.group_color || '#1677ff'}>{groupName}</Tag>
-        ) : (
-          <span style={{ color: '#999' }}>{t('admin.users.noGroup')}</span>
-        )
-      )
-    },
-    {
-      title: t('admin.users.table.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (
-        <Tag color={statusColors[status]}>
-          {t(`status.${status}`)}
-        </Tag>
-      )
-    },
-    {
-      title: t('admin.users.table.credits'),
-      key: 'credits',
-      render: (_, record) => {
-        const stats = record.credits_stats || {}
-        const remaining = stats.remaining || 0
-        const usageRate = record.credits_quota > 0 ? (record.used_credits / record.credits_quota * 100) : 0
-        
-        return (
-          <div style={{ minWidth: 150 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: stats.isExpired ? '#ff4d4f' : (remaining > 0 ? '#52c41a' : '#ff4d4f') }}>
-                {remaining.toLocaleString()}
-              </div>
-              {getCreditsStatusTag(record)}
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {record.used_credits?.toLocaleString()} / {record.credits_quota?.toLocaleString()}
-            </div>
-            <Progress 
-              percent={Math.round(usageRate)} 
-              size="small" 
-              strokeColor={stats.isExpired ? '#ff4d4f' : (usageRate > 80 ? '#ff4d4f' : '#52c41a')}
-              showInfo={false}
-            />
-            {record.credits_expire_at && (
-              <div style={{ fontSize: '11px', color: stats.isExpired ? '#ff4d4f' : '#999', marginTop: 2 }}>
-                <CalendarOutlined /> {moment(record.credits_expire_at).format('YYYY-MM-DD')}
-              </div>
-            )}
-          </div>
-        )
-      }
-    },
-    {
-      title: t('admin.users.table.remark'),
-      dataIndex: 'remark',
-      key: 'remark',
-      width: 150,
-      render: (remark) => {
-        if (!remark) return null
-        return (
-          <Tooltip title={remark}>
-            <div style={{ 
-              maxWidth: 150, 
-              overflow: 'hidden', 
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: '#666',
-              fontSize: '12px'
-            }}>
-              <FileTextOutlined style={{ marginRight: 4 }} />
-              {remark}
-            </div>
-          </Tooltip>
-        )
-      }
-    },
-    {
-      title: t('admin.users.table.createdAt'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (time) => moment(time).format('YYYY-MM-DD HH:mm')
-    },
-    {
-      title: t('admin.users.table.actions'),
-      key: 'actions',
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title={t('admin.users.viewDetail')}>
-            <Button type="text" size="small" icon={<EyeOutlined />} 
-              onClick={() => handleViewDetail(record.id)} />
-          </Tooltip>
-          <Tooltip title={t('button.edit')}>
-            <Button type="text" size="small" icon={<EditOutlined />} 
-              onClick={() => handleEditUser(record)} />
-          </Tooltip>
-          {record.id !== currentUser?.id && (
-            <Tooltip title={record.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}>
-              <Popconfirm
-                title={record.status === 'active' ? t('admin.users.disable.confirm') : t('admin.users.enable.confirm')}
-                onConfirm={() => handleToggleUserStatus(record.id, record.status)}
-                okText={t('button.confirm')}
-                cancelText={t('button.cancel')}
-              >
-                <Button 
-                  type="text" 
-                  size="small" 
-                  danger={record.status === 'active'}
-                  icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
-                />
-              </Popconfirm>
-            </Tooltip>
-          )}
-          {/* 管理员不能删除用户，只有超级管理员可以 */}
-          {isSuperAdmin && record.id !== currentUser?.id && (
-            <Tooltip title={t('button.delete')}>
-              <Popconfirm
-                title={t('admin.users.delete.confirm')}
-                onConfirm={() => deleteUser(record.id)}
-                okText={t('button.confirm')}
-                cancelText={t('button.cancel')}
-              >
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-            </Tooltip>
-          )}
-        </Space>
-      )
-    }
-  ]
-
-  // 分组表格列
-  const groupColumns = [
-    {
-      title: t('admin.users.table.id'),
-      dataIndex: 'id',
-      key: 'id',
-      width: 80
-    },
-    {
-      title: t('admin.groups.table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      render: (name, record) => (
-        <Space>
-          <Tag color={record.color}>{name}</Tag>
-        </Space>
-      )
-    },
-    {
-      title: t('admin.groups.table.description'),
-      dataIndex: 'description',
-      key: 'description'
-    },
-    {
-      title: t('admin.groups.table.userCount'),
-      dataIndex: 'user_count',
-      key: 'user_count',
-      render: (count) => (
-        <Space>
-          <TeamOutlined />
-          <span>{count || 0}</span>
-        </Space>
-      )
-    },
-    {
-      title: t('admin.groups.table.avgTokens'),
-      dataIndex: 'avg_tokens_used',
-      key: 'avg_tokens_used',
-      render: (avg) => Math.round(avg || 0).toLocaleString()
-    },
-    {
-      title: t('admin.groups.table.avgCredits'),
-      dataIndex: 'avg_credits_used',
-      key: 'avg_credits_used',
-      render: (avg) => Math.round(avg || 0).toLocaleString()
-    },
-    {
-      title: t('admin.groups.table.status'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? t('status.active') : t('status.inactive')}
-        </Tag>
-      )
-    },
-    {
-      title: t('admin.groups.table.sort'),
-      dataIndex: 'sort_order',
-      key: 'sort_order'
-    },
-    {
-      title: t('table.actions'),
-      key: 'actions',
-      render: (_, record) => {
-        // 管理员不能编辑分组
-        if (isGroupAdmin) {
-          return null
-        }
-        
-        return (
-          <Space size="small">
-            <Tooltip title={t('button.edit')}>
-              <Button type="text" size="small" icon={<EditOutlined />} 
-                onClick={() => handleEditGroup(record)} />
-            </Tooltip>
-            <Tooltip title={t('button.delete')}>
-              <Popconfirm
-                title={t('admin.groups.delete.confirm')}
-                description={t('admin.groups.delete.desc')}
-                onConfirm={() => handleDeleteGroup(record.id)}
-                okText={t('button.confirm')}
-                cancelText={t('button.cancel')}
-              >
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-            </Tooltip>
-          </Space>
-        )
-      }
-    }
-  ]
-
   // 权限检查
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
     return (
@@ -652,13 +346,6 @@ const Users = () => {
         </Card>
       </div>
     )
-  }
-
-  // 检查是否可以编辑备注（组管理员需要是同组，超级管理员都可以）
-  const canEditRemark = (user) => {
-    if (isSuperAdmin) return true
-    if (isGroupAdmin && currentUser.group_id === user?.group_id) return true
-    return false
   }
 
   return (
@@ -695,61 +382,15 @@ const Users = () => {
 
       {activeTab === 'users' ? (
         <>
-          {/* 用户搜索区域 */}
+          {/* 用户搜索 */}
           <Card style={{ marginBottom: 16 }}>
-            <Form
-              form={searchForm}
-              layout="inline"
-              onFinish={handleSearch}
-            >
-              <Form.Item name="search">
-                <Input placeholder={t('admin.users.searchPlaceholder')} style={{ width: 200 }} />
-              </Form.Item>
-              <Form.Item name="role">
-                <Select placeholder={t('admin.users.form.role')} style={{ width: 120 }} allowClear>
-                  <Select.Option value="user">{t('role.user')}</Select.Option>
-                  {isSuperAdmin && (
-                    <>
-                      <Select.Option value="admin">{t('role.admin')}</Select.Option>
-                      <Select.Option value="super_admin">{t('role.super_admin')}</Select.Option>
-                    </>
-                  )}
-                </Select>
-              </Form.Item>
-              {!isGroupAdmin && (
-                <Form.Item name="group_id">
-                  <Select placeholder={t('admin.users.form.group')} style={{ width: 150 }} allowClear>
-                    {userGroups.map(group => (
-                      <Select.Option key={group.id} value={group.id}>
-                        <Tag color={group.color} style={{ margin: 0 }}>{group.name}</Tag>
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              )}
-              <Form.Item name="status">
-                <Select placeholder={t('admin.users.form.status')} style={{ width: 100 }} allowClear>
-                  <Select.Option value="active">{t('status.active')}</Select.Option>
-                  <Select.Option value="inactive">{t('status.inactive')}</Select.Option>
-                </Select>
-              </Form.Item>
-              <Form.Item>
-                <Space>
-                  <Button type="primary" htmlType="submit">
-                    {t('button.search')}
-                  </Button>
-                  <Button 
-                    icon={<ReloadOutlined />}
-                    onClick={() => {
-                      searchForm.resetFields()
-                      loadUsers()
-                    }}
-                  >
-                    {t('button.reset')}
-                  </Button>
-                </Space>
-              </Form.Item>
-            </Form>
+            <UserSearchForm
+              onSearch={handleSearch}
+              onReset={() => loadUsers()}
+              userGroups={userGroups}
+              isGroupAdmin={isGroupAdmin}
+              isSuperAdmin={isSuperAdmin}
+            />
           </Card>
 
           {/* 用户列表 */}
@@ -761,32 +402,27 @@ const Users = () => {
                 icon={<UserAddOutlined />}
                 onClick={() => {
                   setEditingUser(null)
-                  form.resetFields()
+                  userForm.resetFields()
                   setCreditHistoryData([])
-                  setIsModalVisible(true)
+                  setIsUserModalVisible(true)
                 }}
               >
                 {t('admin.users.addUser')}
               </Button>
             }
           >
-            <Table
-              columns={userColumns}
-              dataSource={users}
-              rowKey="id"
+            <UserTable
+              users={users}
               loading={loading}
-              pagination={{
-                current: pagination.current,
-                pageSize: pagination.pageSize,
-                total: pagination.total,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total) => t('table.total', { total }),
-                onChange: (page, pageSize) => {
-                  setPagination(prev => ({ ...prev, current: page, pageSize }))
-                }
+              pagination={pagination}
+              currentUser={currentUser}
+              onPageChange={(page, pageSize) => {
+                setPagination(prev => ({ ...prev, current: page, pageSize }))
               }}
-              scroll={{ x: 'max-content' }}
+              onViewDetail={handleViewDetail}
+              onEdit={handleEditUser}
+              onToggleStatus={handleToggleUserStatus}
+              onDelete={handleDeleteUser}
             />
           </Card>
         </>
@@ -820,729 +456,60 @@ const Users = () => {
                 style={{ marginBottom: 16 }}
               />
             )}
-            <Table
-              columns={groupColumns}
-              dataSource={userGroups}
-              rowKey="id"
+            <UserGroupTable
+              groups={userGroups}
               loading={loading}
-              pagination={false}
+              isGroupAdmin={isGroupAdmin}
+              onEdit={handleEditGroup}
+              onDelete={handleDeleteGroup}
             />
           </Card>
         </>
       )}
 
-      {/* 创建/编辑用户弹窗 */}
-      <Modal
-        title={editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}
-        open={isModalVisible}
+      {/* 用户表单弹窗 */}
+      <UserFormModal
+        visible={isUserModalVisible}
+        editingUser={editingUser}
+        userGroups={userGroups}
+        currentUser={currentUser}
+        userCredits={userCredits}
+        creditHistory={creditHistoryData}
+        historyLoading={historyLoading}
+        form={userForm}
+        loading={loading}
+        onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
         onCancel={() => {
-          setIsModalVisible(false)
+          setIsUserModalVisible(false)
           setEditingUser(null)
-          form.resetFields()
+          userForm.resetFields()
           setCreditHistoryData([])
         }}
-        footer={null}
-        destroyOnClose
-        width={800}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={editingUser ? handleUpdateUser : handleCreateUser}
-        >
-          <Tabs defaultActiveKey="basic">
-            <TabPane tab={t('admin.users.tabs.basic')} key="basic">
-              {!editingUser && (
-                <>
-                  <Form.Item
-                    name="email"
-                    label={t('admin.users.form.email')}
-                    rules={[
-                      { required: true, message: t('admin.users.form.email.required') },
-                      { type: 'email', message: t('admin.users.form.email.invalid') }
-                    ]}
-                  >
-                    <Input placeholder={t('admin.users.form.email.required')} />
-                  </Form.Item>
+        onLoadCreditHistory={loadCreditHistory}
+      />
 
-                  <Form.Item
-                    name="password"
-                    label={t('admin.users.form.password')}
-                    rules={[
-                      { required: true, message: t('admin.users.form.password.required') },
-                      { min: 6, message: t('admin.users.form.password.min') }
-                    ]}
-                  >
-                    <Input.Password placeholder={t('admin.users.form.password.required')} />
-                  </Form.Item>
-                </>
-              )}
-
-              <Form.Item
-                name="username"
-                label={t('admin.users.form.username')}
-                rules={[{ required: true, message: t('admin.users.form.username.required') }]}
-              >
-                <Input placeholder={t('admin.users.form.username.required')} disabled={editingUser && isGroupAdmin} />
-              </Form.Item>
-
-              {/* 管理员不能修改角色 */}
-              {!isGroupAdmin && (
-                <Form.Item
-                  name="role"
-                  label={t('admin.users.form.role')}
-                  rules={[{ required: true, message: t('admin.users.form.role.required') }]}
-                  initialValue="user"
-                >
-                  <Select placeholder={t('admin.users.form.role.required')}>
-                    <Select.Option value="user">{t('role.user')}</Select.Option>
-                    {isSuperAdmin && (
-                      <>
-                        <Select.Option value="admin">{t('role.admin')}</Select.Option>
-                        <Select.Option value="super_admin">{t('role.super_admin')}</Select.Option>
-                      </>
-                    )}
-                  </Select>
-                </Form.Item>
-              )}
-
-              {/* 管理员不能修改用户组 */}
-              {!isGroupAdmin && (
-                <Form.Item
-                  name="group_id"
-                  label={t('admin.users.form.group')}
-                >
-                  <Select placeholder={t('admin.users.form.group.placeholder')} allowClear>
-                    {userGroups.filter(g => g.is_active).map(group => (
-                      <Select.Option key={group.id} value={group.id}>
-                        <Tag color={group.color} style={{ margin: 0 }}>{group.name}</Tag>
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              )}
-
-              <Form.Item
-                name="status"
-                label={t('admin.users.form.status')}
-                initialValue="active"
-              >
-                <Select>
-                  <Select.Option value="active">{t('status.active')}</Select.Option>
-                  <Select.Option value="inactive">{t('status.inactive')}</Select.Option>
-                </Select>
-              </Form.Item>
-
-              {/* 备注字段 - 超级管理员和同组管理员都可以编辑 */}
-              {(editingUser ? canEditRemark(editingUser) : true) && (
-                <Form.Item
-                  name="remark"
-                  label={
-                    <Space>
-                      <FileTextOutlined />
-                      {t('admin.users.form.remark')}
-                    </Space>
-                  }
-                  help={t('admin.users.form.remark.help')}
-                >
-                  <TextArea
-                    rows={3}
-                    placeholder={t('admin.users.form.remark.placeholder')}
-                    maxLength={500}
-                    showCount
-                  />
-                </Form.Item>
-              )}
-
-              {/* 管理员不能修改配额 */}
-              {!isGroupAdmin && (
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="token_quota"
-                      label={t('admin.users.form.tokenQuota')}
-                      rules={[{ required: true, message: t('admin.users.form.tokenQuota.required') }]}
-                      initialValue={10000}
-                    >
-                      <InputNumber 
-                        placeholder={t('admin.users.form.tokenQuota')}
-                        min={0}
-                        style={{ width: '100%' }}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="credits_quota"
-                      label={t('admin.users.form.creditsQuota')}
-                      rules={[{ required: true, message: t('admin.users.form.creditsQuota.required') }]}
-                      initialValue={1000}
-                    >
-                      <InputNumber 
-                        placeholder={t('admin.users.form.creditsQuota')}
-                        min={0}
-                        style={{ width: '100%' }}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                      />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              )}
-
-              {/* 积分有效期设置 - 只有超级管理员可以设置 */}
-              {isSuperAdmin && !editingUser && (
-                <Form.Item
-                  name="credits_expire_at"
-                  label={
-                    <Space>
-                      {t('admin.users.form.creditsExpire')}
-                      <Tooltip title={t('admin.users.form.creditsExpire.tooltip')}>
-                        <ExclamationCircleOutlined />
-                      </Tooltip>
-                    </Space>
-                  }
-                >
-                  <DatePicker 
-                    style={{ width: '100%' }}
-                    showTime
-                    format="YYYY-MM-DD HH:mm:ss"
-                    placeholder={t('admin.users.form.creditsExpire.placeholder')}
-                    disabledDate={(current) => current && current < moment().startOf('day')}
-                  />
-                </Form.Item>
-              )}
-            </TabPane>
-
-            {editingUser && isSuperAdmin && (
-              <TabPane tab={t('admin.users.tabs.credits')} key="credits">
-                {/* 当前积分信息 */}
-                <Alert
-                  message={t('admin.users.credits.currentInfo')}
-                  description={
-                    <Descriptions column={2} size="small" style={{ marginTop: 8 }}>
-                      <Descriptions.Item label={t('admin.users.credits.currentBalance')}>
-                        <span style={{ 
-                          fontSize: 18, 
-                          fontWeight: 'bold', 
-                          color: userCredits[editingUser.id]?.credits_stats?.isExpired ? '#ff4d4f' : '#52c41a' 
-                        }}>
-                          {userCredits[editingUser.id]?.credits_stats?.remaining?.toLocaleString() || 0}
-                        </span>
-                        {userCredits[editingUser.id]?.credits_stats?.isExpired && (
-                          <Tag color="error" style={{ marginLeft: 8 }}>已过期</Tag>
-                        )}
-                      </Descriptions.Item>
-                      <Descriptions.Item label={t('admin.users.credits.quota')}>
-                        {userCredits[editingUser.id]?.credits_quota?.toLocaleString() || 0}
-                      </Descriptions.Item>
-                      <Descriptions.Item label={t('admin.users.credits.used')}>
-                        {userCredits[editingUser.id]?.used_credits?.toLocaleString() || 0}
-                      </Descriptions.Item>
-                      <Descriptions.Item label={t('admin.users.credits.usageRate')}>
-                        {userCredits[editingUser.id]?.credits_stats?.usageRate || 0}%
-                      </Descriptions.Item>
-                      <Descriptions.Item label={t('admin.users.credits.expireAt')} span={2}>
-                        {userCredits[editingUser.id]?.credits_expire_at ? (
-                          <Space>
-                            <CalendarOutlined />
-                            {moment(userCredits[editingUser.id].credits_expire_at).format('YYYY-MM-DD HH:mm:ss')}
-                            {userCredits[editingUser.id]?.credits_stats?.remainingDays !== null && (
-                              <Tag color={
-                                userCredits[editingUser.id].credits_stats.isExpired ? 'error' :
-                                userCredits[editingUser.id].credits_stats.remainingDays <= 7 ? 'warning' : 'success'
-                              }>
-                                {userCredits[editingUser.id].credits_stats.isExpired 
-                                  ? '已过期' 
-                                  : `剩余${userCredits[editingUser.id].credits_stats.remainingDays}天`
-                                }
-                              </Tag>
-                            )}
-                          </Space>
-                        ) : (
-                          <Tag color="success">永不过期</Tag>
-                        )}
-                      </Descriptions.Item>
-                    </Descriptions>
-                  }
-                  type={userCredits[editingUser.id]?.credits_stats?.isExpired ? 'error' : 'info'}
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-
-                {/* 积分操作 */}
-                <Divider>{t('admin.users.credits.operation')}</Divider>
-                
-                <Form.Item 
-                  name="creditsOperation" 
-                  label={t('admin.users.credits.operationType')}
-                >
-                  <Select placeholder={t('admin.users.credits.selectOperation')}>
-                    <Select.Option value="add">
-                      <Space>
-                        <PlusCircleOutlined style={{ color: '#52c41a' }} />
-                        {t('admin.credits.recharge')}
-                      </Space>
-                    </Select.Option>
-                    <Select.Option value="deduct">
-                      <Space>
-                        <MinusCircleOutlined style={{ color: '#ff4d4f' }} />
-                        {t('admin.credits.deduct')}
-                      </Space>
-                    </Select.Option>
-                    <Select.Option value="set">
-                      <Space>
-                        <WalletOutlined style={{ color: '#1677ff' }} />
-                        {t('admin.credits.setQuota')}
-                      </Space>
-                    </Select.Option>
-                  </Select>
-                </Form.Item>
-
-                <Form.Item 
-                  noStyle
-                  shouldUpdate={(prevValues, currentValues) => 
-                    prevValues.creditsOperation !== currentValues.creditsOperation
-                  }
-                >
-                  {({ getFieldValue }) => {
-                    const operation = getFieldValue('creditsOperation')
-                    if (!operation) return null
-
-                    return (
-                      <>
-                        <Form.Item
-                          name="creditsAmount"
-                          label={operation === 'set' ? t('admin.credits.form.newQuota') : t('admin.credits.form.amount')}
-                          rules={[
-                            { required: true, message: t('admin.credits.form.amount.required') },
-                            { pattern: /^\d+$/, message: t('admin.credits.form.amount.invalid') }
-                          ]}
-                        >
-                          <InputNumber
-                            style={{ width: '100%' }}
-                            min={1}
-                            max={operation === 'set' ? 1000000 : 100000}
-                            placeholder={operation === 'set' ? t('admin.credits.form.newQuota') : t('admin.credits.form.amount')}
-                            formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                            parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                          />
-                        </Form.Item>
-
-                        {operation === 'add' && (
-                          <Form.Item
-                            name="extend_days"
-                            label={t('admin.credits.form.extendDays')}
-                          >
-                            <InputNumber
-                              style={{ width: '100%' }}
-                              min={0}
-                              max={3650}
-                              placeholder={t('admin.credits.form.extendDays.placeholder')}
-                            />
-                          </Form.Item>
-                        )}
-
-                        <Form.Item
-                          name="creditsReason"
-                          label={t('admin.credits.form.reason')}
-                          rules={[{ required: true, message: t('admin.credits.form.reason.required') }]}
-                        >
-                          <Input.TextArea
-                            rows={3}
-                            placeholder={t('admin.credits.form.reason.placeholder')}
-                            showCount
-                            maxLength={200}
-                          />
-                        </Form.Item>
-                      </>
-                    )
-                  }}
-                </Form.Item>
-
-                {/* 积分历史 */}
-                <Divider>{t('admin.users.credits.history')}</Divider>
-                
-                <Timeline loading={historyLoading}>
-                  {creditHistoryData.length > 0 ? (
-                    creditHistoryData.map((record) => (
-                      <Timeline.Item 
-                        key={record.id}
-                        color={record.amount > 0 ? 'green' : 'red'}
-                        dot={<ClockCircleOutlined />}
-                      >
-                        <div>
-                          <strong>{moment(record.created_at).format('YYYY-MM-DD HH:mm:ss')}</strong>
-                        </div>
-                        <div>
-                          <Tag color={record.amount > 0 ? 'green' : 'red'}>
-                            {record.amount > 0 ? '+' : ''}{record.amount}
-                          </Tag>
-                          <span style={{ marginLeft: 8 }}>{record.description}</span>
-                        </div>
-                        {record.operator_name && (
-                          <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                            <UserOutlined /> {t('admin.users.credits.operator')}: {record.operator_name}
-                          </div>
-                        )}
-                        <div style={{ fontSize: 12, color: '#999' }}>
-                          {t('admin.users.credits.balanceAfter')}: {record.balance_after}
-                        </div>
-                      </Timeline.Item>
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                      {t('admin.users.credits.noHistory')}
-                    </div>
-                  )}
-                </Timeline>
-              </TabPane>
-            )}
-
-            {/* 密码重置标签 - 管理员可以重置同组用户密码 */}
-            {editingUser && (
-              <TabPane tab={t('admin.users.tabs.password')} key="password">
-                <Alert
-                  message={t('admin.users.password.resetWarning')}
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-                
-                <Form.Item
-                  name="newPassword"
-                  label={t('admin.users.password.new')}
-                  rules={[
-                    { min: 6, message: t('admin.users.password.min')} 
-                  ]}
-                >
-                  <Input.Password placeholder={t('admin.users.password.newPlaceholder')} />
-                </Form.Item>
-
-                <Form.Item
-                  name="confirmPassword"
-                  label={t('admin.users.password.confirm')}
-                  dependencies={['newPassword']}
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      validator(_, value) {
-                        if (!getFieldValue('newPassword')) {
-                          return Promise.resolve()
-                        }
-                        if (!value || getFieldValue('newPassword') === value) {
-                          return Promise.resolve()
-                        }
-                        return Promise.reject(new Error(t('admin.users.password.mismatch')))
-                      }
-                    })
-                  ]}
-                >
-                  <Input.Password placeholder={t('admin.users.password.confirmPlaceholder')} />
-                </Form.Item>
-              </TabPane>
-            )}
-
-          </Tabs>
-
-          <Form.Item style={{ marginTop: 24 }}>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {editingUser ? t('button.update') : t('button.create')}
-              </Button>
-              <Button onClick={() => {
-                setIsModalVisible(false)
-                setEditingUser(null)
-                form.resetFields()
-                setCreditHistoryData([])
-              }}>
-                {t('button.cancel')}
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 创建/编辑分组弹窗 - 只有超级管理员可以 */}
+      {/* 分组表单弹窗 */}
       {isSuperAdmin && (
-        <Modal
-          title={editingGroup ? t('admin.groups.editGroup') : t('admin.groups.createGroup')}
-          open={isGroupModalVisible}
+        <UserGroupFormModal
+          visible={isGroupModalVisible}
+          editingGroup={editingGroup}
+          form={groupForm}
+          loading={loading}
+          onSubmit={editingGroup ? handleUpdateGroup : handleCreateGroup}
           onCancel={() => {
             setIsGroupModalVisible(false)
             setEditingGroup(null)
             groupForm.resetFields()
           }}
-          footer={null}
-          destroyOnClose
-        >
-          <Form
-            form={groupForm}
-            layout="vertical"
-            onFinish={editingGroup ? handleUpdateGroup : handleCreateGroup}
-          >
-            <Form.Item
-              name="name"
-              label={t('admin.groups.form.name')}
-              rules={[{ required: true, message: t('admin.groups.form.name.required') }]}
-            >
-              <Input placeholder={t('admin.groups.form.name.placeholder')} />
-            </Form.Item>
-
-            <Form.Item
-              name="description"
-              label={t('admin.groups.form.description')}
-            >
-              <Input.TextArea rows={3} placeholder={t('admin.groups.form.description.placeholder')} />
-            </Form.Item>
-
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="color"
-                  label={t('admin.groups.form.color')}
-                  initialValue="#1677ff"
-                >
-                  <Select>
-                    <Select.Option value="#1677ff">
-                      <Tag color="#1677ff">蓝色</Tag>
-                    </Select.Option>
-                    <Select.Option value="#52c41a">
-                      <Tag color="#52c41a">绿色</Tag>
-                    </Select.Option>
-                    <Select.Option value="#fa8c16">
-                      <Tag color="#fa8c16">橙色</Tag>
-                    </Select.Option>
-                    <Select.Option value="#ff4d4f">
-                      <Tag color="#ff4d4f">红色</Tag>
-                    </Select.Option>
-                    <Select.Option value="#722ed1">
-                      <Tag color="#722ed1">紫色</Tag>
-                    </Select.Option>
-                    <Select.Option value="#13c2c2">
-                      <Tag color="#13c2c2">青色</Tag>
-                    </Select.Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="sort_order"
-                  label={t('admin.groups.form.sort')}
-                  initialValue={0}
-                >
-                  <InputNumber min={0} style={{ width: '100%' }} />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Form.Item
-              name="is_active"
-              label={t('admin.groups.form.status')}
-              initialValue={true}
-              valuePropName="checked"
-            >
-              <Select>
-                <Select.Option value={true}>{t('admin.groups.form.enable')}</Select.Option>
-                <Select.Option value={false}>{t('admin.groups.form.disable')}</Select.Option>
-              </Select>
-            </Form.Item>
-
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit" loading={loading}>
-                  {editingGroup ? t('button.update') : t('button.create')}
-                </Button>
-                <Button onClick={() => {
-                  setIsGroupModalVisible(false)
-                  setEditingGroup(null)
-                  groupForm.resetFields()
-                }}>
-                  {t('button.cancel')}
-                </Button>
-              </Space>
-            </Form.Item>
-          </Form>
-        </Modal>
+        />
       )}
 
       {/* 用户详情抽屉 */}
-      <Drawer
-        title={t('admin.users.detail.title')}
-        width={700}
-        open={isDetailVisible}
+      <UserDetailDrawer
+        visible={isDetailVisible}
+        userDetail={userDetail}
         onClose={() => setIsDetailVisible(false)}
-      >
-        {userDetail && (
-          <div>
-            <Card title={t('admin.users.detail.basicInfo')} size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div><strong>{t('admin.users.table.id')}:</strong> {userDetail.user.id}</div>
-                </Col>
-                <Col span={12}>
-                  <div><strong>{t('admin.users.table.username')}:</strong> {userDetail.user.username}</div>
-                </Col>
-                <Col span={12}>
-                  <div><strong>{t('admin.users.table.email')}:</strong> {userDetail.user.email}</div>
-                </Col>
-                <Col span={12}>
-                  <div>
-                    <strong>{t('admin.users.table.role')}:</strong> 
-                    <Tag color={roleColors[userDetail.user.role]} style={{ marginLeft: 8 }}>
-                      {t(`role.${userDetail.user.role}`)}
-                    </Tag>
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div>
-                    <strong>{t('admin.users.table.group')}:</strong>
-                    {userDetail.user.group_name ? (
-                      <Tag color={userDetail.user.group_color} style={{ marginLeft: 8 }}>
-                        {userDetail.user.group_name}
-                      </Tag>
-                    ) : (
-                      <span style={{ marginLeft: 8, color: '#999' }}>{t('admin.users.noGroup')}</span>
-                    )}
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div>
-                    <strong>{t('admin.users.table.status')}:</strong>
-                    <Tag color={statusColors[userDetail.user.status]} style={{ marginLeft: 8 }}>
-                      {t(`status.${userDetail.user.status}`)}
-                    </Tag>
-                  </div>
-                </Col>
-                {userDetail.user.remark && (
-                  <Col span={24}>
-                    <div style={{ marginTop: 8 }}>
-                      <strong>{t('admin.users.table.remark')}:</strong>
-                      <div style={{ 
-                        marginTop: 4, 
-                        padding: '8px 12px', 
-                        background: '#f5f5f5', 
-                        borderRadius: 4,
-                        color: '#666'
-                      }}>
-                        {userDetail.user.remark}
-                      </div>
-                    </div>
-                  </Col>
-                )}
-                <Col span={24}>
-                  <div style={{ marginTop: 8 }}>
-                    <strong>{t('admin.users.table.createdAt')}:</strong> {moment(userDetail.user.created_at).format('YYYY-MM-DD HH:mm:ss')}
-                  </div>
-                </Col>
-                <Col span={24}>
-                  <div style={{ marginTop: 4 }}>
-                    <strong>{t('admin.users.detail.lastLogin')}:</strong> {
-                      userDetail.user.last_login_at 
-                        ? moment(userDetail.user.last_login_at).format('YYYY-MM-DD HH:mm:ss')
-                        : t('admin.users.detail.neverLogin')
-                    }
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-
-            <Tabs defaultActiveKey="tokens" style={{ marginBottom: 16 }}>
-              <TabPane tab={<span><TrophyOutlined />{t('admin.users.detail.tokenStats')}</span>} key="tokens">
-                <Card size="small">
-                  <Row gutter={16} style={{ textAlign: 'center' }}>
-                    <Col span={8}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
-                        {userDetail.user.token_quota?.toLocaleString()}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.form.tokenQuota')}</div>
-                    </Col>
-                    <Col span={8}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                        {userDetail.user.used_tokens?.toLocaleString()}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
-                    </Col>
-                    <Col span={8}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
-                        {((userDetail.user.token_quota || 0) - (userDetail.user.used_tokens || 0)).toLocaleString()}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
-                    </Col>
-                  </Row>
-                </Card>
-              </TabPane>
-
-              <TabPane tab={<span><DollarOutlined />{t('admin.users.detail.creditsStats')}</span>} key="credits">
-                <Card size="small">
-                  <Row gutter={16} style={{ textAlign: 'center' }}>
-                    <Col span={8}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
-                        {userDetail.user.credits_quota?.toLocaleString()}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.form.creditsQuota')}</div>
-                    </Col>
-                    <Col span={8}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                        {userDetail.user.used_credits?.toLocaleString()}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
-                    </Col>
-                    <Col span={8}>
-                      <div style={{ 
-                        fontSize: 24, 
-                        fontWeight: 'bold', 
-                        color: userDetail.user.credits_stats?.isExpired ? '#ff4d4f' : '#52c41a' 
-                      }}>
-                        {userDetail.user.credits_stats?.remaining?.toLocaleString() || 0}
-                      </div>
-                      <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
-                    </Col>
-                  </Row>
-                  <Divider />
-                  <Row gutter={16}>
-                    <Col span={24}>
-                      <div style={{ textAlign: 'center' }}>
-                        <strong>{t('admin.users.credits.expire.title')}:</strong>
-                        {userDetail.user.credits_expire_at ? (
-                          <div style={{ marginTop: 8 }}>
-                            <CalendarOutlined style={{ marginRight: 8 }} />
-                            {moment(userDetail.user.credits_expire_at).format('YYYY-MM-DD HH:mm:ss')}
-                            {userDetail.user.credits_stats?.isExpired ? (
-                              <Tag color="error" style={{ marginLeft: 8 }}>已过期</Tag>
-                            ) : userDetail.user.credits_stats?.remainingDays <= 7 ? (
-                              <Tag color="warning" style={{ marginLeft: 8 }}>
-                                {userDetail.user.credits_stats.remainingDays}天后过期
-                              </Tag>
-                            ) : (
-                              <Tag color="success" style={{ marginLeft: 8 }}>
-                                剩余{userDetail.user.credits_stats.remainingDays}天
-                              </Tag>
-                            )}
-                          </div>
-                        ) : (
-                          <Tag color="success" style={{ marginTop: 8 }}>永不过期</Tag>
-                        )}
-                      </div>
-                    </Col>
-                  </Row>
-                </Card>
-              </TabPane>
-            </Tabs>
-
-            <Card title={t('admin.users.detail.permissions')} size="small">
-              <div>
-                {userDetail.permissions?.map(permission => (
-                  <Tag key={permission} style={{ marginBottom: 4 }}>
-                    {permission}
-                  </Tag>
-                ))}
-              </div>
-            </Card>
-          </div>
-        )}
-      </Drawer>
+      />
     </div>
   )
 }

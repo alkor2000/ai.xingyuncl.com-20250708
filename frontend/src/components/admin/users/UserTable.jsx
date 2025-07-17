@@ -1,0 +1,266 @@
+/**
+ * 用户列表表格组件
+ */
+
+import React from 'react'
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress } from 'antd'
+import {
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  MinusCircleOutlined,
+  PlusCircleOutlined,
+  CalendarOutlined,
+  ExclamationCircleOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  FileTextOutlined
+} from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import moment from 'moment'
+
+const UserTable = ({
+  users = [],
+  loading = false,
+  pagination = {},
+  currentUser = {},
+  onPageChange,
+  onViewDetail,
+  onEdit,
+  onToggleStatus,
+  onDelete
+}) => {
+  const { t } = useTranslation()
+  
+  const isGroupAdmin = currentUser?.role === 'admin'
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  const roleColors = {
+    super_admin: 'red',
+    admin: 'blue',
+    user: 'green'
+  }
+
+  const statusColors = {
+    active: 'green',
+    inactive: 'red'
+  }
+
+  // 获取积分状态标签
+  const getCreditsStatusTag = (user) => {
+    const stats = user.credits_stats || {}
+    
+    if (stats.isExpired) {
+      return <Tag color="error" icon={<ExclamationCircleOutlined />}>已过期</Tag>
+    }
+    
+    if (stats.remainingDays !== null && stats.remainingDays <= 7) {
+      return <Tag color="warning" icon={<ClockCircleOutlined />}>{stats.remainingDays}天后过期</Tag>
+    }
+    
+    if (stats.remaining > 0) {
+      return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
+    }
+    
+    return <Tag color="default">无积分</Tag>
+  }
+
+  const columns = [
+    {
+      title: t('admin.users.table.id'),
+      dataIndex: 'id',
+      key: 'id',
+      width: 80
+    },
+    {
+      title: t('admin.users.table.username'),
+      dataIndex: 'username',
+      key: 'username'
+    },
+    {
+      title: t('admin.users.table.email'),
+      dataIndex: 'email', 
+      key: 'email'
+    },
+    {
+      title: t('admin.users.table.role'),
+      dataIndex: 'role',
+      key: 'role',
+      render: (role) => (
+        <Tag color={roleColors[role]}>{t(`role.${role}`)}</Tag>
+      )
+    },
+    {
+      title: t('admin.users.table.group'),
+      dataIndex: 'group_name',
+      key: 'group_name',
+      render: (groupName, record) => (
+        groupName ? (
+          <Tag color={record.group_color || '#1677ff'}>{groupName}</Tag>
+        ) : (
+          <span style={{ color: '#999' }}>{t('admin.users.noGroup')}</span>
+        )
+      )
+    },
+    {
+      title: t('admin.users.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => (
+        <Tag color={statusColors[status]}>
+          {t(`status.${status}`)}
+        </Tag>
+      )
+    },
+    {
+      title: t('admin.users.table.credits'),
+      key: 'credits',
+      render: (_, record) => {
+        const stats = record.credits_stats || {}
+        const remaining = stats.remaining || 0
+        const usageRate = record.credits_quota > 0 ? (record.used_credits / record.credits_quota * 100) : 0
+        
+        return (
+          <div style={{ minWidth: 150 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 'bold', 
+                color: stats.isExpired ? '#ff4d4f' : (remaining > 0 ? '#52c41a' : '#ff4d4f') 
+              }}>
+                {remaining.toLocaleString()}
+              </div>
+              {getCreditsStatusTag(record)}
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {record.used_credits?.toLocaleString()} / {record.credits_quota?.toLocaleString()}
+            </div>
+            <Progress 
+              percent={Math.round(usageRate)} 
+              size="small" 
+              strokeColor={stats.isExpired ? '#ff4d4f' : (usageRate > 80 ? '#ff4d4f' : '#52c41a')}
+              showInfo={false}
+            />
+            {record.credits_expire_at && (
+              <div style={{ fontSize: '11px', color: stats.isExpired ? '#ff4d4f' : '#999', marginTop: 2 }}>
+                <CalendarOutlined /> {moment(record.credits_expire_at).format('YYYY-MM-DD')}
+              </div>
+            )}
+          </div>
+        )
+      }
+    },
+    {
+      title: t('admin.users.table.remark'),
+      dataIndex: 'remark',
+      key: 'remark',
+      width: 150,
+      render: (remark) => {
+        if (!remark) return null
+        return (
+          <Tooltip title={remark}>
+            <div style={{ 
+              maxWidth: 150, 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: '#666',
+              fontSize: '12px'
+            }}>
+              <FileTextOutlined style={{ marginRight: 4 }} />
+              {remark}
+            </div>
+          </Tooltip>
+        )
+      }
+    },
+    {
+      title: t('admin.users.table.createdAt'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (time) => moment(time).format('YYYY-MM-DD HH:mm')
+    },
+    {
+      title: t('admin.users.table.actions'),
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title={t('admin.users.viewDetail')}>
+            <Button 
+              type="text" 
+              size="small" 
+              icon={<EyeOutlined />} 
+              onClick={() => onViewDetail(record.id)} 
+            />
+          </Tooltip>
+          
+          <Tooltip title={t('button.edit')}>
+            <Button 
+              type="text" 
+              size="small" 
+              icon={<EditOutlined />} 
+              onClick={() => onEdit(record)} 
+            />
+          </Tooltip>
+          
+          {record.id !== currentUser?.id && (
+            <Tooltip title={record.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}>
+              <Popconfirm
+                title={record.status === 'active' ? t('admin.users.disable.confirm') : t('admin.users.enable.confirm')}
+                onConfirm={() => onToggleStatus(record.id, record.status)}
+                okText={t('button.confirm')}
+                cancelText={t('button.cancel')}
+              >
+                <Button 
+                  type="text" 
+                  size="small" 
+                  danger={record.status === 'active'}
+                  icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
+          
+          {isSuperAdmin && record.id !== currentUser?.id && (
+            <Tooltip title={t('button.delete')}>
+              <Popconfirm
+                title={t('admin.users.delete.confirm')}
+                onConfirm={() => onDelete(record.id)}
+                okText={t('button.confirm')}
+                cancelText={t('button.cancel')}
+              >
+                <Button 
+                  type="text" 
+                  size="small" 
+                  danger 
+                  icon={<DeleteOutlined />} 
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
+        </Space>
+      )
+    }
+  ]
+
+  return (
+    <Table
+      columns={columns}
+      dataSource={users}
+      rowKey="id"
+      loading={loading}
+      pagination={{
+        current: pagination.current,
+        pageSize: pagination.pageSize,
+        total: pagination.total,
+        showSizeChanger: true,
+        showQuickJumper: true,
+        showTotal: (total) => t('table.total', { total }),
+        onChange: onPageChange
+      }}
+      scroll={{ x: 'max-content' }}
+    />
+  )
+}
+
+export default UserTable
