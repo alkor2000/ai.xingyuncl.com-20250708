@@ -1,10 +1,11 @@
 /**
- * 用户管理路由
+ * 用户管理路由 - 使用优化的权限中间件
  */
 
 const express = require('express');
 const UserManagementController = require('../../controllers/admin/UserManagementController');
 const { requirePermission } = require('../../middleware/authMiddleware');
+const { canManageUser, canCreateUser, restrictFieldsForGroupAdmin } = require('../../middleware/permissions');
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ router.get('/',
  */
 router.post('/',
   requirePermission('user.manage'),
+  canCreateUser(),
   UserManagementController.createUser
 );
 
@@ -35,6 +37,7 @@ router.post('/',
  */
 router.get('/:id',
   requirePermission('user.manage'),
+  canManageUser(),
   UserManagementController.getUserDetail
 );
 
@@ -45,6 +48,8 @@ router.get('/:id',
  */
 router.put('/:id',
   requirePermission('user.manage'),
+  canManageUser(),
+  restrictFieldsForGroupAdmin(),
   UserManagementController.updateUser
 );
 
@@ -55,6 +60,7 @@ router.put('/:id',
  */
 router.put('/:id/password',
   requirePermission('user.manage'),
+  canManageUser(),
   UserManagementController.resetUserPassword
 );
 
@@ -65,6 +71,7 @@ router.put('/:id/password',
  */
 router.delete('/:id',
   requirePermission('user.manage'),
+  canManageUser(),
   UserManagementController.deleteUser
 );
 

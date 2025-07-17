@@ -1,0 +1,239 @@
+/**
+ * 认证中间件 - 支持基于用户组的权限检查
+ */
+
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const ResponseHelper = require('../utils/response');
+const logger = require('../utils/logger');
+const config = require('../config');
+const redisConnection = require('../database/redis');
+
+/**
+ * JWT认证中间件 - 支持SSE查询参数认证和Token黑名单
+ */
+const authenticate = async (req, res, next) => {
+  try {
+    let token = null;
+    
+    // 1. 优先从请求头获取token（标准方式）
+    const authHeader = req.header('Authorization');
+    if (authHeader) {
+      token = authHeader.replace('Bearer ', '');
+    }
+    
+    // 2. 如果请求头没有，尝试从查询参数获取（SSE支持）
+    if (!token && req.query.token) {
+      token = req.query.token;
+      logger.info('使用查询参数中的Token进行认证');
+    }
+    
+    // 3. 检查是否有token
+    if (!token) {
+      return ResponseHelper.unauthorized(res, '缺少认证令牌');
+    }
+
+    try {
+      const decoded = jwt.verify(token, config.auth.jwt.accessSecret);
+      
+      // 验证token类型
+      if (decoded.type !== 'access') {
+        return ResponseHelper.unauthorized(res, '无效的令牌类型');
+      }
+      
+      // 检查token是否在黑名单中
+      if (decoded.jti && redisConnection.isConnected) {
+        const isBlacklisted = await redisConnection.exists(`token_blacklist:${decoded.jti}`);
+        if (isBlacklisted) {
+          logger.warn('使用已注销的token', { userId: decoded.userId, jti: decoded.jti });
+          return ResponseHelper.unauthorized(res, '令牌已失效，请重新登录');
+        }
+      }
+      
+      // 获取用户信息
+      const user = await User.findById(decoded.userId);
+      if (!user) {
+        return ResponseHelper.unauthorized(res, '用户不存在');
+      }
+      
+      if (user.status !== 'active') {
+        return ResponseHelper.unauthorized(res, '用户账户已被禁用');
+      }
+      
+      // 将用户信息添加到request对象
+      req.user = user;
+      req.token = token;
+      req.tokenPayload = decoded;
+      
+      next();
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return ResponseHelper.unauthorized(res, '访问令牌已过期');
+      } else if (jwtError.name === 'JsonWebTokenError') {
+        return ResponseHelper.unauthorized(res, '无效的访问令牌');
+      } else {
+        logger.error('JWT验证失败:', jwtError);
+        return ResponseHelper.unauthorized(res, '令牌验证失败');
+      }
+    }
+  } catch (error) {
+    logger.error('认证中间件错误:', error);
+    return ResponseHelper.error(res, '认证服务异常');
+  }
+};
+
+/**
+ * 角色检查中间件
+ */
+const requireRole = (roles) => {
+  return (req, res, next) => {
+    try {
+      if (!req.user) {
+        return ResponseHelper.unauthorized(res, '用户未认证');
+      }
+      
+      const userRole = req.user.role;
+      const allowedRoles = Array.isArray(roles) ? roles : [roles];
+      
+      if (!allowedRoles.includes(userRole)) {
+        return ResponseHelper.forbidden(res, '权限不足');
+      }
+      
+      next();
+    } catch (error) {
+      logger.error('角色检查中间件错误:', error);
+      return ResponseHelper.error(res, '权限验证异常');
+    }
+  };
+};
+
+/**
+ * 权限检查中间件 - 增强版，支持基于用户组的权限映射
+ */
+const requirePermission = (permission) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return ResponseHelper.unauthorized(res, '用户未认证');
+      }
+      
+      // 获取用户权限
+      const userPermissions = await req.user.getPermissions();
+      
+      // 权限映射：user.manage.group 权限可以访问 user.manage 的路由
+      const permissionMapping = {
+        'user.manage': ['user.manage', 'user.manage.group', 'user.manage.*'],
+        'credits.manage': ['credits.manage', 'credits.manage.*'],
+        'group.manage': ['group.manage', 'group.manage.*']
+      };
+      
+      // 获取映射的权限列表
+      const acceptedPermissions = permissionMapping[permission] || [permission];
+      
+      // 检查是否有所需权限
+      const hasBasePermission = userPermissions.some(p => {
+        // 直接匹配映射权限
+        if (acceptedPermissions.includes(p)) return true;
+        
+        // 检查通配符权限 (如 admin.*, system.*)
+        if (p.endsWith('.*')) {
+          const prefix = p.slice(0, -1);
+          return permission.startsWith(prefix);
+        }
+        
+        // 检查具体的组权限是否可以访问基础权限
+        if (p.endsWith('.group') && permission === p.replace('.group', '')) {
+          return true;
+        }
+        
+        return false;
+      });
+      
+      if (!hasBasePermission) {
+        logger.warn('权限不足', {
+          userId: req.user.id,
+          userRole: req.user.role,
+          requiredPermission: permission,
+          userPermissions
+        });
+        return ResponseHelper.forbidden(res, '权限不足');
+      }
+      
+      // 如果是基于用户组的权限，需要在具体的控制器中进一步检查
+      // 这里只做基础权限检查
+      
+      next();
+    } catch (error) {
+      logger.error('权限检查中间件错误:', error);
+      return ResponseHelper.error(res, '权限验证异常');
+    }
+  };
+};
+
+/**
+ * 基于用户组的权限检查中间件
+ * 用于检查当前用户是否可以操作目标用户
+ */
+const requireGroupPermission = (permission) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return ResponseHelper.unauthorized(res, '用户未认证');
+      }
+      
+      const targetUserId = req.params.id || req.body.user_id;
+      if (!targetUserId) {
+        return next(); // 没有目标用户ID，跳过组权限检查
+      }
+      
+      // 检查是否有对目标用户的权限
+      const hasPermission = await req.user.hasPermission(permission, targetUserId);
+      
+      if (!hasPermission) {
+        logger.warn('基于用户组的权限不足', {
+          userId: req.user.id,
+          userRole: req.user.role,
+          userGroupId: req.user.group_id,
+          targetUserId,
+          requiredPermission: permission
+        });
+        return ResponseHelper.forbidden(res, '无权操作该用户');
+      }
+      
+      next();
+    } catch (error) {
+      logger.error('基于用户组的权限检查中间件错误:', error);
+      return ResponseHelper.error(res, '权限验证异常');
+    }
+  };
+};
+
+/**
+ * Token配额检查中间件
+ */
+const checkTokenQuota = (estimatedTokens) => {
+  return (req, res, next) => {
+    try {
+      if (!req.user) {
+        return ResponseHelper.unauthorized(res, '用户未认证');
+      }
+      
+      if (!req.user.hasTokenQuota(estimatedTokens)) {
+        return ResponseHelper.forbidden(res, 'Token配额不足');
+      }
+      
+      next();
+    } catch (error) {
+      logger.error('Token配额检查中间件错误:', error);
+      return ResponseHelper.error(res, 'Token配额验证异常');
+    }
+  };
+};
+
+module.exports = {
+  authenticate,
+  requireRole,
+  requirePermission,
+  requireGroupPermission,
+  checkTokenQuota
+};

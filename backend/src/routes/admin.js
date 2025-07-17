@@ -1,9 +1,10 @@
 /**
- * 管理员路由聚合器 - 整合所有管理功能的子路由
+ * 管理员路由聚合器 - 使用优化的权限中间件
  */
 
 const express = require('express');
 const { authenticate } = require('../middleware/authMiddleware');
+const { canViewCredits, canManageCredits } = require('../middleware/permissions');
 const rateLimit = require('express-rate-limit');
 
 // 导入子路由
@@ -13,8 +14,9 @@ const groupRoutes = require('./admin/groupRoutes');
 const modelRoutes = require('./admin/modelRoutes');
 const statsRoutes = require('./admin/statsRoutes');
 
-// 兼容层：保持原有的AdminController引用，用于尚未迁移的功能
-const AdminController = require('../controllers/adminController');
+// 导入控制器（用于积分路由）
+const UserCreditsController = require('../controllers/admin/UserCreditsController');
+const SystemStatsController = require('../controllers/admin/SystemStatsController');
 
 const router = express.Router();
 
@@ -51,13 +53,13 @@ router.use('/stats', statsRoutes);
 
 // 系统设置路由 - 保持原路径 /api/admin/settings
 router.get('/settings',
-  require('../middleware/authMiddleware').requirePermission('system.all'),
-  AdminController.getSystemSettings
+  require('../middleware/permissions').canManageSystem(),
+  SystemStatsController.getSystemSettings
 );
 
 router.put('/settings',
-  require('../middleware/authMiddleware').requirePermission('system.all'),
-  AdminController.updateSystemSettings
+  require('../middleware/permissions').canManageSystem(),
+  SystemStatsController.updateSystemSettings
 );
 
 // ===== 特殊处理：积分相关路由 =====
@@ -68,8 +70,8 @@ router.put('/settings',
  * @desc 获取用户积分信息
  */
 router.get('/users/:id/credits',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').getUserCredits
+  canViewCredits(),
+  UserCreditsController.getUserCredits
 );
 
 /**
@@ -77,8 +79,8 @@ router.get('/users/:id/credits',
  * @desc 设置用户积分配额
  */
 router.put('/users/:id/credits',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').setUserCredits
+  canManageCredits(),
+  UserCreditsController.setUserCredits
 );
 
 /**
@@ -86,8 +88,8 @@ router.put('/users/:id/credits',
  * @desc 充值用户积分
  */
 router.post('/users/:id/credits/add',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').addUserCredits
+  canManageCredits(),
+  UserCreditsController.addUserCredits
 );
 
 /**
@@ -95,8 +97,8 @@ router.post('/users/:id/credits/add',
  * @desc 扣减用户积分
  */
 router.post('/users/:id/credits/deduct',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').deductUserCredits
+  canManageCredits(),
+  UserCreditsController.deductUserCredits
 );
 
 /**
@@ -104,8 +106,8 @@ router.post('/users/:id/credits/deduct',
  * @desc 获取用户积分使用历史
  */
 router.get('/users/:id/credits/history',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').getUserCreditsHistory
+  canViewCredits(),
+  UserCreditsController.getUserCreditsHistory
 );
 
 /**
@@ -113,8 +115,8 @@ router.get('/users/:id/credits/history',
  * @desc 设置用户积分有效期
  */
 router.put('/users/:id/credits/expire',
-  require('../middleware/authMiddleware').requirePermission('credits.manage'),
-  require('../controllers/admin/UserCreditsController').setUserCreditsExpire
+  canManageCredits(),
+  UserCreditsController.setUserCreditsExpire
 );
 
 module.exports = router;

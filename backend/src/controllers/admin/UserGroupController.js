@@ -1,5 +1,5 @@
 /**
- * 用户分组管理控制器 - 负责用户分组的增删改查
+ * 用户分组管理控制器 - 使用中间件处理权限，移除重复检查
  */
 
 const User = require('../../models/User');
@@ -52,14 +52,10 @@ class UserGroupController {
   }
 
   /**
-   * 创建用户分组 - 仅超级管理员
+   * 创建用户分组 - 权限检查已在中间件处理
    */
   static async createUserGroup(req, res) {
     try {
-      if (req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以创建用户分组');
-      }
-
       const groupData = req.body;
       const createdBy = req.user.id;
 
@@ -82,14 +78,10 @@ class UserGroupController {
   }
 
   /**
-   * 更新用户分组 - 仅超级管理员
+   * 更新用户分组 - 权限检查已在中间件处理
    */
   static async updateUserGroup(req, res) {
     try {
-      if (req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以更新用户分组');
-      }
-
       const { id } = req.params;
       const updateData = req.body;
 
@@ -116,14 +108,10 @@ class UserGroupController {
   }
 
   /**
-   * 删除用户分组 - 仅超级管理员
+   * 删除用户分组 - 权限检查已在中间件处理
    */
   static async deleteUserGroup(req, res) {
     try {
-      if (req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以删除用户分组');
-      }
-
       const { id } = req.params;
 
       await User.deleteGroup(id);

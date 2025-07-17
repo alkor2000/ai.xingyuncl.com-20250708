@@ -1,5 +1,5 @@
 /**
- * 用户积分管理控制器 - 负责积分相关的所有操作
+ * 用户积分管理控制器 - 使用中间件处理权限，移除重复检查
  */
 
 const User = require('../../models/User');
@@ -8,23 +8,16 @@ const logger = require('../../utils/logger');
 
 class UserCreditsController {
   /**
-   * 获取用户积分信息 - 管理员只能查看同组用户
+   * 获取用户积分信息 - 权限检查已在中间件处理
    */
   static async getUserCredits(req, res) {
     try {
       const currentUser = req.user;
       const { id } = req.params;
       
-      const user = await User.findById(id);
+      const user = req.targetUser || await User.findById(id);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
-      }
-
-      // 权限检查：管理员只能查看同组用户的积分
-      if (currentUser.role === 'admin') {
-        if (currentUser.group_id !== user.group_id) {
-          return ResponseHelper.forbidden(res, '无权查看其他组用户的积分信息');
-        }
       }
 
       const creditsInfo = {
@@ -55,17 +48,11 @@ class UserCreditsController {
   }
 
   /**
-   * 设置用户积分配额 - 仅超级管理员
+   * 设置用户积分配额 - 权限检查已在中间件处理
    */
   static async setUserCredits(req, res) {
     try {
       const currentUser = req.user;
-      
-      // 只有超级管理员可以设置积分
-      if (currentUser.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以设置积分配额');
-      }
-
       const { id } = req.params;
       const { credits_quota, reason = '管理员调整积分配额', expire_date } = req.body;
       
@@ -106,17 +93,11 @@ class UserCreditsController {
   }
 
   /**
-   * 充值用户积分 - 仅超级管理员
+   * 充值用户积分 - 权限检查已在中间件处理
    */
   static async addUserCredits(req, res) {
     try {
       const currentUser = req.user;
-      
-      // 只有超级管理员可以充值积分
-      if (currentUser.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以充值积分');
-      }
-
       const { id } = req.params;
       const { amount, reason = '管理员充值积分', extend_days } = req.body;
       
@@ -151,17 +132,11 @@ class UserCreditsController {
   }
 
   /**
-   * 扣减用户积分 - 仅超级管理员
+   * 扣减用户积分 - 权限检查已在中间件处理
    */
   static async deductUserCredits(req, res) {
     try {
       const currentUser = req.user;
-      
-      // 只有超级管理员可以扣减积分
-      if (currentUser.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以扣减积分');
-      }
-
       const { id } = req.params;
       const { amount, reason = '管理员扣减积分' } = req.body;
       
@@ -195,17 +170,11 @@ class UserCreditsController {
   }
 
   /**
-   * 设置用户积分有效期 - 仅超级管理员
+   * 设置用户积分有效期 - 权限检查已在中间件处理
    */
   static async setUserCreditsExpire(req, res) {
     try {
       const currentUser = req.user;
-      
-      // 只有超级管理员可以设置积分有效期
-      if (currentUser.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以设置积分有效期');
-      }
-
       const { id } = req.params;
       const { expire_date, extend_days, reason = '管理员设置积分有效期' } = req.body;
       
@@ -245,7 +214,7 @@ class UserCreditsController {
   }
 
   /**
-   * 获取用户积分使用历史 - 管理员只能查看同组用户
+   * 获取用户积分使用历史 - 权限检查已在中间件处理
    */
   static async getUserCreditsHistory(req, res) {
     try {
@@ -257,16 +226,9 @@ class UserCreditsController {
         transaction_type = null 
       } = req.query;
 
-      const user = await User.findById(id);
+      const user = req.targetUser || await User.findById(id);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
-      }
-
-      // 权限检查：管理员只能查看同组用户的积分历史
-      if (currentUser.role === 'admin') {
-        if (currentUser.group_id !== user.group_id) {
-          return ResponseHelper.forbidden(res, '无权查看其他组用户的积分历史');
-        }
       }
 
       const result = await User.getCreditHistory(id, {
