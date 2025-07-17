@@ -250,8 +250,6 @@ const useAdminStore = create((set) => ({
   updateAIModel: async (modelId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/models/${modelId}`, updateData)
-      // 更新成功后重新获取列表
-      await useAdminStore.getState().getAIModels()
       return response.data.data
     } catch (error) {
       console.error('更新AI模型失败:', error)
@@ -262,8 +260,6 @@ const useAdminStore = create((set) => ({
   deleteAIModel: async (modelId) => {
     try {
       await apiClient.delete(`/admin/models/${modelId}`)
-      // 删除成功后重新获取列表
-      await useAdminStore.getState().getAIModels()
     } catch (error) {
       console.error('删除AI模型失败:', error)
       throw error
@@ -315,25 +311,30 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 模块管理（暂时返回空数据）
+  // 模块管理
   getModules: async () => {
     set({ modules: [] })
+    // 暂时返回空数组，后续实现
     return []
   },
   
   createModule: async (moduleData) => {
+    // 暂时不实现
     throw new Error('功能暂未开放')
   },
   
   updateModule: async (moduleId, updateData) => {
+    // 暂时不实现
     throw new Error('功能暂未开放')
   },
   
   deleteModule: async (moduleId) => {
+    // 暂时不实现
     throw new Error('功能暂未开放')
   },
   
   checkModuleHealth: async (moduleId) => {
+    // 暂时不实现
     throw new Error('功能暂未开放')
   }
 }))

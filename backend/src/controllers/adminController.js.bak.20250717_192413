@@ -449,8 +449,12 @@ class AdminController {
         return ResponseHelper.forbidden(res, '无权重置该用户密码');
       }
 
-      // 使用 password 字段而不是 password_hash，让 User 模型自动处理加密
-      await user.update({ password: newPassword });
+      // 加密新密码
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // 更新密码
+      await user.update({ password_hash: hashedPassword });
 
       logger.info('管理员重置用户密码成功', { 
         adminId: currentUser.id,

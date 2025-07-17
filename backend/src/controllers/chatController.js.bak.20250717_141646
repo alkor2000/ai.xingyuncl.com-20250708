@@ -560,7 +560,7 @@ class ChatController {
                 // 更新会话统计
                 const totalTokens = userMessage.tokens + assistantMessage.tokens;
                 await conversation.updateStats(2, totalTokens);
-                await user.consumeTokens(totalTokens);
+                await user.updateTokenUsage(totalTokens);
 
                 // 清除消息缓存（有新消息）
                 await CacheService.clearConversationCache(userId, id);
@@ -635,7 +635,7 @@ class ChatController {
           // 更新会话统计
           const totalTokens = userMessage.tokens + assistantMessage.tokens;
           await conversation.updateStats(2, totalTokens);
-          await user.consumeTokens(totalTokens);
+          await user.updateTokenUsage(totalTokens);
 
           // 清除消息缓存（有新消息）
           await CacheService.clearConversationCache(userId, id);

@@ -295,8 +295,8 @@ const Users = () => {
     })
     
     // 加载用户积分信息和历史
-    if (isSuperAdmin) { await getUserCredits(user.id) }
-    if (isSuperAdmin) { await loadCreditHistory(user.id) }
+    await getUserCredits(user.id)
+    await loadCreditHistory(user.id)
     
     setIsModalVisible(true)
   }

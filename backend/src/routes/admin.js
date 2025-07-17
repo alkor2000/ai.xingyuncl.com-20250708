@@ -1,5 +1,5 @@
 /**
- * 管理员路由 - 支持用户分组管理和积分管理（修复版本，移除maxToken限制）
+ * 管理员路由 - 支持用户分组管理和积分管理
  */
 
 const express = require('express');
@@ -157,6 +157,17 @@ router.get('/users/:id/credits/history',
   AdminController.getUserCreditsHistory
 );
 
+/**
+ * @route PUT /api/admin/users/:id/credits/expire
+ * @desc 设置用户积分有效期
+ * @access Admin / SuperAdmin with credits.manage permission
+ */
+router.put('/users/:id/credits/expire',
+  adminLimiter,
+  requirePermission('credits.manage'),
+  AdminController.setUserCreditsExpire
+);
+
 // ===== 用户分组管理路由 =====
 
 /**
@@ -260,64 +271,7 @@ router.delete('/models/:id',
   AdminController.deleteAIModel
 );
 
-// ===== 系统模块管理路由 =====
-
-/**
- * @route GET /api/admin/modules
- * @desc 获取系统模块列表
- * @access SuperAdmin
- */
-router.get('/modules',
-  adminLimiter,
-  requirePermission('system.all'),
-  AdminController.getModules
-);
-
-/**
- * @route POST /api/admin/modules
- * @desc 创建系统模块
- * @access SuperAdmin
- */
-router.post('/modules',
-  adminLimiter,
-  requirePermission('system.all'),
-  AdminController.createModule
-);
-
-/**
- * @route PUT /api/admin/modules/:id
- * @desc 更新系统模块
- * @access SuperAdmin
- */
-router.put('/modules/:id',
-  adminLimiter,
-  requirePermission('system.all'),
-  AdminController.updateModule
-);
-
-/**
- * @route DELETE /api/admin/modules/:id
- * @desc 删除系统模块
- * @access SuperAdmin
- */
-router.delete('/modules/:id',
-  adminLimiter,
-  requirePermission('system.all'),
-  AdminController.deleteModule
-);
-
-/**
- * @route POST /api/admin/modules/:id/health-check
- * @desc 检查模块健康状态
- * @access SuperAdmin
- */
-router.post('/modules/:id/health-check',
-  adminLimiter,
-  requirePermission('system.all'),
-  AdminController.checkModuleHealth
-);
-
-// ===== 系统设置路由 (移除maxToken相关设置) =====
+// ===== 系统设置路由 =====
 
 /**
  * @route GET /api/admin/settings

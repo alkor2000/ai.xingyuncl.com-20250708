@@ -108,7 +108,7 @@ const requireRole = (roles) => {
 };
 
 /**
- * 权限检查中间件 - 增强版，支持基于用户组的权限映射
+ * 权限检查中间件 - 增强版，支持基于用户组的权限
  */
 const requirePermission = (permission) => {
   return async (req, res, next) => {
@@ -120,32 +120,15 @@ const requirePermission = (permission) => {
       // 获取用户权限
       const userPermissions = await req.user.getPermissions();
       
-      // 权限映射：user.manage.group 权限可以访问 user.manage 的路由
-      const permissionMapping = {
-        'user.manage': ['user.manage', 'user.manage.group', 'user.manage.*'],
-        'credits.manage': ['credits.manage', 'credits.manage.*'],
-        'group.manage': ['group.manage', 'group.manage.*']
-      };
-      
-      // 获取映射的权限列表
-      const acceptedPermissions = permissionMapping[permission] || [permission];
-      
       // 检查是否有所需权限
       const hasBasePermission = userPermissions.some(p => {
-        // 直接匹配映射权限
-        if (acceptedPermissions.includes(p)) return true;
+        if (p === permission) return true;
         
         // 检查通配符权限 (如 admin.*, system.*)
         if (p.endsWith('.*')) {
           const prefix = p.slice(0, -1);
           return permission.startsWith(prefix);
         }
-        
-        // 检查具体的组权限是否可以访问基础权限
-        if (p.endsWith('.group') && permission === p.replace('.group', '')) {
-          return true;
-        }
-        
         return false;
       });
       

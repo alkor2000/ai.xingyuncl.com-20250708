@@ -46,7 +46,7 @@ const MainLayout = ({ children }) => {
     }
   }, [initializeSocket, disconnectSocket])
 
-  // 菜单项配置 - 修改权限判断逻辑
+  // 菜单项配置
   const menuItems = [
     {
       key: '/',
@@ -64,12 +64,12 @@ const MainLayout = ({ children }) => {
       key: 'admin',
       icon: <SettingOutlined />,
       label: t('nav.admin'),
-      permission: ['user.manage', 'user.manage.group'],  // 支持多个权限
+      permission: 'user.manage',
       children: [
         {
           key: '/admin/users',
           label: t('nav.users'),
-          permission: ['user.manage', 'user.manage.group']  // 支持多个权限
+          permission: 'user.manage'
         },
         {
           key: '/admin/settings',
@@ -80,18 +80,11 @@ const MainLayout = ({ children }) => {
     }
   ]
 
-  // 过滤菜单项（根据权限）- 增强权限判断
+  // 过滤菜单项（根据权限）
   const filterMenuItems = (items) => {
     return items.filter(item => {
-      if (item.permission) {
-        // 如果权限是数组，检查是否有任意一个权限
-        if (Array.isArray(item.permission)) {
-          const hasAnyPermission = item.permission.some(p => hasPermission(p))
-          if (!hasAnyPermission) return false
-        } else {
-          // 单个权限检查
-          if (!hasPermission(item.permission)) return false
-        }
+      if (item.permission && !hasPermission(item.permission)) {
+        return false
       }
       
       if (item.children) {

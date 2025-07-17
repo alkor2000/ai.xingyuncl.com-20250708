@@ -9,13 +9,6 @@ const useAdminStore = create((set) => ({
   userCredits: {},
   creditsHistory: [],
   aiModels: [],
-  modules: [],
-  systemStats: {
-    users: {},
-    groups: [],
-    conversations: {},
-    models: []
-  },
   systemSettings: {},
   loading: false,
   creditsLoading: false,
@@ -250,8 +243,6 @@ const useAdminStore = create((set) => ({
   updateAIModel: async (modelId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/models/${modelId}`, updateData)
-      // 更新成功后重新获取列表
-      await useAdminStore.getState().getAIModels()
       return response.data.data
     } catch (error) {
       console.error('更新AI模型失败:', error)
@@ -262,8 +253,6 @@ const useAdminStore = create((set) => ({
   deleteAIModel: async (modelId) => {
     try {
       await apiClient.delete(`/admin/models/${modelId}`)
-      // 删除成功后重新获取列表
-      await useAdminStore.getState().getAIModels()
     } catch (error) {
       console.error('删除AI模型失败:', error)
       throw error
@@ -273,21 +262,9 @@ const useAdminStore = create((set) => ({
   testAIModel: async (modelId) => {
     try {
       const response = await apiClient.post(`/admin/models/${modelId}/test`)
-      return response.data
-    } catch (error) {
-      console.error('测试AI模型失败:', error)
-      throw error
-    }
-  },
-  
-  // 系统统计
-  getSystemStats: async () => {
-    try {
-      const response = await apiClient.get('/admin/stats')
-      set({ systemStats: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取系统统计失败:', error)
+      console.error('测试AI模型失败:', error)
       throw error
     }
   },
@@ -313,28 +290,6 @@ const useAdminStore = create((set) => ({
       console.error('更新系统设置失败:', error)
       throw error
     }
-  },
-  
-  // 模块管理（暂时返回空数据）
-  getModules: async () => {
-    set({ modules: [] })
-    return []
-  },
-  
-  createModule: async (moduleData) => {
-    throw new Error('功能暂未开放')
-  },
-  
-  updateModule: async (moduleId, updateData) => {
-    throw new Error('功能暂未开放')
-  },
-  
-  deleteModule: async (moduleId) => {
-    throw new Error('功能暂未开放')
-  },
-  
-  checkModuleHealth: async (moduleId) => {
-    throw new Error('功能暂未开放')
   }
 }))
 
