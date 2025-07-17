@@ -1,0 +1,1135 @@
+/**
+ * 用户数据模型 - 支持用户分组、积分管理和积分有效期 (事务优化版)
+ */
+
+const dbConnection = require('../database/connection');
+const { DatabaseError } = require('../utils/errors');
+const logger = require('../utils/logger');
+
+class User {
+  constructor(data = {}) {
+    this.id = data.id || null;
+    this.email = data.email || null;
+    this.phone = data.phone || null;
+    this.username = data.username || null;
+    this.password_hash = data.password_hash || null;
+    this.role = data.role || 'user';
+    this.group_id = data.group_id || null;
+    this.status = data.status || 'active';
+    this.email_verified = data.email_verified || false;
+    this.email_verification_token = data.email_verification_token || null;
+    this.password_reset_token = data.password_reset_token || null;
+    this.password_reset_expires = data.password_reset_expires || null;
+    this.avatar_url = data.avatar_url || null;
+    this.token_quota = data.token_quota || 10000;
+    this.credits_quota = data.credits_quota || 1000;
+    this.login_attempts = data.login_attempts || 0;
+    this.used_tokens = data.used_tokens || 0;
+    this.used_credits = data.used_credits || 0;
+    this.credits_expire_at = data.credits_expire_at || null; // 新增：积分过期时间
+    this.last_login_at = data.last_login_at || null;
+    this.created_at = data.created_at || null;
+    this.updated_at = data.updated_at || null;
+    // 分组信息 (从联表查询获得)
+    this.group_name = data.group_name || null;
+    this.group_color = data.group_color || null;
+  }
+
+  /**
+   * 根据ID查找用户 (包含分组信息)
+   */
+  static async findById(id) {
+    try {
+      const sql = `
+        SELECT u.*, g.name as group_name, g.color as group_color
+        FROM users u 
+        LEFT JOIN user_groups g ON u.group_id = g.id
+        WHERE u.id = ?
+      `;
+      const { rows } = await dbConnection.query(sql, [id]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据ID查找用户失败:', error);
+      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 根据邮箱查找用户
+   */
+  static async findByEmail(email) {
+    try {
+      const sql = `
+        SELECT u.*, g.name as group_name, g.color as group_color
+        FROM users u 
+        LEFT JOIN user_groups g ON u.group_id = g.id
+        WHERE u.email = ?
+      `;
+      const { rows } = await dbConnection.query(sql, [email]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据邮箱查找用户失败:', error);
+      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 根据用户名查找用户
+   */
+  static async findByUsername(username) {
+    try {
+      const sql = `
+        SELECT u.*, g.name as group_name, g.color as group_color
+        FROM users u 
+        LEFT JOIN user_groups g ON u.group_id = g.id
+        WHERE u.username = ?
+      `;
+      const { rows } = await dbConnection.query(sql, [username]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据用户名查找用户失败:', error);
+      throw new DatabaseError(`查找用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取用户列表 - 支持分组过滤和信息显示
+   */
+  static async getList(options = {}) {
+    try {
+      const { page = 1, limit = 20, role = null, status = null, group_id = null, search = null } = options;
+      
+      logger.info('开始获取用户列表', { page, limit, role, status, group_id, search });
+      
+      let whereConditions = [];
+      let params = [];
+
+      if (role) {
+        whereConditions.push('u.role = ?');
+        params.push(role);
+      }
+
+      if (status) {
+        whereConditions.push('u.status = ?');
+        params.push(status);
+      }
+
+      if (group_id) {
+        whereConditions.push('u.group_id = ?');
+        params.push(group_id);
+      }
+
+      if (search) {
+        whereConditions.push('(u.username LIKE ? OR u.email LIKE ?)');
+        params.push(`%${search}%`, `%${search}%`);
+      }
+
+      const whereClause = whereConditions.length > 0 
+        ? `WHERE ${whereConditions.join(' AND ')}` 
+        : '';
+
+      // 获取总数
+      const countSql = `
+        SELECT COUNT(*) as total 
+        FROM users u 
+        LEFT JOIN user_groups g ON u.group_id = g.id 
+        ${whereClause}
+      `;
+      const { rows: totalRows } = await dbConnection.query(countSql, params);
+      const total = totalRows[0].total;
+      
+      logger.info('获取用户总数成功', { total, page, limit });
+
+      // 获取用户列表 (包含分组信息)
+      const offset = (page - 1) * limit;
+      const listSql = `
+        SELECT u.*, g.name as group_name, g.color as group_color
+        FROM users u 
+        LEFT JOIN user_groups g ON u.group_id = g.id
+        ${whereClause} 
+        ORDER BY u.created_at DESC 
+        LIMIT ? OFFSET ?
+      `;
+      
+      logger.info('执行用户列表查询', { 
+        limit, 
+        offset, 
+        whereClause,
+        paramsCount: params.length 
+      });
+
+      const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
+
+      logger.info('获取用户列表成功', { count: rows.length, total });
+
+      return {
+        users: rows.map(row => new User(row)),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+    } catch (error) {
+      logger.error('获取用户列表失败:', {
+        error: error.message,
+        stack: error.stack,
+        options
+      });
+      throw new DatabaseError(`获取用户列表失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 创建新用户 - 支持分组设置和积分有效期
+   */
+  static async create(userData) {
+    try {
+      const {
+        email,
+        username,
+        password,
+        role = 'user',
+        group_id = null,
+        status = 'active',
+        token_quota = 10000,
+        credits_quota = 1000,
+        credits_expire_days = 365 // 默认365天有效期
+      } = userData;
+
+      // 计算积分过期时间
+      const credits_expire_at = new Date();
+      credits_expire_at.setDate(credits_expire_at.getDate() + credits_expire_days);
+
+      const sql = `
+        INSERT INTO users (email, username, password_hash, role, group_id, status, token_quota, credits_quota, credits_expire_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      const { rows } = await dbConnection.query(sql, [
+        email.toLowerCase(),
+        username,
+        password,
+        role,
+        group_id,
+        status,
+        token_quota,
+        credits_quota,
+        credits_expire_at
+      ]);
+
+      const insertId = rows.insertId;
+
+      logger.info('用户创建成功', { 
+        userId: insertId,
+        email, 
+        username, 
+        role,
+        group_id,
+        credits_quota,
+        credits_expire_at
+      });
+
+      return await User.findById(insertId);
+    } catch (error) {
+      logger.error('创建用户失败:', error);
+      throw new DatabaseError(`创建用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 更新用户 - 支持分组更新和积分有效期
+   */
+  async update(updateData) {
+    try {
+      const fields = [];
+      const values = [];
+      
+      const allowedFields = [
+        'username', 'password_hash', 'role', 'group_id', 'status', 
+        'phone',
+        'email_verified', 'avatar_url', 'token_quota', 'used_tokens',
+        'credits_quota', 'used_credits', 'credits_expire_at'
+      ];
+      
+      allowedFields.forEach(field => {
+        if (updateData.hasOwnProperty(field)) {
+          fields.push(`${field} = ?`);
+          values.push(updateData[field]);
+        }
+      });
+      
+      if (fields.length === 0) {
+        return this;
+      }
+      
+      fields.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(this.id);
+      
+      const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
+      
+      await dbConnection.query(sql, values);
+
+      logger.info('用户更新成功', { 
+        userId: this.id,
+        updateFields: Object.keys(updateData)
+      });
+
+      return await User.findById(this.id);
+    } catch (error) {
+      logger.error('更新用户失败:', error);
+      throw new DatabaseError(`更新用户失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 删除用户
+   */
+  async delete() {
+    try {
+      const sql = 'DELETE FROM users WHERE id = ?';
+      await dbConnection.query(sql, [this.id]);
+
+      logger.info('用户删除成功', { 
+        userId: this.id,
+        email: this.email
+      });
+    } catch (error) {
+      logger.error('删除用户失败:', error);
+      throw new DatabaseError(`删除用户失败: ${error.message}`, error);
+    }
+  }
+
+  // ===== 积分管理方法 (支持有效期检查) =====
+
+  /**
+   * 检查积分是否过期
+   */
+  isCreditsExpired() {
+    if (!this.credits_expire_at) {
+      return false; // 没有设置过期时间的不过期
+    }
+    return new Date() > new Date(this.credits_expire_at);
+  }
+
+  /**
+   * 获取积分剩余天数
+   */
+  getCreditsRemainingDays() {
+    if (!this.credits_expire_at) {
+      return null; // 永不过期
+    }
+    const now = new Date();
+    const expireDate = new Date(this.credits_expire_at);
+    const diffTime = expireDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  }
+
+  /**
+   * 获取用户积分余额（考虑过期）
+   */
+  getCredits() {
+    if (this.isCreditsExpired()) {
+      return 0; // 过期则余额为0
+    }
+    return Math.max(0, (this.credits_quota || 0) - (this.used_credits || 0));
+  }
+
+  /**
+   * 检查积分配额（考虑过期）
+   */
+  hasCredits(requiredCredits = 1) {
+    if (this.isCreditsExpired()) {
+      return false; // 过期则不可用
+    }
+    return this.getCredits() >= requiredCredits;
+  }
+
+  /**
+   * 获取积分使用统计（包含过期信息）
+   */
+  getCreditsStats() {
+    const isExpired = this.isCreditsExpired();
+    const remainingDays = this.getCreditsRemainingDays();
+    
+    return {
+      quota: this.credits_quota || 0,
+      used: this.used_credits || 0,
+      remaining: this.getCredits(),
+      usageRate: this.credits_quota ? ((this.used_credits || 0) / this.credits_quota * 100).toFixed(2) : 0,
+      isExpired,
+      expireAt: this.credits_expire_at,
+      remainingDays,
+      expireStatus: isExpired ? 'expired' : (remainingDays && remainingDays <= 7 ? 'expiring_soon' : 'active')
+    };
+  }
+
+  /**
+   * 设置积分有效期
+   */
+  async setCreditsExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
+    try {
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户积分有效期
+        const updateSql = `
+          UPDATE users 
+          SET credits_expire_at = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [expireDate, this.id]);
+
+        // 记录操作历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, 0, ?, 'admin_set', ?, ?)
+        `;
+        
+        const balance = this.getCredits();
+        await query(historySql, [
+          this.id, 
+          balance, 
+          `${reason} (有效期设置为: ${new Date(expireDate).toLocaleDateString()})`, 
+          operatorId
+        ]);
+
+        return { expireDate };
+      });
+
+      // 更新当前对象
+      this.credits_expire_at = expireDate;
+
+      logger.info('用户积分有效期设置成功', {
+        userId: this.id,
+        expireDate,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        expireDate,
+        message: '积分有效期设置成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分有效期设置失败:', {
+        userId: this.id,
+        expireDate,
+        error: error.message
+      });
+      throw new DatabaseError(`积分有效期设置失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 延长积分有效期
+   */
+  async extendCreditsExpireDate(days, reason = '管理员延期', operatorId = null) {
+    try {
+      let currentExpireDate = this.credits_expire_at ? new Date(this.credits_expire_at) : new Date();
+      
+      // 如果已过期，从今天开始计算
+      if (this.isCreditsExpired()) {
+        currentExpireDate = new Date();
+      }
+      
+      const newExpireDate = new Date(currentExpireDate);
+      newExpireDate.setDate(newExpireDate.getDate() + days);
+      
+      return await this.setCreditsExpireDate(newExpireDate, `${reason} (延长${days}天)`, operatorId);
+    } catch (error) {
+      logger.error('延长积分有效期失败:', {
+        userId: this.id,
+        days,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 增加积分 (管理员操作) - 使用事务，同时更新有效期
+   */
+  async addCredits(amount, reason = '管理员充值', operatorId = null, extendDays = null) {
+    try {
+      if (amount <= 0) {
+        throw new Error('积分数量必须大于0');
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
+        let updateSql = `
+          UPDATE users 
+          SET credits_quota = credits_quota + ?, updated_at = CURRENT_TIMESTAMP
+        `;
+        const updateParams = [amount];
+        
+        // 如果需要延长有效期
+        if (extendDays && extendDays > 0) {
+          updateSql = `
+            UPDATE users 
+            SET credits_quota = credits_quota + ?, 
+                credits_expire_at = CASE 
+                  WHEN credits_expire_at IS NULL OR credits_expire_at < NOW() 
+                  THEN DATE_ADD(NOW(), INTERVAL ? DAY)
+                  ELSE DATE_ADD(credits_expire_at, INTERVAL ? DAY)
+                END,
+                updated_at = CURRENT_TIMESTAMP
+          `;
+          updateParams.push(extendDays, extendDays);
+        }
+        
+        updateSql += ' WHERE id = ?';
+        updateParams.push(this.id);
+        
+        await query(updateSql, updateParams);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance, credits_expire_at FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+        const newExpireAt = balanceRows[0].credits_expire_at;
+
+        // 记录积分历史
+        let description = reason;
+        if (extendDays) {
+          description += ` (同时延长有效期${extendDays}天)`;
+        }
+        
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_add', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, amount, balanceAfter, description, operatorId
+        ]);
+
+        return { balanceAfter, newExpireAt };
+      });
+
+      // 更新当前对象
+      this.credits_quota += amount;
+      if (result.newExpireAt) {
+        this.credits_expire_at = result.newExpireAt;
+      }
+
+      logger.info('用户积分充值成功', {
+        userId: this.id,
+        amount,
+        newQuota: this.credits_quota,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId,
+        extendDays
+      });
+
+      return {
+        success: true,
+        amount,
+        newQuota: this.credits_quota,
+        balanceAfter: result.balanceAfter,
+        newExpireAt: result.newExpireAt,
+        message: '积分充值成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分充值失败:', {
+        userId: this.id,
+        amount,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分充值失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 扣减积分 (管理员操作) - 使用事务
+   */
+  async deductCredits(amount, reason = '管理员扣减', operatorId = null) {
+    try {
+      if (amount <= 0) {
+        throw new Error('扣减积分数量必须大于0');
+      }
+
+      // 检查是否过期
+      if (this.isCreditsExpired()) {
+        throw new Error('积分已过期，无法扣减');
+      }
+
+      // 检查余额是否充足
+      if (!this.hasCredits(amount)) {
+        throw new Error(`积分余额不足，当前余额: ${this.getCredits()}，需要: ${amount}`);
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户已使用积分
+        const updateSql = `
+          UPDATE users 
+          SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [amount, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_deduct', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, -amount, balanceAfter, reason, operatorId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.used_credits += amount;
+
+      logger.info('用户积分扣减成功', {
+        userId: this.id,
+        amount,
+        newUsed: this.used_credits,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        amount,
+        newUsed: this.used_credits,
+        balanceAfter: result.balanceAfter,
+        message: '积分扣减成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分扣减失败:', {
+        userId: this.id,
+        amount,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分扣减失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 消耗积分 (AI对话) - 使用事务
+   */
+  async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费') {
+    try {
+      if (amount <= 0) {
+        throw new Error('消费积分数量必须大于0');
+      }
+
+      // 检查是否过期
+      if (this.isCreditsExpired()) {
+        const remainingDays = this.getCreditsRemainingDays();
+        throw new Error(`积分已过期${remainingDays === 0 ? '今天' : Math.abs(remainingDays) + '天前'}，请联系管理员续期`);
+      }
+
+      // 检查余额是否充足
+      if (!this.hasCredits(amount)) {
+        throw new Error(`积分余额不足，当前余额: ${this.getCredits()}，需要: ${amount}`);
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户已使用积分
+        const updateSql = `
+          UPDATE users 
+          SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [amount, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分消费历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, 
+           related_model_id, related_conversation_id)
+          VALUES (?, ?, ?, 'chat_consume', ?, ?, ?)
+        `;
+        await query(historySql, [
+          this.id, -amount, balanceAfter, reason, modelId, conversationId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.used_credits += amount;
+
+      logger.info('用户积分消费成功', {
+        userId: this.id,
+        amount,
+        modelId,
+        conversationId,
+        balanceAfter: result.balanceAfter,
+        reason
+      });
+
+      return {
+        success: true,
+        amount,
+        balanceAfter: result.balanceAfter,
+        message: '积分消费成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分消费失败:', {
+        userId: this.id,
+        amount,
+        modelId,
+        conversationId,
+        error: error.message
+      });
+      throw new DatabaseError(`积分消费失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 设置积分配额 (管理员操作) - 使用事务
+   */
+  async setCreditsQuota(newQuota, reason = '管理员设置配额', operatorId = null) {
+    try {
+      if (newQuota < 0) {
+        throw new Error('积分配额不能为负数');
+      }
+
+      const oldQuota = this.credits_quota || 0;
+      const quotaDiff = newQuota - oldQuota;
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
+        const updateSql = `
+          UPDATE users 
+          SET credits_quota = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        await query(updateSql, [newQuota, this.id]);
+
+        // 获取更新后的余额
+        const { rows: balanceRows } = await query(
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+          [this.id]
+        );
+        const balanceAfter = balanceRows[0].balance;
+
+        // 记录积分历史
+        const historySql = `
+          INSERT INTO credit_transactions 
+          (user_id, amount, balance_after, transaction_type, description, operator_id)
+          VALUES (?, ?, ?, 'admin_set', ?, ?)
+        `;
+        await query(historySql, [
+          this.id, quotaDiff, balanceAfter, `${reason} (从 ${oldQuota} 调整为 ${newQuota})`, operatorId
+        ]);
+
+        return { balanceAfter };
+      });
+
+      // 更新当前对象
+      this.credits_quota = newQuota;
+
+      logger.info('用户积分配额设置成功', {
+        userId: this.id,
+        oldQuota,
+        newQuota,
+        quotaDiff,
+        balanceAfter: result.balanceAfter,
+        reason,
+        operatorId
+      });
+
+      return {
+        success: true,
+        oldQuota,
+        newQuota,
+        quotaDiff,
+        balanceAfter: result.balanceAfter,
+        message: '积分配额设置成功'
+      };
+
+    } catch (error) {
+      logger.error('用户积分配额设置失败:', {
+        userId: this.id,
+        newQuota,
+        reason,
+        error: error.message
+      });
+      throw new DatabaseError(`积分配额设置失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取积分使用历史
+   */
+  static async getCreditHistory(userId, options = {}) {
+    try {
+      const { page = 1, limit = 20, transaction_type = null } = options;
+      
+      let whereConditions = ['ct.user_id = ?'];
+      let params = [userId];
+
+      if (transaction_type) {
+        whereConditions.push('ct.transaction_type = ?');
+        params.push(transaction_type);
+      }
+
+      const whereClause = whereConditions.join(' AND ');
+
+      // 获取总数
+      const countSql = `SELECT COUNT(*) as total FROM credit_transactions ct WHERE ${whereClause}`;
+      const { rows: totalRows } = await dbConnection.query(countSql, params);
+      const total = totalRows[0].total;
+
+      // 获取历史记录
+      const offset = (page - 1) * limit;
+      const listSql = `
+        SELECT ct.*, am.display_name as model_name, u.username as operator_name
+        FROM credit_transactions ct
+        LEFT JOIN ai_models am ON ct.related_model_id = am.id
+        LEFT JOIN users u ON ct.operator_id = u.id
+        WHERE ${whereClause}
+        ORDER BY ct.created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+
+      const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
+
+      logger.info('获取积分历史成功', { userId, count: rows.length, total });
+
+      return {
+        history: rows,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+
+    } catch (error) {
+      logger.error('获取积分历史失败:', {
+        userId,
+        error: error.message
+      });
+      throw new DatabaseError(`获取积分历史失败: ${error.message}`, error);
+    }
+  }
+
+  // ===== 分组管理方法 (保持不变) =====
+
+  /**
+   * 获取用户分组列表
+   */
+  static async getGroups() {
+    try {
+      const sql = `
+        SELECT g.*, 
+               COUNT(u.id) as user_count,
+               AVG(u.used_tokens) as avg_tokens_used,
+               AVG(u.used_credits) as avg_credits_used
+        FROM user_groups g
+        LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
+        GROUP BY g.id
+        ORDER BY g.sort_order ASC, g.created_at ASC
+      `;
+      
+      const { rows } = await dbConnection.query(sql);
+      
+      logger.info('获取用户分组列表成功', { count: rows.length });
+      
+      return rows;
+    } catch (error) {
+      logger.error('获取用户分组列表失败:', error);
+      throw new DatabaseError(`获取用户分组列表失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 创建用户分组
+   */
+  static async createGroup(groupData, createdBy) {
+    try {
+      const { name, description, color = '#1677ff', is_active = 1, sort_order = 0 } = groupData;
+
+      const sql = `
+        INSERT INTO user_groups (name, description, color, is_active, sort_order, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+
+      const { rows } = await dbConnection.query(sql, [
+        name, description, color, is_active, sort_order, createdBy
+      ]);
+
+      const groupId = rows.insertId;
+
+      logger.info('用户分组创建成功', { 
+        groupId, 
+        name, 
+        createdBy 
+      });
+
+      return await User.getGroupById(groupId);
+    } catch (error) {
+      logger.error('创建用户分组失败:', error);
+      throw new DatabaseError(`创建用户分组失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 根据ID获取分组
+   */
+  static async getGroupById(id) {
+    try {
+      const sql = `
+        SELECT g.*, 
+               COUNT(u.id) as user_count,
+               AVG(u.used_tokens) as avg_tokens_used,
+               AVG(u.used_credits) as avg_credits_used
+        FROM user_groups g
+        LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
+        WHERE g.id = ?
+        GROUP BY g.id
+      `;
+      
+      const { rows } = await dbConnection.query(sql, [id]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return rows[0];
+    } catch (error) {
+      logger.error('根据ID获取分组失败:', error);
+      throw new DatabaseError(`获取分组失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 更新用户分组
+   */
+  static async updateGroup(groupId, updateData) {
+    try {
+      const fields = [];
+      const values = [];
+      
+      const allowedFields = ['name', 'description', 'color', 'is_active', 'sort_order'];
+      
+      allowedFields.forEach(field => {
+        if (updateData.hasOwnProperty(field)) {
+          fields.push(`${field} = ?`);
+          values.push(updateData[field]);
+        }
+      });
+      
+      if (fields.length === 0) {
+        throw new Error('没有有效的更新字段');
+      }
+      
+      fields.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(groupId);
+      
+      const sql = `UPDATE user_groups SET ${fields.join(', ')} WHERE id = ?`;
+      await dbConnection.query(sql, values);
+
+      logger.info('用户分组更新成功', { 
+        groupId,
+        updateFields: Object.keys(updateData)
+      });
+
+      return await User.getGroupById(groupId);
+    } catch (error) {
+      logger.error('更新用户分组失败:', error);
+      throw new DatabaseError(`更新用户分组失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 删除用户分组
+   */
+  static async deleteGroup(groupId) {
+    try {
+      // 检查是否有用户在此分组
+      const { rows: userCheck } = await dbConnection.query(
+        'SELECT COUNT(*) as count FROM users WHERE group_id = ?', [groupId]
+      );
+
+      if (userCheck[0].count > 0) {
+        throw new Error(`该分组下还有 ${userCheck[0].count} 个用户，无法删除`);
+      }
+
+      const sql = 'DELETE FROM user_groups WHERE id = ?';
+      await dbConnection.query(sql, [groupId]);
+
+      logger.info('用户分组删除成功', { groupId });
+    } catch (error) {
+      logger.error('删除用户分组失败:', error);
+      throw new DatabaseError(`删除用户分组失败: ${error.message}`, error);
+    }
+  }
+
+  // ===== 其他方法 (保持不变) =====
+
+  /**
+   * 更新最后登录时间
+   */
+  async updateLastLogin() {
+    try {
+      const sql = 'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?';
+      await dbConnection.query(sql, [this.id]);
+      
+      logger.info('更新用户最后登录时间', { userId: this.id });
+    } catch (error) {
+      logger.error('更新最后登录时间失败:', error);
+    }
+  }
+
+  /**
+   * 更新Token使用量
+   */
+  async updateTokenUsage(tokens) {
+    try {
+      const sql = 'UPDATE users SET used_tokens = used_tokens + ? WHERE id = ?';
+      await dbConnection.query(sql, [tokens, this.id]);
+      
+      this.used_tokens = (this.used_tokens || 0) + tokens;
+      
+      logger.info('更新用户Token使用量', { 
+        userId: this.id, 
+        tokens,
+        totalUsed: this.used_tokens
+      });
+    } catch (error) {
+      logger.error('更新Token使用量失败:', error);
+    }
+  }
+
+  /**
+   * 获取用户权限 - 可基于分组扩展权限
+   */
+  async getPermissions() {
+    try {
+      // 超级管理员拥有所有权限
+      if (this.role === 'super_admin') {
+        return ['chat.use', 'file.upload', 'system.all', 'user.manage', 'group.manage', 'credits.manage', 'admin.*'];
+      }
+
+      // 管理员权限 (包含分组管理和积分管理)
+      if (this.role === 'admin') {
+        return ['chat.use', 'file.upload', 'user.manage', 'group.manage', 'credits.manage'];
+      }
+
+      // 普通用户权限
+      if (this.role === 'user') {
+        return ['chat.use', 'file.upload'];
+      }
+
+      return [];
+    } catch (error) {
+      logger.error('获取用户权限失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 检查用户状态
+   */
+  isActive() {
+    return this.status === 'active';
+  }
+
+  /**
+   * 检查邮箱是否已验证
+   */
+  isEmailVerified() {
+    return this.email_verified === 1 || this.email_verified === true;
+  }
+
+  /**
+   * 检查Token配额
+   */
+  hasTokenQuota(requiredTokens = 1) {
+    const currentUsed = this.used_tokens || 0;
+    const quota = this.token_quota || 10000;
+    return (currentUsed + requiredTokens) <= quota;
+  }
+
+  /**
+   * 检查是否超出Token配额
+   */
+  isTokenQuotaExceeded() {
+    return !this.hasTokenQuota();
+  }
+
+  /**
+   * 获取剩余Token配额
+   */
+  getRemainingTokens() {
+    return Math.max(0, (this.token_quota || 10000) - (this.used_tokens || 0));
+  }
+
+  /**
+   * 检查Token配额是否足够
+   */
+  checkTokenQuota(requiredTokens = 1) {
+    return this.hasTokenQuota(requiredTokens);
+  }
+
+  /**
+   * 转换为JSON (包含分组信息和积分信息)
+   */
+  toJSON() {
+    const userData = { ...this };
+    delete userData.password_hash;
+    return {
+      ...userData,
+      credits_stats: this.getCreditsStats()
+    };
+  }
+}
+
+module.exports = User;

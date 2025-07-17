@@ -1,5 +1,5 @@
 /**
- * 认证中间件 - 支持基于用户组的权限检查
+ * 认证中间件
  */
 
 const jwt = require('jsonwebtoken');
@@ -108,7 +108,7 @@ const requireRole = (roles) => {
 };
 
 /**
- * 权限检查中间件 - 增强版，支持基于用户组的权限
+ * 权限检查中间件
  */
 const requirePermission = (permission) => {
   return async (req, res, next) => {
@@ -121,7 +121,7 @@ const requirePermission = (permission) => {
       const userPermissions = await req.user.getPermissions();
       
       // 检查是否有所需权限
-      const hasBasePermission = userPermissions.some(p => {
+      const hasPermission = userPermissions.some(p => {
         if (p === permission) return true;
         
         // 检查通配符权限 (如 admin.*, system.*)
@@ -132,60 +132,13 @@ const requirePermission = (permission) => {
         return false;
       });
       
-      if (!hasBasePermission) {
-        logger.warn('权限不足', {
-          userId: req.user.id,
-          userRole: req.user.role,
-          requiredPermission: permission,
-          userPermissions
-        });
+      if (!hasPermission) {
         return ResponseHelper.forbidden(res, '权限不足');
       }
-      
-      // 如果是基于用户组的权限，需要在具体的控制器中进一步检查
-      // 这里只做基础权限检查
       
       next();
     } catch (error) {
       logger.error('权限检查中间件错误:', error);
-      return ResponseHelper.error(res, '权限验证异常');
-    }
-  };
-};
-
-/**
- * 基于用户组的权限检查中间件
- * 用于检查当前用户是否可以操作目标用户
- */
-const requireGroupPermission = (permission) => {
-  return async (req, res, next) => {
-    try {
-      if (!req.user) {
-        return ResponseHelper.unauthorized(res, '用户未认证');
-      }
-      
-      const targetUserId = req.params.id || req.body.user_id;
-      if (!targetUserId) {
-        return next(); // 没有目标用户ID，跳过组权限检查
-      }
-      
-      // 检查是否有对目标用户的权限
-      const hasPermission = await req.user.hasPermission(permission, targetUserId);
-      
-      if (!hasPermission) {
-        logger.warn('基于用户组的权限不足', {
-          userId: req.user.id,
-          userRole: req.user.role,
-          userGroupId: req.user.group_id,
-          targetUserId,
-          requiredPermission: permission
-        });
-        return ResponseHelper.forbidden(res, '无权操作该用户');
-      }
-      
-      next();
-    } catch (error) {
-      logger.error('基于用户组的权限检查中间件错误:', error);
       return ResponseHelper.error(res, '权限验证异常');
     }
   };
@@ -217,6 +170,5 @@ module.exports = {
   authenticate,
   requireRole,
   requirePermission,
-  requireGroupPermission,
   checkTokenQuota
 };
