@@ -13,7 +13,6 @@
   "admin.users.table.status": "状态",
   "admin.users.table.credits": "积分余额",
   "admin.users.table.tokenQuota": "Token配额",
-  "admin.users.table.remark": "备注",
   "admin.users.table.createdAt": "创建时间",
   "admin.users.table.actions": "操作",
   "admin.users.noGroup": "未分组",
@@ -59,9 +58,6 @@
   "admin.users.form.creditsExpire": "积分有效期",
   "admin.users.form.creditsExpire.tooltip": "设置积分的过期时间，过期后积分将无法使用",
   "admin.users.form.creditsExpire.placeholder": "选择积分过期时间",
-  "admin.users.form.remark": "管理员备注",
-  "admin.users.form.remark.placeholder": "添加备注信息，仅管理员可见",
-  "admin.users.form.remark.help": "备注信息仅对管理员可见，用于记录用户相关的重要信息",
   
   "admin.users.detail.title": "用户详情",
   "admin.users.detail.basicInfo": "基本信息",

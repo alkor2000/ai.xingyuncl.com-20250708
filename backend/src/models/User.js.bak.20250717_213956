@@ -109,7 +109,6 @@ class User {
         role = 'user',
         group_id = 1,
         status = 'active',
-        remark = null,
         token_quota = 10000,
         credits_quota = 1000,
         credits_expire_days = 365
@@ -133,13 +132,13 @@ class User {
 
       const sql = `
         INSERT INTO users (
-          email, username, password_hash, phone, role, group_id, status, remark,
+          email, username, password_hash, phone, role, group_id, status,
           token_quota, credits_quota, credits_expire_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       const params = [
-        email, username, hashedPassword, phone, role, group_id, status, remark,
+        email, username, hashedPassword, phone, role, group_id, status,
         token_quota, credits_quota, creditsExpireAt
       ];
 
@@ -243,7 +242,7 @@ class User {
       
       logger.info('获取用户总数成功', { total, page, limit });
 
-      // 获取用户列表 (包含分组信息、积分统计和备注)
+      // 获取用户列表 (包含分组信息和积分统计)
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT u.*, g.name as group_name, g.color as group_color,

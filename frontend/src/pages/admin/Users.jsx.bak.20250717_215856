@@ -45,8 +45,7 @@ import {
   CalendarOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
-  LockOutlined,
-  FileTextOutlined
+  LockOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -54,7 +53,6 @@ import useAuthStore from '../../stores/authStore'
 import moment from 'moment'
 
 const { TabPane } = Tabs
-const { TextArea } = Input
 
 const Users = () => {
   const { t } = useTranslation()
@@ -205,7 +203,6 @@ const Users = () => {
         delete updateData.group_id
         delete updateData.credits_quota
         delete updateData.token_quota
-        delete updateData.remark
       }
       
       await updateUser(editingUser.id, updateData)
@@ -294,8 +291,7 @@ const Users = () => {
       status: user.status,
       token_quota: user.token_quota,
       credits_quota: user.credits_quota,
-      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
-      remark: user.remark
+      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null
     })
     
     // 加载用户积分信息和历史
@@ -471,28 +467,10 @@ const Users = () => {
       }
     },
     {
-      title: t('admin.users.table.remark'),
-      dataIndex: 'remark',
-      key: 'remark',
-      width: 150,
-      render: (remark) => {
-        if (!remark) return null
-        return (
-          <Tooltip title={remark}>
-            <div style={{ 
-              maxWidth: 150, 
-              overflow: 'hidden', 
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: '#666',
-              fontSize: '12px'
-            }}>
-              <FileTextOutlined style={{ marginRight: 4 }} />
-              {remark}
-            </div>
-          </Tooltip>
-        )
-      }
+      title: t('admin.users.table.tokenQuota'),
+      dataIndex: 'token_quota',
+      key: 'token_quota',
+      render: (quota) => quota?.toLocaleString()
     },
     {
       title: t('admin.users.table.createdAt'),
@@ -660,7 +638,7 @@ const Users = () => {
       {isGroupAdmin && (
         <Alert
           message="权限说明"
-          description="作为组管理员，您只能查看和管理本组用户，可以重置密码和禁用/启用账户，但不能修改积分相关设置和用户备注。"
+          description="作为组管理员，您只能查看和管理本组用户，可以重置密码和禁用/启用账户，但不能修改积分相关设置。"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -925,27 +903,6 @@ const Users = () => {
                   <Select.Option value="inactive">{t('status.inactive')}</Select.Option>
                 </Select>
               </Form.Item>
-
-              {/* 备注字段 - 只有超级管理员可以编辑 */}
-              {isSuperAdmin && (
-                <Form.Item
-                  name="remark"
-                  label={
-                    <Space>
-                      <FileTextOutlined />
-                      {t('admin.users.form.remark')}
-                    </Space>
-                  }
-                  help={t('admin.users.form.remark.help')}
-                >
-                  <TextArea
-                    rows={3}
-                    placeholder={t('admin.users.form.remark.placeholder')}
-                    maxLength={500}
-                    showCount
-                  />
-                </Form.Item>
-              )}
 
               {/* 管理员不能修改配额 */}
               {!isGroupAdmin && (
@@ -1408,22 +1365,6 @@ const Users = () => {
                     </Tag>
                   </div>
                 </Col>
-                {userDetail.user.remark && (
-                  <Col span={24}>
-                    <div style={{ marginTop: 8 }}>
-                      <strong>{t('admin.users.table.remark')}:</strong>
-                      <div style={{ 
-                        marginTop: 4, 
-                        padding: '8px 12px', 
-                        background: '#f5f5f5', 
-                        borderRadius: 4,
-                        color: '#666'
-                      }}>
-                        {userDetail.user.remark}
-                      </div>
-                    </div>
-                  </Col>
-                )}
                 <Col span={24}>
                   <div style={{ marginTop: 8 }}>
                     <strong>{t('admin.users.table.createdAt')}:</strong> {moment(userDetail.user.created_at).format('YYYY-MM-DD HH:mm:ss')}

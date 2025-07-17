@@ -13,7 +13,6 @@
   "admin.users.table.status": "Status",
   "admin.users.table.credits": "Credit Balance",
   "admin.users.table.tokenQuota": "Token Quota",
-  "admin.users.table.remark": "Remark",
   "admin.users.table.createdAt": "Created At",
   "admin.users.table.actions": "Actions",
   "admin.users.noGroup": "No Group",
@@ -59,9 +58,6 @@
   "admin.users.form.creditsExpire": "Credits Expiry",
   "admin.users.form.creditsExpire.tooltip": "Set the expiration date for credits. Credits cannot be used after expiry",
   "admin.users.form.creditsExpire.placeholder": "Select credits expiry date",
-  "admin.users.form.remark": "Admin Remark",
-  "admin.users.form.remark.placeholder": "Add remark information, visible to admins only",
-  "admin.users.form.remark.help": "Remark information is only visible to administrators, used to record important user-related information",
   
   "admin.users.detail.title": "User Details",
   "admin.users.detail.basicInfo": "Basic Information",
