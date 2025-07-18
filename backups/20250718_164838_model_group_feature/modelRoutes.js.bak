@@ -1,5 +1,5 @@
 /**
- * AI模型管理路由 - 支持模型分组管理
+ * AI模型管理路由
  */
 
 const express = require('express');
@@ -42,19 +42,5 @@ router.delete('/:id', canManageAIModels(), AIModelController.deleteAIModel);
  * @access Admin
  */
 router.post('/:id/test', canViewAIModels(), AIModelController.testAIModel);
-
-/**
- * @route GET /api/admin/models/:id/groups
- * @desc 获取模型已分配的用户组 - 只有超级管理员可操作
- * @access SuperAdmin
- */
-router.get('/:id/groups', canManageAIModels(), AIModelController.getModelGroups);
-
-/**
- * @route PUT /api/admin/models/:id/groups
- * @desc 更新模型的用户组分配 - 只有超级管理员可操作
- * @access SuperAdmin
- */
-router.put('/:id/groups', canManageAIModels(), AIModelController.updateModelGroups);
 
 module.exports = router;

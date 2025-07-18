@@ -1,5 +1,5 @@
 /**
- * AI模型管理控制器 - 支持基于角色的数据过滤和模型分组管理
+ * AI模型管理控制器 - 支持基于角色的数据过滤
  */
 
 const AIModel = require('../../models/AIModel');
@@ -10,49 +10,23 @@ const { ROLES } = require('../../middleware/permissions');
 
 class AIModelController {
   /**
-   * 获取AI模型列表 - 根据用户角色过滤敏感信息和模型列表
+   * 获取AI模型列表 - 根据用户角色过滤敏感信息
    */
   static async getAIModels(req, res) {
     try {
       const userRole = req.user.role;
-      const userGroupId = req.user.group_id;
       
-      let sql;
-      let params = [];
+      const sql = `
+        SELECT *, 
+        (SELECT COUNT(*) FROM conversations WHERE model_name = ai_models.name) as usage_count
+        FROM ai_models 
+        ORDER BY sort_order ASC, created_at ASC
+      `;
       
-      if (userRole === ROLES.SUPER_ADMIN) {
-        // 超级管理员看到所有模型
-        sql = `
-          SELECT m.*, 
-          (SELECT COUNT(*) FROM conversations WHERE model_name = m.name) as usage_count,
-          (SELECT COUNT(*) FROM ai_model_groups WHERE model_id = m.id) as assigned_groups_count
-          FROM ai_models m
-          ORDER BY m.sort_order ASC, m.created_at ASC
-        `;
-      } else if (userRole === ROLES.ADMIN) {
-        // 组管理员只看到分配给本组的模型
-        sql = `
-          SELECT m.*, 
-          (SELECT COUNT(*) FROM conversations WHERE model_name = m.name) as usage_count,
-          1 as assigned_groups_count
-          FROM ai_models m
-          INNER JOIN ai_model_groups mg ON m.id = mg.model_id
-          WHERE mg.group_id = ?
-          ORDER BY m.sort_order ASC, m.created_at ASC
-        `;
-        params = [userGroupId];
-      } else {
-        // 普通用户不应该访问此接口
-        return ResponseHelper.forbidden(res, '无权访问');
-      }
-      
-      const { rows } = await dbConnection.query(sql, params);
+      const { rows } = await dbConnection.query(sql);
       
       const models = rows.map(row => {
         const model = new AIModel(row);
-        model.usage_count = row.usage_count;
-        model.assigned_groups_count = row.assigned_groups_count;
-        
         if (typeof model.model_config === 'string') {
           try {
             model.model_config = JSON.parse(model.model_config);
@@ -80,7 +54,6 @@ class AIModelController {
             test_status: model.test_status,
             last_tested_at: model.last_tested_at,
             usage_count: model.usage_count,
-            assigned_groups_count: model.assigned_groups_count,
             created_at: model.created_at,
             updated_at: model.updated_at
           };
@@ -115,21 +88,10 @@ class AIModelController {
       const modelData = req.body;
       const model = await AIModel.create(modelData);
 
-      // 新建模型默认分配给所有激活的用户组
-      const { rows: activeGroups } = await dbConnection.query(
-        'SELECT id FROM user_groups WHERE is_active = 1'
-      );
-      
-      if (activeGroups.length > 0) {
-        const groupIds = activeGroups.map(g => g.id);
-        await AIModel.updateModelGroups(model.id, groupIds, req.user.id);
-      }
-
       logger.info('创建AI模型成功', { 
         adminId: req.user.id,
         modelId: model.id,
-        modelName: model.name,
-        assignedGroups: activeGroups.length
+        modelName: model.name
       });
 
       return ResponseHelper.success(res, model.toJSON(), 'AI模型创建成功', 201);
@@ -249,94 +211,6 @@ class AIModelController {
         error: error.message 
       });
       return ResponseHelper.error(res, '连通性测试失败');
-    }
-  }
-
-  /**
-   * 获取模型已分配的用户组 - 只有超级管理员可以操作
-   */
-  static async getModelGroups(req, res) {
-    try {
-      const { id } = req.params;
-      
-      const model = await AIModel.findById(id);
-      if (!model) {
-        return ResponseHelper.notFound(res, 'AI模型不存在');
-      }
-
-      const groups = await AIModel.getModelGroups(id);
-
-      logger.info('获取模型分配组成功', {
-        adminId: req.user.id,
-        modelId: id,
-        groupCount: groups.length
-      });
-
-      return ResponseHelper.success(res, groups, '获取模型分配组成功');
-    } catch (error) {
-      logger.error('获取模型分配组失败', {
-        adminId: req.user?.id,
-        modelId: req.params.id,
-        error: error.message
-      });
-      return ResponseHelper.error(res, '获取模型分配组失败');
-    }
-  }
-
-  /**
-   * 更新模型的用户组分配 - 只有超级管理员可以操作
-   */
-  static async updateModelGroups(req, res) {
-    try {
-      const { id } = req.params;
-      const { group_ids } = req.body;
-
-      if (!Array.isArray(group_ids)) {
-        return ResponseHelper.validation(res, ['group_ids 必须是数组']);
-      }
-
-      const model = await AIModel.findById(id);
-      if (!model) {
-        return ResponseHelper.notFound(res, 'AI模型不存在');
-      }
-
-      // 验证所有组ID是否存在
-      if (group_ids.length > 0) {
-        const { rows } = await dbConnection.query(
-          `SELECT COUNT(*) as count FROM user_groups WHERE id IN (${group_ids.map(() => '?').join(',')})`,
-          group_ids
-        );
-        
-        if (rows[0].count !== group_ids.length) {
-          return ResponseHelper.validation(res, ['部分用户组不存在']);
-        }
-      }
-
-      // 更新分配关系
-      await AIModel.updateModelGroups(id, group_ids, req.user.id);
-
-      // 获取更新后的分配信息
-      const updatedGroups = await AIModel.getModelGroups(id);
-
-      logger.info('更新模型分配组成功', {
-        adminId: req.user.id,
-        modelId: id,
-        groupIds: group_ids,
-        updatedCount: updatedGroups.length
-      });
-
-      return ResponseHelper.success(res, {
-        model_id: id,
-        groups: updatedGroups,
-        group_count: updatedGroups.length
-      }, '模型分配组更新成功');
-    } catch (error) {
-      logger.error('更新模型分配组失败', {
-        adminId: req.user?.id,
-        modelId: req.params.id,
-        error: error.message
-      });
-      return ResponseHelper.error(res, '更新模型分配组失败');
     }
   }
 }

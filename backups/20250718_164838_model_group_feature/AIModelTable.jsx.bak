@@ -1,9 +1,9 @@
 /**
- * AI模型列表表格组件 - 支持基于角色的权限控制和分组管理
+ * AI模型列表表格组件 - 支持基于角色的权限控制
  */
 
 import React, { useState } from 'react'
-import { Table, Tag, Space, Button, Switch, Tooltip, Popconfirm, Modal, Checkbox, message } from 'antd'
+import { Table, Tag, Space, Button, Switch, Tooltip, Popconfirm } from 'antd'
 import {
   EyeOutlined,
   EyeInvisibleOutlined,
@@ -18,12 +18,10 @@ import {
   PictureOutlined,
   FileImageOutlined,
   WalletOutlined,
-  LockOutlined,
-  TeamOutlined
+  LockOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../../stores/authStore'
-import useAdminStore from '../../../stores/adminStore'
 import { getFieldPermission, ROLES } from '../../../utils/permissions'
 
 const AIModelTable = ({
@@ -38,46 +36,9 @@ const AIModelTable = ({
 }) => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
-  const { userGroups, getModelGroups, updateModelGroups } = useAdminStore()
   const [showApiKey, setShowApiKey] = useState({})
-  const [groupModalVisible, setGroupModalVisible] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(null)
-  const [selectedGroups, setSelectedGroups] = useState([])
-  const [groupsLoading, setGroupsLoading] = useState(false)
   
   const userRole = user?.role || ROLES.USER
-
-  // 显示分组管理弹窗
-  const showGroupModal = async (model) => {
-    setSelectedModel(model)
-    setGroupModalVisible(true)
-    setGroupsLoading(true)
-    
-    try {
-      const groups = await getModelGroups(model.id)
-      setSelectedGroups(groups.map(g => g.id))
-    } catch (error) {
-      message.error('获取模型分配组失败')
-    } finally {
-      setGroupsLoading(false)
-    }
-  }
-
-  // 保存分组分配
-  const handleSaveGroups = async () => {
-    if (!selectedModel) return
-    
-    setGroupsLoading(true)
-    try {
-      await updateModelGroups(selectedModel.id, selectedGroups)
-      message.success('模型分组更新成功')
-      setGroupModalVisible(false)
-    } catch (error) {
-      message.error('更新模型分组失败')
-    } finally {
-      setGroupsLoading(false)
-    }
-  }
 
   // 渲染测试状态
   const renderTestStatus = (status, lastTestedAt, modelId) => {
@@ -263,27 +224,14 @@ const AIModelTable = ({
     {
       title: t('admin.models.table.actions'),
       key: 'actions',
-      width: 180,
+      width: 120,
       render: (_, record) => {
         const canEdit = userRole === ROLES.SUPER_ADMIN
         const canDelete = userRole === ROLES.SUPER_ADMIN
         const canTest = userRole !== ROLES.USER
-        const canManageGroups = userRole === ROLES.SUPER_ADMIN
         
         return (
           <Space size="small">
-            {canManageGroups && (
-              <Tooltip title="分配用户组">
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<TeamOutlined />}
-                  onClick={() => showGroupModal(record)}
-                >
-                  分配组
-                </Button>
-              </Tooltip>
-            )}
             {canTest && (
               <Tooltip title={t('admin.models.testConnection')}>
                 <Button
@@ -322,7 +270,7 @@ const AIModelTable = ({
                 </Popconfirm>
               </Tooltip>
             )}
-            {!canEdit && !canDelete && !canTest && !canManageGroups && (
+            {!canEdit && !canDelete && !canTest && (
               <Tooltip title={t('admin.noPermission')}>
                 <LockOutlined style={{ color: '#ccc' }} />
               </Tooltip>
@@ -334,72 +282,15 @@ const AIModelTable = ({
   ]
 
   return (
-    <>
-      <Table
-        columns={columns}
-        dataSource={models}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-        size="small"
-        scroll={{ x: 'max-content' }}
-      />
-      
-      {/* 分组管理弹窗 */}
-      <Modal
-        title={
-          <Space>
-            <TeamOutlined />
-            {selectedModel ? `为 [${selectedModel.display_name}] 分配用户组` : '分配用户组'}
-          </Space>
-        }
-        open={groupModalVisible}
-        onOk={handleSaveGroups}
-        onCancel={() => setGroupModalVisible(false)}
-        confirmLoading={groupsLoading}
-        width={600}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#666' }}>
-            选择可以使用此AI模型的用户组：
-          </p>
-        </div>
-        
-        <Checkbox.Group
-          style={{ width: '100%' }}
-          value={selectedGroups}
-          onChange={setSelectedGroups}
-        >
-          <Space direction="vertical" style={{ width: '100%' }}>
-            {userGroups.map(group => (
-              <Checkbox 
-                key={group.id} 
-                value={group.id}
-                style={{ width: '100%' }}
-              >
-                <Space>
-                  <Tag color={group.color || '#1677ff'}>{group.name}</Tag>
-                  <span style={{ color: '#999' }}>
-                    {group.user_count || 0} 个用户
-                  </span>
-                </Space>
-              </Checkbox>
-            ))}
-          </Space>
-        </Checkbox.Group>
-        
-        {selectedGroups.length === 0 && (
-          <div style={{ marginTop: 16, padding: '12px', background: '#fff7e6', borderRadius: '4px' }}>
-            <Space>
-              <span style={{ color: '#fa8c16' }}>⚠️</span>
-              <span style={{ color: '#666' }}>
-                未选择任何组，此模型将对所有用户不可见
-              </span>
-            </Space>
-          </div>
-        )}
-      </Modal>
-    </>
+    <Table
+      columns={columns}
+      dataSource={models}
+      rowKey="id"
+      loading={loading}
+      pagination={false}
+      size="small"
+      scroll={{ x: 'max-content' }}
+    />
   )
 }
 

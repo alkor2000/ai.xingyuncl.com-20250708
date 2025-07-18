@@ -280,32 +280,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 获取模型已分配的用户组
-  getModelGroups: async (modelId) => {
-    try {
-      const response = await apiClient.get(`/admin/models/${modelId}/groups`)
-      return response.data.data
-    } catch (error) {
-      console.error('获取模型分配组失败:', error)
-      throw error
-    }
-  },
-  
-  // 更新模型的用户组分配
-  updateModelGroups: async (modelId, groupIds) => {
-    try {
-      const response = await apiClient.put(`/admin/models/${modelId}/groups`, {
-        group_ids: groupIds
-      })
-      // 刷新模型列表以更新分配组数量
-      await useAdminStore.getState().getAIModels()
-      return response.data.data
-    } catch (error) {
-      console.error('更新模型分配组失败:', error)
-      throw error
-    }
-  },
-  
   // 系统统计
   getSystemStats: async () => {
     try {

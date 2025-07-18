@@ -75,15 +75,6 @@ class ChatController {
         return ResponseHelper.validation(res, ['选择的AI模型不可用']);
       }
 
-      // 检查用户是否有权限使用该模型
-      const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
-      const canUseModel = availableModels.some(m => m.name === model_name);
-      
-      if (!canUseModel) {
-        return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型');
-      }
-
       // 验证上下文数量
       let validContextLength = parseInt(context_length) || 20;
       if (validContextLength < 0) validContextLength = 0;
@@ -195,15 +186,6 @@ class ChatController {
         const aiModel = await AIModel.findByName(model_name);
         if (!aiModel || !aiModel.is_active) {
           return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-        }
-
-        // 检查用户是否有权限使用该模型
-        const userGroupId = req.user.group_id;
-        const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
-        const canUseModel = availableModels.some(m => m.name === model_name);
-        
-        if (!canUseModel) {
-          return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型');
         }
       }
 
@@ -440,15 +422,6 @@ class ChatController {
       const aiModel = await AIModel.findByName(conversation.model_name);
       if (!aiModel || !aiModel.is_active) {
         return ResponseHelper.error(res, '当前AI模型不可用');
-      }
-
-      // 检查用户是否有权限使用该模型（防止通过旧会话使用未授权模型）
-      const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
-      const canUseModel = availableModels.some(m => m.name === conversation.model_name);
-      
-      if (!canUseModel) {
-        return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型，请创建新会话选择其他模型');
       }
 
       // 如果有图片，检查模型是否支持
@@ -753,16 +726,12 @@ class ChatController {
   }
 
   /**
-   * 获取可用的AI模型列表 - 根据用户组过滤
+   * 获取可用的AI模型列表 - 增强积分和图片支持信息
    * GET /api/chat/models
    */
   static async getModels(req, res) {
     try {
-      // 获取用户的组ID
-      const userGroupId = req.user.group_id;
-      
-      // 根据用户组获取可用的模型
-      const models = await AIModel.getAvailableModelsByGroup(userGroupId);
+      const models = await AIService.getAvailableModels();
       
       // 添加积分和图片支持信息到模型列表
       const modelsWithInfo = models.map(model => ({
@@ -771,12 +740,6 @@ class ChatController {
         credits_display: `${model.credits_per_chat || 10} 积分/次`,
         image_upload_enabled: model.image_upload_enabled || false
       }));
-      
-      logger.info('获取用户可用AI模型列表', {
-        userId: req.user.id,
-        groupId: userGroupId,
-        modelCount: modelsWithInfo.length
-      });
       
       return ResponseHelper.success(res, modelsWithInfo, '获取AI模型列表成功');
     } catch (error) {
