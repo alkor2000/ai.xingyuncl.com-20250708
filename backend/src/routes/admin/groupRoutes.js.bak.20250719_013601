@@ -73,15 +73,4 @@ router.post('/:id/distribute-credits',
   UserGroupController.distributeGroupCredits
 );
 
-/**
- * @route PUT /api/admin/user-groups/:id/user-limit
- * @desc 设置组员上限
- * @access SuperAdmin only
- */
-router.put('/:id/user-limit',
-  requirePermission('group.manage'),
-  canManageGroups(),
-  UserGroupController.setGroupUserLimit
-);
-
 module.exports = router;

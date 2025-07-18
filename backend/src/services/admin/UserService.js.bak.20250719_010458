@@ -4,7 +4,6 @@
 
 const User = require('../../models/User');
 const AIModel = require('../../models/AIModel');
-const GroupService = require('./GroupService');
 const dbConnection = require('../../database/connection');
 const logger = require('../../utils/logger');
 const { DatabaseError, ValidationError, ConflictError } = require('../../utils/errors');
@@ -41,14 +40,6 @@ class UserService {
       const existingUsernameUser = await User.findByUsername(username);
       if (existingUsernameUser) {
         throw new ConflictError('该用户名已被使用');
-      }
-
-      // 检查目标组是否还有容量
-      const hasCapacity = await GroupService.checkGroupCapacity(group_id);
-      if (!hasCapacity) {
-        const group = await GroupService.findGroupById(group_id);
-        const currentCount = await GroupService.getGroupUserCount(group_id);
-        throw new ValidationError(`该组已满员（${currentCount}/${group.user_limit}），无法添加新成员`);
       }
 
       // 创建用户

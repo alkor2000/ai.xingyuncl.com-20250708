@@ -1,5 +1,5 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能和组员上限）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能）
  */
 
 const User = require('../../models/User');
@@ -25,7 +25,6 @@ class GroupService {
                  SUM(u.credits_quota - u.used_credits) as total_credits_balance,
                  g.credits_pool,
                  g.credits_pool_used,
-                 g.user_limit,
                  (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
@@ -44,7 +43,6 @@ class GroupService {
                  SUM(u.credits_quota - u.used_credits) as total_credits_balance,
                  g.credits_pool,
                  g.credits_pool_used,
-                 g.user_limit,
                  (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
@@ -455,13 +453,6 @@ class GroupService {
         throw new ValidationError('目标分组不存在');
       }
 
-      // 检查目标组容量
-      const hasCapacity = await GroupService.checkGroupCapacity(targetGroupId, userIds.length);
-      if (!hasCapacity) {
-        const currentCount = await GroupService.getGroupUserCount(targetGroupId);
-        throw new ValidationError(`目标组已满员，当前 ${currentCount}/${targetGroup.user_limit}`);
-      }
-
       // 使用事务批量更新
       const result = await dbConnection.transaction(async (query) => {
         const placeholders = userIds.map(() => '?').join(',');
@@ -525,8 +516,7 @@ class GroupService {
           AVG(u.credits_quota - u.used_credits) as avg_credits_balance,
           g.credits_pool,
           g.credits_pool_used,
-          (g.credits_pool - g.credits_pool_used) as credits_pool_remaining,
-          g.user_limit
+          (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
@@ -542,73 +532,6 @@ class GroupService {
       return rows[0];
     } catch (error) {
       logger.error('获取分组统计信息失败', { error: error.message, groupId });
-      throw error;
-    }
-  }
-
-  /**
-   * 检查组是否还有容量
-   */
-  static async checkGroupCapacity(groupId, additionalCount = 1) {
-    try {
-      const group = await GroupService.findGroupById(groupId);
-      if (!group) {
-        throw new ValidationError('用户分组不存在');
-      }
-
-      const currentCount = await GroupService.getGroupUserCount(groupId);
-      const newCount = currentCount + additionalCount;
-
-      return newCount <= group.user_limit;
-    } catch (error) {
-      logger.error('检查组容量失败', { error: error.message, groupId });
-      throw error;
-    }
-  }
-
-  /**
-   * 设置组员上限
-   */
-  static async setGroupUserLimit(groupId, userLimit, operatorId = null) {
-    try {
-      if (typeof userLimit !== 'number' || userLimit < 1) {
-        throw new ValidationError('组员上限必须是大于0的数字');
-      }
-
-      // 获取当前组信息
-      const group = await GroupService.findGroupById(groupId);
-      if (!group) {
-        throw new ValidationError('用户分组不存在');
-      }
-
-      // 获取当前组员数
-      const currentCount = await GroupService.getGroupUserCount(groupId);
-      
-      // 不能低于当前组员数
-      if (userLimit < currentCount) {
-        throw new ValidationError(`组员上限不能低于当前组员数(${currentCount}人)`);
-      }
-
-      // 更新组员上限
-      const sql = 'UPDATE user_groups SET user_limit = ?, updated_at = NOW() WHERE id = ?';
-      await dbConnection.query(sql, [userLimit, groupId]);
-
-      logger.info('设置组员上限成功', {
-        operatorId,
-        groupId,
-        userLimit,
-        oldUserLimit: group.user_limit,
-        currentCount
-      });
-
-      return {
-        success: true,
-        user_limit: userLimit,
-        user_count: currentCount,
-        available_slots: userLimit - currentCount
-      };
-    } catch (error) {
-      logger.error('设置组员上限失败', { error: error.message, groupId, userLimit });
       throw error;
     }
   }

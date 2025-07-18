@@ -167,21 +167,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组员上限
-  setGroupUserLimit: async (groupId, userLimit) => {
-    try {
-      const response = await apiClient.put(`/admin/user-groups/${groupId}/user-limit`, {
-        user_limit: userLimit
-      })
-      // 刷新组列表以更新组员上限信息
-      await useAdminStore.getState().getUserGroups()
-      return response.data.data
-    } catch (error) {
-      console.error('设置组员上限失败:', error)
-      throw error
-    }
-  },
-  
   // 积分管理
   getUserCredits: async (userId) => {
     set({ creditsLoading: true })

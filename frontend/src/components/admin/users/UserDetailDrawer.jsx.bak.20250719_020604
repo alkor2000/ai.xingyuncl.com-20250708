@@ -31,10 +31,7 @@ const UserDetailDrawer = ({
   
   if (!userDetail) return null
   
-  // 适配后端返回的数据结构
-  const user = userDetail.basic || {}
-  const tokens = userDetail.tokens || {}
-  const credits = userDetail.credits || {}
+  const { user, permissions } = userDetail
   
   const roleColors = {
     super_admin: 'red',
@@ -77,7 +74,7 @@ const UserDetailDrawer = ({
             <div>
               <strong>{t('admin.users.table.group')}:</strong>
               {user.group_name ? (
-                <Tag color={user.group_color || '#1677ff'} style={{ marginLeft: 8 }}>
+                <Tag color={user.group_color} style={{ marginLeft: 8 }}>
                   {user.group_name}
                 </Tag>
               ) : (
@@ -132,19 +129,19 @@ const UserDetailDrawer = ({
             <Row gutter={16} style={{ textAlign: 'center' }}>
               <Col span={8}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
-                  {tokens.quota?.toLocaleString() || 0}
+                  {user.token_quota?.toLocaleString()}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.form.tokenQuota')}</div>
               </Col>
               <Col span={8}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                  {tokens.used?.toLocaleString() || 0}
+                  {user.used_tokens?.toLocaleString()}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
               </Col>
               <Col span={8}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
-                  {tokens.remaining?.toLocaleString() || 0}
+                  {((user.token_quota || 0) - (user.used_tokens || 0)).toLocaleString()}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
               </Col>
@@ -157,13 +154,13 @@ const UserDetailDrawer = ({
             <Row gutter={16} style={{ textAlign: 'center' }}>
               <Col span={8}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1677ff' }}>
-                  {credits.quota?.toLocaleString() || 0}
+                  {user.credits_quota?.toLocaleString()}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.form.creditsQuota')}</div>
               </Col>
               <Col span={8}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                  {credits.used?.toLocaleString() || 0}
+                  {user.used_credits?.toLocaleString()}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.used')}</div>
               </Col>
@@ -171,9 +168,9 @@ const UserDetailDrawer = ({
                 <div style={{ 
                   fontSize: 24, 
                   fontWeight: 'bold', 
-                  color: credits.isExpired ? '#ff4d4f' : '#52c41a' 
+                  color: user.credits_stats?.isExpired ? '#ff4d4f' : '#52c41a' 
                 }}>
-                  {credits.remaining?.toLocaleString() || 0}
+                  {user.credits_stats?.remaining?.toLocaleString() || 0}
                 </div>
                 <div style={{ color: '#666', fontSize: 12 }}>{t('admin.users.detail.remaining')}</div>
               </Col>
@@ -183,21 +180,21 @@ const UserDetailDrawer = ({
               <Col span={24}>
                 <div style={{ textAlign: 'center' }}>
                   <strong>{t('admin.users.credits.expire.title')}:</strong>
-                  {credits.expireAt ? (
+                  {user.credits_expire_at ? (
                     <div style={{ marginTop: 8 }}>
                       <CalendarOutlined style={{ marginRight: 8 }} />
-                      {moment(credits.expireAt).format('YYYY-MM-DD HH:mm:ss')}
-                      {credits.isExpired ? (
+                      {moment(user.credits_expire_at).format('YYYY-MM-DD HH:mm:ss')}
+                      {user.credits_stats?.isExpired ? (
                         <Tag color="error" style={{ marginLeft: 8 }}>已过期</Tag>
-                      ) : credits.remainingDays !== null && credits.remainingDays <= 7 ? (
+                      ) : user.credits_stats?.remainingDays <= 7 ? (
                         <Tag color="warning" style={{ marginLeft: 8 }}>
-                          {credits.remainingDays}天后过期
+                          {user.credits_stats.remainingDays}天后过期
                         </Tag>
-                      ) : credits.remainingDays !== null ? (
+                      ) : (
                         <Tag color="success" style={{ marginLeft: 8 }}>
-                          剩余{credits.remainingDays}天
+                          剩余{user.credits_stats.remainingDays}天
                         </Tag>
-                      ) : null}
+                      )}
                     </div>
                   ) : (
                     <Tag color="success" style={{ marginTop: 8 }}>永不过期</Tag>
@@ -208,6 +205,16 @@ const UserDetailDrawer = ({
           </Card>
         </TabPane>
       </Tabs>
+
+      <Card title={t('admin.users.detail.permissions')} size="small">
+        <div>
+          {permissions?.map(permission => (
+            <Tag key={permission} style={{ marginBottom: 4 }}>
+              {permission}
+            </Tag>
+          ))}
+        </div>
+      </Card>
     </Drawer>
   )
 }

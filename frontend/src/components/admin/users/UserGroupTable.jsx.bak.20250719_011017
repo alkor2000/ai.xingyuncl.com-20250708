@@ -1,5 +1,5 @@
 /**
- * 用户分组表格组件（包含积分池和组员上限功能）
+ * 用户分组表格组件（包含积分池功能）
  */
 
 import React from 'react'
@@ -9,8 +9,7 @@ import {
   DeleteOutlined,
   TeamOutlined,
   WalletOutlined,
-  SettingOutlined,
-  UsergroupAddOutlined
+  SettingOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -21,8 +20,7 @@ const UserGroupTable = ({
   isSuperAdmin = false,
   onEdit,
   onDelete,
-  onSetCreditsPool,
-  onSetUserLimit
+  onSetCreditsPool
 }) => {
   const { t } = useTranslation()
 
@@ -52,34 +50,12 @@ const UserGroupTable = ({
       title: t('admin.groups.table.userCount'),
       dataIndex: 'user_count',
       key: 'user_count',
-      render: (count, record) => {
-        const userLimit = record.user_limit || 10
-        const percentage = (count / userLimit) * 100
-        const isFull = count >= userLimit
-        const isNearFull = percentage >= 80
-        
-        return (
-          <Space direction="vertical" size="small">
-            <Space>
-              <TeamOutlined />
-              <span style={{ 
-                fontWeight: 'bold',
-                color: isFull ? '#ff4d4f' : (isNearFull ? '#ff7a45' : '#000')
-              }}>
-                {count || 0} / {userLimit}
-              </span>
-              {isFull && <Tag color="error">已满</Tag>}
-            </Space>
-            <Progress 
-              percent={Math.min(100, Math.round(percentage))} 
-              size="small" 
-              showInfo={false}
-              strokeColor={isFull ? '#ff4d4f' : (isNearFull ? '#ff7a45' : '#52c41a')}
-              style={{ width: 100 }}
-            />
-          </Space>
-        )
-      }
+      render: (count) => (
+        <Space>
+          <TeamOutlined />
+          <span>{count || 0}</span>
+        </Space>
+      )
     },
     {
       title: '积分池',
@@ -135,14 +111,6 @@ const UserGroupTable = ({
           <Space size="small">
             {isSuperAdmin && (
               <>
-                <Tooltip title="设置组员上限">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<UsergroupAddOutlined />} 
-                    onClick={() => onSetUserLimit(record)} 
-                  />
-                </Tooltip>
                 <Tooltip title="设置积分池">
                   <Button 
                     type="text" 

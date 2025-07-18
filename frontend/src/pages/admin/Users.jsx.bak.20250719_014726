@@ -271,10 +271,10 @@ const Users = () => {
     }
   }
 
-  // 查看用户详情 - 修复：接收userId而不是user对象
-  const handleViewDetail = async (userId) => {
+  // 查看用户详情
+  const handleViewDetail = async (user) => {
     try {
-      const detail = await getUserDetail(userId)
+      const detail = await getUserDetail(user.id)
       setIsDetailVisible(true)
     } catch (error) {
       message.error('获取用户详情失败')
@@ -443,24 +443,6 @@ const Users = () => {
 
   return (
     <div className="page-container">
-      {/* 标签切换 */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space>
-          <Button 
-            type={activeTab === 'users' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('users')}
-          >
-            {t('admin.users.title')}
-          </Button>
-          <Button 
-            type={activeTab === 'groups' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('groups')}
-          >
-            {t('admin.groups.title')}
-          </Button>
-        </Space>
-      </Card>
-
       {activeTab === 'users' ? (
         <>
           {/* 用户搜索表单 */}

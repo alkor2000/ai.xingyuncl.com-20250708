@@ -201,6 +201,8 @@ class UserGroupController {
       return ResponseHelper.error(res, error.message || '积分操作失败');
     }
   }
+}
+
 
   /**
    * 设置组员上限（仅超级管理员）
@@ -236,5 +238,4 @@ class UserGroupController {
     }
   }
 }
-
 module.exports = UserGroupController;

@@ -32,7 +32,6 @@ import UserModelRestrictModal from '../../components/admin/users/UserModelRestri
 // 导入积分池相关组件
 import GroupCreditsPoolModal from '../../components/admin/users/GroupCreditsPoolModal'
 import DistributeCreditsModal from '../../components/admin/users/DistributeCreditsModal'
-import GroupUserLimitModal from '../../components/admin/users/GroupUserLimitModal'
 
 const Users = () => {
   const { t } = useTranslation()
@@ -61,8 +60,7 @@ const Users = () => {
     setUserCreditsExpire,
     resetUserPassword,
     setGroupCreditsPool,
-    distributeGroupCredits,
-    setGroupUserLimit
+    distributeGroupCredits
   } = useAdminStore()
 
   // 表单实例
@@ -76,13 +74,11 @@ const Users = () => {
   const [isModelRestrictModalVisible, setIsModelRestrictModalVisible] = useState(false)
   const [isCreditsPoolModalVisible, setIsCreditsPoolModalVisible] = useState(false)
   const [isDistributeModalVisible, setIsDistributeModalVisible] = useState(false)
-  const [isUserLimitModalVisible, setIsUserLimitModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
   const [creditsPoolGroup, setCreditsPoolGroup] = useState(null)
   const [distributeUser, setDistributeUser] = useState(null)
-  const [userLimitGroup, setUserLimitGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   const [pagination, setPagination] = useState({
     current: 1,
@@ -92,16 +88,16 @@ const Users = () => {
   const [creditHistoryData, setCreditHistoryData] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   
-  // 积分相关状态 - 用于优化积分加载
+  // 防止重复加载的标志
   const [loadingCredits, setLoadingCredits] = useState(false)
-  
-  // 判断用户权限
-  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  // 用户角色判断
   const isGroupAdmin = currentUser?.role === 'admin'
-  
-  // 获取当前组信息
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  // 获取当前组的信息（用于组管理员）
   const currentGroupInfo = userGroups.find(g => g.id === currentUser?.group_id)
-  
+
   // 加载用户列表
   const loadUsers = async (params = {}) => {
     try {
@@ -205,48 +201,39 @@ const Users = () => {
       
       await updateUser(editingUser.id, updateData)
       
-      // 积分操作
-      if (creditsOperation && creditsAmount && creditsReason) {
-        setLoadingCredits(true)
-        try {
-          switch (creditsOperation) {
-            case 'recharge':
-              await addUserCredits(editingUser.id, creditsAmount, creditsReason, extend_days)
-              message.success(t('admin.credits.recharge.success', { amount: creditsAmount }))
-              break
-            case 'deduct':
-              await deductUserCredits(editingUser.id, creditsAmount, creditsReason)
-              message.success(t('admin.credits.deduct.success', { amount: creditsAmount }))
-              break
-            case 'set':
-              await setUserCreditsQuota(editingUser.id, creditsAmount, creditsReason)
-              message.success(t('admin.credits.setQuota.success', { amount: creditsAmount }))
-              break
-          }
-          await getUserCredits(editingUser.id)
-          await loadCreditHistory(editingUser.id)
-        } catch (error) {
-          message.error(error.response?.data?.message || t('admin.credits.failed'))
-        } finally {
-          setLoadingCredits(false)
+      // 密码重置
+      if (newPassword) {
+        await resetUserPassword(editingUser.id, newPassword)
+      }
+      
+      // 积分操作（仅超级管理员）
+      if (isSuperAdmin && creditsOperation && creditsAmount && creditsReason) {
+        switch (creditsOperation) {
+          case 'add':
+            await addUserCredits(editingUser.id, creditsAmount, creditsReason, extend_days)
+            break
+          case 'deduct':
+            await deductUserCredits(editingUser.id, creditsAmount, creditsReason)
+            break
+          case 'set':
+            await setUserCreditsQuota(editingUser.id, creditsAmount, creditsReason)
+            break
         }
       }
       
       // 积分有效期设置
-      if (credits_expire_at) {
-        await setUserCreditsExpire(editingUser.id, { 
-          expire_at: credits_expire_at.format('YYYY-MM-DD HH:mm:ss') 
-        })
-      }
-      
-      // 密码重置
-      if (newPassword && confirmPassword) {
-        if (newPassword !== confirmPassword) {
-          message.error(t('admin.users.password.mismatch'))
-          return
+      if (isSuperAdmin) {
+        if (credits_expire_at) {
+          await setUserCreditsExpire(editingUser.id, {
+            expire_date: credits_expire_at.format('YYYY-MM-DD HH:mm:ss'),
+            reason: creditsReason || '管理员设置积分有效期'
+          })
+        } else if (extend_days && !creditsOperation) {
+          await setUserCreditsExpire(editingUser.id, {
+            extend_days: extend_days,
+            reason: creditsReason || '管理员延长积分有效期'
+          })
         }
-        await resetUserPassword(editingUser.id, newPassword)
-        message.success(t('admin.users.password.reset.success'))
       }
       
       setIsUserModalVisible(false)
@@ -264,17 +251,29 @@ const Users = () => {
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
       await updateUser(userId, { status: newStatus })
-      message.success('用户状态更新成功')
+      message.success(
+        newStatus === 'active' 
+          ? t('admin.users.enable.success') 
+          : t('admin.users.disable.success')
+      )
       loadUsers()
     } catch (error) {
-      message.error('用户状态更新失败')
+      message.error(
+        error.response?.data?.message || 
+        (currentStatus === 'active' 
+          ? t('admin.users.disable.failed') 
+          : t('admin.users.enable.failed'))
+      )
     }
   }
 
-  // 查看用户详情 - 修复：接收userId而不是user对象
+  // 查看用户详情
   const handleViewDetail = async (userId) => {
     try {
-      const detail = await getUserDetail(userId)
+      await getUserDetail(userId)
+      if (isSuperAdmin) {
+        await getUserCredits(userId)
+      }
       setIsDetailVisible(true)
     } catch (error) {
       message.error('获取用户详情失败')
@@ -283,25 +282,31 @@ const Users = () => {
 
   // 编辑用户
   const handleEditUser = async (user) => {
+    if (loadingCredits) return;
+    
+    setLoadingCredits(true)
     setEditingUser(user)
     userForm.setFieldsValue({
-      ...user,
-      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null
+      username: user.username,
+      role: user.role,
+      group_id: user.group_id,
+      status: user.status,
+      token_quota: user.token_quota,
+      credits_quota: user.credits_quota,
+      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
+      remark: user.remark
     })
     
-    // 加载用户积分信息
-    if (!isGroupAdmin || user.group_id === currentUser.group_id) {
-      setLoadingCredits(true)
+    if (isSuperAdmin) {
       try {
         await getUserCredits(user.id)
-        await loadCreditHistory(user.id)
+        setCreditHistoryData([])
       } catch (error) {
-        console.error('加载用户积分信息失败:', error)
-      } finally {
-        setLoadingCredits(false)
+        console.error('加载积分信息失败:', error)
       }
     }
     
+    setLoadingCredits(false)
     setIsUserModalVisible(true)
   }
 
@@ -309,10 +314,10 @@ const Users = () => {
   const handleDeleteUser = async (userId) => {
     try {
       await deleteUser(userId)
-      message.success('用户删除成功')
+      message.success(t('admin.users.delete.success'))
       loadUsers()
     } catch (error) {
-      message.error('用户删除失败')
+      message.error(error.response?.data?.message || t('admin.users.delete.failed'))
     }
   }
 
@@ -322,45 +327,42 @@ const Users = () => {
     setIsModelRestrictModalVisible(true)
   }
 
-  // 创建分组
+  // 分组管理方法
   const handleCreateGroup = async (values) => {
     try {
       await createUserGroup(values)
       setIsGroupModalVisible(false)
       groupForm.resetFields()
-      message.success('分组创建成功')
+      message.success('用户分组创建成功')
       loadUserGroups()
     } catch (error) {
-      message.error(error.response?.data?.message || '分组创建失败')
+      message.error(error.response?.data?.message || '用户分组创建失败')
     }
   }
 
-  // 更新分组
   const handleUpdateGroup = async (values) => {
     try {
       await updateUserGroup(editingGroup.id, values)
       setIsGroupModalVisible(false)
       setEditingGroup(null)
       groupForm.resetFields()
-      message.success('分组更新成功')
+      message.success('用户分组更新成功')
       loadUserGroups()
     } catch (error) {
-      message.error(error.response?.data?.message || '分组更新失败')
+      message.error(error.response?.data?.message || '用户分组更新失败')
     }
   }
 
-  // 删除分组
   const handleDeleteGroup = async (groupId) => {
     try {
       await deleteUserGroup(groupId)
-      message.success('分组删除成功')
+      message.success('用户分组删除成功')
       loadUserGroups()
     } catch (error) {
-      message.error(error.response?.data?.message || '分组删除失败')
+      message.error(error.response?.data?.message || '删除失败')
     }
   }
 
-  // 编辑分组
   const handleEditGroup = (group) => {
     setEditingGroup(group)
     groupForm.setFieldsValue({
@@ -410,24 +412,6 @@ const Users = () => {
     }
   }
 
-  // 设置组员上限
-  const handleSetUserLimit = (group) => {
-    setUserLimitGroup(group)
-    setIsUserLimitModalVisible(true)
-  }
-
-  const handleSubmitUserLimit = async (groupId, userLimit) => {
-    try {
-      await setGroupUserLimit(groupId, userLimit)
-      setIsUserLimitModalVisible(false)
-      setUserLimitGroup(null)
-      message.success('组员上限设置成功')
-      loadUserGroups()
-    } catch (error) {
-      message.error(error.response?.data?.message || '设置失败')
-    }
-  }
-
   // 权限检查
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
     return (
@@ -443,6 +427,18 @@ const Users = () => {
 
   return (
     <div className="page-container">
+      {/* 权限提示 */}
+      {isGroupAdmin && (
+        <Alert
+          message="权限说明"
+          description="作为组管理员，您可以查看和管理本组用户，可以重置密码、禁用/启用账户、修改用户备注、设置AI模型使用权限、从组积分池分配积分，但不能修改积分相关设置。"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          icon={<LockOutlined />}
+        />
+      )}
+
       {/* 标签切换 */}
       <Card style={{ marginBottom: 16 }}>
         <Space>
@@ -463,17 +459,7 @@ const Users = () => {
 
       {activeTab === 'users' ? (
         <>
-          {/* 用户搜索表单 */}
-          <Card style={{ marginBottom: 16 }}>
-            <UserSearchForm
-              userGroups={userGroups}
-              onSearch={handleSearch}
-              isGroupAdmin={isGroupAdmin}
-              currentUser={currentUser}
-            />
-          </Card>
-
-          {/* 组管理员看到的组积分池信息 */}
+          {/* 组管理员显示积分池信息 */}
           {isGroupAdmin && currentGroupInfo && (
             <Card style={{ marginBottom: 16 }}>
               <Row gutter={16}>
@@ -487,9 +473,9 @@ const Users = () => {
                 </Col>
                 <Col span={8}>
                   <Statistic
-                    title="已分配积分"
+                    title="已分配"
                     value={currentGroupInfo.credits_pool_used || 0}
-                    prefix={<GiftOutlined />}
+                    valueStyle={{ color: '#ff4d4f' }}
                     suffix="积分"
                   />
                 </Col>
@@ -497,7 +483,8 @@ const Users = () => {
                   <Statistic
                     title="剩余可分配"
                     value={currentGroupInfo.credits_pool_remaining || 0}
-                    valueStyle={{ color: currentGroupInfo.credits_pool_remaining > 0 ? '#3f8600' : '#cf1322' }}
+                    valueStyle={{ color: '#52c41a' }}
+                    prefix={<GiftOutlined />}
                     suffix="积分"
                   />
                 </Col>
@@ -505,9 +492,20 @@ const Users = () => {
             </Card>
           )}
 
+          {/* 用户搜索 */}
+          <Card style={{ marginBottom: 16 }}>
+            <UserSearchForm
+              onSearch={handleSearch}
+              onReset={() => loadUsers()}
+              userGroups={userGroups}
+              isGroupAdmin={isGroupAdmin}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </Card>
+
           {/* 用户列表 */}
           <Card 
-            title={t('admin.users.title')}
+            title={t('admin.users.userList')}
             extra={
               <Button 
                 type="primary" 
@@ -515,6 +513,7 @@ const Users = () => {
                 onClick={() => {
                   setEditingUser(null)
                   userForm.resetFields()
+                  setCreditHistoryData([])
                   setIsUserModalVisible(true)
                 }}
               >
@@ -578,7 +577,6 @@ const Users = () => {
               onEdit={handleEditGroup}
               onDelete={handleDeleteGroup}
               onSetCreditsPool={handleSetCreditsPool}
-              onSetUserLimit={handleSetUserLimit}
             />
           </Card>
         </>
@@ -666,20 +664,6 @@ const Users = () => {
           onCancel={() => {
             setIsDistributeModalVisible(false)
             setDistributeUser(null)
-          }}
-        />
-      )}
-
-      {/* 组员上限设置弹窗 */}
-      {isSuperAdmin && (
-        <GroupUserLimitModal
-          visible={isUserLimitModalVisible}
-          group={userLimitGroup}
-          loading={loading}
-          onSubmit={handleSubmitUserLimit}
-          onCancel={() => {
-            setIsUserLimitModalVisible(false)
-            setUserLimitGroup(null)
           }}
         />
       )}

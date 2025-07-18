@@ -201,40 +201,6 @@ class UserGroupController {
       return ResponseHelper.error(res, error.message || '积分操作失败');
     }
   }
-
-  /**
-   * 设置组员上限（仅超级管理员）
-   */
-  static async setGroupUserLimit(req, res) {
-    try {
-      const { id } = req.params;
-      const { user_limit } = req.body;
-
-      if (typeof user_limit !== 'number') {
-        return ResponseHelper.validation(res, ['组员上限必须是数字']);
-      }
-
-      const result = await GroupService.setGroupUserLimit(id, user_limit, req.user.id);
-
-      return ResponseHelper.success(res, result, '组员上限设置成功');
-    } catch (error) {
-      logger.error('设置组员上限失败', { 
-        adminId: req.user?.id, 
-        groupId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message === '用户分组不存在') {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      if (error.message.includes('不能低于')) {
-        return ResponseHelper.validation(res, [error.message]);
-      }
-      
-      return ResponseHelper.error(res, error.message || '设置组员上限失败');
-    }
-  }
 }
 
 module.exports = UserGroupController;
