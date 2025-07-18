@@ -1,9 +1,10 @@
 /**
- * 系统设置主页面 - 支持组管理员权限控制
+ * 系统设置主页面 - 重构版
+ * 将原来1000+行的代码拆分为6个子组件
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Tabs, Form, message, Space, Tag, Alert } from 'antd'
+import { Card, Button, Tabs, Form, message, Space, Tag } from 'antd'
 import {
   BarChartOutlined,
   RobotOutlined,
@@ -11,13 +12,11 @@ import {
   PlusOutlined,
   AppstoreOutlined,
   ThunderboltOutlined,
-  FileImageOutlined,
-  LockOutlined
+  FileImageOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
-import { ROLES, hasPermission } from '../../utils/permissions'
 
 // 导入子组件
 import {
@@ -33,7 +32,7 @@ const { TabPane } = Tabs
 
 const Settings = () => {
   const { t } = useTranslation()
-  const { user, hasRole } = useAuthStore()
+  const { hasPermission } = useAuthStore()
   const {
     aiModels,
     modules,
@@ -68,22 +67,15 @@ const Settings = () => {
   const [testingModelId, setTestingModelId] = useState(null)
   const [checkingModuleId, setCheckingModuleId] = useState(null)
 
-  const userRole = user?.role || ROLES.USER
-  const isSuperAdmin = userRole === ROLES.SUPER_ADMIN
-  const isGroupAdmin = userRole === ROLES.ADMIN
-  const canViewSettings = isSuperAdmin || isGroupAdmin
-
   // 初始化加载数据
   useEffect(() => {
-    if (canViewSettings) {
+    if (hasPermission('system.all')) {
       getSystemStats()
       getAIModels()
-      if (isSuperAdmin) {
-        getModules()
-      }
+      getModules()
       getSystemSettings()
     }
-  }, [canViewSettings, isSuperAdmin])
+  }, [hasPermission])
 
   // 设置表单初始值
   useEffect(() => {
@@ -102,13 +94,8 @@ const Settings = () => {
     }
   }, [aiModels, systemSettings, settingsForm])
 
-  // 保存系统设置（只有超级管理员可以）
+  // 保存系统设置
   const handleSaveSettings = async (values) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await updateSystemSettings(values)
       message.success(t('admin.settings.save.success'))
@@ -117,13 +104,8 @@ const Settings = () => {
     }
   }
 
-  // AI模型相关方法（只有超级管理员可以创建/更新/删除）
+  // AI模型相关方法
   const handleCreateModel = async (values) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await createAIModel(values)
       setIsModelModalVisible(false)
@@ -135,11 +117,6 @@ const Settings = () => {
   }
 
   const handleUpdateModel = async (values) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await updateAIModel(editingModel.id, values)
       setIsModelModalVisible(false)
@@ -152,11 +129,6 @@ const Settings = () => {
   }
 
   const handleDeleteModel = async (modelId) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await deleteAIModel(modelId)
       message.success(t('admin.models.delete.success'))
@@ -188,11 +160,6 @@ const Settings = () => {
   }
 
   const handleEditModel = (model) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     setEditingModel(model)
     modelForm.setFieldsValue({
       name: model.name,
@@ -209,11 +176,6 @@ const Settings = () => {
   }
 
   const handleToggleStreamEnabled = async (modelId, streamEnabled) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await updateAIModel(modelId, { stream_enabled: streamEnabled })
       message.success(streamEnabled ? '流式输出已启用' : '流式输出已禁用')
@@ -223,11 +185,6 @@ const Settings = () => {
   }
 
   const handleToggleImageUploadEnabled = async (modelId, imageUploadEnabled) => {
-    if (!isSuperAdmin) {
-      message.warning(t('admin.noPermission'))
-      return
-    }
-    
     try {
       await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
       message.success(imageUploadEnabled ? '图片上传已启用' : '图片上传已禁用')
@@ -236,7 +193,7 @@ const Settings = () => {
     }
   }
 
-  // 系统模块相关方法（只有超级管理员可以管理）
+  // 系统模块相关方法
   const handleCreateModule = async (values) => {
     try {
       await createModule(values)
@@ -313,8 +270,8 @@ const Settings = () => {
     }
   }
 
-  // 权限检查 - 使用角色判断而不是权限
-  if (!canViewSettings) {
+  // 权限检查
+  if (!hasPermission('system.all')) {
     return (
       <div className="page-container">
         <Card>
@@ -328,18 +285,6 @@ const Settings = () => {
   
   return (
     <div className="page-container">
-      {/* 组管理员提示 */}
-      {isGroupAdmin && (
-        <Alert
-          message={t('admin.groupAdminTip')}
-          description={t('admin.groupAdminDescription')}
-          type="info"
-          showIcon
-          icon={<LockOutlined />}
-          style={{ marginBottom: 16 }}
-        />
-      )}
-      
       <Tabs defaultActiveKey="statistics" type="card">
         {/* 系统统计 */}
         <TabPane 
@@ -380,19 +325,17 @@ const Settings = () => {
               </Space>
             }
             extra={
-              isSuperAdmin && (
-                <Button 
-                  type="primary" 
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingModel(null)
-                    modelForm.resetFields()
-                    setIsModelModalVisible(true)
-                  }}
-                >
-                  {t('admin.models.addModel')}
-                </Button>
-              )
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingModel(null)
+                  modelForm.resetFields()
+                  setIsModelModalVisible(true)
+                }}
+              >
+                {t('admin.models.addModel')}
+              </Button>
             }
           >
             <AIModelTable
@@ -408,45 +351,43 @@ const Settings = () => {
           </Card>
         </TabPane>
 
-        {/* 模块接入（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <AppstoreOutlined />
-                {t('admin.settings.tabs.modules')}
-              </span>
-            } 
-            key="modules"
+        {/* 模块接入 */}
+        <TabPane 
+          tab={
+            <span>
+              <AppstoreOutlined />
+              {t('admin.settings.tabs.modules')}
+            </span>
+          } 
+          key="modules"
+        >
+          <Card
+            title={t('admin.modules.title')}
+            extra={
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingModule(null)
+                  moduleForm.resetFields()
+                  setIsModuleModalVisible(true)
+                }}
+              >
+                {t('admin.modules.addModule')}
+              </Button>
+            }
           >
-            <Card
-              title={t('admin.modules.title')}
-              extra={
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingModule(null)
-                    moduleForm.resetFields()
-                    setIsModuleModalVisible(true)
-                  }}
-                >
-                  {t('admin.modules.addModule')}
-                </Button>
-              }
-            >
-              <SystemModuleTable
-                modules={modules}
-                loading={loading}
-                checkingModuleId={checkingModuleId}
-                onCheckHealth={handleCheckModuleHealth}
-                onToggleStatus={handleToggleModuleStatus}
-                onEdit={handleEditModule}
-                onDelete={handleDeleteModule}
-              />
-            </Card>
-          </TabPane>
-        )}
+            <SystemModuleTable
+              modules={modules}
+              loading={loading}
+              checkingModuleId={checkingModuleId}
+              onCheckHealth={handleCheckModuleHealth}
+              onToggleStatus={handleToggleModuleStatus}
+              onEdit={handleEditModule}
+              onDelete={handleDeleteModule}
+            />
+          </Card>
+        </TabPane>
 
         {/* 基础设置 */}
         <TabPane 
@@ -463,42 +404,37 @@ const Settings = () => {
             aiModels={aiModels}
             loading={loading}
             onSubmit={handleSaveSettings}
-            disabled={!isSuperAdmin}
           />
         </TabPane>
       </Tabs>
 
-      {/* AI模型弹窗（只有超级管理员可以使用） */}
-      {isSuperAdmin && (
-        <AIModelFormModal
-          visible={isModelModalVisible}
-          editingModel={editingModel}
-          form={modelForm}
-          loading={loading}
-          onSubmit={editingModel ? handleUpdateModel : handleCreateModel}
-          onCancel={() => {
-            setIsModelModalVisible(false)
-            setEditingModel(null)
-            modelForm.resetFields()
-          }}
-        />
-      )}
+      {/* AI模型弹窗 */}
+      <AIModelFormModal
+        visible={isModelModalVisible}
+        editingModel={editingModel}
+        form={modelForm}
+        loading={loading}
+        onSubmit={editingModel ? handleUpdateModel : handleCreateModel}
+        onCancel={() => {
+          setIsModelModalVisible(false)
+          setEditingModel(null)
+          modelForm.resetFields()
+        }}
+      />
 
-      {/* 系统模块弹窗（只有超级管理员可以使用） */}
-      {isSuperAdmin && (
-        <SystemModuleFormModal
-          visible={isModuleModalVisible}
-          editingModule={editingModule}
-          form={moduleForm}
-          loading={loading}
-          onSubmit={editingModule ? handleUpdateModule : handleCreateModule}
-          onCancel={() => {
-            setIsModuleModalVisible(false)
-            setEditingModule(null)
-            moduleForm.resetFields()
-          }}
-        />
-      )}
+      {/* 系统模块弹窗 */}
+      <SystemModuleFormModal
+        visible={isModuleModalVisible}
+        editingModule={editingModule}
+        form={moduleForm}
+        loading={loading}
+        onSubmit={editingModule ? handleUpdateModule : handleCreateModule}
+        onCancel={() => {
+          setIsModuleModalVisible(false)
+          setEditingModule(null)
+          moduleForm.resetFields()
+        }}
+      />
     </div>
   )
 }

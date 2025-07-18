@@ -1,21 +1,18 @@
 /**
- * AI模型管理控制器 - 支持基于角色的数据过滤
+ * AI模型管理控制器 - 负责AI模型的配置管理
  */
 
 const AIModel = require('../../models/AIModel');
 const dbConnection = require('../../database/connection');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
-const { ROLES } = require('../../middleware/permissions');
 
 class AIModelController {
   /**
-   * 获取AI模型列表 - 根据用户角色过滤敏感信息
+   * 获取AI模型列表
    */
   static async getAIModels(req, res) {
     try {
-      const userRole = req.user.role;
-      
       const sql = `
         SELECT *, 
         (SELECT COUNT(*) FROM conversations WHERE model_name = ai_models.name) as usage_count
@@ -34,39 +31,11 @@ class AIModelController {
             model.model_config = {};
           }
         }
-        
-        // 根据用户角色过滤敏感信息
-        if (userRole === ROLES.ADMIN) {
-          // 组管理员：隐藏敏感信息
-          const filteredModel = {
-            id: model.id,
-            name: '******', // 隐藏真实模型名
-            display_name: model.display_name,
-            provider: model.provider,
-            api_key: null, // 不返回API密钥
-            api_endpoint: null, // 不返回API端点
-            model_config: {}, // 不返回配置
-            credits_per_chat: model.credits_per_chat,
-            stream_enabled: model.stream_enabled,
-            image_upload_enabled: model.image_upload_enabled,
-            is_active: model.is_active,
-            sort_order: model.sort_order,
-            test_status: model.test_status,
-            last_tested_at: model.last_tested_at,
-            usage_count: model.usage_count,
-            created_at: model.created_at,
-            updated_at: model.updated_at
-          };
-          return filteredModel;
-        }
-        
-        // 超级管理员：返回完整信息
         return model;
       });
 
       logger.info('获取AI模型列表成功', { 
         adminId: req.user.id,
-        userRole: userRole,
         modelCount: models.length
       });
 
@@ -81,7 +50,7 @@ class AIModelController {
   }
 
   /**
-   * 创建AI模型 - 只有超级管理员可以操作
+   * 创建AI模型
    */
   static async createAIModel(req, res) {
     try {
@@ -105,7 +74,7 @@ class AIModelController {
   }
 
   /**
-   * 更新AI模型 - 只有超级管理员可以操作
+   * 更新AI模型
    */
   static async updateAIModel(req, res) {
     try {
@@ -144,7 +113,7 @@ class AIModelController {
   }
 
   /**
-   * 删除AI模型 - 只有超级管理员可以操作
+   * 删除AI模型
    */
   static async deleteAIModel(req, res) {
     try {
@@ -175,24 +144,15 @@ class AIModelController {
   }
 
   /**
-   * 测试AI模型连通性 - 超级管理员和组管理员都可以操作
+   * 测试AI模型连通性
    */
   static async testAIModel(req, res) {
     try {
       const { id } = req.params;
-      const userRole = req.user.role;
 
       const model = await AIModel.findById(id);
       if (!model) {
         return ResponseHelper.notFound(res, 'AI模型不存在');
-      }
-
-      // 组管理员不能测试连通性（因为看不到API密钥）
-      if (userRole === ROLES.ADMIN) {
-        return ResponseHelper.success(res, {
-          success: true,
-          message: '组管理员无法执行连通性测试'
-        }, '操作完成');
       }
 
       const testResult = await model.testConnection();

@@ -313,7 +313,7 @@ const Settings = () => {
     }
   }
 
-  // 权限检查 - 使用角色判断而不是权限
+  // 权限检查
   if (!canViewSettings) {
     return (
       <div className="page-container">

@@ -32,7 +32,7 @@ const { Header, Sider, Content } = Layout
 const MainLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout, hasPermission, hasRole } = useAuthStore()
+  const { user, logout, hasPermission } = useAuthStore()
   const { onlineCount, connected, initializeSocket, disconnectSocket } = useStatsStore()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = React.useState(false)
@@ -74,24 +74,15 @@ const MainLayout = ({ children }) => {
         {
           key: '/admin/settings',
           label: t('nav.settings'),
-          // 允许超级管理员和组管理员查看系统设置
-          roles: ['super_admin', 'admin'],  // 使用角色判断
-          permission: null  // 不使用权限判断
+          permission: 'system.all'
         }
       ]
     }
   ]
 
-  // 过滤菜单项（根据权限和角色）- 增强判断逻辑
+  // 过滤菜单项（根据权限）- 增强权限判断
   const filterMenuItems = (items) => {
     return items.filter(item => {
-      // 首先检查角色
-      if (item.roles) {
-        const hasRequiredRole = item.roles.some(role => hasRole(role))
-        if (!hasRequiredRole) return false
-      }
-      
-      // 然后检查权限
       if (item.permission) {
         // 如果权限是数组，检查是否有任意一个权限
         if (Array.isArray(item.permission)) {
