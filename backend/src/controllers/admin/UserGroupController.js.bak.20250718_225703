@@ -1,5 +1,5 @@
 /**
- * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能）
+ * 用户分组管理控制器 - 使用Service层处理业务逻辑
  */
 
 const { GroupService } = require('../../services/admin');
@@ -103,86 +103,6 @@ class UserGroupController {
       }
       
       return ResponseHelper.error(res, error.message || '删除用户分组失败');
-    }
-  }
-
-  /**
-   * 设置组积分池（仅超级管理员）
-   */
-  static async setGroupCreditsPool(req, res) {
-    try {
-      const { id } = req.params;
-      const { credits_pool } = req.body;
-
-      if (typeof credits_pool !== 'number') {
-        return ResponseHelper.validation(res, ['积分池额度必须是数字']);
-      }
-
-      const result = await GroupService.setGroupCreditsPool(id, credits_pool, req.user.id);
-
-      return ResponseHelper.success(res, result, '组积分池设置成功');
-    } catch (error) {
-      logger.error('设置组积分池失败', { 
-        adminId: req.user?.id, 
-        groupId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message === '用户分组不存在') {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      if (error.message.includes('不能低于')) {
-        return ResponseHelper.validation(res, [error.message]);
-      }
-      
-      return ResponseHelper.error(res, error.message || '设置组积分池失败');
-    }
-  }
-
-  /**
-   * 从组积分池分配积分（组管理员和超级管理员）
-   */
-  static async distributeGroupCredits(req, res) {
-    try {
-      const { id: groupId } = req.params;
-      const { user_id, amount, reason } = req.body;
-      const distributorId = req.user.id;
-
-      // 权限检查
-      if (req.user.role === 'admin' && req.user.group_id !== parseInt(groupId)) {
-        return ResponseHelper.forbidden(res, '只能管理本组的积分池');
-      }
-
-      if (!user_id || !amount) {
-        return ResponseHelper.validation(res, ['用户ID和金额不能为空']);
-      }
-
-      const result = await GroupService.distributeCreditsFromPool(
-        parseInt(groupId),
-        user_id,
-        amount,
-        reason || '组积分池分配',
-        distributorId
-      );
-
-      return ResponseHelper.success(res, result, '积分分配成功');
-    } catch (error) {
-      logger.error('组积分池分配失败', { 
-        distributorId: req.user?.id, 
-        groupId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message.includes('不存在')) {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      if (error.message.includes('余额不足') || error.message.includes('必须是正数')) {
-        return ResponseHelper.validation(res, [error.message]);
-      }
-      
-      return ResponseHelper.error(res, error.message || '积分分配失败');
     }
   }
 }

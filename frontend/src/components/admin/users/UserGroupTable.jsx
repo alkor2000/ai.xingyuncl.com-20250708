@@ -1,13 +1,15 @@
 /**
- * 用户分组表格组件
+ * 用户分组表格组件（包含积分池功能）
  */
 
 import React from 'react'
-import { Table, Tag, Space, Button, Tooltip, Popconfirm } from 'antd'
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
-  TeamOutlined
+  TeamOutlined,
+  WalletOutlined,
+  SettingOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -15,8 +17,10 @@ const UserGroupTable = ({
   groups = [],
   loading = false,
   isGroupAdmin = false,
+  isSuperAdmin = false,
   onEdit,
-  onDelete
+  onDelete,
+  onSetCreditsPool
 }) => {
   const { t } = useTranslation()
 
@@ -54,10 +58,34 @@ const UserGroupTable = ({
       )
     },
     {
-      title: t('admin.groups.table.avgTokens'),
-      dataIndex: 'avg_tokens_used',
-      key: 'avg_tokens_used',
-      render: (avg) => Math.round(avg || 0).toLocaleString()
+      title: '积分池',
+      key: 'credits_pool',
+      render: (_, record) => {
+        const total = record.credits_pool || 0
+        const used = record.credits_pool_used || 0
+        const remaining = record.credits_pool_remaining || 0
+        const percentage = total > 0 ? (used / total * 100) : 0
+        
+        return (
+          <div style={{ minWidth: 200 }}>
+            <div style={{ marginBottom: 4 }}>
+              <Space>
+                <WalletOutlined />
+                <span style={{ fontWeight: 'bold' }}>
+                  {remaining.toLocaleString()} / {total.toLocaleString()}
+                </span>
+                <span style={{ color: '#999', fontSize: '12px' }}>积分</span>
+              </Space>
+            </div>
+            <Progress 
+              percent={Math.round(percentage)} 
+              size="small" 
+              strokeColor={percentage > 80 ? '#ff4d4f' : '#52c41a'}
+              format={() => `已用 ${used.toLocaleString()}`}
+            />
+          </div>
+        )
+      }
     },
     {
       title: t('admin.groups.table.avgCredits'),
@@ -76,45 +104,47 @@ const UserGroupTable = ({
       )
     },
     {
-      title: t('admin.groups.table.sort'),
-      dataIndex: 'sort_order',
-      key: 'sort_order'
-    },
-    {
       title: t('table.actions'),
       key: 'actions',
       render: (_, record) => {
-        // 管理员不能编辑分组
-        if (isGroupAdmin) {
-          return null
-        }
-        
         return (
           <Space size="small">
-            <Tooltip title={t('button.edit')}>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<EditOutlined />} 
-                onClick={() => onEdit(record)} 
-              />
-            </Tooltip>
-            <Tooltip title={t('button.delete')}>
-              <Popconfirm
-                title={t('admin.groups.delete.confirm')}
-                description={t('admin.groups.delete.desc')}
-                onConfirm={() => onDelete(record.id)}
-                okText={t('button.confirm')}
-                cancelText={t('button.cancel')}
-              >
-                <Button 
-                  type="text" 
-                  size="small" 
-                  danger 
-                  icon={<DeleteOutlined />} 
-                />
-              </Popconfirm>
-            </Tooltip>
+            {isSuperAdmin && (
+              <>
+                <Tooltip title="设置积分池">
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<SettingOutlined />} 
+                    onClick={() => onSetCreditsPool(record)} 
+                  />
+                </Tooltip>
+                <Tooltip title={t('button.edit')}>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<EditOutlined />} 
+                    onClick={() => onEdit(record)} 
+                  />
+                </Tooltip>
+                <Tooltip title={t('button.delete')}>
+                  <Popconfirm
+                    title={t('admin.groups.delete.confirm')}
+                    description={t('admin.groups.delete.desc')}
+                    onConfirm={() => onDelete(record.id)}
+                    okText={t('button.confirm')}
+                    cancelText={t('button.cancel')}
+                  >
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      danger 
+                      icon={<DeleteOutlined />} 
+                    />
+                  </Popconfirm>
+                </Tooltip>
+              </>
+            )}
           </Space>
         )
       }
@@ -128,6 +158,7 @@ const UserGroupTable = ({
       rowKey="id"
       loading={loading}
       pagination={false}
+      scroll={{ x: 'max-content' }}
     />
   )
 }

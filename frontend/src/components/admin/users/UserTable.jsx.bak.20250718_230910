@@ -1,5 +1,5 @@
 /**
- * 用户列表表格组件（包含组积分分配功能）
+ * 用户列表表格组件
  */
 
 import React from 'react'
@@ -15,8 +15,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   FileTextOutlined,
-  RobotOutlined,
-  GiftOutlined
+  RobotOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -26,17 +25,16 @@ const UserTable = ({
   loading = false,
   pagination = {},
   currentUser = {},
-  isGroupAdmin = false,
   onPageChange,
   onViewDetail,
   onEdit,
   onToggleStatus,
   onDelete,
-  onManageModels,
-  onDistributeCredits
+  onManageModels
 }) => {
   const { t } = useTranslation()
   
+  const isGroupAdmin = currentUser?.role === 'admin'
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
   const roleColors = {
@@ -187,17 +185,10 @@ const UserTable = ({
     {
       title: t('admin.users.table.actions'),
       key: 'actions',
-      fixed: 'right',
-      width: 240,
       render: (_, record) => {
         // 是否可以管理此用户的模型权限
         const canManageUserModels = record.role === 'user' && (
           isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
-        )
-        
-        // 是否可以分配积分（组管理员只能给同组用户分配）
-        const canDistribute = onDistributeCredits && (
-          (isGroupAdmin && record.group_id === currentUser.group_id) || isSuperAdmin
         )
         
         return (
@@ -227,19 +218,6 @@ const UserTable = ({
                   size="small" 
                   icon={<RobotOutlined />} 
                   onClick={() => onManageModels(record)} 
-                />
-              </Tooltip>
-            )}
-            
-            {/* 组管理员可以分配积分 */}
-            {canDistribute && (
-              <Tooltip title="分配积分">
-                <Button 
-                  type="text" 
-                  size="small" 
-                  icon={<GiftOutlined />} 
-                  onClick={() => onDistributeCredits(record)} 
-                  style={{ color: '#52c41a' }}
                 />
               </Tooltip>
             )}

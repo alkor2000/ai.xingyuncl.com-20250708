@@ -1,5 +1,5 @@
 /**
- * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能）
+ * 用户分组管理路由 - 使用优化的权限中间件
  */
 
 const express = require('express');
@@ -50,27 +50,6 @@ router.delete('/:id',
   requirePermission('group.manage'),
   canManageGroups(),
   UserGroupController.deleteUserGroup
-);
-
-/**
- * @route PUT /api/admin/user-groups/:id/credits-pool
- * @desc 设置组积分池
- * @access SuperAdmin only
- */
-router.put('/:id/credits-pool',
-  requirePermission('group.manage'),
-  canManageGroups(),
-  UserGroupController.setGroupCreditsPool
-);
-
-/**
- * @route POST /api/admin/user-groups/:id/distribute-credits
- * @desc 从组积分池分配积分
- * @access Admin / SuperAdmin (Admin只能管理自己的组)
- */
-router.post('/:id/distribute-credits',
-  requirePermission('user.manage'),
-  UserGroupController.distributeGroupCredits
 );
 
 module.exports = router;

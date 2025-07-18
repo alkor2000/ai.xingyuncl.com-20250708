@@ -1,5 +1,5 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑
  */
 
 const User = require('../../models/User');
@@ -9,7 +9,7 @@ const { DatabaseError, ValidationError, ConflictError } = require('../../utils/e
 
 class GroupService {
   /**
-   * 获取用户分组列表（包含积分池信息）
+   * 获取用户分组列表
    */
   static async getGroups(currentUser = null) {
     try {
@@ -22,10 +22,7 @@ class GroupService {
                  COUNT(u.id) as user_count,
                  AVG(u.used_tokens) as avg_tokens_used,
                  AVG(u.used_credits) as avg_credits_used,
-                 SUM(u.credits_quota - u.used_credits) as total_credits_balance,
-                 g.credits_pool,
-                 g.credits_pool_used,
-                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
+                 SUM(u.credits_quota - u.used_credits) as total_credits_balance
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           WHERE g.id = ?
@@ -34,23 +31,8 @@ class GroupService {
         const { rows } = await dbConnection.query(sql, [currentUser.group_id]);
         groups = rows;
       } else {
-        // 超级管理员可以看到所有组，调用修改后的User.getGroups
-        const sql = `
-          SELECT g.*, 
-                 COUNT(u.id) as user_count,
-                 AVG(u.used_tokens) as avg_tokens_used,
-                 AVG(u.used_credits) as avg_credits_used,
-                 SUM(u.credits_quota - u.used_credits) as total_credits_balance,
-                 g.credits_pool,
-                 g.credits_pool_used,
-                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
-          FROM user_groups g
-          LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
-          GROUP BY g.id
-          ORDER BY g.sort_order ASC, g.created_at ASC
-        `;
-        const { rows } = await dbConnection.query(sql);
-        groups = rows;
+        // 超级管理员可以看到所有组
+        groups = await User.getGroups();
       }
 
       return groups;
@@ -157,152 +139,6 @@ class GroupService {
   }
 
   /**
-   * 设置组积分池
-   */
-  static async setGroupCreditsPool(groupId, creditsPool, operatorId = null) {
-    try {
-      if (typeof creditsPool !== 'number' || creditsPool < 0) {
-        throw new ValidationError('积分池额度必须是非负数');
-      }
-
-      // 获取当前组信息
-      const group = await GroupService.findGroupById(groupId);
-      if (!group) {
-        throw new ValidationError('用户分组不存在');
-      }
-
-      // 如果减少积分池，确保不低于已使用额度
-      if (creditsPool < group.credits_pool_used) {
-        throw new ValidationError(`积分池额度不能低于已使用额度(${group.credits_pool_used})`);
-      }
-
-      // 更新积分池
-      const sql = 'UPDATE user_groups SET credits_pool = ?, updated_at = NOW() WHERE id = ?';
-      await dbConnection.query(sql, [creditsPool, groupId]);
-
-      logger.info('设置组积分池成功', {
-        operatorId,
-        groupId,
-        creditsPool,
-        oldCreditsPool: group.credits_pool
-      });
-
-      return {
-        success: true,
-        credits_pool: creditsPool,
-        credits_pool_used: group.credits_pool_used,
-        credits_pool_remaining: creditsPool - group.credits_pool_used
-      };
-    } catch (error) {
-      logger.error('设置组积分池失败', { error: error.message, groupId, creditsPool });
-      throw error;
-    }
-  }
-
-  /**
-   * 从组积分池分配积分给用户
-   */
-  static async distributeCreditsFromPool(groupId, userId, amount, reason, distributorId) {
-    try {
-      if (typeof amount !== 'number' || amount <= 0) {
-        throw new ValidationError('分配金额必须是正数');
-      }
-
-      // 使用事务确保原子性
-      const result = await dbConnection.transaction(async (query) => {
-        // 1. 获取组信息并锁定
-        const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
-        const { rows: groupRows } = await query(groupSql, [groupId]);
-        
-        if (groupRows.length === 0) {
-          throw new ValidationError('用户分组不存在');
-        }
-        
-        const group = groupRows[0];
-        const remaining = group.credits_pool - group.credits_pool_used;
-        
-        if (remaining < amount) {
-          throw new ValidationError(`组积分池余额不足，剩余: ${remaining}，需要: ${amount}`);
-        }
-
-        // 2. 更新组积分池已使用额度
-        const updateGroupSql = `
-          UPDATE user_groups 
-          SET credits_pool_used = credits_pool_used + ?, 
-              updated_at = NOW() 
-          WHERE id = ?
-        `;
-        await query(updateGroupSql, [amount, groupId]);
-
-        // 3. 获取用户信息
-        const userSql = 'SELECT * FROM users WHERE id = ?';
-        const { rows: userRows } = await query(userSql, [userId]);
-        
-        if (userRows.length === 0) {
-          throw new ValidationError('用户不存在');
-        }
-        
-        const user = userRows[0];
-        
-        // 检查用户是否属于该组
-        if (user.group_id !== groupId) {
-          throw new ValidationError('用户不属于该分组');
-        }
-
-        // 4. 更新用户积分
-        const oldQuota = user.credits_quota || 0;
-        const newQuota = oldQuota + amount;
-        
-        const updateUserSql = `
-          UPDATE users 
-          SET credits_quota = ?, updated_at = NOW()
-          WHERE id = ?
-        `;
-        await query(updateUserSql, [newQuota, userId]);
-
-        // 5. 记录交易历史
-        const transactionSql = `
-          INSERT INTO credit_transactions 
-          (user_id, amount, balance_after, transaction_type, description, operator_id, distributor_id)
-          VALUES (?, ?, ?, 'group_distribute', ?, ?, ?)
-        `;
-        await query(transactionSql, [
-          userId,
-          amount,
-          newQuota - (user.used_credits || 0),
-          reason || '组内积分分配',
-          distributorId,
-          distributorId
-        ]);
-
-        return {
-          credits_pool_remaining: group.credits_pool - group.credits_pool_used - amount,
-          user_new_balance: newQuota - (user.used_credits || 0)
-        };
-      });
-
-      logger.info('组积分池分配成功', {
-        distributorId,
-        groupId,
-        userId,
-        amount,
-        reason,
-        result
-      });
-
-      return {
-        success: true,
-        amount,
-        ...result,
-        message: '积分分配成功'
-      };
-    } catch (error) {
-      logger.error('组积分池分配失败', { error: error.message, groupId, userId, amount });
-      throw error;
-    }
-  }
-
-  /**
    * 根据名称查找分组
    */
   static async findGroupByName(name) {
@@ -377,7 +213,7 @@ class GroupService {
   }
 
   /**
-   * 根据ID查找分组（包含积分池信息）
+   * 根据ID查找分组
    */
   static async findGroupById(groupId) {
     try {
@@ -405,10 +241,7 @@ class GroupService {
           SUM(u.credits_quota) as total_credits_quota,
           SUM(u.used_credits) as total_credits_used,
           SUM(u.credits_quota - u.used_credits) as total_credits_balance,
-          AVG(u.credits_quota - u.used_credits) as avg_credits_balance,
-          g.credits_pool,
-          g.credits_pool_used,
-          (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
+          AVG(u.credits_quota - u.used_credits) as avg_credits_balance
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
