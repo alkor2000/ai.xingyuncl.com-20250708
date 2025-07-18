@@ -281,27 +281,21 @@ const canManageUser = () => {
       
       // 组管理员需要检查目标用户是否在同组
       if (userRole === ROLES.ADMIN) {
-        // 修复路径：从middleware到database是../database
-        const dbConnection = require('../database/connection');
-        const result = await dbConnection.query(
+        // 从数据库获取目标用户信息
+        const dbConnection = require('../../database/connection');
+        const [users] = await dbConnection.query(
           'SELECT group_id FROM users WHERE id = ?',
           [targetUserId]
         );
         
-        if (!result.rows || result.rows.length === 0) {
+        if (users.length === 0) {
           return ResponseHelper.notFound(res, '用户不存在');
         }
         
-        const targetUserGroupId = result.rows[0].group_id;
+        const targetUserGroupId = users[0].group_id;
         
         // 检查是否同组
         if (targetUserGroupId !== userGroupId) {
-          logger.warn('组管理员试图管理其他组用户', {
-            adminId: req.user.id,
-            adminGroupId: userGroupId,
-            targetUserId,
-            targetGroupId: targetUserGroupId
-          });
           return ResponseHelper.forbidden(res, '只能管理本组用户');
         }
         
