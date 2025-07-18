@@ -151,18 +151,17 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 从组积分池分配/回收积分
-  distributeGroupCredits: async (groupId, userId, amount, reason, operation = 'distribute') => {
+  // 从组积分池分配积分
+  distributeGroupCredits: async (groupId, userId, amount, reason) => {
     try {
       const response = await apiClient.post(`/admin/user-groups/${groupId}/distribute-credits`, {
         user_id: userId,
         amount,
-        reason,
-        operation
+        reason
       })
       return response.data.data
     } catch (error) {
-      console.error(`组积分${operation === 'distribute' ? '分配' : '回收'}失败:`, error)
+      console.error('组积分分配失败:', error)
       throw error
     }
   },

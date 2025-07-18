@@ -146,8 +146,8 @@ class UserGroupController {
   static async distributeGroupCredits(req, res) {
     try {
       const { id: groupId } = req.params;
-      const { user_id, amount, reason, operation = 'distribute' } = req.body;
-      const operatorId = req.user.id;
+      const { user_id, amount, reason } = req.body;
+      const distributorId = req.user.id;
 
       // 权限检查
       if (req.user.role === 'admin' && req.user.group_id !== parseInt(groupId)) {
@@ -158,35 +158,19 @@ class UserGroupController {
         return ResponseHelper.validation(res, ['用户ID和金额不能为空']);
       }
 
-      let result;
-      
-      // 根据操作类型调用不同的方法
-      if (operation === 'recycle') {
-        // 回收积分
-        result = await GroupService.recycleCreditsToPool(
-          parseInt(groupId),
-          user_id,
-          amount,
-          reason || '组积分池回收',
-          operatorId
-        );
-        return ResponseHelper.success(res, result, '积分回收成功');
-      } else {
-        // 分配积分
-        result = await GroupService.distributeCreditsFromPool(
-          parseInt(groupId),
-          user_id,
-          amount,
-          reason || '组积分池分配',
-          operatorId
-        );
-        return ResponseHelper.success(res, result, '积分分配成功');
-      }
+      const result = await GroupService.distributeCreditsFromPool(
+        parseInt(groupId),
+        user_id,
+        amount,
+        reason || '组积分池分配',
+        distributorId
+      );
+
+      return ResponseHelper.success(res, result, '积分分配成功');
     } catch (error) {
-      logger.error('组积分池操作失败', { 
-        operatorId: req.user?.id, 
+      logger.error('组积分池分配失败', { 
+        distributorId: req.user?.id, 
         groupId: req.params.id,
-        operation: req.body.operation,
         error: error.message 
       });
       
@@ -194,11 +178,11 @@ class UserGroupController {
         return ResponseHelper.notFound(res, error.message);
       }
       
-      if (error.message.includes('余额不足') || error.message.includes('必须是正数') || error.message.includes('积分不足')) {
+      if (error.message.includes('余额不足') || error.message.includes('必须是正数')) {
         return ResponseHelper.validation(res, [error.message]);
       }
       
-      return ResponseHelper.error(res, error.message || '积分操作失败');
+      return ResponseHelper.error(res, error.message || '积分分配失败');
     }
   }
 }

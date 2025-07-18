@@ -399,16 +399,16 @@ const Users = () => {
     setIsDistributeModalVisible(true)
   }
 
-  const handleSubmitDistribute = async (userId, amount, reason, operation = 'distribute') => {
+  const handleSubmitDistribute = async (userId, amount, reason) => {
     try {
-      await distributeGroupCredits(currentUser.group_id, userId, amount, reason, operation)
+      await distributeGroupCredits(currentUser.group_id, userId, amount, reason)
       setIsDistributeModalVisible(false)
       setDistributeUser(null)
-      message.success(operation === 'distribute' ? '积分分配成功' : '积分回收成功')
+      message.success('积分分配成功')
       loadUsers()
       loadUserGroups()
     } catch (error) {
-      message.error(error.response?.data?.message || (operation === 'distribute' ? '分配失败' : '回收失败'))
+      message.error(error.response?.data?.message || '分配失败')
     }
   }
 
