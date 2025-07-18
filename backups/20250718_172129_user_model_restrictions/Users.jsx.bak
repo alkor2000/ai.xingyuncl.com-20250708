@@ -25,9 +25,6 @@ import {
   UserGroupFormModal
 } from '../../components/admin/users'
 
-// 导入模型限制管理组件
-import UserModelRestrictModal from '../../components/admin/users/UserModelRestrictModal'
-
 const Users = () => {
   const { t } = useTranslation()
   const { user: currentUser, hasPermission } = useAuthStore()
@@ -64,10 +61,8 @@ const Users = () => {
   const [isUserModalVisible, setIsUserModalVisible] = useState(false)
   const [isGroupModalVisible, setIsGroupModalVisible] = useState(false)
   const [isDetailVisible, setIsDetailVisible] = useState(false)
-  const [isModelRestrictModalVisible, setIsModelRestrictModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
-  const [modelRestrictUser, setModelRestrictUser] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   const [pagination, setPagination] = useState({
     current: 1,
@@ -292,12 +287,6 @@ const Users = () => {
     }
   }
 
-  // 管理用户模型权限
-  const handleManageModels = (user) => {
-    setModelRestrictUser(user)
-    setIsModelRestrictModalVisible(true)
-  }
-
   // 分组管理方法
   const handleCreateGroup = async (values) => {
     try {
@@ -365,7 +354,7 @@ const Users = () => {
       {isGroupAdmin && (
         <Alert
           message="权限说明"
-          description="作为组管理员，您可以查看和管理本组用户，可以重置密码、禁用/启用账户、修改用户备注、设置AI模型使用权限，但不能修改积分相关设置。"
+          description="作为组管理员，您可以查看和管理本组用户，可以重置密码、禁用/启用账户、修改用户备注，但不能修改积分相关设置。"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -434,7 +423,6 @@ const Users = () => {
               onEdit={handleEditUser}
               onToggleStatus={handleToggleUserStatus}
               onDelete={handleDeleteUser}
-              onManageModels={handleManageModels}
             />
           </Card>
         </>
@@ -521,19 +509,6 @@ const Users = () => {
         visible={isDetailVisible}
         userDetail={userDetail}
         onClose={() => setIsDetailVisible(false)}
-      />
-
-      {/* 用户模型限制管理弹窗 */}
-      <UserModelRestrictModal
-        visible={isModelRestrictModalVisible}
-        user={modelRestrictUser}
-        onCancel={() => {
-          setIsModelRestrictModalVisible(false)
-          setModelRestrictUser(null)
-        }}
-        onSuccess={() => {
-          loadUsers()
-        }}
       />
     </div>
   )

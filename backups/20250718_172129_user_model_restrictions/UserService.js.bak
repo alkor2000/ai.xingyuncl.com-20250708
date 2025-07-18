@@ -3,7 +3,6 @@
  */
 
 const User = require('../../models/User');
-const AIModel = require('../../models/AIModel');
 const dbConnection = require('../../database/connection');
 const logger = require('../../utils/logger');
 const { DatabaseError, ValidationError, ConflictError } = require('../../utils/errors');
@@ -326,104 +325,6 @@ class UserService {
       return stats;
     } catch (error) {
       logger.error('获取用户统计信息失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 获取用户的模型权限信息
-   */
-  static async getUserModelPermissions(userId, operatorUser) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ValidationError('用户不存在');
-      }
-
-      // 权限检查：组管理员只能查看本组用户
-      if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
-        throw new ValidationError('无权查看其他组用户的模型权限');
-      }
-
-      // 获取用户组的所有可用模型
-      const groupModels = await AIModel.getAvailableModelsByGroup(user.group_id);
-      
-      // 获取用户的模型限制
-      const restrictions = await AIModel.getUserModelRestrictions(userId);
-      const restrictedModelIds = restrictions.map(r => r.id);
-
-      // 构建模型权限信息
-      const modelPermissions = groupModels.map(model => ({
-        id: model.id,
-        name: model.name,
-        display_name: model.display_name,
-        is_restricted: restrictedModelIds.includes(model.id),
-        credits_per_chat: model.credits_per_chat,
-        stream_enabled: model.stream_enabled,
-        image_upload_enabled: model.image_upload_enabled
-      }));
-
-      return {
-        user_id: userId,
-        username: user.username,
-        group_id: user.group_id,
-        group_name: user.group_name,
-        total_models: groupModels.length,
-        restricted_models: restrictions.length,
-        available_models: groupModels.length - restrictions.length,
-        models: modelPermissions,
-        restrictions: restrictions
-      };
-    } catch (error) {
-      logger.error('获取用户模型权限失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 更新用户的模型限制
-   */
-  static async updateUserModelRestrictions(userId, restrictedModelIds, operatorUser) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ValidationError('用户不存在');
-      }
-
-      // 权限检查：组管理员只能管理本组用户
-      if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
-        throw new ValidationError('无权管理其他组用户的模型权限');
-      }
-
-      // 获取用户组的所有可用模型
-      const groupModels = await AIModel.getAvailableModelsByGroup(user.group_id);
-      const groupModelIds = groupModels.map(m => m.id);
-
-      // 验证限制的模型是否都在组的可用模型中
-      const invalidModelIds = restrictedModelIds.filter(id => !groupModelIds.includes(id));
-      if (invalidModelIds.length > 0) {
-        throw new ValidationError('包含无效的模型ID：这些模型不在用户组的可用范围内');
-      }
-
-      // 不允许限制所有模型
-      if (restrictedModelIds.length === groupModels.length) {
-        throw new ValidationError('不能限制用户使用所有模型，至少要保留一个可用模型');
-      }
-
-      // 更新模型限制
-      await AIModel.updateUserModelRestrictions(userId, restrictedModelIds, operatorUser.id);
-
-      logger.info('用户模型限制更新成功', {
-        operatorId: operatorUser.id,
-        userId,
-        restrictedCount: restrictedModelIds.length,
-        availableCount: groupModels.length - restrictedModelIds.length
-      });
-
-      // 返回更新后的权限信息
-      return await UserService.getUserModelPermissions(userId, operatorUser);
-    } catch (error) {
-      logger.error('更新用户模型限制失败', { error: error.message, userId });
       throw error;
     }
   }

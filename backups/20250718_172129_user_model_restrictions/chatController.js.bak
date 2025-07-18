@@ -75,13 +75,13 @@ class ChatController {
         return ResponseHelper.validation(res, ['选择的AI模型不可用']);
       }
 
-      // 检查用户是否有权限使用该模型（考虑用户限制）
+      // 检查用户是否有权限使用该模型
       const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
+      const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
       const canUseModel = availableModels.some(m => m.name === model_name);
       
       if (!canUseModel) {
-        return ResponseHelper.forbidden(res, '您无权使用该模型');
+        return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型');
       }
 
       // 验证上下文数量
@@ -197,13 +197,13 @@ class ChatController {
           return ResponseHelper.validation(res, ['选择的AI模型不可用']);
         }
 
-        // 检查用户是否有权限使用该模型（考虑用户限制）
+        // 检查用户是否有权限使用该模型
         const userGroupId = req.user.group_id;
-        const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
+        const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
         const canUseModel = availableModels.some(m => m.name === model_name);
         
         if (!canUseModel) {
-          return ResponseHelper.forbidden(res, '您无权使用该模型');
+          return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型');
         }
       }
 
@@ -442,13 +442,13 @@ class ChatController {
         return ResponseHelper.error(res, '当前AI模型不可用');
       }
 
-      // 检查用户是否有权限使用该模型（考虑用户限制）
+      // 检查用户是否有权限使用该模型（防止通过旧会话使用未授权模型）
       const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
+      const availableModels = await AIModel.getAvailableModelsByGroup(userGroupId);
       const canUseModel = availableModels.some(m => m.name === conversation.model_name);
       
       if (!canUseModel) {
-        return ResponseHelper.forbidden(res, '您已被限制使用该模型，请创建新会话选择其他模型');
+        return ResponseHelper.forbidden(res, '您所在的用户组无权使用该模型，请创建新会话选择其他模型');
       }
 
       // 如果有图片，检查模型是否支持
@@ -753,17 +753,16 @@ class ChatController {
   }
 
   /**
-   * 获取可用的AI模型列表 - 根据用户权限和限制过滤
+   * 获取可用的AI模型列表 - 根据用户组过滤
    * GET /api/chat/models
    */
   static async getModels(req, res) {
     try {
-      // 获取用户的ID和组ID
-      const userId = req.user.id;
+      // 获取用户的组ID
       const userGroupId = req.user.group_id;
       
-      // 根据用户权限和限制获取可用的模型
-      const models = await AIModel.getUserAvailableModels(userId, userGroupId);
+      // 根据用户组获取可用的模型
+      const models = await AIModel.getAvailableModelsByGroup(userGroupId);
       
       // 添加积分和图片支持信息到模型列表
       const modelsWithInfo = models.map(model => ({

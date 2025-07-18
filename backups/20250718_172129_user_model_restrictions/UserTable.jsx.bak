@@ -14,8 +14,7 @@ import {
   ExclamationCircleOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  FileTextOutlined,
-  RobotOutlined
+  FileTextOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -29,8 +28,7 @@ const UserTable = ({
   onViewDetail,
   onEdit,
   onToggleStatus,
-  onDelete,
-  onManageModels
+  onDelete
 }) => {
   const { t } = useTranslation()
   
@@ -185,81 +183,63 @@ const UserTable = ({
     {
       title: t('admin.users.table.actions'),
       key: 'actions',
-      render: (_, record) => {
-        // 是否可以管理此用户的模型权限
-        const canManageUserModels = record.role === 'user' && (
-          isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
-        )
-        
-        return (
-          <Space size="small">
-            <Tooltip title={t('admin.users.viewDetail')}>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<EyeOutlined />} 
-                onClick={() => onViewDetail(record.id)} 
-              />
-            </Tooltip>
-            
-            <Tooltip title={t('button.edit')}>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<EditOutlined />} 
-                onClick={() => onEdit(record)} 
-              />
-            </Tooltip>
-            
-            {canManageUserModels && (
-              <Tooltip title="管理模型权限">
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title={t('admin.users.viewDetail')}>
+            <Button 
+              type="text" 
+              size="small" 
+              icon={<EyeOutlined />} 
+              onClick={() => onViewDetail(record.id)} 
+            />
+          </Tooltip>
+          
+          <Tooltip title={t('button.edit')}>
+            <Button 
+              type="text" 
+              size="small" 
+              icon={<EditOutlined />} 
+              onClick={() => onEdit(record)} 
+            />
+          </Tooltip>
+          
+          {record.id !== currentUser?.id && (
+            <Tooltip title={record.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}>
+              <Popconfirm
+                title={record.status === 'active' ? t('admin.users.disable.confirm') : t('admin.users.enable.confirm')}
+                onConfirm={() => onToggleStatus(record.id, record.status)}
+                okText={t('button.confirm')}
+                cancelText={t('button.cancel')}
+              >
                 <Button 
                   type="text" 
                   size="small" 
-                  icon={<RobotOutlined />} 
-                  onClick={() => onManageModels(record)} 
+                  danger={record.status === 'active'}
+                  icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
                 />
-              </Tooltip>
-            )}
-            
-            {record.id !== currentUser?.id && (
-              <Tooltip title={record.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}>
-                <Popconfirm
-                  title={record.status === 'active' ? t('admin.users.disable.confirm') : t('admin.users.enable.confirm')}
-                  onConfirm={() => onToggleStatus(record.id, record.status)}
-                  okText={t('button.confirm')}
-                  cancelText={t('button.cancel')}
-                >
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    danger={record.status === 'active'}
-                    icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
-                  />
-                </Popconfirm>
-              </Tooltip>
-            )}
-            
-            {isSuperAdmin && record.id !== currentUser?.id && (
-              <Tooltip title={t('button.delete')}>
-                <Popconfirm
-                  title={t('admin.users.delete.confirm')}
-                  onConfirm={() => onDelete(record.id)}
-                  okText={t('button.confirm')}
-                  cancelText={t('button.cancel')}
-                >
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    danger 
-                    icon={<DeleteOutlined />} 
-                  />
-                </Popconfirm>
-              </Tooltip>
-            )}
-          </Space>
-        )
-      }
+              </Popconfirm>
+            </Tooltip>
+          )}
+          
+          {isSuperAdmin && record.id !== currentUser?.id && (
+            <Tooltip title={t('button.delete')}>
+              <Popconfirm
+                title={t('admin.users.delete.confirm')}
+                onConfirm={() => onDelete(record.id)}
+                okText={t('button.confirm')}
+                cancelText={t('button.cancel')}
+              >
+                <Button 
+                  type="text" 
+                  size="small" 
+                  danger 
+                  icon={<DeleteOutlined />} 
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
+        </Space>
+      )
     }
   ]
 

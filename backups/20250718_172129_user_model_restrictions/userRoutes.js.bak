@@ -75,26 +75,4 @@ router.delete('/:id',
   UserManagementController.deleteUser
 );
 
-/**
- * @route GET /api/admin/users/:id/model-permissions
- * @desc 获取用户的模型权限
- * @access Admin / SuperAdmin
- */
-router.get('/:id/model-permissions',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.getUserModelPermissions
-);
-
-/**
- * @route PUT /api/admin/users/:id/model-restrictions
- * @desc 更新用户的模型限制
- * @access Admin / SuperAdmin
- */
-router.put('/:id/model-restrictions',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.updateUserModelRestrictions
-);
-
 module.exports = router;
