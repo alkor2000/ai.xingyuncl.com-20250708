@@ -128,12 +128,12 @@ class Conversation {
       
       logger.info('获取会话总数成功', { userId, total });
       
-      // 获取会话列表 - 只按优先级和更新时间排序
+      // 获取会话列表 - 按优先级和更新时间排序
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT * FROM conversations 
         WHERE user_id = ? 
-        ORDER BY priority DESC, updated_at DESC
+        ORDER BY priority DESC, is_pinned DESC, updated_at DESC
         LIMIT ? OFFSET ?
       `;
       
@@ -174,7 +174,7 @@ class Conversation {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'priority', 'context_length', 'ai_temperature'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'priority', 'context_length', 'ai_temperature'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -205,6 +205,9 @@ class Conversation {
           } else if (field === 'system_prompt') {
             // system_prompt 可以是null，但不能是undefined
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
+          } else if (field === 'is_pinned') {
+            // is_pinned 转换为布尔值
+            values.push(updateData[field] ? 1 : 0);
           } else {
             // 其他字段：将undefined转换为null
             values.push(updateData[field] === undefined ? null : updateData[field]);

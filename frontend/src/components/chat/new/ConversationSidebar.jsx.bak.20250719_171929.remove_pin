@@ -13,6 +13,8 @@ import {
 } from 'antd'
 import {
   PlusOutlined,
+  PushpinOutlined,
+  PushpinFilled,
   SettingOutlined,
   DeleteOutlined,
   MessageOutlined,
@@ -50,6 +52,7 @@ const ConversationSidebar = ({
       >
         <div className="conversation-header">
           <div className="conversation-title">
+            {conversation.is_pinned && <PushpinFilled className="pin-icon" />}
             {conversation.priority > 0 && (
               <Tag color="gold" size="small">
                 <StarFilled /> {conversation.priority}
@@ -66,6 +69,17 @@ const ConversationSidebar = ({
                 onClick={(e) => {
                   e.stopPropagation()
                   onEditConversation(conversation)
+                }}
+              />
+            </Tooltip>
+            <Tooltip title={conversation.is_pinned ? t('chat.conversation.unpin') : t('chat.conversation.pin')}>
+              <Button
+                type="text"
+                size="small"
+                icon={conversation.is_pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin(conversation.id, conversation.is_pinned)
                 }}
               />
             </Tooltip>
@@ -101,7 +115,7 @@ const ConversationSidebar = ({
   return (
     <div className="sidebar-wrapper">
       {/* 增加顶部空白区域到60px，确保完全避开主布局的50px横条 */}
-      <div style={{ height: '16px' }}></div>
+      <div style={{ height: '60px' }}></div>
       
       {/* 新建按钮 */}
       <div className="sidebar-header-fixed">
