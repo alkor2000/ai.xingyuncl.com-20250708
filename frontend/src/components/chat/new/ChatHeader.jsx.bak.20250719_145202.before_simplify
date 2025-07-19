@@ -1,15 +1,18 @@
 /**
- * 对话头部组件 - 简化版
+ * 对话头部组件
  */
 
 import React from 'react'
 import {
   Button,
+  Space,
   Tag,
   Typography
 } from 'antd'
 import {
   MenuOutlined,
+  PlusOutlined,
+  SettingOutlined,
   PictureOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -20,7 +23,9 @@ const ChatHeader = ({
   currentConversation,
   aiModel,
   sidebarCollapsed,
-  onToggleSidebar
+  onToggleSidebar,
+  onNewConversation,
+  onOpenSettings
 }) => {
   const { t } = useTranslation()
   
@@ -34,19 +39,34 @@ const ChatHeader = ({
           onClick={onToggleSidebar}
           className="menu-button"
           type="text"
-          size="small"
+          size="large"
         />
-        <Title level={5} className="conversation-title" style={{ margin: 0 }}>
+        <Title level={4} className="conversation-title">
           {currentConversation.title}
         </Title>
-      </div>
-      <div className="header-right">
         <Tag color="blue">{aiModel?.display_name}</Tag>
         {aiModel?.image_upload_enabled && (
           <Tag color="green" icon={<PictureOutlined />}>
             {t('chat.supportsImage')}
           </Tag>
         )}
+      </div>
+      <div className="header-right">
+        <Space>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={onNewConversation}
+          >
+            {t("chat.newConversation")}
+          </Button>
+          <Button
+            type="primary"
+            icon={<SettingOutlined />}
+            onClick={onOpenSettings}
+          >
+            {t("chat.conversation.settings")}
+          </Button>
+        </Space>
       </div>
     </div>
   )

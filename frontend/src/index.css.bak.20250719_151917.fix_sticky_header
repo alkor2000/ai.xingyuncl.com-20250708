@@ -63,14 +63,14 @@ body {
   overflow: hidden !important;
 }
 
-/* 聊天侧边栏 - 修改overflow设置 */
+/* 聊天侧边栏 */
 .chat-sidebar {
   background: white !important;
   border-right: 1px solid #f0f0f0 !important;
   height: 100% !important;
+  overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  position: relative !important;
 }
 
 .chat-conversations-container {

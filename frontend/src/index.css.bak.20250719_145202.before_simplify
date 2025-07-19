@@ -63,14 +63,14 @@ body {
   overflow: hidden !important;
 }
 
-/* 聊天侧边栏 - 修改overflow设置 */
+/* 聊天侧边栏 */
 .chat-sidebar {
   background: white !important;
   border-right: 1px solid #f0f0f0 !important;
   height: 100% !important;
+  overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  position: relative !important;
 }
 
 .chat-conversations-container {
@@ -98,7 +98,7 @@ body {
 /* 聊天头部 - 固定在顶部 */
 .chat-header {
   flex-shrink: 0 !important;
-  padding: 8px 24px !important;
+  padding: 16px 24px !important;
   border-bottom: 1px solid #f0f0f0 !important;
   background: white !important;
 }
@@ -418,7 +418,7 @@ body {
   }
   
   .chat-header {
-    padding: 6px 16px !important;
+    padding: 12px 16px !important;
   }
   
   .chat-header .ant-statistic {
@@ -468,7 +468,7 @@ body {
   }
   
   .chat-header {
-    padding: 8px 20px !important;
+    padding: 14px 20px !important;
   }
   
   .chat-messages-content {

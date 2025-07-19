@@ -8,6 +8,7 @@ import {
   Empty,
   Spin,
   Tag,
+  Card,
   Tooltip,
   Typography
 } from 'antd'
@@ -19,6 +20,8 @@ import {
   DeleteOutlined,
   MessageOutlined,
   ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  WalletOutlined,
   StarFilled
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -113,25 +116,19 @@ const ConversationSidebar = ({
   }
 
   return (
-    <div className="sidebar-wrapper">
-      {/* 增加顶部空白区域到60px，确保完全避开主布局的50px横条 */}
-      <div style={{ height: '60px' }}></div>
-      
-      {/* 新建按钮 */}
-      <div className="sidebar-header-fixed">
+    <>
+      <div className="sidebar-header">
         <Button
-          type="default"
+          type="primary"
           block
           icon={<PlusOutlined />}
           onClick={onCreateConversation}
-          style={{ height: '36px' }}
         >
           {t('chat.newConversation')}
         </Button>
       </div>
       
-      {/* 对话列表 */}
-      <div className="conversations-list-wrapper">
+      <div className="conversations-list">
         {conversationsLoading ? (
           <div className="loading-container">
             <Spin tip={t('status.loading')} />
@@ -145,7 +142,44 @@ const ConversationSidebar = ({
           conversations.map(conversation => renderConversationItem(conversation))
         )}
       </div>
-    </div>
+      
+      {/* 积分显示 */}
+      {userCredits && (
+        <div className="sidebar-footer">
+          <Card size="small" className="credits-card">
+            <div className="credits-info">
+              <Text strong>{t('chat.credits.title')}</Text>
+              <div className="credits-stats">
+                <div className="credits-item">
+                  <Text type="secondary">{t('chat.credits.remaining')}:</Text>
+                  <Text strong className="credits-value">
+                    {userCredits.credits_stats.remaining.toLocaleString()}
+                  </Text>
+                </div>
+                <div className="credits-item">
+                  <Text type="secondary">{t('chat.credits.used')}:</Text>
+                  <Text className="credits-value">
+                    {userCredits.credits_stats.used.toLocaleString()}
+                  </Text>
+                </div>
+              </div>
+              {userCredits.credits_stats?.isExpired && (
+                <div style={{ color: "#ff4d4f", fontSize: 12, marginTop: 4 }}>
+                  <ExclamationCircleOutlined /> {t('chat.credits.expired')}
+                </div>
+              )}
+              {userCredits.credits_stats?.remainingDays !== null && 
+               userCredits.credits_stats.remainingDays <= 7 && 
+               !userCredits.credits_stats.isExpired && (
+                <div style={{ color: "#fa8c16", fontSize: 12, marginTop: 4 }}>
+                  <ClockCircleOutlined /> {t('chat.credits.expireSoon', { days: userCredits.credits_stats.remainingDays })}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+    </>
   )
 }
 

@@ -6,118 +6,104 @@
     border-right: 1px solid #f0f0f0;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    position: relative;
     
-    // 让Sider的children容器占满高度
-    .ant-layout-sider-children {
-      height: 100%;
-      overflow: hidden !important;
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #f0f0f0;
     }
     
-    .sidebar-wrapper {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
+    .conversations-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
       
-      .sidebar-header-fixed {
-        flex-shrink: 0;
+      .conversation-item {
         padding: 12px;
-        background: #fff;
-        border-bottom: 1px solid #f0f0f0;
+        margin-bottom: 4px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
         
-        .ant-btn {
-          font-weight: normal;
-          border: 1px solid #e6e6e6;
-          background: #fff;
-          color: #666;
-          
-          &:hover {
-            color: #1677ff;
-            border-color: #1677ff;
-            background: #fff;
-          }
+        &:hover {
+          background: #f5f5f5;
         }
-      }
-      
-      .conversations-list-wrapper {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 8px;
         
-        .conversation-item {
-          padding: 12px;
+        &.active {
+          background: #e6f4ff;
+          border: 1px solid #91caff;
+        }
+        
+        .conversation-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 4px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.3s;
           
-          &:hover {
-            background: #f5f5f5;
-          }
-          
-          &.active {
-            background: #e6f4ff;
-            border: 1px solid #91caff;
-          }
-          
-          .conversation-header {
+          .conversation-title {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 4px;
+            gap: 4px;
+            flex: 1;
+            overflow: hidden;
             
-            .conversation-title {
-              display: flex;
-              align-items: center;
-              gap: 4px;
-              flex: 1;
+            .pin-icon {
+              color: #1677ff;
+            }
+            
+            .title-text {
               overflow: hidden;
-              
-              .pin-icon {
-                color: #1677ff;
-              }
-              
-              .title-text {
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-              }
-            }
-            
-            .conversation-actions {
-              display: none;
-              gap: 4px;
+              text-overflow: ellipsis;
+              white-space: nowrap;
             }
           }
           
-          &:hover .conversation-actions {
-            display: flex;
-          }
-          
-          .conversation-meta {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 4px;
-            
-            .message-count {
-              font-size: 12px;
-            }
-          }
-          
-          .conversation-time {
-            font-size: 12px;
-            color: #8c8c8c;
+          .conversation-actions {
+            display: none;
+            gap: 4px;
           }
         }
         
-        .loading-container {
+        &:hover .conversation-actions {
+          display: flex;
+        }
+        
+        .conversation-meta {
           display: flex;
           align-items: center;
-          justify-content: center;
-          height: 200px;
+          gap: 8px;
+          margin-bottom: 4px;
+          
+          .message-count {
+            font-size: 12px;
+          }
+        }
+        
+        .conversation-time {
+          font-size: 12px;
+          color: #8c8c8c;
+        }
+      }
+    }
+    
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid #f0f0f0;
+      
+      .credits-card {
+        .credits-info {
+          .credits-stats {
+            margin-top: 8px;
+            
+            .credits-item {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 4px;
+              
+              .credits-value {
+                color: #1677ff;
+              }
+            }
+          }
         }
       }
     }
@@ -148,6 +134,9 @@
         background: #fff;
         border-bottom: 1px solid #f0f0f0;
         min-height: 40px;
+        position: sticky;
+        top: 50px;
+        z-index: 10;
         
         .header-left {
           display: flex;
