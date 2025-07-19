@@ -42,7 +42,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-width: 92%;  // 从85%增加到92%
+    max-width: 70%;
     
     .message-image {
       display: flex;
@@ -74,19 +74,6 @@
       border-radius: 8px;
       word-wrap: break-word;
       
-      // 代码块特殊处理
-      .code-block-container {
-        margin: 8px -12px;  // 顶部底部使用8px正边距，左右保持-12px负边距
-        
-        &:first-child {
-          margin-top: 0;  // 第一个元素不需要额外的负边距
-        }
-        
-        &:last-child {
-          margin-bottom: 0;  // 最后一个元素不需要额外的负边距
-        }
-      }
-      
       .streaming-content {
         position: relative;
         
@@ -110,7 +97,6 @@
         margin: 8px 0;
         border-radius: 4px;
         overflow-x: auto;
-        max-width: 100%;  // 确保pre标签不会超出容器
         
         code {
           background: none !important;
@@ -142,15 +128,6 @@
       .time-text {
         font-size: 12px;
       }
-    }
-  }
-}
-
-// 响应式调整
-@media (max-width: 768px) {
-  .message-content {
-    .message-body {
-      max-width: 95%;  // 移动端更宽
     }
   }
 }

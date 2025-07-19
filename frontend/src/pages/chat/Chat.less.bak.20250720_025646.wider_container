@@ -176,7 +176,7 @@
       .messages-container {
         flex: 1;
         overflow-y: auto;
-        padding: 16px 16px 24px 16px;  // 减小左右padding从24px到16px
+        padding: 16px 24px 24px 24px;
         background: #fafafa;
         
         .loading-container {
@@ -190,7 +190,7 @@
       .input-container {
         background: #fff;
         border-top: 1px solid #f0f0f0;
-        padding: 16px 16px;  // 减小左右padding从24px到16px
+        padding: 16px 24px;
         
         .uploaded-image-preview {
           display: flex;

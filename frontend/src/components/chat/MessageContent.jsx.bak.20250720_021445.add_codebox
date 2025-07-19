@@ -4,7 +4,6 @@ import { UserOutlined, RobotOutlined, LoadingOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import CodeBlock from './CodeBlock'
 import './MessageContent.less'
 
 const { Text } = Typography
@@ -18,40 +17,16 @@ const MessageContent = ({ message, isStreaming = false }) => {
   const markdownComponents = {
     code({ node, inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '')
-      
-      // 如果是代码块（非内联）且有语言标识，使用CodeBlock组件
-      if (!inline && match) {
-        return (
-          <CodeBlock className={className}>
-            {String(children).replace(/\n$/, '')}
-          </CodeBlock>
-        )
-      }
-      
-      // 如果是代码块但没有语言标识，使用普通的pre标签
-      if (!inline) {
-        return (
-          <pre style={{ 
-            backgroundColor: '#f6f8fa', 
-            padding: '16px', 
-            borderRadius: '6px',
-            overflow: 'auto',
-            marginTop: '8px',
-            marginBottom: '8px'
-          }}>
-            <code style={{ 
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '13px',
-              lineHeight: '1.45'
-            }}>
-              {String(children).replace(/\n$/, '')}
-            </code>
-          </pre>
-        )
-      }
-      
-      // 内联代码使用原样式
-      return (
+      return !inline && match ? (
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      ) : (
         <code className={className} {...props}>
           {children}
         </code>

@@ -76,14 +76,14 @@
       
       // 代码块特殊处理
       .code-block-container {
-        margin: 8px -12px;  // 顶部底部使用8px正边距，左右保持-12px负边距
+        margin: 12px -20px;  // 增加负边距从-16px到-20px
         
         &:first-child {
-          margin-top: 0;  // 第一个元素不需要额外的负边距
+          margin-top: -12px;
         }
         
         &:last-child {
-          margin-bottom: 0;  // 最后一个元素不需要额外的负边距
+          margin-bottom: -12px;
         }
       }
       
