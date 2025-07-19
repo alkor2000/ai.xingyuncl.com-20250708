@@ -1,0 +1,252 @@
+/* BasicLayout 样式 */
+
+/* 整体布局 */
+.basic-layout {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.basic-layout-body {
+  height: calc(100vh - 50px);
+  display: flex;
+  overflow: hidden;
+}
+
+/* 顶部导航栏 - 横向拉通 */
+.basic-layout-header {
+  height: 50px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: #1677ff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.logo-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-menu-trigger {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
+/* 侧边栏 - 宽度80px，图标模式 */
+.basic-layout-sidebar {
+  width: 80px !important;
+  background: #fff;
+  border-right: 1px solid #f0f0f0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+}
+
+/* 菜单容器 */
+.sidebar-menu-container {
+  padding: 16px 0;
+}
+
+/* 菜单项 - 只显示图标 */
+.sidebar-menu-item {
+  width: 48px;
+  height: 48px;
+  margin: 8px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.sidebar-menu-item:hover {
+  background-color: #f0f0f0;
+  color: #1677ff;
+}
+
+.sidebar-menu-item.active {
+  background-color: #e6f4ff;
+  color: #1677ff;
+}
+
+/* 子菜单弹出内容样式 */
+.sidebar-submenu-content {
+  min-width: 150px;
+}
+
+.sidebar-submenu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+  margin: 2px 0;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.sidebar-submenu-item:hover {
+  background-color: #f5f5f5;
+  color: #1677ff;
+}
+
+.sidebar-submenu-item.active {
+  background-color: #e6f4ff;
+  color: #1677ff;
+  font-weight: 500;
+}
+
+/* 内容区域 */
+.basic-layout-content {
+  flex: 1;
+  background: #f0f2f5;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 移动端抽屉 */
+.mobile-menu-drawer .ant-drawer-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-menu {
+  border: none;
+}
+
+.mobile-menu .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 6px;
+}
+
+/* 滚动条样式 */
+.basic-layout-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.basic-layout-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.basic-layout-sidebar::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 2px;
+}
+
+.basic-layout-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* Tooltip样式优化 */
+.ant-tooltip-inner {
+  min-height: auto;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Popover样式优化 */
+.ant-popover-inner {
+  border-radius: 8px;
+}
+
+.ant-popover-title {
+  padding: 12px 16px 8px;
+  font-weight: 500;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ant-popover-inner-content {
+  padding: 8px 4px;
+}
+
+/* 移动端响应式 */
+@media (max-width: 768px) {
+  .basic-layout-header {
+    padding: 0 16px;
+  }
+  
+  .logo-text {
+    font-size: 14px;
+  }
+}
+
+/* 过渡动画 */
+.basic-layout-sidebar,
+.basic-layout-content {
+  transition: all 0.3s ease;
+}
+
+/* 移动端菜单样式 */
+.mobile-menu .ant-menu-item-selected {
+  background-color: #e6f4ff;
+}
+
+.mobile-menu .ant-menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.mobile-menu .ant-menu-sub {
+  background: transparent;
+}
+
+.mobile-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #1677ff;
+}
