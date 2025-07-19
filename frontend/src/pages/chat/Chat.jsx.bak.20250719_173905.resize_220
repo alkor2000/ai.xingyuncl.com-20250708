@@ -304,9 +304,9 @@ const Chat = () => {
 
   return (
     <Layout className="chat-container">
-      {/* 侧边栏 - 宽度改为220px */}
+      {/* 侧边栏 - 宽度改为200px */}
       <Sider
-        width={220}
+        width={200}
         collapsed={sidebarCollapsed}
         collapsedWidth={0}
         breakpoint="xl"
