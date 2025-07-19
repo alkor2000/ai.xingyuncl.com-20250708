@@ -100,8 +100,8 @@ const ConversationSidebar = ({
 
   return (
     <div className="sidebar-wrapper">
-      {/* 增加顶部空白区域到60px，确保完全避开主布局的50px横条 */}
-      <div style={{ height: '16px' }}></div>
+      {/* 增加顶部空白区域到65px，确保完全避开主布局的50px横条 */}
+      <div style={{ height: '65px' }}></div>
       
       {/* 新建按钮 */}
       <div className="sidebar-header-fixed">

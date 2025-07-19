@@ -259,9 +259,9 @@ const Chat = () => {
     }
   }
 
-  // 处理输入 - 修复：直接接收值而不是事件对象
-  const handleInputChange = (value) => {
-    setInputValue(value)
+  // 处理输入
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value)
   }
 
   const handleKeyPress = (e) => {
