@@ -1,110 +1,55 @@
-import React, { useEffect } from 'react'
-import { Card, Row, Col, Statistic, Typography, Space, Tag, Progress, Spin } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin } from 'antd'
 import {
-  UserOutlined,
-  MessageOutlined,
-  ApiOutlined,
+  BankOutlined,
   DollarOutlined,
-  TrophyOutlined,
-  ClockCircleOutlined,
-  TeamOutlined,
   FireOutlined,
-  RobotOutlined,
-  RiseOutlined
+  InfoCircleOutlined,
+  WarningOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
-import useStatsStore from '../../stores/statsStore'
+import apiClient from '../../utils/api'
 
 const { Title, Paragraph } = Typography
 
 const Dashboard = () => {
-  const { user, permissions } = useAuthStore()
-  const { 
-    realtimeStats, 
-    loading, 
-    fetchRealtimeStats,
-    formatNumber 
-  } = useStatsStore()
+  const { user } = useAuthStore()
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const [creditsData, setCreditsData] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  // 加载实时统计
+  // 加载用户积分统计
   useEffect(() => {
-    fetchRealtimeStats()
-    
-    // 每分钟刷新一次
-    const interval = setInterval(() => {
-      fetchRealtimeStats()
-    }, 60000)
-    
-    return () => clearInterval(interval)
-  }, [fetchRealtimeStats])
-
-  // 用户个人统计
-  const userStats = [
-    {
-      title: t('dashboard.stats.todayChat'),
-      value: user?.today_messages || 0,
-      prefix: <MessageOutlined />,
-      suffix: t('unit.times')
-    },
-    {
-      title: t('dashboard.stats.tokenUsed'),
-      value: user?.used_tokens || 0,
-      prefix: <ApiOutlined />,
-      suffix: t('unit.tokens')
-    },
-    {
-      title: t('dashboard.stats.tokenRemaining'),
-      value: (user?.token_quota || 0) - (user?.used_tokens || 0),
-      prefix: <DollarOutlined />,
-      suffix: t('unit.tokens')
-    },
-    {
-      title: t('dashboard.stats.daysUsed'),
-      value: user?.days_used || 0,
-      prefix: <ClockCircleOutlined />,
-      suffix: t('unit.days')
+    const fetchCreditsStats = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.get('/stats/user-credits')
+        if (response.data.success) {
+          setCreditsData(response.data.data)
+        }
+      } catch (error) {
+        console.error('获取积分统计失败:', error)
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
 
-  // 实时统计
-  const systemStats = [
-    {
-      title: t('dashboard.stats.onlineUsers'),
-      value: realtimeStats.online_users,
-      prefix: <TeamOutlined />,
-      suffix: t('unit.users'),
-      color: '#52c41a'
-    },
-    {
-      title: t('dashboard.stats.todayActiveUsers'),
-      value: realtimeStats.today_active_users,
-      prefix: <UserOutlined />,
-      suffix: t('unit.users'),
-      color: '#1677ff'
-    },
-    {
-      title: t('dashboard.stats.todayMessages'),
-      value: formatNumber(realtimeStats.today_messages),
-      prefix: <MessageOutlined />,
-      suffix: '',
-      color: '#fa8c16'
-    },
-    {
-      title: t('dashboard.stats.todayTokens'),
-      value: formatNumber(realtimeStats.today_tokens),
-      prefix: <ApiOutlined />,
-      suffix: '',
-      color: '#a0d911'
-    }
-  ]
+    fetchCreditsStats()
+  }, [])
 
-  const tokenUsagePercent = user?.token_quota 
-    ? Math.round((user.used_tokens / user.token_quota) * 100)
-    : 0
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '400px' 
+      }}>
+        <Spin size="large" tip={t('status.loading')} />
+      </div>
+    )
+  }
 
   return (
     <div className="page-container">
@@ -117,209 +62,122 @@ const Dashboard = () => {
         </Paragraph>
       </div>
 
-      {/* 用户信息卡片 */}
-      <Card style={{ marginBottom: 24 }}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col>
-            <div style={{
-              width: 64,
-              height: 64,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: 24
-            }}>
-              <UserOutlined />
-            </div>
-          </Col>
-          <Col flex={1}>
-            <div>
-              <Title level={4} style={{ margin: 0 }}>
-                {user?.username}
-              </Title>
-              <Space style={{ marginTop: 4 }}>
-                <Tag color={
-                  user?.role === 'super_admin' ? 'red' :
-                  user?.role === 'admin' ? 'blue' : 'green'
-                }>
-                  {t(`role.${user?.role}`)}
-                </Tag>
-                <span style={{ color: '#666' }}>{user?.email}</span>
-              </Space>
-            </div>
-          </Col>
-          <Col>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: '#666' }}>{t('dashboard.userInfo.tokenUsage')}</div>
-              <Progress
-                type="circle"
-                percent={tokenUsagePercent}
-                size={60}
-                format={(percent) => `${percent}%`}
-                strokeColor={tokenUsagePercent > 80 ? '#ff4d4f' : '#52c41a'}
-              />
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* 实时统计卡片 */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 50 }}>
-          <Spin size="large" tip={t('status.loading')} />
-        </div>
-      ) : (
-        <>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <RiseOutlined /> {t('dashboard.stats.realtimeTitle')}
-          </Title>
-          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-            {systemStats.map((stat, index) => (
-              <Col xs={24} sm={12} lg={6} key={index}>
-                <Card>
-                  <Statistic
-                    title={stat.title}
-                    value={stat.value}
-                    prefix={stat.prefix}
-                    suffix={stat.suffix}
-                    valueStyle={{ color: stat.color }}
-                  />
-                </Card>
-              </Col>
-            ))}
-          </Row>
-
-          {/* 热门模型 */}
-          {realtimeStats.popular_models.length > 0 && (
-            <Card 
-              title={
-                <Space>
-                  <FireOutlined style={{ color: '#fa541c' }} />
-                  {t('dashboard.stats.popularModels')}
-                </Space>
-              }
-              style={{ marginBottom: 24 }}
-            >
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {realtimeStats.popular_models.map((model, index) => (
-                  <div key={index}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Space>
-                        <RobotOutlined />
-                        <span>{model.model_name}</span>
-                      </Space>
-                      <span style={{ color: '#666' }}>
-                        {model.usage_count} {t('unit.times')}
-                      </span>
-                    </div>
-                    <Progress
-                      percent={Math.round((model.usage_count / realtimeStats.today_messages) * 100)}
-                      size="small"
-                      strokeColor={{
-                        '0%': '#108ee9',
-                        '100%': '#87d068',
-                      }}
-                    />
-                  </div>
-                ))}
-              </Space>
+      {/* 积分中心 */}
+      <Card 
+        title={
+          <Space>
+            <DollarOutlined style={{ color: '#52c41a' }} />
+            {t('dashboard.creditsCenter.title')}
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} md={6}>
+            <Card style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 8 }}>
+                <BankOutlined style={{ fontSize: 24, color: '#1677ff' }} />
+              </div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                {t('dashboard.creditsCenter.organization')}
+              </div>
+              <Tag color={creditsData?.group_color || '#1677ff'} style={{ fontSize: 14 }}>
+                {creditsData?.group_name || t('dashboard.creditsCenter.defaultGroup')}
+              </Tag>
             </Card>
-          )}
-        </>
-      )}
-
-      {/* 个人统计 */}
-      <Title level={4} style={{ marginBottom: 16 }}>
-        <UserOutlined /> {t('dashboard.stats.personalTitle')}
-      </Title>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {userStats.map((stat, index) => (
-          <Col xs={24} sm={12} lg={6} key={index}>
+          </Col>
+          
+          <Col xs={24} sm={12} md={6}>
             <Card>
               <Statistic
-                title={stat.title}
-                value={stat.value}
-                prefix={stat.prefix}
-                suffix={stat.suffix}
+                title={t('dashboard.creditsCenter.totalCredits')}
+                value={creditsData?.credits_total || 0}
+                prefix={<DollarOutlined />}
+                suffix={t('unit.credits')}
                 valueStyle={{ color: '#1677ff' }}
               />
             </Card>
           </Col>
-        ))}
-      </Row>
+          
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title={t('dashboard.creditsCenter.currentCredits')}
+                value={creditsData?.credits_remaining || 0}
+                prefix={<DollarOutlined />}
+                suffix={t('unit.credits')}
+                valueStyle={{ 
+                  color: creditsData?.credits_remaining > 0 ? '#52c41a' : '#ff4d4f' 
+                }}
+              />
+            </Card>
+          </Col>
+          
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title={t('dashboard.creditsCenter.todayConsumed')}
+                value={creditsData?.today_consumed || 0}
+                prefix={<FireOutlined />}
+                suffix={t('unit.credits')}
+                valueStyle={{ color: '#fa8c16' }}
+              />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* 快速操作 */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card title={t('dashboard.quickStart')} extra={<TrophyOutlined />}>
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Card 
-                size="small" 
-                hoverable
-                onClick={() => navigate('/chat')}
-                style={{ cursor: 'pointer' }}
-              >
-                <Card.Meta
-                  avatar={<MessageOutlined style={{ color: '#1677ff' }} />}
-                  title={t('dashboard.quickStart.chat')}
-                  description={t('dashboard.quickStart.chat.desc')}
-                />
-              </Card>
-              
-              {permissions.includes('user.manage') && (
-                <Card 
-                  size="small" 
-                  hoverable
-                  onClick={() => navigate('/admin/users')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <Card.Meta
-                    avatar={<UserOutlined style={{ color: '#52c41a' }} />}
-                    title={t('dashboard.quickStart.users')}
-                    description={t('dashboard.quickStart.users.desc')}
-                  />
-                </Card>
-              )}
-            </Space>
-          </Card>
-        </Col>
+        {/* 积分过期提醒 */}
+        {creditsData?.is_expired && (
+          <Alert
+            message={t('dashboard.creditsCenter.expiredAlert')}
+            type="error"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
+        )}
+        
+        {!creditsData?.is_expired && creditsData?.remaining_days !== null && creditsData?.remaining_days <= 7 && (
+          <Alert
+            message={t('dashboard.creditsCenter.expiringSoon', { days: creditsData.remaining_days })}
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
+        )}
+      </Card>
 
-        <Col xs={24} lg={12}>
-          <Card title={t('dashboard.stats.title')}>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <div>
-                <div style={{ marginBottom: 8 }}>
-                  <span>{t('dashboard.stats.tokenQuota')}</span>
-                  <span style={{ float: 'right', color: '#666' }}>
-                    {user?.used_tokens || 0} / {user?.token_quota || 0}
-                  </span>
-                </div>
-                <Progress
-                  percent={tokenUsagePercent}
-                  strokeColor={tokenUsagePercent > 80 ? '#ff4d4f' : '#52c41a'}
-                  showInfo={false}
-                />
-              </div>
-              
-              <div style={{ padding: 16, background: '#fafafa', borderRadius: 6 }}>
-                <Title level={5} style={{ margin: 0 }}>
-                  {t('dashboard.permissions')}
-                </Title>
-                <div style={{ marginTop: 8 }}>
-                  {permissions.map(permission => (
-                    <Tag key={permission} style={{ marginBottom: 4 }}>
-                      {permission}
-                    </Tag>
-                  ))}
-                </div>
-              </div>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
+      {/* 系统公告 */}
+      <Card 
+        title={
+          <Space>
+            <InfoCircleOutlined style={{ color: '#1677ff' }} />
+            {t('dashboard.announcement.system')}
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        <Alert
+          message={t('dashboard.announcement.systemDefault')}
+          type="info"
+          showIcon={false}
+        />
+      </Card>
+
+      {/* 机构公告 */}
+      <Card 
+        title={
+          <Space>
+            <WarningOutlined style={{ color: '#fa8c16' }} />
+            {t('dashboard.announcement.organization')}
+          </Space>
+        }
+      >
+        <Alert
+          message={t('dashboard.announcement.organizationDefault')}
+          type="warning"
+          showIcon={false}
+        />
+      </Card>
     </div>
   )
 }

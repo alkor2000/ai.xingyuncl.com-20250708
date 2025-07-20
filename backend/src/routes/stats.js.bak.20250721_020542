@@ -35,11 +35,4 @@ router.get('/online-users',
  */
 router.post('/heartbeat', StatsController.heartbeat);
 
-/**
- * @route GET /api/stats/user-credits
- * @desc 获取用户积分统计信息
- * @access Private
- */
-router.get('/user-credits', StatsController.getUserCreditsStats);
-
 module.exports = router;
