@@ -102,31 +102,31 @@ const ChatInputArea = ({
               ? t('chat.input.placeholderWithImage')
               : t('chat.input.placeholder')
           }
-          autoSize={{ minRows: 3, maxRows: 6 }}
+          autoSize={{ minRows: 1, maxRows: 6 }}
           disabled={typing || isStreaming}
           className="message-input"
         />
         
         <div className="input-actions-right">
           {isStreaming ? (
-            <Tooltip title={t('chat.stop')}>
-              <Button
-                type="primary"
-                danger
-                icon={<StopOutlined />}
-                onClick={onStop}
-              />
-            </Tooltip>
+            <Button
+              type="primary"
+              danger
+              icon={<StopOutlined />}
+              onClick={onStop}
+            >
+              {t('chat.stop')}
+            </Button>
           ) : (
-            <Tooltip title={t('chat.send')}>
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={onSend}
-                disabled={(!inputValue.trim() && !uploadedImage) || typing}
-                loading={typing}
-              />
-            </Tooltip>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={onSend}
+              disabled={(!inputValue.trim() && !uploadedImage) || typing}
+              loading={typing}
+            >
+              {t('chat.send')}
+            </Button>
           )}
         </div>
       </div>

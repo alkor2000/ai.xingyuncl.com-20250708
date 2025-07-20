@@ -3,7 +3,7 @@
  * 功能：对话管理、消息收发、AI交互
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Layout, Modal, Form, message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -56,7 +56,6 @@ const Chat = () => {
     getUserCredits,
     typing,
     isStreaming,
-    streamingMessageId,
   } = useChatStore()
 
   // 本地状态
@@ -69,14 +68,10 @@ const Chat = () => {
   const [uploadedImage, setUploadedImage] = useState(null)
   const [uploading, setUploading] = useState(false)
   
-  // 用户手动滚动标志
-  const [userScrolled, setUserScrolled] = useState(false)
-  
   const [settingsForm] = Form.useForm()
   const [newChatForm] = Form.useForm()
   
   const messagesEndRef = useRef(null)
-  const messagesContainerRef = useRef(null)
   const draftTimerRef = useRef(null)
 
   // 初始化
@@ -138,66 +133,14 @@ const Chat = () => {
     localStorage.setItem('chatDrafts', JSON.stringify(drafts))
   }
 
-  // 修改滚动函数，支持条件滚动
-  const scrollToBottom = useCallback((force = false) => {
-    if (messagesEndRef.current && (!userScrolled || force)) {
-      const behavior = isStreaming ? 'instant' : 'smooth'
-      messagesEndRef.current.scrollIntoView({ 
-        behavior,
-        block: 'end'
-      })
-    }
-  }, [userScrolled, isStreaming])
-
-  // 监听用户滚动
+  // 滚动到底部
   useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
+    scrollToBottom()
+  }, [messages])
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100 // 100px容差
-      
-      // 如果用户手动向上滚动了，设置标志
-      if (!isAtBottom && isStreaming) {
-        setUserScrolled(true)
-      }
-      // 如果滚动到底部了，清除标志
-      else if (isAtBottom) {
-        setUserScrolled(false)
-      }
-    }
-
-    container.addEventListener('scroll', handleScroll)
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [isStreaming])
-
-  // 流式输出结束时，重置用户滚动标志
-  useEffect(() => {
-    if (!isStreaming) {
-      setUserScrolled(false)
-    }
-  }, [isStreaming])
-
-  // 自动滚动到消息底部 - 只在不是用户手动滚动时执行
-  useEffect(() => {
-    if (!userScrolled) {
-      scrollToBottom()
-    }
-  }, [messages, typing, userScrolled, scrollToBottom])
-  
-  // 流式输出时降低滚动频率
-  useEffect(() => {
-    if (isStreaming && streamingMessageId && !userScrolled) {
-      const scrollInterval = setInterval(() => {
-        if (!userScrolled) {
-          scrollToBottom()
-        }
-      }, 500) // 每500ms滚动一次
-      
-      return () => clearInterval(scrollInterval)
-    }
-  }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   // 创建新对话
   const handleCreateConversation = async (values) => {
@@ -410,8 +353,8 @@ const Chat = () => {
                 onOpenSettings={() => handleEditConversation(currentConversation)}
               />
 
-              {/* 消息列表 - 添加ref用于滚动监听 */}
-              <div className="messages-container" ref={messagesContainerRef}>
+              {/* 消息列表 */}
+              <div className="messages-container">
                 <MessageList
                   messages={messages}
                   loading={messagesLoading}
