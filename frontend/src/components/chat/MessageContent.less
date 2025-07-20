@@ -109,11 +109,61 @@
     }
   }
   
-  .message-time {
-    margin-top: 8px;
+  // 消息底部信息区域
+  .message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
     
-    .time-text {
-      font-size: 12px;
+    .message-info {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0;
+      
+      .info-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.45);
+        
+        .anticon {
+          font-size: 12px;
+        }
+        
+        .info-text {
+          font-size: 12px;
+          color: rgba(0, 0, 0, 0.45);
+        }
+      }
     }
+    
+    .message-actions {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      
+      .ant-btn {
+        padding: 4px 8px;
+        height: 24px;
+        
+        &:hover {
+          background-color: rgba(0, 0, 0, 0.04);
+        }
+        
+        .anticon {
+          font-size: 14px;
+        }
+      }
+    }
+  }
+  
+  // 旧的时间样式（移除）
+  .message-time {
+    display: none;
   }
 }

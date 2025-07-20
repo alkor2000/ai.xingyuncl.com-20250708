@@ -70,6 +70,21 @@ const draftLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 消息操作限流 - 适度限流
+const messageLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分钟
+  max: 30, // 每分钟最多30次消息操作
+  message: {
+    success: false,
+    code: 429,
+    message: '消息操作过于频繁，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // 所有路由都需要认证
 router.use(authenticate);
 
@@ -172,6 +187,17 @@ router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
   ChatController.sendMessage
+);
+
+/**
+ * @route DELETE /api/chat/conversations/:id/messages/:messageId
+ * @desc 删除消息对（用户消息和AI回复）
+ * @access Private
+ */
+router.delete('/conversations/:id/messages/:messageId',
+  messageLimiter,
+  requirePermission('chat.use'),
+  ChatController.deleteMessagePair
 );
 
 /**

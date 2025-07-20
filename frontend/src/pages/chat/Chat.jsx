@@ -50,6 +50,7 @@ const Chat = () => {
     createConversation,
     updateConversation,
     deleteConversation,
+    deleteMessagePair,
     togglePin,
     getAIModels,
     aiModels,
@@ -324,6 +325,16 @@ const Chat = () => {
     message.info(t('chat.stopGeneration') || '已停止生成')
   }
 
+  // 删除消息对
+  const handleDeleteMessage = async (aiMessageId) => {
+    try {
+      await deleteMessagePair(aiMessageId)
+    } catch (error) {
+      console.error('Delete message error:', error)
+      throw error
+    }
+  }
+
   // 处理输入 - 修复：直接接收值而不是事件对象
   const handleInputChange = (value) => {
     setInputValue(value)
@@ -428,6 +439,9 @@ const Chat = () => {
                   isStreaming={isStreaming}
                   currentModel={currentModel}
                   user={user}
+                  streamingMessageId={streamingMessageId}
+                  messagesEndRef={messagesEndRef}
+                  onDeleteMessage={handleDeleteMessage}
                 />
                 <div ref={messagesEndRef} />
               </div>

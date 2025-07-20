@@ -23,8 +23,8 @@ class Message {
    */
   static async create(messageData) {
     try {
-      const { conversation_id, role, content, tokens = 0, file_id = null } = messageData;
-      const id = uuidv4();
+      const { conversation_id, role, content, tokens = 0, file_id = null, id = null } = messageData;
+      const messageId = id || uuidv4();
 
       const sql = `
         INSERT INTO messages (id, conversation_id, role, content, tokens, file_id) 
@@ -33,7 +33,7 @@ class Message {
       
       // 确保所有参数都有值，null值用JS null而不是undefined
       const params = [
-        id, 
+        messageId, 
         conversation_id, 
         role, 
         content, 
@@ -42,7 +42,7 @@ class Message {
       ];
 
       logger.info('创建消息', { 
-        messageId: id, 
+        messageId: messageId, 
         conversationId: conversation_id, 
         role,
         tokens: params[4],
@@ -53,13 +53,13 @@ class Message {
       await dbConnection.query(sql, params);
 
       logger.info('消息创建成功', { 
-        messageId: id, 
+        messageId: messageId, 
         conversationId: conversation_id, 
         role,
         tokens: params[4]
       });
 
-      return await Message.findById(id);
+      return await Message.findById(messageId);
     } catch (error) {
       logger.error('消息创建失败:', error);
       throw new DatabaseError(`消息创建失败: ${error.message}`, error);
@@ -207,6 +207,83 @@ class Message {
     } catch (error) {
       logger.error('消息删除失败:', error);
       throw new DatabaseError(`消息删除失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 删除消息对（用户消息和对应的AI回复）
+   */
+  static async deleteMessagePair(conversationId, aiMessageId) {
+    try {
+      // 使用dbConnection提供的事务方法
+      const result = await dbConnection.transaction(async (query) => {
+        // 首先获取AI消息的创建时间
+        const aiMessageSql = 'SELECT created_at FROM messages WHERE id = ? AND conversation_id = ? AND role = ?';
+        const { rows: aiRows } = await query(aiMessageSql, [aiMessageId, conversationId, 'assistant']);
+        
+        if (aiRows.length === 0) {
+          throw new Error('AI消息不存在');
+        }
+        
+        const aiCreatedAt = aiRows[0].created_at;
+        
+        // 查找在这条AI消息之前最近的用户消息
+        const userMessageSql = `
+          SELECT id FROM messages 
+          WHERE conversation_id = ? 
+            AND role = 'user' 
+            AND created_at < ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        
+        const { rows: userRows } = await query(userMessageSql, [conversationId, aiCreatedAt]);
+        
+        if (userRows.length === 0) {
+          throw new Error('找不到对应的用户消息');
+        }
+        
+        const userMessageId = userRows[0].id;
+        
+        // 删除用户消息
+        await query('DELETE FROM messages WHERE id = ?', [userMessageId]);
+        logger.info('删除用户消息', { messageId: userMessageId, conversationId });
+        
+        // 删除AI消息
+        await query('DELETE FROM messages WHERE id = ?', [aiMessageId]);
+        logger.info('删除AI消息', { messageId: aiMessageId, conversationId });
+        
+        // 更新会话的消息计数和token统计
+        const updateConversationSql = `
+          UPDATE conversations 
+          SET message_count = message_count - 2,
+              total_tokens = (
+                SELECT COALESCE(SUM(tokens), 0) 
+                FROM messages 
+                WHERE conversation_id = ?
+              )
+          WHERE id = ?
+        `;
+        
+        await query(updateConversationSql, [conversationId, conversationId]);
+        
+        logger.info('消息对删除成功', { 
+          conversationId, 
+          userMessageId, 
+          aiMessageId 
+        });
+        
+        return {
+          deletedUserMessageId: userMessageId,
+          deletedAiMessageId: aiMessageId
+        };
+      });
+      
+      return result;
+      
+    } catch (error) {
+      logger.error('删除消息对失败:', error);
+      throw new DatabaseError(`删除消息对失败: ${error.message}`, error);
     }
   }
 

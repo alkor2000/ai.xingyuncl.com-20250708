@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { Typography, Image, Spin } from 'antd'
-import { LoadingOutlined } from '@ant-design/icons'
+import { Typography, Image, Spin, Button, Space, message as antMessage } from 'antd'
+import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -9,10 +9,57 @@ import './MessageContent.less'
 
 const { Text } = Typography
 
-const MessageContent = ({ message, isStreaming = false }) => {
+const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMessage }) => {
   const [imageLoading, setImageLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
   
   const isUser = message.role === 'user'
+  const isAssistant = message.role === 'assistant'
+  
+  // 复制消息内容
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      antMessage.success('内容已复制到剪贴板')
+    } catch (error) {
+      console.error('复制失败:', error)
+      antMessage.error('复制失败，请手动选择复制')
+    }
+  }
+  
+  // 删除消息对
+  const handleDelete = async () => {
+    if (!onDeleteMessage || !isAssistant) return
+    
+    setDeleting(true)
+    try {
+      await onDeleteMessage(message.id)
+      antMessage.success('消息已删除')
+    } catch (error) {
+      console.error('删除失败:', error)
+      antMessage.error('删除失败')
+    } finally {
+      setDeleting(false)
+    }
+  }
+  
+  // 格式化时间
+  const formatTime = (dateStr) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const isToday = date.toDateString() === now.toDateString()
+    
+    if (isToday) {
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    } else {
+      return date.toLocaleString('zh-CN', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    }
+  }
   
   // Markdown 渲染配置
   const markdownComponents = {
@@ -106,12 +153,64 @@ const MessageContent = ({ message, isStreaming = false }) => {
         )}
       </div>
       
-      {/* 消息时间 */}
-      <div className="message-time">
-        <Text type="secondary" className="time-text">
-          {new Date(message.created_at).toLocaleTimeString()}
-        </Text>
-      </div>
+      {/* 消息底部信息 - 只在非流式状态下显示 */}
+      {!isStreaming && !message.streaming && (
+        <div className="message-footer">
+          <Space size="middle" className="message-info">
+            {/* 时间 */}
+            <span className="info-item">
+              <ClockCircleOutlined />
+              <Text type="secondary" className="info-text">
+                {formatTime(message.created_at)}
+              </Text>
+            </span>
+            
+            {/* Token数量 - 只显示AI消息的 */}
+            {isAssistant && message.tokens > 0 && (
+              <span className="info-item">
+                <ThunderboltOutlined />
+                <Text type="secondary" className="info-text">
+                  {message.tokens} Tokens
+                </Text>
+              </span>
+            )}
+            
+            {/* 模型名称 - 只显示AI消息的 */}
+            {isAssistant && currentModel && (
+              <span className="info-item">
+                <RobotOutlined />
+                <Text type="secondary" className="info-text">
+                  {currentModel.display_name || currentModel.name}
+                </Text>
+              </span>
+            )}
+          </Space>
+          
+          {/* 操作按钮 - 只显示AI消息的 */}
+          {isAssistant && (
+            <Space size="small" className="message-actions">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={handleCopy}
+                title="复制内容"
+              />
+              {onDeleteMessage && (
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDelete}
+                  loading={deleting}
+                  title="删除对话"
+                />
+              )}
+            </Space>
+          )}
+        </div>
+      )}
     </div>
   )
 }

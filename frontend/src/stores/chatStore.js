@@ -544,6 +544,43 @@ const useChatStore = create((set, get) => ({
     }
   },
   
+  // 🔥 删除消息对（用户消息和AI回复）
+  deleteMessagePair: async (aiMessageId) => {
+    const state = get()
+    if (!state.currentConversation) return
+    
+    try {
+      // 调用后端API删除消息对
+      const response = await apiClient.delete(
+        `/chat/conversations/${state.currentConversation.id}/messages/${aiMessageId}`
+      )
+      
+      const { deletedUserMessageId, deletedAiMessageId } = response.data.data
+      
+      // 从本地状态中移除这两条消息
+      set(state => ({
+        messages: state.messages.filter(msg => 
+          msg.id !== deletedUserMessageId && msg.id !== deletedAiMessageId
+        )
+      }))
+      
+      // 更新会话统计（消息数量和token）
+      set(state => ({
+        currentConversation: {
+          ...state.currentConversation,
+          message_count: Math.max(0, (state.currentConversation.message_count || 0) - 2)
+        }
+      }))
+      
+      console.log('消息对删除成功', { deletedUserMessageId, deletedAiMessageId })
+      return response.data.data
+      
+    } catch (error) {
+      console.error('删除消息对失败:', error)
+      throw error
+    }
+  },
+  
   // 🔥 停止生成 - 支持流式和非流式
   stopGeneration: () => {
     console.log('停止生成')

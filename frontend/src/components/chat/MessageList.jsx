@@ -7,7 +7,7 @@ import MessageContent from './MessageContent'
 const { Text } = Typography
 
 // 单个消息组件
-const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
+const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, currentModel, onDeleteMessage }) => {
   const { t } = useTranslation()
   
   // 获取用户首字母
@@ -59,23 +59,17 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
         }}
         bodyStyle={{ padding: '12px 16px' }}
       >
-        <MessageContent message={msg} isStreaming={isStreamingMsg && isStreaming} />
+        <MessageContent 
+          message={msg} 
+          isStreaming={isStreamingMsg && isStreaming}
+          currentModel={currentModel}
+          onDeleteMessage={onDeleteMessage}
+        />
         
         {/* 流式加载指示器 - 去掉文字，只保留图标 */}
         {isStreamingMsg && isStreaming && (
           <div style={{ marginTop: 8 }}>
             <LoadingOutlined style={{ fontSize: 14 }} />
-          </div>
-        )}
-        
-        {msg.tokens > 0 && !isStreamingMsg && (
-          <div style={{ 
-            fontSize: 11, 
-            marginTop: 8, 
-            opacity: 0.7,
-            textAlign: 'right'
-          }}>
-            {t('chat.tokens', { count: msg.tokens })}
           </div>
         )}
       </Card>
@@ -104,7 +98,8 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
          prevProps.msg.content === nextProps.msg.content &&
          prevProps.isStreamingMsg === nextProps.isStreamingMsg &&
          prevProps.isStreaming === nextProps.isStreaming &&
-         prevProps.user?.username === nextProps.user?.username
+         prevProps.user?.username === nextProps.user?.username &&
+         prevProps.currentModel?.name === nextProps.currentModel?.name
 })
 
 MessageItem.displayName = 'MessageItem'
@@ -116,7 +111,9 @@ const MessageList = React.memo(({
   isStreaming, 
   streamingMessageId,
   messagesEndRef,
-  user 
+  user,
+  currentModel,
+  onDeleteMessage
 }) => {
   const { t } = useTranslation()
   
@@ -142,6 +139,8 @@ const MessageList = React.memo(({
             isStreamingMsg={isStreamingMsg}
             isStreaming={isStreaming}
             user={user}
+            currentModel={currentModel}
+            onDeleteMessage={onDeleteMessage}
           />
         )
       })}

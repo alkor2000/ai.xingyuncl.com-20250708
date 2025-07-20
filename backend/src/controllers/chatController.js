@@ -762,6 +762,62 @@ class ChatController {
   }
 
   /**
+   * 删除消息对（用户消息和AI回复）
+   * DELETE /api/chat/conversations/:id/messages/:messageId
+   */
+  static async deleteMessagePair(req, res) {
+    try {
+      const { id: conversationId, messageId } = req.params;
+      const userId = req.user.id;
+
+      // 检查会话所有权
+      const hasAccess = await Conversation.checkOwnership(conversationId, userId);
+      if (!hasAccess) {
+        return ResponseHelper.forbidden(res, '无权删除此会话的消息');
+      }
+
+      // 验证消息存在
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return ResponseHelper.notFound(res, '消息不存在');
+      }
+
+      // 只能删除AI的回复消息
+      if (message.role !== 'assistant') {
+        return ResponseHelper.validation(res, ['只能删除AI回复消息']);
+      }
+
+      // 确保消息属于指定的会话
+      if (message.conversation_id !== conversationId) {
+        return ResponseHelper.forbidden(res, '消息不属于此会话');
+      }
+
+      // 删除消息对
+      const result = await Message.deleteMessagePair(conversationId, messageId);
+
+      // 清除消息缓存
+      await CacheService.clearConversationCache(userId, conversationId);
+
+      logger.info('消息对删除成功', {
+        userId,
+        conversationId,
+        ...result
+      });
+
+      return ResponseHelper.success(res, result, '消息删除成功');
+    } catch (error) {
+      logger.error('删除消息对失败', {
+        conversationId: req.params.id,
+        messageId: req.params.messageId,
+        userId: req.user?.id,
+        error: error.message,
+        stack: error.stack
+      });
+      return ResponseHelper.error(res, '删除消息失败');
+    }
+  }
+
+  /**
    * 获取可用的AI模型列表 - 根据用户权限和限制过滤
    * GET /api/chat/models
    */
