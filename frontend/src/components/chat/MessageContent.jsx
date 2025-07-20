@@ -200,7 +200,6 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
                 <Button
                   type="text"
                   size="small"
-                  danger
                   icon={<DeleteOutlined />}
                   onClick={handleDelete}
                   loading={deleting}

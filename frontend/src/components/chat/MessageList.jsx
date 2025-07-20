@@ -18,12 +18,10 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
     return 'U'
   }
   
-  // AI头像的自定义SVG图标
+  // AI头像的自定义SVG图标 - 简洁的闪电符号
   const AIIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2L2 7L12 12L22 7L12 2Z" />
-      <path d="M2 17L12 22L22 17" opacity="0.6" />
-      <path d="M2 12L12 17L22 12" opacity="0.8" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" stroke="none" />
     </svg>
   )
   
@@ -39,11 +37,12 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
         <Avatar 
           size={36}
           style={{ 
-            background: 'linear-gradient(135deg, #1E3A8A 0%, #06B6D4 100%)',
+            backgroundColor: '#1890ff',
             marginRight: 8,
             alignSelf: 'flex-start',
-            boxShadow: '0 2px 8px rgba(30, 58, 138, 0.3)',
-            border: '2px solid rgba(255, 255, 255, 0.2)'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }} 
         >
           <AIIcon />
@@ -65,13 +64,6 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
           currentModel={currentModel}
           onDeleteMessage={onDeleteMessage}
         />
-        
-        {/* 流式加载指示器 - 去掉文字，只保留图标 */}
-        {isStreamingMsg && isStreaming && (
-          <div style={{ marginTop: 8 }}>
-            <LoadingOutlined style={{ fontSize: 14 }} />
-          </div>
-        )}
       </Card>
       
       {msg.role === 'user' && (
