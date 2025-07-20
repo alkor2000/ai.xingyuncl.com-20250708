@@ -1,8 +1,8 @@
 /**
- * 基础设置表单组件 - 支持只读模式和Logo上传
+ * 基础设置表单组件 - 支持只读模式
  */
 
-import React, { useState } from 'react'
+import React from 'react'
 import {
   Form,
   Input,
@@ -15,21 +15,15 @@ import {
   Space,
   Button,
   Tag,
-  Alert,
-  Upload,
-  message
+  Alert
 } from 'antd'
 import {
   SaveOutlined,
   ThunderboltOutlined,
   FileImageOutlined,
-  LockOutlined,
-  UploadOutlined,
-  LoadingOutlined,
-  PlusOutlined
+  LockOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TextArea } = Input
 
@@ -41,62 +35,6 @@ const BasicSettings = ({
   disabled = false
 }) => {
   const { t } = useTranslation()
-  const { uploadSiteLogo, systemConfig } = useSystemConfigStore()
-  const [logoUploading, setLogoUploading] = useState(false)
-  const [logoUrl, setLogoUrl] = useState(systemConfig?.site?.logo || '')
-
-  // 处理Logo上传
-  const handleLogoUpload = async (info) => {
-    const { file } = info
-    
-    if (file.status === 'uploading') {
-      setLogoUploading(true)
-      return
-    }
-    
-    if (file.status === 'done' || file.originFileObj) {
-      try {
-        setLogoUploading(true)
-        const result = await uploadSiteLogo(file.originFileObj || file)
-        
-        if (result.success) {
-          setLogoUrl(result.url)
-          form.setFieldValue(['site', 'logo'], result.url)
-          message.success('Logo上传成功')
-        } else {
-          message.error(result.error || 'Logo上传失败')
-        }
-      } catch (error) {
-        message.error('Logo上传失败')
-      } finally {
-        setLogoUploading(false)
-      }
-    }
-  }
-
-  // 上传前检查
-  const beforeUpload = (file) => {
-    const isImage = file.type.startsWith('image/')
-    if (!isImage) {
-      message.error('只能上传图片文件！')
-      return false
-    }
-    
-    const isLt2M = file.size / 1024 / 1024 < 2
-    if (!isLt2M) {
-      message.error('图片大小不能超过2MB！')
-      return false
-    }
-    
-    return true
-  }
-
-  const uploadButton = (
-    <div>
-      {logoUploading ? <LoadingOutlined /> : <PlusOutlined />}
-      <div style={{ marginTop: 8 }}>上传Logo</div>
-    </div>
-  )
 
   return (
     <>
@@ -122,41 +60,6 @@ const BasicSettings = ({
             <Card title={t('admin.settings.site.title')} size="small" style={{ marginBottom: 16 }}>
               <Form.Item name={['site', 'name']} label={t('admin.settings.site.name')}>
                 <Input placeholder="AI Platform" disabled={disabled} />
-              </Form.Item>
-              
-              <Form.Item name={['site', 'logo']} label="站点Logo">
-                <Upload
-                  name="logo"
-                  listType="picture-card"
-                  className="site-logo-uploader"
-                  showUploadList={false}
-                  beforeUpload={beforeUpload}
-                  onChange={handleLogoUpload}
-                  disabled={disabled}
-                  customRequest={({ file, onSuccess }) => {
-                    // 使用自定义请求，避免默认行为
-                    setTimeout(() => {
-                      onSuccess("ok")
-                    }, 0)
-                  }}
-                >
-                  {logoUrl ? (
-                    <img 
-                      src={logoUrl} 
-                      alt="logo" 
-                      style={{ 
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain'
-                      }} 
-                    />
-                  ) : (
-                    uploadButton
-                  )}
-                </Upload>
-                <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                  建议尺寸：200x50px，支持 JPG/PNG/GIF/SVG，最大2MB
-                </div>
               </Form.Item>
               
               <Form.Item name={['site', 'description']} label={t('admin.settings.site.description')}>

@@ -377,6 +377,83 @@ const Chat = () => {
     }
   }
 
+  // 导出聊天记录
+  const handleExportChat = () => {
+    if (!messages || messages.length === 0) {
+      message.warning(t('chat.export.empty'))
+      return
+    }
+
+    try {
+      // 格式化时间函数
+      const formatDateTime = (dateStr) => {
+        const date = new Date(dateStr)
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+      }
+
+      // 生成文件名
+      const now = new Date()
+      const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5)
+      const conversationTitle = currentConversation?.title || '未命名对话'
+      const fileName = `${conversationTitle}_${timestamp}.txt`
+
+      // 构建文件内容
+      let content = '========================================\n'
+      content += `对话标题：${conversationTitle}\n`
+      content += `AI模型：${currentModel?.display_name || currentConversation?.model_name}\n`
+      content += `创建时间：${formatDateTime(currentConversation?.created_at)}\n`
+      content += `导出时间：${formatDateTime(now)}\n`
+      content += `消息数量：${messages.length}\n`
+      content += '========================================\n\n'
+
+      // 添加消息内容
+      messages.forEach((msg, index) => {
+        const role = msg.role === 'user' ? '【用户】' : '【AI助手】'
+        const time = formatDateTime(msg.created_at)
+        
+        content += `${role} ${time}\n`
+        
+        // 如果有图片，添加图片标记
+        if (msg.file && msg.file.original_name) {
+          content += `[图片：${msg.file.original_name}]\n`
+        }
+        
+        // 消息内容
+        content += `${msg.content}\n`
+        
+        // 如果是AI消息，显示token数
+        if (msg.role === 'assistant' && msg.tokens) {
+          content += `(消耗 ${msg.tokens} tokens)\n`
+        }
+        
+        content += '\n' + '-'.repeat(40) + '\n\n'
+      })
+
+      // 创建Blob并下载
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      message.success(t('chat.export.success'))
+    } catch (error) {
+      console.error('Export chat error:', error)
+      message.error(t('chat.export.failed'))
+    }
+  }
+
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
 
   return (
@@ -454,6 +531,7 @@ const Chat = () => {
                 typing={typing}
                 isStreaming={isStreaming}
                 imageUploadEnabled={currentModel?.image_upload_enabled}
+                hasMessages={messages && messages.length > 0}
                 disabled={!currentConversation}
                 onInputChange={handleInputChange}
                 onKeyPress={handleKeyPress}
@@ -461,6 +539,7 @@ const Chat = () => {
                 onStop={handleStopStreaming}
                 onImageUpload={handleImageUpload}
                 onRemoveImage={() => setUploadedImage(null)}
+                onExportChat={handleExportChat}
                 currentModel={currentModel}
               />
             </>

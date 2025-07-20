@@ -10,7 +10,6 @@ import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from './stores/authStore'
-import useSystemConfigStore from './stores/systemConfigStore'
 
 // 页面组件
 import Login from './pages/auth/Login'
@@ -50,15 +49,7 @@ const LazyLoadingWrapper = ({ children }) => (
 // 路由守卫组件
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuthStore()
-  const { initSystemConfig } = useSystemConfigStore()
   const { t } = useTranslation()
-  
-  // 初始化系统配置
-  useEffect(() => {
-    if (isAuthenticated) {
-      initSystemConfig()
-    }
-  }, [isAuthenticated, initSystemConfig])
   
   if (loading) {
     return (

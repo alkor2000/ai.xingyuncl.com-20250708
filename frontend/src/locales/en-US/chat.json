@@ -22,6 +22,11 @@
   "chat.upload.size.error": "Image size cannot exceed 10MB",
   "chat.upload.type.error": "Only JPG/PNG/GIF/WebP formats are supported",
   
+  "chat.export": "Export Chat History",
+  "chat.export.success": "Chat history exported successfully",
+  "chat.export.failed": "Export failed",
+  "chat.export.empty": "No chat history to export",
+  
   "chat.model.noImageSupport": "Current model does not support image recognition",
   
   "chat.conversation.settings": "Conversation Settings",

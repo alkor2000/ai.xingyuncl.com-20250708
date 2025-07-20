@@ -16,7 +16,8 @@ import {
   SendOutlined,
   StopOutlined,
   PictureOutlined,
-  CloseOutlined
+  CloseOutlined,
+  DownloadOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -30,12 +31,14 @@ const ChatInputArea = ({
   typing,
   isStreaming,
   imageUploadEnabled,
+  hasMessages,
   onInputChange,
   onSend,
   onStop,
   onImageUpload,
   onRemoveImage,
-  onKeyPress
+  onKeyPress,
+  onExportChat
 }) => {
   const { t } = useTranslation()
   const inputRef = useRef(null)
@@ -69,8 +72,8 @@ const ChatInputArea = ({
       )}
       
       {/* 工具栏 - 位于输入框上方 */}
-      {imageUploadEnabled && (
-        <div className="input-toolbar">
+      <div className="input-toolbar">
+        {imageUploadEnabled && (
           <Upload
             beforeUpload={onImageUpload}
             showUploadList={false}
@@ -86,8 +89,18 @@ const ChatInputArea = ({
               />
             </Tooltip>
           </Upload>
-        </div>
-      )}
+        )}
+        
+        {/* 导出聊天记录按钮 */}
+        <Tooltip title={t('chat.export')}>
+          <Button
+            type="text"
+            icon={<DownloadOutlined />}
+            onClick={onExportChat}
+            disabled={!hasMessages || typing || isStreaming}
+          />
+        </Tooltip>
+      </div>
       
       <div className="input-wrapper">
         <TextArea

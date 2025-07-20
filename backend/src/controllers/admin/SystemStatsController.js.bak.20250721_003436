@@ -1,15 +1,11 @@
 /**
- * 系统统计控制器 - 支持基于角色的数据过滤和配置持久化
+ * 系统统计控制器 - 支持基于角色的数据过滤
  */
 
 const { StatsService } = require('../../services/admin');
-const SystemConfig = require('../../models/SystemConfig');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
-const File = require('../../models/File');
-const { deleteFile } = require('../../middleware/uploadMiddleware');
-const path = require('path');
 
 class SystemStatsController {
   /**
@@ -39,14 +35,36 @@ class SystemStatsController {
   }
 
   /**
-   * 获取系统设置 - 从数据库读取
+   * 获取系统设置 - 根据角色返回不同的配置
    */
   static async getSystemSettings(req, res) {
     try {
       const userRole = req.user.role;
       
-      // 从数据库获取配置
-      const settings = await SystemConfig.getFormattedSettings();
+      // 基础设置（所有角色都能看到）
+      const settings = {
+        site: {
+          name: 'AI Platform',
+          description: '企业级AI应用聚合平台',
+          logo: '',
+          favicon: ''
+        },
+        user: {
+          allow_register: true,
+          default_token_quota: 10000,
+          default_group_id: 1,
+          default_credits_quota: 1000
+        },
+        ai: {
+          default_model: 'openai/gpt-4.1-mini',
+          temperature: 0.0
+        },
+        credits: {
+          default_credits: 1000,
+          max_credits: 100000,
+          min_credits_for_chat: 1
+        }
+      };
       
       // 组管理员：添加只读标记
       if (userRole === ROLES.ADMIN) {
@@ -65,7 +83,7 @@ class SystemStatsController {
   }
 
   /**
-   * 更新系统设置 - 保存到数据库
+   * 更新系统设置 - 只有超级管理员可以操作
    */
   static async updateSystemSettings(req, res) {
     try {
@@ -78,9 +96,7 @@ class SystemStatsController {
       
       const settings = req.body;
 
-      // 保存到数据库
-      await SystemConfig.saveFormattedSettings(settings);
-
+      // TODO: 实现系统设置的持久化存储
       logger.info('管理员更新系统设置', { 
         adminId: req.user.id,
         settings
@@ -93,72 +109,6 @@ class SystemStatsController {
         error: error.message 
       });
       return ResponseHelper.error(res, error.message || '更新系统设置失败');
-    }
-  }
-
-  /**
-   * 上传站点Logo
-   */
-  static async uploadSiteLogo(req, res) {
-    try {
-      const userRole = req.user.role;
-      
-      // 只有超级管理员可以上传
-      if (userRole !== ROLES.SUPER_ADMIN) {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以上传站点Logo');
-      }
-
-      if (!req.file) {
-        return ResponseHelper.validation(res, ['请选择要上传的图片']);
-      }
-
-      const file = req.file;
-      
-      // 创建文件记录
-      const fileRecord = await File.create({
-        user_id: req.user.id,
-        conversation_id: null,
-        filename: file.filename,
-        original_name: file.originalname,
-        mime_type: file.mimetype,
-        size: file.size,
-        path: file.path,
-        url: `/uploads/system/${file.filename}`
-      });
-
-      // 获取当前配置
-      const currentSettings = await SystemConfig.getFormattedSettings();
-      
-      // 删除旧Logo文件（如果存在）
-      if (currentSettings.site.logo) {
-        try {
-          const oldLogoPath = path.join('/var/www/ai-platform', currentSettings.site.logo);
-          await deleteFile(oldLogoPath);
-        } catch (error) {
-          logger.warn('删除旧Logo失败', { error: error.message });
-        }
-      }
-
-      // 更新配置中的Logo路径
-      currentSettings.site.logo = `/uploads/system/${file.filename}`;
-      await SystemConfig.saveFormattedSettings(currentSettings);
-
-      logger.info('站点Logo上传成功', {
-        adminId: req.user.id,
-        filename: file.filename,
-        size: file.size
-      });
-
-      return ResponseHelper.success(res, {
-        url: `/uploads/system/${file.filename}`,
-        file: fileRecord.toJSON()
-      }, '站点Logo上传成功');
-    } catch (error) {
-      logger.error('上传站点Logo失败', { 
-        adminId: req.user?.id, 
-        error: error.message 
-      });
-      return ResponseHelper.error(res, error.message || '上传站点Logo失败');
     }
   }
 

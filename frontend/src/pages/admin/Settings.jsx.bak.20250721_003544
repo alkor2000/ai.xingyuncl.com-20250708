@@ -1,5 +1,5 @@
 /**
- * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
+ * 系统设置主页面 - 支持组管理员权限控制
  */
 
 import React, { useEffect, useState } from 'react'
@@ -17,7 +17,6 @@ import {
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
-import useSystemConfigStore from '../../stores/systemConfigStore'
 import { ROLES, hasPermission } from '../../utils/permissions'
 
 // 导入子组件
@@ -35,7 +34,6 @@ const { TabPane } = Tabs
 const Settings = () => {
   const { t } = useTranslation()
   const { user, hasRole } = useAuthStore()
-  const { updateSystemConfig } = useSystemConfigStore()
   const {
     aiModels,
     modules,
@@ -71,7 +69,6 @@ const Settings = () => {
   const [editingModule, setEditingModule] = useState(null)
   const [testingModelId, setTestingModelId] = useState(null)
   const [checkingModuleId, setCheckingModuleId] = useState(null)
-  const [settingsLoading, setSettingsLoading] = useState(false)
 
   const userRole = user?.role || ROLES.USER
   const isSuperAdmin = userRole === ROLES.SUPER_ADMIN
@@ -116,21 +113,10 @@ const Settings = () => {
     }
     
     try {
-      setSettingsLoading(true)
-      
-      // 同时更新后端和前端Store
       await updateSystemSettings(values)
-      const result = await updateSystemConfig(values)
-      
-      if (result.success) {
-        message.success(t('admin.settings.save.success'))
-      } else {
-        message.error(result.error || t('admin.settings.save.failed'))
-      }
+      message.success(t('admin.settings.save.success'))
     } catch (error) {
       message.error(t('admin.settings.save.failed'))
-    } finally {
-      setSettingsLoading(false)
     }
   }
 
@@ -478,7 +464,7 @@ const Settings = () => {
           <BasicSettings
             form={settingsForm}
             aiModels={aiModels}
-            loading={settingsLoading}
+            loading={loading}
             onSubmit={handleSaveSettings}
             disabled={!isSuperAdmin}
           />

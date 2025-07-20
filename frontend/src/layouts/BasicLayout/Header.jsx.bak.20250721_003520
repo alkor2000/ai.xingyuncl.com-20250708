@@ -9,7 +9,6 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
-import useSystemConfigStore from '../../stores/systemConfigStore'
 import LanguageSwitch from '../../components/common/LanguageSwitch'
 
 const { Header: AntHeader } = Layout
@@ -18,7 +17,6 @@ const Header = ({ isMobile, onMenuClick }) => {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { user, logout } = useAuthStore()
-  const { getSiteName, getSiteLogo } = useSystemConfigStore()
 
   // 用户下拉菜单
   const userMenuItems = [
@@ -45,9 +43,6 @@ const Header = ({ isMobile, onMenuClick }) => {
     navigate('/login')
   }
 
-  const siteName = getSiteName()
-  const siteLogo = getSiteLogo()
-
   return (
     <AntHeader className="basic-layout-header">
       <div className="header-left">
@@ -63,21 +58,8 @@ const Header = ({ isMobile, onMenuClick }) => {
         
         {/* Logo和系统名称 */}
         <div className="header-logo" onClick={() => navigate('/')}>
-          {siteLogo ? (
-            <img 
-              src={siteLogo} 
-              alt={siteName}
-              className="logo-image"
-              style={{
-                height: '32px',
-                width: 'auto',
-                objectFit: 'contain'
-              }}
-            />
-          ) : (
-            <span className="logo-icon">AI</span>
-          )}
-          <span className="logo-text">{siteName}</span>
+          <span className="logo-icon">AI</span>
+          <span className="logo-text">{t('app.name')}</span>
         </div>
       </div>
 

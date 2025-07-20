@@ -22,6 +22,11 @@
   "chat.upload.size.error": "图片大小不能超过10MB",
   "chat.upload.type.error": "只支持 JPG/PNG/GIF/WebP 格式",
   
+  "chat.export": "导出聊天记录",
+  "chat.export.success": "聊天记录已导出",
+  "chat.export.failed": "导出失败",
+  "chat.export.empty": "暂无聊天记录可导出",
+  
   "chat.model.noImageSupport": "当前模型不支持图片识别",
   
   "chat.conversation.settings": "对话设置",

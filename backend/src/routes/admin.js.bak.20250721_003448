@@ -12,7 +12,6 @@ const {
   canViewCredits, 
   canManageCredits 
 } = require('../middleware/permissions');
-const { uploadSiteLogo } = require('../middleware/systemUploadMiddleware');
 const rateLimit = require('express-rate-limit');
 
 // 导入子路由
@@ -101,13 +100,6 @@ router.get('/settings',
 router.put('/settings',
   canManageSystem(), // 只有超级管理员可以修改
   SystemStatsController.updateSystemSettings
-);
-
-// 站点Logo上传路由
-router.post('/settings/upload-logo',
-  canManageSystem(), // 只有超级管理员可以上传
-  uploadSiteLogo,
-  SystemStatsController.uploadSiteLogo
 );
 
 // ===== 特殊处理：积分相关路由 =====
