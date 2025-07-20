@@ -10,7 +10,6 @@ import { useNavigate } from 'react-router-dom'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
-import apiClient from '../../utils/api'
 
 // 导入新的子组件
 import {
@@ -304,14 +303,14 @@ const Chat = () => {
     }
 
     const messageContent = inputValue.trim()
-    const fileId = uploadedImage?.id || null
+    const imageUrl = uploadedImage
     
     setInputValue('')
     setUploadedImage(null)
     clearDraft(currentConversation.id)
     
     try {
-      await sendMessage(messageContent, fileId)
+      await sendMessage(messageContent, imageUrl)
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
@@ -336,7 +335,7 @@ const Chat = () => {
     }
   }
 
-  // 处理图片上传 - 使用apiClient
+  // 处理图片上传
   const handleImageUpload = async (file) => {
     if (!file) return
 
@@ -345,21 +344,20 @@ const Chat = () => {
     formData.append('image', file)
 
     try {
-      // 使用apiClient发送请求，它会自动处理认证
-      const response = await apiClient.post('/chat/upload-image', formData, {
+      const response = await fetch('/api/file/upload/chat-image', {
+        method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
       })
 
-      if (response.data?.success && response.data?.data) {
-        setUploadedImage(response.data.data)
-        message.success(t('chat.image.upload.success'))
-      } else {
-        throw new Error(response.data?.message || 'Upload failed')
-      }
+      if (!response.ok) throw new Error('Upload failed')
+
+      const data = await response.json()
+      setUploadedImage(data.data)
+      message.success(t('chat.image.upload.success'))
     } catch (error) {
-      console.error('Image upload error:', error)
       message.error(t('chat.image.upload.failed'))
     } finally {
       setUploading(false)

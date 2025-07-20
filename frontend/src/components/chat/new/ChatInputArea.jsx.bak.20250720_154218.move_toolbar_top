@@ -33,7 +33,7 @@ const ChatInputArea = ({
   onInputChange,
   onSend,
   onStop,
-  onImageUpload,
+  onUploadImage,
   onRemoveImage,
   onKeyPress
 }) => {
@@ -68,28 +68,28 @@ const ChatInputArea = ({
         </div>
       )}
       
-      {/* 工具栏 - 位于输入框上方 */}
-      {imageUploadEnabled && (
-        <div className="input-toolbar">
-          <Upload
-            beforeUpload={onImageUpload}
-            showUploadList={false}
-            accept="image/*"
-            disabled={uploading || typing || isStreaming}
-          >
-            <Tooltip title={t('chat.upload.image')}>
-              <Button
-                type="text"
-                icon={<PictureOutlined />}
-                loading={uploading}
-                disabled={typing || isStreaming}
-              />
-            </Tooltip>
-          </Upload>
-        </div>
-      )}
-      
       <div className="input-wrapper">
+        <div className="input-actions-left">
+          {/* 图片上传按钮 */}
+          {imageUploadEnabled && (
+            <Upload
+              beforeUpload={onUploadImage}
+              showUploadList={false}
+              accept="image/*"
+              disabled={uploading || typing || isStreaming}
+            >
+              <Tooltip title={t('chat.upload.image')}>
+                <Button
+                  type="text"
+                  icon={<PictureOutlined />}
+                  loading={uploading}
+                  disabled={typing || isStreaming}
+                />
+              </Tooltip>
+            </Upload>
+          )}
+        </div>
+        
         <TextArea
           ref={inputRef}
           value={inputValue}
