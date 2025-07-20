@@ -57,7 +57,6 @@ const Chat = () => {
     typing,
     isStreaming,
     streamingMessageId,
-    stopStreaming,
   } = useChatStore()
 
   // 本地状态
@@ -317,12 +316,6 @@ const Chat = () => {
     }
   }
 
-  // 停止流式输出
-  const handleStopStreaming = () => {
-    stopStreaming()
-    message.info(t('chat.stopGeneration') || '已停止生成')
-  }
-
   // 处理输入 - 修复：直接接收值而不是事件对象
   const handleInputChange = (value) => {
     setInputValue(value)
@@ -435,13 +428,10 @@ const Chat = () => {
                 inputValue={inputValue}
                 uploadedImage={uploadedImage}
                 uploading={uploading}
-                typing={typing}
-                isStreaming={isStreaming}
-                disabled={!currentConversation}
+                disabled={!currentConversation || isStreaming}
                 onInputChange={handleInputChange}
                 onKeyPress={handleKeyPress}
                 onSend={handleSendMessage}
-                onStop={handleStopStreaming}
                 onImageUpload={handleImageUpload}
                 onRemoveImage={() => setUploadedImage(null)}
                 currentModel={currentModel}
