@@ -176,7 +176,7 @@
       .messages-container {
         flex: 1;
         overflow-y: auto;
-        padding: 50px 16px 24px 16px;  // 增加顶部padding到50px
+        padding: 16px 16px 24px 16px;  // 减小左右padding从24px到16px
         background: #fafafa;
         
         .loading-container {

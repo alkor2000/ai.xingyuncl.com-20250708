@@ -361,7 +361,6 @@ const Chat = () => {
                   typing={typing}
                   isStreaming={isStreaming}
                   currentModel={currentModel}
-                  user={user}
                 />
                 <div ref={messagesEndRef} />
               </div>

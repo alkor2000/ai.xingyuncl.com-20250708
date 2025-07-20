@@ -7,16 +7,11 @@ import MessageContent from './MessageContent'
 const { Text } = Typography
 
 // 单个消息组件
-const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
+const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming }) => {
   const { t } = useTranslation()
   
-  // 获取用户首字母
-  const getUserInitial = () => {
-    if (user && user.username) {
-      return user.username.charAt(0).toUpperCase()
-    }
-    return 'U'
-  }
+  // 获取用户首字母（简单处理，显示U）
+  const getUserInitial = () => 'U'
   
   // AI头像的自定义SVG图标
   const AIIcon = () => (
@@ -54,8 +49,8 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
         size="small"
         style={{
           maxWidth: '70%',
-          backgroundColor: msg.role === 'user' ? '#e8e8e8' : '#f6f6f6',
-          color: msg.role === 'user' ? 'inherit' : 'inherit'
+          backgroundColor: msg.role === 'user' ? '#1677ff' : '#f6f6f6',
+          color: msg.role === 'user' ? 'white' : 'inherit'
         }}
         bodyStyle={{ padding: '12px 16px' }}
       >
@@ -84,14 +79,13 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
         <Avatar 
           size={36}
           style={{ 
-            background: '#1a1a1a',
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
             marginLeft: 8,
             alignSelf: 'flex-start',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            fontWeight: 700,
-            fontSize: '18px',
-            color: '#ffffff'
+            boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            fontWeight: 600,
+            fontSize: '16px'
           }} 
         >
           {getUserInitial()}
@@ -103,8 +97,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user }) => {
   return prevProps.msg.id === nextProps.msg.id &&
          prevProps.msg.content === nextProps.msg.content &&
          prevProps.isStreamingMsg === nextProps.isStreamingMsg &&
-         prevProps.isStreaming === nextProps.isStreaming &&
-         prevProps.user?.username === nextProps.user?.username
+         prevProps.isStreaming === nextProps.isStreaming
 })
 
 MessageItem.displayName = 'MessageItem'
@@ -115,8 +108,7 @@ const MessageList = React.memo(({
   typing, 
   isStreaming, 
   streamingMessageId,
-  messagesEndRef,
-  user 
+  messagesEndRef 
 }) => {
   const { t } = useTranslation()
   
@@ -141,7 +133,6 @@ const MessageList = React.memo(({
             msg={msg}
             isStreamingMsg={isStreamingMsg}
             isStreaming={isStreaming}
-            user={user}
           />
         )
       })}
