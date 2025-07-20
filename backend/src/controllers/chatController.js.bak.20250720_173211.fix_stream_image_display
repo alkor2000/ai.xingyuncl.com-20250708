@@ -561,22 +561,13 @@ class ChatController {
         const aiMessageId = uuidv4();
         
         try {
-          // 准备用户消息数据，包含file信息
-          const userMessageData = userMessage.toJSON();
-          if (userMessageData.file_id) {
-            const file = await File.findById(userMessageData.file_id);
-            if (file) {
-              userMessageData.file = file.toJSON();
-            }
-          }
-          
           // 直接调用流式服务，由它来设置响应头和处理流
           await AIStreamService.sendStreamMessage(res, conversation.model_name, aiMessages, {
             temperature: conversation.getTemperature(),
             messageId: aiMessageId,
             conversationId: id,
             userId: userId,
-            userMessage: userMessageData,  // 传递包含file信息的完整用户消息
+            userMessage: userMessage.toJSON(),
             creditsInfo: {
               credits_consumed: creditsConsumed,
               credits_remaining: creditsResult.balanceAfter,

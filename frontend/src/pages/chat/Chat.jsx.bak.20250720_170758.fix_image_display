@@ -295,7 +295,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 传递完整的uploadedImage对象
+  // 发送消息
   const handleSendMessage = async () => {
     if (!inputValue.trim() && !uploadedImage) return
     if (!currentConversation) {
@@ -304,14 +304,14 @@ const Chat = () => {
     }
 
     const messageContent = inputValue.trim()
-    const fileInfo = uploadedImage || null // 传递完整的图片对象
+    const fileId = uploadedImage?.id || null
     
     setInputValue('')
     setUploadedImage(null)
     clearDraft(currentConversation.id)
     
     try {
-      await sendMessage(messageContent, fileInfo)
+      await sendMessage(messageContent, fileId)
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))

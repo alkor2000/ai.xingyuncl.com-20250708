@@ -223,8 +223,8 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 发送消息 - 支持传递完整的file对象用于临时消息显示
-  sendMessage: async (content, fileInfo = null) => {
+  // 发送消息 - 集成积分扣减
+  sendMessage: async (content, fileId = null) => {
     const state = get()
     if (!state.currentConversation) return
     
@@ -253,7 +253,7 @@ const useChatStore = create((set, get) => ({
     if (useStream) {
       // 使用流式发送
       console.log('使用流式发送')
-      return get().sendStreamMessage(content, fileInfo)
+      return get().sendStreamMessage(content, fileId)
     }
     
     console.log('使用非流式发送')
@@ -264,12 +264,11 @@ const useChatStore = create((set, get) => ({
       await get().getUserCredits()
     }
     
-    // 立即添加用户消息到界面，包含file信息
+    // 立即添加用户消息到界面
     const userMessage = {
       id: `temp-${Date.now()}`,
       role: 'user',
       content,
-      file: fileInfo, // 添加完整的file信息用于显示
       created_at: new Date().toISOString(),
       temp: true
     }
@@ -279,10 +278,10 @@ const useChatStore = create((set, get) => ({
     }))
     
     try {
-      // 🔥 创建可取消的请求，只发送file_id给后端
+      // 🔥 创建可取消的请求
       const request = apiClient.post(
         `/chat/conversations/${state.currentConversation.id}/messages`,
-        { content, file_id: fileInfo?.id || null, stream: false }
+        { content, file_id: fileId, stream: false }
       )
       
       // 保存请求引用
@@ -342,8 +341,8 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 发送流式消息 - 支持传递完整的file对象用于临时消息显示
-  sendStreamMessage: async (content, fileInfo = null) => {
+  // 发送流式消息 - 重写实现
+  sendStreamMessage: async (content, fileId = null) => {
     const state = get()
     if (!state.currentConversation) return
     
@@ -358,13 +357,12 @@ const useChatStore = create((set, get) => ({
       await get().getUserCredits()
     }
     
-    // 立即添加用户消息到界面（临时），包含file信息
+    // 立即添加用户消息到界面（临时）
     const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage = {
       id: tempUserMessageId,
       role: 'user',
       content,
-      file: fileInfo, // 添加完整的file信息用于显示
       created_at: new Date().toISOString(),
       temp: true
     }
@@ -391,10 +389,10 @@ const useChatStore = create((set, get) => ({
       let fullContent = ''
       let isCancelled = false
       
-      // 使用流式POST请求 - 只发送file_id给后端
+      // 使用流式POST请求 - 重要：这里要传递 stream: true
       await apiClient.postStream(
         `/chat/conversations/${state.currentConversation.id}/messages`,
-        { content, file_id: fileInfo?.id || null, stream: true },
+        { content, file_id: fileId, stream: true }, // 🔥 关键修改：确保传递 stream: true
         {
           onInit: (data) => {
             console.log('流式初始化:', data)
