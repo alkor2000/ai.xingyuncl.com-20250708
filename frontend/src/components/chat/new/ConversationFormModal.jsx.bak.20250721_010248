@@ -2,7 +2,7 @@
  * 新建对话弹窗组件
  */
 
-import React, { useEffect } from 'react'
+import React from 'react'
 import {
   Modal,
   Form,
@@ -19,7 +19,6 @@ import {
   InfoCircleOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -32,30 +31,6 @@ const ConversationFormModal = ({
   onSubmit
 }) => {
   const { t } = useTranslation()
-  const { getDefaultAIModel, getDefaultTemperature } = useSystemConfigStore()
-
-  // 当弹窗打开时，设置默认值
-  useEffect(() => {
-    if (visible && aiModels.length > 0) {
-      // 获取系统配置的默认模型
-      const defaultModel = getDefaultAIModel()
-      const defaultTemp = getDefaultTemperature()
-      
-      // 查找默认模型是否在可用模型列表中
-      const defaultModelAvailable = aiModels.find(m => m.is_active && m.name === defaultModel)
-      
-      // 如果默认模型不可用，使用第一个可用模型
-      const modelToUse = defaultModelAvailable ? defaultModel : aiModels.find(m => m.is_active)?.name
-      
-      // 设置表单默认值
-      form.setFieldsValue({
-        model_name: modelToUse,
-        context_length: 20,
-        ai_temperature: defaultTemp,
-        priority: 0
-      })
-    }
-  }, [visible, aiModels, form, getDefaultAIModel, getDefaultTemperature])
 
   return (
     <Modal
@@ -69,6 +44,12 @@ const ConversationFormModal = ({
         form={form}
         layout="vertical"
         onFinish={onSubmit}
+        initialValues={{
+          model_name: aiModels.find(m => m.is_active)?.name,
+          context_length: 20,
+          ai_temperature: 0.7,
+          priority: 0
+        }}
       >
         <Form.Item
           name="title"
@@ -129,14 +110,7 @@ const ConversationFormModal = ({
 
         <Form.Item
           name="ai_temperature"
-          label={
-            <Space>
-              {t('chat.form.temperature')}
-              <Tooltip title="Temperature控制AI回复的创造性。0=精确，1=创造性">
-                <InfoCircleOutlined style={{ color: '#999' }} />
-              </Tooltip>
-            </Space>
-          }
+          label={t('chat.form.temperature')}
         >
           <Slider
             min={0}

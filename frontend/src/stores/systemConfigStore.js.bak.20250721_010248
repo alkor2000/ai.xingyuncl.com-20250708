@@ -14,21 +14,6 @@ const useSystemConfigStore = create((set, get) => ({
       description: '企业级AI应用聚合平台',
       logo: '',
       favicon: ''
-    },
-    user: {
-      allow_register: true,
-      default_token_quota: 10000,
-      default_group_id: 1,
-      default_credits_quota: 1000
-    },
-    ai: {
-      default_model: 'gpt-4.1-mini-op',
-      temperature: 0.0
-    },
-    credits: {
-      default_credits: 1000,
-      max_credits: 100000,
-      min_credits_for_chat: 1
     }
   },
   
@@ -124,48 +109,6 @@ const useSystemConfigStore = create((set, get) => ({
   getSiteDescription: () => {
     const state = get()
     return state.systemConfig?.site?.description || '企业级AI应用聚合平台'
-  },
-  
-  // 获取默认AI模型
-  getDefaultAIModel: () => {
-    const state = get()
-    return state.systemConfig?.ai?.default_model || 'gpt-4.1-mini-op'
-  },
-  
-  // 获取默认Temperature
-  getDefaultTemperature: () => {
-    const state = get()
-    const temperature = state.systemConfig?.ai?.temperature
-    // 确保返回数字类型
-    if (temperature !== undefined && temperature !== null) {
-      return parseFloat(temperature)
-    }
-    return 0.0
-  },
-  
-  // 获取默认Token配额
-  getDefaultTokenQuota: () => {
-    const state = get()
-    return state.systemConfig?.user?.default_token_quota || 10000
-  },
-  
-  // 获取默认积分配额
-  getDefaultCreditsQuota: () => {
-    const state = get()
-    // 优先使用credits配置中的default_credits
-    if (state.systemConfig?.credits?.default_credits) {
-      return state.systemConfig.credits.default_credits
-    }
-    return state.systemConfig?.user?.default_credits_quota || 1000
-  },
-  
-  // 获取AI相关配置
-  getAIConfig: () => {
-    const state = get()
-    return {
-      defaultModel: state.systemConfig?.ai?.default_model || 'gpt-4.1-mini-op',
-      defaultTemperature: parseFloat(state.systemConfig?.ai?.temperature) || 0.0
-    }
   }
 }))
 

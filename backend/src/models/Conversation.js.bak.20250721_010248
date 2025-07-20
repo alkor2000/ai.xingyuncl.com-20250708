@@ -6,7 +6,6 @@ const { v4: uuidv4 } = require('uuid');
 const dbConnection = require('../database/connection');
 const { DatabaseError } = require('../utils/errors');
 const logger = require('../utils/logger');
-const SystemConfig = require('./SystemConfig');
 
 class Conversation {
   constructor(data = {}) {
@@ -75,23 +74,9 @@ class Conversation {
         model_name,
         system_prompt = null,
         context_length = 20, // 默认20条上下文
-        ai_temperature,
+        ai_temperature = 0.0, // 默认temperature为0.0
         priority = 0 // 默认优先级为0
       } = conversationData;
-
-      // 如果没有传入temperature，从系统配置获取默认值
-      let defaultTemperature = 0.0;
-      if (ai_temperature === undefined || ai_temperature === null) {
-        try {
-          const systemSettings = await SystemConfig.getFormattedSettings();
-          if (systemSettings.ai && systemSettings.ai.temperature !== undefined) {
-            defaultTemperature = parseFloat(systemSettings.ai.temperature) || 0.0;
-            logger.info('使用系统配置的默认temperature', { defaultTemperature });
-          }
-        } catch (configError) {
-          logger.warn('获取系统配置失败，使用默认temperature', { error: configError.message });
-        }
-      }
 
       const conversationId = uuidv4();
       
@@ -108,9 +93,7 @@ class Conversation {
         system_prompt,
         Math.max(0, Math.min(10, parseInt(priority) || 0)), // 确保优先级在0-10范围内
         parseInt(context_length) || 20,
-        ai_temperature !== undefined && ai_temperature !== null 
-          ? parseFloat(ai_temperature) || 0.0 
-          : defaultTemperature
+        parseFloat(ai_temperature) || 0.0
       ]);
 
       logger.info('会话创建成功', { 
@@ -118,7 +101,7 @@ class Conversation {
         userId: user_id,
         modelName: model_name,
         contextLength: context_length,
-        aiTemperature: ai_temperature !== undefined ? ai_temperature : defaultTemperature,
+        aiTemperature: ai_temperature,
         priority: priority
       });
 
