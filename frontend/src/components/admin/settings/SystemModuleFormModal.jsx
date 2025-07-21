@@ -1,8 +1,8 @@
 /**
- * 系统模块表单弹窗组件
+ * 系统模块表单弹窗组件 - 简化版用于外部应用集成
  */
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   Modal,
   Form,
@@ -12,11 +12,38 @@ import {
   Row,
   Col,
   Space,
-  Button
+  Button,
+  InputNumber
 } from 'antd'
 import { useTranslation } from 'react-i18next'
+import useAdminStore from '../../../stores/adminStore'
+import * as Icons from '@ant-design/icons'
 
 const { TextArea } = Input
+
+// 常用图标列表
+const commonIcons = [
+  'AppstoreOutlined',
+  'ApiOutlined',
+  'CloudOutlined',
+  'DatabaseOutlined',
+  'FileTextOutlined',
+  'FolderOutlined',
+  'GlobalOutlined',
+  'HomeOutlined',
+  'LinkOutlined',
+  'PictureOutlined',
+  'ProjectOutlined',
+  'RocketOutlined',
+  'SettingOutlined',
+  'TeamOutlined',
+  'ToolOutlined',
+  'UserOutlined',
+  'VideoCameraOutlined',
+  'BarChartOutlined',
+  'CodeOutlined',
+  'DashboardOutlined'
+]
 
 const SystemModuleFormModal = ({
   visible,
@@ -27,10 +54,28 @@ const SystemModuleFormModal = ({
   onCancel
 }) => {
   const { t } = useTranslation()
+  const { userGroups, getUserGroups } = useAdminStore()
+
+  // 加载用户组列表
+  useEffect(() => {
+    if (visible) {
+      getUserGroups()
+    }
+  }, [visible, getUserGroups])
+
+  // 设置编辑时的默认值
+  useEffect(() => {
+    if (editingModule && visible) {
+      form.setFieldsValue({
+        ...editingModule,
+        allowed_groups: editingModule.allowed_groups || []
+      })
+    }
+  }, [editingModule, visible, form])
 
   return (
     <Modal
-      title={editingModule ? '编辑系统模块' : '创建系统模块'}
+      title={editingModule ? t('admin.modules.editModule') : t('admin.modules.addModule')}
       open={visible}
       onCancel={onCancel}
       footer={null}
@@ -41,16 +86,25 @@ const SystemModuleFormModal = ({
         form={form}
         layout="vertical"
         onFinish={onSubmit}
+        initialValues={{
+          open_mode: 'new_tab',
+          menu_icon: 'AppstoreOutlined',
+          is_active: true,
+          sort_order: 0
+        }}
       >
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
               name="name"
-              label="模块标识"
-              rules={[{ required: true, message: '请输入模块标识' }]}
+              label={t('admin.modules.form.name')}
+              rules={[
+                { required: true, message: '请输入模块标识' },
+                { pattern: /^[a-z][a-z0-9-]*$/, message: '只能包含小写字母、数字和横线，且以字母开头' }
+              ]}
             >
               <Input 
-                placeholder="如: ai-image-generator" 
+                placeholder="如: project-management" 
                 disabled={!!editingModule} 
               />
             </Form.Item>
@@ -58,88 +112,101 @@ const SystemModuleFormModal = ({
           <Col span={12}>
             <Form.Item
               name="display_name"
-              label="显示名称"
+              label={t('admin.modules.form.displayName')}
               rules={[{ required: true, message: '请输入显示名称' }]}
             >
-              <Input placeholder="如: AI图像生成" />
+              <Input placeholder="如: 项目管理系统" />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item name="description" label="模块描述">
+        <Form.Item 
+          name="module_url" 
+          label="模块URL"
+          rules={[
+            { required: true, message: '请输入模块URL' },
+            { type: 'url', message: '请输入有效的URL' }
+          ]}
+        >
+          <Input placeholder="https://example.com/app" />
+        </Form.Item>
+
+        <Form.Item name="description" label={t('admin.modules.form.description')}>
           <TextArea rows={2} placeholder="描述模块的功能和用途" />
         </Form.Item>
 
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item 
-              name="module_type" 
-              label="模块类型" 
+              name="open_mode" 
+              label="打开方式"
               rules={[{ required: true }]}
             >
               <Select>
-                <Select.Option value="frontend">前端模块</Select.Option>
-                <Select.Option value="backend">后端模块</Select.Option>
-                <Select.Option value="fullstack">全栈模块</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item 
-              name="auth_mode" 
-              label="认证模式" 
-              rules={[{ required: true }]}
-            >
-              <Select>
-                <Select.Option value="jwt">JWT认证</Select.Option>
-                <Select.Option value="oauth">OAuth认证</Select.Option>
-                <Select.Option value="none">无认证</Select.Option>
+                <Select.Option value="new_tab">新标签页</Select.Option>
+                <Select.Option value="iframe">内嵌显示</Select.Option>
               </Select>
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
-              name="proxy_path"
-              label="代理路径"
-              rules={[{ required: true, message: '请输入代理路径' }]}
+              name="menu_icon"
+              label="菜单图标"
+              rules={[{ required: true }]}
             >
-              <Input placeholder="/image-generation" />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="api_endpoint" label="后端API地址">
-              <Input placeholder="http://localhost:5000/api" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="frontend_url" label="前端地址">
-              <Input placeholder="http://localhost:5001" />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Form.Item name="health_check_url" label="健康检查地址">
-          <Input placeholder="http://localhost:5000/health" />
-        </Form.Item>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="permissions" label="所需权限">
-              <Select mode="tags" placeholder="添加权限标识">
-                <Select.Option value="image.generate">image.generate</Select.Option>
-                <Select.Option value="image.view">image.view</Select.Option>
-                <Select.Option value="code.generate">code.generate</Select.Option>
-                <Select.Option value="document.process">document.process</Select.Option>
+              <Select
+                showSearch
+                placeholder="选择图标"
+              >
+                {commonIcons.map(iconName => {
+                  const IconComponent = Icons[iconName]
+                  return (
+                    <Select.Option key={iconName} value={iconName}>
+                      <Space>
+                        {IconComponent && <IconComponent />}
+                        <span>{iconName}</span>
+                      </Space>
+                    </Select.Option>
+                  )
+                })}
               </Select>
             </Form.Item>
           </Col>
-          <Col span={12}>
+          <Col span={8}>
+            <Form.Item
+              name="sort_order"
+              label="排序顺序"
+              tooltip="数值越小越靠前"
+            >
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={18}>
+            <Form.Item 
+              name="allowed_groups" 
+              label="允许访问的用户组"
+              tooltip="不选择则所有用户都可访问"
+            >
+              <Select
+                mode="multiple"
+                placeholder="选择允许访问的用户组"
+                allowClear
+              >
+                {userGroups.map(group => (
+                  <Select.Option key={group.id} value={group.id}>
+                    {group.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={6}>
             <Form.Item 
               name="is_active" 
-              label="启用状态" 
+              label={t('admin.modules.form.isActive')}
               valuePropName="checked"
             >
               <Switch />

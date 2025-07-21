@@ -452,7 +452,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  toggleModuleStatus: async (moduleId) => {
+  toggleModuleStatus: async (moduleId, isActive) => {
     try {
       const response = await apiClient.patch(`/admin/modules/${moduleId}/toggle-status`)
       // 刷新模块列表
@@ -467,7 +467,7 @@ const useAdminStore = create((set) => ({
   checkModuleHealth: async (moduleId) => {
     try {
       const response = await apiClient.post(`/admin/modules/${moduleId}/check-health`)
-      return response.data
+      return response.data.data
     } catch (error) {
       console.error('检查模块健康状态失败:', error)
       throw error

@@ -25,9 +25,6 @@ import CustomLanding from './pages/CustomLanding'
 const UserManagement = React.lazy(() => import('./pages/admin/Users'))
 const Settings = React.lazy(() => import('./pages/admin/Settings'))
 
-// 模块页面组件 - 懒加载
-const ModulePage = React.lazy(() => import('./pages/module/ModulePage'))
-
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -205,16 +202,6 @@ const App = () => {
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/profile" element={<Profile />} />
-                      
-                      {/* 模块页面路由 - 懒加载 */}
-                      <Route 
-                        path="/module/:moduleName" 
-                        element={
-                          <LazyLoadingWrapper>
-                            <ModulePage />
-                          </LazyLoadingWrapper>
-                        } 
-                      />
                       
                       {/* Admin路由 - 懒加载隔离 */}
                       <Route 

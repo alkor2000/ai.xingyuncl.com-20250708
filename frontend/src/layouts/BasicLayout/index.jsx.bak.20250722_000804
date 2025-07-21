@@ -4,7 +4,6 @@ import { Layout } from 'antd'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import useStatsStore from '../../stores/statsStore'
-import useModuleStore from '../../stores/moduleStore'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import MobileDrawer from './MobileDrawer'
@@ -17,7 +16,6 @@ const BasicLayout = ({ children }) => {
   const location = useLocation()
   const { user, hasPermission, hasRole } = useAuthStore()
   const { initializeSocket, disconnectSocket } = useStatsStore()
-  const { userModules, getUserModules } = useModuleStore()
   const { t } = useTranslation()
   
   // 移动端菜单状态
@@ -25,9 +23,6 @@ const BasicLayout = ({ children }) => {
   
   // 响应式检测
   const [isMobile, setIsMobile] = useState(false)
-  
-  // 动态菜单项
-  const [dynamicMenuItems, setDynamicMenuItems] = useState([])
   
   useEffect(() => {
     const checkMobile = () => {
@@ -51,81 +46,44 @@ const BasicLayout = ({ children }) => {
     }
   }, [initializeSocket, disconnectSocket])
 
-  // 加载用户可访问的模块
-  useEffect(() => {
-    if (user) {
-      getUserModules()
+  // 菜单配置
+  const menuItems = [
+    {
+      key: '/',
+      icon: 'DashboardOutlined',
+      label: t('nav.dashboard'),
+      permission: null
+    },
+    {
+      key: '/chat',
+      icon: 'MessageOutlined',
+      label: t('nav.chat'),
+      permission: 'chat.use'
+    },
+    {
+      key: 'admin',
+      icon: 'SettingOutlined',
+      label: t('nav.admin'),
+      permission: ['user.manage', 'user.manage.group'],
+      children: [
+        {
+          key: '/admin/users',
+          label: t('nav.users'),
+          permission: ['user.manage', 'user.manage.group']
+        },
+        {
+          key: '/admin/settings',
+          label: t('nav.settings'),
+          roles: ['super_admin', 'admin'],
+          permission: null
+        }
+      ]
     }
-  }, [user, getUserModules])
-
-  // 合并基础菜单和动态模块菜单
-  useEffect(() => {
-    // 基础菜单配置
-    const baseMenuItems = [
-      {
-        key: '/',
-        icon: 'DashboardOutlined',
-        label: t('nav.dashboard'),
-        permission: null
-      },
-      {
-        key: '/chat',
-        icon: 'MessageOutlined',
-        label: t('nav.chat'),
-        permission: 'chat.use'
-      },
-      {
-        key: 'admin',
-        icon: 'SettingOutlined',
-        label: t('nav.admin'),
-        permission: ['user.manage', 'user.manage.group'],
-        children: [
-          {
-            key: '/admin/users',
-            label: t('nav.users'),
-            permission: ['user.manage', 'user.manage.group']
-          },
-          {
-            key: '/admin/settings',
-            label: t('nav.settings'),
-            roles: ['super_admin', 'admin'],
-            permission: null
-          }
-        ]
-      }
-    ]
-
-    const moduleMenuItems = userModules.map(module => ({
-      key: `/module/${module.name}`,
-      icon: module.menu_icon || 'AppstoreOutlined',
-      label: module.display_name,
-      permission: null,
-      isModule: true,
-      openMode: module.open_mode,
-      moduleUrl: module.module_url
-    }))
-    
-    // 将模块菜单插入到管理菜单之前
-    const menuItems = [...baseMenuItems]
-    const adminIndex = menuItems.findIndex(item => item.key === 'admin')
-    
-    if (adminIndex > 0) {
-      menuItems.splice(adminIndex, 0, ...moduleMenuItems)
-    } else {
-      menuItems.push(...moduleMenuItems)
-    }
-    
-    setDynamicMenuItems(menuItems)
-  }, [userModules, t]) // 只依赖userModules和t
+  ]
 
   // 过滤菜单项
   const filterMenuItems = (items) => {
     return items.filter(item => {
-      // 模块菜单项已经过滤过了，直接显示
-      if (item.isModule) {
-        return true
-      }
-      
       if (item.roles) {
         const hasRequiredRole = item.roles.some(role => hasRole(role))
         if (!hasRequiredRole) return false
@@ -149,16 +107,10 @@ const BasicLayout = ({ children }) => {
     })
   }
 
-  const filteredMenuItems = filterMenuItems(dynamicMenuItems)
+  const filteredMenuItems = filterMenuItems(menuItems)
 
   // 处理菜单点击
-  const handleMenuClick = (key, menuItem) => {
-    // 如果是模块且设置为新标签页打开
-    if (menuItem?.isModule && menuItem?.openMode === 'new_tab') {
-      window.open(menuItem.moduleUrl, '_blank')
-      return
-    }
-    
+  const handleMenuClick = (key) => {
     if (key !== 'admin') {
       navigate(key)
       // 移动端点击后关闭菜单
@@ -166,26 +118,6 @@ const BasicLayout = ({ children }) => {
         setMobileMenuVisible(false)
       }
     }
-  }
-
-  // 查找菜单项
-  const findMenuItem = (items, key) => {
-    for (const item of items) {
-      if (item.key === key) {
-        return item
-      }
-      if (item.children) {
-        const found = findMenuItem(item.children, key)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  // 修改点击处理
-  const handleMenuClickWrapper = (key) => {
-    const menuItem = findMenuItem(filteredMenuItems, key)
-    handleMenuClick(key, menuItem)
   }
 
   return (
@@ -203,7 +135,7 @@ const BasicLayout = ({ children }) => {
           <Sidebar
             menuItems={filteredMenuItems}
             selectedKey={location.pathname}
-            onMenuClick={handleMenuClickWrapper}
+            onMenuClick={handleMenuClick}
           />
         )}
         
@@ -214,7 +146,7 @@ const BasicLayout = ({ children }) => {
             menuItems={filteredMenuItems}
             selectedKey={location.pathname}
             onClose={() => setMobileMenuVisible(false)}
-            onMenuClick={handleMenuClickWrapper}
+            onMenuClick={handleMenuClick}
           />
         )}
         

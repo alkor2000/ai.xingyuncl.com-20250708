@@ -53,7 +53,6 @@ const Settings = () => {
     createModule,
     updateModule,
     deleteModule,
-    toggleModuleStatus,
     checkModuleHealth,
     getSystemStats,
     getSystemSettings,
@@ -295,12 +294,15 @@ const Settings = () => {
       name: module.name,
       display_name: module.display_name,
       description: module.description,
-      module_url: module.module_url,
-      open_mode: module.open_mode,
-      menu_icon: module.menu_icon,
-      sort_order: module.sort_order,
-      allowed_groups: module.allowed_groups || [],
-      is_active: module.is_active
+      module_type: module.module_type,
+      api_endpoint: module.api_endpoint,
+      frontend_url: module.frontend_url,
+      proxy_path: module.proxy_path,
+      auth_mode: module.auth_mode,
+      is_active: module.is_active,
+      permissions: module.permissions || [],
+      config: module.config || {},
+      health_check_url: module.health_check_url
     })
     setIsModuleModalVisible(true)
   }
@@ -323,7 +325,7 @@ const Settings = () => {
 
   const handleToggleModuleStatus = async (moduleId, isActive) => {
     try {
-      await toggleModuleStatus(moduleId, isActive)
+      await updateModule(moduleId, { is_active: isActive })
       message.success(isActive ? '模块已启用' : '模块已禁用')
     } catch (error) {
       message.error('操作失败')

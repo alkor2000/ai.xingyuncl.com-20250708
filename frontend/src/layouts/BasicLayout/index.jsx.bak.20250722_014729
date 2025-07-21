@@ -58,43 +58,43 @@ const BasicLayout = ({ children }) => {
     }
   }, [user, getUserModules])
 
+  // 基础菜单配置
+  const baseMenuItems = [
+    {
+      key: '/',
+      icon: 'DashboardOutlined',
+      label: t('nav.dashboard'),
+      permission: null
+    },
+    {
+      key: '/chat',
+      icon: 'MessageOutlined',
+      label: t('nav.chat'),
+      permission: 'chat.use'
+    },
+    {
+      key: 'admin',
+      icon: 'SettingOutlined',
+      label: t('nav.admin'),
+      permission: ['user.manage', 'user.manage.group'],
+      children: [
+        {
+          key: '/admin/users',
+          label: t('nav.users'),
+          permission: ['user.manage', 'user.manage.group']
+        },
+        {
+          key: '/admin/settings',
+          label: t('nav.settings'),
+          roles: ['super_admin', 'admin'],
+          permission: null
+        }
+      ]
+    }
+  ]
+
   // 合并基础菜单和动态模块菜单
   useEffect(() => {
-    // 基础菜单配置
-    const baseMenuItems = [
-      {
-        key: '/',
-        icon: 'DashboardOutlined',
-        label: t('nav.dashboard'),
-        permission: null
-      },
-      {
-        key: '/chat',
-        icon: 'MessageOutlined',
-        label: t('nav.chat'),
-        permission: 'chat.use'
-      },
-      {
-        key: 'admin',
-        icon: 'SettingOutlined',
-        label: t('nav.admin'),
-        permission: ['user.manage', 'user.manage.group'],
-        children: [
-          {
-            key: '/admin/users',
-            label: t('nav.users'),
-            permission: ['user.manage', 'user.manage.group']
-          },
-          {
-            key: '/admin/settings',
-            label: t('nav.settings'),
-            roles: ['super_admin', 'admin'],
-            permission: null
-          }
-        ]
-      }
-    ]
-
     const moduleMenuItems = userModules.map(module => ({
       key: `/module/${module.name}`,
       icon: module.menu_icon || 'AppstoreOutlined',
@@ -116,7 +116,7 @@ const BasicLayout = ({ children }) => {
     }
     
     setDynamicMenuItems(menuItems)
-  }, [userModules, t]) // 只依赖userModules和t
+  }, [userModules, baseMenuItems])
 
   // 过滤菜单项
   const filterMenuItems = (items) => {

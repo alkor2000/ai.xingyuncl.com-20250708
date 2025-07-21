@@ -1,0 +1,206 @@
+/**
+ * 系统模块模型
+ */
+
+const dbConnection = require('../database/connection');
+const logger = require('../utils/logger');
+
+class Module {
+  /**
+   * 获取所有模块
+   */
+  static async findAll() {
+    const query = `
+      SELECT id, name, display_name, description, module_url, open_mode, 
+             menu_icon, is_active, sort_order, allowed_groups, created_at, updated_at
+      FROM system_modules 
+      ORDER BY sort_order ASC, id ASC
+    `;
+    const result = await dbConnection.query(query);
+    return result.rows;
+  }
+
+  /**
+   * 根据ID获取模块
+   */
+  static async findById(id) {
+    const query = `SELECT * FROM system_modules WHERE id = ?`;
+    const result = await dbConnection.query(query, [id]);
+    return result.rows[0];
+  }
+
+  /**
+   * 根据name获取模块
+   */
+  static async findByName(name) {
+    const query = `SELECT * FROM system_modules WHERE name = ?`;
+    const result = await dbConnection.query(query, [name]);
+    return result.rows[0];
+  }
+
+  /**
+   * 获取用户可访问的模块
+   * @param {number} userId - 用户ID
+   * @param {number} userGroupId - 用户组ID
+   */
+  static async findAccessibleModules(userId, userGroupId) {
+    logger.info(`查询用户可访问模块 - userId: ${userId}, groupId: ${userGroupId}`);
+    
+    // 使用CAST AS JSON来确保参数类型正确
+    const query = `
+      SELECT id, name, display_name, description, module_url, open_mode, 
+             menu_icon, sort_order, is_active, allowed_groups
+      FROM system_modules 
+      WHERE is_active = 1 
+        AND (
+          allowed_groups IS NULL 
+          OR JSON_CONTAINS(allowed_groups, CAST(? AS JSON), '$')
+        )
+      ORDER BY sort_order ASC, id ASC
+    `;
+    
+    const result = await dbConnection.query(query, [userGroupId]);
+    
+    logger.info(`查询到 ${result.rows.length} 个可访问模块`);
+    result.rows.forEach(module => {
+      logger.info(`模块: ${module.name}, allowed_groups: ${module.allowed_groups}, is_active: ${module.is_active}`);
+    });
+    
+    return result.rows;
+  }
+
+  /**
+   * 创建模块
+   */
+  static async create(moduleData) {
+    const {
+      name,
+      display_name,
+      description,
+      module_url,
+      open_mode = 'new_tab',
+      menu_icon = 'AppstoreOutlined',
+      is_active = 1,
+      sort_order = 0,
+      allowed_groups = null
+    } = moduleData;
+
+    // 构建allowed_groups的JSON值
+    let allowedGroupsValue = null;
+    if (allowed_groups && Array.isArray(allowed_groups) && allowed_groups.length > 0) {
+      // 确保是JSON格式
+      allowedGroupsValue = JSON.stringify(allowed_groups);
+    }
+
+    const query = `
+      INSERT INTO system_modules 
+      (name, display_name, description, module_url, open_mode, menu_icon, 
+       is_active, sort_order, allowed_groups, proxy_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const result = await dbConnection.query(query, [
+      name,
+      display_name,
+      description,
+      module_url,
+      open_mode,
+      menu_icon,
+      is_active,
+      sort_order,
+      allowedGroupsValue,
+      `/${name}` // 简单的proxy_path生成
+    ]);
+
+    // 修复：使用result.rows.insertId而不是result.insertId
+    return result.rows.insertId;
+  }
+
+  /**
+   * 更新模块
+   */
+  static async update(id, updateData) {
+    const allowedFields = [
+      'display_name', 'description', 'module_url', 'open_mode',
+      'menu_icon', 'is_active', 'sort_order', 'allowed_groups'
+    ];
+
+    const fields = [];
+    const values = [];
+
+    for (const field of allowedFields) {
+      if (updateData.hasOwnProperty(field)) {
+        fields.push(`${field} = ?`);
+        if (field === 'allowed_groups') {
+          // 处理allowed_groups
+          if (updateData[field] === null || 
+              (Array.isArray(updateData[field]) && updateData[field].length === 0)) {
+            values.push(null);
+          } else if (Array.isArray(updateData[field])) {
+            // 确保是JSON格式
+            values.push(JSON.stringify(updateData[field]));
+          } else {
+            values.push(updateData[field]);
+          }
+        } else {
+          values.push(updateData[field]);
+        }
+      }
+    }
+
+    if (fields.length === 0) {
+      return false;
+    }
+
+    values.push(id);
+
+    const query = `UPDATE system_modules SET ${fields.join(', ')} WHERE id = ?`;
+    const result = await dbConnection.query(query, values);
+
+    return result.rows.affectedRows > 0;
+  }
+
+  /**
+   * 删除模块
+   */
+  static async delete(id) {
+    const query = `DELETE FROM system_modules WHERE id = ?`;
+    const result = await dbConnection.query(query, [id]);
+    return result.rows.affectedRows > 0;
+  }
+
+  /**
+   * 切换模块状态
+   */
+  static async toggleStatus(id) {
+    const query = `UPDATE system_modules SET is_active = NOT is_active WHERE id = ?`;
+    const result = await dbConnection.query(query, [id]);
+    return result.rows.affectedRows > 0;
+  }
+
+  /**
+   * 解析allowed_groups字段
+   */
+  static parseAllowedGroups(allowedGroups) {
+    if (!allowedGroups) return [];
+    
+    try {
+      // 如果已经是数组，直接返回
+      if (Array.isArray(allowedGroups)) {
+        return allowedGroups;
+      }
+      
+      // 如果是字符串，尝试解析
+      if (typeof allowedGroups === 'string') {
+        return JSON.parse(allowedGroups);
+      }
+      
+      return [];
+    } catch (e) {
+      console.error('解析allowed_groups失败:', allowedGroups, e);
+      return [];
+    }
+  }
+}
+
+module.exports = Module;

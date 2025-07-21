@@ -400,78 +400,26 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 模块管理
+  // 模块管理（暂时返回空数据）
   getModules: async () => {
-    set({ loading: true })
-    try {
-      const response = await apiClient.get('/admin/modules')
-      set({ 
-        modules: response.data.data,
-        loading: false 
-      })
-      return response.data.data
-    } catch (error) {
-      console.error('获取模块列表失败:', error)
-      set({ loading: false })
-      throw error
-    }
+    set({ modules: [] })
+    return []
   },
   
   createModule: async (moduleData) => {
-    try {
-      const response = await apiClient.post('/admin/modules', moduleData)
-      // 刷新模块列表
-      await useAdminStore.getState().getModules()
-      return response.data.data
-    } catch (error) {
-      console.error('创建模块失败:', error)
-      throw error
-    }
+    throw new Error('功能暂未开放')
   },
   
   updateModule: async (moduleId, updateData) => {
-    try {
-      const response = await apiClient.put(`/admin/modules/${moduleId}`, updateData)
-      // 刷新模块列表
-      await useAdminStore.getState().getModules()
-      return response.data.data
-    } catch (error) {
-      console.error('更新模块失败:', error)
-      throw error
-    }
+    throw new Error('功能暂未开放')
   },
   
   deleteModule: async (moduleId) => {
-    try {
-      await apiClient.delete(`/admin/modules/${moduleId}`)
-      // 刷新模块列表
-      await useAdminStore.getState().getModules()
-    } catch (error) {
-      console.error('删除模块失败:', error)
-      throw error
-    }
-  },
-  
-  toggleModuleStatus: async (moduleId) => {
-    try {
-      const response = await apiClient.patch(`/admin/modules/${moduleId}/toggle-status`)
-      // 刷新模块列表
-      await useAdminStore.getState().getModules()
-      return response.data.data
-    } catch (error) {
-      console.error('切换模块状态失败:', error)
-      throw error
-    }
+    throw new Error('功能暂未开放')
   },
   
   checkModuleHealth: async (moduleId) => {
-    try {
-      const response = await apiClient.post(`/admin/modules/${moduleId}/check-health`)
-      return response.data
-    } catch (error) {
-      console.error('检查模块健康状态失败:', error)
-      throw error
-    }
+    throw new Error('功能暂未开放')
   }
 }))
 
