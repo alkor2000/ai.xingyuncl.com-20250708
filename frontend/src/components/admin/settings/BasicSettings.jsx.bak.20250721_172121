@@ -196,10 +196,8 @@ const BasicSettings = ({
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
-                  step={1}
-                  precision={0}
-                  formatter={value => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                  parser={value => value ? parseInt(value.replace(/\$\s?|(,*)/g, ''), 10) : 0}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
                   disabled={disabled}
                 />
               </Form.Item>

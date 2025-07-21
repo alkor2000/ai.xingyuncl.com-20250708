@@ -25,7 +25,6 @@ import {
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
 import UserCreditsTab from './UserCreditsTab'
-import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TabPane } = Tabs
 const { TextArea } = Input
@@ -46,14 +45,9 @@ const UserFormModal = ({
 }) => {
   const { t } = useTranslation()
   const [activeKey, setActiveKey] = useState('basic')
-  const { systemConfig } = useSystemConfigStore()
   
   const isGroupAdmin = currentUser?.role === 'admin'
   const isSuperAdmin = currentUser?.role === 'super_admin'
-  
-  // 获取系统配置的默认值
-  const defaultTokens = systemConfig?.user?.default_tokens || 10000
-  const defaultCredits = systemConfig?.user?.default_credits || 1000
   
   // 切换到积分Tab时加载积分历史
   useEffect(() => {
@@ -66,15 +60,8 @@ const UserFormModal = ({
   useEffect(() => {
     if (visible) {
       setActiveKey('basic')
-      // 如果是新建用户，设置默认值
-      if (!editingUser && !isGroupAdmin) {
-        form.setFieldsValue({
-          token_quota: defaultTokens,
-          credits_quota: defaultCredits
-        })
-      }
     }
-  }, [visible, editingUser, isGroupAdmin, defaultTokens, defaultCredits, form])
+  }, [visible])
   
   // 检查是否可以编辑备注
   const canEditRemark = (user) => {
@@ -208,6 +195,7 @@ const UserFormModal = ({
                     name="token_quota"
                     label={t('admin.users.form.tokenQuota')}
                     rules={[{ required: true, message: t('admin.users.form.tokenQuota.required') }]}
+                    initialValue={10000}
                   >
                     <InputNumber 
                       placeholder={t('admin.users.form.tokenQuota')}
@@ -223,6 +211,7 @@ const UserFormModal = ({
                     name="credits_quota"
                     label={t('admin.users.form.creditsQuota')}
                     rules={[{ required: true, message: t('admin.users.form.creditsQuota.required') }]}
+                    initialValue={1000}
                   >
                     <InputNumber 
                       placeholder={t('admin.users.form.creditsQuota')}

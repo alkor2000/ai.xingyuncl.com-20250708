@@ -213,14 +213,13 @@ class SystemConfig {
    */
   static async saveFormattedSettings(formattedSettings) {
     try {
-      // 清理用户配置中的旧字段，使用更准确的默认值处理
+      // 清理用户配置中的旧字段
       if (formattedSettings.user) {
         const cleanedUserConfig = {
           allow_register: formattedSettings.user.allow_register !== false,
-          // 使用 ?? 操作符，这样 0 也会被当作有效值
-          default_tokens: formattedSettings.user.default_tokens ?? 10000,
-          default_credits: formattedSettings.user.default_credits ?? 1000,
-          default_group_id: formattedSettings.user.default_group_id ?? 1
+          default_tokens: formattedSettings.user.default_tokens || 10000,
+          default_credits: formattedSettings.user.default_credits || 1000,
+          default_group_id: formattedSettings.user.default_group_id || 1
         };
         formattedSettings.user = cleanedUserConfig;
       }
