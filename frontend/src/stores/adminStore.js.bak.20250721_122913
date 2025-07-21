@@ -85,8 +85,8 @@ const useAdminStore = create((set) => ({
   
   resetUserPassword: async (userId, newPassword) => {
     try {
-      const response = await apiClient.put(`/admin/users/${userId}/password`, {
-        newPassword: newPassword
+      const response = await apiClient.post(`/admin/users/${userId}/reset-password`, {
+        new_password: newPassword
       })
       return response.data.data
     } catch (error) {
