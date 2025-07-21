@@ -262,6 +262,9 @@ const UserTable = ({
               </Tooltip>
             )}
             
+            {/* 删除按钮已移除 - 使用禁用功能代替删除 */}
+            {/* 如需恢复删除功能，取消下面的注释 */}
+            {/*
             {isSuperAdmin && record.id !== currentUser?.id && (
               <Tooltip title={t('button.delete')}>
                 <Popconfirm
@@ -279,6 +282,7 @@ const UserTable = ({
                 </Popconfirm>
               </Tooltip>
             )}
+            */}
           </Space>
         )
       }
