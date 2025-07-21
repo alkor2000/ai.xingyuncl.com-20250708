@@ -4,7 +4,6 @@
   "chat.welcome": "欢迎使用AI助手",
   "chat.selectOrCreate": "请选择一个对话或创建新对话开始",
   "chat.startNewChat": "开始新对话",
-  "chat.startChat": "开始对话",
   "chat.selectConversation": "请先选择或创建一个对话",
   "chat.noConversations": "暂无对话",
   "chat.send": "发送",

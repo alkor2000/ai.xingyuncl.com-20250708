@@ -1,11 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { Avatar, Card, Spin, Empty, Typography, Alert } from 'antd'
-import { ThunderboltFilled, LoadingOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import React from 'react'
+import { Avatar, Card, Spin, Empty, Typography } from 'antd'
+import { ThunderboltFilled, LoadingOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
 import MessageContent from './MessageContent'
-import apiClient from '../../utils/api'
-import './MessageList.less'
 
 const { Text } = Typography
 
@@ -99,61 +96,6 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
 
 MessageItem.displayName = 'MessageItem'
 
-// 空消息状态组件 - 显示系统公告
-const EmptyMessages = () => {
-  const { t } = useTranslation()
-  const [announcement, setAnnouncement] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  // 获取系统公告
-  useEffect(() => {
-    const fetchAnnouncement = async () => {
-      try {
-        setLoading(true)
-        const response = await apiClient.get('/admin/announcement')
-        if (response.data.success) {
-          setAnnouncement(response.data.data)
-        }
-      } catch (error) {
-        console.error('获取系统公告失败:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAnnouncement()
-  }, [])
-
-  return (
-    <div className="chat-empty">
-      {/* 系统公告 */}
-      {loading ? (
-        <div className="announcement-loading">
-          <Spin size="large" />
-        </div>
-      ) : (
-        announcement?.content && (
-          <Card className="announcement-card">
-            <div className="announcement-header">
-              <InfoCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />
-              <span>系统公告</span>
-            </div>
-            <div className="announcement-content markdown-content">
-              <ReactMarkdown>{announcement.content}</ReactMarkdown>
-            </div>
-          </Card>
-        )
-      )}
-      
-      {/* 原有的空状态提示 */}
-      <Empty 
-        description={t('chat.startChat')}
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      />
-    </div>
-  )
-}
-
 // 消息列表组件
 const MessageList = React.memo(({ 
   messages, 
@@ -168,7 +110,14 @@ const MessageList = React.memo(({
   const { t } = useTranslation()
   
   if (messages.length === 0) {
-    return <EmptyMessages />
+    return (
+      <div className="chat-empty">
+        <Empty 
+          description={t('chat.startChat')}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      </div>
+    )
   }
 
   return (
