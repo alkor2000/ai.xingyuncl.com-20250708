@@ -110,17 +110,6 @@ router.post('/settings/upload-logo',
   SystemStatsController.uploadSiteLogo
 );
 
-// 自定义首页配置路由
-router.get('/settings/custom-homepage',
-  canManageSystem(), // 超级管理员和组管理员都可以查看
-  SystemStatsController.getCustomHomepage
-);
-
-router.put('/settings/custom-homepage',
-  canManageSystem(), // 只有超级管理员可以修改
-  SystemStatsController.updateCustomHomepage
-);
-
 // ===== 特殊处理：积分相关路由 =====
 // 由于积分路由路径包含 /users/:id/credits，需要在这里统一处理
 

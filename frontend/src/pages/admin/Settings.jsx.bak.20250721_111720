@@ -12,8 +12,7 @@ import {
   AppstoreOutlined,
   ThunderboltOutlined,
   FileImageOutlined,
-  LockOutlined,
-  GlobalOutlined
+  LockOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -28,8 +27,7 @@ import {
   AIModelFormModal,
   SystemModuleTable,
   SystemModuleFormModal,
-  BasicSettings,
-  CustomHomepage
+  BasicSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -485,21 +483,6 @@ const Settings = () => {
             disabled={!isSuperAdmin}
           />
         </TabPane>
-
-        {/* 自定义首页（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <GlobalOutlined />
-                {t('admin.settings.tabs.customHomepage')}
-              </span>
-            } 
-            key="customHomepage"
-          >
-            <CustomHomepage disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
       </Tabs>
 
       {/* AI模型弹窗（只有超级管理员可以使用） */}

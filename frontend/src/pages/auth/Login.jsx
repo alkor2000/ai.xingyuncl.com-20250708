@@ -35,8 +35,19 @@ const Login = () => {
       alignItems: 'center',
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
+      padding: '20px',
+      position: 'relative'
     }}>
+      {/* 语言切换器移到页面右上角 */}
+      <div style={{ 
+        position: 'absolute', 
+        top: 20, 
+        right: 20,
+        zIndex: 10
+      }}>
+        <LanguageSwitch />
+      </div>
+
       <Card
         style={{
           width: '100%',
@@ -45,15 +56,10 @@ const Login = () => {
           borderRadius: '8px'
         }}
       >
-        <div style={{ position: 'absolute', top: 16, right: 16 }}>
-          <LanguageSwitch />
-        </div>
-        
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: 0 }}>
             {t('app.name')}
           </Title>
-          <Text type="secondary">{t('app.description')}</Text>
         </div>
 
         <Form
@@ -105,19 +111,6 @@ const Login = () => {
             <Text type="secondary">{t('auth.login.noAccount')}</Text>
             <Link to="/register">{t('auth.login.register')}</Link>
           </Space>
-        </div>
-
-        <div style={{ 
-          marginTop: '30px', 
-          padding: '16px', 
-          background: '#f6f8fa', 
-          borderRadius: '4px' 
-        }}>
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            <strong>{t('auth.login.testAccount')}：</strong><br />
-            Email: admin@ai.xingyuncl.com<br />
-            Password: admin123
-          </Text>
         </div>
       </Card>
     </div>
