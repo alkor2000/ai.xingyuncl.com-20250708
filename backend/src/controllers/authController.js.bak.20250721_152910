@@ -135,40 +135,6 @@ class AuthController {
 
       logger.info('用户注册尝试', { email, username });
 
-      // 获取系统配置，检查是否允许注册
-      let allowRegister = true;
-      let defaultTokens = 10000;
-      let defaultCredits = 1000;
-      let defaultGroupId = 1;
-      
-      try {
-        const systemSettings = await SystemConfig.getFormattedSettings();
-        
-        if (systemSettings.user) {
-          // 检查是否允许注册
-          allowRegister = systemSettings.user.allow_register !== false;
-          
-          if (!allowRegister) {
-            logger.warn('注册失败：系统已关闭注册功能', { email, username });
-            return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
-          }
-          
-          // 使用新的字段名
-          defaultTokens = systemSettings.user.default_tokens || 10000;
-          defaultCredits = systemSettings.user.default_credits || 1000;
-          defaultGroupId = systemSettings.user.default_group_id || 1;
-        }
-        
-        logger.info('使用系统配置的默认值', {
-          allowRegister,
-          defaultTokens,
-          defaultCredits,
-          defaultGroupId
-        });
-      } catch (configError) {
-        logger.warn('获取系统配置失败，使用默认值', { error: configError.message });
-      }
-
       // 检查邮箱是否已存在
       const existingUser = await User.findByEmail(email.toLowerCase());
       if (existingUser) {
@@ -179,6 +145,34 @@ class AuthController {
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+      // 从系统配置获取默认值
+      let defaultTokenQuota = 10000;
+      let defaultCreditsQuota = 1000;
+      let defaultGroupId = 1;
+      
+      try {
+        const systemSettings = await SystemConfig.getFormattedSettings();
+        
+        if (systemSettings.user) {
+          defaultTokenQuota = systemSettings.user.default_token_quota || 10000;
+          defaultCreditsQuota = systemSettings.user.default_credits_quota || 1000;
+          defaultGroupId = systemSettings.user.default_group_id || 1;
+        }
+        
+        if (systemSettings.credits) {
+          // 如果credits配置中有default_credits，优先使用
+          defaultCreditsQuota = systemSettings.credits.default_credits || defaultCreditsQuota;
+        }
+        
+        logger.info('使用系统配置的默认值', {
+          defaultTokenQuota,
+          defaultCreditsQuota,
+          defaultGroupId
+        });
+      } catch (configError) {
+        logger.warn('获取系统配置失败，使用默认值', { error: configError.message });
+      }
+
       // 创建用户（使用系统配置的默认值）
       const user = await User.create({
         email: email.toLowerCase(),
@@ -187,8 +181,8 @@ class AuthController {
         role: 'user',
         status: 'active',
         group_id: defaultGroupId,
-        token_quota: defaultTokens,
-        credits_quota: defaultCredits,
+        token_quota: defaultTokenQuota,
+        credits_quota: defaultCreditsQuota,
         credits_expire_days: 365 // 默认365天有效期
       });
 
@@ -198,8 +192,8 @@ class AuthController {
       logger.info('用户注册成功', { 
         email, 
         userId: user.id,
-        tokenQuota: defaultTokens,
-        creditsQuota: defaultCredits
+        tokenQuota: defaultTokenQuota,
+        creditsQuota: defaultCreditsQuota
       });
 
       return ResponseHelper.success(res, {

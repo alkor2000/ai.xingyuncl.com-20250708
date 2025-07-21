@@ -137,8 +137,8 @@ class AuthController {
 
       // 获取系统配置，检查是否允许注册
       let allowRegister = true;
-      let defaultTokens = 10000;
-      let defaultCredits = 1000;
+      let defaultTokenQuota = 10000;
+      let defaultCreditsQuota = 1000;
       let defaultGroupId = 1;
       
       try {
@@ -153,16 +153,20 @@ class AuthController {
             return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
           }
           
-          // 使用新的字段名
-          defaultTokens = systemSettings.user.default_tokens || 10000;
-          defaultCredits = systemSettings.user.default_credits || 1000;
+          defaultTokenQuota = systemSettings.user.default_token_quota || 10000;
+          defaultCreditsQuota = systemSettings.user.default_credits_quota || 1000;
           defaultGroupId = systemSettings.user.default_group_id || 1;
+        }
+        
+        if (systemSettings.credits) {
+          // 如果credits配置中有default_credits，优先使用
+          defaultCreditsQuota = systemSettings.credits.default_credits || defaultCreditsQuota;
         }
         
         logger.info('使用系统配置的默认值', {
           allowRegister,
-          defaultTokens,
-          defaultCredits,
+          defaultTokenQuota,
+          defaultCreditsQuota,
           defaultGroupId
         });
       } catch (configError) {
@@ -187,8 +191,8 @@ class AuthController {
         role: 'user',
         status: 'active',
         group_id: defaultGroupId,
-        token_quota: defaultTokens,
-        credits_quota: defaultCredits,
+        token_quota: defaultTokenQuota,
+        credits_quota: defaultCreditsQuota,
         credits_expire_days: 365 // 默认365天有效期
       });
 
@@ -198,8 +202,8 @@ class AuthController {
       logger.info('用户注册成功', { 
         email, 
         userId: user.id,
-        tokenQuota: defaultTokens,
-        creditsQuota: defaultCredits
+        tokenQuota: defaultTokenQuota,
+        creditsQuota: defaultCreditsQuota
       });
 
       return ResponseHelper.success(res, {

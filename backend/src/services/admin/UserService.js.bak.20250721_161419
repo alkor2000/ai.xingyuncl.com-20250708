@@ -5,7 +5,6 @@
 const User = require('../../models/User');
 const AIModel = require('../../models/AIModel');
 const GroupService = require('./GroupService');
-const SystemConfig = require('../../models/SystemConfig');
 const dbConnection = require('../../database/connection');
 const logger = require('../../utils/logger');
 const { DatabaseError, ValidationError, ConflictError } = require('../../utils/errors');
@@ -16,37 +15,15 @@ class UserService {
    */
   static async createUser(userData, operatorId = null) {
     try {
-      // 先获取系统配置的默认值
-      let defaultTokens = 10000;
-      let defaultCredits = 1000;
-      let defaultGroupId = 1;
-      
-      try {
-        const systemSettings = await SystemConfig.getFormattedSettings();
-        if (systemSettings.user) {
-          defaultTokens = systemSettings.user.default_tokens || 10000;
-          defaultCredits = systemSettings.user.default_credits || 1000;
-          defaultGroupId = systemSettings.user.default_group_id || 1;
-        }
-        
-        logger.info('创建用户使用系统配置的默认值', {
-          defaultTokens,
-          defaultCredits,
-          defaultGroupId
-        });
-      } catch (configError) {
-        logger.warn('获取系统配置失败，使用内置默认值', { error: configError.message });
-      }
-
       const {
         email,
         username,
         password,
         role = 'user',
-        group_id = defaultGroupId,
+        group_id = 1,
         status = 'active',
-        token_quota = defaultTokens,
-        credits_quota = defaultCredits,
+        token_quota = 10000,
+        credits_quota = 1000,
         credits_expire_days = 365,
         remark = null
       } = userData;
@@ -93,9 +70,7 @@ class UserService {
         newUserId: newUser.id,
         email: newUser.email,
         role: newUser.role,
-        group_id: newUser.group_id,
-        token_quota: newUser.token_quota,
-        credits_quota: newUser.credits_quota
+        group_id: newUser.group_id
       });
 
       return newUser;

@@ -142,8 +142,8 @@ class SystemConfig {
     try {
       const settings = await SystemConfig.getAllSettings();
       
-      // 构建配置格式，处理兼容性
-      const formattedSettings = {
+      // 构建兼容的格式
+      return {
         site: settings.site_config || {
           name: 'AI Platform',
           description: '企业级AI应用聚合平台',
@@ -152,38 +152,20 @@ class SystemConfig {
         },
         user: settings.user_config || {
           allow_register: true,
-          default_tokens: 10000,
-          default_credits: 1000,
-          default_group_id: 1
+          default_token_quota: 10000,
+          default_group_id: 1,
+          default_credits_quota: 1000
         },
         ai: settings.ai_config || {
           default_model: 'gpt-4.1-mini-op',
           temperature: 0.0
+        },
+        credits: settings.credits_config || {
+          default_credits: 1000,
+          max_credits: 100000,
+          min_credits_for_chat: 1
         }
       };
-
-      // 处理用户配置兼容性
-      if (formattedSettings.user) {
-        // 兼容旧字段名 default_token_quota -> default_tokens
-        if (formattedSettings.user.default_token_quota !== undefined && formattedSettings.user.default_tokens === undefined) {
-          formattedSettings.user.default_tokens = formattedSettings.user.default_token_quota;
-        }
-        // 兼容旧字段名 default_credits_quota -> default_credits
-        if (formattedSettings.user.default_credits_quota !== undefined && formattedSettings.user.default_credits === undefined) {
-          formattedSettings.user.default_credits = formattedSettings.user.default_credits_quota;
-        }
-        
-        // 如果旧的credits配置中有default_credits，优先使用
-        if (settings.credits_config && settings.credits_config.default_credits !== undefined) {
-          formattedSettings.user.default_credits = settings.credits_config.default_credits;
-        }
-        
-        // 清理旧字段
-        delete formattedSettings.user.default_token_quota;
-        delete formattedSettings.user.default_credits_quota;
-      }
-
-      return formattedSettings;
     } catch (error) {
       logger.error('获取格式化配置失败:', error);
       // 返回默认配置
@@ -196,13 +178,18 @@ class SystemConfig {
         },
         user: {
           allow_register: true,
-          default_tokens: 10000,
-          default_credits: 1000,
-          default_group_id: 1
+          default_token_quota: 10000,
+          default_group_id: 1,
+          default_credits_quota: 1000
         },
         ai: {
           default_model: 'gpt-4.1-mini-op',
           temperature: 0.0
+        },
+        credits: {
+          default_credits: 1000,
+          max_credits: 100000,
+          min_credits_for_chat: 1
         }
       };
     }
@@ -213,24 +200,12 @@ class SystemConfig {
    */
   static async saveFormattedSettings(formattedSettings) {
     try {
-      // 清理用户配置中的旧字段
-      if (formattedSettings.user) {
-        const cleanedUserConfig = {
-          allow_register: formattedSettings.user.allow_register !== false,
-          default_tokens: formattedSettings.user.default_tokens || 10000,
-          default_credits: formattedSettings.user.default_credits || 1000,
-          default_group_id: formattedSettings.user.default_group_id || 1
-        };
-        formattedSettings.user = cleanedUserConfig;
-      }
-
       const settings = {
         site_config: formattedSettings.site,
         user_config: formattedSettings.user,
-        ai_config: formattedSettings.ai
+        ai_config: formattedSettings.ai,
+        credits_config: formattedSettings.credits
       };
-      
-      // 不再保存credits_config
       
       return await SystemConfig.updateSettings(settings);
     } catch (error) {

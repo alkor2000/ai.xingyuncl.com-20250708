@@ -1,50 +1,18 @@
-import React, { useState, useEffect } from 'react'
-import { Form, Input, Button, Card, message, Typography, Space, Spin } from 'antd'
+import React, { useState } from 'react'
+import { Form, Input, Button, Card, message, Typography, Space } from 'antd'
 import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import LanguageSwitch from '../../components/common/LanguageSwitch'
-import apiClient from '../../utils/api'
 
 const { Title, Text } = Typography
 
 const Login = () => {
   const [loading, setLoading] = useState(false)
-  const [publicConfig, setPublicConfig] = useState(null)
-  const [configLoading, setConfigLoading] = useState(true)
   const { login } = useAuthStore()
   const navigate = useNavigate()
   const { t } = useTranslation()
-
-  // 获取公开系统配置
-  useEffect(() => {
-    const fetchPublicConfig = async () => {
-      try {
-        const response = await apiClient.get('/public/system-config')
-        if (response.data?.success && response.data?.data) {
-          setPublicConfig(response.data.data)
-        }
-      } catch (error) {
-        console.error('获取系统配置失败:', error)
-        // 失败时使用默认配置
-        setPublicConfig({
-          site: {
-            name: 'AI Platform',
-            description: '企业级AI应用聚合平台',
-            logo: ''
-          },
-          user: {
-            allow_register: true
-          }
-        })
-      } finally {
-        setConfigLoading(false)
-      }
-    }
-
-    fetchPublicConfig()
-  }, [])
 
   const handleSubmit = async (values) => {
     try {
@@ -59,24 +27,6 @@ const Login = () => {
       setLoading(false)
     }
   }
-
-  // 如果配置还在加载中，显示加载状态
-  if (configLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <Spin size="large" />
-      </div>
-    )
-  }
-
-  const siteName = publicConfig?.site?.name || t('app.name')
-  const allowRegister = publicConfig?.user?.allow_register !== false
 
   return (
     <div style={{
@@ -107,19 +57,8 @@ const Login = () => {
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          {publicConfig?.site?.logo && (
-            <img 
-              src={publicConfig.site.logo} 
-              alt={siteName}
-              style={{ 
-                maxHeight: '60px', 
-                maxWidth: '200px',
-                marginBottom: '20px'
-              }}
-            />
-          )}
           <Title level={2} style={{ color: '#1890ff', marginBottom: 0 }}>
-            {siteName}
+            {t('app.name')}
           </Title>
         </div>
 
@@ -167,14 +106,12 @@ const Login = () => {
           </Form.Item>
         </Form>
 
-        {allowRegister && (
-          <div style={{ textAlign: 'center' }}>
-            <Space>
-              <Text type="secondary">{t('auth.login.noAccount')}</Text>
-              <Link to="/register">{t('auth.login.register')}</Link>
-            </Space>
-          </div>
-        )}
+        <div style={{ textAlign: 'center' }}>
+          <Space>
+            <Text type="secondary">{t('auth.login.noAccount')}</Text>
+            <Link to="/register">{t('auth.login.register')}</Link>
+          </Space>
+        </div>
       </Card>
     </div>
   )

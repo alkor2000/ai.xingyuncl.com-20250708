@@ -10,7 +10,6 @@ const { ROLES } = require('../../middleware/permissions');
 const File = require('../../models/File');
 const { deleteFile } = require('../../middleware/uploadMiddleware');
 const path = require('path');
-const redisConnection = require('../../database/redis');
 
 class SystemStatsController {
   /**
@@ -66,7 +65,7 @@ class SystemStatsController {
   }
 
   /**
-   * 更新系统设置 - 保存到数据库并清除缓存
+   * 更新系统设置 - 保存到数据库
    */
   static async updateSystemSettings(req, res) {
     try {
@@ -81,17 +80,6 @@ class SystemStatsController {
 
       // 保存到数据库
       await SystemConfig.saveFormattedSettings(settings);
-
-      // 清除Redis中的公开配置缓存
-      if (redisConnection.isConnected) {
-        try {
-          const cacheKey = 'public:system:config';
-          await redisConnection.del(cacheKey);
-          logger.info('清除公开配置缓存成功');
-        } catch (redisError) {
-          logger.warn('清除Redis缓存失败:', redisError);
-        }
-      }
 
       logger.info('管理员更新系统设置', { 
         adminId: req.user.id,
@@ -154,17 +142,6 @@ class SystemStatsController {
       // 更新配置中的Logo路径
       currentSettings.site.logo = `/uploads/system/${file.filename}`;
       await SystemConfig.saveFormattedSettings(currentSettings);
-
-      // 清除Redis中的公开配置缓存
-      if (redisConnection.isConnected) {
-        try {
-          const cacheKey = 'public:system:config';
-          await redisConnection.del(cacheKey);
-          logger.info('清除公开配置缓存成功（Logo更新）');
-        } catch (redisError) {
-          logger.warn('清除Redis缓存失败:', redisError);
-        }
-      }
 
       logger.info('站点Logo上传成功', {
         adminId: req.user.id,
