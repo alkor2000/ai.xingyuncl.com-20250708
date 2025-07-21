@@ -110,17 +110,6 @@ router.post('/settings/upload-logo',
   SystemStatsController.uploadSiteLogo
 );
 
-// 系统公告路由
-router.get('/announcement',
-  // 所有认证用户都可以查看公告
-  SystemStatsController.getSystemAnnouncement
-);
-
-router.put('/announcement',
-  canManageSystem(), // 只有超级管理员可以修改
-  SystemStatsController.updateSystemAnnouncement
-);
-
 // 自定义首页配置路由
 router.get('/settings/custom-homepage',
   canManageSystem(), // 超级管理员和组管理员都可以查看

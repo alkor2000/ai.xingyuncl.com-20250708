@@ -1,36 +1,23 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, message, Modal } from 'antd'
+import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin } from 'antd'
 import {
   BankOutlined,
   DollarOutlined,
   FireOutlined,
   InfoCircleOutlined,
-  WarningOutlined,
-  EditOutlined,
-  SaveOutlined,
-  CloseOutlined
+  WarningOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
 import useAuthStore from '../../stores/authStore'
 import apiClient from '../../utils/api'
-import './Dashboard.less'
 
 const { Title, Paragraph } = Typography
-const { TextArea } = Input
 
 const Dashboard = () => {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const [creditsData, setCreditsData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [announcement, setAnnouncement] = useState(null)
-  const [announcementLoading, setAnnouncementLoading] = useState(true)
-  const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false)
-  const [editingContent, setEditingContent] = useState('')
-  const [savingAnnouncement, setSavingAnnouncement] = useState(false)
-
-  const isSuperAdmin = user?.role === 'super_admin'
 
   // 加载用户积分统计
   useEffect(() => {
@@ -50,74 +37,6 @@ const Dashboard = () => {
 
     fetchCreditsStats()
   }, [])
-
-  // 加载系统公告
-  useEffect(() => {
-    const fetchAnnouncement = async () => {
-      try {
-        setAnnouncementLoading(true)
-        const response = await apiClient.get('/admin/announcement')
-        if (response.data.success) {
-          setAnnouncement(response.data.data)
-        }
-      } catch (error) {
-        console.error('获取系统公告失败:', error)
-      } finally {
-        setAnnouncementLoading(false)
-      }
-    }
-
-    fetchAnnouncement()
-  }, [])
-
-  // 开始编辑公告
-  const handleEditAnnouncement = () => {
-    setEditingContent(announcement?.content || '')
-    setIsEditingAnnouncement(true)
-  }
-
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setIsEditingAnnouncement(false)
-    setEditingContent('')
-  }
-
-  // 保存公告
-  const handleSaveAnnouncement = async () => {
-    try {
-      setSavingAnnouncement(true)
-      const response = await apiClient.put('/admin/announcement', {
-        content: editingContent,
-        enabled: true,
-        format: 'markdown'
-      })
-      
-      if (response.data.success) {
-        setAnnouncement(response.data.data)
-        setIsEditingAnnouncement(false)
-        message.success('系统公告更新成功')
-      }
-    } catch (error) {
-      console.error('更新系统公告失败:', error)
-      message.error('更新系统公告失败')
-    } finally {
-      setSavingAnnouncement(false)
-    }
-  }
-
-  // 显示Markdown预览
-  const showPreview = () => {
-    Modal.info({
-      title: '公告预览',
-      width: 600,
-      content: (
-        <div className="markdown-content" style={{ maxHeight: '400px', overflow: 'auto' }}>
-          <ReactMarkdown>{editingContent || '（空）'}</ReactMarkdown>
-        </div>
-      ),
-      okText: '关闭'
-    })
-  }
 
   if (loading) {
     return (
@@ -236,74 +155,12 @@ const Dashboard = () => {
           </Space>
         }
         style={{ marginBottom: 24 }}
-        extra={
-          isSuperAdmin && !isEditingAnnouncement && (
-            <Button 
-              type="link" 
-              icon={<EditOutlined />} 
-              onClick={handleEditAnnouncement}
-            >
-              编辑公告
-            </Button>
-          )
-        }
-        loading={announcementLoading}
       >
-        {isEditingAnnouncement ? (
-          <div>
-            <TextArea
-              value={editingContent}
-              onChange={(e) => setEditingContent(e.target.value)}
-              placeholder="请输入系统公告内容，支持Markdown格式"
-              autoSize={{ minRows: 6, maxRows: 15 }}
-              style={{ marginBottom: 16 }}
-            />
-            <Space>
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />} 
-                onClick={handleSaveAnnouncement}
-                loading={savingAnnouncement}
-              >
-                保存
-              </Button>
-              <Button onClick={showPreview}>
-                预览
-              </Button>
-              <Button 
-                icon={<CloseOutlined />} 
-                onClick={handleCancelEdit}
-                disabled={savingAnnouncement}
-              >
-                取消
-              </Button>
-            </Space>
-            <div className="announcement-edit-tips">
-              <div>提示：支持Markdown格式</div>
-              <div className="example">
-                **粗体** *斜体* [链接](url) `代码` 
-                # 标题1
-                ## 标题2
-                - 列表项1
-                - 列表项2
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {announcement?.content ? (
-              <div className="markdown-content">
-                <ReactMarkdown>{announcement.content}</ReactMarkdown>
-              </div>
-            ) : (
-              <Alert
-                message={t('dashboard.announcement.systemDefault')}
-                type="info"
-                showIcon={false}
-              />
-            )}
-          </>
-        )}
+        <Alert
+          message={t('dashboard.announcement.systemDefault')}
+          type="info"
+          showIcon={false}
+        />
       </Card>
 
       {/* 机构公告 */}

@@ -1,0 +1,150 @@
+/* Dashboard 页面样式 */
+
+.markdown-content {
+  /* Markdown内容基础样式 */
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.85);
+  
+  /* 段落 */
+  p {
+    margin-bottom: 16px;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  /* 标题 */
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+  
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  h3 { font-size: 18px; }
+  h4 { font-size: 16px; }
+  h5 { font-size: 14px; }
+  h6 { font-size: 12px; }
+  
+  /* 列表 */
+  ul, ol {
+    margin-bottom: 16px;
+    padding-left: 24px;
+    
+    li {
+      margin-bottom: 4px;
+    }
+  }
+  
+  /* 链接 */
+  a {
+    color: #1677ff;
+    text-decoration: none;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+  
+  /* 代码 */
+  code {
+    padding: 2px 4px;
+    margin: 0 4px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+  }
+  
+  pre {
+    background-color: #f6f8fa;
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    
+    code {
+      background: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+  }
+  
+  /* 引用 */
+  blockquote {
+    margin: 0 0 16px 0;
+    padding: 0 16px;
+    border-left: 4px solid #ddd;
+    color: #666;
+  }
+  
+  /* 分隔线 */
+  hr {
+    margin: 24px 0;
+    border: none;
+    border-top: 1px solid #e8e8e8;
+  }
+  
+  /* 表格 */
+  table {
+    width: 100%;
+    margin-bottom: 16px;
+    border-collapse: collapse;
+    
+    th, td {
+      padding: 8px 12px;
+      border: 1px solid #e8e8e8;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #fafafa;
+      font-weight: 600;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+  }
+  
+  /* 图片 */
+  img {
+    max-width: 100%;
+    height: auto;
+    margin: 16px 0;
+  }
+  
+  /* 强调文本 */
+  strong {
+    font-weight: 600;
+  }
+  
+  em {
+    font-style: italic;
+  }
+}
+
+/* 编辑公告时的提示文字 */
+.announcement-edit-tips {
+  margin-top: 8px;
+  color: #666;
+  font-size: 12px;
+  
+  .example {
+    margin-top: 4px;
+    padding: 8px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  }
+}

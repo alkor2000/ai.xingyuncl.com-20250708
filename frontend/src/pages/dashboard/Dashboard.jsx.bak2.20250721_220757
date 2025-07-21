@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import useAuthStore from '../../stores/authStore'
 import apiClient from '../../utils/api'
-import './Dashboard.less'
 
 const { Title, Paragraph } = Typography
 const { TextArea } = Input
@@ -111,8 +110,8 @@ const Dashboard = () => {
       title: '公告预览',
       width: 600,
       content: (
-        <div className="markdown-content" style={{ maxHeight: '400px', overflow: 'auto' }}>
-          <ReactMarkdown>{editingContent || '（空）'}</ReactMarkdown>
+        <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+          <ReactMarkdown>{editingContent}</ReactMarkdown>
         </div>
       ),
       okText: '关闭'
@@ -278,15 +277,8 @@ const Dashboard = () => {
                 取消
               </Button>
             </Space>
-            <div className="announcement-edit-tips">
-              <div>提示：支持Markdown格式</div>
-              <div className="example">
-                **粗体** *斜体* [链接](url) `代码` 
-                # 标题1
-                ## 标题2
-                - 列表项1
-                - 列表项2
-              </div>
+            <div style={{ marginTop: 8, color: '#666', fontSize: 12 }}>
+              提示：支持Markdown格式，包括**粗体**、*斜体*、[链接](url)、列表等
             </div>
           </div>
         ) : (
