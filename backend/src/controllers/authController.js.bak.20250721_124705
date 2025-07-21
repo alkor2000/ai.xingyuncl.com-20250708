@@ -254,12 +254,6 @@ class AuthController {
       
       // 验证用户名
       if (username && username !== user.username) {
-        // 验证用户名格式
-        const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
-        if (!usernameRegex.test(username)) {
-          return ResponseHelper.validation(res, ['用户名只能包含字母、数字、下划线和横线，长度3-20个字符']);
-        }
-        
         // 检查用户名是否已存在
         const existingUser = await User.findByUsername(username);
         if (existingUser && existingUser.id !== userId) {
@@ -281,13 +275,6 @@ class AuthController {
         updateData.avatar_url = avatar_url || null;
       }
 
-      // 如果没有需要更新的内容
-      if (Object.keys(updateData).length === 0) {
-        return ResponseHelper.success(res, {
-          user: user.toJSON()
-        }, '无需更新');
-      }
-
       // 更新用户信息
       const updatedUser = await user.update(updateData);
 
@@ -302,7 +289,7 @@ class AuthController {
 
     } catch (error) {
       logger.error('更新个人信息失败:', error);
-      return ResponseHelper.error(res, error.message || '更新个人信息失败');
+      return ResponseHelper.error(res, '更新个人信息失败');
     }
   }
 
@@ -336,8 +323,12 @@ class AuthController {
         return ResponseHelper.validation(res, ['原密码错误']);
       }
 
-      // 更新密码（使用password字段，User模型会自动处理加密）
-      await user.update({ password: newPassword });
+      // 加密新密码
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // 更新密码
+      await user.update({ password_hash: hashedPassword });
 
       logger.info('用户密码修改成功', { userId });
 
