@@ -83,7 +83,6 @@ const Chat = () => {
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
   const draftTimerRef = useRef(null)
-  const inputRef = useRef(null) // 🔥 新增：输入框ref
 
   // 初始化
   useEffect(() => {
@@ -101,30 +100,6 @@ const Chat = () => {
       }
     }
   }, [currentConversation?.id])
-
-  // 🔥 新增：监听typing和isStreaming状态，在AI回复完成后聚焦输入框
-  useEffect(() => {
-    // 当typing和isStreaming都为false时，且有当前对话，聚焦输入框
-    if (!typing && !isStreaming && currentConversation && inputRef.current) {
-      // 添加小延迟以确保DOM更新完成
-      setTimeout(() => {
-        // 只在用户没有滚动查看历史消息时自动聚焦
-        if (!userScrolled) {
-          inputRef.current?.focus()
-        }
-      }, 100)
-    }
-  }, [typing, isStreaming, currentConversation, userScrolled])
-
-  // 🔥 新增：当选择对话后聚焦输入框
-  useEffect(() => {
-    if (currentConversation && !initialLoading && inputRef.current) {
-      // 延迟聚焦，确保界面渲染完成
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 300)
-    }
-  }, [currentConversation?.id, initialLoading])
 
   // 自动保存草稿
   useEffect(() => {
@@ -340,17 +315,9 @@ const Chat = () => {
     
     try {
       await sendMessage(messageContent, fileInfo)
-      // 🔥 新增：发送消息后聚焦输入框
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
-      // 🔥 新增：发送失败也聚焦输入框，方便用户重试
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
     }
   }
 
@@ -401,10 +368,6 @@ const Chat = () => {
       if (response.data?.success && response.data?.data) {
         setUploadedImage(response.data.data)
         message.success(t('chat.image.upload.success'))
-        // 🔥 新增：上传图片后聚焦输入框
-        setTimeout(() => {
-          inputRef.current?.focus()
-        }, 100)
       } else {
         throw new Error(response.data?.message || 'Upload failed')
       }
@@ -507,10 +470,6 @@ const Chat = () => {
         try {
           await clearMessages(currentConversation.id)
           message.success(t('chat.clear.success'))
-          // 🔥 新增：清空对话后聚焦输入框
-          setTimeout(() => {
-            inputRef.current?.focus()
-          }, 100)
         } catch (error) {
           console.error('Clear chat error:', error)
           message.error(t('chat.clear.failed'))
@@ -605,9 +564,8 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* 输入区域 - 🔥 传递ref */}
+              {/* 输入区域 */}
               <ChatInputArea
-                ref={inputRef}
                 inputValue={inputValue}
                 uploadedImage={uploadedImage}
                 uploading={uploading}

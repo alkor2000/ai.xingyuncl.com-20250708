@@ -2,7 +2,7 @@
  * 聊天输入区域组件
  */
 
-import React, { useRef, forwardRef, useImperativeHandle } from 'react'
+import React, { useRef } from 'react'
 import {
   Input,
   Button,
@@ -25,8 +25,7 @@ import { useTranslation } from 'react-i18next'
 const { TextArea } = Input
 const { Text } = Typography
 
-// 使用forwardRef使组件可以接收ref
-const ChatInputArea = forwardRef(({
+const ChatInputArea = ({
   inputValue,
   uploadedImage,
   uploading,
@@ -42,23 +41,9 @@ const ChatInputArea = forwardRef(({
   onKeyPress,
   onExportChat,
   onClearChat
-}, ref) => {
+}) => {
   const { t } = useTranslation()
   const inputRef = useRef(null)
-
-  // 暴露focus方法给父组件
-  useImperativeHandle(ref, () => ({
-    focus: () => {
-      if (inputRef.current) {
-        inputRef.current.focus()
-      }
-    },
-    blur: () => {
-      if (inputRef.current) {
-        inputRef.current.blur()
-      }
-    }
-  }))
 
   return (
     <div className="input-container">
@@ -170,9 +155,6 @@ const ChatInputArea = forwardRef(({
       </div>
     </div>
   )
-})
-
-// 设置displayName以便调试
-ChatInputArea.displayName = 'ChatInputArea'
+}
 
 export default ChatInputArea
