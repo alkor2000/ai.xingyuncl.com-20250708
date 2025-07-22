@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { Form, Input, Button, Card, message, Typography, Space, Spin } from 'antd'
-import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import LanguageSwitch from '../../components/common/LanguageSwitch'
 import apiClient from '../../utils/api'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 
 const Login = () => {
   const [loading, setLoading] = useState(false)
@@ -49,12 +49,7 @@ const Login = () => {
   const handleSubmit = async (values) => {
     try {
       setLoading(true)
-      // 修改为使用account字段
-      const loginData = {
-        account: values.account,
-        password: values.password
-      }
-      await login(loginData)
+      await login(values)
       message.success(t('auth.login.success'))
       navigate('/')
     } catch (error) {
@@ -63,15 +58,6 @@ const Login = () => {
     } finally {
       setLoading(false)
     }
-  }
-
-  // 验证账号输入（可以是邮箱、手机号或用户名）
-  const validateAccount = (_, value) => {
-    if (!value) {
-      return Promise.reject(new Error(t('auth.login.account.required')))
-    }
-    // 这里不需要验证具体格式，让后端处理
-    return Promise.resolve()
   }
 
   // 如果配置还在加载中，显示加载状态
@@ -132,12 +118,9 @@ const Login = () => {
               }}
             />
           )}
-          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: 0 }}>
             {siteName}
           </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            {t('auth.login.subtitle', '登录您的账户')}
-          </Paragraph>
         </div>
 
         <Form
@@ -147,13 +130,16 @@ const Login = () => {
           size="large"
         >
           <Form.Item
-            name="account"
-            rules={[{ validator: validateAccount }]}
+            name="email"
+            rules={[
+              { required: true, message: t('auth.login.email.required') },
+              { type: 'email', message: t('auth.login.email.invalid') }
+            ]}
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
-              autoComplete="username"
+              placeholder={t('auth.login.email')}
+              autoComplete="email"
             />
           </Form.Item>
 
@@ -180,31 +166,6 @@ const Login = () => {
             </Button>
           </Form.Item>
         </Form>
-
-        {/* 登录提示 */}
-        <div style={{ 
-          marginBottom: '20px', 
-          padding: '12px', 
-          background: '#f0f2f5', 
-          borderRadius: '4px',
-          fontSize: '13px',
-          color: '#666'
-        }}>
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <div>
-              <MailOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.email', '支持邮箱登录')}
-            </div>
-            <div>
-              <PhoneOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.phone', '支持手机号登录')}
-            </div>
-            <div>
-              <UserOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.username', '支持用户名登录')}
-            </div>
-          </Space>
-        </div>
 
         {allowRegister && (
           <div style={{ textAlign: 'center' }}>

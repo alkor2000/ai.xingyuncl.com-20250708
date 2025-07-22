@@ -97,28 +97,8 @@ class User {
   }
 
   /**
-   * 根据手机号查找用户
+   * 创建新用户
    */
-  static async findByPhone(phone) {
-    try {
-      const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color
-        FROM users u
-        LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.phone = ?
-      `;
-      const { rows } = await dbConnection.query(sql, [phone]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-      
-      return new User(rows[0]);
-    } catch (error) {
-      logger.error('根据手机号查找用户失败:', error);
-      throw new DatabaseError('查找用户失败', error);
-    }
-  }
   static async create(userData) {
     try {
       const {
