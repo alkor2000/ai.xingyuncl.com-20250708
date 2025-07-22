@@ -5,6 +5,8 @@ import {
   Form,
   Input,
   Button,
+  Avatar,
+  Upload,
   Space,
   Tag,
   Row,
@@ -19,6 +21,7 @@ import {
 } from 'antd'
 import {
   UserOutlined,
+  UploadOutlined,
   EditOutlined,
   LockOutlined,
   MailOutlined,
@@ -102,17 +105,7 @@ const Profile = () => {
       })
       message.success(t('profile.update.success'))
     } catch (error) {
-      // 改进错误处理，解析validation错误
-      if (error.response?.status === 400 && error.response?.data?.data?.errors) {
-        // 如果是validation错误，显示具体的错误信息
-        const errors = error.response.data.data.errors
-        const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
-        message.error(errorMessage)
-      } else {
-        // 其他错误显示通用错误信息
-        message.error(error.response?.data?.message || t('profile.update.failed'))
-      }
-      console.error('更新个人信息失败:', error)
+      message.error(error.response?.data?.message || t('profile.update.failed'))
     } finally {
       setLoading(false)
     }
@@ -127,15 +120,7 @@ const Profile = () => {
       setPasswordModalVisible(false)
       passwordForm.resetFields()
     } catch (error) {
-      // 同样改进密码修改的错误处理
-      if (error.response?.status === 400 && error.response?.data?.data?.errors) {
-        const errors = error.response.data.data.errors
-        const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
-        message.error(errorMessage)
-      } else {
-        message.error(error.response?.data?.message || t('profile.password.changeFailed'))
-      }
-      console.error('修改密码失败:', error)
+      message.error(error.response?.data?.message || t('profile.password.changeFailed'))
     } finally {
       setLoading(false)
     }
@@ -198,6 +183,22 @@ const Profile = () => {
         {/* 左侧 - 用户信息卡片 */}
         <Col xs={24} lg={8}>
           <Card className="user-info-card">
+            <div className="avatar-section">
+              <Avatar
+                size={120}
+                icon={<UserOutlined />}
+                src={user?.avatar_url}
+                className="user-avatar"
+              />
+              <Upload showUploadList={false}>
+                <Button icon={<UploadOutlined />} size="small" className="upload-btn">
+                  {t('profile.changeAvatar')}
+                </Button>
+              </Upload>
+            </div>
+
+            <Divider />
+
             <Descriptions column={1} size="small">
               <Descriptions.Item label={t('profile.id')}>
                 {user?.id}

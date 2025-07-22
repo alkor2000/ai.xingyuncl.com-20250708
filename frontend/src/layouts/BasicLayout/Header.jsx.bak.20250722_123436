@@ -1,5 +1,5 @@
 import React from 'react'
-import { Layout, Space, Badge, Dropdown, Button } from 'antd'
+import { Layout, Space, Badge, Avatar, Dropdown, Button } from 'antd'
 import {
   MenuOutlined,
   UserOutlined,
@@ -97,17 +97,23 @@ const Header = ({ isMobile, onMenuClick }) => {
             </Badge>
           )}
 
-          {/* 用户信息 - 移除头像，只显示用户名 */}
+          {/* 用户信息 */}
           <Dropdown 
             menu={{ items: userMenuItems }}
             placement="bottomRight"
             arrow
           >
             <Space className="user-info" style={{ cursor: 'pointer' }}>
-              <UserOutlined style={{ fontSize: '16px', color: '#666' }} />
-              <span className="user-name">
-                {user?.username || user?.email}
-              </span>
+              <Avatar 
+                size="small" 
+                icon={<UserOutlined />}
+                src={user?.avatar_url}
+              />
+              {!isMobile && (
+                <span className="user-name">
+                  {user?.username || user?.email}
+                </span>
+              )}
             </Space>
           </Dropdown>
         </Space>

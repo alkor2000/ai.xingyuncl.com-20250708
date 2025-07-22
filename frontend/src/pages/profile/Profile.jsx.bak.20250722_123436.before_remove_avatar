@@ -5,6 +5,8 @@ import {
   Form,
   Input,
   Button,
+  Avatar,
+  Upload,
   Space,
   Tag,
   Row,
@@ -19,6 +21,7 @@ import {
 } from 'antd'
 import {
   UserOutlined,
+  UploadOutlined,
   EditOutlined,
   LockOutlined,
   MailOutlined,
@@ -198,6 +201,22 @@ const Profile = () => {
         {/* 左侧 - 用户信息卡片 */}
         <Col xs={24} lg={8}>
           <Card className="user-info-card">
+            <div className="avatar-section">
+              <Avatar
+                size={120}
+                icon={<UserOutlined />}
+                src={user?.avatar_url}
+                className="user-avatar"
+              />
+              <Upload showUploadList={false}>
+                <Button icon={<UploadOutlined />} size="small" className="upload-btn">
+                  {t('profile.changeAvatar')}
+                </Button>
+              </Upload>
+            </div>
+
+            <Divider />
+
             <Descriptions column={1} size="small">
               <Descriptions.Item label={t('profile.id')}>
                 {user?.id}
