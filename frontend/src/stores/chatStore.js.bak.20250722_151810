@@ -581,40 +581,6 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 清空消息 - 新增方法
-  clearMessages: async (conversationId) => {
-    const state = get()
-    if (!conversationId || conversationId !== state.currentConversationId) return
-    
-    try {
-      // 调用后端API清空消息
-      const response = await apiClient.post(
-        `/chat/conversations/${conversationId}/clear`
-      )
-      
-      // 清空本地消息状态
-      set({
-        messages: []
-      })
-      
-      // 更新会话统计
-      set(state => ({
-        currentConversation: {
-          ...state.currentConversation,
-          message_count: 0,
-          total_tokens: 0
-        }
-      }))
-      
-      console.log('对话已清空', { conversationId })
-      return response.data.data
-      
-    } catch (error) {
-      console.error('清空对话失败:', error)
-      throw error
-    }
-  },
-  
   // 🔥 停止生成 - 支持流式和非流式
   stopGeneration: () => {
     console.log('停止生成')
@@ -700,19 +666,6 @@ const useChatStore = create((set, get) => ({
       }))
     } catch (error) {
       console.error('删除会话失败:', error)
-      throw error
-    }
-  },
-  
-  // 切换置顶
-  togglePin: async (conversationId, isPinned) => {
-    try {
-      const response = await apiClient.put(`/chat/conversations/${conversationId}`, {
-        is_pinned: isPinned
-      })
-      return response.data.data
-    } catch (error) {
-      console.error('切换置顶失败:', error)
       throw error
     }
   },

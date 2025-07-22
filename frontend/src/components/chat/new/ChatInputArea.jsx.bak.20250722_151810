@@ -17,8 +17,7 @@ import {
   StopOutlined,
   PictureOutlined,
   CloseOutlined,
-  DownloadOutlined,
-  ClearOutlined
+  DownloadOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -39,8 +38,7 @@ const ChatInputArea = ({
   onImageUpload,
   onRemoveImage,
   onKeyPress,
-  onExportChat,
-  onClearChat
+  onExportChat
 }) => {
   const { t } = useTranslation()
   const inputRef = useRef(null)
@@ -99,16 +97,6 @@ const ChatInputArea = ({
             type="text"
             icon={<DownloadOutlined />}
             onClick={onExportChat}
-            disabled={!hasMessages || typing || isStreaming}
-          />
-        </Tooltip>
-        
-        {/* 清空对话按钮 - 紧跟在导出按钮后面，使用普通样式 */}
-        <Tooltip title={t('chat.clear')}>
-          <Button
-            type="text"
-            icon={<ClearOutlined />}
-            onClick={onClearChat}
             disabled={!hasMessages || typing || isStreaming}
           />
         </Tooltip>

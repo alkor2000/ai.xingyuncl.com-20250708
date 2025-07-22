@@ -248,40 +248,6 @@ class UserManagementController {
       return ResponseHelper.error(res, error.message || '更新用户模型限制失败');
     }
   }
-
-  /**
-   * 将用户挪出当前组
-   */
-  static async removeUserFromGroup(req, res) {
-    try {
-      const currentUser = req.user;
-      const { id } = req.params;
-
-      const result = await UserService.removeUserFromGroup(id, currentUser);
-
-      return ResponseHelper.success(res, result.details, result.message);
-    } catch (error) {
-      logger.error('挪出用户失败', { 
-        adminId: req.user?.id, 
-        userId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message === '用户不存在') {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      if (error.message === '用户已在默认组，无需挪出') {
-        return ResponseHelper.validation(res, [error.message]);
-      }
-      
-      if (error.message.includes('无权') || error.message.includes('不能')) {
-        return ResponseHelper.forbidden(res, error.message);
-      }
-      
-      return ResponseHelper.error(res, error.message || '挪出用户失败');
-    }
-  }
 }
 
 module.exports = UserManagementController;

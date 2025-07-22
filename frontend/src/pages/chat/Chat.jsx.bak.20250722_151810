@@ -60,7 +60,6 @@ const Chat = () => {
     isStreaming,
     streamingMessageId,
     stopStreaming,
-    clearMessages,
   } = useChatStore()
 
   // 本地状态
@@ -455,28 +454,6 @@ const Chat = () => {
     }
   }
 
-  // 清空对话
-  const handleClearChat = () => {
-    if (!currentConversation) return
-    
-    Modal.confirm({
-      title: t('chat.clear.title'),
-      content: t('chat.clear.confirm'),
-      okText: t('button.confirm'),
-      cancelText: t('button.cancel'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await clearMessages(currentConversation.id)
-          message.success(t('chat.clear.success'))
-        } catch (error) {
-          console.error('Clear chat error:', error)
-          message.error(t('chat.clear.failed'))
-        }
-      }
-    })
-  }
-
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
 
   return (
@@ -563,7 +540,6 @@ const Chat = () => {
                 onImageUpload={handleImageUpload}
                 onRemoveImage={() => setUploadedImage(null)}
                 onExportChat={handleExportChat}
-                onClearChat={handleClearChat}
                 currentModel={currentModel}
               />
             </>

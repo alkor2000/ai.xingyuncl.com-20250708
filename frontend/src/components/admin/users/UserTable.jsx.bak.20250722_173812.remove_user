@@ -16,8 +16,7 @@ import {
   ClockCircleOutlined,
   FileTextOutlined,
   RobotOutlined,
-  GiftOutlined,
-  LogoutOutlined
+  GiftOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -34,8 +33,7 @@ const UserTable = ({
   onToggleStatus,
   onDelete,
   onManageModels,
-  onDistributeCredits,
-  onRemoveFromGroup
+  onDistributeCredits
 }) => {
   const { t } = useTranslation()
   
@@ -190,7 +188,7 @@ const UserTable = ({
       title: t('admin.users.table.actions'),
       key: 'actions',
       fixed: 'right',
-      width: 280,
+      width: 240,
       render: (_, record) => {
         // 是否可以管理此用户的模型权限
         const canManageUserModels = record.role === 'user' && (
@@ -201,21 +199,6 @@ const UserTable = ({
         const canDistribute = onDistributeCredits && (
           (isGroupAdmin && record.group_id === currentUser.group_id) || isSuperAdmin
         )
-        
-        // 是否可以挪出用户
-        const canRemoveUser = onRemoveFromGroup && (
-          // 不能挪出自己
-          record.id !== currentUser.id &&
-          // 不能挪出已经在默认组的用户
-          record.group_id !== 1 &&
-          // 超级管理员不能互相挪出
-          !(record.role === 'super_admin' && currentUser.role === 'super_admin') &&
-          // 组管理员只能挪出本组用户
-          (isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id))
-        )
-        
-        // 计算用户剩余积分
-        const remainingCredits = Math.max(0, (record.credits_quota || 0) - (record.used_credits || 0))
         
         return (
           <Space size="small">
@@ -274,41 +257,6 @@ const UserTable = ({
                     size="small" 
                     danger={record.status === 'active'}
                     icon={record.status === 'active' ? <MinusCircleOutlined /> : <PlusCircleOutlined />} 
-                  />
-                </Popconfirm>
-              </Tooltip>
-            )}
-            
-            {/* 挪出按钮 */}
-            {canRemoveUser && (
-              <Tooltip title="挪出组">
-                <Popconfirm
-                  title="确认挪出"
-                  description={
-                    <div>
-                      <p>挪出用户将：</p>
-                      <ul style={{ marginLeft: 20, marginBottom: 0 }}>
-                        <li>将用户移至默认组</li>
-                        <li>清零用户所有积分</li>
-                        {remainingCredits > 0 && (
-                          <li style={{ color: '#fa8c16' }}>
-                            返还 <strong>{remainingCredits}</strong> 积分到组积分池
-                          </li>
-                        )}
-                      </ul>
-                      <p style={{ marginTop: 10, marginBottom: 0 }}>确定要挪出该用户吗？</p>
-                    </div>
-                  }
-                  onConfirm={() => onRemoveFromGroup(record)}
-                  okText="确定挪出"
-                  cancelText="取消"
-                  okButtonProps={{ danger: true }}
-                >
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    danger
-                    icon={<LogoutOutlined />} 
                   />
                 </Popconfirm>
               </Tooltip>

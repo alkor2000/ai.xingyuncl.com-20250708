@@ -201,17 +201,6 @@ router.delete('/conversations/:id/messages/:messageId',
 );
 
 /**
- * @route POST /api/chat/conversations/:id/clear
- * @desc 清空对话消息
- * @access Private
- */
-router.post('/conversations/:id/clear',
-  messageLimiter,
-  requirePermission('chat.use'),
-  ChatController.clearMessages
-);
-
-/**
  * @route POST /api/chat/conversations/:id/draft
  * @desc 保存对话草稿
  * @access Private

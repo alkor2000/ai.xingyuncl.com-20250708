@@ -1,5 +1,5 @@
 /**
- * 消息数据模型 - 支持动态上下文数量和清空时间过滤
+ * 消息数据模型 - 支持动态上下文数量
  */
 
 const dbConnection = require('../database/connection');
@@ -86,34 +86,15 @@ class Message {
   }
 
   /**
-   * 获取会话的消息列表（考虑清空时间）
+   * 获取会话的消息列表
    */
   static async getConversationMessages(conversationId, options = {}) {
     try {
       const { page = 1, limit = 50, order = 'ASC' } = options;
       
-      // 首先获取会话的cleared_at时间
-      const convSql = 'SELECT cleared_at FROM conversations WHERE id = ?';
-      const { rows: convRows } = await dbConnection.query(convSql, [conversationId]);
-      
-      let clearedAt = null;
-      if (convRows.length > 0 && convRows[0].cleared_at) {
-        clearedAt = convRows[0].cleared_at;
-        logger.info('会话有清空时间', { conversationId, clearedAt });
-      }
-      
-      // 构建查询条件
-      let whereClause = 'WHERE conversation_id = ?';
-      const params = [conversationId];
-      
-      if (clearedAt) {
-        whereClause += ' AND created_at > ?';
-        params.push(clearedAt);
-      }
-      
       // 获取总数
-      const countSql = `SELECT COUNT(*) as total FROM messages ${whereClause}`;
-      const { rows: totalRows } = await dbConnection.query(countSql, params);
+      const countSql = 'SELECT COUNT(*) as total FROM messages WHERE conversation_id = ?';
+      const { rows: totalRows } = await dbConnection.query(countSql, [conversationId]);
       const total = totalRows[0].total;
       
       // 获取消息列表  
@@ -122,19 +103,12 @@ class Message {
       
       const listSql = `
         SELECT * FROM messages 
-        ${whereClause}
+        WHERE conversation_id = ? 
         ORDER BY created_at ${order === 'ASC' ? 'ASC' : 'DESC'}
         LIMIT ${limitNum} OFFSET ${offset}
       `;
       
-      const { rows } = await dbConnection.query(listSql, params);
-      
-      logger.info('获取会话消息列表', { 
-        conversationId, 
-        clearedAt,
-        total,
-        returned: rows.length 
-      });
+      const { rows } = await dbConnection.query(listSql, [conversationId]);
       
       return {
         messages: rows.map(row => new Message(row)),
@@ -152,75 +126,46 @@ class Message {
   }
 
   /**
-   * 获取会话的最近消息（用于AI对话上下文）- 支持动态上下文数量和清空时间过滤
+   * 获取会话的最近消息（用于AI对话上下文）- 支持动态上下文数量
    */
   static async getRecentMessages(conversationId, limit = null) {
     try {
-      // 首先获取会话的context_length和cleared_at
-      const conversationSql = 'SELECT context_length, cleared_at FROM conversations WHERE id = ?';
-      const { rows: convRows } = await dbConnection.query(conversationSql, [conversationId]);
-      
       let contextLimit = limit;
-      let clearedAt = null;
       
-      if (convRows.length > 0) {
-        // 如果没有指定limit，使用会话配置的context_length
-        if (contextLimit === null) {
-          contextLimit = parseInt(convRows[0].context_length) || 20;
-        }
+      // 如果没有指定limit，则从会话配置中获取
+      if (contextLimit === null) {
+        const conversationSql = 'SELECT context_length FROM conversations WHERE id = ?';
+        const { rows: convRows } = await dbConnection.query(conversationSql, [conversationId]);
         
-        // 获取清空时间
-        if (convRows[0].cleared_at) {
-          clearedAt = convRows[0].cleared_at;
-          logger.info('会话有清空时间，将过滤历史消息', { 
-            conversationId, 
-            clearedAt 
-          });
+        if (convRows.length > 0) {
+          contextLimit = parseInt(convRows[0].context_length) || 20;
+        } else {
+          contextLimit = 20; // 默认值
         }
-      } else {
-        contextLimit = contextLimit || 20; // 默认值
       }
       
       const limitNum = parseInt(contextLimit);
       
-      // 构建SQL查询
-      let sql;
-      let params = [conversationId];
-      
-      if (clearedAt) {
-        // 如果有清空时间，只获取清空后的消息
-        sql = `
-          SELECT * FROM messages 
-          WHERE conversation_id = ? AND created_at > ?
-          ORDER BY created_at DESC
-          LIMIT ${limitNum}
-        `;
-        params.push(clearedAt);
-      } else {
-        // 没有清空时间，获取所有消息
-        sql = `
-          SELECT * FROM messages 
-          WHERE conversation_id = ? 
-          ORDER BY created_at DESC
-          LIMIT ${limitNum}
-        `;
-      }
+      const sql = `
+        SELECT * FROM messages 
+        WHERE conversation_id = ? 
+        ORDER BY created_at DESC
+        LIMIT ${limitNum}
+      `;
       
       logger.info('获取最近消息', { 
         conversationId, 
         contextLimit: limitNum,
-        clearedAt,
         source: limit !== null ? 'parameter' : 'conversation_config'
       });
       
-      const { rows } = await dbConnection.query(sql, params);
+      const { rows } = await dbConnection.query(sql, [conversationId]);
       
       logger.info('获取最近消息成功', { 
         conversationId, 
         messageCount: rows.length,
         requestedLimit: limitNum,
-        actualCount: rows.length,
-        filtered: !!clearedAt
+        actualCount: rows.length
       });
       
       // 按时间正序返回（最老的在前）

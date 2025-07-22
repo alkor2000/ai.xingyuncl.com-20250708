@@ -22,7 +22,6 @@ class Conversation {
     this.last_message_at = data.last_message_at || null;
     this.context_length = data.context_length || 20; // 上下文携带数量
     this.ai_temperature = data.ai_temperature || 0.0; // AI温度参数
-    this.cleared_at = data.cleared_at || null; // 清空时间
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
   }
@@ -192,7 +191,7 @@ class Conversation {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'is_pinned', 'priority', 'context_length', 'ai_temperature', 'message_count', 'total_tokens', 'last_message_at', 'cleared_at'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'priority', 'context_length', 'ai_temperature'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -220,8 +219,8 @@ class Conversation {
             // 确保优先级在0-10范围内
             const priority = parseInt(updateData[field]) || 0;
             values.push(Math.max(0, Math.min(10, priority)));
-          } else if (field === 'system_prompt' || field === 'cleared_at' || field === 'last_message_at') {
-            // 这些字段可以是null，但不能是undefined
+          } else if (field === 'system_prompt') {
+            // system_prompt 可以是null，但不能是undefined
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
           } else {
             // 其他字段：将undefined转换为null
@@ -358,7 +357,6 @@ class Conversation {
       total_tokens: this.total_tokens,
       context_length: this.context_length,
       ai_temperature: this.ai_temperature,
-      cleared_at: this.cleared_at,
       last_message_at: this.last_message_at,
       created_at: this.created_at,
       updated_at: this.updated_at

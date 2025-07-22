@@ -49,7 +49,6 @@ const Users = () => {
     createUser,
     updateUser,
     deleteUser,
-    removeUserFromGroup,
     getUserGroups,
     createUserGroup,
     updateUserGroup,
@@ -323,25 +322,6 @@ const Users = () => {
     setIsModelRestrictModalVisible(true)
   }
 
-  // 挪出用户
-  const handleRemoveFromGroup = async (user) => {
-    try {
-      const result = await removeUserFromGroup(user.id)
-      message.success(
-        `用户 ${user.username} 已成功挪出到默认组${
-          result.returnedCredits > 0 
-            ? `，返还 ${result.returnedCredits} 积分到组积分池` 
-            : ''
-        }`
-      )
-      // 刷新用户列表和组信息
-      loadUsers()
-      loadUserGroups()
-    } catch (error) {
-      message.error(error.response?.data?.message || '挪出用户失败')
-    }
-  }
-
   // 创建分组
   const handleCreateGroup = async (values) => {
     try {
@@ -557,7 +537,6 @@ const Users = () => {
               onDelete={handleDeleteUser}
               onManageModels={handleManageModels}
               onDistributeCredits={handleDistributeCredits}
-              onRemoveFromGroup={handleRemoveFromGroup}
             />
           </Card>
         </>

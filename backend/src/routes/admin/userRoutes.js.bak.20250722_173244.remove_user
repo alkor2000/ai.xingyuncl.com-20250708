@@ -97,15 +97,4 @@ router.put('/:id/model-restrictions',
   UserManagementController.updateUserModelRestrictions
 );
 
-/**
- * @route POST /api/admin/users/:id/remove-from-group
- * @desc 将用户挪出当前组（移到默认组）
- * @access Admin / SuperAdmin
- */
-router.post('/:id/remove-from-group',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.removeUserFromGroup
-);
-
 module.exports = router;

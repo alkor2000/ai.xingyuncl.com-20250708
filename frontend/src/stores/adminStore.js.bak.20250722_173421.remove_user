@@ -83,17 +83,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 将用户挪出当前组
-  removeUserFromGroup: async (userId) => {
-    try {
-      const response = await apiClient.post(`/admin/users/${userId}/remove-from-group`)
-      return response.data.data
-    } catch (error) {
-      console.error('挪出用户失败:', error)
-      throw error
-    }
-  },
-  
   resetUserPassword: async (userId, newPassword) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/password`, {

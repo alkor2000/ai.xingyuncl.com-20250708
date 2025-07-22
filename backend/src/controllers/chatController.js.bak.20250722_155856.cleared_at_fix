@@ -981,10 +981,6 @@ class ChatController {
    * 清空对话消息
    * POST /api/chat/conversations/:id/clear
    */
-  /**
-   * 清空对话消息
-   * POST /api/chat/conversations/:id/clear
-   */
   static async clearMessages(req, res) {
     try {
       const { id } = req.params;
@@ -1001,22 +997,20 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 注意：这里不真正删除消息，只是设置清空时间
-      // 更新会话的cleared_at时间和重置统计
+      // 注意：这里不真正删除消息，只是重置统计
+      // 更新会话统计为0
       await conversation.update({
         message_count: 0,
         total_tokens: 0,
-        cleared_at: new Date(),
         last_message_at: new Date()
       });
 
       // 清除消息缓存
       await CacheService.clearConversationCache(userId, id);
 
-      logger.info('对话消息已清空（设置cleared_at）', { 
+      logger.info('对话消息已清空（隐藏）', { 
         userId, 
-        conversationId: id,
-        clearedAt: new Date()
+        conversationId: id 
       });
 
       return ResponseHelper.success(res, {

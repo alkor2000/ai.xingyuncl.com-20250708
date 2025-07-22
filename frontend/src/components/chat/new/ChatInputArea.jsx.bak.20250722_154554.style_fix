@@ -103,15 +103,18 @@ const ChatInputArea = ({
           />
         </Tooltip>
         
-        {/* 清空对话按钮 - 紧跟在导出按钮后面，使用普通样式 */}
-        <Tooltip title={t('chat.clear')}>
-          <Button
-            type="text"
-            icon={<ClearOutlined />}
-            onClick={onClearChat}
-            disabled={!hasMessages || typing || isStreaming}
-          />
-        </Tooltip>
+        {/* 清空对话按钮 - 添加到最右边 */}
+        <div style={{ marginLeft: 'auto' }}>
+          <Tooltip title={t('chat.clear')}>
+            <Button
+              type="text"
+              icon={<ClearOutlined />}
+              onClick={onClearChat}
+              disabled={!hasMessages || typing || isStreaming}
+              danger
+            />
+          </Tooltip>
+        </div>
       </div>
       
       <div className="input-wrapper">
