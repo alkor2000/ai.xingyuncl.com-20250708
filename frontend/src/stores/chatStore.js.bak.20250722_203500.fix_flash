@@ -6,7 +6,6 @@ const useChatStore = create((set, get) => ({
   conversations: [],
   conversationsLoading: false,
   conversationsLoaded: false,
-  initialLoading: true, // 🔥 新增：初始加载状态，用于解决闪烁问题
   
   // 🔥 当前对话状态独立
   currentConversationId: null,
@@ -38,10 +37,6 @@ const useChatStore = create((set, get) => ({
     
     // 如果已加载过且不是强制刷新，跳过
     if (state.conversationsLoaded && !force) {
-      // 即使跳过加载，也要更新initialLoading状态
-      if (state.initialLoading) {
-        set({ initialLoading: false })
-      }
       return state.conversations
     }
     
@@ -60,19 +55,13 @@ const useChatStore = create((set, get) => ({
       if (autoSelectFirst && conversations.length > 0 && !state.currentConversationId) {
         // 选择优先级最高的对话（后端已经按优先级排序）
         const firstConversation = conversations[0]
-        await get().selectConversation(firstConversation.id)
+        get().selectConversation(firstConversation.id)
       }
-      
-      // 🔥 更新initialLoading状态
-      set({ initialLoading: false })
       
       return conversations
     } catch (error) {
       console.error('获取会话列表失败:', error)
-      set({ 
-        conversationsLoading: false,
-        initialLoading: false // 即使失败也要更新初始加载状态
-      })
+      set({ conversationsLoading: false })
       throw error
     }
   },
@@ -797,7 +786,6 @@ const useChatStore = create((set, get) => ({
       conversations: [],
       conversationsLoading: false,
       conversationsLoaded: false,
-      initialLoading: true, // 🔥 重置时恢复初始加载状态
       currentConversationId: null,
       currentConversation: null,
       messages: [],

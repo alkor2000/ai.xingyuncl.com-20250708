@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Modal, Form, message, Spin } from 'antd'
+import { Layout, Modal, Form, message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import useChatStore from '../../stores/chatStore'
@@ -44,7 +44,6 @@ const Chat = () => {
     currentConversation,
     messages,
     messagesLoading,
-    initialLoading, // 🔥 新增：获取初始加载状态
     sendMessage,
     getConversations,
     selectConversation,
@@ -519,24 +518,7 @@ const Chat = () => {
       {/* 主内容区 */}
       <Layout className="chat-main">
         <Content className="chat-content">
-          {/* 🔥 修复：添加初始加载判断，避免闪烁 */}
-          {initialLoading ? (
-            // 初始加载时显示加载动画
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              <Spin size="large" tip={t('status.loading')} />
-              <div style={{ color: '#666', fontSize: '14px' }}>
-                {t('chat.loadingConversations') || '正在加载对话列表...'}
-              </div>
-            </div>
-          ) : !currentConversation ? (
-            // 只有在初始加载完成后，且确实没有选中对话时才显示空状态
+          {!currentConversation ? (
             <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
           ) : (
             <>

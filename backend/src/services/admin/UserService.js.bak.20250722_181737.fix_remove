@@ -106,7 +106,7 @@ class UserService {
   }
 
   /**
-   * 更新用户信息（包含分组变更时的积分处理）
+   * 更新用户信息
    */
   static async updateUser(userId, updateData, operatorId = null) {
     try {
@@ -131,108 +131,16 @@ class UserService {
         }
       }
 
-      // 检查是否有分组变更
-      const isGroupChanged = updateData.group_id !== undefined && 
-                           parseInt(updateData.group_id) !== parseInt(user.group_id);
+      // 执行更新
+      const updatedUser = await user.update(updateData);
 
-      if (isGroupChanged) {
-        // 检查目标组是否还有容量
-        const hasCapacity = await GroupService.checkGroupCapacity(updateData.group_id);
-        if (!hasCapacity) {
-          const group = await GroupService.findGroupById(updateData.group_id);
-          const currentCount = await GroupService.getGroupUserCount(updateData.group_id);
-          throw new ValidationError(`目标组已满员（${currentCount}/${group.user_limit}），无法加入`);
-        }
+      logger.info('用户更新成功', {
+        operatorId,
+        userId,
+        updateFields: Object.keys(updateData)
+      });
 
-        // 处理分组变更时的积分
-        const userRemainingCredits = Math.max(0, user.credits_quota - user.used_credits);
-        const originalGroupId = user.group_id;
-
-        // 使用事务处理分组变更和积分操作
-        await dbConnection.transaction(async (query) => {
-          // 1. 只有从非默认组转出时，才返还积分到原组积分池
-          if (originalGroupId !== 1 && userRemainingCredits > 0) {
-            // 获取原组信息
-            const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
-            const { rows: groupRows } = await query(groupSql, [originalGroupId]);
-            
-            if (groupRows.length > 0) {
-              // 更新组积分池（减少已使用额度）
-              const updateGroupSql = `
-                UPDATE user_groups 
-                SET credits_pool_used = GREATEST(0, credits_pool_used - ?), 
-                    updated_at = NOW() 
-                WHERE id = ?
-              `;
-              await query(updateGroupSql, [userRemainingCredits, originalGroupId]);
-
-              logger.info('分组变更：返还用户剩余积分到原组积分池', {
-                groupId: originalGroupId,
-                returnedCredits: userRemainingCredits
-              });
-            }
-          }
-
-          // 2. 更新用户信息，包括清零积分
-          const finalUpdateData = {
-            ...updateData,
-            credits_quota: 0  // 分组变更时清零积分
-          };
-
-          // 构建更新SQL
-          const updateFields = Object.keys(finalUpdateData);
-          const setClause = updateFields.map(field => `${field} = ?`).join(', ');
-          const values = updateFields.map(field => finalUpdateData[field]);
-          values.push(userId);
-
-          const updateUserSql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
-          await query(updateUserSql, values);
-
-          // 3. 记录积分变动（如果有）
-          if (userRemainingCredits > 0) {
-            // 使用已存在的 transaction_type
-            const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
-            const description = originalGroupId === 1 
-              ? `分组变更（从默认组到组${updateData.group_id}），积分清零` 
-              : `分组变更（从组${originalGroupId}到组${updateData.group_id}），积分清零并返还到原组积分池`;
-              
-            const transactionSql = `
-              INSERT INTO credit_transactions 
-              (user_id, amount, balance_after, transaction_type, description, operator_id)
-              VALUES (?, ?, 0, ?, ?, ?)
-            `;
-            await query(transactionSql, [
-              userId,
-              -userRemainingCredits, // 负数表示扣减
-              transactionType,
-              description,
-              operatorId
-            ]);
-          }
-        });
-
-        logger.info('用户分组变更成功', {
-          operatorId,
-          userId,
-          originalGroupId,
-          newGroupId: updateData.group_id,
-          clearedCredits: userRemainingCredits
-        });
-
-        // 重新获取更新后的用户信息
-        return await User.findById(userId);
-      } else {
-        // 没有分组变更，执行普通更新
-        const updatedUser = await user.update(updateData);
-
-        logger.info('用户更新成功', {
-          operatorId,
-          userId,
-          updateFields: Object.keys(updateData)
-        });
-
-        return updatedUser;
-      }
+      return updatedUser;
     } catch (error) {
       logger.error('更新用户失败', { error: error.message, userId, updateData });
       throw error;
@@ -602,9 +510,8 @@ class UserService {
         
         const originalGroup = groupRows[0];
 
-        // 2. 只有从非默认组挪出时，才返还积分到组积分池
-        let actualReturnedCredits = 0;
-        if (originalGroupId !== 1 && userRemainingCredits > 0) {
+        // 2. 如果用户有剩余积分，返还给原组积分池
+        if (userRemainingCredits > 0) {
           // 更新组积分池（减少已使用额度）
           const updateGroupSql = `
             UPDATE user_groups 
@@ -613,11 +520,10 @@ class UserService {
             WHERE id = ?
           `;
           await query(updateGroupSql, [userRemainingCredits, originalGroupId]);
-          actualReturnedCredits = userRemainingCredits;
 
           logger.info('返还用户剩余积分到组积分池', {
             groupId: originalGroupId,
-            returnedCredits: actualReturnedCredits
+            returnedCredits: userRemainingCredits
           });
         }
 
@@ -633,22 +539,15 @@ class UserService {
 
         // 4. 记录积分变动（如果有）
         if (userRemainingCredits > 0) {
-          // 使用已存在的 transaction_type
-          const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
-          const description = originalGroupId === 1 
-            ? '从默认组挪出，积分清零' 
-            : `挪出组时返还积分到组积分池`;
-            
           const transactionSql = `
             INSERT INTO credit_transactions 
             (user_id, amount, balance_after, transaction_type, description, operator_id)
-            VALUES (?, ?, 0, ?, ?, ?)
+            VALUES (?, ?, 0, 'group_recycle', ?, ?)
           `;
           await query(transactionSql, [
             userId,
             -userRemainingCredits, // 负数表示扣减
-            transactionType,
-            description,
+            `挪出组时返还积分到组积分池`,
             operatorUser.id
           ]);
         }
@@ -656,7 +555,7 @@ class UserService {
         return {
           originalGroupId,
           originalGroupName: originalGroup.name,
-          returnedCredits: actualReturnedCredits
+          returnedCredits: userRemainingCredits
         };
       });
 

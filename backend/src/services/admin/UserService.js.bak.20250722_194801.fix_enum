@@ -190,8 +190,7 @@ class UserService {
 
           // 3. 记录积分变动（如果有）
           if (userRemainingCredits > 0) {
-            // 使用已存在的 transaction_type
-            const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
+            const transactionType = originalGroupId === 1 ? 'group_change' : 'group_change_recycle';
             const description = originalGroupId === 1 
               ? `分组变更（从默认组到组${updateData.group_id}），积分清零` 
               : `分组变更（从组${originalGroupId}到组${updateData.group_id}），积分清零并返还到原组积分池`;
@@ -633,8 +632,7 @@ class UserService {
 
         // 4. 记录积分变动（如果有）
         if (userRemainingCredits > 0) {
-          // 使用已存在的 transaction_type
-          const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
+          const transactionType = originalGroupId === 1 ? 'remove_from_default' : 'group_recycle';
           const description = originalGroupId === 1 
             ? '从默认组挪出，积分清零' 
             : `挪出组时返还积分到组积分池`;
