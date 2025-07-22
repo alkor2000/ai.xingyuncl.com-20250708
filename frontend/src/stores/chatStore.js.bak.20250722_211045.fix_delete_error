@@ -139,21 +139,9 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 选择会话 - 优化为使用缓存，支持草稿恢复，修复null处理
+  // 🔥 选择会话 - 优化为使用缓存，支持草稿恢复
   selectConversation: async (conversationId) => {
     const state = get()
-    
-    // 🔥 修复：处理null或undefined的情况
-    if (!conversationId) {
-      // 清空当前对话状态，不发起API请求
-      set({
-        currentConversationId: null,
-        currentConversation: null,
-        messages: [],
-        messagesLoading: false
-      })
-      return
-    }
     
     // 如果选择的是当前会话，跳过
     if (state.currentConversationId === conversationId && state.currentConversation) {
