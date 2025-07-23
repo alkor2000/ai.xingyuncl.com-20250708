@@ -159,11 +159,6 @@ class SystemConfig {
         ai: settings.ai_config || {
           default_model: 'gpt-4.1-mini-op',
           temperature: 0.0
-        },
-        // 添加chat配置
-        chat: settings.chat_config || {
-          font_family: 'system-ui',
-          font_size: 14
         }
       };
 
@@ -208,10 +203,6 @@ class SystemConfig {
         ai: {
           default_model: 'gpt-4.1-mini-op',
           temperature: 0.0
-        },
-        chat: {
-          font_family: 'system-ui',
-          font_size: 14
         }
       };
     }
@@ -234,20 +225,10 @@ class SystemConfig {
         formattedSettings.user = cleanedUserConfig;
       }
 
-      // 处理chat配置
-      if (formattedSettings.chat) {
-        const cleanedChatConfig = {
-          font_family: formattedSettings.chat.font_family || 'system-ui',
-          font_size: formattedSettings.chat.font_size ?? 14
-        };
-        formattedSettings.chat = cleanedChatConfig;
-      }
-
       const settings = {
         site_config: formattedSettings.site,
         user_config: formattedSettings.user,
-        ai_config: formattedSettings.ai,
-        chat_config: formattedSettings.chat  // 保存chat配置
+        ai_config: formattedSettings.ai
       };
       
       // 不再保存credits_config
