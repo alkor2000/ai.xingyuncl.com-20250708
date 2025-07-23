@@ -24,10 +24,6 @@ const useSystemConfigStore = create((set, get) => ({
     ai: {
       default_model: 'gpt-4.1-mini-op',
       temperature: 0.0
-    },
-    chat: {
-      font_family: 'system-ui',
-      font_size: 14
     }
   },
   
@@ -59,22 +55,6 @@ const useSystemConfigStore = create((set, get) => ({
           // 如果credits配置中有default_credits，优先使用
           if (config.credits && config.credits.default_credits !== undefined) {
             config.user.default_credits = config.credits.default_credits
-          }
-        }
-        
-        // 添加chat配置的默认值（如果不存在）
-        if (!config.chat) {
-          config.chat = {
-            font_family: 'system-ui',
-            font_size: 14
-          }
-        } else {
-          // 确保有默认值
-          if (!config.chat.font_family) {
-            config.chat.font_family = 'system-ui'
-          }
-          if (!config.chat.font_size) {
-            config.chat.font_size = 14
           }
         }
         
@@ -197,15 +177,6 @@ const useSystemConfigStore = create((set, get) => ({
     return {
       defaultModel: state.systemConfig?.ai?.default_model || 'gpt-4.1-mini-op',
       defaultTemperature: parseFloat(state.systemConfig?.ai?.temperature) || 0.0
-    }
-  },
-  
-  // 获取对话字体设置
-  getChatFontConfig: () => {
-    const state = get()
-    return {
-      fontFamily: state.systemConfig?.chat?.font_family || 'system-ui',
-      fontSize: state.systemConfig?.chat?.font_size || 14
     }
   }
 }))

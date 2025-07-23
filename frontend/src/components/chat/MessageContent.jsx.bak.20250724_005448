@@ -5,7 +5,6 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import CodeBlock from './CodeBlock'
-import useSystemConfigStore from '../../stores/systemConfigStore'
 import './MessageContent.less'
 
 const { Text } = Typography
@@ -14,20 +13,8 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   const [imageLoading, setImageLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   
-  // 获取系统配置中的字体设置
-  const { systemConfig } = useSystemConfigStore()
-  const chatFontFamily = systemConfig?.chat?.font_family || 'system-ui'
-  const chatFontSize = systemConfig?.chat?.font_size || 14
-  
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
-  
-  // 消息文本样式
-  const messageTextStyle = {
-    fontFamily: chatFontFamily,
-    fontSize: `${chatFontSize}px`,
-    lineHeight: chatFontSize > 16 ? '1.6' : '1.5'
-  }
   
   // 复制消息内容
   const handleCopy = async () => {
@@ -116,16 +103,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
           {children}
         </code>
       )
-    },
-    // 为所有文本元素应用字体设置
-    p: ({ children }) => <p style={messageTextStyle}>{children}</p>,
-    li: ({ children }) => <li style={messageTextStyle}>{children}</li>,
-    h1: ({ children }) => <h1 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.7}px` }}>{children}</h1>,
-    h2: ({ children }) => <h2 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.5}px` }}>{children}</h2>,
-    h3: ({ children }) => <h3 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.3}px` }}>{children}</h3>,
-    h4: ({ children }) => <h4 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.1}px` }}>{children}</h4>,
-    h5: ({ children }) => <h5 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h5>,
-    h6: ({ children }) => <h6 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h6>,
+    }
   }
   
   return (
@@ -152,9 +130,9 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       )}
       
       {/* 消息文本内容 */}
-      <div className="message-text" style={messageTextStyle}>
+      <div className="message-text">
         {isUser ? (
-          <Text style={messageTextStyle}>{message.content}</Text>
+          <Text>{message.content}</Text>
         ) : (
           <>
             {isStreaming && message.streaming ? (

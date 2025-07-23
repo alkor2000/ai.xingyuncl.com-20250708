@@ -26,38 +26,12 @@ import {
   LockOutlined,
   UploadOutlined,
   LoadingOutlined,
-  PlusOutlined,
-  FontSizeOutlined
+  PlusOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TextArea } = Input
-
-// 预定义的字体列表
-const FONT_OPTIONS = [
-  { label: '系统默认', value: 'system-ui' },
-  { label: '苹方', value: '-apple-system, "PingFang SC"' },
-  { label: '微软雅黑', value: '"Microsoft YaHei", "微软雅黑"' },
-  { label: '思源黑体', value: '"Source Han Sans CN", "思源黑体"' },
-  { label: '阿里巴巴普惠体', value: '"Alibaba PuHuiTi", "阿里巴巴普惠体"' },
-  { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
-  { label: '宋体', value: 'SimSun, "宋体"' },
-  { label: '黑体', value: 'SimHei, "黑体"' },
-  { label: '楷体', value: 'KaiTi, "楷体"' },
-]
-
-// 预定义的字体大小选项
-const FONT_SIZE_OPTIONS = [
-  { label: '12px (较小)', value: 12 },
-  { label: '13px (小)', value: 13 },
-  { label: '14px (默认)', value: 14 },
-  { label: '15px (舒适)', value: 15 },
-  { label: '16px (大)', value: 16 },
-  { label: '18px (较大)', value: 18 },
-  { label: '20px (特大)', value: 20 },
-]
 
 const BasicSettings = ({
   form,
@@ -234,7 +208,7 @@ const BasicSettings = ({
 
           <Col xs={24} lg={12}>
             {/* AI设置 */}
-            <Card title={t('admin.settings.ai.title')} size="small" style={{ marginBottom: 16 }}>
+            <Card title={t('admin.settings.ai.title')} size="small">
               <Form.Item 
                 name={['ai', 'default_model']} 
                 label={t('admin.settings.ai.defaultModel')}
@@ -276,63 +250,6 @@ const BasicSettings = ({
                   disabled={disabled}
                 />
               </Form.Item>
-            </Card>
-
-            {/* 对话字体设置 - 新增 */}
-            <Card 
-              title={
-                <Space>
-                  <FontSizeOutlined />
-                  <span>对话字体设置</span>
-                </Space>
-              }
-              size="small"
-            >
-              <Form.Item 
-                name={['chat', 'font_family']} 
-                label="字体类型"
-                tooltip="设置对话界面的字体，对所有用户生效"
-                initialValue="system-ui"
-              >
-                <Select 
-                  disabled={disabled}
-                  placeholder="选择字体"
-                  showSearch
-                  optionFilterProp="label"
-                >
-                  {FONT_OPTIONS.map(font => (
-                    <Select.Option key={font.value} value={font.value} label={font.label}>
-                      <span style={{ fontFamily: font.value }}>{font.label}</span>
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              
-              <Form.Item 
-                name={['chat', 'font_size']} 
-                label="字体大小"
-                tooltip="设置对话内容的字体大小"
-                initialValue={14}
-              >
-                <Select 
-                  disabled={disabled}
-                  placeholder="选择字体大小"
-                >
-                  {FONT_SIZE_OPTIONS.map(size => (
-                    <Select.Option key={size.value} value={size.value}>
-                      {size.label}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              <Alert
-                message="字体设置说明"
-                description="这里设置的字体将应用于所有用户的对话界面，包括用户消息和AI回复。某些字体可能需要用户系统已安装才能正常显示。"
-                type="info"
-                showIcon
-                style={{ marginTop: 16 }}
-              />
             </Card>
           </Col>
         </Row>
