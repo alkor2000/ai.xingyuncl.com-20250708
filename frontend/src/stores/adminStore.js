@@ -411,7 +411,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 模块管理
+  // 模块管理 - 超级管理员使用
   getModules: async () => {
     set({ loading: true })
     try {
@@ -423,6 +423,23 @@ const useAdminStore = create((set) => ({
       return response.data.data
     } catch (error) {
       console.error('获取模块列表失败:', error)
+      set({ loading: false })
+      throw error
+    }
+  },
+  
+  // 获取用户可访问的模块 - 所有登录用户都可以使用
+  getUserModules: async () => {
+    set({ loading: true })
+    try {
+      const response = await apiClient.get('/admin/modules/user-modules')
+      set({ 
+        modules: response.data.data,
+        loading: false 
+      })
+      return response.data.data
+    } catch (error) {
+      console.error('获取用户模块失败:', error)
       set({ loading: false })
       throw error
     }

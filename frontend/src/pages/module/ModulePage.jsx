@@ -7,15 +7,26 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Spin, Result, Button } from 'antd'
 import { LoadingOutlined, ReloadOutlined } from '@ant-design/icons'
 import useAdminStore from '../../stores/adminStore'
+import useAuthStore from '../../stores/authStore'
 import './ModulePage.less'
 
 const ModulePage = () => {
   const { moduleName } = useParams()
   const navigate = useNavigate()
-  const { modules, getModules } = useAdminStore()
+  const { modules, getUserModules } = useAdminStore()  // 使用getUserModules
+  const { accessToken } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [module, setModule] = useState(null)
   const [iframeError, setIframeError] = useState(false)
+
+  // 构建带token的URL
+  const buildModuleUrl = (baseUrl) => {
+    if (!baseUrl || !accessToken) return baseUrl
+    
+    // 检查URL是否已有查询参数
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    return `${baseUrl}${separator}token=${encodeURIComponent(accessToken)}`
+  }
 
   // 加载模块信息
   useEffect(() => {
@@ -23,13 +34,15 @@ const ModulePage = () => {
       try {
         setLoading(true)
         
-        // 如果modules为空，则加载
+        let modulesList = modules
+        
+        // 如果modules为空，则加载并使用返回值
         if (!modules || modules.length === 0) {
-          await getModules()
+          modulesList = await getUserModules()  // 使用getUserModules替代getModules
         }
         
         // 查找对应的模块
-        const foundModule = modules.find(m => m.name === moduleName)
+        const foundModule = modulesList.find(m => m.name === moduleName)
         if (foundModule) {
           setModule(foundModule)
           setIframeError(false)
@@ -45,7 +58,7 @@ const ModulePage = () => {
     }
 
     loadModule()
-  }, [moduleName, modules, getModules])
+  }, [moduleName, getUserModules])  // 更新依赖
 
   // 处理iframe加载完成
   const handleIframeLoad = () => {
@@ -65,7 +78,7 @@ const ModulePage = () => {
     // 强制刷新iframe
     const iframe = document.getElementById('module-iframe')
     if (iframe) {
-      iframe.src = iframe.src
+      iframe.src = buildModuleUrl(module.module_url)
     }
   }
 
@@ -97,6 +110,11 @@ const ModulePage = () => {
       </div>
     )
   }
+
+  // 添加调试日志
+  console.log('Module URL:', module.module_url)
+  console.log('Access Token:', accessToken ? 'Present' : 'Missing')
+  console.log('Final iframe URL:', buildModuleUrl(module.module_url))
 
   return (
     <div className="module-page">
@@ -131,7 +149,7 @@ const ModulePage = () => {
       {!iframeError && (
         <iframe
           id="module-iframe"
-          src={module.module_url}
+          src={buildModuleUrl(module.module_url)}
           title={module.display_name}
           className="module-iframe"
           onLoad={handleIframeLoad}
