@@ -249,26 +249,21 @@
           }
         }
         
-        // 新的头部布局
+        // 新增模型选择器和工具栏的容器
         .input-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-bottom: 8px;
           
-          .left-tools {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+          .model-selector-wrapper {
+            flex-shrink: 0;
           }
           
-          .right-tools {
+          .input-toolbar {
             display: flex;
             align-items: center;
-            
-            .ant-space {
-              gap: 4px !important;
-            }
+            gap: 4px;
             
             .ant-btn {
               padding: 4px 8px;
@@ -295,6 +290,16 @@
             display: flex;
             align-items: center;
             gap: 4px;
+            
+            .ant-btn {
+              &.ant-btn-text {
+                padding: 4px 8px;
+                
+                &:hover {
+                  background-color: #f5f5f5;
+                }
+              }
+            }
           }
         }
       }

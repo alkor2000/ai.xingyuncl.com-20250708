@@ -21,7 +21,6 @@ import {
   ClearOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import ModelSelector from './ModelSelector'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -35,8 +34,6 @@ const ChatInputArea = forwardRef(({
   isStreaming,
   imageUploadEnabled,
   hasMessages,
-  currentModel,
-  availableModels,
   onInputChange,
   onSend,
   onStop,
@@ -44,8 +41,7 @@ const ChatInputArea = forwardRef(({
   onRemoveImage,
   onKeyPress,
   onExportChat,
-  onClearChat,
-  onModelChange
+  onClearChat
 }, ref) => {
   const { t } = useTranslation()
   const inputRef = useRef(null)
@@ -92,58 +88,45 @@ const ChatInputArea = forwardRef(({
         </div>
       )}
       
-      {/* 模型选择器和工具栏 */}
-      <div className="input-header">
-        <div className="left-tools">
-          <ModelSelector
-            currentModel={currentModel}
-            availableModels={availableModels}
-            onModelChange={onModelChange}
-            disabled={typing || isStreaming}
-          />
-          
-          {/* 图片上传按钮 - 紧跟在模型选择器后面 */}
-          {imageUploadEnabled && (
-            <Upload
-              beforeUpload={onImageUpload}
-              showUploadList={false}
-              accept="image/*"
-              disabled={uploading || typing || isStreaming}
-            >
-              <Tooltip title={t('chat.upload.image')}>
-                <Button
-                  type="text"
-                  icon={<PictureOutlined />}
-                  loading={uploading}
-                  disabled={typing || isStreaming}
-                />
-              </Tooltip>
-            </Upload>
-          )}
-        </div>
+      {/* 工具栏 - 位于输入框上方 */}
+      <div className="input-toolbar">
+        {imageUploadEnabled && (
+          <Upload
+            beforeUpload={onImageUpload}
+            showUploadList={false}
+            accept="image/*"
+            disabled={uploading || typing || isStreaming}
+          >
+            <Tooltip title={t('chat.upload.image')}>
+              <Button
+                type="text"
+                icon={<PictureOutlined />}
+                loading={uploading}
+                disabled={typing || isStreaming}
+              />
+            </Tooltip>
+          </Upload>
+        )}
         
-        <div className="right-tools">
-          {/* 导出和清空按钮并排 */}
-          <Space size={4}>
-            <Tooltip title={t('chat.export')}>
-              <Button
-                type="text"
-                icon={<DownloadOutlined />}
-                onClick={onExportChat}
-                disabled={!hasMessages || typing || isStreaming}
-              />
-            </Tooltip>
-            
-            <Tooltip title={t('chat.clear')}>
-              <Button
-                type="text"
-                icon={<ClearOutlined />}
-                onClick={onClearChat}
-                disabled={!hasMessages || typing || isStreaming}
-              />
-            </Tooltip>
-          </Space>
-        </div>
+        {/* 导出聊天记录按钮 */}
+        <Tooltip title={t('chat.export')}>
+          <Button
+            type="text"
+            icon={<DownloadOutlined />}
+            onClick={onExportChat}
+            disabled={!hasMessages || typing || isStreaming}
+          />
+        </Tooltip>
+        
+        {/* 清空对话按钮 - 紧跟在导出按钮后面，使用普通样式 */}
+        <Tooltip title={t('chat.clear')}>
+          <Button
+            type="text"
+            icon={<ClearOutlined />}
+            onClick={onClearChat}
+            disabled={!hasMessages || typing || isStreaming}
+          />
+        </Tooltip>
       </div>
       
       <div className="input-wrapper">
@@ -163,7 +146,6 @@ const ChatInputArea = forwardRef(({
         />
         
         <div className="input-actions-right">
-          {/* 发送/停止按钮 */}
           {isStreaming ? (
             <Tooltip title={t('chat.stop')}>
               <Button

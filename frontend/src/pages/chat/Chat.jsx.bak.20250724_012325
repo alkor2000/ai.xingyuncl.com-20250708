@@ -323,21 +323,6 @@ const Chat = () => {
     }
   }
 
-  // 🔥 新增：处理模型切换
-  const handleModelChange = async (model) => {
-    if (!currentConversation || !model) return
-    
-    try {
-      await updateConversation(currentConversation.id, {
-        model_name: model.name
-      })
-      message.success(`已切换到 ${model.display_name || model.name}`)
-      // 不需要重新获取对话列表，只更新当前对话即可
-    } catch (error) {
-      message.error('切换模型失败')
-    }
-  }
-
   // 发送消息 - 传递完整的uploadedImage对象
   const handleSendMessage = async () => {
     if (!inputValue.trim() && !uploadedImage) return
@@ -535,8 +520,6 @@ const Chat = () => {
   }
 
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
-  // 🔥 新增：获取用户可用的模型列表（只显示激活的模型）
-  const availableModels = aiModels.filter(m => m.is_active)
 
   return (
     <Layout className="chat-container">
@@ -614,7 +597,6 @@ const Chat = () => {
                   typing={typing}
                   isStreaming={isStreaming}
                   currentModel={currentModel}
-                  aiModels={aiModels}
                   user={user}
                   streamingMessageId={streamingMessageId}
                   messagesEndRef={messagesEndRef}
@@ -623,7 +605,7 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* 输入区域 - 🔥 传递ref和模型相关props */}
+              {/* 输入区域 - 🔥 传递ref */}
               <ChatInputArea
                 ref={inputRef}
                 inputValue={inputValue}
@@ -633,8 +615,6 @@ const Chat = () => {
                 isStreaming={isStreaming}
                 imageUploadEnabled={currentModel?.image_upload_enabled}
                 hasMessages={messages && messages.length > 0}
-                currentModel={currentModel}
-                availableModels={availableModels}
                 disabled={!currentConversation}
                 onInputChange={handleInputChange}
                 onKeyPress={handleKeyPress}
@@ -644,7 +624,7 @@ const Chat = () => {
                 onRemoveImage={() => setUploadedImage(null)}
                 onExportChat={handleExportChat}
                 onClearChat={handleClearChat}
-                onModelChange={handleModelChange}
+                currentModel={currentModel}
               />
             </>
           )}

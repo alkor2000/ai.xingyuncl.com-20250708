@@ -10,7 +10,7 @@ import './MessageContent.less'
 
 const { Text } = Typography
 
-const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMessage, aiModels = [] }) => {
+const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMessage }) => {
   const [imageLoading, setImageLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   
@@ -21,19 +21,6 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
-  
-  // 获取消息实际使用的模型信息
-  const getMessageModel = () => {
-    // 如果消息有model_name字段，使用消息自己的模型
-    if (message.model_name && aiModels.length > 0) {
-      const model = aiModels.find(m => m.name === message.model_name)
-      if (model) return model
-    }
-    // 否则使用当前对话的模型（兼容旧消息）
-    return currentModel
-  }
-  
-  const messageModel = getMessageModel()
   
   // 消息文本样式
   const messageTextStyle = {
@@ -210,12 +197,12 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
               </span>
             )}
             
-            {/* 模型名称 - 只显示AI消息的，使用消息自己的模型 */}
-            {isAssistant && messageModel && (
+            {/* 模型名称 - 只显示AI消息的 */}
+            {isAssistant && currentModel && (
               <span className="info-item">
                 <RobotOutlined />
                 <Text type="secondary" className="info-text">
-                  {messageModel.display_name || messageModel.name}
+                  {currentModel.display_name || currentModel.name}
                 </Text>
               </span>
             )}

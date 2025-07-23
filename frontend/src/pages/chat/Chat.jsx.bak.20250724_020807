@@ -614,7 +614,6 @@ const Chat = () => {
                   typing={typing}
                   isStreaming={isStreaming}
                   currentModel={currentModel}
-                  aiModels={aiModels}
                   user={user}
                   streamingMessageId={streamingMessageId}
                   messagesEndRef={messagesEndRef}

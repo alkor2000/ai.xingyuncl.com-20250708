@@ -14,7 +14,6 @@ class Message {
     this.role = data.role || null; // 'user', 'assistant', 'system'
     this.content = data.content || '';
     this.tokens = data.tokens || 0;
-    this.model_name = data.model_name || null; // 记录消息生成时使用的模型
     this.file_id = data.file_id || null;
     this.created_at = data.created_at || null;
   }
@@ -24,12 +23,12 @@ class Message {
    */
   static async create(messageData) {
     try {
-      const { conversation_id, role, content, tokens = 0, model_name = null, file_id = null, id = null } = messageData;
+      const { conversation_id, role, content, tokens = 0, file_id = null, id = null } = messageData;
       const messageId = id || uuidv4();
 
       const sql = `
-        INSERT INTO messages (id, conversation_id, role, content, tokens, model_name, file_id) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (id, conversation_id, role, content, tokens, file_id) 
+        VALUES (?, ?, ?, ?, ?, ?)
       `;
       
       // 确保所有参数都有值，null值用JS null而不是undefined
@@ -38,8 +37,7 @@ class Message {
         conversation_id, 
         role, 
         content, 
-        parseInt(tokens) || 0,
-        model_name || null,
+        parseInt(tokens) || 0, 
         file_id || null
       ];
 
@@ -48,7 +46,6 @@ class Message {
         conversationId: conversation_id, 
         role,
         tokens: params[4],
-        modelName: model_name,
         hasFileId: !!file_id,
         params
       });
@@ -59,8 +56,7 @@ class Message {
         messageId: messageId, 
         conversationId: conversation_id, 
         role,
-        tokens: params[4],
-        modelName: model_name
+        tokens: params[4]
       });
 
       return await Message.findById(messageId);
@@ -380,7 +376,6 @@ class Message {
       role: this.role,
       content: this.content,
       tokens: this.tokens,
-      model_name: this.model_name,
       file_id: this.file_id,
       created_at: this.created_at
     };

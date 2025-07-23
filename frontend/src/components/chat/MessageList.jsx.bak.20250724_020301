@@ -10,7 +10,7 @@ import './MessageList.less'
 const { Text } = Typography
 
 // 单个消息组件
-const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, currentModel, aiModels, onDeleteMessage }) => {
+const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, currentModel, onDeleteMessage }) => {
   const { t } = useTranslation()
   
   // 获取用户首字母
@@ -65,7 +65,6 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
           message={msg} 
           isStreaming={isStreamingMsg && isStreaming}
           currentModel={currentModel}
-          aiModels={aiModels}
           onDeleteMessage={onDeleteMessage}
         />
       </Card>
@@ -95,8 +94,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
          prevProps.isStreamingMsg === nextProps.isStreamingMsg &&
          prevProps.isStreaming === nextProps.isStreaming &&
          prevProps.user?.username === nextProps.user?.username &&
-         prevProps.currentModel?.name === nextProps.currentModel?.name &&
-         prevProps.aiModels?.length === nextProps.aiModels?.length
+         prevProps.currentModel?.name === nextProps.currentModel?.name
 })
 
 MessageItem.displayName = 'MessageItem'
@@ -165,7 +163,6 @@ const MessageList = React.memo(({
   messagesEndRef,
   user,
   currentModel,
-  aiModels = [],
   onDeleteMessage
 }) => {
   const { t } = useTranslation()
@@ -186,7 +183,6 @@ const MessageList = React.memo(({
             isStreaming={isStreaming}
             user={user}
             currentModel={currentModel}
-            aiModels={aiModels}
             onDeleteMessage={onDeleteMessage}
           />
         )

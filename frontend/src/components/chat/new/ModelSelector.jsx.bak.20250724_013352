@@ -1,0 +1,130 @@
+/**
+ * 模型选择器组件
+ * 用于在对话中快速切换AI模型
+ */
+
+import React, { useState, useRef, useEffect } from 'react'
+import { Popover, Button, List, Tag, Space, Typography } from 'antd'
+import {
+  RobotOutlined,
+  ThunderboltOutlined,
+  FileImageOutlined,
+  SwapOutlined
+} from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import './ModelSelector.less'
+
+const { Text } = Typography
+
+const ModelSelector = ({
+  currentModel,
+  availableModels = [],
+  onModelChange,
+  disabled = false
+}) => {
+  const { t } = useTranslation()
+  const [visible, setVisible] = useState(false)
+  const popoverRef = useRef(null)
+
+  // 点击外部关闭
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setVisible(false)
+      }
+    }
+
+    if (visible) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [visible])
+
+  // 处理模型选择
+  const handleModelSelect = (model) => {
+    if (model.name !== currentModel?.name) {
+      onModelChange(model)
+    }
+    setVisible(false)
+  }
+
+  // 模型列表内容
+  const modelListContent = (
+    <div className="model-selector-list" ref={popoverRef}>
+      <div className="model-selector-header">
+        <Space>
+          <SwapOutlined />
+          <Text strong>切换模型</Text>
+        </Space>
+      </div>
+      <List
+        dataSource={availableModels}
+        renderItem={(model) => {
+          const isSelected = model.name === currentModel?.name
+          return (
+            <List.Item
+              className={`model-item ${isSelected ? 'selected' : ''}`}
+              onClick={() => handleModelSelect(model)}
+            >
+              <div className="model-info">
+                <Space direction="vertical" size={4}>
+                  <Space>
+                    <Text strong={isSelected}>
+                      {model.display_name || model.name}
+                    </Text>
+                    {isSelected && <Tag color="blue" size="small">当前</Tag>}
+                  </Space>
+                  <Space size={4}>
+                    <Tag color="cyan" className="credits-tag">
+                      {model.credits_per_chat} 积分/次
+                    </Tag>
+                    {model.stream_enabled && (
+                      <Tag color="processing" icon={<ThunderboltOutlined />} className="feature-tag">
+                        流式
+                      </Tag>
+                    )}
+                    {model.image_upload_enabled && (
+                      <Tag color="success" icon={<FileImageOutlined />} className="feature-tag">
+                        图片
+                      </Tag>
+                    )}
+                  </Space>
+                </Space>
+              </div>
+            </List.Item>
+          )
+        }}
+      />
+    </div>
+  )
+
+  return (
+    <Popover
+      content={modelListContent}
+      trigger="click"
+      visible={visible}
+      onVisibleChange={setVisible}
+      placement="topLeft"
+      overlayClassName="model-selector-popover"
+      getPopupContainer={(trigger) => trigger.parentElement}
+    >
+      <Button
+        className="model-selector-button"
+        icon={<RobotOutlined />}
+        disabled={disabled}
+      >
+        <span className="model-name">
+          {currentModel?.display_name || currentModel?.name || '选择模型'}
+        </span>
+        <span className="credits-info">
+          {currentModel?.credits_per_chat || 0} 积分
+        </span>
+      </Button>
+    </Popover>
+  )
+}
+
+export default ModelSelector

@@ -94,15 +94,16 @@ const ChatInputArea = forwardRef(({
       
       {/* 模型选择器和工具栏 */}
       <div className="input-header">
-        <div className="left-tools">
+        <div className="model-selector-wrapper">
           <ModelSelector
             currentModel={currentModel}
             availableModels={availableModels}
             onModelChange={onModelChange}
             disabled={typing || isStreaming}
           />
-          
-          {/* 图片上传按钮 - 紧跟在模型选择器后面 */}
+        </div>
+        
+        <div className="input-toolbar">
           {imageUploadEnabled && (
             <Upload
               beforeUpload={onImageUpload}
@@ -120,29 +121,16 @@ const ChatInputArea = forwardRef(({
               </Tooltip>
             </Upload>
           )}
-        </div>
-        
-        <div className="right-tools">
-          {/* 导出和清空按钮并排 */}
-          <Space size={4}>
-            <Tooltip title={t('chat.export')}>
-              <Button
-                type="text"
-                icon={<DownloadOutlined />}
-                onClick={onExportChat}
-                disabled={!hasMessages || typing || isStreaming}
-              />
-            </Tooltip>
-            
-            <Tooltip title={t('chat.clear')}>
-              <Button
-                type="text"
-                icon={<ClearOutlined />}
-                onClick={onClearChat}
-                disabled={!hasMessages || typing || isStreaming}
-              />
-            </Tooltip>
-          </Space>
+          
+          {/* 导出聊天记录按钮 */}
+          <Tooltip title={t('chat.export')}>
+            <Button
+              type="text"
+              icon={<DownloadOutlined />}
+              onClick={onExportChat}
+              disabled={!hasMessages || typing || isStreaming}
+            />
+          </Tooltip>
         </div>
       </div>
       
@@ -163,27 +151,41 @@ const ChatInputArea = forwardRef(({
         />
         
         <div className="input-actions-right">
-          {/* 发送/停止按钮 */}
-          {isStreaming ? (
-            <Tooltip title={t('chat.stop')}>
-              <Button
-                type="primary"
-                danger
-                icon={<StopOutlined />}
-                onClick={onStop}
-              />
-            </Tooltip>
-          ) : (
-            <Tooltip title={t('chat.send')}>
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={onSend}
-                disabled={(!inputValue.trim() && !uploadedImage) || typing}
-                loading={typing}
-              />
-            </Tooltip>
-          )}
+          <Space size={8}>
+            {/* 清空对话按钮 - 移到右侧 */}
+            {hasMessages && (
+              <Tooltip title={t('chat.clear')}>
+                <Button
+                  type="text"
+                  icon={<ClearOutlined />}
+                  onClick={onClearChat}
+                  disabled={typing || isStreaming}
+                />
+              </Tooltip>
+            )}
+            
+            {/* 发送/停止按钮 */}
+            {isStreaming ? (
+              <Tooltip title={t('chat.stop')}>
+                <Button
+                  type="primary"
+                  danger
+                  icon={<StopOutlined />}
+                  onClick={onStop}
+                />
+              </Tooltip>
+            ) : (
+              <Tooltip title={t('chat.send')}>
+                <Button
+                  type="primary"
+                  icon={<SendOutlined />}
+                  onClick={onSend}
+                  disabled={(!inputValue.trim() && !uploadedImage) || typing}
+                  loading={typing}
+                />
+              </Tooltip>
+            )}
+          </Space>
         </div>
       </div>
     </div>

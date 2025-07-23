@@ -510,14 +510,13 @@ class ChatController {
       
       creditsConsumed = requiredCredits;
 
-      // 创建用户消息（添加model_name字段）
+      // 创建用户消息
       userMessage = await Message.create({
         conversation_id: id,
         role: 'user',
         content: content.trim(),
         tokens: estimatedTokens,
-        file_id,
-        model_name: conversation.model_name  // 记录当前使用的模型
+        file_id
       });
 
       // 获取会话历史消息
@@ -584,15 +583,14 @@ class ChatController {
               model_credits_per_chat: requiredCredits
             },
             onComplete: async (fullContent, tokens) => {
-              // 流式完成后保存AI消息（添加model_name字段）
+              // 流式完成后保存AI消息
               try {
                 const assistantMessage = await Message.create({
                   id: aiMessageId,
                   conversation_id: id,
                   role: 'assistant',
                   content: fullContent,
-                  tokens: tokens || Message.estimateTokens(fullContent),
-                  model_name: conversation.model_name  // 记录生成时使用的模型
+                  tokens: tokens || Message.estimateTokens(fullContent)
                 });
 
                 // 更新会话统计
@@ -623,8 +621,7 @@ class ChatController {
                   conversationId: id,
                   messageId: aiMessageId,
                   totalTokens,
-                  creditsConsumed,
-                  modelName: conversation.model_name
+                  creditsConsumed
                 });
               } catch (error) {
                 logger.error('保存流式消息失败:', error);
@@ -663,13 +660,12 @@ class ChatController {
             { temperature: conversation.getTemperature() }
           );
 
-          // 创建AI回复消息（添加model_name字段）
+          // 创建AI回复消息
           const assistantMessage = await Message.create({
             conversation_id: id,
             role: 'assistant',
             content: aiResponse.content,
-            tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content),
-            model_name: conversation.model_name  // 记录生成时使用的模型
+            tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content)
           });
 
           // 更新会话统计
@@ -699,8 +695,7 @@ class ChatController {
             userId,
             conversationId: id,
             totalTokens,
-            creditsConsumed,
-            modelName: conversation.model_name
+            creditsConsumed
           });
 
           // 处理响应中的文件信息
