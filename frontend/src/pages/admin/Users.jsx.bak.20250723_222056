@@ -173,7 +173,7 @@ const Users = () => {
   const handleCreateUser = async (values) => {
     try {
       let credits_expire_days = 365
-      if (values.credits_expire_at && typeof values.credits_expire_at.diff === 'function') {
+      if (values.credits_expire_at) {
         const days = values.credits_expire_at.diff(moment(), 'days')
         credits_expire_days = Math.max(1, days)
       }
@@ -181,12 +181,8 @@ const Users = () => {
       // 处理账号有效期
       let account_expire_days = null
       if (values.expire_at) {
-        // 如果expire_at是字符串（YYYY-MM-DD格式）
-        if (typeof values.expire_at === 'string' && values.expire_at.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          const expireMoment = moment(values.expire_at)
-          const days = expireMoment.diff(moment(), 'days')
-          account_expire_days = Math.max(1, days)
-        }
+        const days = values.expire_at.diff(moment(), 'days')
+        account_expire_days = Math.max(1, days)
       }
       
       await createUser({
@@ -228,12 +224,10 @@ const Users = () => {
       }
       
       // 处理账号有效期
-      if (expire_at !== undefined) {
-        if (expire_at === '' || expire_at === null) {
-          updateData.expire_at = null // 清除有效期
-        } else if (typeof expire_at === 'string' && expire_at.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          updateData.expire_at = expire_at // 已经是正确格式
-        }
+      if (expire_at) {
+        updateData.expire_at = expire_at.format('YYYY-MM-DD')
+      } else if (expire_at === null) {
+        updateData.expire_at = null // 清除有效期
       }
       
       await updateUser(editingUser.id, updateData)
@@ -272,7 +266,7 @@ const Users = () => {
       }
       
       // 积分有效期设置
-      if (credits_expire_at && typeof credits_expire_at.format === 'function') {
+      if (credits_expire_at) {
         await setUserCreditsExpire(editingUser.id, { 
           expire_at: credits_expire_at.format('YYYY-MM-DD HH:mm:ss') 
         })
@@ -326,7 +320,7 @@ const Users = () => {
     userForm.setFieldsValue({
       ...user,
       credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
-      expire_at: user.expire_at || '' // 设置为字符串或空字符串
+      expire_at: user.expire_at ? moment(user.expire_at) : null
     })
     
     // 加载用户积分信息
@@ -428,7 +422,7 @@ const Users = () => {
       color: group.color,
       is_active: group.is_active,
       sort_order: group.sort_order,
-      expire_date: group.expire_date || '' // 设置为字符串或空字符串
+      expire_date: group.expire_date ? moment(group.expire_date) : null
     })
     setIsGroupModalVisible(true)
   }

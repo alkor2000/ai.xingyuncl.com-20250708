@@ -9,7 +9,6 @@ const SystemConfig = require('../../models/SystemConfig');
 const dbConnection = require('../../database/connection');
 const logger = require('../../utils/logger');
 const { DatabaseError, ValidationError, ConflictError } = require('../../utils/errors');
-const moment = require('moment');
 
 class UserService {
   /**
@@ -50,7 +49,6 @@ class UserService {
         credits_quota = defaultCredits,
         credits_expire_days = 365,
         account_expire_days = null, // 账号有效期天数（新增）
-        expire_at = null, // 直接设置有效期
         remark = null
       } = userData;
 
@@ -89,7 +87,6 @@ class UserService {
         credits_quota,
         credits_expire_days,
         account_expire_days,
-        expire_at,
         remark
       });
 
@@ -121,12 +118,6 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
-      // 获取操作者信息
-      let operatorUser = null;
-      if (operatorId) {
-        operatorUser = await User.findById(operatorId);
-      }
-
       // 如果要更新邮箱，检查是否已被使用
       if (updateData.email && updateData.email !== user.email) {
         const existingUser = await User.findByEmail(updateData.email);
@@ -140,41 +131,6 @@ class UserService {
         const existingUser = await User.findByUsername(updateData.username);
         if (existingUser) {
           throw new ConflictError('该用户名已被其他用户使用');
-        }
-      }
-
-      // 处理有效期更新（新增验证逻辑）
-      if (updateData.expire_at !== undefined && operatorUser) {
-        // 组管理员的权限验证
-        if (operatorUser.role === 'admin') {
-          // 组管理员只能管理本组用户
-          if (user.group_id !== operatorUser.group_id) {
-            throw new ValidationError('无权设置其他组用户的有效期');
-          }
-          
-          // 组管理员不能设置超级管理员的有效期
-          if (user.role === 'super_admin') {
-            throw new ValidationError('组管理员无权设置超级管理员的有效期');
-          }
-          
-          // 如果设置了有效期，需要验证不超过组有效期
-          if (updateData.expire_at) {
-            const group = await GroupService.findGroupById(user.group_id);
-            if (group.expire_date) {
-              const userExpireDate = moment(updateData.expire_at, 'YYYY-MM-DD');
-              const groupExpireDate = moment(group.expire_date, 'YYYY-MM-DD');
-              
-              if (userExpireDate.isAfter(groupExpireDate)) {
-                throw new ValidationError(`用户有效期不能超过组有效期 ${group.expire_date}`);
-              }
-            }
-          }
-        }
-        
-        // 超级管理员账号不设置有效期
-        if (user.role === 'super_admin' && updateData.expire_at) {
-          delete updateData.expire_at;
-          logger.info('超级管理员账号不设置有效期，已忽略expire_at字段');
         }
       }
 
@@ -789,24 +745,6 @@ class UserService {
         throw new ValidationError('无权设置其他组用户的有效期');
       }
 
-      // 组管理员不能设置超级管理员的有效期
-      if (operatorUser.role === 'admin' && user.role === 'super_admin') {
-        throw new ValidationError('组管理员无权设置超级管理员的有效期');
-      }
-
-      // 组管理员设置的有效期不能超过组有效期
-      if (operatorUser.role === 'admin' && expireDate) {
-        const group = await GroupService.findGroupById(user.group_id);
-        if (group.expire_date) {
-          const userExpireDate = moment(expireDate, 'YYYY-MM-DD');
-          const groupExpireDate = moment(group.expire_date, 'YYYY-MM-DD');
-          
-          if (userExpireDate.isAfter(groupExpireDate)) {
-            throw new ValidationError(`用户有效期不能超过组有效期 ${group.expire_date}`);
-          }
-        }
-      }
-
       // 调用用户模型的方法设置有效期
       const result = await user.setAccountExpireDate(expireDate, reason, operatorUser.id);
 
@@ -837,25 +775,6 @@ class UserService {
       // 权限检查：组管理员只能管理本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权延长其他组用户的有效期');
-      }
-
-      // 组管理员不能延长超级管理员的有效期
-      if (operatorUser.role === 'admin' && user.role === 'super_admin') {
-        throw new ValidationError('组管理员无权延长超级管理员的有效期');
-      }
-
-      // 组管理员延长后的有效期不能超过组有效期
-      if (operatorUser.role === 'admin') {
-        const group = await GroupService.findGroupById(user.group_id);
-        if (group.expire_date) {
-          const currentExpireDate = user.expire_at ? moment(user.expire_at) : moment();
-          const newExpireDate = currentExpireDate.clone().add(days, 'days');
-          const groupExpireDate = moment(group.expire_date, 'YYYY-MM-DD');
-          
-          if (newExpireDate.isAfter(groupExpireDate)) {
-            throw new ValidationError(`延长后的有效期不能超过组有效期 ${group.expire_date}`);
-          }
-        }
       }
 
       // 调用用户模型的方法延长有效期

@@ -59,34 +59,6 @@ const UserFormModal = ({
   const defaultTokens = systemConfig?.user?.default_tokens || 10000
   const defaultCredits = systemConfig?.user?.default_credits || 1000
   
-  // 获取当前组信息（组管理员）或选中的组信息
-  const getCurrentGroupInfo = () => {
-    if (isGroupAdmin) {
-      return userGroups.find(g => g.id === currentUser.group_id)
-    }
-    const groupId = selectedGroupId || editingUser?.group_id
-    if (!groupId) return null
-    return userGroups.find(g => g.id === groupId)
-  }
-  
-  // 验证日期是否在组有效期内
-  const validateExpireDate = (_, value) => {
-    if (!value) return Promise.resolve()
-    
-    const groupInfo = getCurrentGroupInfo()
-    if (!groupInfo?.expire_date) return Promise.resolve()
-    
-    // 将输入的日期字符串转换为日期对象进行比较
-    const inputDate = moment(value, 'YYYY-MM-DD')
-    const groupExpireDate = moment(groupInfo.expire_date, 'YYYY-MM-DD')
-    
-    if (inputDate.isAfter(groupExpireDate)) {
-      return Promise.reject(new Error(`有效期不能超过组有效期 ${groupInfo.expire_date}`))
-    }
-    
-    return Promise.resolve()
-  }
-  
   // 监听分组选择变化
   const handleGroupChange = (groupId) => {
     setSelectedGroupId(groupId)
@@ -128,17 +100,11 @@ const UserFormModal = ({
     return false
   }
 
-  // 检查是否可以设置有效期
-  const canSetExpireDate = () => {
-    if (isSuperAdmin) return true
-    if (isGroupAdmin) {
-      // 组管理员只能编辑本组用户
-      if (editingUser && editingUser.group_id !== currentUser.group_id) return false
-      // 组管理员不能设置超级管理员的有效期
-      if (editingUser?.role === 'super_admin') return false
-      return true
-    }
-    return false
+  // 获取选中组的信息
+  const getSelectedGroupInfo = () => {
+    const groupId = selectedGroupId || editingUser?.group_id
+    if (!groupId) return null
+    return userGroups.find(g => g.id === groupId)
   }
 
   return (
@@ -305,8 +271,8 @@ const UserFormModal = ({
               </Row>
             )}
 
-            {/* 有效期设置区域 - 组管理员也可以设置 */}
-            {canSetExpireDate() && (
+            {/* 有效期设置区域 - 简化版 */}
+            {isSuperAdmin && (
               <>
                 <Divider orientation="left">
                   <Space>
@@ -315,45 +281,19 @@ const UserFormModal = ({
                   </Space>
                 </Divider>
 
-                {/* 显示组有效期限制信息 */}
-                {isGroupAdmin && getCurrentGroupInfo()?.expire_date && (
-                  <Alert
-                    message="有效期限制"
-                    description={`本组有效期至 ${getCurrentGroupInfo().expire_date}，用户有效期不能超过此日期`}
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
-                )}
-
-                {/* 账号有效期 */}
+                {/* 账号有效期 - 使用简单的日期输入 */}
                 <Form.Item
                   name="expire_at"
                   label={
                     <Space>
                       <UserOutlined />
                       账号有效期
-                      <Tooltip title={
-                        isGroupAdmin 
-                          ? "设置用户的账号有效期，不能超过组有效期限制" 
-                          : "设置账号的有效期（格式：YYYY-MM-DD），到期后账号将无法登录。超级管理员账号不受此限制。"
-                      }>
+                      <Tooltip title="设置账号的有效期（格式：YYYY-MM-DD），到期后账号将无法登录。超级管理员账号不受此限制。">
                         <ExclamationCircleOutlined />
                       </Tooltip>
                     </Space>
                   }
-                  extra={
-                    getCurrentGroupInfo()?.expire_date 
-                      ? `最大可设置至: ${getCurrentGroupInfo().expire_date}` 
-                      : "留空表示永久有效，格式：YYYY-MM-DD"
-                  }
-                  rules={[
-                    {
-                      pattern: /^\d{4}-\d{2}-\d{2}$/,
-                      message: '请输入正确的日期格式（YYYY-MM-DD）'
-                    },
-                    { validator: validateExpireDate }
-                  ]}
+                  extra="留空表示永久有效，格式：YYYY-MM-DD"
                 >
                   <Input 
                     placeholder="例如：2025-12-31" 
@@ -417,15 +357,14 @@ const UserFormModal = ({
             </TabPane>
           )}
 
-          {/* 账号有效期Tab（编辑时）- 组管理员和超管都可见 */}
-          {editingUser && canSetExpireDate() && (
+          {/* 账号有效期Tab（编辑时）- 简化版 */}
+          {editingUser && isSuperAdmin && (
             <TabPane tab="账号有效期" key="account">
               <Alert
                 message="账号有效期说明"
                 description={
                   <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                     <li>设置账号有效期后，到期时账号将无法登录</li>
-                    {isGroupAdmin && <li>用户有效期不能超过组有效期限制</li>}
                     <li>超级管理员账号不受有效期限制</li>
                     <li>可以随时延长或修改有效期</li>
                     <li>清除有效期将使账号永久有效</li>
@@ -435,15 +374,6 @@ const UserFormModal = ({
                 showIcon
                 style={{ marginBottom: 16 }}
               />
-
-              {/* 组有效期信息 */}
-              {isGroupAdmin && getCurrentGroupInfo()?.expire_date && (
-                <Alert
-                  message={`本组有效期至: ${getCurrentGroupInfo().expire_date}`}
-                  type="warning"
-                  style={{ marginBottom: 16 }}
-                />
-              )}
 
               {/* 当前状态 */}
               {editingUser.expire_at && (
@@ -457,18 +387,7 @@ const UserFormModal = ({
               <Form.Item
                 name="expire_at"
                 label="设置账号有效期"
-                extra={
-                  getCurrentGroupInfo()?.expire_date 
-                    ? `最大可设置至: ${getCurrentGroupInfo().expire_date}` 
-                    : "留空表示永久有效，格式：YYYY-MM-DD"
-                }
-                rules={[
-                  {
-                    pattern: /^\d{4}-\d{2}-\d{2}$/,
-                    message: '请输入正确的日期格式（YYYY-MM-DD）'
-                  },
-                  { validator: validateExpireDate }
-                ]}
+                extra="留空表示永久有效，格式：YYYY-MM-DD"
               >
                 <Input 
                   placeholder="例如：2025-12-31" 
