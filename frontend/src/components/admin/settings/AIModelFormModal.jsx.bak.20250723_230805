@@ -14,16 +14,14 @@ import {
   Space,
   Button,
   Card,
-  Tag,
-  Alert
+  Tag
 } from 'antd'
 import {
   ThunderboltOutlined,
   CloseCircleOutlined,
   PictureOutlined,
   FileImageOutlined,
-  WalletOutlined,
-  InfoCircleOutlined
+  WalletOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -51,18 +49,6 @@ const AIModelFormModal = ({
         layout="vertical"
         onFinish={onSubmit}
       >
-        {/* 编辑模式的提示信息 */}
-        {editingModel && (
-          <Alert
-            message="编辑提示"
-            description="API密钥和API端点字段留空表示不修改原有配置"
-            type="info"
-            showIcon
-            icon={<InfoCircleOutlined />}
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
@@ -91,44 +77,19 @@ const AIModelFormModal = ({
           <Col span={12}>
             <Form.Item
               name="api_key"
-              label={
-                <Space>
-                  {t('admin.models.form.apiKey')}
-                  {editingModel && (
-                    <Tag color="blue" style={{ fontSize: '12px' }}>
-                      留空保持不变
-                    </Tag>
-                  )}
-                </Space>
-              }
+              label={t('admin.models.form.apiKey')}
               rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required') }]}
-              extra={editingModel ? "如需更新密钥，请输入新的API密钥" : null}
             >
-              <Input.Password 
-                placeholder={editingModel ? "留空表示不修改" : "sk-..."} 
-                autoComplete="new-password"
-              />
+              <Input.Password placeholder="sk-..." />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
               name="api_endpoint"
-              label={
-                <Space>
-                  {t('admin.models.form.apiEndpoint')}
-                  {editingModel && (
-                    <Tag color="blue" style={{ fontSize: '12px' }}>
-                      留空保持不变
-                    </Tag>
-                  )}
-                </Space>
-              }
+              label={t('admin.models.form.apiEndpoint')}
               rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required') }]}
-              extra={editingModel ? "如需更新端点，请输入新的API端点" : null}
             >
-              <Input 
-                placeholder={editingModel ? "留空表示不修改" : "https://api.openai.com/v1"} 
-              />
+              <Input placeholder="https://api.openai.com/v1" />
             </Form.Item>
           </Col>
         </Row>

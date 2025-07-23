@@ -363,10 +363,6 @@ class AIModel {
         sort_order 
       } = updateData;
       
-      // 处理api_key和api_endpoint - 空字符串视为不更新
-      const shouldUpdateApiKey = api_key !== undefined && api_key !== '';
-      const shouldUpdateApiEndpoint = api_endpoint !== undefined && api_endpoint !== '';
-      
       const sql = `
         UPDATE ai_models 
         SET display_name = ?, api_key = ?, api_endpoint = ?, 
@@ -377,8 +373,8 @@ class AIModel {
       
       await dbConnection.query(sql, [
         display_name || this.display_name,
-        shouldUpdateApiKey ? api_key : this.api_key,  // 只有非空字符串才更新
-        shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint,  // 只有非空字符串才更新
+        api_key !== undefined ? api_key : this.api_key,
+        api_endpoint !== undefined ? api_endpoint : this.api_endpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
         stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
@@ -392,9 +388,7 @@ class AIModel {
         modelId: this.id,
         stream_enabled: stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled: image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
-        credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
-        apiKeyUpdated: shouldUpdateApiKey,
-        apiEndpointUpdated: shouldUpdateApiEndpoint
+        credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat
       });
     } catch (error) {
       logger.error('AI模型更新失败:', error);

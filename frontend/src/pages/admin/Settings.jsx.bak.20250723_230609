@@ -161,16 +161,7 @@ const Settings = () => {
     }
     
     try {
-      // 过滤掉空的api_key和api_endpoint，避免覆盖原有值
-      const updateData = { ...values }
-      if (!updateData.api_key) {
-        delete updateData.api_key
-      }
-      if (!updateData.api_endpoint) {
-        delete updateData.api_endpoint
-      }
-      
-      await updateAIModel(editingModel.id, updateData)
+      await updateAIModel(editingModel.id, values)
       setIsModelModalVisible(false)
       setEditingModel(null)
       modelForm.resetFields()
@@ -223,11 +214,11 @@ const Settings = () => {
     }
     
     setEditingModel(model)
-    // 不设置api_key和api_endpoint，让用户选择是否更新
     modelForm.setFieldsValue({
       name: model.name,
       display_name: model.display_name,
-      // 不设置 api_key 和 api_endpoint，保持为空
+      api_key: '',
+      api_endpoint: '',
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
       image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
       credits_per_chat: model.credits_per_chat,
