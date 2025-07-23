@@ -160,16 +160,7 @@ const Register = () => {
               }}
             />
           )}
-          <Title 
-            level={3} 
-            style={{ 
-              color: '#1890ff', 
-              marginBottom: '8px',
-              fontSize: '22px',  // 与登录页面保持一致
-              lineHeight: '1.4',
-              fontWeight: 600
-            }}
-          >
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
             {siteName}
           </Title>
           <Title level={4} style={{ marginTop: 0, fontWeight: 'normal' }}>

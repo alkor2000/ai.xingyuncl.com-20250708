@@ -132,16 +132,7 @@ const Login = () => {
               }}
             />
           )}
-          <Title 
-            level={3} 
-            style={{ 
-              color: '#1890ff', 
-              marginBottom: '8px',
-              fontSize: '22px',  // 自定义字体大小
-              lineHeight: '1.4',  // 调整行高
-              fontWeight: 600  // 调整字重
-            }}
-          >
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
             {siteName}
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
