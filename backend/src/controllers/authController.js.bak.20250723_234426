@@ -202,18 +202,10 @@ class AuthController {
             return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
           }
           
-          // 使用新的字段名 - 修复：正确处理0值
-          defaultTokens = systemSettings.user.default_tokens !== undefined 
-            ? systemSettings.user.default_tokens 
-            : 10000;
-            
-          defaultCredits = systemSettings.user.default_credits !== undefined 
-            ? systemSettings.user.default_credits 
-            : 1000;
-            
-          defaultGroupId = systemSettings.user.default_group_id !== undefined 
-            ? systemSettings.user.default_group_id 
-            : 1;
+          // 使用新的字段名
+          defaultTokens = systemSettings.user.default_tokens || 10000;
+          defaultCredits = systemSettings.user.default_credits || 1000;
+          defaultGroupId = systemSettings.user.default_group_id || 1;
         }
         
         logger.info('使用系统配置的默认值', {

@@ -138,14 +138,9 @@ class User {
         status = 'active',
         remark = null,
         token_quota = 10000,
+        credits_quota = 1000,
         credits_expire_days = 365
       } = userData;
-
-      // 修复：正确处理credits_quota的默认值
-      let credits_quota = userData.credits_quota;
-      if (credits_quota === undefined) {
-        credits_quota = 1000; // 只有在未定义时才使用默认值
-      }
 
       // 验证必填字段
       if (!email || !username || !password) {
@@ -189,7 +184,7 @@ class User {
       const { rows } = await dbConnection.query(sql, params);
       const userId = rows.insertId;
 
-      logger.info('用户创建成功', { userId, email, username, role, accountExpireAt, credits_quota });
+      logger.info('用户创建成功', { userId, email, username, role, accountExpireAt });
 
       return await User.findById(userId);
     } catch (error) {
@@ -1331,7 +1326,7 @@ class User {
   /**
    * 根据组有效期更新用户有效期
    */
-  async syncAccountExpireWithGroup() {
+  async updateAccountExpireFromGroup() {
     try {
       // 超级管理员不更新
       if (this.role === 'super_admin') {

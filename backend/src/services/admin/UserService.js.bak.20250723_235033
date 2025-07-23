@@ -25,18 +25,9 @@ class UserService {
       try {
         const systemSettings = await SystemConfig.getFormattedSettings();
         if (systemSettings.user) {
-          // 修复：正确处理0值
-          defaultTokens = systemSettings.user.default_tokens !== undefined 
-            ? systemSettings.user.default_tokens 
-            : 10000;
-            
-          defaultCredits = systemSettings.user.default_credits !== undefined 
-            ? systemSettings.user.default_credits 
-            : 1000;
-            
-          defaultGroupId = systemSettings.user.default_group_id !== undefined 
-            ? systemSettings.user.default_group_id 
-            : 1;
+          defaultTokens = systemSettings.user.default_tokens || 10000;
+          defaultCredits = systemSettings.user.default_credits || 1000;
+          defaultGroupId = systemSettings.user.default_group_id || 1;
         }
         
         logger.info('创建用户使用系统配置的默认值', {
