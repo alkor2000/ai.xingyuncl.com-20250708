@@ -1,5 +1,5 @@
 /**
- * 用户分组表格组件（包含积分池、组员上限和组有效期功能）
+ * 用户分组表格组件（包含积分池和组员上限功能）
  */
 
 import React from 'react'
@@ -10,14 +10,9 @@ import {
   TeamOutlined,
   WalletOutlined,
   SettingOutlined,
-  UsergroupAddOutlined,
-  CalendarOutlined,
-  ExclamationCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined
+  UsergroupAddOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import moment from 'moment'
 
 const UserGroupTable = ({
   groups = [],
@@ -27,36 +22,9 @@ const UserGroupTable = ({
   onEdit,
   onDelete,
   onSetCreditsPool,
-  onSetUserLimit,
-  onSetExpireDate
+  onSetUserLimit
 }) => {
   const { t } = useTranslation()
-
-  // 获取组有效期状态标签
-  const getExpireStatusTag = (group) => {
-    if (!group.expire_date) {
-      return <Tag color="success" icon={<CheckCircleOutlined />}>永久有效</Tag>
-    }
-
-    const expireDate = moment(group.expire_date)
-    const now = moment()
-    const isExpired = expireDate.isBefore(now)
-    const remainingDays = expireDate.diff(now, 'days')
-
-    if (isExpired) {
-      return <Tag color="error" icon={<ExclamationCircleOutlined />}>已过期</Tag>
-    }
-
-    if (remainingDays <= 7) {
-      return <Tag color="warning" icon={<ClockCircleOutlined />}>{remainingDays}天后过期</Tag>
-    }
-
-    if (remainingDays <= 30) {
-      return <Tag color="orange" icon={<ClockCircleOutlined />}>{remainingDays}天后过期</Tag>
-    }
-
-    return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
-  }
 
   const columns = [
     {
@@ -144,35 +112,6 @@ const UserGroupTable = ({
       }
     },
     {
-      title: '组有效期',
-      key: 'expire_date',
-      width: 150,
-      render: (_, record) => {
-        const expireDate = record.expire_date
-        const isExpired = expireDate && moment(expireDate).isBefore(moment())
-        
-        return (
-          <div style={{ minWidth: 120 }}>
-            <div style={{ marginBottom: 4 }}>
-              {getExpireStatusTag(record)}
-            </div>
-            {expireDate && (
-              <div style={{ 
-                fontSize: '11px', 
-                color: isExpired ? '#ff4d4f' : '#666',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
-              }}>
-                <CalendarOutlined />
-                {moment(expireDate).format('YYYY-MM-DD')}
-              </div>
-            )}
-          </div>
-        )
-      }
-    },
-    {
       title: t('admin.groups.table.avgCredits'),
       dataIndex: 'avg_credits_used',
       key: 'avg_credits_used',
@@ -191,7 +130,6 @@ const UserGroupTable = ({
     {
       title: t('table.actions'),
       key: 'actions',
-      width: 200,
       render: (_, record) => {
         return (
           <Space size="small">
@@ -213,16 +151,6 @@ const UserGroupTable = ({
                     onClick={() => onSetCreditsPool(record)} 
                   />
                 </Tooltip>
-                {onSetExpireDate && (
-                  <Tooltip title="设置有效期">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<CalendarOutlined />} 
-                      onClick={() => onSetExpireDate(record)} 
-                    />
-                  </Tooltip>
-                )}
                 <Tooltip title={t('button.edit')}>
                   <Button 
                     type="text" 

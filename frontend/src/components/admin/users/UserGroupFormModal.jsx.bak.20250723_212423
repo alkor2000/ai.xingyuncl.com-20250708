@@ -1,6 +1,7 @@
 /**
- * 用户分组表单弹窗组件（包含组有效期设置）
+ * 用户分组表单弹窗组件
  */
+
 import React from 'react'
 import { 
   Modal, 
@@ -12,10 +13,8 @@ import {
   Col, 
   Space, 
   Button,
-  Tag,
-  Alert
+  Tag
 } from 'antd'
-import { CalendarOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
 const UserGroupFormModal = ({
@@ -27,7 +26,7 @@ const UserGroupFormModal = ({
   onCancel
 }) => {
   const { t } = useTranslation()
-  
+
   const colorOptions = [
     { value: '#1677ff', label: '蓝色', name: 'blue' },
     { value: '#52c41a', label: '绿色', name: 'green' },
@@ -36,7 +35,7 @@ const UserGroupFormModal = ({
     { value: '#722ed1', label: '紫色', name: 'purple' },
     { value: '#13c2c2', label: '青色', name: 'cyan' }
   ]
-  
+
   return (
     <Modal
       title={editingGroup ? t('admin.groups.editGroup') : t('admin.groups.createGroup')}
@@ -44,7 +43,6 @@ const UserGroupFormModal = ({
       onCancel={onCancel}
       footer={null}
       destroyOnClose
-      width={600}
     >
       <Form
         form={form}
@@ -58,7 +56,7 @@ const UserGroupFormModal = ({
         >
           <Input placeholder={t('admin.groups.form.name.placeholder')} />
         </Form.Item>
-        
+
         <Form.Item
           name="description"
           label={t('admin.groups.form.description')}
@@ -68,7 +66,7 @@ const UserGroupFormModal = ({
             placeholder={t('admin.groups.form.description.placeholder')} 
           />
         </Form.Item>
-        
+
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
@@ -98,44 +96,7 @@ const UserGroupFormModal = ({
             </Form.Item>
           </Col>
         </Row>
-        
-        <Form.Item
-          name="expire_date"
-          label={
-            <Space>
-              <CalendarOutlined />
-              组有效期
-            </Space>
-          }
-          extra="设置组的有效期，留空表示永久有效，格式：YYYY-MM-DD"
-          rules={[
-            {
-              pattern: /^\d{4}-\d{2}-\d{2}$/,
-              message: '请输入正确的日期格式（YYYY-MM-DD）'
-            }
-          ]}
-        >
-          <Input 
-            placeholder="例如：2025-12-31" 
-            style={{ width: '100%' }}
-          />
-        </Form.Item>
-        
-        {editingGroup && editingGroup.expire_date && (
-          <Alert
-            message="提示"
-            description={
-              <div>
-                <p>当前组有效期: {editingGroup.expire_date}</p>
-                <p>修改组有效期后，可以选择是否同步到所有组员</p>
-              </div>
-            }
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        
+
         <Form.Item
           name="is_active"
           label={t('admin.groups.form.status')}
@@ -151,7 +112,7 @@ const UserGroupFormModal = ({
             </Select.Option>
           </Select>
         </Form.Item>
-        
+
         <Form.Item>
           <Space>
             <Button 

@@ -1,5 +1,5 @@
 /**
- * 用户服务层 - 处理用户相关的业务逻辑（包含账号有效期管理）
+ * 用户服务层 - 处理用户相关的业务逻辑
  */
 
 const User = require('../../models/User');
@@ -48,7 +48,6 @@ class UserService {
         token_quota = defaultTokens,
         credits_quota = defaultCredits,
         credits_expire_days = 365,
-        account_expire_days = null, // 账号有效期天数（新增）
         remark = null
       } = userData;
 
@@ -86,7 +85,6 @@ class UserService {
         token_quota,
         credits_quota,
         credits_expire_days,
-        account_expire_days,
         remark
       });
 
@@ -97,8 +95,7 @@ class UserService {
         role: newUser.role,
         group_id: newUser.group_id,
         token_quota: newUser.token_quota,
-        credits_quota: newUser.credits_quota,
-        accountExpireAt: newUser.expire_at
+        credits_quota: newUser.credits_quota
       });
 
       return newUser;
@@ -109,7 +106,7 @@ class UserService {
   }
 
   /**
-   * 更新用户信息（包含分组变更时的积分处理和有效期同步）
+   * 更新用户信息（包含分组变更时的积分处理）
    */
   static async updateUser(userId, updateData, operatorId = null) {
     try {
@@ -176,31 +173,11 @@ class UserService {
             }
           }
 
-          // 2. 获取新组的有效期设置（新增）
-          let newExpireAt = null;
-          if (user.role !== 'super_admin') { // 超级管理员不设置有效期
-            const newGroupSql = 'SELECT expire_date FROM user_groups WHERE id = ?';
-            const { rows: newGroupRows } = await query(newGroupSql, [updateData.group_id]);
-            
-            if (newGroupRows.length > 0 && newGroupRows[0].expire_date) {
-              newExpireAt = newGroupRows[0].expire_date;
-              logger.info('同步新组的有效期', {
-                groupId: updateData.group_id,
-                expireDate: newExpireAt
-              });
-            }
-          }
-
-          // 3. 更新用户信息，包括清零积分和同步有效期
+          // 2. 更新用户信息，包括清零积分
           const finalUpdateData = {
             ...updateData,
             credits_quota: 0  // 分组变更时清零积分
           };
-
-          // 如果需要同步有效期
-          if (newExpireAt !== null) {
-            finalUpdateData.expire_at = newExpireAt;
-          }
 
           // 构建更新SQL
           const updateFields = Object.keys(finalUpdateData);
@@ -211,7 +188,7 @@ class UserService {
           const updateUserSql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
           await query(updateUserSql, values);
 
-          // 4. 记录积分变动（如果有）
+          // 3. 记录积分变动（如果有）
           if (userRemainingCredits > 0) {
             // 使用已存在的 transaction_type
             const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
@@ -444,7 +421,7 @@ class UserService {
   }
 
   /**
-   * 获取用户统计信息（包含账号有效期信息）
+   * 获取用户统计信息
    */
   static async getUserStats(userId) {
     try {
@@ -462,22 +439,14 @@ class UserService {
           role: user.role,
           status: user.status,
           created_at: user.created_at,
-          last_login_at: user.last_login_at,
-          group_id: user.group_id,
-          group_name: user.group_name
+          last_login_at: user.last_login_at
         },
         tokens: {
           quota: user.token_quota,
           used: user.used_tokens,
           remaining: user.token_quota - user.used_tokens
         },
-        credits: user.getCreditsStats(),
-        account: {
-          expire_at: user.expire_at,
-          is_expired: user.isAccountExpired(),
-          remaining_days: user.getAccountRemainingDays(),
-          group_expire_date: user.group_expire_date
-        }
+        credits: user.getCreditsStats()
       };
 
       return stats;
@@ -652,27 +621,14 @@ class UserService {
           });
         }
 
-        // 3. 将用户移动到默认组并清零积分，同时清除账号有效期（如果不是超管）
-        let updateUserSql = `
+        // 3. 将用户移动到默认组并清零积分
+        const updateUserSql = `
           UPDATE users 
           SET group_id = 1, 
               credits_quota = 0,
               updated_at = NOW() 
           WHERE id = ?
         `;
-        
-        // 非超管用户移到默认组时清除有效期
-        if (user.role !== 'super_admin') {
-          updateUserSql = `
-            UPDATE users 
-            SET group_id = 1, 
-                credits_quota = 0,
-                expire_at = NULL,
-                updated_at = NOW() 
-            WHERE id = ?
-          `;
-        }
-        
         await query(updateUserSql, [userId]);
 
         // 4. 记录积分变动（如果有）
@@ -726,101 +682,6 @@ class UserService {
       };
     } catch (error) {
       logger.error('挪出用户失败', { error: error.message, userId, operatorId: operatorUser.id });
-      throw error;
-    }
-  }
-
-  /**
-   * 设置用户账号有效期（新增）
-   */
-  static async setUserAccountExpireDate(userId, expireDate, reason = '管理员设置', operatorUser) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ValidationError('用户不存在');
-      }
-
-      // 权限检查：组管理员只能管理本组用户
-      if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
-        throw new ValidationError('无权设置其他组用户的有效期');
-      }
-
-      // 调用用户模型的方法设置有效期
-      const result = await user.setAccountExpireDate(expireDate, reason, operatorUser.id);
-
-      logger.info('设置用户账号有效期成功', {
-        operatorId: operatorUser.id,
-        userId,
-        expireDate,
-        reason
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('设置用户账号有效期失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 延长用户账号有效期（新增）
-   */
-  static async extendUserAccountExpireDate(userId, days, reason = '管理员延期', operatorUser) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ValidationError('用户不存在');
-      }
-
-      // 权限检查：组管理员只能管理本组用户
-      if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
-        throw new ValidationError('无权延长其他组用户的有效期');
-      }
-
-      // 调用用户模型的方法延长有效期
-      const result = await user.extendAccountExpireDate(days, reason, operatorUser.id);
-
-      logger.info('延长用户账号有效期成功', {
-        operatorId: operatorUser.id,
-        userId,
-        days,
-        reason
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('延长用户账号有效期失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 同步用户有效期到组有效期（新增）
-   */
-  static async syncUserAccountExpireWithGroup(userId, operatorUser) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ValidationError('用户不存在');
-      }
-
-      // 权限检查：组管理员只能管理本组用户
-      if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
-        throw new ValidationError('无权同步其他组用户的有效期');
-      }
-
-      // 调用用户模型的方法同步有效期
-      const result = await user.syncAccountExpireWithGroup();
-
-      logger.info('同步用户有效期成功', {
-        operatorId: operatorUser.id,
-        userId,
-        result
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('同步用户有效期失败', { error: error.message, userId });
       throw error;
     }
   }

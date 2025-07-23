@@ -1,5 +1,5 @@
 /**
- * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能和组有效期）
+ * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能）
  */
 
 const { GroupService } = require('../../services/admin');
@@ -233,76 +233,6 @@ class UserGroupController {
       }
       
       return ResponseHelper.error(res, error.message || '设置组员上限失败');
-    }
-  }
-
-  /**
-   * 设置组有效期（新增，仅超级管理员）
-   */
-  static async setGroupExpireDate(req, res) {
-    try {
-      const { id } = req.params;
-      const { expire_date, sync_to_users = false } = req.body;
-
-      if (!expire_date) {
-        return ResponseHelper.validation(res, ['有效期日期不能为空']);
-      }
-
-      // 验证日期格式
-      const expireDate = new Date(expire_date);
-      if (isNaN(expireDate.getTime())) {
-        return ResponseHelper.validation(res, ['无效的日期格式']);
-      }
-
-      const result = await GroupService.setGroupExpireDate(
-        id, 
-        expireDate, 
-        sync_to_users,
-        req.user.id
-      );
-
-      return ResponseHelper.success(res, result, '组有效期设置成功');
-    } catch (error) {
-      logger.error('设置组有效期失败', { 
-        adminId: req.user?.id, 
-        groupId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message === '用户分组不存在') {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      return ResponseHelper.error(res, error.message || '设置组有效期失败');
-    }
-  }
-
-  /**
-   * 同步组有效期到所有组员（新增，仅超级管理员）
-   */
-  static async syncGroupExpireDateToUsers(req, res) {
-    try {
-      const { id } = req.params;
-
-      const result = await GroupService.syncGroupExpireDateToUsers(id, req.user.id);
-
-      return ResponseHelper.success(res, result, result.message);
-    } catch (error) {
-      logger.error('同步组有效期失败', { 
-        adminId: req.user?.id, 
-        groupId: req.params.id,
-        error: error.message 
-      });
-      
-      if (error.message === '用户分组不存在') {
-        return ResponseHelper.notFound(res, error.message);
-      }
-      
-      if (error.message === '该组未设置有效期') {
-        return ResponseHelper.validation(res, [error.message]);
-      }
-      
-      return ResponseHelper.error(res, error.message || '同步组有效期失败');
     }
   }
 }

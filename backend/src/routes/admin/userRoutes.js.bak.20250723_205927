@@ -1,10 +1,12 @@
 /**
- * 用户管理路由 - 使用优化的权限中间件（包含账号有效期管理）
+ * 用户管理路由 - 使用优化的权限中间件
  */
+
 const express = require('express');
 const UserManagementController = require('../../controllers/admin/UserManagementController');
 const { requirePermission } = require('../../middleware/authMiddleware');
 const { canManageUser, canCreateUser, restrictFieldsForGroupAdmin } = require('../../middleware/permissions');
+
 const router = express.Router();
 
 /**
@@ -104,39 +106,6 @@ router.post('/:id/remove-from-group',
   requirePermission('user.manage'),
   canManageUser(),
   UserManagementController.removeUserFromGroup
-);
-
-/**
- * @route PUT /api/admin/users/:id/expire-date
- * @desc 设置用户账号有效期
- * @access Admin / SuperAdmin
- */
-router.put('/:id/expire-date',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.setUserAccountExpireDate
-);
-
-/**
- * @route PUT /api/admin/users/:id/extend-expire-date
- * @desc 延长用户账号有效期
- * @access Admin / SuperAdmin
- */
-router.put('/:id/extend-expire-date',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.extendUserAccountExpireDate
-);
-
-/**
- * @route POST /api/admin/users/:id/sync-expire-date
- * @desc 同步用户有效期到组有效期
- * @access Admin / SuperAdmin
- */
-router.post('/:id/sync-expire-date',
-  requirePermission('user.manage'),
-  canManageUser(),
-  UserManagementController.syncUserAccountExpireWithGroup
 );
 
 module.exports = router;

@@ -4,8 +4,16 @@ import App from './App.jsx'
 import './utils/i18n' // 导入i18n配置
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+// 生产环境不使用StrictMode，避免双重渲染
+const rootElement = document.getElementById('root')
+const root = ReactDOM.createRoot(rootElement)
+
+if (process.env.NODE_ENV === 'development') {
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+} else {
+  root.render(<App />)
+}

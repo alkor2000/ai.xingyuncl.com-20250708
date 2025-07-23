@@ -21,13 +21,6 @@ class User {
       safeUser.credits_stats = this.getCreditsStats();
     }
     
-    // 添加账号有效期信息
-    safeUser.account_stats = {
-      isExpired: this.isAccountExpired(),
-      expireAt: this.expire_at,
-      remainingDays: this.getAccountRemainingDays()
-    };
-    
     return safeUser;
   }
 
@@ -37,7 +30,7 @@ class User {
   static async findById(id) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, g.name as group_name, g.color as group_color
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.id = ?
@@ -61,7 +54,7 @@ class User {
   static async findByEmail(email) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, g.name as group_name, g.color as group_color
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.email = ?
@@ -85,7 +78,7 @@ class User {
   static async findByUsername(username) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, g.name as group_name, g.color as group_color
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.username = ?
@@ -109,7 +102,7 @@ class User {
   static async findByPhone(phone) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, g.name as group_name, g.color as group_color
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.phone = ?
@@ -158,33 +151,22 @@ class User {
         creditsExpireAt = expireDate;
       }
 
-      // 获取组的有效期设置
-      let accountExpireAt = null;
-      if (role !== 'super_admin') {
-        const groupSql = 'SELECT expire_date FROM user_groups WHERE id = ?';
-        const { rows: groupRows } = await dbConnection.query(groupSql, [group_id]);
-        if (groupRows.length > 0 && groupRows[0].expire_date) {
-          // 使用组的到期日期作为用户账号有效期
-          accountExpireAt = groupRows[0].expire_date;
-        }
-      }
-
       const sql = `
         INSERT INTO users (
           email, username, password_hash, phone, role, group_id, status, remark,
-          token_quota, credits_quota, credits_expire_at, expire_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          token_quota, credits_quota, credits_expire_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       const params = [
         email, username, hashedPassword, phone, role, group_id, status, remark,
-        token_quota, credits_quota, creditsExpireAt, accountExpireAt
+        token_quota, credits_quota, creditsExpireAt
       ];
 
       const { rows } = await dbConnection.query(sql, params);
       const userId = rows.insertId;
 
-      logger.info('用户创建成功', { userId, email, username, role, accountExpireAt });
+      logger.info('用户创建成功', { userId, email, username, role });
 
       return await User.findById(userId);
     } catch (error) {
@@ -284,7 +266,7 @@ class User {
       // 获取用户列表 (包含分组信息、积分统计和备注)
       const offset = (page - 1) * limit;
       const listSql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date,
+        SELECT u.*, g.name as group_name, g.color as group_color,
                CASE 
                  WHEN u.credits_expire_at IS NULL THEN 0
                  WHEN u.credits_expire_at < NOW() THEN 1
@@ -293,18 +275,7 @@ class User {
                CASE
                  WHEN u.credits_expire_at IS NULL THEN NULL
                  ELSE DATEDIFF(u.credits_expire_at, NOW())
-               END as credits_remaining_days,
-               CASE 
-                 WHEN u.role = 'super_admin' THEN 0
-                 WHEN u.expire_at IS NULL THEN 0
-                 WHEN u.expire_at < NOW() THEN 1
-                 ELSE 0
-               END as account_is_expired,
-               CASE
-                 WHEN u.role = 'super_admin' THEN NULL
-                 WHEN u.expire_at IS NULL THEN NULL
-                 ELSE DATEDIFF(u.expire_at, NOW())
-               END as account_remaining_days
+               END as credits_remaining_days
         FROM users u 
         LEFT JOIN user_groups g ON u.group_id = g.id
         ${whereClause}
@@ -595,16 +566,16 @@ class User {
    */
   static async createGroup(groupData, createdBy = null) {
     try {
-      const { name, description = null, color = '#1677ff', is_active = true, sort_order = 0, expire_date = null } = groupData;
+      const { name, description = null, color = '#1677ff', is_active = true, sort_order = 0 } = groupData;
 
       const sql = `
-        INSERT INTO user_groups (name, description, color, is_active, sort_order, expire_date, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_groups (name, description, color, is_active, sort_order, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
       `;
-      const { rows } = await dbConnection.query(sql, [name, description, color, is_active, sort_order, expire_date, createdBy]);
+      const { rows } = await dbConnection.query(sql, [name, description, color, is_active, sort_order, createdBy]);
       
       const groupId = rows.insertId;
-      logger.info('用户分组创建成功', { groupId, name, expire_date });
+      logger.info('用户分组创建成功', { groupId, name });
 
       // 返回创建的分组
       const { rows: [group] } = await dbConnection.query('SELECT * FROM user_groups WHERE id = ?', [groupId]);
@@ -625,7 +596,7 @@ class User {
    */
   static async updateGroup(groupId, updateData) {
     try {
-      const allowedFields = ['name', 'description', 'color', 'is_active', 'sort_order', 'expire_date'];
+      const allowedFields = ['name', 'description', 'color', 'is_active', 'sort_order'];
       const updateFields = Object.keys(updateData).filter(field => allowedFields.includes(field));
       
       if (updateFields.length === 0) {
@@ -1201,164 +1172,6 @@ class User {
     } catch (error) {
       logger.error('获取用户积分历史失败:', error);
       throw new DatabaseError('获取积分历史失败', error);
-    }
-  }
-
-  // ===== 账号有效期管理功能 =====
-
-  /**
-   * 检查账号是否过期
-   */
-  isAccountExpired() {
-    // 超级管理员永不过期
-    if (this.role === 'super_admin') {
-      return false;
-    }
-
-    if (!this.expire_at) {
-      return false; // 没有设置过期时间的不过期
-    }
-    return new Date() > new Date(this.expire_at);
-  }
-
-  /**
-   * 获取账号剩余天数
-   */
-  getAccountRemainingDays() {
-    // 超级管理员永不过期
-    if (this.role === 'super_admin') {
-      return null;
-    }
-
-    if (!this.expire_at) {
-      return null; // 永不过期
-    }
-    
-    const now = new Date();
-    const expireDate = new Date(this.expire_at);
-    const diffTime = expireDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays;
-  }
-
-  /**
-   * 设置账号有效期
-   */
-  async setAccountExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
-    try {
-      // 超级管理员不能设置有效期
-      if (this.role === 'super_admin') {
-        throw new ValidationError('超级管理员账号无需设置有效期');
-      }
-
-      // 使用事务确保原子性
-      await dbConnection.transaction(async (query) => {
-        // 更新账号有效期
-        const updateSql = `
-          UPDATE users 
-          SET expire_at = ?, updated_at = NOW()
-          WHERE id = ?
-        `;
-        await query(updateSql, [expireDate, this.id]);
-
-        // 记录操作日志（如果有日志表的话）
-        logger.info('设置用户账号有效期', {
-          userId: this.id,
-          expireDate,
-          reason,
-          operatorId
-        });
-      });
-
-      // 更新当前对象
-      this.expire_at = expireDate;
-
-      return {
-        success: true,
-        expireDate,
-        remainingDays: this.getAccountRemainingDays(),
-        message: '账号有效期设置成功'
-      };
-    } catch (error) {
-      logger.error('设置用户账号有效期失败:', error);
-      throw new DatabaseError(`设置账号有效期失败: ${error.message}`, error);
-    }
-  }
-
-  /**
-   * 延长账号有效期
-   */
-  async extendAccountExpireDate(days, reason = '管理员延期', operatorId = null) {
-    try {
-      if (days <= 0) {
-        throw new ValidationError('延长天数必须大于0');
-      }
-
-      // 超级管理员不能设置有效期
-      if (this.role === 'super_admin') {
-        throw new ValidationError('超级管理员账号无需设置有效期');
-      }
-
-      let newExpireDate;
-      
-      if (!this.expire_at || this.isAccountExpired()) {
-        // 如果没有设置过期时间或已过期，从今天开始计算
-        newExpireDate = new Date();
-        newExpireDate.setDate(newExpireDate.getDate() + days);
-      } else {
-        // 从现有过期时间延长
-        newExpireDate = new Date(this.expire_at);
-        newExpireDate.setDate(newExpireDate.getDate() + days);
-      }
-
-      return await this.setAccountExpireDate(
-        newExpireDate, 
-        `${reason} - 延长${days}天`, 
-        operatorId
-      );
-    } catch (error) {
-      logger.error('延长用户账号有效期失败:', error);
-      throw new DatabaseError(`延长账号有效期失败: ${error.message}`, error);
-    }
-  }
-
-  /**
-   * 根据组有效期更新用户有效期
-   */
-  async updateAccountExpireFromGroup() {
-    try {
-      // 超级管理员不更新
-      if (this.role === 'super_admin') {
-        return { success: true, message: '超级管理员不需要更新有效期' };
-      }
-
-      // 获取用户组的有效期
-      const sql = 'SELECT expire_date FROM user_groups WHERE id = ?';
-      const { rows } = await dbConnection.query(sql, [this.group_id]);
-      
-      if (rows.length === 0) {
-        throw new ValidationError('用户组不存在');
-      }
-
-      const groupExpireDate = rows[0].expire_date;
-      
-      if (!groupExpireDate) {
-        // 组没有设置有效期，清除用户有效期
-        await this.setAccountExpireDate(null, '组有效期已清除');
-      } else {
-        // 更新为组的有效期
-        await this.setAccountExpireDate(groupExpireDate, '同步组有效期');
-      }
-
-      return {
-        success: true,
-        groupExpireDate,
-        message: '账号有效期已同步组设置'
-      };
-    } catch (error) {
-      logger.error('根据组更新用户有效期失败:', error);
-      throw error;
     }
   }
 }

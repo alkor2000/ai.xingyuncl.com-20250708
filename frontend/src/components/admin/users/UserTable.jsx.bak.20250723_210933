@@ -1,5 +1,5 @@
 /**
- * 用户列表表格组件（包含组积分分配功能和账号有效期）
+ * 用户列表表格组件（包含组积分分配功能）
  */
 
 import React from 'react'
@@ -17,8 +17,7 @@ import {
   FileTextOutlined,
   RobotOutlined,
   GiftOutlined,
-  LogoutOutlined,
-  UserOutlined
+  LogoutOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -72,37 +71,6 @@ const UserTable = ({
     return <Tag color="default">无积分</Tag>
   }
 
-  // 获取账号状态标签（新增）
-  const getAccountStatusTag = (user) => {
-    // 超级管理员不显示有效期
-    if (user.role === 'super_admin') {
-      return <Tag color="blue" icon={<UserOutlined />}>永久有效</Tag>
-    }
-
-    if (!user.expire_at) {
-      return <Tag color="success" icon={<CheckCircleOutlined />}>永久有效</Tag>
-    }
-
-    const expireDate = moment(user.expire_at)
-    const now = moment()
-    const isExpired = expireDate.isBefore(now)
-    const remainingDays = expireDate.diff(now, 'days')
-
-    if (isExpired) {
-      return <Tag color="error" icon={<ExclamationCircleOutlined />}>已过期</Tag>
-    }
-
-    if (remainingDays <= 7) {
-      return <Tag color="warning" icon={<ClockCircleOutlined />}>{remainingDays}天后过期</Tag>
-    }
-
-    if (remainingDays <= 30) {
-      return <Tag color="orange" icon={<ClockCircleOutlined />}>{remainingDays}天后过期</Tag>
-    }
-
-    return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
-  }
-
   const columns = [
     {
       title: t('admin.users.table.id'),
@@ -149,35 +117,6 @@ const UserTable = ({
           {t(`status.${status}`)}
         </Tag>
       )
-    },
-    {
-      title: '账号有效期',
-      key: 'account_expire',
-      width: 150,
-      render: (_, record) => {
-        const expireAt = record.expire_at
-        const isExpired = expireAt && moment(expireAt).isBefore(moment())
-        
-        return (
-          <div style={{ minWidth: 120 }}>
-            <div style={{ marginBottom: 4 }}>
-              {getAccountStatusTag(record)}
-            </div>
-            {expireAt && (
-              <div style={{ 
-                fontSize: '11px', 
-                color: isExpired ? '#ff4d4f' : '#666',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
-              }}>
-                <CalendarOutlined />
-                {moment(expireAt).format('YYYY-MM-DD')}
-              </div>
-            )}
-          </div>
-        )
-      }
     },
     {
       title: t('admin.users.table.credits'),
@@ -351,7 +290,6 @@ const UserTable = ({
                       <ul style={{ marginLeft: 20, marginBottom: 0 }}>
                         <li>将用户移至默认组</li>
                         <li>清零用户所有积分</li>
-                        {record.role !== 'super_admin' && <li>清除账号有效期限制</li>}
                         {remainingCredits > 0 && (
                           <li style={{ color: '#fa8c16' }}>
                             返还 <strong>{remainingCredits}</strong> 积分到组积分池

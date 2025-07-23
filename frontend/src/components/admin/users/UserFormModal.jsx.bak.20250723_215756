@@ -67,7 +67,7 @@ const UserFormModal = ({
     if (groupId && !editingUser) {
       const selectedGroup = userGroups.find(g => g.id === groupId)
       if (selectedGroup?.expire_date) {
-        form.setFieldValue('expire_at', selectedGroup.expire_date)
+        form.setFieldValue('expire_at', moment(selectedGroup.expire_date))
       }
     }
   }
@@ -89,6 +89,10 @@ const UserFormModal = ({
           token_quota: defaultTokens,
           credits_quota: defaultCredits
         })
+      }
+      // 如果是编辑用户，设置账号有效期
+      if (editingUser && editingUser.expire_at) {
+        form.setFieldValue('expire_at', moment(editingUser.expire_at))
       }
     }
   }, [visible, editingUser, isGroupAdmin, defaultTokens, defaultCredits, form])
@@ -195,7 +199,7 @@ const UserFormModal = ({
                         <span style={{ color: group.color }}>{group.name}</span>
                         {group.expire_date && (
                           <span style={{ fontSize: '12px', color: '#999' }}>
-                            (有效期: {group.expire_date})
+                            (有效期: {moment(group.expire_date).format('YYYY-MM-DD')})
                           </span>
                         )}
                       </Space>
@@ -271,7 +275,7 @@ const UserFormModal = ({
               </Row>
             )}
 
-            {/* 有效期设置区域 - 简化版 */}
+            {/* 有效期设置区域 */}
             {isSuperAdmin && (
               <>
                 <Divider orientation="left">
@@ -281,25 +285,56 @@ const UserFormModal = ({
                   </Space>
                 </Divider>
 
-                {/* 账号有效期 - 使用简单的日期输入 */}
+                {/* 账号有效期 */}
                 <Form.Item
                   name="expire_at"
                   label={
                     <Space>
                       <UserOutlined />
                       账号有效期
-                      <Tooltip title="设置账号的有效期（格式：YYYY-MM-DD），到期后账号将无法登录。超级管理员账号不受此限制。">
+                      <Tooltip title="设置账号的有效期，到期后账号将无法登录。超级管理员账号不受此限制。">
                         <ExclamationCircleOutlined />
                       </Tooltip>
                     </Space>
                   }
-                  extra="留空表示永久有效，格式：YYYY-MM-DD"
+                  extra={
+                    getSelectedGroupInfo()?.expire_date && (
+                      <span style={{ color: '#fa8c16' }}>
+                        选中组的有效期: {moment(getSelectedGroupInfo().expire_date).format('YYYY-MM-DD')}
+                      </span>
+                    )
+                  }
                 >
-                  <Input 
-                    placeholder="例如：2025-12-31" 
+                  <DatePicker 
                     style={{ width: '100%' }}
+                    format="YYYY-MM-DD"
+                    placeholder="不设置表示永久有效"
+                    disabledDate={(current) => current && current < moment().startOf('day')}
                   />
                 </Form.Item>
+
+                {/* 积分有效期 */}
+                {!editingUser && (
+                  <Form.Item
+                    name="credits_expire_at"
+                    label={
+                      <Space>
+                        积分有效期
+                        <Tooltip title={t('admin.users.form.creditsExpire.tooltip')}>
+                          <ExclamationCircleOutlined />
+                        </Tooltip>
+                      </Space>
+                    }
+                  >
+                    <DatePicker 
+                      style={{ width: '100%' }}
+                      showTime
+                      format="YYYY-MM-DD HH:mm:ss"
+                      placeholder={t('admin.users.form.creditsExpire.placeholder')}
+                      disabledDate={(current) => current && current < moment().startOf('day')}
+                    />
+                  </Form.Item>
+                )}
               </>
             )}
           </TabPane>
@@ -357,7 +392,7 @@ const UserFormModal = ({
             </TabPane>
           )}
 
-          {/* 账号有效期Tab（编辑时）- 简化版 */}
+          {/* 账号有效期Tab（编辑时） */}
           {editingUser && isSuperAdmin && (
             <TabPane tab="账号有效期" key="account">
               <Alert
@@ -378,8 +413,12 @@ const UserFormModal = ({
               {/* 当前状态 */}
               {editingUser.expire_at && (
                 <Alert
-                  message={`当前有效期: ${editingUser.expire_at}`}
-                  type="warning"
+                  message={
+                    moment(editingUser.expire_at).isBefore(moment()) 
+                      ? "账号已过期" 
+                      : `账号将于 ${moment(editingUser.expire_at).format('YYYY-MM-DD')} 过期`
+                  }
+                  type={moment(editingUser.expire_at).isBefore(moment()) ? "error" : "warning"}
                   style={{ marginBottom: 16 }}
                 />
               )}
@@ -387,11 +426,13 @@ const UserFormModal = ({
               <Form.Item
                 name="expire_at"
                 label="设置账号有效期"
-                extra="留空表示永久有效，格式：YYYY-MM-DD"
+                extra="留空表示永久有效"
               >
-                <Input 
-                  placeholder="例如：2025-12-31" 
+                <DatePicker 
                   style={{ width: '100%' }}
+                  format="YYYY-MM-DD"
+                  placeholder="选择有效期日期"
+                  disabledDate={(current) => current && current < moment().startOf('day')}
                 />
               </Form.Item>
 
@@ -407,6 +448,19 @@ const UserFormModal = ({
                   placeholder="输入要延长的天数"
                 />
               </Form.Item>
+
+              {editingUser.group_expire_date && (
+                <Form.Item>
+                  <Button
+                    type="link"
+                    onClick={() => {
+                      form.setFieldValue('expire_at', moment(editingUser.group_expire_date))
+                    }}
+                  >
+                    同步到组有效期 ({moment(editingUser.group_expire_date).format('YYYY-MM-DD')})
+                  </Button>
+                </Form.Item>
+              )}
             </TabPane>
           )}
         </Tabs>

@@ -1,5 +1,5 @@
 /**
- * 认证中间件 - 支持基于用户组的权限检查和账号有效期验证
+ * 认证中间件 - 支持基于用户组的权限检查
  */
 
 const jwt = require('jsonwebtoken');
@@ -10,7 +10,7 @@ const config = require('../config');
 const redisConnection = require('../database/redis');
 
 /**
- * JWT认证中间件 - 支持SSE查询参数认证、Token黑名单和账号有效期检查
+ * JWT认证中间件 - 支持SSE查询参数认证和Token黑名单
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -56,28 +56,8 @@ const authenticate = async (req, res, next) => {
         return ResponseHelper.unauthorized(res, '用户不存在');
       }
       
-      // 检查用户状态
       if (user.status !== 'active') {
         return ResponseHelper.unauthorized(res, '用户账户已被禁用');
-      }
-      
-      // 检查账号有效期（新增）
-      if (user.isAccountExpired()) {
-        const remainingDays = user.getAccountRemainingDays();
-        logger.warn('访问被拒绝：账号已过期', { 
-          userId: user.id, 
-          username: user.username,
-          expireAt: user.expire_at,
-          expiredDays: Math.abs(remainingDays),
-          requestPath: req.path
-        });
-        
-        let expireMessage = '账号已过期';
-        if (remainingDays !== null) {
-          expireMessage = `账号已过期${Math.abs(remainingDays)}天，请联系管理员续期`;
-        }
-        
-        return ResponseHelper.unauthorized(res, expireMessage);
       }
       
       // 将用户信息添加到request对象

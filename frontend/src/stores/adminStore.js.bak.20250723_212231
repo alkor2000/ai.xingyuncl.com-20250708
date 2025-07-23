@@ -193,33 +193,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组有效期（新增）
-  setGroupExpireDate: async (groupId, expireDate, syncToUsers = false) => {
-    try {
-      const response = await apiClient.put(`/admin/user-groups/${groupId}/expire-date`, {
-        expire_date: expireDate,
-        sync_to_users: syncToUsers
-      })
-      // 刷新组列表以更新有效期信息
-      await useAdminStore.getState().getUserGroups()
-      return response.data.data
-    } catch (error) {
-      console.error('设置组有效期失败:', error)
-      throw error
-    }
-  },
-  
-  // 同步组有效期到所有组员（新增）
-  syncGroupExpireDateToUsers: async (groupId) => {
-    try {
-      const response = await apiClient.post(`/admin/user-groups/${groupId}/sync-expire-date`)
-      return response.data.data
-    } catch (error) {
-      console.error('同步组有效期失败:', error)
-      throw error
-    }
-  },
-  
   // 积分管理
   getUserCredits: async (userId) => {
     set({ creditsLoading: true })
@@ -296,45 +269,6 @@ const useAdminStore = create((set) => ({
       return response.data.data
     } catch (error) {
       console.error('设置积分有效期失败:', error)
-      throw error
-    }
-  },
-  
-  // 设置用户账号有效期（新增）
-  setUserAccountExpireDate: async (userId, expireDate, reason = '管理员设置') => {
-    try {
-      const response = await apiClient.put(`/admin/users/${userId}/expire-date`, {
-        expire_date: expireDate,
-        reason
-      })
-      return response.data.data
-    } catch (error) {
-      console.error('设置账号有效期失败:', error)
-      throw error
-    }
-  },
-  
-  // 延长用户账号有效期（新增）
-  extendUserAccountExpireDate: async (userId, days, reason = '管理员延期') => {
-    try {
-      const response = await apiClient.put(`/admin/users/${userId}/extend-expire-date`, {
-        days,
-        reason
-      })
-      return response.data.data
-    } catch (error) {
-      console.error('延长账号有效期失败:', error)
-      throw error
-    }
-  },
-  
-  // 同步用户有效期到组有效期（新增）
-  syncUserAccountExpireWithGroup: async (userId) => {
-    try {
-      const response = await apiClient.post(`/admin/users/${userId}/sync-expire-date`)
-      return response.data.data
-    } catch (error) {
-      console.error('同步账号有效期失败:', error)
       throw error
     }
   },

@@ -1,5 +1,5 @@
 /**
- * 用户管理主页面 - 包含组积分池功能和账号有效期管理
+ * 用户管理主页面 - 包含组积分池功能
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -34,9 +34,6 @@ import GroupCreditsPoolModal from '../../components/admin/users/GroupCreditsPool
 import DistributeCreditsModal from '../../components/admin/users/DistributeCreditsModal'
 import GroupUserLimitModal from '../../components/admin/users/GroupUserLimitModal'
 
-// 导入组有效期管理组件
-import GroupExpireDateModal from '../../components/admin/users/GroupExpireDateModal'
-
 const Users = () => {
   const { t } = useTranslation()
   const { user: currentUser, hasPermission } = useAuthStore()
@@ -66,12 +63,7 @@ const Users = () => {
     resetUserPassword,
     setGroupCreditsPool,
     distributeGroupCredits,
-    setGroupUserLimit,
-    setGroupExpireDate,
-    syncGroupExpireDateToUsers,
-    setUserAccountExpireDate,
-    extendUserAccountExpireDate,
-    syncUserAccountExpireWithGroup
+    setGroupUserLimit
   } = useAdminStore()
 
   // 表单实例
@@ -86,14 +78,12 @@ const Users = () => {
   const [isCreditsPoolModalVisible, setIsCreditsPoolModalVisible] = useState(false)
   const [isDistributeModalVisible, setIsDistributeModalVisible] = useState(false)
   const [isUserLimitModalVisible, setIsUserLimitModalVisible] = useState(false)
-  const [isExpireDateModalVisible, setIsExpireDateModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
   const [creditsPoolGroup, setCreditsPoolGroup] = useState(null)
   const [distributeUser, setDistributeUser] = useState(null)
   const [userLimitGroup, setUserLimitGroup] = useState(null)
-  const [expireDateGroup, setExpireDateGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   const [pagination, setPagination] = useState({
     current: 1,
@@ -178,17 +168,9 @@ const Users = () => {
         credits_expire_days = Math.max(1, days)
       }
       
-      // 处理账号有效期
-      let account_expire_days = null
-      if (values.expire_at) {
-        const days = values.expire_at.diff(moment(), 'days')
-        account_expire_days = Math.max(1, days)
-      }
-      
       await createUser({
         ...values,
-        credits_expire_days,
-        account_expire_days
+        credits_expire_days
       })
       
       setIsUserModalVisible(false)
@@ -210,7 +192,6 @@ const Users = () => {
         newPassword, 
         confirmPassword,
         credits_expire_at,
-        expire_at,
         extend_days,
         ...updateData 
       } = values
@@ -223,20 +204,7 @@ const Users = () => {
         delete updateData.token_quota
       }
       
-      // 处理账号有效期
-      if (expire_at) {
-        updateData.expire_at = expire_at.format('YYYY-MM-DD')
-      } else if (expire_at === null) {
-        updateData.expire_at = null // 清除有效期
-      }
-      
       await updateUser(editingUser.id, updateData)
-      
-      // 延长账号有效期
-      if (extend_days > 0) {
-        await extendUserAccountExpireDate(editingUser.id, extend_days)
-        message.success(`账号有效期已延长 ${extend_days} 天`)
-      }
       
       // 积分操作
       if (creditsOperation && creditsAmount && creditsReason) {
@@ -319,8 +287,7 @@ const Users = () => {
     setEditingUser(user)
     userForm.setFieldsValue({
       ...user,
-      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
-      expire_at: user.expire_at ? moment(user.expire_at) : null
+      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null
     })
     
     // 加载用户积分信息
@@ -421,8 +388,7 @@ const Users = () => {
       description: group.description,
       color: group.color,
       is_active: group.is_active,
-      sort_order: group.sort_order,
-      expire_date: group.expire_date ? moment(group.expire_date) : null
+      sort_order: group.sort_order
     })
     setIsGroupModalVisible(true)
   }
@@ -477,27 +443,6 @@ const Users = () => {
       setUserLimitGroup(null)
       message.success('组员上限设置成功')
       loadUserGroups()
-    } catch (error) {
-      message.error(error.response?.data?.message || '设置失败')
-    }
-  }
-
-  // 设置组有效期
-  const handleSetExpireDate = (group) => {
-    setExpireDateGroup(group)
-    setIsExpireDateModalVisible(true)
-  }
-
-  const handleSubmitExpireDate = async (groupId, expireDate, syncToUsers) => {
-    try {
-      await setGroupExpireDate(groupId, expireDate, syncToUsers)
-      setIsExpireDateModalVisible(false)
-      setExpireDateGroup(null)
-      message.success('组有效期设置成功')
-      loadUserGroups()
-      if (syncToUsers) {
-        loadUsers() // 如果同步到用户，刷新用户列表
-      }
     } catch (error) {
       message.error(error.response?.data?.message || '设置失败')
     }
@@ -655,7 +600,6 @@ const Users = () => {
               onDelete={handleDeleteGroup}
               onSetCreditsPool={handleSetCreditsPool}
               onSetUserLimit={handleSetUserLimit}
-              onSetExpireDate={handleSetExpireDate}
             />
           </Card>
         </>
@@ -757,20 +701,6 @@ const Users = () => {
           onCancel={() => {
             setIsUserLimitModalVisible(false)
             setUserLimitGroup(null)
-          }}
-        />
-      )}
-
-      {/* 组有效期设置弹窗 */}
-      {isSuperAdmin && (
-        <GroupExpireDateModal
-          visible={isExpireDateModalVisible}
-          group={expireDateGroup}
-          loading={loading}
-          onSubmit={handleSubmitExpireDate}
-          onCancel={() => {
-            setIsExpireDateModalVisible(false)
-            setExpireDateGroup(null)
           }}
         />
       )}

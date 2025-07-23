@@ -11,6 +11,7 @@ import enUS from 'antd/locale/en_US'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from './stores/authStore'
 import useSystemConfigStore from './stores/systemConfigStore'
+import apiClient from './utils/api'
 
 // 页面组件
 import Login from './pages/auth/Login'
@@ -96,16 +97,61 @@ const PublicRoute = ({ children }) => {
   return children
 }
 
-// 优化的首页路由组件 - 移除自定义首页检查，直接跳转
+// 首页路由组件 - 处理自定义首页逻辑
 const HomeRoute = () => {
   const { isAuthenticated } = useAuthStore()
+  const [checkingCustomHomepage, setCheckingCustomHomepage] = useState(true)
+  const [hasCustomHomepage, setHasCustomHomepage] = useState(false)
+
+  useEffect(() => {
+    // 如果已登录，直接跳转到工作台
+    if (isAuthenticated) {
+      setCheckingCustomHomepage(false)
+      return
+    }
+
+    // 检查是否有自定义首页
+    const checkCustomHomepage = async () => {
+      try {
+        const response = await apiClient.get('/public/custom-homepage')
+        if (response.data.success && response.data.data?.enabled) {
+          setHasCustomHomepage(true)
+        }
+      } catch (error) {
+        console.error('检查自定义首页失败:', error)
+      } finally {
+        setCheckingCustomHomepage(false)
+      }
+    }
+
+    checkCustomHomepage()
+  }, [isAuthenticated])
+
+  // 正在检查
+  if (checkingCustomHomepage) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   // 已登录，跳转到工作台
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 
-  // 未登录，跳转到登录页
+  // 有自定义首页，显示自定义首页
+  if (hasCustomHomepage) {
+    return <CustomLanding />
+  }
+
+  // 没有自定义首页，跳转到登录页
   return <Navigate to="/login" replace />
 }
 
@@ -128,7 +174,7 @@ const App = () => {
       <Router>
         <div className="app">
           <Routes>
-            {/* 根路径 - 简化逻辑，直接跳转 */}
+            {/* 根路径 - 处理自定义首页逻辑 */}
             <Route path="/" element={<HomeRoute />} />
 
             {/* 公开路由 */}

@@ -1,5 +1,5 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限和组有效期）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能和组员上限）
  */
 
 const User = require('../../models/User');
@@ -9,7 +9,7 @@ const { DatabaseError, ValidationError, ConflictError } = require('../../utils/e
 
 class GroupService {
   /**
-   * 获取用户分组列表（包含积分池信息和有效期）
+   * 获取用户分组列表（包含积分池信息）
    */
   static async getGroups(currentUser = null) {
     try {
@@ -26,17 +26,7 @@ class GroupService {
                  g.credits_pool,
                  g.credits_pool_used,
                  g.user_limit,
-                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining,
-                 g.expire_date,
-                 CASE 
-                   WHEN g.expire_date IS NULL THEN 0
-                   WHEN g.expire_date < CURDATE() THEN 1
-                   ELSE 0
-                 END as is_expired,
-                 CASE
-                   WHEN g.expire_date IS NULL THEN NULL
-                   ELSE DATEDIFF(g.expire_date, CURDATE())
-                 END as remaining_days
+                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           WHERE g.id = ?
@@ -45,7 +35,7 @@ class GroupService {
         const { rows } = await dbConnection.query(sql, [currentUser.group_id]);
         groups = rows;
       } else {
-        // 超级管理员可以看到所有组
+        // 超级管理员可以看到所有组，调用修改后的User.getGroups
         const sql = `
           SELECT g.*, 
                  COUNT(u.id) as user_count,
@@ -55,17 +45,7 @@ class GroupService {
                  g.credits_pool,
                  g.credits_pool_used,
                  g.user_limit,
-                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining,
-                 g.expire_date,
-                 CASE 
-                   WHEN g.expire_date IS NULL THEN 0
-                   WHEN g.expire_date < CURDATE() THEN 1
-                   ELSE 0
-                 END as is_expired,
-                 CASE
-                   WHEN g.expire_date IS NULL THEN NULL
-                   ELSE DATEDIFF(g.expire_date, CURDATE())
-                 END as remaining_days
+                 (g.credits_pool - g.credits_pool_used) as credits_pool_remaining
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           GROUP BY g.id
@@ -87,7 +67,7 @@ class GroupService {
    */
   static async createGroup(groupData, operatorId = null) {
     try {
-      const { name, description, color, permissions = [], is_active = true, expire_date = null } = groupData;
+      const { name, description, color, permissions = [], is_active = true } = groupData;
 
       // 验证必填字段
       if (!name) {
@@ -106,15 +86,13 @@ class GroupService {
         description,
         color,
         permissions,
-        is_active,
-        expire_date
+        is_active
       }, operatorId);
 
       logger.info('创建用户分组成功', {
         operatorId,
         groupId: group.id,
-        groupName: group.name,
-        expireDate: group.expire_date
+        groupName: group.name
       });
 
       return group;
@@ -484,31 +462,16 @@ class GroupService {
         throw new ValidationError(`目标组已满员，当前 ${currentCount}/${targetGroup.user_limit}`);
       }
 
-      // 使用事务批量更新（包括同步有效期）
+      // 使用事务批量更新
       const result = await dbConnection.transaction(async (query) => {
-        // 如果目标组有有效期设置，同步到用户
-        let updateSql;
-        let params;
+        const placeholders = userIds.map(() => '?').join(',');
+        const sql = `
+          UPDATE users 
+          SET group_id = ?, updated_at = NOW() 
+          WHERE id IN (${placeholders}) AND status != 'deleted'
+        `;
         
-        if (targetGroup.expire_date) {
-          const placeholders = userIds.map(() => '?').join(',');
-          updateSql = `
-            UPDATE users 
-            SET group_id = ?, expire_at = ?, updated_at = NOW() 
-            WHERE id IN (${placeholders}) AND status != 'deleted' AND role != 'super_admin'
-          `;
-          params = [targetGroupId, targetGroup.expire_date, ...userIds];
-        } else {
-          const placeholders = userIds.map(() => '?').join(',');
-          updateSql = `
-            UPDATE users 
-            SET group_id = ?, updated_at = NOW() 
-            WHERE id IN (${placeholders}) AND status != 'deleted'
-          `;
-          params = [targetGroupId, ...userIds];
-        }
-        
-        const { rows } = await query(updateSql, params);
+        const { rows } = await query(sql, [targetGroupId, ...userIds]);
         return rows.affectedRows;
       });
 
@@ -516,8 +479,7 @@ class GroupService {
         operatorId,
         userIds,
         targetGroupId,
-        affectedCount: result,
-        syncedExpireDate: targetGroup.expire_date
+        affectedCount: result
       });
 
       return {
@@ -532,7 +494,7 @@ class GroupService {
   }
 
   /**
-   * 根据ID查找分组（包含积分池信息和有效期）
+   * 根据ID查找分组（包含积分池信息）
    */
   static async findGroupById(groupId) {
     try {
@@ -564,17 +526,7 @@ class GroupService {
           g.credits_pool,
           g.credits_pool_used,
           (g.credits_pool - g.credits_pool_used) as credits_pool_remaining,
-          g.user_limit,
-          g.expire_date,
-          CASE 
-            WHEN g.expire_date IS NULL THEN 0
-            WHEN g.expire_date < CURDATE() THEN 1
-            ELSE 0
-          END as is_expired,
-          CASE
-            WHEN g.expire_date IS NULL THEN NULL
-            ELSE DATEDIFF(g.expire_date, CURDATE())
-          END as remaining_days
+          g.user_limit
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
@@ -662,102 +614,6 @@ class GroupService {
   }
 
   /**
-   * 设置组有效期（新增）
-   */
-  static async setGroupExpireDate(groupId, expireDate, syncToUsers = false, operatorId = null) {
-    try {
-      // 获取当前组信息
-      const group = await GroupService.findGroupById(groupId);
-      if (!group) {
-        throw new ValidationError('用户分组不存在');
-      }
-
-      // 使用事务确保原子性
-      await dbConnection.transaction(async (query) => {
-        // 1. 更新组有效期
-        const updateGroupSql = 'UPDATE user_groups SET expire_date = ?, updated_at = NOW() WHERE id = ?';
-        await query(updateGroupSql, [expireDate, groupId]);
-
-        // 2. 如果需要同步到用户
-        if (syncToUsers) {
-          const updateUsersSql = `
-            UPDATE users 
-            SET expire_at = ?, updated_at = NOW() 
-            WHERE group_id = ? AND role != 'super_admin'
-          `;
-          await query(updateUsersSql, [expireDate, groupId]);
-
-          logger.info('同步组有效期到所有组员', {
-            groupId,
-            expireDate
-          });
-        }
-      });
-
-      logger.info('设置组有效期成功', {
-        operatorId,
-        groupId,
-        expireDate,
-        oldExpireDate: group.expire_date,
-        syncToUsers
-      });
-
-      return {
-        success: true,
-        expire_date: expireDate,
-        synced_to_users: syncToUsers,
-        message: '组有效期设置成功'
-      };
-    } catch (error) {
-      logger.error('设置组有效期失败', { error: error.message, groupId, expireDate });
-      throw error;
-    }
-  }
-
-  /**
-   * 同步组有效期到所有组员（新增）
-   */
-  static async syncGroupExpireDateToUsers(groupId, operatorId = null) {
-    try {
-      // 获取组信息
-      const group = await GroupService.findGroupById(groupId);
-      if (!group) {
-        throw new ValidationError('用户分组不存在');
-      }
-
-      if (!group.expire_date) {
-        throw new ValidationError('该组未设置有效期');
-      }
-
-      // 更新所有组员的有效期（排除超管）
-      const sql = `
-        UPDATE users 
-        SET expire_at = ?, updated_at = NOW() 
-        WHERE group_id = ? AND role != 'super_admin'
-      `;
-      const { rows } = await dbConnection.query(sql, [group.expire_date, groupId]);
-      const affectedCount = rows.affectedRows;
-
-      logger.info('同步组有效期到组员成功', {
-        operatorId,
-        groupId,
-        expireDate: group.expire_date,
-        affectedCount
-      });
-
-      return {
-        success: true,
-        expire_date: group.expire_date,
-        affected_users: affectedCount,
-        message: `成功同步有效期到${affectedCount}个用户`
-      };
-    } catch (error) {
-      logger.error('同步组有效期失败', { error: error.message, groupId });
-      throw error;
-    }
-  }
-
-  /**
    * 克隆分组配置
    */
   static async cloneGroup(sourceGroupId, newGroupName, operatorId = null) {
@@ -767,14 +623,13 @@ class GroupService {
         throw new ValidationError('源分组不存在');
       }
 
-      // 创建新分组（包含有效期）
+      // 创建新分组
       const newGroup = await GroupService.createGroup({
         name: newGroupName,
         description: `克隆自: ${sourceGroup.name}`,
         color: sourceGroup.color,
         permissions: sourceGroup.permissions,
-        is_active: true,
-        expire_date: sourceGroup.expire_date // 复制有效期设置
+        is_active: true
       }, operatorId);
 
       logger.info('克隆分组成功', {

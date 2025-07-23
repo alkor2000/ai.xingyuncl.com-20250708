@@ -1,10 +1,12 @@
 /**
- * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能和组有效期）
+ * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能）
  */
+
 const express = require('express');
 const UserGroupController = require('../../controllers/admin/UserGroupController');
 const { requirePermission } = require('../../middleware/authMiddleware');
 const { canManageGroups } = require('../../middleware/permissions');
+
 const router = express.Router();
 
 /**
@@ -80,28 +82,6 @@ router.put('/:id/user-limit',
   requirePermission('group.manage'),
   canManageGroups(),
   UserGroupController.setGroupUserLimit
-);
-
-/**
- * @route PUT /api/admin/user-groups/:id/expire-date
- * @desc 设置组有效期
- * @access SuperAdmin only
- */
-router.put('/:id/expire-date',
-  requirePermission('group.manage'),
-  canManageGroups(),
-  UserGroupController.setGroupExpireDate
-);
-
-/**
- * @route POST /api/admin/user-groups/:id/sync-expire-date
- * @desc 同步组有效期到所有组员
- * @access SuperAdmin only
- */
-router.post('/:id/sync-expire-date',
-  requirePermission('group.manage'),
-  canManageGroups(),
-  UserGroupController.syncGroupExpireDateToUsers
 );
 
 module.exports = router;

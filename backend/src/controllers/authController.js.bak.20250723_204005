@@ -66,24 +66,6 @@ class AuthController {
         return ResponseHelper.unauthorized(res, '账户已被禁用');
       }
 
-      // 检查账号有效期（新增）
-      if (user.isAccountExpired()) {
-        const remainingDays = user.getAccountRemainingDays();
-        logger.warn('登录失败：账号已过期', { 
-          account, 
-          userId: user.id, 
-          expireAt: user.expire_at,
-          expiredDays: Math.abs(remainingDays)
-        });
-        
-        let expireMessage = '账号已过期';
-        if (remainingDays !== null) {
-          expireMessage = `账号已过期${Math.abs(remainingDays)}天，请联系管理员续期`;
-        }
-        
-        return ResponseHelper.unauthorized(res, expireMessage);
-      }
-
       // 获取用户权限
       const permissions = await user.getPermissions();
 
@@ -131,9 +113,7 @@ class AuthController {
         account, 
         userId: user.id, 
         role: user.role,
-        permissions: permissions.length,
-        accountExpireAt: user.expire_at,
-        accountRemainingDays: user.getAccountRemainingDays()
+        permissions: permissions.length
       });
 
       return ResponseHelper.success(res, {
@@ -263,8 +243,7 @@ class AuthController {
         email, 
         userId: user.id,
         tokenQuota: defaultTokens,
-        creditsQuota: defaultCredits,
-        accountExpireAt: user.expire_at
+        creditsQuota: defaultCredits
       });
 
       return ResponseHelper.success(res, {
@@ -482,15 +461,6 @@ class AuthController {
       const user = await User.findById(decoded.userId);
       if (!user || user.status !== 'active') {
         return ResponseHelper.unauthorized(res, '用户不存在或已被禁用');
-      }
-
-      // 检查账号有效期（新增）
-      if (user.isAccountExpired()) {
-        logger.warn('刷新令牌失败：账号已过期', { 
-          userId: user.id, 
-          expireAt: user.expire_at
-        });
-        return ResponseHelper.unauthorized(res, '账号已过期，请联系管理员续期');
       }
 
       // 生成新的访问令牌
