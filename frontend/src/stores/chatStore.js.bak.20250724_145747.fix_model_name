@@ -25,9 +25,6 @@ const useChatStore = create((set, get) => ({
   streamingMessageId: null,
   streamingContent: '',
   
-  // 🔥 新增：用户主动停止的标记
-  userStoppedStreaming: false,
-  
   // 🔥 改进：存储每个对话的完整状态（包括流式状态）
   conversationStates: new Map(), // conversationId -> { messages, typing, isStreaming, streamingMessageId, streamingContent }
   
@@ -184,8 +181,7 @@ const useChatStore = create((set, get) => ({
         typing: false,
         isStreaming: false,
         streamingMessageId: null,
-        streamingContent: '',
-        userStoppedStreaming: false
+        streamingContent: ''
       })
       
       return newConversation
@@ -196,7 +192,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 选择会话 - 修复：不重置流式状态，避免影响后台生成
+  // 🔥 选择会话 - 改进：保存和恢复对话的完整状态
   selectConversation: async (conversationId) => {
     const state = get()
     
@@ -211,8 +207,7 @@ const useChatStore = create((set, get) => ({
         typing: false,
         isStreaming: false,
         streamingMessageId: null,
-        streamingContent: '',
-        userStoppedStreaming: false
+        streamingContent: ''
       })
       return
     }
@@ -255,8 +250,7 @@ const useChatStore = create((set, get) => ({
           typing: savedState.typing || false,
           isStreaming: savedState.isStreaming || false,
           streamingMessageId: savedState.streamingMessageId || null,
-          streamingContent: savedState.streamingContent || '',
-          userStoppedStreaming: false // 🔥 重置用户停止标记
+          streamingContent: savedState.streamingContent || ''
         })
       } else {
         // 否则从API获取消息
@@ -270,8 +264,7 @@ const useChatStore = create((set, get) => ({
           typing: false,
           isStreaming: false,
           streamingMessageId: null,
-          streamingContent: '',
-          userStoppedStreaming: false // 🔥 重置用户停止标记
+          streamingContent: ''
         })
       }
       
@@ -382,8 +375,7 @@ const useChatStore = create((set, get) => ({
       content,
       file: fileInfo, // 添加完整的file信息用于显示
       created_at: new Date().toISOString(),
-      temp: true,
-      model_name: state.currentConversation.model_name // 🔥 添加model_name
+      temp: true
     }
     
     set(state => ({
@@ -454,19 +446,18 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 发送流式消息 - 修复：添加model_name到消息
+  // 🔥 发送流式消息 - 改进：支持后台继续生成
   sendStreamMessage: async (content, fileInfo = null) => {
     const state = get()
     if (!state.currentConversation) return
     
     const conversationId = state.currentConversationId
-    const modelName = state.currentConversation.model_name // 🔥 保存当前模型名
     
     // 发送消息时清除草稿
     get().clearDraft(conversationId)
     
     console.log('开始流式发送消息')
-    set({ typing: true, isStreaming: true, streamingContent: '', userStoppedStreaming: false })
+    set({ typing: true, isStreaming: true, streamingContent: '' })
     
     // 确保有积分状态
     if (!state.userCredits) {
@@ -481,8 +472,7 @@ const useChatStore = create((set, get) => ({
       content,
       file: fileInfo, // 添加完整的file信息用于显示
       created_at: new Date().toISOString(),
-      temp: true,
-      model_name: modelName // 🔥 添加model_name
+      temp: true
     }
     
     // 预创建AI消息占位（临时）
@@ -493,8 +483,7 @@ const useChatStore = create((set, get) => ({
       content: '',
       created_at: new Date().toISOString(),
       temp: true,
-      streaming: true,
-      model_name: modelName // 🔥 添加model_name
+      streaming: true
     }
     
     set(state => ({
@@ -506,6 +495,7 @@ const useChatStore = create((set, get) => ({
       let realUserMessage = null
       let realAiMessageId = null
       let fullContent = ''
+      let userStopped = false // 🔥 标记是否用户主动停止
       
       // 使用流式POST请求 - 只发送file_id给后端
       await apiClient.postStream(
@@ -522,7 +512,7 @@ const useChatStore = create((set, get) => ({
             set(state => ({
               messages: state.messages.map(msg => 
                 msg.id === tempUserMessageId ? realUserMessage : 
-                msg.id === tempAiMessageId ? { ...msg, id: realAiMessageId, model_name: modelName } : // 🔥 保留model_name
+                msg.id === tempAiMessageId ? { ...msg, id: realAiMessageId } : 
                 msg
               ),
               streamingMessageId: realAiMessageId
@@ -549,8 +539,9 @@ const useChatStore = create((set, get) => ({
             // 🔥 检查当前状态和对话ID
             const currentState = get()
             
-            // 🔥 修复：只检查用户是否主动停止，不检查isStreaming
-            if (currentState.userStoppedStreaming && currentState.currentConversationId === conversationId) {
+            // 🔥 如果用户主动点击了停止（全局isStreaming为false），标记为用户停止
+            if (!currentState.isStreaming && currentState.currentConversationId === conversationId) {
+              userStopped = true
               return
             }
             
@@ -560,7 +551,7 @@ const useChatStore = create((set, get) => ({
                 streamingContent: fullContent,
                 messages: state.messages.map(msg => 
                   msg.id === realAiMessageId
-                    ? { ...msg, content: fullContent, streaming: true, model_name: modelName } // 🔥 保留model_name
+                    ? { ...msg, content: fullContent, streaming: true }
                     : msg
                 )
               }))
@@ -569,7 +560,7 @@ const useChatStore = create((set, get) => ({
               const bgState = currentState.conversationStates.get(conversationId) || { messages: [] }
               const updatedMessages = bgState.messages.map(msg => 
                 msg.id === realAiMessageId
-                  ? { ...msg, content: fullContent, streaming: true, model_name: modelName } // 🔥 保留model_name
+                  ? { ...msg, content: fullContent, streaming: true }
                   : msg
               )
               
@@ -588,18 +579,14 @@ const useChatStore = create((set, get) => ({
             const currentState = get()
             const finalContent = fullContent || data.content || ''
             
-            // 🔥 修复：只在用户主动停止时添加标记
-            const wasUserStopped = currentState.userStoppedStreaming && currentState.currentConversationId === conversationId
-            
-            // 🔥 创建最终的AI消息（添加model_name）
+            // 🔥 创建最终的AI消息
             const finalAiMessage = {
               id: data.messageId || realAiMessageId,
               role: 'assistant',
-              content: wasUserStopped ? finalContent + '\n\n[已停止生成]' : finalContent,
+              content: userStopped ? finalContent + '\n\n[已停止生成]' : finalContent,
               tokens: data.tokens || 0,
               created_at: new Date().toISOString(),
-              streaming: false,
-              model_name: modelName // 🔥 关键修复：添加model_name字段
+              streaming: false
             }
             
             // 🔥 如果是当前对话，更新UI
@@ -613,8 +600,7 @@ const useChatStore = create((set, get) => ({
                 typing: false,
                 isStreaming: false,
                 streamingContent: '',
-                streamingMessageId: null,
-                userStoppedStreaming: false
+                streamingMessageId: null
               }))
             } else {
               // 🔥 如果不是当前对话，更新后台状态
@@ -652,8 +638,7 @@ const useChatStore = create((set, get) => ({
                 typing: false,
                 isStreaming: false,
                 streamingContent: '',
-                streamingMessageId: null,
-                userStoppedStreaming: false
+                streamingMessageId: null
               }))
             } else {
               // 更新后台状态
@@ -677,8 +662,7 @@ const useChatStore = create((set, get) => ({
         typing: false,
         isStreaming: false,
         streamingContent: '',
-        streamingMessageId: null,
-        userStoppedStreaming: false
+        streamingMessageId: null
       }))
       
       console.error('流式消息发送失败:', error)
@@ -762,7 +746,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 停止生成 - 修复：设置用户主动停止标记
+  // 🔥 停止生成 - 改进：只停止当前对话的生成
   stopGeneration: () => {
     console.log('停止生成')
     
@@ -770,10 +754,8 @@ const useChatStore = create((set, get) => ({
     
     // 🔥 标记为用户主动停止
     if (state.isStreaming) {
-      set({ 
-        userStoppedStreaming: true,
-        isStreaming: false 
-      })
+      // 设置isStreaming为false，这会在onMessage中被检测到
+      set({ isStreaming: false })
       // 取消流式请求
       apiClient.cancelStream()
     }
@@ -931,8 +913,7 @@ const useChatStore = create((set, get) => ({
       typing: false,
       isStreaming: false,
       streamingMessageId: null,
-      streamingContent: '',
-      userStoppedStreaming: false
+      streamingContent: ''
     })
   },
   
@@ -961,7 +942,6 @@ const useChatStore = create((set, get) => ({
       isStreaming: false,
       streamingMessageId: null,
       streamingContent: '',
-      userStoppedStreaming: false,
       conversationStates: new Map(),
       activeRequest: null,
       drafts: {},

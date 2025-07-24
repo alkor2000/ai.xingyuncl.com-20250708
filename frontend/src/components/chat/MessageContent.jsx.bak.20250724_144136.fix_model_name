@@ -22,40 +22,15 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
   
-  // 🔥 添加调试日志，查看消息数据
-  if (isAssistant && !message.temp && !message.streaming) {
-    console.log('AI消息数据:', {
-      id: message.id,
-      model_name: message.model_name,
-      hasModelName: !!message.model_name,
-      messageKeys: Object.keys(message),
-      fullMessage: message
-    })
-  }
-  
   // 获取消息实际使用的模型信息
   const getMessageModel = () => {
-    // 🔥 关键修复：优先使用消息自己的model_name
-    if (message.model_name) {
-      // 尝试在aiModels中找到对应的模型对象
+    // 如果消息有model_name字段，使用消息自己的模型
+    if (message.model_name && aiModels.length > 0) {
       const model = aiModels.find(m => m.name === message.model_name)
-      if (model) {
-        return model
-      }
-      // 🔥 如果找不到，创建一个临时模型对象，确保显示正确的模型名
-      return {
-        name: message.model_name,
-        display_name: message.model_name // 使用模型名作为显示名
-      }
+      if (model) return model
     }
-    
-    // 🔥 只有临时消息（没有model_name的）才使用当前对话的模型
-    if (message.temp || message.streaming) {
-      return currentModel
-    }
-    
-    // 其他情况返回null，不显示模型信息
-    return null
+    // 否则使用当前对话的模型（兼容旧消息）
+    return currentModel
   }
   
   const messageModel = getMessageModel()
