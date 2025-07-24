@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: ai-platform-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass2025}
+      MYSQL_DATABASE: ${DB_NAME:-ai_platform}
+      MYSQL_USER: ${DB_USER:-ai_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ai-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: ai-platform-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-ai_user}
+      DB_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
+      DB_NAME: ${DB_NAME:-ai_platform}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-your-super-secret-key-2025}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-2025}
+      APP_DOMAIN: ${APP_DOMAIN:-ai.xingyuncl.com}
+    volumes:
+      - ./storage/uploads:/app/storage/uploads
+      - ./logs/backend:/app/logs
+    networks:
+      - ai-network
+    ports:
+      - "4000:4000"
+
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: ai-platform-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - ai-network
+    ports:
+      - "80:80"
+
+networks:
+  ai-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:

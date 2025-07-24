@@ -1,0 +1,52 @@
+# 后端Dockerfile - 多阶段构建
+FROM node:18-alpine AS builder
+
+# 安装构建依赖
+RUN apk add --no-cache python3 make g++
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制package文件
+COPY backend/package*.json ./
+
+# 安装依赖
+RUN npm ci --only=production
+
+# 生产环境镜像
+FROM node:18-alpine
+
+# 安装运行时依赖
+RUN apk add --no-cache tini
+
+# 创建非root用户
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+# 设置工作目录
+WORKDIR /app
+
+# 从builder阶段复制node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# 复制应用代码
+COPY --chown=nodejs:nodejs backend/src ./src
+
+# 创建必要的目录
+RUN mkdir -p logs storage/uploads && \
+    chown -R nodejs:nodejs logs storage
+
+# 切换到非root用户
+USER nodejs
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:4000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+
+# 暴露端口
+EXPOSE 4000
+
+# 使用tini作为PID 1进程
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# 启动应用
+CMD ["node", "src/server.js"]

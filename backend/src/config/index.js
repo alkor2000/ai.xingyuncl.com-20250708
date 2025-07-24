@@ -1,5 +1,5 @@
 /**
- * 应用配置文件 - MySQL2优化版 + Redis集成
+ * 应用配置文件 - 支持环境变量配置
  */
 
 const path = require('path');
@@ -7,47 +7,47 @@ const path = require('path');
 module.exports = {
   // 应用配置
   app: {
-    name: 'AI Platform',
+    name: process.env.APP_NAME || 'AI Platform',
     version: '1.0.0',
-    port: 4000,
-    domain: 'ai.xingyuncl.com',
+    port: parseInt(process.env.PORT || process.env.BACKEND_PORT || '4000'),
+    domain: process.env.APP_DOMAIN || 'ai.xingyuncl.com',
     env: process.env.NODE_ENV || 'production'
   },
 
   // 数据库配置 - MySQL2 v3.14+ 优化
   database: {
-    host: 'localhost',
-    port: 3306,
-    user: 'ai_user',
-    password: 'AiPlatform@2025!',
-    database: 'ai_platform',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'ai_user',
+    password: process.env.DB_PASSWORD || 'AiPlatform@2025!',
+    database: process.env.DB_NAME || 'ai_platform',
     charset: 'utf8mb4',
-    connectionLimit: 10,
+    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10'),
     // 连接池性能优化配置
     idleTimeout: 30000,      // 空闲超时30秒
     maxIdle: 5,              // 最大空闲连接5个
     enableKeepAlive: true,   // 启用TCP保活
     queueLimit: 0,           // 无限制排队
     
-    // Redis配置移到这里
+    // Redis配置
     redis: {
-      host: 'localhost',
-      port: 6379,
-      password: '',  // 如果有密码在这里设置
-      db: 0,
-      keyPrefix: 'ai_platform:',  // 键前缀
-      maxRetriesPerRequest: 3,    // 最大重试次数
-      retryDelayOnFailover: 100   // 重试延迟
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD || '',
+      db: parseInt(process.env.REDIS_DB || '0'),
+      keyPrefix: process.env.REDIS_KEY_PREFIX || 'ai_platform:',
+      maxRetriesPerRequest: 3,
+      retryDelayOnFailover: 100
     }
   },
 
-  // JWT认证配置 - 延长Token有效期，适合AI对话长时间使用
+  // JWT认证配置
   auth: {
     jwt: {
-      accessSecret: 'your-super-secret-key-2025',
-      refreshSecret: 'your-refresh-secret-key-2025',
-      accessExpiresIn: '12h',   // 12小时，适合长时间AI对话
-      refreshExpiresIn: '14d',  // 14天，减少用户重新登录频率
+      accessSecret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-key-2025',
+      refreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-2025',
+      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '12h',
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '14d',
       issuer: 'ai-platform',
       audience: 'ai-platform-users'
     }
@@ -56,16 +56,18 @@ module.exports = {
   // 安全配置
   security: {
     cors: {
-      origin: [
-        'https://ai.xingyuncl.com',
-        'http://localhost:3000',
-        'http://localhost:5173'
-      ],
+      origin: process.env.CORS_ORIGINS ? 
+        process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
+        [
+          'https://ai.xingyuncl.com',
+          'http://localhost:3000',
+          'http://localhost:5173'
+        ],
       credentials: true
     },
     rateLimit: {
       windowMs: 15 * 60 * 1000, // 15分钟
-      max: 1000 // 限制每个IP最多1000个请求
+      max: parseInt(process.env.RATE_LIMIT_MAX || '1000')
     },
     helmet: {
       contentSecurityPolicy: false,
@@ -75,22 +77,22 @@ module.exports = {
 
   // AI服务配置
   ai: {
-    defaultModel: 'gpt-3.5-turbo',
-    timeout: 30000,
-    retries: 3
+    defaultModel: process.env.DEFAULT_AI_MODEL || 'gpt-3.5-turbo',
+    timeout: parseInt(process.env.AI_TIMEOUT || '30000'),
+    retries: parseInt(process.env.AI_RETRIES || '3')
   },
 
   // 文件上传配置
   upload: {
-    maxFileSize: 10 * 1024 * 1024, // 10MB
+    maxFileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760'), // 10MB
     allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
-    uploadDir: path.resolve(__dirname, '../../storage/uploads')
+    uploadDir: process.env.UPLOAD_DIR || path.resolve(__dirname, '../../storage/uploads')
   },
 
   // 日志配置
   logging: {
-    level: 'info',
-    dirname: path.resolve(__dirname, '../../logs'),
+    level: process.env.LOG_LEVEL || 'info',
+    dirname: process.env.LOG_DIR || path.resolve(__dirname, '../../logs'),
     filename: 'app-%DATE%.log',
     datePattern: 'YYYY-MM-DD',
     maxFiles: '14d',
