@@ -12,7 +12,6 @@ const { deleteFile } = require('../../middleware/uploadMiddleware');
 const path = require('path');
 const redisConnection = require('../../database/redis');
 const HealthCheckService = require('../../services/healthCheckService');
-const config = require('../../config');
 
 class SystemStatsController {
   /**
@@ -227,9 +226,7 @@ class SystemStatsController {
       // 删除旧Logo文件（如果存在）
       if (currentSettings.site.logo) {
         try {
-          // 使用配置的上传目录构建完整路径
-          const logoPath = currentSettings.site.logo.replace(/^\/uploads\//, '');
-          const oldLogoPath = path.join(config.upload.uploadDir, logoPath);
+          const oldLogoPath = path.join('/var/www/ai-platform', currentSettings.site.logo);
           await deleteFile(oldLogoPath);
         } catch (error) {
           logger.warn('删除旧Logo失败', { error: error.message });

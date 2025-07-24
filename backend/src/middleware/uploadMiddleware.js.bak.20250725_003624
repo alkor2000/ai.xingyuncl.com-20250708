@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const config = require('../config');
 
 // 确保上传目录存在
 const ensureUploadDir = async (dirPath) => {
@@ -31,8 +30,7 @@ const generateFileName = (originalName) => {
 // 配置存储
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    // 使用配置中的上传目录，支持容器化部署
-    const uploadBase = config.upload.uploadDir;
+    const uploadBase = '/var/www/ai-platform/uploads';
     let uploadDir = uploadBase;
     
     // 根据文件类型分类存储
@@ -122,11 +120,9 @@ module.exports = {
   
   // 工具函数：获取文件的公开访问URL
   getFileUrl: (filePath) => {
-    // 获取相对于storage/uploads的路径
-    const storageDir = path.join(path.dirname(config.upload.uploadDir), 'storage');
-    const relativePath = path.relative(storageDir, filePath);
-    // 转换为URL格式（使用正斜杠）
-    return '/' + relativePath.split(path.sep).join('/');
+    // 将本地路径转换为URL路径
+    const relativePath = filePath.replace('/var/www/ai-platform/', '');
+    return `/${relativePath}`;
   },
   
   // 工具函数：删除上传的文件

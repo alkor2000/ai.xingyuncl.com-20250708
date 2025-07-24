@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const config = require('../config');
 
 // 确保上传目录存在
 const ensureUploadDir = async (dirPath) => {
@@ -30,7 +31,8 @@ const generateFileName = (originalName) => {
 // 配置存储
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = '/var/www/ai-platform/uploads/system';
+    // 使用配置中的上传目录，支持容器化部署
+    const uploadDir = path.join(config.upload.uploadDir, 'system');
     
     try {
       await ensureUploadDir(uploadDir);

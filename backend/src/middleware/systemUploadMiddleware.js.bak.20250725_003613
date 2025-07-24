@@ -1,6 +1,6 @@
 /**
- * 文件上传中间件
- * 处理图片上传，支持对话中的图片
+ * 系统文件上传中间件
+ * 处理站点Logo等系统级文件上传
  */
 
 const multer = require('multer');
@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const config = require('../config');
 
 // 确保上传目录存在
 const ensureUploadDir = async (dirPath) => {
@@ -16,7 +15,7 @@ const ensureUploadDir = async (dirPath) => {
     await fs.access(dirPath);
   } catch {
     await fs.mkdir(dirPath, { recursive: true });
-    logger.info('创建上传目录', { dirPath });
+    logger.info('创建系统上传目录', { dirPath });
   }
 };
 
@@ -25,28 +24,19 @@ const generateFileName = (originalName) => {
   const timestamp = Date.now();
   const random = crypto.randomBytes(8).toString('hex');
   const ext = path.extname(originalName);
-  return `${timestamp}-${random}${ext}`;
+  return `logo-${timestamp}-${random}${ext}`;
 };
 
 // 配置存储
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    // 使用配置中的上传目录，支持容器化部署
-    const uploadBase = config.upload.uploadDir;
-    let uploadDir = uploadBase;
-    
-    // 根据文件类型分类存储
-    if (file.mimetype.startsWith('image/')) {
-      uploadDir = path.join(uploadBase, 'chat-images', new Date().toISOString().slice(0, 7)); // 按年月分目录
-    } else {
-      uploadDir = path.join(uploadBase, 'others');
-    }
+    const uploadDir = '/var/www/ai-platform/uploads/system';
     
     try {
       await ensureUploadDir(uploadDir);
       cb(null, uploadDir);
     } catch (error) {
-      logger.error('创建上传目录失败', { error: error.message });
+      logger.error('创建系统上传目录失败', { error: error.message });
       cb(error);
     }
   },
@@ -66,7 +56,7 @@ const fileFilter = (req, file, cb) => {
     'image/png',
     'image/gif',
     'image/webp',
-    'image/bmp'
+    'image/svg+xml'
   ];
   
   if (allowedMimes.includes(file.mimetype)) {
@@ -77,25 +67,25 @@ const fileFilter = (req, file, cb) => {
 };
 
 // 创建上传中间件
-const uploadImage = multer({
+const uploadSiteLogo = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-    files: 1 // 单次只允许上传一个文件
+    fileSize: 2 * 1024 * 1024, // 2MB
+    files: 1
   }
-}).single('image');
+}).single('logo');
 
 // 处理上传错误的中间件包装
-const handleUpload = (req, res, next) => {
-  uploadImage(req, res, (err) => {
+const handleLogoUpload = (req, res, next) => {
+  uploadSiteLogo(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       logger.error('Multer上传错误', { error: err.message });
       
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
           success: false,
-          message: '文件大小不能超过10MB'
+          message: 'Logo文件大小不能超过2MB'
         });
       }
       
@@ -104,38 +94,17 @@ const handleUpload = (req, res, next) => {
         message: `上传错误: ${err.message}`
       });
     } else if (err) {
-      logger.error('文件上传错误', { error: err.message });
+      logger.error('Logo上传错误', { error: err.message });
       return res.status(400).json({
         success: false,
         message: err.message
       });
     }
     
-    // 没有错误，继续处理
     next();
   });
 };
 
-// 导出中间件
 module.exports = {
-  uploadImage: handleUpload,
-  
-  // 工具函数：获取文件的公开访问URL
-  getFileUrl: (filePath) => {
-    // 获取相对于storage/uploads的路径
-    const storageDir = path.join(path.dirname(config.upload.uploadDir), 'storage');
-    const relativePath = path.relative(storageDir, filePath);
-    // 转换为URL格式（使用正斜杠）
-    return '/' + relativePath.split(path.sep).join('/');
-  },
-  
-  // 工具函数：删除上传的文件
-  deleteFile: async (filePath) => {
-    try {
-      await fs.unlink(filePath);
-      logger.info('文件删除成功', { filePath });
-    } catch (error) {
-      logger.error('文件删除失败', { filePath, error: error.message });
-    }
-  }
+  uploadSiteLogo: handleLogoUpload
 };
