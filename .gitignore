@@ -85,6 +85,7 @@ Thumbs.db
 
 # Backup files
 *.backup.*
+*.bak.*
 
 # Storage and uploads
 storage/uploads/*
@@ -97,9 +98,14 @@ cache/
 tmp/
 temp/
 
-# Database dumps
-*.sql
+# Database dumps (但不包括migrations目录下的sql文件)
+/database/backups/*.sql
 *.dump
+*.sql.gz
+*.sql.bz2
+
+# 允许migrations目录下的sql文件
+!/database/migrations/*.sql
 
 # Certificates and keys
 *.pem
