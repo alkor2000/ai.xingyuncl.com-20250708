@@ -1,0 +1,387 @@
+/**
+ * 系统健康监控组件
+ */
+
+import React, { useState } from 'react'
+import { Row, Col, Card, Statistic, Tag, Button, Progress, Space, Tooltip, message, Spin } from 'antd'
+import { 
+  HeartOutlined, 
+  DatabaseOutlined, 
+  CloudServerOutlined,
+  HddOutlined,
+  ReloadOutlined,
+  CheckCircleOutlined,
+  WarningOutlined,
+  CloseCircleOutlined,
+  ThunderboltOutlined,
+  ClockCircleOutlined,
+  ApiOutlined
+} from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+
+const SystemHealthMonitor = ({ onRefresh }) => {
+  const { t } = useTranslation()
+  const [loading, setLoading] = useState(false)
+  const [healthData, setHealthData] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(null)
+
+  // 获取健康状态
+  const fetchHealthStatus = async () => {
+    setLoading(true)
+    try {
+      const data = await onRefresh()
+      setHealthData(data)
+      setLastUpdate(new Date())
+    } catch (error) {
+      message.error('获取系统健康状态失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 首次加载
+  React.useEffect(() => {
+    fetchHealthStatus()
+  }, [])
+
+  // 获取状态标签
+  const getStatusTag = (status) => {
+    if (status === 'healthy') {
+      return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
+    } else if (status === 'unhealthy') {
+      return <Tag color="error" icon={<CloseCircleOutlined />}>异常</Tag>
+    } else {
+      return <Tag color="warning" icon={<WarningOutlined />}>警告</Tag>
+    }
+  }
+
+  // 获取状态颜色
+  const getStatusColor = (status) => {
+    if (status === 'healthy') return '#52c41a'
+    if (status === 'unhealthy') return '#ff4d4f'
+    return '#faad14'
+  }
+
+  // 格式化时间
+  const formatUptime = (seconds) => {
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    
+    if (days > 0) {
+      return `${days}天 ${hours}小时 ${minutes}分钟`
+    } else if (hours > 0) {
+      return `${hours}小时 ${minutes}分钟`
+    } else {
+      return `${minutes}分钟`
+    }
+  }
+
+  if (loading && !healthData) {
+    return (
+      <div style={{ textAlign: 'center', padding: '50px 0' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (!healthData) {
+    return (
+      <div style={{ textAlign: 'center', padding: '50px 0' }}>
+        <Button type="primary" onClick={fetchHealthStatus}>
+          加载系统健康状态
+        </Button>
+      </div>
+    )
+  }
+
+  const { status, checks, uptime, version, environment, nodeVersion, platform } = healthData
+
+  return (
+    <div>
+      {/* 头部信息 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space>
+          <HeartOutlined style={{ fontSize: 24, color: getStatusColor(status) }} />
+          <span style={{ fontSize: 18, fontWeight: 500 }}>系统健康状态</span>
+          {getStatusTag(status)}
+        </Space>
+        <Space>
+          {lastUpdate && (
+            <span style={{ color: '#999' }}>
+              <ClockCircleOutlined /> 最后更新：{lastUpdate.toLocaleTimeString()}
+            </span>
+          )}
+          <Button 
+            type="primary" 
+            icon={<ReloadOutlined />} 
+            onClick={fetchHealthStatus}
+            loading={loading}
+          >
+            刷新
+          </Button>
+        </Space>
+      </div>
+
+      <Row gutter={[16, 16]}>
+        {/* 系统概览 */}
+        <Col xs={24} lg={12}>
+          <Card title="系统概览" size="small">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Statistic 
+                  title="运行时间" 
+                  value={formatUptime(uptime)} 
+                  prefix={<ClockCircleOutlined />}
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic 
+                  title="系统版本" 
+                  value={version} 
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic 
+                  title="运行环境" 
+                  value={environment} 
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic 
+                  title="Node版本" 
+                  value={nodeVersion} 
+                />
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+
+        {/* 数据库状态 */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title={
+              <Space>
+                <DatabaseOutlined />
+                <span>数据库状态</span>
+                {checks?.database && getStatusTag(checks.database.status)}
+              </Space>
+            } 
+            size="small"
+          >
+            {checks?.database && (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Statistic 
+                    title="响应时间" 
+                    value={checks.database.responseTime || 'N/A'} 
+                    valueStyle={{ color: getStatusColor(checks.database.status) }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic 
+                    title="活跃连接" 
+                    value={checks.database.activeConnections || 0} 
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic 
+                    title="空闲连接" 
+                    value={checks.database.idleConnections || 0} 
+                  />
+                </Col>
+                <Col span={12}>
+                  {checks.database.error && (
+                    <Tooltip title={checks.database.error}>
+                      <Tag color="error">错误</Tag>
+                    </Tooltip>
+                  )}
+                </Col>
+              </Row>
+            )}
+          </Card>
+        </Col>
+
+        {/* Redis状态 */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title={
+              <Space>
+                <CloudServerOutlined />
+                <span>Redis缓存</span>
+                {checks?.redis && getStatusTag(checks.redis.status)}
+              </Space>
+            } 
+            size="small"
+          >
+            {checks?.redis && (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Statistic 
+                    title="响应时间" 
+                    value={checks.redis.responseTime || 'N/A'} 
+                    valueStyle={{ color: getStatusColor(checks.redis.status) }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic 
+                    title="连接状态" 
+                    value={checks.redis.connected ? '已连接' : '未连接'} 
+                    valueStyle={{ color: checks.redis.connected ? '#52c41a' : '#ff4d4f' }}
+                  />
+                </Col>
+                {checks.redis.error && (
+                  <Col span={24}>
+                    <Tag color="error">{checks.redis.error}</Tag>
+                  </Col>
+                )}
+              </Row>
+            )}
+          </Card>
+        </Col>
+
+        {/* 内存使用 */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title={
+              <Space>
+                <HddOutlined />
+                <span>内存使用</span>
+                {checks?.memory && getStatusTag(checks.memory.status)}
+              </Space>
+            } 
+            size="small"
+          >
+            {checks?.memory && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span>进程内存</span>
+                    <span>{checks.memory.process.heapUsed} / {checks.memory.process.heapTotal}</span>
+                  </div>
+                  <Progress 
+                    percent={Math.round(
+                      parseFloat(checks.memory.process.heapUsed) / 
+                      parseFloat(checks.memory.process.heapTotal) * 100
+                    )} 
+                    strokeColor={getStatusColor(checks.memory.status)}
+                  />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span>系统内存</span>
+                    <span>{checks.memory.system.used} / {checks.memory.system.total} ({checks.memory.system.percentage})</span>
+                  </div>
+                  <Progress 
+                    percent={parseFloat(checks.memory.system.percentage)} 
+                    strokeColor={parseFloat(checks.memory.system.percentage) > 90 ? '#ff4d4f' : '#1890ff'}
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+        </Col>
+
+        {/* 系统负载 */}
+        <Col xs={24}>
+          <Card 
+            title={
+              <Space>
+                <ThunderboltOutlined />
+                <span>系统负载</span>
+              </Space>
+            } 
+            size="small"
+          >
+            {checks?.system && (
+              <Row gutter={16}>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="1分钟平均负载" 
+                    value={checks.system.loadAverage?.[0]?.toFixed(2) || '0.00'} 
+                    valueStyle={{ 
+                      color: checks.system.loadAverage?.[0] > 4 ? '#ff4d4f' : '#52c41a' 
+                    }}
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="5分钟平均负载" 
+                    value={checks.system.loadAverage?.[1]?.toFixed(2) || '0.00'} 
+                    valueStyle={{ 
+                      color: checks.system.loadAverage?.[1] > 4 ? '#ff4d4f' : '#52c41a' 
+                    }}
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="15分钟平均负载" 
+                    value={checks.system.loadAverage?.[2]?.toFixed(2) || '0.00'} 
+                    valueStyle={{ 
+                      color: checks.system.loadAverage?.[2] > 4 ? '#ff4d4f' : '#52c41a' 
+                    }}
+                  />
+                </Col>
+              </Row>
+            )}
+          </Card>
+        </Col>
+
+        {/* 快速操作 */}
+        <Col xs={24}>
+          <Card title="维护操作" size="small">
+            <Space wrap>
+              <Tooltip title="清理Redis缓存，释放内存">
+                <Button 
+                  icon={<ApiOutlined />}
+                  onClick={async () => {
+                    try {
+                      setLoading(true)
+                      // 调用维护操作API
+                      const response = await fetch('/api/admin/stats/maintenance', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ action: 'clearCache' })
+                      })
+                      
+                      const result = await response.json()
+                      if (result.success) {
+                        message.success(result.data.message || '缓存清理成功')
+                        // 刷新健康状态
+                        await fetchHealthStatus()
+                      } else {
+                        message.error(result.message || '操作失败')
+                      }
+                    } catch (error) {
+                      message.error('操作失败')
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  loading={loading}
+                >
+                  清理缓存
+                </Button>
+              </Tooltip>
+              
+              <Tooltip title="查看详细的系统监控信息">
+                <Button 
+                  onClick={() => {
+                    window.open('/health/detailed', '_blank')
+                  }}
+                >
+                  查看详细信息
+                </Button>
+              </Tooltip>
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  )
+}
+
+export default SystemHealthMonitor

@@ -11,7 +11,6 @@ const File = require('../../models/File');
 const { deleteFile } = require('../../middleware/uploadMiddleware');
 const path = require('path');
 const redisConnection = require('../../database/redis');
-const HealthCheckService = require('../../services/healthCheckService');
 
 class SystemStatsController {
   /**
@@ -37,87 +36,6 @@ class SystemStatsController {
         error: error.message 
       });
       return ResponseHelper.error(res, error.message || '获取系统统计失败');
-    }
-  }
-
-  /**
-   * 获取系统健康状态 - 只有超级管理员可以查看
-   */
-  static async getSystemHealth(req, res) {
-    try {
-      const userRole = req.user.role;
-      
-      // 只有超级管理员可以查看系统健康状态
-      if (userRole !== ROLES.SUPER_ADMIN) {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以查看系统健康状态');
-      }
-      
-      // 执行健康检查
-      const healthStatus = await HealthCheckService.performHealthCheck();
-      
-      // 添加一些额外的系统信息
-      const enrichedHealthStatus = {
-        ...healthStatus,
-        environment: process.env.NODE_ENV || 'production',
-        nodeVersion: process.version,
-        platform: process.platform,
-        pid: process.pid
-      };
-
-      return ResponseHelper.success(res, enrichedHealthStatus, '获取系统健康状态成功');
-    } catch (error) {
-      logger.error('获取系统健康状态失败', { 
-        adminId: req.user?.id, 
-        error: error.message 
-      });
-      return ResponseHelper.error(res, error.message || '获取系统健康状态失败');
-    }
-  }
-
-  /**
-   * 执行系统维护操作 - 只有超级管理员可以执行
-   */
-  static async performMaintenance(req, res) {
-    try {
-      const userRole = req.user.role;
-      
-      // 只有超级管理员可以执行维护操作
-      if (userRole !== ROLES.SUPER_ADMIN) {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以执行系统维护');
-      }
-      
-      const { action } = req.body;
-      let result = {};
-      
-      switch (action) {
-        case 'clearCache':
-          // 清理Redis缓存
-          if (redisConnection.isConnected) {
-            await redisConnection.getClient().flushDb();
-            result.message = 'Redis缓存已清理';
-            logger.info('管理员清理了Redis缓存', { adminId: req.user.id });
-          } else {
-            result.message = 'Redis未连接，无法清理缓存';
-          }
-          break;
-          
-        case 'optimizeDatabase':
-          // 优化数据库表（这里只是示例，实际应该异步执行）
-          result.message = '数据库优化已启动（请通过维护脚本执行）';
-          logger.info('管理员请求优化数据库', { adminId: req.user.id });
-          break;
-          
-        default:
-          return ResponseHelper.validation(res, ['不支持的维护操作']);
-      }
-      
-      return ResponseHelper.success(res, result, '维护操作执行成功');
-    } catch (error) {
-      logger.error('执行维护操作失败', { 
-        adminId: req.user?.id, 
-        error: error.message 
-      });
-      return ResponseHelper.error(res, error.message || '执行维护操作失败');
     }
   }
 

@@ -13,8 +13,7 @@ import {
   ThunderboltOutlined,
   FileImageOutlined,
   LockOutlined,
-  GlobalOutlined,
-  HeartOutlined
+  GlobalOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -30,8 +29,7 @@ import {
   SystemModuleTable,
   SystemModuleFormModal,
   BasicSettings,
-  CustomHomepage,
-  SystemHealthMonitor
+  CustomHomepage
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -61,8 +59,7 @@ const Settings = () => {
     getSystemSettings,
     updateSystemSettings,
     getUserGroups,
-    userGroups,
-    getSystemHealth
+    userGroups
   } = useAdminStore()
 
   // 表单实例
@@ -382,21 +379,6 @@ const Settings = () => {
         >
           <SystemStats systemStats={systemStats} />
         </TabPane>
-
-        {/* 系统健康监控（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <HeartOutlined />
-                系统健康
-              </span>
-            } 
-            key="health"
-          >
-            <SystemHealthMonitor onRefresh={getSystemHealth} />
-          </TabPane>
-        )}
 
         {/* AI模型管理 */}
         <TabPane 

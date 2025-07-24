@@ -17,7 +17,6 @@ const useAdminStore = create((set) => ({
     models: []
   },
   systemSettings: {},
-  systemHealth: null,
   loading: false,
   creditsLoading: false,
   
@@ -451,29 +450,6 @@ const useAdminStore = create((set) => ({
       return response.data.data
     } catch (error) {
       console.error('获取实时统计失败:', error)
-      throw error
-    }
-  },
-  
-  // 系统健康监控（新增）
-  getSystemHealth: async () => {
-    try {
-      const response = await apiClient.get('/admin/stats/health')
-      set({ systemHealth: response.data.data })
-      return response.data.data
-    } catch (error) {
-      console.error('获取系统健康状态失败:', error)
-      throw error
-    }
-  },
-  
-  // 执行系统维护操作（新增）
-  performMaintenance: async (action) => {
-    try {
-      const response = await apiClient.post('/admin/stats/maintenance', { action })
-      return response.data
-    } catch (error) {
-      console.error('执行维护操作失败:', error)
       throw error
     }
   },

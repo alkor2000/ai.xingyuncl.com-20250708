@@ -20,26 +20,6 @@ router.get('/',
 );
 
 /**
- * @route GET /api/admin/stats/health
- * @desc 获取系统健康状态
- * @access SuperAdmin only
- */
-router.get('/health',
-  requireRole(['super_admin']),
-  SystemStatsController.getSystemHealth
-);
-
-/**
- * @route POST /api/admin/stats/maintenance
- * @desc 执行系统维护操作
- * @access SuperAdmin only
- */
-router.post('/maintenance',
-  requireRole(['super_admin']),
-  SystemStatsController.performMaintenance
-);
-
-/**
  * @route GET /api/admin/settings
  * @desc 获取系统设置
  * @access SuperAdmin only
