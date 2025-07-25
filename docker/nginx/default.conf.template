@@ -1,0 +1,85 @@
+# HTTP重定向到HTTPS
+server {
+    listen 80;
+    server_name YOUR_DOMAIN_HERE;  # 🔴 改成客户域名，如：ai.company.com
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS服务器配置
+server {
+    listen 443 ssl http2;
+    server_name YOUR_DOMAIN_HERE;  # 🔴 改成客户域名，如：ai.company.com
+    
+    # SSL证书配置
+    ssl_certificate /etc/letsencrypt/live/YOUR_DOMAIN_HERE/fullchain.pem;      # 🔴 改域名
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN_HERE/privkey.pem;    # 🔴 改域名
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers off;
+    
+    # 文件上传大小限制
+    client_max_body_size 10M;
+    
+    # Gzip压缩
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+    
+    # 前端静态文件
+    root /usr/share/nginx/html;
+    index index.html;
+    
+    # 上传文件访问
+    location /uploads/ {
+        alias /app/storage/uploads/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+    
+    # API代理
+    location /api/ {
+        proxy_pass http://backend:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # SSE支持（AI流式输出）
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 600s;
+    }
+    
+    # WebSocket支持
+    location /socket.io/ {
+        proxy_pass http://backend:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # 健康检查
+    location /health {
+        proxy_pass http://backend:4000/health;
+    }
+    
+    # 前端路由（SPA支持）
+    location / {
+        try_files $uri $uri/ /index.html;
+        
+        # index.html不缓存
+        location = /index.html {
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+        }
+        
+        # 其他静态资源缓存
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}

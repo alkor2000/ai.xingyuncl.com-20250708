@@ -146,12 +146,12 @@ class Conversation {
       
       logger.info('获取会话总数成功', { userId, total });
       
-      // 获取会话列表 - 只按优先级和更新时间排序
+      // 获取会话列表 - 修改排序逻辑：先按优先级降序，再按创建时间降序
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT * FROM conversations 
         WHERE user_id = ? 
-        ORDER BY priority DESC, updated_at DESC
+        ORDER BY priority DESC, created_at DESC
         LIMIT ? OFFSET ?
       `;
       

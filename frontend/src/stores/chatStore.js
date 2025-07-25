@@ -162,13 +162,25 @@ const useChatStore = create((set, get) => ({
       const response = await apiClient.post('/chat/conversations', conversationData)
       const newConversation = response.data.data
       
-      // 根据优先级插入到正确的位置
+      // 🔥 修复：根据优先级和创建时间找到正确的插入位置
       const conversations = [...state.conversations]
-      const insertIndex = conversations.findIndex(c => 
-        (c.priority || 0) < (newConversation.priority || 0)
-      )
+      
+      // 找到第一个优先级更低的位置，或者相同优先级但创建时间更早的位置
+      const insertIndex = conversations.findIndex(c => {
+        // 如果当前对话优先级更低，插入到它前面
+        if ((c.priority || 0) < (newConversation.priority || 0)) {
+          return true
+        }
+        // 如果优先级相同，比较创建时间（新的应该在前）
+        if ((c.priority || 0) === (newConversation.priority || 0)) {
+          // 新对话应该在相同优先级的最前面，所以返回true
+          return true
+        }
+        return false
+      })
       
       if (insertIndex === -1) {
+        // 没有找到更低优先级的，添加到末尾
         conversations.push(newConversation)
       } else {
         conversations.splice(insertIndex, 0, newConversation)
@@ -801,14 +813,23 @@ const useChatStore = create((set, get) => ({
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)
       const updatedConversation = response.data.data
       
-      // 更新会话列表，考虑优先级变化后的排序
+      // 🔥 修复：更新会话列表，考虑优先级变化后的排序
       const state = get()
       let conversations = state.conversations.filter(conv => conv.id !== conversationId)
       
-      // 找到正确的插入位置
-      const insertIndex = conversations.findIndex(c => 
-        (c.priority || 0) < (updatedConversation.priority || 0)
-      )
+      // 找到正确的插入位置（与createConversation相同的逻辑）
+      const insertIndex = conversations.findIndex(c => {
+        // 如果当前对话优先级更低，插入到它前面
+        if ((c.priority || 0) < (updatedConversation.priority || 0)) {
+          return true
+        }
+        // 如果优先级相同，保持原有的创建时间顺序
+        if ((c.priority || 0) === (updatedConversation.priority || 0)) {
+          // 比较创建时间，更新的对话应该保持在它原来的相对位置
+          return new Date(c.created_at) < new Date(updatedConversation.created_at)
+        }
+        return false
+      })
       
       if (insertIndex === -1) {
         conversations.push(updatedConversation)
