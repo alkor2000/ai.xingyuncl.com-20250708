@@ -107,6 +107,22 @@ router.put('/settings',
   SystemStatsController.updateSystemSettings
 );
 
+// 邮件设置路由
+router.get('/settings/email',
+  canManageSystem(), // 只有超级管理员可以查看
+  SystemStatsController.getEmailSettings
+);
+
+router.put('/settings/email',
+  canManageSystem(), // 只有超级管理员可以修改
+  SystemStatsController.updateEmailSettings
+);
+
+router.post('/settings/email/test',
+  canManageSystem(), // 只有超级管理员可以测试
+  SystemStatsController.testEmailSend
+);
+
 // 站点Logo上传路由
 router.post('/settings/upload-logo',
   canManageSystem(), // 只有超级管理员可以上传

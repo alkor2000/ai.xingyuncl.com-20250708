@@ -24,12 +24,41 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 邮箱验证码限流配置
+const emailCodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1小时
+  max: 5, // 每小时最多5次发送请求
+  message: {
+    success: false,
+    code: 429,
+    message: '发送验证码过于频繁，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 /**
  * @route POST /api/auth/login
  * @desc 用户登录
  * @access Public
  */
 router.post('/login', authLimiter, AuthController.login);
+
+/**
+ * @route POST /api/auth/send-email-code
+ * @desc 发送邮箱验证码
+ * @access Public
+ */
+router.post('/send-email-code', emailCodeLimiter, AuthController.sendEmailCode);
+
+/**
+ * @route POST /api/auth/login-by-code
+ * @desc 邮箱验证码登录
+ * @access Public
+ */
+router.post('/login-by-code', authLimiter, AuthController.loginByEmailCode);
 
 /**
  * @route POST /api/auth/register

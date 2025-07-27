@@ -4,6 +4,7 @@
 
 const { StatsService } = require('../../services/admin');
 const SystemConfig = require('../../models/SystemConfig');
+const EmailService = require('../../services/emailService');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
@@ -188,6 +189,166 @@ class SystemStatsController {
         error: error.message 
       });
       return ResponseHelper.error(res, error.message || '更新系统设置失败');
+    }
+  }
+
+  /**
+   * 获取邮件设置
+   */
+  static async getEmailSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以查看邮件设置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以查看邮件设置');
+      }
+      
+      // 从数据库获取邮件配置
+      const settings = await SystemConfig.getFormattedSettings();
+      const emailSettings = settings.email || {};
+      
+      // 隐藏密码的部分字符
+      if (emailSettings.smtp_pass) {
+        const passLength = emailSettings.smtp_pass.length;
+        if (passLength > 4) {
+          emailSettings.smtp_pass = emailSettings.smtp_pass.substring(0, 2) + 
+            '*'.repeat(passLength - 4) + 
+            emailSettings.smtp_pass.substring(passLength - 2);
+        } else {
+          emailSettings.smtp_pass = '*'.repeat(passLength);
+        }
+      }
+
+      return ResponseHelper.success(res, emailSettings, '获取邮件设置成功');
+    } catch (error) {
+      logger.error('获取邮件设置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '获取邮件设置失败');
+    }
+  }
+
+  /**
+   * 更新邮件设置
+   */
+  static async updateEmailSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以更新邮件设置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以修改邮件设置');
+      }
+      
+      const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from } = req.body;
+      
+      // 验证必填参数
+      if (!smtp_host || !smtp_port || !smtp_user || !smtp_pass) {
+        return ResponseHelper.validation(res, ['请填写完整的邮件服务器配置']);
+      }
+      
+      // 验证端口号
+      const port = parseInt(smtp_port);
+      if (isNaN(port) || port < 1 || port > 65535) {
+        return ResponseHelper.validation(res, ['端口号必须在1-65535之间']);
+      }
+      
+      // 获取当前设置
+      const currentSettings = await SystemConfig.getFormattedSettings();
+      
+      // 如果密码是掩码格式，保留原密码
+      let finalSmtpPass = smtp_pass;
+      if (smtp_pass.includes('*') && currentSettings.email?.smtp_pass) {
+        // 如果新密码包含*，说明是掩码，保留原密码
+        finalSmtpPass = currentSettings.email.smtp_pass;
+      }
+      
+      // 更新邮件设置
+      currentSettings.email = {
+        smtp_host,
+        smtp_port: port,
+        smtp_user,
+        smtp_pass: finalSmtpPass,
+        smtp_from: smtp_from || 'AI Platform'
+      };
+      
+      // 保存到数据库
+      await SystemConfig.saveFormattedSettings(currentSettings);
+      
+      logger.info('管理员更新邮件设置', { 
+        adminId: req.user.id,
+        smtp_host,
+        smtp_port: port,
+        smtp_user,
+        smtp_from
+      });
+
+      return ResponseHelper.success(res, {
+        smtp_host,
+        smtp_port: port,
+        smtp_user,
+        smtp_from: smtp_from || 'AI Platform'
+      }, '邮件设置更新成功');
+    } catch (error) {
+      logger.error('更新邮件设置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '更新邮件设置失败');
+    }
+  }
+
+  /**
+   * 测试邮件发送
+   */
+  static async testEmailSend(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以测试邮件发送
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以测试邮件发送');
+      }
+      
+      const { test_email } = req.body;
+      
+      // 验证邮箱格式
+      if (!test_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(test_email)) {
+        return ResponseHelper.validation(res, ['请输入有效的测试邮箱地址']);
+      }
+      
+      logger.info('开始测试邮件发送', { 
+        adminId: req.user.id,
+        testEmail: test_email
+      });
+      
+      try {
+        // 发送测试邮件
+        await EmailService.sendTestEmail(test_email);
+        
+        logger.info('测试邮件发送成功', { 
+          adminId: req.user.id,
+          testEmail: test_email
+        });
+        
+        return ResponseHelper.success(res, null, '测试邮件发送成功，请检查收件箱');
+      } catch (emailError) {
+        logger.error('测试邮件发送失败', { 
+          adminId: req.user.id,
+          testEmail: test_email,
+          error: emailError.message
+        });
+        
+        return ResponseHelper.error(res, `邮件发送失败：${emailError.message}`);
+      }
+    } catch (error) {
+      logger.error('测试邮件发送失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '测试邮件发送失败');
     }
   }
 

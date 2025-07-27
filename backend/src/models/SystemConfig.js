@@ -164,7 +164,9 @@ class SystemConfig {
         chat: settings.chat_config || {
           font_family: 'system-ui',
           font_size: 14
-        }
+        },
+        // 添加邮件配置
+        email: settings.email_config || null
       };
 
       // 处理用户配置兼容性
@@ -212,7 +214,8 @@ class SystemConfig {
         chat: {
           font_family: 'system-ui',
           font_size: 14
-        }
+        },
+        email: null
       };
     }
   }
@@ -247,14 +250,41 @@ class SystemConfig {
         site_config: formattedSettings.site,
         user_config: formattedSettings.user,
         ai_config: formattedSettings.ai,
-        chat_config: formattedSettings.chat  // 保存chat配置
+        chat_config: formattedSettings.chat
       };
       
-      // 不再保存credits_config
+      // 保存邮件配置（如果存在）
+      if (formattedSettings.email !== undefined) {
+        settings.email_config = formattedSettings.email;
+      }
       
       return await SystemConfig.updateSettings(settings);
     } catch (error) {
       logger.error('保存格式化配置失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取邮件配置
+   */
+  static async getEmailSettings() {
+    try {
+      return await SystemConfig.getSetting('email_config');
+    } catch (error) {
+      logger.error('获取邮件配置失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 更新邮件配置
+   */
+  static async updateEmailSettings(emailConfig) {
+    try {
+      return await SystemConfig.updateSetting('email_config', emailConfig, 'json');
+    } catch (error) {
+      logger.error('更新邮件配置失败:', error);
       throw error;
     }
   }

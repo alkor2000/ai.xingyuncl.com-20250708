@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Form, Input, Button, Card, message, Typography, Space, Spin } from 'antd'
-import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons'
+import { Form, Input, Button, Card, message, Typography, Space, Spin, Tabs } from 'antd'
+import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
@@ -8,11 +8,15 @@ import LanguageSwitch from '../../components/common/LanguageSwitch'
 import apiClient from '../../utils/api'
 
 const { Title, Text, Paragraph } = Typography
+const { TabPane } = Tabs
 
 const Login = () => {
   const [loading, setLoading] = useState(false)
   const [publicConfig, setPublicConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
+  const [loginType, setLoginType] = useState('password') // password | code
+  const [sendingCode, setSendingCode] = useState(false)
+  const [countdown, setCountdown] = useState(0)
   const { login } = useAuthStore()
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -46,10 +50,21 @@ const Login = () => {
     fetchPublicConfig()
   }, [])
 
-  const handleSubmit = async (values) => {
+  // 倒计时处理
+  useEffect(() => {
+    let timer
+    if (countdown > 0) {
+      timer = setTimeout(() => {
+        setCountdown(countdown - 1)
+      }, 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  // 密码登录处理
+  const handlePasswordLogin = async (values) => {
     try {
       setLoading(true)
-      // 修改为使用account字段
       const loginData = {
         account: values.account,
         password: values.password
@@ -65,12 +80,112 @@ const Login = () => {
     }
   }
 
+  // 发送验证码
+  const handleSendCode = async (email) => {
+    if (!email) {
+      message.warning('请先输入邮箱地址')
+      return
+    }
+
+    // 验证邮箱格式
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      message.warning('请输入有效的邮箱地址')
+      return
+    }
+
+    try {
+      setSendingCode(true)
+      const response = await apiClient.post('/auth/send-email-code', { email })
+      if (response.data.success) {
+        message.success('验证码已发送到您的邮箱')
+        setCountdown(60)
+      }
+    } catch (error) {
+      console.error('发送验证码失败:', error)
+      message.error(error.response?.data?.message || '发送验证码失败')
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
+  // 验证码登录处理
+  const handleCodeLogin = async (values) => {
+    try {
+      setLoading(true)
+      const response = await apiClient.post('/auth/login-by-code', {
+        email: values.email,
+        code: values.code
+      })
+      
+      if (response.data.success) {
+        const { data } = response.data
+        
+        // 使用authStore的set方法来更新状态
+        const authStore = useAuthStore.getState()
+        
+        // 计算Token过期时间
+        let tokenExpiresAt = null
+        if (data.expiresIn) {
+          const hours = parseInt(data.expiresIn.replace('h', '')) || 12
+          tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+        }
+        
+        // 通过setState方法更新状态
+        useAuthStore.setState({
+          user: data.user,
+          permissions: data.permissions || [],
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          tokenExpiresAt: tokenExpiresAt,
+          isAuthenticated: true
+        })
+        
+        // 设置默认请求头
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${data.accessToken}`
+        
+        // 清理之前用户的聊天数据
+        if (window.useChatStore) {
+          const chatStore = window.useChatStore.getState()
+          if (chatStore && chatStore.reset) {
+            console.log('🧹 清除之前的聊天数据...')
+            chatStore.reset()
+          }
+        }
+        
+        console.log('✅ 用户登录成功:', {
+          user: data.user.email,
+          role: data.user.role,
+          permissions: data.permissions?.length || 0,
+          tokenExpires: tokenExpiresAt?.toLocaleString()
+        })
+        
+        message.success(t('auth.login.success'))
+        navigate('/')
+      }
+    } catch (error) {
+      console.error('验证码登录失败:', error)
+      message.error(error.response?.data?.message || '登录失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 验证账号输入（可以是邮箱、手机号或用户名）
   const validateAccount = (_, value) => {
     if (!value) {
       return Promise.reject(new Error(t('auth.login.account.required')))
     }
-    // 这里不需要验证具体格式，让后端处理
+    return Promise.resolve()
+  }
+
+  // 验证邮箱
+  const validateEmail = (_, value) => {
+    if (!value) {
+      return Promise.reject(new Error('请输入邮箱地址'))
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      return Promise.reject(new Error('邮箱格式不正确'))
+    }
     return Promise.resolve()
   }
 
@@ -137,9 +252,9 @@ const Login = () => {
             style={{ 
               color: '#1890ff', 
               marginBottom: '8px',
-              fontSize: '22px',  // 自定义字体大小
-              lineHeight: '1.4',  // 调整行高
-              fontWeight: 600  // 调整字重
+              fontSize: '22px',
+              lineHeight: '1.4',
+              fontWeight: 600
             }}
           >
             {siteName}
@@ -149,46 +264,112 @@ const Login = () => {
           </Paragraph>
         </div>
 
-        <Form
-          name="login"
-          onFinish={handleSubmit}
-          autoComplete="off"
-          size="large"
-        >
-          <Form.Item
-            name="account"
-            rules={[{ validator: validateAccount }]}
-          >
-            <Input
-              prefix={<UserOutlined />}
-              placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
-              autoComplete="username"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: t('auth.login.password.required') }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder={t('auth.login.password')}
-              autoComplete="current-password"
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: '16px' }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              block
-              icon={<LoginOutlined />}
+        <Tabs activeKey={loginType} onChange={setLoginType} centered>
+          <TabPane tab="密码登录" key="password">
+            <Form
+              name="passwordLogin"
+              onFinish={handlePasswordLogin}
+              autoComplete="off"
+              size="large"
             >
-              {t('auth.login.button')}
-            </Button>
-          </Form.Item>
-        </Form>
+              <Form.Item
+                name="account"
+                rules={[{ validator: validateAccount }]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
+                  autoComplete="username"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="password"
+                rules={[{ required: true, message: t('auth.login.password.required') }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder={t('auth.login.password')}
+                  autoComplete="current-password"
+                />
+              </Form.Item>
+
+              <Form.Item style={{ marginBottom: '16px' }}>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loading}
+                  block
+                  icon={<LoginOutlined />}
+                >
+                  {t('auth.login.button')}
+                </Button>
+              </Form.Item>
+            </Form>
+          </TabPane>
+
+          <TabPane tab="邮箱验证码登录" key="code">
+            <Form
+              name="codeLogin"
+              onFinish={handleCodeLogin}
+              autoComplete="off"
+              size="large"
+            >
+              <Form.Item
+                name="email"
+                rules={[{ validator: validateEmail }]}
+              >
+                <Input
+                  prefix={<MailOutlined />}
+                  placeholder="请输入邮箱地址"
+                  autoComplete="email"
+                />
+              </Form.Item>
+
+              <Form.Item>
+                <Space style={{ width: '100%' }} size={8}>
+                  <Form.Item
+                    name="code"
+                    noStyle
+                    rules={[
+                      { required: true, message: '请输入验证码' },
+                      { pattern: /^\d{6}$/, message: '验证码为6位数字' }
+                    ]}
+                  >
+                    <Input
+                      prefix={<SafetyOutlined />}
+                      placeholder="请输入验证码"
+                      style={{ flex: 1 }}
+                    />
+                  </Form.Item>
+                  <Form.Item noStyle dependencies={['email']}>
+                    {({ getFieldValue }) => (
+                      <Button
+                        onClick={() => handleSendCode(getFieldValue('email'))}
+                        loading={sendingCode}
+                        disabled={countdown > 0}
+                      >
+                        {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                      </Button>
+                    )}
+                  </Form.Item>
+                </Space>
+              </Form.Item>
+
+              <Form.Item style={{ marginBottom: '16px' }}>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loading}
+                  block
+                  icon={<LoginOutlined />}
+                >
+                  登录
+                </Button>
+              </Form.Item>
+            </Form>
+          </TabPane>
+        </Tabs>
 
         {/* 登录提示 */}
         <div style={{ 
@@ -200,18 +381,33 @@ const Login = () => {
           color: '#666'
         }}>
           <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <div>
-              <MailOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.email', '支持邮箱登录')}
-            </div>
-            <div>
-              <PhoneOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.phone', '支持手机号登录')}
-            </div>
-            <div>
-              <UserOutlined style={{ marginRight: '6px' }} />
-              {t('auth.login.hint.username', '支持用户名登录')}
-            </div>
+            {loginType === 'password' ? (
+              <>
+                <div>
+                  <MailOutlined style={{ marginRight: '6px' }} />
+                  {t('auth.login.hint.email', '支持邮箱登录')}
+                </div>
+                <div>
+                  <PhoneOutlined style={{ marginRight: '6px' }} />
+                  {t('auth.login.hint.phone', '支持手机号登录')}
+                </div>
+                <div>
+                  <UserOutlined style={{ marginRight: '6px' }} />
+                  {t('auth.login.hint.username', '支持用户名登录')}
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <SafetyOutlined style={{ marginRight: '6px' }} />
+                  验证码5分钟内有效
+                </div>
+                <div>
+                  <MailOutlined style={{ marginRight: '6px' }} />
+                  请确保邮箱已注册
+                </div>
+              </>
+            )}
           </Space>
         </div>
 

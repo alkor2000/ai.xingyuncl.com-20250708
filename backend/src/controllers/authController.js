@@ -4,6 +4,7 @@
 
 const User = require('../models/User');
 const SystemConfig = require('../models/SystemConfig');
+const EmailService = require('../services/emailService');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const ResponseHelper = require('../utils/response');
@@ -146,6 +147,232 @@ class AuthController {
 
     } catch (error) {
       logger.error('登录处理失败:', error);
+      return ResponseHelper.error(res, '登录失败');
+    }
+  }
+
+  /**
+   * 发送邮箱验证码
+   * POST /api/auth/send-email-code
+   */
+  static async sendEmailCode(req, res) {
+    try {
+      const { email } = req.body;
+
+      // 验证邮箱格式
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return ResponseHelper.validation(res, ['请输入有效的邮箱地址']);
+      }
+
+      logger.info('请求发送验证码', { email });
+
+      // 检查邮箱是否存在
+      const user = await User.findByEmail(email.toLowerCase());
+      if (!user) {
+        logger.warn('发送验证码失败：邮箱未注册', { email });
+        return ResponseHelper.validation(res, ['该邮箱未注册']);
+      }
+
+      // 检查用户状态
+      if (user.status !== 'active') {
+        logger.warn('发送验证码失败：用户状态异常', { email, status: user.status });
+        return ResponseHelper.forbidden(res, '账户已被禁用');
+      }
+
+      // 检查60秒内是否已发送
+      const sentKey = `email_sent:${email}`;
+      if (redisConnection.isConnected) {
+        const hasSent = await redisConnection.exists(sentKey);
+        if (hasSent) {
+          return ResponseHelper.validation(res, ['请等待60秒后再试']);
+        }
+      }
+
+      // 生成验证码
+      const code = EmailService.generateVerificationCode();
+      
+      // 存储验证码到Redis（5分钟有效）
+      if (redisConnection.isConnected) {
+        const codeKey = `email_code:${email}`;
+        await redisConnection.set(codeKey, code, 300); // 5分钟
+        await redisConnection.set(sentKey, '1', 60); // 60秒标记
+      } else {
+        logger.error('Redis未连接，无法存储验证码');
+        return ResponseHelper.error(res, '服务暂时不可用，请稍后再试');
+      }
+
+      // 发送邮件
+      try {
+        await EmailService.sendVerificationCode(email, code);
+        logger.info('验证码发送成功', { email });
+        return ResponseHelper.success(res, null, '验证码已发送到您的邮箱');
+      } catch (emailError) {
+        logger.error('发送邮件失败:', emailError);
+        // 清除已存储的验证码
+        if (redisConnection.isConnected) {
+          await redisConnection.del(`email_code:${email}`);
+          await redisConnection.del(sentKey);
+        }
+        return ResponseHelper.error(res, '邮件发送失败，请检查邮件服务配置');
+      }
+
+    } catch (error) {
+      logger.error('发送验证码失败:', error);
+      return ResponseHelper.error(res, '发送验证码失败');
+    }
+  }
+
+  /**
+   * 邮箱验证码登录
+   * POST /api/auth/login-by-code
+   */
+  static async loginByEmailCode(req, res) {
+    try {
+      const { email, code } = req.body;
+
+      // 验证输入
+      if (!email || !code) {
+        return ResponseHelper.validation(res, ['邮箱和验证码不能为空']);
+      }
+
+      // 验证邮箱格式
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return ResponseHelper.validation(res, ['邮箱格式不正确']);
+      }
+
+      // 验证验证码格式
+      if (!/^\d{6}$/.test(code)) {
+        return ResponseHelper.validation(res, ['验证码格式不正确']);
+      }
+
+      logger.info('验证码登录尝试', { email });
+
+      // 验证验证码
+      if (!redisConnection.isConnected) {
+        logger.error('Redis未连接，无法验证验证码');
+        return ResponseHelper.error(res, '服务暂时不可用，请稍后再试');
+      }
+
+      const codeKey = `email_code:${email}`;
+      const storedCode = await redisConnection.get(codeKey);
+
+      // 添加调试日志
+      logger.info("验证码比较", { 
+        email, 
+        inputCode: code, 
+        inputCodeType: typeof code,
+        storedCode: storedCode,
+        storedCodeType: typeof storedCode,
+        isEqual: storedCode === code
+      });
+      
+      if (!storedCode) {
+        logger.warn('验证码登录失败：验证码不存在或已过期', { email });
+        return ResponseHelper.validation(res, ['验证码已过期，请重新获取']);
+      }
+
+      if (String(storedCode) !== String(code)) {
+        logger.warn('验证码登录失败：验证码错误', { email });
+        return ResponseHelper.validation(res, ['验证码错误']);
+      }
+
+      // 删除已使用的验证码
+      await redisConnection.del(codeKey);
+
+      // 查找用户
+      const user = await User.findByEmail(email.toLowerCase());
+      if (!user) {
+        logger.warn('验证码登录失败：用户不存在', { email });
+        return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      // 检查用户状态
+      if (user.status !== 'active') {
+        logger.warn('验证码登录失败：用户状态异常', { 
+          email, 
+          userId: user.id, 
+          status: user.status 
+        });
+        return ResponseHelper.unauthorized(res, '账户已被禁用');
+      }
+
+      // 检查账号有效期
+      if (user.isAccountExpired()) {
+        const remainingDays = user.getAccountRemainingDays();
+        logger.warn('验证码登录失败：账号已过期', { 
+          email, 
+          userId: user.id, 
+          expireAt: user.expire_at,
+          expiredDays: Math.abs(remainingDays)
+        });
+        
+        let expireMessage = '账号已过期';
+        if (remainingDays !== null) {
+          expireMessage = `账号已过期${Math.abs(remainingDays)}天，请联系管理员续期`;
+        }
+        
+        return ResponseHelper.unauthorized(res, expireMessage);
+      }
+
+      // 获取用户权限
+      const permissions = await user.getPermissions();
+
+      // 生成JWT令牌（与密码登录相同）
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        type: 'access'
+      };
+      
+      const jti = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      tokenPayload.jti = jti;
+
+      const accessToken = jwt.sign(
+        tokenPayload,
+        config.auth.jwt.accessSecret,
+        {
+          expiresIn: config.auth.jwt.accessExpiresIn,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      const refreshToken = jwt.sign(
+        {
+          userId: user.id,
+          type: 'refresh',
+          jti: `refresh-${jti}`
+        },
+        config.auth.jwt.refreshSecret,
+        {
+          expiresIn: config.auth.jwt.refreshExpiresIn,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      // 更新用户最后登录时间
+      await user.updateLastLogin();
+
+      logger.info('验证码登录成功', { 
+        email, 
+        userId: user.id, 
+        role: user.role,
+        permissions: permissions.length
+      });
+
+      return ResponseHelper.success(res, {
+        user: user.toJSON(),
+        permissions,
+        accessToken,
+        refreshToken,
+        expiresIn: config.auth.jwt.accessExpiresIn
+      }, '登录成功');
+
+    } catch (error) {
+      logger.error('验证码登录失败:', error);
       return ResponseHelper.error(res, '登录失败');
     }
   }

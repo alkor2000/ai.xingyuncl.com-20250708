@@ -14,7 +14,8 @@ import {
   FileImageOutlined,
   LockOutlined,
   GlobalOutlined,
-  HeartOutlined
+  HeartOutlined,
+  MailOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -31,7 +32,8 @@ import {
   SystemModuleFormModal,
   BasicSettings,
   CustomHomepage,
-  SystemHealthMonitor
+  SystemHealthMonitor,
+  EmailSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -510,6 +512,21 @@ const Settings = () => {
             disabled={!isSuperAdmin}
           />
         </TabPane>
+
+        {/* 邮件设置（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <MailOutlined />
+                邮件设置
+              </span>
+            } 
+            key="email"
+          >
+            <EmailSettings disabled={!isSuperAdmin} />
+          </TabPane>
+        )}
 
         {/* 自定义首页（只有超级管理员可见） */}
         {isSuperAdmin && (
