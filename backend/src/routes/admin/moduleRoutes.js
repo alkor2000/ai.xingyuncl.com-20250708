@@ -1,7 +1,6 @@
 /**
  * 系统模块路由
  */
-
 const express = require('express');
 const router = express.Router();
 const ModuleController = require('../../controllers/admin/ModuleController');
@@ -9,6 +8,9 @@ const { requireSuperAdmin } = require('../../middleware/permissions/superAdminMi
 
 // 获取用户可访问的模块（所有登录用户都可以访问）
 router.get('/user-modules', ModuleController.getUserModules);
+
+// 获取模块的认证访问信息（所有登录用户都可以访问，但会检查模块权限）
+router.get('/:id/auth-url', ModuleController.getModuleAuthUrl);
 
 // 以下路由需要超级管理员权限
 router.use(requireSuperAdmin());

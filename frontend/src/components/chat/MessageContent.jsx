@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Typography, Image, Spin, Button, Space, message as antMessage } from 'antd'
 import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import CodeBlock from './CodeBlock'
@@ -65,6 +66,28 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     fontFamily: chatFontFamily,
     fontSize: `${chatFontSize}px`,
     lineHeight: chatFontSize > 16 ? '1.6' : '1.5'
+  }
+  
+  // 🔥 用户消息样式 - 添加 white-space: pre-wrap 以保留格式
+  const userMessageStyle = {
+    ...messageTextStyle,
+    whiteSpace: 'pre-wrap',  // 保留换行和空格
+    wordBreak: 'break-word'  // 长单词换行
+  }
+  
+  // 🔥 新增：处理用户消息格式，将换行符转换为HTML结构
+  const renderUserMessage = (content) => {
+    if (!content) return null
+    
+    // 将内容按换行符分割
+    const lines = content.split('\n')
+    
+    return lines.map((line, index) => (
+      <React.Fragment key={index}>
+        {line}
+        {index < lines.length - 1 && <br />}
+      </React.Fragment>
+    ))
   }
   
   // 复制消息内容
@@ -164,6 +187,19 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     h4: ({ children }) => <h4 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.1}px` }}>{children}</h4>,
     h5: ({ children }) => <h5 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h5>,
     h6: ({ children }) => <h6 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h6>,
+    // 🔥 新增：表格相关组件样式
+    table: ({ children }) => (
+      <div className="markdown-table-wrapper">
+        <table className="markdown-table">
+          {children}
+        </table>
+      </div>
+    ),
+    thead: ({ children }) => <thead>{children}</thead>,
+    tbody: ({ children }) => <tbody>{children}</tbody>,
+    tr: ({ children }) => <tr>{children}</tr>,
+    th: ({ children }) => <th style={messageTextStyle}>{children}</th>,
+    td: ({ children }) => <td style={messageTextStyle}>{children}</td>,
   }
   
   return (
@@ -192,12 +228,18 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       {/* 消息文本内容 */}
       <div className="message-text" style={messageTextStyle}>
         {isUser ? (
-          <Text style={messageTextStyle}>{message.content}</Text>
+          // 🔥 修复：使用实际的HTML结构渲染用户消息，支持手动选择复制格式
+          <div style={userMessageStyle}>
+            {renderUserMessage(message.content)}
+          </div>
         ) : (
           <>
             {isStreaming && message.streaming ? (
               <div className="streaming-content">
-                <ReactMarkdown components={markdownComponents}>
+                <ReactMarkdown 
+                  components={markdownComponents}
+                  remarkPlugins={[remarkGfm]}
+                >
                   {message.content || ''}
                 </ReactMarkdown>
                 <span className="streaming-cursor">
@@ -205,7 +247,10 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
                 </span>
               </div>
             ) : (
-              <ReactMarkdown components={markdownComponents}>
+              <ReactMarkdown 
+                components={markdownComponents}
+                remarkPlugins={[remarkGfm]}
+              >
                 {message.content}
               </ReactMarkdown>
             )}
@@ -213,11 +258,11 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
         )}
       </div>
       
-      {/* 消息底部信息 - 只在非流式状态下显示 */}
+      {/* 消息底部信息 - 用户消息和AI消息都显示，但内容不同 */}
       {!isStreaming && !message.streaming && (
         <div className="message-footer">
           <Space size="middle" className="message-info">
-            {/* 时间 */}
+            {/* 时间 - 所有消息都显示 */}
             <span className="info-item">
               <ClockCircleOutlined />
               <Text type="secondary" className="info-text">
@@ -225,8 +270,8 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
               </Text>
             </span>
             
-            {/* Token数量 - 只显示AI消息的 */}
-            {isAssistant && message.tokens > 0 && (
+            {/* Token数量 - 不限制角色，只要有token就显示 */}
+            {message.tokens > 0 && (
               <span className="info-item">
                 <ThunderboltOutlined />
                 <Text type="secondary" className="info-text">
@@ -246,28 +291,29 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
             )}
           </Space>
           
-          {/* 操作按钮 - 只显示AI消息的 */}
-          {isAssistant && (
-            <Space size="small" className="message-actions">
+          {/* 操作按钮 - 根据消息类型显示不同按钮 */}
+          <Space size="small" className="message-actions">
+            {/* 复制按钮 - 所有消息都有 */}
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={handleCopy}
+              title="复制内容"
+            />
+            
+            {/* 删除按钮 - 只有AI消息才有 */}
+            {isAssistant && onDeleteMessage && (
               <Button
                 type="text"
                 size="small"
-                icon={<CopyOutlined />}
-                onClick={handleCopy}
-                title="复制内容"
+                icon={<DeleteOutlined />}
+                onClick={handleDelete}
+                loading={deleting}
+                title="删除对话"
               />
-              {onDeleteMessage && (
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={handleDelete}
-                  loading={deleting}
-                  title="删除对话"
-                />
-              )}
-            </Space>
-          )}
+            )}
+          </Space>
         </div>
       )}
     </div>

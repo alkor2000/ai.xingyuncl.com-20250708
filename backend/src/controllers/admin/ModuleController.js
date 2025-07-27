@@ -4,6 +4,8 @@
 
 const Module = require('../../models/Module');
 const ResponseHelper = require('../../utils/response');
+const JWTService = require('../../services/jwtService');
+const logger = require('../../utils/logger');
 
 class ModuleController {
   /**
@@ -63,6 +65,79 @@ class ModuleController {
       return ResponseHelper.error(res, '获取用户模块失败');
     }
   }
+  
+  /**
+   * 获取模块的认证访问URL
+   */
+  static async getModuleAuthUrl(req, res) {
+    try {
+      const { id: moduleId } = req.params;
+      const { id: userId, group_id: userGroupId } = req.user;
+      
+      // 获取模块信息
+      const module = await Module.findById(moduleId);
+      if (!module) {
+        return ResponseHelper.notFound(res, '模块不存在');
+      }
+      
+      // 检查用户是否有权限访问该模块
+      const accessibleModules = await Module.findAccessibleModules(userId, userGroupId);
+      const hasAccess = accessibleModules.some(m => m.id === parseInt(moduleId));
+      
+      if (!hasAccess) {
+        return ResponseHelper.forbidden(res, '您没有权限访问此模块');
+      }
+      
+      // 如果模块不需要认证，直接返回原始URL
+      if (module.auth_mode === 'none' || !module.auth_mode) {
+        return ResponseHelper.success(res, {
+          url: module.module_url,
+          method: 'GET',
+          requiresAuth: false
+        });
+      }
+      
+      // 如果是JWT认证
+      if (module.auth_mode === 'jwt' && module.config && module.config.auth) {
+        try {
+          // 生成JWT Token
+          const token = JWTService.generateModuleToken(req.user, module.config.auth);
+          
+          // 构建认证URL
+          const authInfo = JWTService.buildAuthenticatedUrl(
+            module.module_url,
+            token,
+            module.config.auth
+          );
+          
+          logger.info('生成模块认证URL', {
+            userId,
+            moduleId,
+            moduleName: module.name,
+            authMode: module.auth_mode,
+            tokenMethod: module.config.auth.tokenMethod
+          });
+          
+          return ResponseHelper.success(res, {
+            ...authInfo,
+            requiresAuth: true,
+            authMode: module.auth_mode,
+            openMode: module.open_mode
+          });
+        } catch (error) {
+          logger.error('生成JWT认证失败:', error);
+          return ResponseHelper.error(res, '生成认证信息失败');
+        }
+      }
+      
+      // 其他认证方式暂不支持
+      return ResponseHelper.error(res, '不支持的认证方式');
+      
+    } catch (error) {
+      console.error('获取模块认证URL失败:', error);
+      return ResponseHelper.error(res, '获取模块认证URL失败');
+    }
+  }
 
   /**
    * 创建模块
@@ -78,7 +153,9 @@ class ModuleController {
         menu_icon,
         is_active,
         sort_order,
-        allowed_groups
+        allowed_groups,
+        auth_mode,
+        config
       } = req.body;
 
       // 验证必填字段
@@ -108,7 +185,9 @@ class ModuleController {
         menu_icon,
         is_active: is_active !== undefined ? is_active : 1,
         sort_order: sort_order || 0,
-        allowed_groups
+        allowed_groups,
+        auth_mode: auth_mode || 'none',
+        config
       });
 
       if (moduleId) {

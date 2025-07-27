@@ -1,9 +1,10 @@
 /**
- * 系统模块模型
+ * 系统模块模型 - 支持JWT认证配置
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
+const crypto = require('crypto');
 
 class Module {
   /**
@@ -12,12 +13,21 @@ class Module {
   static async findAll() {
     const query = `
       SELECT id, name, display_name, description, module_url, open_mode, 
-             menu_icon, is_active, sort_order, allowed_groups, created_at, updated_at
+             menu_icon, is_active, sort_order, allowed_groups, auth_mode, 
+             config, created_at, updated_at
       FROM system_modules 
       ORDER BY sort_order ASC, id ASC
     `;
     const result = await dbConnection.query(query);
-    return result.rows;
+    
+    // 解析JSON字段并解密配置
+    const modules = result.rows.map(module => ({
+      ...module,
+      allowed_groups: Module.parseAllowedGroups(module.allowed_groups),
+      config: Module.decryptConfig(module.config)
+    }));
+    
+    return modules;
   }
 
   /**
@@ -26,7 +36,14 @@ class Module {
   static async findById(id) {
     const query = `SELECT * FROM system_modules WHERE id = ?`;
     const result = await dbConnection.query(query, [id]);
-    return result.rows[0];
+    const module = result.rows[0];
+    
+    if (module) {
+      module.allowed_groups = Module.parseAllowedGroups(module.allowed_groups);
+      module.config = Module.decryptConfig(module.config);
+    }
+    
+    return module;
   }
 
   /**
@@ -35,7 +52,14 @@ class Module {
   static async findByName(name) {
     const query = `SELECT * FROM system_modules WHERE name = ?`;
     const result = await dbConnection.query(query, [name]);
-    return result.rows[0];
+    const module = result.rows[0];
+    
+    if (module) {
+      module.allowed_groups = Module.parseAllowedGroups(module.allowed_groups);
+      module.config = Module.decryptConfig(module.config);
+    }
+    
+    return module;
   }
 
   /**
@@ -49,7 +73,7 @@ class Module {
     // 使用CAST AS JSON来确保参数类型正确
     const query = `
       SELECT id, name, display_name, description, module_url, open_mode, 
-             menu_icon, sort_order, is_active, allowed_groups
+             menu_icon, sort_order, is_active, allowed_groups, auth_mode, config
       FROM system_modules 
       WHERE is_active = 1 
         AND (
@@ -61,12 +85,16 @@ class Module {
     
     const result = await dbConnection.query(query, [userGroupId]);
     
-    logger.info(`查询到 ${result.rows.length} 个可访问模块`);
-    result.rows.forEach(module => {
-      logger.info(`模块: ${module.name}, allowed_groups: ${module.allowed_groups}, is_active: ${module.is_active}`);
-    });
+    // 解析JSON字段并解密配置
+    const modules = result.rows.map(module => ({
+      ...module,
+      allowed_groups: Module.parseAllowedGroups(module.allowed_groups),
+      config: Module.decryptConfig(module.config)
+    }));
     
-    return result.rows;
+    logger.info(`查询到 ${modules.length} 个可访问模块`);
+    
+    return modules;
   }
 
   /**
@@ -82,7 +110,9 @@ class Module {
       menu_icon = 'AppstoreOutlined',
       is_active = 1,
       sort_order = 0,
-      allowed_groups = null
+      allowed_groups = null,
+      auth_mode = 'none',
+      config = null
     } = moduleData;
 
     // 构建allowed_groups的JSON值
@@ -91,12 +121,18 @@ class Module {
       // 确保是JSON格式
       allowedGroupsValue = JSON.stringify(allowed_groups);
     }
+    
+    // 加密并构建config的JSON值
+    let configValue = null;
+    if (config && typeof config === 'object') {
+      configValue = Module.encryptConfig(config);
+    }
 
     const query = `
       INSERT INTO system_modules 
       (name, display_name, description, module_url, open_mode, menu_icon, 
-       is_active, sort_order, allowed_groups, proxy_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       is_active, sort_order, allowed_groups, proxy_path, auth_mode, config)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const result = await dbConnection.query(query, [
@@ -109,7 +145,9 @@ class Module {
       is_active,
       sort_order,
       allowedGroupsValue,
-      `/${name}` // 简单的proxy_path生成
+      `/${name}`, // 简单的proxy_path生成
+      auth_mode,
+      configValue
     ]);
 
     // 修复：使用result.rows.insertId而不是result.insertId
@@ -122,7 +160,8 @@ class Module {
   static async update(id, updateData) {
     const allowedFields = [
       'display_name', 'description', 'module_url', 'open_mode',
-      'menu_icon', 'is_active', 'sort_order', 'allowed_groups'
+      'menu_icon', 'is_active', 'sort_order', 'allowed_groups',
+      'auth_mode', 'config'
     ];
 
     const fields = [];
@@ -139,6 +178,13 @@ class Module {
           } else if (Array.isArray(updateData[field])) {
             // 确保是JSON格式
             values.push(JSON.stringify(updateData[field]));
+          } else {
+            values.push(updateData[field]);
+          }
+        } else if (field === 'config') {
+          // 加密config
+          if (updateData[field] && typeof updateData[field] === 'object') {
+            values.push(Module.encryptConfig(updateData[field]));
           } else {
             values.push(updateData[field]);
           }
@@ -199,6 +245,65 @@ class Module {
     } catch (e) {
       console.error('解析allowed_groups失败:', allowedGroups, e);
       return [];
+    }
+  }
+  
+  /**
+   * 加密配置信息
+   * 使用简单的加密方式，生产环境应使用更安全的加密方法
+   */
+  static encryptConfig(config) {
+    if (!config || typeof config !== 'object') return null;
+    
+    // 深拷贝配置对象
+    const configCopy = JSON.parse(JSON.stringify(config));
+    
+    // 加密敏感字段（如JWT密钥）
+    if (configCopy.auth && configCopy.auth.secret) {
+      const algorithm = 'aes-256-cbc';
+      const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
+      const iv = crypto.randomBytes(16);
+      
+      const cipher = crypto.createCipheriv(algorithm, key, iv);
+      let encrypted = cipher.update(configCopy.auth.secret, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      
+      configCopy.auth.secret = {
+        encrypted: true,
+        data: encrypted,
+        iv: iv.toString('hex')
+      };
+    }
+    
+    return JSON.stringify(configCopy);
+  }
+  
+  /**
+   * 解密配置信息
+   */
+  static decryptConfig(configStr) {
+    if (!configStr) return null;
+    
+    try {
+      const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr;
+      
+      // 解密敏感字段
+      if (config.auth && config.auth.secret && config.auth.secret.encrypted) {
+        const algorithm = 'aes-256-cbc';
+        const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
+        const iv = Buffer.from(config.auth.secret.iv, 'hex');
+        
+        const decipher = crypto.createDecipheriv(algorithm, key, iv);
+        let decrypted = decipher.update(config.auth.secret.data, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        
+        config.auth.secret = decrypted;
+      }
+      
+      return config;
+    } catch (e) {
+      console.error('解密config失败:', e);
+      return null;
     }
   }
 }
