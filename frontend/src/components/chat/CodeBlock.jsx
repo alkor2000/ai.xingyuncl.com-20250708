@@ -8,11 +8,17 @@ const CodeBlock = ({ children, className = '', ...props }) => {
   const [copied, setCopied] = useState(false)
   
   const language = className.replace(/language-/, '') || 'text'
-  const code = String(children).replace(/\n$/, '')
+  
+  // 🔥 修复：不在组件初始化时固定code值，而是创建一个获取当前代码的函数
+  const getCurrentCode = () => {
+    return String(children).replace(/\n$/, '')
+  }
   
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code)
+      // 🔥 修复：复制时获取最新的children内容
+      const currentCode = getCurrentCode()
+      await navigator.clipboard.writeText(currentCode)
       setCopied(true)
       message.success('代码已复制到剪贴板')
       setTimeout(() => setCopied(false), 2000)
@@ -127,7 +133,8 @@ const CodeBlock = ({ children, className = '', ...props }) => {
           }}
           {...props}
         >
-          {code}
+          {/* 🔥 修复：显示时也使用实时获取的代码内容 */}
+          {getCurrentCode()}
         </SyntaxHighlighter>
       </div>
     </div>

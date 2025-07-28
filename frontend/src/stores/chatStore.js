@@ -517,7 +517,7 @@ const useChatStore = create((set, get) => ({
     try {
       let realUserMessage = null
       let realAiMessageId = null
-      let fullContent = ''
+      // 🔥 关键修复：不再使用本地累加，直接使用后端的fullContent
       
       // 使用流式POST请求 - 只发送file_id给后端
       await apiClient.postStream(
@@ -555,8 +555,8 @@ const useChatStore = create((set, get) => ({
           },
           
           onMessage: (data) => {
-            // 累加内容
-            fullContent += data.content || ''
+            // 🔥 关键修复：直接使用后端发送的完整内容
+            const currentFullContent = data.fullContent || ''
             
             // 🔥 检查当前状态和对话ID
             const currentState = get()
@@ -569,10 +569,10 @@ const useChatStore = create((set, get) => ({
             // 🔥 如果是当前对话，更新UI
             if (currentState.currentConversationId === conversationId) {
               set(state => ({
-                streamingContent: fullContent,
+                streamingContent: currentFullContent,
                 messages: state.messages.map(msg => 
                   msg.id === realAiMessageId
-                    ? { ...msg, content: fullContent, streaming: true, model_name: modelName } // 🔥 保留model_name
+                    ? { ...msg, content: currentFullContent, streaming: true, model_name: modelName } // 🔥 使用fullContent
                     : msg
                 )
               }))
@@ -581,7 +581,7 @@ const useChatStore = create((set, get) => ({
               const bgState = currentState.conversationStates.get(conversationId) || { messages: [] }
               const updatedMessages = bgState.messages.map(msg => 
                 msg.id === realAiMessageId
-                  ? { ...msg, content: fullContent, streaming: true, model_name: modelName } // 🔥 保留model_name
+                  ? { ...msg, content: currentFullContent, streaming: true, model_name: modelName } // 🔥 使用fullContent
                   : msg
               )
               
@@ -589,7 +589,7 @@ const useChatStore = create((set, get) => ({
                 messages: updatedMessages,
                 isStreaming: true,
                 streamingMessageId: realAiMessageId,
-                streamingContent: fullContent
+                streamingContent: currentFullContent
               })
             }
           },
@@ -598,7 +598,7 @@ const useChatStore = create((set, get) => ({
             console.log('流式完成:', data)
             
             const currentState = get()
-            const finalContent = fullContent || data.content || ''
+            const finalContent = data.content || ''
             
             // 🔥 修复：只在用户主动停止时添加标记
             const wasUserStopped = currentState.userStoppedStreaming && currentState.currentConversationId === conversationId
