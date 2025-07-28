@@ -61,6 +61,13 @@ router.post('/send-email-code', emailCodeLimiter, AuthController.sendEmailCode);
 router.post('/login-by-code', authLimiter, AuthController.loginByEmailCode);
 
 /**
+ * @route POST /api/auth/login-by-email-password
+ * @desc 邮箱+密码+验证码登录（强制验证模式）
+ * @access Public
+ */
+router.post('/login-by-email-password', authLimiter, AuthController.loginByEmailPassword);
+
+/**
  * @route POST /api/auth/register
  * @desc 用户注册
  * @access Public

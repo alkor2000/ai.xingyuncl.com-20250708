@@ -17,7 +17,9 @@ import {
   Tag,
   Alert,
   Upload,
-  message
+  message,
+  Radio,
+  Tooltip
 } from 'antd'
 import {
   SaveOutlined,
@@ -27,7 +29,12 @@ import {
   UploadOutlined,
   LoadingOutlined,
   PlusOutlined,
-  FontSizeOutlined
+  FontSizeOutlined,
+  LoginOutlined,
+  MailOutlined,
+  SafetyOutlined,
+  ClockCircleOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
@@ -191,7 +198,7 @@ const BasicSettings = ({
             </Card>
 
             {/* 用户设置 */}
-            <Card title={t('admin.settings.user.title')} size="small">
+            <Card title={t('admin.settings.user.title')} size="small" style={{ marginBottom: 16 }}>
               <Form.Item 
                 name={['user', 'allow_register']} 
                 label={t('admin.settings.user.allowRegister')} 
@@ -229,6 +236,93 @@ const BasicSettings = ({
                   disabled={disabled}
                 />
               </Form.Item>
+            </Card>
+
+            {/* 登录方式设置 - 新增 */}
+            <Card 
+              title={
+                <Space>
+                  <LoginOutlined />
+                  <span>登录方式设置</span>
+                </Space>
+              }
+              size="small"
+            >
+              <Form.Item 
+                name={['login', 'mode']} 
+                label="登录模式"
+                tooltip="选择系统允许的登录方式"
+                initialValue="standard"
+              >
+                <Radio.Group disabled={disabled}>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Radio value="standard">
+                      <Space>
+                        <span style={{ fontWeight: 'bold' }}>标准模式</span>
+                        <Tag color="blue">推荐</Tag>
+                      </Space>
+                      <div style={{ marginLeft: 24, marginTop: 4, color: '#666', fontSize: 12 }}>
+                        <div>• 支持用户名/邮箱/手机号 + 密码登录</div>
+                        <div>• 支持邮箱 + 验证码登录</div>
+                        <div>• 灵活便捷，适合大多数场景</div>
+                      </div>
+                    </Radio>
+                    
+                    <Radio value="email_verify_required" style={{ marginTop: 16 }}>
+                      <Space>
+                        <span style={{ fontWeight: 'bold' }}>强制邮箱验证模式</span>
+                        <Tag color="orange">高安全</Tag>
+                      </Space>
+                      <div style={{ marginLeft: 24, marginTop: 4, color: '#666', fontSize: 12 }}>
+                        <div>• 仅支持邮箱 + 密码 + 验证码登录</div>
+                        <div>• 每次登录都需要邮箱验证码</div>
+                        <div>• 安全性更高，适合敏感系统</div>
+                      </div>
+                    </Radio>
+                  </Space>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item 
+                name={['login', 'refresh_token_days']} 
+                label={
+                  <Space>
+                    <span>登录有效期</span>
+                    <Tooltip title="用户多少天后需要重新输入密码登录，对新登录的用户生效">
+                      <InfoCircleOutlined style={{ color: '#999' }} />
+                    </Tooltip>
+                  </Space>
+                }
+                initialValue={14}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={1}
+                  max={365}
+                  step={1}
+                  precision={0}
+                  disabled={disabled}
+                  formatter={value => `${value} 天`}
+                  parser={value => value.replace(' 天', '')}
+                  placeholder="输入天数（1-365）"
+                />
+              </Form.Item>
+
+              <Alert
+                message="登录设置说明"
+                description={
+                  <div>
+                    <div>• 切换登录模式后立即生效，影响所有用户</div>
+                    <div>• 强制邮箱验证模式下，用户必须同时提供密码和验证码</div>
+                    <div>• 登录有效期只对新登录的用户生效，已登录用户不受影响</div>
+                    <div>• 建议根据系统安全性要求合理设置登录有效期</div>
+                  </div>
+                }
+                type="info"
+                showIcon
+                icon={<SafetyOutlined />}
+                style={{ marginTop: 16 }}
+              />
             </Card>
           </Col>
 
@@ -278,7 +372,7 @@ const BasicSettings = ({
               </Form.Item>
             </Card>
 
-            {/* 对话字体设置 - 新增 */}
+            {/* 对话字体设置 */}
             <Card 
               title={
                 <Space>

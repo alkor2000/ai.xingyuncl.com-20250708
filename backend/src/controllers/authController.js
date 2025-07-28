@@ -15,6 +15,21 @@ const { ValidationError } = require('../utils/errors');
 
 class AuthController {
   /**
+   * 获取刷新令牌过期时间
+   * @returns {string} 返回格式如 "14d"
+   */
+  static async getRefreshTokenExpiry() {
+    try {
+      const loginConfig = await SystemConfig.getLoginSettings();
+      const days = loginConfig.refresh_token_days || 14;
+      return `${days}d`;
+    } catch (error) {
+      logger.error('获取刷新令牌过期时间失败，使用默认值:', error);
+      return config.auth.jwt.refreshExpiresIn; // 降级到默认配置
+    }
+  }
+
+  /**
    * 用户登录 - 支持邮箱、手机号、用户名登录
    * POST /api/auth/login
    */
@@ -25,6 +40,15 @@ class AuthController {
       // 验证输入
       if (!account || !password) {
         return ResponseHelper.validation(res, ['账号和密码不能为空']);
+      }
+
+      // 获取登录配置
+      const loginConfig = await SystemConfig.getLoginSettings();
+      
+      // 如果是强制邮箱验证模式，拒绝普通密码登录
+      if (loginConfig.mode === 'email_verify_required') {
+        logger.warn('密码登录被拒绝：系统启用了强制邮箱验证模式', { account });
+        return ResponseHelper.forbidden(res, '系统已启用强制邮箱验证模式，请使用邮箱+密码+验证码登录');
       }
 
       logger.info('用户登录尝试', { account });
@@ -111,6 +135,9 @@ class AuthController {
         }
       );
 
+      // 获取动态的刷新令牌过期时间
+      const refreshTokenExpiry = await AuthController.getRefreshTokenExpiry();
+
       const refreshToken = jwt.sign(
         {
           userId: user.id,
@@ -119,7 +146,7 @@ class AuthController {
         },
         config.auth.jwt.refreshSecret,
         {
-          expiresIn: config.auth.jwt.refreshExpiresIn,
+          expiresIn: refreshTokenExpiry,
           issuer: config.auth.jwt.issuer,
           audience: config.auth.jwt.audience
         }
@@ -134,7 +161,8 @@ class AuthController {
         role: user.role,
         permissions: permissions.length,
         accountExpireAt: user.expire_at,
-        accountRemainingDays: user.getAccountRemainingDays()
+        accountRemainingDays: user.getAccountRemainingDays(),
+        refreshTokenExpiry
       });
 
       return ResponseHelper.success(res, {
@@ -245,6 +273,15 @@ class AuthController {
         return ResponseHelper.validation(res, ['验证码格式不正确']);
       }
 
+      // 获取登录配置
+      const loginConfig = await SystemConfig.getLoginSettings();
+      
+      // 如果是强制邮箱验证模式，拒绝纯验证码登录
+      if (loginConfig.mode === 'email_verify_required') {
+        logger.warn('纯验证码登录被拒绝：系统启用了强制邮箱验证模式', { email });
+        return ResponseHelper.forbidden(res, '系统已启用强制邮箱验证模式，请使用邮箱+密码+验证码登录');
+      }
+
       logger.info('验证码登录尝试', { email });
 
       // 验证验证码
@@ -339,6 +376,9 @@ class AuthController {
         }
       );
 
+      // 获取动态的刷新令牌过期时间
+      const refreshTokenExpiry = await AuthController.getRefreshTokenExpiry();
+
       const refreshToken = jwt.sign(
         {
           userId: user.id,
@@ -347,7 +387,7 @@ class AuthController {
         },
         config.auth.jwt.refreshSecret,
         {
-          expiresIn: config.auth.jwt.refreshExpiresIn,
+          expiresIn: refreshTokenExpiry,
           issuer: config.auth.jwt.issuer,
           audience: config.auth.jwt.audience
         }
@@ -360,7 +400,8 @@ class AuthController {
         email, 
         userId: user.id, 
         role: user.role,
-        permissions: permissions.length
+        permissions: permissions.length,
+        refreshTokenExpiry
       });
 
       return ResponseHelper.success(res, {
@@ -373,6 +414,162 @@ class AuthController {
 
     } catch (error) {
       logger.error('验证码登录失败:', error);
+      return ResponseHelper.error(res, '登录失败');
+    }
+  }
+
+  /**
+   * 邮箱+密码+验证码登录（强制验证模式）
+   * POST /api/auth/login-by-email-password
+   */
+  static async loginByEmailPassword(req, res) {
+    try {
+      const { email, password, code } = req.body;
+
+      // 验证输入
+      if (!email || !password || !code) {
+        return ResponseHelper.validation(res, ['邮箱、密码和验证码不能为空']);
+      }
+
+      // 验证邮箱格式
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return ResponseHelper.validation(res, ['邮箱格式不正确']);
+      }
+
+      // 验证验证码格式
+      if (!/^\d{6}$/.test(code)) {
+        return ResponseHelper.validation(res, ['验证码格式不正确']);
+      }
+
+      logger.info('邮箱密码验证码登录尝试', { email });
+
+      // 查找用户
+      const user = await User.findByEmail(email.toLowerCase());
+      if (!user) {
+        logger.warn('登录失败：用户不存在', { email });
+        return ResponseHelper.unauthorized(res, '邮箱或密码错误');
+      }
+
+      // 验证密码
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      if (!isPasswordValid) {
+        logger.warn('登录失败：密码错误', { email, userId: user.id });
+        return ResponseHelper.unauthorized(res, '邮箱或密码错误');
+      }
+
+      // 验证验证码
+      if (!redisConnection.isConnected) {
+        logger.error('Redis未连接，无法验证验证码');
+        return ResponseHelper.error(res, '服务暂时不可用，请稍后再试');
+      }
+
+      const codeKey = `email_code:${email}`;
+      const storedCode = await redisConnection.get(codeKey);
+
+      if (!storedCode) {
+        logger.warn('登录失败：验证码不存在或已过期', { email });
+        return ResponseHelper.validation(res, ['验证码已过期，请重新获取']);
+      }
+
+      if (String(storedCode) !== String(code)) {
+        logger.warn('登录失败：验证码错误', { email });
+        return ResponseHelper.validation(res, ['验证码错误']);
+      }
+
+      // 删除已使用的验证码
+      await redisConnection.del(codeKey);
+
+      // 检查用户状态
+      if (user.status !== 'active') {
+        logger.warn('登录失败：用户状态异常', { 
+          email, 
+          userId: user.id, 
+          status: user.status 
+        });
+        return ResponseHelper.unauthorized(res, '账户已被禁用');
+      }
+
+      // 检查账号有效期
+      if (user.isAccountExpired()) {
+        const remainingDays = user.getAccountRemainingDays();
+        logger.warn('登录失败：账号已过期', { 
+          email, 
+          userId: user.id, 
+          expireAt: user.expire_at,
+          expiredDays: Math.abs(remainingDays)
+        });
+        
+        let expireMessage = '账号已过期';
+        if (remainingDays !== null) {
+          expireMessage = `账号已过期${Math.abs(remainingDays)}天，请联系管理员续期`;
+        }
+        
+        return ResponseHelper.unauthorized(res, expireMessage);
+      }
+
+      // 获取用户权限
+      const permissions = await user.getPermissions();
+
+      // 生成JWT令牌
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        type: 'access'
+      };
+      
+      const jti = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      tokenPayload.jti = jti;
+
+      const accessToken = jwt.sign(
+        tokenPayload,
+        config.auth.jwt.accessSecret,
+        {
+          expiresIn: config.auth.jwt.accessExpiresIn,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      // 获取动态的刷新令牌过期时间
+      const refreshTokenExpiry = await AuthController.getRefreshTokenExpiry();
+
+      const refreshToken = jwt.sign(
+        {
+          userId: user.id,
+          type: 'refresh',
+          jti: `refresh-${jti}`
+        },
+        config.auth.jwt.refreshSecret,
+        {
+          expiresIn: refreshTokenExpiry,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      // 更新用户最后登录时间
+      await user.updateLastLogin();
+
+      logger.info('邮箱密码验证码登录成功', { 
+        email, 
+        userId: user.id, 
+        role: user.role,
+        permissions: permissions.length,
+        refreshTokenExpiry
+      });
+
+      return ResponseHelper.success(res, {
+        user: user.toJSON(),
+        permissions,
+        accessToken,
+        refreshToken,
+        expiresIn: config.auth.jwt.accessExpiresIn
+      }, '登录成功');
+
+    } catch (error) {
+      logger.error('邮箱密码验证码登录失败:', error);
       return ResponseHelper.error(res, '登录失败');
     }
   }

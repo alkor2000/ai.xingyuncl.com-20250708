@@ -43,6 +43,9 @@ router.get('/system-config', async (req, res) => {
       },
       user: {
         allow_register: config.user?.allow_register !== false // 默认允许注册
+      },
+      login: {
+        mode: config.login?.mode || 'standard' // 默认标准模式
       }
     };
     
@@ -67,6 +70,9 @@ router.get('/system-config', async (req, res) => {
       },
       user: {
         allow_register: true
+      },
+      login: {
+        mode: 'standard'
       }
     };
     return ResponseHelper.success(res, defaultConfig, '获取系统配置成功');

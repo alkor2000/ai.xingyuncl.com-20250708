@@ -40,6 +40,9 @@ const Login = () => {
           },
           user: {
             allow_register: true
+          },
+          login: {
+            mode: 'standard'
           }
         })
       } finally {
@@ -170,6 +173,59 @@ const Login = () => {
     }
   }
 
+  // 邮箱+密码+验证码登录处理（强制验证模式）
+  const handleEmailPasswordLogin = async (values) => {
+    try {
+      setLoading(true)
+      const response = await apiClient.post('/auth/login-by-email-password', {
+        email: values.email,
+        password: values.password,
+        code: values.code
+      })
+      
+      if (response.data.success) {
+        const { data } = response.data
+        
+        // 计算Token过期时间
+        let tokenExpiresAt = null
+        if (data.expiresIn) {
+          const hours = parseInt(data.expiresIn.replace('h', '')) || 12
+          tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+        }
+        
+        // 通过setState方法更新状态
+        useAuthStore.setState({
+          user: data.user,
+          permissions: data.permissions || [],
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          tokenExpiresAt: tokenExpiresAt,
+          isAuthenticated: true
+        })
+        
+        // 设置默认请求头
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${data.accessToken}`
+        
+        // 清理之前用户的聊天数据
+        if (window.useChatStore) {
+          const chatStore = window.useChatStore.getState()
+          if (chatStore && chatStore.reset) {
+            console.log('🧹 清除之前的聊天数据...')
+            chatStore.reset()
+          }
+        }
+        
+        message.success(t('auth.login.success'))
+        navigate('/')
+      }
+    } catch (error) {
+      console.error('登录失败:', error)
+      message.error(error.response?.data?.message || '登录失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 验证账号输入（可以是邮箱、手机号或用户名）
   const validateAccount = (_, value) => {
     if (!value) {
@@ -206,6 +262,7 @@ const Login = () => {
 
   const siteName = publicConfig?.site?.name || t('app.name')
   const allowRegister = publicConfig?.user?.allow_register !== false
+  const loginMode = publicConfig?.login?.mode || 'standard'
 
   return (
     <div style={{
@@ -264,112 +321,188 @@ const Login = () => {
           </Paragraph>
         </div>
 
-        <Tabs activeKey={loginType} onChange={setLoginType} centered>
-          <TabPane tab="密码登录" key="password">
-            <Form
-              name="passwordLogin"
-              onFinish={handlePasswordLogin}
-              autoComplete="off"
-              size="large"
-            >
-              <Form.Item
-                name="account"
-                rules={[{ validator: validateAccount }]}
+        {/* 根据登录模式显示不同的界面 */}
+        {loginMode === 'standard' ? (
+          // 标准模式：显示tabs
+          <Tabs activeKey={loginType} onChange={setLoginType} centered>
+            <TabPane tab="密码登录" key="password">
+              <Form
+                name="passwordLogin"
+                onFinish={handlePasswordLogin}
+                autoComplete="off"
+                size="large"
               >
-                <Input
-                  prefix={<UserOutlined />}
-                  placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
-                  autoComplete="username"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="password"
-                rules={[{ required: true, message: t('auth.login.password.required') }]}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder={t('auth.login.password')}
-                  autoComplete="current-password"
-                />
-              </Form.Item>
-
-              <Form.Item style={{ marginBottom: '16px' }}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  icon={<LoginOutlined />}
+                <Form.Item
+                  name="account"
+                  rules={[{ validator: validateAccount }]}
                 >
-                  {t('auth.login.button')}
-                </Button>
-              </Form.Item>
-            </Form>
-          </TabPane>
+                  <Input
+                    prefix={<UserOutlined />}
+                    placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
+                    autoComplete="username"
+                  />
+                </Form.Item>
 
-          <TabPane tab="邮箱验证码登录" key="code">
-            <Form
-              name="codeLogin"
-              onFinish={handleCodeLogin}
-              autoComplete="off"
-              size="large"
-            >
-              <Form.Item
-                name="email"
-                rules={[{ validator: validateEmail }]}
-              >
-                <Input
-                  prefix={<MailOutlined />}
-                  placeholder="请输入邮箱地址"
-                  autoComplete="email"
-                />
-              </Form.Item>
+                <Form.Item
+                  name="password"
+                  rules={[{ required: true, message: t('auth.login.password.required') }]}
+                >
+                  <Input.Password
+                    prefix={<LockOutlined />}
+                    placeholder={t('auth.login.password')}
+                    autoComplete="current-password"
+                  />
+                </Form.Item>
 
-              <Form.Item>
-                <Space style={{ width: '100%' }} size={8}>
-                  <Form.Item
-                    name="code"
-                    noStyle
-                    rules={[
-                      { required: true, message: '请输入验证码' },
-                      { pattern: /^\d{6}$/, message: '验证码为6位数字' }
-                    ]}
+                <Form.Item style={{ marginBottom: '16px' }}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={loading}
+                    block
+                    icon={<LoginOutlined />}
                   >
-                    <Input
-                      prefix={<SafetyOutlined />}
-                      placeholder="请输入验证码"
-                      style={{ flex: 1 }}
-                    />
-                  </Form.Item>
-                  <Form.Item noStyle dependencies={['email']}>
-                    {({ getFieldValue }) => (
-                      <Button
-                        onClick={() => handleSendCode(getFieldValue('email'))}
-                        loading={sendingCode}
-                        disabled={countdown > 0}
-                      >
-                        {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
-                      </Button>
-                    )}
-                  </Form.Item>
-                </Space>
-              </Form.Item>
+                    {t('auth.login.button')}
+                  </Button>
+                </Form.Item>
+              </Form>
+            </TabPane>
 
-              <Form.Item style={{ marginBottom: '16px' }}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  icon={<LoginOutlined />}
+            <TabPane tab="邮箱验证码登录" key="code">
+              <Form
+                name="codeLogin"
+                onFinish={handleCodeLogin}
+                autoComplete="off"
+                size="large"
+              >
+                <Form.Item
+                  name="email"
+                  rules={[{ validator: validateEmail }]}
                 >
-                  登录
-                </Button>
-              </Form.Item>
-            </Form>
-          </TabPane>
-        </Tabs>
+                  <Input
+                    prefix={<MailOutlined />}
+                    placeholder="请输入邮箱地址"
+                    autoComplete="email"
+                  />
+                </Form.Item>
+
+                <Form.Item>
+                  <Space style={{ width: '100%' }} size={8}>
+                    <Form.Item
+                      name="code"
+                      noStyle
+                      rules={[
+                        { required: true, message: '请输入验证码' },
+                        { pattern: /^\d{6}$/, message: '验证码为6位数字' }
+                      ]}
+                    >
+                      <Input
+                        prefix={<SafetyOutlined />}
+                        placeholder="请输入验证码"
+                        style={{ flex: 1 }}
+                      />
+                    </Form.Item>
+                    <Form.Item noStyle dependencies={['email']}>
+                      {({ getFieldValue }) => (
+                        <Button
+                          onClick={() => handleSendCode(getFieldValue('email'))}
+                          loading={sendingCode}
+                          disabled={countdown > 0}
+                        >
+                          {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                        </Button>
+                      )}
+                    </Form.Item>
+                  </Space>
+                </Form.Item>
+
+                <Form.Item style={{ marginBottom: '16px' }}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={loading}
+                    block
+                    icon={<LoginOutlined />}
+                  >
+                    登录
+                  </Button>
+                </Form.Item>
+              </Form>
+            </TabPane>
+          </Tabs>
+        ) : (
+          // 强制邮箱验证模式：只显示一个表单
+          <Form
+            name="emailPasswordLogin"
+            onFinish={handleEmailPasswordLogin}
+            autoComplete="off"
+            size="large"
+          >
+            <Form.Item
+              name="email"
+              rules={[{ validator: validateEmail }]}
+            >
+              <Input
+                prefix={<MailOutlined />}
+                placeholder="请输入邮箱地址"
+                autoComplete="email"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="password"
+              rules={[{ required: true, message: '请输入密码' }]}
+            >
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="请输入密码"
+                autoComplete="current-password"
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Space style={{ width: '100%' }} size={8}>
+                <Form.Item
+                  name="code"
+                  noStyle
+                  rules={[
+                    { required: true, message: '请输入验证码' },
+                    { pattern: /^\d{6}$/, message: '验证码为6位数字' }
+                  ]}
+                >
+                  <Input
+                    prefix={<SafetyOutlined />}
+                    placeholder="请输入验证码"
+                    style={{ flex: 1 }}
+                  />
+                </Form.Item>
+                <Form.Item noStyle dependencies={['email']}>
+                  {({ getFieldValue }) => (
+                    <Button
+                      onClick={() => handleSendCode(getFieldValue('email'))}
+                      loading={sendingCode}
+                      disabled={countdown > 0}
+                    >
+                      {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                    </Button>
+                  )}
+                </Form.Item>
+              </Space>
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: '16px' }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+                block
+                icon={<LoginOutlined />}
+              >
+                登录
+              </Button>
+            </Form.Item>
+          </Form>
+        )}
 
         {/* 登录提示 */}
         <div style={{ 
@@ -381,7 +514,7 @@ const Login = () => {
           color: '#666'
         }}>
           <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            {loginType === 'password' ? (
+            {loginMode === 'standard' && loginType === 'password' ? (
               <>
                 <div>
                   <MailOutlined style={{ marginRight: '6px' }} />
@@ -396,7 +529,7 @@ const Login = () => {
                   {t('auth.login.hint.username', '支持用户名登录')}
                 </div>
               </>
-            ) : (
+            ) : loginMode === 'standard' && loginType === 'code' ? (
               <>
                 <div>
                   <SafetyOutlined style={{ marginRight: '6px' }} />
@@ -405,6 +538,21 @@ const Login = () => {
                 <div>
                   <MailOutlined style={{ marginRight: '6px' }} />
                   请确保邮箱已注册
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <LockOutlined style={{ marginRight: '6px' }} />
+                  当前为高安全模式
+                </div>
+                <div>
+                  <SafetyOutlined style={{ marginRight: '6px' }} />
+                  需要邮箱、密码和验证码三重验证
+                </div>
+                <div>
+                  <MailOutlined style={{ marginRight: '6px' }} />
+                  验证码5分钟内有效
                 </div>
               </>
             )}

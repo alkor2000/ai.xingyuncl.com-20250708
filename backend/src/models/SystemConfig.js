@@ -166,7 +166,12 @@ class SystemConfig {
           font_size: 14
         },
         // 添加邮件配置
-        email: settings.email_config || null
+        email: settings.email_config || null,
+        // 添加登录配置
+        login: settings.login_config || {
+          mode: 'standard', // 默认标准模式
+          refresh_token_days: 14 // 默认14天
+        }
       };
 
       // 处理用户配置兼容性
@@ -215,7 +220,11 @@ class SystemConfig {
           font_family: 'system-ui',
           font_size: 14
         },
-        email: null
+        email: null,
+        login: {
+          mode: 'standard', // 默认标准模式
+          refresh_token_days: 14 // 默认14天
+        }
       };
     }
   }
@@ -246,6 +255,15 @@ class SystemConfig {
         formattedSettings.chat = cleanedChatConfig;
       }
 
+      // 处理登录配置
+      if (formattedSettings.login) {
+        const cleanedLoginConfig = {
+          mode: formattedSettings.login.mode || 'standard',
+          refresh_token_days: formattedSettings.login.refresh_token_days ?? 14
+        };
+        formattedSettings.login = cleanedLoginConfig;
+      }
+
       const settings = {
         site_config: formattedSettings.site,
         user_config: formattedSettings.user,
@@ -256,6 +274,11 @@ class SystemConfig {
       // 保存邮件配置（如果存在）
       if (formattedSettings.email !== undefined) {
         settings.email_config = formattedSettings.email;
+      }
+      
+      // 保存登录配置（如果存在）
+      if (formattedSettings.login !== undefined) {
+        settings.login_config = formattedSettings.login;
       }
       
       return await SystemConfig.updateSettings(settings);
@@ -285,6 +308,31 @@ class SystemConfig {
       return await SystemConfig.updateSetting('email_config', emailConfig, 'json');
     } catch (error) {
       logger.error('更新邮件配置失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取登录配置
+   */
+  static async getLoginSettings() {
+    try {
+      const settings = await SystemConfig.getSetting('login_config');
+      return settings || { mode: 'standard', refresh_token_days: 14 };
+    } catch (error) {
+      logger.error('获取登录配置失败:', error);
+      return { mode: 'standard', refresh_token_days: 14 };
+    }
+  }
+
+  /**
+   * 更新登录配置
+   */
+  static async updateLoginSettings(loginConfig) {
+    try {
+      return await SystemConfig.updateSetting('login_config', loginConfig, 'json');
+    } catch (error) {
+      logger.error('更新登录配置失败:', error);
       throw error;
     }
   }
