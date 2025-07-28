@@ -15,7 +15,8 @@ import {
   LockOutlined,
   GlobalOutlined,
   HeartOutlined,
-  MailOutlined
+  MailOutlined,
+  ApiOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -33,7 +34,8 @@ import {
   BasicSettings,
   CustomHomepage,
   SystemHealthMonitor,
-  EmailSettings
+  EmailSettings,
+  APIServiceTable
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -45,6 +47,7 @@ const Settings = () => {
   const {
     aiModels,
     modules,
+    apiServices,
     systemStats,
     systemSettings,
     loading,
@@ -59,6 +62,8 @@ const Settings = () => {
     deleteModule,
     toggleModuleStatus,
     checkModuleHealth,
+    getApiServices,
+    deleteApiService,
     getSystemStats,
     getSystemSettings,
     updateSystemSettings,
@@ -94,6 +99,7 @@ const Settings = () => {
       getUserGroups()
       if (isSuperAdmin) {
         getModules()
+        getApiServices()
       }
       getSystemSettings()
     }
@@ -304,18 +310,8 @@ const Settings = () => {
   }
 
   const handleEditModule = (module) => {
+    // 只设置editingModule，让子组件自己处理表单值
     setEditingModule(module)
-    moduleForm.setFieldsValue({
-      name: module.name,
-      display_name: module.display_name,
-      description: module.description,
-      module_url: module.module_url,
-      open_mode: module.open_mode,
-      menu_icon: module.menu_icon,
-      sort_order: module.sort_order,
-      allowed_groups: module.allowed_groups || [],
-      is_active: module.is_active
-    })
     setIsModuleModalVisible(true)
   }
 
@@ -341,6 +337,21 @@ const Settings = () => {
       message.success(isActive ? '模块已启用' : '模块已禁用')
     } catch (error) {
       message.error('操作失败')
+    }
+  }
+
+  // API服务相关方法（只有超级管理员可以管理）
+  const handleDeleteApiService = async (serviceId) => {
+    if (!isSuperAdmin) {
+      message.warning(t('admin.noPermission'))
+      return
+    }
+    
+    try {
+      await deleteApiService(serviceId)
+      message.success('API服务删除成功')
+    } catch (error) {
+      message.error(error.response?.data?.message || 'API服务删除失败')
     }
   }
 
@@ -489,6 +500,29 @@ const Settings = () => {
                 onToggleStatus={handleToggleModuleStatus}
                 onEdit={handleEditModule}
                 onDelete={handleDeleteModule}
+              />
+            </Card>
+          </TabPane>
+        )}
+
+        {/* API服务管理（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <ApiOutlined />
+                API服务
+              </span>
+            } 
+            key="apiServices"
+          >
+            <Card title="API服务管理">
+              <APIServiceTable
+                services={apiServices}
+                loading={loading}
+                onRefresh={getApiServices}
+                onDelete={handleDeleteApiService}
+                adminStore={useAdminStore.getState()}
               />
             </Card>
           </TabPane>

@@ -10,6 +10,7 @@ const useAdminStore = create((set) => ({
   creditsHistory: [],
   aiModels: [],
   modules: [],
+  apiServices: [],
   systemStats: {
     users: {},
     groups: [],
@@ -588,6 +589,119 @@ const useAdminStore = create((set) => ({
       return response.data
     } catch (error) {
       console.error('检查模块健康状态失败:', error)
+      throw error
+    }
+  },
+
+  // API服务管理
+  getApiServices: async () => {
+    set({ loading: true })
+    try {
+      const response = await apiClient.get('/admin/api-services')
+      set({ 
+        apiServices: response.data.data,
+        loading: false 
+      })
+      return response.data.data
+    } catch (error) {
+      console.error('获取API服务列表失败:', error)
+      set({ loading: false })
+      throw error
+    }
+  },
+
+  getApiService: async (serviceId) => {
+    try {
+      const response = await apiClient.get(`/admin/api-services/${serviceId}`)
+      return response.data.data
+    } catch (error) {
+      console.error('获取API服务详情失败:', error)
+      throw error
+    }
+  },
+
+  createApiService: async (serviceData) => {
+    try {
+      const response = await apiClient.post('/admin/api-services', serviceData)
+      // 刷新服务列表
+      await useAdminStore.getState().getApiServices()
+      return response.data.data
+    } catch (error) {
+      console.error('创建API服务失败:', error)
+      throw error
+    }
+  },
+
+  updateApiService: async (serviceId, updateData) => {
+    try {
+      const response = await apiClient.put(`/admin/api-services/${serviceId}`, updateData)
+      // 刷新服务列表
+      await useAdminStore.getState().getApiServices()
+      return response.data.data
+    } catch (error) {
+      console.error('更新API服务失败:', error)
+      throw error
+    }
+  },
+
+  deleteApiService: async (serviceId) => {
+    try {
+      await apiClient.delete(`/admin/api-services/${serviceId}`)
+      // 刷新服务列表
+      await useAdminStore.getState().getApiServices()
+    } catch (error) {
+      console.error('删除API服务失败:', error)
+      throw error
+    }
+  },
+
+  resetApiServiceKey: async (serviceId) => {
+    try {
+      const response = await apiClient.post(`/admin/api-services/${serviceId}/reset-key`)
+      // 刷新服务列表
+      await useAdminStore.getState().getApiServices()
+      return response.data.data
+    } catch (error) {
+      console.error('重置API密钥失败:', error)
+      throw error
+    }
+  },
+
+  getApiServiceActions: async (serviceId) => {
+    try {
+      const response = await apiClient.get(`/admin/api-services/${serviceId}/actions`)
+      return response.data.data
+    } catch (error) {
+      console.error('获取服务操作配置失败:', error)
+      throw error
+    }
+  },
+
+  upsertApiServiceAction: async (serviceId, actionData) => {
+    try {
+      const response = await apiClient.post(`/admin/api-services/${serviceId}/actions`, actionData)
+      return response.data.data
+    } catch (error) {
+      console.error('保存服务操作配置失败:', error)
+      throw error
+    }
+  },
+
+  deleteApiServiceAction: async (serviceId, actionType) => {
+    try {
+      await apiClient.delete(`/admin/api-services/${serviceId}/actions/${actionType}`)
+    } catch (error) {
+      console.error('删除服务操作配置失败:', error)
+      throw error
+    }
+  },
+
+  getApiServiceStats: async (serviceId, params = {}) => {
+    try {
+      const response = await apiClient.get(`/admin/api-services/${serviceId}/stats`, { params })
+      return response.data.data
+    } catch (error) {
+      console.error('获取服务统计失败:', error)
       throw error
     }
   }

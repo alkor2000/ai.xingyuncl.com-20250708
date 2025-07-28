@@ -20,6 +20,7 @@ const adminRoutes = require('./routes/admin');
 const chatRoutes = require('./routes/chat');
 const statsRoutes = require('./routes/stats');
 const publicRoutes = require('./routes/public');
+const servicesRoutes = require('./routes/services'); // 新增服务API路由
 
 // 创建 Express 应用
 const app = express();
@@ -41,7 +42,7 @@ app.use(cors({
   origin: corsOrigin,
   credentials: corsCredentials,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Service-ID', 'X-API-Key']
 }));
 
 // 请求日志
@@ -139,6 +140,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/services', servicesRoutes); // 新增服务API路由
 
 // 404 处理
 app.use((req, res) => {

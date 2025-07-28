@@ -22,6 +22,7 @@ const groupRoutes = require('./admin/groupRoutes');
 const modelRoutes = require('./admin/modelRoutes');
 const statsRoutes = require('./admin/statsRoutes');
 const moduleRoutes = require('./admin/moduleRoutes'); // 新增模块路由
+const apiServiceRoutes = require('./admin/apiServiceRoutes'); // 新增API服务路由
 
 // 导入控制器（用于积分路由）
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
@@ -92,6 +93,9 @@ router.use('/models', modelRoutes);
 
 // 系统模块管理路由 - /api/admin/modules/*
 router.use('/modules', moduleRoutes);
+
+// API服务管理路由 - /api/admin/api-services/*
+router.use('/api-services', apiServiceRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);
