@@ -23,7 +23,8 @@ import {
   PictureOutlined,
   FileImageOutlined,
   WalletOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -37,6 +38,19 @@ const AIModelFormModal = ({
 }) => {
   const { t } = useTranslation()
 
+  // 处理表单提交，确保 model_config 包含测试温度
+  const handleFormSubmit = (values) => {
+    const submitData = {
+      ...values,
+      model_config: {
+        ...(values.model_config || {}),
+        test_temperature: values.test_temperature || 1
+      }
+    }
+    delete submitData.test_temperature // 从顶层移除，因为已经在 model_config 中
+    onSubmit(submitData)
+  }
+
   return (
     <Modal
       title={editingModel ? t('admin.models.editModel') : t('admin.models.createModel')}
@@ -49,7 +63,10 @@ const AIModelFormModal = ({
       <Form
         form={form}
         layout="vertical"
-        onFinish={onSubmit}
+        onFinish={handleFormSubmit}
+        initialValues={{
+          test_temperature: editingModel?.model_config?.test_temperature || 1
+        }}
       >
         {/* 编辑模式的提示信息 */}
         {editingModel && (
@@ -130,6 +147,57 @@ const AIModelFormModal = ({
                 placeholder={editingModel ? "留空表示不修改" : "https://api.openai.com/v1"} 
               />
             </Form.Item>
+          </Col>
+        </Row>
+
+        {/* 测试配置 */}
+        <Row gutter={16}>
+          <Col span={24}>
+            <Card 
+              title={
+                <Space>
+                  <ExperimentOutlined style={{ color: '#ff4d4f' }} />
+                  <span>测试配置</span>
+                  <Tag color="red">测试参数</Tag>
+                </Space>
+              } 
+              size="small" 
+              style={{ marginBottom: 16 }}
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="test_temperature"
+                    label="测试温度"
+                    rules={[{ required: true, message: '请输入测试温度' }]}
+                    extra="某些模型（如gpt-4o-mini）只支持特定温度值"
+                  >
+                    <InputNumber
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      precision={1}
+                      style={{ width: '100%' }}
+                      placeholder="默认值: 1"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <div style={{ 
+                    marginTop: 30, 
+                    padding: '8px 12px',
+                    backgroundColor: '#fff2e8',
+                    borderRadius: '4px',
+                    borderLeft: '3px solid #ff4d4f',
+                    fontSize: '12px',
+                    color: '#d4380d'
+                  }}>
+                    <strong>提示：</strong>不同模型对温度参数有不同要求。
+                    如gpt-4o-mini只支持1，其他模型可能支持0-2范围。
+                  </div>
+                </Col>
+              </Row>
+            </Card>
           </Col>
         </Row>
 

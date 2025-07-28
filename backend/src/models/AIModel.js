@@ -459,13 +459,32 @@ class AIModel {
         return { success: false, message: 'API密钥或端点未配置' };
       }
 
-      // 构造测试请求 - 移除maxToken限制
+      // 解析model_config
+      let config = this.model_config;
+      if (typeof config === 'string') {
+        try {
+          config = JSON.parse(config);
+        } catch (e) {
+          config = {};
+        }
+      }
+
+      // 获取测试温度，默认为1
+      const testTemperature = config.test_temperature || 1;
+
+      logger.info('使用测试温度', {
+        modelId: this.id,
+        modelName: this.name,
+        testTemperature
+      });
+
+      // 构造测试请求 - 使用配置的温度值
       const testPayload = {
         model: this.name,
         messages: [
           { role: 'user', content: 'Hello, please respond with a short greeting.' }
         ],
-        temperature: 0.7,
+        temperature: testTemperature,
         stream: false // 测试时不使用流式，避免复杂处理
       };
 
@@ -487,7 +506,8 @@ class AIModel {
         await this.updateTestStatus('success', '连通性测试成功');
         logger.info('AI模型连通性测试成功', { 
           modelId: this.id, 
-          modelName: this.name 
+          modelName: this.name,
+          testTemperature
         });
         return { success: true, message: '连通性测试成功' };
       } else {
@@ -551,6 +571,16 @@ class AIModel {
    * 获取模型的默认配置 - 移除maxToken限制
    */
   getDefaultConfig() {
+    // 解析model_config
+    let config = this.model_config;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+
     const defaultConfig = {
       temperature: 0.7,
       top_p: 1,
@@ -560,7 +590,7 @@ class AIModel {
 
     return {
       ...defaultConfig,
-      ...this.model_config
+      ...config
     };
   }
 
