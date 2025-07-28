@@ -73,6 +73,7 @@ const Chat = () => {
   const [showNewChatModal, setShowNewChatModal] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [isSending, setIsSending] = useState(false) // 🔥 新增：跟踪发送状态
   
   // 用户手动滚动标志
   const [userScrolled, setUserScrolled] = useState(false)
@@ -92,9 +93,9 @@ const Chat = () => {
     getUserCredits()
   }, [])
 
-  // 恢复草稿
+  // 🔥 修改：恢复草稿时检查是否正在发送
   useEffect(() => {
-    if (currentConversation) {
+    if (currentConversation && !isSending) {
       const draft = getDraft(currentConversation.id)
       if (draft && !inputValue) {
         setInputValue(draft)
@@ -105,7 +106,7 @@ const Chat = () => {
   // 🔥 新增：监听typing和isStreaming状态，在AI回复完成后聚焦输入框
   useEffect(() => {
     // 当typing和isStreaming都为false时，且有当前对话，聚焦输入框
-    if (!typing && !isStreaming && currentConversation && inputRef.current) {
+    if (!typing && !isStreaming && currentConversation && inputRef.current && !isSending) {
       // 添加小延迟以确保DOM更新完成
       setTimeout(() => {
         // 只在用户没有滚动查看历史消息时自动聚焦
@@ -114,7 +115,7 @@ const Chat = () => {
         }
       }, 100)
     }
-  }, [typing, isStreaming, currentConversation, userScrolled])
+  }, [typing, isStreaming, currentConversation, userScrolled, isSending])
 
   // 🔥 新增：当选择对话后聚焦输入框
   useEffect(() => {
@@ -126,13 +127,14 @@ const Chat = () => {
     }
   }, [currentConversation?.id, initialLoading])
 
-  // 自动保存草稿
+  // 🔥 修改：自动保存草稿时检查是否正在发送
   useEffect(() => {
     if (draftTimerRef.current) {
       clearTimeout(draftTimerRef.current)
     }
     
-    if (currentConversation && inputValue.trim()) {
+    // 只有在不发送消息时才保存草稿
+    if (currentConversation && inputValue.trim() && !isSending) {
       draftTimerRef.current = setTimeout(() => {
         saveDraft(currentConversation.id, inputValue)
       }, 1000)
@@ -143,11 +145,11 @@ const Chat = () => {
         clearTimeout(draftTimerRef.current)
       }
     }
-  }, [inputValue, currentConversation?.id])
+  }, [inputValue, currentConversation?.id, isSending])
 
   // 草稿管理
   const saveDraft = (conversationId, content) => {
-    if (content.trim()) {
+    if (content.trim() && !isSending) { // 🔥 添加发送状态检查
       const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
       drafts[conversationId] = {
         content,
@@ -338,7 +340,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 传递完整的uploadedImage对象
+  // 🔥 修改：发送消息 - 在发送前清空输入框
   const handleSendMessage = async () => {
     if (!inputValue.trim() && !uploadedImage) return
     if (!currentConversation) {
@@ -346,26 +348,41 @@ const Chat = () => {
       return
     }
 
+    // 🔥 立即保存要发送的内容
     const messageContent = inputValue.trim()
-    const fileInfo = uploadedImage || null // 传递完整的图片对象
+    const fileInfo = uploadedImage || null
     
+    // 🔥 标记正在发送
+    setIsSending(true)
+    
+    // 🔥 立即清空输入框和图片（在发送前）
     setInputValue('')
     setUploadedImage(null)
+    
+    // 🔥 立即清除草稿
     clearDraft(currentConversation.id)
     
     try {
       await sendMessage(messageContent, fileInfo)
-      // 🔥 新增：发送消息后聚焦输入框
+      // 🔥 发送成功后聚焦输入框
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
-      // 🔥 新增：发送失败也聚焦输入框，方便用户重试
+      
+      // 🔥 发送失败时恢复输入内容
+      setInputValue(messageContent)
+      setUploadedImage(fileInfo)
+      
+      // 🔥 发送失败也聚焦输入框，方便用户重试
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
+    } finally {
+      // 🔥 重置发送状态
+      setIsSending(false)
     }
   }
 
@@ -635,7 +652,7 @@ const Chat = () => {
                 hasMessages={messages && messages.length > 0}
                 currentModel={currentModel}
                 availableModels={availableModels}
-                disabled={!currentConversation}
+                disabled={!currentConversation || isSending}
                 onInputChange={handleInputChange}
                 onKeyPress={handleKeyPress}
                 onSend={handleSendMessage}
