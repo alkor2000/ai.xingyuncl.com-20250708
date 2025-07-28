@@ -85,7 +85,6 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const draftTimerRef = useRef(null)
   const inputRef = useRef(null) // 🔥 新增：输入框ref
-  const prevInputValueRef = useRef('') // 🔥 新增：记录上一次的输入值
 
   // 初始化
   useEffect(() => {
@@ -100,7 +99,6 @@ const Chat = () => {
       const draft = getDraft(currentConversation.id)
       if (draft && !inputValue) {
         setInputValue(draft)
-        prevInputValueRef.current = draft // 🔥 更新上一次的值
       }
     }
   }, [currentConversation?.id])
@@ -129,13 +127,19 @@ const Chat = () => {
     }
   }, [currentConversation?.id, initialLoading])
 
-  // 🔥 修改：自动保存草稿时检查是否正在发送
+  // 🔥 修改：改进草稿保存逻辑，避免竞态条件
   useEffect(() => {
     if (draftTimerRef.current) {
       clearTimeout(draftTimerRef.current)
     }
     
-    // 只有在不发送消息时才保存草稿
+    // 如果输入框为空，立即清除草稿（不等待）
+    if (!inputValue.trim() && currentConversation) {
+      clearDraft(currentConversation.id)
+      return
+    }
+    
+    // 只有在有内容且不在发送时才保存草稿
     if (currentConversation && inputValue.trim() && !isSending) {
       draftTimerRef.current = setTimeout(() => {
         saveDraft(currentConversation.id, inputValue)
@@ -360,7 +364,6 @@ const Chat = () => {
     // 🔥 立即清空输入框和图片（在发送前）
     setInputValue('')
     setUploadedImage(null)
-    prevInputValueRef.current = '' // 🔥 更新上一次的值
     
     // 🔥 立即清除草稿
     clearDraft(currentConversation.id)
@@ -378,7 +381,6 @@ const Chat = () => {
       // 🔥 发送失败时恢复输入内容
       setInputValue(messageContent)
       setUploadedImage(fileInfo)
-      prevInputValueRef.current = messageContent // 🔥 恢复上一次的值
       
       // 🔥 发送失败也聚焦输入框，方便用户重试
       setTimeout(() => {
@@ -406,19 +408,9 @@ const Chat = () => {
     }
   }
 
-  // 🔥 修改：处理输入 - 检测从有内容变为空时清除草稿
+  // 🔥 修改：简化输入处理，直接更新值
   const handleInputChange = (value) => {
-    const prevValue = prevInputValueRef.current
-    
-    // 检测是否从有内容变为空（用户主动清空）
-    if (prevValue.trim() && !value.trim() && currentConversation && !isSending) {
-      // 立即清除草稿
-      clearDraft(currentConversation.id)
-    }
-    
-    // 更新状态
     setInputValue(value)
-    prevInputValueRef.current = value
   }
 
   const handleKeyPress = (e) => {
