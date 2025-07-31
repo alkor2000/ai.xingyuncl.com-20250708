@@ -379,7 +379,7 @@ class UserGroupController {
   }
 
   /**
-   * 上传组Logo（组管理员）
+   * 上传组Logo（组管理员）- 修改为只返回URL，不更新数据库
    */
   static async uploadGroupLogo(req, res) {
     try {
@@ -398,19 +398,32 @@ class UserGroupController {
         return ResponseHelper.validation(res, ['请选择要上传的Logo图片']);
       }
 
+      // 检查组是否开启了自定义功能
+      const group = await GroupService.findGroupById(id);
+      if (!group) {
+        return ResponseHelper.notFound(res, '用户分组不存在');
+      }
+      
+      if (!group.site_customization_enabled) {
+        return ResponseHelper.forbidden(res, '该组未开启站点自定义功能');
+      }
+
       // 构建文件URL（使用实际的文件名）
       const logoUrl = `/uploads/system/${req.file.filename}`;
 
-      // 更新组配置
-      const result = await GroupService.updateGroupSiteConfig(
-        id,
-        { site_logo: logoUrl },
-        operatorId
-      );
+      // 不再立即更新数据库，只返回URL
+      logger.info('Logo文件上传成功', {
+        operatorId,
+        groupId: id,
+        fileName: req.file.filename,
+        logoUrl
+      });
 
       return ResponseHelper.success(res, {
-        ...result,
-        logo_url: logoUrl
+        logo_url: logoUrl,
+        file_name: req.file.filename,
+        original_name: req.file.originalname,
+        size: req.file.size
       }, 'Logo上传成功');
     } catch (error) {
       logger.error('上传组Logo失败', { 

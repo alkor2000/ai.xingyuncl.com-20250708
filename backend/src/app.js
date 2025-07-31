@@ -60,7 +60,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 静态文件服务 - 服务上传的文件
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads'), {
+// 修复：正确指向 storage/uploads 目录
+app.use('/uploads', express.static(path.join(__dirname, '../../storage/uploads'), {
   maxAge: '7d',
   etag: true,
   lastModified: true

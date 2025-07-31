@@ -18,7 +18,7 @@ const Header = ({ isMobile, onMenuClick }) => {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { user, logout } = useAuthStore()
-  const { getSiteName, getSiteLogo } = useSystemConfigStore()
+  const { getSiteName, getSiteLogo, isUsingGroupConfig } = useSystemConfigStore()
 
   // 用户下拉菜单
   const userMenuItems = [
@@ -47,6 +47,7 @@ const Header = ({ isMobile, onMenuClick }) => {
 
   const siteName = getSiteName()
   const siteLogo = getSiteLogo()
+  const usingGroupConfig = isUsingGroupConfig()
 
   return (
     <AntHeader className="basic-layout-header">
@@ -63,19 +64,22 @@ const Header = ({ isMobile, onMenuClick }) => {
         
         {/* Logo和系统名称 */}
         <div className="header-logo" onClick={() => navigate('/')}>
-          {siteLogo ? (
-            <img 
-              src={siteLogo} 
-              alt={siteName}
-              className="logo-image"
-              style={{
-                height: '32px',
-                width: 'auto',
-                objectFit: 'contain'
-              }}
-            />
-          ) : (
-            <span className="logo-icon">AI</span>
+          {/* 如果使用组配置，Logo位置留空；否则显示系统Logo或AI文字 */}
+          {!usingGroupConfig && (
+            siteLogo ? (
+              <img 
+                src={siteLogo} 
+                alt={siteName}
+                className="logo-image"
+                style={{
+                  height: '32px',
+                  width: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            ) : (
+              <span className="logo-icon">AI</span>
+            )
           )}
           <span className="logo-text">{siteName}</span>
         </div>

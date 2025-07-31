@@ -557,12 +557,9 @@ const Users = () => {
                     <Alert
                       message="站点自定义"
                       description={
-                        <Space direction="vertical">
-                          <span>
-                            <GlobalOutlined /> 站点名称：{currentGroupInfo.site_name || '使用系统默认'}
-                          </span>
-                          {currentGroupInfo.site_logo && <span>已配置自定义Logo</span>}
-                        </Space>
+                        <span>
+                          <GlobalOutlined /> 站点名称：{currentGroupInfo.site_name || '使用系统默认'}
+                        </span>
                       }
                       type="info"
                       showIcon
@@ -637,7 +634,7 @@ const Users = () => {
                   <div>
                     <p>管理员只能查看所在分组信息，不能创建或修改分组。</p>
                     {currentGroupInfo?.site_customization_enabled && (
-                      <p>您的组已开启站点自定义功能，可以配置专属的站点名称和Logo。</p>
+                      <p>您的组已开启站点自定义功能，可以配置专属的站点名称。</p>
                     )}
                   </div>
                 }
