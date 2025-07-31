@@ -135,18 +135,23 @@ class GroupService {
    */
   static async updateGroup(groupId, updateData, operatorId = null) {
     try {
-      const group = await User.updateGroup(groupId, updateData);
-      if (!group) {
+      // 先检查分组是否存在
+      const currentGroup = await GroupService.findGroupById(groupId);
+      if (!currentGroup) {
         throw new ValidationError('用户分组不存在');
       }
 
-      // 如果更新了分组名称，检查是否重复
-      if (updateData.name) {
+      // 如果要更新分组名称，检查是否与其他分组重复
+      if (updateData.name && updateData.name !== currentGroup.name) {
         const existingGroup = await GroupService.findGroupByName(updateData.name);
-        if (existingGroup && existingGroup.id !== groupId) {
+        // 使用宽松比较或转换类型，避免字符串和数字比较问题
+        if (existingGroup && String(existingGroup.id) !== String(groupId)) {
           throw new ConflictError('分组名称已存在');
         }
       }
+
+      // 执行更新
+      const group = await User.updateGroup(groupId, updateData);
 
       logger.info('更新用户分组成功', {
         operatorId,
