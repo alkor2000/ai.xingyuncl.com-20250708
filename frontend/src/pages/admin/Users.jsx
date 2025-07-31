@@ -380,7 +380,14 @@ const Users = () => {
 
   const handleSubmitDistribute = async (userId, amount, reason, operation = 'distribute') => {
     try {
-      await distributeGroupCredits(currentUser.group_id, userId, amount, reason, operation)
+      // 根据角色确定使用哪个组ID
+      // 超级管理员：使用被操作用户的组ID
+      // 组管理员：使用自己的组ID（因为只能操作本组用户）
+      const targetGroupId = isSuperAdmin && distributeUser?.group_id 
+        ? distributeUser.group_id 
+        : currentUser.group_id
+        
+      await distributeGroupCredits(targetGroupId, userId, amount, reason, operation)
       setIsDistributeModalVisible(false)
       setDistributeUser(null)
       message.success(operation === 'distribute' ? '积分分配成功' : '积分回收成功')
@@ -457,6 +464,16 @@ const Users = () => {
     } catch (error) {
       message.error(error.response?.data?.message || '更新失败')
     }
+  }
+
+  // 获取分配积分时使用的组信息
+  // 超级管理员：使用被操作用户所在的组信息
+  // 组管理员：使用自己的组信息
+  const getDistributeGroupInfo = () => {
+    if (isSuperAdmin && distributeUser?.group_id) {
+      return userGroups.find(g => g.id === distributeUser.group_id)
+    }
+    return currentGroupInfo
   }
 
   // 权限检查
@@ -713,12 +730,12 @@ const Users = () => {
         />
       )}
 
-      {/* 积分分配弹窗 */}
+      {/* 积分分配弹窗 - 动态传入正确的组信息 */}
       {(isGroupAdmin || isSuperAdmin) && (
         <DistributeCreditsModal
           visible={isDistributeModalVisible}
           user={distributeUser}
-          groupInfo={currentGroupInfo}
+          groupInfo={getDistributeGroupInfo()} 
           loading={loading}
           onSubmit={handleSubmitDistribute}
           onCancel={() => {
