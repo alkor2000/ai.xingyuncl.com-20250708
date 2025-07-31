@@ -2,7 +2,7 @@
  * 用户管理主页面 - 包含组积分池功能、账号有效期管理和站点配置
  */
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col } from 'antd'
 import { 
   UserAddOutlined, 
@@ -50,8 +50,6 @@ const Users = () => {
     userDetail,
     userGroups,
     loading,
-    userCredits,
-    creditsHistory,
     getUsers,
     getUserDetail,
     createUser,
@@ -62,12 +60,6 @@ const Users = () => {
     createUserGroup,
     updateUserGroup,
     deleteUserGroup,
-    getUserCredits,
-    setUserCreditsQuota,
-    addUserCredits,
-    deductUserCredits,
-    getUserCreditsHistory,
-    setUserCreditsExpire,
     resetUserPassword,
     setGroupCreditsPool,
     distributeGroupCredits,
@@ -109,11 +101,6 @@ const Users = () => {
     pageSize: 10,
     total: 0
   })
-  const [creditHistoryData, setCreditHistoryData] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-  
-  // 积分相关状态 - 用于优化积分加载
-  const [loadingCredits, setLoadingCredits] = useState(false)
   
   // 判断用户权限
   const isSuperAdmin = currentUser?.role === 'super_admin'
@@ -148,22 +135,6 @@ const Users = () => {
     }
   }
 
-  // 加载积分历史 - 使用防抖避免重复请求
-  const loadCreditHistory = useCallback(async (userId) => {
-    if (historyLoading) return;
-    
-    setHistoryLoading(true)
-    try {
-      const result = await getUserCreditsHistory(userId, { page: 1, limit: 10 })
-      setCreditHistoryData(result || [])
-    } catch (error) {
-      console.error('加载积分历史失败:', error)
-      setCreditHistoryData([])
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [getUserCreditsHistory, historyLoading])
-
   // 初始化加载
   useEffect(() => {
     if (hasPermission('user.manage') || hasPermission('user.manage.group')) {
@@ -181,12 +152,6 @@ const Users = () => {
   // 创建用户
   const handleCreateUser = async (values) => {
     try {
-      let credits_expire_days = 365
-      if (values.credits_expire_at && typeof values.credits_expire_at.diff === 'function') {
-        const days = values.credits_expire_at.diff(moment(), 'days')
-        credits_expire_days = Math.max(1, days)
-      }
-      
       // 处理账号有效期
       let account_expire_days = null
       if (values.expire_at) {
@@ -200,7 +165,6 @@ const Users = () => {
       
       await createUser({
         ...values,
-        credits_expire_days,
         account_expire_days
       })
       
@@ -217,12 +181,8 @@ const Users = () => {
   const handleUpdateUser = async (values) => {
     try {
       const { 
-        creditsOperation, 
-        creditsAmount, 
-        creditsReason, 
         newPassword, 
         confirmPassword,
-        credits_expire_at,
         expire_at,
         extend_days,
         ...updateData 
@@ -251,40 +211,6 @@ const Users = () => {
       if (extend_days > 0) {
         await extendUserAccountExpireDate(editingUser.id, extend_days)
         message.success(`账号有效期已延长 ${extend_days} 天`)
-      }
-      
-      // 积分操作
-      if (creditsOperation && creditsAmount && creditsReason) {
-        setLoadingCredits(true)
-        try {
-          switch (creditsOperation) {
-            case 'recharge':
-              await addUserCredits(editingUser.id, creditsAmount, creditsReason, extend_days)
-              message.success(t('admin.credits.recharge.success', { amount: creditsAmount }))
-              break
-            case 'deduct':
-              await deductUserCredits(editingUser.id, creditsAmount, creditsReason)
-              message.success(t('admin.credits.deduct.success', { amount: creditsAmount }))
-              break
-            case 'set':
-              await setUserCreditsQuota(editingUser.id, creditsAmount, creditsReason)
-              message.success(t('admin.credits.setQuota.success', { amount: creditsAmount }))
-              break
-          }
-          await getUserCredits(editingUser.id)
-          await loadCreditHistory(editingUser.id)
-        } catch (error) {
-          message.error(error.response?.data?.message || t('admin.credits.failed'))
-        } finally {
-          setLoadingCredits(false)
-        }
-      }
-      
-      // 积分有效期设置
-      if (credits_expire_at && typeof credits_expire_at.format === 'function') {
-        await setUserCreditsExpire(editingUser.id, { 
-          expire_at: credits_expire_at.format('YYYY-MM-DD HH:mm:ss') 
-        })
       }
       
       // 密码重置
@@ -319,7 +245,7 @@ const Users = () => {
     }
   }
 
-  // 查看用户详情 - 修复：接收userId而不是user对象
+  // 查看用户详情
   const handleViewDetail = async (userId) => {
     try {
       const detail = await getUserDetail(userId)
@@ -334,22 +260,8 @@ const Users = () => {
     setEditingUser(user)
     userForm.setFieldsValue({
       ...user,
-      credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
       expire_at: formatDate(user.expire_at) || '' // 格式化日期为 YYYY-MM-DD
     })
-    
-    // 加载用户积分信息
-    if (!isGroupAdmin || user.group_id === currentUser.group_id) {
-      setLoadingCredits(true)
-      try {
-        await getUserCredits(user.id)
-        await loadCreditHistory(user.id)
-      } catch (error) {
-        console.error('加载用户积分信息失败:', error)
-      } finally {
-        setLoadingCredits(false)
-      }
-    }
     
     setIsUserModalVisible(true)
   }
@@ -663,7 +575,7 @@ const Users = () => {
           >
             <UserTable
               users={users}
-              loading={loading || loadingCredits}
+              loading={loading}
               pagination={pagination}
               currentUser={currentUser}
               isGroupAdmin={isGroupAdmin}
@@ -741,9 +653,6 @@ const Users = () => {
         editingUser={editingUser}
         userGroups={userGroups}
         currentUser={currentUser}
-        userCredits={userCredits}
-        creditHistory={creditHistoryData}
-        historyLoading={historyLoading}
         form={userForm}
         loading={loading}
         onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
@@ -751,9 +660,7 @@ const Users = () => {
           setIsUserModalVisible(false)
           setEditingUser(null)
           userForm.resetFields()
-          setCreditHistoryData([])
         }}
-        onLoadCreditHistory={loadCreditHistory}
       />
 
       {/* 分组表单弹窗 */}

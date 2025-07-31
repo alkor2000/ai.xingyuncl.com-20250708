@@ -27,7 +27,6 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
-import UserCreditsTab from './UserCreditsTab'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
 import { formatDate, dateValidator, isValidDate } from '../../../utils/dateFormat'
 
@@ -39,14 +38,10 @@ const UserFormModal = ({
   editingUser,
   userGroups = [],
   currentUser = {},
-  userCredits = {},
-  creditHistory = [],
-  historyLoading = false,
   form,
   loading = false,
   onSubmit,
-  onCancel,
-  onLoadCreditHistory
+  onCancel
 }) => {
   const { t } = useTranslation()
   const [activeKey, setActiveKey] = useState('basic')
@@ -110,13 +105,6 @@ const UserFormModal = ({
       }
     }
   }
-  
-  // 切换到积分Tab时加载积分历史
-  useEffect(() => {
-    if (visible && editingUser && isSuperAdmin && activeKey === 'credits' && onLoadCreditHistory) {
-      onLoadCreditHistory(editingUser.id)
-    }
-  }, [visible, editingUser, isSuperAdmin, activeKey, onLoadCreditHistory])
   
   // 每次打开时重置到基本信息Tab
   useEffect(() => {
@@ -316,17 +304,6 @@ const UserFormModal = ({
               </Row>
             )}
           </TabPane>
-
-          {editingUser && isSuperAdmin && (
-            <TabPane tab={t('admin.users.tabs.credits')} key="credits">
-              <UserCreditsTab
-                userCredits={userCredits[editingUser.id] || {}}
-                creditHistory={creditHistory}
-                historyLoading={historyLoading}
-                form={form}
-              />
-            </TabPane>
-          )}
 
           {editingUser && (
             <TabPane tab={t('admin.users.tabs.password')} key="password">
