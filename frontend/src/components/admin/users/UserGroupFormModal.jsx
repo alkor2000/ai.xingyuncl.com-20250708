@@ -17,6 +17,7 @@ import {
 } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { formatDate, dateValidator } from '../../../utils/dateFormat'
 
 const UserGroupFormModal = ({
   visible,
@@ -109,10 +110,7 @@ const UserGroupFormModal = ({
           }
           extra="设置组的有效期，留空表示永久有效，格式：YYYY-MM-DD"
           rules={[
-            {
-              pattern: /^\d{4}-\d{2}-\d{2}$/,
-              message: '请输入正确的日期格式（YYYY-MM-DD）'
-            }
+            dateValidator()
           ]}
         >
           <Input 
@@ -126,7 +124,7 @@ const UserGroupFormModal = ({
             message="提示"
             description={
               <div>
-                <p>当前组有效期: {editingGroup.expire_date}</p>
+                <p>当前组有效期: {formatDate(editingGroup.expire_date)}</p>
                 <p>修改组有效期后，可以选择是否同步到所有组员</p>
               </div>
             }

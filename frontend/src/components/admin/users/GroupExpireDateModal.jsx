@@ -5,6 +5,7 @@
 import React, { useEffect } from 'react'
 import { Modal, Form, Input, Button, Space, Alert, Checkbox } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
+import { formatDate, dateValidator } from '../../../utils/dateFormat'
 
 const GroupExpireDateModal = ({
   visible,
@@ -18,7 +19,7 @@ const GroupExpireDateModal = ({
   useEffect(() => {
     if (visible && group) {
       form.setFieldsValue({
-        expire_date: group.expire_date || '',
+        expire_date: formatDate(group.expire_date) || '',
         sync_to_users: false
       })
     }
@@ -74,10 +75,7 @@ const GroupExpireDateModal = ({
           label="组有效期"
           extra="留空表示永久有效，格式：YYYY-MM-DD"
           rules={[
-            {
-              pattern: /^\d{4}-\d{2}-\d{2}$/,
-              message: '请输入正确的日期格式（YYYY-MM-DD）'
-            }
+            dateValidator()
           ]}
         >
           <Input 
@@ -104,7 +102,7 @@ const GroupExpireDateModal = ({
               <div>当前组员数: {group.user_count || 0} 人</div>
               {group.expire_date && (
                 <div style={{ marginTop: 4 }}>
-                  当前有效期: {group.expire_date}
+                  当前有效期: {formatDate(group.expire_date)}
                 </div>
               )}
             </div>

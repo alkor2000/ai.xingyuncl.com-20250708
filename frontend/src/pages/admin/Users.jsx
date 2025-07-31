@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 import moment from 'moment'
+import { formatDate } from '../../utils/dateFormat'
 
 // 导入子组件
 import {
@@ -334,7 +335,7 @@ const Users = () => {
     userForm.setFieldsValue({
       ...user,
       credits_expire_at: user.credits_expire_at ? moment(user.credits_expire_at) : null,
-      expire_at: user.expire_at || '' // 设置为字符串或空字符串
+      expire_at: formatDate(user.expire_at) || '' // 格式化日期为 YYYY-MM-DD
     })
     
     // 加载用户积分信息
@@ -436,7 +437,7 @@ const Users = () => {
       color: group.color,
       is_active: group.is_active,
       sort_order: group.sort_order,
-      expire_date: group.expire_date || '' // 设置为字符串或空字符串
+      expire_date: formatDate(group.expire_date) || '' // 格式化日期为 YYYY-MM-DD
     })
     setIsGroupModalVisible(true)
   }
