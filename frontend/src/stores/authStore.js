@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import apiClient from '../utils/api'
+import useSystemConfigStore from './systemConfigStore'
 
 const useAuthStore = create(
   persist(
@@ -26,6 +27,7 @@ const useAuthStore = create(
           const { 
             user, 
             permissions = [], 
+            siteConfig,
             accessToken, 
             refreshToken, 
             expiresIn 
@@ -52,6 +54,12 @@ const useAuthStore = create(
           // 设置默认请求头
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
+          // 更新站点配置（如果有）
+          if (siteConfig) {
+            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
+            console.log('🎨 已更新用户站点配置:', siteConfig)
+          }
+
           // 🔥 重要：登录成功后清理之前用户的聊天数据
           if (window.useChatStore) {
             const chatStore = window.useChatStore.getState()
@@ -65,7 +73,8 @@ const useAuthStore = create(
             user: user.email,
             role: user.role,
             permissions: permissions.length,
-            tokenExpires: tokenExpiresAt?.toLocaleString()
+            tokenExpires: tokenExpiresAt?.toLocaleString(),
+            hasSiteConfig: !!siteConfig
           })
 
           return response.data
@@ -100,6 +109,9 @@ const useAuthStore = create(
           // 清除默认请求头
           delete apiClient.defaults.headers.common['Authorization']
           
+          // 清除站点配置
+          useSystemConfigStore.getState().setUserSiteConfig(null)
+          
           // 🔥 重要：清除聊天相关的所有状态
           if (window.useChatStore) {
             const chatStore = window.useChatStore.getState()
@@ -117,12 +129,18 @@ const useAuthStore = create(
       getCurrentUser: async () => {
         try {
           const response = await apiClient.get('/auth/me')
-          const { user, permissions = [] } = response.data.data
+          const { user, permissions = [], siteConfig } = response.data.data
 
           set({
             user,
             permissions: permissions || []
           })
+
+          // 更新站点配置（如果有）
+          if (siteConfig) {
+            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
+            console.log('🎨 已更新用户站点配置:', siteConfig)
+          }
 
           console.log('👤 用户信息已更新')
           return response.data
@@ -254,6 +272,151 @@ const useAuthStore = create(
           console.error('Token刷新失败:', error)
           // 刷新失败，执行登出
           get().logout()
+          throw error
+        }
+      },
+
+      // 发送邮箱验证码
+      sendEmailCode: async (email) => {
+        try {
+          const response = await apiClient.post('/auth/send-email-code', { email })
+          console.log('📧 验证码发送成功')
+          return { success: true, message: response.data.message }
+        } catch (error) {
+          console.error('发送验证码失败:', error)
+          const message = error.response?.data?.message || '发送验证码失败'
+          return { success: false, message }
+        }
+      },
+
+      // 邮箱验证码登录
+      loginByEmailCode: async (email, code) => {
+        set({ loading: true })
+        try {
+          const response = await apiClient.post('/auth/login-by-code', { email, code })
+          const { 
+            user, 
+            permissions = [], 
+            siteConfig,
+            accessToken, 
+            refreshToken, 
+            expiresIn 
+          } = response.data.data
+
+          // 计算Token过期时间
+          let tokenExpiresAt = null
+          if (expiresIn) {
+            const hours = parseInt(expiresIn.replace('h', '')) || 12
+            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+          }
+
+          set({
+            user,
+            permissions: permissions || [],
+            accessToken,
+            refreshToken,
+            tokenExpiresAt,
+            isAuthenticated: true,
+            loading: false
+          })
+
+          // 设置默认请求头
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+
+          // 更新站点配置（如果有）
+          if (siteConfig) {
+            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
+            console.log('🎨 已更新用户站点配置:', siteConfig)
+          }
+
+          // 清理之前用户的聊天数据
+          if (window.useChatStore) {
+            const chatStore = window.useChatStore.getState()
+            if (chatStore && chatStore.reset) {
+              console.log('🧹 清除之前的聊天数据...')
+              chatStore.reset()
+            }
+          }
+
+          console.log('✅ 验证码登录成功:', {
+            user: user.email,
+            role: user.role,
+            permissions: permissions.length,
+            hasSiteConfig: !!siteConfig
+          })
+
+          return response.data
+        } catch (error) {
+          set({ loading: false })
+          console.error('❌ 验证码登录失败:', error)
+          throw error
+        }
+      },
+
+      // 邮箱+密码+验证码登录
+      loginByEmailPassword: async (email, password, code) => {
+        set({ loading: true })
+        try {
+          const response = await apiClient.post('/auth/login-by-email-password', { 
+            email, 
+            password, 
+            code 
+          })
+          const { 
+            user, 
+            permissions = [], 
+            siteConfig,
+            accessToken, 
+            refreshToken, 
+            expiresIn 
+          } = response.data.data
+
+          // 计算Token过期时间
+          let tokenExpiresAt = null
+          if (expiresIn) {
+            const hours = parseInt(expiresIn.replace('h', '')) || 12
+            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+          }
+
+          set({
+            user,
+            permissions: permissions || [],
+            accessToken,
+            refreshToken,
+            tokenExpiresAt,
+            isAuthenticated: true,
+            loading: false
+          })
+
+          // 设置默认请求头
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+
+          // 更新站点配置（如果有）
+          if (siteConfig) {
+            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
+            console.log('🎨 已更新用户站点配置:', siteConfig)
+          }
+
+          // 清理之前用户的聊天数据
+          if (window.useChatStore) {
+            const chatStore = window.useChatStore.getState()
+            if (chatStore && chatStore.reset) {
+              console.log('🧹 清除之前的聊天数据...')
+              chatStore.reset()
+            }
+          }
+
+          console.log('✅ 邮箱密码验证码登录成功:', {
+            user: user.email,
+            role: user.role,
+            permissions: permissions.length,
+            hasSiteConfig: !!siteConfig
+          })
+
+          return response.data
+        } catch (error) {
+          set({ loading: false })
+          console.error('❌ 邮箱密码验证码登录失败:', error)
           throw error
         }
       },

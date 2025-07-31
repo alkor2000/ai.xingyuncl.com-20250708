@@ -1,6 +1,6 @@
 /**
  * 系统配置Store
- * 管理站点名称、Logo等全局配置
+ * 管理站点名称、Logo等全局配置（支持组级别配置）
  */
 
 import { create } from 'zustand'
@@ -30,6 +30,9 @@ const useSystemConfigStore = create((set, get) => ({
       font_size: 14
     }
   },
+  
+  // 用户站点配置（可能来自组配置）
+  userSiteConfig: null,
   
   loading: false,
   initialized: false,
@@ -93,6 +96,11 @@ const useSystemConfigStore = create((set, get) => ({
     }
   },
   
+  // 设置用户站点配置（来自登录或刷新用户信息时）
+  setUserSiteConfig: (siteConfig) => {
+    set({ userSiteConfig: siteConfig })
+  },
+  
   // 更新系统配置
   updateSystemConfig: async (config) => {
     try {
@@ -144,21 +152,42 @@ const useSystemConfigStore = create((set, get) => ({
     }
   },
   
-  // 获取站点名称
+  // 获取站点名称（优先使用用户站点配置）
   getSiteName: () => {
     const state = get()
+    
+    // 如果有用户站点配置（来自组配置）
+    if (state.userSiteConfig?.name) {
+      return state.userSiteConfig.name
+    }
+    
+    // 否则使用系统配置
     return state.systemConfig?.site?.name || 'AI Platform'
   },
   
-  // 获取站点Logo
+  // 获取站点Logo（优先使用用户站点配置）
   getSiteLogo: () => {
     const state = get()
+    
+    // 如果有用户站点配置（来自组配置）
+    if (state.userSiteConfig?.logo) {
+      return state.userSiteConfig.logo
+    }
+    
+    // 否则使用系统配置
     return state.systemConfig?.site?.logo || ''
+  },
+  
+  // 获取是否使用组配置
+  isUsingGroupConfig: () => {
+    const state = get()
+    return state.userSiteConfig?.is_group_config === true
   },
   
   // 获取站点描述
   getSiteDescription: () => {
     const state = get()
+    // 描述始终使用系统配置
     return state.systemConfig?.site?.description || '企业级AI应用聚合平台'
   },
   

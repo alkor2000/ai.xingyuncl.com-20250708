@@ -1,5 +1,5 @@
 /**
- * 用户管理主页面 - 包含组积分池功能和账号有效期管理
+ * 用户管理主页面 - 包含组积分池功能、账号有效期管理和站点配置
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -9,7 +9,8 @@ import {
   PlusOutlined,
   LockOutlined,
   WalletOutlined,
-  GiftOutlined
+  GiftOutlined,
+  GlobalOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -36,6 +37,9 @@ import GroupUserLimitModal from '../../components/admin/users/GroupUserLimitModa
 
 // 导入组有效期管理组件
 import GroupExpireDateModal from '../../components/admin/users/GroupExpireDateModal'
+
+// 导入组站点配置组件
+import GroupSiteConfigModal from '../../components/admin/users/GroupSiteConfigModal'
 
 const Users = () => {
   const { t } = useTranslation()
@@ -71,7 +75,9 @@ const Users = () => {
     syncGroupExpireDateToUsers,
     setUserAccountExpireDate,
     extendUserAccountExpireDate,
-    syncUserAccountExpireWithGroup
+    syncUserAccountExpireWithGroup,
+    toggleGroupSiteCustomization,
+    updateGroupSiteConfig
   } = useAdminStore()
 
   // 表单实例
@@ -87,6 +93,7 @@ const Users = () => {
   const [isDistributeModalVisible, setIsDistributeModalVisible] = useState(false)
   const [isUserLimitModalVisible, setIsUserLimitModalVisible] = useState(false)
   const [isExpireDateModalVisible, setIsExpireDateModalVisible] = useState(false)
+  const [isSiteConfigModalVisible, setIsSiteConfigModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -94,6 +101,7 @@ const Users = () => {
   const [distributeUser, setDistributeUser] = useState(null)
   const [userLimitGroup, setUserLimitGroup] = useState(null)
   const [expireDateGroup, setExpireDateGroup] = useState(null)
+  const [siteConfigGroup, setSiteConfigGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   const [pagination, setPagination] = useState({
     current: 1,
@@ -509,6 +517,35 @@ const Users = () => {
     }
   }
 
+  // 切换组站点自定义开关
+  const handleToggleSiteCustomization = async (group, enabled) => {
+    try {
+      await toggleGroupSiteCustomization(group.id, enabled)
+      message.success(enabled ? '已开启站点自定义功能' : '已关闭站点自定义功能')
+      loadUserGroups()
+    } catch (error) {
+      message.error(error.response?.data?.message || '设置失败')
+    }
+  }
+
+  // 编辑组站点配置
+  const handleEditSiteConfig = (group) => {
+    setSiteConfigGroup(group)
+    setIsSiteConfigModalVisible(true)
+  }
+
+  const handleSubmitSiteConfig = async (values) => {
+    try {
+      await updateGroupSiteConfig(siteConfigGroup.id, values)
+      setIsSiteConfigModalVisible(false)
+      setSiteConfigGroup(null)
+      message.success('站点配置更新成功')
+      loadUserGroups()
+    } catch (error) {
+      message.error(error.response?.data?.message || '更新失败')
+    }
+  }
+
   // 权限检查
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
     return (
@@ -583,6 +620,26 @@ const Users = () => {
                   />
                 </Col>
               </Row>
+              {/* 显示组站点配置信息 */}
+              {currentGroupInfo.site_customization_enabled && (
+                <Row gutter={16} style={{ marginTop: 16 }}>
+                  <Col span={24}>
+                    <Alert
+                      message="站点自定义"
+                      description={
+                        <Space direction="vertical">
+                          <span>
+                            <GlobalOutlined /> 站点名称：{currentGroupInfo.site_name || '使用系统默认'}
+                          </span>
+                          {currentGroupInfo.site_logo && <span>已配置自定义Logo</span>}
+                        </Space>
+                      }
+                      type="info"
+                      showIcon
+                    />
+                  </Col>
+                </Row>
+              )}
             </Card>
           )}
 
@@ -646,7 +703,14 @@ const Users = () => {
             {isGroupAdmin && (
               <Alert
                 message="提示"
-                description="管理员只能查看所在分组信息，不能创建或修改分组。"
+                description={
+                  <div>
+                    <p>管理员只能查看所在分组信息，不能创建或修改分组。</p>
+                    {currentGroupInfo?.site_customization_enabled && (
+                      <p>您的组已开启站点自定义功能，可以配置专属的站点名称和Logo。</p>
+                    )}
+                  </div>
+                }
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
@@ -657,11 +721,14 @@ const Users = () => {
               loading={loading}
               isGroupAdmin={isGroupAdmin}
               isSuperAdmin={isSuperAdmin}
+              currentUser={currentUser}
               onEdit={handleEditGroup}
               onDelete={handleDeleteGroup}
               onSetCreditsPool={handleSetCreditsPool}
               onSetUserLimit={handleSetUserLimit}
               onSetExpireDate={handleSetExpireDate}
+              onToggleSiteCustomization={handleToggleSiteCustomization}
+              onEditSiteConfig={handleEditSiteConfig}
             />
           </Card>
         </>
@@ -777,6 +844,20 @@ const Users = () => {
           onCancel={() => {
             setIsExpireDateModalVisible(false)
             setExpireDateGroup(null)
+          }}
+        />
+      )}
+
+      {/* 组站点配置弹窗 */}
+      {(isGroupAdmin || isSuperAdmin) && (
+        <GroupSiteConfigModal
+          visible={isSiteConfigModalVisible}
+          group={siteConfigGroup}
+          loading={loading}
+          onSubmit={handleSubmitSiteConfig}
+          onCancel={() => {
+            setIsSiteConfigModalVisible(false)
+            setSiteConfigGroup(null)
           }}
         />
       )}

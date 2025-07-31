@@ -4,6 +4,7 @@
 
 const User = require('../models/User');
 const SystemConfig = require('../models/SystemConfig');
+const { GroupService } = require('../services/admin');
 const EmailService = require('../services/emailService');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -26,6 +27,50 @@ class AuthController {
     } catch (error) {
       logger.error('获取刷新令牌过期时间失败，使用默认值:', error);
       return config.auth.jwt.refreshExpiresIn; // 降级到默认配置
+    }
+  }
+
+  /**
+   * 获取用户的站点配置（包含组配置）
+   */
+  static async getUserSiteConfig(user) {
+    try {
+      // 获取系统默认配置
+      const systemSettings = await SystemConfig.getFormattedSettings();
+      const systemSiteConfig = systemSettings.site || {
+        name: 'AI Platform',
+        description: '企业级AI应用聚合平台',
+        logo: '',
+        favicon: ''
+      };
+
+      // 如果用户有组且组开启了自定义配置
+      if (user.group_id && user.group_site_customization_enabled) {
+        // 优先使用组配置，如果组配置为空则使用系统配置
+        return {
+          name: user.group_site_name || systemSiteConfig.name,
+          logo: user.group_site_logo || systemSiteConfig.logo,
+          description: systemSiteConfig.description,
+          favicon: systemSiteConfig.favicon,
+          is_group_config: true
+        };
+      }
+
+      // 使用系统默认配置
+      return {
+        ...systemSiteConfig,
+        is_group_config: false
+      };
+    } catch (error) {
+      logger.error('获取用户站点配置失败:', error);
+      // 返回默认配置
+      return {
+        name: 'AI Platform',
+        description: '企业级AI应用聚合平台', 
+        logo: '',
+        favicon: '',
+        is_group_config: false
+      };
     }
   }
 
@@ -112,6 +157,9 @@ class AuthController {
       // 获取用户权限
       const permissions = await user.getPermissions();
 
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
       // 生成JWT令牌
       const tokenPayload = {
         userId: user.id,
@@ -162,12 +210,14 @@ class AuthController {
         permissions: permissions.length,
         accountExpireAt: user.expire_at,
         accountRemainingDays: user.getAccountRemainingDays(),
-        refreshTokenExpiry
+        refreshTokenExpiry,
+        hasGroupSiteConfig: siteConfig.is_group_config
       });
 
       return ResponseHelper.success(res, {
         user: user.toJSON(),
         permissions,
+        siteConfig,
         accessToken,
         refreshToken,
         expiresIn: config.auth.jwt.accessExpiresIn
@@ -354,6 +404,9 @@ class AuthController {
       // 获取用户权限
       const permissions = await user.getPermissions();
 
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
       // 生成JWT令牌（与密码登录相同）
       const tokenPayload = {
         userId: user.id,
@@ -401,12 +454,14 @@ class AuthController {
         userId: user.id, 
         role: user.role,
         permissions: permissions.length,
-        refreshTokenExpiry
+        refreshTokenExpiry,
+        hasGroupSiteConfig: siteConfig.is_group_config
       });
 
       return ResponseHelper.success(res, {
         user: user.toJSON(),
         permissions,
+        siteConfig,
         accessToken,
         refreshToken,
         expiresIn: config.auth.jwt.accessExpiresIn
@@ -510,6 +565,9 @@ class AuthController {
       // 获取用户权限
       const permissions = await user.getPermissions();
 
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
       // 生成JWT令牌
       const tokenPayload = {
         userId: user.id,
@@ -557,12 +615,14 @@ class AuthController {
         userId: user.id, 
         role: user.role,
         permissions: permissions.length,
-        refreshTokenExpiry
+        refreshTokenExpiry,
+        hasGroupSiteConfig: siteConfig.is_group_config
       });
 
       return ResponseHelper.success(res, {
         user: user.toJSON(),
         permissions,
+        siteConfig,
         accessToken,
         refreshToken,
         expiresIn: config.auth.jwt.accessExpiresIn
@@ -691,6 +751,9 @@ class AuthController {
       // 获取新用户权限
       const permissions = await user.getPermissions();
 
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
       logger.info('用户注册成功', { 
         email, 
         userId: user.id,
@@ -701,7 +764,8 @@ class AuthController {
 
       return ResponseHelper.success(res, {
         user: user.toJSON(),
-        permissions
+        permissions,
+        siteConfig
       }, '注册成功', 201);
 
     } catch (error) {
@@ -726,9 +790,13 @@ class AuthController {
       // 获取用户权限
       const permissions = await user.getPermissions();
 
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
       return ResponseHelper.success(res, {
         user: user.toJSON(),
-        permissions
+        permissions,
+        siteConfig
       }, '获取用户信息成功');
 
     } catch (error) {

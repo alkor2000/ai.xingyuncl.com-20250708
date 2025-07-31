@@ -1,5 +1,5 @@
 /**
- * 用户模型 - 支持用户分组和积分管理（包含积分有效期功能）
+ * 用户模型 - 支持用户分组和积分管理（包含积分有效期功能和组站点配置）
  */
 
 const bcrypt = require('bcryptjs');
@@ -28,6 +28,15 @@ class User {
       remainingDays: this.getAccountRemainingDays()
     };
     
+    // 添加组的站点配置信息
+    if (this.group_site_customization_enabled) {
+      safeUser.group_site_config = {
+        enabled: this.group_site_customization_enabled,
+        site_name: this.group_site_name,
+        site_logo: this.group_site_logo
+      };
+    }
+    
     return safeUser;
   }
 
@@ -37,7 +46,13 @@ class User {
   static async findById(id) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.id = ?
@@ -61,7 +76,13 @@ class User {
   static async findByEmail(email) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.email = ?
@@ -85,7 +106,13 @@ class User {
   static async findByUsername(username) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.username = ?
@@ -109,7 +136,13 @@ class User {
   static async findByPhone(phone) {
     try {
       const sql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.phone = ?
@@ -286,10 +319,16 @@ class User {
       
       logger.info('获取用户总数成功', { total, page, limit });
 
-      // 获取用户列表 (包含分组信息、积分统计和备注)
+      // 获取用户列表 (包含分组信息、积分统计、备注和站点配置)
       const offset = (page - 1) * limit;
       const listSql = `
-        SELECT u.*, g.name as group_name, g.color as group_color, g.expire_date as group_expire_date,
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo,
                CASE 
                  WHEN u.credits_expire_at IS NULL THEN 0
                  WHEN u.credits_expire_at < NOW() THEN 1

@@ -1,5 +1,5 @@
 /**
- * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能和组有效期）
+ * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能、组有效期和站点配置）
  */
 
 const { GroupService } = require('../../services/admin');
@@ -303,6 +303,123 @@ class UserGroupController {
       }
       
       return ResponseHelper.error(res, error.message || '同步组有效期失败');
+    }
+  }
+
+  /**
+   * 设置组站点自定义开关（仅超级管理员）
+   */
+  static async toggleGroupSiteCustomization(req, res) {
+    try {
+      const { id } = req.params;
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return ResponseHelper.validation(res, ['enabled参数必须是布尔值']);
+      }
+
+      const result = await GroupService.toggleGroupSiteCustomization(id, enabled, req.user.id);
+
+      return ResponseHelper.success(res, result, result.message);
+    } catch (error) {
+      logger.error('设置组站点自定义开关失败', { 
+        adminId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      
+      if (error.message === '用户分组不存在') {
+        return ResponseHelper.notFound(res, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '设置组站点自定义开关失败');
+    }
+  }
+
+  /**
+   * 更新组站点配置（组管理员）
+   */
+  static async updateGroupSiteConfig(req, res) {
+    try {
+      const { id } = req.params;
+      const { site_name, site_logo } = req.body;
+      const operatorId = req.user.id;
+
+      // 权限检查 - 组管理员只能更新自己组的配置
+      if (req.user.role === 'admin') {
+        if (req.user.group_id !== parseInt(id)) {
+          return ResponseHelper.forbidden(res, '只能管理本组的站点配置');
+        }
+      }
+
+      const result = await GroupService.updateGroupSiteConfig(
+        id, 
+        { site_name, site_logo },
+        operatorId
+      );
+
+      return ResponseHelper.success(res, result, result.message);
+    } catch (error) {
+      logger.error('更新组站点配置失败', { 
+        operatorId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      
+      if (error.message === '用户分组不存在') {
+        return ResponseHelper.notFound(res, error.message);
+      }
+      
+      if (error.message.includes('未开启站点自定义')) {
+        return ResponseHelper.forbidden(res, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '更新组站点配置失败');
+    }
+  }
+
+  /**
+   * 上传组Logo（组管理员）
+   */
+  static async uploadGroupLogo(req, res) {
+    try {
+      const { id } = req.params;
+      const operatorId = req.user.id;
+
+      // 权限检查 - 组管理员只能上传自己组的logo
+      if (req.user.role === 'admin') {
+        if (req.user.group_id !== parseInt(id)) {
+          return ResponseHelper.forbidden(res, '只能管理本组的站点配置');
+        }
+      }
+
+      // 检查是否有文件上传
+      if (!req.file) {
+        return ResponseHelper.validation(res, ['请选择要上传的Logo图片']);
+      }
+
+      // 构建文件URL（使用实际的文件名）
+      const logoUrl = `/uploads/system/${req.file.filename}`;
+
+      // 更新组配置
+      const result = await GroupService.updateGroupSiteConfig(
+        id,
+        { site_logo: logoUrl },
+        operatorId
+      );
+
+      return ResponseHelper.success(res, {
+        ...result,
+        logo_url: logoUrl
+      }, 'Logo上传成功');
+    } catch (error) {
+      logger.error('上传组Logo失败', { 
+        operatorId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      
+      return ResponseHelper.error(res, error.message || '上传Logo失败');
     }
   }
 }

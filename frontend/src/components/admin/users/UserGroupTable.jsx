@@ -1,9 +1,9 @@
 /**
- * 用户分组表格组件（包含积分池、组员上限和组有效期功能）
+ * 用户分组表格组件（包含积分池、组员上限、组有效期和站点配置功能）
  */
 
 import React from 'react'
-import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress } from 'antd'
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress, Switch } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
@@ -14,7 +14,8 @@ import {
   CalendarOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  GlobalOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -24,11 +25,14 @@ const UserGroupTable = ({
   loading = false,
   isGroupAdmin = false,
   isSuperAdmin = false,
+  currentUser = null,
   onEdit,
   onDelete,
   onSetCreditsPool,
   onSetUserLimit,
-  onSetExpireDate
+  onSetExpireDate,
+  onToggleSiteCustomization,
+  onEditSiteConfig
 }) => {
   const { t } = useTranslation()
 
@@ -173,6 +177,38 @@ const UserGroupTable = ({
       }
     },
     {
+      title: '站点自定义',
+      key: 'site_customization',
+      width: 120,
+      render: (_, record) => {
+        const isEnabled = record.site_customization_enabled
+        const hasConfig = record.site_name || record.site_logo
+        const isUserGroup = currentUser && record.id === currentUser.group_id
+        
+        return (
+          <Space direction="vertical" size="small">
+            {isSuperAdmin ? (
+              <Switch
+                checked={isEnabled}
+                onChange={(checked) => onToggleSiteCustomization && onToggleSiteCustomization(record, checked)}
+                checkedChildren="已开启"
+                unCheckedChildren="已关闭"
+              />
+            ) : (
+              <Tag color={isEnabled ? 'success' : 'default'}>
+                {isEnabled ? '已开启' : '未开启'}
+              </Tag>
+            )}
+            {isEnabled && hasConfig && (
+              <Tooltip title={`站点名称: ${record.site_name || '未设置'}`}>
+                <Tag icon={<GlobalOutlined />} color="blue">已配置</Tag>
+              </Tooltip>
+            )}
+          </Space>
+        )
+      }
+    },
+    {
       title: t('admin.groups.table.avgCredits'),
       dataIndex: 'avg_credits_used',
       key: 'avg_credits_used',
@@ -191,10 +227,24 @@ const UserGroupTable = ({
     {
       title: t('table.actions'),
       key: 'actions',
-      width: 200,
+      width: 240,
       render: (_, record) => {
+        // 组管理员只能编辑自己组的站点配置
+        const canEditSiteConfig = record.site_customization_enabled && 
+          (isSuperAdmin || (isGroupAdmin && currentUser && record.id === currentUser.group_id))
+        
         return (
           <Space size="small">
+            {canEditSiteConfig && onEditSiteConfig && (
+              <Tooltip title="配置站点信息">
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<GlobalOutlined />} 
+                  onClick={() => onEditSiteConfig(record)} 
+                />
+              </Tooltip>
+            )}
             {isSuperAdmin && (
               <>
                 <Tooltip title="设置组员上限">

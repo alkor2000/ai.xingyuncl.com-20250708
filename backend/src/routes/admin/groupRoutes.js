@@ -1,10 +1,12 @@
 /**
- * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能和组有效期）
+ * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能、组有效期和站点配置）
  */
 const express = require('express');
 const UserGroupController = require('../../controllers/admin/UserGroupController');
 const { requirePermission } = require('../../middleware/authMiddleware');
 const { canManageGroups } = require('../../middleware/permissions');
+const { uploadSiteLogo } = require('../../middleware/systemUploadMiddleware');
+
 const router = express.Router();
 
 /**
@@ -102,6 +104,38 @@ router.post('/:id/sync-expire-date',
   requirePermission('group.manage'),
   canManageGroups(),
   UserGroupController.syncGroupExpireDateToUsers
+);
+
+/**
+ * @route PUT /api/admin/user-groups/:id/site-customization
+ * @desc 设置组站点自定义开关
+ * @access SuperAdmin only
+ */
+router.put('/:id/site-customization',
+  requirePermission('group.manage'),
+  canManageGroups(),
+  UserGroupController.toggleGroupSiteCustomization
+);
+
+/**
+ * @route PUT /api/admin/user-groups/:id/site-config
+ * @desc 更新组站点配置
+ * @access Admin / SuperAdmin (Admin只能管理自己的组)
+ */
+router.put('/:id/site-config',
+  requirePermission('user.manage'),
+  UserGroupController.updateGroupSiteConfig
+);
+
+/**
+ * @route POST /api/admin/user-groups/:id/upload-logo
+ * @desc 上传组Logo
+ * @access Admin / SuperAdmin (Admin只能管理自己的组)
+ */
+router.post('/:id/upload-logo',
+  requirePermission('user.manage'),
+  uploadSiteLogo,
+  UserGroupController.uploadGroupLogo
 );
 
 module.exports = router;

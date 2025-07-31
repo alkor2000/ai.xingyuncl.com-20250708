@@ -195,7 +195,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组有效期（新增）
+  // 设置组有效期
   setGroupExpireDate: async (groupId, expireDate, syncToUsers = false) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/expire-date`, {
@@ -211,13 +211,41 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 同步组有效期到所有组员（新增）
+  // 同步组有效期到所有组员
   syncGroupExpireDateToUsers: async (groupId) => {
     try {
       const response = await apiClient.post(`/admin/user-groups/${groupId}/sync-expire-date`)
       return response.data.data
     } catch (error) {
       console.error('同步组有效期失败:', error)
+      throw error
+    }
+  },
+  
+  // 切换组站点自定义开关（新增）
+  toggleGroupSiteCustomization: async (groupId, enabled) => {
+    try {
+      const response = await apiClient.put(`/admin/user-groups/${groupId}/site-customization`, {
+        enabled
+      })
+      // 刷新组列表以更新配置
+      await useAdminStore.getState().getUserGroups()
+      return response.data.data
+    } catch (error) {
+      console.error('切换站点自定义开关失败:', error)
+      throw error
+    }
+  },
+  
+  // 更新组站点配置（新增）
+  updateGroupSiteConfig: async (groupId, config) => {
+    try {
+      const response = await apiClient.put(`/admin/user-groups/${groupId}/site-config`, config)
+      // 刷新组列表以更新配置
+      await useAdminStore.getState().getUserGroups()
+      return response.data.data
+    } catch (error) {
+      console.error('更新站点配置失败:', error)
       throw error
     }
   },
@@ -302,7 +330,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置用户账号有效期（新增）
+  // 设置用户账号有效期
   setUserAccountExpireDate: async (userId, expireDate, reason = '管理员设置') => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/expire-date`, {
@@ -316,7 +344,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 延长用户账号有效期（新增）
+  // 延长用户账号有效期
   extendUserAccountExpireDate: async (userId, days, reason = '管理员延期') => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/extend-expire-date`, {
@@ -330,7 +358,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 同步用户有效期到组有效期（新增）
+  // 同步用户有效期到组有效期
   syncUserAccountExpireWithGroup: async (userId) => {
     try {
       const response = await apiClient.post(`/admin/users/${userId}/sync-expire-date`)
@@ -456,7 +484,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 系统健康监控（新增）
+  // 系统健康监控
   getSystemHealth: async () => {
     try {
       const response = await apiClient.get('/admin/stats/health')
@@ -468,7 +496,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 执行系统维护操作（新增）
+  // 执行系统维护操作
   performMaintenance: async (action) => {
     try {
       const response = await apiClient.post('/admin/stats/maintenance', { action })

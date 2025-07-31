@@ -1,5 +1,5 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限和组有效期）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限、组有效期和站点配置）
  */
 
 const User = require('../../models/User');
@@ -9,7 +9,7 @@ const { DatabaseError, ValidationError, ConflictError } = require('../../utils/e
 
 class GroupService {
   /**
-   * 获取用户分组列表（包含积分池信息和有效期）
+   * 获取用户分组列表（包含积分池信息、有效期和站点配置）
    */
   static async getGroups(currentUser = null) {
     try {
@@ -36,7 +36,10 @@ class GroupService {
                  CASE
                    WHEN g.expire_date IS NULL THEN NULL
                    ELSE DATEDIFF(g.expire_date, CURDATE())
-                 END as remaining_days
+                 END as remaining_days,
+                 g.site_customization_enabled,
+                 g.site_name,
+                 g.site_logo
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           WHERE g.id = ?
@@ -65,7 +68,10 @@ class GroupService {
                  CASE
                    WHEN g.expire_date IS NULL THEN NULL
                    ELSE DATEDIFF(g.expire_date, CURDATE())
-                 END as remaining_days
+                 END as remaining_days,
+                 g.site_customization_enabled,
+                 g.site_name,
+                 g.site_logo
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           GROUP BY g.id
@@ -532,7 +538,7 @@ class GroupService {
   }
 
   /**
-   * 根据ID查找分组（包含积分池信息和有效期）
+   * 根据ID查找分组（包含积分池信息、有效期和站点配置）
    */
   static async findGroupById(groupId) {
     try {
@@ -574,7 +580,10 @@ class GroupService {
           CASE
             WHEN g.expire_date IS NULL THEN NULL
             ELSE DATEDIFF(g.expire_date, CURDATE())
-          END as remaining_days
+          END as remaining_days,
+          g.site_customization_enabled,
+          g.site_name,
+          g.site_logo
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
@@ -788,6 +797,114 @@ class GroupService {
     } catch (error) {
       logger.error('克隆分组失败', { error: error.message, sourceGroupId, newGroupName });
       throw error;
+    }
+  }
+
+  /**
+   * 设置组站点自定义（仅超级管理员）
+   */
+  static async toggleGroupSiteCustomization(groupId, enabled, operatorId = null) {
+    try {
+      // 获取当前组信息
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      // 更新站点自定义开关
+      const sql = 'UPDATE user_groups SET site_customization_enabled = ?, updated_at = NOW() WHERE id = ?';
+      await dbConnection.query(sql, [enabled ? 1 : 0, groupId]);
+
+      logger.info('设置组站点自定义开关成功', {
+        operatorId,
+        groupId,
+        enabled,
+        oldValue: group.site_customization_enabled
+      });
+
+      return {
+        success: true,
+        site_customization_enabled: enabled,
+        message: enabled ? '已开启站点自定义功能' : '已关闭站点自定义功能'
+      };
+    } catch (error) {
+      logger.error('设置组站点自定义开关失败', { error: error.message, groupId, enabled });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新组站点配置（组管理员）
+   */
+  static async updateGroupSiteConfig(groupId, siteConfig, operatorId = null) {
+    try {
+      // 获取当前组信息
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      // 检查是否允许自定义
+      if (!group.site_customization_enabled) {
+        throw new ValidationError('该组未开启站点自定义功能');
+      }
+
+      const { site_name, site_logo } = siteConfig;
+
+      // 更新站点配置
+      const sql = `
+        UPDATE user_groups 
+        SET site_name = ?, site_logo = ?, updated_at = NOW() 
+        WHERE id = ? AND site_customization_enabled = 1
+      `;
+      const { rows } = await dbConnection.query(sql, [site_name || null, site_logo || null, groupId]);
+
+      if (rows.affectedRows === 0) {
+        throw new ValidationError('更新失败，请确认该组已开启站点自定义功能');
+      }
+
+      logger.info('更新组站点配置成功', {
+        operatorId,
+        groupId,
+        siteName: site_name,
+        siteLogo: site_logo
+      });
+
+      return {
+        success: true,
+        site_name,
+        site_logo,
+        message: '站点配置更新成功'
+      };
+    } catch (error) {
+      logger.error('更新组站点配置失败', { error: error.message, groupId, siteConfig });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取组站点配置（根据用户获取）
+   */
+  static async getGroupSiteConfig(groupId) {
+    try {
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        return null;
+      }
+
+      // 如果组开启了自定义且有配置
+      if (group.site_customization_enabled && (group.site_name || group.site_logo)) {
+        return {
+          site_name: group.site_name,
+          site_logo: group.site_logo,
+          is_group_config: true
+        };
+      }
+
+      return null;
+    } catch (error) {
+      logger.error('获取组站点配置失败', { error: error.message, groupId });
+      return null;
     }
   }
 }
