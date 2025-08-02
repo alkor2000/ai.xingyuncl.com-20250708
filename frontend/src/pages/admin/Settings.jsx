@@ -35,7 +35,8 @@ import {
   CustomHomepage,
   SystemHealthMonitor,
   EmailSettings,
-  APIServiceTable
+  APIServiceTable,
+  RateLimitSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -546,6 +547,21 @@ const Settings = () => {
             disabled={!isSuperAdmin}
           />
         </TabPane>
+
+        {/* 速率限制设置（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <ThunderboltOutlined />
+                速率限制
+              </span>
+            } 
+            key="rateLimit"
+          >
+            <RateLimitSettings disabled={!isSuperAdmin} />
+          </TabPane>
+        )}
 
         {/* 邮件设置（只有超级管理员可见） */}
         {isSuperAdmin && (

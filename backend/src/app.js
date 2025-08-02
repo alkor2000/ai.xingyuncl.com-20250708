@@ -1,5 +1,5 @@
 /**
- * Express 应用程序主文件
+ * Express 应用程序主文件 - 支持动态速率限制
  */
 
 const express = require('express');
@@ -7,12 +7,12 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 const { globalErrorHandler } = require('./middleware/errorHandler');
 const HealthCheckService = require('./services/healthCheckService');
+const rateLimitService = require('./services/rateLimitService');
 
 // 导入路由
 const authRoutes = require('./routes/auth');
@@ -67,22 +67,20 @@ app.use('/uploads', express.static(path.join(__dirname, '../../storage/uploads')
   lastModified: true
 }));
 
-// 全局速率限制
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 1000, // 限制每个IP 1000个请求
-  message: {
-    success: false,
-    code: 429,
-    message: '请求过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
+// 动态全局速率限制中间件
+const dynamicGlobalRateLimit = async (req, res, next) => {
+  try {
+    const limiter = await rateLimitService.getLimiter('global');
+    limiter(req, res, next);
+  } catch (error) {
+    logger.error('获取全局速率限制器失败:', error);
+    // 失败时继续处理请求，不阻塞
+    next();
+  }
+};
 
-app.use('/api/', globalLimiter);
+// 应用动态全局速率限制到所有API路由
+app.use('/api/', dynamicGlobalRateLimit);
 
 // 简单健康检查端点（用于负载均衡器）
 app.get('/health', async (req, res) => {

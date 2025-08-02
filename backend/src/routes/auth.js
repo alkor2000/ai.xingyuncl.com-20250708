@@ -1,78 +1,62 @@
 /**
- * 认证路由
+ * 认证路由 - 支持动态速率限制配置
  */
 
 const express = require('express');
 const AuthController = require('../controllers/authController');
 const { authenticate } = require('../middleware/authMiddleware');
-const rateLimit = require('express-rate-limit');
+const rateLimitService = require('../services/rateLimitService');
 
 const router = express.Router();
 
-// 认证相关的限流配置
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 10, // 每15分钟最多10次认证请求
-  message: {
-    success: false,
-    code: 429,
-    message: '认证请求过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 邮箱验证码限流配置
-const emailCodeLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1小时
-  max: 5, // 每小时最多5次发送请求
-  message: {
-    success: false,
-    code: 429,
-    message: '发送验证码过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
+// 创建动态速率限制中间件包装器
+const dynamicRateLimit = (type) => {
+  return async (req, res, next) => {
+    try {
+      const limiter = await rateLimitService.getLimiter(type);
+      limiter(req, res, next);
+    } catch (error) {
+      console.error(`获取速率限制器失败 (${type}):`, error);
+      // 失败时继续处理请求，不阻塞
+      next();
+    }
+  };
+};
 
 /**
  * @route POST /api/auth/login
  * @desc 用户登录
  * @access Public
  */
-router.post('/login', authLimiter, AuthController.login);
+router.post('/login', dynamicRateLimit('auth'), AuthController.login);
 
 /**
  * @route POST /api/auth/send-email-code
  * @desc 发送邮箱验证码
  * @access Public
  */
-router.post('/send-email-code', emailCodeLimiter, AuthController.sendEmailCode);
+router.post('/send-email-code', dynamicRateLimit('emailCode'), AuthController.sendEmailCode);
 
 /**
  * @route POST /api/auth/login-by-code
  * @desc 邮箱验证码登录
  * @access Public
  */
-router.post('/login-by-code', authLimiter, AuthController.loginByEmailCode);
+router.post('/login-by-code', dynamicRateLimit('auth'), AuthController.loginByEmailCode);
 
 /**
  * @route POST /api/auth/login-by-email-password
  * @desc 邮箱+密码+验证码登录（强制验证模式）
  * @access Public
  */
-router.post('/login-by-email-password', authLimiter, AuthController.loginByEmailPassword);
+router.post('/login-by-email-password', dynamicRateLimit('auth'), AuthController.loginByEmailPassword);
 
 /**
  * @route POST /api/auth/register
  * @desc 用户注册
  * @access Public
  */
-router.post('/register', authLimiter, AuthController.register);
+router.post('/register', dynamicRateLimit('auth'), AuthController.register);
 
 /**
  * @route GET /api/auth/me
@@ -107,7 +91,7 @@ router.get('/credit-history', authenticate, AuthController.getCreditHistory);
  * @desc 刷新访问令牌
  * @access Public
  */
-router.post('/refresh', authLimiter, AuthController.refreshToken);
+router.post('/refresh', dynamicRateLimit('auth'), AuthController.refreshToken);
 
 /**
  * @route POST /api/auth/logout

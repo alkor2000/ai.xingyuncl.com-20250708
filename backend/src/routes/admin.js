@@ -1,5 +1,5 @@
 /**
- * 管理员路由聚合器 - 使用基于角色的权限中间件
+ * 管理员路由聚合器 - 使用基于角色的权限中间件和动态速率限制
  */
 
 const express = require('express');
@@ -13,7 +13,7 @@ const {
   canManageCredits 
 } = require('../middleware/permissions');
 const { uploadSiteLogo } = require('../middleware/systemUploadMiddleware');
-const rateLimit = require('express-rate-limit');
+const rateLimitService = require('../services/rateLimitService');
 
 // 导入子路由
 const userRoutes = require('./admin/userRoutes');
@@ -30,55 +30,43 @@ const SystemStatsController = require('../controllers/admin/SystemStatsControlle
 
 const router = express.Router();
 
-// 管理员操作限流配置 - 调整为更宽松的限制
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 1000, // 限制每个IP最多1000个管理请求
-  message: {
-    success: false,
-    message: '管理操作过于频繁，请稍后再试',
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-  skipFailedRequests: false
-});
+// 创建动态速率限制中间件
+const dynamicAdminReadLimit = async (req, res, next) => {
+  // 只对GET请求应用读限制
+  if (req.method !== 'GET') {
+    return next();
+  }
+  
+  try {
+    const limiter = await rateLimitService.getLimiter('adminRead');
+    limiter(req, res, next);
+  } catch (error) {
+    console.error('获取管理读操作速率限制器失败:', error);
+    next();
+  }
+};
 
-// 为读取操作设置更宽松的限流（GET请求）
-const adminReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 2000, // GET请求限制更宽松
-  message: {
-    success: false,
-    message: '读取操作过于频繁，请稍后再试',
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.method !== 'GET' // 只对GET请求生效
-});
-
-// 为写入操作设置严格的限流（POST/PUT/DELETE请求）
-const adminWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 200, // 写操作限制相对严格
-  message: {
-    success: false,
-    message: '写入操作过于频繁，请稍后再试',
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.method === 'GET' // 跳过GET请求
-});
+const dynamicAdminWriteLimit = async (req, res, next) => {
+  // 只对非GET请求应用写限制
+  if (req.method === 'GET') {
+    return next();
+  }
+  
+  try {
+    const limiter = await rateLimitService.getLimiter('adminWrite');
+    limiter(req, res, next);
+  } catch (error) {
+    console.error('获取管理写操作速率限制器失败:', error);
+    next();
+  }
+};
 
 // 所有路由都需要认证
 router.use(authenticate);
 
-// 应用分层限流中间件
-router.use(adminReadLimiter);  // 读操作限流
-router.use(adminWriteLimiter); // 写操作限流
+// 应用动态分层限流中间件
+router.use(dynamicAdminReadLimit);  // 读操作限流
+router.use(dynamicAdminWriteLimit); // 写操作限流
 
 // ===== 路由挂载 =====
 
@@ -109,6 +97,17 @@ router.get('/settings',
 router.put('/settings',
   canManageSystem(), // 只有超级管理员可以修改
   SystemStatsController.updateSystemSettings
+);
+
+// 速率限制配置路由（新增）
+router.get('/settings/rate-limit',
+  canManageSystem(), // 只有超级管理员可以查看
+  SystemStatsController.getRateLimitSettings
+);
+
+router.put('/settings/rate-limit',
+  canManageSystem(), // 只有超级管理员可以修改
+  SystemStatsController.updateRateLimitSettings
 );
 
 // 邮件设置路由

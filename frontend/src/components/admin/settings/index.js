@@ -1,7 +1,6 @@
 /**
  * 系统设置组件统一导出
  */
-
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
 export { default as AIModelFormModal } from './AIModelFormModal'
@@ -14,3 +13,4 @@ export { default as EmailSettings } from './EmailSettings'
 export { default as APIServiceTable } from './APIServiceTable'
 export { default as APIServiceFormModal } from './APIServiceFormModal'
 export { default as APIServiceActionModal } from './APIServiceActionModal'
+export { default as RateLimitSettings } from './RateLimitSettings'

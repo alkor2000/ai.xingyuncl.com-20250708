@@ -14,6 +14,7 @@ const path = require('path');
 const redisConnection = require('../../database/redis');
 const HealthCheckService = require('../../services/healthCheckService');
 const config = require('../../config');
+const rateLimitService = require('../../services/rateLimitService');
 
 class SystemStatsController {
   /**
@@ -678,6 +679,84 @@ class SystemStatsController {
         error: error.message 
       });
       return ResponseHelper.error(res, error.message || '更新自定义首页配置失败');
+    }
+  }
+
+  /**
+   * 获取速率限制设置（新增）
+   */
+  static async getRateLimitSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以查看速率限制设置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以查看速率限制设置');
+      }
+      
+      // 获取格式化的配置
+      const settings = await rateLimitService.getFormattedConfig();
+      
+      return ResponseHelper.success(res, settings, '获取速率限制设置成功');
+    } catch (error) {
+      logger.error('获取速率限制设置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '获取速率限制设置失败');
+    }
+  }
+
+  /**
+   * 更新速率限制设置（新增）
+   */
+  static async updateRateLimitSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以更新速率限制设置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以修改速率限制设置');
+      }
+      
+      const settings = req.body;
+      
+      // 验证配置格式
+      if (typeof settings !== 'object' || settings === null) {
+        return ResponseHelper.validation(res, ['配置格式无效']);
+      }
+      
+      // 验证每个配置项
+      for (const [key, config] of Object.entries(settings)) {
+        if (!config.windowMinutes || !config.max || !config.message) {
+          return ResponseHelper.validation(res, [`配置项 ${key} 缺少必要字段`]);
+        }
+        
+        // 验证数值范围
+        if (config.windowMinutes < 1 || config.windowMinutes > 1440) {
+          return ResponseHelper.validation(res, [`配置项 ${key} 的时间窗口必须在1-1440分钟之间`]);
+        }
+        
+        if (config.max < 1 || config.max > 10000) {
+          return ResponseHelper.validation(res, [`配置项 ${key} 的最大请求数必须在1-10000之间`]);
+        }
+      }
+      
+      // 保存配置
+      await rateLimitService.saveFormattedConfig(settings);
+      
+      logger.info('管理员更新速率限制设置', { 
+        adminId: req.user.id,
+        settings
+      });
+
+      return ResponseHelper.success(res, settings, '速率限制设置更新成功');
+    } catch (error) {
+      logger.error('更新速率限制设置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '更新速率限制设置失败');
     }
   }
 
