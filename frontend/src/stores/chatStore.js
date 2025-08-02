@@ -83,7 +83,7 @@ const useChatStore = create((set, get) => ({
     set({ conversationStates: newStates })
   },
   
-  // 🔥 获取会话列表 - 添加自动选择逻辑
+  // 🔥 获取会话列表 - 添加自动选择逻辑，增加默认limit到100
   getConversations: async (force = false, autoSelectFirst = false) => {
     const state = get()
     
@@ -98,7 +98,13 @@ const useChatStore = create((set, get) => ({
     
     set({ conversationsLoading: true })
     try {
-      const response = await apiClient.get('/chat/conversations')
+      // 🔥 修改：添加limit参数，增加到100
+      const response = await apiClient.get('/chat/conversations', {
+        params: {
+          limit: 100,  // 增加默认获取数量到100
+          page: 1
+        }
+      })
       const conversations = response.data.data
       
       set({ 
