@@ -40,7 +40,7 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
         <Avatar 
           size={36}
           style={{ 
-            backgroundColor: '#1890ff',
+            backgroundColor: 'var(--primary-color)',
             marginRight: 8,
             alignSelf: 'flex-start',
             display: 'flex',
@@ -56,8 +56,8 @@ const MessageItem = React.memo(({ msg, isStreamingMsg, isStreaming, user, curren
         size="small"
         style={{
           maxWidth: '70%',
-          backgroundColor: msg.role === 'user' ? '#e8e8e8' : '#f6f6f6',
-          color: msg.role === 'user' ? 'inherit' : 'inherit'
+          backgroundColor: msg.role === 'user' ? 'var(--user-message-bg)' : 'var(--ai-message-bg)',
+          color: msg.role === 'user' ? 'var(--user-message-text)' : 'var(--ai-message-text)'
         }}
         bodyStyle={{ padding: '12px 16px' }}
       >
@@ -137,7 +137,7 @@ const EmptyMessages = () => {
         announcement?.content && (
           <Card className="announcement-card">
             <div className="announcement-header">
-              <InfoCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />
+              <InfoCircleOutlined style={{ color: 'var(--primary-color)', marginRight: 8 }} />
               <span>系统公告</span>
             </div>
             <div className="announcement-content markdown-content">

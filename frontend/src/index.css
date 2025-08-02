@@ -1,5 +1,8 @@
 /* AI Platform 全局样式 */
 
+/* 导入主题变量 */
+@import './styles/theme-variables.css';
+
 * {
   margin: 0;
   padding: 0;
@@ -17,8 +20,8 @@ body {
     'Noto Color Emoji';
   font-size: 14px;
   line-height: 1.5715;
-  color: rgba(0, 0, 0, 0.85);
-  background-color: #f5f5f5;
+  color: var(--text-color);
+  background-color: var(--body-bg);
 }
 
 #root {
@@ -34,10 +37,10 @@ body {
 /* ===== 页面容器样式 (非聊天页面) ===== */
 .page-container {
   padding: 24px;
-  background: #fff;
+  background: var(--component-bg);
   margin: 24px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-md);
   height: calc(100% - 48px);
   overflow-y: auto;
 }
@@ -45,14 +48,14 @@ body {
 .page-header {
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .page-title {
   font-size: 20px;
   font-weight: 600;
   margin: 0;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-color);
 }
 
 /* ===== 聊天界面固定布局样式 ===== */
@@ -65,8 +68,8 @@ body {
 
 /* 聊天侧边栏 - 修改overflow设置 */
 .chat-sidebar {
-  background: white !important;
-  border-right: 1px solid #f0f0f0 !important;
+  background: var(--chat-sidebar-bg) !important;
+  border-right: 1px solid var(--border-color) !important;
   height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
@@ -92,15 +95,15 @@ body {
   flex-direction: column !important;
   height: 100% !important;
   overflow: hidden !important;
-  background: #fafafa !important;
+  background: var(--chat-bg) !important;
 }
 
 /* 聊天头部 - 固定在顶部 */
 .chat-header {
   flex-shrink: 0 !important;
   padding: 8px 24px !important;
-  border-bottom: 1px solid #f0f0f0 !important;
-  background: white !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  background: var(--component-bg) !important;
 }
 
 /* 消息区域 - 可滚动，自动占满剩余空间 */
@@ -142,8 +145,8 @@ body {
 .chat-input {
   flex-shrink: 0 !important;
   padding: 16px 24px !important;
-  border-top: 1px solid #f0f0f0 !important;
-  background: white !important;
+  border-top: 1px solid var(--border-color) !important;
+  background: var(--input-bg) !important;
 }
 
 .chat-input-container {
@@ -171,7 +174,7 @@ body {
 .chat-input-tip {
   margin-top: 8px !important;
   font-size: 12px !important;
-  color: #999 !important;
+  color: var(--text-color-tertiary) !important;
   text-align: center !important;
   display: flex !important;
   justify-content: space-between !important;
@@ -192,7 +195,7 @@ body {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 .auth-header {
@@ -203,13 +206,13 @@ body {
 .auth-logo {
   font-size: 32px;
   font-weight: bold;
-  color: #1677ff;
+  color: var(--primary-color);
   margin-bottom: 8px;
 }
 
 .auth-title {
   font-size: 18px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--text-color-secondary);
   margin: 0;
 }
 
@@ -227,7 +230,7 @@ body {
 }
 
 .ai-message {
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--ai-message-text);
 }
 
 /* 普通文本样式 */
@@ -243,11 +246,11 @@ body {
 /* 代码块容器 */
 .code-block-container {
   margin: 16px 0;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--component-bg);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 代码块头部工具栏 */
@@ -256,8 +259,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #f6f8fa;
-  border-bottom: 1px solid #e1e4e8;
+  background: var(--code-block-header-bg);
+  border-bottom: 1px solid var(--border-color);
   font-size: 12px;
 }
 
@@ -274,7 +277,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   background: #666666; /* 默认颜色 */
 }
 
@@ -311,7 +314,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 4px 8px;
   transition: all 0.2s ease;
@@ -320,31 +323,31 @@ body {
 }
 
 .copy-button:hover {
-  background: #f3f4f6;
-  border-color: #1677ff;
-  color: #1677ff;
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .copy-button.copied {
   background: #f0f9ff;
-  border-color: #52c41a;
-  color: #52c41a;
+  border-color: var(--success-color);
+  color: var(--success-color);
 }
 
 /* 代码内容区域 */
 .code-block-content {
   overflow-x: auto;
-  background: #2d3748;
+  background: var(--code-block-bg);
 }
 
 .code-block-content pre {
   margin: 0;
   padding: 16px;
-  background: #2d3748 !important;
+  background: var(--code-block-bg) !important;
   font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.45;
-  color: #e2e8f0;
+  color: var(--code-block-text);
 }
 
 .code-block-content code {
@@ -352,12 +355,12 @@ body {
   padding: 0 !important;
   font-family: inherit;
   font-size: inherit;
-  color: #e2e8f0;
+  color: var(--code-block-text);
 }
 
 /* 如果没有高亮，使用基础样式 */
 .code-block-content pre code {
-  color: #e2e8f0;
+  color: var(--code-block-text);
 }
 
 /* 工具样式 */
@@ -510,12 +513,12 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
@@ -529,12 +532,12 @@ body {
 }
 
 .chat-messages-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
   border-radius: 3px;
 }
 
 .chat-messages-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
@@ -552,7 +555,7 @@ body {
 }
 
 .chat-conversations-list::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: var(--border-color);
   border-radius: 2px;
 }
 

@@ -16,7 +16,8 @@ import {
   GlobalOutlined,
   HeartOutlined,
   MailOutlined,
-  ApiOutlined
+  ApiOutlined,
+  BgColorsOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -36,7 +37,8 @@ import {
   SystemHealthMonitor,
   EmailSettings,
   APIServiceTable,
-  RateLimitSettings
+  RateLimitSettings,
+  ThemeSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -548,6 +550,21 @@ const Settings = () => {
           />
         </TabPane>
 
+        {/* 主题设置（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <BgColorsOutlined />
+                主题设置
+              </span>
+            } 
+            key="theme"
+          >
+            <ThemeSettings disabled={!isSuperAdmin} />
+          </TabPane>
+        )}
+
         {/* 速率限制设置（只有超级管理员可见） */}
         {isSuperAdmin && (
           <TabPane 
@@ -617,7 +634,7 @@ const Settings = () => {
           editingModule={editingModule}
           form={moduleForm}
           loading={loading}
-          onSubmit={editingModule ? handleUpdateModule : handleCreateModule}
+          onSubmit={editingModule ? handleUpdateModule : handleCreateModel}
           onCancel={() => {
             setIsModuleModalVisible(false)
             setEditingModule(null)

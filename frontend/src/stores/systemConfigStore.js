@@ -28,7 +28,8 @@ const useSystemConfigStore = create((set, get) => ({
     chat: {
       font_family: 'system-ui',
       font_size: 14
-    }
+    },
+    theme: null // 添加主题配置
   },
   
   // 用户站点配置（可能来自组配置）
@@ -236,6 +237,12 @@ const useSystemConfigStore = create((set, get) => ({
       fontFamily: state.systemConfig?.chat?.font_family || 'system-ui',
       fontSize: state.systemConfig?.chat?.font_size || 14
     }
+  },
+  
+  // 获取主题配置
+  getThemeConfig: () => {
+    const state = get()
+    return state.systemConfig?.theme || null
   }
 }))
 

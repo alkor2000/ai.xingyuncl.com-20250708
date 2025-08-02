@@ -171,7 +171,9 @@ class SystemConfig {
         login: settings.login_config || {
           mode: 'standard', // 默认标准模式
           refresh_token_days: 14 // 默认14天
-        }
+        },
+        // 添加主题配置
+        theme: settings.theme_config || null
       };
 
       // 处理用户配置兼容性
@@ -224,7 +226,8 @@ class SystemConfig {
         login: {
           mode: 'standard', // 默认标准模式
           refresh_token_days: 14 // 默认14天
-        }
+        },
+        theme: null
       };
     }
   }
@@ -281,6 +284,11 @@ class SystemConfig {
         settings.login_config = formattedSettings.login;
       }
       
+      // 保存主题配置（如果存在）
+      if (formattedSettings.theme !== undefined) {
+        settings.theme_config = formattedSettings.theme;
+      }
+      
       return await SystemConfig.updateSettings(settings);
     } catch (error) {
       logger.error('保存格式化配置失败:', error);
@@ -333,6 +341,30 @@ class SystemConfig {
       return await SystemConfig.updateSetting('login_config', loginConfig, 'json');
     } catch (error) {
       logger.error('更新登录配置失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取主题配置
+   */
+  static async getThemeSettings() {
+    try {
+      return await SystemConfig.getSetting('theme_config');
+    } catch (error) {
+      logger.error('获取主题配置失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 更新主题配置
+   */
+  static async updateThemeSettings(themeConfig) {
+    try {
+      return await SystemConfig.updateSetting('theme_config', themeConfig, 'json');
+    } catch (error) {
+      logger.error('更新主题配置失败:', error);
       throw error;
     }
   }

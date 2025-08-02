@@ -1,0 +1,83 @@
+/**
+ * 主题CSS变量定义
+ * 所有颜色都通过CSS变量控制，便于动态切换主题
+ */
+
+:root {
+  /* 基础颜色 */
+  --primary-color: #1677ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #ff4d4f;
+  
+  /* 背景颜色 */
+  --body-bg: #f5f5f5;
+  --component-bg: #ffffff;
+  --header-bg: #ffffff;
+  --sidebar-bg: #ffffff;
+  
+  /* 文字颜色 */
+  --text-color: rgba(0, 0, 0, 0.85);
+  --text-color-secondary: rgba(0, 0, 0, 0.65);
+  --text-color-tertiary: rgba(0, 0, 0, 0.45);
+  
+  /* 边框和分割线 */
+  --border-color: #f0f0f0;
+  --border-color-split: #f0f0f0;
+  
+  /* 顶部导航栏 */
+  --nav-header-bg: #ffffff;
+  --nav-header-text: rgba(0, 0, 0, 0.85);
+  --nav-header-border: #f0f0f0;
+  --nav-logo-bg: #1677ff;
+  --nav-logo-text: #ffffff;
+  
+  /* 侧边栏 */
+  --sidebar-menu-bg: #ffffff;
+  --sidebar-menu-text: rgba(0, 0, 0, 0.65);
+  --sidebar-menu-active-bg: #e6f4ff;
+  --sidebar-menu-active-text: #1677ff;
+  --sidebar-menu-hover-bg: #f0f0f0;
+  --sidebar-menu-hover-text: #1677ff;
+  --sidebar-submenu-bg: #ffffff;
+  
+  /* 聊天界面专属 */
+  --chat-bg: #fafafa;
+  --chat-sidebar-bg: #ffffff;
+  --user-message-bg: #e3f2fd;
+  --user-message-text: rgba(0, 0, 0, 0.85);
+  --ai-message-bg: #f5f5f5;
+  --ai-message-text: rgba(0, 0, 0, 0.85);
+  --input-bg: #ffffff;
+  --input-border: #d9d9d9;
+  
+  /* 代码块 */
+  --code-block-bg: #2d3748;
+  --code-block-text: #e2e8f0;
+  --code-block-header-bg: #f6f8fa;
+  
+  /* 其他组件 */
+  --card-bg: #ffffff;
+  --hover-bg: #f5f5f5;
+  --active-bg: #e6f4ff;
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-track: #f1f1f1;
+  
+  /* 阴影 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* 过渡动画 */
+* {
+  transition: background-color 0.3s ease, 
+              color 0.3s ease, 
+              border-color 0.3s ease;
+}
+
+/* 滚动条过渡 */
+::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-track {
+  transition: background-color 0.3s ease;
+}

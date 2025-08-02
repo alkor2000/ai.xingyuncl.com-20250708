@@ -16,8 +16,8 @@
 .basic-layout-header {
   height: 50px;
   padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--nav-header-bg);
+  border-bottom: 1px solid var(--nav-header-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -43,8 +43,8 @@
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: #1677ff;
-  color: white;
+  background: var(--nav-logo-bg);
+  color: var(--nav-logo-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,18 +56,20 @@
 .logo-text {
   font-size: 16px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--nav-header-text);
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  color: var(--nav-header-text);
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--nav-header-text);
 }
 
 .user-name {
@@ -86,8 +88,8 @@
 /* 侧边栏 - 宽度80px，图标模式 */
 .basic-layout-sidebar {
   width: 80px !important;
-  background: #fff;
-  border-right: 1px solid #f0f0f0;
+  background: var(--sidebar-menu-bg);
+  border-right: 1px solid var(--border-color);
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;
@@ -109,22 +111,23 @@
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--sidebar-menu-text);
 }
 
 .sidebar-menu-item:hover {
-  background-color: #f0f0f0;
-  color: #1677ff;
+  background-color: var(--sidebar-menu-hover-bg);
+  color: var(--sidebar-menu-hover-text);
 }
 
 .sidebar-menu-item.active {
-  background-color: #e6f4ff;
-  color: #1677ff;
+  background-color: var(--sidebar-menu-active-bg);
+  color: var(--sidebar-menu-active-text);
 }
 
 /* 子菜单弹出内容样式 */
 .sidebar-submenu-content {
   min-width: 150px;
+  background: var(--sidebar-submenu-bg);
 }
 
 .sidebar-submenu-item {
@@ -134,24 +137,24 @@
   border-radius: 4px;
   margin: 2px 0;
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-color);
 }
 
 .sidebar-submenu-item:hover {
-  background-color: #f5f5f5;
-  color: #1677ff;
+  background-color: var(--hover-bg);
+  color: var(--primary-color);
 }
 
 .sidebar-submenu-item.active {
-  background-color: #e6f4ff;
-  color: #1677ff;
+  background-color: var(--active-bg);
+  color: var(--primary-color);
   font-weight: 500;
 }
 
 /* 内容区域 */
 .basic-layout-content {
   flex: 1;
-  background: #f0f2f5;
+  background: var(--body-bg);
   overflow: hidden;
   position: relative;
 }
@@ -159,7 +162,9 @@
 /* 移动端抽屉 */
 .mobile-menu-drawer .ant-drawer-header {
   padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--component-bg);
+  color: var(--text-color);
 }
 
 .mobile-drawer-header {
@@ -170,11 +175,14 @@
 
 .mobile-menu {
   border: none;
+  background: var(--component-bg);
+  color: var(--text-color);
 }
 
 .mobile-menu .ant-menu-item {
   margin: 4px 8px;
   border-radius: 6px;
+  color: var(--text-color);
 }
 
 /* 滚动条样式 */
@@ -187,7 +195,7 @@
 }
 
 .basic-layout-sidebar::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 
@@ -205,12 +213,14 @@
 /* Popover样式优化 */
 .ant-popover-inner {
   border-radius: 8px;
+  background: var(--component-bg);
 }
 
 .ant-popover-title {
   padding: 12px 16px 8px;
   font-weight: 500;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
 }
 
 .ant-popover-inner-content {
@@ -236,11 +246,11 @@
 
 /* 移动端菜单样式 */
 .mobile-menu .ant-menu-item-selected {
-  background-color: #e6f4ff;
+  background-color: var(--active-bg);
 }
 
 .mobile-menu .ant-menu-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--hover-bg);
 }
 
 .mobile-menu .ant-menu-sub {
@@ -248,5 +258,14 @@
 }
 
 .mobile-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: #1677ff;
+  color: var(--primary-color);
+}
+
+/* Ant Design 组件样式覆盖 */
+.basic-layout-header .ant-dropdown-trigger {
+  color: var(--nav-header-text);
+}
+
+.basic-layout-header .ant-avatar {
+  background: var(--primary-color);
 }

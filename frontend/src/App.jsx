@@ -12,6 +12,9 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from './stores/authStore'
 import useSystemConfigStore from './stores/systemConfigStore'
 
+// 导入主题Provider
+import ThemeProvider from './components/ThemeProvider'
+
 // 页面组件
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
@@ -125,78 +128,80 @@ const App = () => {
 
   return (
     <ConfigProvider locale={locale}>
-      <Router>
-        <div className="app">
-          <Routes>
-            {/* 根路径 - 简化逻辑，直接跳转 */}
-            <Route path="/" element={<HomeRoute />} />
+      <ThemeProvider>
+        <Router>
+          <div className="app">
+            <Routes>
+              {/* 根路径 - 简化逻辑，直接跳转 */}
+              <Route path="/" element={<HomeRoute />} />
 
-            {/* 公开路由 */}
-            <Route 
-              path="/login" 
-              element={
-                <PublicRoute>
-                  <Login />
-                </PublicRoute>
-              } 
-            />
-            <Route 
-              path="/register" 
-              element={
-                <PublicRoute>
-                  <Register />
-                </PublicRoute>
-              } 
-            />
+              {/* 公开路由 */}
+              <Route 
+                path="/login" 
+                element={
+                  <PublicRoute>
+                    <Login />
+                  </PublicRoute>
+                } 
+              />
+              <Route 
+                path="/register" 
+                element={
+                  <PublicRoute>
+                    <Register />
+                  </PublicRoute>
+                } 
+              />
 
-            {/* 受保护的路由 */}
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <BasicLayout>
-                    <Routes>
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/chat" element={<Chat />} />
-                      <Route path="/profile" element={<Profile />} />
-                      
-                      {/* 模块页面路由 - 懒加载 */}
-                      <Route 
-                        path="/module/:moduleName" 
-                        element={
-                          <LazyLoadingWrapper>
-                            <ModulePage />
-                          </LazyLoadingWrapper>
-                        } 
-                      />
-                      
-                      {/* Admin路由 - 懒加载隔离 */}
-                      <Route 
-                        path="/admin/users" 
-                        element={
-                          <LazyLoadingWrapper>
-                            <UserManagement />
-                          </LazyLoadingWrapper>
-                        } 
-                      />
-                      <Route 
-                        path="/admin/settings" 
-                        element={
-                          <LazyLoadingWrapper>
-                            <Settings />
-                          </LazyLoadingWrapper>
-                        } 
-                      />
-                      
-                      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                    </Routes>
-                  </BasicLayout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </div>
-      </Router>
+              {/* 受保护的路由 */}
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <BasicLayout>
+                      <Routes>
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/chat" element={<Chat />} />
+                        <Route path="/profile" element={<Profile />} />
+                        
+                        {/* 模块页面路由 - 懒加载 */}
+                        <Route 
+                          path="/module/:moduleName" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <ModulePage />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* Admin路由 - 懒加载隔离 */}
+                        <Route 
+                          path="/admin/users" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <UserManagement />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        <Route 
+                          path="/admin/settings" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <Settings />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                      </Routes>
+                    </BasicLayout>
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </div>
+        </Router>
+      </ThemeProvider>
     </ConfigProvider>
   )
 }
