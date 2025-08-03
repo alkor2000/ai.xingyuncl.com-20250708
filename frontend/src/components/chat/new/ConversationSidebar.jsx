@@ -84,7 +84,6 @@ const ConversationSidebar = ({
           </div>
         </div>
         <div className="conversation-meta">
-          <Tag size="small" color="blue">{model?.display_name || conversation.model_name}</Tag>
           <Text type="secondary" className="message-count">
             <MessageOutlined /> {conversation.message_count}
           </Text>
