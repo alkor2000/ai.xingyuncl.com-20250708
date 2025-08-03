@@ -1,5 +1,5 @@
 /**
- * 对话路由 - 集成积分管理、流式输出、草稿功能和图片上传
+ * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传和系统提示词
  */
 
 const express = require('express');
@@ -94,6 +94,16 @@ router.use(authenticate);
  * @access Private
  */
 router.get('/models', ChatController.getModels);
+
+/**
+ * @route GET /api/chat/system-prompts
+ * @desc 获取可用的系统提示词列表
+ * @access Private
+ */
+router.get('/system-prompts', 
+  requirePermission('chat.use'),
+  ChatController.getSystemPrompts
+);
 
 /**
  * @route GET /api/chat/credits

@@ -11,6 +11,8 @@ const useAdminStore = create((set) => ({
   aiModels: [],
   modules: [],
   apiServices: [],
+  systemPrompts: [],  // 新增：系统提示词列表
+  systemPromptsEnabled: false,  // 新增：系统提示词功能开关状态
   systemStats: {
     users: {},
     groups: [],
@@ -118,6 +120,11 @@ const useAdminStore = create((set) => ({
       console.error('获取用户分组失败:', error)
       throw error
     }
+  },
+  
+  // 新增：在获取用户组时使用别名，避免与系统提示词的冲突
+  fetchUserGroups: async () => {
+    return useAdminStore.getState().getUserGroups()
   },
   
   createUserGroup: async (groupData) => {
@@ -731,6 +738,102 @@ const useAdminStore = create((set) => ({
     } catch (error) {
       console.error('获取服务统计失败:', error)
       throw error
+    }
+  },
+
+  // ===== 系统提示词管理 =====
+  // 获取系统提示词列表
+  getSystemPrompts: async (includeInactive = false) => {
+    set({ loading: true })
+    try {
+      const response = await apiClient.get('/admin/system-prompts', { 
+        params: { include_inactive: includeInactive } 
+      })
+      set({ 
+        systemPrompts: response.data.data,
+        loading: false 
+      })
+      // 同时获取功能开关状态
+      await useAdminStore.getState().getSystemPromptsStatus()
+      return response.data.data
+    } catch (error) {
+      console.error('获取系统提示词列表失败:', error)
+      set({ loading: false })
+      throw error
+    }
+  },
+
+  // 获取系统提示词功能状态
+  getSystemPromptsStatus: async () => {
+    try {
+      const response = await apiClient.get('/admin/system-prompts/status')
+      set({ systemPromptsEnabled: response.data.data.enabled })
+      return response.data.data
+    } catch (error) {
+      console.error('获取系统提示词功能状态失败:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
+  // 获取单个系统提示词详情
+  getSystemPrompt: async (promptId) => {
+    try {
+      const response = await apiClient.get(`/admin/system-prompts/${promptId}`)
+      return response.data.data
+    } catch (error) {
+      console.error('获取系统提示词详情失败:', error)
+      throw error
+    }
+  },
+
+  // 创建系统提示词
+  createSystemPrompt: async (promptData) => {
+    try {
+      const response = await apiClient.post('/admin/system-prompts', promptData)
+      // 刷新列表
+      await useAdminStore.getState().getSystemPrompts()
+      return { success: true, data: response.data.data }
+    } catch (error) {
+      console.error('创建系统提示词失败:', error)
+      return { success: false, error: error.response?.data?.message || error.message }
+    }
+  },
+
+  // 更新系统提示词
+  updateSystemPrompt: async (promptId, updateData) => {
+    try {
+      const response = await apiClient.put(`/admin/system-prompts/${promptId}`, updateData)
+      // 刷新列表
+      await useAdminStore.getState().getSystemPrompts()
+      return { success: true, data: response.data.data }
+    } catch (error) {
+      console.error('更新系统提示词失败:', error)
+      return { success: false, error: error.response?.data?.message || error.message }
+    }
+  },
+
+  // 删除系统提示词
+  deleteSystemPrompt: async (promptId) => {
+    try {
+      await apiClient.delete(`/admin/system-prompts/${promptId}`)
+      // 刷新列表
+      await useAdminStore.getState().getSystemPrompts()
+      return { success: true }
+    } catch (error) {
+      console.error('删除系统提示词失败:', error)
+      return { success: false, error: error.response?.data?.message || error.message }
+    }
+  },
+
+  // 切换系统提示词功能开关
+  toggleSystemPromptsFeature: async (enabled) => {
+    try {
+      const response = await apiClient.put('/admin/system-prompts/toggle', { enabled })
+      set({ systemPromptsEnabled: enabled })
+      return { success: true, data: response.data.data }
+    } catch (error) {
+      console.error('切换系统提示词功能失败:', error)
+      return { success: false, error: error.response?.data?.message || error.message }
     }
   }
 }))

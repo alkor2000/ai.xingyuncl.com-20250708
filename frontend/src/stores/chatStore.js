@@ -16,6 +16,7 @@ const useChatStore = create((set, get) => ({
   
   // 其他状态保持不变
   aiModels: [],
+  systemPrompts: [], // 新增：系统提示词列表
   userCredits: null,
   creditsLoading: false,
   
@@ -150,7 +151,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 创建新会话 - 支持上下文数量、temperature设置和优先级
+  // 🔥 创建新会话 - 支持上下文数量、temperature设置、优先级和系统提示词
   createConversation: async (conversationData) => {
     set({ conversationsLoading: true })
     try {
@@ -813,7 +814,7 @@ const useChatStore = create((set, get) => ({
     get().stopGeneration()
   },
   
-  // 更新会话 - 支持上下文数量、temperature和优先级更新
+  // 更新会话 - 支持上下文数量、temperature、优先级和系统提示词更新
   updateConversation: async (conversationId, updateData) => {
     try {
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)
@@ -918,6 +919,22 @@ const useChatStore = create((set, get) => ({
     }
   },
 
+  // 获取系统提示词列表 - 新增方法
+  getSystemPrompts: async () => {
+    try {
+      const response = await apiClient.get('/chat/system-prompts')
+      const prompts = response.data.data
+      
+      console.log('获取到的系统提示词列表:', prompts)
+      
+      set({ systemPrompts: prompts })
+      return prompts
+    } catch (error) {
+      console.error('获取系统提示词列表失败:', error)
+      return []
+    }
+  },
+
   // 检查积分是否充足 - 如果没有积分状态，先获取一次
   checkCreditsForModel: (modelName) => {
     const state = get()
@@ -982,6 +999,7 @@ const useChatStore = create((set, get) => ({
       messages: [],
       messagesLoading: false,
       aiModels: [],
+      systemPrompts: [], // 重置系统提示词
       userCredits: null,
       creditsLoading: false,
       typing: false,

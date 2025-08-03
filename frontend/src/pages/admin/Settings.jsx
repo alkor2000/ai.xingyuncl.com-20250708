@@ -17,7 +17,8 @@ import {
   HeartOutlined,
   MailOutlined,
   ApiOutlined,
-  BgColorsOutlined
+  BgColorsOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -38,7 +39,8 @@ import {
   EmailSettings,
   APIServiceTable,
   RateLimitSettings,
-  ThemeSettings
+  ThemeSettings,
+  SystemPromptSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -467,6 +469,21 @@ const Settings = () => {
             />
           </Card>
         </TabPane>
+
+        {/* 系统提示词（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <FileTextOutlined />
+                系统提示词
+              </span>
+            } 
+            key="systemPrompts"
+          >
+            <SystemPromptSettings disabled={!isSuperAdmin} />
+          </TabPane>
+        )}
 
         {/* 模块接入（只有超级管理员可见） */}
         {isSuperAdmin && (

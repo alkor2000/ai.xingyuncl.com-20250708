@@ -1,11 +1,12 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序和图片上传
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序、图片上传和系统提示词
  */
 
 const { v4: uuidv4 } = require('uuid');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const File = require('../models/File');
+const SystemPrompt = require('../models/SystemPrompt');
 const AIService = require('../services/aiService');
 const AIStreamService = require('../services/aiStreamService');
 const CacheService = require('../services/cacheService');
@@ -46,13 +47,13 @@ class ChatController {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置和优先级
+   * 创建新会话 - 支持上下文数量、temperature设置、优先级和系统提示词
    * POST /api/chat/conversations
    */
   static async createConversation(req, res) {
     try {
       const userId = req.user.id;
-      const { title, model_name, system_prompt, context_length, ai_temperature, priority } = req.body;
+      const { title, model_name, system_prompt, system_prompt_id, context_length, ai_temperature, priority } = req.body;
 
       logger.info('开始创建会话', { 
         userId, 
@@ -61,7 +62,8 @@ class ChatController {
         context_length,
         ai_temperature,
         priority,
-        hasSystemPrompt: !!system_prompt 
+        hasSystemPrompt: !!system_prompt,
+        hasSystemPromptId: !!system_prompt_id
       });
 
       // 验证模型名称
@@ -84,6 +86,16 @@ class ChatController {
         return ResponseHelper.forbidden(res, '您无权使用该模型');
       }
 
+      // 验证系统提示词（如果提供了ID）
+      if (system_prompt_id) {
+        const availablePrompts = await SystemPrompt.getUserAvailablePrompts(userId, userGroupId);
+        const canUsePrompt = availablePrompts.some(p => p.id === system_prompt_id);
+        
+        if (!canUsePrompt) {
+          return ResponseHelper.forbidden(res, '您无权使用该系统提示词');
+        }
+      }
+
       // 验证上下文数量
       let validContextLength = parseInt(context_length) || 20;
       if (validContextLength < 0) validContextLength = 0;
@@ -100,6 +112,7 @@ class ChatController {
         title: title || 'New Chat',
         model_name: model_name || 'gpt-3.5-turbo',
         system_prompt: system_prompt || null,
+        system_prompt_id: system_prompt_id || null,
         context_length: validContextLength,
         ai_temperature: validTemperature,
         priority: parseInt(priority) || 0
@@ -115,7 +128,8 @@ class ChatController {
         modelName: conversation.model_name,
         contextLength: conversation.context_length,
         aiTemperature: conversation.ai_temperature,
-        priority: conversation.priority
+        priority: conversation.priority,
+        systemPromptId: conversation.system_prompt_id
       });
 
       return ResponseHelper.success(res, conversation.toJSON(), '会话创建成功', 201);
@@ -170,14 +184,14 @@ class ChatController {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature和优先级更新
+   * 更新会话 - 支持上下文数量、temperature、优先级和系统提示词更新
    * PUT /api/chat/conversations/:id
    */
   static async updateConversation(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { title, model_name, system_prompt, is_pinned, context_length, ai_temperature, priority } = req.body;
+      const { title, model_name, system_prompt, system_prompt_id, is_pinned, context_length, ai_temperature, priority } = req.body;
 
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -207,8 +221,21 @@ class ChatController {
         }
       }
 
+      // 如果更换系统提示词，验证权限
+      if (system_prompt_id !== undefined && system_prompt_id !== conversation.system_prompt_id) {
+        if (system_prompt_id) {
+          const userGroupId = req.user.group_id;
+          const availablePrompts = await SystemPrompt.getUserAvailablePrompts(userId, userGroupId);
+          const canUsePrompt = availablePrompts.some(p => p.id === system_prompt_id);
+          
+          if (!canUsePrompt) {
+            return ResponseHelper.forbidden(res, '您无权使用该系统提示词');
+          }
+        }
+      }
+
       // 验证上下文数量
-      let updateData = { title, model_name, system_prompt, is_pinned };
+      let updateData = { title, model_name, system_prompt, system_prompt_id, is_pinned };
       
       if (context_length !== undefined) {
         let validContextLength = parseInt(context_length) || 20;
@@ -408,7 +435,7 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片）
+   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片和系统提示词）
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
@@ -526,10 +553,21 @@ class ChatController {
       // 构造AI请求消息（包含图片）
       const aiMessages = [];
       
-      if (conversation.system_prompt) {
+      // 处理系统提示词
+      let systemPromptContent = conversation.system_prompt;
+      
+      // 如果有系统提示词ID，获取实际内容
+      if (conversation.system_prompt_id) {
+        const promptContent = await SystemPrompt.getPromptContent(conversation.system_prompt_id);
+        if (promptContent) {
+          systemPromptContent = promptContent;
+        }
+      }
+      
+      if (systemPromptContent) {
         aiMessages.push({
           role: 'system',
-          content: conversation.system_prompt
+          content: systemPromptContent
         });
       }
       
@@ -553,7 +591,8 @@ class ChatController {
         modelName: conversation.model_name,
         useStream,
         messageCount: aiMessages.length,
-        hasImage: !!file_id
+        hasImage: !!file_id,
+        hasSystemPrompt: !!systemPromptContent
       });
 
       // 处理流式或非流式响应
@@ -857,6 +896,35 @@ class ChatController {
         stack: error.stack
       });
       return ResponseHelper.error(res, '获取AI模型列表失败');
+    }
+  }
+
+  /**
+   * 获取可用的系统提示词列表
+   * GET /api/chat/system-prompts
+   */
+  static async getSystemPrompts(req, res) {
+    try {
+      const userId = req.user.id;
+      const userGroupId = req.user.group_id;
+      
+      // 获取用户可用的系统提示词（不包含内容）
+      const prompts = await SystemPrompt.getUserAvailablePrompts(userId, userGroupId);
+      
+      logger.info('获取用户可用系统提示词列表', {
+        userId: req.user.id,
+        groupId: userGroupId,
+        promptCount: prompts.length
+      });
+      
+      return ResponseHelper.success(res, prompts, '获取系统提示词列表成功');
+    } catch (error) {
+      logger.error('获取系统提示词列表失败', { 
+        userId: req.user?.id, 
+        error: error.message,
+        stack: error.stack
+      });
+      return ResponseHelper.error(res, '获取系统提示词列表失败');
     }
   }
 
