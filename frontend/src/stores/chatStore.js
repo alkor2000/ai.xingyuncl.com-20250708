@@ -17,6 +17,7 @@ const useChatStore = create((set, get) => ({
   // 其他状态保持不变
   aiModels: [],
   systemPrompts: [], // 新增：系统提示词列表
+  moduleCombinations: [], // 新增：模块组合列表
   userCredits: null,
   creditsLoading: false,
   
@@ -151,7 +152,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 创建新会话 - 支持上下文数量、temperature设置、优先级和系统提示词
+  // 🔥 创建新会话 - 支持上下文数量、temperature设置、优先级、系统提示词和模块组合
   createConversation: async (conversationData) => {
     set({ conversationsLoading: true })
     try {
@@ -814,7 +815,7 @@ const useChatStore = create((set, get) => ({
     get().stopGeneration()
   },
   
-  // 更新会话 - 支持上下文数量、temperature、优先级和系统提示词更新
+  // 更新会话 - 支持上下文数量、temperature、优先级、系统提示词和模块组合更新
   updateConversation: async (conversationId, updateData) => {
     try {
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)
@@ -935,6 +936,25 @@ const useChatStore = create((set, get) => ({
     }
   },
 
+  // 获取模块组合列表 - 修复API路径
+  getModuleCombinations: async () => {
+    try {
+      // 🔥 修复：使用正确的API路径
+      const response = await apiClient.get('/knowledge/combinations', {
+        params: { include_inactive: false }
+      })
+      const combinations = response.data.data
+      
+      console.log('获取到的模块组合列表:', combinations)
+      
+      set({ moduleCombinations: combinations })
+      return combinations
+    } catch (error) {
+      console.error('获取模块组合列表失败:', error)
+      return []
+    }
+  },
+
   // 检查积分是否充足 - 如果没有积分状态，先获取一次
   checkCreditsForModel: (modelName) => {
     const state = get()
@@ -1000,6 +1020,7 @@ const useChatStore = create((set, get) => ({
       messagesLoading: false,
       aiModels: [],
       systemPrompts: [], // 重置系统提示词
+      moduleCombinations: [], // 重置模块组合
       userCredits: null,
       creditsLoading: false,
       typing: false,

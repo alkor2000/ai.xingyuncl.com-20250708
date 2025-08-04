@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序、图片上传和系统提示词
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序、图片上传、系统提示词和知识模块
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -7,6 +7,7 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const File = require('../models/File');
 const SystemPrompt = require('../models/SystemPrompt');
+const ModuleCombination = require('../models/ModuleCombination');
 const AIService = require('../services/aiService');
 const AIStreamService = require('../services/aiStreamService');
 const CacheService = require('../services/cacheService');
@@ -47,13 +48,22 @@ class ChatController {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置、优先级和系统提示词
+   * 创建新会话 - 支持上下文数量、temperature设置、优先级、系统提示词和模块组合
    * POST /api/chat/conversations
    */
   static async createConversation(req, res) {
     try {
       const userId = req.user.id;
-      const { title, model_name, system_prompt, system_prompt_id, context_length, ai_temperature, priority } = req.body;
+      const { 
+        title, 
+        model_name, 
+        system_prompt, 
+        system_prompt_id, 
+        module_combination_id,
+        context_length, 
+        ai_temperature, 
+        priority 
+      } = req.body;
 
       logger.info('开始创建会话', { 
         userId, 
@@ -63,7 +73,8 @@ class ChatController {
         ai_temperature,
         priority,
         hasSystemPrompt: !!system_prompt,
-        hasSystemPromptId: !!system_prompt_id
+        hasSystemPromptId: !!system_prompt_id,
+        hasModuleCombination: !!module_combination_id
       });
 
       // 验证模型名称
@@ -96,6 +107,18 @@ class ChatController {
         }
       }
 
+      // 验证模块组合（如果提供了ID）
+      if (module_combination_id) {
+        const combination = await ModuleCombination.findById(module_combination_id, userId);
+        if (!combination) {
+          return ResponseHelper.notFound(res, '模块组合不存在');
+        }
+        
+        if (combination.user_id !== userId) {
+          return ResponseHelper.forbidden(res, '您无权使用该模块组合');
+        }
+      }
+
       // 验证上下文数量
       let validContextLength = parseInt(context_length) || 20;
       if (validContextLength < 0) validContextLength = 0;
@@ -113,6 +136,7 @@ class ChatController {
         model_name: model_name || 'gpt-3.5-turbo',
         system_prompt: system_prompt || null,
         system_prompt_id: system_prompt_id || null,
+        module_combination_id: module_combination_id || null,
         context_length: validContextLength,
         ai_temperature: validTemperature,
         priority: parseInt(priority) || 0
@@ -129,7 +153,8 @@ class ChatController {
         contextLength: conversation.context_length,
         aiTemperature: conversation.ai_temperature,
         priority: conversation.priority,
-        systemPromptId: conversation.system_prompt_id
+        systemPromptId: conversation.system_prompt_id,
+        moduleCombinationId: conversation.module_combination_id
       });
 
       return ResponseHelper.success(res, conversation.toJSON(), '会话创建成功', 201);
@@ -184,14 +209,24 @@ class ChatController {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature、优先级和系统提示词更新
+   * 更新会话 - 支持上下文数量、temperature、优先级、系统提示词和模块组合更新
    * PUT /api/chat/conversations/:id
    */
   static async updateConversation(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { title, model_name, system_prompt, system_prompt_id, is_pinned, context_length, ai_temperature, priority } = req.body;
+      const { 
+        title, 
+        model_name, 
+        system_prompt, 
+        system_prompt_id, 
+        module_combination_id,
+        is_pinned, 
+        context_length, 
+        ai_temperature, 
+        priority 
+      } = req.body;
 
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -234,8 +269,22 @@ class ChatController {
         }
       }
 
+      // 如果更换模块组合，验证权限
+      if (module_combination_id !== undefined && module_combination_id !== conversation.module_combination_id) {
+        if (module_combination_id) {
+          const combination = await ModuleCombination.findById(module_combination_id, userId);
+          if (!combination) {
+            return ResponseHelper.notFound(res, '模块组合不存在');
+          }
+          
+          if (combination.user_id !== userId) {
+            return ResponseHelper.forbidden(res, '您无权使用该模块组合');
+          }
+        }
+      }
+
       // 验证上下文数量
-      let updateData = { title, model_name, system_prompt, system_prompt_id, is_pinned };
+      let updateData = { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned };
       
       if (context_length !== undefined) {
         let validContextLength = parseInt(context_length) || 20;
@@ -435,7 +484,7 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片和系统提示词）
+   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片、系统提示词和模块组合）
    * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
@@ -564,6 +613,54 @@ class ChatController {
         }
       }
       
+      // 如果有模块组合ID，获取组合内容
+      if (conversation.module_combination_id) {
+        logger.info('开始处理模块组合', {
+          moduleCombinationId: conversation.module_combination_id,
+          userId,
+          conversationId: id
+        });
+        
+        try {
+          const combinedContent = await ModuleCombination.getCombinedContent(conversation.module_combination_id, userId);
+          
+          logger.info('获取模块组合内容成功', {
+            moduleCombinationId: conversation.module_combination_id,
+            hasSystemPrompt: !!combinedContent.systemPrompt,
+            hasNormalPrompt: !!combinedContent.normalPrompt,
+            systemPromptLength: combinedContent.systemPrompt?.length || 0,
+            normalPromptLength: combinedContent.normalPrompt?.length || 0
+          });
+          
+          // 如果有系统级提示词内容，添加到系统提示词
+          if (combinedContent.systemPrompt) {
+            systemPromptContent = systemPromptContent 
+              ? `${systemPromptContent}\n\n${combinedContent.systemPrompt}`
+              : combinedContent.systemPrompt;
+          }
+          
+          // 如果有普通提示词内容，作为第一条用户消息
+          if (combinedContent.normalPrompt) {
+            aiMessages.push({
+              role: 'user',
+              content: combinedContent.normalPrompt
+            });
+            aiMessages.push({
+              role: 'assistant',
+              content: '我已经理解了上述内容，请继续提问。'
+            });
+          }
+        } catch (error) {
+          logger.error('获取模块组合内容失败', {
+            moduleCombinationId: conversation.module_combination_id,
+            userId,
+            error: error.message,
+            stack: error.stack
+          });
+          // 继续执行，不中断对话
+        }
+      }
+      
       if (systemPromptContent) {
         aiMessages.push({
           role: 'system',
@@ -592,7 +689,8 @@ class ChatController {
         useStream,
         messageCount: aiMessages.length,
         hasImage: !!file_id,
-        hasSystemPrompt: !!systemPromptContent
+        hasSystemPrompt: !!systemPromptContent,
+        hasModuleCombination: !!conversation.module_combination_id
       });
 
       // 处理流式或非流式响应
@@ -925,6 +1023,33 @@ class ChatController {
         stack: error.stack
       });
       return ResponseHelper.error(res, '获取系统提示词列表失败');
+    }
+  }
+
+  /**
+   * 获取用户的模块组合列表
+   * GET /api/chat/module-combinations
+   */
+  static async getModuleCombinations(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      // 获取用户的模块组合列表
+      const combinations = await ModuleCombination.getUserCombinations(userId, true);
+      
+      logger.info('获取用户模块组合列表', {
+        userId: req.user.id,
+        combinationCount: combinations.length
+      });
+      
+      return ResponseHelper.success(res, combinations, '获取模块组合列表成功');
+    } catch (error) {
+      logger.error('获取模块组合列表失败', { 
+        userId: req.user?.id, 
+        error: error.message,
+        stack: error.stack
+      });
+      return ResponseHelper.error(res, '获取模块组合列表失败');
     }
   }
 

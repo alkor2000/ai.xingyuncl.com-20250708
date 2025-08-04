@@ -75,6 +75,12 @@ const BasicLayout = ({ children }) => {
         permission: 'chat.use'
       },
       {
+        key: '/knowledge',
+        icon: 'AppstoreAddOutlined',
+        label: '万智台',
+        permission: 'chat.use'
+      },
+      {
         key: 'admin',
         icon: 'SettingOutlined',
         label: t('nav.admin'),

@@ -237,7 +237,7 @@ const Chat = () => {
     }
   }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
 
-  // 创建新对话 - 支持系统提示词ID
+  // 创建新对话 - 支持系统提示词ID和模块组合ID
   const handleCreateConversation = async (values) => {
     try {
       await createConversation({
@@ -245,6 +245,7 @@ const Chat = () => {
         model_name: values.model_name,
         system_prompt: values.system_prompt,
         system_prompt_id: values.system_prompt_id, // 新增系统提示词ID
+        module_combination_id: values.module_combination_id, // 新增模块组合ID
         context_length: values.context_length,
         ai_temperature: values.ai_temperature,
         priority: values.priority || 0
@@ -273,13 +274,14 @@ const Chat = () => {
     }
   }
 
-  // 编辑对话 - 支持系统提示词ID
+  // 编辑对话 - 支持系统提示词ID和模块组合ID
   const handleEditConversation = (conversation) => {
     settingsForm.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
       system_prompt: conversation.system_prompt,
       system_prompt_id: conversation.system_prompt_id, // 新增系统提示词ID
+      module_combination_id: conversation.module_combination_id, // 新增模块组合ID
       is_pinned: conversation.is_pinned,
       context_length: conversation.context_length,
       ai_temperature: conversation.ai_temperature,

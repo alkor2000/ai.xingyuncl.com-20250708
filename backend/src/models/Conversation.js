@@ -1,5 +1,5 @@
 /**
- * 对话会话数据模型 - 支持动态上下文数量配置、temperature设置、优先级排序和系统提示词
+ * 对话会话数据模型 - 支持动态上下文数量配置、temperature设置、优先级排序、系统提示词和模块组合
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -16,6 +16,7 @@ class Conversation {
     this.model_name = data.model_name || null;
     this.system_prompt = data.system_prompt || null;
     this.system_prompt_id = data.system_prompt_id || null; // 新增：系统提示词ID
+    this.module_combination_id = data.module_combination_id || null; // 新增：模块组合ID
     this.is_pinned = data.is_pinned || 0;
     this.priority = data.priority || 0; // 优先级字段
     this.message_count = data.message_count || 0;
@@ -67,7 +68,7 @@ class Conversation {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置、优先级和系统提示词
+   * 创建新会话 - 支持上下文数量、temperature设置、优先级、系统提示词和模块组合
    */
   static async create(conversationData) {
     try {
@@ -77,6 +78,7 @@ class Conversation {
         model_name,
         system_prompt = null,
         system_prompt_id = null, // 新增：系统提示词ID
+        module_combination_id = null, // 新增：模块组合ID
         context_length = 20, // 默认20条上下文
         ai_temperature,
         priority = 0 // 默认优先级为0
@@ -99,8 +101,8 @@ class Conversation {
       const conversationId = uuidv4();
       
       const sql = `
-        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, system_prompt_id, priority, context_length, ai_temperature)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, system_prompt_id, module_combination_id, priority, context_length, ai_temperature)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       await dbConnection.query(sql, [
@@ -110,6 +112,7 @@ class Conversation {
         model_name,
         system_prompt,
         system_prompt_id,
+        module_combination_id,
         Math.max(0, Math.min(10, parseInt(priority) || 0)), // 确保优先级在0-10范围内
         parseInt(context_length) || 20,
         ai_temperature !== undefined && ai_temperature !== null 
@@ -124,7 +127,8 @@ class Conversation {
         contextLength: context_length,
         aiTemperature: ai_temperature !== undefined ? ai_temperature : defaultTemperature,
         priority: priority,
-        systemPromptId: system_prompt_id
+        systemPromptId: system_prompt_id,
+        moduleCombinationId: module_combination_id
       });
 
       return await Conversation.findById(conversationId);
@@ -189,14 +193,14 @@ class Conversation {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature、优先级和系统提示词更新
+   * 更新会话 - 支持上下文数量、temperature、优先级、系统提示词和模块组合更新
    */
   async update(updateData) {
     try {
       const fields = [];
       const values = [];
       
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'system_prompt_id', 'is_pinned', 'priority', 'context_length', 'ai_temperature', 'message_count', 'total_tokens', 'last_message_at', 'cleared_at'];
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'system_prompt_id', 'module_combination_id', 'is_pinned', 'priority', 'context_length', 'ai_temperature', 'message_count', 'total_tokens', 'last_message_at', 'cleared_at'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -224,7 +228,7 @@ class Conversation {
             // 确保优先级在0-10范围内
             const priority = parseInt(updateData[field]) || 0;
             values.push(Math.max(0, Math.min(10, priority)));
-          } else if (field === 'system_prompt' || field === 'system_prompt_id' || field === 'cleared_at' || field === 'last_message_at') {
+          } else if (field === 'system_prompt' || field === 'system_prompt_id' || field === 'module_combination_id' || field === 'cleared_at' || field === 'last_message_at') {
             // 这些字段可以是null，但不能是undefined
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
           } else {
@@ -357,6 +361,7 @@ class Conversation {
       model_name: this.model_name,
       system_prompt: this.system_prompt,
       system_prompt_id: this.system_prompt_id, // 返回系统提示词ID
+      module_combination_id: this.module_combination_id, // 返回模块组合ID
       is_pinned: this.is_pinned,
       priority: this.priority, // 返回优先级
       message_count: this.message_count,

@@ -30,6 +30,9 @@ const Settings = React.lazy(() => import('./pages/admin/Settings'))
 // 模块页面组件 - 懒加载
 const ModulePage = React.lazy(() => import('./pages/module/ModulePage'))
 
+// 知识库页面组件 - 懒加载
+const KnowledgeBase = React.lazy(() => import('./pages/knowledge/KnowledgeBase'))
+
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -163,6 +166,16 @@ const App = () => {
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/chat" element={<Chat />} />
                         <Route path="/profile" element={<Profile />} />
+                        
+                        {/* 知识库页面路由 - 懒加载 */}
+                        <Route 
+                          path="/knowledge" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <KnowledgeBase />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
                         
                         {/* 模块页面路由 - 懒加载 */}
                         <Route 

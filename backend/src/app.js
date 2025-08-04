@@ -21,6 +21,7 @@ const chatRoutes = require('./routes/chat');
 const statsRoutes = require('./routes/stats');
 const publicRoutes = require('./routes/public');
 const servicesRoutes = require('./routes/services'); // 新增服务API路由
+const knowledgeRoutes = require('./routes/knowledgeRoutes'); // 新增知识模块路由
 
 // 创建 Express 应用
 const app = express();
@@ -140,6 +141,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/services', servicesRoutes); // 新增服务API路由
+app.use('/api/knowledge', knowledgeRoutes); // 新增知识模块路由
 
 // 404 处理
 app.use((req, res) => {

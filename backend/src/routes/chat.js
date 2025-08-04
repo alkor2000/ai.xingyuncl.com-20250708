@@ -1,5 +1,5 @@
 /**
- * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传和系统提示词
+ * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传、系统提示词和模块组合
  */
 
 const express = require('express');
@@ -103,6 +103,16 @@ router.get('/models', ChatController.getModels);
 router.get('/system-prompts', 
   requirePermission('chat.use'),
   ChatController.getSystemPrompts
+);
+
+/**
+ * @route GET /api/chat/module-combinations
+ * @desc 获取用户的模块组合列表
+ * @access Private
+ */
+router.get('/module-combinations', 
+  requirePermission('chat.use'),
+  ChatController.getModuleCombinations
 );
 
 /**

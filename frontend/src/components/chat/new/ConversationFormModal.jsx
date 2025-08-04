@@ -1,5 +1,5 @@
 /**
- * 新建对话弹窗组件 - 支持系统提示词选择
+ * 新建对话弹窗组件 - 支持系统提示词选择和模块组合
  */
 
 import React, { useEffect, useState } from 'react'
@@ -15,11 +15,14 @@ import {
   Tag,
   Tooltip,
   Divider,
-  Empty
+  Empty,
+  Alert
 } from 'antd'
 import {
   InfoCircleOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  GroupOutlined,
+  AppstoreAddOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
@@ -37,16 +40,18 @@ const ConversationFormModal = ({
 }) => {
   const { t } = useTranslation()
   const { getDefaultAIModel, getDefaultTemperature } = useSystemConfigStore()
-  const { systemPrompts, getSystemPrompts } = useChatStore()
+  const { systemPrompts, getSystemPrompts, moduleCombinations, getModuleCombinations } = useChatStore()
   const [customPromptMode, setCustomPromptMode] = useState(false)
   const [selectedPromptContent, setSelectedPromptContent] = useState('')
+  const [selectedCombination, setSelectedCombination] = useState(null)
 
-  // 加载系统提示词
+  // 加载系统提示词和模块组合
   useEffect(() => {
     if (visible) {
       getSystemPrompts()
+      getModuleCombinations()
     }
-  }, [visible, getSystemPrompts])
+  }, [visible, getSystemPrompts, getModuleCombinations])
 
   // 当弹窗打开时，设置默认值
   useEffect(() => {
@@ -68,12 +73,14 @@ const ConversationFormModal = ({
         ai_temperature: defaultTemp,
         priority: 0,
         system_prompt_id: null,
-        system_prompt: ''
+        system_prompt: '',
+        module_combination_id: null
       })
       
       // 重置状态
       setCustomPromptMode(false)
       setSelectedPromptContent('')
+      setSelectedCombination(null)
     }
   }, [visible, aiModels, form, getDefaultAIModel, getDefaultTemperature])
 
@@ -104,6 +111,30 @@ const ConversationFormModal = ({
       form.setFieldsValue({
         system_prompt_id: null,
         system_prompt: ''
+      })
+    }
+  }
+
+  // 处理模块组合选择
+  const handleCombinationChange = (combinationId) => {
+    if (combinationId) {
+      const combination = moduleCombinations.find(c => c.id === combinationId)
+      setSelectedCombination(combination)
+      
+      // 如果选择了模块组合，清空系统提示词选择（避免冲突）
+      if (combination && combination.module_count > 0) {
+        setCustomPromptMode(false)
+        setSelectedPromptContent('')
+        form.setFieldsValue({
+          system_prompt_id: null,
+          system_prompt: '',
+          module_combination_id: combinationId
+        })
+      }
+    } else {
+      setSelectedCombination(null)
+      form.setFieldsValue({
+        module_combination_id: null
       })
     }
   }
@@ -170,8 +201,96 @@ const ConversationFormModal = ({
           </Select>
         </Form.Item>
 
-        {/* 系统提示词选择 */}
-        {systemPrompts.length > 0 && (
+        {/* 模块组合选择 */}
+        {moduleCombinations.length > 0 && (
+          <Form.Item
+            name="module_combination_id"
+            label={
+              <Space>
+                <AppstoreAddOutlined />
+                模块组合
+                <Tooltip title="选择预设的知识模块组合，可以让AI获得特定领域的知识和能力">
+                  <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
+                </Tooltip>
+              </Space>
+            }
+          >
+            <Select
+              placeholder="选择知识模块组合（可选）"
+              allowClear
+              onChange={handleCombinationChange}
+              style={{ width: '100%' }}
+              optionLabelProp="label"
+              dropdownMatchSelectWidth={false}
+              dropdownStyle={{ minWidth: 400 }}
+            >
+              {moduleCombinations.map(combination => (
+                <Option 
+                  key={combination.id} 
+                  value={combination.id}
+                  label={combination.name}
+                  disabled={!combination.is_active}
+                >
+                  <div style={{ padding: '4px 0' }}>
+                    <div style={{ 
+                      fontWeight: 500,
+                      marginBottom: 4,
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word'
+                    }}>
+                      <Space>
+                        <GroupOutlined />
+                        {combination.name}
+                        <Tag color="blue" size="small">
+                          {combination.module_count || 0} 个模块
+                        </Tag>
+                        {combination.estimated_tokens > 0 && (
+                          <Tag color="orange" size="small">
+                            约 {combination.estimated_tokens} tokens
+                          </Tag>
+                        )}
+                      </Space>
+                    </div>
+                    {combination.description && (
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: '#666',
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
+                        lineHeight: '1.5'
+                      }}>
+                        {combination.description}
+                      </div>
+                    )}
+                  </div>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+        )}
+
+        {/* 显示选中的模块组合信息 */}
+        {selectedCombination && (
+          <Alert
+            message="已选择模块组合"
+            description={
+              <div>
+                <div>{selectedCombination.description}</div>
+                <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                  包含 {selectedCombination.module_count || 0} 个知识模块，
+                  预计消耗 {selectedCombination.estimated_tokens || 0} tokens
+                </div>
+              </div>
+            }
+            type="info"
+            showIcon
+            icon={<GroupOutlined />}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {/* 系统提示词选择 - 仅在未选择模块组合时显示 */}
+        {!selectedCombination && systemPrompts.length > 0 && (
           <Form.Item
             label={
               <Space>
@@ -240,7 +359,7 @@ const ConversationFormModal = ({
         )}
 
         {/* 显示选中的提示词描述 */}
-        {selectedPromptContent && !customPromptMode && (
+        {selectedPromptContent && !customPromptMode && !selectedCombination && (
           <div style={{ 
             marginTop: -16, 
             marginBottom: 16, 
@@ -256,7 +375,7 @@ const ConversationFormModal = ({
         )}
 
         {/* 自定义系统提示词输入框 */}
-        {(customPromptMode || systemPrompts.length === 0) && (
+        {!selectedCombination && (customPromptMode || systemPrompts.length === 0) && (
           <Form.Item
             name="system_prompt"
             label={t('chat.form.systemPrompt')}
@@ -268,7 +387,7 @@ const ConversationFormModal = ({
           </Form.Item>
         )}
 
-        {/* 隐藏的system_prompt_id字段 */}
+        {/* 隐藏的字段 */}
         <Form.Item name="system_prompt_id" hidden>
           <Input />
         </Form.Item>

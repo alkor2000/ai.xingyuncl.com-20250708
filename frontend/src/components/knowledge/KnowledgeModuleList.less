@@ -1,0 +1,33 @@
+.knowledge-module-list {
+  .list-toolbar {
+    margin-bottom: 16px;
+  }
+  
+  .module-name {
+    font-weight: 500;
+  }
+  
+  .ant-table {
+    .ant-table-cell {
+      vertical-align: middle;
+    }
+  }
+  
+  // 移动端适配
+  @media (max-width: 768px) {
+    .list-toolbar {
+      .ant-space {
+        flex-wrap: wrap;
+        
+        .ant-space-item {
+          margin-bottom: 8px;
+        }
+      }
+      
+      .ant-input-search,
+      .ant-select {
+        width: 100% !important;
+      }
+    }
+  }
+}
