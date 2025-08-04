@@ -16,8 +16,8 @@ RUN npm ci --only=production
 # 生产环境镜像
 FROM node:18-alpine
 
-# 安装运行时依赖
-RUN apk add --no-cache tini
+# 安装运行时依赖和mysql客户端
+RUN apk add --no-cache tini mysql-client
 
 # 创建非root用户
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
@@ -30,6 +30,13 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # 复制应用代码
 COPY --chown=nodejs:nodejs backend/src ./src
+
+# 复制数据库迁移文件
+COPY --chown=nodejs:nodejs database/migrations ./database/migrations
+
+# 复制迁移脚本
+COPY --chown=nodejs:nodejs docker/scripts/run-migrations.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/run-migrations.sh
 
 # 创建必要的目录
 RUN mkdir -p logs storage/uploads && \
@@ -48,12 +55,5 @@ EXPOSE 4000
 # 使用tini作为PID 1进程
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# 启动应用
-CMD ["node", "src/server.js"]
-
-# 添加迁移脚本
-COPY docker/scripts/run-migrations.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/run-migrations.sh
-
-# 修改启动命令，先执行迁移
-CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && npm start"]
+# 启动应用（先执行迁移）
+CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && node src/server.js"]
