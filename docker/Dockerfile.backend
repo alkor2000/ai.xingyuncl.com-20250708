@@ -50,3 +50,10 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 # 启动应用
 CMD ["node", "src/server.js"]
+
+# 添加迁移脚本
+COPY docker/scripts/run-migrations.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/run-migrations.sh
+
+# 修改启动命令，先执行迁移
+CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && npm start"]
