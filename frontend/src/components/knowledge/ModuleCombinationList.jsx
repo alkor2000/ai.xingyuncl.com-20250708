@@ -97,14 +97,22 @@ const ModuleCombinationList = ({
     )
   }
 
-  // 计算Token使用率（假设上限为4096）
+  // 格式化Token数量为K单位
+  const formatTokens = (tokens) => {
+    if (tokens >= 1000) {
+      return (tokens / 1000).toFixed(1) + 'K'
+    }
+    return tokens.toString()
+  }
+
+  // 计算Token使用率（上限为100K）
   const getTokenUsage = (estimatedTokens) => {
-    const maxTokens = 4096
+    const maxTokens = 100000 // 100K
     const percent = Math.min((estimatedTokens / maxTokens) * 100, 100)
     const status = percent > 80 ? 'exception' : percent > 60 ? 'active' : 'success'
     
     return (
-      <Tooltip title={`预估 ${estimatedTokens} tokens / ${maxTokens} tokens`}>
+      <Tooltip title={`预估 ${formatTokens(estimatedTokens)} / ${formatTokens(maxTokens)}`}>
         <Progress 
           percent={Math.round(percent)} 
           size="small" 

@@ -17,7 +17,8 @@ import {
   Empty,
   Button,
   InputNumber,
-  Tooltip
+  Tooltip,
+  Progress
 } from 'antd'
 import {
   DeleteOutlined,
@@ -93,6 +94,9 @@ const ModuleCombinationFormModal = ({
 
   const sensors = useSensors(useSensor(PointerSensor))
 
+  // Token上限设置为100K
+  const MAX_TOKENS = 100000
+
   useEffect(() => {
     if (visible) {
       if (combination) {
@@ -121,6 +125,14 @@ const ModuleCombinationFormModal = ({
     }
   }, [visible, combination, form])
 
+  // 格式化Token数量为K单位
+  const formatTokens = (tokens) => {
+    if (tokens >= 1000) {
+      return (tokens / 1000).toFixed(1) + 'K'
+    }
+    return tokens.toString()
+  }
+
   // 计算Token估算
   const calculateEstimatedTokens = () => {
     let tokens = 0
@@ -131,9 +143,22 @@ const ModuleCombinationFormModal = ({
     return tokens
   }
 
+  // 获取Token使用率
+  const getTokenUsagePercent = () => {
+    const tokens = calculateEstimatedTokens()
+    return Math.min((tokens / MAX_TOKENS) * 100, 100)
+  }
+
   const handleSubmit = async (values) => {
     if (selectedModules.length === 0) {
       message.error('请至少选择一个模块')
+      return
+    }
+
+    // 检查Token限制
+    const estimatedTokens = calculateEstimatedTokens()
+    if (estimatedTokens > MAX_TOKENS) {
+      message.error(`组合的Token数（${formatTokens(estimatedTokens)}）超过了限制（${formatTokens(MAX_TOKENS)}）`)
       return
     }
 
@@ -266,6 +291,14 @@ const ModuleCombinationFormModal = ({
     }
   ]
 
+  // 获取Token使用状态
+  const getTokenStatus = () => {
+    const percent = getTokenUsagePercent()
+    if (percent > 90) return 'exception'
+    if (percent > 70) return 'active'
+    return 'success'
+  }
+
   return (
     <Modal
       title={combination ? '编辑模块组合' : '创建模块组合'}
@@ -394,10 +427,20 @@ const ModuleCombinationFormModal = ({
         <Form.Item>
           <Alert
             message={
-              <Space>
-                <InfoCircleOutlined />
-                Token 估算：{calculateEstimatedTokens()} tokens
-              </Space>
+              <div>
+                <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Space>
+                    <InfoCircleOutlined />
+                    <span>Token 估算：{formatTokens(calculateEstimatedTokens())} / {formatTokens(MAX_TOKENS)}</span>
+                  </Space>
+                  <Progress 
+                    percent={Math.round(getTokenUsagePercent())} 
+                    size="small" 
+                    status={getTokenStatus()}
+                    style={{ width: 200 }}
+                  />
+                </Space>
+              </div>
             }
             type="info"
             showIcon={false}

@@ -66,8 +66,8 @@ const KnowledgeBase = () => {
   const loadData = async () => {
     try {
       await Promise.all([
-        getModules(true),
-        getCombinations(true)
+        getModules(false),      // 只获取激活的模块
+        getCombinations(false)  // 只获取激活的组合
       ])
     } catch (error) {
       message.error('加载数据失败')
@@ -90,14 +90,14 @@ const KnowledgeBase = () => {
   const handleModuleSuccess = () => {
     setModuleModalVisible(false)
     setEditingModule(null)
-    getModules(true)
+    getModules(false)  // 只获取激活的模块
   }
 
   // 组合操作成功回调
   const handleCombinationSuccess = () => {
     setCombinationModalVisible(false)
     setEditingCombination(null)
-    getCombinations(true)
+    getCombinations(false)  // 只获取激活的组合
   }
 
   return (
@@ -152,7 +152,7 @@ const KnowledgeBase = () => {
                   <KnowledgeModuleList 
                     modules={modules}
                     onEdit={handleModuleEdit}
-                    onRefresh={() => getModules(true)}
+                    onRefresh={() => getModules(false)}
                     canCreateTeam={canCreateTeamModule}
                     canCreateSystem={canCreateSystemModule}
                   />
@@ -187,7 +187,7 @@ const KnowledgeBase = () => {
                     combinations={combinations}
                     modules={modules}
                     onEdit={handleCombinationEdit}
-                    onRefresh={() => getCombinations(true)}
+                    onRefresh={() => getCombinations(false)}
                   />
                 ) : (
                   <Empty
