@@ -25,10 +25,12 @@ import {
   GlobalOutlined,
   LockOutlined,
   UnlockOutlined,
-  SearchOutlined
+  SearchOutlined,
+  UsergroupAddOutlined
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
+import useAdminStore from '../../stores/adminStore'
 import './KnowledgeModuleList.less'
 
 const { Search } = Input
@@ -43,6 +45,7 @@ const KnowledgeModuleList = ({
 }) => {
   const { deleteModule } = useKnowledgeStore()
   const { user } = useAuthStore()
+  const { userGroups } = useAdminStore()
   
   const [searchText, setSearchText] = useState('')
   const [filterScope, setFilterScope] = useState('all')
@@ -125,11 +128,33 @@ const KnowledgeModuleList = ({
       return null
     }
     
-    return module.content_visible ? (
-      <Tag color="green" icon={<EyeOutlined />}>内容可见</Tag>
-    ) : (
-      <Tag color="orange" icon={<EyeInvisibleOutlined />}>内容隐藏</Tag>
-    )
+    // 系统模块显示权限信息
+    if (module.module_scope === 'system' && module.group_ids) {
+      const groupNames = module.group_ids
+        .map(id => userGroups.find(g => g.id === id)?.name)
+        .filter(Boolean)
+      
+      if (groupNames.length > 0) {
+        return (
+          <Tooltip title={`仅限：${groupNames.join('、')}`}>
+            <Tag color="orange" icon={<UsergroupAddOutlined />}>
+              限定组 ({groupNames.length})
+            </Tag>
+          </Tooltip>
+        )
+      }
+    }
+    
+    // 内容可见性标签
+    if (module.module_scope !== 'personal') {
+      return module.content_visible ? (
+        <Tag color="green" icon={<EyeOutlined />}>内容可见</Tag>
+      ) : (
+        <Tag color="orange" icon={<EyeInvisibleOutlined />}>内容隐藏</Tag>
+      )
+    }
+    
+    return null
   }
 
   const columns = [
@@ -168,9 +193,9 @@ const KnowledgeModuleList = ({
       render: (type) => getTypeTag(type)
     },
     {
-      title: '可见性',
+      title: '权限/可见性',
       key: 'visibility',
-      width: 120,
+      width: 150,
       render: (_, record) => getVisibilityTag(record)
     },
     {

@@ -21,6 +21,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
+import useAdminStore from '../../stores/adminStore'
 import KnowledgeModuleList from '../../components/knowledge/KnowledgeModuleList'
 import ModuleCombinationList from '../../components/knowledge/ModuleCombinationList'
 import KnowledgeModuleFormModal from '../../components/knowledge/KnowledgeModuleFormModal'
@@ -40,6 +41,7 @@ const KnowledgeBase = () => {
     getModules,
     getCombinations 
   } = useKnowledgeStore()
+  const { fetchUserGroups } = useAdminStore()
   
   const [activeTab, setActiveTab] = useState('modules')
   const [moduleModalVisible, setModuleModalVisible] = useState(false)
@@ -47,10 +49,19 @@ const KnowledgeBase = () => {
   const [editingModule, setEditingModule] = useState(null)
   const [editingCombination, setEditingCombination] = useState(null)
 
+  // 判断是否可以创建团队模块
+  const canCreateTeamModule = hasRole(['super_admin', 'admin'])
+  // 判断是否可以创建系统模块
+  const canCreateSystemModule = hasRole(['super_admin'])
+
   // 加载数据
   useEffect(() => {
     loadData()
-  }, [])
+    // 如果是超级管理员，加载用户组列表
+    if (canCreateSystemModule) {
+      fetchUserGroups()
+    }
+  }, [canCreateSystemModule])
 
   const loadData = async () => {
     try {
@@ -88,11 +99,6 @@ const KnowledgeBase = () => {
     setEditingCombination(null)
     getCombinations(true)
   }
-
-  // 判断是否可以创建团队模块
-  const canCreateTeamModule = hasRole(['super_admin', 'admin'])
-  // 判断是否可以创建系统模块
-  const canCreateSystemModule = hasRole(['super_admin'])
 
   return (
     <Layout className="knowledge-base-layout">

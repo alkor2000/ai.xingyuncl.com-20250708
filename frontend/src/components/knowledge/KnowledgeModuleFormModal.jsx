@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
+import useAdminStore from '../../stores/adminStore'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -41,6 +42,7 @@ const KnowledgeModuleFormModal = ({
   const [form] = Form.useForm()
   const { user } = useAuthStore()
   const { createModule, updateModule, getCategories, categories } = useKnowledgeStore()
+  const { userGroups, fetchUserGroups } = useAdminStore()
   const [loading, setLoading] = useState(false)
   const [moduleScope, setModuleScope] = useState('personal')
 
@@ -49,11 +51,17 @@ const KnowledgeModuleFormModal = ({
       // 加载分类
       getCategories()
       
+      // 如果是超级管理员编辑系统级模块，加载用户组列表
+      if (canCreateSystem) {
+        fetchUserGroups()
+      }
+      
       if (module) {
         // 编辑模式
         form.setFieldsValue({
           ...module,
-          tags: module.tags ? JSON.parse(module.tags) : []
+          tags: module.tags ? JSON.parse(module.tags) : [],
+          group_ids: module.group_ids || []
         })
         setModuleScope(module.module_scope)
       } else {
@@ -64,12 +72,13 @@ const KnowledgeModuleFormModal = ({
           prompt_type: 'normal',
           content_visible: true,
           sort_order: 0,
-          is_active: true
+          is_active: true,
+          group_ids: []
         })
         setModuleScope('personal')
       }
     }
-  }, [visible, module, form, getCategories])
+  }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups])
 
   const handleSubmit = async (values) => {
     setLoading(true)
@@ -81,9 +90,15 @@ const KnowledgeModuleFormModal = ({
         values.tags = null
       }
 
-      // 个人模块不需要设置内容可见性
+      // 个人模块不需要设置内容可见性和group_ids
       if (values.module_scope === 'personal') {
         values.content_visible = true
+        delete values.group_ids
+      }
+      
+      // 团队模块不需要group_ids
+      if (values.module_scope === 'team') {
+        delete values.group_ids
       }
 
       if (module) {
@@ -218,6 +233,33 @@ const KnowledgeModuleFormModal = ({
           </Radio.Group>
         </Form.Item>
 
+        {moduleScope === 'system' && canCreateSystem && (
+          <Form.Item
+            name="group_ids"
+            label={
+              <Space>
+                可见用户组
+                <InfoCircleOutlined 
+                  style={{ color: '#999' }} 
+                  title="选择哪些用户组可以使用该模块，留空表示所有用户可用"
+                />
+              </Space>
+            }
+          >
+            <Select
+              mode="multiple"
+              placeholder="留空表示所有用户可用"
+              allowClear
+            >
+              {userGroups.map(group => (
+                <Option key={group.id} value={group.id}>
+                  {group.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+        )}
+
         {moduleScope !== 'personal' && (
           <Form.Item
             name="content_visible"
@@ -273,7 +315,20 @@ const KnowledgeModuleFormModal = ({
         {module && (
           <Alert
             message="提示"
-            description="修改模块内容后，已使用该模块的组合需要重新保存才能生效"
+            description={
+              <>
+                修改模块内容后，已使用该模块的组合需要重新保存才能生效。
+                {moduleScope === 'system' && (
+                  <div style={{ marginTop: 8 }}>
+                    <strong>系统模块权限说明：</strong>
+                    <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                      <li>不选择任何用户组：所有用户都可以使用</li>
+                      <li>选择特定用户组：只有选中的组内用户可以使用</li>
+                    </ul>
+                  </div>
+                )}
+              </>
+            }
             type="info"
             showIcon
             style={{ marginTop: 16 }}

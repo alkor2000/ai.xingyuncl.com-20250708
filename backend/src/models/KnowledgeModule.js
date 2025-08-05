@@ -17,6 +17,7 @@ class KnowledgeModule {
     this.content_visible = data.content_visible !== undefined ? data.content_visible : true;
     this.creator_id = data.creator_id || null;
     this.group_id = data.group_id || null;
+    this.group_ids = data.group_ids || null;
     this.category = data.category || null;
     this.tags = data.tags || null;
     this.sort_order = data.sort_order || 0;
@@ -41,8 +42,11 @@ class KnowledgeModule {
           (km.module_scope = 'personal' AND km.creator_id = ?)
           -- 团队模块：同组可见
           OR (km.module_scope = 'team' AND km.group_id = ?)
-          -- 系统模块：所有人可见
-          OR (km.module_scope = 'system')
+          -- 系统模块：根据group_ids权限控制
+          OR (km.module_scope = 'system' AND (
+            km.group_ids IS NULL  -- NULL表示所有组可见
+            OR JSON_CONTAINS(km.group_ids, CAST(? AS JSON), '$')  -- 检查用户组是否在允许列表中
+          ))
         )
       `;
       
@@ -52,12 +56,21 @@ class KnowledgeModule {
       
       sql += ' ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
       
-      const { rows } = await dbConnection.query(sql, [userId, groupId]);
+      const { rows } = await dbConnection.query(sql, [userId, groupId, groupId || 0]);
       
       return rows.map(row => {
         const module = new KnowledgeModule(row);
         module.creator_name = row.creator_name;
         module.group_name = row.group_name;
+        
+        // 解析group_ids
+        if (module.group_ids && typeof module.group_ids === 'string') {
+          try {
+            module.group_ids = JSON.parse(module.group_ids);
+          } catch (e) {
+            module.group_ids = null;
+          }
+        }
         
         // 判断内容是否可见
         // 系统级模块始终可见
@@ -74,6 +87,47 @@ class KnowledgeModule {
     } catch (error) {
       logger.error('获取用户可用知识模块失败:', error);
       throw new DatabaseError('获取知识模块列表失败', error);
+    }
+  }
+
+  /**
+   * 获取所有系统级模块（管理端）
+   */
+  static async getSystemModules(includeInactive = false) {
+    try {
+      let sql = `
+        SELECT km.*, u.username as creator_name
+        FROM knowledge_modules km
+        LEFT JOIN users u ON km.creator_id = u.id
+        WHERE km.module_scope = 'system'
+      `;
+      
+      if (!includeInactive) {
+        sql += ' AND km.is_active = 1';
+      }
+      
+      sql += ' ORDER BY km.sort_order ASC, km.created_at DESC';
+      
+      const { rows } = await dbConnection.query(sql);
+      
+      return rows.map(row => {
+        const module = new KnowledgeModule(row);
+        module.creator_name = row.creator_name;
+        
+        // 解析group_ids
+        if (module.group_ids && typeof module.group_ids === 'string') {
+          try {
+            module.group_ids = JSON.parse(module.group_ids);
+          } catch (e) {
+            module.group_ids = null;
+          }
+        }
+        
+        return module;
+      });
+    } catch (error) {
+      logger.error('获取系统级知识模块失败:', error);
+      throw new DatabaseError('获取系统级知识模块失败', error);
     }
   }
 
@@ -99,6 +153,15 @@ class KnowledgeModule {
       const module = new KnowledgeModule(rows[0]);
       module.creator_name = rows[0].creator_name;
       module.group_name = rows[0].group_name;
+      
+      // 解析group_ids
+      if (module.group_ids && typeof module.group_ids === 'string') {
+        try {
+          module.group_ids = JSON.parse(module.group_ids);
+        } catch (e) {
+          module.group_ids = null;
+        }
+      }
       
       // 检查内容可见性
       // 系统级模块始终可见
@@ -128,7 +191,7 @@ class KnowledgeModule {
   static async create(data, creatorId) {
     try {
       // 验证权限
-      const { module_scope, group_id } = data;
+      const { module_scope, group_id, group_ids } = data;
       
       // 如果是团队模块，必须有group_id
       if (module_scope === 'team' && !group_id) {
@@ -138,9 +201,9 @@ class KnowledgeModule {
       const sql = `
         INSERT INTO knowledge_modules (
           name, description, content, prompt_type, module_scope,
-          content_visible, creator_id, group_id, category, tags,
+          content_visible, creator_id, group_id, group_ids, category, tags,
           sort_order, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const params = [
@@ -152,6 +215,7 @@ class KnowledgeModule {
         data.content_visible !== undefined ? data.content_visible : true,
         creatorId,
         module_scope === 'team' ? group_id : null,
+        module_scope === 'system' && data.group_ids ? JSON.stringify(data.group_ids) : null,
         data.category || null,
         data.tags ? JSON.stringify(data.tags) : null,
         data.sort_order || 0,
@@ -165,7 +229,8 @@ class KnowledgeModule {
         moduleId: insertId, 
         name: data.name,
         creatorId,
-        scope: module_scope
+        scope: module_scope,
+        group_ids: data.group_ids
       });
       
       return await KnowledgeModule.findById(insertId);
@@ -200,6 +265,12 @@ class KnowledgeModule {
       // 允许更新的字段
       const allowedFields = ['name', 'description', 'content', 'prompt_type', 'content_visible', 
                            'category', 'tags', 'sort_order', 'is_active'];
+      
+      // 如果是系统级模块，允许更新group_ids
+      if (originalModule.module_scope === 'system' && data.group_ids !== undefined) {
+        updateFields.push('group_ids = ?');
+        updateValues.push(data.group_ids ? JSON.stringify(data.group_ids) : null);
+      }
       
       allowedFields.forEach(field => {
         if (data[field] !== undefined) {
@@ -279,11 +350,14 @@ class KnowledgeModule {
         AND (
           (module_scope = 'personal' AND creator_id = ?)
           OR (module_scope = 'team' AND group_id = ?)
-          OR (module_scope = 'system')
+          OR (module_scope = 'system' AND (
+            group_ids IS NULL
+            OR JSON_CONTAINS(group_ids, CAST(? AS JSON), '$')
+          ))
         )
       `;
       
-      const { rows } = await dbConnection.query(sql, [moduleId, userId, groupId]);
+      const { rows } = await dbConnection.query(sql, [moduleId, userId, groupId, groupId || 0]);
       
       return rows[0].count > 0;
     } catch (error) {
@@ -317,6 +391,7 @@ class KnowledgeModule {
       content_visible: this.content_visible,
       creator_id: this.creator_id,
       group_id: this.group_id,
+      group_ids: this.group_ids,
       category: this.category,
       tags: this.tags,
       sort_order: this.sort_order,
