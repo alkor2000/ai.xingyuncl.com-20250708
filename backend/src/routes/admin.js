@@ -24,6 +24,7 @@ const statsRoutes = require('./admin/statsRoutes');
 const moduleRoutes = require('./admin/moduleRoutes'); // 新增模块路由
 const apiServiceRoutes = require('./admin/apiServiceRoutes'); // 新增API服务路由
 const systemPromptRoutes = require('./admin/systemPromptRoutes'); // 系统提示词路由
+const usageLogRoutes = require('./admin/usageLogRoutes'); // 使用记录路由
 
 // 导入控制器（用于积分路由）
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
@@ -88,6 +89,9 @@ router.use('/api-services', apiServiceRoutes);
 
 // 系统提示词管理路由 - /api/admin/system-prompts/*
 router.use('/system-prompts', systemPromptRoutes);
+
+// 使用记录路由 - /api/admin/usage-logs/*
+router.use('/usage-logs', usageLogRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);

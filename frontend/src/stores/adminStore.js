@@ -835,6 +835,54 @@ const useAdminStore = create((set) => ({
       console.error('切换系统提示词功能失败:', error)
       return { success: false, error: error.response?.data?.message || error.message }
     }
+  },
+
+  // ===== 使用记录管理 =====
+  // 获取使用记录列表
+  getUsageLogs: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/admin/usage-logs', { params })
+      return response.data.data
+    } catch (error) {
+      console.error('获取使用记录失败:', error)
+      throw error
+    }
+  },
+
+  // 获取使用统计汇总
+  getUsageSummary: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/admin/usage-logs/summary', { params })
+      return response.data.data
+    } catch (error) {
+      console.error('获取使用统计汇总失败:', error)
+      throw error
+    }
+  },
+
+  // 导出使用记录为Excel
+  exportUsageLogs: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/admin/usage-logs/export', {
+        params,
+        responseType: 'blob'
+      })
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `usage_logs_${new Date().toISOString().split('T')[0]}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      
+      return { success: true }
+    } catch (error) {
+      console.error('导出使用记录失败:', error)
+      throw error
+    }
   }
 }))
 

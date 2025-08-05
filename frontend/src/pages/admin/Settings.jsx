@@ -18,7 +18,8 @@ import {
   MailOutlined,
   ApiOutlined,
   BgColorsOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  HistoryOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -40,7 +41,8 @@ import {
   APIServiceTable,
   RateLimitSettings,
   ThemeSettings,
-  SystemPromptSettings
+  SystemPromptSettings,
+  UsageLogs
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -399,6 +401,19 @@ const Settings = () => {
           key="statistics"
         >
           <SystemStats systemStats={systemStats} />
+        </TabPane>
+
+        {/* 使用记录（新增） */}
+        <TabPane 
+          tab={
+            <span>
+              <HistoryOutlined />
+              使用记录
+            </span>
+          } 
+          key="usageLogs"
+        >
+          <UsageLogs />
         </TabPane>
 
         {/* 系统健康监控（只有超级管理员可见） */}
