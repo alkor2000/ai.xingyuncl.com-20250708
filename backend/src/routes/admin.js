@@ -1,5 +1,5 @@
 /**
- * 管理员路由聚合器 - 使用基于角色的权限中间件和动态速率限制
+ * 管理员路由聚合器 - 使用基于角色的权限中间件、动态速率限制和缓存统计
  */
 
 const express = require('express');
@@ -96,6 +96,20 @@ router.use('/usage-logs', usageLogRoutes);
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);
 
+// ===== 缓存管理路由（新增）=====
+// 缓存统计
+router.get('/cache/stats',
+  canManageSystem(), // 只有超级管理员可以查看
+  SystemStatsController.getCacheStats
+);
+
+// 清除缓存
+router.post('/cache/clear',
+  canManageSystem(), // 只有超级管理员可以清除
+  SystemStatsController.clearCache
+);
+
+// ===== 系统设置路由 =====
 // 系统设置路由 - 保持原路径 /api/admin/settings
 router.get('/settings',
   canManageSystem(), // 超级管理员和组管理员都可以查看

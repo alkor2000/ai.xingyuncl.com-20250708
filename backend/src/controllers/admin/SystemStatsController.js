@@ -1,10 +1,11 @@
 /**
- * 系统统计控制器 - 支持基于角色的数据过滤和配置持久化
+ * 系统统计控制器 - 支持基于角色的数据过滤、配置持久化和缓存统计
  */
 
 const { StatsService } = require('../../services/admin');
 const SystemConfig = require('../../models/SystemConfig');
 const EmailService = require('../../services/emailService');
+const CacheService = require('../../services/cacheService');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
@@ -40,6 +41,187 @@ class SystemStatsController {
         error: error.message 
       });
       return ResponseHelper.error(res, error.message || '获取系统统计失败');
+    }
+  }
+
+  /**
+   * 获取缓存统计信息 - 只有超级管理员可以查看
+   */
+  static async getCacheStats(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以查看缓存统计
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以查看缓存统计');
+      }
+      
+      // 获取缓存统计信息
+      const cacheStats = await CacheService.getCacheStats();
+      
+      // 获取Redis详细信息
+      let redisInfo = null;
+      if (redisConnection.isConnected) {
+        try {
+          const client = redisConnection.getClient();
+          const info = await client.info();
+          
+          // 解析Redis信息
+          const lines = info.split('\r\n');
+          const infoObj = {};
+          
+          lines.forEach(line => {
+            if (line && !line.startsWith('#')) {
+              const [key, value] = line.split(':');
+              if (key && value) {
+                infoObj[key] = value;
+              }
+            }
+          });
+          
+          redisInfo = {
+            version: infoObj.redis_version,
+            uptime: parseInt(infoObj.uptime_in_seconds),
+            uptimeHuman: infoObj.uptime_in_days ? `${infoObj.uptime_in_days} days` : 'N/A',
+            connectedClients: parseInt(infoObj.connected_clients),
+            usedMemory: infoObj.used_memory_human,
+            usedMemoryPeak: infoObj.used_memory_peak_human,
+            memFragmentationRatio: parseFloat(infoObj.mem_fragmentation_ratio),
+            totalSystemMemory: infoObj.total_system_memory_human,
+            totalCommandsProcessed: parseInt(infoObj.total_commands_processed),
+            instantaneousOpsPerSec: parseInt(infoObj.instantaneous_ops_per_sec),
+            keyspaceHits: parseInt(infoObj.keyspace_hits) || 0,
+            keyspaceMisses: parseInt(infoObj.keyspace_misses) || 0,
+            hitRate: 0
+          };
+          
+          // 计算命中率
+          const totalAccess = redisInfo.keyspaceHits + redisInfo.keyspaceMisses;
+          if (totalAccess > 0) {
+            redisInfo.hitRate = ((redisInfo.keyspaceHits / totalAccess) * 100).toFixed(2) + '%';
+          }
+          
+        } catch (error) {
+          logger.warn('获取Redis详细信息失败', { error: error.message });
+        }
+      }
+      
+      // 组合响应数据
+      const result = {
+        cacheStats,
+        redisInfo,
+        summary: {
+          status: cacheStats.connected ? '正常' : '未连接',
+          totalKeys: cacheStats.totalKeys || 0,
+          memoryUsed: cacheStats.memoryUsed || 'N/A',
+          hitRate: redisInfo?.hitRate || 'N/A',
+          performance: redisInfo?.instantaneousOpsPerSec ? `${redisInfo.instantaneousOpsPerSec} ops/sec` : 'N/A'
+        }
+      };
+
+      return ResponseHelper.success(res, result, '获取缓存统计成功');
+    } catch (error) {
+      logger.error('获取缓存统计失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '获取缓存统计失败');
+    }
+  }
+
+  /**
+   * 清除缓存 - 只有超级管理员可以操作
+   */
+  static async clearCache(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以清除缓存
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以清除缓存');
+      }
+      
+      const { type = 'all' } = req.body;
+      
+      let result = {
+        cleared: false,
+        message: '',
+        details: {}
+      };
+      
+      if (!redisConnection.isConnected) {
+        return ResponseHelper.error(res, 'Redis未连接，无法清除缓存');
+      }
+      
+      const client = redisConnection.getClient();
+      
+      switch (type) {
+        case 'all':
+          // 清除所有缓存
+          await client.flushDb();
+          result.cleared = true;
+          result.message = '所有缓存已清除';
+          logger.info('管理员清除了所有缓存', { adminId: req.user.id });
+          break;
+          
+        case 'models':
+          // 清除AI模型相关缓存
+          await CacheService.clearAIModelsCache();
+          result.cleared = true;
+          result.message = 'AI模型缓存已清除';
+          logger.info('管理员清除了AI模型缓存', { adminId: req.user.id });
+          break;
+          
+        case 'permissions':
+          // 清除用户权限缓存
+          await CacheService.clearUserPermissionsCache();
+          result.cleared = true;
+          result.message = '用户权限缓存已清除';
+          logger.info('管理员清除了用户权限缓存', { adminId: req.user.id });
+          break;
+          
+        case 'settings':
+          // 清除系统设置缓存
+          await CacheService.clearSystemSettingsCache();
+          result.cleared = true;
+          result.message = '系统设置缓存已清除';
+          logger.info('管理员清除了系统设置缓存', { adminId: req.user.id });
+          break;
+          
+        case 'stats':
+          // 清除统计缓存
+          await CacheService.clearStatsCache();
+          result.cleared = true;
+          result.message = '统计数据缓存已清除';
+          logger.info('管理员清除了统计缓存', { adminId: req.user.id });
+          break;
+          
+        case 'groups':
+          // 清除用户组缓存
+          await CacheService.clearUserGroupsCache();
+          result.cleared = true;
+          result.message = '用户组缓存已清除';
+          logger.info('管理员清除了用户组缓存', { adminId: req.user.id });
+          break;
+          
+        default:
+          return ResponseHelper.validation(res, ['不支持的缓存类型']);
+      }
+      
+      // 获取清除后的缓存统计
+      const afterStats = await CacheService.getCacheStats();
+      result.details = {
+        keysAfterClear: afterStats.totalKeys || 0,
+        memoryAfterClear: afterStats.memoryUsed || 'N/A'
+      };
+
+      return ResponseHelper.success(res, result, result.message);
+    } catch (error) {
+      logger.error('清除缓存失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '清除缓存失败');
     }
   }
 
@@ -177,6 +359,9 @@ class SystemStatsController {
           logger.warn('清除Redis缓存失败:', redisError);
         }
       }
+
+      // 清除系统设置缓存
+      await CacheService.clearSystemSettingsCache();
 
       logger.info('管理员更新系统设置', { 
         adminId: req.user.id,

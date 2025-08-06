@@ -1,0 +1,60 @@
+# 环境变量和密钥文件
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+
+# 日志文件
+logs/
+*.log
+
+# 备份文件
+*.bak
+*.backup
+archive/
+backups/
+
+# Git相关
+.git/
+.gitignore
+
+# 编辑器文件
+.vscode/
+.idea/
+
+# 测试相关
+coverage/
+.nyc_output/
+__tests__/
+*.test.js
+*.spec.js
+
+# 开发依赖
+node_modules/
+
+# 构建缓存
+.cache/
+dist/
+build/
+
+# 上传文件（应该通过volume挂载）
+storage/uploads/
+uploads/
+
+# PM2
+.pm2/
+ecosystem.config.js
+
+# 文档
+docs/
+README.md
+
+# 脚本
+scripts/
+*.sh
+
+# 临时文件
+tmp/
+temp/

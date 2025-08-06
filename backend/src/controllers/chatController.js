@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存、优先级排序、图片上传、系统提示词和知识模块
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存优化、优先级排序、图片上传、系统提示词和知识模块
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -82,19 +82,17 @@ class ChatController {
         return ResponseHelper.validation(res, ['模型名称不能为空']);
       }
 
-      // 验证AI模型是否存在且启用
-      const aiModel = await AIModel.findByName(model_name);
-      if (!aiModel || !aiModel.is_active) {
-        return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-      }
-
-      // 检查用户是否有权限使用该模型（考虑用户限制）
+      // 验证AI模型是否存在且启用（使用缓存）
       const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
-      const canUseModel = availableModels.some(m => m.name === model_name);
+      const availableModels = await CacheService.getCachedUserModels(
+        userId,
+        userGroupId,
+        async () => await AIModel.getUserAvailableModels(userId, userGroupId)
+      );
       
-      if (!canUseModel) {
-        return ResponseHelper.forbidden(res, '您无权使用该模型');
+      const aiModel = availableModels.find(m => m.name === model_name);
+      if (!aiModel) {
+        return ResponseHelper.forbidden(res, '您无权使用该模型或模型不可用');
       }
 
       // 验证系统提示词（如果提供了ID）
@@ -239,18 +237,16 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 如果更换模型，验证新模型
+      // 如果更换模型，验证新模型（使用缓存）
       if (model_name && model_name !== conversation.model_name) {
-        const aiModel = await AIModel.findByName(model_name);
-        if (!aiModel || !aiModel.is_active) {
-          return ResponseHelper.validation(res, ['选择的AI模型不可用']);
-        }
-
-        // 检查用户是否有权限使用该模型（考虑用户限制）
         const userGroupId = req.user.group_id;
-        const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
-        const canUseModel = availableModels.some(m => m.name === model_name);
+        const availableModels = await CacheService.getCachedUserModels(
+          userId,
+          userGroupId,
+          async () => await AIModel.getUserAvailableModels(userId, userGroupId)
+        );
         
+        const canUseModel = availableModels.some(m => m.name === model_name);
         if (!canUseModel) {
           return ResponseHelper.forbidden(res, '您无权使用该模型');
         }
@@ -485,7 +481,6 @@ class ChatController {
 
   /**
    * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片、系统提示词和模块组合）
-   * POST /api/chat/conversations/:id/messages
    */
   static async sendMessage(req, res) {
     let creditsConsumed = 0;
@@ -512,18 +507,16 @@ class ChatController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 获取AI模型积分配置
-      const aiModel = await AIModel.findByName(conversation.model_name);
-      if (!aiModel || !aiModel.is_active) {
-        return ResponseHelper.error(res, '当前AI模型不可用');
-      }
-
-      // 检查用户是否有权限使用该模型（考虑用户限制）
+      // 获取AI模型配置（使用缓存）
       const userGroupId = req.user.group_id;
-      const availableModels = await AIModel.getUserAvailableModels(userId, userGroupId);
-      const canUseModel = availableModels.some(m => m.name === conversation.model_name);
+      const availableModels = await CacheService.getCachedUserModels(
+        userId,
+        userGroupId,
+        async () => await AIModel.getUserAvailableModels(userId, userGroupId)
+      );
       
-      if (!canUseModel) {
+      const aiModel = availableModels.find(m => m.name === conversation.model_name);
+      if (!aiModel) {
         return ResponseHelper.forbidden(res, '您已被限制使用该模型，请创建新会话选择其他模型');
       }
 
@@ -960,7 +953,7 @@ class ChatController {
   }
 
   /**
-   * 获取可用的AI模型列表 - 根据用户权限和限制过滤
+   * 获取可用的AI模型列表 - 根据用户权限和限制过滤（带缓存）
    * GET /api/chat/models
    */
   static async getModels(req, res) {
@@ -969,8 +962,12 @@ class ChatController {
       const userId = req.user.id;
       const userGroupId = req.user.group_id;
       
-      // 根据用户权限和限制获取可用的模型
-      const models = await AIModel.getUserAvailableModels(userId, userGroupId);
+      // 使用缓存获取用户可用的模型
+      const models = await CacheService.getCachedUserModels(
+        userId,
+        userGroupId,
+        async () => await AIModel.getUserAvailableModels(userId, userGroupId)
+      );
       
       // 添加积分和图片支持信息到模型列表
       const modelsWithInfo = models.map(model => ({
@@ -980,10 +977,11 @@ class ChatController {
         image_upload_enabled: model.image_upload_enabled || false
       }));
       
-      logger.info('获取用户可用AI模型列表', {
+      logger.info('获取用户可用AI模型列表（使用缓存）', {
         userId: req.user.id,
         groupId: userGroupId,
-        modelCount: modelsWithInfo.length
+        modelCount: modelsWithInfo.length,
+        fromCache: true
       });
       
       return ResponseHelper.success(res, modelsWithInfo, '获取AI模型列表成功');
@@ -1175,10 +1173,6 @@ class ChatController {
     }
   }
 
-  /**
-   * 清空对话消息
-   * POST /api/chat/conversations/:id/clear
-   */
   /**
    * 清空对话消息
    * POST /api/chat/conversations/:id/clear
