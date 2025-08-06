@@ -2,6 +2,9 @@
  * 服务器启动文件
  */
 
+// 首先加载环境变量
+require('dotenv').config();
+
 const app = require('./app');
 const config = require('./config');
 const logger = require('./utils/logger');
@@ -36,8 +39,15 @@ async function startServer() {
       logger.info(`环境: ${config.app.env}`);
       logger.info(`域名: ${config.app.domain}`);
       logger.info(`Redis状态: ${redisConnection.isConnected ? '已连接' : '未连接'}`);
+      
+      // 启动时显示JWT配置状态（不显示实际密钥）
+      if (process.env.JWT_ACCESS_SECRET && process.env.JWT_ACCESS_SECRET !== 'your-super-secret-key-2025') {
+        logger.info('JWT密钥已从环境变量加载（安全模式）');
+      } else {
+        logger.warn('警告：使用默认JWT密钥，请配置环境变量！');
+      }
     });
-
+    
     // 优雅关闭
     process.on('SIGTERM', async () => {
       logger.info('收到 SIGTERM 信号，开始优雅关闭');
@@ -63,13 +73,13 @@ async function startServer() {
         }
       });
     });
-
+    
     // 处理进程异常退出
     process.on('SIGINT', async () => {
       logger.info('收到 SIGINT 信号');
       process.emit('SIGTERM');
     });
-
+    
   } catch (error) {
     logger.error('服务器启动失败:', error);
     process.exit(1);
