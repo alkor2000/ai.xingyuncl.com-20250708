@@ -176,6 +176,9 @@ class ChatController {
       const { id } = req.params;
       const userId = req.user.id;
 
+      // 检查并恢复未完成的流式消息
+      await Message.checkAndRecoverStreamingMessages(id);
+
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
       if (!hasAccess) {
@@ -375,6 +378,9 @@ class ChatController {
       const userId = req.user.id;
       const { page = 1, limit = 50, useCache = true } = req.query;
 
+      // 检查并恢复未完成的流式消息
+      await Message.checkAndRecoverStreamingMessages(id);
+
       // 检查会话所有权
       const hasAccess = await Conversation.checkOwnership(id, userId);
       if (!hasAccess) {
@@ -486,6 +492,7 @@ class ChatController {
     let creditsConsumed = 0;
     let conversationBackup = null;
     let userMessage = null;
+    let aiMessageId = null;
     
     try {
       const { id } = req.params;
@@ -579,14 +586,15 @@ class ChatController {
       
       creditsConsumed = requiredCredits;
 
-      // 创建用户消息（添加model_name字段）
+      // 创建用户消息（状态为completed）
       userMessage = await Message.create({
         conversation_id: id,
         role: 'user',
         content: content.trim(),
         tokens: estimatedTokens,
         file_id,
-        model_name: conversation.model_name  // 记录当前使用的模型
+        model_name: conversation.model_name,
+        status: 'completed'
       });
 
       // 获取会话历史消息
@@ -688,8 +696,24 @@ class ChatController {
 
       // 处理流式或非流式响应
       if (useStream) {
-        // 流式响应处理 - 直接返回，不要在这里设置响应头
-        const aiMessageId = uuidv4();
+        // 流式响应处理
+        aiMessageId = uuidv4();
+        
+        // 先创建一个状态为streaming的占位消息
+        const streamingMessage = await Message.createStreamingPlaceholder({
+          id: aiMessageId,
+          conversation_id: id,
+          role: 'assistant',
+          content: '',
+          tokens: 0,
+          model_name: conversation.model_name
+        });
+        
+        logger.info('创建流式消息占位符', {
+          messageId: aiMessageId,
+          conversationId: id,
+          status: 'streaming'
+        });
         
         try {
           // 准备用户消息数据，包含file信息
@@ -714,19 +738,17 @@ class ChatController {
               model_credits_per_chat: requiredCredits
             },
             onComplete: async (fullContent, tokens) => {
-              // 流式完成后保存AI消息（添加model_name字段）
+              // 流式完成后更新消息状态为completed
               try {
-                const assistantMessage = await Message.create({
-                  id: aiMessageId,
-                  conversation_id: id,
-                  role: 'assistant',
-                  content: fullContent,
-                  tokens: tokens || Message.estimateTokens(fullContent),
-                  model_name: conversation.model_name  // 记录生成时使用的模型
-                });
+                await Message.updateStatus(
+                  aiMessageId, 
+                  'completed', 
+                  fullContent, 
+                  tokens || Message.estimateTokens(fullContent)
+                );
 
                 // 更新会话统计
-                const totalTokens = userMessage.tokens + assistantMessage.tokens;
+                const totalTokens = userMessage.tokens + (tokens || Message.estimateTokens(fullContent));
                 await conversation.updateStats(2, totalTokens);
                 await user.consumeTokens(totalTokens);
 
@@ -754,10 +776,17 @@ class ChatController {
                   messageId: aiMessageId,
                   totalTokens,
                   creditsConsumed,
-                  modelName: conversation.model_name
+                  modelName: conversation.model_name,
+                  status: 'completed'
                 });
               } catch (error) {
-                logger.error('保存流式消息失败:', error);
+                logger.error('更新流式消息状态失败:', error);
+                // 尝试标记为失败
+                try {
+                  await Message.updateStatus(aiMessageId, 'failed');
+                } catch (updateError) {
+                  logger.error('标记消息失败状态也失败:', updateError);
+                }
               }
             }
           });
@@ -766,7 +795,16 @@ class ChatController {
           return;
           
         } catch (aiError) {
-          // AI调用失败，退还积分
+          // AI调用失败，更新消息状态为failed
+          if (aiMessageId) {
+            try {
+              await Message.updateStatus(aiMessageId, 'failed');
+            } catch (updateError) {
+              logger.error('更新失败状态失败:', updateError);
+            }
+          }
+          
+          // 退还积分
           logger.error('流式AI调用失败，开始退还积分', {
             userId,
             conversationId: id,
@@ -793,13 +831,14 @@ class ChatController {
             { temperature: conversation.getTemperature() }
           );
 
-          // 创建AI回复消息（添加model_name字段）
+          // 创建AI回复消息（状态为completed）
           const assistantMessage = await Message.create({
             conversation_id: id,
             role: 'assistant',
             content: aiResponse.content,
             tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content),
-            model_name: conversation.model_name  // 记录生成时使用的模型
+            model_name: conversation.model_name,
+            status: 'completed'
           });
 
           // 更新会话统计

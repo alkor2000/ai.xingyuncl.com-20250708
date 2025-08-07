@@ -1,5 +1,5 @@
 /**
- * 消息数据模型 - 支持动态上下文数量和清空时间过滤
+ * 消息数据模型 - 支持动态上下文数量、清空时间过滤和消息状态跟踪
  */
 
 const dbConnection = require('../database/connection');
@@ -15,6 +15,7 @@ class Message {
     this.content = data.content || '';
     this.tokens = data.tokens || 0;
     this.model_name = data.model_name || null; // 记录消息生成时使用的模型
+    this.status = data.status || 'completed'; // 消息状态：pending, streaming, completed, failed
     this.file_id = data.file_id || null;
     this.created_at = data.created_at || null;
   }
@@ -24,12 +25,21 @@ class Message {
    */
   static async create(messageData) {
     try {
-      const { conversation_id, role, content, tokens = 0, model_name = null, file_id = null, id = null } = messageData;
+      const { 
+        conversation_id, 
+        role, 
+        content, 
+        tokens = 0, 
+        model_name = null, 
+        status = 'completed',
+        file_id = null, 
+        id = null 
+      } = messageData;
       const messageId = id || uuidv4();
 
       const sql = `
-        INSERT INTO messages (id, conversation_id, role, content, tokens, model_name, file_id) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (id, conversation_id, role, content, tokens, model_name, status, file_id) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       // 确保所有参数都有值，null值用JS null而不是undefined
@@ -40,6 +50,7 @@ class Message {
         content, 
         parseInt(tokens) || 0,
         model_name || null,
+        status || 'completed',
         file_id || null
       ];
 
@@ -49,8 +60,8 @@ class Message {
         role,
         tokens: params[4],
         modelName: model_name,
-        hasFileId: !!file_id,
-        params
+        status: status,
+        hasFileId: !!file_id
       });
 
       await dbConnection.query(sql, params);
@@ -60,13 +71,62 @@ class Message {
         conversationId: conversation_id, 
         role,
         tokens: params[4],
-        modelName: model_name
+        modelName: model_name,
+        status: status
       });
 
       return await Message.findById(messageId);
     } catch (error) {
       logger.error('消息创建失败:', error);
       throw new DatabaseError(`消息创建失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 创建流式消息占位符
+   */
+  static async createStreamingPlaceholder(messageData) {
+    return await Message.create({
+      ...messageData,
+      status: 'streaming',
+      content: messageData.content || ''
+    });
+  }
+
+  /**
+   * 更新消息状态
+   */
+  static async updateStatus(messageId, status, content = null, tokens = null) {
+    try {
+      let sql = 'UPDATE messages SET status = ?';
+      const params = [status];
+      
+      if (content !== null) {
+        sql += ', content = ?';
+        params.push(content);
+      }
+      
+      if (tokens !== null) {
+        sql += ', tokens = ?';
+        params.push(tokens);
+      }
+      
+      sql += ' WHERE id = ?';
+      params.push(messageId);
+      
+      await dbConnection.query(sql, params);
+      
+      logger.info('消息状态更新成功', { 
+        messageId, 
+        status,
+        hasContent: content !== null,
+        hasTokens: tokens !== null
+      });
+      
+      return true;
+    } catch (error) {
+      logger.error('更新消息状态失败:', error);
+      throw new DatabaseError(`更新消息状态失败: ${error.message}`, error);
     }
   }
 
@@ -90,11 +150,11 @@ class Message {
   }
 
   /**
-   * 获取会话的消息列表（考虑清空时间）
+   * 获取会话的消息列表（考虑清空时间，过滤失败的流式消息）
    */
   static async getConversationMessages(conversationId, options = {}) {
     try {
-      const { page = 1, limit = 50, order = 'ASC' } = options;
+      const { page = 1, limit = 50, order = 'ASC', includeStreaming = false } = options;
       
       // 首先获取会话的cleared_at时间
       const convSql = 'SELECT cleared_at FROM conversations WHERE id = ?';
@@ -113,6 +173,11 @@ class Message {
       if (clearedAt) {
         whereClause += ' AND created_at > ?';
         params.push(clearedAt);
+      }
+      
+      // 默认不显示失败和流式传输中的消息（除非特别要求）
+      if (!includeStreaming) {
+        whereClause += " AND status IN ('completed', 'pending')";
       }
       
       // 获取总数
@@ -137,7 +202,8 @@ class Message {
         conversationId, 
         clearedAt,
         total,
-        returned: rows.length 
+        returned: rows.length,
+        includeStreaming
       });
       
       return {
@@ -187,24 +253,27 @@ class Message {
       
       const limitNum = parseInt(contextLimit);
       
-      // 构建SQL查询
+      // 构建SQL查询 - 只获取已完成的消息用于上下文
       let sql;
       let params = [conversationId];
       
       if (clearedAt) {
-        // 如果有清空时间，只获取清空后的消息
+        // 如果有清空时间，只获取清空后的已完成消息
         sql = `
           SELECT * FROM messages 
-          WHERE conversation_id = ? AND created_at > ?
+          WHERE conversation_id = ? 
+            AND created_at > ?
+            AND status = 'completed'
           ORDER BY created_at DESC
           LIMIT ${limitNum}
         `;
         params.push(clearedAt);
       } else {
-        // 没有清空时间，获取所有消息
+        // 没有清空时间，获取所有已完成的消息
         sql = `
           SELECT * FROM messages 
           WHERE conversation_id = ? 
+            AND status = 'completed'
           ORDER BY created_at DESC
           LIMIT ${limitNum}
         `;
@@ -232,6 +301,47 @@ class Message {
     } catch (error) {
       logger.error('获取最近消息失败:', error);
       throw new DatabaseError(`获取最近消息失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 检查并恢复未完成的流式消息
+   */
+  static async checkAndRecoverStreamingMessages(conversationId) {
+    try {
+      // 查找超过5分钟还在streaming状态的消息
+      const sql = `
+        SELECT id, content, tokens FROM messages 
+        WHERE conversation_id = ? 
+          AND status = 'streaming' 
+          AND created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+      `;
+      
+      const { rows } = await dbConnection.query(sql, [conversationId]);
+      
+      if (rows.length > 0) {
+        logger.warn('发现未完成的流式消息', { 
+          conversationId, 
+          count: rows.length 
+        });
+        
+        // 如果有内容，标记为完成；否则标记为失败
+        for (const msg of rows) {
+          const newStatus = msg.content && msg.content.length > 0 ? 'completed' : 'failed';
+          await Message.updateStatus(msg.id, newStatus);
+          
+          logger.info('恢复流式消息状态', {
+            messageId: msg.id,
+            newStatus,
+            contentLength: msg.content?.length || 0
+          });
+        }
+      }
+      
+      return rows.length;
+    } catch (error) {
+      logger.error('检查流式消息失败:', error);
+      return 0;
     }
   }
 
@@ -320,6 +430,7 @@ class Message {
                 SELECT COALESCE(SUM(tokens), 0) 
                 FROM messages 
                 WHERE conversation_id = ?
+                  AND status = 'completed'
               )
           WHERE id = ?
         `;
@@ -381,6 +492,7 @@ class Message {
       content: this.content,
       tokens: this.tokens,
       model_name: this.model_name,
+      status: this.status,
       file_id: this.file_id,
       created_at: this.created_at
     };

@@ -1,6 +1,7 @@
 /**
  * 流式AI服务
  * 处理流式API调用和Server-Sent Events - 支持图片识别
+ * 修复：解决重复done事件和异常处理问题
  */
 
 const axios = require('axios');
@@ -87,6 +88,9 @@ class AIStreamService {
     const startTime = Date.now();
     let buffer = ''; // 用于处理不完整的数据块
     let messageCount = 0;
+    let isDoneEventSent = false; // 防止重复发送done事件
+    let streamTimeout = null; // 超时控制
+    let lastDataTime = Date.now(); // 最后收到数据的时间
     
     try {
       if (!model.api_key || !model.api_endpoint) {
@@ -197,11 +201,77 @@ class AIStreamService {
 
       logger.info('流式响应开始接收');
 
+      // 完成流式响应的函数
+      const completeStream = (reason = 'normal') => {
+        if (isDoneEventSent) {
+          logger.debug('Done事件已发送，跳过重复发送', { reason });
+          return;
+        }
+        
+        isDoneEventSent = true;
+        
+        // 清除超时定时器
+        if (streamTimeout) {
+          clearTimeout(streamTimeout);
+          streamTimeout = null;
+        }
+        
+        logger.info('流式传输完成', {
+          reason,
+          totalMessages: messageCount,
+          contentLength: fullContent.length,
+          duration: Date.now() - startTime
+        });
+        
+        // 发送完成事件
+        if (!res.writableEnded) {
+          const completionData = {
+            content: fullContent,
+            tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent),
+            duration: Date.now() - startTime,
+            messageId: options.messageId,
+            conversationId: options.conversationId,
+            reason: reason
+          };
+          
+          res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
+          res.end();
+        }
+        
+        // 调用完成回调（用于保存消息）
+        if (options.onComplete) {
+          options.onComplete(fullContent, tokenCount || AIStreamService.estimateStreamTokens(fullContent));
+        }
+      };
+
+      // 设置数据接收超时（30秒无数据则超时）
+      const resetTimeout = () => {
+        if (streamTimeout) {
+          clearTimeout(streamTimeout);
+        }
+        streamTimeout = setTimeout(() => {
+          const timeSinceLastData = Date.now() - lastDataTime;
+          logger.warn('流式响应超时', {
+            timeSinceLastData,
+            contentReceived: fullContent.length,
+            messageCount
+          });
+          completeStream('timeout');
+        }, 30000); // 30秒无数据超时
+      };
+
       // 返回Promise以便等待流式完成
       return new Promise((resolve, reject) => {
+        // 初始化超时
+        resetTimeout();
+
         // 处理流式响应
         response.data.on('data', (chunk) => {
           try {
+            // 更新最后数据时间并重置超时
+            lastDataTime = Date.now();
+            resetTimeout();
+            
             // 将chunk转换为字符串并添加到buffer
             buffer += chunk.toString();
             
@@ -221,37 +291,23 @@ class AIStreamService {
                 
                 // 检查是否是结束标记
                 if (jsonStr === '[DONE]') {
-                  logger.info('流式传输接收完成', {
-                    totalMessages: messageCount,
-                    contentLength: fullContent.length
-                  });
-                  
-                  // 发送完成事件
-                  const completionData = {
-                    content: fullContent,
-                    tokens: tokenCount,
-                    duration: Date.now() - startTime,
-                    messageId: options.messageId,
-                    conversationId: options.conversationId
-                  };
-                  
-                  res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
-                  res.end();
-                  
-                  // 调用完成回调
-                  if (options.onComplete) {
-                    options.onComplete(fullContent, tokenCount);
-                  }
-                  
+                  completeStream('done_signal');
                   resolve({
                     content: fullContent,
-                    tokens: tokenCount
+                    tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
                   });
                   return;
                 }
                 
                 try {
                   const data = JSON.parse(jsonStr);
+                  
+                  // 检查是否有错误
+                  if (data.error) {
+                    logger.error('API返回错误', { error: data.error });
+                    throw new Error(data.error.message || 'API错误');
+                  }
+                  
                   const deltaContent = data.choices?.[0]?.delta?.content;
                   
                   if (deltaContent && deltaContent !== '') {
@@ -265,7 +321,9 @@ class AIStreamService {
                       fullContent: fullContent
                     };
                     
-                    res.write(`event: message\ndata: ${JSON.stringify(messageData)}\n\n`);
+                    if (!res.writableEnded) {
+                      res.write(`event: message\ndata: ${JSON.stringify(messageData)}\n\n`);
+                    }
                     
                     // 每10个片段记录一次日志
                     if (messageCount % 10 === 0) {
@@ -273,6 +331,20 @@ class AIStreamService {
                         messages: messageCount,
                         contentLength: fullContent.length
                       });
+                    }
+                  }
+                  
+                  // 检查finish_reason
+                  const finishReason = data.choices?.[0]?.finish_reason;
+                  if (finishReason) {
+                    logger.info('流式响应结束', { finishReason });
+                    if (finishReason === 'stop' || finishReason === 'length') {
+                      completeStream(`finish_${finishReason}`);
+                      resolve({
+                        content: fullContent,
+                        tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+                      });
+                      return;
                     }
                   }
                 } catch (parseError) {
@@ -285,65 +357,84 @@ class AIStreamService {
             }
           } catch (error) {
             logger.error('处理流式数据块失败:', error);
+            // 不立即结束，继续尝试处理后续数据
           }
         });
 
         response.data.on('error', (error) => {
-          logger.error('流式响应错误:', error);
-          if (!res.writableEnded) {
-            res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
-            res.end();
+          logger.error('流式响应错误:', {
+            error: error.message,
+            contentReceived: fullContent.length
+          });
+          
+          // 如果已经接收到部分内容，保存它
+          if (fullContent.length > 0) {
+            completeStream('error_with_content');
+            resolve({
+              content: fullContent,
+              tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+            });
+          } else {
+            if (!res.writableEnded) {
+              res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+              res.end();
+            }
+            reject(error);
           }
-          reject(error);
         });
 
         response.data.on('end', () => {
-          logger.info('流式响应接收结束');
+          logger.info('流式响应接收结束', {
+            contentLength: fullContent.length,
+            isDoneEventSent
+          });
           
           // 如果还有未处理的buffer数据，尝试处理
           if (buffer.trim()) {
-            logger.warn('存在未处理的流式数据:', buffer);
+            logger.warn('存在未处理的流式数据:', buffer.substring(0, 100));
           }
           
-          // 确保连接已关闭
-          if (!res.writableEnded) {
-            const completionData = {
+          // 确保完成事件被发送（如果还没发送）
+          if (!isDoneEventSent) {
+            completeStream('stream_end');
+            resolve({
               content: fullContent,
-              tokens: tokenCount,
-              duration: Date.now() - startTime,
-              messageId: options.messageId,
-              conversationId: options.conversationId
-            };
-            
-            res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
-            res.end();
+              tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+            });
           }
-          
-          resolve({
-            content: fullContent,
-            tokens: tokenCount
-          });
         });
 
-        // 处理超时
-        const timeoutId = setTimeout(() => {
-          logger.error('流式响应超时');
-          if (!res.writableEnded) {
-            res.write(`event: error\ndata: ${JSON.stringify({ error: 'Stream timeout' })}\n\n`);
-            res.end();
+        // 处理连接关闭
+        res.on('close', () => {
+          logger.info('客户端连接关闭', {
+            contentReceived: fullContent.length,
+            isDoneEventSent
+          });
+          
+          // 如果客户端断开连接但已经有内容，保存它
+          if (fullContent.length > 0 && !isDoneEventSent) {
+            completeStream('client_disconnect');
           }
-          reject(new Error('流式响应超时'));
-        }, 180000);
-
-        response.data.on('end', () => clearTimeout(timeoutId));
-        response.data.on('error', () => clearTimeout(timeoutId));
+          
+          // 清理超时
+          if (streamTimeout) {
+            clearTimeout(streamTimeout);
+          }
+        });
       });
 
     } catch (error) {
       logger.error('流式模型API调用失败:', {
         error: error.message,
-        response: error.response?.data
+        response: error.response?.data,
+        contentReceived: fullContent.length
       });
+      
+      // 如果已经接收到部分内容，尝试保存
+      if (fullContent.length > 0 && !isDoneEventSent && options.onComplete) {
+        logger.info('尝试保存部分接收的内容');
+        options.onComplete(fullContent, tokenCount || AIStreamService.estimateStreamTokens(fullContent));
+      }
       
       throw error;
     }

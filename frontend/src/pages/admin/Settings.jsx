@@ -166,9 +166,9 @@ const Settings = () => {
       await createAIModel(values)
       setIsModelModalVisible(false)
       modelForm.resetFields()
-      message.success(t('admin.models.create.success'))
+      message.success(t('admin.models.success.create'))
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.models.create.failed'))
+      message.error(error.response?.data?.message || t('admin.models.error.create'))
     }
   }
 
@@ -192,9 +192,9 @@ const Settings = () => {
       setIsModelModalVisible(false)
       setEditingModel(null)
       modelForm.resetFields()
-      message.success(t('admin.models.update.success'))
+      message.success(t('admin.models.success.update'))
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.models.update.failed'))
+      message.error(error.response?.data?.message || t('admin.models.error.update'))
     }
   }
 
@@ -206,9 +206,9 @@ const Settings = () => {
     
     try {
       await deleteAIModel(modelId)
-      message.success(t('admin.models.delete.success'))
+      message.success(t('admin.models.success.delete'))
     } catch (error) {
-      message.error(error.response?.data?.message || t('admin.models.delete.failed'))
+      message.error(error.response?.data?.message || t('admin.models.error.delete'))
     }
   }
 
@@ -263,9 +263,9 @@ const Settings = () => {
     
     try {
       await updateAIModel(modelId, { stream_enabled: streamEnabled })
-      message.success(streamEnabled ? '流式输出已启用' : '流式输出已禁用')
+      message.success(t('admin.models.success.update'))
     } catch (error) {
-      message.error('操作失败')
+      message.error(t('admin.models.error.update'))
     }
   }
 
@@ -277,9 +277,9 @@ const Settings = () => {
     
     try {
       await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
-      message.success(imageUploadEnabled ? '图片上传已启用' : '图片上传已禁用')
+      message.success(t('admin.models.success.update'))
     } catch (error) {
-      message.error('操作失败')
+      message.error(t('admin.models.error.update'))
     }
   }
 
@@ -289,9 +289,9 @@ const Settings = () => {
       await createModule(values)
       setIsModuleModalVisible(false)
       moduleForm.resetFields()
-      message.success('系统模块创建成功')
+      message.success(t('admin.modules.success.create'))
     } catch (error) {
-      message.error(error.response?.data?.message || '系统模块创建失败')
+      message.error(error.response?.data?.message || t('admin.modules.error.create'))
     }
   }
 
@@ -301,18 +301,18 @@ const Settings = () => {
       setIsModuleModalVisible(false)
       setEditingModule(null)
       moduleForm.resetFields()
-      message.success('系统模块更新成功')
+      message.success(t('admin.modules.success.update'))
     } catch (error) {
-      message.error(error.response?.data?.message || '系统模块更新失败')
+      message.error(error.response?.data?.message || t('admin.modules.error.update'))
     }
   }
 
   const handleDeleteModule = async (moduleId) => {
     try {
       await deleteModule(moduleId)
-      message.success('系统模块删除成功')
+      message.success(t('admin.modules.success.delete'))
     } catch (error) {
-      message.error(error.response?.data?.message || '系统模块删除失败')
+      message.error(error.response?.data?.message || t('admin.modules.error.delete'))
     }
   }
 
@@ -327,12 +327,12 @@ const Settings = () => {
     try {
       const result = await checkModuleHealth(moduleId)
       if (result.success) {
-        message.success(`健康检查完成：${result.data.message}`)
+        message.success(t('admin.modules.checkHealth.success'))
       } else {
-        message.warning('健康检查失败')
+        message.warning(t('admin.modules.checkHealth.failed'))
       }
     } catch (error) {
-      message.error('健康检查出错')
+      message.error(t('admin.modules.checkHealth.error'))
     } finally {
       setCheckingModuleId(null)
     }
@@ -341,9 +341,9 @@ const Settings = () => {
   const handleToggleModuleStatus = async (moduleId, isActive) => {
     try {
       await toggleModuleStatus(moduleId, isActive)
-      message.success(isActive ? '模块已启用' : '模块已禁用')
+      message.success(t('admin.modules.success.update'))
     } catch (error) {
-      message.error('操作失败')
+      message.error(t('admin.modules.error.update'))
     }
   }
 
@@ -356,9 +356,9 @@ const Settings = () => {
     
     try {
       await deleteApiService(serviceId)
-      message.success('API服务删除成功')
+      message.success(t('admin.apiServices.success.delete'))
     } catch (error) {
-      message.error(error.response?.data?.message || 'API服务删除失败')
+      message.error(error.response?.data?.message || t('admin.apiServices.error.delete'))
     }
   }
 
@@ -408,7 +408,7 @@ const Settings = () => {
           tab={
             <span>
               <HistoryOutlined />
-              使用记录
+              {t('admin.settings.tabs.usageLogs')}
             </span>
           } 
           key="usageLogs"
@@ -422,7 +422,7 @@ const Settings = () => {
             tab={
               <span>
                 <HeartOutlined />
-                系统健康
+                {t('admin.settings.tabs.systemHealth')}
               </span>
             } 
             key="health"
@@ -491,7 +491,7 @@ const Settings = () => {
             tab={
               <span>
                 <FileTextOutlined />
-                系统提示词
+                {t('admin.settings.tabs.systemPrompts')}
               </span>
             } 
             key="systemPrompts"
@@ -546,12 +546,12 @@ const Settings = () => {
             tab={
               <span>
                 <ApiOutlined />
-                API服务
+                {t('admin.settings.tabs.apiServices')}
               </span>
             } 
             key="apiServices"
           >
-            <Card title="API服务管理">
+            <Card title={t('admin.settings.apiServices.title')}>
               <APIServiceTable
                 services={apiServices}
                 loading={loading}
@@ -588,7 +588,7 @@ const Settings = () => {
             tab={
               <span>
                 <BgColorsOutlined />
-                主题设置
+                {t('admin.settings.tabs.theme')}
               </span>
             } 
             key="theme"
@@ -603,7 +603,7 @@ const Settings = () => {
             tab={
               <span>
                 <ThunderboltOutlined />
-                速率限制
+                {t('admin.settings.tabs.rateLimit')}
               </span>
             } 
             key="rateLimit"
@@ -618,7 +618,7 @@ const Settings = () => {
             tab={
               <span>
                 <MailOutlined />
-                邮件设置
+                {t('admin.settings.tabs.email')}
               </span>
             } 
             key="email"
