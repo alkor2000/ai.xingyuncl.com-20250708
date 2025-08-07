@@ -67,8 +67,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-your-super-secret-key-2025}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-2025}
-      APP_DOMAIN: ${APP_DOMAIN:-ai.xingyuncl.com}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://ai.xingyuncl.com}
+      APP_DOMAIN: ${APP_DOMAIN}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_DIR: /app/logs
     volumes:
       - ./storage/uploads:/app/storage/uploads
@@ -95,12 +95,14 @@ services:
     environment:
       TZ: Asia/Shanghai
     volumes:
-      # 挂载SSL证书
+      # 挂载SSL证书目录（如果有）
       - /etc/letsencrypt:/etc/letsencrypt:ro
       # 挂载nginx配置
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       # 挂载上传文件目录
       - ./storage/uploads:/app/storage/uploads:ro
+      # Let's Encrypt验证目录
+      - ./certbot:/var/www/certbot:ro
     networks:
       - ai-network
     ports:
