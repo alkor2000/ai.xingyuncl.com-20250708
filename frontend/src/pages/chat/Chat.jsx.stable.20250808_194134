@@ -1,6 +1,6 @@
 /**
- * 聊天页面 - 主界面（轻量优化版v1）
- * 优化：仅添加输入防抖，不改变组件结构
+ * 聊天页面 - 主界面
+ * 功能：对话管理、消息收发、AI交互
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -12,7 +12,7 @@ import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
 import apiClient from '../../utils/api'
 
-// 导入子组件
+// 导入新的子组件
 import {
   ConversationSidebar,
   ChatHeader,
@@ -31,19 +31,6 @@ if (typeof window !== "undefined") {
 
 const { Sider, Content } = Layout
 
-// 简单的防抖函数
-function debounce(func, wait) {
-  let timeout
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout)
-      func(...args)
-    }
-    clearTimeout(timeout)
-    timeout = setTimeout(later, wait)
-  }
-}
-
 const Chat = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -57,7 +44,7 @@ const Chat = () => {
     currentConversation,
     messages,
     messagesLoading,
-    initialLoading,
+    initialLoading, // 🔥 新增：获取初始加载状态
     sendMessage,
     getConversations,
     selectConversation,
@@ -86,7 +73,7 @@ const Chat = () => {
   const [showNewChatModal, setShowNewChatModal] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [isSending, setIsSending] = useState(false)
+  const [isSending, setIsSending] = useState(false) // 🔥 新增：跟踪发送状态
   
   // 用户手动滚动标志
   const [userScrolled, setUserScrolled] = useState(false)
@@ -96,7 +83,8 @@ const Chat = () => {
   
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
-  const inputRef = useRef(null)
+  const draftTimerRef = useRef(null)
+  const inputRef = useRef(null) // 🔥 新增：输入框ref
 
   // 初始化
   useEffect(() => {
@@ -105,9 +93,69 @@ const Chat = () => {
     getUserCredits()
   }, [])
 
-  // 草稿管理函数
-  const saveDraft = useCallback((conversationId, content) => {
-    if (content.trim() && !isSending) {
+  // 🔥 修改：恢复草稿时检查是否正在发送
+  useEffect(() => {
+    if (currentConversation && !isSending) {
+      const draft = getDraft(currentConversation.id)
+      if (draft && !inputValue) {
+        setInputValue(draft)
+      }
+    }
+  }, [currentConversation?.id])
+
+  // 🔥 新增：监听typing和isStreaming状态，在AI回复完成后聚焦输入框
+  useEffect(() => {
+    // 当typing和isStreaming都为false时，且有当前对话，聚焦输入框
+    if (!typing && !isStreaming && currentConversation && inputRef.current && !isSending) {
+      // 添加小延迟以确保DOM更新完成
+      setTimeout(() => {
+        // 只在用户没有滚动查看历史消息时自动聚焦
+        if (!userScrolled) {
+          inputRef.current?.focus()
+        }
+      }, 100)
+    }
+  }, [typing, isStreaming, currentConversation, userScrolled, isSending])
+
+  // 🔥 新增：当选择对话后聚焦输入框
+  useEffect(() => {
+    if (currentConversation && !initialLoading && inputRef.current) {
+      // 延迟聚焦，确保界面渲染完成
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 300)
+    }
+  }, [currentConversation?.id, initialLoading])
+
+  // 🔥 修改：改进草稿保存逻辑，避免竞态条件
+  useEffect(() => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current)
+    }
+    
+    // 如果输入框为空，立即清除草稿（不等待）
+    if (!inputValue.trim() && currentConversation) {
+      clearDraft(currentConversation.id)
+      return
+    }
+    
+    // 只有在有内容且不在发送时才保存草稿
+    if (currentConversation && inputValue.trim() && !isSending) {
+      draftTimerRef.current = setTimeout(() => {
+        saveDraft(currentConversation.id, inputValue)
+      }, 1000)
+    }
+    
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current)
+      }
+    }
+  }, [inputValue, currentConversation?.id, isSending])
+
+  // 草稿管理
+  const saveDraft = (conversationId, content) => {
+    if (content.trim() && !isSending) { // 🔥 添加发送状态检查
       const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
       drafts[conversationId] = {
         content,
@@ -115,7 +163,7 @@ const Chat = () => {
       }
       localStorage.setItem('chatDrafts', JSON.stringify(drafts))
     }
-  }, [isSending])
+  }
   
   const getDraft = (conversationId) => {
     const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
@@ -128,57 +176,7 @@ const Chat = () => {
     localStorage.setItem('chatDrafts', JSON.stringify(drafts))
   }
 
-  // 创建防抖的草稿保存
-  const debouncedSaveDraft = useCallback(
-    debounce((conversationId, content) => {
-      saveDraft(conversationId, content)
-    }, 1000),
-    [saveDraft]
-  )
-
-  // 恢复草稿
-  useEffect(() => {
-    if (currentConversation && !isSending) {
-      const draft = getDraft(currentConversation.id)
-      if (draft && !inputValue) {
-        setInputValue(draft)
-      }
-    }
-  }, [currentConversation?.id])
-
-  // 监听typing和isStreaming状态
-  useEffect(() => {
-    if (!typing && !isStreaming && currentConversation && inputRef.current && !isSending) {
-      setTimeout(() => {
-        if (!userScrolled) {
-          inputRef.current?.focus()
-        }
-      }, 100)
-    }
-  }, [typing, isStreaming, currentConversation, userScrolled, isSending])
-
-  // 当选择对话后聚焦输入框
-  useEffect(() => {
-    if (currentConversation && !initialLoading && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 300)
-    }
-  }, [currentConversation?.id, initialLoading])
-
-  // 改进草稿保存逻辑
-  useEffect(() => {
-    if (!inputValue.trim() && currentConversation) {
-      clearDraft(currentConversation.id)
-      return
-    }
-    
-    if (currentConversation && inputValue.trim() && !isSending) {
-      debouncedSaveDraft(currentConversation.id, inputValue)
-    }
-  }, [inputValue, currentConversation?.id, isSending, debouncedSaveDraft])
-
-  // 滚动函数
+  // 修改滚动函数，支持条件滚动
   const scrollToBottom = useCallback((force = false) => {
     if (messagesEndRef.current && (!userScrolled || force)) {
       const behavior = isStreaming ? 'instant' : 'smooth'
@@ -196,11 +194,14 @@ const Chat = () => {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100 // 100px容差
       
+      // 如果用户手动向上滚动了，设置标志
       if (!isAtBottom && isStreaming) {
         setUserScrolled(true)
-      } else if (isAtBottom) {
+      }
+      // 如果滚动到底部了，清除标志
+      else if (isAtBottom) {
         setUserScrolled(false)
       }
     }
@@ -216,7 +217,7 @@ const Chat = () => {
     }
   }, [isStreaming])
 
-  // 自动滚动到消息底部
+  // 自动滚动到消息底部 - 只在不是用户手动滚动时执行
   useEffect(() => {
     if (!userScrolled) {
       scrollToBottom()
@@ -230,21 +231,21 @@ const Chat = () => {
         if (!userScrolled) {
           scrollToBottom()
         }
-      }, 500)
+      }, 500) // 每500ms滚动一次
       
       return () => clearInterval(scrollInterval)
     }
   }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
 
-  // 创建新对话
+  // 创建新对话 - 支持系统提示词ID和模块组合ID
   const handleCreateConversation = async (values) => {
     try {
       await createConversation({
         title: values.title,
         model_name: values.model_name,
         system_prompt: values.system_prompt,
-        system_prompt_id: values.system_prompt_id,
-        module_combination_id: values.module_combination_id,
+        system_prompt_id: values.system_prompt_id, // 新增系统提示词ID
+        module_combination_id: values.module_combination_id, // 新增模块组合ID
         context_length: values.context_length,
         ai_temperature: values.ai_temperature,
         priority: values.priority || 0
@@ -273,14 +274,14 @@ const Chat = () => {
     }
   }
 
-  // 编辑对话
+  // 编辑对话 - 支持系统提示词ID和模块组合ID
   const handleEditConversation = (conversation) => {
     settingsForm.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
       system_prompt: conversation.system_prompt,
-      system_prompt_id: conversation.system_prompt_id,
-      module_combination_id: conversation.module_combination_id,
+      system_prompt_id: conversation.system_prompt_id, // 新增系统提示词ID
+      module_combination_id: conversation.module_combination_id, // 新增模块组合ID
       is_pinned: conversation.is_pinned,
       context_length: conversation.context_length,
       ai_temperature: conversation.ai_temperature,
@@ -313,6 +314,7 @@ const Chat = () => {
       setDeletingConversation(null)
       message.success(t('chat.conversation.delete.success'))
       
+      // 如果删除的是当前对话，清空当前对话
       if (deletingConversation.id === currentConversationId) {
         selectConversation(null)
       }
@@ -333,7 +335,7 @@ const Chat = () => {
     }
   }
 
-  // 处理模型切换
+  // 🔥 新增：处理模型切换
   const handleModelChange = async (model) => {
     if (!currentConversation || !model) return
     
@@ -342,29 +344,37 @@ const Chat = () => {
         model_name: model.name
       })
       message.success(`已切换到 ${model.display_name || model.name}`)
+      // 不需要重新获取对话列表，只更新当前对话即可
     } catch (error) {
       message.error('切换模型失败')
     }
   }
 
-  // 发送消息 - 优化版
-  const handleSendMessage = useCallback(async () => {
+  // 🔥 修改：发送消息 - 在发送前清空输入框
+  const handleSendMessage = async () => {
     if (!inputValue.trim() && !uploadedImage) return
     if (!currentConversation) {
       message.warning(t('chat.selectConversation'))
       return
     }
 
+    // 🔥 立即保存要发送的内容
     const messageContent = inputValue.trim()
     const fileInfo = uploadedImage || null
     
+    // 🔥 标记正在发送
     setIsSending(true)
+    
+    // 🔥 立即清空输入框和图片（在发送前）
     setInputValue('')
     setUploadedImage(null)
+    
+    // 🔥 立即清除草稿
     clearDraft(currentConversation.id)
     
     try {
       await sendMessage(messageContent, fileInfo)
+      // 🔥 发送成功后聚焦输入框
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
@@ -372,16 +382,19 @@ const Chat = () => {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
       
+      // 🔥 发送失败时恢复输入内容
       setInputValue(messageContent)
       setUploadedImage(fileInfo)
       
+      // 🔥 发送失败也聚焦输入框，方便用户重试
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
     } finally {
+      // 🔥 重置发送状态
       setIsSending(false)
     }
-  }, [inputValue, uploadedImage, currentConversation, sendMessage, t])
+  }
 
   // 停止流式输出
   const handleStopStreaming = () => {
@@ -399,10 +412,10 @@ const Chat = () => {
     }
   }
 
-  // 优化输入处理 - 使用本地状态
-  const handleInputChange = useCallback((value) => {
+  // 🔥 修改：简化输入处理，直接更新值
+  const handleInputChange = (value) => {
     setInputValue(value)
-  }, [])
+  }
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -411,7 +424,7 @@ const Chat = () => {
     }
   }
 
-  // 处理图片上传
+  // 处理图片上传 - 使用apiClient
   const handleImageUpload = async (file) => {
     if (!file) return
 
@@ -420,6 +433,7 @@ const Chat = () => {
     formData.append('image', file)
 
     try {
+      // 使用apiClient发送请求，它会自动处理认证
       const response = await apiClient.post('/chat/upload-image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -429,6 +443,7 @@ const Chat = () => {
       if (response.data?.success && response.data?.data) {
         setUploadedImage(response.data.data)
         message.success(t('chat.image.upload.success'))
+        // 🔥 新增：上传图片后聚焦输入框
         setTimeout(() => {
           inputRef.current?.focus()
         }, 100)
@@ -451,6 +466,7 @@ const Chat = () => {
     }
 
     try {
+      // 格式化时间函数
       const formatDateTime = (dateStr) => {
         const date = new Date(dateStr)
         return date.toLocaleString('zh-CN', {
@@ -463,11 +479,13 @@ const Chat = () => {
         })
       }
 
+      // 生成文件名
       const now = new Date()
       const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5)
       const conversationTitle = currentConversation?.title || '未命名对话'
       const fileName = `${conversationTitle}_${timestamp}.txt`
 
+      // 构建文件内容
       let content = '========================================\n'
       content += `对话标题：${conversationTitle}\n`
       content += `AI模型：${currentModel?.display_name || currentConversation?.model_name}\n`
@@ -476,18 +494,22 @@ const Chat = () => {
       content += `消息数量：${messages.length}\n`
       content += '========================================\n\n'
 
+      // 添加消息内容
       messages.forEach((msg, index) => {
         const role = msg.role === 'user' ? '【用户】' : '【AI助手】'
         const time = formatDateTime(msg.created_at)
         
         content += `${role} ${time}\n`
         
+        // 如果有图片，添加图片标记
         if (msg.file && msg.file.original_name) {
           content += `[图片：${msg.file.original_name}]\n`
         }
         
+        // 消息内容
         content += `${msg.content}\n`
         
+        // 如果是AI消息，显示token数
         if (msg.role === 'assistant' && msg.tokens) {
           content += `(消耗 ${msg.tokens} tokens)\n`
         }
@@ -495,6 +517,7 @@ const Chat = () => {
         content += '\n' + '-'.repeat(40) + '\n\n'
       })
 
+      // 创建Blob并下载
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -526,6 +549,7 @@ const Chat = () => {
         try {
           await clearMessages(currentConversation.id)
           message.success(t('chat.clear.success'))
+          // 🔥 新增：清空对话后聚焦输入框
           setTimeout(() => {
             inputRef.current?.focus()
           }, 100)
@@ -538,11 +562,12 @@ const Chat = () => {
   }
 
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
+  // 🔥 新增：获取用户可用的模型列表（只显示激活的模型）
   const availableModels = aiModels.filter(m => m.is_active)
 
   return (
     <Layout className="chat-container">
-      {/* 侧边栏 */}
+      {/* 侧边栏 - 宽度改为220px */}
       <Sider
         width={220}
         collapsed={sidebarCollapsed}
@@ -556,6 +581,7 @@ const Chat = () => {
         className="chat-sidebar"
         trigger={null}
       >
+        {/* 添加包装div来隔离Sider的任何内部渲染问题 */}
         <div style={{ height: '100%', overflow: 'hidden' }}>
           <ConversationSidebar
             conversations={conversations}
@@ -578,7 +604,9 @@ const Chat = () => {
       {/* 主内容区 */}
       <Layout className="chat-main">
         <Content className="chat-content">
+          {/* 🔥 修复：添加初始加载判断，避免闪烁 */}
           {initialLoading ? (
+            // 初始加载时显示加载动画
             <div style={{
               display: 'flex',
               justifyContent: 'center',
@@ -593,6 +621,7 @@ const Chat = () => {
               </div>
             </div>
           ) : !currentConversation ? (
+            // 只有在初始加载完成后，且确实没有选中对话时才显示空状态
             <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
           ) : (
             <>
@@ -604,7 +633,7 @@ const Chat = () => {
                 onOpenSettings={() => handleEditConversation(currentConversation)}
               />
 
-              {/* 消息列表 */}
+              {/* 消息列表 - 添加ref用于滚动监听 */}
               <div className="messages-container" ref={messagesContainerRef}>
                 <MessageList
                   messages={messages}
@@ -621,7 +650,7 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* 输入区域 - 使用原有组件 */}
+              {/* 输入区域 - 🔥 传递ref和模型相关props */}
               <ChatInputArea
                 ref={inputRef}
                 inputValue={inputValue}
