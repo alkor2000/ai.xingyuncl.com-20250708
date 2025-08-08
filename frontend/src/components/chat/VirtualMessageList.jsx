@@ -1,60 +1,82 @@
 /**
- * 虚拟滚动消息列表组件 - 优化长对话性能
+ * 虚拟滚动消息列表 - 优化长对话性能
  */
 
-import React, { useState, useEffect, useRef, useCallback, memo, forwardRef } from 'react'
+import React, { useRef, useCallback, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
 import { VariableSizeList as List } from 'react-window'
-import InfiniteLoader from 'react-window-infinite-loader'
-import { Avatar, Card, Spin, Empty, Typography, message as antMessage } from 'antd'
-import { LoadingOutlined, InfoCircleOutlined } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
+import { Avatar, Card, Spin, Empty, Typography } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import MessageContent from './MessageContent'
 import apiClient from '../../utils/api'
+import { useTranslation } from 'react-i18next'
 import './MessageList.less'
 
 const { Text } = Typography
 
-// AI头像图标组件
+// AI头像图标
 const AIIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" stroke="none" />
   </svg>
 )
 
-// 单个消息行组件 - 使用memo优化
-const MessageRow = memo(({ 
-  index, 
-  style, 
-  data 
-}) => {
-  const { 
-    messages, 
-    user, 
-    currentModel, 
-    aiModels, 
-    isStreaming, 
-    streamingMessageId,
-    onDeleteMessage,
-    loadingMore 
-  } = data
-  
-  // 处理加载更多的占位符
-  if (index === 0 && loadingMore) {
-    return (
-      <div style={style}>
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <Spin size="small" />
-          <Text type="secondary" style={{ marginLeft: 8 }}>
-            加载历史消息...
-          </Text>
+// 空消息状态组件 - 复用原有实现
+const EmptyMessages = () => {
+  const { t } = useTranslation()
+  const [announcement, setAnnouncement] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchAnnouncement = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.get('/admin/announcement')
+        if (response.data.success) {
+          setAnnouncement(response.data.data)
+        }
+      } catch (error) {
+        console.error('获取系统公告失败:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAnnouncement()
+  }, [])
+
+  return (
+    <div className="chat-empty">
+      {loading ? (
+        <div className="announcement-loading">
+          <Spin size="large" />
         </div>
-      </div>
-    )
-  }
-  
-  const messageIndex = loadingMore ? index - 1 : index
-  const msg = messages[messageIndex]
+      ) : (
+        announcement?.content && (
+          <Card className="announcement-card">
+            <div className="announcement-header">
+              <InfoCircleOutlined style={{ color: 'var(--primary-color)', marginRight: 8 }} />
+              <span>系统公告</span>
+            </div>
+            <div className="announcement-content markdown-content">
+              <ReactMarkdown>{announcement.content}</ReactMarkdown>
+            </div>
+          </Card>
+        )
+      )}
+      
+      <Empty 
+        description={t('chat.startChat')}
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+      />
+    </div>
+  )
+}
+
+// 虚拟滚动的消息行组件
+const VirtualMessageRow = React.memo(({ index, style, data }) => {
+  const { messages, user, currentModel, aiModels, isStreaming, streamingMessageId, onDeleteMessage } = data
+  const msg = messages[index]
   
   if (!msg) return null
   
@@ -134,59 +156,7 @@ const MessageRow = memo(({
   )
 })
 
-MessageRow.displayName = 'MessageRow'
-
-// 空消息状态组件
-const EmptyMessages = () => {
-  const { t } = useTranslation()
-  const [announcement, setAnnouncement] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchAnnouncement = async () => {
-      try {
-        setLoading(true)
-        const response = await apiClient.get('/admin/announcement')
-        if (response.data.success) {
-          setAnnouncement(response.data.data)
-        }
-      } catch (error) {
-        console.error('获取系统公告失败:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAnnouncement()
-  }, [])
-
-  return (
-    <div className="chat-empty">
-      {loading ? (
-        <div className="announcement-loading">
-          <Spin size="large" />
-        </div>
-      ) : (
-        announcement?.content && (
-          <Card className="announcement-card">
-            <div className="announcement-header">
-              <InfoCircleOutlined style={{ color: 'var(--primary-color)', marginRight: 8 }} />
-              <span>系统公告</span>
-            </div>
-            <div className="announcement-content markdown-content">
-              <ReactMarkdown>{announcement.content}</ReactMarkdown>
-            </div>
-          </Card>
-        )
-      )}
-      
-      <Empty 
-        description={t('chat.startChat')}
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      />
-    </div>
-  )
-}
+VirtualMessageRow.displayName = 'VirtualMessageRow'
 
 // 虚拟滚动消息列表主组件
 const VirtualMessageList = forwardRef(({ 
@@ -194,107 +164,81 @@ const VirtualMessageList = forwardRef(({
   typing, 
   isStreaming, 
   streamingMessageId,
+  messagesEndRef,
   user,
   currentModel,
   aiModels = [],
   onDeleteMessage,
-  onLoadMore,
-  hasMore = false,
-  totalCount = 0,
-  conversationId
+  containerHeight
 }, ref) => {
   const { t } = useTranslation()
   const listRef = useRef(null)
   const itemHeights = useRef({})
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [isScrolling, setIsScrolling] = useState(false)
   
   // 如果没有消息，显示空状态
   if (messages.length === 0) {
     return <EmptyMessages />
   }
   
-  // 计算项目高度
+  // 计算每个消息的高度
   const getItemSize = useCallback((index) => {
-    // 如果是加载更多的占位符
-    if (index === 0 && loadingMore) {
-      return 60
+    // 如果已缓存，返回缓存值
+    if (itemHeights.current[index]) {
+      return itemHeights.current[index]
     }
     
-    const messageIndex = loadingMore ? index - 1 : index
-    const msg = messages[messageIndex]
+    const msg = messages[index]
     if (!msg) return 100
     
-    // 根据内容长度估算高度
-    const baseHeight = 80
-    const contentLength = msg.content ? msg.content.length : 0
-    const hasImage = !!msg.file
+    // 基础高度
+    let height = 80
     
-    // 粗略估算：每100字符增加20px高度
-    const textHeight = Math.ceil(contentLength / 100) * 20
-    const imageHeight = hasImage ? 320 : 0
+    // 根据内容长度估算
+    if (msg.content) {
+      const lines = Math.ceil(msg.content.length / 100)
+      height += lines * 20
+    }
+    
+    // 如果有图片，增加高度
+    if (msg.file) {
+      height += 320
+    }
+    
+    // 限制最大高度
+    height = Math.min(height, 800)
     
     // 缓存计算结果
-    const height = baseHeight + textHeight + imageHeight
     itemHeights.current[index] = height
     
     return height
-  }, [messages, loadingMore])
-  
-  // 加载更多历史消息
-  const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || !onLoadMore) return
-    
-    setLoadingMore(true)
-    try {
-      await onLoadMore()
-    } catch (error) {
-      console.error('加载更多消息失败:', error)
-      antMessage.error('加载历史消息失败')
-    } finally {
-      setLoadingMore(false)
-    }
-  }, [loadingMore, hasMore, onLoadMore])
-  
-  // 检查是否需要加载更多
-  const isItemLoaded = useCallback((index) => {
-    return !hasMore || index > 0
-  }, [hasMore])
-  
-  // 滚动到底部
-  const scrollToBottom = useCallback(() => {
-    if (listRef.current) {
-      const itemCount = loadingMore ? messages.length + 1 : messages.length
-      listRef.current.scrollToItem(itemCount - 1, 'end')
-    }
-  }, [messages.length, loadingMore])
+  }, [messages])
   
   // 暴露方法给父组件
-  React.useImperativeHandle(ref, () => ({
-    scrollToBottom,
+  useImperativeHandle(ref, () => ({
+    scrollToBottom: () => {
+      if (listRef.current) {
+        listRef.current.scrollToItem(messages.length - 1, 'end')
+      }
+    },
     scrollToTop: () => {
       if (listRef.current) {
         listRef.current.scrollToItem(0, 'start')
       }
-    },
-    getListRef: () => listRef.current
+    }
   }))
   
-  // 当有新消息或流式输出时自动滚动
+  // 当有新消息时滚动到底部
   useEffect(() => {
-    if (isStreaming || typing) {
-      scrollToBottom()
+    if (listRef.current && !isScrolling) {
+      // 延迟一下确保高度计算完成
+      setTimeout(() => {
+        listRef.current.scrollToItem(messages.length - 1, 'end')
+      }, 100)
     }
-  }, [messages.length, isStreaming, typing, scrollToBottom])
+  }, [messages.length, isScrolling])
   
-  // 处理滚动事件，判断是否接近顶部需要加载更多
-  const handleScroll = useCallback(({ scrollOffset }) => {
-    if (scrollOffset < 200 && hasMore && !loadingMore) {
-      handleLoadMore()
-    }
-  }, [hasMore, loadingMore, handleLoadMore])
-  
-  const itemCount = loadingMore ? messages.length + 1 : messages.length
-  
+  // 准备传递给行组件的数据
   const itemData = {
     messages,
     user,
@@ -302,22 +246,35 @@ const VirtualMessageList = forwardRef(({
     aiModels,
     isStreaming,
     streamingMessageId,
-    onDeleteMessage,
-    loadingMore
+    onDeleteMessage
   }
   
+  // 计算列表高度（使用容器高度或默认值）
+  const listHeight = containerHeight || window.innerHeight - 250
+  
   return (
-    <div style={{ height: '100%', position: 'relative' }}>
+    <div className="chat-messages-list" style={{ height: '100%' }}>
       <List
         ref={listRef}
-        height={window.innerHeight - 200} // 动态计算高度
-        itemCount={itemCount}
+        height={listHeight}
+        itemCount={messages.length}
         itemSize={getItemSize}
         itemData={itemData}
-        onScroll={handleScroll}
-        overscanCount={3} // 预渲染3个项目
+        width="100%"
+        onScroll={({ scrollDirection, scrollOffset, scrollUpdateWasRequested }) => {
+          // 如果是用户滚动（不是程序触发的）
+          if (!scrollUpdateWasRequested) {
+            setIsScrolling(true)
+            // 如果滚动到底部附近，取消滚动标记
+            const isNearBottom = scrollOffset > (messages.length * 100) - listHeight - 100
+            if (isNearBottom) {
+              setIsScrolling(false)
+            }
+          }
+        }}
+        overscanCount={3}
       >
-        {MessageRow}
+        {VirtualMessageRow}
       </List>
       
       {/* typing状态指示器 */}
@@ -333,6 +290,9 @@ const VirtualMessageList = forwardRef(({
           <Spin size="small" />
         </div>
       )}
+      
+      {/* 保留原有的messagesEndRef用于兼容 */}
+      <div ref={messagesEndRef} style={{ height: 0 }} />
     </div>
   )
 })
