@@ -13,6 +13,11 @@
   "chat.supportsImage": "Image Support",
   "chat.stream": "Stream",
   "chat.image": "Image",
+  "chat.conversations": "Conversations",
+  "chat.new": "New",
+  "chat.back": "Back",
+  "chat.menu": "Menu",
+  "chat.loadingConversations": "Loading conversations...",
   
   "chat.input.placeholder": "Type a message... (Shift+Enter for new line, Enter to send)",
   "chat.input.placeholderWithImage": "Describe the image or ask a question...",
@@ -105,5 +110,10 @@
   
   "chat.file.notSupported": "Current model does not support files",
   "chat.file.sizeExceeded": "File size exceeds limit",
-  "chat.file.typeNotAllowed": "Unsupported file type"
+  "chat.file.typeNotAllowed": "Unsupported file type",
+  
+  "chat.mobile.swipeHint": "Swipe left to view conversations",
+  "chat.mobile.pullToRefresh": "Pull to refresh",
+  "chat.mobile.releaseToRefresh": "Release to refresh",
+  "chat.mobile.refreshing": "Refreshing..."
 }

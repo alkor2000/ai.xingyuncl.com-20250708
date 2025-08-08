@@ -1,12 +1,13 @@
 /**
- * 聊天页面 - 主界面（性能优化版v2）
- * 优化：输入防抖 + 智能虚拟滚动
+ * 聊天页面 - 主界面（移动端适配版）
+ * 优化：响应式布局 + 移动端单页切换
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Modal, Form, message, Spin } from 'antd'
+import { Layout, Modal, Form, message, Spin, Drawer, Button } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { MenuOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
@@ -45,10 +46,54 @@ function debounce(func, wait) {
   }
 }
 
+// 自定义Hook - 检测是否为移动设备
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+  
+  return isMobile
+}
+
+// 获取实际的视口高度（解决iOS Safari的100vh问题）
+const useViewportHeight = () => {
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight)
+  
+  useEffect(() => {
+    const updateHeight = () => {
+      // 使用window.innerHeight而不是100vh
+      const vh = window.innerHeight
+      setViewportHeight(vh)
+      // 设置CSS变量供样式使用
+      document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`)
+    }
+    
+    updateHeight()
+    window.addEventListener('resize', updateHeight)
+    window.addEventListener('orientationchange', updateHeight)
+    
+    return () => {
+      window.removeEventListener('resize', updateHeight)
+      window.removeEventListener('orientationchange', updateHeight)
+    }
+  }, [])
+  
+  return viewportHeight
+}
+
 const Chat = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const isMobile = useIsMobile()
+  const viewportHeight = useViewportHeight()
   
   // 从store获取状态和方法
   const {
@@ -89,6 +134,10 @@ const Chat = () => {
   const [uploading, setUploading] = useState(false)
   const [isSending, setIsSending] = useState(false)
   
+  // 移动端专用状态
+  const [mobileView, setMobileView] = useState('list') // 'list' | 'chat'
+  const [mobileDrawerVisible, setMobileDrawerVisible] = useState(false)
+  
   // 用户手动滚动标志
   const [userScrolled, setUserScrolled] = useState(false)
   
@@ -109,6 +158,14 @@ const Chat = () => {
     getAIModels()
     getUserCredits()
   }, [])
+
+  // 移动端：选择会话后自动切换到聊天视图
+  useEffect(() => {
+    if (isMobile && currentConversationId) {
+      setMobileView('chat')
+      setMobileDrawerVisible(false)
+    }
+  }, [currentConversationId, isMobile])
 
   // 当切换虚拟滚动模式时，显示提示
   useEffect(() => {
@@ -162,21 +219,21 @@ const Chat = () => {
   useEffect(() => {
     if (!typing && !isStreaming && currentConversation && inputRef.current && !isSending) {
       setTimeout(() => {
-        if (!userScrolled) {
+        if (!userScrolled && !isMobile) {
           inputRef.current?.focus()
         }
       }, 100)
     }
-  }, [typing, isStreaming, currentConversation, userScrolled, isSending])
+  }, [typing, isStreaming, currentConversation, userScrolled, isSending, isMobile])
 
-  // 当选择对话后聚焦输入框
+  // 当选择对话后聚焦输入框（仅PC端）
   useEffect(() => {
-    if (currentConversation && !initialLoading && inputRef.current) {
+    if (currentConversation && !initialLoading && inputRef.current && !isMobile) {
       setTimeout(() => {
         inputRef.current?.focus()
       }, 300)
     }
-  }, [currentConversation?.id, initialLoading])
+  }, [currentConversation?.id, initialLoading, isMobile])
 
   // 改进草稿保存逻辑
   useEffect(() => {
@@ -291,6 +348,12 @@ const Chat = () => {
     }
   }
 
+  // 移动端返回列表
+  const handleMobileBack = () => {
+    setMobileView('list')
+    selectConversation(null)
+  }
+
   // 编辑对话
   const handleEditConversation = (conversation) => {
     settingsForm.setFieldsValue({
@@ -333,6 +396,9 @@ const Chat = () => {
       
       if (deletingConversation.id === currentConversationId) {
         selectConversation(null)
+        if (isMobile) {
+          setMobileView('list')
+        }
       }
       
       getConversations(true)
@@ -383,9 +449,11 @@ const Chat = () => {
     
     try {
       await sendMessage(messageContent, fileInfo)
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
+      if (!isMobile) {
+        setTimeout(() => {
+          inputRef.current?.focus()
+        }, 100)
+      }
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
@@ -393,13 +461,15 @@ const Chat = () => {
       setInputValue(messageContent)
       setUploadedImage(fileInfo)
       
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
+      if (!isMobile) {
+        setTimeout(() => {
+          inputRef.current?.focus()
+        }, 100)
+      }
     } finally {
       setIsSending(false)
     }
-  }, [inputValue, uploadedImage, currentConversation, sendMessage, t])
+  }, [inputValue, uploadedImage, currentConversation, sendMessage, t, isMobile])
 
   // 停止流式输出
   const handleStopStreaming = () => {
@@ -447,9 +517,11 @@ const Chat = () => {
       if (response.data?.success && response.data?.data) {
         setUploadedImage(response.data.data)
         message.success(t('chat.image.upload.success'))
-        setTimeout(() => {
-          inputRef.current?.focus()
-        }, 100)
+        if (!isMobile) {
+          setTimeout(() => {
+            inputRef.current?.focus()
+          }, 100)
+        }
       } else {
         throw new Error(response.data?.message || 'Upload failed')
       }
@@ -544,9 +616,11 @@ const Chat = () => {
         try {
           await clearMessages(currentConversation.id)
           message.success(t('chat.clear.success'))
-          setTimeout(() => {
-            inputRef.current?.focus()
-          }, 100)
+          if (!isMobile) {
+            setTimeout(() => {
+              inputRef.current?.focus()
+            }, 100)
+          }
         } catch (error) {
           console.error('Clear chat error:', error)
           message.error(t('chat.clear.failed'))
@@ -569,6 +643,202 @@ const Chat = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // 移动端：渲染会话列表视图（不包含输入框）
+  const renderMobileListView = () => (
+    <div className="mobile-conversations-view" style={{ height: viewportHeight }}>
+      <div className="mobile-header">
+        <h3>{t('chat.conversations')}</h3>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setShowNewChatModal(true)}
+        >
+          {t('chat.new')}
+        </Button>
+      </div>
+      <div className="mobile-conversations-list">
+        <ConversationSidebar
+          conversations={conversations}
+          conversationsLoading={conversationsLoading}
+          currentConversation={null}
+          userCredits={userCredits}
+          aiModels={aiModels}
+          onSelectConversation={selectConversation}
+          onCreateConversation={() => setShowNewChatModal(true)}
+          onEditConversation={handleEditConversation}
+          onDeleteConversation={(conversation) => {
+            setDeletingConversation(conversation)
+            setDeleteModalVisible(true)
+          }}
+          onTogglePin={handleTogglePin}
+        />
+      </div>
+    </div>
+  )
+
+  // 移动端：渲染聊天视图
+  const renderMobileChatView = () => (
+    <div className="mobile-chat-view" style={{ height: viewportHeight }}>
+      {/* 移动端顶部导航 */}
+      <div className="mobile-chat-header">
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined />}
+          onClick={handleMobileBack}
+        />
+        <div className="mobile-chat-title">
+          {currentConversation?.title || t('chat.newConversation')}
+        </div>
+        <Button
+          type="text"
+          icon={<MenuOutlined />}
+          onClick={() => setMobileDrawerVisible(true)}
+        />
+      </div>
+
+      {/* 聊天内容区域 */}
+      <div className="mobile-chat-content">
+        {!currentConversation ? (
+          <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
+        ) : (
+          <>
+            {/* 消息列表 */}
+            <div className="mobile-messages-container" ref={messagesContainerRef}>
+              <MessageList
+                messages={messages}
+                loading={messagesLoading}
+                typing={typing}
+                isStreaming={isStreaming}
+                currentModel={currentModel}
+                aiModels={aiModels}
+                user={user}
+                streamingMessageId={streamingMessageId}
+                messagesEndRef={messagesEndRef}
+                onDeleteMessage={handleDeleteMessage}
+              />
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* 输入区域 - 只在聊天视图显示 */}
+            <div className="mobile-input-container">
+              <ChatInputArea
+                ref={inputRef}
+                inputValue={inputValue}
+                uploadedImage={uploadedImage}
+                uploading={uploading}
+                typing={typing}
+                isStreaming={isStreaming}
+                imageUploadEnabled={currentModel?.image_upload_enabled}
+                hasMessages={messages && messages.length > 0}
+                currentModel={currentModel}
+                availableModels={availableModels}
+                disabled={!currentConversation || isSending}
+                onInputChange={handleInputChange}
+                onKeyPress={handleKeyPress}
+                onSend={handleSendMessage}
+                onStop={handleStopStreaming}
+                onImageUpload={handleImageUpload}
+                onRemoveImage={() => setUploadedImage(null)}
+                onExportChat={handleExportChat}
+                onClearChat={handleClearChat}
+                onModelChange={handleModelChange}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+
+  // 移动端布局
+  if (isMobile) {
+    return (
+      <div className="chat-mobile-container">
+        {initialLoading ? (
+          <div className="mobile-loading">
+            <Spin size="large" tip={t('status.loading')} />
+          </div>
+        ) : mobileView === 'list' ? (
+          renderMobileListView()
+        ) : (
+          renderMobileChatView()
+        )}
+
+        {/* 移动端侧边抽屉（会话列表） */}
+        <Drawer
+          title={t('chat.conversations')}
+          placement="left"
+          onClose={() => setMobileDrawerVisible(false)}
+          open={mobileDrawerVisible}
+          width="85%"
+          className="mobile-conversations-drawer"
+        >
+          <ConversationSidebar
+            conversations={conversations}
+            conversationsLoading={conversationsLoading}
+            currentConversation={currentConversation}
+            userCredits={userCredits}
+            aiModels={aiModels}
+            onSelectConversation={(id) => {
+              selectConversation(id)
+              setMobileDrawerVisible(false)
+            }}
+            onCreateConversation={() => {
+              setShowNewChatModal(true)
+              setMobileDrawerVisible(false)
+            }}
+            onEditConversation={(conversation) => {
+              handleEditConversation(conversation)
+              setMobileDrawerVisible(false)
+            }}
+            onDeleteConversation={(conversation) => {
+              setDeletingConversation(conversation)
+              setDeleteModalVisible(true)
+              setMobileDrawerVisible(false)
+            }}
+            onTogglePin={handleTogglePin}
+          />
+        </Drawer>
+
+        {/* 对话设置抽屉 */}
+        <ConversationSettingsDrawer
+          visible={showSettings}
+          conversation={currentConversation}
+          aiModels={aiModels}
+          form={settingsForm}
+          onClose={() => setShowSettings(false)}
+          onSubmit={handleUpdateSettings}
+        />
+
+        {/* 新建对话弹窗 */}
+        <ConversationFormModal
+          visible={showNewChatModal}
+          aiModels={aiModels}
+          form={newChatForm}
+          onCancel={() => setShowNewChatModal(false)}
+          onSubmit={handleCreateConversation}
+        />
+
+        {/* 删除确认弹窗 */}
+        <Modal
+          open={deleteModalVisible}
+          title={t('chat.conversation.delete.title')}
+          onOk={handleDeleteConversation}
+          onCancel={() => {
+            setDeleteModalVisible(false)
+            setDeletingConversation(null)
+          }}
+          okText={t('button.confirm')}
+          cancelText={t('button.cancel')}
+          okButtonProps={{ danger: true }}
+        >
+          <p>{t('chat.conversation.delete.confirm')}</p>
+        </Modal>
+      </div>
+    )
+  }
+
+  // PC端布局（保持原样）
   return (
     <Layout className="chat-container">
       {/* 侧边栏 */}

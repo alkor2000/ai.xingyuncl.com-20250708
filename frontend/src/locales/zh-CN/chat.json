@@ -13,6 +13,11 @@
   "chat.supportsImage": "支持图片",
   "chat.stream": "流式",
   "chat.image": "图片",
+  "chat.conversations": "对话列表",
+  "chat.new": "新建",
+  "chat.back": "返回",
+  "chat.menu": "菜单",
+  "chat.loadingConversations": "正在加载对话列表...",
   
   "chat.input.placeholder": "输入消息... (Shift+Enter换行，Enter发送)",
   "chat.input.placeholderWithImage": "描述一下这张图片或提出问题...",
@@ -105,5 +110,10 @@
   
   "chat.file.notSupported": "当前模型不支持文件",
   "chat.file.sizeExceeded": "文件大小超过限制",
-  "chat.file.typeNotAllowed": "不支持的文件类型"
+  "chat.file.typeNotAllowed": "不支持的文件类型",
+  
+  "chat.mobile.swipeHint": "左滑查看对话列表",
+  "chat.mobile.pullToRefresh": "下拉刷新",
+  "chat.mobile.releaseToRefresh": "释放刷新",
+  "chat.mobile.refreshing": "正在刷新..."
 }

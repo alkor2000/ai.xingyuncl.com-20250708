@@ -1,5 +1,6 @@
+// PC端样式（保持不变）
 .chat-container {
-  height: 100%;  // 改为100%，适应父容器高度
+  height: 100%;
   
   .chat-sidebar {
     background: #fff;
@@ -9,7 +10,6 @@
     height: 100%;
     position: relative;
     
-    // 让Sider的children容器占满高度
     .ant-layout-sider-children {
       height: 100%;
       overflow: hidden !important;
@@ -52,11 +52,11 @@
           border-radius: 8px;
           cursor: pointer;
           transition: all 0.3s;
-          border: 1px solid #e8e8e8;  // 添加默认边框
+          border: 1px solid #e8e8e8;
           
           &:hover {
             background: #f5f5f5;
-            border-color: #d9d9d9;  // hover时边框稍深
+            border-color: #d9d9d9;
           }
           
           &.active {
@@ -120,7 +120,6 @@
       }
     }
     
-    // 为ConversationSidebar组件添加样式
     .sidebar-header {
       flex-shrink: 0;
       padding: 12px;
@@ -209,7 +208,7 @@
       .messages-container {
         flex: 1;
         overflow-y: auto;
-        padding: 50px 16px 12px 16px;  // 减小底部padding从24px到12px
+        padding: 50px 16px 12px 16px;
         background: #fafafa;
         
         .loading-container {
@@ -223,7 +222,7 @@
       .input-container {
         background: #fff;
         border-top: 1px solid #f0f0f0;
-        padding: 12px 16px;  // 减小上下padding从16px到12px
+        padding: 12px 16px;
         flex-shrink: 0;
         
         .uploaded-image-preview {
@@ -251,7 +250,6 @@
           }
         }
         
-        // 新的头部布局
         .input-header {
           display: flex;
           align-items: center;
@@ -300,6 +298,349 @@
           }
         }
       }
+    }
+  }
+}
+
+// 移动端样式 - 使用CSS变量处理高度
+.chat-mobile-container {
+  // 使用CSS变量而不是100vh
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  
+  .mobile-loading {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  // 移动端会话列表视图
+  .mobile-conversations-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    overflow: hidden;
+    
+    .mobile-header {
+      padding: 12px 16px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      
+      h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 500;
+      }
+      
+      .ant-btn {
+        height: 32px;
+      }
+    }
+    
+    .mobile-conversations-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      
+      // 重用PC端的sidebar样式
+      .sidebar-wrapper {
+        height: 100%;
+        
+        .sidebar-header-fixed {
+          display: none; // 移动端隐藏，用顶部按钮替代
+        }
+        
+        .conversations-list-wrapper {
+          padding: 12px;
+          height: 100%;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          
+          .conversation-item {
+            padding: 14px;
+            margin-bottom: 8px;
+            
+            .conversation-actions {
+              display: flex !important; // 移动端始终显示操作按钮
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 移动端聊天视图
+  .mobile-chat-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    overflow: hidden;
+    
+    .mobile-chat-header {
+      padding: 0 8px;
+      height: 50px;
+      min-height: 50px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      
+      .mobile-chat-title {
+        flex: 1;
+        margin: 0 12px;
+        font-size: 16px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .ant-btn {
+        padding: 4px 12px;
+      }
+    }
+    
+    // 聊天内容区域
+    .mobile-chat-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: 100%;
+      
+      .mobile-messages-container {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 16px 12px;
+        background: #fafafa;
+        -webkit-overflow-scrolling: touch;
+        
+        // 调整消息卡片在移动端的宽度
+        .ant-card {
+          max-width: 85% !important;
+        }
+      }
+      
+      .mobile-input-container {
+        background: #fff;
+        border-top: 1px solid #f0f0f0;
+        padding: 8px 12px;
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+        flex-shrink: 0;
+        
+        .input-container {
+          padding: 0;
+          border: none;
+          
+          .input-header {
+            margin-bottom: 8px;
+            
+            .left-tools {
+              flex: 1;
+              
+              // 模型选择器在移动端缩小
+              .model-selector-button {
+                max-width: 150px;
+                font-size: 12px;
+                padding: 4px 8px;
+                height: 28px;
+                
+                .model-name {
+                  max-width: 80px;
+                }
+                
+                .credits-display {
+                  .credits-number {
+                    font-size: 11px;
+                  }
+                }
+              }
+            }
+            
+            .right-tools {
+              .ant-btn {
+                padding: 4px 6px;
+                font-size: 14px;
+                min-width: 32px;
+                height: 32px;
+              }
+            }
+          }
+          
+          .input-wrapper {
+            .message-input {
+              font-size: 16px; // 防止iOS自动缩放
+              max-height: 100px;
+              min-height: 40px;
+            }
+            
+            .ant-btn-primary {
+              min-width: 40px;
+              height: 40px;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 移动端抽屉样式
+  .mobile-conversations-drawer {
+    .ant-drawer-body {
+      padding: 0;
+    }
+    
+    .sidebar-wrapper {
+      height: 100%;
+      
+      .sidebar-header-fixed {
+        padding: 16px;
+        background: #fff;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      
+      .conversations-list-wrapper {
+        .conversation-item {
+          .conversation-actions {
+            display: flex !important;
+          }
+        }
+      }
+    }
+  }
+}
+
+// 响应式断点
+@media (max-width: 768px) {
+  // 隐藏PC端布局
+  .chat-container {
+    display: none !important;
+  }
+  
+  // 显示移动端布局
+  .chat-mobile-container {
+    display: flex !important;
+  }
+  
+  // 调整弹窗和抽屉在移动端的宽度
+  .ant-modal-wrap {
+    .ant-modal {
+      max-width: calc(100vw - 32px);
+      margin: 16px;
+    }
+  }
+  
+  .ant-drawer {
+    .ant-drawer-content-wrapper {
+      max-width: 100% !important;
+    }
+  }
+  
+  // 防止body滚动
+  body.mobile-chat-active {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+  }
+}
+
+// 平板适配（768px-1024px）
+@media (min-width: 769px) and (max-width: 1024px) {
+  .chat-container {
+    .chat-sidebar {
+      width: 280px !important;
+      
+      .ant-layout-sider {
+        width: 280px !important;
+      }
+    }
+    
+    .messages-container {
+      padding: 30px 16px 16px 16px;
+    }
+    
+    .input-container {
+      padding: 12px 16px;
+    }
+  }
+}
+
+// 大屏优化
+@media (min-width: 1600px) {
+  .chat-container {
+    .messages-container {
+      padding: 50px 24px 16px 24px;
+      
+      .ant-card {
+        max-width: 800px;
+      }
+    }
+  }
+}
+
+// iOS安全区域适配
+@supports (padding: max(0px)) {
+  .mobile-chat-view {
+    .mobile-chat-header {
+      padding-top: env(safe-area-inset-top);
+      height: calc(50px + env(safe-area-inset-top));
+    }
+    
+    .mobile-input-container {
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
+  }
+  
+  .mobile-conversations-view {
+    .mobile-header {
+      padding-top: max(12px, env(safe-area-inset-top));
+    }
+  }
+}
+
+// 深色模式支持（保留原有变量）
+@media (prefers-color-scheme: dark) {
+  .chat-mobile-container {
+    background: var(--body-bg);
+    
+    .mobile-conversations-view,
+    .mobile-chat-view {
+      background: var(--component-bg);
+    }
+    
+    .mobile-header,
+    .mobile-chat-header {
+      background: var(--component-bg);
+      border-color: var(--border-color);
+    }
+    
+    .mobile-messages-container {
+      background: var(--chat-bg);
+    }
+    
+    .mobile-input-container {
+      background: var(--component-bg);
+      border-color: var(--border-color);
     }
   }
 }
