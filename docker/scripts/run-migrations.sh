@@ -46,6 +46,7 @@ SQL
 
 # 执行迁移文件
 echo "开始检查迁移文件..."
+migration_failed=0
 for file in /app/database/migrations/*.sql; do
   if [ -f "$file" ]; then
     filename=$(basename "$file")
@@ -68,22 +69,22 @@ for file in /app/database/migrations/*.sql; do
     if [ "$executed" = "0" ]; then
       echo "执行迁移: $filename"
       
-      # 执行迁移
-      if $MYSQL_CMD < "$file" 2>/dev/null; then
+      # 执行迁移，如果失败记录错误但继续（某些迁移可能是幂等的）
+      if $MYSQL_CMD < "$file" 2>/tmp/migration_error.log; then
         # 记录到两个表（保持兼容）
         $MYSQL_CMD -e "INSERT IGNORE INTO schema_migrations (version) VALUES ('$version')" 2>/dev/null
         $MYSQL_CMD -e "INSERT IGNORE INTO migrations_history (migration_name) VALUES ('$version')" 2>/dev/null
         echo "✓ 迁移 $filename 执行成功"
       else
-        echo "✗ 迁移 $filename 执行失败，继续下一个..."
+        echo "⚠ 迁移 $filename 执行失败："
+        cat /tmp/migration_error.log || echo "未知错误"
+        migration_failed=1
       fi
     else
       echo "跳过已执行的迁移: $filename"
     fi
   fi
 done
-
-echo "所有迁移执行完成"
 
 # 验证关键表是否存在
 echo "验证数据库结构..."
@@ -102,7 +103,13 @@ has_status=$($MYSQL_CMD -sN -e "
 if [ "$has_status" = "1" ]; then
   echo "✓ messages表status字段存在"
 else
-  echo "⚠ messages表缺少status字段"
+  echo "⚠ messages表缺少status字段，尝试手动添加..."
+  # 尝试添加status字段
+  $MYSQL_CMD -e "ALTER TABLE messages ADD COLUMN IF NOT EXISTS status ENUM('pending', 'streaming', 'completed', 'failed') DEFAULT 'completed' AFTER model_name" 2>/dev/null || true
+fi
+
+if [ "$migration_failed" = "1" ]; then
+  echo "⚠ 部分迁移失败，但继续启动服务"
 fi
 
 echo "数据库迁移检查完成"

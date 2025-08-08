@@ -1,56 +1,27 @@
 -- 023_add_message_status.sql
 -- 添加消息状态字段，用于跟踪流式消息的完成状态
--- 执行时间：2024-08-07
+-- 简化版本，避免DELIMITER问题
 
--- 使用存储过程安全地添加列
-DELIMITER $$
+-- 安全地添加status列（如果不存在）
+ALTER TABLE messages 
+ADD COLUMN IF NOT EXISTS status ENUM('pending', 'streaming', 'completed', 'failed') 
+DEFAULT 'completed' 
+COMMENT '消息状态：pending-待处理，streaming-流式传输中，completed-已完成，failed-失败'
+AFTER model_name;
 
-DROP PROCEDURE IF EXISTS add_message_status_column$$
-CREATE PROCEDURE add_message_status_column()
-BEGIN
-    -- 检查status列是否存在
-    IF NOT EXISTS (
-        SELECT * FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'messages' 
-        AND COLUMN_NAME = 'status'
-    ) THEN
-        -- 添加status字段
-        ALTER TABLE messages 
-        ADD COLUMN status ENUM('pending', 'streaming', 'completed', 'failed') 
-        DEFAULT 'completed' 
-        COMMENT '消息状态：pending-待处理，streaming-流式传输中，completed-已完成，failed-失败'
-        AFTER model_name;
-    END IF;
-    
-    -- 检查并添加索引
-    IF NOT EXISTS (
-        SELECT * FROM information_schema.STATISTICS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'messages' 
-        AND INDEX_NAME = 'idx_status'
-    ) THEN
-        ALTER TABLE messages ADD INDEX idx_status (status);
-    END IF;
-    
-    IF NOT EXISTS (
-        SELECT * FROM information_schema.STATISTICS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'messages' 
-        AND INDEX_NAME = 'idx_conversation_status'
-    ) THEN
-        ALTER TABLE messages ADD INDEX idx_conversation_status (conversation_id, status);
-    END IF;
-END$$
-
-DELIMITER ;
-
--- 执行存储过程
-CALL add_message_status_column();
-DROP PROCEDURE add_message_status_column;
+-- 添加索引（如果不存在）
+ALTER TABLE messages ADD INDEX IF NOT EXISTS idx_status (status);
+ALTER TABLE messages ADD INDEX IF NOT EXISTS idx_conversation_status (conversation_id, status);
 
 -- 更新现有消息的状态为completed
 UPDATE messages SET status = 'completed' WHERE status IS NULL;
+
+-- 创建迁移历史表（如果不存在）
+CREATE TABLE IF NOT EXISTS migrations_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    migration_name VARCHAR(255) UNIQUE,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- 记录迁移历史
 INSERT INTO migrations_history (migration_name, executed_at) 
