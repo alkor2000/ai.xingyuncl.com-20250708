@@ -1,5 +1,5 @@
 /**
- * 消息数据模型 - 支持动态上下文数量、清空时间过滤和消息状态跟踪
+ * 消息数据模型 - 支持动态上下文数量、清空时间过滤、消息状态跟踪和序号排序
  */
 
 const dbConnection = require('../database/connection');
@@ -11,6 +11,7 @@ class Message {
   constructor(data = {}) {
     this.id = data.id || null;
     this.conversation_id = data.conversation_id || null;
+    this.sequence_number = data.sequence_number || 0; // 添加序号字段
     this.role = data.role || null; // 'user', 'assistant', 'system'
     this.content = data.content || '';
     this.tokens = data.tokens || 0;
@@ -21,7 +22,23 @@ class Message {
   }
 
   /**
-   * 创建新消息
+   * 获取会话的下一个序号
+   */
+  static async getNextSequenceNumber(conversationId) {
+    try {
+      const sql = 'SELECT MAX(sequence_number) as max_seq FROM messages WHERE conversation_id = ?';
+      const { rows } = await dbConnection.query(sql, [conversationId]);
+      
+      const maxSeq = rows[0]?.max_seq || 0;
+      return maxSeq + 1;
+    } catch (error) {
+      logger.error('获取下一个序号失败:', error);
+      return 1; // 出错时返回1
+    }
+  }
+
+  /**
+   * 创建新消息 - 自动分配序号
    */
   static async create(messageData) {
     try {
@@ -33,19 +50,27 @@ class Message {
         model_name = null, 
         status = 'completed',
         file_id = null, 
-        id = null 
+        id = null,
+        sequence_number = null // 可以手动指定序号
       } = messageData;
       const messageId = id || uuidv4();
 
+      // 如果没有指定序号，自动获取下一个序号
+      let finalSequenceNumber = sequence_number;
+      if (finalSequenceNumber === null || finalSequenceNumber === undefined) {
+        finalSequenceNumber = await Message.getNextSequenceNumber(conversation_id);
+      }
+
       const sql = `
-        INSERT INTO messages (id, conversation_id, role, content, tokens, model_name, status, file_id) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (id, conversation_id, sequence_number, role, content, tokens, model_name, status, file_id) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       // 确保所有参数都有值，null值用JS null而不是undefined
       const params = [
         messageId, 
-        conversation_id, 
+        conversation_id,
+        finalSequenceNumber, // 使用序号
         role, 
         content, 
         parseInt(tokens) || 0,
@@ -56,9 +81,10 @@ class Message {
 
       logger.info('创建消息', { 
         messageId: messageId, 
-        conversationId: conversation_id, 
+        conversationId: conversation_id,
+        sequenceNumber: finalSequenceNumber,
         role,
-        tokens: params[4],
+        tokens: params[5],
         modelName: model_name,
         status: status,
         hasFileId: !!file_id
@@ -68,9 +94,10 @@ class Message {
 
       logger.info('消息创建成功', { 
         messageId: messageId, 
-        conversationId: conversation_id, 
+        conversationId: conversation_id,
+        sequenceNumber: finalSequenceNumber,
         role,
-        tokens: params[4],
+        tokens: params[5],
         modelName: model_name,
         status: status
       });
@@ -83,7 +110,7 @@ class Message {
   }
 
   /**
-   * 创建流式消息占位符
+   * 创建流式消息占位符 - 自动分配序号
    */
   static async createStreamingPlaceholder(messageData) {
     return await Message.create({
@@ -150,7 +177,7 @@ class Message {
   }
 
   /**
-   * 获取会话的消息列表（考虑清空时间，过滤失败的流式消息）
+   * 获取会话的消息列表（考虑清空时间，过滤失败的流式消息，按序号排序）
    */
   static async getConversationMessages(conversationId, options = {}) {
     try {
@@ -185,14 +212,14 @@ class Message {
       const { rows: totalRows } = await dbConnection.query(countSql, params);
       const total = totalRows[0].total;
       
-      // 获取消息列表  
+      // 获取消息列表 - 按sequence_number排序，如果序号相同则按created_at排序
       const offset = parseInt((page - 1) * limit);
       const limitNum = parseInt(limit);
       
       const listSql = `
         SELECT * FROM messages 
         ${whereClause}
-        ORDER BY created_at ${order === 'ASC' ? 'ASC' : 'DESC'}
+        ORDER BY sequence_number ${order === 'ASC' ? 'ASC' : 'DESC'}, created_at ${order === 'ASC' ? 'ASC' : 'DESC'}
         LIMIT ${limitNum} OFFSET ${offset}
       `;
       
@@ -222,7 +249,7 @@ class Message {
   }
 
   /**
-   * 获取会话的最近消息（用于AI对话上下文）- 支持动态上下文数量和清空时间过滤
+   * 获取会话的最近消息（用于AI对话上下文）- 按序号排序
    */
   static async getRecentMessages(conversationId, limit = null) {
     try {
@@ -253,7 +280,7 @@ class Message {
       
       const limitNum = parseInt(contextLimit);
       
-      // 构建SQL查询 - 只获取已完成的消息用于上下文
+      // 构建SQL查询 - 只获取已完成的消息用于上下文，按序号排序
       let sql;
       let params = [conversationId];
       
@@ -264,7 +291,7 @@ class Message {
           WHERE conversation_id = ? 
             AND created_at > ?
             AND status = 'completed'
-          ORDER BY created_at DESC
+          ORDER BY sequence_number DESC
           LIMIT ${limitNum}
         `;
         params.push(clearedAt);
@@ -274,7 +301,7 @@ class Message {
           SELECT * FROM messages 
           WHERE conversation_id = ? 
             AND status = 'completed'
-          ORDER BY created_at DESC
+          ORDER BY sequence_number DESC
           LIMIT ${limitNum}
         `;
       }
@@ -296,7 +323,7 @@ class Message {
         filtered: !!clearedAt
       });
       
-      // 按时间正序返回（最老的在前）
+      // 按序号正序返回（最老的在前）
       return rows.reverse().map(row => new Message(row));
     } catch (error) {
       logger.error('获取最近消息失败:', error);
@@ -380,36 +407,51 @@ class Message {
   }
 
   /**
-   * 删除消息对（用户消息和对应的AI回复）
+   * 删除消息对（用户消息和对应的AI回复）- 更新后续消息的序号
    */
   static async deleteMessagePair(conversationId, aiMessageId) {
     try {
       // 使用dbConnection提供的事务方法
       const result = await dbConnection.transaction(async (query) => {
-        // 首先获取AI消息的创建时间
-        const aiMessageSql = 'SELECT created_at FROM messages WHERE id = ? AND conversation_id = ? AND role = ?';
+        // 首先获取AI消息的序号
+        const aiMessageSql = 'SELECT sequence_number FROM messages WHERE id = ? AND conversation_id = ? AND role = ?';
         const { rows: aiRows } = await query(aiMessageSql, [aiMessageId, conversationId, 'assistant']);
         
         if (aiRows.length === 0) {
           throw new Error('AI消息不存在');
         }
         
-        const aiCreatedAt = aiRows[0].created_at;
+        const aiSeqNumber = aiRows[0].sequence_number;
         
-        // 查找在这条AI消息之前最近的用户消息
+        // 查找前一条用户消息（序号应该是AI消息序号-1）
+        const userSeqNumber = aiSeqNumber - 1;
         const userMessageSql = `
           SELECT id FROM messages 
           WHERE conversation_id = ? 
-            AND role = 'user' 
-            AND created_at < ?
-          ORDER BY created_at DESC
-          LIMIT 1
+            AND sequence_number = ?
+            AND role = 'user'
         `;
         
-        const { rows: userRows } = await query(userMessageSql, [conversationId, aiCreatedAt]);
+        const { rows: userRows } = await query(userMessageSql, [conversationId, userSeqNumber]);
         
         if (userRows.length === 0) {
-          throw new Error('找不到对应的用户消息');
+          // 如果找不到序号-1的用户消息，尝试通过时间查找
+          const userMessageTimeSql = `
+            SELECT id FROM messages 
+            WHERE conversation_id = ? 
+              AND role = 'user' 
+              AND sequence_number < ?
+            ORDER BY sequence_number DESC
+            LIMIT 1
+          `;
+          
+          const { rows: userTimeRows } = await query(userMessageTimeSql, [conversationId, aiSeqNumber]);
+          
+          if (userTimeRows.length === 0) {
+            throw new Error('找不到对应的用户消息');
+          }
+          
+          userRows[0] = userTimeRows[0];
         }
         
         const userMessageId = userRows[0].id;
@@ -421,6 +463,14 @@ class Message {
         // 删除AI消息
         await query('DELETE FROM messages WHERE id = ?', [aiMessageId]);
         logger.info('删除AI消息', { messageId: aiMessageId, conversationId });
+        
+        // 更新后续消息的序号（减2）
+        await query(`
+          UPDATE messages 
+          SET sequence_number = sequence_number - 2 
+          WHERE conversation_id = ? 
+            AND sequence_number > ?
+        `, [conversationId, aiSeqNumber]);
         
         // 更新会话的消息计数和token统计
         const updateConversationSql = `
@@ -488,6 +538,7 @@ class Message {
     return {
       id: this.id,
       conversation_id: this.conversation_id,
+      sequence_number: this.sequence_number, // 包含序号
       role: this.role,
       content: this.content,
       tokens: this.tokens,
