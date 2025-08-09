@@ -1031,8 +1031,13 @@ class User {
 
   /**
    * 消耗积分 - 使用事务确保原子性
+   * @param {number} amount - 消耗的积分数量
+   * @param {number} modelId - 相关模型ID（可选）
+   * @param {string} conversationId - 相关会话ID（可选）
+   * @param {string} reason - 消费原因描述
+   * @param {string} transactionType - 交易类型，默认为'chat_consume'，图像生成为'image_consume'
    */
-  async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费') {
+  async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费', transactionType = 'chat_consume') {
     try {
       if (amount <= 0) {
         throw new Error('消费积分数量必须大于0');
@@ -1066,15 +1071,15 @@ class User {
         );
         const balanceAfter = balanceRows[0].balance;
 
-        // 记录积分消费历史
+        // 记录积分消费历史 - 使用传入的transactionType
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, 
            related_model_id, related_conversation_id)
-          VALUES (?, ?, ?, 'chat_consume', ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         await query(historySql, [
-          this.id, -amount, balanceAfter, reason, modelId, conversationId
+          this.id, -amount, balanceAfter, transactionType, reason, modelId, conversationId
         ]);
 
         return { balanceAfter };
@@ -1088,6 +1093,7 @@ class User {
         amount,
         modelId,
         conversationId,
+        transactionType,
         balanceAfter: result.balanceAfter
       });
 
@@ -1104,6 +1110,7 @@ class User {
         amount,
         modelId,
         conversationId,
+        transactionType,
         error: error.message
       });
       throw new DatabaseError(`积分消费失败: ${error.message}`, error);

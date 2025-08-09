@@ -19,7 +19,8 @@ import {
   ApiOutlined,
   BgColorsOutlined,
   FileTextOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  PictureOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -42,7 +43,8 @@ import {
   RateLimitSettings,
   ThemeSettings,
   SystemPromptSettings,
-  UsageLogs
+  UsageLogs,
+  ImageModelSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -484,6 +486,21 @@ const Settings = () => {
             />
           </Card>
         </TabPane>
+
+        {/* 图像生成模型（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <PictureOutlined />
+                图像生成模型
+              </span>
+            } 
+            key="imageModels"
+          >
+            <ImageModelSettings />
+          </TabPane>
+        )}
 
         {/* 系统提示词（只有超级管理员可见） */}
         {isSuperAdmin && (

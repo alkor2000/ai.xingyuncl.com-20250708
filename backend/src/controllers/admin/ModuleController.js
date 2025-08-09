@@ -1,5 +1,5 @@
 /**
- * 系统模块控制器
+ * 系统模块控制器 - 支持系统内置模块和外部模块管理
  */
 
 const Module = require('../../models/Module');
@@ -9,16 +9,21 @@ const logger = require('../../utils/logger');
 
 class ModuleController {
   /**
-   * 获取所有模块
+   * 获取所有模块（管理员接口）
    */
   static async getModules(req, res) {
     try {
       const modules = await Module.findAll();
       
-      // 解析JSON字段
+      // 解析JSON字段并标记模块类型
       const formattedModules = modules.map(module => ({
         ...module,
-        allowed_groups: Module.parseAllowedGroups(module.allowed_groups)
+        allowed_groups: Module.parseAllowedGroups(module.allowed_groups),
+        // 添加编辑权限标记
+        can_edit: module.module_category === 'external' || 
+                  (module.module_category === 'system' && module.can_disable),
+        can_delete: module.module_category === 'external',
+        can_toggle: module.can_disable
       }));
       
       return ResponseHelper.success(res, formattedModules);
@@ -42,6 +47,10 @@ class ModuleController {
       
       // 解析JSON字段
       module.allowed_groups = Module.parseAllowedGroups(module.allowed_groups);
+      module.can_edit = module.module_category === 'external' || 
+                       (module.module_category === 'system' && module.can_disable);
+      module.can_delete = module.module_category === 'external';
+      module.can_toggle = module.can_disable;
       
       return ResponseHelper.success(res, module);
     } catch (error) {
@@ -55,11 +64,29 @@ class ModuleController {
    */
   static async getUserModules(req, res) {
     try {
-      const { id: userId, group_id: userGroupId } = req.user;
+      const { id: userId, group_id: userGroupId, role: userRole } = req.user;
       
-      const modules = await Module.findAccessibleModules(userId, userGroupId);
+      // 传递用户角色给Model，以便处理超级管理员的特殊权限
+      const modules = await Module.findAccessibleModules(userId, userGroupId, userRole);
       
-      return ResponseHelper.success(res, modules);
+      // 过滤并格式化模块信息
+      const formattedModules = modules.map(module => ({
+        id: module.id,
+        name: module.name,
+        display_name: module.display_name,
+        description: module.description,
+        module_category: module.module_category,
+        module_url: module.module_url,
+        route_path: module.route_path,
+        access_url: module.access_url,
+        open_mode: module.open_mode,
+        menu_icon: module.menu_icon,
+        auth_mode: module.auth_mode,
+        sort_order: module.sort_order,
+        is_active: module.is_active
+      }));
+      
+      return ResponseHelper.success(res, formattedModules);
     } catch (error) {
       console.error('获取用户模块失败:', error);
       return ResponseHelper.error(res, '获取用户模块失败');
@@ -72,7 +99,7 @@ class ModuleController {
   static async getModuleAuthUrl(req, res) {
     try {
       const { id: moduleId } = req.params;
-      const { id: userId, group_id: userGroupId } = req.user;
+      const { id: userId, group_id: userGroupId, role: userRole } = req.user;
       
       // 获取模块信息
       const module = await Module.findById(moduleId);
@@ -80,8 +107,18 @@ class ModuleController {
         return ResponseHelper.notFound(res, '模块不存在');
       }
       
+      // 系统模块不需要认证，直接返回路由路径
+      if (module.module_category === 'system') {
+        return ResponseHelper.success(res, {
+          url: module.route_path || module.module_url,
+          method: 'GET',
+          requiresAuth: false,
+          isSystemModule: true
+        });
+      }
+      
       // 检查用户是否有权限访问该模块
-      const accessibleModules = await Module.findAccessibleModules(userId, userGroupId);
+      const accessibleModules = await Module.findAccessibleModules(userId, userGroupId, userRole);
       const hasAccess = accessibleModules.some(m => m.id === parseInt(moduleId));
       
       if (!hasAccess) {
@@ -140,7 +177,7 @@ class ModuleController {
   }
 
   /**
-   * 创建模块
+   * 创建模块（只能创建外部模块）
    */
   static async createModule(req, res) {
     try {
@@ -201,7 +238,15 @@ class ModuleController {
       return ResponseHelper.error(res, '创建模块失败');
     } catch (error) {
       console.error('创建模块失败:', error);
-      return ResponseHelper.error(res, '创建模块失败');
+      
+      // 处理特殊错误消息
+      if (error.message === '不能创建系统预设模块') {
+        return ResponseHelper.validation(res, {
+          name: '该名称为系统保留名称，请使用其他名称'
+        }, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '创建模块失败');
     }
   }
 
@@ -234,7 +279,15 @@ class ModuleController {
       return ResponseHelper.success(res, updatedModule, '模块更新成功');
     } catch (error) {
       console.error('更新模块失败:', error);
-      return ResponseHelper.error(res, '更新模块失败');
+      
+      // 处理特殊错误消息
+      if (error.message === '核心管理模块不能禁用') {
+        return ResponseHelper.validation(res, {
+          is_active: '核心管理模块必须保持启用状态'
+        }, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '更新模块失败');
     }
   }
 
@@ -261,7 +314,13 @@ class ModuleController {
       return ResponseHelper.success(res, null, '模块删除成功');
     } catch (error) {
       console.error('删除模块失败:', error);
-      return ResponseHelper.error(res, '删除模块失败');
+      
+      // 处理特殊错误消息
+      if (error.message === '系统内置模块不能删除') {
+        return ResponseHelper.forbidden(res, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '删除模块失败');
     }
   }
 
@@ -293,12 +352,18 @@ class ModuleController {
       return ResponseHelper.success(res, updatedModule, '状态更新成功');
     } catch (error) {
       console.error('切换模块状态失败:', error);
-      return ResponseHelper.error(res, '操作失败');
+      
+      // 处理特殊错误消息
+      if (error.message === '核心管理模块不能禁用') {
+        return ResponseHelper.forbidden(res, error.message);
+      }
+      
+      return ResponseHelper.error(res, error.message || '操作失败');
     }
   }
 
   /**
-   * 模块健康检查（暂时返回固定值）
+   * 模块健康检查
    */
   static async checkModuleHealth(req, res) {
     try {
@@ -309,9 +374,23 @@ class ModuleController {
         return ResponseHelper.notFound(res, '模块不存在');
       }
 
-      // 暂时返回固定的健康状态
+      // 系统模块始终返回在线状态
+      if (module.module_category === 'system') {
+        return ResponseHelper.success(res, {
+          moduleId: id,
+          moduleName: module.name,
+          moduleCategory: module.module_category,
+          status: 'online',
+          message: '系统内置模块运行正常'
+        });
+      }
+
+      // 外部模块暂时返回固定的健康状态
+      // TODO: 实现真实的健康检查逻辑
       return ResponseHelper.success(res, {
         moduleId: id,
+        moduleName: module.name,
+        moduleCategory: module.module_category,
         status: 'online',
         message: '模块运行正常'
       });

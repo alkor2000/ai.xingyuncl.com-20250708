@@ -58,77 +58,109 @@ const BasicLayout = ({ children }) => {
     }
   }, [user, getUserModules])
 
-  // 合并基础菜单和动态模块菜单
+  // 构建菜单项（从后端获取的模块数据）
   useEffect(() => {
-    // 基础菜单配置
-    const baseMenuItems = [
-      {
-        key: '/',
-        icon: 'DashboardOutlined',
-        label: t('nav.dashboard'),
-        permission: null
-      },
-      {
-        key: '/chat',
-        icon: 'MessageOutlined',
-        label: t('nav.chat'),
-        permission: 'chat.use'
-      },
-      {
-        key: '/knowledge',
-        icon: 'AppstoreAddOutlined',
-        label: '万智台',
-        permission: 'chat.use'
-      },
-      {
+    if (!userModules || userModules.length === 0) {
+      // 如果还没有加载模块，设置一个基础菜单
+      setDynamicMenuItems([])
+      return
+    }
+
+    // 将模块分类：系统模块和外部模块
+    const systemModules = userModules.filter(m => m.module_category === 'system')
+    const externalModules = userModules.filter(m => m.module_category === 'external')
+    
+    // 构建菜单结构
+    const menuItems = []
+    
+    // 1. 添加系统模块（工作台、聊天、万智台、图像生成等）
+    // 分离管理模块和普通系统模块
+    const adminModules = systemModules.filter(m => m.name.startsWith('admin_'))
+    const normalSystemModules = systemModules.filter(m => !m.name.startsWith('admin_'))
+    
+    // 按sort_order排序
+    normalSystemModules.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    
+    // 处理所有非管理的系统模块
+    normalSystemModules.forEach(module => {
+      // 设置权限
+      let permission = null
+      if (module.name === 'chat' || module.name === 'knowledge') {
+        permission = 'chat.use'
+      }
+      
+      // 添加菜单项
+      menuItems.push({
+        key: module.route_path || `/${module.name}`,
+        icon: module.menu_icon || 'AppstoreOutlined',
+        label: module.display_name || module.name,
+        permission: permission,
+        isSystemModule: true,
+        moduleData: module
+      })
+    })
+    
+    // 2. 添加外部模块
+    externalModules.forEach(module => {
+      menuItems.push({
+        key: `/module/${module.name}`,
+        icon: module.menu_icon || 'AppstoreOutlined',
+        label: module.display_name,
+        permission: null,
+        isModule: true,
+        openMode: module.open_mode,
+        moduleUrl: module.module_url,
+        moduleData: module
+      })
+    })
+    
+    // 3. 构建管理菜单（包含用户管理和系统设置）
+    const adminChildren = []
+    
+    // 查找用户管理模块
+    const adminUsersModule = adminModules.find(m => m.name === 'admin_users')
+    if (adminUsersModule) {
+      adminChildren.push({
+        key: adminUsersModule.route_path || '/admin/users',
+        label: adminUsersModule.display_name || t('nav.users'),
+        permission: ['user.manage', 'user.manage.group'],
+        isSystemModule: true,
+        moduleData: adminUsersModule
+      })
+    }
+    
+    // 查找系统设置模块
+    const adminSettingsModule = adminModules.find(m => m.name === 'admin_settings')
+    if (adminSettingsModule) {
+      adminChildren.push({
+        key: adminSettingsModule.route_path || '/admin/settings',
+        label: adminSettingsModule.display_name || t('nav.settings'),
+        roles: ['super_admin', 'admin'],
+        permission: null,
+        isSystemModule: true,
+        moduleData: adminSettingsModule
+      })
+    }
+    
+    // 如果有管理子菜单，添加管理菜单组
+    if (adminChildren.length > 0) {
+      menuItems.push({
         key: 'admin',
         icon: 'SettingOutlined',
         label: t('nav.admin'),
         permission: ['user.manage', 'user.manage.group'],
-        children: [
-          {
-            key: '/admin/users',
-            label: t('nav.users'),
-            permission: ['user.manage', 'user.manage.group']
-          },
-          {
-            key: '/admin/settings',
-            label: t('nav.settings'),
-            roles: ['super_admin', 'admin'],
-            permission: null
-          }
-        ]
-      }
-    ]
-
-    const moduleMenuItems = userModules.map(module => ({
-      key: `/module/${module.name}`,
-      icon: module.menu_icon || 'AppstoreOutlined',
-      label: module.display_name,
-      permission: null,
-      isModule: true,
-      openMode: module.open_mode,
-      moduleUrl: module.module_url
-    }))
-    
-    // 将模块菜单插入到管理菜单之前
-    const menuItems = [...baseMenuItems]
-    const adminIndex = menuItems.findIndex(item => item.key === 'admin')
-    
-    if (adminIndex > 0) {
-      menuItems.splice(adminIndex, 0, ...moduleMenuItems)
-    } else {
-      menuItems.push(...moduleMenuItems)
+        children: adminChildren
+      })
     }
     
     setDynamicMenuItems(menuItems)
-  }, [userModules, t]) // 只依赖userModules和t
+  }, [userModules, t])
 
-  // 过滤菜单项
+  // 过滤菜单项（基于权限）
   const filterMenuItems = (items) => {
     return items.filter(item => {
       // 模块菜单项已经过滤过了，直接显示
-      if (item.isModule) {
+      if (item.isModule || item.isSystemModule) {
         return true
       }
       
@@ -159,12 +191,13 @@ const BasicLayout = ({ children }) => {
 
   // 处理菜单点击
   const handleMenuClick = (key, menuItem) => {
-    // 如果是模块且设置为新标签页打开
+    // 如果是外部模块且设置为新标签页打开
     if (menuItem?.isModule && menuItem?.openMode === 'new_tab') {
       window.open(menuItem.moduleUrl, '_blank')
       return
     }
     
+    // 如果是系统模块或其他路由
     if (key !== 'admin') {
       navigate(key)
       // 移动端点击后关闭菜单

@@ -33,6 +33,9 @@ const ModulePage = React.lazy(() => import('./pages/module/ModulePage'))
 // 知识库页面组件 - 懒加载
 const KnowledgeBase = React.lazy(() => import('./pages/knowledge/KnowledgeBase'))
 
+// 图像生成页面组件 - 懒加载
+const ImageGeneration = React.lazy(() => import('./pages/image/ImageGeneration'))
+
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -173,6 +176,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <KnowledgeBase />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* 图像生成页面路由 - 懒加载 */}
+                        <Route 
+                          path="/image" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <ImageGeneration />
                             </LazyLoadingWrapper>
                           } 
                         />

@@ -22,6 +22,7 @@ const statsRoutes = require('./routes/stats');
 const publicRoutes = require('./routes/public');
 const servicesRoutes = require('./routes/services'); // 新增服务API路由
 const knowledgeRoutes = require('./routes/knowledgeRoutes'); // 新增知识模块路由
+const imageRoutes = require('./routes/image'); // 新增图像生成路由
 
 // 创建 Express 应用
 const app = express();
@@ -42,7 +43,7 @@ const corsCredentials = config.security?.cors?.credentials !== false;
 app.use(cors({
   origin: corsOrigin,
   credentials: corsCredentials,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Service-ID', 'X-API-Key']
 }));
 
@@ -142,6 +143,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/services', servicesRoutes); // 新增服务API路由
 app.use('/api/knowledge', knowledgeRoutes); // 新增知识模块路由
+app.use('/api/image', imageRoutes); // 新增图像生成路由
 
 // 404 处理
 app.use((req, res) => {
