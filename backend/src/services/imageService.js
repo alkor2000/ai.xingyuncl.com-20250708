@@ -16,11 +16,16 @@ const config = require('../config');
 
 class ImageService {
   /**
-   * 生成图片
+   * 批量生成图片
+   * @param {number} userId - 用户ID
+   * @param {number} modelId - 模型ID
+   * @param {object} params - 生成参数
+   * @param {number} quantity - 生成数量(1-4)
+   * @returns {array} 生成结果数组
    */
-  static async generateImage(userId, modelId, params) {
-    const startTime = Date.now();
-    let generationId = null;
+  static async generateImages(userId, modelId, params, quantity = 1) {
+    // 限制数量在1-4之间
+    const actualQuantity = Math.min(Math.max(1, quantity), 4);
     
     try {
       // 1. 获取模型配置
@@ -35,13 +40,107 @@ class ImageService {
         throw new Error('用户不存在');
       }
 
-      // 检查积分是否充足
-      const requiredCredits = model.price_per_image || 1;
+      // 检查积分是否充足（单价 × 数量）- 确保类型转换
+      const pricePerImage = parseFloat(model.price_per_image) || 1;
+      const requiredCredits = pricePerImage * actualQuantity;
+      
       if (!user.hasCredits(requiredCredits)) {
         throw new Error(`积分不足，需要 ${requiredCredits} 积分`);
       }
 
-      // 3. 创建生成记录
+      logger.info('开始批量生成图片', {
+        userId,
+        modelId,
+        quantity: actualQuantity,
+        pricePerImage,
+        requiredCredits
+      });
+
+      // 3. 并发生成多张图片
+      const generatePromises = [];
+      for (let i = 0; i < actualQuantity; i++) {
+        // 每张图片使用不同的种子（如果原始种子是-1则随机，否则递增）
+        const seed = params.seed === -1 || params.seed === undefined 
+          ? -1 
+          : (params.seed + i);
+        
+        generatePromises.push(
+          this.generateSingleImage(userId, modelId, { ...params, seed }, model, i + 1)
+        );
+      }
+
+      // 并发执行所有生成请求
+      const results = await Promise.allSettled(generatePromises);
+      
+      // 统计成功和失败的结果
+      const successResults = [];
+      const failedResults = [];
+      let totalConsumedCredits = 0; // 确保初始化为数字0
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          successResults.push(result.value.data);
+          // 确保积分累加使用数字类型
+          totalConsumedCredits += pricePerImage;
+        } else {
+          failedResults.push({
+            index: index + 1,
+            error: result.reason?.message || result.value?.error || '生成失败'
+          });
+        }
+      });
+
+      // 4. 扣除积分（按实际成功数量）
+      if (successResults.length > 0) {
+        await user.consumeCredits(
+          totalConsumedCredits,
+          null,
+          null,
+          `批量图像生成 - ${model.display_name} × ${successResults.length}张`,
+          'image_consume'
+        );
+      }
+
+      logger.info('批量生成完成', {
+        userId,
+        requested: actualQuantity,
+        succeeded: successResults.length,
+        failed: failedResults.length,
+        creditsConsumed: totalConsumedCredits
+      });
+
+      return {
+        success: true,
+        requested: actualQuantity,
+        succeeded: successResults.length,
+        failed: failedResults.length,
+        creditsConsumed: totalConsumedCredits,
+        results: successResults,
+        errors: failedResults
+      };
+
+    } catch (error) {
+      logger.error('批量生成图片失败', {
+        userId,
+        modelId,
+        quantity: actualQuantity,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 生成单张图片（内部方法）
+   */
+  static async generateSingleImage(userId, modelId, params, model, index = 1) {
+    const startTime = Date.now();
+    let generationId = null;
+    
+    try {
+      // 1. 创建生成记录 - 确保credits_consumed是数字
+      const creditsToConsume = parseFloat(model.price_per_image) || 1;
+      
       generationId = await ImageGeneration.create({
         user_id: userId,
         model_id: modelId,
@@ -52,10 +151,10 @@ class ImageService {
         guidance_scale: params.guidance_scale || model.default_guidance_scale,
         watermark: params.watermark !== false,
         status: 'generating',
-        credits_consumed: requiredCredits
+        credits_consumed: creditsToConsume
       });
 
-      // 4. 调用API生成图片
+      // 2. 调用API生成图片
       const apiKey = ImageModel.decryptApiKey(model.api_key);
       if (!apiKey) {
         throw new Error('API密钥未配置');
@@ -71,11 +170,11 @@ class ImageService {
         watermark: params.watermark !== false
       };
 
-      logger.info('调用图像生成API', {
+      logger.info(`生成第${index}张图片`, {
         userId,
         modelId,
-        model: model.name,
-        endpoint: model.endpoint
+        generationId,
+        creditsToConsume
       });
 
       const response = await axios.post(
@@ -86,7 +185,7 @@ class ImageService {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          timeout: 60000 // 60秒超时
+          timeout: 60000
         }
       );
 
@@ -96,24 +195,13 @@ class ImageService {
 
       const imageUrl = response.data.data[0].url;
       
-      // 5. 下载图片到本地
+      // 3. 下载图片到本地
       const { localPath, thumbnailPath, fileSize } = await this.downloadAndSaveImage(
         imageUrl,
         generationId
       );
 
-      // 6. 扣除用户积分
-      // 注意：不传递modelId到credit_transactions，因为外键约束指向ai_models表
-      // 使用image_consume作为交易类型以区分图像生成消费
-      await user.consumeCredits(
-        requiredCredits,
-        null,  // 不传递modelId，因为credit_transactions.related_model_id外键指向ai_models表
-        null,  // conversationId为null
-        `图像生成 - ${model.display_name}`,  // reason描述
-        'image_consume'  // 交易类型为image_consume
-      );
-
-      // 7. 更新生成记录
+      // 4. 更新生成记录
       const generationTime = Date.now() - startTime;
       await ImageGeneration.update(generationId, {
         image_url: imageUrl,
@@ -124,18 +212,15 @@ class ImageService {
         generation_time: generationTime
       });
 
-      logger.info('图片生成成功', {
-        userId,
-        generationId,
-        generationTime,
-        creditsConsumed: requiredCredits
-      });
-
-      // 8. 返回生成结果
-      return await ImageGeneration.findById(generationId);
+      const result = await ImageGeneration.findById(generationId);
+      
+      return {
+        success: true,
+        data: result
+      };
 
     } catch (error) {
-      logger.error('图片生成失败', {
+      logger.error(`生成第${index}张图片失败`, {
         userId,
         modelId,
         generationId,
@@ -151,7 +236,24 @@ class ImageService {
         });
       }
 
-      throw error;
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 生成图片（保留原方法兼容性）
+   */
+  static async generateImage(userId, modelId, params) {
+    // 调用批量生成方法，数量为1
+    const result = await this.generateImages(userId, modelId, params, 1);
+    
+    if (result.succeeded > 0) {
+      return result.results[0];
+    } else {
+      throw new Error(result.errors[0]?.error || '生成失败');
     }
   }
 
@@ -200,22 +302,13 @@ class ImageService {
       // 获取文件大小
       const stats = await fs.stat(filePath);
       
-      // 生成访问路径 - 修复路径生成逻辑
-      // uploadDir是 /var/www/ai-platform/backend/uploads
-      // 需要生成相对于uploads目录的路径
+      // 生成访问路径
       const relativePath = path.relative(uploadBase, filePath);
       const relativeThumbPath = path.relative(uploadBase, thumbPath);
       
       // 确保路径以/开头，格式为 /uploads/generations/...
       const finalPath = '/uploads/' + relativePath.split(path.sep).join('/');
       const finalThumbPath = '/uploads/' + relativeThumbPath.split(path.sep).join('/');
-      
-      logger.info('图片保存成功', {
-        filePath,
-        thumbPath,
-        finalPath,
-        finalThumbPath
-      });
       
       return {
         localPath: finalPath,
@@ -332,6 +425,14 @@ class ImageService {
       const scale = parseFloat(params.guidance_scale);
       if (isNaN(scale) || scale < 1 || scale > 10) {
         errors.push('引导系数必须在1到10之间');
+      }
+    }
+    
+    // 验证数量
+    if (params.quantity !== undefined && params.quantity !== null) {
+      const qty = parseInt(params.quantity);
+      if (isNaN(qty) || qty < 1 || qty > 4) {
+        errors.push('生成数量必须在1到4之间');
       }
     }
     

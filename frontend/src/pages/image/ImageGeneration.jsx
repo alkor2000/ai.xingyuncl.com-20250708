@@ -21,11 +21,13 @@ import {
   Tooltip,
   Tag,
   message,
-  Statistic,
   Badge,
-  Dropdown,
   Modal,
-  Popconfirm
+  Popconfirm,
+  Segmented,
+  Collapse,
+  Alert,
+  Select
 } from 'antd';
 import {
   PictureOutlined,
@@ -39,13 +41,12 @@ import {
   CopyOutlined,
   GlobalOutlined,
   LockOutlined,
-  HistoryOutlined,
   FireOutlined,
   ThunderboltOutlined,
-  StarOutlined,
-  MoreOutlined,
   AppstoreOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  SettingOutlined,
+  CaretRightOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useImageStore from '../../stores/imageStore';
@@ -55,6 +56,8 @@ import './ImageGeneration.less';
 const { Content, Sider } = Layout;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
+const { Panel } = Collapse;
+const { Option } = Select;
 
 // 预设尺寸
 const presetSizes = [
@@ -68,6 +71,14 @@ const presetSizes = [
   { label: '超宽 21:9', value: '1512x648', ratio: '21:9' }
 ];
 
+// 生成数量选项
+const quantityOptions = [
+  { label: '1张', value: 1 },
+  { label: '2张', value: 2 },
+  { label: '3张', value: 3 },
+  { label: '4张', value: 4 }
+];
+
 const ImageGeneration = () => {
   const { t } = useTranslation();
   const { user } = useAuthStore();
@@ -79,9 +90,11 @@ const ImageGeneration = () => {
     historyPagination,
     loading,
     userStats,
+    generationProgress,
     getModels,
     selectModel,
     generateImage,
+    generateImages,
     getUserHistory,
     deleteGeneration,
     toggleFavorite,
@@ -96,9 +109,11 @@ const ImageGeneration = () => {
   const [seed, setSeed] = useState(-1);
   const [guidanceScale, setGuidanceScale] = useState(2.5);
   const [watermark, setWatermark] = useState(true);
-  const [viewMode, setViewMode] = useState('grid'); // grid | list
+  const [quantity, setQuantity] = useState(1);
+  const [viewMode, setViewMode] = useState('grid');
   const [activeTab, setActiveTab] = useState('all');
   const [previewImage, setPreviewImage] = useState(null);
+  const [batchResults, setBatchResults] = useState(null);
 
   // 初始化
   useEffect(() => {
@@ -106,6 +121,20 @@ const ImageGeneration = () => {
     getUserHistory();
     getUserStats();
   }, []);
+
+  // 计算总价格
+  const getTotalPrice = () => {
+    if (!selectedModel) return 0;
+    return (selectedModel.price_per_image || 0) * quantity;
+  };
+
+  // 处理模型选择
+  const handleModelChange = (modelId) => {
+    const model = models.find(m => m.id === modelId);
+    if (model) {
+      selectModel(model);
+    }
+  };
 
   // 处理生成
   const handleGenerate = async () => {
@@ -119,20 +148,66 @@ const ImageGeneration = () => {
       return;
     }
 
-    const result = await generateImage({
+    // 检查积分是否充足
+    const totalPrice = getTotalPrice();
+    if (user.credits_stats && user.credits_stats.remaining < totalPrice) {
+      message.error(`积分不足！需要 ${totalPrice} 积分，当前余额 ${user.credits_stats.remaining} 积分`);
+      return;
+    }
+
+    setBatchResults(null);
+
+    const params = {
       prompt: prompt.trim(),
       negative_prompt: negativePrompt.trim(),
       size: selectedSize,
       seed: seed === -1 ? undefined : seed,
       guidance_scale: guidanceScale,
-      watermark
-    });
+      watermark,
+      quantity
+    };
+
+    const result = await generateImages(params);
 
     if (result) {
-      // 清空输入
-      setPrompt('');
-      setNegativePrompt('');
-      setSeed(-1);
+      // 显示批量生成结果
+      if (quantity > 1 && result.results) {
+        setBatchResults(result);
+        Modal.info({
+          title: '批量生成完成',
+          width: 600,
+          content: (
+            <div>
+              <Alert
+                message={`成功生成 ${result.succeeded}/${result.requested} 张图片`}
+                description={`消耗积分：${result.creditsConsumed}`}
+                type={result.succeeded === result.requested ? 'success' : 'warning'}
+                showIcon
+              />
+              {result.errors && result.errors.length > 0 && (
+                <Alert
+                  style={{ marginTop: 10 }}
+                  message="部分图片生成失败"
+                  description={result.errors.map(e => `第${e.index}张: ${e.error}`).join('\n')}
+                  type="error"
+                  showIcon
+                />
+              )}
+            </div>
+          ),
+          onOk() {
+            // 清空输入
+            setPrompt('');
+            setNegativePrompt('');
+            setSeed(-1);
+          }
+        });
+      } else {
+        // 单张生成成功，清空输入
+        setPrompt('');
+        setNegativePrompt('');
+        setSeed(-1);
+      }
     }
   };
 
@@ -163,39 +238,6 @@ const ImageGeneration = () => {
     link.click();
     document.body.removeChild(link);
   };
-
-  // 渲染模型卡片
-  const renderModelCard = (model) => (
-    <Card
-      key={model.id}
-      className={`model-card ${selectedModel?.id === model.id ? 'selected' : ''}`}
-      onClick={() => selectModel(model)}
-      hoverable
-    >
-      <div className="model-header">
-        <Badge 
-          dot 
-          status={model.is_active ? 'success' : 'default'}
-          offset={[-5, 5]}
-        >
-          <FireOutlined className="model-icon" />
-        </Badge>
-        <div className="model-info">
-          <div className="model-name">{model.display_name}</div>
-          <div className="model-provider">{model.provider}</div>
-        </div>
-        <Tag color="blue">{model.price_per_image} 积分</Tag>
-      </div>
-      {model.description && (
-        <div className="model-description">{model.description}</div>
-      )}
-      {selectedModel?.id === model.id && (
-        <div className="selected-indicator">
-          <ThunderboltOutlined /> 已选择
-        </div>
-      )}
-    </Card>
-  );
 
   // 渲染历史图片卡片
   const renderHistoryCard = (item) => (
@@ -295,20 +337,48 @@ const ImageGeneration = () => {
   return (
     <Layout className="image-generation-page">
       {/* 左侧生成区域 */}
-      <Sider width={400} className="generation-sider" theme="light">
+      <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
-          <Card title="选择模型" className="model-selection">
-            <div className="model-list">
-              {models.map(renderModelCard)}
-            </div>
-          </Card>
+          {/* 模型选择 - 改为下拉框 */}
+          <div className="model-selection-compact">
+            <div className="section-title">选择模型</div>
+            <Select
+              className="model-select"
+              placeholder="请选择生成模型"
+              value={selectedModel?.id}
+              onChange={handleModelChange}
+              style={{ width: '100%' }}
+            >
+              {models.map(model => (
+                <Option key={model.id} value={model.id}>
+                  <Space>
+                    <FireOutlined style={{ color: '#ff6b6b' }} />
+                    <span>{model.display_name}</span>
+                    <Tag color="blue" style={{ marginLeft: 'auto' }}>
+                      {model.price_per_image} 积分
+                    </Tag>
+                  </Space>
+                </Option>
+              ))}
+            </Select>
+            {selectedModel && (
+              <div className="model-description">
+                <Space>
+                  <Tag color="volcano">{selectedModel.provider}</Tag>
+                  <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                    {selectedModel.description}
+                  </span>
+                </Space>
+              </div>
+            )}
+          </div>
 
           <Card title="输入提示词" className="prompt-input">
             <TextArea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="描述你想生成的图片内容..."
-              rows={4}
+              rows={3}
               maxLength={1000}
               showCount
             />
@@ -325,6 +395,33 @@ const ImageGeneration = () => {
           </Card>
 
           <Card title="参数设置" className="parameters">
+            {/* 生成数量 - 使用Segmented组件 */}
+            <div className="param-item">
+              <div className="param-label">
+                生成数量
+                <Tooltip title="一次生成多张图片，每张使用不同的随机种子">
+                  <span className="info-icon"> ❓</span>
+                </Tooltip>
+              </div>
+              <Segmented
+                options={quantityOptions}
+                value={quantity}
+                onChange={setQuantity}
+                block
+              />
+              {quantity > 1 && (
+                <div style={{ marginTop: 8 }}>
+                  <Alert
+                    message={`批量生成将消耗 ${getTotalPrice()} 积分`}
+                    type="info"
+                    showIcon={false}
+                    banner
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 图片尺寸 */}
             <div className="param-item">
               <div className="param-label">图片尺寸</div>
               <div className="size-grid">
@@ -341,95 +438,110 @@ const ImageGeneration = () => {
               <div className="size-display">{selectedSize}</div>
             </div>
 
-            <div className="param-item">
-              <div className="param-label">
-                引导系数
-                <Tooltip title="控制生成图像与提示词的相关程度，值越大越相关">
-                  <span className="info-icon">?</span>
-                </Tooltip>
-              </div>
-              <Row gutter={16}>
-                <Col span={16}>
-                  <Slider
-                    min={1}
-                    max={10}
-                    step={0.5}
-                    value={guidanceScale}
-                    onChange={setGuidanceScale}
-                  />
-                </Col>
-                <Col span={8}>
-                  <InputNumber
-                    min={1}
-                    max={10}
-                    step={0.5}
-                    value={guidanceScale}
-                    onChange={setGuidanceScale}
-                  />
-                </Col>
-              </Row>
+            {/* 生成按钮 - 移到高级选项上方 */}
+            <div className="generate-button-section">
+              <Button
+                type="primary"
+                size="large"
+                icon={<SendOutlined />}
+                onClick={handleGenerate}
+                loading={generating}
+                disabled={!selectedModel || !prompt.trim()}
+                block
+              >
+                {generating ? (
+                  generationProgress ? (
+                    <span>生成中 {generationProgress}...</span>
+                  ) : (
+                    '生成中...'
+                  )
+                ) : (
+                  <Space>
+                    <span>生成图片</span>
+                    <Tag color="blue">{getTotalPrice()} 积分</Tag>
+                  </Space>
+                )}
+              </Button>
             </div>
 
-            <div className="param-item">
-              <div className="param-label">
-                随机种子
-                <Tooltip title="使用相同的种子值可以生成相似的图片，-1为随机">
-                  <span className="info-icon">?</span>
-                </Tooltip>
-              </div>
-              <InputNumber
-                min={-1}
-                max={2147483647}
-                value={seed}
-                onChange={setSeed}
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div className="param-item">
-              <Row justify="space-between" align="middle">
-                <Col>添加水印</Col>
-                <Col>
-                  <Switch checked={watermark} onChange={setWatermark} />
-                </Col>
-              </Row>
-            </div>
-          </Card>
-
-          <div className="generate-actions">
-            <Button
-              type="primary"
-              size="large"
-              icon={<SendOutlined />}
-              onClick={handleGenerate}
-              loading={generating}
-              disabled={!selectedModel || !prompt.trim()}
-              block
+            {/* 高级选项 - 使用折叠面板 */}
+            <Collapse
+              ghost
+              expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}
+              className="advanced-options"
             >
-              {generating ? '生成中...' : `生成图片 (${selectedModel?.price_per_image || 0} 积分)`}
-            </Button>
-          </div>
+              <Panel 
+                header={
+                  <Space>
+                    <SettingOutlined />
+                    <span>高级选项</span>
+                  </Space>
+                } 
+                key="1"
+              >
+                <div className="param-item">
+                  <div className="param-label">
+                    引导系数
+                    <Tooltip title="控制生成图像与提示词的相关程度，值越大越相关">
+                      <span className="info-icon"> ❓</span>
+                    </Tooltip>
+                  </div>
+                  <Row gutter={16}>
+                    <Col span={16}>
+                      <Slider
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        value={guidanceScale}
+                        onChange={setGuidanceScale}
+                      />
+                    </Col>
+                    <Col span={8}>
+                      <InputNumber
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        value={guidanceScale}
+                        onChange={setGuidanceScale}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                </div>
 
-          {userStats && (
-            <Card className="user-stats">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Statistic
-                    title="累计生成"
-                    value={userStats.total_generations || 0}
-                    prefix={<PictureOutlined />}
+                <div className="param-item">
+                  <div className="param-label">
+                    随机种子
+                    <Tooltip title="使用相同的种子值可以生成相似的图片，-1为随机。批量生成时每张图片种子会递增">
+                      <span className="info-icon"> ❓</span>
+                    </Tooltip>
+                  </div>
+                  <InputNumber
+                    min={-1}
+                    max={2147483647}
+                    value={seed}
+                    onChange={setSeed}
+                    style={{ width: '100%' }}
+                    placeholder="-1 为随机"
                   />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="消耗积分"
-                    value={userStats.total_credits_consumed || 0}
-                    prefix={<FireOutlined />}
-                  />
-                </Col>
-              </Row>
-            </Card>
-          )}
+                  {quantity > 1 && seed !== -1 && (
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 5 }}>
+                      批量生成种子值：{seed}, {seed + 1}, {seed + 2}...
+                    </div>
+                  )}
+                </div>
+
+                <div className="param-item">
+                  <Row justify="space-between" align="middle">
+                    <Col>添加水印</Col>
+                    <Col>
+                      <Switch checked={watermark} onChange={setWatermark} />
+                    </Col>
+                  </Row>
+                </div>
+              </Panel>
+            </Collapse>
+          </Card>
         </div>
       </Sider>
 

@@ -25,7 +25,9 @@ import {
   DeleteOutlined,
   PoweroffOutlined,
   KeyOutlined,
-  FireOutlined
+  FireOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -63,20 +65,40 @@ const ImageModelSettings = () => {
   // 处理表单提交
   const handleSubmit = async (values) => {
     try {
+      // 处理sizes_supported字段
+      const processedValues = { ...values };
+      if (values.sizes_supported) {
+        try {
+          // 尝试解析JSON字符串
+          const sizesArray = JSON.parse(values.sizes_supported);
+          if (!Array.isArray(sizesArray)) {
+            message.error('尺寸配置必须是JSON数组格式');
+            return;
+          }
+          processedValues.sizes_supported = sizesArray;
+        } catch (error) {
+          message.error('尺寸配置格式错误，请输入有效的JSON数组');
+          return;
+        }
+      }
+
       if (editingModel) {
         // 更新模型
-        const response = await api.put(`/image/admin/models/${editingModel.id}`, values);
+        const response = await api.put(`/image/admin/models/${editingModel.id}`, processedValues);
         if (response.data.success) {
           message.success('模型更新成功');
           setModalVisible(false);
+          form.resetFields();
+          setEditingModel(null);
           loadModels();
         }
       } else {
         // 创建模型
-        const response = await api.post('/image/admin/models', values);
+        const response = await api.post('/image/admin/models', processedValues);
         if (response.data.success) {
           message.success('模型创建成功');
           setModalVisible(false);
+          form.resetFields();
           loadModels();
         }
       }
@@ -119,16 +141,17 @@ const ImageModelSettings = () => {
     setEditingModel(model);
     form.setFieldsValue({
       ...model,
-      sizes_supported: model.sizes_supported ? JSON.stringify(model.sizes_supported) : ''
+      sizes_supported: model.sizes_supported ? JSON.stringify(model.sizes_supported, null, 2) : '',
+      api_key: '' // 编辑时不显示原密钥
     });
     setModalVisible(true);
   };
 
-  // 打开新增窗口
+  // 打开新增窗口 - 修复bug：应该设置为true
   const openAddModal = () => {
     setEditingModel(null);
     form.resetFields();
-    setModalVisible(false);
+    setModalVisible(true); // 修复：这里应该是true，不是false
   };
 
   const columns = [
@@ -176,9 +199,9 @@ const ImageModelSettings = () => {
       render: (_, record) => (
         <Space>
           {record.has_api_key ? (
-            <Tag icon={<KeyOutlined />} color="success">已配置</Tag>
+            <Tag icon={<CheckCircleOutlined />} color="success">已配置</Tag>
           ) : (
-            <Tag icon={<KeyOutlined />} color="default">未配置</Tag>
+            <Tag icon={<CloseCircleOutlined />} color="error">未配置</Tag>
           )}
         </Space>
       )
@@ -210,6 +233,7 @@ const ImageModelSettings = () => {
               type="link"
               icon={<PoweroffOutlined />}
               onClick={() => toggleModelStatus(record.id)}
+              style={{ color: record.is_active ? '#ff4d4f' : '#52c41a' }}
             />
           </Tooltip>
           <Popconfirm
@@ -255,7 +279,11 @@ const ImageModelSettings = () => {
       <Modal
         title={editingModel ? '编辑模型' : '添加模型'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false);
+          form.resetFields();
+          setEditingModel(null);
+        }}
         onOk={() => form.submit()}
         width={700}
       >
@@ -312,7 +340,8 @@ const ImageModelSettings = () => {
           <Form.Item
             name="api_key"
             label="API密钥"
-            extra="留空则不更新密钥"
+            extra={editingModel ? "留空则不更新密钥" : "请输入API密钥"}
+            rules={editingModel ? [] : [{ required: true, message: '请输入API密钥' }]}
           >
             <Input.Password placeholder="输入API密钥" />
           </Form.Item>
@@ -338,8 +367,12 @@ const ImageModelSettings = () => {
             name="sizes_supported"
             label="支持的尺寸（JSON数组）"
             extra='如：["1024x1024", "864x1152", "1280x720"]'
+            initialValue='["1024x1024"]'
           >
-            <TextArea rows={3} placeholder='["1024x1024", "864x1152"]' />
+            <TextArea 
+              rows={3} 
+              placeholder='["1024x1024", "864x1152"]'
+            />
           </Form.Item>
 
           <Form.Item

@@ -1,16 +1,22 @@
 /**
- * 图像生成页面样式
+ * 图像生成页面样式 - 按钮位置优化版
  */
 
 .image-generation-page {
   height: 100vh;
   background: #f5f5f5;
+  display: flex;
+  
+  &.ant-layout {
+    display: flex;
+    flex-direction: row;
+  }
 
+  // 左侧生成面板
   .generation-sider {
     background: #fff;
-    padding: 20px;
-    overflow-y: auto;
     border-right: 1px solid #f0f0f0;
+    overflow-y: auto;
     
     &::-webkit-scrollbar {
       width: 6px;
@@ -20,95 +26,73 @@
       background: #d9d9d9;
       border-radius: 3px;
     }
+    
+    &::-webkit-scrollbar-thumb:hover {
+      background: #b8b8b8;
+    }
   }
 
+  // 可滚动的内容区域
   .generation-container {
+    padding: 12px;
+    
     .ant-card {
-      margin-bottom: 16px;
-      border-radius: 8px;
+      margin-bottom: 12px;
+      border-radius: 6px;
       
       .ant-card-head {
         border-bottom: 1px solid #f0f0f0;
-        padding: 12px 16px;
+        padding: 8px 12px;
+        min-height: auto;
         
         .ant-card-head-title {
-          font-size: 15px;
+          font-size: 13px;
           font-weight: 600;
         }
       }
       
       .ant-card-body {
-        padding: 16px;
+        padding: 12px;
       }
     }
   }
 
-  // 模型选择区域
-  .model-selection {
-    .model-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+  // 模型选择区域 - 紧凑版
+  .model-selection-compact {
+    margin-bottom: 12px;
+    
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #262626;
+      margin-bottom: 8px;
     }
-
-    .model-card {
-      border: 2px solid #f0f0f0;
-      border-radius: 8px;
-      padding: 12px;
-      cursor: pointer;
-      transition: all 0.3s;
-      
-      &:hover {
-        border-color: #1890ff;
-        box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
-      }
-      
-      &.selected {
-        border-color: #1890ff;
-        background: linear-gradient(135deg, #f0f8ff 0%, #fff 100%);
-      }
-
-      .model-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 8px;
-
-        .model-icon {
-          font-size: 24px;
-          color: #ff6b6b;
-        }
-
-        .model-info {
-          flex: 1;
-          
-          .model-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #262626;
-          }
-          
-          .model-provider {
-            font-size: 12px;
-            color: #8c8c8c;
-          }
+    
+    .model-select {
+      .ant-select-selector {
+        height: 36px !important;
+        
+        .ant-select-selection-item {
+          line-height: 34px;
+          font-size: 13px;
         }
       }
-
-      .model-description {
+      
+      .ant-select-arrow {
         font-size: 12px;
-        color: #595959;
-        line-height: 1.5;
-        margin-top: 8px;
       }
-
-      .selected-indicator {
-        color: #1890ff;
-        font-size: 12px;
-        margin-top: 8px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
+    }
+    
+    .model-description {
+      margin-top: 8px;
+      padding: 6px 8px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      
+      .ant-tag {
+        font-size: 11px;
+        padding: 0 6px;
+        line-height: 18px;
       }
     }
   }
@@ -117,20 +101,29 @@
   .prompt-input {
     .ant-input-textarea {
       resize: none;
+      font-size: 13px;
+      
+      textarea {
+        font-size: 13px !important;
+      }
       
       &:focus {
         border-color: #40a9ff;
         box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
       }
     }
+    
+    .ant-input-textarea-show-count::after {
+      font-size: 11px;
+    }
 
     .negative-prompt {
-      margin-top: 16px;
+      margin-top: 12px;
       
       .label {
-        font-size: 13px;
+        font-size: 12px;
         color: #595959;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
     }
   }
@@ -138,16 +131,16 @@
   // 参数设置区域
   .parameters {
     .param-item {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       
       &:last-child {
         margin-bottom: 0;
       }
 
       .param-label {
-        font-size: 13px;
+        font-size: 12px;
         color: #595959;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         display: flex;
         align-items: center;
         gap: 4px;
@@ -156,25 +149,36 @@
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
           background: #f0f0f0;
           color: #8c8c8c;
-          font-size: 11px;
+          font-size: 10px;
           cursor: help;
+        }
+      }
+
+      // Segmented组件
+      .ant-segmented {
+        font-size: 12px;
+        
+        .ant-segmented-item {
+          padding: 4px 12px;
+          min-height: 28px;
         }
       }
 
       .size-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 6px;
+        margin-bottom: 6px;
         
         .ant-btn {
-          height: 32px;
-          font-size: 12px;
+          height: 28px;
+          font-size: 11px;
+          padding: 0 8px;
           border: 1px solid #d9d9d9;
           
           &.selected {
@@ -188,65 +192,93 @@
       .size-display {
         text-align: center;
         color: #8c8c8c;
-        font-size: 12px;
-        padding: 4px;
+        font-size: 11px;
+        padding: 2px;
         background: #fafafa;
         border-radius: 4px;
       }
 
       .ant-slider {
-        margin: 12px 0;
+        margin: 8px 0;
       }
 
       .ant-input-number {
         width: 100%;
-      }
-    }
-  }
-
-  // 生成按钮
-  .generate-actions {
-    margin-top: 20px;
-    
-    .ant-btn-primary {
-      height: 44px;
-      font-size: 15px;
-      font-weight: 500;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      
-      &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        font-size: 12px;
       }
       
-      &:disabled {
-        background: #f5f5f5;
-        color: #bfbfbf;
+      // Alert组件
+      .ant-alert {
+        padding: 4px 8px;
+        font-size: 11px;
+        
+        .ant-alert-message {
+          font-size: 11px;
+        }
       }
     }
-  }
-
-  // 用户统计
-  .user-stats {
-    margin-top: 20px;
-    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
     
-    .ant-statistic-title {
-      font-size: 12px;
-      color: #8c8c8c;
+    // 生成按钮区域 - 在参数设置卡片内
+    .generate-button-section {
+      margin: 20px 0 16px 0;
+      padding-top: 16px;
+      border-top: 1px dashed #e8e8e8;
+      
+      .ant-btn-primary {
+        height: 36px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        
+        .ant-tag {
+          font-size: 11px;
+          padding: 0 6px;
+          line-height: 16px;
+          margin-left: 4px;
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: #fff;
+        }
+        
+        &:hover:not(:disabled) {
+          background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        &:disabled {
+          background: #f5f5f5;
+          color: #bfbfbf;
+        }
+      }
     }
     
-    .ant-statistic-content {
-      font-size: 20px;
-      font-weight: 600;
+    // 折叠面板
+    .advanced-options {
+      margin-bottom: 0;
+      
+      .ant-collapse-header {
+        padding: 8px 0 !important;
+        font-size: 12px;
+        
+        .anticon {
+          font-size: 10px;
+        }
+      }
+      
+      .ant-collapse-content-box {
+        padding: 8px 0 0 0 !important;
+      }
     }
   }
 
   // 历史记录区域
   .history-content {
-    padding: 20px;
+    flex: 1;
+    padding: 16px;
     overflow-y: auto;
+    background: #f5f5f5;
+    min-width: 0;
     
     &::-webkit-scrollbar {
       width: 8px;
@@ -256,33 +288,52 @@
       background: #d9d9d9;
       border-radius: 4px;
     }
+    
+    &::-webkit-scrollbar-thumb:hover {
+      background: #b8b8b8;
+    }
   }
 
   .history-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     background: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 10px 16px;
+    border-radius: 6px;
     
     .ant-tabs {
       margin-bottom: 0;
+      
+      .ant-tabs-nav {
+        margin-bottom: 0;
+      }
+      
+      .ant-tabs-tab {
+        padding: 4px 12px;
+        font-size: 13px;
+      }
+    }
+    
+    .ant-btn {
+      font-size: 13px;
+      height: 28px;
+      padding: 0 12px;
     }
   }
 
   .history-grid {
     &.grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
     }
     
     &.list {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
       
       .history-card {
         max-width: 100%;
@@ -295,9 +346,14 @@
   }
 
   .history-card {
-    border-radius: 8px;
+    border-radius: 6px;
     overflow: hidden;
     transition: all 0.3s;
+    background: #fff;
+    
+    .ant-card-body {
+      padding: 12px;
+    }
     
     &:hover {
       transform: translateY(-2px);
@@ -333,10 +389,16 @@
         display: flex;
         align-items: flex-end;
         justify-content: center;
-        padding: 12px;
+        padding: 8px;
         
         .ant-btn {
           color: #fff;
+          padding: 4px 8px;
+          height: 28px;
+          
+          .anticon {
+            font-size: 14px;
+          }
           
           &:hover {
             color: #40a9ff;
@@ -356,44 +418,45 @@
     .card-meta-title {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      margin-bottom: 8px;
       
       .model-tag {
-        font-size: 12px;
-        padding: 2px 8px;
+        font-size: 11px;
+        padding: 1px 6px;
         background: #f0f0f0;
-        border-radius: 4px;
+        border-radius: 3px;
         color: #595959;
       }
       
       .size-tag {
-        font-size: 12px;
+        font-size: 11px;
         color: #8c8c8c;
       }
     }
 
     .card-meta-description {
       .prompt-text {
-        font-size: 13px;
+        font-size: 12px;
         color: #595959;
         line-height: 1.4;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         
         .ant-btn-link {
           padding: 0 4px;
           height: auto;
-          font-size: 12px;
+          font-size: 11px;
         }
       }
       
       .meta-info {
         display: flex;
         justify-content: space-between;
-        font-size: 12px;
+        font-size: 11px;
         color: #8c8c8c;
       }
     }
@@ -403,26 +466,26 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 400px;
+    min-height: 300px;
   }
 
   // 预览Modal
   .preview-modal {
     img {
       width: 100%;
-      border-radius: 8px;
-      margin-bottom: 16px;
+      border-radius: 6px;
+      margin-bottom: 12px;
     }
     
     .preview-info {
-      padding: 16px;
+      padding: 12px;
       background: #f5f5f5;
-      border-radius: 8px;
+      border-radius: 6px;
       
       p {
-        margin-bottom: 8px;
-        font-size: 14px;
-        line-height: 1.6;
+        margin-bottom: 6px;
+        font-size: 13px;
+        line-height: 1.5;
         
         &:last-child {
           margin-bottom: 0;
@@ -430,9 +493,28 @@
         
         strong {
           color: #262626;
-          margin-right: 8px;
+          margin-right: 6px;
         }
       }
+    }
+  }
+}
+
+// Select下拉框样式
+.ant-select-dropdown {
+  .ant-select-item {
+    font-size: 12px;
+    padding: 5px 12px;
+    
+    .ant-space {
+      width: 100%;
+      justify-content: space-between;
+    }
+    
+    .ant-tag {
+      font-size: 11px;
+      padding: 0 6px;
+      line-height: 16px;
     }
   }
 }
@@ -442,10 +524,11 @@
   .image-generation-page {
     .generation-sider {
       width: 350px !important;
+      min-width: 350px !important;
     }
     
     .history-grid.grid {
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     }
   }
 }
@@ -456,9 +539,14 @@
     
     .generation-sider {
       width: 100% !important;
-      height: auto;
+      min-width: 100% !important;
+      height: 50vh;
       border-right: none;
       border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .history-content {
+      height: 50vh;
     }
     
     .history-grid.grid {

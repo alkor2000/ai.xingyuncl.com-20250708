@@ -13,7 +13,7 @@ class ImageModel {
   static async findAll(onlyActive = false) {
     try {
       let query = `
-        SELECT id, name, display_name, description, provider, endpoint, model_id,
+        SELECT id, name, display_name, description, provider, endpoint, api_key, model_id,
                price_per_image, sizes_supported, max_prompt_length, default_size,
                default_guidance_scale, example_prompt, example_image, icon,
                is_active, sort_order, created_at, updated_at
@@ -28,13 +28,18 @@ class ImageModel {
       
       const result = await dbConnection.query(query);
       
-      // 解析JSON字段
-      return result.rows.map(model => ({
-        ...model,
-        sizes_supported: typeof model.sizes_supported === 'string' 
-          ? JSON.parse(model.sizes_supported) 
-          : model.sizes_supported
-      }));
+      // 解析JSON字段，但不返回实际的api_key内容
+      return result.rows.map(model => {
+        const { api_key, ...modelData } = model;
+        return {
+          ...modelData,
+          price_per_image: parseFloat(model.price_per_image) || 1, // 转换为数字
+          has_api_key: !!api_key,  // 只返回是否配置了API密钥
+          sizes_supported: typeof model.sizes_supported === 'string' 
+            ? JSON.parse(model.sizes_supported) 
+            : model.sizes_supported
+        };
+      });
     } catch (error) {
       logger.error('获取图像模型列表失败:', error);
       throw error;
@@ -57,10 +62,15 @@ class ImageModel {
       
       const model = result.rows[0];
       
-      // 解析JSON字段
+      // 解析JSON字段和转换数值类型
       if (typeof model.sizes_supported === 'string') {
         model.sizes_supported = JSON.parse(model.sizes_supported);
       }
+      
+      // 重要：将price_per_image转换为数字类型
+      model.price_per_image = parseFloat(model.price_per_image) || 1;
+      model.default_guidance_scale = parseFloat(model.default_guidance_scale) || 2.5;
+      model.max_prompt_length = parseInt(model.max_prompt_length) || 1000;
       
       return model;
     } catch (error) {
@@ -85,10 +95,15 @@ class ImageModel {
       
       const model = result.rows[0];
       
-      // 解析JSON字段
+      // 解析JSON字段和转换数值类型
       if (typeof model.sizes_supported === 'string') {
         model.sizes_supported = JSON.parse(model.sizes_supported);
       }
+      
+      // 重要：将price_per_image转换为数字类型
+      model.price_per_image = parseFloat(model.price_per_image) || 1;
+      model.default_guidance_scale = parseFloat(model.default_guidance_scale) || 2.5;
+      model.max_prompt_length = parseInt(model.max_prompt_length) || 1000;
       
       return model;
     } catch (error) {

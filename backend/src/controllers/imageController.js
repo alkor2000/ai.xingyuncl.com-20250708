@@ -30,12 +30,21 @@ class ImageController {
   }
 
   /**
-   * 生成图片
+   * 生成图片（支持批量生成）
    */
   static async generateImage(req, res) {
     try {
       const userId = req.user.id;
-      const { model_id, prompt, negative_prompt, size, seed, guidance_scale, watermark } = req.body;
+      const { 
+        model_id, 
+        prompt, 
+        negative_prompt, 
+        size, 
+        seed, 
+        guidance_scale, 
+        watermark,
+        quantity = 1  // 新增：生成数量，默认1张
+      } = req.body;
       
       // 验证必填参数
       if (!model_id || !prompt) {
@@ -45,23 +54,45 @@ class ImageController {
         }, '参数不完整');
       }
       
-      // 验证参数
+      // 验证参数（包括quantity）
       const errors = ImageService.validateGenerationParams(req.body);
       if (errors.length > 0) {
         return ResponseHelper.validation(res, null, errors.join('; '));
       }
       
-      // 调用服务生成图片
-      const result = await ImageService.generateImage(userId, model_id, {
-        prompt,
-        negative_prompt,
-        size,
-        seed,
-        guidance_scale,
-        watermark
-      });
+      // 限制数量范围
+      const actualQuantity = Math.min(Math.max(1, parseInt(quantity) || 1), 4);
       
-      return ResponseHelper.success(res, result, '图片生成成功');
+      if (actualQuantity === 1) {
+        // 单张生成（保持兼容性）
+        const result = await ImageService.generateImage(userId, model_id, {
+          prompt,
+          negative_prompt,
+          size,
+          seed,
+          guidance_scale,
+          watermark
+        });
+        
+        return ResponseHelper.success(res, result, '图片生成成功');
+      } else {
+        // 批量生成
+        const result = await ImageService.generateImages(userId, model_id, {
+          prompt,
+          negative_prompt,
+          size,
+          seed,
+          guidance_scale,
+          watermark
+        }, actualQuantity);
+        
+        if (result.succeeded > 0) {
+          const message = `成功生成 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`;
+          return ResponseHelper.success(res, result, message);
+        } else {
+          return ResponseHelper.error(res, '所有图片生成失败');
+        }
+      }
     } catch (error) {
       logger.error('生成图片失败:', error);
       

@@ -11,6 +11,7 @@ const useImageStore = create((set, get) => ({
   models: [],
   selectedModel: null,
   generating: false,
+  generationProgress: null, // 新增：生成进度
   generationHistory: [],
   historyPagination: {
     page: 1,
@@ -52,8 +53,8 @@ const useImageStore = create((set, get) => ({
     set({ selectedModel: model });
   },
 
-  // 生成图片
-  generateImage: async (params) => {
+  // 批量生成图片（新方法）
+  generateImages: async (params) => {
     const { selectedModel } = get();
     if (!selectedModel) {
       message.error('请先选择模型');
@@ -61,22 +62,50 @@ const useImageStore = create((set, get) => ({
     }
 
     try {
-      set({ generating: true });
+      set({ generating: true, generationProgress: null });
+      
+      // 显示生成进度
+      const quantity = params.quantity || 1;
+      if (quantity > 1) {
+        set({ generationProgress: `0/${quantity}` });
+        message.loading(`正在生成 ${quantity} 张图片，请稍候...`, 0);
+      }
+
       const response = await api.post('/image/generate', {
         model_id: selectedModel.id,
         ...params
       });
 
       if (response.data.success) {
-        message.success('图片生成成功');
+        const result = response.data.data;
+        
+        // 关闭loading提示
+        message.destroy();
+        
+        if (quantity > 1) {
+          // 批量生成结果
+          if (result.succeeded === result.requested) {
+            message.success(`成功生成 ${result.succeeded} 张图片，消耗 ${result.creditsConsumed} 积分`);
+          } else if (result.succeeded > 0) {
+            message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
+          } else {
+            message.error('所有图片生成失败');
+          }
+        } else {
+          // 单张生成
+          message.success('图片生成成功');
+        }
+        
         // 刷新历史记录
         get().getUserHistory();
-        return response.data.data;
+        return result;
       } else {
+        message.destroy();
         message.error(response.data.message || '生成失败');
         return null;
       }
     } catch (error) {
+      message.destroy();
       console.error('生成图片失败:', error);
       if (error.response?.data?.message) {
         message.error(error.response.data.message);
@@ -85,8 +114,13 @@ const useImageStore = create((set, get) => ({
       }
       return null;
     } finally {
-      set({ generating: false });
+      set({ generating: false, generationProgress: null });
     }
+  },
+
+  // 生成单张图片（保持兼容性）
+  generateImage: async (params) => {
+    return get().generateImages({ ...params, quantity: 1 });
   },
 
   // 获取用户生成历史
@@ -217,6 +251,7 @@ const useImageStore = create((set, get) => ({
       models: [],
       selectedModel: null,
       generating: false,
+      generationProgress: null,
       generationHistory: [],
       historyPagination: {
         page: 1,
