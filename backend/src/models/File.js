@@ -26,12 +26,59 @@ class File {
     
     // 计算属性 - 生成完整URL
     if (this.file_path) {
-      // 直接从/var/www/ai-platform/storage开始计算相对路径
-      const projectRoot = '/var/www/ai-platform';
-      const relativePath = this.file_path.replace(projectRoot, '');
+      // 智能处理不同环境的路径
+      let urlPath = this.file_path;
+      
+      // 移除所有可能的根路径前缀
+      const pathPrefixes = [
+        '/app/storage/uploads',           // Docker容器内路径
+        '/var/www/ai-platform/storage/uploads',  // PM2生产环境路径
+        '/app/storage',                   // Docker存储根路径
+        '/var/www/ai-platform/storage',   // PM2存储根路径
+        '/storage/uploads',                // 相对存储路径
+        '/storage',                        // 存储根路径
+        'storage/uploads',                 // 无斜杠开头的相对路径
+        'storage'                          // 无斜杠开头的存储根路径
+      ];
+      
+      // 按长度排序，先匹配长的路径
+      pathPrefixes.sort((a, b) => b.length - a.length);
+      
+      for (const prefix of pathPrefixes) {
+        if (urlPath.startsWith(prefix)) {
+          // 获取去掉前缀后的路径
+          urlPath = urlPath.substring(prefix.length);
+          break;
+        }
+      }
+      
       // 确保路径以/开头
-      const urlPath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
-      this.url = `https://${config.app.domain}${urlPath}`;
+      if (!urlPath.startsWith('/')) {
+        urlPath = '/' + urlPath;
+      }
+      
+      // 如果路径不是以/uploads开头，添加它
+      if (!urlPath.startsWith('/uploads')) {
+        // 如果路径以/开头但不是/uploads，说明可能是子目录
+        if (urlPath.startsWith('/')) {
+          urlPath = '/uploads' + urlPath;
+        } else {
+          urlPath = '/uploads/' + urlPath;
+        }
+      }
+      
+      // 生成完整URL - 根据环境使用正确的协议
+      const protocol = config.app.env === 'production' || config.app.domain.includes('nebulink') ? 'https' : 'http';
+      this.url = `${protocol}://${config.app.domain}${urlPath}`;
+      
+      // 调试日志（仅开发环境）
+      if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+        logger.debug('文件URL生成', {
+          原始路径: data.file_path,
+          处理后路径: urlPath,
+          完整URL: this.url
+        });
+      }
     } else {
       this.url = null;
     }
