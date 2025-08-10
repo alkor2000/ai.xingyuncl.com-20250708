@@ -162,10 +162,11 @@ class ImageModel {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      const result = await dbConnection.query(query, [
+      // 重要：将undefined转换为null，MySQL2不接受undefined
+      const params = [
         name,
         display_name,
-        description,
+        description || null,  // 转换undefined为null
         provider,
         endpoint,
         encryptedApiKey,
@@ -175,14 +176,24 @@ class ImageModel {
         max_prompt_length,
         default_size,
         default_guidance_scale,
-        example_prompt,
-        example_image,
+        example_prompt || null,  // 转换undefined为null
+        example_image || null,   // 转换undefined为null
         icon,
         is_active,
         sort_order
-      ]);
+      ];
+      
+      const result = await dbConnection.query(query, params);
 
-      return result.rows.insertId;
+      // 修复：MySQL2的INSERT结果，insertId直接在rows对象上
+      const insertId = result.rows.insertId || result.rows[0]?.insertId;
+      
+      if (!insertId) {
+        logger.error('创建图像模型失败：无法获取插入ID', { result });
+        throw new Error('无法获取新创建模型的ID');
+      }
+      
+      return insertId;
     } catch (error) {
       logger.error('创建图像模型失败:', error);
       throw error;
@@ -208,24 +219,29 @@ class ImageModel {
         if (updateData.hasOwnProperty(field)) {
           fields.push(`${field} = ?`);
           
-          if (field === 'api_key' && updateData[field]) {
+          let value = updateData[field];
+          
+          if (field === 'api_key' && value) {
             // 加密API密钥
             const algorithm = 'aes-256-cbc';
             const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
             const iv = crypto.randomBytes(16);
             const cipher = crypto.createCipheriv(algorithm, key, iv);
-            let encrypted = cipher.update(updateData[field], 'utf8', 'hex');
+            let encrypted = cipher.update(value, 'utf8', 'hex');
             encrypted += cipher.final('hex');
-            values.push(JSON.stringify({
+            value = JSON.stringify({
               encrypted: true,
               data: encrypted,
               iv: iv.toString('hex')
-            }));
-          } else if (field === 'sizes_supported' && Array.isArray(updateData[field])) {
-            values.push(JSON.stringify(updateData[field]));
-          } else {
-            values.push(updateData[field]);
+            });
+          } else if (field === 'sizes_supported' && Array.isArray(value)) {
+            value = JSON.stringify(value);
+          } else if (value === undefined) {
+            // 将undefined转换为null
+            value = null;
           }
+          
+          values.push(value);
         }
       }
 
