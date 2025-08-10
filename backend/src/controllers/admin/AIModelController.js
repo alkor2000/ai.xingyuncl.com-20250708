@@ -7,6 +7,7 @@ const dbConnection = require('../../database/connection');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
+const CacheService = require('../../services/cacheService');
 
 class AIModelController {
   /**
@@ -133,6 +134,9 @@ class AIModelController {
         assignedGroups: activeGroups.length
       });
 
+      // 清除AI模型缓存
+      await CacheService.clearAIModelsCache();
+      
       return ResponseHelper.success(res, model.toJSON(), 'AI模型创建成功', 201);
     } catch (error) {
       logger.error('创建AI模型失败', { 
@@ -172,6 +176,9 @@ class AIModelController {
         documentUploadEnabled: updatedModel.document_upload_enabled
       });
 
+      // 清除AI模型缓存
+      await CacheService.clearAIModelsCache();
+      
       return ResponseHelper.success(res, updatedModel.toJSON(), 'AI模型更新成功');
     } catch (error) {
       logger.error('更新AI模型失败', { 
@@ -203,6 +210,9 @@ class AIModelController {
         deletedModelName: model.name
       });
 
+      // 清除AI模型缓存
+      await CacheService.clearAIModelsCache();
+      
       return ResponseHelper.success(res, null, 'AI模型删除成功');
     } catch (error) {
       logger.error('删除AI模型失败', { 
@@ -327,6 +337,9 @@ class AIModelController {
         updatedCount: updatedGroups.length
       });
 
+      // 清除AI模型缓存（组分配变更影响用户可用模型）
+      await CacheService.clearAIModelsCache();
+      
       return ResponseHelper.success(res, {
         model_id: id,
         groups: updatedGroups,
