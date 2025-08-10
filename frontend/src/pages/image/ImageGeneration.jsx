@@ -46,7 +46,9 @@ import {
   AppstoreOutlined,
   UnorderedListOutlined,
   SettingOutlined,
-  CaretRightOutlined
+  CaretRightOutlined,
+  UserOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useImageStore from '../../stores/imageStore';
@@ -88,6 +90,8 @@ const ImageGeneration = () => {
     generating,
     generationHistory,
     historyPagination,
+    publicGallery,
+    galleryPagination,
     loading,
     userStats,
     generationProgress,
@@ -96,6 +100,7 @@ const ImageGeneration = () => {
     generateImage,
     generateImages,
     getUserHistory,
+    getPublicGallery,
     deleteGeneration,
     toggleFavorite,
     togglePublic,
@@ -170,57 +175,49 @@ const ImageGeneration = () => {
     const result = await generateImages(params);
 
     if (result) {
-      // 显示批量生成结果
+      // 批量生成完成后的处理 - 移除弹窗，只使用message提示
       if (quantity > 1 && result.results) {
         setBatchResults(result);
-        Modal.info({
-          title: '批量生成完成',
-          width: 600,
-          content: (
-            <div>
-              <Alert
-                message={`成功生成 ${result.succeeded}/${result.requested} 张图片`}
-                description={`消耗积分：${result.creditsConsumed}`}
-                type={result.succeeded === result.requested ? 'success' : 'warning'}
-                showIcon
-              />
-              {result.errors && result.errors.length > 0 && (
-                <Alert
-                  style={{ marginTop: 10 }}
-                  message="部分图片生成失败"
-                  description={result.errors.map(e => `第${e.index}张: ${e.error}`).join('\n')}
-                  type="error"
-                  showIcon
-                />
-              )}
-            </div>
-          ),
-          onOk() {
-            // 清空输入
-            setPrompt('');
-            setNegativePrompt('');
-            setSeed(-1);
-          }
-        });
-      } else {
-        // 单张生成成功，清空输入
-        setPrompt('');
-        setNegativePrompt('');
-        setSeed(-1);
+        
+        // 根据结果显示不同类型的提示
+        if (result.succeeded === result.requested) {
+          message.success(`成功生成 ${result.succeeded} 张图片，消耗 ${result.creditsConsumed} 积分`);
+        } else if (result.succeeded > 0) {
+          message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
+        } else {
+          message.error('所有图片生成失败');
+        }
+        
+        // 如果有错误，额外显示错误信息
+        if (result.errors && result.errors.length > 0) {
+          result.errors.forEach(e => {
+            message.error(`第${e.index}张生成失败: ${e.error}`);
+          });
+        }
       }
+      
+      // 清空输入
+      setPrompt('');
+      setNegativePrompt('');
+      setSeed(-1);
     }
   };
 
   // 处理Tab切换
   const handleTabChange = (key) => {
     setActiveTab(key);
-    const params = { page: 1, limit: 20 };
-    if (key === 'favorites') {
-      params.is_favorite = true;
-    } else if (key === 'public') {
-      params.is_public = true;
+    
+    if (key === 'public') {
+      // 公开标签页：显示所有用户的公开画廊
+      getPublicGallery({ page: 1, limit: 20 });
+    } else {
+      // 全部和收藏标签页：显示当前用户的图片
+      const params = { page: 1, limit: 20 };
+      if (key === 'favorites') {
+        params.is_favorite = true;
+      }
+      getUserHistory(params);
     }
-    getUserHistory(params);
   };
 
   // 复制提示词
@@ -239,100 +236,181 @@ const ImageGeneration = () => {
     document.body.removeChild(link);
   };
 
-  // 渲染历史图片卡片
-  const renderHistoryCard = (item) => (
-    <Card
-      key={item.id}
-      className="history-card"
-      cover={
-        <div className="image-wrapper">
-          <Image
-            src={item.local_path || item.thumbnail_path}
-            alt={item.prompt}
-            placeholder={<Spin />}
-            preview={{
-              src: item.local_path
-            }}
-          />
-          <div className="image-overlay">
-            <Space>
-              <Tooltip title="查看大图">
-                <Button
-                  type="text"
-                  icon={<EyeOutlined />}
-                  onClick={() => setPreviewImage(item)}
-                />
-              </Tooltip>
-              <Tooltip title="下载">
-                <Button
-                  type="text"
-                  icon={<DownloadOutlined />}
-                  onClick={() => downloadImage(item.local_path, `ai_${item.id}.jpg`)}
-                />
-              </Tooltip>
-              <Tooltip title={item.is_favorite ? '取消收藏' : '收藏'}>
-                <Button
-                  type="text"
-                  icon={item.is_favorite ? <HeartFilled /> : <HeartOutlined />}
-                  onClick={() => toggleFavorite(item.id)}
-                  className={item.is_favorite ? 'favorited' : ''}
-                />
-              </Tooltip>
-              <Tooltip title={item.is_public ? '设为私密' : '公开分享'}>
-                <Button
-                  type="text"
-                  icon={item.is_public ? <GlobalOutlined /> : <LockOutlined />}
-                  onClick={() => togglePublic(item.id)}
-                />
-              </Tooltip>
-              <Popconfirm
-                title="确定删除这张图片吗？"
-                onConfirm={() => deleteGeneration(item.id)}
-                okText="确定"
-                cancelText="取消"
-              >
-                <Tooltip title="删除">
+  // 处理公开/私有切换
+  const handleTogglePublic = async (item) => {
+    const success = await togglePublic(item.id);
+    if (success) {
+      // 根据当前是否公开显示不同提示
+      if (item.is_public) {
+        message.success('已设为私密');
+      } else {
+        message.success('已公开分享');
+      }
+      
+      // 如果在公开标签页，刷新画廊
+      if (activeTab === 'public') {
+        getPublicGallery();
+      }
+    }
+  };
+
+  // 处理收藏切换
+  const handleToggleFavorite = async (item) => {
+    const success = await toggleFavorite(item.id);
+    if (success) {
+      // 根据当前是否收藏显示不同提示
+      if (item.is_favorite) {
+        message.success('已取消收藏');
+      } else {
+        message.success('已添加收藏');
+      }
+    }
+  };
+
+  // 渲染历史图片卡片（支持公开画廊和个人历史）
+  const renderImageCard = (item, isGallery = false) => {
+    // 检查是否是当前用户的图片
+    const isOwner = !isGallery || item.user_id === user?.id;
+    
+    return (
+      <Card
+        key={item.id}
+        className="history-card"
+        cover={
+          <div className="image-wrapper">
+            <Image
+              src={item.local_path || item.thumbnail_path}
+              alt={item.prompt}
+              placeholder={<Spin />}
+              preview={{
+                src: item.local_path
+              }}
+            />
+            <div className="image-overlay">
+              <Space>
+                <Tooltip title="查看大图">
                   <Button
                     type="text"
-                    danger
-                    icon={<DeleteOutlined />}
+                    icon={<EyeOutlined />}
+                    onClick={() => setPreviewImage(item)}
                   />
                 </Tooltip>
-              </Popconfirm>
-            </Space>
+                <Tooltip title="下载">
+                  <Button
+                    type="text"
+                    icon={<DownloadOutlined />}
+                    onClick={() => downloadImage(item.local_path, `ai_${item.id}.jpg`)}
+                  />
+                </Tooltip>
+                {isOwner && (
+                  <>
+                    <Tooltip title={item.is_favorite ? '取消收藏' : '收藏'}>
+                      <Button
+                        type="text"
+                        icon={item.is_favorite ? <HeartFilled style={{ color: '#ff4d4f' }} /> : <HeartOutlined />}
+                        onClick={() => handleToggleFavorite(item)}
+                        className={item.is_favorite ? 'favorited' : ''}
+                      />
+                    </Tooltip>
+                    <Tooltip title={item.is_public ? '设为私密' : '公开分享'}>
+                      <Button
+                        type="text"
+                        icon={item.is_public ? <GlobalOutlined style={{ color: '#52c41a' }} /> : <LockOutlined />}
+                        onClick={() => handleTogglePublic(item)}
+                      />
+                    </Tooltip>
+                    <Popconfirm
+                      title="确定删除这张图片吗？"
+                      onConfirm={() => deleteGeneration(item.id)}
+                      okText="确定"
+                      cancelText="取消"
+                    >
+                      <Tooltip title="删除">
+                        <Button
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                        />
+                      </Tooltip>
+                    </Popconfirm>
+                  </>
+                )}
+              </Space>
+            </div>
           </div>
-        </div>
+        }
+      >
+        <Card.Meta
+          title={
+            <div className="card-meta-title">
+              {item.model_name ? (
+                <span className="model-tag">{item.model_name}</span>
+              ) : (
+                <span className="model-tag" style={{ background: '#f0f0f0', color: '#999' }}>
+                  <WarningOutlined /> 模型已删除
+                </span>
+              )}
+              <span className="size-tag">{item.size}</span>
+            </div>
+          }
+          description={
+            <div className="card-meta-description">
+              <div className="prompt-text">
+                {item.prompt}
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => copyPrompt(item.prompt)}
+                >
+                  复制
+                </Button>
+              </div>
+              <div className="meta-info">
+                {isGallery && item.username && (
+                  <span style={{ marginRight: 8 }}>
+                    <UserOutlined /> {item.username}
+                  </span>
+                )}
+                <span>{new Date(item.created_at).toLocaleString()}</span>
+                {item.credits_consumed !== undefined && (
+                  <span>{item.credits_consumed} 积分</span>
+                )}
+                {item.is_public && <Tag color="green">公开</Tag>}
+                {item.is_favorite && isOwner && <Tag color="red">已收藏</Tag>}
+                {isGallery && item.view_count !== undefined && (
+                  <span style={{ fontSize: 12, color: '#999' }}>
+                    <EyeOutlined /> {item.view_count}
+                  </span>
+                )}
+              </div>
+            </div>
+          }
+        />
+      </Card>
+    );
+  };
+
+  // 获取当前显示的数据
+  const getCurrentData = () => {
+    if (activeTab === 'public') {
+      return publicGallery;
+    }
+    return generationHistory;
+  };
+
+  // 处理刷新
+  const handleRefresh = () => {
+    if (activeTab === 'public') {
+      getPublicGallery();
+    } else {
+      const params = {};
+      if (activeTab === 'favorites') {
+        params.is_favorite = true;
       }
-    >
-      <Card.Meta
-        title={
-          <div className="card-meta-title">
-            <span className="model-tag">{item.model_name}</span>
-            <span className="size-tag">{item.size}</span>
-          </div>
-        }
-        description={
-          <div className="card-meta-description">
-            <div className="prompt-text">
-              {item.prompt}
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={() => copyPrompt(item.prompt)}
-              >
-                复制
-              </Button>
-            </div>
-            <div className="meta-info">
-              <span>{new Date(item.created_at).toLocaleString()}</span>
-              <span>{item.credits_consumed} 积分</span>
-            </div>
-          </div>
-        }
-      />
-    </Card>
-  );
+      getUserHistory(params);
+    }
+  };
 
   return (
     <Layout className="image-generation-page">
@@ -549,9 +627,9 @@ const ImageGeneration = () => {
       <Content className="history-content">
         <div className="history-header">
           <Tabs activeKey={activeTab} onChange={handleTabChange}>
-            <TabPane tab="全部" key="all" />
-            <TabPane tab="收藏" key="favorites" />
-            <TabPane tab="公开" key="public" />
+            <TabPane tab="我的图片" key="all" />
+            <TabPane tab="我的收藏" key="favorites" />
+            <TabPane tab={<span><GlobalOutlined /> 公开画廊</span>} key="public" />
           </Tabs>
           <Space>
             <Button
@@ -560,7 +638,7 @@ const ImageGeneration = () => {
             />
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => getUserHistory()}
+              onClick={handleRefresh}
             >
               刷新
             </Button>
@@ -572,12 +650,18 @@ const ImageGeneration = () => {
             <div className="loading-container">
               <Spin size="large" />
             </div>
-          ) : generationHistory.length > 0 ? (
-            generationHistory.map(renderHistoryCard)
+          ) : getCurrentData().length > 0 ? (
+            getCurrentData().map(item => renderImageCard(item, activeTab === 'public'))
           ) : (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="暂无生成记录"
+              description={
+                activeTab === 'public' 
+                  ? '暂无公开的图片' 
+                  : activeTab === 'favorites'
+                  ? '暂无收藏的图片'
+                  : '暂无生成记录'
+              }
             />
           )}
         </div>
@@ -602,9 +686,12 @@ const ImageGeneration = () => {
               <p>
                 <strong>参数：</strong>
                 尺寸 {previewImage.size} | 
-                引导系数 {previewImage.guidance_scale} | 
-                种子 {previewImage.seed}
+                引导系数 {previewImage.guidance_scale || 'N/A'} | 
+                种子 {previewImage.seed || 'N/A'}
               </p>
+              {previewImage.username && (
+                <p><strong>作者：</strong>{previewImage.username}</p>
+              )}
             </div>
           </div>
         )}
