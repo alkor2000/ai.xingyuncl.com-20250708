@@ -5,6 +5,7 @@
 const { GroupService } = require('../../services/admin');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
+const CacheService = require('../../services/cacheService');
 
 class UserGroupController {
   /**
@@ -62,6 +63,12 @@ class UserGroupController {
       
       const group = await GroupService.updateGroup(id, updateData, req.user.id);
 
+      // 清除相关缓存
+      await CacheService.clearUserGroupsCache();
+      await CacheService.clearAIModelsCache();
+
+
+
       return ResponseHelper.success(res, group, '用户分组更新成功');
     } catch (error) {
       logger.error('更新用户分组失败', { 
@@ -89,6 +96,12 @@ class UserGroupController {
     try {
       const { id } = req.params;
       const result = await GroupService.deleteGroup(id, req.user.id);
+
+      // 清除相关缓存
+      await CacheService.clearUserGroupsCache();
+      await CacheService.clearAIModelsCache();
+
+
 
       return ResponseHelper.success(res, null, result.message);
     } catch (error) {

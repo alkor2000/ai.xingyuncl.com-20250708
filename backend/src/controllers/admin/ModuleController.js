@@ -6,6 +6,7 @@ const Module = require('../../models/Module');
 const ResponseHelper = require('../../utils/response');
 const JWTService = require('../../services/jwtService');
 const logger = require('../../utils/logger');
+const CacheService = require('../../services/cacheService');
 
 class ModuleController {
   /**
@@ -231,6 +232,10 @@ class ModuleController {
         const newModule = await Module.findById(moduleId);
         if (newModule) {
           newModule.allowed_groups = Module.parseAllowedGroups(newModule.allowed_groups);
+          // 清除相关缓存
+      await CacheService.clearCacheByType(CacheService.CACHE_KEYS.SYSTEM_MODULES);
+
+
           return ResponseHelper.success(res, newModule, '模块创建成功');
         }
       }
@@ -276,6 +281,11 @@ class ModuleController {
         updatedModule.allowed_groups = Module.parseAllowedGroups(updatedModule.allowed_groups);
       }
       
+      // 清除相关缓存
+      await CacheService.clearCacheByType(CacheService.CACHE_KEYS.SYSTEM_MODULES);
+
+
+      
       return ResponseHelper.success(res, updatedModule, '模块更新成功');
     } catch (error) {
       console.error('更新模块失败:', error);
@@ -310,6 +320,11 @@ class ModuleController {
       if (!success) {
         return ResponseHelper.error(res, '删除失败');
       }
+
+      // 清除相关缓存
+      await CacheService.clearCacheByType(CacheService.CACHE_KEYS.SYSTEM_MODULES);
+
+
 
       return ResponseHelper.success(res, null, '模块删除成功');
     } catch (error) {

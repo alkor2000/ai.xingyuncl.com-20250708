@@ -6,6 +6,7 @@ const SystemPrompt = require('../../models/SystemPrompt');
 const SystemConfig = require('../../models/SystemConfig');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
+const CacheService = require('../../services/cacheService');
 
 class SystemPromptController {
   /**
@@ -72,6 +73,11 @@ class SystemPromptController {
         group_ids
       }, req.user.id);
       
+      // 清除相关缓存
+      await CacheService.clearSystemSettingsCache();
+
+
+      
       return ResponseHelper.success(res, prompt.toJSON(true), '创建系统提示词成功', 201);
     } catch (error) {
       logger.error('创建系统提示词失败', { 
@@ -93,6 +99,11 @@ class SystemPromptController {
       
       const prompt = await SystemPrompt.update(id, updateData, req.user.id);
       
+      // 清除相关缓存
+      await CacheService.clearSystemSettingsCache();
+
+
+      
       return ResponseHelper.success(res, prompt.toJSON(true), '更新系统提示词成功');
     } catch (error) {
       logger.error('更新系统提示词失败', { 
@@ -113,6 +124,11 @@ class SystemPromptController {
       const { id } = req.params;
       
       await SystemPrompt.delete(id);
+      
+      // 清除相关缓存
+      await CacheService.clearSystemSettingsCache();
+
+
       
       return ResponseHelper.success(res, null, '删除系统提示词成功');
     } catch (error) {

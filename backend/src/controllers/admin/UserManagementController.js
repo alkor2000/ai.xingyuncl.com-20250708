@@ -5,6 +5,7 @@
 const { UserService } = require('../../services/admin');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
+const CacheService = require('../../services/cacheService');
 
 class UserManagementController {
   /**
@@ -224,6 +225,12 @@ class UserManagementController {
         restricted_model_ids,
         currentUser
       );
+
+      // 清除相关缓存
+      await CacheService.clearAIModelsCache();
+      await CacheService.clearUserPermissionsCache();
+
+
 
       return ResponseHelper.success(res, result, '用户模型限制更新成功');
     } catch (error) {
