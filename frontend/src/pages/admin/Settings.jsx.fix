@@ -1,0 +1,37 @@
+  const handleEditModel = (model) => {
+    if (!isSuperAdmin) {
+      message.warning(t('admin.noPermission'))
+      return
+    }
+    
+    setEditingModel(model)
+    // 不设置api_key和api_endpoint，让用户选择是否更新
+    modelForm.setFieldsValue({
+      name: model.name,
+      display_name: model.display_name,
+      // 不设置 api_key 和 api_endpoint，保持为空
+      stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
+      image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
+      document_upload_enabled: model.document_upload_enabled !== undefined ? model.document_upload_enabled : false,
+      credits_per_chat: model.credits_per_chat,
+      is_active: model.is_active,
+      sort_order: model.sort_order,
+      test_temperature: model.model_config?.test_temperature || 1
+    })
+    setIsModelModalVisible(true)
+  }
+
+  const handleToggleDocumentUploadEnabled = async (modelId, documentUploadEnabled) => {
+    if (!isSuperAdmin) {
+      message.warning(t('admin.noPermission'))
+      return
+    }
+    
+    try {
+      await updateAIModel(modelId, { document_upload_enabled: documentUploadEnabled })
+      message.success(t('admin.models.success.update'))
+      await getAIModels() // 刷新列表
+    } catch (error) {
+      message.error(t('admin.models.error.update'))
+    }
+  }

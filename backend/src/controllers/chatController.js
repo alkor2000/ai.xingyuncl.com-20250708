@@ -1,5 +1,5 @@
 /**
- * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存优化、优先级排序、图片上传、系统提示词和知识模块
+ * 对话控制器 - 集成积分扣减系统、动态上下文、流式输出、缓存优化、优先级排序、图片上传、文档上传、系统提示词和知识模块
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -18,6 +18,7 @@ const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 const { getFileUrl } = require('../middleware/uploadMiddleware');
+const { getDocumentUrl, extractContent } = require('../middleware/documentUploadMiddleware');
 
 class ChatController {
   /**
@@ -393,7 +394,7 @@ class ChatController {
         if (cachedMessages) {
           logger.info('从缓存返回消息', { conversationId: id, count: cachedMessages.length });
           
-          // 处理带图片的消息
+          // 处理带图片或文档的消息
           const messagesWithFiles = await Promise.all(cachedMessages.map(async msg => {
             if (msg.file_id) {
               const file = await File.findById(msg.file_id);
@@ -415,7 +416,7 @@ class ChatController {
         order: 'ASC'
       });
 
-      // 处理带图片的消息
+      // 处理带图片或文档的消息
       const messagesWithFiles = await Promise.all(result.messages.map(async msg => {
         const msgData = msg.toJSON();
         if (msgData.file_id) {
@@ -486,7 +487,53 @@ class ChatController {
   }
 
   /**
-   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片、系统提示词和模块组合）
+   * 上传文档
+   * POST /api/chat/upload-document
+   */
+  static async uploadDocument(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      if (!req.file) {
+        return ResponseHelper.validation(res, ['请选择要上传的文档']);
+      }
+      
+      const { filename, originalname, mimetype, size, path: filePath } = req.file;
+      
+      // 提取文档内容（对于文本文件）
+      const extractedContent = await extractContent(filePath, mimetype);
+      
+      // 创建文件记录
+      const file = await File.create({
+        user_id: userId,
+        filename: filename,
+        original_name: originalname,
+        mime_type: mimetype,
+        size: size,
+        path: filePath,
+        url: getDocumentUrl(filePath),
+        extracted_content: extractedContent
+      });
+      
+      logger.info('文档上传成功', {
+        userId,
+        fileId: file.id,
+        filename,
+        hasExtractedContent: !!extractedContent
+      });
+      
+      return ResponseHelper.success(res, file.toJSON(), '文档上传成功');
+    } catch (error) {
+      logger.error('文档上传失败', {
+        userId: req.user?.id,
+        error: error.message
+      });
+      return ResponseHelper.error(res, '文档上传失败');
+    }
+  }
+
+  /**
+   * 发送消息并获取AI回复 - 统一处理流式和非流式（支持图片、文档、系统提示词和模块组合）
    */
   static async sendMessage(req, res) {
     let creditsConsumed = 0;
@@ -527,17 +574,36 @@ class ChatController {
         return ResponseHelper.forbidden(res, '您已被限制使用该模型，请创建新会话选择其他模型');
       }
 
-      // 如果有图片，检查模型是否支持
+      // 如果有文件，检查类型和模型支持
+      let fileInfo = null;
+      let documentContent = null;
       if (file_id) {
-        if (!aiModel.image_upload_enabled) {
-          return ResponseHelper.validation(res, ['当前AI模型不支持图片识别']);
-        }
-        
         // 验证文件所有权
         const fileOwnership = await File.checkOwnership(file_id, userId);
         if (!fileOwnership) {
           return ResponseHelper.forbidden(res, '无权使用此文件');
         }
+        
+        // 获取文件信息
+        fileInfo = await File.findById(file_id);
+        if (!fileInfo) {
+          return ResponseHelper.notFound(res, '文件不存在');
+        }
+        
+        // 判断文件类型
+        const isImage = fileInfo.mime_type && fileInfo.mime_type.startsWith('image/');
+        const isDocument = !isImage;
+        
+        if (isImage && !aiModel.image_upload_enabled) {
+          return ResponseHelper.validation(res, ['当前AI模型不支持图片识别']);
+        }
+        
+        if (isDocument && !aiModel.document_upload_enabled) {
+          return ResponseHelper.validation(res, ['当前AI模型不支持文档上传']);
+        }
+        
+        // 如果是文档，不需要提取内容，中转模型会直接读取URL
+        // documentContent保持为null
       }
 
       // 判断是否使用流式输出
@@ -552,7 +618,7 @@ class ChatController {
       }
 
       // 检查用户Token配额
-      const estimatedTokens = Message.estimateTokens(content);
+      const estimatedTokens = Message.estimateTokens(content + (documentContent || ''));
       if (!user.hasTokenQuota(estimatedTokens * 2)) {
         return ResponseHelper.forbidden(res, 'Token配额不足');
       }
@@ -573,7 +639,8 @@ class ChatController {
         useStream,
         requiredCredits,
         currentBalance: user.getCredits(),
-        hasImage: !!file_id
+        hasFile: !!file_id,
+        isDocument: !!documentContent
       });
 
       // 预先扣减积分
@@ -586,11 +653,18 @@ class ChatController {
       
       creditsConsumed = requiredCredits;
 
+      // 构造实际发送的内容（如果有文档，直接附加URL）
+      let actualContent = content.trim();
+      if (fileInfo && !fileInfo.mime_type?.startsWith('image/')) {
+        // 是文档，直接附加URL供AI访问（中转模型会自动识别）
+        actualContent = `${content.trim()}\n\n${fileInfo.url}`;
+      }
+
       // 创建用户消息（状态为completed）
       userMessage = await Message.create({
         conversation_id: id,
         role: 'user',
-        content: content.trim(),
+        content: actualContent,
         tokens: estimatedTokens,
         file_id,
         model_name: conversation.model_name,
@@ -600,7 +674,7 @@ class ChatController {
       // 获取会话历史消息
       const recentMessages = await Message.getRecentMessages(id);
       
-      // 构造AI请求消息（包含图片）
+      // 构造AI请求消息
       const aiMessages = [];
       
       // 处理系统提示词
@@ -675,7 +749,7 @@ class ChatController {
         // 如果消息有图片，添加图片信息
         if (msg.file_id && aiModel.image_upload_enabled) {
           const file = await File.findById(msg.file_id);
-          if (file) {
+          if (file && file.mime_type && file.mime_type.startsWith('image/')) {
             aiMsg.image_url = file.url;
           }
         }
@@ -689,7 +763,8 @@ class ChatController {
         modelName: conversation.model_name,
         useStream,
         messageCount: aiMessages.length,
-        hasImage: !!file_id,
+        hasFile: !!file_id,
+        hasDocument: !!documentContent,
         hasSystemPrompt: !!systemPromptContent,
         hasModuleCombination: !!conversation.module_combination_id
       });
@@ -1008,12 +1083,13 @@ class ChatController {
         async () => await AIModel.getUserAvailableModels(userId, userGroupId)
       );
       
-      // 添加积分和图片支持信息到模型列表
+      // 添加积分、图片支持和文档支持信息到模型列表
       const modelsWithInfo = models.map(model => ({
         ...model,
         credits_per_chat: model.credits_per_chat || 10,
         credits_display: `${model.credits_per_chat || 10} 积分/次`,
-        image_upload_enabled: model.image_upload_enabled || false
+        image_upload_enabled: !!model.image_upload_enabled,
+        document_upload_enabled: !!model.document_upload_enabled
       }));
       
       logger.info('获取用户可用AI模型列表（使用缓存）', {

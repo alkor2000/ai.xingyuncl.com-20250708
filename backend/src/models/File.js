@@ -26,11 +26,11 @@ class File {
     
     // 计算属性 - 生成完整URL
     if (this.file_path) {
-      // 获取相对于storage的路径
-      const storageDir = path.join(path.dirname(config.upload.uploadDir), 'storage');
-      const relativePath = path.relative(storageDir, this.file_path);
-      // 转换为URL格式（使用正斜杠）
-      const urlPath = '/' + relativePath.split(path.sep).join('/');
+      // 直接从/var/www/ai-platform/storage开始计算相对路径
+      const projectRoot = '/var/www/ai-platform';
+      const relativePath = this.file_path.replace(projectRoot, '');
+      // 确保路径以/开头
+      const urlPath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
       this.url = `https://${config.app.domain}${urlPath}`;
     } else {
       this.url = null;

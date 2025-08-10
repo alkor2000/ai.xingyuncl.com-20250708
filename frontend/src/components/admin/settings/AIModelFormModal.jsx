@@ -1,5 +1,5 @@
 /**
- * AI模型表单弹窗组件
+ * AI模型表单弹窗组件 - 支持文档上传配置
  */
 
 import React from 'react'
@@ -22,6 +22,7 @@ import {
   CloseCircleOutlined,
   PictureOutlined,
   FileImageOutlined,
+  FileTextOutlined,
   WalletOutlined,
   InfoCircleOutlined,
   ExperimentOutlined
@@ -295,6 +296,54 @@ const AIModelFormModal = ({
                   }}
                   dangerouslySetInnerHTML={{ 
                     __html: t('admin.models.form.imageTip')
+                  }}
+                  />
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        </Row>
+
+        {/* 文档上传配置 - 新增 */}
+        <Row gutter={16}>
+          <Col span={24}>
+            <Card 
+              title={
+                <Space>
+                  <FileTextOutlined style={{ color: '#fa8c16' }} />
+                  <span>{t('admin.models.form.documentConfig')}</span>
+                  <Tag color="orange">📄 {t('admin.models.documentUpload')}</Tag>
+                </Space>
+              } 
+              size="small" 
+              style={{ marginBottom: 16 }}
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="document_upload_enabled"
+                    label={t('admin.models.form.enableDocumentUpload')}
+                    valuePropName="checked"
+                    initialValue={false}
+                  >
+                    <Switch
+                      checkedChildren={<FileTextOutlined />}
+                      unCheckedChildren={<CloseCircleOutlined />}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <div style={{ 
+                    marginTop: 30, 
+                    padding: '8px 12px',
+                    backgroundColor: '#fff7e6',
+                    borderRadius: '4px',
+                    borderLeft: '3px solid #fa8c16',
+                    fontSize: '12px',
+                    color: '#fa8c16'
+                  }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: t('admin.models.form.documentTip')
                   }}
                   />
                 </Col>

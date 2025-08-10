@@ -1,11 +1,12 @@
 /**
- * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传、系统提示词和模块组合
+ * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传、文档上传、系统提示词和模块组合
  */
 
 const express = require('express');
 const ChatController = require('../controllers/chatController');
 const { authenticate, requirePermission } = require('../middleware/authMiddleware');
 const { uploadImage } = require('../middleware/uploadMiddleware');
+const { uploadDocument } = require('../middleware/documentUploadMiddleware');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
@@ -90,7 +91,7 @@ router.use(authenticate);
 
 /**
  * @route GET /api/chat/models
- * @desc 获取可用的AI模型列表 (含积分和图片支持信息)
+ * @desc 获取可用的AI模型列表 (含积分、图片和文档支持信息)
  * @access Private
  */
 router.get('/models', ChatController.getModels);
@@ -136,6 +137,18 @@ router.post('/upload-image',
   requirePermission('chat.use'),
   uploadImage,
   ChatController.uploadImage
+);
+
+/**
+ * @route POST /api/chat/upload-document
+ * @desc 上传聊天文档（PDF、Word、TXT等）
+ * @access Private
+ */
+router.post('/upload-document',
+  uploadLimiter,
+  requirePermission('chat.use'),
+  uploadDocument,
+  ChatController.uploadDocument
 );
 
 /**
@@ -200,7 +213,7 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复 (支持流式、非流式和图片)
+ * @desc 发送消息并获取AI回复 (支持流式、非流式、图片和文档)
  * @access Private
  */
 router.post('/conversations/:id/messages',

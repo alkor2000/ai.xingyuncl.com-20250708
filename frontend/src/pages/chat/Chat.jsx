@@ -131,6 +131,7 @@ const Chat = () => {
   const [deletingConversation, setDeletingConversation] = useState(null)
   const [showNewChatModal, setShowNewChatModal] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
+  const [uploadedDocument, setUploadedDocument] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [isSending, setIsSending] = useState(false)
   
@@ -431,20 +432,21 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 优化版
+  // 发送消息 - 支持文档上传
   const handleSendMessage = useCallback(async () => {
-    if (!inputValue.trim() && !uploadedImage) return
+    if (!inputValue.trim() && !uploadedImage && !uploadedDocument) return
     if (!currentConversation) {
       message.warning(t('chat.selectConversation'))
       return
     }
 
     const messageContent = inputValue.trim()
-    const fileInfo = uploadedImage || null
+    const fileInfo = uploadedImage || uploadedDocument || null
     
     setIsSending(true)
     setInputValue('')
     setUploadedImage(null)
+    setUploadedDocument(null)
     clearDraft(currentConversation.id)
     
     try {
@@ -459,7 +461,14 @@ const Chat = () => {
       message.error(error.message || t('chat.send.failed'))
       
       setInputValue(messageContent)
-      setUploadedImage(fileInfo)
+      // 根据文件类型恢复到正确的状态
+      if (fileInfo) {
+        if (fileInfo.type?.startsWith('image/')) {
+          setUploadedImage(fileInfo)
+        } else {
+          setUploadedDocument(fileInfo)
+        }
+      }
       
       if (!isMobile) {
         setTimeout(() => {
@@ -469,7 +478,7 @@ const Chat = () => {
     } finally {
       setIsSending(false)
     }
-  }, [inputValue, uploadedImage, currentConversation, sendMessage, t, isMobile])
+  }, [inputValue, uploadedImage, uploadedDocument, currentConversation, sendMessage, t, isMobile])
 
   // 停止流式输出
   const handleStopStreaming = () => {
@@ -533,6 +542,40 @@ const Chat = () => {
     }
   }
 
+  // 处理文档上传
+  const handleDocumentUpload = async (file) => {
+    if (!file) return
+
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('document', file)
+
+    try {
+      const response = await apiClient.post('/chat/upload-document', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      if (response.data?.success && response.data?.data) {
+        setUploadedDocument(response.data.data)
+        message.success(t('chat.document.upload.success'))
+        if (!isMobile) {
+          setTimeout(() => {
+            inputRef.current?.focus()
+          }, 100)
+        }
+      } else {
+        throw new Error(response.data?.message || 'Upload failed')
+      }
+    } catch (error) {
+      console.error('Document upload error:', error)
+      message.error(t('chat.document.upload.failed'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   // 导出聊天记录
   const handleExportChat = () => {
     if (!messages || messages.length === 0) {
@@ -573,7 +616,8 @@ const Chat = () => {
         content += `${role} ${time}\n`
         
         if (msg.file && msg.file.original_name) {
-          content += `[图片：${msg.file.original_name}]\n`
+          const fileType = msg.file.type?.startsWith('image/') ? '图片' : '文档'
+          content += `[${fileType}：${msg.file.original_name}]\n`
         }
         
         content += `${msg.content}\n`
@@ -725,10 +769,12 @@ const Chat = () => {
                 ref={inputRef}
                 inputValue={inputValue}
                 uploadedImage={uploadedImage}
+                uploadedDocument={uploadedDocument}
                 uploading={uploading}
                 typing={typing}
                 isStreaming={isStreaming}
                 imageUploadEnabled={currentModel?.image_upload_enabled}
+                documentUploadEnabled={currentModel?.document_upload_enabled}
                 hasMessages={messages && messages.length > 0}
                 currentModel={currentModel}
                 availableModels={availableModels}
@@ -738,7 +784,9 @@ const Chat = () => {
                 onSend={handleSendMessage}
                 onStop={handleStopStreaming}
                 onImageUpload={handleImageUpload}
+                onDocumentUpload={handleDocumentUpload}
                 onRemoveImage={() => setUploadedImage(null)}
+                onRemoveDocument={() => setUploadedDocument(null)}
                 onExportChat={handleExportChat}
                 onClearChat={handleClearChat}
                 onModelChange={handleModelChange}
@@ -945,10 +993,12 @@ const Chat = () => {
                 ref={inputRef}
                 inputValue={inputValue}
                 uploadedImage={uploadedImage}
+                uploadedDocument={uploadedDocument}
                 uploading={uploading}
                 typing={typing}
                 isStreaming={isStreaming}
                 imageUploadEnabled={currentModel?.image_upload_enabled}
+                documentUploadEnabled={currentModel?.document_upload_enabled}
                 hasMessages={messages && messages.length > 0}
                 currentModel={currentModel}
                 availableModels={availableModels}
@@ -958,7 +1008,9 @@ const Chat = () => {
                 onSend={handleSendMessage}
                 onStop={handleStopStreaming}
                 onImageUpload={handleImageUpload}
+                onDocumentUpload={handleDocumentUpload}
                 onRemoveImage={() => setUploadedImage(null)}
+                onRemoveDocument={() => setUploadedDocument(null)}
                 onExportChat={handleExportChat}
                 onClearChat={handleClearChat}
                 onModelChange={handleModelChange}

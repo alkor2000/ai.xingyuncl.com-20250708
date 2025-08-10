@@ -17,6 +17,7 @@ import {
   ThunderboltOutlined,
   PictureOutlined,
   FileImageOutlined,
+  FileTextOutlined,
   WalletOutlined,
   LockOutlined,
   TeamOutlined
@@ -34,7 +35,8 @@ const AIModelTable = ({
   onEdit,
   onDelete,
   onToggleStreamEnabled,
-  onToggleImageUploadEnabled
+  onToggleImageUploadEnabled,
+  onToggleDocumentUploadEnabled
 }) => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
@@ -202,6 +204,34 @@ const AIModelTable = ({
           {value ? (
             <Tag color="success" icon={<FileImageOutlined />} size="small">
               {t('admin.models.image')}
+            </Tag>
+          ) : (
+            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
+              {t('admin.models.textOnly')}
+            </Tag>
+          )}
+        </Space>
+      ))
+    },
+    {
+      title: t('admin.models.table.documentUploadEnabled'),
+      dataIndex: 'document_upload_enabled',
+      key: 'document_upload_enabled',
+      width: 120,
+      render: (documentUploadEnabled, record) => renderFieldWithPermission('document_upload_enabled', documentUploadEnabled, (value, permission) => (
+        <Space>
+          <Switch
+            checked={value}
+            size="small"
+            loading={loading}
+            disabled={!permission.editable}
+            onChange={(checked) => permission.editable && onToggleDocumentUploadEnabled(record.id, checked)}
+            checkedChildren={<FileTextOutlined />}
+            unCheckedChildren={<CloseCircleOutlined />}
+          />
+          {value ? (
+            <Tag color="orange" icon={<FileTextOutlined />} size="small">
+              {t('admin.models.document')}
             </Tag>
           ) : (
             <Tag color="default" icon={<CloseCircleOutlined />} size="small">

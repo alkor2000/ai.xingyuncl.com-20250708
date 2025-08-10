@@ -1,5 +1,5 @@
 /**
- * 聊天输入区域组件
+ * 聊天输入区域组件 - 支持图片和文档上传
  */
 
 import React, { useRef, forwardRef, useImperativeHandle } from 'react'
@@ -16,6 +16,7 @@ import {
   SendOutlined,
   StopOutlined,
   PictureOutlined,
+  FileTextOutlined,
   CloseOutlined,
   DownloadOutlined,
   ClearOutlined
@@ -30,10 +31,12 @@ const { Text } = Typography
 const ChatInputArea = forwardRef(({
   inputValue,
   uploadedImage,
+  uploadedDocument,
   uploading,
   typing,
   isStreaming,
   imageUploadEnabled,
+  documentUploadEnabled,
   hasMessages,
   currentModel,
   availableModels,
@@ -41,7 +44,9 @@ const ChatInputArea = forwardRef(({
   onSend,
   onStop,
   onImageUpload,
+  onDocumentUpload,
   onRemoveImage,
+  onRemoveDocument,
   onKeyPress,
   onExportChat,
   onClearChat,
@@ -63,6 +68,9 @@ const ChatInputArea = forwardRef(({
       }
     }
   }))
+
+  // 判断是否有已上传的文件（图片或文档）
+  const hasUploadedFile = uploadedImage || uploadedDocument
 
   return (
     <div className="input-container">
@@ -92,6 +100,33 @@ const ChatInputArea = forwardRef(({
         </div>
       )}
       
+      {/* 已上传的文档预览 */}
+      {uploadedDocument && (
+        <div className="uploaded-document-preview">
+          <Badge
+            count={
+              <Button
+                type="text"
+                size="small"
+                icon={<CloseOutlined />}
+                onClick={onRemoveDocument}
+                className="remove-document-btn"
+              />
+            }
+          >
+            <div className="document-preview">
+              <FileTextOutlined style={{ fontSize: 32, color: '#1890ff' }} />
+              <Text size="small" type="secondary" className="document-name">
+                {uploadedDocument.original_name}
+              </Text>
+              <Text size="small" type="secondary" className="document-size">
+                {Math.round(uploadedDocument.size / 1024)} KB
+              </Text>
+            </div>
+          </Badge>
+        </div>
+      )}
+      
       {/* 模型选择器和工具栏 */}
       <div className="input-header">
         <div className="left-tools">
@@ -102,8 +137,8 @@ const ChatInputArea = forwardRef(({
             disabled={typing || isStreaming}
           />
           
-          {/* 图片上传按钮 - 紧跟在模型选择器后面 */}
-          {imageUploadEnabled && (
+          {/* 图片上传按钮 */}
+          {imageUploadEnabled && !hasUploadedFile && (
             <Upload
               beforeUpload={onImageUpload}
               showUploadList={false}
@@ -114,6 +149,25 @@ const ChatInputArea = forwardRef(({
                 <Button
                   type="text"
                   icon={<PictureOutlined />}
+                  loading={uploading}
+                  disabled={typing || isStreaming}
+                />
+              </Tooltip>
+            </Upload>
+          )}
+          
+          {/* 文档上传按钮 */}
+          {documentUploadEnabled && !hasUploadedFile && (
+            <Upload
+              beforeUpload={onDocumentUpload}
+              showUploadList={false}
+              accept=".pdf,.doc,.docx,.txt,.csv,.html,.htm,.md,.markdown,.xls,.xlsx,.ppt,.pptx,.rtf"
+              disabled={uploading || typing || isStreaming}
+            >
+              <Tooltip title={t('chat.upload.document')}>
+                <Button
+                  type="text"
+                  icon={<FileTextOutlined />}
                   loading={uploading}
                   disabled={typing || isStreaming}
                 />
@@ -155,6 +209,8 @@ const ChatInputArea = forwardRef(({
           placeholder={
             uploadedImage 
               ? t('chat.input.placeholderWithImage')
+              : uploadedDocument
+              ? t('chat.input.placeholderWithDocument')
               : t('chat.input.placeholder')
           }
           autoSize={{ minRows: 3, maxRows: 6 }}
@@ -179,7 +235,7 @@ const ChatInputArea = forwardRef(({
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={onSend}
-                disabled={(!inputValue.trim() && !uploadedImage) || typing}
+                disabled={(!inputValue.trim() && !hasUploadedFile) || typing}
                 loading={typing}
               />
             </Tooltip>

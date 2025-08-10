@@ -12,13 +12,13 @@ import {
   AppstoreOutlined,
   ThunderboltOutlined,
   FileImageOutlined,
+  FileTextOutlined,
   LockOutlined,
   GlobalOutlined,
   HeartOutlined,
   MailOutlined,
   ApiOutlined,
   BgColorsOutlined,
-  FileTextOutlined,
   HistoryOutlined,
   PictureOutlined
 } from '@ant-design/icons'
@@ -169,6 +169,7 @@ const Settings = () => {
       setIsModelModalVisible(false)
       modelForm.resetFields()
       message.success(t('admin.models.success.create'))
+      await getAIModels() // 刷新列表
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.create'))
     }
@@ -195,6 +196,7 @@ const Settings = () => {
       setEditingModel(null)
       modelForm.resetFields()
       message.success(t('admin.models.success.update'))
+      await getAIModels() // 刷新列表
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.update'))
     }
@@ -250,9 +252,11 @@ const Settings = () => {
       // 不设置 api_key 和 api_endpoint，保持为空
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
       image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
+      document_upload_enabled: model.document_upload_enabled !== undefined ? model.document_upload_enabled : false,
       credits_per_chat: model.credits_per_chat,
       is_active: model.is_active,
-      sort_order: model.sort_order
+      sort_order: model.sort_order,
+      test_temperature: model.model_config?.test_temperature || 1
     })
     setIsModelModalVisible(true)
   }
@@ -266,6 +270,7 @@ const Settings = () => {
     try {
       await updateAIModel(modelId, { stream_enabled: streamEnabled })
       message.success(t('admin.models.success.update'))
+      await getAIModels() // 刷新列表
     } catch (error) {
       message.error(t('admin.models.error.update'))
     }
@@ -280,6 +285,22 @@ const Settings = () => {
     try {
       await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
       message.success(t('admin.models.success.update'))
+      await getAIModels() // 刷新列表
+    } catch (error) {
+      message.error(t('admin.models.error.update'))
+    }
+  }
+
+  const handleToggleDocumentUploadEnabled = async (modelId, documentUploadEnabled) => {
+    if (!isSuperAdmin) {
+      message.warning(t('admin.noPermission'))
+      return
+    }
+    
+    try {
+      await updateAIModel(modelId, { document_upload_enabled: documentUploadEnabled })
+      message.success(t('admin.models.success.update'))
+      await getAIModels() // 刷新列表
     } catch (error) {
       message.error(t('admin.models.error.update'))
     }
@@ -443,6 +464,9 @@ const Settings = () => {
                 <Tag color="success" icon={<FileImageOutlined />}>
                   🖼️ {t('admin.models.imageUpload')}
                 </Tag>
+                <Tag color="orange" icon={<FileTextOutlined />}>
+                  📄 {t('admin.models.documentUpload')}
+                </Tag>
                 <Tag color="green">🔓 {t('admin.models.noOutputLimit')}</Tag>
               </Space>
             }
@@ -471,6 +495,7 @@ const Settings = () => {
               onDelete={handleDeleteModel}
               onToggleStreamEnabled={handleToggleStreamEnabled}
               onToggleImageUploadEnabled={handleToggleImageUploadEnabled}
+              onToggleDocumentUploadEnabled={handleToggleDocumentUploadEnabled}
             />
           </Card>
         </TabPane>
@@ -671,7 +696,7 @@ const Settings = () => {
           editingModule={editingModule}
           form={moduleForm}
           loading={loading}
-          onSubmit={editingModule ? handleUpdateModule : handleCreateModel}
+          onSubmit={editingModule ? handleUpdateModule : handleCreateModule}
           onCancel={() => {
             setIsModuleModalVisible(false)
             setEditingModule(null)

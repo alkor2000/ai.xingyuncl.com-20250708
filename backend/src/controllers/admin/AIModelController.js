@@ -75,6 +75,7 @@ class AIModelController {
             credits_per_chat: model.credits_per_chat,
             stream_enabled: model.stream_enabled,
             image_upload_enabled: model.image_upload_enabled,
+            document_upload_enabled: model.document_upload_enabled, // 添加文档上传字段
             is_active: model.is_active,
             sort_order: model.sort_order,
             test_status: model.test_status,
@@ -167,7 +168,8 @@ class AIModelController {
         adminId: req.user.id,
         modelId: id,
         updateFields: Object.keys(updateData),
-        streamEnabled: updatedModel.stream_enabled
+        streamEnabled: updatedModel.stream_enabled,
+        documentUploadEnabled: updatedModel.document_upload_enabled
       });
 
       return ResponseHelper.success(res, updatedModel.toJSON(), 'AI模型更新成功');
