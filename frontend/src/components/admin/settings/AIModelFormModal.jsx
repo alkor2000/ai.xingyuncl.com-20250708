@@ -71,8 +71,8 @@ const AIModelFormModal = ({
         {/* 编辑模式的提示信息 */}
         {editingModel && (
           <Alert
-            message="编辑提示"
-            description="API密钥和API端点字段留空表示不修改原有配置"
+            message={t('admin.models.form.editTip')}
+            description={t('admin.models.form.editTipDesc')}
             type="info"
             showIcon
             icon={<InfoCircleOutlined />}
@@ -113,16 +113,19 @@ const AIModelFormModal = ({
                   {t('admin.models.form.apiKey')}
                   {editingModel && (
                     <Tag color="blue" style={{ fontSize: '12px' }}>
-                      留空保持不变
+                      {t('admin.models.form.apiKey.keepEmpty')}
                     </Tag>
                   )}
                 </Space>
               }
               rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required') }]}
-              extra={editingModel ? "如需更新密钥，请输入新的API密钥" : null}
+              extra={editingModel ? t('admin.models.form.apiKey.updateTip') : null}
             >
               <Input.Password 
-                placeholder={editingModel ? "留空表示不修改" : "sk-..."} 
+                placeholder={editingModel ? 
+                  t('admin.models.form.apiKey.placeholder.edit') : 
+                  t('admin.models.form.apiKey.placeholder.new')
+                } 
                 autoComplete="new-password"
               />
             </Form.Item>
@@ -135,16 +138,19 @@ const AIModelFormModal = ({
                   {t('admin.models.form.apiEndpoint')}
                   {editingModel && (
                     <Tag color="blue" style={{ fontSize: '12px' }}>
-                      留空保持不变
+                      {t('admin.models.form.apiEndpoint.keepEmpty')}
                     </Tag>
                   )}
                 </Space>
               }
               rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required') }]}
-              extra={editingModel ? "如需更新端点，请输入新的API端点" : null}
+              extra={editingModel ? t('admin.models.form.apiEndpoint.updateTip') : null}
             >
               <Input 
-                placeholder={editingModel ? "留空表示不修改" : "https://api.openai.com/v1"} 
+                placeholder={editingModel ? 
+                  t('admin.models.form.apiEndpoint.placeholder.edit') : 
+                  t('admin.models.form.apiEndpoint.placeholder.new')
+                } 
               />
             </Form.Item>
           </Col>
@@ -157,8 +163,8 @@ const AIModelFormModal = ({
               title={
                 <Space>
                   <ExperimentOutlined style={{ color: '#ff4d4f' }} />
-                  <span>测试配置</span>
-                  <Tag color="red">测试参数</Tag>
+                  <span>{t('admin.models.form.testConfig')}</span>
+                  <Tag color="red">{t('admin.models.form.testParams')}</Tag>
                 </Space>
               } 
               size="small" 
@@ -168,9 +174,9 @@ const AIModelFormModal = ({
                 <Col span={12}>
                   <Form.Item
                     name="test_temperature"
-                    label="测试温度"
-                    rules={[{ required: true, message: '请输入测试温度' }]}
-                    extra="某些模型（如gpt-4o-mini）只支持特定温度值"
+                    label={t('admin.models.form.testTemperature')}
+                    rules={[{ required: true, message: t('admin.models.form.testTemperature.required') }]}
+                    extra={t('admin.models.form.testTemperature.extra')}
                   >
                     <InputNumber
                       min={0}
@@ -178,7 +184,7 @@ const AIModelFormModal = ({
                       step={0.1}
                       precision={1}
                       style={{ width: '100%' }}
-                      placeholder="默认值: 1"
+                      placeholder={t('admin.models.form.testTemperature.placeholder')}
                     />
                   </Form.Item>
                 </Col>
@@ -192,8 +198,8 @@ const AIModelFormModal = ({
                     fontSize: '12px',
                     color: '#d4380d'
                   }}>
-                    <strong>提示：</strong>不同模型对温度参数有不同要求。
-                    如gpt-4o-mini只支持1，其他模型可能支持0-2范围。
+                    <strong>{t('admin.models.form.testTemperature.tip')}</strong>
+                    {t('admin.models.form.testTemperature.tipDesc')}
                   </div>
                 </Col>
               </Row>

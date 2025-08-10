@@ -57,7 +57,7 @@ const AIModelTable = ({
       const groups = await getModelGroups(model.id)
       setSelectedGroups(groups.map(g => g.id))
     } catch (error) {
-      message.error('获取模型分配组失败')
+      message.error(t('admin.models.groups.error.load', { defaultValue: '获取模型分配组失败' }))
     } finally {
       setGroupsLoading(false)
     }
@@ -70,10 +70,10 @@ const AIModelTable = ({
     setGroupsLoading(true)
     try {
       await updateModelGroups(selectedModel.id, selectedGroups)
-      message.success('模型分组更新成功')
+      message.success(t('admin.models.groups.success.update', { defaultValue: '模型分组更新成功' }))
       setGroupModalVisible(false)
     } catch (error) {
-      message.error('更新模型分组失败')
+      message.error(t('admin.models.groups.error.update', { defaultValue: '更新模型分组失败' }))
     } finally {
       setGroupsLoading(false)
     }
@@ -273,14 +273,14 @@ const AIModelTable = ({
         return (
           <Space size="small">
             {canManageGroups && (
-              <Tooltip title="分配用户组">
+              <Tooltip title={t('admin.models.groups.assign')}>
                 <Button
                   type="primary"
                   size="small"
                   icon={<TeamOutlined />}
                   onClick={() => showGroupModal(record)}
                 >
-                  分配组
+                  {t('admin.models.groups.assign')}
                 </Button>
               </Tooltip>
             )}
@@ -350,7 +350,9 @@ const AIModelTable = ({
         title={
           <Space>
             <TeamOutlined />
-            {selectedModel ? `为 [${selectedModel.display_name}] 分配用户组` : '分配用户组'}
+            {selectedModel ? 
+              t('admin.models.groups.assignTitle') + ` [${selectedModel.display_name}]` : 
+              t('admin.models.groups.assignTitle')}
           </Space>
         }
         open={groupModalVisible}
@@ -361,7 +363,7 @@ const AIModelTable = ({
       >
         <div style={{ marginBottom: 16 }}>
           <p style={{ color: '#666' }}>
-            选择可以使用此AI模型的用户组：
+            {t('admin.models.groups.assignDesc')}
           </p>
         </div>
         
@@ -380,7 +382,7 @@ const AIModelTable = ({
                 <Space>
                   <Tag color={group.color || '#1677ff'}>{group.name}</Tag>
                   <span style={{ color: '#999' }}>
-                    {group.user_count || 0} 个用户
+                    {group.user_count || 0} {t('admin.models.groups.userCount')}
                   </span>
                 </Space>
               </Checkbox>
@@ -393,7 +395,7 @@ const AIModelTable = ({
             <Space>
               <span style={{ color: '#fa8c16' }}>⚠️</span>
               <span style={{ color: '#666' }}>
-                未选择任何组，此模型将对所有用户不可见
+                {t('admin.models.groups.noGroupWarning')}
               </span>
             </Space>
           </div>
