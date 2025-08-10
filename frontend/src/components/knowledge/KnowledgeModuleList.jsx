@@ -1,10 +1,12 @@
 /**
- * 知识模块列表组件
+ * 知识模块列表组件 - Apple风格卡片设计
  */
 
 import React, { useState } from 'react'
 import {
-  Table,
+  Row,
+  Col,
+  Card,
   Tag,
   Space,
   Button,
@@ -13,20 +15,24 @@ import {
   message,
   Badge,
   Input,
-  Select
+  Select,
+  Empty,
+  Typography,
+  Dropdown,
+  Menu
 } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
-  EyeInvisibleOutlined,
   UserOutlined,
   TeamOutlined,
   GlobalOutlined,
   LockOutlined,
-  UnlockOutlined,
   SearchOutlined,
-  UsergroupAddOutlined
+  MoreOutlined,
+  FireOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
@@ -35,6 +41,7 @@ import './KnowledgeModuleList.less'
 
 const { Search } = Input
 const { Option } = Select
+const { Text, Paragraph } = Typography
 
 const KnowledgeModuleList = ({ 
   modules, 
@@ -64,18 +71,15 @@ const KnowledgeModuleList = ({
 
   // 过滤模块
   const filteredModules = modules.filter(module => {
-    // 搜索过滤
     if (searchText && !module.name.toLowerCase().includes(searchText.toLowerCase()) &&
         !module.description?.toLowerCase().includes(searchText.toLowerCase())) {
       return false
     }
     
-    // 范围过滤
     if (filterScope !== 'all' && module.module_scope !== filterScope) {
       return false
     }
     
-    // 类型过滤
     if (filterType !== 'all' && module.prompt_type !== filterType) {
       return false
     }
@@ -83,204 +87,149 @@ const KnowledgeModuleList = ({
     return true
   })
 
-  // 获取范围图标
-  const getScopeIcon = (scope) => {
-    switch (scope) {
-      case 'personal':
-        return <UserOutlined />
-      case 'team':
-        return <TeamOutlined />
-      case 'system':
-        return <GlobalOutlined />
-      default:
-        return null
+  // 获取范围配置 - 使用苹果色系
+  const getScopeConfig = (scope) => {
+    const configs = {
+      personal: { 
+        color: '#007AFF', 
+        bgColor: 'rgba(0, 122, 255, 0.08)',
+        icon: <UserOutlined />, 
+        text: '个人'
+      },
+      team: { 
+        color: '#34C759', 
+        bgColor: 'rgba(52, 199, 89, 0.08)',
+        icon: <TeamOutlined />, 
+        text: '团队'
+      },
+      system: { 
+        color: '#FF9500', 
+        bgColor: 'rgba(255, 149, 0, 0.08)',
+        icon: <GlobalOutlined />, 
+        text: '系统'
+      }
     }
+    return configs[scope] || configs.personal
   }
 
-  // 获取范围标签
-  const getScopeTag = (scope) => {
-    const config = {
-      personal: { color: 'blue', text: '个人' },
-      team: { color: 'green', text: '团队' },
-      system: { color: 'gold', text: '系统' }
-    }
-    const { color, text } = config[scope] || {}
+  // 渲染模块卡片 - Apple风格
+  const renderModuleCard = (module) => {
+    const scopeConfig = getScopeConfig(module.module_scope)
+    const canEdit = module.creator_id === user.id || 
+                   (module.module_scope === 'team' && canCreateTeam) ||
+                   (module.module_scope === 'system' && canCreateSystem)
+    const canDelete = module.creator_id === user.id || canCreateSystem
+    
+    const moreMenu = (
+      <Menu className="apple-menu">
+        {canEdit && (
+          <Menu.Item key="edit" icon={<EditOutlined />} onClick={() => onEdit(module)}>
+            编辑模块
+          </Menu.Item>
+        )}
+        {canDelete && (
+          <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
+            <Popconfirm
+              title="确定要删除这个模块吗？"
+              description="删除后无法恢复"
+              onConfirm={() => handleDelete(module.id)}
+              okText="确定"
+              cancelText="取消"
+              placement="left"
+            >
+              删除模块
+            </Popconfirm>
+          </Menu.Item>
+        )}
+      </Menu>
+    )
+    
     return (
-      <Tag color={color} icon={getScopeIcon(scope)}>
-        {text}
-      </Tag>
+      <Col xs={24} sm={12} md={8} lg={6} key={module.id}>
+        <Card
+          className="module-card-apple"
+          bordered={false}
+          hoverable
+        >
+          <div className="module-header">
+            <div className="module-scope-badge" style={{ 
+              background: scopeConfig.bgColor,
+              color: scopeConfig.color
+            }}>
+              {scopeConfig.icon}
+              <span>{scopeConfig.text}</span>
+            </div>
+            <Dropdown overlay={moreMenu} trigger={['click']} placement="bottomRight">
+              <Button 
+                type="text" 
+                icon={<MoreOutlined />} 
+                className="more-btn"
+              />
+            </Dropdown>
+          </div>
+          
+          <div className="module-body">
+            <div className="module-name">
+              {module.name}
+              {!module.is_active && (
+                <Badge status="default" text="已禁用" className="status-badge" />
+              )}
+            </div>
+            
+            <Paragraph 
+              ellipsis={{ rows: 2 }} 
+              className="module-description"
+            >
+              {module.description || '暂无描述'}
+            </Paragraph>
+            
+            <div className="module-tags">
+              {module.prompt_type === 'system' && (
+                <Tag className="apple-tag apple-tag-purple">
+                  <LockOutlined /> 系统级
+                </Tag>
+              )}
+              {module.content_visible && module.module_scope !== 'personal' && (
+                <Tag className="apple-tag apple-tag-green">
+                  <EyeOutlined /> 可见
+                </Tag>
+              )}
+            </div>
+          </div>
+          
+          <div className="module-footer">
+            <div className="footer-item">
+              <UserOutlined className="footer-icon" />
+              <span>{module.creator_name || '未知'}</span>
+            </div>
+            <div className="footer-item">
+              <FireOutlined className="footer-icon" />
+              <span>{module.usage_count || 0}</span>
+            </div>
+          </div>
+        </Card>
+      </Col>
     )
   }
-
-  // 获取类型标签
-  const getTypeTag = (type) => {
-    return type === 'system' ? (
-      <Tag color="purple" icon={<LockOutlined />}>系统级</Tag>
-    ) : (
-      <Tag icon={<UnlockOutlined />}>普通</Tag>
-    )
-  }
-
-  // 获取可见性标签
-  const getVisibilityTag = (module) => {
-    // 个人模块不显示可见性
-    if (module.module_scope === 'personal') {
-      return null
-    }
-    
-    // 系统模块显示权限信息
-    if (module.module_scope === 'system' && module.group_ids) {
-      const groupNames = module.group_ids
-        .map(id => userGroups.find(g => g.id === id)?.name)
-        .filter(Boolean)
-      
-      if (groupNames.length > 0) {
-        return (
-          <Tooltip title={`仅限：${groupNames.join('、')}`}>
-            <Tag color="orange" icon={<UsergroupAddOutlined />}>
-              限定组 ({groupNames.length})
-            </Tag>
-          </Tooltip>
-        )
-      }
-    }
-    
-    // 内容可见性标签
-    if (module.module_scope !== 'personal') {
-      return module.content_visible ? (
-        <Tag color="green" icon={<EyeOutlined />}>内容可见</Tag>
-      ) : (
-        <Tag color="orange" icon={<EyeInvisibleOutlined />}>内容隐藏</Tag>
-      )
-    }
-    
-    return null
-  }
-
-  const columns = [
-    {
-      title: '模块名称',
-      dataIndex: 'name',
-      key: 'name',
-      width: 200,
-      ellipsis: true,
-      render: (text, record) => (
-        <Space>
-          <span className="module-name">{text}</span>
-          {!record.is_active && <Badge status="default" text="已禁用" />}
-        </Space>
-      )
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-      render: (text) => text || <span style={{ color: '#999' }}>暂无描述</span>
-    },
-    {
-      title: '范围',
-      dataIndex: 'module_scope',
-      key: 'module_scope',
-      width: 100,
-      render: (scope) => getScopeTag(scope)
-    },
-    {
-      title: '类型',
-      dataIndex: 'prompt_type',
-      key: 'prompt_type',
-      width: 100,
-      render: (type) => getTypeTag(type)
-    },
-    {
-      title: '权限/可见性',
-      key: 'visibility',
-      width: 150,
-      render: (_, record) => getVisibilityTag(record)
-    },
-    {
-      title: '创建者',
-      dataIndex: 'creator_name',
-      key: 'creator_name',
-      width: 120,
-      ellipsis: true,
-      render: (text, record) => (
-        <span style={{ color: record.creator_id === user.id ? '#1890ff' : undefined }}>
-          {text || '未知'}
-        </span>
-      )
-    },
-    {
-      title: '使用次数',
-      dataIndex: 'usage_count',
-      key: 'usage_count',
-      width: 100,
-      sorter: (a, b) => a.usage_count - b.usage_count,
-      render: (count) => count || 0
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 120,
-      fixed: 'right',
-      render: (_, record) => {
-        const canEdit = record.creator_id === user.id || 
-                       (record.module_scope === 'team' && canCreateTeam) ||
-                       (record.module_scope === 'system' && canCreateSystem)
-        const canDelete = record.creator_id === user.id || canCreateSystem
-        
-        return (
-          <Space size="small">
-            {canEdit && (
-              <Tooltip title="编辑">
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => onEdit(record)}
-                />
-              </Tooltip>
-            )}
-            {canDelete && (
-              <Popconfirm
-                title="确定要删除这个模块吗？"
-                description="删除后无法恢复"
-                onConfirm={() => handleDelete(record.id)}
-                okText="确定"
-                cancelText="取消"
-              >
-                <Tooltip title="删除">
-                  <Button
-                    type="link"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                  />
-                </Tooltip>
-              </Popconfirm>
-            )}
-          </Space>
-        )
-      }
-    }
-  ]
 
   return (
-    <div className="knowledge-module-list">
-      <div className="list-toolbar">
-        <Space>
-          <Search
-            placeholder="搜索模块名称或描述"
-            allowClear
-            onSearch={setSearchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 250 }}
-            prefix={<SearchOutlined />}
-          />
+    <div className="knowledge-module-list-apple">
+      {/* 搜索和筛选栏 - Apple风格 */}
+      <div className="list-toolbar-apple">
+        <Search
+          placeholder="搜索模块"
+          allowClear
+          onSearch={setSearchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          className="search-input-apple"
+          prefix={<SearchOutlined />}
+        />
+        <Space className="filter-group">
           <Select
             value={filterScope}
             onChange={setFilterScope}
-            style={{ width: 120 }}
+            className="filter-select-apple"
+            bordered={false}
           >
             <Option value="all">所有范围</Option>
             <Option value="personal">个人模块</Option>
@@ -290,7 +239,8 @@ const KnowledgeModuleList = ({
           <Select
             value={filterType}
             onChange={setFilterType}
-            style={{ width: 120 }}
+            className="filter-select-apple"
+            bordered={false}
           >
             <Option value="all">所有类型</Option>
             <Option value="normal">普通</Option>
@@ -299,17 +249,19 @@ const KnowledgeModuleList = ({
         </Space>
       </div>
       
-      <Table
-        columns={columns}
-        dataSource={filteredModules}
-        rowKey="id"
-        pagination={{
-          pageSize: 10,
-          showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 个模块`
-        }}
-        scroll={{ x: 1000 }}
-      />
+      {/* 模块卡片网格 */}
+      {filteredModules.length > 0 ? (
+        <Row gutter={[12, 12]} className="module-grid-apple">
+          {filteredModules.map(renderModuleCard)}
+        </Row>
+      ) : (
+        <Empty
+          description={searchText || filterScope !== 'all' || filterType !== 'all' 
+            ? "没有找到符合条件的模块" 
+            : "暂无模块"}
+          className="empty-apple"
+        />
+      )}
     </div>
   )
 }

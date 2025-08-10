@@ -3,13 +3,34 @@
  */
 
 import React from 'react'
-import { Row, Col, Card, Statistic, Tag } from 'antd'
+import { Row, Col, Card, Statistic, Tag, Tooltip } from 'antd'
+import { 
+  RobotOutlined, 
+  PictureOutlined,
+  MessageOutlined
+} from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
 const SystemStats = ({ systemStats = {} }) => {
   const { t } = useTranslation()
   
   const { users = {}, conversations = {}, models = [] } = systemStats
+
+  // 获取模型图标
+  const getModelIcon = (modelType) => {
+    if (modelType === 'image') {
+      return <PictureOutlined style={{ marginRight: 8, color: '#ff6b6b' }} />
+    }
+    return <RobotOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+  }
+
+  // 获取模型类型标签
+  const getModelTypeTag = (modelType) => {
+    if (modelType === 'image') {
+      return <Tag color="volcano" size="small">图像</Tag>
+    }
+    return <Tag color="blue" size="small">对话</Tag>
+  }
 
   return (
     <Row gutter={[16, 16]}>
@@ -84,37 +105,61 @@ const SystemStats = ({ systemStats = {} }) => {
       {/* 模型使用统计 */}
       <Col xs={24}>
         <Card title={t('admin.settings.modelUsage')} size="small">
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 400, overflowY: 'auto' }}>
             {models.length > 0 ? (
               models.map((model, index) => (
                 <div 
-                  key={model.model_name} 
+                  key={`${model.model_type}_${model.id}`} 
                   style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
-                    padding: '8px 0',
+                    padding: '12px 0',
                     borderBottom: index < models.length - 1 ? '1px solid #f0f0f0' : 'none'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>#{index + 1} {model.model_name}</span>
-                    {model.credits_per_chat && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                    {getModelIcon(model.model_type)}
+                    <span style={{ fontWeight: 500 }}>
+                      #{index + 1} {model.display_name || model.model_name}
+                    </span>
+                    {getModelTypeTag(model.model_type)}
+                    {model.credits_per_use && (
                       <Tag color="blue" size="small">
-                        💰 {model.credits_per_chat} {t('admin.models.perChat')}
+                        💰 {model.credits_per_use} {t('admin.models.perChat')}
                       </Tag>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <span>{model.conversation_count} {t('admin.settings.conversations')}</span>
-                    {model.total_credits_consumed && (
-                      <span style={{ color: '#722ed1' }}>
-                        🪙 {model.total_credits_consumed?.toLocaleString()} {t('unit.credits', { defaultValue: '积分' })}
-                      </span>
+                    {model.model_type === 'chat' ? (
+                      <>
+                        <Tooltip title="对话数">
+                          <span style={{ color: '#1890ff' }}>
+                            <MessageOutlined /> {model.conversation_count || 0} {t('admin.settings.conversations')}
+                          </span>
+                        </Tooltip>
+                        {model.total_tokens > 0 && (
+                          <span style={{ color: '#999' }}>
+                            {model.total_tokens?.toLocaleString()} tokens
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Tooltip title="生成数">
+                          <span style={{ color: '#ff6b6b' }}>
+                            <PictureOutlined /> {model.generation_count || 0} 张
+                          </span>
+                        </Tooltip>
+                      </>
                     )}
-                    <span style={{ color: '#999' }}>
-                      {model.total_tokens?.toLocaleString()} {t('unit.tokens')}
-                    </span>
+                    {model.total_credits_consumed > 0 && (
+                      <Tooltip title="总消耗积分">
+                        <span style={{ color: '#722ed1', fontWeight: 500 }}>
+                          🪙 {model.total_credits_consumed?.toLocaleString()} {t('unit.credits', { defaultValue: '积分' })}
+                        </span>
+                      </Tooltip>
+                    )}
                   </div>
                 </div>
               ))

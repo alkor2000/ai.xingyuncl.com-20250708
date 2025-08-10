@@ -30,8 +30,8 @@ class StatsService {
       // 获取对话统计
       const conversationStats = await StatsService.getConversationStats(currentUser);
       
-      // 获取AI模型统计
-      const modelStats = await StatsService.getModelStats();
+      // 获取AI模型统计（传递currentUser以支持组级别过滤）
+      const modelStats = await StatsService.getModelStats(currentUser);
 
       // 获取积分统计
       const creditsStats = await StatsService.getCreditsStats(groupFilter, groupParams);
@@ -174,33 +174,153 @@ class StatsService {
   }
 
   /**
-   * 获取AI模型统计
+   * 获取AI模型统计（包含对话模型和图像生成模型） - 支持基于用户组的过滤
    */
-  static async getModelStats() {
+  static async getModelStats(currentUser = null) {
     try {
-      const sql = `
-        SELECT 
-          am.id,
-          am.name,
-          am.display_name,
-          am.provider,
-          am.credits_per_chat,
-          am.is_active,
-          COUNT(DISTINCT c.id) as conversation_count,
-          COUNT(DISTINCT c.user_id) as unique_users,
-          SUM(c.total_tokens) as total_tokens,
-          SUM(c.message_count) as total_messages,
-          AVG(c.message_count) as avg_messages_per_conversation,
-          MAX(c.created_at) as last_used_at
-        FROM ai_models am
-        LEFT JOIN conversations c ON am.name = c.model_name
-        WHERE am.is_active = 1
-        GROUP BY am.id
-        ORDER BY conversation_count DESC
-      `;
+      let chatModelsSql;
+      let imageModelsSql;
+      let params = [];
       
-      const { rows } = await dbConnection.query(sql);
-      return rows;
+      // 判断是否需要组过滤
+      const needGroupFilter = currentUser && currentUser.role === 'admin' && currentUser.group_id;
+      
+      if (needGroupFilter) {
+        // 组管理员：只统计本组用户的使用情况
+        chatModelsSql = `
+          SELECT 
+            am.id,
+            am.name as model_name,
+            am.display_name,
+            am.provider,
+            am.credits_per_chat as credits_per_use,
+            am.is_active,
+            'chat' as model_type,
+            COUNT(DISTINCT c.id) as conversation_count,
+            COUNT(DISTINCT c.user_id) as unique_users,
+            SUM(c.total_tokens) as total_tokens,
+            SUM(c.message_count) as total_messages,
+            AVG(c.message_count) as avg_messages_per_conversation,
+            SUM(c.message_count * am.credits_per_chat) as total_credits_consumed,
+            MAX(c.created_at) as last_used_at
+          FROM ai_models am
+          LEFT JOIN conversations c ON am.name = c.model_name
+          LEFT JOIN users u ON c.user_id = u.id
+          WHERE am.is_active = 1
+            AND (c.id IS NULL OR u.group_id = ?)
+          GROUP BY am.id
+          HAVING conversation_count > 0
+        `;
+        
+        imageModelsSql = `
+          SELECT 
+            im.id,
+            im.name as model_name,
+            im.display_name,
+            im.provider,
+            im.price_per_image as credits_per_use,
+            im.is_active,
+            'image' as model_type,
+            COUNT(DISTINCT ig.id) as generation_count,
+            COUNT(DISTINCT ig.user_id) as unique_users,
+            0 as total_tokens,
+            COUNT(ig.id) as total_generations,
+            0 as avg_messages_per_conversation,
+            SUM(ig.credits_consumed) as total_credits_consumed,
+            MAX(ig.created_at) as last_used_at
+          FROM image_models im
+          LEFT JOIN image_generations ig ON im.id = ig.model_id AND ig.status = 'success'
+          LEFT JOIN users u ON ig.user_id = u.id
+          WHERE im.is_active = 1
+            AND (ig.id IS NULL OR u.group_id = ?)
+          GROUP BY im.id
+          HAVING generation_count > 0
+        `;
+        
+        params = [currentUser.group_id];
+      } else {
+        // 超级管理员：看到所有统计
+        chatModelsSql = `
+          SELECT 
+            am.id,
+            am.name as model_name,
+            am.display_name,
+            am.provider,
+            am.credits_per_chat as credits_per_use,
+            am.is_active,
+            'chat' as model_type,
+            COUNT(DISTINCT c.id) as conversation_count,
+            COUNT(DISTINCT c.user_id) as unique_users,
+            SUM(c.total_tokens) as total_tokens,
+            SUM(c.message_count) as total_messages,
+            AVG(c.message_count) as avg_messages_per_conversation,
+            SUM(c.message_count * am.credits_per_chat) as total_credits_consumed,
+            MAX(c.created_at) as last_used_at
+          FROM ai_models am
+          LEFT JOIN conversations c ON am.name = c.model_name
+          WHERE am.is_active = 1
+          GROUP BY am.id
+        `;
+        
+        imageModelsSql = `
+          SELECT 
+            im.id,
+            im.name as model_name,
+            im.display_name,
+            im.provider,
+            im.price_per_image as credits_per_use,
+            im.is_active,
+            'image' as model_type,
+            COUNT(DISTINCT ig.id) as generation_count,
+            COUNT(DISTINCT ig.user_id) as unique_users,
+            0 as total_tokens,
+            COUNT(ig.id) as total_generations,
+            0 as avg_messages_per_conversation,
+            SUM(ig.credits_consumed) as total_credits_consumed,
+            MAX(ig.created_at) as last_used_at
+          FROM image_models im
+          LEFT JOIN image_generations ig ON im.id = ig.model_id AND ig.status = 'success'
+          WHERE im.is_active = 1
+          GROUP BY im.id
+        `;
+      }
+      
+      // 执行两个查询
+      const [chatResult, imageResult] = await Promise.all([
+        dbConnection.query(chatModelsSql, params),
+        dbConnection.query(imageModelsSql, params)
+      ]);
+      
+      // 合并结果并排序
+      const allModels = [
+        ...chatResult.rows.map(row => ({
+          ...row,
+          model_type: 'chat',
+          display_name: row.display_name || row.model_name,
+          usage_count: row.conversation_count || 0
+        })),
+        ...imageResult.rows.map(row => ({
+          ...row,
+          model_type: 'image',
+          display_name: row.display_name || row.model_name,
+          usage_count: row.generation_count || 0,
+          conversation_count: row.generation_count // 为了统一字段名
+        }))
+      ];
+      
+      // 按使用次数排序
+      allModels.sort((a, b) => (b.usage_count || 0) - (a.usage_count || 0));
+      
+      // 如果是组管理员，记录日志
+      if (needGroupFilter) {
+        logger.info('组管理员获取模型统计', {
+          adminId: currentUser.id,
+          groupId: currentUser.group_id,
+          modelCount: allModels.length
+        });
+      }
+      
+      return allModels;
     } catch (error) {
       logger.error('获取AI模型统计失败', { error: error.message });
       throw error;
@@ -228,33 +348,75 @@ class StatsService {
       
       const { rows: overview } = await dbConnection.query(overviewSql, groupParams);
 
-      // 今日积分消费
-      const todaySql = `
-        SELECT 
-          COUNT(*) as transactions_today,
-          SUM(ABS(amount)) as credits_consumed_today,
-          COUNT(DISTINCT user_id) as active_users_today
-        FROM credit_transactions
-        WHERE DATE(created_at) = CURDATE()
-          AND transaction_type = 'chat_consume'
-      `;
+      // 今日积分消费 - 需要根据用户组过滤
+      let todaySql;
+      let todayParams = [];
       
-      const { rows: today } = await dbConnection.query(todaySql);
+      if (groupFilter) {
+        // 组管理员：只看本组的消费
+        todaySql = `
+          SELECT 
+            COUNT(*) as transactions_today,
+            SUM(ABS(ct.amount)) as credits_consumed_today,
+            COUNT(DISTINCT ct.user_id) as active_users_today
+          FROM credit_transactions ct
+          INNER JOIN users u ON ct.user_id = u.id
+          WHERE DATE(ct.created_at) = CURDATE()
+            AND ct.transaction_type IN ('chat_consume', 'image_consume')
+            AND u.group_id = ?
+        `;
+        todayParams = groupParams;
+      } else {
+        // 超级管理员：看所有消费
+        todaySql = `
+          SELECT 
+            COUNT(*) as transactions_today,
+            SUM(ABS(amount)) as credits_consumed_today,
+            COUNT(DISTINCT user_id) as active_users_today
+          FROM credit_transactions
+          WHERE DATE(created_at) = CURDATE()
+            AND transaction_type IN ('chat_consume', 'image_consume')
+        `;
+      }
+      
+      const { rows: today } = await dbConnection.query(todaySql, todayParams);
 
-      // 积分消费趋势（最近7天）
-      const trendSql = `
-        SELECT 
-          DATE(created_at) as date,
-          transaction_type,
-          COUNT(*) as count,
-          SUM(ABS(amount)) as amount
-        FROM credit_transactions
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        GROUP BY DATE(created_at), transaction_type
-        ORDER BY date DESC
-      `;
+      // 积分消费趋势（最近7天）- 需要根据用户组过滤
+      let trendSql;
+      let trendParams = [];
       
-      const { rows: trend } = await dbConnection.query(trendSql);
+      if (groupFilter) {
+        // 组管理员：只看本组的趋势
+        trendSql = `
+          SELECT 
+            DATE(ct.created_at) as date,
+            ct.transaction_type,
+            COUNT(*) as count,
+            SUM(ABS(ct.amount)) as amount
+          FROM credit_transactions ct
+          INNER JOIN users u ON ct.user_id = u.id
+          WHERE ct.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            AND u.group_id = ?
+          GROUP BY DATE(ct.created_at), ct.transaction_type
+          ORDER BY date DESC
+        `;
+        trendParams = groupParams;
+      } else {
+        // 超级管理员：看所有趋势
+        trendSql = `
+          SELECT 
+            DATE(created_at) as date,
+            transaction_type,
+            COUNT(*) as count,
+            SUM(ABS(amount)) as amount
+          FROM credit_transactions
+          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          GROUP BY DATE(created_at), transaction_type
+          ORDER BY date DESC
+        `;
+      }
+      
+      const { rows: trend } = await dbConnection.query(trendSql, trendParams);
 
       return {
         overview: overview[0] || {},
@@ -270,41 +432,97 @@ class StatsService {
   /**
    * 获取实时统计数据
    */
-  static async getRealtimeStats() {
+  static async getRealtimeStats(filterOptions = {}) {
     try {
+      const { groupId } = filterOptions;
+      let params = [];
+      
       // 在线用户数（最近5分钟有活动）
-      const onlineUsersSql = `
-        SELECT COUNT(DISTINCT user_id) as online_users
-        FROM user_sessions
-        WHERE last_activity_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-      `;
+      let onlineUsersSql;
+      if (groupId) {
+        // 组管理员：只统计本组在线用户
+        onlineUsersSql = `
+          SELECT COUNT(DISTINCT us.user_id) as online_users
+          FROM user_sessions us
+          INNER JOIN users u ON us.user_id = u.id
+          WHERE us.last_activity_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+            AND u.group_id = ?
+        `;
+        params = [groupId];
+      } else {
+        // 超级管理员：统计所有在线用户
+        onlineUsersSql = `
+          SELECT COUNT(DISTINCT user_id) as online_users
+          FROM user_sessions
+          WHERE last_activity_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+        `;
+      }
       
       // 今日新增用户
-      const newUsersSql = `
-        SELECT COUNT(*) as new_users_today
-        FROM users
-        WHERE DATE(created_at) = CURDATE()
-      `;
+      let newUsersSql;
+      let newUsersParams = [];
+      if (groupId) {
+        newUsersSql = `
+          SELECT COUNT(*) as new_users_today
+          FROM users
+          WHERE DATE(created_at) = CURDATE()
+            AND group_id = ?
+        `;
+        newUsersParams = [groupId];
+      } else {
+        newUsersSql = `
+          SELECT COUNT(*) as new_users_today
+          FROM users
+          WHERE DATE(created_at) = CURDATE()
+        `;
+      }
       
       // 今日对话数
-      const conversationsSql = `
-        SELECT COUNT(*) as conversations_today
-        FROM conversations
-        WHERE DATE(created_at) = CURDATE()
-      `;
+      let conversationsSql;
+      let conversationsParams = [];
+      if (groupId) {
+        conversationsSql = `
+          SELECT COUNT(DISTINCT c.id) as conversations_today
+          FROM conversations c
+          INNER JOIN users u ON c.user_id = u.id
+          WHERE DATE(c.created_at) = CURDATE()
+            AND u.group_id = ?
+        `;
+        conversationsParams = [groupId];
+      } else {
+        conversationsSql = `
+          SELECT COUNT(*) as conversations_today
+          FROM conversations
+          WHERE DATE(created_at) = CURDATE()
+        `;
+      }
       
       // 今日消息数
-      const messagesSql = `
-        SELECT COUNT(*) as messages_today
-        FROM messages
-        WHERE DATE(created_at) = CURDATE()
-      `;
+      let messagesSql;
+      let messagesParams = [];
+      if (groupId) {
+        messagesSql = `
+          SELECT COUNT(m.id) as messages_today
+          FROM messages m
+          INNER JOIN conversations c ON m.conversation_id = c.id
+          INNER JOIN users u ON c.user_id = u.id
+          WHERE DATE(m.created_at) = CURDATE()
+            AND u.group_id = ?
+        `;
+        messagesParams = [groupId];
+      } else {
+        messagesSql = `
+          SELECT COUNT(*) as messages_today
+          FROM messages
+          WHERE DATE(created_at) = CURDATE()
+        `;
+      }
 
       const [onlineUsers, newUsers, conversations, messages] = await Promise.all([
-        dbConnection.query(onlineUsersSql),
-        dbConnection.query(newUsersSql),
-        dbConnection.query(conversationsSql),
-        dbConnection.query(messagesSql)
+        dbConnection.query(onlineUsersSql, params),
+        dbConnection.query(newUsersSql, newUsersParams),
+        dbConnection.query(conversationsSql, conversationsParams),
+        dbConnection.query(messagesSql, messagesParams)
       ]);
 
       return {
@@ -325,12 +543,18 @@ class StatsService {
    */
   static async generateReport(options = {}) {
     try {
-      const { startDate, endDate, groupId = null, format = 'json' } = options;
+      const { startDate, endDate, groupId = null, format = 'json', limitToGroup = false } = options;
 
-      // 这里可以实现更复杂的报表生成逻辑
-      // 包括导出为Excel、PDF等格式
+      // 构建用户对象，用于传递给getSystemStats
+      let currentUser = null;
+      if (limitToGroup && groupId) {
+        currentUser = {
+          role: 'admin',
+          group_id: groupId
+        };
+      }
 
-      const stats = await StatsService.getSystemStats();
+      const stats = await StatsService.getSystemStats(currentUser);
       
       return {
         report: {

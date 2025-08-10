@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Tabs, Form, message, Space, Tag, Alert } from 'antd'
+import { Card, Button, Tabs, Form, message, Space, Tag } from 'antd'
 import {
   BarChartOutlined,
   RobotOutlined,
@@ -379,18 +379,6 @@ const Settings = () => {
   
   return (
     <div className="page-container">
-      {/* 组管理员提示 */}
-      {isGroupAdmin && (
-        <Alert
-          message={t('admin.groupAdminTip')}
-          description={t('admin.groupAdminDescription')}
-          type="info"
-          showIcon
-          icon={<LockOutlined />}
-          style={{ marginBottom: 16 }}
-        />
-      )}
-      
       <Tabs defaultActiveKey="statistics" type="card">
         {/* 系统统计 */}
         <TabPane 

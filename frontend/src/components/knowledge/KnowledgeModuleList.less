@@ -1,32 +1,416 @@
-.knowledge-module-list {
-  .list-toolbar {
-    margin-bottom: 16px;
-  }
-  
-  .module-name {
-    font-weight: 500;
-  }
-  
-  .ant-table {
-    .ant-table-cell {
-      vertical-align: middle;
-    }
-  }
-  
-  // 移动端适配
-  @media (max-width: 768px) {
-    .list-toolbar {
-      .ant-space {
-        flex-wrap: wrap;
+// Apple风格模块列表样式 - 增强立体感版本
+.knowledge-module-list-apple {
+  // 搜索栏
+  .list-toolbar-apple {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    
+    .search-input-apple {
+      flex: 1;
+      min-width: 200px;
+      
+      .ant-input-affix-wrapper {
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 10px;
+        padding: 8px 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
         
-        .ant-space-item {
-          margin-bottom: 8px;
+        &:hover {
+          border-color: rgba(0, 0, 0, 0.12);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+        
+        &:focus {
+          border-color: #007AFF;
+          box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+        
+        input {
+          background: transparent;
+          
+          &::placeholder {
+            color: #86868B;
+          }
+        }
+      }
+    }
+    
+    .filter-group {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .filter-select-apple {
+      min-width: 120px;
+      
+      .ant-select-selector {
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 10px;
+        padding: 4px 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+        
+        &:hover {
+          border-color: rgba(0, 0, 0, 0.12);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
         }
       }
       
-      .ant-input-search,
-      .ant-select {
-        width: 100% !important;
+      &.ant-select-focused {
+        .ant-select-selector {
+          border-color: #007AFF;
+          box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+      }
+    }
+  }
+  
+  // 模块卡片网格 - 增强立体感
+  .module-grid-apple {
+    .module-card-apple {
+      height: 100%;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      // 多层阴影创造立体感
+      box-shadow: 
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        0 4px 16px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      
+      // 顶部高光效果
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0.8),
+          rgba(255, 255, 255, 0)
+        );
+        opacity: 0.6;
+      }
+      
+      &:hover {
+        border-color: rgba(0, 0, 0, 0.08);
+        box-shadow: 
+          0 2px 4px rgba(0, 0, 0, 0.06),
+          0 4px 12px rgba(0, 0, 0, 0.08),
+          0 8px 28px rgba(0, 0, 0, 0.06);
+        transform: translateY(-4px);
+        
+        .module-header {
+          .more-btn {
+            opacity: 1;
+          }
+        }
+      }
+      
+      .ant-card-body {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      
+      .module-header {
+        padding: 14px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+        
+        .module-scope-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 5px 10px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+          
+          .anticon {
+            font-size: 12px;
+          }
+        }
+        
+        .more-btn {
+          width: 30px;
+          height: 30px;
+          padding: 0;
+          color: #86868B;
+          opacity: 0.7;
+          transition: all 0.2s ease;
+          
+          &:hover {
+            color: #1D1D1F;
+            background: rgba(0, 0, 0, 0.04);
+            opacity: 1;
+          }
+        }
+      }
+      
+      .module-body {
+        flex: 1;
+        padding: 18px;
+        background: #fff;
+        
+        .module-name {
+          font-size: 16px;
+          font-weight: 600;
+          color: #1D1D1F;
+          margin-bottom: 10px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          letter-spacing: -0.2px;
+          
+          .status-badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            background: rgba(0, 0, 0, 0.04);
+            border-radius: 4px;
+          }
+        }
+        
+        .module-description {
+          color: #6e6e73;
+          font-size: 14px;
+          line-height: 1.6;
+          margin-bottom: 14px;
+        }
+        
+        .module-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          
+          .apple-tag {
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            backdrop-filter: blur(10px);
+            
+            &.apple-tag-purple {
+              background: linear-gradient(135deg, rgba(88, 86, 214, 0.1), rgba(88, 86, 214, 0.05));
+              color: #5856D6;
+              border-color: rgba(88, 86, 214, 0.2);
+            }
+            
+            &.apple-tag-green {
+              background: linear-gradient(135deg, rgba(52, 199, 89, 0.1), rgba(52, 199, 89, 0.05));
+              color: #34C759;
+              border-color: rgba(52, 199, 89, 0.2);
+            }
+            
+            .anticon {
+              font-size: 10px;
+              margin-right: 3px;
+            }
+          }
+        }
+      }
+      
+      .module-footer {
+        padding: 12px 16px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
+        
+        .footer-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: #6e6e73;
+          font-weight: 500;
+          
+          .footer-icon {
+            font-size: 12px;
+            opacity: 0.8;
+          }
+        }
+      }
+    }
+  }
+  
+  // 空状态
+  .empty-apple {
+    padding: 60px 0;
+    
+    .ant-empty-description {
+      color: #86868B;
+    }
+  }
+}
+
+// 下拉菜单Apple风格 - 增强阴影
+.apple-menu {
+  border-radius: 10px;
+  padding: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 4px 20px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.98);
+  
+  .ant-dropdown-menu-item {
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: rgba(0, 122, 255, 0.08);
+    }
+  }
+}
+
+// 响应式
+@media (max-width: 768px) {
+  .knowledge-module-list-apple {
+    .list-toolbar-apple {
+      margin-bottom: 16px;
+      
+      .search-input-apple {
+        width: 100%;
+      }
+      
+      .filter-group {
+        width: 100%;
+        
+        .filter-select-apple {
+          flex: 1;
+        }
+      }
+    }
+    
+    .module-grid-apple {
+      .module-card-apple {
+        // 移动端稍微减少阴影
+        box-shadow: 
+          0 1px 2px rgba(0, 0, 0, 0.04),
+          0 2px 6px rgba(0, 0, 0, 0.06);
+      }
+    }
+  }
+}
+
+// 暗色模式
+@media (prefers-color-scheme: dark) {
+  .knowledge-module-list-apple {
+    .list-toolbar-apple {
+      .search-input-apple,
+      .filter-select-apple {
+        .ant-input-affix-wrapper,
+        .ant-select-selector {
+          background: #1C1C1E;
+          border-color: rgba(255, 255, 255, 0.08);
+          color: #fff;
+          box-shadow: 
+            0 1px 2px rgba(0, 0, 0, 0.3),
+            0 2px 6px rgba(0, 0, 0, 0.2);
+          
+          &:hover {
+            background: #2C2C2E;
+            border-color: rgba(255, 255, 255, 0.12);
+          }
+        }
+      }
+    }
+    
+    .module-card-apple {
+      background: #1C1C1E;
+      border-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 
+        0 1px 2px rgba(0, 0, 0, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.4),
+        0 4px 16px rgba(0, 0, 0, 0.3);
+      
+      &::before {
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0.05),
+          rgba(255, 255, 255, 0)
+        );
+      }
+      
+      &:hover {
+        box-shadow: 
+          0 2px 4px rgba(0, 0, 0, 0.3),
+          0 4px 12px rgba(0, 0, 0, 0.4),
+          0 8px 28px rgba(0, 0, 0, 0.3);
+      }
+      
+      .module-header {
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, #1C1C1E 0%, #1a1a1c 100%);
+        
+        .more-btn {
+          color: #98989D;
+          
+          &:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+          }
+        }
+      }
+      
+      .module-body {
+        background: #1C1C1E;
+        
+        .module-name {
+          color: #fff;
+        }
+        
+        .module-description {
+          color: #98989D;
+        }
+      }
+      
+      .module-footer {
+        border-top-color: rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, #1a1a1c 0%, #181818 100%);
+        
+        .footer-item {
+          color: #98989D;
+        }
+      }
+    }
+  }
+  
+  .apple-menu {
+    background: rgba(28, 28, 30, 0.98);
+    border-color: rgba(255, 255, 255, 0.08);
+    
+    .ant-dropdown-menu-item {
+      color: #fff;
+      
+      &:hover {
+        background: rgba(0, 122, 255, 0.15);
       }
     }
   }
