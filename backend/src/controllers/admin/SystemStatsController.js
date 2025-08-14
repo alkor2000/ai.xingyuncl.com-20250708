@@ -998,6 +998,182 @@ class SystemStatsController {
       return ResponseHelper.error(res, error.message || '生成统计报表失败');
     }
   }
+
+  /**
+   * 获取SSO配置
+   */
+  static async getSSOSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以查看SSO配置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以查看SSO配置');
+      }
+      
+      // 从数据库获取SSO配置
+      const ssoConfig = await SystemConfig.getSetting('sso_config');
+      
+      // 如果没有配置，返回默认值
+      const defaultConfig = {
+        enabled: false,
+        shared_secret: '',
+        target_group_id: 1,
+        default_credits: 100,
+        signature_valid_minutes: 5,
+        ip_whitelist_enabled: false,
+        allowed_ips: ''
+      };
+      
+      const result = ssoConfig || defaultConfig;
+      
+      // 隐藏密钥的部分字符
+      if (result.shared_secret && result.shared_secret.length > 8) {
+        result.shared_secret = result.shared_secret.substring(0, 4) + 
+          '*'.repeat(result.shared_secret.length - 8) + 
+          result.shared_secret.substring(result.shared_secret.length - 4);
+      }
+
+      return ResponseHelper.success(res, result, '获取SSO配置成功');
+    } catch (error) {
+      logger.error('获取SSO配置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '获取SSO配置失败');
+    }
+  }
+
+  /**
+   * 更新SSO配置
+   */
+  static async updateSSOSettings(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以更新SSO配置
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以修改SSO配置');
+      }
+      
+      const {
+        enabled,
+        shared_secret,
+        target_group_id,
+        default_credits,
+        signature_valid_minutes,
+        ip_whitelist_enabled,
+        allowed_ips
+      } = req.body;
+      
+      // 验证参数
+      if (typeof enabled !== 'boolean') {
+        return ResponseHelper.validation(res, ['enabled必须是布尔值']);
+      }
+      
+      if (enabled && !shared_secret) {
+        return ResponseHelper.validation(res, ['启用SSO时必须设置共享密钥']);
+      }
+      
+      // 验证组ID
+      const groupId = parseInt(target_group_id);
+      if (isNaN(groupId) || groupId < 1) {
+        return ResponseHelper.validation(res, ['目标组ID无效']);
+      }
+      
+      // 验证积分数量
+      const credits = parseInt(default_credits);
+      if (isNaN(credits) || credits < 0) {
+        return ResponseHelper.validation(res, ['默认积分数量必须大于等于0']);
+      }
+      
+      // 验证签名有效期
+      const validMinutes = parseInt(signature_valid_minutes);
+      if (isNaN(validMinutes) || validMinutes < 1 || validMinutes > 60) {
+        return ResponseHelper.validation(res, ['签名有效期必须在1-60分钟之间']);
+      }
+      
+      // 获取当前配置
+      const currentConfig = await SystemConfig.getSetting('sso_config') || {};
+      
+      // 如果密钥是掩码格式，保留原密钥
+      let finalSharedSecret = shared_secret;
+      if (shared_secret && shared_secret.includes('*') && currentConfig.shared_secret) {
+        // 如果新密钥包含*，说明是掩码，保留原密钥
+        finalSharedSecret = currentConfig.shared_secret;
+      }
+      
+      // 构建配置对象
+      const ssoConfig = {
+        enabled,
+        shared_secret: finalSharedSecret,
+        target_group_id: groupId,
+        default_credits: credits,
+        signature_valid_minutes: validMinutes,
+        ip_whitelist_enabled: ip_whitelist_enabled === true,
+        allowed_ips: allowed_ips || '',
+        updated_at: new Date().toISOString(),
+        updated_by: req.user.id
+      };
+      
+      // 保存到数据库
+      await SystemConfig.updateSetting('sso_config', ssoConfig, 'json');
+      
+      logger.info('管理员更新SSO配置', { 
+        adminId: req.user.id,
+        enabled: ssoConfig.enabled,
+        target_group_id: ssoConfig.target_group_id,
+        ip_whitelist_enabled: ssoConfig.ip_whitelist_enabled
+      });
+
+      // 返回时隐藏密钥
+      if (ssoConfig.shared_secret && ssoConfig.shared_secret.length > 8) {
+        ssoConfig.shared_secret = ssoConfig.shared_secret.substring(0, 4) + 
+          '*'.repeat(ssoConfig.shared_secret.length - 8) + 
+          ssoConfig.shared_secret.substring(ssoConfig.shared_secret.length - 4);
+      }
+
+      return ResponseHelper.success(res, ssoConfig, 'SSO配置更新成功');
+    } catch (error) {
+      logger.error('更新SSO配置失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '更新SSO配置失败');
+    }
+  }
+
+  /**
+   * 生成新的SSO共享密钥
+   */
+  static async generateSSOSecret(req, res) {
+    try {
+      const userRole = req.user.role;
+      
+      // 只有超级管理员可以生成密钥
+      if (userRole !== ROLES.SUPER_ADMIN) {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以生成SSO密钥');
+      }
+      
+      // 生成32位随机密钥
+      const crypto = require('crypto');
+      const newSecret = crypto.randomBytes(16).toString('hex');
+      
+      logger.info('管理员生成新的SSO密钥', { 
+        adminId: req.user.id
+      });
+
+      return ResponseHelper.success(res, {
+        secret: newSecret
+      }, 'SSO密钥生成成功');
+    } catch (error) {
+      logger.error('生成SSO密钥失败', { 
+        adminId: req.user?.id, 
+        error: error.message 
+      });
+      return ResponseHelper.error(res, error.message || '生成SSO密钥失败');
+    }
+  }
 }
 
 module.exports = SystemStatsController;

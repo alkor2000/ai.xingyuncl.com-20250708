@@ -20,7 +20,8 @@ import {
   ApiOutlined,
   BgColorsOutlined,
   HistoryOutlined,
-  PictureOutlined
+  PictureOutlined,
+  KeyOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -44,7 +45,8 @@ import {
   ThemeSettings,
   SystemPromptSettings,
   UsageLogs,
-  ImageModelSettings
+  ImageModelSettings,
+  SSOSettings
 } from '../../components/admin/settings'
 
 const { TabPane } = Tabs
@@ -654,6 +656,21 @@ const Settings = () => {
             key="email"
           >
             <EmailSettings disabled={!isSuperAdmin} />
+          </TabPane>
+        )}
+
+        {/* SSO配置（只有超级管理员可见） */}
+        {isSuperAdmin && (
+          <TabPane 
+            tab={
+              <span>
+                <KeyOutlined />
+                {t('admin.settings.tabs.sso')}
+              </span>
+            } 
+            key="sso"
+          >
+            <SSOSettings />
           </TabPane>
         )}
 

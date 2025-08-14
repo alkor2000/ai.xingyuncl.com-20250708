@@ -1,5 +1,5 @@
 /**
- * 认证控制器
+ * 认证控制器 - 支持SSO单点登录
  */
 
 const User = require('../models/User');
@@ -8,6 +8,7 @@ const { GroupService } = require('../services/admin');
 const EmailService = require('../services/emailService');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const ResponseHelper = require('../utils/response');
 const config = require('../config');
 const logger = require('../utils/logger');
@@ -75,6 +76,187 @@ class AuthController {
   }
 
   /**
+   * SSO单点登录
+   * POST /api/auth/sso
+   */
+  static async ssoLogin(req, res) {
+    try {
+      const { uuid, name, timestamp, signature } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+
+      // 验证必填参数
+      if (!uuid || !timestamp || !signature) {
+        logger.warn('SSO登录失败：缺少必要参数', { uuid, clientIp });
+        return ResponseHelper.validation(res, ['缺少必要的SSO参数']);
+      }
+
+      // 获取SSO配置
+      const ssoConfig = await SystemConfig.getSetting('sso_config');
+      if (!ssoConfig || !ssoConfig.enabled) {
+        logger.warn('SSO登录失败：SSO功能未启用', { uuid, clientIp });
+        return ResponseHelper.forbidden(res, 'SSO功能未启用');
+      }
+
+      // 检查IP白名单（如果启用）
+      if (ssoConfig.ip_whitelist_enabled && ssoConfig.allowed_ips) {
+        const allowedIps = ssoConfig.allowed_ips.split(',').map(ip => ip.trim());
+        if (!allowedIps.includes(clientIp)) {
+          logger.warn('SSO登录失败：IP不在白名单', { uuid, clientIp, allowedIps });
+          return ResponseHelper.forbidden(res, '您的IP地址未授权访问SSO');
+        }
+      }
+
+      // 验证时间戳（防止重放攻击）
+      const requestTime = parseInt(timestamp);
+      const currentTime = Math.floor(Date.now() / 1000);
+      const validMinutes = ssoConfig.signature_valid_minutes || 5;
+      
+      if (Math.abs(currentTime - requestTime) > validMinutes * 60) {
+        logger.warn('SSO登录失败：请求已过期', { 
+          uuid, 
+          requestTime, 
+          currentTime, 
+          diff: Math.abs(currentTime - requestTime) 
+        });
+        return ResponseHelper.validation(res, ['SSO请求已过期，请重新发起']);
+      }
+
+      // 验证签名
+      const sharedSecret = ssoConfig.shared_secret;
+      if (!sharedSecret) {
+        logger.error('SSO登录失败：未配置共享密钥');
+        return ResponseHelper.error(res, 'SSO配置错误');
+      }
+
+      // 计算预期签名：MD5(uuid + timestamp + shared_secret)
+      const expectedSignature = crypto
+        .createHash('md5')
+        .update(`${uuid}${timestamp}${sharedSecret}`)
+        .digest('hex');
+
+      if (signature !== expectedSignature) {
+        logger.warn('SSO登录失败：签名验证失败', { 
+          uuid, 
+          clientIp,
+          receivedSignature: signature,
+          expectedSignature 
+        });
+        return ResponseHelper.unauthorized(res, 'SSO签名验证失败');
+      }
+
+      // 查找或创建用户
+      const user = await User.createOrUpdateSSOUser({
+        uuid,
+        name,
+        group_id: ssoConfig.target_group_id || 1,
+        default_credits: ssoConfig.default_credits || 100,
+        credits_expire_days: 365
+      });
+
+      // 检查用户状态
+      if (user.status !== 'active') {
+        logger.warn('SSO登录失败：用户状态异常', { 
+          uuid, 
+          userId: user.id, 
+          status: user.status 
+        });
+        return ResponseHelper.unauthorized(res, '账户已被禁用');
+      }
+
+      // 检查账号有效期
+      if (user.isAccountExpired()) {
+        const remainingDays = user.getAccountRemainingDays();
+        logger.warn('SSO登录失败：账号已过期', { 
+          uuid, 
+          userId: user.id, 
+          expireAt: user.expire_at,
+          expiredDays: Math.abs(remainingDays)
+        });
+        
+        let expireMessage = '账号已过期';
+        if (remainingDays !== null) {
+          expireMessage = `账号已过期${Math.abs(remainingDays)}天，请联系管理员续期`;
+        }
+        
+        return ResponseHelper.unauthorized(res, expireMessage);
+      }
+
+      // 获取用户权限
+      const permissions = await user.getPermissions();
+
+      // 获取用户的站点配置
+      const siteConfig = await AuthController.getUserSiteConfig(user);
+
+      // 生成JWT令牌
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        type: 'access',
+        ssoUser: true,
+        uuid: user.uuid
+      };
+      
+      // 添加唯一标识符，用于token管理
+      const jti = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      tokenPayload.jti = jti;
+
+      const accessToken = jwt.sign(
+        tokenPayload,
+        config.auth.jwt.accessSecret,
+        {
+          expiresIn: config.auth.jwt.accessExpiresIn,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      // 获取动态的刷新令牌过期时间
+      const refreshTokenExpiry = await AuthController.getRefreshTokenExpiry();
+
+      const refreshToken = jwt.sign(
+        {
+          userId: user.id,
+          type: 'refresh',
+          jti: `refresh-${jti}`
+        },
+        config.auth.jwt.refreshSecret,
+        {
+          expiresIn: refreshTokenExpiry,
+          issuer: config.auth.jwt.issuer,
+          audience: config.auth.jwt.audience
+        }
+      );
+
+      // 更新用户最后登录时间
+      await user.updateLastLogin();
+
+      logger.info('SSO登录成功', { 
+        uuid, 
+        userId: user.id, 
+        username: user.username,
+        role: user.role,
+        permissions: permissions.length,
+        clientIp
+      });
+
+      return ResponseHelper.success(res, {
+        user: user.toJSON(),
+        permissions,
+        siteConfig,
+        accessToken,
+        refreshToken,
+        expiresIn: config.auth.jwt.accessExpiresIn
+      }, 'SSO登录成功');
+
+    } catch (error) {
+      logger.error('SSO登录处理失败:', error);
+      return ResponseHelper.error(res, 'SSO登录失败');
+    }
+  }
+
+  /**
    * 用户登录 - 支持邮箱、手机号、用户名登录
    * POST /api/auth/login
    */
@@ -117,6 +299,12 @@ class AuthController {
       if (!user) {
         logger.warn('登录失败：用户不存在', { account });
         return ResponseHelper.unauthorized(res, '账号或密码错误');
+      }
+
+      // SSO用户不允许密码登录
+      if (user.uuid_source === 'sso') {
+        logger.warn('登录失败：SSO用户不允许密码登录', { account, userId: user.id });
+        return ResponseHelper.forbidden(res, 'SSO用户请通过单点登录访问');
       }
 
       // 验证密码（使用bcrypt）
@@ -820,6 +1008,11 @@ class AuthController {
         return ResponseHelper.notFound(res, '用户不存在');
       }
 
+      // SSO用户不允许修改用户名
+      if (user.uuid_source === 'sso' && username !== undefined && username !== user.username) {
+        return ResponseHelper.forbidden(res, 'SSO用户不允许修改用户名');
+      }
+
       // 准备更新数据
       const updateData = {};
       
@@ -908,6 +1101,11 @@ class AuthController {
       const user = await User.findById(userId);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
+      }
+
+      // SSO用户不允许修改密码
+      if (user.uuid_source === 'sso') {
+        return ResponseHelper.forbidden(res, 'SSO用户不允许修改密码');
       }
 
       // 验证原密码

@@ -148,6 +148,25 @@ router.post('/settings/email/test',
   SystemStatsController.testEmailSend
 );
 
+// ===== SSO配置路由（新增）=====
+// 获取SSO配置
+router.get('/settings/sso',
+  canManageSystem(), // 只有超级管理员可以查看
+  SystemStatsController.getSSOSettings
+);
+
+// 更新SSO配置
+router.put('/settings/sso',
+  canManageSystem(), // 只有超级管理员可以修改
+  SystemStatsController.updateSSOSettings
+);
+
+// 生成新的SSO密钥
+router.post('/settings/sso/generate-secret',
+  canManageSystem(), // 只有超级管理员可以生成
+  SystemStatsController.generateSSOSecret
+);
+
 // 站点Logo上传路由
 router.post('/settings/upload-logo',
   canManageSystem(), // 只有超级管理员可以上传

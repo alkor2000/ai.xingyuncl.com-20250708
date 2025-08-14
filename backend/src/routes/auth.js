@@ -1,5 +1,5 @@
 /**
- * 认证路由 - 支持动态速率限制配置
+ * 认证路由 - 支持动态速率限制配置和SSO单点登录
  */
 
 const express = require('express');
@@ -22,6 +22,13 @@ const dynamicRateLimit = (type) => {
     }
   };
 };
+
+/**
+ * @route POST /api/auth/sso
+ * @desc SSO单点登录
+ * @access Public
+ */
+router.post('/sso', dynamicRateLimit('auth'), AuthController.ssoLogin);
 
 /**
  * @route POST /api/auth/login

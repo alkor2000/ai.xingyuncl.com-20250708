@@ -16,6 +16,7 @@ class UserGroupController {
       const currentUser = req.user;
       const groups = await GroupService.getGroups(currentUser);
 
+      // 恢复原格式：直接返回数组
       return ResponseHelper.success(res, groups, '获取用户分组列表成功');
     } catch (error) {
       logger.error('获取用户分组列表失败', { 
@@ -67,8 +68,6 @@ class UserGroupController {
       await CacheService.clearUserGroupsCache();
       await CacheService.clearAIModelsCache();
 
-
-
       return ResponseHelper.success(res, group, '用户分组更新成功');
     } catch (error) {
       logger.error('更新用户分组失败', { 
@@ -100,8 +99,6 @@ class UserGroupController {
       // 清除相关缓存
       await CacheService.clearUserGroupsCache();
       await CacheService.clearAIModelsCache();
-
-
 
       return ResponseHelper.success(res, null, result.message);
     } catch (error) {

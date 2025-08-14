@@ -1,8 +1,10 @@
 /**
- * 用户模型 - 支持用户分组和积分管理（包含积分有效期功能和组站点配置）
+ * 用户模型 - 支持用户分组、积分管理和UUID（SSO支持）
  */
 
 const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const dbConnection = require('../database/connection');
 const { DatabaseError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
@@ -66,6 +68,36 @@ class User {
       return new User(rows[0]);
     } catch (error) {
       logger.error('根据ID查找用户失败:', error);
+      throw new DatabaseError('查找用户失败', error);
+    }
+  }
+
+  /**
+   * 根据UUID查找用户（SSO支持）
+   */
+  static async findByUUID(uuid) {
+    try {
+      const sql = `
+        SELECT u.*, 
+               g.name as group_name, 
+               g.color as group_color, 
+               g.expire_date as group_expire_date,
+               g.site_customization_enabled as group_site_customization_enabled,
+               g.site_name as group_site_name,
+               g.site_logo as group_site_logo
+        FROM users u
+        LEFT JOIN user_groups g ON u.group_id = g.id
+        WHERE u.uuid = ?
+      `;
+      const { rows } = await dbConnection.query(sql, [uuid]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      logger.error('根据UUID查找用户失败:', error);
       throw new DatabaseError('查找用户失败', error);
     }
   }
@@ -159,9 +191,15 @@ class User {
       throw new DatabaseError('查找用户失败', error);
     }
   }
+
+  /**
+   * 创建用户（支持UUID）
+   */
   static async create(userData) {
     try {
       const {
+        uuid = null,  // 新增：支持传入UUID（SSO用户）
+        uuid_source = 'system',  // 新增：UUID来源
         email,
         username,
         password,
@@ -184,6 +222,9 @@ class User {
       if (!email || !username || !password) {
         throw new ValidationError('邮箱、用户名和密码为必填项');
       }
+
+      // 生成UUID（如果没有提供）
+      const userUuid = uuid || uuidv4();
 
       // 加密密码
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -209,26 +250,38 @@ class User {
 
       const sql = `
         INSERT INTO users (
-          email, username, password_hash, phone, role, group_id, status, remark,
+          uuid, uuid_source, email, username, password_hash, phone, role, group_id, status, remark,
           token_quota, credits_quota, credits_expire_at, expire_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       const params = [
-        email, username, hashedPassword, phone, role, group_id, status, remark,
+        userUuid, uuid_source, email, username, hashedPassword, phone, role, group_id, status, remark,
         token_quota, credits_quota, creditsExpireAt, accountExpireAt
       ];
 
       const { rows } = await dbConnection.query(sql, params);
       const userId = rows.insertId;
 
-      logger.info('用户创建成功', { userId, email, username, role, accountExpireAt, credits_quota });
+      logger.info('用户创建成功', { 
+        userId, 
+        uuid: userUuid,
+        uuid_source,
+        email, 
+        username, 
+        role, 
+        accountExpireAt, 
+        credits_quota 
+      });
 
       return await User.findById(userId);
     } catch (error) {
       logger.error('创建用户失败:', error);
       
       if (error.code === 'ER_DUP_ENTRY') {
+        if (error.message.includes('uuid')) {
+          throw new ValidationError('该UUID已存在');
+        }
         if (error.message.includes('email')) {
           throw new ValidationError('该邮箱已被注册');
         }
@@ -238,6 +291,72 @@ class User {
       }
       
       throw new DatabaseError('创建用户失败', error);
+    }
+  }
+
+  /**
+   * 创建或更新SSO用户
+   */
+  static async createOrUpdateSSOUser(ssoData) {
+    try {
+      const {
+        uuid,
+        name = null,
+        group_id,
+        default_credits,
+        credits_expire_days = 365
+      } = ssoData;
+
+      // 先查找是否存在该UUID的用户
+      const existingUser = await User.findByUUID(uuid);
+      
+      if (existingUser) {
+        // 用户已存在，更新最后登录时间
+        await existingUser.updateLastLogin();
+        logger.info('SSO用户登录', { 
+          userId: existingUser.id, 
+          uuid,
+          username: existingUser.username 
+        });
+        return existingUser;
+      }
+
+      // 用户不存在，创建新用户
+      // 生成用户名（使用UUID前8位）
+      const username = `sso_${uuid.substring(0, 8)}`;
+      // 生成随机密码（SSO用户不需要密码登录）
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      // 使用UUID作为邮箱（SSO用户可能没有邮箱）
+      const email = `${uuid}@sso.local`;
+
+      const newUser = await User.create({
+        uuid,
+        uuid_source: 'sso',
+        email,
+        username,
+        password: randomPassword,
+        phone: null,
+        role: 'user',
+        group_id,
+        status: 'active',
+        remark: `SSO用户 - ${name || 'Unknown'}`,
+        token_quota: 10000,
+        credits_quota: default_credits,
+        credits_expire_days
+      });
+
+      logger.info('SSO用户创建成功', {
+        userId: newUser.id,
+        uuid,
+        username,
+        group_id,
+        default_credits
+      });
+
+      return newUser;
+    } catch (error) {
+      logger.error('创建或更新SSO用户失败:', error);
+      throw new DatabaseError('SSO用户处理失败', error);
     }
   }
 
@@ -299,8 +418,8 @@ class User {
       }
 
       if (search) {
-        whereConditions.push('(u.username LIKE ? OR u.email LIKE ?)');
-        params.push(`%${search}%`, `%${search}%`);
+        whereConditions.push('(u.username LIKE ? OR u.email LIKE ? OR u.uuid LIKE ?)');
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
       }
 
       const whereClause = whereConditions.length > 0 
@@ -387,7 +506,7 @@ class User {
   async update(updateData) {
     try {
       // 不允许直接更新的字段
-      const protectedFields = ['id', 'created_at', 'password_hash'];
+      const protectedFields = ['id', 'uuid', 'uuid_source', 'created_at', 'password_hash'];
       protectedFields.forEach(field => delete updateData[field]);
 
       // 如果更新密码，需要加密
