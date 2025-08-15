@@ -2,6 +2,7 @@
  * 聊天页面 - 主界面（移动端适配版）
  * 优化：响应式布局 + 移动端单页切换
  * 修改：禁用虚拟滚动，使用普通滚动模式
+ * 更新：移除PC端顶部栏，增加对话空间
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -15,10 +16,9 @@ import MessageList from '../../components/chat/MessageList'
 // import VirtualMessageList from '../../components/chat/VirtualMessageList' // 禁用虚拟滚动
 import apiClient from '../../utils/api'
 
-// 导入子组件
+// 导入子组件 - 移除ChatHeader的导入
 import {
   ConversationSidebar,
-  ChatHeader,
   ChatInputArea,
   ConversationSettingsDrawer,
   ConversationFormModal,
@@ -862,7 +862,7 @@ const Chat = () => {
     )
   }
 
-  // PC端布局（保持原样）
+  // PC端布局（移除顶部栏）
   return (
     <Layout className="chat-container">
       {/* 侧边栏 */}
@@ -919,15 +919,7 @@ const Chat = () => {
             <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
           ) : (
             <>
-              {/* 对话头部 */}
-              <ChatHeader
-                conversation={currentConversation}
-                sidebarCollapsed={sidebarCollapsed}
-                onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-                onOpenSettings={() => handleEditConversation(currentConversation)}
-              />
-
-              {/* 消息列表 - 只使用普通滚动模式 */}
+              {/* 消息列表 - 移除顶部栏后直接显示 */}
               <div className="messages-container" ref={messagesContainerRef}>
                 <MessageList
                   messages={messages}
