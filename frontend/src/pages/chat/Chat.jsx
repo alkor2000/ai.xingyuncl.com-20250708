@@ -1,6 +1,7 @@
 /**
  * 聊天页面 - 主界面（移动端适配版）
  * 优化：响应式布局 + 移动端单页切换
+ * 修改：禁用虚拟滚动，使用普通滚动模式
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -11,7 +12,7 @@ import { MenuOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
-import VirtualMessageList from '../../components/chat/VirtualMessageList'
+// import VirtualMessageList from '../../components/chat/VirtualMessageList' // 禁用虚拟滚动
 import apiClient from '../../utils/api'
 
 // 导入子组件
@@ -147,11 +148,10 @@ const Chat = () => {
   
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
-  const virtualListRef = useRef(null)
   const inputRef = useRef(null)
 
-  // 决定是否使用虚拟滚动（消息数>=50时启用）
-  const useVirtualScroll = messages.length >= 50
+  // 禁用虚拟滚动 - 始终使用普通滚动模式
+  const useVirtualScroll = false
 
   // 初始化
   useEffect(() => {
@@ -167,13 +167,6 @@ const Chat = () => {
       setMobileDrawerVisible(false)
     }
   }, [currentConversationId, isMobile])
-
-  // 当切换虚拟滚动模式时，显示提示
-  useEffect(() => {
-    if (useVirtualScroll && messages.length === 50) {
-      message.info('消息较多，已启用虚拟滚动优化性能', 3)
-    }
-  }, [useVirtualScroll, messages.length])
 
   // 草稿管理函数
   const saveDraft = useCallback((conversationId, content) => {
@@ -248,25 +241,19 @@ const Chat = () => {
     }
   }, [inputValue, currentConversation?.id, isSending, debouncedSaveDraft])
 
-  // 滚动函数（兼容两种模式）
+  // 滚动函数 - 只使用普通滚动模式
   const scrollToBottom = useCallback((force = false) => {
-    if (useVirtualScroll && virtualListRef.current) {
-      // 虚拟滚动模式
-      virtualListRef.current.scrollToBottom()
-    } else if (messagesEndRef.current && (!userScrolled || force)) {
-      // 普通滚动模式
+    if (messagesEndRef.current && (!userScrolled || force)) {
       const behavior = isStreaming ? 'instant' : 'smooth'
       messagesEndRef.current.scrollIntoView({ 
         behavior,
         block: 'end'
       })
     }
-  }, [userScrolled, isStreaming, useVirtualScroll])
+  }, [userScrolled, isStreaming])
 
-  // 监听用户滚动（仅在普通模式下）
+  // 监听用户滚动
   useEffect(() => {
-    if (useVirtualScroll) return
-    
     const container = messagesContainerRef.current
     if (!container) return
 
@@ -283,7 +270,7 @@ const Chat = () => {
 
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [isStreaming, useVirtualScroll])
+  }, [isStreaming])
 
   // 流式输出结束时，重置用户滚动标志
   useEffect(() => {
@@ -676,17 +663,6 @@ const Chat = () => {
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
   const availableModels = aiModels.filter(m => m.is_active)
 
-  // 计算消息容器高度
-  const [containerHeight, setContainerHeight] = useState(window.innerHeight - 250)
-  
-  useEffect(() => {
-    const handleResize = () => {
-      setContainerHeight(window.innerHeight - 250)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
   // 移动端：渲染会话列表视图（不包含输入框）
   const renderMobileListView = () => (
     <div className="mobile-conversations-view" style={{ height: viewportHeight }}>
@@ -951,42 +927,22 @@ const Chat = () => {
                 onOpenSettings={() => handleEditConversation(currentConversation)}
               />
 
-              {/* 消息列表 - 智能切换虚拟滚动 */}
-              {useVirtualScroll ? (
-                // 虚拟滚动模式（>=50条消息）
-                <div className="messages-container" style={{ height: containerHeight }}>
-                  <VirtualMessageList
-                    ref={virtualListRef}
-                    messages={messages}
-                    typing={typing}
-                    isStreaming={isStreaming}
-                    streamingMessageId={streamingMessageId}
-                    messagesEndRef={messagesEndRef}
-                    user={user}
-                    currentModel={currentModel}
-                    aiModels={aiModels}
-                    onDeleteMessage={handleDeleteMessage}
-                    containerHeight={containerHeight}
-                  />
-                </div>
-              ) : (
-                // 普通滚动模式（<50条消息）
-                <div className="messages-container" ref={messagesContainerRef}>
-                  <MessageList
-                    messages={messages}
-                    loading={messagesLoading}
-                    typing={typing}
-                    isStreaming={isStreaming}
-                    currentModel={currentModel}
-                    aiModels={aiModels}
-                    user={user}
-                    streamingMessageId={streamingMessageId}
-                    messagesEndRef={messagesEndRef}
-                    onDeleteMessage={handleDeleteMessage}
-                  />
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
+              {/* 消息列表 - 只使用普通滚动模式 */}
+              <div className="messages-container" ref={messagesContainerRef}>
+                <MessageList
+                  messages={messages}
+                  loading={messagesLoading}
+                  typing={typing}
+                  isStreaming={isStreaming}
+                  currentModel={currentModel}
+                  aiModels={aiModels}
+                  user={user}
+                  streamingMessageId={streamingMessageId}
+                  messagesEndRef={messagesEndRef}
+                  onDeleteMessage={handleDeleteMessage}
+                />
+                <div ref={messagesEndRef} />
+              </div>
 
               {/* 输入区域 - 使用原有组件 */}
               <ChatInputArea
