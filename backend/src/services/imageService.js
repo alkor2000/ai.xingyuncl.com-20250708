@@ -40,9 +40,21 @@ class ImageService {
         throw new Error('用户不存在');
       }
 
-      // 检查积分是否充足（单价 × 数量）- 确保类型转换
-      const pricePerImage = parseFloat(model.price_per_image) || 1;
-      const requiredCredits = pricePerImage * actualQuantity;
+      // Midjourney特殊处理：每次生成4张图
+      const isMidjourney = model.provider === 'midjourney';
+      let effectiveQuantity = actualQuantity;
+      let pricePerImage = parseFloat(model.price_per_image) || 1;
+      
+      if (isMidjourney) {
+        // Midjourney固定生成1次（产生4张图的网格）
+        effectiveQuantity = 1;
+        // 积分按4张计算
+        const gridSize = model.api_config?.grid_size || 4;
+        pricePerImage = pricePerImage * gridSize;
+      }
+
+      // 检查积分是否充足
+      const requiredCredits = pricePerImage * effectiveQuantity;
       
       if (!user.hasCredits(requiredCredits)) {
         throw new Error(`积分不足，需要 ${requiredCredits} 积分`);
@@ -51,14 +63,15 @@ class ImageService {
       logger.info('开始批量生成图片', {
         userId,
         modelId,
-        quantity: actualQuantity,
+        quantity: effectiveQuantity,
         pricePerImage,
-        requiredCredits
+        requiredCredits,
+        isMidjourney
       });
 
       // 3. 并发生成多张图片
       const generatePromises = [];
-      for (let i = 0; i < actualQuantity; i++) {
+      for (let i = 0; i < effectiveQuantity; i++) {
         // 每张图片使用不同的种子（如果原始种子是-1则随机，否则递增）
         const seed = params.seed === -1 || params.seed === undefined 
           ? -1 
@@ -75,12 +88,11 @@ class ImageService {
       // 统计成功和失败的结果
       const successResults = [];
       const failedResults = [];
-      let totalConsumedCredits = 0; // 确保初始化为数字0
+      let totalConsumedCredits = 0;
 
       results.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value.success) {
           successResults.push(result.value.data);
-          // 确保积分累加使用数字类型
           totalConsumedCredits += pricePerImage;
         } else {
           failedResults.push({
@@ -92,18 +104,22 @@ class ImageService {
 
       // 4. 扣除积分（按实际成功数量）
       if (successResults.length > 0) {
+        const displayName = isMidjourney 
+          ? `Midjourney图像生成 - ${model.display_name}`
+          : `批量图像生成 - ${model.display_name} × ${successResults.length}张`;
+          
         await user.consumeCredits(
           totalConsumedCredits,
           null,
           null,
-          `批量图像生成 - ${model.display_name} × ${successResults.length}张`,
+          displayName,
           'image_consume'
         );
       }
 
       logger.info('批量生成完成', {
         userId,
-        requested: actualQuantity,
+        requested: effectiveQuantity,
         succeeded: successResults.length,
         failed: failedResults.length,
         creditsConsumed: totalConsumedCredits
@@ -111,7 +127,7 @@ class ImageService {
 
       return {
         success: true,
-        requested: actualQuantity,
+        requested: effectiveQuantity,
         succeeded: successResults.length,
         failed: failedResults.length,
         creditsConsumed: totalConsumedCredits,
@@ -138,21 +154,35 @@ class ImageService {
     let generationId = null;
     
     try {
-      // 1. 创建生成记录 - 确保credits_consumed是数字
-      const creditsToConsume = parseFloat(model.price_per_image) || 1;
+      // 判断是否为Midjourney
+      const isMidjourney = model.provider === 'midjourney';
       
-      generationId = await ImageGeneration.create({
+      // 1. 创建生成记录
+      const creditsToConsume = isMidjourney 
+        ? parseFloat(model.price_per_image) * (model.api_config?.grid_size || 4)
+        : parseFloat(model.price_per_image) || 1;
+      
+      const generationData = {
         user_id: userId,
         model_id: modelId,
         prompt: params.prompt,
-        negative_prompt: params.negative_prompt,
+        negative_prompt: params.negative_prompt || '',
         size: params.size || model.default_size,
         seed: params.seed || -1,
         guidance_scale: params.guidance_scale || model.default_guidance_scale,
         watermark: params.watermark !== false,
         status: 'generating',
         credits_consumed: creditsToConsume
-      });
+      };
+      
+      // Midjourney特殊字段
+      if (isMidjourney) {
+        generationData.action_type = 'IMAGINE';
+        generationData.generation_mode = params.mode || 'fast';
+        generationData.grid_layout = 1; // 标记为4图网格
+      }
+      
+      generationId = await ImageGeneration.create(generationData);
 
       // 2. 调用API生成图片
       const apiKey = ImageModel.decryptApiKey(model.api_key);
@@ -160,40 +190,75 @@ class ImageService {
         throw new Error('API密钥未配置');
       }
 
-      const requestData = {
-        model: model.model_id,
-        prompt: params.prompt,
-        response_format: 'url',
-        size: params.size || model.default_size,
-        seed: params.seed || -1,
-        guidance_scale: params.guidance_scale || model.default_guidance_scale,
-        watermark: params.watermark !== false
-      };
+      // 构建请求数据
+      let requestData;
+      let requestUrl = model.endpoint;
+      
+      if (isMidjourney) {
+        // Midjourney API的请求格式
+        requestData = {
+          prompt: params.prompt,
+          action: 'IMAGINE',
+          index: 0
+        };
+        
+        // 如果有比例参数，添加到prompt中
+        if (params.size && params.size !== '1:1' && params.size !== '1024x1024') {
+          requestData.prompt += ` --ar ${params.size}`;
+        }
+      } else {
+        // 普通模型的请求格式
+        requestData = {
+          model: model.model_id,
+          prompt: params.prompt,
+          response_format: 'url',
+          size: params.size || model.default_size,
+          seed: params.seed || -1,
+          guidance_scale: params.guidance_scale || model.default_guidance_scale,
+          watermark: params.watermark !== false
+        };
+      }
 
       logger.info(`生成第${index}张图片`, {
         userId,
         modelId,
         generationId,
-        creditsToConsume
+        creditsToConsume,
+        isMidjourney
       });
 
       const response = await axios.post(
-        model.endpoint,
+        requestUrl,
         requestData,
         {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          timeout: 60000
+          timeout: isMidjourney ? 300000 : 60000  // Midjourney需要更长超时
         }
       );
 
-      if (!response.data || !response.data.data || !response.data.data[0]) {
-        throw new Error('API返回数据格式错误');
+      // 解析响应
+      let imageUrl;
+      if (isMidjourney) {
+        // Midjourney API响应格式
+        if (!response.data || response.data.code !== 1) {
+          throw new Error(response.data?.msg || 'Midjourney API调用失败');
+        }
+        const resultData = response.data.data;
+        imageUrl = resultData.imageUrl || resultData.image_url || resultData.url;
+        
+        if (!imageUrl) {
+          throw new Error('Midjourney API未返回图片URL');
+        }
+      } else {
+        // 普通API响应格式
+        if (!response.data || !response.data.data || !response.data.data[0]) {
+          throw new Error('API返回数据格式错误');
+        }
+        imageUrl = response.data.data[0].url;
       }
-
-      const imageUrl = response.data.data[0].url;
       
       // 3. 下载图片到本地
       const { localPath, thumbnailPath, fileSize } = await this.downloadAndSaveImage(
@@ -203,14 +268,33 @@ class ImageService {
 
       // 4. 更新生成记录
       const generationTime = Date.now() - startTime;
-      await ImageGeneration.update(generationId, {
+      const updateData = {
         image_url: imageUrl,
         local_path: localPath,
         thumbnail_path: thumbnailPath,
         file_size: fileSize,
         status: 'success',
         generation_time: generationTime
-      });
+      };
+      
+      // Midjourney特殊处理：添加按钮数据
+      if (isMidjourney) {
+        updateData.task_status = 'SUCCESS';
+        updateData.task_id = response.data?.data?.task_id || `mj_${generationId}`;
+        updateData.buttons = JSON.stringify([
+          { type: 'UPSCALE', label: 'U1', customId: 'U1' },
+          { type: 'UPSCALE', label: 'U2', customId: 'U2' },
+          { type: 'UPSCALE', label: 'U3', customId: 'U3' },
+          { type: 'UPSCALE', label: 'U4', customId: 'U4' },
+          { type: 'VARIATION', label: 'V1', customId: 'V1' },
+          { type: 'VARIATION', label: 'V2', customId: 'V2' },
+          { type: 'VARIATION', label: 'V3', customId: 'V3' },
+          { type: 'VARIATION', label: 'V4', customId: 'V4' },
+          { type: 'REROLL', label: '🔄', customId: 'REROLL' }
+        ]);
+      }
+      
+      await ImageGeneration.update(generationId, updateData);
 
       const result = await ImageGeneration.findById(generationId);
       
@@ -229,11 +313,17 @@ class ImageService {
 
       // 更新失败状态
       if (generationId) {
-        await ImageGeneration.update(generationId, {
+        const updateData = {
           status: 'failed',
           error_message: error.message,
           generation_time: Date.now() - startTime
-        });
+        };
+        
+        if (model.provider === 'midjourney') {
+          updateData.task_status = 'FAILURE';
+        }
+        
+        await ImageGeneration.update(generationId, updateData);
       }
 
       return {
@@ -397,15 +487,16 @@ class ImageService {
     // 验证prompt
     if (!params.prompt || params.prompt.trim().length === 0) {
       errors.push('提示词不能为空');
-    } else if (params.prompt.length > 1000) {
-      errors.push('提示词长度不能超过1000字符');
+    } else if (params.prompt.length > 4000) {
+      errors.push('提示词长度不能超过4000字符');
     }
     
     // 验证尺寸
     if (params.size) {
       const validSizes = [
         '1024x1024', '864x1152', '1152x864', '1280x720',
-        '720x1280', '832x1248', '1248x832', '1512x648'
+        '720x1280', '832x1248', '1248x832', '1512x648',
+        '1:1', '4:3', '3:4', '16:9', '9:16'  // 支持Midjourney的比例格式
       ];
       if (!validSizes.includes(params.size)) {
         errors.push('不支持的图片尺寸');

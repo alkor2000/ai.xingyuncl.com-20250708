@@ -3,6 +3,7 @@
  */
 
 const ImageService = require('../services/imageService');
+const MidjourneyService = require('../services/midjourneyService');
 const ImageModel = require('../models/ImageModel');
 const ImageGeneration = require('../models/ImageGeneration');
 const ResponseHelper = require('../utils/response');
@@ -30,7 +31,7 @@ class ImageController {
   }
 
   /**
-   * 生成图片（支持批量生成）
+   * 生成图片（支持批量生成和Midjourney）
    */
   static async generateImage(req, res) {
     try {
@@ -43,7 +44,8 @@ class ImageController {
         seed, 
         guidance_scale, 
         watermark,
-        quantity = 1  // 新增：生成数量，默认1张
+        quantity = 1,  // 生成数量
+        mode = 'fast'  // Midjourney模式
       } = req.body;
       
       // 验证必填参数
@@ -54,43 +56,63 @@ class ImageController {
         }, '参数不完整');
       }
       
-      // 验证参数（包括quantity）
-      const errors = ImageService.validateGenerationParams(req.body);
-      if (errors.length > 0) {
-        return ResponseHelper.validation(res, null, errors.join('; '));
+      // 获取模型信息
+      const model = await ImageModel.findById(model_id);
+      if (!model) {
+        return ResponseHelper.notFound(res, '模型不存在');
       }
       
-      // 限制数量范围
-      const actualQuantity = Math.min(Math.max(1, parseInt(quantity) || 1), 4);
-      
-      if (actualQuantity === 1) {
-        // 单张生成（保持兼容性）
-        const result = await ImageService.generateImage(userId, model_id, {
+      // 判断是否为Midjourney模型
+      if (model.provider === 'midjourney' && model.generation_type === 'async') {
+        // 使用Midjourney服务
+        const result = await MidjourneyService.submitImagine(userId, model_id, {
           prompt,
           negative_prompt,
           size,
-          seed,
-          guidance_scale,
-          watermark
+          mode
         });
         
-        return ResponseHelper.success(res, result, '图片生成成功');
+        return ResponseHelper.success(res, result, result.message);
       } else {
-        // 批量生成
-        const result = await ImageService.generateImages(userId, model_id, {
-          prompt,
-          negative_prompt,
-          size,
-          seed,
-          guidance_scale,
-          watermark
-        }, actualQuantity);
+        // 使用普通图像服务（豆包等同步模型）
+        // 验证参数
+        const errors = ImageService.validateGenerationParams(req.body);
+        if (errors.length > 0) {
+          return ResponseHelper.validation(res, null, errors.join('; '));
+        }
         
-        if (result.succeeded > 0) {
-          const message = `成功生成 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`;
-          return ResponseHelper.success(res, result, message);
+        // 限制数量范围
+        const actualQuantity = Math.min(Math.max(1, parseInt(quantity) || 1), 4);
+        
+        if (actualQuantity === 1) {
+          // 单张生成（保持兼容性）
+          const result = await ImageService.generateImage(userId, model_id, {
+            prompt,
+            negative_prompt,
+            size,
+            seed,
+            guidance_scale,
+            watermark
+          });
+          
+          return ResponseHelper.success(res, result, '图片生成成功');
         } else {
-          return ResponseHelper.error(res, '所有图片生成失败');
+          // 批量生成
+          const result = await ImageService.generateImages(userId, model_id, {
+            prompt,
+            negative_prompt,
+            size,
+            seed,
+            guidance_scale,
+            watermark
+          }, actualQuantity);
+          
+          if (result.succeeded > 0) {
+            const message = `成功生成 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`;
+            return ResponseHelper.success(res, result, message);
+          } else {
+            return ResponseHelper.error(res, '所有图片生成失败');
+          }
         }
       }
     } catch (error) {
@@ -101,6 +123,153 @@ class ImageController {
       }
       
       return ResponseHelper.error(res, error.message || '图片生成失败');
+    }
+  }
+  
+  /**
+   * Midjourney操作（U/V/Reroll等）
+   */
+  static async midjourneyAction(req, res) {
+    try {
+      const userId = req.user.id;
+      const { generation_id, action, index } = req.body;
+      
+      // 验证参数
+      if (!generation_id || !action) {
+        return ResponseHelper.validation(res, {
+          generation_id: !generation_id ? '请提供生成记录ID' : null,
+          action: !action ? '请提供操作类型' : null
+        });
+      }
+      
+      // 验证操作类型
+      const validActions = ['UPSCALE', 'VARIATION', 'REROLL'];
+      if (!validActions.includes(action)) {
+        return ResponseHelper.validation(res, { action: '无效的操作类型' });
+      }
+      
+      // 对于U/V操作，需要index
+      if ((action === 'UPSCALE' || action === 'VARIATION') && (!index || index < 1 || index > 4)) {
+        return ResponseHelper.validation(res, { index: '请提供有效的图片索引(1-4)' });
+      }
+      
+      const result = await MidjourneyService.submitAction(userId, generation_id, action, index);
+      
+      return ResponseHelper.success(res, result, result.message);
+    } catch (error) {
+      logger.error('Midjourney操作失败:', error);
+      
+      if (error.message.includes('积分不足')) {
+        return ResponseHelper.error(res, error.message, 402);
+      }
+      
+      return ResponseHelper.error(res, error.message || '操作失败');
+    }
+  }
+  
+  /**
+   * 查询Midjourney任务状态
+   */
+  static async getMidjourneyTaskStatus(req, res) {
+    try {
+      const { task_id } = req.params;
+      const userId = req.user.id;
+      
+      // 根据task_id查询生成记录（修复查询）
+      const generation = await ImageGeneration.findByTaskId(task_id);
+      
+      if (!generation) {
+        return ResponseHelper.notFound(res, '任务不存在');
+      }
+      
+      // 验证权限
+      if (generation.user_id !== userId) {
+        return ResponseHelper.forbidden(res, '无权查看此任务');
+      }
+      
+      // 如果任务还在进行中，尝试查询最新状态
+      if (generation.task_status === 'SUBMITTED' || generation.task_status === 'IN_PROGRESS') {
+        try {
+          const model = await ImageModel.findById(generation.model_id);
+          if (model) {
+            const taskData = await MidjourneyService.fetchTaskStatus(task_id, model);
+            
+            // 返回最新状态和当前数据
+            return ResponseHelper.success(res, {
+              id: generation.id,
+              task_id: generation.task_id,
+              status: generation.status,
+              task_status: taskData.status || generation.task_status,
+              progress: taskData.progress || generation.progress,
+              image_url: taskData.imageUrl || generation.image_url,
+              local_path: generation.local_path,
+              thumbnail_path: generation.thumbnail_path,
+              buttons: generation.buttons,
+              prompt: generation.prompt,
+              created_at: generation.created_at,
+              updated_at: generation.updated_at
+            });
+          }
+        } catch (error) {
+          // 如果查询失败，返回数据库中的状态
+          logger.warn('查询Midjourney任务状态失败，返回缓存状态', { task_id, error: error.message });
+        }
+      }
+      
+      // 返回数据库中的状态
+      return ResponseHelper.success(res, generation);
+    } catch (error) {
+      logger.error('获取任务状态失败:', error);
+      return ResponseHelper.error(res, '获取任务状态失败');
+    }
+  }
+  
+  /**
+   * 获取用户的Midjourney任务列表
+   */
+  static async getMidjourneyTasks(req, res) {
+    try {
+      const userId = req.user.id;
+      const { page = 1, limit = 20, status } = req.query;
+      
+      const result = await MidjourneyService.getUserTasks(userId, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        status
+      });
+      
+      return ResponseHelper.success(res, result);
+    } catch (error) {
+      logger.error('获取Midjourney任务列表失败:', error);
+      return ResponseHelper.error(res, '获取任务列表失败');
+    }
+  }
+  
+  /**
+   * Webhook接收（用于Midjourney回调）
+   */
+  static async webhook(req, res) {
+    try {
+      const data = req.body;
+      
+      // 验证webhook密钥（如果配置了）
+      const webhookSecret = process.env.MIDJOURNEY_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const signature = req.headers['x-webhook-signature'];
+        // TODO: 验证签名
+      }
+      
+      // 处理回调
+      const success = await MidjourneyService.handleWebhook(data);
+      
+      if (success) {
+        return ResponseHelper.success(res, null, 'Webhook处理成功');
+      } else {
+        return ResponseHelper.error(res, 'Webhook处理失败');
+      }
+    } catch (error) {
+      logger.error('处理Webhook失败:', error);
+      return ResponseHelper.error(res, 'Webhook处理失败');
     }
   }
 

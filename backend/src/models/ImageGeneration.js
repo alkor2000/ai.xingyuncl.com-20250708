@@ -7,40 +7,64 @@ const logger = require('../utils/logger');
 
 class ImageGeneration {
   /**
-   * 创建生成记录
+   * 创建生成记录（支持Midjourney字段）
    */
   static async create(data) {
     try {
       const {
         user_id,
         model_id,
+        parent_id = null,
         prompt,
         negative_prompt = null,
+        prompt_en = null,
         size = '1024x1024',
         seed = -1,
         guidance_scale = 2.5,
         watermark = 1,
         status = 'pending',
+        task_status = null,
+        task_id = null,
+        action_type = 'IMAGINE',
+        action_index = null,
+        generation_mode = 'fast',
+        grid_layout = 0,
+        mj_custom_id = null,
+        buttons = null,
+        progress = null,
         credits_consumed = 0
       } = data;
 
       const query = `
         INSERT INTO image_generations 
-        (user_id, model_id, prompt, negative_prompt, size, seed, 
-         guidance_scale, watermark, status, credits_consumed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (user_id, model_id, parent_id, prompt, negative_prompt, prompt_en, 
+         size, seed, guidance_scale, watermark, status, task_status, task_id,
+         action_type, action_index, generation_mode, grid_layout, mj_custom_id,
+         buttons, progress, credits_consumed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const result = await dbConnection.query(query, [
         user_id,
         model_id,
+        parent_id,
         prompt,
         negative_prompt,
+        prompt_en,
         size,
         seed,
         guidance_scale,
         watermark,
         status,
+        task_status,
+        task_id,
+        action_type,
+        action_index,
+        generation_mode,
+        grid_layout,
+        mj_custom_id,
+        buttons ? JSON.stringify(buttons) : null,
+        progress,
         credits_consumed
       ]);
 
@@ -52,14 +76,20 @@ class ImageGeneration {
   }
 
   /**
-   * 更新生成记录
+   * 更新生成记录（支持所有字段）
    */
   static async update(id, updateData) {
     try {
+      // 扩展允许更新的字段，包含所有Midjourney相关字段
       const allowedFields = [
+        // 原有字段
         'image_url', 'local_path', 'thumbnail_path', 'file_size',
         'status', 'error_message', 'credits_consumed', 'generation_time',
-        'is_favorite', 'is_public'
+        'is_favorite', 'is_public',
+        // Midjourney相关字段
+        'task_id', 'task_status', 'buttons', 'grid_layout', 'prompt_en',
+        'parent_id', 'action_type', 'action_index', 'generation_mode',
+        'progress', 'mj_custom_id', 'fail_reason'
       ];
 
       const fields = [];
@@ -68,7 +98,12 @@ class ImageGeneration {
       for (const field of allowedFields) {
         if (updateData.hasOwnProperty(field)) {
           fields.push(`${field} = ?`);
-          values.push(updateData[field]);
+          // 特殊处理buttons字段（如果是对象则转JSON）
+          if (field === 'buttons' && typeof updateData[field] === 'object') {
+            values.push(JSON.stringify(updateData[field]));
+          } else {
+            values.push(updateData[field]);
+          }
         }
       }
 
@@ -191,6 +226,35 @@ class ImageGeneration {
       return result.rows[0];
     } catch (error) {
       logger.error('获取图片生成记录失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 根据task_id获取生成记录
+   */
+  static async findByTaskId(taskId) {
+    try {
+      const query = `
+        SELECT 
+          ig.*,
+          im.display_name as model_name,
+          im.provider,
+          im.price_per_image
+        FROM image_generations ig
+        LEFT JOIN image_models im ON ig.model_id = im.id
+        WHERE ig.task_id = ?
+      `;
+
+      const result = await dbConnection.query(query, [taskId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('根据task_id获取图片生成记录失败:', error);
       throw error;
     }
   }

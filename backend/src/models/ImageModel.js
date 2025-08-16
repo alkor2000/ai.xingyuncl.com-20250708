@@ -13,7 +13,8 @@ class ImageModel {
   static async findAll(onlyActive = false) {
     try {
       let query = `
-        SELECT id, name, display_name, description, provider, endpoint, api_key, model_id,
+        SELECT id, name, display_name, description, provider, generation_type, endpoint, api_key, model_id,
+               api_config, webhook_url, polling_interval, max_polling_time,
                price_per_image, sizes_supported, max_prompt_length, default_size,
                default_guidance_scale, example_prompt, example_image, icon,
                is_active, sort_order, created_at, updated_at
@@ -37,7 +38,10 @@ class ImageModel {
           has_api_key: !!api_key,  // 只返回是否配置了API密钥
           sizes_supported: typeof model.sizes_supported === 'string' 
             ? JSON.parse(model.sizes_supported) 
-            : model.sizes_supported
+            : model.sizes_supported,
+          api_config: typeof model.api_config === 'string'
+            ? JSON.parse(model.api_config)
+            : model.api_config
         };
       });
     } catch (error) {
@@ -67,10 +71,16 @@ class ImageModel {
         model.sizes_supported = JSON.parse(model.sizes_supported);
       }
       
+      if (typeof model.api_config === 'string') {
+        model.api_config = JSON.parse(model.api_config);
+      }
+      
       // 重要：将price_per_image转换为数字类型
       model.price_per_image = parseFloat(model.price_per_image) || 1;
       model.default_guidance_scale = parseFloat(model.default_guidance_scale) || 2.5;
       model.max_prompt_length = parseInt(model.max_prompt_length) || 1000;
+      model.polling_interval = parseInt(model.polling_interval) || 2000;
+      model.max_polling_time = parseInt(model.max_polling_time) || 300000;
       
       return model;
     } catch (error) {
@@ -100,10 +110,16 @@ class ImageModel {
         model.sizes_supported = JSON.parse(model.sizes_supported);
       }
       
+      if (typeof model.api_config === 'string') {
+        model.api_config = JSON.parse(model.api_config);
+      }
+      
       // 重要：将price_per_image转换为数字类型
       model.price_per_image = parseFloat(model.price_per_image) || 1;
       model.default_guidance_scale = parseFloat(model.default_guidance_scale) || 2.5;
       model.max_prompt_length = parseInt(model.max_prompt_length) || 1000;
+      model.polling_interval = parseInt(model.polling_interval) || 2000;
+      model.max_polling_time = parseInt(model.max_polling_time) || 300000;
       
       return model;
     } catch (error) {
@@ -122,9 +138,14 @@ class ImageModel {
         display_name,
         description,
         provider = 'volcano',
+        generation_type = 'sync',
         endpoint,
         api_key,
         model_id,
+        api_config,
+        webhook_url,
+        polling_interval = 2000,
+        max_polling_time = 300000,
         price_per_image = 1.00,
         sizes_supported = ['1024x1024'],
         max_prompt_length = 1000,
@@ -155,29 +176,35 @@ class ImageModel {
 
       const query = `
         INSERT INTO image_models 
-        (name, display_name, description, provider, endpoint, api_key, model_id,
+        (name, display_name, description, provider, generation_type, endpoint, api_key, model_id,
+         api_config, webhook_url, polling_interval, max_polling_time,
          price_per_image, sizes_supported, max_prompt_length, default_size,
          default_guidance_scale, example_prompt, example_image, icon,
          is_active, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       // 重要：将undefined转换为null，MySQL2不接受undefined
       const params = [
         name,
         display_name,
-        description || null,  // 转换undefined为null
+        description || null,
         provider,
+        generation_type,
         endpoint,
         encryptedApiKey,
         model_id,
+        typeof api_config === 'object' ? JSON.stringify(api_config) : api_config || null,
+        webhook_url || null,
+        polling_interval,
+        max_polling_time,
         price_per_image,
         JSON.stringify(sizes_supported),
         max_prompt_length,
         default_size,
         default_guidance_scale,
-        example_prompt || null,  // 转换undefined为null
-        example_image || null,   // 转换undefined为null
+        example_prompt || null,
+        example_image || null,
         icon,
         is_active,
         sort_order
@@ -206,7 +233,9 @@ class ImageModel {
   static async update(id, updateData) {
     try {
       const allowedFields = [
-        'display_name', 'description', 'endpoint', 'api_key', 'model_id',
+        'display_name', 'description', 'provider', 'generation_type', 
+        'endpoint', 'api_key', 'model_id', 'api_config', 'webhook_url',
+        'polling_interval', 'max_polling_time',
         'price_per_image', 'sizes_supported', 'max_prompt_length', 'default_size',
         'default_guidance_scale', 'example_prompt', 'example_image', 'icon',
         'is_active', 'sort_order'
@@ -235,6 +264,8 @@ class ImageModel {
               iv: iv.toString('hex')
             });
           } else if (field === 'sizes_supported' && Array.isArray(value)) {
+            value = JSON.stringify(value);
+          } else if (field === 'api_config' && typeof value === 'object') {
             value = JSON.stringify(value);
           } else if (value === undefined) {
             // 将undefined转换为null

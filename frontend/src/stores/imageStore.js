@@ -11,7 +11,7 @@ const useImageStore = create((set, get) => ({
   models: [],
   selectedModel: null,
   generating: false,
-  generationProgress: null, // 新增：生成进度
+  generationProgress: null,
   generationHistory: [],
   historyPagination: {
     page: 1,
@@ -28,6 +28,11 @@ const useImageStore = create((set, get) => ({
   },
   userStats: null,
   loading: false,
+  
+  // Midjourney相关状态
+  midjourneyTasks: [], // 进行中的Midjourney任务
+  pollingTimers: {}, // 轮询定时器
+  processingTasks: {}, // 正在处理的任务状态
 
   // 获取可用模型列表
   getModels: async () => {
@@ -52,8 +57,13 @@ const useImageStore = create((set, get) => ({
   selectModel: (model) => {
     set({ selectedModel: model });
   },
+  
+  // 检查是否为Midjourney模型
+  isMidjourneyModel: (model) => {
+    return model && model.provider === 'midjourney' && model.generation_type === 'async';
+  },
 
-  // 批量生成图片（新方法）
+  // 批量生成图片（支持Midjourney）
   generateImages: async (params) => {
     const { selectedModel } = get();
     if (!selectedModel) {
@@ -64,45 +74,79 @@ const useImageStore = create((set, get) => ({
     try {
       set({ generating: true, generationProgress: null });
       
-      // 显示生成进度
-      const quantity = params.quantity || 1;
-      if (quantity > 1) {
-        set({ generationProgress: `0/${quantity}` });
-        message.loading(`正在生成 ${quantity} 张图片，请稍候...`, 0);
-      }
-
-      const response = await api.post('/image/generate', {
-        model_id: selectedModel.id,
-        ...params
-      });
-
-      if (response.data.success) {
-        const result = response.data.data;
+      // 判断是否为Midjourney模型
+      if (get().isMidjourneyModel(selectedModel)) {
+        // Midjourney生成（异步）
+        message.loading('正在提交Midjourney任务...', 0);
         
-        // 关闭loading提示
+        const response = await api.post('/image/generate', {
+          model_id: selectedModel.id,
+          prompt: params.prompt,
+          negative_prompt: params.negative_prompt,
+          size: params.size,
+          mode: params.mode || 'fast'
+        });
+        
         message.destroy();
         
-        if (quantity > 1) {
-          // 批量生成结果
-          if (result.succeeded === result.requested) {
-            message.success(`成功生成 ${result.succeeded} 张图片，消耗 ${result.creditsConsumed} 积分`);
-          } else if (result.succeeded > 0) {
-            message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
-          } else {
-            message.error('所有图片生成失败');
-          }
+        if (response.data.success) {
+          const result = response.data.data;
+          message.success(result.message || '任务已提交，正在生成中...');
+          
+          // 标记任务为处理中
+          set(state => ({
+            processingTasks: { ...state.processingTasks, [result.taskId]: true }
+          }));
+          
+          // 开始轮询任务状态
+          get().pollMidjourneyTask(result.taskId, result.generationId);
+          
+          // 立即刷新历史记录，显示处理中的任务
+          get().getUserHistory();
+          
+          return result;
         } else {
-          // 单张生成
-          message.success('图片生成成功');
+          message.error(response.data.message || '提交失败');
+          return null;
         }
-        
-        // 刷新历史记录
-        get().getUserHistory();
-        return result;
       } else {
-        message.destroy();
-        message.error(response.data.message || '生成失败');
-        return null;
+        // 普通模型生成（同步）
+        const quantity = params.quantity || 1;
+        if (quantity > 1) {
+          set({ generationProgress: `0/${quantity}` });
+          message.loading(`正在生成 ${quantity} 张图片，请稍候...`, 0);
+        }
+
+        const response = await api.post('/image/generate', {
+          model_id: selectedModel.id,
+          ...params
+        });
+
+        if (response.data.success) {
+          const result = response.data.data;
+          
+          message.destroy();
+          
+          if (quantity > 1) {
+            if (result.succeeded === result.requested) {
+              message.success(`成功生成 ${result.succeeded} 张图片，消耗 ${result.creditsConsumed} 积分`);
+            } else if (result.succeeded > 0) {
+              message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
+            } else {
+              message.error('所有图片生成失败');
+            }
+          } else {
+            message.success('图片生成成功');
+          }
+          
+          // 刷新历史记录
+          get().getUserHistory();
+          return result;
+        } else {
+          message.destroy();
+          message.error(response.data.message || '生成失败');
+          return null;
+        }
       }
     } catch (error) {
       message.destroy();
@@ -117,6 +161,170 @@ const useImageStore = create((set, get) => ({
       set({ generating: false, generationProgress: null });
     }
   },
+  
+  // 轮询Midjourney任务状态
+  pollMidjourneyTask: (taskId, generationId) => {
+    const pollInterval = 2000; // 2秒轮询一次
+    const maxPollingTime = 300000; // 最大轮询5分钟
+    const startTime = Date.now();
+    
+    const poll = async () => {
+      try {
+        const response = await api.get(`/image/midjourney/task/${taskId}`);
+        
+        if (response.data.success) {
+          const task = response.data.data;
+          
+          // 更新进度
+          if (task.progress) {
+            set({ generationProgress: task.progress });
+          }
+          
+          // 检查任务状态
+          if (task.task_status === 'SUCCESS' || task.status === 'success') {
+            // 任务完成
+            message.success('Midjourney生成完成！');
+            
+            // 清除轮询定时器
+            get().clearPollingTimer(taskId);
+            
+            // 移除处理中标记
+            set(state => {
+              const newProcessingTasks = { ...state.processingTasks };
+              delete newProcessingTasks[taskId];
+              return { processingTasks: newProcessingTasks, generationProgress: null };
+            });
+            
+            // 延迟一下再刷新，确保后端已经更新完成
+            setTimeout(() => {
+              get().getUserHistory();
+            }, 500);
+            
+          } else if (task.task_status === 'FAILURE' || task.status === 'failed') {
+            // 任务失败
+            message.error(task.fail_reason || task.error_message || '生成失败');
+            
+            // 清除轮询定时器
+            get().clearPollingTimer(taskId);
+            
+            // 移除处理中标记
+            set(state => {
+              const newProcessingTasks = { ...state.processingTasks };
+              delete newProcessingTasks[taskId];
+              return { processingTasks: newProcessingTasks, generationProgress: null };
+            });
+            
+            // 刷新历史记录
+            get().getUserHistory();
+            
+          } else if (Date.now() - startTime > maxPollingTime) {
+            // 超时
+            message.error('任务超时');
+            
+            // 清除轮询定时器
+            get().clearPollingTimer(taskId);
+            
+            // 移除处理中标记
+            set(state => {
+              const newProcessingTasks = { ...state.processingTasks };
+              delete newProcessingTasks[taskId];
+              return { processingTasks: newProcessingTasks, generationProgress: null };
+            });
+            
+          } else {
+            // 继续轮询
+            const timerId = setTimeout(poll, pollInterval);
+            set(state => ({
+              pollingTimers: { ...state.pollingTimers, [taskId]: timerId }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('轮询任务状态失败:', error);
+        // 继续轮询，但增加间隔
+        const timerId = setTimeout(poll, pollInterval * 2);
+        set(state => ({
+          pollingTimers: { ...state.pollingTimers, [taskId]: timerId }
+        }));
+      }
+    };
+    
+    // 开始轮询
+    poll();
+  },
+  
+  // 清除轮询定时器
+  clearPollingTimer: (taskId) => {
+    const { pollingTimers } = get();
+    if (pollingTimers[taskId]) {
+      clearTimeout(pollingTimers[taskId]);
+      const newTimers = { ...pollingTimers };
+      delete newTimers[taskId];
+      set({ pollingTimers: newTimers });
+    }
+  },
+  
+  // Midjourney操作（U/V/Reroll）
+  midjourneyAction: async (generationId, action, index) => {
+    try {
+      set({ generating: true });
+      message.loading('正在提交操作...', 0);
+      
+      const response = await api.post('/image/midjourney/action', {
+        generation_id: generationId,
+        action,
+        index
+      });
+      
+      message.destroy();
+      
+      if (response.data.success) {
+        const result = response.data.data;
+        message.success(result.message || '操作已提交');
+        
+        // 标记新任务为处理中
+        set(state => ({
+          processingTasks: { ...state.processingTasks, [result.taskId]: true }
+        }));
+        
+        // 开始轮询新任务
+        get().pollMidjourneyTask(result.taskId, result.generationId);
+        
+        // 立即刷新历史记录
+        get().getUserHistory();
+        
+        return result;
+      } else {
+        message.error(response.data.message || '操作失败');
+        return null;
+      }
+    } catch (error) {
+      message.destroy();
+      console.error('Midjourney操作失败:', error);
+      if (error.response?.data?.message) {
+        message.error(error.response.data.message);
+      } else {
+        message.error('操作失败，请稍后重试');
+      }
+      return null;
+    } finally {
+      set({ generating: false });
+    }
+  },
+  
+  // 获取Midjourney任务列表
+  getMidjourneyTasks: async (params = {}) => {
+    try {
+      const response = await api.get('/image/midjourney/tasks', { params });
+      if (response.data.success) {
+        set({ midjourneyTasks: response.data.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取任务列表失败:', error);
+      message.error('获取任务列表失败');
+    }
+  },
 
   // 生成单张图片（保持兼容性）
   generateImage: async (params) => {
@@ -129,15 +337,19 @@ const useImageStore = create((set, get) => ({
       set({ loading: true });
       const response = await api.get('/image/history', { params });
       if (response.data.success) {
+        // 更新历史记录和分页信息
         set({
           generationHistory: response.data.data.data,
-          historyPagination: response.data.data.pagination
+          historyPagination: response.data.data.pagination,
+          loading: false
         });
+        
+        // 返回数据以便调用者使用
+        return response.data.data;
       }
     } catch (error) {
       console.error('获取历史记录失败:', error);
       message.error('获取历史记录失败');
-    } finally {
       set({ loading: false });
     }
   },
@@ -247,6 +459,10 @@ const useImageStore = create((set, get) => ({
 
   // 重置状态
   reset: () => {
+    // 清除所有轮询定时器
+    const { pollingTimers } = get();
+    Object.values(pollingTimers).forEach(timerId => clearTimeout(timerId));
+    
     set({
       models: [],
       selectedModel: null,
@@ -267,7 +483,10 @@ const useImageStore = create((set, get) => ({
         totalPages: 0
       },
       userStats: null,
-      loading: false
+      loading: false,
+      midjourneyTasks: [],
+      pollingTimers: {},
+      processingTasks: {}
     });
   }
 }));
