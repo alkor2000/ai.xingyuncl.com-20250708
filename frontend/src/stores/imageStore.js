@@ -188,17 +188,44 @@ const useImageStore = create((set, get) => ({
             // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 移除处理中标记
+            // 清除进度
+            set({ generationProgress: null });
+            
+            // 等待一下确保后端数据已更新
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 尝试获取最新数据，最多重试3次
+            let retryCount = 0;
+            let dataReady = false;
+            
+            while (retryCount < 3 && !dataReady) {
+              // 获取最新历史记录
+              const historyData = await get().getUserHistory({}, true); // 第二个参数表示不显示loading
+              
+              // 检查数据是否准备好
+              if (historyData && historyData.data) {
+                const targetItem = historyData.data.find(item => item.task_id === taskId);
+                if (targetItem && (targetItem.local_path || targetItem.thumbnail_path)) {
+                  dataReady = true;
+                  console.log('数据已准备好:', targetItem);
+                }
+              }
+              
+              if (!dataReady) {
+                retryCount++;
+                if (retryCount < 3) {
+                  console.log(`数据未准备好，等待后重试... (${retryCount}/3)`);
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+              }
+            }
+            
+            // 最后移除处理中标记
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
-              return { processingTasks: newProcessingTasks, generationProgress: null };
+              return { processingTasks: newProcessingTasks };
             });
-            
-            // 延迟一下再刷新，确保后端已经更新完成
-            setTimeout(() => {
-              get().getUserHistory();
-            }, 500);
             
           } else if (task.task_status === 'FAILURE' || task.status === 'failed') {
             // 任务失败
@@ -207,11 +234,14 @@ const useImageStore = create((set, get) => ({
             // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 移除处理中标记
+            // 清除进度和处理标记
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
-              return { processingTasks: newProcessingTasks, generationProgress: null };
+              return { 
+                processingTasks: newProcessingTasks,
+                generationProgress: null 
+              };
             });
             
             // 刷新历史记录
@@ -331,10 +361,14 @@ const useImageStore = create((set, get) => ({
     return get().generateImages({ ...params, quantity: 1 });
   },
 
-  // 获取用户生成历史
-  getUserHistory: async (params = {}) => {
+  // 获取用户生成历史（优化避免loading闪烁）
+  getUserHistory: async (params = {}, skipLoading = false) => {
     try {
-      set({ loading: true });
+      // 如果是轮询触发的刷新，不显示loading
+      if (!skipLoading) {
+        set({ loading: true });
+      }
+      
       const response = await api.get('/image/history', { params });
       if (response.data.success) {
         // 更新历史记录和分页信息
@@ -349,7 +383,9 @@ const useImageStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('获取历史记录失败:', error);
-      message.error('获取历史记录失败');
+      if (!skipLoading) {
+        message.error('获取历史记录失败');
+      }
       set({ loading: false });
     }
   },
@@ -395,9 +431,13 @@ const useImageStore = create((set, get) => ({
     try {
       const response = await api.post(`/image/generation/${id}/favorite`);
       if (response.data.success) {
+        // 更新本地状态而不是刷新整个列表
+        set(state => ({
+          generationHistory: state.generationHistory.map(item => 
+            item.id === id ? { ...item, is_favorite: !item.is_favorite } : item
+          )
+        }));
         message.success('操作成功');
-        // 刷新历史记录
-        get().getUserHistory();
         return true;
       }
       return false;
@@ -413,9 +453,13 @@ const useImageStore = create((set, get) => ({
     try {
       const response = await api.post(`/image/generation/${id}/public`);
       if (response.data.success) {
+        // 更新本地状态而不是刷新整个列表
+        set(state => ({
+          generationHistory: state.generationHistory.map(item => 
+            item.id === id ? { ...item, is_public: !item.is_public } : item
+          )
+        }));
         message.success('操作成功');
-        // 刷新历史记录
-        get().getUserHistory();
         return true;
       }
       return false;

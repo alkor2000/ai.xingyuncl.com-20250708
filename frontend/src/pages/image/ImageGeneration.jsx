@@ -118,6 +118,7 @@ const ImageGeneration = () => {
     galleryPagination,
     loading,
     userStats,
+    processingTasks, // 添加processingTasks
     getModels,
     selectModel,
     generateImage,
@@ -384,7 +385,14 @@ const ImageGeneration = () => {
   const renderImageCard = (item, isGallery = false) => {
     const isOwner = !isGallery || item.user_id === user?.id;
     const isMj = item.provider === 'midjourney';
-    const isProcessing = item.task_status === 'SUBMITTED' || item.task_status === 'IN_PROGRESS';
+    
+    // 修复：结合processingTasks状态判断是否在处理中
+    // 使用task_id作为key，因为这是唯一的标识符
+    const isProcessing = (item.task_status === 'SUBMITTED' || item.task_status === 'IN_PROGRESS') || 
+                         (item.task_id && processingTasks && processingTasks[item.task_id]);
+    
+    // 判断图片是否已经准备好
+    const hasImage = item.local_path || item.thumbnail_path || item.image_url;
     
     return (
       <Card
@@ -392,29 +400,30 @@ const ImageGeneration = () => {
         className={`history-card ${isMj ? 'midjourney-card' : ''}`}
         cover={
           <div className="image-wrapper">
-            {isProcessing ? (
+            {isProcessing || (!hasImage && item.status === 'generating') ? (
               <div className="processing-overlay">
                 <Spin size="large" />
                 <div className="processing-text">
-                  {item.progress || '生成中...'}
+                  生成中...
                 </div>
                 {generationProgress && (
                   <Progress
-                    percent={parseInt(generationProgress.replace('%', '')) || 0}
+                    percent={parseInt(generationProgress) || 0}
                     showInfo={false}
                     strokeColor="#1890ff"
                   />
                 )}
               </div>
-            ) : (
+            ) : hasImage ? (
               <>
                 <Image
-                  src={item.local_path || item.thumbnail_path}
+                  src={item.local_path || item.thumbnail_path || item.image_url}
                   alt={item.prompt}
                   placeholder={<Spin />}
                   preview={{
-                    src: item.local_path
+                    src: item.local_path || item.image_url
                   }}
+                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
                 />
                 <div className="image-overlay">
                   <Space>
@@ -429,7 +438,7 @@ const ImageGeneration = () => {
                       <Button
                         type="text"
                         icon={<DownloadOutlined />}
-                        onClick={() => downloadImage(item.local_path, `ai_${item.id}.jpg`)}
+                        onClick={() => downloadImage(item.local_path || item.image_url, `ai_${item.id}.jpg`)}
                       />
                     </Tooltip>
                     {isOwner && (
@@ -468,6 +477,14 @@ const ImageGeneration = () => {
                   </Space>
                 </div>
               </>
+            ) : (
+              // 图片还未准备好的占位符
+              <div className="processing-overlay">
+                <Spin size="large" />
+                <div className="processing-text">
+                  加载中...
+                </div>
+              </div>
             )}
           </div>
         }
@@ -508,7 +525,7 @@ const ImageGeneration = () => {
                 </Button>
               </div>
               {/* Midjourney操作按钮 */}
-              {isOwner && isMj && item.grid_layout && !isProcessing && renderMidjourneyActions(item)}
+              {isOwner && isMj && item.grid_layout && !isProcessing && hasImage && renderMidjourneyActions(item)}
               <div className="meta-info">
                 {isGallery && item.username && (
                   <span style={{ marginRight: 8 }}>
@@ -741,11 +758,7 @@ const ImageGeneration = () => {
                 block
               >
                 {generating ? (
-                  generationProgress ? (
-                    <span>生成中 {generationProgress}...</span>
-                  ) : (
-                    '生成中...'
-                  )
+                  '生成中...'
                 ) : (
                   <Space>
                     <span>生成图片</span>
@@ -887,7 +900,7 @@ const ImageGeneration = () => {
       >
         {previewImage && (
           <div className="preview-modal">
-            <img src={previewImage.local_path} alt={previewImage.prompt} />
+            <img src={previewImage.local_path || previewImage.image_url} alt={previewImage.prompt} />
             <div className="preview-info">
               <p><strong>提示词：</strong>{previewImage.prompt}</p>
               {previewImage.negative_prompt && (

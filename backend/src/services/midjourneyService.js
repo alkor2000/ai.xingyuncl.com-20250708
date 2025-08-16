@@ -14,6 +14,36 @@ const config = require('../config');
 
 class MidjourneyService {
   /**
+   * 映射API状态到数据库ENUM值
+   */
+  static mapTaskStatus(apiStatus) {
+    if (!apiStatus) return 'NOT_START';
+    
+    const statusMap = {
+      'NOT_START': 'NOT_START',
+      'SUBMITTED': 'SUBMITTED',
+      'IN_PROGRESS': 'IN_PROGRESS',
+      'SUCCESS': 'SUCCESS',
+      'FAILURE': 'FAILURE',
+      // 处理可能的变体
+      'not_start': 'NOT_START',
+      'submitted': 'SUBMITTED',
+      'in_progress': 'IN_PROGRESS',
+      'success': 'SUCCESS',
+      'failure': 'FAILURE',
+      'failed': 'FAILURE',
+      'pending': 'SUBMITTED',
+      'processing': 'IN_PROGRESS',
+      'completed': 'SUCCESS',
+      'done': 'SUCCESS'
+    };
+    
+    const mapped = statusMap[apiStatus] || statusMap[apiStatus.toLowerCase()] || 'IN_PROGRESS';
+    logger.debug(`映射任务状态: ${apiStatus} -> ${mapped}`);
+    return mapped;
+  }
+
+  /**
    * 生成标准的Midjourney按钮数据
    */
   static generateStandardButtons(taskId) {
@@ -395,16 +425,37 @@ class MidjourneyService {
         // 查询任务状态
         const taskData = await this.fetchTaskStatus(taskId, model);
         
-        // 更新进度
-        if (taskData.progress) {
-          await ImageGeneration.update(generationId, {
-            progress: taskData.progress,
-            task_status: taskData.status
-          });
+        // 映射并更新进度和状态（修复关键点）
+        if (taskData.progress || taskData.status) {
+          const mappedStatus = this.mapTaskStatus(taskData.status);
+          const updateData = {};
+          
+          if (taskData.progress) {
+            // 处理进度值，确保是字符串格式
+            updateData.progress = String(taskData.progress);
+          }
+          
+          // 只有映射后的状态是有效值才更新
+          if (mappedStatus && mappedStatus !== 'NOT_START') {
+            updateData.task_status = mappedStatus;
+          }
+          
+          if (Object.keys(updateData).length > 0) {
+            await ImageGeneration.update(generationId, updateData);
+          }
         }
 
-        // 判断任务是否完成
-        if (taskData.status === 'SUCCESS') {
+        // 判断任务是否完成（使用统一的判断）
+        const isSuccess = taskData.status === 'SUCCESS' || 
+                         taskData.status === 'success' || 
+                         taskData.status === 'completed' ||
+                         taskData.status === 'done';
+                         
+        const isFailure = taskData.status === 'FAILURE' || 
+                         taskData.status === 'failure' || 
+                         taskData.status === 'failed';
+
+        if (isSuccess) {
           // 下载并保存图片
           const imageService = require('./imageService');
           const { localPath, thumbnailPath, fileSize } = await imageService.downloadAndSaveImage(
@@ -445,7 +496,7 @@ class MidjourneyService {
             time: Date.now() - startTime
           });
 
-        } else if (taskData.status === 'FAILURE') {
+        } else if (isFailure) {
           // 任务失败
           await ImageGeneration.update(generationId, {
             status: 'failed',
@@ -564,8 +615,11 @@ class MidjourneyService {
         return;
       }
 
+      // 映射状态
+      const mappedStatus = this.mapTaskStatus(data.status);
+
       // 根据状态更新生成记录
-      if (data.status === 'SUCCESS') {
+      if (mappedStatus === 'SUCCESS') {
         const imageService = require('./imageService');
         const { localPath, thumbnailPath, fileSize } = await imageService.downloadAndSaveImage(
           data.imageUrl,
@@ -592,7 +646,7 @@ class MidjourneyService {
           prompt_en: data.promptEn,
           grid_layout: 1
         });
-      } else if (data.status === 'FAILURE') {
+      } else if (mappedStatus === 'FAILURE') {
         await ImageGeneration.update(generationId, {
           status: 'failed',
           task_status: 'FAILURE',
@@ -601,8 +655,8 @@ class MidjourneyService {
         });
       } else {
         await ImageGeneration.update(generationId, {
-          task_status: data.status,
-          progress: data.progress
+          task_status: mappedStatus,
+          progress: data.progress ? String(data.progress) : null
         });
       }
 
