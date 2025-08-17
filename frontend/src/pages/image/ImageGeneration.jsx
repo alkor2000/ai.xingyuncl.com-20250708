@@ -338,47 +338,60 @@ const ImageGeneration = () => {
   
   // 渲染Midjourney操作按钮
   const renderMidjourneyActions = (item) => {
-    if (!item.buttons || !item.grid_layout) return null;
+    // 修复：检查条件
+    // 1. 必须有按钮数据
+    // 2. 必须有网格布局
+    // 3. 不能是UPSCALE的结果（UPSCALE后是单张图片，不应该有U/V按钮）
+    if (!item.buttons || !item.grid_layout || item.action_type === 'UPSCALE') {
+      return null;
+    }
     
     const buttons = typeof item.buttons === 'string' ? JSON.parse(item.buttons) : item.buttons;
     
-    return (
-      <div className="midjourney-actions">
-        <div className="action-group">
-          <span className="action-label">放大：</span>
-          {[1, 2, 3, 4].map(i => (
-            <Button
-              key={`u${i}`}
-              size="small"
-              icon={<ZoomInOutlined />}
-              onClick={() => handleMidjourneyAction(item.id, 'UPSCALE', i)}
-            >
-              U{i}
-            </Button>
-          ))}
+    // 只有在action_type是IMAGINE或VARIATION时才显示标准按钮
+    // 这些是4张网格图，可以进行U/V操作
+    if (item.action_type === 'IMAGINE' || item.action_type === 'VARIATION') {
+      return (
+        <div className="midjourney-actions">
+          <div className="action-group">
+            <span className="action-label">放大：</span>
+            {[1, 2, 3, 4].map(i => (
+              <Button
+                key={`u${i}`}
+                size="small"
+                icon={<ZoomInOutlined />}
+                onClick={() => handleMidjourneyAction(item.id, 'UPSCALE', i)}
+              >
+                U{i}
+              </Button>
+            ))}
+          </div>
+          <div className="action-group">
+            <span className="action-label">变体：</span>
+            {[1, 2, 3, 4].map(i => (
+              <Button
+                key={`v${i}`}
+                size="small"
+                icon={<ExperimentOutlined />}
+                onClick={() => handleMidjourneyAction(item.id, 'VARIATION', i)}
+              >
+                V{i}
+              </Button>
+            ))}
+          </div>
+          <Button
+            size="small"
+            icon={<SyncOutlined />}
+            onClick={() => handleMidjourneyAction(item.id, 'REROLL')}
+          >
+            重新生成
+          </Button>
         </div>
-        <div className="action-group">
-          <span className="action-label">变体：</span>
-          {[1, 2, 3, 4].map(i => (
-            <Button
-              key={`v${i}`}
-              size="small"
-              icon={<ExperimentOutlined />}
-              onClick={() => handleMidjourneyAction(item.id, 'VARIATION', i)}
-            >
-              V{i}
-            </Button>
-          ))}
-        </div>
-        <Button
-          size="small"
-          icon={<SyncOutlined />}
-          onClick={() => handleMidjourneyAction(item.id, 'REROLL')}
-        >
-          重新生成
-        </Button>
-      </div>
-    );
+      );
+    }
+    
+    // 其他类型（如UPSCALE后的单张图）不显示按钮
+    return null;
   };
 
   // 渲染历史图片卡片（支持Midjourney）
@@ -524,8 +537,8 @@ const ImageGeneration = () => {
                   复制
                 </Button>
               </div>
-              {/* Midjourney操作按钮 */}
-              {isOwner && isMj && item.grid_layout && !isProcessing && hasImage && renderMidjourneyActions(item)}
+              {/* Midjourney操作按钮 - 修复后的判断逻辑 */}
+              {isOwner && isMj && !isProcessing && hasImage && renderMidjourneyActions(item)}
               <div className="meta-info">
                 {isGallery && item.username && (
                   <span style={{ marginRight: 8 }}>
