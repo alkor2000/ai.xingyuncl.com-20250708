@@ -350,7 +350,7 @@ const ImageGeneration = () => {
     
     // 只有在action_type是IMAGINE或VARIATION时才显示标准按钮
     // 这些是4张网格图，可以进行U/V操作
-    if (item.action_type === 'IMAGINE' || item.action_type === 'VARIATION') {
+    if (item.action_type === 'IMAGINE' || item.action_type === 'VARIATION' || item.action_type === 'REROLL') {
       return (
         <div className="midjourney-actions">
           <div className="action-group">
