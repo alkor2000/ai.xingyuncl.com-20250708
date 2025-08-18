@@ -23,6 +23,7 @@ const publicRoutes = require('./routes/public');
 const servicesRoutes = require('./routes/services'); // 新增服务API路由
 const knowledgeRoutes = require('./routes/knowledgeRoutes'); // 新增知识模块路由
 const imageRoutes = require('./routes/image'); // 新增图像生成路由
+const htmlEditorRoutes = require('./routes/htmlEditor'); // 新增HTML编辑器路由
 
 // 创建 Express 应用
 const app = express();
@@ -144,6 +145,10 @@ app.use('/api/public', publicRoutes);
 app.use('/api/services', servicesRoutes); // 新增服务API路由
 app.use('/api/knowledge', knowledgeRoutes); // 新增知识模块路由
 app.use('/api/image', imageRoutes); // 新增图像生成路由
+app.use('/api/html-editor', htmlEditorRoutes); // 新增HTML编辑器路由
+
+// 公开的HTML页面访问路由（不需要认证）
+app.get('/pages/:userId/:slug', require('./controllers/HtmlEditorController').previewPage);
 
 // 404 处理
 app.use((req, res) => {

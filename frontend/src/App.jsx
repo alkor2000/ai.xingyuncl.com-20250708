@@ -36,6 +36,9 @@ const KnowledgeBase = React.lazy(() => import('./pages/knowledge/KnowledgeBase')
 // 图像生成页面组件 - 懒加载
 const ImageGeneration = React.lazy(() => import('./pages/image/ImageGeneration'))
 
+// HTML编辑器页面组件 - 懒加载
+const HtmlEditor = React.lazy(() => import('./pages/htmlEditor/HtmlEditor'))
+
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -186,6 +189,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <ImageGeneration />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* HTML编辑器页面路由 - 懒加载 */}
+                        <Route 
+                          path="/html-editor" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <HtmlEditor />
                             </LazyLoadingWrapper>
                           } 
                         />
