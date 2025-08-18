@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 增强版本（支持编辑名称和积分提示）
+ * HTML编辑器主页面 - 增强版本（支持预览、0积分显示和默认项目）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -44,7 +44,8 @@ import {
   ClearOutlined,
   LinkOutlined,
   GlobalOutlined,
-  DollarOutlined
+  DollarOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
@@ -100,6 +101,7 @@ const HtmlEditor = () => {
     credits_per_publish: 5
   });
   const [userCredits, setUserCredits] = useState(0);
+  const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
 
   // 初始化加载
   useEffect(() => {
@@ -107,6 +109,18 @@ const HtmlEditor = () => {
     fetchCreditsConfig();
     fetchUserCredits();
   }, []);
+
+  // 自动选择默认项目
+  useEffect(() => {
+    if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
+      const defaultProject = projects.find(p => p.name === '默认项目');
+      if (defaultProject) {
+        setSelectedProject(defaultProject);
+        getPages(defaultProject.id);
+        setDefaultProjectSelected(true);
+      }
+    }
+  }, [projects, defaultProjectSelected, selectedProject]);
 
   // 获取积分配置
   const fetchCreditsConfig = async () => {
@@ -132,6 +146,11 @@ const HtmlEditor = () => {
     } catch (error) {
       console.error('获取用户积分失败:', error);
     }
+  };
+
+  // 格式化积分显示
+  const formatCreditsDisplay = (credits) => {
+    return credits === 0 ? '免费' : `${credits} 积分`;
   };
 
   // 加载选中页面的内容
@@ -267,6 +286,28 @@ ${js || ''}
     }
   };
 
+  // 预览页面（新窗口）
+  const handlePreview = () => {
+    if (!htmlContent) {
+      message.warning('编辑器内容为空');
+      return;
+    }
+
+    // 创建Blob URL
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    // 在新窗口打开
+    const previewWindow = window.open(url, '_blank');
+    
+    // 清理URL（延迟执行，确保窗口已打开）
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
+    
+    message.success('预览窗口已打开');
+  };
+
   // 创建项目
   const handleCreateProject = async (values) => {
     try {
@@ -320,13 +361,23 @@ ${js || ''}
 
   // 创建页面
   const handleCreatePage = async (values) => {
-    if (!selectedProject) {
-      message.warning('请先选择一个项目');
-      return;
+    // 如果没有选择项目，使用默认项目
+    let projectId = selectedProject?.id;
+    
+    if (!projectId) {
+      const defaultProject = projects.find(p => p.name === '默认项目');
+      if (defaultProject) {
+        projectId = defaultProject.id;
+        setSelectedProject(defaultProject);
+      } else {
+        message.warning('系统正在创建默认项目，请稍后再试');
+        await getProjects();
+        return;
+      }
     }
 
-    // 检查积分
-    if (userCredits < creditsConfig.credits_per_page) {
+    // 检查积分（只有积分大于0时才检查）
+    if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
       message.error(`积分不足！创建页面需要 ${creditsConfig.credits_per_page} 积分，当前余额 ${userCredits} 积分`);
       return;
     }
@@ -334,7 +385,7 @@ ${js || ''}
     try {
       const pageData = {
         ...values,
-        project_id: selectedProject.id,
+        project_id: projectId,
         html_content: htmlContent,
         css_content: '', // 保持空值以兼容后端
         js_content: ''   // 保持空值以兼容后端
@@ -346,7 +397,7 @@ ${js || ''}
       pageForm.resetFields();
       setSelectedPageId(newPage.id);
       
-      getPages(selectedProject.id);
+      getPages(projectId);
       fetchUserCredits(); // 刷新积分
     } catch (error) {
       message.error(error.message || '创建页面失败');
@@ -360,8 +411,8 @@ ${js || ''}
       return;
     }
 
-    // 检查积分
-    if (userCredits < creditsConfig.credits_per_update) {
+    // 检查积分（只有积分大于0时才检查）
+    if (creditsConfig.credits_per_update > 0 && userCredits < creditsConfig.credits_per_update) {
       message.error(`积分不足！保存页面需要 ${creditsConfig.credits_per_update} 积分，当前余额 ${userCredits} 积分`);
       return;
     }
@@ -425,8 +476,8 @@ ${js || ''}
       return;
     }
 
-    // 检查积分
-    if (userCredits < creditsConfig.credits_per_publish) {
+    // 检查积分（只有积分大于0时才检查）
+    if (creditsConfig.credits_per_publish > 0 && userCredits < creditsConfig.credits_per_publish) {
       Modal.confirm({
         title: '积分不足',
         content: (
@@ -444,17 +495,25 @@ ${js || ''}
     }
 
     // 显示确认弹窗
+    const confirmContent = creditsConfig.credits_per_publish > 0 ? (
+      <div>
+        <p>生成永久链接将消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
+        <p>您当前积分余额：<Text strong>{userCredits}</Text> 积分</p>
+        <p>生成后剩余：<Text strong>{userCredits - creditsConfig.credits_per_publish}</Text> 积分</p>
+        <Divider />
+        <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
+      </div>
+    ) : (
+      <div>
+        <p><Text strong>生成永久链接（免费）</Text></p>
+        <Divider />
+        <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
+      </div>
+    );
+
     Modal.confirm({
       title: '确认生成永久链接',
-      content: (
-        <div>
-          <p>生成永久链接将消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
-          <p>您当前积分余额：<Text strong>{userCredits}</Text> 积分</p>
-          <p>生成后剩余：<Text strong>{userCredits - creditsConfig.credits_per_publish}</Text> 积分</p>
-          <Divider />
-          <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
-        </div>
-      ),
+      content: confirmContent,
       okText: '确认生成',
       cancelText: '取消',
       onOk: async () => {
@@ -509,6 +568,7 @@ ${js || ''}
         <Space size={4}>
           {project.type === 'folder' ? <FolderOutlined /> : <FileOutlined />}
           <span>{project.name}</span>
+          {project.name === '默认项目' && <Tag color="blue" style={{ marginLeft: 4 }}>默认</Tag>}
           <Button
             type="text"
             size="small"
@@ -590,7 +650,13 @@ ${js || ''}
               onClick={handleSavePage}
               loading={isSaving}
             >
-              保存 ({creditsConfig.credits_per_update} 积分)
+              保存 ({formatCreditsDisplay(creditsConfig.credits_per_update)})
+            </Button>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={handlePreview}
+            >
+              预览
             </Button>
             <Button
               icon={<CopyOutlined />}
@@ -609,7 +675,7 @@ ${js || ''}
               onClick={handleGeneratePermalink}
               disabled={!selectedPageId}
             >
-              生成永久链接 ({creditsConfig.credits_per_publish} 积分)
+              生成永久链接 ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
             </Button>
           </Space>
         </div>
@@ -674,6 +740,7 @@ ${js || ''}
                 treeData={buildTreeData()}
                 onSelect={handleTreeSelect}
                 defaultExpandAll
+                selectedKeys={selectedProject ? [`project-${selectedProject.id}`] : []}
               />
             ) : (
               <Empty description="暂无项目" />
@@ -871,9 +938,9 @@ ${js || ''}
             key="submit" 
             type="primary" 
             onClick={() => pageForm.submit()}
-            icon={<DollarOutlined />}
+            icon={creditsConfig.credits_per_page > 0 ? <DollarOutlined /> : null}
           >
-            创建 (消耗 {creditsConfig.credits_per_page} 积分)
+            创建 ({formatCreditsDisplay(creditsConfig.credits_per_page)})
           </Button>
         ]}
       >
@@ -899,14 +966,22 @@ ${js || ''}
         </Form>
         <Divider />
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text type="secondary">
-            创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
-          </Text>
-          <Text type="secondary">
-            您当前积分余额：<Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
-              {userCredits}
-            </Text> 积分
-          </Text>
+          {creditsConfig.credits_per_page > 0 ? (
+            <>
+              <Text type="secondary">
+                创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
+              </Text>
+              <Text type="secondary">
+                您当前积分余额：<Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
+                  {userCredits}
+                </Text> 积分
+              </Text>
+            </>
+          ) : (
+            <Text type="success">
+              <strong>创建页面免费！</strong>
+            </Text>
+          )}
         </Space>
       </Modal>
 

@@ -11,12 +11,31 @@ const dbConnection = require('../database/connection');
 
 class HtmlEditorController {
   /**
-   * 获取用户的项目列表
+   * 获取用户的项目列表（自动创建默认项目）
    */
   static async getProjects(req, res) {
     try {
       const userId = req.user.id;
-      const projects = await HtmlProject.getUserProjects(userId);
+      let projects = await HtmlProject.getUserProjects(userId);
+      
+      // 如果用户没有任何项目，自动创建一个默认项目
+      if (!projects || projects.length === 0) {
+        const defaultProjectId = await HtmlProject.create({
+          user_id: userId,
+          parent_id: null,
+          name: '默认项目',
+          path: '/默认项目',
+          type: 'folder',
+          description: '系统自动创建的默认项目',
+          tags: ['默认'],
+          is_default: 1 // 标记为默认项目
+        });
+        
+        logger.info('为用户创建默认项目', { userId, projectId: defaultProjectId });
+        
+        // 重新获取项目列表
+        projects = await HtmlProject.getUserProjects(userId);
+      }
       
       return ResponseHelper.success(res, projects);
     } catch (error) {
@@ -158,12 +177,32 @@ class HtmlEditorController {
   static async createPage(req, res) {
     try {
       const userId = req.user.id;
-      const { project_id, title, slug, html_content, css_content, js_content } = req.body;
+      let { project_id, title, slug, html_content, css_content, js_content } = req.body;
 
-      if (!project_id || !title) {
+      // 如果没有指定项目，自动使用或创建默认项目
+      if (!project_id) {
+        const projects = await HtmlProject.getUserProjects(userId);
+        const defaultProject = projects.find(p => p.name === '默认项目');
+        
+        if (defaultProject) {
+          project_id = defaultProject.id;
+        } else {
+          // 创建默认项目
+          project_id = await HtmlProject.create({
+            user_id: userId,
+            parent_id: null,
+            name: '默认项目',
+            path: '/默认项目',
+            type: 'folder',
+            description: '系统自动创建的默认项目',
+            tags: ['默认']
+          });
+        }
+      }
+
+      if (!title) {
         return ResponseHelper.validation(res, {
-          project_id: !project_id ? '请选择项目' : null,
-          title: !title ? '页面标题不能为空' : null
+          title: '页面标题不能为空'
         });
       }
 
@@ -175,18 +214,21 @@ class HtmlEditorController {
 
       // 获取积分配置
       const settingQuery = `
-        SELECT setting_value FROM system_settings 
+        SELECT setting_value, setting_type FROM system_settings 
         WHERE setting_key = 'html_editor.credits_per_page'
       `;
       const settingResult = await dbConnection.query(settingQuery);
       const creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 10);
 
-      // 检查用户积分
-      const user = await User.findById(userId);
-      if (!user.hasCredits(creditsRequired)) {
-        return ResponseHelper.forbidden(res, 
-          `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
-        );
+      // 只有当积分大于0时才检查和扣除积分
+      if (creditsRequired > 0) {
+        // 检查用户积分
+        const user = await User.findById(userId);
+        if (!user.hasCredits(creditsRequired)) {
+          return ResponseHelper.forbidden(res, 
+            `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
+          );
+        }
       }
 
       // 编译内容
@@ -205,8 +247,11 @@ class HtmlEditorController {
         credits_consumed: creditsRequired
       });
 
-      // 扣除积分
-      await user.consumeCredits(creditsRequired, null, null, 'HTML页面创建', 'html_create');
+      // 只有当积分大于0时才扣除积分
+      if (creditsRequired > 0) {
+        const user = await User.findById(userId);
+        await user.consumeCredits(creditsRequired, null, null, 'HTML页面创建', 'html_create');
+      }
 
       const newPage = await HtmlPage.findById(pageId);
       
@@ -272,18 +317,20 @@ class HtmlEditorController {
       if (!isOnlyUpdatingTitle) {
         // 获取积分配置
         const settingQuery = `
-          SELECT setting_value FROM system_settings 
+          SELECT setting_value, setting_type FROM system_settings 
           WHERE setting_key = 'html_editor.credits_per_update'
         `;
         const settingResult = await dbConnection.query(settingQuery);
         creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 2);
 
-        // 检查用户积分
-        const user = await User.findById(userId);
-        if (!user.hasCredits(creditsRequired)) {
-          return ResponseHelper.forbidden(res, 
-            `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
-          );
+        // 只有当积分大于0时才检查积分
+        if (creditsRequired > 0) {
+          const user = await User.findById(userId);
+          if (!user.hasCredits(creditsRequired)) {
+            return ResponseHelper.forbidden(res, 
+              `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
+            );
+          }
         }
       }
 
@@ -311,7 +358,7 @@ class HtmlEditorController {
         return ResponseHelper.error(res, '更新失败');
       }
 
-      // 如果需要扣除积分
+      // 只有当积分大于0时才扣除积分
       if (creditsRequired > 0) {
         const user = await User.findById(userId);
         await user.consumeCredits(creditsRequired, null, null, 'HTML页面更新', 'html_update');
@@ -355,28 +402,30 @@ class HtmlEditorController {
       if (!page.is_published) {
         // 获取发布积分配置
         const settingQuery = `
-          SELECT setting_value FROM system_settings 
+          SELECT setting_value, setting_type FROM system_settings 
           WHERE setting_key = 'html_editor.credits_per_publish'
         `;
         const settingResult = await dbConnection.query(settingQuery);
         const creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 5);
 
-        // 检查用户积分
-        const user = await User.findById(userId);
-        if (!user.hasCredits(creditsRequired)) {
-          return ResponseHelper.forbidden(res, 
-            `积分不足，需要 ${creditsRequired} 积分生成永久链接，当前余额 ${user.getCredits()} 积分`
-          );
-        }
+        // 只有当积分大于0时才检查和扣除积分
+        if (creditsRequired > 0) {
+          const user = await User.findById(userId);
+          if (!user.hasCredits(creditsRequired)) {
+            return ResponseHelper.forbidden(res, 
+              `积分不足，需要 ${creditsRequired} 积分生成永久链接，当前余额 ${user.getCredits()} 积分`
+            );
+          }
 
-        // 扣除积分
-        await user.consumeCredits(creditsRequired, null, null, 'HTML页面发布（生成永久链接）', 'html_publish');
-        
-        logger.info('HTML页面发布扣除积分', { 
-          userId, 
-          pageId: id, 
-          creditsConsumed: creditsRequired 
-        });
+          // 扣除积分
+          await user.consumeCredits(creditsRequired, null, null, 'HTML页面发布（生成永久链接）', 'html_publish');
+          
+          logger.info('HTML页面发布扣除积分', { 
+            userId, 
+            pageId: id, 
+            creditsConsumed: creditsRequired 
+          });
+        }
       }
 
       // 切换发布状态
@@ -479,10 +528,10 @@ class HtmlEditorController {
         config[key] = parseInt(row.setting_value) || 0;
       });
 
-      // 设置默认值
-      config.credits_per_page = config.credits_per_page || 10;
-      config.credits_per_update = config.credits_per_update || 2;
-      config.credits_per_publish = config.credits_per_publish || 5;
+      // 设置默认值，允许为0
+      config.credits_per_page = config.credits_per_page ?? 10;
+      config.credits_per_update = config.credits_per_update ?? 2;
+      config.credits_per_publish = config.credits_per_publish ?? 5;
 
       return ResponseHelper.success(res, config);
     } catch (error) {

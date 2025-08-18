@@ -21,7 +21,8 @@ class HtmlProject {
         tags = null,
         is_public = 0,
         password = null,
-        sort_order = 0
+        sort_order = 0,
+        is_default = 0
       } = data;
 
       const query = `
@@ -51,6 +52,33 @@ class HtmlProject {
   }
 
   /**
+   * 安全地解析JSON字符串
+   */
+  static safeJsonParse(jsonString) {
+    if (!jsonString) return null;
+    
+    try {
+      // 如果已经是对象/数组，直接返回
+      if (typeof jsonString === 'object') {
+        return jsonString;
+      }
+      
+      // 尝试直接解析
+      return JSON.parse(jsonString);
+    } catch (error) {
+      // 如果解析失败，尝试修复常见问题
+      try {
+        // 处理可能的编码问题
+        const fixed = jsonString.toString('utf8');
+        return JSON.parse(fixed);
+      } catch (secondError) {
+        logger.warn('JSON解析失败，返回空数组:', jsonString);
+        return [];
+      }
+    }
+  }
+
+  /**
    * 获取用户的项目列表（树形结构）
    */
   static async getUserProjects(userId, parentId = null) {
@@ -76,7 +104,7 @@ class HtmlProject {
       for (const row of result.rows) {
         const project = {
           ...row,
-          tags: row.tags ? JSON.parse(row.tags) : [],
+          tags: this.safeJsonParse(row.tags) || [],
           children: await this.getUserProjects(userId, row.id)
         };
         projects.push(project);
@@ -102,7 +130,7 @@ class HtmlProject {
       }
 
       const project = result.rows[0];
-      project.tags = project.tags ? JSON.parse(project.tags) : [];
+      project.tags = this.safeJsonParse(project.tags) || [];
       return project;
     } catch (error) {
       logger.error('获取项目失败:', error);

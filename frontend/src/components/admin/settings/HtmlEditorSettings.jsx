@@ -143,7 +143,7 @@ const HtmlEditorSettings = ({ disabled = false }) => {
               <Form.Item
                 name="credits_per_page"
                 label="创建页面消耗积分"
-                tooltip="用户创建一个新的HTML页面需要消耗的积分数量"
+                tooltip="用户创建一个新的HTML页面需要消耗的积分数量（设为0表示免费）"
               >
                 <InputNumber
                   min={0}
@@ -158,7 +158,7 @@ const HtmlEditorSettings = ({ disabled = false }) => {
               <Form.Item
                 name="credits_per_update"
                 label="更新页面消耗积分"
-                tooltip="用户更新HTML页面内容需要消耗的积分数量（仅修改标题不消耗）"
+                tooltip="用户更新HTML页面内容需要消耗的积分数量（设为0表示免费，仅修改标题不消耗）"
               >
                 <InputNumber
                   min={0}
@@ -173,7 +173,7 @@ const HtmlEditorSettings = ({ disabled = false }) => {
               <Form.Item
                 name="credits_per_publish"
                 label="生成永久链接消耗积分"
-                tooltip="用户发布页面生成永久链接需要消耗的积分数量"
+                tooltip="用户发布页面生成永久链接需要消耗的积分数量（设为0表示免费）"
               >
                 <InputNumber
                   min={0}
@@ -193,6 +193,7 @@ const HtmlEditorSettings = ({ disabled = false }) => {
                     <li>更新页面内容时扣除积分（仅修改标题不扣除）</li>
                     <li>生成永久链接时扣除积分，链接永久有效</li>
                     <li>删除页面不退还积分</li>
+                    <li>设置为0表示该操作免费</li>
                   </ul>
                 }
                 type="info"
