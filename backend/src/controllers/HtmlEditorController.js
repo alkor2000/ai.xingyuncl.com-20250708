@@ -206,7 +206,7 @@ class HtmlEditorController {
       });
 
       // 扣除积分
-      await user.consumeCredits(creditsRequired, null, null, 'HTML页面创建');
+      await user.consumeCredits(creditsRequired, null, null, 'HTML页面创建', 'html_create');
 
       const newPage = await HtmlPage.findById(pageId);
       
@@ -257,7 +257,7 @@ class HtmlEditorController {
     try {
       const userId = req.user.id;
       const { id } = req.params;
-      const { html_content, css_content, js_content, ...otherData } = req.body;
+      const { html_content, css_content, js_content, title, ...otherData } = req.body;
 
       // 检查权限
       const hasPermission = await HtmlPage.checkOwnership(id, userId);
@@ -265,44 +265,66 @@ class HtmlEditorController {
         return ResponseHelper.forbidden(res, '无权修改此页面');
       }
 
-      // 获取积分配置
-      const settingQuery = `
-        SELECT setting_value FROM system_settings 
-        WHERE setting_key = 'html_editor.credits_per_update'
-      `;
-      const settingResult = await dbConnection.query(settingQuery);
-      const creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 2);
+      // 如果只是更新标题，不扣除积分
+      const isOnlyUpdatingTitle = title && !html_content && !css_content && !js_content && Object.keys(otherData).length === 0;
+      
+      let creditsRequired = 0;
+      if (!isOnlyUpdatingTitle) {
+        // 获取积分配置
+        const settingQuery = `
+          SELECT setting_value FROM system_settings 
+          WHERE setting_key = 'html_editor.credits_per_update'
+        `;
+        const settingResult = await dbConnection.query(settingQuery);
+        creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 2);
 
-      // 检查用户积分
-      const user = await User.findById(userId);
-      if (!user.hasCredits(creditsRequired)) {
-        return ResponseHelper.forbidden(res, 
-          `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
-        );
+        // 检查用户积分
+        const user = await User.findById(userId);
+        if (!user.hasCredits(creditsRequired)) {
+          return ResponseHelper.forbidden(res, 
+            `积分不足，需要 ${creditsRequired} 积分，当前余额 ${user.getCredits()} 积分`
+          );
+        }
       }
 
-      // 编译内容
-      const compiledContent = HtmlPage.compileContent(html_content, css_content, js_content);
+      // 准备更新数据
+      const updateData = { ...otherData };
+      if (title) updateData.title = title;
+      
+      // 如果有内容更新，编译内容
+      if (html_content !== undefined || css_content !== undefined || js_content !== undefined) {
+        const compiledContent = HtmlPage.compileContent(
+          html_content || '', 
+          css_content || '', 
+          js_content || ''
+        );
+        updateData.html_content = html_content;
+        updateData.css_content = css_content;
+        updateData.js_content = js_content;
+        updateData.compiled_content = compiledContent;
+      }
 
       // 更新页面
-      const success = await HtmlPage.update(id, {
-        ...otherData,
-        html_content,
-        css_content,
-        js_content,
-        compiled_content: compiledContent
-      });
+      const success = await HtmlPage.update(id, updateData);
 
       if (!success) {
         return ResponseHelper.error(res, '更新失败');
       }
 
-      // 扣除积分
-      await user.consumeCredits(creditsRequired, null, null, 'HTML页面更新');
+      // 如果需要扣除积分
+      if (creditsRequired > 0) {
+        const user = await User.findById(userId);
+        await user.consumeCredits(creditsRequired, null, null, 'HTML页面更新', 'html_update');
+      }
 
       const updatedPage = await HtmlPage.findById(id);
       
-      logger.info('更新HTML页面成功', { userId, pageId: id, creditsConsumed: creditsRequired });
+      logger.info('更新HTML页面成功', { 
+        userId, 
+        pageId: id, 
+        creditsConsumed: creditsRequired,
+        isOnlyUpdatingTitle 
+      });
       
       return ResponseHelper.success(res, updatedPage, '页面更新成功');
     } catch (error) {
@@ -312,7 +334,7 @@ class HtmlEditorController {
   }
 
   /**
-   * 发布/取消发布页面
+   * 发布/取消发布页面（生成永久链接）
    */
   static async togglePublish(req, res) {
     try {
@@ -327,6 +349,34 @@ class HtmlEditorController {
       
       if (page.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权操作此页面');
+      }
+
+      // 如果是要发布页面（生成永久链接）
+      if (!page.is_published) {
+        // 获取发布积分配置
+        const settingQuery = `
+          SELECT setting_value FROM system_settings 
+          WHERE setting_key = 'html_editor.credits_per_publish'
+        `;
+        const settingResult = await dbConnection.query(settingQuery);
+        const creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 5);
+
+        // 检查用户积分
+        const user = await User.findById(userId);
+        if (!user.hasCredits(creditsRequired)) {
+          return ResponseHelper.forbidden(res, 
+            `积分不足，需要 ${creditsRequired} 积分生成永久链接，当前余额 ${user.getCredits()} 积分`
+          );
+        }
+
+        // 扣除积分
+        await user.consumeCredits(creditsRequired, null, null, 'HTML页面发布（生成永久链接）', 'html_publish');
+        
+        logger.info('HTML页面发布扣除积分', { 
+          userId, 
+          pageId: id, 
+          creditsConsumed: creditsRequired 
+        });
       }
 
       // 切换发布状态
@@ -344,7 +394,7 @@ class HtmlEditorController {
 
       const updatedPage = await HtmlPage.findById(id);
       
-      const message = newStatus ? '页面已发布' : '页面已取消发布';
+      const message = newStatus ? '页面已发布，永久链接已生成' : '页面已取消发布';
       
       return ResponseHelper.success(res, updatedPage, message);
     } catch (error) {
@@ -404,6 +454,40 @@ class HtmlEditorController {
     } catch (error) {
       logger.error('获取模板列表失败:', error);
       return ResponseHelper.error(res, '获取模板列表失败');
+    }
+  }
+
+  /**
+   * 获取HTML编辑器积分配置
+   */
+  static async getCreditsConfig(req, res) {
+    try {
+      const query = `
+        SELECT setting_key, setting_value 
+        FROM system_settings 
+        WHERE setting_key IN (
+          'html_editor.credits_per_page',
+          'html_editor.credits_per_update',
+          'html_editor.credits_per_publish'
+        )
+      `;
+      const result = await dbConnection.query(query);
+      
+      const config = {};
+      result.rows.forEach(row => {
+        const key = row.setting_key.replace('html_editor.', '');
+        config[key] = parseInt(row.setting_value) || 0;
+      });
+
+      // 设置默认值
+      config.credits_per_page = config.credits_per_page || 10;
+      config.credits_per_update = config.credits_per_update || 2;
+      config.credits_per_publish = config.credits_per_publish || 5;
+
+      return ResponseHelper.success(res, config);
+    } catch (error) {
+      logger.error('获取积分配置失败:', error);
+      return ResponseHelper.error(res, '获取积分配置失败');
     }
   }
 

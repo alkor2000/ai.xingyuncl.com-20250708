@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 精简版本
+ * HTML编辑器主页面 - 增强版本（支持编辑名称和积分提示）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,7 +21,8 @@ import {
   Badge,
   Row,
   Col,
-  Divider
+  Divider,
+  Typography
 } from 'antd';
 import {
   FolderOutlined,
@@ -42,16 +43,19 @@ import {
   MenuUnfoldOutlined,
   ClearOutlined,
   LinkOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
 import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
+import apiClient from '../../utils/api';
 import './HtmlEditor.less';
 
 const { Sider, Content, Header } = Layout;
 const { TextArea } = Input;
+const { Text } = Typography;
 
 const HtmlEditor = () => {
   const { t } = useTranslation();
@@ -69,7 +73,8 @@ const HtmlEditor = () => {
     deletePage,
     deleteProject,
     togglePublish,
-    loadPage
+    loadPage,
+    updateProject
   } = useHtmlEditorStore();
 
   // 状态
@@ -79,17 +84,55 @@ const HtmlEditor = () => {
   const [previewMode, setPreviewMode] = useState('desktop');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPageModal, setShowPageModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameType, setRenameType] = useState(''); // 'project' or 'page'
+  const [renameItem, setRenameItem] = useState(null);
   const [projectForm] = Form.useForm();
   const [pageForm] = Form.useForm();
+  const [renameForm] = Form.useForm();
   const [isSaving, setIsSaving] = useState(false);
   const [compiledContent, setCompiledContent] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [editorTheme, setEditorTheme] = useState('vs-dark');
+  const [creditsConfig, setCreditsConfig] = useState({
+    credits_per_page: 10,
+    credits_per_update: 2,
+    credits_per_publish: 5
+  });
+  const [userCredits, setUserCredits] = useState(0);
 
   // 初始化加载
   useEffect(() => {
     getProjects();
+    fetchCreditsConfig();
+    fetchUserCredits();
   }, []);
+
+  // 获取积分配置
+  const fetchCreditsConfig = async () => {
+    try {
+      const response = await apiClient.get('/html-editor/credits-config');
+      if (response.data.success) {
+        setCreditsConfig(response.data.data);
+      }
+    } catch (error) {
+      console.error('获取积分配置失败:', error);
+    }
+  };
+
+  // 获取用户当前积分
+  const fetchUserCredits = async () => {
+    try {
+      const response = await apiClient.get('/auth/me');
+      if (response.data.success) {
+        const userData = response.data.data.user;
+        const credits = (userData.credits_quota || 0) - (userData.used_credits || 0);
+        setUserCredits(Math.max(0, credits));
+      }
+    } catch (error) {
+      console.error('获取用户积分失败:', error);
+    }
+  };
 
   // 加载选中页面的内容
   useEffect(() => {
@@ -236,10 +279,55 @@ ${js || ''}
     }
   };
 
+  // 编辑项目名称
+  const handleEditProject = (project) => {
+    setRenameType('project');
+    setRenameItem(project);
+    renameForm.setFieldsValue({ name: project.name });
+    setShowRenameModal(true);
+  };
+
+  // 编辑页面名称
+  const handleEditPage = (page) => {
+    setRenameType('page');
+    setRenameItem(page);
+    renameForm.setFieldsValue({ name: page.title });
+    setShowRenameModal(true);
+  };
+
+  // 处理重命名
+  const handleRename = async (values) => {
+    try {
+      if (renameType === 'project') {
+        await updateProject(renameItem.id, { name: values.name });
+        message.success('项目名称更新成功');
+        await getProjects();
+      } else if (renameType === 'page') {
+        await updatePage(renameItem.id, { title: values.name });
+        message.success('页面名称更新成功');
+        await getPages(selectedProject?.id);
+        if (renameItem.id === selectedPageId) {
+          await loadPage(renameItem.id);
+        }
+      }
+      setShowRenameModal(false);
+      renameForm.resetFields();
+      setRenameItem(null);
+    } catch (error) {
+      message.error('更新名称失败');
+    }
+  };
+
   // 创建页面
   const handleCreatePage = async (values) => {
     if (!selectedProject) {
       message.warning('请先选择一个项目');
+      return;
+    }
+
+    // 检查积分
+    if (userCredits < creditsConfig.credits_per_page) {
+      message.error(`积分不足！创建页面需要 ${creditsConfig.credits_per_page} 积分，当前余额 ${userCredits} 积分`);
       return;
     }
 
@@ -259,6 +347,7 @@ ${js || ''}
       setSelectedPageId(newPage.id);
       
       getPages(selectedProject.id);
+      fetchUserCredits(); // 刷新积分
     } catch (error) {
       message.error(error.message || '创建页面失败');
     }
@@ -271,6 +360,12 @@ ${js || ''}
       return;
     }
 
+    // 检查积分
+    if (userCredits < creditsConfig.credits_per_update) {
+      message.error(`积分不足！保存页面需要 ${creditsConfig.credits_per_update} 积分，当前余额 ${userCredits} 积分`);
+      return;
+    }
+
     setIsSaving(true);
     try {
       await updatePage(selectedPageId, {
@@ -279,6 +374,7 @@ ${js || ''}
         js_content: ''   // 保持空值以兼容后端
       });
       message.success('页面保存成功');
+      fetchUserCredits(); // 刷新积分
     } catch (error) {
       message.error(error.message || '保存失败');
     } finally {
@@ -321,21 +417,58 @@ ${js || ''}
       return;
     }
 
-    try {
-      const result = await togglePublish(selectedPageId);
-      
-      // 如果页面未发布，先发布
-      if (!result.is_published) {
-        const publishResult = await togglePublish(selectedPageId);
-        if (publishResult.is_published) {
-          showPermalinkModal(publishResult);
-        }
-      } else {
-        showPermalinkModal(result);
-      }
-    } catch (error) {
-      message.error('生成链接失败');
+    // 检查当前页面是否已发布
+    const currentPageData = pages.find(p => p.id === selectedPageId);
+    if (currentPageData?.is_published) {
+      // 如果已发布，直接显示链接
+      showPermalinkModal(currentPageData);
+      return;
     }
+
+    // 检查积分
+    if (userCredits < creditsConfig.credits_per_publish) {
+      Modal.confirm({
+        title: '积分不足',
+        content: (
+          <div>
+            <p>生成永久链接需要 <Text strong>{creditsConfig.credits_per_publish}</Text> 积分</p>
+            <p>您当前积分余额：<Text type="danger">{userCredits}</Text> 积分</p>
+            <p>请联系管理员充值积分后再试。</p>
+          </div>
+        ),
+        okText: '我知道了',
+        cancelText: '取消',
+        onOk: () => {}
+      });
+      return;
+    }
+
+    // 显示确认弹窗
+    Modal.confirm({
+      title: '确认生成永久链接',
+      content: (
+        <div>
+          <p>生成永久链接将消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
+          <p>您当前积分余额：<Text strong>{userCredits}</Text> 积分</p>
+          <p>生成后剩余：<Text strong>{userCredits - creditsConfig.credits_per_publish}</Text> 积分</p>
+          <Divider />
+          <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
+        </div>
+      ),
+      okText: '确认生成',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const result = await togglePublish(selectedPageId);
+          if (result.is_published) {
+            showPermalinkModal(result);
+            fetchUserCredits(); // 刷新积分
+          }
+        } catch (error) {
+          message.error('生成链接失败');
+        }
+      }
+    });
   };
 
   // 显示永久链接弹窗
@@ -343,10 +476,11 @@ ${js || ''}
     const publishUrl = `${window.location.origin}/pages/${user.id}/${page.slug}`;
     
     Modal.success({
-      title: '永久链接已生成',
+      title: '永久链接',
+      width: 600,
       content: (
         <div>
-          <p>你的页面已发布，可以通过以下链接访问：</p>
+          <p>你的页面永久链接：</p>
           <Space.Compact style={{ width: '100%', marginTop: 10 }}>
             <Input value={publishUrl} readOnly />
             <Button 
@@ -357,6 +491,8 @@ ${js || ''}
               }}
             />
           </Space.Compact>
+          <Divider />
+          <Text type="secondary">提示：此链接永久有效，可以分享给任何人访问</Text>
         </div>
       ),
       okText: '打开页面',
@@ -373,6 +509,15 @@ ${js || ''}
         <Space size={4}>
           {project.type === 'folder' ? <FolderOutlined /> : <FileOutlined />}
           <span>{project.name}</span>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEditProject(project);
+            }}
+          />
         </Space>
       ),
       key: `project-${project.id}`,
@@ -445,7 +590,7 @@ ${js || ''}
               onClick={handleSavePage}
               loading={isSaving}
             >
-              保存
+              保存 ({creditsConfig.credits_per_update} 积分)
             </Button>
             <Button
               icon={<CopyOutlined />}
@@ -464,7 +609,7 @@ ${js || ''}
               onClick={handleGeneratePermalink}
               disabled={!selectedPageId}
             >
-              生成永久链接
+              生成永久链接 ({creditsConfig.credits_per_publish} 积分)
             </Button>
           </Space>
         </div>
@@ -480,6 +625,9 @@ ${js || ''}
         
         <div className="header-right">
           <Space>
+            <Tag icon={<DollarOutlined />} color="gold">
+              积分余额: {userCredits}
+            </Tag>
             <Select
               value={previewMode}
               onChange={setPreviewMode}
@@ -561,7 +709,18 @@ ${js || ''}
                           <div className="page-slug">{page.slug}</div>
                         </div>
                         <Space size={4}>
-                          <Tooltip title={page.is_published ? '已发布' : '未发布'}>
+                          <Tooltip title="编辑名称">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditPage(page);
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip title={page.is_published ? '已发布' : '点击发布'}>
                             <Button
                               type="text"
                               size="small"
@@ -569,7 +728,12 @@ ${js || ''}
                               style={{ color: page.is_published ? '#52c41a' : '#999' }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                showPermalinkModal(page);
+                                if (page.is_published) {
+                                  showPermalinkModal(page);
+                                } else {
+                                  setSelectedPageId(page.id);
+                                  handleGeneratePermalink();
+                                }
                               }}
                             />
                           </Tooltip>
@@ -696,6 +860,22 @@ ${js || ''}
           setShowPageModal(false);
           pageForm.resetFields();
         }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setShowPageModal(false);
+            pageForm.resetFields();
+          }}>
+            取消
+          </Button>,
+          <Button 
+            key="submit" 
+            type="primary" 
+            onClick={() => pageForm.submit()}
+            icon={<DollarOutlined />}
+          >
+            创建 (消耗 {creditsConfig.credits_per_page} 积分)
+          </Button>
+        ]}
       >
         <Form
           form={pageForm}
@@ -715,6 +895,43 @@ ${js || ''}
             tooltip="留空将自动生成"
           >
             <Input placeholder="例如: my-page" />
+          </Form.Item>
+        </Form>
+        <Divider />
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Text type="secondary">
+            创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
+          </Text>
+          <Text type="secondary">
+            您当前积分余额：<Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
+              {userCredits}
+            </Text> 积分
+          </Text>
+        </Space>
+      </Modal>
+
+      {/* 重命名弹窗 */}
+      <Modal
+        title={renameType === 'project' ? '修改项目名称' : '修改页面名称'}
+        open={showRenameModal}
+        onOk={() => renameForm.submit()}
+        onCancel={() => {
+          setShowRenameModal(false);
+          renameForm.resetFields();
+          setRenameItem(null);
+        }}
+      >
+        <Form
+          form={renameForm}
+          layout="vertical"
+          onFinish={handleRename}
+        >
+          <Form.Item
+            name="name"
+            label={renameType === 'project' ? '项目名称' : '页面名称'}
+            rules={[{ required: true, message: '请输入名称' }]}
+          >
+            <Input placeholder="输入新名称" />
           </Form.Item>
         </Form>
       </Modal>

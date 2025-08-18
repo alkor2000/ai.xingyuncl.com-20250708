@@ -20,9 +20,13 @@ class SystemConfig {
       const settings = {};
       rows.forEach(row => {
         try {
-          // 如果是JSON类型，解析JSON
+          // 根据类型解析值
           if (row.setting_type === 'json' && row.setting_value) {
             settings[row.setting_key] = JSON.parse(row.setting_value);
+          } else if (row.setting_type === 'boolean') {
+            settings[row.setting_key] = row.setting_value === 'true' || row.setting_value === '1';
+          } else if (row.setting_type === 'number') {
+            settings[row.setting_key] = Number(row.setting_value);
           } else {
             settings[row.setting_key] = row.setting_value;
           }
@@ -55,6 +59,10 @@ class SystemConfig {
       try {
         if (row.setting_type === 'json' && row.setting_value) {
           return JSON.parse(row.setting_value);
+        } else if (row.setting_type === 'boolean') {
+          return row.setting_value === 'true' || row.setting_value === '1';
+        } else if (row.setting_type === 'number') {
+          return Number(row.setting_value);
         }
         return row.setting_value;
       } catch (e) {
@@ -73,9 +81,15 @@ class SystemConfig {
     try {
       let settingValue = value;
       
-      // 如果是JSON类型，序列化
+      // 根据类型转换值
       if (type === 'json' && typeof value === 'object') {
         settingValue = JSON.stringify(value);
+      } else if (type === 'boolean') {
+        settingValue = value ? 'true' : 'false';
+      } else if (type === 'number') {
+        settingValue = String(value);
+      } else {
+        settingValue = String(value);
       }
       
       // 使用UPSERT语法
@@ -89,7 +103,7 @@ class SystemConfig {
       
       await dbConnection.query(sql, [key, settingValue, type]);
       
-      logger.info('系统配置更新成功', { key });
+      logger.info('系统配置更新成功', { key, value: settingValue, type });
       return true;
     } catch (error) {
       logger.error('更新配置失败:', error);
@@ -112,6 +126,14 @@ class SystemConfig {
         if (typeof value === 'object' && value !== null) {
           type = 'json';
           settingValue = JSON.stringify(value);
+        } else if (typeof value === 'boolean') {
+          type = 'boolean';
+          settingValue = value ? 'true' : 'false';
+        } else if (typeof value === 'number') {
+          type = 'number';
+          settingValue = String(value);
+        } else {
+          settingValue = String(value || '');
         }
         
         const sql = `
@@ -141,6 +163,21 @@ class SystemConfig {
   static async getFormattedSettings() {
     try {
       const settings = await SystemConfig.getAllSettings();
+      
+      // 处理html_editor.*配置 - 组合成嵌套对象
+      const htmlEditorConfig = {};
+      const htmlEditorKeys = [];
+      
+      for (const [key, value] of Object.entries(settings)) {
+        if (key.startsWith('html_editor.')) {
+          const subKey = key.replace('html_editor.', '');
+          htmlEditorConfig[subKey] = value;
+          htmlEditorKeys.push(key);
+        }
+      }
+      
+      // 从settings中移除已处理的html_editor.*键
+      htmlEditorKeys.forEach(key => delete settings[key]);
       
       // 构建配置格式，处理兼容性
       const formattedSettings = {
@@ -173,7 +210,9 @@ class SystemConfig {
           refresh_token_days: 14 // 默认14天
         },
         // 添加主题配置
-        theme: settings.theme_config || null
+        theme: settings.theme_config || null,
+        // 添加HTML编辑器配置
+        html_editor: Object.keys(htmlEditorConfig).length > 0 ? htmlEditorConfig : null
       };
 
       // 处理用户配置兼容性
@@ -227,7 +266,8 @@ class SystemConfig {
           mode: 'standard', // 默认标准模式
           refresh_token_days: 14 // 默认14天
         },
-        theme: null
+        theme: null,
+        html_editor: null
       };
     }
   }
@@ -289,7 +329,42 @@ class SystemConfig {
         settings.theme_config = formattedSettings.theme;
       }
       
-      return await SystemConfig.updateSettings(settings);
+      // 处理HTML编辑器配置 - 拆分成独立的配置项
+      if (formattedSettings.html_editor && typeof formattedSettings.html_editor === 'object') {
+        for (const [key, value] of Object.entries(formattedSettings.html_editor)) {
+          const settingKey = `html_editor.${key}`;
+          
+          // 根据值的类型确定setting_type
+          let settingType = 'string';
+          if (typeof value === 'boolean') {
+            settingType = 'boolean';
+          } else if (typeof value === 'number') {
+            settingType = 'number';
+          }
+          
+          settings[settingKey] = value;
+          
+          // 单独更新每个html_editor配置项
+          await SystemConfig.updateSetting(settingKey, value, settingType);
+        }
+        
+        // 从settings对象中移除，因为已经单独处理了
+        delete settings['html_editor.*'];
+      }
+      
+      // 更新其他配置
+      const remainingSettings = {};
+      for (const [key, value] of Object.entries(settings)) {
+        if (!key.startsWith('html_editor.')) {
+          remainingSettings[key] = value;
+        }
+      }
+      
+      if (Object.keys(remainingSettings).length > 0) {
+        await SystemConfig.updateSettings(remainingSettings);
+      }
+      
+      return true;
     } catch (error) {
       logger.error('保存格式化配置失败:', error);
       throw error;

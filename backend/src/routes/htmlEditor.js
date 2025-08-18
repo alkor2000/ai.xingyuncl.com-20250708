@@ -10,6 +10,9 @@ const { authenticate } = require('../middleware/authMiddleware');
 // 需要认证的路由 - 使用authenticate中间件
 router.use(authenticate);
 
+// 积分配置
+router.get('/credits-config', HtmlEditorController.getCreditsConfig);
+
 // 项目管理
 router.get('/projects', HtmlEditorController.getProjects);
 router.post('/projects', HtmlEditorController.createProject);

@@ -21,7 +21,8 @@ import {
   BgColorsOutlined,
   HistoryOutlined,
   PictureOutlined,
-  KeyOutlined
+  KeyOutlined,
+  CodeOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -46,10 +47,24 @@ import {
   SystemPromptSettings,
   UsageLogs,
   ImageModelSettings,
-  SSOSettings
+  SSOSettings,
+  HtmlEditorSettings
 } from '../../components/admin/settings'
 
-const { TabPane } = Tabs
+// 自定义Tab样式，实现两排显示
+const customTabBarStyle = {
+  '.ant-tabs-nav-wrap': {
+    flexWrap: 'wrap',
+    height: 'auto',
+  },
+  '.ant-tabs-nav-list': {
+    flexWrap: 'wrap',
+    height: 'auto',
+  },
+  '.ant-tabs-tab': {
+    marginBottom: '8px',
+  }
+}
 
 const Settings = () => {
   const { t } = useTranslation()
@@ -399,296 +414,292 @@ const Settings = () => {
       </div>
     )
   }
+
+  // Tab配置项 - 使用items属性（Ant Design 5.x）
+  const tabItems = [
+    // 第一组：基础功能
+    {
+      key: 'statistics',
+      label: (
+        <span>
+          <BarChartOutlined />
+          {t('admin.settings.tabs.statistics')}
+        </span>
+      ),
+      children: <SystemStats systemStats={systemStats} />
+    },
+    {
+      key: 'usageLogs',
+      label: (
+        <span>
+          <HistoryOutlined />
+          {t('admin.settings.tabs.usageLogs')}
+        </span>
+      ),
+      children: <UsageLogs />
+    },
+    // 只有超级管理员可见的系统健康监控
+    ...(isSuperAdmin ? [{
+      key: 'health',
+      label: (
+        <span>
+          <HeartOutlined />
+          {t('admin.settings.tabs.systemHealth')}
+        </span>
+      ),
+      children: <SystemHealthMonitor onRefresh={getSystemHealth} />
+    }] : []),
+    {
+      key: 'models',
+      label: (
+        <span>
+          <RobotOutlined />
+          {t('admin.settings.tabs.models')}
+        </span>
+      ),
+      children: (
+        <Card 
+          title={
+            <Space>
+              <RobotOutlined />
+              <span>{t('admin.models.config')}</span>
+              <Tag color="blue">💰 {t('admin.models.creditsSystem')}</Tag>
+              <Tag color="processing" icon={<ThunderboltOutlined />}>
+                🚀 {t('admin.models.streamOutput')}
+              </Tag>
+              <Tag color="success" icon={<FileImageOutlined />}>
+                🖼️ {t('admin.models.imageUpload')}
+              </Tag>
+              <Tag color="orange" icon={<FileTextOutlined />}>
+                📄 {t('admin.models.documentUpload')}
+              </Tag>
+              <Tag color="green">🔓 {t('admin.models.noOutputLimit')}</Tag>
+            </Space>
+          }
+          extra={
+            isSuperAdmin && (
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingModel(null)
+                  modelForm.resetFields()
+                  setIsModelModalVisible(true)
+                }}
+              >
+                {t('admin.models.addModel')}
+              </Button>
+            )
+          }
+        >
+          <AIModelTable
+            models={aiModels}
+            loading={loading}
+            testingModelId={testingModelId}
+            onTest={handleTestModel}
+            onEdit={handleEditModel}
+            onDelete={handleDeleteModel}
+            onToggleStreamEnabled={handleToggleStreamEnabled}
+            onToggleImageUploadEnabled={handleToggleImageUploadEnabled}
+            onToggleDocumentUploadEnabled={handleToggleDocumentUploadEnabled}
+          />
+        </Card>
+      )
+    },
+    // 只有超级管理员可见的Tab
+    ...(isSuperAdmin ? [
+      {
+        key: 'imageModels',
+        label: (
+          <span>
+            <PictureOutlined />
+            图像生成模型
+          </span>
+        ),
+        children: <ImageModelSettings />
+      },
+      {
+        key: 'systemPrompts',
+        label: (
+          <span>
+            <FileTextOutlined />
+            {t('admin.settings.tabs.systemPrompts')}
+          </span>
+        ),
+        children: <SystemPromptSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'modules',
+        label: (
+          <span>
+            <AppstoreOutlined />
+            {t('admin.settings.tabs.modules')}
+          </span>
+        ),
+        children: (
+          <Card
+            title={t('admin.modules.title')}
+            extra={
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingModule(null)
+                  moduleForm.resetFields()
+                  setIsModuleModalVisible(true)
+                }}
+              >
+                {t('admin.modules.addModule')}
+              </Button>
+            }
+          >
+            <SystemModuleTable
+              modules={modules}
+              loading={loading}
+              checkingModuleId={checkingModuleId}
+              onCheckHealth={handleCheckModuleHealth}
+              onToggleStatus={handleToggleModuleStatus}
+              onEdit={handleEditModule}
+              onDelete={handleDeleteModule}
+            />
+          </Card>
+        )
+      },
+      {
+        key: 'apiServices',
+        label: (
+          <span>
+            <ApiOutlined />
+            {t('admin.settings.tabs.apiServices')}
+          </span>
+        ),
+        children: (
+          <Card title={t('admin.settings.apiServices.title')}>
+            <APIServiceTable
+              services={apiServices}
+              loading={loading}
+              onRefresh={getApiServices}
+              onDelete={handleDeleteApiService}
+              adminStore={useAdminStore.getState()}
+            />
+          </Card>
+        )
+      }
+    ] : []),
+    {
+      key: 'settings',
+      label: (
+        <span>
+          <SettingOutlined />
+          {t('admin.settings.tabs.basic')}
+        </span>
+      ),
+      children: (
+        <BasicSettings
+          form={settingsForm}
+          aiModels={aiModels}
+          loading={settingsLoading}
+          onSubmit={handleSaveSettings}
+          disabled={!isSuperAdmin}
+        />
+      )
+    },
+    // 只有超级管理员可见的配置Tab
+    ...(isSuperAdmin ? [
+      {
+        key: 'htmlEditor',
+        label: (
+          <span>
+            <CodeOutlined />
+            HTML编辑器
+          </span>
+        ),
+        children: <HtmlEditorSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'theme',
+        label: (
+          <span>
+            <BgColorsOutlined />
+            {t('admin.settings.tabs.theme')}
+          </span>
+        ),
+        children: <ThemeSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'rateLimit',
+        label: (
+          <span>
+            <ThunderboltOutlined />
+            {t('admin.settings.tabs.rateLimit')}
+          </span>
+        ),
+        children: <RateLimitSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'email',
+        label: (
+          <span>
+            <MailOutlined />
+            {t('admin.settings.tabs.email')}
+          </span>
+        ),
+        children: <EmailSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'sso',
+        label: (
+          <span>
+            <KeyOutlined />
+            {t('admin.settings.tabs.sso')}
+          </span>
+        ),
+        children: <SSOSettings />
+      },
+      {
+        key: 'customHomepage',
+        label: (
+          <span>
+            <GlobalOutlined />
+            {t('admin.settings.tabs.customHomepage')}
+          </span>
+        ),
+        children: <CustomHomepage disabled={!isSuperAdmin} />
+      }
+    ] : [])
+  ]
   
   return (
     <div className="page-container">
-      <Tabs defaultActiveKey="statistics" type="card">
-        {/* 系统统计 */}
-        <TabPane 
-          tab={
-            <span>
-              <BarChartOutlined />
-              {t('admin.settings.tabs.statistics')}
-            </span>
-          } 
-          key="statistics"
-        >
-          <SystemStats systemStats={systemStats} />
-        </TabPane>
-
-        {/* 使用记录（新增） */}
-        <TabPane 
-          tab={
-            <span>
-              <HistoryOutlined />
-              {t('admin.settings.tabs.usageLogs')}
-            </span>
-          } 
-          key="usageLogs"
-        >
-          <UsageLogs />
-        </TabPane>
-
-        {/* 系统健康监控（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <HeartOutlined />
-                {t('admin.settings.tabs.systemHealth')}
-              </span>
-            } 
-            key="health"
-          >
-            <SystemHealthMonitor onRefresh={getSystemHealth} />
-          </TabPane>
-        )}
-
-        {/* AI模型管理 */}
-        <TabPane 
-          tab={
-            <span>
-              <RobotOutlined />
-              {t('admin.settings.tabs.models')}
-            </span>
-          } 
-          key="models"
-        >
-          <Card 
-            title={
-              <Space>
-                <RobotOutlined />
-                <span>{t('admin.models.config')}</span>
-                <Tag color="blue">💰 {t('admin.models.creditsSystem')}</Tag>
-                <Tag color="processing" icon={<ThunderboltOutlined />}>
-                  🚀 {t('admin.models.streamOutput')}
-                </Tag>
-                <Tag color="success" icon={<FileImageOutlined />}>
-                  🖼️ {t('admin.models.imageUpload')}
-                </Tag>
-                <Tag color="orange" icon={<FileTextOutlined />}>
-                  📄 {t('admin.models.documentUpload')}
-                </Tag>
-                <Tag color="green">🔓 {t('admin.models.noOutputLimit')}</Tag>
-              </Space>
-            }
-            extra={
-              isSuperAdmin && (
-                <Button 
-                  type="primary" 
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingModel(null)
-                    modelForm.resetFields()
-                    setIsModelModalVisible(true)
-                  }}
-                >
-                  {t('admin.models.addModel')}
-                </Button>
-              )
-            }
-          >
-            <AIModelTable
-              models={aiModels}
-              loading={loading}
-              testingModelId={testingModelId}
-              onTest={handleTestModel}
-              onEdit={handleEditModel}
-              onDelete={handleDeleteModel}
-              onToggleStreamEnabled={handleToggleStreamEnabled}
-              onToggleImageUploadEnabled={handleToggleImageUploadEnabled}
-              onToggleDocumentUploadEnabled={handleToggleDocumentUploadEnabled}
-            />
-          </Card>
-        </TabPane>
-
-        {/* 图像生成模型（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <PictureOutlined />
-                图像生成模型
-              </span>
-            } 
-            key="imageModels"
-          >
-            <ImageModelSettings />
-          </TabPane>
-        )}
-
-        {/* 系统提示词（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <FileTextOutlined />
-                {t('admin.settings.tabs.systemPrompts')}
-              </span>
-            } 
-            key="systemPrompts"
-          >
-            <SystemPromptSettings disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
-
-        {/* 模块接入（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <AppstoreOutlined />
-                {t('admin.settings.tabs.modules')}
-              </span>
-            } 
-            key="modules"
-          >
-            <Card
-              title={t('admin.modules.title')}
-              extra={
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingModule(null)
-                    moduleForm.resetFields()
-                    setIsModuleModalVisible(true)
-                  }}
-                >
-                  {t('admin.modules.addModule')}
-                </Button>
-              }
-            >
-              <SystemModuleTable
-                modules={modules}
-                loading={loading}
-                checkingModuleId={checkingModuleId}
-                onCheckHealth={handleCheckModuleHealth}
-                onToggleStatus={handleToggleModuleStatus}
-                onEdit={handleEditModule}
-                onDelete={handleDeleteModule}
-              />
-            </Card>
-          </TabPane>
-        )}
-
-        {/* API服务管理（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <ApiOutlined />
-                {t('admin.settings.tabs.apiServices')}
-              </span>
-            } 
-            key="apiServices"
-          >
-            <Card title={t('admin.settings.apiServices.title')}>
-              <APIServiceTable
-                services={apiServices}
-                loading={loading}
-                onRefresh={getApiServices}
-                onDelete={handleDeleteApiService}
-                adminStore={useAdminStore.getState()}
-              />
-            </Card>
-          </TabPane>
-        )}
-
-        {/* 基础设置 */}
-        <TabPane 
-          tab={
-            <span>
-              <SettingOutlined />
-              {t('admin.settings.tabs.basic')}
-            </span>
-          } 
-          key="settings"
-        >
-          <BasicSettings
-            form={settingsForm}
-            aiModels={aiModels}
-            loading={settingsLoading}
-            onSubmit={handleSaveSettings}
-            disabled={!isSuperAdmin}
-          />
-        </TabPane>
-
-        {/* 主题设置（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <BgColorsOutlined />
-                {t('admin.settings.tabs.theme')}
-              </span>
-            } 
-            key="theme"
-          >
-            <ThemeSettings disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
-
-        {/* 速率限制设置（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <ThunderboltOutlined />
-                {t('admin.settings.tabs.rateLimit')}
-              </span>
-            } 
-            key="rateLimit"
-          >
-            <RateLimitSettings disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
-
-        {/* 邮件设置（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <MailOutlined />
-                {t('admin.settings.tabs.email')}
-              </span>
-            } 
-            key="email"
-          >
-            <EmailSettings disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
-
-        {/* SSO配置（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <KeyOutlined />
-                {t('admin.settings.tabs.sso')}
-              </span>
-            } 
-            key="sso"
-          >
-            <SSOSettings />
-          </TabPane>
-        )}
-
-        {/* 自定义首页（只有超级管理员可见） */}
-        {isSuperAdmin && (
-          <TabPane 
-            tab={
-              <span>
-                <GlobalOutlined />
-                {t('admin.settings.tabs.customHomepage')}
-              </span>
-            } 
-            key="customHomepage"
-          >
-            <CustomHomepage disabled={!isSuperAdmin} />
-          </TabPane>
-        )}
-      </Tabs>
+      <style>
+        {`
+          /* 自定义Tab样式，实现自适应多排显示 */
+          .settings-tabs .ant-tabs-nav-wrap {
+            flex-wrap: wrap !important;
+            height: auto !important;
+          }
+          .settings-tabs .ant-tabs-nav-list {
+            flex-wrap: wrap !important;
+            height: auto !important;
+          }
+          .settings-tabs .ant-tabs-tab {
+            margin-bottom: 8px !important;
+          }
+          .settings-tabs .ant-tabs-ink-bar {
+            display: none !important;
+          }
+          .settings-tabs .ant-tabs-nav::before {
+            border-bottom: none !important;
+          }
+        `}
+      </style>
+      
+      <Tabs 
+        defaultActiveKey="statistics" 
+        type="card"
+        className="settings-tabs"
+        items={tabItems}
+      />
 
       {/* AI模型弹窗（只有超级管理员可以使用） */}
       {isSuperAdmin && (
