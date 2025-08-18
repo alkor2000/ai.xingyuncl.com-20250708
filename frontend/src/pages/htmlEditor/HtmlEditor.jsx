@@ -1,11 +1,10 @@
 /**
- * HTML编辑器主页面
+ * HTML编辑器主页面 - 简化版本
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout,
-  Tabs,
   Button,
   Space,
   message,
@@ -16,15 +15,14 @@ import {
   Tree,
   Card,
   Empty,
-  Spin,
   Tooltip,
   Tag,
   Dropdown,
-  Menu,
   Badge,
   Row,
   Col,
-  Alert
+  Tabs,
+  Divider
 } from 'antd';
 import {
   FolderOutlined,
@@ -42,23 +40,22 @@ import {
   FolderAddOutlined,
   FileAddOutlined,
   ReloadOutlined,
-  CloudUploadOutlined,
-  DownloadOutlined,
-  HistoryOutlined,
-  FileImageOutlined,
-  VideoCameraOutlined,
-  AudioOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  DesktopOutlined,
+  TabletOutlined,
+  MobileOutlined,
+  FormatPainterOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
 import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
 import './HtmlEditor.less';
 
-const { Sider, Content } = Layout;
-const { TabPane } = Tabs;
+const { Sider, Content, Header } = Layout;
 const { TextArea } = Input;
-const { Option } = Select;
 
 const HtmlEditor = () => {
   const { t } = useTranslation();
@@ -96,6 +93,8 @@ const HtmlEditor = () => {
   const [pageForm] = Form.useForm();
   const [isSaving, setIsSaving] = useState(false);
   const [compiledContent, setCompiledContent] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [editorTheme, setEditorTheme] = useState('vs-dark');
 
   // 初始化加载
   useEffect(() => {
@@ -119,39 +118,71 @@ const HtmlEditor = () => {
     <title>我的页面</title>
 </head>
 <body>
-    <h1>欢迎使用HTML编辑器</h1>
-    <p>开始创建你的精彩内容...</p>
+    <div class="container">
+        <h1>欢迎使用HTML编辑器</h1>
+        <p>开始创建你的精彩内容...</p>
+        <button id="myButton">点击我</button>
+    </div>
 </body>
 </html>`);
-      setCssContent(`body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      setCssContent(`* {
     margin: 0;
-    padding: 20px;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
-    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.container {
+    text-align: center;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
 }
 
 h1 {
-    text-align: center;
+    color: #333;
     font-size: 2.5em;
     margin-bottom: 0.5em;
 }
 
 p {
-    text-align: center;
+    color: #666;
     font-size: 1.2em;
-    opacity: 0.9;
-}`);
-      setJsContent(`// 在这里编写JavaScript代码
-console.log('页面加载完成');
+    margin-bottom: 1.5em;
+}
 
-// 示例：添加点击事件
+button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: 16px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+button:hover {
+    transform: scale(1.05);
+}`);
+      setJsContent(`// 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
-    const h1 = document.querySelector('h1');
-    if (h1) {
-        h1.addEventListener('click', function() {
-            alert('你点击了标题！');
+    console.log('页面加载完成');
+    
+    const button = document.getElementById('myButton');
+    if (button) {
+        button.addEventListener('click', function() {
+            alert('欢迎使用HTML编辑器！');
         });
     }
 });`);
@@ -166,20 +197,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 编译内容
   const compileContent = () => {
-    // 如果HTML内容已经包含完整的HTML结构，直接使用
     if (htmlContent.includes('<!DOCTYPE') || htmlContent.includes('<html')) {
-      // 找到</head>标签，插入CSS
       let compiled = htmlContent;
-      if (cssContent) {
-        const headEndIndex = compiled.toLowerCase().indexOf('</head>');
-        if (headEndIndex > -1) {
-          compiled = compiled.slice(0, headEndIndex) + 
-            `\n<style>\n${cssContent}\n</style>\n` + 
-            compiled.slice(headEndIndex);
-        }
+      
+      const headEndIndex = compiled.toLowerCase().indexOf('</head>');
+      if (headEndIndex > -1) {
+        compiled = compiled.slice(0, headEndIndex) + 
+          (cssContent ? `\n<style>\n${cssContent}\n</style>\n` : '') +
+          compiled.slice(headEndIndex);
       }
       
-      // 找到</body>标签，插入JS
       if (jsContent) {
         const bodyEndIndex = compiled.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex > -1) {
@@ -191,7 +218,6 @@ document.addEventListener('DOMContentLoaded', function() {
       
       return compiled;
     } else {
-      // 如果只有body内容，构建完整HTML
       return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -246,7 +272,6 @@ ${jsContent || ''}
       pageForm.resetFields();
       setSelectedPageId(newPage.id);
       
-      // 刷新页面列表
       getPages(selectedProject.id);
     } catch (error) {
       message.error(error.message || '创建页面失败');
@@ -256,7 +281,6 @@ ${jsContent || ''}
   // 保存页面
   const handleSavePage = async () => {
     if (!selectedPageId) {
-      // 如果没有选中页面，弹出创建页面对话框
       setShowPageModal(true);
       return;
     }
@@ -296,8 +320,8 @@ ${jsContent || ''}
           content: (
             <div>
               <p>你的页面已发布，可以通过以下链接访问：</p>
-              <Input.Group compact>
-                <Input value={publishUrl} readOnly style={{ width: 'calc(100% - 32px)' }} />
+              <Space.Compact style={{ width: '100%', marginTop: 10 }}>
+                <Input value={publishUrl} readOnly />
                 <Button 
                   icon={<CopyOutlined />}
                   onClick={() => {
@@ -305,7 +329,7 @@ ${jsContent || ''}
                     message.success('链接已复制');
                   }}
                 />
-              </Input.Group>
+              </Space.Compact>
             </div>
           ),
           okText: '打开页面',
@@ -315,7 +339,6 @@ ${jsContent || ''}
         message.success('页面已取消发布');
       }
       
-      // 刷新页面列表
       if (selectedProject) {
         getPages(selectedProject.id);
       }
@@ -330,12 +353,9 @@ ${jsContent || ''}
     
     return projects.map(project => ({
       title: (
-        <Space>
+        <Space size={4}>
           {project.type === 'folder' ? <FolderOutlined /> : <FileOutlined />}
           <span>{project.name}</span>
-          {project.page_count > 0 && (
-            <Badge count={project.page_count} style={{ backgroundColor: '#52c41a' }} />
-          )}
         </Space>
       ),
       key: `project-${project.id}`,
@@ -348,7 +368,7 @@ ${jsContent || ''}
   };
 
   // 选择树节点
-  const handleTreeSelect = (selectedKeys, info) => {
+  const handleTreeSelect = (selectedKeys) => {
     if (selectedKeys.length > 0) {
       const key = selectedKeys[0];
       if (key.startsWith('project-')) {
@@ -360,243 +380,290 @@ ${jsContent || ''}
     }
   };
 
+  // Monaco编辑器配置
+  const editorOptions = {
+    minimap: { enabled: false },
+    fontSize: 14,
+    fontFamily: 'Consolas, Monaco, monospace',
+    formatOnPaste: true,
+    formatOnType: true,
+    automaticLayout: true,
+    tabSize: 2,
+    wordWrap: 'on',
+    scrollBeyondLastLine: false
+  };
+
+  // Dropdown菜单项 - Antd 5.x 格式
+  const projectMenuItems = [
+    {
+      key: 'folder',
+      icon: <FolderAddOutlined />,
+      label: '新建文件夹',
+      onClick: () => {
+        projectForm.setFieldValue('type', 'folder');
+        setShowProjectModal(true);
+      }
+    },
+    {
+      key: 'page',
+      icon: <FileAddOutlined />,
+      label: '新建页面',
+      onClick: () => setShowPageModal(true)
+    }
+  ];
+
+  // 编辑器标签配置
+  const editorTabs = [
+    {
+      key: 'html',
+      label: 'HTML',
+      children: (
+        <Editor
+          height="calc(100vh - 200px)"
+          language="html"
+          theme={editorTheme}
+          value={htmlContent}
+          onChange={setHtmlContent}
+          options={editorOptions}
+        />
+      )
+    },
+    {
+      key: 'css',
+      label: 'CSS',
+      children: (
+        <Editor
+          height="calc(100vh - 200px)"
+          language="css"
+          theme={editorTheme}
+          value={cssContent}
+          onChange={setCssContent}
+          options={editorOptions}
+        />
+      )
+    },
+    {
+      key: 'javascript',
+      label: 'JavaScript',
+      children: (
+        <Editor
+          height="calc(100vh - 200px)"
+          language="javascript"
+          theme={editorTheme}
+          value={jsContent}
+          onChange={setJsContent}
+          options={editorOptions}
+        />
+      )
+    }
+  ];
+
   return (
     <Layout className="html-editor-container">
-      {/* 左侧文件树 */}
-      <Sider width={260} className="editor-sider">
-        <div className="sider-header">
+      {/* 顶部工具栏 */}
+      <Header className="editor-header">
+        <div className="header-left">
           <Space>
-            <h3>项目管理</h3>
-            <Dropdown
-              overlay={
-                <Menu>
-                  <Menu.Item 
-                    key="folder" 
-                    icon={<FolderAddOutlined />}
-                    onClick={() => {
-                      projectForm.setFieldValue('type', 'folder');
-                      setShowProjectModal(true);
-                    }}
-                  >
-                    新建文件夹
-                  </Menu.Item>
-                  <Menu.Item 
-                    key="page" 
-                    icon={<FileAddOutlined />}
-                    onClick={() => setShowPageModal(true)}
-                  >
-                    新建页面
-                  </Menu.Item>
-                </Menu>
-              }
+            <Button
+              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            />
+            <Button 
+              type="primary" 
+              icon={<SaveOutlined />} 
+              onClick={handleSavePage}
+              loading={isSaving}
             >
-              <Button type="primary" size="small" icon={<PlusOutlined />} />
-            </Dropdown>
+              保存
+            </Button>
+            <Button
+              icon={<FormatPainterOutlined />}
+              onClick={() => message.info('格式化功能开发中')}
+            >
+              格式化
+            </Button>
+            <Button
+              icon={<FileTextOutlined />}
+              onClick={() => setShowTemplateModal(true)}
+            >
+              模板
+            </Button>
           </Space>
         </div>
         
-        <div className="project-tree">
-          {projects.length > 0 ? (
-            <Tree
-              treeData={buildTreeData()}
-              onSelect={handleTreeSelect}
-              defaultExpandAll
-            />
-          ) : (
-            <Empty description="暂无项目" />
+        <div className="header-center">
+          {currentPage && (
+            <Space>
+              <Tag color="blue">{currentPage.title}</Tag>
+              {currentPage.is_published && <Tag color="green">已发布</Tag>}
+            </Space>
           )}
         </div>
+        
+        <div className="header-right">
+          <Space>
+            <Select
+              value={previewMode}
+              onChange={setPreviewMode}
+              style={{ width: 120 }}
+              options={[
+                { value: 'desktop', label: '桌面' },
+                { value: 'tablet', label: '平板' },
+                { value: 'mobile', label: '手机' }
+              ]}
+            />
+            <Select
+              value={editorTheme}
+              onChange={setEditorTheme}
+              style={{ width: 100 }}
+              options={[
+                { value: 'vs-dark', label: '暗色' },
+                { value: 'vs-light', label: '亮色' }
+              ]}
+            />
+          </Space>
+        </div>
+      </Header>
 
-        {/* 页面列表 */}
-        {selectedProject && (
-          <div className="page-list">
-            <div className="list-header">
-              <span>{selectedProject.name} 的页面</span>
-              <Button 
-                type="link" 
-                size="small" 
-                icon={<ReloadOutlined />}
-                onClick={() => getPages(selectedProject.id)}
-              />
-            </div>
-            <div className="list-content">
-              {pages.length > 0 ? (
-                pages.map(page => (
-                  <Card
-                    key={page.id}
-                    size="small"
-                    className={`page-card ${selectedPageId === page.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedPageId(page.id);
-                      loadPage(page.id);
-                    }}
-                    actions={[
-                      <Tooltip title="编辑" key="edit">
-                        <EditOutlined />
-                      </Tooltip>,
-                      <Tooltip title={page.is_published ? '已发布' : '未发布'} key="publish">
-                        <GlobalOutlined 
-                          style={{ color: page.is_published ? '#52c41a' : '#999' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTogglePublish(page.id);
-                          }}
-                        />
-                      </Tooltip>,
-                      <Tooltip title="删除" key="delete">
-                        <DeleteOutlined 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            Modal.confirm({
-                              title: '确认删除',
-                              content: '确定要删除这个页面吗？',
-                              onOk: async () => {
-                                await deletePage(page.id);
-                                if (selectedPageId === page.id) {
-                                  setSelectedPageId(null);
-                                }
-                                getPages(selectedProject.id);
-                              }
-                            });
-                          }}
-                        />
-                      </Tooltip>
-                    ]}
-                  >
-                    <Card.Meta
-                      title={page.title}
-                      description={
-                        <Space direction="vertical" size={0}>
-                          <small>{page.slug}</small>
-                          {page.is_published && (
-                            <Tag color="green" style={{ fontSize: '10px' }}>已发布</Tag>
-                          )}
-                        </Space>
-                      }
-                    />
-                  </Card>
-                ))
-              ) : (
-                <Empty description="暂无页面" />
-              )}
-            </div>
-          </div>
-        )}
-      </Sider>
-
-      {/* 主编辑区 */}
       <Layout>
-        <Content className="editor-content">
-          {/* 工具栏 */}
-          <div className="editor-toolbar">
+        {/* 左侧文件树 */}
+        <Sider 
+          width={260} 
+          className="editor-sider"
+          collapsed={sidebarCollapsed}
+          collapsedWidth={0}
+        >
+          <div className="sider-header">
             <Space>
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />} 
-                onClick={handleSavePage}
-                loading={isSaving}
-              >
-                保存
-              </Button>
-              <Button
-                icon={<FileTextOutlined />}
-                onClick={() => setShowTemplateModal(true)}
-              >
-                选择模板
-              </Button>
-              <Select
-                value={previewMode}
-                onChange={setPreviewMode}
-                style={{ width: 120 }}
-              >
-                <Option value="desktop">桌面</Option>
-                <Option value="tablet">平板</Option>
-                <Option value="mobile">手机</Option>
-              </Select>
+              <h3>项目管理</h3>
+              <Dropdown menu={{ items: projectMenuItems }}>
+                <Button type="primary" size="small" icon={<PlusOutlined />} />
+              </Dropdown>
             </Space>
-            
-            {currentPage && (
-              <Space>
-                <Tag>版本: {currentPage.version}</Tag>
-                <Tag>积分消耗: {currentPage.credits_consumed}</Tag>
-                {currentPage.is_published && (
-                  <Tag color="green">已发布</Tag>
-                )}
-              </Space>
+          </div>
+          
+          <div className="project-tree">
+            {projects.length > 0 ? (
+              <Tree
+                treeData={buildTreeData()}
+                onSelect={handleTreeSelect}
+                defaultExpandAll
+              />
+            ) : (
+              <Empty description="暂无项目" />
             )}
           </div>
 
-          {/* 编辑器和预览区 */}
-          <Row gutter={16} className="editor-main">
-            <Col span={12}>
-              <Card className="editor-panel">
-                <Tabs activeKey={activeTab} onChange={setActiveTab}>
-                  <TabPane tab="HTML" key="html">
-                    <TextArea
-                      value={htmlContent}
-                      onChange={(e) => setHtmlContent(e.target.value)}
-                      style={{ 
-                        height: 'calc(100vh - 250px)', 
-                        fontFamily: 'monospace',
-                        fontSize: '14px'
+          {selectedProject && (
+            <div className="page-list">
+              <div className="list-header">
+                <span>{selectedProject.name}</span>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<ReloadOutlined />}
+                  onClick={() => getPages(selectedProject.id)}
+                />
+              </div>
+              <div className="list-content">
+                {pages.length > 0 ? (
+                  pages.map(page => (
+                    <Card
+                      key={page.id}
+                      size="small"
+                      className={`page-card ${selectedPageId === page.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedPageId(page.id);
+                        loadPage(page.id);
                       }}
-                      placeholder="输入HTML代码..."
-                    />
-                  </TabPane>
-                  <TabPane tab="CSS" key="css">
-                    <TextArea
-                      value={cssContent}
-                      onChange={(e) => setCssContent(e.target.value)}
-                      style={{ 
-                        height: 'calc(100vh - 250px)', 
-                        fontFamily: 'monospace',
-                        fontSize: '14px'
-                      }}
-                      placeholder="输入CSS样式..."
-                    />
-                  </TabPane>
-                  <TabPane tab="JavaScript" key="js">
-                    <TextArea
-                      value={jsContent}
-                      onChange={(e) => setJsContent(e.target.value)}
-                      style={{ 
-                        height: 'calc(100vh - 250px)', 
-                        fontFamily: 'monospace',
-                        fontSize: '14px'
-                      }}
-                      placeholder="输入JavaScript代码..."
-                    />
-                  </TabPane>
-                </Tabs>
-              </Card>
-            </Col>
-            
-            <Col span={12}>
-              <Card className="preview-panel" title="实时预览">
-                <div className={`preview-frame preview-${previewMode}`}>
-                  <iframe
-                    title="preview"
-                    className="preview-iframe"
-                    srcDoc={compiledContent}
-                    sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      background: 'white'
-                    }}
-                  />
-                </div>
-              </Card>
-            </Col>
-          </Row>
+                    >
+                      <div className="page-card-content">
+                        <div className="page-info">
+                          <div className="page-title">{page.title}</div>
+                          <div className="page-slug">{page.slug}</div>
+                        </div>
+                        <Space size={4}>
+                          <Tooltip title={page.is_published ? '已发布' : '未发布'}>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<GlobalOutlined />}
+                              style={{ color: page.is_published ? '#52c41a' : '#999' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTogglePublish(page.id);
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="删除">
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                Modal.confirm({
+                                  title: '确认删除',
+                                  content: '确定要删除这个页面吗？',
+                                  onOk: async () => {
+                                    await deletePage(page.id);
+                                    if (selectedPageId === page.id) {
+                                      setSelectedPageId(null);
+                                    }
+                                    getPages(selectedProject.id);
+                                  }
+                                });
+                              }}
+                            />
+                          </Tooltip>
+                        </Space>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <Empty description="暂无页面" />
+                )}
+              </div>
+            </div>
+          )}
+        </Sider>
+
+        {/* 主编辑区 */}
+        <Content className="editor-content">
+          <div className="editor-container">
+            {/* 编辑器区域 */}
+            <div className="code-editor-section">
+              <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                items={editorTabs}
+                className="editor-tabs"
+              />
+            </div>
+
+            {/* 预览区域 */}
+            <div className="preview-section">
+              <div className="preview-header">
+                <span>实时预览</span>
+              </div>
+              <div className={`preview-frame preview-${previewMode}`}>
+                <iframe
+                  title="preview"
+                  className="preview-iframe"
+                  srcDoc={compiledContent}
+                  sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+                />
+              </div>
+            </div>
+          </div>
         </Content>
       </Layout>
 
       {/* 创建项目弹窗 */}
       <Modal
         title="创建项目"
-        visible={showProjectModal}
+        open={showProjectModal}
         onOk={() => projectForm.submit()}
         onCancel={() => {
           setShowProjectModal(false);
@@ -620,10 +687,12 @@ ${jsContent || ''}
             label="类型"
             initialValue="folder"
           >
-            <Select>
-              <Option value="folder">文件夹</Option>
-              <Option value="page">页面</Option>
-            </Select>
+            <Select
+              options={[
+                { value: 'folder', label: '文件夹' },
+                { value: 'page', label: '页面' }
+              ]}
+            />
           </Form.Item>
           <Form.Item
             name="description"
@@ -637,7 +706,7 @@ ${jsContent || ''}
       {/* 创建页面弹窗 */}
       <Modal
         title="创建页面"
-        visible={showPageModal}
+        open={showPageModal}
         onOk={() => pageForm.submit()}
         onCancel={() => {
           setShowPageModal(false);
@@ -669,13 +738,13 @@ ${jsContent || ''}
       {/* 模板选择弹窗 */}
       <Modal
         title="选择模板"
-        visible={showTemplateModal}
-        width={800}
+        open={showTemplateModal}
+        width={900}
         footer={null}
         onCancel={() => setShowTemplateModal(false)}
       >
         <Row gutter={[16, 16]}>
-          {templates.map(template => (
+          {templates.length > 0 ? templates.map(template => (
             <Col span={8} key={template.id}>
               <Card
                 hoverable
@@ -686,12 +755,16 @@ ${jsContent || ''}
                   title={template.name}
                   description={template.description}
                 />
-                <div className="template-category">
-                  <Tag>{template.category}</Tag>
+                <div className="template-footer">
+                  <Tag color="blue">{template.category}</Tag>
                 </div>
               </Card>
             </Col>
-          ))}
+          )) : (
+            <Col span={24}>
+              <Empty description="暂无模板" />
+            </Col>
+          )}
         </Row>
       </Modal>
     </Layout>
