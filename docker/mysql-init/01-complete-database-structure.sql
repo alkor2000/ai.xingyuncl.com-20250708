@@ -26,7 +26,7 @@ CREATE TABLE `ai_model_groups` (
   CONSTRAINT `fk_model_group_model` FOREIGN KEY (`model_id`) REFERENCES `ai_models` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_model_groups_group` FOREIGN KEY (`group_id`) REFERENCES `user_groups` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_model_groups_model` FOREIGN KEY (`model_id`) REFERENCES `ai_models` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=145 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型与用户组关联表';
+) ENGINE=InnoDB AUTO_INCREMENT=187 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型与用户组关联表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `ai_models`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -41,6 +41,7 @@ CREATE TABLE `ai_models` (
   `model_config` json DEFAULT NULL COMMENT '模型配置参数',
   `stream_enabled` tinyint(1) DEFAULT '1' COMMENT '是否启用流式输出',
   `image_upload_enabled` tinyint(1) DEFAULT '0' COMMENT '是否支持图片上传',
+  `document_upload_enabled` tinyint(1) DEFAULT '0' COMMENT '是否支持文档上传',
   `file_upload_enabled` tinyint(1) DEFAULT '0' COMMENT '是否支持文件上传',
   `credits_per_chat` int DEFAULT '10' COMMENT '每次对话消耗积分',
   `is_active` tinyint(1) DEFAULT '1' COMMENT '是否启用',
@@ -60,8 +61,9 @@ CREATE TABLE `ai_models` (
   KEY `idx_stream` (`stream_enabled`),
   KEY `idx_image_upload` (`image_upload_enabled`),
   KEY `idx_is_public` (`is_public`),
-  KEY `idx_file_upload` (`file_upload_enabled`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型配置表';
+  KEY `idx_file_upload` (`file_upload_enabled`),
+  KEY `idx_document_upload` (`document_upload_enabled`)
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型配置表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `api_service_actions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -123,20 +125,6 @@ CREATE TABLE `billing_logs` (
   KEY `idx_billing_logs_user_created` (`user_id`,`created_at` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计费记录表';
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `combination_modules`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `combination_modules` (
-  `combination_id` bigint NOT NULL COMMENT '组合ID',
-  `module_id` bigint NOT NULL COMMENT '模块ID',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序顺序',
-  `added_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`combination_id`,`module_id`),
-  KEY `idx_module_id` (`module_id`),
-  CONSTRAINT `combination_modules_combination_fk` FOREIGN KEY (`combination_id`) REFERENCES `module_combinations` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `combination_modules_module_fk` FOREIGN KEY (`module_id`) REFERENCES `knowledge_modules` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='组合-模块关联表';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `conversations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -184,7 +172,7 @@ CREATE TABLE `credit_transactions` (
   `user_id` bigint NOT NULL,
   `amount` int NOT NULL COMMENT '积分变动数量，正数为充值，负数为消耗',
   `balance_after` int NOT NULL COMMENT '操作后积分余额',
-  `transaction_type` enum('admin_add','admin_deduct','admin_set','chat_consume','system_reward','group_distribute','group_recycle','api_consume') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `transaction_type` enum('admin_add','admin_deduct','admin_set','chat_consume','image_consume','system_reward','group_distribute','group_recycle','api_consume','html_create','html_update','html_publish') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `related_model_id` bigint DEFAULT NULL COMMENT '相关AI模型ID（对话消耗时使用）',
   `related_conversation_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '相关对话ID（对话消耗时使用）',
   `description` text COLLATE utf8mb4_unicode_ci COMMENT '操作描述',
@@ -205,11 +193,12 @@ CREATE TABLE `credit_transactions` (
   KEY `idx_credit_transactions_user_created` (`user_id`,`created_at` DESC),
   KEY `idx_service_id` (`service_id`),
   KEY `idx_request_id` (`request_id`),
+  KEY `idx_transaction_type_created` (`transaction_type`,`created_at`),
   CONSTRAINT `credit_transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `credit_transactions_ibfk_2` FOREIGN KEY (`related_model_id`) REFERENCES `ai_models` (`id`) ON DELETE SET NULL,
   CONSTRAINT `credit_transactions_ibfk_3` FOREIGN KEY (`related_conversation_id`) REFERENCES `conversations` (`id`) ON DELETE SET NULL,
   CONSTRAINT `credit_transactions_ibfk_4` FOREIGN KEY (`operator_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1634 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户积分变动历史记录表';
+) ENGINE=InnoDB AUTO_INCREMENT=2151 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户积分变动历史记录表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `files`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -235,6 +224,222 @@ CREATE TABLE `files` (
   CONSTRAINT `files_ibfk_2` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件表';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `html_pages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `html_pages` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `project_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `html_content` longtext COLLATE utf8mb4_unicode_ci,
+  `css_content` longtext COLLATE utf8mb4_unicode_ci,
+  `js_content` longtext COLLATE utf8mb4_unicode_ci,
+  `compiled_content` longtext COLLATE utf8mb4_unicode_ci,
+  `version` int DEFAULT '1',
+  `is_published` tinyint(1) DEFAULT '0',
+  `publish_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `view_count` int DEFAULT '0',
+  `like_count` int DEFAULT '0',
+  `credits_consumed` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `published_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_slug` (`user_id`,`slug`),
+  KEY `idx_project_id` (`project_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_slug` (`slug`),
+  KEY `idx_is_published` (`is_published`),
+  KEY `idx_view_count` (`view_count`),
+  KEY `idx_created_at` (`created_at`),
+  KEY `idx_user_slug` (`user_id`,`slug`),
+  CONSTRAINT `html_pages_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `html_projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `html_pages_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `html_pages_slug_backup`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `html_pages_slug_backup` (
+  `id` bigint NOT NULL DEFAULT '0',
+  `slug` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `publish_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `html_projects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `html_projects` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `parent_id` bigint DEFAULT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `path` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type` enum('folder','page') COLLATE utf8mb4_unicode_ci DEFAULT 'page',
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `tags` json DEFAULT NULL,
+  `is_public` tinyint(1) DEFAULT '0',
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_parent_id` (`parent_id`),
+  KEY `idx_type` (`type`),
+  KEY `idx_is_public` (`is_public`),
+  CONSTRAINT `html_projects_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `html_projects_ibfk_2` FOREIGN KEY (`parent_id`) REFERENCES `html_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `html_resources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `html_resources` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `project_id` bigint DEFAULT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_size` bigint NOT NULL,
+  `storage_type` enum('local','oss') COLLATE utf8mb4_unicode_ci DEFAULT 'local',
+  `storage_path` varchar(1000) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `oss_bucket` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `oss_key` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cdn_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `thumbnail_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mime_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `metadata` json DEFAULT NULL,
+  `tags` json DEFAULT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `download_count` int DEFAULT '0',
+  `bandwidth_used` bigint DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_project_id` (`project_id`),
+  KEY `idx_file_type` (`file_type`),
+  KEY `idx_storage_type` (`storage_type`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `html_resources_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `html_resources_ibfk_2` FOREIGN KEY (`project_id`) REFERENCES `html_projects` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `html_templates`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `html_templates` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `category` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `thumbnail` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `html_template` longtext COLLATE utf8mb4_unicode_ci,
+  `css_template` longtext COLLATE utf8mb4_unicode_ci,
+  `js_template` longtext COLLATE utf8mb4_unicode_ci,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `tags` json DEFAULT NULL,
+  `usage_count` int DEFAULT '0',
+  `is_premium` tinyint(1) DEFAULT '0',
+  `credits_required` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_category` (`category`),
+  KEY `idx_is_premium` (`is_premium`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `image_generations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `image_generations` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `parent_id` bigint DEFAULT NULL COMMENT '父生成记录ID（用于U/V操作）',
+  `action_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'IMAGINE' COMMENT '操作类型（IMAGINE/UPSCALE/VARIATION/REROLL等）',
+  `action_index` int DEFAULT NULL COMMENT '操作索引（1-4）',
+  `buttons` json DEFAULT NULL COMMENT '可用操作按钮',
+  `generation_mode` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'fast' COMMENT '生成模式（fast/turbo/relax）',
+  `progress` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度信息',
+  `grid_layout` tinyint(1) DEFAULT '0' COMMENT '是否为4图网格',
+  `mj_custom_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Midjourney customId',
+  `model_id` bigint DEFAULT NULL COMMENT '模型ID（可为空，模型删除后保留记录）',
+  `task_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Midjourney任务ID',
+  `prompt` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '提示词',
+  `negative_prompt` text COLLATE utf8mb4_unicode_ci COMMENT '负面提示词',
+  `prompt_en` text COLLATE utf8mb4_unicode_ci COMMENT '英文提示词',
+  `size` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '图片尺寸',
+  `seed` int DEFAULT '-1' COMMENT '随机种子',
+  `guidance_scale` float DEFAULT '2.5' COMMENT '引导系数',
+  `watermark` tinyint(1) DEFAULT '1' COMMENT '是否添加水印',
+  `image_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '原始图片URL（火山方舟返回）',
+  `local_path` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '本地存储路径',
+  `thumbnail_path` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '缩略图路径',
+  `file_size` int DEFAULT NULL COMMENT '文件大小（字节）',
+  `status` enum('pending','generating','success','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `task_status` enum('NOT_START','SUBMITTED','IN_PROGRESS','SUCCESS','FAILURE') COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '任务状态',
+  `error_message` text COLLATE utf8mb4_unicode_ci COMMENT '错误信息',
+  `fail_reason` text COLLATE utf8mb4_unicode_ci COMMENT '失败原因',
+  `credits_consumed` decimal(10,2) DEFAULT '0.00' COMMENT '消耗积分',
+  `generation_time` int DEFAULT NULL COMMENT '生成耗时（毫秒）',
+  `is_favorite` tinyint(1) DEFAULT '0' COMMENT '是否收藏',
+  `is_public` tinyint(1) DEFAULT '0' COMMENT '是否公开',
+  `view_count` int DEFAULT '0' COMMENT '查看次数',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_model` (`model_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created` (`created_at`),
+  KEY `idx_favorite` (`is_favorite`),
+  KEY `idx_public` (`is_public`,`created_at`),
+  KEY `idx_task_id` (`task_id`),
+  KEY `idx_parent_id` (`parent_id`),
+  KEY `idx_task_status` (`task_status`),
+  CONSTRAINT `fk_parent_generation` FOREIGN KEY (`parent_id`) REFERENCES `image_generations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `image_generations_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `image_generations_model_fk` FOREIGN KEY (`model_id`) REFERENCES `image_models` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=94 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='图片生成历史表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `image_models`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `image_models` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模型标识',
+  `display_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示名称',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '模型描述',
+  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'volcano' COMMENT '提供商：volcano/openai/stable-diffusion',
+  `generation_type` enum('sync','async') COLLATE utf8mb4_unicode_ci DEFAULT 'sync' COMMENT '生成类型：sync同步/async异步',
+  `endpoint` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'API端点',
+  `api_key` text COLLATE utf8mb4_unicode_ci COMMENT '加密的API密钥',
+  `model_id` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '模型ID，如doubao-seedream-3-0-t2i-250415',
+  `api_config` json DEFAULT NULL COMMENT 'API特定配置（如Midjourney的mode等）',
+  `webhook_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Webhook回调地址',
+  `polling_interval` int DEFAULT '2000' COMMENT '轮询间隔（毫秒）',
+  `max_polling_time` int DEFAULT '300000' COMMENT '最大轮询时间（毫秒）',
+  `price_per_image` decimal(10,2) DEFAULT '1.00' COMMENT '每张图片消耗积分',
+  `sizes_supported` json DEFAULT NULL COMMENT '支持的尺寸列表',
+  `max_prompt_length` int DEFAULT '1000' COMMENT '最大提示词长度',
+  `default_size` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '1024x1024' COMMENT '默认尺寸',
+  `default_guidance_scale` float DEFAULT '2.5' COMMENT '默认引导系数',
+  `example_prompt` text COLLATE utf8mb4_unicode_ci COMMENT '示例提示词',
+  `example_image` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '示例图片URL',
+  `icon` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'PictureOutlined' COMMENT '图标',
+  `is_active` tinyint(1) DEFAULT '1' COMMENT '是否启用',
+  `sort_order` int DEFAULT '0' COMMENT '排序',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`),
+  KEY `idx_active` (`is_active`),
+  KEY `idx_sort` (`sort_order`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='图像生成模型配置表';
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `knowledge_modules`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -247,7 +452,8 @@ CREATE TABLE `knowledge_modules` (
   `module_scope` enum('personal','team','system') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'personal' COMMENT '模块范围：personal-个人，team-团队，system-系统',
   `content_visible` tinyint(1) DEFAULT '1' COMMENT '内容是否可见（仅对团队和系统模块有效）',
   `creator_id` bigint NOT NULL COMMENT '创建者ID',
-  `group_id` bigint DEFAULT NULL COMMENT '团队模块所属的组ID',
+  `group_id` bigint DEFAULT NULL COMMENT '团队模块所属的组ID（仅团队模块使用）',
+  `group_ids` json DEFAULT NULL COMMENT '可见的用户组ID列表（仅系统级模块使用，NULL表示所有组可见）',
   `category` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '分类',
   `tags` json DEFAULT NULL COMMENT '标签',
   `sort_order` int DEFAULT '0' COMMENT '排序顺序',
@@ -263,7 +469,7 @@ CREATE TABLE `knowledge_modules` (
   KEY `idx_created_at` (`created_at`),
   CONSTRAINT `knowledge_modules_creator_fk` FOREIGN KEY (`creator_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `knowledge_modules_group_fk` FOREIGN KEY (`group_id`) REFERENCES `user_groups` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识模块表';
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识模块表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `messages`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -271,10 +477,12 @@ DROP TABLE IF EXISTS `messages`;
 CREATE TABLE `messages` (
   `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '消息UUID',
   `conversation_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID',
+  `sequence_number` int DEFAULT '0' COMMENT '消息序号，用于保证正确的显示顺序',
   `role` enum('user','assistant','system') COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '消息角色',
   `content` mediumtext COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '消息内容',
   `tokens` int DEFAULT '0' COMMENT '该消息Token数',
   `model_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'AI模型名称',
+  `status` enum('pending','streaming','completed','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'completed' COMMENT '消息状态：pending-待处理，streaming-流式传输中，completed-已完成，failed-失败',
   `file_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联文件ID',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
@@ -286,8 +494,49 @@ CREATE TABLE `messages` (
   KEY `idx_messages_conversation_created` (`conversation_id`,`created_at` DESC),
   KEY `idx_messages_role` (`role`),
   KEY `idx_messages_model_name` (`model_name`),
+  KEY `idx_status` (`status`),
+  KEY `idx_conversation_status` (`conversation_id`,`status`),
   CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对话消息表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `midjourney_tasks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `midjourney_tasks` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `generation_id` bigint DEFAULT NULL,
+  `task_id` varchar(100) NOT NULL,
+  `action` varchar(20) NOT NULL COMMENT '操作类型',
+  `status` varchar(20) NOT NULL DEFAULT 'SUBMITTED',
+  `submit_time` bigint NOT NULL COMMENT '提交时间戳',
+  `start_time` bigint DEFAULT NULL COMMENT '开始时间戳',
+  `finish_time` bigint DEFAULT NULL COMMENT '完成时间戳',
+  `properties` json DEFAULT NULL COMMENT '扩展属性',
+  `webhook_url` varchar(500) DEFAULT NULL,
+  `retry_count` int DEFAULT '0' COMMENT '重试次数',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `task_id` (`task_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_submit_time` (`submit_time`),
+  KEY `fk_mj_generation` (`generation_id`),
+  CONSTRAINT `fk_mj_generation` FOREIGN KEY (`generation_id`) REFERENCES `image_generations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_mj_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Midjourney任务队列';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `migrations_history`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `migrations_history` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `migration_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `executed_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_migration_name` (`migration_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据库迁移历史';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `module_combination_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -302,9 +551,10 @@ CREATE TABLE `module_combination_items` (
   UNIQUE KEY `idx_combination_module` (`combination_id`,`module_id`),
   KEY `idx_combination_id` (`combination_id`),
   KEY `idx_module_id` (`module_id`),
+  KEY `idx_combination_order` (`combination_id`,`order_index`),
   CONSTRAINT `fk_combination_items_combination` FOREIGN KEY (`combination_id`) REFERENCES `module_combinations` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_combination_items_module` FOREIGN KEY (`module_id`) REFERENCES `knowledge_modules` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模块组合项关联表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `module_combinations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -324,7 +574,31 @@ CREATE TABLE `module_combinations` (
   KEY `idx_is_active` (`is_active`),
   KEY `idx_created_at` (`created_at`),
   CONSTRAINT `module_combinations_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模块组合表';
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模块组合表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `oss_config`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `oss_config` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `provider` enum('aliyun','tencent','qiniu','aws','minio') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_key` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `secret_key` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `bucket_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `region` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `endpoint` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cdn_domain` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT '0',
+  `is_default` tinyint(1) DEFAULT '0',
+  `max_file_size_mb` int DEFAULT '100',
+  `allowed_file_types` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_provider` (`provider`),
+  KEY `idx_is_active` (`is_active`),
+  KEY `idx_is_default` (`is_default`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `permissions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -359,14 +633,17 @@ CREATE TABLE `system_modules` (
   `display_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示名称',
   `description` text COLLATE utf8mb4_unicode_ci COMMENT '模块描述',
   `module_type` enum('frontend','backend','fullstack') COLLATE utf8mb4_unicode_ci DEFAULT 'fullstack' COMMENT '模块类型',
+  `module_category` enum('system','external') COLLATE utf8mb4_unicode_ci DEFAULT 'external' COMMENT '模块类别：system-系统内置，external-外部扩展',
   `api_endpoint` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'API端点地址',
   `frontend_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '前端访问地址',
   `module_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '模块访问URL',
+  `route_path` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '系统模块的前端路由路径',
   `open_mode` enum('iframe','new_tab') COLLATE utf8mb4_unicode_ci DEFAULT 'new_tab' COMMENT '打开方式：iframe嵌入或新标签页',
   `menu_icon` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'AppstoreOutlined' COMMENT '菜单图标（Ant Design图标名称）',
   `proxy_path` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '代理路径',
   `auth_mode` enum('jwt','oauth','none') COLLATE utf8mb4_unicode_ci DEFAULT 'jwt' COMMENT '认证模式',
   `is_active` tinyint(1) DEFAULT '0' COMMENT '是否启用',
+  `can_disable` tinyint(1) DEFAULT '1' COMMENT '是否可以禁用：0-不可禁用（核心模块），1-可以禁用',
   `sort_order` int DEFAULT '0' COMMENT '排序',
   `permissions` json DEFAULT NULL COMMENT '所需权限',
   `allowed_groups` json DEFAULT NULL COMMENT '允许访问的用户组ID列表',
@@ -381,8 +658,9 @@ CREATE TABLE `system_modules` (
   UNIQUE KEY `uk_proxy_path` (`proxy_path`),
   KEY `idx_is_active` (`is_active`),
   KEY `idx_sort_order` (`sort_order`),
-  KEY `idx_active_sort` (`is_active`,`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统模块配置表 - 支持外部应用集成';
+  KEY `idx_active_sort` (`is_active`,`sort_order`),
+  KEY `idx_category_active` (`module_category`,`is_active`)
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统模块配置表 - 支持外部应用集成';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `system_prompt_groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -431,7 +709,7 @@ CREATE TABLE `system_settings` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `setting_key` (`setting_key`),
   KEY `idx_key` (`setting_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=1010 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统配置表';
+) ENGINE=InnoDB AUTO_INCREMENT=1129 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统配置表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `token_blacklist`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -463,7 +741,7 @@ CREATE TABLE `user_activities` (
   KEY `idx_user_activities_created` (`created_at`),
   KEY `idx_user_activities_user_created` (`user_id`,`created_at`),
   CONSTRAINT `user_activities_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1239 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1639 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `user_groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -518,6 +796,8 @@ DROP TABLE IF EXISTS `users`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `uuid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `uuid_source` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'system' COMMENT '标识来源：system/sso',
   `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户邮箱',
   `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户名',
@@ -544,6 +824,8 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `username` (`username`),
+  UNIQUE KEY `uuid` (`uuid`),
+  UNIQUE KEY `uuid_2` (`uuid`),
   KEY `idx_email` (`email`),
   KEY `idx_username` (`username`),
   KEY `idx_role` (`role`),
@@ -553,89 +835,11 @@ CREATE TABLE `users` (
   KEY `idx_used_credits` (`used_credits`),
   KEY `idx_credits_expire` (`credits_expire_at`),
   KEY `idx_expire_at` (`expire_at`),
+  KEY `idx_uuid` (`uuid`),
+  KEY `idx_uuid_source` (`uuid_source`),
   FULLTEXT KEY `idx_remark` (`remark`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表 - 包含账号有效期和积分有效期';
+) ENGINE=InnoDB AUTO_INCREMENT=112 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表 - 包含账号有效期和积分有效期';
 /*!40101 SET character_set_client = @saved_cs_client */;
-/*!50003 DROP PROCEDURE IF EXISTS `cleanup_expired_tokens` */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-CREATE DEFINER=`ai_user`@`localhost` PROCEDURE `cleanup_expired_tokens`()
-BEGIN
-  DELETE FROM token_blacklist WHERE expires_at < NOW();
-END ;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
-/*!50003 DROP PROCEDURE IF EXISTS `DeductUserCredits` */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-CREATE DEFINER=`ai_user`@`localhost` PROCEDURE `DeductUserCredits`(
-  IN p_user_id BIGINT,
-  IN p_amount INT,
-  IN p_model_id BIGINT,
-  IN p_conversation_id VARCHAR(36),
-  OUT p_success BOOLEAN,
-  OUT p_new_balance INT
-)
-BEGIN
-  DECLARE current_balance INT DEFAULT 0;
-  DECLARE EXIT HANDLER FOR SQLEXCEPTION 
-  BEGIN
-    ROLLBACK;
-    SET p_success = FALSE;
-    SET p_new_balance = -1;
-  END;
-  
-  START TRANSACTION;
-  
-  
-  SELECT (credits_quota - used_credits) INTO current_balance 
-  FROM users WHERE id = p_user_id FOR UPDATE;
-  
-  
-  IF current_balance >= p_amount THEN
-    
-    UPDATE users SET used_credits = used_credits + p_amount WHERE id = p_user_id;
-    
-    
-    INSERT INTO credit_transactions (
-      user_id, amount, balance_after, transaction_type, 
-      related_model_id, related_conversation_id, description
-    ) VALUES (
-      p_user_id, -p_amount, current_balance - p_amount, 'chat_consume',
-      p_model_id, p_conversation_id, CONCAT('AI对话消耗积分，模型ID:', p_model_id)
-    );
-    
-    SET p_success = TRUE;
-    SET p_new_balance = current_balance - p_amount;
-    COMMIT;
-  ELSE
-    SET p_success = FALSE;
-    SET p_new_balance = current_balance;
-    ROLLBACK;
-  END IF;
-END ;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
