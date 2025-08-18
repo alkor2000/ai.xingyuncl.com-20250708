@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 简化版本
+ * HTML编辑器主页面 - 精简版本
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,7 +21,6 @@ import {
   Badge,
   Row,
   Col,
-  Tabs,
   Divider
 } from 'antd';
 import {
@@ -29,11 +28,6 @@ import {
   FileOutlined,
   PlusOutlined,
   SaveOutlined,
-  PlayCircleOutlined,
-  EyeOutlined,
-  SettingOutlined,
-  CodeOutlined,
-  GlobalOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -44,9 +38,11 @@ import {
   DesktopOutlined,
   TabletOutlined,
   MobileOutlined,
-  FormatPainterOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  ClearOutlined,
+  LinkOutlined,
+  GlobalOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
@@ -64,11 +60,9 @@ const HtmlEditor = () => {
     projects,
     pages,
     currentPage,
-    templates,
     loading,
     getProjects,
     getPages,
-    getTemplates,
     createProject,
     createPage,
     updatePage,
@@ -82,13 +76,9 @@ const HtmlEditor = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [htmlContent, setHtmlContent] = useState('');
-  const [cssContent, setCssContent] = useState('');
-  const [jsContent, setJsContent] = useState('');
-  const [activeTab, setActiveTab] = useState('html');
   const [previewMode, setPreviewMode] = useState('desktop');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPageModal, setShowPageModal] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [projectForm] = Form.useForm();
   const [pageForm] = Form.useForm();
   const [isSaving, setIsSaving] = useState(false);
@@ -99,15 +89,25 @@ const HtmlEditor = () => {
   // 初始化加载
   useEffect(() => {
     getProjects();
-    getTemplates();
   }, []);
 
   // 加载选中页面的内容
   useEffect(() => {
     if (currentPage) {
-      setHtmlContent(currentPage.html_content || '');
-      setCssContent(currentPage.css_content || '');
-      setJsContent(currentPage.js_content || '');
+      // 如果页面有完整HTML内容，使用它；否则尝试编译旧格式的内容
+      if (currentPage.html_content) {
+        setHtmlContent(currentPage.html_content);
+      } else if (currentPage.compiled_content) {
+        setHtmlContent(currentPage.compiled_content);
+      } else {
+        // 兼容旧数据：如果有分离的CSS/JS，编译它们
+        const compiled = compileOldContent(
+          currentPage.html_content || '',
+          currentPage.css_content || '',
+          currentPage.js_content || ''
+        );
+        setHtmlContent(compiled);
+      }
     } else {
       // 加载默认模板
       setHtmlContent(`<!DOCTYPE html>
@@ -116,102 +116,88 @@ const HtmlEditor = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>我的页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 0.5em;
+        }
+        p {
+            color: #666;
+            font-size: 1.2em;
+            margin-bottom: 1.5em;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>欢迎使用HTML编辑器</h1>
         <p>开始创建你的精彩内容...</p>
-        <button id="myButton">点击我</button>
+        <button onclick="alert('欢迎使用HTML编辑器！')">点击我</button>
     </div>
 </body>
 </html>`);
-      setCssContent(`* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.container {
-    text-align: center;
-    padding: 40px;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    max-width: 600px;
-}
-
-h1 {
-    color: #333;
-    font-size: 2.5em;
-    margin-bottom: 0.5em;
-}
-
-p {
-    color: #666;
-    font-size: 1.2em;
-    margin-bottom: 1.5em;
-}
-
-button {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    font-size: 16px;
-    border-radius: 25px;
-    cursor: pointer;
-    transition: transform 0.3s ease;
-}
-
-button:hover {
-    transform: scale(1.05);
-}`);
-      setJsContent(`// 页面加载完成后执行
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('页面加载完成');
-    
-    const button = document.getElementById('myButton');
-    if (button) {
-        button.addEventListener('click', function() {
-            alert('欢迎使用HTML编辑器！');
-        });
-    }
-});`);
     }
   }, [currentPage]);
 
   // 实时预览更新
   useEffect(() => {
-    const compiled = compileContent();
-    setCompiledContent(compiled);
-  }, [htmlContent, cssContent, jsContent]);
+    setCompiledContent(htmlContent);
+  }, [htmlContent]);
 
-  // 编译内容
-  const compileContent = () => {
-    if (htmlContent.includes('<!DOCTYPE') || htmlContent.includes('<html')) {
-      let compiled = htmlContent;
+  // 编译旧格式内容（用于兼容旧数据）
+  const compileOldContent = (html, css, js) => {
+    if (html && (html.includes('<!DOCTYPE') || html.includes('<html'))) {
+      let compiled = html;
       
-      const headEndIndex = compiled.toLowerCase().indexOf('</head>');
-      if (headEndIndex > -1) {
-        compiled = compiled.slice(0, headEndIndex) + 
-          (cssContent ? `\n<style>\n${cssContent}\n</style>\n` : '') +
-          compiled.slice(headEndIndex);
+      if (css) {
+        const headEndIndex = compiled.toLowerCase().indexOf('</head>');
+        if (headEndIndex > -1) {
+          compiled = compiled.slice(0, headEndIndex) + 
+            `\n<style>\n${css}\n</style>\n` +
+            compiled.slice(headEndIndex);
+        }
       }
       
-      if (jsContent) {
+      if (js) {
         const bodyEndIndex = compiled.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex > -1) {
           compiled = compiled.slice(0, bodyEndIndex) + 
-            `\n<script>\n${jsContent}\n</script>\n` + 
+            `\n<script>\n${js}\n</script>\n` + 
             compiled.slice(bodyEndIndex);
         }
       }
@@ -225,13 +211,13 @@ document.addEventListener('DOMContentLoaded', function() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>预览</title>
     <style>
-${cssContent || ''}
+${css || ''}
     </style>
 </head>
 <body>
-${htmlContent || ''}
+${html || ''}
     <script>
-${jsContent || ''}
+${js || ''}
     </script>
 </body>
 </html>`;
@@ -262,8 +248,8 @@ ${jsContent || ''}
         ...values,
         project_id: selectedProject.id,
         html_content: htmlContent,
-        css_content: cssContent,
-        js_content: jsContent
+        css_content: '', // 保持空值以兼容后端
+        js_content: ''   // 保持空值以兼容后端
       };
       
       const newPage = await createPage(pageData);
@@ -289,8 +275,8 @@ ${jsContent || ''}
     try {
       await updatePage(selectedPageId, {
         html_content: htmlContent,
-        css_content: cssContent,
-        js_content: jsContent
+        css_content: '', // 保持空值以兼容后端
+        js_content: ''   // 保持空值以兼容后端
       });
       message.success('页面保存成功');
     } catch (error) {
@@ -300,51 +286,82 @@ ${jsContent || ''}
     }
   };
 
-  // 选择模板
-  const handleSelectTemplate = (template) => {
-    setHtmlContent(template.html_template || '');
-    setCssContent(template.css_template || '');
-    setJsContent(template.js_template || '');
-    setShowTemplateModal(false);
-    message.success('模板已加载');
+  // 复制内容到剪贴板
+  const handleCopyContent = () => {
+    if (!htmlContent) {
+      message.warning('编辑器内容为空');
+      return;
+    }
+    
+    navigator.clipboard.writeText(htmlContent).then(() => {
+      message.success('内容已复制到剪贴板');
+    }).catch(() => {
+      message.error('复制失败，请手动复制');
+    });
   };
 
-  // 发布/取消发布页面
-  const handleTogglePublish = async (pageId) => {
-    try {
-      const result = await togglePublish(pageId);
-      if (result.is_published) {
-        const publishUrl = `${window.location.origin}/pages/${user.id}/${result.slug}`;
-        Modal.success({
-          title: '发布成功',
-          content: (
-            <div>
-              <p>你的页面已发布，可以通过以下链接访问：</p>
-              <Space.Compact style={{ width: '100%', marginTop: 10 }}>
-                <Input value={publishUrl} readOnly />
-                <Button 
-                  icon={<CopyOutlined />}
-                  onClick={() => {
-                    navigator.clipboard.writeText(publishUrl);
-                    message.success('链接已复制');
-                  }}
-                />
-              </Space.Compact>
-            </div>
-          ),
-          okText: '打开页面',
-          onOk: () => window.open(publishUrl, '_blank')
-        });
-      } else {
-        message.success('页面已取消发布');
+  // 清空编辑器内容
+  const handleClearContent = () => {
+    Modal.confirm({
+      title: '确认清空',
+      content: '确定要清空编辑器内容吗？此操作不可恢复。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        setHtmlContent('');
+        message.success('编辑器已清空');
       }
+    });
+  };
+
+  // 生成永久链接
+  const handleGeneratePermalink = async () => {
+    if (!selectedPageId) {
+      message.warning('请先保存页面');
+      return;
+    }
+
+    try {
+      const result = await togglePublish(selectedPageId);
       
-      if (selectedProject) {
-        getPages(selectedProject.id);
+      // 如果页面未发布，先发布
+      if (!result.is_published) {
+        const publishResult = await togglePublish(selectedPageId);
+        if (publishResult.is_published) {
+          showPermalinkModal(publishResult);
+        }
+      } else {
+        showPermalinkModal(result);
       }
     } catch (error) {
-      message.error('操作失败');
+      message.error('生成链接失败');
     }
+  };
+
+  // 显示永久链接弹窗
+  const showPermalinkModal = (page) => {
+    const publishUrl = `${window.location.origin}/pages/${user.id}/${page.slug}`;
+    
+    Modal.success({
+      title: '永久链接已生成',
+      content: (
+        <div>
+          <p>你的页面已发布，可以通过以下链接访问：</p>
+          <Space.Compact style={{ width: '100%', marginTop: 10 }}>
+            <Input value={publishUrl} readOnly />
+            <Button 
+              icon={<CopyOutlined />}
+              onClick={() => {
+                navigator.clipboard.writeText(publishUrl);
+                message.success('链接已复制');
+              }}
+            />
+          </Space.Compact>
+        </div>
+      ),
+      okText: '打开页面',
+      onOk: () => window.open(publishUrl, '_blank')
+    });
   };
 
   // 构建文件树数据
@@ -412,52 +429,6 @@ ${jsContent || ''}
     }
   ];
 
-  // 编辑器标签配置
-  const editorTabs = [
-    {
-      key: 'html',
-      label: 'HTML',
-      children: (
-        <Editor
-          height="calc(100vh - 200px)"
-          language="html"
-          theme={editorTheme}
-          value={htmlContent}
-          onChange={setHtmlContent}
-          options={editorOptions}
-        />
-      )
-    },
-    {
-      key: 'css',
-      label: 'CSS',
-      children: (
-        <Editor
-          height="calc(100vh - 200px)"
-          language="css"
-          theme={editorTheme}
-          value={cssContent}
-          onChange={setCssContent}
-          options={editorOptions}
-        />
-      )
-    },
-    {
-      key: 'javascript',
-      label: 'JavaScript',
-      children: (
-        <Editor
-          height="calc(100vh - 200px)"
-          language="javascript"
-          theme={editorTheme}
-          value={jsContent}
-          onChange={setJsContent}
-          options={editorOptions}
-        />
-      )
-    }
-  ];
-
   return (
     <Layout className="html-editor-container">
       {/* 顶部工具栏 */}
@@ -477,16 +448,23 @@ ${jsContent || ''}
               保存
             </Button>
             <Button
-              icon={<FormatPainterOutlined />}
-              onClick={() => message.info('格式化功能开发中')}
+              icon={<CopyOutlined />}
+              onClick={handleCopyContent}
             >
-              格式化
+              复制
             </Button>
             <Button
-              icon={<FileTextOutlined />}
-              onClick={() => setShowTemplateModal(true)}
+              icon={<ClearOutlined />}
+              onClick={handleClearContent}
             >
-              模板
+              清空
+            </Button>
+            <Button
+              icon={<LinkOutlined />}
+              onClick={handleGeneratePermalink}
+              disabled={!selectedPageId}
+            >
+              生成永久链接
             </Button>
           </Space>
         </div>
@@ -591,7 +569,7 @@ ${jsContent || ''}
                               style={{ color: page.is_published ? '#52c41a' : '#999' }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleTogglePublish(page.id);
+                                showPermalinkModal(page);
                               }}
                             />
                           </Tooltip>
@@ -634,11 +612,17 @@ ${jsContent || ''}
           <div className="editor-container">
             {/* 编辑器区域 */}
             <div className="code-editor-section">
-              <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                items={editorTabs}
-                className="editor-tabs"
+              <div className="editor-header-bar">
+                <span className="editor-title">HTML编辑器</span>
+                <span className="editor-hint">粘贴完整的HTML代码</span>
+              </div>
+              <Editor
+                height="calc(100vh - 200px)"
+                language="html"
+                theme={editorTheme}
+                value={htmlContent}
+                onChange={setHtmlContent}
+                options={editorOptions}
               />
             </div>
 
@@ -733,39 +717,6 @@ ${jsContent || ''}
             <Input placeholder="例如: my-page" />
           </Form.Item>
         </Form>
-      </Modal>
-
-      {/* 模板选择弹窗 */}
-      <Modal
-        title="选择模板"
-        open={showTemplateModal}
-        width={900}
-        footer={null}
-        onCancel={() => setShowTemplateModal(false)}
-      >
-        <Row gutter={[16, 16]}>
-          {templates.length > 0 ? templates.map(template => (
-            <Col span={8} key={template.id}>
-              <Card
-                hoverable
-                className="template-card"
-                onClick={() => handleSelectTemplate(template)}
-              >
-                <Card.Meta
-                  title={template.name}
-                  description={template.description}
-                />
-                <div className="template-footer">
-                  <Tag color="blue">{template.category}</Tag>
-                </div>
-              </Card>
-            </Col>
-          )) : (
-            <Col span={24}>
-              <Empty description="暂无模板" />
-            </Col>
-          )}
-        </Row>
       </Modal>
     </Layout>
   );
