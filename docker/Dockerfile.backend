@@ -58,3 +58,9 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 # 启动应用（先以root执行迁移，然后切换用户启动应用）
 CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]
+
+# 添加数据库schema和升级工具
+COPY database/schema /app/database/schema
+COPY tools/database-upgrade /app/tools/database-upgrade
+COPY docker/scripts/database-upgrade.sh /usr/local/bin/db-upgrade
+RUN chmod +x /usr/local/bin/db-upgrade

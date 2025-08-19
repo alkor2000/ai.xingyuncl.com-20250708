@@ -1,0 +1,12 @@
+{
+  "name": "database-upgrade-tool",
+  "version": "1.0.0",
+  "description": "数据库智能升级工具",
+  "main": "upgrade.js",
+  "scripts": {
+    "upgrade": "node upgrade.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.6.0"
+  }
+}
