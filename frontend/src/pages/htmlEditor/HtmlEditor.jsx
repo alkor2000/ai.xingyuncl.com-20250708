@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 增强版本（支持预览、0积分显示和默认项目）
+ * HTML编辑器主页面 - 增强版本（支持文件夹删除）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -113,7 +113,7 @@ const HtmlEditor = () => {
   // 自动选择默认项目
   useEffect(() => {
     if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
-      const defaultProject = projects.find(p => p.name === '默认项目');
+      const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
       if (defaultProject) {
         setSelectedProject(defaultProject);
         getPages(defaultProject.id);
@@ -250,7 +250,7 @@ const HtmlEditor = () => {
         const headEndIndex = compiled.toLowerCase().indexOf('</head>');
         if (headEndIndex > -1) {
           compiled = compiled.slice(0, headEndIndex) + 
-            `\n<style>\n${css}\n</style>\n` +
+            `\\n<style>\\n${css}\\n</style>\\n` +
             compiled.slice(headEndIndex);
         }
       }
@@ -259,7 +259,7 @@ const HtmlEditor = () => {
         const bodyEndIndex = compiled.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex > -1) {
           compiled = compiled.slice(0, bodyEndIndex) + 
-            `\n<script>\n${js}\n</script>\n` + 
+            `\\n<script>\\n${js}\\n</script>\\n` + 
             compiled.slice(bodyEndIndex);
         }
       }
@@ -328,6 +328,48 @@ ${js || ''}
     setShowRenameModal(true);
   };
 
+  // 删除文件夹
+  const handleDeleteProject = (project) => {
+    // 检查是否为默认项目
+    if (project.is_default === 1 || project.name === '默认项目') {
+      message.warning('默认项目不能删除');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认删除',
+      content: (
+        <div>
+          <p>确定要删除文件夹 "{project.name}" 吗？</p>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            注意：只能删除空文件夹。如果文件夹内有页面或子文件夹，请先删除它们。
+          </p>
+        </div>
+      ),
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteProject(project.id);
+          message.success('文件夹删除成功');
+          
+          // 如果删除的是当前选中的项目，清空选择
+          if (selectedProject?.id === project.id) {
+            setSelectedProject(null);
+          }
+          
+          // 刷新项目列表
+          await getProjects();
+        } catch (error) {
+          // 显示具体的错误信息
+          const errorMsg = error.response?.data?.message || '删除文件夹失败';
+          message.error(errorMsg);
+        }
+      }
+    });
+  };
+
   // 编辑页面名称
   const handleEditPage = (page) => {
     setRenameType('page');
@@ -365,7 +407,7 @@ ${js || ''}
     let projectId = selectedProject?.id;
     
     if (!projectId) {
-      const defaultProject = projects.find(p => p.name === '默认项目');
+      const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
       if (defaultProject) {
         projectId = defaultProject.id;
         setSelectedProject(defaultProject);
@@ -568,7 +610,9 @@ ${js || ''}
         <Space size={4}>
           {project.type === 'folder' ? <FolderOutlined /> : <FileOutlined />}
           <span>{project.name}</span>
-          {project.name === '默认项目' && <Tag color="blue" style={{ marginLeft: 4 }}>默认</Tag>}
+          {(project.is_default === 1 || project.name === '默认项目') && (
+            <Tag color="blue" style={{ marginLeft: 4 }}>默认</Tag>
+          )}
           <Button
             type="text"
             size="small"
@@ -578,6 +622,19 @@ ${js || ''}
               handleEditProject(project);
             }}
           />
+          {/* 添加删除按钮（非默认文件夹） */}
+          {project.type === 'folder' && project.is_default !== 1 && project.name !== '默认项目' && (
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteProject(project);
+              }}
+            />
+          )}
         </Space>
       ),
       key: `project-${project.id}`,

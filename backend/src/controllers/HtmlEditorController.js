@@ -79,7 +79,8 @@ class HtmlEditorController {
         path,
         type: type || 'folder',
         description,
-        tags
+        tags,
+        is_default: 0 // 用户创建的都不是默认项目
       });
 
       const project = await HtmlProject.findById(projectId);
@@ -124,7 +125,7 @@ class HtmlEditorController {
   }
 
   /**
-   * 删除项目
+   * 删除项目（增强版：检查是否为默认项目和是否为空）
    */
   static async deleteProject(req, res) {
     try {
@@ -137,11 +138,53 @@ class HtmlEditorController {
         return ResponseHelper.forbidden(res, '无权删除此项目');
       }
 
+      // 获取项目详情
+      const project = await HtmlProject.findById(id);
+      if (!project) {
+        return ResponseHelper.notFound(res, '项目不存在');
+      }
+
+      // 检查是否为默认项目
+      if (project.is_default === 1) {
+        return ResponseHelper.forbidden(res, '默认项目不能删除');
+      }
+
+      // 检查文件夹是否为空（只对文件夹类型进行检查）
+      if (project.type === 'folder') {
+        const checkEmptyQuery = `
+          SELECT COUNT(*) as count 
+          FROM html_pages 
+          WHERE project_id = ?
+        `;
+        const result = await dbConnection.query(checkEmptyQuery, [id]);
+        const pageCount = result.rows[0].count;
+        
+        if (pageCount > 0) {
+          return ResponseHelper.forbidden(res, '文件夹不为空，请先删除文件夹内的所有页面');
+        }
+
+        // 检查是否有子文件夹
+        const checkSubFoldersQuery = `
+          SELECT COUNT(*) as count 
+          FROM html_projects 
+          WHERE parent_id = ?
+        `;
+        const subResult = await dbConnection.query(checkSubFoldersQuery, [id]);
+        const subFolderCount = subResult.rows[0].count;
+        
+        if (subFolderCount > 0) {
+          return ResponseHelper.forbidden(res, '文件夹包含子文件夹，请先删除所有子文件夹');
+        }
+      }
+
+      // 执行删除
       const success = await HtmlProject.delete(id);
       
       if (!success) {
         return ResponseHelper.error(res, '删除失败');
       }
+
+      logger.info('删除HTML项目成功', { userId, projectId: id, projectName: project.name });
 
       return ResponseHelper.success(res, null, '项目删除成功');
     } catch (error) {
@@ -182,7 +225,7 @@ class HtmlEditorController {
       // 如果没有指定项目，自动使用或创建默认项目
       if (!project_id) {
         const projects = await HtmlProject.getUserProjects(userId);
-        const defaultProject = projects.find(p => p.name === '默认项目');
+        const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
         
         if (defaultProject) {
           project_id = defaultProject.id;
@@ -195,7 +238,8 @@ class HtmlEditorController {
             path: '/默认项目',
             type: 'folder',
             description: '系统自动创建的默认项目',
-            tags: ['默认']
+            tags: ['默认'],
+            is_default: 1
           });
         }
       }
