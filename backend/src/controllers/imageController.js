@@ -489,22 +489,15 @@ class ImageController {
 // 管理端控制器
 class ImageAdminController {
   /**
-   * 获取所有图像模型（管理端）
+   * 获取所有图像模型（管理端）- 修复：直接返回模型，不重复处理has_api_key
    */
   static async getAllModels(req, res) {
     try {
+      // ImageModel.findAll()已经正确处理了：移除api_key，添加has_api_key
       const models = await ImageModel.findAll();
       
-      // 不返回解密的API密钥，只返回是否已配置
-      const safeModels = models.map(model => {
-        const { api_key, ...safeModel } = model;
-        return {
-          ...safeModel,
-          has_api_key: !!api_key
-        };
-      });
-      
-      return ResponseHelper.success(res, safeModels);
+      // 直接返回，不再重复处理
+      return ResponseHelper.success(res, models);
     } catch (error) {
       logger.error('获取图像模型列表失败:', error);
       return ResponseHelper.error(res, '获取模型列表失败');
@@ -531,7 +524,12 @@ class ImageAdminController {
       const modelId = await ImageModel.create(modelData);
       const newModel = await ImageModel.findById(modelId);
       
-      return ResponseHelper.success(res, newModel, '模型创建成功');
+      // 添加has_api_key标识
+      const safeModel = { ...newModel };
+      delete safeModel.api_key;
+      safeModel.has_api_key = !!newModel.api_key;
+      
+      return ResponseHelper.success(res, safeModel, '模型创建成功');
     } catch (error) {
       logger.error('创建图像模型失败:', error);
       return ResponseHelper.error(res, '创建模型失败');
@@ -553,7 +551,13 @@ class ImageAdminController {
       }
       
       const updatedModel = await ImageModel.findById(id);
-      return ResponseHelper.success(res, updatedModel, '模型更新成功');
+      
+      // 添加has_api_key标识
+      const safeModel = { ...updatedModel };
+      delete safeModel.api_key;
+      safeModel.has_api_key = !!updatedModel.api_key;
+      
+      return ResponseHelper.success(res, safeModel, '模型更新成功');
     } catch (error) {
       logger.error('更新图像模型失败:', error);
       return ResponseHelper.error(res, '更新模型失败');

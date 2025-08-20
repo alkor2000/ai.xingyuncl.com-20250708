@@ -228,7 +228,7 @@ class ImageModel {
   }
 
   /**
-   * 更新模型
+   * 更新模型 - 修复：空API key不更新该字段
    */
   static async update(id, updateData) {
     try {
@@ -246,6 +246,12 @@ class ImageModel {
 
       for (const field of allowedFields) {
         if (updateData.hasOwnProperty(field)) {
+          // 修复：如果api_key为空或未定义，跳过该字段的更新
+          if (field === 'api_key' && (!updateData[field] || updateData[field] === '')) {
+            logger.info('更新模型时跳过空的API密钥字段', { modelId: id });
+            continue; // 跳过空的API key
+          }
+          
           fields.push(`${field} = ?`);
           
           let value = updateData[field];
@@ -283,6 +289,12 @@ class ImageModel {
       values.push(id);
       const query = `UPDATE image_models SET ${fields.join(', ')} WHERE id = ?`;
       const result = await dbConnection.query(query, values);
+
+      logger.info('更新图像模型成功', { 
+        modelId: id, 
+        updatedFields: fields.map(f => f.split(' ')[0]),
+        hasApiKeyUpdate: fields.some(f => f.startsWith('api_key'))
+      });
 
       return result.rows.affectedRows > 0;
     } catch (error) {

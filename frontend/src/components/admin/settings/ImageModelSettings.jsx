@@ -17,7 +17,8 @@ import {
   Switch,
   message,
   Popconfirm,
-  Tooltip
+  Tooltip,
+  Alert
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,7 +28,9 @@ import {
   KeyOutlined,
   FireOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  InfoCircleOutlined,
+  LockOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -80,6 +83,11 @@ const ImageModelSettings = () => {
           message.error('尺寸配置格式错误，请输入有效的JSON数组');
           return;
         }
+      }
+
+      // 修复：编辑时如果API密钥为空，从提交数据中删除该字段
+      if (editingModel && (!processedValues.api_key || processedValues.api_key === '')) {
+        delete processedValues.api_key;
       }
 
       if (editingModel) {
@@ -147,11 +155,11 @@ const ImageModelSettings = () => {
     setModalVisible(true);
   };
 
-  // 打开新增窗口 - 修复bug：应该设置为true
+  // 打开新增窗口
   const openAddModal = () => {
     setEditingModel(null);
     form.resetFields();
-    setModalVisible(true); // 修复：这里应该是true，不是false
+    setModalVisible(true);
   };
 
   const columns = [
@@ -174,7 +182,7 @@ const ImageModelSettings = () => {
       dataIndex: 'provider',
       key: 'provider',
       render: (provider) => (
-        <Tag color={provider === 'volcano' ? 'red' : 'blue'}>
+        <Tag color={provider === 'volcano' ? 'red' : provider === 'midjourney' ? 'purple' : 'blue'}>
           {provider}
         </Tag>
       )
@@ -292,6 +300,18 @@ const ImageModelSettings = () => {
           layout="vertical"
           onFinish={handleSubmit}
         >
+          {/* 编辑模式的提示信息 */}
+          {editingModel && editingModel.has_api_key && (
+            <Alert
+              message="API密钥已配置"
+              description="当前模型已配置API密钥。如需更新密钥，请在下方输入新密钥；如不需要更新，请保持密钥字段为空。"
+              type="info"
+              showIcon
+              icon={<LockOutlined />}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Form.Item
             name="name"
             label="模型标识"
@@ -324,8 +344,22 @@ const ImageModelSettings = () => {
           >
             <Select>
               <Select.Option value="volcano">火山方舟</Select.Option>
+              <Select.Option value="midjourney">Midjourney</Select.Option>
               <Select.Option value="openai">OpenAI</Select.Option>
               <Select.Option value="stable-diffusion">Stable Diffusion</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="generation_type"
+            label="生成类型"
+            rules={[{ required: true }]}
+            initialValue="sync"
+            extra="同步模型立即返回结果，异步模型（如Midjourney）需要轮询状态"
+          >
+            <Select>
+              <Select.Option value="sync">同步生成</Select.Option>
+              <Select.Option value="async">异步生成</Select.Option>
             </Select>
           </Form.Item>
 
@@ -339,11 +373,37 @@ const ImageModelSettings = () => {
 
           <Form.Item
             name="api_key"
-            label="API密钥"
-            extra={editingModel ? "留空则不更新密钥" : "请输入API密钥"}
-            rules={editingModel ? [] : [{ required: true, message: '请输入API密钥' }]}
+            label={
+              <Space>
+                <span>API密钥</span>
+                {editingModel && editingModel.has_api_key && (
+                  <Tag color="green" icon={<CheckCircleOutlined />}>
+                    已配置
+                  </Tag>
+                )}
+              </Space>
+            }
+            extra={
+              editingModel 
+                ? (editingModel.has_api_key 
+                    ? "当前已配置密钥，留空则保持不变，输入新值则更新" 
+                    : "请输入API密钥")
+                : "请输入API密钥"
+            }
+            rules={
+              editingModel 
+                ? (editingModel.has_api_key ? [] : [{ required: true, message: '请输入API密钥' }])
+                : [{ required: true, message: '请输入API密钥' }]
+            }
           >
-            <Input.Password placeholder="输入API密钥" />
+            <Input.Password 
+              placeholder={
+                editingModel && editingModel.has_api_key 
+                  ? "已配置，留空保持不变" 
+                  : "输入API密钥"
+              }
+              prefix={<KeyOutlined />}
+            />
           </Form.Item>
 
           <Form.Item
@@ -358,7 +418,7 @@ const ImageModelSettings = () => {
             name="price_per_image"
             label="单价（积分/张）"
             rules={[{ required: true }]}
-            initialValue={2}
+            initialValue={40}
           >
             <InputNumber min={0} step={0.1} style={{ width: '100%' }} />
           </Form.Item>
