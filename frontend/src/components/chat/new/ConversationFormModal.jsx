@@ -1,5 +1,6 @@
 /**
  * 新建对话弹窗组件 - 支持系统提示词选择和模块组合
+ * 支持Azure模型温度限制
  */
 
 import React, { useEffect, useState } from 'react'
@@ -22,7 +23,8 @@ import {
   InfoCircleOutlined,
   FileTextOutlined,
   GroupOutlined,
-  AppstoreAddOutlined
+  AppstoreAddOutlined,
+  WarningOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
@@ -44,6 +46,8 @@ const ConversationFormModal = ({
   const [customPromptMode, setCustomPromptMode] = useState(false)
   const [selectedPromptContent, setSelectedPromptContent] = useState('')
   const [selectedCombination, setSelectedCombination] = useState(null)
+  const [isAzureModel, setIsAzureModel] = useState(false)
+  const [temperatureValue, setTemperatureValue] = useState(0.7)
 
   // 加载系统提示词和模块组合
   useEffect(() => {
@@ -52,6 +56,49 @@ const ConversationFormModal = ({
       getModuleCombinations()
     }
   }, [visible, getSystemPrompts, getModuleCombinations])
+
+  // 检查是否为Azure模型
+  const checkIsAzureModel = (modelName) => {
+    const model = aiModels.find(m => m.name === modelName)
+    if (!model) return false
+    
+    // 检查provider是否为azure
+    if (model.provider === 'azure' || model.provider === 'azure-openai') {
+      return true
+    }
+    
+    // 检查api_endpoint是否为azure
+    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
+      return true
+    }
+    
+    // 检查api_key是否包含Azure格式（包含|分隔符）
+    if (model.api_key && model.api_key.includes('|')) {
+      const parts = model.api_key.split('|')
+      if (parts.length === 3) {
+        return true
+      }
+    }
+    
+    return false
+  }
+
+  // 处理模型选择变化
+  const handleModelChange = (modelName) => {
+    const isAzure = checkIsAzureModel(modelName)
+    setIsAzureModel(isAzure)
+    
+    if (isAzure) {
+      // Azure模型强制设置温度为1
+      setTemperatureValue(1)
+      form.setFieldValue('ai_temperature', 1)
+    } else {
+      // 非Azure模型恢复默认温度
+      const defaultTemp = getDefaultTemperature()
+      setTemperatureValue(defaultTemp)
+      form.setFieldValue('ai_temperature', defaultTemp)
+    }
+  }
 
   // 当弹窗打开时，设置默认值
   useEffect(() => {
@@ -66,11 +113,19 @@ const ConversationFormModal = ({
       // 如果默认模型不可用，使用第一个可用模型
       const modelToUse = defaultModelAvailable ? defaultModel : aiModels.find(m => m.is_active)?.name
       
+      // 检查是否为Azure模型
+      const isAzure = checkIsAzureModel(modelToUse)
+      setIsAzureModel(isAzure)
+      
+      // 设置温度值
+      const tempToUse = isAzure ? 1 : defaultTemp
+      setTemperatureValue(tempToUse)
+      
       // 设置表单默认值
       form.setFieldsValue({
         model_name: modelToUse,
         context_length: 20,
-        ai_temperature: defaultTemp,
+        ai_temperature: tempToUse,
         priority: 0,
         system_prompt_id: null,
         system_prompt: '',
@@ -149,6 +204,11 @@ const ConversationFormModal = ({
       values.system_prompt = null
     }
     
+    // 确保Azure模型的温度为1
+    if (isAzureModel) {
+      values.ai_temperature = 1
+    }
+    
     onSubmit(values)
   }
 
@@ -177,7 +237,7 @@ const ConversationFormModal = ({
           label={t('chat.form.model')}
           rules={[{ required: true, message: t('chat.form.model.required') }]}
         >
-          <Select>
+          <Select onChange={handleModelChange}>
             {aiModels.filter(m => m.is_active).map(model => (
               <Option key={model.name} value={model.name}>
                 <Space>
@@ -193,6 +253,11 @@ const ConversationFormModal = ({
                   {model.image_upload_enabled && (
                     <Tag color="success" size="small">
                       {t('chat.image')}
+                    </Tag>
+                  )}
+                  {(model.provider === 'azure' || model.api_endpoint === 'azure') && (
+                    <Tag color="orange" size="small">
+                      Azure
                     </Tag>
                   )}
                 </Space>
@@ -403,12 +468,28 @@ const ConversationFormModal = ({
           />
         </Form.Item>
 
+        {/* Azure模型温度提示 */}
+        {isAzureModel && (
+          <Alert
+            message="Azure 模型温度限制"
+            description="此 Azure 模型仅支持温度值 1.0（创造性），无法调整。"
+            type="warning"
+            showIcon
+            icon={<WarningOutlined />}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <Form.Item
           name="ai_temperature"
           label={
             <Space>
               {t('chat.form.temperature')}
-              <Tooltip title="Temperature控制AI回复的创造性。0=精确，1=创造性">
+              <Tooltip title={
+                isAzureModel 
+                  ? "Azure 模型仅支持温度值 1.0" 
+                  : "Temperature控制AI回复的创造性。0=精确，1=创造性"
+              }>
                 <InfoCircleOutlined style={{ color: '#999' }} />
               </Tooltip>
             </Space>
@@ -418,6 +499,14 @@ const ConversationFormModal = ({
             min={0}
             max={1}
             step={0.1}
+            value={temperatureValue}
+            onChange={(value) => {
+              if (!isAzureModel) {
+                setTemperatureValue(value)
+                form.setFieldValue('ai_temperature', value)
+              }
+            }}
+            disabled={isAzureModel}
             marks={{
               0: t('chat.form.temperature.precise'),
               0.5: t('chat.form.temperature.balanced'),

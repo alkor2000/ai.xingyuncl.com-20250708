@@ -1,6 +1,7 @@
 /**
  * AI服务层
  * 负责与AI模型交互（非流式版本）
+ * 支持Azure OpenAI特殊配置
  */
 
 const axios = require('axios');
@@ -51,10 +52,152 @@ class AIService {
   }
 
   /**
+   * 解析Azure配置字符串
+   * 格式：api_key|endpoint|api_version
+   */
+  static parseAzureConfig(configString) {
+    const parts = configString.split('|');
+    if (parts.length === 3) {
+      return {
+        apiKey: parts[0].trim(),
+        endpoint: parts[1].trim(),
+        apiVersion: parts[2].trim()
+      };
+    }
+    return null;
+  }
+
+  /**
+   * 检测是否为Azure配置
+   */
+  static isAzureConfig(model) {
+    // 1. 通过provider判断
+    if (model.provider === 'azure' || model.provider === 'azure-openai') {
+      return true;
+    }
+    
+    // 2. 通过api_key格式判断（包含|分隔符）
+    if (model.api_key && model.api_key.includes('|')) {
+      const parts = model.api_key.split('|');
+      if (parts.length === 3) {
+        return true;
+      }
+    }
+    
+    // 3. 通过endpoint判断
+    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * 调用Azure OpenAI API
+   */
+  static async callAzureAPI(model, messages, options = {}) {
+    try {
+      // 解析Azure配置
+      const azureConfig = AIService.parseAzureConfig(model.api_key);
+      if (!azureConfig) {
+        throw new Error('Azure配置格式错误，应为: api_key|endpoint|api_version');
+      }
+
+      const { apiKey, endpoint, apiVersion } = azureConfig;
+
+      // 从endpoint提取deployment名称
+      // 格式: https://xxx.openai.azure.com 或 https://xxx.cognitiveservices.azure.com
+      let deploymentName = model.name;
+      
+      // 如果model.name包含斜杠，取最后一部分作为deployment名称
+      if (model.name.includes('/')) {
+        const parts = model.name.split('/');
+        deploymentName = parts[parts.length - 1];
+      }
+
+      // 构造Azure特定的URL
+      const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
+      const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
+
+      logger.info('调用Azure OpenAI API', {
+        model: model.name,
+        deployment: deploymentName,
+        endpoint: baseUrl,
+        apiVersion: apiVersion,
+        messageCount: messages.length
+      });
+
+      // 合并配置
+      const modelConfig = model.getDefaultConfig();
+      const requestConfig = {
+        ...modelConfig,
+        ...options
+      };
+
+      const finalTemperature = options.temperature !== undefined ? 
+        parseFloat(options.temperature) : 
+        (requestConfig.temperature || 0.7);
+
+      // 处理消息（Azure也支持图片）
+      const processedMessages = messages.map(msg => {
+        if (msg.image_url && model.image_upload_enabled) {
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text', text: msg.content },
+              { type: 'image_url', image_url: { url: msg.image_url } }
+            ]
+          };
+        }
+        return msg;
+      });
+
+      // 构造请求数据 - Azure不需要model字段
+      const requestData = {
+        messages: processedMessages,
+        temperature: finalTemperature,
+        top_p: requestConfig.top_p || 1,
+        presence_penalty: requestConfig.presence_penalty || 0,
+        frequency_penalty: requestConfig.frequency_penalty || 0,
+        stream: false
+      };
+
+      // 发送请求 - 使用api-key头而不是Authorization Bearer
+      const response = await axios.post(azureUrl, requestData, {
+        headers: {
+          'api-key': apiKey,  // Azure使用api-key头
+          'Content-Type': 'application/json'
+        },
+        timeout: 120000
+      });
+
+      return AIService.formatResponse(response.data, model.name);
+    } catch (error) {
+      logger.error('Azure API调用失败:', error);
+      
+      if (error.response) {
+        logger.error('Azure API错误响应:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
    * 调用模型API - 支持会话级temperature和图片
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
+      // 检测是否为Azure配置
+      if (AIService.isAzureConfig(model)) {
+        logger.info('检测到Azure配置，使用Azure API调用');
+        return await AIService.callAzureAPI(model, messages, options);
+      }
+
+      // 标准OpenAI API调用
       if (!model.api_key || !model.api_endpoint) {
         throw new Error(`模型 ${model.name} 的API密钥或端点未配置`);
       }

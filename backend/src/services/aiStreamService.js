@@ -1,6 +1,6 @@
 /**
  * 流式AI服务
- * 处理流式API调用和Server-Sent Events - 支持图片识别
+ * 处理流式API调用和Server-Sent Events - 支持图片识别和Azure OpenAI
  * 修复：解决重复done事件和异常处理问题
  */
 
@@ -11,6 +11,47 @@ const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
 class AIStreamService {
+  /**
+   * 解析Azure配置字符串
+   * 格式：api_key|endpoint|api_version
+   */
+  static parseAzureConfig(configString) {
+    const parts = configString.split('|');
+    if (parts.length === 3) {
+      return {
+        apiKey: parts[0].trim(),
+        endpoint: parts[1].trim(),
+        apiVersion: parts[2].trim()
+      };
+    }
+    return null;
+  }
+
+  /**
+   * 检测是否为Azure配置
+   */
+  static isAzureConfig(model) {
+    // 1. 通过provider判断
+    if (model.provider === 'azure' || model.provider === 'azure-openai') {
+      return true;
+    }
+    
+    // 2. 通过api_key格式判断（包含|分隔符）
+    if (model.api_key && model.api_key.includes('|')) {
+      const parts = model.api_key.split('|');
+      if (parts.length === 3) {
+        return true;
+      }
+    }
+    
+    // 3. 通过endpoint判断
+    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
+      return true;
+    }
+    
+    return false;
+  }
+
   /**
    * 发送流式消息到AI模型
    * @param {Object} res - Express响应对象，用于SSE
@@ -64,8 +105,17 @@ class AIStreamService {
         res.write(`event: init\ndata: ${JSON.stringify(initData)}\n\n`);
       }
 
-      // 调用流式API
-      return await AIStreamService.callStreamAPI(res, model, messages, options);
+      // 根据模型类型调用不同的流式API
+      if (AIStreamService.isAzureConfig(model)) {
+        logger.info('检测到Azure配置，使用Azure流式API', {
+          modelName: model.name,
+          provider: model.provider,
+          endpoint: model.api_endpoint
+        });
+        return await AIStreamService.callAzureStreamAPI(res, model, messages, options);
+      } else {
+        return await AIStreamService.callStreamAPI(res, model, messages, options);
+      }
     } catch (error) {
       logger.error('流式AI服务调用失败:', error);
       
@@ -80,7 +130,341 @@ class AIStreamService {
   }
 
   /**
-   * 调用模型流式API
+   * 调用Azure流式API
+   */
+  static async callAzureStreamAPI(res, model, messages, options = {}) {
+    let fullContent = '';
+    let tokenCount = 0;
+    const startTime = Date.now();
+    let buffer = '';
+    let messageCount = 0;
+    let isDoneEventSent = false;
+    let streamTimeout = null;
+    let lastDataTime = Date.now();
+    
+    try {
+      // 解析Azure配置
+      const azureConfig = AIStreamService.parseAzureConfig(model.api_key);
+      if (!azureConfig) {
+        throw new Error('Azure配置格式错误，应为: api_key|endpoint|api_version');
+      }
+
+      const { apiKey, endpoint, apiVersion } = azureConfig;
+
+      // 从model.name提取deployment名称
+      let deploymentName = model.name;
+      if (model.name.includes('/')) {
+        const parts = model.name.split('/');
+        deploymentName = parts[parts.length - 1];
+      }
+
+      // 构造Azure特定的URL
+      const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
+      const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
+
+      logger.info('调用Azure流式API', {
+        model: model.name,
+        deployment: deploymentName,
+        endpoint: baseUrl,
+        apiVersion: apiVersion,
+        url: azureUrl,
+        messageCount: messages.length
+      });
+
+      // 合并配置
+      const modelConfig = model.getDefaultConfig();
+      const requestConfig = {
+        ...modelConfig,
+        ...options
+      };
+
+      const finalTemperature = options.temperature !== undefined ? 
+        parseFloat(options.temperature) : 
+        (requestConfig.temperature || 0.7);
+
+      // 处理包含图片的消息
+      const processedMessages = messages.map(msg => {
+        if (msg.image_url && model.image_upload_enabled) {
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text', text: msg.content },
+              { type: 'image_url', image_url: { url: msg.image_url } }
+            ]
+          };
+        }
+        return msg;
+      });
+
+      // 构造请求数据 - Azure不需要model字段
+      const requestData = {
+        messages: processedMessages,
+        temperature: finalTemperature,
+        top_p: requestConfig.top_p || 1,
+        presence_penalty: requestConfig.presence_penalty || 0,
+        frequency_penalty: requestConfig.frequency_penalty || 0,
+        stream: true
+      };
+
+      logger.info('Azure请求数据', {
+        url: azureUrl,
+        headers: {
+          'api-key': '***' + apiKey.slice(-4), // 只显示最后4位
+          'Content-Type': 'application/json'
+        },
+        requestData: {
+          ...requestData,
+          messages: requestData.messages.map(m => ({
+            role: m.role,
+            contentLength: typeof m.content === 'string' ? m.content.length : 'complex'
+          }))
+        }
+      });
+
+      // 发起流式请求 - 使用api-key头
+      const response = await axios({
+        method: 'post',
+        url: azureUrl,
+        data: requestData,
+        headers: {
+          'api-key': apiKey,  // Azure使用api-key头
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream'
+        },
+        responseType: 'stream',
+        timeout: 180000
+      });
+
+      logger.info('Azure流式响应开始接收');
+
+      // 完成流式响应的函数
+      const completeStream = (reason = 'normal') => {
+        if (isDoneEventSent) {
+          logger.debug('Done事件已发送，跳过重复发送', { reason });
+          return;
+        }
+        
+        isDoneEventSent = true;
+        
+        if (streamTimeout) {
+          clearTimeout(streamTimeout);
+          streamTimeout = null;
+        }
+        
+        logger.info('Azure流式传输完成', {
+          reason,
+          totalMessages: messageCount,
+          contentLength: fullContent.length,
+          duration: Date.now() - startTime
+        });
+        
+        if (!res.writableEnded) {
+          const completionData = {
+            content: fullContent,
+            tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent),
+            duration: Date.now() - startTime,
+            messageId: options.messageId,
+            conversationId: options.conversationId,
+            reason: reason
+          };
+          
+          res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
+          res.end();
+        }
+        
+        if (options.onComplete) {
+          options.onComplete(fullContent, tokenCount || AIStreamService.estimateStreamTokens(fullContent));
+        }
+      };
+
+      const resetTimeout = () => {
+        if (streamTimeout) {
+          clearTimeout(streamTimeout);
+        }
+        streamTimeout = setTimeout(() => {
+          const timeSinceLastData = Date.now() - lastDataTime;
+          logger.warn('Azure流式响应超时', {
+            timeSinceLastData,
+            contentReceived: fullContent.length,
+            messageCount
+          });
+          completeStream('timeout');
+        }, 30000);
+      };
+
+      return new Promise((resolve, reject) => {
+        resetTimeout();
+
+        response.data.on('data', (chunk) => {
+          try {
+            lastDataTime = Date.now();
+            resetTimeout();
+            
+            buffer += chunk.toString();
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine || trimmedLine === '') continue;
+              
+              if (trimmedLine.startsWith('data: ')) {
+                const jsonStr = trimmedLine.slice(6);
+                
+                if (jsonStr === '[DONE]') {
+                  completeStream('done_signal');
+                  resolve({
+                    content: fullContent,
+                    tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+                  });
+                  return;
+                }
+                
+                try {
+                  const data = JSON.parse(jsonStr);
+                  
+                  if (data.error) {
+                    logger.error('Azure API返回错误', { error: data.error });
+                    throw new Error(data.error.message || 'Azure API错误');
+                  }
+                  
+                  const deltaContent = data.choices?.[0]?.delta?.content;
+                  
+                  if (deltaContent && deltaContent !== '') {
+                    messageCount++;
+                    fullContent += deltaContent;
+                    tokenCount += AIStreamService.estimateStreamTokens(deltaContent);
+                    
+                    const messageData = {
+                      content: deltaContent,
+                      fullContent: fullContent
+                    };
+                    
+                    if (!res.writableEnded) {
+                      res.write(`event: message\ndata: ${JSON.stringify(messageData)}\n\n`);
+                    }
+                    
+                    if (messageCount % 10 === 0) {
+                      logger.debug('Azure流式片段进度', {
+                        messages: messageCount,
+                        contentLength: fullContent.length
+                      });
+                    }
+                  }
+                  
+                  const finishReason = data.choices?.[0]?.finish_reason;
+                  if (finishReason) {
+                    logger.info('Azure流式响应结束', { finishReason });
+                    if (finishReason === 'stop' || finishReason === 'length') {
+                      completeStream(`finish_${finishReason}`);
+                      resolve({
+                        content: fullContent,
+                        tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+                      });
+                      return;
+                    }
+                  }
+                } catch (parseError) {
+                  logger.warn('解析Azure流式数据失败:', {
+                    error: parseError.message,
+                    data: jsonStr.substring(0, 100)
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            logger.error('处理Azure流式数据块失败:', error);
+          }
+        });
+
+        response.data.on('error', (error) => {
+          logger.error('Azure流式响应错误:', {
+            error: error.message,
+            contentReceived: fullContent.length
+          });
+          
+          if (fullContent.length > 0) {
+            completeStream('error_with_content');
+            resolve({
+              content: fullContent,
+              tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+            });
+          } else {
+            if (!res.writableEnded) {
+              res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+              res.end();
+            }
+            reject(error);
+          }
+        });
+
+        response.data.on('end', () => {
+          logger.info('Azure流式响应接收结束', {
+            contentLength: fullContent.length,
+            isDoneEventSent
+          });
+          
+          if (buffer.trim()) {
+            logger.warn('存在未处理的Azure流式数据:', buffer.substring(0, 100));
+          }
+          
+          if (!isDoneEventSent) {
+            completeStream('stream_end');
+            resolve({
+              content: fullContent,
+              tokens: tokenCount || AIStreamService.estimateStreamTokens(fullContent)
+            });
+          }
+        });
+
+        res.on('close', () => {
+          logger.info('客户端连接关闭', {
+            contentReceived: fullContent.length,
+            isDoneEventSent
+          });
+          
+          if (fullContent.length > 0 && !isDoneEventSent) {
+            completeStream('client_disconnect');
+          }
+          
+          if (streamTimeout) {
+            clearTimeout(streamTimeout);
+          }
+        });
+      });
+
+    } catch (error) {
+      logger.error('Azure流式API调用失败:', {
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        contentReceived: fullContent.length
+      });
+      
+      // 如果是400错误，可能是deployment名称或API版本问题
+      if (error.response?.status === 400) {
+        logger.error('Azure API 400错误详情:', {
+          data: error.response.data,
+          headers: error.response.headers,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method
+          }
+        });
+      }
+      
+      if (fullContent.length > 0 && !isDoneEventSent && options.onComplete) {
+        logger.info('尝试保存部分接收的内容');
+        options.onComplete(fullContent, tokenCount || AIStreamService.estimateStreamTokens(fullContent));
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * 调用模型流式API（标准OpenAI格式）
    */
   static async callStreamAPI(res, model, messages, options = {}) {
     let fullContent = '';

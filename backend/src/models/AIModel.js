@@ -1,5 +1,6 @@
 /**
  * AI模型数据模型 - 支持积分消费配置、流式输出、图片上传、文档上传、用户组分配和用户限制
+ * 支持Azure OpenAI配置
  */
 
 const dbConnection = require('../database/connection');
@@ -457,71 +458,197 @@ class AIModel {
   }
 
   /**
-   * 测试AI模型连通性
+   * 检测是否为Azure配置
+   */
+  isAzureConfig() {
+    // 1. 通过provider判断
+    if (this.provider === 'azure' || this.provider === 'azure-openai') {
+      return true;
+    }
+    
+    // 2. 通过api_key格式判断（包含|分隔符）
+    if (this.api_key && this.api_key.includes('|')) {
+      const parts = this.api_key.split('|');
+      if (parts.length === 3) {
+        return true;
+      }
+    }
+    
+    // 3. 通过endpoint判断
+    if (this.api_endpoint === 'azure' || this.api_endpoint === 'use-from-key') {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * 解析Azure配置字符串
+   */
+  parseAzureConfig() {
+    if (!this.api_key || !this.api_key.includes('|')) {
+      return null;
+    }
+    
+    const parts = this.api_key.split('|');
+    if (parts.length === 3) {
+      return {
+        apiKey: parts[0].trim(),
+        endpoint: parts[1].trim(),
+        apiVersion: parts[2].trim()
+      };
+    }
+    return null;
+  }
+
+  /**
+   * 测试AI模型连通性（支持Azure）
    */
   async testConnection() {
     try {
       const axios = require('axios');
       
-      if (!this.api_key || !this.api_endpoint) {
-        await this.updateTestStatus('failed', 'API密钥或端点未配置');
-        return { success: false, message: 'API密钥或端点未配置' };
+      if (!this.api_key) {
+        await this.updateTestStatus('failed', 'API密钥未配置');
+        return { success: false, message: 'API密钥未配置' };
       }
 
-      // 解析model_config
-      let config = this.model_config;
-      if (typeof config === 'string') {
-        try {
-          config = JSON.parse(config);
-        } catch (e) {
-          config = {};
+      // 检测是否为Azure配置
+      if (this.isAzureConfig()) {
+        logger.info('检测到Azure配置，使用Azure测试方法', {
+          modelId: this.id,
+          modelName: this.name
+        });
+
+        // 解析Azure配置
+        const azureConfig = this.parseAzureConfig();
+        if (!azureConfig) {
+          await this.updateTestStatus('failed', 'Azure配置格式错误');
+          return { success: false, message: 'Azure配置格式错误，应为: api_key|endpoint|api_version' };
         }
-      }
 
-      // 获取测试温度，默认为1
-      const testTemperature = config.test_temperature || 1;
+        const { apiKey, endpoint, apiVersion } = azureConfig;
 
-      logger.info('使用测试温度', {
-        modelId: this.id,
-        modelName: this.name,
-        testTemperature
-      });
+        // 从model.name提取deployment名称
+        let deploymentName = this.name;
+        if (this.name.includes('/')) {
+          const parts = this.name.split('/');
+          deploymentName = parts[parts.length - 1];
+        }
 
-      // 构造测试请求 - 使用配置的温度值
-      const testPayload = {
-        model: this.name,
-        messages: [
-          { role: 'user', content: 'Hello, please respond with a short greeting.' }
-        ],
-        temperature: testTemperature,
-        stream: false // 测试时不使用流式，避免复杂处理
-      };
+        // 构造Azure特定的URL
+        const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
+        const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
 
-      const response = await axios.post(
-        this.api_endpoint.endsWith('/chat/completions') ? 
-          this.api_endpoint : 
-          `${this.api_endpoint}/chat/completions`,
-        testPayload,
-        {
+        logger.info('测试Azure连接', {
+          deployment: deploymentName,
+          endpoint: baseUrl,
+          apiVersion: apiVersion
+        });
+
+        // 解析model_config获取测试温度
+        let config = this.model_config;
+        if (typeof config === 'string') {
+          try {
+            config = JSON.parse(config);
+          } catch (e) {
+            config = {};
+          }
+        }
+        const testTemperature = config.test_temperature || 1;
+
+        // 构造测试请求 - Azure不需要model字段
+        const testPayload = {
+          messages: [
+            { role: 'user', content: 'Hello, please respond with a short greeting.' }
+          ],
+          temperature: testTemperature,
+          stream: false
+        };
+
+        const response = await axios.post(azureUrl, testPayload, {
           headers: {
-            'Authorization': `Bearer ${this.api_key}`,
+            'api-key': apiKey,  // Azure使用api-key头
             'Content-Type': 'application/json'
           },
           timeout: 30000
-        }
-      );
+        });
 
-      if (response.status === 200 && response.data.choices) {
-        await this.updateTestStatus('success', '连通性测试成功');
-        logger.info('AI模型连通性测试成功', { 
-          modelId: this.id, 
+        if (response.status === 200 && response.data.choices) {
+          await this.updateTestStatus('success', '连通性测试成功');
+          logger.info('Azure模型连通性测试成功', { 
+            modelId: this.id, 
+            modelName: this.name,
+            deployment: deploymentName
+          });
+          return { success: true, message: '连通性测试成功' };
+        } else {
+          await this.updateTestStatus('failed', 'API响应格式异常');
+          return { success: false, message: 'API响应格式异常' };
+        }
+
+      } else {
+        // 标准OpenAI API测试
+        if (!this.api_endpoint) {
+          await this.updateTestStatus('failed', 'API端点未配置');
+          return { success: false, message: 'API端点未配置' };
+        }
+
+        // 解析model_config
+        let config = this.model_config;
+        if (typeof config === 'string') {
+          try {
+            config = JSON.parse(config);
+          } catch (e) {
+            config = {};
+          }
+        }
+
+        // 获取测试温度，默认为1
+        const testTemperature = config.test_temperature || 1;
+
+        logger.info('使用测试温度', {
+          modelId: this.id,
           modelName: this.name,
           testTemperature
         });
-        return { success: true, message: '连通性测试成功' };
-      } else {
-        await this.updateTestStatus('failed', 'API响应格式异常');
-        return { success: false, message: 'API响应格式异常' };
+
+        // 构造测试请求 - 使用配置的温度值
+        const testPayload = {
+          model: this.name,
+          messages: [
+            { role: 'user', content: 'Hello, please respond with a short greeting.' }
+          ],
+          temperature: testTemperature,
+          stream: false // 测试时不使用流式，避免复杂处理
+        };
+
+        const response = await axios.post(
+          this.api_endpoint.endsWith('/chat/completions') ? 
+            this.api_endpoint : 
+            `${this.api_endpoint}/chat/completions`,
+          testPayload,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.api_key}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000
+          }
+        );
+
+        if (response.status === 200 && response.data.choices) {
+          await this.updateTestStatus('success', '连通性测试成功');
+          logger.info('AI模型连通性测试成功', { 
+            modelId: this.id, 
+            modelName: this.name,
+            testTemperature
+          });
+          return { success: true, message: '连通性测试成功' };
+        } else {
+          await this.updateTestStatus('failed', 'API响应格式异常');
+          return { success: false, message: 'API响应格式异常' };
+        }
       }
     } catch (error) {
       const errorMsg = error.response?.data?.error?.message || error.message || '连通性测试失败';
@@ -530,7 +657,8 @@ class AIModel {
       logger.warn('AI模型连通性测试失败', { 
         modelId: this.id, 
         modelName: this.name,
-        error: errorMsg 
+        error: errorMsg,
+        response: error.response?.data
       });
       return { 
         success: false, 
