@@ -1,5 +1,5 @@
 /**
- * 用户表单弹窗组件（创建/编辑用户）- 包含账号有效期管理
+ * 用户表单弹窗组件（创建/编辑用户）- 包含账号有效期管理和UUID显示
  */
 
 import React, { useEffect, useState } from 'react'
@@ -23,12 +23,16 @@ import {
   ExclamationCircleOutlined,
   FileTextOutlined,
   CalendarOutlined,
-  UserOutlined
+  UserOutlined,
+  KeyOutlined,
+  MailOutlined,
+  CopyOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
 import { formatDate, dateValidator, isValidDate } from '../../../utils/dateFormat'
+import { message } from 'antd'
 
 const { TabPane } = Tabs
 const { TextArea } = Input
@@ -106,6 +110,19 @@ const UserFormModal = ({
     }
   }
   
+  // 复制UUID到剪贴板
+  const handleCopyUUID = () => {
+    if (editingUser?.uuid) {
+      navigator.clipboard.writeText(editingUser.uuid)
+        .then(() => {
+          message.success('UUID已复制到剪贴板')
+        })
+        .catch(() => {
+          message.error('复制失败，请手动复制')
+        })
+    }
+  }
+  
   // 每次打开时重置到基本信息Tab
   useEffect(() => {
     if (visible) {
@@ -140,6 +157,17 @@ const UserFormModal = ({
     return false
   }
 
+  // 检查是否可以编辑邮箱（只有超级管理员可以）
+  const canEditEmail = () => {
+    return isSuperAdmin
+  }
+
+  // 检查是否可以编辑用户名（超级管理员可以编辑所有，组管理员不能编辑）
+  const canEditUsername = () => {
+    if (isSuperAdmin) return true
+    return false
+  }
+
   return (
     <Modal
       title={editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}
@@ -156,40 +184,107 @@ const UserFormModal = ({
       >
         <Tabs activeKey={activeKey} onChange={setActiveKey}>
           <TabPane tab={t('admin.users.tabs.basic')} key="basic">
-            {!editingUser && (
-              <>
-                <Form.Item
-                  name="email"
-                  label={t('admin.users.form.email')}
-                  rules={[
-                    { required: true, message: t('admin.users.form.email.required') },
-                    { type: 'email', message: t('admin.users.form.email.invalid') }
-                  ]}
-                >
-                  <Input placeholder={t('admin.users.form.email.required')} />
-                </Form.Item>
-
-                <Form.Item
-                  name="password"
-                  label={t('admin.users.form.password')}
-                  rules={[
-                    { required: true, message: t('admin.users.form.password.required') },
-                    { min: 6, message: t('admin.users.form.password.min') }
-                  ]}
-                >
-                  <Input.Password placeholder={t('admin.users.form.password.required')} />
-                </Form.Item>
-              </>
+            {/* UUID显示（编辑时显示，只读） */}
+            {editingUser && editingUser.uuid && (
+              <Form.Item
+                label={
+                  <Space>
+                    <KeyOutlined />
+                    <span>UUID (用户唯一标识)</span>
+                  </Space>
+                }
+              >
+                <Input.Group compact>
+                  <Input
+                    value={editingUser.uuid}
+                    disabled
+                    style={{ width: 'calc(100% - 32px)', fontFamily: 'monospace' }}
+                    prefix={
+                      <Tooltip title={editingUser.uuid_source === 'sso' ? 'SSO用户' : '系统用户'}>
+                        <UserOutlined style={{ color: editingUser.uuid_source === 'sso' ? '#1890ff' : '#52c41a' }} />
+                      </Tooltip>
+                    }
+                  />
+                  <Tooltip title="复制UUID">
+                    <Button 
+                      icon={<CopyOutlined />} 
+                      onClick={handleCopyUUID}
+                    />
+                  </Tooltip>
+                </Input.Group>
+                <div style={{ marginTop: 4, fontSize: '12px', color: '#999' }}>
+                  {editingUser.uuid_source === 'sso' 
+                    ? '此用户通过SSO单点登录创建，UUID由外部系统提供' 
+                    : '系统自动生成的唯一标识，不可修改'}
+                </div>
+              </Form.Item>
             )}
 
+            {/* 邮箱字段：创建时必填，编辑时超级管理员可修改 */}
+            {(!editingUser || canEditEmail()) && (
+              <Form.Item
+                name="email"
+                label={
+                  <Space>
+                    <MailOutlined />
+                    {t('admin.users.form.email')}
+                  </Space>
+                }
+                rules={[
+                  { required: !editingUser, message: t('admin.users.form.email.required') },
+                  { type: 'email', message: t('admin.users.form.email.invalid') }
+                ]}
+                extra={editingUser && isSuperAdmin ? '修改邮箱后，用户需使用新邮箱登录' : null}
+              >
+                <Input 
+                  placeholder={t('admin.users.form.email.required')} 
+                  disabled={editingUser && !canEditEmail()}
+                />
+              </Form.Item>
+            )}
+
+            {/* 显示当前邮箱（组管理员查看） */}
+            {editingUser && !canEditEmail() && (
+              <Form.Item
+                label={
+                  <Space>
+                    <MailOutlined />
+                    {t('admin.users.form.email')}
+                  </Space>
+                }
+              >
+                <Input 
+                  value={editingUser.email}
+                  disabled
+                  style={{ color: '#000' }}
+                />
+              </Form.Item>
+            )}
+
+            {/* 密码字段（仅创建时显示） */}
+            {!editingUser && (
+              <Form.Item
+                name="password"
+                label={t('admin.users.form.password')}
+                rules={[
+                  { required: true, message: t('admin.users.form.password.required') },
+                  { min: 6, message: t('admin.users.form.password.min') }
+                ]}
+              >
+                <Input.Password placeholder={t('admin.users.form.password.required')} />
+              </Form.Item>
+            )}
+
+            {/* 用户名字段 */}
             <Form.Item
               name="username"
               label={t('admin.users.form.username')}
               rules={[{ required: true, message: t('admin.users.form.username.required') }]}
+              extra={editingUser && canEditUsername() ? '修改用户名后，用户可使用新用户名登录' : null}
             >
               <Input 
                 placeholder={t('admin.users.form.username.required')} 
-                disabled={editingUser && isGroupAdmin} 
+                disabled={editingUser && !canEditUsername()} 
               />
             </Form.Item>
 

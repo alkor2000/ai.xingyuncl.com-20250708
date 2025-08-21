@@ -188,12 +188,14 @@ const Users = () => {
         ...updateData 
       } = values
       
-      // 基础信息更新
+      // 基础信息更新 - 组管理员不能修改这些字段
       if (isGroupAdmin) {
         delete updateData.role
         delete updateData.group_id
         delete updateData.credits_quota
         delete updateData.token_quota
+        delete updateData.email  // 组管理员不能修改邮箱
+        delete updateData.username  // 组管理员不能修改用户名
       }
       
       // 处理账号有效期
@@ -255,14 +257,24 @@ const Users = () => {
     }
   }
 
-  // 编辑用户
+  // 编辑用户 - 确保所有字段都被正确设置
   const handleEditUser = async (user) => {
     setEditingUser(user)
-    userForm.setFieldsValue({
-      ...user,
-      expire_at: formatDate(user.expire_at) || '' // 格式化日期为 YYYY-MM-DD
-    })
     
+    // 设置表单值，包括email和uuid等所有字段
+    const formValues = {
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      group_id: user.group_id,
+      status: user.status,
+      remark: user.remark,
+      token_quota: user.token_quota,
+      credits_quota: user.credits_quota,
+      expire_at: formatDate(user.expire_at) || '' // 格式化日期为 YYYY-MM-DD
+    }
+    
+    userForm.setFieldsValue(formValues)
     setIsUserModalVisible(true)
   }
 
