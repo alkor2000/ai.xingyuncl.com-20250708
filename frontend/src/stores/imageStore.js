@@ -191,41 +191,63 @@ const useImageStore = create((set, get) => ({
             // 清除进度
             set({ generationProgress: null });
             
-            // 等待一下确保后端数据已更新
+            // 重要：等待后端完成图片下载和保存
+            // 这是必要的，因为后端需要时间下载Midjourney的图片并保存到本地
+            // 不能立即清除processingTasks，否则会出现图片还没准备好就显示完成的问题
+            console.log('任务成功，等待后端保存图片...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // 尝试获取最新数据，最多重试3次
+            // 尝试获取最新数据，确保图片已经保存
+            // 最多重试3次，每次间隔1.5秒
             let retryCount = 0;
             let dataReady = false;
             
             while (retryCount < 3 && !dataReady) {
               // 获取最新历史记录
-              const historyData = await get().getUserHistory({}, true); // 第二个参数表示不显示loading
+              const historyResponse = await api.get('/image/history', { 
+                params: { page: 1, limit: 20 } 
+              });
               
-              // 检查数据是否准备好
-              if (historyData && historyData.data) {
-                const targetItem = historyData.data.find(item => item.task_id === taskId);
-                if (targetItem && (targetItem.local_path || targetItem.thumbnail_path)) {
+              if (historyResponse.data.success) {
+                const historyData = historyResponse.data.data.data;
+                // 查找对应的任务记录
+                const targetItem = historyData.find(item => item.task_id === taskId);
+                
+                // 检查图片是否已经准备好
+                if (targetItem && (targetItem.local_path || targetItem.thumbnail_path || targetItem.image_url)) {
                   dataReady = true;
-                  console.log('数据已准备好:', targetItem);
+                  console.log('图片数据已准备好:', targetItem);
+                  
+                  // 更新历史记录
+                  set({
+                    generationHistory: historyData,
+                    historyPagination: historyResponse.data.data.pagination
+                  });
                 }
               }
               
               if (!dataReady) {
                 retryCount++;
                 if (retryCount < 3) {
-                  console.log(`数据未准备好，等待后重试... (${retryCount}/3)`);
+                  console.log(`图片数据未准备好，等待后重试... (${retryCount}/3)`);
                   await new Promise(resolve => setTimeout(resolve, 1500));
                 }
               }
             }
             
-            // 最后移除处理中标记
+            // 只有在确认数据准备好或重试完成后才清除处理状态
+            // 这样可以避免出现"空白"状态
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
               return { processingTasks: newProcessingTasks };
             });
+            
+            // 如果数据还没准备好，再刷新一次
+            if (!dataReady) {
+              console.log('数据可能还未完全准备好，最后刷新一次');
+              get().getUserHistory();
+            }
             
           } else if (task.task_status === 'FAILURE' || task.status === 'failed') {
             // 任务失败
@@ -234,7 +256,7 @@ const useImageStore = create((set, get) => ({
             // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 清除进度和处理标记
+            // 失败时立即清除处理状态，这样用户可以看到失败状态并删除
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
@@ -244,8 +266,10 @@ const useImageStore = create((set, get) => ({
               };
             });
             
-            // 刷新历史记录
-            get().getUserHistory();
+            // 延迟刷新历史记录，确保UI更新
+            setTimeout(() => {
+              get().getUserHistory();
+            }, 500);
             
           } else if (Date.now() - startTime > maxPollingTime) {
             // 超时
@@ -254,12 +278,15 @@ const useImageStore = create((set, get) => ({
             // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 移除处理中标记
+            // 超时也要清除处理状态，让用户可以操作
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
               return { processingTasks: newProcessingTasks, generationProgress: null };
             });
+            
+            // 刷新历史记录
+            get().getUserHistory();
             
           } else {
             // 继续轮询
@@ -291,6 +318,31 @@ const useImageStore = create((set, get) => ({
       const newTimers = { ...pollingTimers };
       delete newTimers[taskId];
       set({ pollingTimers: newTimers });
+    }
+  },
+  
+  // 清理所有失败任务的处理状态
+  // 这个函数很重要，用于清理那些已经失败但还在processingTasks中的任务
+  cleanupFailedTasks: () => {
+    const { generationHistory, processingTasks } = get();
+    const newProcessingTasks = { ...processingTasks };
+    let hasChanges = false;
+    
+    // 遍历历史记录，清理失败任务的处理状态
+    generationHistory.forEach(item => {
+      if (item.task_id && newProcessingTasks[item.task_id]) {
+        // 如果任务已经失败或成功，清理其处理状态
+        if (item.status === 'failed' || item.status === 'success' || 
+            item.task_status === 'FAILURE' || item.task_status === 'SUCCESS') {
+          delete newProcessingTasks[item.task_id];
+          hasChanges = true;
+        }
+      }
+    });
+    
+    if (hasChanges) {
+      set({ processingTasks: newProcessingTasks });
+      console.log('已清理失败任务的处理状态');
     }
   },
   
@@ -377,6 +429,10 @@ const useImageStore = create((set, get) => ({
           historyPagination: response.data.data.pagination,
           loading: false
         });
+        
+        // 每次获取历史记录后，自动清理失败任务的处理状态
+        // 这确保了页面刷新后，失败的任务不会显示为"加载中"
+        get().cleanupFailedTasks();
         
         // 返回数据以便调用者使用
         return response.data.data;

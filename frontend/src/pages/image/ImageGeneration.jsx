@@ -55,11 +55,13 @@ import {
   ClockCircleOutlined,
   ZoomInOutlined,
   ExperimentOutlined,
-  SyncOutlined
+  SyncOutlined,
+  CloseCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useImageStore from '../../stores/imageStore';
 import useAuthStore from '../../stores/authStore';
+import ImageViewer from '../../components/common/ImageViewer';
 import './ImageGeneration.less';
 
 const { Content, Sider } = Layout;
@@ -118,7 +120,7 @@ const ImageGeneration = () => {
     galleryPagination,
     loading,
     userStats,
-    processingTasks, // 添加processingTasks
+    processingTasks,
     getModels,
     selectModel,
     generateImage,
@@ -130,7 +132,8 @@ const ImageGeneration = () => {
     togglePublic,
     getUserStats,
     isMidjourneyModel,
-    midjourneyAction
+    midjourneyAction,
+    cleanupFailedTasks
   } = useImageStore();
 
   // 生成参数状态
@@ -143,18 +146,25 @@ const ImageGeneration = () => {
   const [quantity, setQuantity] = useState(1);
   const [viewMode, setViewMode] = useState('grid');
   const [activeTab, setActiveTab] = useState('all');
-  const [previewImage, setPreviewImage] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
   
   // Midjourney专用状态
   const [mjMode, setMjMode] = useState('fast');
   const [showMjActions, setShowMjActions] = useState(false);
   const [selectedMjImage, setSelectedMjImage] = useState(null);
+  
+  // ImageViewer 状态
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerImages, setViewerImages] = useState([]);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
 
   // 初始化
   useEffect(() => {
     getModels();
-    getUserHistory();
+    getUserHistory().then(() => {
+      // 获取历史记录后，清理失败任务的处理状态
+      cleanupFailedTasks();
+    });
     getUserStats();
   }, []);
   
@@ -336,6 +346,34 @@ const ImageGeneration = () => {
     }
   };
   
+  // 处理查看大图
+  const handleViewImage = (item) => {
+    // 获取当前数据列表
+    const currentData = getCurrentData();
+    
+    // 找到点击图片在列表中的索引
+    const index = currentData.findIndex(img => img.id === item.id);
+    
+    // 准备图片数据
+    const images = currentData.map(img => ({
+      url: img.local_path || img.image_url,
+      thumbnail_path: img.thumbnail_path,
+      title: img.prompt,
+      prompt: img.prompt,
+      negative_prompt: img.negative_prompt,
+      size: img.size,
+      generation_mode: img.generation_mode,
+      guidance_scale: img.guidance_scale,
+      seed: img.seed,
+      username: img.username,
+      gridLayout: img.grid_layout // Midjourney 四宫格标记
+    }));
+    
+    setViewerImages(images);
+    setViewerInitialIndex(index >= 0 ? index : 0);
+    setViewerVisible(true);
+  };
+  
   // 渲染Midjourney操作按钮
   const renderMidjourneyActions = (item) => {
     // 修复：检查条件
@@ -399,10 +437,17 @@ const ImageGeneration = () => {
     const isOwner = !isGallery || item.user_id === user?.id;
     const isMj = item.provider === 'midjourney';
     
-    // 修复：结合processingTasks状态判断是否在处理中
-    // 使用task_id作为key，因为这是唯一的标识符
-    const isProcessing = (item.task_status === 'SUBMITTED' || item.task_status === 'IN_PROGRESS') || 
-                         (item.task_id && processingTasks && processingTasks[item.task_id]);
+    // 关键修复：先检查任务是否已经失败或成功（终态）
+    const isCompleted = item.status === 'success' || item.status === 'failed' || 
+                       item.task_status === 'SUCCESS' || item.task_status === 'FAILURE';
+    
+    const isFailed = item.status === 'failed' || item.task_status === 'FAILURE';
+    
+    // 只有在非终态且在处理列表中才算处理中
+    const isProcessing = !isCompleted && (
+      (item.task_status === 'SUBMITTED' || item.task_status === 'IN_PROGRESS') || 
+      (item.task_id && processingTasks && processingTasks[item.task_id])
+    );
     
     // 判断图片是否已经准备好
     const hasImage = item.local_path || item.thumbnail_path || item.image_url;
@@ -410,10 +455,11 @@ const ImageGeneration = () => {
     return (
       <Card
         key={item.id}
-        className={`history-card ${isMj ? 'midjourney-card' : ''}`}
+        className={`history-card ${isMj ? 'midjourney-card' : ''} ${isFailed ? 'failed-card' : ''}`}
         cover={
           <div className="image-wrapper">
-            {isProcessing || (!hasImage && item.status === 'generating') ? (
+            {isProcessing ? (
+              // 处理中状态
               <div className="processing-overlay">
                 <Spin size="large" />
                 <div className="processing-text">
@@ -427,16 +473,40 @@ const ImageGeneration = () => {
                   />
                 )}
               </div>
+            ) : isFailed ? (
+              // 失败状态 - 显示错误信息和删除按钮
+              <div className="failed-overlay">
+                <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+                <div className="failed-text">生成失败</div>
+                {item.error_message && (
+                  <div className="error-message">{item.error_message}</div>
+                )}
+                <div className="failed-actions">
+                  <Popconfirm
+                    title="确定删除这个失败的任务吗？"
+                    onConfirm={() => deleteGeneration(item.id)}
+                    okText="确定"
+                    cancelText="取消"
+                  >
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      size="small"
+                    >
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </div>
             ) : hasImage ? (
+              // 成功状态 - 显示图片
               <>
                 <Image
                   src={item.local_path || item.thumbnail_path || item.image_url}
                   alt={item.prompt}
                   placeholder={<Spin />}
-                  preview={{
-                    src: item.local_path || item.image_url
-                  }}
-                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
+                  preview={false}
+                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
                 />
                 <div className="image-overlay">
                   <Space>
@@ -444,14 +514,20 @@ const ImageGeneration = () => {
                       <Button
                         type="text"
                         icon={<EyeOutlined />}
-                        onClick={() => setPreviewImage(item)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewImage(item);
+                        }}
                       />
                     </Tooltip>
                     <Tooltip title="下载">
                       <Button
                         type="text"
                         icon={<DownloadOutlined />}
-                        onClick={() => downloadImage(item.local_path || item.image_url, `ai_${item.id}.jpg`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadImage(item.local_path || item.image_url, `ai_${item.id}.jpg`);
+                        }}
                       />
                     </Tooltip>
                     {isOwner && (
@@ -460,7 +536,10 @@ const ImageGeneration = () => {
                           <Button
                             type="text"
                             icon={item.is_favorite ? <HeartFilled style={{ color: '#ff4d4f' }} /> : <HeartOutlined />}
-                            onClick={() => handleToggleFavorite(item)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(item);
+                            }}
                             className={item.is_favorite ? 'favorited' : ''}
                           />
                         </Tooltip>
@@ -468,7 +547,10 @@ const ImageGeneration = () => {
                           <Button
                             type="text"
                             icon={item.is_public ? <GlobalOutlined style={{ color: '#52c41a' }} /> : <LockOutlined />}
-                            onClick={() => handleTogglePublic(item)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePublic(item);
+                            }}
                           />
                         </Tooltip>
                         <Popconfirm
@@ -482,6 +564,7 @@ const ImageGeneration = () => {
                               type="text"
                               danger
                               icon={<DeleteOutlined />}
+                              onClick={(e) => e.stopPropagation()}
                             />
                           </Tooltip>
                         </Popconfirm>
@@ -491,7 +574,7 @@ const ImageGeneration = () => {
                 </div>
               </>
             ) : (
-              // 图片还未准备好的占位符
+              // 未知状态 - 可能是数据不完整
               <div className="processing-overlay">
                 <Spin size="large" />
                 <div className="processing-text">
@@ -522,6 +605,9 @@ const ImageGeneration = () => {
               {item.action_type && item.action_type !== 'IMAGINE' && (
                 <Tag color="orange">{item.action_type}</Tag>
               )}
+              {isFailed && (
+                <Tag color="error">失败</Tag>
+              )}
             </div>
           }
           description={
@@ -532,13 +618,16 @@ const ImageGeneration = () => {
                   type="link"
                   size="small"
                   icon={<CopyOutlined />}
-                  onClick={() => copyPrompt(item.prompt)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyPrompt(item.prompt);
+                  }}
                 >
                   复制
                 </Button>
               </div>
-              {/* Midjourney操作按钮 - 修复后的判断逻辑 */}
-              {isOwner && isMj && !isProcessing && hasImage && renderMidjourneyActions(item)}
+              {/* Midjourney操作按钮 - 只在成功状态下显示 */}
+              {isOwner && isMj && !isProcessing && !isFailed && hasImage && renderMidjourneyActions(item)}
               <div className="meta-info">
                 {isGallery && item.username && (
                   <span style={{ marginRight: 8 }}>
@@ -581,7 +670,10 @@ const ImageGeneration = () => {
       if (activeTab === 'favorites') {
         params.is_favorite = true;
       }
-      getUserHistory(params);
+      getUserHistory(params).then(() => {
+        // 刷新后清理失败任务
+        cleanupFailedTasks();
+      });
     }
   };
   
@@ -903,36 +995,15 @@ const ImageGeneration = () => {
         </div>
       </Content>
 
-      {/* 图片预览Modal */}
-      <Modal
-        open={!!previewImage}
-        footer={null}
-        onCancel={() => setPreviewImage(null)}
-        width={800}
-        centered
-      >
-        {previewImage && (
-          <div className="preview-modal">
-            <img src={previewImage.local_path || previewImage.image_url} alt={previewImage.prompt} />
-            <div className="preview-info">
-              <p><strong>提示词：</strong>{previewImage.prompt}</p>
-              {previewImage.negative_prompt && (
-                <p><strong>负面提示词：</strong>{previewImage.negative_prompt}</p>
-              )}
-              <p>
-                <strong>参数：</strong>
-                尺寸 {previewImage.size} | 
-                {previewImage.generation_mode && ` 模式 ${previewImage.generation_mode} |`}
-                {previewImage.guidance_scale && ` 引导系数 ${previewImage.guidance_scale} |`}
-                {previewImage.seed && ` 种子 ${previewImage.seed}`}
-              </p>
-              {previewImage.username && (
-                <p><strong>作者：</strong>{previewImage.username}</p>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
+      {/* 使用新的 ImageViewer 组件 */}
+      <ImageViewer
+        visible={viewerVisible}
+        images={viewerImages}
+        initialIndex={viewerInitialIndex}
+        onClose={() => setViewerVisible(false)}
+        showDownload={true}
+        showThumbnails={viewerImages.length > 1}
+      />
     </Layout>
   );
 };
