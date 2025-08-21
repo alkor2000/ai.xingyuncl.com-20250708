@@ -108,7 +108,7 @@ const PublicRoute = ({ children }) => {
   return children
 }
 
-// 优化的首页路由组件 - 移除自定义首页检查，直接跳转
+// 优化的首页路由组件 - 显示自定义首页
 const HomeRoute = () => {
   const { isAuthenticated } = useAuthStore()
 
@@ -117,8 +117,8 @@ const HomeRoute = () => {
     return <Navigate to="/dashboard" replace />
   }
 
-  // 未登录，跳转到登录页
-  return <Navigate to="/login" replace />
+  // 未登录，显示自定义首页
+  return <CustomLanding />
 }
 
 const App = () => {
@@ -141,7 +141,7 @@ const App = () => {
         <Router>
           <div className="app">
             <Routes>
-              {/* 根路径 - 简化逻辑，直接跳转 */}
+              {/* 根路径 - 显示自定义首页或跳转到dashboard */}
               <Route path="/" element={<HomeRoute />} />
 
               {/* 公开路由 */}

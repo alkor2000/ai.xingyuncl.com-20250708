@@ -122,6 +122,9 @@ const useAuthStore = create(
           }
           
           console.log('🚪 用户已登出')
+          
+          // 跳转到首页（自定义首页）
+          window.location.href = '/'
         }
       },
 
