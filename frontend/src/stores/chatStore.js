@@ -39,10 +39,6 @@ const useChatStore = create((set, get) => ({
   // 🔥 新增：存储当前活跃的非流式请求
   activeRequest: null,
   
-  // 🔥 新增：草稿相关状态
-  drafts: {}, // conversationId -> draft content
-  draftSaving: false,
-  
   // 🔥 改进：保存对话状态（包括流式状态）
   saveConversationState: (conversationId) => {
     const state = get()
@@ -256,16 +252,9 @@ const useChatStore = create((set, get) => ({
     })
     
     try {
-      // 获取会话详情（可能包含草稿）
+      // 获取会话详情
       const conversationResponse = await apiClient.get(`/chat/conversations/${conversationId}`)
       const conversation = conversationResponse.data.data
-      
-      // 如果有草稿，更新草稿状态
-      if (conversation.draft) {
-        set(state => ({
-          drafts: { ...state.drafts, [conversationId]: conversation.draft }
-        }))
-      }
       
       // 🔥 尝试恢复保存的完整状态
       const savedState = state.restoreConversationState(conversationId)
@@ -319,56 +308,10 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 保存草稿
-  saveDraft: async (conversationId, content) => {
-    if (!conversationId || !content) return
-    
-    // 更新本地草稿状态
-    set(state => ({
-      drafts: { ...state.drafts, [conversationId]: content }
-    }))
-    
-    // 保存到后端（静默，不阻塞）
-    try {
-      set({ draftSaving: true })
-      await apiClient.post(`/chat/conversations/${conversationId}/draft`, { content })
-      set({ draftSaving: false })
-    } catch (error) {
-      console.error('保存草稿失败:', error)
-      set({ draftSaving: false })
-    }
-  },
-  
-  // 🔥 获取草稿
-  getDraft: (conversationId) => {
-    const state = get()
-    return state.drafts[conversationId] || ''
-  },
-  
-  // 🔥 清除草稿
-  clearDraft: async (conversationId) => {
-    // 清除本地草稿
-    set(state => {
-      const newDrafts = { ...state.drafts }
-      delete newDrafts[conversationId]
-      return { drafts: newDrafts }
-    })
-    
-    // 清除后端草稿（静默）
-    try {
-      await apiClient.delete(`/chat/conversations/${conversationId}/draft`)
-    } catch (error) {
-      console.error('清除草稿失败:', error)
-    }
-  },
-  
   // 发送消息 - 支持传递完整的file对象用于临时消息显示
   sendMessage: async (content, fileInfo = null) => {
     const state = get()
     if (!state.currentConversation) return
-    
-    // 发送消息时清除草稿
-    get().clearDraft(state.currentConversationId)
     
     // 确保有最新的模型列表
     if (!state.aiModels.length) {
@@ -489,9 +432,6 @@ const useChatStore = create((set, get) => ({
     
     const conversationId = state.currentConversationId
     const modelName = state.currentConversation.model_name
-    
-    // 发送消息时清除草稿
-    get().clearDraft(conversationId)
     
     // 清除之前的超时定时器
     if (state.streamingTimeout) {
@@ -965,13 +905,6 @@ const useChatStore = create((set, get) => ({
     try {
       await apiClient.delete(`/chat/conversations/${conversationId}`)
       
-      // 清除相关草稿
-      set(state => {
-        const newDrafts = { ...state.drafts }
-        delete newDrafts[conversationId]
-        return { drafts: newDrafts }
-      })
-      
       // 🔥 清除保存的对话状态
       set(state => {
         const newStates = new Map(state.conversationStates)
@@ -1134,9 +1067,7 @@ const useChatStore = create((set, get) => ({
       userStoppedStreaming: false,
       streamingTimeout: null,
       conversationStates: new Map(),
-      activeRequest: null,
-      drafts: {},
-      draftSaving: false
+      activeRequest: null
     })
   }
 }))

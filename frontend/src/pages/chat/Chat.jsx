@@ -1,6 +1,6 @@
 /**
  * 聊天页面 - 主界面（移动端适配版）
- * 优化：响应式布局 + 移动端单页切换
+ * 优化：移除草稿功能，提升性能和稳定性
  * 修改：禁用虚拟滚动，使用普通滚动模式
  * 更新：移除PC端顶部栏，增加对话空间
  */
@@ -13,10 +13,9 @@ import { MenuOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
-// import VirtualMessageList from '../../components/chat/VirtualMessageList' // 禁用虚拟滚动
 import apiClient from '../../utils/api'
 
-// 导入子组件 - 移除ChatHeader的导入
+// 导入子组件
 import {
   ConversationSidebar,
   ChatInputArea,
@@ -33,19 +32,6 @@ if (typeof window !== "undefined") {
 }
 
 const { Sider, Content } = Layout
-
-// 简单的防抖函数
-function debounce(func, wait) {
-  let timeout
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout)
-      func(...args)
-    }
-    clearTimeout(timeout)
-    timeout = setTimeout(later, wait)
-  }
-}
 
 // 自定义Hook - 检测是否为移动设备
 const useIsMobile = () => {
@@ -69,10 +55,8 @@ const useViewportHeight = () => {
   
   useEffect(() => {
     const updateHeight = () => {
-      // 使用window.innerHeight而不是100vh
       const vh = window.innerHeight
       setViewportHeight(vh)
-      // 设置CSS变量供样式使用
       document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`)
     }
     
@@ -137,7 +121,7 @@ const Chat = () => {
   const [isSending, setIsSending] = useState(false)
   
   // 移动端专用状态
-  const [mobileView, setMobileView] = useState('list') // 'list' | 'chat'
+  const [mobileView, setMobileView] = useState('list')
   const [mobileDrawerVisible, setMobileDrawerVisible] = useState(false)
   
   // 用户手动滚动标志
@@ -150,7 +134,7 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
-  // 禁用虚拟滚动 - 始终使用普通滚动模式
+  // 禁用虚拟滚动
   const useVirtualScroll = false
 
   // 初始化
@@ -168,46 +152,10 @@ const Chat = () => {
     }
   }, [currentConversationId, isMobile])
 
-  // 草稿管理函数
-  const saveDraft = useCallback((conversationId, content) => {
-    if (content.trim() && !isSending) {
-      const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
-      drafts[conversationId] = {
-        content,
-        timestamp: Date.now()
-      }
-      localStorage.setItem('chatDrafts', JSON.stringify(drafts))
-    }
-  }, [isSending])
-  
-  const getDraft = (conversationId) => {
-    const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
-    return drafts[conversationId]?.content || ''
-  }
-  
-  const clearDraft = (conversationId) => {
-    const drafts = JSON.parse(localStorage.getItem('chatDrafts') || '{}')
-    delete drafts[conversationId]
-    localStorage.setItem('chatDrafts', JSON.stringify(drafts))
-  }
-
-  // 创建防抖的草稿保存
-  const debouncedSaveDraft = useCallback(
-    debounce((conversationId, content) => {
-      saveDraft(conversationId, content)
-    }, 1000),
-    [saveDraft]
-  )
-
-  // 恢复草稿
+  // 切换对话时清空输入框
   useEffect(() => {
-    if (currentConversation && !isSending) {
-      const draft = getDraft(currentConversation.id)
-      if (draft && !inputValue) {
-        setInputValue(draft)
-      }
-    }
-  }, [currentConversation?.id])
+    setInputValue('')
+  }, [currentConversationId])
 
   // 监听typing和isStreaming状态
   useEffect(() => {
@@ -229,19 +177,7 @@ const Chat = () => {
     }
   }, [currentConversation?.id, initialLoading, isMobile])
 
-  // 改进草稿保存逻辑
-  useEffect(() => {
-    if (!inputValue.trim() && currentConversation) {
-      clearDraft(currentConversation.id)
-      return
-    }
-    
-    if (currentConversation && inputValue.trim() && !isSending) {
-      debouncedSaveDraft(currentConversation.id, inputValue)
-    }
-  }, [inputValue, currentConversation?.id, isSending, debouncedSaveDraft])
-
-  // 滚动函数 - 只使用普通滚动模式
+  // 滚动函数
   const scrollToBottom = useCallback((force = false) => {
     if (messagesEndRef.current && (!userScrolled || force)) {
       const behavior = isStreaming ? 'instant' : 'smooth'
@@ -419,7 +355,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息 - 支持文档上传
+  // 发送消息
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() && !uploadedImage && !uploadedDocument) return
     if (!currentConversation) {
@@ -434,7 +370,6 @@ const Chat = () => {
     setInputValue('')
     setUploadedImage(null)
     setUploadedDocument(null)
-    clearDraft(currentConversation.id)
     
     try {
       await sendMessage(messageContent, fileInfo)
@@ -447,8 +382,8 @@ const Chat = () => {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
       
+      // 恢复输入内容
       setInputValue(messageContent)
-      // 根据文件类型恢复到正确的状态
       if (fileInfo) {
         if (fileInfo.type?.startsWith('image/')) {
           setUploadedImage(fileInfo)
@@ -483,7 +418,7 @@ const Chat = () => {
     }
   }
 
-  // 优化输入处理 - 使用本地状态
+  // 输入处理
   const handleInputChange = useCallback((value) => {
     setInputValue(value)
   }, [])
@@ -663,7 +598,7 @@ const Chat = () => {
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
   const availableModels = aiModels.filter(m => m.is_active)
 
-  // 移动端：渲染会话列表视图（不包含输入框）
+  // 移动端：渲染会话列表视图
   const renderMobileListView = () => (
     <div className="mobile-conversations-view" style={{ height: viewportHeight }}>
       <div className="mobile-header">
@@ -739,7 +674,7 @@ const Chat = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* 输入区域 - 只在聊天视图显示 */}
+            {/* 输入区域 */}
             <div className="mobile-input-container">
               <ChatInputArea
                 ref={inputRef}
@@ -788,7 +723,7 @@ const Chat = () => {
           renderMobileChatView()
         )}
 
-        {/* 移动端侧边抽屉（会话列表） */}
+        {/* 移动端侧边抽屉 */}
         <Drawer
           title={t('chat.conversations')}
           placement="left"
@@ -862,7 +797,7 @@ const Chat = () => {
     )
   }
 
-  // PC端布局（移除顶部栏）
+  // PC端布局
   return (
     <Layout className="chat-container">
       {/* 侧边栏 */}
@@ -919,7 +854,7 @@ const Chat = () => {
             <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
           ) : (
             <>
-              {/* 消息列表 - 移除顶部栏后直接显示 */}
+              {/* 消息列表 */}
               <div className="messages-container" ref={messagesContainerRef}>
                 <MessageList
                   messages={messages}
@@ -936,7 +871,7 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* 输入区域 - 使用原有组件 */}
+              {/* 输入区域 */}
               <ChatInputArea
                 ref={inputRef}
                 inputValue={inputValue}
