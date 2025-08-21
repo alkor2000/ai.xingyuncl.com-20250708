@@ -1,7 +1,7 @@
 /**
  * 流式AI服务
  * 处理流式API调用和Server-Sent Events - 支持图片识别和Azure OpenAI
- * 修复：解决重复done事件和异常处理问题
+ * 修复：解决长内容时的流式传输问题，添加分片和强制flush
  */
 
 const axios = require('axios');
@@ -53,6 +53,67 @@ class AIStreamService {
   }
 
   /**
+   * 分片发送SSE数据，避免单个消息过大
+   * @param {Object} res - Express响应对象
+   * @param {string} event - 事件类型
+   * @param {Object} data - 要发送的数据
+   * @param {number} maxChunkSize - 最大分片大小（字符数）
+   */
+  static sendSSEChunked(res, event, data, maxChunkSize = 1024) {
+    try {
+      if (res.writableEnded) return false;
+      
+      const jsonStr = JSON.stringify(data);
+      
+      // 如果数据较小，直接发送
+      if (jsonStr.length <= maxChunkSize) {
+        res.write(`event: ${event}\ndata: ${jsonStr}\n\n`);
+        // 强制flush确保数据立即发送
+        if (res.flush) res.flush();
+        return true;
+      }
+      
+      // 对于message事件的content字段进行特殊处理
+      if (event === 'message' && data.content) {
+        const content = data.content;
+        const fullContent = data.fullContent || '';
+        
+        // 将内容分成小块
+        const chunkSize = Math.floor(maxChunkSize / 2); // 留出空间给JSON结构
+        for (let i = 0; i < content.length; i += chunkSize) {
+          const chunk = content.slice(i, i + chunkSize);
+          const chunkData = {
+            content: chunk,
+            fullContent: fullContent.slice(0, fullContent.length - content.length + i + chunk.length),
+            isChunk: true,
+            chunkIndex: Math.floor(i / chunkSize)
+          };
+          
+          const chunkJson = JSON.stringify(chunkData);
+          res.write(`event: ${event}\ndata: ${chunkJson}\n\n`);
+          // 每个分片都强制flush
+          if (res.flush) res.flush();
+          
+          // 短暂延迟，避免发送过快
+          if (i + chunkSize < content.length) {
+            // 使用setImmediate而不是setTimeout，避免阻塞
+            setImmediate(() => {});
+          }
+        }
+      } else {
+        // 其他事件直接发送
+        res.write(`event: ${event}\ndata: ${jsonStr}\n\n`);
+        if (res.flush) res.flush();
+      }
+      
+      return true;
+    } catch (error) {
+      logger.error('发送SSE数据失败:', error);
+      return false;
+    }
+  }
+
+  /**
    * 发送流式消息到AI模型
    * @param {Object} res - Express响应对象，用于SSE
    * @param {string} modelName - 模型名称
@@ -66,7 +127,9 @@ class AIStreamService {
         model: modelName, 
         messageCount: messages.length,
         customTemperature: options.temperature,
-        hasImages: messages.some(m => m.image_url)
+        hasImages: messages.some(m => m.image_url),
+        // 添加内容长度信息用于调试
+        totalContentLength: messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
       });
 
       // 获取AI模型配置
@@ -86,14 +149,17 @@ class AIStreamService {
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // 禁用Nginx缓冲
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Transfer-Encoding': 'chunked' // 明确使用分块传输
       });
 
       // 立即flush确保头部发送
       res.flushHeaders();
+      if (res.flush) res.flush(); // 添加显式flush
 
       // 发送初始连接成功事件
       res.write('event: connected\ndata: {"status": "connected"}\n\n');
+      if (res.flush) res.flush();
 
       // 如果有初始化数据，发送初始化事件
       if (options.userMessage || options.creditsInfo) {
@@ -102,7 +168,7 @@ class AIStreamService {
           ai_message_id: options.messageId,
           credits_info: options.creditsInfo
         };
-        res.write(`event: init\ndata: ${JSON.stringify(initData)}\n\n`);
+        AIStreamService.sendSSEChunked(res, 'init', initData);
       }
 
       // 根据模型类型调用不同的流式API
@@ -122,6 +188,7 @@ class AIStreamService {
       // 发送错误事件
       if (!res.writableEnded) {
         res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+        if (res.flush) res.flush();
         res.end();
       }
       
@@ -141,6 +208,10 @@ class AIStreamService {
     let isDoneEventSent = false;
     let streamTimeout = null;
     let lastDataTime = Date.now();
+    let contentBuffer = ''; // 用于累积小片段
+    const BUFFER_THRESHOLD = 50; // 累积到50个字符再发送
+    let lastFlushTime = Date.now();
+    const FLUSH_INTERVAL = 100; // 至少100ms flush一次
     
     try {
       // 解析Azure配置
@@ -237,12 +308,28 @@ class AIStreamService {
 
       logger.info('Azure流式响应开始接收');
 
+      // 定期flush缓冲区的函数
+      const flushBuffer = () => {
+        if (contentBuffer && !res.writableEnded) {
+          const messageData = {
+            content: contentBuffer,
+            fullContent: fullContent
+          };
+          AIStreamService.sendSSEChunked(res, 'message', messageData);
+          contentBuffer = '';
+          lastFlushTime = Date.now();
+        }
+      };
+
       // 完成流式响应的函数
       const completeStream = (reason = 'normal') => {
         if (isDoneEventSent) {
           logger.debug('Done事件已发送，跳过重复发送', { reason });
           return;
         }
+        
+        // flush任何剩余的缓冲内容
+        flushBuffer();
         
         isDoneEventSent = true;
         
@@ -269,6 +356,7 @@ class AIStreamService {
           };
           
           res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
+          if (res.flush) res.flush();
           res.end();
         }
         
@@ -335,13 +423,20 @@ class AIStreamService {
                     fullContent += deltaContent;
                     tokenCount += AIStreamService.estimateStreamTokens(deltaContent);
                     
-                    const messageData = {
-                      content: deltaContent,
-                      fullContent: fullContent
-                    };
+                    // 累积内容到缓冲区
+                    contentBuffer += deltaContent;
                     
-                    if (!res.writableEnded) {
-                      res.write(`event: message\ndata: ${JSON.stringify(messageData)}\n\n`);
+                    // 判断是否需要立即发送
+                    const shouldFlush = 
+                      contentBuffer.length >= BUFFER_THRESHOLD || // 缓冲区满
+                      (Date.now() - lastFlushTime) >= FLUSH_INTERVAL || // 时间间隔到
+                      deltaContent.includes('\n') || // 包含换行符
+                      deltaContent.includes('。') || // 包含句号
+                      deltaContent.includes('！') || // 包含感叹号
+                      deltaContent.includes('？'); // 包含问号
+                    
+                    if (shouldFlush) {
+                      flushBuffer();
                     }
                     
                     if (messageCount % 10 === 0) {
@@ -372,6 +467,11 @@ class AIStreamService {
                 }
               }
             }
+            
+            // 定期强制flush，即使缓冲区未满
+            if ((Date.now() - lastFlushTime) >= FLUSH_INTERVAL && contentBuffer) {
+              flushBuffer();
+            }
           } catch (error) {
             logger.error('处理Azure流式数据块失败:', error);
           }
@@ -383,6 +483,9 @@ class AIStreamService {
             contentReceived: fullContent.length
           });
           
+          // flush任何剩余的缓冲内容
+          flushBuffer();
+          
           if (fullContent.length > 0) {
             completeStream('error_with_content');
             resolve({
@@ -392,6 +495,7 @@ class AIStreamService {
           } else {
             if (!res.writableEnded) {
               res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+              if (res.flush) res.flush();
               res.end();
             }
             reject(error);
@@ -403,6 +507,9 @@ class AIStreamService {
             contentLength: fullContent.length,
             isDoneEventSent
           });
+          
+          // flush任何剩余的缓冲内容
+          flushBuffer();
           
           if (buffer.trim()) {
             logger.warn('存在未处理的Azure流式数据:', buffer.substring(0, 100));
@@ -442,7 +549,6 @@ class AIStreamService {
         contentReceived: fullContent.length
       });
       
-      // 如果是400错误，可能是deployment名称或API版本问题
       if (error.response?.status === 400) {
         logger.error('Azure API 400错误详情:', {
           data: error.response.data,
@@ -475,6 +581,10 @@ class AIStreamService {
     let isDoneEventSent = false; // 防止重复发送done事件
     let streamTimeout = null; // 超时控制
     let lastDataTime = Date.now(); // 最后收到数据的时间
+    let contentBuffer = ''; // 用于累积小片段
+    const BUFFER_THRESHOLD = 50; // 累积到50个字符再发送
+    let lastFlushTime = Date.now();
+    const FLUSH_INTERVAL = 100; // 至少100ms flush一次
     
     try {
       if (!model.api_key || !model.api_endpoint) {
@@ -499,7 +609,8 @@ class AIStreamService {
         messageCount: messages.length,
         temperature: finalTemperature,
         supportsImages: model.image_upload_enabled,
-        provider: model.provider
+        provider: model.provider,
+        totalContentLength: messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
       });
 
       // 处理包含图片的消息
@@ -585,12 +696,28 @@ class AIStreamService {
 
       logger.info('流式响应开始接收');
 
+      // 定期flush缓冲区的函数
+      const flushBuffer = () => {
+        if (contentBuffer && !res.writableEnded) {
+          const messageData = {
+            content: contentBuffer,
+            fullContent: fullContent
+          };
+          AIStreamService.sendSSEChunked(res, 'message', messageData);
+          contentBuffer = '';
+          lastFlushTime = Date.now();
+        }
+      };
+
       // 完成流式响应的函数
       const completeStream = (reason = 'normal') => {
         if (isDoneEventSent) {
           logger.debug('Done事件已发送，跳过重复发送', { reason });
           return;
         }
+        
+        // flush任何剩余的缓冲内容
+        flushBuffer();
         
         isDoneEventSent = true;
         
@@ -619,6 +746,7 @@ class AIStreamService {
           };
           
           res.write(`event: done\ndata: ${JSON.stringify(completionData)}\n\n`);
+          if (res.flush) res.flush();
           res.end();
         }
         
@@ -699,21 +827,28 @@ class AIStreamService {
                     fullContent += deltaContent;
                     tokenCount += AIStreamService.estimateStreamTokens(deltaContent);
                     
-                    // 发送内容片段 - 确保格式正确
-                    const messageData = {
-                      content: deltaContent,
-                      fullContent: fullContent
-                    };
+                    // 累积内容到缓冲区
+                    contentBuffer += deltaContent;
                     
-                    if (!res.writableEnded) {
-                      res.write(`event: message\ndata: ${JSON.stringify(messageData)}\n\n`);
+                    // 判断是否需要立即发送
+                    const shouldFlush = 
+                      contentBuffer.length >= BUFFER_THRESHOLD || // 缓冲区满
+                      (Date.now() - lastFlushTime) >= FLUSH_INTERVAL || // 时间间隔到
+                      deltaContent.includes('\n') || // 包含换行符
+                      deltaContent.includes('。') || // 包含句号
+                      deltaContent.includes('！') || // 包含感叹号
+                      deltaContent.includes('？'); // 包含问号
+                    
+                    if (shouldFlush) {
+                      flushBuffer();
                     }
                     
                     // 每10个片段记录一次日志
                     if (messageCount % 10 === 0) {
                       logger.debug('流式片段进度', {
                         messages: messageCount,
-                        contentLength: fullContent.length
+                        contentLength: fullContent.length,
+                        bufferLength: contentBuffer.length
                       });
                     }
                   }
@@ -739,6 +874,11 @@ class AIStreamService {
                 }
               }
             }
+            
+            // 定期强制flush，即使缓冲区未满
+            if ((Date.now() - lastFlushTime) >= FLUSH_INTERVAL && contentBuffer) {
+              flushBuffer();
+            }
           } catch (error) {
             logger.error('处理流式数据块失败:', error);
             // 不立即结束，继续尝试处理后续数据
@@ -751,6 +891,9 @@ class AIStreamService {
             contentReceived: fullContent.length
           });
           
+          // flush任何剩余的缓冲内容
+          flushBuffer();
+          
           // 如果已经接收到部分内容，保存它
           if (fullContent.length > 0) {
             completeStream('error_with_content');
@@ -761,6 +904,7 @@ class AIStreamService {
           } else {
             if (!res.writableEnded) {
               res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+              if (res.flush) res.flush();
               res.end();
             }
             reject(error);
@@ -772,6 +916,9 @@ class AIStreamService {
             contentLength: fullContent.length,
             isDoneEventSent
           });
+          
+          // flush任何剩余的缓冲内容
+          flushBuffer();
           
           // 如果还有未处理的buffer数据，尝试处理
           if (buffer.trim()) {
