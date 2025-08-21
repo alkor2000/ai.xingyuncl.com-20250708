@@ -37,6 +37,8 @@ export default defineConfig({
           'utils-vendor': ['axios', 'zustand'],
           // Antd分离但保持统一
           'antd-vendor': ['antd', '@ant-design/icons'],
+          // Monaco Editor 单独分块
+          'monaco-vendor': ['monaco-editor', '@monaco-editor/react'],
           // Prism.js 单独分块，支持动态加载
           'prism-vendor': ['prismjs'],
           // Markdown 分块
@@ -45,7 +47,7 @@ export default defineConfig({
       }
     },
     // 调整chunk大小警告阈值
-    chunkSizeWarningLimit: 800
+    chunkSizeWarningLimit: 1500
   },
   // 优化依赖预构建
   optimizeDeps: {
@@ -56,10 +58,20 @@ export default defineConfig({
       'antd',
       'axios',
       'zustand',
-      'react-markdown'
+      'react-markdown',
+      'monaco-editor',
+      '@monaco-editor/react'
     ],
     exclude: [
       'prismjs/components/*'  // 排除 Prism 组件，让它们动态加载
     ]
-  }
+  },
+  // 处理Monaco Editor的worker
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  },
+  // 确保Monaco Editor的CSS和字体正确加载
+  assetsInclude: ['**/*.ttf', '**/*.woff', '**/*.woff2']
 })

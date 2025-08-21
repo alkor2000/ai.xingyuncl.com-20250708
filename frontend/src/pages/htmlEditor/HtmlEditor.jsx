@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 增强版本（支持文件夹删除）
+ * HTML编辑器主页面 - 本地化Monaco版本
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -22,7 +22,8 @@ import {
   Row,
   Col,
   Divider,
-  Typography
+  Typography,
+  Spin
 } from 'antd';
 import {
   FolderOutlined,
@@ -47,7 +48,8 @@ import {
   DollarOutlined,
   EyeOutlined
 } from '@ant-design/icons';
-import Editor from '@monaco-editor/react';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { useTranslation } from 'react-i18next';
 import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
@@ -58,121 +60,11 @@ const { Sider, Content, Header } = Layout;
 const { TextArea } = Input;
 const { Text } = Typography;
 
-const HtmlEditor = () => {
-  const { t } = useTranslation();
-  const { user } = useAuthStore();
-  const {
-    projects,
-    pages,
-    currentPage,
-    loading,
-    getProjects,
-    getPages,
-    createProject,
-    createPage,
-    updatePage,
-    deletePage,
-    deleteProject,
-    togglePublish,
-    loadPage,
-    updateProject
-  } = useHtmlEditorStore();
+// 配置Monaco使用本地资源而不是CDN
+loader.config({ monaco });
 
-  // 状态
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [selectedPageId, setSelectedPageId] = useState(null);
-  const [htmlContent, setHtmlContent] = useState('');
-  const [previewMode, setPreviewMode] = useState('desktop');
-  const [showProjectModal, setShowProjectModal] = useState(false);
-  const [showPageModal, setShowPageModal] = useState(false);
-  const [showRenameModal, setShowRenameModal] = useState(false);
-  const [renameType, setRenameType] = useState(''); // 'project' or 'page'
-  const [renameItem, setRenameItem] = useState(null);
-  const [projectForm] = Form.useForm();
-  const [pageForm] = Form.useForm();
-  const [renameForm] = Form.useForm();
-  const [isSaving, setIsSaving] = useState(false);
-  const [compiledContent, setCompiledContent] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [editorTheme, setEditorTheme] = useState('vs-dark');
-  const [creditsConfig, setCreditsConfig] = useState({
-    credits_per_page: 10,
-    credits_per_update: 2,
-    credits_per_publish: 5
-  });
-  const [userCredits, setUserCredits] = useState(0);
-  const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
-
-  // 初始化加载
-  useEffect(() => {
-    getProjects();
-    fetchCreditsConfig();
-    fetchUserCredits();
-  }, []);
-
-  // 自动选择默认项目
-  useEffect(() => {
-    if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
-      const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
-      if (defaultProject) {
-        setSelectedProject(defaultProject);
-        getPages(defaultProject.id);
-        setDefaultProjectSelected(true);
-      }
-    }
-  }, [projects, defaultProjectSelected, selectedProject]);
-
-  // 获取积分配置
-  const fetchCreditsConfig = async () => {
-    try {
-      const response = await apiClient.get('/html-editor/credits-config');
-      if (response.data.success) {
-        setCreditsConfig(response.data.data);
-      }
-    } catch (error) {
-      console.error('获取积分配置失败:', error);
-    }
-  };
-
-  // 获取用户当前积分
-  const fetchUserCredits = async () => {
-    try {
-      const response = await apiClient.get('/auth/me');
-      if (response.data.success) {
-        const userData = response.data.data.user;
-        const credits = (userData.credits_quota || 0) - (userData.used_credits || 0);
-        setUserCredits(Math.max(0, credits));
-      }
-    } catch (error) {
-      console.error('获取用户积分失败:', error);
-    }
-  };
-
-  // 格式化积分显示
-  const formatCreditsDisplay = (credits) => {
-    return credits === 0 ? '免费' : `${credits} 积分`;
-  };
-
-  // 加载选中页面的内容
-  useEffect(() => {
-    if (currentPage) {
-      // 如果页面有完整HTML内容，使用它；否则尝试编译旧格式的内容
-      if (currentPage.html_content) {
-        setHtmlContent(currentPage.html_content);
-      } else if (currentPage.compiled_content) {
-        setHtmlContent(currentPage.compiled_content);
-      } else {
-        // 兼容旧数据：如果有分离的CSS/JS，编译它们
-        const compiled = compileOldContent(
-          currentPage.html_content || '',
-          currentPage.css_content || '',
-          currentPage.js_content || ''
-        );
-        setHtmlContent(compiled);
-      }
-    } else {
-      // 加载默认模板
-      setHtmlContent(`<!DOCTYPE html>
+// 默认HTML模板
+const DEFAULT_HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -232,7 +124,121 @@ const HtmlEditor = () => {
         <button onclick="alert('欢迎使用HTML编辑器！')">点击我</button>
     </div>
 </body>
-</html>`);
+</html>`;
+
+const HtmlEditor = () => {
+  const { t } = useTranslation();
+  const { user } = useAuthStore();
+  const {
+    projects,
+    pages,
+    currentPage,
+    loading,
+    getProjects,
+    getPages,
+    createProject,
+    createPage,
+    updatePage,
+    deletePage,
+    deleteProject,
+    togglePublish,
+    loadPage,
+    updateProject
+  } = useHtmlEditorStore();
+
+  // 状态
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedPageId, setSelectedPageId] = useState(null);
+  const [htmlContent, setHtmlContent] = useState('');
+  const [previewMode, setPreviewMode] = useState('desktop');
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showPageModal, setShowPageModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameType, setRenameType] = useState('');
+  const [renameItem, setRenameItem] = useState(null);
+  const [projectForm] = Form.useForm();
+  const [pageForm] = Form.useForm();
+  const [renameForm] = Form.useForm();
+  const [isSaving, setIsSaving] = useState(false);
+  const [compiledContent, setCompiledContent] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [editorTheme, setEditorTheme] = useState('vs-dark');
+  const [creditsConfig, setCreditsConfig] = useState({
+    credits_per_page: 10,
+    credits_per_update: 2,
+    credits_per_publish: 5
+  });
+  const [userCredits, setUserCredits] = useState(0);
+  const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
+
+  // 初始化加载
+  useEffect(() => {
+    getProjects();
+    fetchCreditsConfig();
+    fetchUserCredits();
+  }, []);
+
+  // 自动选择默认项目
+  useEffect(() => {
+    if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
+      const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
+      if (defaultProject) {
+        setSelectedProject(defaultProject);
+        getPages(defaultProject.id);
+        setDefaultProjectSelected(true);
+      }
+    }
+  }, [projects, defaultProjectSelected, selectedProject]);
+
+  // 获取积分配置
+  const fetchCreditsConfig = async () => {
+    try {
+      const response = await apiClient.get('/html-editor/credits-config');
+      if (response.data.success) {
+        setCreditsConfig(response.data.data);
+      }
+    } catch (error) {
+      console.error('获取积分配置失败:', error);
+    }
+  };
+
+  // 获取用户当前积分
+  const fetchUserCredits = async () => {
+    try {
+      const response = await apiClient.get('/auth/me');
+      if (response.data.success) {
+        const userData = response.data.data.user;
+        const credits = (userData.credits_quota || 0) - (userData.used_credits || 0);
+        setUserCredits(Math.max(0, credits));
+      }
+    } catch (error) {
+      console.error('获取用户积分失败:', error);
+    }
+  };
+
+  // 格式化积分显示
+  const formatCreditsDisplay = (credits) => {
+    return credits === 0 ? '免费' : `${credits} 积分`;
+  };
+
+  // 加载选中页面的内容
+  useEffect(() => {
+    if (currentPage) {
+      if (currentPage.html_content) {
+        setHtmlContent(currentPage.html_content);
+      } else if (currentPage.compiled_content) {
+        setHtmlContent(currentPage.compiled_content);
+      } else {
+        const compiled = compileOldContent(
+          currentPage.html_content || '',
+          currentPage.css_content || '',
+          currentPage.js_content || ''
+        );
+        setHtmlContent(compiled);
+      }
+    } else {
+      setHtmlContent(DEFAULT_HTML_TEMPLATE);
     }
   }, [currentPage]);
 
@@ -241,7 +247,7 @@ const HtmlEditor = () => {
     setCompiledContent(htmlContent);
   }, [htmlContent]);
 
-  // 编译旧格式内容（用于兼容旧数据）
+  // 编译旧格式内容
   const compileOldContent = (html, css, js) => {
     if (html && (html.includes('<!DOCTYPE') || html.includes('<html'))) {
       let compiled = html;
@@ -250,7 +256,7 @@ const HtmlEditor = () => {
         const headEndIndex = compiled.toLowerCase().indexOf('</head>');
         if (headEndIndex > -1) {
           compiled = compiled.slice(0, headEndIndex) + 
-            `\\n<style>\\n${css}\\n</style>\\n` +
+            `\n<style>\n${css}\n</style>\n` +
             compiled.slice(headEndIndex);
         }
       }
@@ -259,7 +265,7 @@ const HtmlEditor = () => {
         const bodyEndIndex = compiled.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex > -1) {
           compiled = compiled.slice(0, bodyEndIndex) + 
-            `\\n<script>\\n${js}\\n</script>\\n` + 
+            `\n<script>\n${js}\n</script>\n` + 
             compiled.slice(bodyEndIndex);
         }
       }
@@ -286,21 +292,17 @@ ${js || ''}
     }
   };
 
-  // 预览页面（新窗口）
+  // 预览页面
   const handlePreview = () => {
     if (!htmlContent) {
       message.warning('编辑器内容为空');
       return;
     }
 
-    // 创建Blob URL
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    
-    // 在新窗口打开
     const previewWindow = window.open(url, '_blank');
     
-    // 清理URL（延迟执行，确保窗口已打开）
     setTimeout(() => {
       URL.revokeObjectURL(url);
     }, 1000);
@@ -330,7 +332,6 @@ ${js || ''}
 
   // 删除文件夹
   const handleDeleteProject = (project) => {
-    // 检查是否为默认项目
     if (project.is_default === 1 || project.name === '默认项目') {
       message.warning('默认项目不能删除');
       return;
@@ -354,15 +355,12 @@ ${js || ''}
           await deleteProject(project.id);
           message.success('文件夹删除成功');
           
-          // 如果删除的是当前选中的项目，清空选择
           if (selectedProject?.id === project.id) {
             setSelectedProject(null);
           }
           
-          // 刷新项目列表
           await getProjects();
         } catch (error) {
-          // 显示具体的错误信息
           const errorMsg = error.response?.data?.message || '删除文件夹失败';
           message.error(errorMsg);
         }
@@ -403,7 +401,6 @@ ${js || ''}
 
   // 创建页面
   const handleCreatePage = async (values) => {
-    // 如果没有选择项目，使用默认项目
     let projectId = selectedProject?.id;
     
     if (!projectId) {
@@ -418,7 +415,6 @@ ${js || ''}
       }
     }
 
-    // 检查积分（只有积分大于0时才检查）
     if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
       message.error(`积分不足！创建页面需要 ${creditsConfig.credits_per_page} 积分，当前余额 ${userCredits} 积分`);
       return;
@@ -429,8 +425,8 @@ ${js || ''}
         ...values,
         project_id: projectId,
         html_content: htmlContent,
-        css_content: '', // 保持空值以兼容后端
-        js_content: ''   // 保持空值以兼容后端
+        css_content: '',
+        js_content: ''
       };
       
       const newPage = await createPage(pageData);
@@ -440,7 +436,7 @@ ${js || ''}
       setSelectedPageId(newPage.id);
       
       getPages(projectId);
-      fetchUserCredits(); // 刷新积分
+      fetchUserCredits();
     } catch (error) {
       message.error(error.message || '创建页面失败');
     }
@@ -453,7 +449,6 @@ ${js || ''}
       return;
     }
 
-    // 检查积分（只有积分大于0时才检查）
     if (creditsConfig.credits_per_update > 0 && userCredits < creditsConfig.credits_per_update) {
       message.error(`积分不足！保存页面需要 ${creditsConfig.credits_per_update} 积分，当前余额 ${userCredits} 积分`);
       return;
@@ -463,11 +458,11 @@ ${js || ''}
     try {
       await updatePage(selectedPageId, {
         html_content: htmlContent,
-        css_content: '', // 保持空值以兼容后端
-        js_content: ''   // 保持空值以兼容后端
+        css_content: '',
+        js_content: ''
       });
       message.success('页面保存成功');
-      fetchUserCredits(); // 刷新积分
+      fetchUserCredits();
     } catch (error) {
       message.error(error.message || '保存失败');
     } finally {
@@ -475,7 +470,7 @@ ${js || ''}
     }
   };
 
-  // 复制内容到剪贴板
+  // 复制内容
   const handleCopyContent = () => {
     if (!htmlContent) {
       message.warning('编辑器内容为空');
@@ -489,7 +484,7 @@ ${js || ''}
     });
   };
 
-  // 清空编辑器内容
+  // 清空编辑器
   const handleClearContent = () => {
     Modal.confirm({
       title: '确认清空',
@@ -510,15 +505,12 @@ ${js || ''}
       return;
     }
 
-    // 检查当前页面是否已发布
     const currentPageData = pages.find(p => p.id === selectedPageId);
     if (currentPageData?.is_published) {
-      // 如果已发布，直接显示链接
       showPermalinkModal(currentPageData);
       return;
     }
 
-    // 检查积分（只有积分大于0时才检查）
     if (creditsConfig.credits_per_publish > 0 && userCredits < creditsConfig.credits_per_publish) {
       Modal.confirm({
         title: '积分不足',
@@ -536,7 +528,6 @@ ${js || ''}
       return;
     }
 
-    // 显示确认弹窗
     const confirmContent = creditsConfig.credits_per_publish > 0 ? (
       <div>
         <p>生成永久链接将消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
@@ -563,7 +554,7 @@ ${js || ''}
           const result = await togglePublish(selectedPageId);
           if (result.is_published) {
             showPermalinkModal(result);
-            fetchUserCredits(); // 刷新积分
+            fetchUserCredits();
           }
         } catch (error) {
           message.error('生成链接失败');
@@ -622,7 +613,6 @@ ${js || ''}
               handleEditProject(project);
             }}
           />
-          {/* 添加删除按钮（非默认文件夹） */}
           {project.type === 'folder' && project.is_default !== 1 && project.name !== '默认项目' && (
             <Button
               type="text"
@@ -669,10 +659,20 @@ ${js || ''}
     automaticLayout: true,
     tabSize: 2,
     wordWrap: 'on',
-    scrollBeyondLastLine: false
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on',
+    renderWhitespace: 'selection',
+    folding: true,
+    bracketPairColorization: {
+      enabled: true
+    },
+    guides: {
+      indentation: true,
+      bracketPairs: true
+    }
   };
 
-  // Dropdown菜单项 - Antd 5.x 格式
+  // Dropdown菜单项
   const projectMenuItems = [
     {
       key: 'folder',
@@ -690,6 +690,13 @@ ${js || ''}
       onClick: () => setShowPageModal(true)
     }
   ];
+
+  // 编辑器加载完成回调
+  const handleEditorDidMount = (editor, monaco) => {
+    setEditorReady(true);
+    // 可以在这里添加额外的编辑器配置
+    console.log('Monaco Editor已加载完成');
+  };
 
   return (
     <Layout className="html-editor-container">
@@ -902,7 +909,9 @@ ${js || ''}
             <div className="code-editor-section">
               <div className="editor-header-bar">
                 <span className="editor-title">HTML编辑器</span>
-                <span className="editor-hint">粘贴完整的HTML代码</span>
+                <span className="editor-hint">
+                  {editorReady ? '编辑器已就绪' : '正在加载编辑器...'}
+                </span>
               </div>
               <Editor
                 height="calc(100vh - 200px)"
@@ -911,6 +920,20 @@ ${js || ''}
                 value={htmlContent}
                 onChange={setHtmlContent}
                 options={editorOptions}
+                onMount={handleEditorDidMount}
+                loading={
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    height: '100%',
+                    flexDirection: 'column',
+                    gap: '16px'
+                  }}>
+                    <Spin size="large" />
+                    <div>正在加载编辑器...</div>
+                  </div>
+                }
               />
             </div>
 
