@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 本地化Monaco版本
+ * HTML编辑器主页面 - 优化版本（修复Monaco错误）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -48,8 +48,7 @@ import {
   DollarOutlined,
   EyeOutlined
 } from '@ant-design/icons';
-import Editor, { loader } from '@monaco-editor/react';
-import * as monaco from 'monaco-editor';
+import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
 import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
@@ -60,8 +59,17 @@ const { Sider, Content, Header } = Layout;
 const { TextArea } = Input;
 const { Text } = Typography;
 
-// 配置Monaco使用本地资源而不是CDN
-loader.config({ monaco });
+// 重要修复：不要直接导入monaco-editor，避免配置冲突
+// 让@monaco-editor/react自己管理Monaco实例
+
+// 配置Monaco环境 - 避免Worker加载错误
+if (typeof window !== 'undefined' && !window.MonacoEnvironment) {
+  window.MonacoEnvironment = {
+    // 返回undefined让Monaco使用内置fallback，避免toUrl错误
+    getWorker: () => undefined,
+    getWorkerUrl: () => undefined
+  };
+}
 
 // 默认HTML模板
 const DEFAULT_HTML_TEMPLATE = `<!DOCTYPE html>
@@ -694,8 +702,25 @@ ${js || ''}
   // 编辑器加载完成回调
   const handleEditorDidMount = (editor, monaco) => {
     setEditorReady(true);
-    // 可以在这里添加额外的编辑器配置
-    console.log('Monaco Editor已加载完成');
+    // 配置HTML语言选项
+    if (monaco?.languages?.html?.htmlDefaults) {
+      try {
+        monaco.languages.html.htmlDefaults.setOptions({
+          format: {
+            tabSize: 2,
+            insertSpaces: true,
+            wrapLineLength: 120,
+            wrapAttributes: 'auto'
+          },
+          suggest: {
+            html5: true
+          }
+        });
+      } catch (e) {
+        // 静默处理配置错误
+      }
+    }
+    console.log('Monaco Editor已加载完成（优化版本）');
   };
 
   return (
