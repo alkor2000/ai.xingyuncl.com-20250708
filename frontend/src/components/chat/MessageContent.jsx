@@ -3,8 +3,6 @@ import { Typography, Image, Spin, Button, Space, message as antMessage } from 'a
 import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import CodeBlock from './CodeBlock'
 import useSystemConfigStore from '../../stores/systemConfigStore'
 import './MessageContent.less'
@@ -23,7 +21,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
   
-  // 🔥 添加调试日志，查看消息数据
+  // 添加调试日志，查看消息数据
   if (isAssistant && !message.temp && !message.streaming) {
     console.log('AI消息数据:', {
       id: message.id,
@@ -36,21 +34,21 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   
   // 获取消息实际使用的模型信息
   const getMessageModel = () => {
-    // 🔥 关键修复：优先使用消息自己的model_name
+    // 优先使用消息自己的model_name
     if (message.model_name) {
       // 尝试在aiModels中找到对应的模型对象
       const model = aiModels.find(m => m.name === message.model_name)
       if (model) {
         return model
       }
-      // 🔥 如果找不到，创建一个临时模型对象，确保显示正确的模型名
+      // 如果找不到，创建一个临时模型对象，确保显示正确的模型名
       return {
         name: message.model_name,
         display_name: message.model_name // 使用模型名作为显示名
       }
     }
     
-    // 🔥 只有临时消息（没有model_name的）才使用当前对话的模型
+    // 只有临时消息（没有model_name的）才使用当前对话的模型
     if (message.temp || message.streaming) {
       return currentModel
     }
@@ -68,14 +66,14 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     lineHeight: chatFontSize > 16 ? '1.6' : '1.5'
   }
   
-  // 🔥 用户消息样式 - 添加 white-space: pre-wrap 以保留格式
+  // 用户消息样式 - 添加 white-space: pre-wrap 以保留格式
   const userMessageStyle = {
     ...messageTextStyle,
     whiteSpace: 'pre-wrap',  // 保留换行和空格
     wordBreak: 'break-word'  // 长单词换行
   }
   
-  // 🔥 新增：处理用户消息格式，将换行符转换为HTML结构
+  // 处理用户消息格式，将换行符转换为HTML结构
   const renderUserMessage = (content) => {
     if (!content) return null
     
@@ -153,18 +151,18 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       if (!inline) {
         return (
           <pre style={{ 
-            backgroundColor: '#f6f8fa', 
+            backgroundColor: '#2d3748', 
+            color: '#d4d4d4',
             padding: '16px', 
             borderRadius: '6px',
             overflow: 'auto',
             marginTop: '8px',
-            marginBottom: '8px'
+            marginBottom: '8px',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            fontSize: '13px',
+            lineHeight: '1.45'
           }}>
-            <code style={{ 
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '13px',
-              lineHeight: '1.45'
-            }}>
+            <code>
               {String(children).replace(/\n$/, '')}
             </code>
           </pre>
@@ -173,7 +171,17 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       
       // 内联代码使用原样式
       return (
-        <code className={className} {...props}>
+        <code 
+          className={className} 
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.06)',
+            padding: '2px 4px',
+            borderRadius: '3px',
+            fontSize: '14px',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace'
+          }}
+          {...props}
+        >
           {children}
         </code>
       )
@@ -187,7 +195,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     h4: ({ children }) => <h4 style={{ ...messageTextStyle, fontSize: `${chatFontSize * 1.1}px` }}>{children}</h4>,
     h5: ({ children }) => <h5 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h5>,
     h6: ({ children }) => <h6 style={{ ...messageTextStyle, fontSize: `${chatFontSize}px` }}>{children}</h6>,
-    // 🔥 新增：表格相关组件样式
+    // 表格相关组件样式
     table: ({ children }) => (
       <div className="markdown-table-wrapper">
         <table className="markdown-table">
@@ -228,7 +236,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       {/* 消息文本内容 */}
       <div className="message-text" style={messageTextStyle}>
         {isUser ? (
-          // 🔥 修复：使用实际的HTML结构渲染用户消息，支持手动选择复制格式
+          // 使用实际的HTML结构渲染用户消息，支持手动选择复制格式
           <div style={userMessageStyle}>
             {renderUserMessage(message.content)}
           </div>

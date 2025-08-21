@@ -1,22 +1,19 @@
 import React, { useState } from 'react'
 import { Button, message, Tooltip } from 'antd'
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const CodeBlock = ({ children, className = '', ...props }) => {
   const [copied, setCopied] = useState(false)
   
   const language = className.replace(/language-/, '') || 'text'
   
-  // 🔥 修复：不在组件初始化时固定code值，而是创建一个获取当前代码的函数
+  // 获取当前代码内容
   const getCurrentCode = () => {
     return String(children).replace(/\n$/, '')
   }
   
   const handleCopy = async () => {
     try {
-      // 🔥 修复：复制时获取最新的children内容
       const currentCode = getCurrentCode()
       await navigator.clipboard.writeText(currentCode)
       setCopied(true)
@@ -87,10 +84,9 @@ const CodeBlock = ({ children, className = '', ...props }) => {
   
   return (
     <div className="code-block-container">
-      {/* 代码块头部工具栏 */}
+      {/* 代码块头部工具栏 - 保持不变 */}
       <div className="code-block-header">
         <div className="code-block-language">
-          {/* 只有非text语言才显示语言标签 */}
           {language !== 'text' && (
             <span 
               className="language-badge"
@@ -118,24 +114,26 @@ const CodeBlock = ({ children, className = '', ...props }) => {
         </Tooltip>
       </div>
       
-      {/* 代码内容区域 - 使用语法高亮 */}
+      {/* 代码内容区域 - 始终使用简单的 pre 标签，不进行语法高亮 */}
       <div className="code-block-content">
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={language}
-          PreTag="div"
-          customStyle={{
+        <pre
+          style={{
             margin: 0,
             padding: '16px',
             background: '#2d3748',
+            color: '#d4d4d4',
             fontSize: '13px',
-            lineHeight: '1.45'
+            lineHeight: '1.45',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            overflow: 'auto',
+            whiteSpace: 'pre',
+            wordBreak: 'normal',
+            overflowWrap: 'normal'
           }}
           {...props}
         >
-          {/* 🔥 修复：显示时也使用实时获取的代码内容 */}
-          {getCurrentCode()}
-        </SyntaxHighlighter>
+          <code>{getCurrentCode()}</code>
+        </pre>
       </div>
     </div>
   )
