@@ -219,7 +219,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 选择会话 - 修复：不重置流式状态，避免影响后台生成
+  // 🔥 选择会话 - 修复：不重置流式状态，避免影响后台生成，并获取所有历史消息
   selectConversation: async (conversationId) => {
     const state = get()
     
@@ -282,8 +282,13 @@ const useChatStore = create((set, get) => ({
           userStoppedStreaming: false // 🔥 重置用户停止标记
         })
       } else {
-        // 否则从API获取消息
-        const messagesResponse = await apiClient.get(`/chat/conversations/${conversationId}/messages`)
+        // 🔥 重要修改：从API获取消息时，指定更大的limit确保获取所有历史消息
+        const messagesResponse = await apiClient.get(`/chat/conversations/${conversationId}/messages`, {
+          params: {
+            limit: 1000,  // 获取最多1000条历史消息，确保显示完整对话历史
+            page: 1
+          }
+        })
         const messages = messagesResponse.data.data
         
         set({

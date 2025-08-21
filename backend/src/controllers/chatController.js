@@ -372,12 +372,14 @@ class ChatController {
   /**
    * 获取会话消息
    * GET /api/chat/conversations/:id/messages
+   * 修改：将默认limit从50改为1000，确保显示所有历史消息
    */
   static async getMessages(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { page = 1, limit = 50, useCache = true } = req.query;
+      // 重要修改：将默认limit从50改为1000，确保获取完整对话历史
+      const { page = 1, limit = 1000, useCache = true } = req.query;
 
       // 检查并恢复未完成的流式消息
       await Message.checkAndRecoverStreamingMessages(id);
