@@ -9,17 +9,20 @@ const logger = require('../utils/logger');
 class KnowledgeModuleController {
   /**
    * 获取用户可用的知识模块列表
+   * 修复：传递用户角色给模型方法
    */
   static async getModules(req, res) {
     try {
       const userId = req.user.id;
       const groupId = req.user.group_id;
+      const userRole = req.user.role; // 添加用户角色
       const { include_inactive = false } = req.query;
       
       const modules = await KnowledgeModule.getUserAvailableModules(
         userId, 
         groupId, 
-        include_inactive === 'true'
+        include_inactive === 'true',
+        userRole // 传递用户角色
       );
       
       return ResponseHelper.success(res, modules, '获取知识模块列表成功');
@@ -34,12 +37,14 @@ class KnowledgeModuleController {
 
   /**
    * 获取单个知识模块详情
+   * 修复：传递用户角色给权限检查
    */
   static async getModule(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
       const groupId = req.user.group_id;
+      const userRole = req.user.role; // 添加用户角色
       
       const module = await KnowledgeModule.findById(id, userId);
       
@@ -47,8 +52,8 @@ class KnowledgeModuleController {
         return ResponseHelper.notFound(res, '知识模块不存在');
       }
       
-      // 检查访问权限
-      const hasAccess = await KnowledgeModule.checkUserAccess(id, userId, groupId);
+      // 检查访问权限（传递用户角色）
+      const hasAccess = await KnowledgeModule.checkUserAccess(id, userId, groupId, userRole);
       if (!hasAccess) {
         return ResponseHelper.forbidden(res, '无权访问此模块');
       }
@@ -81,7 +86,7 @@ class KnowledgeModuleController {
       
       // 权限验证
       if (moduleData.module_scope === 'system' && userRole !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '只有超级管理员可以创建系统模块');
+        return ResponseHelper.forbidden(res, '只有超级管理员可以创建全局模块');
       }
       
       if (moduleData.module_scope === 'team') {

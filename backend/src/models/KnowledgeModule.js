@@ -29,9 +29,59 @@ class KnowledgeModule {
 
   /**
    * 获取用户可用的知识模块列表
+   * 修复：超级管理员可以看到所有模块
    */
-  static async getUserAvailableModules(userId, groupId, includeInactive = false) {
+  static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
+      // 如果没有传入用户角色，查询用户角色
+      if (!userRole) {
+        const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+        userRole = userResult.rows[0]?.role;
+      }
+      
+      // 超级管理员可以看到所有模块
+      if (userRole === 'super_admin') {
+        let sql = `
+          SELECT km.*, u.username as creator_name, ug.name as group_name
+          FROM knowledge_modules km
+          LEFT JOIN users u ON km.creator_id = u.id
+          LEFT JOIN user_groups ug ON km.group_id = ug.id
+        `;
+        
+        if (!includeInactive) {
+          sql += ' WHERE km.is_active = 1';
+        }
+        
+        sql += ' ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
+        
+        const { rows } = await dbConnection.query(sql);
+        
+        logger.debug('超级管理员获取所有模块', {
+          userId,
+          moduleCount: rows.length,
+          includeInactive
+        });
+        
+        return rows.map(row => {
+          const module = new KnowledgeModule(row);
+          module.creator_name = row.creator_name;
+          module.group_name = row.group_name;
+          
+          // 解析group_ids
+          if (module.group_ids && typeof module.group_ids === 'string') {
+            try {
+              module.group_ids = JSON.parse(module.group_ids);
+            } catch (e) {
+              module.group_ids = null;
+            }
+          }
+          
+          // 超级管理员可以看到所有内容
+          return module;
+        });
+      }
+      
+      // 普通用户和组管理员的权限检查
       let sql = `
         SELECT km.*, u.username as creator_name, ug.name as group_name
         FROM knowledge_modules km
@@ -42,7 +92,7 @@ class KnowledgeModule {
           (km.module_scope = 'personal' AND km.creator_id = ?)
           -- 团队模块：同组可见
           OR (km.module_scope = 'team' AND km.group_id = ?)
-          -- 系统模块：根据group_ids权限控制
+          -- 全局模块：根据group_ids权限控制
           OR (km.module_scope = 'system' AND (
             km.group_ids IS NULL  -- NULL表示所有组可见
             OR JSON_CONTAINS(km.group_ids, CAST(? AS JSON), '$')  -- 检查用户组是否在允许列表中
@@ -73,9 +123,13 @@ class KnowledgeModule {
         }
         
         // 判断内容是否可见
-        // 系统级模块始终可见
+        // 全局模块内容的可见性判断
         if (module.module_scope === 'system') {
-          // 系统模块内容始终可见，不做任何处理
+          // 全局模块根据content_visible设置
+          if (!module.content_visible && module.creator_id !== userId) {
+            module.content = null;
+            module.content_hidden = true;
+          }
         } else if (module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
           // 团队模块才检查content_visible
           module.content = null; // 隐藏内容
@@ -164,14 +218,29 @@ class KnowledgeModule {
       }
       
       // 检查内容可见性
-      // 系统级模块始终可见
+      if (userId) {
+        // 获取用户角色
+        const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+        const userRole = userResult.rows[0]?.role;
+        
+        // 超级管理员可以看到所有内容
+        if (userRole === 'super_admin') {
+          logger.debug('超级管理员查看模块', {
+            moduleId: id,
+            moduleName: module.name,
+            userId
+          });
+          return module;
+        }
+      }
+      
+      // 检查内容可见性
+      // 全局模块的内容可见性
       if (module.module_scope === 'system') {
-        // 系统模块内容始终可见，不做任何处理
-        logger.debug('系统级模块内容始终可见', {
-          moduleId: id,
-          moduleName: module.name,
-          userId
-        });
+        if (!module.content_visible && module.creator_id !== userId) {
+          module.content = null;
+          module.content_hidden = true;
+        }
       } else if (userId && module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
         // 只对非系统级、非个人模块检查content_visible
         module.content = null;
@@ -339,9 +408,26 @@ class KnowledgeModule {
 
   /**
    * 检查用户是否有权限使用该模块
+   * 修复：超级管理员总是有权限
    */
-  static async checkUserAccess(moduleId, userId, groupId) {
+  static async checkUserAccess(moduleId, userId, groupId, userRole = null) {
     try {
+      // 如果没有传入用户角色，查询用户角色
+      if (!userRole) {
+        const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+        userRole = userResult.rows[0]?.role;
+      }
+      
+      // 超级管理员总是有权限
+      if (userRole === 'super_admin') {
+        logger.debug('超级管理员访问模块', {
+          moduleId,
+          userId
+        });
+        return true;
+      }
+      
+      // 普通用户和组管理员的权限检查
       const sql = `
         SELECT COUNT(*) as count
         FROM knowledge_modules

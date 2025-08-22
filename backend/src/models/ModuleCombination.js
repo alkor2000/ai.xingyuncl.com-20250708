@@ -99,12 +99,18 @@ class ModuleCombination {
 
   /**
    * 创建模块组合
+   * 修复：传递用户角色给checkUserAccess
    */
   static async create(data, userId) {
     const transaction = await dbConnection.beginTransaction();
     
     try {
       const { name, description, module_ids = [] } = data;
+      
+      // 获取用户信息和角色
+      const userResult = await transaction.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
+      const userGroupId = userResult.rows[0]?.group_id;
+      const userRole = userResult.rows[0]?.role;
       
       // 创建组合
       const sql = `
@@ -140,12 +146,17 @@ class ModuleCombination {
         for (let i = 0; i < module_ids.length; i++) {
           const moduleId = module_ids[i];
           
-          // 验证用户是否有权限使用该模块
-          const userResult = await transaction.query('SELECT group_id FROM users WHERE id = ?', [userId]);
-          const userGroupId = userResult.rows[0]?.group_id;
-          
-          const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId);
+          // 验证用户是否有权限使用该模块（传递用户角色）
+          const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId, userRole);
           if (!hasAccess) {
+            // 对超级管理员不应该出现这种情况
+            if (userRole === 'super_admin') {
+              logger.error('超级管理员权限检查失败', {
+                moduleId,
+                userId,
+                userRole
+              });
+            }
             throw new Error(`无权使用模块ID: ${moduleId}`);
           }
           
@@ -175,18 +186,25 @@ class ModuleCombination {
 
   /**
    * 更新模块组合
+   * 修复：传递用户角色给checkUserAccess
    */
   static async update(id, data, userId) {
     const transaction = await dbConnection.beginTransaction();
     
     try {
-      // 验证所有权
+      // 获取用户信息和角色
+      const userResult = await transaction.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
+      const userGroupId = userResult.rows[0]?.group_id;
+      const userRole = userResult.rows[0]?.role;
+      
+      // 验证所有权（超级管理员可以修改任何组合）
       const combination = await ModuleCombination.findById(id);
       if (!combination) {
         throw new Error('模块组合不存在');
       }
       
-      if (combination.user_id !== userId) {
+      // 修复：超级管理员可以修改任何组合
+      if (combination.user_id !== userId && userRole !== 'super_admin') {
         throw new Error('无权修改此组合');
       }
       
@@ -238,12 +256,19 @@ class ModuleCombination {
           for (let i = 0; i < module_ids.length; i++) {
             const moduleId = module_ids[i];
             
-            // 验证权限
-            const userResult = await transaction.query('SELECT group_id FROM users WHERE id = ?', [userId]);
-            const userGroupId = userResult.rows[0]?.group_id;
+            // 验证权限（传递用户角色）
+            const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId, userRole);
             
-            const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId);
             if (!hasAccess) {
+              // 对超级管理员记录警告
+              if (userRole === 'super_admin') {
+                logger.warn('超级管理员权限检查异常', {
+                  moduleId,
+                  userId,
+                  userRole,
+                  action: 'update_combination'
+                });
+              }
               throw new Error(`无权使用模块ID: ${moduleId}`);
             }
             
@@ -263,7 +288,12 @@ class ModuleCombination {
       
       await transaction.commit();
       
-      logger.info('更新模块组合成功', { combinationId: id, userId });
+      logger.info('更新模块组合成功', { 
+        combinationId: id, 
+        userId,
+        userRole,
+        isOwner: combination.user_id === userId
+      });
       
       return await ModuleCombination.findById(id);
     } catch (error) {
@@ -275,16 +305,22 @@ class ModuleCombination {
 
   /**
    * 删除模块组合
+   * 修复：超级管理员可以删除任何组合
    */
   static async delete(id, userId) {
     try {
+      // 获取用户角色
+      const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+      const userRole = userResult.rows[0]?.role;
+      
       // 验证所有权
       const combination = await ModuleCombination.findById(id);
       if (!combination) {
         throw new Error('模块组合不存在');
       }
       
-      if (combination.user_id !== userId) {
+      // 修复：超级管理员可以删除任何组合
+      if (combination.user_id !== userId && userRole !== 'super_admin') {
         throw new Error('无权删除此组合');
       }
       
@@ -292,7 +328,12 @@ class ModuleCombination {
       const sql = 'UPDATE module_combinations SET is_active = 0 WHERE id = ?';
       await dbConnection.query(sql, [id]);
       
-      logger.info('删除模块组合成功', { combinationId: id, userId });
+      logger.info('删除模块组合成功', { 
+        combinationId: id, 
+        userId,
+        userRole,
+        isOwner: combination.user_id === userId
+      });
       
       return true;
     } catch (error) {
@@ -312,33 +353,45 @@ class ModuleCombination {
         throw new Error('模块组合不存在');
       }
       
-      // 检查组合中是否包含系统级模块
-      const hasSystemModule = combination.modules.some(module => module.module_scope === 'system');
+      // 获取用户角色
+      const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+      const userRole = userResult.rows[0]?.role;
       
-      // 如果不包含系统级模块，则检查所有权
-      if (!hasSystemModule && combination.user_id !== userId) {
-        throw new Error('无权使用此组合');
-      }
-      
-      // 如果包含系统级模块，记录日志
-      if (hasSystemModule) {
-        logger.info('用户使用包含系统级模块的组合', {
-          userId,
-          combinationId: id,
-          combinationOwnerId: combination.user_id,
-          systemModules: combination.modules.filter(m => m.module_scope === 'system').map(m => ({
-            id: m.id,
-            name: m.name
-          }))
-        });
+      // 超级管理员可以使用任何组合
+      if (userRole !== 'super_admin') {
+        // 检查组合中是否包含系统级模块
+        const hasSystemModule = combination.modules.some(module => module.module_scope === 'system');
+        
+        // 如果不包含系统级模块，则检查所有权
+        if (!hasSystemModule && combination.user_id !== userId) {
+          throw new Error('无权使用此组合');
+        }
+        
+        // 如果包含系统级模块，记录日志
+        if (hasSystemModule) {
+          logger.info('用户使用包含系统级模块的组合', {
+            userId,
+            combinationId: id,
+            combinationOwnerId: combination.user_id,
+            systemModules: combination.modules.filter(m => m.module_scope === 'system').map(m => ({
+              id: m.id,
+              name: m.name
+            }))
+          });
+        }
       }
       
       let systemPrompts = [];
       let normalPrompts = [];
       
       for (const module of combination.modules) {
-        // 跳过内容被隐藏的模块
-        if (module.content_hidden || !module.content) {
+        // 跳过内容被隐藏的模块（超级管理员除外）
+        if (userRole !== 'super_admin' && (module.content_hidden || !module.content)) {
+          logger.debug('跳过隐藏内容的模块', {
+            moduleId: module.id,
+            moduleName: module.name,
+            userId
+          });
           continue;
         }
         
@@ -370,6 +423,7 @@ class ModuleCombination {
 
   /**
    * 复制组合
+   * 修复：需要检查用户对所有模块的访问权限
    */
   static async copy(id, userId, newName) {
     try {
@@ -378,13 +432,53 @@ class ModuleCombination {
         throw new Error('原组合不存在');
       }
       
-      const moduleIds = original.modules.map(m => m.id);
+      // 获取用户信息
+      const userResult = await dbConnection.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
+      const userGroupId = userResult.rows[0]?.group_id;
+      const userRole = userResult.rows[0]?.role;
       
-      return await ModuleCombination.create({
+      // 过滤用户有权限的模块
+      const accessibleModuleIds = [];
+      for (const module of original.modules) {
+        const hasAccess = await KnowledgeModule.checkUserAccess(
+          module.id, 
+          userId, 
+          userGroupId, 
+          userRole
+        );
+        if (hasAccess) {
+          accessibleModuleIds.push(module.id);
+        } else {
+          logger.warn('复制组合时跳过无权限的模块', {
+            moduleId: module.id,
+            moduleName: module.name,
+            userId,
+            userRole
+          });
+        }
+      }
+      
+      if (accessibleModuleIds.length === 0) {
+        throw new Error('您没有权限使用原组合中的任何模块');
+      }
+      
+      const newCombination = await ModuleCombination.create({
         name: newName || `${original.name} (副本)`,
         description: original.description,
-        module_ids: moduleIds
+        module_ids: accessibleModuleIds
       }, userId);
+      
+      // 如果有模块被过滤，记录日志
+      if (accessibleModuleIds.length < original.modules.length) {
+        logger.info('复制组合时过滤了部分模块', {
+          originalCount: original.modules.length,
+          copiedCount: accessibleModuleIds.length,
+          userId,
+          userRole
+        });
+      }
+      
+      return newCombination;
     } catch (error) {
       logger.error('复制模块组合失败:', error);
       throw new DatabaseError('复制模块组合失败', error);

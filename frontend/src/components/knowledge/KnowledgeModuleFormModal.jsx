@@ -51,7 +51,7 @@ const KnowledgeModuleFormModal = ({
       // 加载分类
       getCategories()
       
-      // 如果是超级管理员编辑系统级模块，加载用户组列表
+      // 如果是超级管理员编辑全局模块，加载用户组列表
       if (canCreateSystem) {
         fetchUserGroups()
       }
@@ -130,7 +130,8 @@ const KnowledgeModuleFormModal = ({
     }
     
     if (canCreateSystem) {
-      scopes.push({ value: 'system', label: '系统模块', icon: <GlobalOutlined /> })
+      // 改为全局模块
+      scopes.push({ value: 'system', label: '全局模块', icon: <GlobalOutlined /> })
     }
     
     return scopes
@@ -320,7 +321,7 @@ const KnowledgeModuleFormModal = ({
                 修改模块内容后，已使用该模块的组合需要重新保存才能生效。
                 {moduleScope === 'system' && (
                   <div style={{ marginTop: 8 }}>
-                    <strong>系统模块权限说明：</strong>
+                    <strong>全局模块权限说明：</strong>
                     <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                       <li>不选择任何用户组：所有用户都可以使用</li>
                       <li>选择特定用户组：只有选中的组内用户可以使用</li>
