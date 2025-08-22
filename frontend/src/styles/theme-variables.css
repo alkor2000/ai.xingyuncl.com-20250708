@@ -1,6 +1,5 @@
 /**
  * 主题CSS变量定义
- * 所有颜色都通过CSS变量控制，便于动态切换主题
  */
 
 :root {
@@ -11,7 +10,7 @@
   --error-color: #ff4d4f;
   
   /* 背景颜色 */
-  --body-bg: #f5f5f5;
+  --body-bg: #f8f9fa;  /* 轻微灰色 */
   --component-bg: #ffffff;
   --header-bg: #ffffff;
   --sidebar-bg: #ffffff;

@@ -1,29 +1,32 @@
-/* BasicLayout 样式 */
+/* BasicLayout 样式 - 精致版 */
 
-/* 整体布局 */
+/* ===== 整体布局 ===== */
 .basic-layout {
   height: 100vh;
   overflow: hidden;
+  background: #f8f9fa; /* 更浅的背景色 */
 }
 
 .basic-layout-body {
-  height: calc(100vh - 50px);
+  height: calc(100vh - 54px); /* 稍微调整高度 */
   display: flex;
   overflow: hidden;
 }
 
-/* 顶部导航栏 - 横向拉通 */
+/* ===== 顶部导航栏 - 简洁风格 ===== */
 .basic-layout-header {
-  height: 50px;
+  height: 54px;
   padding: 0 24px;
-  background: var(--nav-header-bg);
-  border-bottom: 1px solid var(--nav-header-border);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: relative;
   z-index: 100;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .header-left {
@@ -32,44 +35,64 @@
   gap: 16px;
 }
 
+/* Logo区域 - 更精致 */
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   user-select: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
 }
 
+.header-logo:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* Logo图标 - 简洁渐变 */
 .logo-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--nav-logo-bg);
-  color: var(--nav-logo-text);
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: bold;
   font-size: 16px;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.2);
 }
 
 .logo-text {
   font-size: 16px;
   font-weight: 600;
-  color: var(--nav-header-text);
+  color: #1f2937;
+  letter-spacing: -0.2px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  color: var(--nav-header-text);
+  color: #1f2937;
 }
 
+/* 用户信息 - 简洁风格 */
 .user-info {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--nav-header-text);
+  padding: 6px 12px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-info:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .user-name {
@@ -77,115 +100,164 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
+  font-size: 14px;
+  color: #374151;
 }
 
 .mobile-menu-trigger {
   width: 40px;
   height: 40px;
   font-size: 18px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
-/* 侧边栏 - 宽度80px，图标模式 */
+/* ===== 侧边栏 - 精致图标栏 ===== */
 .basic-layout-sidebar {
   width: 80px !important;
-  background: var(--sidebar-menu-bg);
-  border-right: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;
+  padding: 0;
 }
 
-/* 菜单容器 */
+/* 菜单容器 - 确保对齐 */
 .sidebar-menu-container {
   padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* 统一间距 */
 }
 
-/* 菜单项 - 只显示图标 */
+/* 菜单项 - 轻量级效果 */
 .sidebar-menu-item {
   width: 48px;
   height: 48px;
-  margin: 8px auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  color: var(--sidebar-menu-text);
+  position: relative;
+  color: #6b7280;
+  background: transparent;
+  transition: all 0.2s ease;
 }
 
+/* 图标样式 */
+.sidebar-menu-item .anticon {
+  font-size: 20px;
+  transition: all 0.2s ease;
+}
+
+/* 悬停状态 - 轻柔效果 */
 .sidebar-menu-item:hover {
-  background-color: var(--sidebar-menu-hover-bg);
-  color: var(--sidebar-menu-hover-text);
+  background: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
+  transform: scale(1.05);
 }
 
+.sidebar-menu-item:hover .anticon {
+  transform: scale(1.1);
+}
+
+/* 激活状态 - 优雅高亮 */
 .sidebar-menu-item.active {
-  background-color: var(--sidebar-menu-active-bg);
-  color: var(--sidebar-menu-active-text);
+  background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.25);
 }
 
-/* 子菜单弹出内容样式 */
+.sidebar-menu-item.active .anticon {
+  transform: scale(1.05);
+}
+
+/* 子菜单弹出内容 */
 .sidebar-submenu-content {
-  min-width: 150px;
-  background: var(--sidebar-submenu-bg);
+  min-width: 160px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-submenu-item {
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 4px;
+  transition: all 0.2s ease;
+  border-radius: 6px;
   margin: 2px 0;
   font-size: 14px;
-  color: var(--text-color);
+  font-weight: 500;
+  color: #374151;
 }
 
 .sidebar-submenu-item:hover {
-  background-color: var(--hover-bg);
-  color: var(--primary-color);
+  background: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
 }
 
 .sidebar-submenu-item.active {
-  background-color: var(--active-bg);
-  color: var(--primary-color);
-  font-weight: 500;
+  background: #1677ff;
+  color: #ffffff;
 }
 
-/* 内容区域 */
+/* ===== 内容区域 ===== */
 .basic-layout-content {
   flex: 1;
-  background: var(--body-bg);
+  background: #f8f9fa;
   overflow: hidden;
   position: relative;
 }
 
-/* 移动端抽屉 */
+/* ===== 移动端抽屉 ===== */
 .mobile-menu-drawer .ant-drawer-header {
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--component-bg);
-  color: var(--text-color);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
 }
 
 .mobile-drawer-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1f2937;
 }
 
 .mobile-menu {
   border: none;
-  background: var(--component-bg);
-  color: var(--text-color);
+  background: #ffffff;
 }
 
 .mobile-menu .ant-menu-item {
   margin: 4px 8px;
-  border-radius: 6px;
-  color: var(--text-color);
+  border-radius: 8px;
+  color: #374151;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
-/* 滚动条样式 */
+.mobile-menu .ant-menu-item:hover {
+  background: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
+}
+
+.mobile-menu .ant-menu-item-selected {
+  background: #1677ff;
+  color: #ffffff !important;
+}
+
+/* ===== 滚动条 ===== */
 .basic-layout-sidebar::-webkit-scrollbar {
   width: 4px;
 }
@@ -195,42 +267,51 @@
 }
 
 .basic-layout-sidebar::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 2px;
 }
 
 .basic-layout-sidebar::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+  background: rgba(0, 0, 0, 0.2);
 }
 
-/* Tooltip样式优化 */
+/* ===== Tooltip和Popover ===== */
 .ant-tooltip-inner {
   min-height: auto;
-  padding: 6px 12px;
+  padding: 6px 10px;
   font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
 }
 
-/* Popover样式优化 */
 .ant-popover-inner {
   border-radius: 8px;
-  background: var(--component-bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 .ant-popover-title {
   padding: 12px 16px 8px;
-  font-weight: 500;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-color);
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1f2937;
 }
 
 .ant-popover-inner-content {
-  padding: 8px 4px;
+  padding: 6px;
 }
 
-/* 移动端响应式 */
+/* ===== 响应式 ===== */
 @media (max-width: 768px) {
   .basic-layout-header {
     padding: 0 16px;
+    height: 50px;
+  }
+  
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
   
   .logo-text {
@@ -238,34 +319,17 @@
   }
 }
 
-/* 过渡动画 */
+/* ===== 过渡动画 ===== */
 .basic-layout-sidebar,
 .basic-layout-content {
   transition: all 0.3s ease;
 }
 
-/* 移动端菜单样式 */
-.mobile-menu .ant-menu-item-selected {
-  background-color: var(--active-bg);
-}
-
-.mobile-menu .ant-menu-item:hover {
-  background-color: var(--hover-bg);
-}
-
-.mobile-menu .ant-menu-sub {
-  background: transparent;
-}
-
-.mobile-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: var(--primary-color);
-}
-
-/* Ant Design 组件样式覆盖 */
+/* ===== Ant Design 组件样式覆盖 ===== */
 .basic-layout-header .ant-dropdown-trigger {
-  color: var(--nav-header-text);
+  color: #374151;
 }
 
-.basic-layout-header .ant-avatar {
-  background: var(--primary-color);
+.basic-layout-header .ant-badge-dot {
+  box-shadow: 0 0 0 2px #ffffff;
 }
