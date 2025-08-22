@@ -1,29 +1,64 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, message, Modal } from 'antd'
+import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, message, Modal, Badge, Empty } from 'antd'
 import {
   BankOutlined,
   DollarOutlined,
   FireOutlined,
   InfoCircleOutlined,
-  WarningOutlined,
+  TeamOutlined,
   EditOutlined,
   SaveOutlined,
-  CloseOutlined
+  CloseOutlined,
+  MessageOutlined,
+  AppstoreOutlined,
+  FileSearchOutlined,
+  PictureOutlined,
+  CodeOutlined,
+  RocketOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
+import * as Icons from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
+import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
+import useModuleStore from '../../stores/moduleStore'
 import apiClient from '../../utils/api'
 import './Dashboard.less'
 
-const { Title, Paragraph } = Typography
+const { Title, Paragraph, Text } = Typography
 const { TextArea } = Input
+
+// 图标映射
+const iconMap = {
+  'MessageOutlined': MessageOutlined,
+  'AppstoreOutlined': AppstoreOutlined,
+  'FileSearchOutlined': FileSearchOutlined,
+  'PictureOutlined': PictureOutlined,
+  'CodeOutlined': CodeOutlined,
+  'RocketOutlined': RocketOutlined,
+  'TeamOutlined': TeamOutlined
+}
+
+// 模块颜色映射 - 更柔和的颜色
+const moduleColors = {
+  'chat': { bg: '#e6f4ff', color: '#1677ff', icon: '#1677ff' },
+  'knowledge': { bg: '#f9f0ff', color: '#722ed1', icon: '#722ed1' },
+  'image': { bg: '#fff1f0', color: '#ff4d4f', icon: '#ff4d4f' },
+  'html_editor': { bg: '#e6fffb', color: '#13c2c2', icon: '#13c2c2' },
+  'admin_users': { bg: '#fff7e6', color: '#fa8c16', icon: '#fa8c16' },
+  'admin_settings': { bg: '#f0f5ff', color: '#2f54eb', icon: '#2f54eb' }
+}
 
 const Dashboard = () => {
   const { user } = useAuthStore()
+  const { userModules, getUserModules } = useModuleStore()
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const [creditsData, setCreditsData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [modulesLoading, setModulesLoading] = useState(true)
   const [announcement, setAnnouncement] = useState(null)
   const [announcementLoading, setAnnouncementLoading] = useState(true)
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false)
@@ -31,6 +66,27 @@ const Dashboard = () => {
   const [savingAnnouncement, setSavingAnnouncement] = useState(false)
 
   const isSuperAdmin = user?.role === 'super_admin'
+  
+  // 获取当前时间段的问候语
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 6) return '凌晨好'
+    if (hour < 12) return '早上好'
+    if (hour < 14) return '中午好'
+    if (hour < 18) return '下午好'
+    if (hour < 22) return '晚上好'
+    return '夜深了'
+  }
+  
+  // 获取日期信息
+  const getDateInfo = () => {
+    const now = new Date()
+    const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+    const month = now.getMonth() + 1
+    const date = now.getDate()
+    const weekDay = weekDays[now.getDay()]
+    return `${month}月${date}日 ${weekDay}`
+  }
 
   // 加载用户积分统计
   useEffect(() => {
@@ -50,6 +106,22 @@ const Dashboard = () => {
 
     fetchCreditsStats()
   }, [])
+  
+  // 加载用户模块
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        setModulesLoading(true)
+        await getUserModules()
+      } catch (error) {
+        console.error('获取模块失败:', error)
+      } finally {
+        setModulesLoading(false)
+      }
+    }
+    
+    fetchModules()
+  }, [getUserModules])
 
   // 加载系统公告
   useEffect(() => {
@@ -118,6 +190,64 @@ const Dashboard = () => {
       okText: '关闭'
     })
   }
+  
+  // 获取模块图标
+  const getModuleIcon = (iconName, module) => {
+    // 优先使用映射的图标
+    if (iconMap[iconName]) {
+      const IconComponent = iconMap[iconName]
+      return <IconComponent />
+    }
+    
+    // 动态获取Ant Design图标
+    const IconComponent = Icons[iconName]
+    if (IconComponent) {
+      return <IconComponent />
+    }
+    
+    // 根据模块名称返回默认图标
+    switch(module?.name) {
+      case 'chat':
+        return <MessageOutlined />
+      case 'knowledge':
+        return <FileSearchOutlined />
+      case 'image':
+        return <PictureOutlined />
+      case 'html_editor':
+        return <CodeOutlined />
+      default:
+        return <AppstoreOutlined />
+    }
+  }
+  
+  // 处理模块点击
+  const handleModuleClick = (module) => {
+    if (module.route_path) {
+      navigate(module.route_path)
+    } else if (module.module_url) {
+      if (module.open_mode === 'new_tab') {
+        window.open(module.module_url, '_blank')
+      } else {
+        navigate(`/module/${module.name}`)
+      }
+    }
+  }
+  
+  // 过滤并排序模块 - 排除dashboard
+  const getDisplayModules = () => {
+    if (!userModules || userModules.length === 0) return []
+    
+    // 过滤出非管理员模块，并排除dashboard
+    const displayModules = userModules.filter(m => 
+      m.module_category === 'system' && 
+      !m.name.startsWith('admin_') &&
+      m.name !== 'dashboard' &&  // 排除工作台自己
+      m.is_active
+    )
+    
+    // 按sort_order排序
+    return displayModules.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }
 
   if (loading) {
     return (
@@ -133,77 +263,129 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <Title level={2} className="page-title">
-          {t('dashboard.title')}
-        </Title>
-        <Paragraph type="secondary">
-          {t('dashboard.welcome', { name: user?.username })}
-        </Paragraph>
+    <div className="dashboard-container">
+      {/* 精简的欢迎区域 */}
+      <div className="welcome-section-compact">
+        <div className="welcome-left">
+          <Title level={4} style={{ margin: 0 }}>
+            {getGreeting()}，{user?.username || user?.email}！
+          </Title>
+        </div>
+        <div className="welcome-right">
+          <Space>
+            <CalendarOutlined />
+            <Text>{getDateInfo()}</Text>
+            <ClockCircleOutlined />
+            <Text>{new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+          </Space>
+        </div>
       </div>
 
-      {/* 积分中心 */}
+      {/* 功能模块区域 */}
       <Card 
+        className="modules-card"
+        title={
+          <Space>
+            <AppstoreOutlined style={{ color: '#1677ff' }} />
+            <span>功能模块</span>
+          </Space>
+        }
+        loading={modulesLoading}
+        style={{ marginBottom: 20 }}
+      >
+        {getDisplayModules().length > 0 ? (
+          <Row gutter={[16, 16]}>
+            {getDisplayModules().map(module => {
+              const colorScheme = moduleColors[module.name] || moduleColors['chat']
+              return (
+                <Col xs={12} sm={8} md={6} lg={4} key={module.id}>
+                  <div 
+                    className="module-card-new"
+                    onClick={() => handleModuleClick(module)}
+                    style={{
+                      backgroundColor: colorScheme.bg,
+                      borderColor: colorScheme.color
+                    }}
+                  >
+                    <div className="module-icon" style={{ color: colorScheme.icon }}>
+                      {getModuleIcon(module.menu_icon, module)}
+                    </div>
+                    <div className="module-name" style={{ color: colorScheme.color }}>
+                      {module.display_name}
+                    </div>
+                    {module.description && (
+                      <div className="module-desc" style={{ color: colorScheme.color }}>
+                        {module.description}
+                      </div>
+                    )}
+                  </div>
+                </Col>
+              )
+            })}
+          </Row>
+        ) : (
+          <Empty description="暂无可用模块" />
+        )}
+      </Card>
+
+      {/* 精简的积分中心 */}
+      <Card 
+        className="credits-card-compact"
         title={
           <Space>
             <DollarOutlined style={{ color: '#52c41a' }} />
             {t('dashboard.creditsCenter.title')}
           </Space>
         }
-        style={{ marginBottom: 24 }}
+        style={{ marginBottom: 20 }}
       >
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={6}>
-            <Card style={{ textAlign: 'center' }}>
-              <div style={{ marginBottom: 8 }}>
-                <BankOutlined style={{ fontSize: 24, color: '#1677ff' }} />
+        <Row gutter={16}>
+          <Col xs={12} sm={6}>
+            <div className="stat-item">
+              <div className="stat-label">
+                <BankOutlined /> {t('dashboard.creditsCenter.organization')}
               </div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                {t('dashboard.creditsCenter.organization')}
+              <div className="stat-value">
+                <Tag color={creditsData?.group_color || '#1677ff'}>
+                  {creditsData?.group_name || t('dashboard.creditsCenter.defaultGroup')}
+                </Tag>
               </div>
-              <Tag color={creditsData?.group_color || '#1677ff'} style={{ fontSize: 14 }}>
-                {creditsData?.group_name || t('dashboard.creditsCenter.defaultGroup')}
-              </Tag>
-            </Card>
+            </div>
           </Col>
           
-          <Col xs={24} sm={12} md={6}>
-            <Card>
-              <Statistic
-                title={t('dashboard.creditsCenter.totalCredits')}
-                value={creditsData?.credits_total || 0}
-                prefix={<DollarOutlined />}
-                suffix={t('unit.credits')}
-                valueStyle={{ color: '#1677ff' }}
-              />
-            </Card>
+          <Col xs={12} sm={6}>
+            <div className="stat-item">
+              <div className="stat-label">
+                {t('dashboard.creditsCenter.totalCredits')}
+              </div>
+              <div className="stat-value" style={{ color: '#1677ff' }}>
+                <DollarOutlined /> {creditsData?.credits_total || 0}
+              </div>
+            </div>
           </Col>
           
-          <Col xs={24} sm={12} md={6}>
-            <Card>
-              <Statistic
-                title={t('dashboard.creditsCenter.currentCredits')}
-                value={creditsData?.credits_remaining || 0}
-                prefix={<DollarOutlined />}
-                suffix={t('unit.credits')}
-                valueStyle={{ 
-                  color: creditsData?.credits_remaining > 0 ? '#52c41a' : '#ff4d4f' 
-                }}
-              />
-            </Card>
+          <Col xs={12} sm={6}>
+            <div className="stat-item">
+              <div className="stat-label">
+                {t('dashboard.creditsCenter.currentCredits')}
+              </div>
+              <div className="stat-value" style={{ 
+                color: creditsData?.credits_remaining > 0 ? '#52c41a' : '#ff4d4f' 
+              }}>
+                <DollarOutlined /> {creditsData?.credits_remaining || 0}
+              </div>
+            </div>
           </Col>
           
-          <Col xs={24} sm={12} md={6}>
-            <Card>
-              <Statistic
-                title={t('dashboard.creditsCenter.todayConsumed')}
-                value={creditsData?.today_consumed || 0}
-                prefix={<FireOutlined />}
-                suffix={t('unit.credits')}
-                valueStyle={{ color: '#fa8c16' }}
-              />
-            </Card>
+          <Col xs={12} sm={6}>
+            <div className="stat-item">
+              <div className="stat-label">
+                {t('dashboard.creditsCenter.todayConsumed')}
+              </div>
+              <div className="stat-value" style={{ color: '#fa8c16' }}>
+                <FireOutlined /> {creditsData?.today_consumed || 0}
+              </div>
+            </div>
           </Col>
         </Row>
 
@@ -227,100 +409,108 @@ const Dashboard = () => {
         )}
       </Card>
 
-      {/* 系统公告 */}
-      <Card 
-        title={
-          <Space>
-            <InfoCircleOutlined style={{ color: '#1677ff' }} />
-            {t('dashboard.announcement.system')}
-          </Space>
-        }
-        style={{ marginBottom: 24 }}
-        extra={
-          isSuperAdmin && !isEditingAnnouncement && (
-            <Button 
-              type="link" 
-              icon={<EditOutlined />} 
-              onClick={handleEditAnnouncement}
-            >
-              编辑公告
-            </Button>
-          )
-        }
-        loading={announcementLoading}
-      >
-        {isEditingAnnouncement ? (
-          <div>
-            <TextArea
-              value={editingContent}
-              onChange={(e) => setEditingContent(e.target.value)}
-              placeholder="请输入系统公告内容，支持Markdown格式"
-              autoSize={{ minRows: 6, maxRows: 15 }}
-              style={{ marginBottom: 16 }}
-            />
-            <Space>
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />} 
-                onClick={handleSaveAnnouncement}
-                loading={savingAnnouncement}
-              >
-                保存
-              </Button>
-              <Button onClick={showPreview}>
-                预览
-              </Button>
-              <Button 
-                icon={<CloseOutlined />} 
-                onClick={handleCancelEdit}
-                disabled={savingAnnouncement}
-              >
-                取消
-              </Button>
-            </Space>
-            <div className="announcement-edit-tips">
-              <div>提示：支持Markdown格式</div>
-              <div className="example">
-                **粗体** *斜体* [链接](url) `代码` 
-                # 标题1
-                ## 标题2
-                - 列表项1
-                - 列表项2
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {announcement?.content ? (
-              <div className="markdown-content">
-                <ReactMarkdown>{announcement.content}</ReactMarkdown>
+      {/* 公告区域 - 增大高度 */}
+      <Row gutter={16}>
+        <Col xs={24} md={12}>
+          {/* 系统公告 */}
+          <Card 
+            className="announcement-card-large"
+            title={
+              <Space>
+                <InfoCircleOutlined style={{ color: '#1677ff' }} />
+                {t('dashboard.announcement.system')}
+              </Space>
+            }
+            extra={
+              isSuperAdmin && !isEditingAnnouncement && (
+                <Button 
+                  type="link" 
+                  icon={<EditOutlined />} 
+                  onClick={handleEditAnnouncement}
+                >
+                  编辑公告
+                </Button>
+              )
+            }
+            loading={announcementLoading}
+          >
+            {isEditingAnnouncement ? (
+              <div>
+                <TextArea
+                  value={editingContent}
+                  onChange={(e) => setEditingContent(e.target.value)}
+                  placeholder="请输入系统公告内容，支持Markdown格式"
+                  autoSize={{ minRows: 8, maxRows: 20 }}
+                  style={{ marginBottom: 16 }}
+                />
+                <Space>
+                  <Button 
+                    type="primary" 
+                    icon={<SaveOutlined />} 
+                    onClick={handleSaveAnnouncement}
+                    loading={savingAnnouncement}
+                  >
+                    保存
+                  </Button>
+                  <Button onClick={showPreview}>
+                    预览
+                  </Button>
+                  <Button 
+                    icon={<CloseOutlined />} 
+                    onClick={handleCancelEdit}
+                    disabled={savingAnnouncement}
+                  >
+                    取消
+                  </Button>
+                </Space>
+                <div className="announcement-edit-tips">
+                  <div>提示：支持Markdown格式</div>
+                  <div className="example">
+                    **粗体** *斜体* [链接](url) `代码` 
+                    # 标题1
+                    ## 标题2
+                    - 列表项1
+                    - 列表项2
+                  </div>
+                </div>
               </div>
             ) : (
-              <Alert
-                message={t('dashboard.announcement.systemDefault')}
-                type="info"
-                showIcon={false}
-              />
+              <>
+                {announcement?.content ? (
+                  <div className="markdown-content">
+                    <ReactMarkdown>{announcement.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <Alert
+                    message={t('dashboard.announcement.systemDefault')}
+                    type="info"
+                    showIcon={false}
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-      </Card>
-
-      {/* 机构公告 */}
-      <Card 
-        title={
-          <Space>
-            <WarningOutlined style={{ color: '#fa8c16' }} />
-            {t('dashboard.announcement.organization')}
-          </Space>
-        }
-      >
-        <Alert
-          message={t('dashboard.announcement.organizationDefault')}
-          type="warning"
-          showIcon={false}
-        />
-      </Card>
+          </Card>
+        </Col>
+        
+        <Col xs={24} md={12}>
+          {/* 组织公告 */}
+          <Card 
+            className="announcement-card-large"
+            title={
+              <Space>
+                <TeamOutlined style={{ color: '#fa8c16' }} />
+                <span>组织公告</span>
+              </Space>
+            }
+          >
+            <Alert
+              message="暂无组织公告"
+              type="warning"
+              showIcon={false}
+            />
+          </Card>
+        </Col>
+      </Row>
     </div>
   )
 }
