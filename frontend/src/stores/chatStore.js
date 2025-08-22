@@ -425,7 +425,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 发送流式消息 - 添加超时保护和错误恢复
+  // 🔥 发送流式消息 - 修复超时机制
   sendStreamMessage: async (content, fileInfo = null) => {
     const state = get()
     if (!state.currentConversation) return
@@ -476,38 +476,60 @@ const useChatStore = create((set, get) => ({
       streamingMessageId: tempAiMessageId
     }))
     
-    // 设置超时保护（60秒）
-    const timeoutId = setTimeout(() => {
-      console.warn('流式传输超时，强制重置状态')
-      const currentState = get()
-      
-      // 只有当前对话仍在流式传输时才重置
-      if (currentState.currentConversationId === conversationId && 
-          (currentState.isStreaming || currentState.typing)) {
-        set({
-          typing: false,
-          isStreaming: false,
-          streamingContent: '',
-          streamingMessageId: null,
-          userStoppedStreaming: false,
-          streamingTimeout: null
-        })
-        
-        // 如果有消息内容，标记为完成
-        const messages = currentState.messages
-        const streamingMsg = messages.find(m => m.streaming)
-        if (streamingMsg && streamingMsg.content) {
-          set(state => ({
-            messages: state.messages.map(msg => 
-              msg.id === streamingMsg.id
-                ? { ...msg, streaming: false, content: msg.content + '\n\n[响应超时]' }
-                : msg
-            )
-          }))
-        }
-      }
-    }, 60000)
+    // 🔥 关键修复：动态超时机制
+    let lastMessageTime = Date.now()
+    let timeoutId = null
     
+    // 创建超时检查函数
+    const createTimeout = () => {
+      // 清除旧的超时
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      
+      // 设置新的超时（30秒没有新消息才算超时）
+      timeoutId = setTimeout(() => {
+        const timeSinceLastMessage = Date.now() - lastMessageTime
+        console.warn(`流式传输可能卡住了，${timeSinceLastMessage/1000}秒没有新消息`)
+        
+        const currentState = get()
+        
+        // 只有当前对话且真的很久没有新消息时才重置
+        if (currentState.currentConversationId === conversationId && 
+            currentState.isStreaming &&
+            timeSinceLastMessage > 30000) {  // 30秒没有新消息
+          
+          console.error('流式传输真的超时了，强制重置状态')
+          
+          set({
+            typing: false,
+            isStreaming: false,
+            streamingContent: '',
+            streamingMessageId: null,
+            userStoppedStreaming: false,
+            streamingTimeout: null
+          })
+          
+          // 标记消息为超时
+          const messages = currentState.messages
+          const streamingMsg = messages.find(m => m.streaming)
+          if (streamingMsg && streamingMsg.content) {
+            set(state => ({
+              messages: state.messages.map(msg => 
+                msg.id === streamingMsg.id
+                  ? { ...msg, streaming: false, content: msg.content + '\n\n[响应超时]' }
+                  : msg
+              )
+            }))
+          }
+        }
+      }, 30000)  // 30秒超时检查
+      
+      return timeoutId
+    }
+    
+    // 初始设置超时
+    timeoutId = createTimeout()
     set({ streamingTimeout: timeoutId })
     
     try {
@@ -524,6 +546,9 @@ const useChatStore = create((set, get) => ({
             console.log('流式初始化:', data)
             realUserMessage = data.user_message
             realAiMessageId = data.ai_message_id
+            
+            // 🔥 更新最后消息时间
+            lastMessageTime = Date.now()
             
             // 更新为真实的用户消息，保留AI占位消息
             set(state => ({
@@ -552,6 +577,15 @@ const useChatStore = create((set, get) => ({
           onMessage: (data) => {
             const currentFullContent = data.fullContent || ''
             const currentState = get()
+            
+            // 🔥 关键：每次收到消息都更新时间并重置超时
+            lastMessageTime = Date.now()
+            
+            // 重置超时计时器
+            if (currentState.streamingTimeout === timeoutId) {
+              timeoutId = createTimeout()
+              set({ streamingTimeout: timeoutId })
+            }
             
             // 如果用户主动停止，忽略后续消息
             if (currentState.userStoppedStreaming && currentState.currentConversationId === conversationId) {
@@ -598,7 +632,7 @@ const useChatStore = create((set, get) => ({
             
             // 清除超时定时器
             const currentState = get()
-            if (currentState.streamingTimeout === timeoutId) {
+            if (timeoutId) {
               clearTimeout(timeoutId)
               set({ streamingTimeout: null })
             }
@@ -654,13 +688,13 @@ const useChatStore = create((set, get) => ({
             console.error('流式传输错误:', error)
             
             // 清除超时定时器
-            const currentState = get()
-            if (currentState.streamingTimeout === timeoutId) {
+            if (timeoutId) {
               clearTimeout(timeoutId)
               set({ streamingTimeout: null })
             }
             
             // 清理状态（当前对话或后台对话）
+            const currentState = get()
             if (currentState.currentConversationId === conversationId) {
               // 移除临时消息
               set(state => ({
@@ -691,8 +725,7 @@ const useChatStore = create((set, get) => ({
       )
       
       // 流式传输正常完成后，确保清除超时定时器
-      const finalState = get()
-      if (finalState.streamingTimeout === timeoutId) {
+      if (timeoutId) {
         clearTimeout(timeoutId)
         set({ streamingTimeout: null })
       }
@@ -716,27 +749,6 @@ const useChatStore = create((set, get) => ({
       
       console.error('流式消息发送失败:', error)
       throw error
-    } finally {
-      // 最终确保状态被重置（双重保险）
-      const finalState = get()
-      if (finalState.currentConversationId === conversationId) {
-        // 延迟检查，确保状态已经正确重置
-        setTimeout(() => {
-          const checkState = get()
-          if (checkState.currentConversationId === conversationId && 
-              (checkState.isStreaming || checkState.typing)) {
-            console.warn('检测到状态未正确重置，强制重置')
-            set({
-              typing: false,
-              isStreaming: false,
-              streamingContent: '',
-              streamingMessageId: null,
-              userStoppedStreaming: false,
-              streamingTimeout: null
-            })
-          }
-        }, 2000)
-      }
     }
   },
   

@@ -1,8 +1,6 @@
 /**
  * 聊天页面 - 主界面（移动端适配版）
- * 优化：移除草稿功能，提升性能和稳定性
- * 修改：禁用虚拟滚动，使用普通滚动模式
- * 更新：移除PC端顶部栏，增加对话空间
+ * 优化：改进滚动逻辑，解决代码块输出时的滚动冲突
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -124,8 +122,9 @@ const Chat = () => {
   const [mobileView, setMobileView] = useState('list')
   const [mobileDrawerVisible, setMobileDrawerVisible] = useState(false)
   
-  // 用户手动滚动标志
+  // 改进的滚动控制状态
   const [userScrolled, setUserScrolled] = useState(false)
+  const [lastScrollTop, setLastScrollTop] = useState(0) // 记录上次滚动位置
   
   const [settingsForm] = Form.useForm()
   const [newChatForm] = Form.useForm()
@@ -152,9 +151,11 @@ const Chat = () => {
     }
   }, [currentConversationId, isMobile])
 
-  // 切换对话时清空输入框
+  // 切换对话时清空输入框和重置滚动状态
   useEffect(() => {
     setInputValue('')
+    setUserScrolled(false) // 切换对话时重置滚动状态
+    setLastScrollTop(0)
   }, [currentConversationId])
 
   // 监听typing和isStreaming状态
@@ -188,32 +189,48 @@ const Chat = () => {
     }
   }, [userScrolled, isStreaming])
 
-  // 监听用户滚动
+  // 改进的滚动监听逻辑
   useEffect(() => {
     const container = messagesContainerRef.current
     if (!container) return
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
       
-      if (!isAtBottom && isStreaming) {
+      // 增大阈值到300px，给代码块更多空间
+      const isAtBottom = distanceFromBottom < 300
+      
+      // 检测滚动方向
+      const isScrollingUp = scrollTop < lastScrollTop
+      const isScrollingDown = scrollTop > lastScrollTop
+      
+      // 关键改进：只要用户向上滚动，立即锁定
+      if (isScrollingUp && isStreaming) {
         setUserScrolled(true)
-      } else if (isAtBottom) {
+      } 
+      // 只有用户主动滚到很底部（小于50px）才解锁自动滚动
+      else if (isScrollingDown && distanceFromBottom < 50) {
         setUserScrolled(false)
       }
+      
+      // 更新上次滚动位置
+      setLastScrollTop(scrollTop)
     }
 
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [isStreaming])
+  }, [isStreaming, lastScrollTop])
 
-  // 流式输出结束时，重置用户滚动标志
+  // 移除流式输出结束时的强制重置
+  // 让用户保持在他们想要的位置
+  /*
   useEffect(() => {
     if (!isStreaming) {
       setUserScrolled(false)
     }
   }, [isStreaming])
+  */
 
   // 自动滚动到消息底部
   useEffect(() => {
@@ -355,7 +372,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息
+  // 发送消息 - 发送前重置滚动状态
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() && !uploadedImage && !uploadedDocument) return
     if (!currentConversation) {
@@ -365,6 +382,9 @@ const Chat = () => {
 
     const messageContent = inputValue.trim()
     const fileInfo = uploadedImage || uploadedDocument || null
+    
+    // 发送消息前重置滚动状态，确保能看到新消息
+    setUserScrolled(false)
     
     setIsSending(true)
     setInputValue('')

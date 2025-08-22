@@ -114,7 +114,7 @@ const CodeBlock = ({ children, className = '', ...props }) => {
         </Tooltip>
       </div>
       
-      {/* 代码内容区域 - 始终使用简单的 pre 标签，不进行语法高亮 */}
+      {/* 代码内容区域 - 完全避免滚动，使用自动换行 */}
       <div className="code-block-content">
         <pre
           style={{
@@ -125,10 +125,14 @@ const CodeBlock = ({ children, className = '', ...props }) => {
             fontSize: '13px',
             lineHeight: '1.45',
             fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-            overflow: 'auto',
-            whiteSpace: 'pre',
-            wordBreak: 'normal',
-            overflowWrap: 'normal'
+            // 核心修改：完全禁用滚动，使用自动换行
+            overflow: 'visible',        // 完全不创建滚动容器
+            whiteSpace: 'pre-wrap',      // 保留格式但允许换行
+            wordBreak: 'break-all',      // 允许在任意位置断行
+            overflowWrap: 'break-word',  // 长单词换行
+            maxWidth: '100%',            // 确保不超出容器宽度
+            // 添加最小高度，避免内容跳动
+            minHeight: '20px'
           }}
           {...props}
         >

@@ -148,6 +148,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
       }
       
       // 如果是代码块但没有语言标识，使用普通的pre标签
+      // 重要修改：使用自动换行而不是滚动
       if (!inline) {
         return (
           <pre style={{ 
@@ -155,12 +156,18 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
             color: '#d4d4d4',
             padding: '16px', 
             borderRadius: '6px',
-            overflow: 'auto',
+            // 核心修改：完全避免滚动，使用自动换行
+            overflow: 'visible',        // 完全不创建滚动容器
+            whiteSpace: 'pre-wrap',      // 保留格式但允许换行
+            wordBreak: 'break-all',      // 允许在任意位置断行
+            overflowWrap: 'break-word',  // 长单词换行
+            maxWidth: '100%',            // 确保不超出容器宽度
             marginTop: '8px',
             marginBottom: '8px',
             fontFamily: 'Consolas, Monaco, "Courier New", monospace',
             fontSize: '13px',
-            lineHeight: '1.45'
+            lineHeight: '1.45',
+            minHeight: '20px'           // 添加最小高度
           }}>
             <code>
               {String(children).replace(/\n$/, '')}
