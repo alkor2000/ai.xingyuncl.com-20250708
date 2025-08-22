@@ -1,5 +1,6 @@
 /**
  * API 客户端配置 - 支持智能Token自动刷新和流式响应
+ * 优化：基于业界最佳实践改进SSE接收逻辑
  */
 
 import axios from 'axios'
@@ -406,7 +407,7 @@ apiClient.getTokenInfo = () => {
   }
 }
 
-// 流式请求处理 - 添加取消支持
+// 优化的流式请求处理 - 基于业界最佳实践
 apiClient.postStream = async (url, data, options = {}) => {
   const authData = getAuthData()
   if (!authData.accessToken) {
@@ -426,14 +427,14 @@ apiClient.postStream = async (url, data, options = {}) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authData.accessToken}`,
         'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
         'X-Request-ID': Math.random().toString(36).substring(2)
       },
       body: JSON.stringify(data),
-      signal: controller.signal // 添加信号以支持取消
+      signal: controller.signal
     })
 
     if (!response.ok) {
-      // 处理非200响应
       if (response.status === 401) {
         message.error('登录已过期，请重新登录')
         setTimeout(() => {
@@ -449,85 +450,98 @@ apiClient.postStream = async (url, data, options = {}) => {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let currentEvent = null
+    let currentData = ''
 
-    // 处理流式数据
+    // 改进的SSE解析逻辑
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        console.log('流式读取结束')
+        break
+      }
 
-      // 解码新的数据块
-      buffer += decoder.decode(value, { stream: true })
+      // 解码数据
+      const chunk = decoder.decode(value, { stream: true })
+      buffer += chunk
       
-      // 按行分割，保留未完成的行在buffer中
+      // 按行分割
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
 
-      // 处理完整的行
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-
-        // SSE格式: event: eventName\ndata: jsonData\n\n
-        if (line.startsWith('event:')) {
-          const eventType = line.slice(6).trim()
-          
-          // 查找对应的data行
-          if (i + 1 < lines.length) {
-            const dataLine = lines[i + 1].trim()
-            if (dataLine.startsWith('data:')) {
-              const dataStr = dataLine.slice(5).trim()
+      for (const line of lines) {
+        const trimmed = line.trim()
+        
+        // 空行表示消息结束
+        if (trimmed === '') {
+          if (currentEvent && currentData) {
+            try {
+              const jsonData = JSON.parse(currentData)
               
-              try {
-                const jsonData = JSON.parse(dataStr)
-                
-                // 根据事件类型调用不同的回调
-                switch (eventType) {
-                  case 'connected':
-                    console.log('SSE连接成功')
-                    break
-                    
-                  case 'init':
-                    console.log('流式初始化数据:', jsonData)
-                    if (onInit) onInit(jsonData)
-                    break
-                    
-                  case 'message':
-                    // 接收到内容片段
-                    if (onMessage) onMessage(jsonData)
-                    break
-                    
-                  case 'done':
-                    console.log('流式传输完成:', jsonData)
-                    if (onComplete) onComplete(jsonData)
-                    break
-                    
-                  case 'error':
-                    console.error('流式传输错误:', jsonData)
-                    if (onError) onError(new Error(jsonData.error || '未知错误'))
-                    break
-                    
-                  default:
-                    console.warn('未知的SSE事件类型:', eventType)
-                }
-              } catch (e) {
-                console.error('解析SSE JSON数据失败:', e, 'dataStr:', dataStr)
+              // 处理不同的事件类型
+              switch (currentEvent) {
+                case 'init':
+                  console.log('流式初始化:', jsonData)
+                  if (onInit) onInit(jsonData)
+                  break
+                  
+                case 'message':
+                  // 使用delta或fullContent字段
+                  if (onMessage) onMessage(jsonData)
+                  break
+                  
+                case 'done':
+                  console.log('流式完成:', jsonData)
+                  if (onComplete) onComplete(jsonData)
+                  return // 结束处理
+                  
+                case 'error':
+                  console.error('流式错误:', jsonData)
+                  if (onError) onError(new Error(jsonData.error || '未知错误'))
+                  break
+                  
+                default:
+                  console.log(`收到事件 ${currentEvent}:`, jsonData)
               }
-              
-              // 跳过已处理的data行
-              i++
+            } catch (e) {
+              console.error('解析SSE数据失败:', e, 'data:', currentData)
             }
+            
+            // 重置状态
+            currentEvent = null
+            currentData = ''
+          }
+          continue
+        }
+        
+        // 解析事件类型
+        if (trimmed.startsWith('event:')) {
+          currentEvent = trimmed.slice(6).trim()
+        }
+        // 解析数据
+        else if (trimmed.startsWith('data:')) {
+          const dataLine = trimmed.slice(5).trim()
+          if (currentData) {
+            currentData += '\n' + dataLine
+          } else {
+            currentData = dataLine
           }
         }
       }
     }
 
-    // 处理剩余的buffer数据
+    // 处理剩余的buffer
     if (buffer.trim()) {
       console.warn('未处理的流式数据:', buffer)
     }
+    
+    // 如果没有收到done事件，手动触发完成
+    if (onComplete) {
+      console.log('流结束，触发完成回调')
+      onComplete({ reason: 'stream_end' })
+    }
 
   } catch (error) {
-    // 如果是取消操作，不算错误
     if (error.name === 'AbortError') {
       console.log('流式请求已取消')
       if (onComplete) {
