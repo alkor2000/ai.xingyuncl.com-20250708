@@ -32,11 +32,13 @@ import {
   SearchOutlined,
   MoreOutlined,
   FireOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
 import useAdminStore from '../../stores/adminStore'
+import { formatTokenCount } from '../../utils/tokenCalculator'
 import './KnowledgeModuleList.less'
 
 const { Search } = Input
@@ -110,6 +112,15 @@ const KnowledgeModuleList = ({
       }
     }
     return configs[scope] || configs.personal
+  }
+
+  // 获取token显示颜色
+  const getTokenColor = (tokenCount) => {
+    if (!tokenCount || tokenCount === 0) return '#999'
+    if (tokenCount < 1000) return '#52c41a'  // 绿色 - 小于1K
+    if (tokenCount < 10000) return '#1890ff'  // 蓝色 - 1K-10K
+    if (tokenCount < 50000) return '#faad14'  // 橙色 - 10K-50K
+    return '#f5222d'  // 红色 - 大于50K
   }
 
   // 渲染模块卡片 - Apple风格
@@ -194,18 +205,42 @@ const KnowledgeModuleList = ({
                   <EyeOutlined /> 可见
                 </Tag>
               )}
+              {/* 隐藏内容标识 */}
+              {module.content_hidden && (
+                <Tag className="apple-tag apple-tag-orange">
+                  <EyeInvisibleOutlined /> 内容隐藏
+                </Tag>
+              )}
             </div>
           </div>
           
           <div className="module-footer">
-            <div className="footer-item">
-              <UserOutlined className="footer-icon" />
-              <span>{module.creator_name || '未知'}</span>
-            </div>
-            <div className="footer-item">
-              <FireOutlined className="footer-icon" />
-              <span>{module.usage_count || 0}</span>
-            </div>
+            <Tooltip title="创建者">
+              <div className="footer-item">
+                <UserOutlined className="footer-icon" />
+                <span>{module.creator_name || '未知'}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title="使用次数">
+              <div className="footer-item">
+                <FireOutlined className="footer-icon" />
+                <span>{module.usage_count || 0}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title={`Token数量: ${module.token_count || 0}`}>
+              <div className="footer-item">
+                <FileTextOutlined 
+                  className="footer-icon" 
+                  style={{ color: getTokenColor(module.token_count) }}
+                />
+                <span style={{ 
+                  color: getTokenColor(module.token_count),
+                  fontWeight: module.token_count > 10000 ? 'bold' : 'normal'
+                }}>
+                  {formatTokenCount(module.token_count || 0)}
+                </span>
+              </div>
+            </Tooltip>
           </div>
         </Card>
       </Col>

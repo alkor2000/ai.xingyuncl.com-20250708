@@ -36,6 +36,8 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import useKnowledgeStore from '../../stores/knowledgeStore'
+import { calculateModulesTotalTokens, formatTokenCount, getTokenStatus } from '../../utils/tokenCalculator'
+import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
 const { Search } = Input
@@ -86,6 +88,7 @@ const ModuleCombinationFormModal = ({
   onSuccess
 }) => {
   const [form] = Form.useForm()
+  const { t } = useTranslation()
   const { createCombination, updateCombination } = useKnowledgeStore()
   const [loading, setLoading] = useState(false)
   const [selectedModules, setSelectedModules] = useState([])
@@ -125,40 +128,32 @@ const ModuleCombinationFormModal = ({
     }
   }, [visible, combination, form])
 
-  // 格式化Token数量为K单位
-  const formatTokens = (tokens) => {
-    if (tokens >= 1000) {
-      return (tokens / 1000).toFixed(1) + 'K'
-    }
-    return tokens.toString()
-  }
-
-  // 计算Token估算
+  // 计算Token估算 - 使用新的工具函数
   const calculateEstimatedTokens = () => {
-    let tokens = 0
-    selectedModules.forEach(module => {
-      // 简单估算：每个字符约0.5个token
-      tokens += Math.ceil((module.content?.length || 0) * 0.5)
-    })
-    return tokens
+    return calculateModulesTotalTokens(selectedModules)
   }
 
-  // 获取Token使用率
-  const getTokenUsagePercent = () => {
+  // 获取Token使用状态
+  const getTokenUsageInfo = () => {
     const tokens = calculateEstimatedTokens()
-    return Math.min((tokens / MAX_TOKENS) * 100, 100)
+    return getTokenStatus(tokens, MAX_TOKENS)
   }
 
   const handleSubmit = async (values) => {
     if (selectedModules.length === 0) {
-      message.error('请至少选择一个模块')
+      message.error(t('knowledge.combination.selectAtLeastOne'))
       return
     }
 
     // 检查Token限制
     const estimatedTokens = calculateEstimatedTokens()
-    if (estimatedTokens > MAX_TOKENS) {
-      message.error(`组合的Token数（${formatTokens(estimatedTokens)}）超过了限制（${formatTokens(MAX_TOKENS)}）`)
+    const tokenStatus = getTokenStatus(estimatedTokens, MAX_TOKENS)
+    
+    if (tokenStatus.isOverLimit) {
+      message.error(t('knowledge.combination.tokenOverLimit', {
+        current: formatTokenCount(estimatedTokens),
+        max: formatTokenCount(MAX_TOKENS)
+      }))
       return
     }
 
@@ -175,16 +170,16 @@ const ModuleCombinationFormModal = ({
       if (combination) {
         // 更新
         await updateCombination(combination.id, submitData)
-        message.success('更新成功')
+        message.success(t('common.updateSuccess'))
       } else {
         // 创建
         await createCombination(submitData)
-        message.success('创建成功')
+        message.success(t('common.createSuccess'))
       }
       
       onSuccess()
     } catch (error) {
-      message.error(error.message || '操作失败')
+      message.error(error.message || t('common.operationFailed'))
     } finally {
       setLoading(false)
     }
@@ -193,7 +188,21 @@ const ModuleCombinationFormModal = ({
   // 添加模块
   const handleAddModule = (module) => {
     if (selectedModules.find(m => m.id === module.id)) {
-      message.warning('该模块已添加')
+      message.warning(t('knowledge.combination.moduleAlreadyAdded'))
+      return
+    }
+    
+    // 检查添加后是否会超过token限制
+    const newModules = [...selectedModules, module]
+    const newTokens = calculateModulesTotalTokens(newModules)
+    const tokenStatus = getTokenStatus(newTokens, MAX_TOKENS)
+    
+    if (tokenStatus.isOverLimit) {
+      message.warning(t('knowledge.combination.addModuleWillExceedLimit', {
+        moduleTokens: formatTokenCount(module.token_count || 0),
+        totalTokens: formatTokenCount(newTokens),
+        maxTokens: formatTokenCount(MAX_TOKENS)
+      }))
       return
     }
     
@@ -261,23 +270,39 @@ const ModuleCombinationFormModal = ({
       render: () => null
     },
     {
-      title: '模块名称',
+      title: t('knowledge.module.name'),
       dataIndex: 'name',
       render: (text, record) => (
         <Space size="small">
           {getScopeIcon(record.module_scope)}
           <span>{text}</span>
           {record.prompt_type === 'system' && (
-            <Tag color="purple" icon={<ThunderboltOutlined />}>系统级</Tag>
+            <Tag color="purple" icon={<ThunderboltOutlined />}>
+              {t('knowledge.module.systemLevel')}
+            </Tag>
           )}
           {!record.content_visible && record.module_scope !== 'personal' && (
-            <Tag color="orange" icon={<EyeInvisibleOutlined />}>隐藏</Tag>
+            <Tag color="orange" icon={<EyeInvisibleOutlined />}>
+              {t('knowledge.module.hidden')}
+            </Tag>
           )}
         </Space>
       )
     },
     {
-      title: '操作',
+      title: 'Tokens',
+      dataIndex: 'token_count',
+      width: 100,
+      render: (tokens) => (
+        <Tooltip title={t('knowledge.module.tokenEstimate')}>
+          <span style={{ color: '#1890ff' }}>
+            {formatTokenCount(tokens || 0)}
+          </span>
+        </Tooltip>
+      )
+    },
+    {
+      title: t('common.operation'),
       width: 60,
       render: (_, record) => (
         <Button
@@ -291,17 +316,12 @@ const ModuleCombinationFormModal = ({
     }
   ]
 
-  // 获取Token使用状态
-  const getTokenStatus = () => {
-    const percent = getTokenUsagePercent()
-    if (percent > 90) return 'exception'
-    if (percent > 70) return 'active'
-    return 'success'
-  }
+  // 获取Token使用状态样式
+  const tokenUsageInfo = getTokenUsageInfo()
 
   return (
     <Modal
-      title={combination ? '编辑模块组合' : '创建模块组合'}
+      title={combination ? t('knowledge.combination.edit') : t('knowledge.combination.create')}
       open={visible}
       onCancel={onCancel}
       onOk={() => form.submit()}
@@ -316,25 +336,25 @@ const ModuleCombinationFormModal = ({
       >
         <Form.Item
           name="name"
-          label="组合名称"
-          rules={[{ required: true, message: '请输入组合名称' }]}
+          label={t('knowledge.combination.name')}
+          rules={[{ required: true, message: t('knowledge.combination.nameRequired') }]}
         >
-          <Input placeholder="请输入组合名称" maxLength={100} />
+          <Input placeholder={t('knowledge.combination.namePlaceholder')} maxLength={100} />
         </Form.Item>
 
         <Form.Item
           name="description"
-          label="组合描述"
+          label={t('knowledge.combination.description')}
         >
           <TextArea 
-            placeholder="请输入组合描述" 
+            placeholder={t('knowledge.combination.descriptionPlaceholder')} 
             rows={2} 
             maxLength={500}
             showCount
           />
         </Form.Item>
 
-        <Form.Item label="包含模块">
+        <Form.Item label={t('knowledge.combination.includedModules')}>
           <Card size="small">
             {selectedModules.length > 0 ? (
               <DndContext
@@ -361,7 +381,7 @@ const ModuleCombinationFormModal = ({
                 </SortableContext>
               </DndContext>
             ) : (
-              <Empty description="暂未选择模块" />
+              <Empty description={t('knowledge.combination.noModulesSelected')} />
             )}
             
             <div style={{ marginTop: 16, textAlign: 'center' }}>
@@ -371,12 +391,12 @@ const ModuleCombinationFormModal = ({
                   icon={<PlusOutlined />}
                   onClick={() => setShowModuleSelector(true)}
                 >
-                  添加模块
+                  {t('knowledge.combination.addModule')}
                 </Button>
               ) : (
                 <Card size="small" style={{ marginTop: 8 }}>
                   <Search
-                    placeholder="搜索模块"
+                    placeholder={t('knowledge.combination.searchModule')}
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     style={{ marginBottom: 8 }}
@@ -389,26 +409,40 @@ const ModuleCombinationFormModal = ({
                           style={{ 
                             padding: '8px 12px',
                             cursor: 'pointer',
-                            borderBottom: '1px solid #f0f0f0'
+                            borderBottom: '1px solid #f0f0f0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
                           }}
                           onClick={() => handleAddModule(module)}
                         >
-                          <Space size="small">
-                            {getScopeIcon(module.module_scope)}
-                            <span>{module.name}</span>
-                            {module.prompt_type === 'system' && (
-                              <Tag color="purple" size="small">系统级</Tag>
+                          <div style={{ flex: 1 }}>
+                            <Space size="small">
+                              {getScopeIcon(module.module_scope)}
+                              <span>{module.name}</span>
+                              {module.prompt_type === 'system' && (
+                                <Tag color="purple" size="small">
+                                  {t('knowledge.module.systemLevel')}
+                                </Tag>
+                              )}
+                            </Space>
+                            {module.description && (
+                              <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                {module.description}
+                              </div>
                             )}
-                          </Space>
-                          {module.description && (
-                            <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                              {module.description}
-                            </div>
-                          )}
+                          </div>
+                          <div style={{ marginLeft: 12 }}>
+                            <Tooltip title={t('knowledge.module.tokenCount')}>
+                              <Tag color="blue">
+                                {formatTokenCount(module.token_count || 0)}
+                              </Tag>
+                            </Tooltip>
+                          </div>
                         </div>
                       ))
                     ) : (
-                      <Empty description="没有可用的模块" />
+                      <Empty description={t('knowledge.combination.noAvailableModules')} />
                     )}
                   </div>
                   <Button 
@@ -416,7 +450,7 @@ const ModuleCombinationFormModal = ({
                     onClick={() => setShowModuleSelector(false)}
                     style={{ marginTop: 8 }}
                   >
-                    取消
+                    {t('common.cancel')}
                   </Button>
                 </Card>
               )}
@@ -431,28 +465,41 @@ const ModuleCombinationFormModal = ({
                 <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
                   <Space>
                     <InfoCircleOutlined />
-                    <span>Token 估算：{formatTokens(calculateEstimatedTokens())} / {formatTokens(MAX_TOKENS)}</span>
+                    <span>
+                      {t('knowledge.combination.tokenEstimate')}: 
+                      <strong style={{ marginLeft: 8, color: tokenUsageInfo.color }}>
+                        {formatTokenCount(calculateEstimatedTokens())}
+                      </strong>
+                      <span style={{ margin: '0 4px' }}>/</span>
+                      <span>{formatTokenCount(MAX_TOKENS)}</span>
+                    </span>
                   </Space>
                   <Progress 
-                    percent={Math.round(getTokenUsagePercent())} 
+                    percent={tokenUsageInfo.percentage} 
                     size="small" 
-                    status={getTokenStatus()}
+                    status={tokenUsageInfo.status === 'danger' ? 'exception' : 
+                            tokenUsageInfo.status === 'warning' ? 'active' : 'success'}
+                    strokeColor={tokenUsageInfo.color}
                     style={{ width: 200 }}
                   />
                 </Space>
               </div>
             }
-            type="info"
+            type={tokenUsageInfo.status === 'danger' ? 'error' : 
+                  tokenUsageInfo.status === 'warning' ? 'warning' : 'info'}
             showIcon={false}
           />
         </Form.Item>
 
         <Form.Item
           name="is_active"
-          label="状态"
+          label={t('common.status')}
           valuePropName="checked"
         >
-          <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          <Switch 
+            checkedChildren={t('common.enabled')} 
+            unCheckedChildren={t('common.disabled')} 
+          />
         </Form.Item>
       </Form>
     </Modal>

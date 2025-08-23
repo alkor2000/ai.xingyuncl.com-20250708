@@ -93,6 +93,16 @@
         }
       }
       
+      .panel-toolbar {
+        padding: 8px 12px;
+        min-height: 57px;
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+        background: rgba(248, 248, 250, 0.5);
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      
       .panel-content {
         flex: 1;
         padding: 12px;
@@ -247,6 +257,62 @@
         }
       }
       
+      // Token进度条区域
+      .token-progress-area {
+        padding: 8px 12px;
+        background: rgba(248, 248, 250, 0.5);
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+        
+        .token-progress-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          
+          .token-label {
+            font-size: 11px;
+            color: #666;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            
+            .anticon {
+              font-size: 12px;
+            }
+          }
+          
+          .ant-progress {
+            flex: 1;
+            margin: 0;
+            
+            .ant-progress-text {
+              font-size: 11px;
+            }
+          }
+          
+          .token-value {
+            font-size: 11px;
+            color: #333;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: right;
+          }
+        }
+        
+        .token-warning {
+          margin-top: 4px;
+          font-size: 10px;
+          color: #ff4d4f;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          
+          .anticon {
+            font-size: 10px;
+          }
+        }
+      }
+      
       // 卡槽容器 - 高级质感
       .slots-container {
         height: calc(100% - 50px);
@@ -359,7 +425,7 @@
   }
 }
 
-// 模块广场卡片 - 优化三个信息显示
+// 模块广场卡片 - 优化显示，token移到顶部
 .square-module-card {
   width: 100%;
   height: 105px; // 略微增加高度
@@ -393,15 +459,17 @@
     }
   }
   
-  // 左上角显示三个信息
+  // 顶部显示所有标签信息
   .module-badges {
     position: absolute;
     top: 6px;
     left: 6px;
+    right: 26px; // 给操作按钮留空间
     display: flex;
     align-items: center;
     gap: 3px;
     z-index: 2;
+    flex-wrap: wrap;
     
     // 系统级标签
     .type-tag-purple {
@@ -452,6 +520,25 @@
         background: rgba(237, 137, 54, 0.2);
       }
     }
+    
+    // Token标签 - 移到顶部
+    .token-tag {
+      padding: 1px 4px;
+      font-size: 8px;
+      font-weight: 600;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(10px);
+      color: rgba(255, 255, 255, 0.95);
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      line-height: 1.3;
+      
+      .anticon {
+        font-size: 8px;
+      }
+    }
   }
   
   // 右上角更多按钮
@@ -489,7 +576,7 @@
     align-items: center;
     justify-content: center;
     color: white;
-    padding-top: 18px; // 给标签留出更多空间
+    padding-top: 22px; // 给顶部标签留出更多空间
     
     .card-icon {
       font-size: 22px;
@@ -564,7 +651,7 @@
   }
 }
 
-// 卡槽中的模块 - 优化三个信息显示
+// 卡槽中的模块 - 优化显示
 .slot-module {
   height: 85px; // 增加高度
   border-radius: 12px;
@@ -576,7 +663,7 @@
   cursor: move;
   border: 0.5px solid rgba(255, 255, 255, 0.3);
   
-  // 顶部标签栏 - 显示三个信息
+  // 顶部标签栏 - 显示所有信息包括token
   .module-badges-bar {
     position: absolute;
     top: 6px;
@@ -586,6 +673,7 @@
     align-items: center;
     gap: 4px;
     z-index: 2;
+    flex-wrap: wrap;
     
     // 系统级标签
     .system-prompt-tag {
@@ -631,6 +719,24 @@
       font-size: 9px;
       font-weight: 600;
       background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: rgba(255, 255, 255, 0.95);
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      
+      .anticon {
+        font-size: 9px;
+      }
+    }
+    
+    // Token标签 - 移到顶部
+    .token-tag {
+      padding: 2px 5px;
+      font-size: 9px;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.25);
       backdrop-filter: blur(10px);
       color: rgba(255, 255, 255, 0.95);
       border-radius: 4px;
@@ -833,12 +939,28 @@
       .card-meta {
         font-size: 11px;
         color: #8e8e93;
+        display: flex;
+        align-items: center;
+        gap: 6px;
         
         span {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          
           &:not(:last-child)::after {
             content: ' · ';
             margin: 0 1px;
           }
+          
+          .anticon {
+            font-size: 10px;
+          }
+        }
+        
+        .token-info {
+          color: #666;
+          font-weight: 500;
         }
       }
     }

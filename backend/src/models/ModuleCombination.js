@@ -6,6 +6,7 @@ const dbConnection = require('../database/connection');
 const { DatabaseError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const KnowledgeModule = require('./KnowledgeModule');
+const { calculateTokens } = require('../utils/tokenCalculator');
 
 class ModuleCombination {
   constructor(data = {}) {
@@ -99,7 +100,7 @@ class ModuleCombination {
 
   /**
    * 创建模块组合
-   * 修复：传递用户角色给checkUserAccess
+   * 修复：传递用户角色给checkUserAccess，使用准确的token计算
    */
   static async create(data, userId) {
     const transaction = await dbConnection.beginTransaction();
@@ -118,17 +119,26 @@ class ModuleCombination {
         VALUES (?, ?, ?, ?)
       `;
       
-      // 估算token数（简单估算）
+      // 更准确的token估算：获取所有模块的token_count总和
       let estimatedTokens = 0;
       if (module_ids.length > 0) {
-        // 修复：正确处理IN子句
         const placeholders = module_ids.map(() => '?').join(',');
         const modulesResult = await transaction.query(
-          `SELECT SUM(LENGTH(content)) as total_length FROM knowledge_modules WHERE id IN (${placeholders})`,
+          `SELECT SUM(token_count) as total_tokens FROM knowledge_modules WHERE id IN (${placeholders})`,
           module_ids
         );
-        const totalLength = modulesResult.rows[0]?.total_length || 0;
-        estimatedTokens = Math.ceil(totalLength / 4); // 粗略估算
+        estimatedTokens = modulesResult.rows[0]?.total_tokens || 0;
+        
+        // 如果数据库中没有token_count，则使用content计算
+        if (estimatedTokens === 0) {
+          const contentResult = await transaction.query(
+            `SELECT content FROM knowledge_modules WHERE id IN (${placeholders})`,
+            module_ids
+          );
+          for (const row of contentResult.rows) {
+            estimatedTokens += calculateTokens(row.content || '');
+          }
+        }
       }
       
       const result = await transaction.query(sql, [
@@ -173,7 +183,8 @@ class ModuleCombination {
         combinationId,
         name,
         userId,
-        moduleCount: module_ids.length
+        moduleCount: module_ids.length,
+        estimatedTokens
       });
       
       return await ModuleCombination.findById(combinationId);
@@ -186,7 +197,7 @@ class ModuleCombination {
 
   /**
    * 更新模块组合
-   * 修复：传递用户角色给checkUserAccess
+   * 修复：传递用户角色给checkUserAccess，使用准确的token计算
    */
   static async update(id, data, userId) {
     const transaction = await dbConnection.beginTransaction();
@@ -243,14 +254,24 @@ class ModuleCombination {
         let estimatedTokens = 0;
         
         if (module_ids.length > 0) {
-          // 估算token数 - 修复IN子句
+          // 更准确的token估算
           const placeholders = module_ids.map(() => '?').join(',');
           const modulesResult = await transaction.query(
-            `SELECT SUM(LENGTH(content)) as total_length FROM knowledge_modules WHERE id IN (${placeholders})`,
+            `SELECT SUM(token_count) as total_tokens FROM knowledge_modules WHERE id IN (${placeholders})`,
             module_ids
           );
-          const totalLength = modulesResult.rows[0]?.total_length || 0;
-          estimatedTokens = Math.ceil(totalLength / 4);
+          estimatedTokens = modulesResult.rows[0]?.total_tokens || 0;
+          
+          // 如果数据库中没有token_count，则使用content计算
+          if (estimatedTokens === 0) {
+            const contentResult = await transaction.query(
+              `SELECT content FROM knowledge_modules WHERE id IN (${placeholders})`,
+              module_ids
+            );
+            for (const row of contentResult.rows) {
+              estimatedTokens += calculateTokens(row.content || '');
+            }
+          }
           
           // 添加模块
           for (let i = 0; i < module_ids.length; i++) {

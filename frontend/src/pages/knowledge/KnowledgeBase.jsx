@@ -2,7 +2,7 @@
  * 万智魔方 - iOS风格模块组装页面
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { 
   Layout, 
   Card, 
@@ -19,7 +19,8 @@ import {
   Tooltip,
   Popconfirm,
   Switch,
-  Divider
+  Divider,
+  Progress
 } from 'antd'
 import {
   AppstoreOutlined,
@@ -43,7 +44,9 @@ import {
   EyeOutlined,
   InfoCircleOutlined,
   FilterOutlined,
-  PlusCircleOutlined
+  PlusCircleOutlined,
+  FileTextOutlined,
+  WarningOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -52,12 +55,13 @@ import { CSS } from '@dnd-kit/utilities'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
 import KnowledgeModuleFormModal from '../../components/knowledge/KnowledgeModuleFormModal'
+import { formatTokenCount, getTokenStatus } from '../../utils/tokenCalculator'
 import './KnowledgeBase.less'
 
 const { Content } = Layout
 const { Search } = Input
 
-// 卡槽中的模块组件 - 修复显示三个信息
+// 卡槽中的模块组件 - Token显示在顶部
 const SlotModule = ({ module, onRemove, index }) => {
   const {
     attributes,
@@ -113,7 +117,7 @@ const SlotModule = ({ module, onRemove, index }) => {
       {...attributes}
       {...listeners}
     >
-      {/* 顶部标签区域 - 显示三个信息 */}
+      {/* 顶部标签区域 - 显示所有信息包括token */}
       <div className="module-badges-bar">
         {/* 系统级标识 - 这个是prompt_type，保持不变 */}
         {module.prompt_type === 'system' && (
@@ -135,6 +139,14 @@ const SlotModule = ({ module, onRemove, index }) => {
         <Tag className="scope-tag">
           {getScopeIcon()} {getScopeText()}
         </Tag>
+        
+        {/* Token显示 - 移到顶部标签栏 */}
+        {module.token_count > 0 && (
+          <Tag className="token-tag">
+            <FileTextOutlined />
+            {formatTokenCount(module.token_count)}
+          </Tag>
+        )}
       </div>
       
       <div className="module-content">
@@ -151,7 +163,7 @@ const SlotModule = ({ module, onRemove, index }) => {
   )
 }
 
-// 模块广场卡片 - 修复颜色和信息显示
+// 模块广场卡片 - Token显示在顶部
 const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete }) => {
   const [isDragging, setIsDragging] = useState(false)
   
@@ -224,7 +236,7 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
       }}
       onDragEnd={() => setIsDragging(false)}
     >
-      {/* 左上角显示三个信息 */}
+      {/* 顶部显示所有信息 - 包括token */}
       <div className="module-badges">
         {/* 系统级标识 - 这个是prompt_type，保持不变 */}
         {module.prompt_type === 'system' && (
@@ -246,6 +258,14 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
         <Tag className={`type-tag type-tag-${getModuleColor().replace('card-', '')}`}>
           {getScopeText()}
         </Tag>
+        
+        {/* Token显示 - 移到顶部 */}
+        {module.token_count > 0 && (
+          <Tag className="token-tag">
+            <FileTextOutlined />
+            {formatTokenCount(module.token_count)}
+          </Tag>
+        )}
       </div>
 
       {/* 右上角操作按钮 */}
@@ -278,9 +298,12 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
   )
 }
 
-// 组合卡片 - 修改为可拖拽，去掉应用选项
+// 组合卡片 - 可拖拽，显示token
 const CombinationCard = ({ combination, onEdit, onDelete }) => {
   const [isDragging, setIsDragging] = useState(false)
+  
+  // 计算组合的总token数
+  const totalTokens = combination.estimated_tokens || 0
   
   // 只保留编辑和删除
   const menuItems = [
@@ -316,6 +339,11 @@ const CombinationCard = ({ combination, onEdit, onDelete }) => {
           <div className="card-meta">
             <span>{combination.module_count || 0}个模块</span>
             <span>{combination.usage_count || 0}次使用</span>
+            {totalTokens > 0 && (
+              <span className="token-info">
+                <FileTextOutlined /> {formatTokenCount(totalTokens)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -371,6 +399,16 @@ const KnowledgeBase = () => {
 
   const canCreateTeamModule = hasRole(['super_admin', 'admin'])
   const canCreateSystemModule = hasRole(['super_admin'])
+
+  // 计算当前canvas中模块的总token数
+  const totalCanvasTokens = useMemo(() => {
+    return canvasModules.reduce((sum, module) => sum + (module.token_count || 0), 0)
+  }, [canvasModules])
+
+  // 获取token状态
+  const tokenStatus = useMemo(() => {
+    return getTokenStatus(totalCanvasTokens, 100000)
+  }, [totalCanvasTokens])
 
   useEffect(() => {
     loadData()
@@ -478,6 +516,14 @@ const KnowledgeBase = () => {
             message.warning('最多只能添加5个模块')
             return
           }
+          
+          // 检查token是否超限
+          const newTotalTokens = totalCanvasTokens + (module.token_count || 0)
+          if (newTotalTokens > 100000) {
+            message.warning(`添加此模块(${formatTokenCount(module.token_count)})后，总Token数(${formatTokenCount(newTotalTokens)})将超过限制(100K)`)
+            return
+          }
+          
           setCanvasModules([...canvasModules, module])
           message.success('模块已添加')
         }
@@ -529,6 +575,12 @@ const KnowledgeBase = () => {
   const handleSaveCombination = async () => {
     if (canvasModules.length === 0) {
       message.warning('请先添加模块')
+      return
+    }
+    
+    // 检查token是否超限
+    if (totalCanvasTokens > 100000) {
+      message.warning(`当前总Token数(${formatTokenCount(totalCanvasTokens)})超过限制(100K)，请减少模块`)
       return
     }
     
@@ -732,6 +784,7 @@ const KnowledgeBase = () => {
                   icon={<SaveOutlined />} 
                   onClick={handleSaveCombination}
                   style={{ fontSize: '12px' }}
+                  disabled={totalCanvasTokens > 100000}
                 >
                   保存
                 </Button>
@@ -748,10 +801,35 @@ const KnowledgeBase = () => {
             </div>
           </div>
           
-          {/* 添加工具栏区域保持一致高度 */}
+          {/* Token进度条 */}
+          <div className="token-progress-area">
+            <div className="token-progress-wrapper">
+              <div className="token-label">
+                <FileTextOutlined />
+                Token使用
+              </div>
+              <Progress 
+                percent={tokenStatus.percentage}
+                strokeColor={tokenStatus.color}
+                size="small"
+                showInfo={false}
+              />
+              <div className="token-value" style={{ color: tokenStatus.color }}>
+                {formatTokenCount(totalCanvasTokens)}/100K
+              </div>
+            </div>
+            {totalCanvasTokens > 100000 && (
+              <div className="token-warning">
+                <WarningOutlined />
+                Token数超过限制，请减少模块
+              </div>
+            )}
+          </div>
+          
+          {/* 组合信息工具栏 */}
           <div className="panel-toolbar" style={{
             padding: '8px 12px',
-            minHeight: '57px',
+            minHeight: '40px',
             borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
             backgroundColor: 'rgba(248, 248, 250, 0.5)',
             display: 'flex',
@@ -899,7 +977,7 @@ const KnowledgeBase = () => {
             maxLength={100}
           />
         </div>
-        <div>
+        <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: '#666' }}>
             组合描述
           </label>
@@ -910,6 +988,21 @@ const KnowledgeBase = () => {
             maxLength={500}
             rows={3}
           />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: '#666' }}>
+            Token统计
+          </label>
+          <div style={{ 
+            padding: '8px 12px', 
+            background: '#f5f5f5', 
+            borderRadius: '4px',
+            color: tokenStatus.color,
+            fontWeight: 600,
+            fontSize: '13px'
+          }}>
+            总计: {formatTokenCount(totalCanvasTokens)} / 100K限制
+          </div>
         </div>
       </Modal>
     </div>

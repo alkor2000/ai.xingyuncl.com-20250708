@@ -5,6 +5,7 @@
 const dbConnection = require('../database/connection');
 const { DatabaseError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const { calculateTokens } = require('../utils/tokenCalculator');
 
 class KnowledgeModule {
   constructor(data = {}) {
@@ -12,6 +13,7 @@ class KnowledgeModule {
     this.name = data.name || '';
     this.description = data.description || '';
     this.content = data.content || '';
+    this.token_count = data.token_count || 0;  // 添加token_count字段
     this.prompt_type = data.prompt_type || 'normal';
     this.module_scope = data.module_scope || 'personal';
     this.content_visible = data.content_visible !== undefined ? data.content_visible : true;
@@ -129,11 +131,13 @@ class KnowledgeModule {
           if (!module.content_visible && module.creator_id !== userId) {
             module.content = null;
             module.content_hidden = true;
+            module.token_count = 0;  // 隐藏内容时也隐藏token数
           }
         } else if (module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
           // 团队模块才检查content_visible
           module.content = null; // 隐藏内容
           module.content_hidden = true;
+          module.token_count = 0;  // 隐藏内容时也隐藏token数
         }
         
         return module;
@@ -240,11 +244,13 @@ class KnowledgeModule {
         if (!module.content_visible && module.creator_id !== userId) {
           module.content = null;
           module.content_hidden = true;
+          module.token_count = 0;  // 隐藏内容时也隐藏token数
         }
       } else if (userId && module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
         // 只对非系统级、非个人模块检查content_visible
         module.content = null;
         module.content_hidden = true;
+        module.token_count = 0;  // 隐藏内容时也隐藏token数
       }
       
       return module;
@@ -267,18 +273,22 @@ class KnowledgeModule {
         throw new Error('团队模块必须指定所属组');
       }
       
+      // 计算token数量
+      const tokenCount = calculateTokens(data.content || '');
+      
       const sql = `
         INSERT INTO knowledge_modules (
-          name, description, content, prompt_type, module_scope,
+          name, description, content, token_count, prompt_type, module_scope,
           content_visible, creator_id, group_id, group_ids, category, tags,
           sort_order, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const params = [
         data.name,
         data.description || null,
         data.content,
+        tokenCount,  // 保存计算的token数
         data.prompt_type || 'normal',
         module_scope || 'personal',
         data.content_visible !== undefined ? data.content_visible : true,
@@ -299,7 +309,8 @@ class KnowledgeModule {
         name: data.name,
         creatorId,
         scope: module_scope,
-        group_ids: data.group_ids
+        group_ids: data.group_ids,
+        tokenCount
       });
       
       return await KnowledgeModule.findById(insertId);
@@ -331,8 +342,15 @@ class KnowledgeModule {
       const updateFields = [];
       const updateValues = [];
       
-      // 允许更新的字段
-      const allowedFields = ['name', 'description', 'content', 'prompt_type', 'content_visible', 
+      // 如果更新了内容，重新计算token
+      if (data.content !== undefined) {
+        const tokenCount = calculateTokens(data.content);
+        updateFields.push('content = ?', 'token_count = ?');
+        updateValues.push(data.content, tokenCount);
+      }
+      
+      // 允许更新的其他字段
+      const allowedFields = ['name', 'description', 'prompt_type', 'content_visible', 
                            'category', 'tags', 'sort_order', 'is_active'];
       
       // 如果是系统级模块，允许更新group_ids
@@ -342,7 +360,7 @@ class KnowledgeModule {
       }
       
       allowedFields.forEach(field => {
-        if (data[field] !== undefined) {
+        if (data[field] !== undefined && field !== 'content') {  // content已经处理过了
           updateFields.push(`${field} = ?`);
           if (field === 'tags') {
             updateValues.push(data[field] ? JSON.stringify(data[field]) : null);
@@ -472,6 +490,7 @@ class KnowledgeModule {
       id: this.id,
       name: this.name,
       description: this.description,
+      token_count: this.token_count,  // 添加token_count到输出
       prompt_type: this.prompt_type,
       module_scope: this.module_scope,
       content_visible: this.content_visible,
