@@ -39,7 +39,8 @@ import {
   LockOutlined,
   UnlockOutlined,
   EyeInvisibleOutlined,
-  EyeOutlined
+  EyeOutlined,
+  InfoCircleOutlined  // 添加这个图标
 } from '@ant-design/icons'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -215,6 +216,7 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
         setIsDragging(true)
         e.dataTransfer.effectAllowed = 'copy'
         e.dataTransfer.setData('module', JSON.stringify(module))
+        e.dataTransfer.setData('type', 'module')  // 标识拖拽类型
         onDragStart(module)
       }}
       onDragEnd={() => setIsDragging(false)}
@@ -273,24 +275,35 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
   )
 }
 
-// 组合卡片
-const CombinationCard = ({ combination, onApply, onEdit, onDelete }) => {
+// 组合卡片 - 修改为可拖拽，去掉应用选项
+const CombinationCard = ({ combination, onEdit, onDelete }) => {
+  const [isDragging, setIsDragging] = useState(false)
+  
+  // 只保留编辑和删除
   const menuItems = [
-    { key: 'apply', label: '应用', icon: <CheckOutlined /> },
-    { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+    { key: 'edit', label: '加载编辑', icon: <EditOutlined /> },
     { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true }
   ]
 
   const handleMenuClick = ({ key }) => {
     switch (key) {
-      case 'apply': onApply(combination); break
       case 'edit': onEdit(combination); break
       case 'delete': onDelete(combination.id); break
     }
   }
 
   return (
-    <div className="combination-card-ios">
+    <div 
+      className={`combination-card-ios ${isDragging ? 'dragging' : ''}`}
+      draggable
+      onDragStart={(e) => {
+        setIsDragging(true)
+        e.dataTransfer.effectAllowed = 'copy'
+        e.dataTransfer.setData('combination', JSON.stringify(combination))
+        e.dataTransfer.setData('type', 'combination')  // 标识拖拽类型
+      }}
+      onDragEnd={() => setIsDragging(false)}
+    >
       <div className="card-content">
         <div className="card-icon-large">
           <AppstoreOutlined />
@@ -372,22 +385,31 @@ const KnowledgeBase = () => {
   }
 
   // 判断是否可以编辑模块
+  // 修复：超级管理员可以编辑所有模块
   const canEditModule = (module) => {
-    // 创建者可以编辑
+    // 超级管理员可以编辑所有模块
+    if (hasRole(['super_admin'])) return true
+    
+    // 创建者可以编辑自己的模块
     if (module.creator_id === user.id) return true
-    // 团队管理员可以编辑团队模块
-    if (module.module_scope === 'team' && canCreateTeamModule) return true
-    // 超级管理员可以编辑全局模块
-    if (module.module_scope === 'system' && canCreateSystemModule) return true
+    
+    // 团队管理员可以编辑本组的团队模块
+    if (module.module_scope === 'team' && module.group_id === user.group_id && hasRole(['admin'])) {
+      return true
+    }
+    
     return false
   }
 
   // 判断是否可以删除模块
+  // 修复：超级管理员可以删除所有模块
   const canDeleteModule = (module) => {
-    // 创建者可以删除
+    // 超级管理员可以删除所有模块
+    if (hasRole(['super_admin'])) return true
+    
+    // 创建者可以删除自己的模块
     if (module.creator_id === user.id) return true
-    // 超级管理员可以删除任何模块
-    if (canCreateSystemModule) return true
+    
     return false
   }
 
@@ -436,20 +458,33 @@ const KnowledgeBase = () => {
     setDraggedModule(module)
   }
 
+  // 修改处理拖入，支持模块和组合
   const handleCanvasDrop = (e) => {
     e.preventDefault()
     setIsDragOver(false)
     
-    const moduleData = e.dataTransfer.getData('module')
-    if (moduleData) {
-      const module = JSON.parse(moduleData)
-      if (!canvasModules.find(m => m.id === module.id)) {
-        if (canvasModules.length >= 5) {
-          message.warning('最多只能添加5个模块')
-          return
+    const dragType = e.dataTransfer.getData('type')
+    
+    if (dragType === 'module') {
+      // 处理模块拖入
+      const moduleData = e.dataTransfer.getData('module')
+      if (moduleData) {
+        const module = JSON.parse(moduleData)
+        if (!canvasModules.find(m => m.id === module.id)) {
+          if (canvasModules.length >= 5) {
+            message.warning('最多只能添加5个模块')
+            return
+          }
+          setCanvasModules([...canvasModules, module])
+          message.success('模块已添加')
         }
-        setCanvasModules([...canvasModules, module])
-        message.success('模块已添加')
+      }
+    } else if (dragType === 'combination') {
+      // 处理组合拖入
+      const combinationData = e.dataTransfer.getData('combination')
+      if (combinationData) {
+        const combination = JSON.parse(combinationData)
+        handleLoadCombination(combination)
       }
     }
   }
@@ -540,11 +575,12 @@ const KnowledgeBase = () => {
     }
   }
 
-  const handleApplyCombination = (combination) => {
+  // 加载组合到编辑区
+  const handleLoadCombination = (combination) => {
     if (combination.modules && combination.modules.length > 0) {
       setCanvasModules([...combination.modules])
       setCurrentCombination(combination)
-      message.success(`已应用：${combination.name}`)
+      message.success(`已加载组合：${combination.name}`)
     }
   }
 
@@ -569,13 +605,10 @@ const KnowledgeBase = () => {
 
   return (
     <div className="knowledge-wizard-ios">
-      {/* 顶部标题栏 */}
+      {/* 顶部标题栏 - 移除编辑状态显示 */}
       <div className="wizard-header">
         <div className="header-left">
           <h1>万智魔方</h1>
-          {currentCombination && (
-            <Tag color="blue">编辑: {currentCombination.name}</Tag>
-          )}
         </div>
       </div>
 
@@ -585,7 +618,21 @@ const KnowledgeBase = () => {
         <div className="panel-left">
           <div className="panel-header">
             <h3>模块广场</h3>
-            <Badge count={filteredModules.length} showZero />
+            <Space>
+              <Badge count={filteredModules.length} showZero />
+              {/* 新建模块按钮移到这里 */}
+              <Button 
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />} 
+                onClick={() => {
+                  setEditingModule(null)
+                  setModuleModalVisible(true)
+                }}
+              >
+                新建模块
+              </Button>
+            </Space>
           </div>
           
           <div className="panel-content">
@@ -659,16 +706,7 @@ const KnowledgeBase = () => {
               )}
             </div>
             <div className="header-actions">
-              <Button 
-                size="small"
-                icon={<PlusOutlined />} 
-                onClick={() => {
-                  setEditingModule(null)
-                  setModuleModalVisible(true)
-                }}
-              >
-                新建
-              </Button>
+              {/* 移除新建按钮 */}
               <Button 
                 size="small"
                 type="primary"
@@ -686,6 +724,23 @@ const KnowledgeBase = () => {
               </Button>
             </div>
           </div>
+          
+          {/* 添加当前组装状态显示 */}
+          {currentCombination && (
+            <div style={{ 
+              padding: '8px 16px', 
+              borderBottom: '1px solid #f0f0f0',
+              backgroundColor: '#f5f5f5'
+            }}>
+              <Space>
+                <span style={{ color: '#666', fontSize: '13px' }}>当前组装：</span>
+                <Tag color="blue">{currentCombination.name}</Tag>
+                <span style={{ color: '#999', fontSize: '12px' }}>
+                  （原{currentCombination.module_count}个模块）
+                </span>
+              </Space>
+            </div>
+          )}
           
           <div 
             className={`slots-container ${isDragOver ? 'drag-over' : ''}`}
@@ -715,7 +770,7 @@ const KnowledgeBase = () => {
                       ) : (
                         <div className="empty-slot">
                           <div className="slot-number">{index + 1}</div>
-                          <div className="slot-hint">拖拽模块到此处</div>
+                          <div className="slot-hint">拖拽模块或组合到此处</div>
                         </div>
                       )}
                     </div>
@@ -744,11 +799,7 @@ const KnowledgeBase = () => {
                   <CombinationCard
                     key={combination.id}
                     combination={combination}
-                    onApply={handleApplyCombination}
-                    onEdit={(c) => {
-                      handleApplyCombination(c)
-                      message.info('已加载到组装区')
-                    }}
+                    onEdit={handleLoadCombination}
                     onDelete={handleDeleteCombination}
                   />
                 ))
@@ -756,6 +807,17 @@ const KnowledgeBase = () => {
                 <Empty description="暂无组合" />
               )}
             </div>
+            {/* 添加提示文字 */}
+            {combinations.length > 0 && (
+              <div style={{ 
+                textAlign: 'center', 
+                marginTop: 16, 
+                color: '#999',
+                fontSize: 12
+              }}>
+                <InfoCircleOutlined /> 拖拽组合到左侧可快速加载编辑
+              </div>
+            )}
           </div>
         </div>
       </div>

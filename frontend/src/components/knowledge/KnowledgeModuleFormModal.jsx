@@ -61,7 +61,9 @@ const KnowledgeModuleFormModal = ({
         form.setFieldsValue({
           ...module,
           tags: module.tags ? JSON.parse(module.tags) : [],
-          group_ids: module.group_ids || []
+          group_ids: module.group_ids || [],
+          // 添加创建人显示（只读）
+          creator_name: module.creator_name || '未知'
         })
         setModuleScope(module.module_scope)
       } else {
@@ -73,41 +75,47 @@ const KnowledgeModuleFormModal = ({
           content_visible: true,
           sort_order: 0,
           is_active: true,
-          group_ids: []
+          group_ids: [],
+          // 新建时显示当前用户为创建人
+          creator_name: user.username || user.email
         })
         setModuleScope('personal')
       }
     }
-  }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups])
+  }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups, user])
 
   const handleSubmit = async (values) => {
     setLoading(true)
     try {
+      // 移除创建人字段（不需要提交）
+      const submitData = { ...values }
+      delete submitData.creator_name
+      
       // 处理标签
-      if (values.tags && values.tags.length > 0) {
-        values.tags = JSON.stringify(values.tags)
+      if (submitData.tags && submitData.tags.length > 0) {
+        submitData.tags = JSON.stringify(submitData.tags)
       } else {
-        values.tags = null
+        submitData.tags = null
       }
 
       // 个人模块不需要设置内容可见性和group_ids
-      if (values.module_scope === 'personal') {
-        values.content_visible = true
-        delete values.group_ids
+      if (submitData.module_scope === 'personal') {
+        submitData.content_visible = true
+        delete submitData.group_ids
       }
       
       // 团队模块不需要group_ids
-      if (values.module_scope === 'team') {
-        delete values.group_ids
+      if (submitData.module_scope === 'team') {
+        delete submitData.group_ids
       }
 
       if (module) {
         // 更新
-        await updateModule(module.id, values)
+        await updateModule(module.id, submitData)
         message.success('更新成功')
       } else {
         // 创建
-        await createModule(values)
+        await createModule(submitData)
         message.success('创建成功')
       }
       
@@ -152,6 +160,28 @@ const KnowledgeModuleFormModal = ({
         layout="vertical"
         onFinish={handleSubmit}
       >
+        {/* 编辑模式下显示创建人信息 */}
+        {module && (
+          <Form.Item
+            name="creator_name"
+            label={
+              <Space>
+                <UserOutlined />
+                创建人
+              </Space>
+            }
+          >
+            <Input 
+              disabled 
+              style={{ 
+                backgroundColor: '#f5f5f5',
+                color: '#595959',
+                cursor: 'not-allowed'
+              }}
+            />
+          </Form.Item>
+        )}
+
         <Form.Item
           name="name"
           label="模块名称"
@@ -318,7 +348,7 @@ const KnowledgeModuleFormModal = ({
             message="提示"
             description={
               <>
-                修改模块内容后，已使用该模块的组合需要重新保存才能生效。
+                <div>修改模块内容后，已使用该模块的组合需要重新保存才能生效。</div>
                 {moduleScope === 'system' && (
                   <div style={{ marginTop: 8 }}>
                     <strong>全局模块权限说明：</strong>
@@ -326,6 +356,11 @@ const KnowledgeModuleFormModal = ({
                       <li>不选择任何用户组：所有用户都可以使用</li>
                       <li>选择特定用户组：只有选中的组内用户可以使用</li>
                     </ul>
+                  </div>
+                )}
+                {module.creator_name && module.creator_name !== user.username && (
+                  <div style={{ marginTop: 8, color: '#1890ff' }}>
+                    <InfoCircleOutlined /> 该模块由 <strong>{module.creator_name}</strong> 创建
                   </div>
                 )}
               </>
