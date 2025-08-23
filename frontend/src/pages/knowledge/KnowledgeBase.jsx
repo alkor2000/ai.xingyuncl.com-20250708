@@ -18,7 +18,8 @@ import {
   Dropdown,
   Tooltip,
   Popconfirm,
-  Switch
+  Switch,
+  Divider
 } from 'antd'
 import {
   AppstoreOutlined,
@@ -40,7 +41,9 @@ import {
   UnlockOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
-  InfoCircleOutlined  // 添加这个图标
+  InfoCircleOutlined,
+  FilterOutlined,
+  PlusCircleOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -618,39 +621,57 @@ const KnowledgeBase = () => {
         <div className="panel-left">
           <div className="panel-header">
             <h3>模块广场</h3>
-            <Space>
+            <Space size={4}>
               <Badge count={filteredModules.length} showZero />
-              {/* 新建模块按钮移到这里 */}
-              <Button 
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />} 
-                onClick={() => {
-                  setEditingModule(null)
-                  setModuleModalVisible(true)
-                }}
-              >
-                新建模块
-              </Button>
+              {/* 新建模块按钮改为图标按钮，降低视觉权重 */}
+              <Tooltip title="新建模块">
+                <Button 
+                  size="small"
+                  type="text"
+                  icon={<PlusCircleOutlined />} 
+                  onClick={() => {
+                    setEditingModule(null)
+                    setModuleModalVisible(true)
+                  }}
+                  style={{ 
+                    color: '#666',
+                    fontSize: '16px',
+                    width: '24px',
+                    height: '24px'
+                  }}
+                />
+              </Tooltip>
             </Space>
           </div>
           
-          <div className="panel-content">
+          {/* 添加工具栏区域，统一高度 */}
+          <div className="panel-toolbar" style={{
+            padding: '8px 12px',
+            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+            backgroundColor: 'rgba(248, 248, 250, 0.5)'
+          }}>
             <Search
               placeholder="搜索模块"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="search-input"
+              style={{ marginBottom: 8 }}
+              size="small"
+              prefix={<SearchOutlined />}
             />
             
-            <div className="filter-controls">
-              <div className="filter-tags">
-                {/* 过滤器标签 - 系统改为全局 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="filter-tags" style={{ display: 'flex', gap: 4 }}>
                 {['all', 'personal', 'team', 'system'].map(scope => (
                   <Tag
                     key={scope}
                     className={`filter-tag ${filterScope === scope ? 'active' : ''}`}
                     onClick={() => setFilterScope(scope)}
+                    style={{ 
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      padding: '2px 6px',
+                      lineHeight: '16px'
+                    }}
                   >
                     {scope === 'all' ? '全部' : 
                      scope === 'personal' ? '个人' :
@@ -659,19 +680,17 @@ const KnowledgeBase = () => {
                 ))}
               </div>
               
-              {/* 显示隐藏模块的开关 */}
-              <div className="show-inactive-switch">
-                <Switch
-                  size="small"
-                  checked={showInactive}
-                  onChange={setShowInactive}
-                  checkedChildren={<EyeOutlined />}
-                  unCheckedChildren={<EyeInvisibleOutlined />}
-                />
-                <span className="switch-label">显示隐藏模块</span>
-              </div>
+              <Switch
+                size="small"
+                checked={showInactive}
+                onChange={setShowInactive}
+                checkedChildren={<EyeOutlined />}
+                unCheckedChildren={<EyeInvisibleOutlined />}
+              />
             </div>
-            
+          </div>
+          
+          <div className="panel-content">
             <div className="module-grid">
               {loading ? (
                 <div className="loading-center">
@@ -706,78 +725,92 @@ const KnowledgeBase = () => {
               )}
             </div>
             <div className="header-actions">
-              {/* 移除新建按钮 */}
-              <Button 
-                size="small"
-                type="primary"
-                icon={<SaveOutlined />} 
-                onClick={handleSaveCombination}
-              >
-                保存
-              </Button>
-              <Button 
-                size="small"
-                icon={<ClearOutlined />} 
-                onClick={handleClearCanvas}
-              >
-                清空
-              </Button>
+              <Space size={4}>
+                <Button 
+                  size="small"
+                  type="default"
+                  icon={<SaveOutlined />} 
+                  onClick={handleSaveCombination}
+                  style={{ fontSize: '12px' }}
+                >
+                  保存
+                </Button>
+                <Button 
+                  size="small"
+                  type="text"
+                  icon={<ClearOutlined />} 
+                  onClick={handleClearCanvas}
+                  style={{ fontSize: '12px' }}
+                >
+                  清空
+                </Button>
+              </Space>
             </div>
           </div>
           
-          {/* 添加当前组装状态显示 */}
-          {currentCombination && (
-            <div style={{ 
-              padding: '8px 16px', 
-              borderBottom: '1px solid #f0f0f0',
-              backgroundColor: '#f5f5f5'
-            }}>
+          {/* 添加工具栏区域保持一致高度 */}
+          <div className="panel-toolbar" style={{
+            padding: '8px 12px',
+            minHeight: '57px',
+            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+            backgroundColor: 'rgba(248, 248, 250, 0.5)',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            {currentCombination ? (
               <Space>
-                <span style={{ color: '#666', fontSize: '13px' }}>当前组装：</span>
-                <Tag color="blue">{currentCombination.name}</Tag>
-                <span style={{ color: '#999', fontSize: '12px' }}>
+                <span style={{ color: '#666', fontSize: '12px' }}>当前组装：</span>
+                <Tag color="blue" style={{ margin: 0 }}>{currentCombination.name}</Tag>
+                <span style={{ color: '#999', fontSize: '11px' }}>
                   （原{currentCombination.module_count}个模块）
                 </span>
               </Space>
-            </div>
-          )}
+            ) : (
+              <span style={{ color: '#999', fontSize: '12px' }}>
+                拖拽模块或组合到下方卡槽进行组装
+              </span>
+            )}
+          </div>
           
-          <div 
-            className={`slots-container ${isDragOver ? 'drag-over' : ''}`}
-            onDrop={handleCanvasDrop}
-            onDragOver={handleCanvasDragOver}
-            onDragLeave={handleCanvasDragLeave}
-          >
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
+          <div className="panel-content">
+            <div 
+              className={`slots-container ${isDragOver ? 'drag-over' : ''}`}
+              onDrop={handleCanvasDrop}
+              onDragOver={handleCanvasDragOver}
+              onDragLeave={handleCanvasDragLeave}
+              style={{ padding: '12px' }}
             >
-              <SortableContext
-                items={canvasModules.map(m => m.id)}
-                strategy={verticalListSortingStrategy}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                <div className="slots-wrapper">
-                  {/* 渲染5个卡槽 */}
-                  {[0, 1, 2, 3, 4].map(index => (
-                    <div key={`slot-${index}`} className="module-slot">
-                      {canvasModules[index] ? (
-                        <SlotModule 
-                          module={canvasModules[index]}
-                          onRemove={handleRemoveModule}
-                          index={index}
-                        />
-                      ) : (
-                        <div className="empty-slot">
-                          <div className="slot-number">{index + 1}</div>
-                          <div className="slot-hint">拖拽模块或组合到此处</div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+                <SortableContext
+                  items={canvasModules.map(m => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="slots-wrapper">
+                    {/* 渲染5个卡槽 */}
+                    {[0, 1, 2, 3, 4].map(index => (
+                      <div key={`slot-${index}`} className="module-slot">
+                        {canvasModules[index] ? (
+                          <SlotModule 
+                            module={canvasModules[index]}
+                            onRemove={handleRemoveModule}
+                            index={index}
+                          />
+                        ) : (
+                          <div className="empty-slot">
+                            <div className="slot-number">{index + 1}</div>
+                            <div className="slot-hint">拖拽模块或组合到此处</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
           </div>
         </div>
 
@@ -786,6 +819,25 @@ const KnowledgeBase = () => {
           <div className="panel-header">
             <h3>我的组合</h3>
             <Badge count={combinations.length} showZero />
+          </div>
+          
+          {/* 添加工具栏区域保持一致高度 */}
+          <div className="panel-toolbar" style={{
+            padding: '8px 12px',
+            minHeight: '57px',
+            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+            backgroundColor: 'rgba(248, 248, 250, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{ 
+              color: '#999', 
+              fontSize: '11px',
+              textAlign: 'center'
+            }}>
+              <InfoCircleOutlined /> 拖拽组合到中间区域可快速加载
+            </span>
           </div>
           
           <div className="panel-content">
@@ -807,17 +859,6 @@ const KnowledgeBase = () => {
                 <Empty description="暂无组合" />
               )}
             </div>
-            {/* 添加提示文字 */}
-            {combinations.length > 0 && (
-              <div style={{ 
-                textAlign: 'center', 
-                marginTop: 16, 
-                color: '#999',
-                fontSize: 12
-              }}>
-                <InfoCircleOutlined /> 拖拽组合到左侧可快速加载编辑
-              </div>
-            )}
           </div>
         </div>
       </div>
