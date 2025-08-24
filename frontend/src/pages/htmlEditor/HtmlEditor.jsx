@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 优化版本（修复Monaco错误）
+ * HTML编辑器主页面 - iOS设计风格增强版（修复项目切换&优化配色）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -23,7 +23,8 @@ import {
   Col,
   Divider,
   Typography,
-  Spin
+  Spin,
+  List
 } from 'antd';
 import {
   FolderOutlined,
@@ -46,93 +47,40 @@ import {
   LinkOutlined,
   GlobalOutlined,
   DollarOutlined,
-  EyeOutlined
+  EyeOutlined,
+  CodeOutlined,
+  Html5Outlined,
+  AppstoreOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
 import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
 import apiClient from '../../utils/api';
+import moment from 'moment';
 import './HtmlEditor.less';
 
 const { Sider, Content, Header } = Layout;
 const { TextArea } = Input;
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
-// 重要修复：不要直接导入monaco-editor，避免配置冲突
-// 让@monaco-editor/react自己管理Monaco实例
-
-// 配置Monaco环境 - 避免Worker加载错误
+// Monaco环境配置
 if (typeof window !== 'undefined' && !window.MonacoEnvironment) {
   window.MonacoEnvironment = {
-    // 返回undefined让Monaco使用内置fallback，避免toUrl错误
     getWorker: () => undefined,
     getWorkerUrl: () => undefined
   };
 }
 
-// 默认HTML模板
-const DEFAULT_HTML_TEMPLATE = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的页面</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            text-align: center;
-            padding: 40px;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-        }
-        h1 {
-            color: #333;
-            font-size: 2.5em;
-            margin-bottom: 0.5em;
-        }
-        p {
-            color: #666;
-            font-size: 1.2em;
-            margin-bottom: 1.5em;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            font-size: 16px;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-        }
-        button:hover {
-            transform: scale(1.05);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>欢迎使用HTML编辑器</h1>
-        <p>开始创建你的精彩内容...</p>
-        <button onclick="alert('欢迎使用HTML编辑器！')">点击我</button>
-    </div>
-</body>
-</html>`;
+// 空白模板 - 用户从零开始
+const EMPTY_TEMPLATE = '';
+
+// 生成默认页面标题
+const generateDefaultTitle = () => {
+  const now = moment();
+  return `页面-${now.format('YYYY年MM月DD日-HH时mm分')}`;
+};
 
 const HtmlEditor = () => {
   const { t } = useTranslation();
@@ -154,10 +102,10 @@ const HtmlEditor = () => {
     updateProject
   } = useHtmlEditorStore();
 
-  // 状态
+  // 状态管理
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPageId, setSelectedPageId] = useState(null);
-  const [htmlContent, setHtmlContent] = useState('');
+  const [htmlContent, setHtmlContent] = useState(EMPTY_TEMPLATE);
   const [previewMode, setPreviewMode] = useState('desktop');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPageModal, setShowPageModal] = useState(false);
@@ -179,6 +127,7 @@ const HtmlEditor = () => {
   const [userCredits, setUserCredits] = useState(0);
   const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
+  const [loadingPages, setLoadingPages] = useState(false);
 
   // 初始化加载
   useEffect(() => {
@@ -192,12 +141,11 @@ const HtmlEditor = () => {
     if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
       const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
       if (defaultProject) {
-        setSelectedProject(defaultProject);
-        getPages(defaultProject.id);
+        handleSelectProject(defaultProject);
         setDefaultProjectSelected(true);
       }
     }
-  }, [projects, defaultProjectSelected, selectedProject]);
+  }, [projects, defaultProjectSelected]);
 
   // 获取积分配置
   const fetchCreditsConfig = async () => {
@@ -233,72 +181,20 @@ const HtmlEditor = () => {
   // 加载选中页面的内容
   useEffect(() => {
     if (currentPage) {
-      if (currentPage.html_content) {
+      if (currentPage.html_content !== undefined && currentPage.html_content !== null) {
         setHtmlContent(currentPage.html_content);
       } else if (currentPage.compiled_content) {
         setHtmlContent(currentPage.compiled_content);
       } else {
-        const compiled = compileOldContent(
-          currentPage.html_content || '',
-          currentPage.css_content || '',
-          currentPage.js_content || ''
-        );
-        setHtmlContent(compiled);
+        setHtmlContent(EMPTY_TEMPLATE);
       }
-    } else {
-      setHtmlContent(DEFAULT_HTML_TEMPLATE);
     }
   }, [currentPage]);
 
   // 实时预览更新
   useEffect(() => {
-    setCompiledContent(htmlContent);
+    setCompiledContent(htmlContent || '<!DOCTYPE html><html><body style="padding:20px;color:#999;font-family:system-ui;">开始编写你的HTML代码...</body></html>');
   }, [htmlContent]);
-
-  // 编译旧格式内容
-  const compileOldContent = (html, css, js) => {
-    if (html && (html.includes('<!DOCTYPE') || html.includes('<html'))) {
-      let compiled = html;
-      
-      if (css) {
-        const headEndIndex = compiled.toLowerCase().indexOf('</head>');
-        if (headEndIndex > -1) {
-          compiled = compiled.slice(0, headEndIndex) + 
-            `\n<style>\n${css}\n</style>\n` +
-            compiled.slice(headEndIndex);
-        }
-      }
-      
-      if (js) {
-        const bodyEndIndex = compiled.toLowerCase().lastIndexOf('</body>');
-        if (bodyEndIndex > -1) {
-          compiled = compiled.slice(0, bodyEndIndex) + 
-            `\n<script>\n${js}\n</script>\n` + 
-            compiled.slice(bodyEndIndex);
-        }
-      }
-      
-      return compiled;
-    } else {
-      return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>预览</title>
-    <style>
-${css || ''}
-    </style>
-</head>
-<body>
-${html || ''}
-    <script>
-${js || ''}
-    </script>
-</body>
-</html>`;
-    }
-  };
 
   // 预览页面
   const handlePreview = () => {
@@ -330,6 +226,22 @@ ${js || ''}
     }
   };
 
+  // 选择项目 - 修复：确保正确加载对应项目的页面
+  const handleSelectProject = async (project) => {
+    // 先清空当前状态
+    setSelectedProject(project);
+    setSelectedPageId(null);
+    setHtmlContent(EMPTY_TEMPLATE);
+    
+    // 加载新项目的页面
+    setLoadingPages(true);
+    try {
+      await getPages(project.id);
+    } finally {
+      setLoadingPages(false);
+    }
+  };
+
   // 编辑项目名称
   const handleEditProject = (project) => {
     setRenameType('project');
@@ -338,7 +250,7 @@ ${js || ''}
     setShowRenameModal(true);
   };
 
-  // 删除文件夹
+  // 删除项目
   const handleDeleteProject = (project) => {
     if (project.is_default === 1 || project.name === '默认项目') {
       message.warning('默认项目不能删除');
@@ -349,9 +261,9 @@ ${js || ''}
       title: '确认删除',
       content: (
         <div>
-          <p>确定要删除文件夹 "{project.name}" 吗？</p>
+          <p>确定要删除项目 "{project.name}" 吗？</p>
           <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            注意：只能删除空文件夹。如果文件夹内有页面或子文件夹，请先删除它们。
+            注意：只能删除空项目。如果项目内有页面，请先删除页面。
           </p>
         </div>
       ),
@@ -361,15 +273,17 @@ ${js || ''}
       onOk: async () => {
         try {
           await deleteProject(project.id);
-          message.success('文件夹删除成功');
+          message.success('项目删除成功');
           
           if (selectedProject?.id === project.id) {
             setSelectedProject(null);
+            setSelectedPageId(null);
+            setHtmlContent(EMPTY_TEMPLATE);
           }
           
           await getProjects();
         } catch (error) {
-          const errorMsg = error.response?.data?.message || '删除文件夹失败';
+          const errorMsg = error.response?.data?.message || '删除项目失败';
           message.error(errorMsg);
         }
       }
@@ -407,20 +321,18 @@ ${js || ''}
     }
   };
 
-  // 创建页面
+  // 打开创建页面弹窗时，设置默认标题
+  const handleOpenPageModal = () => {
+    const defaultTitle = generateDefaultTitle();
+    pageForm.setFieldsValue({ title: defaultTitle });
+    setShowPageModal(true);
+  };
+
+  // 创建页面 - 确保在选中的项目下创建
   const handleCreatePage = async (values) => {
-    let projectId = selectedProject?.id;
-    
-    if (!projectId) {
-      const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
-      if (defaultProject) {
-        projectId = defaultProject.id;
-        setSelectedProject(defaultProject);
-      } else {
-        message.warning('系统正在创建默认项目，请稍后再试');
-        await getProjects();
-        return;
-      }
+    if (!selectedProject) {
+      message.warning('请先选择一个项目');
+      return;
     }
 
     if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
@@ -430,9 +342,9 @@ ${js || ''}
 
     try {
       const pageData = {
-        ...values,
-        project_id: projectId,
-        html_content: htmlContent,
+        title: values.title || generateDefaultTitle(),
+        project_id: selectedProject.id,
+        html_content: EMPTY_TEMPLATE,
         css_content: '',
         js_content: ''
       };
@@ -442,8 +354,10 @@ ${js || ''}
       setShowPageModal(false);
       pageForm.resetFields();
       setSelectedPageId(newPage.id);
+      loadPage(newPage.id);
+      setHtmlContent(EMPTY_TEMPLATE);
       
-      getPages(projectId);
+      await getPages(selectedProject.id);
       fetchUserCredits();
     } catch (error) {
       message.error(error.message || '创建页面失败');
@@ -453,7 +367,7 @@ ${js || ''}
   // 保存页面
   const handleSavePage = async () => {
     if (!selectedPageId) {
-      setShowPageModal(true);
+      message.warning('请先选择或创建一个页面');
       return;
     }
 
@@ -471,11 +385,43 @@ ${js || ''}
       });
       message.success('页面保存成功');
       fetchUserCredits();
+      // 刷新页面列表以更新状态
+      await getPages(selectedProject?.id);
     } catch (error) {
       message.error(error.message || '保存失败');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // 选择页面
+  const handleSelectPage = (page) => {
+    setSelectedPageId(page.id);
+    loadPage(page.id);
+  };
+
+  // 删除页面
+  const handleDeletePage = (page) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除页面 "${page.title}" 吗？`,
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deletePage(page.id);
+          message.success('页面删除成功');
+          if (selectedPageId === page.id) {
+            setSelectedPageId(null);
+            setHtmlContent(EMPTY_TEMPLATE);
+          }
+          await getPages(selectedProject.id);
+        } catch (error) {
+          message.error('删除页面失败');
+        }
+      }
+    });
   };
 
   // 复制内容
@@ -520,41 +466,28 @@ ${js || ''}
     }
 
     if (creditsConfig.credits_per_publish > 0 && userCredits < creditsConfig.credits_per_publish) {
-      Modal.confirm({
+      Modal.error({
         title: '积分不足',
         content: (
           <div>
             <p>生成永久链接需要 <Text strong>{creditsConfig.credits_per_publish}</Text> 积分</p>
             <p>您当前积分余额：<Text type="danger">{userCredits}</Text> 积分</p>
-            <p>请联系管理员充值积分后再试。</p>
           </div>
-        ),
-        okText: '我知道了',
-        cancelText: '取消',
-        onOk: () => {}
+        )
       });
       return;
     }
 
-    const confirmContent = creditsConfig.credits_per_publish > 0 ? (
-      <div>
-        <p>生成永久链接将消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
-        <p>您当前积分余额：<Text strong>{userCredits}</Text> 积分</p>
-        <p>生成后剩余：<Text strong>{userCredits - creditsConfig.credits_per_publish}</Text> 积分</p>
-        <Divider />
-        <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
-      </div>
-    ) : (
-      <div>
-        <p><Text strong>生成永久链接（免费）</Text></p>
-        <Divider />
-        <p><Text type="secondary">提示：生成永久链接后，您的页面将可以通过固定URL访问</Text></p>
-      </div>
-    );
-
     Modal.confirm({
-      title: '确认生成永久链接',
-      content: confirmContent,
+      title: '生成永久链接',
+      content: (
+        <div>
+          <p>生成永久链接后，页面将可以通过固定URL访问</p>
+          {creditsConfig.credits_per_publish > 0 && (
+            <p>需要消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
+          )}
+        </div>
+      ),
       okText: '确认生成',
       cancelText: '取消',
       onOk: async () => {
@@ -600,68 +533,11 @@ ${js || ''}
     });
   };
 
-  // 构建文件树数据
-  const buildTreeData = () => {
-    if (!projects || projects.length === 0) return [];
-    
-    return projects.map(project => ({
-      title: (
-        <Space size={4}>
-          {project.type === 'folder' ? <FolderOutlined /> : <FileOutlined />}
-          <span>{project.name}</span>
-          {(project.is_default === 1 || project.name === '默认项目') && (
-            <Tag color="blue" style={{ marginLeft: 4 }}>默认</Tag>
-          )}
-          <Button
-            type="text"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEditProject(project);
-            }}
-          />
-          {project.type === 'folder' && project.is_default !== 1 && project.name !== '默认项目' && (
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteProject(project);
-              }}
-            />
-          )}
-        </Space>
-      ),
-      key: `project-${project.id}`,
-      children: project.children?.map(child => ({
-        title: child.name,
-        key: `project-${child.id}`,
-        isLeaf: child.type === 'page'
-      })) || []
-    }));
-  };
-
-  // 选择树节点
-  const handleTreeSelect = (selectedKeys) => {
-    if (selectedKeys.length > 0) {
-      const key = selectedKeys[0];
-      if (key.startsWith('project-')) {
-        const projectId = parseInt(key.replace('project-', ''));
-        const project = projects.find(p => p.id === projectId);
-        setSelectedProject(project);
-        getPages(projectId);
-      }
-    }
-  };
-
   // Monaco编辑器配置
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 14,
-    fontFamily: 'Consolas, Monaco, monospace',
+    fontFamily: 'SF Mono, Monaco, Consolas, monospace',
     formatOnPaste: true,
     formatOnType: true,
     automaticLayout: true,
@@ -671,38 +547,17 @@ ${js || ''}
     lineNumbers: 'on',
     renderWhitespace: 'selection',
     folding: true,
-    bracketPairColorization: {
-      enabled: true
-    },
+    bracketPairColorization: { enabled: true },
     guides: {
       indentation: true,
       bracketPairs: true
-    }
+    },
+    padding: { top: 16, bottom: 16 }
   };
 
-  // Dropdown菜单项
-  const projectMenuItems = [
-    {
-      key: 'folder',
-      icon: <FolderAddOutlined />,
-      label: '新建文件夹',
-      onClick: () => {
-        projectForm.setFieldValue('type', 'folder');
-        setShowProjectModal(true);
-      }
-    },
-    {
-      key: 'page',
-      icon: <FileAddOutlined />,
-      label: '新建页面',
-      onClick: () => setShowPageModal(true)
-    }
-  ];
-
-  // 编辑器加载完成回调
+  // 编辑器加载完成
   const handleEditorDidMount = (editor, monaco) => {
     setEditorReady(true);
-    // 配置HTML语言选项
     if (monaco?.languages?.html?.htmlDefaults) {
       try {
         monaco.languages.html.htmlDefaults.setOptions({
@@ -712,234 +567,522 @@ ${js || ''}
             wrapLineLength: 120,
             wrapAttributes: 'auto'
           },
-          suggest: {
-            html5: true
-          }
+          suggest: { html5: true }
         });
       } catch (e) {
-        // 静默处理配置错误
+        console.error('Monaco配置失败:', e);
       }
     }
-    console.log('Monaco Editor已加载完成（优化版本）');
+  };
+
+  // iOS风格的样式对象 - 增强配色方案
+  const iosStyles = {
+    container: {
+      height: '100vh',
+      background: '#F2F2F7'
+    },
+    header: {
+      background: 'rgba(255, 255, 255, 0.98)',
+      backdropFilter: 'blur(20px)',
+      borderBottom: '1px solid rgba(60, 60, 67, 0.12)',
+      height: 60,
+      padding: '0 24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)'
+    },
+    sidebar: {
+      background: 'rgba(255, 255, 255, 0.98)',
+      backdropFilter: 'blur(20px)',
+      borderRight: '1px solid rgba(60, 60, 67, 0.12)'
+    },
+    sidebarSection: {
+      padding: '20px',
+      borderBottom: '1px solid rgba(60, 60, 67, 0.08)'
+    },
+    sectionHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: 600,
+      color: '#000',
+      margin: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      letterSpacing: '-0.4px'
+    },
+    projectItem: {
+      padding: '10px 14px',
+      cursor: 'pointer',
+      borderRadius: 10,
+      marginBottom: 6,
+      transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    projectItemSelected: {
+      background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+      color: 'white',
+      boxShadow: '0 2px 8px rgba(0, 122, 255, 0.25)'
+    },
+    pageCard: {
+      background: 'white',
+      borderRadius: 10,
+      padding: '12px 14px',
+      marginBottom: 8,
+      cursor: 'pointer',
+      border: '1px solid rgba(60, 60, 67, 0.08)',
+      transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)'
+    },
+    pageCardSelected: {
+      border: '2px solid #007AFF',
+      boxShadow: '0 4px 12px rgba(0, 122, 255, 0.15)',
+      background: 'linear-gradient(135deg, rgba(0, 122, 255, 0.02) 0%, rgba(0, 81, 213, 0.04) 100%)'
+    },
+    editorSection: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'white',
+      borderRadius: '12px 0 0 0',
+      overflow: 'hidden',
+      margin: '0 0 0 1px'
+    },
+    editorHeader: {
+      padding: '14px 20px',
+      background: 'rgba(255, 255, 255, 0.98)',
+      backdropFilter: 'blur(20px)',
+      borderBottom: '1px solid rgba(60, 60, 67, 0.12)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    previewSection: {
+      width: '50%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'linear-gradient(135deg, #F2F2F7 0%, #E5E5EA 100%)'
+    },
+    previewContent: {
+      flex: 1,
+      padding: 20,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    previewFrame: {
+      background: 'white',
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+      transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+    },
+    // 按钮样式 - 多彩iOS风格
+    saveButton: {
+      background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)',
+      borderColor: 'transparent',
+      borderRadius: 8,
+      fontWeight: 600,
+      padding: '6px 16px',
+      height: 38,
+      transition: 'all 0.2s ease',
+      boxShadow: '0 2px 8px rgba(52, 199, 89, 0.3)',
+      color: 'white'
+    },
+    previewButton: {
+      background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
+      borderColor: 'transparent',
+      color: 'white',
+      borderRadius: 8,
+      fontWeight: 600,
+      padding: '6px 16px',
+      height: 38,
+      transition: 'all 0.2s ease',
+      boxShadow: '0 2px 8px rgba(175, 82, 222, 0.3)'
+    },
+    copyButton: {
+      background: 'rgba(142, 142, 147, 0.12)',
+      borderColor: 'transparent',
+      color: '#3C3C43',
+      borderRadius: 8,
+      fontWeight: 600,
+      padding: '6px 16px',
+      height: 38,
+      transition: 'all 0.2s ease'
+    },
+    clearButton: {
+      background: 'linear-gradient(135deg, #FF9500 0%, #FF8200 100%)',
+      borderColor: 'transparent',
+      color: 'white',
+      borderRadius: 8,
+      fontWeight: 600,
+      padding: '6px 16px',
+      height: 38,
+      transition: 'all 0.2s ease',
+      boxShadow: '0 2px 8px rgba(255, 149, 0, 0.3)'
+    },
+    linkButton: {
+      background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+      borderColor: 'transparent',
+      color: 'white',
+      borderRadius: 8,
+      fontWeight: 600,
+      padding: '6px 16px',
+      height: 38,
+      transition: 'all 0.2s ease',
+      boxShadow: '0 2px 8px rgba(0, 122, 255, 0.3)'
+    },
+    iconButton: {
+      borderRadius: 8,
+      width: 38,
+      height: 38,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(142, 142, 147, 0.12)',
+      border: 'none',
+      transition: 'all 0.2s ease'
+    },
+    tag: {
+      borderRadius: 6,
+      padding: '4px 10px',
+      fontSize: 12,
+      fontWeight: 600,
+      border: 'none'
+    },
+    smallButton: {
+      borderRadius: 6,
+      fontSize: 13,
+      height: 30,
+      fontWeight: 600,
+      background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+      borderColor: 'transparent',
+      boxShadow: '0 1px 4px rgba(0, 122, 255, 0.25)'
+    }
   };
 
   return (
-    <Layout className="html-editor-container">
-      {/* 顶部工具栏 */}
-      <Header className="editor-header">
-        <div className="header-left">
-          <Space>
-            <Button
-              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
-            <Button 
-              type="primary" 
-              icon={<SaveOutlined />} 
-              onClick={handleSavePage}
-              loading={isSaving}
-            >
-              保存 ({formatCreditsDisplay(creditsConfig.credits_per_update)})
-            </Button>
-            <Button
-              icon={<EyeOutlined />}
-              onClick={handlePreview}
-            >
-              预览
-            </Button>
-            <Button
-              icon={<CopyOutlined />}
-              onClick={handleCopyContent}
-            >
-              复制
-            </Button>
-            <Button
-              icon={<ClearOutlined />}
-              onClick={handleClearContent}
-            >
-              清空
-            </Button>
-            <Button
-              icon={<LinkOutlined />}
-              onClick={handleGeneratePermalink}
-              disabled={!selectedPageId}
-            >
-              生成永久链接 ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
-            </Button>
-          </Space>
-        </div>
+    <Layout style={iosStyles.container}>
+      {/* 顶部工具栏 - iOS风格增强 */}
+      <Header style={iosStyles.header}>
+        <Space size={12}>
+          <Button
+            style={iosStyles.iconButton}
+            icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+          <Button 
+            type="primary"
+            style={iosStyles.saveButton}
+            icon={<SaveOutlined />} 
+            onClick={handleSavePage}
+            loading={isSaving}
+            disabled={!selectedPageId}
+          >
+            保存 ({formatCreditsDisplay(creditsConfig.credits_per_update)})
+          </Button>
+          <Button 
+            style={iosStyles.previewButton}
+            icon={<EyeOutlined />} 
+            onClick={handlePreview}
+          >
+            预览
+          </Button>
+          <Button 
+            style={iosStyles.copyButton}
+            icon={<CopyOutlined />} 
+            onClick={handleCopyContent}
+          >
+            复制
+          </Button>
+          <Button 
+            style={iosStyles.clearButton}
+            icon={<ClearOutlined />} 
+            onClick={handleClearContent}
+          >
+            清空
+          </Button>
+          <Button
+            style={iosStyles.linkButton}
+            icon={<LinkOutlined />}
+            onClick={handleGeneratePermalink}
+            disabled={!selectedPageId}
+          >
+            生成链接 ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
+          </Button>
+        </Space>
         
-        <div className="header-center">
+        <div style={{ flex: 1, textAlign: 'center' }}>
           {currentPage && (
-            <Space>
-              <Tag color="blue">{currentPage.title}</Tag>
-              {currentPage.is_published && <Tag color="green">已发布</Tag>}
+            <Space size={8}>
+              <Tag style={{ 
+                ...iosStyles.tag, 
+                background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)', 
+                color: 'white' 
+              }}>
+                <Html5Outlined /> {currentPage.title}
+              </Tag>
+              {currentPage.is_published && (
+                <Tag style={{ 
+                  ...iosStyles.tag, 
+                  background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)', 
+                  color: 'white' 
+                }}>
+                  <GlobalOutlined /> 已发布
+                </Tag>
+              )}
             </Space>
           )}
         </div>
         
-        <div className="header-right">
-          <Space>
-            <Tag icon={<DollarOutlined />} color="gold">
-              积分余额: {userCredits}
-            </Tag>
-            <Select
-              value={previewMode}
-              onChange={setPreviewMode}
-              style={{ width: 120 }}
-              options={[
-                { value: 'desktop', label: '桌面' },
-                { value: 'tablet', label: '平板' },
-                { value: 'mobile', label: '手机' }
-              ]}
-            />
-            <Select
-              value={editorTheme}
-              onChange={setEditorTheme}
-              style={{ width: 100 }}
-              options={[
-                { value: 'vs-dark', label: '暗色' },
-                { value: 'vs-light', label: '亮色' }
-              ]}
-            />
-          </Space>
-        </div>
+        <Space size={12}>
+          <Tag style={{ 
+            ...iosStyles.tag, 
+            background: 'linear-gradient(135deg, #FFD60A 0%, #FFCC00 100%)', 
+            color: '#000' 
+          }}>
+            <DollarOutlined /> 积分: {userCredits}
+          </Tag>
+          <Select
+            value={previewMode}
+            onChange={setPreviewMode}
+            style={{ width: 100, borderRadius: 8 }}
+            options={[
+              { value: 'desktop', label: '桌面' },
+              { value: 'tablet', label: '平板' },
+              { value: 'mobile', label: '手机' }
+            ]}
+          />
+          <Select
+            value={editorTheme}
+            onChange={setEditorTheme}
+            style={{ width: 90, borderRadius: 8 }}
+            options={[
+              { value: 'vs-dark', label: '暗色' },
+              { value: 'vs-light', label: '亮色' }
+            ]}
+          />
+        </Space>
       </Header>
 
-      <Layout>
-        {/* 左侧文件树 */}
+      <Layout style={{ background: 'transparent' }}>
+        {/* 左侧项目管理区 - iOS风格 */}
         <Sider 
-          width={260} 
-          className="editor-sider"
+          width={300} 
           collapsed={sidebarCollapsed}
           collapsedWidth={0}
+          style={iosStyles.sidebar}
         >
-          <div className="sider-header">
-            <Space>
-              <h3>项目管理</h3>
-              <Dropdown menu={{ items: projectMenuItems }}>
-                <Button type="primary" size="small" icon={<PlusOutlined />} />
-              </Dropdown>
-            </Space>
-          </div>
-          
-          <div className="project-tree">
+          {/* 项目列表 */}
+          <div style={iosStyles.sidebarSection}>
+            <div style={iosStyles.sectionHeader}>
+              <h3 style={iosStyles.sectionTitle}>
+                <AppstoreOutlined style={{ color: '#007AFF' }} /> 项目
+              </h3>
+              <Button
+                type="primary"
+                size="small"
+                style={iosStyles.smallButton}
+                icon={<PlusOutlined />}
+                onClick={() => setShowProjectModal(true)}
+              >
+                新建
+              </Button>
+            </div>
+            
             {projects.length > 0 ? (
-              <Tree
-                treeData={buildTreeData()}
-                onSelect={handleTreeSelect}
-                defaultExpandAll
-                selectedKeys={selectedProject ? [`project-${selectedProject.id}`] : []}
-              />
+              <div>
+                {projects.map(project => (
+                  <div
+                    key={project.id}
+                    style={{
+                      ...iosStyles.projectItem,
+                      ...(selectedProject?.id === project.id ? iosStyles.projectItemSelected : {
+                        background: 'rgba(60, 60, 67, 0.03)',
+                        '&:hover': { background: 'rgba(60, 60, 67, 0.06)' }
+                      })
+                    }}
+                    onClick={() => handleSelectProject(project)}
+                  >
+                    <Space size={8}>
+                      <FolderOutlined style={{ fontSize: 16 }} />
+                      <span style={{ fontWeight: 500 }}>{project.name}</span>
+                      {project.is_default === 1 && (
+                        <Tag style={{ 
+                          ...iosStyles.tag, 
+                          background: 'rgba(0, 122, 255, 0.1)', 
+                          color: '#007AFF',
+                          padding: '2px 6px',
+                          fontSize: 11
+                        }}>
+                          默认
+                        </Tag>
+                      )}
+                    </Space>
+                    <Space size={4}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditProject(project);
+                        }}
+                        style={{ 
+                          color: selectedProject?.id === project.id ? 'white' : '#8E8E93',
+                          opacity: 0.8
+                        }}
+                      />
+                      {project.is_default !== 1 && (
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProject(project);
+                          }}
+                          style={{ 
+                            color: selectedProject?.id === project.id ? '#FFD1DC' : '#FF3B30',
+                            opacity: 0.8
+                          }}
+                        />
+                      )}
+                    </Space>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <Empty description="暂无项目" />
+              <Empty description="暂无项目" style={{ marginTop: 40 }} />
             )}
           </div>
 
+          {/* 页面列表 */}
           {selectedProject && (
-            <div className="page-list">
-              <div className="list-header">
-                <span>{selectedProject.name}</span>
-                <Button 
-                  type="link" 
-                  size="small" 
-                  icon={<ReloadOutlined />}
-                  onClick={() => getPages(selectedProject.id)}
-                />
+            <div style={iosStyles.sidebarSection}>
+              <div style={iosStyles.sectionHeader}>
+                <h3 style={iosStyles.sectionTitle}>
+                  <FileTextOutlined style={{ color: '#AF52DE' }} /> 页面
+                </h3>
+                <Button
+                  type="primary"
+                  size="small"
+                  style={{
+                    ...iosStyles.smallButton,
+                    background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
+                    boxShadow: '0 1px 4px rgba(175, 82, 222, 0.25)'
+                  }}
+                  icon={<PlusOutlined />}
+                  onClick={handleOpenPageModal}
+                >
+                  新建
+                </Button>
               </div>
-              <div className="list-content">
-                {pages.length > 0 ? (
-                  pages.map(page => (
-                    <Card
+              
+              {loadingPages ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <Spin tip="加载页面中..." />
+                </div>
+              ) : pages.length > 0 ? (
+                <div>
+                  {pages.map(page => (
+                    <div
                       key={page.id}
-                      size="small"
-                      className={`page-card ${selectedPageId === page.id ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedPageId(page.id);
-                        loadPage(page.id);
+                      style={{
+                        ...iosStyles.pageCard,
+                        ...(selectedPageId === page.id ? iosStyles.pageCardSelected : {})
                       }}
+                      onClick={() => handleSelectPage(page)}
                     >
-                      <div className="page-card-content">
-                        <div className="page-info">
-                          <div className="page-title">{page.title}</div>
-                          <div className="page-slug">{page.slug}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: '#000' }}>
+                            {page.title}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>
+                            {page.slug}
+                          </div>
                         </div>
-                        <Space size={4}>
-                          <Tooltip title="编辑名称">
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<EditOutlined />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditPage(page);
-                              }}
-                            />
-                          </Tooltip>
-                          <Tooltip title={page.is_published ? '已发布' : '点击发布'}>
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<GlobalOutlined />}
-                              style={{ color: page.is_published ? '#52c41a' : '#999' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (page.is_published) {
-                                  showPermalinkModal(page);
-                                } else {
-                                  setSelectedPageId(page.id);
-                                  handleGeneratePermalink();
-                                }
-                              }}
-                            />
-                          </Tooltip>
-                          <Tooltip title="删除">
-                            <Button
-                              type="text"
-                              size="small"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                Modal.confirm({
-                                  title: '确认删除',
-                                  content: '确定要删除这个页面吗？',
-                                  onOk: async () => {
-                                    await deletePage(page.id);
-                                    if (selectedPageId === page.id) {
-                                      setSelectedPageId(null);
-                                    }
-                                    getPages(selectedProject.id);
-                                  }
-                                });
-                              }}
-                            />
-                          </Tooltip>
+                        <Space size={6}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditPage(page);
+                            }}
+                            style={{ color: '#8E8E93' }}
+                          />
+                          {page.is_published && (
+                            <CheckCircleOutlined style={{ color: '#34C759', fontSize: 16 }} />
+                          )}
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePage(page);
+                            }}
+                            style={{ color: '#FF3B30' }}
+                          />
                         </Space>
                       </div>
-                    </Card>
-                  ))
-                ) : (
-                  <Empty description="暂无页面" />
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty description="暂无页面" style={{ marginTop: 40 }}>
+                  <Button 
+                    type="primary" 
+                    style={{ 
+                      borderRadius: 8, 
+                      marginTop: 16,
+                      background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
+                      border: 'none',
+                      fontWeight: 600
+                    }}
+                    icon={<FileAddOutlined />}
+                    onClick={handleOpenPageModal}
+                  >
+                    创建第一个页面
+                  </Button>
+                </Empty>
+              )}
+            </div>
+          )}
+
+          {!selectedProject && (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <Empty description="请选择一个项目" />
             </div>
           )}
         </Sider>
 
         {/* 主编辑区 */}
-        <Content className="editor-content">
-          <div className="editor-container">
-            {/* 编辑器区域 */}
-            <div className="code-editor-section">
-              <div className="editor-header-bar">
-                <span className="editor-title">HTML编辑器</span>
-                <span className="editor-hint">
-                  {editorReady ? '编辑器已就绪' : '正在加载编辑器...'}
-                </span>
-              </div>
+        <Content style={{ display: 'flex', background: 'transparent', padding: 0 }}>
+          {/* 编辑器区域 */}
+          <div style={iosStyles.editorSection}>
+            <div style={iosStyles.editorHeader}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: '#000' }}>
+                <CodeOutlined style={{ color: '#007AFF' }} /> HTML编辑器
+              </span>
+              <span style={{ fontSize: 12, color: '#8E8E93' }}>
+                {editorReady ? '就绪' : '加载中...'}
+              </span>
+            </div>
+            <div style={{ flex: 1, background: '#1e1e1e' }}>
               <Editor
-                height="calc(100vh - 200px)"
+                height="100%"
                 language="html"
                 theme={editorTheme}
                 value={htmlContent}
@@ -953,25 +1096,45 @@ ${js || ''}
                     alignItems: 'center', 
                     height: '100%',
                     flexDirection: 'column',
-                    gap: '16px'
+                    gap: 16,
+                    background: 'white'
                   }}>
                     <Spin size="large" />
-                    <div>正在加载编辑器...</div>
+                    <div style={{ color: '#8E8E93' }}>正在加载编辑器...</div>
                   </div>
                 }
               />
             </div>
+          </div>
 
-            {/* 预览区域 */}
-            <div className="preview-section">
-              <div className="preview-header">
-                <span>实时预览</span>
-              </div>
-              <div className={`preview-frame preview-${previewMode}`}>
+          {/* 预览区域 */}
+          <div style={iosStyles.previewSection}>
+            <div style={iosStyles.editorHeader}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: '#000' }}>
+                <EyeOutlined style={{ color: '#AF52DE' }} /> 实时预览
+              </span>
+              <span style={{ fontSize: 12, color: '#8E8E93' }}>
+                {previewMode === 'desktop' ? '桌面' : 
+                 previewMode === 'tablet' ? '平板' : '手机'}
+              </span>
+            </div>
+            <div style={iosStyles.previewContent}>
+              <div style={{
+                ...iosStyles.previewFrame,
+                width: previewMode === 'desktop' ? '100%' : 
+                       previewMode === 'tablet' ? '768px' : '375px',
+                height: '100%',
+                maxHeight: '90%'
+              }}>
                 <iframe
                   title="preview"
-                  className="preview-iframe"
                   srcDoc={compiledContent}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    border: 'none',
+                    display: 'block'
+                  }}
                   sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
                 />
               </div>
@@ -989,6 +1152,7 @@ ${js || ''}
           setShowProjectModal(false);
           projectForm.resetFields();
         }}
+        centered
       >
         <Form
           form={projectForm}
@@ -1000,38 +1164,35 @@ ${js || ''}
             label="项目名称"
             rules={[{ required: true, message: '请输入项目名称' }]}
           >
-            <Input placeholder="输入项目名称" />
+            <Input placeholder="输入项目名称" style={{ borderRadius: 8 }} />
           </Form.Item>
           <Form.Item
             name="type"
             label="类型"
             initialValue="folder"
+            hidden
           >
-            <Select
-              options={[
-                { value: 'folder', label: '文件夹' },
-                { value: 'page', label: '页面' }
-              ]}
-            />
+            <Input />
           </Form.Item>
           <Form.Item
             name="description"
             label="描述"
           >
-            <TextArea rows={3} placeholder="项目描述（可选）" />
+            <TextArea rows={3} placeholder="项目描述（可选）" style={{ borderRadius: 8 }} />
           </Form.Item>
         </Form>
       </Modal>
 
       {/* 创建页面弹窗 */}
       <Modal
-        title="创建页面"
+        title={`在 "${selectedProject?.name}" 中创建页面`}
         open={showPageModal}
         onOk={() => pageForm.submit()}
         onCancel={() => {
           setShowPageModal(false);
           pageForm.resetFields();
         }}
+        centered
         footer={[
           <Button key="cancel" onClick={() => {
             setShowPageModal(false);
@@ -1044,6 +1205,10 @@ ${js || ''}
             type="primary" 
             onClick={() => pageForm.submit()}
             icon={creditsConfig.credits_per_page > 0 ? <DollarOutlined /> : null}
+            style={{
+              background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)',
+              border: 'none'
+            }}
           >
             创建 ({formatCreditsDisplay(creditsConfig.credits_per_page)})
           </Button>
@@ -1057,22 +1222,19 @@ ${js || ''}
           <Form.Item
             name="title"
             label="页面标题"
-            rules={[{ required: true, message: '请输入页面标题' }]}
+            tooltip="默认以当前时间命名，您可以修改为自己想要的标题"
           >
-            <Input placeholder="输入页面标题" />
-          </Form.Item>
-          <Form.Item
-            name="slug"
-            label="URL路径"
-            tooltip="留空将自动生成"
-          >
-            <Input placeholder="例如: my-page" />
+            <Input 
+              placeholder="输入页面标题（可选）" 
+              allowClear
+              style={{ borderRadius: 8 }}
+            />
           </Form.Item>
         </Form>
-        <Divider />
-        <Space direction="vertical" style={{ width: '100%' }}>
-          {creditsConfig.credits_per_page > 0 ? (
-            <>
+        {creditsConfig.credits_per_page > 0 && (
+          <>
+            <Divider />
+            <Space direction="vertical" style={{ width: '100%' }}>
               <Text type="secondary">
                 创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
               </Text>
@@ -1081,13 +1243,9 @@ ${js || ''}
                   {userCredits}
                 </Text> 积分
               </Text>
-            </>
-          ) : (
-            <Text type="success">
-              <strong>创建页面免费！</strong>
-            </Text>
-          )}
-        </Space>
+            </Space>
+          </>
+        )}
       </Modal>
 
       {/* 重命名弹窗 */}
@@ -1100,6 +1258,7 @@ ${js || ''}
           renameForm.resetFields();
           setRenameItem(null);
         }}
+        centered
       >
         <Form
           form={renameForm}
@@ -1111,7 +1270,7 @@ ${js || ''}
             label={renameType === 'project' ? '项目名称' : '页面名称'}
             rules={[{ required: true, message: '请输入名称' }]}
           >
-            <Input placeholder="输入新名称" />
+            <Input placeholder="输入新名称" style={{ borderRadius: 8 }} />
           </Form.Item>
         </Form>
       </Modal>
