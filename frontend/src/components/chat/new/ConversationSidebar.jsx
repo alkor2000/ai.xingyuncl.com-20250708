@@ -1,5 +1,5 @@
 /**
- * 会话侧边栏组件
+ * 会话侧边栏组件 - iOS风格优化版（仅对话列表）
  */
 
 import React from 'react'
@@ -17,7 +17,7 @@ import {
   DeleteOutlined,
   MessageOutlined,
   ClockCircleOutlined,
-  StarFilled
+  PushpinFilled
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -37,7 +37,7 @@ const ConversationSidebar = ({
 }) => {
   const { t } = useTranslation()
 
-  // 渲染单个会话项
+  // 渲染单个会话项 - 优化置顶图标显示
   const renderConversationItem = (conversation) => {
     const isActive = currentConversation?.id === conversation.id
     const model = aiModels.find(m => m.name === conversation.model_name)
@@ -50,10 +50,16 @@ const ConversationSidebar = ({
       >
         <div className="conversation-header">
           <div className="conversation-title">
+            {/* 简单的置顶图标，不显示数字 */}
             {conversation.priority > 0 && (
-              <Tag color="gold" size="small">
-                <StarFilled /> {conversation.priority}
-              </Tag>
+              <PushpinFilled 
+                className="pin-icon"
+                style={{ 
+                  color: '#FF9500',
+                  fontSize: 14,
+                  marginRight: 6
+                }} 
+              />
             )}
             <span className="title-text">{conversation.title}</span>
           </div>
@@ -85,12 +91,17 @@ const ConversationSidebar = ({
         </div>
         <div className="conversation-meta">
           <Text type="secondary" className="message-count">
-            <MessageOutlined /> {conversation.message_count}
+            <MessageOutlined /> {conversation.message_count || 0}
           </Text>
         </div>
         {conversation.last_message_at && (
           <div className="conversation-time">
-            <ClockCircleOutlined /> {new Date(conversation.last_message_at).toLocaleString()}
+            <ClockCircleOutlined /> {new Date(conversation.last_message_at).toLocaleString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </div>
         )}
       </div>
@@ -99,14 +110,14 @@ const ConversationSidebar = ({
 
   return (
     <div className="sidebar-wrapper">
-      {/* 新建按钮 */}
+      {/* 新建按钮 - iOS风格优化 */}
       <div className="sidebar-header-fixed">
         <Button
-          type="default"
+          type="primary"
           block
           icon={<PlusOutlined />}
           onClick={onCreateConversation}
-          style={{ height: '36px' }}
+          className="new-chat-button"
         >
           {t('chat.newConversation')}
         </Button>
