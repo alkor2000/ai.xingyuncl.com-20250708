@@ -89,7 +89,7 @@ class GroupService {
   }
 
   /**
-   * 创建用户分组
+   * 创建用户分组 - 自动分配所有激活的AI模型权限
    */
   static async createGroup(groupData, operatorId = null) {
     try {
@@ -106,24 +106,75 @@ class GroupService {
         throw new ConflictError('分组名称已存在');
       }
 
-      // 创建分组
-      const group = await User.createGroup({
-        name,
-        description,
-        color,
-        permissions,
-        is_active,
-        expire_date
-      }, operatorId);
+      // 使用事务确保原子性 - 创建组和分配AI模型权限
+      const result = await dbConnection.transaction(async (query) => {
+        // 1. 创建分组
+        const group = await User.createGroup({
+          name,
+          description,
+          color,
+          permissions,
+          is_active,
+          expire_date
+        }, operatorId);
 
-      logger.info('创建用户分组成功', {
-        operatorId,
-        groupId: group.id,
-        groupName: group.name,
-        expireDate: group.expire_date
+        // 2. 获取所有激活的AI模型（对话模型）
+        const aiModelsSql = 'SELECT id, name, display_name FROM ai_models WHERE is_active = 1';
+        const { rows: aiModels } = await query(aiModelsSql);
+
+        // 3. 获取所有激活的图像模型
+        const imageModelsSql = 'SELECT id, name, display_name FROM image_models WHERE is_active = 1';
+        const { rows: imageModels } = await query(imageModelsSql);
+
+        // 4. 自动分配所有AI对话模型给新创建的组
+        if (aiModels.length > 0) {
+          const aiModelAssignments = aiModels.map(model => [model.id, group.id, operatorId]);
+          const aiAssignSql = 'INSERT INTO ai_model_groups (model_id, group_id, created_by) VALUES ?';
+          
+          // MySQL的批量插入语法
+          const aiInsertSql = `
+            INSERT INTO ai_model_groups (model_id, group_id, created_by) 
+            VALUES ${aiModelAssignments.map(() => '(?, ?, ?)').join(', ')}
+          `;
+          const aiInsertParams = aiModelAssignments.flat();
+          await query(aiInsertSql, aiInsertParams);
+
+          logger.info('自动分配AI对话模型给新组成功', {
+            groupId: group.id,
+            groupName: group.name,
+            assignedAIModels: aiModels.length,
+            modelNames: aiModels.map(m => m.display_name).join(', ')
+          });
+        }
+
+        // 5. 记录图像模型数量（当前系统架构下图像模型权限可能通过其他机制管理）
+        if (imageModels.length > 0) {
+          logger.info('系统中存在激活的图像模型', {
+            groupId: group.id,
+            groupName: group.name,
+            imageModelCount: imageModels.length,
+            imageModelNames: imageModels.map(m => m.display_name).join(', '),
+            note: '图像模型权限管理机制待确认'
+          });
+        }
+
+        return {
+          group,
+          assignedAIModels: aiModels.length,
+          totalImageModels: imageModels.length
+        };
       });
 
-      return group;
+      logger.info('创建用户分组成功（包含模型权限自动分配）', {
+        operatorId,
+        groupId: result.group.id,
+        groupName: result.group.name,
+        expireDate: result.group.expire_date,
+        assignedAIModels: result.assignedAIModels,
+        totalImageModels: result.totalImageModels
+      });
+
+      return result.group;
     } catch (error) {
       logger.error('创建用户分组失败', { error: error.message, groupData });
       throw error;
@@ -772,7 +823,7 @@ class GroupService {
   }
 
   /**
-   * 克隆分组配置
+   * 克隆分组配置 - 包含自动分配AI模型权限
    */
   static async cloneGroup(sourceGroupId, newGroupName, operatorId = null) {
     try {
@@ -781,24 +832,54 @@ class GroupService {
         throw new ValidationError('源分组不存在');
       }
 
-      // 创建新分组（包含有效期）
-      const newGroup = await GroupService.createGroup({
-        name: newGroupName,
-        description: `克隆自: ${sourceGroup.name}`,
-        color: sourceGroup.color,
-        permissions: sourceGroup.permissions,
-        is_active: true,
-        expire_date: sourceGroup.expire_date // 复制有效期设置
-      }, operatorId);
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 1. 创建新分组（包含有效期）- 这会自动分配所有激活的AI模型
+        const newGroup = await GroupService.createGroup({
+          name: newGroupName,
+          description: `克隆自: ${sourceGroup.name}`,
+          color: sourceGroup.color,
+          permissions: sourceGroup.permissions,
+          is_active: true,
+          expire_date: sourceGroup.expire_date
+        }, operatorId);
+
+        // 2. 克隆源组的AI模型分配关系（如果源组有特定的模型配置）
+        const sourceModelAssignmentsSql = 'SELECT model_id FROM ai_model_groups WHERE group_id = ?';
+        const { rows: sourceModels } = await query(sourceModelAssignmentsSql, [sourceGroupId]);
+
+        if (sourceModels.length > 0) {
+          // 删除自动分配的模型，改为复制源组的模型配置
+          const deleteAutoAssignedSql = 'DELETE FROM ai_model_groups WHERE group_id = ?';
+          await query(deleteAutoAssignedSql, [newGroup.id]);
+
+          // 复制源组的模型分配
+          const cloneAssignments = sourceModels.map(model => [model.model_id, newGroup.id, operatorId]);
+          const cloneSql = `
+            INSERT INTO ai_model_groups (model_id, group_id, created_by) 
+            VALUES ${cloneAssignments.map(() => '(?, ?, ?)').join(', ')}
+          `;
+          const cloneParams = cloneAssignments.flat();
+          await query(cloneSql, cloneParams);
+
+          logger.info('克隆分组AI模型分配成功', {
+            sourceGroupId,
+            newGroupId: newGroup.id,
+            clonedModels: sourceModels.length
+          });
+        }
+
+        return newGroup;
+      });
 
       logger.info('克隆分组成功', {
         operatorId,
         sourceGroupId,
-        newGroupId: newGroup.id,
+        newGroupId: result.id,
         newGroupName
       });
 
-      return newGroup;
+      return result;
     } catch (error) {
       logger.error('克隆分组失败', { error: error.message, sourceGroupId, newGroupName });
       throw error;
@@ -910,6 +991,73 @@ class GroupService {
     } catch (error) {
       logger.error('获取组站点配置失败', { error: error.message, groupId });
       return null;
+    }
+  }
+
+  /**
+   * 为现有组补充分配AI模型权限（管理员工具方法）
+   */
+  static async assignAllActiveModelsToGroup(groupId, operatorId = null) {
+    try {
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      // 使用事务确保原子性
+      const result = await dbConnection.transaction(async (query) => {
+        // 1. 获取所有激活的AI模型
+        const aiModelsSql = 'SELECT id, name, display_name FROM ai_models WHERE is_active = 1';
+        const { rows: aiModels } = await query(aiModelsSql);
+
+        if (aiModels.length === 0) {
+          return { assignedCount: 0 };
+        }
+
+        // 2. 获取该组已分配的模型
+        const existingAssignmentsSql = 'SELECT model_id FROM ai_model_groups WHERE group_id = ?';
+        const { rows: existingAssignments } = await query(existingAssignmentsSql, [groupId]);
+        const existingModelIds = new Set(existingAssignments.map(a => a.model_id));
+
+        // 3. 找出需要新分配的模型
+        const newModels = aiModels.filter(model => !existingModelIds.has(model.id));
+
+        if (newModels.length === 0) {
+          return { assignedCount: 0, message: '该组已分配了所有激活的AI模型' };
+        }
+
+        // 4. 分配新的模型
+        const newAssignments = newModels.map(model => [model.id, groupId, operatorId]);
+        const insertSql = `
+          INSERT INTO ai_model_groups (model_id, group_id, created_by) 
+          VALUES ${newAssignments.map(() => '(?, ?, ?)').join(', ')}
+        `;
+        const insertParams = newAssignments.flat();
+        await query(insertSql, insertParams);
+
+        logger.info('为现有组补充分配AI模型成功', {
+          groupId,
+          groupName: group.name,
+          newAssignedModels: newModels.length,
+          modelNames: newModels.map(m => m.display_name).join(', ')
+        });
+
+        return {
+          assignedCount: newModels.length,
+          assignedModels: newModels
+        };
+      });
+
+      return {
+        success: true,
+        ...result,
+        message: result.assignedCount > 0 
+          ? `成功为组"${group.name}"分配了${result.assignedCount}个AI模型` 
+          : '该组已分配了所有激活的AI模型'
+      };
+    } catch (error) {
+      logger.error('为现有组补充分配AI模型失败', { error: error.message, groupId });
+      throw error;
     }
   }
 }
