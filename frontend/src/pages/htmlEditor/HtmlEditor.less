@@ -34,10 +34,11 @@
     }
   }
 
-  // 侧边栏
+  // 侧边栏 - 固定高度
   .editor-sider {
     background: #fff;
     border-right: 1px solid #f0f0f0;
+    height: calc(100vh - 48px);  // 设置固定高度，减去顶部工具栏高度
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -46,6 +47,7 @@
       padding: 12px 16px;
       border-bottom: 1px solid #f0f0f0;
       background: #fafafa;
+      flex-shrink: 0;  // 不允许收缩
 
       h3 {
         margin: 0;
@@ -56,9 +58,29 @@
 
     .project-tree {
       padding: 8px;
-      max-height: 40vh;
+      max-height: 150px;  // 减小项目树高度，给页面列表更多空间
       overflow-y: auto;
       border-bottom: 1px solid #f0f0f0;
+      flex-shrink: 0;  // 不允许收缩
+      
+      // 项目树滚动条样式
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: #f0f0f0;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c0c0c0;
+        border-radius: 3px;
+        
+        &:hover {
+          background: #999;
+        }
+      }
     }
 
     .page-list {
@@ -66,6 +88,8 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-height: 0;  // 重要：允许flex子元素缩小
+      height: 100%;  // 确保占满剩余空间
       
       .list-header {
         padding: 8px 16px;
@@ -76,12 +100,40 @@
         align-items: center;
         font-size: 13px;
         font-weight: 500;
+        flex-shrink: 0;  // 固定header高度
       }
 
       .list-content {
         flex: 1;
         padding: 8px;
-        overflow-y: auto;
+        overflow-y: auto;  // 允许垂直滚动
+        overflow-x: hidden;  // 禁止水平滚动
+        min-height: 0;  // 重要：允许内容区域正确计算高度
+        max-height: 100%;  // 确保不超出父容器
+
+        // 添加滚动条样式美化
+        &::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        &::-webkit-scrollbar-track {
+          background: #f0f0f0;
+          border-radius: 3px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: #c0c0c0;
+          border-radius: 3px;
+          
+          &:hover {
+            background: #999;
+          }
+        }
+
+        // 确保滚动条始终显示（当内容超出时）
+        &::-webkit-scrollbar {
+          display: block;
+        }
 
         .page-card {
           margin-bottom: 8px;

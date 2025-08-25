@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - iOS设计风格增强版（修复项目切换&优化配色）
+ * HTML编辑器主页面 - iOS设计风格增强版（修复页面列表滚动）
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -597,15 +597,43 @@ const HtmlEditor = () => {
       backdropFilter: 'blur(20px)',
       borderRight: '1px solid rgba(60, 60, 67, 0.12)'
     },
+    // 关键修改：侧边栏内容容器
+    sidebarContent: {
+      height: 'calc(100vh - 60px)',  // 固定高度
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden'  // 防止整体溢出
+    },
     sidebarSection: {
       padding: '20px',
-      borderBottom: '1px solid rgba(60, 60, 67, 0.08)'
+      borderBottom: '1px solid rgba(60, 60, 67, 0.08)',
+      flexShrink: 0  // 项目区域不收缩
+    },
+    // 修改：页面列表区域样式
+    pageListSection: {
+      padding: '20px',
+      borderBottom: '1px solid rgba(60, 60, 67, 0.08)',
+      flex: 1,  // 占用剩余空间
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0,  // 重要：允许收缩到0
+      overflow: 'hidden'  // 防止整个section溢出
+    },
+    // 页面列表滚动容器
+    pageListScrollContainer: {
+      flex: 1,
+      overflowY: 'auto',  // 允许垂直滚动
+      overflowX: 'hidden',  // 禁止水平滚动
+      paddingRight: '4px',  // 给滚动条留出空间
+      minHeight: 0,  // 重要：允许收缩
+      maxHeight: 'calc(100vh - 300px)'  // 明确设置最大高度
     },
     sectionHeader: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 16
+      marginBottom: 16,
+      flexShrink: 0  // 防止header被压缩
     },
     sectionTitle: {
       fontSize: 17,
@@ -881,191 +909,194 @@ const HtmlEditor = () => {
           collapsedWidth={0}
           style={iosStyles.sidebar}
         >
-          {/* 项目列表 */}
-          <div style={iosStyles.sidebarSection}>
-            <div style={iosStyles.sectionHeader}>
-              <h3 style={iosStyles.sectionTitle}>
-                <AppstoreOutlined style={{ color: '#007AFF' }} /> 项目
-              </h3>
-              <Button
-                type="primary"
-                size="small"
-                style={iosStyles.smallButton}
-                icon={<PlusOutlined />}
-                onClick={() => setShowProjectModal(true)}
-              >
-                新建
-              </Button>
-            </div>
-            
-            {projects.length > 0 ? (
-              <div>
-                {projects.map(project => (
-                  <div
-                    key={project.id}
-                    style={{
-                      ...iosStyles.projectItem,
-                      ...(selectedProject?.id === project.id ? iosStyles.projectItemSelected : {
-                        background: 'rgba(60, 60, 67, 0.03)',
-                        '&:hover': { background: 'rgba(60, 60, 67, 0.06)' }
-                      })
-                    }}
-                    onClick={() => handleSelectProject(project)}
-                  >
-                    <Space size={8}>
-                      <FolderOutlined style={{ fontSize: 16 }} />
-                      <span style={{ fontWeight: 500 }}>{project.name}</span>
-                      {project.is_default === 1 && (
-                        <Tag style={{ 
-                          ...iosStyles.tag, 
-                          background: 'rgba(0, 122, 255, 0.1)', 
-                          color: '#007AFF',
-                          padding: '2px 6px',
-                          fontSize: 11
-                        }}>
-                          默认
-                        </Tag>
-                      )}
-                    </Space>
-                    <Space size={4}>
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditProject(project);
-                        }}
-                        style={{ 
-                          color: selectedProject?.id === project.id ? 'white' : '#8E8E93',
-                          opacity: 0.8
-                        }}
-                      />
-                      {project.is_default !== 1 && (
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteProject(project);
-                          }}
-                          style={{ 
-                            color: selectedProject?.id === project.id ? '#FFD1DC' : '#FF3B30',
-                            opacity: 0.8
-                          }}
-                        />
-                      )}
-                    </Space>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty description="暂无项目" style={{ marginTop: 40 }} />
-            )}
-          </div>
-
-          {/* 页面列表 */}
-          {selectedProject && (
+          {/* 关键修改：添加内容容器 */}
+          <div style={iosStyles.sidebarContent}>
+            {/* 项目列表 */}
             <div style={iosStyles.sidebarSection}>
               <div style={iosStyles.sectionHeader}>
                 <h3 style={iosStyles.sectionTitle}>
-                  <FileTextOutlined style={{ color: '#AF52DE' }} /> 页面
+                  <AppstoreOutlined style={{ color: '#007AFF' }} /> 项目
                 </h3>
                 <Button
                   type="primary"
                   size="small"
-                  style={{
-                    ...iosStyles.smallButton,
-                    background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
-                    boxShadow: '0 1px 4px rgba(175, 82, 222, 0.25)'
-                  }}
+                  style={iosStyles.smallButton}
                   icon={<PlusOutlined />}
-                  onClick={handleOpenPageModal}
+                  onClick={() => setShowProjectModal(true)}
                 >
                   新建
                 </Button>
               </div>
               
-              {loadingPages ? (
-                <div style={{ textAlign: 'center', padding: 40 }}>
-                  <Spin tip="加载页面中..." />
-                </div>
-              ) : pages.length > 0 ? (
+              {projects.length > 0 ? (
                 <div>
-                  {pages.map(page => (
+                  {projects.map(project => (
                     <div
-                      key={page.id}
+                      key={project.id}
                       style={{
-                        ...iosStyles.pageCard,
-                        ...(selectedPageId === page.id ? iosStyles.pageCardSelected : {})
+                        ...iosStyles.projectItem,
+                        ...(selectedProject?.id === project.id ? iosStyles.projectItemSelected : {
+                          background: 'rgba(60, 60, 67, 0.03)',
+                          '&:hover': { background: 'rgba(60, 60, 67, 0.06)' }
+                        })
                       }}
-                      onClick={() => handleSelectPage(page)}
+                      onClick={() => handleSelectProject(project)}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: '#000' }}>
-                            {page.title}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>
-                            {page.slug}
-                          </div>
-                        </div>
-                        <Space size={6}>
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<EditOutlined />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditPage(page);
-                            }}
-                            style={{ color: '#8E8E93' }}
-                          />
-                          {page.is_published && (
-                            <CheckCircleOutlined style={{ color: '#34C759', fontSize: 16 }} />
-                          )}
+                      <Space size={8}>
+                        <FolderOutlined style={{ fontSize: 16 }} />
+                        <span style={{ fontWeight: 500 }}>{project.name}</span>
+                        {project.is_default === 1 && (
+                          <Tag style={{ 
+                            ...iosStyles.tag, 
+                            background: 'rgba(0, 122, 255, 0.1)', 
+                            color: '#007AFF',
+                            padding: '2px 6px',
+                            fontSize: 11
+                          }}>
+                            默认
+                          </Tag>
+                        )}
+                      </Space>
+                      <Space size={4}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditProject(project);
+                          }}
+                          style={{ 
+                            color: selectedProject?.id === project.id ? 'white' : '#8E8E93',
+                            opacity: 0.8
+                          }}
+                        />
+                        {project.is_default !== 1 && (
                           <Button
                             type="text"
                             size="small"
                             icon={<DeleteOutlined />}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeletePage(page);
+                              handleDeleteProject(project);
                             }}
-                            style={{ color: '#FF3B30' }}
+                            style={{ 
+                              color: selectedProject?.id === project.id ? '#FFD1DC' : '#FF3B30',
+                              opacity: 0.8
+                            }}
                           />
-                        </Space>
-                      </div>
+                        )}
+                      </Space>
                     </div>
                   ))}
                 </div>
               ) : (
-                <Empty description="暂无页面" style={{ marginTop: 40 }}>
-                  <Button 
-                    type="primary" 
-                    style={{ 
-                      borderRadius: 8, 
-                      marginTop: 16,
-                      background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
-                      border: 'none',
-                      fontWeight: 600
-                    }}
-                    icon={<FileAddOutlined />}
-                    onClick={handleOpenPageModal}
-                  >
-                    创建第一个页面
-                  </Button>
-                </Empty>
+                <Empty description="暂无项目" style={{ marginTop: 40 }} />
               )}
             </div>
-          )}
 
-          {!selectedProject && (
-            <div style={{ padding: 40, textAlign: 'center' }}>
-              <Empty description="请选择一个项目" />
-            </div>
-          )}
+            {/* 页面列表 - 修复滚动问题 */}
+            {selectedProject && (
+              <div style={iosStyles.pageListSection}>
+                <div style={iosStyles.sectionHeader}>
+                  <h3 style={iosStyles.sectionTitle}>
+                    <FileTextOutlined style={{ color: '#AF52DE' }} /> 页面
+                  </h3>
+                  <Button
+                    type="primary"
+                    size="small"
+                    style={{
+                      ...iosStyles.smallButton,
+                      background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
+                      boxShadow: '0 1px 4px rgba(175, 82, 222, 0.25)'
+                    }}
+                    icon={<PlusOutlined />}
+                    onClick={handleOpenPageModal}
+                  >
+                    新建
+                  </Button>
+                </div>
+                
+                {loadingPages ? (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <Spin tip="加载页面中..." />
+                  </div>
+                ) : pages.length > 0 ? (
+                  <div style={iosStyles.pageListScrollContainer} className="page-list-scroll">
+                    {pages.map(page => (
+                      <div
+                        key={page.id}
+                        style={{
+                          ...iosStyles.pageCard,
+                          ...(selectedPageId === page.id ? iosStyles.pageCardSelected : {})
+                        }}
+                        onClick={() => handleSelectPage(page)}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: '#000' }}>
+                              {page.title}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>
+                              {page.slug}
+                            </div>
+                          </div>
+                          <Space size={6}>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditPage(page);
+                              }}
+                              style={{ color: '#8E8E93' }}
+                            />
+                            {page.is_published && (
+                              <CheckCircleOutlined style={{ color: '#34C759', fontSize: 16 }} />
+                            )}
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<DeleteOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePage(page);
+                              }}
+                              style={{ color: '#FF3B30' }}
+                            />
+                          </Space>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty description="暂无页面" style={{ marginTop: 40 }}>
+                    <Button 
+                      type="primary" 
+                      style={{ 
+                        borderRadius: 8, 
+                        marginTop: 16,
+                        background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
+                        border: 'none',
+                        fontWeight: 600
+                      }}
+                      icon={<FileAddOutlined />}
+                      onClick={handleOpenPageModal}
+                    >
+                      创建第一个页面
+                    </Button>
+                  </Empty>
+                )}
+              </div>
+            )}
+
+            {!selectedProject && (
+              <div style={{ padding: 40, textAlign: 'center' }}>
+                <Empty description="请选择一个项目" />
+              </div>
+            )}
+          </div>
         </Sider>
 
         {/* 主编辑区 */}
