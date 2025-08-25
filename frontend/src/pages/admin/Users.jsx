@@ -1,5 +1,6 @@
 /**
  * 用户管理主页面 - 包含组积分池功能、账号有效期管理和站点配置
+ * 修复：搜索状态保持，确保分页时不丢失搜索条件
  */
 
 import React, { useEffect, useState } from 'react'
@@ -96,6 +97,10 @@ const Users = () => {
   const [expireDateGroup, setExpireDateGroup] = useState(null)
   const [siteConfigGroup, setSiteConfigGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
+  
+  // 🔥 核心修复：添加搜索状态管理
+  const [currentSearchParams, setCurrentSearchParams] = useState({})
+  
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -109,20 +114,32 @@ const Users = () => {
   // 获取当前组信息
   const currentGroupInfo = userGroups.find(g => g.id === currentUser?.group_id)
   
-  // 加载用户列表
-  const loadUsers = async (params = {}) => {
+  // 🔥 核心修复：统一的加载用户列表函数，支持搜索条件和分页
+  const loadUsers = async (searchParams = {}, pageParams = {}) => {
     try {
-      const result = await getUsers({
-        page: pagination.current,
-        limit: pagination.pageSize,
-        ...params
-      })
+      // 合并搜索参数和分页参数
+      const finalParams = {
+        ...currentSearchParams, // 保持当前搜索条件
+        ...searchParams,        // 新的搜索条件（如果有）
+        page: pageParams.current || pagination.current,
+        limit: pageParams.pageSize || pagination.pageSize
+      }
+
+      console.log('🔍 加载用户列表参数:', finalParams)
+
+      const result = await getUsers(finalParams)
+      
+      // 更新分页信息
       setPagination(prev => ({
         ...prev,
+        ...pageParams,
         total: result.pagination.total
       }))
+
+      return result
     } catch (error) {
       console.error('加载用户失败:', error)
+      message.error('加载用户列表失败')
     }
   }
 
@@ -132,6 +149,7 @@ const Users = () => {
       await getUserGroups()
     } catch (error) {
       console.error('加载用户分组失败:', error)
+      message.error('加载用户分组失败')
     }
   }
 
@@ -141,12 +159,46 @@ const Users = () => {
       loadUsers()
       loadUserGroups()
     }
-  }, [pagination.current, pagination.pageSize, hasPermission])
+  }, [hasPermission])
 
-  // 用户搜索
-  const handleSearch = (values) => {
+  // 🔥 核心修复：用户搜索 - 保存搜索条件并重置到第一页
+  const handleSearch = async (searchValues) => {
+    console.log('🔍 执行用户搜索:', searchValues)
+    
+    // 更新搜索条件状态
+    setCurrentSearchParams(searchValues)
+    
+    // 重置到第一页并执行搜索
+    const newPagination = { current: 1, pageSize: pagination.pageSize }
     setPagination(prev => ({ ...prev, current: 1 }))
-    loadUsers(values)
+    
+    await loadUsers(searchValues, newPagination)
+  }
+
+  // 🔥 核心修复：分页处理 - 保持搜索条件
+  const handlePageChange = async (page, pageSize) => {
+    console.log('📄 分页切换:', { page, pageSize, currentSearchParams })
+    
+    const newPagination = { current: page, pageSize }
+    setPagination(prev => ({ ...prev, ...newPagination }))
+    
+    // 使用当前搜索条件进行分页
+    await loadUsers({}, newPagination)
+  }
+
+  // 🔥 核心修复：重置搜索 - 清空搜索条件并回到第一页
+  const handleResetSearch = async () => {
+    console.log('🔄 重置搜索')
+    
+    // 清空搜索条件
+    setCurrentSearchParams({})
+    
+    // 重置到第一页
+    const newPagination = { current: 1, pageSize: pagination.pageSize }
+    setPagination(prev => ({ ...prev, current: 1 }))
+    
+    // 加载全部数据
+    await loadUsers({}, newPagination)
   }
 
   // 创建用户
@@ -171,7 +223,9 @@ const Users = () => {
       setIsUserModalVisible(false)
       userForm.resetFields()
       message.success(t('admin.users.create.success'))
-      loadUsers()
+      
+      // 🔥 修复：创建用户后保持当前搜索和分页状态
+      await loadUsers()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.users.create.failed'))
     }
@@ -229,7 +283,9 @@ const Users = () => {
       setEditingUser(null)
       userForm.resetFields()
       message.success(t('admin.users.update.success'))
-      loadUsers()
+      
+      // 🔥 修复：更新用户后保持当前搜索和分页状态
+      await loadUsers()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.users.update.failed'))
     }
@@ -241,7 +297,9 @@ const Users = () => {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
       await updateUser(userId, { status: newStatus })
       message.success('用户状态更新成功')
-      loadUsers()
+      
+      // 🔥 修复：状态切换后保持当前搜索和分页状态
+      await loadUsers()
     } catch (error) {
       message.error('用户状态更新失败')
     }
@@ -283,7 +341,20 @@ const Users = () => {
     try {
       await deleteUser(userId)
       message.success('用户删除成功')
-      loadUsers()
+      
+      // 🔥 修复：删除用户后保持当前搜索和分页状态，但需要检查是否需要调整页码
+      const currentTotal = pagination.total
+      const currentPage = pagination.current
+      const pageSize = pagination.pageSize
+      
+      // 如果删除后当前页没有数据了，回到上一页
+      if ((currentTotal - 1) <= (currentPage - 1) * pageSize && currentPage > 1) {
+        const newPagination = { current: currentPage - 1, pageSize }
+        setPagination(prev => ({ ...prev, current: currentPage - 1 }))
+        await loadUsers({}, newPagination)
+      } else {
+        await loadUsers()
+      }
     } catch (error) {
       message.error('用户删除失败')
     }
@@ -306,9 +377,9 @@ const Users = () => {
             : ''
         }`
       )
-      // 刷新用户列表和组信息
-      loadUsers()
-      loadUserGroups()
+      // 🔥 修复：挪出用户后保持当前搜索和分页状态
+      await loadUsers()
+      await loadUserGroups()
     } catch (error) {
       message.error(error.response?.data?.message || '挪出用户失败')
     }
@@ -403,8 +474,10 @@ const Users = () => {
       setIsDistributeModalVisible(false)
       setDistributeUser(null)
       message.success(operation === 'distribute' ? '积分分配成功' : '积分回收成功')
-      loadUsers()
-      loadUserGroups()
+      
+      // 🔥 修复：积分操作后保持当前搜索和分页状态
+      await loadUsers()
+      await loadUserGroups()
     } catch (error) {
       message.error(error.response?.data?.message || (operation === 'distribute' ? '分配失败' : '回收失败'))
     }
@@ -442,7 +515,8 @@ const Users = () => {
       message.success('组有效期设置成功')
       loadUserGroups()
       if (syncToUsers) {
-        loadUsers() // 如果同步到用户，刷新用户列表
+        // 🔥 修复：同步有效期后保持当前搜索和分页状态
+        await loadUsers()
       }
     } catch (error) {
       message.error(error.response?.data?.message || '设置失败')
@@ -523,11 +597,12 @@ const Users = () => {
 
       {activeTab === 'users' ? (
         <>
-          {/* 用户搜索表单 */}
+          {/* 用户搜索表单 - 🔥 新增重置回调 */}
           <Card style={{ marginBottom: 16 }}>
             <UserSearchForm
               userGroups={userGroups}
               onSearch={handleSearch}
+              onReset={handleResetSearch}
               isGroupAdmin={isGroupAdmin}
               currentUser={currentUser}
             />
@@ -582,7 +657,7 @@ const Users = () => {
             </Card>
           )}
 
-          {/* 用户列表 */}
+          {/* 用户列表 - 🔥 修复分页处理 */}
           <Card 
             title={t('admin.users.title')}
             extra={
@@ -605,9 +680,7 @@ const Users = () => {
               pagination={pagination}
               currentUser={currentUser}
               isGroupAdmin={isGroupAdmin}
-              onPageChange={(page, pageSize) => {
-                setPagination(prev => ({ ...prev, current: page, pageSize }))
-              }}
+              onPageChange={handlePageChange}
               onViewDetail={handleViewDetail}
               onEdit={handleEditUser}
               onToggleStatus={handleToggleUserStatus}
@@ -721,6 +794,7 @@ const Users = () => {
           setModelRestrictUser(null)
         }}
         onSuccess={() => {
+          // 🔥 修复：模型权限更新后保持当前搜索和分页状态
           loadUsers()
         }}
       />
