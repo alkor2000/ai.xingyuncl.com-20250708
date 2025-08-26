@@ -52,6 +52,7 @@ class ModuleCombination {
 
   /**
    * 根据ID获取组合详情（包含模块）
+   * 注意：这是用于展示的方法，内容可能被隐藏
    */
   static async findById(id, userId = null) {
     try {
@@ -84,6 +85,7 @@ class ModuleCombination {
       
       combination.modules = [];
       for (const row of moduleRows) {
+        // 这里调用findById会根据权限隐藏内容（用于展示）
         const module = await KnowledgeModule.findById(row.id, userId);
         if (module) {
           module.order_index = row.order_index;
@@ -95,6 +97,46 @@ class ModuleCombination {
     } catch (error) {
       logger.error('根据ID查找模块组合失败:', error);
       throw new DatabaseError('查找模块组合失败', error);
+    }
+  }
+
+  /**
+   * 获取组合详情用于执行（包含完整内容）
+   * 专门用于获取组合内容执行的方法，不隐藏内容
+   */
+  static async findByIdForExecution(id) {
+    try {
+      const sql = 'SELECT * FROM module_combinations WHERE id = ?';
+      const { rows } = await dbConnection.query(sql, [id]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      const combination = new ModuleCombination(rows[0]);
+      
+      // 获取组合中的模块，直接查询完整内容
+      const modulesSql = `
+        SELECT km.*, mci.order_index
+        FROM module_combination_items mci
+        JOIN knowledge_modules km ON mci.module_id = km.id
+        WHERE mci.combination_id = ?
+        AND km.is_active = 1
+        ORDER BY mci.order_index ASC
+      `;
+      
+      const { rows: moduleRows } = await dbConnection.query(modulesSql, [id]);
+      
+      combination.modules = moduleRows.map(row => {
+        const module = new KnowledgeModule(row);
+        module.order_index = row.order_index;
+        return module;
+      });
+      
+      return combination;
+    } catch (error) {
+      logger.error('获取组合执行内容失败:', error);
+      throw new DatabaseError('获取组合执行内容失败', error);
     }
   }
 
@@ -365,57 +407,81 @@ class ModuleCombination {
 
   /**
    * 获取组合的完整内容（用于对话）
-   * 修复：如果组合包含系统级模块，则允许所有用户使用
+   * 核心修复：内容不可见的模块在执行时仍然要生效（黑盒模式）
    */
   static async getCombinedContent(id, userId) {
     try {
-      const combination = await ModuleCombination.findById(id, userId);
-      if (!combination) {
+      // 先检查组合是否存在
+      const basicCombination = await ModuleCombination.findById(id);
+      if (!basicCombination) {
         throw new Error('模块组合不存在');
       }
       
-      // 获取用户角色
-      const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
+      // 获取用户角色和组信息
+      const userResult = await dbConnection.query('SELECT role, group_id FROM users WHERE id = ?', [userId]);
       const userRole = userResult.rows[0]?.role;
+      const userGroupId = userResult.rows[0]?.group_id;
       
-      // 超级管理员可以使用任何组合
-      if (userRole !== 'super_admin') {
-        // 检查组合中是否包含系统级模块
-        const hasSystemModule = combination.modules.some(module => module.module_scope === 'system');
+      // 权限检查：只检查用户是否能使用这个组合
+      if (userRole !== 'super_admin' && basicCombination.user_id !== userId) {
+        // 检查组合中是否包含系统级模块（允许共享使用）
+        const hasSystemModule = basicCombination.modules.some(module => module.module_scope === 'system');
         
-        // 如果不包含系统级模块，则检查所有权
-        if (!hasSystemModule && combination.user_id !== userId) {
+        if (!hasSystemModule) {
           throw new Error('无权使用此组合');
         }
         
-        // 如果包含系统级模块，记录日志
-        if (hasSystemModule) {
-          logger.info('用户使用包含系统级模块的组合', {
-            userId,
-            combinationId: id,
-            combinationOwnerId: combination.user_id,
-            systemModules: combination.modules.filter(m => m.module_scope === 'system').map(m => ({
-              id: m.id,
-              name: m.name
-            }))
-          });
-        }
+        logger.info('用户使用包含系统级模块的组合', {
+          userId,
+          combinationId: id,
+          combinationOwnerId: basicCombination.user_id,
+          userRole
+        });
+      }
+      
+      // 获取组合的完整执行内容（不隐藏内容）
+      const executionCombination = await ModuleCombination.findByIdForExecution(id);
+      if (!executionCombination || !executionCombination.modules) {
+        logger.error('获取组合执行内容失败', {
+          combinationId: id,
+          userId
+        });
+        throw new Error('获取组合内容失败');
       }
       
       let systemPrompts = [];
       let normalPrompts = [];
       
-      for (const module of combination.modules) {
-        // 跳过内容被隐藏的模块（超级管理员除外）
-        if (userRole !== 'super_admin' && (module.content_hidden || !module.content)) {
-          logger.debug('跳过隐藏内容的模块', {
+      for (const module of executionCombination.modules) {
+        // 再次检查用户是否有权限使用这个模块
+        const hasAccess = await KnowledgeModule.checkUserAccess(
+          module.id, 
+          userId, 
+          userGroupId, 
+          userRole
+        );
+        
+        if (!hasAccess) {
+          logger.warn('用户无权使用模块，跳过', {
             moduleId: module.id,
             moduleName: module.name,
-            userId
+            userId,
+            userRole
           });
           continue;
         }
         
+        // 核心修改：不检查content_hidden，直接使用内容
+        // 因为"内容不可见"只是保护知识产权，不影响实际使用
+        if (!module.content) {
+          logger.warn('模块内容为空，跳过', {
+            moduleId: module.id,
+            moduleName: module.name
+          });
+          continue;
+        }
+        
+        // 根据提示类型分类
         if (module.prompt_type === 'system') {
           systemPrompts.push(module.content);
         } else {
@@ -424,6 +490,16 @@ class ModuleCombination {
         
         // 更新使用次数
         await KnowledgeModule.incrementUsageCount(module.id);
+        
+        logger.debug('使用模块内容', {
+          moduleId: module.id,
+          moduleName: module.name,
+          promptType: module.prompt_type,
+          contentLength: module.content?.length || 0,
+          contentVisible: module.content_visible,
+          userId,
+          userRole
+        });
       }
       
       // 更新组合使用次数
@@ -432,10 +508,21 @@ class ModuleCombination {
         [id]
       );
       
-      return {
+      const result = {
         systemPrompt: systemPrompts.join('\n\n'),
         normalPrompt: normalPrompts.join('\n\n')
       };
+      
+      logger.info('成功获取组合内容', {
+        combinationId: id,
+        userId,
+        userRole,
+        systemPromptLength: result.systemPrompt.length,
+        normalPromptLength: result.normalPrompt.length,
+        modulesUsed: systemPrompts.length + normalPrompts.length
+      });
+      
+      return result;
     } catch (error) {
       logger.error('获取组合内容失败:', error);
       throw new DatabaseError('获取组合内容失败', error);

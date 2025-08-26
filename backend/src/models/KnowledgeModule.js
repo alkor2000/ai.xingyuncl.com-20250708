@@ -13,7 +13,7 @@ class KnowledgeModule {
     this.name = data.name || '';
     this.description = data.description || '';
     this.content = data.content || '';
-    this.token_count = data.token_count || 0;  // 添加token_count字段
+    this.token_count = data.token_count || 0;
     this.prompt_type = data.prompt_type || 'normal';
     this.module_scope = data.module_scope || 'personal';
     this.content_visible = data.content_visible !== undefined ? data.content_visible : true;
@@ -31,7 +31,7 @@ class KnowledgeModule {
 
   /**
    * 获取用户可用的知识模块列表
-   * 修复：超级管理员可以看到所有模块
+   * 修复：正确处理系统级模块的权限和可见性
    */
   static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
@@ -84,6 +84,7 @@ class KnowledgeModule {
       }
       
       // 普通用户和组管理员的权限检查
+      // 修复：正确处理group_ids为NULL或空数组的情况
       let sql = `
         SELECT km.*, u.username as creator_name, ug.name as group_name
         FROM knowledge_modules km
@@ -97,6 +98,7 @@ class KnowledgeModule {
           -- 全局模块：根据group_ids权限控制
           OR (km.module_scope = 'system' AND (
             km.group_ids IS NULL  -- NULL表示所有组可见
+            OR JSON_LENGTH(km.group_ids) = 0  -- 空数组也表示所有组可见
             OR JSON_CONTAINS(km.group_ids, CAST(? AS JSON), '$')  -- 检查用户组是否在允许列表中
           ))
         )
@@ -124,21 +126,24 @@ class KnowledgeModule {
           }
         }
         
-        // 判断内容是否可见
-        // 全局模块内容的可见性判断
+        // 修复：系统级模块的内容可见性处理
         if (module.module_scope === 'system') {
-          // 全局模块根据content_visible设置
-          if (!module.content_visible && module.creator_id !== userId) {
+          // 系统级模块：如果content_visible为true，则内容对所有有权限的用户可见
+          // 只有当content_visible为false时才隐藏内容
+          if (!module.content_visible) {
             module.content = null;
             module.content_hidden = true;
-            module.token_count = 0;  // 隐藏内容时也隐藏token数
+            // 注意：即使内容隐藏，token_count仍然显示，以便用户了解模块大小
           }
-        } else if (module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
-          // 团队模块才检查content_visible
-          module.content = null; // 隐藏内容
-          module.content_hidden = true;
-          module.token_count = 0;  // 隐藏内容时也隐藏token数
+        } else if (module.module_scope === 'team') {
+          // 团队模块：非创建者需要检查content_visible
+          if (module.creator_id !== userId && !module.content_visible) {
+            module.content = null;
+            module.content_hidden = true;
+            // 团队模块隐藏内容时也保留token_count显示
+          }
         }
+        // 个人模块：创建者始终可见，所以不需要处理
         
         return module;
       });
@@ -236,21 +241,26 @@ class KnowledgeModule {
           });
           return module;
         }
-      }
-      
-      // 检查内容可见性
-      // 全局模块的内容可见性
-      if (module.module_scope === 'system') {
-        if (!module.content_visible && module.creator_id !== userId) {
-          module.content = null;
-          module.content_hidden = true;
-          module.token_count = 0;  // 隐藏内容时也隐藏token数
+        
+        // 修复：系统级模块的内容可见性处理
+        if (module.module_scope === 'system') {
+          // 系统级模块只在content_visible为false时隐藏内容
+          if (!module.content_visible) {
+            module.content = null;
+            module.content_hidden = true;
+            // 保留token_count显示
+          }
+        } else if (module.module_scope === 'team') {
+          // 团队模块：非创建者需要检查content_visible
+          if (module.creator_id !== userId && !module.content_visible) {
+            module.content = null;
+            module.content_hidden = true;
+            // 保留token_count显示
+          }
+        } else if (module.module_scope === 'personal' && module.creator_id !== userId) {
+          // 个人模块：非创建者不应该能访问
+          return null;
         }
-      } else if (userId && module.module_scope !== 'personal' && module.creator_id !== userId && !module.content_visible) {
-        // 只对非系统级、非个人模块检查content_visible
-        module.content = null;
-        module.content_hidden = true;
-        module.token_count = 0;  // 隐藏内容时也隐藏token数
       }
       
       return module;
@@ -276,6 +286,15 @@ class KnowledgeModule {
       // 计算token数量
       const tokenCount = calculateTokens(data.content || '');
       
+      // 处理group_ids：如果是空数组或未指定，设为NULL（表示所有组可见）
+      let processedGroupIds = null;
+      if (module_scope === 'system' && group_ids) {
+        if (Array.isArray(group_ids) && group_ids.length > 0) {
+          processedGroupIds = JSON.stringify(group_ids);
+        }
+        // 空数组或未指定都保持为NULL
+      }
+      
       const sql = `
         INSERT INTO knowledge_modules (
           name, description, content, token_count, prompt_type, module_scope,
@@ -288,13 +307,13 @@ class KnowledgeModule {
         data.name,
         data.description || null,
         data.content,
-        tokenCount,  // 保存计算的token数
+        tokenCount,
         data.prompt_type || 'normal',
         module_scope || 'personal',
         data.content_visible !== undefined ? data.content_visible : true,
         creatorId,
         module_scope === 'team' ? group_id : null,
-        module_scope === 'system' && data.group_ids ? JSON.stringify(data.group_ids) : null,
+        processedGroupIds,  // 使用处理后的group_ids
         data.category || null,
         data.tags ? JSON.stringify(data.tags) : null,
         data.sort_order || 0,
@@ -309,7 +328,7 @@ class KnowledgeModule {
         name: data.name,
         creatorId,
         scope: module_scope,
-        group_ids: data.group_ids,
+        group_ids: processedGroupIds,
         tokenCount
       });
       
@@ -356,11 +375,16 @@ class KnowledgeModule {
       // 如果是系统级模块，允许更新group_ids
       if (originalModule.module_scope === 'system' && data.group_ids !== undefined) {
         updateFields.push('group_ids = ?');
-        updateValues.push(data.group_ids ? JSON.stringify(data.group_ids) : null);
+        // 处理group_ids：空数组设为NULL
+        if (Array.isArray(data.group_ids) && data.group_ids.length > 0) {
+          updateValues.push(JSON.stringify(data.group_ids));
+        } else {
+          updateValues.push(null);  // 空数组或未指定都设为NULL
+        }
       }
       
       allowedFields.forEach(field => {
-        if (data[field] !== undefined && field !== 'content') {  // content已经处理过了
+        if (data[field] !== undefined && field !== 'content') {
           updateFields.push(`${field} = ?`);
           if (field === 'tags') {
             updateValues.push(data[field] ? JSON.stringify(data[field]) : null);
@@ -426,7 +450,7 @@ class KnowledgeModule {
 
   /**
    * 检查用户是否有权限使用该模块
-   * 修复：超级管理员总是有权限
+   * 修复：正确处理系统级模块的权限检查
    */
   static async checkUserAccess(moduleId, userId, groupId, userRole = null) {
     try {
@@ -446,6 +470,7 @@ class KnowledgeModule {
       }
       
       // 普通用户和组管理员的权限检查
+      // 修复：正确处理group_ids为NULL或空数组的情况
       const sql = `
         SELECT COUNT(*) as count
         FROM knowledge_modules
@@ -456,6 +481,7 @@ class KnowledgeModule {
           OR (module_scope = 'team' AND group_id = ?)
           OR (module_scope = 'system' AND (
             group_ids IS NULL
+            OR JSON_LENGTH(group_ids) = 0
             OR JSON_CONTAINS(group_ids, CAST(? AS JSON), '$')
           ))
         )
@@ -490,7 +516,7 @@ class KnowledgeModule {
       id: this.id,
       name: this.name,
       description: this.description,
-      token_count: this.token_count,  // 添加token_count到输出
+      token_count: this.token_count,  // 始终包含token_count
       prompt_type: this.prompt_type,
       module_scope: this.module_scope,
       content_visible: this.content_visible,
