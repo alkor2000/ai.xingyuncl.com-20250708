@@ -1,0 +1,732 @@
+/**
+ * 文件管理系统 - 优化配色版
+ * 采用清爽的白色基调，多彩的图标系统
+ */
+
+// 定义颜色变量 - 更平衡的配色系统
+@primary-color: #6366f1;  // 主题紫色（仅用于强调）
+@primary-hover: #4f46e5;
+@background-color: #f8fafb;  // 浅灰白背景
+@card-background: #ffffff;
+@sidebar-background: rgba(255, 255, 255, 0.95);
+@border-color: #e5e7eb;
+@text-primary: #1f2937;
+@text-secondary: #6b7280;
+@text-tertiary: #9ca3af;
+
+// 文件类型配色 - 鲜明的色彩系统
+@folder-color: #f59e0b;  // 明亮橙黄
+@image-color: #10b981;   // 翠绿
+@video-color: #3b82f6;   // 天蓝
+@document-color: #ea580c; // 深橙
+@pdf-color: #dc2626;     // 红色
+@excel-color: #059669;    // 深绿
+@ppt-color: #f97316;      // 橙红
+@archive-color: #9333ea;  // 紫色
+@text-file-color: #6b7280; // 灰色
+
+// 交互状态色
+@hover-background: #f3f4f6;
+@selected-background: #ede9fe;
+@selected-border: #a78bfa;
+@danger-color: #ef4444;
+@success-color: #10b981;
+@warning-color: #f59e0b;
+@info-color: #3b82f6;
+
+.storage-manager {
+  height: 100%;
+  background: @background-color;
+  position: relative;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  // 主布局容器
+  .storage-layout {
+    display: flex;
+    height: 100%;
+    gap: 20px;
+    padding: 20px;
+    position: relative;
+  }
+
+  // 侧边栏 - 白色毛玻璃
+  .storage-sidebar {
+    width: 280px;
+    background: @sidebar-background;
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border-radius: 16px;
+    box-shadow: 
+      0 0 0 1px @border-color,
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &.collapsed {
+      width: 70px;
+    }
+
+    // 文件夹树
+    .folder-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: @border-color;
+        border-radius: 3px;
+
+        &:hover {
+          background: darken(@border-color, 10%);
+        }
+      }
+
+      .ant-tree {
+        background: transparent;
+        color: @text-primary;
+        font-size: 14px;
+
+        .ant-tree-node-content-wrapper {
+          padding: 8px 12px;
+          border-radius: 8px;
+          transition: all 0.2s ease;
+
+          &:hover {
+            background: @hover-background;
+          }
+
+          &.ant-tree-node-selected {
+            background: @selected-background;
+            color: @primary-color;
+            font-weight: 500;
+            border: 1px solid @selected-border;
+          }
+        }
+
+        .ant-tree-icon {
+          color: @folder-color;
+          font-size: 16px;
+        }
+
+        .ant-tree-switcher {
+          color: @text-tertiary;
+        }
+      }
+    }
+
+    // 存储信息卡片 - 轻微渐变
+    .storage-info-card {
+      margin: 20px;
+      padding: 20px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 12px;
+      color: white;
+      box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
+
+      > div:first-child {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        opacity: 0.95;
+      }
+
+      .storage-progress {
+        margin-top: 12px;
+
+        .ant-progress-inner {
+          background: rgba(255, 255, 255, 0.2);
+          height: 6px;
+        }
+
+        .ant-progress-bg {
+          background: white;
+          height: 6px;
+        }
+      }
+
+      .storage-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 16px;
+
+        .stat-item {
+          text-align: center;
+
+          .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+          }
+
+          .stat-label {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
+        }
+      }
+    }
+  }
+
+  // 主内容区 - 纯白背景
+  .storage-main {
+    flex: 1;
+    background: @card-background;
+    border-radius: 16px;
+    box-shadow: 
+      0 0 0 1px @border-color,
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    // 顶部工具栏
+    .storage-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      border-bottom: 1px solid @border-color;
+      background: @card-background;
+
+      // 面包屑导航
+      .breadcrumb-nav {
+        flex: 1;
+
+        .ant-breadcrumb {
+          font-size: 14px;
+
+          .ant-breadcrumb-link {
+            color: @text-secondary;
+            padding: 6px 10px;
+            border-radius: 6px;
+            transition: all 0.2s;
+
+            &:hover {
+              background: @hover-background;
+              color: @primary-color;
+            }
+          }
+
+          .ant-breadcrumb-separator {
+            color: @text-tertiary;
+          }
+        }
+      }
+
+      // 工具按钮组
+      .toolbar-actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+
+        // 搜索框
+        .search-box {
+          position: relative;
+
+          input {
+            padding: 8px 36px 8px 14px;
+            border-radius: 8px;
+            border: 1px solid @border-color;
+            background: @background-color;
+            width: 260px;
+            transition: all 0.2s;
+            font-size: 14px;
+
+            &:focus {
+              width: 320px;
+              background: white;
+              border-color: @primary-color;
+              box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+              outline: none;
+            }
+
+            &::placeholder {
+              color: @text-tertiary;
+            }
+          }
+
+          .search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: @text-tertiary;
+            font-size: 16px;
+          }
+        }
+
+        // 视图切换按钮
+        .view-switcher {
+          display: flex;
+          gap: 2px;
+          background: @background-color;
+          padding: 3px;
+          border-radius: 8px;
+          border: 1px solid @border-color;
+
+          button {
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            border-radius: 5px;
+            color: @text-secondary;
+            transition: all 0.2s;
+            cursor: pointer;
+            font-size: 16px;
+
+            &.active {
+              background: white;
+              color: @primary-color;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+
+            &:hover:not(.active) {
+              color: @text-primary;
+            }
+          }
+        }
+
+        // 操作按钮
+        .ant-btn {
+          border-radius: 8px;
+          font-weight: 500;
+          padding: 0 16px;
+          height: 36px;
+          transition: all 0.2s;
+          border: 1px solid @border-color;
+
+          &:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+
+          &.ant-btn-primary {
+            background: @primary-color;
+            border-color: @primary-color;
+          }
+
+          &.ant-btn-danger {
+            color: @danger-color;
+            border-color: @danger-color;
+
+            &:hover {
+              background: lighten(@danger-color, 45%);
+            }
+          }
+        }
+      }
+    }
+
+    // 内容区域
+    .storage-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      position: relative;
+
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: @background-color;
+        border-radius: 4px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: @border-color;
+        border-radius: 4px;
+
+        &:hover {
+          background: darken(@border-color, 10%);
+        }
+      }
+
+      // 网格视图
+      &.grid-view {
+        .file-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 16px;
+
+          .file-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 12px;
+            background: white;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid @border-color;
+            position: relative;
+
+            &:hover {
+              transform: translateY(-2px);
+              box-shadow: 
+                0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+              border-color: @primary-color;
+            }
+
+            &.selected {
+              background: @selected-background;
+              border-color: @selected-border;
+            }
+
+            &.dragging {
+              opacity: 0.5;
+              transform: scale(0.95);
+            }
+
+            // 文件图标 - 鲜明的颜色
+            .file-icon {
+              width: 64px;
+              height: 64px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-bottom: 12px;
+              position: relative;
+
+              svg {
+                width: 100%;
+                height: 100%;
+                transition: transform 0.2s;
+              }
+
+              // 文件类型专属颜色
+              &.folder-icon svg {
+                color: @folder-color;
+                fill: @folder-color;
+              }
+
+              &.image-icon svg {
+                color: @image-color;
+              }
+
+              &.video-icon svg {
+                color: @video-color;
+              }
+
+              &.document-icon svg {
+                color: @document-color;
+              }
+
+              &.pdf-icon svg {
+                color: @pdf-color;
+              }
+
+              &.excel-icon svg {
+                color: @excel-color;
+              }
+
+              &.ppt-icon svg {
+                color: @ppt-color;
+              }
+
+              &.archive-icon svg {
+                color: @archive-color;
+              }
+
+              &.file-icon svg {
+                color: @text-tertiary;
+              }
+
+              // 文件数量标记
+              .file-count {
+                position: absolute;
+                top: -6px;
+                right: -6px;
+                background: @danger-color;
+                color: white;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 2px 5px;
+                border-radius: 8px;
+                min-width: 18px;
+                text-align: center;
+              }
+            }
+
+            // 文件名
+            .file-name {
+              font-size: 13px;
+              font-weight: 500;
+              color: @text-primary;
+              text-align: center;
+              width: 100%;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              line-height: 1.4;
+            }
+
+            // 文件大小
+            .file-size {
+              font-size: 11px;
+              color: @text-secondary;
+              margin-top: 4px;
+            }
+
+            // 选择框
+            .select-checkbox {
+              position: absolute;
+              top: 8px;
+              left: 8px;
+              opacity: 0;
+              transition: opacity 0.2s;
+
+              .ant-checkbox-wrapper {
+                .ant-checkbox {
+                  border-color: @border-color;
+
+                  &.ant-checkbox-checked {
+                    background: @primary-color;
+                    border-color: @primary-color;
+                  }
+                }
+              }
+            }
+
+            &:hover .select-checkbox,
+            &.selected .select-checkbox {
+              opacity: 1;
+            }
+          }
+        }
+      }
+
+      // 列表视图
+      &.list-view {
+        .ant-table {
+          font-size: 14px;
+
+          .ant-table-thead {
+            > tr > th {
+              background: @background-color;
+              border-bottom: 1px solid @border-color;
+              font-weight: 600;
+              color: @text-secondary;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+            }
+          }
+
+          .ant-table-tbody {
+            > tr {
+              transition: all 0.2s;
+
+              &:hover {
+                background: @hover-background;
+              }
+
+              &.selected-row {
+                background: @selected-background;
+              }
+
+              > td {
+                border-bottom: 1px solid @border-color;
+                padding: 12px;
+                color: @text-primary;
+              }
+            }
+          }
+
+          // 操作按钮
+          .ant-btn-link {
+            color: @text-secondary;
+            transition: all 0.2s;
+
+            &:hover {
+              color: @primary-color;
+            }
+
+            &.ant-btn-dangerous {
+              color: @danger-color;
+            }
+          }
+        }
+      }
+
+      // 空状态
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+
+        .empty-icon {
+          font-size: 72px;
+          color: @text-tertiary;
+          margin-bottom: 20px;
+        }
+
+        .empty-text {
+          font-size: 16px;
+          color: @text-secondary;
+          font-weight: 500;
+        }
+      }
+
+      // 拖拽上传区域
+      &.drag-active {
+        &::after {
+          content: '释放文件以上传';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(99, 102, 241, 0.95);
+          border: 2px dashed white;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+          color: white;
+          font-size: 20px;
+          font-weight: 600;
+        }
+      }
+    }
+  }
+
+  // 浮动上传按钮 - 保持紫色作为主要行动点
+  .upload-fab {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    box-shadow: 
+      0 10px 25px -5px rgba(99, 102, 241, 0.3),
+      0 10px 10px -5px rgba(99, 102, 241, 0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    font-size: 24px;
+
+    &:hover {
+      transform: scale(1.08);
+      box-shadow: 
+        0 20px 25px -5px rgba(99, 102, 241, 0.4),
+        0 10px 10px -5px rgba(99, 102, 241, 0.2);
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+
+  // 右键菜单
+  .context-menu {
+    position: fixed;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 
+      0 10px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04),
+      0 0 0 1px @border-color;
+    padding: 6px;
+    min-width: 200px;
+    z-index: 1000;
+
+    .menu-item {
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.15s;
+      font-size: 14px;
+      color: @text-primary;
+
+      &:hover {
+        background: @hover-background;
+      }
+
+      &.danger {
+        color: @danger-color;
+
+        &:hover {
+          background: lighten(@danger-color, 45%);
+        }
+      }
+
+      .menu-icon {
+        width: 18px;
+        font-size: 16px;
+      }
+    }
+
+    .menu-divider {
+      height: 1px;
+      background: @border-color;
+      margin: 6px 0;
+    }
+  }
+
+  // 响应式设计
+  @media (max-width: 768px) {
+    .storage-layout {
+      flex-direction: column;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .storage-sidebar {
+      width: 100%;
+      height: auto;
+    }
+
+    .storage-toolbar {
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+
+      .toolbar-actions {
+        width: 100%;
+        flex-wrap: wrap;
+
+        .search-box input {
+          width: 100%;
+
+          &:focus {
+            width: 100%;
+          }
+        }
+      }
+    }
+
+    .storage-content.grid-view .file-grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px;
+    }
+  }
+}

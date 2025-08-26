@@ -559,7 +559,7 @@ const StorageManager = () => {
             onMove={handleMove}
           >
             <div
-              className="file-item folder-item"
+              className="file-item folder-item"  {/* 添加folder-item类 */}
               onDoubleClick={() => {
                 setCurrentFolder(folder)
               }}

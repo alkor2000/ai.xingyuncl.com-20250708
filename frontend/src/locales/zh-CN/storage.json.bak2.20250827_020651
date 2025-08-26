@@ -25,8 +25,6 @@
   "storage.selectFilesFirst": "请先选择文件",
   "storage.confirmDeleteFile": "确定要删除文件 \"{{name}}\" 吗？",
   "storage.confirmDeleteFiles": "确定要删除选中的 {{count}} 个文件吗？",
-  "storage.confirmDeleteFolder": "确定要删除文件夹 \"{{name}}\" 吗？",
-  "storage.confirmDeleteFolderWithFiles": "文件夹 \"{{name}}\" 中包含 {{count}} 个文件，删除文件夹将同时删除所有文件，确定要继续吗？",
   "storage.linkCopied": "链接已复制到剪贴板",
   "storage.copyLink": "复制链接",
   "storage.storageInfo": "存储信息",
@@ -45,11 +43,5 @@
   "storage.moveSuccess": "移动成功",
   "storage.moveFailed": "移动失败",
   "storage.used": "已用",
-  "storage.total": "总容量",
-  "storage.folder": "文件夹",
-  "storage.files": "个文件",
-  "storage.open": "打开",
-  "storage.gridView": "网格视图",
-  "storage.listView": "列表视图",
-  "storage.loading": "加载中..."
+  "storage.total": "总容量"
 }

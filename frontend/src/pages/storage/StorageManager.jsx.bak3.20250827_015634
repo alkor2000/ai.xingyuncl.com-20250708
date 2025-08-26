@@ -1,6 +1,6 @@
 /**
- * 文件存储管理页面 - iOS风格界面（增强版）
- * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
+ * 文件存储管理页面 - iOS风格界面
+ * 支持拖拽上传、多视图切换、右键菜单等现代化功能
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -28,8 +28,7 @@ import {
   Tree,
   Spin,
   Grid,
-  Avatar,
-  Badge
+  Avatar
 } from 'antd'
 import {
   UploadOutlined,
@@ -40,7 +39,6 @@ import {
   CopyOutlined,
   ScissorOutlined,
   FolderOutlined,
-  FolderOpenOutlined,
   FileOutlined,
   FileImageOutlined,
   VideoCameraOutlined,
@@ -62,11 +60,7 @@ import {
   StarOutlined,
   StarFilled,
   ClockCircleOutlined,
-  FolderFilled,
-  FileWordOutlined,
-  FileExcelOutlined,
-  FilePptOutlined,
-  FileUnknownOutlined
+  FolderOpenOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
@@ -90,56 +84,6 @@ const ViewMode = {
   GRID: 'grid',
   LIST: 'list',
   GALLERY: 'gallery'
-}
-
-/**
- * 获取文件类型对应的CSS类名
- */
-const getFileTypeClass = (mimeType, fileName) => {
-  const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
-  
-  // 图片类型
-  if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
-    return 'image-file'
-  }
-  
-  // 视频类型
-  if (mimeType?.startsWith('video/') || ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
-    return 'video-file'
-  }
-  
-  // PDF
-  if (mimeType?.includes('pdf') || ext === 'pdf') {
-    return 'pdf-file'
-  }
-  
-  // Word文档
-  if (mimeType?.includes('word') || ['doc', 'docx'].includes(ext)) {
-    return 'document-file'
-  }
-  
-  // Excel表格
-  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet') || ['xls', 'xlsx'].includes(ext)) {
-    return 'excel-file'
-  }
-  
-  // PPT演示
-  if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
-    return 'ppt-file'
-  }
-  
-  // 压缩文件
-  if (mimeType?.includes('zip') || mimeType?.includes('rar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-    return 'archive-file'
-  }
-  
-  // 文本文件
-  if (mimeType?.includes('text') || ['txt', 'md', 'json', 'js', 'css', 'html', 'xml', 'csv'].includes(ext)) {
-    return 'text-file'
-  }
-  
-  // 未知类型
-  return 'unknown-file'
 }
 
 /**
@@ -176,7 +120,7 @@ const DraggableItem = ({ item, type, children, onMove }) => {
   return (
     <div 
       ref={type === ItemTypes.FOLDER ? node => drag(drop(node)) : drag}
-      style={{ opacity, backgroundColor, borderRadius: '20px', transition: 'all 0.3s' }}
+      style={{ opacity, backgroundColor, borderRadius: '12px', transition: 'all 0.3s' }}
     >
       {children}
     </div>
@@ -184,56 +128,30 @@ const DraggableItem = ({ item, type, children, onMove }) => {
 }
 
 /**
- * 文件图标组件 - 增强版本，更多文件类型
+ * 文件图标组件
  */
-const FileIcon = ({ mimeType, fileName, size = 64 }) => {
+const FileIcon = ({ mimeType, size = 64 }) => {
   const iconProps = { style: { fontSize: size } }
   
-  // 根据文件扩展名判断
-  const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
+  if (!mimeType) return <FileOutlined {...iconProps} className="file-icon" />
   
-  // 图片类型
-  if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
+  if (mimeType.startsWith('image/')) {
     return <FileImageOutlined {...iconProps} className="file-icon image-icon" />
   }
-  
-  // 视频类型
-  if (mimeType?.startsWith('video/') || ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
+  if (mimeType.startsWith('video/')) {
     return <VideoCameraOutlined {...iconProps} className="file-icon video-icon" />
   }
-  
-  // PDF
-  if (mimeType?.includes('pdf') || ext === 'pdf') {
+  if (mimeType.includes('pdf')) {
     return <FilePdfOutlined {...iconProps} className="file-icon pdf-icon" />
   }
-  
-  // Word文档
-  if (mimeType?.includes('word') || ['doc', 'docx'].includes(ext)) {
-    return <FileWordOutlined {...iconProps} className="file-icon document-icon" />
-  }
-  
-  // Excel表格
-  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet') || ['xls', 'xlsx'].includes(ext)) {
-    return <FileExcelOutlined {...iconProps} className="file-icon excel-icon" style={{ color: '#10b981' }} />
-  }
-  
-  // PPT演示
-  if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
-    return <FilePptOutlined {...iconProps} className="file-icon ppt-icon" style={{ color: '#f97316' }} />
-  }
-  
-  // 压缩文件
-  if (mimeType?.includes('zip') || mimeType?.includes('rar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+  if (mimeType.includes('zip') || mimeType.includes('rar')) {
     return <FileZipOutlined {...iconProps} className="file-icon archive-icon" />
   }
-  
-  // 文本文件
-  if (mimeType?.includes('text') || ['txt', 'md', 'json', 'js', 'css', 'html', 'xml', 'csv'].includes(ext)) {
+  if (mimeType.includes('text') || mimeType.includes('document')) {
     return <FileTextOutlined {...iconProps} className="file-icon document-icon" />
   }
   
-  // 未知类型
-  return <FileUnknownOutlined {...iconProps} className="file-icon" />
+  return <FileOutlined {...iconProps} className="file-icon" />
 }
 
 /**
@@ -282,23 +200,11 @@ const StorageManager = () => {
   const [dragActive, setDragActive] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [folderCounts, setFolderCounts] = useState({}) // 文件夹内文件数量
 
   // 初始化加载数据
   useEffect(() => {
     loadData()
   }, [currentFolder])
-
-  // 计算文件夹内的文件数量
-  useEffect(() => {
-    const counts = {}
-    folders.forEach(folder => {
-      // 计算每个文件夹内的文件数
-      const count = files.filter(file => file.folder_id === folder.id).length
-      counts[folder.id] = count
-    })
-    setFolderCounts(counts)
-  }, [files, folders])
 
   const loadData = async () => {
     await Promise.all([
@@ -435,29 +341,6 @@ const StorageManager = () => {
     })
   }
 
-  // 处理文件夹删除
-  const handleDeleteFolder = async (folder) => {
-    const fileCount = folderCounts[folder.id] || 0
-    const warningMsg = fileCount > 0 
-      ? t('storage.confirmDeleteFolderWithFiles', { name: folder.name, count: fileCount })
-      : t('storage.confirmDeleteFolder', { name: folder.name })
-    
-    Modal.confirm({
-      title: t('common.confirmDelete'),
-      content: warningMsg,
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await deleteFolder(folder.id)
-          message.success(t('common.deleteSuccess'))
-          await loadData()
-        } catch (error) {
-          message.error(t('common.deleteFailed'))
-        }
-      }
-    })
-  }
-
   // 批量删除
   const handleBatchDelete = async () => {
     if (selectedFiles.length === 0) {
@@ -511,17 +394,8 @@ const StorageManager = () => {
   const convertToTreeData = (folders) => {
     return folders.map(folder => ({
       key: folder.id,
-      title: (
-        <span style={{ fontWeight: folder.children && folder.children.length > 0 ? 600 : 400 }}>
-          {folder.name}
-          {folderCounts[folder.id] > 0 && (
-            <span style={{ marginLeft: 8, color: '#999', fontSize: 12 }}>
-              ({folderCounts[folder.id]})
-            </span>
-          )}
-        </span>
-      ),
-      icon: folder.children && folder.children.length > 0 ? <FolderFilled /> : <FolderOutlined />,
+      title: folder.name,
+      icon: <FolderOutlined />,
       children: folder.children ? convertToTreeData(folder.children) : [],
       ...folder
     }))
@@ -547,69 +421,57 @@ const StorageManager = () => {
   // 渲染网格视图
   const renderGridView = () => (
     <div className="file-grid">
-      {/* 文件夹 - 添加folder-item类名 */}
-      {filteredFolders.map(folder => {
-        const fileCount = files.filter(f => f.folder_id === folder.id).length
-        
-        return (
-          <DraggableItem
-            key={folder.id}
-            item={folder}
-            type={ItemTypes.FOLDER}
-            onMove={handleMove}
+      {/* 文件夹 */}
+      {filteredFolders.map(folder => (
+        <DraggableItem
+          key={folder.id}
+          item={folder}
+          type={ItemTypes.FOLDER}
+          onMove={handleMove}
+        >
+          <div
+            className="file-item"
+            onDoubleClick={() => {
+              setCurrentFolder(folder)
+            }}
+            onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
           >
-            <div
-              className="file-item folder-item"
-              onDoubleClick={() => {
-                setCurrentFolder(folder)
-              }}
-              onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
-            >
-              <div className="file-icon folder-icon">
-                {fileCount > 0 ? <FolderFilled /> : <FolderOutlined />}
-                {fileCount > 0 && (
-                  <span className="file-count">{fileCount}</span>
-                )}
-              </div>
-              <div className="file-name">{folder.name}</div>
-              <div className="file-size">{t('storage.folder')}</div>
+            <div className="file-icon folder-icon">
+              <FolderOutlined />
             </div>
-          </DraggableItem>
-        )
-      })}
+            <div className="file-name">{folder.name}</div>
+          </div>
+        </DraggableItem>
+      ))}
       
-      {/* 文件 - 根据类型添加对应的类名 */}
-      {filteredFiles.map(file => {
-        const fileTypeClass = getFileTypeClass(file.mime_type, file.original_name)
-        
-        return (
-          <DraggableItem
-            key={file.id}
-            item={file}
-            type={ItemTypes.FILE}
-            onMove={handleMove}
+      {/* 文件 */}
+      {filteredFiles.map(file => (
+        <DraggableItem
+          key={file.id}
+          item={file}
+          type={ItemTypes.FILE}
+          onMove={handleMove}
+        >
+          <div
+            className={`file-item ${selectedFiles.includes(file.id) ? 'selected' : ''}`}
+            onClick={() => toggleFileSelection(file.id)}
+            onDoubleClick={() => {
+              setPreviewFile(file)
+              setPreviewVisible(true)
+            }}
+            onContextMenu={(e) => handleContextMenu(e, file, 'file')}
           >
-            <div
-              className={`file-item ${fileTypeClass} ${selectedFiles.includes(file.id) ? 'selected' : ''}`}
-              onClick={() => toggleFileSelection(file.id)}
-              onDoubleClick={() => {
-                setPreviewFile(file)
-                setPreviewVisible(true)
-              }}
-              onContextMenu={(e) => handleContextMenu(e, file, 'file')}
-            >
-              <Checkbox
-                className="select-checkbox"
-                checked={selectedFiles.includes(file.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <FileIcon mimeType={file.mime_type} fileName={file.original_name} />
-              <div className="file-name">{file.original_name}</div>
-              <div className="file-size">{formatFileSize(file.file_size)}</div>
-            </div>
-          </DraggableItem>
-        )
-      })}
+            <Checkbox
+              className="select-checkbox"
+              checked={selectedFiles.includes(file.id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <FileIcon mimeType={file.mime_type} />
+            <div className="file-name">{file.original_name}</div>
+            <div className="file-size">{formatFileSize(file.file_size)}</div>
+          </div>
+        </DraggableItem>
+      ))}
     </div>
   )
 
@@ -625,56 +487,36 @@ const StorageManager = () => {
       ),
       width: 50,
       render: (_, record) => (
-        record.isFolder ? null : (
-          <Checkbox
-            checked={selectedFiles.includes(record.id)}
-            onChange={() => toggleFileSelection(record.id)}
-          />
-        )
+        <Checkbox
+          checked={selectedFiles.includes(record.id)}
+          onChange={() => toggleFileSelection(record.id)}
+        />
       )
     },
     {
       title: t('storage.fileName'),
-      dataIndex: 'name',
+      dataIndex: 'original_name',
       key: 'name',
-      render: (text, record) => {
-        if (record.isFolder) {
-          const fileCount = files.filter(f => f.folder_id === record.id).length
-          return (
-            <Space>
-              {fileCount > 0 ? <FolderFilled style={{ color: '#fbbf24', fontSize: 24 }} /> : <FolderOutlined style={{ color: '#fbbf24', fontSize: 24 }} />}
-              <span style={{ fontWeight: 600 }}>{record.name}</span>
-              {fileCount > 0 && (
-                <Tag color="orange">{fileCount} {t('storage.files')}</Tag>
-              )}
-            </Space>
-          )
-        }
-        return (
-          <Space>
-            <FileIcon mimeType={record.mime_type} fileName={record.original_name} size={24} />
-            <span>{record.original_name}</span>
-          </Space>
-        )
-      }
+      render: (text, record) => (
+        <Space>
+          <FileIcon mimeType={record.mime_type} size={24} />
+          <span>{text}</span>
+        </Space>
+      )
     },
     {
       title: t('storage.fileSize'),
       dataIndex: 'file_size',
       key: 'size',
       width: 120,
-      render: (size, record) => record.isFolder ? '-' : formatFileSize(size)
+      render: (size) => formatFileSize(size)
     },
     {
       title: t('storage.fileType'),
       dataIndex: 'mime_type',
       key: 'type',
       width: 150,
-      render: (type, record) => {
-        if (record.isFolder) {
-          return <Tag color="gold">{t('storage.folder')}</Tag>
-        }
-        
+      render: (type) => {
         const typeMap = {
           'image': { color: 'green', text: t('storage.type.image') },
           'video': { color: 'blue', text: t('storage.type.video') },
@@ -698,54 +540,30 @@ const StorageManager = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date) => date ? new Date(date).toLocaleString() : '-'
+      render: (date) => new Date(date).toLocaleString()
     },
     {
       title: t('common.operation'),
       key: 'action',
       width: 120,
-      render: (_, record) => {
-        if (record.isFolder) {
-          return (
-            <Space>
-              <Button 
-                type="link" 
-                size="small"
-                onClick={() => setCurrentFolder(record)}
-              >
-                {t('storage.open')}
-              </Button>
-              <Button 
-                type="link" 
-                size="small" 
-                danger 
-                onClick={() => handleDeleteFolder(record)}
-              >
-                <DeleteOutlined />
-              </Button>
-            </Space>
-          )
-        }
-        
-        return (
-          <Space>
-            <Button type="link" size="small" onClick={() => {
-              setPreviewFile(record)
-              setPreviewVisible(true)
-            }}>
-              <EyeOutlined />
-            </Button>
-            <Button type="link" size="small" onClick={() => {
-              window.open(record.oss_url, '_blank')
-            }}>
-              <DownloadOutlined />
-            </Button>
-            <Button type="link" size="small" danger onClick={() => handleDelete(record)}>
-              <DeleteOutlined />
-            </Button>
-          </Space>
-        )
-      }
+      render: (_, record) => (
+        <Space>
+          <Button type="link" size="small" onClick={() => {
+            setPreviewFile(record)
+            setPreviewVisible(true)
+          }}>
+            <EyeOutlined />
+          </Button>
+          <Button type="link" size="small" onClick={() => {
+            window.open(record.oss_url, '_blank')
+          }}>
+            <DownloadOutlined />
+          </Button>
+          <Button type="link" size="small" danger onClick={() => handleDelete(record)}>
+            <DeleteOutlined />
+          </Button>
+        </Space>
+      )
     }
   ]
 
@@ -755,43 +573,33 @@ const StorageManager = () => {
         <div className="storage-layout">
           {/* 侧边栏 */}
           <div className={`storage-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-            {/* 文件夹树卡片 */}
-            <div className="folder-tree-card">
-              <div className="folder-tree-header">
-                {t('storage.myFiles')}
-              </div>
-              <div className="folder-tree">
-                <Tree
-                  showIcon
-                  showLine={{ showLeafIcon: false }}
-                  treeData={[
-                    {
-                      key: 'root',
-                      title: (
-                        <span style={{ fontWeight: 600 }}>
-                          {t('storage.myFiles')}
-                        </span>
-                      ),
-                      icon: <HomeOutlined />,
-                      children: convertToTreeData(folderTree)
-                    }
-                  ]}
-                  onSelect={(keys, info) => {
-                    if (keys[0] === 'root') {
-                      setCurrentFolder(null)
-                    } else {
-                      const folder = info.node
-                      setCurrentFolder(folder)
-                    }
-                    clearSelection()
-                  }}
-                  expandedKeys={treeExpandedKeys}
-                  onExpand={setTreeExpandedKeys}
-                />
-              </div>
+            {/* 文件夹树 */}
+            <div className="folder-tree">
+              <Tree
+                showIcon
+                treeData={[
+                  {
+                    key: 'root',
+                    title: t('storage.myFiles'),
+                    icon: <HomeOutlined />,
+                    children: convertToTreeData(folderTree)
+                  }
+                ]}
+                onSelect={(keys, info) => {
+                  if (keys[0] === 'root') {
+                    setCurrentFolder(null)
+                  } else {
+                    const folder = info.node
+                    setCurrentFolder(folder)
+                  }
+                  clearSelection()
+                }}
+                expandedKeys={treeExpandedKeys}
+                onExpand={setTreeExpandedKeys}
+              />
             </div>
             
-            {/* 存储信息卡片 - 更紧凑 */}
+            {/* 存储信息卡片 */}
             {storageStats && !sidebarCollapsed && (
               <div className="storage-info-card">
                 <div>{t('storage.storageInfo')}</div>
@@ -799,7 +607,6 @@ const StorageManager = () => {
                   className="storage-progress"
                   percent={Math.round((storageStats.storage_used / storageStats.storage_quota) * 100)}
                   status={storageStats.storage_used > storageStats.storage_quota * 0.9 ? 'exception' : 'active'}
-                  strokeLinecap="round"
                 />
                 <div className="storage-stats">
                   <div className="stat-item">
@@ -840,14 +647,12 @@ const StorageManager = () => {
                   <button 
                     className={viewMode === ViewMode.GRID ? 'active' : ''}
                     onClick={() => setViewMode(ViewMode.GRID)}
-                    title={t('storage.gridView')}
                   >
                     <AppstoreOutlined />
                   </button>
                   <button 
                     className={viewMode === ViewMode.LIST ? 'active' : ''}
                     onClick={() => setViewMode(ViewMode.LIST)}
-                    title={t('storage.listView')}
                   >
                     <BarsOutlined />
                   </button>
@@ -864,7 +669,7 @@ const StorageManager = () => {
                   </Button>
                 )}
                 
-                <Button icon={<ReloadOutlined />} onClick={loadData} title={t('common.refresh')} />
+                <Button icon={<ReloadOutlined />} onClick={loadData} />
               </div>
             </div>
             
@@ -879,7 +684,7 @@ const StorageManager = () => {
             >
               {loading ? (
                 <div className="loading-container">
-                  <Spin size="large" tip={t('storage.loading')} />
+                  <Spin size="large" />
                 </div>
               ) : (
                 <>
@@ -888,24 +693,10 @@ const StorageManager = () => {
                   ) : (
                     <Table
                       columns={columns}
-                      dataSource={[
-                        ...filteredFolders.map(f => ({...f, isFolder: true})), 
-                        ...filteredFiles
-                      ]}
-                      rowKey={(record) => record.isFolder ? `folder-${record.id}` : `file-${record.id}`}
+                      dataSource={[...filteredFolders.map(f => ({...f, isFolder: true})), ...filteredFiles]}
+                      rowKey="id"
                       pagination={false}
                       className={viewMode === ViewMode.LIST ? 'list-view-table' : ''}
-                      onRow={(record) => ({
-                        onDoubleClick: () => {
-                          if (record.isFolder) {
-                            setCurrentFolder(record)
-                          } else {
-                            setPreviewFile(record)
-                            setPreviewVisible(true)
-                          }
-                        },
-                        onContextMenu: (e) => handleContextMenu(e, record, record.isFolder ? 'folder' : 'file')
-                      })}
                     />
                   )}
                   
@@ -932,37 +723,19 @@ const StorageManager = () => {
             className="context-menu"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
-            {contextMenu.type === 'folder' ? (
+            <div className="menu-item" onClick={() => {
+              if (contextMenu.type === 'file') {
+                setPreviewFile(contextMenu.item)
+                setPreviewVisible(true)
+              }
+              closeContextMenu()
+            }}>
+              <EyeOutlined className="menu-icon" />
+              {t('common.preview')}
+            </div>
+            
+            {contextMenu.type === 'file' && (
               <>
-                <div className="menu-item" onClick={() => {
-                  setCurrentFolder(contextMenu.item)
-                  closeContextMenu()
-                }}>
-                  <FolderOpenOutlined className="menu-icon" />
-                  {t('storage.open')}
-                </div>
-                
-                <div className="menu-divider" />
-                
-                <div className="menu-item danger" onClick={() => {
-                  handleDeleteFolder(contextMenu.item)
-                  closeContextMenu()
-                }}>
-                  <DeleteOutlined className="menu-icon" />
-                  {t('common.delete')}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="menu-item" onClick={() => {
-                  setPreviewFile(contextMenu.item)
-                  setPreviewVisible(true)
-                  closeContextMenu()
-                }}>
-                  <EyeOutlined className="menu-icon" />
-                  {t('common.preview')}
-                </div>
-                
                 <div className="menu-item" onClick={() => {
                   window.open(contextMenu.item.oss_url, '_blank')
                   closeContextMenu()
@@ -979,18 +752,20 @@ const StorageManager = () => {
                   <CopyOutlined className="menu-icon" />
                   {t('storage.copyLink')}
                 </div>
-                
-                <div className="menu-divider" />
-                
-                <div className="menu-item danger" onClick={() => {
-                  handleDelete(contextMenu.item)
-                  closeContextMenu()
-                }}>
-                  <DeleteOutlined className="menu-icon" />
-                  {t('common.delete')}
-                </div>
               </>
             )}
+            
+            <div className="menu-divider" />
+            
+            <div className="menu-item danger" onClick={() => {
+              if (contextMenu.type === 'file') {
+                handleDelete(contextMenu.item)
+              }
+              closeContextMenu()
+            }}>
+              <DeleteOutlined className="menu-icon" />
+              {t('common.delete')}
+            </div>
           </div>
         )}
         

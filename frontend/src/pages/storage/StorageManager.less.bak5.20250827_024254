@@ -1,6 +1,6 @@
 /**
- * 文件管理系统 - 优化配色版
- * 文件夹和文件使用鲜艳渐变色，存储卡片更紧凑
+ * 文件管理系统 - 活力配色版
+ * 采用鲜艳的渐变色彩，参考左侧模块风格
  */
 
 // 渐变色系统
@@ -15,9 +15,12 @@
 
 // 基础色
 @background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
+@card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+@card-shadow-hover: 0 20px 40px -5px rgba(0, 0, 0, 0.2), 0 10px 15px -5px rgba(0, 0, 0, 0.08);
 @text-white: #ffffff;
 @text-dark: #1e293b;
 @text-muted: #64748b;
+@border-light: rgba(255, 255, 255, 0.2);
 
 .storage-manager {
   height: 100%;
@@ -30,22 +33,22 @@
   .storage-layout {
     display: flex;
     height: 100%;
-    gap: 20px;
-    padding: 20px;
+    gap: 24px;
+    padding: 24px;
   }
 
   // 侧边栏
   .storage-sidebar {
-    width: 280px;
+    width: 300px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
 
     // 文件夹树卡片
     .folder-tree-card {
       background: white;
       border-radius: 16px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-shadow: @card-shadow;
       overflow: hidden;
       flex: 1;
       display: flex;
@@ -53,10 +56,27 @@
 
       .folder-tree-header {
         background: @indigo-gradient;
-        padding: 14px 18px;
+        padding: 16px 20px;
         color: @text-white;
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        button {
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          padding: 4px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.3);
+          }
+        }
       }
 
       .folder-tree {
@@ -78,9 +98,10 @@
           color: @text-dark;
 
           .ant-tree-node-content-wrapper {
-            padding: 8px 12px;
-            border-radius: 8px;
+            padding: 10px 14px;
+            border-radius: 10px;
             transition: all 0.2s;
+            font-weight: 500;
 
             &:hover {
               background: #f1f5f9;
@@ -89,60 +110,88 @@
             &.ant-tree-node-selected {
               background: @blue-gradient;
               color: white;
+              box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
             }
           }
 
           .ant-tree-icon {
             color: #f59e0b;
-            font-size: 16px;
+            font-size: 18px;
           }
         }
       }
     }
 
-    // 存储信息卡片 - 更紧凑
+    // 存储信息卡片
     .storage-info-card {
       background: @purple-gradient;
       border-radius: 16px;
-      padding: 16px;
+      padding: 24px;
       color: white;
-      box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.3);
-      height: 140px; // 固定高度，更紧凑
+      box-shadow: @card-shadow;
+      position: relative;
+      overflow: hidden;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+        animation: pulse 4s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+      }
 
       > div:first-child {
-        font-size: 14px;
+        font-size: 16px;
         font-weight: 600;
-        margin-bottom: 10px;
+        margin-bottom: 16px;
+        position: relative;
+        z-index: 1;
       }
 
       .storage-progress {
+        position: relative;
+        z-index: 1;
+
         .ant-progress-inner {
           background: rgba(255, 255, 255, 0.3);
-          height: 6px;
+          height: 8px;
         }
 
         .ant-progress-bg {
           background: white;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
       }
 
       .storage-stats {
         display: flex;
         justify-content: space-between;
-        margin-top: 12px;
+        margin-top: 20px;
+        position: relative;
+        z-index: 1;
 
         .stat-item {
           text-align: center;
 
           .stat-value {
-            font-size: 16px;
+            font-size: 22px;
             font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
           }
 
           .stat-label {
-            font-size: 11px;
-            opacity: 0.9;
-            margin-top: 2px;
+            font-size: 12px;
+            opacity: 0.95;
+            margin-top: 4px;
+            text-transform: uppercase;
           }
         }
       }
@@ -154,7 +203,7 @@
     flex: 1;
     background: white;
     border-radius: 20px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    box-shadow: @card-shadow;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -162,7 +211,7 @@
     // 工具栏
     .storage-toolbar {
       background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-      padding: 16px 20px;
+      padding: 20px 24px;
       border-bottom: 1px solid #e2e8f0;
       display: flex;
       align-items: center;
@@ -172,17 +221,19 @@
         flex: 1;
 
         .ant-breadcrumb {
-          font-size: 14px;
+          font-size: 15px;
 
           .ant-breadcrumb-link {
             color: @text-muted;
-            padding: 6px 10px;
-            border-radius: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
             transition: all 0.2s;
+            font-weight: 500;
 
             &:hover {
               background: @blue-gradient;
               color: white;
+              transform: translateY(-2px);
             }
           }
         }
@@ -190,32 +241,32 @@
 
       .toolbar-actions {
         display: flex;
-        gap: 10px;
+        gap: 12px;
         align-items: center;
 
         .search-box {
           position: relative;
 
           input {
-            padding: 8px 36px 8px 14px;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
+            padding: 10px 40px 10px 16px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
             background: white;
-            width: 260px;
-            transition: all 0.2s;
+            width: 280px;
+            transition: all 0.3s;
             font-size: 14px;
 
             &:focus {
-              width: 320px;
+              width: 350px;
               border-color: #3b82f6;
-              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+              box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
               outline: none;
             }
           }
 
           .search-icon {
             position: absolute;
-            right: 12px;
+            right: 14px;
             top: 50%;
             transform: translateY(-50%);
             color: @text-muted;
@@ -227,13 +278,13 @@
           gap: 0;
           background: #f1f5f9;
           padding: 2px;
-          border-radius: 8px;
+          border-radius: 10px;
 
           button {
-            padding: 6px 10px;
+            padding: 8px 12px;
             border: none;
             background: transparent;
-            border-radius: 6px;
+            border-radius: 8px;
             color: @text-muted;
             transition: all 0.2s;
             cursor: pointer;
@@ -241,6 +292,7 @@
             &.active {
               background: @blue-gradient;
               color: white;
+              box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
             }
 
             &:hover:not(.active) {
@@ -250,35 +302,37 @@
         }
 
         .ant-btn {
-          border-radius: 8px;
-          font-weight: 500;
-          height: 36px;
-          padding: 0 16px;
+          border-radius: 10px;
+          font-weight: 600;
+          height: 40px;
+          padding: 0 20px;
           border: none;
           transition: all 0.2s;
 
           &:not(.ant-btn-danger) {
             background: @blue-gradient;
             color: white;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
 
             &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+              transform: translateY(-2px);
+              box-shadow: 0 8px 12px -1px rgba(59, 130, 246, 0.4);
             }
           }
 
           &.ant-btn-danger {
             background: @red-gradient;
             color: white;
+            box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
 
             &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+              transform: translateY(-2px);
+              box-shadow: 0 8px 12px -1px rgba(239, 68, 68, 0.4);
             }
           }
 
           &[icon] {
-            padding: 0 10px;
+            padding: 0 12px;
           }
         }
       }
@@ -288,28 +342,28 @@
     .storage-content {
       flex: 1;
       overflow-y: auto;
-      padding: 20px;
+      padding: 24px;
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 
       &::-webkit-scrollbar {
-        width: 8px;
+        width: 10px;
       }
 
       &::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
+        background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+        border-radius: 5px;
       }
 
       // 网格视图
       &.grid-view {
         .file-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+          gap: 20px;
 
           .file-item {
-            border-radius: 14px;
-            padding: 20px 14px;
+            border-radius: 16px;
+            padding: 24px 16px;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
@@ -317,160 +371,132 @@
             flex-direction: column;
             align-items: center;
             color: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: @card-shadow;
             overflow: hidden;
 
-            // 文件夹样式 - 橙色渐变
+            // 文件夹样式
             &.folder-item {
               background: @orange-gradient;
-              
-              &:hover {
-                transform: translateY(-4px) scale(1.02);
-                box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4);
-              }
 
-              .file-icon svg {
-                color: white !important;
+              &::before {
+                content: '';
+                position: absolute;
+                top: -50%;
+                right: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
               }
             }
 
             // 根据文件类型设置渐变背景
             &.image-file {
               background: @green-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
-              }
             }
 
             &.video-file {
               background: @blue-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4);
-              }
             }
 
             &.document-file {
               background: @cyan-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(6, 182, 212, 0.4);
-              }
             }
 
             &.pdf-file {
               background: @red-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4);
-              }
             }
 
             &.excel-file {
               background: @green-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(5, 150, 105, 0.4);
-              }
             }
 
             &.ppt-file {
               background: @pink-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(236, 72, 153, 0.4);
-              }
             }
 
             &.archive-file {
               background: @purple-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(139, 92, 246, 0.4);
-              }
             }
 
             &.text-file {
               background: @indigo-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
-              }
             }
 
             &.unknown-file {
               background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(100, 116, 139, 0.4);
-              }
             }
 
             &:hover {
-              transform: translateY(-4px) scale(1.02);
+              transform: translateY(-6px) scale(1.02);
+              box-shadow: @card-shadow-hover;
             }
 
             &.selected {
               transform: scale(1.05);
-              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+              box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), @card-shadow-hover;
             }
 
             // 文件图标
             .file-icon {
-              width: 64px;
-              height: 64px;
+              width: 72px;
+              height: 72px;
               display: flex;
               align-items: center;
               justify-content: center;
-              margin-bottom: 12px;
+              margin-bottom: 16px;
+              position: relative;
+              z-index: 1;
 
               svg {
                 width: 100%;
                 height: 100%;
                 color: white;
-                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+                filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
               }
 
               // 文件数量标记
               .file-count {
                 position: absolute;
-                top: -6px;
-                right: -6px;
+                top: -8px;
+                right: -8px;
                 background: white;
                 color: #f59e0b;
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: 700;
-                padding: 2px 6px;
-                border-radius: 8px;
+                padding: 3px 7px;
+                border-radius: 10px;
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
               }
             }
 
             // 文件名
             .file-name {
-              font-size: 13px;
+              font-size: 14px;
               font-weight: 600;
               text-align: center;
               width: 100%;
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
+              position: relative;
+              z-index: 1;
               text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }
 
             // 文件大小
             .file-size {
-              font-size: 11px;
-              margin-top: 4px;
+              font-size: 12px;
+              margin-top: 6px;
               opacity: 0.95;
+              position: relative;
+              z-index: 1;
             }
 
             // 选择框
             .select-checkbox {
               position: absolute;
-              top: 8px;
-              left: 8px;
+              top: 10px;
+              left: 10px;
               opacity: 0;
               transition: opacity 0.2s;
               z-index: 2;
@@ -522,9 +548,17 @@
               }
 
               > td {
-                padding: 12px;
+                padding: 14px;
                 border-bottom: 1px solid #f1f5f9;
               }
+            }
+          }
+
+          .ant-btn-link {
+            font-weight: 500;
+            
+            &:hover {
+              transform: scale(1.1);
             }
           }
         }
@@ -539,16 +573,16 @@
         height: 100%;
 
         .empty-icon {
-          font-size: 72px;
+          font-size: 80px;
           background: @purple-gradient;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
         }
 
         .empty-text {
-          font-size: 16px;
+          font-size: 18px;
           color: @text-muted;
           font-weight: 500;
         }
@@ -570,8 +604,9 @@
           justify-content: center;
           z-index: 10;
           color: white;
-          font-size: 22px;
+          font-size: 24px;
           font-weight: 700;
+          backdrop-filter: blur(8px);
         }
       }
     }
@@ -580,30 +615,47 @@
   // 浮动上传按钮
   .upload-fab {
     position: fixed;
-    bottom: 32px;
-    right: 32px;
-    width: 60px;
-    height: 60px;
+    bottom: 36px;
+    right: 36px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     background: @purple-gradient;
     color: white;
     border: none;
-    box-shadow: 0 8px 20px -5px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 10px 30px -5px rgba(139, 92, 246, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     z-index: 100;
-    font-size: 26px;
+    font-size: 28px;
+
+    &::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: @purple-gradient;
+      opacity: 0;
+      transform: scale(0);
+      transition: all 0.4s;
+    }
 
     &:hover {
-      transform: scale(1.1) rotate(15deg);
-      box-shadow: 0 12px 30px -5px rgba(139, 92, 246, 0.5);
+      transform: scale(1.15) rotate(15deg);
+      box-shadow: 0 15px 40px -5px rgba(139, 92, 246, 0.5);
+
+      &::before {
+        opacity: 0.3;
+        transform: scale(1.5);
+      }
     }
 
     &:active {
-      transform: scale(1);
+      transform: scale(1.05);
     }
   }
 
@@ -611,19 +663,20 @@
   .context-menu {
     position: fixed;
     background: white;
-    border-radius: 10px;
-    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.2);
-    padding: 6px;
-    min-width: 200px;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    min-width: 220px;
     z-index: 1000;
+    overflow: hidden;
 
     .menu-item {
-      padding: 10px 14px;
-      border-radius: 6px;
+      padding: 12px 16px;
+      border-radius: 8px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       transition: all 0.2s;
       font-size: 14px;
       font-weight: 500;
@@ -632,6 +685,7 @@
       &:hover {
         background: @blue-gradient;
         color: white;
+        transform: translateX(4px);
       }
 
       &.danger {
@@ -644,15 +698,15 @@
       }
 
       .menu-icon {
-        width: 18px;
-        font-size: 16px;
+        width: 20px;
+        font-size: 18px;
       }
     }
 
     .menu-divider {
       height: 1px;
-      background: #e2e8f0;
-      margin: 6px 0;
+      background: linear-gradient(90deg, transparent 0%, #e2e8f0 50%, transparent 100%);
+      margin: 8px 0;
     }
   }
 
@@ -660,26 +714,21 @@
   @media (max-width: 768px) {
     .storage-layout {
       flex-direction: column;
-      padding: 10px;
-      gap: 10px;
+      padding: 12px;
+      gap: 12px;
     }
 
     .storage-sidebar {
       width: 100%;
 
       .folder-tree-card {
-        max-height: 180px;
-      }
-
-      .storage-info-card {
-        height: auto;
-        padding: 12px;
+        max-height: 200px;
       }
     }
 
     .storage-content.grid-view .file-grid {
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
     }
   }
 }

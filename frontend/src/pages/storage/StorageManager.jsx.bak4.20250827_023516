@@ -93,56 +93,6 @@ const ViewMode = {
 }
 
 /**
- * 获取文件类型对应的CSS类名
- */
-const getFileTypeClass = (mimeType, fileName) => {
-  const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
-  
-  // 图片类型
-  if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
-    return 'image-file'
-  }
-  
-  // 视频类型
-  if (mimeType?.startsWith('video/') || ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
-    return 'video-file'
-  }
-  
-  // PDF
-  if (mimeType?.includes('pdf') || ext === 'pdf') {
-    return 'pdf-file'
-  }
-  
-  // Word文档
-  if (mimeType?.includes('word') || ['doc', 'docx'].includes(ext)) {
-    return 'document-file'
-  }
-  
-  // Excel表格
-  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet') || ['xls', 'xlsx'].includes(ext)) {
-    return 'excel-file'
-  }
-  
-  // PPT演示
-  if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
-    return 'ppt-file'
-  }
-  
-  // 压缩文件
-  if (mimeType?.includes('zip') || mimeType?.includes('rar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-    return 'archive-file'
-  }
-  
-  // 文本文件
-  if (mimeType?.includes('text') || ['txt', 'md', 'json', 'js', 'css', 'html', 'xml', 'csv'].includes(ext)) {
-    return 'text-file'
-  }
-  
-  // 未知类型
-  return 'unknown-file'
-}
-
-/**
  * 文件/文件夹拖拽组件
  */
 const DraggableItem = ({ item, type, children, onMove }) => {
@@ -547,7 +497,7 @@ const StorageManager = () => {
   // 渲染网格视图
   const renderGridView = () => (
     <div className="file-grid">
-      {/* 文件夹 - 添加folder-item类名 */}
+      {/* 文件夹 */}
       {filteredFolders.map(folder => {
         const fileCount = files.filter(f => f.folder_id === folder.id).length
         
@@ -559,7 +509,7 @@ const StorageManager = () => {
             onMove={handleMove}
           >
             <div
-              className="file-item folder-item"
+              className="file-item"
               onDoubleClick={() => {
                 setCurrentFolder(folder)
               }}
@@ -578,38 +528,34 @@ const StorageManager = () => {
         )
       })}
       
-      {/* 文件 - 根据类型添加对应的类名 */}
-      {filteredFiles.map(file => {
-        const fileTypeClass = getFileTypeClass(file.mime_type, file.original_name)
-        
-        return (
-          <DraggableItem
-            key={file.id}
-            item={file}
-            type={ItemTypes.FILE}
-            onMove={handleMove}
+      {/* 文件 */}
+      {filteredFiles.map(file => (
+        <DraggableItem
+          key={file.id}
+          item={file}
+          type={ItemTypes.FILE}
+          onMove={handleMove}
+        >
+          <div
+            className={`file-item ${selectedFiles.includes(file.id) ? 'selected' : ''}`}
+            onClick={() => toggleFileSelection(file.id)}
+            onDoubleClick={() => {
+              setPreviewFile(file)
+              setPreviewVisible(true)
+            }}
+            onContextMenu={(e) => handleContextMenu(e, file, 'file')}
           >
-            <div
-              className={`file-item ${fileTypeClass} ${selectedFiles.includes(file.id) ? 'selected' : ''}`}
-              onClick={() => toggleFileSelection(file.id)}
-              onDoubleClick={() => {
-                setPreviewFile(file)
-                setPreviewVisible(true)
-              }}
-              onContextMenu={(e) => handleContextMenu(e, file, 'file')}
-            >
-              <Checkbox
-                className="select-checkbox"
-                checked={selectedFiles.includes(file.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <FileIcon mimeType={file.mime_type} fileName={file.original_name} />
-              <div className="file-name">{file.original_name}</div>
-              <div className="file-size">{formatFileSize(file.file_size)}</div>
-            </div>
-          </DraggableItem>
-        )
-      })}
+            <Checkbox
+              className="select-checkbox"
+              checked={selectedFiles.includes(file.id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <FileIcon mimeType={file.mime_type} fileName={file.original_name} />
+            <div className="file-name">{file.original_name}</div>
+            <div className="file-size">{formatFileSize(file.file_size)}</div>
+          </div>
+        </DraggableItem>
+      ))}
     </div>
   )
 
@@ -755,43 +701,38 @@ const StorageManager = () => {
         <div className="storage-layout">
           {/* 侧边栏 */}
           <div className={`storage-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-            {/* 文件夹树卡片 */}
-            <div className="folder-tree-card">
-              <div className="folder-tree-header">
-                {t('storage.myFiles')}
-              </div>
-              <div className="folder-tree">
-                <Tree
-                  showIcon
-                  showLine={{ showLeafIcon: false }}
-                  treeData={[
-                    {
-                      key: 'root',
-                      title: (
-                        <span style={{ fontWeight: 600 }}>
-                          {t('storage.myFiles')}
-                        </span>
-                      ),
-                      icon: <HomeOutlined />,
-                      children: convertToTreeData(folderTree)
-                    }
-                  ]}
-                  onSelect={(keys, info) => {
-                    if (keys[0] === 'root') {
-                      setCurrentFolder(null)
-                    } else {
-                      const folder = info.node
-                      setCurrentFolder(folder)
-                    }
-                    clearSelection()
-                  }}
-                  expandedKeys={treeExpandedKeys}
-                  onExpand={setTreeExpandedKeys}
-                />
-              </div>
+            {/* 文件夹树 */}
+            <div className="folder-tree">
+              <Tree
+                showIcon
+                showLine={{ showLeafIcon: false }}
+                treeData={[
+                  {
+                    key: 'root',
+                    title: (
+                      <span style={{ fontWeight: 600 }}>
+                        {t('storage.myFiles')}
+                      </span>
+                    ),
+                    icon: <HomeOutlined />,
+                    children: convertToTreeData(folderTree)
+                  }
+                ]}
+                onSelect={(keys, info) => {
+                  if (keys[0] === 'root') {
+                    setCurrentFolder(null)
+                  } else {
+                    const folder = info.node
+                    setCurrentFolder(folder)
+                  }
+                  clearSelection()
+                }}
+                expandedKeys={treeExpandedKeys}
+                onExpand={setTreeExpandedKeys}
+              />
             </div>
             
-            {/* 存储信息卡片 - 更紧凑 */}
+            {/* 存储信息卡片 */}
             {storageStats && !sidebarCollapsed && (
               <div className="storage-info-card">
                 <div>{t('storage.storageInfo')}</div>
