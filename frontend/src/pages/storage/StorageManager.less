@@ -1,0 +1,138 @@
+.storage-manager {
+  height: 100%;
+  
+  .ant-layout {
+    height: 100%;
+    background: #f0f2f5;
+  }
+  
+  .storage-sider {
+    background: #fff;
+    border-right: 1px solid #f0f0f0;
+    
+    .ant-card {
+      border: none;
+      border-radius: 0;
+      
+      .ant-card-body {
+        padding: 12px;
+      }
+    }
+    
+    .storage-stats {
+      .stats-text {
+        margin: 8px 0;
+        font-size: 12px;
+        color: #666;
+        text-align: center;
+      }
+      
+      .stats-info {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f0f0f0;
+        font-size: 12px;
+        color: #999;
+        
+        > div {
+          margin: 4px 0;
+        }
+      }
+    }
+  }
+  
+  .storage-content {
+    background: transparent;
+    
+    .storage-header {
+      padding: 16px 24px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      .ant-breadcrumb {
+        font-size: 14px;
+      }
+    }
+    
+    .storage-main {
+      padding: 24px;
+      overflow: auto;
+      
+      .loading-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 400px;
+      }
+      
+      .folder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+        
+        .folder-card {
+          text-align: center;
+          cursor: pointer;
+          
+          .ant-card-body {
+            padding: 16px;
+          }
+          
+          .folder-icon {
+            margin-bottom: 8px;
+          }
+          
+          .folder-name {
+            font-size: 12px;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          
+          &:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          }
+        }
+      }
+      
+      .ant-table {
+        background: #fff;
+        
+        .ant-table-cell {
+          font-size: 14px;
+        }
+      }
+    }
+  }
+  
+  .file-preview {
+    text-align: center;
+    
+    .preview-not-supported {
+      padding: 60px 20px;
+      
+      p {
+        margin: 20px 0;
+        color: #666;
+      }
+    }
+  }
+}
+
+// 响应式布局
+@media (max-width: 768px) {
+  .storage-manager {
+    .storage-sider {
+      display: none;
+    }
+    
+    .folder-grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+    }
+  }
+}

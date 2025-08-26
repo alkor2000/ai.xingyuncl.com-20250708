@@ -22,7 +22,8 @@ import {
   HistoryOutlined,
   PictureOutlined,
   KeyOutlined,
-  CodeOutlined
+  CodeOutlined,
+  CloudServerOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -48,7 +49,8 @@ import {
   UsageLogs,
   ImageModelSettings,
   SSOSettings,
-  HtmlEditorSettings
+  HtmlEditorSettings,
+  OSSSettings
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -584,6 +586,16 @@ const Settings = () => {
             />
           </Card>
         )
+      },
+      {
+        key: 'ossSettings',
+        label: (
+          <span>
+            <CloudServerOutlined />
+            OSS存储配置
+          </span>
+        ),
+        children: <OSSSettings />
       }
     ] : []),
     {

@@ -39,6 +39,9 @@ const ImageGeneration = React.lazy(() => import('./pages/image/ImageGeneration')
 // HTML编辑器页面组件 - 懒加载
 const HtmlEditor = React.lazy(() => import('./pages/htmlEditor/HtmlEditor'))
 
+// 文件管理页面组件 - 懒加载
+const StorageManager = React.lazy(() => import('./pages/storage/StorageManager'))
+
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -199,6 +202,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <HtmlEditor />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* 文件管理页面路由 - 懒加载 */}
+                        <Route 
+                          path="/storage" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <StorageManager />
                             </LazyLoadingWrapper>
                           } 
                         />

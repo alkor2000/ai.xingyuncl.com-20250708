@@ -32,6 +32,16 @@
   "button.selectAll": "全选",
   "button.unselectAll": "取消全选",
   
+  "common.refresh": "刷新",
+  "common.more": "更多",
+  "common.preview": "预览",
+  "common.download": "下载",
+  "common.delete": "删除",
+  "common.operation": "操作",
+  "common.confirmDelete": "确定要删除吗？",
+  "common.deleteSuccess": "删除成功",
+  "common.deleteFailed": "删除失败",
+  
   "status.success": "成功",
   "status.error": "错误",
   "status.warning": "警告",

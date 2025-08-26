@@ -1,0 +1,519 @@
+/**
+ * 存储管理控制器
+ * 处理文件上传、下载、管理等操作
+ */
+
+const multer = require('multer');
+const path = require('path');
+const ossService = require('../services/ossService');
+const UserFile = require('../models/UserFile');
+const UserFolder = require('../models/UserFolder');
+const ResponseHelper = require('../utils/response');
+const logger = require('../utils/logger');
+const dbConnection = require('../database/connection');
+
+// 配置multer内存存储
+const storage = multer.memoryStorage();
+
+// 文件过滤器
+const fileFilter = (req, file, cb) => {
+  // 允许的文件类型
+  const allowedMimes = [
+    // 图片
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+    // 视频
+    'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo',
+    // 文档
+    'application/pdf', 'application/msword', 
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain', 'text/csv',
+    // 压缩文件
+    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed'
+  ];
+  
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`不支持的文件类型: ${file.mimetype}`), false);
+  }
+};
+
+// 创建上传中间件
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB
+    files: 10 // 单次最多10个文件
+  }
+});
+
+class StorageController {
+  /**
+   * 上传文件
+   */
+  static uploadFiles = [
+    upload.array('files', 10),
+    async (req, res) => {
+      try {
+        const userId = req.user.id;
+        const { folder_id, is_public } = req.body;
+        
+        if (!req.files || req.files.length === 0) {
+          return ResponseHelper.error(res, '请选择要上传的文件');
+        }
+        
+        // 检查用户存储空间
+        const userStorage = await UserFile.getUserStorage(userId);
+        const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+        
+        if (userStorage.storage_used + totalSize > userStorage.storage_quota) {
+          return ResponseHelper.error(res, '存储空间不足');
+        }
+        
+        // 如果指定了文件夹，检查权限
+        if (folder_id) {
+          const hasAccess = await UserFolder.checkOwnership(folder_id, userId);
+          if (!hasAccess) {
+            return ResponseHelper.forbidden(res, '无权访问该文件夹');
+          }
+        }
+        
+        // 计算积分消耗
+        const creditCost = await StorageController.calculateCreditCost('upload', req.files);
+        
+        // 检查用户积分
+        const userCredits = await StorageController.getUserCredits(userId);
+        if (userCredits < creditCost) {
+          return ResponseHelper.error(res, `积分不足，需要${creditCost}积分，当前可用${userCredits}积分`);
+        }
+        
+        // 初始化OSS服务
+        await ossService.initialize();
+        
+        const uploadedFiles = [];
+        const failedFiles = [];
+        
+        // 逐个上传文件
+        for (const file of req.files) {
+          try {
+            // 生成OSS key
+            const ossKey = ossService.generateOSSKey(userId, file.originalname, folder_id);
+            
+            // 上传到OSS
+            const uploadResult = await ossService.uploadFile(
+              file.buffer,
+              ossKey,
+              {
+                headers: {
+                  'Content-Type': file.mimetype,
+                  'Content-Disposition': `attachment; filename="${encodeURIComponent(file.originalname)}"`
+                }
+              }
+            );
+            
+            // 生成缩略图URL（如果是图片）
+            let thumbnailUrl = null;
+            if (file.mimetype.startsWith('image/')) {
+              thumbnailUrl = ossService.generateThumbnailUrl(uploadResult.url);
+            }
+            
+            // 保存到数据库
+            const fileRecord = await UserFile.create({
+              user_id: userId,
+              folder_id: folder_id || null,
+              original_name: file.originalname,
+              stored_name: path.basename(ossKey),
+              oss_key: ossKey,
+              oss_url: uploadResult.url,
+              file_size: file.size,
+              mime_type: file.mimetype,
+              file_ext: path.extname(file.originalname),
+              thumbnail_url: thumbnailUrl,
+              is_public: is_public === 'true' || is_public === true
+            });
+            
+            uploadedFiles.push(fileRecord);
+          } catch (error) {
+            logger.error('文件上传失败:', {
+              filename: file.originalname,
+              error: error.message
+            });
+            failedFiles.push({
+              filename: file.originalname,
+              error: error.message
+            });
+          }
+        }
+        
+        // 扣除积分
+        if (uploadedFiles.length > 0 && creditCost > 0) {
+          await StorageController.deductCredits(userId, creditCost);
+        }
+        
+        const result = {
+          success: uploadedFiles,
+          failed: failedFiles,
+          credits_used: creditCost
+        };
+        
+        if (uploadedFiles.length === 0) {
+          return ResponseHelper.error(res, '所有文件上传失败', result);
+        } else if (failedFiles.length > 0) {
+          return ResponseHelper.success(res, result, '部分文件上传成功');
+        } else {
+          return ResponseHelper.success(res, result, '文件上传成功');
+        }
+      } catch (error) {
+        logger.error('文件上传处理失败:', error);
+        return ResponseHelper.error(res, error.message || '文件上传失败');
+      }
+    }
+  ];
+
+  /**
+   * 获取文件列表
+   */
+  static async getFiles(req, res) {
+    try {
+      const userId = req.user.id;
+      const { folder_id, page = 1, limit = 50, order_by = 'created_at', order = 'DESC' } = req.query;
+      
+      const result = await UserFile.getUserFiles(userId, folder_id, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        orderBy: order_by,
+        order: order.toUpperCase()
+      });
+      
+      return ResponseHelper.success(res, result, '获取文件列表成功');
+    } catch (error) {
+      logger.error('获取文件列表失败:', error);
+      return ResponseHelper.error(res, '获取文件列表失败');
+    }
+  }
+
+  /**
+   * 删除文件
+   */
+  static async deleteFile(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      
+      // 检查文件所有权
+      const file = await UserFile.findById(id);
+      if (!file) {
+        return ResponseHelper.notFound(res, '文件不存在');
+      }
+      
+      if (file.user_id !== userId) {
+        return ResponseHelper.forbidden(res, '无权删除此文件');
+      }
+      
+      // 从OSS删除
+      try {
+        await ossService.deleteFile(file.oss_key);
+      } catch (error) {
+        logger.error('OSS文件删除失败，继续删除数据库记录:', error);
+      }
+      
+      // 软删除数据库记录
+      await file.softDelete();
+      
+      return ResponseHelper.success(res, null, '文件删除成功');
+    } catch (error) {
+      logger.error('删除文件失败:', error);
+      return ResponseHelper.error(res, '删除文件失败');
+    }
+  }
+
+  /**
+   * 批量删除文件
+   */
+  static async deleteFiles(req, res) {
+    try {
+      const userId = req.user.id;
+      const { file_ids } = req.body;
+      
+      if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+        return ResponseHelper.validation(res, ['请选择要删除的文件']);
+      }
+      
+      const ossKeys = [];
+      const deletedFiles = [];
+      
+      for (const fileId of file_ids) {
+        const file = await UserFile.findById(fileId);
+        if (file && file.user_id === userId) {
+          ossKeys.push(file.oss_key);
+          await file.softDelete();
+          deletedFiles.push(fileId);
+        }
+      }
+      
+      // 批量删除OSS文件
+      if (ossKeys.length > 0) {
+        try {
+          await ossService.deleteFiles(ossKeys);
+        } catch (error) {
+          logger.error('批量删除OSS文件失败:', error);
+        }
+      }
+      
+      return ResponseHelper.success(res, {
+        deleted: deletedFiles.length,
+        total: file_ids.length
+      }, '文件删除完成');
+    } catch (error) {
+      logger.error('批量删除文件失败:', error);
+      return ResponseHelper.error(res, '批量删除文件失败');
+    }
+  }
+
+  /**
+   * 移动文件
+   */
+  static async moveFile(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { target_folder_id } = req.body;
+      
+      // 检查文件所有权
+      const file = await UserFile.findById(id);
+      if (!file || file.user_id !== userId) {
+        return ResponseHelper.forbidden(res, '无权移动此文件');
+      }
+      
+      // 检查目标文件夹权限
+      if (target_folder_id) {
+        const hasAccess = await UserFolder.checkOwnership(target_folder_id, userId);
+        if (!hasAccess) {
+          return ResponseHelper.forbidden(res, '无权访问目标文件夹');
+        }
+      }
+      
+      await file.moveTo(target_folder_id);
+      
+      return ResponseHelper.success(res, null, '文件移动成功');
+    } catch (error) {
+      logger.error('移动文件失败:', error);
+      return ResponseHelper.error(res, '移动文件失败');
+    }
+  }
+
+  /**
+   * 创建文件夹
+   */
+  static async createFolder(req, res) {
+    try {
+      const userId = req.user.id;
+      const { name, parent_id } = req.body;
+      
+      if (!name) {
+        return ResponseHelper.validation(res, ['文件夹名称不能为空']);
+      }
+      
+      // 检查父文件夹权限
+      if (parent_id) {
+        const hasAccess = await UserFolder.checkOwnership(parent_id, userId);
+        if (!hasAccess) {
+          return ResponseHelper.forbidden(res, '无权在此文件夹创建子文件夹');
+        }
+      }
+      
+      const folder = await UserFolder.create({
+        user_id: userId,
+        parent_id: parent_id || null,
+        name: name
+      });
+      
+      return ResponseHelper.success(res, folder, '文件夹创建成功');
+    } catch (error) {
+      logger.error('创建文件夹失败:', error);
+      return ResponseHelper.error(res, '创建文件夹失败');
+    }
+  }
+
+  /**
+   * 获取文件夹列表
+   */
+  static async getFolders(req, res) {
+    try {
+      const userId = req.user.id;
+      const { parent_id, tree } = req.query;
+      
+      let folders;
+      if (tree === 'true') {
+        folders = await UserFolder.getFolderTree(userId);
+      } else {
+        folders = await UserFolder.getUserFolders(userId, parent_id);
+      }
+      
+      return ResponseHelper.success(res, folders, '获取文件夹列表成功');
+    } catch (error) {
+      logger.error('获取文件夹列表失败:', error);
+      return ResponseHelper.error(res, '获取文件夹列表失败');
+    }
+  }
+
+  /**
+   * 删除文件夹
+   */
+  static async deleteFolder(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      
+      const folder = await UserFolder.findById(id);
+      if (!folder || folder.user_id !== userId) {
+        return ResponseHelper.forbidden(res, '无权删除此文件夹');
+      }
+      
+      await folder.softDelete();
+      
+      return ResponseHelper.success(res, null, '文件夹删除成功');
+    } catch (error) {
+      logger.error('删除文件夹失败:', error);
+      return ResponseHelper.error(res, '删除文件夹失败');
+    }
+  }
+
+  /**
+   * 获取存储统计
+   */
+  static async getStorageStats(req, res) {
+    try {
+      const userId = req.user.id;
+      const stats = await UserFile.getUserStorage(userId);
+      
+      return ResponseHelper.success(res, stats, '获取存储统计成功');
+    } catch (error) {
+      logger.error('获取存储统计失败:', error);
+      return ResponseHelper.error(res, '获取存储统计失败');
+    }
+  }
+
+  /**
+   * 计算积分消耗
+   */
+  static async calculateCreditCost(action, files) {
+    try {
+      const sql = `
+        SELECT * FROM storage_credit_config 
+        WHERE action_type = ? AND is_active = 1
+      `;
+      
+      const { rows } = await dbConnection.query(sql, [action]);
+      
+      if (rows.length === 0) {
+        return 0;
+      }
+      
+      const configs = {};
+      rows.forEach(row => {
+        configs[row.file_type] = row;
+      });
+      
+      let totalCost = 0;
+      for (const file of files) {
+        const fileType = StorageController.getFileType(file.mimetype);
+        const config = configs[fileType] || configs['default'];
+        
+        if (config) {
+          const sizeMB = file.size / (1024 * 1024);
+          let cost = Math.ceil(sizeMB * config.credits_per_mb);
+          cost = Math.max(config.min_credits, Math.min(cost, config.max_credits));
+          totalCost += cost;
+        }
+      }
+      
+      return totalCost;
+    } catch (error) {
+      logger.error('计算积分消耗失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 获取文件类型分类
+   */
+  static getFileType(mimeType) {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.includes('document') || mimeType.includes('pdf') || 
+        mimeType.includes('word') || mimeType.includes('excel')) {
+      return 'document';
+    }
+    return 'default';
+  }
+
+  /**
+   * 获取用户积分（修复：使用正确的字段名）
+   */
+  static async getUserCredits(userId) {
+    try {
+      const sql = 'SELECT credits_quota, used_credits FROM users WHERE id = ?';
+      const { rows } = await dbConnection.query(sql, [userId]);
+      
+      if (rows.length > 0) {
+        const creditsQuota = rows[0].credits_quota || 0;
+        const usedCredits = rows[0].used_credits || 0;
+        const availableCredits = creditsQuota - usedCredits;
+        
+        logger.info('获取用户积分', { 
+          userId, 
+          creditsQuota, 
+          usedCredits, 
+          availableCredits 
+        });
+        
+        return Math.max(0, availableCredits);
+      }
+      
+      return 0;
+    } catch (error) {
+      logger.error('获取用户积分失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 扣除用户积分（修复：更新used_credits字段）
+   */
+  static async deductCredits(userId, amount) {
+    try {
+      // 先检查积分是否足够
+      const userCredits = await StorageController.getUserCredits(userId);
+      if (userCredits < amount) {
+        logger.warn('积分不足，无法扣除', { userId, required: amount, available: userCredits });
+        return false;
+      }
+      
+      // 更新已使用积分
+      const sql = 'UPDATE users SET used_credits = used_credits + ? WHERE id = ?';
+      await dbConnection.query(sql, [amount, userId]);
+      
+      // 记录积分使用历史
+      const historySql = `
+        INSERT INTO credit_transactions 
+        (user_id, amount, type, description, created_at) 
+        VALUES (?, ?, 'debit', ?, NOW())
+      `;
+      await dbConnection.query(historySql, [userId, amount, '文件上传']);
+      
+      logger.info('扣除用户积分成功', { userId, amount });
+      return true;
+    } catch (error) {
+      logger.error('扣除积分失败:', error);
+      return false;
+    }
+  }
+}
+
+module.exports = StorageController;

@@ -4,6 +4,7 @@ import auth from './auth.json'
 import chat from './chat.json'
 import admin from './admin.json'
 import errors from './errors.json'
+import storage from './storage.json'
 
 export default {
   ...common,
@@ -11,5 +12,6 @@ export default {
   ...auth,
   ...chat,
   ...admin,
-  ...errors
+  ...errors,
+  ...storage
 }
