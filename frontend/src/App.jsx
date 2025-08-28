@@ -18,6 +18,7 @@ import ThemeProvider from './components/ThemeProvider'
 // 页面组件
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import SSOCallback from './pages/auth/SSOCallback'  // 新增SSO回调页面
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
 import Profile from './pages/profile/Profile'
@@ -163,6 +164,12 @@ const App = () => {
                     <Register />
                   </PublicRoute>
                 } 
+              />
+              
+              {/* SSO回调路由 - 不需要PublicRoute包装，因为它会处理自己的认证逻辑 */}
+              <Route 
+                path="/auth/sso-callback" 
+                element={<SSOCallback />} 
               />
 
               {/* 受保护的路由 */}
