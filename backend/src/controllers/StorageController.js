@@ -104,7 +104,7 @@ class StorageController {
           }
         }
         
-        // 计算积分消耗
+        // 计算积分消耗（使用简化版）
         const creditCost = await StorageController.calculateCreditCost('upload', req.files);
         
         // 检查用户积分
@@ -202,7 +202,7 @@ class StorageController {
         
         // 扣除积分
         if (uploadedFiles.length > 0 && creditCost > 0) {
-          await StorageController.deductCredits(userId, creditCost);
+          await StorageController.deductCredits(userId, creditCost, '文件上传');
         }
         
         const result = {
@@ -461,42 +461,76 @@ class StorageController {
   }
 
   /**
-   * 计算积分消耗
+   * 计算积分消耗（优化版）
+   * 规则：
+   * - 5MB及以下：只收基础积分
+   * - 超过5MB：按每5MB区间收费
    */
   static async calculateCreditCost(action, files) {
     try {
-      const sql = `
-        SELECT * FROM storage_credit_config 
-        WHERE action_type = ? AND is_active = 1
-      `;
-      
-      const { rows } = await dbConnection.query(sql, [action]);
-      
-      if (rows.length === 0) {
+      // 只对上传操作收费
+      if (action !== 'upload') {
         return 0;
       }
       
-      const configs = {};
-      rows.forEach(row => {
-        configs[row.file_type] = row;
-      });
+      // 获取简化配置
+      const sql = `SELECT * FROM storage_credits_config_simple WHERE is_active = 1 LIMIT 1`;
+      const { rows } = await dbConnection.query(sql);
       
-      let totalCost = 0;
-      for (const file of files) {
-        const fileType = StorageController.getFileType(file.mimetype);
-        const config = configs[fileType] || configs['default'];
-        
-        if (config) {
-          const sizeMB = file.size / (1024 * 1024);
-          let cost = Math.ceil(sizeMB * config.credits_per_mb);
-          cost = Math.max(config.min_credits, Math.min(cost, config.max_credits));
-          totalCost += cost;
-        }
+      if (rows.length === 0) {
+        logger.warn('未找到积分配置，使用默认值');
+        // 默认配置
+        const config = {
+          base_credits: 2,
+          credits_per_5mb: 1,
+          max_file_size: 100
+        };
+        rows.push(config);
       }
       
-      return totalCost;
+      const config = rows[0];
+      let totalCost = 0;
+      
+      for (const file of files) {
+        // 检查文件大小限制
+        const fileSizeMB = file.size / (1024 * 1024);
+        if (fileSizeMB > config.max_file_size) {
+          throw new Error(`文件 ${file.originalname} 超过最大限制 ${config.max_file_size}MB`);
+        }
+        
+        // 计算单个文件积分
+        let fileCredits = 0;
+        
+        if (fileSizeMB <= 5) {
+          // 5MB及以下，只收基础积分
+          fileCredits = parseInt(config.base_credits);
+        } else {
+          // 超过5MB，按区间收费
+          // 超出部分的区间数 = Math.ceil((文件大小 - 5) / 5)
+          const extraIntervals = Math.ceil((fileSizeMB - 5) / 5);
+          fileCredits = extraIntervals * parseFloat(config.credits_per_5mb);
+        }
+        
+        totalCost += fileCredits;
+        
+        logger.info('文件积分计算', {
+          filename: file.originalname,
+          sizeMB: fileSizeMB.toFixed(2),
+          baseCredits: config.base_credits,
+          creditsPerInterval: config.credits_per_5mb,
+          fileCredits: fileCredits,
+          calculation: fileSizeMB <= 5 ? '使用基础积分' : `超出${(fileSizeMB - 5).toFixed(2)}MB，${Math.ceil((fileSizeMB - 5) / 5)}个区间`
+        });
+      }
+      
+      return Math.ceil(totalCost);
     } catch (error) {
       logger.error('计算积分消耗失败:', error);
+      // 如果是文件大小超限，抛出错误
+      if (error.message.includes('超过最大限制')) {
+        throw error;
+      }
+      // 其他错误返回0，不阻止上传
       return 0;
     }
   }
@@ -545,9 +579,9 @@ class StorageController {
   }
 
   /**
-   * 扣除用户积分（修复：更新used_credits字段）
+   * 扣除用户积分（修复：更新used_credits字段并记录交易）
    */
-  static async deductCredits(userId, amount) {
+  static async deductCredits(userId, amount, description = '文件上传') {
     try {
       // 先检查积分是否足够
       const userCredits = await StorageController.getUserCredits(userId);
@@ -560,15 +594,16 @@ class StorageController {
       const sql = 'UPDATE users SET used_credits = used_credits + ? WHERE id = ?';
       await dbConnection.query(sql, [amount, userId]);
       
-      // 记录积分使用历史
+      // 记录积分使用历史（使用正确的字段和负数表示扣除）
       const historySql = `
         INSERT INTO credit_transactions 
-        (user_id, amount, type, description, created_at) 
-        VALUES (?, ?, 'debit', ?, NOW())
+        (user_id, amount, balance_after, transaction_type, description, created_at) 
+        VALUES (?, ?, ?, 'storage_upload', ?, NOW())
       `;
-      await dbConnection.query(historySql, [userId, amount, '文件上传']);
+      const newBalance = userCredits - amount;
+      await dbConnection.query(historySql, [userId, -amount, newBalance, description]);
       
-      logger.info('扣除用户积分成功', { userId, amount });
+      logger.info('扣除用户积分成功', { userId, amount, description });
       return true;
     } catch (error) {
       logger.error('扣除积分失败:', error);

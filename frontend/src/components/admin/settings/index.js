@@ -1,6 +1,3 @@
-/**
- * 系统设置组件统一导出
- */
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
 export { default as AIModelFormModal } from './AIModelFormModal'
@@ -20,6 +17,8 @@ export { default as SystemPromptTable } from './SystemPromptTable'
 export { default as SystemPromptFormModal } from './SystemPromptFormModal'
 export { default as UsageLogs } from './UsageLogs'
 export { default as ImageModelSettings } from './ImageModelSettings'
+export { default as ImageModelFormModal } from './ImageModelFormModal'
 export { default as SSOSettings } from './SSOSettings'
 export { default as HtmlEditorSettings } from './HtmlEditorSettings'
 export { default as OSSSettings } from './OSSSettings'
+export { default as StorageCreditsConfig } from './StorageCreditsConfig'

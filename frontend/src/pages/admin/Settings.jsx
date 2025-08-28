@@ -23,7 +23,8 @@ import {
   PictureOutlined,
   KeyOutlined,
   CodeOutlined,
-  CloudServerOutlined
+  CloudServerOutlined,
+  DollarOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -50,7 +51,8 @@ import {
   ImageModelSettings,
   SSOSettings,
   HtmlEditorSettings,
-  OSSSettings
+  OSSSettings,
+  StorageCreditsConfig
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -596,6 +598,16 @@ const Settings = () => {
           </span>
         ),
         children: <OSSSettings />
+      },
+      {
+        key: 'storageCredits',
+        label: (
+          <span>
+            <DollarOutlined />
+            存储积分配置
+          </span>
+        ),
+        children: <StorageCreditsConfig />
       }
     ] : []),
     {
