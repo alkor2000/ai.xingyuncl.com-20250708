@@ -1,5 +1,5 @@
 /**
- * 图像生成页面样式 - 支持Midjourney
+ * 图像生成页面样式 - 支持Midjourney和分页（修复Dock遮挡）
  */
 
 .image-generation-page {
@@ -296,13 +296,23 @@
     }
   }
 
-  // 历史记录区域
+  // 历史记录区域 - 修改为包含分页容器
   .history-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #f5f5f5;
+    min-width: 0;
+    height: 100vh;
+    position: relative;
+  }
+
+  // 历史记录滚动区域 - 为分页留出空间
+  .history-scroll-area {
     flex: 1;
     padding: 16px;
     overflow-y: auto;
-    background: #f5f5f5;
-    min-width: 0;
+    padding-bottom: 100px; // 增加底部padding，为分页留出更多空间
     
     &::-webkit-scrollbar {
       width: 8px;
@@ -364,6 +374,56 @@
         
         .ant-card-cover {
           display: none;
+        }
+      }
+    }
+  }
+  
+  // 分页容器 - 固定在底部但留出距离避免被Dock遮挡
+  .pagination-container {
+    position: absolute;
+    bottom: 30px; // 增加底部距离，避免被Dock遮挡
+    left: 0;
+    right: 0;
+    padding: 16px;
+    background: linear-gradient(to top, #f5f5f5 85%, transparent);
+    display: flex;
+    justify-content: center;
+    z-index: 100; // 提高层级确保在最上层
+    pointer-events: none; // 让背景不影响滚动
+    
+    .pagination-wrapper {
+      background: #fff;
+      padding: 12px 24px;
+      border-radius: 6px;
+      box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
+      pointer-events: auto; // 恢复分页组件的点击
+      
+      .ant-pagination {
+        margin: 0;
+        
+        .ant-pagination-total-text {
+          font-size: 13px;
+          color: #8c8c8c;
+        }
+        
+        .ant-pagination-item {
+          font-size: 13px;
+          min-width: 28px;
+          height: 28px;
+          line-height: 26px;
+        }
+        
+        .ant-pagination-prev,
+        .ant-pagination-next {
+          min-width: 28px;
+          height: 28px;
+          line-height: 26px;
+        }
+        
+        .ant-select-selector {
+          height: 28px !important;
+          font-size: 13px;
         }
       }
     }
@@ -694,6 +754,25 @@
           .ant-btn {
             flex: 1;
             min-width: 40px;
+          }
+        }
+      }
+    }
+    
+    // 移动端分页调整
+    .pagination-container {
+      bottom: 20px; // 移动端也保持底部距离
+      padding: 12px;
+      
+      .pagination-wrapper {
+        padding: 8px 12px;
+        
+        .ant-pagination {
+          .ant-pagination-item {
+            min-width: 24px;
+            height: 24px;
+            line-height: 22px;
+            font-size: 12px;
           }
         }
       }

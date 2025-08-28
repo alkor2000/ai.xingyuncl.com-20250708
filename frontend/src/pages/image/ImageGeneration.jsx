@@ -1,5 +1,5 @@
 /**
- * 图像生成页面 - 支持Midjourney
+ * 图像生成页面 - 支持Midjourney和分页（分页固定底部）
  */
 
 import React, { useEffect, useState } from 'react';
@@ -29,7 +29,8 @@ import {
   Alert,
   Select,
   Progress,
-  Radio
+  Radio,
+  Pagination  // 添加分页组件
 } from 'antd';
 import {
   PictureOutlined,
@@ -148,6 +149,12 @@ const ImageGeneration = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [batchResults, setBatchResults] = useState(null);
   
+  // 分页状态 - 新增
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [publicPage, setPublicPage] = useState(1);
+  const [publicPageSize, setPublicPageSize] = useState(20);
+  
   // Midjourney专用状态
   const [mjMode, setMjMode] = useState('fast');
   const [showMjActions, setShowMjActions] = useState(false);
@@ -161,7 +168,7 @@ const ImageGeneration = () => {
   // 初始化
   useEffect(() => {
     getModels();
-    getUserHistory().then(() => {
+    getUserHistory({ page: 1, limit: pageSize }).then(() => {
       // 获取历史记录后，清理失败任务的处理状态
       cleanupFailedTasks();
     });
@@ -260,6 +267,9 @@ const ImageGeneration = () => {
         setNegativePrompt('');
         setSeed(-1);
       }
+      
+      // 生成成功后，重置到第一页查看最新的图片
+      setCurrentPage(1);
     }
   };
   
@@ -291,11 +301,31 @@ const ImageGeneration = () => {
   const handleTabChange = (key) => {
     setActiveTab(key);
     
+    // 切换Tab时重置分页
     if (key === 'public') {
-      getPublicGallery({ page: 1, limit: 20 });
+      setPublicPage(1);
+      getPublicGallery({ page: 1, limit: publicPageSize });
     } else {
-      const params = { page: 1, limit: 20 };
+      setCurrentPage(1);
+      const params = { page: 1, limit: pageSize };
       if (key === 'favorites') {
+        params.is_favorite = true;
+      }
+      getUserHistory(params);
+    }
+  };
+
+  // 处理分页变化 - 新增
+  const handlePageChange = (page, size) => {
+    if (activeTab === 'public') {
+      setPublicPage(page);
+      setPublicPageSize(size);
+      getPublicGallery({ page, limit: size });
+    } else {
+      setCurrentPage(page);
+      setPageSize(size);
+      const params = { page, limit: size };
+      if (activeTab === 'favorites') {
         params.is_favorite = true;
       }
       getUserHistory(params);
@@ -329,7 +359,7 @@ const ImageGeneration = () => {
       }
       
       if (activeTab === 'public') {
-        getPublicGallery();
+        getPublicGallery({ page: publicPage, limit: publicPageSize });
       }
     }
   };
@@ -506,7 +536,7 @@ const ImageGeneration = () => {
                   alt={item.prompt}
                   placeholder={<Spin />}
                   preview={false}
-                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
+                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
                 />
                 <div className="image-overlay">
                   <Space>
@@ -555,7 +585,15 @@ const ImageGeneration = () => {
                         </Tooltip>
                         <Popconfirm
                           title="确定删除这张图片吗？"
-                          onConfirm={() => deleteGeneration(item.id)}
+                          onConfirm={() => {
+                            deleteGeneration(item.id);
+                            // 删除后刷新当前页
+                            const params = { page: currentPage, limit: pageSize };
+                            if (activeTab === 'favorites') {
+                              params.is_favorite = true;
+                            }
+                            getUserHistory(params);
+                          }}
                           okText="确定"
                           cancelText="取消"
                         >
@@ -660,13 +698,35 @@ const ImageGeneration = () => {
     }
     return generationHistory;
   };
+  
+  // 获取当前分页信息 - 新增
+  const getCurrentPagination = () => {
+    if (activeTab === 'public') {
+      return {
+        current: publicPage,
+        pageSize: publicPageSize,
+        total: galleryPagination.total,
+        showSizeChanger: true,
+        showTotal: (total) => `共 ${total} 张图片`,
+        pageSizeOptions: ['20', '40', '60', '100']
+      };
+    }
+    return {
+      current: currentPage,
+      pageSize: pageSize,
+      total: historyPagination.total,
+      showSizeChanger: true,
+      showTotal: (total) => `共 ${total} 张图片`,
+      pageSizeOptions: ['20', '40', '60', '100']
+    };
+  };
 
   // 处理刷新
   const handleRefresh = () => {
     if (activeTab === 'public') {
-      getPublicGallery();
+      getPublicGallery({ page: publicPage, limit: publicPageSize });
     } else {
-      const params = {};
+      const params = { page: currentPage, limit: pageSize };
       if (activeTab === 'favorites') {
         params.is_favorite = true;
       }
@@ -951,48 +1011,64 @@ const ImageGeneration = () => {
         </div>
       </Sider>
 
-      {/* 右侧历史记录 */}
+      {/* 右侧历史记录 - 修改结构 */}
       <Content className="history-content">
-        <div className="history-header">
-          <Tabs activeKey={activeTab} onChange={handleTabChange}>
-            <TabPane tab="我的图片" key="all" />
-            <TabPane tab="我的收藏" key="favorites" />
-            <TabPane tab={<span><GlobalOutlined /> 公开画廊</span>} key="public" />
-          </Tabs>
-          <Space>
-            <Button
-              icon={viewMode === 'grid' ? <AppstoreOutlined /> : <UnorderedListOutlined />}
-              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-            />
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={handleRefresh}
-            >
-              刷新
-            </Button>
-          </Space>
-        </div>
+        {/* 可滚动的内容区域 */}
+        <div className="history-scroll-area">
+          <div className="history-header">
+            <Tabs activeKey={activeTab} onChange={handleTabChange}>
+              <TabPane tab="我的图片" key="all" />
+              <TabPane tab="我的收藏" key="favorites" />
+              <TabPane tab={<span><GlobalOutlined /> 公开画廊</span>} key="public" />
+            </Tabs>
+            <Space>
+              <Button
+                icon={viewMode === 'grid' ? <AppstoreOutlined /> : <UnorderedListOutlined />}
+                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+              />
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRefresh}
+              >
+                刷新
+              </Button>
+            </Space>
+          </div>
 
-        <div className={`history-grid ${viewMode}`}>
-          {loading ? (
-            <div className="loading-container">
-              <Spin size="large" />
-            </div>
-          ) : getCurrentData().length > 0 ? (
-            getCurrentData().map(item => renderImageCard(item, activeTab === 'public'))
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                activeTab === 'public' 
-                  ? '暂无公开的图片' 
-                  : activeTab === 'favorites'
-                  ? '暂无收藏的图片'
-                  : '暂无生成记录'
-              }
-            />
-          )}
+          <div className={`history-grid ${viewMode}`}>
+            {loading ? (
+              <div className="loading-container">
+                <Spin size="large" />
+              </div>
+            ) : getCurrentData().length > 0 ? (
+              getCurrentData().map(item => renderImageCard(item, activeTab === 'public'))
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  activeTab === 'public' 
+                    ? '暂无公开的图片' 
+                    : activeTab === 'favorites'
+                    ? '暂无收藏的图片'
+                    : '暂无生成记录'
+                }
+              />
+            )}
+          </div>
         </div>
+        
+        {/* 分页组件 - 固定在底部 */}
+        {!loading && getCurrentData().length > 0 && (
+          <div className="pagination-container">
+            <div className="pagination-wrapper">
+              <Pagination
+                {...getCurrentPagination()}
+                onChange={handlePageChange}
+                onShowSizeChange={handlePageChange}
+              />
+            </div>
+          </div>
+        )}
       </Content>
 
       {/* 使用新的 ImageViewer 组件 */}
