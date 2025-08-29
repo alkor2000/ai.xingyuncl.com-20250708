@@ -184,8 +184,8 @@ class MidjourneyService {
           'image_consume'
         );
 
-        // 开始轮询任务状态
-        this.pollTaskStatus(taskId, generationId, model);
+        // 开始轮询任务状态（传递userId）
+        this.pollTaskStatus(taskId, generationId, model, userId);
 
         return {
           success: true,
@@ -350,8 +350,8 @@ class MidjourneyService {
         'image_consume'
       );
 
-      // 10. 开始轮询任务状态
-      this.pollTaskStatus(taskId, generationId, model);
+      // 10. 开始轮询任务状态（传递userId）
+      this.pollTaskStatus(taskId, generationId, model, userId);
 
       return {
         success: true,
@@ -403,11 +403,28 @@ class MidjourneyService {
 
   /**
    * 轮询任务状态
+   * @param {string} taskId - 任务ID
+   * @param {number} generationId - 生成记录ID
+   * @param {object} model - 模型对象
+   * @param {number} userId - 用户ID（重要：用于目录隔离）
    */
-  static async pollTaskStatus(taskId, generationId, model) {
+  static async pollTaskStatus(taskId, generationId, model, userId) {
     const pollingInterval = model.polling_interval || 2000;
     const maxPollingTime = model.max_polling_time || 300000;
     const startTime = Date.now();
+
+    // 如果没有传递userId，尝试从数据库获取
+    if (!userId) {
+      try {
+        const generation = await ImageGeneration.findById(generationId);
+        if (generation) {
+          userId = generation.user_id;
+          logger.info('从数据库获取userId', { generationId, userId });
+        }
+      } catch (e) {
+        logger.error('无法获取userId', { generationId, error: e.message });
+      }
+    }
 
     const poll = async () => {
       try {
@@ -425,7 +442,7 @@ class MidjourneyService {
         // 查询任务状态
         const taskData = await this.fetchTaskStatus(taskId, model);
         
-        // 映射并更新进度和状态（修复关键点）
+        // 映射并更新进度和状态
         if (taskData.progress || taskData.status) {
           const mappedStatus = this.mapTaskStatus(taskData.status);
           const updateData = {};
@@ -456,11 +473,12 @@ class MidjourneyService {
                          taskData.status === 'failed';
 
         if (isSuccess) {
-          // 下载并保存图片
+          // 下载并保存图片（传递userId实现目录隔离）
           const imageService = require('./imageService');
           const { localPath, thumbnailPath, fileSize } = await imageService.downloadAndSaveImage(
             taskData.imageUrl,
-            generationId
+            generationId,
+            userId  // 重要：传递userId
           );
 
           // 生成按钮数据（如果API没有返回）
@@ -493,6 +511,7 @@ class MidjourneyService {
           logger.info('Midjourney任务完成', {
             taskId,
             generationId,
+            userId,
             time: Date.now() - startTime
           });
 
@@ -513,6 +532,7 @@ class MidjourneyService {
           logger.error('Midjourney任务失败', {
             taskId,
             generationId,
+            userId,
             reason: taskData.failReason
           });
 
@@ -524,6 +544,7 @@ class MidjourneyService {
         logger.error('轮询Midjourney任务状态出错', {
           taskId,
           generationId,
+          userId,
           error: error.message
         });
         
@@ -606,13 +627,27 @@ class MidjourneyService {
     try {
       logger.info('收到Midjourney Webhook回调', data);
       
-      // 解析state获取generationId
+      // 解析state获取generationId和userId
       const state = JSON.parse(data.state || '{}');
-      const { generationId } = state;
+      const { generationId, userId } = state;
       
       if (!generationId) {
         logger.warn('Webhook回调缺少generationId');
         return;
+      }
+
+      // 如果state中没有userId，尝试从数据库获取
+      let actualUserId = userId;
+      if (!actualUserId) {
+        try {
+          const generation = await ImageGeneration.findById(generationId);
+          if (generation) {
+            actualUserId = generation.user_id;
+            logger.info('从数据库获取userId', { generationId, userId: actualUserId });
+          }
+        } catch (e) {
+          logger.error('无法获取userId', { generationId, error: e.message });
+        }
       }
 
       // 映射状态
@@ -623,7 +658,8 @@ class MidjourneyService {
         const imageService = require('./imageService');
         const { localPath, thumbnailPath, fileSize } = await imageService.downloadAndSaveImage(
           data.imageUrl,
-          generationId
+          generationId,
+          actualUserId  // 传递userId
         );
 
         // 生成按钮数据

@@ -1,16 +1,17 @@
 /**
  * 图像生成服务
  * 处理与火山方舟API的交互
+ * 支持OSS存储和用户目录隔离
  */
 
 const axios = require('axios');
-const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const sharp = require('sharp');
 const ImageModel = require('../models/ImageModel');
 const ImageGeneration = require('../models/ImageGeneration');
 const User = require('../models/User');
+const ossService = require('./ossService');
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -260,10 +261,11 @@ class ImageService {
         imageUrl = response.data.data[0].url;
       }
       
-      // 3. 下载图片到本地
+      // 3. 下载图片并保存（使用OSS服务，支持用户目录隔离）
       const { localPath, thumbnailPath, fileSize } = await this.downloadAndSaveImage(
         imageUrl,
-        generationId
+        generationId,
+        userId  // 传递userId用于目录隔离
       );
 
       // 4. 更新生成记录
@@ -349,8 +351,12 @@ class ImageService {
 
   /**
    * 下载并保存图片
+   * 改进：使用OSS服务，支持用户目录隔离
+   * @param {string} imageUrl - 图片URL
+   * @param {number} generationId - 生成记录ID
+   * @param {number} userId - 用户ID（用于目录隔离）
    */
-  static async downloadAndSaveImage(imageUrl, generationId) {
+  static async downloadAndSaveImage(imageUrl, generationId, userId) {
     try {
       // 下载图片
       const response = await axios.get(imageUrl, {
@@ -360,56 +366,68 @@ class ImageService {
 
       const imageBuffer = Buffer.from(response.data);
       
-      // 生成文件路径
-      const uploadBase = config.upload.uploadDir;
+      // 初始化OSS服务（自动判断使用本地还是OSS）
+      await ossService.initialize();
+      
+      // 生成文件名和路径（包含用户ID以实现隔离）
       const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const saveDir = path.join(uploadBase, 'generations', dateFolder);
-      
-      // 确保目录存在
-      await fs.mkdir(saveDir, { recursive: true });
-      
-      // 生成文件名
       const timestamp = Date.now();
       const random = crypto.randomBytes(8).toString('hex');
       const fileName = `gen_${generationId}_${timestamp}_${random}.jpg`;
       const thumbFileName = `thumb_${generationId}_${timestamp}_${random}.jpg`;
       
-      const filePath = path.join(saveDir, fileName);
-      const thumbPath = path.join(saveDir, thumbFileName);
-      
-      // 保存原图
-      await fs.writeFile(filePath, imageBuffer);
+      // 构建OSS key：generations/{userId}/{YYYY-MM}/filename
+      const ossKey = `generations/${userId}/${dateFolder}/${fileName}`;
+      const thumbOssKey = `generations/${userId}/${dateFolder}/${thumbFileName}`;
       
       // 生成缩略图
-      await sharp(imageBuffer)
+      const thumbnailBuffer = await sharp(imageBuffer)
         .resize(400, 400, {
           fit: 'inside',
           withoutEnlargement: true
         })
         .jpeg({ quality: 85 })
-        .toFile(thumbPath);
+        .toBuffer();
       
-      // 获取文件大小
-      const stats = await fs.stat(filePath);
+      // 上传原图到OSS（会自动判断使用OSS还是本地存储）
+      const uploadResult = await ossService.uploadFile(imageBuffer, ossKey, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Content-Disposition': `inline; filename="${fileName}"`
+        }
+      });
       
-      // 生成访问路径
-      const relativePath = path.relative(uploadBase, filePath);
-      const relativeThumbPath = path.relative(uploadBase, thumbPath);
+      // 上传缩略图到OSS
+      const thumbResult = await ossService.uploadFile(thumbnailBuffer, thumbOssKey, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Content-Disposition': `inline; filename="${thumbFileName}"`
+        }
+      });
       
-      // 确保路径以/开头，格式为 /uploads/generations/...
-      const finalPath = '/uploads/' + relativePath.split(path.sep).join('/');
-      const finalThumbPath = '/uploads/' + relativeThumbPath.split(path.sep).join('/');
+      logger.info('图片已保存', {
+        generationId,
+        userId,
+        ossKey,
+        thumbOssKey,
+        isLocal: uploadResult.isLocal,
+        url: uploadResult.url
+      });
       
+      // 返回访问路径
+      // 如果是本地存储，URL格式为 /storage/uploads/generations/...
+      // 如果是OSS存储，URL为完整的OSS URL
       return {
-        localPath: finalPath,
-        thumbnailPath: finalThumbPath,
-        fileSize: stats.size
+        localPath: uploadResult.url,  // 这里存储的是完整URL或本地路径
+        thumbnailPath: thumbResult.url,
+        fileSize: imageBuffer.length
       };
       
     } catch (error) {
       logger.error('下载保存图片失败', {
         imageUrl,
         generationId,
+        userId,
         error: error.message
       });
       throw new Error('保存图片失败: ' + error.message);
@@ -418,34 +436,72 @@ class ImageService {
 
   /**
    * 删除图片文件
+   * 改进：使用OSS服务删除
    */
   static async deleteImageFile(localPath, thumbnailPath) {
     try {
-      const uploadBase = config.upload.uploadDir;
+      // 初始化OSS服务
+      await ossService.initialize();
       
-      if (localPath) {
-        // 移除/uploads/前缀，拼接完整路径
-        const relativePath = localPath.replace(/^\/uploads\//, '');
-        const fullPath = path.join(uploadBase, relativePath);
-        try {
-          await fs.unlink(fullPath);
-        } catch (e) {
-          logger.warn('删除原图失败', { path: fullPath, error: e.message });
+      // 从URL或路径中提取OSS key
+      const extractOssKey = (url) => {
+        if (!url) return null;
+        
+        // 如果是本地存储URL格式：/storage/uploads/generations/...
+        if (url.startsWith('/storage/uploads/')) {
+          return url.replace('/storage/uploads/', '');
         }
+        
+        // 如果是相对路径：/uploads/generations/...（兼容老数据）
+        if (url.startsWith('/uploads/')) {
+          return url.replace('/uploads/', '');
+        }
+        
+        // 如果是HTTPS URL格式：https://ai.xingyuncl.com/storage/uploads/...
+        if (url.includes('/storage/uploads/')) {
+          const match = url.match(/\/storage\/uploads\/(.+)/);
+          return match ? match[1] : null;
+        }
+        
+        // 如果是OSS URL，尝试从URL中提取key
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          try {
+            const urlObj = new URL(url);
+            // 通常OSS URL格式：https://bucket.oss-region.aliyuncs.com/path/to/file
+            const pathname = urlObj.pathname;
+            // 移除开头的斜杠
+            return pathname.startsWith('/') ? pathname.slice(1) : pathname;
+          } catch (e) {
+            logger.warn('无法解析URL提取OSS key', { url, error: e.message });
+            return null;
+          }
+        }
+        
+        // 如果都不匹配，可能已经是OSS key了
+        return url;
+      };
+      
+      // 删除原图
+      const ossKey = extractOssKey(localPath);
+      if (ossKey) {
+        await ossService.deleteFile(ossKey);
+        logger.info('原图已删除', { ossKey });
       }
       
-      if (thumbnailPath) {
-        // 移除/uploads/前缀，拼接完整路径
-        const relativePath = thumbnailPath.replace(/^\/uploads\//, '');
-        const fullThumbPath = path.join(uploadBase, relativePath);
-        try {
-          await fs.unlink(fullThumbPath);
-        } catch (e) {
-          logger.warn('删除缩略图失败', { path: fullThumbPath, error: e.message });
-        }
+      // 删除缩略图
+      const thumbOssKey = extractOssKey(thumbnailPath);
+      if (thumbOssKey) {
+        await ossService.deleteFile(thumbOssKey);
+        logger.info('缩略图已删除', { thumbOssKey });
       }
+      
     } catch (error) {
-      logger.error('删除图片文件失败', { error: error.message });
+      logger.error('删除图片文件失败', { 
+        localPath,
+        thumbnailPath,
+        error: error.message 
+      });
+      // 删除失败不抛出错误，避免影响主流程
     }
   }
 
