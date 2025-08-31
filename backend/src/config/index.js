@@ -83,13 +83,13 @@ module.exports = {
     }
   },
 
-  // JWT认证配置
+  // JWT认证配置 - 修复：确保使用正确的默认值
   auth: {
     jwt: {
       accessSecret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-key-2025',
       refreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-2025',
-      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '12h',
-      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '14d',
+      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '24h',  // 修复：默认值改为24h
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '30d', // 修复：默认值改为30d
       issuer: 'ai-platform',
       audience: 'ai-platform-users'
     }
@@ -149,5 +149,7 @@ if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CONFIG === 'true'
   console.log('Environment:', process.env.NODE_ENV || 'production');
   console.log('Upload Directory:', module.exports.upload.uploadDir);
   console.log('Is Docker:', fs.existsSync('/.dockerenv') ? 'Yes' : 'No');
+  console.log('JWT Access Expires:', module.exports.auth.jwt.accessExpiresIn);
+  console.log('JWT Refresh Expires:', module.exports.auth.jwt.refreshExpiresIn);
   console.log('================================');
 }

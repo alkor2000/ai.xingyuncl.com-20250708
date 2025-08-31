@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import apiClient from '../utils/api'
 import useSystemConfigStore from './systemConfigStore'
+import tokenRefreshService from '../services/tokenRefreshService'
 
 const useAuthStore = create(
   persist(
@@ -18,6 +19,43 @@ const useAuthStore = create(
       isAuthenticated: false,
       loading: false,
       tokenExpiresAt: null,
+
+      // 解析过期时间字符串（支持 s/m/h/d 格式）
+      parseExpiresIn: (expiresIn) => {
+        if (!expiresIn) return null
+        
+        // 提取数字和单位
+        const match = expiresIn.match(/^(\d+)([smhd])$/i)
+        if (!match) {
+          // 如果没有单位，默认按秒处理
+          const seconds = parseInt(expiresIn)
+          if (isNaN(seconds)) return null
+          return new Date(Date.now() + seconds * 1000)
+        }
+        
+        const [, num, unit] = match
+        const value = parseInt(num)
+        let milliseconds = 0
+        
+        switch (unit.toLowerCase()) {
+          case 's': // 秒
+            milliseconds = value * 1000
+            break
+          case 'm': // 分钟
+            milliseconds = value * 60 * 1000
+            break
+          case 'h': // 小时
+            milliseconds = value * 60 * 60 * 1000
+            break
+          case 'd': // 天
+            milliseconds = value * 24 * 60 * 60 * 1000
+            break
+          default:
+            return null
+        }
+        
+        return new Date(Date.now() + milliseconds)
+      },
 
       // 登录
       login: async (credentials) => {
@@ -33,13 +71,8 @@ const useAuthStore = create(
             expiresIn 
           } = response.data.data
 
-          // 计算Token过期时间
-          let tokenExpiresAt = null
-          if (expiresIn) {
-            // 解析过期时间（如 "12h"）
-            const hours = parseInt(expiresIn.replace('h', '')) || 12
-            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
-          }
+          // 使用改进的时间解析
+          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
 
           set({
             user,
@@ -69,6 +102,9 @@ const useAuthStore = create(
             }
           }
 
+          // 启动Token自动刷新
+          tokenRefreshService.startAutoRefresh({ getState: get })
+
           console.log('✅ 用户登录成功:', {
             user: user.email,
             role: user.role,
@@ -96,6 +132,9 @@ const useAuthStore = create(
         } catch (error) {
           console.warn('登出API调用失败:', error)
         } finally {
+          // 停止Token自动刷新
+          tokenRefreshService.stopAutoRefresh()
+          
           // 清除状态
           set({
             user: null,
@@ -240,7 +279,7 @@ const useAuthStore = create(
         }
       },
 
-      // 刷新令牌
+      // 刷新令牌 - 改进版，使用新的时间解析
       refreshAccessToken: async () => {
         const state = get()
         if (!state.refreshToken) {
@@ -254,12 +293,8 @@ const useAuthStore = create(
 
           const { accessToken, expiresIn } = response.data.data
 
-          // 计算新的过期时间
-          let tokenExpiresAt = null
-          if (expiresIn) {
-            const hours = parseInt(expiresIn.replace('h', '')) || 12
-            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
-          }
+          // 使用改进的时间解析
+          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
 
           set({
             accessToken,
@@ -269,10 +304,12 @@ const useAuthStore = create(
           // 更新默认请求头
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
-          console.log('🔄 Token刷新成功')
+          console.log('🔄 Token刷新成功，新过期时间:', tokenExpiresAt?.toLocaleString())
           return accessToken
         } catch (error) {
           console.error('Token刷新失败:', error)
+          // 停止自动刷新
+          tokenRefreshService.stopAutoRefresh()
           // 刷新失败，执行登出
           get().logout()
           throw error
@@ -306,12 +343,8 @@ const useAuthStore = create(
             expiresIn 
           } = response.data.data
 
-          // 计算Token过期时间
-          let tokenExpiresAt = null
-          if (expiresIn) {
-            const hours = parseInt(expiresIn.replace('h', '')) || 12
-            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
-          }
+          // 使用改进的时间解析
+          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
 
           set({
             user,
@@ -341,10 +374,14 @@ const useAuthStore = create(
             }
           }
 
+          // 启动Token自动刷新
+          tokenRefreshService.startAutoRefresh({ getState: get })
+
           console.log('✅ 验证码登录成功:', {
             user: user.email,
             role: user.role,
             permissions: permissions.length,
+            tokenExpires: tokenExpiresAt?.toLocaleString(),
             hasSiteConfig: !!siteConfig
           })
 
@@ -374,12 +411,8 @@ const useAuthStore = create(
             expiresIn 
           } = response.data.data
 
-          // 计算Token过期时间
-          let tokenExpiresAt = null
-          if (expiresIn) {
-            const hours = parseInt(expiresIn.replace('h', '')) || 12
-            tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
-          }
+          // 使用改进的时间解析
+          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
 
           set({
             user,
@@ -409,10 +442,14 @@ const useAuthStore = create(
             }
           }
 
+          // 启动Token自动刷新
+          tokenRefreshService.startAutoRefresh({ getState: get })
+
           console.log('✅ 邮箱密码验证码登录成功:', {
             user: user.email,
             role: user.role,
             permissions: permissions.length,
+            tokenExpires: tokenExpiresAt?.toLocaleString(),
             hasSiteConfig: !!siteConfig
           })
 
@@ -450,7 +487,7 @@ const useAuthStore = create(
         return new Date() >= new Date(tokenExpiresAt)
       },
 
-      // 初始化认证状态
+      // 初始化认证状态 - 改进版，支持自动刷新
       initializeAuth: async () => {
         const state = get()
         
@@ -467,10 +504,15 @@ const useAuthStore = create(
           console.log('⏰ Token已过期，尝试刷新...')
           try {
             await state.refreshAccessToken()
+            // 刷新成功后启动自动刷新
+            tokenRefreshService.startAutoRefresh({ getState: get })
           } catch (error) {
             console.error('Token刷新失败，需要重新登录')
             return
           }
+        } else {
+          // Token未过期，启动自动刷新
+          tokenRefreshService.startAutoRefresh({ getState: get })
         }
 
         // 获取最新用户信息
@@ -502,5 +544,10 @@ const useAuthStore = create(
     }
   )
 )
+
+// 在开发环境下暴露到window对象方便调试
+if (process.env.NODE_ENV === 'development') {
+  window.useAuthStore = useAuthStore
+}
 
 export default useAuthStore
