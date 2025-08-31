@@ -2,7 +2,7 @@
  * 视频生成页面
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Layout,
   Card,
@@ -45,7 +45,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   UploadOutlined,
-  PlusOutlined
+  PlusOutlined,
+  ExpandOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
@@ -117,6 +118,7 @@ const VideoGeneration = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [previewVideo, setPreviewVideo] = useState(null);
 
   // 初始化
   useEffect(() => {
@@ -315,6 +317,37 @@ const VideoGeneration = () => {
     }
   };
 
+  // 判断视频是否为竖版
+  const isVerticalVideo = (ratio) => {
+    if (!ratio) return false;
+    const ratioStr = ratio.toString();
+    // 竖版视频：3:4, 9:16 等
+    return ratioStr === '3:4' || ratioStr === '9:16' || ratioStr === '2:3';
+  };
+
+  // 获取视频的object-fit样式
+  const getVideoObjectFit = (item) => {
+    // 如果是竖版视频，使用contain以显示完整内容
+    if (isVerticalVideo(item.ratio)) {
+      return 'contain';
+    }
+    // 横版视频使用cover
+    return 'cover';
+  };
+
+  // 预览视频模态框
+  const handlePreviewVideo = (item) => {
+    setPreviewVideo(item);
+  };
+
+  // 处理视频加载完成，设置预览时间点
+  const handleVideoLoadedMetadata = (e) => {
+    const video = e.target;
+    // 设置预览时间为0.5秒或视频长度的10%（取较小值）
+    const previewTime = Math.min(0.5, video.duration * 0.1);
+    video.currentTime = previewTime;
+  };
+
   // 渲染视频卡片
   const renderVideoCard = (item, isGallery = false) => {
     const isOwner = !isGallery || item.user_id === user?.id;
@@ -325,10 +358,14 @@ const VideoGeneration = () => {
     // 生成唯一的video key，确保URL变化时重新创建元素
     const videoKey = `video-${item.id}-${item.local_path || 'no-path'}-${item.status}`;
     
+    // 判断是否为竖版视频
+    const isVertical = isVerticalVideo(item.ratio);
+    const videoObjectFit = getVideoObjectFit(item);
+    
     return (
       <Card
         key={item.id}
-        className={`video-card ${isProcessing ? 'processing' : ''} ${isFailed ? 'failed' : ''}`}
+        className={`video-card ${isProcessing ? 'processing' : ''} ${isFailed ? 'failed' : ''} ${isVertical ? 'vertical' : ''}`}
         cover={
           <div className="video-wrapper">
             {isProcessing ? (
@@ -354,16 +391,39 @@ const VideoGeneration = () => {
                   src={item.local_path}
                   poster={item.thumbnail_path}
                   controls
-                  style={{ width: '100%', height: '200px', objectFit: 'cover' }}
+                  preload="metadata" // 只预加载元数据
+                  style={{ 
+                    width: '100%', 
+                    height: '200px', 
+                    objectFit: videoObjectFit,
+                    backgroundColor: '#000' // 添加黑色背景，让contain模式下的黑边更自然
+                  }}
+                  onLoadedMetadata={handleVideoLoadedMetadata} // 视频元数据加载完成后设置预览时间点
                   onLoadedData={() => {
                     // 视频数据加载完成的回调，确保视频正确加载
-                    console.log(`视频已加载: ${item.id}`);
+                    console.log(`视频已加载: ${item.id}, 比例: ${item.ratio}, object-fit: ${videoObjectFit}`);
                   }}
                   onError={(e) => {
                     // 视频加载错误的处理
                     console.error(`视频加载失败: ${item.id}`, e);
                   }}
                 />
+                {/* 添加全屏预览按钮 */}
+                <Tooltip title="大屏预览">
+                  <Button
+                    type="text"
+                    icon={<ExpandOutlined />}
+                    onClick={() => handlePreviewVideo(item)}
+                    style={{
+                      position: 'absolute',
+                      bottom: 45,
+                      right: 10,
+                      background: 'rgba(0, 0, 0, 0.5)',
+                      color: 'white',
+                      border: 'none'
+                    }}
+                  />
+                </Tooltip>
               </div>
             ) : (
               <div className="no-video">
@@ -462,7 +522,7 @@ const VideoGeneration = () => {
             <div className="card-meta-title">
               <Tag color="blue">{item.resolution}</Tag>
               <Tag>{item.duration}秒</Tag>
-              {item.ratio && <Tag>{item.ratio}</Tag>}
+              {item.ratio && <Tag color={isVertical ? 'purple' : 'cyan'}>{item.ratio}</Tag>}
               {isFailed && <Tag color="error">失败</Tag>}
               {isProcessing && <Tag color="processing">处理中</Tag>}
               {isSucceeded && <Tag color="success">已完成</Tag>}
@@ -745,6 +805,38 @@ const VideoGeneration = () => {
           )}
         </div>
       </Content>
+
+      {/* 视频预览模态框 */}
+      <Modal
+        title={previewVideo?.prompt || '视频预览'}
+        visible={!!previewVideo}
+        onCancel={() => setPreviewVideo(null)}
+        footer={null}
+        width="90%"
+        style={{ maxWidth: '1200px' }}
+        centered
+        bodyStyle={{ 
+          padding: 0, 
+          background: '#000',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '60vh'
+        }}
+      >
+        {previewVideo && (
+          <video
+            src={previewVideo.local_path}
+            controls
+            autoPlay
+            style={{ 
+              width: '100%',
+              maxHeight: '80vh',
+              objectFit: isVerticalVideo(previewVideo.ratio) ? 'contain' : 'contain'
+            }}
+          />
+        )}
+      </Modal>
     </Layout>
   );
 };

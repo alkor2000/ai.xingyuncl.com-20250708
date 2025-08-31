@@ -4,63 +4,75 @@
 
 .video-generation-page {
   height: 100%;
-  background: #f0f2f5;
+  background: #f5f5f5;
 
   .generation-sider {
-    height: 100%;
+    background: #fff;
+    padding: 16px 12px;  // 减小内边距
     overflow-y: auto;
-    border-right: 1px solid #e8e8e8;
     
     .generation-container {
-      padding: 16px;
-      
       .ant-card {
-        margin-bottom: 16px;
+        margin-bottom: 10px;  // 减小卡片间距从16px到10px
+        
+        .ant-card-head {
+          min-height: 40px;  // 减小标题区域高度
+          padding: 8px 12px;  // 减小标题内边距
+          
+          .ant-card-head-title {
+            font-size: 14px;  // 稍微减小标题字号
+          }
+        }
+        
+        .ant-card-body {
+          padding: 12px;  // 减小卡片内容区域内边距
+        }
         
         .model-info {
-          margin-top: 12px;
+          margin-top: 10px;  // 减小上边距
           
           p {
             color: #666;
-            font-size: 13px;
-            margin-bottom: 8px;
+            font-size: 13px;  // 稍微减小字号
+            margin-bottom: 6px;  // 减小段落间距
           }
         }
       }
       
       .param-label {
-        font-size: 13px;
+        font-size: 13px;  // 稍微减小标签字号
         color: #666;
-        margin-bottom: 4px;
+        margin-bottom: 6px;  // 减小间距
       }
       
       .generate-button-section {
-        margin-top: 16px;
+        margin-top: 16px;  // 减小顶部间距
       }
     }
   }
-  
+
   .history-content {
-    padding: 16px;
+    padding: 20px;
     overflow-y: auto;
-    
+    background: #f0f2f5;
+
     .history-header {
-      margin-bottom: 16px;
-      background: white;
-      padding: 8px 16px;
+      margin-bottom: 20px;
+      background: #fff;
+      padding: 16px;
       border-radius: 8px;
     }
-    
+
     .history-pagination {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       text-align: right;
     }
-    
+
     .history-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 16px;
-      
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 20px;
+
       .loading-container {
         grid-column: 1 / -1;
         display: flex;
@@ -68,66 +80,30 @@
         align-items: center;
         min-height: 400px;
       }
-      
+
       .ant-empty {
         grid-column: 1 / -1;
       }
     }
   }
-  
+
   .video-card {
+    border-radius: 8px;
     overflow: hidden;
-    transition: all 0.3s;
-    
+    transition: transform 0.2s, box-shadow 0.2s;
+
     &:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
-    
-    &.processing {
-      opacity: 0.95;
-    }
-    
-    &.failed {
-      .ant-card-cover {
-        opacity: 0.8;
-      }
-    }
-    
+
     .video-wrapper {
       position: relative;
       width: 100%;
-      height: 200px;
+      height: 220px;
       background: #000;
-      overflow: hidden;
-      
-      // 处理中的覆盖层
-      .processing-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
-        z-index: 10;
-        
-        .processing-text {
-          margin-top: 16px;
-          font-size: 14px;
-        }
-        
-        .ant-progress {
-          width: 80%;
-          margin-top: 12px;
-        }
-      }
-      
-      // 失败的覆盖层
+
+      .processing-overlay,
       .failed-overlay {
         position: absolute;
         top: 0;
@@ -138,38 +114,76 @@
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
+        background: rgba(255, 255, 255, 0.95);
         z-index: 10;
-        
+
+        .processing-text,
         .failed-text {
           margin-top: 12px;
           font-size: 16px;
+          font-weight: 500;
+        }
+
+        .failed-text {
           color: #ff4d4f;
         }
-        
+
         .error-message {
           margin-top: 8px;
           font-size: 12px;
-          color: #ff7875;
+          color: #999;
           text-align: center;
           padding: 0 16px;
         }
       }
-      
-      // 视频播放器
+
       .video-player {
         width: 100%;
         height: 100%;
-        
+        position: relative;
+
         video {
           width: 100%;
           height: 100%;
-          object-fit: cover;
+          
+          // 隐藏视频默认控件中的全屏按钮
+          &::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+          }
+          
+          &::-webkit-media-controls-enclosure {
+            overflow: hidden;
+          }
+          
+          &::-moz-media-controls-fullscreen-button {
+            display: none !important;
+          }
+          
+          // 对于火狐浏览器
+          &::-moz-media-controls-enclosure {
+            overflow: hidden;
+          }
+        }
+        
+        // 大屏预览按钮样式优化
+        .preview-button {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          background: rgba(0, 0, 0, 0.6);
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(4px);
+          transition: all 0.2s;
+          
+          &:hover {
+            background: rgba(0, 0, 0, 0.8);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
+          }
         }
       }
-      
-      // 无视频占位
+
       .no-video {
         width: 100%;
         height: 100%;
@@ -178,39 +192,79 @@
         align-items: center;
         background: #f0f0f0;
       }
-      
-      // 操作按钮 - 放在右上角，不遮挡播放器控件
+
+      // 操作按钮区域 - 优化按钮颜色
       .video-actions {
         position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 20;
-        
-        // 按钮容器背景
+        top: 10px;
+        right: 10px;
+        z-index: 5;
+
         .ant-space {
-          background: rgba(255, 255, 255, 0.9);
-          padding: 4px;
-          border-radius: 4px;
-          backdrop-filter: blur(10px);
-          
-          // 按钮样式
           .ant-btn {
-            transition: all 0.3s;
+            backdrop-filter: blur(4px);
+            border: none;
+            transition: all 0.2s;
             
-            &:hover {
-              transform: scale(1.1);
+            // 下载按钮 - 使用主色调蓝色
+            &:first-child {
+              background: rgba(24, 144, 255, 0.85);
+              color: white;
+              
+              &:hover {
+                background: rgba(24, 144, 255, 1);
+                transform: scale(1.1);
+              }
+            }
+            
+            // 默认按钮样式
+            &:not(:first-child):not(.ant-btn-dangerous) {
+              background: rgba(255, 255, 255, 0.9);
+              color: #666;
+              
+              &:hover {
+                background: rgba(255, 255, 255, 1);
+                transform: scale(1.1);
+              }
+            }
+            
+            // 收藏按钮（已收藏状态）
+            &.ant-btn-danger {
+              background: rgba(255, 77, 79, 0.85);
+              color: white;
+              
+              &:hover {
+                background: rgba(255, 77, 79, 1);
+                transform: scale(1.1);
+              }
+            }
+            
+            // 公开状态按钮（绿色）
+            &[style*="background: rgb(82, 196, 26)"] {
+              background: rgba(82, 196, 26, 0.85) !important;
+              color: white;
+              
+              &:hover {
+                background: rgba(82, 196, 26, 1) !important;
+                transform: scale(1.1);
+              }
+            }
+            
+            // 删除按钮 - 始终保持红色警示
+            &.ant-btn-dangerous {
+              background: rgba(255, 77, 79, 0.85);
+              color: white;
+              
+              &:hover {
+                background: rgba(255, 77, 79, 1);
+                transform: scale(1.1);
+              }
             }
           }
         }
       }
-      
-      // 旧的overlay样式（如果存在则覆盖）
-      .video-overlay {
-        display: none; // 禁用旧的覆盖层
-      }
     }
-    
-    // 卡片元信息
+
     .ant-card-meta {
       .card-meta-title {
         display: flex;
@@ -219,7 +273,7 @@
         flex-wrap: wrap;
         margin-bottom: 8px;
       }
-      
+
       .card-meta-description {
         .prompt-text {
           color: #333;
@@ -232,16 +286,16 @@
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        
+
         .meta-info {
           display: flex;
           justify-content: space-between;
           align-items: center;
           font-size: 12px;
           color: #999;
-          
+
           span {
-            margin-right: 8px;
+            margin-right: 12px;
             
             &:last-child {
               margin-right: 0;
@@ -251,6 +305,25 @@
       }
     }
   }
+
+  // 上传区域样式
+  .first-frame-uploader {
+    .ant-upload {
+      width: 100%;
+      height: 120px;  // 减小上传区域高度
+    }
+  }
+  
+  // 输入框优化
+  .ant-input,
+  .ant-input-textarea .ant-input {
+    font-size: 13px;  // 稍微减小输入框字号
+  }
+  
+  // Select选择器优化
+  .ant-select {
+    font-size: 13px;  // 稍微减小选择器字号
+  }
 }
 
 // 响应式布局
@@ -258,7 +331,7 @@
   .video-generation-page {
     .history-content {
       .history-grid {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       }
     }
   }
@@ -271,7 +344,7 @@
       max-width: 100% !important;
       flex: 0 0 100% !important;
     }
-    
+
     .history-content {
       .history-grid {
         grid-template-columns: 1fr;
