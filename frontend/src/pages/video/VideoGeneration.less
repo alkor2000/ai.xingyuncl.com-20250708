@@ -1,0 +1,281 @@
+/**
+ * 视频生成页面样式
+ */
+
+.video-generation-page {
+  height: 100%;
+  background: #f0f2f5;
+
+  .generation-sider {
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid #e8e8e8;
+    
+    .generation-container {
+      padding: 16px;
+      
+      .ant-card {
+        margin-bottom: 16px;
+        
+        .model-info {
+          margin-top: 12px;
+          
+          p {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 8px;
+          }
+        }
+      }
+      
+      .param-label {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      
+      .generate-button-section {
+        margin-top: 16px;
+      }
+    }
+  }
+  
+  .history-content {
+    padding: 16px;
+    overflow-y: auto;
+    
+    .history-header {
+      margin-bottom: 16px;
+      background: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+    }
+    
+    .history-pagination {
+      margin-bottom: 16px;
+      text-align: right;
+    }
+    
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      
+      .loading-container {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 400px;
+      }
+      
+      .ant-empty {
+        grid-column: 1 / -1;
+      }
+    }
+  }
+  
+  .video-card {
+    overflow: hidden;
+    transition: all 0.3s;
+    
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+    
+    &.processing {
+      opacity: 0.95;
+    }
+    
+    &.failed {
+      .ant-card-cover {
+        opacity: 0.8;
+      }
+    }
+    
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #000;
+      overflow: hidden;
+      
+      // 处理中的覆盖层
+      .processing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        z-index: 10;
+        
+        .processing-text {
+          margin-top: 16px;
+          font-size: 14px;
+        }
+        
+        .ant-progress {
+          width: 80%;
+          margin-top: 12px;
+        }
+      }
+      
+      // 失败的覆盖层
+      .failed-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        z-index: 10;
+        
+        .failed-text {
+          margin-top: 12px;
+          font-size: 16px;
+          color: #ff4d4f;
+        }
+        
+        .error-message {
+          margin-top: 8px;
+          font-size: 12px;
+          color: #ff7875;
+          text-align: center;
+          padding: 0 16px;
+        }
+      }
+      
+      // 视频播放器
+      .video-player {
+        width: 100%;
+        height: 100%;
+        
+        video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+      }
+      
+      // 无视频占位
+      .no-video {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #f0f0f0;
+      }
+      
+      // 操作按钮 - 放在右上角，不遮挡播放器控件
+      .video-actions {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 20;
+        
+        // 按钮容器背景
+        .ant-space {
+          background: rgba(255, 255, 255, 0.9);
+          padding: 4px;
+          border-radius: 4px;
+          backdrop-filter: blur(10px);
+          
+          // 按钮样式
+          .ant-btn {
+            transition: all 0.3s;
+            
+            &:hover {
+              transform: scale(1.1);
+            }
+          }
+        }
+      }
+      
+      // 旧的overlay样式（如果存在则覆盖）
+      .video-overlay {
+        display: none; // 禁用旧的覆盖层
+      }
+    }
+    
+    // 卡片元信息
+    .ant-card-meta {
+      .card-meta-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      
+      .card-meta-description {
+        .prompt-text {
+          color: #333;
+          font-size: 14px;
+          line-height: 1.5;
+          margin-bottom: 8px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .meta-info {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 12px;
+          color: #999;
+          
+          span {
+            margin-right: 8px;
+            
+            &:last-child {
+              margin-right: 0;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// 响应式布局
+@media (max-width: 1200px) {
+  .video-generation-page {
+    .history-content {
+      .history-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .video-generation-page {
+    .generation-sider {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 0 0 100% !important;
+    }
+    
+    .history-content {
+      .history-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  }
+}

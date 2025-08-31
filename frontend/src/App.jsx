@@ -37,6 +37,9 @@ const KnowledgeBase = React.lazy(() => import('./pages/knowledge/KnowledgeBase')
 // 图像生成页面组件 - 懒加载
 const ImageGeneration = React.lazy(() => import('./pages/image/ImageGeneration'))
 
+// 视频生成页面组件 - 懒加载
+const VideoGeneration = React.lazy(() => import('./pages/video/VideoGeneration'))
+
 // HTML编辑器页面组件 - 懒加载
 const HtmlEditor = React.lazy(() => import('./pages/htmlEditor/HtmlEditor'))
 
@@ -199,6 +202,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <ImageGeneration />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* 视频生成页面路由 - 懒加载 */}
+                        <Route 
+                          path="/video" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <VideoGeneration />
                             </LazyLoadingWrapper>
                           } 
                         />

@@ -24,7 +24,8 @@ import {
   KeyOutlined,
   CodeOutlined,
   CloudServerOutlined,
-  DollarOutlined
+  DollarOutlined,
+  VideoCameraOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -49,6 +50,7 @@ import {
   SystemPromptSettings,
   UsageLogs,
   ImageModelSettings,
+  VideoModelSettings,
   SSOSettings,
   HtmlEditorSettings,
   OSSSettings,
@@ -523,6 +525,16 @@ const Settings = () => {
         children: <ImageModelSettings />
       },
       {
+        key: 'videoModels',
+        label: (
+          <span>
+            <VideoCameraOutlined />
+            视频生成模型
+          </span>
+        ),
+        children: <VideoModelSettings />
+      },
+      {
         key: 'systemPrompts',
         label: (
           <span>
@@ -646,8 +658,8 @@ const Settings = () => {
           <span>
             <BgColorsOutlined />
             {t('admin.settings.tabs.theme')}
-          </span>
-        ),
+        </span>
+      ),
         children: <ThemeSettings disabled={!isSuperAdmin} />
       },
       {
@@ -656,8 +668,8 @@ const Settings = () => {
           <span>
             <ThunderboltOutlined />
             {t('admin.settings.tabs.rateLimit')}
-          </span>
-        ),
+        </span>
+      ),
         children: <RateLimitSettings disabled={!isSuperAdmin} />
       },
       {
@@ -666,8 +678,8 @@ const Settings = () => {
           <span>
             <MailOutlined />
             {t('admin.settings.tabs.email')}
-          </span>
-        ),
+        </span>
+      ),
         children: <EmailSettings disabled={!isSuperAdmin} />
       },
       {
@@ -676,8 +688,8 @@ const Settings = () => {
           <span>
             <KeyOutlined />
             {t('admin.settings.tabs.sso')}
-          </span>
-        ),
+        </span>
+      ),
         children: <SSOSettings />
       },
       {
@@ -686,8 +698,8 @@ const Settings = () => {
           <span>
             <GlobalOutlined />
             {t('admin.settings.tabs.customHomepage')}
-          </span>
-        ),
+        </span>
+      ),
         children: <CustomHomepage disabled={!isSuperAdmin} />
       }
     ] : [])

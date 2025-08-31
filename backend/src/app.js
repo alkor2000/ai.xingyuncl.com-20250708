@@ -23,6 +23,7 @@ const publicRoutes = require('./routes/public');
 const servicesRoutes = require('./routes/services'); // 新增服务API路由
 const knowledgeRoutes = require('./routes/knowledgeRoutes'); // 新增知识模块路由
 const imageRoutes = require('./routes/image'); // 新增图像生成路由
+const videoRoutes = require('./routes/video'); // 新增视频生成路由
 const htmlEditorRoutes = require('./routes/htmlEditor'); // 新增HTML编辑器路由
 const storageRoutes = require('./routes/storageRoutes'); // 新增存储管理路由
 
@@ -146,6 +147,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/services', servicesRoutes); // 新增服务API路由
 app.use('/api/knowledge', knowledgeRoutes); // 新增知识模块路由
 app.use('/api/image', imageRoutes); // 新增图像生成路由
+app.use('/api/video', videoRoutes); // 新增视频生成路由
 app.use('/api/html-editor', htmlEditorRoutes); // 新增HTML编辑器路由
 app.use('/api/storage', storageRoutes); // 新增存储管理路由
 
