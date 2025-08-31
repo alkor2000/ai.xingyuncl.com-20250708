@@ -23,7 +23,8 @@ import {
   Progress,
   Alert,
   Pagination,
-  Popconfirm
+  Popconfirm,
+  Upload
 } from 'antd';
 import {
   VideoCameraOutlined,
@@ -42,11 +43,14 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  UploadOutlined,
+  PlusOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
 import useAuthStore from '../../stores/authStore';
+import apiClient from '../../utils/api';
 import './VideoGeneration.less';
 
 const { Content, Sider } = Layout;
@@ -101,6 +105,8 @@ const VideoGeneration = () => {
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [firstFrameImage, setFirstFrameImage] = useState('');
+  const [firstFrameFile, setFirstFrameFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [generationMode, setGenerationMode] = useState('text_to_video');
   const [resolution, setResolution] = useState('720p');
   const [duration, setDuration] = useState(5);
@@ -153,6 +159,72 @@ const VideoGeneration = () => {
     }
   };
 
+  // 处理首帧图片上传
+  const handleFrameUpload = async (info) => {
+    const { file } = info;
+    
+    if (file.status === 'uploading') {
+      setUploading(true);
+      return;
+    }
+    
+    if (file.status === 'done') {
+      setUploading(false);
+      if (file.response && file.response.success) {
+        setFirstFrameImage(file.response.data.url);
+        setFirstFrameFile(file);
+        message.success('图片上传成功');
+      } else {
+        message.error(file.response?.message || '上传失败');
+      }
+    } else if (file.status === 'error') {
+      setUploading(false);
+      message.error('图片上传失败');
+    }
+  };
+
+  // 自定义上传请求
+  const customUploadRequest = async ({ file, onSuccess, onError }) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    try {
+      const response = await apiClient.post('/video/upload-frame', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      onSuccess(response.data, file);
+    } catch (error) {
+      console.error('上传失败:', error);
+      onError(error);
+    }
+  };
+
+  // 上传前的验证
+  const beforeUpload = (file) => {
+    const isImage = file.type.startsWith('image/');
+    if (!isImage) {
+      message.error('只能上传图片文件！');
+      return false;
+    }
+    
+    const isLt10M = file.size / 1024 / 1024 < 10;
+    if (!isLt10M) {
+      message.error('图片大小不能超过 10MB！');
+      return false;
+    }
+    
+    return true;
+  };
+
+  // 移除图片
+  const handleRemoveImage = () => {
+    setFirstFrameImage('');
+    setFirstFrameFile(null);
+  };
+
   // 处理生成
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -167,6 +239,12 @@ const VideoGeneration = () => {
 
     if (!selectedModel.has_api_key) {
       message.error('该模型尚未配置API密钥，请联系管理员');
+      return;
+    }
+
+    // 如果是首帧图生成模式，检查是否上传了图片
+    if (generationMode === 'first_frame' && !firstFrameImage) {
+      message.warning('请上传首帧图片');
       return;
     }
 
@@ -197,6 +275,7 @@ const VideoGeneration = () => {
       setPrompt('');
       setNegativePrompt('');
       setFirstFrameImage('');
+      setFirstFrameFile(null);
       setSeed(-1);
       
       // 重置到第一页查看最新的视频
@@ -424,6 +503,16 @@ const VideoGeneration = () => {
     return historyPagination;
   };
 
+  // 上传按钮内容
+  const uploadButton = (
+    <div>
+      {uploading ? <Spin /> : <PlusOutlined />}
+      <div style={{ marginTop: 8 }}>
+        {uploading ? '上传中...' : '点击上传首帧图片'}
+      </div>
+    </div>
+  );
+
   return (
     <Layout className="video-generation-page">
       {/* 左侧生成区域 */}
@@ -489,13 +578,47 @@ const VideoGeneration = () => {
             />
             
             {generationMode === 'first_frame' && (
-              <Input
-                style={{ marginTop: 16 }}
-                value={firstFrameImage}
-                onChange={(e) => setFirstFrameImage(e.target.value)}
-                placeholder="输入首帧图片URL"
-                prefix={<FileImageOutlined />}
-              />
+              <div style={{ marginTop: 16 }}>
+                <Upload
+                  name="image"
+                  listType="picture-card"
+                  className="first-frame-uploader"
+                  showUploadList={false}
+                  customRequest={customUploadRequest}
+                  beforeUpload={beforeUpload}
+                  onChange={handleFrameUpload}
+                >
+                  {firstFrameImage ? (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                      <img 
+                        src={firstFrameImage} 
+                        alt="首帧图片" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveImage();
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          background: 'rgba(255, 255, 255, 0.8)'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    uploadButton
+                  )}
+                </Upload>
+                <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
+                  支持 JPG、PNG、WEBP 格式，最大 10MB
+                </div>
+              </div>
             )}
           </Card>
 
