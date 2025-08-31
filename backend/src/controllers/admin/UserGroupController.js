@@ -6,6 +6,8 @@ const { GroupService } = require('../../services/admin');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const CacheService = require('../../services/cacheService');
+const ossService = require('../../services/ossService');
+const fs = require('fs').promises;
 
 class UserGroupController {
   /**
@@ -389,7 +391,7 @@ class UserGroupController {
   }
 
   /**
-   * 上传组Logo（组管理员）- 修改为只返回URL，不更新数据库
+   * 上传组Logo（组管理员）- 使用OSS服务
    */
   static async uploadGroupLogo(req, res) {
     try {
@@ -418,19 +420,52 @@ class UserGroupController {
         return ResponseHelper.forbidden(res, '该组未开启站点自定义功能');
       }
 
-      // 构建文件URL（使用实际的文件名）
-      const logoUrl = `/uploads/system/${req.file.filename}`;
+      // 初始化OSS服务
+      await ossService.initialize();
+      
+      // 读取上传的文件
+      const fileBuffer = await fs.readFile(req.file.path);
+      
+      // 生成OSS key - 组logo存储路径
+      const ossKey = ossService.generateOSSKey(
+        `group_${id}`, // 使用组ID作为用户标识
+        `logo_${req.file.filename}`, // 文件名
+        'logos' // 存储在logos文件夹
+      );
+      
+      // 上传到OSS或本地存储
+      const uploadResult = await ossService.uploadFile(fileBuffer, ossKey, {
+        headers: {
+          'Content-Type': req.file.mimetype,
+          'Content-Disposition': `inline; filename="${req.file.originalname}"`
+        }
+      });
+      
+      // 删除临时文件
+      await fs.unlink(req.file.path);
+      
+      // 如果有旧logo，尝试删除（不影响主流程）
+      if (group.site_logo) {
+        try {
+          // 从URL提取OSS key
+          const oldKey = group.site_logo.replace(/^https?:\/\/[^\/]+\//, '');
+          await ossService.deleteFile(oldKey);
+        } catch (err) {
+          logger.warn('删除旧logo失败', { error: err.message });
+        }
+      }
 
-      // 不再立即更新数据库，只返回URL
-      logger.info('Logo文件上传成功', {
+      logger.info('组Logo上传成功', {
         operatorId,
         groupId: id,
         fileName: req.file.filename,
-        logoUrl
+        ossKey,
+        url: uploadResult.url
       });
 
       return ResponseHelper.success(res, {
-        logo_url: logoUrl,
+        logo_url: uploadResult.url,
+        oss_key: ossKey,
         file_name: req.file.filename,
         original_name: req.file.originalname,
         size: req.file.size
@@ -441,6 +476,15 @@ class UserGroupController {
         groupId: req.params.id,
         error: error.message 
       });
+      
+      // 清理临时文件
+      if (req.file && req.file.path) {
+        try {
+          await fs.unlink(req.file.path);
+        } catch (e) {
+          // 忽略删除错误
+        }
+      }
       
       return ResponseHelper.error(res, error.message || '上传Logo失败');
     }

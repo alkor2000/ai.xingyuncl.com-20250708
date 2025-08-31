@@ -64,22 +64,21 @@ const Header = ({ isMobile, onMenuClick }) => {
         
         {/* Logo和系统名称 */}
         <div className="header-logo" onClick={() => navigate('/')}>
-          {/* 如果使用组配置，Logo位置留空；否则显示系统Logo或AI文字 */}
-          {!usingGroupConfig && (
-            siteLogo ? (
-              <img 
-                src={siteLogo} 
-                alt={siteName}
-                className="logo-image"
-                style={{
-                  height: '32px',
-                  width: 'auto',
-                  objectFit: 'contain'
-                }}
-              />
-            ) : (
-              <span className="logo-icon">AI</span>
-            )
+          {/* 显示Logo - 组Logo或系统Logo */}
+          {siteLogo ? (
+            <img 
+              src={siteLogo} 
+              alt={siteName}
+              className="logo-image"
+              style={{
+                height: '32px',
+                width: 'auto',
+                objectFit: 'contain',
+                marginRight: '8px'
+              }}
+            />
+          ) : (
+            <span className="logo-icon" style={{ marginRight: '8px' }}>AI</span>
           )}
           <span className="logo-text">{siteName}</span>
         </div>
