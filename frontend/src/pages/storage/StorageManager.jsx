@@ -1,6 +1,7 @@
 /**
  * 文件存储管理页面 - iOS风格界面（增强版）
  * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
+ * 修改：在列表视图操作列添加复制链接按钮
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -70,7 +71,8 @@ import {
   FilePptOutlined,
   FileUnknownOutlined,
   InfoCircleOutlined,
-  DollarOutlined
+  DollarOutlined,
+  LinkOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
@@ -239,6 +241,33 @@ const FileIcon = ({ mimeType, fileName, size = 64 }) => {
   
   // 未知类型
   return <FileUnknownOutlined {...iconProps} className="file-icon" />
+}
+
+/**
+ * 复制链接到剪贴板的辅助函数
+ */
+const copyToClipboard = async (text, successMessage) => {
+  try {
+    // 优先使用现代API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+      message.success(successMessage || '链接已复制到剪贴板')
+    } else {
+      // 降级方案
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      message.success(successMessage || '链接已复制到剪贴板')
+    }
+  } catch (error) {
+    message.error('复制失败，请手动复制')
+    console.error('复制到剪贴板失败:', error)
+  }
 }
 
 /**
@@ -761,7 +790,7 @@ const StorageManager = () => {
     {
       title: t('common.operation'),
       key: 'action',
-      width: 120,
+      width: 160,
       render: (_, record) => {
         if (record.isFolder) {
           return (
@@ -787,20 +816,37 @@ const StorageManager = () => {
         
         return (
           <Space>
-            <Button type="link" size="small" onClick={() => {
-              setPreviewFile(record)
-              setPreviewVisible(true)
-            }}>
-              <EyeOutlined />
-            </Button>
-            <Button type="link" size="small" onClick={() => {
-              window.open(record.oss_url, '_blank')
-            }}>
-              <DownloadOutlined />
-            </Button>
-            <Button type="link" size="small" danger onClick={() => handleDelete(record)}>
-              <DeleteOutlined />
-            </Button>
+            <Tooltip title={t('common.preview')}>
+              <Button type="link" size="small" onClick={() => {
+                setPreviewFile(record)
+                setPreviewVisible(true)
+              }}>
+                <EyeOutlined />
+              </Button>
+            </Tooltip>
+            <Tooltip title={t('common.download')}>
+              <Button type="link" size="small" onClick={() => {
+                window.open(record.oss_url, '_blank')
+              }}>
+                <DownloadOutlined />
+              </Button>
+            </Tooltip>
+            <Tooltip title={t('storage.copyLink')}>
+              <Button 
+                type="link" 
+                size="small" 
+                onClick={() => {
+                  copyToClipboard(record.oss_url, t('storage.linkCopied'))
+                }}
+              >
+                <LinkOutlined />
+              </Button>
+            </Tooltip>
+            <Tooltip title={t('common.delete')}>
+              <Button type="link" size="small" danger onClick={() => handleDelete(record)}>
+                <DeleteOutlined />
+              </Button>
+            </Tooltip>
           </Space>
         )
       }
@@ -1037,8 +1083,7 @@ const StorageManager = () => {
                 </div>
                 
                 <div className="menu-item" onClick={() => {
-                  navigator.clipboard.writeText(contextMenu.item.oss_url)
-                  message.success(t('storage.linkCopied'))
+                  copyToClipboard(contextMenu.item.oss_url, t('storage.linkCopied'))
                   closeContextMenu()
                 }}>
                   <CopyOutlined className="menu-icon" />
