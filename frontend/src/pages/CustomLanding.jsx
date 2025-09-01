@@ -7,11 +7,14 @@ import { Spin, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { LoginOutlined } from '@ant-design/icons'
 import apiClient from '../utils/api'
+import useAuthStore from '../stores/authStore'
 
 const CustomLanding = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState('')
+  // 获取认证状态
+  const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
     loadCustomHomepage()
@@ -120,38 +123,40 @@ const CustomLanding = () => {
   // 使用iframe显示内容，确保安全隔离
   return (
     <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0, position: 'relative' }}>
-      {/* Login按钮 - 固定在右上角 */}
-      <Button
-        type="primary"
-        icon={<LoginOutlined />}
-        onClick={handleLogin}
-        style={{
-          position: 'fixed',
-          top: 24,
-          right: 24,
-          zIndex: 1000,
-          borderRadius: 20,
-          paddingLeft: 20,
-          paddingRight: 20,
-          height: 40,
-          fontSize: 16,
-          fontWeight: 500,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
-          transition: 'all 0.3s ease'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.5)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
-        }}
-      >
-        Login
-      </Button>
+      {/* Login按钮 - 固定在右上角，只在未登录时显示 */}
+      {!isAuthenticated && (
+        <Button
+          type="primary"
+          icon={<LoginOutlined />}
+          onClick={handleLogin}
+          style={{
+            position: 'fixed',
+            top: 24,
+            right: 24,
+            zIndex: 1000,
+            borderRadius: 20,
+            paddingLeft: 20,
+            paddingRight: 20,
+            height: 40,
+            fontSize: 16,
+            fontWeight: 500,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.5)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
+          }}
+        >
+          Login
+        </Button>
+      )}
 
       {/* 自定义内容iframe */}
       <iframe
