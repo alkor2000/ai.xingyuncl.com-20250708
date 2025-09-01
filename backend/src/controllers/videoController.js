@@ -470,14 +470,37 @@ class VideoAdminController {
     try {
       const modelData = req.body;
       
-      // 验证必填字段
-      if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.model_id) {
-        return ResponseHelper.validation(res, {
-          name: !modelData.name ? '模型标识不能为空' : null,
-          display_name: !modelData.display_name ? '显示名称不能为空' : null,
-          endpoint: !modelData.endpoint ? 'API端点不能为空' : null,
-          model_id: !modelData.model_id ? '模型ID不能为空' : null
-        });
+      // 根据provider类型进行不同的验证
+      if (modelData.provider === 'kling') {
+        // 可灵模型验证
+        if (!modelData.name || !modelData.display_name || !modelData.endpoint) {
+          return ResponseHelper.validation(res, {
+            name: !modelData.name ? '模型标识不能为空' : null,
+            display_name: !modelData.display_name ? '显示名称不能为空' : null,
+            endpoint: !modelData.endpoint ? 'API端点不能为空' : null
+          });
+        }
+        
+        // 验证api_config中必须有access_key和secret_key
+        if (!modelData.api_config || !modelData.api_config.access_key || !modelData.api_config.secret_key) {
+          return ResponseHelper.validation(res, {
+            api_config: 'Access Key和Secret Key不能为空'
+          });
+        }
+        
+        // 可灵模型不需要model_id，设置为null
+        modelData.model_id = null;
+        
+      } else {
+        // 火山引擎模型验证
+        if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.model_id) {
+          return ResponseHelper.validation(res, {
+            name: !modelData.name ? '模型标识不能为空' : null,
+            display_name: !modelData.display_name ? '显示名称不能为空' : null,
+            endpoint: !modelData.endpoint ? 'API端点不能为空' : null,
+            model_id: !modelData.model_id ? '模型ID不能为空' : null
+          });
+        }
       }
       
       const modelId = await VideoModel.create(modelData);
@@ -486,7 +509,15 @@ class VideoAdminController {
       // 添加has_api_key标识
       const safeModel = { ...newModel };
       delete safeModel.api_key;
-      safeModel.has_api_key = !!newModel.api_key;
+      
+      // 对于可灵模型，检查api_config是否包含必要的密钥
+      if (newModel.provider === 'kling') {
+        safeModel.has_api_key = !!(newModel.api_config && 
+          newModel.api_config.access_key && 
+          newModel.api_config.secret_key);
+      } else {
+        safeModel.has_api_key = !!newModel.api_key;
+      }
       
       return ResponseHelper.success(res, safeModel, '模型创建成功');
     } catch (error) {
@@ -503,6 +534,19 @@ class VideoAdminController {
       const { id } = req.params;
       const updateData = req.body;
       
+      // 获取现有模型信息
+      const existingModel = await VideoModel.findById(id);
+      if (!existingModel) {
+        return ResponseHelper.notFound(res, '模型不存在');
+      }
+      
+      // 如果是可灵模型，确保不会意外清除api_config
+      if (existingModel.provider === 'kling' && updateData.api_config) {
+        // 合并api_config而不是完全替换
+        const existingConfig = existingModel.api_config || {};
+        updateData.api_config = { ...existingConfig, ...updateData.api_config };
+      }
+      
       const success = await VideoModel.update(id, updateData);
       
       if (!success) {
@@ -514,7 +558,15 @@ class VideoAdminController {
       // 添加has_api_key标识
       const safeModel = { ...updatedModel };
       delete safeModel.api_key;
-      safeModel.has_api_key = !!updatedModel.api_key;
+      
+      // 对于可灵模型，检查api_config是否包含必要的密钥
+      if (updatedModel.provider === 'kling') {
+        safeModel.has_api_key = !!(updatedModel.api_config && 
+          updatedModel.api_config.access_key && 
+          updatedModel.api_config.secret_key);
+      } else {
+        safeModel.has_api_key = !!updatedModel.api_key;
+      }
       
       return ResponseHelper.success(res, safeModel, '模型更新成功');
     } catch (error) {

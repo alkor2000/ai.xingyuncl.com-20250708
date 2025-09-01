@@ -35,12 +35,32 @@ class VideoModel {
       
       // 解析JSON字段并添加has_api_key标识
       return result.rows.map(model => {
-        // 先判断api_key是否存在
-        const hasApiKey = !!(model.api_key && model.api_key !== null && model.api_key !== '');
+        // 解析api_config
+        let apiConfig = null;
+        if (model.api_config) {
+          try {
+            apiConfig = typeof model.api_config === 'string' 
+              ? JSON.parse(model.api_config) 
+              : model.api_config;
+          } catch (e) {
+            apiConfig = null;
+          }
+        }
+        
+        // 判断是否已配置API密钥
+        let hasApiKey = false;
+        if (model.provider === 'kling') {
+          // 可灵模型：检查api_config中是否有access_key和secret_key
+          hasApiKey = !!(apiConfig && apiConfig.access_key && apiConfig.secret_key);
+        } else {
+          // 火山引擎模型：检查api_key字段
+          hasApiKey = !!(model.api_key && model.api_key !== null && model.api_key !== '');
+        }
         
         const parsed = {
           ...model,
           has_api_key: hasApiKey,
+          api_config: apiConfig,
           resolutions_supported: typeof model.resolutions_supported === 'string' 
             ? JSON.parse(model.resolutions_supported) 
             : model.resolutions_supported,
@@ -55,10 +75,7 @@ class VideoModel {
             : model.ratios_supported,
           price_config: typeof model.price_config === 'string'
             ? JSON.parse(model.price_config)
-            : model.price_config,
-          api_config: typeof model.api_config === 'string'
-            ? JSON.parse(model.api_config)
-            : model.api_config
+            : model.price_config
         };
         
         // 不返回API密钥本身
@@ -154,7 +171,7 @@ class VideoModel {
         sort_order = 0
       } = modelData;
 
-      // 加密API密钥
+      // 加密API密钥（只对火山引擎）
       const encryptedApiKey = api_key ? VideoModel.encryptApiKey(api_key) : null;
 
       const query = `

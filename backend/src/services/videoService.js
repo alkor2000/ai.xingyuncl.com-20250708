@@ -1,6 +1,6 @@
 /**
  * 视频生成服务
- * 处理与火山方舟视频API的交互
+ * 处理与火山方舟和可灵视频API的交互
  */
 
 const axios = require('axios');
@@ -11,6 +11,7 @@ const VideoModel = require('../models/VideoModel');
 const VideoGeneration = require('../models/VideoGeneration');
 const User = require('../models/User');
 const ossService = require('./ossService');
+const klingVideoService = require('./klingVideoService');
 const logger = require('../utils/logger');
 
 class VideoService {
@@ -69,85 +70,42 @@ class VideoService {
         credits_consumed: creditsRequired
       });
 
-      // 5. 构建API请求
-      const apiKey = VideoModel.decryptApiKey(model.api_key);
-      if (!apiKey) {
-        throw new Error('API密钥未配置');
-      }
-
-      // 构建请求内容
-      const content = [];
+      // 5. 根据provider调用不同的API
+      let taskResult;
       
-      // 添加文本内容
-      const textContent = this.buildTextContent(params, model);
-      content.push({
-        type: 'text',
-        text: textContent
-      });
-
-      // 如果有首帧图片，添加图片内容
-      if (params.first_frame_image) {
-        content.push({
-          type: 'image_url',
-          image_url: {
-            url: params.first_frame_image
-          },
-          role: 'first_frame'
+      if (model.provider === 'kling') {
+        // 调用可灵API
+        logger.info('使用可灵API生成视频', {
+          userId,
+          modelId,
+          generationId,
+          model_version: model.api_config?.model_version
         });
-      }
-
-      // 如果有尾帧图片，添加图片内容
-      if (params.last_frame_image) {
-        content.push({
-          type: 'image_url',
-          image_url: {
-            url: params.last_frame_image
-          },
-          role: 'last_frame'
-        });
-      }
-
-      const requestData = {
-        model: model.model_id,
-        content,
-        return_last_frame: params.return_last_frame || false,
-        callback_url: params.callback_url || model.api_config?.webhook_url
-      };
-
-      logger.info('提交视频生成任务', {
-        userId,
-        modelId,
-        generationId,
-        creditsRequired
-      });
-
-      // 6. 调用火山方舟API
-      const response = await axios.post(
-        model.endpoint,
-        requestData,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          timeout: 30000
+        
+        // 根据生成模式调用不同的API
+        if (params.generation_mode === 'first_frame' || params.generation_mode === 'image_to_video') {
+          taskResult = await klingVideoService.submitImage2Video(model, params);
+        } else {
+          taskResult = await klingVideoService.submitText2Video(model, params);
         }
-      );
-
-      // 7. 处理响应
-      if (!response.data || !response.data.id) {
-        throw new Error('API返回数据格式错误');
+      } else {
+        // 调用火山方舟API（原有逻辑）
+        logger.info('使用火山方舟API生成视频', {
+          userId,
+          modelId,
+          generationId
+        });
+        
+        taskResult = await this.submitToVolcano(model, params);
       }
 
-      const taskId = response.data.id;
-
-      // 8. 更新生成记录
+      // 6. 更新生成记录
       await VideoGeneration.update(generationId, {
-        task_id: taskId,
-        status: 'queued'
+        task_id: taskResult.taskId,
+        status: taskResult.status || 'queued'
       });
 
-      // 9. 扣除积分
+      // 7. 扣除积分
       await user.consumeCredits(
         creditsRequired,
         null,
@@ -156,13 +114,13 @@ class VideoService {
         'video_consume'
       );
 
-      // 10. 开始轮询任务状态
-      this.pollTaskStatus(taskId, generationId, model, userId);
+      // 8. 开始轮询任务状态
+      this.pollTaskStatus(taskResult.taskId, generationId, model, userId);
 
       return {
         success: true,
         generationId,
-        taskId,
+        taskId: taskResult.taskId,
         creditsConsumed: creditsRequired,
         message: '视频生成任务已提交，请稍候...'
       };
@@ -186,6 +144,79 @@ class VideoService {
 
       throw error;
     }
+  }
+
+  /**
+   * 提交到火山方舟（原有逻辑）
+   */
+  static async submitToVolcano(model, params) {
+    // 解密API密钥
+    const apiKey = VideoModel.decryptApiKey(model.api_key);
+    if (!apiKey) {
+      throw new Error('API密钥未配置');
+    }
+
+    // 构建请求内容
+    const content = [];
+    
+    // 添加文本内容
+    const textContent = this.buildTextContent(params, model);
+    content.push({
+      type: 'text',
+      text: textContent
+    });
+
+    // 如果有首帧图片，添加图片内容
+    if (params.first_frame_image) {
+      content.push({
+        type: 'image_url',
+        image_url: {
+          url: params.first_frame_image
+        },
+        role: 'first_frame'
+      });
+    }
+
+    // 如果有尾帧图片，添加图片内容
+    if (params.last_frame_image) {
+      content.push({
+        type: 'image_url',
+        image_url: {
+          url: params.last_frame_image
+        },
+        role: 'last_frame'
+      });
+    }
+
+    const requestData = {
+      model: model.model_id,
+      content,
+      return_last_frame: params.return_last_frame || false,
+      callback_url: params.callback_url || model.api_config?.webhook_url
+    };
+
+    // 调用火山方舟API
+    const response = await axios.post(
+      model.endpoint,
+      requestData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        timeout: 30000
+      }
+    );
+
+    // 处理响应
+    if (!response.data || !response.data.id) {
+      throw new Error('API返回数据格式错误');
+    }
+
+    return {
+      taskId: response.data.id,
+      status: 'submitted'
+    };
   }
 
   /**
@@ -243,22 +274,36 @@ class VideoService {
    */
   static async queryTaskStatus(taskId, model) {
     try {
-      const apiKey = VideoModel.decryptApiKey(model.api_key);
-      
-      // 构建查询URL
-      const queryUrl = `https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`;
-      
-      const response = await axios.get(queryUrl, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        },
-        timeout: 10000
-      });
+      if (model.provider === 'kling') {
+        // 查询可灵任务状态
+        return await klingVideoService.queryTaskStatus(taskId, model);
+      } else {
+        // 查询火山方舟任务状态（原有逻辑）
+        const apiKey = VideoModel.decryptApiKey(model.api_key);
+        
+        // 构建查询URL
+        const queryUrl = `https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`;
+        
+        const response = await axios.get(queryUrl, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          },
+          timeout: 10000
+        });
 
-      return response.data;
+        const taskData = response.data;
+        
+        return {
+          status: taskData.status,
+          progress: taskData.progress,
+          video_url: taskData.content?.video_url,
+          error: taskData.error
+        };
+      }
     } catch (error) {
       logger.error('查询视频任务状态失败', {
         taskId,
+        provider: model.provider,
         error: error.message
       });
       throw error;
@@ -291,8 +336,8 @@ class VideoService {
         logger.info('查询到任务状态', {
           taskId,
           status: taskData.status,
-          hasContent: !!taskData.content,
-          hasVideoUrl: !!(taskData.content && taskData.content.video_url)
+          provider: model.provider,
+          hasVideoUrl: !!taskData.videoUrl || !!taskData.video_url
         });
 
         // 更新进度
@@ -304,19 +349,30 @@ class VideoService {
 
         // 根据状态处理
         if (taskData.status === 'succeeded') {
-          // 获取视频URL - 注意这里是从content字段获取
-          const videoUrl = taskData.content?.video_url;
+          // 获取视频URL
+          const videoUrl = taskData.videoUrl || taskData.video_url;
           
           if (!videoUrl) {
             throw new Error('API返回成功但没有视频URL');
           }
 
           // 下载并保存视频
-          const saveResult = await this.downloadAndSaveVideo(
-            videoUrl,
-            generationId,
-            userId
-          );
+          let saveResult;
+          if (model.provider === 'kling') {
+            // 可灵视频下载
+            saveResult = await klingVideoService.downloadAndSaveVideo(
+              videoUrl,
+              userId,
+              generationId
+            );
+          } else {
+            // 火山方舟视频下载
+            saveResult = await this.downloadAndSaveVideo(
+              videoUrl,
+              generationId,
+              userId
+            );
+          }
 
           // 更新生成记录
           await VideoGeneration.update(generationId, {
@@ -325,7 +381,7 @@ class VideoService {
             local_path: saveResult.localPath,
             thumbnail_path: saveResult.thumbnailPath,
             preview_gif_path: saveResult.previewGifPath,
-            last_frame_path: taskData.content?.last_frame_url || null,
+            last_frame_path: taskData.last_frame_url || null,
             file_size: saveResult.fileSize,
             video_width: saveResult.width,
             video_height: saveResult.height,
@@ -338,6 +394,7 @@ class VideoService {
             taskId,
             generationId,
             userId,
+            provider: model.provider,
             time: Date.now() - startTime
           });
 
@@ -345,14 +402,15 @@ class VideoService {
           // 任务失败
           await VideoGeneration.update(generationId, {
             status: 'failed',
-            error_message: taskData.error || '生成失败',
+            error_message: taskData.errorMessage || taskData.error || '生成失败',
             generation_time: Math.floor((Date.now() - startTime) / 1000)
           });
 
           logger.error('视频生成任务失败', {
             taskId,
             generationId,
-            error: taskData.error
+            provider: model.provider,
+            error: taskData.errorMessage || taskData.error
           });
 
         } else if (taskData.status === 'running') {
@@ -372,6 +430,7 @@ class VideoService {
         logger.error('轮询视频任务状态出错', {
           taskId,
           generationId,
+          provider: model.provider,
           error: error.message
         });
         
@@ -394,7 +453,7 @@ class VideoService {
   }
 
   /**
-   * 下载并保存视频
+   * 下载并保存视频（火山方舟）
    */
   static async downloadAndSaveVideo(videoUrl, generationId, userId) {
     try {
