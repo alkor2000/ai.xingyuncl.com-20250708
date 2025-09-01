@@ -29,7 +29,9 @@ import {
   Spin,
   Grid,
   Avatar,
-  Badge
+  Badge,
+  Alert,
+  Divider
 } from 'antd'
 import {
   UploadOutlined,
@@ -66,12 +68,15 @@ import {
   FileWordOutlined,
   FileExcelOutlined,
   FilePptOutlined,
-  FileUnknownOutlined
+  FileUnknownOutlined,
+  InfoCircleOutlined,
+  DollarOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import useStorageStore from '../../stores/storageStore'
+import useAuthStore from '../../stores/authStore'
 import './StorageManager.less'
 
 const { Content, Sider } = Layout
@@ -251,12 +256,14 @@ const StorageManager = () => {
     currentFolder,
     selectedFiles,
     storageStats,
+    creditConfig,
     loading,
     uploading,
     getFiles,
     getFolders,
     getFolderTree,
     getStorageStats,
+    getCreditConfig,
     uploadFiles,
     deleteFile,
     deleteFiles,
@@ -266,8 +273,11 @@ const StorageManager = () => {
     setCurrentFolder,
     toggleFileSelection,
     toggleSelectAll,
-    clearSelection
+    clearSelection,
+    calculateUploadCredits
   } = useStorageStore()
+  
+  const { user } = useAuthStore()
 
   // 状态管理
   const [viewMode, setViewMode] = useState(ViewMode.GRID)
@@ -283,11 +293,28 @@ const StorageManager = () => {
   const [contextMenu, setContextMenu] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [folderCounts, setFolderCounts] = useState({}) // 文件夹内文件数量
+  const [uploadCreditsNeeded, setUploadCreditsNeeded] = useState(0) // 上传所需积分
+  const [userCredits, setUserCredits] = useState(0) // 用户当前积分
 
   // 初始化加载数据
   useEffect(() => {
     loadData()
+    // 获取积分配置
+    getCreditConfig()
+    // 获取用户当前积分
+    if (user) {
+      const credits = (user.credits_quota || 0) - (user.used_credits || 0)
+      setUserCredits(Math.max(0, credits))
+    }
   }, [currentFolder])
+
+  // 监听用户信息变化，更新积分显示
+  useEffect(() => {
+    if (user) {
+      const credits = (user.credits_quota || 0) - (user.used_credits || 0)
+      setUserCredits(Math.max(0, credits))
+    }
+  }, [user])
 
   // 计算文件夹内的文件数量
   useEffect(() => {
@@ -299,6 +326,17 @@ const StorageManager = () => {
     })
     setFolderCounts(counts)
   }, [files, folders])
+
+  // 文件列表变化时，重新计算所需积分
+  useEffect(() => {
+    if (fileList.length > 0 && creditConfig) {
+      const files = fileList.map(f => f.originFileObj || f).filter(Boolean)
+      const credits = calculateUploadCredits(files)
+      setUploadCreditsNeeded(credits)
+    } else {
+      setUploadCreditsNeeded(0)
+    }
+  }, [fileList, creditConfig, calculateUploadCredits])
 
   const loadData = async () => {
     await Promise.all([
@@ -356,6 +394,13 @@ const StorageManager = () => {
       }
       
       await loadData()
+      // 刷新用户信息以更新积分
+      if (window.useAuthStore) {
+        const authStore = window.useAuthStore.getState()
+        if (authStore.getCurrentUser) {
+          await authStore.getCurrentUser()
+        }
+      }
     } catch (error) {
       message.error(t('storage.uploadFailed'))
     }
@@ -365,6 +410,12 @@ const StorageManager = () => {
   const handleUpload = async () => {
     if (fileList.length === 0) {
       message.warning(t('storage.selectFilesFirst'))
+      return
+    }
+
+    // 检查积分是否足够
+    if (uploadCreditsNeeded > 0 && userCredits < uploadCreditsNeeded) {
+      message.error(`积分不足！需要 ${uploadCreditsNeeded} 积分，当前余额 ${userCredits} 积分`)
       return
     }
 
@@ -384,6 +435,13 @@ const StorageManager = () => {
       setUploadModalVisible(false)
       setFileList([])
       await loadData()
+      // 刷新用户信息以更新积分
+      if (window.useAuthStore) {
+        const authStore = window.useAuthStore.getState()
+        if (authStore.getCurrentUser) {
+          await authStore.getCurrentUser()
+        }
+      }
     } catch (error) {
       message.error(t('storage.uploadFailed'))
     }
@@ -749,6 +807,13 @@ const StorageManager = () => {
     }
   ]
 
+  // 生成积分说明文本
+  const getCreditDescription = () => {
+    if (!creditConfig) return ''
+    
+    return `5MB及以下文件：${creditConfig.base_credits}积分/个，超过5MB部分：每5MB收取${creditConfig.credits_per_5mb}积分`
+  }
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="storage-manager">
@@ -994,7 +1059,7 @@ const StorageManager = () => {
           </div>
         )}
         
-        {/* 上传弹窗 */}
+        {/* 上传弹窗 - 增强版，显示积分和限制信息 */}
         <Modal
           title={t('storage.uploadFiles')}
           open={uploadModalVisible}
@@ -1002,14 +1067,52 @@ const StorageManager = () => {
           onCancel={() => {
             setUploadModalVisible(false)
             setFileList([])
+            setUploadCreditsNeeded(0)
           }}
           confirmLoading={uploading}
-          width={600}
+          width={700}
         >
+          {/* 积分和限制信息 */}
+          {creditConfig && (
+            <Alert
+              message="上传说明"
+              description={
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    <InfoCircleOutlined style={{ marginRight: 8 }} />
+                    <strong>文件大小限制：</strong>
+                    单个文件不超过 <span style={{ color: '#1890ff' }}>{creditConfig.max_file_size || 100}MB</span>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <DollarOutlined style={{ marginRight: 8 }} />
+                    <strong>积分计算规则：</strong>
+                    {getCreditDescription()}
+                  </div>
+                  <div>
+                    <DollarOutlined style={{ marginRight: 8 }} />
+                    <strong>当前可用积分：</strong>
+                    <span style={{ color: userCredits > 0 ? '#52c41a' : '#ff4d4f' }}>
+                      {userCredits} 积分
+                    </span>
+                  </div>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          
           <Dragger
             multiple
             fileList={fileList}
             beforeUpload={(file) => {
+              // 检查文件大小
+              const maxSize = (creditConfig?.max_file_size || 100) * 1024 * 1024
+              if (file.size > maxSize) {
+                message.error(`文件 ${file.name} 超过最大限制 ${creditConfig?.max_file_size || 100}MB`)
+                return false
+              }
               setFileList([...fileList, file])
               return false
             }}
@@ -1021,8 +1124,53 @@ const StorageManager = () => {
               <InboxOutlined />
             </p>
             <p className="ant-upload-text">{t('storage.uploadHint')}</p>
-            <p className="ant-upload-hint">{t('storage.uploadTip')}</p>
+            <p className="ant-upload-hint">
+              {creditConfig ? 
+                `支持批量上传，单个文件不超过${creditConfig.max_file_size || 100}MB` : 
+                t('storage.uploadTip')
+              }
+            </p>
           </Dragger>
+          
+          {/* 显示选中文件的积分消耗 */}
+          {fileList.length > 0 && creditConfig && (
+            <div style={{ marginTop: 16 }}>
+              <Divider />
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Statistic 
+                    title="已选文件" 
+                    value={fileList.length} 
+                    suffix="个" 
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic 
+                    title="总大小" 
+                    value={formatFileSize(fileList.reduce((sum, f) => sum + (f.size || 0), 0))} 
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic 
+                    title="需要积分" 
+                    value={uploadCreditsNeeded} 
+                    suffix="积分"
+                    valueStyle={{ 
+                      color: userCredits >= uploadCreditsNeeded ? '#52c41a' : '#ff4d4f' 
+                    }}
+                  />
+                </Col>
+              </Row>
+              {userCredits < uploadCreditsNeeded && (
+                <Alert
+                  message={`积分不足！需要 ${uploadCreditsNeeded} 积分，当前余额 ${userCredits} 积分`}
+                  type="error"
+                  showIcon
+                  style={{ marginTop: 16 }}
+                />
+              )}
+            </div>
+          )}
         </Modal>
         
         {/* 创建文件夹弹窗 */}

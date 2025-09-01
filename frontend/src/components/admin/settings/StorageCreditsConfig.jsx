@@ -21,7 +21,7 @@ const StorageCreditsConfig = () => {
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/admin/storage-credit/config');
+      const response = await apiClient.get('/admin/storage-credits/config');
       if (response.data.success) {
         form.setFieldsValue(response.data.data);
       }
@@ -36,7 +36,7 @@ const StorageCreditsConfig = () => {
   const handleSave = async (values) => {
     setSaving(true);
     try {
-      const response = await apiClient.put('/admin/storage-credit/config', values);
+      const response = await apiClient.put('/admin/storage-credits/config', values);
       if (response.data.success) {
         message.success('配置保存成功');
       }
@@ -47,7 +47,7 @@ const StorageCreditsConfig = () => {
     }
   };
   
-  // 计算示例
+  // 计算示例 - 修复计算逻辑以匹配后端
   const calculateExample = (values) => {
     const examples = [
       { size: 1, label: '1MB文件' },
@@ -57,9 +57,20 @@ const StorageCreditsConfig = () => {
     ];
     
     return examples.map(ex => {
-      const sizeCredits = Math.ceil(ex.size / 5) * (values?.credits_per_5mb || 1);
-      const total = (values?.base_credits || 2) + sizeCredits;
-      return { ...ex, credits: total };
+      let credits = 0;
+      const baseCredits = parseInt(values?.base_credits || 2);
+      const creditsPerInterval = parseFloat(values?.credits_per_5mb || 1);
+      
+      if (ex.size <= 5) {
+        // 5MB及以下，只收基础积分
+        credits = baseCredits;
+      } else {
+        // 超过5MB，按区间收费
+        const extraIntervals = Math.ceil((ex.size - 5) / 5);
+        credits = extraIntervals * creditsPerInterval;
+      }
+      
+      return { ...ex, credits: Math.ceil(credits) };
     });
   };
   
@@ -93,7 +104,7 @@ const StorageCreditsConfig = () => {
         <Form.Item
           label="基础积分"
           name="base_credits"
-          tooltip="每次上传文件的最小积分消耗"
+          tooltip="5MB及以下文件的积分消耗"
           rules={[{ required: true, message: '请输入基础积分' }]}
         >
           <InputNumber
@@ -108,7 +119,7 @@ const StorageCreditsConfig = () => {
         <Form.Item
           label="大小积分"
           name="credits_per_5mb"
-          tooltip="每5MB文件大小额外消耗的积分"
+          tooltip="超过5MB部分，每5MB区间收取的积分"
           rules={[{ required: true, message: '请输入大小积分' }]}
         >
           <InputNumber

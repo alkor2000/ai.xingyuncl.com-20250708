@@ -331,17 +331,24 @@ const useStorageStore = create((set, get) => ({
   },
   
   /**
-   * 获取积分配置
+   * 获取积分配置 - 修复：使用正确的API路径
    */
   getCreditConfig: async () => {
     try {
-      const response = await apiClient.get('/admin/oss/credit-config')
+      const response = await apiClient.get('/admin/storage-credits/config')
       const config = response.data.data
       set({ creditConfig: config })
       return config
     } catch (error) {
       console.error('获取积分配置失败:', error)
-      return null
+      // 返回默认配置
+      const defaultConfig = {
+        base_credits: 2,
+        credits_per_5mb: 1,
+        max_file_size: 100
+      }
+      set({ creditConfig: defaultConfig })
+      return defaultConfig
     }
   },
   
@@ -351,7 +358,7 @@ const useStorageStore = create((set, get) => ({
   updateCreditConfig: async (configs) => {
     set({ loading: true, error: null })
     try {
-      await apiClient.put('/admin/oss/credit-config', { configs })
+      await apiClient.put('/admin/storage-credits/config', configs)
       set({ loading: false })
       return true
     } catch (error) {
@@ -362,6 +369,33 @@ const useStorageStore = create((set, get) => ({
       })
       throw error
     }
+  },
+  
+  /**
+   * 计算文件上传所需积分
+   * @param {Array} files - 文件列表
+   * @returns {number} 所需积分
+   */
+  calculateUploadCredits: (files) => {
+    const config = get().creditConfig
+    if (!config) return 0
+    
+    let totalCredits = 0
+    
+    for (const file of files) {
+      const fileSizeMB = file.size / (1024 * 1024)
+      
+      if (fileSizeMB <= 5) {
+        // 5MB及以下，只收基础积分
+        totalCredits += parseInt(config.base_credits)
+      } else {
+        // 超过5MB，按区间收费
+        const extraIntervals = Math.ceil((fileSizeMB - 5) / 5)
+        totalCredits += extraIntervals * parseFloat(config.credits_per_5mb)
+      }
+    }
+    
+    return Math.ceil(totalCredits)
   },
   
   // 辅助方法

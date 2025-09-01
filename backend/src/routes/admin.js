@@ -98,8 +98,8 @@ router.use('/usage-logs', usageLogRoutes);
 // OSS配置管理路由 - /api/admin/oss/*
 router.use('/oss', ossRoutes);
 
-// 存储积分配置路由 - /api/admin/storage-credit/*
-router.use('/storage-credit', storageCreditRoutes);
+// 存储积分配置路由 - 修复：使用复数形式匹配前端 /api/admin/storage-credits/*
+router.use('/storage-credits', storageCreditRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);
