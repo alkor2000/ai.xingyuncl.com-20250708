@@ -115,7 +115,7 @@
         justify-content: center;
         align-items: center;
         background: rgba(255, 255, 255, 0.95);
-        z-index: 10;
+        z-index: 2;  // 降低z-index，让操作按钮在上层
 
         .processing-text,
         .failed-text {
@@ -193,18 +193,21 @@
         background: #f0f0f0;
       }
 
-      // 操作按钮区域 - 优化按钮颜色
+      // 操作按钮区域 - 提高z-index确保在最上层
       .video-actions {
         position: absolute;
         top: 10px;
         right: 10px;
-        z-index: 5;
+        z-index: 15;  // 提高z-index，确保在所有覆盖层之上
+        pointer-events: auto;  // 确保可以接收鼠标事件
 
         .ant-space {
           .ant-btn {
             backdrop-filter: blur(4px);
             border: none;
             transition: all 0.2s;
+            pointer-events: auto;  // 确保按钮可点击
+            cursor: pointer;  // 确保显示指针光标
             
             // 下载按钮 - 使用主色调蓝色
             &:first-child {
@@ -229,7 +232,7 @@
             }
             
             // 收藏按钮（已收藏状态）
-            &.ant-btn-danger {
+            &.ant-btn-danger:not(.ant-btn-dangerous) {
               background: rgba(255, 77, 79, 0.85);
               color: white;
               
@@ -252,12 +255,19 @@
             
             // 删除按钮 - 始终保持红色警示
             &.ant-btn-dangerous {
-              background: rgba(255, 77, 79, 0.85);
-              color: white;
+              background: rgba(255, 77, 79, 0.85) !important;
+              color: white !important;
+              pointer-events: auto !important;  // 强制确保可点击
+              cursor: pointer !important;
               
               &:hover {
-                background: rgba(255, 77, 79, 1);
+                background: rgba(255, 77, 79, 1) !important;
                 transform: scale(1.1);
+              }
+              
+              &:disabled {
+                opacity: 0.5;
+                cursor: not-allowed !important;
               }
             }
           }
