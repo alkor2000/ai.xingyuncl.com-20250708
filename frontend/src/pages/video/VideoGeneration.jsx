@@ -1,5 +1,5 @@
 /**
- * 视频生成页面 - 支持首尾帧控制
+ * 视频生成页面 - 支持首尾帧控制和模型名称显示
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -48,7 +48,8 @@ import {
   UploadOutlined,
   PlusOutlined,
   ExpandOutlined,
-  PictureOutlined
+  PictureOutlined,
+  RobotOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
@@ -416,6 +417,20 @@ const VideoGeneration = () => {
     video.currentTime = previewTime;
   };
 
+  // 获取模型提供商的标签颜色
+  const getProviderColor = (provider) => {
+    const colorMap = {
+      'volcano': 'volcano',  // 火山引擎 - 橙红色
+      'kling': 'purple',     // 可灵 - 紫色
+      'midjourney': 'geekblue', // Midjourney - 蓝色
+      'stable': 'green',     // Stable Diffusion - 绿色
+      'runway': 'cyan',      // Runway - 青色
+      'pika': 'magenta',     // Pika - 洋红色
+      'sora': 'gold'         // Sora - 金色
+    };
+    return colorMap[provider] || 'default';
+  };
+
   // 渲染视频卡片
   const renderVideoCard = (item, isGallery = false) => {
     const isOwner = !isGallery || item.user_id === user?.id;
@@ -586,6 +601,18 @@ const VideoGeneration = () => {
         <Card.Meta
           title={
             <div className="card-meta-title">
+              {/* 添加模型名称标签 */}
+              {item.model_name && (
+                <Tooltip title={`生成模型: ${item.model_name}`}>
+                  <Tag 
+                    icon={<RobotOutlined />} 
+                    color={getProviderColor(item.provider)}
+                    style={{ marginBottom: 4 }}
+                  >
+                    {item.model_name}
+                  </Tag>
+                </Tooltip>
+              )}
               <Tag color="blue">{item.resolution}</Tag>
               <Tag>{item.duration}秒</Tag>
               {item.ratio && <Tag color={isVertical ? 'purple' : 'cyan'}>{item.ratio}</Tag>}
