@@ -1,9 +1,9 @@
 /**
- * 对话路由 - 集成积分管理、流式输出、草稿功能、图片上传、文档上传、系统提示词和模块组合
+ * 对话路由 - 使用重构后的控制器
  */
 
 const express = require('express');
-const ChatController = require('../controllers/chatController');
+const ChatControllerRefactored = require('../controllers/ChatControllerRefactored');
 const { authenticate, requirePermission } = require('../middleware/authMiddleware');
 const { uploadImage } = require('../middleware/uploadMiddleware');
 const { uploadDocument } = require('../middleware/documentUploadMiddleware');
@@ -11,10 +11,10 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
-// AI对话限流配置 - 调整限流，考虑积分限制
+// AI对话限流配置
 const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
-  max: 15, // 每分钟最多15次对话请求（积分已经是天然限流）
+  max: 15, // 每分钟最多15次对话请求
   message: {
     success: false,
     code: 429,
@@ -41,7 +41,7 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// 用户积分查询限流 - 较宽松
+// 用户积分查询限流
 const creditsLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
   max: 60, // 每分钟最多60次积分查询
@@ -56,10 +56,10 @@ const creditsLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// 草稿操作限流 - 适度限流
+// 草稿操作限流
 const draftLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
-  max: 120, // 每分钟最多120次草稿操作（自动保存需要）
+  max: 120, // 每分钟最多120次草稿操作
   message: {
     success: false,
     code: 429,
@@ -71,7 +71,7 @@ const draftLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// 消息操作限流 - 适度限流
+// 消息操作限流
 const messageLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
   max: 30, // 每分钟最多30次消息操作
@@ -91,10 +91,10 @@ router.use(authenticate);
 
 /**
  * @route GET /api/chat/models
- * @desc 获取可用的AI模型列表 (含积分、图片和文档支持信息)
+ * @desc 获取可用的AI模型列表
  * @access Private
  */
-router.get('/models', ChatController.getModels);
+router.get('/models', ChatControllerRefactored.getModels);
 
 /**
  * @route GET /api/chat/system-prompts
@@ -103,7 +103,7 @@ router.get('/models', ChatController.getModels);
  */
 router.get('/system-prompts', 
   requirePermission('chat.use'),
-  ChatController.getSystemPrompts
+  ChatControllerRefactored.getSystemPrompts
 );
 
 /**
@@ -113,7 +113,7 @@ router.get('/system-prompts',
  */
 router.get('/module-combinations', 
   requirePermission('chat.use'),
-  ChatController.getModuleCombinations
+  ChatControllerRefactored.getModuleCombinations
 );
 
 /**
@@ -124,7 +124,7 @@ router.get('/module-combinations',
 router.get('/credits',
   creditsLimiter,
   requirePermission('chat.use'),
-  ChatController.getUserCredits
+  ChatControllerRefactored.getUserCredits
 );
 
 /**
@@ -136,19 +136,19 @@ router.post('/upload-image',
   uploadLimiter,
   requirePermission('chat.use'),
   uploadImage,
-  ChatController.uploadImage
+  ChatControllerRefactored.uploadImage
 );
 
 /**
  * @route POST /api/chat/upload-document
- * @desc 上传聊天文档（PDF、Word、TXT等）
+ * @desc 上传聊天文档
  * @access Private
  */
 router.post('/upload-document',
   uploadLimiter,
   requirePermission('chat.use'),
   uploadDocument,
-  ChatController.uploadDocument
+  ChatControllerRefactored.uploadDocument
 );
 
 /**
@@ -158,7 +158,7 @@ router.post('/upload-document',
  */
 router.get('/conversations', 
   requirePermission('chat.use'),
-  ChatController.getConversations
+  ChatControllerRefactored.getConversations
 );
 
 /**
@@ -168,7 +168,7 @@ router.get('/conversations',
  */
 router.post('/conversations',
   requirePermission('chat.use'),
-  ChatController.createConversation
+  ChatControllerRefactored.createConversation
 );
 
 /**
@@ -178,7 +178,7 @@ router.post('/conversations',
  */
 router.get('/conversations/:id',
   requirePermission('chat.use'),
-  ChatController.getConversation
+  ChatControllerRefactored.getConversation
 );
 
 /**
@@ -188,7 +188,7 @@ router.get('/conversations/:id',
  */
 router.put('/conversations/:id',
   requirePermission('chat.use'),
-  ChatController.updateConversation
+  ChatControllerRefactored.updateConversation
 );
 
 /**
@@ -198,7 +198,7 @@ router.put('/conversations/:id',
  */
 router.delete('/conversations/:id',
   requirePermission('chat.use'),
-  ChatController.deleteConversation
+  ChatControllerRefactored.deleteConversation
 );
 
 /**
@@ -208,29 +208,29 @@ router.delete('/conversations/:id',
  */
 router.get('/conversations/:id/messages',
   requirePermission('chat.use'),
-  ChatController.getMessages
+  ChatControllerRefactored.getMessages
 );
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复 (支持流式、非流式、图片和文档)
+ * @desc 发送消息并获取AI回复
  * @access Private
  */
 router.post('/conversations/:id/messages',
   chatLimiter,
   requirePermission('chat.use'),
-  ChatController.sendMessage
+  ChatControllerRefactored.sendMessage
 );
 
 /**
  * @route DELETE /api/chat/conversations/:id/messages/:messageId
- * @desc 删除消息对（用户消息和AI回复）
+ * @desc 删除消息对
  * @access Private
  */
 router.delete('/conversations/:id/messages/:messageId',
   messageLimiter,
   requirePermission('chat.use'),
-  ChatController.deleteMessagePair
+  ChatControllerRefactored.deleteMessagePair
 );
 
 /**
@@ -241,7 +241,7 @@ router.delete('/conversations/:id/messages/:messageId',
 router.post('/conversations/:id/clear',
   messageLimiter,
   requirePermission('chat.use'),
-  ChatController.clearMessages
+  ChatControllerRefactored.clearMessages
 );
 
 /**
@@ -252,7 +252,7 @@ router.post('/conversations/:id/clear',
 router.post('/conversations/:id/draft',
   draftLimiter,
   requirePermission('chat.use'),
-  ChatController.saveDraft
+  ChatControllerRefactored.saveDraft
 );
 
 /**
@@ -262,7 +262,7 @@ router.post('/conversations/:id/draft',
  */
 router.get('/conversations/:id/draft',
   requirePermission('chat.use'),
-  ChatController.getDraft
+  ChatControllerRefactored.getDraft
 );
 
 /**
@@ -272,7 +272,7 @@ router.get('/conversations/:id/draft',
  */
 router.delete('/conversations/:id/draft',
   requirePermission('chat.use'),
-  ChatController.deleteDraft
+  ChatControllerRefactored.deleteDraft
 );
 
 module.exports = router;
