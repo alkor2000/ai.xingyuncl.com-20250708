@@ -1,6 +1,6 @@
 /**
  * 视频模型配置管理组件
- * 支持火山引擎和可灵视频模型
+ * 支持火山引擎和可灵视频模型，包含价格系数配置
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -19,7 +19,10 @@ import {
   Tooltip,
   Popconfirm,
   Alert,
-  Divider
+  Divider,
+  Row,
+  Col,
+  Typography
 } from 'antd';
 import {
   PlusOutlined,
@@ -28,12 +31,15 @@ import {
   VideoCameraOutlined,
   KeyOutlined,
   ThunderboltOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  DollarOutlined,
+  CalculatorOutlined
 } from '@ant-design/icons';
 import apiClient from '../../../utils/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
+const { Title, Text } = Typography;
 
 // 可灵模型版本选项
 const klingModelVersions = [
@@ -58,6 +64,18 @@ const VideoModelSettings = () => {
   const [editingModel, setEditingModel] = useState(null);
   const [form] = Form.useForm();
   const [selectedProvider, setSelectedProvider] = useState('volcano');
+  
+  // 价格配置状态
+  const [basePrice, setBasePrice] = useState(50);
+  const [resolutionMultipliers, setResolutionMultipliers] = useState({
+    '480p': 0.8,
+    '720p': 1.0,
+    '1080p': 1.5
+  });
+  const [durationMultipliers, setDurationMultipliers] = useState({
+    '5': 1.0,
+    '10': 2.0
+  });
 
   // 加载模型列表
   const loadModels = async () => {
@@ -96,6 +114,29 @@ const VideoModelSettings = () => {
     }
   }, [selectedProvider, modalVisible, form]);
 
+  // 监听价格相关字段变化
+  const handleBasePriceChange = (value) => {
+    setBasePrice(value || 50);
+    form.setFieldsValue({ base_price: value });
+  };
+
+  const handleResolutionMultiplierChange = (resolution, value) => {
+    const newMultipliers = { ...resolutionMultipliers, [resolution]: value || 1.0 };
+    setResolutionMultipliers(newMultipliers);
+  };
+
+  const handleDurationMultiplierChange = (duration, value) => {
+    const newMultipliers = { ...durationMultipliers, [duration]: value || 1.0 };
+    setDurationMultipliers(newMultipliers);
+  };
+
+  // 计算预览价格
+  const calculatePreviewPrice = (resolution, duration) => {
+    const resMultiplier = resolutionMultipliers[resolution] || 1.0;
+    const durMultiplier = durationMultipliers[String(duration)] || 1.0;
+    return Math.ceil(basePrice * resMultiplier * durMultiplier);
+  };
+
   // 保存模型
   const handleSave = async (values) => {
     try {
@@ -126,6 +167,12 @@ const VideoModelSettings = () => {
       
       // 设置api_config
       values.api_config = apiConfig;
+      
+      // 构建price_config
+      values.price_config = {
+        resolution_multiplier: resolutionMultipliers,
+        duration_multiplier: durationMultipliers
+      };
       
       if (editingModel) {
         await apiClient.put(`/video/admin/models/${editingModel.id}`, values);
@@ -184,6 +231,33 @@ const VideoModelSettings = () => {
       formValues.kling_mode = config.mode;
     }
     
+    // 解析价格配置
+    if (model.price_config) {
+      const priceConfig = typeof model.price_config === 'string'
+        ? JSON.parse(model.price_config)
+        : model.price_config;
+      
+      if (priceConfig.resolution_multiplier) {
+        setResolutionMultipliers(priceConfig.resolution_multiplier);
+      }
+      if (priceConfig.duration_multiplier) {
+        setDurationMultipliers(priceConfig.duration_multiplier);
+      }
+    } else {
+      // 使用默认值
+      setResolutionMultipliers({
+        '480p': 0.8,
+        '720p': 1.0,
+        '1080p': 1.5
+      });
+      setDurationMultipliers({
+        '5': 1.0,
+        '10': 2.0
+      });
+    }
+    
+    setBasePrice(model.base_price || 50);
+    
     form.setFieldsValue({
       ...formValues,
       resolutions_supported: formValues.resolutions_supported || ['720p'],
@@ -199,6 +273,19 @@ const VideoModelSettings = () => {
   const openCreateModal = () => {
     setEditingModel(null);
     setSelectedProvider('volcano');
+    
+    // 重置价格配置为默认值
+    setBasePrice(50);
+    setResolutionMultipliers({
+      '480p': 0.8,
+      '720p': 1.0,
+      '1080p': 1.5
+    });
+    setDurationMultipliers({
+      '5': 1.0,
+      '10': 2.0
+    });
+    
     form.resetFields();
     form.setFieldsValue({
       provider: 'volcano',
@@ -297,6 +384,16 @@ const VideoModelSettings = () => {
       render: (price) => `${price} 积分`
     },
     {
+      title: '价格配置',
+      key: 'price_config',
+      render: (_, record) => {
+        if (record.price_config) {
+          return <Tag color="green">已配置</Tag>;
+        }
+        return <Tag color="orange">未配置</Tag>;
+      }
+    },
+    {
       title: '状态',
       dataIndex: 'is_active',
       key: 'is_active',
@@ -368,7 +465,7 @@ const VideoModelSettings = () => {
           form.resetFields();
         }}
         onOk={() => form.submit()}
-        width={800}
+        width={900}
         destroyOnClose
       >
         <Form
@@ -398,9 +495,6 @@ const VideoModelSettings = () => {
                 <div>
                   <p>可灵AI使用JWT认证方式，需要提供Access Key和Secret Key。</p>
                   <p>支持多个模型版本，包括V1、V1.5、V1.6、V2等，不同版本支持不同功能。</p>
-                  <p>您提供的密钥：</p>
-                  <p><strong>Access Key:</strong> ABQK94AddP4aYKLB8f8H3tgBbkeCNYMR</p>
-                  <p><strong>Secret Key:</strong> CDKN9mH9PpK9MKFN4gr9mAYNdfnCC8P4</p>
                 </div>
               }
               type="info"
@@ -435,7 +529,6 @@ const VideoModelSettings = () => {
                 name="kling_access_key"
                 label="Access Key"
                 rules={[{ required: !editingModel, message: '请输入Access Key' }]}
-                initialValue={editingModel ? undefined : "ABQK94AddP4aYKLB8f8H3tgBbkeCNYMR"}
               >
                 <Input.Password 
                   placeholder="请输入Access Key" 
@@ -446,7 +539,6 @@ const VideoModelSettings = () => {
                 name="kling_secret_key"
                 label="Secret Key"
                 rules={[{ required: !editingModel, message: '请输入Secret Key' }]}
-                initialValue={editingModel ? undefined : "CDKN9mH9PpK9MKFN4gr9mAYNdfnCC8P4"}
               >
                 <Input.Password 
                   placeholder="请输入Secret Key"
@@ -588,13 +680,158 @@ const VideoModelSettings = () => {
             </Select>
           </Form.Item>
 
+          <Divider orientation="left">
+            <Space>
+              <DollarOutlined />
+              价格配置
+            </Space>
+          </Divider>
+
           <Form.Item
             name="base_price"
             label="基础价格（积分）"
             rules={[{ required: true, message: '请输入基础价格' }]}
+            tooltip="720p分辨率、5秒时长的基准价格"
           >
-            <InputNumber min={0} max={10000} style={{ width: '100%' }} />
+            <InputNumber 
+              min={0} 
+              max={10000} 
+              style={{ width: '100%' }}
+              onChange={handleBasePriceChange}
+            />
           </Form.Item>
+
+          {/* 价格系数配置 */}
+          <Card 
+            title={
+              <Space>
+                <CalculatorOutlined />
+                <span>价格系数配置</span>
+              </Space>
+            }
+            size="small"
+            style={{ marginBottom: 16 }}
+          >
+            <Row gutter={16}>
+              <Col span={12}>
+                <Title level={5}>分辨率系数</Title>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Row align="middle">
+                    <Col span={8}>480p:</Col>
+                    <Col span={16}>
+                      <InputNumber
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={resolutionMultipliers['480p']}
+                        onChange={(value) => handleResolutionMultiplierChange('480p', value)}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                  <Row align="middle">
+                    <Col span={8}>720p:</Col>
+                    <Col span={16}>
+                      <InputNumber
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={resolutionMultipliers['720p']}
+                        onChange={(value) => handleResolutionMultiplierChange('720p', value)}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                  <Row align="middle">
+                    <Col span={8}>1080p:</Col>
+                    <Col span={16}>
+                      <InputNumber
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={resolutionMultipliers['1080p']}
+                        onChange={(value) => handleResolutionMultiplierChange('1080p', value)}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                </Space>
+              </Col>
+              
+              <Col span={12}>
+                <Title level={5}>时长系数</Title>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Row align="middle">
+                    <Col span={8}>5秒:</Col>
+                    <Col span={16}>
+                      <InputNumber
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={durationMultipliers['5']}
+                        onChange={(value) => handleDurationMultiplierChange('5', value)}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                  <Row align="middle">
+                    <Col span={8}>10秒:</Col>
+                    <Col span={16}>
+                      <InputNumber
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={durationMultipliers['10']}
+                        onChange={(value) => handleDurationMultiplierChange('10', value)}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                  </Row>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
+
+          {/* 价格预览表格 */}
+          <Card 
+            title="价格预览"
+            size="small"
+            style={{ marginBottom: 16 }}
+          >
+            <table style={{ width: '100%', textAlign: 'center' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '8px', background: '#fafafa' }}>分辨率/时长</th>
+                  <th style={{ padding: '8px', background: '#fafafa' }}>5秒</th>
+                  <th style={{ padding: '8px', background: '#fafafa' }}>10秒</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>480p</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('480p', 5)} 积分</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('480p', 10)} 积分</td>
+                </tr>
+                <tr style={{ background: '#f5f5f5' }}>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>720p</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('720p', 5)} 积分</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('720p', 10)} 积分</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>1080p</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('1080p', 5)} 积分</td>
+                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('1080p', 10)} 积分</td>
+                </tr>
+              </tbody>
+            </table>
+            <Alert
+              message="价格计算公式"
+              description="最终价格 = 基础价格 × 分辨率系数 × 时长系数"
+              type="info"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+          </Card>
 
           <Form.Item
             name="is_active"
