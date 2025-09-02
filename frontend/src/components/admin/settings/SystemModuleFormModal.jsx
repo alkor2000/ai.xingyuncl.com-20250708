@@ -1,5 +1,6 @@
 /**
  * 系统模块表单弹窗组件 - 支持系统内置模块和外部模块管理
+ * 增强SSO单点登录配置功能
  */
 
 import React, { useEffect, useState } from 'react'
@@ -18,7 +19,8 @@ import {
   Alert,
   Tooltip,
   Card,
-  Tag
+  Tag,
+  Checkbox
 } from 'antd'
 import { 
   QuestionCircleOutlined,
@@ -26,7 +28,10 @@ import {
   KeyOutlined,
   WarningOutlined,
   AppstoreOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  UserOutlined,
+  ApiOutlined,
+  LinkOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../../stores/adminStore'
@@ -70,10 +75,25 @@ const jwtAlgorithms = [
 
 // Token传递方式选项
 const tokenMethods = [
-  { value: 'query', label: 'URL参数', description: '将token作为URL参数传递' },
+  { value: 'query', label: 'URL参数', description: '将token作为URL参数传递（推荐）' },
   { value: 'header', label: 'Header', description: '在Authorization header中传递' },
   { value: 'cookie', label: 'Cookie', description: '通过Cookie传递' },
   { value: 'post', label: 'POST Body', description: '作为POST表单数据提交' }
+]
+
+// 可用的用户字段（用于Payload配置）
+const availableUserFields = [
+  { field: 'sub', label: '用户ID (sub)', checked: true, description: '标准JWT字段，用户唯一标识' },
+  { field: 'uuid', label: 'UUID', checked: true, description: '用户唯一标识符，用于SSO' },
+  { field: 'name', label: '用户名 (name)', checked: true, description: '用户登录名' },
+  { field: 'username', label: '用户名 (username)', checked: false, description: '备用用户名字段' },
+  { field: 'email', label: '邮箱 (email)', checked: true, description: '用户邮箱地址' },
+  { field: 'display_name', label: '显示名称', checked: false, description: '用户显示名称' },
+  { field: 'role', label: '角色 (role)', checked: false, description: '用户角色' },
+  { field: 'avatar', label: '头像', checked: false, description: '用户头像URL' },
+  { field: 'phone', label: '电话', checked: false, description: '用户电话号码' },
+  { field: 'group_id', label: '组ID', checked: false, description: '用户所属组ID' },
+  { field: 'group_name', label: '组名称', checked: false, description: '用户所属组名称' }
 ]
 
 const SystemModuleFormModal = ({
@@ -88,6 +108,7 @@ const SystemModuleFormModal = ({
   const { userGroups, getUserGroups } = useAdminStore()
   const [authMode, setAuthMode] = useState('none')
   const [tokenMethod, setTokenMethod] = useState('query')
+  const [selectedFields, setSelectedFields] = useState(['sub', 'uuid', 'name', 'email'])
   
   // 判断模块类型和权限
   const isSystemModule = editingModule?.module_category === 'system'
@@ -105,6 +126,8 @@ const SystemModuleFormModal = ({
   useEffect(() => {
     if (editingModule && visible) {
       const authConfig = editingModule.config?.auth || {}
+      const includes = authConfig.payload?.includes || []
+      
       form.setFieldsValue({
         ...editingModule,
         allowed_groups: editingModule.allowed_groups || [],
@@ -115,14 +138,17 @@ const SystemModuleFormModal = ({
         jwt_expires_in: authConfig.expiresIn || 3600,
         jwt_token_method: authConfig.tokenMethod || 'query',
         jwt_token_field: authConfig.tokenField || 'token',
-        // Payload配置
-        jwt_include_sub: authConfig.payload?.includes?.includes('sub') !== false,
-        jwt_include_name: authConfig.payload?.includes?.includes('name') !== false,
-        jwt_include_email: authConfig.payload?.includes?.includes('email') !== false,
-        jwt_include_role: authConfig.payload?.includes?.includes('role') || false
+        // SSO配置
+        sso_endpoint: authConfig.ssoEndpoint || '',
+        callback_url: authConfig.callbackUrl || ''
       })
+      
       setAuthMode(editingModule.auth_mode || 'none')
       setTokenMethod(authConfig.tokenMethod || 'query')
+      setSelectedFields(includes.length > 0 ? includes : ['sub', 'uuid', 'name', 'email'])
+    } else {
+      // 新建时的默认值
+      setSelectedFields(['sub', 'uuid', 'name', 'email'])
     }
   }, [editingModule, visible, form])
 
@@ -157,12 +183,6 @@ const SystemModuleFormModal = ({
 
       // 如果是JWT认证，构造config对象
       if (values.auth_mode === 'jwt') {
-        const payloadIncludes = []
-        if (values.jwt_include_sub) payloadIncludes.push('sub')
-        if (values.jwt_include_name) payloadIncludes.push('name')
-        if (values.jwt_include_email) payloadIncludes.push('email')
-        if (values.jwt_include_role) payloadIncludes.push('role')
-
         submitData.config = {
           auth: {
             secret: values.jwt_secret,
@@ -170,8 +190,10 @@ const SystemModuleFormModal = ({
             expiresIn: values.jwt_expires_in,
             tokenMethod: values.jwt_token_method,
             tokenField: values.jwt_token_field,
+            ssoEndpoint: values.sso_endpoint || '',
+            callbackUrl: values.callback_url || '',
             payload: {
-              includes: payloadIncludes
+              includes: selectedFields
             }
           }
         }
@@ -205,6 +227,15 @@ const SystemModuleFormModal = ({
       )
     }
     return null
+  }
+
+  // 处理字段选择变化
+  const handleFieldChange = (field, checked) => {
+    if (checked) {
+      setSelectedFields([...selectedFields, field])
+    } else {
+      setSelectedFields(selectedFields.filter(f => f !== field))
+    }
   }
 
   return (
@@ -255,11 +286,7 @@ const SystemModuleFormModal = ({
           jwt_algorithm: 'HS256',
           jwt_expires_in: 3600,
           jwt_token_method: 'query',
-          jwt_token_field: 'token',
-          jwt_include_sub: true,
-          jwt_include_name: true,
-          jwt_include_email: true,
-          jwt_include_role: false
+          jwt_token_field: 'token'
         }}
       >
         <Card title="基础信息" size="small" style={{ marginBottom: 16 }}>
@@ -399,7 +426,7 @@ const SystemModuleFormModal = ({
                   <Space>
                     <LockOutlined />
                     <span>JWT认证</span>
-                    <span style={{ color: '#999', fontSize: 12 }}>自动生成并传递JWT Token</span>
+                    <span style={{ color: '#999', fontSize: 12 }}>自动生成并传递JWT Token（SSO）</span>
                   </Space>
                 </Select.Option>
                 <Select.Option value="oauth" disabled>
@@ -414,13 +441,27 @@ const SystemModuleFormModal = ({
             {authMode === 'jwt' && (
               <>
                 <Alert
-                  message="JWT认证配置"
-                  description="系统会在用户访问模块时自动生成JWT Token并传递给目标系统"
+                  message="JWT单点登录(SSO)配置"
+                  description={
+                    <div>
+                      <p>系统会在用户访问模块时自动生成JWT Token并传递给目标系统。</p>
+                      <p>目标系统可以通过验证Token获取用户信息，实现自动登录。</p>
+                      <p><strong>重要：</strong>Token中包含用户UUID，对方系统可用此创建或登录用户。</p>
+                    </div>
+                  }
                   type="info"
                   showIcon
-                  icon={<KeyOutlined />}
+                  icon={<ApiOutlined />}
                   style={{ marginBottom: 16 }}
                 />
+
+                {/* 基础JWT配置 */}
+                <Divider orientation="left" style={{ fontSize: 14 }}>
+                  <Space>
+                    <KeyOutlined />
+                    JWT基础配置
+                  </Space>
+                </Divider>
 
                 <Row gutter={16}>
                   <Col span={16}>
@@ -459,12 +500,13 @@ const SystemModuleFormModal = ({
                       name="jwt_expires_in"
                       label="Token有效期（秒）"
                       rules={[{ required: authMode === 'jwt' }]}
+                      tooltip="建议设置较短的有效期（如300秒）以提高安全性"
                     >
                       <InputNumber 
                         min={60} 
                         max={86400} 
                         style={{ width: '100%' }}
-                        placeholder="3600"
+                        placeholder="300"
                       />
                     </Form.Item>
                   </Col>
@@ -503,50 +545,113 @@ const SystemModuleFormModal = ({
                   </Col>
                 </Row>
 
-                <Divider orientation="left" style={{ fontSize: 14 }}>Payload配置</Divider>
+                {/* SSO端点配置 */}
+                <Divider orientation="left" style={{ fontSize: 14 }}>
+                  <Space>
+                    <LinkOutlined />
+                    SSO端点配置
+                  </Space>
+                </Divider>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="sso_endpoint"
+                      label="SSO登录端点"
+                      tooltip="目标系统的SSO登录地址，留空则使用模块URL"
+                      extra="如: /api/sso/login 或 https://academy.nebulink.com.cn/sso"
+                    >
+                      <Input 
+                        placeholder="/api/sso/login" 
+                        prefix={<ApiOutlined />}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      name="callback_url"
+                      label="回调URL"
+                      tooltip="登录成功后的跳转地址"
+                      extra="可选，登录成功后跳转到的页面"
+                    >
+                      <Input 
+                        placeholder="/dashboard" 
+                        prefix={<LinkOutlined />}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                {/* Payload字段配置 */}
+                <Divider orientation="left" style={{ fontSize: 14 }}>
+                  <Space>
+                    <UserOutlined />
+                    Payload字段配置
+                  </Space>
+                </Divider>
                 
                 <Alert
-                  message="选择要包含在JWT Payload中的用户信息"
+                  message="选择要包含在JWT Token中的用户信息"
+                  description="UUID是SSO的关键字段，建议始终包含"
                   type="info"
                   style={{ marginBottom: 16 }}
                 />
 
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <div style={{ 
+                  border: '1px solid #f0f0f0', 
+                  borderRadius: 4, 
+                  padding: 16,
+                  maxHeight: 300,
+                  overflowY: 'auto'
+                }}>
                   <Row gutter={[16, 16]}>
-                    <Col span={12}>
-                      <Form.Item name="jwt_include_sub" valuePropName="checked">
-                        <Space>
-                          <Switch />
-                          <span>用户ID (sub)</span>
-                        </Space>
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item name="jwt_include_name" valuePropName="checked">
-                        <Space>
-                          <Switch />
-                          <span>用户名 (name)</span>
-                        </Space>
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item name="jwt_include_email" valuePropName="checked">
-                        <Space>
-                          <Switch />
-                          <span>邮箱 (email)</span>
-                        </Space>
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item name="jwt_include_role" valuePropName="checked">
-                        <Space>
-                          <Switch />
-                          <span>角色 (role)</span>
-                        </Space>
-                      </Form.Item>
-                    </Col>
+                    {availableUserFields.map(item => (
+                      <Col span={12} key={item.field}>
+                        <Checkbox
+                          checked={selectedFields.includes(item.field)}
+                          onChange={(e) => handleFieldChange(item.field, e.target.checked)}
+                        >
+                          <Space direction="vertical" size={0}>
+                            <span style={{ fontWeight: item.field === 'uuid' ? 'bold' : 'normal' }}>
+                              {item.label}
+                              {item.field === 'uuid' && (
+                                <Tag color="blue" style={{ marginLeft: 8 }}>SSO关键字段</Tag>
+                              )}
+                            </span>
+                            <span style={{ fontSize: 12, color: '#999' }}>
+                              {item.description}
+                            </span>
+                          </Space>
+                        </Checkbox>
+                      </Col>
+                    ))}
                   </Row>
-                </Space>
+                </div>
+
+                {/* 配置示例 */}
+                <Alert
+                  message="配置示例"
+                  description={
+                    <div style={{ fontSize: 12 }}>
+                      <p>假设配置如下：</p>
+                      <ul>
+                        <li>SSO端点: /api/sso/login</li>
+                        <li>Token传递方式: URL参数 (token)</li>
+                        <li>包含字段: uuid, username, email</li>
+                      </ul>
+                      <p>用户点击模块时会跳转到:</p>
+                      <code style={{ display: 'block', padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
+                        https://academy.nebulink.com.cn/api/sso/login?token=eyJhbGciOiJIUzI1NiIs...
+                      </code>
+                      <p style={{ marginTop: 8 }}>Token解码后包含:</p>
+                      <code style={{ display: 'block', padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
+                        {JSON.stringify({ uuid: "xxx-xxx-xxx", username: "user1", email: "user@example.com" }, null, 2)}
+                      </code>
+                    </div>
+                  }
+                  type="success"
+                  style={{ marginTop: 16 }}
+                />
               </>
             )}
           </Card>
