@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout } from 'antd'
+import { Layout, message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import useStatsStore from '../../stores/statsStore'
 import useModuleStore from '../../stores/moduleStore'
+import apiClient from '../../utils/api'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import MobileDrawer from './MobileDrawer'
@@ -110,6 +111,8 @@ const BasicLayout = ({ children }) => {
         isModule: true,
         openMode: module.open_mode,
         moduleUrl: module.module_url,
+        moduleId: module.id,  // 重要：添加模块ID
+        authMode: module.auth_mode,  // 添加认证模式
         moduleData: module
       })
     })
@@ -189,11 +192,75 @@ const BasicLayout = ({ children }) => {
 
   const filteredMenuItems = filterMenuItems(dynamicMenuItems)
 
+  // 处理外部模块的认证打开
+  const handleOpenExternalModule = async (menuItem) => {
+    try {
+      // 如果模块不需要认证，直接打开
+      if (menuItem.authMode === 'none' || !menuItem.authMode) {
+        window.open(menuItem.moduleUrl, '_blank')
+        return
+      }
+      
+      // 获取认证URL
+      const response = await apiClient.get(`/admin/modules/${menuItem.moduleId}/auth-url`)
+      const authInfo = response.data.data
+      
+      if (authInfo) {
+        // 根据认证方式打开
+        if (authInfo.method === 'POST' && authInfo.formData) {
+          // POST方式需要创建表单提交
+          const form = document.createElement('form')
+          form.method = 'POST'
+          form.action = authInfo.url
+          form.target = '_blank'
+          
+          Object.keys(authInfo.formData).forEach(key => {
+            const input = document.createElement('input')
+            input.type = 'hidden'
+            input.name = key
+            input.value = authInfo.formData[key]
+            form.appendChild(input)
+          })
+          
+          document.body.appendChild(form)
+          form.submit()
+          document.body.removeChild(form)
+        } else {
+          // GET方式或URL参数方式，直接打开
+          window.open(authInfo.url, '_blank')
+        }
+        
+        console.log('模块认证URL打开成功', {
+          module: menuItem.label,
+          authMode: menuItem.authMode,
+          method: authInfo.method
+        })
+      } else {
+        throw new Error('无法获取认证信息')
+      }
+    } catch (error) {
+      console.error('打开外部模块失败:', error)
+      message.error(`打开模块失败: ${error.message}`)
+      // 降级处理：直接打开原始URL
+      window.open(menuItem.moduleUrl, '_blank')
+    }
+  }
+
   // 处理菜单点击
-  const handleMenuClick = (key, menuItem) => {
+  const handleMenuClick = async (key, menuItem) => {
     // 如果是外部模块且设置为新标签页打开
     if (menuItem?.isModule && menuItem?.openMode === 'new_tab') {
-      window.open(menuItem.moduleUrl, '_blank')
+      // 调用认证打开函数
+      await handleOpenExternalModule(menuItem)
+      return
+    }
+    
+    // 如果是外部模块且设置为iframe模式，导航到模块页面
+    if (menuItem?.isModule && menuItem?.openMode === 'iframe') {
+      navigate(key)
+      if (isMobile) {
+        setMobileMenuVisible(false)
+      }
       return
     }
     
