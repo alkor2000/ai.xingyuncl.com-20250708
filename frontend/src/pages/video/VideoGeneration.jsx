@@ -1,5 +1,5 @@
 /**
- * 视频生成页面
+ * 视频生成页面 - 支持首尾帧控制
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -24,7 +24,8 @@ import {
   Alert,
   Pagination,
   Popconfirm,
-  Upload
+  Upload,
+  Divider
 } from 'antd';
 import {
   VideoCameraOutlined,
@@ -46,7 +47,8 @@ import {
   CloseCircleOutlined,
   UploadOutlined,
   PlusOutlined,
-  ExpandOutlined
+  ExpandOutlined,
+  PictureOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
@@ -107,7 +109,10 @@ const VideoGeneration = () => {
   const [negativePrompt, setNegativePrompt] = useState('');
   const [firstFrameImage, setFirstFrameImage] = useState('');
   const [firstFrameFile, setFirstFrameFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [lastFrameImage, setLastFrameImage] = useState(''); // 新增：尾帧图片
+  const [lastFrameFile, setLastFrameFile] = useState(null); // 新增：尾帧文件
+  const [uploadingFirst, setUploadingFirst] = useState(false);
+  const [uploadingLast, setUploadingLast] = useState(false); // 新增：尾帧上传状态
   const [generationMode, setGenerationMode] = useState('text_to_video');
   const [resolution, setResolution] = useState('720p');
   const [duration, setDuration] = useState(5);
@@ -134,6 +139,16 @@ const VideoGeneration = () => {
       setResolution(selectedModel.default_resolution || '720p');
       setDuration(selectedModel.default_duration || 5);
       setRatio(selectedModel.default_ratio || '16:9');
+      
+      // 如果模型不支持当前模式，切换到支持的模式
+      if (generationMode === 'first_frame' && !selectedModel.supports_first_frame) {
+        setGenerationMode('text_to_video');
+      } else if (generationMode === 'last_frame' && !selectedModel.supports_last_frame) {
+        setGenerationMode('text_to_video');
+      } else if (generationMode === 'first_last_frame' && 
+                 (!selectedModel.supports_first_frame || !selectedModel.supports_last_frame)) {
+        setGenerationMode('text_to_video');
+      }
     }
   }, [selectedModel]);
 
@@ -162,26 +177,50 @@ const VideoGeneration = () => {
   };
 
   // 处理首帧图片上传
-  const handleFrameUpload = async (info) => {
+  const handleFirstFrameUpload = async (info) => {
     const { file } = info;
     
     if (file.status === 'uploading') {
-      setUploading(true);
+      setUploadingFirst(true);
       return;
     }
     
     if (file.status === 'done') {
-      setUploading(false);
+      setUploadingFirst(false);
       if (file.response && file.response.success) {
         setFirstFrameImage(file.response.data.url);
         setFirstFrameFile(file);
-        message.success('图片上传成功');
+        message.success('首帧图片上传成功');
       } else {
         message.error(file.response?.message || '上传失败');
       }
     } else if (file.status === 'error') {
-      setUploading(false);
-      message.error('图片上传失败');
+      setUploadingFirst(false);
+      message.error('首帧图片上传失败');
+    }
+  };
+
+  // 处理尾帧图片上传
+  const handleLastFrameUpload = async (info) => {
+    const { file } = info;
+    
+    if (file.status === 'uploading') {
+      setUploadingLast(true);
+      return;
+    }
+    
+    if (file.status === 'done') {
+      setUploadingLast(false);
+      if (file.response && file.response.success) {
+        setLastFrameImage(file.response.data.url);
+        setLastFrameFile(file);
+        message.success('尾帧图片上传成功');
+      } else {
+        message.error(file.response?.message || '上传失败');
+      }
+    } else if (file.status === 'error') {
+      setUploadingLast(false);
+      message.error('尾帧图片上传失败');
     }
   };
 
@@ -221,10 +260,16 @@ const VideoGeneration = () => {
     return true;
   };
 
-  // 移除图片
-  const handleRemoveImage = () => {
+  // 移除首帧图片
+  const handleRemoveFirstImage = () => {
     setFirstFrameImage('');
     setFirstFrameFile(null);
+  };
+
+  // 移除尾帧图片
+  const handleRemoveLastImage = () => {
+    setLastFrameImage('');
+    setLastFrameFile(null);
   };
 
   // 处理生成
@@ -244,10 +289,22 @@ const VideoGeneration = () => {
       return;
     }
 
-    // 如果是首帧图生成模式，检查是否上传了图片
+    // 根据生成模式检查图片是否上传
     if (generationMode === 'first_frame' && !firstFrameImage) {
       message.warning('请上传首帧图片');
       return;
+    }
+    
+    if (generationMode === 'last_frame' && !lastFrameImage) {
+      message.warning('请上传尾帧图片');
+      return;
+    }
+    
+    if (generationMode === 'first_last_frame') {
+      if (!firstFrameImage || !lastFrameImage) {
+        message.warning('请上传首帧和尾帧图片');
+        return;
+      }
     }
 
     // 检查积分是否充足
@@ -257,10 +314,10 @@ const VideoGeneration = () => {
       return;
     }
 
+    // 构建参数对象
     const params = {
       prompt: prompt.trim(),
       negative_prompt: negativePrompt.trim(),
-      first_frame_image: generationMode === 'first_frame' ? firstFrameImage : undefined,
       generation_mode: generationMode,
       resolution,
       duration,
@@ -269,6 +326,15 @@ const VideoGeneration = () => {
       watermark,
       camera_fixed: cameraFixed
     };
+    
+    // 根据模式添加图片参数
+    if (generationMode === 'first_frame' || generationMode === 'first_last_frame') {
+      params.first_frame_image = firstFrameImage;
+    }
+    
+    if (generationMode === 'last_frame' || generationMode === 'first_last_frame') {
+      params.last_frame_image = lastFrameImage;
+    }
 
     const result = await generateVideo(params);
 
@@ -278,6 +344,8 @@ const VideoGeneration = () => {
       setNegativePrompt('');
       setFirstFrameImage('');
       setFirstFrameFile(null);
+      setLastFrameImage('');
+      setLastFrameFile(null);
       setSeed(-1);
       
       // 重置到第一页查看最新的视频
@@ -387,24 +455,22 @@ const VideoGeneration = () => {
             ) : isSucceeded && item.local_path ? (
               <div className="video-player" key={videoKey}>
                 <video
-                  key={videoKey} // 添加key属性，当URL变化时强制重新创建video元素
+                  key={videoKey}
                   src={item.local_path}
                   poster={item.thumbnail_path}
                   controls
-                  preload="metadata" // 只预加载元数据
+                  preload="metadata"
                   style={{ 
                     width: '100%', 
                     height: '200px', 
                     objectFit: videoObjectFit,
-                    backgroundColor: '#000' // 添加黑色背景，让contain模式下的黑边更自然
+                    backgroundColor: '#000'
                   }}
-                  onLoadedMetadata={handleVideoLoadedMetadata} // 视频元数据加载完成后设置预览时间点
+                  onLoadedMetadata={handleVideoLoadedMetadata}
                   onLoadedData={() => {
-                    // 视频数据加载完成的回调，确保视频正确加载
                     console.log(`视频已加载: ${item.id}, 比例: ${item.ratio}, object-fit: ${videoObjectFit}`);
                   }}
                   onError={(e) => {
-                    // 视频加载错误的处理
                     console.error(`视频加载失败: ${item.id}`, e);
                   }}
                 />
@@ -431,7 +497,7 @@ const VideoGeneration = () => {
               </div>
             )}
             
-            {/* 操作按钮 - 移到右上角，不遮挡视频播放器 */}
+            {/* 操作按钮 */}
             {isOwner && (
               <div className="video-actions">
                 <Space direction="vertical" size="small">
@@ -453,7 +519,7 @@ const VideoGeneration = () => {
                     </Tooltip>
                   )}
                   
-                  {/* 收藏按钮 - 成功和失败都可以收藏 */}
+                  {/* 收藏按钮 */}
                   {(isSucceeded || isFailed) && (
                     <Tooltip title={item.is_favorite ? '取消收藏' : '收藏'} placement="left">
                       <Button
@@ -470,7 +536,7 @@ const VideoGeneration = () => {
                     </Tooltip>
                   )}
                   
-                  {/* 公开/私密按钮 - 只有成功的可以公开 */}
+                  {/* 公开/私密按钮 */}
                   {isSucceeded && (
                     <Tooltip title={item.is_public ? '设为私密' : '公开分享'} placement="left">
                       <Button
@@ -487,7 +553,7 @@ const VideoGeneration = () => {
                     </Tooltip>
                   )}
                   
-                  {/* 删除按钮 - 所有状态都可以删除 */}
+                  {/* 删除按钮 */}
                   <Popconfirm
                     title="确定删除这个视频吗？"
                     onConfirm={(e) => {
@@ -563,12 +629,22 @@ const VideoGeneration = () => {
     return historyPagination;
   };
 
-  // 上传按钮内容
-  const uploadButton = (
+  // 首帧上传按钮内容
+  const firstFrameUploadButton = (
     <div>
-      {uploading ? <Spin /> : <PlusOutlined />}
+      {uploadingFirst ? <Spin /> : <PlusOutlined />}
       <div style={{ marginTop: 8 }}>
-        {uploading ? '上传中...' : '点击上传首帧图片'}
+        {uploadingFirst ? '上传中...' : '上传首帧'}
+      </div>
+    </div>
+  );
+  
+  // 尾帧上传按钮内容
+  const lastFrameUploadButton = (
+    <div>
+      {uploadingLast ? <Spin /> : <PlusOutlined />}
+      <div style={{ marginTop: 8 }}>
+        {uploadingLast ? '上传中...' : '上传尾帧'}
       </div>
     </div>
   );
@@ -605,6 +681,9 @@ const VideoGeneration = () => {
                 <Space wrap>
                   {selectedModel.supports_text_to_video && <Tag color="green">文生视频</Tag>}
                   {selectedModel.supports_first_frame && <Tag color="blue">首帧图生</Tag>}
+                  {selectedModel.supports_last_frame && <Tag color="orange">尾帧图生</Tag>}
+                  {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
+                    <Tag color="purple">首尾帧图生</Tag>}
                 </Space>
               </div>
             )}
@@ -618,12 +697,57 @@ const VideoGeneration = () => {
               style={{ width: '100%' }}
             >
               <Option value="text_to_video" disabled={!selectedModel?.supports_text_to_video}>
-                文字生成视频
+                <Space>
+                  <VideoCameraOutlined />
+                  <span>文字生成视频</span>
+                </Space>
               </Option>
               <Option value="first_frame" disabled={!selectedModel?.supports_first_frame}>
-                首帧图生成视频
+                <Space>
+                  <PictureOutlined />
+                  <span>首帧图生成视频</span>
+                </Space>
+              </Option>
+              <Option value="last_frame" disabled={!selectedModel?.supports_last_frame}>
+                <Space>
+                  <PictureOutlined />
+                  <span>尾帧图生成视频</span>
+                </Space>
+              </Option>
+              <Option value="first_last_frame" 
+                disabled={!selectedModel?.supports_first_frame || !selectedModel?.supports_last_frame}>
+                <Space>
+                  <FileImageOutlined />
+                  <span>首尾帧图生成视频</span>
+                </Space>
               </Option>
             </Select>
+            
+            {/* 模式说明 */}
+            {generationMode === 'first_frame' && (
+              <Alert 
+                message="首帧图生成：提供视频的第一帧图片，AI会根据图片和提示词生成后续内容"
+                type="info" 
+                showIcon 
+                style={{ marginTop: 10 }}
+              />
+            )}
+            {generationMode === 'last_frame' && (
+              <Alert 
+                message="尾帧图生成：提供视频的最后一帧图片，AI会生成到达该画面的过程"
+                type="info" 
+                showIcon 
+                style={{ marginTop: 10 }}
+              />
+            )}
+            {generationMode === 'first_last_frame' && (
+              <Alert 
+                message="首尾帧图生成：提供首尾两帧图片，AI会生成从首帧到尾帧的过渡视频"
+                type="info" 
+                showIcon 
+                style={{ marginTop: 10 }}
+              />
+            )}
           </Card>
 
           {/* 输入提示词 */}
@@ -637,16 +761,20 @@ const VideoGeneration = () => {
               showCount
             />
             
-            {generationMode === 'first_frame' && (
+            {/* 首帧图片上传 */}
+            {(generationMode === 'first_frame' || generationMode === 'first_last_frame') && (
               <div style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                  <PictureOutlined /> 首帧图片
+                </div>
                 <Upload
                   name="image"
                   listType="picture-card"
-                  className="first-frame-uploader"
+                  className="frame-uploader"
                   showUploadList={false}
                   customRequest={customUploadRequest}
                   beforeUpload={beforeUpload}
-                  onChange={handleFrameUpload}
+                  onChange={handleFirstFrameUpload}
                 >
                   {firstFrameImage ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -661,7 +789,7 @@ const VideoGeneration = () => {
                         icon={<DeleteOutlined />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleRemoveImage();
+                          handleRemoveFirstImage();
                         }}
                         style={{
                           position: 'absolute',
@@ -672,12 +800,61 @@ const VideoGeneration = () => {
                       />
                     </div>
                   ) : (
-                    uploadButton
+                    firstFrameUploadButton
                   )}
                 </Upload>
-                <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
-                  支持 JPG、PNG、WEBP 格式，最大 10MB
+              </div>
+            )}
+            
+            {/* 尾帧图片上传 */}
+            {(generationMode === 'last_frame' || generationMode === 'first_last_frame') && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                  <PictureOutlined /> 尾帧图片
                 </div>
+                <Upload
+                  name="image"
+                  listType="picture-card"
+                  className="frame-uploader"
+                  showUploadList={false}
+                  customRequest={customUploadRequest}
+                  beforeUpload={beforeUpload}
+                  onChange={handleLastFrameUpload}
+                >
+                  {lastFrameImage ? (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                      <img 
+                        src={lastFrameImage} 
+                        alt="尾帧图片" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveLastImage();
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          background: 'rgba(255, 255, 255, 0.8)'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    lastFrameUploadButton
+                  )}
+                </Upload>
+              </div>
+            )}
+            
+            {/* 图片格式说明 */}
+            {(generationMode !== 'text_to_video') && (
+              <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
+                支持 JPG、PNG、WEBP 格式，最大 10MB
               </div>
             )}
           </Card>
