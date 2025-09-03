@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { Typography, Image, Spin, Button, Space, message as antMessage } from 'antd'
-import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Typography, Image, Spin, Button, Space, message as antMessage, Row, Col } from 'antd'
+import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined, PictureOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import CodeBlock from './CodeBlock'
@@ -21,14 +21,36 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
   
+  // 处理生成的图片数据
+  const getGeneratedImages = () => {
+    if (!message.generated_images) return []
+    
+    // 如果是字符串，尝试解析JSON
+    if (typeof message.generated_images === 'string') {
+      try {
+        return JSON.parse(message.generated_images)
+      } catch (e) {
+        console.error('解析生成的图片失败:', e)
+        return []
+      }
+    }
+    
+    // 如果已经是数组，直接返回
+    if (Array.isArray(message.generated_images)) {
+      return message.generated_images
+    }
+    
+    return []
+  }
+  
+  const generatedImages = getGeneratedImages()
+  
   // 添加调试日志，查看消息数据
-  if (isAssistant && !message.temp && !message.streaming) {
-    console.log('AI消息数据:', {
+  if (isAssistant && !message.temp && !message.streaming && generatedImages.length > 0) {
+    console.log('AI消息包含生成的图片:', {
       id: message.id,
-      model_name: message.model_name,
-      hasModelName: !!message.model_name,
-      messageKeys: Object.keys(message),
-      fullMessage: message
+      imageCount: generatedImages.length,
+      images: generatedImages
     })
   }
   
@@ -219,7 +241,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   
   return (
     <div className={`message-content ${isUser ? 'user-message' : 'assistant-message'}`}>
-      {/* 显示图片（如果有） */}
+      {/* 显示上传的图片（用户消息） */}
       {message.file && (
         <div className="message-image">
           <Image
@@ -273,6 +295,58 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
         )}
       </div>
       
+      {/* 显示AI生成的图片 */}
+      {isAssistant && generatedImages.length > 0 && (
+        <div className="generated-images" style={{ marginTop: '12px' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            marginBottom: '8px',
+            color: '#1890ff'
+          }}>
+            <PictureOutlined style={{ marginRight: '6px' }} />
+            <Text type="secondary">生成的图片 ({generatedImages.length})</Text>
+          </div>
+          <Row gutter={[12, 12]}>
+            {generatedImages.map((img, index) => (
+              <Col key={index} xs={24} sm={12} md={8} lg={6}>
+                <Image
+                  src={img.url}
+                  alt={`Generated image ${index + 1}`}
+                  style={{ 
+                    width: '100%', 
+                    borderRadius: '8px',
+                    border: '1px solid #f0f0f0'
+                  }}
+                  placeholder={
+                    <div style={{ 
+                      width: '100%', 
+                      height: '200px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#f5f5f5'
+                    }}>
+                      <Spin />
+                    </div>
+                  }
+                />
+                {img.filename && (
+                  <Text type="secondary" style={{ 
+                    fontSize: '12px',
+                    display: 'block',
+                    marginTop: '4px',
+                    textAlign: 'center'
+                  }}>
+                    {img.filename}
+                  </Text>
+                )}
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
+      
       {/* 消息底部信息 - 用户消息和AI消息都显示，但内容不同 */}
       {!isStreaming && !message.streaming && (
         <div className="message-footer">
@@ -301,6 +375,16 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
                 <RobotOutlined />
                 <Text type="secondary" className="info-text">
                   {messageModel.display_name || messageModel.name}
+                </Text>
+              </span>
+            )}
+            
+            {/* 显示生成的图片数量 */}
+            {isAssistant && generatedImages.length > 0 && (
+              <span className="info-item">
+                <PictureOutlined />
+                <Text type="secondary" className="info-text">
+                  {generatedImages.length} 张图片
                 </Text>
               </span>
             )}

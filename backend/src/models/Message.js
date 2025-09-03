@@ -1,5 +1,5 @@
 /**
- * 消息数据模型 - 支持动态上下文数量、清空时间过滤、消息状态跟踪和序号排序
+ * 消息数据模型 - 支持动态上下文数量、清空时间过滤、消息状态跟踪、序号排序和生成的图片
  */
 
 const dbConnection = require('../database/connection');
@@ -18,6 +18,7 @@ class Message {
     this.model_name = data.model_name || null; // 记录消息生成时使用的模型
     this.status = data.status || 'completed'; // 消息状态：pending, streaming, completed, failed
     this.file_id = data.file_id || null;
+    this.generated_images = data.generated_images || null; // 生成的图片信息
     this.created_at = data.created_at || null;
   }
 
@@ -38,7 +39,7 @@ class Message {
   }
 
   /**
-   * 创建新消息 - 自动分配序号
+   * 创建新消息 - 自动分配序号，支持生成的图片
    */
   static async create(messageData) {
     try {
@@ -49,7 +50,8 @@ class Message {
         tokens = 0, 
         model_name = null, 
         status = 'completed',
-        file_id = null, 
+        file_id = null,
+        generated_images = null, // 新增：生成的图片
         id = null,
         sequence_number = null // 可以手动指定序号
       } = messageData;
@@ -61,9 +63,19 @@ class Message {
         finalSequenceNumber = await Message.getNextSequenceNumber(conversation_id);
       }
 
+      // 处理generated_images，确保是JSON字符串
+      let generatedImagesJson = null;
+      if (generated_images) {
+        if (typeof generated_images === 'string') {
+          generatedImagesJson = generated_images;
+        } else {
+          generatedImagesJson = JSON.stringify(generated_images);
+        }
+      }
+
       const sql = `
-        INSERT INTO messages (id, conversation_id, sequence_number, role, content, tokens, model_name, status, file_id) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (id, conversation_id, sequence_number, role, content, tokens, model_name, status, file_id, generated_images) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       // 确保所有参数都有值，null值用JS null而不是undefined
@@ -76,7 +88,8 @@ class Message {
         parseInt(tokens) || 0,
         model_name || null,
         status || 'completed',
-        file_id || null
+        file_id || null,
+        generatedImagesJson // 生成的图片JSON
       ];
 
       logger.info('创建消息', { 
@@ -87,7 +100,8 @@ class Message {
         tokens: params[5],
         modelName: model_name,
         status: status,
-        hasFileId: !!file_id
+        hasFileId: !!file_id,
+        hasGeneratedImages: !!generated_images
       });
 
       await dbConnection.query(sql, params);
@@ -99,7 +113,8 @@ class Message {
         role,
         tokens: params[5],
         modelName: model_name,
-        status: status
+        status: status,
+        hasGeneratedImages: !!generated_images
       });
 
       return await Message.findById(messageId);
@@ -121,9 +136,9 @@ class Message {
   }
 
   /**
-   * 更新消息状态
+   * 更新消息状态和生成的图片
    */
-  static async updateStatus(messageId, status, content = null, tokens = null) {
+  static async updateStatus(messageId, status, content = null, tokens = null, generatedImages = null) {
     try {
       let sql = 'UPDATE messages SET status = ?';
       const params = [status];
@@ -138,6 +153,14 @@ class Message {
         params.push(tokens);
       }
       
+      if (generatedImages !== null) {
+        sql += ', generated_images = ?';
+        const generatedImagesJson = typeof generatedImages === 'string' 
+          ? generatedImages 
+          : JSON.stringify(generatedImages);
+        params.push(generatedImagesJson);
+      }
+      
       sql += ' WHERE id = ?';
       params.push(messageId);
       
@@ -147,7 +170,8 @@ class Message {
         messageId, 
         status,
         hasContent: content !== null,
-        hasTokens: tokens !== null
+        hasTokens: tokens !== null,
+        hasGeneratedImages: generatedImages !== null
       });
       
       return true;
@@ -545,6 +569,7 @@ class Message {
       model_name: this.model_name,
       status: this.status,
       file_id: this.file_id,
+      generated_images: this.generated_images, // 包含生成的图片
       created_at: this.created_at
     };
   }

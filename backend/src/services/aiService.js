@@ -1,11 +1,14 @@
 /**
- * AI服务层
+ * AI服务层 - 增强调试版本
  * 负责与AI模型交互（非流式版本）
- * 支持Azure OpenAI特殊配置
+ * 支持Azure OpenAI、Gemini图片生成和OpenRouter格式
  */
 
 const axios = require('axios');
+const fs = require('fs').promises;
+const path = require('path');
 const AIModel = require('../models/AIModel');
+const ImageGenerationService = require('./imageGenerationService');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
@@ -19,7 +22,8 @@ class AIService {
         model: modelName, 
         messageCount: messages.length,
         customTemperature: options.temperature,
-        hasImages: messages.some(m => m.image_url)
+        hasImages: messages.some(m => m.image_url),
+        messageId: options.messageId
       });
 
       // 获取AI模型配置
@@ -171,7 +175,7 @@ class AIService {
         timeout: 120000
       });
 
-      return AIService.formatResponse(response.data, model.name);
+      return AIService.formatResponse(response.data, model, options);
     } catch (error) {
       logger.error('Azure API调用失败:', error);
       
@@ -187,7 +191,7 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 支持会话级temperature和图片
+   * 调用模型API - 支持会话级temperature和图片生成
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -220,6 +224,7 @@ class AIService {
         messageCount: messages.length,
         temperature: finalTemperature,
         supportsImages: model.image_upload_enabled,
+        supportsImageGeneration: model.image_generation_enabled,
         provider: model.provider
       });
 
@@ -287,19 +292,62 @@ class AIService {
         // 完全移除 max_tokens 参数，让模型自由输出
       };
 
+      // 对于OpenRouter，添加额外的headers
+      let headers = {
+        'Authorization': `Bearer ${model.api_key}`,
+        'Content-Type': 'application/json'
+      };
+      
+      if (model.api_endpoint.includes('openrouter')) {
+        headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
+        headers['X-Title'] = 'AI Platform';
+      }
+
       const endpoint = model.api_endpoint.endsWith('/chat/completions') ? 
         model.api_endpoint : 
         `${model.api_endpoint}/chat/completions`;
 
       const response = await axios.post(endpoint, requestData, {
-        headers: {
-          'Authorization': `Bearer ${model.api_key}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         timeout: 120000 // 延长超时时间以支持图片处理和更长的输出
       });
 
-      return AIService.formatResponse(response.data, model.name);
+      // 增强调试：保存完整响应
+      if (model.image_generation_enabled) {
+        const debugDir = '/var/www/ai-platform/logs/debug';
+        await fs.mkdir(debugDir, { recursive: true });
+        const debugFile = path.join(debugDir, `response_${Date.now()}.json`);
+        await fs.writeFile(debugFile, JSON.stringify(response.data, null, 2));
+        
+        logger.info('【增强调试】API响应已保存', {
+          file: debugFile,
+          endpoint: model.api_endpoint,
+          modelName: model.name
+        });
+
+        // 详细记录响应结构
+        if (response.data.choices && response.data.choices[0]) {
+          const message = response.data.choices[0].message;
+          logger.info('【增强调试】choices[0].message结构', {
+            hasContent: !!message?.content,
+            contentType: typeof message?.content,
+            hasImages: !!message?.images,
+            imagesType: typeof message?.images,
+            imagesLength: Array.isArray(message?.images) ? message.images.length : 0,
+            messageKeys: message ? Object.keys(message) : []
+          });
+
+          // 如果有images，记录详细信息
+          if (message?.images && Array.isArray(message.images)) {
+            logger.info('【增强调试】发现images字段！', {
+              count: message.images.length,
+              firstImage: message.images[0] ? Object.keys(message.images[0]) : null
+            });
+          }
+        }
+      }
+
+      return AIService.formatResponse(response.data, model, options);
     } catch (error) {
       logger.error('模型API调用失败:', error);
       
@@ -312,20 +360,116 @@ class AIService {
   }
 
   /**
-   * 格式化响应
+   * 格式化响应 - 支持图片生成（OpenRouter格式）
    */
-  static formatResponse(response, modelName) {
+  static async formatResponse(response, model, options = {}) {
     try {
-      const choice = response.choices?.[0];
-      if (!choice) {
-        throw new Error('AI响应格式错误: 没有找到choices');
+      // 检查是否为图片生成模型
+      const isImageGenModel = ImageGenerationService.isImageGenerationModel(model);
+      
+      if (isImageGenModel && options.messageId) {
+        logger.info('检测到图片生成模型响应，开始处理', {
+          modelName: model.name,
+          messageId: options.messageId,
+          provider: model.provider
+        });
+        
+        let processedResult = { content: '', images: [] };
+        
+        // 1. 检查OpenRouter格式（choices[0].message.images）
+        if (response.choices && response.choices[0] && response.choices[0].message) {
+          const message = response.choices[0].message;
+          
+          logger.info('【格式化调试】检查message内容', {
+            hasContent: !!message.content,
+            hasImages: !!message.images,
+            messageKeys: Object.keys(message)
+          });
+          
+          // 提取文本内容
+          if (message.content) {
+            processedResult.content = message.content;
+          }
+          
+          // 检查是否有images字段（OpenRouter格式）
+          if (message.images && Array.isArray(message.images)) {
+            logger.info('【格式化调试】找到images数组', {
+              messageId: options.messageId,
+              imageCount: message.images.length
+            });
+            
+            processedResult = await ImageGenerationService.processOpenRouterImageResponse(
+              response,
+              options.messageId
+            );
+          }
+        }
+        // 2. 尝试原始Gemini格式 (candidates)
+        else if (response.candidates && response.candidates[0]) {
+          logger.info('使用Gemini格式解析响应');
+          processedResult = await ImageGenerationService.processGeminiImageResponse(
+            response,
+            options.messageId
+          );
+        }
+        
+        // 如果有生成的图片，返回特殊格式
+        if (processedResult.images && processedResult.images.length > 0) {
+          logger.info('成功处理生成的图片', {
+            messageId: options.messageId,
+            imageCount: processedResult.images.length,
+            images: processedResult.images.map(img => ({
+              filename: img.filename,
+              size: img.size
+            }))
+          });
+          
+          return {
+            content: processedResult.content || '',
+            generatedImages: processedResult.images,
+            finish_reason: response.choices?.[0]?.finish_reason || response.candidates?.[0]?.finishReason,
+            usage: response.usage,
+            model: model.name
+          };
+        } else {
+          logger.warn('图片生成模型响应中没有找到图片', {
+            modelName: model.name,
+            hasContent: !!processedResult.content,
+            responseHasImages: !!(response.choices?.[0]?.message?.images)
+          });
+        }
+      }
+      
+      // 标准响应处理 - 同时支持OpenAI和Gemini格式
+      let content = '';
+      let finish_reason = null;
+      
+      // 尝试OpenAI格式
+      if (response.choices && response.choices[0]) {
+        const choice = response.choices[0];
+        content = choice.message?.content || '';
+        finish_reason = choice.finish_reason;
+      }
+      // 尝试Gemini格式
+      else if (response.candidates && response.candidates[0]) {
+        const candidate = response.candidates[0];
+        if (candidate.content?.parts) {
+          // 提取所有text部分
+          content = candidate.content.parts
+            .filter(part => part.text)
+            .map(part => part.text)
+            .join('');
+        }
+        finish_reason = candidate.finishReason || 'stop';
+      } else {
+        throw new Error('AI响应格式错误: 没有找到choices或candidates');
       }
 
       return {
-        content: choice.message?.content || '',
-        finish_reason: choice.finish_reason,
+        content: content,
+        finish_reason: finish_reason,
         usage: response.usage,
-        model: modelName
+        model: model.name
       };
     } catch (error) {
       logger.error('格式化AI响应失败:', error);

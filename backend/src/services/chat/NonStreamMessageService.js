@@ -3,7 +3,7 @@
  */
 
 const Message = require('../../models/Message');
-const File = require('../../models/File');  // 添加缺失的File引用
+const File = require('../../models/File');
 const AIService = require('../aiService');
 const MessageService = require('./MessageService');
 const logger = require('../../utils/logger');
@@ -25,23 +25,38 @@ class NonStreamMessageService {
     } = params;
     
     try {
-      // 调用AI服务
+      // 调用AI服务 - 传递messageId以支持图片生成
       const aiResponse = await AIService.sendMessage(
         conversation.model_name,
         aiMessages,
-        { temperature: conversation.getTemperature() }
+        { 
+          temperature: conversation.getTemperature(),
+          messageId: userMessage.id  // 传递消息ID用于保存生成的图片
+        }
       );
 
-      // 创建AI回复消息
-      const assistantMessage = await Message.create({
+      // 准备AI消息数据
+      const aiMessageData = {
         conversation_id: conversation.id,
         role: 'assistant',
         content: aiResponse.content,
         tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content),
         model_name: conversation.model_name,
-        status: 'completed',
-        generated_images: aiResponse.generated_images
-      });
+        status: 'completed'
+      };
+
+      // 如果有生成的图片，添加到消息中
+      if (aiResponse.generatedImages && aiResponse.generatedImages.length > 0) {
+        aiMessageData.generated_images = JSON.stringify(aiResponse.generatedImages);
+        logger.info('AI生成了图片', {
+          conversationId: conversation.id,
+          imageCount: aiResponse.generatedImages.length,
+          images: aiResponse.generatedImages
+        });
+      }
+
+      // 创建AI回复消息
+      const assistantMessage = await Message.create(aiMessageData);
 
       // 更新统计
       const totalTokens = await MessageService.updateStatistics({
@@ -68,7 +83,7 @@ class NonStreamMessageService {
         totalTokens,
         creditsConsumed,
         modelName: conversation.model_name,
-        hasGeneratedImages: !!assistantMessage.generated_images
+        hasGeneratedImages: !!(aiResponse.generatedImages && aiResponse.generatedImages.length > 0)
       });
 
       // 准备响应数据
@@ -78,7 +93,8 @@ class NonStreamMessageService {
         conversation,
         totalTokens,
         creditsConsumed,
-        creditsResult
+        creditsResult,
+        generatedImages: aiResponse.generatedImages
       });
 
       return responseData;
@@ -112,7 +128,8 @@ class NonStreamMessageService {
       conversation,
       totalTokens,
       creditsConsumed,
-      creditsResult
+      creditsResult,
+      generatedImages
     } = params;
     
     // 处理用户消息的文件信息
@@ -124,7 +141,18 @@ class NonStreamMessageService {
       }
     }
     
+    // 处理AI消息数据
     const assistantMessageData = assistantMessage.toJSON();
+    
+    // 如果有生成的图片，解析JSON字符串
+    if (assistantMessageData.generated_images) {
+      try {
+        assistantMessageData.generated_images = JSON.parse(assistantMessageData.generated_images);
+      } catch (e) {
+        logger.error('解析生成的图片JSON失败', { error: e.message });
+        assistantMessageData.generated_images = [];
+      }
+    }
     
     return {
       user_message: userMessageData,

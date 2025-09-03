@@ -814,14 +814,15 @@ class ChatController {
               credits_remaining: creditsResult.balanceAfter,
               model_credits_per_chat: requiredCredits
             },
-            onComplete: async (fullContent, tokens) => {
-              // 流式完成后更新消息状态为completed
+            onComplete: async (fullContent, tokens, generatedImages) => {
+              // 流式完成后更新消息状态为completed，包含生成的图片
               try {
                 await Message.updateStatus(
                   aiMessageId, 
                   'completed', 
                   fullContent, 
-                  tokens || Message.estimateTokens(fullContent)
+                  tokens || Message.estimateTokens(fullContent),
+                  generatedImages  // 保存生成的图片
                 );
 
                 // 更新会话统计
@@ -854,7 +855,8 @@ class ChatController {
                   totalTokens,
                   creditsConsumed,
                   modelName: conversation.model_name,
-                  status: 'completed'
+                  status: 'completed',
+                  hasGeneratedImages: !!generatedImages
                 });
               } catch (error) {
                 logger.error('更新流式消息状态失败:', error);
@@ -900,22 +902,42 @@ class ChatController {
         }
         
       } else {
-        // 非流式响应处理（原有逻辑）
+        // 非流式响应处理 - 修改：支持图片生成
         try {
+          // 生成AI消息的ID（用于图片生成服务）
+          const assistantMessageId = uuidv4();
+          
           const aiResponse = await AIService.sendMessage(
             conversation.model_name,
             aiMessages,
-            { temperature: conversation.getTemperature() }
+            { 
+              temperature: conversation.getTemperature(),
+              messageId: assistantMessageId  // 传递messageId以支持图片生成
+            }
           );
 
-          // 创建AI回复消息（状态为completed）
+          // 检查是否有生成的图片
+          let generatedImages = null;
+          if (aiResponse.generatedImages && aiResponse.generatedImages.length > 0) {
+            generatedImages = aiResponse.generatedImages;
+            logger.info('AI生成了图片', {
+              conversationId: id,
+              messageId: assistantMessageId,
+              imageCount: generatedImages.length,
+              images: generatedImages
+            });
+          }
+
+          // 创建AI回复消息（状态为completed，包含生成的图片）
           const assistantMessage = await Message.create({
+            id: assistantMessageId,  // 使用预生成的ID
             conversation_id: id,
             role: 'assistant',
             content: aiResponse.content,
             tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content),
             model_name: conversation.model_name,
-            status: 'completed'
+            status: 'completed',
+            generated_images: generatedImages  // 保存生成的图片
           });
 
           // 更新会话统计
@@ -946,7 +968,8 @@ class ChatController {
             conversationId: id,
             totalTokens,
             creditsConsumed,
-            modelName: conversation.model_name
+            modelName: conversation.model_name,
+            hasGeneratedImages: !!generatedImages
           });
 
           // 处理响应中的文件信息
