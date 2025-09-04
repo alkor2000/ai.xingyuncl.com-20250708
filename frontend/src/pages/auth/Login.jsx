@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Form, Input, Button, Card, message, Typography, Space, Spin, Tabs } from 'antd'
-import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, HomeOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
@@ -31,25 +31,14 @@ const Login = () => {
         }
       } catch (error) {
         console.error('获取系统配置失败:', error)
-        // 失败时使用默认配置
         setPublicConfig({
-          site: {
-            name: 'AI Platform',
-            description: '企业级AI应用聚合平台',
-            logo: ''
-          },
-          user: {
-            allow_register: true
-          },
-          login: {
-            mode: 'standard'
-          }
+          user: { allow_register: true },
+          login: { mode: 'standard' }
         })
       } finally {
         setConfigLoading(false)
       }
     }
-
     fetchPublicConfig()
   }, [])
 
@@ -57,9 +46,7 @@ const Login = () => {
   useEffect(() => {
     let timer
     if (countdown > 0) {
-      timer = setTimeout(() => {
-        setCountdown(countdown - 1)
-      }, 1000)
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000)
     }
     return () => clearTimeout(timer)
   }, [countdown])
@@ -89,8 +76,6 @@ const Login = () => {
       message.warning('请先输入邮箱地址')
       return
     }
-
-    // 验证邮箱格式
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       message.warning('请输入有效的邮箱地址')
       return
@@ -122,18 +107,12 @@ const Login = () => {
       
       if (response.data.success) {
         const { data } = response.data
-        
-        // 使用authStore的set方法来更新状态
-        const authStore = useAuthStore.getState()
-        
-        // 计算Token过期时间
         let tokenExpiresAt = null
         if (data.expiresIn) {
           const hours = parseInt(data.expiresIn.replace('h', '')) || 12
           tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
         }
         
-        // 通过setState方法更新状态
         useAuthStore.setState({
           user: data.user,
           permissions: data.permissions || [],
@@ -143,24 +122,14 @@ const Login = () => {
           isAuthenticated: true
         })
         
-        // 设置默认请求头
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${data.accessToken}`
         
-        // 清理之前用户的聊天数据
         if (window.useChatStore) {
           const chatStore = window.useChatStore.getState()
           if (chatStore && chatStore.reset) {
-            console.log('🧹 清除之前的聊天数据...')
             chatStore.reset()
           }
         }
-        
-        console.log('✅ 用户登录成功:', {
-          user: data.user.email,
-          role: data.user.role,
-          permissions: data.permissions?.length || 0,
-          tokenExpires: tokenExpiresAt?.toLocaleString()
-        })
         
         message.success(t('auth.login.success'))
         navigate('/')
@@ -173,7 +142,7 @@ const Login = () => {
     }
   }
 
-  // 邮箱+密码+验证码登录处理（强制验证模式）
+  // 邮箱+密码+验证码登录处理
   const handleEmailPasswordLogin = async (values) => {
     try {
       setLoading(true)
@@ -185,15 +154,12 @@ const Login = () => {
       
       if (response.data.success) {
         const { data } = response.data
-        
-        // 计算Token过期时间
         let tokenExpiresAt = null
         if (data.expiresIn) {
           const hours = parseInt(data.expiresIn.replace('h', '')) || 12
           tokenExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
         }
         
-        // 通过setState方法更新状态
         useAuthStore.setState({
           user: data.user,
           permissions: data.permissions || [],
@@ -203,14 +169,11 @@ const Login = () => {
           isAuthenticated: true
         })
         
-        // 设置默认请求头
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${data.accessToken}`
         
-        // 清理之前用户的聊天数据
         if (window.useChatStore) {
           const chatStore = window.useChatStore.getState()
           if (chatStore && chatStore.reset) {
-            console.log('🧹 清除之前的聊天数据...')
             chatStore.reset()
           }
         }
@@ -226,7 +189,7 @@ const Login = () => {
     }
   }
 
-  // 验证账号输入（可以是邮箱、手机号或用户名）
+  // 验证函数
   const validateAccount = (_, value) => {
     if (!value) {
       return Promise.reject(new Error(t('auth.login.account.required')))
@@ -234,7 +197,6 @@ const Login = () => {
     return Promise.resolve()
   }
 
-  // 验证邮箱
   const validateEmail = (_, value) => {
     if (!value) {
       return Promise.reject(new Error('请输入邮箱地址'))
@@ -245,7 +207,7 @@ const Login = () => {
     return Promise.resolve()
   }
 
-  // 如果配置还在加载中，显示加载状态
+  // 加载状态
   if (configLoading) {
     return (
       <div style={{
@@ -260,9 +222,41 @@ const Login = () => {
     )
   }
 
-  const siteName = publicConfig?.site?.name || t('app.name')
   const allowRegister = publicConfig?.user?.allow_register !== false
   const loginMode = publicConfig?.login?.mode || 'standard'
+
+  // iOS风格的样式定义
+  const iosStyles = {
+    // 输入框样式
+    inputStyle: {
+      height: '48px',
+      borderRadius: '12px',
+      fontSize: '16px',
+      backgroundColor: '#f8f9fa',
+      border: 'none',
+      padding: '0 16px',
+      transition: 'all 0.3s ease'
+    },
+    // 按钮样式
+    buttonStyle: {
+      height: '50px',
+      borderRadius: '12px',
+      fontSize: '17px',
+      fontWeight: '600',
+      background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+      border: 'none',
+      boxShadow: '0 4px 15px rgba(0, 122, 255, 0.3)',
+      transition: 'all 0.3s ease'
+    },
+    // 验证码按钮样式
+    codeButtonStyle: {
+      height: '48px',
+      borderRadius: '12px',
+      fontSize: '15px',
+      fontWeight: '500',
+      minWidth: '120px'
+    }
+  }
 
   return (
     <div style={{
@@ -274,7 +268,23 @@ const Login = () => {
       padding: '20px',
       position: 'relative'
     }}>
-      {/* 语言切换器移到页面右上角 */}
+      {/* 背景装饰 */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.1,
+        background: `
+          radial-gradient(circle at 20% 50%, #fff 0%, transparent 50%),
+          radial-gradient(circle at 80% 80%, #fff 0%, transparent 50%),
+          radial-gradient(circle at 40% 20%, #fff 0%, transparent 50%)
+        `,
+        pointerEvents: 'none'
+      }} />
+
+      {/* 语言切换器 */}
       <div style={{ 
         position: 'absolute', 
         top: 20, 
@@ -284,73 +294,145 @@ const Login = () => {
         <LanguageSwitch />
       </div>
 
+      {/* 返回首页按钮 - iOS风格 */}
+      <Button
+        icon={<ArrowLeftOutlined style={{ fontSize: '18px' }} />}
+        onClick={() => navigate('/')}
+        style={{ 
+          position: 'absolute', 
+          top: 20, 
+          left: 20,
+          zIndex: 10,
+          background: 'rgba(255, 255, 255, 0.95)',
+          border: 'none',
+          borderRadius: '24px',
+          padding: '0 20px',
+          height: '44px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '15px',
+          fontWeight: 600,
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)'
+          e.currentTarget.style.boxShadow = '0 12px 48px rgba(31, 38, 135, 0.2)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.boxShadow = '0 8px 32px rgba(31, 38, 135, 0.15)'
+        }}
+      >
+        返回首页
+      </Button>
+
+      {/* 登录卡片 - iOS风格 */}
       <Card
         style={{
           width: '100%',
-          maxWidth: '400px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          borderRadius: '8px'
+          maxWidth: '380px',
+          borderRadius: '20px',
+          border: 'none',
+          backdropFilter: 'blur(20px)',
+          background: 'rgba(255, 255, 255, 0.98)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+          padding: '20px 8px'
+        }}
+        bodyStyle={{
+          padding: '32px 32px 24px'
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          {publicConfig?.site?.logo && (
-            <img 
-              src={publicConfig.site.logo} 
-              alt={siteName}
-              style={{ 
-                maxHeight: '60px', 
-                maxWidth: '200px',
-                marginBottom: '20px'
-              }}
-            />
-          )}
+        {/* 标题区域 - 更紧凑的设计 */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <Title 
-            level={3} 
+            level={2} 
             style={{ 
-              color: '#1890ff', 
-              marginBottom: '8px',
-              fontSize: '22px',
-              lineHeight: '1.4',
-              fontWeight: 600
+              margin: 0,
+              fontSize: '32px',
+              fontWeight: '700',
+              background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '-0.5px'
             }}
           >
-            {siteName}
+            {t('auth.login.title', '登录')}
           </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            {t('auth.login.subtitle', '登录您的账户')}
+          <Paragraph 
+            type="secondary" 
+            style={{ 
+              marginTop: '8px',
+              marginBottom: 0,
+              fontSize: '15px',
+              color: '#8e8e93'
+            }}
+          >
+            {t('auth.login.subtitle', '欢迎回来，请登录您的账户')}
           </Paragraph>
         </div>
 
-        {/* 根据登录模式显示不同的界面 */}
+        {/* 登录表单 */}
         {loginMode === 'standard' ? (
-          // 标准模式：显示tabs
-          <Tabs activeKey={loginType} onChange={setLoginType} centered>
-            <TabPane tab="密码登录" key="password">
+          <Tabs 
+            activeKey={loginType} 
+            onChange={setLoginType} 
+            centered
+            style={{ marginTop: '-10px' }}
+            tabBarStyle={{ 
+              borderBottom: 'none',
+              marginBottom: '24px'
+            }}
+          >
+            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>密码登录</span>} key="password">
               <Form
                 name="passwordLogin"
                 onFinish={handlePasswordLogin}
                 autoComplete="off"
                 size="large"
+                style={{ marginTop: '8px' }}
               >
                 <Form.Item
                   name="account"
                   rules={[{ validator: validateAccount }]}
+                  style={{ marginBottom: '16px' }}
                 >
                   <Input
-                    prefix={<UserOutlined />}
+                    prefix={<UserOutlined style={{ color: '#8e8e93' }} />}
                     placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
                     autoComplete="username"
+                    style={iosStyles.inputStyle}
+                    onFocus={(e) => {
+                      e.target.style.backgroundColor = '#ffffff'
+                      e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.backgroundColor = '#f8f9fa'
+                      e.target.style.boxShadow = 'none'
+                    }}
                   />
                 </Form.Item>
 
                 <Form.Item
                   name="password"
                   rules={[{ required: true, message: t('auth.login.password.required') }]}
+                  style={{ marginBottom: '24px' }}
                 >
                   <Input.Password
-                    prefix={<LockOutlined />}
+                    prefix={<LockOutlined style={{ color: '#8e8e93' }} />}
                     placeholder={t('auth.login.password')}
                     autoComplete="current-password"
+                    style={iosStyles.inputStyle}
+                    onFocus={(e) => {
+                      e.target.style.backgroundColor = '#ffffff'
+                      e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.backgroundColor = '#f8f9fa'
+                      e.target.style.boxShadow = 'none'
+                    }}
                   />
                 </Form.Item>
 
@@ -360,7 +442,17 @@ const Login = () => {
                     htmlType="submit"
                     loading={loading}
                     block
-                    icon={<LoginOutlined />}
+                    style={iosStyles.buttonStyle}
+                    onMouseEnter={(e) => {
+                      if (!loading) {
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)'
+                    }}
                   >
                     {t('auth.login.button')}
                   </Button>
@@ -368,26 +460,37 @@ const Login = () => {
               </Form>
             </TabPane>
 
-            <TabPane tab="邮箱验证码登录" key="code">
+            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>验证码登录</span>} key="code">
               <Form
                 name="codeLogin"
                 onFinish={handleCodeLogin}
                 autoComplete="off"
                 size="large"
+                style={{ marginTop: '8px' }}
               >
                 <Form.Item
                   name="email"
                   rules={[{ validator: validateEmail }]}
+                  style={{ marginBottom: '16px' }}
                 >
                   <Input
-                    prefix={<MailOutlined />}
+                    prefix={<MailOutlined style={{ color: '#8e8e93' }} />}
                     placeholder="请输入邮箱地址"
                     autoComplete="email"
+                    style={iosStyles.inputStyle}
+                    onFocus={(e) => {
+                      e.target.style.backgroundColor = '#ffffff'
+                      e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.backgroundColor = '#f8f9fa'
+                      e.target.style.boxShadow = 'none'
+                    }}
                   />
                 </Form.Item>
 
-                <Form.Item>
-                  <Space style={{ width: '100%' }} size={8}>
+                <Form.Item style={{ marginBottom: '24px' }}>
+                  <Space style={{ width: '100%', gap: '12px' }} size={12}>
                     <Form.Item
                       name="code"
                       noStyle
@@ -397,9 +500,17 @@ const Login = () => {
                       ]}
                     >
                       <Input
-                        prefix={<SafetyOutlined />}
+                        prefix={<SafetyOutlined style={{ color: '#8e8e93' }} />}
                         placeholder="请输入验证码"
-                        style={{ flex: 1 }}
+                        style={{ ...iosStyles.inputStyle, flex: 1 }}
+                        onFocus={(e) => {
+                          e.target.style.backgroundColor = '#ffffff'
+                          e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.backgroundColor = '#f8f9fa'
+                          e.target.style.boxShadow = 'none'
+                        }}
                       />
                     </Form.Item>
                     <Form.Item noStyle dependencies={['email']}>
@@ -408,8 +519,9 @@ const Login = () => {
                           onClick={() => handleSendCode(getFieldValue('email'))}
                           loading={sendingCode}
                           disabled={countdown > 0}
+                          style={iosStyles.codeButtonStyle}
                         >
-                          {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                          {countdown > 0 ? `${countdown}s` : '获取验证码'}
                         </Button>
                       )}
                     </Form.Item>
@@ -422,7 +534,17 @@ const Login = () => {
                     htmlType="submit"
                     loading={loading}
                     block
-                    icon={<LoginOutlined />}
+                    style={iosStyles.buttonStyle}
+                    onMouseEnter={(e) => {
+                      if (!loading) {
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)'
+                    }}
                   >
                     登录
                   </Button>
@@ -431,7 +553,7 @@ const Login = () => {
             </TabPane>
           </Tabs>
         ) : (
-          // 强制邮箱验证模式：只显示一个表单
+          // 强制邮箱验证模式
           <Form
             name="emailPasswordLogin"
             onFinish={handleEmailPasswordLogin}
@@ -441,27 +563,47 @@ const Login = () => {
             <Form.Item
               name="email"
               rules={[{ validator: validateEmail }]}
+              style={{ marginBottom: '16px' }}
             >
               <Input
-                prefix={<MailOutlined />}
+                prefix={<MailOutlined style={{ color: '#8e8e93' }} />}
                 placeholder="请输入邮箱地址"
                 autoComplete="email"
+                style={iosStyles.inputStyle}
+                onFocus={(e) => {
+                  e.target.style.backgroundColor = '#ffffff'
+                  e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                }}
+                onBlur={(e) => {
+                  e.target.style.backgroundColor = '#f8f9fa'
+                  e.target.style.boxShadow = 'none'
+                }}
               />
             </Form.Item>
 
             <Form.Item
               name="password"
               rules={[{ required: true, message: '请输入密码' }]}
+              style={{ marginBottom: '16px' }}
             >
               <Input.Password
-                prefix={<LockOutlined />}
+                prefix={<LockOutlined style={{ color: '#8e8e93' }} />}
                 placeholder="请输入密码"
                 autoComplete="current-password"
+                style={iosStyles.inputStyle}
+                onFocus={(e) => {
+                  e.target.style.backgroundColor = '#ffffff'
+                  e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                }}
+                onBlur={(e) => {
+                  e.target.style.backgroundColor = '#f8f9fa'
+                  e.target.style.boxShadow = 'none'
+                }}
               />
             </Form.Item>
 
-            <Form.Item>
-              <Space style={{ width: '100%' }} size={8}>
+            <Form.Item style={{ marginBottom: '24px' }}>
+              <Space style={{ width: '100%', gap: '12px' }} size={12}>
                 <Form.Item
                   name="code"
                   noStyle
@@ -471,9 +613,17 @@ const Login = () => {
                   ]}
                 >
                   <Input
-                    prefix={<SafetyOutlined />}
+                    prefix={<SafetyOutlined style={{ color: '#8e8e93' }} />}
                     placeholder="请输入验证码"
-                    style={{ flex: 1 }}
+                    style={{ ...iosStyles.inputStyle, flex: 1 }}
+                    onFocus={(e) => {
+                      e.target.style.backgroundColor = '#ffffff'
+                      e.target.style.boxShadow = '0 0 0 3px rgba(0, 122, 255, 0.1)'
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.backgroundColor = '#f8f9fa'
+                      e.target.style.boxShadow = 'none'
+                    }}
                   />
                 </Form.Item>
                 <Form.Item noStyle dependencies={['email']}>
@@ -482,8 +632,9 @@ const Login = () => {
                       onClick={() => handleSendCode(getFieldValue('email'))}
                       loading={sendingCode}
                       disabled={countdown > 0}
+                      style={iosStyles.codeButtonStyle}
                     >
-                      {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                      {countdown > 0 ? `${countdown}s` : '获取验证码'}
                     </Button>
                   )}
                 </Form.Item>
@@ -496,7 +647,17 @@ const Login = () => {
                 htmlType="submit"
                 loading={loading}
                 block
-                icon={<LoginOutlined />}
+                style={iosStyles.buttonStyle}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)'
+                }}
               >
                 登录
               </Button>
@@ -504,66 +665,50 @@ const Login = () => {
           </Form>
         )}
 
-        {/* 登录提示 */}
+        {/* 简化的提示区域 */}
         <div style={{ 
-          marginBottom: '20px', 
-          padding: '12px', 
-          background: '#f0f2f5', 
-          borderRadius: '4px',
-          fontSize: '13px',
-          color: '#666'
+          textAlign: 'center',
+          marginTop: '20px',
+          paddingTop: '20px',
+          borderTop: '1px solid #f0f0f0'
         }}>
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            {loginMode === 'standard' && loginType === 'password' ? (
-              <>
-                <div>
-                  <MailOutlined style={{ marginRight: '6px' }} />
-                  {t('auth.login.hint.email', '支持邮箱登录')}
-                </div>
-                <div>
-                  <PhoneOutlined style={{ marginRight: '6px' }} />
-                  {t('auth.login.hint.phone', '支持手机号登录')}
-                </div>
-                <div>
-                  <UserOutlined style={{ marginRight: '6px' }} />
-                  {t('auth.login.hint.username', '支持用户名登录')}
-                </div>
-              </>
-            ) : loginMode === 'standard' && loginType === 'code' ? (
-              <>
-                <div>
-                  <SafetyOutlined style={{ marginRight: '6px' }} />
-                  验证码5分钟内有效
-                </div>
-                <div>
-                  <MailOutlined style={{ marginRight: '6px' }} />
-                  请确保邮箱已注册
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <LockOutlined style={{ marginRight: '6px' }} />
-                  当前为高安全模式
-                </div>
-                <div>
-                  <SafetyOutlined style={{ marginRight: '6px' }} />
-                  需要邮箱、密码和验证码三重验证
-                </div>
-                <div>
-                  <MailOutlined style={{ marginRight: '6px' }} />
-                  验证码5分钟内有效
-                </div>
-              </>
-            )}
-          </Space>
+          {loginMode === 'standard' && loginType === 'password' && (
+            <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
+              支持邮箱、手机号或用户名登录
+            </Text>
+          )}
+          {loginMode === 'standard' && loginType === 'code' && (
+            <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
+              验证码5分钟内有效
+            </Text>
+          )}
+          {loginMode !== 'standard' && (
+            <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
+              需要邮箱、密码和验证码三重验证
+            </Text>
+          )}
         </div>
 
+        {/* 注册链接 */}
         {allowRegister && (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            textAlign: 'center',
+            marginTop: '16px'
+          }}>
             <Space>
-              <Text type="secondary">{t('auth.login.noAccount')}</Text>
-              <Link to="/register">{t('auth.login.register')}</Link>
+              <Text style={{ fontSize: '14px', color: '#8e8e93' }}>
+                {t('auth.login.noAccount')}
+              </Text>
+              <Link 
+                to="/register"
+                style={{ 
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#007AFF'
+                }}
+              >
+                {t('auth.login.register')}
+              </Link>
             </Space>
           </div>
         )}
