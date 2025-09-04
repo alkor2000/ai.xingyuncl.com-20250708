@@ -62,7 +62,14 @@ class MidjourneyService {
   }
 
   /**
-   * 提交Imagine任务（文生图）
+   * 提交Imagine任务（文生图/图生图）
+   * @param {number} userId - 用户ID
+   * @param {number} modelId - 模型ID
+   * @param {object} params - 生成参数
+   * @param {string} params.prompt - 提示词
+   * @param {string} params.negative_prompt - 负面提示词
+   * @param {string} params.size - 图片尺寸比例
+   * @param {array} params.base64Array - 垫图base64数组（可选，用于图生图）
    */
   static async submitImagine(userId, modelId, params) {
     try {
@@ -100,16 +107,9 @@ class MidjourneyService {
         ? JSON.parse(model.api_config) 
         : model.api_config;
 
-      // 4. 确定API端点（根据模式）
-      const mode = params.mode || apiConfig.default_mode || 'fast';
+      // 4. 确定API端点（默认使用fast模式）
+      const mode = 'fast';  // 固定使用快速模式
       let endpoint = model.endpoint;
-      
-      // 替换端点中的模式占位符
-      if (mode === 'turbo') {
-        endpoint = endpoint.replace('/mj/', '/mj-turbo/');
-      } else if (mode === 'relax') {
-        endpoint = endpoint.replace('/mj/', '/mj-relax/');
-      }
 
       // 5. 创建生成记录
       const generationId = await ImageGeneration.create({
@@ -129,7 +129,6 @@ class MidjourneyService {
       // 6. 构建请求数据
       const requestData = {
         prompt: params.prompt,
-        base64Array: params.base64Array || [],
         notifyHook: params.notifyHook || model.webhook_url,
         state: JSON.stringify({
           userId,
@@ -138,12 +137,23 @@ class MidjourneyService {
         })
       };
 
+      // 添加垫图base64数组（如果有）
+      if (params.base64Array && Array.isArray(params.base64Array) && params.base64Array.length > 0) {
+        requestData.base64Array = params.base64Array;
+        logger.info('使用垫图生成', {
+          userId,
+          generationId,
+          imageCount: params.base64Array.length
+        });
+      }
+
       logger.info('提交Midjourney Imagine任务', {
         userId,
         modelId,
         generationId,
         mode,
-        prompt: params.prompt
+        prompt: params.prompt,
+        hasReferenceImages: !!(params.base64Array && params.base64Array.length > 0)
       });
 
       // 7. 提交任务到Midjourney API

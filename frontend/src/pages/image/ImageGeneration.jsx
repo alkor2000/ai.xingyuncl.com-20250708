@@ -1,5 +1,5 @@
 /**
- * 图像生成页面 - 支持Midjourney和分页（分页在顶部）
+ * 图像生成页面 - 支持Midjourney图生图和分页
  */
 
 import React, { useEffect, useState } from 'react';
@@ -30,7 +30,9 @@ import {
   Select,
   Progress,
   Radio,
-  Pagination  // 添加分页组件
+  Pagination,
+  Upload,
+  Typography
 } from 'antd';
 import {
   PictureOutlined,
@@ -57,7 +59,10 @@ import {
   ZoomInOutlined,
   ExperimentOutlined,
   SyncOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  InboxOutlined,
+  PlusOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useImageStore from '../../stores/imageStore';
@@ -70,8 +75,10 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
 const { Option } = Select;
+const { Dragger } = Upload;
+const { Title, Text: AntText, Paragraph } = Typography;
 
-// 预设尺寸 - 根据模型类型动态调整
+// 预设尺寸
 const presetSizes = {
   default: [
     { label: '正方形 1:1', value: '1024x1024', ratio: '1:1' },
@@ -98,13 +105,6 @@ const quantityOptions = [
   { label: '2张', value: 2 },
   { label: '3张', value: 3 },
   { label: '4张', value: 4 }
-];
-
-// Midjourney模式选项
-const midjourneyModes = [
-  { label: '快速模式', value: 'fast', icon: <RocketOutlined />, description: '最快生成，消耗较多积分' },
-  { label: '极速模式', value: 'turbo', icon: <ThunderboltOutlined />, description: '超快生成，消耗最多积分' },
-  { label: '放松模式', value: 'relax', icon: <ClockCircleOutlined />, description: '慢速生成，消耗较少积分' }
 ];
 
 const ImageGeneration = () => {
@@ -149,16 +149,17 @@ const ImageGeneration = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [batchResults, setBatchResults] = useState(null);
   
-  // 分页状态 - 新增
+  // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [publicPage, setPublicPage] = useState(1);
   const [publicPageSize, setPublicPageSize] = useState(20);
   
   // Midjourney专用状态
-  const [mjMode, setMjMode] = useState('fast');
   const [showMjActions, setShowMjActions] = useState(false);
   const [selectedMjImage, setSelectedMjImage] = useState(null);
+  const [referenceImages, setReferenceImages] = useState([]); // 参考图片列表
+  const [uploadLoading, setUploadLoading] = useState(false); // 上传加载状态
   
   // ImageViewer 状态
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -169,7 +170,6 @@ const ImageGeneration = () => {
   useEffect(() => {
     getModels();
     getUserHistory({ page: 1, limit: pageSize }).then(() => {
-      // 获取历史记录后，清理失败任务的处理状态
       cleanupFailedTasks();
     });
     getUserStats();
@@ -179,10 +179,12 @@ const ImageGeneration = () => {
   useEffect(() => {
     if (selectedModel) {
       if (isMidjourneyModel(selectedModel)) {
-        setSelectedSize('1:1'); // Midjourney使用比例而非像素
+        setSelectedSize('1:1');
         setQuantity(1); // Midjourney固定一次生成4张
       } else {
         setSelectedSize('1024x1024');
+        // 普通模型不支持图生图，清空参考图片
+        setReferenceImages([]);
       }
     }
   }, [selectedModel, isMidjourneyModel]);
@@ -207,6 +209,78 @@ const ImageGeneration = () => {
     if (model) {
       selectModel(model);
     }
+  };
+
+  // 将图片文件转换为base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        // 移除data:image/xxx;base64,前缀，只保留base64字符串
+        const base64 = e.target.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // 处理参考图片上传
+  const handleReferenceUpload = async ({ file, onSuccess, onError }) => {
+    try {
+      // 检查文件类型
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        onError(new Error('Invalid file type'));
+        return false;
+      }
+
+      // 检查文件大小（限制5MB）
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过5MB！');
+        onError(new Error('File too large'));
+        return false;
+      }
+
+      // 转换为base64
+      const base64 = await fileToBase64(file);
+      
+      // 创建预览URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      // 添加到参考图片列表
+      const newImage = {
+        uid: file.uid,
+        name: file.name,
+        status: 'done',
+        url: previewUrl,
+        base64: base64,
+        size: file.size
+      };
+      
+      setReferenceImages(prev => [...prev, newImage]);
+      onSuccess();
+      
+      return false; // 阻止默认上传
+    } catch (error) {
+      console.error('处理参考图片失败:', error);
+      message.error('处理图片失败');
+      onError(error);
+      return false;
+    }
+  };
+
+  // 移除参考图片
+  const handleRemoveReference = (uid) => {
+    setReferenceImages(prev => {
+      const removed = prev.find(img => img.uid === uid);
+      if (removed && removed.url) {
+        URL.revokeObjectURL(removed.url);
+      }
+      return prev.filter(img => img.uid !== uid);
+    });
   };
 
   // 处理生成
@@ -240,10 +314,14 @@ const ImageGeneration = () => {
       quantity
     };
     
-    // 如果是Midjourney，添加模式参数
+    // 如果是Midjourney且有参考图片，添加base64Array
     if (isMidjourneyModel(selectedModel)) {
-      params.mode = mjMode;
       params.quantity = 1; // Midjourney强制为1
+      
+      // 添加参考图片的base64数据
+      if (referenceImages.length > 0) {
+        params.base64Array = referenceImages.map(img => img.base64);
+      }
     }
 
     const result = await generateImages(params);
@@ -266,6 +344,9 @@ const ImageGeneration = () => {
         setPrompt('');
         setNegativePrompt('');
         setSeed(-1);
+      } else {
+        // Midjourney生成后清空参考图片
+        setReferenceImages([]);
       }
       
       // 生成成功后，重置到第一页查看最新的图片
@@ -301,7 +382,6 @@ const ImageGeneration = () => {
   const handleTabChange = (key) => {
     setActiveTab(key);
     
-    // 切换Tab时重置分页
     if (key === 'public') {
       setPublicPage(1);
       getPublicGallery({ page: 1, limit: publicPageSize });
@@ -315,7 +395,7 @@ const ImageGeneration = () => {
     }
   };
 
-  // 处理分页变化 - 新增
+  // 处理分页变化
   const handlePageChange = (page, size) => {
     if (activeTab === 'public') {
       setPublicPage(page);
@@ -378,15 +458,11 @@ const ImageGeneration = () => {
   
   // 处理查看大图
   const handleViewImage = (item) => {
-    // 获取当前数据列表
     const currentData = getCurrentData();
-    
-    // 找到点击图片在列表中的索引
     const index = currentData.findIndex(img => img.id === item.id);
     
-    // 准备图片数据
     const images = currentData.map(img => ({
-      url: img.local_path || img.image_url,
+      url: img.local_path || img.thumbnail_path || img.image_url,
       thumbnail_path: img.thumbnail_path,
       title: img.prompt,
       prompt: img.prompt,
@@ -396,7 +472,7 @@ const ImageGeneration = () => {
       guidance_scale: img.guidance_scale,
       seed: img.seed,
       username: img.username,
-      gridLayout: img.grid_layout // Midjourney 四宫格标记
+      gridLayout: img.grid_layout
     }));
     
     setViewerImages(images);
@@ -406,18 +482,12 @@ const ImageGeneration = () => {
   
   // 渲染Midjourney操作按钮
   const renderMidjourneyActions = (item) => {
-    // 修复：检查条件
-    // 1. 必须有按钮数据
-    // 2. 必须有网格布局
-    // 3. 不能是UPSCALE的结果（UPSCALE后是单张图片，不应该有U/V按钮）
     if (!item.buttons || !item.grid_layout || item.action_type === 'UPSCALE') {
       return null;
     }
     
     const buttons = typeof item.buttons === 'string' ? JSON.parse(item.buttons) : item.buttons;
     
-    // 只有在action_type是IMAGINE或VARIATION时才显示标准按钮
-    // 这些是4张网格图，可以进行U/V操作
     if (item.action_type === 'IMAGINE' || item.action_type === 'VARIATION' || item.action_type === 'REROLL') {
       return (
         <div className="midjourney-actions">
@@ -458,28 +528,24 @@ const ImageGeneration = () => {
       );
     }
     
-    // 其他类型（如UPSCALE后的单张图）不显示按钮
     return null;
   };
 
-  // 渲染历史图片卡片（支持Midjourney）
+  // 渲染历史图片卡片
   const renderImageCard = (item, isGallery = false) => {
     const isOwner = !isGallery || item.user_id === user?.id;
     const isMj = item.provider === 'midjourney';
     
-    // 关键修复：先检查任务是否已经失败或成功（终态）
     const isCompleted = item.status === 'success' || item.status === 'failed' || 
                        item.task_status === 'SUCCESS' || item.task_status === 'FAILURE';
     
     const isFailed = item.status === 'failed' || item.task_status === 'FAILURE';
     
-    // 只有在非终态且在处理列表中才算处理中
     const isProcessing = !isCompleted && (
       (item.task_status === 'SUBMITTED' || item.task_status === 'IN_PROGRESS') || 
       (item.task_id && processingTasks && processingTasks[item.task_id])
     );
     
-    // 判断图片是否已经准备好
     const hasImage = item.local_path || item.thumbnail_path || item.image_url;
     
     return (
@@ -489,7 +555,6 @@ const ImageGeneration = () => {
         cover={
           <div className="image-wrapper">
             {isProcessing ? (
-              // 处理中状态
               <div className="processing-overlay">
                 <Spin size="large" />
                 <div className="processing-text">
@@ -504,7 +569,6 @@ const ImageGeneration = () => {
                 )}
               </div>
             ) : isFailed ? (
-              // 失败状态 - 显示错误信息和删除按钮
               <div className="failed-overlay">
                 <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
                 <div className="failed-text">生成失败</div>
@@ -529,14 +593,13 @@ const ImageGeneration = () => {
                 </div>
               </div>
             ) : hasImage ? (
-              // 成功状态 - 显示图片
               <>
                 <Image
                   src={item.local_path || item.thumbnail_path || item.image_url}
                   alt={item.prompt}
                   placeholder={<Spin />}
                   preview={false}
-                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
+                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
                 />
                 <div className="image-overlay">
                   <Space>
@@ -587,7 +650,6 @@ const ImageGeneration = () => {
                           title="确定删除这张图片吗？"
                           onConfirm={() => {
                             deleteGeneration(item.id);
-                            // 删除后刷新当前页
                             const params = { page: currentPage, limit: pageSize };
                             if (activeTab === 'favorites') {
                               params.is_favorite = true;
@@ -612,7 +674,6 @@ const ImageGeneration = () => {
                 </div>
               </>
             ) : (
-              // 未知状态 - 可能是数据不完整
               <div className="processing-overlay">
                 <Spin size="large" />
                 <div className="processing-text">
@@ -664,7 +725,6 @@ const ImageGeneration = () => {
                   复制
                 </Button>
               </div>
-              {/* Midjourney操作按钮 - 只在成功状态下显示 */}
               {isOwner && isMj && !isProcessing && !isFailed && hasImage && renderMidjourneyActions(item)}
               <div className="meta-info">
                 {isGallery && item.username && (
@@ -699,7 +759,7 @@ const ImageGeneration = () => {
     return generationHistory;
   };
   
-  // 获取当前分页信息 - 新增
+  // 获取当前分页信息
   const getCurrentPagination = () => {
     if (activeTab === 'public') {
       return {
@@ -731,7 +791,6 @@ const ImageGeneration = () => {
         params.is_favorite = true;
       }
       getUserHistory(params).then(() => {
-        // 刷新后清理失败任务
         cleanupFailedTasks();
       });
     }
@@ -796,6 +855,75 @@ const ImageGeneration = () => {
             )}
           </div>
 
+          {/* Midjourney图生图功能 */}
+          {selectedModel && isMidjourneyModel(selectedModel) && (
+            <Card title="参考图片（可选）" className="reference-images-section" style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 8 }}>
+                <AntText type="secondary" style={{ fontSize: '12px' }}>
+                  上传参考图片，让AI基于这些图片生成新内容（最多5张，每张不超过5MB）
+                </AntText>
+              </div>
+              
+              <div className="reference-images-grid">
+                {referenceImages.map(img => (
+                  <div key={img.uid} className="reference-image-item" style={{ position: 'relative', display: 'inline-block', marginRight: 8, marginBottom: 8 }}>
+                    <Image
+                      src={img.url}
+                      alt={img.name}
+                      style={{ width: 80, height: 80, objectFit: 'cover' }}
+                      preview={false}
+                    />
+                    <Button
+                      type="text"
+                      danger
+                      icon={<CloseOutlined />}
+                      size="small"
+                      onClick={() => handleRemoveReference(img.uid)}
+                      style={{
+                        position: 'absolute',
+                        top: -8,
+                        right: -8,
+                        background: 'rgba(255,255,255,0.9)',
+                        borderRadius: '50%',
+                        width: 24,
+                        height: 24,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    />
+                  </div>
+                ))}
+                
+                {referenceImages.length < 5 && (
+                  <Upload
+                    accept="image/*"
+                    customRequest={handleReferenceUpload}
+                    showUploadList={false}
+                    multiple={false}
+                  >
+                    <Button
+                      icon={<PlusOutlined />}
+                      style={{ width: 80, height: 80 }}
+                    >
+                      添加
+                    </Button>
+                  </Upload>
+                )}
+              </div>
+              
+              {referenceImages.length > 0 && (
+                <Alert
+                  message={`已添加 ${referenceImages.length} 张参考图片`}
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </Card>
+          )}
+
           <Card title="输入提示词" className="prompt-input">
             <TextArea
               value={prompt}
@@ -824,35 +952,6 @@ const ImageGeneration = () => {
           </Card>
 
           <Card title="参数设置" className="parameters">
-            {/* Midjourney模式选择 */}
-            {selectedModel && isMidjourneyModel(selectedModel) && (
-              <div className="param-item">
-                <div className="param-label">
-                  生成模式
-                  <Tooltip title="不同模式的生成速度和积分消耗不同">
-                    <span className="info-icon"> ❓</span>
-                  </Tooltip>
-                </div>
-                <Radio.Group
-                  value={mjMode}
-                  onChange={(e) => setMjMode(e.target.value)}
-                  style={{ width: '100%' }}
-                >
-                  {midjourneyModes.map(mode => (
-                    <Radio.Button key={mode.value} value={mode.value} style={{ width: '33.33%', textAlign: 'center' }}>
-                      <div>
-                        {mode.icon}
-                        <div style={{ fontSize: 12 }}>{mode.label}</div>
-                      </div>
-                    </Radio.Button>
-                  ))}
-                </Radio.Group>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 8 }}>
-                  {midjourneyModes.find(m => m.value === mjMode)?.description}
-                </div>
-              </div>
-            )}
-            
             {/* 生成数量 - Midjourney不显示 */}
             {selectedModel && !isMidjourneyModel(selectedModel) && (
               <div className="param-item">
@@ -904,7 +1003,12 @@ const ImageGeneration = () => {
             {selectedModel && isMidjourneyModel(selectedModel) && (
               <Alert
                 message="Midjourney每次生成4张图片（2×2网格）"
-                description="生成后可以选择放大(U)、生成变体(V)或重新生成"
+                description={
+                  <>
+                    <div>• 生成后可以选择放大(U)、生成变体(V)或重新生成</div>
+                    {referenceImages.length > 0 && <div>• 参考图片将影响生成结果的风格和内容</div>}
+                  </>
+                }
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
@@ -1011,10 +1115,9 @@ const ImageGeneration = () => {
         </div>
       </Sider>
 
-      {/* 右侧历史记录 - 修改结构，分页移到顶部 */}
+      {/* 右侧历史记录 */}
       <Content className="history-content">
         <div className="history-header-wrapper">
-          {/* 第一行：Tabs和操作按钮 */}
           <div className="history-header">
             <Tabs activeKey={activeTab} onChange={handleTabChange}>
               <TabPane tab="我的图片" key="all" />
@@ -1035,7 +1138,6 @@ const ImageGeneration = () => {
             </Space>
           </div>
           
-          {/* 第二行：分页控件 */}
           {!loading && getCurrentData().length > 0 && (
             <div className="history-pagination">
               <Pagination
@@ -1072,7 +1174,7 @@ const ImageGeneration = () => {
         </div>
       </Content>
 
-      {/* 使用新的 ImageViewer 组件 */}
+      {/* ImageViewer组件 */}
       <ImageViewer
         visible={viewerVisible}
         images={viewerImages}

@@ -63,7 +63,7 @@ const useImageStore = create((set, get) => ({
     return model && model.provider === 'midjourney' && model.generation_type === 'async';
   },
 
-  // 批量生成图片（支持Midjourney）
+  // 批量生成图片（支持Midjourney和base64Array）
   generateImages: async (params) => {
     const { selectedModel } = get();
     if (!selectedModel) {
@@ -79,13 +79,20 @@ const useImageStore = create((set, get) => ({
         // Midjourney生成（异步）
         message.loading('正在提交Midjourney任务...', 0);
         
-        const response = await api.post('/image/generate', {
+        // 构建请求数据，包含base64Array（如果有）
+        const requestData = {
           model_id: selectedModel.id,
           prompt: params.prompt,
           negative_prompt: params.negative_prompt,
-          size: params.size,
-          mode: params.mode || 'fast'
-        });
+          size: params.size
+        };
+
+        // 添加base64Array（如果有）
+        if (params.base64Array && params.base64Array.length > 0) {
+          requestData.base64Array = params.base64Array;
+        }
+        
+        const response = await api.post('/image/generate', requestData);
         
         message.destroy();
         
@@ -192,13 +199,10 @@ const useImageStore = create((set, get) => ({
             set({ generationProgress: null });
             
             // 重要：等待后端完成图片下载和保存
-            // 这是必要的，因为后端需要时间下载Midjourney的图片并保存到本地
-            // 不能立即清除processingTasks，否则会出现图片还没准备好就显示完成的问题
             console.log('任务成功，等待后端保存图片...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             // 尝试获取最新数据，确保图片已经保存
-            // 最多重试3次，每次间隔1.5秒
             let retryCount = 0;
             let dataReady = false;
             
@@ -236,7 +240,6 @@ const useImageStore = create((set, get) => ({
             }
             
             // 只有在确认数据准备好或重试完成后才清除处理状态
-            // 这样可以避免出现"空白"状态
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
@@ -322,7 +325,6 @@ const useImageStore = create((set, get) => ({
   },
   
   // 清理所有失败任务的处理状态
-  // 这个函数很重要，用于清理那些已经失败但还在processingTasks中的任务
   cleanupFailedTasks: () => {
     const { generationHistory, processingTasks } = get();
     const newProcessingTasks = { ...processingTasks };
@@ -431,7 +433,6 @@ const useImageStore = create((set, get) => ({
         });
         
         // 每次获取历史记录后，自动清理失败任务的处理状态
-        // 这确保了页面刷新后，失败的任务不会显示为"加载中"
         get().cleanupFailedTasks();
         
         // 返回数据以便调用者使用
