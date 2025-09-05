@@ -5,6 +5,7 @@
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
+import useAuthStore from './authStore'
 
 const useSystemConfigStore = create((set, get) => ({
   // 系统配置
@@ -38,62 +39,117 @@ const useSystemConfigStore = create((set, get) => ({
   loading: false,
   initialized: false,
   
-  // 初始化系统配置
+  // 初始化系统配置 - 修复：根据用户角色条件性调用
   initSystemConfig: async () => {
     const state = get()
     if (state.initialized) return
     
     try {
       set({ loading: true })
-      const response = await apiClient.get('/admin/settings')
       
-      if (response.data.success && response.data.data) {
-        // 处理配置兼容性
-        const config = response.data.data
-        
-        // 处理用户配置兼容性
-        if (config.user) {
-          // 兼容旧字段名
-          if (config.user.default_token_quota !== undefined && config.user.default_tokens === undefined) {
-            config.user.default_tokens = config.user.default_token_quota
+      // 获取当前用户信息
+      const authStore = useAuthStore.getState()
+      const currentUser = authStore.user
+      
+      // 只有管理员才尝试获取管理员配置
+      if (currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'admin')) {
+        try {
+          const response = await apiClient.get('/admin/settings')
+          
+          if (response.data.success && response.data.data) {
+            // 处理配置兼容性
+            const config = response.data.data
+            
+            // 处理用户配置兼容性
+            if (config.user) {
+              // 兼容旧字段名
+              if (config.user.default_token_quota !== undefined && config.user.default_tokens === undefined) {
+                config.user.default_tokens = config.user.default_token_quota
+              }
+              if (config.user.default_credits_quota !== undefined && config.user.default_credits === undefined) {
+                config.user.default_credits = config.user.default_credits_quota
+              }
+              // 如果credits配置中有default_credits，优先使用
+              if (config.credits && config.credits.default_credits !== undefined) {
+                config.user.default_credits = config.credits.default_credits
+              }
+            }
+            
+            // 添加chat配置的默认值（如果不存在）
+            if (!config.chat) {
+              config.chat = {
+                font_family: 'system-ui',
+                font_size: 14
+              }
+            } else {
+              // 确保有默认值
+              if (!config.chat.font_family) {
+                config.chat.font_family = 'system-ui'
+              }
+              if (!config.chat.font_size) {
+                config.chat.font_size = 14
+              }
+            }
+            
+            // 移除不需要的配置节
+            delete config.credits
+            
+            set({ 
+              systemConfig: config,
+              initialized: true,
+              loading: false
+            })
+            
+            console.log('✅ 管理员系统配置初始化成功')
+            return
           }
-          if (config.user.default_credits_quota !== undefined && config.user.default_credits === undefined) {
-            config.user.default_credits = config.user.default_credits_quota
-          }
-          // 如果credits配置中有default_credits，优先使用
-          if (config.credits && config.credits.default_credits !== undefined) {
-            config.user.default_credits = config.credits.default_credits
-          }
+        } catch (error) {
+          // 管理员接口调用失败，但不应该阻止应用运行
+          console.warn('⚠️ 获取管理员配置失败，使用默认配置:', error.message)
         }
-        
-        // 添加chat配置的默认值（如果不存在）
-        if (!config.chat) {
-          config.chat = {
-            font_family: 'system-ui',
-            font_size: 14
+      } else {
+        // 普通用户：尝试从公开接口获取基础配置
+        try {
+          const response = await apiClient.get('/public/system-config')
+          
+          if (response.data.success && response.data.data) {
+            const publicConfig = response.data.data
+            
+            // 合并公开配置到默认配置
+            set(state => ({
+              systemConfig: {
+                ...state.systemConfig,
+                site: {
+                  ...state.systemConfig.site,
+                  ...publicConfig.site
+                },
+                user: {
+                  ...state.systemConfig.user,
+                  allow_register: publicConfig.user?.allow_register !== false
+                }
+              },
+              initialized: true,
+              loading: false
+            }))
+            
+            console.log('✅ 普通用户配置初始化成功（使用公开配置）')
+            return
           }
-        } else {
-          // 确保有默认值
-          if (!config.chat.font_family) {
-            config.chat.font_family = 'system-ui'
-          }
-          if (!config.chat.font_size) {
-            config.chat.font_size = 14
-          }
+        } catch (error) {
+          console.warn('⚠️ 获取公开配置失败，使用默认配置:', error.message)
         }
-        
-        // 移除不需要的配置节
-        delete config.credits
-        
-        set({ 
-          systemConfig: config,
-          initialized: true,
-          loading: false
-        })
       }
+      
+      // 如果所有尝试都失败，标记为已初始化并使用默认配置
+      set({ 
+        initialized: true, 
+        loading: false 
+      })
+      console.log('ℹ️ 使用默认系统配置')
+      
     } catch (error) {
-      console.error('初始化系统配置失败:', error)
-      set({ loading: false })
+      console.error('❌ 初始化系统配置失败:', error)
+      set({ loading: false, initialized: true })
     }
   },
   
@@ -102,7 +158,7 @@ const useSystemConfigStore = create((set, get) => ({
     set({ userSiteConfig: siteConfig })
   },
   
-  // 更新系统配置
+  // 更新系统配置（只有管理员能调用）
   updateSystemConfig: async (config) => {
     try {
       const response = await apiClient.put('/admin/settings', config)
@@ -119,7 +175,7 @@ const useSystemConfigStore = create((set, get) => ({
     }
   },
   
-  // 上传站点Logo
+  // 上传站点Logo（只有管理员能调用）
   uploadSiteLogo: async (file) => {
     try {
       const formData = new FormData()
