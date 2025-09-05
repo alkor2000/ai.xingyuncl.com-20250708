@@ -213,8 +213,6 @@ const Register = () => {
     )
   }
 
-  const siteName = publicConfig?.site?.name || t('app.name')
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -236,32 +234,10 @@ const Register = () => {
           <LanguageSwitch />
         </div>
         
+        {/* 简化的标题，不显示logo和自定义站点名称 */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          {publicConfig?.site?.logo && (
-            <img 
-              src={publicConfig.site.logo} 
-              alt={siteName}
-              style={{ 
-                maxHeight: '60px', 
-                maxWidth: '200px',
-                marginBottom: '20px'
-              }}
-            />
-          )}
-          <Title 
-            level={3} 
-            style={{ 
-              color: '#1890ff', 
-              marginBottom: '8px',
-              fontSize: '22px',
-              lineHeight: '1.4',
-              fontWeight: 600
-            }}
-          >
-            {siteName}
-          </Title>
-          <Title level={4} style={{ marginTop: 0, fontWeight: 'normal' }}>
-            {t('auth.register.title')}
+          <Title level={3} style={{ marginBottom: 8, color: '#333' }}>
+            创建您的账户
           </Title>
         </div>
 
@@ -295,7 +271,7 @@ const Register = () => {
           autoComplete="off"
           size="large"
         >
-          {/* 邀请码输入框 - 放在最前面 */}
+          {/* 邀请码输入框 - 改进错误提示 */}
           <Form.Item
             name="invitation_code"
             label={
@@ -312,11 +288,11 @@ const Register = () => {
             rules={[
               {
                 required: requireInvitationCode,
-                message: '请输入邀请码'
+                message: '请输入5位邀请码'
               },
               {
                 len: 5,
-                message: '邀请码为5位字符',
+                message: '邀请码必须是5位字符',
                 validateTrigger: 'onBlur'
               },
               {
@@ -328,12 +304,13 @@ const Register = () => {
             extra={
               requireInvitationCode 
                 ? '必须输入有效的邀请码才能注册' 
-                : '如有邀请码，可加入指定组织（可选）'
+                : '如有邀请码，可加入指定组织'
             }
+            validateFirst={true}
           >
             <Input
               prefix={<TeamOutlined />}
-              placeholder={requireInvitationCode ? "输入5位邀请码（必填）" : "输入5位邀请码（可选）"}
+              placeholder="输入5位邀请码"
               style={{ textTransform: 'uppercase' }}
               onChange={(e) => {
                 const value = e.target.value
@@ -361,27 +338,28 @@ const Register = () => {
             name="username"
             label={
               <Space>
-                <span>{t('auth.register.username')}</span>
+                <span>用户名</span>
                 <Text type="danger">*</Text>
               </Space>
             }
             rules={[
               {
                 required: true,
-                message: t('auth.register.username.required')
+                message: '请输入用户名'
               },
               {
                 pattern: /^[a-zA-Z0-9_-]{3,20}$/,
-                message: t('auth.register.username.pattern')
+                message: '用户名只能包含字母、数字、下划线和横线，长度3-20个字符'
               },
               {
                 validator: validateUsername
               }
             ]}
+            validateFirst={true}
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder={t('auth.register.username.required')}
+              placeholder="请输入用户名"
             />
           </Form.Item>
 
@@ -389,8 +367,8 @@ const Register = () => {
             name="email"
             label={
               <Space>
-                <span>{t('auth.register.email')}</span>
-                <Tooltip title="邮箱用于找回密码和接收通知（可选）">
+                <span>邮箱地址</span>
+                <Tooltip title="邮箱用于找回密码和接收通知">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
@@ -398,33 +376,35 @@ const Register = () => {
             rules={[
               {
                 type: 'email',
-                message: t('auth.register.email.invalid')
+                message: '邮箱格式不正确'
               },
               {
                 validator: validateEmail
               }
             ]}
             extra="选填，用于找回密码和接收通知"
+            validateFirst={true}
           >
             <Input
               prefix={<MailOutlined />}
-              placeholder="请输入邮箱（可选）"
+              placeholder="请输入邮箱"
             />
           </Form.Item>
 
           <Form.Item
             name="phone"
-            label={t('auth.register.phone')}
+            label="手机号"
             rules={[
               {
                 pattern: /^1[3-9]\d{9}$/,
-                message: t('auth.register.phone.pattern')
+                message: '手机号格式不正确'
               }
             ]}
+            validateFirst={true}
           >
             <Input
               prefix={<PhoneOutlined />}
-              placeholder={t('auth.register.phone')}
+              placeholder="手机号（选填）"
             />
           </Form.Item>
 
@@ -432,24 +412,25 @@ const Register = () => {
             name="password"
             label={
               <Space>
-                <span>{t('auth.register.password')}</span>
+                <span>密码</span>
                 <Text type="danger">*</Text>
               </Space>
             }
             rules={[
               {
                 required: true,
-                message: t('auth.register.password.required')
+                message: '请输入密码'
               },
               {
                 min: 6,
-                message: t('auth.register.password.min')
+                message: '密码长度至少6位'
               }
             ]}
+            validateFirst={true}
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder={t('auth.register.password.required')}
+              placeholder="请输入密码"
             />
           </Form.Item>
 
@@ -457,7 +438,7 @@ const Register = () => {
             name="confirmPassword"
             label={
               <Space>
-                <span>{t('auth.register.confirmPassword')}</span>
+                <span>确认密码</span>
                 <Text type="danger">*</Text>
               </Space>
             }
@@ -465,21 +446,22 @@ const Register = () => {
             rules={[
               {
                 required: true,
-                message: t('auth.register.confirmPassword.required')
+                message: '请再次输入密码'
               },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
                     return Promise.resolve()
                   }
-                  return Promise.reject(new Error(t('auth.register.confirmPassword.mismatch')))
+                  return Promise.reject(new Error('两次输入的密码不一致'))
                 }
               })
             ]}
+            validateFirst={true}
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder={t('auth.register.confirmPassword.required')}
+              placeholder="请确认密码"
             />
           </Form.Item>
 
@@ -492,14 +474,14 @@ const Register = () => {
               size="large"
               disabled={requireInvitationCode && !invitationCodeValid}
             >
-              {t('auth.register.button')}
+              注册
             </Button>
           </Form.Item>
 
           <div style={{ textAlign: 'center' }}>
             <Space>
-              <Text type="secondary">{t('auth.register.hasAccount')}</Text>
-              <Link to="/login">{t('auth.register.login')}</Link>
+              <Text type="secondary">已有账户？</Text>
+              <Link to="/login">立即登录</Link>
             </Space>
           </div>
         </Form>
