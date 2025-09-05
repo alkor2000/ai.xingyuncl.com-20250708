@@ -1,5 +1,6 @@
 /**
  * 用户分组表格组件（包含积分池、组员上限、组有效期、站点配置和邀请码功能）
+ * 修改：允许组管理员编辑自己组的邀请码
  */
 
 import React from 'react'
@@ -312,9 +313,13 @@ const UserGroupTable = ({
       key: 'actions',
       width: 280,
       render: (_, record) => {
-        // 组管理员只能编辑自己组的站点配置
+        // 组管理员只能编辑自己组的站点配置和邀请码
         const canEditSiteConfig = record.site_customization_enabled && 
           (isSuperAdmin || (isGroupAdmin && currentUser && record.id === currentUser.group_id))
+        
+        // 组管理员可以编辑自己组的邀请码
+        const canManageInvitationCode = isSuperAdmin || 
+          (isGroupAdmin && currentUser && record.id === currentUser.group_id)
         
         return (
           <Space size="small">
@@ -328,28 +333,30 @@ const UserGroupTable = ({
                 />
               </Tooltip>
             )}
+            {/* 组管理员也能看到并使用邀请码管理按钮 */}
+            {canManageInvitationCode && onManageInvitationCode && (
+              <Tooltip title={isGroupAdmin ? "编辑邀请码" : "管理邀请码"}>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<LinkOutlined />} 
+                  onClick={() => onManageInvitationCode(record)} 
+                />
+              </Tooltip>
+            )}
+            {/* 只有超级管理员才能查看邀请记录 */}
+            {isSuperAdmin && onViewInvitationLogs && record.invitation_enabled && (
+              <Tooltip title="查看邀请记录">
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<EyeOutlined />} 
+                  onClick={() => onViewInvitationLogs(record)} 
+                />
+              </Tooltip>
+            )}
             {isSuperAdmin && (
               <>
-                {onManageInvitationCode && (
-                  <Tooltip title="管理邀请码">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<LinkOutlined />} 
-                      onClick={() => onManageInvitationCode(record)} 
-                    />
-                  </Tooltip>
-                )}
-                {onViewInvitationLogs && record.invitation_enabled && (
-                  <Tooltip title="查看邀请记录">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<EyeOutlined />} 
-                      onClick={() => onViewInvitationLogs(record)} 
-                    />
-                  </Tooltip>
-                )}
                 <Tooltip title="设置组员上限">
                   <Button 
                     type="text" 

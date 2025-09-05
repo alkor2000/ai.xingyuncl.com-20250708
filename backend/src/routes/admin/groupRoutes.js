@@ -1,5 +1,6 @@
 /**
  * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能、组有效期、站点配置和邀请码功能）
+ * 修改：允许组管理员管理自己组的邀请码
  */
 const express = require('express');
 const UserGroupController = require('../../controllers/admin/UserGroupController');
@@ -54,18 +55,17 @@ router.delete('/:id',
 
 /**
  * @route PUT /api/admin/user-groups/:id/invitation-code
- * @desc 设置组邀请码（新增）
- * @access SuperAdmin only
+ * @desc 设置组邀请码
+ * @access SuperAdmin可以管理所有组，Admin可以管理自己的组
  */
 router.put('/:id/invitation-code',
-  requirePermission('group.manage'),
-  canManageGroups(),
+  requirePermission('user.manage'), // 改为user.manage，让组管理员也能访问
   UserGroupController.setGroupInvitationCode
 );
 
 /**
  * @route GET /api/admin/user-groups/:id/invitation-logs
- * @desc 获取邀请码使用记录（新增）
+ * @desc 获取邀请码使用记录
  * @access SuperAdmin only
  */
 router.get('/:id/invitation-logs',

@@ -1,5 +1,6 @@
 /**
  * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能、组有效期、站点配置和邀请码功能）
+ * 修改：允许组管理员管理自己组的邀请码
  */
 
 const { GroupService } = require('../../services/admin');
@@ -119,16 +120,25 @@ class UserGroupController {
   }
 
   /**
-   * 设置组邀请码（新增功能）
+   * 设置组邀请码（修改：允许组管理员管理自己组的邀请码）
    */
   static async setGroupInvitationCode(req, res) {
     try {
       const { id } = req.params;
       const { enabled, code, max_uses, expire_at } = req.body;
 
-      // 仅超级管理员可以设置邀请码
-      if (req.user.role !== 'super_admin') {
-        return ResponseHelper.forbidden(res, '仅超级管理员可以设置邀请码');
+      // 权限检查：超级管理员可以设置所有组，组管理员只能设置自己的组
+      if (req.user.role === 'admin') {
+        // 组管理员只能管理自己组的邀请码
+        if (req.user.group_id !== parseInt(id)) {
+          return ResponseHelper.forbidden(res, '只能管理本组的邀请码');
+        }
+        
+        logger.info('组管理员设置本组邀请码', {
+          adminId: req.user.id,
+          groupId: id,
+          enabled
+        });
       }
 
       const result = await GroupService.setGroupInvitationCode(id, {
@@ -166,7 +176,7 @@ class UserGroupController {
   }
 
   /**
-   * 获取邀请码使用记录（新增功能）
+   * 获取邀请码使用记录（仅超级管理员）
    */
   static async getInvitationCodeLogs(req, res) {
     try {

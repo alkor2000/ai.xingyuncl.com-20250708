@@ -1,6 +1,7 @@
 /**
  * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置和邀请码管理
  * 修复：搜索状态保持，确保分页时不丢失搜索条件
+ * 修改：允许组管理员管理自己组的邀请码
  */
 
 import React, { useEffect, useState } from 'react'
@@ -560,8 +561,14 @@ const Users = () => {
     }
   }
 
-  // 管理邀请码（新增）
+  // 管理邀请码（修改：组管理员也能管理自己组的邀请码）
   const handleManageInvitationCode = (group) => {
+    // 权限检查：组管理员只能管理自己的组
+    if (isGroupAdmin && group.id !== currentUser.group_id) {
+      message.warning('只能管理本组的邀请码')
+      return
+    }
+    
     setInvitationCodeGroup(group)
     setIsInvitationCodeModalVisible(true)
   }
@@ -578,7 +585,7 @@ const Users = () => {
     }
   }
 
-  // 查看邀请记录（新增）
+  // 查看邀请记录（仅超级管理员）
   const handleViewInvitationLogs = (group) => {
     setInvitationLogsGroup(group)
     setIsInvitationLogsModalVisible(true)
@@ -686,6 +693,26 @@ const Users = () => {
                   </Col>
                 </Row>
               )}
+              {/* 显示邀请码信息 */}
+              {currentGroupInfo.invitation_enabled && currentGroupInfo.invitation_code && (
+                <Row gutter={16} style={{ marginTop: 16 }}>
+                  <Col span={24}>
+                    <Alert
+                      message="组邀请码"
+                      description={
+                        <span>
+                          邀请码：<strong>{currentGroupInfo.invitation_code}</strong>
+                          {currentGroupInfo.invitation_usage_count > 0 && (
+                            <span>（已使用 {currentGroupInfo.invitation_usage_count} 次）</span>
+                          )}
+                        </span>
+                      }
+                      type="info"
+                      showIcon
+                    />
+                  </Col>
+                </Row>
+              )}
             </Card>
           )}
 
@@ -753,6 +780,7 @@ const Users = () => {
                     {currentGroupInfo?.site_customization_enabled && (
                       <p>您的组已开启站点自定义功能，可以配置专属的站点名称。</p>
                     )}
+                    <p>您可以管理本组的邀请码设置。</p>
                   </div>
                 }
                 type="info"
@@ -904,8 +932,8 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请码管理弹窗（新增） */}
-      {isSuperAdmin && (
+      {/* 邀请码管理弹窗（修改：组管理员也能使用） */}
+      {(isSuperAdmin || isGroupAdmin) && (
         <GroupInvitationCodeModal
           visible={isInvitationCodeModalVisible}
           group={invitationCodeGroup}
@@ -918,7 +946,7 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请记录查看弹窗（新增） */}
+      {/* 邀请记录查看弹窗（仅超级管理员） */}
       {isSuperAdmin && (
         <GroupInvitationLogsModal
           visible={isInvitationLogsModalVisible}
