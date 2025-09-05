@@ -9,6 +9,7 @@ const SSOService = require('../services/auth/SSOService');
 const EmailAuthService = require('../services/auth/EmailAuthService');
 const TokenService = require('../services/auth/TokenService');
 const SiteConfigService = require('../services/auth/SiteConfigService');
+const { GroupService } = require('../services/admin');
 const bcrypt = require('bcryptjs');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
@@ -419,24 +420,87 @@ class AuthControllerRefactored {
   }
   
   /**
-   * 用户注册
+   * 检查邮箱是否可用（新增）
+   * POST /api/auth/check-email
+   */
+  static async checkEmail(req, res) {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return ResponseHelper.validation(res, ['邮箱不能为空']);
+      }
+      
+      // 验证邮箱格式
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return ResponseHelper.validation(res, ['邮箱格式不正确']);
+      }
+      
+      // 检查邮箱是否已存在
+      const existingUser = await User.findByEmail(email.toLowerCase());
+      const available = !existingUser;
+      
+      logger.info('检查邮箱可用性', { email, available });
+      
+      return ResponseHelper.success(res, { available }, '检查成功');
+      
+    } catch (error) {
+      logger.error('检查邮箱可用性失败:', error);
+      return ResponseHelper.error(res, '检查失败');
+    }
+  }
+  
+  /**
+   * 检查用户名是否可用（新增）
+   * POST /api/auth/check-username
+   */
+  static async checkUsername(req, res) {
+    try {
+      const { username } = req.body;
+      
+      if (!username) {
+        return ResponseHelper.validation(res, ['用户名不能为空']);
+      }
+      
+      // 验证用户名格式
+      if (!/^[a-zA-Z0-9_-]{3,20}$/.test(username)) {
+        return ResponseHelper.validation(res, ['用户名只能包含字母、数字、下划线和横线，长度3-20个字符']);
+      }
+      
+      // 检查用户名是否已存在
+      const existingUser = await User.findByUsername(username);
+      const available = !existingUser;
+      
+      logger.info('检查用户名可用性', { username, available });
+      
+      return ResponseHelper.success(res, { available }, '检查成功');
+      
+    } catch (error) {
+      logger.error('检查用户名可用性失败:', error);
+      return ResponseHelper.error(res, '检查失败');
+    }
+  }
+  
+  /**
+   * 用户注册（支持邀请码，邮箱可选）
    * POST /api/auth/register
    */
   static async register(req, res) {
     try {
-      const { email, username, password, phone } = req.body;
+      const { email, username, password, phone, invitation_code } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
       
-      // 验证输入
-      if (!email || !username || !password) {
-        return ResponseHelper.validation(res, ['邮箱、用户名和密码不能为空']);
+      // 验证必填项：只有用户名和密码是必填的
+      if (!username || !password) {
+        return ResponseHelper.validation(res, ['用户名和密码不能为空']);
       }
       
       if (password.length < 6) {
         return ResponseHelper.validation(res, ['密码长度至少6位']);
       }
       
-      // 验证邮箱格式
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      // 如果提供了邮箱，验证邮箱格式
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return ResponseHelper.validation(res, ['邮箱格式不正确']);
       }
       
@@ -450,13 +514,19 @@ class AuthControllerRefactored {
         return ResponseHelper.validation(res, ['手机号格式不正确']);
       }
       
-      logger.info('用户注册尝试', { email, username, phone });
+      logger.info('用户注册尝试', { 
+        username, 
+        hasEmail: !!email,
+        hasPhone: !!phone, 
+        hasInvitationCode: !!invitation_code 
+      });
       
       // 获取系统配置，检查是否允许注册
       let allowRegister = true;
       let defaultTokens = 10000;
       let defaultCredits = 1000;
       let defaultGroupId = 1;
+      let targetGroup = null;
       
       try {
         const systemSettings = await SystemConfig.getFormattedSettings();
@@ -465,9 +535,9 @@ class AuthControllerRefactored {
           // 检查是否允许注册
           allowRegister = systemSettings.user.allow_register !== false;
           
-          if (!allowRegister) {
-            logger.warn('注册失败：系统已关闭注册功能', { email, username });
-            return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
+          if (!allowRegister && !invitation_code) {
+            logger.warn('注册失败：系统已关闭注册功能且未提供邀请码', { username });
+            return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能，需要邀请码才能注册');
           }
           
           // 使用新的字段名
@@ -494,10 +564,40 @@ class AuthControllerRefactored {
         logger.warn('获取系统配置失败，使用默认值', { error: configError.message });
       }
       
-      // 检查邮箱是否已存在
-      const existingUserByEmail = await User.findByEmail(email.toLowerCase());
-      if (existingUserByEmail) {
-        return ResponseHelper.validation(res, ['邮箱已被注册']);
+      // 处理邀请码
+      if (invitation_code) {
+        // 验证邀请码
+        targetGroup = await GroupService.findGroupByInvitationCode(invitation_code);
+        
+        if (!targetGroup) {
+          logger.warn('注册失败：邀请码无效', { 
+            username, 
+            invitationCode: invitation_code 
+          });
+          return ResponseHelper.validation(res, ['邀请码无效或已过期']);
+        }
+        
+        // 使用邀请码对应组的ID
+        defaultGroupId = targetGroup.id;
+        
+        logger.info('使用邀请码注册', {
+          username,
+          invitationCode: invitation_code,
+          groupId: targetGroup.id,
+          groupName: targetGroup.name
+        });
+      } else if (!allowRegister) {
+        // 如果系统关闭了注册且没有邀请码
+        logger.warn('注册失败：系统已关闭注册功能', { username });
+        return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
+      }
+      
+      // 如果提供了邮箱，检查邮箱是否已存在
+      if (email) {
+        const existingUserByEmail = await User.findByEmail(email.toLowerCase());
+        if (existingUserByEmail) {
+          return ResponseHelper.validation(res, ['邮箱已被注册']);
+        }
       }
       
       // 检查用户名是否已存在
@@ -514,23 +614,35 @@ class AuthControllerRefactored {
         }
       }
       
-      // 加密密码
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
+      // 如果没有邮箱，生成一个占位邮箱（确保唯一性）
+      const finalEmail = email ? email.toLowerCase() : `${username}@noemail.local`;
       
-      // 创建用户
+      // 创建用户 - 修复：直接传递原始密码，让User.create自己处理加密
       const user = await User.create({
-        email: email.toLowerCase(),
+        email: finalEmail,
         username,
-        password: hashedPassword,
+        password: password,  // ✅ 修复：传递原始密码，不要传递加密后的密码
         phone: phone || null,
         role: 'user',
         status: 'active',
         group_id: defaultGroupId,
         token_quota: defaultTokens,
         credits_quota: defaultCredits,
-        credits_expire_days: 365
+        credits_expire_days: 365,
+        email_verified: !email ? true : false  // 如果没有提供邮箱，自动设为已验证
       });
+      
+      // 如果使用了邀请码，记录使用情况
+      if (invitation_code && targetGroup) {
+        await GroupService.useInvitationCode(invitation_code, user.id, clientIp);
+        
+        logger.info('邀请码注册成功并记录', {
+          userId: user.id,
+          invitationCode: invitation_code,
+          groupId: targetGroup.id,
+          groupName: targetGroup.name
+        });
+      }
       
       // 获取新用户权限
       const permissions = await user.getPermissions();
@@ -539,11 +651,14 @@ class AuthControllerRefactored {
       const siteConfig = await SiteConfigService.getUserSiteConfig(user);
       
       logger.info('用户注册成功', { 
-        email, 
+        username,
         userId: user.id,
+        hasEmail: !!email,
         tokenQuota: defaultTokens,
         creditsQuota: defaultCredits,
-        accountExpireAt: user.expire_at
+        accountExpireAt: user.expire_at,
+        groupId: defaultGroupId,
+        usedInvitationCode: !!invitation_code
       });
       
       return ResponseHelper.success(res, {
@@ -555,6 +670,43 @@ class AuthControllerRefactored {
     } catch (error) {
       logger.error('注册处理失败:', error);
       return ResponseHelper.error(res, '注册失败');
+    }
+  }
+
+  /**
+   * 验证邀请码（新增）
+   * POST /api/auth/verify-invitation-code
+   */
+  static async verifyInvitationCode(req, res) {
+    try {
+      const { code } = req.body;
+      
+      if (!code) {
+        return ResponseHelper.validation(res, ['邀请码不能为空']);
+      }
+      
+      // 查找有效的邀请码对应的组
+      const group = await GroupService.findGroupByInvitationCode(code);
+      
+      if (!group) {
+        return ResponseHelper.validation(res, ['邀请码无效或已过期']);
+      }
+      
+      logger.info('邀请码验证成功', {
+        code: code.toUpperCase(),
+        groupId: group.id,
+        groupName: group.name
+      });
+      
+      return ResponseHelper.success(res, {
+        valid: true,
+        group_name: group.name,
+        group_id: group.id
+      }, '邀请码有效');
+      
+    } catch (error) {
+      logger.error('验证邀请码失败:', error);
+      return ResponseHelper.error(res, '验证邀请码失败');
     }
   }
   

@@ -9,13 +9,17 @@ import {
   Space,
   Typography,
   message,
-  Spin
+  Spin,
+  Tooltip
 } from 'antd'
 import {
   UserOutlined,
   LockOutlined,
   MailOutlined,
-  PhoneOutlined
+  PhoneOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
@@ -32,6 +36,10 @@ const Register = () => {
   const [error, setError] = useState('')
   const [publicConfig, setPublicConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
+  const [invitationCodeValid, setInvitationCodeValid] = useState(false)
+  const [invitationGroupName, setInvitationGroupName] = useState('')
+  const [checkingCode, setCheckingCode] = useState(false)
+  const [requireInvitationCode, setRequireInvitationCode] = useState(false)
 
   // 获取公开系统配置
   useEffect(() => {
@@ -41,10 +49,10 @@ const Register = () => {
         if (response.data?.success && response.data?.data) {
           setPublicConfig(response.data.data)
           
-          // 如果不允许注册，直接跳转到登录页
+          // 如果不允许注册，设置需要邀请码
           if (response.data.data.user?.allow_register === false) {
-            message.warning('系统暂时关闭了注册功能')
-            navigate('/login')
+            setRequireInvitationCode(true)
+            message.info('系统需要邀请码才能注册')
           }
         }
       } catch (error) {
@@ -66,17 +74,61 @@ const Register = () => {
     }
 
     fetchPublicConfig()
-  }, [navigate])
+  }, [])
+
+  // 验证邀请码
+  const handleVerifyInvitationCode = async (value) => {
+    if (!value || value.length !== 5) {
+      setInvitationCodeValid(false)
+      setInvitationGroupName('')
+      return
+    }
+
+    setCheckingCode(true)
+    try {
+      const response = await apiClient.post('/auth/verify-invitation-code', {
+        code: value.toUpperCase()
+      })
+
+      if (response.data?.success && response.data?.data?.valid) {
+        setInvitationCodeValid(true)
+        setInvitationGroupName(response.data.data.group_name)
+        message.success(`邀请码有效，将加入"${response.data.data.group_name}"组`)
+      } else {
+        setInvitationCodeValid(false)
+        setInvitationGroupName('')
+        if (requireInvitationCode) {
+          message.error('邀请码无效或已过期')
+        }
+      }
+    } catch (error) {
+      console.error('验证邀请码失败:', error)
+      setInvitationCodeValid(false)
+      setInvitationGroupName('')
+      if (requireInvitationCode) {
+        message.error('邀请码验证失败')
+      }
+    } finally {
+      setCheckingCode(false)
+    }
+  }
 
   // 处理注册
   const handleSubmit = async (values) => {
+    // 如果需要邀请码但未验证通过
+    if (requireInvitationCode && !invitationCodeValid) {
+      setError('请输入有效的邀请码')
+      return
+    }
+
     setError('')
     
     const result = await register({
-      email: values.email,
+      email: values.email || null,  // 邮箱现在是可选的
       username: values.username,
       password: values.password,
-      phone: values.phone || null,  // 添加手机号字段
+      phone: values.phone || null,
+      invitation_code: values.invitation_code || null,
       confirmPassword: values.confirmPassword
     })
 
@@ -88,9 +140,9 @@ const Register = () => {
     }
   }
 
-  // 验证邮箱可用性
+  // 验证邮箱可用性（只在填写了邮箱时验证）
   const validateEmail = async (_, value) => {
-    if (!value) return Promise.resolve()
+    if (!value) return Promise.resolve()  // 邮箱为空时直接通过验证
     
     const available = await checkEmailAvailable(value)
     if (!available) {
@@ -165,7 +217,7 @@ const Register = () => {
             style={{ 
               color: '#1890ff', 
               marginBottom: '8px',
-              fontSize: '22px',  // 与登录页面保持一致
+              fontSize: '22px',
               lineHeight: '1.4',
               fontWeight: 600
             }}
@@ -196,32 +248,73 @@ const Register = () => {
           autoComplete="off"
           size="large"
         >
+          {/* 邀请码输入框 - 放在最前面 */}
           <Form.Item
-            name="email"
-            label={t('auth.register.email')}
+            name="invitation_code"
+            label={
+              <Space>
+                <span>邀请码</span>
+                {requireInvitationCode && <Text type="danger">*</Text>}
+                {invitationCodeValid && (
+                  <Text type="success">
+                    <CheckCircleOutlined /> 将加入"{invitationGroupName}"
+                  </Text>
+                )}
+              </Space>
+            }
             rules={[
               {
-                required: true,
-                message: t('auth.register.email.required')
+                required: requireInvitationCode,
+                message: '请输入邀请码'
               },
               {
-                type: 'email',
-                message: t('auth.register.email.invalid')
+                len: 5,
+                message: '邀请码为5位字符',
+                validateTrigger: 'onBlur'
               },
               {
-                validator: validateEmail
+                pattern: /^[A-Za-z0-9]{5}$/,
+                message: '邀请码只能包含字母和数字',
+                validateTrigger: 'onBlur'
               }
             ]}
+            extra={
+              requireInvitationCode 
+                ? '系统需要邀请码才能注册' 
+                : '如有邀请码，可加入指定组织'
+            }
           >
             <Input
-              prefix={<MailOutlined />}
-              placeholder={t('auth.register.email.required')}
+              prefix={<TeamOutlined />}
+              placeholder="输入5位邀请码（可选）"
+              style={{ textTransform: 'uppercase' }}
+              onChange={(e) => {
+                const value = e.target.value
+                if (value) {
+                  form.setFieldsValue({ invitation_code: value.toUpperCase() })
+                  if (value.length === 5) {
+                    handleVerifyInvitationCode(value)
+                  }
+                }
+              }}
+              suffix={
+                checkingCode ? (
+                  <Spin size="small" />
+                ) : invitationCodeValid ? (
+                  <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                ) : null
+              }
             />
           </Form.Item>
 
           <Form.Item
             name="username"
-            label={t('auth.register.username')}
+            label={
+              <Space>
+                <span>{t('auth.register.username')}</span>
+                <Text type="danger">*</Text>
+              </Space>
+            }
             rules={[
               {
                 required: true,
@@ -243,6 +336,33 @@ const Register = () => {
           </Form.Item>
 
           <Form.Item
+            name="email"
+            label={
+              <Space>
+                <span>{t('auth.register.email')}</span>
+                <Tooltip title="邮箱用于找回密码和接收通知（可选）">
+                  <InfoCircleOutlined style={{ color: '#999' }} />
+                </Tooltip>
+              </Space>
+            }
+            rules={[
+              {
+                type: 'email',
+                message: t('auth.register.email.invalid')
+              },
+              {
+                validator: validateEmail
+              }
+            ]}
+            extra="选填，用于找回密码和接收通知"
+          >
+            <Input
+              prefix={<MailOutlined />}
+              placeholder="请输入邮箱（可选）"
+            />
+          </Form.Item>
+
+          <Form.Item
             name="phone"
             label={t('auth.register.phone')}
             rules={[
@@ -260,7 +380,12 @@ const Register = () => {
 
           <Form.Item
             name="password"
-            label={t('auth.register.password')}
+            label={
+              <Space>
+                <span>{t('auth.register.password')}</span>
+                <Text type="danger">*</Text>
+              </Space>
+            }
             rules={[
               {
                 required: true,
@@ -280,7 +405,12 @@ const Register = () => {
 
           <Form.Item
             name="confirmPassword"
-            label={t('auth.register.confirmPassword')}
+            label={
+              <Space>
+                <span>{t('auth.register.confirmPassword')}</span>
+                <Text type="danger">*</Text>
+              </Space>
+            }
             dependencies={['password']}
             rules={[
               {
@@ -310,6 +440,7 @@ const Register = () => {
               loading={loading}
               block
               size="large"
+              disabled={requireInvitationCode && !invitationCodeValid}
             >
               {t('auth.register.button')}
             </Button>

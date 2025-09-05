@@ -855,75 +855,6 @@ const ImageGeneration = () => {
             )}
           </div>
 
-          {/* Midjourney图生图功能 */}
-          {selectedModel && isMidjourneyModel(selectedModel) && (
-            <Card title="参考图片（可选）" className="reference-images-section" style={{ marginBottom: 16 }}>
-              <div style={{ marginBottom: 8 }}>
-                <AntText type="secondary" style={{ fontSize: '12px' }}>
-                  上传参考图片，让AI基于这些图片生成新内容（最多5张，每张不超过5MB）
-                </AntText>
-              </div>
-              
-              <div className="reference-images-grid">
-                {referenceImages.map(img => (
-                  <div key={img.uid} className="reference-image-item" style={{ position: 'relative', display: 'inline-block', marginRight: 8, marginBottom: 8 }}>
-                    <Image
-                      src={img.url}
-                      alt={img.name}
-                      style={{ width: 80, height: 80, objectFit: 'cover' }}
-                      preview={false}
-                    />
-                    <Button
-                      type="text"
-                      danger
-                      icon={<CloseOutlined />}
-                      size="small"
-                      onClick={() => handleRemoveReference(img.uid)}
-                      style={{
-                        position: 'absolute',
-                        top: -8,
-                        right: -8,
-                        background: 'rgba(255,255,255,0.9)',
-                        borderRadius: '50%',
-                        width: 24,
-                        height: 24,
-                        padding: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    />
-                  </div>
-                ))}
-                
-                {referenceImages.length < 5 && (
-                  <Upload
-                    accept="image/*"
-                    customRequest={handleReferenceUpload}
-                    showUploadList={false}
-                    multiple={false}
-                  >
-                    <Button
-                      icon={<PlusOutlined />}
-                      style={{ width: 80, height: 80 }}
-                    >
-                      添加
-                    </Button>
-                  </Upload>
-                )}
-              </div>
-              
-              {referenceImages.length > 0 && (
-                <Alert
-                  message={`已添加 ${referenceImages.length} 张参考图片`}
-                  type="info"
-                  showIcon
-                  style={{ marginTop: 8 }}
-                />
-              )}
-            </Card>
-          )}
-
           <Card title="输入提示词" className="prompt-input">
             <TextArea
               value={prompt}
@@ -999,20 +930,73 @@ const ImageGeneration = () => {
               <div className="size-display">{selectedSize}</div>
             </div>
 
-            {/* Midjourney提示 */}
+            {/* Midjourney参考图片功能 - 移到参数设置内 */}
             {selectedModel && isMidjourneyModel(selectedModel) && (
-              <Alert
-                message="Midjourney每次生成4张图片（2×2网格）"
-                description={
-                  <>
-                    <div>• 生成后可以选择放大(U)、生成变体(V)或重新生成</div>
-                    {referenceImages.length > 0 && <div>• 参考图片将影响生成结果的风格和内容</div>}
-                  </>
-                }
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
+              <div className="param-item">
+                <div className="param-label">
+                  参考图片（可选）
+                  <Tooltip title="上传参考图片，让AI基于这些图片生成新内容。建议在提示词末尾添加 --iw 1 或 --iw 2 来增强参考图片的影响">
+                    <span className="info-icon"> ❓</span>
+                  </Tooltip>
+                </div>
+                
+                <div className="reference-images-grid">
+                  {referenceImages.map(img => (
+                    <div key={img.uid} className="reference-image-item" style={{ position: 'relative', display: 'inline-block', marginRight: 8, marginBottom: 8 }}>
+                      <Image
+                        src={img.url}
+                        alt={img.name}
+                        style={{ width: 60, height: 60, objectFit: 'cover' }}
+                        preview={false}
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<CloseOutlined />}
+                        size="small"
+                        onClick={() => handleRemoveReference(img.uid)}
+                        style={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          background: 'rgba(255,255,255,0.9)',
+                          borderRadius: '50%',
+                          width: 20,
+                          height: 20,
+                          minWidth: 20,
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      />
+                    </div>
+                  ))}
+                  
+                  {referenceImages.length < 5 && (
+                    <Upload
+                      accept="image/*"
+                      customRequest={handleReferenceUpload}
+                      showUploadList={false}
+                      multiple={false}
+                    >
+                      <Button
+                        size="small"
+                        icon={<PlusOutlined />}
+                        style={{ width: 60, height: 60 }}
+                      >
+                        添加
+                      </Button>
+                    </Upload>
+                  )}
+                </div>
+                
+                {referenceImages.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
+                    已添加 {referenceImages.length} 张参考图片（最多5张，每张不超过5MB）
+                  </div>
+                )}
+              </div>
             )}
 
             {/* 生成按钮 */}

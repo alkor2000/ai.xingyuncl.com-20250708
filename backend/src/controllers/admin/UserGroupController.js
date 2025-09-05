@@ -1,5 +1,5 @@
 /**
- * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能、组有效期和站点配置）
+ * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能、组有效期、站点配置和邀请码功能）
  */
 
 const { GroupService } = require('../../services/admin');
@@ -115,6 +115,88 @@ class UserGroupController {
       }
       
       return ResponseHelper.error(res, error.message || '删除用户分组失败');
+    }
+  }
+
+  /**
+   * 设置组邀请码（新增功能）
+   */
+  static async setGroupInvitationCode(req, res) {
+    try {
+      const { id } = req.params;
+      const { enabled, code, max_uses, expire_at } = req.body;
+
+      // 仅超级管理员可以设置邀请码
+      if (req.user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可以设置邀请码');
+      }
+
+      const result = await GroupService.setGroupInvitationCode(id, {
+        enabled,
+        code,
+        max_uses,
+        expire_at
+      }, req.user.id);
+
+      // 清除缓存
+      await CacheService.clearUserGroupsCache();
+
+      return ResponseHelper.success(res, result, result.message);
+    } catch (error) {
+      logger.error('设置组邀请码失败', { 
+        adminId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      
+      if (error.message === '用户分组不存在') {
+        return ResponseHelper.notFound(res, error.message);
+      }
+      
+      if (error.message.includes('已被') && error.message.includes('使用')) {
+        return ResponseHelper.error(res, error.message, 409);
+      }
+      
+      if (error.message.includes('必须是5位')) {
+        return ResponseHelper.validation(res, [error.message]);
+      }
+      
+      return ResponseHelper.error(res, error.message || '设置邀请码失败');
+    }
+  }
+
+  /**
+   * 获取邀请码使用记录（新增功能）
+   */
+  static async getInvitationCodeLogs(req, res) {
+    try {
+      const { id } = req.params;
+      const { page = 1, limit = 20 } = req.query;
+
+      // 仅超级管理员可以查看邀请码使用记录
+      if (req.user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可以查看邀请码使用记录');
+      }
+
+      const result = await GroupService.getInvitationCodeLogs(id, {
+        page: parseInt(page),
+        limit: parseInt(limit)
+      });
+
+      return ResponseHelper.paginated(
+        res, 
+        result.logs, 
+        result.pagination, 
+        '获取邀请码使用记录成功'
+      );
+    } catch (error) {
+      logger.error('获取邀请码使用记录失败', { 
+        adminId: req.user?.id, 
+        groupId: req.params.id,
+        error: error.message 
+      });
+      
+      return ResponseHelper.error(res, error.message || '获取邀请码使用记录失败');
     }
   }
 

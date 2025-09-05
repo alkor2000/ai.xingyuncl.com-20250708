@@ -1,9 +1,9 @@
 /**
- * 用户分组表格组件（包含积分池、组员上限、组有效期和站点配置功能）
+ * 用户分组表格组件（包含积分池、组员上限、组有效期、站点配置和邀请码功能）
  */
 
 import React from 'react'
-import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress, Switch } from 'antd'
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress, Switch, Badge } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
@@ -15,10 +15,14 @@ import {
   ExclamationCircleOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  LinkOutlined,
+  CopyOutlined,
+  EyeOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
+import { message } from 'antd'
 
 const UserGroupTable = ({
   groups = [],
@@ -32,9 +36,22 @@ const UserGroupTable = ({
   onSetUserLimit,
   onSetExpireDate,
   onToggleSiteCustomization,
-  onEditSiteConfig
+  onEditSiteConfig,
+  onManageInvitationCode,
+  onViewInvitationLogs
 }) => {
   const { t } = useTranslation()
+
+  // 复制邀请码到剪贴板
+  const copyInvitationCode = (code) => {
+    if (!code) return
+    
+    navigator.clipboard.writeText(code).then(() => {
+      message.success('邀请码已复制到剪贴板')
+    }).catch(() => {
+      message.error('复制失败，请手动复制')
+    })
+  }
 
   // 获取组有效期状态标签
   const getExpireStatusTag = (group) => {
@@ -60,6 +77,25 @@ const UserGroupTable = ({
     }
 
     return <Tag color="success" icon={<CheckCircleOutlined />}>正常</Tag>
+  }
+
+  // 获取邀请码状态标签
+  const getInvitationCodeStatus = (group) => {
+    if (!group.invitation_enabled) {
+      return <Tag color="default">未启用</Tag>
+    }
+
+    // 检查是否过期
+    if (group.invitation_expire_at && moment(group.invitation_expire_at).isBefore(moment())) {
+      return <Tag color="error">已过期</Tag>
+    }
+
+    // 检查使用次数
+    if (group.invitation_max_uses && group.invitation_usage_count >= group.invitation_max_uses) {
+      return <Tag color="warning">已用完</Tag>
+    }
+
+    return <Tag color="success">可用</Tag>
   }
 
   const columns = [
@@ -113,6 +149,53 @@ const UserGroupTable = ({
               strokeColor={isFull ? '#ff4d4f' : (isNearFull ? '#ff7a45' : '#52c41a')}
               style={{ width: 100 }}
             />
+          </Space>
+        )
+      }
+    },
+    {
+      title: '邀请码',
+      key: 'invitation_code',
+      width: 180,
+      render: (_, record) => {
+        const isEnabled = record.invitation_enabled
+        const code = record.invitation_code
+        const usageCount = record.invitation_usage_count || 0
+        const maxUses = record.invitation_max_uses
+        
+        return (
+          <Space direction="vertical" size="small">
+            {isEnabled ? (
+              <>
+                <Space>
+                  {getInvitationCodeStatus(record)}
+                  {code && (
+                    <Space>
+                      <Badge count={usageCount} showZero>
+                        <Tag style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                          {code}
+                        </Tag>
+                      </Badge>
+                      <Tooltip title="复制邀请码">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => copyInvitationCode(code)}
+                        />
+                      </Tooltip>
+                    </Space>
+                  )}
+                </Space>
+                {maxUses && (
+                  <span style={{ fontSize: '11px', color: '#666' }}>
+                    使用: {usageCount}/{maxUses}
+                  </span>
+                )}
+              </>
+            ) : (
+              <Tag color="default">未启用</Tag>
+            )}
           </Space>
         )
       }
@@ -227,7 +310,7 @@ const UserGroupTable = ({
     {
       title: t('table.actions'),
       key: 'actions',
-      width: 240,
+      width: 280,
       render: (_, record) => {
         // 组管理员只能编辑自己组的站点配置
         const canEditSiteConfig = record.site_customization_enabled && 
@@ -247,6 +330,26 @@ const UserGroupTable = ({
             )}
             {isSuperAdmin && (
               <>
+                {onManageInvitationCode && (
+                  <Tooltip title="管理邀请码">
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LinkOutlined />} 
+                      onClick={() => onManageInvitationCode(record)} 
+                    />
+                  </Tooltip>
+                )}
+                {onViewInvitationLogs && record.invitation_enabled && (
+                  <Tooltip title="查看邀请记录">
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<EyeOutlined />} 
+                      onClick={() => onViewInvitationLogs(record)} 
+                    />
+                  </Tooltip>
+                )}
                 <Tooltip title="设置组员上限">
                   <Button 
                     type="text" 

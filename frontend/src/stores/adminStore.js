@@ -257,6 +257,31 @@ const useAdminStore = create((set) => ({
     }
   },
   
+  // ===== 邀请码管理（新增） =====
+  // 设置组邀请码
+  setGroupInvitationCode: async (groupId, invitationData) => {
+    try {
+      const response = await apiClient.put(`/admin/user-groups/${groupId}/invitation-code`, invitationData)
+      // 刷新组列表以更新邀请码信息
+      await useAdminStore.getState().getUserGroups()
+      return response.data.data
+    } catch (error) {
+      console.error('设置组邀请码失败:', error)
+      throw error
+    }
+  },
+  
+  // 获取邀请码使用记录
+  getInvitationCodeLogs: async (groupId, params = {}) => {
+    try {
+      const response = await apiClient.get(`/admin/user-groups/${groupId}/invitation-logs`, { params })
+      return response.data.data
+    } catch (error) {
+      console.error('获取邀请码使用记录失败:', error)
+      throw error
+    }
+  },
+  
   // 积分管理
   getUserCredits: async (userId) => {
     set({ creditsLoading: true })

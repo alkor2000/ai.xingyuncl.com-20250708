@@ -1,5 +1,5 @@
 /**
- * 用户管理主页面 - 包含组积分池功能、账号有效期管理和站点配置
+ * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置和邀请码管理
  * 修复：搜索状态保持，确保分页时不丢失搜索条件
  */
 
@@ -26,7 +26,9 @@ import {
   UserFormModal,
   UserDetailDrawer,
   UserGroupTable,
-  UserGroupFormModal
+  UserGroupFormModal,
+  GroupInvitationCodeModal,
+  GroupInvitationLogsModal
 } from '../../components/admin/users'
 
 // 导入模型限制管理组件
@@ -71,7 +73,9 @@ const Users = () => {
     extendUserAccountExpireDate,
     syncUserAccountExpireWithGroup,
     toggleGroupSiteCustomization,
-    updateGroupSiteConfig
+    updateGroupSiteConfig,
+    setGroupInvitationCode,
+    getInvitationCodeLogs
   } = useAdminStore()
 
   // 表单实例
@@ -88,6 +92,8 @@ const Users = () => {
   const [isUserLimitModalVisible, setIsUserLimitModalVisible] = useState(false)
   const [isExpireDateModalVisible, setIsExpireDateModalVisible] = useState(false)
   const [isSiteConfigModalVisible, setIsSiteConfigModalVisible] = useState(false)
+  const [isInvitationCodeModalVisible, setIsInvitationCodeModalVisible] = useState(false)
+  const [isInvitationLogsModalVisible, setIsInvitationLogsModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -96,6 +102,8 @@ const Users = () => {
   const [userLimitGroup, setUserLimitGroup] = useState(null)
   const [expireDateGroup, setExpireDateGroup] = useState(null)
   const [siteConfigGroup, setSiteConfigGroup] = useState(null)
+  const [invitationCodeGroup, setInvitationCodeGroup] = useState(null)
+  const [invitationLogsGroup, setInvitationLogsGroup] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   
   // 🔥 核心修复：添加搜索状态管理
@@ -552,6 +560,30 @@ const Users = () => {
     }
   }
 
+  // 管理邀请码（新增）
+  const handleManageInvitationCode = (group) => {
+    setInvitationCodeGroup(group)
+    setIsInvitationCodeModalVisible(true)
+  }
+
+  const handleSubmitInvitationCode = async (invitationData) => {
+    try {
+      await setGroupInvitationCode(invitationCodeGroup.id, invitationData)
+      setIsInvitationCodeModalVisible(false)
+      setInvitationCodeGroup(null)
+      message.success('邀请码设置成功')
+      loadUserGroups()
+    } catch (error) {
+      message.error(error.response?.data?.message || '设置失败')
+    }
+  }
+
+  // 查看邀请记录（新增）
+  const handleViewInvitationLogs = (group) => {
+    setInvitationLogsGroup(group)
+    setIsInvitationLogsModalVisible(true)
+  }
+
   // 获取分配积分时使用的组信息
   // 超级管理员：使用被操作用户所在的组信息
   // 组管理员：使用自己的组信息
@@ -741,6 +773,8 @@ const Users = () => {
               onSetExpireDate={handleSetExpireDate}
               onToggleSiteCustomization={handleToggleSiteCustomization}
               onEditSiteConfig={handleEditSiteConfig}
+              onManageInvitationCode={handleManageInvitationCode}
+              onViewInvitationLogs={handleViewInvitationLogs}
             />
           </Card>
         </>
@@ -866,6 +900,32 @@ const Users = () => {
           onCancel={() => {
             setIsSiteConfigModalVisible(false)
             setSiteConfigGroup(null)
+          }}
+        />
+      )}
+
+      {/* 邀请码管理弹窗（新增） */}
+      {isSuperAdmin && (
+        <GroupInvitationCodeModal
+          visible={isInvitationCodeModalVisible}
+          group={invitationCodeGroup}
+          loading={loading}
+          onOk={handleSubmitInvitationCode}
+          onCancel={() => {
+            setIsInvitationCodeModalVisible(false)
+            setInvitationCodeGroup(null)
+          }}
+        />
+      )}
+
+      {/* 邀请记录查看弹窗（新增） */}
+      {isSuperAdmin && (
+        <GroupInvitationLogsModal
+          visible={isInvitationLogsModalVisible}
+          group={invitationLogsGroup}
+          onCancel={() => {
+            setIsInvitationLogsModalVisible(false)
+            setInvitationLogsGroup(null)
           }}
         />
       )}

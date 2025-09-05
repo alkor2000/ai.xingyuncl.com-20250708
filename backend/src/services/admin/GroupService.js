@@ -1,5 +1,5 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限、组有效期和站点配置）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限、组有效期、站点配置和邀请码功能）
  */
 
 const User = require('../../models/User');
@@ -9,7 +9,7 @@ const { DatabaseError, ValidationError, ConflictError } = require('../../utils/e
 
 class GroupService {
   /**
-   * 获取用户分组列表（包含积分池信息、有效期和站点配置）
+   * 获取用户分组列表（包含积分池信息、有效期、站点配置和邀请码信息）
    */
   static async getGroups(currentUser = null) {
     try {
@@ -39,7 +39,12 @@ class GroupService {
                  END as remaining_days,
                  g.site_customization_enabled,
                  g.site_name,
-                 g.site_logo
+                 g.site_logo,
+                 g.invitation_enabled,
+                 g.invitation_code,
+                 g.invitation_usage_count,
+                 g.invitation_max_uses,
+                 g.invitation_expire_at
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           WHERE g.id = ?
@@ -71,7 +76,12 @@ class GroupService {
                  END as remaining_days,
                  g.site_customization_enabled,
                  g.site_name,
-                 g.site_logo
+                 g.site_logo,
+                 g.invitation_enabled,
+                 g.invitation_code,
+                 g.invitation_usage_count,
+                 g.invitation_max_uses,
+                 g.invitation_expire_at
           FROM user_groups g
           LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           GROUP BY g.id
@@ -238,6 +248,242 @@ class GroupService {
       return { success: true, message: '用户分组删除成功' };
     } catch (error) {
       logger.error('删除用户分组失败', { error: error.message, groupId });
+      throw error;
+    }
+  }
+
+  /**
+   * 设置组邀请码（新增功能）
+   */
+  static async setGroupInvitationCode(groupId, invitationData, operatorId = null) {
+    try {
+      const { 
+        enabled, 
+        code, 
+        max_uses = null, 
+        expire_at = null 
+      } = invitationData;
+
+      // 获取当前组信息
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      // 使用事务确保原子性
+      await dbConnection.transaction(async (query) => {
+        if (enabled) {
+          // 启用邀请码
+          if (!code) {
+            throw new ValidationError('请输入邀请码');
+          }
+
+          // 验证邀请码格式（5位英文数字）
+          if (!/^[A-Za-z0-9]{5}$/.test(code)) {
+            throw new ValidationError('邀请码必须是5位英文或数字');
+          }
+
+          // 检查邀请码是否已被其他组使用
+          const existingCodeSql = `
+            SELECT id, name FROM user_groups 
+            WHERE invitation_code = ? AND id != ?
+          `;
+          const { rows: existingGroups } = await query(existingCodeSql, [code.toUpperCase(), groupId]);
+          
+          if (existingGroups.length > 0) {
+            throw new ConflictError(`邀请码已被"${existingGroups[0].name}"使用`);
+          }
+
+          // 更新组邀请码设置
+          const updateSql = `
+            UPDATE user_groups 
+            SET invitation_enabled = 1,
+                invitation_code = ?,
+                invitation_usage_count = CASE 
+                  WHEN invitation_code = ? THEN invitation_usage_count 
+                  ELSE 0 
+                END,
+                invitation_max_uses = ?,
+                invitation_expire_at = ?,
+                updated_at = NOW()
+            WHERE id = ?
+          `;
+          await query(updateSql, [
+            code.toUpperCase(),
+            code.toUpperCase(),
+            max_uses,
+            expire_at,
+            groupId
+          ]);
+
+          logger.info('设置组邀请码成功', {
+            operatorId,
+            groupId,
+            code: code.toUpperCase(),
+            maxUses: max_uses,
+            expireAt: expire_at
+          });
+        } else {
+          // 禁用邀请码
+          const updateSql = `
+            UPDATE user_groups 
+            SET invitation_enabled = 0,
+                updated_at = NOW()
+            WHERE id = ?
+          `;
+          await query(updateSql, [groupId]);
+
+          logger.info('禁用组邀请码', {
+            operatorId,
+            groupId
+          });
+        }
+      });
+
+      return {
+        success: true,
+        message: enabled ? '邀请码设置成功' : '邀请码已禁用'
+      };
+    } catch (error) {
+      logger.error('设置组邀请码失败', { error: error.message, groupId, invitationData });
+      throw error;
+    }
+  }
+
+  /**
+   * 根据邀请码查找组（新增功能）
+   */
+  static async findGroupByInvitationCode(code) {
+    try {
+      if (!code) {
+        return null;
+      }
+
+      const sql = `
+        SELECT * FROM user_groups 
+        WHERE invitation_code = ? 
+          AND invitation_enabled = 1
+          AND is_active = 1
+          AND (invitation_expire_at IS NULL OR invitation_expire_at > NOW())
+          AND (invitation_max_uses IS NULL OR invitation_usage_count < invitation_max_uses)
+      `;
+      const { rows } = await dbConnection.query(sql, [code.toUpperCase()]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const group = rows[0];
+
+      // 检查组容量
+      const hasCapacity = await GroupService.checkGroupCapacity(group.id, 1);
+      if (!hasCapacity) {
+        logger.warn('邀请码对应的组已满员', { 
+          code, 
+          groupId: group.id,
+          groupName: group.name 
+        });
+        return null;
+      }
+
+      return group;
+    } catch (error) {
+      logger.error('根据邀请码查找组失败', { error: error.message, code });
+      throw error;
+    }
+  }
+
+  /**
+   * 使用邀请码（增加使用计数）（新增功能）
+   */
+  static async useInvitationCode(code, userId, ipAddress = null) {
+    try {
+      if (!code) {
+        return { success: false, message: '邀请码为空' };
+      }
+
+      // 查找有效的邀请码
+      const group = await GroupService.findGroupByInvitationCode(code);
+      if (!group) {
+        return { success: false, message: '邀请码无效或已过期' };
+      }
+
+      // 使用事务记录使用情况
+      await dbConnection.transaction(async (query) => {
+        // 1. 增加使用计数
+        const updateSql = `
+          UPDATE user_groups 
+          SET invitation_usage_count = invitation_usage_count + 1,
+              updated_at = NOW()
+          WHERE id = ?
+        `;
+        await query(updateSql, [group.id]);
+
+        // 2. 记录使用日志
+        const logSql = `
+          INSERT INTO invitation_code_logs (group_id, invitation_code, user_id, ip_address, used_at)
+          VALUES (?, ?, ?, ?, NOW())
+        `;
+        await query(logSql, [group.id, code.toUpperCase(), userId, ipAddress]);
+      });
+
+      logger.info('邀请码使用成功', {
+        code: code.toUpperCase(),
+        groupId: group.id,
+        groupName: group.name,
+        userId,
+        ipAddress
+      });
+
+      return {
+        success: true,
+        groupId: group.id,
+        groupName: group.name
+      };
+    } catch (error) {
+      logger.error('使用邀请码失败', { error: error.message, code, userId });
+      return { success: false, message: '使用邀请码失败' };
+    }
+  }
+
+  /**
+   * 获取邀请码使用记录（新增功能）
+   */
+  static async getInvitationCodeLogs(groupId, options = {}) {
+    try {
+      const { page = 1, limit = 20 } = options;
+      const offset = (page - 1) * limit;
+
+      // 获取使用记录
+      const sql = `
+        SELECT 
+          l.*,
+          u.username,
+          u.email
+        FROM invitation_code_logs l
+        LEFT JOIN users u ON l.user_id = u.id
+        WHERE l.group_id = ?
+        ORDER BY l.used_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      const { rows } = await dbConnection.query(sql, [groupId, limit, offset]);
+
+      // 获取总数
+      const countSql = 'SELECT COUNT(*) as total FROM invitation_code_logs WHERE group_id = ?';
+      const { rows: countRows } = await dbConnection.query(countSql, [groupId]);
+      const total = countRows[0].total;
+
+      return {
+        logs: rows,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      };
+    } catch (error) {
+      logger.error('获取邀请码使用记录失败', { error: error.message, groupId });
       throw error;
     }
   }
@@ -594,7 +840,7 @@ class GroupService {
   }
 
   /**
-   * 根据ID查找分组（包含积分池信息、有效期和站点配置）
+   * 根据ID查找分组（包含积分池信息、有效期、站点配置和邀请码信息）
    */
   static async findGroupById(groupId) {
     try {
@@ -639,7 +885,12 @@ class GroupService {
           END as remaining_days,
           g.site_customization_enabled,
           g.site_name,
-          g.site_logo
+          g.site_logo,
+          g.invitation_enabled,
+          g.invitation_code,
+          g.invitation_usage_count,
+          g.invitation_max_uses,
+          g.invitation_expire_at
         FROM user_groups g
         LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
