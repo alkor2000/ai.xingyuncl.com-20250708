@@ -1,5 +1,5 @@
 /**
- * 基础设置表单组件 - 支持只读模式和Logo上传
+ * 基础设置表单组件 - 支持只读模式和Logo上传，新增强制邀请码开关
  */
 
 import React, { useState } from 'react'
@@ -34,7 +34,8 @@ import {
   MailOutlined,
   SafetyOutlined,
   ClockCircleOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  TeamOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
@@ -77,6 +78,9 @@ const BasicSettings = ({
   const { uploadSiteLogo, systemConfig } = useSystemConfigStore()
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoUrl, setLogoUrl] = useState(systemConfig?.site?.logo || '')
+  
+  // 监听允许注册开关的变化
+  const allowRegister = Form.useWatch(['user', 'allow_register'], form)
 
   // 处理Logo上传
   const handleLogoUpload = async (info) => {
@@ -197,8 +201,17 @@ const BasicSettings = ({
               </Form.Item>
             </Card>
 
-            {/* 用户设置 */}
-            <Card title={t('admin.settings.user.title')} size="small" style={{ marginBottom: 16 }}>
+            {/* 用户设置 - 增强注册控制 */}
+            <Card 
+              title={
+                <Space>
+                  <span>{t('admin.settings.user.title')}</span>
+                  <TeamOutlined />
+                </Space>
+              }
+              size="small" 
+              style={{ marginBottom: 16 }}
+            >
               <Form.Item 
                 name={['user', 'allow_register']} 
                 label={t('admin.settings.user.allowRegister')} 
@@ -206,6 +219,47 @@ const BasicSettings = ({
               >
                 <Switch disabled={disabled} />
               </Form.Item>
+              
+              {/* 新增：强制邀请码开关 */}
+              <Form.Item 
+                name={['user', 'require_invitation_code']} 
+                label={
+                  <Space>
+                    <span>强制邀请码注册</span>
+                    <Tooltip title="开启后，新用户必须输入有效的邀请码才能注册">
+                      <InfoCircleOutlined style={{ color: '#999' }} />
+                    </Tooltip>
+                  </Space>
+                }
+                valuePropName="checked"
+                dependencies={['user', 'allow_register']}
+              >
+                <Switch 
+                  disabled={disabled || !allowRegister}
+                  checkedChildren="必须" 
+                  unCheckedChildren="可选" 
+                />
+              </Form.Item>
+              
+              {/* 注册控制说明 */}
+              {allowRegister && (
+                <Alert
+                  message="注册控制说明"
+                  description={
+                    <div>
+                      <div>• <strong>允许注册关闭</strong>：完全禁止新用户注册</div>
+                      <div>• <strong>允许注册开启 + 强制邀请码关闭</strong>：开放注册，邀请码可选</div>
+                      <div>• <strong>允许注册开启 + 强制邀请码开启</strong>：必须有邀请码才能注册</div>
+                      <div style={{ marginTop: 8, color: '#1890ff' }}>
+                        <TeamOutlined /> 邀请码由超级管理员在"用户分组"中设置
+                      </div>
+                    </div>
+                  }
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 16, marginBottom: 16 }}
+                />
+              )}
               
               <Form.Item 
                 name={['user', 'default_tokens']} 
@@ -238,7 +292,7 @@ const BasicSettings = ({
               </Form.Item>
             </Card>
 
-            {/* 登录方式设置 - 新增 */}
+            {/* 登录方式设置 */}
             <Card 
               title={
                 <Space>

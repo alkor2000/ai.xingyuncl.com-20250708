@@ -482,7 +482,7 @@ class AuthControllerRefactored {
   }
   
   /**
-   * 用户注册（支持邀请码，邮箱可选）
+   * 用户注册（支持邀请码，邮箱可选，支持强制邀请码配置）
    * POST /api/auth/register
    */
   static async register(req, res) {
@@ -521,8 +521,9 @@ class AuthControllerRefactored {
         hasInvitationCode: !!invitation_code 
       });
       
-      // 获取系统配置，检查是否允许注册
+      // 获取系统配置，检查注册策略
       let allowRegister = true;
+      let requireInvitationCode = false;  // 新增：是否强制邀请码
       let defaultTokens = 10000;
       let defaultCredits = 1000;
       let defaultGroupId = 1;
@@ -535,12 +536,23 @@ class AuthControllerRefactored {
           // 检查是否允许注册
           allowRegister = systemSettings.user.allow_register !== false;
           
-          if (!allowRegister && !invitation_code) {
-            logger.warn('注册失败：系统已关闭注册功能且未提供邀请码', { username });
-            return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能，需要邀请码才能注册');
+          // 检查是否强制邀请码（新增）
+          requireInvitationCode = systemSettings.user.require_invitation_code === true;
+          
+          // 根据配置判断注册策略
+          if (!allowRegister) {
+            // 完全禁止注册
+            logger.warn('注册失败：系统已关闭注册功能', { username });
+            return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
           }
           
-          // 使用新的字段名
+          if (requireInvitationCode && !invitation_code) {
+            // 强制邀请码但未提供
+            logger.warn('注册失败：系统要求邀请码但未提供', { username });
+            return ResponseHelper.validation(res, ['系统要求邀请码才能注册']);
+          }
+          
+          // 使用配置的默认值
           defaultTokens = systemSettings.user.default_tokens !== undefined 
             ? systemSettings.user.default_tokens 
             : 10000;
@@ -554,8 +566,9 @@ class AuthControllerRefactored {
             : 1;
         }
         
-        logger.info('使用系统配置的默认值', {
+        logger.info('使用系统配置的注册策略', {
           allowRegister,
+          requireInvitationCode,
           defaultTokens,
           defaultCredits,
           defaultGroupId
@@ -586,10 +599,10 @@ class AuthControllerRefactored {
           groupId: targetGroup.id,
           groupName: targetGroup.name
         });
-      } else if (!allowRegister) {
-        // 如果系统关闭了注册且没有邀请码
-        logger.warn('注册失败：系统已关闭注册功能', { username });
-        return ResponseHelper.forbidden(res, '系统暂时关闭了注册功能');
+      } else if (requireInvitationCode) {
+        // 如果强制邀请码但走到这里，说明前面的检查有遗漏
+        logger.warn('注册失败：需要邀请码', { username });
+        return ResponseHelper.validation(res, ['系统要求邀请码才能注册']);
       }
       
       // 如果提供了邮箱，检查邮箱是否已存在
@@ -617,11 +630,11 @@ class AuthControllerRefactored {
       // 如果没有邮箱，生成一个占位邮箱（确保唯一性）
       const finalEmail = email ? email.toLowerCase() : `${username}@noemail.local`;
       
-      // 创建用户 - 修复：直接传递原始密码，让User.create自己处理加密
+      // 创建用户 - 直接传递原始密码，让User.create自己处理加密
       const user = await User.create({
         email: finalEmail,
         username,
-        password: password,  // ✅ 修复：传递原始密码，不要传递加密后的密码
+        password: password,  // 传递原始密码，不要传递加密后的密码
         phone: phone || null,
         role: 'user',
         status: 'active',
@@ -658,7 +671,8 @@ class AuthControllerRefactored {
         creditsQuota: defaultCredits,
         accountExpireAt: user.expire_at,
         groupId: defaultGroupId,
-        usedInvitationCode: !!invitation_code
+        usedInvitationCode: !!invitation_code,
+        wasInvitationCodeRequired: requireInvitationCode
       });
       
       return ResponseHelper.success(res, {
@@ -674,7 +688,7 @@ class AuthControllerRefactored {
   }
 
   /**
-   * 验证邀请码（新增）
+   * 验证邀请码
    * POST /api/auth/verify-invitation-code
    */
   static async verifyInvitationCode(req, res) {

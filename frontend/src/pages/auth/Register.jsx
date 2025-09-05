@@ -49,10 +49,23 @@ const Register = () => {
         if (response.data?.success && response.data?.data) {
           setPublicConfig(response.data.data)
           
-          // 如果不允许注册，设置需要邀请码
-          if (response.data.data.user?.allow_register === false) {
-            setRequireInvitationCode(true)
-            message.info('系统需要邀请码才能注册')
+          // 根据配置设置注册策略
+          const userConfig = response.data.data.user
+          if (userConfig) {
+            if (userConfig.allow_register === false) {
+              // 不允许注册
+              setRequireInvitationCode(false)
+              message.error('系统已关闭注册功能')
+              // 可以跳转到登录页
+              setTimeout(() => navigate('/login'), 2000)
+            } else if (userConfig.require_invitation_code === true) {
+              // 允许注册但强制邀请码
+              setRequireInvitationCode(true)
+              message.info('注册需要邀请码')
+            } else {
+              // 允许自由注册
+              setRequireInvitationCode(false)
+            }
           }
         }
       } catch (error) {
@@ -65,7 +78,8 @@ const Register = () => {
             logo: ''
           },
           user: {
-            allow_register: true
+            allow_register: true,
+            require_invitation_code: false
           }
         })
       } finally {
@@ -74,7 +88,7 @@ const Register = () => {
     }
 
     fetchPublicConfig()
-  }, [])
+  }, [navigate])
 
   // 验证邀请码
   const handleVerifyInvitationCode = async (value) => {
@@ -177,6 +191,28 @@ const Register = () => {
     )
   }
 
+  // 检查是否允许注册
+  if (publicConfig?.user?.allow_register === false) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '20px'
+      }}>
+        <Card style={{ maxWidth: 400, width: '100%', textAlign: 'center' }}>
+          <Title level={3}>注册已关闭</Title>
+          <p>系统暂时关闭了注册功能，请联系管理员。</p>
+          <Button type="primary" onClick={() => navigate('/login')}>
+            返回登录
+          </Button>
+        </Card>
+      </div>
+    )
+  }
+
   const siteName = publicConfig?.site?.name || t('app.name')
 
   return (
@@ -240,6 +276,17 @@ const Register = () => {
           />
         )}
 
+        {/* 显示注册策略提示 */}
+        {requireInvitationCode && (
+          <Alert
+            message="邀请码注册"
+            description="系统要求邀请码才能注册，请向管理员获取邀请码"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <Form
           form={form}
           name="register"
@@ -280,13 +327,13 @@ const Register = () => {
             ]}
             extra={
               requireInvitationCode 
-                ? '系统需要邀请码才能注册' 
-                : '如有邀请码，可加入指定组织'
+                ? '必须输入有效的邀请码才能注册' 
+                : '如有邀请码，可加入指定组织（可选）'
             }
           >
             <Input
               prefix={<TeamOutlined />}
-              placeholder="输入5位邀请码（可选）"
+              placeholder={requireInvitationCode ? "输入5位邀请码（必填）" : "输入5位邀请码（可选）"}
               style={{ textTransform: 'uppercase' }}
               onChange={(e) => {
                 const value = e.target.value
@@ -295,6 +342,9 @@ const Register = () => {
                   if (value.length === 5) {
                     handleVerifyInvitationCode(value)
                   }
+                } else {
+                  setInvitationCodeValid(false)
+                  setInvitationGroupName('')
                 }
               }}
               suffix={
