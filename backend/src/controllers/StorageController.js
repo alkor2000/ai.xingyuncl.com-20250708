@@ -1,6 +1,7 @@
 /**
  * 存储管理控制器
  * 处理文件上传、下载、管理等操作
+ * 修复：正确处理中文文件名编码问题
  */
 
 const multer = require('multer');
@@ -12,11 +13,56 @@ const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const dbConnection = require('../database/connection');
 
+/**
+ * 修复文件名编码问题
+ * Multer默认使用latin1编码，需要转换为UTF-8
+ */
+const fixFileName = (filename) => {
+  if (!filename) return filename;
+  
+  try {
+    // 检测是否已经是正确的UTF-8编码
+    // 如果文件名只包含ASCII字符，直接返回
+    if (/^[\x00-\x7F]*$/.test(filename)) {
+      return filename;
+    }
+    
+    // 尝试从latin1转换为UTF-8
+    // Buffer.from(filename, 'latin1') 将错误编码的字符串转为Buffer
+    // toString('utf8') 将Buffer按UTF-8解码
+    const buffer = Buffer.from(filename, 'latin1');
+    const decoded = buffer.toString('utf8');
+    
+    // 验证解码后的字符串是否有效
+    // 如果解码后包含替换字符（�），说明解码失败，返回原始文件名
+    if (decoded.includes('�')) {
+      logger.warn('文件名解码失败，使用原始文件名', { original: filename });
+      return filename;
+    }
+    
+    logger.info('文件名编码修复成功', { 
+      original: filename,
+      fixed: decoded 
+    });
+    
+    return decoded;
+  } catch (error) {
+    logger.error('修复文件名编码时出错', { 
+      filename, 
+      error: error.message 
+    });
+    return filename;
+  }
+};
+
 // 配置multer内存存储
 const storage = multer.memoryStorage();
 
 // 文件过滤器
 const fileFilter = (req, file, cb) => {
+  // 修复文件名编码
+  file.originalname = fixFileName(file.originalname);
+  
   // 允许的文件类型
   const allowedMimes = [
     // 图片
@@ -74,7 +120,12 @@ class StorageController {
           return ResponseHelper.error(res, '请选择要上传的文件');
         }
         
-        logger.info('文件信息', {
+        // 再次确保所有文件名都是正确编码的
+        req.files.forEach(file => {
+          file.originalname = fixFileName(file.originalname);
+        });
+        
+        logger.info('文件信息（编码修复后）', {
           files: req.files.map(f => ({
             originalname: f.originalname,
             mimetype: f.mimetype,
@@ -137,13 +188,16 @@ class StorageController {
         // 逐个上传文件
         for (const file of req.files) {
           try {
+            // 使用修复后的文件名
+            const fixedFileName = file.originalname;
+            
             logger.info('开始上传文件', {
-              filename: file.originalname,
+              filename: fixedFileName,
               size: file.size
             });
             
-            // 生成OSS key
-            const ossKey = ossService.generateOSSKey(userId, file.originalname, folder_id);
+            // 生成OSS key - 使用修复后的文件名
+            const ossKey = ossService.generateOSSKey(userId, fixedFileName, folder_id);
             logger.info('生成的OSS Key', { ossKey });
             
             // 上传到OSS
@@ -153,13 +207,13 @@ class StorageController {
               {
                 headers: {
                   'Content-Type': file.mimetype,
-                  'Content-Disposition': `attachment; filename="${encodeURIComponent(file.originalname)}"`
+                  'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fixedFileName)}`
                 }
               }
             );
             
             logger.info('文件上传结果', {
-              filename: file.originalname,
+              filename: fixedFileName,
               success: uploadResult.success,
               url: uploadResult.url,
               isLocal: uploadResult.isLocal
@@ -171,17 +225,17 @@ class StorageController {
               thumbnailUrl = ossService.generateThumbnailUrl(uploadResult.url);
             }
             
-            // 保存到数据库
+            // 保存到数据库 - 使用修复后的文件名
             const fileRecord = await UserFile.create({
               user_id: userId,
               folder_id: folder_id || null,
-              original_name: file.originalname,
+              original_name: fixedFileName,  // 使用修复后的文件名
               stored_name: path.basename(ossKey),
               oss_key: ossKey,
               oss_url: uploadResult.url,
               file_size: file.size,
               mime_type: file.mimetype,
-              file_ext: path.extname(file.originalname),
+              file_ext: path.extname(fixedFileName),
               thumbnail_url: thumbnailUrl,
               is_public: is_public === 'true' || is_public === true
             });
