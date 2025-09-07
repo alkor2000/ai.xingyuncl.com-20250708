@@ -1,18 +1,20 @@
 /**
- * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置和邀请码管理
+ * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置、邀请码管理和标签管理
  * 修复：搜索状态保持，确保分页时不丢失搜索条件
- * 修改：允许组管理员管理自己组的邀请码
+ * 修改：允许组管理员管理自己组的邀请码和标签
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col } from 'antd'
+import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs } from 'antd'
 import { 
   UserAddOutlined, 
   PlusOutlined,
   LockOutlined,
   WalletOutlined,
   GiftOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  TagsOutlined,
+  PieChartOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -45,6 +47,11 @@ import GroupExpireDateModal from '../../components/admin/users/GroupExpireDateMo
 
 // 导入组站点配置组件
 import GroupSiteConfigModal from '../../components/admin/users/GroupSiteConfigModal'
+
+// 导入标签管理组件
+import { UserTagAssign, UserTagManager, TagStatistics } from '../../components/admin/tags'
+
+const { TabPane } = Tabs
 
 const Users = () => {
   const { t } = useTranslation()
@@ -95,6 +102,7 @@ const Users = () => {
   const [isSiteConfigModalVisible, setIsSiteConfigModalVisible] = useState(false)
   const [isInvitationCodeModalVisible, setIsInvitationCodeModalVisible] = useState(false)
   const [isInvitationLogsModalVisible, setIsInvitationLogsModalVisible] = useState(false)
+  const [isTagAssignModalVisible, setIsTagAssignModalVisible] = useState(false) // 新增：标签分配弹窗
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -105,7 +113,9 @@ const Users = () => {
   const [siteConfigGroup, setSiteConfigGroup] = useState(null)
   const [invitationCodeGroup, setInvitationCodeGroup] = useState(null)
   const [invitationLogsGroup, setInvitationLogsGroup] = useState(null)
+  const [tagAssignUser, setTagAssignUser] = useState(null) // 新增：标签分配用户
   const [activeTab, setActiveTab] = useState('users')
+  const [activeGroupTab, setActiveGroupTab] = useState('info') // 新增：组管理子标签
   
   // 🔥 核心修复：添加搜索状态管理
   const [currentSearchParams, setCurrentSearchParams] = useState({})
@@ -131,7 +141,8 @@ const Users = () => {
         ...currentSearchParams, // 保持当前搜索条件
         ...searchParams,        // 新的搜索条件（如果有）
         page: pageParams.current || pagination.current,
-        limit: pageParams.pageSize || pagination.pageSize
+        limit: pageParams.pageSize || pagination.pageSize,
+        include_tags: true     // 包含标签信息
       }
 
       console.log('🔍 加载用户列表参数:', finalParams)
@@ -373,6 +384,12 @@ const Users = () => {
   const handleManageModels = (user) => {
     setModelRestrictUser(user)
     setIsModelRestrictModalVisible(true)
+  }
+
+  // 管理用户标签（新增）
+  const handleManageTags = (user) => {
+    setTagAssignUser(user)
+    setIsTagAssignModalVisible(true)
   }
 
   // 挪出用户
@@ -745,6 +762,7 @@ const Users = () => {
               onToggleStatus={handleToggleUserStatus}
               onDelete={handleDeleteUser}
               onManageModels={handleManageModels}
+              onManageTags={handleManageTags}  // 新增：传递标签管理回调
               onDistributeCredits={handleDistributeCredits}
               onRemoveFromGroup={handleRemoveFromGroup}
             />
@@ -752,58 +770,95 @@ const Users = () => {
         </>
       ) : (
         <>
-          {/* 分组列表 */}
-          <Card 
-            title={t('admin.groups.title')}
-            extra={
-              isSuperAdmin && (
-                <Button 
-                  type="primary" 
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingGroup(null)
-                    groupForm.resetFields()
-                    setIsGroupModalVisible(true)
-                  }}
+          {/* 分组管理标签页 */}
+          <Card>
+            <Tabs activeKey={activeGroupTab} onChange={setActiveGroupTab}>
+              <TabPane tab="分组信息" key="info">
+                <Card 
+                  title={t('admin.groups.title')}
+                  extra={
+                    isSuperAdmin && (
+                      <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          setEditingGroup(null)
+                          groupForm.resetFields()
+                          setIsGroupModalVisible(true)
+                        }}
+                      >
+                        {t('admin.groups.addGroup')}
+                      </Button>
+                    )
+                  }
                 >
-                  {t('admin.groups.addGroup')}
-                </Button>
-              )
-            }
-          >
-            {isGroupAdmin && (
-              <Alert
-                message="提示"
-                description={
-                  <div>
-                    <p>管理员只能查看所在分组信息，不能创建或修改分组。</p>
-                    {currentGroupInfo?.site_customization_enabled && (
-                      <p>您的组已开启站点自定义功能，可以配置专属的站点名称。</p>
-                    )}
-                    <p>您可以管理本组的邀请码设置。</p>
-                  </div>
-                }
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-            )}
-            <UserGroupTable
-              groups={userGroups}
-              loading={loading}
-              isGroupAdmin={isGroupAdmin}
-              isSuperAdmin={isSuperAdmin}
-              currentUser={currentUser}
-              onEdit={handleEditGroup}
-              onDelete={handleDeleteGroup}
-              onSetCreditsPool={handleSetCreditsPool}
-              onSetUserLimit={handleSetUserLimit}
-              onSetExpireDate={handleSetExpireDate}
-              onToggleSiteCustomization={handleToggleSiteCustomization}
-              onEditSiteConfig={handleEditSiteConfig}
-              onManageInvitationCode={handleManageInvitationCode}
-              onViewInvitationLogs={handleViewInvitationLogs}
-            />
+                  {isGroupAdmin && (
+                    <Alert
+                      message="提示"
+                      description={
+                        <div>
+                          <p>管理员只能查看所在分组信息，不能创建或修改分组。</p>
+                          {currentGroupInfo?.site_customization_enabled && (
+                            <p>您的组已开启站点自定义功能，可以配置专属的站点名称。</p>
+                          )}
+                          <p>您可以管理本组的邀请码设置和标签。</p>
+                        </div>
+                      }
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
+                  <UserGroupTable
+                    groups={userGroups}
+                    loading={loading}
+                    isGroupAdmin={isGroupAdmin}
+                    isSuperAdmin={isSuperAdmin}
+                    currentUser={currentUser}
+                    onEdit={handleEditGroup}
+                    onDelete={handleDeleteGroup}
+                    onSetCreditsPool={handleSetCreditsPool}
+                    onSetUserLimit={handleSetUserLimit}
+                    onSetExpireDate={handleSetExpireDate}
+                    onToggleSiteCustomization={handleToggleSiteCustomization}
+                    onEditSiteConfig={handleEditSiteConfig}
+                    onManageInvitationCode={handleManageInvitationCode}
+                    onViewInvitationLogs={handleViewInvitationLogs}
+                  />
+                </Card>
+              </TabPane>
+
+              {/* 标签管理Tab（新增） */}
+              <TabPane 
+                tab={
+                  <span>
+                    <TagsOutlined />
+                    标签管理
+                  </span>
+                } 
+                key="tags"
+              >
+                <UserTagManager 
+                  groupId={isGroupAdmin ? currentUser.group_id : (currentGroupInfo?.id || 1)}
+                  currentUser={currentUser}
+                />
+              </TabPane>
+
+              {/* 标签统计Tab（新增） */}
+              <TabPane 
+                tab={
+                  <span>
+                    <PieChartOutlined />
+                    标签统计
+                  </span>
+                } 
+                key="tag-stats"
+              >
+                <TagStatistics 
+                  groupId={isGroupAdmin ? currentUser.group_id : (currentGroupInfo?.id || 1)}
+                />
+              </TabPane>
+            </Tabs>
           </Card>
         </>
       )}
@@ -858,6 +913,23 @@ const Users = () => {
         onSuccess={() => {
           // 🔥 修复：模型权限更新后保持当前搜索和分页状态
           loadUsers()
+        }}
+      />
+
+      {/* 用户标签分配弹窗（新增） */}
+      <UserTagAssign
+        visible={isTagAssignModalVisible}
+        user={tagAssignUser}
+        groupId={tagAssignUser?.group_id}
+        onCancel={() => {
+          setIsTagAssignModalVisible(false)
+          setTagAssignUser(null)
+        }}
+        onSuccess={() => {
+          // 更新用户列表以显示最新标签
+          loadUsers()
+          setIsTagAssignModalVisible(false)
+          setTagAssignUser(null)
         }}
       />
 

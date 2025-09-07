@@ -1,5 +1,5 @@
 /**
- * 用户管理控制器 - 使用Service层处理业务逻辑（包含账号有效期管理）
+ * 用户管理控制器 - 使用Service层处理业务逻辑（包含账号有效期管理和标签支持）
  */
 
 const { UserService } = require('../../services/admin');
@@ -20,7 +20,8 @@ class UserManagementController {
         role: req.query.role,
         status: req.query.status,
         group_id: req.query.group_id ? parseInt(req.query.group_id) : null,
-        search: req.query.search
+        search: req.query.search,
+        include_tags: req.query.include_tags === 'true'  // 新增：是否包含标签信息
       };
 
       const result = await UserService.getUserList(filters, currentUser);
@@ -229,8 +230,6 @@ class UserManagementController {
       // 清除相关缓存
       await CacheService.clearAIModelsCache();
       await CacheService.clearUserPermissionsCache();
-
-
 
       return ResponseHelper.success(res, result, '用户模型限制更新成功');
     } catch (error) {

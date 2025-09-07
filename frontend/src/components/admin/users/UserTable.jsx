@@ -1,5 +1,5 @@
 /**
- * 用户列表表格组件（包含组积分分配功能和账号有效期）
+ * 用户列表表格组件（包含组积分分配功能、账号有效期和标签管理）
  */
 
 import React from 'react'
@@ -18,7 +18,8 @@ import {
   RobotOutlined,
   GiftOutlined,
   LogoutOutlined,
-  UserOutlined
+  UserOutlined,
+  TagsOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -36,7 +37,8 @@ const UserTable = ({
   onDelete,
   onManageModels,
   onDistributeCredits,
-  onRemoveFromGroup
+  onRemoveFromGroup,
+  onManageTags // 新增：管理标签回调
 }) => {
   const { t } = useTranslation()
   
@@ -72,7 +74,7 @@ const UserTable = ({
     return <Tag color="default">无积分</Tag>
   }
 
-  // 获取账号状态标签（新增）
+  // 获取账号状态标签
   const getAccountStatusTag = (user) => {
     // 超级管理员不显示有效期
     if (user.role === 'super_admin') {
@@ -139,6 +141,42 @@ const UserTable = ({
           <span style={{ color: '#999' }}>{t('admin.users.noGroup')}</span>
         )
       )
+    },
+    {
+      title: '标签',
+      key: 'tags',
+      width: 200,
+      render: (_, record) => {
+        const tags = record.tags || []
+        const tagCount = record.tag_count || 0
+        
+        if (tagCount === 0) {
+          return <span style={{ color: '#999', fontSize: 12 }}>无标签</span>
+        }
+        
+        // 最多显示3个标签，多余的显示数量
+        const displayTags = tags.slice(0, 3)
+        const remainingCount = tagCount - displayTags.length
+        
+        return (
+          <Space size={4} wrap>
+            {displayTags.map(tag => (
+              <Tag
+                key={tag.id}
+                color={tag.color || '#1677ff'}
+                style={{ margin: 0, fontSize: 11 }}
+              >
+                {tag.name}
+              </Tag>
+            ))}
+            {remainingCount > 0 && (
+              <Tag style={{ margin: 0, fontSize: 11 }}>
+                +{remainingCount}
+              </Tag>
+            )}
+          </Space>
+        )
+      }
     },
     {
       title: t('admin.users.table.status'),
@@ -251,10 +289,15 @@ const UserTable = ({
       title: t('admin.users.table.actions'),
       key: 'actions',
       fixed: 'right',
-      width: 280,
+      width: 320,
       render: (_, record) => {
         // 是否可以管理此用户的模型权限
         const canManageUserModels = record.role === 'user' && (
+          isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
+        )
+        
+        // 是否可以管理标签（新增）
+        const canManageUserTags = (
           isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
         )
         
@@ -297,6 +340,19 @@ const UserTable = ({
                 onClick={() => onEdit(record)} 
               />
             </Tooltip>
+            
+            {/* 标签管理按钮（新增） */}
+            {canManageUserTags && onManageTags && (
+              <Tooltip title="管理标签">
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<TagsOutlined />} 
+                  onClick={() => onManageTags(record)} 
+                  style={{ color: '#fa8c16' }}
+                />
+              </Tooltip>
+            )}
             
             {canManageUserModels && (
               <Tooltip title="管理模型权限">
@@ -375,28 +431,6 @@ const UserTable = ({
                 </Popconfirm>
               </Tooltip>
             )}
-            
-            {/* 删除按钮已移除 - 使用禁用功能代替删除 */}
-            {/* 如需恢复删除功能，取消下面的注释 */}
-            {/*
-            {isSuperAdmin && record.id !== currentUser?.id && (
-              <Tooltip title={t('button.delete')}>
-                <Popconfirm
-                  title={t('admin.users.delete.confirm')}
-                  onConfirm={() => onDelete(record.id)}
-                  okText={t('button.confirm')}
-                  cancelText={t('button.cancel')}
-                >
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    danger 
-                    icon={<DeleteOutlined />} 
-                  />
-                </Popconfirm>
-              </Tooltip>
-            )}
-            */}
           </Space>
         )
       }

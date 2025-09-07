@@ -14,7 +14,10 @@ import {
   Tag,
   Space,
   message,
-  Alert
+  Alert,
+  Checkbox,
+  Divider,
+  Tooltip
 } from 'antd'
 import {
   UserOutlined,
@@ -22,11 +25,14 @@ import {
   GlobalOutlined,
   LockOutlined,
   UnlockOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  TagsOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
 import useAdminStore from '../../stores/adminStore'
+import apiClient from '../../utils/api'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -45,6 +51,9 @@ const KnowledgeModuleFormModal = ({
   const { userGroups, fetchUserGroups } = useAdminStore()
   const [loading, setLoading] = useState(false)
   const [moduleScope, setModuleScope] = useState('personal')
+  const [groupTags, setGroupTags] = useState([])
+  const [loadingTags, setLoadingTags] = useState(false)
+  const [tagAccessMode, setTagAccessMode] = useState('all') // 'all' 或 'selected'
 
   useEffect(() => {
     if (visible) {
@@ -62,10 +71,19 @@ const KnowledgeModuleFormModal = ({
           ...module,
           tags: module.tags ? JSON.parse(module.tags) : [],
           group_ids: module.group_ids || [],
+          // 设置标签访问模式
+          tag_access_mode: module.allowed_tag_ids && module.allowed_tag_ids.length > 0 ? 'selected' : 'all',
+          allowed_tag_ids: module.allowed_tag_ids || [],
           // 添加创建人显示（只读）
           creator_name: module.creator_name || '未知'
         })
         setModuleScope(module.module_scope)
+        setTagAccessMode(module.allowed_tag_ids && module.allowed_tag_ids.length > 0 ? 'selected' : 'all')
+        
+        // 如果是团队模块，加载组内标签
+        if (module.module_scope === 'team' && module.group_id) {
+          loadGroupTags(module.group_id)
+        }
       } else {
         // 创建模式
         form.resetFields()
@@ -76,13 +94,52 @@ const KnowledgeModuleFormModal = ({
           sort_order: 0,
           is_active: true,
           group_ids: [],
+          tag_access_mode: 'all',
+          allowed_tag_ids: [],
           // 新建时显示当前用户为创建人
           creator_name: user.username || user.email
         })
         setModuleScope('personal')
+        setTagAccessMode('all')
       }
     }
   }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups, user])
+
+  // 加载组内标签
+  const loadGroupTags = async (groupId) => {
+    setLoadingTags(true)
+    try {
+      const response = await apiClient.get(`/admin/user-tags/group/${groupId}`)
+      setGroupTags(response.data.data || [])
+    } catch (error) {
+      console.error('加载组内标签失败:', error)
+      setGroupTags([])
+    } finally {
+      setLoadingTags(false)
+    }
+  }
+
+  // 当模块范围改变时
+  const handleScopeChange = (e) => {
+    const newScope = e.target.value
+    setModuleScope(newScope)
+    
+    // 如果切换到团队模块，加载当前组的标签
+    if (newScope === 'team' && user.group_id) {
+      loadGroupTags(user.group_id)
+    } else {
+      setGroupTags([])
+    }
+    
+    // 重置标签访问设置
+    if (newScope !== 'team') {
+      form.setFieldsValue({
+        tag_access_mode: 'all',
+        allowed_tag_ids: []
+      })
+      setTagAccessMode('all')
+    }
+  }
 
   const handleSubmit = async (values) => {
     setLoading(true)
@@ -90,6 +147,7 @@ const KnowledgeModuleFormModal = ({
       // 移除创建人字段（不需要提交）
       const submitData = { ...values }
       delete submitData.creator_name
+      delete submitData.tag_access_mode // 这只是UI控制字段
       
       // 处理标签
       if (submitData.tags && submitData.tags.length > 0) {
@@ -98,15 +156,26 @@ const KnowledgeModuleFormModal = ({
         submitData.tags = null
       }
 
-      // 个人模块不需要设置内容可见性和group_ids
+      // 个人模块不需要设置内容可见性、group_ids和标签权限
       if (submitData.module_scope === 'personal') {
         submitData.content_visible = true
         delete submitData.group_ids
+        delete submitData.allowed_tag_ids
       }
       
-      // 团队模块不需要group_ids
+      // 团队模块处理标签权限
       if (submitData.module_scope === 'team') {
-        delete submitData.group_ids
+        delete submitData.group_ids // 团队模块不需要group_ids
+        
+        // 如果选择了"所有组内用户"，清空allowed_tag_ids
+        if (values.tag_access_mode === 'all') {
+          submitData.allowed_tag_ids = []
+        }
+      }
+      
+      // 系统模块不需要标签权限
+      if (submitData.module_scope === 'system') {
+        delete submitData.allowed_tag_ids
       }
 
       if (module) {
@@ -152,7 +221,7 @@ const KnowledgeModuleFormModal = ({
       onCancel={onCancel}
       onOk={() => form.submit()}
       confirmLoading={loading}
-      width={700}
+      width={800}
       destroyOnClose
     >
       <Form
@@ -221,7 +290,7 @@ const KnowledgeModuleFormModal = ({
           rules={[{ required: true }]}
         >
           <Radio.Group 
-            onChange={(e) => setModuleScope(e.target.value)}
+            onChange={handleScopeChange}
             disabled={!!module} // 编辑时不能修改范围
           >
             {getAvailableScopes().map(scope => (
@@ -240,10 +309,9 @@ const KnowledgeModuleFormModal = ({
           label={
             <Space>
               提示词类型
-              <InfoCircleOutlined 
-                style={{ color: '#999' }}
-                title="系统级提示词会作为system角色发送给AI，优先级最高"
-              />
+              <Tooltip title="系统级提示词会作为system角色发送给AI，优先级最高">
+                <InfoCircleOutlined style={{ color: '#999' }} />
+              </Tooltip>
             </Space>
           }
           rules={[{ required: true }]}
@@ -264,16 +332,66 @@ const KnowledgeModuleFormModal = ({
           </Radio.Group>
         </Form.Item>
 
+        {/* 团队模块的标签访问权限设置 */}
+        {moduleScope === 'team' && (
+          <>
+            <Divider />
+            <Form.Item
+              name="tag_access_mode"
+              label={
+                <Space>
+                  <TagsOutlined />
+                  访问权限设置
+                  <Tooltip title="控制哪些用户可以使用此模块">
+                    <QuestionCircleOutlined style={{ color: '#999' }} />
+                  </Tooltip>
+                </Space>
+              }
+            >
+              <Radio.Group onChange={(e) => setTagAccessMode(e.target.value)}>
+                <Radio value="all">所有组内用户</Radio>
+                <Radio value="selected">指定标签用户</Radio>
+              </Radio.Group>
+            </Form.Item>
+
+            {tagAccessMode === 'selected' && (
+              <Form.Item
+                name="allowed_tag_ids"
+                label="选择允许访问的用户标签"
+                extra="只有拥有选中标签的用户才能使用此模块（创建者始终可以访问）"
+              >
+                <Checkbox.Group style={{ width: '100%' }}>
+                  <Space wrap>
+                    {loadingTags ? (
+                      <span>加载标签中...</span>
+                    ) : groupTags.length > 0 ? (
+                      groupTags.map(tag => (
+                        <Checkbox key={tag.id} value={tag.id}>
+                          <Tag color={tag.color || '#1677ff'}>
+                            {tag.name}
+                          </Tag>
+                        </Checkbox>
+                      ))
+                    ) : (
+                      <span style={{ color: '#999' }}>暂无可用标签</span>
+                    )}
+                  </Space>
+                </Checkbox.Group>
+              </Form.Item>
+            )}
+            <Divider />
+          </>
+        )}
+
         {moduleScope === 'system' && canCreateSystem && (
           <Form.Item
             name="group_ids"
             label={
               <Space>
                 可见用户组
-                <InfoCircleOutlined 
-                  style={{ color: '#999' }} 
-                  title="选择哪些用户组可以使用该模块，留空表示所有用户可用"
-                />
+                <Tooltip title="选择哪些用户组可以使用该模块，留空表示所有用户可用">
+                  <InfoCircleOutlined style={{ color: '#999' }} />
+                </Tooltip>
               </Space>
             }
           >
@@ -349,6 +467,16 @@ const KnowledgeModuleFormModal = ({
             description={
               <>
                 <div>修改模块内容后，已使用该模块的组合需要重新保存才能生效。</div>
+                {moduleScope === 'team' && (
+                  <div style={{ marginTop: 8 }}>
+                    <strong>团队模块权限说明：</strong>
+                    <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                      <li>不设置标签限制：组内所有用户都可以使用</li>
+                      <li>设置标签限制：只有拥有指定标签的用户可以使用</li>
+                      <li>模块创建者始终拥有访问权限</li>
+                    </ul>
+                  </div>
+                )}
                 {moduleScope === 'system' && (
                   <div style={{ marginTop: 8 }}>
                     <strong>全局模块权限说明：</strong>

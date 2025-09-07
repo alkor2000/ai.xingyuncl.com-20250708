@@ -1,5 +1,5 @@
 /**
- * 用户服务层 - 处理用户相关的业务逻辑（包含账号有效期管理）
+ * 用户服务层 - 处理用户相关的业务逻辑（包含账号有效期管理和标签支持）
  */
 
 const User = require('../../models/User');
@@ -380,7 +380,7 @@ class UserService {
   }
 
   /**
-   * 获取用户列表（支持高级过滤）
+   * 获取用户列表（支持高级过滤和标签）
    */
   static async getUserList(filters = {}, currentUser = null) {
     try {
@@ -391,18 +391,20 @@ class UserService {
         status,
         group_id,
         search,
+        include_tags = false,  // 新增：是否包含标签信息
         sort_by = 'created_at',
         sort_order = 'DESC'
       } = filters;
 
-      // 调用模型方法获取列表
+      // 调用模型方法获取列表，传递include_tags参数
       const result = await User.getList({
         page,
         limit,
         role,
         status,
         group_id,
-        search
+        search,
+        include_tags  // 传递标签参数
       }, currentUser);
 
       return result;

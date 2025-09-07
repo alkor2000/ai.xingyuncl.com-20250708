@@ -2,7 +2,7 @@
  * 知识模块列表组件 - Apple风格卡片设计
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Row,
   Col,
@@ -25,6 +25,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
+  EyeInvisibleOutlined,
   UserOutlined,
   TeamOutlined,
   GlobalOutlined,
@@ -33,11 +34,14 @@ import {
   MoreOutlined,
   FireOutlined,
   ClockCircleOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  TagsOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
 import useAdminStore from '../../stores/adminStore'
+import apiClient from '../../utils/api'
 import { formatTokenCount } from '../../utils/tokenCalculator'
 import './KnowledgeModuleList.less'
 
@@ -59,6 +63,40 @@ const KnowledgeModuleList = ({
   const [searchText, setSearchText] = useState('')
   const [filterScope, setFilterScope] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [tagInfoCache, setTagInfoCache] = useState({}) // 缓存标签信息
+
+  // 加载标签信息
+  useEffect(() => {
+    loadTagInfo()
+  }, [modules])
+
+  // 批量加载标签信息
+  const loadTagInfo = async () => {
+    try {
+      // 收集所有需要的标签ID
+      const tagIds = new Set()
+      modules.forEach(module => {
+        if (module.allowed_tag_ids && module.allowed_tag_ids.length > 0) {
+          module.allowed_tag_ids.forEach(id => tagIds.add(id))
+        }
+      })
+
+      if (tagIds.size === 0) return
+
+      // 批量获取标签信息
+      const response = await apiClient.post('/admin/user-tags/batch-info', {
+        tag_ids: Array.from(tagIds)
+      })
+
+      const tagMap = {}
+      response.data.data.forEach(tag => {
+        tagMap[tag.id] = tag
+      })
+      setTagInfoCache(tagMap)
+    } catch (error) {
+      console.error('加载标签信息失败:', error)
+    }
+  }
 
   // 处理删除
   const handleDelete = async (moduleId) => {
@@ -130,6 +168,11 @@ const KnowledgeModuleList = ({
                    (module.module_scope === 'team' && canCreateTeam) ||
                    (module.module_scope === 'system' && canCreateSystem)
     const canDelete = module.creator_id === user.id || canCreateSystem
+    
+    // 检查是否有标签限制
+    const hasTagRestriction = module.module_scope === 'team' && 
+                             module.allowed_tag_ids && 
+                             module.allowed_tag_ids.length > 0
     
     const moreMenu = (
       <Menu className="apple-menu">
@@ -210,6 +253,32 @@ const KnowledgeModuleList = ({
                 <Tag className="apple-tag apple-tag-orange">
                   <EyeInvisibleOutlined /> 内容隐藏
                 </Tag>
+              )}
+              {/* 标签限制标识 */}
+              {hasTagRestriction && (
+                <Tooltip 
+                  title={
+                    <div>
+                      <div style={{ marginBottom: 4 }}>访问限制：</div>
+                      {module.allowed_tag_ids.map(tagId => {
+                        const tag = tagInfoCache[tagId]
+                        return tag ? (
+                          <Tag 
+                            key={tagId} 
+                            color={tag.color}
+                            style={{ margin: '2px' }}
+                          >
+                            {tag.name}
+                          </Tag>
+                        ) : null
+                      })}
+                    </div>
+                  }
+                >
+                  <Tag className="apple-tag apple-tag-orange">
+                    <SafetyCertificateOutlined /> 限制访问
+                  </Tag>
+                </Tooltip>
               )}
             </div>
           </div>

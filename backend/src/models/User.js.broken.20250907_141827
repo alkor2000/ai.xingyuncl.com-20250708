@@ -361,6 +361,9 @@ class User {
   }
 
   /**
+   * 获取用户列表 - 支持基于用户组的权限过滤
+   */
+  /**
    * 获取用户列表 - 支持基于用户组的权限过滤和标签信息
    */
   static async getList(options = {}, currentUser = null) {
@@ -551,48 +554,6 @@ class User {
     }
   }
 
-  /**
-   * 更新用户信息
-   */
-  async update(updateData) {
-    try {
-      const allowedFields = [
-        'email', 'username', 'phone', 'role', 'group_id', 'status', 'remark',
-        'token_quota', 'credits_quota', 'credits_expire_at', 'expire_at',
-        'email_verified', 'password'
-      ];
-      
-      const updateFields = Object.keys(updateData).filter(field => allowedFields.includes(field));
-      
-      if (updateFields.length === 0) {
-        return this;
-      }
-
-      // 处理密码更新
-      if (updateData.password) {
-        updateData.password_hash = await bcrypt.hash(updateData.password, 10);
-        delete updateData.password;
-        updateFields[updateFields.indexOf('password')] = 'password_hash';
-      }
-
-      const setClause = updateFields.map(field => `${field} = ?`).join(', ');
-      const values = updateFields.map(field => updateData[field === 'password_hash' ? 'password_hash' : field]);
-      values.push(this.id);
-
-      const sql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
-      await dbConnection.query(sql, values);
-
-      // 更新当前对象的属性
-      updateFields.forEach(field => {
-        const originalField = field === 'password_hash' ? 'password' : field;
-        if (field === 'password_hash') {
-          this.password_hash = updateData.password_hash;
-        } else {
-          this[field] = updateData[originalField];
-        }
-      });
-
-      logger.info('用户信息更新成功', { userId: this.id, updatedFields: updateFields });
 
       return this;
     } catch (error) {

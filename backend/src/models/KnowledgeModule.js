@@ -3,7 +3,7 @@
  */
 
 const dbConnection = require('../database/connection');
-const { DatabaseError } = require('../utils/errors');
+const { DatabaseError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const { calculateTokens } = require('../utils/tokenCalculator');
 
@@ -27,11 +27,14 @@ class KnowledgeModule {
     this.usage_count = data.usage_count || 0;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
+    // 新增：允许访问的标签ID列表
+    this.allowed_tag_ids = data.allowed_tag_ids || [];
   }
 
   /**
-   * 获取用户可用的知识模块列表
+   * 获取用户可用的知识模块列表（优化版本）
    * 修复：正确处理系统级模块的权限和可见性
+   * 优化：减少N+1查询问题
    */
   static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
@@ -44,27 +47,23 @@ class KnowledgeModule {
       // 超级管理员可以看到所有模块
       if (userRole === 'super_admin') {
         let sql = `
-          SELECT km.*, u.username as creator_name, ug.name as group_name
+          SELECT km.*, u.username as creator_name, ug.name as group_name,
+                 GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
           FROM knowledge_modules km
           LEFT JOIN users u ON km.creator_id = u.id
           LEFT JOIN user_groups ug ON km.group_id = ug.id
+          LEFT JOIN knowledge_module_tag_permissions kmtp ON km.id = kmtp.module_id
         `;
         
         if (!includeInactive) {
           sql += ' WHERE km.is_active = 1';
         }
         
-        sql += ' ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
+        sql += ' GROUP BY km.id ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
         
         const { rows } = await dbConnection.query(sql);
         
-        logger.debug('超级管理员获取所有模块', {
-          userId,
-          moduleCount: rows.length,
-          includeInactive
-        });
-        
-        return rows.map(row => {
+        const modules = rows.map(row => {
           const module = new KnowledgeModule(row);
           module.creator_name = row.creator_name;
           module.group_name = row.group_name;
@@ -78,23 +77,61 @@ class KnowledgeModule {
             }
           }
           
-          // 超级管理员可以看到所有内容
+          // 解析allowed_tag_ids
+          if (row.allowed_tag_ids_str) {
+            module.allowed_tag_ids = row.allowed_tag_ids_str.split(',').map(id => parseInt(id));
+          } else {
+            module.allowed_tag_ids = [];
+          }
+          
           return module;
         });
+        
+        logger.debug('超级管理员获取所有模块', {
+          userId,
+          moduleCount: modules.length,
+          includeInactive
+        });
+        
+        return modules;
       }
       
       // 普通用户和组管理员的权限检查
-      // 修复：正确处理group_ids为NULL或空数组的情况
+      // 获取用户的标签ID列表
+      const userTagsSql = `
+        SELECT tag_id FROM user_tag_relations WHERE user_id = ?
+      `;
+      const { rows: userTagRows } = await dbConnection.query(userTagsSql, [userId]);
+      const userTagIds = userTagRows.map(row => row.tag_id);
+      
+      // 优化查询：使用LEFT JOIN一次性获取所有需要的数据
       let sql = `
-        SELECT km.*, u.username as creator_name, ug.name as group_name
+        SELECT DISTINCT km.*, u.username as creator_name, ug.name as group_name,
+               GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
         FROM knowledge_modules km
         LEFT JOIN users u ON km.creator_id = u.id
         LEFT JOIN user_groups ug ON km.group_id = ug.id
+        LEFT JOIN knowledge_module_tag_permissions kmtp ON km.id = kmtp.module_id
         WHERE (
           -- 个人模块：只能看到自己的
           (km.module_scope = 'personal' AND km.creator_id = ?)
-          -- 团队模块：同组可见
-          OR (km.module_scope = 'team' AND km.group_id = ?)
+          -- 团队模块：同组可见，需要检查标签权限
+          OR (km.module_scope = 'team' AND km.group_id = ? AND (
+            -- 创建者始终可见
+            km.creator_id = ?
+            -- 没有标签限制的模块对所有组内用户可见
+            OR NOT EXISTS (
+              SELECT 1 FROM knowledge_module_tag_permissions 
+              WHERE module_id = km.id
+            )
+            ${userTagIds.length > 0 ? `
+            -- 有标签限制的模块，用户必须拥有至少一个允许的标签
+            OR EXISTS (
+              SELECT 1 FROM knowledge_module_tag_permissions kmtp2
+              WHERE kmtp2.module_id = km.id 
+              AND kmtp2.tag_id IN (${userTagIds.map(() => '?').join(',')})
+            )` : ''}
+          ))
           -- 全局模块：根据group_ids权限控制
           OR (km.module_scope = 'system' AND (
             km.group_ids IS NULL  -- NULL表示所有组可见
@@ -104,15 +141,21 @@ class KnowledgeModule {
         )
       `;
       
+      const params = [userId, groupId, userId];
+      if (userTagIds.length > 0) {
+        params.push(...userTagIds);
+      }
+      params.push(groupId || 0);
+      
       if (!includeInactive) {
         sql += ' AND km.is_active = 1';
       }
       
-      sql += ' ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
+      sql += ' GROUP BY km.id ORDER BY km.module_scope DESC, km.sort_order ASC, km.created_at DESC';
       
-      const { rows } = await dbConnection.query(sql, [userId, groupId, groupId || 0]);
+      const { rows } = await dbConnection.query(sql, params);
       
-      return rows.map(row => {
+      const modules = rows.map(row => {
         const module = new KnowledgeModule(row);
         module.creator_name = row.creator_name;
         module.group_name = row.group_name;
@@ -126,30 +169,80 @@ class KnowledgeModule {
           }
         }
         
-        // 修复：系统级模块的内容可见性处理
+        // 解析allowed_tag_ids
+        if (row.allowed_tag_ids_str) {
+          module.allowed_tag_ids = row.allowed_tag_ids_str.split(',').map(id => parseInt(id));
+        } else {
+          module.allowed_tag_ids = [];
+        }
+        
+        // 处理内容可见性
         if (module.module_scope === 'system') {
-          // 系统级模块：如果content_visible为true，则内容对所有有权限的用户可见
-          // 只有当content_visible为false时才隐藏内容
           if (!module.content_visible) {
             module.content = null;
             module.content_hidden = true;
-            // 注意：即使内容隐藏，token_count仍然显示，以便用户了解模块大小
           }
         } else if (module.module_scope === 'team') {
-          // 团队模块：非创建者需要检查content_visible
           if (module.creator_id !== userId && !module.content_visible) {
             module.content = null;
             module.content_hidden = true;
-            // 团队模块隐藏内容时也保留token_count显示
           }
         }
-        // 个人模块：创建者始终可见，所以不需要处理
         
         return module;
       });
+      
+      return modules;
     } catch (error) {
       logger.error('获取用户可用知识模块失败:', error);
       throw new DatabaseError('获取知识模块列表失败', error);
+    }
+  }
+
+  /**
+   * 获取模块的标签权限列表
+   */
+  static async getModuleTagPermissions(moduleId) {
+    try {
+      const sql = 'SELECT tag_id FROM knowledge_module_tag_permissions WHERE module_id = ?';
+      const { rows } = await dbConnection.query(sql, [moduleId]);
+      return rows.map(row => row.tag_id);
+    } catch (error) {
+      logger.error('获取模块标签权限失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 设置模块的标签权限
+   */
+  static async setModuleTagPermissions(moduleId, tagIds, operatorId) {
+    const transaction = await dbConnection.beginTransaction();
+    try {
+      // 删除旧的权限
+      await transaction.query('DELETE FROM knowledge_module_tag_permissions WHERE module_id = ?', [moduleId]);
+      
+      // 添加新的权限
+      if (tagIds && tagIds.length > 0) {
+        for (const tagId of tagIds) {
+          await transaction.query(
+            'INSERT INTO knowledge_module_tag_permissions (module_id, tag_id, created_by) VALUES (?, ?, ?)',
+            [moduleId, tagId, operatorId]
+          );
+        }
+      }
+      
+      await transaction.commit();
+      
+      logger.info('设置模块标签权限成功', {
+        moduleId,
+        tagIds,
+        operatorId
+      });
+    } catch (error) {
+      await transaction.rollback();
+      logger.error('设置模块标签权限失败:', error);
+      throw new DatabaseError('设置模块标签权限失败', error);
     }
   }
 
@@ -200,11 +293,14 @@ class KnowledgeModule {
   static async findById(id, userId = null) {
     try {
       const sql = `
-        SELECT km.*, u.username as creator_name, ug.name as group_name
+        SELECT km.*, u.username as creator_name, ug.name as group_name,
+               GROUP_CONCAT(kmtp.tag_id) as allowed_tag_ids_str
         FROM knowledge_modules km
         LEFT JOIN users u ON km.creator_id = u.id
         LEFT JOIN user_groups ug ON km.group_id = ug.id
+        LEFT JOIN knowledge_module_tag_permissions kmtp ON km.id = kmtp.module_id
         WHERE km.id = ?
+        GROUP BY km.id
       `;
       
       const { rows } = await dbConnection.query(sql, [id]);
@@ -226,6 +322,13 @@ class KnowledgeModule {
         }
       }
       
+      // 解析allowed_tag_ids
+      if (rows[0].allowed_tag_ids_str) {
+        module.allowed_tag_ids = rows[0].allowed_tag_ids_str.split(',').map(id => parseInt(id));
+      } else {
+        module.allowed_tag_ids = [];
+      }
+      
       // 检查内容可见性
       if (userId) {
         // 获取用户角色
@@ -242,20 +345,17 @@ class KnowledgeModule {
           return module;
         }
         
-        // 修复：系统级模块的内容可见性处理
+        // 系统级模块的内容可见性处理
         if (module.module_scope === 'system') {
-          // 系统级模块只在content_visible为false时隐藏内容
           if (!module.content_visible) {
             module.content = null;
             module.content_hidden = true;
-            // 保留token_count显示
           }
         } else if (module.module_scope === 'team') {
           // 团队模块：非创建者需要检查content_visible
           if (module.creator_id !== userId && !module.content_visible) {
             module.content = null;
             module.content_hidden = true;
-            // 保留token_count显示
           }
         } else if (module.module_scope === 'personal' && module.creator_id !== userId) {
           // 个人模块：非创建者不应该能访问
@@ -274,13 +374,14 @@ class KnowledgeModule {
    * 创建知识模块
    */
   static async create(data, creatorId) {
+    const transaction = await dbConnection.beginTransaction();
     try {
       // 验证权限
-      const { module_scope, group_id, group_ids } = data;
+      const { module_scope, group_id, group_ids, allowed_tag_ids } = data;
       
       // 如果是团队模块，必须有group_id
       if (module_scope === 'team' && !group_id) {
-        throw new Error('团队模块必须指定所属组');
+        throw new ValidationError('团队模块必须指定所属组');
       }
       
       // 计算token数量
@@ -292,7 +393,6 @@ class KnowledgeModule {
         if (Array.isArray(group_ids) && group_ids.length > 0) {
           processedGroupIds = JSON.stringify(group_ids);
         }
-        // 空数组或未指定都保持为NULL
       }
       
       const sql = `
@@ -313,15 +413,27 @@ class KnowledgeModule {
         data.content_visible !== undefined ? data.content_visible : true,
         creatorId,
         module_scope === 'team' ? group_id : null,
-        processedGroupIds,  // 使用处理后的group_ids
+        processedGroupIds,
         data.category || null,
         data.tags ? JSON.stringify(data.tags) : null,
         data.sort_order || 0,
         data.is_active !== undefined ? data.is_active : true
       ];
       
-      const result = await dbConnection.query(sql, params);
+      const result = await transaction.query(sql, params);
       const insertId = result.rows.insertId;
+      
+      // 如果是团队模块且设置了标签权限，保存标签权限
+      if (module_scope === 'team' && allowed_tag_ids && allowed_tag_ids.length > 0) {
+        for (const tagId of allowed_tag_ids) {
+          await transaction.query(
+            'INSERT INTO knowledge_module_tag_permissions (module_id, tag_id, created_by) VALUES (?, ?, ?)',
+            [insertId, tagId, creatorId]
+          );
+        }
+      }
+      
+      await transaction.commit();
       
       logger.info('创建知识模块成功', { 
         moduleId: insertId, 
@@ -329,13 +441,15 @@ class KnowledgeModule {
         creatorId,
         scope: module_scope,
         group_ids: processedGroupIds,
+        allowed_tag_ids,
         tokenCount
       });
       
       return await KnowledgeModule.findById(insertId);
     } catch (error) {
+      await transaction.rollback();
       logger.error('创建知识模块失败:', error);
-      throw new DatabaseError('创建知识模块失败', error);
+      throw error;
     }
   }
 
@@ -343,18 +457,19 @@ class KnowledgeModule {
    * 更新知识模块
    */
   static async update(id, data, operatorId) {
+    const transaction = await dbConnection.beginTransaction();
     try {
       // 获取原模块信息
       const originalModule = await KnowledgeModule.findById(id);
       if (!originalModule) {
-        throw new Error('知识模块不存在');
+        throw new ValidationError('知识模块不存在');
       }
       
       // 检查权限
       if (originalModule.creator_id !== operatorId) {
-        const operator = await dbConnection.query('SELECT role FROM users WHERE id = ?', [operatorId]);
+        const operator = await transaction.query('SELECT role FROM users WHERE id = ?', [operatorId]);
         if (operator.rows[0]?.role !== 'super_admin') {
-          throw new Error('无权修改此模块');
+          throw new ValidationError('无权修改此模块');
         }
       }
       
@@ -375,11 +490,10 @@ class KnowledgeModule {
       // 如果是系统级模块，允许更新group_ids
       if (originalModule.module_scope === 'system' && data.group_ids !== undefined) {
         updateFields.push('group_ids = ?');
-        // 处理group_ids：空数组设为NULL
         if (Array.isArray(data.group_ids) && data.group_ids.length > 0) {
           updateValues.push(JSON.stringify(data.group_ids));
         } else {
-          updateValues.push(null);  // 空数组或未指定都设为NULL
+          updateValues.push(null);
         }
       }
       
@@ -394,25 +508,42 @@ class KnowledgeModule {
         }
       });
       
-      if (updateFields.length === 0) {
-        return originalModule;
+      if (updateFields.length > 0) {
+        updateValues.push(id);
+        const sql = `UPDATE knowledge_modules SET ${updateFields.join(', ')} WHERE id = ?`;
+        await transaction.query(sql, updateValues);
       }
       
-      updateValues.push(id);
-      const sql = `UPDATE knowledge_modules SET ${updateFields.join(', ')} WHERE id = ?`;
+      // 如果是团队模块，更新标签权限
+      if (originalModule.module_scope === 'team' && data.allowed_tag_ids !== undefined) {
+        // 删除旧的权限
+        await transaction.query('DELETE FROM knowledge_module_tag_permissions WHERE module_id = ?', [id]);
+        
+        // 添加新的权限
+        if (data.allowed_tag_ids && data.allowed_tag_ids.length > 0) {
+          for (const tagId of data.allowed_tag_ids) {
+            await transaction.query(
+              'INSERT INTO knowledge_module_tag_permissions (module_id, tag_id, created_by) VALUES (?, ?, ?)',
+              [id, tagId, operatorId]
+            );
+          }
+        }
+      }
       
-      await dbConnection.query(sql, updateValues);
+      await transaction.commit();
       
       logger.info('更新知识模块成功', { 
         moduleId: id, 
         operatorId,
-        updatedFields: updateFields 
+        updatedFields: updateFields,
+        allowed_tag_ids: data.allowed_tag_ids
       });
       
       return await KnowledgeModule.findById(id);
     } catch (error) {
+      await transaction.rollback();
       logger.error('更新知识模块失败:', error);
-      throw new DatabaseError('更新知识模块失败', error);
+      throw error;
     }
   }
 
@@ -424,14 +555,14 @@ class KnowledgeModule {
       // 获取模块信息
       const module = await KnowledgeModule.findById(id);
       if (!module) {
-        throw new Error('知识模块不存在');
+        throw new ValidationError('知识模块不存在');
       }
       
       // 检查权限
       if (module.creator_id !== operatorId) {
         const operator = await dbConnection.query('SELECT role FROM users WHERE id = ?', [operatorId]);
         if (operator.rows[0]?.role !== 'super_admin') {
-          throw new Error('无权删除此模块');
+          throw new ValidationError('无权删除此模块');
         }
       }
       
@@ -444,13 +575,12 @@ class KnowledgeModule {
       return true;
     } catch (error) {
       logger.error('删除知识模块失败:', error);
-      throw new DatabaseError('删除知识模块失败', error);
+      throw error;
     }
   }
 
   /**
    * 检查用户是否有权限使用该模块
-   * 修复：正确处理系统级模块的权限检查
    */
   static async checkUserAccess(moduleId, userId, groupId, userRole = null) {
     try {
@@ -469,27 +599,88 @@ class KnowledgeModule {
         return true;
       }
       
-      // 普通用户和组管理员的权限检查
-      // 修复：正确处理group_ids为NULL或空数组的情况
+      // 获取用户的标签ID列表
+      const userTagsSql = `
+        SELECT tag_id FROM user_tag_relations WHERE user_id = ?
+      `;
+      const { rows: userTagRows } = await dbConnection.query(userTagsSql, [userId]);
+      const userTagIds = userTagRows.map(row => row.tag_id);
+      
+      // 检查模块访问权限
       const sql = `
-        SELECT COUNT(*) as count
-        FROM knowledge_modules
-        WHERE id = ? 
-        AND is_active = 1
-        AND (
-          (module_scope = 'personal' AND creator_id = ?)
-          OR (module_scope = 'team' AND group_id = ?)
-          OR (module_scope = 'system' AND (
-            group_ids IS NULL
-            OR JSON_LENGTH(group_ids) = 0
-            OR JSON_CONTAINS(group_ids, CAST(? AS JSON), '$')
-          ))
-        )
+        SELECT km.*, 
+               (SELECT COUNT(*) FROM knowledge_module_tag_permissions WHERE module_id = km.id) as tag_permission_count
+        FROM knowledge_modules km
+        WHERE km.id = ? 
+        AND km.is_active = 1
       `;
       
-      const { rows } = await dbConnection.query(sql, [moduleId, userId, groupId, groupId || 0]);
+      const { rows } = await dbConnection.query(sql, [moduleId]);
       
-      return rows[0].count > 0;
+      if (rows.length === 0) {
+        return false;
+      }
+      
+      const module = rows[0];
+      
+      // 个人模块：只有创建者可以访问
+      if (module.module_scope === 'personal') {
+        return module.creator_id === userId;
+      }
+      
+      // 团队模块：检查组和标签权限
+      if (module.module_scope === 'team') {
+        // 首先检查是否同组
+        if (module.group_id !== groupId) {
+          return false;
+        }
+        
+        // 创建者始终有权限
+        if (module.creator_id === userId) {
+          return true;
+        }
+        
+        // 如果没有标签限制，组内所有用户都有权限
+        if (module.tag_permission_count === 0) {
+          return true;
+        }
+        
+        // 如果有标签限制，检查用户是否拥有允许的标签
+        if (userTagIds.length > 0) {
+          const checkTagSql = `
+            SELECT COUNT(*) as count 
+            FROM knowledge_module_tag_permissions 
+            WHERE module_id = ? AND tag_id IN (${userTagIds.map(() => '?').join(',')})
+          `;
+          const { rows: tagCheckRows } = await dbConnection.query(checkTagSql, [moduleId, ...userTagIds]);
+          return tagCheckRows[0].count > 0;
+        }
+        
+        return false;
+      }
+      
+      // 系统模块：检查group_ids
+      if (module.module_scope === 'system') {
+        // 解析group_ids
+        let allowedGroups = null;
+        if (module.group_ids) {
+          try {
+            allowedGroups = JSON.parse(module.group_ids);
+          } catch (e) {
+            allowedGroups = null;
+          }
+        }
+        
+        // NULL或空数组表示所有组可见
+        if (!allowedGroups || allowedGroups.length === 0) {
+          return true;
+        }
+        
+        // 检查用户组是否在允许列表中
+        return allowedGroups.includes(groupId);
+      }
+      
+      return false;
     } catch (error) {
       logger.error('检查模块访问权限失败:', error);
       return false;
@@ -516,7 +707,7 @@ class KnowledgeModule {
       id: this.id,
       name: this.name,
       description: this.description,
-      token_count: this.token_count,  // 始终包含token_count
+      token_count: this.token_count,
       prompt_type: this.prompt_type,
       module_scope: this.module_scope,
       content_visible: this.content_visible,
@@ -529,7 +720,8 @@ class KnowledgeModule {
       is_active: this.is_active,
       usage_count: this.usage_count,
       created_at: this.created_at,
-      updated_at: this.updated_at
+      updated_at: this.updated_at,
+      allowed_tag_ids: this.allowed_tag_ids
     };
     
     // 如果内容被隐藏，添加标识

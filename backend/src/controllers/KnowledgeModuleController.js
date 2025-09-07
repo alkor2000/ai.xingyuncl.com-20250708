@@ -71,6 +71,7 @@ class KnowledgeModuleController {
 
   /**
    * 创建知识模块
+   * 新增：处理标签权限
    */
   static async createModule(req, res) {
     try {
@@ -97,6 +98,26 @@ class KnowledgeModuleController {
         if (userRole === 'admin') {
           moduleData.group_id = userGroupId;
         }
+        
+        // 验证标签权限：确保选择的标签属于该组
+        if (moduleData.allowed_tag_ids && moduleData.allowed_tag_ids.length > 0) {
+          const validateTagsSql = `
+            SELECT COUNT(*) as valid_count 
+            FROM user_tags 
+            WHERE id IN (${moduleData.allowed_tag_ids.map(() => '?').join(',')})
+            AND group_id = ? 
+            AND is_active = 1
+          `;
+          const dbConnection = require('../database/connection');
+          const { rows } = await dbConnection.query(
+            validateTagsSql, 
+            [...moduleData.allowed_tag_ids, moduleData.group_id]
+          );
+          
+          if (rows[0].valid_count !== moduleData.allowed_tag_ids.length) {
+            return ResponseHelper.validation(res, ['选择的标签无效或不属于当前组']);
+          }
+        }
       }
       
       const module = await KnowledgeModule.create(moduleData, userId);
@@ -114,12 +135,49 @@ class KnowledgeModuleController {
 
   /**
    * 更新知识模块
+   * 新增：处理标签权限更新
    */
   static async updateModule(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const userRole = req.user.role;
+      const userGroupId = req.user.group_id;
       const updateData = req.body;
+      
+      // 获取原模块信息
+      const originalModule = await KnowledgeModule.findById(id);
+      if (!originalModule) {
+        return ResponseHelper.notFound(res, '知识模块不存在');
+      }
+      
+      // 如果是团队模块，验证标签权限
+      if (originalModule.module_scope === 'team' && updateData.allowed_tag_ids !== undefined) {
+        // 只有创建者或超级管理员可以修改标签权限
+        if (originalModule.creator_id !== userId && userRole !== 'super_admin') {
+          return ResponseHelper.forbidden(res, '无权修改此模块的访问权限');
+        }
+        
+        // 验证标签属于该组
+        if (updateData.allowed_tag_ids && updateData.allowed_tag_ids.length > 0) {
+          const validateTagsSql = `
+            SELECT COUNT(*) as valid_count 
+            FROM user_tags 
+            WHERE id IN (${updateData.allowed_tag_ids.map(() => '?').join(',')})
+            AND group_id = ? 
+            AND is_active = 1
+          `;
+          const dbConnection = require('../database/connection');
+          const { rows } = await dbConnection.query(
+            validateTagsSql, 
+            [...updateData.allowed_tag_ids, originalModule.group_id]
+          );
+          
+          if (rows[0].valid_count !== updateData.allowed_tag_ids.length) {
+            return ResponseHelper.validation(res, ['选择的标签无效或不属于模块所在组']);
+          }
+        }
+      }
       
       const module = await KnowledgeModule.update(id, updateData, userId);
       

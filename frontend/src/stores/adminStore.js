@@ -24,11 +24,17 @@ const useAdminStore = create((set) => ({
   loading: false,
   creditsLoading: false,
   
-  // 用户管理
+  // 用户管理 - 修改：支持include_tags参数
   getUsers: async (params = {}) => {
     set({ loading: true })
     try {
-      const response = await apiClient.get('/admin/users', { params })
+      // 默认包含标签信息
+      const requestParams = {
+        ...params,
+        include_tags: params.include_tags !== false  // 默认为true，除非明确设置为false
+      }
+      
+      const response = await apiClient.get('/admin/users', { params: requestParams })
       set({ 
         users: response.data.data,
         loading: false 
