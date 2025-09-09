@@ -27,6 +27,7 @@ import CustomLanding from './pages/CustomLanding'
 // Admin页面组件 - 懒加载隔离管理功能
 const UserManagement = React.lazy(() => import('./pages/admin/Users'))
 const Settings = React.lazy(() => import('./pages/admin/Settings'))
+const Analytics = React.lazy(() => import('./pages/admin/Analytics')) // 新增数据分析页面
 
 // 模块页面组件 - 懒加载
 const ModulePage = React.lazy(() => import('./pages/module/ModulePage'))
@@ -260,6 +261,14 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <Settings />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        <Route 
+                          path="/admin/analytics" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <Analytics />
                             </LazyLoadingWrapper>
                           } 
                         />

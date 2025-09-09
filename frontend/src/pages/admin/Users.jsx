@@ -2,10 +2,11 @@
  * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置、邀请码管理和标签管理
  * 修复：搜索状态保持，确保分页时不丢失搜索条件
  * 修改：允许组管理员管理自己组的邀请码和标签
+ * 新增：添加数据分析入口按钮
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs } from 'antd'
+import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs, Divider } from 'antd'
 import { 
   UserAddOutlined, 
   PlusOutlined,
@@ -14,9 +15,12 @@ import {
   GiftOutlined,
   GlobalOutlined,
   TagsOutlined,
-  PieChartOutlined
+  PieChartOutlined,
+  BarChartOutlined,
+  DashboardOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import useAdminStore from '../../stores/adminStore'
 import useAuthStore from '../../stores/authStore'
 import moment from 'moment'
@@ -55,6 +59,7 @@ const { TabPane } = Tabs
 
 const Users = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { user: currentUser, hasPermission } = useAuthStore()
   const {
     users,
@@ -618,6 +623,11 @@ const Users = () => {
     return currentGroupInfo
   }
 
+  // 跳转到数据分析页面
+  const handleGoToAnalytics = () => {
+    navigate('/admin/analytics')
+  }
+
   // 权限检查
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
     return (
@@ -635,20 +645,39 @@ const Users = () => {
     <div className="page-container">
       {/* 标签切换 */}
       <Card style={{ marginBottom: 16 }}>
-        <Space>
-          <Button 
-            type={activeTab === 'users' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('users')}
-          >
-            {t('admin.users.title')}
-          </Button>
-          <Button 
-            type={activeTab === 'groups' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('groups')}
-          >
-            {t('admin.groups.title')}
-          </Button>
-        </Space>
+        <Row justify="space-between" align="middle">
+          <Col>
+            <Space>
+              <Button 
+                type={activeTab === 'users' ? 'primary' : 'default'}
+                onClick={() => setActiveTab('users')}
+              >
+                {t('admin.users.title')}
+              </Button>
+              <Button 
+                type={activeTab === 'groups' ? 'primary' : 'default'}
+                onClick={() => setActiveTab('groups')}
+              >
+                {t('admin.groups.title')}
+              </Button>
+            </Space>
+          </Col>
+          <Col>
+            {/* 数据分析入口按钮 */}
+            <Button 
+              type="default"
+              icon={<BarChartOutlined />}
+              onClick={handleGoToAnalytics}
+              style={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              {t('admin.analytics.title')}
+            </Button>
+          </Col>
+        </Row>
       </Card>
 
       {activeTab === 'users' ? (
@@ -737,17 +766,28 @@ const Users = () => {
           <Card 
             title={t('admin.users.title')}
             extra={
-              <Button 
-                type="primary" 
-                icon={<UserAddOutlined />}
-                onClick={() => {
-                  setEditingUser(null)
-                  userForm.resetFields()
-                  setIsUserModalVisible(true)
-                }}
-              >
-                {t('admin.users.addUser')}
-              </Button>
+              <Space>
+                <Button 
+                  type="primary" 
+                  icon={<UserAddOutlined />}
+                  onClick={() => {
+                    setEditingUser(null)
+                    userForm.resetFields()
+                    setIsUserModalVisible(true)
+                  }}
+                >
+                  {t('admin.users.addUser')}
+                </Button>
+                {/* 移动端数据分析入口 */}
+                <Button 
+                  icon={<DashboardOutlined />}
+                  onClick={handleGoToAnalytics}
+                  style={{ display: 'none' }}
+                  className="mobile-analytics-btn"
+                >
+                  {t('admin.analytics.title')}
+                </Button>
+              </Space>
             }
           >
             <UserTable
@@ -1029,6 +1069,15 @@ const Users = () => {
           }}
         />
       )}
+
+      {/* 响应式样式 */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .mobile-analytics-btn {
+            display: inline-block !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

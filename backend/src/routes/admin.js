@@ -28,6 +28,7 @@ const usageLogRoutes = require('./admin/usageLogRoutes'); // 使用记录路由
 const ossRoutes = require('./admin/ossRoutes'); // OSS配置路由
 const storageCreditRoutes = require('./admin/storageCreditRoutes'); // 存储积分配置路由
 const userTagRoutes = require('./admin/userTagRoutes'); // 用户标签路由
+const analyticsRoutes = require('./admin/analyticsRoutes'); // 数据分析路由
 
 // 导入控制器（用于积分路由）
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
@@ -83,6 +84,9 @@ router.use('/user-groups', groupRoutes);
 
 // 用户标签管理路由 - /api/admin/user-tags/*
 router.use('/user-tags', userTagRoutes);
+
+// 数据分析路由 - /api/admin/analytics/*
+router.use('/analytics', analyticsRoutes);
 
 // AI模型管理路由 - /api/admin/models/*
 router.use('/models', modelRoutes);
