@@ -1,5 +1,5 @@
 /**
- * 数据分析BI面板页面 - iOS科技风格版本（修复日期选择器）
+ * 数据分析BI面板页面 - iOS科技风格版本（增强用户分析表格）
  */
 
 import React, { useEffect, useState } from 'react'
@@ -36,7 +36,12 @@ import {
   FallOutlined,
   TrophyOutlined,
   FireOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  CommentOutlined,
+  PictureOutlined,
+  VideoCameraOutlined,
+  CloudUploadOutlined,
+  CodeOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import * as echarts from 'echarts/core'
@@ -528,7 +533,7 @@ const Analytics = () => {
     )
   }
 
-  // 渲染iOS风格的TOP用户表格
+  // 渲染iOS风格的TOP用户表格 - 增强版，包含模块消耗明细
   const renderTopUsersTable = () => {
     if (!analyticsData?.users?.topUsers || analyticsData.users.topUsers.length === 0) {
       return (
@@ -543,10 +548,11 @@ const Analytics = () => {
 
     const columns = [
       {
-        title: t('admin.analytics.rank'),
+        title: '排名',
         dataIndex: 'rank',
         key: 'rank',
-        width: 80,
+        width: 60,
+        fixed: 'left',
         render: (_, __, index) => {
           const rank = index + 1
           return (
@@ -557,15 +563,18 @@ const Analytics = () => {
         }
       },
       {
-        title: t('admin.analytics.username'),
+        title: '用户名',
         dataIndex: 'username',
         key: 'username',
+        width: 120,
+        fixed: 'left',
         render: (text) => <span style={{ fontWeight: 600 }}>{text}</span>
       },
       {
-        title: t('admin.analytics.group'),
+        title: '所属组',
         dataIndex: 'group_name',
         key: 'group_name',
+        width: 100,
         render: (text) => text ? (
           <Tag style={{ 
             borderRadius: 8,
@@ -576,37 +585,118 @@ const Analytics = () => {
         ) : '-'
       },
       {
-        title: t('admin.analytics.tags'),
+        title: '标签',
         dataIndex: 'tags',
         key: 'tags',
+        width: 150,
+        ellipsis: true,
         render: (tags) => tags ? (
-          <Tag style={{
-            borderRadius: 8,
-            background: 'rgba(88, 86, 214, 0.08)',
-            border: '1px solid rgba(88, 86, 214, 0.2)',
-            color: iosColors.purple
-          }}>{tags}</Tag>
+          <Tooltip title={tags}>
+            <Tag style={{
+              borderRadius: 8,
+              background: 'rgba(88, 86, 214, 0.08)',
+              border: '1px solid rgba(88, 86, 214, 0.2)',
+              color: iosColors.purple
+            }}>{tags}</Tag>
+          </Tooltip>
         ) : '-'
       },
       {
-        title: t('admin.analytics.creditsConsumed'),
+        title: '总消耗',
         dataIndex: 'total_credits_consumed',
         key: 'total_credits_consumed',
+        width: 100,
         sorter: (a, b) => a.total_credits_consumed - b.total_credits_consumed,
         render: (value) => (
           <span style={{ 
             fontWeight: 600,
             fontSize: 16,
-            color: iosColors.blue
+            color: iosColors.red
           }}>
-            {value.toLocaleString()}
+            {(value || 0).toLocaleString()}
           </span>
         )
       },
       {
-        title: t('admin.analytics.activeDays'),
+        title: (
+          <Tooltip title="对话消耗">
+            <CommentOutlined /> 对话
+          </Tooltip>
+        ),
+        dataIndex: 'chat_consumed',
+        key: 'chat_consumed',
+        width: 90,
+        render: (value) => (
+          <span style={{ color: iosColors.blue }}>
+            {(value || 0).toLocaleString()}
+          </span>
+        )
+      },
+      {
+        title: (
+          <Tooltip title="图像生成消耗">
+            <PictureOutlined /> 图像
+          </Tooltip>
+        ),
+        dataIndex: 'image_consumed',
+        key: 'image_consumed',
+        width: 90,
+        render: (value) => (
+          <span style={{ color: iosColors.purple }}>
+            {(value || 0).toLocaleString()}
+          </span>
+        )
+      },
+      {
+        title: (
+          <Tooltip title="视频生成消耗">
+            <VideoCameraOutlined /> 视频
+          </Tooltip>
+        ),
+        dataIndex: 'video_consumed',
+        key: 'video_consumed',
+        width: 90,
+        render: (value) => (
+          <span style={{ color: iosColors.orange }}>
+            {(value || 0).toLocaleString()}
+          </span>
+        )
+      },
+      {
+        title: (
+          <Tooltip title="存储消耗">
+            <CloudUploadOutlined /> 存储
+          </Tooltip>
+        ),
+        dataIndex: 'storage_consumed',
+        key: 'storage_consumed',
+        width: 90,
+        render: (value) => (
+          <span style={{ color: iosColors.teal }}>
+            {(value || 0).toLocaleString()}
+          </span>
+        )
+      },
+      {
+        title: (
+          <Tooltip title="HTML编辑器消耗">
+            <CodeOutlined /> HTML
+          </Tooltip>
+        ),
+        dataIndex: 'html_consumed',
+        key: 'html_consumed',
+        width: 90,
+        render: (value) => (
+          <span style={{ color: iosColors.pink }}>
+            {(value || 0).toLocaleString()}
+          </span>
+        )
+      },
+      {
+        title: '活跃天数',
         dataIndex: 'active_days',
         key: 'active_days',
+        width: 90,
         render: (value) => (
           <Badge 
             count={value} 
@@ -625,8 +715,9 @@ const Analytics = () => {
           columns={columns}
           dataSource={analyticsData.users.topUsers}
           rowKey="id"
+          scroll={{ x: 1200 }}
           pagination={{ 
-            pageSize: 10,
+            pageSize: 20,
             showSizeChanger: false,
             showQuickJumper: false
           }}
@@ -759,10 +850,10 @@ const Analytics = () => {
         </TabPane>
 
         <TabPane tab={t('admin.analytics.userAnalysis')} key="users">
-          {/* TOP用户表格 */}
+          {/* TOP用户表格 - 增强版 */}
           <div className="ios-card">
             <div className="chart-title">
-              {t('admin.analytics.topUsers')}
+              TOP 20 用户消耗排行榜（含模块明细）
             </div>
             {renderTopUsersTable()}
           </div>

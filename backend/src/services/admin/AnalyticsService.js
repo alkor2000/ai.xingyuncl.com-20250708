@@ -51,7 +51,7 @@ class AnalyticsService {
         ? `WHERE ${baseConditions.join(' AND ')}` 
         : '';
 
-      // 获取各个维度的分析数据
+      // 获取各个维度的分析数据 - 传递groupId用于用户分析
       const [
         overviewData,
         timeSeriesData,
@@ -62,7 +62,7 @@ class AnalyticsService {
       ] = await Promise.all([
         this.getOverviewAnalytics(whereClause, params),
         this.getTimeSeriesAnalytics(whereClause, params, timeGranularity),
-        this.getUserAnalytics(whereClause, params, tagIds),
+        this.getUserAnalytics(whereClause, params, tagIds, groupId, startDate, endDate), // 传递groupId
         this.getModelAnalytics(whereClause, params),
         this.getModuleAnalytics(whereClause, params),
         this.getTagAnalytics(groupId)
@@ -168,11 +168,40 @@ class AnalyticsService {
   }
 
   /**
-   * 获取用户分析数据
+   * 获取用户分析数据 - 修复参数顺序问题
    */
-  static async getUserAnalytics(whereClause, params, tagIds = []) {
+  static async getUserAnalytics(whereClause, params, tagIds = [], groupId = null, startDate = null, endDate = null) {
     try {
-      // TOP活跃用户 - 修复：GROUP BY包含所有非聚合列
+      // 重要修复：构建正确的参数顺序
+      let topUsersParams = [];
+      
+      // 构建WHERE条件（用于筛选用户）
+      let userWhereConditions = [];
+      let userWhereParams = [];
+      
+      if (groupId) {
+        userWhereConditions.push('u.group_id = ?');
+        userWhereParams.push(groupId);
+      }
+      
+      const userWhereClause = userWhereConditions.length > 0 
+        ? 'WHERE ' + userWhereConditions.join(' AND ')
+        : '';
+
+      // 构建日期条件（用于JOIN）
+      let dateCondition = '';
+      let dateParams = [];
+      if (startDate && endDate) {
+        dateCondition = 'AND DATE(ct.created_at) >= ? AND DATE(ct.created_at) <= ?';
+        dateParams.push(moment(startDate).format('YYYY-MM-DD'));
+        dateParams.push(moment(endDate).format('YYYY-MM-DD'));
+      }
+
+      // 按照SQL中占位符的顺序组装参数
+      // SQL顺序：先是JOIN中的日期条件，然后是WHERE中的group_id
+      topUsersParams = [...dateParams, ...userWhereParams];
+
+      // TOP活跃用户 - 修复：正确的参数顺序
       const topUsersSql = `
         SELECT 
           u.id,
@@ -180,23 +209,31 @@ class AnalyticsService {
           u.email,
           g.name as group_name,
           COUNT(DISTINCT ct.id) as transaction_count,
-          SUM(ABS(ct.amount)) as total_credits_consumed,
+          SUM(CASE WHEN ct.amount < 0 THEN ABS(ct.amount) ELSE 0 END) as total_credits_consumed,
+          -- 各模块消耗明细
+          SUM(CASE WHEN ct.transaction_type = 'chat_consume' THEN ABS(ct.amount) ELSE 0 END) as chat_consumed,
+          SUM(CASE WHEN ct.transaction_type = 'image_consume' THEN ABS(ct.amount) ELSE 0 END) as image_consumed,
+          SUM(CASE WHEN ct.transaction_type = 'video_consume' THEN ABS(ct.amount) ELSE 0 END) as video_consumed,
+          SUM(CASE WHEN ct.transaction_type = 'storage_upload' THEN ABS(ct.amount) ELSE 0 END) as storage_consumed,
+          SUM(CASE WHEN ct.transaction_type = 'html_publish' THEN ABS(ct.amount) ELSE 0 END) as html_consumed,
           COUNT(DISTINCT DATE(ct.created_at)) as active_days,
           COUNT(DISTINCT c.id) as conversation_count,
-          GROUP_CONCAT(DISTINCT ut.name SEPARATOR ', ') as tags
+          -- 修复标签查询
+          (SELECT GROUP_CONCAT(DISTINCT ut2.name SEPARATOR ', ') 
+           FROM user_tag_relations utr2 
+           LEFT JOIN user_tags ut2 ON utr2.tag_id = ut2.id 
+           WHERE utr2.user_id = u.id) as tags
         FROM users u
-        LEFT JOIN credit_transactions ct ON u.id = ct.user_id
-        LEFT JOIN conversations c ON ct.related_conversation_id = c.id
         LEFT JOIN user_groups g ON u.group_id = g.id
-        LEFT JOIN user_tag_relations utr ON u.id = utr.user_id
-        LEFT JOIN user_tags ut ON utr.tag_id = ut.id
-        ${whereClause ? whereClause.replace('ct.', 'ct.').replace('u.', 'u.') : ''}
+        LEFT JOIN credit_transactions ct ON u.id = ct.user_id ${dateCondition}
+        LEFT JOIN conversations c ON ct.related_conversation_id = c.id
+        ${userWhereClause}
         GROUP BY u.id, u.username, u.email, g.name
         ORDER BY total_credits_consumed DESC
         LIMIT 20
       `;
 
-      // 用户分布统计
+      // 用户分布统计 - 使用原始的whereClause和params
       const distributionSql = `
         SELECT 
           CASE 
@@ -220,8 +257,17 @@ class AnalyticsService {
         ORDER BY FIELD(credit_range, '0-100', '100-500', '500-1000', '1000-5000', '5000+')
       `;
 
+      // 记录SQL和参数用于调试
+      logger.info('执行用户分析查询:', {
+        sql: topUsersSql.substring(0, 200),
+        params: topUsersParams,
+        groupId: groupId,
+        startDate: startDate,
+        endDate: endDate
+      });
+
       const [topUsersResult, distributionResult] = await Promise.all([
-        dbConnection.query(topUsersSql, params),
+        dbConnection.query(topUsersSql, topUsersParams),
         dbConnection.query(distributionSql, params)
       ]);
 
@@ -436,7 +482,7 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, '时间趋势');
       }
 
-      // TOP用户表
+      // TOP用户表 - 增加模块消耗列
       if (analyticsData.users && analyticsData.users.topUsers) {
         const userData = analyticsData.users.topUsers.map((user, index) => ({
           '排名': index + 1,
@@ -445,7 +491,12 @@ class AnalyticsService {
           '所属组': user.group_name || '-',
           '标签': user.tags || '-',
           '交易次数': user.transaction_count,
-          '积分消耗': user.total_credits_consumed,
+          '总消耗': user.total_credits_consumed || 0,
+          '对话消耗': user.chat_consumed || 0,
+          '图像消耗': user.image_consumed || 0,
+          '视频消耗': user.video_consumed || 0,
+          '存储消耗': user.storage_consumed || 0,
+          'HTML消耗': user.html_consumed || 0,
           '活跃天数': user.active_days,
           '对话数': user.conversation_count
         }));
@@ -454,7 +505,9 @@ class AnalyticsService {
         ws['!cols'] = [
           { wch: 8 }, { wch: 15 }, { wch: 25 }, 
           { wch: 15 }, { wch: 20 }, { wch: 10 },
-          { wch: 10 }, { wch: 10 }, { wch: 10 }
+          { wch: 10 }, { wch: 10 }, { wch: 10 },
+          { wch: 10 }, { wch: 10 }, { wch: 10 },
+          { wch: 10 }, { wch: 10 }
         ];
         XLSX.utils.book_append_sheet(wb, ws, 'TOP用户');
       }
