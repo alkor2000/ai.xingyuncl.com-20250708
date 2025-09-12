@@ -1,5 +1,6 @@
 /**
- * HTML编辑器主页面 - iOS设计风格增强版（修复页面列表滚动）
+ * HTML编辑器主页面 - 自动页面管理增强版
+ * 自动加载或创建页面，无欢迎页
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -73,479 +74,31 @@ if (typeof window !== 'undefined' && !window.MonacoEnvironment) {
   };
 }
 
-// 默认欢迎页面模板 - 展示HTML编辑器功能
-const EMPTY_TEMPLATE = `<!DOCTYPE html>
+// 简单的空白HTML模板
+const BLANK_HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>欢迎使用HTML编辑器</title>
+    <title>新页面</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            padding: 20px;
             line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-            overflow: hidden;
-        }
-        
-        .hero {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 60px 40px;
-            text-align: center;
-        }
-        
-        .hero h1 {
-            font-size: 3em;
-            margin-bottom: 20px;
-            font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        
-        .hero p {
-            font-size: 1.2em;
-            opacity: 0.95;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .content {
-            padding: 60px 40px;
-        }
-        
-        .section {
-            margin-bottom: 50px;
-        }
-        
-        .section h2 {
-            color: #667eea;
-            font-size: 2em;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #667eea;
-        }
-        
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 30px;
-            margin-top: 30px;
-        }
-        
-        .feature-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-        }
-        
-        .feature-icon {
-            font-size: 3em;
-            margin-bottom: 15px;
-        }
-        
-        .feature-card h3 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .feature-card p {
-            color: #666;
-            font-size: 0.95em;
-        }
-        
-        .example-code {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            overflow-x: auto;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 15px;
-            margin-top: 30px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        
-        .btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            font-size: 1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-secondary {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-        
-        .btn-secondary:hover {
-            background: #667eea;
-            color: white;
-        }
-        
-        .tips {
-            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            border-radius: 15px;
-            padding: 30px;
-            margin-top: 40px;
-        }
-        
-        .tips h3 {
-            color: #d94f00;
-            margin-bottom: 15px;
-        }
-        
-        .tips ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .tips li {
-            padding: 8px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-        
-        .tips li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #d94f00;
-            font-weight: bold;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        
-        table th,
-        table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        table th {
-            background: #f8f9fa;
-            color: #667eea;
-            font-weight: 600;
-        }
-        
-        table tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .demo-form {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 15px;
-            margin-top: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-        
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s ease;
-        }
-        
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2em;
-            }
-            
-            .content {
-                padding: 40px 20px;
-            }
-            
-            .feature-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        /* 动画效果 */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .animate {
-            animation: fadeIn 0.8s ease-out;
         }
     </style>
 </head>
 <body>
-    <div class="container animate">
-        <div class="hero">
-            <h1>🎨 HTML编辑器</h1>
-            <p>欢迎使用专业的HTML在线编辑器！在这里，您可以创建精美的网页，实时预览效果，并生成永久访问链接。</p>
-        </div>
-        
-        <div class="content">
-            <div class="section">
-                <h2>✨ 核心功能</h2>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">📝</div>
-                        <h3>智能编辑</h3>
-                        <p>Monaco编辑器提供代码高亮、自动补全、格式化等专业功能</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">👁️</div>
-                        <h3>实时预览</h3>
-                        <p>编写代码的同时实时查看页面效果，支持多种设备预览模式</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔗</div>
-                        <h3>永久链接</h3>
-                        <p>一键生成永久访问链接，轻松分享您的作品</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📁</div>
-                        <h3>项目管理</h3>
-                        <p>创建多个项目和页面，有序管理您的所有作品</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h2>📚 HTML元素示例</h2>
-                
-                <h3 style="margin-top: 30px; color: #764ba2;">文本元素</h3>
-                <p>这是一个普通段落，包含<strong>加粗文本</strong>和<em>斜体文本</em>。</p>
-                <p>您还可以使用<mark>高亮文本</mark>、<del>删除线</del>和<u>下划线</u>。</p>
-                
-                <h3 style="margin-top: 30px; color: #764ba2;">列表示例</h3>
-                <ul>
-                    <li>无序列表项目 1</li>
-                    <li>无序列表项目 2</li>
-                    <li>无序列表项目 3</li>
-                </ul>
-                
-                <ol>
-                    <li>有序列表项目 1</li>
-                    <li>有序列表项目 2</li>
-                    <li>有序列表项目 3</li>
-                </ol>
-                
-                <h3 style="margin-top: 30px; color: #764ba2;">表格示例</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>功能</th>
-                            <th>快捷键</th>
-                            <th>描述</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>保存</td>
-                            <td>Ctrl + S</td>
-                            <td>保存当前页面</td>
-                        </tr>
-                        <tr>
-                            <td>预览</td>
-                            <td>F5</td>
-                            <td>预览页面效果</td>
-                        </tr>
-                        <tr>
-                            <td>格式化</td>
-                            <td>Shift + Alt + F</td>
-                            <td>格式化代码</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <h3 style="margin-top: 30px; color: #764ba2;">表单示例</h3>
-                <div class="demo-form">
-                    <div class="form-group">
-                        <label for="name">姓名</label>
-                        <input type="text" id="name" placeholder="请输入您的姓名">
-                    </div>
-                    <div class="form-group">
-                        <label for="email">邮箱</label>
-                        <input type="email" id="email" placeholder="example@email.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="category">类别</label>
-                        <select id="category">
-                            <option>个人网站</option>
-                            <option>企业官网</option>
-                            <option>在线商城</option>
-                            <option>博客</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="message">留言</label>
-                        <textarea id="message" rows="4" placeholder="请输入您的留言..."></textarea>
-                    </div>
-                    <button class="btn btn-primary" type="button" onclick="alert('这是一个示例表单！')">提交</button>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h2>💡 使用技巧</h2>
-                <div class="tips">
-                    <h3>快速上手指南</h3>
-                    <ul>
-                        <li>使用左侧项目管理器创建和管理您的项目</li>
-                        <li>在编辑器中编写HTML代码，右侧会实时显示预览效果</li>
-                        <li>点击"保存"按钮保存您的更改（消耗2积分）</li>
-                        <li>点击"生成链接"创建永久访问链接（消耗5积分）</li>
-                        <li>使用顶部工具栏切换预览模式（桌面/平板/手机）</li>
-                        <li>点击"清空"可以清除编辑器内容，重新开始</li>
-                        <li>支持HTML5、CSS3和JavaScript，尽情发挥创意！</li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h2>🚀 开始创作</h2>
-                <p style="text-align: center; font-size: 1.1em; color: #666; margin: 30px 0;">
-                    现在就开始修改这个页面，创建属于您的精彩内容吧！<br>
-                    您可以删除所有内容从零开始，或者在此基础上进行修改。
-                </p>
-                <div class="button-group">
-                    <button class="btn btn-primary" onclick="alert('开始编辑这个页面吧！')">
-                        立即开始
-                    </button>
-                    <button class="btn btn-secondary" onclick="alert('查看更多示例和教程')">
-                        学习更多
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        // 简单的交互效果示例
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('欢迎使用HTML编辑器！');
-            
-            // 为所有按钮添加点击效果
-            const buttons = document.querySelectorAll('.btn');
-            buttons.forEach(button => {
-                button.addEventListener('click', function(e) {
-                    // 创建涟漪效果
-                    const ripple = document.createElement('span');
-                    ripple.style.position = 'absolute';
-                    ripple.style.width = '20px';
-                    ripple.style.height = '20px';
-                    ripple.style.background = 'rgba(255, 255, 255, 0.5)';
-                    ripple.style.borderRadius = '50%';
-                    ripple.style.transform = 'scale(0)';
-                    ripple.style.animation = 'ripple 0.6s ease-out';
-                    
-                    this.style.position = 'relative';
-                    this.style.overflow = 'hidden';
-                    
-                    const rect = this.getBoundingClientRect();
-                    ripple.style.left = (e.clientX - rect.left - 10) + 'px';
-                    ripple.style.top = (e.clientY - rect.top - 10) + 'px';
-                    
-                    this.appendChild(ripple);
-                    
-                    setTimeout(() => {
-                        ripple.remove();
-                    }, 600);
-                });
-            });
-        });
-        
-        // 添加涟漪动画
-        const style = document.createElement('style');
-        style.textContent = \`
-            @keyframes ripple {
-                to {
-                    transform: scale(10);
-                    opacity: 0;
-                }
-            }
-        \`;
-        document.head.appendChild(style);
-    </script>
+    <h1>开始创建您的页面</h1>
+    <p>这是一个空白页面，您可以开始编写HTML代码了。</p>
 </body>
 </html>`;
 
-// 生成默认页面标题
-const generateDefaultTitle = () => {
+// 生成带时间戳的页面标题
+const generateTimestampTitle = () => {
   const now = moment();
-  return `页面-${now.format('YYYY年MM月DD日-HH时mm分')}`;
+  return `页面_${now.format('YYYYMMDD_HHmmss')}`;
 };
 
 const HtmlEditor = () => {
@@ -571,7 +124,7 @@ const HtmlEditor = () => {
   // 状态管理
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPageId, setSelectedPageId] = useState(null);
-  const [htmlContent, setHtmlContent] = useState(EMPTY_TEMPLATE);
+  const [htmlContent, setHtmlContent] = useState(BLANK_HTML_TEMPLATE);
   const [previewMode, setPreviewMode] = useState('desktop');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPageModal, setShowPageModal] = useState(false);
@@ -594,6 +147,7 @@ const HtmlEditor = () => {
   const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [loadingPages, setLoadingPages] = useState(false);
+  const [autoPageCreated, setAutoPageCreated] = useState(false); // 防止重复创建
 
   // 初始化加载
   useEffect(() => {
@@ -607,7 +161,7 @@ const HtmlEditor = () => {
     if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
       const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
       if (defaultProject) {
-        handleSelectProject(defaultProject);
+        handleSelectProject(defaultProject, true); // 传入true表示是自动选择
         setDefaultProjectSelected(true);
       }
     }
@@ -652,7 +206,7 @@ const HtmlEditor = () => {
       } else if (currentPage.compiled_content) {
         setHtmlContent(currentPage.compiled_content);
       } else {
-        setHtmlContent(EMPTY_TEMPLATE);
+        setHtmlContent(BLANK_HTML_TEMPLATE);
       }
     }
   }, [currentPage]);
@@ -661,6 +215,68 @@ const HtmlEditor = () => {
   useEffect(() => {
     setCompiledContent(htmlContent || '<!DOCTYPE html><html><body style="padding:20px;color:#999;font-family:system-ui;">开始编写你的HTML代码...</body></html>');
   }, [htmlContent]);
+
+  // 自动创建或选择页面
+  const autoHandlePage = async (projectId) => {
+    if (autoPageCreated) return; // 防止重复创建
+    
+    setLoadingPages(true);
+    try {
+      // 获取项目的页面列表
+      await getPages(projectId);
+      
+      // 等待页面列表更新
+      setTimeout(async () => {
+        const currentPages = useHtmlEditorStore.getState().pages;
+        
+        if (currentPages && currentPages.length > 0) {
+          // 如果有页面，选择第一个
+          const firstPage = currentPages[0];
+          setSelectedPageId(firstPage.id);
+          await loadPage(firstPage.id);
+          message.info(`已加载页面: ${firstPage.title}`);
+        } else {
+          // 如果没有页面，自动创建一个
+          setAutoPageCreated(true);
+          const autoTitle = generateTimestampTitle();
+          
+          // 检查积分是否足够
+          if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
+            message.warning('积分不足，无法自动创建页面，请充值后手动创建');
+            setHtmlContent(BLANK_HTML_TEMPLATE);
+            return;
+          }
+          
+          try {
+            const pageData = {
+              title: autoTitle,
+              project_id: projectId,
+              html_content: BLANK_HTML_TEMPLATE,
+              css_content: '',
+              js_content: ''
+            };
+            
+            const newPage = await createPage(pageData);
+            message.success(`已自动创建页面: ${autoTitle}`);
+            setSelectedPageId(newPage.id);
+            await loadPage(newPage.id);
+            setHtmlContent(BLANK_HTML_TEMPLATE);
+            
+            // 刷新页面列表
+            await getPages(projectId);
+            fetchUserCredits();
+          } catch (error) {
+            console.error('自动创建页面失败:', error);
+            message.error('自动创建页面失败，请手动创建');
+            setHtmlContent(BLANK_HTML_TEMPLATE);
+          }
+        }
+      }, 500); // 给状态更新一点时间
+      
+    } finally {
+      setLoadingPages(false);
+    }
+  };
 
   // 预览页面
   const handlePreview = () => {
@@ -692,20 +308,16 @@ const HtmlEditor = () => {
     }
   };
 
-  // 选择项目 - 修复：确保正确加载对应项目的页面
-  const handleSelectProject = async (project) => {
+  // 选择项目 - 增强版：自动处理页面
+  const handleSelectProject = async (project, isAutoSelect = false) => {
     // 先清空当前状态
     setSelectedProject(project);
     setSelectedPageId(null);
-    setHtmlContent(EMPTY_TEMPLATE);
+    setHtmlContent(BLANK_HTML_TEMPLATE);
+    setAutoPageCreated(false); // 重置自动创建标记
     
-    // 加载新项目的页面
-    setLoadingPages(true);
-    try {
-      await getPages(project.id);
-    } finally {
-      setLoadingPages(false);
-    }
+    // 如果是自动选择默认项目或用户手动选择，都执行自动页面处理
+    await autoHandlePage(project.id);
   };
 
   // 编辑项目名称
@@ -744,7 +356,7 @@ const HtmlEditor = () => {
           if (selectedProject?.id === project.id) {
             setSelectedProject(null);
             setSelectedPageId(null);
-            setHtmlContent(EMPTY_TEMPLATE);
+            setHtmlContent(BLANK_HTML_TEMPLATE);
           }
           
           await getProjects();
@@ -789,12 +401,12 @@ const HtmlEditor = () => {
 
   // 打开创建页面弹窗时，设置默认标题
   const handleOpenPageModal = () => {
-    const defaultTitle = generateDefaultTitle();
+    const defaultTitle = generateTimestampTitle();
     pageForm.setFieldsValue({ title: defaultTitle });
     setShowPageModal(true);
   };
 
-  // 创建页面 - 确保在选中的项目下创建
+  // 创建页面
   const handleCreatePage = async (values) => {
     if (!selectedProject) {
       message.warning('请先选择一个项目');
@@ -808,9 +420,9 @@ const HtmlEditor = () => {
 
     try {
       const pageData = {
-        title: values.title || generateDefaultTitle(),
+        title: values.title || generateTimestampTitle(),
         project_id: selectedProject.id,
-        html_content: EMPTY_TEMPLATE,
+        html_content: BLANK_HTML_TEMPLATE,
         css_content: '',
         js_content: ''
       };
@@ -821,7 +433,7 @@ const HtmlEditor = () => {
       pageForm.resetFields();
       setSelectedPageId(newPage.id);
       loadPage(newPage.id);
-      setHtmlContent(EMPTY_TEMPLATE);
+      setHtmlContent(BLANK_HTML_TEMPLATE);
       
       await getPages(selectedProject.id);
       fetchUserCredits();
@@ -880,7 +492,14 @@ const HtmlEditor = () => {
           message.success('页面删除成功');
           if (selectedPageId === page.id) {
             setSelectedPageId(null);
-            setHtmlContent(EMPTY_TEMPLATE);
+            setHtmlContent(BLANK_HTML_TEMPLATE);
+            
+            // 如果删除后没有页面了，自动创建一个新页面
+            const remainingPages = pages.filter(p => p.id !== page.id);
+            if (remainingPages.length === 0 && selectedProject) {
+              setAutoPageCreated(false);
+              await autoHandlePage(selectedProject.id);
+            }
           }
           await getPages(selectedProject.id);
         } catch (error) {
@@ -912,7 +531,7 @@ const HtmlEditor = () => {
       okText: '确定',
       cancelText: '取消',
       onOk: () => {
-        setHtmlContent('');
+        setHtmlContent(BLANK_HTML_TEMPLATE);
         message.success('编辑器已清空');
       }
     });
@@ -1041,7 +660,7 @@ const HtmlEditor = () => {
     }
   };
 
-  // iOS风格的样式对象 - 增强配色方案
+  // iOS风格的样式对象
   const iosStyles = {
     container: {
       height: '100vh',
@@ -1063,43 +682,40 @@ const HtmlEditor = () => {
       backdropFilter: 'blur(20px)',
       borderRight: '1px solid rgba(60, 60, 67, 0.12)'
     },
-    // 关键修改：侧边栏内容容器
     sidebarContent: {
-      height: 'calc(100vh - 60px)',  // 固定高度
+      height: 'calc(100vh - 60px)',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'  // 防止整体溢出
+      overflow: 'hidden'
     },
     sidebarSection: {
       padding: '20px',
       borderBottom: '1px solid rgba(60, 60, 67, 0.08)',
-      flexShrink: 0  // 项目区域不收缩
+      flexShrink: 0
     },
-    // 修改：页面列表区域样式
     pageListSection: {
       padding: '20px',
       borderBottom: '1px solid rgba(60, 60, 67, 0.08)',
-      flex: 1,  // 占用剩余空间
+      flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      minHeight: 0,  // 重要：允许收缩到0
-      overflow: 'hidden'  // 防止整个section溢出
+      minHeight: 0,
+      overflow: 'hidden'
     },
-    // 页面列表滚动容器
     pageListScrollContainer: {
       flex: 1,
-      overflowY: 'auto',  // 允许垂直滚动
-      overflowX: 'hidden',  // 禁止水平滚动
-      paddingRight: '4px',  // 给滚动条留出空间
-      minHeight: 0,  // 重要：允许收缩
-      maxHeight: 'calc(100vh - 300px)'  // 明确设置最大高度
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      paddingRight: '4px',
+      minHeight: 0,
+      maxHeight: 'calc(100vh - 300px)'
     },
     sectionHeader: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 16,
-      flexShrink: 0  // 防止header被压缩
+      flexShrink: 0
     },
     sectionTitle: {
       fontSize: 17,
@@ -1179,7 +795,6 @@ const HtmlEditor = () => {
       boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
       transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
     },
-    // 按钮样式 - 多彩iOS风格
     saveButton: {
       background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)',
       borderColor: 'transparent',
@@ -1265,7 +880,7 @@ const HtmlEditor = () => {
 
   return (
     <Layout style={iosStyles.container}>
-      {/* 顶部工具栏 - iOS风格增强 */}
+      {/* 顶部工具栏 */}
       <Header style={iosStyles.header}>
         <Space size={12}>
           <Button
@@ -1368,14 +983,13 @@ const HtmlEditor = () => {
       </Header>
 
       <Layout style={{ background: 'transparent' }}>
-        {/* 左侧项目管理区 - iOS风格 */}
+        {/* 左侧项目管理区 */}
         <Sider 
           width={300} 
           collapsed={sidebarCollapsed}
           collapsedWidth={0}
           style={iosStyles.sidebar}
         >
-          {/* 关键修改：添加内容容器 */}
           <div style={iosStyles.sidebarContent}>
             {/* 项目列表 */}
             <div style={iosStyles.sidebarSection}>
@@ -1461,7 +1075,7 @@ const HtmlEditor = () => {
               )}
             </div>
 
-            {/* 页面列表 - 修复滚动问题 */}
+            {/* 页面列表 */}
             {selectedProject && (
               <div style={iosStyles.pageListSection}>
                 <div style={iosStyles.sectionHeader}>
