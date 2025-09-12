@@ -72,6 +72,7 @@ class KnowledgeModuleController {
   /**
    * 创建知识模块
    * 新增：处理标签权限
+   * 修改：允许所有组内用户创建团队模块
    */
   static async createModule(req, res) {
     try {
@@ -90,14 +91,15 @@ class KnowledgeModuleController {
         return ResponseHelper.forbidden(res, '只有超级管理员可以创建全局模块');
       }
       
+      // 团队模块：所有组内用户都可以创建（移除了角色限制）
       if (moduleData.module_scope === 'team') {
-        if (userRole !== 'admin' && userRole !== 'super_admin') {
-          return ResponseHelper.forbidden(res, '只有管理员可以创建团队模块');
+        // 确保用户属于某个组
+        if (!userGroupId) {
+          return ResponseHelper.forbidden(res, '您还未加入任何组，无法创建团队模块');
         }
-        // 组管理员只能为自己的组创建
-        if (userRole === 'admin') {
-          moduleData.group_id = userGroupId;
-        }
+        
+        // 强制设置为用户所在组
+        moduleData.group_id = userGroupId;
         
         // 验证标签权限：确保选择的标签属于该组
         if (moduleData.allowed_tag_ids && moduleData.allowed_tag_ids.length > 0) {
@@ -237,6 +239,47 @@ class KnowledgeModuleController {
         userId: req.user?.id 
       });
       return ResponseHelper.error(res, '获取分类列表失败');
+    }
+  }
+
+  /**
+   * 获取当前用户所在组的标签列表
+   * 新增：供普通用户创建团队模块时使用
+   */
+  static async getGroupTags(req, res) {
+    try {
+      const userGroupId = req.user.group_id;
+      
+      // 如果用户不属于任何组
+      if (!userGroupId) {
+        return ResponseHelper.success(res, [], '用户未加入任何组');
+      }
+      
+      // 查询用户所在组的标签
+      const dbConnection = require('../database/connection');
+      const sql = `
+        SELECT 
+          id,
+          name,
+          color,
+          description,
+          created_at
+        FROM user_tags
+        WHERE group_id = ?
+        AND is_active = 1
+        ORDER BY name ASC
+      `;
+      
+      const { rows } = await dbConnection.query(sql, [userGroupId]);
+      
+      return ResponseHelper.success(res, rows, '获取组标签成功');
+    } catch (error) {
+      logger.error('获取组标签失败', { 
+        error: error.message,
+        userId: req.user?.id,
+        groupId: req.user?.group_id 
+      });
+      return ResponseHelper.error(res, '获取组标签失败');
     }
   }
 }

@@ -397,7 +397,8 @@ const KnowledgeBase = () => {
     })
   )
 
-  const canCreateTeamModule = hasRole(['super_admin', 'admin'])
+  // 修改权限判断：所有组内用户都可以创建团队模块
+  const canCreateTeamModule = !!user.group_id  // 只要用户属于某个组就可以创建团队模块
   const canCreateSystemModule = hasRole(['super_admin'])
 
   // 计算当前canvas中模块的总token数

@@ -82,7 +82,7 @@ const KnowledgeModuleFormModal = ({
         
         // 如果是团队模块，加载组内标签
         if (module.module_scope === 'team' && module.group_id) {
-          loadGroupTags(module.group_id)
+          loadGroupTags()
         }
       } else {
         // 创建模式
@@ -105,15 +105,20 @@ const KnowledgeModuleFormModal = ({
     }
   }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups, user])
 
-  // 加载组内标签
-  const loadGroupTags = async (groupId) => {
+  // 加载组内标签 - 使用新的普通用户可访问的接口
+  const loadGroupTags = async () => {
     setLoadingTags(true)
     try {
-      const response = await apiClient.get(`/admin/user-tags/group/${groupId}`)
+      // 使用新的接口路径，不需要传递groupId，后端会根据用户的group_id返回
+      const response = await apiClient.get('/knowledge/modules/group-tags')
       setGroupTags(response.data.data || [])
     } catch (error) {
       console.error('加载组内标签失败:', error)
       setGroupTags([])
+      // 如果是权限问题，给出友好提示
+      if (error.response?.status === 403) {
+        message.warning('无法获取组标签，请确认您已加入组')
+      }
     } finally {
       setLoadingTags(false)
     }
@@ -126,7 +131,7 @@ const KnowledgeModuleFormModal = ({
     
     // 如果切换到团队模块，加载当前组的标签
     if (newScope === 'team' && user.group_id) {
-      loadGroupTags(user.group_id)
+      loadGroupTags()
     } else {
       setGroupTags([])
     }
