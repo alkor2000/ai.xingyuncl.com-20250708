@@ -1,7 +1,7 @@
 /**
- * 存储管理控制器
+ * 存储管理控制器 - 增强版
+ * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
- * 修复：正确处理中文文件名编码问题
  */
 
 const multer = require('multer');
@@ -22,19 +22,15 @@ const fixFileName = (filename) => {
   
   try {
     // 检测是否已经是正确的UTF-8编码
-    // 如果文件名只包含ASCII字符，直接返回
     if (/^[\x00-\x7F]*$/.test(filename)) {
       return filename;
     }
     
     // 尝试从latin1转换为UTF-8
-    // Buffer.from(filename, 'latin1') 将错误编码的字符串转为Buffer
-    // toString('utf8') 将Buffer按UTF-8解码
     const buffer = Buffer.from(filename, 'latin1');
     const decoded = buffer.toString('utf8');
     
     // 验证解码后的字符串是否有效
-    // 如果解码后包含替换字符（�），说明解码失败，返回原始文件名
     if (decoded.includes('�')) {
       logger.warn('文件名解码失败，使用原始文件名', { original: filename });
       return filename;
@@ -100,7 +96,89 @@ const upload = multer({
 
 class StorageController {
   /**
-   * 上传文件
+   * 检查文件夹权限
+   * @param {Object} folder - 文件夹对象
+   * @param {Object} user - 用户对象
+   * @param {string} action - 操作类型：upload/delete/view
+   * @returns {boolean} 是否有权限
+   */
+  static checkFolderPermission(folder, user, action) {
+    if (!folder) return true; // 根目录默认允许个人操作
+    
+    const folderType = folder.folder_type || 'personal';
+    const userRole = user.role;
+    const userGroupId = user.group_id;
+    
+    switch (folderType) {
+      case 'global':
+        // 全局文件夹
+        if (action === 'upload' || action === 'delete') {
+          return userRole === 'super_admin';
+        }
+        return true; // 所有人可查看
+        
+      case 'group':
+        // 组织文件夹
+        if (action === 'upload' || action === 'delete') {
+          return userRole === 'admin' && userGroupId === folder.group_id;
+        }
+        // 查看权限：同组用户
+        return userGroupId === folder.group_id;
+        
+      case 'personal':
+      default:
+        // 个人文件夹
+        return folder.user_id === user.id;
+    }
+  }
+
+  /**
+   * 检查文件权限
+   * @param {Object} file - 文件对象
+   * @param {Object} user - 用户对象
+   * @param {string} action - 操作类型：delete/download/view
+   * @returns {boolean} 是否有权限
+   */
+  static async checkFilePermission(file, user, action) {
+    // 获取文件所在文件夹信息
+    if (file.folder_id) {
+      const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
+      const { rows } = await dbConnection.query(folderSql, [file.folder_id]);
+      
+      if (rows.length > 0) {
+        const folder = rows[0];
+        const folderType = folder.folder_type || 'personal';
+        
+        switch (folderType) {
+          case 'global':
+            // 全局文件夹的文件：只有超管能删除
+            if (action === 'delete') {
+              return user.role === 'super_admin';
+            }
+            return true; // 所有人可查看和下载
+            
+          case 'group':
+            // 组织文件夹的文件：只有组管理员能删除
+            if (action === 'delete') {
+              return user.role === 'admin' && user.group_id === folder.group_id;
+            }
+            // 查看和下载：同组用户
+            return user.group_id === folder.group_id;
+            
+          case 'personal':
+          default:
+            // 个人文件：只有所有者有权限
+            return file.user_id === user.id;
+        }
+      }
+    }
+    
+    // 默认检查文件所有者
+    return file.user_id === user.id;
+  }
+
+  /**
+   * 上传文件 - 增强版，支持不同类型文件夹
    */
   static uploadFiles = [
     upload.array('files', 10),
@@ -125,13 +203,20 @@ class StorageController {
           file.originalname = fixFileName(file.originalname);
         });
         
-        logger.info('文件信息（编码修复后）', {
-          files: req.files.map(f => ({
-            originalname: f.originalname,
-            mimetype: f.mimetype,
-            size: f.size
-          }))
-        });
+        // 检查文件夹上传权限
+        if (folder_id) {
+          const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
+          const { rows } = await dbConnection.query(folderSql, [folder_id]);
+          
+          if (rows.length === 0) {
+            return ResponseHelper.notFound(res, '文件夹不存在');
+          }
+          
+          const folder = rows[0];
+          if (!StorageController.checkFolderPermission(folder, req.user, 'upload')) {
+            return ResponseHelper.forbidden(res, '无权在此文件夹上传文件');
+          }
+        }
         
         // 检查用户存储空间
         const userStorage = await UserFile.getUserStorage(userId);
@@ -147,15 +232,7 @@ class StorageController {
           return ResponseHelper.error(res, '存储空间不足');
         }
         
-        // 如果指定了文件夹，检查权限
-        if (folder_id) {
-          const hasAccess = await UserFolder.checkOwnership(folder_id, userId);
-          if (!hasAccess) {
-            return ResponseHelper.forbidden(res, '无权访问该文件夹');
-          }
-        }
-        
-        // 计算积分消耗（使用简化版）
+        // 计算积分消耗
         const creditCost = await StorageController.calculateCreditCost('upload', req.files);
         
         // 检查用户积分
@@ -173,14 +250,6 @@ class StorageController {
         // 初始化OSS服务
         logger.info('初始化OSS服务...');
         await ossService.initialize();
-        logger.info('OSS服务状态', {
-          isLocal: ossService.isLocal,
-          hasClient: !!ossService.client,
-          config: ossService.config ? { 
-            provider: ossService.config.provider, 
-            bucket: ossService.config.bucket 
-          } : null
-        });
         
         const uploadedFiles = [];
         const failedFiles = [];
@@ -188,7 +257,6 @@ class StorageController {
         // 逐个上传文件
         for (const file of req.files) {
           try {
-            // 使用修复后的文件名
             const fixedFileName = file.originalname;
             
             logger.info('开始上传文件', {
@@ -196,7 +264,7 @@ class StorageController {
               size: file.size
             });
             
-            // 生成OSS key - 使用修复后的文件名
+            // 生成OSS key
             const ossKey = ossService.generateOSSKey(userId, fixedFileName, folder_id);
             logger.info('生成的OSS Key', { ossKey });
             
@@ -225,11 +293,12 @@ class StorageController {
               thumbnailUrl = ossService.generateThumbnailUrl(uploadResult.url);
             }
             
-            // 保存到数据库 - 使用修复后的文件名
+            // 保存到数据库 - 记录上传者
             const fileRecord = await UserFile.create({
               user_id: userId,
+              uploaded_by: userId, // 记录实际上传者
               folder_id: folder_id || null,
-              original_name: fixedFileName,  // 使用修复后的文件名
+              original_name: fixedFileName,
               stored_name: path.basename(ossKey),
               oss_key: ossKey,
               oss_url: uploadResult.url,
@@ -272,7 +341,6 @@ class StorageController {
         });
         
         if (uploadedFiles.length === 0) {
-          // 修复：正确传递参数给ResponseHelper.error
           return ResponseHelper.error(res, '所有文件上传失败', 500, result);
         } else if (failedFiles.length > 0) {
           return ResponseHelper.success(res, result, '部分文件上传成功');
@@ -291,18 +359,35 @@ class StorageController {
   ];
 
   /**
-   * 获取文件列表
+   * 获取文件列表 - 增强版，包含不同类型文件夹的文件
    */
   static async getFiles(req, res) {
     try {
       const userId = req.user.id;
+      const userGroupId = req.user.group_id;
+      const userRole = req.user.role;
       const { folder_id, page = 1, limit = 50, order_by = 'created_at', order = 'DESC' } = req.query;
+      
+      // 如果指定了文件夹，检查访问权限
+      if (folder_id && folder_id !== 'null') {
+        const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
+        const { rows } = await dbConnection.query(folderSql, [folder_id]);
+        
+        if (rows.length > 0) {
+          const folder = rows[0];
+          if (!StorageController.checkFolderPermission(folder, req.user, 'view')) {
+            return ResponseHelper.forbidden(res, '无权访问此文件夹');
+          }
+        }
+      }
       
       const result = await UserFile.getUserFiles(userId, folder_id, {
         page: parseInt(page),
         limit: parseInt(limit),
         orderBy: order_by,
-        order: order.toUpperCase()
+        order: order.toUpperCase(),
+        userGroupId: userGroupId,
+        userRole: userRole
       });
       
       return ResponseHelper.success(res, result, '获取文件列表成功');
@@ -313,20 +398,22 @@ class StorageController {
   }
 
   /**
-   * 删除文件
+   * 删除文件 - 增强版，检查不同类型文件夹的权限
    */
   static async deleteFile(req, res) {
     try {
       const userId = req.user.id;
       const { id } = req.params;
       
-      // 检查文件所有权
+      // 获取文件信息
       const file = await UserFile.findById(id);
       if (!file) {
         return ResponseHelper.notFound(res, '文件不存在');
       }
       
-      if (file.user_id !== userId) {
+      // 检查删除权限
+      const hasPermission = await StorageController.checkFilePermission(file, req.user, 'delete');
+      if (!hasPermission) {
         return ResponseHelper.forbidden(res, '无权删除此文件');
       }
       
@@ -348,7 +435,7 @@ class StorageController {
   }
 
   /**
-   * 批量删除文件
+   * 批量删除文件 - 增强版
    */
   static async deleteFiles(req, res) {
     try {
@@ -364,10 +451,13 @@ class StorageController {
       
       for (const fileId of file_ids) {
         const file = await UserFile.findById(fileId);
-        if (file && file.user_id === userId) {
-          ossKeys.push(file.oss_key);
-          await file.softDelete();
-          deletedFiles.push(fileId);
+        if (file) {
+          const hasPermission = await StorageController.checkFilePermission(file, req.user, 'delete');
+          if (hasPermission) {
+            ossKeys.push(file.oss_key);
+            await file.softDelete();
+            deletedFiles.push(fileId);
+          }
         }
       }
       
@@ -391,7 +481,7 @@ class StorageController {
   }
 
   /**
-   * 移动文件
+   * 移动文件 - 增强版，检查目标文件夹权限
    */
   static async moveFile(req, res) {
     try {
@@ -399,17 +489,28 @@ class StorageController {
       const { id } = req.params;
       const { target_folder_id } = req.body;
       
-      // 检查文件所有权
+      // 检查文件
       const file = await UserFile.findById(id);
-      if (!file || file.user_id !== userId) {
+      if (!file) {
+        return ResponseHelper.notFound(res, '文件不存在');
+      }
+      
+      // 检查源文件权限
+      const hasSourcePermission = await StorageController.checkFilePermission(file, req.user, 'delete');
+      if (!hasSourcePermission) {
         return ResponseHelper.forbidden(res, '无权移动此文件');
       }
       
       // 检查目标文件夹权限
       if (target_folder_id) {
-        const hasAccess = await UserFolder.checkOwnership(target_folder_id, userId);
-        if (!hasAccess) {
-          return ResponseHelper.forbidden(res, '无权访问目标文件夹');
+        const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
+        const { rows } = await dbConnection.query(folderSql, [target_folder_id]);
+        
+        if (rows.length > 0) {
+          const targetFolder = rows[0];
+          if (!StorageController.checkFolderPermission(targetFolder, req.user, 'upload')) {
+            return ResponseHelper.forbidden(res, '无权移动文件到目标文件夹');
+          }
         }
       }
       
@@ -423,30 +524,54 @@ class StorageController {
   }
 
   /**
-   * 创建文件夹
+   * 创建文件夹 - 增强版，支持创建不同类型的文件夹
    */
   static async createFolder(req, res) {
     try {
       const userId = req.user.id;
-      const { name, parent_id } = req.body;
+      const userRole = req.user.role;
+      const userGroupId = req.user.group_id;
+      const { name, parent_id, folder_type = 'personal' } = req.body;
       
       if (!name) {
         return ResponseHelper.validation(res, ['文件夹名称不能为空']);
       }
       
+      // 权限检查
+      if (folder_type === 'global' && userRole !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '只有超级管理员可以创建全局文件夹');
+      }
+      
+      if (folder_type === 'group' && userRole !== 'admin') {
+        return ResponseHelper.forbidden(res, '只有组管理员可以创建组织文件夹');
+      }
+      
       // 检查父文件夹权限
       if (parent_id) {
-        const hasAccess = await UserFolder.checkOwnership(parent_id, userId);
-        if (!hasAccess) {
-          return ResponseHelper.forbidden(res, '无权在此文件夹创建子文件夹');
+        const parentSql = 'SELECT * FROM user_folders WHERE id = ?';
+        const { rows } = await dbConnection.query(parentSql, [parent_id]);
+        
+        if (rows.length > 0) {
+          const parentFolder = rows[0];
+          if (!StorageController.checkFolderPermission(parentFolder, req.user, 'upload')) {
+            return ResponseHelper.forbidden(res, '无权在此文件夹创建子文件夹');
+          }
         }
       }
       
-      const folder = await UserFolder.create({
+      const folderData = {
         user_id: userId,
         parent_id: parent_id || null,
-        name: name
-      });
+        name: name,
+        folder_type: folder_type
+      };
+      
+      // 如果是组织文件夹，设置group_id
+      if (folder_type === 'group') {
+        folderData.group_id = userGroupId;
+      }
+      
+      const folder = await UserFolder.create(folderData);
       
       return ResponseHelper.success(res, folder, '文件夹创建成功');
     } catch (error) {
@@ -456,18 +581,29 @@ class StorageController {
   }
 
   /**
-   * 获取文件夹列表
+   * 获取文件夹列表 - 增强版，包含不同类型的文件夹
    */
   static async getFolders(req, res) {
     try {
       const userId = req.user.id;
-      const { parent_id, tree } = req.query;
+      const userGroupId = req.user.group_id;
+      const userRole = req.user.role;
+      const { parent_id, tree, include_special } = req.query;
       
       let folders;
+      
       if (tree === 'true') {
-        folders = await UserFolder.getFolderTree(userId);
+        // 获取树形结构，包含特殊文件夹
+        folders = await UserFolder.getFolderTreeWithSpecial(userId, userGroupId, userRole);
       } else {
-        folders = await UserFolder.getUserFolders(userId, parent_id);
+        // 获取平铺结构
+        if (include_special === 'true') {
+          // 包含全局和组织文件夹
+          folders = await UserFolder.getUserFoldersWithSpecial(userId, userGroupId, userRole, parent_id);
+        } else {
+          // 只获取个人文件夹
+          folders = await UserFolder.getUserFolders(userId, parent_id);
+        }
       }
       
       return ResponseHelper.success(res, folders, '获取文件夹列表成功');
@@ -478,7 +614,7 @@ class StorageController {
   }
 
   /**
-   * 删除文件夹
+   * 删除文件夹 - 增强版，检查权限
    */
   static async deleteFolder(req, res) {
     try {
@@ -486,7 +622,12 @@ class StorageController {
       const { id } = req.params;
       
       const folder = await UserFolder.findById(id);
-      if (!folder || folder.user_id !== userId) {
+      if (!folder) {
+        return ResponseHelper.notFound(res, '文件夹不存在');
+      }
+      
+      // 检查删除权限
+      if (!StorageController.checkFolderPermission(folder, req.user, 'delete')) {
         return ResponseHelper.forbidden(res, '无权删除此文件夹');
       }
       
@@ -515,25 +656,19 @@ class StorageController {
   }
 
   /**
-   * 计算积分消耗（优化版）
-   * 规则：
-   * - 5MB及以下：只收基础积分
-   * - 超过5MB：按每5MB区间收费
+   * 计算积分消耗（保持原有逻辑）
    */
   static async calculateCreditCost(action, files) {
     try {
-      // 只对上传操作收费
       if (action !== 'upload') {
         return 0;
       }
       
-      // 获取简化配置
       const sql = `SELECT * FROM storage_credits_config_simple WHERE is_active = 1 LIMIT 1`;
       const { rows } = await dbConnection.query(sql);
       
       if (rows.length === 0) {
         logger.warn('未找到积分配置，使用默认值');
-        // 默认配置
         const config = {
           base_credits: 2,
           credits_per_5mb: 1,
@@ -546,21 +681,16 @@ class StorageController {
       let totalCost = 0;
       
       for (const file of files) {
-        // 检查文件大小限制
         const fileSizeMB = file.size / (1024 * 1024);
         if (fileSizeMB > config.max_file_size) {
           throw new Error(`文件 ${file.originalname} 超过最大限制 ${config.max_file_size}MB`);
         }
         
-        // 计算单个文件积分
         let fileCredits = 0;
         
         if (fileSizeMB <= 5) {
-          // 5MB及以下，只收基础积分
           fileCredits = parseInt(config.base_credits);
         } else {
-          // 超过5MB，按区间收费
-          // 超出部分的区间数 = Math.ceil((文件大小 - 5) / 5)
           const extraIntervals = Math.ceil((fileSizeMB - 5) / 5);
           fileCredits = extraIntervals * parseFloat(config.credits_per_5mb);
         }
@@ -580,11 +710,9 @@ class StorageController {
       return Math.ceil(totalCost);
     } catch (error) {
       logger.error('计算积分消耗失败:', error);
-      // 如果是文件大小超限，抛出错误
       if (error.message.includes('超过最大限制')) {
         throw error;
       }
-      // 其他错误返回0，不阻止上传
       return 0;
     }
   }
@@ -603,7 +731,7 @@ class StorageController {
   }
 
   /**
-   * 获取用户积分（修复：使用正确的字段名）
+   * 获取用户积分
    */
   static async getUserCredits(userId) {
     try {
@@ -633,22 +761,19 @@ class StorageController {
   }
 
   /**
-   * 扣除用户积分（修复：更新used_credits字段并记录交易）
+   * 扣除用户积分
    */
   static async deductCredits(userId, amount, description = '文件上传') {
     try {
-      // 先检查积分是否足够
       const userCredits = await StorageController.getUserCredits(userId);
       if (userCredits < amount) {
         logger.warn('积分不足，无法扣除', { userId, required: amount, available: userCredits });
         return false;
       }
       
-      // 更新已使用积分
       const sql = 'UPDATE users SET used_credits = used_credits + ? WHERE id = ?';
       await dbConnection.query(sql, [amount, userId]);
       
-      // 记录积分使用历史（使用正确的字段和负数表示扣除）
       const historySql = `
         INSERT INTO credit_transactions 
         (user_id, amount, balance_after, transaction_type, description, created_at) 

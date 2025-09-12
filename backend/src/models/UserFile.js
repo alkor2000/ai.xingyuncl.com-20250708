@@ -1,6 +1,6 @@
 /**
- * 用户文件模型
- * 管理用户上传到OSS的文件
+ * 用户文件模型 - 增强版
+ * 管理用户上传到OSS的文件，支持上传者记录
  */
 
 const dbConnection = require('../database/connection');
@@ -11,6 +11,7 @@ class UserFile {
   constructor(data = {}) {
     this.id = data.id || null;
     this.user_id = data.user_id || null;
+    this.uploaded_by = data.uploaded_by || null;
     this.folder_id = data.folder_id || null;
     this.original_name = data.original_name || '';
     this.stored_name = data.stored_name || '';
@@ -34,13 +35,14 @@ class UserFile {
     try {
       const sql = `
         INSERT INTO user_files (
-          user_id, folder_id, original_name, stored_name, oss_key,
+          user_id, uploaded_by, folder_id, original_name, stored_name, oss_key,
           oss_url, file_size, mime_type, file_ext, thumbnail_url, is_public
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const params = [
         fileData.user_id,
+        fileData.uploaded_by || fileData.user_id, // 如果没有指定上传者，默认为user_id
         fileData.folder_id || null,
         fileData.original_name,
         fileData.stored_name,
@@ -55,7 +57,7 @@ class UserFile {
       
       const result = await dbConnection.query(sql, params);
       
-      // 正确访问insertId：在result.rows.insertId
+      // 正确访问insertId
       const fileId = result.rows.insertId;
       
       // 更新用户存储统计
@@ -64,6 +66,7 @@ class UserFile {
       logger.info('文件记录创建成功', {
         fileId,
         userId: fileData.user_id,
+        uploadedBy: fileData.uploaded_by,
         fileName: fileData.original_name
       });
       
@@ -94,11 +97,11 @@ class UserFile {
   }
 
   /**
-   * 获取用户文件列表
+   * 获取用户文件列表 - 增强版，支持特殊文件夹
    */
   static async getUserFiles(userId, folderId = null, options = {}) {
     try {
-      const { page = 1, limit = 50, orderBy = 'created_at', order = 'DESC' } = options;
+      const { page = 1, limit = 50, orderBy = 'created_at', order = 'DESC', userGroupId, userRole } = options;
       const offset = (page - 1) * limit;
       
       // 验证排序字段，防止SQL注入
@@ -112,37 +115,99 @@ class UserFile {
       const safeLimit = parseInt(limit) || 50;
       const safeOffset = parseInt(offset) || 0;
       
-      // 构建基础查询
-      let sqlParts = ['SELECT * FROM user_files WHERE user_id = ? AND is_deleted = 0'];
-      const params = [userId];
+      let sqlParts = [];
+      let params = [];
       
-      // 处理文件夹ID，注意区分null、undefined和"null"字符串
+      // 如果指定了文件夹
       if (folderId !== null && folderId !== undefined && folderId !== 'null') {
-        sqlParts.push('AND folder_id = ?');
-        params.push(folderId);
-      } else if (folderId === null || folderId === 'null' || folderId === undefined) {
-        // 查询根目录文件（folder_id为NULL的文件）
-        sqlParts.push('AND folder_id IS NULL');
+        // 先获取文件夹信息
+        const folderSql = 'SELECT folder_type, group_id FROM user_folders WHERE id = ?';
+        const folderResult = await dbConnection.query(folderSql, [folderId]);
+        
+        if (folderResult.rows.length > 0) {
+          const folder = folderResult.rows[0];
+          
+          // 根据文件夹类型构建查询
+          if (folder.folder_type === 'global') {
+            // 全局文件夹：显示所有文件
+            sqlParts = ['SELECT * FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
+            params = [folderId];
+          } else if (folder.folder_type === 'group') {
+            // 组织文件夹：显示组内所有文件（需要验证用户是否属于该组）
+            if (userGroupId === folder.group_id) {
+              sqlParts = ['SELECT * FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
+              params = [folderId];
+            } else {
+              // 用户不属于该组，返回空结果
+              return {
+                files: [],
+                pagination: {
+                  page: parseInt(page),
+                  limit: parseInt(limit),
+                  total: 0,
+                  pages: 0
+                }
+              };
+            }
+          } else {
+            // 个人文件夹：只显示用户自己的文件
+            sqlParts = ['SELECT * FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
+            params = [userId, folderId];
+          }
+        } else {
+          // 文件夹不存在
+          sqlParts = ['SELECT * FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
+          params = [userId, folderId];
+        }
+      } else {
+        // 根目录：只显示用户个人文件
+        sqlParts = ['SELECT * FROM user_files WHERE user_id = ? AND folder_id IS NULL AND is_deleted = 0'];
+        params = [userId];
       }
       
-      // 添加排序和分页 - 直接拼接数值，不使用参数绑定
+      // 添加排序和分页
       sqlParts.push(`ORDER BY \`${safeOrderBy}\` ${safeOrder}`);
       sqlParts.push(`LIMIT ${safeLimit} OFFSET ${safeOffset}`);
       
-      // 组合SQL语句，确保各部分之间有空格
       const sql = sqlParts.join(' ');
-      
       const { rows } = await dbConnection.query(sql, params);
       
       // 获取总数
-      let countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE user_id = ? AND is_deleted = 0'];
-      const countParams = [userId];
+      let countSqlParts = [];
+      let countParams = [];
       
       if (folderId !== null && folderId !== undefined && folderId !== 'null') {
-        countSqlParts.push('AND folder_id = ?');
-        countParams.push(folderId);
-      } else if (folderId === null || folderId === 'null' || folderId === undefined) {
-        countSqlParts.push('AND folder_id IS NULL');
+        const folderSql = 'SELECT folder_type, group_id FROM user_folders WHERE id = ?';
+        const folderResult = await dbConnection.query(folderSql, [folderId]);
+        
+        if (folderResult.rows.length > 0) {
+          const folder = folderResult.rows[0];
+          
+          if (folder.folder_type === 'global' || (folder.folder_type === 'group' && userGroupId === folder.group_id)) {
+            countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
+            countParams = [folderId];
+          } else if (folder.folder_type === 'group' && userGroupId !== folder.group_id) {
+            // 用户不属于该组
+            return {
+              files: [],
+              pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: 0,
+                pages: 0
+              }
+            };
+          } else {
+            countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
+            countParams = [userId, folderId];
+          }
+        } else {
+          countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
+          countParams = [userId, folderId];
+        }
+      } else {
+        countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE user_id = ? AND folder_id IS NULL AND is_deleted = 0'];
+        countParams = [userId];
       }
       
       const countSql = countSqlParts.join(' ');
@@ -293,6 +358,7 @@ class UserFile {
     return {
       id: this.id,
       user_id: this.user_id,
+      uploaded_by: this.uploaded_by,
       folder_id: this.folder_id,
       original_name: this.original_name,
       stored_name: this.stored_name,

@@ -1,6 +1,9 @@
 {
   "storage.title": "文件管理",
   "storage.myFiles": "我的文件",
+  "storage.personalFiles": "个人文件",
+  "storage.globalShare": "全局共享",
+  "storage.groupShare": "组织共享",
   "storage.folders": "文件夹",
   "storage.upload": "上传文件",
   "storage.uploadFiles": "上传文件",
@@ -20,6 +23,7 @@
   "storage.fileSize": "大小",
   "storage.fileType": "类型",
   "storage.uploadTime": "上传时间",
+  "storage.uploadedBy": "上传者",
   "storage.selected": "已选择 {{count}} 项",
   "storage.batchDelete": "批量删除",
   "storage.selectFilesFirst": "请先选择文件",
@@ -51,5 +55,11 @@
   "storage.open": "打开",
   "storage.gridView": "网格视图",
   "storage.listView": "列表视图",
-  "storage.loading": "加载中..."
+  "storage.loading": "加载中...",
+  "storage.folderType.personal": "个人",
+  "storage.folderType.global": "全局",
+  "storage.folderType.group": "组织",
+  "storage.noPermission": "无权限访问",
+  "storage.onlyAdminCanUpload": "仅管理员可上传",
+  "storage.readOnly": "只读"
 }

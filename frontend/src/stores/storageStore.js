@@ -1,5 +1,6 @@
 /**
- * 存储管理状态管理
+ * 存储管理状态管理 - 增强版
+ * 支持全局文件夹、组织文件夹和个人文件夹
  */
 
 import { create } from 'zustand'
@@ -174,10 +175,14 @@ const useStorageStore = create((set, get) => ({
   /**
    * 获取文件夹列表
    */
-  getFolders: async (parentId = null) => {
+  getFolders: async (parentId = null, includeSpecial = false) => {
     set({ loading: true, error: null })
     try {
       const params = parentId ? { parent_id: parentId } : {}
+      // 添加参数以包含特殊文件夹
+      if (includeSpecial) {
+        params.include_special = true
+      }
       const response = await apiClient.get('/storage/folders', { params })
       set({ 
         folders: response.data.data,
@@ -195,7 +200,7 @@ const useStorageStore = create((set, get) => ({
   },
   
   /**
-   * 获取文件夹树
+   * 获取文件夹树（包含特殊文件夹）
    */
   getFolderTree: async () => {
     set({ loading: true, error: null })
@@ -219,16 +224,17 @@ const useStorageStore = create((set, get) => ({
   /**
    * 创建文件夹
    */
-  createFolder: async (name, parentId = null) => {
+  createFolder: async (name, parentId = null, folderType = 'personal') => {
     set({ loading: true, error: null })
     try {
       const response = await apiClient.post('/storage/folders', {
         name,
-        parent_id: parentId
+        parent_id: parentId,
+        folder_type: folderType
       })
       
       // 刷新文件夹列表
-      await get().getFolders(parentId)
+      await get().getFolders(parentId, true)
       await get().getFolderTree()
       
       set({ loading: false })
@@ -331,7 +337,7 @@ const useStorageStore = create((set, get) => ({
   },
   
   /**
-   * 获取积分配置 - 修复：使用正确的API路径
+   * 获取积分配置
    */
   getCreditConfig: async () => {
     try {

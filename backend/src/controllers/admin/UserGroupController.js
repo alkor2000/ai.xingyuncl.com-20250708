@@ -1,6 +1,7 @@
 /**
- * 用户分组管理控制器 - 使用Service层处理业务逻辑（包含积分池功能、组有效期、站点配置和邀请码功能）
- * 修改：允许组管理员管理自己组的邀请码
+ * 用户分组管理控制器 - 增强版，支持自动创建组织文件夹
+ * 使用Service层处理业务逻辑（包含积分池功能、组有效期、站点配置和邀请码功能）
+ * 修改：创建组时自动创建组织共享文件夹
  */
 
 const { GroupService } = require('../../services/admin');
@@ -8,6 +9,7 @@ const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const CacheService = require('../../services/cacheService');
 const ossService = require('../../services/ossService');
+const UserFolder = require('../../models/UserFolder');  // 引入文件夹模型
 const fs = require('fs').promises;
 
 class UserGroupController {
@@ -37,6 +39,22 @@ class UserGroupController {
     try {
       const groupData = req.body;
       const group = await GroupService.createGroup(groupData, req.user.id);
+
+      // 自动为新组创建组织共享文件夹
+      try {
+        await UserFolder.createGroupFolder(group.id, group.name, req.user.id);
+        logger.info('为新组自动创建组织文件夹成功', { 
+          groupId: group.id, 
+          groupName: group.name,
+          creatorId: req.user.id
+        });
+      } catch (folderError) {
+        logger.error('创建组织文件夹失败，但不影响组创建', { 
+          groupId: group.id,
+          error: folderError.message 
+        });
+        // 不影响主流程，只记录错误
+      }
 
       return ResponseHelper.success(res, group, '用户分组创建成功', 201);
     } catch (error) {
