@@ -2,6 +2,7 @@
  * 存储管理控制器 - 增强版
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
+ * 修改：支持更多通用文件类型上传
  */
 
 const multer = require('multer');
@@ -54,34 +55,140 @@ const fixFileName = (filename) => {
 // 配置multer内存存储
 const storage = multer.memoryStorage();
 
-// 文件过滤器
+// 文件过滤器 - 增强版，支持更多文件类型
 const fileFilter = (req, file, cb) => {
   // 修复文件名编码
   file.originalname = fixFileName(file.originalname);
   
-  // 允许的文件类型
-  const allowedMimes = [
-    // 图片
-    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
-    // 视频
-    'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo',
-    // 文档
-    'application/pdf', 'application/msword', 
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain', 'text/csv',
-    // 压缩文件
-    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed'
+  // 获取文件扩展名（小写）
+  const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+  
+  // 危险文件扩展名黑名单（禁止上传）
+  const dangerousExtensions = [
+    // 可执行文件
+    'exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'app', 'deb', 'rpm',
+    // 脚本文件（服务器端）
+    'php', 'jsp', 'asp', 'aspx', 'cgi', 'pl', 'sh', 'bash',
+    // 系统文件
+    'sys', 'dll', 'so', 'dylib',
+    // 其他危险文件
+    'jar', 'war', 'ear', 'class'
   ];
   
+  // 检查是否为危险文件
+  if (dangerousExtensions.includes(ext)) {
+    cb(new Error(`出于安全考虑，不允许上传 .${ext} 文件`), false);
+    return;
+  }
+  
+  // 扩展的白名单（允许的MIME类型）
+  const allowedMimes = [
+    // === 图片 ===
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+    'image/bmp', 'image/svg+xml', 'image/tiff', 'image/ico', 'image/x-icon',
+    
+    // === 音频 ===
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
+    'audio/ogg', 'audio/webm', 'audio/flac', 'audio/aac', 'audio/mp4',
+    'audio/x-m4a', 'audio/midi', 'audio/x-midi', 'audio/wma', 'audio/x-ms-wma',
+    
+    // === 视频 ===
+    'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo',
+    'video/x-ms-wmv', 'video/webm', 'video/ogg', 'video/x-flv',
+    'video/x-matroska', 'video/3gpp', 'video/x-m4v',
+    
+    // === 文档 ===
+    'application/pdf',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation', 'application/rtf',
+    
+    // === 文本和代码 ===
+    'text/plain', 'text/csv', 'text/html', 'text/css', 'text/javascript',
+    'text/xml', 'text/markdown', 'text/x-markdown',
+    'application/json', 'application/xml', 'application/javascript',
+    'application/x-javascript', 'application/typescript', 'application/x-yaml',
+    'text/yaml', 'text/x-yaml', 'application/sql',
+    
+    // === 压缩文件 ===
+    'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed',
+    'application/x-7z-compressed', 'application/x-tar', 'application/gzip',
+    'application/x-gzip', 'application/x-bzip', 'application/x-bzip2',
+    
+    // === 设计文件 ===
+    'application/postscript', 'application/illustrator', 'image/vnd.adobe.photoshop',
+    'application/x-photoshop', 'application/psd', 'image/x-psd',
+    
+    // === 电子书 ===
+    'application/epub+zip', 'application/x-mobipocket-ebook',
+    
+    // === 字体文件 ===
+    'font/ttf', 'font/otf', 'font/woff', 'font/woff2', 'application/font-woff',
+    'application/x-font-ttf', 'application/x-font-otf',
+    
+    // === 其他常见格式 ===
+    'application/octet-stream', // 二进制文件（需要额外检查扩展名）
+    'application/x-sqlite3', 'application/x-sqlite',
+    'text/calendar', 'text/vcard'
+  ];
+  
+  // 安全的文件扩展名白名单（即使MIME类型不在列表中也允许）
+  const safeExtensions = [
+    // 文档
+    'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'odt', 'ods', 'odp', 'rtf',
+    // 图片
+    'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico', 'tiff', 'tif',
+    // 音频
+    'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus', 'mid', 'midi', 'amr',
+    // 视频  
+    'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'mpg', 'mpeg', '3gp', 'm4v', 'vob',
+    // 压缩
+    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
+    // 文本和代码
+    'txt', 'md', 'markdown', 'json', 'xml', 'yaml', 'yml', 'ini', 'conf', 'cfg',
+    'js', 'ts', 'jsx', 'tsx', 'css', 'scss', 'sass', 'less', 'html', 'htm',
+    'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'swift', 'kt',
+    'rb', 'lua', 'r', 'scala', 'groovy', 'dart', 'sql', 'sh', 'ps1',
+    // 设计
+    'psd', 'ai', 'sketch', 'fig', 'xd', 'eps',
+    // 电子书
+    'epub', 'mobi', 'azw', 'azw3',
+    // 字体
+    'ttf', 'otf', 'woff', 'woff2', 'eot',
+    // 数据文件
+    'csv', 'tsv', 'db', 'sqlite', 'sqlite3',
+    // 其他
+    'log', 'bak', 'tmp', 'ics', 'vcf', 'torrent'
+  ];
+  
+  // 检查文件是否允许上传
+  // 1. 如果MIME类型在白名单中，允许
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
-  } else {
-    cb(new Error(`不支持的文件类型: ${file.mimetype}`), false);
+    return;
   }
+  
+  // 2. 如果MIME类型是application/octet-stream，检查扩展名是否安全
+  if (file.mimetype === 'application/octet-stream' && safeExtensions.includes(ext)) {
+    cb(null, true);
+    return;
+  }
+  
+  // 3. 对于某些文件，浏览器可能识别不出正确的MIME类型，检查扩展名
+  if (safeExtensions.includes(ext)) {
+    logger.info('通过扩展名白名单允许上传', {
+      filename: file.originalname,
+      ext: ext,
+      mimetype: file.mimetype
+    });
+    cb(null, true);
+    return;
+  }
+  
+  // 4. 不在白名单中，拒绝上传
+  cb(new Error(`不支持的文件类型: ${file.mimetype} (.${ext})`), false);
 };
 
 // 创建上传中间件
@@ -261,7 +368,8 @@ class StorageController {
             
             logger.info('开始上传文件', {
               filename: fixedFileName,
-              size: file.size
+              size: file.size,
+              mimetype: file.mimetype
             });
             
             // 生成OSS key
@@ -723,6 +831,7 @@ class StorageController {
   static getFileType(mimeType) {
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
     if (mimeType.includes('document') || mimeType.includes('pdf') || 
         mimeType.includes('word') || mimeType.includes('excel')) {
       return 'document';
