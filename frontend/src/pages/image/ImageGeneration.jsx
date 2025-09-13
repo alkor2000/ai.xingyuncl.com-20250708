@@ -1,5 +1,6 @@
 /**
  * 图像生成页面 - 支持Midjourney图生图和分页
+ * 修改：移除Midjourney独立参数选择，支持直接在提示词中输入参数
  */
 
 import React, { useEffect, useState } from 'react';
@@ -62,7 +63,8 @@ import {
   CloseCircleOutlined,
   InboxOutlined,
   PlusOutlined,
-  CloseOutlined
+  CloseOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useImageStore from '../../stores/imageStore';
@@ -78,7 +80,7 @@ const { Option } = Select;
 const { Dragger } = Upload;
 const { Title, Text: AntText, Paragraph } = Typography;
 
-// 预设尺寸
+// 预设尺寸（仅用于非Midjourney模型）
 const presetSizes = {
   default: [
     { label: '正方形 1:1', value: '1024x1024', ratio: '1:1' },
@@ -89,13 +91,6 @@ const presetSizes = {
     { label: '竖屏 2:3', value: '832x1248', ratio: '2:3' },
     { label: '横屏 3:2', value: '1248x832', ratio: '3:2' },
     { label: '超宽 21:9', value: '1512x648', ratio: '21:9' }
-  ],
-  midjourney: [
-    { label: '正方形 1:1', value: '1:1', ratio: '1:1' },
-    { label: '横屏 4:3', value: '4:3', ratio: '4:3' },
-    { label: '竖屏 3:4', value: '3:4', ratio: '3:4' },
-    { label: '宽屏 16:9', value: '16:9', ratio: '16:9' },
-    { label: '竖屏 9:16', value: '9:16', ratio: '9:16' }
   ]
 };
 
@@ -105,6 +100,18 @@ const quantityOptions = [
   { label: '2张', value: 2 },
   { label: '3张', value: 3 },
   { label: '4张', value: 4 }
+];
+
+// Midjourney参数示例
+const midjourneyExamples = [
+  { param: '--ar 16:9', desc: '宽屏比例' },
+  { param: '--ar 9:16', desc: '竖屏比例' },
+  { param: '--ar 3:2', desc: '横屏3:2' },
+  { param: '--v 6', desc: '使用V6版本' },
+  { param: '--s 750', desc: '风格化程度' },
+  { param: '--q 2', desc: '高质量' },
+  { param: '--no text', desc: '排除文字' },
+  { param: '--iw 2', desc: '增强参考图权重' }
 ];
 
 const ImageGeneration = () => {
@@ -179,7 +186,7 @@ const ImageGeneration = () => {
   useEffect(() => {
     if (selectedModel) {
       if (isMidjourneyModel(selectedModel)) {
-        setSelectedSize('1:1');
+        // Midjourney不需要独立的尺寸设置
         setQuantity(1); // Midjourney固定一次生成4张
       } else {
         setSelectedSize('1024x1024');
@@ -599,7 +606,7 @@ const ImageGeneration = () => {
                   alt={item.prompt}
                   placeholder={<Spin />}
                   preview={false}
-                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
+                  fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg0Aj8i0JO4OzsrPv69Wv+hi2qPHr0qNvf39+iI7duPc8RooHBgCEBCAKgC21DfDTSgBBgmAM8qIKk0HO0eXWr0h7bBJWwAgxhQZkKiwDVkQ5AD3aSqQSBQJgHNDV4AAQyj1ibKbHbCYB2bVnngJhCzwhQNUvosJCDAcDG5yV2VJP0ujsZvHzheD0IO4M7qP5akRW/2aSYF6Ek5CXhJbEsJ5d6CRABBQQZKUgz4sL4K1K9nMXG2ESJgLvBoRvzHC9VeywCAAAABJRU5ErkJggg=="
                 />
                 <div className="image-overlay">
                   <Space>
@@ -796,14 +803,6 @@ const ImageGeneration = () => {
     }
   };
   
-  // 获取当前可用的尺寸选项
-  const getCurrentSizes = () => {
-    if (selectedModel && isMidjourneyModel(selectedModel)) {
-      return presetSizes.midjourney;
-    }
-    return presetSizes.default;
-  };
-
   return (
     <Layout className="image-generation-page">
       {/* 左侧生成区域 */}
@@ -861,13 +860,53 @@ const ImageGeneration = () => {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={
                 isMidjourneyModel(selectedModel) 
-                  ? "描述你想生成的图片内容，支持参数如 --v 6 --ar 16:9..."
+                  ? "描述你想生成的图片，可直接添加参数如 --ar 16:9 --v 6 --s 750..."
                   : "描述你想生成的图片内容..."
               }
               rows={3}
               maxLength={isMidjourneyModel(selectedModel) ? 4000 : 1000}
               showCount
             />
+            
+            {/* Midjourney参数提示 */}
+            {selectedModel && isMidjourneyModel(selectedModel) && (
+              <div style={{ marginTop: 12 }}>
+                <Alert
+                  message="参数提示"
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        直接在提示词末尾添加参数即可，常用参数：
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {midjourneyExamples.map(example => (
+                          <Tag 
+                            key={example.param}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              const currentPrompt = prompt.trim();
+                              // 在提示词末尾添加参数
+                              if (currentPrompt) {
+                                setPrompt(currentPrompt + ' ' + example.param);
+                              }
+                            }}
+                          >
+                            <code>{example.param}</code> - {example.desc}
+                          </Tag>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
+                        点击参数标签可快速添加到提示词末尾
+                      </div>
+                    </div>
+                  }
+                  type="info"
+                  showIcon
+                  icon={<InfoCircleOutlined />}
+                />
+              </div>
+            )}
+            
             {!isMidjourneyModel(selectedModel) && (
               <div className="negative-prompt">
                 <div className="label">负面提示词（可选）</div>
@@ -911,31 +950,31 @@ const ImageGeneration = () => {
               </div>
             )}
 
-            {/* 图片尺寸 */}
-            <div className="param-item">
-              <div className="param-label">
-                {isMidjourneyModel(selectedModel) ? '图片比例' : '图片尺寸'}
+            {/* 图片尺寸 - 仅非Midjourney模型显示 */}
+            {selectedModel && !isMidjourneyModel(selectedModel) && (
+              <div className="param-item">
+                <div className="param-label">图片尺寸</div>
+                <div className="size-grid">
+                  {presetSizes.default.map(size => (
+                    <Button
+                      key={size.value}
+                      className={selectedSize === size.value ? 'selected' : ''}
+                      onClick={() => setSelectedSize(size.value)}
+                    >
+                      {size.ratio}
+                    </Button>
+                  ))}
+                </div>
+                <div className="size-display">{selectedSize}</div>
               </div>
-              <div className="size-grid">
-                {getCurrentSizes().map(size => (
-                  <Button
-                    key={size.value}
-                    className={selectedSize === size.value ? 'selected' : ''}
-                    onClick={() => setSelectedSize(size.value)}
-                  >
-                    {size.ratio}
-                  </Button>
-                ))}
-              </div>
-              <div className="size-display">{selectedSize}</div>
-            </div>
+            )}
 
-            {/* Midjourney参考图片功能 - 移到参数设置内 */}
+            {/* Midjourney参考图片功能 */}
             {selectedModel && isMidjourneyModel(selectedModel) && (
               <div className="param-item">
                 <div className="param-label">
                   参考图片（可选）
-                  <Tooltip title="上传参考图片，让AI基于这些图片生成新内容。建议在提示词末尾添加 --iw 1 或 --iw 2 来增强参考图片的影响">
+                  <Tooltip title="上传参考图片进行图生图。建议在提示词末尾添加 --iw 1 或 --iw 2 来控制参考图片的影响权重">
                     <span className="info-icon"> ❓</span>
                   </Tooltip>
                 </div>
@@ -992,8 +1031,14 @@ const ImageGeneration = () => {
                 </div>
                 
                 {referenceImages.length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
-                    已添加 {referenceImages.length} 张参考图片（最多5张，每张不超过5MB）
+                  <div style={{ marginTop: 8 }}>
+                    <Alert
+                      message={`已添加 ${referenceImages.length} 张参考图片`}
+                      description="提示：添加 --iw 2 可增强参考图片的影响"
+                      type="info"
+                      showIcon={false}
+                      banner
+                    />
                   </div>
                 )}
               </div>
