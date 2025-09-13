@@ -309,7 +309,7 @@ const StorageManager = () => {
   const { user } = useAuthStore()
 
   // 状态管理
-  const [viewMode, setViewMode] = useState(ViewMode.GRID)
+  const [viewMode, setViewMode] = useState(ViewMode.LIST)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [createFolderVisible, setCreateFolderVisible] = useState(false)
   const [folderName, setFolderName] = useState('')
