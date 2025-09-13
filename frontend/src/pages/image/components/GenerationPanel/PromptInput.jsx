@@ -1,10 +1,11 @@
 /**
  * 提示词输入组件
+ * 优化：精简参数提示内容和样式
  */
 
-import React, { memo, useCallback } from 'react';
-import { Card, Input, Alert, Tag } from 'antd';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import React, { memo, useCallback, useState } from 'react';
+import { Card, Input, Tag, Space, Button } from 'antd';
+import { QuestionCircleOutlined, CaretRightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { MIDJOURNEY_EXAMPLES } from '../../utils/constants';
 import { isMidjourneyModel } from '../../utils/imageHelpers';
@@ -20,6 +21,7 @@ const PromptInput = memo(({
 }) => {
   const { t } = useTranslation();
   const isMj = selectedModel && isMidjourneyModel(selectedModel);
+  const [showParams, setShowParams] = useState(false); // 参数提示默认折叠
 
   // 处理参数点击
   const handleParamClick = useCallback((param) => {
@@ -44,36 +46,41 @@ const PromptInput = memo(({
         showCount
       />
       
-      {/* Midjourney参数提示 */}
+      {/* Midjourney参数提示 - 优化版 */}
       {isMj && (
-        <div style={{ marginTop: 12 }}>
-          <Alert
-            message={t('image.parameterTips', '参数提示')}
-            description={
-              <div>
-                <div style={{ marginBottom: 8 }}>
-                  {t('image.parameterTipsDesc', '直接在提示词末尾添加参数即可，常用参数：')}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {MIDJOURNEY_EXAMPLES.map(example => (
-                    <Tag 
-                      key={example.param}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => handleParamClick(example.param)}
-                    >
-                      <code>{example.param}</code> - {t(`image.param.${example.param}`, example.desc)}
-                    </Tag>
-                  ))}
-                </div>
-                <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
-                  {t('image.clickToAddParam', '点击参数标签可快速添加到提示词末尾')}
-                </div>
-              </div>
-            }
-            type="info"
-            showIcon
-            icon={<InfoCircleOutlined />}
-          />
+        <div className="mj-params-helper">
+          <Button
+            type="text"
+            size="small"
+            icon={<CaretRightOutlined rotate={showParams ? 90 : 0} />}
+            onClick={() => setShowParams(!showParams)}
+            style={{ 
+              padding: '2px 8px', 
+              margin: '8px 0 4px 0',
+              fontSize: '12px',
+              color: '#8c8c8c'
+            }}
+          >
+            <Space size={4}>
+              <QuestionCircleOutlined />
+              {t('image.parameterHelper', '参数助手')}
+            </Space>
+          </Button>
+          
+          {showParams && (
+            <div className="params-grid">
+              {MIDJOURNEY_EXAMPLES.map(example => (
+                <Tag 
+                  key={example.param}
+                  className="param-tag"
+                  onClick={() => handleParamClick(example.param)}
+                >
+                  <span className="param-code">{example.param}</span>
+                  <span className="param-desc">{t(`image.param.${example.param}`, example.desc)}</span>
+                </Tag>
+              ))}
+            </div>
+          )}
         </div>
       )}
       

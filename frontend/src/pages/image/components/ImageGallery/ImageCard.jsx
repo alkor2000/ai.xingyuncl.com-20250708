@@ -1,8 +1,9 @@
 /**
  * 图片卡片组件
+ * 修复：长提示词导致复制按钮消失的问题
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm } from 'antd';
 import {
   EyeOutlined,
@@ -16,7 +17,9 @@ import {
   UserOutlined,
   WarningOutlined,
   ThunderboltOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  DownOutlined,
+  UpOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -41,11 +44,16 @@ const ImageCard = memo(({
   renderActions
 }) => {
   const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useState(false); // 添加展开状态
+  
   const isMj = item.provider === 'midjourney';
   const isCompleted = isTaskCompleted(item);
   const isFailed = isTaskFailed(item);
   const isProcessing = isTaskProcessing(item, processingTasks);
   const hasImage = getImageUrl(item);
+
+  // 判断提示词是否过长（超过100个字符显示展开按钮）
+  const isLongPrompt = item.prompt && item.prompt.length > 100;
 
   // 处理复制提示词
   const handleCopyPrompt = useCallback((e) => {
@@ -58,6 +66,12 @@ const ImageCard = memo(({
     e.stopPropagation();
     downloadImage(getImageUrl(item), `ai_${item.id}.jpg`);
   }, [item]);
+
+  // 切换展开/收起
+  const toggleExpanded = useCallback((e) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+  }, [isExpanded]);
 
   return (
     <Card
@@ -211,18 +225,37 @@ const ImageCard = memo(({
         }
         description={
           <div className="card-meta-description">
-            <div className="prompt-text">
-              {item.prompt}
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={handleCopyPrompt}
-              >
-                {t('common.copy', '复制')}
-              </Button>
+            {/* 修复：重新设计提示词区域布局 */}
+            <div className="prompt-container">
+              <div className={`prompt-text ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                {item.prompt}
+              </div>
+              <div className="prompt-actions">
+                {isLongPrompt && (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={isExpanded ? <UpOutlined /> : <DownOutlined />}
+                    onClick={toggleExpanded}
+                    style={{ padding: '0 4px' }}
+                  >
+                    {isExpanded ? t('common.collapse', '收起') : t('common.expand', '展开')}
+                  </Button>
+                )}
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={handleCopyPrompt}
+                  style={{ padding: '0 4px' }}
+                >
+                  {t('common.copy', '复制')}
+                </Button>
+              </div>
             </div>
+            
             {isOwner && isMj && !isProcessing && !isFailed && hasImage && renderActions && renderActions(item)}
+            
             <div className="meta-info">
               {isGallery && item.username && (
                 <span style={{ marginRight: 8 }}>
