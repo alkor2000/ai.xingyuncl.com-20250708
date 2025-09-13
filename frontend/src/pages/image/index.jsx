@@ -1,6 +1,6 @@
 /**
  * 图像生成页面 - 重构版
- * 修复：解决Midjourney新图片查看大图显示旧图的问题
+ * 修复：正确处理OSS URL
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -176,16 +176,56 @@ const ImageGeneration = () => {
     }
   }, [activeTab, historyPaging, publicPaging, getUserHistory, getPublicGallery, cleanupFailedTasks]);
 
-  // 修复：移除useCallback，确保每次都获取最新数据
+  /**
+   * 获取图片的最佳URL
+   * 优先级：local_path (OSS) > image_url (原始) > thumbnail_path
+   */
+  const getBestImageUrl = (img) => {
+    // local_path通常是OSS URL或本地路径
+    if (img.local_path) {
+      // 如果是OSS URL（以http开头），直接使用
+      if (img.local_path.startsWith('http://') || img.local_path.startsWith('https://')) {
+        return img.local_path;
+      }
+      // 如果是本地路径，需要加上域名前缀
+      if (img.local_path.startsWith('/')) {
+        return `https://ai.xingyuncl.com${img.local_path}`;
+      }
+    }
+    
+    // image_url是原始URL（火山方舟或Midjourney返回的）
+    if (img.image_url) {
+      return img.image_url;
+    }
+    
+    // thumbnail_path作为最后备选
+    if (img.thumbnail_path) {
+      // 如果是OSS URL，直接使用
+      if (img.thumbnail_path.startsWith('http://') || img.thumbnail_path.startsWith('https://')) {
+        return img.thumbnail_path;
+      }
+      // 如果是本地路径，加上域名前缀
+      if (img.thumbnail_path.startsWith('/')) {
+        return `https://ai.xingyuncl.com${img.thumbnail_path}`;
+      }
+    }
+    
+    return '';
+  };
+
+  // 修复：处理查看大图
   const handleViewImage = (item) => {
     // 直接获取当前最新数据，不使用缓存
     const currentData = activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
     const index = currentData.findIndex(img => img.id === item.id);
     
     const images = currentData.map(img => ({
-      // 修复：优先使用可用的URL，确保新图片能正确显示
-      url: img.image_url || img.local_path || img.thumbnail_path || '',
-      thumbnail_path: img.thumbnail_path || img.image_url || img.local_path || '',
+      // 使用getBestImageUrl获取正确的URL
+      url: getBestImageUrl(img),
+      // 缩略图优先使用thumbnail_path
+      thumbnail_path: img.thumbnail_path?.startsWith('http') 
+        ? img.thumbnail_path 
+        : (img.thumbnail_path ? `https://ai.xingyuncl.com${img.thumbnail_path}` : getBestImageUrl(img)),
       title: img.prompt,
       prompt: img.prompt,
       negative_prompt: img.negative_prompt,
@@ -197,12 +237,23 @@ const ImageGeneration = () => {
       gridLayout: img.grid_layout
     }));
     
-    setViewerImages(images);
-    setViewerInitialIndex(index >= 0 ? index : 0);
+    // 过滤掉没有URL的图片
+    const validImages = images.filter(img => img.url);
+    
+    if (validImages.length === 0) {
+      message.error('图片加载失败');
+      return;
+    }
+    
+    // 找到当前图片在有效图片列表中的索引
+    const validIndex = validImages.findIndex(img => img.prompt === item.prompt && img.url);
+    
+    setViewerImages(validImages);
+    setViewerInitialIndex(validIndex >= 0 ? validIndex : 0);
     setViewerVisible(true);
   };
 
-  // 修复：移除useCallback，确保始终返回最新数据
+  // 获取当前显示的数据
   const getCurrentData = () => {
     return activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
   };

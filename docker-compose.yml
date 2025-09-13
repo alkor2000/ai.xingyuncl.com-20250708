@@ -12,15 +12,20 @@ services:
       MYSQL_USER: ${DB_USER:-ai_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
       TZ: Asia/Shanghai
+      # 添加字符集环境变量
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+      # 挂载MySQL配置文件
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/charset.cnf:ro
     networks:
       - ai-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--default-character-set=utf8mb4"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -62,6 +67,8 @@ services:
       DB_USER: ${DB_USER:-ai_user}
       DB_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
       DB_NAME: ${DB_NAME:-ai_platform}
+      # 确保连接使用utf8mb4
+      DB_CHARSET: utf8mb4
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
