@@ -18,6 +18,7 @@ class OrgApplicationController {
         SELECT 
           button_text,
           button_visible,
+          application_rules,
           field_4_label,
           field_4_required,
           field_4_type,
@@ -41,6 +42,7 @@ class OrgApplicationController {
         return ResponseHelper.success(res, {
           button_text: '申请企业账号',
           button_visible: true,
+          application_rules: '',
           fields: []
         });
       }
@@ -64,6 +66,7 @@ class OrgApplicationController {
       return ResponseHelper.success(res, {
         button_text: config.button_text,
         button_visible: config.button_visible === 1,
+        application_rules: config.application_rules || '',
         invitation_code_required: config.invitation_code_required === 1,
         fields
       });
@@ -314,7 +317,7 @@ class OrgApplicationController {
         // 生成UUID
         const userUuid = crypto.randomUUID();
         
-        // 使用固定默认密码 - 关键修改
+        // 使用固定默认密码
         const defaultPassword = '123456';
         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
         
@@ -379,7 +382,7 @@ class OrgApplicationController {
           message: '申请已批准，账号创建成功',
           email: application.applicant_email,
           username: username,
-          defaultPassword: defaultPassword, // 明确返回默认密码供管理员告知用户
+          defaultPassword: defaultPassword,
           note: '请告知用户使用此密码登录，并建议首次登录后修改密码'
         });
       } else {
@@ -424,10 +427,11 @@ class OrgApplicationController {
       const updateData = req.body;
       const updaterId = req.user.id;
       
-      // 构建更新语句
+      // 构建更新语句 - 添加application_rules字段
       const allowedFields = [
         'button_text',
         'button_visible',
+        'application_rules',
         'field_4_label',
         'field_4_required',
         'field_4_type',

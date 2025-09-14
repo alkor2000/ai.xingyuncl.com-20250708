@@ -1,5 +1,5 @@
 /**
- * 申请页面 - 支持文件上传到OSS
+ * 申请页面 - 显示申请规则，去掉选填文字
  */
 
 import React, { useState, useEffect } from 'react';
@@ -11,7 +11,8 @@ import {
   ArrowLeftOutlined,
   SafetyOutlined,
   CheckCircleOutlined,
-  InboxOutlined
+  InboxOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -228,6 +229,26 @@ const OrgApplication = () => {
           </Paragraph>
         </div>
 
+        {/* 显示申请规则 */}
+        {formConfig?.application_rules && (
+          <Alert
+            message="申请规则"
+            description={
+              <pre style={{ 
+                margin: 0, 
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'inherit'
+              }}>
+                {formConfig.application_rules}
+              </pre>
+            }
+            type="info"
+            showIcon
+            icon={<InfoCircleOutlined />}
+            style={{ marginBottom: '20px' }}
+          />
+        )}
+
         <Form
           form={form}
           layout="vertical"
@@ -264,9 +285,9 @@ const OrgApplication = () => {
             />
           </Form.Item>
 
-          {/* 营业执照上传 - 改进的上传组件 */}
+          {/* 营业执照上传 - 去掉选填文字 */}
           <Form.Item
-            label="营业执照（选填）"
+            label="营业执照"
             name="business_license_upload"
           >
             <Dragger
@@ -325,7 +346,7 @@ const OrgApplication = () => {
 
           {/* 邀请码 */}
           <Form.Item
-            label={formConfig?.invitation_code_required ? '邀请码' : '邀请码（选填）'}
+            label={formConfig?.invitation_code_required ? '邀请码' : '邀请码'}
             name="invitation_code"
             rules={formConfig?.invitation_code_required 
               ? [{ required: true, message: '请输入邀请码' }] 

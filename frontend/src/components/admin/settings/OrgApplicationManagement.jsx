@@ -1,5 +1,5 @@
 /**
- * 机构申请管理组件 - 增强版，显示完整信息
+ * 机构申请管理组件 - 支持申请规则配置
  */
 
 import React, { useState, useEffect } from 'react';
@@ -34,7 +34,8 @@ import {
   SafetyOutlined,
   FileImageOutlined,
   EyeOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../../utils/api';
@@ -254,7 +255,7 @@ const OrgApplicationManagement = () => {
     setDetailModalVisible(true);
   };
 
-  // 申请列表列定义 - 增加更多字段显示
+  // 申请列表列定义
   const applicationColumns = [
     {
       title: '申请时间',
@@ -555,7 +556,7 @@ const OrgApplicationManagement = () => {
         <TabPane tab={<span><EditOutlined /> 表单配置</span>} key="config">
           <Alert
             message="配置说明"
-            description="您可以自定义企业申请表单的字段和行为"
+            description="您可以自定义企业申请表单的字段和行为，申请规则将显示在申请页面顶部"
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -577,6 +578,15 @@ const OrgApplicationManagement = () => {
                 <Tag color={formConfig.button_visible ? 'success' : 'default'}>
                   {formConfig.button_visible ? '显示' : '隐藏'}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="申请规则" span={3}>
+                {formConfig.application_rules ? (
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {formConfig.application_rules}
+                  </pre>
+                ) : (
+                  <span style={{ color: '#999' }}>未设置</span>
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="邀请码必填">
                 <Tag color={formConfig.invitation_code_required ? 'warning' : 'default'}>
@@ -876,7 +886,7 @@ const OrgApplicationManagement = () => {
         </Form>
       </Modal>
 
-      {/* 表单配置弹窗 */}
+      {/* 表单配置弹窗 - 添加申请规则字段 */}
       <Modal
         title="编辑表单配置"
         visible={configModalVisible}
@@ -894,6 +904,27 @@ const OrgApplicationManagement = () => {
             name="button_text"
           >
             <Input placeholder="例如：申请企业账号" />
+          </Form.Item>
+          
+          <Form.Item
+            label={
+              <span>
+                申请规则 
+                <Tooltip title="在申请页面顶部显示的规则说明，支持换行">
+                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                </Tooltip>
+              </span>
+            }
+            name="application_rules"
+          >
+            <TextArea 
+              rows={6} 
+              placeholder={`请输入申请规则，例如：
+1. 申请条件：需提供有效的企业营业执照
+2. 审核时间：1-3个工作日内完成审核
+3. 联系方式：如有问题请联系 support@example.com
+4. 注意事项：请确保填写信息真实有效`}
+            />
           </Form.Item>
           
           <Form.Item
