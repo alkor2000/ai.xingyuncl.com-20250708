@@ -1,6 +1,6 @@
 /**
  * 图像生成页面 - 重构版
- * 修复：正确处理OSS URL
+ * 修复：图片查看器索引错位问题
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -213,43 +213,63 @@ const ImageGeneration = () => {
     return '';
   };
 
-  // 修复：处理查看大图
+  /**
+   * 修复：处理查看大图
+   * 关键修复：确保索引正确对应
+   */
   const handleViewImage = (item) => {
-    // 直接获取当前最新数据，不使用缓存
+    // 获取当前显示的数据
     const currentData = activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
-    const index = currentData.findIndex(img => img.id === item.id);
     
-    const images = currentData.map(img => ({
-      // 使用getBestImageUrl获取正确的URL
-      url: getBestImageUrl(img),
-      // 缩略图优先使用thumbnail_path
-      thumbnail_path: img.thumbnail_path?.startsWith('http') 
-        ? img.thumbnail_path 
-        : (img.thumbnail_path ? `https://ai.xingyuncl.com${img.thumbnail_path}` : getBestImageUrl(img)),
-      title: img.prompt,
-      prompt: img.prompt,
-      negative_prompt: img.negative_prompt,
-      size: img.size,
-      generation_mode: img.generation_mode,
-      guidance_scale: img.guidance_scale,
-      seed: img.seed,
-      username: img.username,
-      gridLayout: img.grid_layout
-    }));
+    // 先构建完整的图片数据，并保留原始id
+    const allImages = currentData.map(img => {
+      const url = getBestImageUrl(img);
+      if (!url) return null; // 标记无效图片
+      
+      return {
+        id: img.id, // 保留原始id用于索引查找
+        url: url,
+        // 缩略图优先使用thumbnail_path
+        thumbnail_path: img.thumbnail_path?.startsWith('http') 
+          ? img.thumbnail_path 
+          : (img.thumbnail_path ? `https://ai.xingyuncl.com${img.thumbnail_path}` : url),
+        title: img.prompt,
+        prompt: img.prompt,
+        negative_prompt: img.negative_prompt,
+        size: img.size,
+        generation_mode: img.generation_mode,
+        guidance_scale: img.guidance_scale,
+        seed: img.seed,
+        username: img.username,
+        gridLayout: img.grid_layout
+      };
+    });
     
-    // 过滤掉没有URL的图片
-    const validImages = images.filter(img => img.url);
+    // 过滤掉无效图片（url为null的）
+    const validImages = allImages.filter(img => img !== null);
     
     if (validImages.length === 0) {
       message.error('图片加载失败');
       return;
     }
     
-    // 找到当前图片在有效图片列表中的索引
-    const validIndex = validImages.findIndex(img => img.prompt === item.prompt && img.url);
+    // 重要修复：使用id查找正确的索引
+    const correctIndex = validImages.findIndex(img => img.id === item.id);
+    
+    // 如果找不到对应的图片，使用第一张
+    const finalIndex = correctIndex >= 0 ? correctIndex : 0;
+    
+    // 调试日志（生产环境可删除）
+    console.log('图片查看调试:', {
+      clickedItemId: item.id,
+      totalImages: currentData.length,
+      validImages: validImages.length,
+      foundIndex: correctIndex,
+      finalIndex: finalIndex
+    });
     
     setViewerImages(validImages);
-    setViewerInitialIndex(validIndex >= 0 ? validIndex : 0);
+    setViewerInitialIndex(finalIndex);
     setViewerVisible(true);
   };
 
