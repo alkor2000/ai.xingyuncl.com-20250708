@@ -7,6 +7,8 @@ const dbConnection = require('../database/connection');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const OrgApplicationController = require('../controllers/admin/OrgApplicationController');
+const PublicUploadController = require('../controllers/PublicUploadController');
+const { uploadBusinessLicense } = require('../middleware/publicUploadMiddleware');
 
 // 获取自定义首页配置（新增）
 router.get('/custom-homepage', async (req, res) => {
@@ -120,5 +122,11 @@ router.get('/system-config', async (req, res) => {
 // 机构申请相关的公开路由
 router.get('/org-application/form-config', OrgApplicationController.getFormConfig);
 router.post('/org-application/submit', OrgApplicationController.submitApplication);
+
+// 公开文件上传路由
+router.post('/org-application/upload-license', 
+  uploadBusinessLicense,
+  PublicUploadController.uploadBusinessLicense
+);
 
 module.exports = router;

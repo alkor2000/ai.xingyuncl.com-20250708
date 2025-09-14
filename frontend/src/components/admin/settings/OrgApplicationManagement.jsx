@@ -1,5 +1,5 @@
 /**
- * 机构申请管理组件
+ * 机构申请管理组件 - 增强版，显示完整信息
  */
 
 import React, { useState, useEffect } from 'react';
@@ -20,7 +20,8 @@ import {
   Alert,
   Switch,
   DatePicker,
-  Popconfirm
+  Popconfirm,
+  Tooltip
 } from 'antd';
 import {
   CheckOutlined,
@@ -30,7 +31,10 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   BankOutlined,
-  SafetyOutlined
+  SafetyOutlined,
+  FileImageOutlined,
+  EyeOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../../utils/api';
@@ -51,6 +55,7 @@ const OrgApplicationManagement = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [codeModalVisible, setCodeModalVisible] = useState(false);
   const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [editingCode, setEditingCode] = useState(null);
   const [groups, setGroups] = useState([]);
@@ -60,7 +65,7 @@ const OrgApplicationManagement = () => {
   const [codeForm] = Form.useForm();
   const [configForm] = Form.useForm();
 
-  // 获取申请列表 - 修正路径
+  // 获取申请列表
   const fetchApplications = async (status = null) => {
     setLoading(true);
     try {
@@ -80,7 +85,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 获取邀请码列表 - 修正路径
+  // 获取邀请码列表
   const fetchInvitationCodes = async () => {
     setLoading(true);
     try {
@@ -96,7 +101,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 获取表单配置 - 修正路径
+  // 获取表单配置
   const fetchFormConfig = async () => {
     try {
       const response = await apiClient.get('/admin/org-applications/form-config');
@@ -109,7 +114,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 获取用户组列表 - 修正路径
+  // 获取用户组列表
   const fetchGroups = async () => {
     try {
       const response = await apiClient.get('/admin/user-groups');
@@ -128,7 +133,7 @@ const OrgApplicationManagement = () => {
     fetchGroups();
   }, []);
 
-  // 处理批准申请 - 修正路径
+  // 处理批准申请
   const handleApprove = async (values) => {
     try {
       const response = await apiClient.post(
@@ -140,7 +145,27 @@ const OrgApplicationManagement = () => {
         }
       );
       if (response.data.success) {
-        message.success('申请已批准');
+        // 显示账号信息
+        const { email, username, defaultPassword } = response.data.data;
+        Modal.success({
+          title: '申请已批准',
+          content: (
+            <div>
+              <p>账号创建成功，请告知用户以下信息：</p>
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="邮箱">{email}</Descriptions.Item>
+                <Descriptions.Item label="用户名">{username}</Descriptions.Item>
+                <Descriptions.Item label="默认密码">{defaultPassword}</Descriptions.Item>
+              </Descriptions>
+              <Alert 
+                message="请提醒用户首次登录后修改密码" 
+                type="warning" 
+                style={{ marginTop: 10 }}
+              />
+            </div>
+          ),
+          width: 500
+        });
         setApproveModalVisible(false);
         approveForm.resetFields();
         fetchApplications();
@@ -151,7 +176,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 处理拒绝申请 - 修正路径
+  // 处理拒绝申请
   const handleReject = async (values) => {
     try {
       const response = await apiClient.post(
@@ -173,7 +198,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 创建或更新邀请码 - 修正路径
+  // 创建或更新邀请码
   const handleSaveCode = async (values) => {
     try {
       if (editingCode) {
@@ -198,7 +223,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 删除邀请码 - 修正路径
+  // 删除邀请码
   const handleDeleteCode = async (id) => {
     try {
       await apiClient.delete(`/admin/org-applications/invitation-codes/${id}`);
@@ -210,7 +235,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 更新表单配置 - 修正路径
+  // 更新表单配置
   const handleUpdateConfig = async (values) => {
     try {
       await apiClient.put('/admin/org-applications/form-config', values);
@@ -223,7 +248,13 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 申请列表列定义
+  // 查看详情
+  const showApplicationDetail = (record) => {
+    setSelectedApplication(record);
+    setDetailModalVisible(true);
+  };
+
+  // 申请列表列定义 - 增加更多字段显示
   const applicationColumns = [
     {
       title: '申请时间',
@@ -236,20 +267,90 @@ const OrgApplicationManagement = () => {
       title: '组织名称',
       dataIndex: 'org_name',
       key: 'org_name',
-      ellipsis: true
+      ellipsis: true,
+      width: 150
     },
     {
       title: '申请人邮箱',
       dataIndex: 'applicant_email',
       key: 'applicant_email',
-      ellipsis: true
+      ellipsis: true,
+      width: 180
+    },
+    {
+      title: '联系人',
+      dataIndex: 'custom_field_4',
+      key: 'custom_field_4',
+      render: (text) => text || '-',
+      width: 100
+    },
+    {
+      title: '联系电话',
+      dataIndex: 'custom_field_5',
+      key: 'custom_field_5',
+      render: (text) => text || '-',
+      width: 120
+    },
+    {
+      title: '申请说明',
+      dataIndex: 'custom_field_6',
+      key: 'custom_field_6',
+      ellipsis: true,
+      width: 150,
+      render: (text) => (
+        <Tooltip title={text}>
+          <span>{text || '-'}</span>
+        </Tooltip>
+      )
+    },
+    {
+      title: '营业执照',
+      dataIndex: 'business_license',
+      key: 'business_license',
+      width: 100,
+      render: (url) => {
+        if (!url) return '-';
+        return (
+          <Space>
+            <Tooltip title="查看">
+              <Button
+                type="link"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => window.open(url, '_blank')}
+              />
+            </Tooltip>
+            <Tooltip title="下载">
+              <Button
+                type="link"
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'business_license';
+                  link.click();
+                }}
+              />
+            </Tooltip>
+          </Space>
+        );
+      }
     },
     {
       title: '邀请码',
       dataIndex: 'invitation_code',
       key: 'invitation_code',
-      render: (text) => text || '-',
+      render: (text) => text ? <Tag color="blue">{text}</Tag> : '-',
       width: 100
+    },
+    {
+      title: '推荐人',
+      dataIndex: 'referrer_info',
+      key: 'referrer_info',
+      ellipsis: true,
+      width: 120,
+      render: (text) => text || '-'
     },
     {
       title: '状态',
@@ -273,9 +374,17 @@ const OrgApplicationManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 250,
+      fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => showApplicationDetail(record)}
+          >
+            详情
+          </Button>
           {record.status === 'pending' && (
             <>
               <Button
@@ -301,9 +410,6 @@ const OrgApplicationManagement = () => {
                 拒绝
               </Button>
             </>
-          )}
-          {record.status === 'approved' && record.created_user_email && (
-            <Tag color="blue">{record.created_user_email}</Tag>
           )}
         </Space>
       )
@@ -406,6 +512,7 @@ const OrgApplicationManagement = () => {
             dataSource={applications}
             loading={loading}
             rowKey="id"
+            scroll={{ x: 1800 }}
             pagination={{
               showSizeChanger: true,
               showTotal: (total) => `共 ${total} 条`
@@ -491,6 +598,115 @@ const OrgApplicationManagement = () => {
           )}
         </TabPane>
       </Tabs>
+
+      {/* 申请详情弹窗 */}
+      <Modal
+        title="申请详情"
+        visible={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={700}
+      >
+        {selectedApplication && (
+          <Descriptions bordered column={2}>
+            <Descriptions.Item label="申请ID" span={1}>
+              {selectedApplication.id}
+            </Descriptions.Item>
+            <Descriptions.Item label="申请时间" span={1}>
+              {moment(selectedApplication.created_at).format('YYYY-MM-DD HH:mm:ss')}
+            </Descriptions.Item>
+            <Descriptions.Item label="组织名称" span={2}>
+              {selectedApplication.org_name}
+            </Descriptions.Item>
+            <Descriptions.Item label="申请人邮箱" span={2}>
+              {selectedApplication.applicant_email}
+            </Descriptions.Item>
+            <Descriptions.Item label="联系人姓名" span={1}>
+              {selectedApplication.custom_field_4 || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="联系电话" span={1}>
+              {selectedApplication.custom_field_5 || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="申请说明" span={2}>
+              {selectedApplication.custom_field_6 || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="营业执照" span={2}>
+              {selectedApplication.business_license ? (
+                <Space>
+                  <Button
+                    type="link"
+                    icon={<EyeOutlined />}
+                    onClick={() => window.open(selectedApplication.business_license, '_blank')}
+                  >
+                    查看
+                  </Button>
+                  <Button
+                    type="link"
+                    icon={<DownloadOutlined />}
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = selectedApplication.business_license;
+                      link.download = 'business_license';
+                      link.click();
+                    }}
+                  >
+                    下载
+                  </Button>
+                </Space>
+              ) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="邀请码" span={1}>
+              {selectedApplication.invitation_code ? (
+                <Tag color="blue">{selectedApplication.invitation_code}</Tag>
+              ) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="推荐人信息" span={1}>
+              {selectedApplication.referrer_info || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="状态" span={1}>
+              {(() => {
+                const status = selectedApplication.status;
+                const colorMap = {
+                  pending: 'processing',
+                  approved: 'success',
+                  rejected: 'error'
+                };
+                const textMap = {
+                  pending: '待审核',
+                  approved: '已批准',
+                  rejected: '已拒绝'
+                };
+                return <Tag color={colorMap[status]}>{textMap[status]}</Tag>;
+              })()}
+            </Descriptions.Item>
+            <Descriptions.Item label="审批时间" span={1}>
+              {selectedApplication.approved_at ? 
+                moment(selectedApplication.approved_at).format('YYYY-MM-DD HH:mm:ss') : 
+                '-'
+              }
+            </Descriptions.Item>
+            {selectedApplication.status === 'approved' && (
+              <>
+                <Descriptions.Item label="审批人" span={1}>
+                  {selectedApplication.approver_name || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="创建账号" span={1}>
+                  {selectedApplication.created_user_email || '-'}
+                </Descriptions.Item>
+              </>
+            )}
+            {selectedApplication.status === 'rejected' && (
+              <Descriptions.Item label="拒绝原因" span={2}>
+                {selectedApplication.rejection_reason || '-'}
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        )}
+      </Modal>
 
       {/* 批准申请弹窗 */}
       <Modal
