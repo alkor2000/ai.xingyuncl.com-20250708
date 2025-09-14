@@ -272,7 +272,7 @@ class OrgApplicationController {
   }
   
   /**
-   * 审批申请（管理员接口）
+   * 审批申请（管理员接口） - 使用固定默认密码
    */
   static async approveApplication(req, res) {
     try {
@@ -311,9 +311,12 @@ class OrgApplicationController {
         const finalGroupId = group_id || config.default_group_id || 1;
         const finalCredits = credits !== undefined ? credits : (config.default_credits || 0);
         
-        // 生成随机密码
-        const randomPassword = crypto.randomBytes(8).toString('hex');
-        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+        // 生成UUID
+        const userUuid = crypto.randomUUID();
+        
+        // 使用固定默认密码 - 关键修改
+        const defaultPassword = '123456';
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
         
         // 生成用户名（使用邮箱前缀）
         const username = application.applicant_email.split('@')[0] + '_' + Date.now();
@@ -323,6 +326,7 @@ class OrgApplicationController {
           // 创建用户
           const userSql = `
             INSERT INTO users (
+              uuid,
               email,
               username,
               password_hash,
@@ -331,10 +335,11 @@ class OrgApplicationController {
               status,
               credits_quota,
               remark
-            ) VALUES (?, ?, ?, 'user', ?, 'active', ?, ?)
+            ) VALUES (?, ?, ?, ?, 'user', ?, 'active', ?, ?)
           `;
           
           const userResult = await query(userSql, [
+            userUuid,
             application.applicant_email,
             username,
             hashedPassword,
@@ -363,15 +368,19 @@ class OrgApplicationController {
           applicationId: id,
           approverId,
           email: application.applicant_email,
-          org: application.org_name
+          org: application.org_name,
+          uuid: userUuid,
+          defaultPassword: '已设置为123456'
         });
         
-        // TODO: 发送邮件通知，包含临时密码
+        // TODO: 发送邮件通知，告知默认密码
         
         return ResponseHelper.success(res, {
           message: '申请已批准，账号创建成功',
           email: application.applicant_email,
-          tempPassword: randomPassword // 仅用于测试，生产环境应通过邮件发送
+          username: username,
+          defaultPassword: defaultPassword, // 明确返回默认密码供管理员告知用户
+          note: '请告知用户使用此密码登录，并建议首次登录后修改密码'
         });
       } else {
         // 拒绝申请
@@ -492,7 +501,7 @@ class OrgApplicationController {
   }
   
   /**
-   * 创建邀请码
+   * 创建邀请码 - 修复日期格式问题
    */
   static async createInvitationCode(req, res) {
     try {
@@ -511,6 +520,20 @@ class OrgApplicationController {
         return ResponseHelper.validation(res, '邀请码已存在');
       }
       
+      // 处理日期格式
+      let formattedExpiresAt = null;
+      if (expires_at) {
+        const date = new Date(expires_at);
+        if (!isNaN(date.getTime())) {
+          formattedExpiresAt = date.getFullYear() + '-' +
+            String(date.getMonth() + 1).padStart(2, '0') + '-' +
+            String(date.getDate()).padStart(2, '0') + ' ' +
+            String(date.getHours()).padStart(2, '0') + ':' +
+            String(date.getMinutes()).padStart(2, '0') + ':' +
+            String(date.getSeconds()).padStart(2, '0');
+        }
+      }
+      
       const insertSql = `
         INSERT INTO invitation_codes (
           code, description, usage_limit, expires_at, created_by
@@ -519,16 +542,17 @@ class OrgApplicationController {
       
       const { rows } = await dbConnection.query(insertSql, [
         code,
-        description,
+        description || null,
         usage_limit,
-        expires_at,
+        formattedExpiresAt,
         creatorId
       ]);
       
       logger.info('邀请码创建成功', {
         codeId: rows.insertId,
         code,
-        creatorId
+        creatorId,
+        expires_at: formattedExpiresAt
       });
       
       return ResponseHelper.success(res, {
@@ -542,7 +566,7 @@ class OrgApplicationController {
   }
   
   /**
-   * 更新邀请码
+   * 更新邀请码 - 修复日期格式问题
    */
   static async updateInvitationCode(req, res) {
     try {
@@ -556,7 +580,26 @@ class OrgApplicationController {
       for (const field of allowedFields) {
         if (updateData.hasOwnProperty(field)) {
           updates.push(`${field} = ?`);
-          values.push(updateData[field]);
+          
+          // 特殊处理expires_at字段
+          if (field === 'expires_at' && updateData[field]) {
+            const date = new Date(updateData[field]);
+            if (!isNaN(date.getTime())) {
+              const formattedDate = date.getFullYear() + '-' +
+                String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                String(date.getDate()).padStart(2, '0') + ' ' +
+                String(date.getHours()).padStart(2, '0') + ':' +
+                String(date.getMinutes()).padStart(2, '0') + ':' +
+                String(date.getSeconds()).padStart(2, '0');
+              values.push(formattedDate);
+            } else {
+              values.push(null);
+            }
+          } else if (field === 'expires_at' && !updateData[field]) {
+            values.push(null);
+          } else {
+            values.push(updateData[field]);
+          }
         }
       }
       
