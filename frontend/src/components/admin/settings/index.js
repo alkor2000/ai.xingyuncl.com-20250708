@@ -1,3 +1,8 @@
+/**
+ * 管理设置组件导出文件
+ */
+
+// 系统设置相关组件
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
 export { default as AIModelFormModal } from './AIModelFormModal'
@@ -8,18 +13,14 @@ export { default as CustomHomepage } from './CustomHomepage'
 export { default as SystemHealthMonitor } from './SystemHealthMonitor'
 export { default as EmailSettings } from './EmailSettings'
 export { default as APIServiceTable } from './APIServiceTable'
-export { default as APIServiceFormModal } from './APIServiceFormModal'
-export { default as APIServiceActionModal } from './APIServiceActionModal'
 export { default as RateLimitSettings } from './RateLimitSettings'
 export { default as ThemeSettings } from './ThemeSettings'
 export { default as SystemPromptSettings } from './SystemPromptSettings'
-export { default as SystemPromptTable } from './SystemPromptTable'
-export { default as SystemPromptFormModal } from './SystemPromptFormModal'
 export { default as UsageLogs } from './UsageLogs'
 export { default as ImageModelSettings } from './ImageModelSettings'
-export { default as ImageModelFormModal } from './ImageModelFormModal'
 export { default as VideoModelSettings } from './VideoModelSettings'
 export { default as SSOSettings } from './SSOSettings'
 export { default as HtmlEditorSettings } from './HtmlEditorSettings'
 export { default as OSSSettings } from './OSSSettings'
 export { default as StorageCreditsConfig } from './StorageCreditsConfig'
+export { default as OrgApplicationManagement } from './OrgApplicationManagement'

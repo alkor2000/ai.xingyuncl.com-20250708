@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Form, Input, Button, Card, message, Typography, Space, Spin, Tabs } from 'antd'
-import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, HomeOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { Form, Input, Button, Card, message, Typography, Space, Spin, Tabs, Divider } from 'antd'
+import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, HomeOutlined, ArrowLeftOutlined, BankOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
@@ -17,6 +17,7 @@ const Login = () => {
   const [loginType, setLoginType] = useState('password') // password | code
   const [sendingCode, setSendingCode] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [orgAppConfig, setOrgAppConfig] = useState(null) // 企业申请配置
   const { login } = useAuthStore()
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -40,6 +41,21 @@ const Login = () => {
       }
     }
     fetchPublicConfig()
+  }, [])
+
+  // 获取企业申请表单配置
+  useEffect(() => {
+    const fetchOrgAppConfig = async () => {
+      try {
+        const response = await apiClient.get('/public/org-application/form-config')
+        if (response.data?.success && response.data?.data) {
+          setOrgAppConfig(response.data.data)
+        }
+      } catch (error) {
+        console.error('获取企业申请配置失败:', error)
+      }
+    }
+    fetchOrgAppConfig()
   }, [])
 
   // 倒计时处理
@@ -224,6 +240,7 @@ const Login = () => {
 
   const allowRegister = publicConfig?.user?.allow_register !== false
   const loginMode = publicConfig?.login?.mode || 'standard'
+  const showOrgApplication = orgAppConfig?.button_visible === true
 
   // iOS风格的样式定义
   const iosStyles = {
@@ -689,29 +706,63 @@ const Login = () => {
           )}
         </div>
 
-        {/* 注册链接 */}
-        {allowRegister && (
-          <div style={{ 
-            textAlign: 'center',
-            marginTop: '16px'
-          }}>
-            <Space>
-              <Text style={{ fontSize: '14px', color: '#8e8e93' }}>
-                {t('auth.login.noAccount')}
-              </Text>
-              <Link 
-                to="/register"
-                style={{ 
+        {/* 注册和企业申请链接 */}
+        <div style={{ 
+          textAlign: 'center',
+          marginTop: '16px'
+        }}>
+          {allowRegister && (
+            <div style={{ marginBottom: '12px' }}>
+              <Space>
+                <Text style={{ fontSize: '14px', color: '#8e8e93' }}>
+                  {t('auth.login.noAccount')}
+                </Text>
+                <Link 
+                  to="/register"
+                  style={{ 
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: '#007AFF'
+                  }}
+                >
+                  {t('auth.login.register')}
+                </Link>
+              </Space>
+            </div>
+          )}
+          
+          {/* 企业申请按钮 */}
+          {showOrgApplication && (
+            <div>
+              <Button
+                type="default"
+                icon={<BankOutlined />}
+                onClick={() => navigate('/org-application')}
+                style={{
+                  borderRadius: '8px',
+                  height: '36px',
                   fontSize: '14px',
                   fontWeight: 500,
-                  color: '#007AFF'
+                  color: '#764ba2',
+                  borderColor: '#764ba2',
+                  background: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(118, 75, 162, 0.05)'
+                  e.currentTarget.style.borderColor = '#667eea'
+                  e.currentTarget.style.color = '#667eea'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.borderColor = '#764ba2'
+                  e.currentTarget.style.color = '#764ba2'
                 }}
               >
-                {t('auth.login.register')}
-              </Link>
-            </Space>
-          </div>
-        )}
+                {orgAppConfig?.button_text || '申请企业账号'}
+              </Button>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   )

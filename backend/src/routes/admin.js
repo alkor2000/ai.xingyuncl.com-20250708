@@ -29,6 +29,7 @@ const ossRoutes = require('./admin/ossRoutes'); // OSS配置路由
 const storageCreditRoutes = require('./admin/storageCreditRoutes'); // 存储积分配置路由
 const userTagRoutes = require('./admin/userTagRoutes'); // 用户标签路由
 const analyticsRoutes = require('./admin/analyticsRoutes'); // 数据分析路由
+const orgApplicationRoutes = require('./admin/orgApplicationRoutes'); // 机构申请路由
 
 // 导入控制器（用于积分路由）
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
@@ -108,6 +109,9 @@ router.use('/oss', ossRoutes);
 
 // 存储积分配置路由 - 修复：使用复数形式匹配前端 /api/admin/storage-credits/*
 router.use('/storage-credits', storageCreditRoutes);
+
+// 机构申请管理路由 - /api/admin/org-applications/*
+router.use('/org-applications', orgApplicationRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);

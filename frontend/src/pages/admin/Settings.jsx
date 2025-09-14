@@ -25,7 +25,8 @@ import {
   CodeOutlined,
   CloudServerOutlined,
   DollarOutlined,
-  VideoCameraOutlined
+  VideoCameraOutlined,
+  BankOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -54,7 +55,8 @@ import {
   SSOSettings,
   HtmlEditorSettings,
   OSSSettings,
-  StorageCreditsConfig
+  StorageCreditsConfig,
+  OrgApplicationManagement
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -600,6 +602,16 @@ const Settings = () => {
             />
           </Card>
         )
+      },
+      {
+        key: 'orgApplications',
+        label: (
+          <span>
+            <BankOutlined />
+            企业申请管理
+          </span>
+        ),
+        children: <OrgApplicationManagement />
       },
       {
         key: 'ossSettings',

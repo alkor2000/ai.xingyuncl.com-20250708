@@ -18,6 +18,7 @@ import ThemeProvider from './components/ThemeProvider'
 // 页面组件
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import OrgApplication from './pages/auth/OrgApplication'  // 新增企业申请页面
 import SSOCallback from './pages/auth/SSOCallback'  // 新增SSO回调页面
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
@@ -166,6 +167,14 @@ const App = () => {
                 element={
                   <PublicRoute>
                     <Register />
+                  </PublicRoute>
+                } 
+              />
+              <Route 
+                path="/org-application" 
+                element={
+                  <PublicRoute>
+                    <OrgApplication />
                   </PublicRoute>
                 } 
               />
