@@ -1,5 +1,5 @@
 /**
- * 机构申请控制器
+ * 机构申请控制器 - 修复错误提示
  */
 
 const dbConnection = require('../../database/connection');
@@ -91,26 +91,26 @@ class OrgApplicationController {
         invitation_code
       } = req.body;
       
-      // 验证必填字段
+      // 验证必填字段 - 修复错误提示
       if (!org_name || !applicant_email) {
-        return ResponseHelper.validation(res, '组织名称和申请人邮箱为必填项');
+        return ResponseHelper.validation(res, null, '组织名称和申请人邮箱为必填项');
       }
       
-      // 验证邮箱格式
+      // 验证邮箱格式 - 修复错误提示
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(applicant_email)) {
-        return ResponseHelper.validation(res, '邮箱格式不正确');
+        return ResponseHelper.validation(res, null, '邮箱格式不正确，请输入有效的邮箱地址');
       }
       
-      // 检查邮箱是否已被使用
+      // 检查邮箱是否已被使用 - 修复错误提示
       const emailCheckSql = 'SELECT id FROM users WHERE email = ?';
       const { rows: existingUsers } = await dbConnection.query(emailCheckSql, [applicant_email]);
       
       if (existingUsers.length > 0) {
-        return ResponseHelper.validation(res, '该邮箱已被注册');
+        return ResponseHelper.validation(res, null, '该邮箱已被注册，请使用其他邮箱');
       }
       
-      // 检查是否有未处理的申请
+      // 检查是否有未处理的申请 - 修复错误提示
       const pendingCheckSql = `
         SELECT id FROM org_applications 
         WHERE applicant_email = ? AND status = 'pending'
@@ -118,7 +118,43 @@ class OrgApplicationController {
       const { rows: pendingApps } = await dbConnection.query(pendingCheckSql, [applicant_email]);
       
       if (pendingApps.length > 0) {
-        return ResponseHelper.validation(res, '您已有待处理的申请，请耐心等待审批');
+        return ResponseHelper.validation(res, null, '您已有待处理的申请，请耐心等待审批');
+      }
+      
+      // 获取表单配置，检查必填字段
+      const configSql = `
+        SELECT 
+          field_4_label, field_4_required,
+          field_5_label, field_5_required,
+          field_6_label, field_6_required,
+          invitation_code_required
+        FROM application_form_config
+        LIMIT 1
+      `;
+      const { rows: configs } = await dbConnection.query(configSql);
+      
+      if (configs.length > 0) {
+        const config = configs[0];
+        
+        // 检查自定义字段4
+        if (config.field_4_required === 1 && !custom_field_4) {
+          return ResponseHelper.validation(res, null, `${config.field_4_label || '联系人姓名'}为必填项`);
+        }
+        
+        // 检查自定义字段5
+        if (config.field_5_required === 1 && !custom_field_5) {
+          return ResponseHelper.validation(res, null, `${config.field_5_label || '联系电话'}为必填项`);
+        }
+        
+        // 检查自定义字段6
+        if (config.field_6_required === 1 && !custom_field_6) {
+          return ResponseHelper.validation(res, null, `${config.field_6_label || '申请说明'}为必填项`);
+        }
+        
+        // 检查邀请码是否必填
+        if (config.invitation_code_required === 1 && !invitation_code) {
+          return ResponseHelper.validation(res, null, '请输入邀请码');
+        }
       }
       
       let invitationCodeId = null;
@@ -134,24 +170,24 @@ class OrgApplicationController {
         const { rows: codes } = await dbConnection.query(codeSql, [invitation_code]);
         
         if (codes.length === 0) {
-          return ResponseHelper.validation(res, '邀请码无效');
+          return ResponseHelper.validation(res, null, '邀请码无效，请检查输入是否正确');
         }
         
         const codeData = codes[0];
         
-        // 检查邀请码状态
+        // 检查邀请码状态 - 修复错误提示
         if (!codeData.is_active) {
-          return ResponseHelper.validation(res, '邀请码已停用');
+          return ResponseHelper.validation(res, null, '邀请码已停用，请联系管理员');
         }
         
-        // 检查使用次数
+        // 检查使用次数 - 修复错误提示
         if (codeData.usage_limit !== -1 && codeData.used_count >= codeData.usage_limit) {
-          return ResponseHelper.validation(res, '邀请码使用次数已达上限');
+          return ResponseHelper.validation(res, null, '邀请码使用次数已达上限');
         }
         
-        // 检查是否过期
+        // 检查是否过期 - 修复错误提示
         if (codeData.expires_at && new Date(codeData.expires_at) < new Date()) {
-          return ResponseHelper.validation(res, '邀请码已过期');
+          return ResponseHelper.validation(res, null, '邀请码已过期，请联系管理员获取新的邀请码');
         }
         
         invitationCodeId = codeData.id;
@@ -162,14 +198,6 @@ class OrgApplicationController {
           'UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?',
           [invitationCodeId]
         );
-      } else {
-        // 检查是否必须使用邀请码
-        const configSql = 'SELECT invitation_code_required FROM application_form_config LIMIT 1';
-        const { rows: configs } = await dbConnection.query(configSql);
-        
-        if (configs.length > 0 && configs[0].invitation_code_required === 1) {
-          return ResponseHelper.validation(res, '请输入邀请码');
-        }
       }
       
       // 创建申请记录
@@ -283,9 +311,9 @@ class OrgApplicationController {
       const { action, rejection_reason, group_id, credits } = req.body;
       const approverId = req.user.id;
       
-      // 验证action
+      // 验证action - 修复错误提示
       if (!['approve', 'reject'].includes(action)) {
-        return ResponseHelper.validation(res, '无效的操作');
+        return ResponseHelper.validation(res, null, '无效的操作类型');
       }
       
       // 获取申请信息
@@ -299,7 +327,7 @@ class OrgApplicationController {
       const application = apps[0];
       
       if (application.status !== 'pending') {
-        return ResponseHelper.validation(res, '该申请已处理');
+        return ResponseHelper.validation(res, null, '该申请已处理，无需重复操作');
       }
       
       if (action === 'approve') {
@@ -386,9 +414,9 @@ class OrgApplicationController {
           note: '请告知用户使用此密码登录，并建议首次登录后修改密码'
         });
       } else {
-        // 拒绝申请
+        // 拒绝申请 - 修复错误提示
         if (!rejection_reason) {
-          return ResponseHelper.validation(res, '请填写拒绝原因');
+          return ResponseHelper.validation(res, null, '请填写拒绝原因');
         }
         
         const updateSql = `
@@ -462,7 +490,7 @@ class OrgApplicationController {
       }
       
       if (updates.length === 0) {
-        return ResponseHelper.validation(res, '没有要更新的字段');
+        return ResponseHelper.validation(res, null, '没有要更新的字段');
       }
       
       updates.push('updated_by = ?', 'updated_at = NOW()');
@@ -512,16 +540,17 @@ class OrgApplicationController {
       const { code, description, usage_limit = -1, expires_at } = req.body;
       const creatorId = req.user.id;
       
+      // 修复错误提示
       if (!code || code.length !== 6) {
-        return ResponseHelper.validation(res, '邀请码必须为6位字符');
+        return ResponseHelper.validation(res, null, '邀请码必须为6位字符');
       }
       
-      // 检查重复
+      // 检查重复 - 修复错误提示
       const checkSql = 'SELECT id FROM invitation_codes WHERE code = ?';
       const { rows: existing } = await dbConnection.query(checkSql, [code]);
       
       if (existing.length > 0) {
-        return ResponseHelper.validation(res, '邀请码已存在');
+        return ResponseHelper.validation(res, null, '邀请码已存在，请使用其他邀请码');
       }
       
       // 处理日期格式
@@ -608,7 +637,7 @@ class OrgApplicationController {
       }
       
       if (updates.length === 0) {
-        return ResponseHelper.validation(res, '没有要更新的字段');
+        return ResponseHelper.validation(res, null, '没有要更新的字段');
       }
       
       values.push(id);
