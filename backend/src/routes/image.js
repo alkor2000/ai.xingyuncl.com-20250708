@@ -3,9 +3,36 @@
  */
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { ImageController, ImageAdminController } = require('../controllers/imageController');
 const { authenticate } = require('../middleware/authMiddleware');
 const { requireSuperAdmin } = require('../middleware/permissions/superAdminMiddleware');
+
+// 配置multer用于处理参考图片上传
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB限制
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    // 只接受图片文件
+    const allowedMimes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('不支持的文件类型，请上传图片文件'));
+    }
+  }
+});
 
 // ========== 用户端路由 ==========
 
@@ -15,7 +42,10 @@ router.use(authenticate);
 // 获取可用的图像模型列表
 router.get('/models', ImageController.getModels);
 
-// 生成图片（支持同步和异步模型）
+// 上传参考图片（用于图生图）
+router.post('/upload-reference', upload.single('image'), ImageController.uploadReferenceImage);
+
+// 生成图片（支持同步和异步模型，支持图生图）
 router.post('/generate', ImageController.generateImage);
 
 // Midjourney特定路由

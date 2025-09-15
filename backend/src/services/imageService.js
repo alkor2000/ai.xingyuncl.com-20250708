@@ -1,7 +1,7 @@
 /**
  * 图像生成服务
  * 处理与火山方舟API的交互
- * 支持OSS存储和用户目录隔离
+ * 支持OSS存储、用户目录隔离和图生图功能
  */
 
 const axios = require('axios');
@@ -67,7 +67,8 @@ class ImageService {
         quantity: effectiveQuantity,
         pricePerImage,
         requiredCredits,
-        isMidjourney
+        isMidjourney,
+        hasReferenceImages: params.reference_images && params.reference_images.length > 0
       });
 
       // 3. 并发生成多张图片
@@ -107,6 +108,8 @@ class ImageService {
       if (successResults.length > 0) {
         const displayName = isMidjourney 
           ? `Midjourney图像生成 - ${model.display_name}`
+          : params.reference_images && params.reference_images.length > 0
+          ? `图生图 - ${model.display_name} × ${successResults.length}张`
           : `批量图像生成 - ${model.display_name} × ${successResults.length}张`;
           
         await user.consumeCredits(
@@ -176,6 +179,11 @@ class ImageService {
         credits_consumed: creditsToConsume
       };
       
+      // 如果有参考图片，记录在备注中
+      if (params.reference_images && params.reference_images.length > 0) {
+        generationData.reference_images = JSON.stringify(params.reference_images);
+      }
+      
       // Midjourney特殊字段
       if (isMidjourney) {
         generationData.action_type = 'IMAGINE';
@@ -207,8 +215,89 @@ class ImageService {
         if (params.size && params.size !== '1:1' && params.size !== '1024x1024') {
           requestData.prompt += ` --ar ${params.size}`;
         }
+      } else if (model.provider === 'volcano' && model.model_id === 'doubao-seedream-4-0-250828') {
+        // 火山引擎SeedDream 4.0的特殊请求格式
+        requestData = {
+          model: model.model_id,
+          prompt: params.prompt
+        };
+        
+        // 添加参考图片（图生图功能）
+        if (params.reference_images && params.reference_images.length > 0) {
+          // SeedDream 4.0 使用image参数传递参考图片URL数组
+          requestData.image = params.reference_images;
+          
+          // 如果配置了连续图像生成选项
+          const apiConfig = model.api_config || {};
+          if (apiConfig.sequential_image_generation) {
+            requestData.sequential_image_generation = apiConfig.sequential_image_generation;
+            if (apiConfig.sequential_image_generation_options) {
+              requestData.sequential_image_generation_options = apiConfig.sequential_image_generation_options;
+            }
+          }
+          
+          logger.info('使用图生图模式', {
+            modelId: model.model_id,
+            referenceImages: params.reference_images.length,
+            sequential: requestData.sequential_image_generation
+          });
+        }
+        
+        // 处理尺寸参数 - SeedDream 4.0支持特殊的尺寸格式
+        if (params.size) {
+          // 将标准尺寸映射到SeedDream 4.0格式
+          const sizeMapping = {
+            '1024x1024': '2K',      // 2K (默认)
+            '2048x2048': '4K',      // 4K
+            '864x1152': '2K',       // 竖屏2K
+            '1152x864': '2K',       // 横屏2K
+            '1280x720': '2K',       // 16:9横屏
+            '720x1280': '2K',       // 9:16竖屏
+            '832x1248': '2K',       // 2:3竖屏
+            '1248x832': '2K',       // 3:2横屏
+            '1512x648': '2K'        // 超宽屏
+          };
+          requestData.size = sizeMapping[params.size] || '2K';
+        } else {
+          requestData.size = '2K';  // 默认使用2K
+        }
+        
+        // 设置响应格式
+        requestData.response_format = 'url';
+        
+        // 添加流式响应（SeedDream 4.0特性）
+        requestData.stream = false;  // 暂时不使用流式，简化处理
+        
+        // 添加水印设置
+        requestData.watermark = params.watermark !== false;
+        
+        // 如果有负向提示词，添加到请求中
+        if (params.negative_prompt && !params.reference_images) {
+          // 图生图模式下，负向提示词可能不支持
+          requestData.prompt = `${params.prompt}, avoid: ${params.negative_prompt}`;
+        }
+        
+        // 如果提供了引导系数，转换为SeedDream 4.0的格式
+        if (params.guidance_scale) {
+          requestData.cfg_scale = params.guidance_scale;
+        }
+        
+        // 如果提供了种子值
+        if (params.seed && params.seed !== -1) {
+          requestData.seed = params.seed;
+        }
+        
+        logger.info('使用SeedDream 4.0 API格式', {
+          modelId: model.model_id,
+          hasReferenceImages: !!requestData.image,
+          requestData: {
+            ...requestData,
+            prompt: requestData.prompt.substring(0, 100) + '...',  // 只记录部分提示词
+            image: requestData.image ? `[${requestData.image.length} images]` : undefined
+          }
+        });
       } else {
-        // 普通模型的请求格式
+        // 普通模型或SeedDream 3.0的请求格式
         requestData = {
           model: model.model_id,
           prompt: params.prompt,
@@ -218,6 +307,11 @@ class ImageService {
           guidance_scale: params.guidance_scale || model.default_guidance_scale,
           watermark: params.watermark !== false
         };
+        
+        // 添加负向提示词（如果有）
+        if (params.negative_prompt) {
+          requestData.negative_prompt = params.negative_prompt;
+        }
       }
 
       logger.info(`生成第${index}张图片`, {
@@ -225,7 +319,10 @@ class ImageService {
         modelId,
         generationId,
         creditsToConsume,
-        isMidjourney
+        isMidjourney,
+        provider: model.provider,
+        modelName: model.name,
+        isImage2Image: params.reference_images && params.reference_images.length > 0
       });
 
       const response = await axios.post(
@@ -236,9 +333,37 @@ class ImageService {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          timeout: isMidjourney ? 300000 : 60000  // Midjourney需要更长超时
+          timeout: isMidjourney ? 300000 : 60000,  // Midjourney需要更长超时
+          validateStatus: function (status) {
+            // 允许记录详细的错误响应
+            return status >= 200 && status < 500;
+          }
         }
       );
+
+      // 检查响应状态
+      if (response.status !== 200) {
+        logger.error('API返回错误', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data,
+          modelId: model.model_id,
+          provider: model.provider
+        });
+        
+        // 尝试从响应中提取错误信息
+        let errorMessage = `API返回错误: ${response.status}`;
+        if (response.data) {
+          if (response.data.error) {
+            errorMessage = response.data.error.message || response.data.error;
+          } else if (response.data.message) {
+            errorMessage = response.data.message;
+          } else if (response.data.msg) {
+            errorMessage = response.data.msg;
+          }
+        }
+        throw new Error(errorMessage);
+      }
 
       // 解析响应
       let imageUrl;
@@ -254,8 +379,12 @@ class ImageService {
           throw new Error('Midjourney API未返回图片URL');
         }
       } else {
-        // 普通API响应格式
+        // 火山引擎API响应格式
         if (!response.data || !response.data.data || !response.data.data[0]) {
+          logger.error('API响应格式错误', {
+            responseData: response.data,
+            modelId: model.model_id
+          });
           throw new Error('API返回数据格式错误');
         }
         imageUrl = response.data.data[0].url;
@@ -310,7 +439,8 @@ class ImageService {
         userId,
         modelId,
         generationId,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
 
       // 更新失败状态
@@ -552,6 +682,7 @@ class ImageService {
       const validSizes = [
         '1024x1024', '864x1152', '1152x864', '1280x720',
         '720x1280', '832x1248', '1248x832', '1512x648',
+        '2048x2048', '4K', '2K',  // 添加SeedDream 4.0支持的尺寸
         '1:1', '4:3', '3:4', '16:9', '9:16'  // 支持Midjourney的比例格式
       ];
       if (!validSizes.includes(params.size)) {
@@ -580,6 +711,16 @@ class ImageService {
       const qty = parseInt(params.quantity);
       if (isNaN(qty) || qty < 1 || qty > 4) {
         errors.push('生成数量必须在1到4之间');
+      }
+    }
+    
+    // 验证参考图片URL
+    if (params.reference_images && params.reference_images.length > 0) {
+      for (const url of params.reference_images) {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          errors.push('参考图片URL格式不正确');
+          break;
+        }
       }
     }
     

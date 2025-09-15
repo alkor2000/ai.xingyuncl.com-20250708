@@ -8,6 +8,8 @@ const ImageModel = require('../models/ImageModel');
 const ImageGeneration = require('../models/ImageGeneration');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
+const ossService = require('../services/ossService');
+const crypto = require('crypto');
 
 class ImageController {
   /**
@@ -31,7 +33,68 @@ class ImageController {
   }
 
   /**
-   * 生成图片（支持批量生成和Midjourney）
+   * 上传参考图片（用于图生图）
+   * 将图片上传到OSS/本地存储，返回URL供后续使用
+   */
+  static async uploadReferenceImage(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      if (!req.file) {
+        return ResponseHelper.validation(res, null, '请选择要上传的图片');
+      }
+      
+      // 初始化OSS服务
+      await ossService.initialize();
+      
+      // 生成唯一的文件名
+      const timestamp = Date.now();
+      const random = crypto.randomBytes(8).toString('hex');
+      const originalName = req.file.originalname;
+      const ext = originalName.substring(originalName.lastIndexOf('.'));
+      const fileName = `ref_${userId}_${timestamp}_${random}${ext}`;
+      
+      // 构建OSS key
+      const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const ossKey = `image-reference/${userId}/${dateFolder}/${fileName}`;
+      
+      // 上传到OSS/本地存储
+      const uploadResult = await ossService.uploadFile(req.file.buffer, ossKey, {
+        headers: {
+          'Content-Type': req.file.mimetype,
+          'Content-Disposition': `inline; filename="${fileName}"`
+        }
+      });
+      
+      if (!uploadResult.success) {
+        throw new Error('文件上传失败');
+      }
+      
+      logger.info('参考图片上传成功', {
+        userId,
+        fileName,
+        ossKey,
+        isLocal: uploadResult.isLocal,
+        url: uploadResult.url
+      });
+      
+      // 返回图片URL
+      return ResponseHelper.success(res, {
+        url: uploadResult.url,
+        ossKey: ossKey,
+        fileName: fileName,
+        size: req.file.size,
+        mimeType: req.file.mimetype
+      }, '图片上传成功');
+      
+    } catch (error) {
+      logger.error('上传参考图片失败:', error);
+      return ResponseHelper.error(res, error.message || '图片上传失败');
+    }
+  }
+
+  /**
+   * 生成图片（支持批量生成、Midjourney和图生图）
    */
   static async generateImage(req, res) {
     try {
@@ -45,7 +108,8 @@ class ImageController {
         guidance_scale, 
         watermark,
         quantity = 1,  // 生成数量
-        mode = 'fast'  // Midjourney模式
+        mode = 'fast',  // Midjourney模式
+        reference_images = []  // 参考图片URL数组（用于图生图）
       } = req.body;
       
       // 验证必填参数
@@ -81,6 +145,20 @@ class ImageController {
           return ResponseHelper.validation(res, null, errors.join('; '));
         }
         
+        // 检查模型是否支持图生图
+        if (reference_images.length > 0) {
+          const apiConfig = model.api_config || {};
+          if (!apiConfig.supports_image2image) {
+            return ResponseHelper.validation(res, null, '该模型不支持图生图功能');
+          }
+          
+          // 检查参考图片数量限制
+          const maxImages = apiConfig.max_reference_images || 2;
+          if (reference_images.length > maxImages) {
+            return ResponseHelper.validation(res, null, `该模型最多支持${maxImages}张参考图片`);
+          }
+        }
+        
         // 限制数量范围
         const actualQuantity = Math.min(Math.max(1, parseInt(quantity) || 1), 4);
         
@@ -92,7 +170,8 @@ class ImageController {
             size,
             seed,
             guidance_scale,
-            watermark
+            watermark,
+            reference_images  // 传递参考图片URL
           });
           
           return ResponseHelper.success(res, result, '图片生成成功');
@@ -104,7 +183,8 @@ class ImageController {
             size,
             seed,
             guidance_scale,
-            watermark
+            watermark,
+            reference_images  // 传递参考图片URL
           }, actualQuantity);
           
           if (result.succeeded > 0) {

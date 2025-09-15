@@ -1,5 +1,6 @@
 /**
  * 参数设置面板组件
+ * 支持图生图和Midjourney参考图片
  */
 
 import React, { memo } from 'react';
@@ -7,6 +8,7 @@ import { Card, Button, Space, Row, Col, Slider, InputNumber, Switch, Segmented, 
 import { SendOutlined, CaretRightOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import MidjourneyUploader from './MidjourneyUploader';
+import ReferenceUploader from './ReferenceUploader';
 import { PRESET_SIZES, QUANTITY_OPTIONS } from '../../utils/constants';
 import { isMidjourneyModel } from '../../utils/imageHelpers';
 
@@ -33,11 +35,15 @@ const ParameterSettings = memo(({
 }) => {
   const { t } = useTranslation();
   const isMj = selectedModel && isMidjourneyModel(selectedModel);
+  
+  // 检查模型是否支持图生图
+  const supportsImage2Image = selectedModel?.api_config?.supports_image2image === true;
+  const maxReferenceImages = selectedModel?.api_config?.max_reference_images || 2;
 
   return (
     <Card title={t('image.parameterSettings', '参数设置')} className="parameters">
-      {/* 生成数量 - Midjourney不显示 */}
-      {selectedModel && !isMj && (
+      {/* 生成数量 - Midjourney和图生图模式不显示 */}
+      {selectedModel && !isMj && (!referenceImages || referenceImages.length === 0) && (
         <div className="param-item">
           <div className="param-label">
             {t('image.quantity', '生成数量')}
@@ -92,6 +98,28 @@ const ParameterSettings = memo(({
         />
       )}
 
+      {/* 普通模型的图生图功能 */}
+      {selectedModel && !isMj && supportsImage2Image && (
+        <ReferenceUploader
+          referenceImages={referenceImages}
+          onUpload={onReferenceUpload}
+          onRemove={onRemoveReference}
+          maxCount={maxReferenceImages}
+          modelConfig={selectedModel.api_config}
+        />
+      )}
+
+      {/* 图生图模式提示 */}
+      {referenceImages && referenceImages.length > 0 && !isMj && (
+        <Alert
+          message={t('image.image2imageMode', '图生图模式')}
+          description={t('image.image2imageDesc', '将基于参考图片生成新图片，批量生成功能已禁用')}
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       {/* 生成按钮 */}
       <div className="generate-button-section">
         <Button
@@ -107,14 +135,18 @@ const ParameterSettings = memo(({
             t('image.generating', '生成中...')
           ) : (
             <Space>
-              <span>{t('image.generateImage', '生成图片')}</span>
+              <span>
+                {referenceImages && referenceImages.length > 0 && !isMj
+                  ? t('image.generateFromImage', '图生图')
+                  : t('image.generateImage', '生成图片')}
+              </span>
               <Tag color="blue">{t('image.credits', '{{credits}} 积分', { credits: getTotalPrice() })}</Tag>
             </Space>
           )}
         </Button>
       </div>
 
-      {/* 高级选项 - Midjourney不需要 */}
+      {/* 高级选项 - Midjourney和图生图模式下部分选项不可用 */}
       {selectedModel && !isMj && (
         <Collapse
           ghost
@@ -130,12 +162,18 @@ const ParameterSettings = memo(({
             } 
             key="1"
           >
+            {/* 引导系数 - 图生图模式可能不支持 */}
             <div className="param-item">
               <div className="param-label">
                 {t('image.guidanceScale', '引导系数')}
                 <Tooltip title={t('image.guidanceScaleTip', '控制生成图像与提示词的相关程度，值越大越相关')}>
                   <span className="info-icon"> ❓</span>
                 </Tooltip>
+                {referenceImages && referenceImages.length > 0 && (
+                  <Tag color="orange" style={{ marginLeft: 8 }}>
+                    {t('image.mayNotSupport', '图生图模式可能不支持')}
+                  </Tag>
+                )}
               </div>
               <Row gutter={16}>
                 <Col span={16}>
@@ -145,6 +183,7 @@ const ParameterSettings = memo(({
                     step={0.5}
                     value={guidanceScale}
                     onChange={onGuidanceScaleChange}
+                    disabled={referenceImages && referenceImages.length > 0}
                   />
                 </Col>
                 <Col span={8}>
@@ -155,6 +194,7 @@ const ParameterSettings = memo(({
                     value={guidanceScale}
                     onChange={onGuidanceScaleChange}
                     style={{ width: '100%' }}
+                    disabled={referenceImages && referenceImages.length > 0}
                   />
                 </Col>
               </Row>

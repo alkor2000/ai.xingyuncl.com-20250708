@@ -1,5 +1,6 @@
 /**
  * 图像生成业务逻辑Hook
+ * 支持图生图功能
  */
 
 import { useState, useCallback, useEffect } from 'react';
@@ -91,6 +92,7 @@ export const useImageGeneration = () => {
 
     setBatchResults(null);
 
+    // 准备基本参数
     const params = {
       prompt: prompt.trim(),
       negative_prompt: negativePrompt.trim(),
@@ -101,23 +103,42 @@ export const useImageGeneration = () => {
       quantity
     };
     
-    // 如果是Midjourney且有参考图片，添加base64Array
-    if (checkMidjourney(selectedModel)) {
-      params.quantity = 1; // Midjourney强制为1
-      
-      // 添加参考图片的base64数据
-      if (referenceImages.length > 0) {
+    // 检查是否是Midjourney模型
+    const isMj = checkMidjourney(selectedModel);
+    
+    // 处理参考图片
+    if (referenceImages && referenceImages.length > 0) {
+      if (isMj) {
+        // Midjourney使用base64格式
+        params.quantity = 1; // Midjourney强制为1
         params.base64Array = referenceImages.map(img => img.base64);
+      } else {
+        // 普通模型使用URL格式（图生图）
+        // 检查模型是否支持图生图
+        const supportsImage2Image = selectedModel.api_config?.supports_image2image;
+        if (!supportsImage2Image) {
+          message.error('该模型不支持图生图功能');
+          return null;
+        }
+        
+        // 提取URL数组
+        params.reference_images = referenceImages.map(img => img.url);
+        
+        // 图生图模式下强制数量为1
+        params.quantity = 1;
       }
+    } else if (isMj) {
+      params.quantity = 1; // Midjourney即使没有参考图片也固定为1
     }
 
+    // 调用生成服务
     const result = await generateImages(params);
 
     if (result) {
       // 对于Midjourney，不清空输入（可能需要继续调整）
-      if (!checkMidjourney(selectedModel)) {
+      if (!isMj) {
         // 普通模型：显示结果并清空
-        if (quantity > 1 && result.results) {
+        if (quantity > 1 && result.results && !referenceImages.length) {
           setBatchResults(result);
           
           if (result.succeeded === result.requested) {
@@ -125,6 +146,9 @@ export const useImageGeneration = () => {
           } else if (result.succeeded > 0) {
             message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
           }
+        } else if (referenceImages.length > 0) {
+          // 图生图模式的成功提示
+          message.success(`图生图成功，消耗 ${result.creditsConsumed || getTotalPrice()} 积分`);
         }
         
         // 清空输入
@@ -146,7 +170,8 @@ export const useImageGeneration = () => {
     quantity,
     selectedModel,
     checkMidjourney,
-    generateImages
+    generateImages,
+    getTotalPrice
   ]);
 
   // 重置参数
@@ -156,6 +181,7 @@ export const useImageGeneration = () => {
     setSeed(DEFAULT_PARAMS.seed);
     setGuidanceScale(DEFAULT_PARAMS.guidanceScale);
     setWatermark(DEFAULT_PARAMS.watermark);
+    // 不重置quantity，用户可能想继续使用相同数量
   }, []);
 
   return {
