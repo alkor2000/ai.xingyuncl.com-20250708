@@ -1,5 +1,5 @@
 /**
- * 机构申请管理组件 - 支持申请规则配置
+ * 机构申请管理组件 - 使用管理员专用接口获取完整配置
  */
 
 import React, { useState, useEffect } from 'react';
@@ -35,7 +35,8 @@ import {
   FileImageOutlined,
   EyeOutlined,
   DownloadOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../../utils/api';
@@ -102,16 +103,28 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 获取表单配置
+  // 获取表单配置 - 使用管理员专用接口
   const fetchFormConfig = async () => {
     try {
-      const response = await apiClient.get('/admin/org-applications/form-config');
+      const response = await apiClient.get('/admin/org-applications/admin-form-config');
       if (response.data.success) {
-        setFormConfig(response.data.data);
-        configForm.setFieldsValue(response.data.data);
+        const config = response.data.data;
+        setFormConfig(config);
+        // 设置表单初始值，包括所有字段
+        configForm.setFieldsValue({
+          button_text: config.button_text,
+          button_visible: config.button_visible,
+          application_rules: config.application_rules,
+          invitation_code_required: config.invitation_code_required,
+          default_group_id: config.default_group_id,
+          default_credits: config.default_credits,
+          auto_approve: config.auto_approve,
+          email_notification: config.email_notification
+        });
       }
     } catch (error) {
       console.error('获取表单配置失败:', error);
+      message.error('获取表单配置失败');
     }
   };
 
@@ -163,6 +176,14 @@ const OrgApplicationManagement = () => {
                 type="warning" 
                 style={{ marginTop: 10 }}
               />
+              {formConfig?.email_notification && (
+                <Alert 
+                  message="邮件通知已发送至用户邮箱" 
+                  type="info" 
+                  icon={<MailOutlined />}
+                  style={{ marginTop: 10 }}
+                />
+              )}
             </div>
           ),
           width: 500
@@ -189,6 +210,9 @@ const OrgApplicationManagement = () => {
       );
       if (response.data.success) {
         message.success('申请已拒绝');
+        if (formConfig?.email_notification) {
+          message.info('拒绝邮件已发送至用户邮箱');
+        }
         setRejectModalVisible(false);
         rejectForm.resetFields();
         fetchApplications();
@@ -564,7 +588,22 @@ const OrgApplicationManagement = () => {
           
           <Button
             type="primary"
-            onClick={() => setConfigModalVisible(true)}
+            onClick={() => {
+              // 重新设置表单值，确保显示最新配置
+              if (formConfig) {
+                configForm.setFieldsValue({
+                  button_text: formConfig.button_text,
+                  button_visible: formConfig.button_visible,
+                  application_rules: formConfig.application_rules,
+                  invitation_code_required: formConfig.invitation_code_required,
+                  default_group_id: formConfig.default_group_id,
+                  default_credits: formConfig.default_credits,
+                  auto_approve: formConfig.auto_approve,
+                  email_notification: formConfig.email_notification
+                });
+              }
+              setConfigModalVisible(true);
+            }}
           >
             编辑配置
           </Button>
@@ -603,6 +642,16 @@ const OrgApplicationManagement = () => {
                 <Tag color={formConfig.auto_approve ? 'success' : 'default'}>
                   {formConfig.auto_approve ? '启用' : '禁用'}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="邮件通知">
+                <Tag color={formConfig.email_notification ? 'success' : 'default'}>
+                  {formConfig.email_notification ? '启用' : '禁用'}
+                </Tag>
+                {formConfig.email_notification && (
+                  <Tooltip title="批准和拒绝时会自动发送邮件通知">
+                    <InfoCircleOutlined style={{ marginLeft: 8, color: '#1890ff' }} />
+                  </Tooltip>
+                )}
               </Descriptions.Item>
             </Descriptions>
           )}
@@ -886,7 +935,7 @@ const OrgApplicationManagement = () => {
         </Form>
       </Modal>
 
-      {/* 表单配置弹窗 - 添加申请规则字段 */}
+      {/* 表单配置弹窗 - 包含所有配置字段 */}
       <Modal
         title="编辑表单配置"
         visible={configModalVisible}
@@ -964,7 +1013,14 @@ const OrgApplicationManagement = () => {
           </Form.Item>
           
           <Form.Item
-            label="自动审批"
+            label={
+              <span>
+                自动审批
+                <Tooltip title="启用后，新申请将自动批准并创建账号">
+                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                </Tooltip>
+              </span>
+            }
             name="auto_approve"
             valuePropName="checked"
           >
@@ -972,7 +1028,14 @@ const OrgApplicationManagement = () => {
           </Form.Item>
           
           <Form.Item
-            label="邮件通知"
+            label={
+              <span>
+                邮件通知
+                <Tooltip title="启用后，批准或拒绝申请时会自动发送邮件通知用户">
+                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                </Tooltip>
+              </span>
+            }
             name="email_notification"
             valuePropName="checked"
           >

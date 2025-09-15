@@ -1,5 +1,5 @@
 /**
- * 机构申请控制器 - 修复错误提示
+ * 机构申请控制器 - 添加完整配置获取和邮件通知
  */
 
 const dbConnection = require('../../database/connection');
@@ -7,10 +7,12 @@ const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const EmailService = require('../../services/emailService');
+const SystemConfig = require('../../models/SystemConfig');
 
 class OrgApplicationController {
   /**
-   * 获取申请表单配置（公开接口）
+   * 获取申请表单配置（公开接口）- 只返回前端显示需要的字段
    */
   static async getFormConfig(req, res) {
     try {
@@ -75,9 +77,88 @@ class OrgApplicationController {
       return ResponseHelper.error(res, '获取配置失败');
     }
   }
+
+  /**
+   * 获取完整的申请表单配置（管理员接口）- 返回所有字段
+   */
+  static async getAdminFormConfig(req, res) {
+    try {
+      const sql = `
+        SELECT 
+          button_text,
+          button_visible,
+          application_rules,
+          field_4_label,
+          field_4_required,
+          field_4_type,
+          field_4_options,
+          field_5_label,
+          field_5_required,
+          field_5_type,
+          field_5_options,
+          field_6_label,
+          field_6_required,
+          field_6_type,
+          field_6_options,
+          invitation_code_required,
+          default_group_id,
+          default_credits,
+          auto_approve,
+          email_notification
+        FROM application_form_config
+        LIMIT 1
+      `;
+      
+      const { rows } = await dbConnection.query(sql);
+      
+      if (rows.length === 0) {
+        return ResponseHelper.success(res, {
+          button_text: '申请企业账号',
+          button_visible: true,
+          application_rules: '',
+          invitation_code_required: false,
+          default_group_id: 1,
+          default_credits: 0,
+          auto_approve: false,
+          email_notification: false
+        });
+      }
+      
+      const config = rows[0];
+      
+      // 转换布尔值
+      const formattedConfig = {
+        button_text: config.button_text,
+        button_visible: config.button_visible === 1,
+        application_rules: config.application_rules || '',
+        field_4_label: config.field_4_label,
+        field_4_required: config.field_4_required === 1,
+        field_4_type: config.field_4_type,
+        field_4_options: config.field_4_options,
+        field_5_label: config.field_5_label,
+        field_5_required: config.field_5_required === 1,
+        field_5_type: config.field_5_type,
+        field_5_options: config.field_5_options,
+        field_6_label: config.field_6_label,
+        field_6_required: config.field_6_required === 1,
+        field_6_type: config.field_6_type,
+        field_6_options: config.field_6_options,
+        invitation_code_required: config.invitation_code_required === 1,
+        default_group_id: config.default_group_id,
+        default_credits: config.default_credits,
+        auto_approve: config.auto_approve === 1,
+        email_notification: config.email_notification === 1
+      };
+      
+      return ResponseHelper.success(res, formattedConfig);
+    } catch (error) {
+      logger.error('获取管理表单配置失败:', error);
+      return ResponseHelper.error(res, '获取配置失败');
+    }
+  }
   
   /**
-   * 提交机构申请（公开接口）
+   * 提交机构申请（公开接口）- 支持自动审批
    */
   static async submitApplication(req, res) {
     try {
@@ -91,18 +172,18 @@ class OrgApplicationController {
         invitation_code
       } = req.body;
       
-      // 验证必填字段 - 修复错误提示
+      // 验证必填字段
       if (!org_name || !applicant_email) {
         return ResponseHelper.validation(res, null, '组织名称和申请人邮箱为必填项');
       }
       
-      // 验证邮箱格式 - 修复错误提示
+      // 验证邮箱格式
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(applicant_email)) {
         return ResponseHelper.validation(res, null, '邮箱格式不正确，请输入有效的邮箱地址');
       }
       
-      // 检查邮箱是否已被使用 - 修复错误提示
+      // 检查邮箱是否已被使用
       const emailCheckSql = 'SELECT id FROM users WHERE email = ?';
       const { rows: existingUsers } = await dbConnection.query(emailCheckSql, [applicant_email]);
       
@@ -110,7 +191,7 @@ class OrgApplicationController {
         return ResponseHelper.validation(res, null, '该邮箱已被注册，请使用其他邮箱');
       }
       
-      // 检查是否有未处理的申请 - 修复错误提示
+      // 检查是否有未处理的申请
       const pendingCheckSql = `
         SELECT id FROM org_applications 
         WHERE applicant_email = ? AND status = 'pending'
@@ -121,40 +202,51 @@ class OrgApplicationController {
         return ResponseHelper.validation(res, null, '您已有待处理的申请，请耐心等待审批');
       }
       
-      // 获取表单配置，检查必填字段
+      // 获取表单配置，检查必填字段和自动审批设置
       const configSql = `
         SELECT 
           field_4_label, field_4_required,
           field_5_label, field_5_required,
           field_6_label, field_6_required,
-          invitation_code_required
+          invitation_code_required,
+          default_group_id,
+          default_credits,
+          auto_approve,
+          email_notification
         FROM application_form_config
         LIMIT 1
       `;
       const { rows: configs } = await dbConnection.query(configSql);
       
+      let autoApprove = false;
+      let emailNotification = false;
+      let defaultGroupId = 1;
+      let defaultCredits = 0;
+      
       if (configs.length > 0) {
         const config = configs[0];
         
-        // 检查自定义字段4
+        // 检查自定义字段
         if (config.field_4_required === 1 && !custom_field_4) {
           return ResponseHelper.validation(res, null, `${config.field_4_label || '联系人姓名'}为必填项`);
         }
         
-        // 检查自定义字段5
         if (config.field_5_required === 1 && !custom_field_5) {
           return ResponseHelper.validation(res, null, `${config.field_5_label || '联系电话'}为必填项`);
         }
         
-        // 检查自定义字段6
         if (config.field_6_required === 1 && !custom_field_6) {
           return ResponseHelper.validation(res, null, `${config.field_6_label || '申请说明'}为必填项`);
         }
         
-        // 检查邀请码是否必填
         if (config.invitation_code_required === 1 && !invitation_code) {
           return ResponseHelper.validation(res, null, '请输入邀请码');
         }
+        
+        autoApprove = config.auto_approve === 1;
+        emailNotification = config.email_notification === 1;
+        defaultGroupId = config.default_group_id || 1;
+        defaultCredits = config.default_credits || 0;
       }
       
       let invitationCodeId = null;
@@ -175,17 +267,14 @@ class OrgApplicationController {
         
         const codeData = codes[0];
         
-        // 检查邀请码状态 - 修复错误提示
         if (!codeData.is_active) {
           return ResponseHelper.validation(res, null, '邀请码已停用，请联系管理员');
         }
         
-        // 检查使用次数 - 修复错误提示
         if (codeData.usage_limit !== -1 && codeData.used_count >= codeData.usage_limit) {
           return ResponseHelper.validation(res, null, '邀请码使用次数已达上限');
         }
         
-        // 检查是否过期 - 修复错误提示
         if (codeData.expires_at && new Date(codeData.expires_at) < new Date()) {
           return ResponseHelper.validation(res, null, '邀请码已过期，请联系管理员获取新的邀请码');
         }
@@ -212,8 +301,10 @@ class OrgApplicationController {
           invitation_code_id,
           referrer_info,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
+      
+      const initialStatus = autoApprove ? 'approved' : 'pending';
       
       const { rows } = await dbConnection.query(insertSql, [
         org_name,
@@ -223,23 +314,232 @@ class OrgApplicationController {
         custom_field_5,
         custom_field_6,
         invitationCodeId,
-        referrerInfo
+        referrerInfo,
+        initialStatus
       ]);
       
-      logger.info('机构申请提交成功', {
-        applicationId: rows.insertId,
-        org_name,
-        applicant_email,
-        referrer: referrerInfo
-      });
+      const applicationId = rows.insertId;
       
-      return ResponseHelper.success(res, {
-        applicationId: rows.insertId,
-        message: '申请已提交，我们会尽快处理'
-      }, '申请提交成功');
+      // 如果启用自动审批，立即创建账号
+      if (autoApprove) {
+        try {
+          // 生成UUID
+          const userUuid = crypto.randomUUID();
+          
+          // 使用固定默认密码
+          const defaultPassword = '123456';
+          const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+          
+          // 生成用户名
+          const username = applicant_email.split('@')[0] + '_' + Date.now();
+          
+          // 创建用户
+          await dbConnection.transaction(async (query) => {
+            const userSql = `
+              INSERT INTO users (
+                uuid,
+                email,
+                username,
+                password_hash,
+                role,
+                group_id,
+                status,
+                credits_quota,
+                remark
+              ) VALUES (?, ?, ?, ?, 'user', ?, 'active', ?, ?)
+            `;
+            
+            const userResult = await query(userSql, [
+              userUuid,
+              applicant_email,
+              username,
+              hashedPassword,
+              defaultGroupId,
+              defaultCredits,
+              `机构用户 - ${org_name}（自动审批）`
+            ]);
+            
+            const userId = userResult.rows.insertId;
+            
+            // 更新申请记录
+            const updateSql = `
+              UPDATE org_applications 
+              SET 
+                approved_at = NOW(),
+                approved_by = 0,
+                created_user_id = ?
+              WHERE id = ?
+            `;
+            
+            await query(updateSql, [userId, applicationId]);
+          });
+          
+          logger.info('机构申请自动审批成功', {
+            applicationId,
+            email: applicant_email,
+            org: org_name
+          });
+          
+          // 发送邮件通知
+          if (emailNotification) {
+            await OrgApplicationController.sendApprovalEmail(
+              applicant_email,
+              org_name,
+              username,
+              defaultPassword
+            );
+          }
+          
+          return ResponseHelper.success(res, {
+            applicationId,
+            message: '申请已自动批准，账号信息已发送至您的邮箱'
+          }, '申请提交成功');
+        } catch (autoApproveError) {
+          logger.error('自动审批失败:', autoApproveError);
+          // 如果自动审批失败，将状态改回pending
+          await dbConnection.query(
+            'UPDATE org_applications SET status = ? WHERE id = ?',
+            ['pending', applicationId]
+          );
+          return ResponseHelper.success(res, {
+            applicationId,
+            message: '申请已提交，我们会尽快处理'
+          }, '申请提交成功');
+        }
+      } else {
+        logger.info('机构申请提交成功', {
+          applicationId,
+          org_name,
+          applicant_email,
+          referrer: referrerInfo
+        });
+        
+        return ResponseHelper.success(res, {
+          applicationId,
+          message: '申请已提交，我们会尽快处理'
+        }, '申请提交成功');
+      }
     } catch (error) {
       logger.error('提交机构申请失败:', error);
       return ResponseHelper.error(res, '提交申请失败，请稍后重试');
+    }
+  }
+  
+  /**
+   * 发送批准邮件
+   */
+  static async sendApprovalEmail(email, orgName, username, password) {
+    try {
+      const settings = await SystemConfig.getFormattedSettings();
+      const siteName = settings.site?.name || 'AI Platform';
+      const siteUrl = settings.site?.url || 'https://ai.xingyuncl.com';
+      
+      // 检查邮件服务是否配置
+      const emailConfig = settings.email || {};
+      if (!emailConfig.smtp_host || !emailConfig.smtp_user || !emailConfig.smtp_pass) {
+        logger.warn('邮件服务未配置，跳过发送批准邮件');
+        return false;
+      }
+      
+      const transporter = await EmailService.getTransporter();
+      const fromName = emailConfig.smtp_from || siteName;
+      
+      const mailOptions = {
+        from: `"${fromName}" <${emailConfig.smtp_user}>`,
+        to: email,
+        subject: `[${siteName}] 您的机构申请已批准`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">${siteName}</h2>
+            <p>尊敬的用户：</p>
+            <p>恭喜！您的机构申请已经批准。</p>
+            
+            <div style="background: #f0f2f5; padding: 20px; margin: 20px 0; border-radius: 8px;">
+              <h3 style="margin-top: 0;">账号信息</h3>
+              <p><strong>组织名称：</strong>${orgName}</p>
+              <p><strong>登录邮箱：</strong>${email}</p>
+              <p><strong>用户名：</strong>${username}</p>
+              <p><strong>默认密码：</strong>${password}</p>
+            </div>
+            
+            <p style="color: #ff4d4f;">
+              <strong>重要提示：</strong>请登录后立即修改密码以确保账号安全。
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/login" 
+                 style="display: inline-block; padding: 12px 30px; background: #1890ff; color: white; text-decoration: none; border-radius: 4px;">
+                立即登录
+              </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              ${siteName} - ${new Date().getFullYear()}
+            </p>
+          </div>
+        `
+      };
+      
+      await transporter.sendMail(mailOptions);
+      logger.info('批准邮件发送成功', { to: email });
+      return true;
+    } catch (error) {
+      logger.error('发送批准邮件失败:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 发送拒绝邮件
+   */
+  static async sendRejectionEmail(email, orgName, reason) {
+    try {
+      const settings = await SystemConfig.getFormattedSettings();
+      const siteName = settings.site?.name || 'AI Platform';
+      
+      // 检查邮件服务是否配置
+      const emailConfig = settings.email || {};
+      if (!emailConfig.smtp_host || !emailConfig.smtp_user || !emailConfig.smtp_pass) {
+        logger.warn('邮件服务未配置，跳过发送拒绝邮件');
+        return false;
+      }
+      
+      const transporter = await EmailService.getTransporter();
+      const fromName = emailConfig.smtp_from || siteName;
+      
+      const mailOptions = {
+        from: `"${fromName}" <${emailConfig.smtp_user}>`,
+        to: email,
+        subject: `[${siteName}] 关于您的机构申请`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">${siteName}</h2>
+            <p>尊敬的用户：</p>
+            <p>感谢您申请使用我们的服务。</p>
+            
+            <div style="background: #fff5f5; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #ff4d4f;">
+              <p>很遗憾，您的机构申请未能通过审核。</p>
+              <p><strong>组织名称：</strong>${orgName}</p>
+              ${reason ? `<p><strong>原因说明：</strong>${reason}</p>` : ''}
+            </div>
+            
+            <p>如有疑问，请联系我们的客服团队。</p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              ${siteName} - ${new Date().getFullYear()}
+            </p>
+          </div>
+        `
+      };
+      
+      await transporter.sendMail(mailOptions);
+      logger.info('拒绝邮件发送成功', { to: email });
+      return true;
+    } catch (error) {
+      logger.error('发送拒绝邮件失败:', error);
+      return false;
     }
   }
   
@@ -303,7 +603,7 @@ class OrgApplicationController {
   }
   
   /**
-   * 审批申请（管理员接口） - 使用固定默认密码
+   * 审批申请（管理员接口）- 支持邮件通知
    */
   static async approveApplication(req, res) {
     try {
@@ -311,7 +611,7 @@ class OrgApplicationController {
       const { action, rejection_reason, group_id, credits } = req.body;
       const approverId = req.user.id;
       
-      // 验证action - 修复错误提示
+      // 验证action
       if (!['approve', 'reject'].includes(action)) {
         return ResponseHelper.validation(res, null, '无效的操作类型');
       }
@@ -330,15 +630,16 @@ class OrgApplicationController {
         return ResponseHelper.validation(res, null, '该申请已处理，无需重复操作');
       }
       
+      // 获取邮件通知配置
+      const configSql = `
+        SELECT email_notification, default_group_id, default_credits 
+        FROM application_form_config LIMIT 1
+      `;
+      const { rows: configs } = await dbConnection.query(configSql);
+      const config = configs[0] || {};
+      const emailNotification = config.email_notification === 1;
+      
       if (action === 'approve') {
-        // 获取配置
-        const configSql = `
-          SELECT default_group_id, default_credits 
-          FROM application_form_config LIMIT 1
-        `;
-        const { rows: configs } = await dbConnection.query(configSql);
-        
-        const config = configs[0] || {};
         const finalGroupId = group_id || config.default_group_id || 1;
         const finalCredits = credits !== undefined ? credits : (config.default_credits || 0);
         
@@ -349,12 +650,11 @@ class OrgApplicationController {
         const defaultPassword = '123456';
         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
         
-        // 生成用户名（使用邮箱前缀）
+        // 生成用户名
         const username = application.applicant_email.split('@')[0] + '_' + Date.now();
         
         // 使用事务创建用户
         await dbConnection.transaction(async (query) => {
-          // 创建用户
           const userSql = `
             INSERT INTO users (
               uuid,
@@ -400,11 +700,18 @@ class OrgApplicationController {
           approverId,
           email: application.applicant_email,
           org: application.org_name,
-          uuid: userUuid,
-          defaultPassword: '已设置为123456'
+          uuid: userUuid
         });
         
-        // TODO: 发送邮件通知，告知默认密码
+        // 发送邮件通知
+        if (emailNotification) {
+          await OrgApplicationController.sendApprovalEmail(
+            application.applicant_email,
+            application.org_name,
+            username,
+            defaultPassword
+          );
+        }
         
         return ResponseHelper.success(res, {
           message: '申请已批准，账号创建成功',
@@ -414,7 +721,7 @@ class OrgApplicationController {
           note: '请告知用户使用此密码登录，并建议首次登录后修改密码'
         });
       } else {
-        // 拒绝申请 - 修复错误提示
+        // 拒绝申请
         if (!rejection_reason) {
           return ResponseHelper.validation(res, null, '请填写拒绝原因');
         }
@@ -437,7 +744,14 @@ class OrgApplicationController {
           reason: rejection_reason
         });
         
-        // TODO: 发送邮件通知
+        // 发送邮件通知
+        if (emailNotification) {
+          await OrgApplicationController.sendRejectionEmail(
+            application.applicant_email,
+            application.org_name,
+            rejection_reason
+          );
+        }
         
         return ResponseHelper.success(res, null, '申请已拒绝');
       }
@@ -455,7 +769,7 @@ class OrgApplicationController {
       const updateData = req.body;
       const updaterId = req.user.id;
       
-      // 构建更新语句 - 添加application_rules字段
+      // 构建更新语句
       const allowedFields = [
         'button_text',
         'button_visible',
@@ -533,19 +847,18 @@ class OrgApplicationController {
   }
   
   /**
-   * 创建邀请码 - 修复日期格式问题
+   * 创建邀请码
    */
   static async createInvitationCode(req, res) {
     try {
       const { code, description, usage_limit = -1, expires_at } = req.body;
       const creatorId = req.user.id;
       
-      // 修复错误提示
       if (!code || code.length !== 6) {
         return ResponseHelper.validation(res, null, '邀请码必须为6位字符');
       }
       
-      // 检查重复 - 修复错误提示
+      // 检查重复
       const checkSql = 'SELECT id FROM invitation_codes WHERE code = ?';
       const { rows: existing } = await dbConnection.query(checkSql, [code]);
       
@@ -599,7 +912,7 @@ class OrgApplicationController {
   }
   
   /**
-   * 更新邀请码 - 修复日期格式问题
+   * 更新邀请码
    */
   static async updateInvitationCode(req, res) {
     try {

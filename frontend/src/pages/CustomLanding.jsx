@@ -1,5 +1,5 @@
 /**
- * 自定义首页展示组件
+ * 自定义首页展示组件 - 修改登录按钮文字
  */
 
 import React, { useEffect, useState } from 'react'
@@ -154,7 +154,7 @@ const CustomLanding = () => {
             e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
           }}
         >
-          Login
+          登录 / Login
         </Button>
       )}
 

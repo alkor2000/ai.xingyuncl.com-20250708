@@ -1,5 +1,5 @@
 /**
- * 机构申请路由
+ * 机构申请路由 - 修复配置获取
  */
 
 const express = require('express');
@@ -21,7 +21,8 @@ router.use(canManageSystem()); // 只有超级管理员可以管理
 router.get('/applications', OrgApplicationController.getApplicationList);
 router.post('/applications/:id/approve', OrgApplicationController.approveApplication);
 
-// 表单配置管理
+// 表单配置管理 - 添加管理员专用的获取配置接口
+router.get('/admin-form-config', OrgApplicationController.getAdminFormConfig); // 新增：获取完整配置
 router.put('/form-config', OrgApplicationController.updateFormConfig);
 
 // 邀请码管理
