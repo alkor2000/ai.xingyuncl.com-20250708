@@ -1,6 +1,7 @@
 /**
  * 参数设置面板组件
  * 支持图生图和Midjourney参考图片
+ * 修复：Midjourney也遵守后台的图生图开关设置
  */
 
 import React, { memo } from 'react';
@@ -36,7 +37,7 @@ const ParameterSettings = memo(({
   const { t } = useTranslation();
   const isMj = selectedModel && isMidjourneyModel(selectedModel);
   
-  // 检查模型是否支持图生图
+  // 检查模型是否支持图生图 - 统一检查逻辑
   const supportsImage2Image = selectedModel?.api_config?.supports_image2image === true;
   const maxReferenceImages = selectedModel?.api_config?.max_reference_images || 2;
 
@@ -89,8 +90,8 @@ const ParameterSettings = memo(({
         </div>
       )}
 
-      {/* Midjourney参考图片功能 */}
-      {selectedModel && isMj && (
+      {/* Midjourney参考图片功能 - 修复：检查supports_image2image配置 */}
+      {selectedModel && isMj && supportsImage2Image && (
         <MidjourneyUploader
           referenceImages={referenceImages}
           onUpload={onReferenceUpload}
@@ -106,6 +107,21 @@ const ParameterSettings = memo(({
           onRemove={onRemoveReference}
           maxCount={maxReferenceImages}
           modelConfig={selectedModel.api_config}
+        />
+      )}
+
+      {/* 如果模型不支持图生图，显示提示 */}
+      {selectedModel && !supportsImage2Image && (
+        <Alert
+          message={t('image.noImage2ImageSupport', '图生图功能未启用')}
+          description={
+            isMj 
+              ? t('image.mjNoImage2ImageDesc', '该Midjourney模型未启用参考图片功能，请联系管理员开启')
+              : t('image.noImage2ImageDesc', '该模型不支持上传参考图片生成新图片')
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
         />
       )}
 
