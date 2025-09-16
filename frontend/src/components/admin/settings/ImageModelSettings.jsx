@@ -1,5 +1,6 @@
 /**
  * 图像模型管理组件
+ * 改进：添加图生图功能开关和配置
  */
 
 import React, { useState, useEffect } from 'react';
@@ -18,7 +19,10 @@ import {
   message,
   Popconfirm,
   Tooltip,
-  Alert
+  Alert,
+  Divider,
+  Row,
+  Col
 } from 'antd';
 import {
   PlusOutlined,
@@ -30,7 +34,9 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   InfoCircleOutlined,
-  LockOutlined
+  LockOutlined,
+  PictureOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -44,6 +50,8 @@ const ImageModelSettings = () => {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
+  const [toggleLoading, setToggleLoading] = useState({}); // 记录每个开关的加载状态
+  const [supportsImage2Image, setSupportsImage2Image] = useState(false); // 图生图功能开关状态
 
   // 加载模型列表
   const loadModels = async () => {
@@ -85,6 +93,37 @@ const ImageModelSettings = () => {
         }
       }
 
+      // 处理api_config字段 - 合并图生图配置
+      let apiConfig = {};
+      
+      // 如果是编辑模式，先获取原有的api_config
+      if (editingModel && editingModel.api_config) {
+        apiConfig = { ...editingModel.api_config };
+      }
+      
+      // 尝试解析用户输入的api_config（如果有）
+      if (values.api_config_json) {
+        try {
+          const userConfig = JSON.parse(values.api_config_json);
+          apiConfig = { ...apiConfig, ...userConfig };
+        } catch (error) {
+          message.error('API配置JSON格式错误');
+          return;
+        }
+      }
+      
+      // 合并图生图相关配置
+      apiConfig.supports_image2image = values.supports_image2image || false;
+      if (values.supports_image2image) {
+        apiConfig.max_reference_images = values.max_reference_images || 2;
+      }
+      
+      // 将处理后的api_config添加到提交数据中
+      processedValues.api_config = apiConfig;
+      delete processedValues.api_config_json; // 删除临时字段
+      delete processedValues.supports_image2image; // 删除临时字段
+      delete processedValues.max_reference_images; // 删除临时字段
+
       // 修复：编辑时如果API密钥为空，从提交数据中删除该字段
       if (editingModel && (!processedValues.api_key || processedValues.api_key === '')) {
         delete processedValues.api_key;
@@ -98,6 +137,7 @@ const ImageModelSettings = () => {
           setModalVisible(false);
           form.resetFields();
           setEditingModel(null);
+          setSupportsImage2Image(false);
           loadModels();
         }
       } else {
@@ -107,6 +147,7 @@ const ImageModelSettings = () => {
           message.success('模型创建成功');
           setModalVisible(false);
           form.resetFields();
+          setSupportsImage2Image(false);
           loadModels();
         }
       }
@@ -116,17 +157,30 @@ const ImageModelSettings = () => {
     }
   };
 
-  // 切换模型状态
-  const toggleModelStatus = async (id) => {
+  // 切换模型状态 - 改进版，支持直接Switch操作
+  const handleToggleStatus = async (id, currentStatus) => {
+    // 设置当前模型的loading状态
+    setToggleLoading({ ...toggleLoading, [id]: true });
+    
     try {
       const response = await api.patch(`/image/admin/models/${id}/toggle`);
       if (response.data.success) {
-        message.success('状态更新成功');
-        loadModels();
+        // 直接更新本地状态，避免重新加载整个列表
+        setModels(prevModels => 
+          prevModels.map(model => 
+            model.id === id 
+              ? { ...model, is_active: currentStatus ? 0 : 1 }
+              : model
+          )
+        );
+        message.success(`模型已${currentStatus ? '禁用' : '启用'}`);
       }
     } catch (error) {
       console.error('切换状态失败:', error);
       message.error('操作失败');
+    } finally {
+      // 清除loading状态
+      setToggleLoading({ ...toggleLoading, [id]: false });
     }
   };
 
@@ -147,17 +201,33 @@ const ImageModelSettings = () => {
   // 打开编辑窗口
   const openEditModal = (model) => {
     setEditingModel(model);
-    form.setFieldsValue({
+    
+    // 设置表单初始值
+    const formValues = {
       ...model,
       sizes_supported: model.sizes_supported ? JSON.stringify(model.sizes_supported, null, 2) : '',
-      api_key: '' // 编辑时不显示原密钥
-    });
+      api_key: '', // 编辑时不显示原密钥
+      supports_image2image: model.api_config?.supports_image2image || false,
+      max_reference_images: model.api_config?.max_reference_images || 2
+    };
+    
+    // 将其他api_config内容转为JSON字符串（排除图生图相关字段）
+    if (model.api_config) {
+      const { supports_image2image, max_reference_images, ...otherConfig } = model.api_config;
+      if (Object.keys(otherConfig).length > 0) {
+        formValues.api_config_json = JSON.stringify(otherConfig, null, 2);
+      }
+    }
+    
+    form.setFieldsValue(formValues);
+    setSupportsImage2Image(model.api_config?.supports_image2image || false);
     setModalVisible(true);
   };
 
   // 打开新增窗口
   const openAddModal = () => {
     setEditingModel(null);
+    setSupportsImage2Image(false);
     form.resetFields();
     setModalVisible(true);
   };
@@ -211,6 +281,9 @@ const ImageModelSettings = () => {
           ) : (
             <Tag icon={<CloseCircleOutlined />} color="error">未配置</Tag>
           )}
+          {record.api_config?.supports_image2image && (
+            <Tag icon={<PictureOutlined />} color="processing">图生图</Tag>
+          )}
         </Space>
       )
     },
@@ -218,10 +291,18 @@ const ImageModelSettings = () => {
       title: '状态',
       dataIndex: 'is_active',
       key: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? '启用' : '禁用'}
-        </Tag>
+      align: 'center',
+      render: (isActive, record) => (
+        <Tooltip title={`点击${isActive ? '禁用' : '启用'}模型`}>
+          <Switch
+            checked={!!isActive}
+            onChange={() => handleToggleStatus(record.id, isActive)}
+            loading={toggleLoading[record.id] || false}
+            checkedChildren="启用"
+            unCheckedChildren="禁用"
+            style={{ minWidth: '65px' }}
+          />
+        </Tooltip>
       )
     },
     {
@@ -234,14 +315,6 @@ const ImageModelSettings = () => {
               type="link"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record)}
-            />
-          </Tooltip>
-          <Tooltip title={record.is_active ? '禁用' : '启用'}>
-            <Button
-              type="link"
-              icon={<PoweroffOutlined />}
-              onClick={() => toggleModelStatus(record.id)}
-              style={{ color: record.is_active ? '#ff4d4f' : '#52c41a' }}
             />
           </Tooltip>
           <Popconfirm
@@ -265,7 +338,12 @@ const ImageModelSettings = () => {
 
   return (
     <Card
-      title="图像生成模型管理"
+      title={
+        <Space>
+          <FireOutlined style={{ color: '#ff6b6b', fontSize: '20px' }} />
+          <span style={{ fontSize: '16px', fontWeight: 'bold' }}>图像生成模型管理</span>
+        </Space>
+      }
       extra={
         <Button
           type="primary"
@@ -276,12 +354,26 @@ const ImageModelSettings = () => {
         </Button>
       }
     >
+      {/* 提示信息 */}
+      <Alert
+        message="模型管理说明"
+        description="您可以通过状态列的开关直接启用或禁用模型。支持图生图的模型会显示相应标记。"
+        type="info"
+        showIcon
+        closable
+        style={{ marginBottom: 16 }}
+      />
+      
       <Table
         columns={columns}
         dataSource={models}
         rowKey="id"
         loading={loading}
-        pagination={false}
+        pagination={{
+          defaultPageSize: 20,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 个模型`
+        }}
       />
 
       <Modal
@@ -291,9 +383,10 @@ const ImageModelSettings = () => {
           setModalVisible(false);
           form.resetFields();
           setEditingModel(null);
+          setSupportsImage2Image(false);
         }}
         onOk={() => form.submit()}
-        width={700}
+        width={800}
       >
         <Form
           form={form}
@@ -312,22 +405,27 @@ const ImageModelSettings = () => {
             />
           )}
 
-          <Form.Item
-            name="name"
-            label="模型标识"
-            rules={[{ required: true, message: '请输入模型标识' }]}
-            extra="唯一标识，如：volcano_seedream"
-          >
-            <Input placeholder="模型标识" disabled={!!editingModel} />
-          </Form.Item>
-
-          <Form.Item
-            name="display_name"
-            label="显示名称"
-            rules={[{ required: true, message: '请输入显示名称' }]}
-          >
-            <Input placeholder="如：火山方舟 SeedDream" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="模型标识"
+                rules={[{ required: true, message: '请输入模型标识' }]}
+                extra="唯一标识，如：volcano_seedream"
+              >
+                <Input placeholder="模型标识" disabled={!!editingModel} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="display_name"
+                label="显示名称"
+                rules={[{ required: true, message: '请输入显示名称' }]}
+              >
+                <Input placeholder="如：火山方舟 SeedDream" />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item
             name="description"
@@ -336,32 +434,37 @@ const ImageModelSettings = () => {
             <TextArea rows={2} placeholder="描述模型的功能特点" />
           </Form.Item>
 
-          <Form.Item
-            name="provider"
-            label="提供商"
-            rules={[{ required: true }]}
-            initialValue="volcano"
-          >
-            <Select>
-              <Select.Option value="volcano">火山方舟</Select.Option>
-              <Select.Option value="midjourney">Midjourney</Select.Option>
-              <Select.Option value="openai">OpenAI</Select.Option>
-              <Select.Option value="stable-diffusion">Stable Diffusion</Select.Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="generation_type"
-            label="生成类型"
-            rules={[{ required: true }]}
-            initialValue="sync"
-            extra="同步模型立即返回结果，异步模型（如Midjourney）需要轮询状态"
-          >
-            <Select>
-              <Select.Option value="sync">同步生成</Select.Option>
-              <Select.Option value="async">异步生成</Select.Option>
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="provider"
+                label="提供商"
+                rules={[{ required: true }]}
+                initialValue="volcano"
+              >
+                <Select>
+                  <Select.Option value="volcano">火山方舟</Select.Option>
+                  <Select.Option value="midjourney">Midjourney</Select.Option>
+                  <Select.Option value="openai">OpenAI</Select.Option>
+                  <Select.Option value="stable-diffusion">Stable Diffusion</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="generation_type"
+                label="生成类型"
+                rules={[{ required: true }]}
+                initialValue="sync"
+                extra="同步模型立即返回结果，异步模型需要轮询状态"
+              >
+                <Select>
+                  <Select.Option value="sync">同步生成</Select.Option>
+                  <Select.Option value="async">异步生成</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item
             name="endpoint"
@@ -414,14 +517,80 @@ const ImageModelSettings = () => {
             <Input placeholder="如：doubao-seedream-3-0-t2i-250415" />
           </Form.Item>
 
-          <Form.Item
-            name="price_per_image"
-            label="单价（积分/张）"
-            rules={[{ required: true }]}
-            initialValue={40}
-          >
-            <InputNumber min={0} step={0.1} style={{ width: '100%' }} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="price_per_image"
+                label="单价（积分/张）"
+                rules={[{ required: true }]}
+                initialValue={40}
+              >
+                <InputNumber min={0} step={0.1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="sort_order"
+                label="排序"
+                initialValue={0}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">
+            <Space>
+              <PictureOutlined />
+              图生图功能配置
+            </Space>
+          </Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="supports_image2image"
+                label="启用图生图（垫图）功能"
+                valuePropName="checked"
+                extra="开启后用户可以上传参考图片生成新图片"
+              >
+                <Switch 
+                  checkedChildren={<UploadOutlined />}
+                  unCheckedChildren={<CloseCircleOutlined />}
+                  onChange={(checked) => setSupportsImage2Image(checked)}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              {supportsImage2Image && (
+                <Form.Item
+                  name="max_reference_images"
+                  label="最大参考图片数量"
+                  initialValue={2}
+                  extra="用户一次最多可以上传的参考图片数量"
+                >
+                  <InputNumber 
+                    min={1} 
+                    max={5} 
+                    style={{ width: '100%' }} 
+                    placeholder="建议1-2张"
+                  />
+                </Form.Item>
+              )}
+            </Col>
+          </Row>
+
+          {supportsImage2Image && (
+            <Alert
+              message="图生图功能说明"
+              description="启用后，用户可以上传参考图片来引导AI生成相似风格或内容的新图片。不同的模型对图生图的支持程度可能不同，建议先测试效果。"
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          <Divider orientation="left">其他配置</Divider>
 
           <Form.Item
             name="sizes_supported"
@@ -435,28 +604,36 @@ const ImageModelSettings = () => {
             />
           </Form.Item>
 
-          <Form.Item
-            name="default_size"
-            label="默认尺寸"
-            initialValue="1024x1024"
-          >
-            <Input placeholder="1024x1024" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="default_size"
+                label="默认尺寸"
+                initialValue="1024x1024"
+              >
+                <Input placeholder="1024x1024" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="default_guidance_scale"
+                label="默认引导系数"
+                initialValue={2.5}
+              >
+                <InputNumber min={1} max={10} step={0.5} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item
-            name="default_guidance_scale"
-            label="默认引导系数"
-            initialValue={2.5}
+            name="api_config_json"
+            label="其他API配置（JSON格式）"
+            extra="可选，用于配置其他高级参数"
           >
-            <InputNumber min={1} max={10} step={0.5} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="sort_order"
-            label="排序"
-            initialValue={0}
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <TextArea 
+              rows={4} 
+              placeholder='{"timeout": 60000, "retry": 3}'
+            />
           </Form.Item>
 
           <Form.Item
@@ -465,7 +642,7 @@ const ImageModelSettings = () => {
             valuePropName="checked"
             initialValue={true}
           >
-            <Switch />
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
         </Form>
       </Modal>

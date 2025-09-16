@@ -1,5 +1,6 @@
 /**
  * 图像生成页面样式 - 支持Midjourney和顶部分页
+ * 修复：左侧面板滚动问题
  */
 
 .image-generation-page {
@@ -12,29 +13,49 @@
     flex-direction: row;
   }
 
-  // 左侧生成面板
+  // 左侧生成面板 - 修复滚动问题
   .generation-sider {
     background: #fff;
     border-right: 1px solid #f0f0f0;
-    overflow-y: auto;
+    height: 100vh; // 明确设置高度
+    display: flex; // 使用flex布局
+    flex-direction: column; // 垂直方向
     
+    // 修复：让整个侧边栏内容可滚动
+    .ant-layout-sider-children {
+      height: 100%;
+      overflow: hidden; // 防止默认滚动条
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  // 可滚动的内容区域 - 修复
+  .generation-container {
+    flex: 1; // 占满剩余空间
+    overflow-y: auto; // 启用垂直滚动
+    overflow-x: hidden; // 禁用水平滚动
+    padding: 12px;
+    max-height: 100vh; // 限制最大高度
+    
+    // 美化滚动条
     &::-webkit-scrollbar {
       width: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: #f0f0f0;
+      border-radius: 3px;
     }
     
     &::-webkit-scrollbar-thumb {
       background: #d9d9d9;
       border-radius: 3px;
+      
+      &:hover {
+        background: #b8b8b8;
+      }
     }
-    
-    &::-webkit-scrollbar-thumb:hover {
-      background: #b8b8b8;
-    }
-  }
-
-  // 可滚动的内容区域
-  .generation-container {
-    padding: 12px;
     
     .ant-card {
       margin-bottom: 12px;
@@ -242,7 +263,7 @@
       }
     }
     
-    // 生成按钮区域
+    // 生成按钮区域 - 确保按钮始终可见
     .generate-button-section {
       margin: 20px 0 16px 0;
       padding-top: 16px;
@@ -735,6 +756,7 @@
     .generation-sider {
       width: 350px !important;
       min-width: 350px !important;
+      flex-shrink: 0;
     }
     
     .history-grid.grid {
