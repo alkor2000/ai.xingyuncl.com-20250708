@@ -84,7 +84,7 @@ const useChatStore = create((set, get) => ({
     set({ conversationStates: newStates })
   },
   
-  // 🔥 获取会话列表 - 添加自动选择逻辑，增加默认limit到100
+  // 🔥 获取会话列表 - 修复：增加limit到500，避免对话丢失
   getConversations: async (force = false, autoSelectFirst = false) => {
     const state = get()
     
@@ -99,10 +99,10 @@ const useChatStore = create((set, get) => ({
     
     set({ conversationsLoading: true })
     try {
-      // 🔥 修改：添加limit参数，增加到100
+      // 🔥 修复：增加limit到500，确保获取更多对话
       const response = await apiClient.get('/chat/conversations', {
         params: {
-          limit: 100,  // 增加默认获取数量到100
+          limit: 500,  // 增加到500，避免对话丢失
           page: 1
         }
       })
@@ -869,6 +869,7 @@ const useChatStore = create((set, get) => ({
   },
   
   // 更新会话 - 支持上下文数量、temperature、优先级、系统提示词和模块组合更新
+  // 🔥 修复：确保本地状态立即更新，避免依赖后端响应延迟
   updateConversation: async (conversationId, updateData) => {
     try {
       const response = await apiClient.put(`/chat/conversations/${conversationId}`, updateData)
@@ -898,6 +899,7 @@ const useChatStore = create((set, get) => ({
         conversations.splice(insertIndex, 0, updatedConversation)
       }
       
+      // 🔥 关键：立即更新状态，不依赖后端延迟
       set({
         conversations: conversations,
         currentConversation: state.currentConversationId === conversationId 
@@ -937,18 +939,8 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 切换置顶
-  togglePin: async (conversationId, isPinned) => {
-    try {
-      const response = await apiClient.put(`/chat/conversations/${conversationId}`, {
-        is_pinned: isPinned
-      })
-      return response.data.data
-    } catch (error) {
-      console.error('切换置顶失败:', error)
-      throw error
-    }
-  },
+  // 🔥 删除togglePin方法，不再使用is_pinned字段
+  // togglePin方法已删除，统一使用updateConversation更新priority字段
   
   // 获取AI模型列表 - 包含积分信息
   getAIModels: async () => {

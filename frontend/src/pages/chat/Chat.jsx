@@ -1,6 +1,7 @@
 /**
  * 聊天页面 - 主界面（移动端适配版）
  * 优化：改进滚动逻辑，解决代码块输出时的滚动冲突
+ * 修复：对话名称更新和置顶功能问题
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -311,15 +312,16 @@ const Chat = () => {
     setShowSettings(true)
   }
 
-  // 更新对话设置
+  // 更新对话设置 - 修复：移除getConversations调用，避免竞态条件
   const handleUpdateSettings = async (values) => {
     if (!currentConversation) return
 
     try {
+      // updateConversation已经会更新本地状态，不需要重新获取
       await updateConversation(currentConversation.id, values)
       setShowSettings(false)
       message.success(t('chat.conversation.update.success'))
-      getConversations(true)
+      // 移除这行，避免竞态条件： getConversations(true)
     } catch (error) {
       message.error(t('chat.conversation.update.failed'))
     }
@@ -348,11 +350,20 @@ const Chat = () => {
     }
   }
 
-  // 切换置顶
-  const handleTogglePin = async (conversationId, isPinned) => {
+  // 切换置顶 - 修复：使用priority字段而不是is_pinned
+  const handleTogglePin = async (conversationId, currentPriority) => {
     try {
-      await togglePin(conversationId, !isPinned)
-      getConversations(true)
+      // 如果当前priority > 0，设为0（取消置顶），否则设为5（置顶）
+      const newPriority = (currentPriority > 0) ? 0 : 5
+      
+      await updateConversation(conversationId, {
+        priority: newPriority
+      })
+      
+      // 更新后刷新列表以重新排序
+      await getConversations(true)
+      
+      message.success(newPriority > 0 ? '已置顶' : '已取消置顶')
     } catch (error) {
       message.error(t('chat.conversation.pin.failed'))
     }
@@ -645,7 +656,12 @@ const Chat = () => {
             setDeletingConversation(conversation)
             setDeleteModalVisible(true)
           }}
-          onTogglePin={handleTogglePin}
+          onTogglePin={(conversationId) => {
+            const conv = conversations.find(c => c.id === conversationId)
+            if (conv) {
+              handleTogglePin(conversationId, conv.priority)
+            }
+          }}
         />
       </div>
     </div>
@@ -775,7 +791,12 @@ const Chat = () => {
               setDeleteModalVisible(true)
               setMobileDrawerVisible(false)
             }}
-            onTogglePin={handleTogglePin}
+            onTogglePin={(conversationId) => {
+              const conv = conversations.find(c => c.id === conversationId)
+              if (conv) {
+                handleTogglePin(conversationId, conv.priority)
+              }
+            }}
           />
         </Drawer>
 
@@ -848,7 +869,12 @@ const Chat = () => {
               setDeletingConversation(conversation)
               setDeleteModalVisible(true)
             }}
-            onTogglePin={handleTogglePin}
+            onTogglePin={(conversationId) => {
+              const conv = conversations.find(c => c.id === conversationId)
+              if (conv) {
+                handleTogglePin(conversationId, conv.priority)
+              }
+            }}
           />
         </div>
       </Sider>
