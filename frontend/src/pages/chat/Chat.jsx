@@ -845,7 +845,7 @@ const Chat = () => {
       <Sider
         width={220}
         collapsed={sidebarCollapsed}
-        collapsedWidth={0}
+        collapsedWidth={50}
         breakpoint="xl"
         onBreakpoint={(broken) => {
           if (window.innerWidth > 1600) {
@@ -875,6 +875,8 @@ const Chat = () => {
                 handleTogglePin(conversationId, conv.priority)
               }
             }}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           />
         </div>
       </Sider>

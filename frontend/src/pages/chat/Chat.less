@@ -27,6 +27,41 @@
         backdrop-filter: blur(10px);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         
+        // 添加flex布局容器
+        .sidebar-header-content {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          
+          .new-chat-button {
+            flex: 1;
+          }
+          
+          // 折叠按钮样式
+          .collapse-button {
+            flex-shrink: 0;
+            width: 36px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.04);
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: none;
+            
+            &:hover {
+              background: rgba(0, 0, 0, 0.08) !important;
+              transform: scale(1.05);
+            }
+            
+            .anticon {
+              font-size: 16px;
+              color: #666;
+            }
+          }
+        }
+        
         // iOS风格的新建按钮
         .new-chat-button {
           height: 40px;
@@ -423,6 +458,37 @@
       -webkit-overflow-scrolling: touch;
       
       // 重用PC端的sidebar样式
+      
+      
+      // 折叠状态的侧边栏样式
+      &.collapsed-sidebar {
+        padding: 8px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        
+        .sidebar-collapsed-header {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+        }
+        
+        .collapse-button-only {
+          border-radius: 8px;
+          background: rgba(0, 0, 0, 0.04);
+          transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          
+          &:hover {
+            background: rgba(0, 0, 0, 0.08) !important;
+            transform: scale(1.05);
+          }
+          
+          .anticon {
+            font-size: 18px;
+            color: #666;
+          }
+        }
+      }
       .sidebar-wrapper {
         height: 100%;
         

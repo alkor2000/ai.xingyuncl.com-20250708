@@ -17,7 +17,9 @@ import {
   DeleteOutlined,
   MessageOutlined,
   ClockCircleOutlined,
-  PushpinFilled
+  PushpinFilled,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -33,7 +35,9 @@ const ConversationSidebar = ({
   onEditConversation,
   onDeleteConversation,
   onTogglePin,
-  aiModels = []
+  aiModels = [],
+  collapsed = false,
+  onToggleCollapse
 }) => {
   const { t } = useTranslation()
 
@@ -108,19 +112,54 @@ const ConversationSidebar = ({
     )
   }
 
+  // 如果侧边栏折叠，只显示折叠按钮
+  if (collapsed) {
+    return (
+      <div className="sidebar-wrapper collapsed-sidebar">
+        <div className="sidebar-collapsed-header">
+          <Tooltip title="展开侧边栏" placement="right">
+            <Button
+              type="text"
+              icon={<MenuUnfoldOutlined />}
+              onClick={onToggleCollapse}
+              className="collapse-button-only"
+              style={{
+                width: '36px',
+                height: '36px',
+                margin: '8px auto'
+              }}
+            />
+          </Tooltip>
+        </div>
+      </div>
+    )
+  }
+
+  // 正常展开状态
   return (
     <div className="sidebar-wrapper">
-      {/* 新建按钮 - iOS风格优化 */}
+      {/* 新建按钮和折叠按钮 - iOS风格优化 */}
       <div className="sidebar-header-fixed">
-        <Button
-          type="primary"
-          block
-          icon={<PlusOutlined />}
-          onClick={onCreateConversation}
-          className="new-chat-button"
-        >
-          {t('chat.newConversation')}
-        </Button>
+        <div className="sidebar-header-content">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={onCreateConversation}
+            className="new-chat-button"
+            style={{ flex: 1 }}
+          >
+            {t('chat.newConversation')}
+          </Button>
+          {/* 折叠/展开按钮 */}
+          <Tooltip title="收起侧边栏">
+            <Button
+              type="text"
+              icon={<MenuFoldOutlined />}
+              onClick={onToggleCollapse}
+              className="collapse-button"
+            />
+          </Tooltip>
+        </div>
       </div>
       
       {/* 对话列表 */}

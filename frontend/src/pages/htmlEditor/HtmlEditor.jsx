@@ -198,6 +198,11 @@ const HtmlEditor = () => {
     return credits === 0 ? '免费' : `${credits} 积分`;
   };
 
+  // 格式化积分显示（保存按钮专用，不显示免费）
+  const formatCreditsDisplayForSave = (credits) => {
+    return credits === 0 ? '' : `(${credits} 积分)`;
+  };
+
   // 加载选中页面的内容
   useEffect(() => {
     if (currentPage) {
@@ -523,18 +528,10 @@ const HtmlEditor = () => {
     });
   };
 
-  // 清空编辑器
+  // 清空编辑器 - 直接清空
   const handleClearContent = () => {
-    Modal.confirm({
-      title: '确认清空',
-      content: '确定要清空编辑器内容吗？此操作不可恢复。',
-      okText: '确定',
-      cancelText: '取消',
-      onOk: () => {
-        setHtmlContent(BLANK_HTML_TEMPLATE);
-        message.success('编辑器已清空');
-      }
-    });
+    setHtmlContent('');
+    message.success('编辑器已清空');
   };
 
   // 生成永久链接
@@ -896,7 +893,7 @@ const HtmlEditor = () => {
             loading={isSaving}
             disabled={!selectedPageId}
           >
-            保存 ({formatCreditsDisplay(creditsConfig.credits_per_update)})
+            保存 {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}
           </Button>
           <Button 
             style={iosStyles.previewButton}
