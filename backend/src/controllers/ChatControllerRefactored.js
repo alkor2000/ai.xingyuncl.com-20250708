@@ -401,18 +401,22 @@ class ChatControllerRefactored {
         status: 'completed'
       });
 
-      // 9. 获取历史消息并构建AI上下文
+      // 9. 获取历史消息
       const recentMessages = await Message.getRecentMessages(id);
+      
+      // 10. 构建AI上下文 - 传递当前消息内容和文件信息
       const aiMessages = await MessageService.buildAIContext({
         conversation,
         recentMessages,
         systemPromptId: conversation.system_prompt_id,
         moduleCombinationId: conversation.module_combination_id,
         userId,
-        aiModel
+        aiModel,
+        currentContent: content,  // 传递当前消息内容
+        currentFileInfo: fileInfo  // 传递当前文件信息
       });
 
-      // 10. 根据模式发送消息
+      // 11. 根据模式发送消息
       const useStream = stream && aiModel.stream_enabled;
       
       if (useStream) {

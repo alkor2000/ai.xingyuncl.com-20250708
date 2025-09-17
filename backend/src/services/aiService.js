@@ -1,7 +1,7 @@
 /**
- * AI服务层 - 增强调试版本
+ * AI服务层 - 增强PDF支持版本
  * 负责与AI模型交互（非流式版本）
- * 支持Azure OpenAI、Gemini图片生成和OpenRouter格式
+ * 支持Azure OpenAI、Gemini图片生成和OpenRouter PDF格式
  */
 
 const axios = require('axios');
@@ -14,7 +14,7 @@ const { ExternalServiceError } = require('../utils/errors');
 
 class AIService {
   /**
-   * 发送消息到AI模型 - 支持会话级temperature和图片
+   * 发送消息到AI模型 - 支持会话级temperature和图片/PDF
    */
   static async sendMessage(modelName, messages, options = {}) {
     try {
@@ -23,6 +23,7 @@ class AIService {
         messageCount: messages.length,
         customTemperature: options.temperature,
         hasImages: messages.some(m => m.image_url),
+        hasPDFs: messages.some(m => m.file),
         messageId: options.messageId
       });
 
@@ -97,6 +98,125 @@ class AIService {
   }
 
   /**
+   * 判断是否为OpenRouter端点
+   */
+  static isOpenRouterEndpoint(endpoint) {
+    return endpoint && endpoint.includes('openrouter');
+  }
+
+  /**
+   * 处理消息为OpenRouter格式 - 支持PDF
+   */
+  static processMessagesForOpenRouter(messages, model) {
+    return messages.map(msg => {
+      // 如果消息包含PDF文件
+      if (msg.file && msg.file.mime_type === 'application/pdf') {
+        logger.info('处理PDF消息为OpenRouter格式', {
+          role: msg.role,
+          hasFile: true,
+          fileUrl: msg.file.url
+        });
+        
+        // OpenRouter的PDF格式：使用content数组
+        return {
+          role: msg.role,
+          content: [
+            {
+              type: 'text',
+              text: msg.content
+            },
+            {
+              type: 'file',
+              file: {
+                filename: 'document.pdf',
+                file_data: msg.file.url
+              }
+            }
+          ]
+        };
+      }
+      
+      // 如果消息包含图片
+      if (msg.image_url && model.image_upload_enabled) {
+        return {
+          role: msg.role,
+          content: [
+            { type: 'text', text: msg.content },
+            { type: 'image_url', image_url: { url: msg.image_url } }
+          ]
+        };
+      }
+      
+      // 普通文本消息
+      return {
+        role: msg.role,
+        content: msg.content
+      };
+    });
+  }
+
+  /**
+   * 处理消息为标准格式（非OpenRouter）
+   */
+  static processMessagesStandard(messages, model) {
+    return messages.map(msg => {
+      // 如果消息包含图片
+      if (msg.image_url && model.image_upload_enabled) {
+        // 根据不同的模型API格式处理图片
+        if (model.provider === 'openai' || model.provider === 'google') {
+          // OpenAI 和 Google 格式相同
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text', text: msg.content },
+              { type: 'image_url', image_url: { url: msg.image_url } }
+            ]
+          };
+        } else if (model.provider === 'anthropic') {
+          // Claude格式
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text', text: msg.content },
+              { 
+                type: 'image',
+                source: {
+                  type: 'url',
+                  url: msg.image_url
+                }
+              }
+            ]
+          };
+        } else {
+          // 其他模型默认使用OpenAI格式
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text', text: msg.content },
+              { type: 'image_url', image_url: { url: msg.image_url } }
+            ]
+          };
+        }
+      }
+      
+      // 对于PDF文件，在非OpenRouter的情况下，只能作为文本处理
+      if (msg.file) {
+        logger.warn('非OpenRouter端点不支持PDF直接处理', {
+          provider: model.provider,
+          endpoint: model.api_endpoint
+        });
+        // 可以考虑在content中添加文件URL说明
+        return {
+          role: msg.role,
+          content: `${msg.content}\n\n[附件: ${msg.file.url}]`
+        };
+      }
+      
+      return msg;
+    });
+  }
+
+  /**
    * 调用Azure OpenAI API
    */
   static async callAzureAPI(model, messages, options = {}) {
@@ -110,7 +230,6 @@ class AIService {
       const { apiKey, endpoint, apiVersion } = azureConfig;
 
       // 从endpoint提取deployment名称
-      // 格式: https://xxx.openai.azure.com 或 https://xxx.cognitiveservices.azure.com
       let deploymentName = model.name;
       
       // 如果model.name包含斜杠，取最后一部分作为deployment名称
@@ -142,19 +261,8 @@ class AIService {
         parseFloat(options.temperature) : 
         (requestConfig.temperature || 0.7);
 
-      // 处理消息（Azure也支持图片）
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          return {
-            role: msg.role,
-            content: [
-              { type: 'text', text: msg.content },
-              { type: 'image_url', image_url: { url: msg.image_url } }
-            ]
-          };
-        }
-        return msg;
-      });
+      // 处理消息（Azure不支持PDF，但支持图片）
+      const processedMessages = AIService.processMessagesStandard(messages, model);
 
       // 构造请求数据 - Azure不需要model字段
       const requestData = {
@@ -191,7 +299,7 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 支持会话级temperature和图片生成
+   * 调用模型API - 支持会话级temperature和图片生成、PDF
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -218,69 +326,60 @@ class AIService {
         parseFloat(options.temperature) : 
         (requestConfig.temperature || 0.7);
 
+      // 检查是否为OpenRouter
+      const isOpenRouter = AIService.isOpenRouterEndpoint(model.api_endpoint);
+      
       logger.info('调用AI模型API', { 
         model: model.name, 
         endpoint: model.api_endpoint,
+        isOpenRouter,
         messageCount: messages.length,
         temperature: finalTemperature,
         supportsImages: model.image_upload_enabled,
+        supportsDocuments: model.document_upload_enabled,
         supportsImageGeneration: model.image_generation_enabled,
-        provider: model.provider
+        provider: model.provider,
+        hasPDFs: messages.some(m => m.file)
       });
 
-      // 处理包含图片的消息
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          // 根据不同的模型API格式处理图片
-          if (model.provider === 'openai' || model.provider === 'google') {
-            // OpenAI 和 Google 格式相同
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          } else if (model.provider === 'anthropic') {
-            // Claude格式
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { 
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: msg.image_url
-                  }
-                }
-              ]
-            };
-          } else {
-            // 其他模型默认使用OpenAI格式
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content },
-                { type: 'image_url', image_url: { url: msg.image_url } }
-              ]
-            };
-          }
+      // 根据端点类型处理消息
+      let processedMessages;
+      let plugins = undefined;
+      
+      if (isOpenRouter) {
+        processedMessages = AIService.processMessagesForOpenRouter(messages, model);
+        
+        // 如果有PDF文件，添加plugins配置
+        if (messages.some(m => m.file)) {
+          plugins = [
+            {
+              id: 'file-parser',
+              pdf: {
+                engine: 'pdf-text'  // 使用免费的pdf-text引擎
+              }
+            }
+          ];
+          logger.info('为PDF添加OpenRouter插件配置', { engine: 'pdf-text' });
         }
-        return msg;
-      });
+      } else {
+        processedMessages = AIService.processMessagesStandard(messages, model);
+      }
 
       // 记录处理后的消息（用于调试）
-      if (messages.some(m => m.image_url)) {
-        logger.info('处理后的图片消息', {
+      if (messages.some(m => m.image_url || m.file)) {
+        logger.info('处理后的文件消息', {
           provider: model.provider,
-          processedMessage: JSON.stringify(processedMessages.find(m => 
-            Array.isArray(m.content) && m.content.some(c => c.type === 'image_url' || c.type === 'image')
-          ))
+          isOpenRouter,
+          hasProcessedPDF: processedMessages.some(m => 
+            Array.isArray(m.content) && m.content.some(c => c.type === 'file')
+          ),
+          hasProcessedImage: processedMessages.some(m => 
+            Array.isArray(m.content) && m.content.some(c => c.type === 'image_url')
+          )
         });
       }
 
-      // 构造请求数据 - 使用会话级temperature
+      // 构造请求数据
       const requestData = {
         model: model.name,
         messages: processedMessages,
@@ -289,16 +388,20 @@ class AIService {
         presence_penalty: requestConfig.presence_penalty || 0,
         frequency_penalty: requestConfig.frequency_penalty || 0,
         stream: false
-        // 完全移除 max_tokens 参数，让模型自由输出
       };
 
-      // 对于OpenRouter，添加额外的headers
+      // 如果有plugins配置（OpenRouter PDF），添加到请求
+      if (plugins) {
+        requestData.plugins = plugins;
+      }
+
+      // 设置请求头
       let headers = {
         'Authorization': `Bearer ${model.api_key}`,
         'Content-Type': 'application/json'
       };
       
-      if (model.api_endpoint.includes('openrouter')) {
+      if (isOpenRouter) {
         headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
         headers['X-Title'] = 'AI Platform';
       }
@@ -309,42 +412,22 @@ class AIService {
 
       const response = await axios.post(endpoint, requestData, {
         headers,
-        timeout: 120000 // 延长超时时间以支持图片处理和更长的输出
+        timeout: 120000 // 延长超时时间以支持PDF处理
       });
 
       // 增强调试：保存完整响应
-      if (model.image_generation_enabled) {
+      if (model.image_generation_enabled || messages.some(m => m.file)) {
         const debugDir = '/var/www/ai-platform/logs/debug';
         await fs.mkdir(debugDir, { recursive: true });
         const debugFile = path.join(debugDir, `response_${Date.now()}.json`);
         await fs.writeFile(debugFile, JSON.stringify(response.data, null, 2));
         
-        logger.info('【增强调试】API响应已保存', {
+        logger.info('【调试】API响应已保存', {
           file: debugFile,
           endpoint: model.api_endpoint,
-          modelName: model.name
+          modelName: model.name,
+          hadPDF: messages.some(m => m.file)
         });
-
-        // 详细记录响应结构
-        if (response.data.choices && response.data.choices[0]) {
-          const message = response.data.choices[0].message;
-          logger.info('【增强调试】choices[0].message结构', {
-            hasContent: !!message?.content,
-            contentType: typeof message?.content,
-            hasImages: !!message?.images,
-            imagesType: typeof message?.images,
-            imagesLength: Array.isArray(message?.images) ? message.images.length : 0,
-            messageKeys: message ? Object.keys(message) : []
-          });
-
-          // 如果有images，记录详细信息
-          if (message?.images && Array.isArray(message.images)) {
-            logger.info('【增强调试】发现images字段！', {
-              count: message.images.length,
-              firstImage: message.images[0] ? Object.keys(message.images[0]) : null
-            });
-          }
-        }
       }
 
       return AIService.formatResponse(response.data, model, options);
@@ -491,10 +574,10 @@ class AIService {
       const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length;
       const otherChars = content.length - chineseChars;
       
-      // 如果有图片，额外增加token估算
-      const imageTokens = message.image_url ? 100 : 0;
+      // 如果有图片或文件，额外增加token估算
+      const fileTokens = (message.image_url || message.file) ? 100 : 0;
       
-      return total + Math.ceil(chineseChars * 0.67 + otherChars * 0.25) + imageTokens;
+      return total + Math.ceil(chineseChars * 0.67 + otherChars * 0.25) + fileTokens;
     }, 0);
   }
 

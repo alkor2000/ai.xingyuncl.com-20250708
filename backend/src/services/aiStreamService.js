@@ -1,6 +1,6 @@
 /**
- * 流式AI服务 - 基于业界最佳实践优化
- * 移除所有缓冲机制，实现实时流式传输
+ * 流式AI服务 - 增强PDF支持版本
+ * 基于业界最佳实践优化，支持PDF文档处理
  */
 
 const axios = require('axios');
@@ -47,6 +47,115 @@ class AIStreamService {
   }
 
   /**
+   * 判断是否为OpenRouter端点
+   */
+  static isOpenRouterEndpoint(endpoint) {
+    return endpoint && endpoint.includes('openrouter');
+  }
+
+  /**
+   * 判断文件是否为PDF
+   */
+  static isPDFFile(fileInfo) {
+    if (!fileInfo) return false;
+    
+    // 通过MIME类型判断
+    if (fileInfo.mime_type === 'application/pdf') {
+      return true;
+    }
+    
+    // 通过文件名判断（作为备选）
+    if (fileInfo.url && fileInfo.url.toLowerCase().endsWith('.pdf')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * 处理消息为OpenRouter格式 - 支持PDF
+   */
+  static processMessagesForOpenRouter(messages, model) {
+    return messages.map(msg => {
+      // 如果消息包含PDF文件
+      if (msg.file && this.isPDFFile(msg.file)) {
+        logger.info('处理PDF消息为OpenRouter流式格式', {
+          role: msg.role,
+          hasFile: true,
+          fileUrl: msg.file.url
+        });
+        
+        // OpenRouter的PDF格式：使用content数组
+        return {
+          role: msg.role,
+          content: [
+            {
+              type: 'text',
+              text: msg.content
+            },
+            {
+              type: 'file',
+              file: {
+                filename: 'document.pdf',
+                file_data: msg.file.url
+              }
+            }
+          ]
+        };
+      }
+      
+      // 如果消息包含图片
+      if (msg.image_url && model.image_upload_enabled) {
+        return {
+          role: msg.role,
+          content: [
+            { type: 'text', text: msg.content },
+            { type: 'image_url', image_url: { url: msg.image_url } }
+          ]
+        };
+      }
+      
+      // 普通文本消息
+      return {
+        role: msg.role,
+        content: msg.content
+      };
+    });
+  }
+
+  /**
+   * 处理消息为标准格式（非OpenRouter）
+   */
+  static processMessagesStandard(messages, model) {
+    return messages.map(msg => {
+      if (msg.image_url && model.image_upload_enabled) {
+        return {
+          role: msg.role,
+          content: [
+            { type: 'text', text: msg.content },
+            { type: 'image_url', image_url: { url: msg.image_url } }
+          ]
+        };
+      }
+      
+      // 对于PDF文件，在非OpenRouter的情况下，作为文本处理
+      if (msg.file) {
+        logger.warn('非OpenRouter端点不支持PDF直接处理（流式）', {
+          provider: model.provider,
+          endpoint: model.api_endpoint
+        });
+        // 在content中添加文件URL说明
+        return {
+          role: msg.role,
+          content: `${msg.content}\n\n[附件: ${msg.file.url}]`
+        };
+      }
+      
+      return msg;
+    });
+  }
+
+  /**
    * 发送SSE事件 - 严格遵循SSE规范
    */
   static sendSSE(res, event, data) {
@@ -76,7 +185,8 @@ class AIStreamService {
     try {
       logger.info('开始流式AI服务', { 
         model: modelName, 
-        messageCount: messages.length
+        messageCount: messages.length,
+        hasPDFs: messages.some(m => m.file)
       });
 
       const model = await AIModel.findByName(modelName);
@@ -135,19 +245,38 @@ class AIStreamService {
     let isDone = false;
     
     try {
-      // 处理包含图片的消息
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          return {
-            role: msg.role,
-            content: [
-              { type: 'text', text: msg.content },
-              { type: 'image_url', image_url: { url: msg.image_url } }
-            ]
-          };
-        }
-        return msg;
+      // 检查是否为OpenRouter
+      const isOpenRouter = AIStreamService.isOpenRouterEndpoint(model.api_endpoint);
+      
+      logger.info('准备流式请求', {
+        model: model.name,
+        isOpenRouter,
+        hasPDFs: messages.some(m => m.file),
+        hasImages: messages.some(m => m.image_url)
       });
+
+      // 根据端点类型处理消息
+      let processedMessages;
+      let plugins = undefined;
+      
+      if (isOpenRouter) {
+        processedMessages = AIStreamService.processMessagesForOpenRouter(messages, model);
+        
+        // 如果有PDF文件，添加plugins配置
+        if (messages.some(m => m.file)) {
+          plugins = [
+            {
+              id: 'file-parser',
+              pdf: {
+                engine: 'pdf-text'  // 使用免费的pdf-text引擎
+              }
+            }
+          ];
+          logger.info('为PDF添加OpenRouter流式插件配置', { engine: 'pdf-text' });
+        }
+      } else {
+        processedMessages = AIStreamService.processMessagesStandard(messages, model);
+      }
 
       const requestData = {
         model: model.name,
@@ -156,25 +285,42 @@ class AIStreamService {
         stream: true
       };
 
+      // 如果有plugins配置（OpenRouter PDF），添加到请求
+      if (plugins) {
+        requestData.plugins = plugins;
+      }
+
       const endpoint = model.api_endpoint.endsWith('/chat/completions') ? 
         model.api_endpoint : 
         `${model.api_endpoint}/chat/completions`;
+
+      // 设置请求头
+      let headers = {
+        'Authorization': `Bearer ${model.api_key}`,
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
+      };
+      
+      if (isOpenRouter) {
+        headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
+        headers['X-Title'] = 'AI Platform';
+      }
 
       // 发起流式请求
       const response = await axios({
         method: 'post',
         url: endpoint,
         data: requestData,
-        headers: {
-          'Authorization': `Bearer ${model.api_key}`,
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
+        headers: headers,
         responseType: 'stream',
         timeout: 120000
       });
 
-      logger.info('开始接收流式响应');
+      logger.info('开始接收流式响应', {
+        model: model.name,
+        isOpenRouter,
+        hadPDF: messages.some(m => m.file)
+      });
 
       return new Promise((resolve, reject) => {
         response.data.on('data', (chunk) => {
@@ -313,19 +459,8 @@ class AIStreamService {
       const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
       const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
 
-      // 处理包含图片的消息
-      const processedMessages = messages.map(msg => {
-        if (msg.image_url && model.image_upload_enabled) {
-          return {
-            role: msg.role,
-            content: [
-              { type: 'text', text: msg.content },
-              { type: 'image_url', image_url: { url: msg.image_url } }
-            ]
-          };
-        }
-        return msg;
-      });
+      // Azure不支持PDF，使用标准格式处理消息
+      const processedMessages = AIStreamService.processMessagesStandard(messages, model);
 
       const requestData = {
         messages: processedMessages,

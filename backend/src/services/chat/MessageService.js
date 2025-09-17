@@ -86,10 +86,37 @@ class MessageService {
   }
   
   /**
-   * 构建AI请求的消息上下文
+   * 判断文件是否为PDF
+   */
+  static isPDFFile(fileInfo) {
+    if (!fileInfo) return false;
+    
+    // 通过MIME类型判断
+    if (fileInfo.mime_type === 'application/pdf') {
+      return true;
+    }
+    
+    // 通过文件名判断（作为备选）
+    if (fileInfo.original_name && fileInfo.original_name.toLowerCase().endsWith('.pdf')) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * 判断文件是否为图片
+   */
+  static isImageFile(fileInfo) {
+    if (!fileInfo) return false;
+    return fileInfo.mime_type && fileInfo.mime_type.startsWith('image/');
+  }
+  
+  /**
+   * 构建AI请求的消息上下文 - 增强版，支持PDF
    */
   static async buildAIContext(params) {
-    const { conversation, recentMessages, systemPromptId, moduleCombinationId, userId, aiModel } = params;
+    const { conversation, recentMessages, systemPromptId, moduleCombinationId, userId, aiModel, currentContent, currentFileInfo } = params;
     const aiMessages = [];
     
     // 处理系统提示词
@@ -154,15 +181,60 @@ class MessageService {
     for (const msg of recentMessages) {
       const aiMsg = msg.toAIFormat();
       
-      // 如果消息有图片，添加图片信息
-      if (msg.file_id && aiModel.image_upload_enabled) {
+      // 处理历史消息中的文件
+      if (msg.file_id && (aiModel.image_upload_enabled || aiModel.document_upload_enabled)) {
         const file = await File.findById(msg.file_id);
-        if (file && file.mime_type && file.mime_type.startsWith('image/')) {
-          aiMsg.image_url = file.url;
+        if (file) {
+          // 判断文件类型
+          if (this.isImageFile(file)) {
+            // 图片使用image_url
+            aiMsg.image_url = file.url;
+          } else if (this.isPDFFile(file)) {
+            // PDF使用file格式（OpenRouter格式）
+            aiMsg.file = {
+              url: file.url,
+              mime_type: file.mime_type
+            };
+          }
+          
+          logger.info('处理历史消息中的文件', {
+            messageId: msg.id,
+            fileId: msg.file_id,
+            fileType: this.isImageFile(file) ? 'image' : (this.isPDFFile(file) ? 'pdf' : 'document'),
+            mimeType: file.mime_type
+          });
         }
       }
       
       aiMessages.push(aiMsg);
+    }
+    
+    // 添加当前消息（需要在调用处单独处理）
+    if (currentContent) {
+      const currentMsg = {
+        role: 'user',
+        content: currentContent
+      };
+      
+      // 处理当前消息的文件
+      if (currentFileInfo) {
+        if (this.isImageFile(currentFileInfo)) {
+          currentMsg.image_url = currentFileInfo.url;
+        } else if (this.isPDFFile(currentFileInfo)) {
+          currentMsg.file = {
+            url: currentFileInfo.url,
+            mime_type: currentFileInfo.mime_type
+          };
+        }
+        
+        logger.info('处理当前消息中的文件', {
+          fileType: this.isImageFile(currentFileInfo) ? 'image' : (this.isPDFFile(currentFileInfo) ? 'pdf' : 'document'),
+          mimeType: currentFileInfo.mime_type,
+          url: currentFileInfo.url
+        });
+      }
+      
+      aiMessages.push(currentMsg);
     }
     
     return aiMessages;
@@ -227,14 +299,12 @@ class MessageService {
   
   /**
    * 准备实际发送的内容
+   * 注意：对于PDF文件，不再附加URL到content中，而是使用专门的file字段
    */
   static buildActualContent(content, fileInfo) {
-    let actualContent = content.trim();
-    if (fileInfo && !fileInfo.mime_type?.startsWith('image/')) {
-      // 是文档，直接附加URL供AI访问
-      actualContent = `${content.trim()}\n\n${fileInfo.url}`;
-    }
-    return actualContent;
+    // PDF和图片都不需要附加URL到content中
+    // OpenRouter会通过专门的字段处理文件
+    return content.trim();
   }
 }
 
