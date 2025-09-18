@@ -26,7 +26,8 @@ import {
   CloudServerOutlined,
   DollarOutlined,
   VideoCameraOutlined,
-  BankOutlined
+  BankOutlined,
+  ShareAltOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -56,7 +57,8 @@ import {
   HtmlEditorSettings,
   OSSSettings,
   StorageCreditsConfig,
-  OrgApplicationManagement
+  OrgApplicationManagement,
+  MindmapCreditsConfig
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -632,6 +634,16 @@ const Settings = () => {
           </span>
         ),
         children: <StorageCreditsConfig />
+      },
+      {
+        key: 'mindmapCredits',
+        label: (
+          <span>
+            <ShareAltOutlined />
+            思维导图积分配置
+          </span>
+        ),
+        children: <MindmapCreditsConfig />
       }
     ] : []),
     {

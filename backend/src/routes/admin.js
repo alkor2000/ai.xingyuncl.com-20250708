@@ -34,6 +34,7 @@ const orgApplicationRoutes = require('./admin/orgApplicationRoutes'); // 机构�
 // 导入控制器（用于积分路由）
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
 const SystemStatsController = require('../controllers/admin/SystemStatsController');
+const MindmapCreditsController = require('../controllers/admin/MindmapCreditsController'); // 思维导图积分控制器
 
 const router = express.Router();
 
@@ -115,6 +116,19 @@ router.use('/org-applications', orgApplicationRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);
+
+// ===== 思维导图积分配置路由 =====
+// 获取思维导图积分配置
+router.get('/mindmap-credits/config',
+  canManageSystem(),
+  MindmapCreditsController.getConfig
+);
+
+// 更新思维导图积分配置
+router.put('/mindmap-credits/config',
+  canManageSystem(),
+  MindmapCreditsController.updateConfig
+);
 
 // ===== 缓存管理路由（新增）=====
 // 缓存统计

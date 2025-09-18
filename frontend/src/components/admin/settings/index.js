@@ -1,7 +1,6 @@
 /**
  * 管理设置组件导出文件
  */
-
 // 系统设置相关组件
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
@@ -24,3 +23,4 @@ export { default as HtmlEditorSettings } from './HtmlEditorSettings'
 export { default as OSSSettings } from './OSSSettings'
 export { default as StorageCreditsConfig } from './StorageCreditsConfig'
 export { default as OrgApplicationManagement } from './OrgApplicationManagement'
+export { default as MindmapCreditsConfig } from './MindmapCreditsConfig'
