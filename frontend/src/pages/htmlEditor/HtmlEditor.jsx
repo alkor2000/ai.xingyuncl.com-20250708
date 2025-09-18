@@ -1,5 +1,5 @@
 /**
- * HTML编辑器主页面 - 自动页面管理增强版
+ * HTML编辑器主页面 - 自动页面管理增强版（修复积分加载时序问题）
  * 自动加载或创建页面，无欢迎页
  */
 
@@ -52,7 +52,8 @@ import {
   CodeOutlined,
   Html5Outlined,
   AppstoreOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';
@@ -103,7 +104,7 @@ const generateTimestampTitle = () => {
 
 const HtmlEditor = () => {
   const { t } = useTranslation();
-  const { user } = useAuthStore();
+  const { user, getCurrentUser } = useAuthStore();
   const {
     projects,
     pages,
@@ -144,17 +145,64 @@ const HtmlEditor = () => {
     credits_per_publish: 5
   });
   const [userCredits, setUserCredits] = useState(0);
+  const [creditsLoading, setCreditsLoading] = useState(true); // 添加积分加载状态
   const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [loadingPages, setLoadingPages] = useState(false);
   const [autoPageCreated, setAutoPageCreated] = useState(false); // 防止重复创建
 
-  // 初始化加载
+  // 初始化加载 - 优化积分获取逻辑
   useEffect(() => {
     getProjects();
-    fetchCreditsConfig();
-    fetchUserCredits();
+    initializeCredits();
   }, []);
+
+  // 监听user变化，自动更新积分
+  useEffect(() => {
+    if (user) {
+      updateUserCredits();
+    }
+  }, [user]);
+
+  // 初始化积分信息（合并配置和用户积分获取）
+  const initializeCredits = async () => {
+    setCreditsLoading(true);
+    try {
+      // 并行获取配置和用户信息
+      const [configResponse] = await Promise.all([
+        fetchCreditsConfig(),
+        getCurrentUser() // 确保获取最新用户信息
+      ]);
+      
+      // 更新用户积分
+      updateUserCredits();
+      
+    } catch (error) {
+      console.error('初始化积分信息失败:', error);
+      // 即使失败也更新用户积分（从本地状态）
+      updateUserCredits();
+    } finally {
+      setCreditsLoading(false);
+    }
+  };
+
+  // 从authStore更新用户积分
+  const updateUserCredits = () => {
+    if (user) {
+      // 优先使用credits_stats中的remaining
+      let credits = 0;
+      if (user.credits_stats && typeof user.credits_stats.remaining !== 'undefined') {
+        credits = user.credits_stats.remaining;
+      } else if (typeof user.credits_quota !== 'undefined' && typeof user.used_credits !== 'undefined') {
+        credits = (user.credits_quota || 0) - (user.used_credits || 0);
+      } else if (typeof user.credits !== 'undefined') {
+        credits = user.credits;
+      }
+      
+      setUserCredits(Math.max(0, credits));
+      console.log('更新用户积分:', credits);
+    }
+  };
 
   // 自动选择默认项目
   useEffect(() => {
@@ -173,23 +221,21 @@ const HtmlEditor = () => {
       const response = await apiClient.get('/html-editor/credits-config');
       if (response.data.success) {
         setCreditsConfig(response.data.data);
+        return response.data.data;
       }
     } catch (error) {
       console.error('获取积分配置失败:', error);
     }
+    return null;
   };
 
-  // 获取用户当前积分
-  const fetchUserCredits = async () => {
+  // 刷新用户积分（操作后调用）
+  const refreshUserCredits = async () => {
     try {
-      const response = await apiClient.get('/auth/me');
-      if (response.data.success) {
-        const userData = response.data.data.user;
-        const credits = (userData.credits_quota || 0) - (userData.used_credits || 0);
-        setUserCredits(Math.max(0, credits));
-      }
+      await getCurrentUser();
+      updateUserCredits();
     } catch (error) {
-      console.error('获取用户积分失败:', error);
+      console.error('刷新用户积分失败:', error);
     }
   };
 
@@ -201,6 +247,21 @@ const HtmlEditor = () => {
   // 格式化积分显示（保存按钮专用，不显示免费）
   const formatCreditsDisplayForSave = (credits) => {
     return credits === 0 ? '' : `(${credits} 积分)`;
+  };
+
+  // 检查是否可以执行需要积分的操作
+  const canPerformCreditAction = (requiredCredits, actionName) => {
+    if (creditsLoading) {
+      message.warning('积分信息加载中，请稍候...');
+      return false;
+    }
+    
+    if (requiredCredits > 0 && userCredits < requiredCredits) {
+      message.error(`积分不足！${actionName}需要 ${requiredCredits} 积分，当前余额 ${userCredits} 积分`);
+      return false;
+    }
+    
+    return true;
   };
 
   // 加载选中页面的内容
@@ -241,12 +302,20 @@ const HtmlEditor = () => {
           await loadPage(firstPage.id);
           message.info(`已加载页面: ${firstPage.title}`);
         } else {
+          // 等待积分加载完成
+          if (creditsLoading) {
+            console.log('等待积分信息加载...');
+            // 设置一个定时器重试
+            setTimeout(() => autoHandlePage(projectId), 500);
+            return;
+          }
+          
           // 如果没有页面，自动创建一个
           setAutoPageCreated(true);
           const autoTitle = generateTimestampTitle();
           
           // 检查积分是否足够
-          if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
+          if (!canPerformCreditAction(creditsConfig.credits_per_page, '创建页面')) {
             message.warning('积分不足，无法自动创建页面，请充值后手动创建');
             setHtmlContent(BLANK_HTML_TEMPLATE);
             return;
@@ -267,9 +336,9 @@ const HtmlEditor = () => {
             await loadPage(newPage.id);
             setHtmlContent(BLANK_HTML_TEMPLATE);
             
-            // 刷新页面列表
+            // 刷新页面列表和积分
             await getPages(projectId);
-            fetchUserCredits();
+            await refreshUserCredits();
           } catch (error) {
             console.error('自动创建页面失败:', error);
             message.error('自动创建页面失败，请手动创建');
@@ -418,8 +487,7 @@ const HtmlEditor = () => {
       return;
     }
 
-    if (creditsConfig.credits_per_page > 0 && userCredits < creditsConfig.credits_per_page) {
-      message.error(`积分不足！创建页面需要 ${creditsConfig.credits_per_page} 积分，当前余额 ${userCredits} 积分`);
+    if (!canPerformCreditAction(creditsConfig.credits_per_page, '创建页面')) {
       return;
     }
 
@@ -441,7 +509,7 @@ const HtmlEditor = () => {
       setHtmlContent(BLANK_HTML_TEMPLATE);
       
       await getPages(selectedProject.id);
-      fetchUserCredits();
+      await refreshUserCredits();
     } catch (error) {
       message.error(error.message || '创建页面失败');
     }
@@ -454,8 +522,7 @@ const HtmlEditor = () => {
       return;
     }
 
-    if (creditsConfig.credits_per_update > 0 && userCredits < creditsConfig.credits_per_update) {
-      message.error(`积分不足！保存页面需要 ${creditsConfig.credits_per_update} 积分，当前余额 ${userCredits} 积分`);
+    if (!canPerformCreditAction(creditsConfig.credits_per_update, '保存页面')) {
       return;
     }
 
@@ -467,7 +534,7 @@ const HtmlEditor = () => {
         js_content: ''
       });
       message.success('页面保存成功');
-      fetchUserCredits();
+      await refreshUserCredits();
       // 刷新页面列表以更新状态
       await getPages(selectedProject?.id);
     } catch (error) {
@@ -547,16 +614,7 @@ const HtmlEditor = () => {
       return;
     }
 
-    if (creditsConfig.credits_per_publish > 0 && userCredits < creditsConfig.credits_per_publish) {
-      Modal.error({
-        title: '积分不足',
-        content: (
-          <div>
-            <p>生成永久链接需要 <Text strong>{creditsConfig.credits_per_publish}</Text> 积分</p>
-            <p>您当前积分余额：<Text type="danger">{userCredits}</Text> 积分</p>
-          </div>
-        )
-      });
+    if (!canPerformCreditAction(creditsConfig.credits_per_publish, '生成永久链接')) {
       return;
     }
 
@@ -577,7 +635,7 @@ const HtmlEditor = () => {
           const result = await togglePublish(selectedPageId);
           if (result.is_published) {
             showPermalinkModal(result);
-            fetchUserCredits();
+            await refreshUserCredits();
           }
         } catch (error) {
           message.error('生成链接失败');
@@ -803,6 +861,10 @@ const HtmlEditor = () => {
       boxShadow: '0 2px 8px rgba(52, 199, 89, 0.3)',
       color: 'white'
     },
+    saveButtonDisabled: {
+      background: 'rgba(52, 199, 89, 0.5)',
+      cursor: 'not-allowed'
+    },
     previewButton: {
       background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)',
       borderColor: 'transparent',
@@ -846,6 +908,10 @@ const HtmlEditor = () => {
       transition: 'all 0.2s ease',
       boxShadow: '0 2px 8px rgba(0, 122, 255, 0.3)'
     },
+    linkButtonDisabled: {
+      background: 'rgba(0, 122, 255, 0.5)',
+      cursor: 'not-allowed'
+    },
     iconButton: {
       borderRadius: 8,
       width: 38,
@@ -887,11 +953,14 @@ const HtmlEditor = () => {
           />
           <Button 
             type="primary"
-            style={iosStyles.saveButton}
+            style={{
+              ...iosStyles.saveButton,
+              ...(creditsLoading || !selectedPageId ? iosStyles.saveButtonDisabled : {})
+            }}
             icon={<SaveOutlined />} 
             onClick={handleSavePage}
             loading={isSaving}
-            disabled={!selectedPageId}
+            disabled={!selectedPageId || creditsLoading}
           >
             保存 {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}
           </Button>
@@ -917,10 +986,13 @@ const HtmlEditor = () => {
             清空
           </Button>
           <Button
-            style={iosStyles.linkButton}
+            style={{
+              ...iosStyles.linkButton,
+              ...(creditsLoading || !selectedPageId ? iosStyles.linkButtonDisabled : {})
+            }}
             icon={<LinkOutlined />}
             onClick={handleGeneratePermalink}
-            disabled={!selectedPageId}
+            disabled={!selectedPageId || creditsLoading}
           >
             生成链接 ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
           </Button>
@@ -952,10 +1024,16 @@ const HtmlEditor = () => {
         <Space size={12}>
           <Tag style={{ 
             ...iosStyles.tag, 
-            background: 'linear-gradient(135deg, #FFD60A 0%, #FFCC00 100%)', 
-            color: '#000' 
+            background: creditsLoading 
+              ? 'linear-gradient(135deg, #C7C7CC 0%, #B0B0B5 100%)'
+              : 'linear-gradient(135deg, #FFD60A 0%, #FFCC00 100%)', 
+            color: creditsLoading ? '#666' : '#000' 
           }}>
-            <DollarOutlined /> 积分: {userCredits}
+            {creditsLoading ? (
+              <><LoadingOutlined spin /> 加载中...</>
+            ) : (
+              <><DollarOutlined /> 积分: {userCredits}</>
+            )}
           </Tag>
           <Select
             value={previewMode}
@@ -1089,6 +1167,7 @@ const HtmlEditor = () => {
                     }}
                     icon={<PlusOutlined />}
                     onClick={handleOpenPageModal}
+                    disabled={creditsLoading}
                   >
                     新建
                   </Button>
@@ -1160,6 +1239,7 @@ const HtmlEditor = () => {
                       }}
                       icon={<FileAddOutlined />}
                       onClick={handleOpenPageModal}
+                      disabled={creditsLoading}
                     >
                       创建第一个页面
                     </Button>
@@ -1317,6 +1397,7 @@ const HtmlEditor = () => {
               background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)',
               border: 'none'
             }}
+            disabled={creditsLoading}
           >
             创建 ({formatCreditsDisplay(creditsConfig.credits_per_page)})
           </Button>
@@ -1347,9 +1428,14 @@ const HtmlEditor = () => {
                 创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
               </Text>
               <Text type="secondary">
-                您当前积分余额：<Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
-                  {userCredits}
-                </Text> 积分
+                您当前积分余额：
+                {creditsLoading ? (
+                  <Text strong><LoadingOutlined spin /> 加载中...</Text>
+                ) : (
+                  <Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
+                    {userCredits}
+                  </Text>
+                )} 积分
               </Text>
             </Space>
           </>
