@@ -27,6 +27,7 @@ const videoRoutes = require('./routes/video'); // 新增视频生成路由
 const htmlEditorRoutes = require('./routes/htmlEditor'); // 新增HTML编辑器路由
 const storageRoutes = require('./routes/storageRoutes'); // 新增存储管理路由
 const mindmapRoutes = require('./routes/mindmapRoutes'); // 新增思维导图路由
+const ocrRoutes = require('./routes/ocrRoutes'); // 新增OCR路由
 
 // 创建 Express 应用
 const app = express();
@@ -152,6 +153,7 @@ app.use('/api/video', videoRoutes); // 新增视频生成路由
 app.use('/api/html-editor', htmlEditorRoutes); // 新增HTML编辑器路由
 app.use('/api/storage', storageRoutes); // 新增存储管理路由
 app.use('/api/mindmap', mindmapRoutes); // 新增思维导图路由
+app.use('/api/ocr', ocrRoutes); // 新增OCR路由
 
 // 公开的HTML页面访问路由（不需要认证）
 app.get('/pages/:userId/:slug', require('./controllers/HtmlEditorController').previewPage);

@@ -51,6 +51,9 @@ const StorageManager = React.lazy(() => import('./pages/storage/StorageManager')
 // 思维导图页面组件 - 懒加载
 const Mindmap = React.lazy(() => import('./pages/mindmap/Mindmap'))
 
+// OCR页面组件 - 懒加载
+const OcrTool = React.lazy(() => import('./pages/ocr/OcrTool'))
+
 // 布局组件 - 使用新的BasicLayout
 import BasicLayout from './layouts/BasicLayout'
 
@@ -255,6 +258,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <Mindmap />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* OCR页面路由 - 懒加载 */}
+                        <Route 
+                          path="/ocr" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <OcrTool />
                             </LazyLoadingWrapper>
                           } 
                         />

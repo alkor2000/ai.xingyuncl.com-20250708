@@ -27,7 +27,8 @@ import {
   DollarOutlined,
   VideoCameraOutlined,
   BankOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  ScanOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -58,7 +59,8 @@ import {
   OSSSettings,
   StorageCreditsConfig,
   OrgApplicationManagement,
-  MindmapCreditsConfig
+  MindmapCreditsConfig,
+  OcrSettings
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -537,6 +539,16 @@ const Settings = () => {
           </span>
         ),
         children: <VideoModelSettings />
+      },
+      {
+        key: 'ocrSettings',
+        label: (
+          <span>
+            <ScanOutlined />
+            OCR识别配置
+          </span>
+        ),
+        children: <OcrSettings disabled={!isSuperAdmin} />
       },
       {
         key: 'systemPrompts',
