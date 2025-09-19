@@ -99,10 +99,13 @@ class OCRService {
     let taskId = null;
     
     try {
+      // 修复文件名编码问题
+      const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      
       // 创建OCR任务记录
       taskId = await this.createTask(userId, {
         task_type: 'image',
-        file_name: file.originalname,
+        file_name: fileName,  // 使用修复后的文件名
         file_size: file.size,
         file_type: file.mimetype
       });
@@ -179,10 +182,13 @@ class OCRService {
     let taskId = null;
     
     try {
+      // 修复文件名编码问题
+      const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      
       // 创建OCR任务记录
       taskId = await this.createTask(userId, {
         task_type: 'pdf',
-        file_name: file.originalname,
+        file_name: fileName,  // 使用修复后的文件名
         file_size: file.size,
         file_type: file.mimetype,
         page_count: options.pageCount || 1
@@ -247,136 +253,153 @@ class OCRService {
   }
 
   /**
-   * 调用Mistral OCR API
+   * 调用Mistral OCR API - 使用Python SDK的API格式
    */
   async callMistralOCR(base64Data, mimeType, fileType) {
     try {
-      // 构建文档对象 - 根据官方API文档格式
-      let document = {};
+      // 构建文档对象 - 根据官方Python SDK格式
+      let requestBody = {
+        model: this.model
+      };
       
       if (fileType === 'pdf') {
-        // PDF使用document_url格式
-        document = {
+        // PDF使用document格式
+        requestBody.document = {
           type: "document_url",
           document_url: `data:${mimeType};base64,${base64Data}`
         };
       } else {
-        // 图片使用image_url格式
-        document = {
+        // 图片使用document格式，但内部是image_url
+        requestBody.document = {
           type: "image_url", 
           image_url: `data:${mimeType};base64,${base64Data}`
         };
       }
       
-      // 准备请求体 - 根据官方API文档
-      const requestBody = {
-        model: this.model,
-        document: document
-      };
+      // 添加额外参数以提高识别质量
+      // 注意：include_image_base64 参数可能会增加响应大小
+      // requestBody.include_image_base64 = false;  // 不需要返回图片的base64
       
-      logger.info('调用Mistral OCR API，端点: /v1/ocr');
+      logger.info('调用Mistral OCR API，模型:', this.model);
+      logger.debug('请求体大小:', JSON.stringify(requestBody).length);
       
-      // 调用Mistral OCR API - 使用正确的端点
+      // 调用Mistral OCR API
       const response = await axios.post(
-        'https://api.mistral.ai/v1/ocr',  // 修正端点
+        'https://api.mistral.ai/v1/ocr',
         requestBody,
         {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
-          timeout: 120000 // 120秒超时，PDF可能需要更长时间
+          timeout: 180000, // 180秒超时
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity
         }
       );
       
-      // 处理响应 - 根据官方API响应格式
+      // 处理响应
       const result = response.data;
-      logger.info('OCR API响应成功');
+      logger.info('OCR API响应成功，状态码:', response.status);
       
-      // 调试：记录响应结构
-      logger.debug('OCR API响应结构:', {
+      // 记录响应结构用于调试
+      logger.debug('OCR响应结构:', {
         hasPages: !!result.pages,
         pagesLength: result.pages?.length,
-        firstPageKeys: result.pages?.[0] ? Object.keys(result.pages[0]) : null,
-        hasDocumentAnnotation: !!result.document_annotation
+        pageKeys: result.pages?.[0] ? Object.keys(result.pages[0]).slice(0, 5) : null,
+        hasText: !!result.text,
+        hasMarkdown: !!result.markdown,
+        responseKeys: Object.keys(result).slice(0, 10)
       });
       
-      // 提取文本内容
+      // 提取文本内容 - 根据实际响应格式调整
       let text = '';
       let markdown = '';
       let pageCount = 1;
       
-      // 根据官方API文档，响应格式包含 pages 数组
-      if (result.pages && Array.isArray(result.pages)) {
-        // 处理页面数组
+      // 方案1：如果直接返回text和markdown字段
+      if (result.text || result.markdown) {
+        text = result.text || '';
+        markdown = result.markdown || result.text || '';
+        pageCount = result.page_count || 1;
+      }
+      // 方案2：如果返回pages数组
+      else if (result.pages && Array.isArray(result.pages)) {
         pageCount = result.pages.length;
         
-        // 提取所有页面的文本
         const pageTexts = [];
         const pageMarkdowns = [];
         
         result.pages.forEach((page, index) => {
-          // 修复：正确提取页面中的markdown或text字段
+          // 尝试多种可能的字段名
           let pageText = '';
           let pageMarkdown = '';
           
+          // 优先使用markdown
           if (page.markdown) {
             pageMarkdown = page.markdown;
-            pageText = page.markdown; // 如果没有纯文本，使用markdown
+            pageText = page.text || page.markdown;
           } else if (page.text) {
             pageText = page.text;
-            pageMarkdown = page.text; // 如果没有markdown，使用纯文本
+            pageMarkdown = page.text;
           } else if (page.content) {
             pageText = page.content;
             pageMarkdown = page.content;
+          } else if (typeof page === 'string') {
+            // 如果page直接是字符串
+            pageText = page;
+            pageMarkdown = page;
           }
           
-          // 如果是多页，添加页面标记
-          if (result.pages.length > 1) {
-            pageTexts.push(`=== Page ${index + 1} ===\n${pageText}`);
-            pageMarkdowns.push(`## Page ${index + 1}\n${pageMarkdown}`);
+          // 添加页码标记（多页时）
+          if (pageCount > 1) {
+            pageTexts.push(`【第 ${index + 1} 页】\n${pageText}`);
+            pageMarkdowns.push(`## 第 ${index + 1} 页\n\n${pageMarkdown}`);
           } else {
-            // 单页不需要标记
             pageTexts.push(pageText);
             pageMarkdowns.push(pageMarkdown);
           }
         });
         
-        text = pageTexts.join('\n\n');
-        markdown = pageMarkdowns.join('\n\n');
-        
-      } else if (result.document_annotation) {
-        // 如果有文档级别的注释
-        text = result.document_annotation;
-        markdown = result.document_annotation;
-      } else {
-        // 其他可能的响应格式
-        text = result.text || result.content || '';
-        markdown = result.markdown || text;
+        text = pageTexts.join('\n\n---\n\n');
+        markdown = pageMarkdowns.join('\n\n---\n\n');
+      }
+      // 方案3：其他格式
+      else {
+        // 尝试查找任何包含文本的字段
+        text = result.content || result.document || JSON.stringify(result, null, 2);
+        markdown = result.markdown_content || text;
       }
       
-      // 确保返回的内容不为空
+      // 清理识别结果
+      text = this.cleanupOCRResult(text);
+      markdown = this.cleanupOCRResult(markdown);
+      
+      // 确保有内容
       if (!text && !markdown) {
-        logger.warn('OCR API未返回有效文本内容');
-        text = '未能提取到文本内容';
-        markdown = '未能提取到文本内容';
+        logger.warn('OCR未返回有效内容，原始响应:', JSON.stringify(result).substring(0, 500));
+        text = '识别失败：未能提取到文本内容';
+        markdown = text;
       }
       
       return {
         text: text,
         markdown: markdown,
-        confidence: null, // Mistral OCR不返回置信度
+        confidence: result.confidence || null,
         pageCount: pageCount,
         metadata: {
           model: result.model || this.model,
-          usage_info: result.usage_info || {},
-          processing_id: result.id
+          usage: result.usage || {},
+          doc_size_bytes: result.doc_size_bytes,
+          pages_processed: result.pages_processed || pageCount
         }
       };
       
     } catch (error) {
       logger.error('Mistral OCR API调用失败:', {
         status: error.response?.status,
+        statusText: error.response?.statusText,
         data: error.response?.data,
         message: error.message
       });
@@ -386,23 +409,56 @@ class OCRService {
       } else if (error.response?.status === 429) {
         throw new Error('API调用频率限制，请稍后重试');
       } else if (error.response?.status === 413) {
-        throw new Error('文件太大（最大50MB）');
+        throw new Error('文件太大，最大支持50MB');
       } else if (error.response?.status === 400) {
-        const errorMsg = error.response?.data?.detail || error.response?.data?.error?.message || '请求格式错误';
+        const errorMsg = error.response?.data?.message || error.response?.data?.error || '请求格式错误';
         throw new Error(`请求错误: ${errorMsg}`);
-      } else if (error.response?.status === 404) {
-        throw new Error('API端点不存在，请检查API版本');
       } else if (error.response?.status === 422) {
-        const detail = error.response?.data?.detail;
-        if (Array.isArray(detail)) {
-          const errorMsg = detail.map(d => d.msg || d.message).join('; ');
-          throw new Error(`请求验证失败: ${errorMsg}`);
-        }
-        throw new Error('请求验证失败');
+        throw new Error('请求参数验证失败，请检查文件格式');
       } else {
-        throw new Error(`OCR处理失败: ${error.response?.data?.detail || error.response?.data?.error?.message || error.message}`);
+        throw new Error(`OCR处理失败: ${error.response?.data?.message || error.message}`);
       }
     }
+  }
+
+  /**
+   * 清理OCR识别结果
+   */
+  cleanupOCRResult(content) {
+    if (!content) return content;
+    
+    // 移除过多的空行
+    content = content.replace(/\n{4,}/g, '\n\n\n');
+    
+    // 移除只包含分隔符的行
+    content = content.replace(/^[-=_*]{3,}$/gm, '---');
+    
+    // 移除大量重复的空表格
+    // 检测连续的空表格行（只包含 | 和空格）
+    const lines = content.split('\n');
+    const cleanedLines = [];
+    let emptyTableCount = 0;
+    const maxEmptyTableRows = 3; // 最多保留3行空表格
+    
+    for (const line of lines) {
+      // 检测空表格行
+      if (/^\|\s*(\|\s*){2,}$/.test(line.trim())) {
+        emptyTableCount++;
+        if (emptyTableCount <= maxEmptyTableRows) {
+          cleanedLines.push(line);
+        }
+      } else {
+        // 不是空表格行，重置计数
+        if (emptyTableCount > maxEmptyTableRows) {
+          // 添加省略标记
+          cleanedLines.push('... [空表格已省略] ...');
+        }
+        emptyTableCount = 0;
+        cleanedLines.push(line);
+      }
+    }
+    
+    return cleanedLines.join('\n').trim();
   }
 
   /**
@@ -411,8 +467,11 @@ class OCRService {
   async saveFile(userId, file, taskId) {
     await ossService.initialize();
     
+    // 修复文件名编码
+    const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    
     // 生成OSS key
-    const ossKey = ossService.generateOSSKey(userId, file.originalname, 'ocr');
+    const ossKey = ossService.generateOSSKey(userId, fileName, 'ocr');
     
     // 上传文件
     const uploadResult = await ossService.uploadFile(file.buffer, ossKey, {
@@ -513,13 +572,13 @@ class OCRService {
     
     if (totalCredits > 0) {
       const user = await User.findById(userId);
-      // 重要修改：使用正确的transaction_type值 'ocr_consume'
+      // 使用正确的transaction_type值
       await user.consumeCredits(
         totalCredits, 
         null, 
         null, 
         `OCR识别(${type})`, 
-        'ocr_consume'  // 修改为数据库中已有的枚举值
+        'ocr_consume'
       );
     }
     
@@ -527,57 +586,64 @@ class OCRService {
   }
 
   /**
-   * 获取任务详情
+   * 获取任务详情 - 修复查询方法
    */
   async getTask(taskId, userId = null) {
-    let query = `
-      SELECT t.*, 
-        GROUP_CONCAT(
-          JSON_OBJECT(
-            'page_number', r.page_number,
-            'text', r.recognized_text,
-            'markdown', r.markdown_content,
-            'confidence', r.confidence_score
-          )
-        ) as results
-      FROM ocr_tasks t
-      LEFT JOIN ocr_results r ON t.id = r.task_id
-      WHERE t.id = ?
-    `;
-    
-    const params = [taskId];
-    
-    if (userId) {
-      query += ' AND t.user_id = ?';
-      params.push(userId);
-    }
-    
-    query += ' GROUP BY t.id';
-    
-    const result = await dbConnection.query(query, params);
-    
-    if (result.rows.length === 0) {
-      return null;
-    }
-    
-    const task = result.rows[0];
-    
-    // 解析结果
-    if (task.results) {
-      try {
-        task.results = JSON.parse(`[${task.results}]`);
-      } catch (e) {
-        task.results = [];
+    try {
+      // 先查询任务基本信息
+      let taskQuery = `
+        SELECT * FROM ocr_tasks WHERE id = ?
+      `;
+      
+      const taskParams = [taskId];
+      
+      if (userId) {
+        taskQuery += ' AND user_id = ?';
+        taskParams.push(userId);
       }
-    } else {
-      task.results = [];
+      
+      const taskResult = await dbConnection.query(taskQuery, taskParams);
+      
+      if (taskResult.rows.length === 0) {
+        return null;
+      }
+      
+      const task = taskResult.rows[0];
+      
+      // 分别查询结果
+      const resultsQuery = `
+        SELECT page_number, recognized_text as text, 
+               markdown_content as markdown, confidence_score as confidence
+        FROM ocr_results 
+        WHERE task_id = ?
+        ORDER BY page_number
+      `;
+      
+      const resultsResult = await dbConnection.query(resultsQuery, [taskId]);
+      
+      // 清理结果
+      task.results = resultsResult.rows.map(result => ({
+        ...result,
+        text: this.cleanupOCRResult(result.text),
+        markdown: this.cleanupOCRResult(result.markdown)
+      }));
+      
+      // 如果只有一个结果，直接添加到task对象
+      if (task.results.length === 1) {
+        task.text = task.results[0].text;
+        task.markdown = task.results[0].markdown;
+      }
+      
+      return task;
+      
+    } catch (error) {
+      logger.error('获取任务详情失败:', error);
+      throw error;
     }
-    
-    return task;
   }
 
   /**
-   * 获取用户任务历史 - 修复LIMIT/OFFSET参数问题
+   * 获取用户任务历史
    */
   async getUserTasks(userId, options = {}) {
     const { page = 1, limit = 20, status } = options;
@@ -594,16 +660,15 @@ class OCRService {
       WHERE t.user_id = ${dbConnection.pool.escape(userId)}
     `;
     
-    // 添加状态过滤（如果提供）
+    // 添加状态过滤
     if (status) {
       baseQuery += ` AND t.status = ${dbConnection.pool.escape(status)}`;
     }
     
-    // 添加排序和分页（直接使用数字，避免参数化查询问题）
+    // 添加排序和分页
     baseQuery += ` ORDER BY t.created_at DESC LIMIT ${limitNum} OFFSET ${offset}`;
     
     try {
-      // 使用非参数化查询执行（已经通过escape处理了安全问题）
       const connection = await dbConnection.pool.getConnection();
       const [rows] = await connection.query(baseQuery);
       const [countRows] = await connection.query('SELECT FOUND_ROWS() as total');
@@ -620,7 +685,6 @@ class OCRService {
       };
     } catch (error) {
       logger.error('获取任务历史失败:', error);
-      // 返回空结果而不是抛出错误
       return {
         data: [],
         pagination: {
