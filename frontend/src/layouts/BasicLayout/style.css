@@ -210,12 +210,31 @@
   color: #ffffff;
 }
 
-/* ===== 内容区域 ===== */
+/* ===== 内容区域 - 修复滚动问题 ===== */
 .basic-layout-content {
   flex: 1;
   background: #f8f9fa;
-  overflow: hidden;
+  overflow-y: auto; /* 修改：从 hidden 改为 auto，允许垂直滚动 */
+  overflow-x: hidden; /* 禁止水平滚动 */
   position: relative;
+}
+
+/* 为内容区域添加平滑滚动 */
+.basic-layout-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.basic-layout-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.basic-layout-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.basic-layout-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 /* ===== 移动端抽屉 ===== */
@@ -316,6 +335,12 @@
   
   .logo-text {
     font-size: 14px;
+  }
+
+  /* 移动端内容区域也需要能滚动 */
+  .basic-layout-content {
+    height: calc(100vh - 50px);
+    overflow-y: auto;
   }
 }
 

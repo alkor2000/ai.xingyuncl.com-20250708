@@ -15,7 +15,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB限制
-    files: 10 // 批量最多10个文件
+    files: 20 // 批量最多20个文件（从10个提升到20个）
   },
   fileFilter: (req, file, cb) => {
     // 支持的文件类型
@@ -49,8 +49,8 @@ router.post('/process-image', upload.single('image'), OcrController.processImage
 // 处理PDF OCR
 router.post('/process-pdf', upload.single('pdf'), OcrController.processPDF);
 
-// 批量处理文件
-router.post('/process-batch', upload.array('files', 10), OcrController.processBatch);
+// 批量处理文件（最多20个）
+router.post('/process-batch', upload.array('files', 20), OcrController.processBatch);
 
 // 获取任务详情
 router.get('/task/:id', OcrController.getTask);
