@@ -2,11 +2,13 @@
  * 存储管理控制器 - 增强版
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
- * 修改：支持更多通用文件类型上传
+ * 修改：使用磁盘存储代替内存存储，支持大文件上传
  */
 
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
+const crypto = require('crypto');
 const ossService = require('../services/ossService');
 const UserFile = require('../models/UserFile');
 const UserFolder = require('../models/UserFolder');
@@ -52,8 +54,78 @@ const fixFileName = (filename) => {
   }
 };
 
-// 配置multer内存存储
-const storage = multer.memoryStorage();
+/**
+ * 生成唯一的临时文件名
+ */
+const generateTempFileName = (originalName) => {
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(8).toString('hex');
+  const ext = path.extname(originalName);
+  return `temp_${timestamp}_${random}${ext}`;
+};
+
+/**
+ * 获取存储配置
+ * 从数据库动态读取文件大小限制等配置
+ */
+const getStorageConfig = async () => {
+  try {
+    const sql = `SELECT * FROM storage_credits_config_simple WHERE is_active = 1 LIMIT 1`;
+    const { rows } = await dbConnection.query(sql);
+    
+    if (rows.length > 0) {
+      const config = rows[0];
+      return {
+        maxFileSize: config.max_file_size * 1024 * 1024, // 转换为字节
+        maxFiles: 20, // 最大文件数
+        baseCredits: parseInt(config.base_credits),
+        creditsPerInterval: parseFloat(config.credits_per_5mb)
+      };
+    }
+    
+    // 默认配置
+    logger.warn('未找到存储配置，使用默认值');
+    return {
+      maxFileSize: 100 * 1024 * 1024, // 默认100MB
+      maxFiles: 10,
+      baseCredits: 2,
+      creditsPerInterval: 1
+    };
+  } catch (error) {
+    logger.error('获取存储配置失败:', error);
+    // 返回安全的默认值
+    return {
+      maxFileSize: 100 * 1024 * 1024,
+      maxFiles: 10,
+      baseCredits: 2,
+      creditsPerInterval: 1
+    };
+  }
+};
+
+/**
+ * 配置multer磁盘存储
+ * 使用磁盘存储避免内存溢出
+ */
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const tempDir = path.join('/var/www/ai-platform/storage/temp');
+    try {
+      // 确保临时目录存在
+      await fs.mkdir(tempDir, { recursive: true });
+      cb(null, tempDir);
+    } catch (error) {
+      logger.error('创建临时目录失败', { error: error.message });
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    // 修复文件名编码并生成临时文件名
+    file.originalname = fixFileName(file.originalname);
+    const tempFileName = generateTempFileName(file.originalname);
+    cb(null, tempFileName);
+  }
+});
 
 // 文件过滤器 - 增强版，支持更多文件类型
 const fileFilter = (req, file, cb) => {
@@ -116,6 +188,7 @@ const fileFilter = (req, file, cb) => {
     'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed',
     'application/x-7z-compressed', 'application/x-tar', 'application/gzip',
     'application/x-gzip', 'application/x-bzip', 'application/x-bzip2',
+    'application/x-compressed', // 添加对rar文件的支持
     
     // === 设计文件 ===
     'application/postscript', 'application/illustrator', 'image/vnd.adobe.photoshop',
@@ -170,8 +243,8 @@ const fileFilter = (req, file, cb) => {
     return;
   }
   
-  // 2. 如果MIME类型是application/octet-stream，检查扩展名是否安全
-  if (file.mimetype === 'application/octet-stream' && safeExtensions.includes(ext)) {
+  // 2. 如果MIME类型是application/octet-stream或application/x-compressed，检查扩展名是否安全
+  if ((file.mimetype === 'application/octet-stream' || file.mimetype === 'application/x-compressed') && safeExtensions.includes(ext)) {
     cb(null, true);
     return;
   }
@@ -191,15 +264,41 @@ const fileFilter = (req, file, cb) => {
   cb(new Error(`不支持的文件类型: ${file.mimetype} (.${ext})`), false);
 };
 
-// 创建上传中间件
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB
-    files: 10 // 单次最多10个文件
+/**
+ * 创建动态配置的multer中间件
+ * 根据数据库配置动态设置文件大小限制
+ */
+const createUploadMiddleware = async () => {
+  const config = await getStorageConfig();
+  
+  logger.info('创建上传中间件，使用配置:', {
+    maxFileSize: `${config.maxFileSize / 1024 / 1024}MB`,
+    maxFiles: config.maxFiles
+  });
+  
+  return multer({
+    storage: storage,  // 使用磁盘存储
+    fileFilter: fileFilter,
+    limits: {
+      fileSize: config.maxFileSize,
+      files: config.maxFiles
+    }
+  });
+};
+
+/**
+ * 清理临时文件
+ */
+const cleanupTempFile = async (filePath) => {
+  try {
+    if (filePath) {
+      await fs.unlink(filePath);
+      logger.info('临时文件已删除', { filePath });
+    }
+  } catch (error) {
+    logger.error('删除临时文件失败', { filePath, error: error.message });
   }
-});
+};
 
 class StorageController {
   /**
@@ -285,186 +384,263 @@ class StorageController {
   }
 
   /**
-   * 上传文件 - 增强版，支持不同类型文件夹
+   * 上传文件 - 增强版，支持动态配置和不同类型文件夹
    */
-  static uploadFiles = [
-    upload.array('files', 10),
-    async (req, res) => {
-      logger.info('开始处理文件上传请求', {
-        userId: req.user?.id,
-        filesCount: req.files?.length,
-        body: req.body
+  static uploadFiles = async (req, res, next) => {
+    try {
+      // 动态创建上传中间件
+      const uploadMiddleware = await createUploadMiddleware();
+      const upload = uploadMiddleware.array('files');
+      
+      // 处理文件上传
+      upload(req, res, async (err) => {
+        // 处理multer错误
+        if (err) {
+          logger.error('文件上传错误:', {
+            error: err.message,
+            code: err.code,
+            field: err.field
+          });
+          
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            const config = await getStorageConfig();
+            const maxSizeMB = Math.round(config.maxFileSize / 1024 / 1024);
+            return ResponseHelper.error(res, `文件大小不能超过${maxSizeMB}MB`);
+          }
+          
+          if (err.code === 'LIMIT_FILE_COUNT') {
+            const config = await getStorageConfig();
+            return ResponseHelper.error(res, `单次最多上传${config.maxFiles}个文件`);
+          }
+          
+          if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+            return ResponseHelper.error(res, '文件字段名错误');
+          }
+          
+          return ResponseHelper.error(res, err.message || '文件上传失败');
+        }
+        
+        // 继续处理上传逻辑
+        await StorageController.processUploadedFiles(req, res);
+      });
+    } catch (error) {
+      logger.error('创建上传中间件失败:', error);
+      return ResponseHelper.error(res, '服务器配置错误');
+    }
+  };
+  
+  /**
+   * 处理已上传的文件
+   */
+  static async processUploadedFiles(req, res) {
+    logger.info('开始处理文件上传请求', {
+      userId: req.user?.id,
+      filesCount: req.files?.length,
+      body: req.body
+    });
+    
+    const tempFiles = []; // 记录所有临时文件路径，用于清理
+    
+    try {
+      const userId = req.user.id;
+      const { folder_id, is_public } = req.body;
+      
+      if (!req.files || req.files.length === 0) {
+        logger.warn('上传请求中没有文件');
+        return ResponseHelper.error(res, '请选择要上传的文件');
+      }
+      
+      // 记录所有临时文件路径
+      req.files.forEach(file => {
+        tempFiles.push(file.path);
       });
       
-      try {
-        const userId = req.user.id;
-        const { folder_id, is_public } = req.body;
+      // 检查文件夹上传权限
+      if (folder_id) {
+        const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
+        const { rows } = await dbConnection.query(folderSql, [folder_id]);
         
-        if (!req.files || req.files.length === 0) {
-          logger.warn('上传请求中没有文件');
-          return ResponseHelper.error(res, '请选择要上传的文件');
-        }
-        
-        // 再次确保所有文件名都是正确编码的
-        req.files.forEach(file => {
-          file.originalname = fixFileName(file.originalname);
-        });
-        
-        // 检查文件夹上传权限
-        if (folder_id) {
-          const folderSql = 'SELECT * FROM user_folders WHERE id = ?';
-          const { rows } = await dbConnection.query(folderSql, [folder_id]);
-          
-          if (rows.length === 0) {
-            return ResponseHelper.notFound(res, '文件夹不存在');
+        if (rows.length === 0) {
+          // 清理临时文件
+          for (const tempFile of tempFiles) {
+            await cleanupTempFile(tempFile);
           }
-          
-          const folder = rows[0];
-          if (!StorageController.checkFolderPermission(folder, req.user, 'upload')) {
-            return ResponseHelper.forbidden(res, '无权在此文件夹上传文件');
+          return ResponseHelper.notFound(res, '文件夹不存在');
+        }
+        
+        const folder = rows[0];
+        if (!StorageController.checkFolderPermission(folder, req.user, 'upload')) {
+          // 清理临时文件
+          for (const tempFile of tempFiles) {
+            await cleanupTempFile(tempFile);
           }
+          return ResponseHelper.forbidden(res, '无权在此文件夹上传文件');
         }
-        
-        // 检查用户存储空间
-        const userStorage = await UserFile.getUserStorage(userId);
-        const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
-        
-        logger.info('存储空间检查', {
-          used: userStorage.storage_used,
-          quota: userStorage.storage_quota,
-          toUpload: totalSize
-        });
-        
-        if (userStorage.storage_used + totalSize > userStorage.storage_quota) {
-          return ResponseHelper.error(res, '存储空间不足');
-        }
-        
-        // 计算积分消耗
-        const creditCost = await StorageController.calculateCreditCost('upload', req.files);
-        
-        // 检查用户积分
-        const userCredits = await StorageController.getUserCredits(userId);
-        
-        logger.info('积分检查', {
-          available: userCredits,
-          required: creditCost
-        });
-        
-        if (userCredits < creditCost) {
-          return ResponseHelper.error(res, `积分不足，需要${creditCost}积分，当前可用${userCredits}积分`);
-        }
-        
-        // 初始化OSS服务
-        logger.info('初始化OSS服务...');
-        await ossService.initialize();
-        
-        const uploadedFiles = [];
-        const failedFiles = [];
-        
-        // 逐个上传文件
-        for (const file of req.files) {
-          try {
-            const fixedFileName = file.originalname;
-            
-            logger.info('开始上传文件', {
-              filename: fixedFileName,
-              size: file.size,
-              mimetype: file.mimetype
-            });
-            
-            // 生成OSS key
-            const ossKey = ossService.generateOSSKey(userId, fixedFileName, folder_id);
-            logger.info('生成的OSS Key', { ossKey });
-            
-            // 上传到OSS
-            const uploadResult = await ossService.uploadFile(
-              file.buffer,
-              ossKey,
-              {
-                headers: {
-                  'Content-Type': file.mimetype,
-                  'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fixedFileName)}`
-                }
-              }
-            );
-            
-            logger.info('文件上传结果', {
-              filename: fixedFileName,
-              success: uploadResult.success,
-              url: uploadResult.url,
-              isLocal: uploadResult.isLocal
-            });
-            
-            // 生成缩略图URL（如果是图片）
-            let thumbnailUrl = null;
-            if (file.mimetype.startsWith('image/')) {
-              thumbnailUrl = ossService.generateThumbnailUrl(uploadResult.url);
-            }
-            
-            // 保存到数据库 - 记录上传者
-            const fileRecord = await UserFile.create({
-              user_id: userId,
-              uploaded_by: userId, // 记录实际上传者
-              folder_id: folder_id || null,
-              original_name: fixedFileName,
-              stored_name: path.basename(ossKey),
-              oss_key: ossKey,
-              oss_url: uploadResult.url,
-              file_size: file.size,
-              mime_type: file.mimetype,
-              file_ext: path.extname(fixedFileName),
-              thumbnail_url: thumbnailUrl,
-              is_public: is_public === 'true' || is_public === true
-            });
-            
-            uploadedFiles.push(fileRecord);
-          } catch (error) {
-            logger.error('文件上传失败:', {
-              filename: file.originalname,
-              error: error.message,
-              stack: error.stack
-            });
-            failedFiles.push({
-              filename: file.originalname,
-              error: error.message
-            });
-          }
-        }
-        
-        // 扣除积分
-        if (uploadedFiles.length > 0 && creditCost > 0) {
-          await StorageController.deductCredits(userId, creditCost, '文件上传');
-        }
-        
-        const result = {
-          success: uploadedFiles,
-          failed: failedFiles,
-          credits_used: creditCost
-        };
-        
-        logger.info('上传处理完成', {
-          successCount: uploadedFiles.length,
-          failedCount: failedFiles.length,
-          creditsUsed: creditCost
-        });
-        
-        if (uploadedFiles.length === 0) {
-          return ResponseHelper.error(res, '所有文件上传失败', 500, result);
-        } else if (failedFiles.length > 0) {
-          return ResponseHelper.success(res, result, '部分文件上传成功');
-        } else {
-          return ResponseHelper.success(res, result, '文件上传成功');
-        }
-      } catch (error) {
-        logger.error('文件上传处理失败:', {
-          error: error.message,
-          stack: error.stack,
-          userId: req.user?.id
-        });
-        return ResponseHelper.error(res, error.message || '文件上传失败');
       }
+      
+      // 检查用户存储空间
+      const userStorage = await UserFile.getUserStorage(userId);
+      const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+      
+      logger.info('存储空间检查', {
+        used: userStorage.storage_used,
+        quota: userStorage.storage_quota,
+        toUpload: totalSize
+      });
+      
+      if (userStorage.storage_used + totalSize > userStorage.storage_quota) {
+        // 清理临时文件
+        for (const tempFile of tempFiles) {
+          await cleanupTempFile(tempFile);
+        }
+        return ResponseHelper.error(res, '存储空间不足');
+      }
+      
+      // 计算积分消耗
+      const creditCost = await StorageController.calculateCreditCost('upload', req.files);
+      
+      // 检查用户积分
+      const userCredits = await StorageController.getUserCredits(userId);
+      
+      logger.info('积分检查', {
+        available: userCredits,
+        required: creditCost
+      });
+      
+      if (userCredits < creditCost) {
+        // 清理临时文件
+        for (const tempFile of tempFiles) {
+          await cleanupTempFile(tempFile);
+        }
+        return ResponseHelper.error(res, `积分不足，需要${creditCost}积分，当前可用${userCredits}积分`);
+      }
+      
+      // 初始化OSS服务
+      logger.info('初始化OSS服务...');
+      await ossService.initialize();
+      
+      const uploadedFiles = [];
+      const failedFiles = [];
+      
+      // 逐个上传文件到OSS
+      for (const file of req.files) {
+        try {
+          const fixedFileName = file.originalname;
+          
+          logger.info('开始上传文件到OSS', {
+            filename: fixedFileName,
+            size: file.size,
+            mimetype: file.mimetype,
+            tempPath: file.path
+          });
+          
+          // 生成OSS key
+          const ossKey = ossService.generateOSSKey(userId, fixedFileName, folder_id);
+          logger.info('生成的OSS Key', { ossKey });
+          
+          // 读取临时文件
+          const fileBuffer = await fs.readFile(file.path);
+          
+          // 上传到OSS
+          const uploadResult = await ossService.uploadFile(
+            fileBuffer,
+            ossKey,
+            {
+              headers: {
+                'Content-Type': file.mimetype,
+                'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fixedFileName)}`
+              }
+            }
+          );
+          
+          logger.info('文件上传结果', {
+            filename: fixedFileName,
+            success: uploadResult.success,
+            url: uploadResult.url,
+            isLocal: uploadResult.isLocal
+          });
+          
+          // 生成缩略图URL（如果是图片）
+          let thumbnailUrl = null;
+          if (file.mimetype.startsWith('image/')) {
+            thumbnailUrl = ossService.generateThumbnailUrl(uploadResult.url);
+          }
+          
+          // 保存到数据库 - 记录上传者
+          const fileRecord = await UserFile.create({
+            user_id: userId,
+            uploaded_by: userId, // 记录实际上传者
+            folder_id: folder_id || null,
+            original_name: fixedFileName,
+            stored_name: path.basename(ossKey),
+            oss_key: ossKey,
+            oss_url: uploadResult.url,
+            file_size: file.size,
+            mime_type: file.mimetype,
+            file_ext: path.extname(fixedFileName),
+            thumbnail_url: thumbnailUrl,
+            is_public: is_public === 'true' || is_public === true
+          });
+          
+          uploadedFiles.push(fileRecord);
+          
+          // 成功上传后立即删除临时文件
+          await cleanupTempFile(file.path);
+        } catch (error) {
+          logger.error('文件上传失败:', {
+            filename: file.originalname,
+            error: error.message,
+            stack: error.stack
+          });
+          failedFiles.push({
+            filename: file.originalname,
+            error: error.message
+          });
+          
+          // 失败的文件也要删除临时文件
+          await cleanupTempFile(file.path);
+        }
+      }
+      
+      // 扣除积分
+      if (uploadedFiles.length > 0 && creditCost > 0) {
+        await StorageController.deductCredits(userId, creditCost, '文件上传');
+      }
+      
+      const result = {
+        success: uploadedFiles,
+        failed: failedFiles,
+        credits_used: creditCost
+      };
+      
+      logger.info('上传处理完成', {
+        successCount: uploadedFiles.length,
+        failedCount: failedFiles.length,
+        creditsUsed: creditCost
+      });
+      
+      if (uploadedFiles.length === 0) {
+        return ResponseHelper.error(res, '所有文件上传失败', 500, result);
+      } else if (failedFiles.length > 0) {
+        return ResponseHelper.success(res, result, '部分文件上传成功');
+      } else {
+        return ResponseHelper.success(res, result, '文件上传成功');
+      }
+    } catch (error) {
+      logger.error('文件上传处理失败:', {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.id
+      });
+      
+      // 确保清理所有临时文件
+      for (const tempFile of tempFiles) {
+        await cleanupTempFile(tempFile);
+      }
+      
+      return ResponseHelper.error(res, error.message || '文件上传失败');
     }
-  ];
+  }
 
   /**
    * 获取文件列表 - 增强版，包含不同类型文件夹的文件
@@ -772,35 +948,19 @@ class StorageController {
         return 0;
       }
       
-      const sql = `SELECT * FROM storage_credits_config_simple WHERE is_active = 1 LIMIT 1`;
-      const { rows } = await dbConnection.query(sql);
-      
-      if (rows.length === 0) {
-        logger.warn('未找到积分配置，使用默认值');
-        const config = {
-          base_credits: 2,
-          credits_per_5mb: 1,
-          max_file_size: 100
-        };
-        rows.push(config);
-      }
-      
-      const config = rows[0];
+      const config = await getStorageConfig();
       let totalCost = 0;
       
       for (const file of files) {
         const fileSizeMB = file.size / (1024 * 1024);
-        if (fileSizeMB > config.max_file_size) {
-          throw new Error(`文件 ${file.originalname} 超过最大限制 ${config.max_file_size}MB`);
-        }
         
         let fileCredits = 0;
         
         if (fileSizeMB <= 5) {
-          fileCredits = parseInt(config.base_credits);
+          fileCredits = config.baseCredits;
         } else {
           const extraIntervals = Math.ceil((fileSizeMB - 5) / 5);
-          fileCredits = extraIntervals * parseFloat(config.credits_per_5mb);
+          fileCredits = extraIntervals * config.creditsPerInterval;
         }
         
         totalCost += fileCredits;
@@ -808,8 +968,8 @@ class StorageController {
         logger.info('文件积分计算', {
           filename: file.originalname,
           sizeMB: fileSizeMB.toFixed(2),
-          baseCredits: config.base_credits,
-          creditsPerInterval: config.credits_per_5mb,
+          baseCredits: config.baseCredits,
+          creditsPerInterval: config.creditsPerInterval,
           fileCredits: fileCredits,
           calculation: fileSizeMB <= 5 ? '使用基础积分' : `超出${(fileSizeMB - 5).toFixed(2)}MB，${Math.ceil((fileSizeMB - 5) / 5)}个区间`
         });
@@ -818,9 +978,6 @@ class StorageController {
       return Math.ceil(totalCost);
     } catch (error) {
       logger.error('计算积分消耗失败:', error);
-      if (error.message.includes('超过最大限制')) {
-        throw error;
-      }
       return 0;
     }
   }

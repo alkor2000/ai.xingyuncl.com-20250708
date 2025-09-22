@@ -16,8 +16,8 @@ module.exports = {
       log_type: 'json',
       merge_logs: true,
       time: true,
-      max_memory_restart: '500M',
-      node_args: '--max-old-space-size=512',
+      max_memory_restart: '2G',  // 增加到2GB
+      node_args: '--max-old-space-size=2048',  // 增加到2GB
       restart_delay: 5000,
       max_restarts: 10,
       kill_timeout: 5000,
@@ -46,7 +46,7 @@ module.exports = {
       log_type: 'json',
       merge_logs: true,
       time: true,
-      max_memory_restart: '200M',
+      max_memory_restart: '500M',
       restart_delay: 3000,
       max_restarts: 10,
       kill_timeout: 5000,
