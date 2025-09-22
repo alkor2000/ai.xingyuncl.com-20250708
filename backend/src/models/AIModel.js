@@ -1,6 +1,6 @@
 /**
  * AI模型数据模型 - 支持积分消费配置、流式输出、图片上传、文档上传、用户组分配和用户限制
- * 支持Azure OpenAI配置
+ * 支持Azure OpenAI配置和免费模型（0积分）
  */
 
 const dbConnection = require('../database/connection');
@@ -19,9 +19,10 @@ class AIModel {
     this.stream_enabled = data.stream_enabled !== undefined ? data.stream_enabled : true;
     this.image_upload_enabled = data.image_upload_enabled !== undefined ? data.image_upload_enabled : false;
     this.document_upload_enabled = data.document_upload_enabled !== undefined ? data.document_upload_enabled : false;
-    this.credits_per_chat = data.credits_per_chat || 10;
+    // 修复：正确处理0值，使用严格比较
+    this.credits_per_chat = data.credits_per_chat !== undefined ? data.credits_per_chat : 10;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
-    this.sort_order = data.sort_order || 0;
+    this.sort_order = data.sort_order !== undefined ? data.sort_order : 0;
     this.test_status = data.test_status || 'untested';
     this.last_tested_at = data.last_tested_at || null;
     this.created_at = data.created_at || null;
@@ -263,7 +264,7 @@ class AIModel {
   }
 
   /**
-   * 创建新的AI模型配置（支持流式输出、图片上传和文档上传配置）
+   * 创建新的AI模型配置（支持流式输出、图片上传、文档上传配置和免费模型）
    */
   static async create(modelData) {
     try {
@@ -276,9 +277,11 @@ class AIModel {
         stream_enabled = true,
         image_upload_enabled = false,
         document_upload_enabled = false,
-        credits_per_chat = 10,
         sort_order = 0 
       } = modelData;
+
+      // 修复：正确处理credits_per_chat的0值
+      const credits_per_chat = modelData.credits_per_chat !== undefined ? modelData.credits_per_chat : 10;
 
       // 根据模型名称自动推断提供商
       const provider = AIModel.inferProvider(name);
@@ -312,7 +315,8 @@ class AIModel {
         stream_enabled,
         image_upload_enabled,
         document_upload_enabled,
-        credits_per_chat
+        credits_per_chat,
+        is_free_model: credits_per_chat === 0
       });
 
       return await AIModel.findById(rows.insertId);
@@ -353,7 +357,7 @@ class AIModel {
   }
 
   /**
-   * 更新AI模型（支持流式输出、图片上传和文档上传配置）
+   * 更新AI模型（支持流式输出、图片上传、文档上传配置和免费模型）
    */
   async update(updateData) {
     try {
@@ -384,25 +388,28 @@ class AIModel {
       `;
       
       await dbConnection.query(sql, [
-        display_name || this.display_name,
-        shouldUpdateApiKey ? api_key : this.api_key,  // 只有非空字符串才更新
-        shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint,  // 只有非空字符串才更新
+        display_name !== undefined ? display_name : this.display_name,
+        shouldUpdateApiKey ? api_key : this.api_key,
+        shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
         stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
         document_upload_enabled !== undefined ? document_upload_enabled : this.document_upload_enabled,
-        credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
+        credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,  // 支持0值
         is_active !== undefined ? is_active : this.is_active,
         sort_order !== undefined ? sort_order : this.sort_order,
         this.id
       ]);
 
+      const finalCredits = credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat;
+      
       logger.info('AI模型更新成功', { 
         modelId: this.id,
         stream_enabled: stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled: image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
         document_upload_enabled: document_upload_enabled !== undefined ? document_upload_enabled : this.document_upload_enabled,
-        credits_per_chat: credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
+        credits_per_chat: finalCredits,
+        is_free_model: finalCredits === 0,
         apiKeyUpdated: shouldUpdateApiKey,
         apiEndpointUpdated: shouldUpdateApiEndpoint
       });
@@ -668,11 +675,12 @@ class AIModel {
   }
 
   /**
-   * 获取积分消费配置
+   * 获取积分消费配置（支持免费模型）
    */
   getCreditsConfig() {
     return {
-      credits_per_chat: this.credits_per_chat || 10,
+      credits_per_chat: this.credits_per_chat !== undefined ? this.credits_per_chat : 10,
+      is_free: this.credits_per_chat === 0,
       model_name: this.name,
       display_name: this.display_name,
       provider: this.provider
@@ -709,6 +717,13 @@ class AIModel {
    */
   isDocumentUploadEnabled() {
     return this.document_upload_enabled === true || this.document_upload_enabled === 1;
+  }
+
+  /**
+   * 检查是否为免费模型
+   */
+  isFreeModel() {
+    return this.credits_per_chat === 0;
   }
 
   /**
@@ -754,6 +769,7 @@ class AIModel {
       image_upload_enabled: this.image_upload_enabled,
       document_upload_enabled: this.document_upload_enabled,
       credits_per_chat: this.credits_per_chat,
+      is_free: this.credits_per_chat === 0,
       is_active: this.is_active,
       sort_order: this.sort_order,
       test_status: this.test_status,
@@ -779,6 +795,7 @@ class AIModel {
       image_upload_enabled: this.image_upload_enabled,
       document_upload_enabled: this.document_upload_enabled,
       credits_per_chat: this.credits_per_chat,
+      is_free: this.credits_per_chat === 0,
       is_active: this.is_active,
       sort_order: this.sort_order,
       test_status: this.test_status,

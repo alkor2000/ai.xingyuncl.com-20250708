@@ -1,5 +1,5 @@
 /**
- * AI模型列表表格组件 - 支持基于角色的权限控制和分组管理
+ * AI模型列表表格组件 - 支持基于角色的权限控制、分组管理和免费模型
  */
 
 import React, { useState } from 'react'
@@ -20,7 +20,8 @@ import {
   FileTextOutlined,
   WalletOutlined,
   LockOutlined,
-  TeamOutlined
+  TeamOutlined,
+  GiftOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../../stores/authStore'
@@ -147,15 +148,29 @@ const AIModelTable = ({
       title: t('admin.models.table.credits'),
       dataIndex: 'credits_per_chat',
       key: 'credits_per_chat',
-      width: 100,
-      render: (credits) => renderFieldWithPermission('credits_per_chat', credits, (value) => (
-        <Space>
-          <WalletOutlined style={{ color: '#1677ff' }} />
-          <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
-            {value}{t('admin.models.perChat')}
-          </span>
-        </Space>
-      ))
+      width: 120,
+      render: (credits) => renderFieldWithPermission('credits_per_chat', credits, (value) => {
+        // 如果积分为0，显示免费标签
+        if (value === 0) {
+          return (
+            <Space>
+              <GiftOutlined style={{ color: '#52c41a' }} />
+              <Tag color="success" icon={<GiftOutlined />}>
+                免费
+              </Tag>
+            </Space>
+          )
+        }
+        // 否则显示正常的积分数量
+        return (
+          <Space>
+            <WalletOutlined style={{ color: '#1677ff' }} />
+            <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
+              {value}{t('admin.models.perChat')}
+            </span>
+          </Space>
+        )
+      })
     },
     {
       title: t('admin.models.table.streamEnabled'),

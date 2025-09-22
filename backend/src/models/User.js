@@ -1210,8 +1210,8 @@ class User {
   }
 
   /**
-   * 消耗积分 - 使用事务确保原子性
-   * @param {number} amount - 消耗的积分数量
+   * 消耗积分 - 使用事务确保原子性（支持0积分免费模型）
+   * @param {number} amount - 消耗的积分数量（0表示免费模型）
    * @param {number} modelId - 相关模型ID（可选）
    * @param {string} conversationId - 相关会话ID（可选）
    * @param {string} reason - 消费原因描述
@@ -1219,8 +1219,55 @@ class User {
    */
   async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费', transactionType = 'chat_consume') {
     try {
-      if (amount <= 0) {
-        throw new Error('消费积分数量必须大于0');
+      // 如果积分为0，表示免费模型，不需要扣除积分
+      if (amount === 0) {
+        logger.info('使用免费模型，不扣除积分', {
+          userId: this.id,
+          modelId,
+          conversationId,
+          transactionType
+        });
+
+        // 记录免费使用历史（可选）
+        const result = await dbConnection.transaction(async (query) => {
+          // 获取当前余额
+          const { rows: balanceRows } = await query(
+            'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
+            [this.id]
+          );
+          const balanceAfter = balanceRows[0].balance;
+
+          // 记录免费使用历史
+          const historySql = `
+            INSERT INTO credit_transactions 
+            (user_id, amount, balance_after, transaction_type, description, 
+             related_model_id, related_conversation_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `;
+          await query(historySql, [
+            this.id, 
+            0, // 免费，不扣除
+            balanceAfter, 
+            transactionType, 
+            reason + ' (免费模型)', 
+            modelId, 
+            conversationId
+          ]);
+
+          return { balanceAfter };
+        });
+
+        return {
+          success: true,
+          amount: 0,
+          balanceAfter: result.balanceAfter,
+          message: '免费模型使用成功'
+        };
+      }
+
+      // 非零积分，执行原有的扣除逻辑
+      if (amount < 0) {
+        throw new Error('消费积分数量不能为负数');
       }
 
       // 检查是否过期

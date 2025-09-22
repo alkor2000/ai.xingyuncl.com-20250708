@@ -344,7 +344,7 @@ class ChatControllerRefactored {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 2. 获取AI模型配置
+      // 2. 获取AI模型配置 - 修复：正确处理credits_per_chat的0值
       const availableModels = await CacheService.getCachedUserModels(
         userId,
         userGroupId,
@@ -352,7 +352,8 @@ class ChatControllerRefactored {
       );
       
       const aiModel = availableModels.find(m => m.name === conversation.model_name);
-      const requiredCredits = aiModel?.credits_per_chat || 10;
+      // 修复：使用严格判断，支持0积分（免费模型）
+      const requiredCredits = aiModel?.credits_per_chat !== undefined ? aiModel.credits_per_chat : 10;
 
       // 3. 获取用户信息
       const user = await User.findById(userId);
@@ -378,6 +379,7 @@ class ChatControllerRefactored {
         userId,
         conversationId: id,
         requiredCredits,
+        isFreeModel: requiredCredits === 0,
         currentBalance: user.getCredits()
       });
 
@@ -619,6 +621,7 @@ class ChatControllerRefactored {
   /**
    * 获取可用的AI模型列表
    * GET /api/chat/models
+   * 修复：正确处理0积分（免费模型）
    */
   static async getModels(req, res) {
     try {
@@ -632,20 +635,28 @@ class ChatControllerRefactored {
         async () => await AIModel.getUserAvailableModels(userId, userGroupId)
       );
       
-      // 添加额外信息
-      const modelsWithInfo = models.map(model => ({
-        ...model,
-        credits_per_chat: model.credits_per_chat || 10,
-        credits_display: `${model.credits_per_chat || 10} 积分/次`,
-        image_upload_enabled: !!model.image_upload_enabled,
-        image_generation_enabled: !!model.image_generation_enabled,
-        document_upload_enabled: !!model.document_upload_enabled
-      }));
+      // 添加额外信息 - 修复：正确处理0积分（免费模型）
+      const modelsWithInfo = models.map(model => {
+        // 使用严格判断避免0被当作falsy值
+        const credits = model.credits_per_chat !== undefined ? model.credits_per_chat : 10;
+        const isFree = credits === 0;
+        
+        return {
+          ...model,
+          credits_per_chat: credits,
+          credits_display: isFree ? '免费' : `${credits} 积分/次`,
+          is_free: isFree,
+          image_upload_enabled: !!model.image_upload_enabled,
+          image_generation_enabled: !!model.image_generation_enabled,
+          document_upload_enabled: !!model.document_upload_enabled
+        };
+      });
       
       logger.info('获取用户可用AI模型列表', {
         userId,
         groupId: userGroupId,
-        modelCount: modelsWithInfo.length
+        modelCount: modelsWithInfo.length,
+        freeModels: modelsWithInfo.filter(m => m.is_free).length
       });
       
       return ResponseHelper.success(res, modelsWithInfo, '获取AI模型列表成功');
