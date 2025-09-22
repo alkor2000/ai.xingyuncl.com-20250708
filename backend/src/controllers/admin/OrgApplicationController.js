@@ -1,5 +1,5 @@
 /**
- * 机构申请控制器 - 添加完整配置获取和邮件通知
+ * 机构申请控制器 - 支持完整字段标签自定义
  */
 
 const dbConnection = require('../../database/connection');
@@ -12,7 +12,7 @@ const SystemConfig = require('../../models/SystemConfig');
 
 class OrgApplicationController {
   /**
-   * 获取申请表单配置（公开接口）- 只返回前端显示需要的字段
+   * 获取申请表单配置（公开接口）- 返回所有字段标签
    */
   static async getFormConfig(req, res) {
     try {
@@ -21,18 +21,22 @@ class OrgApplicationController {
           button_text,
           button_visible,
           application_rules,
-          field_4_label,
-          field_4_required,
-          field_4_type,
-          field_4_options,
-          field_5_label,
-          field_5_required,
-          field_5_type,
-          field_5_options,
-          field_6_label,
-          field_6_required,
-          field_6_type,
-          field_6_options,
+          org_name_label,
+          applicant_email_label,
+          business_license_label,
+          invitation_code_label,
+          contact_name_label,
+          contact_name_required,
+          contact_name_type,
+          contact_name_options,
+          contact_phone_label,
+          contact_phone_required,
+          contact_phone_type,
+          contact_phone_options,
+          application_reason_label,
+          application_reason_required,
+          application_reason_type,
+          application_reason_options,
           invitation_code_required
         FROM application_form_config
         LIMIT 1
@@ -45,32 +49,62 @@ class OrgApplicationController {
           button_text: '申请企业账号',
           button_visible: true,
           application_rules: '',
-          fields: []
+          field_labels: {
+            org_name: '企业/组织/学校名称',
+            applicant_email: '申请人邮箱',
+            business_license: '营业执照',
+            invitation_code: '邀请码'
+          },
+          custom_fields: []
         });
       }
       
       const config = rows[0];
-      const fields = [];
+      const customFields = [];
       
-      // 构建动态字段配置
-      for (let i = 4; i <= 6; i++) {
-        if (config[`field_${i}_label`]) {
-          fields.push({
-            name: `custom_field_${i}`,
-            label: config[`field_${i}_label`],
-            required: config[`field_${i}_required`] === 1,
-            type: config[`field_${i}_type`] || 'text',
-            options: config[`field_${i}_options`] || null
-          });
-        }
+      // 构建自定义字段配置（联系人姓名、联系电话、申请说明）
+      if (config.contact_name_label) {
+        customFields.push({
+          name: 'custom_field_4',
+          label: config.contact_name_label,
+          required: config.contact_name_required === 1,
+          type: config.contact_name_type || 'text',
+          options: config.contact_name_options || null
+        });
+      }
+      
+      if (config.contact_phone_label) {
+        customFields.push({
+          name: 'custom_field_5',
+          label: config.contact_phone_label,
+          required: config.contact_phone_required === 1,
+          type: config.contact_phone_type || 'text',
+          options: config.contact_phone_options || null
+        });
+      }
+      
+      if (config.application_reason_label) {
+        customFields.push({
+          name: 'custom_field_6',
+          label: config.application_reason_label,
+          required: config.application_reason_required === 1,
+          type: config.application_reason_type || 'text',
+          options: config.application_reason_options || null
+        });
       }
       
       return ResponseHelper.success(res, {
         button_text: config.button_text,
         button_visible: config.button_visible === 1,
         application_rules: config.application_rules || '',
+        field_labels: {
+          org_name: config.org_name_label || '企业/组织/学校名称',
+          applicant_email: config.applicant_email_label || '申请人邮箱',
+          business_license: config.business_license_label || '营业执照',
+          invitation_code: config.invitation_code_label || '邀请码'
+        },
         invitation_code_required: config.invitation_code_required === 1,
-        fields
+        custom_fields: customFields
       });
     } catch (error) {
       logger.error('获取申请表单配置失败:', error);
@@ -79,7 +113,7 @@ class OrgApplicationController {
   }
 
   /**
-   * 获取完整的申请表单配置（管理员接口）- 返回所有字段
+   * 获取完整的申请表单配置（管理员接口）- 返回所有配置项
    */
   static async getAdminFormConfig(req, res) {
     try {
@@ -88,18 +122,22 @@ class OrgApplicationController {
           button_text,
           button_visible,
           application_rules,
-          field_4_label,
-          field_4_required,
-          field_4_type,
-          field_4_options,
-          field_5_label,
-          field_5_required,
-          field_5_type,
-          field_5_options,
-          field_6_label,
-          field_6_required,
-          field_6_type,
-          field_6_options,
+          org_name_label,
+          applicant_email_label,
+          business_license_label,
+          invitation_code_label,
+          contact_name_label,
+          contact_name_required,
+          contact_name_type,
+          contact_name_options,
+          contact_phone_label,
+          contact_phone_required,
+          contact_phone_type,
+          contact_phone_options,
+          application_reason_label,
+          application_reason_required,
+          application_reason_type,
+          application_reason_options,
           invitation_code_required,
           default_group_id,
           default_credits,
@@ -116,6 +154,16 @@ class OrgApplicationController {
           button_text: '申请企业账号',
           button_visible: true,
           application_rules: '',
+          org_name_label: '企业/组织/学校名称',
+          applicant_email_label: '申请人邮箱',
+          business_license_label: '营业执照',
+          invitation_code_label: '邀请码',
+          contact_name_label: '联系人姓名',
+          contact_name_required: false,
+          contact_phone_label: '联系电话',
+          contact_phone_required: false,
+          application_reason_label: '申请说明',
+          application_reason_required: false,
           invitation_code_required: false,
           default_group_id: 1,
           default_credits: 0,
@@ -126,23 +174,30 @@ class OrgApplicationController {
       
       const config = rows[0];
       
-      // 转换布尔值
+      // 转换布尔值并返回完整配置
       const formattedConfig = {
         button_text: config.button_text,
         button_visible: config.button_visible === 1,
         application_rules: config.application_rules || '',
-        field_4_label: config.field_4_label,
-        field_4_required: config.field_4_required === 1,
-        field_4_type: config.field_4_type,
-        field_4_options: config.field_4_options,
-        field_5_label: config.field_5_label,
-        field_5_required: config.field_5_required === 1,
-        field_5_type: config.field_5_type,
-        field_5_options: config.field_5_options,
-        field_6_label: config.field_6_label,
-        field_6_required: config.field_6_required === 1,
-        field_6_type: config.field_6_type,
-        field_6_options: config.field_6_options,
+        // 核心字段标签
+        org_name_label: config.org_name_label || '企业/组织/学校名称',
+        applicant_email_label: config.applicant_email_label || '申请人邮箱',
+        business_license_label: config.business_license_label || '营业执照',
+        invitation_code_label: config.invitation_code_label || '邀请码',
+        // 自定义字段配置
+        contact_name_label: config.contact_name_label || '联系人姓名',
+        contact_name_required: config.contact_name_required === 1,
+        contact_name_type: config.contact_name_type || 'text',
+        contact_name_options: config.contact_name_options,
+        contact_phone_label: config.contact_phone_label || '联系电话',
+        contact_phone_required: config.contact_phone_required === 1,
+        contact_phone_type: config.contact_phone_type || 'text',
+        contact_phone_options: config.contact_phone_options,
+        application_reason_label: config.application_reason_label || '申请说明',
+        application_reason_required: config.application_reason_required === 1,
+        application_reason_type: config.application_reason_type || 'text',
+        application_reason_options: config.application_reason_options,
+        // 其他配置
         invitation_code_required: config.invitation_code_required === 1,
         default_group_id: config.default_group_id,
         default_credits: config.default_credits,
@@ -205,9 +260,9 @@ class OrgApplicationController {
       // 获取表单配置，检查必填字段和自动审批设置
       const configSql = `
         SELECT 
-          field_4_label, field_4_required,
-          field_5_label, field_5_required,
-          field_6_label, field_6_required,
+          contact_name_label, contact_name_required,
+          contact_phone_label, contact_phone_required,
+          application_reason_label, application_reason_required,
           invitation_code_required,
           default_group_id,
           default_credits,
@@ -227,16 +282,16 @@ class OrgApplicationController {
         const config = configs[0];
         
         // 检查自定义字段
-        if (config.field_4_required === 1 && !custom_field_4) {
-          return ResponseHelper.validation(res, null, `${config.field_4_label || '联系人姓名'}为必填项`);
+        if (config.contact_name_required === 1 && !custom_field_4) {
+          return ResponseHelper.validation(res, null, `${config.contact_name_label || '联系人姓名'}为必填项`);
         }
         
-        if (config.field_5_required === 1 && !custom_field_5) {
-          return ResponseHelper.validation(res, null, `${config.field_5_label || '联系电话'}为必填项`);
+        if (config.contact_phone_required === 1 && !custom_field_5) {
+          return ResponseHelper.validation(res, null, `${config.contact_phone_label || '联系电话'}为必填项`);
         }
         
-        if (config.field_6_required === 1 && !custom_field_6) {
-          return ResponseHelper.validation(res, null, `${config.field_6_label || '申请说明'}为必填项`);
+        if (config.application_reason_required === 1 && !custom_field_6) {
+          return ResponseHelper.validation(res, null, `${config.application_reason_label || '申请说明'}为必填项`);
         }
         
         if (config.invitation_code_required === 1 && !invitation_code) {
@@ -762,30 +817,37 @@ class OrgApplicationController {
   }
   
   /**
-   * 更新表单配置（管理员接口）
+   * 更新表单配置（管理员接口）- 支持所有字段标签配置
    */
   static async updateFormConfig(req, res) {
     try {
       const updateData = req.body;
       const updaterId = req.user.id;
       
-      // 构建更新语句
+      // 构建更新语句 - 包括新的字段标签
       const allowedFields = [
         'button_text',
         'button_visible',
         'application_rules',
-        'field_4_label',
-        'field_4_required',
-        'field_4_type',
-        'field_4_options',
-        'field_5_label',
-        'field_5_required',
-        'field_5_type',
-        'field_5_options',
-        'field_6_label',
-        'field_6_required',
-        'field_6_type',
-        'field_6_options',
+        // 核心字段标签
+        'org_name_label',
+        'applicant_email_label',
+        'business_license_label',
+        'invitation_code_label',
+        // 自定义字段配置（原field_4/5/6）
+        'contact_name_label',
+        'contact_name_required',
+        'contact_name_type',
+        'contact_name_options',
+        'contact_phone_label',
+        'contact_phone_required',
+        'contact_phone_type',
+        'contact_phone_options',
+        'application_reason_label',
+        'application_reason_required',
+        'application_reason_type',
+        'application_reason_options',
+        // 其他配置
         'invitation_code_required',
         'default_group_id',
         'default_credits',

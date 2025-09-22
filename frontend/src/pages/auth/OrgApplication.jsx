@@ -1,5 +1,5 @@
 /**
- * 申请页面 - 显示申请规则，去掉选填文字
+ * 申请页面 - 支持动态字段标签显示
  */
 
 import React, { useState, useEffect } from 'react';
@@ -170,6 +170,14 @@ const OrgApplication = () => {
     return null;
   }
 
+  // 从配置中获取字段标签，如果没有则使用默认值
+  const fieldLabels = formConfig?.field_labels || {
+    org_name: '企业/组织/学校名称',
+    applicant_email: '申请人邮箱',
+    business_license: '营业执照',
+    invitation_code: '邀请码'
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -256,38 +264,38 @@ const OrgApplication = () => {
           autoComplete="off"
           disabled={submitted}
         >
-          {/* 组织名称 */}
+          {/* 组织名称 - 使用动态标签 */}
           <Form.Item
-            label="企业/组织/学校名称"
+            label={fieldLabels.org_name}
             name="org_name"
-            rules={[{ required: true, message: '请输入组织名称' }]}
+            rules={[{ required: true, message: `请输入${fieldLabels.org_name}` }]}
           >
             <Input 
               prefix={<BankOutlined />} 
-              placeholder="请输入您的企业、组织或学校名称"
+              placeholder={`请输入您的${fieldLabels.org_name}`}
               size="large"
             />
           </Form.Item>
 
-          {/* 申请人邮箱 */}
+          {/* 申请人邮箱 - 使用动态标签 */}
           <Form.Item
-            label="申请人邮箱"
+            label={fieldLabels.applicant_email}
             name="applicant_email"
             rules={[
-              { required: true, message: '请输入邮箱地址' },
+              { required: true, message: `请输入${fieldLabels.applicant_email}` },
               { type: 'email', message: '请输入有效的邮箱地址' }
             ]}
           >
             <Input 
               prefix={<MailOutlined />} 
-              placeholder="请输入您的邮箱"
+              placeholder={`请输入您的${fieldLabels.applicant_email}`}
               size="large"
             />
           </Form.Item>
 
-          {/* 营业执照上传 - 去掉选填文字 */}
+          {/* 营业执照上传 - 使用动态标签 */}
           <Form.Item
-            label="营业执照"
+            label={fieldLabels.business_license}
             name="business_license_upload"
           >
             <Dragger
@@ -306,7 +314,7 @@ const OrgApplication = () => {
                 <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
               </p>
               <p className="ant-upload-text">
-                点击或拖拽文件到此处上传
+                点击或拖拽文件到此处上传{fieldLabels.business_license}
               </p>
               <p className="ant-upload-hint">
                 支持 JPG、PNG、PDF 格式，文件大小不超过 10MB
@@ -314,8 +322,8 @@ const OrgApplication = () => {
             </Dragger>
           </Form.Item>
 
-          {/* 动态字段 */}
-          {formConfig?.fields?.map((field) => (
+          {/* 自定义字段 - 使用配置的字段标签 */}
+          {formConfig?.custom_fields?.map((field) => (
             <Form.Item
               key={field.name}
               label={field.label}
@@ -344,18 +352,18 @@ const OrgApplication = () => {
             </Form.Item>
           ))}
 
-          {/* 邀请码 */}
+          {/* 邀请码 - 使用动态标签 */}
           <Form.Item
-            label={formConfig?.invitation_code_required ? '邀请码' : '邀请码'}
+            label={fieldLabels.invitation_code}
             name="invitation_code"
             rules={formConfig?.invitation_code_required 
-              ? [{ required: true, message: '请输入邀请码' }] 
+              ? [{ required: true, message: `请输入${fieldLabels.invitation_code}` }] 
               : []
             }
           >
             <Input 
               prefix={<SafetyOutlined />}
-              placeholder="请输入6位邀请码"
+              placeholder={`请输入6位${fieldLabels.invitation_code}`}
               maxLength={6}
               size="large"
             />

@@ -1,5 +1,5 @@
 /**
- * 机构申请管理组件 - 使用管理员专用接口获取完整配置
+ * 机构申请管理组件 - 支持所有字段标签自定义配置
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,7 +21,10 @@ import {
   Switch,
   DatePicker,
   Popconfirm,
-  Tooltip
+  Tooltip,
+  Divider,
+  Row,
+  Col
 } from 'antd';
 import {
   CheckOutlined,
@@ -36,7 +39,9 @@ import {
   EyeOutlined,
   DownloadOutlined,
   InfoCircleOutlined,
-  MailOutlined
+  MailOutlined,
+  FormOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../../utils/api';
@@ -110,11 +115,24 @@ const OrgApplicationManagement = () => {
       if (response.data.success) {
         const config = response.data.data;
         setFormConfig(config);
-        // 设置表单初始值，包括所有字段
+        // 设置表单初始值，包括所有字段标签
         configForm.setFieldsValue({
           button_text: config.button_text,
           button_visible: config.button_visible,
           application_rules: config.application_rules,
+          // 核心字段标签
+          org_name_label: config.org_name_label,
+          applicant_email_label: config.applicant_email_label,
+          business_license_label: config.business_license_label,
+          invitation_code_label: config.invitation_code_label,
+          // 自定义字段配置
+          contact_name_label: config.contact_name_label,
+          contact_name_required: config.contact_name_required,
+          contact_phone_label: config.contact_phone_label,
+          contact_phone_required: config.contact_phone_required,
+          application_reason_label: config.application_reason_label,
+          application_reason_required: config.application_reason_required,
+          // 其他配置
           invitation_code_required: config.invitation_code_required,
           default_group_id: config.default_group_id,
           default_credits: config.default_credits,
@@ -260,7 +278,7 @@ const OrgApplicationManagement = () => {
     }
   };
 
-  // 更新表单配置
+  // 更新表单配置 - 支持所有字段标签
   const handleUpdateConfig = async (values) => {
     try {
       await apiClient.put('/admin/org-applications/form-config', values);
@@ -279,7 +297,7 @@ const OrgApplicationManagement = () => {
     setDetailModalVisible(true);
   };
 
-  // 申请列表列定义
+  // 申请列表列定义 - 使用动态字段标签
   const applicationColumns = [
     {
       title: '申请时间',
@@ -289,35 +307,35 @@ const OrgApplicationManagement = () => {
       width: 150
     },
     {
-      title: '组织名称',
+      title: formConfig?.org_name_label || '组织名称',
       dataIndex: 'org_name',
       key: 'org_name',
       ellipsis: true,
       width: 150
     },
     {
-      title: '申请人邮箱',
+      title: formConfig?.applicant_email_label || '申请人邮箱',
       dataIndex: 'applicant_email',
       key: 'applicant_email',
       ellipsis: true,
       width: 180
     },
     {
-      title: '联系人',
+      title: formConfig?.contact_name_label || '联系人',
       dataIndex: 'custom_field_4',
       key: 'custom_field_4',
       render: (text) => text || '-',
       width: 100
     },
     {
-      title: '联系电话',
+      title: formConfig?.contact_phone_label || '联系电话',
       dataIndex: 'custom_field_5',
       key: 'custom_field_5',
       render: (text) => text || '-',
       width: 120
     },
     {
-      title: '申请说明',
+      title: formConfig?.application_reason_label || '申请说明',
       dataIndex: 'custom_field_6',
       key: 'custom_field_6',
       ellipsis: true,
@@ -329,7 +347,7 @@ const OrgApplicationManagement = () => {
       )
     },
     {
-      title: '营业执照',
+      title: formConfig?.business_license_label || '营业执照',
       dataIndex: 'business_license',
       key: 'business_license',
       width: 100,
@@ -363,7 +381,7 @@ const OrgApplicationManagement = () => {
       }
     },
     {
-      title: '邀请码',
+      title: formConfig?.invitation_code_label || '邀请码',
       dataIndex: 'invitation_code',
       key: 'invitation_code',
       render: (text) => text ? <Tag color="blue">{text}</Tag> : '-',
@@ -444,7 +462,7 @@ const OrgApplicationManagement = () => {
   // 邀请码列表列定义
   const codeColumns = [
     {
-      title: '邀请码',
+      title: formConfig?.invitation_code_label || '邀请码',
       dataIndex: 'code',
       key: 'code',
       render: (text) => <Tag color="blue">{text}</Tag>
@@ -503,7 +521,7 @@ const OrgApplicationManagement = () => {
             编辑
           </Button>
           <Popconfirm
-            title="确定删除该邀请码吗？"
+            title={`确定删除该${formConfig?.invitation_code_label || '邀请码'}吗？`}
             onConfirm={() => handleDeleteCode(record.id)}
           >
             <Button danger size="small" icon={<DeleteOutlined />}>
@@ -546,7 +564,7 @@ const OrgApplicationManagement = () => {
         </TabPane>
 
         {/* 邀请码管理Tab */}
-        <TabPane tab={<span><SafetyOutlined /> 邀请码管理</span>} key="codes">
+        <TabPane tab={<span><SafetyOutlined /> {formConfig?.invitation_code_label || '邀请码'}管理</span>} key="codes">
           <Space style={{ marginBottom: 16 }}>
             <Button
               type="primary"
@@ -557,7 +575,7 @@ const OrgApplicationManagement = () => {
                 setCodeModalVisible(true);
               }}
             >
-              创建邀请码
+              创建{formConfig?.invitation_code_label || '邀请码'}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={fetchInvitationCodes}>
               刷新
@@ -576,11 +594,11 @@ const OrgApplicationManagement = () => {
           />
         </TabPane>
 
-        {/* 表单配置Tab */}
-        <TabPane tab={<span><EditOutlined /> 表单配置</span>} key="config">
+        {/* 表单配置Tab - 增强字段标签配置 */}
+        <TabPane tab={<span><FormOutlined /> 表单配置</span>} key="config">
           <Alert
             message="配置说明"
-            description="您可以自定义企业申请表单的字段和行为，申请规则将显示在申请页面顶部"
+            description="您可以自定义企业申请表单的所有字段标签和显示行为，让系统适应不同类型的组织（企业、学校、政府机构等）"
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -588,6 +606,7 @@ const OrgApplicationManagement = () => {
           
           <Button
             type="primary"
+            icon={<SettingOutlined />}
             onClick={() => {
               // 重新设置表单值，确保显示最新配置
               if (formConfig) {
@@ -595,6 +614,19 @@ const OrgApplicationManagement = () => {
                   button_text: formConfig.button_text,
                   button_visible: formConfig.button_visible,
                   application_rules: formConfig.application_rules,
+                  // 核心字段标签
+                  org_name_label: formConfig.org_name_label,
+                  applicant_email_label: formConfig.applicant_email_label,
+                  business_license_label: formConfig.business_license_label,
+                  invitation_code_label: formConfig.invitation_code_label,
+                  // 自定义字段
+                  contact_name_label: formConfig.contact_name_label,
+                  contact_name_required: formConfig.contact_name_required,
+                  contact_phone_label: formConfig.contact_phone_label,
+                  contact_phone_required: formConfig.contact_phone_required,
+                  application_reason_label: formConfig.application_reason_label,
+                  application_reason_required: formConfig.application_reason_required,
+                  // 其他配置
                   invitation_code_required: formConfig.invitation_code_required,
                   default_group_id: formConfig.default_group_id,
                   default_credits: formConfig.default_credits,
@@ -609,8 +641,8 @@ const OrgApplicationManagement = () => {
           </Button>
           
           {formConfig && (
-            <Descriptions bordered style={{ marginTop: 16 }}>
-              <Descriptions.Item label="按钮文字">
+            <Descriptions bordered style={{ marginTop: 16 }} column={2}>
+              <Descriptions.Item label="按钮文字" span={2}>
                 {formConfig.button_text}
               </Descriptions.Item>
               <Descriptions.Item label="按钮可见">
@@ -618,7 +650,25 @@ const OrgApplicationManagement = () => {
                   {formConfig.button_visible ? '显示' : '隐藏'}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="申请规则" span={3}>
+              <Descriptions.Item label={formConfig.invitation_code_label + "必填"}>
+                <Tag color={formConfig.invitation_code_required ? 'warning' : 'default'}>
+                  {formConfig.invitation_code_required ? '必填' : '选填'}
+                </Tag>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="字段标签配置" span={2}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <div><strong>组织名称：</strong>{formConfig.org_name_label}</div>
+                  <div><strong>邮箱：</strong>{formConfig.applicant_email_label}</div>
+                  <div><strong>资质文件：</strong>{formConfig.business_license_label}</div>
+                  <div><strong>邀请码：</strong>{formConfig.invitation_code_label}</div>
+                  <div><strong>联系人：</strong>{formConfig.contact_name_label}</div>
+                  <div><strong>联系电话：</strong>{formConfig.contact_phone_label}</div>
+                  <div><strong>申请说明：</strong>{formConfig.application_reason_label}</div>
+                </Space>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="申请规则" span={2}>
                 {formConfig.application_rules ? (
                   <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
                     {formConfig.application_rules}
@@ -627,11 +677,7 @@ const OrgApplicationManagement = () => {
                   <span style={{ color: '#999' }}>未设置</span>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="邀请码必填">
-                <Tag color={formConfig.invitation_code_required ? 'warning' : 'default'}>
-                  {formConfig.invitation_code_required ? '必填' : '选填'}
-                </Tag>
-              </Descriptions.Item>
+              
               <Descriptions.Item label="默认用户组">
                 {groups.find(g => g.id === formConfig.default_group_id)?.name || '默认组'}
               </Descriptions.Item>
@@ -647,18 +693,13 @@ const OrgApplicationManagement = () => {
                 <Tag color={formConfig.email_notification ? 'success' : 'default'}>
                   {formConfig.email_notification ? '启用' : '禁用'}
                 </Tag>
-                {formConfig.email_notification && (
-                  <Tooltip title="批准和拒绝时会自动发送邮件通知">
-                    <InfoCircleOutlined style={{ marginLeft: 8, color: '#1890ff' }} />
-                  </Tooltip>
-                )}
               </Descriptions.Item>
             </Descriptions>
           )}
         </TabPane>
       </Tabs>
 
-      {/* 申请详情弹窗 */}
+      {/* 申请详情弹窗 - 使用动态字段标签 */}
       <Modal
         title="申请详情"
         visible={detailModalVisible}
@@ -678,22 +719,22 @@ const OrgApplicationManagement = () => {
             <Descriptions.Item label="申请时间" span={1}>
               {moment(selectedApplication.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="组织名称" span={2}>
+            <Descriptions.Item label={formConfig?.org_name_label || '组织名称'} span={2}>
               {selectedApplication.org_name}
             </Descriptions.Item>
-            <Descriptions.Item label="申请人邮箱" span={2}>
+            <Descriptions.Item label={formConfig?.applicant_email_label || '申请人邮箱'} span={2}>
               {selectedApplication.applicant_email}
             </Descriptions.Item>
-            <Descriptions.Item label="联系人姓名" span={1}>
+            <Descriptions.Item label={formConfig?.contact_name_label || '联系人姓名'} span={1}>
               {selectedApplication.custom_field_4 || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="联系电话" span={1}>
+            <Descriptions.Item label={formConfig?.contact_phone_label || '联系电话'} span={1}>
               {selectedApplication.custom_field_5 || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="申请说明" span={2}>
+            <Descriptions.Item label={formConfig?.application_reason_label || '申请说明'} span={2}>
               {selectedApplication.custom_field_6 || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="营业执照" span={2}>
+            <Descriptions.Item label={formConfig?.business_license_label || '营业执照'} span={2}>
               {selectedApplication.business_license ? (
                 <Space>
                   <Button
@@ -718,7 +759,7 @@ const OrgApplicationManagement = () => {
                 </Space>
               ) : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="邀请码" span={1}>
+            <Descriptions.Item label={formConfig?.invitation_code_label || '邀请码'} span={1}>
               {selectedApplication.invitation_code ? (
                 <Tag color="blue">{selectedApplication.invitation_code}</Tag>
               ) : '-'}
@@ -859,7 +900,7 @@ const OrgApplicationManagement = () => {
 
       {/* 邀请码编辑弹窗 */}
       <Modal
-        title={editingCode ? '编辑邀请码' : '创建邀请码'}
+        title={editingCode ? `编辑${formConfig?.invitation_code_label || '邀请码'}` : `创建${formConfig?.invitation_code_label || '邀请码'}`}
         visible={codeModalVisible}
         onCancel={() => {
           setCodeModalVisible(false);
@@ -875,14 +916,14 @@ const OrgApplicationManagement = () => {
         >
           {!editingCode && (
             <Form.Item
-              label="邀请码"
+              label={formConfig?.invitation_code_label || '邀请码'}
               name="code"
               rules={[
-                { required: true, message: '请输入邀请码' },
-                { len: 6, message: '邀请码必须为6位字符' }
+                { required: true, message: `请输入${formConfig?.invitation_code_label || '邀请码'}` },
+                { len: 6, message: `${formConfig?.invitation_code_label || '邀请码'}必须为6位字符` }
               ]}
             >
-              <Input placeholder="输入6位邀请码" maxLength={6} />
+              <Input placeholder={`输入6位${formConfig?.invitation_code_label || '邀请码'}`} maxLength={6} />
             </Form.Item>
           )}
           
@@ -890,7 +931,7 @@ const OrgApplicationManagement = () => {
             label="描述"
             name="description"
           >
-            <TextArea rows={2} placeholder="邀请码用途说明" />
+            <TextArea rows={2} placeholder={`${formConfig?.invitation_code_label || '邀请码'}用途说明`} />
           </Form.Item>
           
           <Form.Item
@@ -935,12 +976,12 @@ const OrgApplicationManagement = () => {
         </Form>
       </Modal>
 
-      {/* 表单配置弹窗 - 包含所有配置字段 */}
+      {/* 表单配置弹窗 - 支持所有字段标签配置 */}
       <Modal
         title="编辑表单配置"
         visible={configModalVisible}
         onCancel={() => setConfigModalVisible(false)}
-        width={600}
+        width={800}
         footer={null}
       >
         <Form
@@ -948,12 +989,27 @@ const OrgApplicationManagement = () => {
           layout="vertical"
           onFinish={handleUpdateConfig}
         >
-          <Form.Item
-            label="申请按钮文字"
-            name="button_text"
-          >
-            <Input placeholder="例如：申请企业账号" />
-          </Form.Item>
+          <Divider orientation="left">基础配置</Divider>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="申请按钮文字"
+                name="button_text"
+              >
+                <Input placeholder="例如：申请企业账号" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="显示申请按钮"
+                name="button_visible"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
+              </Form.Item>
+            </Col>
+          </Row>
           
           <Form.Item
             label={
@@ -967,22 +1023,117 @@ const OrgApplicationManagement = () => {
             name="application_rules"
           >
             <TextArea 
-              rows={6} 
+              rows={4} 
               placeholder={`请输入申请规则，例如：
 1. 申请条件：需提供有效的企业营业执照
 2. 审核时间：1-3个工作日内完成审核
-3. 联系方式：如有问题请联系 support@example.com
-4. 注意事项：请确保填写信息真实有效`}
+3. 联系方式：如有问题请联系 support@example.com`}
             />
           </Form.Item>
           
-          <Form.Item
-            label="显示申请按钮"
-            name="button_visible"
-            valuePropName="checked"
-          >
-            <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
-          </Form.Item>
+          <Divider orientation="left">字段标签配置</Divider>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="组织名称字段标签"
+                name="org_name_label"
+                extra="例如：企业名称、学校名称、机构名称"
+              >
+                <Input placeholder="默认：企业/组织/学校名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="申请人邮箱字段标签"
+                name="applicant_email_label"
+                extra="例如：申请人邮箱、联系邮箱"
+              >
+                <Input placeholder="默认：申请人邮箱" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="资质文件字段标签"
+                name="business_license_label"
+                extra="例如：营业执照、办学许可证、组织机构代码证"
+              >
+                <Input placeholder="默认：营业执照" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="邀请码字段标签"
+                name="invitation_code_label"
+                extra="例如：邀请码、推荐码、内测码"
+              >
+                <Input placeholder="默认：邀请码" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label="联系人姓名标签"
+                name="contact_name_label"
+              >
+                <Input placeholder="默认：联系人姓名" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item
+                label="是否必填"
+                name="contact_name_required"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="必填" unCheckedChildren="选填" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label="联系电话标签"
+                name="contact_phone_label"
+              >
+                <Input placeholder="默认：联系电话" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item
+                label="是否必填"
+                name="contact_phone_required"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="必填" unCheckedChildren="选填" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label="申请说明标签"
+                name="application_reason_label"
+              >
+                <Input placeholder="默认：申请说明" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item
+                label="是否必填"
+                name="application_reason_required"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="必填" unCheckedChildren="选填" />
+              </Form.Item>
+            </Col>
+          </Row>
           
           <Form.Item
             label="邀请码必填"
@@ -992,55 +1143,67 @@ const OrgApplicationManagement = () => {
             <Switch checkedChildren="必填" unCheckedChildren="选填" />
           </Form.Item>
           
-          <Form.Item
-            label="默认用户组"
-            name="default_group_id"
-          >
-            <Select placeholder="选择默认用户组">
-              {groups.map(group => (
-                <Option key={group.id} value={group.id}>
-                  {group.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <Divider orientation="left">审批配置</Divider>
           
-          <Form.Item
-            label="默认积分"
-            name="default_credits"
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="默认用户组"
+                name="default_group_id"
+              >
+                <Select placeholder="选择默认用户组">
+                  {groups.map(group => (
+                    <Option key={group.id} value={group.id}>
+                      {group.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="默认积分"
+                name="default_credits"
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
           
-          <Form.Item
-            label={
-              <span>
-                自动审批
-                <Tooltip title="启用后，新申请将自动批准并创建账号">
-                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
-                </Tooltip>
-              </span>
-            }
-            name="auto_approve"
-            valuePropName="checked"
-          >
-            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
-          </Form.Item>
-          
-          <Form.Item
-            label={
-              <span>
-                邮件通知
-                <Tooltip title="启用后，批准或拒绝申请时会自动发送邮件通知用户">
-                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
-                </Tooltip>
-              </span>
-            }
-            name="email_notification"
-            valuePropName="checked"
-          >
-            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={
+                  <span>
+                    自动审批
+                    <Tooltip title="启用后，新申请将自动批准并创建账号">
+                      <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                    </Tooltip>
+                  </span>
+                }
+                name="auto_approve"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={
+                  <span>
+                    邮件通知
+                    <Tooltip title="启用后，批准或拒绝申请时会自动发送邮件通知用户">
+                      <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                    </Tooltip>
+                  </span>
+                }
+                name="email_notification"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+              </Form.Item>
+            </Col>
+          </Row>
           
           <Form.Item>
             <Space>
