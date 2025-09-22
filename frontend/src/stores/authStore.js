@@ -212,12 +212,11 @@ const useAuthStore = create(
         }
       },
 
-      // 修改密码
-      changePassword: async (oldPassword, newPassword) => {
+      // 修改密码 - 简化版，不需要原密码
+      changePassword: async (newPassword) => {
         try {
           const response = await apiClient.put('/auth/password', {
-            oldPassword,
-            newPassword
+            newPassword  // 只传新密码，后端会自动处理
           })
 
           console.log('✅ 密码修改成功')

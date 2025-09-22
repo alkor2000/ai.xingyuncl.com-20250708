@@ -842,7 +842,7 @@ class AuthControllerRefactored {
   }
   
   /**
-   * 修改密码
+   * 修改密码 - 简化版，用户修改自己的密码不需要原密码
    * PUT /api/auth/password
    */
   static async changePassword(req, res) {
@@ -850,9 +850,9 @@ class AuthControllerRefactored {
       const userId = req.user.id;
       const { oldPassword, newPassword } = req.body;
       
-      // 验证输入
-      if (!oldPassword || !newPassword) {
-        return ResponseHelper.validation(res, ['原密码和新密码不能为空']);
+      // 只验证新密码是否存在
+      if (!newPassword) {
+        return ResponseHelper.validation(res, ['新密码不能为空']);
       }
       
       if (newPassword.length < 6) {
@@ -870,13 +870,13 @@ class AuthControllerRefactored {
         return ResponseHelper.forbidden(res, 'SSO用户不允许修改密码');
       }
       
-      // 验证原密码
-      const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
-      if (!isOldPasswordValid) {
-        return ResponseHelper.validation(res, ['原密码错误']);
-      }
+      // 注意：用户修改自己的密码时，不再需要验证原密码
+      // 因为用户已经通过JWT认证了身份，这就足够了
+      // 如果前端传了oldPassword（向后兼容），我们忽略它
       
-      // 更新密码
+      logger.info('用户自行修改密码（无需原密码验证）', { userId, username: user.username });
+      
+      // 直接更新密码
       await user.update({ password: newPassword });
       
       logger.info('用户密码修改成功', { userId });

@@ -118,11 +118,12 @@ const Profile = () => {
     }
   }
 
-  // 修改密码
+  // 修改密码 - 不再需要原密码
   const handleChangePassword = async (values) => {
     setLoading(true)
     try {
-      await changePassword(values.oldPassword, values.newPassword)
+      // 现在只传新密码，不需要原密码了
+      await changePassword(values.newPassword)
       message.success(t('profile.password.changeSuccess'))
       setPasswordModalVisible(false)
       passwordForm.resetFields()
@@ -355,7 +356,7 @@ const Profile = () => {
         </Col>
       </Row>
 
-      {/* 修改密码弹窗 */}
+      {/* 修改密码弹窗 - 已移除原密码输入框 */}
       <Modal
         title={t('profile.password.title')}
         open={passwordModalVisible}
@@ -370,14 +371,7 @@ const Profile = () => {
           layout="vertical"
           onFinish={handleChangePassword}
         >
-          <Form.Item
-            name="oldPassword"
-            label={t('profile.password.old')}
-            rules={[{ required: true, message: t('profile.password.old.required') }]}
-          >
-            <Input.Password prefix={<LockOutlined />} />
-          </Form.Item>
-
+          {/* 已移除原密码输入框，直接输入新密码 */}
           <Form.Item
             name="newPassword"
             label={t('profile.password.new')}
