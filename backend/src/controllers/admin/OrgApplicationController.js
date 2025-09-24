@@ -1,5 +1,6 @@
 /**
  * 机构申请控制器 - 支持完整字段标签自定义
+ * 修复：正确处理选填字段的空值判断
  */
 
 const dbConnection = require('../../database/connection');
@@ -11,6 +12,18 @@ const EmailService = require('../../services/emailService');
 const SystemConfig = require('../../models/SystemConfig');
 
 class OrgApplicationController {
+  /**
+   * 辅助方法：检查字段是否为空
+   * @param {any} value - 要检查的值
+   * @returns {boolean} - 如果值为空返回true
+   */
+  static isEmpty(value) {
+    // null、undefined、空字符串、仅包含空白字符的字符串都视为空
+    return value === null || 
+           value === undefined || 
+           (typeof value === 'string' && value.trim() === '');
+  }
+
   /**
    * 获取申请表单配置（公开接口）- 返回所有字段标签
    */
@@ -281,20 +294,24 @@ class OrgApplicationController {
       if (configs.length > 0) {
         const config = configs[0];
         
-        // 检查自定义字段
-        if (config.contact_name_required === 1 && !custom_field_4) {
+        // 检查自定义字段 - 使用改进的空值判断
+        // 联系人姓名
+        if (config.contact_name_required === 1 && OrgApplicationController.isEmpty(custom_field_4)) {
           return ResponseHelper.validation(res, null, `${config.contact_name_label || '联系人姓名'}为必填项`);
         }
         
-        if (config.contact_phone_required === 1 && !custom_field_5) {
+        // 联系电话
+        if (config.contact_phone_required === 1 && OrgApplicationController.isEmpty(custom_field_5)) {
           return ResponseHelper.validation(res, null, `${config.contact_phone_label || '联系电话'}为必填项`);
         }
         
-        if (config.application_reason_required === 1 && !custom_field_6) {
+        // 申请说明
+        if (config.application_reason_required === 1 && OrgApplicationController.isEmpty(custom_field_6)) {
           return ResponseHelper.validation(res, null, `${config.application_reason_label || '申请说明'}为必填项`);
         }
         
-        if (config.invitation_code_required === 1 && !invitation_code) {
+        // 邀请码
+        if (config.invitation_code_required === 1 && OrgApplicationController.isEmpty(invitation_code)) {
           return ResponseHelper.validation(res, null, '请输入邀请码');
         }
         
@@ -307,8 +324,8 @@ class OrgApplicationController {
       let invitationCodeId = null;
       let referrerInfo = null;
       
-      // 验证邀请码
-      if (invitation_code) {
+      // 验证邀请码（如果提供了邀请码）
+      if (invitation_code && !OrgApplicationController.isEmpty(invitation_code)) {
         const codeSql = `
           SELECT id, description, is_active, usage_limit, used_count, expires_at
           FROM invitation_codes
@@ -344,6 +361,11 @@ class OrgApplicationController {
         );
       }
       
+      // 处理可能为空的字段，将空字符串转为null存入数据库
+      const processedField4 = OrgApplicationController.isEmpty(custom_field_4) ? null : custom_field_4;
+      const processedField5 = OrgApplicationController.isEmpty(custom_field_5) ? null : custom_field_5;
+      const processedField6 = OrgApplicationController.isEmpty(custom_field_6) ? null : custom_field_6;
+      
       // 创建申请记录
       const insertSql = `
         INSERT INTO org_applications (
@@ -365,9 +387,9 @@ class OrgApplicationController {
         org_name,
         applicant_email,
         business_license,
-        custom_field_4,
-        custom_field_5,
-        custom_field_6,
+        processedField4,  // 使用处理后的值
+        processedField5,  // 使用处理后的值
+        processedField6,  // 使用处理后的值
         invitationCodeId,
         referrerInfo,
         initialStatus
