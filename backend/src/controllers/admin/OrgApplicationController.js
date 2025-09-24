@@ -1,6 +1,6 @@
 /**
  * 机构申请控制器 - 支持完整字段标签自定义
- * 修复：正确处理选填字段的空值判断
+ * 修复：使用事务处理邀请码更新，避免申请失败时错误消耗邀请码
  */
 
 const dbConnection = require('../../database/connection');
@@ -227,6 +227,7 @@ class OrgApplicationController {
   
   /**
    * 提交机构申请（公开接口）- 支持自动审批
+   * 修复：使用事务处理，确保邀请码使用次数更新的原子性
    */
   static async submitApplication(req, res) {
     try {
@@ -239,6 +240,8 @@ class OrgApplicationController {
         custom_field_6,
         invitation_code
       } = req.body;
+      
+      // ========== 第一阶段：所有验证（不修改数据） ==========
       
       // 验证必填字段
       if (!org_name || !applicant_email) {
@@ -310,7 +313,7 @@ class OrgApplicationController {
           return ResponseHelper.validation(res, null, `${config.application_reason_label || '申请说明'}为必填项`);
         }
         
-        // 邀请码
+        // 邀请码必填检查
         if (config.invitation_code_required === 1 && OrgApplicationController.isEmpty(invitation_code)) {
           return ResponseHelper.validation(res, null, '请输入邀请码');
         }
@@ -323,8 +326,9 @@ class OrgApplicationController {
       
       let invitationCodeId = null;
       let referrerInfo = null;
+      let codeData = null;
       
-      // 验证邀请码（如果提供了邀请码）
+      // 验证邀请码（如果提供了邀请码）- 只验证，不更新
       if (invitation_code && !OrgApplicationController.isEmpty(invitation_code)) {
         const codeSql = `
           SELECT id, description, is_active, usage_limit, used_count, expires_at
@@ -337,7 +341,7 @@ class OrgApplicationController {
           return ResponseHelper.validation(res, null, '邀请码无效，请检查输入是否正确');
         }
         
-        const codeData = codes[0];
+        codeData = codes[0];
         
         if (!codeData.is_active) {
           return ResponseHelper.validation(res, null, '邀请码已停用，请联系管理员');
@@ -353,12 +357,6 @@ class OrgApplicationController {
         
         invitationCodeId = codeData.id;
         referrerInfo = codeData.description;
-        
-        // 更新使用次数
-        await dbConnection.query(
-          'UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?',
-          [invitationCodeId]
-        );
       }
       
       // 处理可能为空的字段，将空字符串转为null存入数据库
@@ -366,52 +364,70 @@ class OrgApplicationController {
       const processedField5 = OrgApplicationController.isEmpty(custom_field_5) ? null : custom_field_5;
       const processedField6 = OrgApplicationController.isEmpty(custom_field_6) ? null : custom_field_6;
       
-      // 创建申请记录
-      const insertSql = `
-        INSERT INTO org_applications (
-          org_name,
-          applicant_email,
-          business_license,
-          custom_field_4,
-          custom_field_5,
-          custom_field_6,
-          invitation_code_id,
-          referrer_info,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+      // ========== 第二阶段：事务处理（创建申请记录 + 更新邀请码） ==========
       
       const initialStatus = autoApprove ? 'approved' : 'pending';
+      let applicationId = null;
+      let createdUserId = null;
+      let username = null;
+      let defaultPassword = null;
       
-      const { rows } = await dbConnection.query(insertSql, [
-        org_name,
-        applicant_email,
-        business_license,
-        processedField4,  // 使用处理后的值
-        processedField5,  // 使用处理后的值
-        processedField6,  // 使用处理后的值
-        invitationCodeId,
-        referrerInfo,
-        initialStatus
-      ]);
-      
-      const applicationId = rows.insertId;
-      
-      // 如果启用自动审批，立即创建账号
-      if (autoApprove) {
-        try {
-          // 生成UUID
-          const userUuid = crypto.randomUUID();
+      try {
+        // 开始事务
+        await dbConnection.transaction(async (query) => {
+          // 1. 创建申请记录
+          const insertSql = `
+            INSERT INTO org_applications (
+              org_name,
+              applicant_email,
+              business_license,
+              custom_field_4,
+              custom_field_5,
+              custom_field_6,
+              invitation_code_id,
+              referrer_info,
+              status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `;
           
-          // 使用固定默认密码
-          const defaultPassword = '123456';
-          const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+          const insertResult = await query(insertSql, [
+            org_name,
+            applicant_email,
+            business_license,
+            processedField4,
+            processedField5,
+            processedField6,
+            invitationCodeId,
+            referrerInfo,
+            initialStatus
+          ]);
           
-          // 生成用户名
-          const username = applicant_email.split('@')[0] + '_' + Date.now();
+          applicationId = insertResult.rows.insertId;
           
-          // 创建用户
-          await dbConnection.transaction(async (query) => {
+          // 2. 如果使用了邀请码，更新使用次数
+          if (invitationCodeId) {
+            const updateCodeSql = 'UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?';
+            await query(updateCodeSql, [invitationCodeId]);
+            
+            logger.info('邀请码使用次数已更新', {
+              codeId: invitationCodeId,
+              code: invitation_code,
+              applicationId
+            });
+          }
+          
+          // 3. 如果启用自动审批，创建用户账号
+          if (autoApprove) {
+            // 生成UUID
+            const userUuid = crypto.randomUUID();
+            
+            // 使用固定默认密码
+            defaultPassword = '123456';
+            const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+            
+            // 生成用户名
+            username = applicant_email.split('@')[0] + '_' + Date.now();
+            
             const userSql = `
               INSERT INTO users (
                 uuid,
@@ -436,10 +452,10 @@ class OrgApplicationController {
               `机构用户 - ${org_name}（自动审批）`
             ]);
             
-            const userId = userResult.rows.insertId;
+            createdUserId = userResult.rows.insertId;
             
-            // 更新申请记录
-            const updateSql = `
+            // 更新申请记录，关联创建的用户
+            const updateAppSql = `
               UPDATE org_applications 
               SET 
                 approved_at = NOW(),
@@ -448,54 +464,48 @@ class OrgApplicationController {
               WHERE id = ?
             `;
             
-            await query(updateSql, [userId, applicationId]);
-          });
-          
-          logger.info('机构申请自动审批成功', {
-            applicationId,
-            email: applicant_email,
-            org: org_name
-          });
-          
-          // 发送邮件通知
-          if (emailNotification) {
-            await OrgApplicationController.sendApprovalEmail(
-              applicant_email,
-              org_name,
-              username,
-              defaultPassword
-            );
+            await query(updateAppSql, [createdUserId, applicationId]);
           }
+        });
+        
+        // 事务成功完成
+        logger.info('机构申请提交成功', {
+          applicationId,
+          org_name,
+          applicant_email,
+          referrer: referrerInfo,
+          autoApproved: autoApprove
+        });
+        
+        // 如果自动审批，发送邮件通知
+        if (autoApprove && emailNotification) {
+          // 异步发送邮件，不影响响应
+          OrgApplicationController.sendApprovalEmail(
+            applicant_email,
+            org_name,
+            username,
+            defaultPassword
+          ).catch(err => {
+            logger.error('发送批准邮件失败，但申请已成功:', err);
+          });
           
           return ResponseHelper.success(res, {
             applicationId,
             message: '申请已自动批准，账号信息已发送至您的邮箱'
           }, '申请提交成功');
-        } catch (autoApproveError) {
-          logger.error('自动审批失败:', autoApproveError);
-          // 如果自动审批失败，将状态改回pending
-          await dbConnection.query(
-            'UPDATE org_applications SET status = ? WHERE id = ?',
-            ['pending', applicationId]
-          );
-          return ResponseHelper.success(res, {
-            applicationId,
-            message: '申请已提交，我们会尽快处理'
-          }, '申请提交成功');
         }
-      } else {
-        logger.info('机构申请提交成功', {
-          applicationId,
-          org_name,
-          applicant_email,
-          referrer: referrerInfo
-        });
         
         return ResponseHelper.success(res, {
           applicationId,
           message: '申请已提交，我们会尽快处理'
         }, '申请提交成功');
+        
+      } catch (transactionError) {
+        // 事务失败，所有操作自动回滚
+        logger.error('提交机构申请事务失败:', transactionError);
+        return ResponseHelper.error(res, '提交申请失败，请稍后重试');
       }
+      
     } catch (error) {
       logger.error('提交机构申请失败:', error);
       return ResponseHelper.error(res, '提交申请失败，请稍后重试');
