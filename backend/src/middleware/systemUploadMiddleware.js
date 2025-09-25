@@ -1,6 +1,7 @@
 /**
  * 系统文件上传中间件
  * 处理站点Logo等系统级文件上传
+ * 修改：使用配置文件路径，支持Docker部署
  */
 
 const multer = require('multer');
@@ -31,14 +32,18 @@ const generateFileName = (originalName) => {
 // 配置存储
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    // 使用配置中的上传目录，支持容器化部署
-    const uploadDir = path.join(config.upload.uploadDir, 'system');
+    // 使用配置中的系统上传目录，支持容器化部署
+    const uploadDir = config.storage.paths.system;
     
     try {
       await ensureUploadDir(uploadDir);
+      logger.debug('使用系统上传目录', { uploadDir });
       cb(null, uploadDir);
     } catch (error) {
-      logger.error('创建系统上传目录失败', { error: error.message });
+      logger.error('创建系统上传目录失败', { 
+        uploadDir,
+        error: error.message 
+      });
       cb(error);
     }
   },

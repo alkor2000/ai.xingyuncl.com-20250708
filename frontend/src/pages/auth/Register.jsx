@@ -55,13 +55,13 @@ const Register = () => {
             if (userConfig.allow_register === false) {
               // 不允许注册
               setRequireInvitationCode(false)
-              message.error('系统已关闭注册功能')
+              message.error(t('auth.register.systemClosed'))
               // 可以跳转到登录页
               setTimeout(() => navigate('/login'), 2000)
             } else if (userConfig.require_invitation_code === true) {
               // 允许注册但强制邀请码
               setRequireInvitationCode(true)
-              message.info('注册需要邀请码')
+              message.info(t('auth.register.invitationCode.systemRequired'))
             } else {
               // 允许自由注册
               setRequireInvitationCode(false)
@@ -88,7 +88,7 @@ const Register = () => {
     }
 
     fetchPublicConfig()
-  }, [navigate])
+  }, [navigate, t])
 
   // 验证邀请码
   const handleVerifyInvitationCode = async (value) => {
@@ -107,12 +107,12 @@ const Register = () => {
       if (response.data?.success && response.data?.data?.valid) {
         setInvitationCodeValid(true)
         setInvitationGroupName(response.data.data.group_name)
-        message.success(`邀请码有效，将加入"${response.data.data.group_name}"组`)
+        message.success(t('auth.register.invitationCode.valid', { groupName: response.data.data.group_name }))
       } else {
         setInvitationCodeValid(false)
         setInvitationGroupName('')
         if (requireInvitationCode) {
-          message.error('邀请码无效或已过期')
+          message.error(t('auth.register.invitationCode.invalid'))
         }
       }
     } catch (error) {
@@ -120,7 +120,7 @@ const Register = () => {
       setInvitationCodeValid(false)
       setInvitationGroupName('')
       if (requireInvitationCode) {
-        message.error('邀请码验证失败')
+        message.error(t('auth.register.invitationCode.verifyFailed'))
       }
     } finally {
       setCheckingCode(false)
@@ -131,7 +131,7 @@ const Register = () => {
   const handleSubmit = async (values) => {
     // 如果需要邀请码但未验证通过
     if (requireInvitationCode && !invitationCodeValid) {
-      setError('请输入有效的邀请码')
+      setError(t('auth.register.needInvitationCode'))
       return
     }
 
@@ -203,10 +203,10 @@ const Register = () => {
         padding: '20px'
       }}>
         <Card style={{ maxWidth: 400, width: '100%', textAlign: 'center' }}>
-          <Title level={3}>注册已关闭</Title>
-          <p>系统暂时关闭了注册功能，请联系管理员。</p>
+          <Title level={3}>{t('auth.register.registrationClosed')}</Title>
+          <p>{t('auth.register.registrationClosedDesc')}</p>
           <Button type="primary" onClick={() => navigate('/login')}>
-            返回登录
+            {t('auth.register.backToLogin')}
           </Button>
         </Card>
       </div>
@@ -237,7 +237,7 @@ const Register = () => {
         {/* 简化的标题，不显示logo和自定义站点名称 */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <Title level={3} style={{ marginBottom: 8, color: '#333' }}>
-            创建您的账户
+            {t('auth.register.title')}
           </Title>
         </div>
 
@@ -255,8 +255,8 @@ const Register = () => {
         {/* 显示注册策略提示 */}
         {requireInvitationCode && (
           <Alert
-            message="邀请码注册"
-            description="系统要求邀请码才能注册，请向管理员获取邀请码"
+            message={t('auth.register.invitationCode.systemRequired')}
+            description={t('auth.register.invitationCode.systemRequiredDesc')}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -276,11 +276,11 @@ const Register = () => {
             name="invitation_code"
             label={
               <Space>
-                <span>邀请码</span>
-                {requireInvitationCode && <Text type="danger">*</Text>}
+                <span>{t('auth.register.invitationCode')}</span>
+                {requireInvitationCode && <Text type="danger">{t('auth.register.required')}</Text>}
                 {invitationCodeValid && (
                   <Text type="success">
-                    <CheckCircleOutlined /> 将加入"{invitationGroupName}"
+                    <CheckCircleOutlined /> {t('auth.register.invitationCode.willJoin', { groupName: invitationGroupName })}
                   </Text>
                 )}
               </Space>
@@ -288,29 +288,29 @@ const Register = () => {
             rules={[
               {
                 required: requireInvitationCode,
-                message: '请输入5位邀请码'
+                message: t('auth.register.invitationCode.required')
               },
               {
                 len: 5,
-                message: '邀请码必须是5位字符',
+                message: t('auth.register.invitationCode.length'),
                 validateTrigger: 'onBlur'
               },
               {
                 pattern: /^[A-Za-z0-9]{5}$/,
-                message: '邀请码只能包含字母和数字',
+                message: t('auth.register.invitationCode.pattern'),
                 validateTrigger: 'onBlur'
               }
             ]}
             extra={
               requireInvitationCode 
-                ? '必须输入有效的邀请码才能注册' 
-                : '如有邀请码，可加入指定组织'
+                ? t('auth.register.invitationCode.requiredHint')
+                : t('auth.register.invitationCode.optionalHint')
             }
             validateFirst={true}
           >
             <Input
               prefix={<TeamOutlined />}
-              placeholder="输入5位邀请码"
+              placeholder={t('auth.register.invitationCode.placeholder')}
               style={{ textTransform: 'uppercase' }}
               onChange={(e) => {
                 const value = e.target.value
@@ -338,18 +338,18 @@ const Register = () => {
             name="username"
             label={
               <Space>
-                <span>用户名</span>
-                <Text type="danger">*</Text>
+                <span>{t('auth.register.username')}</span>
+                <Text type="danger">{t('auth.register.required')}</Text>
               </Space>
             }
             rules={[
               {
                 required: true,
-                message: '请输入用户名'
+                message: t('auth.register.username.required')
               },
               {
                 pattern: /^[a-zA-Z0-9_-]{3,20}$/,
-                message: '用户名只能包含字母、数字、下划线和横线，长度3-20个字符'
+                message: t('auth.register.username.pattern')
               },
               {
                 validator: validateUsername
@@ -359,7 +359,7 @@ const Register = () => {
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder="请输入用户名"
+              placeholder={t('auth.register.username.placeholder')}
             />
           </Form.Item>
 
@@ -367,8 +367,8 @@ const Register = () => {
             name="email"
             label={
               <Space>
-                <span>邮箱地址</span>
-                <Tooltip title="邮箱用于找回密码和接收通知">
+                <span>{t('auth.register.email')}</span>
+                <Tooltip title={t('auth.register.email.tooltip')}>
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
@@ -376,35 +376,35 @@ const Register = () => {
             rules={[
               {
                 type: 'email',
-                message: '邮箱格式不正确'
+                message: t('auth.register.email.invalid')
               },
               {
                 validator: validateEmail
               }
             ]}
-            extra="选填，用于找回密码和接收通知"
+            extra={t('auth.register.email.optional')}
             validateFirst={true}
           >
             <Input
               prefix={<MailOutlined />}
-              placeholder="请输入邮箱"
+              placeholder={t('auth.register.email.placeholder')}
             />
           </Form.Item>
 
           <Form.Item
             name="phone"
-            label="手机号"
+            label={t('auth.register.phone')}
             rules={[
               {
                 pattern: /^1[3-9]\d{9}$/,
-                message: '手机号格式不正确'
+                message: t('auth.register.phone.pattern')
               }
             ]}
             validateFirst={true}
           >
             <Input
               prefix={<PhoneOutlined />}
-              placeholder="手机号（选填）"
+              placeholder={t('auth.register.phone.placeholder')}
             />
           </Form.Item>
 
@@ -412,25 +412,25 @@ const Register = () => {
             name="password"
             label={
               <Space>
-                <span>密码</span>
-                <Text type="danger">*</Text>
+                <span>{t('auth.register.password')}</span>
+                <Text type="danger">{t('auth.register.required')}</Text>
               </Space>
             }
             rules={[
               {
                 required: true,
-                message: '请输入密码'
+                message: t('auth.register.password.required')
               },
               {
                 min: 6,
-                message: '密码长度至少6位'
+                message: t('auth.register.password.min')
               }
             ]}
             validateFirst={true}
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder="请输入密码"
+              placeholder={t('auth.register.password.placeholder')}
             />
           </Form.Item>
 
@@ -438,22 +438,22 @@ const Register = () => {
             name="confirmPassword"
             label={
               <Space>
-                <span>确认密码</span>
-                <Text type="danger">*</Text>
+                <span>{t('auth.register.confirmPassword')}</span>
+                <Text type="danger">{t('auth.register.required')}</Text>
               </Space>
             }
             dependencies={['password']}
             rules={[
               {
                 required: true,
-                message: '请再次输入密码'
+                message: t('auth.register.confirmPassword.required')
               },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
                     return Promise.resolve()
                   }
-                  return Promise.reject(new Error('两次输入的密码不一致'))
+                  return Promise.reject(new Error(t('auth.register.confirmPassword.mismatch')))
                 }
               })
             ]}
@@ -461,7 +461,7 @@ const Register = () => {
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder="请确认密码"
+              placeholder={t('auth.register.confirmPassword.placeholder')}
             />
           </Form.Item>
 
@@ -474,14 +474,14 @@ const Register = () => {
               size="large"
               disabled={requireInvitationCode && !invitationCodeValid}
             >
-              注册
+              {t('auth.register.button')}
             </Button>
           </Form.Item>
 
           <div style={{ textAlign: 'center' }}>
             <Space>
-              <Text type="secondary">已有账户？</Text>
-              <Link to="/login">立即登录</Link>
+              <Text type="secondary">{t('auth.register.hasAccount')}</Text>
+              <Link to="/login">{t('auth.register.login')}</Link>
             </Space>
           </div>
         </Form>

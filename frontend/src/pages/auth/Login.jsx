@@ -89,11 +89,11 @@ const Login = () => {
   // 发送验证码
   const handleSendCode = async (email) => {
     if (!email) {
-      message.warning('请先输入邮箱地址')
+      message.warning(t('auth.login.enterEmailFirst'))
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      message.warning('请输入有效的邮箱地址')
+      message.warning(t('auth.login.enterValidEmail'))
       return
     }
 
@@ -101,12 +101,12 @@ const Login = () => {
       setSendingCode(true)
       const response = await apiClient.post('/auth/send-email-code', { email })
       if (response.data.success) {
-        message.success('验证码已发送到您的邮箱')
+        message.success(t('auth.login.codeSent'))
         setCountdown(60)
       }
     } catch (error) {
       console.error('发送验证码失败:', error)
-      message.error(error.response?.data?.message || '发送验证码失败')
+      message.error(error.response?.data?.message || t('auth.login.codeSendFailed'))
     } finally {
       setSendingCode(false)
     }
@@ -152,7 +152,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('验证码登录失败:', error)
-      message.error(error.response?.data?.message || '登录失败')
+      message.error(error.response?.data?.message || t('auth.login.failed'))
     } finally {
       setLoading(false)
     }
@@ -199,7 +199,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('登录失败:', error)
-      message.error(error.response?.data?.message || '登录失败')
+      message.error(error.response?.data?.message || t('auth.login.failed'))
     } finally {
       setLoading(false)
     }
@@ -215,10 +215,10 @@ const Login = () => {
 
   const validateEmail = (_, value) => {
     if (!value) {
-      return Promise.reject(new Error('请输入邮箱地址'))
+      return Promise.reject(new Error(t('auth.login.email.required')))
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      return Promise.reject(new Error('邮箱格式不正确'))
+      return Promise.reject(new Error(t('auth.login.email.invalid')))
     }
     return Promise.resolve()
   }
@@ -343,7 +343,7 @@ const Login = () => {
           e.currentTarget.style.boxShadow = '0 8px 32px rgba(31, 38, 135, 0.15)'
         }}
       >
-        返回首页
+        {t('auth.login.backHome')}
       </Button>
 
       {/* 登录卡片 - iOS风格 */}
@@ -376,7 +376,7 @@ const Login = () => {
               letterSpacing: '-0.5px'
             }}
           >
-            {t('auth.login.title', '登录')}
+            {t('auth.login.title')}
           </Title>
           <Paragraph 
             type="secondary" 
@@ -387,7 +387,7 @@ const Login = () => {
               color: '#8e8e93'
             }}
           >
-            {t('auth.login.subtitle', '欢迎回来，请登录您的账户')}
+            {t('auth.login.subtitle')}
           </Paragraph>
         </div>
 
@@ -403,7 +403,7 @@ const Login = () => {
               marginBottom: '24px'
             }}
           >
-            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>密码登录</span>} key="password">
+            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>{t('auth.login.passwordLogin')}</span>} key="password">
               <Form
                 name="passwordLogin"
                 onFinish={handlePasswordLogin}
@@ -418,7 +418,7 @@ const Login = () => {
                 >
                   <Input
                     prefix={<UserOutlined style={{ color: '#8e8e93' }} />}
-                    placeholder={t('auth.login.account.placeholder', '邮箱 / 手机号 / 用户名')}
+                    placeholder={t('auth.login.account.placeholder')}
                     autoComplete="username"
                     style={iosStyles.inputStyle}
                     onFocus={(e) => {
@@ -439,7 +439,7 @@ const Login = () => {
                 >
                   <Input.Password
                     prefix={<LockOutlined style={{ color: '#8e8e93' }} />}
-                    placeholder={t('auth.login.password')}
+                    placeholder={t('auth.login.password.placeholder')}
                     autoComplete="current-password"
                     style={iosStyles.inputStyle}
                     onFocus={(e) => {
@@ -477,7 +477,7 @@ const Login = () => {
               </Form>
             </TabPane>
 
-            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>验证码登录</span>} key="code">
+            <TabPane tab={<span style={{ fontSize: '15px', fontWeight: 500 }}>{t('auth.login.codeLogin')}</span>} key="code">
               <Form
                 name="codeLogin"
                 onFinish={handleCodeLogin}
@@ -492,7 +492,7 @@ const Login = () => {
                 >
                   <Input
                     prefix={<MailOutlined style={{ color: '#8e8e93' }} />}
-                    placeholder="请输入邮箱地址"
+                    placeholder={t('auth.login.email.placeholder')}
                     autoComplete="email"
                     style={iosStyles.inputStyle}
                     onFocus={(e) => {
@@ -512,13 +512,13 @@ const Login = () => {
                       name="code"
                       noStyle
                       rules={[
-                        { required: true, message: '请输入验证码' },
-                        { pattern: /^\d{6}$/, message: '验证码为6位数字' }
+                        { required: true, message: t('auth.login.code.required') },
+                        { pattern: /^\d{6}$/, message: t('auth.login.code.pattern') }
                       ]}
                     >
                       <Input
                         prefix={<SafetyOutlined style={{ color: '#8e8e93' }} />}
-                        placeholder="请输入验证码"
+                        placeholder={t('auth.login.code.placeholder')}
                         style={{ ...iosStyles.inputStyle, flex: 1 }}
                         onFocus={(e) => {
                           e.target.style.backgroundColor = '#ffffff'
@@ -538,7 +538,7 @@ const Login = () => {
                           disabled={countdown > 0}
                           style={iosStyles.codeButtonStyle}
                         >
-                          {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                          {countdown > 0 ? t('auth.login.codeCountdown', { count: countdown }) : t('auth.login.getCode')}
                         </Button>
                       )}
                     </Form.Item>
@@ -563,7 +563,7 @@ const Login = () => {
                       e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)'
                     }}
                   >
-                    登录
+                    {t('auth.login.button')}
                   </Button>
                 </Form.Item>
               </Form>
@@ -584,7 +584,7 @@ const Login = () => {
             >
               <Input
                 prefix={<MailOutlined style={{ color: '#8e8e93' }} />}
-                placeholder="请输入邮箱地址"
+                placeholder={t('auth.login.email.placeholder')}
                 autoComplete="email"
                 style={iosStyles.inputStyle}
                 onFocus={(e) => {
@@ -600,12 +600,12 @@ const Login = () => {
 
             <Form.Item
               name="password"
-              rules={[{ required: true, message: '请输入密码' }]}
+              rules={[{ required: true, message: t('auth.login.password.required') }]}
               style={{ marginBottom: '16px' }}
             >
               <Input.Password
                 prefix={<LockOutlined style={{ color: '#8e8e93' }} />}
-                placeholder="请输入密码"
+                placeholder={t('auth.login.password.placeholder')}
                 autoComplete="current-password"
                 style={iosStyles.inputStyle}
                 onFocus={(e) => {
@@ -625,13 +625,13 @@ const Login = () => {
                   name="code"
                   noStyle
                   rules={[
-                    { required: true, message: '请输入验证码' },
-                    { pattern: /^\d{6}$/, message: '验证码为6位数字' }
+                    { required: true, message: t('auth.login.code.required') },
+                    { pattern: /^\d{6}$/, message: t('auth.login.code.pattern') }
                   ]}
                 >
                   <Input
                     prefix={<SafetyOutlined style={{ color: '#8e8e93' }} />}
-                    placeholder="请输入验证码"
+                    placeholder={t('auth.login.code.placeholder')}
                     style={{ ...iosStyles.inputStyle, flex: 1 }}
                     onFocus={(e) => {
                       e.target.style.backgroundColor = '#ffffff'
@@ -651,7 +651,7 @@ const Login = () => {
                       disabled={countdown > 0}
                       style={iosStyles.codeButtonStyle}
                     >
-                      {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                      {countdown > 0 ? t('auth.login.codeCountdown', { count: countdown }) : t('auth.login.getCode')}
                     </Button>
                   )}
                 </Form.Item>
@@ -676,7 +676,7 @@ const Login = () => {
                   e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)'
                 }}
               >
-                登录
+                {t('auth.login.button')}
               </Button>
             </Form.Item>
           </Form>
@@ -691,17 +691,17 @@ const Login = () => {
         }}>
           {loginMode === 'standard' && loginType === 'password' && (
             <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
-              支持邮箱、手机号或用户名登录
+              {t('auth.login.supportHint')}
             </Text>
           )}
           {loginMode === 'standard' && loginType === 'code' && (
             <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
-              验证码5分钟内有效
+              {t('auth.login.codeValidHint')}
             </Text>
           )}
           {loginMode !== 'standard' && (
             <Text style={{ fontSize: '13px', color: '#8e8e93' }}>
-              需要邮箱、密码和验证码三重验证
+              {t('auth.login.tripleAuthHint')}
             </Text>
           )}
         </div>
@@ -758,7 +758,7 @@ const Login = () => {
                   e.currentTarget.style.color = '#764ba2'
                 }}
               >
-                {orgAppConfig?.button_text || '申请企业账号'}
+                {orgAppConfig?.button_text || t('auth.login.applyOrgAccount')}
               </Button>
             </div>
           )}

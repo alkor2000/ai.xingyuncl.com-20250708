@@ -1,49 +1,64 @@
 /**
- * 应用配置文件 - 支持环境变量配置
+ * 应用配置文件 - 完全支持环境变量和Docker部署
  */
 
 const path = require('path');
 const fs = require('fs');
 
-// 智能检测运行环境并返回正确的上传目录
-function getUploadDir() {
-  // 如果环境变量已设置，优先使用
-  if (process.env.UPLOAD_DIR) {
-    return process.env.UPLOAD_DIR;
+/**
+ * 获取存储根目录
+ * 支持环境变量配置，完全兼容Docker和本地部署
+ */
+function getStorageRoot() {
+  // 1. 优先使用环境变量
+  if (process.env.STORAGE_PATH) {
+    return process.env.STORAGE_PATH;
   }
   
-  // 检测是否在Docker容器中（通过检查/.dockerenv文件）
-  const isDocker = fs.existsSync('/.dockerenv');
+  // 2. 检测Docker环境
+  const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_ENV === 'true';
   
   if (isDocker) {
-    // Docker环境：使用/app路径
-    return '/app/storage/uploads';
-  } else {
-    // 本地开发环境：尝试找到项目根目录
-    let currentDir = __dirname;
-    let projectRoot = null;
-    
-    // 向上查找，直到找到package.json或达到根目录
-    while (currentDir !== '/') {
-      if (fs.existsSync(path.join(currentDir, 'package.json'))) {
-        // 找到了backend的package.json，再向上一级到项目根目录
-        const parentDir = path.dirname(currentDir);
-        if (fs.existsSync(path.join(parentDir, 'frontend'))) {
-          projectRoot = parentDir;
-          break;
-        }
-      }
-      currentDir = path.dirname(currentDir);
-    }
-    
-    // 如果找到项目根目录，使用相对路径
-    if (projectRoot) {
-      return path.join(projectRoot, 'storage/uploads');
-    }
-    
-    // 最后的备选：使用绝对路径（适用于特定的生产环境）
-    return '/var/www/ai-platform/storage/uploads';
+    // Docker环境：使用容器内路径
+    return '/app/storage';
   }
+  
+  // 3. 智能检测项目根目录
+  let currentDir = __dirname;
+  let projectRoot = null;
+  
+  // 向上查找项目根目录
+  while (currentDir !== '/' && currentDir !== path.parse(currentDir).root) {
+    // 检查是否在backend目录
+    if (path.basename(currentDir) === 'backend' && 
+        fs.existsSync(path.join(path.dirname(currentDir), 'frontend'))) {
+      projectRoot = path.dirname(currentDir);
+      break;
+    }
+    // 或者检查是否已经是项目根目录
+    if (fs.existsSync(path.join(currentDir, 'backend')) && 
+        fs.existsSync(path.join(currentDir, 'frontend'))) {
+      projectRoot = currentDir;
+      break;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  
+  // 4. 使用找到的项目根目录
+  if (projectRoot) {
+    return path.join(projectRoot, 'storage');
+  }
+  
+  // 5. 最后的备选：使用进程工作目录
+  return path.join(process.cwd(), 'storage');
+}
+
+/**
+ * 获取具体的存储子目录
+ */
+function getStoragePath(subdir = '') {
+  const root = getStorageRoot();
+  return subdir ? path.join(root, subdir) : root;
 }
 
 module.exports = {
@@ -56,7 +71,7 @@ module.exports = {
     env: process.env.NODE_ENV || 'production'
   },
 
-  // 数据库配置 - MySQL2 v3.14+ 优化
+  // 数据库配置
   database: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306'),
@@ -65,11 +80,11 @@ module.exports = {
     database: process.env.DB_NAME || 'ai_platform',
     charset: 'utf8mb4',
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10'),
-    // 连接池性能优化配置
-    idleTimeout: 30000,      // 空闲超时30秒
-    maxIdle: 5,              // 最大空闲连接5个
-    enableKeepAlive: true,   // 启用TCP保活
-    queueLimit: 0,           // 无限制排队
+    // 连接池优化配置
+    idleTimeout: 30000,
+    maxIdle: 5,
+    enableKeepAlive: true,
+    queueLimit: 0,
     
     // Redis配置
     redis: {
@@ -83,13 +98,13 @@ module.exports = {
     }
   },
 
-  // JWT认证配置 - 修复：确保使用正确的默认值
+  // JWT认证配置
   auth: {
     jwt: {
-      accessSecret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-key-2025',
-      refreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-2025',
-      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '24h',  // 修复：默认值改为24h
-      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '30d', // 修复：默认值改为30d
+      accessSecret: process.env.JWT_ACCESS_SECRET || 'MwKSiF/tjdvjyNUALHyW44ekzdYWYS/rsCCqwK1dyHTdaj5rjMG6yzTUwz1yfQWd+rZRRPeBVGH8tm1o5qG4BA==',
+      refreshSecret: process.env.JWT_REFRESH_SECRET || 'VGQCIaN5MRe2n7wmiYCoIqjq0Bd33B3OZ8iR7j+ITD1tKR1TJicWQLColOAXpvPfO8r8PJCZbaEgQl1qa2nijQ==',
+      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '24h',
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '30d',
       issuer: 'ai-platform',
       audience: 'ai-platform-users'
     }
@@ -108,7 +123,7 @@ module.exports = {
       credentials: true
     },
     rateLimit: {
-      windowMs: 15 * 60 * 1000, // 15分钟
+      windowMs: 15 * 60 * 1000,
       max: parseInt(process.env.RATE_LIMIT_MAX || '1000')
     },
     helmet: {
@@ -124,18 +139,39 @@ module.exports = {
     retries: parseInt(process.env.AI_RETRIES || '3')
   },
 
+  // 存储配置 - 统一管理所有存储路径
+  storage: {
+    // 根目录
+    root: getStorageRoot(),
+    // 各种子目录
+    paths: {
+      uploads: getStoragePath('uploads'),
+      temp: getStoragePath('temp'),
+      cache: getStoragePath('cache'),
+      system: getStoragePath('uploads/system'),
+      avatars: getStoragePath('uploads/avatars'),
+      documents: getStoragePath('uploads/documents'),
+      images: getStoragePath('uploads/images'),
+      audio: getStoragePath('uploads/audio'),
+      video: getStoragePath('uploads/video'),
+      generations: getStoragePath('uploads/generations'),
+      chatImages: getStoragePath('uploads/chat-images'),
+      licenses: getStoragePath('uploads/licenses')
+    }
+  },
+
   // 文件上传配置
   upload: {
-    maxFileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760'), // 10MB
+    maxFileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760'),
     allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
-    // 智能检测环境并设置上传目录
-    uploadDir: getUploadDir()
+    // 向后兼容旧配置
+    uploadDir: getStoragePath('uploads')
   },
 
   // 日志配置
   logging: {
     level: process.env.LOG_LEVEL || 'info',
-    dirname: process.env.LOG_DIR || path.resolve(__dirname, '../../logs'),
+    dirname: process.env.LOG_DIR || path.resolve(getStorageRoot(), '../logs'),
     filename: 'app-%DATE%.log',
     datePattern: 'YYYY-MM-DD',
     maxFiles: '14d',
@@ -143,13 +179,17 @@ module.exports = {
   }
 };
 
-// 在启动时输出配置信息（用于调试）
+// 调试输出（仅在开发环境或明确要求时）
 if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CONFIG === 'true') {
-  console.log('=== AI Platform Configuration ===');
+  console.log('=== AI Platform Storage Configuration ===');
   console.log('Environment:', process.env.NODE_ENV || 'production');
-  console.log('Upload Directory:', module.exports.upload.uploadDir);
+  console.log('Storage Root:', module.exports.storage.root);
+  console.log('Temp Directory:', module.exports.storage.paths.temp);
+  console.log('Upload Directory:', module.exports.storage.paths.uploads);
   console.log('Is Docker:', fs.existsSync('/.dockerenv') ? 'Yes' : 'No');
-  console.log('JWT Access Expires:', module.exports.auth.jwt.accessExpiresIn);
-  console.log('JWT Refresh Expires:', module.exports.auth.jwt.refreshExpiresIn);
-  console.log('================================');
+  console.log('========================================');
 }
+
+// 导出辅助函数供其他模块使用
+module.exports.getStoragePath = getStoragePath;
+module.exports.getStorageRoot = getStorageRoot;

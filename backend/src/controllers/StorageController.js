@@ -2,7 +2,7 @@
  * 存储管理控制器 - 增强版
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
- * 修改：使用磁盘存储代替内存存储，支持大文件上传
+ * 修改：移除所有硬编码路径，完全支持环境变量和Docker部署
  */
 
 const multer = require('multer');
@@ -15,6 +15,7 @@ const UserFolder = require('../models/UserFolder');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const dbConnection = require('../database/connection');
+const config = require('../config');  // 导入配置
 
 /**
  * 修复文件名编码问题
@@ -106,16 +107,23 @@ const getStorageConfig = async () => {
 /**
  * 配置multer磁盘存储
  * 使用磁盘存储避免内存溢出
+ * 修改：使用配置文件中的路径而不是硬编码
  */
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const tempDir = path.join('/var/www/ai-platform/storage/temp');
+    // 使用配置中的临时目录路径
+    const tempDir = config.storage.paths.temp;
+    
     try {
       // 确保临时目录存在
       await fs.mkdir(tempDir, { recursive: true });
+      logger.debug('使用临时目录', { tempDir });
       cb(null, tempDir);
     } catch (error) {
-      logger.error('创建临时目录失败', { error: error.message });
+      logger.error('创建临时目录失败', { 
+        tempDir,
+        error: error.message 
+      });
       cb(error);
     }
   },
@@ -269,19 +277,20 @@ const fileFilter = (req, file, cb) => {
  * 根据数据库配置动态设置文件大小限制
  */
 const createUploadMiddleware = async () => {
-  const config = await getStorageConfig();
+  const storageConfig = await getStorageConfig();
   
   logger.info('创建上传中间件，使用配置:', {
-    maxFileSize: `${config.maxFileSize / 1024 / 1024}MB`,
-    maxFiles: config.maxFiles
+    maxFileSize: `${storageConfig.maxFileSize / 1024 / 1024}MB`,
+    maxFiles: storageConfig.maxFiles,
+    tempDir: config.storage.paths.temp
   });
   
   return multer({
     storage: storage,  // 使用磁盘存储
     fileFilter: fileFilter,
     limits: {
-      fileSize: config.maxFileSize,
-      files: config.maxFiles
+      fileSize: storageConfig.maxFileSize,
+      files: storageConfig.maxFiles
     }
   });
 };
@@ -403,14 +412,14 @@ class StorageController {
           });
           
           if (err.code === 'LIMIT_FILE_SIZE') {
-            const config = await getStorageConfig();
-            const maxSizeMB = Math.round(config.maxFileSize / 1024 / 1024);
+            const storageConfig = await getStorageConfig();
+            const maxSizeMB = Math.round(storageConfig.maxFileSize / 1024 / 1024);
             return ResponseHelper.error(res, `文件大小不能超过${maxSizeMB}MB`);
           }
           
           if (err.code === 'LIMIT_FILE_COUNT') {
-            const config = await getStorageConfig();
-            return ResponseHelper.error(res, `单次最多上传${config.maxFiles}个文件`);
+            const storageConfig = await getStorageConfig();
+            return ResponseHelper.error(res, `单次最多上传${storageConfig.maxFiles}个文件`);
           }
           
           if (err.code === 'LIMIT_UNEXPECTED_FILE') {
@@ -948,7 +957,7 @@ class StorageController {
         return 0;
       }
       
-      const config = await getStorageConfig();
+      const storageConfig = await getStorageConfig();
       let totalCost = 0;
       
       for (const file of files) {
@@ -957,10 +966,10 @@ class StorageController {
         let fileCredits = 0;
         
         if (fileSizeMB <= 5) {
-          fileCredits = config.baseCredits;
+          fileCredits = storageConfig.baseCredits;
         } else {
           const extraIntervals = Math.ceil((fileSizeMB - 5) / 5);
-          fileCredits = extraIntervals * config.creditsPerInterval;
+          fileCredits = extraIntervals * storageConfig.creditsPerInterval;
         }
         
         totalCost += fileCredits;
@@ -968,8 +977,8 @@ class StorageController {
         logger.info('文件积分计算', {
           filename: file.originalname,
           sizeMB: fileSizeMB.toFixed(2),
-          baseCredits: config.baseCredits,
-          creditsPerInterval: config.creditsPerInterval,
+          baseCredits: storageConfig.baseCredits,
+          creditsPerInterval: storageConfig.creditsPerInterval,
           fileCredits: fileCredits,
           calculation: fileSizeMB <= 5 ? '使用基础积分' : `超出${(fileSizeMB - 5).toFixed(2)}MB，${Math.ceil((fileSizeMB - 5) / 5)}个区间`
         });
