@@ -55,7 +55,7 @@ const Dashboard = () => {
   const { user } = useAuthStore()
   const { userModules, getUserModules } = useModuleStore()
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [creditsData, setCreditsData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modulesLoading, setModulesLoading] = useState(true)
@@ -70,22 +70,27 @@ const Dashboard = () => {
   // 获取当前时间段的问候语
   const getGreeting = () => {
     const hour = new Date().getHours()
-    if (hour < 6) return '凌晨好'
-    if (hour < 12) return '早上好'
-    if (hour < 14) return '中午好'
-    if (hour < 18) return '下午好'
-    if (hour < 22) return '晚上好'
-    return '夜深了'
+    if (hour < 6) return t('greeting.earlyMorning')
+    if (hour < 12) return t('greeting.morning')
+    if (hour < 14) return t('greeting.noon')
+    if (hour < 18) return t('greeting.afternoon')
+    if (hour < 22) return t('greeting.evening')
+    return t('greeting.night')
   }
   
   // 获取日期信息
   const getDateInfo = () => {
     const now = new Date()
-    const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
     const month = now.getMonth() + 1
     const date = now.getDate()
-    const weekDay = weekDays[now.getDay()]
-    return `${month}月${date}日 ${weekDay}`
+    const weekDay = t(`time.weekDays.${now.getDay()}`)
+    
+    // 根据语言选择不同的日期格式
+    if (i18n.language === 'en-US') {
+      return t('time.monthDate', { month, date }) + ' ' + weekDay
+    } else {
+      return t('time.monthDate', { month, date }) + ' ' + weekDay
+    }
   }
 
   // 加载用户积分统计
@@ -167,11 +172,11 @@ const Dashboard = () => {
       if (response.data.success) {
         setAnnouncement(response.data.data)
         setIsEditingAnnouncement(false)
-        message.success('系统公告更新成功')
+        message.success(t('dashboard.announcement.updateSuccess'))
       }
     } catch (error) {
       console.error('更新系统公告失败:', error)
-      message.error('更新系统公告失败')
+      message.error(t('dashboard.announcement.updateFailed'))
     } finally {
       setSavingAnnouncement(false)
     }
@@ -180,14 +185,14 @@ const Dashboard = () => {
   // 显示Markdown预览
   const showPreview = () => {
     Modal.info({
-      title: '公告预览',
+      title: t('dashboard.announcement.previewTitle'),
       width: 600,
       content: (
         <div className="markdown-content" style={{ maxHeight: '400px', overflow: 'auto' }}>
-          <ReactMarkdown>{editingContent || '（空）'}</ReactMarkdown>
+          <ReactMarkdown>{editingContent || t('dashboard.announcement.empty')}</ReactMarkdown>
         </div>
       ),
-      okText: '关闭'
+      okText: t('button.close')
     })
   }
   
@@ -268,7 +273,7 @@ const Dashboard = () => {
       <div className="welcome-section-compact">
         <div className="welcome-left">
           <Title level={4} style={{ margin: 0 }}>
-            {getGreeting()}，{user?.username || user?.email}！
+            {t('dashboard.welcome', { greeting: getGreeting(), name: user?.username || user?.email })}
           </Title>
         </div>
         <div className="welcome-right">
@@ -276,7 +281,7 @@ const Dashboard = () => {
             <CalendarOutlined />
             <Text>{getDateInfo()}</Text>
             <ClockCircleOutlined />
-            <Text>{new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+            <Text>{new Date().toLocaleTimeString(i18n.language === 'en-US' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
           </Space>
         </div>
       </div>
@@ -287,7 +292,7 @@ const Dashboard = () => {
         title={
           <Space>
             <AppstoreOutlined style={{ color: '#1677ff' }} />
-            <span>功能模块</span>
+            <span>{t('dashboard.modules.title')}</span>
           </Space>
         }
         loading={modulesLoading}
@@ -324,7 +329,7 @@ const Dashboard = () => {
             })}
           </Row>
         ) : (
-          <Empty description="暂无可用模块" />
+          <Empty description={t('dashboard.modules.empty')} />
         )}
       </Card>
 
@@ -428,7 +433,7 @@ const Dashboard = () => {
                   icon={<EditOutlined />} 
                   onClick={handleEditAnnouncement}
                 >
-                  编辑公告
+                  {t('dashboard.announcement.editButton')}
                 </Button>
               )
             }
@@ -439,7 +444,7 @@ const Dashboard = () => {
                 <TextArea
                   value={editingContent}
                   onChange={(e) => setEditingContent(e.target.value)}
-                  placeholder="请输入系统公告内容，支持Markdown格式"
+                  placeholder={t('dashboard.announcement.placeholder')}
                   autoSize={{ minRows: 8, maxRows: 20 }}
                   style={{ marginBottom: 16 }}
                 />
@@ -450,27 +455,26 @@ const Dashboard = () => {
                     onClick={handleSaveAnnouncement}
                     loading={savingAnnouncement}
                   >
-                    保存
+                    {t('dashboard.announcement.save')}
                   </Button>
                   <Button onClick={showPreview}>
-                    预览
+                    {t('dashboard.announcement.preview')}
                   </Button>
                   <Button 
                     icon={<CloseOutlined />} 
                     onClick={handleCancelEdit}
                     disabled={savingAnnouncement}
                   >
-                    取消
+                    {t('dashboard.announcement.cancel')}
                   </Button>
                 </Space>
                 <div className="announcement-edit-tips">
-                  <div>提示：支持Markdown格式</div>
+                  <div>{t('dashboard.announcement.tips')}</div>
                   <div className="example">
-                    **粗体** *斜体* [链接](url) `代码` 
-                    # 标题1
-                    ## 标题2
-                    - 列表项1
-                    - 列表项2
+                    {t('dashboard.announcement.example.bold')} {t('dashboard.announcement.example.italic')} {t('dashboard.announcement.example.link')} {t('dashboard.announcement.example.code')} 
+                    {t('dashboard.announcement.example.h1')}
+                    {t('dashboard.announcement.example.h2')}
+                    {t('dashboard.announcement.example.list')}
                   </div>
                 </div>
               </div>
@@ -499,12 +503,12 @@ const Dashboard = () => {
             title={
               <Space>
                 <TeamOutlined style={{ color: '#fa8c16' }} />
-                <span>组织公告</span>
+                <span>{t('dashboard.announcement.organization')}</span>
               </Space>
             }
           >
             <Alert
-              message="暂无组织公告"
+              message={t('dashboard.announcement.organizationDefault')}
               type="warning"
               showIcon={false}
             />

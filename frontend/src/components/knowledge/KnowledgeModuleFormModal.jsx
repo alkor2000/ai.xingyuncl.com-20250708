@@ -1,5 +1,6 @@
 /**
  * 知识模块表单弹窗组件
+ * 支持国际化(i18n)
  */
 
 import React, { useEffect, useState } from 'react'
@@ -29,6 +30,7 @@ import {
   TagsOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import useKnowledgeStore from '../../stores/knowledgeStore'
 import useAuthStore from '../../stores/authStore'
 import useAdminStore from '../../stores/adminStore'
@@ -45,6 +47,7 @@ const KnowledgeModuleFormModal = ({
   canCreateTeam,
   canCreateSystem
 }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm()
   const { user } = useAuthStore()
   const { createModule, updateModule, getCategories, categories } = useKnowledgeStore()
@@ -75,7 +78,7 @@ const KnowledgeModuleFormModal = ({
           tag_access_mode: module.allowed_tag_ids && module.allowed_tag_ids.length > 0 ? 'selected' : 'all',
           allowed_tag_ids: module.allowed_tag_ids || [],
           // 添加创建人显示（只读）
-          creator_name: module.creator_name || '未知'
+          creator_name: module.creator_name || t('knowledge.form.unknown')
         })
         setModuleScope(module.module_scope)
         setTagAccessMode(module.allowed_tag_ids && module.allowed_tag_ids.length > 0 ? 'selected' : 'all')
@@ -103,7 +106,7 @@ const KnowledgeModuleFormModal = ({
         setTagAccessMode('all')
       }
     }
-  }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups, user])
+  }, [visible, module, form, getCategories, canCreateSystem, fetchUserGroups, user, t])
 
   // 加载组内标签 - 使用新的普通用户可访问的接口
   const loadGroupTags = async () => {
@@ -117,7 +120,7 @@ const KnowledgeModuleFormModal = ({
       setGroupTags([])
       // 如果是权限问题，给出友好提示
       if (error.response?.status === 403) {
-        message.warning('无法获取组标签，请确认您已加入组')
+        message.warning(t('knowledge.form.noGroupPermission'))
       }
     } finally {
       setLoadingTags(false)
@@ -186,16 +189,16 @@ const KnowledgeModuleFormModal = ({
       if (module) {
         // 更新
         await updateModule(module.id, submitData)
-        message.success('更新成功')
+        message.success(t('knowledge.updateSuccess'))
       } else {
         // 创建
         await createModule(submitData)
-        message.success('创建成功')
+        message.success(t('knowledge.saveSuccess'))
       }
       
       onSuccess()
     } catch (error) {
-      message.error(error.message || '操作失败')
+      message.error(error.message || t('knowledge.form.operationFailed'))
     } finally {
       setLoading(false)
     }
@@ -204,16 +207,15 @@ const KnowledgeModuleFormModal = ({
   // 获取可选的模块范围
   const getAvailableScopes = () => {
     const scopes = [
-      { value: 'personal', label: '个人模块', icon: <UserOutlined /> }
+      { value: 'personal', label: t('knowledge.form.scopePersonal'), icon: <UserOutlined /> }
     ]
     
     if (canCreateTeam) {
-      scopes.push({ value: 'team', label: '团队模块', icon: <TeamOutlined /> })
+      scopes.push({ value: 'team', label: t('knowledge.form.scopeTeam'), icon: <TeamOutlined /> })
     }
     
     if (canCreateSystem) {
-      // 改为全局模块
-      scopes.push({ value: 'system', label: '全局模块', icon: <GlobalOutlined /> })
+      scopes.push({ value: 'system', label: t('knowledge.form.scopeSystem'), icon: <GlobalOutlined /> })
     }
     
     return scopes
@@ -221,7 +223,7 @@ const KnowledgeModuleFormModal = ({
 
   return (
     <Modal
-      title={module ? '编辑知识模块' : '创建知识模块'}
+      title={module ? t('knowledge.form.editModule') : t('knowledge.form.createModule')}
       open={visible}
       onCancel={onCancel}
       onOk={() => form.submit()}
@@ -241,7 +243,7 @@ const KnowledgeModuleFormModal = ({
             label={
               <Space>
                 <UserOutlined />
-                创建人
+                {t('knowledge.form.creator')}
               </Space>
             }
           >
@@ -258,18 +260,18 @@ const KnowledgeModuleFormModal = ({
 
         <Form.Item
           name="name"
-          label="模块名称"
-          rules={[{ required: true, message: '请输入模块名称' }]}
+          label={t('knowledge.form.moduleName')}
+          rules={[{ required: true, message: t('knowledge.form.moduleNameRequired') }]}
         >
-          <Input placeholder="请输入模块名称" maxLength={100} />
+          <Input placeholder={t('knowledge.form.moduleNamePlaceholder')} maxLength={100} />
         </Form.Item>
 
         <Form.Item
           name="description"
-          label="模块描述"
+          label={t('knowledge.form.moduleDescription')}
         >
           <TextArea 
-            placeholder="请输入模块描述" 
+            placeholder={t('knowledge.form.moduleDescriptionPlaceholder')} 
             rows={2} 
             maxLength={500}
             showCount
@@ -278,12 +280,12 @@ const KnowledgeModuleFormModal = ({
 
         <Form.Item
           name="content"
-          label="模块内容"
-          rules={[{ required: true, message: '请输入模块内容' }]}
-          extra="支持Markdown格式，建议详细描述相关知识、规则或指令"
+          label={t('knowledge.form.moduleContent')}
+          rules={[{ required: true, message: t('knowledge.form.moduleContentRequired') }]}
+          extra={t('knowledge.form.moduleContentHelp')}
         >
           <TextArea 
-            placeholder="请输入模块内容" 
+            placeholder={t('knowledge.form.moduleContentPlaceholder')} 
             rows={10}
             showCount
           />
@@ -291,7 +293,7 @@ const KnowledgeModuleFormModal = ({
 
         <Form.Item
           name="module_scope"
-          label="模块范围"
+          label={t('knowledge.form.moduleScope')}
           rules={[{ required: true }]}
         >
           <Radio.Group 
@@ -313,8 +315,8 @@ const KnowledgeModuleFormModal = ({
           name="prompt_type"
           label={
             <Space>
-              提示词类型
-              <Tooltip title="系统级提示词会作为system角色发送给AI，优先级最高">
+              {t('knowledge.form.promptType')}
+              <Tooltip title={t('knowledge.form.promptTypeTooltip')}>
                 <InfoCircleOutlined style={{ color: '#999' }} />
               </Tooltip>
             </Space>
@@ -325,13 +327,13 @@ const KnowledgeModuleFormModal = ({
             <Radio.Button value="normal">
               <Space>
                 <UnlockOutlined />
-                普通提示词
+                {t('knowledge.form.promptNormal')}
               </Space>
             </Radio.Button>
             <Radio.Button value="system">
               <Space>
                 <LockOutlined />
-                系统级提示词
+                {t('knowledge.form.promptSystem')}
               </Space>
             </Radio.Button>
           </Radio.Group>
@@ -346,29 +348,29 @@ const KnowledgeModuleFormModal = ({
               label={
                 <Space>
                   <TagsOutlined />
-                  访问权限设置
-                  <Tooltip title="控制哪些用户可以使用此模块">
+                  {t('knowledge.form.accessPermission')}
+                  <Tooltip title={t('knowledge.form.accessPermissionTooltip')}>
                     <QuestionCircleOutlined style={{ color: '#999' }} />
                   </Tooltip>
                 </Space>
               }
             >
               <Radio.Group onChange={(e) => setTagAccessMode(e.target.value)}>
-                <Radio value="all">所有组内用户</Radio>
-                <Radio value="selected">指定标签用户</Radio>
+                <Radio value="all">{t('knowledge.form.accessAll')}</Radio>
+                <Radio value="selected">{t('knowledge.form.accessSelected')}</Radio>
               </Radio.Group>
             </Form.Item>
 
             {tagAccessMode === 'selected' && (
               <Form.Item
                 name="allowed_tag_ids"
-                label="选择允许访问的用户标签"
-                extra="只有拥有选中标签的用户才能使用此模块（创建者始终可以访问）"
+                label={t('knowledge.form.selectAllowedTags')}
+                extra={t('knowledge.form.selectAllowedTagsHelp')}
               >
                 <Checkbox.Group style={{ width: '100%' }}>
                   <Space wrap>
                     {loadingTags ? (
-                      <span>加载标签中...</span>
+                      <span>{t('knowledge.form.loadingTags')}</span>
                     ) : groupTags.length > 0 ? (
                       groupTags.map(tag => (
                         <Checkbox key={tag.id} value={tag.id}>
@@ -378,7 +380,7 @@ const KnowledgeModuleFormModal = ({
                         </Checkbox>
                       ))
                     ) : (
-                      <span style={{ color: '#999' }}>暂无可用标签</span>
+                      <span style={{ color: '#999' }}>{t('knowledge.form.noAvailableTags')}</span>
                     )}
                   </Space>
                 </Checkbox.Group>
@@ -393,8 +395,8 @@ const KnowledgeModuleFormModal = ({
             name="group_ids"
             label={
               <Space>
-                可见用户组
-                <Tooltip title="选择哪些用户组可以使用该模块，留空表示所有用户可用">
+                {t('knowledge.form.visibleGroups')}
+                <Tooltip title={t('knowledge.form.visibleGroupsTooltip')}>
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </Space>
@@ -402,7 +404,7 @@ const KnowledgeModuleFormModal = ({
           >
             <Select
               mode="multiple"
-              placeholder="留空表示所有用户可用"
+              placeholder={t('knowledge.form.visibleGroupsPlaceholder')}
               allowClear
             >
               {userGroups.map(group => (
@@ -417,19 +419,22 @@ const KnowledgeModuleFormModal = ({
         {moduleScope !== 'personal' && (
           <Form.Item
             name="content_visible"
-            label="内容可见性"
+            label={t('knowledge.form.contentVisibility')}
             valuePropName="checked"
-            extra="关闭后，使用者只能看到模块名称和描述，无法查看具体内容"
+            extra={t('knowledge.form.contentVisibilityHelp')}
           >
-            <Switch checkedChildren="内容可见" unCheckedChildren="内容隐藏" />
+            <Switch 
+              checkedChildren={t('knowledge.form.contentVisibleOn')} 
+              unCheckedChildren={t('knowledge.form.contentVisibleOff')} 
+            />
           </Form.Item>
         )}
 
         <Form.Item
           name="category"
-          label="分类"
+          label={t('knowledge.form.category')}
         >
-          <Select placeholder="请选择分类" allowClear>
+          <Select placeholder={t('knowledge.form.categoryPlaceholder')} allowClear>
             {categories.map(cat => (
               <Option key={cat.value} value={cat.value}>
                 {cat.label}
@@ -440,11 +445,11 @@ const KnowledgeModuleFormModal = ({
 
         <Form.Item
           name="tags"
-          label="标签"
+          label={t('knowledge.form.tags')}
         >
           <Select
             mode="tags"
-            placeholder="输入后回车添加标签"
+            placeholder={t('knowledge.form.tagsPlaceholder')}
             maxTagCount={5}
             maxTagTextLength={20}
           />
@@ -452,48 +457,51 @@ const KnowledgeModuleFormModal = ({
 
         <Form.Item
           name="sort_order"
-          label="排序"
-          extra="数值越小越靠前"
+          label={t('knowledge.form.sortOrder')}
+          extra={t('knowledge.form.sortOrderHelp')}
         >
           <InputNumber min={0} max={999} style={{ width: '100%' }} />
         </Form.Item>
 
         <Form.Item
           name="is_active"
-          label="状态"
+          label={t('knowledge.form.status')}
           valuePropName="checked"
         >
-          <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          <Switch 
+            checkedChildren={t('knowledge.form.statusEnabled')} 
+            unCheckedChildren={t('knowledge.form.statusDisabled')} 
+          />
         </Form.Item>
 
         {module && (
           <Alert
-            message="提示"
+            message={t('knowledge.form.tip')}
             description={
               <>
-                <div>修改模块内容后，已使用该模块的组合需要重新保存才能生效。</div>
+                <div>{t('knowledge.form.tipContent')}</div>
                 {moduleScope === 'team' && (
                   <div style={{ marginTop: 8 }}>
-                    <strong>团队模块权限说明：</strong>
+                    <strong>{t('knowledge.form.teamPermissionTitle')}</strong>
                     <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                      <li>不设置标签限制：组内所有用户都可以使用</li>
-                      <li>设置标签限制：只有拥有指定标签的用户可以使用</li>
-                      <li>模块创建者始终拥有访问权限</li>
+                      <li>{t('knowledge.form.teamPermission1')}</li>
+                      <li>{t('knowledge.form.teamPermission2')}</li>
+                      <li>{t('knowledge.form.teamPermission3')}</li>
                     </ul>
                   </div>
                 )}
                 {moduleScope === 'system' && (
                   <div style={{ marginTop: 8 }}>
-                    <strong>全局模块权限说明：</strong>
+                    <strong>{t('knowledge.form.systemPermissionTitle')}</strong>
                     <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                      <li>不选择任何用户组：所有用户都可以使用</li>
-                      <li>选择特定用户组：只有选中的组内用户可以使用</li>
+                      <li>{t('knowledge.form.systemPermission1')}</li>
+                      <li>{t('knowledge.form.systemPermission2')}</li>
                     </ul>
                   </div>
                 )}
                 {module.creator_name && module.creator_name !== user.username && (
                   <div style={{ marginTop: 8, color: '#1890ff' }}>
-                    <InfoCircleOutlined /> 该模块由 <strong>{module.creator_name}</strong> 创建
+                    <InfoCircleOutlined /> {t('knowledge.form.createdBy', { creator: module.creator_name })}
                   </div>
                 )}
               </>

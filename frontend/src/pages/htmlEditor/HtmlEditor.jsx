@@ -1,6 +1,7 @@
 /**
  * HTML编辑器主页面 - 自动页面管理增强版（修复积分加载时序问题）
  * 自动加载或创建页面，无欢迎页
+ * 支持国际化(i18n)
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -75,33 +76,6 @@ if (typeof window !== 'undefined' && !window.MonacoEnvironment) {
   };
 }
 
-// 简单的空白HTML模板
-const BLANK_HTML_TEMPLATE = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>新页面</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            padding: 20px;
-            line-height: 1.6;
-        }
-    </style>
-</head>
-<body>
-    <h1>开始创建您的页面</h1>
-    <p>这是一个空白页面，您可以开始编写HTML代码了。</p>
-</body>
-</html>`;
-
-// 生成带时间戳的页面标题
-const generateTimestampTitle = () => {
-  const now = moment();
-  return `页面_${now.format('YYYYMMDD_HHmmss')}`;
-};
-
 const HtmlEditor = () => {
   const { t } = useTranslation();
   const { user, getCurrentUser } = useAuthStore();
@@ -121,6 +95,33 @@ const HtmlEditor = () => {
     loadPage,
     updateProject
   } = useHtmlEditorStore();
+
+  // 简单的空白HTML模板 - 使用t()函数
+  const BLANK_HTML_TEMPLATE = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${t('htmlEditor.newPage')}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <h1>${t('htmlEditor.startCreate')}</h1>
+    <p>${t('htmlEditor.blankPage')}</p>
+</body>
+</html>`;
+
+  // 生成带时间戳的页面标题
+  const generateTimestampTitle = () => {
+    const now = moment();
+    return `${t('htmlEditor.page')}_${now.format('YYYYMMDD_HHmmss')}`;
+  };
 
   // 状态管理
   const [selectedProject, setSelectedProject] = useState(null);
@@ -224,7 +225,7 @@ const HtmlEditor = () => {
         return response.data.data;
       }
     } catch (error) {
-      console.error('获取积分配置失败:', error);
+      console.error(t('htmlEditor.credits.configFailed'), error);
     }
     return null;
   };
@@ -235,29 +236,33 @@ const HtmlEditor = () => {
       await getCurrentUser();
       updateUserCredits();
     } catch (error) {
-      console.error('刷新用户积分失败:', error);
+      console.error(t('htmlEditor.credits.refreshFailed'), error);
     }
   };
 
   // 格式化积分显示
   const formatCreditsDisplay = (credits) => {
-    return credits === 0 ? '免费' : `${credits} 积分`;
+    return credits === 0 ? t('htmlEditor.credits.free') : t('htmlEditor.credits.required', { credits });
   };
 
   // 格式化积分显示（保存按钮专用，不显示免费）
   const formatCreditsDisplayForSave = (credits) => {
-    return credits === 0 ? '' : `(${credits} 积分)`;
+    return credits === 0 ? '' : `(${credits} ${t('htmlEditor.credits.creditsUnit')})`;
   };
 
   // 检查是否可以执行需要积分的操作
   const canPerformCreditAction = (requiredCredits, actionName) => {
     if (creditsLoading) {
-      message.warning('积分信息加载中，请稍候...');
+      message.warning(t('htmlEditor.credits.loading'));
       return false;
     }
     
     if (requiredCredits > 0 && userCredits < requiredCredits) {
-      message.error(`积分不足！${actionName}需要 ${requiredCredits} 积分，当前余额 ${userCredits} 积分`);
+      message.error(t('htmlEditor.credits.insufficient', {
+        action: actionName,
+        required: requiredCredits,
+        current: userCredits
+      }));
       return false;
     }
     
@@ -275,12 +280,12 @@ const HtmlEditor = () => {
         setHtmlContent(BLANK_HTML_TEMPLATE);
       }
     }
-  }, [currentPage]);
+  }, [currentPage, BLANK_HTML_TEMPLATE]);
 
   // 实时预览更新
   useEffect(() => {
-    setCompiledContent(htmlContent || '<!DOCTYPE html><html><body style="padding:20px;color:#999;font-family:system-ui;">开始编写你的HTML代码...</body></html>');
-  }, [htmlContent]);
+    setCompiledContent(htmlContent || `<!DOCTYPE html><html><body style="padding:20px;color:#999;font-family:system-ui;">${t('htmlEditor.editor.startWriting')}</body></html>`);
+  }, [htmlContent, t]);
 
   // 自动创建或选择页面
   const autoHandlePage = async (projectId) => {
@@ -300,7 +305,7 @@ const HtmlEditor = () => {
           const firstPage = currentPages[0];
           setSelectedPageId(firstPage.id);
           await loadPage(firstPage.id);
-          message.info(`已加载页面: ${firstPage.title}`);
+          message.info(t('htmlEditor.page.loaded', { title: firstPage.title }));
         } else {
           // 等待积分加载完成
           if (creditsLoading) {
@@ -315,8 +320,8 @@ const HtmlEditor = () => {
           const autoTitle = generateTimestampTitle();
           
           // 检查积分是否足够
-          if (!canPerformCreditAction(creditsConfig.credits_per_page, '创建页面')) {
-            message.warning('积分不足，无法自动创建页面，请充值后手动创建');
+          if (!canPerformCreditAction(creditsConfig.credits_per_page, t('htmlEditor.page.create'))) {
+            message.warning(t('htmlEditor.credits.cannotAutoCreate'));
             setHtmlContent(BLANK_HTML_TEMPLATE);
             return;
           }
@@ -331,7 +336,7 @@ const HtmlEditor = () => {
             };
             
             const newPage = await createPage(pageData);
-            message.success(`已自动创建页面: ${autoTitle}`);
+            message.success(t('htmlEditor.page.autoCreated', { title: autoTitle }));
             setSelectedPageId(newPage.id);
             await loadPage(newPage.id);
             setHtmlContent(BLANK_HTML_TEMPLATE);
@@ -341,7 +346,7 @@ const HtmlEditor = () => {
             await refreshUserCredits();
           } catch (error) {
             console.error('自动创建页面失败:', error);
-            message.error('自动创建页面失败，请手动创建');
+            message.error(t('htmlEditor.page.createFailed'));
             setHtmlContent(BLANK_HTML_TEMPLATE);
           }
         }
@@ -355,7 +360,7 @@ const HtmlEditor = () => {
   // 预览页面
   const handlePreview = () => {
     if (!htmlContent) {
-      message.warning('编辑器内容为空');
+      message.warning(t('htmlEditor.editor.empty'));
       return;
     }
 
@@ -367,18 +372,18 @@ const HtmlEditor = () => {
       URL.revokeObjectURL(url);
     }, 1000);
     
-    message.success('预览窗口已打开');
+    message.success(t('htmlEditor.editor.previewOpened'));
   };
 
   // 创建项目
   const handleCreateProject = async (values) => {
     try {
       await createProject(values);
-      message.success('项目创建成功');
+      message.success(t('htmlEditor.project.createSuccess'));
       setShowProjectModal(false);
       projectForm.resetFields();
     } catch (error) {
-      message.error('创建项目失败');
+      message.error(t('htmlEditor.project.createFailed'));
     }
   };
 
@@ -405,27 +410,27 @@ const HtmlEditor = () => {
   // 删除项目
   const handleDeleteProject = (project) => {
     if (project.is_default === 1 || project.name === '默认项目') {
-      message.warning('默认项目不能删除');
+      message.warning(t('htmlEditor.project.defaultCannotDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认删除',
+      title: t('htmlEditor.project.deleteConfirm'),
       content: (
         <div>
-          <p>确定要删除项目 "{project.name}" 吗？</p>
+          <p>{t('htmlEditor.project.deleteContent', { name: project.name })}</p>
           <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            注意：只能删除空项目。如果项目内有页面，请先删除页面。
+            {t('htmlEditor.project.deleteWarning')}
           </p>
         </div>
       ),
-      okText: '确定删除',
+      okText: t('htmlEditor.project.deleteButton'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('htmlEditor.action.cancel'),
       onOk: async () => {
         try {
           await deleteProject(project.id);
-          message.success('项目删除成功');
+          message.success(t('htmlEditor.project.deleteSuccess'));
           
           if (selectedProject?.id === project.id) {
             setSelectedProject(null);
@@ -435,7 +440,7 @@ const HtmlEditor = () => {
           
           await getProjects();
         } catch (error) {
-          const errorMsg = error.response?.data?.message || '删除项目失败';
+          const errorMsg = error.response?.data?.message || t('htmlEditor.project.deleteFailed');
           message.error(errorMsg);
         }
       }
@@ -455,11 +460,11 @@ const HtmlEditor = () => {
     try {
       if (renameType === 'project') {
         await updateProject(renameItem.id, { name: values.name });
-        message.success('项目名称更新成功');
+        message.success(t('htmlEditor.project.renameSuccess'));
         await getProjects();
       } else if (renameType === 'page') {
         await updatePage(renameItem.id, { title: values.name });
-        message.success('页面名称更新成功');
+        message.success(t('htmlEditor.page.renameSuccess'));
         await getPages(selectedProject?.id);
         if (renameItem.id === selectedPageId) {
           await loadPage(renameItem.id);
@@ -469,7 +474,7 @@ const HtmlEditor = () => {
       renameForm.resetFields();
       setRenameItem(null);
     } catch (error) {
-      message.error('更新名称失败');
+      message.error(t('htmlEditor.project.createFailed'));
     }
   };
 
@@ -483,11 +488,11 @@ const HtmlEditor = () => {
   // 创建页面
   const handleCreatePage = async (values) => {
     if (!selectedProject) {
-      message.warning('请先选择一个项目');
+      message.warning(t('htmlEditor.page.selectFirst'));
       return;
     }
 
-    if (!canPerformCreditAction(creditsConfig.credits_per_page, '创建页面')) {
+    if (!canPerformCreditAction(creditsConfig.credits_per_page, t('htmlEditor.page.create'))) {
       return;
     }
 
@@ -501,7 +506,7 @@ const HtmlEditor = () => {
       };
       
       const newPage = await createPage(pageData);
-      message.success('页面创建成功');
+      message.success(t('htmlEditor.page.createSuccess'));
       setShowPageModal(false);
       pageForm.resetFields();
       setSelectedPageId(newPage.id);
@@ -511,18 +516,18 @@ const HtmlEditor = () => {
       await getPages(selectedProject.id);
       await refreshUserCredits();
     } catch (error) {
-      message.error(error.message || '创建页面失败');
+      message.error(error.message || t('htmlEditor.page.createFailed'));
     }
   };
 
   // 保存页面
   const handleSavePage = async () => {
     if (!selectedPageId) {
-      message.warning('请先选择或创建一个页面');
+      message.warning(t('htmlEditor.page.selectFirst'));
       return;
     }
 
-    if (!canPerformCreditAction(creditsConfig.credits_per_update, '保存页面')) {
+    if (!canPerformCreditAction(creditsConfig.credits_per_update, t('htmlEditor.credits.perUpdate'))) {
       return;
     }
 
@@ -533,12 +538,12 @@ const HtmlEditor = () => {
         css_content: '',
         js_content: ''
       });
-      message.success('页面保存成功');
+      message.success(t('htmlEditor.page.saveSuccess'));
       await refreshUserCredits();
       // 刷新页面列表以更新状态
       await getPages(selectedProject?.id);
     } catch (error) {
-      message.error(error.message || '保存失败');
+      message.error(error.message || t('htmlEditor.page.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -553,15 +558,15 @@ const HtmlEditor = () => {
   // 删除页面
   const handleDeletePage = (page) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除页面 "${page.title}" 吗？`,
-      okText: '确定删除',
+      title: t('htmlEditor.project.deleteConfirm'),
+      content: t('htmlEditor.page.deleteConfirm', { title: page.title }),
+      okText: t('htmlEditor.project.deleteButton'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('htmlEditor.action.cancel'),
       onOk: async () => {
         try {
           await deletePage(page.id);
-          message.success('页面删除成功');
+          message.success(t('htmlEditor.page.deleteSuccess'));
           if (selectedPageId === page.id) {
             setSelectedPageId(null);
             setHtmlContent(BLANK_HTML_TEMPLATE);
@@ -575,7 +580,7 @@ const HtmlEditor = () => {
           }
           await getPages(selectedProject.id);
         } catch (error) {
-          message.error('删除页面失败');
+          message.error(t('htmlEditor.page.deleteFailed'));
         }
       }
     });
@@ -584,27 +589,27 @@ const HtmlEditor = () => {
   // 复制内容
   const handleCopyContent = () => {
     if (!htmlContent) {
-      message.warning('编辑器内容为空');
+      message.warning(t('htmlEditor.editor.empty'));
       return;
     }
     
     navigator.clipboard.writeText(htmlContent).then(() => {
-      message.success('内容已复制到剪贴板');
+      message.success(t('htmlEditor.editor.copied'));
     }).catch(() => {
-      message.error('复制失败，请手动复制');
+      message.error(t('htmlEditor.editor.copyFailed'));
     });
   };
 
   // 清空编辑器 - 直接清空
   const handleClearContent = () => {
     setHtmlContent('');
-    message.success('编辑器已清空');
+    message.success(t('htmlEditor.editor.cleared'));
   };
 
   // 生成永久链接
   const handleGeneratePermalink = async () => {
     if (!selectedPageId) {
-      message.warning('请先保存页面');
+      message.warning(t('htmlEditor.link.saveFirst'));
       return;
     }
 
@@ -614,22 +619,22 @@ const HtmlEditor = () => {
       return;
     }
 
-    if (!canPerformCreditAction(creditsConfig.credits_per_publish, '生成永久链接')) {
+    if (!canPerformCreditAction(creditsConfig.credits_per_publish, t('htmlEditor.link.generate'))) {
       return;
     }
 
     Modal.confirm({
-      title: '生成永久链接',
+      title: t('htmlEditor.link.generate'),
       content: (
         <div>
-          <p>生成永久链接后，页面将可以通过固定URL访问</p>
+          <p>{t('htmlEditor.link.generateConfirm')}</p>
           {creditsConfig.credits_per_publish > 0 && (
-            <p>需要消耗 <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> 积分</p>
+            <p>{t('htmlEditor.link.costCredits')} <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> {t('htmlEditor.credits.creditsUnit')}</p>
           )}
         </div>
       ),
-      okText: '确认生成',
-      cancelText: '取消',
+      okText: t('htmlEditor.link.confirmGenerate'),
+      cancelText: t('htmlEditor.action.cancel'),
       onOk: async () => {
         try {
           const result = await togglePublish(selectedPageId);
@@ -638,7 +643,7 @@ const HtmlEditor = () => {
             await refreshUserCredits();
           }
         } catch (error) {
-          message.error('生成链接失败');
+          message.error(t('htmlEditor.link.generateFailed'));
         }
       }
     });
@@ -649,26 +654,26 @@ const HtmlEditor = () => {
     const publishUrl = `${window.location.origin}/pages/${user.id}/${page.slug}`;
     
     Modal.success({
-      title: '永久链接',
+      title: t('htmlEditor.link.permanentLink'),
       width: 600,
       content: (
         <div>
-          <p>你的页面永久链接：</p>
+          <p>{t('htmlEditor.link.yourLink')}</p>
           <Space.Compact style={{ width: '100%', marginTop: 10 }}>
             <Input value={publishUrl} readOnly />
             <Button 
               icon={<CopyOutlined />}
               onClick={() => {
                 navigator.clipboard.writeText(publishUrl);
-                message.success('链接已复制');
+                message.success(t('htmlEditor.link.copied'));
               }}
             />
           </Space.Compact>
           <Divider />
-          <Text type="secondary">提示：此链接永久有效，可以分享给任何人访问</Text>
+          <Text type="secondary">{t('htmlEditor.link.tip')}</Text>
         </div>
       ),
-      okText: '打开页面',
+      okText: t('htmlEditor.link.openPage'),
       onOk: () => window.open(publishUrl, '_blank')
     });
   };
@@ -962,28 +967,28 @@ const HtmlEditor = () => {
             loading={isSaving}
             disabled={!selectedPageId || creditsLoading}
           >
-            保存 {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}
+            {t('htmlEditor.save')} {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}
           </Button>
           <Button 
             style={iosStyles.previewButton}
             icon={<EyeOutlined />} 
             onClick={handlePreview}
           >
-            预览
+            {t('htmlEditor.preview')}
           </Button>
           <Button 
             style={iosStyles.copyButton}
             icon={<CopyOutlined />} 
             onClick={handleCopyContent}
           >
-            复制
+            {t('htmlEditor.copy')}
           </Button>
           <Button 
             style={iosStyles.clearButton}
             icon={<ClearOutlined />} 
             onClick={handleClearContent}
           >
-            清空
+            {t('htmlEditor.clear')}
           </Button>
           <Button
             style={{
@@ -994,7 +999,7 @@ const HtmlEditor = () => {
             onClick={handleGeneratePermalink}
             disabled={!selectedPageId || creditsLoading}
           >
-            生成链接 ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
+            {t('htmlEditor.generateLink')} ({formatCreditsDisplay(creditsConfig.credits_per_publish)})
           </Button>
         </Space>
         
@@ -1014,7 +1019,7 @@ const HtmlEditor = () => {
                   background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)', 
                   color: 'white' 
                 }}>
-                  <GlobalOutlined /> 已发布
+                  <GlobalOutlined /> {t('htmlEditor.published')}
                 </Tag>
               )}
             </Space>
@@ -1030,9 +1035,9 @@ const HtmlEditor = () => {
             color: creditsLoading ? '#666' : '#000' 
           }}>
             {creditsLoading ? (
-              <><LoadingOutlined spin /> 加载中...</>
+              <><LoadingOutlined spin /> {t('htmlEditor.loading')}</>
             ) : (
-              <><DollarOutlined /> 积分: {userCredits}</>
+              <><DollarOutlined /> {t('htmlEditor.credits')}: {userCredits}</>
             )}
           </Tag>
           <Select
@@ -1040,9 +1045,9 @@ const HtmlEditor = () => {
             onChange={setPreviewMode}
             style={{ width: 100, borderRadius: 8 }}
             options={[
-              { value: 'desktop', label: '桌面' },
-              { value: 'tablet', label: '平板' },
-              { value: 'mobile', label: '手机' }
+              { value: 'desktop', label: t('htmlEditor.desktop') },
+              { value: 'tablet', label: t('htmlEditor.tablet') },
+              { value: 'mobile', label: t('htmlEditor.mobile') }
             ]}
           />
           <Select
@@ -1050,8 +1055,8 @@ const HtmlEditor = () => {
             onChange={setEditorTheme}
             style={{ width: 90, borderRadius: 8 }}
             options={[
-              { value: 'vs-dark', label: '暗色' },
-              { value: 'vs-light', label: '亮色' }
+              { value: 'vs-dark', label: t('htmlEditor.dark') },
+              { value: 'vs-light', label: t('htmlEditor.light') }
             ]}
           />
         </Space>
@@ -1063,6 +1068,12 @@ const HtmlEditor = () => {
           width={300} 
           collapsed={sidebarCollapsed}
           collapsedWidth={0}
+          breakpoint="xl"
+          onBreakpoint={(broken) => {
+            if (window.innerWidth > 1600) {
+              setSidebarCollapsed(broken)
+            }
+          }}
           style={iosStyles.sidebar}
         >
           <div style={iosStyles.sidebarContent}>
@@ -1070,7 +1081,7 @@ const HtmlEditor = () => {
             <div style={iosStyles.sidebarSection}>
               <div style={iosStyles.sectionHeader}>
                 <h3 style={iosStyles.sectionTitle}>
-                  <AppstoreOutlined style={{ color: '#007AFF' }} /> 项目
+                  <AppstoreOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.projects')}
                 </h3>
                 <Button
                   type="primary"
@@ -1079,7 +1090,7 @@ const HtmlEditor = () => {
                   icon={<PlusOutlined />}
                   onClick={() => setShowProjectModal(true)}
                 >
-                  新建
+                  {t('htmlEditor.new')}
                 </Button>
               </div>
               
@@ -1108,7 +1119,7 @@ const HtmlEditor = () => {
                             padding: '2px 6px',
                             fontSize: 11
                           }}>
-                            默认
+                            {t('htmlEditor.default')}
                           </Tag>
                         )}
                       </Space>
@@ -1146,7 +1157,7 @@ const HtmlEditor = () => {
                   ))}
                 </div>
               ) : (
-                <Empty description="暂无项目" style={{ marginTop: 40 }} />
+                <Empty description={t('htmlEditor.noProjects')} style={{ marginTop: 40 }} />
               )}
             </div>
 
@@ -1155,7 +1166,7 @@ const HtmlEditor = () => {
               <div style={iosStyles.pageListSection}>
                 <div style={iosStyles.sectionHeader}>
                   <h3 style={iosStyles.sectionTitle}>
-                    <FileTextOutlined style={{ color: '#AF52DE' }} /> 页面
+                    <FileTextOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.pages')}
                   </h3>
                   <Button
                     type="primary"
@@ -1169,13 +1180,13 @@ const HtmlEditor = () => {
                     onClick={handleOpenPageModal}
                     disabled={creditsLoading}
                   >
-                    新建
+                    {t('htmlEditor.new')}
                   </Button>
                 </div>
                 
                 {loadingPages ? (
                   <div style={{ textAlign: 'center', padding: 40 }}>
-                    <Spin tip="加载页面中..." />
+                    <Spin tip={t('htmlEditor.page.loadingPages')} />
                   </div>
                 ) : pages.length > 0 ? (
                   <div style={iosStyles.pageListScrollContainer} className="page-list-scroll">
@@ -1227,7 +1238,7 @@ const HtmlEditor = () => {
                     ))}
                   </div>
                 ) : (
-                  <Empty description="暂无页面" style={{ marginTop: 40 }}>
+                  <Empty description={t('htmlEditor.noPages')} style={{ marginTop: 40 }}>
                     <Button 
                       type="primary" 
                       style={{ 
@@ -1241,7 +1252,7 @@ const HtmlEditor = () => {
                       onClick={handleOpenPageModal}
                       disabled={creditsLoading}
                     >
-                      创建第一个页面
+                      {t('htmlEditor.createFirstPage')}
                     </Button>
                   </Empty>
                 )}
@@ -1250,7 +1261,7 @@ const HtmlEditor = () => {
 
             {!selectedProject && (
               <div style={{ padding: 40, textAlign: 'center' }}>
-                <Empty description="请选择一个项目" />
+                <Empty description={t('htmlEditor.selectProject')} />
               </div>
             )}
           </div>
@@ -1262,10 +1273,10 @@ const HtmlEditor = () => {
           <div style={iosStyles.editorSection}>
             <div style={iosStyles.editorHeader}>
               <span style={{ fontWeight: 600, fontSize: 15, color: '#000' }}>
-                <CodeOutlined style={{ color: '#007AFF' }} /> HTML编辑器
+                <CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}
               </span>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>
-                {editorReady ? '就绪' : '加载中...'}
+                {editorReady ? t('htmlEditor.ready') : t('htmlEditor.loading')}
               </span>
             </div>
             <div style={{ flex: 1, background: '#1e1e1e' }}>
@@ -1288,7 +1299,7 @@ const HtmlEditor = () => {
                     background: 'white'
                   }}>
                     <Spin size="large" />
-                    <div style={{ color: '#8E8E93' }}>正在加载编辑器...</div>
+                    <div style={{ color: '#8E8E93' }}>{t('htmlEditor.loadingEditor')}</div>
                   </div>
                 }
               />
@@ -1299,11 +1310,11 @@ const HtmlEditor = () => {
           <div style={iosStyles.previewSection}>
             <div style={iosStyles.editorHeader}>
               <span style={{ fontWeight: 600, fontSize: 15, color: '#000' }}>
-                <EyeOutlined style={{ color: '#AF52DE' }} /> 实时预览
+                <EyeOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.realTimePreview')}
               </span>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>
-                {previewMode === 'desktop' ? '桌面' : 
-                 previewMode === 'tablet' ? '平板' : '手机'}
+                {previewMode === 'desktop' ? t('htmlEditor.desktop') : 
+                 previewMode === 'tablet' ? t('htmlEditor.tablet') : t('htmlEditor.mobile')}
               </span>
             </div>
             <div style={iosStyles.previewContent}>
@@ -1333,7 +1344,7 @@ const HtmlEditor = () => {
 
       {/* 创建项目弹窗 */}
       <Modal
-        title="创建项目"
+        title={t('htmlEditor.project.create')}
         open={showProjectModal}
         onOk={() => projectForm.submit()}
         onCancel={() => {
@@ -1349,14 +1360,14 @@ const HtmlEditor = () => {
         >
           <Form.Item
             name="name"
-            label="项目名称"
-            rules={[{ required: true, message: '请输入项目名称' }]}
+            label={t('htmlEditor.project.name')}
+            rules={[{ required: true, message: t('htmlEditor.project.nameRequired') }]}
           >
-            <Input placeholder="输入项目名称" style={{ borderRadius: 8 }} />
+            <Input placeholder={t('htmlEditor.project.namePlaceholder')} style={{ borderRadius: 8 }} />
           </Form.Item>
           <Form.Item
             name="type"
-            label="类型"
+            label={t('htmlEditor.project.type')}
             initialValue="folder"
             hidden
           >
@@ -1364,16 +1375,16 @@ const HtmlEditor = () => {
           </Form.Item>
           <Form.Item
             name="description"
-            label="描述"
+            label={t('htmlEditor.project.description')}
           >
-            <TextArea rows={3} placeholder="项目描述（可选）" style={{ borderRadius: 8 }} />
+            <TextArea rows={3} placeholder={t('htmlEditor.project.descriptionPlaceholder')} style={{ borderRadius: 8 }} />
           </Form.Item>
         </Form>
       </Modal>
 
       {/* 创建页面弹窗 */}
       <Modal
-        title={`在 "${selectedProject?.name}" 中创建页面`}
+        title={t('htmlEditor.page.createIn', { project: selectedProject?.name })}
         open={showPageModal}
         onOk={() => pageForm.submit()}
         onCancel={() => {
@@ -1386,7 +1397,7 @@ const HtmlEditor = () => {
             setShowPageModal(false);
             pageForm.resetFields();
           }}>
-            取消
+            {t('htmlEditor.action.cancel')}
           </Button>,
           <Button 
             key="submit" 
@@ -1399,7 +1410,7 @@ const HtmlEditor = () => {
             }}
             disabled={creditsLoading}
           >
-            创建 ({formatCreditsDisplay(creditsConfig.credits_per_page)})
+            {t('htmlEditor.page.createButton')} ({formatCreditsDisplay(creditsConfig.credits_per_page)})
           </Button>
         ]}
       >
@@ -1410,11 +1421,11 @@ const HtmlEditor = () => {
         >
           <Form.Item
             name="title"
-            label="页面标题"
-            tooltip="默认以当前时间命名，您可以修改为自己想要的标题"
+            label={t('htmlEditor.page.title')}
+            tooltip={t('htmlEditor.page.titleTooltip')}
           >
             <Input 
-              placeholder="输入页面标题（可选）" 
+              placeholder={t('htmlEditor.page.titlePlaceholder')} 
               allowClear
               style={{ borderRadius: 8 }}
             />
@@ -1425,17 +1436,17 @@ const HtmlEditor = () => {
             <Divider />
             <Space direction="vertical" style={{ width: '100%' }}>
               <Text type="secondary">
-                创建页面需要消耗 <Text strong>{creditsConfig.credits_per_page}</Text> 积分
+                {t('htmlEditor.credits.perPage', { credits: creditsConfig.credits_per_page })}
               </Text>
               <Text type="secondary">
-                您当前积分余额：
+                {t('htmlEditor.credits.currentBalance')}
                 {creditsLoading ? (
-                  <Text strong><LoadingOutlined spin /> 加载中...</Text>
+                  <Text strong><LoadingOutlined spin /> {t('htmlEditor.loading')}</Text>
                 ) : (
                   <Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>
                     {userCredits}
                   </Text>
-                )} 积分
+                )} {t('htmlEditor.credits.creditsUnit')}
               </Text>
             </Space>
           </>
@@ -1444,7 +1455,7 @@ const HtmlEditor = () => {
 
       {/* 重命名弹窗 */}
       <Modal
-        title={renameType === 'project' ? '修改项目名称' : '修改页面名称'}
+        title={renameType === 'project' ? t('htmlEditor.project.rename') : t('htmlEditor.page.rename')}
         open={showRenameModal}
         onOk={() => renameForm.submit()}
         onCancel={() => {
@@ -1461,10 +1472,10 @@ const HtmlEditor = () => {
         >
           <Form.Item
             name="name"
-            label={renameType === 'project' ? '项目名称' : '页面名称'}
-            rules={[{ required: true, message: '请输入名称' }]}
+            label={renameType === 'project' ? t('htmlEditor.project.name') : t('htmlEditor.page.name')}
+            rules={[{ required: true, message: t('htmlEditor.page.nameRequired') }]}
           >
-            <Input placeholder="输入新名称" style={{ borderRadius: 8 }} />
+            <Input placeholder={t('htmlEditor.page.namePlaceholder')} style={{ borderRadius: 8 }} />
           </Form.Item>
         </Form>
       </Modal>
