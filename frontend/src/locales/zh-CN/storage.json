@@ -61,5 +61,20 @@
   "storage.folderType.group": "组织",
   "storage.noPermission": "无权限访问",
   "storage.onlyAdminCanUpload": "仅管理员可上传",
-  "storage.readOnly": "只读"
+  "storage.readOnly": "只读",
+  
+  "storage.uploadDescription": "上传说明",
+  "storage.fileSizeLimit": "文件大小限制：",
+  "storage.singleFileLimit": "单个文件不超过 {{size}}MB",
+  "storage.creditCalculation": "积分计算规则：",
+  "storage.creditRule5MB": "5MB及以下文件：{{base}}积分/个，超过5MB部分：每5MB收取{{per5mb}}积分",
+  "storage.currentCredits": "当前可用积分：",
+  "storage.selectedFiles": "已选文件",
+  "storage.totalSize": "总大小",
+  "storage.requiredCredits": "需要积分",
+  "storage.credits": "积分",
+  "storage.creditUnit": "个",
+  "storage.insufficientCredits": "积分不足！需要 {{required}} 积分，当前余额 {{current}} 积分",
+  "storage.copyFailed": "复制失败，请手动复制",
+  "storage.dragActive": "松开鼠标即可上传"
 }

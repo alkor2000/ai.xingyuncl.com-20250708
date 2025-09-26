@@ -1,7 +1,7 @@
 /**
  * 文件存储管理页面 - iOS风格界面（增强版）
  * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
- * 修改：在列表视图操作列添加复制链接按钮
+ * 修改：完整国际化支持(i18n)
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -244,33 +244,6 @@ const FileIcon = ({ mimeType, fileName, size = 64 }) => {
 }
 
 /**
- * 复制链接到剪贴板的辅助函数
- */
-const copyToClipboard = async (text, successMessage) => {
-  try {
-    // 优先使用现代API
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text)
-      message.success(successMessage || '链接已复制到剪贴板')
-    } else {
-      // 降级方案
-      const textArea = document.createElement('textarea')
-      textArea.value = text
-      textArea.style.position = 'fixed'
-      textArea.style.opacity = '0'
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      message.success(successMessage || '链接已复制到剪贴板')
-    }
-  } catch (error) {
-    message.error('复制失败，请手动复制')
-    console.error('复制到剪贴板失败:', error)
-  }
-}
-
-/**
  * 主组件
  */
 const StorageManager = () => {
@@ -324,6 +297,33 @@ const StorageManager = () => {
   const [folderCounts, setFolderCounts] = useState({}) // 文件夹内文件数量
   const [uploadCreditsNeeded, setUploadCreditsNeeded] = useState(0) // 上传所需积分
   const [userCredits, setUserCredits] = useState(0) // 用户当前积分
+
+  /**
+   * 复制链接到剪贴板的辅助函数 - 移到组件内部
+   */
+  const copyToClipboard = useCallback(async (text, successMessage, errorMessage) => {
+    try {
+      // 优先使用现代API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text)
+        message.success(successMessage || t('storage.linkCopied'))
+      } else {
+        // 降级方案
+        const textArea = document.createElement('textarea')
+        textArea.value = text
+        textArea.style.position = 'fixed'
+        textArea.style.opacity = '0'
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        message.success(successMessage || t('storage.linkCopied'))
+      }
+    } catch (error) {
+      message.error(errorMessage || t('storage.copyFailed'))
+      console.error('复制到剪贴板失败:', error)
+    }
+  }, [t])
 
   // 初始化加载数据
   useEffect(() => {
@@ -444,7 +444,10 @@ const StorageManager = () => {
 
     // 检查积分是否足够
     if (uploadCreditsNeeded > 0 && userCredits < uploadCreditsNeeded) {
-      message.error(`积分不足！需要 ${uploadCreditsNeeded} 积分，当前余额 ${userCredits} 积分`)
+      message.error(t('storage.insufficientCredits', { 
+        required: uploadCreditsNeeded, 
+        current: userCredits 
+      }))
       return
     }
 
@@ -836,7 +839,7 @@ const StorageManager = () => {
                 type="link" 
                 size="small" 
                 onClick={() => {
-                  copyToClipboard(record.oss_url, t('storage.linkCopied'))
+                  copyToClipboard(record.oss_url, t('storage.linkCopied'), t('storage.copyFailed'))
                 }}
               >
                 <LinkOutlined />
@@ -857,7 +860,10 @@ const StorageManager = () => {
   const getCreditDescription = () => {
     if (!creditConfig) return ''
     
-    return `5MB及以下文件：${creditConfig.base_credits}积分/个，超过5MB部分：每5MB收取${creditConfig.credits_per_5mb}积分`
+    return t('storage.creditRule5MB', {
+      base: creditConfig.base_credits,
+      per5mb: creditConfig.credits_per_5mb
+    })
   }
 
   return (
@@ -1083,7 +1089,7 @@ const StorageManager = () => {
                 </div>
                 
                 <div className="menu-item" onClick={() => {
-                  copyToClipboard(contextMenu.item.oss_url, t('storage.linkCopied'))
+                  copyToClipboard(contextMenu.item.oss_url, t('storage.linkCopied'), t('storage.copyFailed'))
                   closeContextMenu()
                 }}>
                   <CopyOutlined className="menu-icon" />
@@ -1120,24 +1126,24 @@ const StorageManager = () => {
           {/* 积分和限制信息 */}
           {creditConfig && (
             <Alert
-              message="上传说明"
+              message={t('storage.uploadDescription')}
               description={
                 <div>
                   <div style={{ marginBottom: 8 }}>
                     <InfoCircleOutlined style={{ marginRight: 8 }} />
-                    <strong>文件大小限制：</strong>
-                    单个文件不超过 <span style={{ color: '#1890ff' }}>{creditConfig.max_file_size || 100}MB</span>
+                    <strong>{t('storage.fileSizeLimit')}</strong>
+                    {t('storage.singleFileLimit', { size: creditConfig.max_file_size || 100 })}
                   </div>
                   <div style={{ marginBottom: 8 }}>
                     <DollarOutlined style={{ marginRight: 8 }} />
-                    <strong>积分计算规则：</strong>
+                    <strong>{t('storage.creditCalculation')}</strong>
                     {getCreditDescription()}
                   </div>
                   <div>
                     <DollarOutlined style={{ marginRight: 8 }} />
-                    <strong>当前可用积分：</strong>
+                    <strong>{t('storage.currentCredits')}</strong>
                     <span style={{ color: userCredits > 0 ? '#52c41a' : '#ff4d4f' }}>
-                      {userCredits} 积分
+                      {userCredits} {t('storage.credits')}
                     </span>
                   </div>
                 </div>
@@ -1155,7 +1161,7 @@ const StorageManager = () => {
               // 检查文件大小
               const maxSize = (creditConfig?.max_file_size || 100) * 1024 * 1024
               if (file.size > maxSize) {
-                message.error(`文件 ${file.name} 超过最大限制 ${creditConfig?.max_file_size || 100}MB`)
+                message.error(t('storage.singleFileLimit', { size: creditConfig?.max_file_size || 100 }))
                 return false
               }
               setFileList([...fileList, file])
@@ -1171,7 +1177,7 @@ const StorageManager = () => {
             <p className="ant-upload-text">{t('storage.uploadHint')}</p>
             <p className="ant-upload-hint">
               {creditConfig ? 
-                `支持批量上传，单个文件不超过${creditConfig.max_file_size || 100}MB` : 
+                t('storage.singleFileLimit', { size: creditConfig.max_file_size || 100 }) :
                 t('storage.uploadTip')
               }
             </p>
@@ -1184,22 +1190,22 @@ const StorageManager = () => {
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic 
-                    title="已选文件" 
+                    title={t('storage.selectedFiles')} 
                     value={fileList.length} 
-                    suffix="个" 
+                    suffix={t('storage.creditUnit')} 
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic 
-                    title="总大小" 
+                    title={t('storage.totalSize')} 
                     value={formatFileSize(fileList.reduce((sum, f) => sum + (f.size || 0), 0))} 
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic 
-                    title="需要积分" 
+                    title={t('storage.requiredCredits')} 
                     value={uploadCreditsNeeded} 
-                    suffix="积分"
+                    suffix={t('storage.credits')}
                     valueStyle={{ 
                       color: userCredits >= uploadCreditsNeeded ? '#52c41a' : '#ff4d4f' 
                     }}
@@ -1208,7 +1214,10 @@ const StorageManager = () => {
               </Row>
               {userCredits < uploadCreditsNeeded && (
                 <Alert
-                  message={`积分不足！需要 ${uploadCreditsNeeded} 积分，当前余额 ${userCredits} 积分`}
+                  message={t('storage.insufficientCredits', {
+                    required: uploadCreditsNeeded,
+                    current: userCredits
+                  })}
                   type="error"
                   showIcon
                   style={{ marginTop: 16 }}

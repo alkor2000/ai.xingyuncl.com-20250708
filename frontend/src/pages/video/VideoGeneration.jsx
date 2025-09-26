@@ -1,5 +1,6 @@
 /**
  * 视频生成页面 - 支持首尾帧控制和模型名称显示
+ * 支持国际化(i18n)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -62,23 +63,6 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { Option } = Select;
 
-// 预设分辨率
-const resolutionOptions = {
-  '480p': { label: '480P (标清)', width: 854, height: 480 },
-  '720p': { label: '720P (高清)', width: 1280, height: 720 },
-  '1080p': { label: '1080P (全高清)', width: 1920, height: 1080 }
-};
-
-// 预设宽高比
-const ratioOptions = [
-  { label: '16:9 (横屏)', value: '16:9' },
-  { label: '4:3 (传统)', value: '4:3' },
-  { label: '1:1 (正方形)', value: '1:1' },
-  { label: '3:4 (竖屏)', value: '3:4' },
-  { label: '9:16 (手机竖屏)', value: '9:16' },
-  { label: '21:9 (影院)', value: '21:9' }
-];
-
 const VideoGeneration = () => {
   const { t } = useTranslation();
   const { user } = useAuthStore();
@@ -104,6 +88,23 @@ const VideoGeneration = () => {
     togglePublic,
     getUserStats
   } = useVideoStore();
+
+  // 预设分辨率
+  const resolutionOptions = {
+    '480p': { label: t('video.resolution480p'), width: 854, height: 480 },
+    '720p': { label: t('video.resolution720p'), width: 1280, height: 720 },
+    '1080p': { label: t('video.resolution1080p'), width: 1920, height: 1080 }
+  };
+
+  // 预设宽高比
+  const ratioOptions = [
+    { label: t('video.ratio16_9'), value: '16:9' },
+    { label: t('video.ratio4_3'), value: '4:3' },
+    { label: t('video.ratio1_1'), value: '1:1' },
+    { label: t('video.ratio3_4'), value: '3:4' },
+    { label: t('video.ratio9_16'), value: '9:16' },
+    { label: t('video.ratio21_9'), value: '21:9' }
+  ];
 
   // 生成参数状态
   const [prompt, setPrompt] = useState('');
@@ -191,13 +192,13 @@ const VideoGeneration = () => {
       if (file.response && file.response.success) {
         setFirstFrameImage(file.response.data.url);
         setFirstFrameFile(file);
-        message.success('首帧图片上传成功');
+        message.success(t('video.uploadSuccess', { type: t('video.firstFrame') }));
       } else {
-        message.error(file.response?.message || '上传失败');
+        message.error(file.response?.message || t('video.uploadFailed', { type: t('video.firstFrame') }));
       }
     } else if (file.status === 'error') {
       setUploadingFirst(false);
-      message.error('首帧图片上传失败');
+      message.error(t('video.uploadFailed', { type: t('video.firstFrame') }));
     }
   };
 
@@ -215,13 +216,13 @@ const VideoGeneration = () => {
       if (file.response && file.response.success) {
         setLastFrameImage(file.response.data.url);
         setLastFrameFile(file);
-        message.success('尾帧图片上传成功');
+        message.success(t('video.uploadSuccess', { type: t('video.lastFrame') }));
       } else {
-        message.error(file.response?.message || '上传失败');
+        message.error(file.response?.message || t('video.uploadFailed', { type: t('video.lastFrame') }));
       }
     } else if (file.status === 'error') {
       setUploadingLast(false);
-      message.error('尾帧图片上传失败');
+      message.error(t('video.uploadFailed', { type: t('video.lastFrame') }));
     }
   };
 
@@ -248,13 +249,13 @@ const VideoGeneration = () => {
   const beforeUpload = (file) => {
     const isImage = file.type.startsWith('image/');
     if (!isImage) {
-      message.error('只能上传图片文件！');
+      message.error(t('video.onlyImage'));
       return false;
     }
     
     const isLt10M = file.size / 1024 / 1024 < 10;
     if (!isLt10M) {
-      message.error('图片大小不能超过 10MB！');
+      message.error(t('video.imageSizeLimit'));
       return false;
     }
     
@@ -276,34 +277,34 @@ const VideoGeneration = () => {
   // 处理生成
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      message.warning('请输入提示词');
+      message.warning(t('video.pleaseInputPrompt'));
       return;
     }
 
     if (!selectedModel) {
-      message.warning('请选择模型');
+      message.warning(t('video.pleaseSelectModel'));
       return;
     }
 
     if (!selectedModel.has_api_key) {
-      message.error('该模型尚未配置API密钥，请联系管理员');
+      message.error(t('video.modelNotConfigured'));
       return;
     }
 
     // 根据生成模式检查图片是否上传
     if (generationMode === 'first_frame' && !firstFrameImage) {
-      message.warning('请上传首帧图片');
+      message.warning(t('video.pleaseUploadFirstFrame'));
       return;
     }
     
     if (generationMode === 'last_frame' && !lastFrameImage) {
-      message.warning('请上传尾帧图片');
+      message.warning(t('video.pleaseUploadLastFrame'));
       return;
     }
     
     if (generationMode === 'first_last_frame') {
       if (!firstFrameImage || !lastFrameImage) {
-        message.warning('请上传首帧和尾帧图片');
+        message.warning(t('video.pleaseUploadBothFrames'));
         return;
       }
     }
@@ -311,7 +312,10 @@ const VideoGeneration = () => {
     // 检查积分是否充足
     const price = calculatePrice();
     if (user.credits_stats && user.credits_stats.remaining < price) {
-      message.error(`积分不足！需要 ${price} 积分，当前余额 ${user.credits_stats.remaining} 积分`);
+      message.error(t('video.insufficientCredits', { 
+        required: price, 
+        current: user.credits_stats.remaining 
+      }));
       return;
     }
 
@@ -454,7 +458,7 @@ const VideoGeneration = () => {
             {isProcessing ? (
               <div className="processing-overlay">
                 <Spin size="large" />
-                <div className="processing-text">生成中...</div>
+                <div className="processing-text">{t('video.processing')}</div>
                 {item.progress > 0 && (
                   <Progress percent={item.progress} showInfo={false} />
                 )}
@@ -462,7 +466,7 @@ const VideoGeneration = () => {
             ) : isFailed ? (
               <div className="failed-overlay">
                 <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-                <div className="failed-text">生成失败</div>
+                <div className="failed-text">{t('video.failed')}</div>
                 {item.error_message && (
                   <div className="error-message">{item.error_message}</div>
                 )}
@@ -490,7 +494,7 @@ const VideoGeneration = () => {
                   }}
                 />
                 {/* 添加全屏预览按钮 */}
-                <Tooltip title="大屏预览">
+                <Tooltip title={t('video.fullscreenPreview')}>
                   <Button
                     type="text"
                     icon={<ExpandOutlined />}
@@ -517,7 +521,7 @@ const VideoGeneration = () => {
               <div className="video-actions">
                 <Space direction="vertical" size="small">
                   {isSucceeded && item.local_path && (
-                    <Tooltip title="下载" placement="left">
+                    <Tooltip title={t('video.download')} placement="left">
                       <Button
                         type="primary"
                         shape="circle"
@@ -536,7 +540,7 @@ const VideoGeneration = () => {
                   
                   {/* 收藏按钮 */}
                   {(isSucceeded || isFailed) && (
-                    <Tooltip title={item.is_favorite ? '取消收藏' : '收藏'} placement="left">
+                    <Tooltip title={item.is_favorite ? t('video.unfavorite') : t('video.favorite')} placement="left">
                       <Button
                         type="primary"
                         shape="circle"
@@ -553,7 +557,7 @@ const VideoGeneration = () => {
                   
                   {/* 公开/私密按钮 */}
                   {isSucceeded && (
-                    <Tooltip title={item.is_public ? '设为私密' : '公开分享'} placement="left">
+                    <Tooltip title={item.is_public ? t('video.setPrivate') : t('video.setPublic')} placement="left">
                       <Button
                         type="primary"
                         shape="circle"
@@ -570,7 +574,7 @@ const VideoGeneration = () => {
                   
                   {/* 删除按钮 */}
                   <Popconfirm
-                    title="确定删除这个视频吗？"
+                    title={t('video.confirmDelete')}
                     onConfirm={(e) => {
                       if (e) e.stopPropagation();
                       deleteGeneration(item.id);
@@ -578,11 +582,11 @@ const VideoGeneration = () => {
                     onCancel={(e) => {
                       if (e) e.stopPropagation();
                     }}
-                    okText="确定"
-                    cancelText="取消"
+                    okText={t('common.confirm')}
+                    cancelText={t('common.cancel')}
                     placement="left"
                   >
-                    <Tooltip title="删除" placement="left">
+                    <Tooltip title={t('video.delete')} placement="left">
                       <Button
                         danger
                         shape="circle"
@@ -603,7 +607,7 @@ const VideoGeneration = () => {
             <div className="card-meta-title">
               {/* 添加模型名称标签 */}
               {item.model_name && (
-                <Tooltip title={`生成模型: ${item.model_name}`}>
+                <Tooltip title={`${t('video.generatedBy')}: ${item.model_name}`}>
                   <Tag 
                     icon={<RobotOutlined />} 
                     color={getProviderColor(item.provider)}
@@ -614,11 +618,11 @@ const VideoGeneration = () => {
                 </Tooltip>
               )}
               <Tag color="blue">{item.resolution}</Tag>
-              <Tag>{item.duration}秒</Tag>
+              <Tag>{item.duration}{t('video.seconds')}</Tag>
               {item.ratio && <Tag color={isVertical ? 'purple' : 'cyan'}>{item.ratio}</Tag>}
-              {isFailed && <Tag color="error">失败</Tag>}
-              {isProcessing && <Tag color="processing">处理中</Tag>}
-              {isSucceeded && <Tag color="success">已完成</Tag>}
+              {isFailed && <Tag color="error">{t('video.status.failed')}</Tag>}
+              {isProcessing && <Tag color="processing">{t('video.processingText')}</Tag>}
+              {isSucceeded && <Tag color="success">{t('video.completed')}</Tag>}
             </div>
           }
           description={
@@ -630,7 +634,7 @@ const VideoGeneration = () => {
                 )}
                 <span>{new Date(item.created_at).toLocaleString()}</span>
                 {item.credits_consumed !== undefined && (
-                  <span>{item.credits_consumed} 积分</span>
+                  <span>{t('video.credits', { credits: item.credits_consumed })}</span>
                 )}
               </div>
             </div>
@@ -661,7 +665,7 @@ const VideoGeneration = () => {
     <div>
       {uploadingFirst ? <Spin /> : <PlusOutlined />}
       <div style={{ marginTop: 8 }}>
-        {uploadingFirst ? '上传中...' : '上传首帧'}
+        {uploadingFirst ? t('video.uploading') : t('video.uploadFirst')}
       </div>
     </div>
   );
@@ -671,7 +675,7 @@ const VideoGeneration = () => {
     <div>
       {uploadingLast ? <Spin /> : <PlusOutlined />}
       <div style={{ marginTop: 8 }}>
-        {uploadingLast ? '上传中...' : '上传尾帧'}
+        {uploadingLast ? t('video.uploading') : t('video.uploadLast')}
       </div>
     </div>
   );
@@ -682,10 +686,10 @@ const VideoGeneration = () => {
       <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
           {/* 模型选择 */}
-          <Card title="选择模型" className="model-selection">
+          <Card title={t('video.selectModel')} className="model-selection">
             <Select
               className="model-select"
-              placeholder="请选择视频生成模型"
+              placeholder={t('video.selectModelPlaceholder')}
               value={selectedModel?.id}
               onChange={handleModelChange}
               style={{ width: '100%' }}
@@ -696,7 +700,7 @@ const VideoGeneration = () => {
                     <VideoCameraOutlined />
                     <span>{model.display_name}</span>
                     {!model.has_api_key && (
-                      <Tag color="orange">未配置</Tag>
+                      <Tag color="orange">{t('video.notConfigured')}</Tag>
                     )}
                   </Space>
                 </Option>
@@ -706,18 +710,18 @@ const VideoGeneration = () => {
               <div className="model-info">
                 <p>{selectedModel.description}</p>
                 <Space wrap>
-                  {selectedModel.supports_text_to_video && <Tag color="green">文生视频</Tag>}
-                  {selectedModel.supports_first_frame && <Tag color="blue">首帧图生</Tag>}
-                  {selectedModel.supports_last_frame && <Tag color="orange">尾帧图生</Tag>}
+                  {selectedModel.supports_text_to_video && <Tag color="green">{t('video.textToVideo')}</Tag>}
+                  {selectedModel.supports_first_frame && <Tag color="blue">{t('video.firstFrameToVideo')}</Tag>}
+                  {selectedModel.supports_last_frame && <Tag color="orange">{t('video.lastFrameToVideo')}</Tag>}
                   {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
-                    <Tag color="purple">首尾帧图生</Tag>}
+                    <Tag color="purple">{t('video.firstLastFrameToVideo')}</Tag>}
                 </Space>
               </div>
             )}
           </Card>
 
           {/* 生成模式 */}
-          <Card title="生成模式">
+          <Card title={t('video.generationMode')}>
             <Select
               value={generationMode}
               onChange={setGenerationMode}
@@ -726,26 +730,26 @@ const VideoGeneration = () => {
               <Option value="text_to_video" disabled={!selectedModel?.supports_text_to_video}>
                 <Space>
                   <VideoCameraOutlined />
-                  <span>文字生成视频</span>
+                  <span>{t('video.modeTextToVideo')}</span>
                 </Space>
               </Option>
               <Option value="first_frame" disabled={!selectedModel?.supports_first_frame}>
                 <Space>
                   <PictureOutlined />
-                  <span>首帧图生成视频</span>
+                  <span>{t('video.modeFirstFrame')}</span>
                 </Space>
               </Option>
               <Option value="last_frame" disabled={!selectedModel?.supports_last_frame}>
                 <Space>
                   <PictureOutlined />
-                  <span>尾帧图生成视频</span>
+                  <span>{t('video.modeLastFrame')}</span>
                 </Space>
               </Option>
               <Option value="first_last_frame" 
                 disabled={!selectedModel?.supports_first_frame || !selectedModel?.supports_last_frame}>
                 <Space>
                   <FileImageOutlined />
-                  <span>首尾帧图生成视频</span>
+                  <span>{t('video.modeFirstLastFrame')}</span>
                 </Space>
               </Option>
             </Select>
@@ -753,7 +757,7 @@ const VideoGeneration = () => {
             {/* 模式说明 */}
             {generationMode === 'first_frame' && (
               <Alert 
-                message="首帧图生成：提供视频的第一帧图片，AI会根据图片和提示词生成后续内容"
+                message={t('video.firstFrameDesc')}
                 type="info" 
                 showIcon 
                 style={{ marginTop: 10 }}
@@ -761,7 +765,7 @@ const VideoGeneration = () => {
             )}
             {generationMode === 'last_frame' && (
               <Alert 
-                message="尾帧图生成：提供视频的最后一帧图片，AI会生成到达该画面的过程"
+                message={t('video.lastFrameDesc')}
                 type="info" 
                 showIcon 
                 style={{ marginTop: 10 }}
@@ -769,7 +773,7 @@ const VideoGeneration = () => {
             )}
             {generationMode === 'first_last_frame' && (
               <Alert 
-                message="首尾帧图生成：提供首尾两帧图片，AI会生成从首帧到尾帧的过渡视频"
+                message={t('video.firstLastFrameDesc')}
                 type="info" 
                 showIcon 
                 style={{ marginTop: 10 }}
@@ -778,11 +782,11 @@ const VideoGeneration = () => {
           </Card>
 
           {/* 输入提示词 */}
-          <Card title="输入提示词">
+          <Card title={t('video.inputPrompt')}>
             <TextArea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述你想生成的视频内容..."
+              placeholder={t('video.promptPlaceholder')}
               rows={4}
               maxLength={selectedModel?.max_prompt_length || 500}
               showCount
@@ -792,7 +796,7 @@ const VideoGeneration = () => {
             {(generationMode === 'first_frame' || generationMode === 'first_last_frame') && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>
-                  <PictureOutlined /> 首帧图片
+                  <PictureOutlined /> {t('video.firstFrameImage')}
                 </div>
                 <Upload
                   name="image"
@@ -807,7 +811,7 @@ const VideoGeneration = () => {
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                       <img 
                         src={firstFrameImage} 
-                        alt="首帧图片" 
+                        alt={t('video.firstFrame')} 
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                       <Button
@@ -837,7 +841,7 @@ const VideoGeneration = () => {
             {(generationMode === 'last_frame' || generationMode === 'first_last_frame') && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>
-                  <PictureOutlined /> 尾帧图片
+                  <PictureOutlined /> {t('video.lastFrameImage')}
                 </div>
                 <Upload
                   name="image"
@@ -852,7 +856,7 @@ const VideoGeneration = () => {
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                       <img 
                         src={lastFrameImage} 
-                        alt="尾帧图片" 
+                        alt={t('video.lastFrame')} 
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                       <Button
@@ -881,16 +885,16 @@ const VideoGeneration = () => {
             {/* 图片格式说明 */}
             {(generationMode !== 'text_to_video') && (
               <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
-                支持 JPG、PNG、WEBP 格式，最大 10MB
+                {t('video.imageFormatTip')}
               </div>
             )}
           </Card>
 
           {/* 参数设置 */}
-          <Card title="参数设置">
+          <Card title={t('video.parameters')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div>
-                <div className="param-label">分辨率</div>
+                <div className="param-label">{t('video.resolution')}</div>
                 <Select
                   value={resolution}
                   onChange={setResolution}
@@ -905,7 +909,7 @@ const VideoGeneration = () => {
               </div>
 
               <div>
-                <div className="param-label">时长</div>
+                <div className="param-label">{t('video.duration')}</div>
                 <Select
                   value={duration}
                   onChange={setDuration}
@@ -913,14 +917,14 @@ const VideoGeneration = () => {
                 >
                   {selectedModel?.durations_supported?.map(dur => (
                     <Option key={dur} value={dur}>
-                      {dur} 秒
+                      {dur} {t('video.seconds')}
                     </Option>
                   ))}
                 </Select>
               </div>
 
               <div>
-                <div className="param-label">宽高比</div>
+                <div className="param-label">{t('video.aspectRatio')}</div>
                 <Select
                   value={ratio}
                   onChange={setRatio}
@@ -939,16 +943,16 @@ const VideoGeneration = () => {
                   <Switch
                     checked={watermark}
                     onChange={setWatermark}
-                    checkedChildren="有水印"
-                    unCheckedChildren="无水印"
+                    checkedChildren={t('video.withWatermark')}
+                    unCheckedChildren={t('video.noWatermark')}
                   />
                 </Col>
                 <Col span={12}>
                   <Switch
                     checked={cameraFixed}
                     onChange={setCameraFixed}
-                    checkedChildren="固定镜头"
-                    unCheckedChildren="运动镜头"
+                    checkedChildren={t('video.fixedCamera')}
+                    unCheckedChildren={t('video.movingCamera')}
                   />
                 </Col>
               </Row>
@@ -966,7 +970,9 @@ const VideoGeneration = () => {
               disabled={!selectedModel || !prompt.trim() || !selectedModel.has_api_key}
               block
             >
-              {generating ? '生成中...' : `生成视频 (${calculatePrice()} 积分)`}
+              {generating 
+                ? t('video.generating') 
+                : `${t('video.generate')} (${t('video.credits', { credits: calculatePrice() })})`}
             </Button>
           </div>
         </div>
@@ -976,9 +982,9 @@ const VideoGeneration = () => {
       <Content className="history-content">
         <div className="history-header">
           <Tabs activeKey={activeTab} onChange={handleTabChange}>
-            <TabPane tab="我的视频" key="all" />
-            <TabPane tab="我的收藏" key="favorites" />
-            <TabPane tab="公开画廊" key="public" />
+            <TabPane tab={t('video.myVideos')} key="all" />
+            <TabPane tab={t('video.myFavorites')} key="favorites" />
+            <TabPane tab={t('video.publicGallery')} key="public" />
           </Tabs>
         </div>
 
@@ -992,7 +998,7 @@ const VideoGeneration = () => {
               onChange={handlePageChange}
               onShowSizeChange={handlePageChange}
               showSizeChanger
-              showTotal={(total) => `共 ${total} 个视频`}
+              showTotal={(total) => t('video.total', { total })}
             />
           </div>
         )}
@@ -1005,14 +1011,14 @@ const VideoGeneration = () => {
           ) : getCurrentData().length > 0 ? (
             getCurrentData().map(item => renderVideoCard(item, activeTab === 'public'))
           ) : (
-            <Empty description="暂无视频" />
+            <Empty description={t('video.noVideos')} />
           )}
         </div>
       </Content>
 
       {/* 视频预览模态框 */}
       <Modal
-        title={previewVideo?.prompt || '视频预览'}
+        title={previewVideo?.prompt || t('video.videoPreview')}
         visible={!!previewVideo}
         onCancel={() => setPreviewVideo(null)}
         footer={null}

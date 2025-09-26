@@ -7,6 +7,8 @@ import errors from './errors.json'
 import storage from './storage.json'
 import knowledge from './knowledge.json'
 import htmlEditor from './htmlEditor.json'
+import image from './image.json'
+import video from './video.json'
 
 export default {
   ...common,
@@ -17,5 +19,7 @@ export default {
   ...errors,
   ...storage,
   ...knowledge,
-  ...htmlEditor
+  ...htmlEditor,
+  ...image,
+  ...video
 }
