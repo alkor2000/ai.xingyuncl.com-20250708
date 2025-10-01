@@ -71,3 +71,23 @@ temp/
 
 # 系统文件
 Thumbs.db
+
+# 环境变量文件（包含敏感信息，不提交）
+.env
+backend/.env
+
+# 备份文件
+*.backup.*
+*.bak.*
+archive/config-backups/
+
+# 日志文件
+logs/
+*.log
+
+# 上传文件
+storage/uploads/
+
+# Docker volumes数据
+mysql_data/
+redis_data/

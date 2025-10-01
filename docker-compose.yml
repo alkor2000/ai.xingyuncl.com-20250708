@@ -1,16 +1,16 @@
 version: '3.8'
 
 services:
-  # MySQL数据库
   mysql:
     image: mysql:8.0
     container_name: ai-platform-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass2025}
-      MYSQL_DATABASE: ${DB_NAME:-ai_platform}
-      MYSQL_USER: ${DB_USER:-ai_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
+      # 强制从环境变量读取，无默认值
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
@@ -28,7 +28,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis缓存
   redis:
     image: redis:7-alpine
     container_name: ai-platform-redis
@@ -45,7 +44,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # 后端服务
   backend:
     build:
       context: .
@@ -62,15 +60,18 @@ services:
       PORT: 4000
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: ${DB_USER:-ai_user}
-      DB_PASSWORD: ${DB_PASSWORD:-AiPlatform@2025!}
-      DB_NAME: ${DB_NAME:-ai_platform}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
       DB_CHARSET: utf8mb4
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-your-super-secret-key-2025}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-2025}
+      # JWT密钥强制配置
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRES: 24h
+      JWT_REFRESH_EXPIRES: 30d
+      # 域名配置
       APP_DOMAIN: ${APP_DOMAIN}
       CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_DIR: /app/logs
@@ -87,25 +88,22 @@ services:
       timeout: 10s
       retries: 3
 
-  # 前端服务（Nginx）
   frontend:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+      args:
+        CUSTOMER_DOMAIN: ${CUSTOMER_DOMAIN}
     container_name: ai-platform-frontend
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       TZ: Asia/Shanghai
+      CUSTOMER_DOMAIN: ${CUSTOMER_DOMAIN}
     volumes:
-      # 挂载SSL证书目录
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      # 挂载nginx配置
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      # 挂载上传文件目录
+      - ${SSL_CERT_PATH:-/etc/letsencrypt}:/etc/letsencrypt:ro
       - ./storage/uploads:/app/storage/uploads:ro
-      # Let's Encrypt验证目录
       - ./certbot:/var/www/certbot:ro
     networks:
       - ai-network
