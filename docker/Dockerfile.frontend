@@ -1,4 +1,6 @@
 FROM node:18-alpine AS builder
+RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
+
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
@@ -6,6 +8,7 @@ COPY frontend/ .
 RUN npm run build
 
 FROM nginx:alpine
+
 # 接收构建参数
 ARG CUSTOMER_DOMAIN
 ENV CUSTOMER_DOMAIN=${CUSTOMER_DOMAIN}

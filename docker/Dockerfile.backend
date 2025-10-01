@@ -1,5 +1,6 @@
 # 后端Dockerfile - 多阶段构建
 FROM node:18-alpine AS builder
+RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 
 # 安装构建依赖
 RUN apk add --no-cache python3 make g++
@@ -15,6 +16,7 @@ RUN npm ci --only=production
 
 # 生产环境镜像
 FROM node:18-alpine
+RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 
 # 安装运行时依赖、mysql客户端、netcat和su-exec
 RUN apk add --no-cache tini mysql-client netcat-openbsd su-exec
@@ -46,6 +48,12 @@ RUN mkdir -p /app/logs/backend /app/storage/uploads && \
     chown -R nodejs:nodejs /app/logs /app/storage && \
     chmod -R 755 /app/logs /app/storage
 
+# 添加数据库schema和升级工具
+COPY database/schema /app/database/schema
+COPY tools/database-upgrade /app/tools/database-upgrade
+COPY docker/scripts/database-upgrade.sh /usr/local/bin/db-upgrade
+RUN chmod +x /usr/local/bin/db-upgrade
+
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
@@ -58,9 +66,3 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 # 启动应用（先以root执行迁移，然后切换用户启动应用）
 CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]
-
-# 添加数据库schema和升级工具
-COPY database/schema /app/database/schema
-COPY tools/database-upgrade /app/tools/database-upgrade
-COPY docker/scripts/database-upgrade.sh /usr/local/bin/db-upgrade
-RUN chmod +x /usr/local/bin/db-upgrade
