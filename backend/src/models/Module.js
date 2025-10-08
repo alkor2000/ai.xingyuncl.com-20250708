@@ -202,8 +202,14 @@ class Module {
 
     // 系统模块的限制
     if (module.module_category === 'system') {
-      // 系统模块只能修改：display_name, description, menu_icon, allowed_groups
+      // 系统模块基础可修改字段：display_name, description, menu_icon, allowed_groups
       const systemAllowedFields = ['display_name', 'description', 'menu_icon', 'allowed_groups'];
+      
+      // ✅ 修复：非核心系统模块可以修改sort_order
+      if (module.can_disable) {
+        systemAllowedFields.push('sort_order');
+      }
+      
       const fields = [];
       const values = [];
 
@@ -235,6 +241,7 @@ class Module {
         throw new Error('核心管理模块不能禁用');
       }
 
+      // 非核心系统模块可以修改is_active
       if (updateData.hasOwnProperty('is_active') && module.can_disable) {
         fields.push('is_active = ?');
         values.push(updateData.is_active);

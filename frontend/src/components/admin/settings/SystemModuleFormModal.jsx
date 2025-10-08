@@ -163,10 +163,11 @@ const SystemModuleFormModal = ({
       submitData.description = values.description
       submitData.menu_icon = values.menu_icon
       
-      // 非核心系统模块可以修改权限和状态
+      // 非核心系统模块可以修改权限、状态和排序
       if (!isCoreModule) {
         submitData.allowed_groups = values.allowed_groups
         submitData.is_active = values.is_active
+        submitData.sort_order = values.sort_order  // ✅ 修复：允许修改排序
       }
     } else {
       // 外部模块可以修改所有字段
@@ -263,8 +264,8 @@ const SystemModuleFormModal = ({
           }
           description={
             isCoreModule
-              ? "核心管理模块只能修改：显示名称、描述、图标。不能修改访问权限、禁用或删除。"
-              : "系统内置模块只能修改：显示名称、描述、图标、访问权限和启用状态。不能修改URL或删除。"
+              ? "核心管理模块只能修改：显示名称、描述、图标。不能修改访问权限、排序、禁用或删除。"
+              : "系统内置模块只能修改：显示名称、描述、图标、访问权限、排序和启用状态。不能修改URL或删除。"
           }
           type={isCoreModule ? "error" : "warning"}
           showIcon
@@ -385,13 +386,28 @@ const SystemModuleFormModal = ({
             <Col span={8}>
               <Form.Item
                 name="sort_order"
-                label="排序顺序"
-                tooltip="数值越小越靠前"
+                label={
+                  <Space>
+                    <span>排序顺序</span>
+                    {isCoreModule && (
+                      <Tooltip title="核心管理模块的排序由系统固定，不可修改">
+                        <LockOutlined style={{ color: '#ff4d4f' }} />
+                      </Tooltip>
+                    )}
+                  </Space>
+                }
+                tooltip={isCoreModule ? "核心管理模块排序固定" : "数值越小越靠前，同类别模块间排序"}
+                extra={
+                  !isCoreModule && isSystemModule
+                    ? "建议：基础功能1-50，辅助功能51-99，管理功能100+"
+                    : !isCoreModule ? "建议：与系统模块错开，使用独立序号段" : null
+                }
               >
                 <InputNumber 
                   min={0} 
                   style={{ width: '100%' }} 
-                  disabled={isSystemModule}
+                  disabled={isCoreModule}  // ✅ 修复：只有核心模块不能改，普通系统模块可以改
+                  placeholder={isCoreModule ? "系统固定" : "输入排序数字"}
                 />
               </Form.Item>
             </Col>
