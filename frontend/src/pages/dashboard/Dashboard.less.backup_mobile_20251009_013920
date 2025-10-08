@@ -1,4 +1,4 @@
-/* Dashboard 页面样式 - 移动端专项优化版 */
+/* Dashboard 页面样式 - 优化版 */
 
 .dashboard-container {
   padding: 20px;
@@ -10,50 +10,46 @@
   }
 }
 
-/* ===== 精简的欢迎区域（移动端优化）===== */
+/* ===== 精简的欢迎区域 ===== */
 .welcome-section-compact {
   background: white;
   border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   
-  .welcome-content {
-    h4, h5 {
+  .welcome-left {
+    h4 {
       color: #1f2937;
       font-weight: 600;
-      margin-bottom: 6px;
     }
+  }
+  
+  .welcome-right {
+    color: #6b7280;
+    font-size: 14px;
     
-    .date-info {
-      color: #6b7280;
-      font-size: 13px;
-      
-      .anticon {
-        font-size: 12px;
-      }
+    .anticon {
+      margin-right: 4px;
     }
   }
   
   @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     padding: 12px 16px;
-    margin-bottom: 12px;
-    border-radius: 10px;
     
-    .welcome-content {
-      h5 {
-        font-size: 15px;
-        margin-bottom: 4px;
-      }
-      
-      .date-info {
-        font-size: 12px;
-      }
+    .welcome-right {
+      font-size: 13px;
     }
   }
 }
 
-/* ===== 功能模块卡片 - 移动端专项优化 ===== */
+/* ===== 功能模块卡片 - 新样式 ===== */
 .modules-card {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -66,40 +62,25 @@
   .ant-card-body {
     padding: 20px;
   }
-  
-  @media (max-width: 768px) {
-    border-radius: 10px;
-    
-    .ant-card-head {
-      padding: 12px 16px;
-      
-      .ant-card-head-title {
-        font-size: 15px;
-      }
-    }
-    
-    .ant-card-body {
-      padding: 16px;
-    }
-  }
 }
 
-/* 优化后的模块卡片 - 移动端单列横向布局 */
-.module-card-optimized {
-  min-height: 90px;
+.module-card-new {
+  height: 140px;  // 增加高度以显示描述
   border-radius: 12px;
   padding: 16px;
   cursor: pointer;
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  justify-content: center;
+  text-align: center;
+  transition: all 0.3s ease;
   border: 1px solid;
-  background: white;
   
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
   
   &:active {
@@ -107,76 +88,51 @@
   }
   
   .module-icon {
-    font-size: 32px;
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.5);
+    font-size: 28px;
+    margin-bottom: 8px;
+    opacity: 0.9;
   }
   
-  .module-info {
-    flex: 1;
+  .module-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    opacity: 0.95;
+  }
+  
+  .module-desc {
+    font-size: 12px;
+    opacity: 0.75;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 4px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 120px;
+    padding: 12px;
+    
+    .module-icon {
+      font-size: 24px;
+    }
     
     .module-name {
-      font-size: 16px;
-      font-weight: 600;
-      line-height: 22px;
-      margin-bottom: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: 13px;
     }
     
     .module-desc {
-      font-size: 13px;
-      opacity: 0.75;
-      line-height: 18px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-  }
-  
-  /* 移动端优化：单列横向布局 */
-  &.mobile {
-    min-height: 72px;
-    padding: 14px 16px;
-    border-radius: 10px;
-    gap: 14px;
-    
-    // 增加触摸目标大小（Apple HIG建议至少44x44）
-    min-height: 72px;
-    
-    .module-icon {
-      font-size: 28px;
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-    }
-    
-    .module-info {
-      .module-name {
-        font-size: 16px; // 防止iOS缩放，最小16px
-        line-height: 20px;
-        font-weight: 600;
-      }
-      
-      // 移动端隐藏描述，保持简洁
-      .module-desc {
-        display: none;
-      }
+      font-size: 11px;
+      -webkit-line-clamp: 1;
     }
   }
 }
 
-/* ===== 精简的积分统计（移动端优化）===== */
+/* ===== 精简的积分统计 ===== */
 .credits-card-compact {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -191,14 +147,12 @@
   }
   
   .stat-item {
-    padding: 10px 0;
-    text-align: center;
+    padding: 8px 0;
     
     .stat-label {
       font-size: 12px;
       color: #8c8c8c;
-      margin-bottom: 6px;
-      line-height: 18px;
+      margin-bottom: 4px;
       
       .anticon {
         margin-right: 4px;
@@ -208,12 +162,10 @@
     .stat-value {
       font-size: 18px;
       font-weight: 600;
-      line-height: 24px;
       
       .ant-tag {
         font-size: 14px;
-        padding: 2px 10px;
-        margin: 0;
+        padding: 2px 8px;
       }
       
       .anticon {
@@ -224,54 +176,19 @@
   }
   
   @media (max-width: 768px) {
-    border-radius: 10px;
-    
-    .ant-card-head {
-      padding: 12px 16px;
-      
-      .ant-card-head-title {
-        font-size: 15px;
-      }
-    }
-    
-    .ant-card-body {
-      padding: 12px 16px;
-    }
-    
     .stat-item {
-      padding: 8px 0;
-      
-      .stat-label {
-        font-size: 11px;
-        margin-bottom: 4px;
-      }
-      
       .stat-value {
         font-size: 16px;
-        
-        .ant-tag {
-          font-size: 12px;
-          padding: 1px 8px;
-        }
-        
-        .anticon {
-          font-size: 13px;
-        }
       }
-    }
-    
-    .ant-alert {
-      font-size: 13px;
-      margin-top: 12px;
     }
   }
 }
 
-/* ===== 公告卡片（移动端优化）===== */
+/* ===== 增大的公告卡片 ===== */
 .announcement-card-large {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  min-height: 400px;
+  min-height: 400px;  // 增加最小高度
   
   .ant-card-head {
     border-bottom: 1px solid #f0f0f0;
@@ -280,7 +197,7 @@
   
   .ant-card-body {
     padding: 20px;
-    min-height: 340px;
+    min-height: 340px;  // 确保内容区有足够高度
   }
   
   .ant-alert {
@@ -288,26 +205,17 @@
   }
   
   @media (max-width: 768px) {
-    min-height: 280px;
+    min-height: 300px;
     margin-bottom: 16px;
-    border-radius: 10px;
-    
-    .ant-card-head {
-      padding: 12px 16px;
-      
-      .ant-card-head-title {
-        font-size: 15px;
-      }
-    }
     
     .ant-card-body {
-      min-height: 220px;
+      min-height: 240px;
       padding: 16px;
     }
   }
 }
 
-/* ===== Markdown内容样式（移动端优化）===== */
+/* ===== Markdown内容样式 ===== */
 .markdown-content {
   font-size: 14px;
   line-height: 1.7;
@@ -450,24 +358,6 @@
   
   em {
     font-style: italic;
-  }
-  
-  @media (max-width: 768px) {
-    font-size: 15px;
-    max-height: 240px;
-    
-    h1 { font-size: 20px; }
-    h2 { font-size: 17px; }
-    h3 { font-size: 16px; }
-    h4 { font-size: 15px; }
-    
-    code {
-      font-size: 12px;
-    }
-    
-    pre code {
-      font-size: 12px;
-    }
   }
 }
 

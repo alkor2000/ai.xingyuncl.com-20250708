@@ -365,7 +365,7 @@
   }
 }
 
-// 移动端样式 - 优化对话卡片
+// 移动端样式 - 修复布局问题
 .chat-mobile-container {
   height: 100vh;
   height: calc(var(--vh, 1vh) * 100);
@@ -420,7 +420,6 @@
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
-      background: #f5f5f5;
       
       .sidebar-wrapper {
         height: 100%;
@@ -435,77 +434,12 @@
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
           
-          // 移动端对话卡片优化样式
           .conversation-item {
-            padding: 16px;
-            margin-bottom: 10px;
-            border-radius: 14px;
-            background: white;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            padding: 14px;
+            margin-bottom: 8px;
             
-            .conversation-header {
-              margin-bottom: 10px;
-              
-              .conversation-title {
-                .pin-icon {
-                  font-size: 15px;
-                  margin-right: 8px;
-                }
-                
-                .title-text {
-                  font-size: 16px;
-                  font-weight: 600;
-                  line-height: 22px;
-                }
-              }
-              
-              .conversation-actions {
-                display: flex !important;
-                gap: 6px;
-                
-                .ant-btn {
-                  min-width: 36px;
-                  min-height: 36px;
-                  padding: 6px;
-                  
-                  .anticon {
-                    font-size: 16px;
-                  }
-                }
-              }
-            }
-            
-            .conversation-meta {
-              margin-bottom: 6px;
-              
-              .message-count {
-                font-size: 13px;
-                display: flex;
-                align-items: center;
-                
-                .anticon {
-                  font-size: 14px;
-                  margin-right: 6px;
-                }
-              }
-            }
-            
-            .conversation-time {
-              font-size: 13px;
-              display: flex;
-              align-items: center;
-              
-              .anticon {
-                font-size: 13px;
-                margin-right: 6px;
-              }
-            }
-            
-            &.active {
-              background: linear-gradient(135deg, rgba(0, 122, 255, 0.1) 0%, rgba(0, 122, 255, 0.05) 100%);
-              border: 1px solid rgba(0, 122, 255, 0.35);
-              box-shadow: 0 3px 16px rgba(0, 122, 255, 0.18);
+            .conversation-actions {
+              display: flex !important;
             }
           }
         }
@@ -576,6 +510,7 @@
         }
       }
       
+      // 关键修复：移动端输入区域
       .mobile-input-container {
         background: #fff;
         border-top: 1px solid #f0f0f0;
@@ -587,35 +522,38 @@
           padding: 0;
           border: none;
           
+          // 工具栏：强制一行显示
           .input-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 10px;
-            flex-wrap: nowrap;
+            flex-wrap: nowrap; // 强制不换行
             gap: 6px;
             
             .left-tools {
               display: flex;
               align-items: center;
-              gap: 4px;
-              flex-shrink: 1;
+              gap: 4px; // 缩小间距
+              flex-shrink: 1; // 允许收缩
               min-width: 0;
               overflow: hidden;
               
+              // 模型选择器缩到最小
               .model-selector-button {
                 &.mobile {
                   min-height: 36px;
                   height: 36px;
                   padding: 4px 8px;
-                  max-width: 100px;
+                  max-width: 100px; // 限制最大宽度
                   
                   .model-name {
-                    max-width: 50px;
+                    max-width: 50px; // 进一步缩小
                   }
                 }
               }
               
+              // 工具按钮缩小到36x36
               .mobile-action-btn {
                 min-width: 36px !important;
                 min-height: 36px !important;
@@ -654,9 +592,10 @@
             }
           }
           
+          // 输入框和发送按钮：同行显示
           .input-wrapper {
             display: flex;
-            flex-direction: row;
+            flex-direction: row; // 强制横向
             align-items: flex-end;
             gap: 10px;
             
@@ -670,6 +609,7 @@
               padding: 10px 12px;
             }
             
+            // 发送按钮：固定在右侧
             .input-actions-right {
               display: flex;
               align-items: flex-end;
@@ -701,12 +641,10 @@
   .mobile-conversations-drawer {
     .ant-drawer-body {
       padding: 0;
-      background: #f5f5f5;
     }
     
     .sidebar-wrapper {
       height: 100%;
-      background: #f5f5f5;
       
       .sidebar-header-fixed {
         padding: 16px;
@@ -715,37 +653,9 @@
       }
       
       .conversations-list-wrapper {
-        padding: 12px;
-        
         .conversation-item {
-          padding: 16px;
-          margin-bottom: 10px;
-          border-radius: 14px;
-          
-          .conversation-header {
-            margin-bottom: 10px;
-            
-            .conversation-title {
-              .title-text {
-                font-size: 16px;
-                font-weight: 600;
-              }
-            }
-            
-            .conversation-actions {
-              display: flex !important;
-              gap: 6px;
-              
-              .ant-btn {
-                min-width: 36px;
-                min-height: 36px;
-              }
-            }
-          }
-          
-          .conversation-meta,
-          .conversation-time {
-            font-size: 13px;
+          .conversation-actions {
+            display: flex !important;
           }
         }
       }

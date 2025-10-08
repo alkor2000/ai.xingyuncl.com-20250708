@@ -2,21 +2,13 @@
  * 聊天页面 - 主界面（移动端适配版）
  * 优化：改进滚动逻辑，解决代码块输出时的滚动冲突
  * 修复：对话名称更新和置顶功能问题
- * 新增：移动端返回工作台功能
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Modal, Form, message, Spin, Drawer, Button, Dropdown } from 'antd'
+import { Layout, Modal, Form, message, Spin, Drawer, Button } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { 
-  MenuOutlined, 
-  ArrowLeftOutlined, 
-  PlusOutlined, 
-  HomeOutlined,
-  SettingOutlined,
-  MoreOutlined
-} from '@ant-design/icons'
+import { MenuOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
@@ -133,7 +125,7 @@ const Chat = () => {
   
   // 改进的滚动控制状态
   const [userScrolled, setUserScrolled] = useState(false)
-  const [lastScrollTop, setLastScrollTop] = useState(0)
+  const [lastScrollTop, setLastScrollTop] = useState(0) // 记录上次滚动位置
   
   const [settingsForm] = Form.useForm()
   const [newChatForm] = Form.useForm()
@@ -142,6 +134,7 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
+  // 禁用虚拟滚动
   const useVirtualScroll = false
 
   // 初始化
@@ -162,7 +155,7 @@ const Chat = () => {
   // 切换对话时清空输入框和重置滚动状态
   useEffect(() => {
     setInputValue('')
-    setUserScrolled(false)
+    setUserScrolled(false) // 切换对话时重置滚动状态
     setLastScrollTop(0)
   }, [currentConversationId])
 
@@ -206,24 +199,39 @@ const Chat = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight
       
+      // 增大阈值到300px，给代码块更多空间
       const isAtBottom = distanceFromBottom < 300
       
+      // 检测滚动方向
       const isScrollingUp = scrollTop < lastScrollTop
       const isScrollingDown = scrollTop > lastScrollTop
       
+      // 关键改进：只要用户向上滚动，立即锁定
       if (isScrollingUp && isStreaming) {
         setUserScrolled(true)
       } 
+      // 只有用户主动滚到很底部（小于50px）才解锁自动滚动
       else if (isScrollingDown && distanceFromBottom < 50) {
         setUserScrolled(false)
       }
       
+      // 更新上次滚动位置
       setLastScrollTop(scrollTop)
     }
 
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
   }, [isStreaming, lastScrollTop])
+
+  // 移除流式输出结束时的强制重置
+  // 让用户保持在他们想要的位置
+  /*
+  useEffect(() => {
+    if (!isStreaming) {
+      setUserScrolled(false)
+    }
+  }, [isStreaming])
+  */
 
   // 自动滚动到消息底部
   useEffect(() => {
@@ -287,11 +295,6 @@ const Chat = () => {
     setMobileView('list')
     selectConversation(null)
   }
-  
-  // 移动端返回工作台
-  const handleBackToHome = () => {
-    navigate('/dashboard')
-  }
 
   // 编辑对话
   const handleEditConversation = (conversation) => {
@@ -309,14 +312,16 @@ const Chat = () => {
     setShowSettings(true)
   }
 
-  // 更新对话设置
+  // 更新对话设置 - 修复：移除getConversations调用，避免竞态条件
   const handleUpdateSettings = async (values) => {
     if (!currentConversation) return
 
     try {
+      // updateConversation已经会更新本地状态，不需要重新获取
       await updateConversation(currentConversation.id, values)
       setShowSettings(false)
       message.success(t('chat.conversation.update.success'))
+      // 移除这行，避免竞态条件： getConversations(true)
     } catch (error) {
       message.error(t('chat.conversation.update.failed'))
     }
@@ -345,15 +350,17 @@ const Chat = () => {
     }
   }
 
-  // 切换置顶
+  // 切换置顶 - 修复：使用priority字段而不是is_pinned
   const handleTogglePin = async (conversationId, currentPriority) => {
     try {
+      // 如果当前priority > 0，设为0（取消置顶），否则设为5（置顶）
       const newPriority = (currentPriority > 0) ? 0 : 5
       
       await updateConversation(conversationId, {
         priority: newPriority
       })
       
+      // 更新后刷新列表以重新排序
       await getConversations(true)
       
       message.success(newPriority > 0 ? '已置顶' : '已取消置顶')
@@ -376,7 +383,7 @@ const Chat = () => {
     }
   }
 
-  // 发送消息
+  // 发送消息 - 发送前重置滚动状态
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() && !uploadedImage && !uploadedDocument) return
     if (!currentConversation) {
@@ -387,6 +394,7 @@ const Chat = () => {
     const messageContent = inputValue.trim()
     const fileInfo = uploadedImage || uploadedDocument || null
     
+    // 发送消息前重置滚动状态，确保能看到新消息
     setUserScrolled(false)
     
     setIsSending(true)
@@ -405,6 +413,7 @@ const Chat = () => {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
       
+      // 恢复输入内容
       setInputValue(messageContent)
       if (fileInfo) {
         if (fileInfo.type?.startsWith('image/')) {
@@ -620,43 +629,11 @@ const Chat = () => {
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
   const availableModels = aiModels.filter(m => m.is_active)
 
-  // 移动端聊天视图右上角下拉菜单
-  const chatMenuItems = [
-    {
-      key: 'home',
-      icon: <HomeOutlined />,
-      label: '返回工作台',
-      onClick: handleBackToHome
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: '对话设置',
-      onClick: () => {
-        if (currentConversation) {
-          handleEditConversation(currentConversation)
-        }
-      }
-    },
-    {
-      key: 'conversations',
-      icon: <MenuOutlined />,
-      label: '对话列表',
-      onClick: () => setMobileDrawerVisible(true)
-    }
-  ]
-
   // 移动端：渲染会话列表视图
   const renderMobileListView = () => (
     <div className="mobile-conversations-view" style={{ height: viewportHeight }}>
       <div className="mobile-header">
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={handleBackToHome}
-          style={{ marginRight: 8 }}
-        />
-        <h3 style={{ flex: 1, margin: 0 }}>{t('chat.conversations')}</h3>
+        <h3>{t('chat.conversations')}</h3>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -693,7 +670,7 @@ const Chat = () => {
   // 移动端：渲染聊天视图
   const renderMobileChatView = () => (
     <div className="mobile-chat-view" style={{ height: viewportHeight }}>
-      {/* 移动端顶部导航 - 使用下拉菜单 */}
+      {/* 移动端顶部导航 */}
       <div className="mobile-chat-header">
         <Button
           type="text"
@@ -703,16 +680,11 @@ const Chat = () => {
         <div className="mobile-chat-title">
           {currentConversation?.title || t('chat.newConversation')}
         </div>
-        <Dropdown
-          menu={{ items: chatMenuItems }}
-          trigger={['click']}
-          placement="bottomRight"
-        >
-          <Button
-            type="text"
-            icon={<MoreOutlined />}
-          />
-        </Dropdown>
+        <Button
+          type="text"
+          icon={<MenuOutlined />}
+          onClick={() => setMobileDrawerVisible(true)}
+        />
       </div>
 
       {/* 聊天内容区域 */}
@@ -866,9 +838,10 @@ const Chat = () => {
     )
   }
 
-  // PC端布局（保持不变）
+  // PC端布局
   return (
     <Layout className="chat-container">
+      {/* 侧边栏 */}
       <Sider
         width={220}
         collapsed={sidebarCollapsed}
@@ -908,6 +881,7 @@ const Chat = () => {
         </div>
       </Sider>
 
+      {/* 主内容区 */}
       <Layout className="chat-main">
         <Content className="chat-content">
           {initialLoading ? (
@@ -928,6 +902,7 @@ const Chat = () => {
             <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
           ) : (
             <>
+              {/* 消息列表 */}
               <div className="messages-container" ref={messagesContainerRef}>
                 <MessageList
                   messages={messages}
@@ -944,6 +919,7 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* 输入区域 */}
               <ChatInputArea
                 ref={inputRef}
                 inputValue={inputValue}
@@ -975,6 +951,7 @@ const Chat = () => {
         </Content>
       </Layout>
 
+      {/* 对话设置抽屉 */}
       <ConversationSettingsDrawer
         visible={showSettings}
         conversation={currentConversation}
@@ -984,6 +961,7 @@ const Chat = () => {
         onSubmit={handleUpdateSettings}
       />
 
+      {/* 新建对话弹窗 */}
       <ConversationFormModal
         visible={showNewChatModal}
         aiModels={aiModels}
@@ -992,6 +970,7 @@ const Chat = () => {
         onSubmit={handleCreateConversation}
       />
 
+      {/* 删除确认弹窗 */}
       <Modal
         open={deleteModalVisible}
         title={t('chat.conversation.delete.title')}

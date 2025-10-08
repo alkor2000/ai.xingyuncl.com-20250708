@@ -1,4 +1,4 @@
-// 模型选择器样式（移动端优化版）
+// 模型选择器样式
 .model-selector-button {
   background: #f5f5f5;
   border: 1px solid #d9d9d9;
@@ -27,7 +27,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
   }
   
   .credits-display {
@@ -43,31 +42,6 @@
     .credits-number {
       font-size: 12px;
       font-weight: 500;
-    }
-  }
-  
-  // 移动端样式优化
-  &.mobile {
-    height: 36px; // 增大高度
-    padding: 4px 12px;
-    border-radius: 18px;
-    gap: 6px;
-    
-    .model-name {
-      max-width: 80px;
-      font-size: 13px; // 稍微减小但不低于13px
-    }
-    
-    .credits-display {
-      gap: 2px;
-      
-      .credits-icon {
-        font-size: 11px;
-      }
-      
-      .credits-number {
-        font-size: 11px;
-      }
     }
   }
 }
@@ -100,7 +74,6 @@
     border: none;
     border-radius: 6px;
     margin-bottom: 2px;
-    min-height: 48px; // 确保足够的点击区域
     
     &:hover {
       background: #f5f5f5;
@@ -128,10 +101,6 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 4px;
-      
-      .ant-typography {
-        font-size: 14px;
-      }
       
       .selected-icon {
         color: #1890ff;
@@ -184,34 +153,5 @@
   
   &:hover {
     background: #999;
-  }
-}
-
-// 移动端专属样式优化
-@media (max-width: 768px) {
-  .model-selector-list {
-    width: 260px; // 移动端稍微窄一些
-    max-height: 320px;
-    
-    .ant-list-item {
-      padding: 12px;
-      min-height: 52px; // 移动端增大点击区域
-    }
-    
-    .model-info {
-      .model-name-row {
-        .ant-typography {
-          font-size: 15px; // 移动端字体稍大
-        }
-      }
-      
-      .model-features {
-        .credits-info {
-          .credits-number {
-            font-size: 13px;
-          }
-        }
-      }
-    }
   }
 }

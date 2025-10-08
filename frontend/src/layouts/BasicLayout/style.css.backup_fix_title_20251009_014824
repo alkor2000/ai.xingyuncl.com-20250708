@@ -1,14 +1,14 @@
-/* BasicLayout 样式 - 修复移动端标题溢出问题 */
+/* BasicLayout 样式 - 精致版 */
 
 /* ===== 整体布局 ===== */
 .basic-layout {
   height: 100vh;
   overflow: hidden;
-  background: #f8f9fa;
+  background: #f8f9fa; /* 更浅的背景色 */
 }
 
 .basic-layout-body {
-  height: calc(100vh - 54px);
+  height: calc(100vh - 54px); /* 稍微调整高度 */
   display: flex;
   overflow: hidden;
 }
@@ -33,11 +33,9 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  flex: 1;
-  min-width: 0; /* 重要：允许flex子元素收缩 */
 }
 
-/* Logo区域 - 更精致，防止溢出 */
+/* Logo区域 - 更精致 */
 .header-logo {
   display: flex;
   align-items: center;
@@ -47,8 +45,6 @@
   padding: 6px 12px;
   border-radius: 10px;
   transition: all 0.2s ease;
-  min-width: 0; /* 重要：允许收缩 */
-  max-width: 100%; /* 限制最大宽度 */
 }
 
 .header-logo:hover {
@@ -68,26 +64,19 @@
   font-weight: bold;
   font-size: 16px;
   box-shadow: 0 2px 6px rgba(22, 119, 255, 0.2);
-  flex-shrink: 0; /* 图标不收缩 */
 }
 
-/* Logo文字 - 防止溢出 */
 .logo-text {
   font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   letter-spacing: -0.2px;
-  white-space: nowrap; /* 不换行 */
-  overflow: hidden; /* 隐藏溢出 */
-  text-overflow: ellipsis; /* 显示省略号 */
-  min-width: 0; /* 允许收缩 */
 }
 
 .header-right {
   display: flex;
   align-items: center;
   color: #1f2937;
-  flex-shrink: 0; /* 右侧不收缩 */
 }
 
 /* 用户信息 - 简洁风格 */
@@ -122,7 +111,6 @@
   font-size: 18px;
   border-radius: 8px;
   transition: all 0.2s ease;
-  flex-shrink: 0; /* 菜单按钮不收缩 */
 }
 
 /* ===== 侧边栏 - 精致图标栏 ===== */
@@ -144,7 +132,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 8px; /* 统一间距 */
 }
 
 /* 菜单项 - 轻量级效果 */
@@ -226,8 +214,8 @@
 .basic-layout-content {
   flex: 1;
   background: #f8f9fa;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow-y: auto; /* 修改：从 hidden 改为 auto，允许垂直滚动 */
+  overflow-x: hidden; /* 禁止水平滚动 */
   position: relative;
 }
 
@@ -332,89 +320,27 @@
   padding: 6px;
 }
 
-/* ===== 响应式 - 移动端优化 ===== */
+/* ===== 响应式 ===== */
 @media (max-width: 768px) {
   .basic-layout-header {
-    padding: 0 12px; /* 减小padding */
+    padding: 0 16px;
     height: 50px;
-  }
-  
-  .basic-layout-body {
-    height: calc(100vh - 50px);
-  }
-  
-  .header-left {
-    gap: 8px; /* 减小间距 */
-    flex: 1;
-    min-width: 0;
-    overflow: hidden; /* 重要：防止溢出 */
-  }
-  
-  .header-logo {
-    padding: 4px 8px;
-    gap: 8px;
-    max-width: calc(100vw - 180px); /* 限制logo区域最大宽度，为右侧留空间 */
-    overflow: hidden; /* 重要：防止溢出 */
   }
   
   .logo-icon {
     width: 32px;
     height: 32px;
     font-size: 14px;
-    flex-shrink: 0; /* 确保图标不被压缩 */
   }
   
-  /* 移动端隐藏完整标题，只显示简短版本 */
   .logo-text {
     font-size: 14px;
-    max-width: 100px; /* 限制最大宽度 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  
-  /* 或者完全隐藏标题，只保留图标 */
-  /* .logo-text {
-    display: none;
-  } */
-  
-  .header-right {
-    gap: 8px;
-  }
-  
-  .header-right .ant-space {
-    gap: 8px !important;
-  }
-  
-  /* 移动端用户名缩短 */
-  .user-name {
-    max-width: 80px;
-    font-size: 13px;
-  }
-  
+
   /* 移动端内容区域也需要能滚动 */
   .basic-layout-content {
     height: calc(100vh - 50px);
     overflow-y: auto;
-  }
-}
-
-/* 超小屏幕（iPhone SE等）*/
-@media (max-width: 375px) {
-  .basic-layout-header {
-    padding: 0 8px;
-  }
-  
-  .header-logo {
-    max-width: calc(100vw - 160px);
-  }
-  
-  .logo-text {
-    max-width: 60px; /* 进一步限制 */
-  }
-  
-  .user-name {
-    max-width: 60px;
   }
 }
 

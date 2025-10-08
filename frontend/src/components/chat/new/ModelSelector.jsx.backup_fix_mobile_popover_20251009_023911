@@ -1,10 +1,10 @@
 /**
- * 模型选择器组件（移动端优化版 - 修复弹出位置）
+ * 模型选择器组件（移动端优化版）
  * 用于在对话中快速切换AI模型
  */
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Popover, Button, List, Typography } from 'antd'
+import { Popover, Button, List, Tag, Space, Typography } from 'antd'
 import {
   ThunderboltOutlined,
   FileImageOutlined,
@@ -102,15 +102,9 @@ const ModelSelector = ({
       trigger="click"
       visible={visible}
       onVisibleChange={setVisible}
-      // 移动端向上居中弹出，PC端向左上弹出
-      placement={isMobile ? 'top' : 'topLeft'}
-      // 移动端挂载到body，避免被父容器裁剪
-      getPopupContainer={isMobile ? undefined : (trigger) => trigger.parentElement}
-      overlayClassName={`model-selector-popover ${isMobile ? 'mobile' : ''}`}
-      // 允许自动调整位置，避免超出视口
-      autoAdjustOverflow={true}
-      // 移动端增加偏移，避免遮挡按钮
-      align={isMobile ? { offset: [0, -8] } : undefined}
+      placement="topLeft"
+      overlayClassName="model-selector-popover"
+      getPopupContainer={(trigger) => trigger.parentElement}
     >
       <Button
         className={`model-selector-button ${isMobile ? 'mobile' : ''}`}

@@ -45,12 +45,8 @@ const iconMap = {
 const moduleColors = {
   'chat': { bg: '#e6f4ff', color: '#1677ff', icon: '#1677ff' },
   'knowledge': { bg: '#f9f0ff', color: '#722ed1', icon: '#722ed1' },
-  'image_generation': { bg: '#fff1f0', color: '#ff4d4f', icon: '#ff4d4f' },
+  'image': { bg: '#fff1f0', color: '#ff4d4f', icon: '#ff4d4f' },
   'html_editor': { bg: '#e6fffb', color: '#13c2c2', icon: '#13c2c2' },
-  'storage': { bg: '#fff7e6', color: '#fa8c16', icon: '#fa8c16' },
-  'video_generation': { bg: '#f0f5ff', color: '#2f54eb', icon: '#2f54eb' },
-  'mindmap': { bg: '#f6ffed', color: '#52c41a', icon: '#52c41a' },
-  'ocr': { bg: '#fff0f6', color: '#eb2f96', icon: '#eb2f96' },
   'admin_users': { bg: '#fff7e6', color: '#fa8c16', icon: '#fa8c16' },
   'admin_settings': { bg: '#f0f5ff', color: '#2f54eb', icon: '#2f54eb' }
 }
@@ -70,17 +66,6 @@ const Dashboard = () => {
   const [savingAnnouncement, setSavingAnnouncement] = useState(false)
 
   const isSuperAdmin = user?.role === 'super_admin'
-  
-  // 检测是否为移动设备
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
   
   // 获取当前时间段的问候语
   const getGreeting = () => {
@@ -231,7 +216,7 @@ const Dashboard = () => {
         return <MessageOutlined />
       case 'knowledge':
         return <FileSearchOutlined />
-      case 'image_generation':
+      case 'image':
         return <PictureOutlined />
       case 'html_editor':
         return <CodeOutlined />
@@ -286,26 +271,22 @@ const Dashboard = () => {
     <div className="dashboard-container">
       {/* 精简的欢迎区域 */}
       <div className="welcome-section-compact">
-        <div className="welcome-content">
-          <Title level={isMobile ? 5 : 4} style={{ margin: 0 }}>
+        <div className="welcome-left">
+          <Title level={4} style={{ margin: 0 }}>
             {t('dashboard.welcome', { greeting: getGreeting(), name: user?.username || user?.email })}
           </Title>
-          <div className="date-info">
-            <Space size={isMobile ? 8 : 12}>
-              <CalendarOutlined />
-              <Text>{getDateInfo()}</Text>
-              {!isMobile && (
-                <>
-                  <ClockCircleOutlined />
-                  <Text>{new Date().toLocaleTimeString(i18n.language === 'en-US' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
-                </>
-              )}
-            </Space>
-          </div>
+        </div>
+        <div className="welcome-right">
+          <Space>
+            <CalendarOutlined />
+            <Text>{getDateInfo()}</Text>
+            <ClockCircleOutlined />
+            <Text>{new Date().toLocaleTimeString(i18n.language === 'en-US' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+          </Space>
         </div>
       </div>
 
-      {/* 功能模块区域 - 移动端优化 */}
+      {/* 功能模块区域 */}
       <Card 
         className="modules-card"
         title={
@@ -318,13 +299,13 @@ const Dashboard = () => {
         style={{ marginBottom: 20 }}
       >
         {getDisplayModules().length > 0 ? (
-          <Row gutter={[isMobile ? 12 : 16, isMobile ? 12 : 16]}>
+          <Row gutter={[16, 16]}>
             {getDisplayModules().map(module => {
               const colorScheme = moduleColors[module.name] || moduleColors['chat']
               return (
-                <Col xs={24} sm={12} md={8} lg={6} key={module.id}>
+                <Col xs={12} sm={8} md={6} lg={4} key={module.id}>
                   <div 
-                    className={`module-card-optimized ${isMobile ? 'mobile' : ''}`}
+                    className="module-card-new"
                     onClick={() => handleModuleClick(module)}
                     style={{
                       backgroundColor: colorScheme.bg,
@@ -334,16 +315,14 @@ const Dashboard = () => {
                     <div className="module-icon" style={{ color: colorScheme.icon }}>
                       {getModuleIcon(module.menu_icon, module)}
                     </div>
-                    <div className="module-info">
-                      <div className="module-name" style={{ color: colorScheme.color }}>
-                        {module.display_name}
-                      </div>
-                      {module.description && !isMobile && (
-                        <div className="module-desc" style={{ color: colorScheme.color }}>
-                          {module.description}
-                        </div>
-                      )}
+                    <div className="module-name" style={{ color: colorScheme.color }}>
+                      {module.display_name}
                     </div>
+                    {module.description && (
+                      <div className="module-desc" style={{ color: colorScheme.color }}>
+                        {module.description}
+                      </div>
+                    )}
                   </div>
                 </Col>
               )
@@ -365,7 +344,7 @@ const Dashboard = () => {
         }
         style={{ marginBottom: 20 }}
       >
-        <Row gutter={[12, isMobile ? 12 : 16]}>
+        <Row gutter={16}>
           <Col xs={12} sm={6}>
             <div className="stat-item">
               <div className="stat-label">
@@ -435,7 +414,7 @@ const Dashboard = () => {
         )}
       </Card>
 
-      {/* 公告区域 */}
+      {/* 公告区域 - 增大高度 */}
       <Row gutter={16}>
         <Col xs={24} md={12}>
           {/* 系统公告 */}
@@ -453,9 +432,8 @@ const Dashboard = () => {
                   type="link" 
                   icon={<EditOutlined />} 
                   onClick={handleEditAnnouncement}
-                  size={isMobile ? 'small' : 'middle'}
                 >
-                  {!isMobile && t('dashboard.announcement.editButton')}
+                  {t('dashboard.announcement.editButton')}
                 </Button>
               )
             }
@@ -470,42 +448,35 @@ const Dashboard = () => {
                   autoSize={{ minRows: 8, maxRows: 20 }}
                   style={{ marginBottom: 16 }}
                 />
-                <Space wrap>
+                <Space>
                   <Button 
                     type="primary" 
                     icon={<SaveOutlined />} 
                     onClick={handleSaveAnnouncement}
                     loading={savingAnnouncement}
-                    size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.save')}
                   </Button>
-                  <Button 
-                    onClick={showPreview}
-                    size={isMobile ? 'small' : 'middle'}
-                  >
+                  <Button onClick={showPreview}>
                     {t('dashboard.announcement.preview')}
                   </Button>
                   <Button 
                     icon={<CloseOutlined />} 
                     onClick={handleCancelEdit}
                     disabled={savingAnnouncement}
-                    size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.cancel')}
                   </Button>
                 </Space>
-                {!isMobile && (
-                  <div className="announcement-edit-tips">
-                    <div>{t('dashboard.announcement.tips')}</div>
-                    <div className="example">
-                      {t('dashboard.announcement.example.bold')} {t('dashboard.announcement.example.italic')} {t('dashboard.announcement.example.link')} {t('dashboard.announcement.example.code')} 
-                      {t('dashboard.announcement.example.h1')}
-                      {t('dashboard.announcement.example.h2')}
-                      {t('dashboard.announcement.example.list')}
-                    </div>
+                <div className="announcement-edit-tips">
+                  <div>{t('dashboard.announcement.tips')}</div>
+                  <div className="example">
+                    {t('dashboard.announcement.example.bold')} {t('dashboard.announcement.example.italic')} {t('dashboard.announcement.example.link')} {t('dashboard.announcement.example.code')} 
+                    {t('dashboard.announcement.example.h1')}
+                    {t('dashboard.announcement.example.h2')}
+                    {t('dashboard.announcement.example.list')}
                   </div>
-                )}
+                </div>
               </div>
             ) : (
               <>

@@ -1,4 +1,4 @@
-// PC端样式（保持不变）
+// PC端样式（移除顶部栏）
 .chat-container {
   height: 100%;
   
@@ -27,6 +27,7 @@
         backdrop-filter: blur(10px);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         
+        // 添加flex布局容器
         .sidebar-header-content {
           display: flex;
           gap: 8px;
@@ -36,6 +37,7 @@
             flex: 1;
           }
           
+          // 折叠按钮样式
           .collapse-button {
             flex-shrink: 0;
             width: 36px;
@@ -60,6 +62,7 @@
           }
         }
         
+        // iOS风格的新建按钮
         .new-chat-button {
           height: 40px;
           font-weight: 600;
@@ -88,6 +91,7 @@
         overflow-x: hidden;
         padding: 12px;
         
+        // iOS风格滚动条
         &::-webkit-scrollbar {
           width: 6px;
         }
@@ -105,6 +109,7 @@
           }
         }
         
+        // iOS风格对话卡片
         .conversation-item {
           padding: 14px 16px;
           margin-bottom: 8px;
@@ -209,6 +214,34 @@
           justify-content: center;
           height: 200px;
         }
+      }
+    }
+    
+    .sidebar-header {
+      flex-shrink: 0;
+      padding: 12px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      
+      .ant-btn {
+        font-weight: normal;
+      }
+    }
+    
+    .conversations-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 8px;
+    }
+    
+    .sidebar-footer {
+      flex-shrink: 0;
+      padding: 12px;
+      border-top: 1px solid #f0f0f0;
+      
+      .credits-card {
+        margin: 0;
       }
     }
   }
@@ -365,7 +398,7 @@
   }
 }
 
-// 移动端样式 - 优化对话卡片
+// 移动端样式 - 全面优化版
 .chat-mobile-container {
   height: 100vh;
   height: calc(var(--vh, 1vh) * 100);
@@ -386,6 +419,7 @@
     justify-content: center;
   }
   
+  // 移动端会话列表视图
   .mobile-conversations-view {
     height: 100%;
     display: flex;
@@ -401,7 +435,7 @@
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
-      min-height: 56px;
+      min-height: 56px; // 确保足够高度
       
       h3 {
         margin: 0;
@@ -420,7 +454,6 @@
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
-      background: #f5f5f5;
       
       .sidebar-wrapper {
         height: 100%;
@@ -435,77 +468,12 @@
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
           
-          // 移动端对话卡片优化样式
           .conversation-item {
-            padding: 16px;
-            margin-bottom: 10px;
-            border-radius: 14px;
-            background: white;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            padding: 14px;
+            margin-bottom: 8px;
             
-            .conversation-header {
-              margin-bottom: 10px;
-              
-              .conversation-title {
-                .pin-icon {
-                  font-size: 15px;
-                  margin-right: 8px;
-                }
-                
-                .title-text {
-                  font-size: 16px;
-                  font-weight: 600;
-                  line-height: 22px;
-                }
-              }
-              
-              .conversation-actions {
-                display: flex !important;
-                gap: 6px;
-                
-                .ant-btn {
-                  min-width: 36px;
-                  min-height: 36px;
-                  padding: 6px;
-                  
-                  .anticon {
-                    font-size: 16px;
-                  }
-                }
-              }
-            }
-            
-            .conversation-meta {
-              margin-bottom: 6px;
-              
-              .message-count {
-                font-size: 13px;
-                display: flex;
-                align-items: center;
-                
-                .anticon {
-                  font-size: 14px;
-                  margin-right: 6px;
-                }
-              }
-            }
-            
-            .conversation-time {
-              font-size: 13px;
-              display: flex;
-              align-items: center;
-              
-              .anticon {
-                font-size: 13px;
-                margin-right: 6px;
-              }
-            }
-            
-            &.active {
-              background: linear-gradient(135deg, rgba(0, 122, 255, 0.1) 0%, rgba(0, 122, 255, 0.05) 100%);
-              border: 1px solid rgba(0, 122, 255, 0.35);
-              box-shadow: 0 3px 16px rgba(0, 122, 255, 0.18);
+            .conversation-actions {
+              display: flex !important;
             }
           }
         }
@@ -513,6 +481,7 @@
     }
   }
   
+  // 移动端聊天视图（全面优化）
   .mobile-chat-view {
     height: 100%;
     display: flex;
@@ -530,7 +499,7 @@
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
-      gap: 8px;
+      gap: 8px; // 添加间距
       
       .ant-btn {
         min-width: 44px;
@@ -551,11 +520,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        min-width: 0;
+        min-width: 0; // 重要：允许flex子元素收缩
         padding: 0 4px;
       }
     }
     
+    // 聊天内容区域
     .mobile-chat-content {
       flex: 1;
       display: flex;
@@ -588,81 +558,54 @@
           border: none;
           
           .input-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
             margin-bottom: 10px;
-            flex-wrap: nowrap;
-            gap: 6px;
             
             .left-tools {
-              display: flex;
-              align-items: center;
-              gap: 4px;
-              flex-shrink: 1;
-              min-width: 0;
-              overflow: hidden;
+              flex: 1;
+              gap: 6px;
               
-              .model-selector-button {
-                &.mobile {
-                  min-height: 36px;
-                  height: 36px;
-                  padding: 4px 8px;
-                  max-width: 100px;
-                  
-                  .model-name {
-                    max-width: 50px;
-                  }
+              // 移动端按钮统一样式
+              .mobile-action-btn {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 8px;
+                
+                .anticon {
+                  font-size: 20px;
                 }
               }
               
+              // 模型选择器在移动端优化
+              .model-selector-button {
+                &.mobile {
+                  min-height: 44px;
+                  height: 44px;
+                }
+              }
+            }
+            
+            .right-tools {
               .mobile-action-btn {
-                min-width: 36px !important;
-                min-height: 36px !important;
-                width: 36px;
-                height: 36px;
-                padding: 6px;
-                flex-shrink: 0;
+                min-width: 44px;
+                min-height: 44px;
+                padding: 10px;
                 
                 .anticon {
                   font-size: 18px;
                 }
               }
             }
-            
-            .right-tools {
-              display: flex;
-              align-items: center;
-              flex-shrink: 0;
-              gap: 4px;
-              
-              .ant-space {
-                gap: 4px !important;
-              }
-              
-              .mobile-action-btn {
-                min-width: 36px !important;
-                min-height: 36px !important;
-                width: 36px;
-                height: 36px;
-                padding: 6px;
-                
-                .anticon {
-                  font-size: 16px;
-                }
-              }
-            }
           }
           
           .input-wrapper {
-            display: flex;
-            flex-direction: row;
-            align-items: flex-end;
             gap: 10px;
             
             .message-input {
-              flex: 1;
-              font-size: 16px !important;
+              font-size: 16px !important; // 防止iOS自动缩放，最小16px
               line-height: 1.5;
               max-height: 120px;
               min-height: 44px;
@@ -670,12 +613,7 @@
               padding: 10px 12px;
             }
             
-            .input-actions-right {
-              display: flex;
-              align-items: flex-end;
-              flex-shrink: 0;
-            }
-            
+            // 发送按钮统一样式
             .mobile-send-btn {
               min-width: 44px !important;
               min-height: 44px !important;
@@ -698,15 +636,14 @@
     }
   }
   
+  // 移动端抽屉样式
   .mobile-conversations-drawer {
     .ant-drawer-body {
       padding: 0;
-      background: #f5f5f5;
     }
     
     .sidebar-wrapper {
       height: 100%;
-      background: #f5f5f5;
       
       .sidebar-header-fixed {
         padding: 16px;
@@ -715,37 +652,9 @@
       }
       
       .conversations-list-wrapper {
-        padding: 12px;
-        
         .conversation-item {
-          padding: 16px;
-          margin-bottom: 10px;
-          border-radius: 14px;
-          
-          .conversation-header {
-            margin-bottom: 10px;
-            
-            .conversation-title {
-              .title-text {
-                font-size: 16px;
-                font-weight: 600;
-              }
-            }
-            
-            .conversation-actions {
-              display: flex !important;
-              gap: 6px;
-              
-              .ant-btn {
-                min-width: 36px;
-                min-height: 36px;
-              }
-            }
-          }
-          
-          .conversation-meta,
-          .conversation-time {
-            font-size: 13px;
+          .conversation-actions {
+            display: flex !important;
           }
         }
       }
@@ -783,7 +692,7 @@
   }
 }
 
-// 平板适配
+// 平板适配（768px-1024px）
 @media (min-width: 769px) and (max-width: 1024px) {
   .chat-container {
     .chat-sidebar {

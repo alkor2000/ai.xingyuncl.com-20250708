@@ -22,11 +22,8 @@
   "chat.loadingConversations": "正在加载对话列表...",
   
   "chat.input.placeholder": "输入消息... (Shift+Enter换行，Enter发送)",
-  "chat.input.placeholder.mobile": "输入消息...",
   "chat.input.placeholderWithImage": "描述一下这张图片或提出问题...",
-  "chat.input.placeholderWithImage.mobile": "描述图片...",
   "chat.input.placeholderWithDocument": "请输入关于文档的问题或指令...",
-  "chat.input.placeholderWithDocument.mobile": "询问文档...",
   
   "chat.upload.image": "上传图片",
   "chat.upload.document": "上传文档",
