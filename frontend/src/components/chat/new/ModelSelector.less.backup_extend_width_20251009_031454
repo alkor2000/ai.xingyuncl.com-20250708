@@ -1,4 +1,4 @@
-// 模型选择器样式（移动端加长显示完整名称）
+// 模型选择器样式（移动端优化版）
 .model-selector-button {
   background: #f5f5f5;
   border: 1px solid #d9d9d9;
@@ -35,7 +35,6 @@
     align-items: center;
     gap: 3px;
     color: #1890ff;
-    flex-shrink: 0;
     
     .credits-icon {
       font-size: 12px;
@@ -47,28 +46,20 @@
     }
   }
   
-  // 移动端样式优化 - 文字区域充分利用空间
+  // 移动端样式优化
   &.mobile {
-    height: 36px;
-    padding: 4px 10px;
+    height: 36px; // 增大高度
+    padding: 4px 12px;
     border-radius: 18px;
     gap: 6px;
-    min-width: 180px;
-    max-width: 260px;
     
     .model-name {
-      flex: 1; // 让文字区域占据剩余空间
-      min-width: 0; // 重要：允许flex子元素收缩
-      max-width: none; // 移除最大宽度限制
-      font-size: 13px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      max-width: 80px;
+      font-size: 13px; // 稍微减小但不低于13px
     }
     
     .credits-display {
       gap: 2px;
-      flex-shrink: 0; // 积分区域不收缩
       
       .credits-icon {
         font-size: 11px;
@@ -109,7 +100,7 @@
     border: none;
     border-radius: 6px;
     margin-bottom: 2px;
-    min-height: 48px;
+    min-height: 48px; // 确保足够的点击区域
     
     &:hover {
       background: #f5f5f5;
@@ -199,18 +190,18 @@
 // 移动端专属样式优化
 @media (max-width: 768px) {
   .model-selector-list {
-    width: 260px;
+    width: 260px; // 移动端稍微窄一些
     max-height: 320px;
     
     .ant-list-item {
       padding: 12px;
-      min-height: 52px;
+      min-height: 52px; // 移动端增大点击区域
     }
     
     .model-info {
       .model-name-row {
         .ant-typography {
-          font-size: 15px;
+          font-size: 15px; // 移动端字体稍大
         }
       }
       

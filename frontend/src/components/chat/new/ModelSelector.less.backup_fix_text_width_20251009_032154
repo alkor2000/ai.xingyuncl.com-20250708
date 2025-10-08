@@ -47,28 +47,22 @@
     }
   }
   
-  // 移动端样式优化 - 文字区域充分利用空间
+  // 移动端样式优化 - 进一步加长按钮
   &.mobile {
     height: 36px;
     padding: 4px 10px;
     border-radius: 18px;
     gap: 6px;
-    min-width: 180px;
-    max-width: 260px;
+    min-width: 180px; // 增加最小宽度
+    max-width: 260px; // 增加最大宽度
     
     .model-name {
-      flex: 1; // 让文字区域占据剩余空间
-      min-width: 0; // 重要：允许flex子元素收缩
-      max-width: none; // 移除最大宽度限制
+      max-width: 200px; // 增加文字区域宽度
       font-size: 13px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
     
     .credits-display {
       gap: 2px;
-      flex-shrink: 0; // 积分区域不收缩
       
       .credits-icon {
         font-size: 11px;

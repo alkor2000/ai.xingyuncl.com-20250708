@@ -599,11 +599,22 @@
               display: flex;
               align-items: center;
               gap: 4px;
-              flex: 1;
+              flex-shrink: 1;
               min-width: 0;
-              overflow: visible; // 改为visible让模型选择器能够完整显示
+              overflow: hidden;
               
-              // 移除对模型选择器的限制，让ModelSelector.less完全控制
+              .model-selector-button {
+                &.mobile {
+                  min-height: 36px;
+                  height: 36px;
+                  padding: 4px 8px;
+                  max-width: 100px;
+                  
+                  .model-name {
+                    max-width: 50px;
+                  }
+                }
+              }
               
               .mobile-action-btn {
                 min-width: 36px !important;

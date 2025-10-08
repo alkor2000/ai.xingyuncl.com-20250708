@@ -1,5 +1,5 @@
 /**
- * 模型选择器组件（移动端显示完整别名）
+ * 模型选择器组件（移动端优化版 - 修复弹出位置）
  * 用于在对话中快速切换AI模型
  */
 
@@ -49,6 +49,17 @@ const ModelSelector = ({
     setVisible(false)
   }
 
+  // 获取简短的模型名称（移动端使用）
+  const getShortModelName = (modelName) => {
+    if (!modelName) return '选择模型'
+    // 移除常见前缀和简化名称
+    return modelName
+      .replace('claude-', '')
+      .replace('gpt-', '')
+      .replace('gemini-', '')
+      .split('-')[0] // 只取第一段
+  }
+
   // 模型列表内容
   const modelListContent = (
     <div className="model-selector-list" ref={popoverRef}>
@@ -91,10 +102,14 @@ const ModelSelector = ({
       trigger="click"
       visible={visible}
       onVisibleChange={setVisible}
+      // 移动端向上居中弹出，PC端向左上弹出
       placement={isMobile ? 'top' : 'topLeft'}
+      // 移动端挂载到body，避免被父容器裁剪
       getPopupContainer={isMobile ? undefined : (trigger) => trigger.parentElement}
       overlayClassName={`model-selector-popover ${isMobile ? 'mobile' : ''}`}
+      // 允许自动调整位置，避免超出视口
       autoAdjustOverflow={true}
+      // 移动端增加偏移，避免遮挡按钮
       align={isMobile ? { offset: [0, -8] } : undefined}
     >
       <Button
@@ -102,7 +117,10 @@ const ModelSelector = ({
         disabled={disabled}
       >
         <span className="model-name">
-          {currentModel?.display_name || currentModel?.name || '选择模型'}
+          {isMobile 
+            ? getShortModelName(currentModel?.name)
+            : (currentModel?.display_name || currentModel?.name || '选择模型')
+          }
         </span>
         <span className="credits-display">
           <ThunderboltOutlined className="credits-icon" />
