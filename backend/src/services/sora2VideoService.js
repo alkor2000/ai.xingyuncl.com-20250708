@@ -84,6 +84,76 @@ class Sora2VideoService {
   }
 
   /**
+   * 翻译OpenAI错误信息为中文
+   * @param {string} errorMessage 英文错误信息
+   * @param {string} kind 错误类型
+   * @returns {string} 中文错误信息
+   */
+  translateErrorMessage(errorMessage, kind) {
+    // 如果没有错误信息，返回通用提示
+    if (!errorMessage) {
+      return '视频生成失败，请稍后重试';
+    }
+
+    // 常见错误类型映射
+    const errorTranslations = {
+      // 内容审核相关
+      'sora_content_violation': '内容审核未通过',
+      'content_policy_violation': '违反内容政策',
+      
+      // 具体错误信息翻译
+      'This content may violate our guardrails around nudity, sexuality, or erotic content.': 
+        '内容审核未通过：可能涉及裸露、性或色情内容',
+      'This content may violate our guardrails concerning similarity to third-party content.': 
+        '内容审核未通过：可能涉及受版权保护的第三方内容（如知名IP、品牌等）',
+      'This content may violate our guardrails around violence or graphic content.': 
+        '内容审核未通过：可能涉及暴力或血腥内容',
+      'This content may violate our guardrails around hate speech or discrimination.': 
+        '内容审核未通过：可能涉及仇恨言论或歧视内容',
+      'This content may violate our guardrails around self-harm.': 
+        '内容审核未通过：可能涉及自残内容',
+      'This content may violate our guardrails around illegal activity.': 
+        '内容审核未通过：可能涉及非法活动',
+        
+      // 技术错误
+      'Invalid input': '输入参数无效',
+      'Rate limit exceeded': 'API调用频率超限，请稍后重试',
+      'Insufficient credits': '账户余额不足',
+      'Service unavailable': '服务暂时不可用，请稍后重试',
+      'Timeout': '生成超时，请重试',
+      'Internal server error': '服务器内部错误，请稍后重试'
+    };
+
+    // 先尝试精确匹配
+    if (errorTranslations[errorMessage]) {
+      return errorTranslations[errorMessage];
+    }
+
+    // 再尝试kind类型匹配
+    if (kind && errorTranslations[kind]) {
+      return `${errorTranslations[kind]}：${errorMessage}`;
+    }
+
+    // 关键词匹配
+    const lowerError = errorMessage.toLowerCase();
+    if (lowerError.includes('nudity') || lowerError.includes('sexual') || lowerError.includes('erotic')) {
+      return '内容审核未通过：可能涉及不适当内容';
+    }
+    if (lowerError.includes('copyright') || lowerError.includes('third-party')) {
+      return '内容审核未通过：可能涉及版权保护内容';
+    }
+    if (lowerError.includes('violence') || lowerError.includes('graphic')) {
+      return '内容审核未通过：可能涉及暴力内容';
+    }
+    if (lowerError.includes('rate limit')) {
+      return 'API调用频率超限，请稍后重试';
+    }
+
+    // 如果都不匹配，返回原始错误（加上提示）
+    return `生成失败：${errorMessage}`;
+  }
+
+  /**
    * 提交纯文本视频生成任务
    * @param {object} model 模型配置
    * @param {object} params 生成参数
@@ -133,7 +203,8 @@ class Sora2VideoService {
       
       // 处理API错误
       if (error.response?.data?.error) {
-        throw new Error(`Sora2 API错误: ${error.response.data.error}`);
+        const translatedError = this.translateErrorMessage(error.response.data.error);
+        throw new Error(translatedError);
       }
       
       throw error;
@@ -202,7 +273,8 @@ class Sora2VideoService {
       
       // 处理API错误
       if (error.response?.data?.error) {
-        throw new Error(`Sora2 API错误: ${error.response.data.error}`);
+        const translatedError = this.translateErrorMessage(error.response.data.error);
+        throw new Error(translatedError);
       }
       
       throw error;
@@ -258,6 +330,34 @@ class Sora2VideoService {
         generationId = draftInfo.generation_id;
       }
       
+      // ✅ 修复：正确提取错误信息
+      let errorMessage = null;
+      let errorKind = null;
+      
+      if (status === 'failed') {
+        // 从多个可能的位置提取错误信息
+        const rawError = data.error || 
+                        data.detail?.draft_info?.reason_str || 
+                        data.detail?.pending_info?.failure_reason;
+        
+        // 提取错误类型
+        errorKind = data.detail?.draft_info?.kind;
+        
+        // 翻译错误信息为中文
+        if (rawError) {
+          errorMessage = this.translateErrorMessage(rawError, errorKind);
+          
+          logger.warn('Sora2任务失败', {
+            taskId,
+            kind: errorKind,
+            rawError,
+            translatedError: errorMessage
+          });
+        } else {
+          errorMessage = '视频生成失败，未返回具体原因';
+        }
+      }
+      
       // 计算进度
       let progress = 0;
       if (status === 'succeeded') {
@@ -280,7 +380,7 @@ class Sora2VideoService {
         width,
         height,
         generationId,
-        errorMessage: data.detail?.pending_info?.failure_reason || null,
+        errorMessage,  // ✅ 现在包含翻译后的中文错误信息
         rawResponse: data
       };
     } catch (error) {

@@ -1,6 +1,7 @@
 /**
  * 视频生成页面 - 支持首尾帧控制和模型名称显示
  * 支持国际化(i18n)
+ * 优化：保留生成输入、提示词可复制、Sora2隐藏无用参数
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -50,7 +51,8 @@ import {
   PlusOutlined,
   ExpandOutlined,
   PictureOutlined,
-  RobotOutlined
+  RobotOutlined,
+  CopyOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
@@ -114,10 +116,10 @@ const VideoGeneration = () => {
   const [negativePrompt, setNegativePrompt] = useState('');
   const [firstFrameImage, setFirstFrameImage] = useState('');
   const [firstFrameFile, setFirstFrameFile] = useState(null);
-  const [lastFrameImage, setLastFrameImage] = useState(''); // 新增：尾帧图片
-  const [lastFrameFile, setLastFrameFile] = useState(null); // 新增：尾帧文件
+  const [lastFrameImage, setLastFrameImage] = useState('');
+  const [lastFrameFile, setLastFrameFile] = useState(null);
   const [uploadingFirst, setUploadingFirst] = useState(false);
-  const [uploadingLast, setUploadingLast] = useState(false); // 新增：尾帧上传状态
+  const [uploadingLast, setUploadingLast] = useState(false);
   const [generationMode, setGenerationMode] = useState('text_to_video');
   const [resolution, setResolution] = useState('720p');
   const [duration, setDuration] = useState(5);
@@ -277,6 +279,15 @@ const VideoGeneration = () => {
     setLastFrameFile(null);
   };
 
+  // 复制提示词到剪贴板
+  const handleCopyPrompt = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      message.success('提示词已复制');
+    }).catch(() => {
+      message.error('复制失败');
+    });
+  };
+
   // 处理生成
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -347,17 +358,12 @@ const VideoGeneration = () => {
     const result = await generateVideo(params);
 
     if (result) {
-      // 清空输入
-      setPrompt('');
-      setNegativePrompt('');
-      setFirstFrameImage('');
-      setFirstFrameFile(null);
-      setLastFrameImage('');
-      setLastFrameFile(null);
-      setSeed(-1);
-      
+      // ✅ 优化：不再自动清空输入，保留用户输入方便微调
       // 重置到第一页查看最新的视频
       setCurrentPage(1);
+      
+      // 提示用户生成成功
+      message.success('视频生成任务已提交，输入已保留可继续使用');
     }
   };
 
@@ -631,7 +637,24 @@ const VideoGeneration = () => {
           }
           description={
             <div className="card-meta-description">
-              <div className="prompt-text">{item.prompt}</div>
+              {/* ✅ 优化：提示词可复制，使用flex布局确保按钮始终可见 */}
+              <div className="prompt-text-container">
+                <Tooltip title={item.prompt} placement="topLeft">
+                  <span className="prompt-text-content">{item.prompt}</span>
+                </Tooltip>
+                <Tooltip title="复制提示词">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    className="copy-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyPrompt(item.prompt);
+                    }}
+                  />
+                </Tooltip>
+              </div>
               <div className="meta-info">
                 {isGallery && item.username && (
                   <span>{item.username}</span>
@@ -683,6 +706,21 @@ const VideoGeneration = () => {
       </div>
     </div>
   );
+
+  // 过滤宽高比选项：只显示模型支持的宽高比
+  const getFilteredRatioOptions = () => {
+    if (!selectedModel || !selectedModel.ratios_supported) {
+      return ratioOptions;
+    }
+    return ratioOptions.filter(opt => 
+      selectedModel.ratios_supported.includes(opt.value)
+    );
+  };
+
+  // ✅ 判断是否应该显示水印和镜头开关（Sora2不支持）
+  const shouldShowAdvancedControls = () => {
+    return selectedModel && selectedModel.provider !== 'sora2_goapi';
+  };
 
   return (
     <Layout className="video-generation-page">
@@ -934,7 +972,8 @@ const VideoGeneration = () => {
                   onChange={setRatio}
                   style={{ width: '100%' }}
                 >
-                  {ratioOptions.map(opt => (
+                  {/* ✅ 优化：只显示模型支持的宽高比 */}
+                  {getFilteredRatioOptions().map(opt => (
                     <Option key={opt.value} value={opt.value}>
                       {opt.label}
                     </Option>
@@ -942,24 +981,27 @@ const VideoGeneration = () => {
                 </Select>
               </div>
 
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Switch
-                    checked={watermark}
-                    onChange={setWatermark}
-                    checkedChildren={t('video.withWatermark')}
-                    unCheckedChildren={t('video.noWatermark')}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Switch
-                    checked={cameraFixed}
-                    onChange={setCameraFixed}
-                    checkedChildren={t('video.fixedCamera')}
-                    unCheckedChildren={t('video.movingCamera')}
-                  />
-                </Col>
-              </Row>
+              {/* ✅ 优化：Sora2不支持水印和镜头控制，条件显示 */}
+              {shouldShowAdvancedControls() && (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Switch
+                      checked={watermark}
+                      onChange={setWatermark}
+                      checkedChildren={t('video.withWatermark')}
+                      unCheckedChildren={t('video.noWatermark')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Switch
+                      checked={cameraFixed}
+                      onChange={setCameraFixed}
+                      checkedChildren={t('video.fixedCamera')}
+                      unCheckedChildren={t('video.movingCamera')}
+                    />
+                  </Col>
+                </Row>
+              )}
             </Space>
           </Card>
 

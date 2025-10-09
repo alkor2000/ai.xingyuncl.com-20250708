@@ -1,5 +1,6 @@
 /**
  * 视频生成页面样式
+ * 优化：复制按钮始终可见
  */
 
 .video-generation-page {
@@ -8,45 +9,45 @@
 
   .generation-sider {
     background: #fff;
-    padding: 16px 12px;  // 减小内边距
+    padding: 16px 12px;
     overflow-y: auto;
     
     .generation-container {
       .ant-card {
-        margin-bottom: 10px;  // 减小卡片间距从16px到10px
+        margin-bottom: 10px;
         
         .ant-card-head {
-          min-height: 40px;  // 减小标题区域高度
-          padding: 8px 12px;  // 减小标题内边距
+          min-height: 40px;
+          padding: 8px 12px;
           
           .ant-card-head-title {
-            font-size: 14px;  // 稍微减小标题字号
+            font-size: 14px;
           }
         }
         
         .ant-card-body {
-          padding: 12px;  // 减小卡片内容区域内边距
+          padding: 12px;
         }
         
         .model-info {
-          margin-top: 10px;  // 减小上边距
+          margin-top: 10px;
           
           p {
             color: #666;
-            font-size: 13px;  // 稍微减小字号
-            margin-bottom: 6px;  // 减小段落间距
+            font-size: 13px;
+            margin-bottom: 6px;
           }
         }
       }
       
       .param-label {
-        font-size: 13px;  // 稍微减小标签字号
+        font-size: 13px;
         color: #666;
-        margin-bottom: 6px;  // 减小间距
+        margin-bottom: 6px;
       }
       
       .generate-button-section {
-        margin-top: 16px;  // 减小顶部间距
+        margin-top: 16px;
       }
     }
   }
@@ -115,7 +116,7 @@
         justify-content: center;
         align-items: center;
         background: rgba(255, 255, 255, 0.95);
-        z-index: 2;  // 降低z-index，让操作按钮在上层
+        z-index: 2;
 
         .processing-text,
         .failed-text {
@@ -146,7 +147,6 @@
           width: 100%;
           height: 100%;
           
-          // 隐藏视频默认控件中的全屏按钮
           &::-webkit-media-controls-fullscreen-button {
             display: none !important;
           }
@@ -159,27 +159,8 @@
             display: none !important;
           }
           
-          // 对于火狐浏览器
           &::-moz-media-controls-enclosure {
             overflow: hidden;
-          }
-        }
-        
-        // 大屏预览按钮样式优化
-        .preview-button {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          background: rgba(0, 0, 0, 0.6);
-          color: white;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          backdrop-filter: blur(4px);
-          transition: all 0.2s;
-          
-          &:hover {
-            background: rgba(0, 0, 0, 0.8);
-            border-color: rgba(255, 255, 255, 0.4);
-            transform: scale(1.05);
           }
         }
       }
@@ -193,23 +174,21 @@
         background: #f0f0f0;
       }
 
-      // 操作按钮区域 - 提高z-index确保在最上层
       .video-actions {
         position: absolute;
         top: 10px;
         right: 10px;
-        z-index: 15;  // 提高z-index，确保在所有覆盖层之上
-        pointer-events: auto;  // 确保可以接收鼠标事件
+        z-index: 15;
+        pointer-events: auto;
 
         .ant-space {
           .ant-btn {
             backdrop-filter: blur(4px);
             border: none;
             transition: all 0.2s;
-            pointer-events: auto;  // 确保按钮可点击
-            cursor: pointer;  // 确保显示指针光标
+            pointer-events: auto;
+            cursor: pointer;
             
-            // 下载按钮 - 使用主色调蓝色
             &:first-child {
               background: rgba(24, 144, 255, 0.85);
               color: white;
@@ -220,7 +199,6 @@
               }
             }
             
-            // 默认按钮样式
             &:not(:first-child):not(.ant-btn-dangerous) {
               background: rgba(255, 255, 255, 0.9);
               color: #666;
@@ -231,7 +209,6 @@
               }
             }
             
-            // 收藏按钮（已收藏状态）
             &.ant-btn-danger:not(.ant-btn-dangerous) {
               background: rgba(255, 77, 79, 0.85);
               color: white;
@@ -242,7 +219,6 @@
               }
             }
             
-            // 公开状态按钮（绿色）
             &[style*="background: rgb(82, 196, 26)"] {
               background: rgba(82, 196, 26, 0.85) !important;
               color: white;
@@ -253,11 +229,10 @@
               }
             }
             
-            // 删除按钮 - 始终保持红色警示
             &.ant-btn-dangerous {
               background: rgba(255, 77, 79, 0.85) !important;
               color: white !important;
-              pointer-events: auto !important;  // 强制确保可点击
+              pointer-events: auto !important;
               cursor: pointer !important;
               
               &:hover {
@@ -285,16 +260,44 @@
       }
 
       .card-meta-description {
-        .prompt-text {
-          color: #333;
-          font-size: 14px;
-          line-height: 1.5;
+        /* ✅ 优化：使用flex布局确保复制按钮始终可见 */
+        .prompt-text-container {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
           margin-bottom: 8px;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          min-height: 20px; /* 确保至少有一行高度 */
+          
+          .prompt-text-content {
+            flex: 1;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-break: break-word;
+          }
+          
+          .copy-button {
+            flex-shrink: 0; /* 防止按钮被压缩 */
+            padding: 0 4px;
+            height: 20px;
+            line-height: 20px;
+            color: #999;
+            transition: all 0.2s;
+            
+            &:hover {
+              color: #1890ff;
+              background: rgba(24, 144, 255, 0.1);
+            }
+            
+            .anticon {
+              font-size: 14px;
+            }
+          }
         }
 
         .meta-info {
@@ -316,27 +319,23 @@
     }
   }
 
-  // 上传区域样式
   .first-frame-uploader {
     .ant-upload {
       width: 100%;
-      height: 120px;  // 减小上传区域高度
+      height: 120px;
     }
   }
   
-  // 输入框优化
   .ant-input,
   .ant-input-textarea .ant-input {
-    font-size: 13px;  // 稍微减小输入框字号
+    font-size: 13px;
   }
   
-  // Select选择器优化
   .ant-select {
-    font-size: 13px;  // 稍微减小选择器字号
+    font-size: 13px;
   }
 }
 
-// 响应式布局
 @media (max-width: 1200px) {
   .video-generation-page {
     .history-content {
