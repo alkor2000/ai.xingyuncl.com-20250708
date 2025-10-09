@@ -1,6 +1,6 @@
 /**
  * 视频生成服务
- * 处理与火山方舟和可灵视频API的交互
+ * 处理与火山方舟、可灵和Sora2视频API的交互
  */
 
 const axios = require('axios');
@@ -12,6 +12,7 @@ const VideoGeneration = require('../models/VideoGeneration');
 const User = require('../models/User');
 const ossService = require('./ossService');
 const klingVideoService = require('./klingVideoService');
+const sora2VideoService = require('./sora2VideoService');
 const logger = require('../utils/logger');
 
 class VideoService {
@@ -50,8 +51,8 @@ class VideoService {
         throw new Error(`积分不足，需要 ${creditsRequired} 积分`);
       }
 
-      // 4. 创建生成记录
-      generationId = await VideoGeneration.create({
+      // 4. 准备生成记录数据
+      const generationData = {
         user_id: userId,
         model_id: modelId,
         prompt: params.prompt,
@@ -67,10 +68,30 @@ class VideoService {
         watermark: params.watermark !== false,
         camera_fixed: params.camera_fixed || false,
         status: 'submitted',
-        credits_consumed: creditsRequired
-      });
+        credits_consumed: creditsRequired,
+        provider: model.provider,  // 新增：保存provider
+        started_at: new Date()     // 新增：记录开始时间
+      };
 
-      // 5. 根据provider调用不同的API
+      // 5. 如果是Sora2，添加orientation
+      if (model.provider === 'sora2_goapi') {
+        generationData.orientation = sora2VideoService.convertRatioToOrientation(
+          params.ratio || model.default_ratio
+        );
+        
+        // 如果有参考图片，保存为JSON
+        if (params.first_frame_image || params.last_frame_image) {
+          const images = [];
+          if (params.first_frame_image) images.push(params.first_frame_image);
+          if (params.last_frame_image) images.push(params.last_frame_image);
+          generationData.reference_images = JSON.stringify(images);
+        }
+      }
+
+      // 6. 创建生成记录
+      generationId = await VideoGeneration.create(generationData);
+
+      // 7. 根据provider调用不同的API
       let taskResult;
       
       if (model.provider === 'kling') {
@@ -88,6 +109,34 @@ class VideoService {
         } else {
           taskResult = await klingVideoService.submitText2Video(model, params);
         }
+      } else if (model.provider === 'sora2_goapi') {
+        // 调用Sora2 API
+        logger.info('使用Sora2 API生成视频', {
+          userId,
+          modelId,
+          generationId,
+          orientation: generationData.orientation
+        });
+        
+        // 根据生成模式调用不同的API
+        if (params.generation_mode === 'first_frame' || 
+            params.generation_mode === 'image_to_video' ||
+            params.first_frame_image) {
+          taskResult = await sora2VideoService.submitImage2Video(model, params);
+        } else {
+          taskResult = await sora2VideoService.submitText2Video(model, params);
+        }
+        
+        // 保存generation_id（如果有）
+        if (taskResult.rawResponse && taskResult.rawResponse.detail) {
+          const genId = taskResult.rawResponse.detail.draft_info?.generation_id;
+          if (genId) {
+            await VideoGeneration.update(generationId, {
+              generation_id: genId,
+              raw_response: JSON.stringify(taskResult.rawResponse)
+            });
+          }
+        }
       } else {
         // 调用火山方舟API（原有逻辑）
         logger.info('使用火山方舟API生成视频', {
@@ -99,13 +148,13 @@ class VideoService {
         taskResult = await this.submitToVolcano(model, params);
       }
 
-      // 6. 更新生成记录
+      // 8. 更新生成记录
       await VideoGeneration.update(generationId, {
         task_id: taskResult.taskId,
         status: taskResult.status || 'queued'
       });
 
-      // 7. 扣除积分
+      // 9. 扣除积分
       await user.consumeCredits(
         creditsRequired,
         null,
@@ -114,7 +163,7 @@ class VideoService {
         'video_consume'
       );
 
-      // 8. 开始轮询任务状态
+      // 10. 开始轮询任务状态
       this.pollTaskStatus(taskResult.taskId, generationId, model, userId);
 
       return {
@@ -277,6 +326,9 @@ class VideoService {
       if (model.provider === 'kling') {
         // 查询可灵任务状态
         return await klingVideoService.queryTaskStatus(taskId, model);
+      } else if (model.provider === 'sora2_goapi') {
+        // 查询Sora2任务状态
+        return await sora2VideoService.queryTaskStatus(taskId, model);
       } else {
         // 查询火山方舟任务状态（原有逻辑）
         const apiKey = VideoModel.decryptApiKey(model.api_key);
@@ -365,6 +417,15 @@ class VideoService {
               userId,
               generationId
             );
+          } else if (model.provider === 'sora2_goapi') {
+            // Sora2视频下载
+            saveResult = await sora2VideoService.downloadAndSaveVideo(
+              videoUrl,
+              taskData.thumbnailUrl,
+              taskData.gifUrl,
+              userId,
+              generationId
+            );
           } else {
             // 火山方舟视频下载
             saveResult = await this.downloadAndSaveVideo(
@@ -383,8 +444,8 @@ class VideoService {
             preview_gif_path: saveResult.previewGifPath,
             last_frame_path: taskData.last_frame_url || null,
             file_size: saveResult.fileSize,
-            video_width: saveResult.width,
-            video_height: saveResult.height,
+            video_width: saveResult.width || taskData.width,
+            video_height: saveResult.height || taskData.height,
             video_duration: taskData.duration || saveResult.duration,
             generation_time: Math.floor((Date.now() - startTime) / 1000),
             completed_at: new Date()

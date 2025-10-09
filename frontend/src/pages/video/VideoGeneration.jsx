@@ -93,7 +93,10 @@ const VideoGeneration = () => {
   const resolutionOptions = {
     '480p': { label: t('video.resolution480p'), width: 854, height: 480 },
     '720p': { label: t('video.resolution720p'), width: 1280, height: 720 },
-    '1080p': { label: t('video.resolution1080p'), width: 1920, height: 1080 }
+    '1080p': { label: t('video.resolution1080p'), width: 1920, height: 1080 },
+    '352x640': { label: t('video.resolution352x640'), width: 352, height: 640 },
+    '640x352': { label: t('video.resolution640x352'), width: 640, height: 352 },
+    '640x640': { label: t('video.resolution640x640'), width: 640, height: 640 }
   };
 
   // 预设宽高比
@@ -430,7 +433,8 @@ const VideoGeneration = () => {
       'stable': 'green',     // Stable Diffusion - 绿色
       'runway': 'cyan',      // Runway - 青色
       'pika': 'magenta',     // Pika - 洋红色
-      'sora': 'gold'         // Sora - 金色
+      'sora': 'gold',         // Sora - 金色
+      'sora2_goapi': 'gold'   // Sora 2 (GoAPI) - 金色
     };
     return colorMap[provider] || 'default';
   };

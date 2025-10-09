@@ -43,6 +43,9 @@
   "video.resolution480p": "480P (标清)",
   "video.resolution720p": "720P (高清)",
   "video.resolution1080p": "1080P (全高清)",
+  "video.resolution352x640": "352×640 (竖屏)",
+  "video.resolution640x352": "640×352 (横屏)",
+  "video.resolution640x640": "640×640 (正方形)",
   "video.duration": "时长",
   "video.seconds": "秒",
   "video.aspectRatio": "宽高比",
@@ -93,6 +96,7 @@
   
   "video.provider.volcano": "火山引擎",
   "video.provider.kling": "可灵",
+  "video.provider.sora2_goapi": "OpenAI Sora 2",
   "video.provider.midjourney": "Midjourney",
   "video.provider.stable": "Stable Diffusion",
   "video.provider.runway": "Runway",

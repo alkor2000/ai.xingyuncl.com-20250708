@@ -28,7 +28,12 @@ class VideoGeneration {
         camera_fixed = false,
         task_id = null,
         status = 'pending',
-        credits_consumed = 0
+        credits_consumed = 0,
+        provider = null,              // 新增：Provider标识
+        orientation = null,           // 新增：Sora2方向
+        reference_images = null,      // 新增：参考图片列表
+        generation_id = null,         // 新增：Sora2生成ID
+        started_at = null             // 新增：开始时间
       } = generationData;
 
       const query = `
@@ -36,15 +41,17 @@ class VideoGeneration {
           user_id, model_id, prompt, negative_prompt,
           first_frame_image, last_frame_image, generation_mode,
           resolution, duration, fps, ratio, seed, watermark, camera_fixed,
-          task_id, status, credits_consumed
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          task_id, status, credits_consumed,
+          provider, orientation, reference_images, generation_id, started_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const result = await dbConnection.query(query, [
         user_id, model_id, prompt, negative_prompt,
         first_frame_image, last_frame_image, generation_mode,
         resolution, duration, fps, ratio, seed, watermark, camera_fixed,
-        task_id, status, credits_consumed
+        task_id, status, credits_consumed,
+        provider, orientation, reference_images, generation_id, started_at
       ]);
 
       return result.rows.insertId;
@@ -63,7 +70,11 @@ class VideoGeneration {
         'task_id', 'status', 'progress', 'error_message',
         'video_url', 'local_path', 'thumbnail_path', 'preview_gif_path', 'last_frame_path',
         'file_size', 'video_width', 'video_height', 'video_duration',
-        'generation_time', 'completed_at', 'is_public'
+        'generation_time', 'completed_at', 'is_public',
+        // 新增：Sora2相关字段
+        'provider', 'orientation', 'reference_images', 'generation_id',
+        'oss_video_url', 'oss_thumbnail_url', 'oss_gif_url',
+        'raw_response', 'started_at', 'download_attempted', 'download_failed_reason'
       ];
 
       const updates = [];
