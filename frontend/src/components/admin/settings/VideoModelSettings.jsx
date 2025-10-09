@@ -1,6 +1,6 @@
 /**
  * 视频模型配置管理组件
- * 支持火山引擎和可灵视频模型，包含价格系数配置
+ * 支持火山引擎、可灵、Sora2视频模型，包含价格系数配置
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -70,7 +70,10 @@ const VideoModelSettings = () => {
   const [resolutionMultipliers, setResolutionMultipliers] = useState({
     '480p': 0.8,
     '720p': 1.0,
-    '1080p': 1.5
+    '1080p': 1.5,
+    '352x640': 1.0,
+    '640x352': 1.0,
+    '640x640': 1.0
   });
   const [durationMultipliers, setDurationMultipliers] = useState({
     '5': 1.0,
@@ -109,6 +112,17 @@ const VideoModelSettings = () => {
         form.setFieldsValue({
           endpoint: 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
           generation_type: 'async'
+        });
+      } else if (selectedProvider === 'sora2_goapi') {
+        form.setFieldsValue({
+          endpoint: 'https://goapi.gptnb.ai',
+          generation_type: 'async',
+          resolutions_supported: ['352x640', '640x352', '640x640'],
+          durations_supported: [5, 10],
+          ratios_supported: ['9:16', '16:9', '1:1'],
+          default_resolution: '640x352',
+          default_duration: 5,
+          default_ratio: '16:9'
         });
       }
     }
@@ -160,6 +174,15 @@ const VideoModelSettings = () => {
         
         // 可灵不使用api_key字段
         values.api_key = null;
+      } else if (values.provider === 'sora2_goapi') {
+        // Sora2配置
+        apiConfig = {
+          base_url: values.endpoint || 'https://goapi.gptnb.ai',
+          create_endpoint: '/sora2/v1/create',
+          query_endpoint: '/sora2/v1/query'
+        };
+        
+        // Sora2使用api_key，不需要删除
       } else {
         // 火山引擎配置
         apiConfig = values.api_config || {};
@@ -248,7 +271,10 @@ const VideoModelSettings = () => {
       setResolutionMultipliers({
         '480p': 0.8,
         '720p': 1.0,
-        '1080p': 1.5
+        '1080p': 1.5,
+        '352x640': 1.0,
+        '640x352': 1.0,
+        '640x640': 1.0
       });
       setDurationMultipliers({
         '5': 1.0,
@@ -279,7 +305,10 @@ const VideoModelSettings = () => {
     setResolutionMultipliers({
       '480p': 0.8,
       '720p': 1.0,
-      '1080p': 1.5
+      '1080p': 1.5,
+      '352x640': 1.0,
+      '640x352': 1.0,
+      '640x640': 1.0
     });
     setDurationMultipliers({
       '5': 1.0,
@@ -325,6 +354,9 @@ const VideoModelSettings = () => {
           {record.provider === 'volcano' && (
             <Tag color="blue">火山</Tag>
           )}
+          {record.provider === 'sora2_goapi' && (
+            <Tag color="gold">Sora2</Tag>
+          )}
           {(record.has_api_key || (record.provider === 'kling' && record.api_config)) && (
             <Tooltip title="已配置API密钥">
               <KeyOutlined style={{ color: '#52c41a' }} />
@@ -340,9 +372,15 @@ const VideoModelSettings = () => {
       render: (text) => {
         const providerMap = {
           'volcano': '火山引擎',
-          'kling': '可灵AI'
+          'kling': '可灵AI',
+          'sora2_goapi': 'OpenAI Sora 2'
         };
-        return <Tag color={text === 'kling' ? 'purple' : 'blue'}>{providerMap[text] || text}</Tag>;
+        const colorMap = {
+          'volcano': 'blue',
+          'kling': 'purple',
+          'sora2_goapi': 'gold'
+        };
+        return <Tag color={colorMap[text]}>{providerMap[text] || text}</Tag>;
       }
     },
     {
@@ -354,6 +392,9 @@ const VideoModelSettings = () => {
             ? JSON.parse(record.api_config) 
             : record.api_config;
           return config.model_version || '-';
+        }
+        if (record.provider === 'sora2_goapi') {
+          return record.name || 'sora-2';
         }
         return record.model_id || '-';
       },
@@ -485,6 +526,7 @@ const VideoModelSettings = () => {
             >
               <Option value="volcano">火山引擎</Option>
               <Option value="kling">可灵AI</Option>
+              <Option value="sora2_goapi">OpenAI Sora 2</Option>
             </Select>
           </Form.Item>
 
@@ -503,13 +545,34 @@ const VideoModelSettings = () => {
             />
           )}
 
+          {selectedProvider === 'sora2_goapi' && (
+            <Alert
+              message="OpenAI Sora 2 配置说明"
+              description={
+                <div>
+                  <p>Sora 2 是OpenAI最新的视频生成模型，通过GoAPI接口调用。</p>
+                  <p>固定分辨率：横屏640×352、竖屏352×640、正方形640×640</p>
+                  <p>支持时长：5秒、10秒</p>
+                  <p>支持文生视频和图生视频（首帧、尾帧、首尾帧）</p>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Form.Item
             name="name"
             label="模型标识"
             rules={[{ required: true, message: '请输入模型标识' }]}
           >
             <Input 
-              placeholder={selectedProvider === 'kling' ? "例如: kling_v1_6_pro" : "例如: doubao_seedance_pro"} 
+              placeholder={
+                selectedProvider === 'sora2_goapi' ? "例如: sora-2" :
+                selectedProvider === 'kling' ? "例如: kling_v1_6_pro" : 
+                "例如: doubao_seedance_pro"
+              } 
               disabled={!!editingModel} 
             />
           </Form.Item>
@@ -519,7 +582,13 @@ const VideoModelSettings = () => {
             label="显示名称"
             rules={[{ required: true, message: '请输入显示名称' }]}
           >
-            <Input placeholder={selectedProvider === 'kling' ? "例如: 可灵V1.6专业版" : "例如: Doubao-Seedance-1.0-pro"} />
+            <Input 
+              placeholder={
+                selectedProvider === 'sora2_goapi' ? "例如: OpenAI Sora 2" :
+                selectedProvider === 'kling' ? "例如: 可灵V1.6专业版" : 
+                "例如: Doubao-Seedance-1.0-pro"
+              } 
+            />
           </Form.Item>
 
           {selectedProvider === 'kling' ? (
@@ -574,7 +643,6 @@ const VideoModelSettings = () => {
                 </Select>
               </Form.Item>
 
-              {/* 可灵不需要model_id，但需要endpoint */}
               <Form.Item
                 name="endpoint"
                 label="API端点"
@@ -582,6 +650,27 @@ const VideoModelSettings = () => {
                 initialValue="https://api-beijing.klingai.com"
               >
                 <Input placeholder="https://api-beijing.klingai.com" disabled />
+              </Form.Item>
+            </>
+          ) : selectedProvider === 'sora2_goapi' ? (
+            <>
+              {/* Sora2特定配置 */}
+              <Form.Item
+                name="api_key"
+                label="API密钥"
+                rules={[{ required: !editingModel, message: '请输入API密钥' }]}
+                tooltip="GoAPI提供的Sora2 API密钥"
+              >
+                <Input.Password placeholder="sk-xxxxxx" />
+              </Form.Item>
+
+              <Form.Item
+                name="endpoint"
+                label="API端点"
+                rules={[{ required: true, message: '请输入API端点' }]}
+                initialValue="https://goapi.gptnb.ai"
+              >
+                <Input placeholder="https://goapi.gptnb.ai" />
               </Form.Item>
             </>
           ) : (
@@ -667,6 +756,9 @@ const VideoModelSettings = () => {
               <Option value="480p">480p</Option>
               <Option value="720p">720p (高清)</Option>
               <Option value="1080p">1080p (全高清)</Option>
+              <Option value="352x640">352×640 (竖屏)</Option>
+              <Option value="640x352">640×352 (横屏)</Option>
+              <Option value="640x640">640×640 (正方形)</Option>
             </Select>
           </Form.Item>
 
@@ -680,6 +772,47 @@ const VideoModelSettings = () => {
             </Select>
           </Form.Item>
 
+          <Form.Item
+            name="ratios_supported"
+            label="支持的宽高比"
+          >
+            <Select mode="multiple" placeholder="选择支持的宽高比">
+              <Option value="16:9">16:9 (横屏)</Option>
+              <Option value="9:16">9:16 (竖屏)</Option>
+              <Option value="1:1">1:1 (正方形)</Option>
+              <Option value="4:3">4:3 (传统)</Option>
+              <Option value="3:4">3:4 (竖屏)</Option>
+              <Option value="21:9">21:9 (影院)</Option>
+            </Select>
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="default_resolution"
+                label="默认分辨率"
+              >
+                <Input placeholder="例如: 720p" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="default_duration"
+                label="默认时长（秒）"
+              >
+                <InputNumber min={1} max={60} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="default_ratio"
+                label="默认宽高比"
+              >
+                <Input placeholder="例如: 16:9" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Divider orientation="left">
             <Space>
               <DollarOutlined />
@@ -691,7 +824,7 @@ const VideoModelSettings = () => {
             name="base_price"
             label="基础价格（积分）"
             rules={[{ required: true, message: '请输入基础价格' }]}
-            tooltip="720p分辨率、5秒时长的基准价格"
+            tooltip="基准配置（默认分辨率、5秒）的价格"
           >
             <InputNumber 
               min={0} 
@@ -716,45 +849,21 @@ const VideoModelSettings = () => {
               <Col span={12}>
                 <Title level={5}>分辨率系数</Title>
                 <Space direction="vertical" style={{ width: '100%' }}>
-                  <Row align="middle">
-                    <Col span={8}>480p:</Col>
-                    <Col span={16}>
-                      <InputNumber
-                        min={0.1}
-                        max={10}
-                        step={0.1}
-                        value={resolutionMultipliers['480p']}
-                        onChange={(value) => handleResolutionMultiplierChange('480p', value)}
-                        style={{ width: '100%' }}
-                      />
-                    </Col>
-                  </Row>
-                  <Row align="middle">
-                    <Col span={8}>720p:</Col>
-                    <Col span={16}>
-                      <InputNumber
-                        min={0.1}
-                        max={10}
-                        step={0.1}
-                        value={resolutionMultipliers['720p']}
-                        onChange={(value) => handleResolutionMultiplierChange('720p', value)}
-                        style={{ width: '100%' }}
-                      />
-                    </Col>
-                  </Row>
-                  <Row align="middle">
-                    <Col span={8}>1080p:</Col>
-                    <Col span={16}>
-                      <InputNumber
-                        min={0.1}
-                        max={10}
-                        step={0.1}
-                        value={resolutionMultipliers['1080p']}
-                        onChange={(value) => handleResolutionMultiplierChange('1080p', value)}
-                        style={{ width: '100%' }}
-                      />
-                    </Col>
-                  </Row>
+                  {['480p', '720p', '1080p', '352x640', '640x352', '640x640'].map(res => (
+                    <Row align="middle" key={res}>
+                      <Col span={10}>{res}:</Col>
+                      <Col span={14}>
+                        <InputNumber
+                          min={0.1}
+                          max={10}
+                          step={0.1}
+                          value={resolutionMultipliers[res] || 1.0}
+                          onChange={(value) => handleResolutionMultiplierChange(res, value)}
+                          style={{ width: '100%' }}
+                        />
+                      </Col>
+                    </Row>
+                  ))}
                 </Space>
               </Col>
               
@@ -798,6 +907,13 @@ const VideoModelSettings = () => {
             size="small"
             style={{ marginBottom: 16 }}
           >
+            <Alert
+              message="价格计算公式"
+              description="最终价格 = 基础价格 × 分辨率系数 × 时长系数"
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
             <table style={{ width: '100%', textAlign: 'center' }}>
               <thead>
                 <tr>
@@ -807,31 +923,23 @@ const VideoModelSettings = () => {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ padding: '8px', fontWeight: 'bold' }}>480p</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('480p', 5)} 积分</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('480p', 10)} 积分</td>
-                </tr>
-                <tr style={{ background: '#f5f5f5' }}>
-                  <td style={{ padding: '8px', fontWeight: 'bold' }}>720p</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('720p', 5)} 积分</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('720p', 10)} 积分</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px', fontWeight: 'bold' }}>1080p</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('1080p', 5)} 积分</td>
-                  <td style={{ padding: '8px' }}>{calculatePreviewPrice('1080p', 10)} 积分</td>
-                </tr>
+                {['480p', '720p', '1080p', '352x640', '640x352', '640x640'].map((res, idx) => (
+                  <tr key={res} style={idx % 2 === 1 ? { background: '#f5f5f5' } : {}}>
+                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{res}</td>
+                    <td style={{ padding: '8px' }}>{calculatePreviewPrice(res, 5)} 积分</td>
+                    <td style={{ padding: '8px' }}>{calculatePreviewPrice(res, 10)} 积分</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            <Alert
-              message="价格计算公式"
-              description="最终价格 = 基础价格 × 分辨率系数 × 时长系数"
-              type="info"
-              showIcon
-              style={{ marginTop: 16 }}
-            />
           </Card>
+
+          <Form.Item
+            name="max_prompt_length"
+            label="最大提示词长度"
+          >
+            <InputNumber min={100} max={5000} style={{ width: '100%' }} />
+          </Form.Item>
 
           <Form.Item
             name="is_active"

@@ -43,6 +43,9 @@
   "video.resolution480p": "480P (SD)",
   "video.resolution720p": "720P (HD)",
   "video.resolution1080p": "1080P (Full HD)",
+  "video.resolution352x640": "352×640 (Portrait)",
+  "video.resolution640x352": "640×352 (Landscape)",
+  "video.resolution640x640": "640×640 (Square)",
   "video.duration": "Duration",
   "video.seconds": "seconds",
   "video.aspectRatio": "Aspect Ratio",
@@ -93,6 +96,7 @@
   
   "video.provider.volcano": "Volcano Engine",
   "video.provider.kling": "Kling",
+  "video.provider.sora2_goapi": "OpenAI Sora 2",
   "video.provider.midjourney": "Midjourney",
   "video.provider.stable": "Stable Diffusion",
   "video.provider.runway": "Runway",

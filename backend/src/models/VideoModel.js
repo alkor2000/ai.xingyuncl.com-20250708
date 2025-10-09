@@ -53,7 +53,7 @@ class VideoModel {
           // 可灵模型：检查api_config中是否有access_key和secret_key
           hasApiKey = !!(apiConfig && apiConfig.access_key && apiConfig.secret_key);
         } else {
-          // 火山引擎模型：检查api_key字段
+          // 其他模型：检查api_key字段
           hasApiKey = !!(model.api_key && model.api_key !== null && model.api_key !== '');
         }
         
@@ -171,8 +171,17 @@ class VideoModel {
         sort_order = 0
       } = modelData;
 
-      // 加密API密钥（只对火山引擎）
-      const encryptedApiKey = api_key ? VideoModel.encryptApiKey(api_key) : null;
+      // ✅ 修复：根据提供商决定是否加密API密钥
+      let processedApiKey = null;
+      if (api_key) {
+        // 只对火山引擎加密，其他提供商保持明文
+        if (provider === 'volcano') {
+          processedApiKey = VideoModel.encryptApiKey(api_key);
+        } else {
+          // sora2_goapi、kling 等保持明文
+          processedApiKey = api_key;
+        }
+      }
 
       const query = `
         INSERT INTO video_models (
@@ -192,7 +201,7 @@ class VideoModel {
         description,
         provider,
         endpoint,
-        encryptedApiKey,
+        processedApiKey,
         model_id,
         generation_type,
         JSON.stringify(api_config),
@@ -241,6 +250,12 @@ class VideoModel {
         'icon', 'is_active', 'sort_order'
       ];
 
+      // ✅ 获取现有模型信息，确定provider
+      const existingModel = await VideoModel.findById(id);
+      if (!existingModel) {
+        throw new Error('模型不存在');
+      }
+
       const updates = [];
       const values = [];
 
@@ -248,9 +263,13 @@ class VideoModel {
         if (updateData.hasOwnProperty(field)) {
           let value = updateData[field];
           
-          // 处理API密钥加密
+          // ✅ 修复：根据提供商决定是否加密API密钥
           if (field === 'api_key' && value) {
-            value = VideoModel.encryptApiKey(value);
+            if (existingModel.provider === 'volcano') {
+              // 只对火山引擎加密
+              value = VideoModel.encryptApiKey(value);
+            }
+            // 其他提供商（sora2_goapi、kling等）保持明文，不加密
           }
           
           // 处理JSON字段
@@ -295,7 +314,7 @@ class VideoModel {
   }
 
   /**
-   * 加密API密钥
+   * 加密API密钥（仅用于火山引擎）
    */
   static encryptApiKey(apiKey) {
     if (!apiKey) return null;
@@ -325,7 +344,7 @@ class VideoModel {
   }
 
   /**
-   * 解密API密钥
+   * 解密API密钥（仅用于火山引擎）
    */
   static decryptApiKey(encryptedData) {
     if (!encryptedData) return null;

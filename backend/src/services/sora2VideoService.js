@@ -5,6 +5,10 @@
  * API文档参考:
  * - 创建: POST /sora2/v1/create
  * - 查询: GET /sora2/v1/query?id={task_id}
+ * 
+ * 支持的模型：
+ * - sora-2: 基础版本（支持多种orientation和参数）
+ * - sora-2-pro: 专业版本（仅支持landscape，不接受额外参数）
  */
 
 const axios = require('axios');
@@ -39,6 +43,7 @@ class Sora2VideoService {
         base_url: model.endpoint || config.base_url || this.defaultBaseUrl,
         create_endpoint: config.create_endpoint || '/sora2/v1/create',
         query_endpoint: config.query_endpoint || '/sora2/v1/query',
+        model_name: model.name || 'sora-2',
         auto_download_to_oss: config.auto_download_to_oss !== false,
         download_gif_preview: config.download_gif_preview !== false
       };
@@ -67,9 +72,15 @@ class Sora2VideoService {
   /**
    * 转换方向参数
    * @param {string} ratio 宽高比 (如 "16:9", "9:16", "1:1")
+   * @param {string} modelName 模型名称
    * @returns {string} orientation (portrait, landscape, square)
    */
-  convertRatioToOrientation(ratio) {
+  convertRatioToOrientation(ratio, modelName) {
+    // ✅ sora-2-pro 只支持 landscape
+    if (modelName === 'sora-2-pro') {
+      return 'landscape';
+    }
+    
     const orientationMap = {
       '16:9': 'landscape',
       '9:16': 'portrait', 
@@ -85,23 +96,28 @@ class Sora2VideoService {
 
   /**
    * 翻译OpenAI错误信息为中文
-   * @param {string} errorMessage 英文错误信息
+   * @param {string|object} errorData 错误数据（可能是字符串或对象）
    * @param {string} kind 错误类型
    * @returns {string} 中文错误信息
    */
-  translateErrorMessage(errorMessage, kind) {
-    // 如果没有错误信息，返回通用提示
-    if (!errorMessage) {
+  translateErrorMessage(errorData, kind) {
+    let errorMessage = '';
+    
+    if (!errorData) {
       return '视频生成失败，请稍后重试';
+    }
+    
+    // 如果是对象，提取message字段
+    if (typeof errorData === 'object') {
+      errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+    } else {
+      errorMessage = String(errorData);
     }
 
     // 常见错误类型映射
     const errorTranslations = {
-      // 内容审核相关
       'sora_content_violation': '内容审核未通过',
       'content_policy_violation': '违反内容政策',
-      
-      // 具体错误信息翻译
       'This content may violate our guardrails around nudity, sexuality, or erotic content.': 
         '内容审核未通过：可能涉及裸露、性或色情内容',
       'This content may violate our guardrails concerning similarity to third-party content.': 
@@ -114,8 +130,6 @@ class Sora2VideoService {
         '内容审核未通过：可能涉及自残内容',
       'This content may violate our guardrails around illegal activity.': 
         '内容审核未通过：可能涉及非法活动',
-        
-      // 技术错误
       'Invalid input': '输入参数无效',
       'Rate limit exceeded': 'API调用频率超限，请稍后重试',
       'Insufficient credits': '账户余额不足',
@@ -124,18 +138,22 @@ class Sora2VideoService {
       'Internal server error': '服务器内部错误，请稍后重试'
     };
 
-    // 先尝试精确匹配
     if (errorTranslations[errorMessage]) {
       return errorTranslations[errorMessage];
     }
 
-    // 再尝试kind类型匹配
     if (kind && errorTranslations[kind]) {
       return `${errorTranslations[kind]}：${errorMessage}`;
     }
 
-    // 关键词匹配
     const lowerError = errorMessage.toLowerCase();
+    
+    if (lowerError.includes('invalid') && (lowerError.includes('token') || lowerError.includes('令牌') || lowerError.includes('api key'))) {
+      return 'API密钥无效或已过期，请联系管理员更新密钥';
+    }
+    if (lowerError.includes('unauthorized') || lowerError.includes('401')) {
+      return 'API认证失败，请检查密钥是否正确';
+    }
     if (lowerError.includes('nudity') || lowerError.includes('sexual') || lowerError.includes('erotic')) {
       return '内容审核未通过：可能涉及不适当内容';
     }
@@ -149,7 +167,6 @@ class Sora2VideoService {
       return 'API调用频率超限，请稍后重试';
     }
 
-    // 如果都不匹配，返回原始错误（加上提示）
     return `生成失败：${errorMessage}`;
   }
 
@@ -164,16 +181,27 @@ class Sora2VideoService {
       const config = this.parseModelConfig(model);
       const headers = this.getHeaders(config.api_key);
       
-      // 构建请求参数
+      // ✅ 构建请求参数 - 根据模型类型决定
       const requestData = {
-        model: 'sora-2',
-        orientation: this.convertRatioToOrientation(params.ratio || '16:9'),
+        model: config.model_name,
+        orientation: this.convertRatioToOrientation(params.ratio || '16:9', config.model_name),
         prompt: params.prompt
       };
       
+      // ✅ sora-2-pro 不接受任何额外参数
+      if (config.model_name !== 'sora-2-pro') {
+        // 只有 sora-2 才添加这些参数
+        // 注意：根据测试，sora-2 也可能不需要这些参数
+        // 如果需要，可以取消注释
+        // if (params.resolution) requestData.resolution = params.resolution;
+        // if (params.duration) requestData.duration = params.duration;
+      }
+      
       logger.info('提交Sora2纯文本视频任务', {
+        model: requestData.model,
         orientation: requestData.orientation,
-        promptLength: params.prompt.length
+        promptLength: params.prompt.length,
+        isPro: config.model_name === 'sora-2-pro'
       });
       
       const response = await axios.post(
@@ -185,7 +213,6 @@ class Sora2VideoService {
         }
       );
       
-      // 处理响应
       if (!response.data || !response.data.id) {
         throw new Error('Sora2 API返回数据格式错误');
       }
@@ -201,7 +228,6 @@ class Sora2VideoService {
         response: error.response?.data
       });
       
-      // 处理API错误
       if (error.response?.data?.error) {
         const translatedError = this.translateErrorMessage(error.response.data.error);
         throw new Error(translatedError);
@@ -222,10 +248,10 @@ class Sora2VideoService {
       const config = this.parseModelConfig(model);
       const headers = this.getHeaders(config.api_key);
       
-      // 构建请求参数
+      // ✅ 构建请求参数
       const requestData = {
-        model: 'sora-2',
-        orientation: this.convertRatioToOrientation(params.ratio || '16:9'),
+        model: config.model_name,
+        orientation: this.convertRatioToOrientation(params.ratio || '16:9', config.model_name),
         prompt: params.prompt,
         images: []
       };
@@ -241,9 +267,11 @@ class Sora2VideoService {
       }
       
       logger.info('提交Sora2图片参考视频任务', {
+        model: requestData.model,
         orientation: requestData.orientation,
         imageCount: requestData.images.length,
-        promptLength: params.prompt.length
+        promptLength: params.prompt.length,
+        isPro: config.model_name === 'sora-2-pro'
       });
       
       const response = await axios.post(
@@ -255,7 +283,6 @@ class Sora2VideoService {
         }
       );
       
-      // 处理响应
       if (!response.data || !response.data.id) {
         throw new Error('Sora2 API返回数据格式错误');
       }
@@ -271,7 +298,6 @@ class Sora2VideoService {
         response: error.response?.data
       });
       
-      // 处理API错误
       if (error.response?.data?.error) {
         const translatedError = this.translateErrorMessage(error.response.data.error);
         throw new Error(translatedError);
@@ -283,7 +309,7 @@ class Sora2VideoService {
 
   /**
    * 查询任务状态
-   * @param {string} taskId 任务ID (格式: sora-2:task_xxx)
+   * @param {string} taskId 任务ID
    * @param {object} model 模型配置
    * @returns {object} 任务状态信息
    */
@@ -292,7 +318,6 @@ class Sora2VideoService {
       const config = this.parseModelConfig(model);
       const headers = this.getHeaders(config.api_key);
       
-      // URL编码任务ID中的冒号
       const encodedTaskId = encodeURIComponent(taskId);
       
       const response = await axios.get(
@@ -308,11 +333,8 @@ class Sora2VideoService {
       }
       
       const data = response.data;
-      
-      // 转换状态
       const status = this.convertTaskStatus(data.status);
       
-      // 提取视频URL和其他信息
       let videoUrl = null;
       let thumbnailUrl = null;
       let gifUrl = null;
@@ -330,25 +352,22 @@ class Sora2VideoService {
         generationId = draftInfo.generation_id;
       }
       
-      // ✅ 修复：正确提取错误信息
       let errorMessage = null;
       let errorKind = null;
       
       if (status === 'failed') {
-        // 从多个可能的位置提取错误信息
         const rawError = data.error || 
                         data.detail?.draft_info?.reason_str || 
                         data.detail?.pending_info?.failure_reason;
         
-        // 提取错误类型
         errorKind = data.detail?.draft_info?.kind;
         
-        // 翻译错误信息为中文
         if (rawError) {
           errorMessage = this.translateErrorMessage(rawError, errorKind);
           
           logger.warn('Sora2任务失败', {
             taskId,
+            model: config.model_name,
             kind: errorKind,
             rawError,
             translatedError: errorMessage
@@ -358,12 +377,10 @@ class Sora2VideoService {
         }
       }
       
-      // 计算进度
       let progress = 0;
       if (status === 'succeeded') {
         progress = 100;
       } else if (status === 'running') {
-        // 尝试从detail中获取进度
         progress = data.detail?.pending_info?.progress_pct 
           ? parseInt(data.detail.pending_info.progress_pct * 100) 
           : 50;
@@ -380,7 +397,7 @@ class Sora2VideoService {
         width,
         height,
         generationId,
-        errorMessage,  // ✅ 现在包含翻译后的中文错误信息
+        errorMessage,
         rawResponse: data
       };
     } catch (error) {
@@ -396,12 +413,6 @@ class Sora2VideoService {
 
   /**
    * 下载并保存视频到OSS
-   * @param {string} videoUrl 视频URL
-   * @param {string} thumbnailUrl 缩略图URL
-   * @param {string} gifUrl GIF预览URL
-   * @param {number} userId 用户ID
-   * @param {number} generationId 生成记录ID
-   * @returns {object} 保存结果
    */
   async downloadAndSaveVideo(videoUrl, thumbnailUrl, gifUrl, userId, generationId) {
     try {
@@ -411,23 +422,20 @@ class Sora2VideoService {
         generationId
       });
       
-      // 初始化OSS服务
       await ossService.initialize();
       
-      // 生成文件名
-      const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const dateFolder = new Date().toISOString().slice(0, 7);
       const timestamp = Date.now();
       const random = crypto.randomBytes(8).toString('hex');
       
-      // 下载视频
       let ossVideoUrl = null;
       let fileSize = 0;
       
       if (videoUrl) {
         const videoResponse = await axios.get(videoUrl, {
           responseType: 'arraybuffer',
-          timeout: 180000, // 3分钟超时
-          maxContentLength: 500 * 1024 * 1024, // 最大500MB
+          timeout: 180000,
+          maxContentLength: 500 * 1024 * 1024,
           maxBodyLength: 500 * 1024 * 1024
         });
         
@@ -453,7 +461,6 @@ class Sora2VideoService {
         });
       }
       
-      // 下载缩略图
       let ossThumbnailUrl = null;
       if (thumbnailUrl) {
         try {
@@ -480,11 +487,10 @@ class Sora2VideoService {
           logger.warn('下载Sora2缩略图失败，使用视频URL', { 
             error: error.message 
           });
-          ossThumbnailUrl = ossVideoUrl; // 使用视频URL作为fallback
+          ossThumbnailUrl = ossVideoUrl;
         }
       }
       
-      // 下载GIF预览
       let ossGifUrl = null;
       if (gifUrl) {
         try {
@@ -519,9 +525,9 @@ class Sora2VideoService {
         thumbnailPath: ossThumbnailUrl || ossVideoUrl,
         previewGifPath: ossGifUrl,
         fileSize,
-        width: null,  // TODO: 从视频元数据获取
-        height: null, // TODO: 从视频元数据获取
-        duration: null // TODO: 从视频元数据获取
+        width: null,
+        height: null,
+        duration: null
       };
       
     } catch (error) {
@@ -536,8 +542,6 @@ class Sora2VideoService {
 
   /**
    * 转换任务状态
-   * @param {string} sora2Status Sora2的状态
-   * @returns {string} 系统统一的状态
    */
   convertTaskStatus(sora2Status) {
     const statusMap = {
@@ -552,5 +556,4 @@ class Sora2VideoService {
   }
 }
 
-// 导出单例
 module.exports = new Sora2VideoService();

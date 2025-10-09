@@ -472,7 +472,7 @@ class VideoAdminController {
       
       // 根据provider类型进行不同的验证
       if (modelData.provider === 'kling') {
-        // 可灵模型验证
+        // ========== 可灵模型验证 ==========
         if (!modelData.name || !modelData.display_name || !modelData.endpoint) {
           return ResponseHelper.validation(res, {
             name: !modelData.name ? '模型标识不能为空' : null,
@@ -491,8 +491,33 @@ class VideoAdminController {
         // 可灵模型不需要model_id，设置为null
         modelData.model_id = null;
         
+      } else if (modelData.provider === 'sora2_goapi') {
+        // ========== Sora2 模型验证 ==========
+        if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.api_key) {
+          return ResponseHelper.validation(res, {
+            name: !modelData.name ? '模型标识不能为空' : null,
+            display_name: !modelData.display_name ? '显示名称不能为空' : null,
+            endpoint: !modelData.endpoint ? 'API端点不能为空' : null,
+            api_key: !modelData.api_key ? 'API密钥不能为空' : null
+          });
+        }
+        
+        // Sora2模型不需要model_id，设置为null
+        modelData.model_id = null;
+        
+        // 确保api_config包含必要的端点配置
+        if (!modelData.api_config) {
+          modelData.api_config = {};
+        }
+        modelData.api_config = {
+          ...modelData.api_config,
+          base_url: modelData.endpoint || 'https://goapi.gptnb.ai',
+          create_endpoint: '/sora2/v1/create',
+          query_endpoint: '/sora2/v1/query'
+        };
+        
       } else {
-        // 火山引擎模型验证
+        // ========== 火山引擎模型验证 ==========
         if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.model_id) {
           return ResponseHelper.validation(res, {
             name: !modelData.name ? '模型标识不能为空' : null,
@@ -522,7 +547,7 @@ class VideoAdminController {
       return ResponseHelper.success(res, safeModel, '模型创建成功');
     } catch (error) {
       logger.error('创建视频模型失败:', error);
-      return ResponseHelper.error(res, '创建模型失败');
+      return ResponseHelper.error(res, error.message || '创建模型失败');
     }
   }
 
@@ -545,6 +570,18 @@ class VideoAdminController {
         // 合并api_config而不是完全替换
         const existingConfig = existingModel.api_config || {};
         updateData.api_config = { ...existingConfig, ...updateData.api_config };
+      }
+      
+      // 如果是Sora2模型，确保api_config正确
+      if (existingModel.provider === 'sora2_goapi' && updateData.api_config) {
+        const existingConfig = existingModel.api_config || {};
+        updateData.api_config = {
+          ...existingConfig,
+          ...updateData.api_config,
+          base_url: updateData.endpoint || existingConfig.base_url || 'https://goapi.gptnb.ai',
+          create_endpoint: '/sora2/v1/create',
+          query_endpoint: '/sora2/v1/query'
+        };
       }
       
       const success = await VideoModel.update(id, updateData);
