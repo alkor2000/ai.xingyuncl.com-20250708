@@ -183,7 +183,7 @@ SET provider = 'kling'
 WHERE provider IS NULL OR provider = '';
 
 -- 插入系统配置（使用INSERT IGNORE避免重复）
-INSERT IGNORE INTO system_settings (setting_key, setting_value, setting_type, description, created_at, updated_at)
+INSERT IGNORE INTO system_config (config_key, config_value, config_type, description, created_at, updated_at)
 VALUES 
   ('video.sora2.enabled', 'false', 'boolean', 'Sora 2 视频生成是否启用', NOW(), NOW()),
   ('video.sora2.api_key', '', 'string', 'Sora 2 API密钥（加密存储）', NOW(), NOW()),
