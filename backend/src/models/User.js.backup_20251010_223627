@@ -198,8 +198,8 @@ class User {
   static async create(userData) {
     try {
       const {
-        uuid = null,
-        uuid_source = 'system',
+        uuid = null,  // 新增：支持传入UUID（SSO用户）
+        uuid_source = 'system',  // 新增：UUID来源
         email,
         username,
         password,
@@ -212,18 +212,24 @@ class User {
         credits_expire_days = 365
       } = userData;
 
+      // 修复：正确处理credits_quota的默认值
       let credits_quota = userData.credits_quota;
       if (credits_quota === undefined) {
-        credits_quota = 1000;
+        credits_quota = 1000; // 只有在未定义时才使用默认值
       }
 
+      // 验证必填字段
       if (!email || !username || !password) {
         throw new ValidationError('邮箱、用户名和密码为必填项');
       }
 
+      // 生成UUID（如果没有提供）
       const userUuid = uuid || uuidv4();
+
+      // 加密密码
       const hashedPassword = await bcrypt.hash(password, 10);
       
+      // 计算积分过期时间
       let creditsExpireAt = null;
       if (credits_expire_days && credits_expire_days > 0) {
         const expireDate = new Date();
@@ -231,11 +237,13 @@ class User {
         creditsExpireAt = expireDate;
       }
 
+      // 获取组的有效期设置
       let accountExpireAt = null;
       if (role !== 'super_admin') {
         const groupSql = 'SELECT expire_date FROM user_groups WHERE id = ?';
         const { rows: groupRows } = await dbConnection.query(groupSql, [group_id]);
         if (groupRows.length > 0 && groupRows[0].expire_date) {
+          // 使用组的到期日期作为用户账号有效期
           accountExpireAt = groupRows[0].expire_date;
         }
       }
@@ -299,9 +307,11 @@ class User {
         credits_expire_days = 365
       } = ssoData;
 
+      // 先查找是否存在该UUID的用户
       const existingUser = await User.findByUUID(uuid);
       
       if (existingUser) {
+        // 用户已存在，更新最后登录时间
         await existingUser.updateLastLogin();
         logger.info('SSO用户登录', { 
           userId: existingUser.id, 
@@ -311,8 +321,12 @@ class User {
         return existingUser;
       }
 
+      // 用户不存在，创建新用户
+      // 生成用户名（使用UUID前8位）
       const username = `sso_${uuid.substring(0, 8)}`;
+      // 生成随机密码（SSO用户不需要密码登录）
       const randomPassword = crypto.randomBytes(32).toString('hex');
+      // 使用UUID作为邮箱（SSO用户可能没有邮箱）
       const email = `${uuid}@sso.local`;
 
       const newUser = await User.create({
@@ -358,7 +372,7 @@ class User {
         status = null, 
         group_id = null, 
         search = null,
-        include_tags = false,
+        include_tags = false,  // 新增：是否包含标签信息
         requesterRole = null,
         requesterGroupId = null
       } = options;
@@ -368,11 +382,14 @@ class User {
       let whereConditions = [];
       let params = [];
 
+      // 基于请求者角色的过滤
       if (currentUser) {
         if (currentUser.role === 'admin' && currentUser.group_id) {
+          // 管理员只能看到同组用户
           whereConditions.push('u.group_id = ?');
           params.push(currentUser.group_id);
         }
+        // 超级管理员可以看到所有用户，不需要额外过滤
       }
 
       if (role) {
@@ -386,12 +403,14 @@ class User {
       }
 
       if (group_id) {
+        // 如果是管理员请求且指定了group_id，确保只能查看自己组的
         if (currentUser && currentUser.role === 'admin' && currentUser.group_id) {
           if (parseInt(group_id) !== currentUser.group_id) {
             logger.warn('管理员尝试查看其他组用户', { 
               adminGroupId: currentUser.group_id, 
               requestedGroupId: group_id 
             });
+            // 返回空结果
             return { users: [], pagination: { page, limit, total: 0 } };
           }
         }
@@ -408,6 +427,7 @@ class User {
         ? `WHERE ${whereConditions.join(' AND ')}` 
         : '';
 
+      // 获取总数
       const countSql = `
         SELECT COUNT(*) as total 
         FROM users u 
@@ -419,6 +439,7 @@ class User {
       
       logger.info('获取用户总数成功', { total, page, limit });
 
+      // 获取用户列表 (包含分组信息、积分统计、备注和站点配置)
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT u.*, 
@@ -458,10 +479,12 @@ class User {
       
       logger.info('获取用户列表成功', { count: users.length, page, limit });
 
+      // 如果需要包含标签信息
       if (include_tags && users.length > 0) {
         const userIds = users.map(u => u.id);
         const placeholders = userIds.map(() => '?').join(',');
         
+        // 批量获取所有用户的标签
         const tagsSql = `
           SELECT 
             utr.user_id,
@@ -479,6 +502,7 @@ class User {
         
         const { rows: allTags } = await dbConnection.query(tagsSql, userIds);
         
+        // 将标签分组到对应的用户
         const userTagsMap = {};
         allTags.forEach(tag => {
           if (!userTagsMap[tag.user_id]) {
@@ -493,6 +517,7 @@ class User {
           });
         });
         
+        // 为每个用户添加标签信息
         users.forEach(user => {
           user.tags = userTagsMap[user.id] || [];
         });
@@ -500,9 +525,12 @@ class User {
         logger.info('获取用户标签成功', { userCount: users.length });
       }
 
+      // 转换为User实例并计算积分统计
       const userInstances = users.map(userData => {
         const user = new User(userData);
+        // 添加积分统计信息
         user.credits_stats = user.getCreditsStats();
+        // 如果有标签，保留标签信息
         if (userData.tags) {
           user.tags = userData.tags;
         }
@@ -540,6 +568,7 @@ class User {
         return this;
       }
 
+      // 处理密码更新
       if (updateData.password) {
         updateData.password_hash = await bcrypt.hash(updateData.password, 10);
         delete updateData.password;
@@ -553,6 +582,7 @@ class User {
       const sql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
       await dbConnection.query(sql, values);
 
+      // 更新当前对象的属性
       updateFields.forEach(field => {
         const originalField = field === 'password_hash' ? 'password' : field;
         if (field === 'password_hash') {
@@ -599,55 +629,32 @@ class User {
   }
 
   /**
-   * 获取用户权限 - 基于角色和用户组的权限系统（新增calendar.use）
+   * 获取用户权限 - 基于角色和用户组的权限系统
    */
   async getPermissions() {
     try {
       // 超级管理员拥有所有权限
       if (this.role === 'super_admin') {
-        return [
-          'chat.use', 
-          'file.upload', 
-          'calendar.use',  // 新增：日历权限
-          'system.all', 
-          'user.manage', 
-          'group.manage', 
-          'credits.manage', 
-          'admin.*'
-        ];
+        return ['chat.use', 'file.upload', 'system.all', 'user.manage', 'group.manage', 'credits.manage', 'admin.*'];
       }
 
       // 管理员权限 - 基于用户组的权限
       if (this.role === 'admin') {
+        // 管理员可以管理同组用户，但不能管理积分
         return [
           'chat.use', 
           'file.upload', 
-          'calendar.use',  // 新增：日历权限
-          'user.manage.group',
-          'user.view.group',
-          'user.password.group',
-          'user.status.group',
-          'credits.view'
+          'user.manage.group', // 仅限同组用户管理
+          'user.view.group',   // 仅限查看同组用户
+          'user.password.group', // 可以重置同组用户密码
+          'user.status.group',   // 可以禁用/启用同组用户
+          'credits.view'         // 只能查看积分，不能修改
         ];
       }
 
-      // 普通用户权限 - 从数据库permissions表获取
+      // 普通用户权限
       if (this.role === 'user') {
-        const sql = `
-          SELECT DISTINCT permission_type 
-          FROM permissions 
-          WHERE user_id = ?
-        `;
-        const { rows } = await dbConnection.query(sql, [this.id]);
-        
-        // 返回数据库中的权限列表
-        const dbPermissions = rows.map(row => row.permission_type);
-        
-        // 基础权限（所有用户默认拥有）
-        const basePermissions = ['chat.use', 'file.upload'];
-        
-        // 合并并去重
-        return [...new Set([...basePermissions, ...dbPermissions])];
+        return ['chat.use', 'file.upload'];
       }
 
       return [];
@@ -663,6 +670,7 @@ class User {
   async hasPermission(permission, targetUserId = null) {
     const permissions = await this.getPermissions();
     
+    // 检查是否有对应权限或通配符权限
     const hasBasePermission = permissions.some(p => {
       if (p === permission) return true;
       if (p.endsWith('.*') && permission.startsWith(p.slice(0, -1))) return true;
@@ -671,12 +679,14 @@ class User {
 
     if (!hasBasePermission) return false;
 
+    // 如果是基于用户组的权限，需要检查目标用户是否在同一组
     if (permission.includes('.group') && targetUserId) {
-      if (this.role === 'super_admin') return true;
+      if (this.role === 'super_admin') return true; // 超级管理员不受限制
       
       const targetUser = await User.findById(targetUserId);
       if (!targetUser) return false;
       
+      // 检查是否同组
       return this.group_id === targetUser.group_id;
     }
 
@@ -820,6 +830,7 @@ class User {
       const groupId = rows.insertId;
       logger.info('用户分组创建成功', { groupId, name, expire_date });
 
+      // 返回创建的分组
       const { rows: [group] } = await dbConnection.query('SELECT * FROM user_groups WHERE id = ?', [groupId]);
       return group;
     } catch (error) {
@@ -854,6 +865,7 @@ class User {
 
       logger.info('用户分组更新成功', { groupId, updatedFields: updateFields });
 
+      // 返回更新后的分组
       const { rows: [group] } = await dbConnection.query('SELECT * FROM user_groups WHERE id = ?', [groupId]);
       return group;
     } catch (error) {
@@ -872,6 +884,7 @@ class User {
    */
   static async deleteGroup(groupId) {
     try {
+      // 检查是否有用户属于该分组
       const { rows: users } = await dbConnection.query('SELECT COUNT(*) as count FROM users WHERE group_id = ?', [groupId]);
       if (users[0].count > 0) {
         throw new ValidationError('该分组下还有用户，无法删除');
@@ -899,7 +912,7 @@ class User {
    */
   isCreditsExpired() {
     if (!this.credits_expire_at) {
-      return false;
+      return false; // 没有设置过期时间的不过期
     }
     return new Date() > new Date(this.credits_expire_at);
   }
@@ -909,7 +922,7 @@ class User {
    */
   getCreditsRemainingDays() {
     if (!this.credits_expire_at) {
-      return null;
+      return null; // 永不过期
     }
     
     const now = new Date();
@@ -933,7 +946,7 @@ class User {
     return {
       quota,
       used,
-      remaining: isExpired ? 0 : remaining,
+      remaining: isExpired ? 0 : remaining, // 过期则余额为0
       usageRate: quota > 0 ? Math.round(used / quota * 100) : 0,
       isExpired,
       expireAt: this.credits_expire_at,
@@ -946,7 +959,7 @@ class User {
    */
   getCredits() {
     if (this.isCreditsExpired()) {
-      return 0;
+      return 0; // 过期则余额为0
     }
     return Math.max(0, (this.credits_quota || 0) - (this.used_credits || 0));
   }
@@ -969,9 +982,13 @@ class User {
 
       const oldQuota = this.credits_quota || 0;
       const usedCredits = this.used_credits || 0;
+      
+      // 如果新配额小于已使用积分，将已使用积分设置为新配额
       const newUsedCredits = Math.min(usedCredits, newQuota);
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
         const updateSql = `
           UPDATE users 
           SET credits_quota = ?, used_credits = ?, updated_at = NOW()
@@ -979,8 +996,10 @@ class User {
         `;
         await query(updateSql, [newQuota, newUsedCredits, this.id]);
 
+        // 计算余额
         const balanceAfter = newQuota - newUsedCredits;
 
+        // 记录积分变更历史
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
@@ -988,13 +1007,14 @@ class User {
         `;
         await query(historySql, [
           this.id, 
-          newQuota - oldQuota,
+          newQuota - oldQuota, // 变化量
           balanceAfter,
           reason,
           operatorId
         ]);
       });
 
+      // 更新当前对象
       this.credits_quota = newQuota;
       this.used_credits = newUsedCredits;
 
@@ -1032,13 +1052,16 @@ class User {
       const newQuota = oldQuota + amount;
       const usedCredits = this.used_credits || 0;
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
         let updateSql = `
           UPDATE users 
           SET credits_quota = ?, updated_at = NOW()
         `;
         const updateParams = [newQuota];
         
+        // 如果需要延长有效期
         if (extendDays && extendDays > 0) {
           updateSql = `
             UPDATE users 
@@ -1058,8 +1081,10 @@ class User {
         
         await query(updateSql, updateParams);
 
+        // 计算余额
         const balanceAfter = newQuota - usedCredits;
 
+        // 记录积分变更历史
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
@@ -1073,6 +1098,7 @@ class User {
           operatorId
         ]);
 
+        // 如果延长了有效期，获取新的过期时间
         if (extendDays) {
           const { rows: [userData] } = await query(
             'SELECT credits_expire_at FROM users WHERE id = ?',
@@ -1082,6 +1108,7 @@ class User {
         }
       });
 
+      // 更新当前对象
       this.credits_quota = newQuota;
 
       logger.info('用户积分充值成功', {
@@ -1124,10 +1151,12 @@ class User {
       }
 
       const oldQuota = this.credits_quota || 0;
-      const newQuota = Math.max(0, oldQuota - amount);
-      const usedCredits = Math.min(this.used_credits || 0, newQuota);
+      const newQuota = Math.max(0, oldQuota - amount); // 确保不会变成负数
+      const usedCredits = Math.min(this.used_credits || 0, newQuota); // 如果已使用超过新配额，调整已使用
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 更新用户积分配额
         const updateSql = `
           UPDATE users 
           SET credits_quota = ?, used_credits = ?, updated_at = NOW()
@@ -1135,8 +1164,10 @@ class User {
         `;
         await query(updateSql, [newQuota, usedCredits, this.id]);
 
+        // 计算余额
         const balanceAfter = newQuota - usedCredits;
 
+        // 记录积分变更历史
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
@@ -1144,13 +1175,14 @@ class User {
         `;
         await query(historySql, [
           this.id,
-          -amount,
+          -amount, // 扣减为负数
           balanceAfter,
           reason,
           operatorId
         ]);
       });
 
+      // 更新当前对象
       this.credits_quota = newQuota;
       this.used_credits = usedCredits;
 
@@ -1179,9 +1211,15 @@ class User {
 
   /**
    * 消耗积分 - 使用事务确保原子性（支持0积分免费模型）
+   * @param {number} amount - 消耗的积分数量（0表示免费模型）
+   * @param {number} modelId - 相关模型ID（可选）
+   * @param {string} conversationId - 相关会话ID（可选）
+   * @param {string} reason - 消费原因描述
+   * @param {string} transactionType - 交易类型，默认为'chat_consume'，图像生成为'image_consume'
    */
   async consumeCredits(amount, modelId = null, conversationId = null, reason = 'AI对话消费', transactionType = 'chat_consume') {
     try {
+      // 如果积分为0，表示免费模型，不需要扣除积分
       if (amount === 0) {
         logger.info('使用免费模型，不扣除积分', {
           userId: this.id,
@@ -1190,13 +1228,16 @@ class User {
           transactionType
         });
 
+        // 记录免费使用历史（可选）
         const result = await dbConnection.transaction(async (query) => {
+          // 获取当前余额
           const { rows: balanceRows } = await query(
             'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
             [this.id]
           );
           const balanceAfter = balanceRows[0].balance;
 
+          // 记录免费使用历史
           const historySql = `
             INSERT INTO credit_transactions 
             (user_id, amount, balance_after, transaction_type, description, 
@@ -1205,7 +1246,7 @@ class User {
           `;
           await query(historySql, [
             this.id, 
-            0,
+            0, // 免费，不扣除
             balanceAfter, 
             transactionType, 
             reason + ' (免费模型)', 
@@ -1224,20 +1265,25 @@ class User {
         };
       }
 
+      // 非零积分，执行原有的扣除逻辑
       if (amount < 0) {
         throw new Error('消费积分数量不能为负数');
       }
 
+      // 检查是否过期
       if (this.isCreditsExpired()) {
         const remainingDays = this.getCreditsRemainingDays();
         throw new Error(`积分已过期${remainingDays === 0 ? '今天' : Math.abs(remainingDays) + '天前'}，请联系管理员续期`);
       }
 
+      // 检查余额是否充足
       if (!this.hasCredits(amount)) {
         throw new Error(`积分余额不足，当前余额: ${this.getCredits()}，需要: ${amount}`);
       }
 
+      // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
+        // 更新用户已使用积分
         const updateSql = `
           UPDATE users 
           SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
@@ -1245,12 +1291,14 @@ class User {
         `;
         await query(updateSql, [amount, this.id]);
 
+        // 获取更新后的余额
         const { rows: balanceRows } = await query(
           'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
           [this.id]
         );
         const balanceAfter = balanceRows[0].balance;
 
+        // 记录积分消费历史 - 使用传入的transactionType
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, 
@@ -1264,6 +1312,7 @@ class User {
         return { balanceAfter };
       });
 
+      // 更新当前对象
       this.used_credits += amount;
 
       logger.info('用户积分消费成功', {
@@ -1300,7 +1349,9 @@ class User {
    */
   async setCreditsExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
     try {
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 更新过期时间
         const updateSql = `
           UPDATE users 
           SET credits_expire_at = ?, updated_at = NOW()
@@ -1308,6 +1359,7 @@ class User {
         `;
         await query(updateSql, [expireDate, this.id]);
 
+        // 记录变更历史
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
@@ -1321,6 +1373,7 @@ class User {
         ]);
       });
 
+      // 更新当前对象
       this.credits_expire_at = expireDate;
 
       logger.info('设置用户积分过期时间成功', {
@@ -1354,9 +1407,11 @@ class User {
       let newExpireDate;
       
       if (!this.credits_expire_at || this.isCreditsExpired()) {
+        // 如果没有设置过期时间或已过期，从今天开始计算
         newExpireDate = new Date();
         newExpireDate.setDate(newExpireDate.getDate() + days);
       } else {
+        // 从现有过期时间延长
         newExpireDate = new Date(this.credits_expire_at);
         newExpireDate.setDate(newExpireDate.getDate() + days);
       }
@@ -1389,6 +1444,7 @@ class User {
 
       const whereClause = whereConditions.join(' AND ');
 
+      // 获取总数
       const countSql = `
         SELECT COUNT(*) as total 
         FROM credit_transactions ct 
@@ -1397,6 +1453,7 @@ class User {
       const { rows: totalRows } = await dbConnection.query(countSql, params);
       const total = totalRows[0].total;
 
+      // 获取历史记录
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT ct.*, 
@@ -1431,12 +1488,13 @@ class User {
    * 检查账号是否过期
    */
   isAccountExpired() {
+    // 超级管理员永不过期
     if (this.role === 'super_admin') {
       return false;
     }
 
     if (!this.expire_at) {
-      return false;
+      return false; // 没有设置过期时间的不过期
     }
     return new Date() > new Date(this.expire_at);
   }
@@ -1445,12 +1503,13 @@ class User {
    * 获取账号剩余天数
    */
   getAccountRemainingDays() {
+    // 超级管理员永不过期
     if (this.role === 'super_admin') {
       return null;
     }
 
     if (!this.expire_at) {
-      return null;
+      return null; // 永不过期
     }
     
     const now = new Date();
@@ -1466,11 +1525,14 @@ class User {
    */
   async setAccountExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
     try {
+      // 超级管理员不能设置有效期
       if (this.role === 'super_admin') {
         throw new ValidationError('超级管理员账号无需设置有效期');
       }
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 更新账号有效期
         const updateSql = `
           UPDATE users 
           SET expire_at = ?, updated_at = NOW()
@@ -1478,6 +1540,7 @@ class User {
         `;
         await query(updateSql, [expireDate, this.id]);
 
+        // 记录操作日志（如果有日志表的话）
         logger.info('设置用户账号有效期', {
           userId: this.id,
           expireDate,
@@ -1486,6 +1549,7 @@ class User {
         });
       });
 
+      // 更新当前对象
       this.expire_at = expireDate;
 
       return {
@@ -1509,6 +1573,7 @@ class User {
         throw new ValidationError('延长天数必须大于0');
       }
 
+      // 超级管理员不能设置有效期
       if (this.role === 'super_admin') {
         throw new ValidationError('超级管理员账号无需设置有效期');
       }
@@ -1516,9 +1581,11 @@ class User {
       let newExpireDate;
       
       if (!this.expire_at || this.isAccountExpired()) {
+        // 如果没有设置过期时间或已过期，从今天开始计算
         newExpireDate = new Date();
         newExpireDate.setDate(newExpireDate.getDate() + days);
       } else {
+        // 从现有过期时间延长
         newExpireDate = new Date(this.expire_at);
         newExpireDate.setDate(newExpireDate.getDate() + days);
       }
@@ -1539,10 +1606,12 @@ class User {
    */
   async syncAccountExpireWithGroup() {
     try {
+      // 超级管理员不更新
       if (this.role === 'super_admin') {
         return { success: true, message: '超级管理员不需要更新有效期' };
       }
 
+      // 获取用户组的有效期
       const sql = 'SELECT expire_date FROM user_groups WHERE id = ?';
       const { rows } = await dbConnection.query(sql, [this.group_id]);
       
@@ -1553,8 +1622,10 @@ class User {
       const groupExpireDate = rows[0].expire_date;
       
       if (!groupExpireDate) {
+        // 组没有设置有效期，清除用户有效期
         await this.setAccountExpireDate(null, '组有效期已清除');
       } else {
+        // 更新为组的有效期
         await this.setAccountExpireDate(groupExpireDate, '同步组有效期');
       }
 

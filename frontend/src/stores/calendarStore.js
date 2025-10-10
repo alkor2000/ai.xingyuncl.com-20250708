@@ -1,0 +1,534 @@
+/**
+ * 日历Store - Zustand状态管理
+ * 管理事项、分类、AI分析、AI模型等状态
+ */
+
+import { create } from 'zustand';
+import api from '../utils/api';
+import { message } from 'antd';
+
+const useCalendarStore = create((set, get) => ({
+  // ========== 状态 ==========
+  
+  // 事项相关
+  events: [],
+  selectedDate: new Date(),
+  selectedEvents: [],
+  currentMonthStats: [],
+  eventsLoading: false,
+  
+  // 分类相关
+  categories: [],
+  categoriesLoading: false,
+  
+  // AI分析相关
+  analyses: [],
+  currentAnalysis: null,
+  analysisLoading: false,
+  analysisHistory: [],
+  
+  // AI模型相关（新增）
+  aiModels: [],
+  aiModelsLoading: false,
+  
+  // 设置相关
+  settings: null,
+  settingsLoading: false,
+  
+  // 概览统计
+  overview: null,
+  overviewLoading: false,
+  
+  // 筛选条件
+  filters: {
+    status: null,
+    category: null,
+    importance_min: null,
+    importance_max: null
+  },
+  
+  // ========== 事项管理 ==========
+  
+  /**
+   * 获取指定日期范围的事项
+   */
+  fetchEvents: async (startDate, endDate, filters = {}) => {
+    set({ eventsLoading: true });
+    try {
+      const params = {
+        start_date: startDate,
+        end_date: endDate,
+        ...filters,
+        limit: 1000
+      };
+      
+      const response = await api.get('/calendar/events', { params });
+      
+      if (response.data.success) {
+        set({ 
+          events: response.data.data,
+          eventsLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取事项失败:', error);
+      message.error('获取事项失败');
+      set({ eventsLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 获取月度统计
+   */
+  fetchMonthStats: async (year, month) => {
+    try {
+      const response = await api.get('/calendar/events/month-stats', {
+        params: { year, month }
+      });
+      
+      if (response.data.success) {
+        set({ currentMonthStats: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取月度统计失败:', error);
+      return [];
+    }
+  },
+  
+  /**
+   * 创建事项
+   */
+  createEvent: async (eventData) => {
+    try {
+      const response = await api.post('/calendar/events', eventData);
+      
+      if (response.data.success) {
+        message.success('事项创建成功');
+        // 重新获取当前月的事项
+        const { selectedDate } = get();
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth() + 1;
+        await get().fetchMonthStats(year, month);
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('创建事项失败:', error);
+      message.error(error.response?.data?.message || '创建事项失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 更新事项
+   */
+  updateEvent: async (id, eventData) => {
+    try {
+      const response = await api.put(`/calendar/events/${id}`, eventData);
+      
+      if (response.data.success) {
+        message.success('事项更新成功');
+        // 更新本地状态
+        set(state => ({
+          events: state.events.map(e => 
+            e.id === id ? response.data.data : e
+          )
+        }));
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('更新事项失败:', error);
+      message.error(error.response?.data?.message || '更新事项失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 删除事项
+   */
+  deleteEvent: async (id) => {
+    try {
+      const response = await api.delete(`/calendar/events/${id}`);
+      
+      if (response.data.success) {
+        message.success('事项删除成功');
+        // 更新本地状态
+        set(state => ({
+          events: state.events.filter(e => e.id !== id)
+        }));
+        return true;
+      }
+    } catch (error) {
+      console.error('删除事项失败:', error);
+      message.error(error.response?.data?.message || '删除事项失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 批量删除事项
+   */
+  batchDeleteEvents: async (ids) => {
+    try {
+      const response = await api.post('/calendar/events/batch-delete', { ids });
+      
+      if (response.data.success) {
+        message.success(`成功删除 ${response.data.data.deleted_count} 个事项`);
+        // 更新本地状态
+        set(state => ({
+          events: state.events.filter(e => !ids.includes(e.id)),
+          selectedEvents: []
+        }));
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('批量删除失败:', error);
+      message.error(error.response?.data?.message || '批量删除失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 快速标记完成
+   */
+  markEventComplete: async (id) => {
+    try {
+      const response = await api.post(`/calendar/events/${id}/complete`);
+      
+      if (response.data.success) {
+        message.success('已标记为完成');
+        // 更新本地状态
+        set(state => ({
+          events: state.events.map(e => 
+            e.id === id ? response.data.data : e
+          )
+        }));
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('标记完成失败:', error);
+      message.error(error.response?.data?.message || '标记完成失败');
+      throw error;
+    }
+  },
+  
+  // ========== 分类管理 ==========
+  
+  /**
+   * 获取分类列表
+   */
+  fetchCategories: async () => {
+    set({ categoriesLoading: true });
+    try {
+      const response = await api.get('/calendar/categories');
+      
+      if (response.data.success) {
+        set({ 
+          categories: response.data.data,
+          categoriesLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取分类失败:', error);
+      set({ categoriesLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 创建分类
+   */
+  createCategory: async (categoryData) => {
+    try {
+      const response = await api.post('/calendar/categories', categoryData);
+      
+      if (response.data.success) {
+        message.success('分类创建成功');
+        // 重新获取分类列表
+        await get().fetchCategories();
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('创建分类失败:', error);
+      message.error(error.response?.data?.message || '创建分类失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 更新分类
+   */
+  updateCategory: async (id, categoryData) => {
+    try {
+      const response = await api.put(`/calendar/categories/${id}`, categoryData);
+      
+      if (response.data.success) {
+        message.success('分类更新成功');
+        await get().fetchCategories();
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('更新分类失败:', error);
+      message.error(error.response?.data?.message || '更新分类失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 删除分类
+   */
+  deleteCategory: async (id) => {
+    try {
+      const response = await api.delete(`/calendar/categories/${id}`);
+      
+      if (response.data.success) {
+        message.success('分类删除成功');
+        await get().fetchCategories();
+        return true;
+      }
+    } catch (error) {
+      console.error('删除分类失败:', error);
+      message.error(error.response?.data?.message || '删除分类失败');
+      throw error;
+    }
+  },
+  
+  // ========== AI模型管理（新增）==========
+  
+  /**
+   * 获取用户可用的AI模型列表
+   * 复用 /chat/models 接口
+   */
+  fetchAvailableModels: async () => {
+    set({ aiModelsLoading: true });
+    try {
+      const response = await api.get('/chat/models');
+      
+      if (response.data.success) {
+        set({ 
+          aiModels: response.data.data,
+          aiModelsLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取AI模型失败:', error);
+      message.error('获取AI模型列表失败');
+      set({ aiModelsLoading: false });
+      throw error;
+    }
+  },
+  
+  // ========== AI分析 ==========
+  
+  /**
+   * 执行AI分析
+   */
+  performAnalysis: async (analysisData) => {
+    set({ analysisLoading: true });
+    try {
+      const response = await api.post('/calendar/ai-analysis', analysisData);
+      
+      if (response.data.success) {
+        message.success('AI分析完成');
+        set({ 
+          currentAnalysis: response.data.data.analysis,
+          analysisLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('AI分析失败:', error);
+      message.error(error.response?.data?.message || 'AI分析失败');
+      set({ analysisLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 获取分析历史
+   */
+  fetchAnalysisHistory: async () => {
+    try {
+      const response = await api.get('/calendar/ai-analyses');
+      
+      if (response.data.success) {
+        set({ analysisHistory: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取分析历史失败:', error);
+      return [];
+    }
+  },
+  
+  /**
+   * 获取单个分析详情
+   */
+  fetchAnalysisById: async (id) => {
+    try {
+      const response = await api.get(`/calendar/ai-analyses/${id}`);
+      
+      if (response.data.success) {
+        set({ currentAnalysis: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取分析详情失败:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * 删除分析记录
+   */
+  deleteAnalysis: async (id) => {
+    try {
+      const response = await api.delete(`/calendar/ai-analyses/${id}`);
+      
+      if (response.data.success) {
+        message.success('分析记录删除成功');
+        await get().fetchAnalysisHistory();
+        return true;
+      }
+    } catch (error) {
+      console.error('删除分析记录失败:', error);
+      message.error(error.response?.data?.message || '删除失败');
+      throw error;
+    }
+  },
+  
+  // ========== 设置管理 ==========
+  
+  /**
+   * 获取用户设置
+   */
+  fetchSettings: async () => {
+    set({ settingsLoading: true });
+    try {
+      const response = await api.get('/calendar/settings');
+      
+      if (response.data.success) {
+        set({ 
+          settings: response.data.data,
+          settingsLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取设置失败:', error);
+      set({ settingsLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 更新设置
+   */
+  updateSettings: async (settingsData) => {
+    try {
+      const response = await api.put('/calendar/settings', settingsData);
+      
+      if (response.data.success) {
+        message.success('设置更新成功');
+        set({ settings: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('更新设置失败:', error);
+      message.error(error.response?.data?.message || '更新设置失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 重置设置
+   */
+  resetSettings: async () => {
+    try {
+      const response = await api.post('/calendar/settings/reset');
+      
+      if (response.data.success) {
+        message.success('设置已重置');
+        set({ settings: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('重置设置失败:', error);
+      message.error(error.response?.data?.message || '重置失败');
+      throw error;
+    }
+  },
+  
+  // ========== 统计概览 ==========
+  
+  /**
+   * 获取统计概览
+   */
+  fetchOverview: async () => {
+    set({ overviewLoading: true });
+    try {
+      const response = await api.get('/calendar/overview');
+      
+      if (response.data.success) {
+        set({ 
+          overview: response.data.data,
+          overviewLoading: false 
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('获取概览失败:', error);
+      set({ overviewLoading: false });
+      throw error;
+    }
+  },
+  
+  // ========== 辅助方法 ==========
+  
+  /**
+   * 设置选中日期
+   */
+  setSelectedDate: (date) => {
+    set({ selectedDate: date });
+  },
+  
+  /**
+   * 设置筛选条件
+   */
+  setFilters: (filters) => {
+    set({ filters });
+  },
+  
+  /**
+   * 清空当前分析
+   */
+  clearCurrentAnalysis: () => {
+    set({ currentAnalysis: null });
+  },
+  
+  /**
+   * 重置Store
+   */
+  reset: () => {
+    set({
+      events: [],
+      selectedDate: new Date(),
+      selectedEvents: [],
+      currentMonthStats: [],
+      currentAnalysis: null,
+      aiModels: [],
+      filters: {
+        status: null,
+        category: null,
+        importance_min: null,
+        importance_max: null
+      }
+    });
+  }
+}));
+
+export default useCalendarStore;

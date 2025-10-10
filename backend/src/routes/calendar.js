@@ -1,0 +1,251 @@
+/**
+ * 日历路由 - 带权限验证
+ * 处理所有日历相关的API请求
+ */
+
+const express = require('express');
+const CalendarController = require('../controllers/CalendarController');
+const { authenticate, requirePermission } = require('../middleware/authMiddleware');
+const rateLimit = require('express-rate-limit');
+
+const router = express.Router();
+
+// 日历操作限流配置
+const calendarLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  message: {
+    success: false,
+    code: 429,
+    message: '日历操作频率过高，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// AI分析限流配置（更严格）
+const analysisLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    code: 429,
+    message: 'AI分析请求过于频繁，请稍后再试',
+    data: null,
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 所有路由都需要认证和calendar.use权限
+router.use(authenticate);
+router.use(requirePermission('calendar.use'));
+
+// ==================== 事项管理路由 ====================
+
+/**
+ * @route GET /api/calendar/events
+ * @desc 获取用户事项列表（支持筛选）
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/events', 
+  calendarLimiter,
+  CalendarController.getEvents
+);
+
+/**
+ * @route GET /api/calendar/events/month-stats
+ * @desc 获取月度统计数据
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/events/month-stats',
+  calendarLimiter,
+  CalendarController.getMonthStats
+);
+
+/**
+ * @route POST /api/calendar/events
+ * @desc 创建事项
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/events',
+  calendarLimiter,
+  CalendarController.createEvent
+);
+
+/**
+ * @route PUT /api/calendar/events/:id
+ * @desc 更新事项
+ * @access Private - 需要calendar.use权限
+ */
+router.put('/events/:id',
+  calendarLimiter,
+  CalendarController.updateEvent
+);
+
+/**
+ * @route DELETE /api/calendar/events/:id
+ * @desc 删除事项
+ * @access Private - 需要calendar.use权限
+ */
+router.delete('/events/:id',
+  calendarLimiter,
+  CalendarController.deleteEvent
+);
+
+/**
+ * @route POST /api/calendar/events/batch-delete
+ * @desc 批量删除事项
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/events/batch-delete',
+  calendarLimiter,
+  CalendarController.batchDeleteEvents
+);
+
+/**
+ * @route POST /api/calendar/events/:id/complete
+ * @desc 快速标记完成
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/events/:id/complete',
+  calendarLimiter,
+  CalendarController.markEventComplete
+);
+
+// ==================== 分类管理路由 ====================
+
+/**
+ * @route GET /api/calendar/categories
+ * @desc 获取用户可用分类（系统+自定义）
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/categories',
+  CalendarController.getCategories
+);
+
+/**
+ * @route POST /api/calendar/categories
+ * @desc 创建自定义分类
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/categories',
+  calendarLimiter,
+  CalendarController.createCategory
+);
+
+/**
+ * @route PUT /api/calendar/categories/:id
+ * @desc 更新分类
+ * @access Private - 需要calendar.use权限
+ */
+router.put('/categories/:id',
+  calendarLimiter,
+  CalendarController.updateCategory
+);
+
+/**
+ * @route DELETE /api/calendar/categories/:id
+ * @desc 删除分类
+ * @access Private - 需要calendar.use权限
+ */
+router.delete('/categories/:id',
+  calendarLimiter,
+  CalendarController.deleteCategory
+);
+
+// ==================== AI分析路由 ====================
+
+/**
+ * @route POST /api/calendar/ai-analysis
+ * @desc 执行AI分析（消耗积分）
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/ai-analysis',
+  analysisLimiter,
+  CalendarController.performAnalysis
+);
+
+/**
+ * @route GET /api/calendar/ai-analyses
+ * @desc 获取分析历史列表
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/ai-analyses',
+  CalendarController.getAnalyses
+);
+
+/**
+ * @route GET /api/calendar/ai-analyses/stats
+ * @desc 获取分析统计
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/ai-analyses/stats',
+  CalendarController.getAnalysisStats
+);
+
+/**
+ * @route GET /api/calendar/ai-analyses/:id
+ * @desc 获取单个分析详情
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/ai-analyses/:id',
+  CalendarController.getAnalysisById
+);
+
+/**
+ * @route DELETE /api/calendar/ai-analyses/:id
+ * @desc 删除分析记录
+ * @access Private - 需要calendar.use权限
+ */
+router.delete('/ai-analyses/:id',
+  calendarLimiter,
+  CalendarController.deleteAnalysis
+);
+
+// ==================== 用户设置路由 ====================
+
+/**
+ * @route GET /api/calendar/settings
+ * @desc 获取用户设置
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/settings',
+  CalendarController.getSettings
+);
+
+/**
+ * @route PUT /api/calendar/settings
+ * @desc 更新用户设置
+ * @access Private - 需要calendar.use权限
+ */
+router.put('/settings',
+  calendarLimiter,
+  CalendarController.updateSettings
+);
+
+/**
+ * @route POST /api/calendar/settings/reset
+ * @desc 重置用户设置
+ * @access Private - 需要calendar.use权限
+ */
+router.post('/settings/reset',
+  calendarLimiter,
+  CalendarController.resetSettings
+);
+
+// ==================== 统计与概览路由 ====================
+
+/**
+ * @route GET /api/calendar/overview
+ * @desc 获取用户统计概览
+ * @access Private - 需要calendar.use权限
+ */
+router.get('/overview',
+  CalendarController.getOverview
+);
+
+module.exports = router;

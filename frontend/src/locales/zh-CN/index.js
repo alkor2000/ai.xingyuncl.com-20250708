@@ -9,6 +9,7 @@ import knowledge from './knowledge.json'
 import htmlEditor from './htmlEditor.json'
 import image from './image.json'
 import video from './video.json'
+import calendar from './calendar.json'
 
 export default {
   ...common,
@@ -21,5 +22,6 @@ export default {
   ...knowledge,
   ...htmlEditor,
   ...image,
-  ...video
+  ...video,
+  ...calendar
 }

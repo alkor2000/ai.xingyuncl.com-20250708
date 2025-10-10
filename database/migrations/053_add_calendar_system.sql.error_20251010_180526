@@ -1,0 +1,169 @@
+-- =====================================================
+-- 智能日历系统数据库迁移
+-- 版本: 1.0.0
+-- 日期: 2025-10-10
+-- 描述: 创建智能日历相关表和系统配置
+-- =====================================================
+
+-- 1. 日历事项表
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id INT PRIMARY KEY AUTO_INCREMENT COMMENT '事项ID',
+  user_id INT NOT NULL COMMENT '用户ID',
+  event_date DATE NOT NULL COMMENT '事项日期',
+  content TEXT NOT NULL COMMENT '事项内容（支持Markdown）',
+  importance TINYINT DEFAULT 5 COMMENT '重要度（0-10）',
+  category VARCHAR(50) DEFAULT '其他' COMMENT '分类',
+  color VARCHAR(20) DEFAULT '#1890ff' COMMENT '颜色值',
+  status ENUM('daily', 'not_started', 'in_progress', 'completed') DEFAULT 'not_started' COMMENT '状态',
+  file_link TEXT COMMENT '云盘文件链接',
+  recurrence_type ENUM('none', 'daily', 'weekly', 'monthly', 'yearly') DEFAULT 'none' COMMENT '重复类型',
+  recurrence_end_date DATE COMMENT '重复结束日期',
+  parent_event_id INT COMMENT '父事项ID（重复事项）',
+  sort_order INT DEFAULT 0 COMMENT '同一天内排序',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  
+  INDEX idx_user_date (user_id, event_date),
+  INDEX idx_status (status),
+  INDEX idx_category (category),
+  INDEX idx_parent (parent_event_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日历事项表';
+
+-- 2. 自定义分类表
+CREATE TABLE IF NOT EXISTS calendar_categories (
+  id INT PRIMARY KEY AUTO_INCREMENT COMMENT '分类ID',
+  user_id INT COMMENT '用户ID（NULL表示系统预设）',
+  name VARCHAR(50) NOT NULL COMMENT '分类名称',
+  color VARCHAR(20) DEFAULT '#1890ff' COMMENT '颜色',
+  icon VARCHAR(50) DEFAULT 'TagOutlined' COMMENT '图标',
+  is_active TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+  sort_order INT DEFAULT 0 COMMENT '排序',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  
+  INDEX idx_user (user_id),
+  UNIQUE KEY uk_user_name (user_id, name),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日历分类表';
+
+-- 3. AI分析历史表
+CREATE TABLE IF NOT EXISTS calendar_ai_analyses (
+  id INT PRIMARY KEY AUTO_INCREMENT COMMENT '分析ID',
+  user_id INT NOT NULL COMMENT '用户ID',
+  scan_date_start DATE NOT NULL COMMENT '扫描开始日期',
+  scan_date_end DATE NOT NULL COMMENT '扫描结束日期',
+  model_id INT COMMENT 'AI模型ID',
+  model_name VARCHAR(100) COMMENT '模型名称快照',
+  analysis_result JSON COMMENT '分析结果（JSON格式）',
+  credits_consumed INT DEFAULT 0 COMMENT '消耗积分',
+  events_count INT DEFAULT 0 COMMENT '分析的事项数量',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  
+  INDEX idx_user_date (user_id, created_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (model_id) REFERENCES ai_models(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI分析历史表';
+
+-- 4. 用户设置表
+CREATE TABLE IF NOT EXISTS calendar_user_settings (
+  id INT PRIMARY KEY AUTO_INCREMENT COMMENT '设置ID',
+  user_id INT NOT NULL UNIQUE COMMENT '用户ID',
+  auto_analysis_enabled TINYINT(1) DEFAULT 0 COMMENT '自动分析开关',
+  auto_analysis_frequency ENUM('daily', 'weekly', 'monthly') DEFAULT 'weekly' COMMENT '自动分析频率',
+  default_scan_range INT DEFAULT 15 COMMENT '默认扫描天数',
+  default_model_id INT COMMENT '默认AI模型ID',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (default_model_id) REFERENCES ai_models(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日历用户设置表';
+
+-- 5. 插入系统预设分类
+INSERT INTO calendar_categories (user_id, name, color, icon, sort_order) VALUES
+(NULL, '学习', '#52c41a', 'BookOutlined', 1),
+(NULL, '工作', '#1890ff', 'LaptopOutlined', 2),
+(NULL, '生活', '#fa8c16', 'HomeOutlined', 3),
+(NULL, '其他', '#8c8c8c', 'TagOutlined', 4);
+
+-- 6. 在system_modules表中添加日历模块（如果不存在）
+INSERT INTO system_modules (
+  name, 
+  display_name, 
+  description,
+  module_type,
+  module_category, 
+  route_path,
+  menu_icon, 
+  is_active,
+  can_disable,
+  sort_order
+) 
+SELECT 
+  'calendar',
+  '智能日历',
+  'AI驱动的智能日程管理工具，支持事项规划、重要度管理和智能分析',
+  'fullstack',
+  'system',
+  '/calendar',
+  'CalendarOutlined',
+  1,
+  1,
+  50
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_modules WHERE name = 'calendar'
+);
+
+-- 7. 添加日历相关的积分交易类型
+ALTER TABLE credit_transactions 
+MODIFY COLUMN transaction_type ENUM(
+  'chat_consume', 'admin_add', 'admin_deduct', 'admin_set',
+  'image_consume', 'html_publish', 'html_unpublish', 
+  'video_consume', 'mindmap_consume', 'ocr_consume',
+  'storage_consume', 'calendar_ai_analysis'
+) NOT NULL COMMENT '交易类型';
+
+-- 8. 创建视图：用户日历统计
+CREATE OR REPLACE VIEW v_calendar_user_stats AS
+SELECT 
+  u.id AS user_id,
+  u.username,
+  COUNT(DISTINCT ce.id) AS total_events,
+  COUNT(DISTINCT CASE WHEN ce.status = 'completed' THEN ce.id END) AS completed_events,
+  COUNT(DISTINCT CASE WHEN ce.status = 'in_progress' THEN ce.id END) AS in_progress_events,
+  COUNT(DISTINCT CASE WHEN ce.event_date >= CURDATE() THEN ce.id END) AS future_events,
+  COUNT(DISTINCT caa.id) AS ai_analyses_count,
+  COALESCE(SUM(caa.credits_consumed), 0) AS total_credits_consumed
+FROM users u
+LEFT JOIN calendar_events ce ON u.id = ce.user_id
+LEFT JOIN calendar_ai_analyses caa ON u.id = caa.user_id
+GROUP BY u.id, u.username;
+
+-- 9. 创建存储过程：自动清理过期事项（超过1年的已完成事项）
+DELIMITER //
+CREATE PROCEDURE IF NOT EXISTS sp_cleanup_old_calendar_events()
+BEGIN
+  DELETE FROM calendar_events 
+  WHERE status = 'completed' 
+    AND updated_at < DATE_SUB(NOW(), INTERVAL 1 YEAR);
+  
+  SELECT ROW_COUNT() AS deleted_count;
+END//
+DELIMITER ;
+
+-- 10. 创建触发器：自动创建用户设置
+DELIMITER //
+CREATE TRIGGER IF NOT EXISTS trg_create_calendar_settings
+AFTER INSERT ON users
+FOR EACH ROW
+BEGIN
+  INSERT INTO calendar_user_settings (user_id, auto_analysis_enabled, default_scan_range)
+  VALUES (NEW.id, 0, 15)
+  ON DUPLICATE KEY UPDATE user_id = user_id;
+END//
+DELIMITER ;
+
+-- 迁移完成标记
+SELECT '智能日历系统迁移完成' AS status, NOW() AS completed_at;
