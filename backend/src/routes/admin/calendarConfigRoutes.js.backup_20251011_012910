@@ -1,0 +1,24 @@
+/**
+ * 日历配置路由 - 超级管理员专用
+ */
+
+const express = require('express');
+const router = express.Router();
+const CalendarConfigController = require('../../controllers/admin/CalendarConfigController');
+const { superAdminOnly } = require('../../middleware/permissions');
+
+// 所有路由都需要超级管理员权限
+router.use(superAdminOnly);
+
+// 配置相关
+router.get('/config', CalendarConfigController.getConfig);
+router.put('/config', CalendarConfigController.updateConfig);
+
+// 模板相关
+router.get('/templates', CalendarConfigController.getTemplates);
+router.post('/templates', CalendarConfigController.createTemplate);
+router.put('/templates/:id', CalendarConfigController.updateTemplate);
+router.delete('/templates/:id', CalendarConfigController.deleteTemplate);
+router.put('/templates/:id/default', CalendarConfigController.setDefaultTemplate);
+
+module.exports = router;

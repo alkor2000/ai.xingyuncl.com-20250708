@@ -1,11 +1,10 @@
 /**
- * 日历服务层 - 使用配置化的积分倍数和提示词模板
+ * 日历服务层 - AI分析核心逻辑
+ * 负责处理AI分析请求、积分扣除、结果存储
  */
 
 const CalendarEvent = require('../models/CalendarEvent');
 const CalendarAIAnalysis = require('../models/CalendarAIAnalysis');
-const CalendarConfig = require('../models/CalendarConfig');
-const CalendarPromptTemplate = require('../models/CalendarPromptTemplate');
 const AIModel = require('../models/AIModel');
 const User = require('../models/User');
 const AIService = require('./aiService');
@@ -14,39 +13,19 @@ const { ValidationError, DatabaseError } = require('../utils/errors');
 
 class CalendarService {
   /**
-   * 计算AI分析需要的积分（使用配置的倍数）
+   * 计算AI分析需要的积分
    */
-  static async calculateAnalysisCredits(scanDays, modelCreditsPerChat) {
-    // 获取配置的倍数
-    const config = await CalendarConfig.getConfig();
-    const multiplier = config?.credits_multiplier || 1.0;
-    
+  static calculateAnalysisCredits(scanDays, modelCreditsPerChat) {
     const baseCost = 10;
     const daysCost = Math.ceil((scanDays * 2) / 7) * 5;
     const modelMultiplier = Math.ceil(modelCreditsPerChat / 10);
-    
-    const baseTotal = baseCost + daysCost + modelMultiplier;
-    return Math.ceil(baseTotal * multiplier);
+    return baseCost + daysCost + modelMultiplier;
   }
 
   /**
-   * 构建AI分析的Prompt（使用模板）
+   * 构建AI分析的Prompt
    */
-  static async buildAnalysisPrompt(events, scanDateStart, scanDateEnd, templateId = null) {
-    // 1. 获取模板
-    let template;
-    if (templateId) {
-      template = await CalendarPromptTemplate.findById(templateId);
-    } else {
-      template = await CalendarPromptTemplate.getDefault();
-    }
-    
-    if (!template) {
-      // 回退到内置默认提示词
-      return CalendarService.buildFallbackPrompt(events, scanDateStart, scanDateEnd);
-    }
-    
-    // 2. 准备统计数据
+  static buildAnalysisPrompt(events, scanDateStart, scanDateEnd) {
     const stats = {
       total: events.length,
       by_category: {},
@@ -74,50 +53,71 @@ class CalendarService {
       category: event.category,
       status: event.status
     }));
-    
-    // 3. 准备变量映射
-    const variables = {
-      scanDateStart: scanDateStart,
-      scanDateEnd: scanDateEnd,
-      eventsCount: events.length,
-      eventsData: JSON.stringify(formattedEvents, null, 2),
-      statsTotal: stats.total,
-      categoryDistribution: Object.entries(stats.by_category).map(([k, v]) => `${k}(${v})`).join('、'),
-      statusDistribution: `已完成(${stats.by_status.completed || 0})、进行中(${stats.by_status.in_progress || 0})、未开始(${stats.by_status.not_started || 0})、日常(${stats.by_status.daily || 0})`,
-      importanceDistribution: `高优(${stats.by_importance.high})、中等(${stats.by_importance.medium})、低优(${stats.by_importance.low})`
-    };
-    
-    // 4. 渲染模板
-    return template.renderPrompt(variables);
-  }
 
-  /**
-   * 回退默认提示词（当模板不可用时）
-   */
-  static buildFallbackPrompt(events, scanDateStart, scanDateEnd) {
-    const stats = {
-      total: events.length,
-      by_category: {},
-      by_status: {}
-    };
+    const prompt = `你是一位专业的时间管理顾问和日程规划专家。请分析用户的日历事项,提供深度洞察和优化建议。
 
-    events.forEach(event => {
-      stats.by_category[event.category] = (stats.by_category[event.category] || 0) + 1;
-      stats.by_status[event.status] = (stats.by_status[event.status] || 0) + 1;
-    });
+【数据概览】
+- 分析时间范围：${scanDateStart} 至 ${scanDateEnd}
+- 事项总数：${stats.total}
+- 分类分布：${Object.entries(stats.by_category).map(([k, v]) => `${k}(${v})`).join('、')}
+- 状态分布：已完成(${stats.by_status.completed || 0})、进行中(${stats.by_status.in_progress || 0})、未开始(${stats.by_status.not_started || 0})、日常(${stats.by_status.daily || 0})
+- 重要度分布：高优(${stats.by_importance.high})、中等(${stats.by_importance.medium})、低优(${stats.by_importance.low})
 
-    return `你是时间管理专家，请分析${scanDateStart}到${scanDateEnd}的${events.length}个日历事项，给出优先级排序、时间分配建议、冲突检测和效率优化方案。`;
+【详细事项数据】
+\`\`\`json
+${JSON.stringify(formattedEvents, null, 2)}
+\`\`\`
+
+请从以下5个维度进行深度分析，用Markdown格式输出，包含表格、列表、emoji图标：
+
+## 📊 1. 任务优先级排序
+- 列出Top 10高优任务（重要度>=8）
+- 用表格展示：日期、任务内容、重要度、状态、分类
+- 标注紧急程度和建议处理顺序
+
+## ⏰ 2. 时间分配合理性分析
+- 分析工作、学习、生活各类任务的时间占比
+- 用饼图数据展示分类分布
+- 评估时间分配是否合理，是否有失衡现象
+- 提供具体的时间分配建议（如工作50%、学习30%、生活20%）
+
+## ⚠️ 3. 任务冲突与风险检测
+- 标注同一天内有多个高优任务（importance>=8）的日期
+- 用表格列出冲突日期、任务数量、任务列表
+- 分析可能的时间冲突和资源冲突
+- 提供解决方案（如任务重排、优先级调整）
+
+## 📈 4. 完成进度与效率总结
+- 统计完成率（已完成/总数）
+- 分析各分类的完成情况
+- 识别拖延风险高的任务（未开始且临近日期）
+- 评估整体执行效率
+
+## 💡 5. 优化建议与行动计划
+- 提供3-5条具体可执行的改进建议
+- 针对发现的问题给出解决方案
+- 建议任务重排序或时间调整
+- 提供时间管理技巧（如番茄工作法、时间块）
+
+**注意事项：**
+- 保持专业、客观、实用
+- 避免泛泛而谈，提供可量化的建议
+- 用数据支撑观点
+- 语言简洁明了，易于理解
+- 适当使用emoji增强可读性`;
+
+    return prompt;
   }
 
   /**
    * 执行AI分析
+   * 修复：移除错误的事务管理，改用顺序执行
    */
   static async performAnalysis(userId, options) {
     try {
       const {
         scan_days = 15,
         model_id,
-        template_id,  // 新增：模板ID
         focus_areas = ['priority', 'time_allocation', 'conflicts', 'progress', 'optimization']
       } = options;
 
@@ -157,9 +157,9 @@ class CalendarService {
         throw new ValidationError('该时间范围内没有事项，无需分析');
       }
 
-      // 5. 计算需要消耗的积分（使用配置的倍数）
+      // 5. 计算需要消耗的积分
       const totalScanDays = scan_days * 2;
-      const creditsNeeded = await CalendarService.calculateAnalysisCredits(
+      const creditsNeeded = CalendarService.calculateAnalysisCredits(
         totalScanDays, 
         model.credits_per_chat || 10
       );
@@ -169,12 +169,11 @@ class CalendarService {
         throw new ValidationError(`积分不足，需要${creditsNeeded}积分，当前余额${user.getCredits()}积分`);
       }
 
-      // 7. 构建Prompt（使用模板）
-      const prompt = await CalendarService.buildAnalysisPrompt(
+      // 7. 构建Prompt
+      const prompt = CalendarService.buildAnalysisPrompt(
         events,
         formatDate(scanDateStart),
-        formatDate(scanDateEnd),
-        template_id  // 传入模板ID
+        formatDate(scanDateEnd)
       );
 
       // 8. 调用AI模型
@@ -189,7 +188,6 @@ class CalendarService {
         userId,
         modelName: model.name,
         modelId: model.id,
-        templateId: template_id,
         eventsCount: events.length,
         creditsNeeded
       });
@@ -205,13 +203,13 @@ class CalendarService {
         throw new Error('AI分析返回内容为空');
       }
 
-      // 9. 扣除积分
+      // 9. 扣除积分 - 修复：使用正确的 transaction_type
       await user.consumeCredits(
         creditsNeeded,
         model_id,
         null,
         `日历AI分析 - ${events.length}个事项 - ${model.display_name}`,
-        'calendar_analysis'
+        'calendar_analysis'  // 修复：改为 calendar_analysis
       );
 
       // 10. 保存分析结果
@@ -225,7 +223,6 @@ class CalendarService {
           events_analyzed: events.length,
           scan_range_days: totalScanDays,
           focus_areas,
-          template_id: template_id || null,
           generated_at: new Date().toISOString()
         },
         credits_consumed: creditsNeeded,

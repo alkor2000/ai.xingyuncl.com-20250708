@@ -1,23 +1,24 @@
 /**
- * 智能日历 - 4x4网格视图样式
+ * 智能日历 - 优化版（精简顶部 + 更大格子 + 现代配色）
  */
 
 @import '../../styles/theme-variables.css';
 
-// ========== 颜色变量 ==========
+// ========== 优化后的颜色变量 ==========
 @primary-color: #007AFF;
 @primary-light: #5AC8FA;
 @primary-dark: #0051D5;
 @success-color: #34C759;
 @warning-color: #FF9500;
 @danger-color: #FF3B30;
+@info-color: #5856D6;
 @today-color: #FF2D55;
 
 @bg-primary: rgba(255, 255, 255, 0.98);
 @bg-secondary: rgba(248, 248, 252, 0.95);
 @bg-card: rgba(255, 255, 255, 0.98);
 @bg-hover: rgba(0, 122, 255, 0.08);
-@bg-today: rgba(255, 45, 85, 0.15);
+@bg-today: rgba(255, 45, 85, 0.12);
 
 @text-primary: #1C1C1E;
 @text-secondary: #8E8E93;
@@ -26,7 +27,8 @@
 @border-color: rgba(0, 0, 0, 0.08);
 @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
 @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
-@shadow-today: 0 6px 24px rgba(255, 45, 85, 0.3);
+@shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+@shadow-today: 0 4px 20px rgba(255, 45, 85, 0.25);
 
 // ========== 主容器 ==========
 .calendar-page {
@@ -36,6 +38,104 @@
   
   @media (max-width: 768px) {
     padding: 12px;
+  }
+}
+
+// ========== 顶部工具栏 - 精简版 ==========
+.calendar-header {
+  background: @bg-card;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 14px 20px;  // 缩小内边距
+  margin-bottom: 20px;
+  box-shadow: @shadow-sm;
+  border: 1px solid @border-color;
+  
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  
+  .header-title {
+    h1 {
+      margin: 0;
+      font-size: 24px;  // 缩小字体
+      font-weight: 700;
+      color: @text-primary;
+      background: linear-gradient(135deg, @primary-color, @primary-light);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+    }
+    
+    p {
+      margin: 4px 0 0;  // 缩小间距
+      font-size: 13px;  // 缩小字体
+      color: @text-secondary;
+      font-weight: 500;
+    }
+  }
+  
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    
+    .ant-btn {
+      border-radius: 12px;
+      border: none;
+      height: 38px;  // 缩小按钮高度
+      padding: 0 18px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      &.ant-btn-primary {
+        background: linear-gradient(135deg, @primary-color, @primary-light);
+        box-shadow: 0 3px 12px rgba(0, 122, 255, 0.3);
+        
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 5px 16px rgba(0, 122, 255, 0.4);
+        }
+        
+        &:active {
+          transform: translateY(0);
+        }
+      }
+      
+      &.ant-btn-default {
+        background: @bg-secondary;
+        color: @text-primary;
+        
+        &:hover {
+          background: @bg-hover;
+          color: @primary-color;
+          transform: translateY(-1px);
+        }
+      }
+    }
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    
+    .header-title h1 {
+      font-size: 22px;
+    }
+    
+    .header-actions {
+      justify-content: stretch;
+      
+      .ant-btn {
+        flex: 1;
+        height: 40px;
+      }
+    }
   }
 }
 
@@ -56,10 +156,6 @@
   
   @media (max-width: 992px) {
     grid-template-columns: 1fr;
-    
-    .calendar-left-panel {
-      display: none;
-    }
   }
 }
 
@@ -187,9 +283,13 @@
       }
     }
   }
+  
+  @media (max-width: 992px) {
+    display: none;
+  }
 }
 
-// ========== 中间日历面板 - 4x4网格 ==========
+// ========== 中间面板（日历主体）- 重点优化 ==========
 .calendar-main-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -198,235 +298,200 @@
   padding: 24px;
   box-shadow: @shadow-md;
   border: 1px solid @border-color;
-  min-height: 800px;
+  min-height: 750px;
   
-  // 日历控制栏
-  .calendar-controls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-    border-bottom: 2px solid @border-color;
+  .ant-picker-calendar {
+    background: transparent;
     
-    .controls-left {
-      display: flex;
-      gap: 10px;
+    .ant-picker-calendar-header {
+      padding-bottom: 16px;
+      border-bottom: 2px solid @border-color;
+      margin-bottom: 16px;
       
-      .ant-btn {
+      .ant-picker-calendar-year-select,
+      .ant-picker-calendar-month-select {
+        min-width: 100px;
+      }
+      
+      .ant-select-selector {
         border-radius: 10px;
+        border-color: @border-color;
+        background: @bg-secondary;
         height: 36px;
+        font-size: 14px;
         font-weight: 600;
-        border: 1px solid @border-color;
         
-        &[type="primary"] {
-          background: linear-gradient(135deg, @primary-color, @primary-light);
-          border: none;
-          box-shadow: 0 3px 12px rgba(0, 122, 255, 0.3);
-          
-          &:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4);
-          }
+        &:hover {
+          border-color: @primary-color;
+          box-shadow: 0 2px 6px rgba(0, 122, 255, 0.12);
         }
-        
-        &:not([type="primary"]) {
-          background: @bg-secondary;
+      }
+      
+      .ant-picker-calendar-mode-switch {
+        .ant-radio-button-wrapper {
+          border-radius: 8px;
+          border-color: @border-color;
+          font-weight: 600;
+          height: 32px;
+          line-height: 30px;
           
-          &:hover {
-            background: @bg-hover;
-            color: @primary-color;
+          &.ant-radio-button-wrapper-checked {
+            background: @primary-color;
             border-color: @primary-color;
           }
         }
       }
     }
     
-    .controls-center {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      
-      .ant-btn {
-        border-radius: 8px;
-        height: 32px;
-        min-width: 32px;
-        padding: 0 12px;
-        font-weight: 600;
-        border: 1px solid @border-color;
-        background: @bg-secondary;
-        
-        &:hover {
-          background: @bg-hover;
-          color: @primary-color;
-          border-color: @primary-color;
-        }
-      }
+    .ant-picker-panel {
+      background: transparent;
+      border: none;
     }
     
-    .controls-right {
-      .date-range-display {
-        font-size: 14px;
-        font-weight: 600;
+    .ant-picker-content {
+      thead th {
         color: @text-secondary;
-        padding: 6px 12px;
-        background: @bg-secondary;
-        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 12px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
-    }
-  }
-  
-  // 4x4网格容器
-  .calendar-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    
-    .calendar-grid-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
       
-      .calendar-grid-cell {
-        background: @bg-secondary;
-        border-radius: 14px;
-        padding: 16px 12px;
-        min-height: 180px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        cursor: pointer;
-        border: 3px solid transparent;
-        position: relative;
+      .ant-picker-cell {
+        padding: 5px;
         
-        &:hover {
-          background: @bg-hover;
-          transform: scale(1.02);
-          box-shadow: @shadow-md;
-          border-color: rgba(0, 122, 255, 0.2);
-          z-index: 10;
-        }
-        
-        .cell-header {
+        .ant-picker-cell-inner {
+          border-radius: 14px;
+          height: 140px;  // 🔥 放大格子到140px
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 6px;
-          margin-bottom: 12px;
+          justify-content: flex-start;
+          padding: 14px 8px;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          background: @bg-secondary;
+          border: 2px solid transparent;
           
-          .cell-weekday {
-            font-size: 12px;
-            font-weight: 600;
-            color: @text-secondary;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          
-          .cell-date {
-            font-size: 28px;
-            font-weight: 800;
-            color: @text-primary;
-            line-height: 1;
+          &:hover {
+            background: @bg-hover;
+            transform: scale(1.03);
+            box-shadow: @shadow-md;
+            border-color: rgba(0, 122, 255, 0.25);
+            z-index: 10;
           }
         }
         
-        // 今日角标
-        .today-badge {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          background: linear-gradient(135deg, @today-color, #FF6B9D);
-          color: white;
-          font-size: 11px;
+        .ant-picker-calendar-date-value {
+          font-size: 22px;  // 🔥 放大日期数字
           font-weight: 700;
-          padding: 4px 10px;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(255, 45, 85, 0.35);
-          letter-spacing: 0.5px;
+          color: @text-primary;
+          margin-bottom: 8px;
         }
         
-        // 事项显示区域
-        .cell-events {
-          margin-top: auto;
-          width: 100%;
-          display: flex;
-          justify-content: center;
+        // 🌟 今天高亮 - 超级明显
+        &.ant-picker-cell-today .ant-picker-cell-inner {
+          background: linear-gradient(135deg, rgba(255, 45, 85, 0.15), rgba(255, 107, 157, 0.1));
+          border: 3px solid @today-color;
+          box-shadow: @shadow-today, 0 0 0 4px rgba(255, 45, 85, 0.1);
           
-          .event-count-badge {
-            background: linear-gradient(135deg, @primary-color, @primary-light);
-            color: white;
-            font-size: 14px;
-            font-weight: 700;
-            padding: 6px 14px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35);
-            min-width: 36px;
-            text-align: center;
+          .ant-picker-calendar-date-value {
+            color: @today-color;
+            font-weight: 900;
+            font-size: 26px;  // 今天的数字更大
           }
           
-          .event-dots {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            justify-content: center;
+          // "今日"角标
+          &::before {
+            content: '今日';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, @today-color, #FF6B9D);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(255, 45, 85, 0.35);
+            letter-spacing: 1px;
+          }
+        }
+        
+        // 选中日期
+        &.ant-picker-cell-selected .ant-picker-cell-inner {
+          background: linear-gradient(135deg, @primary-color, @primary-light);
+          border-color: @primary-dark;
+          box-shadow: 0 4px 20px rgba(0, 122, 255, 0.4);
+          
+          .ant-picker-calendar-date-value {
+            color: white;
+            font-weight: 900;
+          }
+          
+          .event-dots .event-dot {
+            background: white;
+            box-shadow: 0 2px 6px rgba(255, 255, 255, 0.5);
+          }
+          
+          .event-count {
+            background: rgba(255, 255, 255, 0.95);
+            color: @primary-color;
+          }
+        }
+        
+        // 非当前月日期
+        &.ant-picker-cell-disabled {
+          .ant-picker-cell-inner {
+            background: rgba(242, 242, 247, 0.4);
+            opacity: 0.4;
+          }
+          
+          .ant-picker-calendar-date-value {
+            color: @text-tertiary;
+          }
+        }
+        
+        // 事项标记点
+        .event-dots {
+          display: flex;
+          gap: 5px;
+          margin-top: auto;
+          flex-wrap: wrap;
+          justify-content: center;
+          max-width: 100%;
+          
+          .event-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: @primary-color;
+            box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
             
-            .event-dot {
+            &.high-priority {
+              background: @danger-color;
               width: 10px;
               height: 10px;
-              border-radius: 50%;
-              background: @primary-color;
-              box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
-              
-              &.high-priority {
-                background: @danger-color;
-                width: 12px;
-                height: 12px;
-                box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
-              }
+              box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
             }
           }
         }
         
-        // 今天状态
-        &.is-today {
-          background: @bg-today;
-          border-color: @today-color;
-          box-shadow: @shadow-today;
-          
-          .cell-date {
-            color: @today-color;
-            font-size: 32px;
-            font-weight: 900;
-          }
-          
-          &:hover {
-            transform: scale(1.03);
-            box-shadow: @shadow-today, @shadow-md;
-          }
-        }
-        
-        // 选中状态
-        &.is-selected {
+        // 事项数量角标
+        .event-count {
+          position: absolute;
+          top: 10px;
+          left: 10px;
           background: linear-gradient(135deg, @primary-color, @primary-light);
-          border-color: @primary-dark;
-          box-shadow: 0 6px 24px rgba(0, 122, 255, 0.4);
-          
-          .cell-weekday,
-          .cell-date {
-            color: white;
-          }
-          
-          .event-count-badge {
-            background: rgba(255, 255, 255, 0.95);
-            color: @primary-color;
-          }
-          
-          .event-dot {
-            background: white;
-            box-shadow: 0 2px 6px rgba(255, 255, 255, 0.5);
-          }
+          color: white;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 10px;
+          min-width: 26px;
+          text-align: center;
+          box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35);
         }
       }
     }
@@ -772,45 +837,46 @@
   }
 }
 
-// ========== 响应式 ==========
+// ========== 响应式调整 ==========
 @media (max-width: 768px) {
   .calendar-page {
     padding: 10px;
   }
   
+  .calendar-header {
+    padding: 14px;
+    
+    .header-title h1 {
+      font-size: 20px;
+    }
+  }
+  
   .calendar-main-panel {
     padding: 16px;
     
-    .calendar-controls {
-      flex-direction: column;
-      gap: 12px;
-      align-items: stretch;
-      
-      .controls-left,
-      .controls-center,
-      .controls-right {
-        width: 100%;
-        justify-content: center;
-      }
-    }
-    
-    .calendar-grid {
-      .calendar-grid-row {
-        grid-template-columns: repeat(2, 1fr);
+    .ant-picker-calendar {
+      .ant-picker-content {
+        .ant-picker-cell {
+          padding: 3px;
+          
+          .ant-picker-cell-inner {
+            height: 90px;
+            padding: 8px 6px;
+          }
+          
+          .ant-picker-calendar-date-value {
+            font-size: 16px;
+          }
+          
+          .event-dots .event-dot {
+            width: 6px;
+            height: 6px;
+          }
+        }
         
-        .calendar-grid-cell {
-          min-height: 140px;
-          padding: 12px 8px;
-          
-          .cell-header {
-            .cell-date {
-              font-size: 22px;
-            }
-          }
-          
-          &.is-today .cell-date {
-            font-size: 24px;
-          }
+        .ant-picker-cell-today .ant-picker-cell-inner::before {
+          font-size: 9px;
+          padding: 2px 6px;
         }
       }
     }
@@ -839,7 +905,7 @@
   }
 }
 
-// ========== 动画 ==========
+// ========== 动画效果 ==========
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -861,11 +927,10 @@
 }
 
 .event-card,
-.stat-card,
-.calendar-grid-cell {
+.stat-card {
   animation: fadeIn 0.3s ease;
 }
 
-.calendar-grid-cell.is-today {
+.ant-picker-cell-today .ant-picker-cell-inner {
   animation: pulse 2s ease-in-out infinite;
 }

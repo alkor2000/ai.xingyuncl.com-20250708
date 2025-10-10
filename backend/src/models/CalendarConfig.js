@@ -1,0 +1,80 @@
+/**
+ * 日历配置Model - 积分倍数配置（单例）
+ */
+
+const dbConnection = require('../database/connection');
+const { DatabaseError } = require('../utils/errors');
+const logger = require('../utils/logger');
+
+class CalendarConfig {
+  constructor(data = {}) {
+    this.id = data.id || null;
+    this.credits_multiplier = data.credits_multiplier || 1.0;
+    this.created_at = data.created_at || null;
+    this.updated_at = data.updated_at || null;
+  }
+
+  /**
+   * 获取配置（单例）
+   */
+  static async getConfig() {
+    try {
+      const sql = 'SELECT * FROM calendar_config LIMIT 1';
+      const { rows } = await dbConnection.query(sql);
+      
+      if (rows.length === 0) {
+        // 如果不存在，创建默认配置
+        await dbConnection.query('INSERT INTO calendar_config (credits_multiplier) VALUES (1.0)');
+        return new CalendarConfig({ credits_multiplier: 1.0 });
+      }
+      
+      return new CalendarConfig(rows[0]);
+    } catch (error) {
+      logger.error('获取日历配置失败:', error);
+      throw new DatabaseError(`获取日历配置失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 更新配置
+   */
+  static async updateConfig(data) {
+    try {
+      const { credits_multiplier } = data;
+      
+      // 验证范围
+      if (credits_multiplier < 1.0 || credits_multiplier > 10.0) {
+        throw new Error('积分倍数必须在1.0-10.0之间');
+      }
+      
+      const sql = `
+        UPDATE calendar_config 
+        SET credits_multiplier = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+      `;
+      
+      await dbConnection.query(sql, [credits_multiplier]);
+      
+      logger.info('日历配置更新成功', { credits_multiplier });
+      
+      return await CalendarConfig.getConfig();
+    } catch (error) {
+      logger.error('更新日历配置失败:', error);
+      throw new DatabaseError(`更新日历配置失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 转换为JSON
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      credits_multiplier: this.credits_multiplier,
+      created_at: this.created_at,
+      updated_at: this.updated_at
+    };
+  }
+}
+
+module.exports = CalendarConfig;

@@ -28,8 +28,7 @@ import {
   VideoCameraOutlined,
   BankOutlined,
   ShareAltOutlined,
-  ScanOutlined,
-  CalendarOutlined
+  ScanOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -61,8 +60,7 @@ import {
   StorageCreditsConfig,
   OrgApplicationManagement,
   MindmapCreditsConfig,
-  OcrSettings,
-  CalendarConfigSettings
+  OcrSettings
 } from '../../components/admin/settings'
 
 // 自定义Tab样式，实现两排显示
@@ -658,16 +656,6 @@ const Settings = () => {
           </span>
         ),
         children: <MindmapCreditsConfig />
-      },
-      {
-        key: 'calendarConfig',
-        label: (
-          <span>
-            <CalendarOutlined />
-            日历配置
-          </span>
-        ),
-        children: <CalendarConfigSettings />
       }
     ] : []),
     {

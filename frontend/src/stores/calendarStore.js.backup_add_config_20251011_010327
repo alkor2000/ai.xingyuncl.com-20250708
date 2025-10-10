@@ -1,6 +1,6 @@
 /**
  * 日历Store - Zustand状态管理
- * 管理事项、分类、AI分析、AI模型、配置等状态
+ * 管理事项、分类、AI分析、AI模型等状态
  */
 
 import { create } from 'zustand';
@@ -27,14 +27,9 @@ const useCalendarStore = create((set, get) => ({
   analysisLoading: false,
   analysisHistory: [],
   
-  // AI模型相关
+  // AI模型相关（新增）
   aiModels: [],
   aiModelsLoading: false,
-  
-  // 配置和模板相关（新增）
-  calendarConfig: null,
-  promptTemplates: [],
-  configLoading: false,
   
   // 设置相关
   settings: null,
@@ -112,6 +107,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('事项创建成功');
+        // 重新获取当前月的事项
         const { selectedDate } = get();
         const year = selectedDate.getFullYear();
         const month = selectedDate.getMonth() + 1;
@@ -134,6 +130,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('事项更新成功');
+        // 更新本地状态
         set(state => ({
           events: state.events.map(e => 
             e.id === id ? response.data.data : e
@@ -157,6 +154,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('事项删除成功');
+        // 更新本地状态
         set(state => ({
           events: state.events.filter(e => e.id !== id)
         }));
@@ -178,6 +176,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success(`成功删除 ${response.data.data.deleted_count} 个事项`);
+        // 更新本地状态
         set(state => ({
           events: state.events.filter(e => !ids.includes(e.id)),
           selectedEvents: []
@@ -200,6 +199,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('已标记为完成');
+        // 更新本地状态
         set(state => ({
           events: state.events.map(e => 
             e.id === id ? response.data.data : e
@@ -247,6 +247,7 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('分类创建成功');
+        // 重新获取分类列表
         await get().fetchCategories();
         return response.data.data;
       }
@@ -295,7 +296,7 @@ const useCalendarStore = create((set, get) => ({
     }
   },
   
-  // ========== AI模型管理 ==========
+  // ========== AI模型管理（新增）==========
   
   /**
    * 获取用户可用的AI模型列表
@@ -321,36 +322,10 @@ const useCalendarStore = create((set, get) => ({
     }
   },
   
-  // ========== 配置和模板管理（新增）==========
-  
-  /**
-   * 获取日历配置和模板列表（用户端只读）
-   */
-  fetchCalendarConfig: async () => {
-    set({ configLoading: true });
-    try {
-      const response = await api.get('/admin/calendar/config');
-      
-      if (response.data.success) {
-        const { config, templates } = response.data.data;
-        set({ 
-          calendarConfig: config,
-          promptTemplates: templates.filter(t => t.is_active),
-          configLoading: false 
-        });
-        return response.data.data;
-      }
-    } catch (error) {
-      console.error('获取日历配置失败:', error);
-      set({ configLoading: false });
-      throw error;
-    }
-  },
-  
   // ========== AI分析 ==========
   
   /**
-   * 执行AI分析（支持模板选择）
+   * 执行AI分析
    */
   performAnalysis: async (analysisData) => {
     set({ analysisLoading: true });
@@ -546,7 +521,6 @@ const useCalendarStore = create((set, get) => ({
       currentMonthStats: [],
       currentAnalysis: null,
       aiModels: [],
-      promptTemplates: [],
       filters: {
         status: null,
         category: null,

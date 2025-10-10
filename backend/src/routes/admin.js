@@ -288,3 +288,7 @@ router.put('/users/:id/credits/expire',
 );
 
 module.exports = router;
+
+// 日历配置路由
+const calendarConfigRoutes = require('./admin/calendarConfigRoutes');
+router.use('/calendar', calendarConfigRoutes);
