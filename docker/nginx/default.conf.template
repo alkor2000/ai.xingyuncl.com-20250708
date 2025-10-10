@@ -18,7 +18,7 @@ server {
     listen 443 ssl http2;
     server_name ${CUSTOMER_DOMAIN};
 
-    client_max_body_size 50M;
+    client_max_body_size 1G;
 
     # SSL 证书（动态域名）
     ssl_certificate /etc/letsencrypt/live/${CUSTOMER_DOMAIN}/fullchain.pem;
