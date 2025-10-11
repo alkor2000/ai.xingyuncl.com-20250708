@@ -1,6 +1,5 @@
 /**
  * 智能日历 - 4x4网格视图样式（智能分析面板）
- * 修复：AI分析结果滚动问题 + 历史记录展开功能 + 重要事项显示
  */
 
 @import '../../styles/theme-variables.css';
@@ -90,7 +89,6 @@
     margin-bottom: 20px;
     padding-bottom: 14px;
     border-bottom: 2px solid @border-color;
-    flex-shrink: 0;
     
     .header-title {
       font-size: 18px;
@@ -111,7 +109,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    overflow: hidden;
     
     .analysis-meta {
       background: @bg-ai;
@@ -121,7 +119,6 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      flex-shrink: 0;
       
       .meta-item {
         display: flex;
@@ -140,7 +137,6 @@
     
     .analysis-result {
       flex: 1;
-      min-height: 0;
       overflow-y: auto;
       padding: 14px;
       background: @bg-secondary;
@@ -226,7 +222,6 @@
     .analysis-actions {
       display: flex;
       gap: 10px;
-      flex-shrink: 0;
       
       .ant-btn {
         flex: 1;
@@ -446,18 +441,6 @@
             color: @text-primary;
             line-height: 1;
           }
-          
-          // 重要事项标记
-          .important-count {
-            font-size: 10px;
-            color: @danger-color;
-            font-weight: 700;
-            margin-top: 4px;
-            padding: 2px 6px;
-            background: rgba(255, 59, 48, 0.1);
-            border-radius: 6px;
-            letter-spacing: 0.5px;
-          }
         }
         
         // 今日角标
@@ -544,11 +527,6 @@
           .cell-weekday,
           .cell-date {
             color: white;
-          }
-          
-          .important-count {
-            background: rgba(255, 255, 255, 0.95);
-            color: @danger-color;
           }
           
           .event-count-badge {
@@ -893,7 +871,7 @@
   }
 }
 
-// ========== 历史记录模态框（支持展开详情）==========
+// ========== 历史记录模态框 ==========
 .history-modal {
   .ant-modal-content {
     border-radius: 16px;
@@ -921,158 +899,35 @@
       padding: 16px;
       margin-bottom: 12px;
       border-left: 4px solid @ai-color;
-      transition: all 0.3s ease;
+      transition: all 0.25s ease;
+      cursor: pointer;
       
-      // 头部：可点击区域
+      &:hover {
+        transform: translateX(4px);
+        box-shadow: @shadow-sm;
+        background: @bg-hover;
+      }
+      
       .item-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         margin-bottom: 8px;
         
-        &.clickable {
-          cursor: pointer;
-          padding: 8px;
-          margin: -8px;
-          border-radius: 8px;
-          transition: all 0.2s ease;
-          
-          &:hover {
-            background: rgba(102, 126, 234, 0.08);
-          }
-        }
-        
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          
-          .item-time {
-            font-size: 14px;
-            font-weight: 700;
-            color: @text-primary;
-          }
-        }
-        
-        .header-right {
-          display: flex;
-          align-items: center;
-          
-          .anticon {
-            font-size: 14px;
-            transition: transform 0.2s ease;
-          }
+        .item-time {
+          font-size: 14px;
+          font-weight: 700;
+          color: @text-primary;
         }
       }
       
-      // 基本信息
       .item-info {
         font-size: 13px;
         color: @text-secondary;
         font-weight: 600;
-        padding-left: 8px;
-      }
-      
-      // 展开详情区域
-      .item-detail {
-        margin-top: 16px;
-        padding: 16px;
-        background: rgba(248, 248, 252, 1);
-        border-radius: 12px;
-        max-height: 400px;
-        overflow-y: auto;
-        font-size: 14px;
-        line-height: 1.8;
-        color: @text-primary;
-        animation: slideDown 0.3s ease;
-        
-        h1, h2, h3, h4, h5, h6 {
-          color: @text-primary;
-          margin-top: 16px;
-          margin-bottom: 8px;
-          font-weight: 700;
-          
-          &:first-child {
-            margin-top: 0;
-          }
-        }
-        
-        h3 {
-          font-size: 16px;
-          color: @ai-color;
-        }
-        
-        p {
-          margin-bottom: 12px;
-          
-          &:last-child {
-            margin-bottom: 0;
-          }
-        }
-        
-        ul, ol {
-          margin-bottom: 12px;
-          padding-left: 24px;
-          
-          li {
-            margin-bottom: 6px;
-          }
-        }
-        
-        strong {
-          color: @text-primary;
-          font-weight: 700;
-        }
-        
-        code {
-          background: rgba(0, 0, 0, 0.05);
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 13px;
-          font-family: 'Monaco', 'Menlo', monospace;
-        }
-        
-        blockquote {
-          border-left: 3px solid @ai-color;
-          padding-left: 12px;
-          margin-left: 0;
-          color: @text-secondary;
-          font-style: italic;
-        }
-        
-        // 详情区域滚动条
-        &::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        &::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.02);
-          border-radius: 3px;
-        }
-        
-        &::-webkit-scrollbar-thumb {
-          background: @text-tertiary;
-          border-radius: 3px;
-          
-          &:hover {
-            background: @text-secondary;
-          }
-        }
-      }
-      
-      // 展开状态
-      &.expanded {
-        background: rgba(248, 248, 252, 1);
-        box-shadow: @shadow-sm;
-        
-        .item-header .header-right .anticon {
-          transform: rotate(0deg);
-          color: @ai-color;
-        }
       }
     }
     
-    // 列表滚动条
     &::-webkit-scrollbar {
       width: 8px;
     }
@@ -1127,10 +982,6 @@
             .cell-date {
               font-size: 22px;
             }
-            
-            .important-count {
-              font-size: 9px;
-            }
           }
           
           &.is-today .cell-date {
@@ -1182,19 +1033,6 @@
   }
   50% {
     transform: scale(1.02);
-  }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    max-height: 400px;
-    transform: translateY(0);
   }
 }
 

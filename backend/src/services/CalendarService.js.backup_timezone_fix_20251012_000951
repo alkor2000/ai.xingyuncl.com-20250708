@@ -1,6 +1,5 @@
 /**
  * 日历服务层 - 使用配置化的积分倍数和提示词模板
- * 修复：时区导致的日期错误
  */
 
 const CalendarEvent = require('../models/CalendarEvent');
@@ -72,23 +71,22 @@ class CalendarService {
       else stats.by_importance.low++;
     });
 
-    // 3. 格式化事项数据（修复时区问题）
     const formattedEvents = events.map(event => ({
-      date: dayjs(event.event_date).format('YYYY-MM-DD'),  // 使用 dayjs 格式化，避免时区问题
+      date: event.event_date,
       content: event.content,
       importance: event.importance,
       category: event.category,
       status: event.status
     }));
     
-    // 4. 获取当前时间信息
+    // 3. 获取当前时间信息
     const now = dayjs();
     const today = now.format('YYYY-MM-DD');
     const currentDateTime = now.format('YYYY-MM-DD HH:mm:ss');
     const currentWeekday = now.format('dddd'); // 星期几（中文）
     const currentTime = now.format('HH:mm');
     
-    // 5. 准备变量映射（包含时间变量）
+    // 4. 准备变量映射（包含时间变量）
     const variables = {
       // 时间相关变量
       today: today,
@@ -111,7 +109,7 @@ class CalendarService {
       importanceDistribution: `高优(${stats.by_importance.high})、中等(${stats.by_importance.medium})、低优(${stats.by_importance.low})`
     };
     
-    // 6. 渲染模板
+    // 5. 渲染模板
     return template.renderPrompt(variables);
   }
 

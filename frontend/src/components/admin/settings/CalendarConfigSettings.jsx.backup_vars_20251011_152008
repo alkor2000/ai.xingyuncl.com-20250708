@@ -191,25 +191,20 @@ const CalendarConfigSettings = () => {
     }
   ];
   
-  // 变量说明表格（新增时间变量）
+  // 变量说明表格
   const variablesData = [
-    { key: '1', variable: '{today}', description: '当前日期（YYYY-MM-DD）', example: '2025-10-11' },
-    { key: '2', variable: '{currentDateTime}', description: '当前完整时间', example: '2025-10-11 14:30:00' },
-    { key: '3', variable: '{currentWeekday}', description: '当前星期几', example: '星期五' },
-    { key: '4', variable: '{currentTime}', description: '当前时间', example: '14:30' },
-    { key: '5', variable: '{scanDateStart}', description: '扫描开始日期', example: '2025-09-26' },
-    { key: '6', variable: '{scanDateEnd}', description: '扫描结束日期', example: '2025-11-26' },
-    { key: '7', variable: '{eventsCount}', description: '事项总数', example: '15' },
-    { key: '8', variable: '{eventsData}', description: '事项JSON数据（包含date/content/importance等）', example: '[{...}]' },
-    { key: '9', variable: '{categoryDistribution}', description: '分类分布统计', example: '工作(5)、学习(3)' },
-    { key: '10', variable: '{statusDistribution}', description: '状态分布统计', example: '已完成(2)、进行中(3)' },
-    { key: '11', variable: '{importanceDistribution}', description: '重要度分布统计', example: '高优(3)、中等(5)、低优(2)' }
+    { key: '1', variable: '{scanDateStart}', description: '扫描开始日期' },
+    { key: '2', variable: '{scanDateEnd}', description: '扫描结束日期' },
+    { key: '3', variable: '{eventsCount}', description: '事项总数' },
+    { key: '4', variable: '{eventsData}', description: '事项JSON数据' },
+    { key: '5', variable: '{categoryDistribution}', description: '分类分布统计' },
+    { key: '6', variable: '{statusDistribution}', description: '状态分布统计' },
+    { key: '7', variable: '{importanceDistribution}', description: '重要度分布统计' }
   ];
   
   const variablesColumns = [
     { title: '变量名', dataIndex: 'variable', key: 'variable', width: 200 },
-    { title: '说明', dataIndex: 'description', key: 'description', width: 300 },
-    { title: '示例', dataIndex: 'example', key: 'example' }
+    { title: '说明', dataIndex: 'description', key: 'description' }
   ];
   
   return (
@@ -309,10 +304,10 @@ const CalendarConfigSettings = () => {
           setEditingTemplate(null);
         }}
         footer={null}
-        width={900}
+        width={800}
       >
         <Alert
-          message="支持的变量（可在提示词中使用）"
+          message="支持的变量"
           description={
             <Table
               columns={variablesColumns}
@@ -344,11 +339,10 @@ const CalendarConfigSettings = () => {
             label="提示词内容"
             name="prompt"
             rules={[{ required: true, message: '请输入提示词' }]}
-            tooltip="可使用上方表格中的变量，格式为 {变量名}"
           >
             <TextArea
-              rows={10}
-              placeholder="请输入提示词，可使用上方列出的变量...&#10;&#10;示例：&#10;今天是{today}（{currentWeekday}），当前时间{currentTime}。&#10;请分析{scanDateStart}到{scanDateEnd}的{eventsCount}个事项：&#10;{eventsData}"
+              rows={8}
+              placeholder="请输入提示词，可使用上方列出的变量..."
             />
           </Form.Item>
           

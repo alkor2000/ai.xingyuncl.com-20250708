@@ -38,9 +38,7 @@ import {
   RobotOutlined,
   HistoryOutlined,
   ReloadOutlined,
-  SaveOutlined,
-  DownOutlined,
-  RightOutlined as RightExpandOutlined
+  SaveOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -105,9 +103,6 @@ const CalendarPage = () => {
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState([]);
-  
-  // 历史记录展开状态
-  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   
   // 计算16天日期范围（前2天 + 今天 + 后13天）
   const dateRange = useMemo(() => {
@@ -375,18 +370,10 @@ const CalendarPage = () => {
     try {
       const history = await fetchAnalysisHistory();
       setAnalysisHistory(history);
-      setExpandedHistoryId(null); // 重置展开状态
       setHistoryModalVisible(true);
     } catch (error) {
       console.error('获取历史失败:', error);
     }
-  };
-  
-  /**
-   * 切换历史记录展开/收起
-   */
-  const handleToggleHistory = (itemId) => {
-    setExpandedHistoryId(expandedHistoryId === itemId ? null : itemId);
   };
   
   // ==================== 工具方法 ====================
@@ -428,7 +415,7 @@ const CalendarPage = () => {
         <div className="calendar-left-panel ai-analysis-panel">
           <div className="panel-header">
             <div className="header-title">
-              <RobotOutlined /> 智能日历
+              <RobotOutlined /> 智能分析
             </div>
           </div>
           
@@ -553,13 +540,6 @@ const CalendarPage = () => {
                         <div className="cell-header">
                           <span className="cell-weekday">{date.format('ddd')}</span>
                           <span className="cell-date">{date.format('DD')}</span>
-                          
-                          {/* 重要事项标记 */}
-                          {stats.highPriority > 0 && (
-                            <span className="important-count">
-                              重要{stats.highPriority}
-                            </span>
-                          )}
                         </div>
                         
                         {isToday && <div className="today-badge">今日</div>}
@@ -838,14 +818,11 @@ const CalendarPage = () => {
         </Spin>
       </Modal>
       
-      {/* 历史记录模态框 - 支持展开详情 */}
+      {/* 历史记录模态框 */}
       <Modal
         title={<><HistoryOutlined /> 分析历史</>}
         open={historyModalVisible}
-        onCancel={() => {
-          setHistoryModalVisible(false);
-          setExpandedHistoryId(null);
-        }}
+        onCancel={() => setHistoryModalVisible(false)}
         footer={null}
         width={900}
         className="history-modal"
@@ -855,42 +832,14 @@ const CalendarPage = () => {
             <Empty description="暂无历史记录" />
           ) : (
             analysisHistory.map(item => (
-              <div 
-                key={item.id} 
-                className={`history-item ${expandedHistoryId === item.id ? 'expanded' : ''}`}
-              >
-                {/* 头部：可点击展开/收起 */}
-                <div 
-                  className="item-header clickable"
-                  onClick={() => handleToggleHistory(item.id)}
-                >
-                  <div className="header-left">
-                    <span className="item-time">
-                      {dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
-                    </span>
-                    <Tag color="blue">{item.model_name}</Tag>
-                  </div>
-                  <div className="header-right">
-                    {expandedHistoryId === item.id ? 
-                      <DownOutlined style={{ color: '#667eea' }} /> : 
-                      <RightExpandOutlined style={{ color: '#8e8e93' }} />
-                    }
-                  </div>
+              <div key={item.id} className="history-item">
+                <div className="item-header">
+                  <span className="item-time">{dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}</span>
+                  <Tag color="blue">{item.model_name}</Tag>
                 </div>
-                
-                {/* 基本信息 */}
                 <div className="item-info">
                   分析了 {item.events_count} 个事项 | 消耗 {item.credits_consumed} 积分
                 </div>
-                
-                {/* 展开详情：完整分析内容 */}
-                {expandedHistoryId === item.id && (
-                  <div className="item-detail">
-                    <ReactMarkdown>
-                      {item.analysis_result?.raw_text || '暂无分析内容'}
-                    </ReactMarkdown>
-                  </div>
-                )}
               </div>
             ))
           )}

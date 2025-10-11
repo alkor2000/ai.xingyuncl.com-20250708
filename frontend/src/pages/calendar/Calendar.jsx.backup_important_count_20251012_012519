@@ -428,7 +428,7 @@ const CalendarPage = () => {
         <div className="calendar-left-panel ai-analysis-panel">
           <div className="panel-header">
             <div className="header-title">
-              <RobotOutlined /> 智能日历
+              <RobotOutlined /> 智能分析
             </div>
           </div>
           
@@ -553,13 +553,6 @@ const CalendarPage = () => {
                         <div className="cell-header">
                           <span className="cell-weekday">{date.format('ddd')}</span>
                           <span className="cell-date">{date.format('DD')}</span>
-                          
-                          {/* 重要事项标记 */}
-                          {stats.highPriority > 0 && (
-                            <span className="important-count">
-                              重要{stats.highPriority}
-                            </span>
-                          )}
                         </div>
                         
                         {isToday && <div className="today-badge">今日</div>}

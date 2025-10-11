@@ -1,6 +1,6 @@
 /**
  * 智能日历 - 4x4网格视图样式（智能分析面板）
- * 修复：AI分析结果滚动问题 + 历史记录展开功能 + 重要事项显示
+ * 修复：AI分析结果滚动问题 + 历史记录展开功能
  */
 
 @import '../../styles/theme-variables.css';
@@ -446,18 +446,6 @@
             color: @text-primary;
             line-height: 1;
           }
-          
-          // 重要事项标记
-          .important-count {
-            font-size: 10px;
-            color: @danger-color;
-            font-weight: 700;
-            margin-top: 4px;
-            padding: 2px 6px;
-            background: rgba(255, 59, 48, 0.1);
-            border-radius: 6px;
-            letter-spacing: 0.5px;
-          }
         }
         
         // 今日角标
@@ -544,11 +532,6 @@
           .cell-weekday,
           .cell-date {
             color: white;
-          }
-          
-          .important-count {
-            background: rgba(255, 255, 255, 0.95);
-            color: @danger-color;
           }
           
           .event-count-badge {
@@ -1126,10 +1109,6 @@
           .cell-header {
             .cell-date {
               font-size: 22px;
-            }
-            
-            .important-count {
-              font-size: 9px;
             }
           }
           
