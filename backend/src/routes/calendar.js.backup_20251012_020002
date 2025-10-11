@@ -1,5 +1,5 @@
 /**
- * 日历路由 - 带权限验证（包含背景知识路由）
+ * 日历路由 - 带权限验证
  * 处理所有日历相关的API请求
  */
 
@@ -204,57 +204,6 @@ router.get('/ai-analyses/:id',
 router.delete('/ai-analyses/:id',
   calendarLimiter,
   CalendarController.deleteAnalysis
-);
-
-// ==================== 背景知识管理路由（新增）====================
-
-/**
- * @route GET /api/calendar/background-knowledge
- * @desc 获取用户背景知识列表
- * @access Private - 需要calendar.use权限
- */
-router.get('/background-knowledge',
-  CalendarController.getBackgroundKnowledge
-);
-
-/**
- * @route POST /api/calendar/background-knowledge
- * @desc 创建背景知识
- * @access Private - 需要calendar.use权限
- */
-router.post('/background-knowledge',
-  calendarLimiter,
-  CalendarController.createBackgroundKnowledge
-);
-
-/**
- * @route PUT /api/calendar/background-knowledge/:id
- * @desc 更新背景知识
- * @access Private - 需要calendar.use权限
- */
-router.put('/background-knowledge/:id',
-  calendarLimiter,
-  CalendarController.updateBackgroundKnowledge
-);
-
-/**
- * @route DELETE /api/calendar/background-knowledge/:id
- * @desc 删除背景知识
- * @access Private - 需要calendar.use权限
- */
-router.delete('/background-knowledge/:id',
-  calendarLimiter,
-  CalendarController.deleteBackgroundKnowledge
-);
-
-/**
- * @route POST /api/calendar/background-knowledge/reorder
- * @desc 批量调整排序
- * @access Private - 需要calendar.use权限
- */
-router.post('/background-knowledge/reorder',
-  calendarLimiter,
-  CalendarController.reorderBackgroundKnowledge
 );
 
 // ==================== 用户设置路由 ====================

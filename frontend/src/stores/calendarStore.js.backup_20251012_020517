@@ -1,6 +1,6 @@
 /**
  * 日历Store - Zustand状态管理
- * 管理事项、分类、AI分析、AI模型、配置、背景知识等状态
+ * 管理事项、分类、AI分析、AI模型、配置等状态
  */
 
 import { create } from 'zustand';
@@ -24,7 +24,7 @@ const useCalendarStore = create((set, get) => ({
   // AI分析相关
   analyses: [],
   currentAnalysis: null,
-  latestAnalysis: null,
+  latestAnalysis: null,  // 新增：最新分析结果
   analysisLoading: false,
   analysisHistory: [],
   
@@ -36,10 +36,6 @@ const useCalendarStore = create((set, get) => ({
   calendarConfig: null,
   promptTemplates: [],
   configLoading: false,
-  
-  // 背景知识相关（新增）
-  backgroundKnowledge: [],
-  backgroundKnowledgeLoading: false,
   
   // 设置相关
   settings: null,
@@ -351,107 +347,6 @@ const useCalendarStore = create((set, get) => ({
     }
   },
   
-  // ========== 背景知识管理（新增）==========
-  
-  /**
-   * 获取背景知识列表
-   */
-  fetchBackgroundKnowledge: async () => {
-    set({ backgroundKnowledgeLoading: true });
-    try {
-      const response = await api.get('/calendar/background-knowledge');
-      
-      if (response.data.success) {
-        set({ 
-          backgroundKnowledge: response.data.data,
-          backgroundKnowledgeLoading: false 
-        });
-        return response.data.data;
-      }
-    } catch (error) {
-      console.error('获取背景知识失败:', error);
-      message.error('获取背景知识列表失败');
-      set({ backgroundKnowledgeLoading: false });
-      throw error;
-    }
-  },
-  
-  /**
-   * 创建背景知识
-   */
-  createBackgroundKnowledge: async (knowledgeData) => {
-    try {
-      const response = await api.post('/calendar/background-knowledge', knowledgeData);
-      
-      if (response.data.success) {
-        message.success('背景知识创建成功');
-        await get().fetchBackgroundKnowledge();
-        return response.data.data;
-      }
-    } catch (error) {
-      console.error('创建背景知识失败:', error);
-      message.error(error.response?.data?.message || '创建背景知识失败');
-      throw error;
-    }
-  },
-  
-  /**
-   * 更新背景知识
-   */
-  updateBackgroundKnowledge: async (id, knowledgeData) => {
-    try {
-      const response = await api.put(`/calendar/background-knowledge/${id}`, knowledgeData);
-      
-      if (response.data.success) {
-        message.success('背景知识更新成功');
-        await get().fetchBackgroundKnowledge();
-        return response.data.data;
-      }
-    } catch (error) {
-      console.error('更新背景知识失败:', error);
-      message.error(error.response?.data?.message || '更新背景知识失败');
-      throw error;
-    }
-  },
-  
-  /**
-   * 删除背景知识
-   */
-  deleteBackgroundKnowledge: async (id) => {
-    try {
-      const response = await api.delete(`/calendar/background-knowledge/${id}`);
-      
-      if (response.data.success) {
-        message.success('背景知识删除成功');
-        await get().fetchBackgroundKnowledge();
-        return true;
-      }
-    } catch (error) {
-      console.error('删除背景知识失败:', error);
-      message.error(error.response?.data?.message || '删除背景知识失败');
-      throw error;
-    }
-  },
-  
-  /**
-   * 批量调整排序
-   */
-  reorderBackgroundKnowledge: async (items) => {
-    try {
-      const response = await api.post('/calendar/background-knowledge/reorder', { items });
-      
-      if (response.data.success) {
-        message.success('排序更新成功');
-        set({ backgroundKnowledge: response.data.data });
-        return response.data.data;
-      }
-    } catch (error) {
-      console.error('更新排序失败:', error);
-      message.error(error.response?.data?.message || '更新排序失败');
-      throw error;
-    }
-  },
-  
   // ========== AI分析 ==========
   
   /**
@@ -724,7 +619,6 @@ const useCalendarStore = create((set, get) => ({
       latestAnalysis: null,
       aiModels: [],
       promptTemplates: [],
-      backgroundKnowledge: [],
       filters: {
         status: null,
         category: null,
