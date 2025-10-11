@@ -1,5 +1,5 @@
 /**
- * 智能日历 - 4x4网格视图样式（智能分析面板）
+ * 智能日历 - 4x4网格视图样式
  */
 
 @import '../../styles/theme-variables.css';
@@ -12,15 +12,12 @@
 @warning-color: #FF9500;
 @danger-color: #FF3B30;
 @today-color: #FF2D55;
-@ai-color: #667eea;
-@ai-light: #764ba2;
 
 @bg-primary: rgba(255, 255, 255, 0.98);
 @bg-secondary: rgba(248, 248, 252, 0.95);
 @bg-card: rgba(255, 255, 255, 0.98);
 @bg-hover: rgba(0, 122, 255, 0.08);
 @bg-today: rgba(255, 45, 85, 0.15);
-@bg-ai: rgba(102, 126, 234, 0.08);
 
 @text-primary: #1C1C1E;
 @text-secondary: #8E8E93;
@@ -30,7 +27,6 @@
 @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
 @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
 @shadow-today: 0 6px 24px rgba(255, 45, 85, 0.3);
-@shadow-ai: 0 4px 20px rgba(102, 126, 234, 0.15);
 
 // ========== 主容器 ==========
 .calendar-page {
@@ -46,12 +42,12 @@
 // ========== 主内容区域 ==========
 .calendar-content {
   display: grid;
-  grid-template-columns: 320px 1fr 340px;
+  grid-template-columns: 300px 1fr 340px;
   gap: 20px;
   align-items: start;
   
   @media (max-width: 1400px) {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 280px 1fr;
     
     .calendar-right-panel {
       display: none;
@@ -67,233 +63,126 @@
   }
 }
 
-// ========== 左侧智能分析面板 ==========
-.calendar-left-panel.ai-analysis-panel {
+// ========== 左侧面板 ==========
+.calendar-left-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: @shadow-ai;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  box-shadow: @shadow-sm;
+  border: 1px solid @border-color;
   position: sticky;
   top: 20px;
-  max-height: calc(100vh - 40px);
-  display: flex;
-  flex-direction: column;
   
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    padding-bottom: 14px;
-    border-bottom: 2px solid @border-color;
+  .overview-section {
+    margin-bottom: 24px;
     
-    .header-title {
-      font-size: 18px;
+    &:last-child {
+      margin-bottom: 0;
+    }
+    
+    .section-title {
+      font-size: 16px;
       font-weight: 700;
       color: @text-primary;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
       gap: 8px;
       
       .anticon {
-        color: @ai-color;
-        font-size: 20px;
+        color: @primary-color;
+        font-size: 18px;
       }
     }
-  }
-  
-  .analysis-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
     
-    .analysis-meta {
-      background: @bg-ai;
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       
-      .meta-item {
+      .stat-card {
+        background: @bg-secondary;
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+        transition: all 0.25s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+        
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: @shadow-sm;
+          border-color: rgba(0, 122, 255, 0.15);
+        }
+        
+        .stat-value {
+          font-size: 26px;
+          font-weight: 800;
+          color: @primary-color;
+          margin-bottom: 4px;
+          line-height: 1;
+        }
+        
+        .stat-label {
+          font-size: 12px;
+          color: @text-secondary;
+          font-weight: 600;
+        }
+        
+        &.completed .stat-value { color: @success-color; }
+        &.in-progress .stat-value { color: @warning-color; }
+        &.not-started .stat-value { color: @text-secondary; }
+        &.high-priority .stat-value { color: @danger-color; }
+      }
+    }
+    
+    .category-list {
+      .category-item {
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-size: 13px;
-        color: @text-secondary;
-        font-weight: 600;
-        
-        .anticon {
-          color: @ai-color;
-          font-size: 14px;
-        }
-      }
-    }
-    
-    .analysis-result {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px;
-      background: @bg-secondary;
-      border-radius: 12px;
-      margin-bottom: 16px;
-      font-size: 14px;
-      line-height: 1.8;
-      color: @text-primary;
-      
-      h1, h2, h3, h4, h5, h6 {
-        color: @text-primary;
-        margin-top: 16px;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 10px;
         margin-bottom: 8px;
-        font-weight: 700;
-        
-        &:first-child {
-          margin-top: 0;
-        }
-      }
-      
-      h3 {
-        font-size: 16px;
-        color: @ai-color;
-      }
-      
-      p {
-        margin-bottom: 12px;
-        
-        &:last-child {
-          margin-bottom: 0;
-        }
-      }
-      
-      ul, ol {
-        margin-bottom: 12px;
-        padding-left: 24px;
-        
-        li {
-          margin-bottom: 6px;
-        }
-      }
-      
-      strong {
-        color: @text-primary;
-        font-weight: 700;
-      }
-      
-      code {
-        background: rgba(0, 0, 0, 0.05);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-family: 'Monaco', 'Menlo', monospace;
-      }
-      
-      blockquote {
-        border-left: 3px solid @ai-color;
-        padding-left: 12px;
-        margin-left: 0;
-        color: @text-secondary;
-        font-style: italic;
-      }
-      
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-      
-      &::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.02);
-        border-radius: 3px;
-      }
-      
-      &::-webkit-scrollbar-thumb {
-        background: @text-tertiary;
-        border-radius: 3px;
+        background: @bg-secondary;
+        transition: all 0.2s ease;
+        cursor: pointer;
         
         &:hover {
-          background: @text-secondary;
+          background: @bg-hover;
+          transform: translateX(3px);
         }
-      }
-    }
-    
-    .analysis-actions {
-      display: flex;
-      gap: 10px;
-      
-      .ant-btn {
-        flex: 1;
-        border-radius: 10px;
-        height: 38px;
-        font-weight: 600;
-        border: 1px solid @border-color;
         
-        &:first-child {
-          background: linear-gradient(135deg, @ai-color, @ai-light);
-          color: white;
-          border: none;
+        .category-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
           
-          &:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+          .category-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+          }
+          
+          .category-name {
+            font-size: 14px;
+            color: @text-primary;
+            font-weight: 600;
           }
         }
         
-        &:last-child {
-          background: @bg-secondary;
-          color: @text-primary;
-          
-          &:hover {
-            background: @bg-hover;
-            color: @ai-color;
-            border-color: @ai-color;
-          }
-        }
-      }
-    }
-  }
-  
-  .analysis-empty {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    
-    .ant-empty {
-      .ant-empty-image {
-        height: auto;
-        margin-bottom: 16px;
-      }
-      
-      .ant-empty-description {
-        font-size: 15px;
-        color: @text-secondary;
-        font-weight: 600;
-        margin-bottom: 12px;
-      }
-      
-      .empty-tip {
-        font-size: 13px;
-        color: @text-tertiary;
-        margin-bottom: 20px;
-        line-height: 1.6;
-      }
-      
-      .ant-btn-primary {
-        background: linear-gradient(135deg, @ai-color, @ai-light);
-        border: none;
-        border-radius: 10px;
-        height: 38px;
-        padding: 0 24px;
-        font-weight: 600;
-        box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3);
-        
-        &:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+        .category-count {
+          font-size: 14px;
+          font-weight: 700;
+          color: @primary-color;
+          background: @bg-primary;
+          padding: 3px 10px;
+          border-radius: 10px;
+          min-width: 28px;
+          text-align: center;
         }
       }
     }
@@ -869,81 +758,16 @@
       margin-bottom: 16px;
     }
   }
-}
-
-// ========== 历史记录模态框 ==========
-.history-modal {
-  .ant-modal-content {
-    border-radius: 16px;
-  }
   
-  .ant-modal-header {
-    background: linear-gradient(135deg, @ai-color, @ai-light);
-    border: none;
-    padding: 20px 24px;
+  .analysis-loading {
+    text-align: center;
+    padding: 40px;
     
-    .ant-modal-title {
-      color: white;
-      font-size: 18px;
-      font-weight: 700;
-    }
-  }
-  
-  .history-list {
-    max-height: 60vh;
-    overflow-y: auto;
-    
-    .history-item {
-      background: @bg-secondary;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-      border-left: 4px solid @ai-color;
-      transition: all 0.25s ease;
-      cursor: pointer;
-      
-      &:hover {
-        transform: translateX(4px);
-        box-shadow: @shadow-sm;
-        background: @bg-hover;
-      }
-      
-      .item-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
-        
-        .item-time {
-          font-size: 14px;
-          font-weight: 700;
-          color: @text-primary;
-        }
-      }
-      
-      .item-info {
-        font-size: 13px;
-        color: @text-secondary;
-        font-weight: 600;
-      }
-    }
-    
-    &::-webkit-scrollbar {
-      width: 8px;
-    }
-    
-    &::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.02);
-      border-radius: 4px;
-    }
-    
-    &::-webkit-scrollbar-thumb {
-      background: @text-tertiary;
-      border-radius: 4px;
-      
-      &:hover {
-        background: @text-secondary;
-      }
+    p {
+      margin-top: 16px;
+      font-size: 15px;
+      color: @text-secondary;
+      font-weight: 600;
     }
   }
 }
@@ -1037,6 +861,7 @@
 }
 
 .event-card,
+.stat-card,
 .calendar-grid-cell {
   animation: fadeIn 0.3s ease;
 }

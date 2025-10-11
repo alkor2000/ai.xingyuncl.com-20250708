@@ -37,8 +37,7 @@ import {
   RightOutlined,
   RobotOutlined,
   HistoryOutlined,
-  ReloadOutlined,
-  SaveOutlined
+  ReloadOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -91,7 +90,7 @@ const CalendarPage = () => {
   } = useCalendarStore();
   
   const [form] = Form.useForm();
-  const [settingsForm] = Form.useForm();
+  const [aiForm] = Form.useForm();
   
   // 日历状态：基准日期（默认今天）
   const [baseDate, setBaseDate] = useState(dayjs());
@@ -102,6 +101,7 @@ const CalendarPage = () => {
   const [editingEvent, setEditingEvent] = useState(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
   const [analysisHistory, setAnalysisHistory] = useState([]);
   
   // 计算16天日期范围（前2天 + 今天 + 后13天）
@@ -179,49 +179,6 @@ const CalendarPage = () => {
     await fetchEvents(startDate, endDate);
   };
   
-  // ==================== 配置持久化 ====================
-  
-  /**
-   * 获取默认配置
-   */
-  const getDefaultSettings = () => {
-    const defaultModel = aiModels.find(m => m.is_active) || aiModels[0];
-    return {
-      model_id: defaultModel?.id || null,
-      template_id: null,
-      scan_days_before: 15,
-      scan_days_after: 15
-    };
-  };
-  
-  /**
-   * 从 LocalStorage 加载配置
-   */
-  const loadSettings = () => {
-    const key = `calendar_ai_settings_${user?.id || 'default'}`;
-    const saved = localStorage.getItem(key);
-    
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('解析配置失败:', e);
-      }
-    }
-    
-    return getDefaultSettings();
-  };
-  
-  /**
-   * 保存配置到 LocalStorage
-   */
-  const saveSettings = (settings) => {
-    const key = `calendar_ai_settings_${user?.id || 'default'}`;
-    localStorage.setItem(key, JSON.stringify(settings));
-  };
-  
-  // ==================== 日历操作 ====================
-  
   // 切换到上一个16天周期
   const handlePrevPeriod = () => {
     setBaseDate(prev => prev.add(-16, 'day'));
@@ -242,8 +199,6 @@ const CalendarPage = () => {
   const handleSelectDate = (date) => {
     setSelectedDate(date);
   };
-  
-  // ==================== 事项操作 ====================
   
   // 创建事项
   const handleCreateEvent = () => {
@@ -313,59 +268,38 @@ const CalendarPage = () => {
     }
   };
   
-  // ==================== AI分析操作 ====================
-  
-  /**
-   * 打开设置模态框
-   */
+  // 打开设置（AI分析配置）
   const handleOpenSettings = () => {
-    const settings = loadSettings();
-    settingsForm.setFieldsValue(settings);
     setSettingsModalVisible(true);
+    setAiAnalysisResult(null);
+    aiForm.setFieldsValue({ scan_days: 15 });
   };
   
-  /**
-   * 保存设置
-   */
-  const handleSaveSettings = async () => {
-    try {
-      const values = await settingsForm.validateFields();
-      saveSettings(values);
-      message.success('设置已保存');
-      setSettingsModalVisible(false);
-    } catch (error) {
-      console.error('保存设置失败:', error);
-    }
-  };
-  
-  /**
-   * 执行新分析（使用保存的配置）
-   */
+  // 执行新分析
   const handleNewAnalysis = async () => {
-    const settings = loadSettings();
+    if (aiModels.length === 0) {
+      message.warning('暂无可用AI模型');
+      return;
+    }
     
-    if (!settings.model_id) {
-      message.warning('请先设置AI模型');
-      handleOpenSettings();
+    const defaultModel = aiModels.find(m => m.is_active);
+    if (!defaultModel) {
+      message.warning('暂无激活的AI模型');
       return;
     }
     
     try {
-      const totalDays = settings.scan_days_before + settings.scan_days_after;
-      
       await performAnalysis({
-        model_id: settings.model_id,
-        template_id: settings.template_id,
-        scan_days: totalDays
+        model_id: defaultModel.id,
+        scan_days: 15
       });
+      message.success('AI分析完成');
     } catch (error) {
       console.error('分析失败:', error);
     }
   };
   
-  /**
-   * 查看历史
-   */
+  // 查看历史
   const handleViewHistory = async () => {
     try {
       const history = await fetchAnalysisHistory();
@@ -376,7 +310,23 @@ const CalendarPage = () => {
     }
   };
   
-  // ==================== 工具方法 ====================
+  // 执行AI分析（从设置界面）
+  const handleAIAnalysis = async () => {
+    try {
+      const values = await aiForm.validateFields();
+      const result = await performAnalysis(values);
+      
+      if (result && result.analysis && result.analysis.analysis_result) {
+        setAiAnalysisResult(result.analysis.analysis_result.raw_text);
+        message.success('AI分析完成');
+      } else {
+        throw new Error('分析结果格式错误');
+      }
+    } catch (error) {
+      console.error('AI分析失败:', error);
+      message.error(error.message || 'AI分析失败');
+    }
+  };
   
   // 获取日期的事项统计
   const getDateStats = (date) => {
@@ -754,86 +704,115 @@ const CalendarPage = () => {
         </Form>
       </Modal>
       
-      {/* AI分析设置模态框 */}
+      {/* 设置/AI分析模态框 */}
       <Modal
         title={<><SettingOutlined /> AI分析设置</>}
         open={settingsModalVisible}
-        onOk={handleSaveSettings}
-        onCancel={() => setSettingsModalVisible(false)}
-        width={600}
-        okText="保存设置"
-        cancelText="取消"
+        onCancel={() => {
+          setSettingsModalVisible(false);
+          setAiAnalysisResult(null);
+        }}
+        footer={null}
+        width={800}
         className="ai-analysis-modal"
       >
-        <Spin spinning={aiModelsLoading || configLoading}>
-          <Form form={settingsForm} layout="vertical">
-            <Form.Item
-              name="model_id"
-              label="选择AI模型"
-              rules={[{ required: true, message: '请选择AI模型' }]}
-            >
-              <Select placeholder="请选择AI模型">
-                {aiModels.filter(m => m.is_active).map(model => (
-                  <Option key={model.id} value={model.id}>
-                    {model.display_name} ({model.credits_per_chat} 积分/次)
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-            
-            <Form.Item
-              name="template_id"
-              label="分析模板"
-              tooltip="选择分析模板，不选则使用默认模板"
-            >
-              <Select placeholder="请选择模板（可选）" allowClear>
-                {promptTemplates.map(template => (
-                  <Option key={template.id} value={template.id}>
-                    {template.name}
-                    {template.is_default && ' (默认)'}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-            
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="scan_days_before"
-                  label="今日前"
-                  rules={[
-                    { required: true, message: '请输入天数' },
-                    { type: 'number', min: 1, max: 365, message: '范围1-365天' }
-                  ]}
+        <div className="ai-analysis-panel">
+          {!aiAnalysisResult ? (
+            <div className="analysis-form">
+              <Spin spinning={aiModelsLoading || configLoading}>
+                <Form form={aiForm} layout="vertical">
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        name="model_id"
+                        label="选择AI模型"
+                        rules={[{ required: true, message: '请选择AI模型' }]}
+                      >
+                        <Select placeholder="请选择AI模型">
+                          {aiModels.filter(m => m.is_active).map(model => (
+                            <Option key={model.id} value={model.id}>
+                              {model.display_name} ({model.credits_per_chat} 积分)
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                    
+                    <Col span={12}>
+                      <Form.Item
+                        name="template_id"
+                        label="分析模板"
+                        tooltip="选择分析模板，不选则使用默认模板"
+                      >
+                        <Select placeholder="请选择模板（可选）" allowClear>
+                          {promptTemplates.map(template => (
+                            <Option key={template.id} value={template.id}>
+                              {template.name}
+                              {template.is_default && ' (默认)'}
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        name="scan_days"
+                        label="扫描范围"
+                        rules={[{ required: true }]}
+                      >
+                        <InputNumber 
+                          min={1} 
+                          max={180} 
+                          style={{ width: '100%' }}
+                          addonAfter="天"
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  
+                  <div className="info-box">
+                    <div className="info-item">
+                      <span className="label">积分余额</span>
+                      <span className="value credits">{user?.credits || 0}</span>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    type="primary"
+                    block
+                    size="large"
+                    icon={<ThunderboltOutlined />}
+                    onClick={handleAIAnalysis}
+                    loading={analysisLoading}
+                  >
+                    开始分析
+                  </Button>
+                </Form>
+              </Spin>
+            </div>
+          ) : (
+            <div className="analysis-result">
+              <div className="result-content">
+                <ReactMarkdown>{aiAnalysisResult}</ReactMarkdown>
+              </div>
+              
+              <div className="result-actions">
+                <Button onClick={() => setAiAnalysisResult(null)}>
+                  返回
+                </Button>
+                <Button 
+                  type="primary" 
+                  icon={<FileTextOutlined />}
                 >
-                  <InputNumber 
-                    min={1} 
-                    max={365} 
-                    style={{ width: '100%' }}
-                    addonAfter="天"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="scan_days_after"
-                  label="今日后"
-                  rules={[
-                    { required: true, message: '请输入天数' },
-                    { type: 'number', min: 1, max: 365, message: '范围1-365天' }
-                  ]}
-                >
-                  <InputNumber 
-                    min={1} 
-                    max={365} 
-                    style={{ width: '100%' }}
-                    addonAfter="天"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
-        </Spin>
+                  导出结果
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
       
       {/* 历史记录模态框 */}

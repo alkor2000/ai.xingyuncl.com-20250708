@@ -24,7 +24,6 @@ const useCalendarStore = create((set, get) => ({
   // AI分析相关
   analyses: [],
   currentAnalysis: null,
-  latestAnalysis: null,  // 新增：最新分析结果
   analysisLoading: false,
   analysisHistory: [],
   
@@ -32,7 +31,7 @@ const useCalendarStore = create((set, get) => ({
   aiModels: [],
   aiModelsLoading: false,
   
-  // 配置和模板相关
+  // 配置和模板相关（新增）
   calendarConfig: null,
   promptTemplates: [],
   configLoading: false,
@@ -300,6 +299,7 @@ const useCalendarStore = create((set, get) => ({
   
   /**
    * 获取用户可用的AI模型列表
+   * 复用 /chat/models 接口
    */
   fetchAvailableModels: async () => {
     set({ aiModelsLoading: true });
@@ -321,10 +321,10 @@ const useCalendarStore = create((set, get) => ({
     }
   },
   
-  // ========== 配置和模板管理 ==========
+  // ========== 配置和模板管理（新增）==========
   
   /**
-   * 获取日历配置和模板列表
+   * 获取日历配置和模板列表（用户端只读）
    */
   fetchCalendarConfig: async () => {
     set({ configLoading: true });
@@ -350,75 +350,6 @@ const useCalendarStore = create((set, get) => ({
   // ========== AI分析 ==========
   
   /**
-   * 获取最新的AI分析结果
-   */
-  fetchLatestAnalysis: async () => {
-    try {
-      const response = await api.get('/calendar/ai-analyses', {
-        params: { page: 1, limit: 1 }
-      });
-      
-      if (response.data.success && response.data.data.length > 0) {
-        set({ latestAnalysis: response.data.data[0] });
-        return response.data.data[0];
-      }
-      return null;
-    } catch (error) {
-      console.error('获取最新分析失败:', error);
-      return null;
-    }
-  },
-  
-  /**
-   * 自动执行AI分析（页面加载时）
-   */
-  autoPerformAnalysis: async () => {
-    const { aiModels, latestAnalysis } = get();
-    
-    // 检查是否有可用模型
-    if (aiModels.length === 0) {
-      console.log('无可用AI模型，跳过自动分析');
-      return;
-    }
-    
-    const defaultModel = aiModels.find(m => m.is_active);
-    if (!defaultModel) {
-      console.log('无激活的AI模型，跳过自动分析');
-      return;
-    }
-    
-    // 如果已有最新分析，检查是否需要更新
-    if (latestAnalysis) {
-      const analysisDate = new Date(latestAnalysis.created_at);
-      const now = new Date();
-      const hoursDiff = (now - analysisDate) / (1000 * 60 * 60);
-      
-      // 如果分析在24小时内，不重复分析
-      if (hoursDiff < 24) {
-        console.log('已有最新分析，无需重复');
-        return;
-      }
-    }
-    
-    // 执行自动分析
-    set({ analysisLoading: true });
-    try {
-      const result = await get().performAnalysis({
-        model_id: defaultModel.id,
-        scan_days: 15
-      });
-      
-      if (result && result.analysis) {
-        set({ latestAnalysis: result.analysis });
-        console.log('自动分析完成');
-      }
-    } catch (error) {
-      console.error('自动分析失败:', error);
-      set({ analysisLoading: false });
-    }
-  },
-  
-  /**
    * 执行AI分析（支持模板选择）
    */
   performAnalysis: async (analysisData) => {
@@ -428,10 +359,8 @@ const useCalendarStore = create((set, get) => ({
       
       if (response.data.success) {
         message.success('AI分析完成');
-        const analysis = response.data.data.analysis;
         set({ 
-          currentAnalysis: analysis,
-          latestAnalysis: analysis,
+          currentAnalysis: response.data.data.analysis,
           analysisLoading: false 
         });
         return response.data.data;
@@ -616,7 +545,6 @@ const useCalendarStore = create((set, get) => ({
       selectedEvents: [],
       currentMonthStats: [],
       currentAnalysis: null,
-      latestAnalysis: null,
       aiModels: [],
       promptTemplates: [],
       filters: {
