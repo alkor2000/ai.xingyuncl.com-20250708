@@ -1,6 +1,6 @@
 /**
- * 智能日历 - 移动端完整修复版
- * 修复：底部Tab固定 + 内容区高度 + 面板切换 + 4x2网格
+ * 智能日历 - 完整移动端优化版
+ * 修复：AI分析结果滚动 + 移动端Tab导航 + 触摸友好
  */
 
 @import '../../styles/theme-variables.css';
@@ -39,33 +39,29 @@
   background: linear-gradient(135deg, #f0f9ff 0%, #faf5ff 50%, #fff7ed 100%);
   padding: 20px;
   position: relative;
+  padding-bottom: 80px; // 为底部Tab预留空间
   
   @media (max-width: 768px) {
-    padding: 0;
-    min-height: 100vh;
-    height: 100vh;
-    overflow: hidden; // 🔥 防止页面滚动
+    padding: 8px;
+    padding-bottom: 70px; // 移动端底部Tab高度
   }
 }
 
-// ========== 🔥 移动端底部Tab导航（关键修复）==========
+// ========== 移动端底部Tab导航（新增）==========
 .mobile-bottom-tabs {
-  display: none;
+  display: none; // 桌面端隐藏
   
   @media (max-width: 768px) {
     display: flex;
-    position: fixed; // 🔥 固定定位
+    position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 70px;
-    background: rgba(255, 255, 255, 0.98); // 🔥 必须有背景色
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: @bg-card;
     border-top: 1px solid @border-color;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
-    z-index: 9999; // 🔥 超高优先级
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    z-index: 1000;
+    padding-bottom: env(safe-area-inset-bottom, 0); // 支持iPhone底部安全区域
     
     .tab-item {
       flex: 1;
@@ -74,22 +70,21 @@
       align-items: center;
       justify-content: center;
       padding: 8px 0;
-      min-height: 56px;
+      min-height: 56px; // 触摸目标 ≥ 44px
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
       color: @text-secondary;
-      position: relative;
       
       .anticon {
         font-size: 22px;
         margin-bottom: 4px;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
       }
       
       span {
         font-size: 11px;
         font-weight: 600;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
       }
       
       &.active {
@@ -106,14 +101,14 @@
       }
       
       &:active {
-        background: rgba(0, 122, 255, 0.15);
+        background: @bg-hover;
         transform: scale(0.95);
       }
     }
   }
 }
 
-// ========== 🔥 主内容区域（关键修复）==========
+// ========== 主内容区域 ==========
 .calendar-content {
   display: grid;
   grid-template-columns: 320px 1fr 340px;
@@ -136,30 +131,24 @@
     }
   }
   
-  // 🔥 移动端布局（关键修复）
+  // 🔥 移动端：根据Tab显示不同面板
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 0;
-    height: calc(100vh - 70px); // 🔥 减去底部Tab高度
-    overflow: hidden; // 🔥 防止内容区滚动
     
-    // 🔥 默认隐藏所有面板
+    // 默认隐藏所有面板
     .calendar-left-panel,
     .calendar-main-panel,
     .calendar-right-panel,
     .calendar-settings-panel {
-      display: none !important; // 🔥 强制隐藏
+      display: none;
     }
     
-    // 🔥 激活的面板显示
+    // 激活的面板显示
     .calendar-left-panel.mobile-active,
     .calendar-main-panel.mobile-active,
     .calendar-right-panel.mobile-active,
     .calendar-settings-panel.mobile-active {
-      display: flex !important; // 🔥 强制显示
-      height: 100%; // 🔥 占满父容器
-      overflow-y: auto; // 🔥 内部可滚动
-      -webkit-overflow-scrolling: touch; // iOS平滑滚动
+      display: flex;
     }
   }
 }
@@ -183,11 +172,9 @@
   
   @media (max-width: 768px) {
     position: static;
-    border-radius: 0;
+    max-height: calc(100vh - 140px); // 减去顶部和底部Tab高度
     padding: 16px;
-    border: none;
-    max-height: none; // 🔥 取消高度限制
-    height: 100%; // 🔥 占满父容器
+    border-radius: 12px;
   }
   
   .panel-header {
@@ -199,11 +186,6 @@
     border-bottom: 2px solid @border-color;
     flex-shrink: 0;
     
-    @media (max-width: 768px) {
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-    }
-    
     .header-title {
       font-size: 18px;
       font-weight: 700;
@@ -213,7 +195,7 @@
       gap: 8px;
       
       @media (max-width: 768px) {
-        font-size: 17px;
+        font-size: 16px;
       }
       
       .anticon {
@@ -221,7 +203,7 @@
         font-size: 20px;
         
         @media (max-width: 768px) {
-          font-size: 19px;
+          font-size: 18px;
         }
       }
     }
@@ -263,6 +245,10 @@
         .anticon {
           color: @ai-color;
           font-size: 14px;
+          
+          @media (max-width: 768px) {
+            font-size: 13px;
+          }
         }
       }
     }
@@ -367,6 +353,7 @@
         font-style: italic;
       }
       
+      // 美化滚动条
       &::-webkit-scrollbar {
         width: 8px;
         
@@ -384,9 +371,14 @@
       &::-webkit-scrollbar-thumb {
         background: rgba(102, 126, 234, 0.3);
         border-radius: 4px;
+        transition: background 0.2s ease;
         
         &:hover {
           background: rgba(102, 126, 234, 0.5);
+        }
+        
+        &:active {
+          background: @ai-color;
         }
       }
     }
@@ -398,7 +390,6 @@
       
       @media (max-width: 768px) {
         gap: 8px;
-        padding-bottom: 16px; // 🔥 底部留白
       }
       
       .ant-btn {
@@ -409,9 +400,9 @@
         border: 1px solid @border-color;
         
         @media (max-width: 768px) {
-          min-height: 48px; // 🔥 触摸友好
-          height: 48px;
-          font-size: 15px;
+          min-height: 44px; // 触摸友好
+          height: 44px;
+          font-size: 14px;
         }
         
         &:first-child {
@@ -419,8 +410,13 @@
           color: white;
           border: none;
           
+          &:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+          }
+          
           &:active {
-            transform: scale(0.97);
+            transform: translateY(0);
           }
         }
         
@@ -428,8 +424,10 @@
           background: @bg-secondary;
           color: @text-primary;
           
-          &:active {
-            transform: scale(0.97);
+          &:hover {
+            background: @bg-hover;
+            color: @ai-color;
+            border-color: @ai-color;
           }
         }
       }
@@ -448,6 +446,15 @@
     }
     
     .ant-empty {
+      .ant-empty-image {
+        height: auto;
+        margin-bottom: 16px;
+        
+        @media (max-width: 768px) {
+          margin-bottom: 12px;
+        }
+      }
+      
       .ant-empty-description {
         font-size: 15px;
         color: @text-secondary;
@@ -478,11 +485,17 @@
         height: 38px;
         padding: 0 24px;
         font-weight: 600;
+        box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3);
         
         @media (max-width: 768px) {
-          min-height: 48px;
-          height: 48px;
-          font-size: 15px;
+          min-height: 44px;
+          height: 44px;
+          font-size: 14px;
+        }
+        
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
         }
       }
     }
@@ -502,10 +515,8 @@
   
   @media (max-width: 768px) {
     padding: 12px;
-    border-radius: 0;
-    border: none;
+    border-radius: 12px;
     min-height: auto;
-    height: 100%; // 🔥 占满父容器
   }
   
   .calendar-controls {
@@ -518,7 +529,7 @@
     
     @media (max-width: 768px) {
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
       margin-bottom: 12px;
       padding-bottom: 12px;
     }
@@ -538,13 +549,22 @@
         height: 36px;
         font-weight: 600;
         border: 1px solid @border-color;
-        background: @bg-secondary;
         
         @media (max-width: 768px) {
           min-height: 44px;
           height: 44px;
           flex: 1;
           font-size: 14px;
+        }
+        
+        &:not([type="primary"]) {
+          background: @bg-secondary;
+          
+          &:hover {
+            background: @bg-hover;
+            color: @primary-color;
+            border-color: @primary-color;
+          }
         }
       }
     }
@@ -570,10 +590,16 @@
         background: @bg-secondary;
         
         @media (max-width: 768px) {
-          min-height: 44px;
-          height: 44px;
-          min-width: 44px;
-          font-size: 14px;
+          min-height: 40px;
+          height: 40px;
+          min-width: 40px;
+          font-size: 13px;
+        }
+        
+        &:hover {
+          background: @bg-hover;
+          color: @primary-color;
+          border-color: @primary-color;
         }
       }
     }
@@ -583,6 +609,7 @@
         order: 2;
         width: 100%;
         text-align: center;
+        margin-bottom: 8px;
       }
       
       .date-range-display {
@@ -607,7 +634,7 @@
     gap: 12px;
     
     @media (max-width: 768px) {
-      gap: 10px;
+      gap: 8px;
     }
     
     .calendar-grid-row {
@@ -616,8 +643,8 @@
       gap: 12px;
       
       @media (max-width: 768px) {
-        grid-template-columns: repeat(2, 1fr); // 🔥 4x2网格
-        gap: 10px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
       }
       
       .calendar-grid-cell {
@@ -635,14 +662,22 @@
         position: relative;
         
         @media (max-width: 768px) {
-          min-height: 130px; // 🔥 移动端格子高度
+          min-height: 120px;
           padding: 12px 8px;
           border-radius: 12px;
           border-width: 2px;
         }
         
+        &:hover {
+          background: @bg-hover;
+          transform: scale(1.02);
+          box-shadow: @shadow-md;
+          border-color: rgba(0, 122, 255, 0.2);
+          z-index: 10;
+        }
+        
         &:active {
-          transform: scale(0.95); // 🔥 触摸反馈
+          transform: scale(0.98);
         }
         
         .cell-header {
@@ -665,7 +700,7 @@
             letter-spacing: 0.5px;
             
             @media (max-width: 768px) {
-              font-size: 11px;
+              font-size: 10px;
             }
           }
           
@@ -676,7 +711,7 @@
             line-height: 1;
             
             @media (max-width: 768px) {
-              font-size: 26px;
+              font-size: 24px;
             }
           }
           
@@ -692,7 +727,7 @@
             
             @media (max-width: 768px) {
               font-size: 9px;
-              padding: 2px 5px;
+              padding: 2px 4px;
             }
           }
         }
@@ -711,7 +746,7 @@
           letter-spacing: 0.5px;
           
           @media (max-width: 768px) {
-            font-size: 10px;
+            font-size: 9px;
             padding: 3px 8px;
             top: 8px;
             right: 8px;
@@ -736,9 +771,9 @@
             text-align: center;
             
             @media (max-width: 768px) {
-              font-size: 13px;
-              padding: 5px 12px;
-              min-width: 32px;
+              font-size: 12px;
+              padding: 4px 10px;
+              min-width: 28px;
             }
           }
           
@@ -749,7 +784,7 @@
             justify-content: center;
             
             @media (max-width: 768px) {
-              gap: 5px;
+              gap: 4px;
             }
             
             .event-dot {
@@ -760,8 +795,8 @@
               box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
               
               @media (max-width: 768px) {
-                width: 9px;
-                height: 9px;
+                width: 8px;
+                height: 8px;
               }
               
               &.high-priority {
@@ -771,8 +806,8 @@
                 box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
                 
                 @media (max-width: 768px) {
-                  width: 11px;
-                  height: 11px;
+                  width: 10px;
+                  height: 10px;
                 }
               }
             }
@@ -790,8 +825,13 @@
             font-weight: 900;
             
             @media (max-width: 768px) {
-              font-size: 28px;
+              font-size: 26px;
             }
+          }
+          
+          &:hover {
+            transform: scale(1.03);
+            box-shadow: @shadow-today, @shadow-md;
           }
         }
         
@@ -842,11 +882,9 @@
   
   @media (max-width: 768px) {
     position: static;
-    border-radius: 0;
+    max-height: calc(100vh - 140px);
     padding: 16px;
-    border: none;
-    max-height: none;
-    height: 100%; // 🔥 占满父容器
+    border-radius: 12px;
   }
   
   .panel-header {
@@ -864,7 +902,7 @@
       color: @text-primary;
       
       @media (max-width: 768px) {
-        font-size: 17px;
+        font-size: 16px;
       }
     }
     
@@ -887,14 +925,21 @@
       margin-bottom: 12px;
       border-left: 4px solid @primary-color;
       transition: all 0.25s ease;
+      cursor: pointer;
       
       @media (max-width: 768px) {
         padding: 12px;
         margin-bottom: 10px;
       }
       
+      &:hover {
+        transform: translateX(4px);
+        box-shadow: @shadow-sm;
+        background: rgba(248, 248, 252, 1);
+      }
+      
       &:active {
-        transform: scale(0.98); // 🔥 触摸反馈
+        transform: translateX(2px);
       }
       
       .event-header {
@@ -955,7 +1000,7 @@
         
         @media (max-width: 768px) {
           font-size: 12px;
-          gap: 10px;
+          gap: 8px;
         }
         
         .meta-item {
@@ -980,8 +1025,8 @@
           font-weight: 600;
           
           @media (max-width: 768px) {
-            min-height: 44px; // 🔥 触摸友好
-            height: 44px;
+            min-height: 40px;
+            height: 40px;
             font-size: 13px;
           }
           
@@ -989,8 +1034,13 @@
             background: rgba(0, 122, 255, 0.12);
             color: @primary-color;
             
+            &:hover {
+              background: rgba(0, 122, 255, 0.22);
+              transform: translateY(-1px);
+            }
+            
             &:active {
-              transform: scale(0.97);
+              transform: translateY(0);
             }
           }
           
@@ -998,8 +1048,13 @@
             background: rgba(255, 59, 48, 0.12);
             color: @danger-color;
             
+            &:hover {
+              background: rgba(255, 59, 48, 0.22);
+              transform: translateY(-1px);
+            }
+            
             &:active {
-              transform: scale(0.97);
+              transform: translateY(0);
             }
           }
         }
@@ -1051,7 +1106,7 @@
   }
 }
 
-// ========== 🔥 移动端设置面板（新增）==========
+// ========== 移动端设置面板（新增）==========
 .calendar-settings-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -1064,10 +1119,8 @@
   flex-direction: column;
   
   @media (max-width: 768px) {
-    border-radius: 0;
     padding: 16px;
-    border: none;
-    height: 100%; // 🔥 占满父容器
+    border-radius: 12px;
   }
   
   .panel-header {
@@ -1085,7 +1138,7 @@
       color: @text-primary;
       
       @media (max-width: 768px) {
-        font-size: 17px;
+        font-size: 16px;
       }
     }
   }
@@ -1093,8 +1146,8 @@
   .settings-quick-actions {
     .ant-btn {
       @media (max-width: 768px) {
-        min-height: 52px;
-        height: 52px;
+        min-height: 50px;
+        height: 50px;
         font-size: 15px;
         font-weight: 600;
       }
@@ -1102,12 +1155,20 @@
   }
 }
 
-// ========== 🔥 移动端全屏模态框 ==========
+// ========== 触摸友好按钮（新增）==========
+.mobile-friendly-btn {
+  @media (max-width: 768px) {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+}
+
+// ========== 移动端全屏模态框（新增）==========
 .mobile-fullscreen-modal {
   @media (max-width: 768px) {
-    max-width: 100vw !important;
+    max-width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding-bottom: 0 !important;
     top: 0 !important;
     
     .ant-modal {
@@ -1117,7 +1178,7 @@
     
     .ant-modal-content {
       border-radius: 0 !important;
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       flex-direction: column;
     }
@@ -1132,7 +1193,6 @@
       flex: 1;
       overflow-y: auto;
       padding: 16px !important;
-      -webkit-overflow-scrolling: touch;
     }
     
     .ant-modal-footer {
@@ -1141,8 +1201,8 @@
       padding-bottom: calc(12px + env(safe-area-inset-bottom, 0)) !important;
       
       .ant-btn {
-        min-height: 48px;
-        height: 48px;
+        min-height: 44px;
+        height: 44px;
         font-size: 15px;
       }
     }
@@ -1171,7 +1231,7 @@
       font-weight: 700;
       
       @media (max-width: 768px) {
-        font-size: 17px;
+        font-size: 16px;
       }
     }
   }
@@ -1188,7 +1248,7 @@
     margin-bottom: 16px;
     
     @media (max-width: 768px) {
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     
     .ant-form-item-label > label {
@@ -1211,9 +1271,9 @@
       font-size: 14px;
       
       @media (max-width: 768px) {
-        min-height: 48px;
-        height: 48px;
-        font-size: 16px; // 🔥 防止iOS缩放
+        min-height: 44px;
+        height: 44px;
+        font-size: 15px;
       }
       
       &:hover, &:focus {
@@ -1228,7 +1288,7 @@
       font-size: 14px;
       
       @media (max-width: 768px) {
-        font-size: 16px; // 🔥 防止iOS缩放
+        font-size: 15px;
         min-height: 120px;
       }
     }
@@ -1240,7 +1300,7 @@
       height: 6px;
       
       @media (max-width: 768px) {
-        height: 10px; // 🔥 更容易点击
+        height: 8px;
       }
     }
     
@@ -1249,7 +1309,7 @@
       height: 6px;
       
       @media (max-width: 768px) {
-        height: 10px;
+        height: 8px;
       }
     }
     
@@ -1259,14 +1319,43 @@
       height: 18px;
       
       @media (max-width: 768px) {
-        width: 28px; // 🔥 触摸友好
-        height: 28px;
+        width: 24px;
+        height: 24px;
+      }
+      
+      &:hover, &:focus {
+        box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.15);
       }
     }
   }
 }
 
-.ai-analysis-modal,
+.ai-analysis-modal {
+  .ant-modal-content {
+    border-radius: 16px;
+  }
+  
+  .ant-modal-header {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    padding: 20px 24px;
+    
+    @media (max-width: 768px) {
+      padding: 16px;
+    }
+    
+    .ant-modal-title {
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+      
+      @media (max-width: 768px) {
+        font-size: 16px;
+      }
+    }
+  }
+}
+
 .history-modal {
   .ant-modal-content {
     border-radius: 16px;
@@ -1287,13 +1376,11 @@
       font-weight: 700;
       
       @media (max-width: 768px) {
-        font-size: 17px;
+        font-size: 16px;
       }
     }
   }
-}
-
-.history-modal {
+  
   .history-list {
     max-height: 60vh;
     overflow-y: auto;
@@ -1304,6 +1391,7 @@
       padding: 16px;
       margin-bottom: 12px;
       border-left: 4px solid @ai-color;
+      transition: all 0.3s ease;
       
       @media (max-width: 768px) {
         padding: 12px;
@@ -1321,10 +1409,11 @@
           padding: 8px;
           margin: -8px;
           border-radius: 8px;
-          min-height: 48px; // 🔥 触摸友好
+          transition: all 0.2s ease;
+          min-height: 44px; // 触摸友好
           
-          &:active {
-            background: rgba(102, 126, 234, 0.12);
+          &:hover {
+            background: rgba(102, 126, 234, 0.08);
           }
         }
         
@@ -1348,12 +1437,27 @@
             }
           }
         }
+        
+        .header-right {
+          display: flex;
+          align-items: center;
+          
+          .anticon {
+            font-size: 14px;
+            transition: transform 0.2s ease;
+            
+            @media (max-width: 768px) {
+              font-size: 16px;
+            }
+          }
+        }
       }
       
       .item-info {
         font-size: 13px;
         color: @text-secondary;
         font-weight: 600;
+        padding-left: 8px;
         
         @media (max-width: 768px) {
           font-size: 12px;
@@ -1369,12 +1473,36 @@
         overflow-y: auto;
         font-size: 14px;
         line-height: 1.8;
+        color: @text-primary;
+        animation: slideDown 0.3s ease;
         
         @media (max-width: 768px) {
           padding: 12px;
           font-size: 13px;
           line-height: 1.7;
           max-height: 300px;
+        }
+        
+        &::-webkit-scrollbar {
+          width: 6px;
+          
+          @media (max-width: 768px) {
+            width: 4px;
+          }
+        }
+        
+        &::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.02);
+          border-radius: 3px;
+        }
+        
+        &::-webkit-scrollbar-thumb {
+          background: @text-tertiary;
+          border-radius: 3px;
+          
+          &:hover {
+            background: @text-secondary;
+          }
         }
       }
     }

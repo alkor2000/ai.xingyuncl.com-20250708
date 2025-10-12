@@ -1,7 +1,7 @@
 /**
- * 智能日历 - 移动端优化版
- * 桌面端：4x4网格（16天）
- * 移动端：4x2网格（8天）
+ * 智能日历 - 4x4网格视图（移动端优化版）
+ * 显示16天视图：前2天 + 今天 + 后13天
+ * 支持背景知识管理 + 移动端Tab切换
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -21,11 +21,13 @@ import {
   Row,
   Col,
   Empty,
-  Divider
+  Divider,
+  Tabs
 } from 'antd';
 import {
   PlusOutlined,
   SettingOutlined,
+  ScanOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -39,6 +41,7 @@ import {
   RobotOutlined,
   HistoryOutlined,
   ReloadOutlined,
+  SaveOutlined,
   DownOutlined,
   RightOutlined as RightExpandOutlined,
   UnorderedListOutlined
@@ -97,7 +100,7 @@ const CalendarPage = () => {
   const [form] = Form.useForm();
   const [settingsForm] = Form.useForm();
   
-  // 日历状态
+  // 日历状态：基准日期（默认今天）
   const [baseDate, setBaseDate] = useState(dayjs());
   const [selectedDate, setSelectedDate] = useState(dayjs());
   
@@ -107,56 +110,30 @@ const CalendarPage = () => {
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState([]);
+  
+  // 历史记录展开状态
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   
-  // 🔥 移动端Tab状态（默认calendar）
-  const [mobileTab, setMobileTab] = useState('calendar');
+  // 🔥 移动端Tab状态（新增）
+  const [mobileTab, setMobileTab] = useState('calendar'); // calendar | ai | events | settings
   
-  // 🔥 检测是否为移动端
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-  
-  // 🔥 计算日期范围（响应式：移动端8天，桌面端16天）
+  // 计算16天日期范围（前2天 + 今天 + 后13天）
   const dateRange = useMemo(() => {
     const dates = [];
-    
-    if (isMobile) {
-      // 移动端：今天前1天 + 今天 + 后6天 = 8天
-      for (let i = -1; i <= 6; i++) {
-        dates.push(baseDate.add(i, 'day'));
-      }
-    } else {
-      // 桌面端：前2天 + 今天 + 后13天 = 16天
-      for (let i = -2; i <= 13; i++) {
-        dates.push(baseDate.add(i, 'day'));
-      }
+    for (let i = -2; i <= 13; i++) {
+      dates.push(baseDate.add(i, 'day'));
     }
-    
     return dates;
-  }, [baseDate, isMobile]);
+  }, [baseDate]);
   
-  // 🔥 转换为网格（响应式：移动端4x2，桌面端4x4）
+  // 转换为4x4网格
   const gridDates = useMemo(() => {
     const grid = [];
-    const cols = isMobile ? 2 : 4; // 移动端2列，桌面端4列
-    const rows = Math.ceil(dateRange.length / cols);
-    
-    for (let i = 0; i < rows; i++) {
-      grid.push(dateRange.slice(i * cols, (i + 1) * cols));
+    for (let i = 0; i < 4; i++) {
+      grid.push(dateRange.slice(i * 4, (i + 1) * 4));
     }
-    
     return grid;
-  }, [dateRange, isMobile]);
+  }, [dateRange]);
   
   // 获取日期范围的事项数据
   const dateEvents = useMemo(() => {
@@ -196,6 +173,7 @@ const CalendarPage = () => {
         loadDateRangeEvents()
       ]);
       
+      // 加载最新分析，如果没有则自动执行
       const latest = await fetchLatestAnalysis();
       if (!latest) {
         setTimeout(() => {
@@ -208,9 +186,8 @@ const CalendarPage = () => {
   };
   
   const loadDateRangeEvents = async () => {
-    const offset = isMobile ? 1 : 2;
-    const startDate = baseDate.add(-offset, 'day').format('YYYY-MM-DD');
-    const endDate = baseDate.add(isMobile ? 6 : 13, 'day').format('YYYY-MM-DD');
+    const startDate = baseDate.add(-2, 'day').format('YYYY-MM-DD');
+    const endDate = baseDate.add(13, 'day').format('YYYY-MM-DD');
     await fetchEvents(startDate, endDate);
   };
   
@@ -249,13 +226,11 @@ const CalendarPage = () => {
   // ==================== 日历操作 ====================
   
   const handlePrevPeriod = () => {
-    const days = isMobile ? 8 : 16;
-    setBaseDate(prev => prev.add(-days, 'day'));
+    setBaseDate(prev => prev.add(-16, 'day'));
   };
   
   const handleNextPeriod = () => {
-    const days = isMobile ? 8 : 16;
-    setBaseDate(prev => prev.add(days, 'day'));
+    setBaseDate(prev => prev.add(16, 'day'));
   };
   
   const handleToday = () => {
@@ -266,7 +241,7 @@ const CalendarPage = () => {
   const handleSelectDate = (date) => {
     setSelectedDate(date);
     // 🔥 移动端：选择日期后自动切换到事项Tab
-    if (isMobile) {
+    if (window.innerWidth <= 768) {
       setMobileTab('events');
     }
   };
@@ -422,7 +397,7 @@ const CalendarPage = () => {
 
   return (
     <div className="calendar-page calendar-grid-view">
-      {/* 🔥 移动端底部Tab导航 */}
+      {/* 🔥 移动端底部Tab导航（仅在≤768px显示）*/}
       <div className="mobile-bottom-tabs">
         <div 
           className={`tab-item ${mobileTab === 'calendar' ? 'active' : ''}`}
@@ -456,7 +431,7 @@ const CalendarPage = () => {
 
       {/* 主内容区域 */}
       <div className="calendar-content">
-        {/* 左侧AI分析面板 */}
+        {/* 左侧智能分析面板（桌面端显示，移动端根据Tab显示）*/}
         <div className={`calendar-left-panel ai-analysis-panel ${mobileTab === 'ai' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <div className="header-title">
@@ -527,13 +502,15 @@ const CalendarPage = () => {
           </Spin>
         </div>
         
-        {/* 中间日历面板 */}
+        {/* 中间日历面板（桌面端始终显示，移动端根据Tab显示）*/}
         <div className={`calendar-main-panel calendar-grid-panel ${mobileTab === 'calendar' ? 'mobile-active' : ''}`}>
+          {/* 日历头部控制栏 */}
           <div className="calendar-controls">
             <div className="controls-left">
               <Button 
                 icon={<SettingOutlined />}
                 onClick={handleOpenSettings}
+                className="mobile-friendly-btn"
               >
                 设置
               </Button>
@@ -544,10 +521,12 @@ const CalendarPage = () => {
                 icon={<LeftOutlined />} 
                 onClick={handlePrevPeriod}
                 size="small"
+                className="mobile-friendly-btn"
               />
               <Button 
                 onClick={handleToday}
                 size="small"
+                className="mobile-friendly-btn"
               >
                 返回今天
               </Button>
@@ -555,16 +534,18 @@ const CalendarPage = () => {
                 icon={<RightOutlined />} 
                 onClick={handleNextPeriod}
                 size="small"
+                className="mobile-friendly-btn"
               />
             </div>
             
             <div className="controls-right">
               <span className="date-range-display">
-                {dateRange[0].format('MM/DD')} - {dateRange[dateRange.length - 1].format('MM/DD')}
+                {dateRange[0].format('MM/DD')} - {dateRange[15].format('MM/DD')}
               </span>
             </div>
           </div>
           
+          {/* 4x4日历网格 */}
           <Spin spinning={eventsLoading}>
             <div className="calendar-grid">
               {gridDates.map((row, rowIndex) => (
@@ -618,7 +599,7 @@ const CalendarPage = () => {
           </Spin>
         </div>
         
-        {/* 右侧事项列表 */}
+        {/* 右侧事项列表（桌面端显示，移动端根据Tab显示）*/}
         <div className={`calendar-right-panel ${mobileTab === 'events' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <h3>事项详情</h3>
@@ -633,6 +614,7 @@ const CalendarPage = () => {
             block
             onClick={handleCreateEvent}
             style={{ marginBottom: 16 }}
+            className="mobile-friendly-btn"
           >
             创建事项
           </Button>
@@ -671,7 +653,7 @@ const CalendarPage = () => {
                     
                     <div className="event-actions">
                       <Button 
-                        className="btn-edit"
+                        className="btn-edit mobile-friendly-btn"
                         size="small"
                         icon={<EditOutlined />}
                         onClick={() => handleEditEvent(event)}
@@ -685,7 +667,7 @@ const CalendarPage = () => {
                         cancelText="取消"
                       >
                         <Button 
-                          className="btn-delete"
+                          className="btn-delete mobile-friendly-btn"
                           size="small"
                           icon={<DeleteOutlined />}
                         >
@@ -700,7 +682,7 @@ const CalendarPage = () => {
           </div>
         </div>
 
-        {/* 🔥 移动端设置面板 */}
+        {/* 🔥 移动端设置面板（新增）*/}
         <div className={`calendar-settings-panel ${mobileTab === 'settings' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <h3>快捷设置</h3>
@@ -711,6 +693,7 @@ const CalendarPage = () => {
               onClick={handleOpenSettings}
               block
               size="large"
+              className="mobile-friendly-btn"
             >
               AI分析设置
             </Button>
@@ -719,6 +702,7 @@ const CalendarPage = () => {
               onClick={handleViewHistory}
               block
               size="large"
+              className="mobile-friendly-btn"
               style={{ marginTop: 12 }}
             >
               查看分析历史

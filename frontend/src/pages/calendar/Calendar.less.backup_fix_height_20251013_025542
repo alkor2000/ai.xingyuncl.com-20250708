@@ -1,6 +1,7 @@
 /**
- * 智能日历 - 移动端完整修复版
- * 修复：底部Tab固定 + 内容区高度 + 面板切换 + 4x2网格
+ * 智能日历 - 4x4网格视图样式（智能分析面板）
+ * 修复：AI分析结果滚动问题 + 历史记录展开功能 + 重要事项显示
+ * 优化：左侧面板滚动条独立 + "返回今天"按钮
  */
 
 @import '../../styles/theme-variables.css';
@@ -38,82 +39,13 @@
   min-height: 100vh;
   background: linear-gradient(135deg, #f0f9ff 0%, #faf5ff 50%, #fff7ed 100%);
   padding: 20px;
-  position: relative;
   
   @media (max-width: 768px) {
-    padding: 0;
-    min-height: 100vh;
-    height: 100vh;
-    overflow: hidden; // 🔥 防止页面滚动
+    padding: 12px;
   }
 }
 
-// ========== 🔥 移动端底部Tab导航（关键修复）==========
-.mobile-bottom-tabs {
-  display: none;
-  
-  @media (max-width: 768px) {
-    display: flex;
-    position: fixed; // 🔥 固定定位
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 70px;
-    background: rgba(255, 255, 255, 0.98); // 🔥 必须有背景色
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid @border-color;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
-    z-index: 9999; // 🔥 超高优先级
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    
-    .tab-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 0;
-      min-height: 56px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: @text-secondary;
-      position: relative;
-      
-      .anticon {
-        font-size: 22px;
-        margin-bottom: 4px;
-        transition: all 0.2s ease;
-      }
-      
-      span {
-        font-size: 11px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-      }
-      
-      &.active {
-        color: @primary-color;
-        background: @bg-hover;
-        
-        .anticon {
-          transform: scale(1.1);
-        }
-        
-        span {
-          font-weight: 700;
-        }
-      }
-      
-      &:active {
-        background: rgba(0, 122, 255, 0.15);
-        transform: scale(0.95);
-      }
-    }
-  }
-}
-
-// ========== 🔥 主内容区域（关键修复）==========
+// ========== 主内容区域 ==========
 .calendar-content {
   display: grid;
   grid-template-columns: 320px 1fr 340px;
@@ -135,36 +67,9 @@
       display: none;
     }
   }
-  
-  // 🔥 移动端布局（关键修复）
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 0;
-    height: calc(100vh - 70px); // 🔥 减去底部Tab高度
-    overflow: hidden; // 🔥 防止内容区滚动
-    
-    // 🔥 默认隐藏所有面板
-    .calendar-left-panel,
-    .calendar-main-panel,
-    .calendar-right-panel,
-    .calendar-settings-panel {
-      display: none !important; // 🔥 强制隐藏
-    }
-    
-    // 🔥 激活的面板显示
-    .calendar-left-panel.mobile-active,
-    .calendar-main-panel.mobile-active,
-    .calendar-right-panel.mobile-active,
-    .calendar-settings-panel.mobile-active {
-      display: flex !important; // 🔥 强制显示
-      height: 100%; // 🔥 占满父容器
-      overflow-y: auto; // 🔥 内部可滚动
-      -webkit-overflow-scrolling: touch; // iOS平滑滚动
-    }
-  }
 }
 
-// ========== 左侧智能分析面板 ==========
+// ========== 左侧智能分析面板（优化滚动）==========
 .calendar-left-panel.ai-analysis-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -175,20 +80,11 @@
   border: 1px solid rgba(102, 126, 234, 0.1);
   position: sticky;
   top: 20px;
-  min-height: auto;
-  max-height: calc(100vh - 40px);
+  min-height: 800px;
+  max-height: 800px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  
-  @media (max-width: 768px) {
-    position: static;
-    border-radius: 0;
-    padding: 16px;
-    border: none;
-    max-height: none; // 🔥 取消高度限制
-    height: 100%; // 🔥 占满父容器
-  }
+  overflow: hidden; // 🔥 关键修复：防止子元素撑破容器
   
   .panel-header {
     display: flex;
@@ -197,12 +93,7 @@
     margin-bottom: 20px;
     padding-bottom: 14px;
     border-bottom: 2px solid @border-color;
-    flex-shrink: 0;
-    
-    @media (max-width: 768px) {
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-    }
+    flex-shrink: 0; // 固定不滚动
     
     .header-title {
       font-size: 18px;
@@ -212,17 +103,9 @@
       align-items: center;
       gap: 8px;
       
-      @media (max-width: 768px) {
-        font-size: 17px;
-      }
-      
       .anticon {
         color: @ai-color;
         font-size: 20px;
-        
-        @media (max-width: 768px) {
-          font-size: 19px;
-        }
       }
     }
   }
@@ -231,7 +114,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 0; // 关键：配合flex布局实现正确滚动
     
     .analysis-meta {
       background: @bg-ai;
@@ -241,12 +124,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      flex-shrink: 0;
-      
-      @media (max-width: 768px) {
-        padding: 10px;
-        margin-bottom: 12px;
-      }
+      flex-shrink: 0; // 固定不滚动
       
       .meta-item {
         display: flex;
@@ -256,10 +134,6 @@
         color: @text-secondary;
         font-weight: 600;
         
-        @media (max-width: 768px) {
-          font-size: 12px;
-        }
-        
         .anticon {
           color: @ai-color;
           font-size: 14px;
@@ -267,11 +141,12 @@
       }
     }
     
+    // 🔥 核心滚动区域：AI分析结果
     .analysis-result {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      overflow-x: hidden;
+      flex: 1; // 占据剩余空间
+      min-height: 0; // 关键：允许滚动
+      overflow-y: auto; // 启用垂直滚动
+      overflow-x: hidden; // 隐藏水平滚动
       padding: 14px;
       background: @bg-secondary;
       border-radius: 12px;
@@ -280,23 +155,11 @@
       line-height: 1.8;
       color: @text-primary;
       
-      @media (max-width: 768px) {
-        padding: 12px;
-        font-size: 13px;
-        line-height: 1.7;
-        margin-bottom: 12px;
-      }
-      
       h1, h2, h3, h4, h5, h6 {
         color: @text-primary;
         margin-top: 16px;
         margin-bottom: 8px;
         font-weight: 700;
-        
-        @media (max-width: 768px) {
-          margin-top: 12px;
-          margin-bottom: 6px;
-        }
         
         &:first-child {
           margin-top: 0;
@@ -306,18 +169,10 @@
       h3 {
         font-size: 16px;
         color: @ai-color;
-        
-        @media (max-width: 768px) {
-          font-size: 15px;
-        }
       }
       
       p {
         margin-bottom: 12px;
-        
-        @media (max-width: 768px) {
-          margin-bottom: 10px;
-        }
         
         &:last-child {
           margin-bottom: 0;
@@ -328,17 +183,8 @@
         margin-bottom: 12px;
         padding-left: 24px;
         
-        @media (max-width: 768px) {
-          margin-bottom: 10px;
-          padding-left: 20px;
-        }
-        
         li {
           margin-bottom: 6px;
-          
-          @media (max-width: 768px) {
-            margin-bottom: 5px;
-          }
         }
       }
       
@@ -353,10 +199,6 @@
         border-radius: 4px;
         font-size: 13px;
         font-family: 'Monaco', 'Menlo', monospace;
-        
-        @media (max-width: 768px) {
-          font-size: 12px;
-        }
       }
       
       blockquote {
@@ -367,26 +209,28 @@
         font-style: italic;
       }
       
+      // 🎨 美化滚动条
       &::-webkit-scrollbar {
-        width: 8px;
-        
-        @media (max-width: 768px) {
-          width: 4px;
-        }
+        width: 8px; // 稍微宽一点，更容易抓取
       }
       
       &::-webkit-scrollbar-track {
         background: rgba(0, 0, 0, 0.03);
         border-radius: 4px;
-        margin: 4px 0;
+        margin: 4px 0; // 上下留白
       }
       
       &::-webkit-scrollbar-thumb {
-        background: rgba(102, 126, 234, 0.3);
+        background: rgba(102, 126, 234, 0.3); // AI主题色
         border-radius: 4px;
+        transition: background 0.2s ease;
         
         &:hover {
           background: rgba(102, 126, 234, 0.5);
+        }
+        
+        &:active {
+          background: @ai-color;
         }
       }
     }
@@ -394,12 +238,7 @@
     .analysis-actions {
       display: flex;
       gap: 10px;
-      flex-shrink: 0;
-      
-      @media (max-width: 768px) {
-        gap: 8px;
-        padding-bottom: 16px; // 🔥 底部留白
-      }
+      flex-shrink: 0; // 固定不滚动
       
       .ant-btn {
         flex: 1;
@@ -408,19 +247,14 @@
         font-weight: 600;
         border: 1px solid @border-color;
         
-        @media (max-width: 768px) {
-          min-height: 48px; // 🔥 触摸友好
-          height: 48px;
-          font-size: 15px;
-        }
-        
         &:first-child {
           background: linear-gradient(135deg, @ai-color, @ai-light);
           color: white;
           border: none;
           
-          &:active {
-            transform: scale(0.97);
+          &:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
           }
         }
         
@@ -428,8 +262,10 @@
           background: @bg-secondary;
           color: @text-primary;
           
-          &:active {
-            transform: scale(0.97);
+          &:hover {
+            background: @bg-hover;
+            color: @ai-color;
+            border-color: @ai-color;
           }
         }
       }
@@ -443,20 +279,17 @@
     justify-content: center;
     padding: 40px 20px;
     
-    @media (max-width: 768px) {
-      padding: 30px 15px;
-    }
-    
     .ant-empty {
+      .ant-empty-image {
+        height: auto;
+        margin-bottom: 16px;
+      }
+      
       .ant-empty-description {
         font-size: 15px;
         color: @text-secondary;
         font-weight: 600;
         margin-bottom: 12px;
-        
-        @media (max-width: 768px) {
-          font-size: 14px;
-        }
       }
       
       .empty-tip {
@@ -464,11 +297,6 @@
         color: @text-tertiary;
         margin-bottom: 20px;
         line-height: 1.6;
-        
-        @media (max-width: 768px) {
-          font-size: 12px;
-          margin-bottom: 16px;
-        }
       }
       
       .ant-btn-primary {
@@ -478,18 +306,18 @@
         height: 38px;
         padding: 0 24px;
         font-weight: 600;
+        box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3);
         
-        @media (max-width: 768px) {
-          min-height: 48px;
-          height: 48px;
-          font-size: 15px;
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
         }
       }
     }
   }
 }
 
-// ========== 中间日历面板 ==========
+// ========== 中间日历面板 - 4x4网格 ==========
 .calendar-main-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -500,14 +328,7 @@
   border: 1px solid @border-color;
   min-height: 800px;
   
-  @media (max-width: 768px) {
-    padding: 12px;
-    border-radius: 0;
-    border: none;
-    min-height: auto;
-    height: 100%; // 🔥 占满父容器
-  }
-  
+  // 日历控制栏
   .calendar-controls {
     display: flex;
     align-items: center;
@@ -516,35 +337,35 @@
     padding-bottom: 16px;
     border-bottom: 2px solid @border-color;
     
-    @media (max-width: 768px) {
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 12px;
-      padding-bottom: 12px;
-    }
-    
     .controls-left {
       display: flex;
       gap: 10px;
-      
-      @media (max-width: 768px) {
-        order: 3;
-        width: 100%;
-        justify-content: center;
-      }
       
       .ant-btn {
         border-radius: 10px;
         height: 36px;
         font-weight: 600;
         border: 1px solid @border-color;
-        background: @bg-secondary;
         
-        @media (max-width: 768px) {
-          min-height: 44px;
-          height: 44px;
-          flex: 1;
-          font-size: 14px;
+        &[type="primary"] {
+          background: linear-gradient(135deg, @primary-color, @primary-light);
+          border: none;
+          box-shadow: 0 3px 12px rgba(0, 122, 255, 0.3);
+          
+          &:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4);
+          }
+        }
+        
+        &:not([type="primary"]) {
+          background: @bg-secondary;
+          
+          &:hover {
+            background: @bg-hover;
+            color: @primary-color;
+            border-color: @primary-color;
+          }
         }
       }
     }
@@ -553,12 +374,6 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      
-      @media (max-width: 768px) {
-        order: 1;
-        width: 100%;
-        justify-content: center;
-      }
       
       .ant-btn {
         border-radius: 8px;
@@ -569,22 +384,15 @@
         border: 1px solid @border-color;
         background: @bg-secondary;
         
-        @media (max-width: 768px) {
-          min-height: 44px;
-          height: 44px;
-          min-width: 44px;
-          font-size: 14px;
+        &:hover {
+          background: @bg-hover;
+          color: @primary-color;
+          border-color: @primary-color;
         }
       }
     }
     
     .controls-right {
-      @media (max-width: 768px) {
-        order: 2;
-        width: 100%;
-        text-align: center;
-      }
-      
       .date-range-display {
         font-size: 14px;
         font-weight: 600;
@@ -592,33 +400,20 @@
         padding: 6px 12px;
         background: @bg-secondary;
         border-radius: 8px;
-        
-        @media (max-width: 768px) {
-          font-size: 13px;
-          display: inline-block;
-        }
       }
     }
   }
   
+  // 4x4网格容器
   .calendar-grid {
     display: flex;
     flex-direction: column;
     gap: 12px;
     
-    @media (max-width: 768px) {
-      gap: 10px;
-    }
-    
     .calendar-grid-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 12px;
-      
-      @media (max-width: 768px) {
-        grid-template-columns: repeat(2, 1fr); // 🔥 4x2网格
-        gap: 10px;
-      }
       
       .calendar-grid-cell {
         background: @bg-secondary;
@@ -634,15 +429,12 @@
         border: 3px solid transparent;
         position: relative;
         
-        @media (max-width: 768px) {
-          min-height: 130px; // 🔥 移动端格子高度
-          padding: 12px 8px;
-          border-radius: 12px;
-          border-width: 2px;
-        }
-        
-        &:active {
-          transform: scale(0.95); // 🔥 触摸反馈
+        &:hover {
+          background: @bg-hover;
+          transform: scale(1.02);
+          box-shadow: @shadow-md;
+          border-color: rgba(0, 122, 255, 0.2);
+          z-index: 10;
         }
         
         .cell-header {
@@ -652,21 +444,12 @@
           gap: 6px;
           margin-bottom: 12px;
           
-          @media (max-width: 768px) {
-            gap: 4px;
-            margin-bottom: 8px;
-          }
-          
           .cell-weekday {
             font-size: 12px;
             font-weight: 600;
             color: @text-secondary;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            
-            @media (max-width: 768px) {
-              font-size: 11px;
-            }
           }
           
           .cell-date {
@@ -674,12 +457,9 @@
             font-weight: 800;
             color: @text-primary;
             line-height: 1;
-            
-            @media (max-width: 768px) {
-              font-size: 26px;
-            }
           }
           
+          // 重要事项标记
           .important-count {
             font-size: 10px;
             color: @danger-color;
@@ -689,14 +469,10 @@
             background: rgba(255, 59, 48, 0.1);
             border-radius: 6px;
             letter-spacing: 0.5px;
-            
-            @media (max-width: 768px) {
-              font-size: 9px;
-              padding: 2px 5px;
-            }
           }
         }
         
+        // 今日角标
         .today-badge {
           position: absolute;
           top: 12px;
@@ -709,15 +485,9 @@
           border-radius: 8px;
           box-shadow: 0 2px 8px rgba(255, 45, 85, 0.35);
           letter-spacing: 0.5px;
-          
-          @media (max-width: 768px) {
-            font-size: 10px;
-            padding: 3px 8px;
-            top: 8px;
-            right: 8px;
-          }
         }
         
+        // 事项显示区域
         .cell-events {
           margin-top: auto;
           width: 100%;
@@ -734,12 +504,6 @@
             box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35);
             min-width: 36px;
             text-align: center;
-            
-            @media (max-width: 768px) {
-              font-size: 13px;
-              padding: 5px 12px;
-              min-width: 32px;
-            }
           }
           
           .event-dots {
@@ -748,10 +512,6 @@
             flex-wrap: wrap;
             justify-content: center;
             
-            @media (max-width: 768px) {
-              gap: 5px;
-            }
-            
             .event-dot {
               width: 10px;
               height: 10px;
@@ -759,26 +519,17 @@
               background: @primary-color;
               box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
               
-              @media (max-width: 768px) {
-                width: 9px;
-                height: 9px;
-              }
-              
               &.high-priority {
                 background: @danger-color;
                 width: 12px;
                 height: 12px;
                 box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
-                
-                @media (max-width: 768px) {
-                  width: 11px;
-                  height: 11px;
-                }
               }
             }
           }
         }
         
+        // 今天状态
         &.is-today {
           background: @bg-today;
           border-color: @today-color;
@@ -788,13 +539,15 @@
             color: @today-color;
             font-size: 32px;
             font-weight: 900;
-            
-            @media (max-width: 768px) {
-              font-size: 28px;
-            }
+          }
+          
+          &:hover {
+            transform: scale(1.03);
+            box-shadow: @shadow-today, @shadow-md;
           }
         }
         
+        // 选中状态
         &.is-selected {
           background: linear-gradient(135deg, @primary-color, @primary-light);
           border-color: @primary-dark;
@@ -825,7 +578,7 @@
   }
 }
 
-// ========== 右侧事项面板 ==========
+// ========== 右侧面板 ==========
 .calendar-right-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -836,18 +589,9 @@
   border: 1px solid @border-color;
   position: sticky;
   top: 20px;
-  min-height: auto;
-  max-height: calc(100vh - 40px);
+  min-height: 800px;
+  max-height: 800px;
   overflow-y: auto;
-  
-  @media (max-width: 768px) {
-    position: static;
-    border-radius: 0;
-    padding: 16px;
-    border: none;
-    max-height: none;
-    height: 100%; // 🔥 占满父容器
-  }
   
   .panel-header {
     display: flex;
@@ -862,20 +606,12 @@
       font-size: 18px;
       font-weight: 700;
       color: @text-primary;
-      
-      @media (max-width: 768px) {
-        font-size: 17px;
-      }
     }
     
     .date-display {
       font-size: 13px;
       color: @text-secondary;
       font-weight: 600;
-      
-      @media (max-width: 768px) {
-        font-size: 12px;
-      }
     }
   }
   
@@ -887,14 +623,12 @@
       margin-bottom: 12px;
       border-left: 4px solid @primary-color;
       transition: all 0.25s ease;
+      cursor: pointer;
       
-      @media (max-width: 768px) {
-        padding: 12px;
-        margin-bottom: 10px;
-      }
-      
-      &:active {
-        transform: scale(0.98); // 🔥 触摸反馈
+      &:hover {
+        transform: translateX(4px);
+        box-shadow: @shadow-sm;
+        background: rgba(248, 248, 252, 1);
       }
       
       .event-header {
@@ -909,10 +643,6 @@
           color: @text-primary;
           flex: 1;
           line-height: 1.4;
-          
-          @media (max-width: 768px) {
-            font-size: 14px;
-          }
         }
         
         .importance-badge {
@@ -922,11 +652,6 @@
           font-weight: 700;
           white-space: nowrap;
           margin-left: 8px;
-          
-          @media (max-width: 768px) {
-            font-size: 9px;
-            padding: 2px 6px;
-          }
           
           &.high {
             background: rgba(255, 59, 48, 0.15);
@@ -953,11 +678,6 @@
         color: @text-secondary;
         margin-bottom: 8px;
         
-        @media (max-width: 768px) {
-          font-size: 12px;
-          gap: 10px;
-        }
-        
         .meta-item {
           display: flex;
           align-items: center;
@@ -979,18 +699,23 @@
           border: none;
           font-weight: 600;
           
-          @media (max-width: 768px) {
-            min-height: 44px; // 🔥 触摸友好
-            height: 44px;
-            font-size: 13px;
+          &.btn-complete {
+            background: rgba(52, 199, 89, 0.12);
+            color: @success-color;
+            
+            &:hover {
+              background: rgba(52, 199, 89, 0.22);
+              transform: translateY(-1px);
+            }
           }
           
           &.btn-edit {
             background: rgba(0, 122, 255, 0.12);
             color: @primary-color;
             
-            &:active {
-              transform: scale(0.97);
+            &:hover {
+              background: rgba(0, 122, 255, 0.22);
+              transform: translateY(-1px);
             }
           }
           
@@ -998,8 +723,9 @@
             background: rgba(255, 59, 48, 0.12);
             color: @danger-color;
             
-            &:active {
-              transform: scale(0.97);
+            &:hover {
+              background: rgba(255, 59, 48, 0.22);
+              transform: translateY(-1px);
             }
           }
         }
@@ -1024,132 +750,22 @@
       padding: 40px 16px;
       color: @text-secondary;
       
-      @media (max-width: 768px) {
-        padding: 30px 12px;
-      }
-      
       .anticon {
         font-size: 48px;
         color: @text-tertiary;
         margin-bottom: 12px;
-        
-        @media (max-width: 768px) {
-          font-size: 40px;
-        }
       }
       
       p {
         margin: 0;
         font-size: 14px;
         font-weight: 600;
-        
-        @media (max-width: 768px) {
-          font-size: 13px;
-        }
       }
     }
   }
 }
 
-// ========== 🔥 移动端设置面板（新增）==========
-.calendar-settings-panel {
-  background: @bg-card;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: @shadow-sm;
-  border: 1px solid @border-color;
-  display: none;
-  flex-direction: column;
-  
-  @media (max-width: 768px) {
-    border-radius: 0;
-    padding: 16px;
-    border: none;
-    height: 100%; // 🔥 占满父容器
-  }
-  
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid @border-color;
-    
-    h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 700;
-      color: @text-primary;
-      
-      @media (max-width: 768px) {
-        font-size: 17px;
-      }
-    }
-  }
-  
-  .settings-quick-actions {
-    .ant-btn {
-      @media (max-width: 768px) {
-        min-height: 52px;
-        height: 52px;
-        font-size: 15px;
-        font-weight: 600;
-      }
-    }
-  }
-}
-
-// ========== 🔥 移动端全屏模态框 ==========
-.mobile-fullscreen-modal {
-  @media (max-width: 768px) {
-    max-width: 100vw !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    top: 0 !important;
-    
-    .ant-modal {
-      max-width: 100%;
-      margin: 0;
-    }
-    
-    .ant-modal-content {
-      border-radius: 0 !important;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .ant-modal-header {
-      flex-shrink: 0;
-      border-radius: 0 !important;
-      padding: 16px !important;
-    }
-    
-    .ant-modal-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px !important;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    .ant-modal-footer {
-      flex-shrink: 0;
-      padding: 12px 16px !important;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0)) !important;
-      
-      .ant-btn {
-        min-height: 48px;
-        height: 48px;
-        font-size: 15px;
-      }
-    }
-  }
-}
-
-// ========== 模态框样式 ==========
+// ========== 事项表单模态框 ==========
 .event-form-modal {
   .ant-modal-content {
     border-radius: 16px;
@@ -1161,44 +777,24 @@
     border: none;
     padding: 20px 24px;
     
-    @media (max-width: 768px) {
-      padding: 16px;
-    }
-    
     .ant-modal-title {
       color: white;
       font-size: 18px;
       font-weight: 700;
-      
-      @media (max-width: 768px) {
-        font-size: 17px;
-      }
     }
   }
   
   .ant-modal-body {
     padding: 24px;
-    
-    @media (max-width: 768px) {
-      padding: 16px;
-    }
   }
   
   .ant-form-item {
     margin-bottom: 16px;
     
-    @media (max-width: 768px) {
-      margin-bottom: 14px;
-    }
-    
     .ant-form-item-label > label {
       font-weight: 600;
       color: @text-primary;
       font-size: 14px;
-      
-      @media (max-width: 768px) {
-        font-size: 13px;
-      }
     }
     
     .ant-input,
@@ -1210,12 +806,6 @@
       height: 40px;
       font-size: 14px;
       
-      @media (max-width: 768px) {
-        min-height: 48px;
-        height: 48px;
-        font-size: 16px; // 🔥 防止iOS缩放
-      }
-      
       &:hover, &:focus {
         border-color: @primary-color;
         box-shadow: 0 2px 6px rgba(0, 122, 255, 0.12);
@@ -1226,11 +816,6 @@
       border-radius: 10px;
       min-height: 100px;
       font-size: 14px;
-      
-      @media (max-width: 768px) {
-        font-size: 16px; // 🔥 防止iOS缩放
-        min-height: 120px;
-      }
     }
   }
   
@@ -1238,19 +823,11 @@
     .ant-slider-rail {
       background: @bg-secondary;
       height: 6px;
-      
-      @media (max-width: 768px) {
-        height: 10px; // 🔥 更容易点击
-      }
     }
     
     .ant-slider-track {
       background: linear-gradient(90deg, @success-color, @warning-color, @danger-color);
       height: 6px;
-      
-      @media (max-width: 768px) {
-        height: 10px;
-      }
     }
     
     .ant-slider-handle {
@@ -1258,15 +835,78 @@
       width: 18px;
       height: 18px;
       
-      @media (max-width: 768px) {
-        width: 28px; // 🔥 触摸友好
-        height: 28px;
+      &:hover, &:focus {
+        box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.15);
       }
     }
   }
 }
 
-.ai-analysis-modal,
+// ========== AI分析模态框 ==========
+.ai-analysis-modal {
+  .ant-modal-content {
+    border-radius: 16px;
+  }
+  
+  .ant-modal-header {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    padding: 20px 24px;
+    
+    .ant-modal-title {
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  }
+  
+  .analysis-form {
+    .info-box {
+      background: @bg-secondary;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        .label {
+          font-size: 14px;
+          color: @text-secondary;
+          font-weight: 600;
+        }
+        
+        .value.credits {
+          font-size: 24px;
+          font-weight: 800;
+          color: @primary-color;
+        }
+      }
+    }
+    
+    .ant-btn-primary {
+      height: 48px;
+      font-size: 16px;
+      border-radius: 12px;
+    }
+  }
+  
+  .analysis-result {
+    max-height: 60vh;
+    overflow-y: auto;
+    
+    .result-content {
+      padding: 20px;
+      background: @bg-secondary;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+  }
+}
+
+// ========== 历史记录模态框（支持展开详情）==========
 .history-modal {
   .ant-modal-content {
     border-radius: 16px;
@@ -1277,23 +917,13 @@
     border: none;
     padding: 20px 24px;
     
-    @media (max-width: 768px) {
-      padding: 16px;
-    }
-    
     .ant-modal-title {
       color: white;
       font-size: 18px;
       font-weight: 700;
-      
-      @media (max-width: 768px) {
-        font-size: 17px;
-      }
     }
   }
-}
-
-.history-modal {
+  
   .history-list {
     max-height: 60vh;
     overflow-y: auto;
@@ -1304,12 +934,9 @@
       padding: 16px;
       margin-bottom: 12px;
       border-left: 4px solid @ai-color;
+      transition: all 0.3s ease;
       
-      @media (max-width: 768px) {
-        padding: 12px;
-        margin-bottom: 10px;
-      }
-      
+      // 头部：可点击区域
       .item-header {
         display: flex;
         align-items: center;
@@ -1321,10 +948,10 @@
           padding: 8px;
           margin: -8px;
           border-radius: 8px;
-          min-height: 48px; // 🔥 触摸友好
+          transition: all 0.2s ease;
           
-          &:active {
-            background: rgba(102, 126, 234, 0.12);
+          &:hover {
+            background: rgba(102, 126, 234, 0.08);
           }
         }
         
@@ -1333,33 +960,33 @@
           align-items: center;
           gap: 12px;
           
-          @media (max-width: 768px) {
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-          
           .item-time {
             font-size: 14px;
             font-weight: 700;
             color: @text-primary;
-            
-            @media (max-width: 768px) {
-              font-size: 13px;
-            }
+          }
+        }
+        
+        .header-right {
+          display: flex;
+          align-items: center;
+          
+          .anticon {
+            font-size: 14px;
+            transition: transform 0.2s ease;
           }
         }
       }
       
+      // 基本信息
       .item-info {
         font-size: 13px;
         color: @text-secondary;
         font-weight: 600;
-        
-        @media (max-width: 768px) {
-          font-size: 12px;
-        }
+        padding-left: 8px;
       }
       
+      // 展开详情区域
       .item-detail {
         margin-top: 16px;
         padding: 16px;
@@ -1369,12 +996,159 @@
         overflow-y: auto;
         font-size: 14px;
         line-height: 1.8;
+        color: @text-primary;
+        animation: slideDown 0.3s ease;
         
-        @media (max-width: 768px) {
-          padding: 12px;
+        h1, h2, h3, h4, h5, h6 {
+          color: @text-primary;
+          margin-top: 16px;
+          margin-bottom: 8px;
+          font-weight: 700;
+          
+          &:first-child {
+            margin-top: 0;
+          }
+        }
+        
+        h3 {
+          font-size: 16px;
+          color: @ai-color;
+        }
+        
+        p {
+          margin-bottom: 12px;
+          
+          &:last-child {
+            margin-bottom: 0;
+          }
+        }
+        
+        ul, ol {
+          margin-bottom: 12px;
+          padding-left: 24px;
+          
+          li {
+            margin-bottom: 6px;
+          }
+        }
+        
+        strong {
+          color: @text-primary;
+          font-weight: 700;
+        }
+        
+        code {
+          background: rgba(0, 0, 0, 0.05);
+          padding: 2px 6px;
+          border-radius: 4px;
           font-size: 13px;
-          line-height: 1.7;
-          max-height: 300px;
+          font-family: 'Monaco', 'Menlo', monospace;
+        }
+        
+        blockquote {
+          border-left: 3px solid @ai-color;
+          padding-left: 12px;
+          margin-left: 0;
+          color: @text-secondary;
+          font-style: italic;
+        }
+        
+        // 详情区域滚动条
+        &::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        &::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.02);
+          border-radius: 3px;
+        }
+        
+        &::-webkit-scrollbar-thumb {
+          background: @text-tertiary;
+          border-radius: 3px;
+          
+          &:hover {
+            background: @text-secondary;
+          }
+        }
+      }
+      
+      // 展开状态
+      &.expanded {
+        background: rgba(248, 248, 252, 1);
+        box-shadow: @shadow-sm;
+        
+        .item-header .header-right .anticon {
+          transform: rotate(0deg);
+          color: @ai-color;
+        }
+      }
+    }
+    
+    // 列表滚动条
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 4px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: @text-tertiary;
+      border-radius: 4px;
+      
+      &:hover {
+        background: @text-secondary;
+      }
+    }
+  }
+}
+
+// ========== 响应式 ==========
+@media (max-width: 768px) {
+  .calendar-page {
+    padding: 10px;
+  }
+  
+  .calendar-main-panel {
+    padding: 16px;
+    
+    .calendar-controls {
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
+      
+      .controls-left,
+      .controls-center,
+      .controls-right {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+    
+    .calendar-grid {
+      .calendar-grid-row {
+        grid-template-columns: repeat(2, 1fr);
+        
+        .calendar-grid-cell {
+          min-height: 140px;
+          padding: 12px 8px;
+          
+          .cell-header {
+            .cell-date {
+              font-size: 22px;
+            }
+            
+            .important-count {
+              font-size: 9px;
+            }
+          }
+          
+          &.is-today .cell-date {
+            font-size: 24px;
+          }
         }
       }
     }
@@ -1386,10 +1160,6 @@
 .analysis-result {
   &::-webkit-scrollbar {
     width: 8px;
-    
-    @media (max-width: 768px) {
-      width: 4px;
-    }
   }
   
   &::-webkit-scrollbar-track {
