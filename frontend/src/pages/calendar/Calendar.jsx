@@ -1,7 +1,11 @@
 /**
- * 智能日历 - 移动端优化版
- * 桌面端：4x4网格（16天）
- * 移动端：4x2网格（8天）
+ * 智能日历 - 完整优化版
+ * 
+ * 优化内容：
+ * 1. AI分析结果独立滚动（元信息和按钮固定底部）
+ * 2. 有事项标题时不显示红点Badge
+ * 3. 表单：标题必填，内容选填
+ * 4. 日历格子显示7字标题
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -21,7 +25,8 @@ import {
   Row,
   Col,
   Empty,
-  Divider
+  Divider,
+  Badge
 } from 'antd';
 import {
   PlusOutlined,
@@ -109,10 +114,10 @@ const CalendarPage = () => {
   const [analysisHistory, setAnalysisHistory] = useState([]);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   
-  // 🔥 移动端Tab状态（默认calendar）
+  // 移动端Tab状态
   const [mobileTab, setMobileTab] = useState('calendar');
   
-  // 🔥 检测是否为移动端
+  // 检测是否为移动端
   const [isMobile, setIsMobile] = useState(false);
   
   useEffect(() => {
@@ -126,17 +131,15 @@ const CalendarPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  // 🔥 计算日期范围（响应式：移动端8天，桌面端16天）
+  // 计算日期范围（响应式：移动端9天，桌面端16天）
   const dateRange = useMemo(() => {
     const dates = [];
     
     if (isMobile) {
-      // 移动端：今天前1天 + 今天 + 后6天 = 8天
-      for (let i = -1; i <= 6; i++) {
+      for (let i = -1; i <= 7; i++) {
         dates.push(baseDate.add(i, 'day'));
       }
     } else {
-      // 桌面端：前2天 + 今天 + 后13天 = 16天
       for (let i = -2; i <= 13; i++) {
         dates.push(baseDate.add(i, 'day'));
       }
@@ -145,10 +148,10 @@ const CalendarPage = () => {
     return dates;
   }, [baseDate, isMobile]);
   
-  // 🔥 转换为网格（响应式：移动端4x2，桌面端4x4）
+  // 转换为网格
   const gridDates = useMemo(() => {
     const grid = [];
-    const cols = isMobile ? 2 : 4; // 移动端2列，桌面端4列
+    const cols = isMobile ? 3 : 4;
     const rows = Math.ceil(dateRange.length / cols);
     
     for (let i = 0; i < rows; i++) {
@@ -182,10 +185,9 @@ const CalendarPage = () => {
     loadInitialData();
   }, []);
   
-  // 当基准日期变化时重新加载事项
   useEffect(() => {
     loadDateRangeEvents();
-  }, [baseDate]);
+  }, [baseDate, isMobile]);
   
   const loadInitialData = async () => {
     try {
@@ -209,13 +211,13 @@ const CalendarPage = () => {
   
   const loadDateRangeEvents = async () => {
     const offset = isMobile ? 1 : 2;
+    const endOffset = isMobile ? 7 : 13;
     const startDate = baseDate.add(-offset, 'day').format('YYYY-MM-DD');
-    const endDate = baseDate.add(isMobile ? 6 : 13, 'day').format('YYYY-MM-DD');
+    const endDate = baseDate.add(endOffset, 'day').format('YYYY-MM-DD');
     await fetchEvents(startDate, endDate);
   };
   
-  // ==================== 配置持久化 ====================
-  
+  // 配置持久化
   const getDefaultSettings = () => {
     const defaultModel = aiModels.find(m => m.is_active) || aiModels[0];
     return {
@@ -246,15 +248,14 @@ const CalendarPage = () => {
     localStorage.setItem(key, JSON.stringify(settings));
   };
   
-  // ==================== 日历操作 ====================
-  
+  // 日历操作
   const handlePrevPeriod = () => {
-    const days = isMobile ? 8 : 16;
+    const days = isMobile ? 9 : 16;
     setBaseDate(prev => prev.add(-days, 'day'));
   };
   
   const handleNextPeriod = () => {
-    const days = isMobile ? 8 : 16;
+    const days = isMobile ? 9 : 16;
     setBaseDate(prev => prev.add(days, 'day'));
   };
   
@@ -265,14 +266,12 @@ const CalendarPage = () => {
   
   const handleSelectDate = (date) => {
     setSelectedDate(date);
-    // 🔥 移动端：选择日期后自动切换到事项Tab
     if (isMobile) {
       setMobileTab('events');
     }
   };
   
-  // ==================== 事项操作 ====================
-  
+  // 事项操作
   const handleCreateEvent = () => {
     setEditingEvent(null);
     form.resetFields();
@@ -336,8 +335,7 @@ const CalendarPage = () => {
     }
   };
   
-  // ==================== AI分析操作 ====================
-  
+  // AI分析操作
   const handleOpenSettings = () => {
     const settings = loadSettings();
     settingsForm.setFieldsValue(settings);
@@ -372,6 +370,14 @@ const CalendarPage = () => {
         template_id: settings.template_id,
         scan_days: totalDays
       });
+      
+      if (isMobile) {
+        setTimeout(() => {
+          setMobileTab('ai');
+        }, 500);
+      }
+      
+      message.success('分析完成！');
     } catch (error) {
       console.error('分析失败:', error);
     }
@@ -392,8 +398,18 @@ const CalendarPage = () => {
     setExpandedHistoryId(expandedHistoryId === itemId ? null : itemId);
   };
   
-  // ==================== 工具方法 ====================
+  // 获取日期的前3个事项（按重要度排序）
+  const getTopEvents = (date) => {
+    const dateKey = date.format('YYYY-MM-DD');
+    const dayEvents = dateEvents[dateKey] || [];
+    
+    // 按重要度降序排序，取前3个
+    return dayEvents
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 3);
+  };
   
+  // 工具方法
   const getDateStats = (date) => {
     const dateKey = date.format('YYYY-MM-DD');
     const dayEvents = dateEvents[dateKey] || [];
@@ -422,7 +438,7 @@ const CalendarPage = () => {
 
   return (
     <div className="calendar-page calendar-grid-view">
-      {/* 🔥 移动端底部Tab导航 */}
+      {/* 移动端底部Tab导航 */}
       <div className="mobile-bottom-tabs">
         <div 
           className={`tab-item ${mobileTab === 'calendar' ? 'active' : ''}`}
@@ -460,50 +476,67 @@ const CalendarPage = () => {
         <div className={`calendar-left-panel ai-analysis-panel ${mobileTab === 'ai' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <div className="header-title">
-              <RobotOutlined /> 智能日历
+              <RobotOutlined /> AI分析
             </div>
+            {isMobile && (
+              <Button 
+                size="small"
+                icon={<HistoryOutlined />}
+                onClick={handleViewHistory}
+              >
+                历史
+              </Button>
+            )}
           </div>
           
           <Spin spinning={analysisLoading}>
             {latestAnalysis ? (
               <div className="analysis-content">
-                <div className="analysis-meta">
-                  <div className="meta-item">
-                    <CalendarOutlined />
-                    <span>{dayjs(latestAnalysis.created_at).fromNow()}</span>
-                  </div>
-                  <div className="meta-item">
-                    <ThunderboltOutlined />
-                    <span>{latestAnalysis.model_name}</span>
-                  </div>
-                  <div className="meta-item">
-                    <FileTextOutlined />
-                    <span>分析了{latestAnalysis.events_count}个事项</span>
+                {/* 🔥 优化1：AI分析结果独立滚动区域 */}
+                <div className="analysis-result-scroll">
+                  <div className="analysis-result">
+                    <ReactMarkdown>
+                      {latestAnalysis.analysis_result?.raw_text || '暂无分析内容'}
+                    </ReactMarkdown>
                   </div>
                 </div>
                 
-                <div className="analysis-result">
-                  <ReactMarkdown>
-                    {latestAnalysis.analysis_result?.raw_text || '暂无分析内容'}
-                  </ReactMarkdown>
+                {/* 🔥 元信息卡片固定在底部（已移至结果下方）*/}
+                <div className="analysis-meta-card">
+                  <div className="meta-row">
+                    <span className="meta-label">🤖 模型</span>
+                    <span className="meta-value">{latestAnalysis.model_name}</span>
+                  </div>
+                  <div className="meta-row">
+                    <span className="meta-label">⏱️ 时间</span>
+                    <span className="meta-value">{dayjs(latestAnalysis.created_at).fromNow()}</span>
+                  </div>
+                  <div className="meta-row">
+                    <span className="meta-label">📋 事项</span>
+                    <span className="meta-value">{latestAnalysis.events_count}个</span>
+                  </div>
                 </div>
                 
+                {/* 操作按钮固定在底部 */}
                 <div className="analysis-actions">
                   <Button 
+                    type="primary"
                     icon={<ReloadOutlined />}
                     onClick={handleNewAnalysis}
                     loading={analysisLoading}
                     block
                   >
-                    一键分析
+                    重新分析
                   </Button>
-                  <Button 
-                    icon={<HistoryOutlined />}
-                    onClick={handleViewHistory}
-                    block
-                  >
-                    查看历史
-                  </Button>
+                  {!isMobile && (
+                    <Button 
+                      icon={<HistoryOutlined />}
+                      onClick={handleViewHistory}
+                      block
+                    >
+                      查看历史
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -530,39 +563,39 @@ const CalendarPage = () => {
         {/* 中间日历面板 */}
         <div className={`calendar-main-panel calendar-grid-panel ${mobileTab === 'calendar' ? 'mobile-active' : ''}`}>
           <div className="calendar-controls">
-            <div className="controls-left">
+            {/* PC端左侧设置按钮 */}
+            {!isMobile && (
               <Button 
-                icon={<SettingOutlined />}
+                icon={<SettingOutlined />} 
                 onClick={handleOpenSettings}
-              >
-                设置
-              </Button>
-            </div>
-            
-            <div className="controls-center">
-              <Button 
-                icon={<LeftOutlined />} 
-                onClick={handlePrevPeriod}
                 size="small"
+                className="settings-btn"
+                title="AI分析设置"
               />
-              <Button 
-                onClick={handleToday}
-                size="small"
-              >
-                返回今天
-              </Button>
-              <Button 
-                icon={<RightOutlined />} 
-                onClick={handleNextPeriod}
-                size="small"
-              />
-            </div>
+            )}
             
-            <div className="controls-right">
-              <span className="date-range-display">
-                {dateRange[0].format('MM/DD')} - {dateRange[dateRange.length - 1].format('MM/DD')}
-              </span>
-            </div>
+            <Button 
+              icon={<LeftOutlined />} 
+              onClick={handlePrevPeriod}
+              size={isMobile ? 'middle' : 'small'}
+              className="nav-btn"
+            />
+            <span className="month-display">
+              {baseDate.format(isMobile ? 'M月' : 'YYYY年M月')}
+            </span>
+            <Button 
+              icon={<RightOutlined />} 
+              onClick={handleNextPeriod}
+              size={isMobile ? 'middle' : 'small'}
+              className="nav-btn"
+            />
+            <Button 
+              onClick={handleToday}
+              size={isMobile ? 'middle' : 'small'}
+              className="today-btn"
+            >
+              {isMobile ? '今天' : '返回今天'}
+            </Button>
           </div>
           
           <Spin spinning={eventsLoading}>
@@ -571,6 +604,7 @@ const CalendarPage = () => {
                 <div key={rowIndex} className="calendar-grid-row">
                   {row.map((date, colIndex) => {
                     const stats = getDateStats(date);
+                    const topEvents = getTopEvents(date);
                     const isToday = date.isSame(dayjs(), 'day');
                     const isSelected = date.isSame(selectedDate, 'day');
                     
@@ -584,29 +618,38 @@ const CalendarPage = () => {
                           <span className="cell-weekday">{date.format('ddd')}</span>
                           <span className="cell-date">{date.format('DD')}</span>
                           
-                          {stats.highPriority > 0 && (
-                            <span className="important-count">
-                              重要{stats.highPriority}
-                            </span>
+                          {/* 🔥 优化2：只在没有事项标题时才显示Badge */}
+                          {stats.highPriority > 0 && topEvents.length === 0 && (
+                            <Badge 
+                              count={stats.highPriority} 
+                              className="high-priority-badge"
+                              style={{ 
+                                backgroundColor: '#FF3B30',
+                                fontSize: '10px',
+                                height: '18px',
+                                lineHeight: '18px'
+                              }}
+                            />
                           )}
                         </div>
                         
                         {isToday && <div className="today-badge">今日</div>}
                         
-                        {stats.count > 0 && (
-                          <div className="cell-events">
-                            {stats.count > 3 ? (
-                              <div className="event-count-badge">{stats.count}</div>
-                            ) : (
-                              <div className="event-dots">
-                                {Array.from({ length: stats.count }).map((_, i) => (
-                                  <div 
-                                    key={i} 
-                                    className={`event-dot ${stats.highPriority > 0 ? 'high-priority' : ''}`}
-                                  />
-                                ))}
+                        {/* 显示前3个事项标题（7字）*/}
+                        {topEvents.length > 0 && (
+                          <div className="cell-events-list">
+                            {topEvents.map((event, idx) => (
+                              <div 
+                                key={idx}
+                                className="event-title-item"
+                                style={{ 
+                                  borderLeftColor: IMPORTANCE_COLORS[event.importance]
+                                }}
+                              >
+                                {/* 显示标题前7字 */}
+                                {event.title.substring(0, 7)}
                               </div>
-                            )}
+                            ))}
                           </div>
                         )}
                       </div>
@@ -616,91 +659,117 @@ const CalendarPage = () => {
               ))}
             </div>
           </Spin>
+          
+          {isMobile && (
+            <div className="mobile-quick-analysis">
+              <Button 
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                onClick={handleNewAnalysis}
+                loading={analysisLoading}
+                block
+                size="large"
+              >
+                一键分析
+              </Button>
+            </div>
+          )}
         </div>
         
         {/* 右侧事项列表 */}
-        <div className={`calendar-right-panel ${mobileTab === 'events' ? 'mobile-active' : ''}`}>
-          <div className="panel-header">
-            <h3>事项详情</h3>
-            <span className="date-display">
-              {selectedDate.format('YYYY年MM月DD日')}
-            </span>
+        <div className={`calendar-right-panel events-panel ${mobileTab === 'events' ? 'mobile-active' : ''}`}>
+          <div className="events-header">
+            <div className="date-info">
+              <CalendarOutlined className="date-icon" />
+              <div className="date-text">
+                <div className="date-main">{selectedDate.format('M月D日')}</div>
+                <div className="date-sub">{selectedDate.format('dddd')}</div>
+              </div>
+            </div>
+            
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />}
+              onClick={handleCreateEvent}
+              className="create-event-btn"
+            >
+              创建事项
+            </Button>
           </div>
           
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            block
-            onClick={handleCreateEvent}
-            style={{ marginBottom: 16 }}
-          >
-            创建事项
-          </Button>
-          
-          <div className="events-list">
+          <div className="events-list-container">
             {selectedDateEvents.length === 0 ? (
-              <div className="empty-events">
-                <CalendarOutlined />
-                <p>当前无事项</p>
+              <div className="events-empty-state">
+                <CalendarOutlined className="empty-icon" />
+                <p className="empty-text">这一天还没有事项</p>
+                <p className="empty-hint">点击上方按钮创建新事项</p>
               </div>
             ) : (
-              selectedDateEvents.map(event => {
-                const badge = getImportanceBadge(event.importance);
-                return (
-                  <div 
-                    key={event.id} 
-                    className={`event-card status-${event.status}`}
-                    style={{ borderLeftColor: IMPORTANCE_COLORS[event.importance] }}
-                  >
-                    <div className="event-header">
-                      <div className="event-title">{event.content}</div>
-                      <span className={`importance-badge ${badge.class}`}>
-                        {badge.text}
-                      </span>
-                    </div>
-                    
-                    <div className="event-meta">
-                      <div className="meta-item">
-                        {getStatusIcon(event.status)}
-                        <span>{t(`calendar.event.status.${event.status}`)}</span>
+              <div className="events-list">
+                {selectedDateEvents.map(event => {
+                  const badge = getImportanceBadge(event.importance);
+                  return (
+                    <div 
+                      key={event.id} 
+                      className={`event-card status-${event.status}`}
+                      style={{ borderLeftColor: IMPORTANCE_COLORS[event.importance] }}
+                    >
+                      <div className="event-header">
+                        <div className="event-title">{event.title}</div>
+                        <span className={`importance-badge ${badge.class}`}>
+                          {badge.text}
+                        </span>
                       </div>
-                      <div className="meta-item">
-                        <Tag color={event.color || '#007AFF'}>{event.category}</Tag>
+                      
+                      {event.content && (
+                        <div className="event-content">
+                          {event.content}
+                        </div>
+                      )}
+                      
+                      <div className="event-meta">
+                        <div className="meta-item">
+                          {getStatusIcon(event.status)}
+                          <span>{t(`calendar.event.status.${event.status}`)}</span>
+                        </div>
+                        <div className="meta-item">
+                          <Tag color={event.color || '#007AFF'}>{event.category}</Tag>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="event-actions">
-                      <Button 
-                        className="btn-edit"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => handleEditEvent(event)}
-                      >
-                        编辑
-                      </Button>
-                      <Popconfirm
-                        title="确认删除此事项？"
-                        onConfirm={() => handleDeleteEvent(event.id)}
-                        okText="确认"
-                        cancelText="取消"
-                      >
+                      
+                      <div className="event-actions">
                         <Button 
-                          className="btn-delete"
+                          className="btn-edit"
                           size="small"
-                          icon={<DeleteOutlined />}
+                          icon={<EditOutlined />}
+                          onClick={() => handleEditEvent(event)}
                         >
-                          删除
+                          编辑
                         </Button>
-                      </Popconfirm>
+                        <Popconfirm
+                          title="确认删除此事项？"
+                          onConfirm={() => handleDeleteEvent(event.id)}
+                          okText="确认"
+                          cancelText="取消"
+                        >
+                          <Button 
+                            className="btn-delete"
+                            size="small"
+                            icon={<DeleteOutlined />}
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
 
-        {/* 🔥 移动端设置面板 */}
+        {/* 移动端设置面板 */}
         <div className={`calendar-settings-panel ${mobileTab === 'settings' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <h3>快捷设置</h3>
@@ -727,7 +796,7 @@ const CalendarPage = () => {
         </div>
       </div>
       
-      {/* 事项表单模态框 */}
+      {/* 🔥 优化3：事项表单（标题必填，内容选填）*/}
       <Modal
         title={editingEvent ? '编辑事项' : '创建事项'}
         open={eventModalVisible}
@@ -739,12 +808,31 @@ const CalendarPage = () => {
         className="event-form-modal mobile-fullscreen-modal"
       >
         <Form form={form} layout="vertical">
+          {/* 🔥 标题必填（原来可选）*/}
+          <Form.Item
+            name="title"
+            label="事项标题"
+            rules={[
+              { required: true, message: '请输入事项标题' },
+              { max: 100, message: '标题不能超过100个字符' }
+            ]}
+          >
+            <Input 
+              placeholder="请输入事项标题（必填，最多100字）" 
+              maxLength={100}
+              showCount
+            />
+          </Form.Item>
+          
+          {/* 🔥 内容选填（原来必填）*/}
           <Form.Item
             name="content"
-            label="事项内容"
-            rules={[{ required: true, message: '请输入事项内容' }]}
+            label="事项内容（可选）"
           >
-            <TextArea rows={4} placeholder="请输入事项内容" />
+            <TextArea 
+              rows={isMobile ? 6 : 8}
+              placeholder="可选：输入事项详细内容" 
+            />
           </Form.Item>
           
           <Row gutter={16}>

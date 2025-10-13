@@ -1,6 +1,7 @@
 /**
  * 日历控制器
  * 处理所有日历相关的HTTP请求（包含背景知识管理）
+ * 新增：title字段支持
  */
 
 const CalendarEvent = require('../models/CalendarEvent');
@@ -88,13 +89,14 @@ class CalendarController {
   }
 
   /**
-   * 创建事项
+   * 创建事项（支持title字段）
    * POST /api/calendar/events
    */
   static async createEvent(req, res) {
     try {
       const userId = req.user.id;
       const {
+        title,
         event_date,
         content,
         importance = 5,
@@ -115,7 +117,15 @@ class CalendarController {
         });
       }
 
+      // 验证title长度
+      if (title && title.length > 100) {
+        return ResponseHelper.validation(res, {
+          title: '事项标题不能超过100个字符'
+        });
+      }
+
       const event = await CalendarEvent.create({
+        title,
         event_date,
         content,
         importance,
@@ -128,7 +138,7 @@ class CalendarController {
         sort_order
       }, userId);
 
-      logger.info('创建日历事项成功', { userId, eventId: event.id });
+      logger.info('创建日历事项成功', { userId, eventId: event.id, title });
 
       return ResponseHelper.success(res, event.toJSON(), '事项创建成功', 201);
     } catch (error) {
@@ -138,7 +148,7 @@ class CalendarController {
   }
 
   /**
-   * 更新事项
+   * 更新事项（支持title字段）
    * PUT /api/calendar/events/:id
    */
   static async updateEvent(req, res) {
@@ -146,6 +156,13 @@ class CalendarController {
       const { id } = req.params;
       const userId = req.user.id;
       const updateData = req.body;
+
+      // 验证title长度
+      if (updateData.title && updateData.title.length > 100) {
+        return ResponseHelper.validation(res, {
+          title: '事项标题不能超过100个字符'
+        });
+      }
 
       const event = await CalendarEvent.update(parseInt(id), updateData, userId);
 

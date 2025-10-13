@@ -2,6 +2,7 @@
  * 日历服务层 - 使用配置化的积分倍数和提示词模板（支持背景知识）
  * 修复：时区导致的日期错误
  * 新增：AI分析时拼接用户背景知识
+ * 优化：formattedEvents包含title字段
  */
 
 const CalendarEvent = require('../models/CalendarEvent');
@@ -92,10 +93,11 @@ class CalendarService {
       else stats.by_importance.low++;
     });
 
-    // ========== 4. 格式化事项数据（修复时区问题）==========
+    // ========== 4. 格式化事项数据（🔥 新增title字段）==========
     const formattedEvents = events.map(event => ({
       date: dayjs(event.event_date).format('YYYY-MM-DD'),
-      content: event.content,
+      title: event.title || '（无标题）',  // 🔥 新增title字段
+      content: event.content || '',        // content可能为空
       importance: event.importance,
       category: event.category,
       status: event.status

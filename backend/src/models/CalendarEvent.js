@@ -1,6 +1,7 @@
 /**
  * 日历事项模型
  * 支持CRUD操作、重复事项、状态管理
+ * 优化：title必填，content可选
  */
 
 const dbConnection = require('../database/connection');
@@ -171,13 +172,14 @@ class CalendarEvent {
   }
 
   /**
-   * 创建事项
+   * 创建事项（🔥 title必填，content可选）
    */
   static async create(data, userId) {
     try {
       const {
+        title,
         event_date,
-        content,
+        content = null,
         importance = 5,
         category = '其他',
         color = '#1890ff',
@@ -188,23 +190,29 @@ class CalendarEvent {
         sort_order = 0
       } = data;
 
-      if (!event_date || !content) {
-        throw new ValidationError('事项日期和内容为必填项');
+      // 🔥 title必填，content可选
+      if (!event_date || !title) {
+        throw new ValidationError('事项日期和标题为必填项');
       }
 
       if (importance < 0 || importance > 10) {
         throw new ValidationError('重要度必须在0-10之间');
       }
 
+      // 验证title长度
+      if (title.length > 100) {
+        throw new ValidationError('事项标题不能超过100个字符');
+      }
+
       const sql = `
         INSERT INTO calendar_events (
-          user_id, event_date, content, importance, category, color,
+          user_id, title, event_date, content, importance, category, color,
           status, file_link, recurrence_type, recurrence_end_date, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const { rows } = await dbConnection.query(sql, [
-        userId, event_date, content, importance, category, color,
+        userId, title, event_date, content, importance, category, color,
         status, file_link, recurrence_type, recurrence_end_date, sort_order
       ]);
 
@@ -213,6 +221,7 @@ class CalendarEvent {
       logger.info('日历事项创建成功', {
         userId,
         eventId,
+        title,
         event_date,
         category
       });
@@ -225,7 +234,7 @@ class CalendarEvent {
   }
 
   /**
-   * 更新事项
+   * 更新事项（🔥 title必填，content可选）
    */
   static async update(id, data, userId) {
     try {
@@ -235,7 +244,7 @@ class CalendarEvent {
       }
 
       const allowedFields = [
-        'event_date', 'content', 'importance', 'category', 'color',
+        'title', 'event_date', 'content', 'importance', 'category', 'color',
         'status', 'file_link', 'recurrence_type', 'recurrence_end_date', 'sort_order'
       ];
 
@@ -255,6 +264,15 @@ class CalendarEvent {
 
       if (data.importance !== undefined && (data.importance < 0 || data.importance > 10)) {
         throw new ValidationError('重要度必须在0-10之间');
+      }
+
+      if (data.title !== undefined) {
+        if (!data.title || data.title.trim() === '') {
+          throw new ValidationError('事项标题不能为空');
+        }
+        if (data.title.length > 100) {
+          throw new ValidationError('事项标题不能超过100个字符');
+        }
       }
 
       updateValues.push(id);
@@ -345,6 +363,7 @@ class CalendarEvent {
     return {
       id: this.id,
       user_id: this.user_id,
+      title: this.title,
       event_date: this.event_date,
       content: this.content,
       importance: this.importance,
