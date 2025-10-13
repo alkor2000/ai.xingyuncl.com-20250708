@@ -1,11 +1,9 @@
 /**
- * 智能日历 - 完整优化版
+ * 智能日历 - 最终优化版
  * 
- * 优化内容：
- * 1. AI分析结果独立滚动（元信息和按钮固定底部）
- * 2. 有事项标题时不显示红点Badge
- * 3. 表单：标题必填，内容选填
- * 4. 日历格子显示7字标题
+ * 最新优化：
+ * 1. 设置按钮改为中等大小（无文字）
+ * 2. 今日高优先级事项（>=7）前添加小红色竖条标识
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -46,7 +44,9 @@ import {
   ReloadOutlined,
   DownOutlined,
   RightOutlined as RightExpandOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  BookOutlined,
+  ToolOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -110,6 +110,7 @@ const CalendarPage = () => {
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [knowledgeModalVisible, setKnowledgeModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState([]);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -131,7 +132,7 @@ const CalendarPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  // 计算日期范围（响应式：移动端9天，桌面端16天）
+  // 计算日期范围
   const dateRange = useMemo(() => {
     const dates = [];
     
@@ -398,12 +399,15 @@ const CalendarPage = () => {
     setExpandedHistoryId(expandedHistoryId === itemId ? null : itemId);
   };
   
+  const handleOpenKnowledge = () => {
+    setKnowledgeModalVisible(true);
+  };
+  
   // 获取日期的前3个事项（按重要度排序）
   const getTopEvents = (date) => {
     const dateKey = date.format('YYYY-MM-DD');
     const dayEvents = dateEvents[dateKey] || [];
     
-    // 按重要度降序排序，取前3个
     return dayEvents
       .sort((a, b) => b.importance - a.importance)
       .slice(0, 3);
@@ -492,7 +496,6 @@ const CalendarPage = () => {
           <Spin spinning={analysisLoading}>
             {latestAnalysis ? (
               <div className="analysis-content">
-                {/* 🔥 优化1：AI分析结果独立滚动区域 */}
                 <div className="analysis-result-scroll">
                   <div className="analysis-result">
                     <ReactMarkdown>
@@ -501,7 +504,6 @@ const CalendarPage = () => {
                   </div>
                 </div>
                 
-                {/* 🔥 元信息卡片固定在底部（已移至结果下方）*/}
                 <div className="analysis-meta-card">
                   <div className="meta-row">
                     <span className="meta-label">🤖 模型</span>
@@ -517,26 +519,16 @@ const CalendarPage = () => {
                   </div>
                 </div>
                 
-                {/* 操作按钮固定在底部 */}
                 <div className="analysis-actions">
                   <Button 
                     type="primary"
-                    icon={<ReloadOutlined />}
+                    icon={<ThunderboltOutlined />}
                     onClick={handleNewAnalysis}
                     loading={analysisLoading}
                     block
                   >
-                    重新分析
+                    一键分析
                   </Button>
-                  {!isMobile && (
-                    <Button 
-                      icon={<HistoryOutlined />}
-                      onClick={handleViewHistory}
-                      block
-                    >
-                      查看历史
-                    </Button>
-                  )}
                 </div>
               </div>
             ) : (
@@ -552,7 +544,7 @@ const CalendarPage = () => {
                     onClick={handleNewAnalysis}
                     loading={analysisLoading}
                   >
-                    立即分析
+                    一键分析
                   </Button>
                 </Empty>
               </div>
@@ -563,12 +555,12 @@ const CalendarPage = () => {
         {/* 中间日历面板 */}
         <div className={`calendar-main-panel calendar-grid-panel ${mobileTab === 'calendar' ? 'mobile-active' : ''}`}>
           <div className="calendar-controls">
-            {/* PC端左侧设置按钮 */}
+            {/* 🔥 优化1：设置按钮改为中等大小（无文字）*/}
             {!isMobile && (
               <Button 
-                icon={<SettingOutlined />} 
+                icon={<SettingOutlined style={{ fontSize: 16 }} />} 
                 onClick={handleOpenSettings}
-                size="small"
+                size="middle"
                 className="settings-btn"
                 title="AI分析设置"
               />
@@ -618,7 +610,6 @@ const CalendarPage = () => {
                           <span className="cell-weekday">{date.format('ddd')}</span>
                           <span className="cell-date">{date.format('DD')}</span>
                           
-                          {/* 🔥 优化2：只在没有事项标题时才显示Badge */}
                           {stats.highPriority > 0 && topEvents.length === 0 && (
                             <Badge 
                               count={stats.highPriority} 
@@ -635,19 +626,22 @@ const CalendarPage = () => {
                         
                         {isToday && <div className="today-badge">今日</div>}
                         
-                        {/* 显示前3个事项标题（7字）*/}
+                        {/* 🔥 优化2：今日高优先级事项（>=7）添加红色竖条 */}
                         {topEvents.length > 0 && (
                           <div className="cell-events-list">
                             {topEvents.map((event, idx) => (
                               <div 
                                 key={idx}
-                                className="event-title-item"
+                                className={`event-title-item ${isToday && event.importance >= 7 ? 'today-high-priority' : ''}`}
                                 style={{ 
-                                  borderLeftColor: IMPORTANCE_COLORS[event.importance]
+                                  borderLeftColor: IMPORTANCE_COLORS[event.importance],
+                                  backgroundColor: `${IMPORTANCE_COLORS[event.importance]}15`
                                 }}
                               >
-                                {/* 显示标题前7字 */}
-                                {event.title.substring(0, 7)}
+                                {event.title.length > 7 
+                                  ? `${event.title.substring(0, 7)}...` 
+                                  : event.title
+                                }
                               </div>
                             ))}
                           </div>
@@ -769,34 +763,61 @@ const CalendarPage = () => {
           </div>
         </div>
 
-        {/* 移动端设置面板 */}
+        {/* 移动端扁平化设置面板 */}
         <div className={`calendar-settings-panel ${mobileTab === 'settings' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
-            <h3>快捷设置</h3>
+            <h3>设置中心</h3>
           </div>
-          <div className="settings-quick-actions">
-            <Button 
-              icon={<SettingOutlined />}
-              onClick={handleOpenSettings}
-              block
-              size="large"
-            >
-              AI分析设置
-            </Button>
-            <Button 
-              icon={<HistoryOutlined />}
-              onClick={handleViewHistory}
-              block
-              size="large"
-              style={{ marginTop: 12 }}
-            >
-              查看分析历史
-            </Button>
+          
+          <div className="settings-menu-grid">
+            <div className="settings-menu-item" onClick={handleOpenSettings}>
+              <div className="menu-icon">
+                <RobotOutlined />
+              </div>
+              <div className="menu-text">
+                <div className="menu-title">AI分析设置</div>
+                <div className="menu-desc">模型、模板、扫描天数</div>
+              </div>
+              <RightOutlined className="menu-arrow" />
+            </div>
+            
+            <div className="settings-menu-item" onClick={handleOpenKnowledge}>
+              <div className="menu-icon">
+                <BookOutlined />
+              </div>
+              <div className="menu-text">
+                <div className="menu-title">背景知识管理</div>
+                <div className="menu-desc">添加、编辑背景知识</div>
+              </div>
+              <RightOutlined className="menu-arrow" />
+            </div>
+            
+            <div className="settings-menu-item" onClick={handleViewHistory}>
+              <div className="menu-icon">
+                <HistoryOutlined />
+              </div>
+              <div className="menu-text">
+                <div className="menu-title">查看分析历史</div>
+                <div className="menu-desc">浏览历史分析记录</div>
+              </div>
+              <RightOutlined className="menu-arrow" />
+            </div>
+            
+            <div className="settings-menu-item" style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+              <div className="menu-icon">
+                <ToolOutlined />
+              </div>
+              <div className="menu-text">
+                <div className="menu-title">其他设置</div>
+                <div className="menu-desc">敬请期待</div>
+              </div>
+              <RightOutlined className="menu-arrow" />
+            </div>
           </div>
         </div>
       </div>
       
-      {/* 🔥 优化3：事项表单（标题必填，内容选填）*/}
+      {/* 事项表单Modal */}
       <Modal
         title={editingEvent ? '编辑事项' : '创建事项'}
         open={eventModalVisible}
@@ -808,7 +829,6 @@ const CalendarPage = () => {
         className="event-form-modal mobile-fullscreen-modal"
       >
         <Form form={form} layout="vertical">
-          {/* 🔥 标题必填（原来可选）*/}
           <Form.Item
             name="title"
             label="事项标题"
@@ -824,7 +844,6 @@ const CalendarPage = () => {
             />
           </Form.Item>
           
-          {/* 🔥 内容选填（原来必填）*/}
           <Form.Item
             name="content"
             label="事项内容（可选）"
@@ -898,7 +917,7 @@ const CalendarPage = () => {
         </Form>
       </Modal>
       
-      {/* AI分析设置模态框 */}
+      {/* AI分析设置Modal */}
       <Modal
         title={<><SettingOutlined /> AI分析设置</>}
         open={settingsModalVisible}
@@ -979,13 +998,46 @@ const CalendarPage = () => {
             </Row>
           </Form>
           
-          <Divider />
-          
-          <BackgroundKnowledgeManager />
+          {!isMobile && (
+            <>
+              <Divider />
+              <BackgroundKnowledgeManager />
+              <Divider />
+              <Button 
+                icon={<HistoryOutlined />}
+                onClick={() => {
+                  setSettingsModalVisible(false);
+                  handleViewHistory();
+                }}
+                block
+                size="large"
+                style={{ 
+                  marginTop: 16,
+                  height: 48,
+                  fontSize: 15,
+                  fontWeight: 600
+                }}
+              >
+                查看分析历史
+              </Button>
+            </>
+          )}
         </Spin>
       </Modal>
       
-      {/* 历史记录模态框 */}
+      {/* 背景知识管理独立Modal */}
+      <Modal
+        title={<><BookOutlined /> 背景知识管理</>}
+        open={knowledgeModalVisible}
+        onCancel={() => setKnowledgeModalVisible(false)}
+        footer={null}
+        width={900}
+        className="knowledge-modal mobile-fullscreen-modal"
+      >
+        <BackgroundKnowledgeManager />
+      </Modal>
+      
+      {/* 历史记录Modal */}
       <Modal
         title={<><HistoryOutlined /> 分析历史</>}
         open={historyModalVisible}

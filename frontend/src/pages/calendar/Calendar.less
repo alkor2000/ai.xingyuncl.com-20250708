@@ -1,10 +1,9 @@
 /**
- * 智能日历 - 完整优化样式
+ * 智能日历 - 最终优化样式
  * 
- * 最终修复：
- * 1. 降低左侧面板最大高度（100vh-150px）
- * 2. 限制滚动区域最大高度（450px）
- * 3. 确保底部按钮始终可见（min-height保护）
+ * 最新优化：
+ * 1. 设置按钮样式优化（中等大小，醒目）
+ * 2. 今日高优先级事项（>=7）添加小红色竖条标识
  */
 
 @import '../../styles/theme-variables.css';
@@ -202,7 +201,38 @@
       flex-shrink: 0;
     }
     
-    .settings-btn,
+    // 🔥 优化1：设置按钮样式优化（中等大小，更醒目）
+    .settings-btn {
+      border-radius: 10px;
+      border: 1px solid @border-color;
+      background: @bg-secondary;
+      min-width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      
+      .anticon {
+        font-size: 16px;
+        color: @text-primary;
+      }
+      
+      &:hover {
+        background: @bg-hover;
+        border-color: @primary-color;
+        
+        .anticon {
+          color: @primary-color;
+        }
+      }
+      
+      @media (max-width: 768px) {
+        min-width: 40px;
+        height: 40px;
+      }
+    }
+    
     .nav-btn {
       border-radius: 8px;
       border: 1px solid @border-color;
@@ -369,7 +399,6 @@
           .event-title-item {
             width: 100%;
             padding: 6px 8px;
-            background: rgba(255, 255, 255, 0.9);
             border-radius: 6px;
             border-left: 3px solid @primary-color;
             font-size: 12px;
@@ -380,6 +409,7 @@
             white-space: nowrap;
             transition: all 0.2s ease;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            position: relative;
             
             @media (max-width: 768px) {
               padding: 5px 6px;
@@ -389,6 +419,21 @@
             &:hover {
               transform: translateX(2px);
               box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+            }
+            
+            // 🔥 优化2：今日高优先级事项（>=7）添加小红色竖条
+            &.today-high-priority {
+              &::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 2px;
+                height: 70%;
+                background: @danger-color;
+                border-radius: 1px;
+              }
             }
           }
         }
@@ -409,7 +454,7 @@
           }
           
           .event-title-item {
-            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
           }
         }
         
@@ -429,8 +474,9 @@
           }
           
           .event-title-item {
-            background: rgba(255, 255, 255, 0.98);
+            background: rgba(255, 255, 255, 0.98) !important;
             color: @text-primary;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
           }
         }
       }
@@ -476,7 +522,7 @@
   position: sticky;
   top: 20px;
   min-height: auto;
-  max-height: calc(100vh - 150px);  // 🔥 最终修复1：从100px改为150px
+  max-height: calc(100vh - 150px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -537,7 +583,7 @@
     .analysis-result-scroll {
       flex: 1;
       min-height: 0;
-      max-height: 450px;  // 🔥 最终修复2：强制限制滚动区域最大高度
+      max-height: 450px;
       overflow-y: auto;
       overflow-x: hidden;
       margin-bottom: 16px;
@@ -673,7 +719,7 @@
       margin-bottom: 16px;
       border: 1px solid rgba(102, 126, 234, 0.15);
       flex-shrink: 0;
-      min-height: 100px;  // 🔥 最终修复3：确保元信息最小高度
+      min-height: 100px;
       
       @media (max-width: 768px) {
         padding: 12px;
@@ -717,7 +763,7 @@
       display: flex;
       gap: 10px;
       flex-shrink: 0;
-      min-height: 60px;  // 🔥 最终修复4：确保按钮区域最小高度
+      min-height: 60px;
       
       @media (max-width: 768px) {
         gap: 8px;
@@ -1124,7 +1170,7 @@
   }
 }
 
-// ========== 移动端设置面板 ==========
+// ========== 移动端扁平化设置面板 ==========
 .calendar-settings-panel {
   background: @bg-card;
   backdrop-filter: blur(20px);
@@ -1163,13 +1209,85 @@
     }
   }
   
-  .settings-quick-actions {
-    .ant-btn {
-      @media (max-width: 768px) {
-        min-height: 52px;
-        height: 52px;
-        font-size: 15px;
-        font-weight: 600;
+  .settings-menu-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    
+    .settings-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: @bg-secondary;
+      border-radius: 12px;
+      border: 1px solid @border-color;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 72px;
+      
+      &:active {
+        transform: scale(0.98);
+        background: @bg-hover;
+      }
+      
+      .menu-icon {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: linear-gradient(135deg, @primary-color, @primary-light);
+        color: white;
+        font-size: 20px;
+        
+        .anticon {
+          font-size: 20px;
+        }
+      }
+      
+      .menu-text {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        
+        .menu-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: @text-primary;
+          line-height: 1.2;
+        }
+        
+        .menu-desc {
+          font-size: 12px;
+          color: @text-secondary;
+          line-height: 1.3;
+        }
+      }
+      
+      .menu-arrow {
+        flex-shrink: 0;
+        font-size: 14px;
+        color: @text-tertiary;
+      }
+      
+      &:nth-child(1) .menu-icon {
+        background: linear-gradient(135deg, @ai-color, @ai-light);
+      }
+      
+      &:nth-child(2) .menu-icon {
+        background: linear-gradient(135deg, #34C759, #30D158);
+      }
+      
+      &:nth-child(3) .menu-icon {
+        background: linear-gradient(135deg, #FF9500, #FF6B00);
+      }
+      
+      &:nth-child(4) .menu-icon {
+        background: linear-gradient(135deg, #8E8E93, #636366);
       }
     }
   }
@@ -1340,7 +1458,8 @@
 }
 
 .ai-analysis-modal,
-.history-modal {
+.history-modal,
+.knowledge-modal {
   .ant-modal-content {
     border-radius: 16px;
   }
@@ -1363,6 +1482,12 @@
         font-size: 17px;
       }
     }
+  }
+}
+
+.knowledge-modal {
+  .ant-modal-header {
+    background: linear-gradient(135deg, #34C759, #30D158);
   }
 }
 
@@ -1509,6 +1634,26 @@
 
 .calendar-grid-cell.is-today {
   animation: pulse 2s ease-in-out infinite;
+}
+
+.settings-menu-item {
+  animation: fadeIn 0.3s ease;
+  
+  &:nth-child(1) {
+    animation-delay: 0.05s;
+  }
+  
+  &:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  
+  &:nth-child(3) {
+    animation-delay: 0.15s;
+  }
+  
+  &:nth-child(4) {
+    animation-delay: 0.2s;
+  }
 }
 
 // ========== 语言切换按钮精简样式 ==========
