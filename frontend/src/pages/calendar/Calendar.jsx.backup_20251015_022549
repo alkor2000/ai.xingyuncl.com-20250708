@@ -1,9 +1,9 @@
 /**
- * 智能日历 - 移动端Tab导航优化版
+ * 智能日历 - 最终优化版
  * 
  * 最新优化：
- * 1. Tab切换时自动关闭所有Modal，符合移动端导航直觉
- * 2. 压缩移动端一键分析按钮区域padding，更紧凑
+ * 1. 设置按钮改为中等大小（无文字）
+ * 2. 今日高优先级事项（>=7）前添加小红色竖条标识
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -249,18 +249,6 @@ const CalendarPage = () => {
     localStorage.setItem(key, JSON.stringify(settings));
   };
   
-  // 🔥 新增：统一Tab切换函数，自动关闭所有Modal
-  const handleTabSwitch = (tabName) => {
-    // 1. 关闭所有Modal
-    setEventModalVisible(false);
-    setSettingsModalVisible(false);
-    setKnowledgeModalVisible(false);
-    setHistoryModalVisible(false);
-    
-    // 2. 切换Tab
-    setMobileTab(tabName);
-  };
-  
   // 日历操作
   const handlePrevPeriod = () => {
     const days = isMobile ? 9 : 16;
@@ -280,7 +268,7 @@ const CalendarPage = () => {
   const handleSelectDate = (date) => {
     setSelectedDate(date);
     if (isMobile) {
-      handleTabSwitch('events'); // 使用统一函数
+      setMobileTab('events');
     }
   };
   
@@ -386,7 +374,7 @@ const CalendarPage = () => {
       
       if (isMobile) {
         setTimeout(() => {
-          handleTabSwitch('ai'); // 使用统一函数
+          setMobileTab('ai');
         }, 500);
       }
       
@@ -454,32 +442,32 @@ const CalendarPage = () => {
 
   return (
     <div className="calendar-page calendar-grid-view">
-      {/* 🔥 移动端底部Tab导航 - 使用统一的handleTabSwitch函数 */}
+      {/* 移动端底部Tab导航 */}
       <div className="mobile-bottom-tabs">
         <div 
           className={`tab-item ${mobileTab === 'calendar' ? 'active' : ''}`}
-          onClick={() => handleTabSwitch('calendar')}
+          onClick={() => setMobileTab('calendar')}
         >
           <CalendarOutlined />
           <span>日历</span>
         </div>
         <div 
           className={`tab-item ${mobileTab === 'ai' ? 'active' : ''}`}
-          onClick={() => handleTabSwitch('ai')}
+          onClick={() => setMobileTab('ai')}
         >
           <RobotOutlined />
           <span>AI分析</span>
         </div>
         <div 
           className={`tab-item ${mobileTab === 'events' ? 'active' : ''}`}
-          onClick={() => handleTabSwitch('events')}
+          onClick={() => setMobileTab('events')}
         >
           <UnorderedListOutlined />
           <span>事项</span>
         </div>
         <div 
           className={`tab-item ${mobileTab === 'settings' ? 'active' : ''}`}
-          onClick={() => handleTabSwitch('settings')}
+          onClick={() => setMobileTab('settings')}
         >
           <SettingOutlined />
           <span>设置</span>
@@ -567,6 +555,7 @@ const CalendarPage = () => {
         {/* 中间日历面板 */}
         <div className={`calendar-main-panel calendar-grid-panel ${mobileTab === 'calendar' ? 'mobile-active' : ''}`}>
           <div className="calendar-controls">
+            {/* 🔥 优化1：设置按钮改为中等大小（无文字）*/}
             {!isMobile && (
               <Button 
                 icon={<SettingOutlined style={{ fontSize: 16 }} />} 
@@ -637,6 +626,7 @@ const CalendarPage = () => {
                         
                         {isToday && <div className="today-badge">今日</div>}
                         
+                        {/* 🔥 优化2：今日高优先级事项（>=7）添加红色竖条 */}
                         {topEvents.length > 0 && (
                           <div className="cell-events-list">
                             {topEvents.map((event, idx) => (
@@ -664,7 +654,6 @@ const CalendarPage = () => {
             </div>
           </Spin>
           
-          {/* 🔥 移动端一键分析按钮区域 - 优化padding */}
           {isMobile && (
             <div className="mobile-quick-analysis">
               <Button 
