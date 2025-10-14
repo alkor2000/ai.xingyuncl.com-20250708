@@ -1,0 +1,200 @@
+/**
+ * Agent节点执行日志模型
+ * 详细追踪每个节点的执行状态
+ */
+
+const dbConnection = require('../database/connection');
+const logger = require('../utils/logger');
+
+class AgentNodeExecution {
+  /**
+   * 创建节点执行日志
+   */
+  static async create(nodeExecutionData) {
+    try {
+      const {
+        execution_id,
+        node_id,
+        node_type,
+        node_name = null,
+        input_data = null,
+        status = 'pending'
+      } = nodeExecutionData;
+
+      const query = `
+        INSERT INTO agent_node_executions (
+          execution_id, node_id, node_type, node_name, input_data, status
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `;
+
+      const result = await dbConnection.query(query, [
+        execution_id,
+        node_id,
+        node_type,
+        node_name,
+        input_data ? JSON.stringify(input_data) : null,
+        status
+      ]);
+
+      return result.rows.insertId;
+    } catch (error) {
+      logger.error('创建节点执行日志失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 根据执行ID获取所有节点日志
+   */
+  static async findByExecutionId(executionId) {
+    try {
+      const query = `
+        SELECT * FROM agent_node_executions
+        WHERE execution_id = ?
+        ORDER BY id ASC
+      `;
+
+      const result = await dbConnection.query(query, [executionId]);
+
+      // 解析 JSON 字段
+      return result.rows.map(log => {
+        ['input_data', 'output_data'].forEach(field => {
+          if (log[field] && typeof log[field] === 'string') {
+            try {
+              log[field] = JSON.parse(log[field]);
+            } catch (e) {
+              logger.warn(`解析 ${field} 失败:`, e.message);
+            }
+          }
+        });
+        return log;
+      });
+    } catch (error) {
+      logger.error('获取节点执行日志失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 根据执行ID和节点ID查找日志（主方法）
+   */
+  static async findByExecutionAndNode(executionId, nodeId) {
+    try {
+      const query = `
+        SELECT * FROM agent_node_executions
+        WHERE execution_id = ? AND node_id = ?
+        LIMIT 1
+      `;
+
+      const result = await dbConnection.query(query, [executionId, nodeId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const log = result.rows[0];
+
+      // 解析 JSON 字段
+      ['input_data', 'output_data'].forEach(field => {
+        if (log[field] && typeof log[field] === 'string') {
+          try {
+            log[field] = JSON.parse(log[field]);
+          } catch (e) {
+            logger.warn(`解析 ${field} 失败:`, e.message);
+          }
+        }
+      });
+
+      return log;
+    } catch (error) {
+      logger.error('根据执行ID和节点ID查找日志失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 根据节点ID查找日志（别名方法，保持向后兼容）
+   */
+  static async findByNodeId(executionId, nodeId) {
+    return this.findByExecutionAndNode(executionId, nodeId);
+  }
+
+  /**
+   * 更新节点执行日志
+   */
+  static async update(id, updateData) {
+    try {
+      const allowedFields = [
+        'output_data', 'credits_used', 'status', 'error_message',
+        'started_at', 'completed_at', 'duration_ms'
+      ];
+
+      const updates = [];
+      const values = [];
+
+      for (const field of allowedFields) {
+        if (updateData.hasOwnProperty(field)) {
+          updates.push(`${field} = ?`);
+
+          if (field === 'output_data' && typeof updateData[field] === 'object') {
+            values.push(JSON.stringify(updateData[field]));
+          } else {
+            values.push(updateData[field]);
+          }
+        }
+      }
+
+      if (updates.length === 0) {
+        return false;
+      }
+
+      values.push(id);
+      const query = `UPDATE agent_node_executions SET ${updates.join(', ')} WHERE id = ?`;
+
+      const result = await dbConnection.query(query, values);
+      return result.rows.affectedRows > 0;
+    } catch (error) {
+      logger.error('更新节点执行日志失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 批量创建节点执行日志
+   */
+  static async batchCreate(nodeExecutions) {
+    const transaction = await dbConnection.beginTransaction();
+
+    try {
+      const ids = [];
+
+      for (const nodeExecution of nodeExecutions) {
+        const query = `
+          INSERT INTO agent_node_executions (
+            execution_id, node_id, node_type, node_name, input_data, status
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `;
+
+        const result = await transaction.query(query, [
+          nodeExecution.execution_id,
+          nodeExecution.node_id,
+          nodeExecution.node_type,
+          nodeExecution.node_name || null,
+          nodeExecution.input_data ? JSON.stringify(nodeExecution.input_data) : null,
+          nodeExecution.status || 'pending'
+        ]);
+
+        ids.push(result.rows.insertId);
+      }
+
+      await transaction.commit();
+      return ids;
+    } catch (error) {
+      await transaction.rollback();
+      logger.error('批量创建节点执行日志失败:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = AgentNodeExecution;

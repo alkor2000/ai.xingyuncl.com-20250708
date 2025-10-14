@@ -1,0 +1,369 @@
+/**
+ * Agent工作流API测试脚本
+ * 测试完整的工作流创建、执行流程
+ */
+
+const axios = require('axios');
+
+const BASE_URL = 'http://localhost:4000/api';
+let authToken = '';
+let workflowId = null;
+
+// 测试用的工作流定义
+const testWorkflow = {
+  name: '测试工作流 - AI对话',
+  description: '一个简单的AI对话工作流，用于测试执行引擎',
+  flow_data: {
+    nodes: [
+      {
+        id: 'start-1',
+        type: 'start',
+        position: { x: 100, y: 100 },
+        data: {}
+      },
+      {
+        id: 'llm-1',
+        type: 'llm',
+        position: { x: 300, y: 100 },
+        data: {
+          model_id: 1, // 假设存在ID为1的模型
+          system_prompt: '你是一个友好的助手',
+          user_prompt: '请用一句话介绍你自己',
+          temperature: 0.7,
+          max_tokens: 100
+        }
+      },
+      {
+        id: 'end-1',
+        type: 'end',
+        position: { x: 500, y: 100 },
+        data: {
+          output_format: 'text'
+        }
+      }
+    ],
+    edges: [
+      { id: 'e1', source: 'start-1', target: 'llm-1' },
+      { id: 'e2', source: 'llm-1', target: 'end-1' }
+    ]
+  },
+  is_published: true
+};
+
+// 辅助函数：延迟
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 辅助函数：打印分隔线
+const printSeparator = (title) => {
+  console.log('\n' + '='.repeat(60));
+  console.log(`  ${title}`);
+  console.log('='.repeat(60));
+};
+
+// 1. 登录获取Token
+async function login() {
+  printSeparator('步骤1: 用户登录');
+  
+  try {
+    const response = await axios.post(`${BASE_URL}/auth/login`, {
+      username: 'admin',
+      password: '123456'
+    });
+
+    if (response.data.success) {
+      authToken = response.data.data.access_token;
+      console.log('✅ 登录成功');
+      console.log(`Token: ${authToken.substring(0, 20)}...`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 登录失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 2. 获取节点类型列表
+async function getNodeTypes() {
+  printSeparator('步骤2: 获取节点类型');
+  
+  try {
+    const response = await axios.get(`${BASE_URL}/agent/node-types`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+
+    if (response.data.success) {
+      console.log('✅ 获取节点类型成功');
+      console.log(`可用节点数: ${response.data.data.length}`);
+      response.data.data.forEach(node => {
+        console.log(`  - ${node.name} (${node.type_key}) - ${node.credits_per_execution}积分/次`);
+      });
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 获取节点类型失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 3. 检查AI模型
+async function checkModels() {
+  printSeparator('步骤3: 检查AI模型');
+  
+  try {
+    const response = await axios.get(`${BASE_URL}/chat/models`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+
+    if (response.data.success && response.data.data.length > 0) {
+      const firstModel = response.data.data[0];
+      console.log('✅ 找到可用的AI模型');
+      console.log(`第一个模型: ${firstModel.display_name} (ID: ${firstModel.id})`);
+      
+      // 更新工作流中的model_id
+      testWorkflow.flow_data.nodes[1].data.model_id = firstModel.id;
+      return true;
+    } else {
+      console.log('⚠️  没有可用的AI模型，请先在管理后台添加');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ 检查模型失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 4. 创建工作流
+async function createWorkflow() {
+  printSeparator('步骤4: 创建工作流');
+  
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/agent/workflows`,
+      testWorkflow,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+
+    if (response.data.success) {
+      workflowId = response.data.data.id;
+      console.log('✅ 工作流创建成功');
+      console.log(`工作流ID: ${workflowId}`);
+      console.log(`名称: ${testWorkflow.name}`);
+      console.log(`节点数: ${testWorkflow.flow_data.nodes.length}`);
+      console.log(`已发布: ${testWorkflow.is_published}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 创建工作流失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 5. 获取工作流详情
+async function getWorkflowDetail() {
+  printSeparator('步骤5: 获取工作流详情');
+  
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/agent/workflows/${workflowId}`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+
+    if (response.data.success) {
+      console.log('✅ 获取工作流详情成功');
+      const workflow = response.data.data;
+      console.log(`ID: ${workflow.id}`);
+      console.log(`名称: ${workflow.name}`);
+      console.log(`版本: ${workflow.version}`);
+      console.log(`状态: ${workflow.is_published ? '已发布' : '草稿'}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 获取详情失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 6. 执行工作流
+async function executeWorkflow() {
+  printSeparator('步骤6: 执行工作流');
+  
+  try {
+    console.log('📤 发送执行请求...');
+    
+    const response = await axios.post(
+      `${BASE_URL}/agent/workflows/${workflowId}/execute`,
+      { input_data: { message: '你好' } },
+      { 
+        headers: { Authorization: `Bearer ${authToken}` },
+        timeout: 120000 // 2分钟超时
+      }
+    );
+
+    if (response.data.success) {
+      console.log('✅ 工作流执行成功！');
+      const result = response.data.data;
+      
+      console.log('\n📊 执行结果：');
+      console.log(`执行ID: ${result.executionId}`);
+      console.log(`执行时长: ${result.duration}ms`);
+      
+      console.log('\n💰 积分消耗：');
+      console.log(`预估: ${result.credits.estimated}`);
+      console.log(`实际使用: ${result.credits.used}`);
+      console.log(`退款: ${result.credits.refunded}`);
+      
+      console.log('\n📄 输出内容：');
+      console.log(JSON.stringify(result.output, null, 2));
+      
+      return result.executionId;
+    }
+  } catch (error) {
+    console.error('❌ 执行失败:', error.response?.data || error.message);
+    if (error.response?.status === 402) {
+      console.log('💡 提示: 积分不足，请先充值');
+    }
+    return null;
+  }
+}
+
+// 7. 获取执行历史
+async function getExecutionHistory() {
+  printSeparator('步骤7: 获取执行历史');
+  
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/agent/executions`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+
+    if (response.data.success) {
+      console.log('✅ 获取执行历史成功');
+      const executions = response.data.data.executions;
+      console.log(`总执行次数: ${response.data.data.pagination.total}`);
+      
+      if (executions.length > 0) {
+        console.log('\n最近的执行记录:');
+        executions.slice(0, 3).forEach((exec, index) => {
+          console.log(`\n${index + 1}. 执行ID: ${exec.id}`);
+          console.log(`   工作流: ${exec.workflow_name}`);
+          console.log(`   状态: ${exec.status}`);
+          console.log(`   积分: ${exec.total_credits_used}`);
+          console.log(`   时间: ${exec.created_at}`);
+        });
+      }
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 获取历史失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 8. 获取统计信息
+async function getStats() {
+  printSeparator('步骤8: 获取统计信息');
+  
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/agent/stats`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+
+    if (response.data.success) {
+      console.log('✅ 获取统计信息成功');
+      const stats = response.data.data;
+      
+      console.log('\n📈 工作流统计:');
+      console.log(`  总数: ${stats.workflows.total}`);
+      console.log(`  已发布: ${stats.workflows.published}`);
+      console.log(`  草稿: ${stats.workflows.draft}`);
+      
+      console.log('\n⚡ 执行统计:');
+      console.log(`  总执行次数: ${stats.executions.total}`);
+      console.log(`  成功: ${stats.executions.completed}`);
+      console.log(`  失败: ${stats.executions.failed}`);
+      console.log(`  运行中: ${stats.executions.running}`);
+      console.log(`  总积分消耗: ${stats.executions.total_credits_used}`);
+      
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ 获取统计失败:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// 主测试流程
+async function runTests() {
+  console.log('\n🚀 开始测试 Agent 工作流 API');
+  console.log(`测试地址: ${BASE_URL}`);
+  console.log(`测试时间: ${new Date().toLocaleString()}`);
+  
+  try {
+    // 1. 登录
+    if (!await login()) {
+      console.log('\n❌ 测试终止：登录失败');
+      return;
+    }
+    
+    await sleep(500);
+    
+    // 2. 获取节点类型
+    if (!await getNodeTypes()) {
+      console.log('\n⚠️  警告：节点类型获取失败，但继续测试');
+    }
+    
+    await sleep(500);
+    
+    // 3. 检查模型
+    if (!await checkModels()) {
+      console.log('\n⚠️  警告：没有可用模型，跳过执行测试');
+      return;
+    }
+    
+    await sleep(500);
+    
+    // 4. 创建工作流
+    if (!await createWorkflow()) {
+      console.log('\n❌ 测试终止：工作流创建失败');
+      return;
+    }
+    
+    await sleep(500);
+    
+    // 5. 获取详情
+    await getWorkflowDetail();
+    
+    await sleep(500);
+    
+    // 6. 执行工作流（可能失败，因为需要积分和API配置）
+    console.log('\n⚠️  即将执行工作流，这将消耗积分...');
+    await sleep(1000);
+    await executeWorkflow();
+    
+    await sleep(1000);
+    
+    // 7. 获取执行历史
+    await getExecutionHistory();
+    
+    await sleep(500);
+    
+    // 8. 获取统计
+    await getStats();
+    
+    // 测试总结
+    printSeparator('测试完成');
+    console.log('✅ Agent工作流系统测试完成！');
+    console.log('\n📌 后续步骤:');
+    console.log('1. 确保AI模型配置正确（API Key有效）');
+    console.log('2. 确保用户有足够积分');
+    console.log('3. 开始前端界面开发');
+    console.log(`4. 访问工作流编辑页面测试完整流程\n`);
+    
+  } catch (error) {
+    console.error('\n❌ 测试过程出错:', error.message);
+  }
+}
+
+// 运行测试
+runTests().catch(console.error);

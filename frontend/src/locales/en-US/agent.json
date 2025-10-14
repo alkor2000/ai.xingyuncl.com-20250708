@@ -1,0 +1,48 @@
+{
+  "agent": {
+    "title": "Agent Workflow",
+    "workflow": {
+      "list": "Workflow List",
+      "name": "Workflow Name",
+      "description": "Description",
+      "create": "Create Workflow",
+      "edit": "Edit Workflow",
+      "delete": "Delete Workflow",
+      "publish": "Publish",
+      "unpublish": "Unpublish",
+      "execute": "Execute",
+      "version": "Version",
+      "status": "Status",
+      "published": "Published",
+      "draft": "Draft"
+    },
+    "execution": {
+      "history": "Execution History",
+      "detail": "Execution Detail",
+      "status": {
+        "running": "Running",
+        "success": "Success",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "credits": {
+        "estimated": "Estimated Credits",
+        "used": "Used Credits",
+        "saved": "Saved Credits"
+      },
+      "duration": "Duration",
+      "startTime": "Start Time",
+      "endTime": "End Time",
+      "inputData": "Input Data",
+      "outputData": "Output Data",
+      "errorMessage": "Error Message"
+    },
+    "node": {
+      "types": "Node Types",
+      "start": "Start",
+      "llm": "AI Chat",
+      "knowledge": "Knowledge Search",
+      "end": "End"
+    }
+  }
+}

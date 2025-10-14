@@ -29,7 +29,6 @@ const storageRoutes = require('./routes/storageRoutes'); // 新增存储管理�
 const mindmapRoutes = require('./routes/mindmapRoutes'); // 新增思维导图路由
 const ocrRoutes = require('./routes/ocrRoutes'); // 新增OCR路由
 const calendarRoutes = require('./routes/calendar'); // 新增日历路由
-const agentRoutes = require('./routes/agent'); // 新增AI工作流路由
 
 // 创建 Express 应用
 const app = express();
@@ -157,7 +156,6 @@ app.use('/api/storage', storageRoutes); // 新增存储管理路由
 app.use('/api/mindmap', mindmapRoutes); // 新增思维导图路由
 app.use('/api/ocr', ocrRoutes); // 新增OCR路由
 app.use('/api/calendar', calendarRoutes); // 新增日历路由
-app.use('/api/agent', agentRoutes); // 新增AI工作流路由
 
 // 公开的HTML页面访问路由（不需要认证）
 app.get('/pages/:userId/:slug', require('./controllers/HtmlEditorController').previewPage);

@@ -1,0 +1,48 @@
+{
+  "agent": {
+    "title": "Agent工作流",
+    "workflow": {
+      "list": "工作流列表",
+      "name": "工作流名称",
+      "description": "描述",
+      "create": "创建工作流",
+      "edit": "编辑工作流",
+      "delete": "删除工作流",
+      "publish": "发布",
+      "unpublish": "取消发布",
+      "execute": "执行",
+      "version": "版本",
+      "status": "状态",
+      "published": "已发布",
+      "draft": "草稿"
+    },
+    "execution": {
+      "history": "执行历史",
+      "detail": "执行详情",
+      "status": {
+        "running": "运行中",
+        "success": "成功",
+        "failed": "失败",
+        "cancelled": "已取消"
+      },
+      "credits": {
+        "estimated": "预估积分",
+        "used": "实际消耗",
+        "saved": "节省积分"
+      },
+      "duration": "执行时长",
+      "startTime": "开始时间",
+      "endTime": "完成时间",
+      "inputData": "输入数据",
+      "outputData": "输出数据",
+      "errorMessage": "错误信息"
+    },
+    "node": {
+      "types": "节点类型",
+      "start": "开始",
+      "llm": "AI对话",
+      "knowledge": "知识库检索",
+      "end": "结束"
+    }
+  }
+}

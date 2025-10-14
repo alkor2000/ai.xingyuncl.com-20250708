@@ -10,6 +10,7 @@ import htmlEditor from './htmlEditor.json'
 import image from './image.json'
 import video from './video.json'
 import calendar from './calendar.json'
+import agent from './agent.json'
 
 export default {
   ...common,
@@ -23,5 +24,6 @@ export default {
   ...htmlEditor,
   ...image,
   ...video,
-  ...calendar
+  ...calendar,
+  ...agent
 }
