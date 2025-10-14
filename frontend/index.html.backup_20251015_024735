@@ -2,11 +2,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <!-- 默认favicon，会被JavaScript动态替换 -->
-    <link rel="icon" type="image/png" href="/favicon.svg" id="favicon-link" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AI Platform - 企业级AI应用聚合平台" />
-    <!-- 默认标题，会被JavaScript动态替换 -->
     <title>AI Platform</title>
   </head>
   <body>

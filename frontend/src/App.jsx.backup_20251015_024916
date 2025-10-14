@@ -141,9 +141,6 @@ const App = () => {
   const { i18n } = useTranslation()
   const currentLanguage = i18n.language
   const locale = currentLanguage === 'zh-CN' ? zhCN : enUS
-  
-  // 获取系统配置
-  const { systemConfig, initialized, getSiteLogo, getSiteDescription } = useSystemConfigStore()
 
   // 全局消息配置
   useEffect(() => {
@@ -153,45 +150,6 @@ const App = () => {
       maxCount: 3,
     })
   }, [])
-  
-  // 🔥 新增：动态更新浏览器标签栏的favicon和title
-  useEffect(() => {
-    // 只有在系统配置初始化完成后才更新
-    if (!initialized) return
-    
-    try {
-      // 1. 更新favicon
-      const logoUrl = getSiteLogo()
-      if (logoUrl) {
-        const faviconLink = document.getElementById('favicon-link') || 
-                           document.querySelector("link[rel*='icon']")
-        
-        if (faviconLink) {
-          // 使用上传的logo作为favicon
-          faviconLink.href = logoUrl
-          console.log('✅ Favicon已更新:', logoUrl)
-        } else {
-          // 如果没有找到favicon link标签，创建一个新的
-          const newLink = document.createElement('link')
-          newLink.id = 'favicon-link'
-          newLink.rel = 'icon'
-          newLink.type = 'image/png'
-          newLink.href = logoUrl
-          document.head.appendChild(newLink)
-          console.log('✅ Favicon已创建并更新:', logoUrl)
-        }
-      }
-      
-      // 2. 更新页面标题
-      const siteDescription = getSiteDescription()
-      if (siteDescription && siteDescription !== '企业级AI应用聚合平台') {
-        document.title = siteDescription
-        console.log('✅ 页面标题已更新:', siteDescription)
-      }
-    } catch (error) {
-      console.error('❌ 更新favicon或title失败:', error)
-    }
-  }, [initialized, systemConfig, getSiteLogo, getSiteDescription])
 
   return (
     <ConfigProvider locale={locale}>
