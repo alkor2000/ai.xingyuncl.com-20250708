@@ -1,0 +1,84 @@
+/**
+ * 工作流编辑器工具栏
+ * 提供保存、返回、删除、测试等操作
+ */
+
+import React from 'react'
+import { Button, Space, Tag, Tooltip } from 'antd'
+import {
+  SaveOutlined,
+  ArrowLeftOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined
+} from '@ant-design/icons'
+
+const Toolbar = ({
+  workflow,
+  hasUnsavedChanges,
+  onSave,
+  onBack,
+  onDelete,
+  onTest,
+  selectedNode,
+  selectedEdge
+}) => {
+  return (
+    <div className="workflow-editor-toolbar">
+      <div className="toolbar-left">
+        <Button
+          icon={<ArrowLeftOutlined />}
+          onClick={onBack}
+        >
+          返回列表
+        </Button>
+        
+        <div className="workflow-info">
+          <h3>{workflow?.name}</h3>
+          {workflow?.is_published && (
+            <Tag color="success">已发布</Tag>
+          )}
+          {hasUnsavedChanges && (
+            <Tag color="warning">未保存</Tag>
+          )}
+        </div>
+      </div>
+      
+      <div className="toolbar-right">
+        <Space>
+          {(selectedNode || selectedEdge) && (
+            <Tooltip title="删除选中项">
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                onClick={onDelete}
+              >
+                删除
+              </Button>
+            </Tooltip>
+          )}
+          
+          <Tooltip title="测试运行工作流">
+            <Button
+              type="default"
+              icon={<PlayCircleOutlined />}
+              onClick={onTest}
+            >
+              测试运行
+            </Button>
+          </Tooltip>
+          
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={onSave}
+            disabled={!hasUnsavedChanges}
+          >
+            保存
+          </Button>
+        </Space>
+      </div>
+    </div>
+  )
+}
+
+export default Toolbar

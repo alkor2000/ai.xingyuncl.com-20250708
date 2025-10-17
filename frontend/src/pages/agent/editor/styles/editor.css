@@ -1,0 +1,376 @@
+/* 工作流编辑器样式 - 增强版 */
+
+.workflow-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f0f2f5;
+}
+
+/* 工具栏 */
+.workflow-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.workflow-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+/* 主体区域 */
+.workflow-editor-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 节点面板 */
+.workflow-editor-node-panel {
+  width: 280px;
+  background: #fff;
+  border-right: 1px solid #e8e8e8;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.node-panel-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #262626;
+}
+
+.node-panel-tips {
+  padding: 12px;
+  background: #f6f8fa;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+/* 画布区域 */
+.workflow-editor-canvas {
+  flex: 1;
+  position: relative;
+  background: #fafafa;
+}
+
+/* 配置面板 */
+.workflow-editor-config-panel {
+  width: 320px;
+  background: #fff;
+  border-left: 1px solid #e8e8e8;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ========== 增强的自定义节点样式 ========== */
+
+.custom-node.enhanced {
+  background: #fff;
+  border: 2px solid #d9d9d9;
+  border-radius: 12px;
+  min-width: 260px;
+  max-width: 280px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.custom-node.enhanced:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.custom-node.enhanced.selected {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2);
+}
+
+/* 开始节点 */
+.start-node.enhanced {
+  border-color: #52c41a;
+}
+
+.start-node.enhanced.selected {
+  border-color: #52c41a;
+  box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.2);
+}
+
+.start-node.enhanced .node-header {
+  background: linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%);
+  color: #389e0d;
+  border-bottom: 1px solid #b7eb8f;
+}
+
+/* LLM节点 */
+.llm-node.enhanced {
+  border-color: #1890ff;
+}
+
+.llm-node.enhanced.selected {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2);
+}
+
+.llm-node.enhanced .node-header {
+  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+  color: #0050b3;
+  border-bottom: 1px solid #91d5ff;
+}
+
+/* 结束节点 */
+.end-node.enhanced {
+  border-color: #ff4d4f;
+}
+
+.end-node.enhanced.selected {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.2);
+}
+
+.end-node.enhanced .node-header {
+  background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
+  color: #cf1322;
+  border-bottom: 1px solid #ffa39e;
+}
+
+/* 知识库节点 */
+.knowledge-node.enhanced {
+  border-color: #722ed1;
+}
+
+.knowledge-node.enhanced.selected {
+  border-color: #722ed1;
+  box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.2);
+}
+
+.knowledge-node.enhanced .node-header {
+  background: linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%);
+  color: #531dab;
+  border-bottom: 1px solid #d3adf7;
+}
+
+/* 节点头部 */
+.node-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.node-icon {
+  font-size: 18px;
+}
+
+.node-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 节点主体 */
+.node-body {
+  padding: 12px 16px;
+}
+
+.node-section {
+  margin-bottom: 12px;
+}
+
+.node-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #595959;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* 参数列表 */
+.param-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.param-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #fafafa;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.param-name {
+  color: #595959;
+  font-weight: 500;
+}
+
+.param-type {
+  color: #8c8c8c;
+  font-size: 11px;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.param-value {
+  color: #262626;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.param-empty {
+  font-size: 12px;
+  color: #bfbfbf;
+  font-style: italic;
+}
+
+.param-more {
+  font-size: 11px;
+  color: #8c8c8c;
+  text-align: center;
+  padding: 4px;
+}
+
+/* 模型名称 */
+.model-name {
+  font-weight: 600;
+  color: #1890ff;
+  padding: 6px 10px;
+  background: #f0f5ff;
+  border-radius: 4px;
+}
+
+/* 提示词预览 */
+.prompt-preview {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #595959;
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.prompt-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prompt-more {
+  text-align: center;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
+
+/* 输出预览 */
+.output-preview {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #595959;
+  font-family: 'Courier New', monospace;
+}
+
+/* 节点底部 */
+.node-footer {
+  padding: 8px 16px;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+.node-hint {
+  font-size: 11px;
+  color: #8c8c8c;
+  font-style: italic;
+}
+
+/* 自定义连接点 */
+.custom-handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ReactFlow 覆盖样式 */
+.react-flow__node {
+  cursor: pointer;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #1890ff;
+  stroke-width: 3;
+}
+
+/* 加载状态 */
+.workflow-editor-loading,
+.workflow-editor-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 16px;
+  color: #8c8c8c;
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .workflow-editor-node-panel {
+    width: 220px;
+  }
+  
+  .workflow-editor-config-panel {
+    width: 280px;
+  }
+  
+  .custom-node.enhanced {
+    min-width: 220px;
+    max-width: 240px;
+  }
+}

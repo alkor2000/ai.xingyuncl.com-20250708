@@ -1,0 +1,31 @@
+/**
+ * 开始节点 - 工作流入口
+ */
+
+import React from 'react'
+import { Handle, Position } from 'reactflow'
+import { PlayCircleOutlined } from '@ant-design/icons'
+
+const StartNode = ({ data, selected }) => {
+  return (
+    <div className={`custom-node start-node ${selected ? 'selected' : ''}`}>
+      <div className="node-header">
+        <PlayCircleOutlined className="node-icon" />
+        <span className="node-title">{data.label || '开始'}</span>
+      </div>
+      <div className="node-body">
+        <div className="node-desc">工作流入口</div>
+      </div>
+      
+      {/* 输出连接点 */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="output"
+        style={{ background: '#52c41a' }}
+      />
+    </div>
+  )
+}
+
+export default StartNode

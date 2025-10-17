@@ -1,0 +1,31 @@
+/**
+ * 结束节点 - 工作流出口
+ */
+
+import React from 'react'
+import { Handle, Position } from 'reactflow'
+import { CheckCircleOutlined } from '@ant-design/icons'
+
+const EndNode = ({ data, selected }) => {
+  return (
+    <div className={`custom-node end-node ${selected ? 'selected' : ''}`}>
+      <div className="node-header">
+        <CheckCircleOutlined className="node-icon" />
+        <span className="node-title">{data.label || '结束'}</span>
+      </div>
+      <div className="node-body">
+        <div className="node-desc">工作流出口</div>
+      </div>
+      
+      {/* 输入连接点 */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="input"
+        style={{ background: '#ff4d4f' }}
+      />
+    </div>
+  )
+}
+
+export default EndNode

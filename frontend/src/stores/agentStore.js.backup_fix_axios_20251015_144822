@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand'
-import apiClient from '../utils/api'
+import axios from 'axios'
 import { message } from 'antd'
 
 const useAgentStore = create((set, get) => ({
@@ -13,10 +13,6 @@ const useAgentStore = create((set, get) => ({
   // 节点类型列表
   nodeTypes: [],
   nodeTypesLoading: false,
-  
-  // 用户可用模型列表（新增）
-  availableModels: [],
-  modelsLoading: false,
   
   // 工作流列表
   workflows: [],
@@ -56,7 +52,7 @@ const useAgentStore = create((set, get) => ({
   fetchNodeTypes: async () => {
     set({ nodeTypesLoading: true })
     try {
-      const response = await apiClient.get('/agent/node-types')
+      const response = await axios.get('/api/agent/node-types')
       if (response.data.success) {
         set({ 
           nodeTypes: response.data.data,
@@ -78,38 +74,6 @@ const useAgentStore = create((set, get) => ({
     return nodeTypes.find(nt => nt.type_key === typeKey)
   },
   
-  // ========== 模型相关（新增）==========
-  
-  /**
-   * 获取用户可用的AI模型列表
-   */
-  fetchAvailableModels: async () => {
-    set({ modelsLoading: true })
-    try {
-      const response = await apiClient.get('/chat/models')
-      if (response.data.success) {
-        set({ 
-          availableModels: response.data.data,
-          modelsLoading: false 
-        })
-        return response.data.data
-      }
-    } catch (error) {
-      console.error('获取可用模型失败:', error)
-      message.error('获取可用模型失败')
-      set({ modelsLoading: false })
-      return []
-    }
-  },
-  
-  /**
-   * 根据模型名称获取模型信息
-   */
-  getModelByName: (modelName) => {
-    const { availableModels } = get()
-    return availableModels.find(m => m.name === modelName)
-  },
-  
   // ========== 工作流列表相关 ==========
   
   /**
@@ -129,7 +93,7 @@ const useAgentStore = create((set, get) => ({
         queryParams.append('is_published', is_published)
       }
       
-      const response = await apiClient.get(`/agent/workflows?${queryParams}`)
+      const response = await axios.get(`/api/agent/workflows?${queryParams}`)
       
       if (response.data.success) {
         const { workflows, pagination } = response.data.data
@@ -157,7 +121,7 @@ const useAgentStore = create((set, get) => ({
   fetchWorkflowById: async (id) => {
     set({ currentWorkflowLoading: true })
     try {
-      const response = await apiClient.get(`/agent/workflows/${id}`)
+      const response = await axios.get(`/api/agent/workflows/${id}`)
       
       if (response.data.success) {
         set({
@@ -179,7 +143,7 @@ const useAgentStore = create((set, get) => ({
    */
   createWorkflow: async (workflowData) => {
     try {
-      const response = await apiClient.post('/agent/workflows', workflowData)
+      const response = await axios.post('/api/agent/workflows', workflowData)
       
       if (response.data.success) {
         message.success('工作流创建成功')
@@ -201,7 +165,7 @@ const useAgentStore = create((set, get) => ({
    */
   updateWorkflow: async (id, workflowData) => {
     try {
-      const response = await apiClient.put(`/agent/workflows/${id}`, workflowData)
+      const response = await axios.put(`/api/agent/workflows/${id}`, workflowData)
       
       if (response.data.success) {
         message.success('工作流更新成功')
@@ -228,7 +192,7 @@ const useAgentStore = create((set, get) => ({
    */
   deleteWorkflow: async (id) => {
     try {
-      const response = await apiClient.delete(`/agent/workflows/${id}`)
+      const response = await axios.delete(`/api/agent/workflows/${id}`)
       
       if (response.data.success) {
         message.success('工作流删除成功')
@@ -250,7 +214,7 @@ const useAgentStore = create((set, get) => ({
    */
   togglePublish: async (id) => {
     try {
-      const response = await apiClient.post(`/agent/workflows/${id}/toggle-publish`)
+      const response = await axios.post(`/api/agent/workflows/${id}/toggle-publish`)
       
       if (response.data.success) {
         message.success('发布状态已更新')
@@ -288,8 +252,8 @@ const useAgentStore = create((set, get) => ({
    */
   executeWorkflow: async (id, inputData = {}) => {
     try {
-      const response = await apiClient.post(
-        `/agent/workflows/${id}/execute`,
+      const response = await axios.post(
+        `/api/agent/workflows/${id}/execute`,
         { input_data: inputData },
         { timeout: 120000 } // 2分钟超时
       )
@@ -331,7 +295,7 @@ const useAgentStore = create((set, get) => ({
       if (workflow_id) queryParams.append('workflow_id', workflow_id)
       if (status) queryParams.append('status', status)
       
-      const response = await apiClient.get(`/agent/executions?${queryParams}`)
+      const response = await axios.get(`/api/agent/executions?${queryParams}`)
       
       if (response.data.success) {
         const { executions, pagination } = response.data.data
@@ -359,7 +323,7 @@ const useAgentStore = create((set, get) => ({
   fetchExecutionById: async (id) => {
     set({ currentExecutionLoading: true })
     try {
-      const response = await apiClient.get(`/agent/executions/${id}`)
+      const response = await axios.get(`/api/agent/executions/${id}`)
       
       if (response.data.success) {
         set({
@@ -381,7 +345,7 @@ const useAgentStore = create((set, get) => ({
    */
   deleteExecution: async (id) => {
     try {
-      const response = await apiClient.delete(`/agent/executions/${id}`)
+      const response = await axios.delete(`/api/agent/executions/${id}`)
       
       if (response.data.success) {
         message.success('执行记录已删除')
@@ -406,7 +370,7 @@ const useAgentStore = create((set, get) => ({
   fetchStats: async () => {
     set({ statsLoading: true })
     try {
-      const response = await apiClient.get('/agent/stats')
+      const response = await axios.get('/api/agent/stats')
       
       if (response.data.success) {
         set({

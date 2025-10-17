@@ -1,0 +1,231 @@
+/**
+ * 配置面板 - 显示选中节点的配置选项
+ * 支持编辑节点参数
+ */
+
+import React, { useEffect } from 'react'
+import { Card, Form, Input, Select, InputNumber, Empty, Spin } from 'antd'
+import useAgentStore from '../../../../stores/agentStore'
+
+const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
+  const [form] = Form.useForm()
+  
+  // 获取用户可用模型列表
+  const { availableModels, modelsLoading, fetchAvailableModels } = useAgentStore()
+  
+  // 加载模型列表
+  useEffect(() => {
+    if (availableModels.length === 0) {
+      fetchAvailableModels()
+    }
+  }, [])
+  
+  useEffect(() => {
+    if (selectedNode) {
+      form.setFieldsValue(selectedNode.data?.config || {})
+    } else {
+      form.resetFields()
+    }
+  }, [selectedNode, form])
+  
+  const handleValuesChange = (changedValues, allValues) => {
+    if (selectedNode) {
+      onUpdateConfig(selectedNode.id, allValues)
+    }
+  }
+  
+  if (!selectedNode) {
+    return (
+      <div className="workflow-editor-config-panel">
+        <Card
+          title="节点配置"
+          size="small"
+          bodyStyle={{ padding: '24px' }}
+        >
+          <Empty
+            description="请选择一个节点"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        </Card>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="workflow-editor-config-panel">
+      <Card
+        title={`${selectedNode.data?.label} 配置`}
+        size="small"
+        bodyStyle={{ padding: '16px' }}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={handleValuesChange}
+        >
+          {/* 节点名称 */}
+          <Form.Item
+            label="节点名称"
+            name="label"
+            initialValue={selectedNode.data?.label}
+          >
+            <Input placeholder="输入节点名称" />
+          </Form.Item>
+          
+          {/* LLM节点特殊配置 */}
+          {selectedNode.type === 'llm' && (
+            <>
+              <Form.Item
+                label="系统提示词"
+                name="system_prompt"
+              >
+                <Input.TextArea
+                  rows={4}
+                  placeholder="输入系统提示词..."
+                />
+              </Form.Item>
+              
+              <Form.Item
+                label="AI模型"
+                name="model"
+                initialValue="claude-3-5-sonnet-20241022"
+              >
+                {modelsLoading ? (
+                  <Spin size="small" />
+                ) : (
+                  <Select
+                    placeholder="选择AI模型"
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    {availableModels.map((model) => (
+                      <Select.Option key={model.name} value={model.name}>
+                        {model.display_name} ({model.credits_display || `${model.credits_per_chat} 积分/次`})
+                      </Select.Option>
+                    ))}
+                  </Select>
+                )}
+              </Form.Item>
+              
+              <Form.Item
+                label="温度"
+                name="temperature"
+                initialValue={0.7}
+              >
+                <InputNumber
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+              
+              <Form.Item
+                label="最大Token数"
+                name="max_tokens"
+                initialValue={1000}
+              >
+                <InputNumber
+                  min={1}
+                  max={4096}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </>
+          )}
+          
+          {/* 开始节点配置 */}
+          {selectedNode.type === 'start' && (
+            <Form.Item
+              label="输入参数"
+              name="input_schema"
+              help="定义工作流的输入参数（JSON格式）"
+            >
+              <Input.TextArea
+                rows={6}
+                placeholder='{"param1": "value1"}'
+              />
+            </Form.Item>
+          )}
+          
+          {/* 结束节点配置 */}
+          {selectedNode.type === 'end' && (
+            <Form.Item
+              label="输出映射"
+              name="output_mapping"
+              help="定义如何映射最终输出"
+            >
+              <Input.TextArea
+                rows={4}
+                placeholder="result"
+              />
+            </Form.Item>
+          )}
+          
+          {/* 知识库节点配置 */}
+          {selectedNode.type === 'knowledge' && (
+            <>
+              <Form.Item
+                label="知识库"
+                name="knowledge_base"
+                help="选择要检索的知识库"
+              >
+                <Input placeholder="输入知识库名称" />
+              </Form.Item>
+              
+              <Form.Item
+                label="检索模式"
+                name="search_mode"
+                initialValue="vector"
+              >
+                <Select>
+                  <Select.Option value="vector">向量检索</Select.Option>
+                  <Select.Option value="keyword">关键词检索</Select.Option>
+                  <Select.Option value="hybrid">混合检索</Select.Option>
+                </Select>
+              </Form.Item>
+              
+              <Form.Item
+                label="Top-K"
+                name="top_k"
+                initialValue={5}
+                help="返回前K个最相关的结果"
+              >
+                <InputNumber
+                  min={1}
+                  max={20}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+              
+              <Form.Item
+                label="相似度阈值"
+                name="threshold"
+                initialValue={0.7}
+                help="最低相似度分数"
+              >
+                <InputNumber
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+        
+        <div style={{ marginTop: '16px', padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            <strong>节点ID:</strong> {selectedNode.id}
+          </div>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+            <strong>类型:</strong> {selectedNode.type}
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+export default ConfigPanel

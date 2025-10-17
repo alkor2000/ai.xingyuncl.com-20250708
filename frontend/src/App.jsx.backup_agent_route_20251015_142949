@@ -57,11 +57,9 @@ const OcrTool = React.lazy(() => import('./pages/ocr/OcrTool'))
 // 日历页面组件 - 懒加载
 const Calendar = React.lazy(() => import('./pages/calendar/Calendar'))
 
-// Agent工作流主工作区 - 懒加载
-const AgentWorkspace = React.lazy(() => import('./pages/agent/AgentWorkspace'))
-
-// Agent工作流编辑器 - 懒加载
-const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEditor'))
+// Agent工作流页面组件 - 懒加载
+const WorkflowList = React.lazy(() => import('./pages/agent/WorkflowList'))
+const ExecutionHistory = React.lazy(() => import('./pages/agent/ExecutionHistory'))
 
 // 布局组件
 import BasicLayout from './layouts/BasicLayout'
@@ -331,22 +329,20 @@ const App = () => {
                           } 
                         />
                         
-                        {/* Agent工作流路由 */}
+                        {/* Agent工作流路由 - 新增 */}
                         <Route 
-                          path="/agent" 
+                          path="/agent/workflows" 
                           element={
                             <LazyLoadingWrapper>
-                              <AgentWorkspace />
+                              <WorkflowList />
                             </LazyLoadingWrapper>
                           } 
                         />
-                        
-                        {/* Agent工作流编辑器路由 - 新增 */}
                         <Route 
-                          path="/agent/editor/:id" 
+                          path="/agent/executions" 
                           element={
                             <LazyLoadingWrapper>
-                              <WorkflowEditor />
+                              <ExecutionHistory />
                             </LazyLoadingWrapper>
                           } 
                         />

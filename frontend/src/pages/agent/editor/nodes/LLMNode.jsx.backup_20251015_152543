@@ -1,0 +1,50 @@
+/**
+ * LLM节点 - AI大模型对话
+ */
+
+import React from 'react'
+import { Handle, Position } from 'reactflow'
+import { RobotOutlined } from '@ant-design/icons'
+
+const LLMNode = ({ data, selected }) => {
+  const model = data.config?.model || 'claude-3-5-sonnet-20241022'
+  
+  return (
+    <div className={`custom-node llm-node ${selected ? 'selected' : ''}`}>
+      <div className="node-header">
+        <RobotOutlined className="node-icon" />
+        <span className="node-title">{data.label || 'LLM对话'}</span>
+      </div>
+      <div className="node-body">
+        <div className="node-desc">
+          {model === 'claude-3-5-sonnet-20241022' && 'Claude 3.5 Sonnet'}
+          {model === 'gpt-4' && 'GPT-4'}
+          {model === 'gpt-3.5-turbo' && 'GPT-3.5 Turbo'}
+        </div>
+        {data.config?.system_prompt && (
+          <div className="node-preview">
+            {data.config.system_prompt.substring(0, 30)}...
+          </div>
+        )}
+      </div>
+      
+      {/* 输入连接点 */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="input"
+        style={{ background: '#1890ff' }}
+      />
+      
+      {/* 输出连接点 */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="output"
+        style={{ background: '#1890ff' }}
+      />
+    </div>
+  )
+}
+
+export default LLMNode

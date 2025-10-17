@@ -1,7 +1,6 @@
 /**
  * AI对话节点
  * 调用大语言模型进行对话和推理（非流式，用于工作流执行）
- * 支持从 data.config 读取配置
  */
 
 const BaseNode = require('./BaseNode');
@@ -15,21 +14,6 @@ class LLMNode extends BaseNode {
   }
 
   /**
-   * 获取配置（兼容旧版和新版）
-   */
-  getConfig(key, defaultValue = undefined) {
-    // 优先从 data.config 读取（新版）
-    if (this.data.config && this.data.config[key] !== undefined) {
-      return this.data.config[key];
-    }
-    // 兼容旧版直接从 data 读取
-    if (this.data[key] !== undefined) {
-      return this.data[key];
-    }
-    return defaultValue;
-  }
-
-  /**
    * 执行AI对话节点
    * @param {Object} context - 执行上下文
    * @param {number} userId - 用户ID
@@ -40,22 +24,22 @@ class LLMNode extends BaseNode {
     try {
       this.log('info', 'AI对话节点开始执行', { 
         userId, 
-        nodeData: this.data 
+        nodeConfig: this.data 
       });
 
-      // 1. 获取模型名称（从 config.model 或 data.model_name）
-      const modelName = this.getConfig('model') || this.getConfig('model_name');
-      
-      if (!modelName) {
+      // 1. 验证必填字段
+      if (!this.data.model_id) {
         throw new Error('未选择AI模型');
       }
 
-      this.log('info', '查找AI模型', { modelName });
+      if (!this.data.user_prompt) {
+        throw new Error('用户提示词不能为空');
+      }
 
-      // 2. 根据名称查找模型
-      const model = await AIModel.findByName(modelName);
+      // 2. 获取模型信息
+      const model = await AIModel.findById(this.data.model_id);
       if (!model) {
-        throw new Error(`AI模型不存在: ${modelName}`);
+        throw new Error(`AI模型不存在: ${this.data.model_id}`);
       }
 
       if (!model.is_active) {
@@ -68,47 +52,29 @@ class LLMNode extends BaseNode {
         displayName: model.display_name
       });
 
-      // 3. 获取提示词配置
-      const systemPromptTemplate = this.getConfig('system_prompt', '');
-      const userPromptTemplate = this.getConfig('user_prompt') || this.getConfig('prompt');
-
-      // 如果没有用户提示词，使用输入数据作为提示词
-      let userPromptContent;
-      if (userPromptTemplate) {
-        userPromptContent = this.replaceVariables(userPromptTemplate, context);
-      } else if (context.input && context.input.query) {
-        userPromptContent = context.input.query;
-      } else if (context.input) {
-        userPromptContent = JSON.stringify(context.input);
-      } else {
-        throw new Error('用户提示词不能为空，且输入数据为空');
-      }
-
-      // 4. 处理系统提示词变量替换
-      const systemPrompt = systemPromptTemplate 
-        ? this.replaceVariables(systemPromptTemplate, context)
+      // 3. 处理变量替换
+      const systemPrompt = this.data.system_prompt 
+        ? this.replaceVariables(this.data.system_prompt, context)
         : '';
 
+      const userPrompt = this.replaceVariables(this.data.user_prompt, context);
+
       this.log('debug', '变量替换后的提示词', {
-        systemPrompt: systemPrompt ? systemPrompt.substring(0, 100) + '...' : '(无)',
-        userPrompt: userPromptContent.substring(0, 100) + '...'
+        systemPrompt: systemPrompt ? systemPrompt.substring(0, 100) + '...' : '',
+        userPrompt: userPrompt.substring(0, 100) + '...'
       });
 
-      // 5. 构建消息数组
+      // 4. 构建消息数组
       const messages = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
-      messages.push({ role: 'user', content: userPromptContent });
+      messages.push({ role: 'user', content: userPrompt });
 
-      // 6. 获取模型参数
-      const temperature = parseFloat(this.getConfig('temperature', 0.7));
-      const maxTokens = parseInt(this.getConfig('max_tokens', 2000));
-
-      // 7. 调用AI（非流式）
+      // 5. 调用AI（非流式）
       const response = await this.callAI(model, messages, {
-        temperature,
-        max_tokens: maxTokens
+        temperature: this.data.temperature || 0.7,
+        max_tokens: this.data.max_tokens || 2000
       });
 
       this.log('info', 'AI响应成功', {
@@ -116,7 +82,7 @@ class LLMNode extends BaseNode {
         tokensUsed: this.estimateTokens(response)
       });
 
-      // 8. 返回结果（包含积分消耗信息）
+      // 6. 返回结果（包含积分消耗信息）
       return {
         success: true,
         output: {
@@ -295,23 +261,20 @@ class LLMNode extends BaseNode {
   validate() {
     const errors = [];
 
-    const modelName = this.getConfig('model') || this.getConfig('model_name');
-    if (!modelName) {
+    if (!this.data.model_id) {
       errors.push('必须选择AI模型');
     }
 
-    // 用户提示词非必填，可以从输入数据获取
-    // const userPrompt = this.getConfig('user_prompt') || this.getConfig('prompt');
-    // if (!userPrompt) {
-    //   errors.push('用户提示词不能为空');
-    // }
+    if (!this.data.user_prompt) {
+      errors.push('用户提示词不能为空');
+    }
 
-    const temperature = this.getConfig('temperature');
+    const temperature = this.data.temperature;
     if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
       errors.push('温度值必须在0-2之间');
     }
 
-    const maxTokens = this.getConfig('max_tokens');
+    const maxTokens = this.data.max_tokens;
     if (maxTokens !== undefined && (maxTokens < 100 || maxTokens > 4000)) {
       errors.push('最大Token数必须在100-4000之间');
     }

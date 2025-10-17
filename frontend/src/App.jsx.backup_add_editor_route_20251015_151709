@@ -60,9 +60,6 @@ const Calendar = React.lazy(() => import('./pages/calendar/Calendar'))
 // Agent工作流主工作区 - 懒加载
 const AgentWorkspace = React.lazy(() => import('./pages/agent/AgentWorkspace'))
 
-// Agent工作流编辑器 - 懒加载
-const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEditor'))
-
 // 布局组件
 import BasicLayout from './layouts/BasicLayout'
 
@@ -331,22 +328,12 @@ const App = () => {
                           } 
                         />
                         
-                        {/* Agent工作流路由 */}
+                        {/* Agent工作流路由 - 修改为单一入口 */}
                         <Route 
                           path="/agent" 
                           element={
                             <LazyLoadingWrapper>
                               <AgentWorkspace />
-                            </LazyLoadingWrapper>
-                          } 
-                        />
-                        
-                        {/* Agent工作流编辑器路由 - 新增 */}
-                        <Route 
-                          path="/agent/editor/:id" 
-                          element={
-                            <LazyLoadingWrapper>
-                              <WorkflowEditor />
                             </LazyLoadingWrapper>
                           } 
                         />

@@ -133,7 +133,7 @@ class AgentWorkflow {
       const dataResult = await dbConnection.query(dataQuery, params);
 
       return {
-        workflows: dataResult.rows,
+        data: dataResult.rows,
         pagination: {
           page: pageInt,
           limit: limitInt,
@@ -148,7 +148,7 @@ class AgentWorkflow {
   }
 
   /**
-   * 更新工作流 - 修复：过滤 undefined 值
+   * 更新工作流
    */
   static async update(id, updateData) {
     try {
@@ -160,8 +160,7 @@ class AgentWorkflow {
       const values = [];
 
       for (const field of allowedFields) {
-        // 修复：检查字段存在且值不是 undefined
-        if (updateData.hasOwnProperty(field) && updateData[field] !== undefined) {
+        if (updateData.hasOwnProperty(field)) {
           updates.push(`${field} = ?`);
           
           if (field === 'flow_data' && typeof updateData[field] === 'object') {
@@ -173,27 +172,16 @@ class AgentWorkflow {
       }
 
       if (updates.length === 0) {
-        logger.warn('没有有效的更新字段', { id, updateData });
         return false;
       }
 
       values.push(id);
       const query = `UPDATE agent_workflows SET ${updates.join(', ')} WHERE id = ?`;
 
-      logger.info('执行工作流更新', { 
-        id, 
-        updates: updates.join(', '), 
-        valueCount: values.length 
-      });
-
       const result = await dbConnection.query(query, values);
       return result.rows.affectedRows > 0;
     } catch (error) {
-      logger.error('更新工作流失败:', { 
-        id, 
-        error: error.message,
-        updateData 
-      });
+      logger.error('更新工作流失败:', error);
       throw error;
     }
   }

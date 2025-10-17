@@ -1,0 +1,124 @@
+/**
+ * 节点面板 - 显示可用的节点类型
+ * 用户可以点击添加到画布
+ */
+
+import React from 'react'
+import { Card, Space, Button, Divider } from 'antd'
+import {
+  PlayCircleOutlined,
+  RobotOutlined,
+  CheckCircleOutlined,
+  DatabaseOutlined
+} from '@ant-design/icons'
+
+const NodePanel = ({ nodeTypes, onAddNode }) => {
+  // 内置节点类型（基础）
+  const builtInNodes = [
+    {
+      type: 'start',
+      label: '开始',
+      icon: <PlayCircleOutlined />,
+      color: '#52c41a',
+      description: '工作流入口'
+    },
+    {
+      type: 'llm',
+      label: 'LLM对话',
+      icon: <RobotOutlined />,
+      color: '#1890ff',
+      description: 'AI大模型对话'
+    },
+    {
+      type: 'knowledge',
+      label: '知识检索',
+      icon: <DatabaseOutlined />,
+      color: '#722ed1',
+      description: '从知识库检索'
+    },
+    {
+      type: 'end',
+      label: '结束',
+      icon: <CheckCircleOutlined />,
+      color: '#ff4d4f',
+      description: '工作流出口'
+    }
+  ]
+  
+  const handleAddNode = (nodeType) => {
+    // 在画布中心位置添加节点
+    const position = {
+      x: Math.random() * 300 + 100,
+      y: Math.random() * 300 + 100
+    }
+    onAddNode(nodeType, position)
+  }
+  
+  return (
+    <div className="workflow-editor-node-panel">
+      <Card
+        title="节点库"
+        size="small"
+        bodyStyle={{ padding: '12px' }}
+      >
+        <div className="node-panel-section">
+          <h4>基础节点</h4>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {builtInNodes.map((node) => (
+              <Button
+                key={node.type}
+                block
+                icon={node.icon}
+                style={{
+                  borderColor: node.color,
+                  color: node.color,
+                  textAlign: 'left',
+                  height: 'auto',
+                  padding: '8px 12px'
+                }}
+                onClick={() => handleAddNode(node.type)}
+              >
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>{node.label}</div>
+                  <div style={{ fontSize: '12px', opacity: 0.7 }}>
+                    {node.description}
+                  </div>
+                </div>
+              </Button>
+            ))}
+          </Space>
+        </div>
+        
+        {nodeTypes && nodeTypes.length > 0 && (
+          <>
+            <Divider />
+            <div className="node-panel-section">
+              <h4>扩展节点</h4>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {nodeTypes.map((node) => (
+                  <Button
+                    key={node.type_key}
+                    block
+                    icon={<DatabaseOutlined />}
+                    onClick={() => handleAddNode(node.type_key)}
+                  >
+                    {node.display_name}
+                  </Button>
+                ))}
+              </Space>
+            </div>
+          </>
+        )}
+        
+        <Divider />
+        <div className="node-panel-tips">
+          <p style={{ fontSize: '12px', color: '#999', margin: 0 }}>
+            💡 点击节点添加到画布
+          </p>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+export default NodePanel
