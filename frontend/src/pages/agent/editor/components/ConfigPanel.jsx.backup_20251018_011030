@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react'
-import { Card, Form, Input, Select, InputNumber, Empty, Spin, Slider } from 'antd'
+import { Card, Form, Input, Select, InputNumber, Empty, Spin } from 'antd'
 import useAgentStore from '../../../../stores/agentStore'
 
 const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
@@ -78,11 +78,10 @@ const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
               <Form.Item
                 label="系统提示词"
                 name="system_prompt"
-                help="可选，用于设定AI的角色和行为"
               >
                 <Input.TextArea
                   rows={4}
-                  placeholder="例如: 你是一个专业的AI助手..."
+                  placeholder="输入系统提示词..."
                 />
               </Form.Item>
               
@@ -90,7 +89,6 @@ const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
                 label="AI模型"
                 name="model"
                 initialValue="claude-3-5-sonnet-20241022"
-                rules={[{ required: true, message: '请选择AI模型' }]}
               >
                 {modelsLoading ? (
                   <Spin size="small" />
@@ -110,31 +108,9 @@ const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
               </Form.Item>
               
               <Form.Item
-                label="历史轮数"
-                name="history_turns"
-                initialValue={10}
-                help="对话测试时保留的历史轮数（0=无记忆，10=推荐）"
-              >
-                <Slider
-                  min={0}
-                  max={100}
-                  marks={{
-                    0: '0',
-                    10: '10',
-                    50: '50',
-                    100: '100'
-                  }}
-                  tooltip={{
-                    formatter: (value) => `${value}轮 (${value * 2}条消息)`
-                  }}
-                />
-              </Form.Item>
-              
-              <Form.Item
                 label="温度"
                 name="temperature"
                 initialValue={0.7}
-                help="控制回复的随机性（0=精确，2=创意）"
               >
                 <InputNumber
                   min={0}
@@ -148,10 +124,9 @@ const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
                 label="最大Token数"
                 name="max_tokens"
                 initialValue={1000}
-                help="单次回复的最大长度"
               >
                 <InputNumber
-                  min={100}
+                  min={1}
                   max={4096}
                   style={{ width: '100%' }}
                 />
@@ -161,29 +136,16 @@ const ConfigPanel = ({ selectedNode, onUpdateConfig }) => {
           
           {/* 开始节点配置 */}
           {selectedNode.type === 'start' && (
-            <>
-              <Form.Item
-                label="欢迎语"
-                name="welcome_message"
-                help="可选，测试时显示的欢迎消息"
-              >
-                <Input.TextArea
-                  rows={3}
-                  placeholder="你好！我是AI助手，有什么可以帮你的吗？"
-                />
-              </Form.Item>
-              
-              <Form.Item
-                label="输入参数"
-                name="input_schema"
-                help="定义工作流的输入参数（JSON格式，可选）"
-              >
-                <Input.TextArea
-                  rows={4}
-                  placeholder='{"param1": "value1"}'
-                />
-              </Form.Item>
-            </>
+            <Form.Item
+              label="输入参数"
+              name="input_schema"
+              help="定义工作流的输入参数（JSON格式）"
+            >
+              <Input.TextArea
+                rows={6}
+                placeholder='{"param1": "value1"}'
+              />
+            </Form.Item>
           )}
           
           {/* 结束节点配置 */}

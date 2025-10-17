@@ -14,7 +14,7 @@ const useAgentStore = create((set, get) => ({
   nodeTypes: [],
   nodeTypesLoading: false,
   
-  // 用户可用模型列表
+  // 用户可用模型列表（新增）
   availableModels: [],
   modelsLoading: false,
   
@@ -48,11 +48,6 @@ const useAgentStore = create((set, get) => ({
   stats: null,
   statsLoading: false,
   
-  // 测试会话状态（新增）
-  testSession: null,
-  testMessages: [],
-  testLoading: false,
-  
   // ========== 节点类型相关 ==========
   
   /**
@@ -83,7 +78,7 @@ const useAgentStore = create((set, get) => ({
     return nodeTypes.find(nt => nt.type_key === typeKey)
   },
   
-  // ========== 模型相关 ==========
+  // ========== 模型相关（新增）==========
   
   /**
    * 获取用户可用的AI模型列表
@@ -289,7 +284,7 @@ const useAgentStore = create((set, get) => ({
   // ========== 执行相关 ==========
   
   /**
-   * 执行工作流（一次性执行）
+   * 执行工作流
    */
   executeWorkflow: async (id, inputData = {}) => {
     try {
@@ -319,150 +314,6 @@ const useAgentStore = create((set, get) => ({
       throw error
     }
   },
-  
-  // ========== 测试对话相关（新增）==========
-  
-  /**
-   * 创建测试会话
-   */
-  createTestSession: async (workflowId) => {
-    set({ testLoading: true })
-    try {
-      const response = await apiClient.post(`/agent/workflows/${workflowId}/test/session`)
-      
-      if (response.data.success) {
-        set({
-          testSession: response.data.data,
-          testMessages: [],
-          testLoading: false
-        })
-        return response.data.data
-      }
-    } catch (error) {
-      console.error('创建测试会话失败:', error)
-      message.error('创建测试会话失败')
-      set({ testLoading: false })
-      throw error
-    }
-  },
-  
-  /**
-   * 发送测试消息
-   */
-  sendTestMessage: async (workflowId, messageContent) => {
-    const { testSession, testMessages } = get()
-    
-    if (!testSession) {
-      throw new Error('测试会话不存在')
-    }
-    
-    set({ testLoading: true })
-    
-    // 添加用户消息到本地状态
-    const userMessage = {
-      role: 'user',
-      content: messageContent,
-      timestamp: new Date().toISOString()
-    }
-    
-    set({ testMessages: [...testMessages, userMessage] })
-    
-    try {
-      const response = await apiClient.post(
-        `/agent/workflows/${workflowId}/test/message`,
-        {
-          session_id: testSession.session_id,
-          message: messageContent
-        },
-        { timeout: 120000 }
-      )
-      
-      if (response.data.success) {
-        // 添加AI回复到本地状态
-        const aiMessage = response.data.data.message
-        
-        set({ 
-          testMessages: [...get().testMessages, aiMessage],
-          testLoading: false
-        })
-        
-        return response.data.data
-      }
-    } catch (error) {
-      console.error('发送测试消息失败:', error)
-      
-      // 移除用户消息（因为发送失败）
-      set({ 
-        testMessages: testMessages,
-        testLoading: false 
-      })
-      
-      if (error.response?.status === 402) {
-        message.error('积分不足，请先充值')
-      } else {
-        message.error(error.response?.data?.message || '发送消息失败')
-      }
-      
-      throw error
-    }
-  },
-  
-  /**
-   * 获取测试会话历史
-   */
-  getTestSessionHistory: async (workflowId, sessionId) => {
-    try {
-      const response = await apiClient.get(
-        `/agent/workflows/${workflowId}/test/history?session_id=${sessionId}`
-      )
-      
-      if (response.data.success) {
-        set({ testMessages: response.data.data.messages })
-        return response.data.data
-      }
-    } catch (error) {
-      console.error('获取会话历史失败:', error)
-      message.error('获取会话历史失败')
-      throw error
-    }
-  },
-  
-  /**
-   * 删除测试会话
-   */
-  deleteTestSession: async (workflowId, sessionId) => {
-    try {
-      const response = await apiClient.delete(
-        `/agent/workflows/${workflowId}/test/session`,
-        { data: { session_id: sessionId } }
-      )
-      
-      if (response.data.success) {
-        set({
-          testSession: null,
-          testMessages: []
-        })
-        return true
-      }
-    } catch (error) {
-      console.error('删除测试会话失败:', error)
-      message.error('删除测试会话失败')
-      throw error
-    }
-  },
-  
-  /**
-   * 清空测试状态
-   */
-  clearTestSession: () => {
-    set({
-      testSession: null,
-      testMessages: [],
-      testLoading: false
-    })
-  },
-  
-  // ========== 执行历史相关 ==========
   
   /**
    * 获取执行历史

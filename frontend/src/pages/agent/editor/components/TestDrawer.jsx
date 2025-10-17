@@ -1,258 +1,234 @@
 /**
- * 工作流测试抽屉
- * 在编辑器中直接测试工作流
+ * 工作流测试抽屉 - 对话式测试界面
+ * 类似 FastGPT 的运行预览，支持多轮对话
  */
 
-import React, { useState } from 'react'
-import { Drawer, Button, Form, Input, Alert, Steps, Card, Tag, Space, Spin, message } from 'antd'
+import React, { useState, useEffect, useRef } from 'react'
+import { Drawer, Input, Button, Alert, Empty, Space, Tag, Spin } from 'antd'
 import {
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LoadingOutlined,
-  ClockCircleOutlined
+  SendOutlined,
+  DeleteOutlined,
+  RobotOutlined,
+  UserOutlined
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
+import './TestDrawer.less'
 
 const { TextArea } = Input
-const { Step } = Steps
 
-const TestDrawer = ({ open, onClose, workflow, nodes }) => {
-  const [form] = Form.useForm()
-  const { executeWorkflow } = useAgentStore()
+const TestDrawer = ({ open, onClose, workflow }) => {
+  const {
+    testSession,
+    testMessages,
+    testLoading,
+    createTestSession,
+    sendTestMessage,
+    clearTestSession
+  } = useAgentStore()
   
-  const [executing, setExecuting] = useState(false)
-  const [executionResult, setExecutionResult] = useState(null)
-  const [error, setError] = useState(null)
+  const [inputValue, setInputValue] = useState('')
+  const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
   
-  // 获取 START 节点的输入参数配置
-  const getStartNodeConfig = () => {
-    const startNode = nodes.find(n => n.type === 'start')
-    if (!startNode) return {}
+  // 滚动到底部
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+  
+  // 消息更新时滚动
+  useEffect(() => {
+    scrollToBottom()
+  }, [testMessages])
+  
+  // 打开抽屉时创建会话并聚焦输入框
+  useEffect(() => {
+    if (open && workflow?.id) {
+      handleCreateSession()
+    }
     
-    try {
-      const inputSchema = startNode.data?.config?.input_schema
-      if (typeof inputSchema === 'string') {
-        return JSON.parse(inputSchema)
+    if (open) {
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 300)
+    }
+  }, [open])
+  
+  // 创建测试会话
+  const handleCreateSession = async () => {
+    if (!testSession) {
+      try {
+        await createTestSession(workflow.id)
+      } catch (error) {
+        console.error('创建会话失败:', error)
       }
-      return inputSchema || {}
-    } catch (e) {
-      return {}
     }
   }
   
-  // 执行工作流
-  const handleExecute = async (values) => {
-    if (!workflow?.id) {
-      message.error('工作流ID不存在')
-      return
-    }
+  // 发送消息
+  const handleSend = async () => {
+    if (!inputValue.trim()) return
     
-    setExecuting(true)
-    setError(null)
-    setExecutionResult(null)
+    const messageContent = inputValue.trim()
+    setInputValue('')
     
     try {
-      // 解析输入参数
-      let inputData = {}
-      if (values.input_json) {
-        try {
-          inputData = JSON.parse(values.input_json)
-        } catch (e) {
-          message.error('输入参数格式错误，请检查JSON格式')
-          setExecuting(false)
-          return
-        }
-      }
-      
-      const result = await executeWorkflow(workflow.id, inputData)
-      setExecutionResult(result)
-      message.success('工作流执行成功')
-    } catch (err) {
-      setError(err.message || '执行失败')
-      message.error('工作流执行失败')
-    } finally {
-      setExecuting(false)
+      await sendTestMessage(workflow.id, messageContent)
+    } catch (error) {
+      console.error('发送消息失败:', error)
     }
   }
   
-  // 渲染节点执行状态
-  const renderNodeExecutions = () => {
-    if (!executionResult?.nodeExecutions) return null
-    
-    return (
-      <div style={{ marginTop: 16 }}>
-        <h4>节点执行详情</h4>
-        <Steps direction="vertical" current={executionResult.nodeExecutions.length}>
-          {executionResult.nodeExecutions.map((nodeExec, index) => {
-            const statusIcon = nodeExec.status === 'completed' 
-              ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
-              : nodeExec.status === 'failed'
-              ? <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-              : <LoadingOutlined />
-            
-            return (
-              <Step
-                key={nodeExec.node_id}
-                title={
-                  <Space>
-                    {nodeExec.node_type}
-                    <Tag color={nodeExec.status === 'completed' ? 'success' : 'error'}>
-                      {nodeExec.status}
-                    </Tag>
-                  </Space>
-                }
-                description={
-                  <Card size="small" style={{ marginTop: 8 }}>
-                    {nodeExec.output && (
-                      <div>
-                        <strong>输出：</strong>
-                        <pre style={{ 
-                          background: '#f5f5f5', 
-                          padding: 8, 
-                          borderRadius: 4,
-                          marginTop: 8,
-                          maxHeight: 200,
-                          overflow: 'auto'
-                        }}>
-                          {typeof nodeExec.output === 'string' 
-                            ? nodeExec.output 
-                            : JSON.stringify(nodeExec.output, null, 2)
-                          }
-                        </pre>
-                      </div>
-                    )}
-                    {nodeExec.error_message && (
-                      <Alert
-                        type="error"
-                        message={nodeExec.error_message}
-                        style={{ marginTop: 8 }}
-                      />
-                    )}
-                    <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                      <ClockCircleOutlined /> 执行时间: {nodeExec.execution_time || 0}ms
-                    </div>
-                  </Card>
-                }
-                icon={statusIcon}
-              />
-            )
-          })}
-        </Steps>
-      </div>
-    )
+  // 按Enter发送（Shift+Enter换行）
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+  
+  // 清空对话
+  const handleClear = () => {
+    clearTestSession()
+    handleCreateSession()
+  }
+  
+  // 关闭抽屉时清理
+  const handleClose = () => {
+    clearTestSession()
+    onClose()
   }
   
   return (
     <Drawer
-      title="测试运行工作流"
+      title={
+        <Space>
+          <RobotOutlined />
+          测试运行 - {workflow?.name}
+        </Space>
+      }
       placement="right"
       width={600}
-      onClose={onClose}
+      onClose={handleClose}
       open={open}
-      destroyOnClose
+      destroyOnClose={false}
+      className="test-drawer"
     >
-      <Alert
-        message="测试模式"
-        description="在这里可以快速测试工作流的执行效果，无需离开编辑器。请确保工作流已保存。"
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-      />
-      
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleExecute}
-      >
-        <Form.Item
-          label="输入参数（JSON格式）"
-          name="input_json"
-          help="根据START节点配置的参数格式输入"
-        >
-          <TextArea
-            rows={6}
-            placeholder='例如: {"param1": "value1", "query": "你好"}'
-            disabled={executing}
-          />
-        </Form.Item>
-        
-        <Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            icon={<PlayCircleOutlined />}
-            loading={executing}
-            block
-            size="large"
-          >
-            {executing ? '执行中...' : '开始执行'}
-          </Button>
-        </Form.Item>
-      </Form>
-      
-      {executing && (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <Spin size="large" tip="工作流执行中，请稍候..." />
-        </div>
-      )}
-      
-      {error && (
+      <div className="test-chat-container">
         <Alert
-          message="执行失败"
-          description={error}
-          type="error"
+          message="对话测试模式"
+          description="每次发送消息都会从START节点开始执行工作流，LLM节点会记住完整对话历史。"
+          type="info"
           showIcon
           closable
-          style={{ marginTop: 16 }}
+          style={{ marginBottom: 16 }}
         />
-      )}
-      
-      {executionResult && (
-        <div style={{ marginTop: 16 }}>
-          <Card title="执行结果" size="small">
-            <div>
-              <Tag color={executionResult.status === 'completed' ? 'success' : 'error'}>
-                {executionResult.status}
-              </Tag>
-              <span style={{ marginLeft: 8 }}>
-                执行ID: {executionResult.executionId}
-              </span>
+        
+        {/* 对话消息列表 */}
+        <div className="test-messages-container">
+          {testMessages.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="开始对话吧！"
+              style={{ marginTop: 60 }}
+            />
+          ) : (
+            <div className="test-messages-list">
+              {testMessages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`test-message ${msg.role === 'user' ? 'user-message' : 'ai-message'}`}
+                >
+                  <div className="message-avatar">
+                    {msg.role === 'user' ? (
+                      <UserOutlined style={{ fontSize: 18 }} />
+                    ) : (
+                      <RobotOutlined style={{ fontSize: 18 }} />
+                    )}
+                  </div>
+                  <div className="message-content">
+                    <div className="message-header">
+                      <span className="message-role">
+                        {msg.role === 'user' ? '你' : 'AI助手'}
+                      </span>
+                      <span className="message-time">
+                        {new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    <div className="message-text">
+                      {msg.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {/* 加载中指示器 */}
+              {testLoading && (
+                <div className="test-message ai-message">
+                  <div className="message-avatar">
+                    <RobotOutlined style={{ fontSize: 18 }} />
+                  </div>
+                  <div className="message-content">
+                    <div className="message-header">
+                      <span className="message-role">AI助手</span>
+                    </div>
+                    <div className="message-text">
+                      <Spin size="small" /> 思考中...
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
             </div>
-            
-            {executionResult.output && (
-              <div style={{ marginTop: 16 }}>
-                <strong>最终输出：</strong>
-                <pre style={{ 
-                  background: '#f5f5f5', 
-                  padding: 12, 
-                  borderRadius: 4,
-                  marginTop: 8,
-                  maxHeight: 300,
-                  overflow: 'auto'
-                }}>
-                  {typeof executionResult.output === 'string' 
-                    ? executionResult.output 
-                    : JSON.stringify(executionResult.output, null, 2)
-                  }
-                </pre>
-              </div>
-            )}
-            
-            {executionResult.credits && (
-              <div style={{ marginTop: 16 }}>
-                <Alert
-                  message={`消耗积分: ${executionResult.credits.used}`}
-                  type="info"
-                  showIcon
-                />
-              </div>
-            )}
-          </Card>
-          
-          {renderNodeExecutions()}
+          )}
         </div>
-      )}
+        
+        {/* 输入区域 */}
+        <div className="test-input-container">
+          {testMessages.length > 0 && (
+            <div className="test-actions">
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={handleClear}
+                disabled={testLoading}
+              >
+                清空对话
+              </Button>
+              <Tag color="blue">
+                {testMessages.length} 条消息
+              </Tag>
+            </div>
+          )}
+          
+          <div className="test-input-wrapper">
+            <TextArea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="输入消息... (Enter发送，Shift+Enter换行)"
+              autoSize={{ minRows: 1, maxRows: 4 }}
+              disabled={testLoading}
+              className="test-input"
+            />
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={handleSend}
+              loading={testLoading}
+              disabled={!inputValue.trim() || testLoading}
+              className="test-send-button"
+            >
+              发送
+            </Button>
+          </div>
+        </div>
+      </div>
     </Drawer>
   )
 }

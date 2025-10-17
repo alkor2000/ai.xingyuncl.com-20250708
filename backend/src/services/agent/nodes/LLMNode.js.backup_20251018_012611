@@ -1,7 +1,7 @@
 /**
  * AI对话节点
  * 调用大语言模型进行对话和推理（非流式，用于工作流执行）
- * 支持对话历史管理、轮数控制和上游节点输出传递
+ * 支持对话历史管理和轮数控制
  */
 
 const BaseNode = require('./BaseNode');
@@ -30,34 +30,6 @@ class LLMNode extends BaseNode {
   }
 
   /**
-   * 提取上游输出的文本内容
-   * @param {*} upstreamOutput - 上游节点输出
-   * @returns {string} 提取的文本内容
-   */
-  extractUpstreamContent(upstreamOutput) {
-    if (!upstreamOutput) {
-      return null;
-    }
-
-    // 如果是对象，尝试提取 content 字段
-    if (typeof upstreamOutput === 'object') {
-      if (upstreamOutput.content) {
-        return upstreamOutput.content;
-      }
-      // 如果没有 content 字段，转为 JSON 字符串
-      return JSON.stringify(upstreamOutput);
-    }
-
-    // 如果是字符串，直接返回
-    if (typeof upstreamOutput === 'string') {
-      return upstreamOutput;
-    }
-
-    // 其他类型，转为字符串
-    return String(upstreamOutput);
-  }
-
-  /**
    * 执行AI对话节点
    * @param {Object} context - 执行上下文
    * @param {number} userId - 用户ID
@@ -68,8 +40,7 @@ class LLMNode extends BaseNode {
     try {
       this.log('info', 'AI对话节点开始执行', { 
         userId, 
-        nodeData: this.data,
-        hasUpstream: !!context.upstreamOutput
+        nodeData: this.data 
       });
 
       // 1. 获取模型名称（从 config.model 或 data.model_name）
@@ -119,38 +90,23 @@ class LLMNode extends BaseNode {
         });
       }
 
-      // 6. 获取系统提示词和用户提示词模板
+      // 6. 获取系统提示词和用户提示词
       const systemPromptTemplate = this.getConfig('system_prompt', '');
       const userPromptTemplate = this.getConfig('user_prompt') || this.getConfig('prompt');
 
-      // 7. 获取当前用户消息（优先级：模板 > 上游输出 > 原始输入）
+      // 7. 获取当前用户消息
       let currentUserMessage;
-      
       if (userPromptTemplate) {
-        // 优先级1: 如果配置了提示词模板，使用模板并替换变量
+        // 如果配置了提示词模板，使用模板并替换变量
         currentUserMessage = this.replaceVariables(userPromptTemplate, context);
-        this.log('info', '使用提示词模板', { templateLength: userPromptTemplate.length });
-      } 
-      else if (context.upstreamOutput) {
-        // 优先级2: 如果有上游节点输出，使用上游输出
-        currentUserMessage = this.extractUpstreamContent(context.upstreamOutput);
-        this.log('info', '使用上游节点输出', { 
-          upstreamType: typeof context.upstreamOutput,
-          messageLength: currentUserMessage.length 
-        });
-      }
-      else if (context.input && context.input.query) {
-        // 优先级3: 使用输入的 query
+      } else if (context.input && context.input.query) {
+        // 否则使用输入的 query
         currentUserMessage = context.input.query;
-        this.log('info', '使用原始输入query', { queryLength: currentUserMessage.length });
-      }
-      else if (context.input) {
-        // 优先级4: 使用整个输入对象
+      } else if (context.input) {
+        // 最后使用整个输入对象
         currentUserMessage = JSON.stringify(context.input);
-        this.log('info', '使用整个输入对象', { inputLength: currentUserMessage.length });
-      }
-      else {
-        throw new Error('无法获取用户输入：没有提示词模板、上游输出或输入数据');
+      } else {
+        throw new Error('用户提示词不能为空，且输入数据为空');
       }
 
       // 8. 处理系统提示词变量替换

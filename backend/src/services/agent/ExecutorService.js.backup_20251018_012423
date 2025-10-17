@@ -1,7 +1,6 @@
 /**
  * Agent工作流执行引擎
  * 负责工作流的编排、执行、积分管理和错误处理
- * 支持节点间数据传递和上下游连接
  */
 
 const NodeRegistry = require('./NodeRegistry');
@@ -73,15 +72,12 @@ class ExecutorService {
         edgeCount: edges.length
       });
 
-      // 5. 验证工作流连接性
-      this.validateWorkflowConnections(nodes, edges);
-
-      // 6. 验证节点类型和预估积分
+      // 5. 验证节点类型和预估积分
       const { nodeTypeMap, estimatedCredits } = await this.validateAndEstimateCredits(nodes);
 
       logger.info('积分预估完成', { estimatedCredits });
 
-      // 7. 预扣积分
+      // 6. 预扣积分
       const user = await User.findById(userId);
       if (!user) {
         throw new Error('用户不存在');
@@ -104,7 +100,7 @@ class ExecutorService {
         logger.info('积分预扣成功', { userId, amount: estimatedCredits });
       }
 
-      // 8. 创建执行记录
+      // 7. 创建执行记录
       executionId = await AgentExecution.create({
         workflow_id: workflowId,
         user_id: userId,
@@ -115,14 +111,14 @@ class ExecutorService {
 
       logger.info('执行记录创建成功', { executionId });
 
-      // 9. 拓扑排序（检测环形依赖）
+      // 8. 拓扑排序（检测环形依赖）
       const sortedNodes = this.topologicalSort(nodes, edges);
 
       logger.info('拓扑排序完成', { 
         executionOrder: sortedNodes.map(n => `${n.type}:${n.id}`)
       });
 
-      // 10. 执行节点
+      // 9. 执行节点
       const context = {
         input: inputData,
         variables: {},
@@ -158,34 +154,11 @@ class ExecutorService {
           // 获取节点类型配置（积分消耗）
           const nodeTypeConfig = nodeTypeMap.get(node.type);
 
-          // ===== 🔥 新增：查找上游节点输出并传递 =====
-          const incomingEdges = edges.filter(e => e.target === node.id);
-          
-          if (incomingEdges.length > 0) {
-            // 有上游节点，获取上游输出
-            const sourceNodeId = incomingEdges[0].source;
-            const upstreamOutput = context.variables[sourceNodeId];
-            
-            // 传递给当前节点
-            context.upstreamOutput = upstreamOutput;
-            
-            logger.info('传递上游节点输出', {
-              currentNode: node.id,
-              upstreamNode: sourceNodeId,
-              hasOutput: !!upstreamOutput
-            });
-          } else {
-            // 没有上游节点
-            context.upstreamOutput = null;
-          }
-          // ===== 结束 =====
-
           logger.info('执行节点', {
             executionId,
             nodeId: node.id,
             nodeType: node.type,
-            creditsPerExecution: nodeTypeConfig.credits_per_execution,
-            hasUpstream: !!context.upstreamOutput
+            creditsPerExecution: nodeTypeConfig.credits_per_execution
           });
 
           // 记录节点开始执行
@@ -249,7 +222,7 @@ class ExecutorService {
         }
       }
 
-      // 11. 计算实际消耗和退款
+      // 10. 计算实际消耗和退款
       const creditsToRefund = Math.max(0, preDeductedCredits - totalCreditsUsed);
 
       if (creditsToRefund > 0) {
@@ -264,7 +237,7 @@ class ExecutorService {
         logger.info('退还多扣积分', { userId, amount: creditsToRefund });
       }
 
-      // 12. 更新执行记录为成功
+      // 11. 更新执行记录为成功（修正：使用 'success'）
       await AgentExecution.update(executionId, {
         status: 'success',
         output_data: lastNodeOutput,
@@ -330,27 +303,6 @@ class ExecutorService {
       }
 
       throw error;
-    }
-  }
-
-  /**
-   * 验证工作流连接性（新增）
-   * 检查LLM节点是否有上游连接
-   */
-  validateWorkflowConnections(nodes, edges) {
-    for (const node of nodes) {
-      // LLM节点必须有上游连接
-      if (node.type === 'llm') {
-        const incomingEdges = edges.filter(e => e.target === node.id);
-        
-        if (incomingEdges.length === 0) {
-          throw new Error(`LLM节点 "${node.data?.label || node.id}" 必须连接上游节点`);
-        }
-        
-        if (incomingEdges.length > 1) {
-          throw new Error(`LLM节点 "${node.data?.label || node.id}" 只能有一个上游节点`);
-        }
-      }
     }
   }
 
