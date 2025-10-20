@@ -1,6 +1,5 @@
 /**
  * 速率限制服务 - 管理动态速率限制配置
- * 修复：支持enabled字段，禁用时不应用速率限制
  */
 
 const SystemConfig = require('../models/SystemConfig');
@@ -16,32 +15,27 @@ class RateLimitService {
       auth: {
         windowMs: 15 * 60 * 1000, // 15分钟
         max: 100, // 默认提升到100次
-        message: '认证请求过于频繁，请稍后再试',
-        enabled: true // 默认启用
+        message: '认证请求过于频繁，请稍后再试'
       },
       emailCode: {
         windowMs: 60 * 60 * 1000, // 1小时
         max: 10, // 提升到10次
-        message: '发送验证码过于频繁，请稍后再试',
-        enabled: true
+        message: '发送验证码过于频繁，请稍后再试'
       },
       global: {
         windowMs: 15 * 60 * 1000, // 15分钟
         max: 2000, // 全局限制2000次
-        message: '请求过于频繁，请稍后再试',
-        enabled: true
+        message: '请求过于频繁，请稍后再试'
       },
       adminRead: {
         windowMs: 15 * 60 * 1000, // 15分钟
         max: 3000, // 管理读操作3000次
-        message: '读取操作过于频繁，请稍后再试',
-        enabled: true
+        message: '读取操作过于频繁，请稍后再试'
       },
       adminWrite: {
         windowMs: 15 * 60 * 1000, // 15分钟
         max: 500, // 管理写操作500次
-        message: '写入操作过于频繁，请稍后再试',
-        enabled: true
+        message: '写入操作过于频繁，请稍后再试'
       }
     };
   }
@@ -71,7 +65,7 @@ class RateLimitService {
       await SystemConfig.updateSetting('rate_limit_config', config, 'json');
       // 清除所有缓存的限制器，强制重新创建
       this.limiters.clear();
-      logger.info('速率限制配置已更新，缓存已清除');
+      logger.info('速率限制配置已更新');
       return true;
     } catch (error) {
       logger.error('保存速率限制配置失败:', error);
@@ -81,7 +75,6 @@ class RateLimitService {
 
   /**
    * 获取或创建速率限制器
-   * 🔥 修复：支持enabled字段，禁用时返回空中间件
    */
   async getLimiter(type) {
     // 如果已有缓存的限制器，直接返回
@@ -96,15 +89,6 @@ class RateLimitService {
     if (!limitConfig) {
       logger.warn(`未找到类型为 ${type} 的速率限制配置，使用默认配置`);
       return this.createDefaultLimiter();
-    }
-
-    // 🔥 核心修复：检查enabled字段
-    if (limitConfig.enabled === false) {
-      logger.info(`速率限制 ${type} 已禁用，跳过限制`);
-      // 返回一个空中间件（直接放行，不限制）
-      const noopMiddleware = (req, res, next) => next();
-      this.limiters.set(type, noopMiddleware);
-      return noopMiddleware;
     }
 
     // 创建限制器
@@ -126,7 +110,6 @@ class RateLimitService {
 
     // 缓存限制器
     this.limiters.set(type, limiter);
-    logger.info(`速率限制 ${type} 已启用: ${limitConfig.max}次/${Math.floor(limitConfig.windowMs/60000)}分钟`);
     return limiter;
   }
 
