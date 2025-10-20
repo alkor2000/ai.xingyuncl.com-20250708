@@ -1,6 +1,6 @@
 /**
  * 知识模块模型
- * 最终修复：使用MEMBER OF进行类型安全的JSON数组查询
+ * 修复：统一group_ids的数据类型处理，确保类型安全的权限检查
  */
 
 const dbConnection = require('../database/connection');
@@ -63,7 +63,8 @@ class KnowledgeModule {
 
   /**
    * 获取用户可用的知识模块列表（优化版本）
-   * 🔧 最终修复：使用MEMBER OF进行JSON数组匹配
+   * 修复：正确处理系统级模块的权限和可见性
+   * 优化：减少N+1查询问题
    */
   static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
@@ -130,7 +131,7 @@ class KnowledgeModule {
       // 🔧 修复：确保groupId是整数
       const normalizedGroupId = parseInt(groupId, 10);
       
-      // 🔧 核心修复：使用MEMBER OF代替JSON_SEARCH
+      // 优化查询：使用LEFT JOIN一次性获取所有需要的数据
       let sql = `
         SELECT DISTINCT km.*, u.username as creator_name, ug.name as group_name,
                GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
@@ -158,11 +159,11 @@ class KnowledgeModule {
               AND kmtp2.tag_id IN (${userTagIds.map(() => '?').join(',')})
             )` : ''}
           ))
-          -- 🔧 最终修复：全局模块使用MEMBER OF进行类型安全的匹配
+          -- 🔧 修复：全局模块的权限检查，使用JSON_SEARCH确保类型安全
           OR (km.module_scope = 'system' AND (
             km.group_ids IS NULL  -- NULL表示所有组可见
             OR JSON_LENGTH(km.group_ids) = 0  -- 空数组也表示所有组可见
-            OR (? MEMBER OF (km.group_ids))  -- 使用MEMBER OF匹配整数
+            OR JSON_SEARCH(km.group_ids, 'one', ?, NULL, '$[*]') IS NOT NULL  -- 检查用户组ID是否在数组中
           ))
         )
       `;
@@ -171,7 +172,7 @@ class KnowledgeModule {
       if (userTagIds.length > 0) {
         params.push(...userTagIds);
       }
-      params.push(normalizedGroupId); // MEMBER OF使用整数参数
+      params.push(normalizedGroupId.toString()); // JSON_SEARCH需要字符串比较
       
       if (!includeInactive) {
         sql += ' AND km.is_active = 1';
@@ -216,8 +217,7 @@ class KnowledgeModule {
         userId,
         userGroupId: normalizedGroupId,
         userRole,
-        moduleCount: modules.length,
-        systemModules: modules.filter(m => m.module_scope === 'system').length
+        moduleCount: modules.length
       });
       
       return modules;

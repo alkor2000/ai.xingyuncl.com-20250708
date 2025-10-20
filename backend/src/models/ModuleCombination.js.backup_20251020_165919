@@ -1,6 +1,5 @@
 /**
  * 模块组合模型
- * 修复：确保权限检查时正确传递用户信息，统一类型处理
  */
 
 const dbConnection = require('../database/connection');
@@ -143,7 +142,7 @@ class ModuleCombination {
 
   /**
    * 创建模块组合
-   * 🔧 核心修复：确保正确传递用户角色和组ID进行权限验证
+   * 修复：传递用户角色给checkUserAccess，使用准确的token计算
    */
   static async create(data, userId) {
     const transaction = await dbConnection.beginTransaction();
@@ -151,22 +150,10 @@ class ModuleCombination {
     try {
       const { name, description, module_ids = [] } = data;
       
-      // 🔧 修复：获取用户完整信息（包括角色）
+      // 获取用户信息和角色
       const userResult = await transaction.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
-      
-      if (userResult.rows.length === 0) {
-        throw new Error('用户不存在');
-      }
-      
-      const userGroupId = parseInt(userResult.rows[0].group_id, 10);
-      const userRole = userResult.rows[0].role;
-      
-      logger.info('创建模块组合 - 用户信息', {
-        userId,
-        userGroupId,
-        userRole,
-        moduleCount: module_ids.length
-      });
+      const userGroupId = userResult.rows[0]?.group_id;
+      const userRole = userResult.rows[0]?.role;
       
       // 创建组合
       const sql = `
@@ -203,46 +190,32 @@ class ModuleCombination {
         estimatedTokens
       ]);
       
+      // 修复：正确获取insertId
       const combinationId = result.rows.insertId;
       
-      // 🔧 核心修复：添加模块关联时逐个验证权限
+      // 添加模块关联
       if (module_ids.length > 0) {
         for (let i = 0; i < module_ids.length; i++) {
           const moduleId = module_ids[i];
           
-          // 🔧 修复：正确传递所有参数给checkUserAccess
-          const hasAccess = await KnowledgeModule.checkUserAccess(
-            moduleId, 
-            userId, 
-            userGroupId,  // 确保传递整数类型的groupId
-            userRole      // 确保传递用户角色
-          );
-          
+          // 验证用户是否有权限使用该模块（传递用户角色）
+          const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId, userRole);
           if (!hasAccess) {
-            // 记录详细的权限检查失败信息
-            logger.error('用户无权使用模块，组合创建失败', {
-              userId,
-              userGroupId,
-              userRole,
-              moduleId,
-              combinationName: name
-            });
-            
-            throw new Error(`无权使用模块ID: ${moduleId}。请确认该模块的可见组设置包含您所在的组。`);
+            // 对超级管理员不应该出现这种情况
+            if (userRole === 'super_admin') {
+              logger.error('超级管理员权限检查失败', {
+                moduleId,
+                userId,
+                userRole
+              });
+            }
+            throw new Error(`无权使用模块ID: ${moduleId}`);
           }
           
-          // 权限检查通过，添加到组合
           await transaction.query(
             'INSERT INTO module_combination_items (combination_id, module_id, order_index) VALUES (?, ?, ?)',
             [combinationId, moduleId, i]
           );
-          
-          logger.debug('模块已添加到组合', {
-            combinationId,
-            moduleId,
-            orderIndex: i,
-            userId
-          });
         }
       }
       
@@ -252,7 +225,6 @@ class ModuleCombination {
         combinationId,
         name,
         userId,
-        userRole,
         moduleCount: module_ids.length,
         estimatedTokens
       });
@@ -261,34 +233,22 @@ class ModuleCombination {
     } catch (error) {
       await transaction.rollback();
       logger.error('创建模块组合失败:', error);
-      throw new DatabaseError(error.message || '创建模块组合失败', error);
+      throw new DatabaseError('创建模块组合失败', error);
     }
   }
 
   /**
    * 更新模块组合
-   * 🔧 修复：确保正确传递用户角色和组ID进行权限验证
+   * 修复：传递用户角色给checkUserAccess，使用准确的token计算
    */
   static async update(id, data, userId) {
     const transaction = await dbConnection.beginTransaction();
     
     try {
-      // 🔧 修复：获取用户完整信息（包括角色）
+      // 获取用户信息和角色
       const userResult = await transaction.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
-      
-      if (userResult.rows.length === 0) {
-        throw new Error('用户不存在');
-      }
-      
-      const userGroupId = parseInt(userResult.rows[0].group_id, 10);
-      const userRole = userResult.rows[0].role;
-      
-      logger.info('更新模块组合 - 用户信息', {
-        combinationId: id,
-        userId,
-        userGroupId,
-        userRole
-      });
+      const userGroupId = userResult.rows[0]?.group_id;
+      const userRole = userResult.rows[0]?.role;
       
       // 验证所有权（超级管理员可以修改任何组合）
       const combination = await ModuleCombination.findById(id);
@@ -296,7 +256,7 @@ class ModuleCombination {
         throw new Error('模块组合不存在');
       }
       
-      // 🔧 修复：超级管理员可以修改任何组合
+      // 修复：超级管理员可以修改任何组合
       if (combination.user_id !== userId && userRole !== 'super_admin') {
         throw new Error('无权修改此组合');
       }
@@ -326,7 +286,7 @@ class ModuleCombination {
         await transaction.query(sql, updateValues);
       }
       
-      // 🔧 核心修复：更新模块列表时验证权限
+      // 更新模块列表
       if (data.module_ids !== undefined) {
         // 删除旧的关联
         await transaction.query('DELETE FROM module_combination_items WHERE combination_id = ?', [id]);
@@ -355,42 +315,30 @@ class ModuleCombination {
             }
           }
           
-          // 🔧 修复：添加模块时逐个验证权限
+          // 添加模块
           for (let i = 0; i < module_ids.length; i++) {
             const moduleId = module_ids[i];
             
-            // 正确传递所有参数给checkUserAccess
-            const hasAccess = await KnowledgeModule.checkUserAccess(
-              moduleId, 
-              userId, 
-              userGroupId,  // 确保传递整数类型的groupId
-              userRole      // 确保传递用户角色
-            );
+            // 验证权限（传递用户角色）
+            const hasAccess = await KnowledgeModule.checkUserAccess(moduleId, userId, userGroupId, userRole);
             
             if (!hasAccess) {
-              logger.error('用户无权使用模块，组合更新失败', {
-                userId,
-                userGroupId,
-                userRole,
-                moduleId,
-                combinationId: id
-              });
-              
-              throw new Error(`无权使用模块ID: ${moduleId}。请确认该模块的可见组设置包含您所在的组。`);
+              // 对超级管理员记录警告
+              if (userRole === 'super_admin') {
+                logger.warn('超级管理员权限检查异常', {
+                  moduleId,
+                  userId,
+                  userRole,
+                  action: 'update_combination'
+                });
+              }
+              throw new Error(`无权使用模块ID: ${moduleId}`);
             }
             
-            // 权限检查通过，添加到组合
             await transaction.query(
               'INSERT INTO module_combination_items (combination_id, module_id, order_index) VALUES (?, ?, ?)',
               [id, moduleId, i]
             );
-            
-            logger.debug('模块已更新到组合', {
-              combinationId: id,
-              moduleId,
-              orderIndex: i,
-              userId
-            });
           }
         }
         
@@ -414,13 +362,13 @@ class ModuleCombination {
     } catch (error) {
       await transaction.rollback();
       logger.error('更新模块组合失败:', error);
-      throw new DatabaseError(error.message || '更新模块组合失败', error);
+      throw new DatabaseError('更新模块组合失败', error);
     }
   }
 
   /**
    * 删除模块组合
-   * 🔧 修复：超级管理员可以删除任何组合
+   * 修复：超级管理员可以删除任何组合
    */
   static async delete(id, userId) {
     try {
@@ -434,7 +382,7 @@ class ModuleCombination {
         throw new Error('模块组合不存在');
       }
       
-      // 🔧 修复：超级管理员可以删除任何组合
+      // 修复：超级管理员可以删除任何组合
       if (combination.user_id !== userId && userRole !== 'super_admin') {
         throw new Error('无权删除此组合');
       }
@@ -472,7 +420,7 @@ class ModuleCombination {
       // 获取用户角色和组信息
       const userResult = await dbConnection.query('SELECT role, group_id FROM users WHERE id = ?', [userId]);
       const userRole = userResult.rows[0]?.role;
-      const userGroupId = parseInt(userResult.rows[0]?.group_id, 10);
+      const userGroupId = userResult.rows[0]?.group_id;
       
       // 权限检查：只检查用户是否能使用这个组合
       if (userRole !== 'super_admin' && basicCombination.user_id !== userId) {
@@ -583,7 +531,7 @@ class ModuleCombination {
 
   /**
    * 复制组合
-   * 🔧 修复：需要检查用户对所有模块的访问权限
+   * 修复：需要检查用户对所有模块的访问权限
    */
   static async copy(id, userId, newName) {
     try {
@@ -594,7 +542,7 @@ class ModuleCombination {
       
       // 获取用户信息
       const userResult = await dbConnection.query('SELECT group_id, role FROM users WHERE id = ?', [userId]);
-      const userGroupId = parseInt(userResult.rows[0]?.group_id, 10);
+      const userGroupId = userResult.rows[0]?.group_id;
       const userRole = userResult.rows[0]?.role;
       
       // 过滤用户有权限的模块

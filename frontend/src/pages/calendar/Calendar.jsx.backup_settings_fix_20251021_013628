@@ -1,12 +1,9 @@
 /**
  * 智能日历 - 移动端Tab导航优化版
  * 
- * 最新修复：
- * 1. ✅ AI设置持久化到数据库，不再使用localStorage
- * 2. ✅ 登录后自动加载用户设置
- * 3. ✅ Tab切换时自动关闭所有Modal
- * 4. ✅ content字段改为可选，不强制必填
- * 5. ✅ 默认状态改为'daily'（日常）
+ * 最新优化：
+ * 1. Tab切换时自动关闭所有Modal，符合移动端导航直觉
+ * 2. 压缩移动端一键分析按钮区域padding，更紧凑
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -88,15 +85,11 @@ const CalendarPage = () => {
     aiModelsLoading,
     promptTemplates,
     configLoading,
-    settings,
-    settingsLoading,
     fetchEvents,
     fetchCategories,
     fetchAvailableModels,
     fetchCalendarConfig,
     fetchLatestAnalysis,
-    fetchSettings,
-    updateSettings,
     autoPerformAnalysis,
     createEvent,
     updateEvent,
@@ -203,7 +196,6 @@ const CalendarPage = () => {
         fetchCategories(),
         fetchAvailableModels(),
         fetchCalendarConfig(),
-        fetchSettings(),
         loadDateRangeEvents()
       ]);
       
@@ -226,17 +218,8 @@ const CalendarPage = () => {
     await fetchEvents(startDate, endDate);
   };
   
-  // 获取默认设置
+  // 配置持久化
   const getDefaultSettings = () => {
-    if (settings) {
-      return {
-        model_id: settings.default_model_id,
-        template_id: settings.template_id,
-        scan_days_before: settings.scan_days_before || 15,
-        scan_days_after: settings.scan_days_after || 15
-      };
-    }
-    
     const defaultModel = aiModels.find(m => m.is_active) || aiModels[0];
     return {
       model_id: defaultModel?.id || null,
@@ -246,12 +229,35 @@ const CalendarPage = () => {
     };
   };
   
-  // 统一Tab切换函数
+  const loadSettings = () => {
+    const key = `calendar_ai_settings_${user?.id || 'default'}`;
+    const saved = localStorage.getItem(key);
+    
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('解析配置失败:', e);
+      }
+    }
+    
+    return getDefaultSettings();
+  };
+  
+  const saveSettings = (settings) => {
+    const key = `calendar_ai_settings_${user?.id || 'default'}`;
+    localStorage.setItem(key, JSON.stringify(settings));
+  };
+  
+  // 🔥 新增：统一Tab切换函数，自动关闭所有Modal
   const handleTabSwitch = (tabName) => {
+    // 1. 关闭所有Modal
     setEventModalVisible(false);
     setSettingsModalVisible(false);
     setKnowledgeModalVisible(false);
     setHistoryModalVisible(false);
+    
+    // 2. 切换Tab
     setMobileTab(tabName);
   };
   
@@ -274,18 +280,18 @@ const CalendarPage = () => {
   const handleSelectDate = (date) => {
     setSelectedDate(date);
     if (isMobile) {
-      handleTabSwitch('events');
+      handleTabSwitch('events'); // 使用统一函数
     }
   };
   
-  // 🔧 修复：事项操作 - 默认状态改为'daily'
+  // 事项操作
   const handleCreateEvent = () => {
     setEditingEvent(null);
     form.resetFields();
     form.setFieldsValue({
       event_date: selectedDate,
       importance: 5,
-      status: 'daily',  // 🔧 修复：默认状态改为'daily'
+      status: 'not_started',
       recurrence_type: 'none',
       category: categories.length > 0 ? categories[0].name : '其他'
     });
@@ -342,24 +348,18 @@ const CalendarPage = () => {
     }
   };
   
-  // AI分析设置操作
+  // AI分析操作
   const handleOpenSettings = () => {
-    const currentSettings = getDefaultSettings();
-    settingsForm.setFieldsValue(currentSettings);
+    const settings = loadSettings();
+    settingsForm.setFieldsValue(settings);
     setSettingsModalVisible(true);
   };
   
   const handleSaveSettings = async () => {
     try {
       const values = await settingsForm.validateFields();
-      
-      await updateSettings({
-        default_model_id: values.model_id,
-        template_id: values.template_id,
-        scan_days_before: values.scan_days_before,
-        scan_days_after: values.scan_days_after
-      });
-      
+      saveSettings(values);
+      message.success('设置已保存');
       setSettingsModalVisible(false);
     } catch (error) {
       console.error('保存设置失败:', error);
@@ -367,26 +367,26 @@ const CalendarPage = () => {
   };
   
   const handleNewAnalysis = async () => {
-    const currentSettings = getDefaultSettings();
+    const settings = loadSettings();
     
-    if (!currentSettings.model_id) {
+    if (!settings.model_id) {
       message.warning('请先设置AI模型');
       handleOpenSettings();
       return;
     }
     
     try {
-      const totalDays = currentSettings.scan_days_before + currentSettings.scan_days_after;
+      const totalDays = settings.scan_days_before + settings.scan_days_after;
       
       await performAnalysis({
-        model_id: currentSettings.model_id,
-        template_id: currentSettings.template_id,
+        model_id: settings.model_id,
+        template_id: settings.template_id,
         scan_days: totalDays
       });
       
       if (isMobile) {
         setTimeout(() => {
-          handleTabSwitch('ai');
+          handleTabSwitch('ai'); // 使用统一函数
         }, 500);
       }
       
@@ -415,7 +415,7 @@ const CalendarPage = () => {
     setKnowledgeModalVisible(true);
   };
   
-  // 获取日期的前3个事项
+  // 获取日期的前3个事项（按重要度排序）
   const getTopEvents = (date) => {
     const dateKey = date.format('YYYY-MM-DD');
     const dayEvents = dateEvents[dateKey] || [];
@@ -454,7 +454,7 @@ const CalendarPage = () => {
 
   return (
     <div className="calendar-page calendar-grid-view">
-      {/* 移动端底部Tab导航 */}
+      {/* 🔥 移动端底部Tab导航 - 使用统一的handleTabSwitch函数 */}
       <div className="mobile-bottom-tabs">
         <div 
           className={`tab-item ${mobileTab === 'calendar' ? 'active' : ''}`}
@@ -664,6 +664,7 @@ const CalendarPage = () => {
             </div>
           </Spin>
           
+          {/* 🔥 移动端一键分析按钮区域 - 优化padding */}
           {isMobile && (
             <div className="mobile-quick-analysis">
               <Button 
@@ -773,7 +774,7 @@ const CalendarPage = () => {
           </div>
         </div>
 
-        {/* 移动端设置面板 */}
+        {/* 移动端扁平化设置面板 */}
         <div className={`calendar-settings-panel ${mobileTab === 'settings' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <h3>设置中心</h3>
@@ -827,7 +828,7 @@ const CalendarPage = () => {
         </div>
       </div>
       
-      {/* 事项表单Modal - 🔧 content字段不再必填 */}
+      {/* 事项表单Modal */}
       <Modal
         title={editingEvent ? '编辑事项' : '创建事项'}
         open={eventModalVisible}
@@ -939,7 +940,7 @@ const CalendarPage = () => {
         className="ai-analysis-modal mobile-fullscreen-modal"
         style={{ top: 20 }}
       >
-        <Spin spinning={aiModelsLoading || configLoading || settingsLoading}>
+        <Spin spinning={aiModelsLoading || configLoading}>
           <Form form={settingsForm} layout="vertical">
             <Form.Item
               name="model_id"
@@ -1035,7 +1036,7 @@ const CalendarPage = () => {
         </Spin>
       </Modal>
       
-      {/* 背景知识管理Modal */}
+      {/* 背景知识管理独立Modal */}
       <Modal
         title={<><BookOutlined /> 背景知识管理</>}
         open={knowledgeModalVisible}

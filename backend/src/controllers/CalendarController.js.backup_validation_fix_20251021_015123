@@ -1,10 +1,7 @@
 /**
  * 日历控制器
  * 处理所有日历相关的HTTP请求（包含背景知识管理）
- * 
- * 修复记录：
- * 1. ✅ content字段改为可选，只有title和event_date必填
- * 2. ✅ 默认状态改为'daily'（日常）
+ * 新增：title字段支持
  */
 
 const CalendarEvent = require('../models/CalendarEvent');
@@ -92,12 +89,8 @@ class CalendarController {
   }
 
   /**
-   * 创建事项
+   * 创建事项（支持title字段）
    * POST /api/calendar/events
-   * 
-   * 修复：
-   * 1. content字段改为可选
-   * 2. 默认状态改为'daily'（日常）
    */
   static async createEvent(req, res) {
     try {
@@ -105,27 +98,27 @@ class CalendarController {
       const {
         title,
         event_date,
-        content = '',  // 🔧 修复1：content默认为空字符串，改为可选
+        content,
         importance = 5,
         category = '其他',
         color,
-        status = 'daily',  // 🔧 修复2：默认状态改为'daily'
+        status = 'not_started',
         file_link,
         recurrence_type = 'none',
         recurrence_end_date,
         sort_order = 0
       } = req.body;
 
-      // 🔧 修复：只验证title和event_date必填
-      if (!title || !event_date) {
+      // 验证必填字段
+      if (!event_date || !content) {
         return ResponseHelper.validation(res, {
-          title: !title ? '事项标题不能为空' : null,
-          event_date: !event_date ? '事项日期不能为空' : null
+          event_date: !event_date ? '事项日期不能为空' : null,
+          content: !content ? '事项内容不能为空' : null
         });
       }
 
       // 验证title长度
-      if (title.length > 100) {
+      if (title && title.length > 100) {
         return ResponseHelper.validation(res, {
           title: '事项标题不能超过100个字符'
         });

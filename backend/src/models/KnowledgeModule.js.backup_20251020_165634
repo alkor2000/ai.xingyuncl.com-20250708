@@ -1,6 +1,5 @@
 /**
  * 知识模块模型
- * 最终修复：使用MEMBER OF进行类型安全的JSON数组查询
  */
 
 const dbConnection = require('../database/connection');
@@ -33,37 +32,9 @@ class KnowledgeModule {
   }
 
   /**
-   * 🔧 辅助方法：统一group_ids为整数数组
-   * 确保所有ID都是数字类型，避免类型匹配问题
-   */
-  static normalizeGroupIds(groupIds) {
-    if (!groupIds) return null;
-    
-    // 如果是字符串，尝试解析
-    if (typeof groupIds === 'string') {
-      try {
-        groupIds = JSON.parse(groupIds);
-      } catch (e) {
-        logger.warn('解析group_ids失败', { groupIds });
-        return null;
-      }
-    }
-    
-    // 如果是数组，确保所有元素都是整数
-    if (Array.isArray(groupIds)) {
-      const normalized = groupIds
-        .map(id => parseInt(id, 10))
-        .filter(id => !isNaN(id) && id > 0);
-      
-      return normalized.length > 0 ? normalized : null;
-    }
-    
-    return null;
-  }
-
-  /**
    * 获取用户可用的知识模块列表（优化版本）
-   * 🔧 最终修复：使用MEMBER OF进行JSON数组匹配
+   * 修复：正确处理系统级模块的权限和可见性
+   * 优化：减少N+1查询问题
    */
   static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
@@ -97,8 +68,14 @@ class KnowledgeModule {
           module.creator_name = row.creator_name;
           module.group_name = row.group_name;
           
-          // 解析group_ids - 使用统一的规范化方法
-          module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
+          // 解析group_ids
+          if (module.group_ids && typeof module.group_ids === 'string') {
+            try {
+              module.group_ids = JSON.parse(module.group_ids);
+            } catch (e) {
+              module.group_ids = null;
+            }
+          }
           
           // 解析allowed_tag_ids
           if (row.allowed_tag_ids_str) {
@@ -127,10 +104,7 @@ class KnowledgeModule {
       const { rows: userTagRows } = await dbConnection.query(userTagsSql, [userId]);
       const userTagIds = userTagRows.map(row => row.tag_id);
       
-      // 🔧 修复：确保groupId是整数
-      const normalizedGroupId = parseInt(groupId, 10);
-      
-      // 🔧 核心修复：使用MEMBER OF代替JSON_SEARCH
+      // 优化查询：使用LEFT JOIN一次性获取所有需要的数据
       let sql = `
         SELECT DISTINCT km.*, u.username as creator_name, ug.name as group_name,
                GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
@@ -158,20 +132,20 @@ class KnowledgeModule {
               AND kmtp2.tag_id IN (${userTagIds.map(() => '?').join(',')})
             )` : ''}
           ))
-          -- 🔧 最终修复：全局模块使用MEMBER OF进行类型安全的匹配
+          -- 全局模块：根据group_ids权限控制
           OR (km.module_scope = 'system' AND (
             km.group_ids IS NULL  -- NULL表示所有组可见
             OR JSON_LENGTH(km.group_ids) = 0  -- 空数组也表示所有组可见
-            OR (? MEMBER OF (km.group_ids))  -- 使用MEMBER OF匹配整数
+            OR JSON_CONTAINS(km.group_ids, CAST(? AS JSON), '$')  -- 检查用户组是否在允许列表中
           ))
         )
       `;
       
-      const params = [userId, normalizedGroupId, userId];
+      const params = [userId, groupId, userId];
       if (userTagIds.length > 0) {
         params.push(...userTagIds);
       }
-      params.push(normalizedGroupId); // MEMBER OF使用整数参数
+      params.push(groupId || 0);
       
       if (!includeInactive) {
         sql += ' AND km.is_active = 1';
@@ -186,8 +160,14 @@ class KnowledgeModule {
         module.creator_name = row.creator_name;
         module.group_name = row.group_name;
         
-        // 解析group_ids - 使用统一的规范化方法
-        module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
+        // 解析group_ids
+        if (module.group_ids && typeof module.group_ids === 'string') {
+          try {
+            module.group_ids = JSON.parse(module.group_ids);
+          } catch (e) {
+            module.group_ids = null;
+          }
+        }
         
         // 解析allowed_tag_ids
         if (row.allowed_tag_ids_str) {
@@ -210,14 +190,6 @@ class KnowledgeModule {
         }
         
         return module;
-      });
-      
-      logger.debug('获取用户可用模块', {
-        userId,
-        userGroupId: normalizedGroupId,
-        userRole,
-        moduleCount: modules.length,
-        systemModules: modules.filter(m => m.module_scope === 'system').length
       });
       
       return modules;
@@ -298,8 +270,14 @@ class KnowledgeModule {
         const module = new KnowledgeModule(row);
         module.creator_name = row.creator_name;
         
-        // 解析group_ids - 使用统一的规范化方法
-        module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
+        // 解析group_ids
+        if (module.group_ids && typeof module.group_ids === 'string') {
+          try {
+            module.group_ids = JSON.parse(module.group_ids);
+          } catch (e) {
+            module.group_ids = null;
+          }
+        }
         
         return module;
       });
@@ -335,8 +313,14 @@ class KnowledgeModule {
       module.creator_name = rows[0].creator_name;
       module.group_name = rows[0].group_name;
       
-      // 解析group_ids - 使用统一的规范化方法
-      module.group_ids = KnowledgeModule.normalizeGroupIds(rows[0].group_ids);
+      // 解析group_ids
+      if (module.group_ids && typeof module.group_ids === 'string') {
+        try {
+          module.group_ids = JSON.parse(module.group_ids);
+        } catch (e) {
+          module.group_ids = null;
+        }
+      }
       
       // 解析allowed_tag_ids
       if (rows[0].allowed_tag_ids_str) {
@@ -388,7 +372,6 @@ class KnowledgeModule {
 
   /**
    * 创建知识模块
-   * 🔧 修复：统一group_ids为整数数组
    */
   static async create(data, creatorId) {
     const transaction = await dbConnection.beginTransaction();
@@ -404,18 +387,11 @@ class KnowledgeModule {
       // 计算token数量
       const tokenCount = calculateTokens(data.content || '');
       
-      // 🔧 修复：处理group_ids，统一为整数数组并序列化
+      // 处理group_ids：如果是空数组或未指定，设为NULL（表示所有组可见）
       let processedGroupIds = null;
       if (module_scope === 'system' && group_ids) {
-        const normalized = KnowledgeModule.normalizeGroupIds(group_ids);
-        if (normalized && normalized.length > 0) {
-          processedGroupIds = JSON.stringify(normalized);
-          
-          logger.info('保存系统模块的group_ids', {
-            原始值: group_ids,
-            规范化后: normalized,
-            JSON字符串: processedGroupIds
-          });
+        if (Array.isArray(group_ids) && group_ids.length > 0) {
+          processedGroupIds = JSON.stringify(group_ids);
         }
       }
       
@@ -479,7 +455,6 @@ class KnowledgeModule {
 
   /**
    * 更新知识模块
-   * 🔧 修复：统一group_ids为整数数组
    */
   static async update(id, data, operatorId) {
     const transaction = await dbConnection.beginTransaction();
@@ -512,23 +487,13 @@ class KnowledgeModule {
       const allowedFields = ['name', 'description', 'prompt_type', 'content_visible', 
                            'category', 'tags', 'sort_order', 'is_active'];
       
-      // 🔧 修复：如果是系统级模块，允许更新group_ids（统一为整数数组）
+      // 如果是系统级模块，允许更新group_ids
       if (originalModule.module_scope === 'system' && data.group_ids !== undefined) {
         updateFields.push('group_ids = ?');
-        const normalized = KnowledgeModule.normalizeGroupIds(data.group_ids);
-        if (normalized && normalized.length > 0) {
-          const processedGroupIds = JSON.stringify(normalized);
-          updateValues.push(processedGroupIds);
-          
-          logger.info('更新系统模块的group_ids', {
-            moduleId: id,
-            原始值: data.group_ids,
-            规范化后: normalized,
-            JSON字符串: processedGroupIds
-          });
+        if (Array.isArray(data.group_ids) && data.group_ids.length > 0) {
+          updateValues.push(JSON.stringify(data.group_ids));
         } else {
           updateValues.push(null);
-          logger.info('清空系统模块的group_ids（设为所有组可见）', { moduleId: id });
         }
       }
       
@@ -616,7 +581,6 @@ class KnowledgeModule {
 
   /**
    * 检查用户是否有权限使用该模块
-   * 🔧 核心修复：确保类型安全的权限比较
    */
   static async checkUserAccess(moduleId, userId, groupId, userRole = null) {
     try {
@@ -634,9 +598,6 @@ class KnowledgeModule {
         });
         return true;
       }
-      
-      // 🔧 修复：确保groupId是整数
-      const normalizedGroupId = parseInt(groupId, 10);
       
       // 获取用户的标签ID列表
       const userTagsSql = `
@@ -657,7 +618,6 @@ class KnowledgeModule {
       const { rows } = await dbConnection.query(sql, [moduleId]);
       
       if (rows.length === 0) {
-        logger.warn('模块不存在或未激活', { moduleId, userId });
         return false;
       }
       
@@ -665,38 +625,23 @@ class KnowledgeModule {
       
       // 个人模块：只有创建者可以访问
       if (module.module_scope === 'personal') {
-        const hasAccess = module.creator_id === userId;
-        logger.debug('个人模块权限检查', {
-          moduleId,
-          userId,
-          creatorId: module.creator_id,
-          hasAccess
-        });
-        return hasAccess;
+        return module.creator_id === userId;
       }
       
       // 团队模块：检查组和标签权限
       if (module.module_scope === 'team') {
         // 首先检查是否同组
-        if (module.group_id !== normalizedGroupId) {
-          logger.debug('团队模块组不匹配', {
-            moduleId,
-            userId,
-            moduleGroupId: module.group_id,
-            userGroupId: normalizedGroupId
-          });
+        if (module.group_id !== groupId) {
           return false;
         }
         
         // 创建者始终有权限
         if (module.creator_id === userId) {
-          logger.debug('团队模块创建者访问', { moduleId, userId });
           return true;
         }
         
         // 如果没有标签限制，组内所有用户都有权限
         if (module.tag_permission_count === 0) {
-          logger.debug('团队模块无标签限制', { moduleId, userId });
           return true;
         }
         
@@ -708,57 +653,32 @@ class KnowledgeModule {
             WHERE module_id = ? AND tag_id IN (${userTagIds.map(() => '?').join(',')})
           `;
           const { rows: tagCheckRows } = await dbConnection.query(checkTagSql, [moduleId, ...userTagIds]);
-          const hasAccess = tagCheckRows[0].count > 0;
-          
-          logger.debug('团队模块标签权限检查', {
-            moduleId,
-            userId,
-            userTagIds,
-            matchCount: tagCheckRows[0].count,
-            hasAccess
-          });
-          
-          return hasAccess;
+          return tagCheckRows[0].count > 0;
         }
         
-        logger.debug('团队模块：用户无标签且模块有标签限制', { moduleId, userId });
         return false;
       }
       
-      // 🔧 核心修复：系统模块权限检查 - 类型安全的比较
+      // 系统模块：检查group_ids
       if (module.module_scope === 'system') {
-        // 解析group_ids - 使用统一的规范化方法
-        const allowedGroups = KnowledgeModule.normalizeGroupIds(module.group_ids);
+        // 解析group_ids
+        let allowedGroups = null;
+        if (module.group_ids) {
+          try {
+            allowedGroups = JSON.parse(module.group_ids);
+          } catch (e) {
+            allowedGroups = null;
+          }
+        }
         
         // NULL或空数组表示所有组可见
         if (!allowedGroups || allowedGroups.length === 0) {
-          logger.debug('系统模块对所有组可见', {
-            moduleId,
-            userId,
-            userGroupId: normalizedGroupId
-          });
           return true;
         }
         
-        // 🔧 类型安全的比较：统一为整数后比较
-        const hasAccess = allowedGroups.includes(normalizedGroupId);
-        
-        logger.debug('系统模块组权限检查', {
-          moduleId,
-          userId,
-          userGroupId: normalizedGroupId,
-          allowedGroups,
-          hasAccess
-        });
-        
-        return hasAccess;
+        // 检查用户组是否在允许列表中
+        return allowedGroups.includes(groupId);
       }
-      
-      logger.warn('未知的模块类型', {
-        moduleId,
-        moduleScope: module.module_scope,
-        userId
-      });
       
       return false;
     } catch (error) {

@@ -1,7 +1,6 @@
 /**
  * 日历用户设置模型
  * 管理用户的个性化设置
- * 更新：支持template_id、scan_days_before、scan_days_after字段
  */
 
 const dbConnection = require('../database/connection');
@@ -20,11 +19,9 @@ class CalendarUserSettings {
     try {
       let sql = `
         SELECT cus.*, 
-               am.display_name as default_model_name,
-               cpt.name as template_name
+               am.display_name as default_model_name
         FROM calendar_user_settings cus
         LEFT JOIN ai_models am ON cus.default_model_id = am.id
-        LEFT JOIN calendar_prompt_templates cpt ON cus.template_id = cpt.id
         WHERE cus.user_id = ?
       `;
       
@@ -37,9 +34,8 @@ class CalendarUserSettings {
       // 不存在则创建默认设置
       const insertSql = `
         INSERT INTO calendar_user_settings (
-          user_id, auto_analysis_enabled, auto_analysis_frequency, 
-          default_scan_range, scan_days_before, scan_days_after
-        ) VALUES (?, 0, 'weekly', 15, 15, 15)
+          user_id, auto_analysis_enabled, auto_analysis_frequency, default_scan_range
+        ) VALUES (?, 0, 'weekly', 15)
       `;
       
       await dbConnection.query(insertSql, [userId]);
@@ -65,10 +61,7 @@ class CalendarUserSettings {
         'auto_analysis_enabled',
         'auto_analysis_frequency',
         'default_scan_range',
-        'default_model_id',
-        'template_id',           // 新增
-        'scan_days_before',      // 新增
-        'scan_days_after'        // 新增
+        'default_model_id'
       ];
 
       const updateFields = [];
@@ -92,20 +85,6 @@ class CalendarUserSettings {
         }
       }
 
-      // 验证scan_days_before
-      if (data.scan_days_before !== undefined) {
-        if (data.scan_days_before < 1 || data.scan_days_before > 365) {
-          throw new ValidationError('今日前扫描天数必须在1-365天之间');
-        }
-      }
-
-      // 验证scan_days_after
-      if (data.scan_days_after !== undefined) {
-        if (data.scan_days_after < 1 || data.scan_days_after > 365) {
-          throw new ValidationError('今日后扫描天数必须在1-365天之间');
-        }
-      }
-
       // 验证自动分析频率
       if (data.auto_analysis_frequency !== undefined) {
         const validFrequencies = ['daily', 'weekly', 'monthly'];
@@ -118,11 +97,7 @@ class CalendarUserSettings {
       const sql = `UPDATE calendar_user_settings SET ${updateFields.join(', ')} WHERE user_id = ?`;
       await dbConnection.query(sql, updateValues);
 
-      logger.info('用户日历设置更新成功', { 
-        userId, 
-        updatedFields: updateFields,
-        values: data
-      });
+      logger.info('用户日历设置更新成功', { userId, updatedFields: updateFields });
 
       return await CalendarUserSettings.getOrCreate(userId);
     } catch (error) {
@@ -141,10 +116,7 @@ class CalendarUserSettings {
         SET auto_analysis_enabled = 0,
             auto_analysis_frequency = 'weekly',
             default_scan_range = 15,
-            default_model_id = NULL,
-            template_id = NULL,
-            scan_days_before = 15,
-            scan_days_after = 15
+            default_model_id = NULL
         WHERE user_id = ?
       `;
 
@@ -171,10 +143,6 @@ class CalendarUserSettings {
       default_scan_range: this.default_scan_range,
       default_model_id: this.default_model_id,
       default_model_name: this.default_model_name,
-      template_id: this.template_id,           // 新增
-      template_name: this.template_name,       // 新增
-      scan_days_before: this.scan_days_before, // 新增
-      scan_days_after: this.scan_days_after,   // 新增
       created_at: this.created_at,
       updated_at: this.updated_at
     };

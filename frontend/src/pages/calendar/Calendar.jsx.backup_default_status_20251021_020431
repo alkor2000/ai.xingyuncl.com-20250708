@@ -5,8 +5,6 @@
  * 1. ✅ AI设置持久化到数据库，不再使用localStorage
  * 2. ✅ 登录后自动加载用户设置
  * 3. ✅ Tab切换时自动关闭所有Modal
- * 4. ✅ content字段改为可选，不强制必填
- * 5. ✅ 默认状态改为'daily'（日常）
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -88,15 +86,15 @@ const CalendarPage = () => {
     aiModelsLoading,
     promptTemplates,
     configLoading,
-    settings,
+    settings,              // 🔧 使用store中的settings
     settingsLoading,
     fetchEvents,
     fetchCategories,
     fetchAvailableModels,
     fetchCalendarConfig,
     fetchLatestAnalysis,
-    fetchSettings,
-    updateSettings,
+    fetchSettings,         // 🔧 新增：从后端获取设置
+    updateSettings,        // 🔧 新增：保存设置到后端
     autoPerformAnalysis,
     createEvent,
     updateEvent,
@@ -203,7 +201,7 @@ const CalendarPage = () => {
         fetchCategories(),
         fetchAvailableModels(),
         fetchCalendarConfig(),
-        fetchSettings(),
+        fetchSettings(),      // 🔧 新增：加载用户设置
         loadDateRangeEvents()
       ]);
       
@@ -226,7 +224,7 @@ const CalendarPage = () => {
     await fetchEvents(startDate, endDate);
   };
   
-  // 获取默认设置
+  // 🔧 修复：获取默认设置（从store或生成默认值）
   const getDefaultSettings = () => {
     if (settings) {
       return {
@@ -246,12 +244,15 @@ const CalendarPage = () => {
     };
   };
   
-  // 统一Tab切换函数
+  // 统一Tab切换函数，自动关闭所有Modal
   const handleTabSwitch = (tabName) => {
+    // 1. 关闭所有Modal
     setEventModalVisible(false);
     setSettingsModalVisible(false);
     setKnowledgeModalVisible(false);
     setHistoryModalVisible(false);
+    
+    // 2. 切换Tab
     setMobileTab(tabName);
   };
   
@@ -278,14 +279,14 @@ const CalendarPage = () => {
     }
   };
   
-  // 🔧 修复：事项操作 - 默认状态改为'daily'
+  // 事项操作
   const handleCreateEvent = () => {
     setEditingEvent(null);
     form.resetFields();
     form.setFieldsValue({
       event_date: selectedDate,
       importance: 5,
-      status: 'daily',  // 🔧 修复：默认状态改为'daily'
+      status: 'not_started',
       recurrence_type: 'none',
       category: categories.length > 0 ? categories[0].name : '其他'
     });
@@ -342,7 +343,7 @@ const CalendarPage = () => {
     }
   };
   
-  // AI分析设置操作
+  // 🔧 修复：AI分析设置操作
   const handleOpenSettings = () => {
     const currentSettings = getDefaultSettings();
     settingsForm.setFieldsValue(currentSettings);
@@ -353,6 +354,7 @@ const CalendarPage = () => {
     try {
       const values = await settingsForm.validateFields();
       
+      // 🔧 核心修复：保存到数据库而不是localStorage
       await updateSettings({
         default_model_id: values.model_id,
         template_id: values.template_id,
@@ -415,7 +417,7 @@ const CalendarPage = () => {
     setKnowledgeModalVisible(true);
   };
   
-  // 获取日期的前3个事项
+  // 获取日期的前3个事项（按重要度排序）
   const getTopEvents = (date) => {
     const dateKey = date.format('YYYY-MM-DD');
     const dayEvents = dateEvents[dateKey] || [];
@@ -664,6 +666,7 @@ const CalendarPage = () => {
             </div>
           </Spin>
           
+          {/* 移动端一键分析按钮 */}
           {isMobile && (
             <div className="mobile-quick-analysis">
               <Button 
@@ -773,7 +776,7 @@ const CalendarPage = () => {
           </div>
         </div>
 
-        {/* 移动端设置面板 */}
+        {/* 移动端扁平化设置面板 */}
         <div className={`calendar-settings-panel ${mobileTab === 'settings' ? 'mobile-active' : ''}`}>
           <div className="panel-header">
             <h3>设置中心</h3>
@@ -827,7 +830,7 @@ const CalendarPage = () => {
         </div>
       </div>
       
-      {/* 事项表单Modal - 🔧 content字段不再必填 */}
+      {/* 事项表单Modal */}
       <Modal
         title={editingEvent ? '编辑事项' : '创建事项'}
         open={eventModalVisible}
@@ -1035,7 +1038,7 @@ const CalendarPage = () => {
         </Spin>
       </Modal>
       
-      {/* 背景知识管理Modal */}
+      {/* 背景知识管理独立Modal */}
       <Modal
         title={<><BookOutlined /> 背景知识管理</>}
         open={knowledgeModalVisible}
