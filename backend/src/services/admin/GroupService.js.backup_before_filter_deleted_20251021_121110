@@ -1,8 +1,5 @@
 /**
  * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限、组有效期、站点配置和邀请码功能）
- * 
- * 修复记录：
- * - getGroupUserCount: 改用deleted_at IS NULL过滤已删除用户
  */
 
 const User = require('../../models/User');
@@ -19,6 +16,7 @@ class GroupService {
       let groups;
 
       if (currentUser && currentUser.role === 'admin' && currentUser.group_id) {
+        // 管理员只能看到自己所在的组
         const sql = `
           SELECT g.*, 
                  COUNT(u.id) as user_count,
@@ -48,13 +46,14 @@ class GroupService {
                  g.invitation_max_uses,
                  g.invitation_expire_at
           FROM user_groups g
-          LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active' AND u.deleted_at IS NULL
+          LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           WHERE g.id = ?
           GROUP BY g.id
         `;
         const { rows } = await dbConnection.query(sql, [currentUser.group_id]);
         groups = rows;
       } else {
+        // 超级管理员可以看到所有组
         const sql = `
           SELECT g.*, 
                  COUNT(u.id) as user_count,
@@ -84,7 +83,7 @@ class GroupService {
                  g.invitation_max_uses,
                  g.invitation_expire_at
           FROM user_groups g
-          LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active' AND u.deleted_at IS NULL
+          LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
           GROUP BY g.id
           ORDER BY g.sort_order ASC, g.created_at ASC
         `;
@@ -99,20 +98,27 @@ class GroupService {
     }
   }
 
+  /**
+   * 创建用户分组 - 自动分配所有激活的AI模型权限
+   */
   static async createGroup(groupData, operatorId = null) {
     try {
       const { name, description, color, permissions = [], is_active = true, expire_date = null } = groupData;
 
+      // 验证必填字段
       if (!name) {
         throw new ValidationError('分组名称不能为空');
       }
 
+      // 检查分组名称是否已存在
       const existingGroup = await GroupService.findGroupByName(name);
       if (existingGroup) {
         throw new ConflictError('分组名称已存在');
       }
 
+      // 使用事务确保原子性 - 创建组和分配AI模型权限
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 创建分组
         const group = await User.createGroup({
           name,
           description,
@@ -122,14 +128,20 @@ class GroupService {
           expire_date
         }, operatorId);
 
+        // 2. 获取所有激活的AI模型（对话模型）
         const aiModelsSql = 'SELECT id, name, display_name FROM ai_models WHERE is_active = 1';
         const { rows: aiModels } = await query(aiModelsSql);
 
+        // 3. 获取所有激活的图像模型
         const imageModelsSql = 'SELECT id, name, display_name FROM image_models WHERE is_active = 1';
         const { rows: imageModels } = await query(imageModelsSql);
 
+        // 4. 自动分配所有AI对话模型给新创建的组
         if (aiModels.length > 0) {
           const aiModelAssignments = aiModels.map(model => [model.id, group.id, operatorId]);
+          const aiAssignSql = 'INSERT INTO ai_model_groups (model_id, group_id, created_by) VALUES ?';
+          
+          // MySQL的批量插入语法
           const aiInsertSql = `
             INSERT INTO ai_model_groups (model_id, group_id, created_by) 
             VALUES ${aiModelAssignments.map(() => '(?, ?, ?)').join(', ')}
@@ -145,6 +157,7 @@ class GroupService {
           });
         }
 
+        // 5. 记录图像模型数量（当前系统架构下图像模型权限可能通过其他机制管理）
         if (imageModels.length > 0) {
           logger.info('系统中存在激活的图像模型', {
             groupId: group.id,
@@ -178,20 +191,27 @@ class GroupService {
     }
   }
 
+  /**
+   * 更新用户分组
+   */
   static async updateGroup(groupId, updateData, operatorId = null) {
     try {
+      // 先检查分组是否存在
       const currentGroup = await GroupService.findGroupById(groupId);
       if (!currentGroup) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 如果要更新分组名称，检查是否与其他分组重复
       if (updateData.name && updateData.name !== currentGroup.name) {
         const existingGroup = await GroupService.findGroupByName(updateData.name);
+        // 使用宽松比较或转换类型，避免字符串和数字比较问题
         if (existingGroup && String(existingGroup.id) !== String(groupId)) {
           throw new ConflictError('分组名称已存在');
         }
       }
 
+      // 执行更新
       const group = await User.updateGroup(groupId, updateData);
 
       logger.info('更新用户分组成功', {
@@ -207,8 +227,12 @@ class GroupService {
     }
   }
 
+  /**
+   * 删除用户分组
+   */
   static async deleteGroup(groupId, operatorId = null) {
     try {
+      // 检查分组下是否还有用户
       const userCount = await GroupService.getGroupUserCount(groupId);
       if (userCount > 0) {
         throw new ValidationError(`该分组下还有${userCount}个用户，无法删除`);
@@ -228,6 +252,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 设置组邀请码（新增功能）
+   */
   static async setGroupInvitationCode(groupId, invitationData, operatorId = null) {
     try {
       const { 
@@ -237,21 +264,26 @@ class GroupService {
         expire_at = null 
       } = invitationData;
 
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
         if (enabled) {
+          // 启用邀请码
           if (!code) {
             throw new ValidationError('请输入邀请码');
           }
 
+          // 验证邀请码格式（5位英文数字）
           if (!/^[A-Za-z0-9]{5}$/.test(code)) {
             throw new ValidationError('邀请码必须是5位英文或数字');
           }
 
+          // 检查邀请码是否已被其他组使用
           const existingCodeSql = `
             SELECT id, name FROM user_groups 
             WHERE invitation_code = ? AND id != ?
@@ -262,6 +294,7 @@ class GroupService {
             throw new ConflictError(`邀请码已被"${existingGroups[0].name}"使用`);
           }
 
+          // 更新组邀请码设置
           const updateSql = `
             UPDATE user_groups 
             SET invitation_enabled = 1,
@@ -291,6 +324,7 @@ class GroupService {
             expireAt: expire_at
           });
         } else {
+          // 禁用邀请码
           const updateSql = `
             UPDATE user_groups 
             SET invitation_enabled = 0,
@@ -316,6 +350,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 根据邀请码查找组（新增功能）
+   */
   static async findGroupByInvitationCode(code) {
     try {
       if (!code) {
@@ -338,6 +375,7 @@ class GroupService {
 
       const group = rows[0];
 
+      // 检查组容量
       const hasCapacity = await GroupService.checkGroupCapacity(group.id, 1);
       if (!hasCapacity) {
         logger.warn('邀请码对应的组已满员', { 
@@ -355,18 +393,24 @@ class GroupService {
     }
   }
 
+  /**
+   * 使用邀请码（增加使用计数）（新增功能）
+   */
   static async useInvitationCode(code, userId, ipAddress = null) {
     try {
       if (!code) {
         return { success: false, message: '邀请码为空' };
       }
 
+      // 查找有效的邀请码
       const group = await GroupService.findGroupByInvitationCode(code);
       if (!group) {
         return { success: false, message: '邀请码无效或已过期' };
       }
 
+      // 使用事务记录使用情况
       await dbConnection.transaction(async (query) => {
+        // 1. 增加使用计数
         const updateSql = `
           UPDATE user_groups 
           SET invitation_usage_count = invitation_usage_count + 1,
@@ -375,6 +419,7 @@ class GroupService {
         `;
         await query(updateSql, [group.id]);
 
+        // 2. 记录使用日志
         const logSql = `
           INSERT INTO invitation_code_logs (group_id, invitation_code, user_id, ip_address, used_at)
           VALUES (?, ?, ?, ?, NOW())
@@ -401,11 +446,15 @@ class GroupService {
     }
   }
 
+  /**
+   * 获取邀请码使用记录（新增功能）
+   */
   static async getInvitationCodeLogs(groupId, options = {}) {
     try {
       const { page = 1, limit = 20 } = options;
       const offset = (page - 1) * limit;
 
+      // 获取使用记录
       const sql = `
         SELECT 
           l.*,
@@ -419,6 +468,7 @@ class GroupService {
       `;
       const { rows } = await dbConnection.query(sql, [groupId, limit, offset]);
 
+      // 获取总数
       const countSql = 'SELECT COUNT(*) as total FROM invitation_code_logs WHERE group_id = ?';
       const { rows: countRows } = await dbConnection.query(countSql, [groupId]);
       const total = countRows[0].total;
@@ -438,21 +488,27 @@ class GroupService {
     }
   }
 
+  /**
+   * 设置组积分池
+   */
   static async setGroupCreditsPool(groupId, creditsPool, operatorId = null) {
     try {
       if (typeof creditsPool !== 'number' || creditsPool < 0) {
         throw new ValidationError('积分池额度必须是非负数');
       }
 
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 如果减少积分池，确保不低于已使用额度
       if (creditsPool < group.credits_pool_used) {
         throw new ValidationError(`积分池额度不能低于已使用额度(${group.credits_pool_used})`);
       }
 
+      // 更新积分池
       const sql = 'UPDATE user_groups SET credits_pool = ?, updated_at = NOW() WHERE id = ?';
       await dbConnection.query(sql, [creditsPool, groupId]);
 
@@ -475,13 +531,18 @@ class GroupService {
     }
   }
 
+  /**
+   * 从组积分池分配积分给用户
+   */
   static async distributeCreditsFromPool(groupId, userId, amount, reason, distributorId) {
     try {
       if (typeof amount !== 'number' || amount <= 0) {
         throw new ValidationError('分配金额必须是正数');
       }
 
+      // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 获取组信息并锁定
         const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
         const { rows: groupRows } = await query(groupSql, [groupId]);
         
@@ -496,6 +557,7 @@ class GroupService {
           throw new ValidationError(`组积分池余额不足，剩余: ${remaining}，需要: ${amount}`);
         }
 
+        // 2. 更新组积分池已使用额度
         const updateGroupSql = `
           UPDATE user_groups 
           SET credits_pool_used = credits_pool_used + ?, 
@@ -504,6 +566,7 @@ class GroupService {
         `;
         await query(updateGroupSql, [amount, groupId]);
 
+        // 3. 获取用户信息
         const userSql = 'SELECT * FROM users WHERE id = ?';
         const { rows: userRows } = await query(userSql, [userId]);
         
@@ -513,10 +576,12 @@ class GroupService {
         
         const user = userRows[0];
         
+        // 检查用户是否属于该组
         if (user.group_id !== groupId) {
           throw new ValidationError('用户不属于该分组');
         }
 
+        // 4. 更新用户积分
         const oldQuota = user.credits_quota || 0;
         const newQuota = oldQuota + amount;
         
@@ -527,6 +592,7 @@ class GroupService {
         `;
         await query(updateUserSql, [newQuota, userId]);
 
+        // 5. 记录交易历史
         const transactionSql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id, distributor_id)
@@ -568,13 +634,18 @@ class GroupService {
     }
   }
 
+  /**
+   * 从用户回收积分到组积分池
+   */
   static async recycleCreditsToPool(groupId, userId, amount, reason, operatorId) {
     try {
       if (typeof amount !== 'number' || amount <= 0) {
         throw new ValidationError('回收金额必须是正数');
       }
 
+      // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 获取组信息并锁定
         const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
         const { rows: groupRows } = await query(groupSql, [groupId]);
         
@@ -584,6 +655,7 @@ class GroupService {
         
         const group = groupRows[0];
 
+        // 2. 获取用户信息并锁定
         const userSql = 'SELECT * FROM users WHERE id = ? FOR UPDATE';
         const { rows: userRows } = await query(userSql, [userId]);
         
@@ -593,15 +665,18 @@ class GroupService {
         
         const user = userRows[0];
         
+        // 检查用户是否属于该组
         if (user.group_id !== groupId) {
           throw new ValidationError('用户不属于该分组');
         }
 
+        // 检查用户可用积分
         const userAvailable = (user.credits_quota || 0) - (user.used_credits || 0);
         if (userAvailable < amount) {
           throw new ValidationError(`用户积分不足，可用余额: ${userAvailable}，需要回收: ${amount}`);
         }
 
+        // 3. 更新组积分池已使用额度（减少）
         const updateGroupSql = `
           UPDATE user_groups 
           SET credits_pool_used = GREATEST(0, credits_pool_used - ?), 
@@ -610,6 +685,7 @@ class GroupService {
         `;
         await query(updateGroupSql, [amount, groupId]);
 
+        // 4. 更新用户积分（减少）
         const newQuota = user.credits_quota - amount;
         
         const updateUserSql = `
@@ -619,6 +695,7 @@ class GroupService {
         `;
         await query(updateUserSql, [newQuota, userId]);
 
+        // 5. 记录交易历史（负数表示扣减）
         const transactionSql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id, distributor_id)
@@ -626,13 +703,14 @@ class GroupService {
         `;
         await query(transactionSql, [
           userId,
-          -amount,
+          -amount, // 负数表示扣减
           newQuota - (user.used_credits || 0),
           reason || '组积分池回收',
           operatorId,
           operatorId
         ]);
 
+        // 获取更新后的组信息
         const updatedGroupSql = 'SELECT credits_pool, credits_pool_used FROM user_groups WHERE id = ?';
         const { rows: updatedGroupRows } = await query(updatedGroupSql, [groupId]);
         const updatedGroup = updatedGroupRows[0];
@@ -664,6 +742,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 根据名称查找分组
+   */
   static async findGroupByName(name) {
     try {
       const sql = 'SELECT * FROM user_groups WHERE name = ?';
@@ -676,12 +757,12 @@ class GroupService {
   }
 
   /**
-   * 获取分组用户数量（🔧 核心修复：使用deleted_at过滤）
+   * 获取分组用户数量
    */
   static async getGroupUserCount(groupId) {
     try {
-      const sql = 'SELECT COUNT(*) as count FROM users WHERE group_id = ? AND deleted_at IS NULL';
-      const { rows } = await dbConnection.query(sql, [groupId]);
+      const sql = 'SELECT COUNT(*) as count FROM users WHERE group_id = ? AND status != ?';
+      const { rows } = await dbConnection.query(sql, [groupId, 'deleted']);
       return rows[0].count;
     } catch (error) {
       logger.error('获取分组用户数量失败', { error: error.message, groupId });
@@ -689,24 +770,31 @@ class GroupService {
     }
   }
 
+  /**
+   * 批量移动用户到新分组
+   */
   static async moveUsersToGroup(userIds, targetGroupId, operatorId = null) {
     try {
       if (!Array.isArray(userIds) || userIds.length === 0) {
         throw new ValidationError('用户ID列表不能为空');
       }
 
+      // 检查目标分组是否存在
       const targetGroup = await GroupService.findGroupById(targetGroupId);
       if (!targetGroup) {
         throw new ValidationError('目标分组不存在');
       }
 
+      // 检查目标组容量
       const hasCapacity = await GroupService.checkGroupCapacity(targetGroupId, userIds.length);
       if (!hasCapacity) {
         const currentCount = await GroupService.getGroupUserCount(targetGroupId);
         throw new ValidationError(`目标组已满员，当前 ${currentCount}/${targetGroup.user_limit}`);
       }
 
+      // 使用事务批量更新（包括同步有效期）
       const result = await dbConnection.transaction(async (query) => {
+        // 如果目标组有有效期设置，同步到用户
         let updateSql;
         let params;
         
@@ -715,7 +803,7 @@ class GroupService {
           updateSql = `
             UPDATE users 
             SET group_id = ?, expire_at = ?, updated_at = NOW() 
-            WHERE id IN (${placeholders}) AND deleted_at IS NULL AND role != 'super_admin'
+            WHERE id IN (${placeholders}) AND status != 'deleted' AND role != 'super_admin'
           `;
           params = [targetGroupId, targetGroup.expire_date, ...userIds];
         } else {
@@ -723,7 +811,7 @@ class GroupService {
           updateSql = `
             UPDATE users 
             SET group_id = ?, updated_at = NOW() 
-            WHERE id IN (${placeholders}) AND deleted_at IS NULL
+            WHERE id IN (${placeholders}) AND status != 'deleted'
           `;
           params = [targetGroupId, ...userIds];
         }
@@ -751,6 +839,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 根据ID查找分组（包含积分池信息、有效期、站点配置和邀请码信息）
+   */
   static async findGroupById(groupId) {
     try {
       const sql = 'SELECT * FROM user_groups WHERE id = ?';
@@ -762,6 +853,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 获取分组统计信息
+   */
   static async getGroupStats(groupId) {
     try {
       const sql = `
@@ -798,7 +892,7 @@ class GroupService {
           g.invitation_max_uses,
           g.invitation_expire_at
         FROM user_groups g
-        LEFT JOIN users u ON g.id = u.group_id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON g.id = u.group_id
         WHERE g.id = ?
         GROUP BY g.id
       `;
@@ -816,6 +910,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 检查组是否还有容量
+   */
   static async checkGroupCapacity(groupId, additionalCount = 1) {
     try {
       const group = await GroupService.findGroupById(groupId);
@@ -833,23 +930,30 @@ class GroupService {
     }
   }
 
+  /**
+   * 设置组员上限
+   */
   static async setGroupUserLimit(groupId, userLimit, operatorId = null) {
     try {
       if (typeof userLimit !== 'number' || userLimit < 1) {
         throw new ValidationError('组员上限必须是大于0的数字');
       }
 
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 获取当前组员数
       const currentCount = await GroupService.getGroupUserCount(groupId);
       
+      // 不能低于当前组员数
       if (userLimit < currentCount) {
         throw new ValidationError(`组员上限不能低于当前组员数(${currentCount}人)`);
       }
 
+      // 更新组员上限
       const sql = 'UPDATE user_groups SET user_limit = ?, updated_at = NOW() WHERE id = ?';
       await dbConnection.query(sql, [userLimit, groupId]);
 
@@ -873,22 +977,29 @@ class GroupService {
     }
   }
 
+  /**
+   * 设置组有效期（新增）
+   */
   static async setGroupExpireDate(groupId, expireDate, syncToUsers = false, operatorId = null) {
     try {
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 使用事务确保原子性
       await dbConnection.transaction(async (query) => {
+        // 1. 更新组有效期
         const updateGroupSql = 'UPDATE user_groups SET expire_date = ?, updated_at = NOW() WHERE id = ?';
         await query(updateGroupSql, [expireDate, groupId]);
 
+        // 2. 如果需要同步到用户
         if (syncToUsers) {
           const updateUsersSql = `
             UPDATE users 
             SET expire_at = ?, updated_at = NOW() 
-            WHERE group_id = ? AND role != 'super_admin' AND deleted_at IS NULL
+            WHERE group_id = ? AND role != 'super_admin'
           `;
           await query(updateUsersSql, [expireDate, groupId]);
 
@@ -919,8 +1030,12 @@ class GroupService {
     }
   }
 
+  /**
+   * 同步组有效期到所有组员（新增）
+   */
   static async syncGroupExpireDateToUsers(groupId, operatorId = null) {
     try {
+      // 获取组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
@@ -930,10 +1045,11 @@ class GroupService {
         throw new ValidationError('该组未设置有效期');
       }
 
+      // 更新所有组员的有效期（排除超管）
       const sql = `
         UPDATE users 
         SET expire_at = ?, updated_at = NOW() 
-        WHERE group_id = ? AND role != 'super_admin' AND deleted_at IS NULL
+        WHERE group_id = ? AND role != 'super_admin'
       `;
       const { rows } = await dbConnection.query(sql, [group.expire_date, groupId]);
       const affectedCount = rows.affectedRows;
@@ -957,6 +1073,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 克隆分组配置 - 包含自动分配AI模型权限
+   */
   static async cloneGroup(sourceGroupId, newGroupName, operatorId = null) {
     try {
       const sourceGroup = await GroupService.findGroupById(sourceGroupId);
@@ -964,7 +1083,9 @@ class GroupService {
         throw new ValidationError('源分组不存在');
       }
 
+      // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 创建新分组（包含有效期）- 这会自动分配所有激活的AI模型
         const newGroup = await GroupService.createGroup({
           name: newGroupName,
           description: `克隆自: ${sourceGroup.name}`,
@@ -974,13 +1095,16 @@ class GroupService {
           expire_date: sourceGroup.expire_date
         }, operatorId);
 
+        // 2. 克隆源组的AI模型分配关系（如果源组有特定的模型配置）
         const sourceModelAssignmentsSql = 'SELECT model_id FROM ai_model_groups WHERE group_id = ?';
         const { rows: sourceModels } = await query(sourceModelAssignmentsSql, [sourceGroupId]);
 
         if (sourceModels.length > 0) {
+          // 删除自动分配的模型，改为复制源组的模型配置
           const deleteAutoAssignedSql = 'DELETE FROM ai_model_groups WHERE group_id = ?';
           await query(deleteAutoAssignedSql, [newGroup.id]);
 
+          // 复制源组的模型分配
           const cloneAssignments = sourceModels.map(model => [model.model_id, newGroup.id, operatorId]);
           const cloneSql = `
             INSERT INTO ai_model_groups (model_id, group_id, created_by) 
@@ -1013,13 +1137,18 @@ class GroupService {
     }
   }
 
+  /**
+   * 设置组站点自定义（仅超级管理员）
+   */
   static async toggleGroupSiteCustomization(groupId, enabled, operatorId = null) {
     try {
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 更新站点自定义开关
       const sql = 'UPDATE user_groups SET site_customization_enabled = ?, updated_at = NOW() WHERE id = ?';
       await dbConnection.query(sql, [enabled ? 1 : 0, groupId]);
 
@@ -1041,19 +1170,25 @@ class GroupService {
     }
   }
 
+  /**
+   * 更新组站点配置（组管理员）
+   */
   static async updateGroupSiteConfig(groupId, siteConfig, operatorId = null) {
     try {
+      // 获取当前组信息
       const group = await GroupService.findGroupById(groupId);
       if (!group) {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 检查是否允许自定义
       if (!group.site_customization_enabled) {
         throw new ValidationError('该组未开启站点自定义功能');
       }
 
       const { site_name, site_logo } = siteConfig;
 
+      // 更新站点配置
       const sql = `
         UPDATE user_groups 
         SET site_name = ?, site_logo = ?, updated_at = NOW() 
@@ -1084,6 +1219,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 获取组站点配置（根据用户获取）
+   */
   static async getGroupSiteConfig(groupId) {
     try {
       const group = await GroupService.findGroupById(groupId);
@@ -1091,6 +1229,7 @@ class GroupService {
         return null;
       }
 
+      // 如果组开启了自定义且有配置
       if (group.site_customization_enabled && (group.site_name || group.site_logo)) {
         return {
           site_name: group.site_name,
@@ -1106,6 +1245,9 @@ class GroupService {
     }
   }
 
+  /**
+   * 为现有组补充分配AI模型权限（管理员工具方法）
+   */
   static async assignAllActiveModelsToGroup(groupId, operatorId = null) {
     try {
       const group = await GroupService.findGroupById(groupId);
@@ -1113,7 +1255,9 @@ class GroupService {
         throw new ValidationError('用户分组不存在');
       }
 
+      // 使用事务确保原子性
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 获取所有激活的AI模型
         const aiModelsSql = 'SELECT id, name, display_name FROM ai_models WHERE is_active = 1';
         const { rows: aiModels } = await query(aiModelsSql);
 
@@ -1121,16 +1265,19 @@ class GroupService {
           return { assignedCount: 0 };
         }
 
+        // 2. 获取该组已分配的模型
         const existingAssignmentsSql = 'SELECT model_id FROM ai_model_groups WHERE group_id = ?';
         const { rows: existingAssignments } = await query(existingAssignmentsSql, [groupId]);
         const existingModelIds = new Set(existingAssignments.map(a => a.model_id));
 
+        // 3. 找出需要新分配的模型
         const newModels = aiModels.filter(model => !existingModelIds.has(model.id));
 
         if (newModels.length === 0) {
           return { assignedCount: 0, message: '该组已分配了所有激活的AI模型' };
         }
 
+        // 4. 分配新的模型
         const newAssignments = newModels.map(model => [model.id, groupId, operatorId]);
         const insertSql = `
           INSERT INTO ai_model_groups (model_id, group_id, created_by) 

@@ -1,9 +1,5 @@
 /**
- * 用户服务层 - 处理用户相关的业务逻辑（包含账号有效期管理、标签支持和软删除）
- * 
- * 修复记录：
- * - deleteUser方法改为调用User Model的softDelete()
- * - 支持软删除，保留所有关联数据
+ * 用户服务层 - 处理用户相关的业务逻辑（包含账号有效期管理和标签支持）
  */
 
 const User = require('../../models/User');
@@ -62,8 +58,8 @@ class UserService {
         token_quota = defaultTokens,
         credits_quota = defaultCredits,
         credits_expire_days = 365,
-        account_expire_days = null,
-        expire_at = null,
+        account_expire_days = null, // 账号有效期天数（新增）
+        expire_at = null, // 直接设置有效期
         remark = null
       } = userData;
 
@@ -156,17 +152,21 @@ class UserService {
         }
       }
 
-      // 处理有效期更新
+      // 处理有效期更新（新增验证逻辑）
       if (updateData.expire_at !== undefined && operatorUser) {
+        // 组管理员的权限验证
         if (operatorUser.role === 'admin') {
+          // 组管理员只能管理本组用户
           if (user.group_id !== operatorUser.group_id) {
             throw new ValidationError('无权设置其他组用户的有效期');
           }
           
+          // 组管理员不能设置超级管理员的有效期
           if (user.role === 'super_admin') {
             throw new ValidationError('组管理员无权设置超级管理员的有效期');
           }
           
+          // 如果设置了有效期，需要验证不超过组有效期
           if (updateData.expire_at) {
             const group = await GroupService.findGroupById(user.group_id);
             if (group.expire_date) {
@@ -180,6 +180,7 @@ class UserService {
           }
         }
         
+        // 超级管理员账号不设置有效期
         if (user.role === 'super_admin' && updateData.expire_at) {
           delete updateData.expire_at;
           logger.info('超级管理员账号不设置有效期，已忽略expire_at字段');
@@ -191,6 +192,7 @@ class UserService {
                            parseInt(updateData.group_id) !== parseInt(user.group_id);
 
       if (isGroupChanged) {
+        // 检查目标组是否还有容量
         const hasCapacity = await GroupService.checkGroupCapacity(updateData.group_id);
         if (!hasCapacity) {
           const group = await GroupService.findGroupById(updateData.group_id);
@@ -198,15 +200,20 @@ class UserService {
           throw new ValidationError(`目标组已满员（${currentCount}/${group.user_limit}），无法加入`);
         }
 
+        // 处理分组变更时的积分
         const userRemainingCredits = Math.max(0, user.credits_quota - user.used_credits);
         const originalGroupId = user.group_id;
 
+        // 使用事务处理分组变更和积分操作
         await dbConnection.transaction(async (query) => {
+          // 1. 只有从非默认组转出时，才返还积分到原组积分池
           if (originalGroupId !== 1 && userRemainingCredits > 0) {
+            // 获取原组信息
             const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
             const { rows: groupRows } = await query(groupSql, [originalGroupId]);
             
             if (groupRows.length > 0) {
+              // 更新组积分池（减少已使用额度）
               const updateGroupSql = `
                 UPDATE user_groups 
                 SET credits_pool_used = GREATEST(0, credits_pool_used - ?), 
@@ -222,8 +229,9 @@ class UserService {
             }
           }
 
+          // 2. 获取新组的有效期设置（新增）
           let newExpireAt = null;
-          if (user.role !== 'super_admin') {
+          if (user.role !== 'super_admin') { // 超级管理员不设置有效期
             const newGroupSql = 'SELECT expire_date FROM user_groups WHERE id = ?';
             const { rows: newGroupRows } = await query(newGroupSql, [updateData.group_id]);
             
@@ -236,24 +244,29 @@ class UserService {
             }
           }
 
+          // 3. 更新用户信息，包括清零积分和同步有效期
           const finalUpdateData = {
             ...updateData,
-            credits_quota: 0
+            credits_quota: 0  // 分组变更时清零积分
           };
 
+          // 如果需要同步有效期
           if (newExpireAt !== null) {
             finalUpdateData.expire_at = newExpireAt;
           }
 
+          // 构建更新SQL
           const updateFields = Object.keys(finalUpdateData);
           const setClause = updateFields.map(field => `${field} = ?`).join(', ');
           const values = updateFields.map(field => finalUpdateData[field]);
           values.push(userId);
 
-          const updateUserSql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL`;
+          const updateUserSql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
           await query(updateUserSql, values);
 
+          // 4. 记录积分变动（如果有）
           if (userRemainingCredits > 0) {
+            // 使用已存在的 transaction_type
             const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
             const description = originalGroupId === 1 
               ? `分组变更（从默认组到组${updateData.group_id}），积分清零` 
@@ -266,7 +279,7 @@ class UserService {
             `;
             await query(transactionSql, [
               userId,
-              -userRemainingCredits,
+              -userRemainingCredits, // 负数表示扣减
               transactionType,
               description,
               operatorId
@@ -282,8 +295,10 @@ class UserService {
           clearedCredits: userRemainingCredits
         });
 
+        // 重新获取更新后的用户信息
         return await User.findById(userId);
       } else {
+        // 没有分组变更，执行普通更新
         const updatedUser = await user.update(updateData);
 
         logger.info('用户更新成功', {
@@ -301,7 +316,7 @@ class UserService {
   }
 
   /**
-   * 删除用户（软删除）- 核心修改
+   * 删除用户（软删除）
    */
   static async deleteUser(userId, operatorId = null) {
     try {
@@ -310,25 +325,24 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
-      // 调用User Model的软删除方法
-      await user.softDelete();
+      // 使用事务确保数据一致性
+      await dbConnection.transaction(async (query) => {
+        // 标记用户为已删除
+        await query(
+          'UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['deleted', userId]
+        );
 
-      logger.info('用户软删除成功', {
-        operatorId,
-        deletedUserId: userId,
-        deletedEmail: user.email,
-        deletedUsername: user.username
+        // 可以添加其他清理操作，如删除会话、令牌等
       });
 
-      return { 
-        success: true, 
-        message: '用户删除成功',
-        deletedUser: {
-          id: user.id,
-          username: user.username,
-          email: user.email
-        }
-      };
+      logger.info('用户删除成功', {
+        operatorId,
+        deletedUserId: userId,
+        deletedEmail: user.email
+      });
+
+      return { success: true, message: '用户删除成功' };
     } catch (error) {
       logger.error('删除用户失败', { error: error.message, userId });
       throw error;
@@ -345,6 +359,7 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 验证密码强度
       if (!newPassword || newPassword.length < 6) {
         throw new ValidationError('密码长度至少6个字符');
       }
@@ -376,11 +391,12 @@ class UserService {
         status,
         group_id,
         search,
-        include_tags = false,
+        include_tags = false,  // 新增：是否包含标签信息
         sort_by = 'created_at',
         sort_order = 'DESC'
       } = filters;
 
+      // 调用模型方法获取列表，传递include_tags参数
       const result = await User.getList({
         page,
         limit,
@@ -388,7 +404,7 @@ class UserService {
         status,
         group_id,
         search,
-        include_tags
+        include_tags  // 传递标签参数
       }, currentUser);
 
       return result;
@@ -411,12 +427,13 @@ class UserService {
         throw new ValidationError('无效的用户状态');
       }
 
+      // 使用事务批量更新
       const result = await dbConnection.transaction(async (query) => {
         const placeholders = userIds.map(() => '?').join(',');
         const sql = `
           UPDATE users 
           SET status = ?, updated_at = NOW() 
-          WHERE id IN (${placeholders}) AND deleted_at IS NULL
+          WHERE id IN (${placeholders})
         `;
         
         const { rows } = await query(sql, [status, ...userIds]);
@@ -447,6 +464,7 @@ class UserService {
   static async validateUserData({ email, username, password }) {
     const errors = [];
 
+    // 邮箱验证
     if (!email) {
       errors.push('邮箱不能为空');
     } else {
@@ -456,6 +474,7 @@ class UserService {
       }
     }
 
+    // 用户名验证
     if (!username) {
       errors.push('用户名不能为空');
     } else {
@@ -465,6 +484,7 @@ class UserService {
       }
     }
 
+    // 密码验证
     if (!password) {
       errors.push('密码不能为空');
     } else if (password.length < 6) {
@@ -488,6 +508,7 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 获取用户的统计信息
       const stats = {
         basic: {
           id: user.id,
@@ -531,14 +552,19 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 权限检查：组管理员只能查看本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权查看其他组用户的模型权限');
       }
 
+      // 获取用户组的所有可用模型
       const groupModels = await AIModel.getAvailableModelsByGroup(user.group_id);
+      
+      // 获取用户的模型限制
       const restrictions = await AIModel.getUserModelRestrictions(userId);
       const restrictedModelIds = restrictions.map(r => r.id);
 
+      // 构建模型权限信息
       const modelPermissions = groupModels.map(model => ({
         id: model.id,
         name: model.name,
@@ -576,22 +602,27 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 权限检查：组管理员只能管理本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权管理其他组用户的模型权限');
       }
 
+      // 获取用户组的所有可用模型
       const groupModels = await AIModel.getAvailableModelsByGroup(user.group_id);
       const groupModelIds = groupModels.map(m => m.id);
 
+      // 验证限制的模型是否都在组的可用模型中
       const invalidModelIds = restrictedModelIds.filter(id => !groupModelIds.includes(id));
       if (invalidModelIds.length > 0) {
         throw new ValidationError('包含无效的模型ID：这些模型不在用户组的可用范围内');
       }
 
+      // 不允许限制所有模型
       if (restrictedModelIds.length === groupModels.length) {
         throw new ValidationError('不能限制用户使用所有模型，至少要保留一个可用模型');
       }
 
+      // 更新模型限制
       await AIModel.updateUserModelRestrictions(userId, restrictedModelIds, operatorUser.id);
 
       logger.info('用户模型限制更新成功', {
@@ -601,6 +632,7 @@ class UserService {
         availableCount: groupModels.length - restrictedModelIds.length
       });
 
+      // 返回更新后的权限信息
       return await UserService.getUserModelPermissions(userId, operatorUser);
     } catch (error) {
       logger.error('更新用户模型限制失败', { error: error.message, userId });
@@ -618,27 +650,35 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 检查用户是否已在默认组
       if (user.group_id === 1) {
         throw new ValidationError('用户已在默认组，无需挪出');
       }
 
+      // 权限检查
       if (operatorUser.role === 'admin') {
+        // 组管理员只能挪出本组用户
         if (user.group_id !== operatorUser.group_id) {
           throw new ValidationError('无权挪出其他组的用户');
         }
+        // 组管理员不能挪出自己
         if (user.id === operatorUser.id) {
           throw new ValidationError('不能将自己挪出组');
         }
       }
 
+      // 超级管理员不能互相挪出
       if (user.role === 'super_admin' && operatorUser.role === 'super_admin') {
         throw new ValidationError('超级管理员之间不能互相挪出');
       }
 
+      // 计算用户剩余积分
       const userRemainingCredits = Math.max(0, user.credits_quota - user.used_credits);
       const originalGroupId = user.group_id;
 
+      // 使用事务处理所有操作
       const result = await dbConnection.transaction(async (query) => {
+        // 1. 获取原组信息
         const groupSql = 'SELECT * FROM user_groups WHERE id = ? FOR UPDATE';
         const { rows: groupRows } = await query(groupSql, [originalGroupId]);
         
@@ -648,8 +688,10 @@ class UserService {
         
         const originalGroup = groupRows[0];
 
+        // 2. 只有从非默认组挪出时，才返还积分到组积分池
         let actualReturnedCredits = 0;
         if (originalGroupId !== 1 && userRemainingCredits > 0) {
+          // 更新组积分池（减少已使用额度）
           const updateGroupSql = `
             UPDATE user_groups 
             SET credits_pool_used = GREATEST(0, credits_pool_used - ?), 
@@ -665,14 +707,16 @@ class UserService {
           });
         }
 
+        // 3. 将用户移动到默认组并清零积分，同时清除账号有效期（如果不是超管）
         let updateUserSql = `
           UPDATE users 
           SET group_id = 1, 
               credits_quota = 0,
               updated_at = NOW() 
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         
+        // 非超管用户移到默认组时清除有效期
         if (user.role !== 'super_admin') {
           updateUserSql = `
             UPDATE users 
@@ -680,13 +724,15 @@ class UserService {
                 credits_quota = 0,
                 expire_at = NULL,
                 updated_at = NOW() 
-            WHERE id = ? AND deleted_at IS NULL
+            WHERE id = ?
           `;
         }
         
         await query(updateUserSql, [userId]);
 
+        // 4. 记录积分变动（如果有）
         if (userRemainingCredits > 0) {
+          // 使用已存在的 transaction_type
           const transactionType = originalGroupId === 1 ? 'admin_set' : 'group_recycle';
           const description = originalGroupId === 1 
             ? '从默认组挪出，积分清零' 
@@ -699,7 +745,7 @@ class UserService {
           `;
           await query(transactionSql, [
             userId,
-            -userRemainingCredits,
+            -userRemainingCredits, // 负数表示扣减
             transactionType,
             description,
             operatorUser.id
@@ -740,7 +786,7 @@ class UserService {
   }
 
   /**
-   * 设置用户账号有效期
+   * 设置用户账号有效期（新增）
    */
   static async setUserAccountExpireDate(userId, expireDate, reason = '管理员设置', operatorUser) {
     try {
@@ -749,14 +795,17 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 权限检查：组管理员只能管理本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权设置其他组用户的有效期');
       }
 
+      // 组管理员不能设置超级管理员的有效期
       if (operatorUser.role === 'admin' && user.role === 'super_admin') {
         throw new ValidationError('组管理员无权设置超级管理员的有效期');
       }
 
+      // 组管理员设置的有效期不能超过组有效期
       if (operatorUser.role === 'admin' && expireDate) {
         const group = await GroupService.findGroupById(user.group_id);
         if (group.expire_date) {
@@ -769,6 +818,7 @@ class UserService {
         }
       }
 
+      // 调用用户模型的方法设置有效期
       const result = await user.setAccountExpireDate(expireDate, reason, operatorUser.id);
 
       logger.info('设置用户账号有效期成功', {
@@ -786,7 +836,7 @@ class UserService {
   }
 
   /**
-   * 延长用户账号有效期
+   * 延长用户账号有效期（新增）
    */
   static async extendUserAccountExpireDate(userId, days, reason = '管理员延期', operatorUser) {
     try {
@@ -795,14 +845,17 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 权限检查：组管理员只能管理本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权延长其他组用户的有效期');
       }
 
+      // 组管理员不能延长超级管理员的有效期
       if (operatorUser.role === 'admin' && user.role === 'super_admin') {
         throw new ValidationError('组管理员无权延长超级管理员的有效期');
       }
 
+      // 组管理员延长后的有效期不能超过组有效期
       if (operatorUser.role === 'admin') {
         const group = await GroupService.findGroupById(user.group_id);
         if (group.expire_date) {
@@ -816,6 +869,7 @@ class UserService {
         }
       }
 
+      // 调用用户模型的方法延长有效期
       const result = await user.extendAccountExpireDate(days, reason, operatorUser.id);
 
       logger.info('延长用户账号有效期成功', {
@@ -833,7 +887,7 @@ class UserService {
   }
 
   /**
-   * 同步用户有效期到组有效期
+   * 同步用户有效期到组有效期（新增）
    */
   static async syncUserAccountExpireWithGroup(userId, operatorUser) {
     try {
@@ -842,10 +896,12 @@ class UserService {
         throw new ValidationError('用户不存在');
       }
 
+      // 权限检查：组管理员只能管理本组用户
       if (operatorUser.role === 'admin' && user.group_id !== operatorUser.group_id) {
         throw new ValidationError('无权同步其他组用户的有效期');
       }
 
+      // 调用用户模型的方法同步有效期
       const result = await user.syncAccountExpireWithGroup();
 
       logger.info('同步用户有效期成功', {

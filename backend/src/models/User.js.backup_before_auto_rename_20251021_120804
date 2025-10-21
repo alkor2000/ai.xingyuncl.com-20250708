@@ -1,10 +1,9 @@
 /**
- * 用户模型 - 支持用户分组、积分管理、UUID和软删除（自动重命名释放唯一字段）
+ * 用户模型 - 支持用户分组、积分管理、UUID和软删除
  * 
  * 软删除说明：
  * - deleted_at IS NULL     → 正常用户
  * - deleted_at IS NOT NULL → 已删除用户
- * - 删除时自动重命名 email/username/uuid，释放唯一字段，允许重新注册
  * - 所有查询自动过滤已删除用户
  */
 
@@ -578,44 +577,17 @@ class User {
   }
 
   /**
-   * 软删除用户（核心方法 - 自动重命名唯一字段）
+   * 软删除用户（核心方法）
    */
   async softDelete() {
     try {
-      // 使用Unix时间戳确保唯一性
-      const timestamp = Math.floor(Date.now() / 1000);
-      const newEmail = `deleted_${timestamp}_${this.email}`;
-      const newUsername = `deleted_${timestamp}_${this.username}`;
-      const newUuid = `deleted_${timestamp}_${this.uuid}`;
-      
-      const sql = `
-        UPDATE users 
-        SET deleted_at = NOW(), 
-            status = ?, 
-            email = ?,
-            username = ?,
-            uuid = ?,
-            updated_at = NOW() 
-        WHERE id = ? AND deleted_at IS NULL
-      `;
-      await dbConnection.query(sql, ['inactive', newEmail, newUsername, newUuid, this.id]);
-      
-      const oldEmail = this.email;
-      const oldUsername = this.username;
+      const sql = 'UPDATE users SET deleted_at = NOW(), status = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL';
+      await dbConnection.query(sql, ['inactive', this.id]);
       
       this.deleted_at = new Date();
       this.status = 'inactive';
-      this.email = newEmail;
-      this.username = newUsername;
-      this.uuid = newUuid;
       
-      logger.info('用户软删除成功（已重命名唯一字段，释放注册资格）', { 
-        userId: this.id, 
-        oldEmail,
-        oldUsername,
-        newEmail,
-        newUsername
-      });
+      logger.info('用户软删除成功', { userId: this.id, email: this.email });
     } catch (error) {
       logger.error('软删除用户失败:', error);
       throw new DatabaseError('删除用户失败', error);

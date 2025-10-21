@@ -1,11 +1,5 @@
 /**
- * 用户模型 - 支持用户分组、积分管理、UUID和软删除（自动重命名释放唯一字段）
- * 
- * 软删除说明：
- * - deleted_at IS NULL     → 正常用户
- * - deleted_at IS NOT NULL → 已删除用户
- * - 删除时自动重命名 email/username/uuid，释放唯一字段，允许重新注册
- * - 所有查询自动过滤已删除用户
+ * 用户模型 - 支持用户分组、积分管理和UUID（SSO支持）
  */
 
 const bcrypt = require('bcryptjs');
@@ -49,7 +43,7 @@ class User {
   }
 
   /**
-   * 根据ID查找用户（自动过滤已删除）
+   * 根据ID查找用户
    */
   static async findById(id) {
     try {
@@ -63,7 +57,7 @@ class User {
                g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.id = ? AND u.deleted_at IS NULL
+        WHERE u.id = ?
       `;
       const { rows } = await dbConnection.query(sql, [id]);
       
@@ -79,7 +73,7 @@ class User {
   }
 
   /**
-   * 根据UUID查找用户（自动过滤已删除）
+   * 根据UUID查找用户（SSO支持）
    */
   static async findByUUID(uuid) {
     try {
@@ -93,7 +87,7 @@ class User {
                g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.uuid = ? AND u.deleted_at IS NULL
+        WHERE u.uuid = ?
       `;
       const { rows } = await dbConnection.query(sql, [uuid]);
       
@@ -109,7 +103,7 @@ class User {
   }
 
   /**
-   * 根据邮箱查找用户（自动过滤已删除）
+   * 根据邮箱查找用户
    */
   static async findByEmail(email) {
     try {
@@ -123,7 +117,7 @@ class User {
                g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.email = ? AND u.deleted_at IS NULL
+        WHERE u.email = ?
       `;
       const { rows } = await dbConnection.query(sql, [email]);
       
@@ -139,7 +133,7 @@ class User {
   }
 
   /**
-   * 根据用户名查找用户（自动过滤已删除）
+   * 根据用户名查找用户
    */
   static async findByUsername(username) {
     try {
@@ -153,7 +147,7 @@ class User {
                g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.username = ? AND u.deleted_at IS NULL
+        WHERE u.username = ?
       `;
       const { rows } = await dbConnection.query(sql, [username]);
       
@@ -169,7 +163,7 @@ class User {
   }
 
   /**
-   * 根据手机号查找用户（自动过滤已删除）
+   * 根据手机号查找用户
    */
   static async findByPhone(phone) {
     try {
@@ -183,7 +177,7 @@ class User {
                g.site_logo as group_site_logo
         FROM users u
         LEFT JOIN user_groups g ON u.group_id = g.id
-        WHERE u.phone = ? AND u.deleted_at IS NULL
+        WHERE u.phone = ?
       `;
       const { rows } = await dbConnection.query(sql, [phone]);
       
@@ -353,7 +347,7 @@ class User {
   }
 
   /**
-   * 获取用户列表 - 支持基于用户组的权限过滤和标签信息（自动过滤已删除）
+   * 获取用户列表 - 支持基于用户组的权限过滤和标签信息
    */
   static async getList(options = {}, currentUser = null) {
     try {
@@ -371,7 +365,7 @@ class User {
       
       logger.info('开始获取用户列表', { page, limit, role, status, group_id, search, include_tags, requesterRole, requesterGroupId });
       
-      let whereConditions = ['u.deleted_at IS NULL']; // 🔧 核心：过滤已删除用户
+      let whereConditions = [];
       let params = [];
 
       if (currentUser) {
@@ -556,7 +550,7 @@ class User {
       const values = updateFields.map(field => updateData[field === 'password_hash' ? 'password_hash' : field]);
       values.push(this.id);
 
-      const sql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL`;
+      const sql = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
       await dbConnection.query(sql, values);
 
       updateFields.forEach(field => {
@@ -578,55 +572,18 @@ class User {
   }
 
   /**
-   * 软删除用户（核心方法 - 自动重命名唯一字段）
-   */
-  async softDelete() {
-    try {
-      // 使用Unix时间戳确保唯一性
-      const timestamp = Math.floor(Date.now() / 1000);
-      const newEmail = `deleted_${timestamp}_${this.email}`;
-      const newUsername = `deleted_${timestamp}_${this.username}`;
-      const newUuid = `deleted_${timestamp}_${this.uuid}`;
-      
-      const sql = `
-        UPDATE users 
-        SET deleted_at = NOW(), 
-            status = ?, 
-            email = ?,
-            username = ?,
-            uuid = ?,
-            updated_at = NOW() 
-        WHERE id = ? AND deleted_at IS NULL
-      `;
-      await dbConnection.query(sql, ['inactive', newEmail, newUsername, newUuid, this.id]);
-      
-      const oldEmail = this.email;
-      const oldUsername = this.username;
-      
-      this.deleted_at = new Date();
-      this.status = 'inactive';
-      this.email = newEmail;
-      this.username = newUsername;
-      this.uuid = newUuid;
-      
-      logger.info('用户软删除成功（已重命名唯一字段，释放注册资格）', { 
-        userId: this.id, 
-        oldEmail,
-        oldUsername,
-        newEmail,
-        newUsername
-      });
-    } catch (error) {
-      logger.error('软删除用户失败:', error);
-      throw new DatabaseError('删除用户失败', error);
-    }
-  }
-
-  /**
-   * 删除用户（软删除别名，兼容旧代码）
+   * 删除用户
    */
   async delete() {
-    return await this.softDelete();
+    try {
+      const sql = 'DELETE FROM users WHERE id = ?';
+      await dbConnection.query(sql, [this.id]);
+      
+      logger.info('用户删除成功', { userId: this.id, email: this.email });
+    } catch (error) {
+      logger.error('删除用户失败:', error);
+      throw new DatabaseError('删除用户失败', error);
+    }
   }
 
   /**
@@ -642,15 +599,16 @@ class User {
   }
 
   /**
-   * 获取用户权限 - 基于角色和用户组的权限系统
+   * 获取用户权限 - 基于角色和用户组的权限系统（新增calendar.use）
    */
   async getPermissions() {
     try {
+      // 超级管理员拥有所有权限
       if (this.role === 'super_admin') {
         return [
           'chat.use', 
           'file.upload', 
-          'calendar.use',
+          'calendar.use',  // 新增：日历权限
           'system.all', 
           'user.manage', 
           'group.manage', 
@@ -659,11 +617,12 @@ class User {
         ];
       }
 
+      // 管理员权限 - 基于用户组的权限
       if (this.role === 'admin') {
         return [
           'chat.use', 
           'file.upload', 
-          'calendar.use',
+          'calendar.use',  // 新增：日历权限
           'user.manage.group',
           'user.view.group',
           'user.password.group',
@@ -672,6 +631,7 @@ class User {
         ];
       }
 
+      // 普通用户权限 - 从数据库permissions表获取
       if (this.role === 'user') {
         const sql = `
           SELECT DISTINCT permission_type 
@@ -680,9 +640,13 @@ class User {
         `;
         const { rows } = await dbConnection.query(sql, [this.id]);
         
+        // 返回数据库中的权限列表
         const dbPermissions = rows.map(row => row.permission_type);
+        
+        // 基础权限（所有用户默认拥有）
         const basePermissions = ['chat.use', 'file.upload'];
         
+        // 合并并去重
         return [...new Set([...basePermissions, ...dbPermissions])];
       }
 
@@ -694,7 +658,7 @@ class User {
   }
 
   /**
-   * 检查是否有特定权限
+   * 检查是否有特定权限（支持用户组权限检查）
    */
   async hasPermission(permission, targetUserId = null) {
     const permissions = await this.getPermissions();
@@ -723,14 +687,7 @@ class User {
    * 检查用户状态
    */
   isActive() {
-    return this.status === 'active' && !this.deleted_at;
-  }
-
-  /**
-   * 检查是否已删除
-   */
-  isDeleted() {
-    return this.deleted_at !== null;
+    return this.status === 'active';
   }
 
   /**
@@ -770,7 +727,7 @@ class User {
       const sql = `
         UPDATE users 
         SET used_tokens = used_tokens + ?, updated_at = NOW()
-        WHERE id = ? AND deleted_at IS NULL
+        WHERE id = ?
       `;
       await dbConnection.query(sql, [tokens, this.id]);
 
@@ -788,7 +745,7 @@ class User {
    */
   async updateLastLogin() {
     try {
-      const sql = 'UPDATE users SET last_login_at = NOW() WHERE id = ? AND deleted_at IS NULL';
+      const sql = 'UPDATE users SET last_login_at = NOW() WHERE id = ?';
       await dbConnection.query(sql, [this.id]);
       this.last_login_at = new Date();
     } catch (error) {
@@ -801,7 +758,7 @@ class User {
    */
   async incrementLoginAttempts() {
     try {
-      const sql = 'UPDATE users SET login_attempts = login_attempts + 1 WHERE id = ? AND deleted_at IS NULL';
+      const sql = 'UPDATE users SET login_attempts = login_attempts + 1 WHERE id = ?';
       await dbConnection.query(sql, [this.id]);
       this.login_attempts = (this.login_attempts || 0) + 1;
     } catch (error) {
@@ -814,7 +771,7 @@ class User {
    */
   async resetLoginAttempts() {
     try {
-      const sql = 'UPDATE users SET login_attempts = 0 WHERE id = ? AND deleted_at IS NULL';
+      const sql = 'UPDATE users SET login_attempts = 0 WHERE id = ?';
       await dbConnection.query(sql, [this.id]);
       this.login_attempts = 0;
     } catch (error) {
@@ -835,7 +792,7 @@ class User {
                AVG(u.used_tokens) as avg_tokens_used,
                AVG(u.used_credits) as avg_credits_used
         FROM user_groups g
-        LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active' AND u.deleted_at IS NULL
+        LEFT JOIN users u ON g.id = u.group_id AND u.status = 'active'
         GROUP BY g.id
         ORDER BY g.sort_order ASC, g.created_at ASC
       `;
@@ -915,10 +872,7 @@ class User {
    */
   static async deleteGroup(groupId) {
     try {
-      const { rows: users } = await dbConnection.query(
-        'SELECT COUNT(*) as count FROM users WHERE group_id = ? AND deleted_at IS NULL', 
-        [groupId]
-      );
+      const { rows: users } = await dbConnection.query('SELECT COUNT(*) as count FROM users WHERE group_id = ?', [groupId]);
       if (users[0].count > 0) {
         throw new ValidationError('该分组下还有用户，无法删除');
       }
@@ -1021,7 +975,7 @@ class User {
         const updateSql = `
           UPDATE users 
           SET credits_quota = ?, used_credits = ?, updated_at = NOW()
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         await query(updateSql, [newQuota, newUsedCredits, this.id]);
 
@@ -1099,7 +1053,7 @@ class User {
           updateParams.push(extendDays, extendDays);
         }
         
-        updateSql += ' WHERE id = ? AND deleted_at IS NULL';
+        updateSql += ' WHERE id = ?';
         updateParams.push(this.id);
         
         await query(updateSql, updateParams);
@@ -1121,7 +1075,7 @@ class User {
 
         if (extendDays) {
           const { rows: [userData] } = await query(
-            'SELECT credits_expire_at FROM users WHERE id = ? AND deleted_at IS NULL',
+            'SELECT credits_expire_at FROM users WHERE id = ?',
             [this.id]
           );
           this.credits_expire_at = userData.credits_expire_at;
@@ -1177,7 +1131,7 @@ class User {
         const updateSql = `
           UPDATE users 
           SET credits_quota = ?, used_credits = ?, updated_at = NOW()
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         await query(updateSql, [newQuota, usedCredits, this.id]);
 
@@ -1238,7 +1192,7 @@ class User {
 
         const result = await dbConnection.transaction(async (query) => {
           const { rows: balanceRows } = await query(
-            'SELECT credits_quota - used_credits as balance FROM users WHERE id = ? AND deleted_at IS NULL',
+            'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
             [this.id]
           );
           const balanceAfter = balanceRows[0].balance;
@@ -1287,12 +1241,12 @@ class User {
         const updateSql = `
           UPDATE users 
           SET used_credits = used_credits + ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         await query(updateSql, [amount, this.id]);
 
         const { rows: balanceRows } = await query(
-          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ? AND deleted_at IS NULL',
+          'SELECT credits_quota - used_credits as balance FROM users WHERE id = ?',
           [this.id]
         );
         const balanceAfter = balanceRows[0].balance;
@@ -1350,14 +1304,14 @@ class User {
         const updateSql = `
           UPDATE users 
           SET credits_expire_at = ?, updated_at = NOW()
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         await query(updateSql, [expireDate, this.id]);
 
         const historySql = `
           INSERT INTO credit_transactions 
           (user_id, amount, balance_after, transaction_type, description, operator_id)
-          VALUES (?, 0, (SELECT credits_quota - used_credits FROM users WHERE id = ? AND deleted_at IS NULL), 
+          VALUES (?, 0, (SELECT credits_quota - used_credits FROM users WHERE id = ?), 
                   'admin_set', ?, ?)
         `;
         await query(historySql, [
@@ -1449,7 +1403,7 @@ class User {
                u.username as operator_name,
                am.display_name as model_name
         FROM credit_transactions ct
-        LEFT JOIN users u ON ct.operator_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON ct.operator_id = u.id
         LEFT JOIN ai_models am ON ct.related_model_id = am.id
         WHERE ${whereClause}
         ORDER BY ct.created_at DESC
@@ -1520,7 +1474,7 @@ class User {
         const updateSql = `
           UPDATE users 
           SET expire_at = ?, updated_at = NOW()
-          WHERE id = ? AND deleted_at IS NULL
+          WHERE id = ?
         `;
         await query(updateSql, [expireDate, this.id]);
 

@@ -1,9 +1,5 @@
 /**
  * 数据分析服务 - 提供多维度的数据分析和BI统计
- * 
- * 修复记录：
- * - 所有涉及users表的JOIN添加deleted_at IS NULL过滤
- * - 共修复6个分析方法中的约20处查询
  */
 
 const dbConnection = require('../../database/connection');
@@ -15,6 +11,12 @@ const moment = require('moment');
 class AnalyticsService {
   /**
    * 获取综合分析数据
+   * @param {Object} options - 查询选项
+   * @param {Date} options.startDate - 开始日期
+   * @param {Date} options.endDate - 结束日期
+   * @param {Number} options.groupId - 组ID（组管理员必传）
+   * @param {Array} options.tagIds - 标签ID列表
+   * @param {String} options.timeGranularity - 时间粒度：day/week/month
    */
   static async getComprehensiveAnalytics(options = {}) {
     try {
@@ -26,6 +28,7 @@ class AnalyticsService {
         timeGranularity = 'day'
       } = options;
 
+      // 构建基础查询条件
       const baseConditions = [];
       const params = [];
 
@@ -48,6 +51,7 @@ class AnalyticsService {
         ? `WHERE ${baseConditions.join(' AND ')}` 
         : '';
 
+      // 获取各个维度的分析数据 - 传递groupId用于用户分析
       const [
         overviewData,
         timeSeriesData,
@@ -58,7 +62,7 @@ class AnalyticsService {
       ] = await Promise.all([
         this.getOverviewAnalytics(whereClause, params),
         this.getTimeSeriesAnalytics(whereClause, params, timeGranularity),
-        this.getUserAnalytics(whereClause, params, tagIds, groupId, startDate, endDate),
+        this.getUserAnalytics(whereClause, params, tagIds, groupId, startDate, endDate), // 传递groupId
         this.getModelAnalytics(whereClause, params),
         this.getModuleAnalytics(whereClause, params),
         this.getTagAnalytics(groupId)
@@ -85,7 +89,7 @@ class AnalyticsService {
   }
 
   /**
-   * 获取概览分析数据（🔧 已修复：添加deleted_at过滤）
+   * 获取概览分析数据
    */
   static async getOverviewAnalytics(whereClause, params) {
     try {
@@ -100,7 +104,7 @@ class AnalyticsService {
           AVG(ABS(ct.amount)) as avg_credits_per_transaction,
           COUNT(DISTINCT DATE(ct.created_at)) as active_days
         FROM credit_transactions ct
-        LEFT JOIN users u ON ct.user_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON ct.user_id = u.id
         LEFT JOIN conversations c ON ct.related_conversation_id = c.id
         ${whereClause}
       `;
@@ -114,7 +118,7 @@ class AnalyticsService {
   }
 
   /**
-   * 获取时间序列分析数据（🔧 已修复：添加deleted_at过滤）
+   * 获取时间序列分析数据
    */
   static async getTimeSeriesAnalytics(whereClause, params, granularity = 'day') {
     try {
@@ -130,11 +134,12 @@ class AnalyticsService {
           dateFormat = '%Y-%m';
           dateGroup = 'DATE_FORMAT(ct.created_at, "%Y-%m")';
           break;
-        default:
+        default: // day
           dateFormat = '%Y-%m-%d';
           dateGroup = 'DATE_FORMAT(ct.created_at, "%Y-%m-%d")';
       }
 
+      // 修复：GROUP BY使用与SELECT相同的表达式
       const sql = `
         SELECT 
           DATE_FORMAT(ct.created_at, '${dateFormat}') as period,
@@ -147,7 +152,7 @@ class AnalyticsService {
           SUM(CASE WHEN ct.transaction_type = 'image_consume' THEN ABS(ct.amount) ELSE 0 END) as image_credits,
           SUM(CASE WHEN ct.transaction_type = 'video_consume' THEN ABS(ct.amount) ELSE 0 END) as video_credits
         FROM credit_transactions ct
-        LEFT JOIN users u ON ct.user_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON ct.user_id = u.id
         LEFT JOIN conversations c ON ct.related_conversation_id = c.id
         ${whereClause}
         GROUP BY DATE_FORMAT(ct.created_at, '${dateFormat}')
@@ -163,13 +168,15 @@ class AnalyticsService {
   }
 
   /**
-   * 获取用户分析数据（🔧 已修复：添加deleted_at过滤）
+   * 获取用户分析数据 - 修复参数顺序问题
    */
   static async getUserAnalytics(whereClause, params, tagIds = [], groupId = null, startDate = null, endDate = null) {
     try {
+      // 重要修复：构建正确的参数顺序
       let topUsersParams = [];
       
-      let userWhereConditions = ['u.deleted_at IS NULL'];
+      // 构建WHERE条件（用于筛选用户）
+      let userWhereConditions = [];
       let userWhereParams = [];
       
       if (groupId) {
@@ -177,8 +184,11 @@ class AnalyticsService {
         userWhereParams.push(groupId);
       }
       
-      const userWhereClause = 'WHERE ' + userWhereConditions.join(' AND ');
+      const userWhereClause = userWhereConditions.length > 0 
+        ? 'WHERE ' + userWhereConditions.join(' AND ')
+        : '';
 
+      // 构建日期条件（用于JOIN）
       let dateCondition = '';
       let dateParams = [];
       if (startDate && endDate) {
@@ -187,8 +197,11 @@ class AnalyticsService {
         dateParams.push(moment(endDate).format('YYYY-MM-DD'));
       }
 
+      // 按照SQL中占位符的顺序组装参数
+      // SQL顺序：先是JOIN中的日期条件，然后是WHERE中的group_id
       topUsersParams = [...dateParams, ...userWhereParams];
 
+      // TOP活跃用户 - 修复：正确的参数顺序
       const topUsersSql = `
         SELECT 
           u.id,
@@ -197,6 +210,7 @@ class AnalyticsService {
           g.name as group_name,
           COUNT(DISTINCT ct.id) as transaction_count,
           SUM(CASE WHEN ct.amount < 0 THEN ABS(ct.amount) ELSE 0 END) as total_credits_consumed,
+          -- 各模块消耗明细
           SUM(CASE WHEN ct.transaction_type = 'chat_consume' THEN ABS(ct.amount) ELSE 0 END) as chat_consumed,
           SUM(CASE WHEN ct.transaction_type = 'image_consume' THEN ABS(ct.amount) ELSE 0 END) as image_consumed,
           SUM(CASE WHEN ct.transaction_type = 'video_consume' THEN ABS(ct.amount) ELSE 0 END) as video_consumed,
@@ -204,6 +218,7 @@ class AnalyticsService {
           SUM(CASE WHEN ct.transaction_type = 'html_publish' THEN ABS(ct.amount) ELSE 0 END) as html_consumed,
           COUNT(DISTINCT DATE(ct.created_at)) as active_days,
           COUNT(DISTINCT c.id) as conversation_count,
+          -- 修复标签查询
           (SELECT GROUP_CONCAT(DISTINCT ut2.name SEPARATOR ', ') 
            FROM user_tag_relations utr2 
            LEFT JOIN user_tags ut2 ON utr2.tag_id = ut2.id 
@@ -218,6 +233,7 @@ class AnalyticsService {
         LIMIT 20
       `;
 
+      // 用户分布统计 - 使用原始的whereClause和params
       const distributionSql = `
         SELECT 
           CASE 
@@ -234,13 +250,14 @@ class AnalyticsService {
             SUM(ABS(ct.amount)) as total_credits
           FROM users u
           LEFT JOIN credit_transactions ct ON u.id = ct.user_id
-          ${whereClause ? whereClause.replace('ct.', 'ct.').replace('u.', 'u.') + ' AND u.deleted_at IS NULL' : 'WHERE u.deleted_at IS NULL'}
+          ${whereClause ? whereClause.replace('ct.', 'ct.').replace('u.', 'u.') : ''}
           GROUP BY u.id
         ) as user_credits
         GROUP BY credit_range
         ORDER BY FIELD(credit_range, '0-100', '100-500', '500-1000', '1000-5000', '5000+')
       `;
 
+      // 记录SQL和参数用于调试
       logger.info('执行用户分析查询:', {
         sql: topUsersSql.substring(0, 200),
         params: topUsersParams,
@@ -265,10 +282,11 @@ class AnalyticsService {
   }
 
   /**
-   * 获取模型使用分析（🔧 已修复：添加deleted_at过滤）
+   * 获取模型使用分析
    */
   static async getModelAnalytics(whereClause, params) {
     try {
+      // AI对话模型分析 - 修复：GROUP BY包含所有非聚合列
       const chatModelSql = `
         SELECT 
           c.model_name,
@@ -283,12 +301,13 @@ class AnalyticsService {
         FROM conversations c
         LEFT JOIN ai_models am ON c.model_name = am.name
         LEFT JOIN credit_transactions ct ON c.id = ct.related_conversation_id
-        LEFT JOIN users u ON c.user_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON c.user_id = u.id
         ${whereClause}
         GROUP BY c.model_name, am.display_name, am.provider
         ORDER BY usage_count DESC
       `;
 
+      // 图像生成模型分析 - 修复：将ct.created_at改为ig.created_at
       const imageModelSql = `
         SELECT 
           im.name as model_name,
@@ -300,13 +319,15 @@ class AnalyticsService {
           AVG(ig.credits_consumed) as avg_credits_per_use
         FROM image_generations ig
         LEFT JOIN image_models im ON ig.model_id = im.id
-        LEFT JOIN users u ON ig.user_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON ig.user_id = u.id
         ${whereClause ? 'WHERE DATE(ig.created_at) >= ? AND DATE(ig.created_at) <= ? AND ig.status = \'success\'' + (whereClause.includes('u.group_id') ? ' AND u.group_id = ?' : '') : 'WHERE ig.status = \'success\''}
         GROUP BY im.id, im.name, im.display_name, im.provider
         ORDER BY usage_count DESC
       `;
 
+      // 构建图像模型查询的参数，只使用前两个日期参数
       const imageParams = params.slice(0, 2);
+      // 如果有groupId参数，添加到末尾
       if (whereClause && whereClause.includes('u.group_id') && params.length > 2) {
         imageParams.push(params[params.length - 1]);
       }
@@ -327,10 +348,11 @@ class AnalyticsService {
   }
 
   /**
-   * 获取功能模块使用分析（🔧 已修复：添加deleted_at过滤）
+   * 获取功能模块使用分析
    */
   static async getModuleAnalytics(whereClause, params) {
     try {
+      // 修复：如果有WHERE子句，用AND连接额外条件
       const moduleCondition = whereClause 
         ? whereClause + ' AND ct.transaction_type IN (\'chat_consume\', \'image_consume\', \'video_consume\', \'storage_upload\', \'html_publish\')'
         : 'WHERE ct.transaction_type IN (\'chat_consume\', \'image_consume\', \'video_consume\', \'storage_upload\', \'html_publish\')';
@@ -351,7 +373,7 @@ class AnalyticsService {
             ELSE '其他'
           END as module_name
         FROM credit_transactions ct
-        LEFT JOIN users u ON ct.user_id = u.id AND u.deleted_at IS NULL
+        LEFT JOIN users u ON ct.user_id = u.id
         ${moduleCondition}
         GROUP BY ct.transaction_type
         ORDER BY credits_consumed DESC
@@ -366,7 +388,7 @@ class AnalyticsService {
   }
 
   /**
-   * 获取标签维度分析（🔧 已修复：添加deleted_at过滤）
+   * 获取标签维度分析
    */
   static async getTagAnalytics(groupId) {
     try {
@@ -374,6 +396,7 @@ class AnalyticsService {
         return [];
       }
 
+      // 修复：GROUP BY包含所有非聚合列
       const sql = `
         SELECT 
           ut.id,
@@ -385,8 +408,7 @@ class AnalyticsService {
           AVG(ABS(ct.amount)) as avg_credits_per_user
         FROM user_tags ut
         LEFT JOIN user_tag_relations utr ON ut.id = utr.tag_id
-        LEFT JOIN users u ON utr.user_id = u.id AND u.deleted_at IS NULL
-        LEFT JOIN credit_transactions ct ON u.id = ct.user_id
+        LEFT JOIN credit_transactions ct ON utr.user_id = ct.user_id
         WHERE ut.group_id = ?
         GROUP BY ut.id, ut.name, ut.color
         ORDER BY user_count DESC
@@ -407,6 +429,7 @@ class AnalyticsService {
     try {
       const wb = XLSX.utils.book_new();
 
+      // 概览表
       if (analyticsData.overview) {
         const overviewData = [{
           '指标': '总用户数',
@@ -436,6 +459,7 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, '概览');
       }
 
+      // 时间趋势表
       if (analyticsData.timeSeries && analyticsData.timeSeries.length > 0) {
         const timeData = analyticsData.timeSeries.map(item => ({
           '时间': item.period,
@@ -458,6 +482,7 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, '时间趋势');
       }
 
+      // TOP用户表 - 增加模块消耗列
       if (analyticsData.users && analyticsData.users.topUsers) {
         const userData = analyticsData.users.topUsers.map((user, index) => ({
           '排名': index + 1,
@@ -487,7 +512,9 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, 'TOP用户');
       }
 
+      // 模型使用表
       if (analyticsData.models) {
+        // 对话模型
         if (analyticsData.models.chatModels && analyticsData.models.chatModels.length > 0) {
           const chatModelData = analyticsData.models.chatModels.map(model => ({
             '模型名称': model.display_name || model.model_name,
@@ -509,6 +536,7 @@ class AnalyticsService {
           XLSX.utils.book_append_sheet(wb, ws, '对话模型');
         }
 
+        // 图像模型
         if (analyticsData.models.imageModels && analyticsData.models.imageModels.length > 0) {
           const imageModelData = analyticsData.models.imageModels.map(model => ({
             '模型名称': model.display_name || model.model_name,
@@ -528,6 +556,7 @@ class AnalyticsService {
         }
       }
 
+      // 功能模块表
       if (analyticsData.modules && analyticsData.modules.length > 0) {
         const moduleData = analyticsData.modules.map(module => ({
           '模块名称': module.module_name,
@@ -545,6 +574,7 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, '功能模块');
       }
 
+      // 标签分析表
       if (analyticsData.tags && analyticsData.tags.length > 0) {
         const tagData = analyticsData.tags.map(tag => ({
           '标签名称': tag.tag_name,
@@ -562,6 +592,7 @@ class AnalyticsService {
         XLSX.utils.book_append_sheet(wb, ws, '标签分析');
       }
 
+      // 生成文件
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
       return buffer;
     } catch (error) {

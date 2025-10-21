@@ -1,9 +1,5 @@
 /**
- * 用户列表表格组件（包含组积分分配功能、账号有效期、标签管理和删除功能）
- * 
- * 修复记录：
- * - 添加删除按钮，支持软删除
- * - 删除前二次确认，显示详细信息
+ * 用户列表表格组件（包含组积分分配功能、账号有效期和标签管理）
  */
 
 import React from 'react'
@@ -42,7 +38,7 @@ const UserTable = ({
   onManageModels,
   onDistributeCredits,
   onRemoveFromGroup,
-  onManageTags
+  onManageTags // 新增：管理标签回调
 }) => {
   const { t } = useTranslation()
   
@@ -80,6 +76,7 @@ const UserTable = ({
 
   // 获取账号状态标签
   const getAccountStatusTag = (user) => {
+    // 超级管理员不显示有效期
     if (user.role === 'super_admin') {
       return <Tag color="blue" icon={<UserOutlined />}>永久有效</Tag>
     }
@@ -157,6 +154,7 @@ const UserTable = ({
           return <span style={{ color: '#999', fontSize: 12 }}>无标签</span>
         }
         
+        // 最多显示3个标签，多余的显示数量
         const displayTags = tags.slice(0, 3)
         const remainingCount = tagCount - displayTags.length
         
@@ -291,43 +289,33 @@ const UserTable = ({
       title: t('admin.users.table.actions'),
       key: 'actions',
       fixed: 'right',
-      width: 360,
+      width: 320,
       render: (_, record) => {
         // 是否可以管理此用户的模型权限
         const canManageUserModels = record.role === 'user' && (
           isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
         )
         
-        // 是否可以管理标签
+        // 是否可以管理标签（新增）
         const canManageUserTags = (
           isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id)
         )
         
-        // 是否可以分配积分
+        // 是否可以分配积分（组管理员只能给同组用户分配）
         const canDistribute = onDistributeCredits && (
           (isGroupAdmin && record.group_id === currentUser.group_id) || isSuperAdmin
         )
         
         // 是否可以挪出用户
         const canRemoveUser = onRemoveFromGroup && (
+          // 不能挪出自己
           record.id !== currentUser.id &&
+          // 不能挪出已经在默认组的用户
           record.group_id !== 1 &&
+          // 超级管理员不能互相挪出
           !(record.role === 'super_admin' && currentUser.role === 'super_admin') &&
+          // 组管理员只能挪出本组用户
           (isSuperAdmin || (isGroupAdmin && record.group_id === currentUser.group_id))
-        )
-        
-        // 🔧 新增：是否可以删除用户
-        const canDeleteUser = onDelete && (
-          // 不能删除自己
-          record.id !== currentUser.id &&
-          (
-            // 超级管理员可以删除任何用户（除自己）
-            isSuperAdmin ||
-            // 组管理员只能删除本组的普通用户
-            (isGroupAdmin && 
-             record.group_id === currentUser.group_id && 
-             record.role === 'user')
-          )
         )
         
         // 计算用户剩余积分
@@ -353,6 +341,7 @@ const UserTable = ({
               />
             </Tooltip>
             
+            {/* 标签管理按钮（新增） */}
             {canManageUserTags && onManageTags && (
               <Tooltip title="管理标签">
                 <Button 
@@ -376,6 +365,7 @@ const UserTable = ({
               </Tooltip>
             )}
             
+            {/* 组管理员可以分配积分 */}
             {canDistribute && (
               <Tooltip title="分配积分">
                 <Button 
@@ -406,6 +396,7 @@ const UserTable = ({
               </Tooltip>
             )}
             
+            {/* 挪出按钮 */}
             {canRemoveUser && (
               <Tooltip title="挪出组">
                 <Popconfirm
@@ -436,39 +427,6 @@ const UserTable = ({
                     size="small" 
                     danger
                     icon={<LogoutOutlined />} 
-                  />
-                </Popconfirm>
-              </Tooltip>
-            )}
-            
-            {/* 🔧 新增：删除按钮 */}
-            {canDeleteUser && (
-              <Tooltip title="删除用户">
-                <Popconfirm
-                  title="确认删除用户？"
-                  description={
-                    <div>
-                      <p style={{ marginBottom: 8 }}>
-                        即将删除用户 <strong>{record.username}</strong>
-                      </p>
-                      <p style={{ marginBottom: 4, color: '#666' }}>删除后：</p>
-                      <ul style={{ marginLeft: 20, marginBottom: 0, color: '#666' }}>
-                        <li>用户将无法登录</li>
-                        <li>所有关联数据（对话、文件等）将保留</li>
-                        <li>此操作不可恢复</li>
-                      </ul>
-                    </div>
-                  }
-                  onConfirm={() => onDelete(record.id)}
-                  okText="确认删除"
-                  cancelText="取消"
-                  okButtonProps={{ danger: true }}
-                >
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    danger
-                    icon={<DeleteOutlined />} 
                   />
                 </Popconfirm>
               </Tooltip>
