@@ -1,0 +1,233 @@
+/**
+ * Mermaid 图表预览组件
+ * 支持实时渲染各种类型的 Mermaid 图表
+ */
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Spin, Empty } from 'antd';
+import mermaid from 'mermaid';
+
+const MermaidPreview = ({ code }) => {
+  const containerRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const renderTimeoutRef = useRef(null);
+  const renderCountRef = useRef(0);
+
+  // 初始化 Mermaid 配置（只执行一次）
+  useEffect(() => {
+    console.log('MermaidPreview 组件初始化');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      fontFamily: 'Arial, sans-serif, "Microsoft YaHei", "微软雅黑"',
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true,
+        curve: 'basis',
+        padding: 15
+      },
+      sequence: {
+        useMaxWidth: false,
+        wrap: true,
+        width: 150
+      },
+      gantt: {
+        useMaxWidth: false,
+        fontSize: 12
+      },
+      logLevel: 'error'
+    });
+  }, []);
+
+  // 渲染 Mermaid 图表
+  useEffect(() => {
+    console.log('MermaidPreview useEffect 触发, code length:', code?.length);
+    
+    // 如果代码为空，清空显示
+    if (!code || code.trim() === '') {
+      console.log('代码为空，清空容器');
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    if (!containerRef.current) {
+      console.log('容器 ref 未就绪');
+      return;
+    }
+
+    // 清除之前的渲染超时
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
+
+    // 立即开始加载状态
+    setLoading(true);
+
+    // 防抖渲染（300ms）
+    renderTimeoutRef.current = setTimeout(async () => {
+      try {
+        console.log('开始渲染 Mermaid，代码:', code.substring(0, 100));
+        setError(null);
+
+        // 清空容器
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+        }
+
+        // 生成唯一ID
+        renderCountRef.current += 1;
+        const id = `mermaid-preview-${Date.now()}-${renderCountRef.current}`;
+
+        // 创建临时容器
+        const tempContainer = document.createElement('div');
+        tempContainer.id = id;
+        tempContainer.style.display = 'none';
+        document.body.appendChild(tempContainer);
+
+        try {
+          // 渲染图表
+          const { svg } = await mermaid.render(id, code);
+          
+          console.log('Mermaid 渲染成功，SVG 长度:', svg.length);
+          
+          // 移除临时容器
+          if (tempContainer && tempContainer.parentNode) {
+            tempContainer.parentNode.removeChild(tempContainer);
+          }
+
+          // 将SVG插入到实际容器
+          if (containerRef.current) {
+            containerRef.current.innerHTML = svg;
+            
+            // 优化SVG显示 - 自适应容器
+            const svgElement = containerRef.current.querySelector('svg');
+            if (svgElement) {
+              // 获取原始尺寸
+              const width = svgElement.getAttribute('width');
+              const height = svgElement.getAttribute('height');
+              
+              console.log('SVG原始尺寸:', width, 'x', height);
+              
+              // 设置viewBox以支持缩放
+              if (width && height && !svgElement.getAttribute('viewBox')) {
+                svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
+              }
+              
+              // 移除固定尺寸，使用百分比
+              svgElement.removeAttribute('width');
+              svgElement.removeAttribute('height');
+              
+              // 设置样式
+              svgElement.style.width = '100%';
+              svgElement.style.height = 'auto';
+              svgElement.style.maxWidth = '100%';
+              svgElement.style.maxHeight = '100%';
+              svgElement.style.display = 'block';
+              svgElement.style.margin = '0 auto';
+              
+              console.log('SVG自适应设置完成');
+            }
+          }
+
+          setLoading(false);
+        } catch (renderError) {
+          // 清理临时容器
+          if (tempContainer && tempContainer.parentNode) {
+            tempContainer.parentNode.removeChild(tempContainer);
+          }
+          throw renderError;
+        }
+
+      } catch (err) {
+        console.error('Mermaid 渲染失败:', err);
+        const errorMessage = err.message || err.toString();
+        setError(errorMessage);
+        setLoading(false);
+
+        // 显示友好的错误提示
+        if (containerRef.current) {
+          containerRef.current.innerHTML = `
+            <div style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 400px;
+              color: #ff4d4f;
+              padding: 20px;
+              text-align: center;
+            ">
+              <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+              <div style="font-size: 16px; margin-bottom: 8px; font-weight: 600;">Mermaid 图表渲染失败</div>
+              <div style="font-size: 14px; color: #999; max-width: 500px; word-break: break-word;">
+                ${errorMessage}
+              </div>
+              <div style="font-size: 12px; color: #999; margin-top: 16px;">
+                请检查 Mermaid 语法是否正确
+              </div>
+            </div>
+          `;
+        }
+      }
+    }, 300);
+
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
+  }, [code]); // 依赖 code，每次变化都重新渲染
+
+  // 如果代码为空，显示空状态
+  if (!code || code.trim() === '') {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100%',
+        minHeight: '400px'
+      }}>
+        <Empty description="请输入 Mermaid 代码" />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100%',
+        minHeight: '400px'
+      }}>
+        <Spin size="large" tip="渲染图表中..." />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      ref={containerRef} 
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'auto',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '20px',
+        minHeight: '400px'
+      }}
+    />
+  );
+};
+
+export default MermaidPreview;

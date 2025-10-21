@@ -1,0 +1,220 @@
+/**
+ * Mermaid 图表预览组件
+ * 支持实时渲染各种类型的 Mermaid 图表
+ */
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Spin, Empty } from 'antd';
+import mermaid from 'mermaid';
+
+const MermaidPreview = ({ code }) => {
+  const containerRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const renderTimeoutRef = useRef(null);
+  const renderCountRef = useRef(0);
+  const isMountedRef = useRef(false);
+
+  // 初始化 Mermaid 配置（只执行一次）
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      fontFamily: 'Arial, sans-serif, "Microsoft YaHei", "微软雅黑"',
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true,
+        curve: 'basis',
+        padding: 15
+      },
+      sequence: {
+        useMaxWidth: false,
+        wrap: true,
+        width: 150
+      },
+      gantt: {
+        useMaxWidth: false,
+        fontSize: 12
+      },
+      logLevel: 'error'
+    });
+  }, []);
+
+  // 标记组件已挂载
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // 渲染 Mermaid 图表
+  useEffect(() => {
+    // 如果代码为空
+    if (!code || code.trim() === '') {
+      setLoading(false);
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+      return;
+    }
+
+    // 清除之前的渲染超时
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
+
+    // 设置加载状态
+    setLoading(true);
+
+    // 防抖渲染（500ms，给足时间让 DOM 挂载）
+    renderTimeoutRef.current = setTimeout(async () => {
+      if (!isMountedRef.current || !containerRef.current) {
+        console.error('组件未挂载或容器不存在');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // 清空容器
+        containerRef.current.innerHTML = '';
+
+        // 生成唯一ID
+        renderCountRef.current += 1;
+        const id = `mermaid-${Date.now()}-${renderCountRef.current}`;
+
+        // 创建临时容器
+        const tempDiv = document.createElement('div');
+        tempDiv.id = id;
+        tempDiv.style.display = 'none';
+        document.body.appendChild(tempDiv);
+
+        try {
+          // 渲染图表
+          const { svg } = await mermaid.render(id, code);
+          
+          // 清理临时容器
+          if (tempDiv.parentNode) {
+            tempDiv.parentNode.removeChild(tempDiv);
+          }
+
+          // 插入 SVG
+          if (containerRef.current && isMountedRef.current) {
+            containerRef.current.innerHTML = svg;
+            
+            // 优化 SVG 显示
+            const svgEl = containerRef.current.querySelector('svg');
+            if (svgEl) {
+              const w = svgEl.getAttribute('width');
+              const h = svgEl.getAttribute('height');
+              
+              if (w && h && !svgEl.getAttribute('viewBox')) {
+                svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+              }
+              
+              svgEl.removeAttribute('width');
+              svgEl.removeAttribute('height');
+              svgEl.style.width = '100%';
+              svgEl.style.height = 'auto';
+              svgEl.style.maxWidth = '100%';
+              svgEl.style.display = 'block';
+              svgEl.style.margin = '0 auto';
+            }
+          }
+
+          setLoading(false);
+        } catch (renderError) {
+          // 清理临时容器
+          if (tempDiv.parentNode) {
+            tempDiv.parentNode.removeChild(tempDiv);
+          }
+          throw renderError;
+        }
+
+      } catch (err) {
+        console.error('Mermaid 渲染失败:', err);
+        setLoading(false);
+
+        // 显示错误提示
+        if (containerRef.current) {
+          containerRef.current.innerHTML = `
+            <div style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 400px;
+              color: #ff4d4f;
+              padding: 20px;
+              text-align: center;
+            ">
+              <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+              <div style="font-size: 16px; margin-bottom: 8px; font-weight: 600;">Mermaid 图表渲染失败</div>
+              <div style="font-size: 14px; color: #999; max-width: 500px; word-break: break-word;">
+                ${err.message || err.toString()}
+              </div>
+              <div style="font-size: 12px; color: #999; margin-top: 16px;">
+                请检查 Mermaid 语法是否正确
+              </div>
+            </div>
+          `;
+        }
+      }
+    }, 500); // 增加到 500ms
+
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
+  }, [code]);
+
+  // 加载中
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100%',
+        minHeight: '400px'
+      }}>
+        <Spin size="large" tip="渲染图表中..." />
+      </div>
+    );
+  }
+
+  // 代码为空
+  if (!code || code.trim() === '') {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100%',
+        minHeight: '400px'
+      }}>
+        <Empty description="请输入 Mermaid 代码" />
+      </div>
+    );
+  }
+
+  // 渲染容器
+  return (
+    <div 
+      ref={containerRef} 
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'auto',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '20px',
+        minHeight: '400px'
+      }}
+    />
+  );
+};
+
+export default MermaidPreview;

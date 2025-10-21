@@ -1,5 +1,5 @@
 /**
- * 使用记录组件 - 支持查看对话内容
+ * 使用记录组件
  */
 
 import React, { useState, useEffect } from 'react'
@@ -27,14 +27,12 @@ import {
   TeamOutlined,
   RobotOutlined,
   BarChartOutlined,
-  TrophyOutlined,
-  EyeOutlined
+  TrophyOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../../stores/adminStore'
 import useAuthStore from '../../../stores/authStore'
 import moment from 'moment'
-import ConversationContentDrawer from './ConversationContentDrawer'
 
 const { Search } = Input
 const { RangePicker } = DatePicker
@@ -70,10 +68,6 @@ const UsageLogs = () => {
     modelName: null,
     dateRange: null
   })
-
-  // 对话内容Drawer状态
-  const [drawerVisible, setDrawerVisible] = useState(false)
-  const [selectedConversationId, setSelectedConversationId] = useState(null)
 
   // 是否是超级管理员
   const isSuperAdmin = user?.role === 'super_admin'
@@ -192,32 +186,19 @@ const UsageLogs = () => {
     }
   }
 
-  // 查看对话内容
-  const handleViewConversation = (record) => {
-    if (!record.related_conversation_id) {
-      message.warning('该记录没有关联的对话')
-      return
-    }
-    
-    setSelectedConversationId(record.related_conversation_id)
-    setDrawerVisible(true)
-  }
-
   // 表格列定义
   const columns = [
     {
       title: '使用时间',
       dataIndex: 'usage_time',
       key: 'usage_time',
-      width: 170,
-      fixed: 'left',
+      width: 180,
       render: (time) => moment(time).format('YYYY-MM-DD HH:mm:ss')
     },
     {
       title: '用户',
       key: 'user',
       width: 200,
-      fixed: 'left',
       render: (record) => (
         <Space direction="vertical" size={0}>
           <Space>
@@ -281,31 +262,11 @@ const UsageLogs = () => {
       title: '会话',
       dataIndex: 'conversation_title',
       key: 'conversation_title',
-      width: 120,
-      fixed: 'right',
       ellipsis: true,
       render: (title) => (
         <Tooltip title={title}>
           {title || '-'}
         </Tooltip>
-      )
-    },
-    {
-      title: '内容',
-      key: 'content',
-      width: 80,
-      fixed: 'right',
-      align: 'center',
-      render: (_, record) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewConversation(record)}
-          disabled={!record.related_conversation_id}
-        >
-          查看
-        </Button>
       )
     }
   ]
@@ -500,23 +461,10 @@ const UsageLogs = () => {
             loading={loading}
             pagination={pagination}
             onChange={handleTableChange}
-            scroll={{ 
-              x: 1300,
-              y: 600
-            }}
+            scroll={{ x: 1200 }}
           />
         </Space>
       </Card>
-
-      {/* 对话内容Drawer */}
-      <ConversationContentDrawer
-        visible={drawerVisible}
-        conversationId={selectedConversationId}
-        onClose={() => {
-          setDrawerVisible(false)
-          setSelectedConversationId(null)
-        }}
-      />
     </div>
   )
 }

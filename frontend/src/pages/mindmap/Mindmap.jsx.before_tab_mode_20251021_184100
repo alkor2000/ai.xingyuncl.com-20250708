@@ -1,6 +1,6 @@
 /**
- * 思维导图编辑器页面 - 多模式支持版本
- * 支持 Markdown、Mermaid、SVG 三种模式
+ * 思维导图编辑器页面 - 集成积分系统版本
+ * 在BasicLayout内容区域正确显示
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -11,10 +11,11 @@ import {
   message, 
   Dropdown, 
   Modal,
-  Tabs,
+  Input,
   Tooltip,
   Typography,
   Spin,
+  Card,
   Badge
 } from 'antd';
 import {
@@ -32,45 +33,81 @@ import {
   FolderOpenOutlined,
   QuestionCircleOutlined,
   ExpandOutlined,
-  DollarOutlined,
-  FileTextOutlined,
-  FilePdfOutlined
+  CompressOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { Markmap } from 'markmap-view';
 import { Transformer } from 'markmap-lib';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import apiClient from '../../utils/api';
 import useAuthStore from '../../stores/authStore';
-import { MermaidPreview, SvgPreview } from './components';
-import TEMPLATES from './constants/templates';
 import './Mindmap.less';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
+// 默认的示例Markdown
+const DEFAULT_MARKDOWN = `# 项目规划
+
+## 第一阶段
+### 需求分析
+- 用户调研
+- 竞品分析
+- 功能清单
+
+### 技术选型
+- 前端框架
+  - React 18
+  - Ant Design 5
+- 后端技术
+  - Node.js
+  - Express
+  - MySQL
+
+## 第二阶段
+### 系统设计
+#### 架构设计
+- 微服务架构
+- 容器化部署
+- 负载均衡
+
+#### 数据库设计
+- 表结构设计
+- 索引优化
+- 分库分表策略
+
+### UI/UX设计
+- 设计规范
+- 原型设计
+- 交互优化
+
+## 第三阶段
+### 开发实施
+- 敏捷开发
+- 代码审查
+- 单元测试
+
+### 部署上线
+- CI/CD流程
+- 灰度发布
+- 监控告警`;
+
 const MindmapPage = () => {
-  // 核心状态
-  const [contentType, setContentType] = useState('markdown'); // markdown, mermaid, svg
-  const [content, setContent] = useState(TEMPLATES.markdown);
+  const [markdown, setMarkdown] = useState(DEFAULT_MARKDOWN);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [savedMaps, setSavedMaps] = useState([]);
   const [editorLoading, setEditorLoading] = useState(true);
-  const [svgLoading, setSvgLoading] = useState(false);
+  const [svgLoading, setSvgLoading] = useState(true);
   const [editorHeight, setEditorHeight] = useState('600px');
   const [creditsConfig, setCreditsConfig] = useState(null);
   const [userCredits, setUserCredits] = useState(0);
   
-  // Refs
   const svgRef = useRef(null);
   const markmapRef = useRef(null);
   const transformerRef = useRef(null);
   const containerRef = useRef(null);
   const svgContainerRef = useRef(null);
   const editorWrapperRef = useRef(null);
-  const previewRef = useRef(null); // 用于PNG/PDF导出
-  const renderTimerRef = useRef(null);
   
   const { user } = useAuthStore();
 
@@ -105,16 +142,14 @@ const MindmapPage = () => {
     calculateHeight();
     window.addEventListener('resize', calculateHeight);
 
+    const initTimer = setTimeout(() => {
+      setSvgLoading(false);
+      renderMindmap();
+    }, 500);
+
     return () => {
+      clearTimeout(initTimer);
       window.removeEventListener('resize', calculateHeight);
-      if (renderTimerRef.current) {
-        clearTimeout(renderTimerRef.current);
-      }
-      // 清理 Markmap 实例
-      if (markmapRef.current) {
-        markmapRef.current.destroy();
-        markmapRef.current = null;
-      }
     };
   }, [user]);
 
@@ -158,155 +193,90 @@ const MindmapPage = () => {
     }
   };
 
-  // 切换内容类型
-  const handleTabChange = (key) => {
-    console.log('切换到模式:', key);
-    
-    // 清理旧的渲染定时器
-    if (renderTimerRef.current) {
-      clearTimeout(renderTimerRef.current);
-      renderTimerRef.current = null;
-    }
-    
-    // 如果从 Markdown 切换走，销毁 Markmap 实例
-    if (contentType === 'markdown' && markmapRef.current) {
-      markmapRef.current.destroy();
-      markmapRef.current = null;
-      if (svgRef.current) {
-        svgRef.current.innerHTML = '';
-      }
-    }
-    
-    setContentType(key);
-    setContent(TEMPLATES[key]);
-    
-    // 如果切换到 Markdown，延迟渲染
-    if (key === 'markdown') {
-      setSvgLoading(true);
-      renderTimerRef.current = setTimeout(() => {
-        setSvgLoading(false);
-        // 再次延迟确保容器已渲染
-        setTimeout(() => {
-          renderMarkdownMindmap();
-        }, 100);
-      }, 300);
-    }
-  };
-
-  // 渲染 Markdown 思维导图
-  const renderMarkdownMindmap = useCallback(() => {
-    if (contentType !== 'markdown') {
-      return;
-    }
-
+  // 渲染思维导图
+  const renderMindmap = useCallback(() => {
     if (!svgRef.current || !transformerRef.current) {
-      console.log('SVG ref 或 transformer 未就绪');
+      console.log('SVG ref or transformer not ready');
       return;
     }
 
     const container = svgContainerRef.current;
     if (!container) {
-      console.log('容器未找到');
+      console.log('Container not found');
       return;
     }
 
-    // 等待容器完全渲染
-    setTimeout(() => {
-      const rect = container.getBoundingClientRect();
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      console.log('Container has no size, retrying...');
+      setTimeout(() => renderMindmap(), 200);
+      return;
+    }
+
+    try {
+      const { root } = transformerRef.current.transform(markdown);
       
-      // 检查容器尺寸是否有效
-      if (!rect || rect.width === 0 || rect.height === 0) {
-        console.log('容器尺寸无效，重试...', rect);
-        setTimeout(() => renderMarkdownMindmap(), 200);
-        return;
+      if (markmapRef.current) {
+        markmapRef.current.destroy();
       }
 
-      try {
-        console.log('开始渲染 Markdown 思维导图，容器尺寸:', rect.width, 'x', rect.height);
-        
-        // 转换 Markdown
-        const { root } = transformerRef.current.transform(content);
-        
-        // 销毁旧实例
+      svgRef.current.innerHTML = '';
+      
+      svgRef.current.setAttribute('width', rect.width - 40);
+      svgRef.current.setAttribute('height', rect.height - 40);
+      
+      const options = {
+        duration: 300,
+        nodeFont: '300 16px -apple-system, BlinkMacSystemFont, sans-serif',
+        lineHeight: 1.5,
+        paddingX: 8,
+        autoFit: true,
+        color: (node) => {
+          const colors = ['#007AFF', '#5856D6', '#FF3B30', '#FF9500', '#34C759', '#00C7BE'];
+          const depth = node.state?.depth || 0;
+          return colors[depth % colors.length];
+        },
+        nodeMinHeight: 24,
+        spacingVertical: 10,
+        spacingHorizontal: 80
+      };
+
+      markmapRef.current = Markmap.create(svgRef.current, options, root);
+
+      setTimeout(() => {
         if (markmapRef.current) {
-          markmapRef.current.destroy();
-          markmapRef.current = null;
+          markmapRef.current.fit();
         }
+      }, 100);
+      
+    } catch (error) {
+      console.error('渲染思维导图失败:', error);
+      message.error('渲染失败，请检查Markdown格式');
+    }
+  }, [markdown]);
 
-        // 清空容器
-        if (svgRef.current) {
-          svgRef.current.innerHTML = '';
-          
-          // 设置 SVG 尺寸
-          const svgWidth = Math.max(rect.width - 40, 400);
-          const svgHeight = Math.max(rect.height - 40, 300);
-          
-          svgRef.current.setAttribute('width', svgWidth);
-          svgRef.current.setAttribute('height', svgHeight);
-          
-          console.log('SVG 尺寸设置:', svgWidth, 'x', svgHeight);
-        }
-        
-        // Markmap 配置
-        const options = {
-          duration: 300,
-          nodeFont: '300 16px -apple-system, BlinkMacSystemFont, sans-serif',
-          lineHeight: 1.5,
-          paddingX: 8,
-          autoFit: true,
-          color: (node) => {
-            const colors = ['#007AFF', '#5856D6', '#FF3B30', '#FF9500', '#34C759', '#00C7BE'];
-            const depth = node.state?.depth || 0;
-            return colors[depth % colors.length];
-          },
-          nodeMinHeight: 24,
-          spacingVertical: 10,
-          spacingHorizontal: 80,
-          initialExpandLevel: 2
-        };
-
-        // 创建新实例
-        markmapRef.current = Markmap.create(svgRef.current, options, root);
-
-        // 延迟自适应
-        setTimeout(() => {
-          if (markmapRef.current) {
-            try {
-              markmapRef.current.fit();
-              console.log('Markmap 渲染成功');
-            } catch (fitError) {
-              console.error('Fit 失败:', fitError);
-            }
-          }
-        }, 100);
-        
-      } catch (error) {
-        console.error('渲染思维导图失败:', error);
-        message.error('渲染失败: ' + error.message);
-      }
-    }, 50);
-  }, [content, contentType]);
-
-  // 监听 markdown 内容变化
+  // 监听markdown变化
   useEffect(() => {
-    if (contentType !== 'markdown' || svgLoading) {
-      return;
-    }
+    if (svgLoading) return;
     
-    if (renderTimerRef.current) {
-      clearTimeout(renderTimerRef.current);
-    }
-    
-    renderTimerRef.current = setTimeout(() => {
-      renderMarkdownMindmap();
+    const timer = setTimeout(() => {
+      renderMindmap();
     }, 500);
     
-    return () => {
-      if (renderTimerRef.current) {
-        clearTimeout(renderTimerRef.current);
+    return () => clearTimeout(timer);
+  }, [markdown, renderMindmap, svgLoading]);
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      if (markmapRef.current) {
+        renderMindmap();
       }
     };
-  }, [content, contentType, renderMarkdownMindmap, svgLoading]);
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [renderMindmap]);
 
   // 编辑器挂载完成
   const handleEditorDidMount = (editor, monaco) => {
@@ -328,9 +298,10 @@ const MindmapPage = () => {
 
   // 保存到服务器（扣减积分）
   const handleSave = async () => {
-    const title = prompt('请输入脑图名称：', `${contentType}_${new Date().toLocaleDateString()}`);
+    const title = prompt('请输入脑图名称：', `脑图_${new Date().toLocaleDateString()}`);
     if (!title) return;
 
+    // 检查积分
     const credits = await checkCredits('save');
     if (!credits.sufficient) {
       Modal.error({
@@ -340,6 +311,7 @@ const MindmapPage = () => {
       return;
     }
 
+    // 如果需要积分，显示确认对话框
     if (credits.requiredCredits > 0) {
       Modal.confirm({
         title: '确认保存',
@@ -360,18 +332,17 @@ const MindmapPage = () => {
     try {
       const response = await apiClient.post('/mindmap', {
         title,
-        content,
-        content_type: contentType
+        content: markdown
       });
       
       if (response.data.success) {
         message.success(response.data.data.message || '保存成功');
         
+        // 同时保存到本地
         const newMap = {
           id: response.data.data.id || Date.now(),
           title,
-          content,
-          content_type: contentType,
+          content: markdown,
           createdAt: new Date().toISOString()
         };
         
@@ -379,6 +350,7 @@ const MindmapPage = () => {
         setSavedMaps(updated);
         localStorage.setItem('mindmap_saved', JSON.stringify(updated));
         
+        // 刷新用户积分
         fetchUserCredits();
       }
     } catch (error) {
@@ -389,20 +361,7 @@ const MindmapPage = () => {
 
   // 加载已保存的脑图
   const handleLoad = (map) => {
-    const newType = map.content_type || 'markdown';
-    setContent(map.content);
-    
-    if (newType !== contentType) {
-      setContentType(newType);
-      if (newType === 'markdown') {
-        setSvgLoading(true);
-        setTimeout(() => {
-          setSvgLoading(false);
-          setTimeout(() => renderMarkdownMindmap(), 100);
-        }, 300);
-      }
-    }
-    
+    setMarkdown(map.content);
     message.success(`已加载: ${map.title}`);
   };
 
@@ -414,8 +373,11 @@ const MindmapPage = () => {
     message.success('删除成功');
   };
 
-  // 导出SVG
+  // 导出SVG（扣减积分）
   const exportSVG = async () => {
+    if (!svgRef.current) return;
+    
+    // 检查积分
     const credits = await checkCredits('export_svg');
     if (!credits.sufficient) {
       Modal.error({
@@ -425,6 +387,7 @@ const MindmapPage = () => {
       return;
     }
 
+    // 如果需要积分，显示确认对话框
     if (credits.requiredCredits > 0) {
       Modal.confirm({
         title: '确认导出',
@@ -440,34 +403,37 @@ const MindmapPage = () => {
     }
   };
 
+  // 实际执行SVG导出
   const doExportSVG = async () => {
     try {
-      const response = await apiClient.post('/mindmap/export-log', { type: 'svg' });
+      // 记录导出操作
+      const response = await apiClient.post('/mindmap/export-log', {
+        type: 'svg'
+      });
       
       if (response.data.success) {
-        let svgElement;
+        // 执行导出
+        const svgClone = svgRef.current.cloneNode(true);
+        const styleElement = document.createElement('style');
+        styleElement.textContent = `
+          .markmap-node rect { fill: #fff; stroke-width: 2px; rx: 6px; }
+          .markmap-node text { font-family: sans-serif; }
+          .markmap-link { fill: none; stroke-width: 2px; opacity: 0.6; }
+        `;
+        svgClone.insertBefore(styleElement, svgClone.firstChild);
         
-        if (contentType === 'markdown' && svgRef.current) {
-          svgElement = svgRef.current.cloneNode(true);
-        } else if (previewRef.current) {
-          svgElement = previewRef.current.querySelector('svg')?.cloneNode(true);
-        }
-        
-        if (!svgElement) {
-          message.error('未找到可导出的SVG元素');
-          return;
-        }
-        
-        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgData = new XMLSerializer().serializeToString(svgClone);
         const blob = new Blob([svgData], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${contentType}_${Date.now()}.svg`;
+        a.download = `mindmap_${Date.now()}.svg`;
         a.click();
         URL.revokeObjectURL(url);
         
         message.success(response.data.data.message || 'SVG导出成功');
+        
+        // 刷新用户积分
         fetchUserCredits();
       }
     } catch (error) {
@@ -476,8 +442,9 @@ const MindmapPage = () => {
     }
   };
 
-  // 导出Markdown
+  // 导出Markdown（扣减积分）
   const exportMarkdown = async () => {
+    // 检查积分
     const credits = await checkCredits('export_markdown');
     if (!credits.sufficient) {
       Modal.error({
@@ -487,6 +454,7 @@ const MindmapPage = () => {
       return;
     }
 
+    // 如果需要积分，显示确认对话框
     if (credits.requiredCredits > 0) {
       Modal.confirm({
         title: '确认导出',
@@ -502,145 +470,27 @@ const MindmapPage = () => {
     }
   };
 
+  // 实际执行Markdown导出
   const doExportMarkdown = async () => {
     try {
-      const response = await apiClient.post('/mindmap/export-log', { type: 'markdown' });
+      // 记录导出操作
+      const response = await apiClient.post('/mindmap/export-log', {
+        type: 'markdown'
+      });
       
       if (response.data.success) {
-        const blob = new Blob([content], { type: 'text/markdown' });
+        // 执行导出
+        const blob = new Blob([markdown], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${contentType}_${Date.now()}.md`;
+        a.download = `mindmap_${Date.now()}.md`;
         a.click();
         URL.revokeObjectURL(url);
         
         message.success(response.data.data.message || 'Markdown导出成功');
-        fetchUserCredits();
-      }
-    } catch (error) {
-      console.error('导出失败:', error);
-      message.error(error.response?.data?.message || '导出失败');
-    }
-  };
-
-  // 导出PNG
-  const exportPNG = async () => {
-    const credits = await checkCredits('export_png');
-    if (!credits.sufficient) {
-      Modal.error({
-        title: '积分不足',
-        content: `导出PNG需要${credits.requiredCredits}积分，当前余额${credits.currentCredits}积分`
-      });
-      return;
-    }
-
-    if (credits.requiredCredits > 0) {
-      Modal.confirm({
-        title: '确认导出',
-        content: `导出PNG将消耗${credits.requiredCredits}积分，当前余额${credits.currentCredits}积分`,
-        okText: '确认',
-        cancelText: '取消',
-        onOk: async () => {
-          await doExportPNG();
-        }
-      });
-    } else {
-      await doExportPNG();
-    }
-  };
-
-  const doExportPNG = async () => {
-    try {
-      const response = await apiClient.post('/mindmap/export-log', { type: 'png' });
-      
-      if (response.data.success) {
-        const element = previewRef.current || svgContainerRef.current;
         
-        if (!element) {
-          message.error('未找到可导出的元素');
-          return;
-        }
-        
-        const canvas = await html2canvas(element, {
-          backgroundColor: '#ffffff',
-          scale: 2,
-          logging: false
-        });
-        
-        canvas.toBlob((blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${contentType}_${Date.now()}.png`;
-          a.click();
-          URL.revokeObjectURL(url);
-        });
-        
-        message.success(response.data.data.message || 'PNG导出成功');
-        fetchUserCredits();
-      }
-    } catch (error) {
-      console.error('导出失败:', error);
-      message.error(error.response?.data?.message || '导出失败');
-    }
-  };
-
-  // 导出PDF
-  const exportPDF = async () => {
-    const credits = await checkCredits('export_pdf');
-    if (!credits.sufficient) {
-      Modal.error({
-        title: '积分不足',
-        content: `导出PDF需要${credits.requiredCredits}积分，当前余额${credits.currentCredits}积分`
-      });
-      return;
-    }
-
-    if (credits.requiredCredits > 0) {
-      Modal.confirm({
-        title: '确认导出',
-        content: `导出PDF将消耗${credits.requiredCredits}积分，当前余额${credits.currentCredits}积分`,
-        okText: '确认',
-        cancelText: '取消',
-        onOk: async () => {
-          await doExportPDF();
-        }
-      });
-    } else {
-      await doExportPDF();
-    }
-  };
-
-  const doExportPDF = async () => {
-    try {
-      const response = await apiClient.post('/mindmap/export-log', { type: 'pdf' });
-      
-      if (response.data.success) {
-        const element = previewRef.current || svgContainerRef.current;
-        
-        if (!element) {
-          message.error('未找到可导出的元素');
-          return;
-        }
-        
-        const canvas = await html2canvas(element, {
-          backgroundColor: '#ffffff',
-          scale: 2,
-          logging: false
-        });
-        
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-          orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-          unit: 'px',
-          format: [canvas.width, canvas.height]
-        });
-        
-        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save(`${contentType}_${Date.now()}.pdf`);
-        
-        message.success(response.data.data.message || 'PDF导出成功');
+        // 刷新用户积分
         fetchUserCredits();
       }
     } catch (error) {
@@ -650,13 +500,14 @@ const MindmapPage = () => {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(content).then(() => {
+    navigator.clipboard.writeText(markdown).then(() => {
       message.success('已复制到剪贴板');
     }).catch(() => {
       message.error('复制失败');
     });
   };
 
+  // 完全清空内容
   const clearContent = () => {
     Modal.confirm({
       title: '确认清空',
@@ -664,31 +515,27 @@ const MindmapPage = () => {
       okText: '确定',
       cancelText: '取消',
       onOk: () => {
-        setContent('');
+        setMarkdown(''); // 完全清空
         message.success('已清空');
       }
     });
   };
 
   const handleZoom = (type) => {
-    if (contentType !== 'markdown' || !markmapRef.current) return;
-    
-    try {
-      if (type === 'in') {
-        markmapRef.current.rescale(1.25);
-      } else if (type === 'out') {
-        markmapRef.current.rescale(0.8);
-      } else if (type === 'fit') {
-        markmapRef.current.fit();
-      }
-    } catch (error) {
-      console.error('缩放失败:', error);
+    if (!markmapRef.current) return;
+    if (type === 'in') {
+      markmapRef.current.rescale(1.25);
+    } else if (type === 'out') {
+      markmapRef.current.rescale(0.8);
+    } else if (type === 'fit') {
+      markmapRef.current.fit();
     }
   };
 
+  // 展开所有节点功能
   const handleExpandAll = () => {
-    if (contentType !== 'markdown' || !markmapRef.current) {
-      message.warning('该功能仅支持Markdown模式');
+    if (!markmapRef.current) {
+      message.warning('请等待思维导图加载完成');
       return;
     }
     
@@ -730,7 +577,7 @@ const MindmapPage = () => {
     }
   };
 
-  // 导出菜单
+  // 导出菜单项 - 显示积分消耗
   const exportMenuItems = [
     { 
       key: 'svg', 
@@ -746,37 +593,11 @@ const MindmapPage = () => {
       onClick: exportSVG 
     },
     { 
-      key: 'png', 
-      label: (
-        <Space>
-          <FileImageOutlined />
-          <span>PNG图片</span>
-          {creditsConfig && creditsConfig.export_png_credits > 0 && (
-            <Badge count={`${creditsConfig.export_png_credits}积分`} style={{ backgroundColor: '#52c41a' }} />
-          )}
-        </Space>
-      ),
-      onClick: exportPNG 
-    },
-    { 
-      key: 'pdf', 
-      label: (
-        <Space>
-          <FilePdfOutlined />
-          <span>PDF文档</span>
-          {creditsConfig && creditsConfig.export_pdf_credits > 0 && (
-            <Badge count={`${creditsConfig.export_pdf_credits}积分`} style={{ backgroundColor: '#52c41a' }} />
-          )}
-        </Space>
-      ),
-      onClick: exportPDF 
-    },
-    { 
       key: 'markdown', 
       label: (
         <Space>
-          <FileTextOutlined />
-          <span>源代码</span>
+          <FileOutlined />
+          <span>Markdown文件</span>
           {creditsConfig && creditsConfig.export_markdown_credits > 0 && (
             <Badge count={`${creditsConfig.export_markdown_credits}积分`} style={{ backgroundColor: '#52c41a' }} />
           )}
@@ -791,9 +612,7 @@ const MindmapPage = () => {
     key: map.id,
     label: (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <span onClick={() => handleLoad(map)} style={{ flex: 1 }}>
-          [{map.content_type || 'markdown'}] {map.title}
-        </span>
+        <span onClick={() => handleLoad(map)} style={{ flex: 1 }}>{map.title}</span>
         <Button
           type="text"
           size="small"
@@ -809,64 +628,6 @@ const MindmapPage = () => {
     )
   }));
 
-  // Tab项配置
-  const tabItems = [
-    {
-      key: 'markdown',
-      label: '思维导图 (Markdown)',
-      icon: <FileTextOutlined />
-    },
-    {
-      key: 'mermaid',
-      label: '流程图 (Mermaid)',
-      icon: <FileImageOutlined />
-    },
-    {
-      key: 'svg',
-      label: '矢量图 (SVG)',
-      icon: <FileImageOutlined />
-    }
-  ];
-
-  // 获取编辑器语言
-  const getEditorLanguage = () => {
-    switch(contentType) {
-      case 'markdown': return 'markdown';
-      case 'mermaid': return 'markdown';
-      case 'svg': return 'xml';
-      default: return 'markdown';
-    }
-  };
-
-  // 渲染预览区域
-  const renderPreview = () => {
-    if (contentType === 'markdown') {
-      return (
-        <div className="mindmap-canvas" ref={svgContainerRef}>
-          {svgLoading ? (
-            <div className="svg-loading">
-              <Spin tip="初始化思维导图..." />
-            </div>
-          ) : (
-            <svg ref={svgRef} className="mindmap-svg" />
-          )}
-        </div>
-      );
-    } else if (contentType === 'mermaid') {
-      return (
-        <div className="mindmap-canvas" ref={previewRef}>
-          <MermaidPreview code={content} />
-        </div>
-      );
-    } else if (contentType === 'svg') {
-      return (
-        <div className="mindmap-canvas" ref={previewRef}>
-          <SvgPreview code={content} />
-        </div>
-      );
-    }
-  };
-
   return (
     <div className="mindmap-page-container" ref={containerRef}>
       {/* 页面级工具栏 */}
@@ -878,10 +639,9 @@ const MindmapPage = () => {
             </Text>
             {creditsConfig && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                (保存: {creditsConfig.save_credits}积分 | 
-                SVG: {creditsConfig.export_svg_credits}积分 | 
-                PNG: {creditsConfig.export_png_credits}积分 | 
-                PDF: {creditsConfig.export_pdf_credits}积分)
+                (保存: {creditsConfig.save_credits}积分, 
+                导出SVG: {creditsConfig.export_svg_credits}积分, 
+                导出MD: {creditsConfig.export_markdown_credits}积分)
               </Text>
             )}
           </Space>
@@ -940,27 +700,15 @@ const MindmapPage = () => {
         </Space>
       </div>
       
-      {/* Tab切换 */}
-      <div className="mindmap-tabs-container">
-        <Tabs
-          activeKey={contentType}
-          onChange={handleTabChange}
-          items={tabItems}
-          size="large"
-        />
-      </div>
-      
       {/* 主体内容区 */}
       <Layout className="mindmap-main-layout">
         {/* 左侧编辑器 */}
         <Sider width="50%" theme="light" className="mindmap-editor-sider">
           <div className="editor-header">
             <Text strong style={{ fontSize: 15 }}>
-              {contentType === 'markdown' && 'Markdown 编辑器'}
-              {contentType === 'mermaid' && 'Mermaid DSL 编辑器'}
-              {contentType === 'svg' && 'SVG 代码编辑器'}
+              Markdown编辑器
             </Text>
-            <Tooltip title="支持实时预览">
+            <Tooltip title="使用Markdown语法编写，支持多级标题和列表">
               <QuestionCircleOutlined style={{ color: '#8E8E93' }} />
             </Tooltip>
           </div>
@@ -972,10 +720,10 @@ const MindmapPage = () => {
             )}
             <Editor
               height={editorHeight}
-              language={getEditorLanguage()}
+              language="markdown"
               theme="vs-light"
-              value={content}
-              onChange={(value) => setContent(value || '')}
+              value={markdown}
+              onChange={(value) => setMarkdown(value || '')}
               onMount={handleEditorDidMount}
               loading={null}
               options={{
@@ -1004,49 +752,55 @@ const MindmapPage = () => {
           </div>
         </Sider>
         
-        {/* 右侧预览区 */}
+        {/* 右侧思维导图 */}
         <Content className="mindmap-preview-content">
           <div className="mindmap-toolbar">
             <Space size={16}>
               <Text strong style={{ fontSize: 15 }}>
-                实时预览
+                思维导图预览
               </Text>
               <div className="toolbar-divider" />
-              {contentType === 'markdown' && (
-                <Space size={8}>
-                  <Tooltip title="放大">
-                    <Button 
-                      className="zoom-button"
-                      icon={<ZoomInOutlined />} 
-                      onClick={() => handleZoom('in')}
-                    />
-                  </Tooltip>
-                  <Tooltip title="缩小">
-                    <Button 
-                      className="zoom-button"
-                      icon={<ZoomOutOutlined />} 
-                      onClick={() => handleZoom('out')}
-                    />
-                  </Tooltip>
-                  <Tooltip title="自适应">
-                    <Button 
-                      className="zoom-button"
-                      icon={<ReloadOutlined />} 
-                      onClick={() => handleZoom('fit')}
-                    />
-                  </Tooltip>
-                  <Tooltip title="展开所有">
-                    <Button 
-                      className="zoom-button"
-                      icon={<ExpandOutlined />} 
-                      onClick={handleExpandAll}
-                    />
-                  </Tooltip>
-                </Space>
-              )}
+              <Space size={8}>
+                <Tooltip title="放大">
+                  <Button 
+                    className="zoom-button"
+                    icon={<ZoomInOutlined />} 
+                    onClick={() => handleZoom('in')}
+                  />
+                </Tooltip>
+                <Tooltip title="缩小">
+                  <Button 
+                    className="zoom-button"
+                    icon={<ZoomOutOutlined />} 
+                    onClick={() => handleZoom('out')}
+                  />
+                </Tooltip>
+                <Tooltip title="自适应">
+                  <Button 
+                    className="zoom-button"
+                    icon={<ReloadOutlined />} 
+                    onClick={() => handleZoom('fit')}
+                  />
+                </Tooltip>
+                <Tooltip title="展开所有">
+                  <Button 
+                    className="zoom-button"
+                    icon={<ExpandOutlined />} 
+                    onClick={handleExpandAll}
+                  />
+                </Tooltip>
+              </Space>
             </Space>
           </div>
-          {renderPreview()}
+          <div className="mindmap-canvas" ref={svgContainerRef}>
+            {svgLoading ? (
+              <div className="svg-loading">
+                <Spin tip="初始化思维导图..." />
+              </div>
+            ) : (
+              <svg ref={svgRef} className="mindmap-svg" />
+            )}
+          </div>
         </Content>
       </Layout>
     </div>

@@ -1,5 +1,5 @@
 /**
- * 思维导图相关路由 - 支持 Markdown/Mermaid/SVG 三种模式
+ * 思维导图相关路由
  * 提供思维导图的保存、加载、导出等功能（支持积分扣减）
  */
 
@@ -18,15 +18,11 @@ router.get('/credits-config', authenticate, async (req, res) => {
     const saveCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
     const exportSvgCredits = await SystemConfig.getSetting('mindmap.export_svg_credits') || 2;
     const exportMarkdownCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
-    const exportPngCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
-    const exportPdfCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
     
     return ResponseHelper.success(res, {
       save_credits: saveCredits,
       export_svg_credits: exportSvgCredits,
-      export_markdown_credits: exportMarkdownCredits,
-      export_png_credits: exportPngCredits,
-      export_pdf_credits: exportPdfCredits
+      export_markdown_credits: exportMarkdownCredits
     });
   } catch (error) {
     logger.error('获取思维导图积分配置失败:', error);
@@ -37,7 +33,7 @@ router.get('/credits-config', authenticate, async (req, res) => {
 // 检查积分是否充足（供前端调用）
 router.get('/check-credits', authenticate, async (req, res) => {
   try {
-    const { operation } = req.query; // save, export_svg, export_markdown, export_png, export_pdf
+    const { operation } = req.query; // save, export_svg, export_markdown
     const userId = req.user.id;
     
     // 获取操作所需积分
@@ -51,12 +47,6 @@ router.get('/check-credits', authenticate, async (req, res) => {
         break;
       case 'export_markdown':
         requiredCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
-        break;
-      case 'export_png':
-        requiredCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
-        break;
-      case 'export_pdf':
-        requiredCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
         break;
       default:
         return ResponseHelper.validation(res, ['无效的操作类型']);
@@ -100,7 +90,7 @@ router.get('/', authenticate, async (req, res) => {
     const userId = req.user.id;
     
     const query = `
-      SELECT id, title, content, content_type, created_at, updated_at
+      SELECT id, title, content, created_at, updated_at
       FROM user_mindmaps
       WHERE user_id = ?
       ORDER BY updated_at DESC
@@ -119,16 +109,10 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { title, content, content_type = 'markdown' } = req.body;
+    const { title, content } = req.body;
     
     if (!title || !content) {
       return ResponseHelper.validation(res, {}, '标题和内容不能为空');
-    }
-    
-    // 验证 content_type
-    const validTypes = ['markdown', 'mermaid', 'svg'];
-    if (!validTypes.includes(content_type)) {
-      return ResponseHelper.validation(res, {}, '无效的内容类型');
     }
     
     // 获取保存所需积分
@@ -152,20 +136,20 @@ router.post('/', authenticate, async (req, res) => {
         requiredCredits, 
         null, 
         null, 
-        `保存思维导图(${content_type})`,
+        '保存思维导图',
         'mindmap_save'
       );
       
-      logger.info('思维导图保存扣减积分', { userId, credits: requiredCredits, type: content_type });
+      logger.info('思维导图保存扣减积分', { userId, credits: requiredCredits });
     }
     
     // 保存思维导图
     const query = `
-      INSERT INTO user_mindmaps (user_id, title, content, content_type)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO user_mindmaps (user_id, title, content)
+      VALUES (?, ?, ?)
     `;
     
-    const result = await dbConnection.query(query, [userId, title, content, content_type]);
+    const result = await dbConnection.query(query, [userId, title, content]);
     
     return ResponseHelper.success(res, { 
       id: result.rows.insertId,
@@ -182,13 +166,7 @@ router.put('/:id', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const { title, content, content_type = 'markdown' } = req.body;
-    
-    // 验证 content_type
-    const validTypes = ['markdown', 'mermaid', 'svg'];
-    if (!validTypes.includes(content_type)) {
-      return ResponseHelper.validation(res, {}, '无效的内容类型');
-    }
+    const { title, content } = req.body;
     
     // 获取保存所需积分
     const requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
@@ -211,20 +189,20 @@ router.put('/:id', authenticate, async (req, res) => {
         requiredCredits,
         null,
         null,
-        `更新思维导图(${content_type})`,
+        '更新思维导图',
         'mindmap_save'
       );
       
-      logger.info('思维导图更新扣减积分', { userId, credits: requiredCredits, type: content_type });
+      logger.info('思维导图更新扣减积分', { userId, credits: requiredCredits });
     }
     
     const query = `
       UPDATE user_mindmaps
-      SET title = ?, content = ?, content_type = ?, updated_at = NOW()
+      SET title = ?, content = ?, updated_at = NOW()
       WHERE id = ? AND user_id = ?
     `;
     
-    const result = await dbConnection.query(query, [title, content, content_type, id, userId]);
+    const result = await dbConnection.query(query, [title, content, id, userId]);
     
     if (result.rows.affectedRows === 0) {
       return ResponseHelper.notFound(res, '思维导图不存在');
@@ -243,7 +221,7 @@ router.put('/:id', authenticate, async (req, res) => {
 router.post('/export-log', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { type } = req.body; // svg, markdown, png, pdf
+    const { type } = req.body; // svg 或 markdown
     
     // 获取导出所需积分
     let requiredCredits = 0;
@@ -255,12 +233,6 @@ router.post('/export-log', authenticate, async (req, res) => {
     } else if (type === 'markdown') {
       requiredCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
       exportType = 'Markdown';
-    } else if (type === 'png') {
-      requiredCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
-      exportType = 'PNG';
-    } else if (type === 'pdf') {
-      requiredCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
-      exportType = 'PDF';
     } else {
       return ResponseHelper.validation(res, {}, '无效的导出类型');
     }

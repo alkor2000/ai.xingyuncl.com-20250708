@@ -1,4 +1,4 @@
-// 思维导图编辑器样式 - 多模式支持版本
+// 思维导图编辑器样式 - BasicLayout适配版
 .mindmap-page-container {
   height: 100%;
   display: flex;
@@ -15,7 +15,6 @@
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    z-index: 100;
 
     .page-header-left {
       h4 {
@@ -52,46 +51,6 @@
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(255, 77, 79, 0.25);
         }
-      }
-    }
-  }
-
-  // Tab切换区域
-  .mindmap-tabs-container {
-    background: #fff;
-    padding: 0 24px;
-    border-bottom: 1px solid #e8e8e8;
-
-    .ant-tabs {
-      .ant-tabs-nav {
-        margin-bottom: 0;
-
-        &::before {
-          border-bottom: 2px solid #e8e8e8;
-        }
-      }
-
-      .ant-tabs-tab {
-        padding: 12px 20px;
-        font-size: 15px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-
-        &:hover {
-          color: #007aff;
-        }
-
-        &.ant-tabs-tab-active {
-          .ant-tabs-tab-btn {
-            color: #007aff;
-            font-weight: 600;
-          }
-        }
-      }
-
-      .ant-tabs-ink-bar {
-        background: #007aff;
-        height: 3px;
       }
     }
   }
@@ -297,12 +256,6 @@
     top: 0;
     z-index: 1000;
   }
-  
-  .mindmap-tabs-container {
-    position: sticky;
-    top: 60px;
-    z-index: 999;
-  }
 }
 
 // 响应式布局
@@ -331,15 +284,6 @@
           padding: 0 12px;
           font-size: 13px;
         }
-      }
-    }
-    
-    .mindmap-tabs-container {
-      padding: 0 12px;
-      
-      .ant-tabs-tab {
-        padding: 10px 12px;
-        font-size: 13px;
       }
     }
   }

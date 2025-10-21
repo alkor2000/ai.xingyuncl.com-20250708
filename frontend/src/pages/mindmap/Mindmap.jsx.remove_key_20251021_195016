@@ -61,6 +61,7 @@ const MindmapPage = () => {
   const [editorHeight, setEditorHeight] = useState('600px');
   const [creditsConfig, setCreditsConfig] = useState(null);
   const [userCredits, setUserCredits] = useState(0);
+  const [renderKey, setRenderKey] = useState(0); // 用于强制重新渲染
   
   // Refs
   const svgRef = useRef(null);
@@ -179,6 +180,7 @@ const MindmapPage = () => {
     
     setContentType(key);
     setContent(TEMPLATES[key]);
+    setRenderKey(prev => prev + 1); // 强制重新渲染
     
     // 如果切换到 Markdown，延迟渲染
     if (key === 'markdown') {
@@ -394,6 +396,7 @@ const MindmapPage = () => {
     
     if (newType !== contentType) {
       setContentType(newType);
+      setRenderKey(prev => prev + 1); // 强制重新渲染
       if (newType === 'markdown') {
         setSvgLoading(true);
         setTimeout(() => {
@@ -855,13 +858,19 @@ const MindmapPage = () => {
     } else if (contentType === 'mermaid') {
       return (
         <div className="mindmap-canvas" ref={previewRef}>
-          <MermaidPreview code={content} />
+          <MermaidPreview 
+            key={`mermaid-${renderKey}`}
+            code={content} 
+          />
         </div>
       );
     } else if (contentType === 'svg') {
       return (
         <div className="mindmap-canvas" ref={previewRef}>
-          <SvgPreview code={content} />
+          <SvgPreview 
+            key={`svg-${renderKey}`}
+            code={content} 
+          />
         </div>
       );
     }

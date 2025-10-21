@@ -37,7 +37,6 @@ const agentNodeTypeRoutes = require('./admin/agentNodeTypes'); // Agent节点类
 const UserCreditsController = require('../controllers/admin/UserCreditsController');
 const SystemStatsController = require('../controllers/admin/SystemStatsController');
 const MindmapCreditsController = require('../controllers/admin/MindmapCreditsController'); // 思维导图积分控制器
-const UsageLogController = require('../controllers/admin/UsageLogController'); // 使用记录控制器
 
 const router = express.Router();
 
@@ -125,18 +124,6 @@ router.use('/agent-node-types', agentNodeTypeRoutes);
 
 // 系统统计路由 - /api/admin/stats
 router.use('/stats', statsRoutes);
-
-// ===== 会话管理路由（独立路由，用于管理员查看对话内容）=====
-/**
- * @route GET /api/admin/conversations/:conversationId/messages
- * @desc 获取会话的完整消息记录（管理员专用）
- * @access Admin / SuperAdmin
- */
-const { requireRole } = require('../middleware/authMiddleware');
-router.get('/conversations/:conversationId/messages',
-  requireRole(['admin', 'super_admin']),
-  UsageLogController.getConversationMessages
-);
 
 // ===== 思维导图积分配置路由 =====
 // 获取思维导图积分配置

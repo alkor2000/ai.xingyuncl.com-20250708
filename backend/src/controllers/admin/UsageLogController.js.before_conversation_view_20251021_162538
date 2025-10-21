@@ -3,8 +3,6 @@
  */
 
 const UsageLogService = require('../../services/admin/UsageLogService');
-const Conversation = require('../../models/Conversation');
-const Message = require('../../models/Message');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
@@ -135,71 +133,6 @@ class UsageLogController {
     } catch (error) {
       logger.error('导出使用记录失败:', error);
       return ResponseHelper.error(res, error.message || '导出失败');
-    }
-  }
-
-  /**
-   * 获取会话的完整消息记录（管理员专用）
-   * GET /api/admin/conversations/:conversationId/messages
-   */
-  static async getConversationMessages(req, res) {
-    try {
-      const { conversationId } = req.params;
-      const userRole = req.user.role;
-
-      // 权限检查：只有管理员和超级管理员可以访问
-      if (userRole !== ROLES.ADMIN && userRole !== ROLES.SUPER_ADMIN) {
-        return ResponseHelper.forbidden(res, '只有管理员可以查看对话记录');
-      }
-
-      // 验证会话是否存在
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) {
-        return ResponseHelper.notFound(res, '会话不存在');
-      }
-
-      // 组管理员只能查看本组用户的会话
-      if (userRole === ROLES.ADMIN) {
-        // 需要验证会话所属用户是否在当前管理员的组
-        const dbConnection = require('../../database/connection');
-        const checkSql = `
-          SELECT u.group_id 
-          FROM conversations c
-          JOIN users u ON c.user_id = u.id
-          WHERE c.id = ?
-        `;
-        const { rows } = await dbConnection.query(checkSql, [conversationId]);
-        
-        if (rows.length === 0 || rows[0].group_id !== req.user.group_id) {
-          return ResponseHelper.forbidden(res, '无权查看其他组的对话记录');
-        }
-      }
-
-      // 获取会话的所有消息（不分页，全部返回）
-      const result = await Message.getConversationMessages(conversationId, {
-        page: 1,
-        limit: 10000, // 设置一个大数字获取所有消息
-        order: 'DESC', // 倒序：最新的在前
-        includeStreaming: false // 不包含流式传输中的消息
-      });
-
-      // 返回会话信息和消息列表
-      const responseData = {
-        conversation: conversation.toJSON(),
-        messages: result.messages.map(msg => msg.toJSON())
-      };
-
-      logger.info('管理员查看会话消息', {
-        adminId: req.user.id,
-        adminRole: userRole,
-        conversationId,
-        messageCount: result.messages.length
-      });
-
-      return ResponseHelper.success(res, responseData, '获取对话记录成功');
-    } catch (error) {
-      logger.error('获取会话消息失败:', error);
-      return ResponseHelper.error(res, error.message || '获取对话记录失败');
     }
   }
 }

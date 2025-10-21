@@ -57,7 +57,7 @@ const MindmapPage = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [savedMaps, setSavedMaps] = useState([]);
   const [editorLoading, setEditorLoading] = useState(true);
-  const [svgLoading, setSvgLoading] = useState(false);
+  const [svgLoading, setSvgLoading] = useState(true);
   const [editorHeight, setEditorHeight] = useState('600px');
   const [creditsConfig, setCreditsConfig] = useState(null);
   const [userCredits, setUserCredits] = useState(0);
@@ -70,7 +70,6 @@ const MindmapPage = () => {
   const svgContainerRef = useRef(null);
   const editorWrapperRef = useRef(null);
   const previewRef = useRef(null); // 用于PNG/PDF导出
-  const renderTimerRef = useRef(null);
   
   const { user } = useAuthStore();
 
@@ -105,16 +104,16 @@ const MindmapPage = () => {
     calculateHeight();
     window.addEventListener('resize', calculateHeight);
 
+    const initTimer = setTimeout(() => {
+      setSvgLoading(false);
+      if (contentType === 'markdown') {
+        renderMarkdownMindmap();
+      }
+    }, 500);
+
     return () => {
+      clearTimeout(initTimer);
       window.removeEventListener('resize', calculateHeight);
-      if (renderTimerRef.current) {
-        clearTimeout(renderTimerRef.current);
-      }
-      // 清理 Markmap 实例
-      if (markmapRef.current) {
-        markmapRef.current.destroy();
-        markmapRef.current = null;
-      }
     };
   }, [user]);
 
@@ -160,152 +159,85 @@ const MindmapPage = () => {
 
   // 切换内容类型
   const handleTabChange = (key) => {
-    console.log('切换到模式:', key);
-    
-    // 清理旧的渲染定时器
-    if (renderTimerRef.current) {
-      clearTimeout(renderTimerRef.current);
-      renderTimerRef.current = null;
-    }
-    
-    // 如果从 Markdown 切换走，销毁 Markmap 实例
-    if (contentType === 'markdown' && markmapRef.current) {
-      markmapRef.current.destroy();
-      markmapRef.current = null;
-      if (svgRef.current) {
-        svgRef.current.innerHTML = '';
-      }
-    }
-    
     setContentType(key);
     setContent(TEMPLATES[key]);
     
-    // 如果切换到 Markdown，延迟渲染
+    // 如果切换到markdown，需要重新渲染
     if (key === 'markdown') {
-      setSvgLoading(true);
-      renderTimerRef.current = setTimeout(() => {
-        setSvgLoading(false);
-        // 再次延迟确保容器已渲染
-        setTimeout(() => {
-          renderMarkdownMindmap();
-        }, 100);
-      }, 300);
+      setTimeout(() => {
+        renderMarkdownMindmap();
+      }, 100);
     }
   };
 
   // 渲染 Markdown 思维导图
   const renderMarkdownMindmap = useCallback(() => {
-    if (contentType !== 'markdown') {
-      return;
-    }
-
-    if (!svgRef.current || !transformerRef.current) {
-      console.log('SVG ref 或 transformer 未就绪');
+    if (contentType !== 'markdown' || !svgRef.current || !transformerRef.current) {
       return;
     }
 
     const container = svgContainerRef.current;
     if (!container) {
-      console.log('容器未找到');
       return;
     }
 
-    // 等待容器完全渲染
-    setTimeout(() => {
-      const rect = container.getBoundingClientRect();
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      setTimeout(() => renderMarkdownMindmap(), 200);
+      return;
+    }
+
+    try {
+      const { root } = transformerRef.current.transform(content);
       
-      // 检查容器尺寸是否有效
-      if (!rect || rect.width === 0 || rect.height === 0) {
-        console.log('容器尺寸无效，重试...', rect);
-        setTimeout(() => renderMarkdownMindmap(), 200);
-        return;
+      if (markmapRef.current) {
+        markmapRef.current.destroy();
       }
 
-      try {
-        console.log('开始渲染 Markdown 思维导图，容器尺寸:', rect.width, 'x', rect.height);
-        
-        // 转换 Markdown
-        const { root } = transformerRef.current.transform(content);
-        
-        // 销毁旧实例
+      svgRef.current.innerHTML = '';
+      
+      svgRef.current.setAttribute('width', rect.width - 40);
+      svgRef.current.setAttribute('height', rect.height - 40);
+      
+      const options = {
+        duration: 300,
+        nodeFont: '300 16px -apple-system, BlinkMacSystemFont, sans-serif',
+        lineHeight: 1.5,
+        paddingX: 8,
+        autoFit: true,
+        color: (node) => {
+          const colors = ['#007AFF', '#5856D6', '#FF3B30', '#FF9500', '#34C759', '#00C7BE'];
+          const depth = node.state?.depth || 0;
+          return colors[depth % colors.length];
+        },
+        nodeMinHeight: 24,
+        spacingVertical: 10,
+        spacingHorizontal: 80
+      };
+
+      markmapRef.current = Markmap.create(svgRef.current, options, root);
+
+      setTimeout(() => {
         if (markmapRef.current) {
-          markmapRef.current.destroy();
-          markmapRef.current = null;
+          markmapRef.current.fit();
         }
-
-        // 清空容器
-        if (svgRef.current) {
-          svgRef.current.innerHTML = '';
-          
-          // 设置 SVG 尺寸
-          const svgWidth = Math.max(rect.width - 40, 400);
-          const svgHeight = Math.max(rect.height - 40, 300);
-          
-          svgRef.current.setAttribute('width', svgWidth);
-          svgRef.current.setAttribute('height', svgHeight);
-          
-          console.log('SVG 尺寸设置:', svgWidth, 'x', svgHeight);
-        }
-        
-        // Markmap 配置
-        const options = {
-          duration: 300,
-          nodeFont: '300 16px -apple-system, BlinkMacSystemFont, sans-serif',
-          lineHeight: 1.5,
-          paddingX: 8,
-          autoFit: true,
-          color: (node) => {
-            const colors = ['#007AFF', '#5856D6', '#FF3B30', '#FF9500', '#34C759', '#00C7BE'];
-            const depth = node.state?.depth || 0;
-            return colors[depth % colors.length];
-          },
-          nodeMinHeight: 24,
-          spacingVertical: 10,
-          spacingHorizontal: 80,
-          initialExpandLevel: 2
-        };
-
-        // 创建新实例
-        markmapRef.current = Markmap.create(svgRef.current, options, root);
-
-        // 延迟自适应
-        setTimeout(() => {
-          if (markmapRef.current) {
-            try {
-              markmapRef.current.fit();
-              console.log('Markmap 渲染成功');
-            } catch (fitError) {
-              console.error('Fit 失败:', fitError);
-            }
-          }
-        }, 100);
-        
-      } catch (error) {
-        console.error('渲染思维导图失败:', error);
-        message.error('渲染失败: ' + error.message);
-      }
-    }, 50);
+      }, 100);
+      
+    } catch (error) {
+      console.error('渲染思维导图失败:', error);
+      message.error('渲染失败，请检查Markdown格式');
+    }
   }, [content, contentType]);
 
   // 监听 markdown 内容变化
   useEffect(() => {
-    if (contentType !== 'markdown' || svgLoading) {
-      return;
-    }
+    if (contentType !== 'markdown' || svgLoading) return;
     
-    if (renderTimerRef.current) {
-      clearTimeout(renderTimerRef.current);
-    }
-    
-    renderTimerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       renderMarkdownMindmap();
     }, 500);
     
-    return () => {
-      if (renderTimerRef.current) {
-        clearTimeout(renderTimerRef.current);
-      }
-    };
+    return () => clearTimeout(timer);
   }, [content, contentType, renderMarkdownMindmap, svgLoading]);
 
   // 编辑器挂载完成
@@ -331,6 +263,7 @@ const MindmapPage = () => {
     const title = prompt('请输入脑图名称：', `${contentType}_${new Date().toLocaleDateString()}`);
     if (!title) return;
 
+    // 检查积分
     const credits = await checkCredits('save');
     if (!credits.sufficient) {
       Modal.error({
@@ -340,6 +273,7 @@ const MindmapPage = () => {
       return;
     }
 
+    // 如果需要积分，显示确认对话框
     if (credits.requiredCredits > 0) {
       Modal.confirm({
         title: '确认保存',
@@ -367,6 +301,7 @@ const MindmapPage = () => {
       if (response.data.success) {
         message.success(response.data.data.message || '保存成功');
         
+        // 同时保存到本地
         const newMap = {
           id: response.data.data.id || Date.now(),
           title,
@@ -379,6 +314,7 @@ const MindmapPage = () => {
         setSavedMaps(updated);
         localStorage.setItem('mindmap_saved', JSON.stringify(updated));
         
+        // 刷新用户积分
         fetchUserCredits();
       }
     } catch (error) {
@@ -389,20 +325,8 @@ const MindmapPage = () => {
 
   // 加载已保存的脑图
   const handleLoad = (map) => {
-    const newType = map.content_type || 'markdown';
     setContent(map.content);
-    
-    if (newType !== contentType) {
-      setContentType(newType);
-      if (newType === 'markdown') {
-        setSvgLoading(true);
-        setTimeout(() => {
-          setSvgLoading(false);
-          setTimeout(() => renderMarkdownMindmap(), 100);
-        }, 300);
-      }
-    }
-    
+    setContentType(map.content_type || 'markdown');
     message.success(`已加载: ${map.title}`);
   };
 
@@ -673,16 +597,12 @@ const MindmapPage = () => {
   const handleZoom = (type) => {
     if (contentType !== 'markdown' || !markmapRef.current) return;
     
-    try {
-      if (type === 'in') {
-        markmapRef.current.rescale(1.25);
-      } else if (type === 'out') {
-        markmapRef.current.rescale(0.8);
-      } else if (type === 'fit') {
-        markmapRef.current.fit();
-      }
-    } catch (error) {
-      console.error('缩放失败:', error);
+    if (type === 'in') {
+      markmapRef.current.rescale(1.25);
+    } else if (type === 'out') {
+      markmapRef.current.rescale(0.8);
+    } else if (type === 'fit') {
+      markmapRef.current.fit();
     }
   };
 

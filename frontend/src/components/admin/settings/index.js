@@ -1,7 +1,3 @@
-/**
- * 管理设置组件导出文件
- */
-// 系统设置相关组件
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
 export { default as AIModelFormModal } from './AIModelFormModal'
@@ -26,3 +22,4 @@ export { default as OrgApplicationManagement } from './OrgApplicationManagement'
 export { default as MindmapCreditsConfig } from './MindmapCreditsConfig'
 export { default as OcrSettings } from './OcrSettings'
 export { default as CalendarConfigSettings } from './CalendarConfigSettings'
+export { default as ConversationContentDrawer } from './ConversationContentDrawer'

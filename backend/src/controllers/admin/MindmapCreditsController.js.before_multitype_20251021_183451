@@ -1,5 +1,5 @@
 /**
- * 思维导图积分配置控制器 - 支持 PNG/PDF 导出
+ * 思维导图积分配置控制器
  */
 const SystemConfig = require('../../models/SystemConfig');
 const ResponseHelper = require('../../utils/response');
@@ -15,15 +15,11 @@ class MindmapCreditsController {
       const saveCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
       const exportSvgCredits = await SystemConfig.getSetting('mindmap.export_svg_credits') || 2;
       const exportMarkdownCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
-      const exportPngCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
-      const exportPdfCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
       
       const config = {
         save_credits: saveCredits,
         export_svg_credits: exportSvgCredits,
-        export_markdown_credits: exportMarkdownCredits,
-        export_png_credits: exportPngCredits,
-        export_pdf_credits: exportPdfCredits
+        export_markdown_credits: exportMarkdownCredits
       };
       
       logger.info('获取思维导图积分配置', config);
@@ -39,20 +35,12 @@ class MindmapCreditsController {
    */
   static async updateConfig(req, res) {
     try {
-      const { 
-        save_credits, 
-        export_svg_credits, 
-        export_markdown_credits,
-        export_png_credits,
-        export_pdf_credits
-      } = req.body;
+      const { save_credits, export_svg_credits, export_markdown_credits } = req.body;
       
       // 验证参数范围 0-999
       if (save_credits < 0 || save_credits > 999 ||
           export_svg_credits < 0 || export_svg_credits > 999 ||
-          export_markdown_credits < 0 || export_markdown_credits > 999 ||
-          export_png_credits < 0 || export_png_credits > 999 ||
-          export_pdf_credits < 0 || export_pdf_credits > 999) {
+          export_markdown_credits < 0 || export_markdown_credits > 999) {
         return ResponseHelper.validation(res, ['积分值必须在0-999之间']);
       }
       
@@ -60,15 +48,11 @@ class MindmapCreditsController {
       await SystemConfig.updateSetting('mindmap.save_credits', save_credits, 'number');
       await SystemConfig.updateSetting('mindmap.export_svg_credits', export_svg_credits, 'number');
       await SystemConfig.updateSetting('mindmap.export_markdown_credits', export_markdown_credits, 'number');
-      await SystemConfig.updateSetting('mindmap.export_png_credits', export_png_credits, 'number');
-      await SystemConfig.updateSetting('mindmap.export_pdf_credits', export_pdf_credits, 'number');
       
       logger.info('思维导图积分配置已更新', { 
         save_credits, 
         export_svg_credits, 
         export_markdown_credits,
-        export_png_credits,
-        export_pdf_credits,
         updatedBy: req.user.id 
       });
       
@@ -84,7 +68,7 @@ class MindmapCreditsController {
    */
   static async checkCredits(req, res) {
     try {
-      const { operation } = req.query; // save, export_svg, export_markdown, export_png, export_pdf
+      const { operation } = req.query; // save, export_svg, export_markdown
       const userId = req.user.id;
       
       // 获取操作所需积分
@@ -98,12 +82,6 @@ class MindmapCreditsController {
           break;
         case 'export_markdown':
           requiredCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
-          break;
-        case 'export_png':
-          requiredCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
-          break;
-        case 'export_pdf':
-          requiredCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
           break;
         default:
           return ResponseHelper.validation(res, ['无效的操作类型']);

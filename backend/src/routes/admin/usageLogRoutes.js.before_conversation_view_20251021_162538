@@ -38,14 +38,4 @@ router.get('/export',
   UsageLogController.exportUsageLogs
 );
 
-/**
- * @route GET /api/admin/conversations/:conversationId/messages
- * @desc 获取会话的完整消息记录（管理员专用）
- * @access Admin / SuperAdmin
- */
-router.get('/conversations/:conversationId/messages',
-  requireRole(['admin', 'super_admin']),
-  UsageLogController.getConversationMessages
-);
-
 module.exports = router;
