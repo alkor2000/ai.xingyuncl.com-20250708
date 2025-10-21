@@ -3,7 +3,6 @@
  * 修复：搜索状态保持，确保分页时不丢失搜索条件
  * 修改：允许组管理员管理自己组的邀请码和标签
  * 新增：添加数据分析入口按钮
- * 优化：为用户组表格添加分页功能
  */
 
 import React, { useEffect, useState } from 'react'
@@ -108,7 +107,7 @@ const Users = () => {
   const [isSiteConfigModalVisible, setIsSiteConfigModalVisible] = useState(false)
   const [isInvitationCodeModalVisible, setIsInvitationCodeModalVisible] = useState(false)
   const [isInvitationLogsModalVisible, setIsInvitationLogsModalVisible] = useState(false)
-  const [isTagAssignModalVisible, setIsTagAssignModalVisible] = useState(false)
+  const [isTagAssignModalVisible, setIsTagAssignModalVisible] = useState(false) // 新增：标签分配弹窗
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -119,24 +118,16 @@ const Users = () => {
   const [siteConfigGroup, setSiteConfigGroup] = useState(null)
   const [invitationCodeGroup, setInvitationCodeGroup] = useState(null)
   const [invitationLogsGroup, setInvitationLogsGroup] = useState(null)
-  const [tagAssignUser, setTagAssignUser] = useState(null)
+  const [tagAssignUser, setTagAssignUser] = useState(null) // 新增：标签分配用户
   const [activeTab, setActiveTab] = useState('users')
-  const [activeGroupTab, setActiveGroupTab] = useState('info')
+  const [activeGroupTab, setActiveGroupTab] = useState('info') // 新增：组管理子标签
   
   // 🔥 核心修复：添加搜索状态管理
   const [currentSearchParams, setCurrentSearchParams] = useState({})
   
-  // 用户分页状态
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
-    total: 0
-  })
-
-  // 🆕 用户组分页状态
-  const [groupPagination, setGroupPagination] = useState({
-    current: 1,
-    pageSize: 20,
     total: 0
   })
   
@@ -150,18 +141,20 @@ const Users = () => {
   // 🔥 核心修复：统一的加载用户列表函数，支持搜索条件和分页
   const loadUsers = async (searchParams = {}, pageParams = {}) => {
     try {
+      // 合并搜索参数和分页参数
       const finalParams = {
-        ...currentSearchParams,
-        ...searchParams,
+        ...currentSearchParams, // 保持当前搜索条件
+        ...searchParams,        // 新的搜索条件（如果有）
         page: pageParams.current || pagination.current,
         limit: pageParams.pageSize || pagination.pageSize,
-        include_tags: true
+        include_tags: true     // 包含标签信息
       }
 
       console.log('🔍 加载用户列表参数:', finalParams)
 
       const result = await getUsers(finalParams)
       
+      // 更新分页信息
       setPagination(prev => ({
         ...prev,
         ...pageParams,
@@ -179,11 +172,6 @@ const Users = () => {
   const loadUserGroups = async () => {
     try {
       await getUserGroups()
-      // 🆕 更新分组分页总数
-      setGroupPagination(prev => ({
-        ...prev,
-        total: userGroups.length
-      }))
     } catch (error) {
       console.error('加载用户分组失败:', error)
       message.error('加载用户分组失败')
@@ -198,22 +186,14 @@ const Users = () => {
     }
   }, [hasPermission])
 
-  // 🆕 监听 userGroups 变化，更新分页总数
-  useEffect(() => {
-    if (userGroups.length > 0) {
-      setGroupPagination(prev => ({
-        ...prev,
-        total: userGroups.length
-      }))
-    }
-  }, [userGroups])
-
   // 🔥 核心修复：用户搜索 - 保存搜索条件并重置到第一页
   const handleSearch = async (searchValues) => {
     console.log('🔍 执行用户搜索:', searchValues)
     
+    // 更新搜索条件状态
     setCurrentSearchParams(searchValues)
     
+    // 重置到第一页并执行搜索
     const newPagination = { current: 1, pageSize: pagination.pageSize }
     setPagination(prev => ({ ...prev, current: 1 }))
     
@@ -227,36 +207,32 @@ const Users = () => {
     const newPagination = { current: page, pageSize }
     setPagination(prev => ({ ...prev, ...newPagination }))
     
+    // 使用当前搜索条件进行分页
     await loadUsers({}, newPagination)
-  }
-
-  // 🆕 用户组分页处理（前端分页）
-  const handleGroupPageChange = (page, pageSize) => {
-    console.log('📄 用户组分页切换:', { page, pageSize })
-    setGroupPagination({
-      current: page,
-      pageSize: pageSize,
-      total: groupPagination.total
-    })
   }
 
   // 🔥 核心修复：重置搜索 - 清空搜索条件并回到第一页
   const handleResetSearch = async () => {
     console.log('🔄 重置搜索')
     
+    // 清空搜索条件
     setCurrentSearchParams({})
     
+    // 重置到第一页
     const newPagination = { current: 1, pageSize: pagination.pageSize }
     setPagination(prev => ({ ...prev, current: 1 }))
     
+    // 加载全部数据
     await loadUsers({}, newPagination)
   }
 
   // 创建用户
   const handleCreateUser = async (values) => {
     try {
+      // 处理账号有效期
       let account_expire_days = null
       if (values.expire_at) {
+        // 如果expire_at是字符串（YYYY-MM-DD格式）
         if (typeof values.expire_at === 'string' && values.expire_at.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const expireMoment = moment(values.expire_at)
           const days = expireMoment.diff(moment(), 'days')
@@ -273,6 +249,7 @@ const Users = () => {
       userForm.resetFields()
       message.success(t('admin.users.create.success'))
       
+      // 🔥 修复：创建用户后保持当前搜索和分页状态
       await loadUsers()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.users.create.failed'))
@@ -290,30 +267,34 @@ const Users = () => {
         ...updateData 
       } = values
       
+      // 基础信息更新 - 组管理员不能修改这些字段
       if (isGroupAdmin) {
         delete updateData.role
         delete updateData.group_id
         delete updateData.credits_quota
         delete updateData.token_quota
-        delete updateData.email
-        delete updateData.username
+        delete updateData.email  // 组管理员不能修改邮箱
+        delete updateData.username  // 组管理员不能修改用户名
       }
       
+      // 处理账号有效期
       if (expire_at !== undefined) {
         if (expire_at === '' || expire_at === null) {
-          updateData.expire_at = null
+          updateData.expire_at = null // 清除有效期
         } else if (typeof expire_at === 'string' && expire_at.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          updateData.expire_at = expire_at
+          updateData.expire_at = expire_at // 已经是正确格式
         }
       }
       
       await updateUser(editingUser.id, updateData)
       
+      // 延长账号有效期
       if (extend_days > 0) {
         await extendUserAccountExpireDate(editingUser.id, extend_days)
         message.success(`账号有效期已延长 ${extend_days} 天`)
       }
       
+      // 密码重置
       if (newPassword && confirmPassword) {
         if (newPassword !== confirmPassword) {
           message.error(t('admin.users.password.mismatch'))
@@ -328,6 +309,7 @@ const Users = () => {
       userForm.resetFields()
       message.success(t('admin.users.update.success'))
       
+      // 🔥 修复：更新用户后保持当前搜索和分页状态
       await loadUsers()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.users.update.failed'))
@@ -341,6 +323,7 @@ const Users = () => {
       await updateUser(userId, { status: newStatus })
       message.success('用户状态更新成功')
       
+      // 🔥 修复：状态切换后保持当前搜索和分页状态
       await loadUsers()
     } catch (error) {
       message.error('用户状态更新失败')
@@ -357,10 +340,11 @@ const Users = () => {
     }
   }
 
-  // 编辑用户
+  // 编辑用户 - 确保所有字段都被正确设置
   const handleEditUser = async (user) => {
     setEditingUser(user)
     
+    // 设置表单值，包括email和uuid等所有字段
     const formValues = {
       email: user.email,
       username: user.username,
@@ -370,7 +354,7 @@ const Users = () => {
       remark: user.remark,
       token_quota: user.token_quota,
       credits_quota: user.credits_quota,
-      expire_at: formatDate(user.expire_at) || ''
+      expire_at: formatDate(user.expire_at) || '' // 格式化日期为 YYYY-MM-DD
     }
     
     userForm.setFieldsValue(formValues)
@@ -383,10 +367,12 @@ const Users = () => {
       await deleteUser(userId)
       message.success('用户删除成功')
       
+      // 🔥 修复：删除用户后保持当前搜索和分页状态，但需要检查是否需要调整页码
       const currentTotal = pagination.total
       const currentPage = pagination.current
       const pageSize = pagination.pageSize
       
+      // 如果删除后当前页没有数据了，回到上一页
       if ((currentTotal - 1) <= (currentPage - 1) * pageSize && currentPage > 1) {
         const newPagination = { current: currentPage - 1, pageSize }
         setPagination(prev => ({ ...prev, current: currentPage - 1 }))
@@ -405,7 +391,7 @@ const Users = () => {
     setIsModelRestrictModalVisible(true)
   }
 
-  // 管理用户标签
+  // 管理用户标签（新增）
   const handleManageTags = (user) => {
     setTagAssignUser(user)
     setIsTagAssignModalVisible(true)
@@ -422,6 +408,7 @@ const Users = () => {
             : ''
         }`
       )
+      // 🔥 修复：挪出用户后保持当前搜索和分页状态
       await loadUsers()
       await loadUserGroups()
     } catch (error) {
@@ -476,7 +463,7 @@ const Users = () => {
       color: group.color,
       is_active: group.is_active,
       sort_order: group.sort_order,
-      expire_date: formatDate(group.expire_date) || ''
+      expire_date: formatDate(group.expire_date) || '' // 格式化日期为 YYYY-MM-DD
     })
     setIsGroupModalVisible(true)
   }
@@ -507,6 +494,9 @@ const Users = () => {
 
   const handleSubmitDistribute = async (userId, amount, reason, operation = 'distribute') => {
     try {
+      // 根据角色确定使用哪个组ID
+      // 超级管理员：使用被操作用户的组ID
+      // 组管理员：使用自己的组ID（因为只能操作本组用户）
       const targetGroupId = isSuperAdmin && distributeUser?.group_id 
         ? distributeUser.group_id 
         : currentUser.group_id
@@ -516,6 +506,7 @@ const Users = () => {
       setDistributeUser(null)
       message.success(operation === 'distribute' ? '积分分配成功' : '积分回收成功')
       
+      // 🔥 修复：积分操作后保持当前搜索和分页状态
       await loadUsers()
       await loadUserGroups()
     } catch (error) {
@@ -555,6 +546,7 @@ const Users = () => {
       message.success('组有效期设置成功')
       loadUserGroups()
       if (syncToUsers) {
+        // 🔥 修复：同步有效期后保持当前搜索和分页状态
         await loadUsers()
       }
     } catch (error) {
@@ -591,8 +583,9 @@ const Users = () => {
     }
   }
 
-  // 管理邀请码
+  // 管理邀请码（修改：组管理员也能管理自己组的邀请码）
   const handleManageInvitationCode = (group) => {
+    // 权限检查：组管理员只能管理自己的组
     if (isGroupAdmin && group.id !== currentUser.group_id) {
       message.warning('只能管理本组的邀请码')
       return
@@ -614,13 +607,15 @@ const Users = () => {
     }
   }
 
-  // 查看邀请记录
+  // 查看邀请记录（仅超级管理员）
   const handleViewInvitationLogs = (group) => {
     setInvitationLogsGroup(group)
     setIsInvitationLogsModalVisible(true)
   }
 
   // 获取分配积分时使用的组信息
+  // 超级管理员：使用被操作用户所在的组信息
+  // 组管理员：使用自己的组信息
   const getDistributeGroupInfo = () => {
     if (isSuperAdmin && distributeUser?.group_id) {
       return userGroups.find(g => g.id === distributeUser.group_id)
@@ -631,14 +626,6 @@ const Users = () => {
   // 跳转到数据分析页面
   const handleGoToAnalytics = () => {
     navigate('/admin/analytics')
-  }
-
-  // 🆕 获取当前页显示的用户组数据
-  const getCurrentPageGroups = () => {
-    const { current, pageSize } = groupPagination
-    const start = (current - 1) * pageSize
-    const end = start + pageSize
-    return userGroups.slice(start, end)
   }
 
   // 权限检查
@@ -695,7 +682,7 @@ const Users = () => {
 
       {activeTab === 'users' ? (
         <>
-          {/* 用户搜索表单 */}
+          {/* 用户搜索表单 - 🔥 新增重置回调 */}
           <Card style={{ marginBottom: 16 }}>
             <UserSearchForm
               userGroups={userGroups}
@@ -735,6 +722,7 @@ const Users = () => {
                   />
                 </Col>
               </Row>
+              {/* 显示组站点配置信息 */}
               {currentGroupInfo.site_customization_enabled && (
                 <Row gutter={16} style={{ marginTop: 16 }}>
                   <Col span={24}>
@@ -751,6 +739,7 @@ const Users = () => {
                   </Col>
                 </Row>
               )}
+              {/* 显示邀请码信息 */}
               {currentGroupInfo.invitation_enabled && currentGroupInfo.invitation_code && (
                 <Row gutter={16} style={{ marginTop: 16 }}>
                   <Col span={24}>
@@ -773,7 +762,7 @@ const Users = () => {
             </Card>
           )}
 
-          {/* 用户列表 */}
+          {/* 用户列表 - 🔥 修复分页处理 */}
           <Card 
             title={t('admin.users.title')}
             extra={
@@ -789,6 +778,7 @@ const Users = () => {
                 >
                   {t('admin.users.addUser')}
                 </Button>
+                {/* 移动端数据分析入口 */}
                 <Button 
                   icon={<DashboardOutlined />}
                   onClick={handleGoToAnalytics}
@@ -812,7 +802,7 @@ const Users = () => {
               onToggleStatus={handleToggleUserStatus}
               onDelete={handleDeleteUser}
               onManageModels={handleManageModels}
-              onManageTags={handleManageTags}
+              onManageTags={handleManageTags}  // 新增：传递标签管理回调
               onDistributeCredits={handleDistributeCredits}
               onRemoveFromGroup={handleRemoveFromGroup}
             />
@@ -860,13 +850,11 @@ const Users = () => {
                     />
                   )}
                   <UserGroupTable
-                    groups={getCurrentPageGroups()}
+                    groups={userGroups}
                     loading={loading}
                     isGroupAdmin={isGroupAdmin}
                     isSuperAdmin={isSuperAdmin}
                     currentUser={currentUser}
-                    pagination={groupPagination}
-                    onPageChange={handleGroupPageChange}
                     onEdit={handleEditGroup}
                     onDelete={handleDeleteGroup}
                     onSetCreditsPool={handleSetCreditsPool}
@@ -880,7 +868,7 @@ const Users = () => {
                 </Card>
               </TabPane>
 
-              {/* 标签管理Tab */}
+              {/* 标签管理Tab（新增） */}
               <TabPane 
                 tab={
                   <span>
@@ -896,7 +884,7 @@ const Users = () => {
                 />
               </TabPane>
 
-              {/* 标签统计Tab */}
+              {/* 标签统计Tab（新增） */}
               <TabPane 
                 tab={
                   <span>
@@ -963,11 +951,12 @@ const Users = () => {
           setModelRestrictUser(null)
         }}
         onSuccess={() => {
+          // 🔥 修复：模型权限更新后保持当前搜索和分页状态
           loadUsers()
         }}
       />
 
-      {/* 用户标签分配弹窗 */}
+      {/* 用户标签分配弹窗（新增） */}
       <UserTagAssign
         visible={isTagAssignModalVisible}
         user={tagAssignUser}
@@ -977,6 +966,7 @@ const Users = () => {
           setTagAssignUser(null)
         }}
         onSuccess={() => {
+          // 更新用户列表以显示最新标签
           loadUsers()
           setIsTagAssignModalVisible(false)
           setTagAssignUser(null)
@@ -997,7 +987,7 @@ const Users = () => {
         />
       )}
 
-      {/* 积分分配弹窗 */}
+      {/* 积分分配弹窗 - 动态传入正确的组信息 */}
       {(isGroupAdmin || isSuperAdmin) && (
         <DistributeCreditsModal
           visible={isDistributeModalVisible}
@@ -1054,7 +1044,7 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请码管理弹窗 */}
+      {/* 邀请码管理弹窗（修改：组管理员也能使用） */}
       {(isSuperAdmin || isGroupAdmin) && (
         <GroupInvitationCodeModal
           visible={isInvitationCodeModalVisible}
@@ -1068,7 +1058,7 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请记录查看弹窗 */}
+      {/* 邀请记录查看弹窗（仅超级管理员） */}
       {isSuperAdmin && (
         <GroupInvitationLogsModal
           visible={isInvitationLogsModalVisible}

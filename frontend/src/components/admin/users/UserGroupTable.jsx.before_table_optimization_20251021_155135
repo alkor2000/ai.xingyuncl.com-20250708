@@ -1,7 +1,6 @@
 /**
  * 用户分组表格组件（包含积分池、组员上限、组有效期、站点配置和邀请码功能）
  * 修改：允许组管理员编辑自己组的邀请码
- * 优化：添加固定列、固定表头、分页功能，解决横向和纵向滚动问题
  */
 
 import React from 'react'
@@ -32,8 +31,6 @@ const UserGroupTable = ({
   isGroupAdmin = false,
   isSuperAdmin = false,
   currentUser = null,
-  pagination = { current: 1, pageSize: 20, total: 0 }, // 新增：分页配置
-  onPageChange = () => {}, // 新增：分页回调
   onEdit,
   onDelete,
   onSetCreditsPool,
@@ -107,16 +104,12 @@ const UserGroupTable = ({
       title: t('admin.users.table.id'),
       dataIndex: 'id',
       key: 'id',
-      width: 80,
-      fixed: 'left', // 🔧 固定左侧
-      align: 'center'
+      width: 80
     },
     {
       title: t('admin.groups.table.name'),
       dataIndex: 'name',
       key: 'name',
-      width: 150,
-      fixed: 'left', // 🔧 固定左侧
       render: (name, record) => (
         <Space>
           <Tag color={record.color}>{name}</Tag>
@@ -126,22 +119,12 @@ const UserGroupTable = ({
     {
       title: t('admin.groups.table.description'),
       dataIndex: 'description',
-      key: 'description',
-      width: 180,
-      ellipsis: {
-        showTitle: false
-      },
-      render: (description) => (
-        <Tooltip placement="topLeft" title={description}>
-          {description || '-'}
-        </Tooltip>
-      )
+      key: 'description'
     },
     {
       title: t('admin.groups.table.userCount'),
       dataIndex: 'user_count',
       key: 'user_count',
-      width: 160,
       render: (count, record) => {
         const userLimit = record.user_limit || 10
         const percentage = (count / userLimit) * 100
@@ -149,7 +132,7 @@ const UserGroupTable = ({
         const isNearFull = percentage >= 80
         
         return (
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space direction="vertical" size="small">
             <Space>
               <TeamOutlined />
               <span style={{ 
@@ -165,6 +148,7 @@ const UserGroupTable = ({
               size="small" 
               showInfo={false}
               strokeColor={isFull ? '#ff4d4f' : (isNearFull ? '#ff7a45' : '#52c41a')}
+              style={{ width: 100 }}
             />
           </Space>
         )
@@ -220,7 +204,6 @@ const UserGroupTable = ({
     {
       title: '积分池',
       key: 'credits_pool',
-      width: 200,
       render: (_, record) => {
         const total = record.credits_pool || 0
         const used = record.credits_pool_used || 0
@@ -228,13 +211,14 @@ const UserGroupTable = ({
         const percentage = total > 0 ? (used / total * 100) : 0
         
         return (
-          <div>
+          <div style={{ minWidth: 200 }}>
             <div style={{ marginBottom: 4 }}>
               <Space>
                 <WalletOutlined />
                 <span style={{ fontWeight: 'bold' }}>
                   {remaining.toLocaleString()} / {total.toLocaleString()}
                 </span>
+                <span style={{ color: '#999', fontSize: '12px' }}>积分</span>
               </Space>
             </div>
             <Progress 
@@ -279,10 +263,11 @@ const UserGroupTable = ({
     {
       title: '站点自定义',
       key: 'site_customization',
-      width: 140,
+      width: 120,
       render: (_, record) => {
         const isEnabled = record.site_customization_enabled
         const hasConfig = record.site_name || record.site_logo
+        const isUserGroup = currentUser && record.id === currentUser.group_id
         
         return (
           <Space direction="vertical" size="small">
@@ -311,16 +296,12 @@ const UserGroupTable = ({
       title: t('admin.groups.table.avgCredits'),
       dataIndex: 'avg_credits_used',
       key: 'avg_credits_used',
-      width: 120,
-      align: 'right',
       render: (avg) => Math.round(avg || 0).toLocaleString()
     },
     {
       title: t('admin.groups.table.status'),
       dataIndex: 'is_active',
       key: 'is_active',
-      width: 100,
-      align: 'center',
       render: (isActive) => (
         <Tag color={isActive ? 'green' : 'red'}>
           {isActive ? t('status.active') : t('status.inactive')}
@@ -330,9 +311,7 @@ const UserGroupTable = ({
     {
       title: t('table.actions'),
       key: 'actions',
-      width: 200,
-      fixed: 'right', // 🔧 固定右侧
-      align: 'center',
+      width: 280,
       render: (_, record) => {
         // 组管理员只能编辑自己组的站点配置和邀请码
         const canEditSiteConfig = record.site_customization_enabled && 
@@ -354,6 +333,7 @@ const UserGroupTable = ({
                 />
               </Tooltip>
             )}
+            {/* 组管理员也能看到并使用邀请码管理按钮 */}
             {canManageInvitationCode && onManageInvitationCode && (
               <Tooltip title={isGroupAdmin ? "编辑邀请码" : "管理邀请码"}>
                 <Button 
@@ -364,6 +344,7 @@ const UserGroupTable = ({
                 />
               </Tooltip>
             )}
+            {/* 只有超级管理员才能查看邀请记录 */}
             {isSuperAdmin && onViewInvitationLogs && record.invitation_enabled && (
               <Tooltip title="查看邀请记录">
                 <Button 
@@ -440,18 +421,8 @@ const UserGroupTable = ({
       dataSource={groups}
       rowKey="id"
       loading={loading}
-      scroll={{ 
-        x: 1800,  // 🔧 横向滚动宽度
-        y: 600    // 🔧 固定表头高度
-      }}
-      pagination={{
-        ...pagination,
-        showSizeChanger: true,
-        showQuickJumper: true,
-        showTotal: (total) => `共 ${total} 个分组`,
-        pageSizeOptions: ['10', '20', '50', '100'],
-        onChange: onPageChange
-      }}
+      pagination={false}
+      scroll={{ x: 'max-content' }}
     />
   )
 }
