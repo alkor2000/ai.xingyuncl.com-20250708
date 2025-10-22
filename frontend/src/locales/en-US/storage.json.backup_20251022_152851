@@ -1,7 +1,6 @@
 {
   "storage.title": "File Management",
-  "storage.myFiles": "Default Folder",
-  "storage.rootFolder": "Default Folder",
+  "storage.myFiles": "My Files",
   "storage.personalFiles": "Personal Files",
   "storage.globalShare": "Global Share",
   "storage.groupShare": "Organization Share",
@@ -15,16 +14,11 @@
   "storage.uploadPartialFailed": "{{count}} files failed to upload",
   "storage.createFolder": "Create Folder",
   "storage.newFolder": "New Folder",
-  "storage.renameFolder": "Rename Folder",
   "storage.enterFolderName": "Please enter folder name",
-  "storage.enterNewFolderName": "Please enter new folder name",
   "storage.folderName": "Folder Name",
-  "storage.newFolderName": "New Folder Name",
   "storage.folderNamePlaceholder": "Please enter folder name",
   "storage.createFolderSuccess": "Folder created successfully",
   "storage.createFolderFailed": "Failed to create folder",
-  "storage.renameFolderSuccess": "Folder renamed successfully",
-  "storage.renameFolderFailed": "Failed to rename folder",
   "storage.fileName": "File Name",
   "storage.fileSize": "Size",
   "storage.fileType": "Type",
@@ -59,7 +53,6 @@
   "storage.folder": "Folder",
   "storage.files": "files",
   "storage.open": "Open",
-  "storage.rename": "Rename",
   "storage.gridView": "Grid View",
   "storage.listView": "List View",
   "storage.loading": "Loading...",
@@ -69,10 +62,10 @@
   "storage.noPermission": "No permission to access",
   "storage.onlyAdminCanUpload": "Only admin can upload",
   "storage.readOnly": "Read only",
+  
   "storage.uploadDescription": "Upload Instructions",
   "storage.fileSizeLimit": "File Size Limit:",
   "storage.singleFileLimit": "Single file up to {{size}}MB",
-  "storage.batchUploadTip": "💡 You can select multiple files for batch upload",
   "storage.creditCalculation": "Credit Calculation:",
   "storage.creditRule5MB": "Files ≤5MB: {{base}} credits/file, >5MB: {{per5mb}} credits per 5MB",
   "storage.currentCredits": "Available Credits:",
@@ -83,6 +76,5 @@
   "storage.creditUnit": "files",
   "storage.insufficientCredits": "Insufficient credits! Need {{required}} credits, current balance {{current}} credits",
   "storage.copyFailed": "Copy failed, please copy manually",
-  "storage.dragActive": "Drop files to upload",
-  "storage.continueAddFiles": "Continue Adding Files"
+  "storage.dragActive": "Drop files to upload"
 }

@@ -1,6 +1,5 @@
 /**
  * 存储管理路由
- * 新增：文件夹重命名功能
  */
 
 const express = require('express');
@@ -22,7 +21,6 @@ router.put('/files/:id/move', StorageController.moveFile);
 // 文件夹操作
 router.post('/folders', StorageController.createFolder);
 router.get('/folders', StorageController.getFolders);
-router.put('/folders/:id/rename', StorageController.renameFolder);  // 新增重命名路由
 router.delete('/folders/:id', StorageController.deleteFolder);
 
 // 存储统计

@@ -1,7 +1,6 @@
 {
   "storage.title": "文件管理",
-  "storage.myFiles": "默认文件夹",
-  "storage.rootFolder": "默认文件夹",
+  "storage.myFiles": "我的文件",
   "storage.personalFiles": "个人文件",
   "storage.globalShare": "全局共享",
   "storage.groupShare": "组织共享",
@@ -15,16 +14,11 @@
   "storage.uploadPartialFailed": "{{count}} 个文件上传失败",
   "storage.createFolder": "新建文件夹",
   "storage.newFolder": "新建文件夹",
-  "storage.renameFolder": "重命名文件夹",
   "storage.enterFolderName": "请输入文件夹名称",
-  "storage.enterNewFolderName": "请输入新的文件夹名称",
   "storage.folderName": "文件夹名称",
-  "storage.newFolderName": "新文件夹名称",
   "storage.folderNamePlaceholder": "请输入文件夹名称",
   "storage.createFolderSuccess": "文件夹创建成功",
   "storage.createFolderFailed": "文件夹创建失败",
-  "storage.renameFolderSuccess": "文件夹重命名成功",
-  "storage.renameFolderFailed": "文件夹重命名失败",
   "storage.fileName": "文件名",
   "storage.fileSize": "大小",
   "storage.fileType": "类型",
@@ -59,7 +53,6 @@
   "storage.folder": "文件夹",
   "storage.files": "个文件",
   "storage.open": "打开",
-  "storage.rename": "重命名",
   "storage.gridView": "网格视图",
   "storage.listView": "列表视图",
   "storage.loading": "加载中...",
@@ -69,10 +62,10 @@
   "storage.noPermission": "无权限访问",
   "storage.onlyAdminCanUpload": "仅管理员可上传",
   "storage.readOnly": "只读",
+  
   "storage.uploadDescription": "上传说明",
   "storage.fileSizeLimit": "文件大小限制：",
   "storage.singleFileLimit": "单个文件不超过 {{size}}MB",
-  "storage.batchUploadTip": "💡 您可以同时选择多个文件进行批量上传",
   "storage.creditCalculation": "积分计算规则：",
   "storage.creditRule5MB": "5MB及以下文件：{{base}}积分/个，超过5MB部分：每5MB收取{{per5mb}}积分",
   "storage.currentCredits": "当前可用积分：",
@@ -83,6 +76,5 @@
   "storage.creditUnit": "个",
   "storage.insufficientCredits": "积分不足！需要 {{required}} 积分，当前余额 {{current}} 积分",
   "storage.copyFailed": "复制失败，请手动复制",
-  "storage.dragActive": "松开鼠标即可上传",
-  "storage.continueAddFiles": "继续添加文件"
+  "storage.dragActive": "松开鼠标即可上传"
 }

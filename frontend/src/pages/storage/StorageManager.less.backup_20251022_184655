@@ -1,7 +1,6 @@
 /**
  * 文件管理系统 - 优化配色版
  * 文件夹和文件使用鲜艳渐变色，存储卡片更紧凑
- * 新增：文件夹悬停操作按钮样式
  */
 
 // 渐变色系统
@@ -332,51 +331,6 @@
 
               .file-icon svg {
                 color: white !important;
-              }
-
-              // 文件夹悬停操作按钮 - 新增
-              .folder-actions {
-                position: absolute;
-                top: 8px;
-                right: 8px;
-                display: flex;
-                gap: 4px;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 4px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                z-index: 10;
-                opacity: 0;
-                transform: translateY(-4px);
-                transition: all 0.2s ease-in-out;
-
-                .ant-btn {
-                  padding: 4px 8px;
-                  height: 28px;
-                  min-width: 28px;
-                  border-radius: 6px;
-                  border: none;
-                  background: transparent;
-                  color: #64748b;
-                  transition: all 0.2s;
-
-                  &:hover {
-                    background: #f1f5f9;
-                    color: #3b82f6;
-                  }
-
-                  &.ant-btn-dangerous {
-                    &:hover {
-                      background: #fee2e2;
-                      color: #ef4444;
-                    }
-                  }
-                }
-              }
-
-              &:hover .folder-actions {
-                opacity: 1;
-                transform: translateY(0);
               }
             }
 

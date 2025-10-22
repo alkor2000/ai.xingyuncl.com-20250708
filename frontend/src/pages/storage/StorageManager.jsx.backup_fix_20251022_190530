@@ -3,7 +3,7 @@
  * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
  * 新增功能：
  * 1. 文件夹重命名
- * 2. 批量上传优化（明显提示、继续添加按钮）- 修复批量选择问题
+ * 2. 批量上传优化（明显提示、继续添加按钮）
  * 3. 网格视图文件夹操作按钮（悬停显示）
  * 修改：完整国际化支持(i18n)
  */
@@ -1197,7 +1197,7 @@ const StorageManager = () => {
           </div>
         )}
         
-        {/* 上传弹窗 - 增强版，显示批量上传提示，修复批量选择问题 */}
+        {/* 上传弹窗 - 增强版，显示批量上传提示 */}
         <Modal
           title={t('storage.uploadFiles')}
           open={uploadModalVisible}
@@ -1259,12 +1259,11 @@ const StorageManager = () => {
                 message.error(t('storage.singleFileLimit', { size: creditConfig?.max_file_size || 100 }))
                 return false
               }
-              // 使用函数式setState确保正确累加所有文件
-              setFileList(prevList => [...prevList, file])
+              setFileList([...fileList, file])
               return false
             }}
             onRemove={(file) => {
-              setFileList(prevList => prevList.filter(f => f.uid !== file.uid))
+              setFileList(fileList.filter(f => f.uid !== file.uid))
             }}
           >
             <p className="ant-upload-drag-icon">

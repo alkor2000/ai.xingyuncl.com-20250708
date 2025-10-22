@@ -1,7 +1,6 @@
 /**
  * 存储管理状态管理 - 增强版
  * 支持全局文件夹、组织文件夹和个人文件夹
- * 新增：文件夹重命名功能
  */
 
 import { create } from 'zustand'
@@ -244,37 +243,6 @@ const useStorageStore = create((set, get) => ({
       console.error('创建文件夹失败:', error)
       set({ 
         error: error.response?.data?.message || '创建文件夹失败',
-        loading: false 
-      })
-      throw error
-    }
-  },
-  
-  /**
-   * 重命名文件夹 - 新增方法
-   */
-  renameFolder: async (folderId, newName) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await apiClient.put(`/storage/folders/${folderId}/rename`, {
-        new_name: newName
-      })
-      
-      // 刷新文件夹列表和树
-      await get().getFolderTree()
-      
-      // 如果重命名的是当前文件夹，更新当前文件夹信息
-      const state = get()
-      if (state.currentFolder && state.currentFolder.id === folderId) {
-        set({ currentFolder: response.data.data })
-      }
-      
-      set({ loading: false })
-      return response.data.data
-    } catch (error) {
-      console.error('重命名文件夹失败:', error)
-      set({ 
-        error: error.response?.data?.message || '重命名文件夹失败',
         loading: false 
       })
       throw error

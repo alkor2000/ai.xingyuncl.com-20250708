@@ -1,10 +1,6 @@
 /**
  * 文件存储管理页面 - iOS风格界面（增强版）
  * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
- * 新增功能：
- * 1. 文件夹重命名
- * 2. 批量上传优化（明显提示、继续添加按钮）- 修复批量选择问题
- * 3. 网格视图文件夹操作按钮（悬停显示）
  * 修改：完整国际化支持(i18n)
  */
 
@@ -275,7 +271,6 @@ const StorageManager = () => {
     deleteFiles,
     moveFile,
     createFolder,
-    renameFolder,
     deleteFolder,
     setCurrentFolder,
     toggleFileSelection,
@@ -291,9 +286,6 @@ const StorageManager = () => {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [createFolderVisible, setCreateFolderVisible] = useState(false)
   const [folderName, setFolderName] = useState('')
-  const [renameFolderVisible, setRenameFolderVisible] = useState(false)
-  const [renamingFolder, setRenamingFolder] = useState(null)
-  const [newFolderName, setNewFolderName] = useState('')
   const [uploadModalVisible, setUploadModalVisible] = useState(false)
   const [fileList, setFileList] = useState([])
   const [previewVisible, setPreviewVisible] = useState(false)
@@ -302,10 +294,9 @@ const StorageManager = () => {
   const [dragActive, setDragActive] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [folderCounts, setFolderCounts] = useState({})
-  const [uploadCreditsNeeded, setUploadCreditsNeeded] = useState(0)
-  const [userCredits, setUserCredits] = useState(0)
-  const [hoveredFolderId, setHoveredFolderId] = useState(null)
+  const [folderCounts, setFolderCounts] = useState({}) // 文件夹内文件数量
+  const [uploadCreditsNeeded, setUploadCreditsNeeded] = useState(0) // 上传所需积分
+  const [userCredits, setUserCredits] = useState(0) // 用户当前积分
 
   /**
    * 复制链接到剪贴板的辅助函数 - 移到组件内部
@@ -598,38 +589,6 @@ const StorageManager = () => {
     }
   }
 
-  // 打开重命名文件夹对话框
-  const openRenameFolder = (folder) => {
-    setRenamingFolder(folder)
-    setNewFolderName(folder.name)
-    setRenameFolderVisible(true)
-    closeContextMenu()
-  }
-
-  // 重命名文件夹
-  const handleRenameFolder = async () => {
-    if (!newFolderName || newFolderName.trim() === '') {
-      message.warning(t('storage.enterNewFolderName'))
-      return
-    }
-
-    if (newFolderName.trim() === renamingFolder.name) {
-      setRenameFolderVisible(false)
-      return
-    }
-
-    try {
-      await renameFolder(renamingFolder.id, newFolderName.trim())
-      message.success(t('storage.renameFolderSuccess'))
-      setRenameFolderVisible(false)
-      setRenamingFolder(null)
-      setNewFolderName('')
-      await loadData()
-    } catch (error) {
-      message.error(t('storage.renameFolderFailed'))
-    }
-  }
-
   // 过滤文件和文件夹
   const filteredFiles = files.filter(file => 
     file.original_name.toLowerCase().includes(searchKeyword.toLowerCase())
@@ -675,13 +634,12 @@ const StorageManager = () => {
     onClick: () => setCurrentFolder(null)
   })
 
-  // 渲染网格视图 - 新增悬停操作按钮
+  // 渲染网格视图
   const renderGridView = () => (
     <div className="file-grid">
-      {/* 文件夹 - 添加folder-item类名和悬停操作按钮 */}
+      {/* 文件夹 - 添加folder-item类名 */}
       {filteredFolders.map(folder => {
         const fileCount = files.filter(f => f.folder_id === folder.id).length
-        const isHovered = hoveredFolderId === folder.id
         
         return (
           <DraggableItem
@@ -692,8 +650,6 @@ const StorageManager = () => {
           >
             <div
               className="file-item folder-item"
-              onMouseEnter={() => setHoveredFolderId(folder.id)}
-              onMouseLeave={() => setHoveredFolderId(null)}
               onDoubleClick={() => {
                 setCurrentFolder(folder)
               }}
@@ -707,35 +663,6 @@ const StorageManager = () => {
               </div>
               <div className="file-name">{folder.name}</div>
               <div className="file-size">{t('storage.folder')}</div>
-              
-              {/* 悬停时显示的操作按钮 */}
-              {isHovered && (
-                <div className="folder-actions" onClick={(e) => e.stopPropagation()}>
-                  <Tooltip title={t('storage.rename')}>
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<EditOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openRenameFolder(folder)
-                      }}
-                    />
-                  </Tooltip>
-                  <Tooltip title={t('common.delete')}>
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteFolder(folder)
-                      }}
-                    />
-                  </Tooltip>
-                </div>
-              )}
             </div>
           </DraggableItem>
         )
@@ -776,7 +703,7 @@ const StorageManager = () => {
     </div>
   )
 
-  // 表格列配置（列表视图）- 添加重命名操作
+  // 表格列配置（列表视图）
   const columns = [
     {
       title: () => (
@@ -866,7 +793,7 @@ const StorageManager = () => {
     {
       title: t('common.operation'),
       key: 'action',
-      width: 200,
+      width: 160,
       render: (_, record) => {
         if (record.isFolder) {
           return (
@@ -877,13 +804,6 @@ const StorageManager = () => {
                 onClick={() => setCurrentFolder(record)}
               >
                 {t('storage.open')}
-              </Button>
-              <Button 
-                type="link" 
-                size="small"
-                onClick={() => openRenameFolder(record)}
-              >
-                <EditOutlined />
               </Button>
               <Button 
                 type="link" 
@@ -955,7 +875,7 @@ const StorageManager = () => {
             {/* 文件夹树卡片 */}
             <div className="folder-tree-card">
               <div className="folder-tree-header">
-                {t('storage.rootFolder')}
+                {t('storage.myFiles')}
               </div>
               <div className="folder-tree">
                 <Tree
@@ -966,7 +886,7 @@ const StorageManager = () => {
                       key: 'root',
                       title: (
                         <span style={{ fontWeight: 600 }}>
-                          {t('storage.rootFolder')}
+                          {t('storage.myFiles')}
                         </span>
                       ),
                       icon: <HomeOutlined />,
@@ -1123,7 +1043,7 @@ const StorageManager = () => {
           <CloudUploadOutlined />
         </button>
         
-        {/* 右键菜单 - 添加重命名选项 */}
+        {/* 右键菜单 */}
         {contextMenu && (
           <div 
             className="context-menu"
@@ -1137,13 +1057,6 @@ const StorageManager = () => {
                 }}>
                   <FolderOpenOutlined className="menu-icon" />
                   {t('storage.open')}
-                </div>
-                
-                <div className="menu-item" onClick={() => {
-                  openRenameFolder(contextMenu.item)
-                }}>
-                  <EditOutlined className="menu-icon" />
-                  {t('storage.rename')}
                 </div>
                 
                 <div className="menu-divider" />
@@ -1197,7 +1110,7 @@ const StorageManager = () => {
           </div>
         )}
         
-        {/* 上传弹窗 - 增强版，显示批量上传提示，修复批量选择问题 */}
+        {/* 上传弹窗 - 增强版，显示积分和限制信息 */}
         <Modal
           title={t('storage.uploadFiles')}
           open={uploadModalVisible}
@@ -1241,14 +1154,6 @@ const StorageManager = () => {
             />
           )}
           
-          {/* 批量上传提示 */}
-          <Alert
-            message={t('storage.batchUploadTip')}
-            type="success"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-          
           <Dragger
             multiple
             fileList={fileList}
@@ -1259,12 +1164,11 @@ const StorageManager = () => {
                 message.error(t('storage.singleFileLimit', { size: creditConfig?.max_file_size || 100 }))
                 return false
               }
-              // 使用函数式setState确保正确累加所有文件
-              setFileList(prevList => [...prevList, file])
+              setFileList([...fileList, file])
               return false
             }}
             onRemove={(file) => {
-              setFileList(prevList => prevList.filter(f => f.uid !== file.uid))
+              setFileList(fileList.filter(f => f.uid !== file.uid))
             }}
           >
             <p className="ant-upload-drag-icon">
@@ -1338,25 +1242,6 @@ const StorageManager = () => {
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
             onPressEnter={handleCreateFolder}
-          />
-        </Modal>
-        
-        {/* 重命名文件夹弹窗 - 新增 */}
-        <Modal
-          title={t('storage.renameFolder')}
-          open={renameFolderVisible}
-          onOk={handleRenameFolder}
-          onCancel={() => {
-            setRenameFolderVisible(false)
-            setRenamingFolder(null)
-            setNewFolderName('')
-          }}
-        >
-          <Input
-            placeholder={t('storage.enterNewFolderName')}
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            onPressEnter={handleRenameFolder}
           />
         </Modal>
         

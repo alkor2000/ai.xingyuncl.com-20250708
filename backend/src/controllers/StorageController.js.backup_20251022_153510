@@ -2,7 +2,6 @@
  * 存储管理控制器 - 增强版
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
- * 新增：文件夹重命名功能
  * 修改：移除所有硬编码路径，完全支持环境变量和Docker部署
  */
 
@@ -315,7 +314,7 @@ class StorageController {
    * 检查文件夹权限
    * @param {Object} folder - 文件夹对象
    * @param {Object} user - 用户对象
-   * @param {string} action - 操作类型：upload/delete/view/rename
+   * @param {string} action - 操作类型：upload/delete/view
    * @returns {boolean} 是否有权限
    */
   static checkFolderPermission(folder, user, action) {
@@ -328,14 +327,14 @@ class StorageController {
     switch (folderType) {
       case 'global':
         // 全局文件夹
-        if (action === 'upload' || action === 'delete' || action === 'rename') {
+        if (action === 'upload' || action === 'delete') {
           return userRole === 'super_admin';
         }
         return true; // 所有人可查看
         
       case 'group':
         // 组织文件夹
-        if (action === 'upload' || action === 'delete' || action === 'rename') {
+        if (action === 'upload' || action === 'delete') {
           return userRole === 'admin' && userGroupId === folder.group_id;
         }
         // 查看权限：同组用户
@@ -871,48 +870,6 @@ class StorageController {
     } catch (error) {
       logger.error('创建文件夹失败:', error);
       return ResponseHelper.error(res, '创建文件夹失败');
-    }
-  }
-
-  /**
-   * 重命名文件夹 - 新增方法
-   */
-  static async renameFolder(req, res) {
-    try {
-      const userId = req.user.id;
-      const { id } = req.params;
-      const { new_name } = req.body;
-      
-      // 验证新名称
-      if (!new_name || new_name.trim() === '') {
-        return ResponseHelper.validation(res, ['文件夹名称不能为空']);
-      }
-      
-      // 获取文件夹信息
-      const folder = await UserFolder.findById(id);
-      if (!folder) {
-        return ResponseHelper.notFound(res, '文件夹不存在');
-      }
-      
-      // 检查重命名权限
-      if (!StorageController.checkFolderPermission(folder, req.user, 'rename')) {
-        return ResponseHelper.forbidden(res, '无权重命名此文件夹');
-      }
-      
-      // 执行重命名（会自动递归更新子文件夹路径）
-      await folder.rename(new_name.trim());
-      
-      logger.info('文件夹重命名成功', {
-        folderId: id,
-        oldName: folder.name,
-        newName: new_name.trim(),
-        userId: userId
-      });
-      
-      return ResponseHelper.success(res, folder, '文件夹重命名成功');
-    } catch (error) {
-      logger.error('重命名文件夹失败:', error);
-      return ResponseHelper.error(res, error.message || '重命名文件夹失败');
     }
   }
 

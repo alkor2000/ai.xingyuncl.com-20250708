@@ -1,7 +1,6 @@
 /**
  * 用户文件夹模型 - 增强版
  * 支持个人文件夹、全局文件夹、组织文件夹
- * 新增：文件夹重命名功能（含递归更新子文件夹路径）
  */
 
 const dbConnection = require('../database/connection');
@@ -86,111 +85,6 @@ class UserFolder {
     } catch (error) {
       logger.error('查找文件夹失败:', error);
       throw new DatabaseError('查找文件夹失败', error);
-    }
-  }
-
-  /**
-   * 重命名文件夹 - 新增方法
-   * 会递归更新所有子文件夹的路径
-   */
-  async rename(newName) {
-    const transaction = await dbConnection.beginTransaction();
-    
-    try {
-      // 保存旧路径用于后续更新子文件夹
-      const oldPath = this.path;
-      
-      // 生成新路径
-      let newPath;
-      if (this.parent_id) {
-        const parent = await UserFolder.findById(this.parent_id);
-        if (parent) {
-          newPath = `${parent.path}/${newName}`;
-        } else {
-          newPath = `/${newName}`;
-        }
-      } else {
-        newPath = `/${newName}`;
-      }
-      
-      // 更新当前文件夹
-      const updateSql = `
-        UPDATE user_folders 
-        SET name = ?, path = ?, updated_at = NOW()
-        WHERE id = ?
-      `;
-      
-      await transaction.query(updateSql, [newName, newPath, this.id]);
-      
-      // 递归更新所有子文件夹的路径
-      await this.updateChildrenPaths(transaction, oldPath, newPath);
-      
-      await transaction.commit();
-      
-      // 更新当前对象的属性
-      this.name = newName;
-      this.path = newPath;
-      
-      logger.info('文件夹重命名成功', {
-        folderId: this.id,
-        oldName: oldPath.split('/').pop(),
-        newName: newName,
-        oldPath: oldPath,
-        newPath: newPath
-      });
-      
-      return this;
-    } catch (error) {
-      await transaction.rollback();
-      logger.error('重命名文件夹失败:', error);
-      throw new DatabaseError('重命名文件夹失败', error);
-    }
-  }
-
-  /**
-   * 递归更新子文件夹路径
-   * @param {Object} transaction - 数据库事务对象
-   * @param {string} oldPath - 旧路径
-   * @param {string} newPath - 新路径
-   */
-  async updateChildrenPaths(transaction, oldPath, newPath) {
-    try {
-      // 查找所有子文件夹（路径以旧路径开头的）
-      const sql = `
-        SELECT id, path 
-        FROM user_folders 
-        WHERE path LIKE ? AND id != ? AND is_deleted = 0
-      `;
-      
-      const { rows } = await transaction.query(sql, [`${oldPath}/%`, this.id]);
-      
-      // 批量更新子文件夹路径
-      for (const row of rows) {
-        const oldChildPath = row.path;
-        const newChildPath = oldChildPath.replace(oldPath, newPath);
-        
-        const updateSql = `
-          UPDATE user_folders 
-          SET path = ?, updated_at = NOW()
-          WHERE id = ?
-        `;
-        
-        await transaction.query(updateSql, [newChildPath, row.id]);
-        
-        logger.debug('更新子文件夹路径', {
-          folderId: row.id,
-          oldPath: oldChildPath,
-          newPath: newChildPath
-        });
-      }
-      
-      logger.info('子文件夹路径更新完成', {
-        parentId: this.id,
-        updatedCount: rows.length
-      });
-    } catch (error) {
-      logger.error('更新子文件夹路径失败:', error);
-      throw error;
     }
   }
 
