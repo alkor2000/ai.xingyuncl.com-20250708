@@ -1,25 +1,28 @@
-// 思维导图编辑器样式 - 绝对定位布局修复版
+// 思维导图编辑器样式 - 多模式支持版本
 .mindmap-page-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #f0f2f5;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
 
+  // 页面顶部工具栏
   .mindmap-page-header {
     background: #fff;
-    padding: 16px 24px;
+    padding: 12px 24px;
     border-bottom: 1px solid #e8e8e8;
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     z-index: 100;
-    flex-shrink: 0;
+
+    .page-header-left {
+      h4 {
+        color: #1c1c1e;
+        font-weight: 600;
+      }
+    }
 
     .page-header-actions {
       .ant-btn {
@@ -43,14 +46,21 @@
           border-color: #0051d5;
         }
       }
+
+      .ant-btn-dangerous {
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(255, 77, 79, 0.25);
+        }
+      }
     }
   }
 
+  // Tab切换区域
   .mindmap-tabs-container {
     background: #fff;
     padding: 0 24px;
     border-bottom: 1px solid #e8e8e8;
-    flex-shrink: 0;
 
     .ant-tabs {
       .ant-tabs-nav {
@@ -86,12 +96,11 @@
     }
   }
 
+  // 主体布局
   .mindmap-main-layout {
     flex: 1;
     overflow: hidden;
     background: transparent;
-    display: flex;
-    min-height: 0;
 
     // 左侧编辑器
     .mindmap-editor-sider {
@@ -100,14 +109,9 @@
       display: flex;
       flex-direction: column;
       box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
-      flex: 0 0 50%;
-      width: 50%;
-      max-width: 50%;
-      min-width: 600px;
-      overflow: hidden;
 
       .editor-header {
-        padding: 12px 20px;
+        padding: 16px 20px;
         background: linear-gradient(180deg, #ffffff 0%, #f9f9fb 100%);
         border-bottom: 1px solid #e5e5ea;
         display: flex;
@@ -121,43 +125,45 @@
         flex: 1;
         overflow: hidden;
         background: #fff;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
 
-        textarea {
-          flex: 1;
-          width: 100%;
-          padding: 20px;
-          font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-          font-size: 15px;
-          line-height: 1.8;
-          border: none;
-          outline: none;
-          resize: none;
-          background: #fff;
-          color: #1c1c1e;
-          overflow-y: auto;
-          min-height: 0;
+        .editor-loading {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 10;
+        }
 
-          &::placeholder {
-            color: #8e8e93;
+        // Monaco编辑器样式
+        .monaco-editor {
+          .margin {
+            background: #fafafa !important;
           }
 
-          &:focus {
-            background: #fafafa;
+          .monaco-editor-background {
+            background: #ffffff !important;
+          }
+
+          .line-numbers {
+            color: #8e8e93 !important;
+            font-size: 12px !important;
+          }
+
+          .view-line {
+            font-size: 14px !important;
+            line-height: 22px !important;
           }
         }
       }
     }
 
+    // 右侧预览区
     .mindmap-preview-content {
       flex: 1;
       background: #f2f2f7;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      min-width: 0;
 
       .mindmap-toolbar {
         padding: 12px 20px;
@@ -184,7 +190,6 @@
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
-          cursor: pointer;
 
           &:hover {
             background: #e5e5ea;
@@ -207,25 +212,15 @@
         padding: 20px;
         overflow: auto;
         position: relative;
-        background: #f2f2f7;
-        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
 
-        &::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-
-        &::-webkit-scrollbar-track {
-          background: #f2f2f7;
-        }
-
-        &::-webkit-scrollbar-thumb {
-          background: #c7c7cc;
-          border-radius: 4px;
-
-          &:hover {
-            background: #aeaeb2;
-          }
+        .svg-loading {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
         }
 
         .mindmap-svg {
@@ -233,15 +228,15 @@
           border-radius: 12px;
           box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08),
                       0 1px 2px rgba(0, 0, 0, 0.05);
-          padding: 40px;
-          min-height: 600px;
+          padding: 20px;
+          cursor: grab;
           width: 100%;
           height: 100%;
+          max-width: 100%;
+          max-height: 100%;
 
-          svg {
-            width: 100%;
-            height: 100%;
-            display: block;
+          &:active {
+            cursor: grabbing;
           }
         }
       }
@@ -249,7 +244,7 @@
   }
 }
 
-// Markmap 节点样式
+// Markmap样式
 .markmap-node {
   cursor: pointer;
 
@@ -289,19 +284,10 @@
   }
 }
 
-// Markmap 连线样式
-.markmap-link,
-.mindmap-svg svg path[fill="none"],
-.mindmap-svg svg g path,
-svg.markmap path {
-  fill: none !important;
-  stroke-width: 3px !important;
-  opacity: 1 !important;
-  transition: all 0.3s ease;
-
-  &:hover {
-    stroke-width: 4px !important;
-  }
+.markmap-link {
+  fill: none;
+  stroke-width: 2px;
+  opacity: 0.6;
 }
 
 // 全屏模式
@@ -320,37 +306,20 @@ svg.markmap path {
 }
 
 // 响应式布局
-@media (max-width: 1200px) {
-  .mindmap-page-container {
-    .mindmap-main-layout {
-      .mindmap-editor-sider {
-        flex: 0 0 40%;
-        width: 40%;
-        max-width: 40%;
-        min-width: 500px;
-      }
-    }
-  }
-}
-
 @media (max-width: 768px) {
   .mindmap-page-container {
     .mindmap-main-layout {
       flex-direction: column;
 
       .mindmap-editor-sider {
-        width: 100%;
-        max-width: 100%;
-        min-width: 100%;
+        width: 100% !important;
         height: 50%;
-        flex: 0 0 50%;
         border-right: none;
         border-bottom: 1px solid #e5e5ea;
       }
 
       .mindmap-preview-content {
         height: 50%;
-        flex: 1;
       }
     }
 

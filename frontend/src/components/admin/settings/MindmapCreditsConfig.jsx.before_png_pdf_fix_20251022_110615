@@ -1,5 +1,5 @@
 /**
- * 思维导图积分配置组件 - 完整版（包含 PNG/PDF）
+ * 思维导图积分配置组件
  */
 import React, { useState, useEffect } from 'react';
 import { Card, Form, InputNumber, Button, message, Alert, Space, Typography, Divider, Table } from 'antd';
@@ -65,20 +65,6 @@ const MindmapCreditsConfig = () => {
     },
     { 
       key: '3',
-      operation: '导出PNG图片', 
-      field: 'export_png_credits',
-      description: '导出为PNG格式文件时扣减的积分',
-      current: form.getFieldValue('export_png_credits') || 0
-    },
-    { 
-      key: '4',
-      operation: '导出PDF文档', 
-      field: 'export_pdf_credits',
-      description: '导出为PDF格式文件时扣减的积分',
-      current: form.getFieldValue('export_pdf_credits') || 0
-    },
-    { 
-      key: '5',
       operation: '导出Markdown文件', 
       field: 'export_markdown_credits',
       description: '导出为Markdown格式文件时扣减的积分',
@@ -170,42 +156,6 @@ const MindmapCreditsConfig = () => {
             style={{ width: 200 }}
             addonAfter="积分"
             placeholder="例如: 2"
-          />
-        </Form.Item>
-        
-        <Form.Item
-          label="导出PNG图片积分"
-          name="export_png_credits"
-          tooltip="导出为PNG格式文件时扣减的积分，设置为0表示免费"
-          rules={[
-            { required: true, message: '请输入积分值' },
-            { type: 'number', min: 0, max: 999, message: '积分值必须在0-999之间' }
-          ]}
-        >
-          <InputNumber
-            min={0}
-            max={999}
-            style={{ width: 200 }}
-            addonAfter="积分"
-            placeholder="例如: 3"
-          />
-        </Form.Item>
-        
-        <Form.Item
-          label="导出PDF文档积分"
-          name="export_pdf_credits"
-          tooltip="导出为PDF格式文件时扣减的积分，设置为0表示免费"
-          rules={[
-            { required: true, message: '请输入积分值' },
-            { type: 'number', min: 0, max: 999, message: '积分值必须在0-999之间' }
-          ]}
-        >
-          <InputNumber
-            min={0}
-            max={999}
-            style={{ width: 200 }}
-            addonAfter="积分"
-            placeholder="例如: 5"
           />
         </Form.Item>
         

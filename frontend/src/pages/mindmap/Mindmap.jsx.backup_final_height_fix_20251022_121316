@@ -1,6 +1,5 @@
 /**
- * 思维导图工具 - 原生 div 布局版
- * 修复：使用原生 div 替代 Ant Design Layout 组件，确保 flex 布局完整生效
+ * 思维导图工具 - 修复 TextArea 高度
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
@@ -10,7 +9,8 @@ import {
   message, 
   Tabs, 
   Tooltip,
-  Typography
+  Typography,
+  Layout
 } from 'antd';
 import { 
   SaveOutlined, 
@@ -32,6 +32,7 @@ import apiClient from '../../utils/api';
 import useAuthStore from '../../stores/authStore';
 
 const { Text } = Typography;
+const { Sider, Content } = Layout;
 
 const Mindmap = () => {
   const [contentType, setContentType] = useState('markdown');
@@ -384,24 +385,36 @@ const Mindmap = () => {
         ]} />
       </div>
 
-      {/* 使用原生 div 替代 Layout */}
-      <div className="mindmap-main-layout">
-        {/* 左侧编辑器 - 原生 div */}
-        <div className="mindmap-editor-sider">
+      <Layout className="mindmap-main-layout">
+        <Sider className="mindmap-editor-sider">
           <div className="editor-header">
             <Text strong>代码编辑器</Text>
           </div>
           <div className="editor-wrapper">
+            {/* ✅ 改用原生 textarea，确保高度填充 */}
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={`请输入 ${contentType === 'markdown' ? 'Markdown' : contentType === 'mermaid' ? 'Mermaid' : 'SVG'} 代码...`}
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: '20px',
+                fontFamily: 'Monaco, Menlo, "Courier New", monospace',
+                fontSize: '15px',
+                lineHeight: '1.8',
+                border: 'none',
+                outline: 'none',
+                resize: 'none',
+                background: '#fff',
+                color: '#1c1c1e',
+                flex: 1
+              }}
             />
           </div>
-        </div>
+        </Sider>
 
-        {/* 右侧预览 - 原生 div */}
-        <div className="mindmap-preview-content">
+        <Content className="mindmap-preview-content">
           <div className="mindmap-toolbar">
             <Space size={8}>
               <Text strong>实时预览</Text>
@@ -418,8 +431,8 @@ const Mindmap = () => {
           <div className="mindmap-canvas">
             {renderPreviewContent()}
           </div>
-        </div>
-      </div>
+        </Content>
+      </Layout>
     </div>
   );
 };

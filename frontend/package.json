@@ -34,7 +34,7 @@
     "html2canvas": "^1.4.1",
     "i18next": "^25.3.2",
     "i18next-browser-languagedetector": "^8.2.0",
-    "jspdf": "^2.5.1",
+    "jspdf": "^2.5.2",
     "lodash": "^4.17.21",
     "lodash.debounce": "^4.0.8",
     "markmap-lib": "^0.18.12",
@@ -58,6 +58,7 @@
     "reactflow": "^11.11.4",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
+    "svg2pdf.js": "^2.6.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 /**
- * 思维导图工具 - 原生 div 布局版
- * 修复：使用原生 div 替代 Ant Design Layout 组件，确保 flex 布局完整生效
+ * 思维导图工具 - 最终版
+ * 修复：1.编辑器50%宽度 2.导出SVG获取 3.连线可见性
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
@@ -10,7 +10,8 @@ import {
   message, 
   Tabs, 
   Tooltip,
-  Typography
+  Typography,
+  Layout
 } from 'antd';
 import { 
   SaveOutlined, 
@@ -31,7 +32,9 @@ import { MARKDOWN_TEMPLATE, MERMAID_TEMPLATE, SVG_TEMPLATE } from './constants/t
 import apiClient from '../../utils/api';
 import useAuthStore from '../../stores/authStore';
 
+const { TextArea } = Input;
 const { Text } = Typography;
+const { Sider, Content } = Layout;
 
 const Mindmap = () => {
   const [contentType, setContentType] = useState('markdown');
@@ -102,13 +105,16 @@ const Mindmap = () => {
       const mm = Markmap.create(svgRef.current, options, root);
       markmapRef.current = mm;
 
+      // 手动增强连线可见性
       setTimeout(() => {
         mm.fit();
         
+        // 强制设置所有连线样式
         const svg = svgRef.current;
         if (svg) {
           const allPaths = svg.querySelectorAll('path');
           allPaths.forEach(path => {
+            // 只处理连线（fill="none"的路径）
             if (path.getAttribute('fill') === 'none' || !path.getAttribute('fill')) {
               path.style.strokeWidth = '3px';
               path.style.opacity = '1';
@@ -228,10 +234,14 @@ const Mindmap = () => {
     }
   };
 
+  // ✅ 修复：正确获取 SVG 元素
   const getSVGElement = () => {
-    if (contentType === 'markdown') return svgRef.current;
-    else if (contentType === 'mermaid') return previewRef.current?.querySelector('svg');
-    else if (contentType === 'svg') {
+    if (contentType === 'markdown') {
+      // Markmap 直接在 svgRef 上创建 SVG
+      return svgRef.current;
+    } else if (contentType === 'mermaid') {
+      return previewRef.current?.querySelector('svg');
+    } else if (contentType === 'svg') {
       const div = document.createElement('div');
       div.innerHTML = content;
       return div.querySelector('svg');
@@ -242,6 +252,7 @@ const Mindmap = () => {
   const exportSVG = async () => {
     const svg = getSVGElement();
     if (!svg) throw new Error('未找到 SVG 元素');
+    
     const data = new XMLSerializer().serializeToString(svg);
     const blob = new Blob([data], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -255,6 +266,7 @@ const Mindmap = () => {
   const exportPNG = async () => {
     const svg = getSVGElement();
     if (!svg) throw new Error('未找到 SVG 元素');
+    
     const data = new XMLSerializer().serializeToString(svg);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -285,8 +297,10 @@ const Mindmap = () => {
   const exportPDF = async () => {
     const { jsPDF } = await import('jspdf');
     await import('svg2pdf.js');
+    
     const svg = getSVGElement();
     if (!svg) throw new Error('未找到 SVG 元素');
+    
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     await pdf.svg(svg, {
       x: 0, y: 0,
@@ -384,24 +398,21 @@ const Mindmap = () => {
         ]} />
       </div>
 
-      {/* 使用原生 div 替代 Layout */}
-      <div className="mindmap-main-layout">
-        {/* 左侧编辑器 - 原生 div */}
-        <div className="mindmap-editor-sider">
+      <Layout className="mindmap-main-layout">
+        <Sider className="mindmap-editor-sider">
           <div className="editor-header">
             <Text strong>代码编辑器</Text>
           </div>
           <div className="editor-wrapper">
-            <textarea
+            <TextArea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={`请输入 ${contentType === 'markdown' ? 'Markdown' : contentType === 'mermaid' ? 'Mermaid' : 'SVG'} 代码...`}
             />
           </div>
-        </div>
+        </Sider>
 
-        {/* 右侧预览 - 原生 div */}
-        <div className="mindmap-preview-content">
+        <Content className="mindmap-preview-content">
           <div className="mindmap-toolbar">
             <Space size={8}>
               <Text strong>实时预览</Text>
@@ -418,8 +429,8 @@ const Mindmap = () => {
           <div className="mindmap-canvas">
             {renderPreviewContent()}
           </div>
-        </div>
-      </div>
+        </Content>
+      </Layout>
     </div>
   );
 };
