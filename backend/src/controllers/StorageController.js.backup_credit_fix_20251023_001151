@@ -3,7 +3,6 @@
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 处理文件上传、下载、管理等操作
  * 新增：文件夹重命名功能
- * 修复：积分扣除并发安全问题（使用事务+行锁）
  * 修改：移除所有硬编码路径，完全支持环境变量和Docker部署
  */
 
@@ -510,10 +509,21 @@ class StorageController {
       // 计算积分消耗
       const creditCost = await StorageController.calculateCreditCost('upload', req.files);
       
+      // 检查用户积分
+      const userCredits = await StorageController.getUserCredits(userId);
+      
       logger.info('积分检查', {
-        userId: userId,
+        available: userCredits,
         required: creditCost
       });
+      
+      if (userCredits < creditCost) {
+        // 清理临时文件
+        for (const tempFile of tempFiles) {
+          await cleanupTempFile(tempFile);
+        }
+        return ResponseHelper.error(res, `积分不足，需要${creditCost}积分，当前可用${userCredits}积分`);
+      }
       
       // 初始化OSS服务
       logger.info('初始化OSS服务...');
@@ -602,13 +612,9 @@ class StorageController {
         }
       }
       
-      // 扣除积分（使用事务确保并发安全）
+      // 扣除积分
       if (uploadedFiles.length > 0 && creditCost > 0) {
-        const deductResult = await StorageController.deductCredits(userId, creditCost, '文件上传');
-        if (!deductResult) {
-          // 积分扣除失败，理论上不应该到这里（前面已检查）
-          logger.error('积分扣除失败', { userId, creditCost });
-        }
+        await StorageController.deductCredits(userId, creditCost, '文件上传');
       }
       
       const result = {
@@ -1043,80 +1049,61 @@ class StorageController {
   }
 
   /**
-   * 扣除用户积分 - 修复版（使用事务+行锁确保并发安全）
-   * @param {number} userId - 用户ID
-   * @param {number} amount - 扣除积分数量
-   * @param {string} description - 描述信息
-   * @returns {boolean} 是否扣除成功
+   * 获取用户积分
+   */
+  static async getUserCredits(userId) {
+    try {
+      const sql = 'SELECT credits_quota, used_credits FROM users WHERE id = ?';
+      const { rows } = await dbConnection.query(sql, [userId]);
+      
+      if (rows.length > 0) {
+        const creditsQuota = rows[0].credits_quota || 0;
+        const usedCredits = rows[0].used_credits || 0;
+        const availableCredits = creditsQuota - usedCredits;
+        
+        logger.info('获取用户积分', { 
+          userId, 
+          creditsQuota, 
+          usedCredits, 
+          availableCredits 
+        });
+        
+        return Math.max(0, availableCredits);
+      }
+      
+      return 0;
+    } catch (error) {
+      logger.error('获取用户积分失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 扣除用户积分
    */
   static async deductCredits(userId, amount, description = '文件上传') {
-    const transaction = await dbConnection.beginTransaction();
-    
     try {
-      // 1. 使用 FOR UPDATE 锁定用户记录（行锁）
-      const lockSql = 'SELECT credits_quota, used_credits FROM users WHERE id = ? FOR UPDATE';
-      const { rows: userRows } = await transaction.query(lockSql, [userId]);
-      
-      if (userRows.length === 0) {
-        await transaction.rollback();
-        logger.error('用户不存在', { userId });
+      const userCredits = await StorageController.getUserCredits(userId);
+      if (userCredits < amount) {
+        logger.warn('积分不足，无法扣除', { userId, required: amount, available: userCredits });
         return false;
       }
       
-      const user = userRows[0];
-      const creditsQuota = user.credits_quota || 0;
-      const usedCredits = user.used_credits || 0;
-      const availableCredits = creditsQuota - usedCredits;
+      const sql = 'UPDATE users SET used_credits = used_credits + ? WHERE id = ?';
+      await dbConnection.query(sql, [amount, userId]);
       
-      // 2. 在锁内检查余额（此时其他事务无法修改该用户记录）
-      if (availableCredits < amount) {
-        await transaction.rollback();
-        logger.warn('积分不足，扣除失败', { 
-          userId, 
-          required: amount, 
-          available: availableCredits,
-          quota: creditsQuota,
-          used: usedCredits
-        });
-        return false;
-      }
-      
-      // 3. 扣除积分（在事务中执行）
-      const updateSql = 'UPDATE users SET used_credits = used_credits + ? WHERE id = ?';
-      await transaction.query(updateSql, [amount, userId]);
-      
-      // 4. 计算新余额
-      const newBalance = availableCredits - amount;
-      
-      // 5. 记录交易历史（在同一事务中）
       const historySql = `
         INSERT INTO credit_transactions 
         (user_id, amount, balance_after, transaction_type, description, created_at) 
         VALUES (?, ?, ?, 'storage_upload', ?, NOW())
       `;
-      await transaction.query(historySql, [userId, -amount, newBalance, description]);
+      const newBalance = userCredits - amount;
+      await dbConnection.query(historySql, [userId, -amount, newBalance, description]);
       
-      // 6. 提交事务
-      await transaction.commit();
-      
-      logger.info('扣除用户积分成功', { 
-        userId, 
-        amount, 
-        description,
-        previousBalance: availableCredits,
-        newBalance: newBalance
-      });
-      
+      logger.info('扣除用户积分成功', { userId, amount, description });
       return true;
     } catch (error) {
-      // 发生错误时回滚事务
-      await transaction.rollback();
-      logger.error('扣除积分失败', { 
-        userId, 
-        amount, 
-        error: error.message,
-        stack: error.stack
-      });
+      logger.error('扣除积分失败:', error);
       return false;
     }
   }
