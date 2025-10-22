@@ -1,0 +1,377 @@
+// 思维导图编辑器样式 - 绝对定位布局修复版
+.mindmap-page-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f0f2f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
+
+  .mindmap-page-header {
+    background: #fff;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e8e8e8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    z-index: 100;
+    flex-shrink: 0;
+
+    .page-header-actions {
+      .ant-btn {
+        border-radius: 6px;
+        height: 36px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+      }
+
+      .ant-btn-primary {
+        background: #007aff;
+        border-color: #007aff;
+
+        &:hover {
+          background: #0051d5;
+          border-color: #0051d5;
+        }
+      }
+    }
+  }
+
+  .mindmap-tabs-container {
+    background: #fff;
+    padding: 0 24px;
+    border-bottom: 1px solid #e8e8e8;
+    flex-shrink: 0;
+
+    .ant-tabs {
+      .ant-tabs-nav {
+        margin-bottom: 0;
+
+        &::before {
+          border-bottom: 2px solid #e8e8e8;
+        }
+      }
+
+      .ant-tabs-tab {
+        padding: 12px 20px;
+        font-size: 15px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+
+        &:hover {
+          color: #007aff;
+        }
+
+        &.ant-tabs-tab-active {
+          .ant-tabs-tab-btn {
+            color: #007aff;
+            font-weight: 600;
+          }
+        }
+      }
+
+      .ant-tabs-ink-bar {
+        background: #007aff;
+        height: 3px;
+      }
+    }
+  }
+
+  .mindmap-main-layout {
+    flex: 1;
+    overflow: hidden;
+    background: transparent;
+    display: flex;
+    min-height: 0;
+
+    // 左侧编辑器
+    .mindmap-editor-sider {
+      background: #fff;
+      border-right: 1px solid #e5e5ea;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+      flex: 0 0 50%;
+      width: 50%;
+      max-width: 50%;
+      min-width: 600px;
+      overflow: hidden;
+
+      .editor-header {
+        padding: 12px 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #f9f9fb 100%);
+        border-bottom: 1px solid #e5e5ea;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .editor-wrapper {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+
+        textarea {
+          flex: 1;
+          width: 100%;
+          padding: 20px;
+          font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+          font-size: 15px;
+          line-height: 1.8;
+          border: none;
+          outline: none;
+          resize: none;
+          background: #fff;
+          color: #1c1c1e;
+          overflow-y: auto;
+          min-height: 0;
+
+          &::placeholder {
+            color: #8e8e93;
+          }
+
+          &:focus {
+            background: #fafafa;
+          }
+        }
+      }
+    }
+
+    .mindmap-preview-content {
+      flex: 1;
+      background: #f2f2f7;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+
+      .mindmap-toolbar {
+        padding: 12px 20px;
+        background: #fff;
+        border-bottom: 1px solid #e5e5ea;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+
+        .toolbar-divider {
+          width: 1px;
+          height: 24px;
+          background: #e5e5ea;
+          margin: 0 12px;
+        }
+
+        .zoom-button {
+          width: 36px;
+          height: 36px;
+          border-radius: 18px;
+          background: #f2f2f7;
+          border: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          cursor: pointer;
+
+          &:hover {
+            background: #e5e5ea;
+            transform: scale(1.05);
+          }
+
+          &:active {
+            transform: scale(0.95);
+          }
+
+          .anticon {
+            font-size: 16px;
+            color: #1c1c1e;
+          }
+        }
+      }
+
+      .mindmap-canvas {
+        flex: 1;
+        padding: 20px;
+        overflow: auto;
+        position: relative;
+        background: #f2f2f7;
+        min-height: 0;
+
+        &::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        &::-webkit-scrollbar-track {
+          background: #f2f2f7;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: #c7c7cc;
+          border-radius: 4px;
+
+          &:hover {
+            background: #aeaeb2;
+          }
+        }
+
+        .mindmap-svg {
+          background: #fff;
+          border-radius: 12px;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08),
+                      0 1px 2px rgba(0, 0, 0, 0.05);
+          padding: 40px;
+          min-height: 600px;
+          width: 100%;
+          height: 100%;
+
+          svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Markmap 节点样式
+.markmap-node {
+  cursor: pointer;
+
+  circle {
+    fill: #fff;
+    stroke: #007aff;
+    stroke-width: 2px;
+    r: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+      r: 6px;
+      fill: #007aff;
+    }
+  }
+
+  rect {
+    fill: #ffffff;
+    stroke-width: 2px;
+    rx: 6px;
+    ry: 6px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+    transition: all 0.3s ease;
+  }
+
+  &:hover rect {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+  }
+
+  text {
+    fill: #1c1c1e;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+  }
+}
+
+// Markmap 连线样式
+.markmap-link,
+.mindmap-svg svg path[fill="none"],
+.mindmap-svg svg g path,
+svg.markmap path {
+  fill: none !important;
+  stroke-width: 3px !important;
+  opacity: 1 !important;
+  transition: all 0.3s ease;
+
+  &:hover {
+    stroke-width: 4px !important;
+  }
+}
+
+// 全屏模式
+.mindmap-page-container:fullscreen {
+  .mindmap-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  
+  .mindmap-tabs-container {
+    position: sticky;
+    top: 60px;
+    z-index: 999;
+  }
+}
+
+// 响应式布局
+@media (max-width: 1200px) {
+  .mindmap-page-container {
+    .mindmap-main-layout {
+      .mindmap-editor-sider {
+        flex: 0 0 40%;
+        width: 40%;
+        max-width: 40%;
+        min-width: 500px;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .mindmap-page-container {
+    .mindmap-main-layout {
+      flex-direction: column;
+
+      .mindmap-editor-sider {
+        width: 100%;
+        max-width: 100%;
+        min-width: 100%;
+        height: 50%;
+        flex: 0 0 50%;
+        border-right: none;
+        border-bottom: 1px solid #e5e5ea;
+      }
+
+      .mindmap-preview-content {
+        height: 50%;
+        flex: 1;
+      }
+    }
+
+    .mindmap-page-header {
+      padding: 8px 12px;
+
+      .page-header-actions {
+        .ant-btn {
+          padding: 0 12px;
+          font-size: 13px;
+        }
+      }
+    }
+    
+    .mindmap-tabs-container {
+      padding: 0 12px;
+      
+      .ant-tabs-tab {
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+    }
+  }
+}

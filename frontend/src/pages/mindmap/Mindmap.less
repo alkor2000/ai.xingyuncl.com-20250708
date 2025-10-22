@@ -1,4 +1,4 @@
-// 思维导图编辑器样式 - 绝对定位布局修复版
+// 思维导图编辑器样式 - iOS 科技风优化版
 .mindmap-page-container {
   position: absolute;
   top: 0;
@@ -7,49 +7,55 @@
   bottom: 0;
   display: flex;
   flex-direction: column;
-  background: #f0f2f5;
+  background: #F2F2F7;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
 
   .mindmap-page-header {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     padding: 16px 24px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     z-index: 100;
     flex-shrink: 0;
 
     .page-header-actions {
       .ant-btn {
-        border-radius: 6px;
+        border-radius: 8px;
         height: 36px;
         font-weight: 500;
-        transition: all 0.2s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid rgba(0, 0, 0, 0.08);
 
         &:hover {
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 4px 12px rgba(0, 122, 255, 0.15);
         }
       }
 
       .ant-btn-primary {
-        background: #007aff;
-        border-color: #007aff;
+        background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
 
         &:hover {
-          background: #0051d5;
-          border-color: #0051d5;
+          background: linear-gradient(135deg, #0051D5 0%, #003D9F 100%);
+          box-shadow: 0 4px 16px rgba(0, 122, 255, 0.35);
         }
       }
     }
   }
 
   .mindmap-tabs-container {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     padding: 0 24px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     flex-shrink: 0;
 
     .ant-tabs {
@@ -57,31 +63,33 @@
         margin-bottom: 0;
 
         &::before {
-          border-bottom: 2px solid #e8e8e8;
+          border-bottom: 1.5px solid rgba(0, 0, 0, 0.06);
         }
       }
 
       .ant-tabs-tab {
-        padding: 12px 20px;
-        font-size: 15px;
+        padding: 12px 24px;
+        font-size: 14px;
         font-weight: 500;
-        transition: all 0.3s ease;
+        color: #8E8E93;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
         &:hover {
-          color: #007aff;
+          color: #007AFF;
         }
 
         &.ant-tabs-tab-active {
           .ant-tabs-tab-btn {
-            color: #007aff;
+            color: #007AFF;
             font-weight: 600;
           }
         }
       }
 
       .ant-tabs-ink-bar {
-        background: #007aff;
-        height: 3px;
+        background: linear-gradient(90deg, #007AFF 0%, #5856D6 100%);
+        height: 2.5px;
+        border-radius: 2px;
       }
     }
   }
@@ -92,14 +100,20 @@
     background: transparent;
     display: flex;
     min-height: 0;
+    gap: 16px;
+    padding: 16px;
 
-    // 左侧编辑器
+    // 左侧编辑器 - iOS 卡片风格
     .mindmap-editor-sider {
-      background: #fff;
-      border-right: 1px solid #e5e5ea;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
-      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06),
+                  0 1px 4px rgba(0, 0, 0, 0.04);
       flex: 0 0 50%;
       width: 50%;
       max-width: 50%;
@@ -107,20 +121,27 @@
       overflow: hidden;
 
       .editor-header {
-        padding: 12px 20px;
-        background: linear-gradient(180deg, #ffffff 0%, #f9f9fb 100%);
-        border-bottom: 1px solid #e5e5ea;
+        padding: 14px 20px;
+        background: rgba(248, 248, 248, 0.8);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-shrink: 0;
+
+        .ant-typography {
+          font-size: 15px;
+          font-weight: 600;
+          color: #1C1C1E;
+          letter-spacing: -0.2px;
+        }
       }
 
       .editor-wrapper {
         position: relative;
         flex: 1;
         overflow: hidden;
-        background: #fff;
+        background: #FFFFFF;
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -129,65 +150,97 @@
           flex: 1;
           width: 100%;
           padding: 20px;
-          font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-          font-size: 15px;
+          font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+          font-size: 14px;
           line-height: 1.8;
           border: none;
           outline: none;
           resize: none;
-          background: #fff;
-          color: #1c1c1e;
+          background: #FFFFFF;
+          color: #1C1C1E;
           overflow-y: auto;
           min-height: 0;
 
           &::placeholder {
-            color: #8e8e93;
+            color: #8E8E93;
           }
 
           &:focus {
-            background: #fafafa;
+            background: rgba(242, 242, 247, 0.3);
+          }
+
+          // 自定义滚动条 - iOS 风格
+          &::-webkit-scrollbar {
+            width: 8px;
+          }
+
+          &::-webkit-scrollbar-track {
+            background: transparent;
+          }
+
+          &::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 4px;
+
+            &:hover {
+              background: rgba(0, 0, 0, 0.25);
+            }
           }
         }
       }
     }
 
+    // 右侧预览 - iOS 卡片风格
     .mindmap-preview-content {
       flex: 1;
-      background: #f2f2f7;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06),
+                  0 1px 4px rgba(0, 0, 0, 0.04);
       min-width: 0;
 
       .mindmap-toolbar {
         padding: 12px 20px;
-        background: #fff;
-        border-bottom: 1px solid #e5e5ea;
+        background: rgba(248, 248, 248, 0.8);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         display: flex;
         align-items: center;
         flex-shrink: 0;
 
+        .ant-typography {
+          font-size: 15px;
+          font-weight: 600;
+          color: #1C1C1E;
+          letter-spacing: -0.2px;
+        }
+
         .toolbar-divider {
           width: 1px;
-          height: 24px;
-          background: #e5e5ea;
+          height: 20px;
+          background: rgba(0, 0, 0, 0.1);
           margin: 0 12px;
         }
 
         .zoom-button {
-          width: 36px;
-          height: 36px;
-          border-radius: 18px;
-          background: #f2f2f7;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(0, 122, 255, 0.08);
           border: none;
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: all 0.2s ease;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
 
           &:hover {
-            background: #e5e5ea;
+            background: rgba(0, 122, 255, 0.15);
             transform: scale(1.05);
           }
 
@@ -197,17 +250,17 @@
 
           .anticon {
             font-size: 16px;
-            color: #1c1c1e;
+            color: #007AFF;
           }
         }
       }
 
       .mindmap-canvas {
         flex: 1;
-        padding: 20px;
+        padding: 24px;
         overflow: auto;
         position: relative;
-        background: #f2f2f7;
+        background: #FAFAFA;
         min-height: 0;
 
         &::-webkit-scrollbar {
@@ -216,24 +269,24 @@
         }
 
         &::-webkit-scrollbar-track {
-          background: #f2f2f7;
+          background: transparent;
         }
 
         &::-webkit-scrollbar-thumb {
-          background: #c7c7cc;
+          background: rgba(0, 0, 0, 0.15);
           border-radius: 4px;
 
           &:hover {
-            background: #aeaeb2;
+            background: rgba(0, 0, 0, 0.25);
           }
         }
 
         .mindmap-svg {
-          background: #fff;
+          background: #FFFFFF;
           border-radius: 12px;
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08),
-                      0 1px 2px rgba(0, 0, 0, 0.05);
-          padding: 40px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04),
+                      0 1px 4px rgba(0, 0, 0, 0.02);
+          padding: 48px;
           min-height: 600px;
           width: 100%;
           height: 100%;
@@ -249,58 +302,62 @@
   }
 }
 
-// Markmap 节点样式
+// Markmap 节点样式 - XMind + iOS 风格
 .markmap-node {
   cursor: pointer;
 
   circle {
-    fill: #fff;
-    stroke: #007aff;
-    stroke-width: 2px;
-    r: 4px;
+    fill: #FFFFFF;
+    stroke: #007AFF;
+    stroke-width: 1.5px;
+    r: 5px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      r: 6px;
-      fill: #007aff;
+      r: 7px;
+      fill: #007AFF;
+      box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
     }
   }
 
   rect {
-    fill: #ffffff;
-    stroke-width: 2px;
-    rx: 6px;
-    ry: 6px;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
-    transition: all 0.3s ease;
+    fill: rgba(255, 255, 255, 0.98);
+    stroke-width: 1.5px;
+    rx: 10px;
+    ry: 10px;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.06));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &:hover rect {
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.12));
+    transform: translateY(-1px);
   }
 
   text {
-    fill: #1c1c1e;
+    fill: #1C1C1E;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
     font-weight: 500;
     font-size: 14px;
     cursor: pointer;
+    letter-spacing: -0.2px;
   }
 }
 
-// Markmap 连线样式
+// Markmap 连线样式 - 柔和平滑
 .markmap-link,
 .mindmap-svg svg path[fill="none"],
 .mindmap-svg svg g path,
 svg.markmap path {
   fill: none !important;
-  stroke-width: 3px !important;
-  opacity: 1 !important;
-  transition: all 0.3s ease;
+  stroke-width: 1.5px !important;
+  opacity: 0.75 !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    stroke-width: 4px !important;
+    stroke-width: 2px !important;
+    opacity: 0.9 !important;
   }
 }
 
@@ -323,10 +380,13 @@ svg.markmap path {
 @media (max-width: 1200px) {
   .mindmap-page-container {
     .mindmap-main-layout {
+      gap: 12px;
+      padding: 12px;
+
       .mindmap-editor-sider {
-        flex: 0 0 40%;
-        width: 40%;
-        max-width: 40%;
+        flex: 0 0 45%;
+        width: 45%;
+        max-width: 45%;
         min-width: 500px;
       }
     }
@@ -337,39 +397,40 @@ svg.markmap path {
   .mindmap-page-container {
     .mindmap-main-layout {
       flex-direction: column;
+      gap: 12px;
+      padding: 12px;
 
       .mindmap-editor-sider {
         width: 100%;
         max-width: 100%;
         min-width: 100%;
-        height: 50%;
-        flex: 0 0 50%;
-        border-right: none;
-        border-bottom: 1px solid #e5e5ea;
+        height: 45%;
+        flex: 0 0 45%;
       }
 
       .mindmap-preview-content {
-        height: 50%;
+        height: 55%;
         flex: 1;
       }
     }
 
     .mindmap-page-header {
-      padding: 8px 12px;
+      padding: 12px 16px;
 
       .page-header-actions {
         .ant-btn {
           padding: 0 12px;
           font-size: 13px;
+          height: 32px;
         }
       }
     }
     
     .mindmap-tabs-container {
-      padding: 0 12px;
+      padding: 0 16px;
       
       .ant-tabs-tab {
-        padding: 10px 12px;
+        padding: 10px 16px;
         font-size: 13px;
       }
     }

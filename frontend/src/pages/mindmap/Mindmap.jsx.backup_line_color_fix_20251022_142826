@@ -1,6 +1,6 @@
 /**
- * 思维导图工具 - iOS 科技风优化版
- * 修复：主动设置连线 stroke 颜色
+ * 思维导图工具 - 原生 div 布局版
+ * 修复：使用原生 div 替代 Ant Design Layout 组件，确保 flex 布局完整生效
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
@@ -47,16 +47,6 @@ const Mindmap = () => {
   const previewRef = useRef(null);
   const user = useAuthStore(state => state.user);
 
-  // iOS 系统配色方案（在组件外定义，供多处使用）
-  const iosColors = [
-    '#007AFF', // SF Blue
-    '#34C759', // SF Green
-    '#FF9500', // SF Orange
-    '#AF52DE', // SF Purple
-    '#5856D6', // SF Indigo
-    '#00C7BE'  // SF Teal
-  ];
-
   useEffect(() => {
     loadCreditsConfig();
   }, []);
@@ -95,13 +85,14 @@ const Mindmap = () => {
 
       const options = {
         color: (node) => {
-          return iosColors[node.depth % iosColors.length];
+          const colors = ['#1677ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'];
+          return colors[node.depth % colors.length];
         },
         duration: 500,
-        nodeMinHeight: 20,
-        paddingX: 12,
-        spacingVertical: 15,
-        spacingHorizontal: 100,
+        nodeMinHeight: 16,
+        paddingX: 8,
+        spacingVertical: 10,
+        spacingHorizontal: 80,
         autoFit: true,
         initialExpandLevel: -1,
         zoom: true,
@@ -114,46 +105,16 @@ const Mindmap = () => {
       setTimeout(() => {
         mm.fit();
         
-        // ✅ 关键修复：主动设置连线颜色
         const svg = svgRef.current;
         if (svg) {
-          // 1. 先收集所有节点的层级信息（通过 class 或 data 属性）
-          const nodeGroups = svg.querySelectorAll('g[data-depth]');
-          const depthMap = new Map();
-          
-          nodeGroups.forEach(group => {
-            const depth = parseInt(group.getAttribute('data-depth') || '0');
-            const paths = group.querySelectorAll('path');
-            paths.forEach(path => {
-              depthMap.set(path, depth);
-            });
-          });
-
-          // 2. 遍历所有 path 并设置样式
           const allPaths = svg.querySelectorAll('path');
-          allPaths.forEach((path, index) => {
-            // 检测是连线（fill="none"）
+          allPaths.forEach(path => {
             if (path.getAttribute('fill') === 'none' || !path.getAttribute('fill')) {
-              // ✅ 主动设置连线颜色
-              // 尝试从 map 中获取深度，如果没有则根据索引推断
-              const depth = depthMap.get(path) || (index % iosColors.length);
-              const lineColor = iosColors[depth % iosColors.length];
-              
-              // 设置连线样式
-              path.style.stroke = lineColor;
-              path.style.strokeWidth = '1.5px';
-              path.style.opacity = '0.75';
-              path.style.strokeLinecap = 'round';
-              path.style.strokeLinejoin = 'round';
-              path.style.fill = 'none';
-              
+              path.style.strokeWidth = '3px';
+              path.style.opacity = '1';
               path.setAttribute('class', 'markmap-link');
-              
-              console.log(`✅ 连线 ${index}: 深度=${depth}, 颜色=${lineColor}`);
             }
           });
-          
-          console.log(`✅ iOS 风格渲染完成，共 ${allPaths.length} 条路径`);
         }
       }, 300);
     } catch (error) {
@@ -358,7 +319,7 @@ const Mindmap = () => {
       <div style={{ 
         transform: `scale(${zoomLevel})`,
         transformOrigin: 'top left',
-        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'transform 0.3s ease',
         padding: '20px',
         background: '#fff',
         borderRadius: '12px',
@@ -376,14 +337,12 @@ const Mindmap = () => {
     const current = user ? (user.credits_quota - user.used_credits) : 0;
     return (
       <Space direction="vertical" size={4} style={{ fontSize: '12px' }}>
-        <Text type="secondary" style={{ color: '#8E8E93' }}>
-          余额: {current}分 {creditsConfig.save_credits > 0 && `(保存: ${creditsConfig.save_credits}分)`}
-        </Text>
+        <Text type="secondary">余额: {current}分 {creditsConfig.save_credits > 0 && `(保存: ${creditsConfig.save_credits}分)`}</Text>
         <Space size={8}>
-          {creditsConfig.export_svg_credits > 0 && <Text type="secondary" style={{ color: '#8E8E93' }}>SVG: {creditsConfig.export_svg_credits}分</Text>}
-          {creditsConfig.export_png_credits > 0 && <Text type="secondary" style={{ color: '#8E8E93' }}>PNG: {creditsConfig.export_png_credits}分</Text>}
-          {creditsConfig.export_pdf_credits > 0 && <Text type="secondary" style={{ color: '#8E8E93' }}>PDF: {creditsConfig.export_pdf_credits}分</Text>}
-          {creditsConfig.export_markdown_credits > 0 && <Text type="secondary" style={{ color: '#8E8E93' }}>MD: {creditsConfig.export_markdown_credits}分</Text>}
+          {creditsConfig.export_svg_credits > 0 && <Text type="secondary">SVG: {creditsConfig.export_svg_credits}分</Text>}
+          {creditsConfig.export_png_credits > 0 && <Text type="secondary">PNG: {creditsConfig.export_png_credits}分</Text>}
+          {creditsConfig.export_pdf_credits > 0 && <Text type="secondary">PDF: {creditsConfig.export_pdf_credits}分</Text>}
+          {creditsConfig.export_markdown_credits > 0 && <Text type="secondary">MD: {creditsConfig.export_markdown_credits}分</Text>}
         </Space>
       </Space>
     );
@@ -425,7 +384,9 @@ const Mindmap = () => {
         ]} />
       </div>
 
+      {/* 使用原生 div 替代 Layout */}
       <div className="mindmap-main-layout">
+        {/* 左侧编辑器 - 原生 div */}
         <div className="mindmap-editor-sider">
           <div className="editor-header">
             <Text strong>代码编辑器</Text>
@@ -439,6 +400,7 @@ const Mindmap = () => {
           </div>
         </div>
 
+        {/* 右侧预览 - 原生 div */}
         <div className="mindmap-preview-content">
           <div className="mindmap-toolbar">
             <Space size={8}>
@@ -450,7 +412,7 @@ const Mindmap = () => {
               {contentType === 'markdown' && (
                 <Tooltip title="展开所有"><button className="zoom-button" onClick={handleExpandAll}><ExpandOutlined /></button></Tooltip>
               )}
-              {contentType !== 'markdown' && <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px', color: '#8E8E93' }}>{Math.round(zoomLevel * 100)}%</Text>}
+              {contentType !== 'markdown' && <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>{Math.round(zoomLevel * 100)}%</Text>}
             </Space>
           </div>
           <div className="mindmap-canvas">

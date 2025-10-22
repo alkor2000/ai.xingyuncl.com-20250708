@@ -1,6 +1,6 @@
 /**
  * 思维导图工具 - iOS 科技风优化版
- * 修复：主动设置连线 stroke 颜色
+ * 配色：SF 系统配色 + 柔和连线 + XMind 节点风格
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
@@ -47,16 +47,6 @@ const Mindmap = () => {
   const previewRef = useRef(null);
   const user = useAuthStore(state => state.user);
 
-  // iOS 系统配色方案（在组件外定义，供多处使用）
-  const iosColors = [
-    '#007AFF', // SF Blue
-    '#34C759', // SF Green
-    '#FF9500', // SF Orange
-    '#AF52DE', // SF Purple
-    '#5856D6', // SF Indigo
-    '#00C7BE'  // SF Teal
-  ];
-
   useEffect(() => {
     loadCreditsConfig();
   }, []);
@@ -93,6 +83,16 @@ const Mindmap = () => {
       const { root } = transformer.transform(content);
       svgRef.current.innerHTML = '';
 
+      // iOS 系统配色方案（柔和色调）
+      const iosColors = [
+        '#007AFF', // SF Blue
+        '#34C759', // SF Green
+        '#FF9500', // SF Orange
+        '#AF52DE', // SF Purple
+        '#5856D6', // SF Indigo
+        '#00C7BE'  // SF Teal
+      ];
+
       const options = {
         color: (node) => {
           return iosColors[node.depth % iosColors.length];
@@ -114,46 +114,29 @@ const Mindmap = () => {
       setTimeout(() => {
         mm.fit();
         
-        // ✅ 关键修复：主动设置连线颜色
+        // 优化连线样式（柔和、细腻）
         const svg = svgRef.current;
         if (svg) {
-          // 1. 先收集所有节点的层级信息（通过 class 或 data 属性）
-          const nodeGroups = svg.querySelectorAll('g[data-depth]');
-          const depthMap = new Map();
-          
-          nodeGroups.forEach(group => {
-            const depth = parseInt(group.getAttribute('data-depth') || '0');
-            const paths = group.querySelectorAll('path');
-            paths.forEach(path => {
-              depthMap.set(path, depth);
-            });
-          });
-
-          // 2. 遍历所有 path 并设置样式
           const allPaths = svg.querySelectorAll('path');
-          allPaths.forEach((path, index) => {
-            // 检测是连线（fill="none"）
+          allPaths.forEach((path) => {
             if (path.getAttribute('fill') === 'none' || !path.getAttribute('fill')) {
-              // ✅ 主动设置连线颜色
-              // 尝试从 map 中获取深度，如果没有则根据索引推断
-              const depth = depthMap.get(path) || (index % iosColors.length);
-              const lineColor = iosColors[depth % iosColors.length];
-              
-              // 设置连线样式
-              path.style.stroke = lineColor;
+              // 柔和的连线样式
               path.style.strokeWidth = '1.5px';
               path.style.opacity = '0.75';
               path.style.strokeLinecap = 'round';
               path.style.strokeLinejoin = 'round';
-              path.style.fill = 'none';
+              
+              // 获取当前 stroke 颜色并降低饱和度
+              const currentStroke = path.getAttribute('stroke');
+              if (currentStroke) {
+                path.style.stroke = currentStroke;
+              }
               
               path.setAttribute('class', 'markmap-link');
-              
-              console.log(`✅ 连线 ${index}: 深度=${depth}, 颜色=${lineColor}`);
             }
           });
           
-          console.log(`✅ iOS 风格渲染完成，共 ${allPaths.length} 条路径`);
+          console.log('✅ iOS 风格渲染完成');
         }
       }, 300);
     } catch (error) {
