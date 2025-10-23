@@ -1,0 +1,662 @@
+/**
+ * 课程编辑器组件
+ * 三栏布局：左侧页面管理 | 中间Monaco编辑器 | 右侧实时预览
+ * 支持多页面编辑、自动保存草稿、实时预览
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Layout,
+  Button,
+  Input,
+  Card,
+  List,
+  Space,
+  Breadcrumb,
+  message,
+  Modal,
+  Form,
+  Select,
+  Tag,
+  Tooltip,
+  Popconfirm,
+  Badge,
+  Tabs
+} from 'antd';
+import {
+  SaveOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  ArrowLeftOutlined,
+  FileTextOutlined,
+  EditOutlined,
+  CopyOutlined,
+  CheckCircleOutlined,
+  SyncOutlined,
+  WarningOutlined
+} from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import moment from 'moment';
+
+const { Sider, Content } = Layout;
+const { TextArea } = Input;
+
+const LessonEditor = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    draft,
+    draftSaving,
+    fetchLesson,
+    updateLesson,
+    saveDraft,
+    fetchDraft
+  } = useTeachingStore();
+
+  // 页面状态
+  const [pages, setPages] = useState([
+    { id: 1, title: 'Page 1', html: '<h1>新页面</h1>' }
+  ]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [htmlContent, setHtmlContent] = useState('');
+  const [lessonInfo, setLessonInfo] = useState({
+    title: '',
+    description: '',
+    content_type: 'course',
+    status: 'draft'
+  });
+
+  // UI状态
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
+  const [previewContent, setPreviewContent] = useState('');
+  const [pageModalVisible, setPageModalVisible] = useState(false);
+  const [editingPageIndex, setEditingPageIndex] = useState(null);
+  const [editorReady, setEditorReady] = useState(false);
+
+  const [pageForm] = Form.useForm();
+  const autoSaveTimerRef = useRef(null);
+
+  // 加载课程数据
+  useEffect(() => {
+    if (id) {
+      loadLessonData();
+    }
+  }, [id]);
+
+  const loadLessonData = async () => {
+    try {
+      const lesson = await fetchLesson(id);
+      
+      // 设置课程信息
+      setLessonInfo({
+        title: lesson.title,
+        description: lesson.description,
+        content_type: lesson.content_type,
+        status: lesson.status
+      });
+
+      // 解析页面内容
+      if (lesson.content) {
+        const content = typeof lesson.content === 'string'
+          ? JSON.parse(lesson.content)
+          : lesson.content;
+        
+        if (content.pages && content.pages.length > 0) {
+          setPages(content.pages);
+          setHtmlContent(content.pages[0].html || '');
+        }
+      }
+
+      // 尝试加载草稿
+      try {
+        const draftData = await fetchDraft(id);
+        if (draftData && draftData.draft_content) {
+          const shouldLoadDraft = window.confirm(t('teaching.foundDraft'));
+          if (shouldLoadDraft) {
+            const draftContent = typeof draftData.draft_content === 'string'
+              ? JSON.parse(draftData.draft_content)
+              : draftData.draft_content;
+            
+            if (draftContent.pages) {
+              setPages(draftContent.pages);
+              setHtmlContent(draftContent.pages[0]?.html || '');
+            }
+            message.info(t('teaching.draftLoaded'));
+          }
+        }
+      } catch (error) {
+        console.log('没有找到草稿');
+      }
+    } catch (error) {
+      message.error(t('teaching.loadFailed'));
+    }
+  };
+
+  // 监听内容变化
+  useEffect(() => {
+    setHasChanges(true);
+    
+    // 自动保存草稿
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleAutoSave();
+    }, 3000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [htmlContent, pages]);
+
+  // 实时预览更新
+  useEffect(() => {
+    setPreviewContent(htmlContent || '<div style="padding:20px;color:#999;">开始编写内容...</div>');
+  }, [htmlContent]);
+
+  // 自动保存草稿
+  const handleAutoSave = async () => {
+    if (!id) return;
+
+    try {
+      const draftContent = {
+        pages: pages.map((page, index) => ({
+          ...page,
+          html: index === currentPageIndex ? htmlContent : page.html
+        })),
+        info: lessonInfo
+      };
+
+      await saveDraft({
+        lesson_id: id,
+        draft_content: JSON.stringify(draftContent),
+        draft_title: lessonInfo.title
+      });
+
+      setLastSavedTime(new Date());
+    } catch (error) {
+      console.error('自动保存草稿失败:', error);
+    }
+  };
+
+  // 保存当前页面到pages数组
+  const saveCurrentPageContent = () => {
+    const newPages = [...pages];
+    newPages[currentPageIndex] = {
+      ...newPages[currentPageIndex],
+      html: htmlContent
+    };
+    setPages(newPages);
+    return newPages;
+  };
+
+  // 切换页面
+  const handlePageChange = (index) => {
+    // 保存当前页面内容
+    const newPages = saveCurrentPageContent();
+    
+    // 切换到新页面
+    setCurrentPageIndex(index);
+    setHtmlContent(newPages[index].html || '');
+  };
+
+  // 添加页面
+  const handleAddPage = () => {
+    pageForm.setFieldsValue({ title: `Page ${pages.length + 1}` });
+    setEditingPageIndex(null);
+    setPageModalVisible(true);
+  };
+
+  // 编辑页面标题
+  const handleEditPage = (index) => {
+    pageForm.setFieldsValue({ title: pages[index].title });
+    setEditingPageIndex(index);
+    setPageModalVisible(true);
+  };
+
+  // 确认页面操作
+  const handlePageSubmit = async () => {
+    try {
+      const values = await pageForm.validateFields();
+      
+      if (editingPageIndex !== null) {
+        // 编辑页面标题
+        const newPages = [...pages];
+        newPages[editingPageIndex].title = values.title;
+        setPages(newPages);
+        message.success(t('teaching.updateSuccess'));
+      } else {
+        // 添加新页面
+        const newPage = {
+          id: Date.now(),
+          title: values.title,
+          html: '<h1>新页面</h1>'
+        };
+        setPages([...pages, newPage]);
+        message.success(t('teaching.pageAdded'));
+      }
+      
+      setPageModalVisible(false);
+      pageForm.resetFields();
+    } catch (error) {
+      console.error('页面操作失败:', error);
+    }
+  };
+
+  // 删除页面
+  const handleDeletePage = (index) => {
+    if (pages.length === 1) {
+      message.warning(t('teaching.lastPageCannotDelete'));
+      return;
+    }
+
+    const newPages = pages.filter((_, i) => i !== index);
+    setPages(newPages);
+    
+    // 如果删除的是当前页面，切换到第一页
+    if (index === currentPageIndex) {
+      setCurrentPageIndex(0);
+      setHtmlContent(newPages[0].html || '');
+    } else if (index < currentPageIndex) {
+      setCurrentPageIndex(currentPageIndex - 1);
+    }
+    
+    message.success(t('teaching.deleteSuccess'));
+  };
+
+  // 保存课程
+  const handleSave = async () => {
+    if (!lessonInfo.title.trim()) {
+      message.warning(t('teaching.lessonTitleRequired'));
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 保存当前页面内容
+      const finalPages = saveCurrentPageContent();
+
+      // 构建更新数据
+      const updateData = {
+        title: lessonInfo.title,
+        description: lessonInfo.description,
+        content_type: lessonInfo.content_type,
+        status: lessonInfo.status,
+        content: JSON.stringify({ pages: finalPages })
+      };
+
+      await updateLesson(id, updateData);
+      
+      setHasChanges(false);
+      setLastSavedTime(new Date());
+      message.success(t('teaching.saveSuccess'));
+    } catch (error) {
+      message.error(t('teaching.saveFailed'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 返回
+  const handleBack = () => {
+    if (hasChanges) {
+      Modal.confirm({
+        title: t('teaching.unsavedChanges'),
+        content: t('teaching.unsavedChangesContent'),
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
+        onOk: () => {
+          navigate(`/teaching/modules/${currentLesson?.module_id}`);
+        }
+      });
+    } else {
+      navigate(`/teaching/modules/${currentLesson?.module_id}`);
+    }
+  };
+
+  // 预览
+  const handlePreview = () => {
+    navigate(`/teaching/lessons/${id}`);
+  };
+
+  // Monaco编辑器配置
+  const editorOptions = {
+    minimap: { enabled: false },
+    fontSize: 14,
+    fontFamily: 'SF Mono, Monaco, Consolas, monospace',
+    formatOnPaste: true,
+    formatOnType: true,
+    automaticLayout: true,
+    tabSize: 2,
+    wordWrap: 'on',
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on',
+    renderWhitespace: 'selection',
+    folding: true,
+    bracketPairColorization: { enabled: true }
+  };
+
+  const handleEditorDidMount = (editor, monaco) => {
+    setEditorReady(true);
+  };
+
+  // 内容类型颜色
+  const contentTypeColors = {
+    course: 'blue',
+    experiment: 'cyan',
+    exercise: 'geekblue',
+    reference: 'purple',
+    teaching_plan: 'orange',
+    answer: 'red',
+    guide: 'magenta',
+    assessment: 'volcano'
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <SyncOutlined spin style={{ fontSize: 32, color: '#1890ff' }} />
+      </div>
+    );
+  }
+
+  return (
+    <Layout style={{ height: '100vh', background: '#f0f2f5' }}>
+      {/* 顶部操作栏 */}
+      <div style={{
+        background: 'white',
+        padding: '12px 24px',
+        borderBottom: '1px solid #e8e8e8',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        zIndex: 10
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* 左侧 - 面包屑和标题 */}
+          <div style={{ flex: 1 }}>
+            <Breadcrumb style={{ marginBottom: 8 }}>
+              <Breadcrumb.Item>
+                <a onClick={handleBack}>{currentLesson.module_name}</a>
+              </Breadcrumb.Item>
+              <Breadcrumb.Item>{t('teaching.editLesson')}</Breadcrumb.Item>
+            </Breadcrumb>
+            
+            <Space size="middle">
+              <Input
+                value={lessonInfo.title}
+                onChange={(e) => setLessonInfo({ ...lessonInfo, title: e.target.value })}
+                style={{ width: 300, fontWeight: 600 }}
+                placeholder={t('teaching.lessonTitle')}
+              />
+              
+              <Select
+                value={lessonInfo.content_type}
+                onChange={(value) => setLessonInfo({ ...lessonInfo, content_type: value })}
+                style={{ width: 150 }}
+              >
+                <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+                <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+                <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+                <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+                <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+                <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+                <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+                <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+              </Select>
+
+              {draftSaving && (
+                <Tag icon={<SyncOutlined spin />} color="processing">
+                  {t('teaching.autoSaving')}
+                </Tag>
+              )}
+              
+              {lastSavedTime && !draftSaving && (
+                <Tag icon={<CheckCircleOutlined />} color="success">
+                  {t('teaching.lastSaved')}: {moment(lastSavedTime).fromNow()}
+                </Tag>
+              )}
+
+              {hasChanges && !draftSaving && (
+                <Tag icon={<WarningOutlined />} color="warning">
+                  {t('teaching.unsaved')}
+                </Tag>
+              )}
+            </Space>
+          </div>
+
+          {/* 右侧 - 操作按钮 */}
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+              {t('common.back')}
+            </Button>
+            <Button icon={<EyeOutlined />} onClick={handlePreview}>
+              {t('teaching.preview')}
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSave}
+              loading={isSaving}
+              disabled={!lessonInfo.title.trim()}
+            >
+              {t('common.save')}
+            </Button>
+          </Space>
+        </div>
+      </div>
+
+      {/* 主体内容 */}
+      <Layout style={{ background: 'transparent' }}>
+        {/* 左侧 - 页面列表 */}
+        <Sider
+          width={280}
+          style={{
+            background: 'white',
+            borderRight: '1px solid #e8e8e8',
+            overflow: 'auto'
+          }}
+        >
+          <div style={{ padding: '16px' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: 16
+            }}>
+              <h4 style={{ margin: 0 }}>
+                <FileTextOutlined /> {t('teaching.pageManagement')}
+              </h4>
+              <Badge count={pages.length} showZero />
+            </div>
+
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={handleAddPage}
+              block
+              style={{ marginBottom: 16 }}
+            >
+              {t('teaching.addPage')}
+            </Button>
+
+            <List
+              size="small"
+              dataSource={pages}
+              renderItem={(page, index) => (
+                <List.Item
+                  key={page.id}
+                  style={{
+                    background: index === currentPageIndex ? '#e6f7ff' : 'transparent',
+                    padding: '8px 12px',
+                    borderRadius: 4,
+                    marginBottom: 4,
+                    cursor: 'pointer',
+                    border: index === currentPageIndex ? '1px solid #1890ff' : '1px solid transparent'
+                  }}
+                  onClick={() => handlePageChange(index)}
+                >
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                    <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                    <span style={{ 
+                      fontWeight: index === currentPageIndex ? 600 : 400,
+                      flex: 1
+                    }}>
+                      {page.title}
+                    </span>
+                  </div>
+                  <Space size="small">
+                    <Tooltip title={t('common.edit')}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditPage(index);
+                        }}
+                      />
+                    </Tooltip>
+                    {pages.length > 1 && (
+                      <Popconfirm
+                        title={t('teaching.confirmDeletePage')}
+                        onConfirm={(e) => {
+                          e.stopPropagation();
+                          handleDeletePage(index);
+                        }}
+                        okText={t('common.confirm')}
+                        cancelText={t('common.cancel')}
+                      >
+                        <Tooltip title={t('common.delete')}>
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Tooltip>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                </List.Item>
+              )}
+            />
+          </div>
+        </Sider>
+
+        {/* 中间 - Monaco编辑器 */}
+        <Content style={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          background: 'white',
+          margin: '0 1px'
+        }}>
+          <div style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid #e8e8e8',
+            background: '#fafafa',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {t('teaching.htmlEditor')}: {pages[currentPageIndex]?.title}
+            </span>
+            <span style={{ fontSize: 12, color: '#999' }}>
+              {editorReady ? t('teaching.editorReady') : t('teaching.editorLoading')}
+            </span>
+          </div>
+
+          <div style={{ flex: 1, background: '#1e1e1e' }}>
+            <Editor
+              height="100%"
+              language="html"
+              theme="vs-dark"
+              value={htmlContent}
+              onChange={(value) => setHtmlContent(value || '')}
+              options={editorOptions}
+              onMount={handleEditorDidMount}
+            />
+          </div>
+        </Content>
+
+        {/* 右侧 - 实时预览 */}
+        <Sider
+          width={500}
+          style={{
+            background: 'white',
+            borderLeft: '1px solid #e8e8e8',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <div style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid #e8e8e8',
+            background: '#fafafa'
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              <EyeOutlined /> {t('teaching.realTimePreview')}
+            </span>
+          </div>
+
+          <div style={{ flex: 1, overflow: 'hidden', background: '#f5f5f5' }}>
+            <iframe
+              srcDoc={previewContent}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                background: 'white'
+              }}
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+              title="Preview"
+            />
+          </div>
+        </Sider>
+      </Layout>
+
+      {/* 页面标题编辑模态框 */}
+      <Modal
+        title={editingPageIndex !== null ? t('teaching.editPageTitle') : t('teaching.addPage')}
+        open={pageModalVisible}
+        onOk={handlePageSubmit}
+        onCancel={() => {
+          setPageModalVisible(false);
+          pageForm.resetFields();
+        }}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+      >
+        <Form form={pageForm} layout="vertical">
+          <Form.Item
+            name="title"
+            label={t('teaching.pageTitle')}
+            rules={[{ required: true, message: t('teaching.pageTitleRequired') }]}
+          >
+            <Input placeholder={t('teaching.pageTitlePlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Layout>
+  );
+};
+
+export default LessonEditor;

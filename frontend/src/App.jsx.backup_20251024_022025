@@ -63,12 +63,6 @@ const AgentWorkspace = React.lazy(() => import('./pages/agent/AgentWorkspace'))
 // Agent工作流编辑器 - 懒加载
 const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEditor'))
 
-// 智能教学系统页面组件 - 懒加载
-const Teaching = React.lazy(() => import('./pages/teaching/Teaching'))
-const ModuleDetail = React.lazy(() => import('./pages/teaching/ModuleDetail'))
-const LessonEditor = React.lazy(() => import('./pages/teaching/LessonEditor'))
-const LessonViewer = React.lazy(() => import('./pages/teaching/LessonViewer'))
-
 // 布局组件
 import BasicLayout from './layouts/BasicLayout'
 
@@ -347,52 +341,12 @@ const App = () => {
                           } 
                         />
                         
-                        {/* Agent工作流编辑器路由 */}
+                        {/* Agent工作流编辑器路由 - 新增 */}
                         <Route 
                           path="/agent/editor/:id" 
                           element={
                             <LazyLoadingWrapper>
                               <WorkflowEditor />
-                            </LazyLoadingWrapper>
-                          } 
-                        />
-                        
-                        {/* 智能教学系统路由 */}
-                        <Route 
-                          path="/teaching" 
-                          element={
-                            <LazyLoadingWrapper>
-                              <Teaching />
-                            </LazyLoadingWrapper>
-                          } 
-                        />
-                        
-                        {/* 教学模块详情路由 */}
-                        <Route 
-                          path="/teaching/modules/:id" 
-                          element={
-                            <LazyLoadingWrapper>
-                              <ModuleDetail />
-                            </LazyLoadingWrapper>
-                          } 
-                        />
-                        
-                        {/* 课程查看路由 */}
-                        <Route 
-                          path="/teaching/lessons/:id" 
-                          element={
-                            <LazyLoadingWrapper>
-                              <LessonViewer />
-                            </LazyLoadingWrapper>
-                          } 
-                        />
-                        
-                        {/* 课程编辑路由 */}
-                        <Route 
-                          path="/teaching/lessons/:id/edit" 
-                          element={
-                            <LazyLoadingWrapper>
-                              <LessonEditor />
                             </LazyLoadingWrapper>
                           } 
                         />

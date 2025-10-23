@@ -1,0 +1,441 @@
+-- 065: 创建智能教学系统表
+-- 创建时间: 2025-01-24
+-- 说明: 支持教学模块、课程页面、细粒度权限管理
+
+-- =====================================================
+-- 设置：允许创建触发器（解决权限问题）
+-- =====================================================
+SET @old_log_bin_trust_function_creators = @@log_bin_trust_function_creators;
+SET GLOBAL log_bin_trust_function_creators = 1;
+
+-- =====================================================
+-- 表1: 教学模块表（类似知识模块）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teaching_modules (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  name VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块名称',
+  description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '模块描述',
+  cover_image VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '封面图片URL（云盘链接）',
+  
+  -- 创建者和归属
+  creator_id BIGINT NOT NULL COMMENT '创建者用户ID',
+  owner_group_id BIGINT DEFAULT NULL COMMENT '所属组织ID（NULL表示平台级）',
+  
+  -- 可见性控制
+  visibility ENUM('public', 'group', 'private') DEFAULT 'private' COMMENT '可见性：public-公开，group-组织内，private-私有',
+  
+  -- 状态和排序
+  status ENUM('draft', 'published', 'archived') DEFAULT 'draft' COMMENT '状态：草稿/已发布/已归档',
+  order_index INT DEFAULT 0 COMMENT '排序序号',
+  
+  -- 统计信息
+  lesson_count INT DEFAULT 0 COMMENT '课程数量',
+  view_count INT DEFAULT 0 COMMENT '查看次数',
+  
+  -- 时间戳
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  published_at TIMESTAMP NULL DEFAULT NULL COMMENT '发布时间',
+  
+  -- 软删除
+  is_deleted TINYINT(1) DEFAULT 0 COMMENT '是否已删除',
+  deleted_at TIMESTAMP NULL DEFAULT NULL COMMENT '删除时间',
+  deleted_by BIGINT DEFAULT NULL COMMENT '删除者用户ID',
+  
+  PRIMARY KEY (id),
+  KEY idx_creator_id (creator_id),
+  KEY idx_owner_group_id (owner_group_id),
+  KEY idx_visibility (visibility),
+  KEY idx_status (status),
+  KEY idx_is_deleted (is_deleted),
+  KEY idx_created_at (created_at),
+  KEY idx_order_index (order_index),
+  KEY idx_creator_status (creator_id, status, is_deleted),
+  KEY idx_group_status (owner_group_id, status, is_deleted),
+  
+  CONSTRAINT fk_teaching_modules_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_teaching_modules_group FOREIGN KEY (owner_group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_modules_deleter FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='教学模块表';
+
+-- =====================================================
+-- 表2: 课程页面表
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teaching_lessons (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  module_id BIGINT NOT NULL COMMENT '所属教学模块ID',
+  
+  -- 基本信息
+  title VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '课程标题',
+  description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '课程描述',
+  
+  -- 内容类型（核心字段 - 控制可见性）
+  content_type ENUM(
+    'course',          -- 课程内容（所有人可见）
+    'experiment',      -- 实验说明（所有人可见）
+    'exercise',        -- 练习题目（所有人可见）
+    'reference',       -- 参考资料（所有人可见）
+    'teaching_plan',   -- 教案（仅教师可见）
+    'answer',          -- 答案解析（仅教师可见）
+    'guide',           -- 教学指南（仅教师可见）
+    'assessment'       -- 评测标准（仅教师可见）
+  ) DEFAULT 'course' COMMENT '内容类型',
+  
+  -- 多页面内容（JSON格式）
+  content JSON NOT NULL COMMENT '课程内容JSON: {pages: [{pageNumber, title, html, css, javascript}]}',
+  page_count INT DEFAULT 1 COMMENT '总页数',
+  
+  -- 创建者和状态
+  creator_id BIGINT NOT NULL COMMENT '创建者用户ID',
+  status ENUM('draft', 'published', 'archived') DEFAULT 'draft' COMMENT '状态',
+  order_index INT DEFAULT 0 COMMENT '在模块中的排序',
+  
+  -- 统计
+  view_count INT DEFAULT 0 COMMENT '查看次数',
+  
+  -- 时间戳
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  published_at TIMESTAMP NULL DEFAULT NULL COMMENT '发布时间',
+  
+  -- 软删除
+  is_deleted TINYINT(1) DEFAULT 0 COMMENT '是否已删除',
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_by BIGINT DEFAULT NULL,
+  
+  PRIMARY KEY (id),
+  KEY idx_module_id (module_id),
+  KEY idx_creator_id (creator_id),
+  KEY idx_content_type (content_type),
+  KEY idx_status (status),
+  KEY idx_is_deleted (is_deleted),
+  KEY idx_order_index (order_index),
+  KEY idx_module_status (module_id, status, is_deleted),
+  KEY idx_module_type (module_id, content_type, is_deleted),
+  KEY idx_module_order (module_id, order_index),
+  
+  CONSTRAINT fk_teaching_lessons_module FOREIGN KEY (module_id) REFERENCES teaching_modules(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_lessons_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_teaching_lessons_deleter FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='教学课程页面表';
+
+-- =====================================================
+-- 表3: 教学模块权限表（支持用户/组织/标签三种授权）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teaching_permissions (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  module_id BIGINT NOT NULL COMMENT '教学模块ID',
+  
+  -- 授权对象（三选一）
+  user_id BIGINT DEFAULT NULL COMMENT '授权给特定用户（优先级最高）',
+  group_id BIGINT DEFAULT NULL COMMENT '授权给组织（该组织所有成员）',
+  tag_id BIGINT DEFAULT NULL COMMENT '授权给标签用户（拥有该标签的所有用户）',
+  
+  -- 权限类型
+  permission_type ENUM('edit', 'view') NOT NULL DEFAULT 'view' COMMENT '权限类型：edit-可编辑，view-仅查看',
+  
+  -- 授权元数据
+  granted_by BIGINT NOT NULL COMMENT '授权人用户ID',
+  granted_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP COMMENT '授权时间',
+  expires_at TIMESTAMP NULL DEFAULT NULL COMMENT '过期时间（NULL表示永久）',
+  
+  -- 备注
+  note VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '授权备注',
+  
+  PRIMARY KEY (id),
+  
+  -- 唯一约束：同一模块+同一授权对象+同一权限类型 只能有一条记录
+  UNIQUE KEY uk_module_user_type (module_id, user_id, permission_type),
+  UNIQUE KEY uk_module_group_type (module_id, group_id, permission_type),
+  UNIQUE KEY uk_module_tag_type (module_id, tag_id, permission_type),
+  
+  -- 索引
+  KEY idx_module_id (module_id),
+  KEY idx_user_id (user_id),
+  KEY idx_group_id (group_id),
+  KEY idx_tag_id (tag_id),
+  KEY idx_granted_by (granted_by),
+  KEY idx_permission_type (permission_type),
+  KEY idx_expires_at (expires_at),
+  KEY idx_module_permission (module_id, permission_type),
+  
+  -- 外键约束
+  CONSTRAINT fk_teaching_permissions_module FOREIGN KEY (module_id) REFERENCES teaching_modules(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_permissions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_permissions_group FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_permissions_tag FOREIGN KEY (tag_id) REFERENCES user_tags(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teaching_permissions_granter FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE RESTRICT,
+  
+  -- 检查约束：user_id、group_id、tag_id 必须且只能有一个不为空
+  CONSTRAINT chk_permission_target CHECK (
+    (user_id IS NOT NULL AND group_id IS NULL AND tag_id IS NULL) OR
+    (user_id IS NULL AND group_id IS NOT NULL AND tag_id IS NULL) OR
+    (user_id IS NULL AND group_id IS NULL AND tag_id IS NOT NULL)
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='教学模块权限表';
+
+-- =====================================================
+-- 表4: 课程浏览记录表（用于统计和推荐）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teaching_view_logs (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL COMMENT '用户ID',
+  module_id BIGINT NOT NULL COMMENT '模块ID',
+  lesson_id BIGINT DEFAULT NULL COMMENT '课程ID（NULL表示只看了模块列表）',
+  
+  -- 浏览行为
+  page_number INT DEFAULT 1 COMMENT '查看的页码',
+  duration INT DEFAULT 0 COMMENT '停留时长（秒）',
+  is_completed TINYINT(1) DEFAULT 0 COMMENT '是否看完整个课程',
+  
+  -- 时间戳
+  viewed_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP COMMENT '查看时间',
+  
+  PRIMARY KEY (id),
+  KEY idx_user_id (user_id),
+  KEY idx_module_id (module_id),
+  KEY idx_lesson_id (lesson_id),
+  KEY idx_viewed_at (viewed_at),
+  KEY idx_user_module (user_id, module_id),
+  KEY idx_user_lesson (user_id, lesson_id),
+  
+  CONSTRAINT fk_view_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_view_logs_module FOREIGN KEY (module_id) REFERENCES teaching_modules(id) ON DELETE CASCADE,
+  CONSTRAINT fk_view_logs_lesson FOREIGN KEY (lesson_id) REFERENCES teaching_lessons(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='教学浏览记录表';
+
+-- =====================================================
+-- 表5: 课程草稿表（自动保存编辑器内容）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teaching_lesson_drafts (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  lesson_id BIGINT DEFAULT NULL COMMENT '关联的课程ID（NULL表示新建未保存）',
+  user_id BIGINT NOT NULL COMMENT '编辑者用户ID',
+  
+  -- 草稿内容
+  draft_content JSON NOT NULL COMMENT '草稿内容（格式同teaching_lessons.content）',
+  
+  -- 元数据
+  draft_title VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '草稿标题',
+  auto_saved TINYINT(1) DEFAULT 1 COMMENT '是否自动保存',
+  
+  -- 时间戳
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  PRIMARY KEY (id),
+  KEY idx_lesson_id (lesson_id),
+  KEY idx_user_id (user_id),
+  KEY idx_updated_at (updated_at),
+  KEY idx_user_lesson (user_id, lesson_id),
+  
+  CONSTRAINT fk_drafts_lesson FOREIGN KEY (lesson_id) REFERENCES teaching_lessons(id) ON DELETE CASCADE,
+  CONSTRAINT fk_drafts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='教学课程草稿表';
+
+-- =====================================================
+-- 创建视图：用户可访问的教学模块
+-- =====================================================
+CREATE OR REPLACE VIEW v_user_accessible_teaching_modules AS
+SELECT DISTINCT
+  tm.id AS module_id,
+  tm.name AS module_name,
+  tm.description,
+  tm.cover_image,
+  tm.creator_id,
+  tm.owner_group_id,
+  tm.visibility,
+  tm.status,
+  tm.lesson_count,
+  tm.view_count,
+  tm.created_at,
+  tm.updated_at,
+  u.id AS user_id,
+  u.username,
+  u.group_id AS user_group_id,
+  creator.username AS creator_name,
+  
+  -- 权限类型（优先级：用户 > 组织 > 标签）
+  CASE
+    WHEN tp_user.permission_type IS NOT NULL THEN tp_user.permission_type
+    WHEN tp_group.permission_type IS NOT NULL THEN tp_group.permission_type
+    WHEN tp_tag.permission_type IS NOT NULL THEN tp_tag.permission_type
+    ELSE 'view'
+  END AS user_permission,
+  
+  -- 是否是创建者
+  (u.id = tm.creator_id) AS is_creator,
+  
+  -- 是否是管理员
+  (u.role IN ('super_admin', 'admin')) AS is_admin
+
+FROM teaching_modules tm
+CROSS JOIN users u
+LEFT JOIN users creator ON tm.creator_id = creator.id
+
+-- 用户直接授权
+LEFT JOIN teaching_permissions tp_user ON tm.id = tp_user.module_id 
+  AND tp_user.user_id = u.id 
+  AND (tp_user.expires_at IS NULL OR tp_user.expires_at > NOW())
+
+-- 组织授权
+LEFT JOIN teaching_permissions tp_group ON tm.id = tp_group.module_id 
+  AND tp_group.group_id = u.group_id 
+  AND (tp_group.expires_at IS NULL OR tp_group.expires_at > NOW())
+
+-- 标签授权
+LEFT JOIN teaching_permissions tp_tag ON tm.id = tp_tag.module_id 
+  AND tp_tag.tag_id IN (
+    SELECT tag_id FROM user_tag_relations WHERE user_id = u.id
+  )
+  AND (tp_tag.expires_at IS NULL OR tp_tag.expires_at > NOW())
+
+WHERE tm.is_deleted = 0
+  AND u.deleted_at IS NULL
+  AND (
+    -- 创建者始终可访问
+    u.id = tm.creator_id
+    -- 管理员可访问所有
+    OR u.role IN ('super_admin', 'admin')
+    -- 公开模块所有人可见
+    OR tm.visibility = 'public'
+    -- 组织模块：同组织成员可见
+    OR (tm.visibility = 'group' AND u.group_id = tm.owner_group_id)
+    -- 私有模块：有明确授权
+    OR tp_user.id IS NOT NULL
+    OR tp_group.id IS NOT NULL
+    OR tp_tag.id IS NOT NULL
+  );
+
+-- =====================================================
+-- 触发器：自动更新模块的课程数量
+-- =====================================================
+DROP TRIGGER IF EXISTS trg_teaching_lessons_after_insert;
+DROP TRIGGER IF EXISTS trg_teaching_lessons_after_update;
+DROP TRIGGER IF EXISTS trg_teaching_lessons_after_delete;
+
+DELIMITER $$
+
+CREATE TRIGGER trg_teaching_lessons_after_insert
+AFTER INSERT ON teaching_lessons
+FOR EACH ROW
+BEGIN
+  IF NEW.is_deleted = 0 THEN
+    UPDATE teaching_modules 
+    SET lesson_count = lesson_count + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.module_id;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_teaching_lessons_after_update
+AFTER UPDATE ON teaching_lessons
+FOR EACH ROW
+BEGIN
+  -- 软删除时减少计数
+  IF OLD.is_deleted = 0 AND NEW.is_deleted = 1 THEN
+    UPDATE teaching_modules 
+    SET lesson_count = GREATEST(0, lesson_count - 1),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.module_id;
+  END IF;
+  
+  -- 恢复时增加计数
+  IF OLD.is_deleted = 1 AND NEW.is_deleted = 0 THEN
+    UPDATE teaching_modules 
+    SET lesson_count = lesson_count + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.module_id;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_teaching_lessons_after_delete
+AFTER DELETE ON teaching_lessons
+FOR EACH ROW
+BEGIN
+  IF OLD.is_deleted = 0 THEN
+    UPDATE teaching_modules 
+    SET lesson_count = GREATEST(0, lesson_count - 1),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = OLD.module_id;
+  END IF;
+END$$
+
+DELIMITER ;
+
+-- =====================================================
+-- 恢复原始设置
+-- =====================================================
+SET GLOBAL log_bin_trust_function_creators = @old_log_bin_trust_function_creators;
+
+-- =====================================================
+-- 插入初始数据：创建预定义标签（修复版 - 使用NULL作为创建者）
+-- =====================================================
+-- 获取默认组织ID
+SET @default_group_id = (SELECT id FROM user_groups ORDER BY id ASC LIMIT 1);
+
+-- 插入 developer 标签
+INSERT INTO user_tags (group_id, name, color, description, icon, sort_order, is_active, created_by)
+SELECT 
+  @default_group_id,
+  'developer',
+  '#52c41a',
+  '开发者 - 可创建和编辑教学模块',
+  'CodeOutlined',
+  10,
+  1,
+  NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM user_tags WHERE name = 'developer' AND group_id = @default_group_id
+);
+
+-- 插入 teacher 标签
+INSERT INTO user_tags (group_id, name, color, description, icon, sort_order, is_active, created_by)
+SELECT 
+  @default_group_id,
+  'teacher',
+  '#1890ff',
+  '教师 - 可查看教案和答案',
+  'ReadOutlined',
+  20,
+  1,
+  NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM user_tags WHERE name = 'teacher' AND group_id = @default_group_id
+);
+
+-- 插入 student 标签
+INSERT INTO user_tags (group_id, name, color, description, icon, sort_order, is_active, created_by)
+SELECT 
+  @default_group_id,
+  'student',
+  '#faad14',
+  '学生 - 可查看课程内容',
+  'UserOutlined',
+  30,
+  1,
+  NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM user_tags WHERE name = 'student' AND group_id = @default_group_id
+);
+
+-- =====================================================
+-- 记录迁移历史
+-- =====================================================
+INSERT INTO migrations_history (migration_name, executed_at) 
+VALUES ('065_create_teaching_system_tables', NOW())
+ON DUPLICATE KEY UPDATE executed_at = NOW();
+
+-- =====================================================
+-- 执行完成提示
+-- =====================================================
+SELECT '✅ 智能教学系统表创建完成！' AS status;
+
+SELECT 
+  id AS tag_id,
+  name AS tag_name,
+  color,
+  description
+FROM user_tags
+WHERE name IN ('developer', 'teacher', 'student')
+ORDER BY sort_order;
