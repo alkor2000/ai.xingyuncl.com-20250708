@@ -1,7 +1,6 @@
 /**
- * 智能教学系统 Store（增强版）
- * 使用 Zustand 管理教学模块、课程、权限状态
- * 新增：管理员全局数据管理功能
+ * 智能教学系统 Store（分组增强版）
+ * 新增：教学模块分组管理功能
  */
 
 import { create } from 'zustand';
@@ -21,7 +20,15 @@ const useTeachingStore = create((set, get) => ({
   },
   modulesLoading: false,
   
-  // 管理员全局模块列表（新增）
+  // 分组列表（新增）
+  groups: [],
+  groupsLoading: false,
+  
+  // 分组模块数据（新增）
+  groupedModules: [],
+  groupedModulesLoading: false,
+  
+  // 管理员全局模块列表
   allModules: [],
   allModulesLoading: false,
   
@@ -44,6 +51,112 @@ const useTeachingStore = create((set, get) => ({
   // 草稿
   draft: null,
   draftSaving: false,
+  
+  // ==================== 分组操作（新增）====================
+  
+  /**
+   * 获取所有分组列表
+   */
+  fetchGroups: async (params = {}) => {
+    set({ groupsLoading: true });
+    try {
+      const response = await api.get('/teaching/groups', { params });
+      const groupsData = response.data.data || response.data;
+      set({
+        groups: Array.isArray(groupsData) ? groupsData : [],
+        groupsLoading: false
+      });
+      return groupsData;
+    } catch (error) {
+      message.error(error.response?.data?.message || '获取分组列表失败');
+      set({ groupsLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 获取按分组返回的模块数据
+   */
+  fetchGroupedModules: async (params = {}) => {
+    set({ groupedModulesLoading: true });
+    try {
+      const response = await api.get('/teaching/modules', { 
+        params: {
+          ...params,
+          group_by: 'group'
+        }
+      });
+      const responseData = response.data.data || response.data;
+      set({
+        groupedModules: responseData.groups || [],
+        modulesPagination: responseData.pagination || {},
+        groupedModulesLoading: false
+      });
+      return responseData;
+    } catch (error) {
+      message.error(error.response?.data?.message || '获取分组模块失败');
+      set({ groupedModulesLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
+   * 创建分组（仅超级管理员）
+   */
+  createGroup: async (data) => {
+    try {
+      const response = await api.post('/teaching/groups', data);
+      message.success('分组创建成功');
+      await get().fetchGroups();
+      return response.data.data || response.data;
+    } catch (error) {
+      message.error(error.response?.data?.message || '创建分组失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 更新分组（仅超级管理员）
+   */
+  updateGroup: async (id, data) => {
+    try {
+      const response = await api.put(`/teaching/groups/${id}`, data);
+      message.success('分组更新成功');
+      await get().fetchGroups();
+      return response.data.data || response.data;
+    } catch (error) {
+      message.error(error.response?.data?.message || '更新分组失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 删除分组（仅超级管理员）
+   */
+  deleteGroup: async (id) => {
+    try {
+      await api.delete(`/teaching/groups/${id}`);
+      message.success('分组删除成功');
+      await get().fetchGroups();
+      await get().fetchGroupedModules();
+    } catch (error) {
+      message.error(error.response?.data?.message || '删除分组失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 获取分组的模块列表
+   */
+  fetchGroupModules: async (groupId) => {
+    try {
+      const response = await api.get(`/teaching/groups/${groupId}/modules`);
+      return response.data.data || response.data;
+    } catch (error) {
+      message.error(error.response?.data?.message || '获取分组模块失败');
+      throw error;
+    }
+  },
   
   // ==================== 模块操作 ====================
   
@@ -69,21 +182,18 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 获取所有模块（管理员视角，不受权限限制）- 新增
+   * 获取所有模块（管理员视角，不受权限限制）
    */
   fetchAllModules: async (params = {}) => {
     set({ allModulesLoading: true });
     try {
-      // 使用admin路径，后端需要实现该接口
       const response = await api.get('/teaching/admin/modules', { 
         params: {
           ...params,
-          all: true // 标记获取全部数据
+          all: true
         }
       });
       const responseData = response.data.data || response.data;
-      
-      // 如果返回的是分页数据，提取modules数组
       const modulesArray = responseData.modules || responseData;
       
       set({
@@ -99,7 +209,7 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 获取单个模块详情
+   * 获取单个模块详情（增强：包含分组信息）
    */
   fetchModule: async (id) => {
     set({ currentModuleLoading: true });
@@ -119,14 +229,13 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 创建模块
+   * 创建模块（增强：支持分组）
    */
   createModule: async (data) => {
     try {
       const response = await api.post('/teaching/modules', data);
       message.success('模块创建成功');
-      // 重新加载列表
-      await get().fetchModules();
+      await get().fetchGroupedModules();
       return response.data.data || response.data;
     } catch (error) {
       message.error(error.response?.data?.message || '创建模块失败');
@@ -135,19 +244,17 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 更新模块
+   * 更新模块（增强：支持更新分组）
    */
   updateModule: async (id, data) => {
     try {
       const response = await api.put(`/teaching/modules/${id}`, data);
       message.success('模块更新成功');
       const moduleData = response.data.data || response.data;
-      // 更新当前模块
       if (get().currentModule?.id === id) {
         set({ currentModule: moduleData });
       }
-      // 重新加载列表
-      await get().fetchModules();
+      await get().fetchGroupedModules();
       return moduleData;
     } catch (error) {
       message.error(error.response?.data?.message || '更新模块失败');
@@ -156,7 +263,7 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 批量更新模块（管理员功能）- 新增
+   * 批量更新模块（管理员功能）
    */
   batchUpdateModules: async (moduleIds, updateData) => {
     try {
@@ -165,7 +272,6 @@ const useTeachingStore = create((set, get) => ({
         update_data: updateData
       });
       message.success(`成功更新${moduleIds.length}个模块`);
-      // 重新加载管理员列表
       await get().fetchAllModules();
       return response.data.data || response.data;
     } catch (error) {
@@ -181,8 +287,7 @@ const useTeachingStore = create((set, get) => ({
     try {
       await api.delete(`/teaching/modules/${id}`);
       message.success('模块删除成功');
-      // 重新加载列表
-      await get().fetchModules();
+      await get().fetchGroupedModules();
     } catch (error) {
       message.error(error.response?.data?.message || '删除模块失败');
       throw error;
@@ -191,9 +296,6 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 课程操作 ====================
   
-  /**
-   * 获取模块的课程列表
-   */
   fetchLessons: async (moduleId, params = {}) => {
     set({ lessonsLoading: true });
     try {
@@ -211,9 +313,6 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 获取单个课程详情
-   */
   fetchLesson: async (id) => {
     set({ currentLessonLoading: true });
     try {
@@ -231,14 +330,10 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 创建课程
-   */
   createLesson: async (data) => {
     try {
       const response = await api.post('/teaching/lessons', data);
       message.success('课程创建成功');
-      // 重新加载课程列表
       if (data.module_id) {
         await get().fetchLessons(data.module_id);
       }
@@ -249,15 +344,11 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 更新课程
-   */
   updateLesson: async (id, data) => {
     try {
       const response = await api.put(`/teaching/lessons/${id}`, data);
       message.success('课程更新成功');
       const lessonData = response.data.data || response.data;
-      // 更新当前课程
       if (get().currentLesson?.id === id) {
         set({ currentLesson: lessonData });
       }
@@ -268,14 +359,10 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 删除课程
-   */
   deleteLesson: async (id, moduleId) => {
     try {
       await api.delete(`/teaching/lessons/${id}`);
       message.success('课程删除成功');
-      // 重新加载课程列表
       if (moduleId) {
         await get().fetchLessons(moduleId);
       }
@@ -287,9 +374,6 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 权限操作 ====================
   
-  /**
-   * 获取模块权限列表
-   */
   fetchPermissions: async (moduleId) => {
     set({ permissionsLoading: true });
     try {
@@ -307,14 +391,10 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 授予权限
-   */
   grantPermission: async (data) => {
     try {
       const response = await api.post('/teaching/permissions', data);
       message.success('权限授予成功');
-      // 重新加载权限列表
       if (data.module_id) {
         await get().fetchPermissions(data.module_id);
       }
@@ -325,14 +405,10 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 撤销权限
-   */
   revokePermission: async (permissionId, moduleId) => {
     try {
       await api.delete(`/teaching/permissions/${permissionId}`);
       message.success('权限撤销成功');
-      // 重新加载权限列表
       if (moduleId) {
         await get().fetchPermissions(moduleId);
       }
@@ -342,16 +418,12 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 批量撤销权限
-   */
   revokeMultiplePermissions: async (permissionIds, moduleId) => {
     try {
       await api.post('/teaching/permissions/revoke-multiple', {
         permission_ids: permissionIds
       });
       message.success(`成功撤销${permissionIds.length}个权限`);
-      // 重新加载权限列表
       if (moduleId) {
         await get().fetchPermissions(moduleId);
       }
@@ -363,9 +435,6 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 草稿操作 ====================
   
-  /**
-   * 自动保存草稿
-   */
   saveDraft: async (data) => {
     set({ draftSaving: true });
     try {
@@ -383,9 +452,6 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
-  /**
-   * 获取草稿
-   */
   fetchDraft: async (lessonId) => {
     try {
       const response = await api.get(`/teaching/drafts/${lessonId || 'null'}`);
@@ -400,9 +466,6 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 浏览记录 ====================
   
-  /**
-   * 记录浏览行为
-   */
   recordView: async (data) => {
     try {
       await api.post('/teaching/view-logs', data);
@@ -418,7 +481,9 @@ const useTeachingStore = create((set, get) => ({
   resetLessons: () => set({ lessons: [] }),
   resetPermissions: () => set({ permissions: [] }),
   resetDraft: () => set({ draft: null }),
-  resetAllModules: () => set({ allModules: [] })
+  resetAllModules: () => set({ allModules: [] }),
+  resetGroups: () => set({ groups: [] }),
+  resetGroupedModules: () => set({ groupedModules: [] })
 }));
 
 export default useTeachingStore;

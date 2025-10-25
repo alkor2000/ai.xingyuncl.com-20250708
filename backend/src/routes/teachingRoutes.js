@@ -1,7 +1,6 @@
 /**
- * 教学系统路由（增强版）
- * 定义教学模块、课程、权限的API端点
- * 新增：管理员全局数据管理路由
+ * 教学系统路由（分组增强版）
+ * 新增：教学模块分组管理路由
  */
 
 const express = require('express');
@@ -22,7 +21,44 @@ const router = express.Router();
 // 所有路由都需要认证
 router.use(authenticate);
 
-// ==================== 管理员路由（新增）====================
+// ==================== 分组管理路由（新增）====================
+
+/**
+ * @route   GET /api/teaching/groups
+ * @desc    获取所有分组列表（所有用户可访问）
+ * @access  所有认证用户
+ */
+router.get('/groups', TeachingController.getGroups);
+
+/**
+ * @route   POST /api/teaching/groups
+ * @desc    创建分组
+ * @access  仅超级管理员
+ */
+router.post('/groups', TeachingController.createGroup);
+
+/**
+ * @route   PUT /api/teaching/groups/:groupId
+ * @desc    更新分组信息
+ * @access  仅超级管理员
+ */
+router.put('/groups/:groupId', TeachingController.updateGroup);
+
+/**
+ * @route   DELETE /api/teaching/groups/:groupId
+ * @desc    删除分组
+ * @access  仅超级管理员
+ */
+router.delete('/groups/:groupId', TeachingController.deleteGroup);
+
+/**
+ * @route   GET /api/teaching/groups/:groupId/modules
+ * @desc    获取分组的模块列表
+ * @access  所有认证用户
+ */
+router.get('/groups/:groupId/modules', TeachingController.getGroupModules);
+
+// ==================== 管理员路由 ====================
 
 /**
  * @route   GET /api/teaching/admin/modules
@@ -42,28 +78,29 @@ router.post('/admin/modules/batch-update', TeachingController.batchUpdateModules
 
 /**
  * @route   POST /api/teaching/modules
- * @desc    创建教学模块
+ * @desc    创建教学模块（增强：支持设置分组）
  * @access  开发者、管理员
  */
 router.post('/modules', canCreateModule(), TeachingController.createModule);
 
 /**
  * @route   GET /api/teaching/modules
- * @desc    获取模块列表（根据权限自动过滤）
+ * @desc    获取模块列表（增强：支持按分组返回）
  * @access  所有认证用户
+ * @query   group_by=group 按分组返回
  */
 router.get('/modules', TeachingController.getModules);
 
 /**
  * @route   GET /api/teaching/modules/:id
- * @desc    获取模块详情
+ * @desc    获取模块详情（增强：包含分组信息）
  * @access  有查看权限的用户
  */
 router.get('/modules/:id', canViewModule(), TeachingController.getModule);
 
 /**
  * @route   PUT /api/teaching/modules/:id
- * @desc    更新模块信息
+ * @desc    更新模块信息（增强：支持更新分组）
  * @access  有编辑权限的用户
  */
 router.put('/modules/:id', canEditModule(), TeachingController.updateModule);

@@ -1,14 +1,12 @@
 /**
- * 教学系统控制器（增强版）
- * 处理教学模块、课程、权限的业务逻辑
- * 新增：管理员全局数据管理功能
- * 修复：使用simpleQuery解决LIMIT/OFFSET兼容性问题
- * 修复：添加cover_image支持
+ * 教学系统控制器（分组增强版）
+ * 新增：教学模块分组管理功能（支持多对多关系）
  */
 
 const TeachingModule = require('../models/TeachingModule');
 const TeachingLesson = require('../models/TeachingLesson');
 const TeachingPermission = require('../models/TeachingPermission');
+const TeachingModuleGroup = require('../models/TeachingModuleGroup');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { getUserTags } = require('../middleware/teachingPermissions');
@@ -17,7 +15,7 @@ class TeachingController {
   // ==================== 模块管理 ====================
 
   /**
-   * 创建教学模块
+   * 创建教学模块（增强：支持分组）
    */
   static async createModule(req, res) {
     try {
@@ -28,15 +26,14 @@ class TeachingController {
         cover_image,
         visibility = 'private',
         status = 'draft',
-        owner_group_id
+        owner_group_id,
+        group_ids = [] // 新增：分组ID数组
       } = req.body;
 
-      // 验证必填项
       if (!name) {
         return ResponseHelper.validation(res, ['模块名称不能为空']);
       }
 
-      // 如果是admin创建，自动设置owner_group_id为其所在组
       let finalOwnerGroupId = owner_group_id;
       if (user.role === 'admin' && !owner_group_id) {
         finalOwnerGroupId = user.group_id;
@@ -52,10 +49,16 @@ class TeachingController {
         status
       });
 
+      // 设置模块的分组
+      if (group_ids.length > 0) {
+        await TeachingModuleGroup.setModuleGroups(module.id, group_ids);
+      }
+
       logger.info('教学模块创建成功', {
         moduleId: module.id,
         userId: user.id,
-        name
+        name,
+        groupIds: group_ids
       });
 
       return ResponseHelper.success(res, module, '模块创建成功', 201);
@@ -66,7 +69,7 @@ class TeachingController {
   }
 
   /**
-   * 获取模块列表（用户可访问的）
+   * 获取模块列表（增强：按分组返回）
    */
   static async getModules(req, res) {
     try {
@@ -76,10 +79,10 @@ class TeachingController {
         limit = 20,
         status,
         visibility,
-        search
+        search,
+        group_by = 'none' // 新增：'none' | 'group'
       } = req.query;
 
-      // 获取用户标签
       const userTags = await getUserTags(user.id);
 
       const result = await TeachingModule.getUserModules(
@@ -96,6 +99,56 @@ class TeachingController {
         }
       );
 
+      // 如果需要按分组返回
+      if (group_by === 'group') {
+        const dbConnection = require('../database/connection');
+        
+        // 获取所有启用的分组
+        const groups = await TeachingModuleGroup.getAll({ is_active: true });
+        
+        // 为每个分组获取模块
+        const groupedData = await Promise.all(
+          groups.map(async (group) => {
+            const modules = await TeachingModuleGroup.getGroupModules(group.id);
+            
+            // 过滤用户有权限访问的模块
+            const accessibleModules = modules.filter(m => 
+              result.modules.some(rm => rm.id === m.id)
+            );
+            
+            return {
+              ...group.toJSON(),
+              modules: accessibleModules
+            };
+          })
+        );
+
+        // 添加"未分组"模块
+        const groupedModuleIds = new Set();
+        groupedData.forEach(g => {
+          g.modules.forEach(m => groupedModuleIds.add(m.id));
+        });
+
+        const ungroupedModules = result.modules.filter(m => !groupedModuleIds.has(m.id));
+        
+        if (ungroupedModules.length > 0) {
+          groupedData.push({
+            id: null,
+            name: '未分组',
+            description: '未分配到任何分组的模块',
+            sort_order: 999999,
+            is_active: true,
+            module_count: ungroupedModules.length,
+            modules: ungroupedModules
+          });
+        }
+
+        return ResponseHelper.success(res, {
+          groups: groupedData,
+          pagination: result.pagination
+        }, '获取模块列表成功');
+      }
+
       return ResponseHelper.success(res, result, '获取模块列表成功');
     } catch (error) {
       logger.error('获取模块列表失败:', error);
@@ -104,19 +157,22 @@ class TeachingController {
   }
 
   /**
-   * 获取单个模块详情
+   * 获取单个模块详情（增强：包含分组信息）
    */
   static async getModule(req, res) {
     try {
-      const module = req.module; // 从中间件获取
+      const module = req.module;
       const permission = req.modulePermission;
 
-      // 增加查看次数
       await module.incrementViewCount();
+
+      // 获取模块的分组
+      const groups = await TeachingModuleGroup.getModuleGroups(module.id);
 
       const result = {
         ...module.toJSON(),
-        user_permission: permission
+        user_permission: permission,
+        groups: groups.map(g => g.toJSON())
       };
 
       return ResponseHelper.success(res, result, '获取模块详情成功');
@@ -127,18 +183,19 @@ class TeachingController {
   }
 
   /**
-   * 更新模块信息
+   * 更新模块信息（增强：支持更新分组）
    */
   static async updateModule(req, res) {
     try {
-      const module = req.module; // 从中间件获取
+      const module = req.module;
       const {
         name,
         description,
         cover_image,
         visibility,
         status,
-        order_index
+        order_index,
+        group_ids // 新增：分组ID数组
       } = req.body;
 
       const updateData = {};
@@ -150,6 +207,11 @@ class TeachingController {
       if (order_index !== undefined) updateData.order_index = order_index;
 
       await module.update(updateData);
+
+      // 更新分组关系
+      if (group_ids !== undefined) {
+        await TeachingModuleGroup.setModuleGroups(module.id, group_ids);
+      }
 
       logger.info('模块更新成功', {
         moduleId: module.id,
@@ -168,7 +230,7 @@ class TeachingController {
    */
   static async deleteModule(req, res) {
     try {
-      const module = req.module; // 从中间件获取
+      const module = req.module;
       const user = req.user;
 
       await module.softDelete(user.id);
@@ -185,22 +247,181 @@ class TeachingController {
     }
   }
 
-  // ==================== 管理员功能（新增）====================
+  // ==================== 分组管理（新增）====================
 
   /**
-   * 获取所有模块（管理员视角，不受权限限制）
-   * 修复：使用simpleQuery解决LIMIT/OFFSET兼容性问题
+   * 获取所有分组列表
+   */
+  static async getGroups(req, res) {
+    try {
+      const { is_active } = req.query;
+      
+      const groups = await TeachingModuleGroup.getAll({
+        is_active: is_active !== undefined ? is_active === 'true' : null
+      });
+
+      return ResponseHelper.success(res, groups, '获取分组列表成功');
+    } catch (error) {
+      logger.error('获取分组列表失败:', error);
+      return ResponseHelper.error(res, '获取分组列表失败');
+    }
+  }
+
+  /**
+   * 创建分组（仅超级管理员）
+   */
+  static async createGroup(req, res) {
+    try {
+      const user = req.user;
+
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可创建分组');
+      }
+
+      const {
+        name,
+        description,
+        sort_order = 0,
+        is_active = true,
+        visibility = 'public',
+        owner_group_id
+      } = req.body;
+
+      if (!name) {
+        return ResponseHelper.validation(res, ['分组名称不能为空']);
+      }
+
+      const group = await TeachingModuleGroup.create({
+        name,
+        description,
+        sort_order,
+        is_active,
+        visibility,
+        owner_group_id,
+        created_by: user.id
+      });
+
+      logger.info('分组创建成功', {
+        groupId: group.id,
+        name,
+        userId: user.id
+      });
+
+      return ResponseHelper.success(res, group, '分组创建成功', 201);
+    } catch (error) {
+      logger.error('创建分组失败:', error);
+      return ResponseHelper.error(res, error.message || '创建分组失败');
+    }
+  }
+
+  /**
+   * 更新分组（仅超级管理员）
+   */
+  static async updateGroup(req, res) {
+    try {
+      const user = req.user;
+      const { groupId } = req.params;
+
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可更新分组');
+      }
+
+      const group = await TeachingModuleGroup.findById(groupId);
+      if (!group) {
+        return ResponseHelper.notFound(res, '分组不存在');
+      }
+
+      const {
+        name,
+        description,
+        sort_order,
+        is_active,
+        visibility,
+        owner_group_id
+      } = req.body;
+
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (sort_order !== undefined) updateData.sort_order = sort_order;
+      if (is_active !== undefined) updateData.is_active = is_active;
+      if (visibility !== undefined) updateData.visibility = visibility;
+      if (owner_group_id !== undefined) updateData.owner_group_id = owner_group_id;
+
+      await group.update(updateData);
+
+      logger.info('分组更新成功', {
+        groupId: group.id,
+        userId: user.id
+      });
+
+      return ResponseHelper.success(res, group, '分组更新成功');
+    } catch (error) {
+      logger.error('更新分组失败:', error);
+      return ResponseHelper.error(res, '更新分组失败');
+    }
+  }
+
+  /**
+   * 删除分组（仅超级管理员）
+   */
+  static async deleteGroup(req, res) {
+    try {
+      const user = req.user;
+      const { groupId } = req.params;
+
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可删除分组');
+      }
+
+      const group = await TeachingModuleGroup.findById(groupId);
+      if (!group) {
+        return ResponseHelper.notFound(res, '分组不存在');
+      }
+
+      await group.delete();
+
+      logger.info('分组删除成功', {
+        groupId: group.id,
+        userId: user.id
+      });
+
+      return ResponseHelper.success(res, null, '分组删除成功');
+    } catch (error) {
+      logger.error('删除分组失败:', error);
+      return ResponseHelper.error(res, '删除分组失败');
+    }
+  }
+
+  /**
+   * 获取分组的模块列表
+   */
+  static async getGroupModules(req, res) {
+    try {
+      const { groupId } = req.params;
+
+      const modules = await TeachingModuleGroup.getGroupModules(groupId);
+
+      return ResponseHelper.success(res, modules, '获取分组模块成功');
+    } catch (error) {
+      logger.error('获取分组模块失败:', error);
+      return ResponseHelper.error(res, '获取分组模块失败');
+    }
+  }
+
+  // ==================== 管理员功能 ====================
+
+  /**
+   * 获取所有模块（管理员视角）
    */
   static async getAllModules(req, res) {
     try {
       const user = req.user;
 
-      // 验证超级管理员权限
       if (user.role !== 'super_admin') {
         return ResponseHelper.forbidden(res, '仅超级管理员可访问');
       }
 
-      // 严格的参数验证
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit) || 100));
       const offset = (page - 1) * limit;
@@ -208,7 +429,6 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 构建查询条件
       let whereClause = 'tm.deleted_at IS NULL';
       const whereParams = [];
 
@@ -227,16 +447,10 @@ class TeachingController {
         whereParams.push(`%${search}%`, `%${search}%`);
       }
 
-      // 查询总数
-      const countSql = `
-        SELECT COUNT(*) as total 
-        FROM teaching_modules tm
-        WHERE ${whereClause}
-      `;
+      const countSql = `SELECT COUNT(*) as total FROM teaching_modules tm WHERE ${whereClause}`;
       const { rows: countRows } = await dbConnection.query(countSql, whereParams);
       const total = countRows[0].total;
 
-      // ✅ 关键修复：使用simpleQuery代替query，解决LIMIT/OFFSET兼容性问题
       const dataSql = `
         SELECT 
           tm.*,
@@ -278,20 +492,18 @@ class TeachingController {
   }
 
   /**
-   * 批量更新模块（管理员功能）
+   * 批量更新模块
    */
   static async batchUpdateModules(req, res) {
     try {
       const user = req.user;
 
-      // 验证超级管理员权限
       if (user.role !== 'super_admin') {
         return ResponseHelper.forbidden(res, '仅超级管理员可操作');
       }
 
       const { module_ids, update_data } = req.body;
 
-      // 验证输入
       if (!Array.isArray(module_ids) || module_ids.length === 0) {
         return ResponseHelper.validation(res, ['模块ID列表不能为空']);
       }
@@ -302,7 +514,6 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 允许批量更新的字段
       const allowedFields = ['status', 'visibility', 'order_index'];
       const updateFields = [];
       const updateValues = [];
@@ -318,10 +529,8 @@ class TeachingController {
         return ResponseHelper.validation(res, ['没有有效的更新字段']);
       }
 
-      // 添加updated_at
       updateFields.push('updated_at = NOW()');
 
-      // 构建SQL
       const placeholders = module_ids.map(() => '?').join(',');
       const sql = `
         UPDATE teaching_modules 
@@ -351,9 +560,6 @@ class TeachingController {
 
   // ==================== 课程管理 ====================
 
-  /**
-   * 创建课程
-   */
   static async createLesson(req, res) {
     try {
       const user = req.user;
@@ -368,12 +574,10 @@ class TeachingController {
         order_index
       } = req.body;
 
-      // 验证必填项
       if (!module_id || !title || !content) {
         return ResponseHelper.validation(res, ['模块ID、标题和内容不能为空']);
       }
 
-      // 验证用户是否有模块编辑权限
       const userTags = await getUserTags(user.id);
       const permission = await TeachingModule.checkUserPermission(
         module_id,
@@ -413,16 +617,12 @@ class TeachingController {
     }
   }
 
-  /**
-   * 获取模块的课程列表
-   */
   static async getModuleLessons(req, res) {
     try {
       const { moduleId } = req.params;
       const { status } = req.query;
       const user = req.user;
 
-      // 验证模块访问权限
       const userTags = await getUserTags(user.id);
       const permission = await TeachingModule.checkUserPermission(
         moduleId,
@@ -436,7 +636,6 @@ class TeachingController {
         return ResponseHelper.forbidden(res, '无权访问此模块');
       }
 
-      // 获取课程列表（自动过滤教师专属内容）
       const lessons = await TeachingLesson.getModuleLessons(
         moduleId,
         user.id,
@@ -444,7 +643,7 @@ class TeachingController {
         userTags,
         {
           status,
-          include_teacher_content: permission === 'edit' // 有编辑权限时包含教师内容
+          include_teacher_content: permission === 'edit'
         }
       );
 
@@ -455,14 +654,10 @@ class TeachingController {
     }
   }
 
-  /**
-   * 获取单个课程详情
-   */
   static async getLesson(req, res) {
     try {
-      const lesson = req.lesson; // 从中间件获取
+      const lesson = req.lesson;
 
-      // 增加查看次数
       await lesson.incrementViewCount();
 
       return ResponseHelper.success(res, lesson, '获取课程详情成功');
@@ -472,13 +667,9 @@ class TeachingController {
     }
   }
 
-  /**
-   * 更新课程信息
-   * 修复：添加cover_image支持
-   */
   static async updateLesson(req, res) {
     try {
-      const lesson = req.lesson; // 从中间件获取
+      const lesson = req.lesson;
       const {
         title,
         description,
@@ -512,12 +703,9 @@ class TeachingController {
     }
   }
 
-  /**
-   * 删除课程
-   */
   static async deleteLesson(req, res) {
     try {
-      const lesson = req.lesson; // 从中间件获取
+      const lesson = req.lesson;
       const user = req.user;
 
       await lesson.softDelete(user.id);
@@ -536,9 +724,6 @@ class TeachingController {
 
   // ==================== 权限管理 ====================
 
-  /**
-   * 获取模块的权限列表
-   */
   static async getModulePermissions(req, res) {
     try {
       const { moduleId } = req.params;
@@ -552,9 +737,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 授予权限
-   */
   static async grantPermission(req, res) {
     try {
       const user = req.user;
@@ -568,7 +750,6 @@ class TeachingController {
         note
       } = req.body;
 
-      // 验证必填项
       if (!module_id) {
         return ResponseHelper.validation(res, ['模块ID不能为空']);
       }
@@ -597,9 +778,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 撤销权限
-   */
   static async revokePermission(req, res) {
     try {
       const { permissionId } = req.params;
@@ -618,9 +796,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 批量撤销权限
-   */
   static async revokeMultiplePermissions(req, res) {
     try {
       const { permission_ids } = req.body;
@@ -643,19 +818,12 @@ class TeachingController {
     }
   }
 
-  // ==================== 草稿管理 ====================
+  // ==================== 草稿和浏览记录 ====================
 
-  /**
-   * 自动保存课程草稿
-   */
   static async saveDraft(req, res) {
     try {
       const user = req.user;
-      const {
-        lesson_id,
-        draft_content,
-        draft_title
-      } = req.body;
+      const { lesson_id, draft_content, draft_title } = req.body;
 
       if (!draft_content) {
         return ResponseHelper.validation(res, ['草稿内容不能为空']);
@@ -663,58 +831,31 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 检查是否已存在草稿
       let sql, params;
 
       if (lesson_id) {
-        sql = `
-          SELECT id FROM teaching_lesson_drafts 
-          WHERE lesson_id = ? AND user_id = ?
-        `;
+        sql = 'SELECT id FROM teaching_lesson_drafts WHERE lesson_id = ? AND user_id = ?';
         params = [lesson_id, user.id];
       } else {
-        sql = `
-          SELECT id FROM teaching_lesson_drafts 
-          WHERE user_id = ? AND lesson_id IS NULL 
-          ORDER BY updated_at DESC LIMIT 1
-        `;
+        sql = 'SELECT id FROM teaching_lesson_drafts WHERE user_id = ? AND lesson_id IS NULL ORDER BY updated_at DESC LIMIT 1';
         params = [user.id];
       }
 
       const { rows: existingDrafts } = await dbConnection.query(sql, params);
 
       if (existingDrafts.length > 0) {
-        // 更新现有草稿
         const draftId = existingDrafts[0].id;
-        const updateSql = `
-          UPDATE teaching_lesson_drafts 
-          SET draft_content = ?, draft_title = ?, updated_at = NOW()
-          WHERE id = ?
-        `;
-        const contentStr = typeof draft_content === 'string' 
-          ? draft_content 
-          : JSON.stringify(draft_content);
+        const updateSql = 'UPDATE teaching_lesson_drafts SET draft_content = ?, draft_title = ?, updated_at = NOW() WHERE id = ?';
+        const contentStr = typeof draft_content === 'string' ? draft_content : JSON.stringify(draft_content);
         
         await dbConnection.query(updateSql, [contentStr, draft_title, draftId]);
 
         return ResponseHelper.success(res, { draft_id: draftId }, '草稿已更新');
       } else {
-        // 创建新草稿
-        const insertSql = `
-          INSERT INTO teaching_lesson_drafts 
-          (lesson_id, user_id, draft_content, draft_title, auto_saved, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 1, NOW(), NOW())
-        `;
-        const contentStr = typeof draft_content === 'string' 
-          ? draft_content 
-          : JSON.stringify(draft_content);
+        const insertSql = 'INSERT INTO teaching_lesson_drafts (lesson_id, user_id, draft_content, draft_title, auto_saved, created_at, updated_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())';
+        const contentStr = typeof draft_content === 'string' ? draft_content : JSON.stringify(draft_content);
         
-        const { rows } = await dbConnection.query(insertSql, [
-          lesson_id || null,
-          user.id,
-          contentStr,
-          draft_title
-        ]);
+        const { rows } = await dbConnection.query(insertSql, [lesson_id || null, user.id, contentStr, draft_title]);
 
         return ResponseHelper.success(res, { draft_id: rows.insertId }, '草稿已保存', 201);
       }
@@ -724,9 +865,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 获取课程草稿
-   */
   static async getDraft(req, res) {
     try {
       const user = req.user;
@@ -737,18 +875,10 @@ class TeachingController {
       let sql, params;
 
       if (lessonId && lessonId !== 'null') {
-        sql = `
-          SELECT * FROM teaching_lesson_drafts 
-          WHERE lesson_id = ? AND user_id = ?
-          ORDER BY updated_at DESC LIMIT 1
-        `;
+        sql = 'SELECT * FROM teaching_lesson_drafts WHERE lesson_id = ? AND user_id = ? ORDER BY updated_at DESC LIMIT 1';
         params = [lessonId, user.id];
       } else {
-        sql = `
-          SELECT * FROM teaching_lesson_drafts 
-          WHERE user_id = ? AND lesson_id IS NULL 
-          ORDER BY updated_at DESC LIMIT 1
-        `;
+        sql = 'SELECT * FROM teaching_lesson_drafts WHERE user_id = ? AND lesson_id IS NULL ORDER BY updated_at DESC LIMIT 1';
         params = [user.id];
       }
 
@@ -760,7 +890,6 @@ class TeachingController {
 
       const draft = rows[0];
 
-      // 解析JSON内容
       if (typeof draft.draft_content === 'string') {
         try {
           draft.draft_content = JSON.parse(draft.draft_content);
@@ -776,11 +905,6 @@ class TeachingController {
     }
   }
 
-  // ==================== 浏览记录 ====================
-
-  /**
-   * 记录浏览行为
-   */
   static async recordView(req, res) {
     try {
       const user = req.user;
@@ -798,11 +922,7 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      const sql = `
-        INSERT INTO teaching_view_logs 
-        (user_id, module_id, lesson_id, page_number, duration, is_completed, viewed_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
-      `;
+      const sql = 'INSERT INTO teaching_view_logs (user_id, module_id, lesson_id, page_number, duration, is_completed, viewed_at) VALUES (?, ?, ?, ?, ?, ?, NOW())';
 
       await dbConnection.query(sql, [
         user.id,

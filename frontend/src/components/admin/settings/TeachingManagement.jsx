@@ -1,7 +1,9 @@
 /**
- * 教学管理后台组件（增强版）
- * 新增功能：页面头部HTML配置（Monaco Editor + 实时预览）
- * 功能：全局教学数据管理、批量操作、统计概览
+ * 教学管理后台组件（分组管理增强版）
+ * 新增功能：
+ * 1. Tab结构：模块管理 + 分组管理
+ * 2. 分组管理：创建、编辑、删除、排序、批量操作
+ * 3. 拖拽排序功能
  * 权限：仅超级管理员可见
  */
 
@@ -23,8 +25,11 @@ import {
   Badge,
   Tooltip,
   Empty,
-  Divider,
-  Alert
+  Alert,
+  Tabs,
+  Form,
+  Switch,
+  InputNumber
 } from 'antd';
 import {
   BookOutlined,
@@ -33,18 +38,19 @@ import {
   EditOutlined,
   DeleteOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
   InboxOutlined,
-  UserOutlined,
-  TeamOutlined,
-  FireOutlined,
   RiseOutlined,
   SearchOutlined,
   ReloadOutlined,
-  ThunderboltOutlined,
   CodeOutlined,
   SaveOutlined,
-  UndoOutlined
+  UndoOutlined,
+  PlusOutlined,
+  MenuOutlined,
+  AppstoreOutlined,
+  HolderOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -63,7 +69,13 @@ const TeachingManagement = () => {
   const {
     allModules,
     allModulesLoading,
+    groups,
+    groupsLoading,
     fetchAllModules,
+    fetchGroups,
+    createGroup,
+    updateGroup,
+    deleteGroup,
     updateModule,
     deleteModule,
     batchUpdateModules
@@ -71,33 +83,35 @@ const TeachingManagement = () => {
   
   const { systemConfig, updateSystemConfig } = useSystemConfigStore();
 
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [filters, setFilters] = useState({
+  // 模块管理状态
+  const [selectedModuleKeys, setSelectedModuleKeys] = useState([]);
+  const [moduleFilters, setModuleFilters] = useState({
     search: '',
     status: null,
-    visibility: null,
-    creator: null
+    visibility: null
   });
-  const [statistics, setStatistics] = useState({
-    totalModules: 0,
-    totalLessons: 0,
-    todayViews: 0,
-    weeklyNew: 0,
-    activeUsers: [],
-    hotModules: []
-  });
+  
+  // 分组管理状态
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState([]);
+  const [groupModalVisible, setGroupModalVisible] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [groupForm] = Form.useForm();
   
   // 页面头部HTML配置
   const [headerHtml, setHeaderHtml] = useState('');
   const [headerHtmlLoading, setHeaderHtmlLoading] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [editorMounted, setEditorMounted] = useState(false);
+
+  const [statistics, setStatistics] = useState({
+    totalModules: 0,
+    totalLessons: 0,
+    todayViews: 0,
+    weeklyNew: 0
+  });
 
   // 初始加载
   useEffect(() => {
     loadData();
-    
-    // 加载当前页面头部HTML配置
     const currentHeaderHtml = systemConfig?.teaching_page_header_html || '';
     setHeaderHtml(currentHeaderHtml);
   }, [systemConfig]);
@@ -106,8 +120,9 @@ const TeachingManagement = () => {
   const loadData = async () => {
     try {
       await fetchAllModules();
+      await fetchGroups();
     } catch (error) {
-      message.error(t('teaching.loadFailed'));
+      message.error('加载数据失败');
     }
   };
 
@@ -122,65 +137,175 @@ const TeachingManagement = () => {
         moment(m.created_at).isAfter(oneWeekAgo)
       ).length;
 
-      const hotModules = [...allModules]
-        .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
-        .slice(0, 10);
-
       setStatistics({
         totalModules: allModules.length,
         totalLessons,
         todayViews,
-        weeklyNew,
-        activeUsers: [],
-        hotModules
+        weeklyNew
       });
     }
   }, [allModules]);
 
-  // 批量更新状态
-  const handleBatchUpdateStatus = async (status) => {
-    if (selectedRowKeys.length === 0) {
-      message.warning(t('teaching.selectModules'));
-      return;
-    }
+  // ==================== 分组管理功能 ====================
 
+  // 打开分组编辑模态框
+  const handleOpenGroupModal = (group = null) => {
+    setEditingGroup(group);
+    if (group) {
+      groupForm.setFieldsValue(group);
+    } else {
+      groupForm.resetFields();
+    }
+    setGroupModalVisible(true);
+  };
+
+  // 提交分组表单
+  const handleSubmitGroup = async () => {
     try {
-      await batchUpdateModules(selectedRowKeys, { status });
-      message.success(t('teaching.batchUpdateSuccess'));
-      setSelectedRowKeys([]);
-      loadData();
+      const values = await groupForm.validateFields();
+      
+      if (editingGroup) {
+        await updateGroup(editingGroup.id, values);
+        message.success('分组更新成功');
+      } else {
+        await createGroup(values);
+        message.success('分组创建成功');
+      }
+      
+      setGroupModalVisible(false);
+      groupForm.resetFields();
+      await fetchGroups();
     } catch (error) {
-      message.error(t('teaching.batchUpdateFailed'));
+      message.error(editingGroup ? '更新分组失败' : '创建分组失败');
     }
   };
 
-  // 批量删除
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
-      message.warning(t('teaching.selectModules'));
+  // 删除分组
+  const handleDeleteGroup = async (groupId) => {
+    try {
+      await deleteGroup(groupId);
+      message.success('分组删除成功');
+      await fetchGroups();
+    } catch (error) {
+      message.error('删除分组失败');
+    }
+  };
+
+  // 批量删除分组
+  const handleBatchDeleteGroups = async () => {
+    if (selectedGroupKeys.length === 0) {
+      message.warning('请选择要删除的分组');
       return;
     }
 
     Modal.confirm({
-      title: t('teaching.confirmBatchDelete'),
-      content: t('teaching.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedGroupKeys.length} 个分组吗？`,
+      okText: '确认',
+      cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          for (const id of selectedRowKeys) {
-            await deleteModule(id);
+          for (const id of selectedGroupKeys) {
+            await deleteGroup(id);
           }
-          message.success(t('teaching.batchDeleteSuccess'));
-          setSelectedRowKeys([]);
-          loadData();
+          message.success('批量删除成功');
+          setSelectedGroupKeys([]);
+          await fetchGroups();
         } catch (error) {
-          message.error(t('teaching.batchDeleteFailed'));
+          message.error('批量删除失败');
         }
       }
     });
   };
+
+  // 批量启用/禁用分组
+  const handleBatchToggleGroups = async (isActive) => {
+    if (selectedGroupKeys.length === 0) {
+      message.warning('请选择要操作的分组');
+      return;
+    }
+
+    try {
+      for (const id of selectedGroupKeys) {
+        await updateGroup(id, { is_active: isActive });
+      }
+      message.success(`批量${isActive ? '启用' : '禁用'}成功`);
+      setSelectedGroupKeys([]);
+      await fetchGroups();
+    } catch (error) {
+      message.error(`批量${isActive ? '启用' : '禁用'}失败`);
+    }
+  };
+
+  // 调整分组排序（上移/下移）
+  const handleMoveGroup = async (group, direction) => {
+    const sortedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order);
+    const currentIndex = sortedGroups.findIndex(g => g.id === group.id);
+    
+    if (direction === 'up' && currentIndex > 0) {
+      const targetGroup = sortedGroups[currentIndex - 1];
+      await updateGroup(group.id, { sort_order: targetGroup.sort_order });
+      await updateGroup(targetGroup.id, { sort_order: group.sort_order });
+      message.success('上移成功');
+    } else if (direction === 'down' && currentIndex < sortedGroups.length - 1) {
+      const targetGroup = sortedGroups[currentIndex + 1];
+      await updateGroup(group.id, { sort_order: targetGroup.sort_order });
+      await updateGroup(targetGroup.id, { sort_order: group.sort_order });
+      message.success('下移成功');
+    }
+    
+    await fetchGroups();
+  };
+
+  // ==================== 模块管理功能 ====================
+
+  // 批量更新模块状态
+  const handleBatchUpdateModuleStatus = async (status) => {
+    if (selectedModuleKeys.length === 0) {
+      message.warning('请选择要操作的模块');
+      return;
+    }
+
+    try {
+      await batchUpdateModules(selectedModuleKeys, { status });
+      message.success('批量更新成功');
+      setSelectedModuleKeys([]);
+      loadData();
+    } catch (error) {
+      message.error('批量更新失败');
+    }
+  };
+
+  // 批量删除模块
+  const handleBatchDeleteModules = async () => {
+    if (selectedModuleKeys.length === 0) {
+      message.warning('请选择要删除的模块');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedModuleKeys.length} 个模块吗？`,
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          for (const id of selectedModuleKeys) {
+            await deleteModule(id);
+          }
+          message.success('批量删除成功');
+          setSelectedModuleKeys([]);
+          loadData();
+        } catch (error) {
+          message.error('批量删除失败');
+        }
+      }
+    });
+  };
+
+  // ==================== 页面头部HTML配置 ====================
 
   // 保存页面头部HTML
   const handleSaveHeaderHtml = async () => {
@@ -194,12 +319,12 @@ const TeachingManagement = () => {
       const result = await updateSystemConfig(newConfig);
       
       if (result.success) {
-        message.success(t('teaching.header.saveSuccess'));
+        message.success('保存成功');
       } else {
-        message.error(result.error || t('teaching.header.saveFailed'));
+        message.error(result.error || '保存失败');
       }
     } catch (error) {
-      message.error(t('teaching.header.saveFailed'));
+      message.error('保存失败');
     } finally {
       setHeaderHtmlLoading(false);
     }
@@ -213,48 +338,19 @@ const TeachingManagement = () => {
       <h1 style="font-size: 48px; color: #1a1a1a; margin: 0 0 16px 0; font-weight: 600;">我的课程</h1>
       <p style="color: #666; font-size: 16px; margin: 0;">探索AI驱动的智能教学模块，开启现代化学习体验</p>
     </div>
-    <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-      <input 
-        type="text" 
-        placeholder="搜索模块名称或课程标签" 
-        style="flex: 1; max-width: 500px; padding: 12px 20px; border: 2px solid #e0e0e0; border-radius: 24px; font-size: 14px; outline: none; transition: border-color 0.3s;"
-        onfocus="this.style.borderColor='#1890ff'"
-        onblur="this.style.borderColor='#e0e0e0'"
-      />
-      <button 
-        style="background: #1890ff; color: white; padding: 12px 32px; border: none; border-radius: 24px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s;"
-        onmouseover="this.style.background='#40a9ff'"
-        onmouseout="this.style.background='#1890ff'"
-        onclick="window.location.reload()"
-      >
-        🔄 刷新课程
-      </button>
-    </div>
   </div>
 </div>`;
     
     setHeaderHtml(defaultTemplate);
-    message.success(t('teaching.header.resetSuccess'));
+    message.success('已重置为默认模板');
   };
 
-  // 过滤数据
-  const filteredModules = allModules.filter(module => {
-    if (filters.search && !module.name.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
-    }
-    if (filters.status && module.status !== filters.status) {
-      return false;
-    }
-    if (filters.visibility && module.visibility !== filters.visibility) {
-      return false;
-    }
-    return true;
-  });
+  // ==================== 表格列配置 ====================
 
-  // 表格列配置
-  const columns = [
+  // 模块表格列
+  const moduleColumns = [
     {
-      title: t('teaching.moduleName'),
+      title: '模块名称',
       dataIndex: 'name',
       key: 'name',
       width: 250,
@@ -266,13 +362,13 @@ const TeachingManagement = () => {
       )
     },
     {
-      title: t('teaching.creator'),
+      title: '创建者',
       dataIndex: 'creator_name',
       key: 'creator_name',
       width: 120
     },
     {
-      title: t('teaching.visibility.label'),
+      title: '可见性',
       dataIndex: 'visibility',
       key: 'visibility',
       width: 100,
@@ -282,12 +378,12 @@ const TeachingManagement = () => {
           visibility === 'group' ? 'blue' :
           'orange'
         }>
-          {t(`teaching.visibility.${visibility}`)}
+          {visibility === 'public' ? '公开' : visibility === 'group' ? '组织内' : '私有'}
         </Tag>
       )
     },
     {
-      title: t('teaching.status.label'),
+      title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -297,12 +393,12 @@ const TeachingManagement = () => {
           status === 'published' ? 'success' :
           'error'
         }>
-          {t(`teaching.status.${status}`)}
+          {status === 'draft' ? '草稿' : status === 'published' ? '已发布' : '已归档'}
         </Tag>
       )
     },
     {
-      title: t('teaching.lessonCount'),
+      title: '课程数',
       dataIndex: 'lesson_count',
       key: 'lesson_count',
       width: 100,
@@ -312,14 +408,14 @@ const TeachingManagement = () => {
       )
     },
     {
-      title: t('teaching.viewCount'),
+      title: '查看数',
       dataIndex: 'view_count',
       key: 'view_count',
       width: 100,
       sorter: (a, b) => (a.view_count || 0) - (b.view_count || 0)
     },
     {
-      title: t('teaching.createdAt'),
+      title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
@@ -327,13 +423,13 @@ const TeachingManagement = () => {
       render: (date) => moment(date).format('YYYY-MM-DD HH:mm')
     },
     {
-      title: t('common.actions'),
+      title: '操作',
       key: 'actions',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Tooltip title={t('teaching.view')}>
+          <Tooltip title="查看">
             <Button
               type="link"
               size="small"
@@ -342,20 +438,20 @@ const TeachingManagement = () => {
             />
           </Tooltip>
           <Popconfirm
-            title={t('teaching.confirmDeleteModule')}
+            title="确认删除此模块？"
             onConfirm={async () => {
               try {
                 await deleteModule(record.id);
-                message.success(t('teaching.deleteSuccess'));
+                message.success('删除成功');
                 loadData();
               } catch (error) {
-                message.error(t('teaching.deleteFailed'));
+                message.error('删除失败');
               }
             }}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
+            okText="确认"
+            cancelText="取消"
           >
-            <Tooltip title={t('common.delete')}>
+            <Tooltip title="删除">
               <Button
                 type="link"
                 size="small"
@@ -369,6 +465,402 @@ const TeachingManagement = () => {
     }
   ];
 
+  // 分组表格列
+  const groupColumns = [
+    {
+      title: '排序',
+      key: 'sort',
+      width: 100,
+      render: (_, record, index) => (
+        <Space>
+          <Tooltip title="上移">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowUpOutlined />}
+              disabled={index === 0}
+              onClick={() => handleMoveGroup(record, 'up')}
+            />
+          </Tooltip>
+          <span style={{ color: '#999', fontSize: 12 }}>#{record.sort_order}</span>
+          <Tooltip title="下移">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              disabled={index === groups.length - 1}
+              onClick={() => handleMoveGroup(record, 'down')}
+            />
+          </Tooltip>
+        </Space>
+      )
+    },
+    {
+      title: '分组名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: 250,
+      render: (text) => (
+        <Space>
+          <AppstoreOutlined style={{ color: '#1890ff' }} />
+          <strong>{text}</strong>
+        </Space>
+      )
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      render: (text) => text || <span style={{ color: '#ccc' }}>暂无描述</span>
+    },
+    {
+      title: '模块数量',
+      dataIndex: 'module_count',
+      key: 'module_count',
+      width: 100,
+      sorter: (a, b) => (a.module_count || 0) - (b.module_count || 0),
+      render: (count) => (
+        <Badge count={count || 0} showZero style={{ backgroundColor: '#52c41a' }} />
+      )
+    },
+    {
+      title: '状态',
+      dataIndex: 'is_active',
+      key: 'is_active',
+      width: 100,
+      render: (isActive, record) => (
+        <Switch
+          checked={isActive}
+          onChange={async (checked) => {
+            try {
+              await updateGroup(record.id, { is_active: checked });
+              message.success(`${checked ? '启用' : '禁用'}成功`);
+              await fetchGroups();
+            } catch (error) {
+              message.error(`${checked ? '启用' : '禁用'}失败`);
+            }
+          }}
+        />
+      )
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (date) => moment(date).format('YYYY-MM-DD HH:mm')
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 150,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Tooltip title="编辑">
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleOpenGroupModal(record)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="确认删除此分组？"
+            description="删除分组不会删除模块，模块将变为未分组状态"
+            onConfirm={() => handleDeleteGroup(record.id)}
+            okText="确认"
+            cancelText="取消"
+          >
+            <Tooltip title="删除">
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      )
+    }
+  ];
+
+  // 过滤模块
+  const filteredModules = allModules.filter(module => {
+    if (moduleFilters.search && !module.name.toLowerCase().includes(moduleFilters.search.toLowerCase())) {
+      return false;
+    }
+    if (moduleFilters.status && module.status !== moduleFilters.status) {
+      return false;
+    }
+    if (moduleFilters.visibility && module.visibility !== moduleFilters.visibility) {
+      return false;
+    }
+    return true;
+  });
+
+  // Tab项配置
+  const tabItems = [
+    {
+      key: 'modules',
+      label: (
+        <span>
+          <BookOutlined />
+          模块管理
+        </span>
+      ),
+      children: (
+        <div>
+          {/* 筛选栏 */}
+          <Space style={{ marginBottom: 16, width: '100%' }} wrap>
+            <Search
+              placeholder="搜索模块名称"
+              allowClear
+              style={{ width: 300 }}
+              onSearch={(value) => setModuleFilters({ ...moduleFilters, search: value })}
+              onChange={(e) => {
+                if (!e.target.value) {
+                  setModuleFilters({ ...moduleFilters, search: '' });
+                }
+              }}
+            />
+            <Select
+              placeholder="状态"
+              allowClear
+              style={{ width: 120 }}
+              onChange={(value) => setModuleFilters({ ...moduleFilters, status: value })}
+            >
+              <Option value="draft">草稿</Option>
+              <Option value="published">已发布</Option>
+              <Option value="archived">已归档</Option>
+            </Select>
+            <Select
+              placeholder="可见性"
+              allowClear
+              style={{ width: 120 }}
+              onChange={(value) => setModuleFilters({ ...moduleFilters, visibility: value })}
+            >
+              <Option value="private">私有</Option>
+              <Option value="group">组织内</Option>
+              <Option value="public">公开</Option>
+            </Select>
+          </Space>
+
+          {/* 批量操作栏 */}
+          {selectedModuleKeys.length > 0 && (
+            <Space style={{ marginBottom: 16 }}>
+              <span>已选择 {selectedModuleKeys.length} 项</span>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleBatchUpdateModuleStatus('published')}
+              >
+                批量发布
+              </Button>
+              <Button
+                icon={<InboxOutlined />}
+                onClick={() => handleBatchUpdateModuleStatus('archived')}
+              >
+                批量归档
+              </Button>
+              <Popconfirm
+                title="确认批量删除？"
+                onConfirm={handleBatchDeleteModules}
+                okText="确认"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  批量删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          )}
+
+          {/* 模块表格 */}
+          <Table
+            columns={moduleColumns}
+            dataSource={filteredModules}
+            loading={allModulesLoading}
+            rowKey="id"
+            rowSelection={{
+              selectedRowKeys: selectedModuleKeys,
+              onChange: setSelectedModuleKeys
+            }}
+            scroll={{ x: 1400 }}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 项`
+            }}
+          />
+        </div>
+      )
+    },
+    {
+      key: 'groups',
+      label: (
+        <span>
+          <AppstoreOutlined />
+          分组管理
+        </span>
+      ),
+      children: (
+        <div>
+          <Alert
+            message="分组管理说明"
+            description="分组用于组织教学模块，一个模块可以属于多个分组。通过调整排序可以控制前端显示顺序。"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          
+          {/* 操作栏 */}
+          <Space style={{ marginBottom: 16 }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => handleOpenGroupModal()}
+            >
+              创建分组
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => fetchGroups()}
+            >
+              刷新
+            </Button>
+          </Space>
+
+          {/* 批量操作栏 */}
+          {selectedGroupKeys.length > 0 && (
+            <Space style={{ marginBottom: 16 }}>
+              <span>已选择 {selectedGroupKeys.length} 项</span>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleBatchToggleGroups(true)}
+              >
+                批量启用
+              </Button>
+              <Button
+                icon={<InboxOutlined />}
+                onClick={() => handleBatchToggleGroups(false)}
+              >
+                批量禁用
+              </Button>
+              <Popconfirm
+                title="确认批量删除？"
+                description="删除分组不会删除模块"
+                onConfirm={handleBatchDeleteGroups}
+                okText="确认"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  批量删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          )}
+
+          {/* 分组表格 */}
+          <Table
+            columns={groupColumns}
+            dataSource={[...groups].sort((a, b) => a.sort_order - b.sort_order)}
+            loading={groupsLoading}
+            rowKey="id"
+            rowSelection={{
+              selectedRowKeys: selectedGroupKeys,
+              onChange: setSelectedGroupKeys
+            }}
+            pagination={false}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无分组"
+                >
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleOpenGroupModal()}
+                  >
+                    创建第一个分组
+                  </Button>
+                </Empty>
+              )
+            }}
+          />
+        </div>
+      )
+    },
+    {
+      key: 'header',
+      label: (
+        <span>
+          <CodeOutlined />
+          页面头部配置
+        </span>
+      ),
+      children: (
+        <div>
+          <Alert
+            message="提示"
+            description="您可以自定义教学模块列表页面的头部HTML内容，包括标题、搜索框、按钮等。支持完整的HTML、CSS和JavaScript代码。"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          
+          <Space style={{ marginBottom: 16 }}>
+            <Button
+              icon={<UndoOutlined />}
+              onClick={handleResetToDefault}
+            >
+              重置为默认
+            </Button>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => setPreviewVisible(true)}
+            >
+              预览
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={headerHtmlLoading}
+              onClick={handleSaveHeaderHtml}
+            >
+              保存
+            </Button>
+          </Space>
+          
+          <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden' }}>
+            <MonacoEditor
+              height="400px"
+              language="html"
+              value={headerHtml}
+              onChange={(value) => setHeaderHtml(value || '')}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                wordWrap: 'on'
+              }}
+              theme="vs-light"
+            />
+          </div>
+        </div>
+      )
+    }
+  ];
+
   return (
     <div>
       {/* 统计卡片 */}
@@ -376,7 +868,7 @@ const TeachingManagement = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title={t('teaching.totalModules')}
+              title="模块总数"
               value={statistics.totalModules}
               prefix={<BookOutlined />}
               valueStyle={{ color: '#1890ff' }}
@@ -386,7 +878,7 @@ const TeachingManagement = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title={t('teaching.totalLessons')}
+              title="课程总数"
               value={statistics.totalLessons}
               prefix={<FileTextOutlined />}
               valueStyle={{ color: '#52c41a' }}
@@ -396,7 +888,7 @@ const TeachingManagement = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title={t('teaching.totalViews')}
+              title="总浏览量"
               value={statistics.todayViews}
               prefix={<EyeOutlined />}
               valueStyle={{ color: '#faad14' }}
@@ -406,7 +898,7 @@ const TeachingManagement = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title={t('teaching.weeklyNew')}
+              title="本周新增"
               value={statistics.weeklyNew}
               prefix={<RiseOutlined />}
               valueStyle={{ color: '#f5222d' }}
@@ -415,193 +907,76 @@ const TeachingManagement = () => {
         </Col>
       </Row>
 
-      {/* 页面头部HTML配置（新增） */}
-      <Card
-        title={
-          <Space>
-            <CodeOutlined />
-            {t('teaching.header.title')}
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button
-              icon={<UndoOutlined />}
-              onClick={handleResetToDefault}
-            >
-              {t('teaching.header.resetToDefault')}
-            </Button>
-            <Button
-              icon={<EyeOutlined />}
-              onClick={() => setPreviewVisible(true)}
-            >
-              {t('teaching.header.preview')}
-            </Button>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={headerHtmlLoading}
-              onClick={handleSaveHeaderHtml}
-            >
-              {t('common.save')}
-            </Button>
-          </Space>
-        }
-        style={{ marginBottom: 24 }}
-      >
-        <Alert
-          message={t('teaching.header.tips')}
-          description={t('teaching.header.description')}
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-        
-        <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden' }}>
-          <MonacoEditor
-            height="400px"
-            language="html"
-            value={headerHtml}
-            onChange={(value) => setHeaderHtml(value || '')}
-            onMount={() => setEditorMounted(true)}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              wordWrap: 'on'
-            }}
-            theme="vs-light"
-          />
-        </div>
-        
-        <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
-          {t('teaching.header.editorTip')}
-        </div>
+      {/* Tab区域 */}
+      <Card>
+        <Tabs items={tabItems} defaultActiveKey="modules" />
       </Card>
 
-      {/* 模块管理表格 */}
-      <Card
-        title={
-          <Space>
-            <BookOutlined />
-            {t('teaching.allModules')}
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadData}
-            >
-              {t('common.refresh')}
-            </Button>
-          </Space>
-        }
+      {/* 分组编辑模态框 */}
+      <Modal
+        title={editingGroup ? '编辑分组' : '创建分组'}
+        open={groupModalVisible}
+        onOk={handleSubmitGroup}
+        onCancel={() => {
+          setGroupModalVisible(false);
+          groupForm.resetFields();
+        }}
+        width={600}
+        okText="提交"
+        cancelText="取消"
       >
-        {/* 筛选栏 */}
-        <Space style={{ marginBottom: 16, width: '100%' }} wrap>
-          <Search
-            placeholder={t('teaching.searchModules')}
-            allowClear
-            style={{ width: 300 }}
-            onSearch={(value) => setFilters({ ...filters, search: value })}
-            onChange={(e) => {
-              if (!e.target.value) {
-                setFilters({ ...filters, search: '' });
-              }
-            }}
-          />
-          <Select
-            placeholder={t('teaching.status.label')}
-            allowClear
-            style={{ width: 120 }}
-            onChange={(value) => setFilters({ ...filters, status: value })}
+        <Form
+          form={groupForm}
+          layout="vertical"
+          initialValues={{
+            sort_order: 0,
+            is_active: true
+          }}
+        >
+          <Form.Item
+            name="name"
+            label="分组名称"
+            rules={[{ required: true, message: '请输入分组名称' }]}
           >
-            <Option value="draft">{t('teaching.status.draft')}</Option>
-            <Option value="published">{t('teaching.status.published')}</Option>
-            <Option value="archived">{t('teaching.status.archived')}</Option>
-          </Select>
-          <Select
-            placeholder={t('teaching.visibility.label')}
-            allowClear
-            style={{ width: 120 }}
-            onChange={(value) => setFilters({ ...filters, visibility: value })}
+            <Input placeholder="如：小学1年级数学课程包" />
+          </Form.Item>
+          
+          <Form.Item
+            name="description"
+            label="分组描述"
           >
-            <Option value="private">{t('teaching.visibility.private')}</Option>
-            <Option value="group">{t('teaching.visibility.group')}</Option>
-            <Option value="public">{t('teaching.visibility.public')}</Option>
-          </Select>
-        </Space>
-
-        {/* 批量操作栏 */}
-        {selectedRowKeys.length > 0 && (
-          <Space style={{ marginBottom: 16 }}>
-            <span>{t('teaching.selectedCount', { count: selectedRowKeys.length })}</span>
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleBatchUpdateStatus('published')}
-            >
-              {t('teaching.batchPublish')}
-            </Button>
-            <Button
-              icon={<InboxOutlined />}
-              onClick={() => handleBatchUpdateStatus('archived')}
-            >
-              {t('teaching.batchArchive')}
-            </Button>
-            <Popconfirm
-              title={t('teaching.confirmBatchDelete')}
-              onConfirm={handleBatchDelete}
-              okText={t('common.confirm')}
-              cancelText={t('common.cancel')}
-              okButtonProps={{ danger: true }}
-            >
-              <Button danger icon={<DeleteOutlined />}>
-                {t('teaching.batchDelete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-        )}
-
-        {/* 数据表格 */}
-        <Table
-          columns={columns}
-          dataSource={filteredModules}
-          loading={allModulesLoading}
-          rowKey="id"
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys
-          }}
-          scroll={{ x: 1400 }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => t('teaching.totalItems', { total })
-          }}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('teaching.noModules')}
-              />
-            )
-          }}
-        />
-      </Card>
+            <TextArea 
+              rows={4} 
+              placeholder="请输入分组描述" 
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="sort_order"
+            label="排序序号"
+            tooltip="数字越小越靠前"
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          
+          <Form.Item
+            name="is_active"
+            label="是否启用"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 预览模态框 */}
       <Modal
-        title={t('teaching.header.preview')}
+        title="页面头部预览"
         open={previewVisible}
         onCancel={() => setPreviewVisible(false)}
         footer={[
           <Button key="close" onClick={() => setPreviewVisible(false)}>
-            {t('common.close')}
+            关闭
           </Button>
         ]}
         width={1000}
