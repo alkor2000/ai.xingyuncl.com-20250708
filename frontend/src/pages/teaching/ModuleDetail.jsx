@@ -1,6 +1,8 @@
 /**
- * 教学模块详情页面
- * 显示模块信息、课程列表、权限管理
+ * 教学模块详情页面（课程编辑优化版）
+ * 新增功能：
+ * 1. 铅笔图标 = 编辑课程元信息（标题、描述、封面图）
+ * 2. 三点菜单 = 编辑内容、删除
  */
 
 import React, { useEffect, useState } from 'react';
@@ -17,13 +19,13 @@ import {
   Select,
   message,
   Breadcrumb,
-  Descriptions,
   Empty,
   Popconfirm,
   Tooltip,
   Badge,
   Dropdown,
-  Avatar
+  List,
+  Spin
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -40,14 +42,16 @@ import {
   GlobalOutlined,
   LockOutlined,
   UnlockOutlined,
-  SaveOutlined,
-  CloseOutlined
+  MoreOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
 import moment from 'moment';
+
+// 导入选择器组件
+import { UserSelector, GroupSelector, TagSelector } from '../../components/teaching/selectors';
 
 const { TextArea } = Input;
 
@@ -70,6 +74,7 @@ const ModuleDetail = () => {
     updateModule,
     deleteModule,
     createLesson,
+    updateLesson,
     deleteLesson,
     grantPermission,
     revokePermission,
@@ -79,10 +84,13 @@ const ModuleDetail = () => {
   const [activeTab, setActiveTab] = useState('lessons');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [lessonModalVisible, setLessonModalVisible] = useState(false);
+  const [editLessonModalVisible, setEditLessonModalVisible] = useState(false); // 新增：编辑课程信息模态框
+  const [editingLesson, setEditingLesson] = useState(null); // 新增：当前编辑的课程
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [editForm] = Form.useForm();
   const [lessonForm] = Form.useForm();
+  const [editLessonForm] = Form.useForm(); // 新增：编辑课程信息表单
   const [permissionForm] = Form.useForm();
 
   // 加载数据
@@ -132,8 +140,13 @@ const ModuleDetail = () => {
     }
   };
 
-  // 删除模块
+  // 删除模块（检查是否有课程）
   const handleDelete = async () => {
+    if (lessons.length > 0) {
+      message.warning('请先删除模块内的所有课程');
+      return;
+    }
+    
     try {
       await deleteModule(id);
       message.success(t('teaching.deleteSuccess'));
@@ -166,13 +179,44 @@ const ModuleDetail = () => {
     navigate(`/teaching/lessons/${lesson.id}`);
   };
 
-  // 编辑课程
-  const handleEditLesson = (lesson) => {
+  // 新增：打开编辑课程信息模态框
+  const handleEditLessonInfo = (lesson, e) => {
+    if (e) e.stopPropagation();
+    setEditingLesson(lesson);
+    editLessonForm.setFieldsValue({
+      title: lesson.title,
+      description: lesson.description,
+      cover_image: lesson.cover_image,
+      content_type: lesson.content_type,
+      status: lesson.status
+    });
+    setEditLessonModalVisible(true);
+  };
+
+  // 新增：提交课程信息编辑
+  const handleEditLessonSubmit = async () => {
+    try {
+      const values = await editLessonForm.validateFields();
+      await updateLesson(editingLesson.id, values);
+      setEditLessonModalVisible(false);
+      editLessonForm.resetFields();
+      setEditingLesson(null);
+      message.success(t('teaching.updateSuccess'));
+      await fetchLessons(id);
+    } catch (error) {
+      message.error(t('teaching.updateFailed'));
+    }
+  };
+
+  // 编辑课程内容（跳转到编辑器）
+  const handleEditLessonContent = (lesson, e) => {
+    if (e) e.stopPropagation();
     navigate(`/teaching/lessons/${lesson.id}/edit`);
   };
 
   // 删除课程
-  const handleDeleteLesson = async (lessonId) => {
+  const handleDeleteLesson = async (lessonId, e) => {
+    if (e) e.stopPropagation();
     try {
       await deleteLesson(lessonId, id);
       message.success(t('teaching.deleteSuccess'));
@@ -250,104 +294,37 @@ const ModuleDetail = () => {
     assessment: 'volcano'
   };
 
-  // 课程列表列配置
-  const lessonColumns = [
-    {
-      title: t('teaching.lessonTitle'),
-      dataIndex: 'title',
-      key: 'title',
-      width: 300,
-      render: (text, record) => (
-        <Space>
-          <FileTextOutlined style={{ color: '#1890ff' }} />
-          <a onClick={() => handleViewLesson(record)}>{text}</a>
-        </Space>
-      )
-    },
-    {
-      title: t('teaching.contentType'),
-      dataIndex: 'content_type',
-      key: 'content_type',
-      width: 120,
-      render: (type) => (
-        <Tag color={contentTypeColors[type]}>
-          {t(`teaching.contentTypes.${type}`)}
-        </Tag>
-      )
-    },
-    {
-      title: t('teaching.pageCount'),
-      dataIndex: 'page_count',
-      key: 'page_count',
-      width: 100,
-      render: (count) => <Badge count={count} showZero style={{ backgroundColor: '#52c41a' }} />
-    },
-    {
-      title: t('teaching.status.label'),
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status) => (
-        <Tag color={statusColors[status]}>
-          {t(`teaching.status.${status}`)}
-        </Tag>
-      )
-    },
-    {
-      title: t('teaching.viewCount'),
-      dataIndex: 'view_count',
-      key: 'view_count',
-      width: 100
-    },
-    {
-      title: t('teaching.createdAt'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (date) => moment(date).format('YYYY-MM-DD HH:mm')
-    },
-    {
-      title: t('common.actions'),
-      key: 'actions',
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Tooltip title={t('teaching.view')}>
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewLesson(record)}
-            />
-          </Tooltip>
-          <Tooltip title={t('common.edit')}>
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditLesson(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title={t('teaching.confirmDeleteLesson')}
-            onConfirm={() => handleDeleteLesson(record.id)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Tooltip title={t('common.delete')}>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ];
+  // 课程操作菜单（修改：只包含编辑内容和删除）
+  const getLessonActionMenu = (lesson) => ({
+    items: [
+      {
+        key: 'edit_content',
+        label: t('teaching.editContent'),
+        icon: <FileTextOutlined />,
+        onClick: (e) => handleEditLessonContent(lesson, e)
+      },
+      {
+        type: 'divider'
+      },
+      {
+        key: 'delete',
+        label: t('common.delete'),
+        icon: <DeleteOutlined />,
+        danger: true,
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          Modal.confirm({
+            title: t('teaching.confirmDeleteLesson'),
+            content: lesson.title,
+            okText: t('common.confirm'),
+            cancelText: t('common.cancel'),
+            okButtonProps: { danger: true },
+            onOk: () => handleDeleteLesson(lesson.id)
+          });
+        }
+      }
+    ]
+  });
 
   // 权限列表列配置
   const permissionColumns = [
@@ -438,7 +415,7 @@ const ModuleDetail = () => {
   if (currentModuleLoading || !currentModule) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <Empty description={t('common.loading')} />
+        <Spin size="large" tip={t('common.loading')} />
       </div>
     );
   }
@@ -454,9 +431,10 @@ const ModuleDetail = () => {
         </span>
       ),
       children: (
-        <Card
-          title={t('teaching.lessonList')}
-          extra={
+        <div>
+          {/* 课程列表头部 */}
+          <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -464,17 +442,155 @@ const ModuleDetail = () => {
             >
               {t('teaching.createLesson')}
             </Button>
-          }
-        >
-          <Table
-            columns={lessonColumns}
-            dataSource={lessons}
-            loading={lessonsLoading}
-            rowKey="id"
-            scroll={{ x: 1200 }}
-            locale={{ emptyText: t('teaching.noLessons') }}
-          />
-        </Card>
+          </div>
+
+          {/* 课程卡片网格 */}
+          <Spin spinning={lessonsLoading}>
+            {lessons.length === 0 ? (
+              <Empty 
+                description={t('teaching.noLessons')}
+                style={{ marginTop: 60 }}
+              >
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />}
+                  onClick={() => setLessonModalVisible(true)}
+                >
+                  {t('teaching.createLesson')}
+                </Button>
+              </Empty>
+            ) : (
+              <List
+                grid={{ gutter: 20, xs: 1, sm: 2, md: 3, lg: 4, xl: 4, xxl: 4 }}
+                dataSource={lessons}
+                renderItem={lesson => (
+                  <List.Item>
+                    <Card
+                      hoverable
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        border: '1px solid #f0f0f0'
+                      }}
+                      bodyStyle={{ padding: '16px' }}
+                      onClick={() => handleViewLesson(lesson)}
+                      cover={
+                        lesson.cover_image ? (
+                          <img 
+                            alt={lesson.title} 
+                            src={lesson.cover_image} 
+                            style={{ 
+                              height: 180, 
+                              objectFit: 'cover',
+                              borderRadius: '8px 8px 0 0'
+                            }}
+                          />
+                        ) : (
+                          <div style={{ 
+                            height: 180, 
+                            background: `linear-gradient(135deg, ${
+                              contentTypeColors[lesson.content_type] === 'blue' ? '#667eea 0%, #764ba2' :
+                              contentTypeColors[lesson.content_type] === 'cyan' ? '#30cfd0 0%, #330867' :
+                              contentTypeColors[lesson.content_type] === 'purple' ? '#a8c0ff 0%, #3f2b96' :
+                              '#fa709a 0%, #fee140'
+                            } 100%)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px 8px 0 0'
+                          }}>
+                            <FileTextOutlined style={{ fontSize: 48, color: 'white', opacity: 0.9 }} />
+                          </div>
+                        )
+                      }
+                    >
+                      <Card.Meta
+                        title={
+                          <div style={{ 
+                            marginBottom: 8,
+                            fontSize: 15,
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {lesson.title}
+                          </div>
+                        }
+                        description={
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <div style={{ 
+                              minHeight: 36, 
+                              fontSize: 12, 
+                              color: '#666',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              lineHeight: '1.4'
+                            }}>
+                              {lesson.description || t('teaching.noDescription')}
+                            </div>
+                            <Space wrap style={{ marginTop: 4 }}>
+                              <Tag color={contentTypeColors[lesson.content_type]}>
+                                {t(`teaching.contentTypes.${lesson.content_type}`)}
+                              </Tag>
+                              <Tag color={statusColors[lesson.status]}>
+                                {t(`teaching.status.${lesson.status}`)}
+                              </Tag>
+                            </Space>
+                            <div style={{ 
+                              fontSize: 12, 
+                              color: '#999',
+                              marginTop: 8,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span>
+                                <Badge count={lesson.page_count} showZero style={{ backgroundColor: '#52c41a', marginRight: 8 }} />
+                                {lesson.view_count} {t('teaching.views')}
+                              </span>
+                              {/* 新增：铅笔图标和三点菜单 */}
+                              <Space size={4}>
+                                <Tooltip title={t('teaching.editInfo')}>
+                                  <EditOutlined 
+                                    style={{ 
+                                      fontSize: 14, 
+                                      padding: '4px',
+                                      cursor: 'pointer',
+                                      color: '#1890ff'
+                                    }}
+                                    onClick={(e) => handleEditLessonInfo(lesson, e)}
+                                  />
+                                </Tooltip>
+                                <Dropdown 
+                                  menu={getLessonActionMenu(lesson)} 
+                                  trigger={['click']}
+                                >
+                                  <MoreOutlined 
+                                    style={{ 
+                                      fontSize: 16, 
+                                      padding: '4px',
+                                      cursor: 'pointer',
+                                      color: '#666'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </Dropdown>
+                              </Space>
+                            </div>
+                          </Space>
+                        }
+                      />
+                    </Card>
+                  </List.Item>
+                )}
+              />
+            )}
+          </Spin>
+        </div>
       )
     },
     {
@@ -536,63 +652,39 @@ const ModuleDetail = () => {
         <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
       </Breadcrumb>
 
-      {/* 模块信息卡片 */}
-      <Card
-        style={{ marginBottom: 24 }}
-        cover={
-          currentModule.cover_image && (
-            <div
-              style={{
-                height: 200,
-                backgroundImage: `url(${currentModule.cover_image})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center'
-              }}
-            />
-          )
-        }
+      {/* 精简的模块信息页头 */}
+      <Card 
+        style={{ marginBottom: 20 }}
+        bodyStyle={{ padding: '16px 24px' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-              <BookOutlined style={{ fontSize: 32, color: '#1890ff', marginRight: 12 }} />
-              <div>
-                <h2 style={{ margin: 0, fontSize: 24 }}>{currentModule.name}</h2>
-                <Space style={{ marginTop: 8 }}>
-                  <Tag color={visibilityColors[currentModule.visibility]}>
-                    <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
-                  </Tag>
-                  <Tag color={statusColors[currentModule.status]}>
-                    {t(`teaching.status.${currentModule.status}`)}
-                  </Tag>
-                </Space>
-              </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* 左侧：模块信息 */}
+          <Space size="large">
+            <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20 }}>
+                {currentModule.name}
+              </h2>
+              <Space style={{ marginTop: 6 }} size="middle">
+                <Tag color={visibilityColors[currentModule.visibility]}>
+                  <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
+                </Tag>
+                <Tag color={statusColors[currentModule.status]}>
+                  {t(`teaching.status.${currentModule.status}`)}
+                </Tag>
+                {currentModule.description && (
+                  <span style={{ color: '#666', fontSize: 13 }}>
+                    {currentModule.description.length > 50 
+                      ? currentModule.description.substring(0, 50) + '...' 
+                      : currentModule.description}
+                  </span>
+                )}
+              </Space>
             </div>
+          </Space>
 
-            <Descriptions column={2} style={{ marginTop: 16 }}>
-              <Descriptions.Item label={t('teaching.description')}>
-                {currentModule.description || t('teaching.noDescription')}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('teaching.creator')}>
-                {currentModule.creator_name}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('teaching.lessonCount')}>
-                {currentModule.lesson_count}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('teaching.viewCount')}>
-                {currentModule.view_count}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('teaching.createdAt')}>
-                {moment(currentModule.created_at).format('YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('teaching.updatedAt')}>
-                {moment(currentModule.updated_at).format('YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-            </Descriptions>
-          </div>
-
-          {/* 操作按钮 */}
-          <Space direction="vertical">
+          {/* 右侧：操作按钮 */}
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
               {t('common.back')}
             </Button>
@@ -600,13 +692,14 @@ const ModuleDetail = () => {
               {t('common.edit')}
             </Button>
             <Popconfirm
-              title={t('teaching.confirmDeleteModule')}
+              title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
               onConfirm={handleDelete}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
+              disabled={lessons.length > 0}
             >
-              <Button danger icon={<DeleteOutlined />}>
+              <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
                 {t('common.delete')}
               </Button>
             </Popconfirm>
@@ -614,7 +707,7 @@ const ModuleDetail = () => {
         </div>
       </Card>
 
-      {/* Tabs */}
+      {/* Tabs - 课程列表立即可见 */}
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -683,6 +776,9 @@ const ModuleDetail = () => {
           <Form.Item name="description" label={t('teaching.lessonDescription')}>
             <TextArea rows={3} />
           </Form.Item>
+          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+            <Input placeholder={t('teaching.coverImagePlaceholder')} />
+          </Form.Item>
           <Form.Item
             name="content_type"
             label={t('teaching.contentType')}
@@ -702,15 +798,70 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
+      {/* 新增：编辑课程信息模态框 */}
+      <Modal
+        title={t('teaching.editLessonInfo')}
+        open={editLessonModalVisible}
+        onOk={handleEditLessonSubmit}
+        onCancel={() => {
+          setEditLessonModalVisible(false);
+          editLessonForm.resetFields();
+          setEditingLesson(null);
+        }}
+        width={600}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
+        destroyOnClose
+      >
+        <Form form={editLessonForm} layout="vertical">
+          <Form.Item
+            name="title"
+            label={t('teaching.lessonTitle')}
+            rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label={t('teaching.lessonDescription')}>
+            <TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+            <Input placeholder={t('teaching.coverImagePlaceholder')} />
+          </Form.Item>
+          <Form.Item name="content_type" label={t('teaching.contentType')}>
+            <Select>
+              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="status" label={t('teaching.status.label')}>
+            <Select>
+              <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+              <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+              <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* 授予权限模态框 */}
       <Modal
         title={t('teaching.grantPermission')}
         open={permissionModalVisible}
         onOk={handleGrantPermission}
-        onCancel={() => setPermissionModalVisible(false)}
+        onCancel={() => {
+          setPermissionModalVisible(false);
+          permissionForm.resetFields();
+        }}
         width={600}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
+        destroyOnClose
       >
         <Form form={permissionForm} layout="vertical">
           <Form.Item
@@ -718,10 +869,25 @@ const ModuleDetail = () => {
             label={t('teaching.targetType')}
             rules={[{ required: true, message: t('teaching.targetTypeRequired') }]}
           >
-            <Select placeholder={t('teaching.selectTargetType')}>
-              <Select.Option value="user">{t('teaching.targetTypes.user')}</Select.Option>
-              <Select.Option value="group">{t('teaching.targetTypes.group')}</Select.Option>
-              <Select.Option value="tag">{t('teaching.targetTypes.tag')}</Select.Option>
+            <Select 
+              placeholder={t('teaching.selectTargetType')}
+              onChange={() => {
+                permissionForm.setFieldsValue({
+                  user_id: undefined,
+                  group_id: undefined,
+                  tag_id: undefined
+                });
+              }}
+            >
+              <Select.Option value="user">
+                <UserOutlined /> {t('teaching.targetTypes.user')}
+              </Select.Option>
+              <Select.Option value="group">
+                <TeamOutlined /> {t('teaching.targetTypes.group')}
+              </Select.Option>
+              <Select.Option value="tag">
+                <TagOutlined /> {t('teaching.targetTypes.tag')}
+              </Select.Option>
             </Select>
           </Form.Item>
           
@@ -733,6 +899,7 @@ const ModuleDetail = () => {
           >
             {({ getFieldValue }) => {
               const targetType = getFieldValue('target_type');
+              
               if (targetType === 'user') {
                 return (
                   <Form.Item
@@ -740,10 +907,11 @@ const ModuleDetail = () => {
                     label={t('teaching.selectUser')}
                     rules={[{ required: true, message: t('teaching.userRequired') }]}
                   >
-                    <Input type="number" placeholder={t('teaching.enterUserId')} />
+                    <UserSelector placeholder={t('teaching.selectUser')} />
                   </Form.Item>
                 );
               }
+              
               if (targetType === 'group') {
                 return (
                   <Form.Item
@@ -751,10 +919,11 @@ const ModuleDetail = () => {
                     label={t('teaching.selectGroup')}
                     rules={[{ required: true, message: t('teaching.groupRequired') }]}
                   >
-                    <Input type="number" placeholder={t('teaching.enterGroupId')} />
+                    <GroupSelector placeholder={t('teaching.selectGroup')} />
                   </Form.Item>
                 );
               }
+              
               if (targetType === 'tag') {
                 return (
                   <Form.Item
@@ -762,10 +931,14 @@ const ModuleDetail = () => {
                     label={t('teaching.selectTag')}
                     rules={[{ required: true, message: t('teaching.tagRequired') }]}
                   >
-                    <Input type="number" placeholder={t('teaching.enterTagId')} />
+                    <TagSelector 
+                      placeholder={t('teaching.selectTag')}
+                      groupId={user?.group_id}
+                    />
                   </Form.Item>
                 );
               }
+              
               return null;
             }}
           </Form.Item>
@@ -776,8 +949,12 @@ const ModuleDetail = () => {
             initialValue="view"
           >
             <Select>
-              <Select.Option value="view">{t('teaching.permissionTypes.view')}</Select.Option>
-              <Select.Option value="edit">{t('teaching.permissionTypes.edit')}</Select.Option>
+              <Select.Option value="view">
+                <LockOutlined /> {t('teaching.permissionTypes.view')}
+              </Select.Option>
+              <Select.Option value="edit">
+                <UnlockOutlined /> {t('teaching.permissionTypes.edit')}
+              </Select.Option>
             </Select>
           </Form.Item>
         </Form>

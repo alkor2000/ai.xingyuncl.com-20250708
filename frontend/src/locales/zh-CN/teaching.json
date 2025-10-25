@@ -14,6 +14,8 @@
     "confirmDelete": "确认删除",
     "confirmDeleteModule": "确定要删除此模块吗？",
     "confirmDeleteContent": "此操作将删除该{{type}}及其所有关联数据，且无法恢复！",
+    "confirmBatchDelete": "确认批量删除",
+    "confirmBatchDeleteContent": "确定要删除选中的 {{count}} 个模块吗？此操作无法恢复！",
     "noModules": "暂无教学模块",
     "noDescription": "暂无描述",
     "view": "查看",
@@ -34,6 +36,9 @@
     "views": "浏览",
     "createLesson": "创建课程",
     "editLesson": "编辑课程",
+    "editInfo": "编辑信息",
+    "editLessonInfo": "编辑课程信息",
+    "editContent": "编辑内容",
     "deleteLesson": "删除课程",
     "confirmDeleteLesson": "确定要删除此课程吗？",
     "lessonCount": "课程数",
@@ -113,6 +118,21 @@
     "enterUserId": "输入用户ID",
     "enterGroupId": "输入组织ID",
     "enterTagId": "输入标签ID",
+    "noUsersFound": "未找到用户",
+    "noGroupsFound": "未找到组织",
+    "noTagsFound": "未找到标签",
+    
+    "totalModules": "总模块数",
+    "totalLessons": "总课程数",
+    "totalViews": "总浏览量",
+    "weeklyNew": "本周新增",
+    "searchModules": "搜索模块",
+    "selectedCount": "已选择 {{count}} 项",
+    "selectModules": "请选择要操作的模块",
+    "batchPublish": "批量发布",
+    "batchArchive": "批量归档",
+    "batchDelete": "批量删除",
+    "totalItems": "共 {{total}} 项",
     
     "developer": "开发者",
     "teacher": "教师",
@@ -156,6 +176,21 @@
     "exitFullscreen": "退出全屏",
     "toggleFullscreen": "切换全屏",
     
+    "teachingPlan": "教案",
+    "homework": "作业",
+    
+    "header": {
+      "title": "页面头部HTML配置",
+      "tips": "提示",
+      "description": "您可以自定义教学模块列表页面的头部HTML内容，包括标题、搜索框等元素。支持完整的HTML、CSS和JavaScript代码。留空则不显示头部区域。",
+      "preview": "预览",
+      "resetToDefault": "恢复默认",
+      "saveSuccess": "页面头部HTML保存成功",
+      "saveFailed": "保存页面头部HTML失败",
+      "resetSuccess": "已恢复为默认模板",
+      "editorTip": "提示：支持HTML、CSS、内联JavaScript。建议使用响应式布局以适配不同设备。"
+    },
+    
     "unsavedChanges": "有未保存的更改",
     "unsavedChangesContent": "离开此页面将丢失未保存的更改，确定要离开吗？",
     
@@ -173,6 +208,10 @@
     "revokeSuccess": "撤销成功",
     "revokeFailed": "撤销失败",
     "batchRevokeSuccess": "批量撤销成功",
-    "batchRevokeFailed": "批量撤销失败"
+    "batchRevokeFailed": "批量撤销失败",
+    "batchUpdateSuccess": "批量更新成功",
+    "batchUpdateFailed": "批量更新失败",
+    "batchDeleteSuccess": "批量删除成功",
+    "batchDeleteFailed": "批量删除失败"
   }
 }

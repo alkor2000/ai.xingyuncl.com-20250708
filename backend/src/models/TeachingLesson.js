@@ -1,6 +1,7 @@
 /**
  * 教学课程模型
  * 管理课程页面的创建、查询、更新和内容类型权限
+ * 修复：添加cover_image字段支持
  */
 
 const dbConnection = require('../database/connection');
@@ -36,6 +37,7 @@ class TeachingLesson {
     this.module_id = data.module_id || null;
     this.title = data.title || '';
     this.description = data.description || null;
+    this.cover_image = data.cover_image || null; // 新增：封面图
     this.content_type = data.content_type || CONTENT_TYPES.COURSE;
     this.content = data.content || null;
     this.page_count = data.page_count || 1;
@@ -60,6 +62,7 @@ class TeachingLesson {
         module_id,
         title,
         description = null,
+        cover_image = null,
         content_type = CONTENT_TYPES.COURSE,
         content,
         creator_id,
@@ -82,14 +85,14 @@ class TeachingLesson {
 
       const sql = `
         INSERT INTO teaching_lessons (
-          module_id, title, description, content_type, content,
+          module_id, title, description, cover_image, content_type, content,
           page_count, creator_id, status, order_index, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
       const params = [
-        module_id, title, description, content_type, contentStr,
+        module_id, title, description, cover_image, content_type, contentStr,
         pageCount, creator_id, status, order_index
       ];
 
@@ -212,11 +215,12 @@ class TeachingLesson {
 
   /**
    * 更新课程信息
+   * 修复：添加cover_image到allowedFields
    */
   async update(updateData) {
     try {
       const allowedFields = [
-        'title', 'description', 'content_type', 'content',
+        'title', 'description', 'cover_image', 'content_type', 'content',
         'status', 'order_index'
       ];
 
@@ -342,6 +346,7 @@ class TeachingLesson {
       module_name: this.module_name,
       title: this.title,
       description: this.description,
+      cover_image: this.cover_image,
       content_type: this.content_type,
       content: this.content,
       page_count: this.page_count,

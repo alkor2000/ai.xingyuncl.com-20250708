@@ -1,6 +1,9 @@
 /**
- * 教学系统控制器
+ * 教学系统控制器（增强版）
  * 处理教学模块、课程、权限的业务逻辑
+ * 新增：管理员全局数据管理功能
+ * 修复：使用simpleQuery解决LIMIT/OFFSET兼容性问题
+ * 修复：添加cover_image支持
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -182,6 +185,170 @@ class TeachingController {
     }
   }
 
+  // ==================== 管理员功能（新增）====================
+
+  /**
+   * 获取所有模块（管理员视角，不受权限限制）
+   * 修复：使用simpleQuery解决LIMIT/OFFSET兼容性问题
+   */
+  static async getAllModules(req, res) {
+    try {
+      const user = req.user;
+
+      // 验证超级管理员权限
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可访问');
+      }
+
+      // 严格的参数验证
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit) || 100));
+      const offset = (page - 1) * limit;
+      const { status, visibility, search } = req.query;
+
+      const dbConnection = require('../database/connection');
+
+      // 构建查询条件
+      let whereClause = 'tm.deleted_at IS NULL';
+      const whereParams = [];
+
+      if (status) {
+        whereClause += ' AND tm.status = ?';
+        whereParams.push(status);
+      }
+
+      if (visibility) {
+        whereClause += ' AND tm.visibility = ?';
+        whereParams.push(visibility);
+      }
+
+      if (search) {
+        whereClause += ' AND (tm.name LIKE ? OR tm.description LIKE ?)';
+        whereParams.push(`%${search}%`, `%${search}%`);
+      }
+
+      // 查询总数
+      const countSql = `
+        SELECT COUNT(*) as total 
+        FROM teaching_modules tm
+        WHERE ${whereClause}
+      `;
+      const { rows: countRows } = await dbConnection.query(countSql, whereParams);
+      const total = countRows[0].total;
+
+      // ✅ 关键修复：使用simpleQuery代替query，解决LIMIT/OFFSET兼容性问题
+      const dataSql = `
+        SELECT 
+          tm.*,
+          u.username as creator_name,
+          u.remark as creator_remark,
+          ug.name as owner_group_name,
+          (SELECT COUNT(*) FROM teaching_lessons WHERE module_id = tm.id AND deleted_at IS NULL) as lesson_count
+        FROM teaching_modules tm
+        LEFT JOIN users u ON tm.creator_id = u.id
+        LEFT JOIN user_groups ug ON tm.owner_group_id = ug.id
+        WHERE ${whereClause}
+        ORDER BY tm.created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      
+      const dataParams = [...whereParams, limit, offset];
+      const { rows: modules } = await dbConnection.simpleQuery(dataSql, dataParams);
+
+      logger.info('管理员获取所有模块', {
+        adminId: user.id,
+        total,
+        page,
+        limit
+      });
+
+      return ResponseHelper.success(res, {
+        modules,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }, '获取所有模块成功');
+    } catch (error) {
+      logger.error('获取所有模块失败:', error);
+      return ResponseHelper.error(res, '获取所有模块失败');
+    }
+  }
+
+  /**
+   * 批量更新模块（管理员功能）
+   */
+  static async batchUpdateModules(req, res) {
+    try {
+      const user = req.user;
+
+      // 验证超级管理员权限
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可操作');
+      }
+
+      const { module_ids, update_data } = req.body;
+
+      // 验证输入
+      if (!Array.isArray(module_ids) || module_ids.length === 0) {
+        return ResponseHelper.validation(res, ['模块ID列表不能为空']);
+      }
+
+      if (!update_data || Object.keys(update_data).length === 0) {
+        return ResponseHelper.validation(res, ['更新数据不能为空']);
+      }
+
+      const dbConnection = require('../database/connection');
+
+      // 允许批量更新的字段
+      const allowedFields = ['status', 'visibility', 'order_index'];
+      const updateFields = [];
+      const updateValues = [];
+
+      for (const [key, value] of Object.entries(update_data)) {
+        if (allowedFields.includes(key)) {
+          updateFields.push(`${key} = ?`);
+          updateValues.push(value);
+        }
+      }
+
+      if (updateFields.length === 0) {
+        return ResponseHelper.validation(res, ['没有有效的更新字段']);
+      }
+
+      // 添加updated_at
+      updateFields.push('updated_at = NOW()');
+
+      // 构建SQL
+      const placeholders = module_ids.map(() => '?').join(',');
+      const sql = `
+        UPDATE teaching_modules 
+        SET ${updateFields.join(', ')}
+        WHERE id IN (${placeholders}) AND deleted_at IS NULL
+      `;
+
+      const params = [...updateValues, ...module_ids];
+      const { rows } = await dbConnection.query(sql, params);
+
+      logger.info('批量更新模块成功', {
+        adminId: user.id,
+        moduleIds: module_ids,
+        updateData: update_data,
+        affectedRows: rows.affectedRows
+      });
+
+      return ResponseHelper.success(res, {
+        updated_count: rows.affectedRows,
+        module_ids
+      }, `成功更新${rows.affectedRows}个模块`);
+    } catch (error) {
+      logger.error('批量更新模块失败:', error);
+      return ResponseHelper.error(res, error.message || '批量更新模块失败');
+    }
+  }
+
   // ==================== 课程管理 ====================
 
   /**
@@ -194,6 +361,7 @@ class TeachingController {
         module_id,
         title,
         description,
+        cover_image,
         content_type = 'course',
         content,
         status = 'draft',
@@ -223,6 +391,7 @@ class TeachingController {
         module_id,
         title,
         description,
+        cover_image,
         content_type,
         content,
         creator_id: user.id,
@@ -305,6 +474,7 @@ class TeachingController {
 
   /**
    * 更新课程信息
+   * 修复：添加cover_image支持
    */
   static async updateLesson(req, res) {
     try {
@@ -312,6 +482,7 @@ class TeachingController {
       const {
         title,
         description,
+        cover_image,
         content_type,
         content,
         status,
@@ -321,6 +492,7 @@ class TeachingController {
       const updateData = {};
       if (title !== undefined) updateData.title = title;
       if (description !== undefined) updateData.description = description;
+      if (cover_image !== undefined) updateData.cover_image = cover_image;
       if (content_type !== undefined) updateData.content_type = content_type;
       if (content !== undefined) updateData.content = content;
       if (status !== undefined) updateData.status = status;

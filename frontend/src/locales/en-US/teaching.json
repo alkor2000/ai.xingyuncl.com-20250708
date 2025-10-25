@@ -113,6 +113,9 @@
     "enterUserId": "Enter User ID",
     "enterGroupId": "Enter Group ID",
     "enterTagId": "Enter Tag ID",
+    "noUsersFound": "No users found",
+    "noGroupsFound": "No groups found",
+    "noTagsFound": "No tags found",
     
     "developer": "Developer",
     "teacher": "Teacher",
@@ -155,6 +158,18 @@
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "toggleFullscreen": "Toggle Fullscreen",
+    
+    "header": {
+      "title": "Page Header HTML Configuration",
+      "tips": "Tips",
+      "description": "Customize the header HTML content for the teaching module list page, including titles, search boxes, and other elements. Supports full HTML, CSS, and JavaScript code. Leave empty to hide the header area.",
+      "preview": "Preview",
+      "resetToDefault": "Reset to Default",
+      "saveSuccess": "Page header HTML saved successfully",
+      "saveFailed": "Failed to save page header HTML",
+      "resetSuccess": "Reset to default template successfully",
+      "editorTip": "Tip: Supports HTML, CSS, and inline JavaScript. Use responsive layout for different devices."
+    },
     
     "unsavedChanges": "Unsaved Changes",
     "unsavedChangesContent": "Leaving this page will lose unsaved changes. Are you sure?",

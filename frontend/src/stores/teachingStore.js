@@ -1,7 +1,7 @@
 /**
- * 智能教学系统 Store
+ * 智能教学系统 Store（增强版）
  * 使用 Zustand 管理教学模块、课程、权限状态
- * 修复：正确处理API响应格式 { success: true, data: {...} }
+ * 新增：管理员全局数据管理功能
  */
 
 import { create } from 'zustand';
@@ -20,6 +20,10 @@ const useTeachingStore = create((set, get) => ({
     pages: 0
   },
   modulesLoading: false,
+  
+  // 管理员全局模块列表（新增）
+  allModules: [],
+  allModulesLoading: false,
   
   // 当前模块
   currentModule: null,
@@ -44,13 +48,12 @@ const useTeachingStore = create((set, get) => ({
   // ==================== 模块操作 ====================
   
   /**
-   * 获取模块列表
+   * 获取模块列表（用户视角，受权限限制）
    */
   fetchModules: async (params = {}) => {
     set({ modulesLoading: true });
     try {
       const response = await api.get('/teaching/modules', { params });
-      // 修复：正确访问响应数据 response.data.data
       const responseData = response.data.data || response.data;
       set({
         modules: responseData.modules || [],
@@ -66,13 +69,42 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
+   * 获取所有模块（管理员视角，不受权限限制）- 新增
+   */
+  fetchAllModules: async (params = {}) => {
+    set({ allModulesLoading: true });
+    try {
+      // 使用admin路径，后端需要实现该接口
+      const response = await api.get('/teaching/admin/modules', { 
+        params: {
+          ...params,
+          all: true // 标记获取全部数据
+        }
+      });
+      const responseData = response.data.data || response.data;
+      
+      // 如果返回的是分页数据，提取modules数组
+      const modulesArray = responseData.modules || responseData;
+      
+      set({
+        allModules: Array.isArray(modulesArray) ? modulesArray : [],
+        allModulesLoading: false
+      });
+      return modulesArray;
+    } catch (error) {
+      message.error(error.response?.data?.message || '获取全部模块失败');
+      set({ allModulesLoading: false });
+      throw error;
+    }
+  },
+  
+  /**
    * 获取单个模块详情
    */
   fetchModule: async (id) => {
     set({ currentModuleLoading: true });
     try {
       const response = await api.get(`/teaching/modules/${id}`);
-      // 修复：正确访问响应数据
       const moduleData = response.data.data || response.data;
       set({
         currentModule: moduleData,
@@ -124,6 +156,25 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
+   * 批量更新模块（管理员功能）- 新增
+   */
+  batchUpdateModules: async (moduleIds, updateData) => {
+    try {
+      const response = await api.post('/teaching/admin/modules/batch-update', {
+        module_ids: moduleIds,
+        update_data: updateData
+      });
+      message.success(`成功更新${moduleIds.length}个模块`);
+      // 重新加载管理员列表
+      await get().fetchAllModules();
+      return response.data.data || response.data;
+    } catch (error) {
+      message.error(error.response?.data?.message || '批量更新模块失败');
+      throw error;
+    }
+  },
+  
+  /**
    * 删除模块
    */
   deleteModule: async (id) => {
@@ -147,7 +198,6 @@ const useTeachingStore = create((set, get) => ({
     set({ lessonsLoading: true });
     try {
       const response = await api.get(`/teaching/modules/${moduleId}/lessons`, { params });
-      // 修复：正确访问响应数据
       const lessonsData = response.data.data || response.data;
       set({
         lessons: Array.isArray(lessonsData) ? lessonsData : [],
@@ -168,7 +218,6 @@ const useTeachingStore = create((set, get) => ({
     set({ currentLessonLoading: true });
     try {
       const response = await api.get(`/teaching/lessons/${id}`);
-      // 修复：正确访问响应数据
       const lessonData = response.data.data || response.data;
       set({
         currentLesson: lessonData,
@@ -245,7 +294,6 @@ const useTeachingStore = create((set, get) => ({
     set({ permissionsLoading: true });
     try {
       const response = await api.get(`/teaching/modules/${moduleId}/permissions`);
-      // 修复：正确访问响应数据
       const permissionsData = response.data.data || response.data;
       set({
         permissions: Array.isArray(permissionsData) ? permissionsData : [],
@@ -369,7 +417,8 @@ const useTeachingStore = create((set, get) => ({
   resetCurrentLesson: () => set({ currentLesson: null }),
   resetLessons: () => set({ lessons: [] }),
   resetPermissions: () => set({ permissions: [] }),
-  resetDraft: () => set({ draft: null })
+  resetDraft: () => set({ draft: null }),
+  resetAllModules: () => set({ allModules: [] })
 }));
 
 export default useTeachingStore;

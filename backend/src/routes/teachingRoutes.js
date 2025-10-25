@@ -1,6 +1,7 @@
 /**
- * 教学系统路由
+ * 教学系统路由（增强版）
  * 定义教学模块、课程、权限的API端点
+ * 新增：管理员全局数据管理路由
  */
 
 const express = require('express');
@@ -20,6 +21,22 @@ const router = express.Router();
 
 // 所有路由都需要认证
 router.use(authenticate);
+
+// ==================== 管理员路由（新增）====================
+
+/**
+ * @route   GET /api/teaching/admin/modules
+ * @desc    获取所有教学模块（管理员视角，不受权限限制）
+ * @access  仅超级管理员
+ */
+router.get('/admin/modules', TeachingController.getAllModules);
+
+/**
+ * @route   POST /api/teaching/admin/modules/batch-update
+ * @desc    批量更新模块状态
+ * @access  仅超级管理员
+ */
+router.post('/admin/modules/batch-update', TeachingController.batchUpdateModules);
 
 // ==================== 教学模块路由 ====================
 

@@ -1,6 +1,7 @@
 /**
  * 系统配置模型
  * 管理站点名称、Logo等全局配置
+ * 修复：添加 teaching_page_header_html 的保存支持
  */
 
 const dbConnection = require('../database/connection');
@@ -189,7 +190,7 @@ class SystemConfig {
         },
         user: settings.user_config || {
           allow_register: true,
-          require_invitation_code: false, // 添加默认值
+          require_invitation_code: false,
           default_tokens: 10000,
           default_credits: 1000,
           default_group_id: 1
@@ -198,46 +199,38 @@ class SystemConfig {
           default_model: 'gpt-4.1-mini-op',
           temperature: 0.0
         },
-        // 添加chat配置
         chat: settings.chat_config || {
           font_family: 'system-ui',
           font_size: 14
         },
-        // 添加邮件配置
         email: settings.email_config || null,
-        // 添加登录配置
         login: settings.login_config || {
-          mode: 'standard', // 默认标准模式
-          refresh_token_days: 14 // 默认14天
+          mode: 'standard',
+          refresh_token_days: 14
         },
-        // 添加主题配置
         theme: settings.theme_config || null,
-        // 添加HTML编辑器配置
-        html_editor: Object.keys(htmlEditorConfig).length > 0 ? htmlEditorConfig : null
+        html_editor: Object.keys(htmlEditorConfig).length > 0 ? htmlEditorConfig : null,
+        // ✅ 新增：教学页面头部HTML配置
+        teaching_page_header_html: settings.teaching_page_header_html || ''
       };
 
       // 处理用户配置兼容性
       if (formattedSettings.user) {
-        // 兼容旧字段名 default_token_quota -> default_tokens
         if (formattedSettings.user.default_token_quota !== undefined && formattedSettings.user.default_tokens === undefined) {
           formattedSettings.user.default_tokens = formattedSettings.user.default_token_quota;
         }
-        // 兼容旧字段名 default_credits_quota -> default_credits
         if (formattedSettings.user.default_credits_quota !== undefined && formattedSettings.user.default_credits === undefined) {
           formattedSettings.user.default_credits = formattedSettings.user.default_credits_quota;
         }
         
-        // 如果旧的credits配置中有default_credits，优先使用
         if (settings.credits_config && settings.credits_config.default_credits !== undefined) {
           formattedSettings.user.default_credits = settings.credits_config.default_credits;
         }
         
-        // 确保require_invitation_code字段存在（新增）
         if (formattedSettings.user.require_invitation_code === undefined) {
           formattedSettings.user.require_invitation_code = false;
         }
         
-        // 清理旧字段
         delete formattedSettings.user.default_token_quota;
         delete formattedSettings.user.default_credits_quota;
       }
@@ -245,7 +238,6 @@ class SystemConfig {
       return formattedSettings;
     } catch (error) {
       logger.error('获取格式化配置失败:', error);
-      // 返回默认配置
       return {
         site: {
           name: 'AI Platform',
@@ -255,7 +247,7 @@ class SystemConfig {
         },
         user: {
           allow_register: true,
-          require_invitation_code: false, // 添加默认值
+          require_invitation_code: false,
           default_tokens: 10000,
           default_credits: 1000,
           default_group_id: 1
@@ -274,22 +266,23 @@ class SystemConfig {
           refresh_token_days: 14
         },
         theme: null,
-        html_editor: null
+        html_editor: null,
+        teaching_page_header_html: ''
       };
     }
   }
 
   /**
    * 保存格式化的系统设置
+   * ✅ 修复：添加 teaching_page_header_html 的保存支持
    */
   static async saveFormattedSettings(formattedSettings) {
     try {
-      // 清理用户配置，保留所有字段包括require_invitation_code
+      // 清理用户配置
       if (formattedSettings.user) {
         const cleanedUserConfig = {
           allow_register: formattedSettings.user.allow_register !== false,
-          require_invitation_code: formattedSettings.user.require_invitation_code === true, // 保留新字段
-          // 使用 ?? 操作符，这样 0 也会被当作有效值
+          require_invitation_code: formattedSettings.user.require_invitation_code === true,
           default_tokens: formattedSettings.user.default_tokens ?? 10000,
           default_credits: formattedSettings.user.default_credits ?? 1000,
           default_group_id: formattedSettings.user.default_group_id ?? 1
@@ -324,19 +317,27 @@ class SystemConfig {
         chat_config: formattedSettings.chat
       };
       
-      // 保存邮件配置（如果存在）
+      // 保存邮件配置
       if (formattedSettings.email !== undefined) {
         settings.email_config = formattedSettings.email;
       }
       
-      // 保存登录配置（如果存在）
+      // 保存登录配置
       if (formattedSettings.login !== undefined) {
         settings.login_config = formattedSettings.login;
       }
       
-      // 保存主题配置（如果存在）
+      // 保存主题配置
       if (formattedSettings.theme !== undefined) {
         settings.theme_config = formattedSettings.theme;
+      }
+      
+      // ✅ 新增：保存教学页面头部HTML配置
+      if (formattedSettings.teaching_page_header_html !== undefined) {
+        settings.teaching_page_header_html = formattedSettings.teaching_page_header_html;
+        logger.info('保存教学页面头部HTML配置', { 
+          length: formattedSettings.teaching_page_header_html?.length || 0 
+        });
       }
       
       // 处理HTML编辑器配置 - 拆分成独立的配置项
@@ -344,7 +345,6 @@ class SystemConfig {
         for (const [key, value] of Object.entries(formattedSettings.html_editor)) {
           const settingKey = `html_editor.${key}`;
           
-          // 根据值的类型确定setting_type
           let settingType = 'string';
           if (typeof value === 'boolean') {
             settingType = 'boolean';
@@ -353,12 +353,9 @@ class SystemConfig {
           }
           
           settings[settingKey] = value;
-          
-          // 单独更新每个html_editor配置项
           await SystemConfig.updateSetting(settingKey, value, settingType);
         }
         
-        // 从settings对象中移除，因为已经单独处理了
         delete settings['html_editor.*'];
       }
       

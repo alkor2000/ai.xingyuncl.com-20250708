@@ -1,5 +1,6 @@
 /**
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
+ * 新增：教学管理Tab（仅超级管理员）
  */
 
 import React, { useEffect, useState } from 'react'
@@ -29,7 +30,8 @@ import {
   BankOutlined,
   ShareAltOutlined,
   ScanOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  BookOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -62,23 +64,9 @@ import {
   OrgApplicationManagement,
   MindmapCreditsConfig,
   OcrSettings,
-  CalendarConfigSettings
+  CalendarConfigSettings,
+  TeachingManagement
 } from '../../components/admin/settings'
-
-// 自定义Tab样式，实现两排显示
-const customTabBarStyle = {
-  '.ant-tabs-nav-wrap': {
-    flexWrap: 'wrap',
-    height: 'auto',
-  },
-  '.ant-tabs-nav-list': {
-    flexWrap: 'wrap',
-    height: 'auto',
-  },
-  '.ant-tabs-tab': {
-    marginBottom: '8px',
-  }
-}
 
 const Settings = () => {
   const { t } = useTranslation()
@@ -452,6 +440,17 @@ const Settings = () => {
       ),
       children: <UsageLogs />
     },
+    // 只有超级管理员可见的教学管理Tab（新增）
+    ...(isSuperAdmin ? [{
+      key: 'teaching',
+      label: (
+        <span>
+          <BookOutlined />
+          教学管理
+        </span>
+      ),
+      children: <TeachingManagement />
+    }] : []),
     // 只有超级管理员可见的系统健康监控
     ...(isSuperAdmin ? [{
       key: 'health',

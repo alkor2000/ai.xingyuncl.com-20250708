@@ -1,19 +1,25 @@
 /**
- * 教学模块列表组件
+ * 教学模块列表组件（终极优化版）
+ * 优化：
+ * 1. 删除底部标签和统计信息
+ * 2. 操作按钮移至右下角
+ * 3. 修复点击事件冒泡问题
+ * 4. 支持自定义HTML头部
  */
 
 import React, { useEffect, useState } from 'react';
 import { 
-  Card, List, Button, Space, Tag, Empty, Spin, Modal, 
-  Form, Input, Select, Upload, message, Dropdown, Pagination 
+  Card, List, Button, Empty, Spin, Modal, 
+  Form, Input, Select, message, Dropdown, Pagination 
 } from 'antd';
 import { 
-  PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, 
-  FileTextOutlined, SettingOutlined, UploadOutlined, MoreOutlined 
+  PlusOutlined, EditOutlined, DeleteOutlined, 
+  FileTextOutlined, MoreOutlined 
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
+import useSystemConfigStore from '../../stores/systemConfigStore';
 
 const { TextArea } = Input;
 
@@ -31,17 +37,28 @@ const ModuleList = () => {
     deleteModule
   } = useTeachingStore();
   
+  const { systemConfig } = useSystemConfigStore();
+  
   const [modalVisible, setModalVisible] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
   const [form] = Form.useForm();
+  const [customHeaderHtml, setCustomHeaderHtml] = useState('');
   
-  // 加载模块列表
+  // 加载模块列表和自定义头部HTML
   useEffect(() => {
     fetchModules();
-  }, []);
+    
+    // 从系统配置加载自定义头部HTML
+    const headerHtml = systemConfig?.teaching_page_header_html || '';
+    setCustomHeaderHtml(headerHtml);
+  }, [systemConfig]);
   
   // 打开创建/编辑模态框
-  const handleOpenModal = (module = null) => {
+  const handleOpenModal = (module = null, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
     setEditingModule(module);
     if (module) {
       form.setFieldsValue(module);
@@ -70,7 +87,11 @@ const ModuleList = () => {
   };
   
   // 删除模块
-  const handleDelete = (module) => {
+  const handleDelete = (module, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
     Modal.confirm({
       title: t('teaching.confirmDelete'),
       content: `${t('teaching.confirmDeleteModule')}: ${module.name}`,
@@ -88,50 +109,22 @@ const ModuleList = () => {
     navigate(`/teaching/modules/${module.id}`);
   };
   
-  // 管理权限
-  const handleManagePermissions = (module) => {
-    navigate(`/teaching/modules/${module.id}/permissions`);
-  };
-  
   // 页码变化
   const handlePageChange = (page, pageSize) => {
     fetchModules({ page, limit: pageSize });
-  };
-  
-  // 可见性标签颜色
-  const visibilityColor = {
-    public: 'green',
-    group: 'blue',
-    private: 'orange'
-  };
-  
-  // 状态标签颜色
-  const statusColor = {
-    draft: 'default',
-    published: 'success',
-    archived: 'error'
   };
   
   // 操作菜单
   const getActionMenu = (module) => ({
     items: [
       {
-        key: 'view',
-        label: t('teaching.viewModule'),
-        icon: <EyeOutlined />,
-        onClick: () => handleView(module)
-      },
-      {
         key: 'edit',
         label: t('common.edit'),
         icon: <EditOutlined />,
-        onClick: () => handleOpenModal(module)
-      },
-      {
-        key: 'permissions',
-        label: t('teaching.managePermissions'),
-        icon: <SettingOutlined />,
-        onClick: () => handleManagePermissions(module)
+        onClick: (e) => {
+          e.domEvent.stopPropagation(); // Dropdown的事件对象在domEvent中
+          handleOpenModal(module, e.domEvent);
+        }
       },
       {
         type: 'divider'
@@ -141,21 +134,26 @@ const ModuleList = () => {
         label: t('common.delete'),
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => handleDelete(module)
+        onClick: (e) => {
+          e.domEvent.stopPropagation(); // Dropdown的事件对象在domEvent中
+          handleDelete(module, e.domEvent);
+        }
       }
     ]
   });
   
   return (
     <div style={{ padding: '24px' }}>
-      {/* 头部 */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0 }}>{t('teaching.moduleList')}</h2>
-          <p style={{ color: '#666', margin: '8px 0 0 0' }}>
-            {t('teaching.moduleListDescription')}
-          </p>
-        </div>
+      {/* 自定义HTML头部区域（超级管理员可在后台配置） */}
+      {customHeaderHtml && (
+        <div 
+          dangerouslySetInnerHTML={{ __html: customHeaderHtml }}
+          style={{ marginBottom: '24px' }}
+        />
+      )}
+      
+      {/* 创建按钮（固定显示） */}
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'flex-end' }}>
         <Button 
           type="primary" 
           icon={<PlusOutlined />}
@@ -183,73 +181,123 @@ const ModuleList = () => {
         ) : (
           <>
             <List
-              grid={{ gutter: 16, xs: 1, sm: 2, md: 2, lg: 3, xl: 4, xxl: 4 }}
+              grid={{ gutter: 20, xs: 1, sm: 2, md: 2, lg: 3, xl: 4, xxl: 4 }}
               dataSource={modules}
               renderItem={module => (
                 <List.Item>
                   <Card
                     hoverable
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: '8px',
+                      overflow: 'hidden'
+                    }}
+                    bodyStyle={{ padding: '16px' }}
+                    onClick={() => handleView(module)}
                     cover={
-                      module.cover_image ? (
-                        <img 
-                          alt={module.name} 
-                          src={module.cover_image} 
-                          style={{ height: 160, objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div style={{ 
-                          height: 160, 
-                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <FileTextOutlined style={{ fontSize: 48, color: 'white' }} />
-                        </div>
-                      )
-                    }
-                    actions={[
-                      <EyeOutlined key="view" onClick={() => handleView(module)} />,
-                      <EditOutlined key="edit" onClick={() => handleOpenModal(module)} />,
-                      <Dropdown menu={getActionMenu(module)} trigger={['click']}>
-                        <MoreOutlined />
-                      </Dropdown>
-                    ]}
-                  >
-                    <Card.Meta
-                      title={
-                        <div style={{ marginBottom: 8 }}>
-                          {module.name}
-                        </div>
-                      }
-                      description={
-                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <div style={{ position: 'relative' }}>
+                        {/* 封面图片 */}
+                        {module.cover_image ? (
+                          <img 
+                            alt={module.name} 
+                            src={module.cover_image} 
+                            style={{ 
+                              height: 200, 
+                              width: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ) : (
                           <div style={{ 
-                            minHeight: 40, 
-                            fontSize: 12, 
-                            color: '#666',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical'
+                            height: 200, 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}>
-                            {module.description || t('teaching.noDescription')}
+                            <FileTextOutlined style={{ fontSize: 56, color: 'white', opacity: 0.9 }} />
                           </div>
-                          <Space wrap>
-                            <Tag color={visibilityColor[module.visibility]}>
-                              {t(`teaching.visibility.${module.visibility}`)}
-                            </Tag>
-                            <Tag color={statusColor[module.status]}>
-                              {t(`teaching.status.${module.status}`)}
-                            </Tag>
-                          </Space>
-                          <div style={{ fontSize: 12, color: '#999' }}>
-                            {module.lesson_count} {t('teaching.lessons')} · {module.view_count} {t('teaching.views')}
-                          </div>
-                        </Space>
-                      }
-                    />
+                        )}
+                        
+                        {/* 操作按钮（右下角浮动） */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '12px',
+                            right: '12px',
+                            background: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                            transition: 'all 0.3s ease',
+                            cursor: 'pointer',
+                            zIndex: 10
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation(); // 阻止事件冒泡到Card
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                        >
+                          <Dropdown 
+                            menu={getActionMenu(module)} 
+                            trigger={['click']}
+                            placement="topRight"
+                          >
+                            <MoreOutlined 
+                              style={{ 
+                                fontSize: 20, 
+                                color: '#666'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation(); // 双重保险，再次阻止冒泡
+                              }}
+                            />
+                          </Dropdown>
+                        </div>
+                      </div>
+                    }
+                  >
+                    {/* 标题 */}
+                    <div style={{ 
+                      marginBottom: 8,
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: '#1a1a1a',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: '1.5'
+                    }}>
+                      {module.name}
+                    </div>
+                    
+                    {/* 描述（仅保留描述，删除所有标签和统计） */}
+                    <div style={{ 
+                      minHeight: 40, 
+                      fontSize: 13, 
+                      color: '#666',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: '1.5'
+                    }}>
+                      {module.description || t('teaching.noDescription')}
+                    </div>
                   </Card>
                 </List.Item>
               )}
