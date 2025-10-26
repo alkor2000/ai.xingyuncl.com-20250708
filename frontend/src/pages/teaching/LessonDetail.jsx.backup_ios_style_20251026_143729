@@ -1,0 +1,312 @@
+/**
+ * 课程详情页面（页面列表）
+ * 功能：显示课程包含的所有页面，用户可以选择要查看的页面
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Card,
+  List,
+  Button,
+  Space,
+  Tag,
+  Breadcrumb,
+  Empty,
+  Spin,
+  Badge,
+  Progress,
+  Tooltip
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  RightOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import moment from 'moment';
+
+const LessonDetail = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    fetchLesson
+  } = useTeachingStore();
+
+  const [viewedPages, setViewedPages] = useState(new Set());
+
+  // 加载课程数据
+  useEffect(() => {
+    if (id) {
+      loadLesson();
+      
+      // 从 localStorage 加载已查看的页面
+      const saved = localStorage.getItem(`lesson_${id}_viewed_pages`);
+      if (saved) {
+        try {
+          setViewedPages(new Set(JSON.parse(saved)));
+        } catch (e) {
+          console.error('解析已查看页面失败:', e);
+        }
+      }
+    }
+  }, [id]);
+
+  const loadLesson = async () => {
+    try {
+      await fetchLesson(id);
+    } catch (error) {
+      console.error('加载课程失败:', error);
+    }
+  };
+
+  // 返回模块详情
+  const handleBack = () => {
+    if (currentLesson?.module_id) {
+      navigate(`/teaching/modules/${currentLesson.module_id}`);
+    } else {
+      navigate('/teaching');
+    }
+  };
+
+  // 编辑课程
+  const handleEdit = () => {
+    navigate(`/teaching/lessons/${id}/edit`);
+  };
+
+  // 查看页面
+  const handleViewPage = (pageNumber) => {
+    // 标记为已查看
+    const newViewed = new Set(viewedPages);
+    newViewed.add(pageNumber);
+    setViewedPages(newViewed);
+    localStorage.setItem(`lesson_${id}_viewed_pages`, JSON.stringify([...newViewed]));
+    
+    // 跳转到页面查看器
+    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
+  };
+
+  // 获取页面列表
+  const getPages = () => {
+    if (!currentLesson?.content) return [];
+    
+    try {
+      const content = typeof currentLesson.content === 'string'
+        ? JSON.parse(currentLesson.content)
+        : currentLesson.content;
+      
+      return content.pages || [];
+    } catch (error) {
+      console.error('解析课程内容失败:', error);
+      return [];
+    }
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
+    );
+  }
+
+  const pages = getPages();
+  const totalPages = pages.length;
+  const viewedCount = viewedPages.size;
+  const progress = totalPages > 0 ? Math.round((viewedCount / totalPages) * 100) : 0;
+
+  return (
+    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
+      {/* 面包屑 */}
+      <Breadcrumb style={{ marginBottom: 16 }}>
+        <Breadcrumb.Item>
+          <a onClick={() => navigate('/teaching')}>{t('teaching.teaching')}</a>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>
+          <a onClick={handleBack}>{t('teaching.module')}</a>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>{currentLesson.title}</Breadcrumb.Item>
+      </Breadcrumb>
+
+      {/* 课程信息卡片 */}
+      <Card 
+        style={{ marginBottom: 20 }}
+        bodyStyle={{ padding: '24px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* 左侧：课程信息 */}
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 24, marginBottom: 12 }}>
+              {currentLesson.title}
+            </h2>
+            {currentLesson.description && (
+              <p style={{ color: '#666', marginBottom: 16, fontSize: 14 }}>
+                {currentLesson.description}
+              </p>
+            )}
+            <Space size="large">
+              <Tag color="blue">
+                <FileTextOutlined /> {totalPages} {t('teaching.pages')}
+              </Tag>
+              <span style={{ color: '#666', fontSize: 13 }}>
+                {t('teaching.created')}: {moment(currentLesson.created_at).format('YYYY-MM-DD')}
+              </span>
+              <span style={{ color: '#666', fontSize: 13 }}>
+                {t('teaching.views')}: {currentLesson.view_count || 0}
+              </span>
+            </Space>
+            
+            {/* 学习进度 */}
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 13, color: '#666' }}>{t('teaching.progress')}:</span>
+              <Progress 
+                percent={progress} 
+                style={{ flex: 1, maxWidth: 300 }}
+                strokeColor="#52c41a"
+              />
+              <span style={{ fontSize: 13, color: '#666' }}>
+                {viewedCount} / {totalPages}
+              </span>
+            </div>
+          </div>
+
+          {/* 右侧：操作按钮 */}
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+              {t('common.back')}
+            </Button>
+            <Button icon={<EditOutlined />} onClick={handleEdit}>
+              {t('common.edit')}
+            </Button>
+          </Space>
+        </div>
+      </Card>
+
+      {/* 页面列表 */}
+      <Card title={
+        <span>
+          <FileTextOutlined /> {t('teaching.pageList')}
+        </span>
+      }>
+        {totalPages === 0 ? (
+          <Empty 
+            description={t('teaching.noPages')}
+            style={{ marginTop: 60 }}
+          >
+            <Button 
+              type="primary" 
+              icon={<EditOutlined />}
+              onClick={handleEdit}
+            >
+              {t('teaching.editContent')}
+            </Button>
+          </Empty>
+        ) : (
+          <List
+            dataSource={pages}
+            renderItem={(page, index) => {
+              const pageNumber = index + 1;
+              const isViewed = viewedPages.has(pageNumber);
+              
+              return (
+                <List.Item
+                  key={pageNumber}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '20px 24px',
+                    transition: 'all 0.3s ease',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    background: isViewed ? '#f6ffed' : 'white',
+                    border: isViewed ? '1px solid #b7eb8f' : '1px solid #f0f0f0'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = isViewed ? '#f0ffd9' : '#fafafa';
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isViewed ? '#f6ffed' : 'white';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                  onClick={() => handleViewPage(pageNumber)}
+                >
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    width: '100%'
+                  }}>
+                    {/* 左侧：序号和标题 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
+                      <Badge 
+                        count={pageNumber < 10 ? `0${pageNumber}` : pageNumber}
+                        style={{ 
+                          backgroundColor: isViewed ? '#52c41a' : '#1890ff',
+                          fontSize: 16,
+                          fontWeight: 'bold',
+                          minWidth: 48,
+                          height: 48,
+                          lineHeight: '48px',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ 
+                          fontSize: 16, 
+                          fontWeight: 500,
+                          color: '#1a1a1a',
+                          marginBottom: 4
+                        }}>
+                          {page.title || `${t('teaching.page')} ${pageNumber}`}
+                        </div>
+                        {isViewed && (
+                          <Space size="small" style={{ fontSize: 12, color: '#52c41a' }}>
+                            <CheckCircleOutlined />
+                            <span>{t('teaching.viewed')}</span>
+                          </Space>
+                        )}
+                        {!isViewed && (
+                          <Space size="small" style={{ fontSize: 12, color: '#999' }}>
+                            <ClockCircleOutlined />
+                            <span>{t('teaching.notViewed')}</span>
+                          </Space>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 右侧：进入按钮 */}
+                    <Button 
+                      type={isViewed ? 'default' : 'primary'}
+                      icon={<RightOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewPage(pageNumber);
+                      }}
+                    >
+                      {t('teaching.enterPage')}
+                    </Button>
+                  </div>
+                </List.Item>
+              );
+            }}
+          />
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default LessonDetail;

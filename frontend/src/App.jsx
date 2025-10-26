@@ -66,6 +66,7 @@ const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEdi
 // 智能教学系统页面组件 - 懒加载
 const Teaching = React.lazy(() => import('./pages/teaching/Teaching'))
 const ModuleDetail = React.lazy(() => import('./pages/teaching/ModuleDetail'))
+const LessonDetail = React.lazy(() => import('./pages/teaching/LessonDetail')) // 新增：课程详情（页面列表）
 const LessonEditor = React.lazy(() => import('./pages/teaching/LessonEditor'))
 const LessonViewer = React.lazy(() => import('./pages/teaching/LessonViewer'))
 
@@ -166,24 +167,20 @@ const App = () => {
     })
   }, [])
   
-  // 🔥 新增：动态更新浏览器标签栏的favicon和title
+  // 动态更新浏览器标签栏的favicon和title
   useEffect(() => {
-    // 只有在系统配置初始化完成后才更新
     if (!initialized) return
     
     try {
-      // 1. 更新favicon
       const logoUrl = getSiteLogo()
       if (logoUrl) {
         const faviconLink = document.getElementById('favicon-link') || 
                            document.querySelector("link[rel*='icon']")
         
         if (faviconLink) {
-          // 使用上传的logo作为favicon
           faviconLink.href = logoUrl
           console.log('✅ Favicon已更新:', logoUrl)
         } else {
-          // 如果没有找到favicon link标签，创建一个新的
           const newLink = document.createElement('link')
           newLink.id = 'favicon-link'
           newLink.rel = 'icon'
@@ -194,7 +191,6 @@ const App = () => {
         }
       }
       
-      // 2. 更新页面标题
       const siteDescription = getSiteDescription()
       if (siteDescription && siteDescription !== '企业级AI应用聚合平台') {
         document.title = siteDescription
@@ -377,9 +373,19 @@ const App = () => {
                           } 
                         />
                         
-                        {/* 课程查看路由 */}
+                        {/* 课程详情路由（新增：页面列表）*/}
                         <Route 
                           path="/teaching/lessons/:id" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <LessonDetail />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* 课程页面查看路由（修改：支持 pageNumber）*/}
+                        <Route 
+                          path="/teaching/lessons/:id/pages/:pageNumber" 
                           element={
                             <LazyLoadingWrapper>
                               <LessonViewer />

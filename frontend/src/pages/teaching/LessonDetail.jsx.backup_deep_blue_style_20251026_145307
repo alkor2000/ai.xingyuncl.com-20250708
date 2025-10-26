@@ -1,0 +1,520 @@
+/**
+ * 课程详情页面（iOS科技风格）
+ * 功能：显示课程包含的所有页面，用户可以选择要查看的页面
+ * 设计：采用iOS风格的毛玻璃、渐变、圆角设计
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Button,
+  Space,
+  Empty,
+  Spin,
+  Progress,
+  Tooltip
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  RightOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined,
+  EyeOutlined,
+  BookOutlined
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import moment from 'moment';
+
+const LessonDetail = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    fetchLesson
+  } = useTeachingStore();
+
+  const [viewedPages, setViewedPages] = useState(new Set());
+
+  useEffect(() => {
+    if (id) {
+      loadLesson();
+      
+      const saved = localStorage.getItem(`lesson_${id}_viewed_pages`);
+      if (saved) {
+        try {
+          setViewedPages(new Set(JSON.parse(saved)));
+        } catch (e) {
+          console.error('解析已查看页面失败:', e);
+        }
+      }
+    }
+  }, [id]);
+
+  const loadLesson = async () => {
+    try {
+      await fetchLesson(id);
+    } catch (error) {
+      console.error('加载课程失败:', error);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentLesson?.module_id) {
+      navigate(`/teaching/modules/${currentLesson.module_id}`);
+    } else {
+      navigate('/teaching');
+    }
+  };
+
+  const handleEdit = () => {
+    navigate(`/teaching/lessons/${id}/edit`);
+  };
+
+  const handleViewPage = (pageNumber) => {
+    const newViewed = new Set(viewedPages);
+    newViewed.add(pageNumber);
+    setViewedPages(newViewed);
+    localStorage.setItem(`lesson_${id}_viewed_pages`, JSON.stringify([...newViewed]));
+    
+    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
+  };
+
+  const getPages = () => {
+    if (!currentLesson?.content) return [];
+    
+    try {
+      const content = typeof currentLesson.content === 'string'
+        ? JSON.parse(currentLesson.content)
+        : currentLesson.content;
+      
+      return content.pages || [];
+    } catch (error) {
+      console.error('解析课程内容失败:', error);
+      return [];
+    }
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
+    );
+  }
+
+  const pages = getPages();
+  const totalPages = pages.length;
+  const viewedCount = viewedPages.size;
+  const progress = totalPages > 0 ? Math.round((viewedCount / totalPages) * 100) : 0;
+
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+    }}>
+      {/* iOS风格导航栏 */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.15)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRadius: '20px',
+        padding: '12px 20px',
+        marginBottom: '20px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined style={{ fontSize: 18 }} />}
+          onClick={handleBack}
+          style={{
+            color: 'white',
+            fontWeight: 500,
+            fontSize: 15,
+            height: 40,
+            borderRadius: 12,
+            padding: '0 16px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: 'none',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          }}
+        >
+          {t('common.back')}
+        </Button>
+        
+        <div style={{ 
+          flex: 1,
+          color: 'white',
+          fontSize: 13,
+          opacity: 0.9,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
+        }}>
+          <span>{t('teaching.teaching')}</span>
+          <span>/</span>
+          <span>{t('teaching.module')}</span>
+          <span>/</span>
+          <span style={{ fontWeight: 600 }}>{currentLesson.title}</span>
+        </div>
+
+        <Button
+          type="text"
+          icon={<EditOutlined style={{ fontSize: 16 }} />}
+          onClick={handleEdit}
+          style={{
+            color: 'white',
+            fontWeight: 500,
+            fontSize: 14,
+            height: 40,
+            borderRadius: 12,
+            padding: '0 16px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: 'none',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          }}
+        >
+          {t('common.edit')}
+        </Button>
+      </div>
+
+      {/* iOS风格课程信息卡片 */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        padding: '32px',
+        marginBottom: '24px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+        border: '1px solid rgba(255, 255, 255, 0.3)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24 }}>
+          {/* 左侧图标 */}
+          <div style={{
+            width: 80,
+            height: 80,
+            borderRadius: 20,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)'
+          }}>
+            <BookOutlined style={{ fontSize: 36, color: 'white' }} />
+          </div>
+
+          {/* 课程信息 */}
+          <div style={{ flex: 1 }}>
+            <h1 style={{ 
+              margin: 0,
+              fontSize: 28,
+              fontWeight: 700,
+              color: '#1a1a1a',
+              marginBottom: 12,
+              letterSpacing: '-0.5px'
+            }}>
+              {currentLesson.title}
+            </h1>
+            
+            {currentLesson.description && (
+              <p style={{ 
+                color: '#666',
+                fontSize: 15,
+                lineHeight: 1.6,
+                margin: '0 0 20px 0'
+              }}>
+                {currentLesson.description}
+              </p>
+            )}
+
+            {/* 课程元信息 */}
+            <div style={{ 
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 20,
+              marginBottom: 20
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileTextOutlined style={{ color: '#667eea', fontSize: 16 }} />
+                <span style={{ fontSize: 14, color: '#666', fontWeight: 500 }}>
+                  {totalPages} {t('teaching.pages')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <EyeOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                <span style={{ fontSize: 14, color: '#666', fontWeight: 500 }}>
+                  {currentLesson.view_count || 0} {t('teaching.views')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                <span style={{ fontSize: 14, color: '#666', fontWeight: 500 }}>
+                  {t('teaching.created')}: {moment(currentLesson.created_at).format('YYYY-MM-DD')}
+                </span>
+              </div>
+            </div>
+
+            {/* 学习进度条 */}
+            <div style={{
+              background: '#f5f7fa',
+              borderRadius: 16,
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8
+                }}>
+                  <span style={{ fontSize: 13, color: '#666', fontWeight: 600 }}>
+                    {t('teaching.progress')}
+                  </span>
+                  <span style={{ fontSize: 13, color: '#667eea', fontWeight: 600 }}>
+                    {viewedCount} / {totalPages}
+                  </span>
+                </div>
+                <Progress 
+                  percent={progress}
+                  strokeColor={{
+                    '0%': '#667eea',
+                    '100%': '#764ba2'
+                  }}
+                  trailColor="rgba(0,0,0,0.06)"
+                  strokeWidth={8}
+                  showInfo={false}
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <div style={{
+                fontSize: 24,
+                fontWeight: 700,
+                color: '#667eea',
+                minWidth: 60,
+                textAlign: 'right'
+              }}>
+                {progress}%
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* iOS风格页面列表 */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        padding: '28px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+        border: '1px solid rgba(255, 255, 255, 0.3)'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 24,
+          paddingBottom: 20,
+          borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
+        }}>
+          <FileTextOutlined style={{ fontSize: 20, color: '#667eea' }} />
+          <h2 style={{ 
+            margin: 0,
+            fontSize: 20,
+            fontWeight: 700,
+            color: '#1a1a1a',
+            letterSpacing: '-0.3px'
+          }}>
+            {t('teaching.pageList')}
+          </h2>
+        </div>
+
+        {totalPages === 0 ? (
+          <Empty 
+            description={
+              <span style={{ color: '#999', fontSize: 14 }}>
+                {t('teaching.noPages')}
+              </span>
+            }
+            style={{ marginTop: 40, marginBottom: 40 }}
+          >
+            <Button 
+              type="primary"
+              icon={<EditOutlined />}
+              onClick={handleEdit}
+              style={{
+                height: 44,
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 600,
+                padding: '0 28px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)'
+              }}
+            >
+              {t('teaching.editContent')}
+            </Button>
+          </Empty>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {pages.map((page, index) => {
+              const pageNumber = index + 1;
+              const isViewed = viewedPages.has(pageNumber);
+              
+              return (
+                <div
+                  key={pageNumber}
+                  onClick={() => handleViewPage(pageNumber)}
+                  style={{
+                    background: isViewed 
+                      ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)'
+                      : 'rgba(0, 0, 0, 0.02)',
+                    borderRadius: 16,
+                    padding: '20px 24px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    border: isViewed 
+                      ? '2px solid rgba(102, 126, 234, 0.2)'
+                      : '2px solid transparent',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                    e.currentTarget.style.boxShadow = isViewed
+                      ? '0 8px 24px rgba(102, 126, 234, 0.15)'
+                      : '0 4px 12px rgba(0, 0, 0, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateX(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <div style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 20
+                  }}>
+                    {/* 序号徽章 */}
+                    <div style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 14,
+                      background: isViewed
+                        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                        : 'linear-gradient(135deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.08) 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: isViewed ? 'white' : '#999',
+                      flexShrink: 0,
+                      boxShadow: isViewed ? '0 4px 16px rgba(102, 126, 234, 0.3)' : 'none'
+                    }}>
+                      {pageNumber < 10 ? `0${pageNumber}` : pageNumber}
+                    </div>
+
+                    {/* 页面信息 */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 16,
+                        fontWeight: 600,
+                        color: '#1a1a1a',
+                        marginBottom: 6,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {page.title || `${t('teaching.page')} ${pageNumber}`}
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        {isViewed ? (
+                          <>
+                            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 14 }} />
+                            <span style={{ fontSize: 13, color: '#52c41a', fontWeight: 500 }}>
+                              {t('teaching.viewed')}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <ClockCircleOutlined style={{ color: '#999', fontSize: 14 }} />
+                            <span style={{ fontSize: 13, color: '#999', fontWeight: 500 }}>
+                              {t('teaching.notViewed')}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 进入按钮 */}
+                    <div style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: isViewed
+                        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                        : 'rgba(0, 0, 0, 0.04)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <RightOutlined style={{ 
+                        fontSize: 16,
+                        color: isViewed ? 'white' : '#999'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default LessonDetail;

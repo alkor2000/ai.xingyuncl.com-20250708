@@ -45,16 +45,6 @@
     "viewCount": "浏览次数",
     "pageCount": "页数",
     
-    "pages": "页",
-    "page": "第",
-    "pageList": "页面列表",
-    "noPages": "暂无页面",
-    "viewed": "已查看",
-    "notViewed": "未查看",
-    "enterPage": "进入页面",
-    "backToPageList": "返回页面列表",
-    "created": "创建",
-    
     "lessonTitle": "课程标题",
     "lessonTitleRequired": "请输入课程标题",
     "lessonDescription": "课程描述",

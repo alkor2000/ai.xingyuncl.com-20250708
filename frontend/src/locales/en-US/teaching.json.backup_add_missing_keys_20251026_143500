@@ -34,24 +34,11 @@
     "views": "Views",
     "createLesson": "Create Lesson",
     "editLesson": "Edit Lesson",
-    "editInfo": "Edit Info",
-    "editLessonInfo": "Edit Lesson Info",
-    "editContent": "Edit Content",
     "deleteLesson": "Delete Lesson",
     "confirmDeleteLesson": "Are you sure to delete this lesson?",
     "lessonCount": "Lessons",
     "viewCount": "Views",
     "pageCount": "Pages",
-    
-    "pages": "Pages",
-    "page": "Page",
-    "pageList": "Page List",
-    "noPages": "No pages",
-    "viewed": "Viewed",
-    "notViewed": "Not Viewed",
-    "enterPage": "Enter Page",
-    "backToPageList": "Back to Page List",
-    "created": "Created",
     
     "lessonTitle": "Lesson Title",
     "lessonTitleRequired": "Please enter lesson title",
@@ -171,9 +158,6 @@
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "toggleFullscreen": "Toggle Fullscreen",
-    
-    "teachingPlan": "Teaching Plan",
-    "homework": "Homework",
     
     "header": {
       "title": "Page Header HTML Configuration",

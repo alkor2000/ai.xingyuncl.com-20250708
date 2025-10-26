@@ -1,9 +1,6 @@
 /**
- * 课程查看器组件（最终优化版）
- * 优化：
- * 1. 底部控制条字体加粗
- * 2. 恢复全屏模式快捷键（F键、左右键）
- * 3. 修复翻译键（common.edit）
+ * 课程页面查看器（支持指定页码）
+ * 修改：支持通过 URL 参数 pageNumber 指定初始页面
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -29,7 +26,8 @@ import {
   SettingOutlined,
   BookOutlined,
   FileTextOutlined,
-  AimOutlined
+  AimOutlined,
+  UnorderedListOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +36,7 @@ import useAuthStore from '../../stores/authStore';
 
 const LessonViewer = () => {
   const { t } = useTranslation();
-  const { id } = useParams();
+  const { id, pageNumber } = useParams(); // 新增：获取 pageNumber 参数
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
@@ -64,6 +62,17 @@ const LessonViewer = () => {
       loadLesson();
     }
   }, [id]);
+
+  // 新增：URL pageNumber 变化时更新当前页
+  useEffect(() => {
+    if (pageNumber) {
+      const page = parseInt(pageNumber);
+      if (!isNaN(page) && page > 0) {
+        setCurrentPage(page);
+        setPageViewTime(Date.now());
+      }
+    }
+  }, [pageNumber]);
 
   const loadLesson = async () => {
     try {
@@ -104,18 +113,15 @@ const LessonViewer = () => {
     
     setShowControls(true);
     
-    // 清除之前的计时器
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
     
-    // 3秒后隐藏
     hideTimerRef.current = setTimeout(() => {
       setShowControls(false);
     }, 3000);
   };
 
-  // 鼠标在控制条上移动，重置隐藏计时器
   const handleMouseMoveOnControls = () => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
@@ -126,7 +132,6 @@ const LessonViewer = () => {
     }, 3000);
   };
 
-  // 清理计时器
   useEffect(() => {
     return () => {
       if (hideTimerRef.current) {
@@ -135,7 +140,7 @@ const LessonViewer = () => {
     };
   }, []);
 
-  // 全屏模式快捷键支持
+  // 全屏模式快捷键
   useEffect(() => {
     if (!isFullscreen) return;
 
@@ -158,7 +163,6 @@ const LessonViewer = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isFullscreen, currentPage]);
 
-  // 获取页面列表
   const getPages = () => {
     if (!currentLesson?.content) return [];
     
@@ -174,7 +178,6 @@ const LessonViewer = () => {
     }
   };
 
-  // 获取当前页面内容
   const getCurrentPageContent = () => {
     const pages = getPages();
     if (pages.length === 0) {
@@ -206,34 +209,28 @@ const LessonViewer = () => {
     return page?.html || page?.content || '';
   };
 
-  // 返回模块详情
+  // 返回课程页面列表
   const handleBack = () => {
-    if (currentLesson?.module_id) {
-      navigate(`/teaching/modules/${currentLesson.module_id}`);
-    } else {
-      navigate('/teaching');
-    }
+    navigate(`/teaching/lessons/${id}`);
   };
 
-  // 编辑课程
   const handleEdit = () => {
     navigate(`/teaching/lessons/${id}/edit`);
   };
 
-  // 切换页面
   const handlePageChange = (page) => {
     setCurrentPage(page);
     setPageViewTime(Date.now());
+    // 更新 URL（可选）
+    navigate(`/teaching/lessons/${id}/pages/${page}`, { replace: true });
   };
 
-  // 上一页
   const handlePrevPage = () => {
     if (currentPage > 1) {
       handlePageChange(currentPage - 1);
     }
   };
 
-  // 下一页
   const handleNextPage = () => {
     const pages = getPages();
     if (currentPage < pages.length) {
@@ -241,7 +238,6 @@ const LessonViewer = () => {
     }
   };
 
-  // 全屏切换
   const toggleFullscreen = () => {
     if (!isFullscreen) {
       const elem = containerRef.current;
@@ -261,12 +257,10 @@ const LessonViewer = () => {
     }
   };
 
-  // 监听全屏变化
   useEffect(() => {
     const handleFullscreenChange = () => {
       const fullscreen = !!document.fullscreenElement;
       setIsFullscreen(fullscreen);
-      // 退出全屏时重置控制条状态
       if (!fullscreen) {
         setShowControls(false);
       }
@@ -281,26 +275,19 @@ const LessonViewer = () => {
     };
   }, []);
 
-  // 更多菜单
   const moreMenuItems = {
     items: [
+      {
+        key: 'page_list',
+        label: t('teaching.pageList'),
+        icon: <UnorderedListOutlined />,
+        onClick: () => navigate(`/teaching/lessons/${id}`)
+      },
       {
         key: 'settings',
         label: t('common.settings'),
         icon: <SettingOutlined />,
         onClick: () => message.info('设置功能开发中')
-      },
-      {
-        key: 'teaching_plan',
-        label: t('teaching.teachingPlan'),
-        icon: <BookOutlined />,
-        onClick: () => message.info('教案功能开发中')
-      },
-      {
-        key: 'homework',
-        label: t('teaching.homework'),
-        icon: <FileTextOutlined />,
-        onClick: () => message.info('作业功能开发中')
       }
     ]
   };
@@ -334,7 +321,6 @@ const LessonViewer = () => {
         overflow: 'hidden'
       }}
     >
-      {/* 非全屏模式：顶部操作栏（优化布局） */}
       {!isFullscreen && (
         <div style={{
           background: 'white',
@@ -345,16 +331,14 @@ const LessonViewer = () => {
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          {/* 左侧：返回按钮 */}
           <Button 
             icon={<ArrowLeftOutlined />} 
             onClick={handleBack}
             size="large"
           >
-            {t('common.back')}
+            {t('teaching.backToPageList')}
           </Button>
 
-          {/* 中间：翻页控制 */}
           <Space size="middle">
             <Button
               icon={<LeftOutlined />}
@@ -384,9 +368,7 @@ const LessonViewer = () => {
             </Button>
           </Space>
 
-          {/* 右侧：功能按钮 */}
           <Space size="middle">
-            {/* 进度 */}
             <Tooltip title={`${t('teaching.progress')}: ${progress}%`}>
               <div style={{ 
                 display: 'flex', 
@@ -405,12 +387,10 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
-            {/* 编辑 */}
             <Button icon={<EditOutlined />} onClick={handleEdit}>
               {t('common.edit')}
             </Button>
 
-            {/* 全屏（加大显眼） */}
             <Tooltip title={t('teaching.fullscreen')}>
               <Button
                 type="primary"
@@ -430,7 +410,6 @@ const LessonViewer = () => {
         </div>
       )}
 
-      {/* 全屏内容区域 */}
       <div style={{ 
         flex: 1,
         background: '#fff',
@@ -463,10 +442,8 @@ const LessonViewer = () => {
         )}
       </div>
 
-      {/* 全屏模式：底部透明触发区域 + 控制条 */}
       {isFullscreen && (
         <>
-          {/* 底部透明触发区域（200px高度） */}
           <div
             onMouseEnter={handleMouseEnterTrigger}
             style={{
@@ -480,7 +457,6 @@ const LessonViewer = () => {
             }}
           />
 
-          {/* 底部控制条（更透明：0.25，字体加粗） */}
           <div
             onMouseMove={handleMouseMoveOnControls}
             style={{
@@ -502,7 +478,6 @@ const LessonViewer = () => {
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
             }}
           >
-            {/* 上一页 */}
             <Tooltip title={t('teaching.prevPage')} placement="top">
               <Button
                 type="text"
@@ -517,7 +492,6 @@ const LessonViewer = () => {
               />
             </Tooltip>
 
-            {/* 页码显示（加粗字体） */}
             <span style={{ 
               color: 'white', 
               fontSize: 13,
@@ -529,7 +503,6 @@ const LessonViewer = () => {
               {currentPage} / {totalPages}
             </span>
 
-            {/* 下一页 */}
             <Tooltip title={t('teaching.nextPage')} placement="top">
               <Button
                 type="text"
@@ -550,7 +523,6 @@ const LessonViewer = () => {
               margin: '0 4px'
             }} />
 
-            {/* 进度 */}
             <Tooltip title={`${t('teaching.progress')}: ${progress}%`} placement="top">
               <div style={{ cursor: 'default' }}>
                 <Progress
@@ -567,7 +539,18 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
-            {/* 编辑 */}
+            <Tooltip title={t('teaching.pageList')} placement="top">
+              <Button
+                type="text"
+                icon={<UnorderedListOutlined />}
+                onClick={handleBack}
+                style={{
+                  color: 'white',
+                  borderRadius: 20
+                }}
+              />
+            </Tooltip>
+
             <Tooltip title={t('common.edit')} placement="top">
               <Button
                 type="text"
@@ -580,20 +563,6 @@ const LessonViewer = () => {
               />
             </Tooltip>
 
-            {/* 返回 */}
-            <Tooltip title={t('common.back')} placement="top">
-              <Button
-                type="text"
-                icon={<ArrowLeftOutlined />}
-                onClick={handleBack}
-                style={{
-                  color: 'white',
-                  borderRadius: 20
-                }}
-              />
-            </Tooltip>
-
-            {/* 退出全屏 */}
             <Tooltip title={t('teaching.exitFullscreen')} placement="top">
               <Button
                 type="text"
@@ -606,7 +575,6 @@ const LessonViewer = () => {
               />
             </Tooltip>
 
-            {/* 更多菜单 */}
             <Dropdown 
               menu={moreMenuItems} 
               trigger={['click']}

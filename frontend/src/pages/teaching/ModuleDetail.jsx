@@ -1,8 +1,6 @@
 /**
  * 教学模块详情页面（课程编辑优化版）
- * 新增功能：
- * 1. 铅笔图标 = 编辑课程元信息（标题、描述、封面图）
- * 2. 三点菜单 = 编辑内容、删除
+ * 修改：课程点击跳转到课程页面列表，而非直接查看器
  */
 
 import React, { useEffect, useState } from 'react';
@@ -84,16 +82,15 @@ const ModuleDetail = () => {
   const [activeTab, setActiveTab] = useState('lessons');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [lessonModalVisible, setLessonModalVisible] = useState(false);
-  const [editLessonModalVisible, setEditLessonModalVisible] = useState(false); // 新增：编辑课程信息模态框
-  const [editingLesson, setEditingLesson] = useState(null); // 新增：当前编辑的课程
+  const [editLessonModalVisible, setEditLessonModalVisible] = useState(false);
+  const [editingLesson, setEditingLesson] = useState(null);
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [editForm] = Form.useForm();
   const [lessonForm] = Form.useForm();
-  const [editLessonForm] = Form.useForm(); // 新增：编辑课程信息表单
+  const [editLessonForm] = Form.useForm();
   const [permissionForm] = Form.useForm();
 
-  // 加载数据
   useEffect(() => {
     if (id) {
       loadModuleData();
@@ -110,12 +107,10 @@ const ModuleDetail = () => {
     }
   };
 
-  // 返回列表
   const handleBack = () => {
     navigate('/teaching');
   };
 
-  // 打开编辑模态框
   const handleEdit = () => {
     editForm.setFieldsValue({
       name: currentModule.name,
@@ -127,7 +122,6 @@ const ModuleDetail = () => {
     setEditModalVisible(true);
   };
 
-  // 提交编辑
   const handleEditSubmit = async () => {
     try {
       const values = await editForm.validateFields();
@@ -140,7 +134,6 @@ const ModuleDetail = () => {
     }
   };
 
-  // 删除模块（检查是否有课程）
   const handleDelete = async () => {
     if (lessons.length > 0) {
       message.warning('请先删除模块内的所有课程');
@@ -156,7 +149,6 @@ const ModuleDetail = () => {
     }
   };
 
-  // 创建课程
   const handleCreateLesson = async () => {
     try {
       const values = await lessonForm.validateFields();
@@ -174,12 +166,11 @@ const ModuleDetail = () => {
     }
   };
 
-  // 查看课程
+  // 修改：跳转到课程页面列表，而非直接查看器
   const handleViewLesson = (lesson) => {
     navigate(`/teaching/lessons/${lesson.id}`);
   };
 
-  // 新增：打开编辑课程信息模态框
   const handleEditLessonInfo = (lesson, e) => {
     if (e) e.stopPropagation();
     setEditingLesson(lesson);
@@ -193,7 +184,6 @@ const ModuleDetail = () => {
     setEditLessonModalVisible(true);
   };
 
-  // 新增：提交课程信息编辑
   const handleEditLessonSubmit = async () => {
     try {
       const values = await editLessonForm.validateFields();
@@ -208,13 +198,11 @@ const ModuleDetail = () => {
     }
   };
 
-  // 编辑课程内容（跳转到编辑器）
   const handleEditLessonContent = (lesson, e) => {
     if (e) e.stopPropagation();
     navigate(`/teaching/lessons/${lesson.id}/edit`);
   };
 
-  // 删除课程
   const handleDeleteLesson = async (lessonId, e) => {
     if (e) e.stopPropagation();
     try {
@@ -225,7 +213,6 @@ const ModuleDetail = () => {
     }
   };
 
-  // 授予权限
   const handleGrantPermission = async () => {
     try {
       const values = await permissionForm.validateFields();
@@ -242,7 +229,6 @@ const ModuleDetail = () => {
     }
   };
 
-  // 撤销权限
   const handleRevokePermission = async (permissionId) => {
     try {
       await revokePermission(permissionId, id);
@@ -252,7 +238,6 @@ const ModuleDetail = () => {
     }
   };
 
-  // 批量撤销权限
   const handleBatchRevoke = async () => {
     if (selectedPermissions.length === 0) {
       message.warning(t('teaching.selectPermissions'));
@@ -268,21 +253,18 @@ const ModuleDetail = () => {
     }
   };
 
-  // 可见性颜色
   const visibilityColors = {
     public: 'green',
     group: 'blue',
     private: 'orange'
   };
 
-  // 状态颜色
   const statusColors = {
     draft: 'default',
     published: 'success',
     archived: 'error'
   };
 
-  // 内容类型颜色
   const contentTypeColors = {
     course: 'blue',
     experiment: 'cyan',
@@ -294,7 +276,6 @@ const ModuleDetail = () => {
     assessment: 'volcano'
   };
 
-  // 课程操作菜单（修改：只包含编辑内容和删除）
   const getLessonActionMenu = (lesson) => ({
     items: [
       {
@@ -326,7 +307,6 @@ const ModuleDetail = () => {
     ]
   });
 
-  // 权限列表列配置
   const permissionColumns = [
     {
       title: t('teaching.permissionTarget'),
@@ -420,7 +400,6 @@ const ModuleDetail = () => {
     );
   }
 
-  // Tabs配置
   const tabItems = [
     {
       key: 'lessons',
@@ -432,7 +411,6 @@ const ModuleDetail = () => {
       ),
       children: (
         <div>
-          {/* 课程列表头部 */}
           <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
             <Button
@@ -444,7 +422,6 @@ const ModuleDetail = () => {
             </Button>
           </div>
 
-          {/* 课程卡片网格 */}
           <Spin spinning={lessonsLoading}>
             {lessons.length === 0 ? (
               <Empty 
@@ -552,7 +529,6 @@ const ModuleDetail = () => {
                                 <Badge count={lesson.page_count} showZero style={{ backgroundColor: '#52c41a', marginRight: 8 }} />
                                 {lesson.view_count} {t('teaching.views')}
                               </span>
-                              {/* 新增：铅笔图标和三点菜单 */}
                               <Space size={4}>
                                 <Tooltip title={t('teaching.editInfo')}>
                                   <EditOutlined 
@@ -644,7 +620,6 @@ const ModuleDetail = () => {
 
   return (
     <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
-      {/* 面包屑 */}
       <Breadcrumb style={{ marginBottom: 16 }}>
         <Breadcrumb.Item>
           <a onClick={handleBack}>{t('teaching.teaching')}</a>
@@ -652,13 +627,11 @@ const ModuleDetail = () => {
         <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
       </Breadcrumb>
 
-      {/* 精简的模块信息页头 */}
       <Card 
         style={{ marginBottom: 20 }}
         bodyStyle={{ padding: '16px 24px' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {/* 左侧：模块信息 */}
           <Space size="large">
             <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
             <div>
@@ -683,7 +656,6 @@ const ModuleDetail = () => {
             </div>
           </Space>
 
-          {/* 右侧：操作按钮 */}
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
               {t('common.back')}
@@ -707,14 +679,12 @@ const ModuleDetail = () => {
         </div>
       </Card>
 
-      {/* Tabs - 课程列表立即可见 */}
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
         items={tabItems}
       />
 
-      {/* 编辑模块模态框 */}
       <Modal
         title={t('teaching.editModule')}
         open={editModalVisible}
@@ -755,7 +725,6 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
-      {/* 创建课程模态框 */}
       <Modal
         title={t('teaching.createLesson')}
         open={lessonModalVisible}
@@ -798,7 +767,6 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
-      {/* 新增：编辑课程信息模态框 */}
       <Modal
         title={t('teaching.editLessonInfo')}
         open={editLessonModalVisible}
@@ -849,7 +817,6 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
-      {/* 授予权限模态框 */}
       <Modal
         title={t('teaching.grantPermission')}
         open={permissionModalVisible}

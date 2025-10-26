@@ -1,15 +1,16 @@
 /**
- * 课程编辑器组件（最终精简版）
+ * 课程编辑器组件（优化版）
  * 三栏布局：左侧页面管理 | 中间Monaco编辑器 | 右侧实时预览
- * 支持多页面编辑、实时预览
- * 特点：无草稿功能、无未保存提示、更宽的预览区域
+ * 支持多页面编辑、自动保存草稿、实时预览
+ * 修复：1. 自动静默加载草稿 2. 预览区域滚动支持
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout,
   Button,
   Input,
+  Card,
   List,
   Space,
   Breadcrumb,
@@ -17,9 +18,11 @@ import {
   Modal,
   Form,
   Select,
+  Tag,
   Tooltip,
   Popconfirm,
-  Badge
+  Badge,
+  Tabs
 } from 'antd';
 import {
   SaveOutlined,
@@ -29,14 +32,19 @@ import {
   ArrowLeftOutlined,
   FileTextOutlined,
   EditOutlined,
-  SyncOutlined
+  CopyOutlined,
+  CheckCircleOutlined,
+  SyncOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
+import moment from 'moment';
 
 const { Sider, Content } = Layout;
+const { TextArea } = Input;
 
 const LessonEditor = () => {
   const { t } = useTranslation();
@@ -46,8 +54,12 @@ const LessonEditor = () => {
   const {
     currentLesson,
     currentLessonLoading,
+    draft,
+    draftSaving,
     fetchLesson,
-    updateLesson
+    updateLesson,
+    saveDraft,
+    fetchDraft
   } = useTeachingStore();
 
   // 页面状态
@@ -65,12 +77,15 @@ const LessonEditor = () => {
 
   // UI状态
   const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
   const [previewContent, setPreviewContent] = useState('');
   const [pageModalVisible, setPageModalVisible] = useState(false);
   const [editingPageIndex, setEditingPageIndex] = useState(null);
   const [editorReady, setEditorReady] = useState(false);
 
   const [pageForm] = Form.useForm();
+  const autoSaveTimerRef = useRef(null);
 
   // 加载课程数据
   useEffect(() => {
@@ -102,15 +117,79 @@ const LessonEditor = () => {
           setHtmlContent(content.pages[0].html || '');
         }
       }
+
+      // 尝试加载草稿（修改：自动静默加载，不弹确认框）
+      try {
+        const draftData = await fetchDraft(id);
+        if (draftData && draftData.draft_content) {
+          const draftContent = typeof draftData.draft_content === 'string'
+            ? JSON.parse(draftData.draft_content)
+            : draftData.draft_content;
+          
+          if (draftContent.pages && draftContent.pages.length > 0) {
+            setPages(draftContent.pages);
+            setHtmlContent(draftContent.pages[0]?.html || '');
+            // 静默提示已加载草稿
+            message.info(t('teaching.draftLoaded'), 2);
+          }
+        }
+      } catch (error) {
+        console.log('没有找到草稿或草稿加载失败');
+      }
     } catch (error) {
       message.error(t('teaching.loadFailed'));
     }
   };
 
+  // 监听内容变化
+  useEffect(() => {
+    setHasChanges(true);
+    
+    // 自动保存草稿
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleAutoSave();
+    }, 3000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [htmlContent, pages]);
+
   // 实时预览更新
   useEffect(() => {
     setPreviewContent(htmlContent || '<div style="padding:20px;color:#999;">开始编写内容...</div>');
   }, [htmlContent]);
+
+  // 自动保存草稿
+  const handleAutoSave = async () => {
+    if (!id) return;
+
+    try {
+      const draftContent = {
+        pages: pages.map((page, index) => ({
+          ...page,
+          html: index === currentPageIndex ? htmlContent : page.html
+        })),
+        info: lessonInfo
+      };
+
+      await saveDraft({
+        lesson_id: id,
+        draft_content: JSON.stringify(draftContent),
+        draft_title: lessonInfo.title
+      });
+
+      setLastSavedTime(new Date());
+    } catch (error) {
+      console.error('自动保存草稿失败:', error);
+    }
+  };
 
   // 保存当前页面到pages数组
   const saveCurrentPageContent = () => {
@@ -220,6 +299,8 @@ const LessonEditor = () => {
 
       await updateLesson(id, updateData);
       
+      setHasChanges(false);
+      setLastSavedTime(new Date());
       message.success(t('teaching.saveSuccess'));
     } catch (error) {
       message.error(t('teaching.saveFailed'));
@@ -228,9 +309,21 @@ const LessonEditor = () => {
     }
   };
 
-  // 返回（简化版：直接返回，不弹确认框）
+  // 返回
   const handleBack = () => {
-    navigate(`/teaching/modules/${currentLesson?.module_id}`);
+    if (hasChanges) {
+      Modal.confirm({
+        title: t('teaching.unsavedChanges'),
+        content: t('teaching.unsavedChangesContent'),
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
+        onOk: () => {
+          navigate(`/teaching/modules/${currentLesson?.module_id}`);
+        }
+      });
+    } else {
+      navigate(`/teaching/modules/${currentLesson?.module_id}`);
+    }
   };
 
   // 预览
@@ -257,6 +350,18 @@ const LessonEditor = () => {
 
   const handleEditorDidMount = (editor, monaco) => {
     setEditorReady(true);
+  };
+
+  // 内容类型颜色
+  const contentTypeColors = {
+    course: 'blue',
+    experiment: 'cyan',
+    exercise: 'geekblue',
+    reference: 'purple',
+    teaching_plan: 'orange',
+    answer: 'red',
+    guide: 'magenta',
+    assessment: 'volcano'
   };
 
   if (currentLessonLoading || !currentLesson) {
@@ -314,6 +419,24 @@ const LessonEditor = () => {
                 <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
                 <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
               </Select>
+
+              {draftSaving && (
+                <Tag icon={<SyncOutlined spin />} color="processing">
+                  {t('teaching.autoSaving')}
+                </Tag>
+              )}
+              
+              {lastSavedTime && !draftSaving && (
+                <Tag icon={<CheckCircleOutlined />} color="success">
+                  {t('teaching.lastSaved')}: {moment(lastSavedTime).fromNow()}
+                </Tag>
+              )}
+
+              {hasChanges && !draftSaving && (
+                <Tag icon={<WarningOutlined />} color="warning">
+                  {t('teaching.unsaved')}
+                </Tag>
+              )}
             </Space>
           </div>
 
@@ -473,15 +596,14 @@ const LessonEditor = () => {
           </div>
         </Content>
 
-        {/* 右侧 - 实时预览（优化：增加宽度到800px，使用绝对定位）*/}
+        {/* 右侧 - 实时预览（修改：增加滚动支持）*/}
         <Sider
-          width={800}
+          width={500}
           style={{
             background: 'white',
             borderLeft: '1px solid #e8e8e8',
             display: 'flex',
-            flexDirection: 'column',
-            position: 'relative'
+            flexDirection: 'column'
           }}
         >
           <div style={{
@@ -495,11 +617,7 @@ const LessonEditor = () => {
           </div>
 
           <div style={{ 
-            position: 'absolute',
-            top: '49px',
-            left: 0,
-            right: 0,
-            bottom: 0,
+            flex: 1, 
             overflow: 'auto',
             background: '#f5f5f5'
           }}>
