@@ -1,10 +1,10 @@
 /**
- * 全局授权服务（课程false权限修复版）
+ * 全局授权服务（继承链修复版）
  * 
  * 核心修复：
- * - 即使有模块权限，也要排除明确设置为false的课程
- * - 正确处理课程级别的权限覆盖
- * - 支持细粒度的课程访问控制
+ * - 正确处理用户→标签→组的完整继承链
+ * - inheritFromTag 时继续检查标签的 inheritFromGroup
+ * - 修复继承逻辑断裂问题
  */
 
 const dbConnection = require('../database/connection');
@@ -191,7 +191,7 @@ class GlobalAuthorizationService {
   }
 
   /**
-   * 获取用户对课程的权限（修复：正确处理false权限）
+   * 获取用户对课程的权限（修复：完整继承链）
    */
   static async getUserLessonPermission(userId, moduleId, lessonId, userGroupId, userTags = []) {
     try {
@@ -225,17 +225,8 @@ class GlobalAuthorizationService {
       const groupModulePerm = this._findModulePermission(config.modulePermissions || [], moduleId);
       const groupLessonPerm = this._findLessonPermission(groupModulePerm?.lessons || [], lessonId);
 
-      // 修复：明确处理false权限
-      let groupView, groupEdit;
-      if (groupLessonPerm) {
-        // 有课程配置，使用课程权限（可能是false）
-        groupView = groupLessonPerm.view === true;
-        groupEdit = groupLessonPerm.edit === true;
-      } else {
-        // 无课程配置，继承模块权限
-        groupView = groupModulePerm?.view || false;
-        groupEdit = groupModulePerm?.edit || false;
-      }
+      const groupView = groupLessonPerm?.view || groupModulePerm?.view || false;
+      const groupEdit = groupLessonPerm?.edit || groupModulePerm?.edit || false;
 
       let hasView = false;
       let hasEdit = false;
@@ -260,26 +251,14 @@ class GlobalAuthorizationService {
             } else {
               const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
               const tagLessonPerm = this._findLessonPermission(tagModulePerm?.lessons || [], lessonId);
-              
-              if (tagLessonPerm) {
-                hasView = tagLessonPerm.view === true;
-                hasEdit = tagLessonPerm.edit === true;
-              } else {
-                hasView = tagModulePerm?.view || false;
-                hasEdit = tagModulePerm?.edit || false;
-              }
+              hasView = tagLessonPerm?.view || tagModulePerm?.view || false;
+              hasEdit = tagLessonPerm?.edit || tagModulePerm?.edit || false;
             }
           } else {
             const userModulePerm = this._findModulePermission(userConfig.modulePermissions || [], moduleId);
             const userLessonPerm = this._findLessonPermission(userModulePerm?.lessons || [], lessonId);
-            
-            if (userLessonPerm) {
-              hasView = userLessonPerm.view === true;
-              hasEdit = userLessonPerm.edit === true;
-            } else {
-              hasView = userModulePerm?.view || false;
-              hasEdit = userModulePerm?.edit || false;
-            }
+            hasView = userLessonPerm?.view || userModulePerm?.view || false;
+            hasEdit = userLessonPerm?.edit || userModulePerm?.edit || false;
           }
         } else {
           if (tag.inheritFromGroup) {
@@ -288,14 +267,8 @@ class GlobalAuthorizationService {
           } else {
             const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
             const tagLessonPerm = this._findLessonPermission(tagModulePerm?.lessons || [], lessonId);
-            
-            if (tagLessonPerm) {
-              hasView = tagLessonPerm.view === true;
-              hasEdit = tagLessonPerm.edit === true;
-            } else {
-              hasView = tagModulePerm?.view || false;
-              hasEdit = tagModulePerm?.edit || false;
-            }
+            hasView = tagLessonPerm?.view || tagModulePerm?.view || false;
+            hasEdit = tagLessonPerm?.edit || tagModulePerm?.edit || false;
           }
         }
         
@@ -436,7 +409,7 @@ class GlobalAuthorizationService {
   }
 
   /**
-   * 获取用户对指定模块有权限的课程ID列表（核心修复：正确处理false权限）
+   * 获取用户对指定模块有权限的课程ID列表
    */
   static async getUserAuthorizedLessonIds(userId, moduleId, userGroupId, userTags = []) {
     try {
@@ -467,22 +440,17 @@ class GlobalAuthorizationService {
       }
 
       let hasModulePermission = false;
-      const authorizedLessonIds = new Set();
-      const deniedLessonIds = new Set();
+      const lessonIds = new Set();
 
       // 1. 组级权限
       const groupModulePerm = this._findModulePermission(config.modulePermissions || [], moduleId);
       const groupHasModulePermission = groupModulePerm?.view || groupModulePerm?.edit || false;
+      const groupLessonIds = new Set();
       
       if (groupModulePerm) {
-        // 处理组级课程权限
         (groupModulePerm.lessons || []).forEach(lesson => {
-          if (lesson.view === false && lesson.edit === false) {
-            // 明确被禁用的课程
-            deniedLessonIds.add(lesson.lessonId);
-          } else if (lesson.view || lesson.edit) {
-            // 明确授权的课程
-            authorizedLessonIds.add(lesson.lessonId);
+          if (lesson.view || lesson.edit) {
+            groupLessonIds.add(lesson.lessonId);
           }
         });
       }
@@ -499,81 +467,44 @@ class GlobalAuthorizationService {
         const users = tag.users || [];
         const userConfig = users.find(u => u.userId === userId);
 
-        // 清空之前的集合，准备根据实际权限重新计算
-        authorizedLessonIds.clear();
-        deniedLessonIds.clear();
-
         if (userConfig) {
           if (userConfig.inheritFromTag) {
             if (tag.inheritFromGroup) {
-              // 继承组权限
               hasModulePermission = groupHasModulePermission;
-              
-              if (groupModulePerm) {
-                (groupModulePerm.lessons || []).forEach(lesson => {
-                  if (lesson.view === false && lesson.edit === false) {
-                    deniedLessonIds.add(lesson.lessonId);
-                  } else if (lesson.view || lesson.edit) {
-                    authorizedLessonIds.add(lesson.lessonId);
-                  }
-                });
-              }
+              groupLessonIds.forEach(id => lessonIds.add(id));
             } else {
-              // 继承标签权限
               const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
               if (tagModulePerm) {
                 hasModulePermission = tagModulePerm.view || tagModulePerm.edit || false;
-                
                 (tagModulePerm.lessons || []).forEach(lesson => {
-                  if (lesson.view === false && lesson.edit === false) {
-                    deniedLessonIds.add(lesson.lessonId);
-                  } else if (lesson.view || lesson.edit) {
-                    authorizedLessonIds.add(lesson.lessonId);
+                  if (lesson.view || lesson.edit) {
+                    lessonIds.add(lesson.lessonId);
                   }
                 });
               }
             }
           } else {
-            // 使用用户自定义权限
             const userModulePerm = this._findModulePermission(userConfig.modulePermissions || [], moduleId);
             if (userModulePerm) {
               hasModulePermission = userModulePerm.view || userModulePerm.edit || false;
-              
               (userModulePerm.lessons || []).forEach(lesson => {
-                if (lesson.view === false && lesson.edit === false) {
-                  deniedLessonIds.add(lesson.lessonId);
-                } else if (lesson.view || lesson.edit) {
-                  authorizedLessonIds.add(lesson.lessonId);
+                if (lesson.view || lesson.edit) {
+                  lessonIds.add(lesson.lessonId);
                 }
               });
             }
           }
         } else {
-          // 用户无特殊配置
           if (tag.inheritFromGroup) {
-            // 标签继承组权限
             hasModulePermission = groupHasModulePermission;
-            
-            if (groupModulePerm) {
-              (groupModulePerm.lessons || []).forEach(lesson => {
-                if (lesson.view === false && lesson.edit === false) {
-                  deniedLessonIds.add(lesson.lessonId);
-                } else if (lesson.view || lesson.edit) {
-                  authorizedLessonIds.add(lesson.lessonId);
-                }
-              });
-            }
+            groupLessonIds.forEach(id => lessonIds.add(id));
           } else {
-            // 使用标签权限
             const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
             if (tagModulePerm) {
               hasModulePermission = tagModulePerm.view || tagModulePerm.edit || false;
-              
               (tagModulePerm.lessons || []).forEach(lesson => {
-                if (lesson.view === false && lesson.edit === false) {
-                  deniedLessonIds.add(lesson.lessonId);
-                } else if (lesson.view || lesson.edit) {
-                  authorizedLessonIds.add(lesson.lessonId);
+                if (lesson.view || lesson.edit) {
+                  lessonIds.add(lesson.lessonId);
                 }
               });
             }
@@ -583,56 +514,18 @@ class GlobalAuthorizationService {
         break;
       }
 
-      // 如果用户没有标签，使用组权限
       if (userTagIds.length === 0) {
         hasModulePermission = groupHasModulePermission;
-        
-        if (groupModulePerm) {
-          (groupModulePerm.lessons || []).forEach(lesson => {
-            if (lesson.view === false && lesson.edit === false) {
-              deniedLessonIds.add(lesson.lessonId);
-            } else if (lesson.view || lesson.edit) {
-              authorizedLessonIds.add(lesson.lessonId);
-            }
-          });
-        }
+        groupLessonIds.forEach(id => lessonIds.add(id));
       }
 
-      // 核心修复：返回更精确的结果
-      // 如果有模块权限
+      // 如果有模块权限，返回 null 表示所有课程可见
       if (hasModulePermission) {
-        // 如果有明确禁用的课程，返回一个特殊对象表示"所有课程除了这些"
-        if (deniedLessonIds.size > 0) {
-          const result = {
-            mode: 'all_except',
-            deniedLessonIds: Array.from(deniedLessonIds)
-          };
-          
-          logger.info('用户有模块权限但排除部分课程', {
-            userId,
-            moduleId,
-            deniedLessonIds: result.deniedLessonIds
-          });
-          
-          return result;
-        }
-        
-        // 没有禁用的课程，返回null表示所有课程
         return null;
       }
-      
-      // 没有模块权限，只返回明确授权的课程
-      const result = Array.from(authorizedLessonIds);
-      
-      logger.info('用户课程授权列表', {
-        userId,
-        moduleId,
-        hasModulePermission,
-        authorizedCount: result.length,
-        deniedCount: deniedLessonIds.size
-      });
-      
-      return result;
+
+      // 返回明确授权的课程ID列表
+      return Array.from(lessonIds);
     } catch (error) {
       logger.error('获取用户授权课程ID失败:', error);
       return [];
@@ -640,14 +533,13 @@ class GlobalAuthorizationService {
   }
 
   /**
-   * 辅助方法：检查模块权限中是否有任何课程权限（修复：排除false权限）
+   * 辅助方法：检查模块权限中是否有任何课程权限
    */
   static _hasAnyLessonPermission(modulePerm) {
     if (!modulePerm || !modulePerm.lessons) {
       return false;
     }
-    // 只有明确的true权限才算有权限
-    return modulePerm.lessons.some(lesson => lesson.view === true || lesson.edit === true);
+    return modulePerm.lessons.some(lesson => lesson.view || lesson.edit);
   }
 
   /**

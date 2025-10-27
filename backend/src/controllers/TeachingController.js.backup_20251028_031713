@@ -1,10 +1,9 @@
 /**
- * 教学系统控制器（支持课程级false权限版）
+ * 教学系统控制器（修复版：过滤空分组）
  * 
  * 核心修复：
- * - getModuleLessons: 正确处理新的授权返回格式
- * - 支持 {mode: 'all_except', deniedLessonIds: [...]} 格式
- * - 过滤掉被明确禁用的课程
+ * - getModules: 按分组返回时，过滤掉没有可访问模块的空分组
+ * - 支持课程级权限过滤
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -608,7 +607,7 @@ class TeachingController {
   }
 
   /**
-   * 获取模块的课程列表（核心修复：正确处理新的授权返回格式）
+   * 获取模块的课程列表（修复：添加课程级权限过滤）
    */
   static async getModuleLessons(req, res) {
     try {
@@ -651,49 +650,24 @@ class TeachingController {
 
       if (!isSuperAdmin && !isCreator) {
         // 普通用户和admin：检查课程级授权
-        const authResult = await GlobalAuthorizationService.getUserAuthorizedLessonIds(
+        const authorizedLessonIds = await GlobalAuthorizationService.getUserAuthorizedLessonIds(
           user.id,
           parseInt(moduleId),
           user.group_id,
           userTags
         );
 
-        logger.info('课程授权检查结果', {
-          userId: user.id,
-          moduleId,
-          authResult
-        });
-
-        if (authResult === null) {
+        if (authorizedLessonIds === null) {
           // null 表示所有课程可见（有模块级权限）
           filteredLessons = allLessons;
-        } else if (authResult && typeof authResult === 'object' && authResult.mode === 'all_except') {
-          // 新格式：所有课程除了被禁用的
-          const deniedIds = authResult.deniedLessonIds || [];
-          filteredLessons = allLessons.filter(lesson => 
-            !deniedIds.includes(lesson.id)
-          );
-          
-          logger.info('过滤被禁用的课程', {
-            totalLessons: allLessons.length,
-            deniedCount: deniedIds.length,
-            remainingCount: filteredLessons.length
-          });
-        } else if (Array.isArray(authResult)) {
-          // 数组格式：只返回明确授权的课程
-          if (authResult.length === 0) {
-            // 空数组表示没有任何课程权限
-            filteredLessons = [];
-          } else {
-            // 只返回授权的课程
-            filteredLessons = allLessons.filter(lesson => 
-              authResult.includes(lesson.id)
-            );
-          }
-        } else {
-          // 未知格式，默认无权限
-          logger.warn('未知的授权返回格式', { authResult });
+        } else if (authorizedLessonIds.length === 0) {
+          // 空数组表示没有任何课程权限
           filteredLessons = [];
+        } else {
+          // 只返回授权的课程
+          filteredLessons = allLessons.filter(lesson => 
+            authorizedLessonIds.includes(lesson.id)
+          );
         }
       }
 
