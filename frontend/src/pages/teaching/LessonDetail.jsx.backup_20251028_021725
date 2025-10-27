@@ -1,8 +1,7 @@
 /**
- * 课程详情页面（极简专业版 - 添加权限控制）
+ * 课程详情页面（极简专业版）
  * 功能：显示课程包含的所有页面，用户可以选择要查看的页面
  * 设计：极简风格，去除冗余信息，突出核心内容
- * 权限：根据用户权限决定是否显示编辑按钮
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,20 +19,16 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
-import useAuthStore from '../../stores/authStore';  // 修正：使用authStore而不是userStore
 
 const LessonDetail = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();  // 从authStore获取用户信息
 
   const {
     currentLesson,
     currentLessonLoading,
-    currentModule,
-    fetchLesson,
-    fetchModule
+    fetchLesson
   } = useTeachingStore();
 
   const [viewedPages, setViewedPages] = useState(new Set());
@@ -53,36 +48,12 @@ const LessonDetail = () => {
     }
   }, [id]);
 
-  // 加载课程和模块信息
   const loadLesson = async () => {
     try {
-      const lesson = await fetchLesson(id);
-      // 如果有模块ID，加载模块信息以获取权限
-      if (lesson?.module_id) {
-        await fetchModule(lesson.module_id);
-      }
+      await fetchLesson(id);
     } catch (error) {
       console.error('加载课程失败:', error);
     }
-  };
-
-  // 权限检查函数（与LessonViewer保持一致）
-  const hasEditPermission = () => {
-    if (!user) return false;
-    
-    // 超级管理员有所有权限
-    if (user.role === 'super_admin') return true;
-    
-    // 课程创建者有编辑权限
-    if (currentLesson?.creator_id === user.id) return true;
-    
-    // 模块创建者有编辑权限
-    if (currentModule?.creator_id === user.id) return true;
-    
-    // 检查用户对模块的权限
-    if (currentModule?.user_permission === 'edit') return true;
-    
-    return false;
   };
 
   const handleBack = () => {
@@ -94,11 +65,6 @@ const LessonDetail = () => {
   };
 
   const handleEdit = () => {
-    // 再次检查权限
-    if (!hasEditPermission()) {
-      console.warn('用户没有编辑权限');
-      return;
-    }
     navigate(`/teaching/lessons/${id}/edit`);
   };
 
@@ -142,7 +108,6 @@ const LessonDetail = () => {
 
   const pages = getPages();
   const totalPages = pages.length;
-  const canEdit = hasEditPermission(); // 计算编辑权限
 
   return (
     <div style={{ 
@@ -198,25 +163,20 @@ const LessonDetail = () => {
           <span style={{ color: 'white' }}>{currentLesson.title}</span>
         </div>
 
-        {/* 根据权限决定是否显示编辑按钮 */}
-        {canEdit ? (
-          <Button
-            type="text"
-            icon={<EditOutlined style={{ fontSize: 13 }} />}
-            onClick={handleEdit}
-            style={{
-              color: 'white',
-              fontSize: 13,
-              height: 32,
-              padding: '0 12px',
-              border: 'none'
-            }}
-          >
-            {t('common.edit')}
-          </Button>
-        ) : (
-          <div style={{ width: 80 }}></div> // 占位符，保持布局平衡
-        )}
+        <Button
+          type="text"
+          icon={<EditOutlined style={{ fontSize: 13 }} />}
+          onClick={handleEdit}
+          style={{
+            color: 'white',
+            fontSize: 13,
+            height: 32,
+            padding: '0 12px',
+            border: 'none'
+          }}
+        >
+          {t('common.edit')}
+        </Button>
       </div>
 
       {/* 课程信息卡片 - 极简版（居中） */}
@@ -292,23 +252,20 @@ const LessonDetail = () => {
             }
             style={{ marginTop: 40, marginBottom: 40 }}
           >
-            {/* 只有有权限时才显示编辑按钮 */}
-            {canEdit && (
-              <Button 
-                type="primary"
-                icon={<EditOutlined />}
-                onClick={handleEdit}
-                style={{
-                  height: 40,
-                  borderRadius: '8px',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  padding: '0 24px'
-                }}
-              >
-                {t('teaching.editContent')}
-              </Button>
-            )}
+            <Button 
+              type="primary"
+              icon={<EditOutlined />}
+              onClick={handleEdit}
+              style={{
+                height: 40,
+                borderRadius: '8px',
+                fontSize: 14,
+                fontWeight: 500,
+                padding: '0 24px'
+              }}
+            >
+              {t('teaching.editContent')}
+            </Button>
           </Empty>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
