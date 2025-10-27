@@ -1,7 +1,6 @@
 /**
- * 教学模块详情页面（树状权限管理版）
- * 优化：将权限Tab替换为垂直树状授权管理器
- * 特性：单页面操作、实时状态、批量授权、权限继承
+ * 教学模块详情页面（课程编辑优化版）
+ * 修改：课程点击跳转到课程页面列表，而非直接查看器
  */
 
 import React, { useEffect, useState } from 'react';
@@ -10,6 +9,7 @@ import {
   Tabs,
   Button,
   Space,
+  Table,
   Tag,
   Modal,
   Form,
@@ -32,9 +32,14 @@ import {
   PlusOutlined,
   EyeOutlined,
   BookOutlined,
+  TeamOutlined,
+  UserOutlined,
+  TagOutlined,
   SettingOutlined,
   FileTextOutlined,
   GlobalOutlined,
+  LockOutlined,
+  UnlockOutlined,
   MoreOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -43,8 +48,8 @@ import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
 import moment from 'moment';
 
-// 导入树状权限管理组件
-import PermissionTreeManager from '../../components/teaching/PermissionTreeManager';
+// 导入选择器组件
+import { UserSelector, GroupSelector, TagSelector } from '../../components/teaching/selectors';
 
 const { TextArea } = Input;
 
@@ -60,6 +65,7 @@ const ModuleDetail = () => {
     permissions,
     currentModuleLoading,
     lessonsLoading,
+    permissionsLoading,
     fetchModule,
     fetchLessons,
     fetchPermissions,
@@ -67,7 +73,10 @@ const ModuleDetail = () => {
     deleteModule,
     createLesson,
     updateLesson,
-    deleteLesson
+    deleteLesson,
+    grantPermission,
+    revokePermission,
+    revokeMultiplePermissions
   } = useTeachingStore();
 
   const [activeTab, setActiveTab] = useState('lessons');
@@ -75,9 +84,12 @@ const ModuleDetail = () => {
   const [lessonModalVisible, setLessonModalVisible] = useState(false);
   const [editLessonModalVisible, setEditLessonModalVisible] = useState(false);
   const [editingLesson, setEditingLesson] = useState(null);
+  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
+  const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [editForm] = Form.useForm();
   const [lessonForm] = Form.useForm();
   const [editLessonForm] = Form.useForm();
+  const [permissionForm] = Form.useForm();
 
   useEffect(() => {
     if (id) {
@@ -154,6 +166,7 @@ const ModuleDetail = () => {
     }
   };
 
+  // 修改：跳转到课程页面列表，而非直接查看器
   const handleViewLesson = (lesson) => {
     navigate(`/teaching/lessons/${lesson.id}`);
   };
@@ -197,6 +210,46 @@ const ModuleDetail = () => {
       message.success(t('teaching.deleteSuccess'));
     } catch (error) {
       message.error(t('teaching.deleteFailed'));
+    }
+  };
+
+  const handleGrantPermission = async () => {
+    try {
+      const values = await permissionForm.validateFields();
+      await grantPermission({
+        module_id: id,
+        ...values
+      });
+      setPermissionModalVisible(false);
+      permissionForm.resetFields();
+      message.success(t('teaching.grantSuccess'));
+      await fetchPermissions(id);
+    } catch (error) {
+      message.error(t('teaching.grantFailed'));
+    }
+  };
+
+  const handleRevokePermission = async (permissionId) => {
+    try {
+      await revokePermission(permissionId, id);
+      message.success(t('teaching.revokeSuccess'));
+    } catch (error) {
+      message.error(t('teaching.revokeFailed'));
+    }
+  };
+
+  const handleBatchRevoke = async () => {
+    if (selectedPermissions.length === 0) {
+      message.warning(t('teaching.selectPermissions'));
+      return;
+    }
+
+    try {
+      await revokeMultiplePermissions(selectedPermissions, id);
+      setSelectedPermissions([]);
+      message.success(t('teaching.batchRevokeSuccess'));
+    } catch (error) {
+      message.error(t('teaching.batchRevokeFailed'));
     }
   };
 
@@ -253,6 +306,91 @@ const ModuleDetail = () => {
       }
     ]
   });
+
+  const permissionColumns = [
+    {
+      title: t('teaching.permissionTarget'),
+      key: 'target',
+      width: 300,
+      render: (_, record) => {
+        if (record.user_id) {
+          return (
+            <Space>
+              <UserOutlined style={{ color: '#1890ff' }} />
+              <span>{record.target_user_name || record.target_user_email}</span>
+            </Space>
+          );
+        }
+        if (record.group_id) {
+          return (
+            <Space>
+              <TeamOutlined style={{ color: '#52c41a' }} />
+              <span>{record.target_group_name}</span>
+            </Space>
+          );
+        }
+        if (record.tag_id) {
+          return (
+            <Space>
+              <TagOutlined style={{ color: '#faad14' }} />
+              <Tag color={record.target_tag_color}>{record.target_tag_name}</Tag>
+            </Space>
+          );
+        }
+        return '-';
+      }
+    },
+    {
+      title: t('teaching.permissionType'),
+      dataIndex: 'permission_type',
+      key: 'permission_type',
+      width: 120,
+      render: (type) => (
+        <Tag color={type === 'edit' ? 'orange' : 'blue'}>
+          {type === 'edit' ? <UnlockOutlined /> : <LockOutlined />}
+          {t(`teaching.permissionTypes.${type}`)}
+        </Tag>
+      )
+    },
+    {
+      title: t('teaching.grantedBy'),
+      dataIndex: 'granted_by_name',
+      key: 'granted_by_name',
+      width: 150
+    },
+    {
+      title: t('teaching.grantedAt'),
+      dataIndex: 'granted_at',
+      key: 'granted_at',
+      width: 180,
+      render: (date) => moment(date).format('YYYY-MM-DD HH:mm')
+    },
+    {
+      title: t('teaching.expiresAt'),
+      dataIndex: 'expires_at',
+      key: 'expires_at',
+      width: 180,
+      render: (date) => date ? moment(date).format('YYYY-MM-DD HH:mm') : t('teaching.permanent')
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 100,
+      fixed: 'right',
+      render: (_, record) => (
+        <Popconfirm
+          title={t('teaching.confirmRevokePermission')}
+          onConfirm={() => handleRevokePermission(record.id)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button type="link" size="small" danger>
+            {t('teaching.revoke')}
+          </Button>
+        </Popconfirm>
+      )
+    }
+  ];
 
   if (currentModuleLoading || !currentModule) {
     return (
@@ -440,10 +578,42 @@ const ModuleDetail = () => {
         </span>
       ),
       children: (
-        <PermissionTreeManager 
-          moduleId={id}
-          onRefresh={loadModuleData}
-        />
+        <Card
+          title={t('teaching.permissionList')}
+          extra={
+            <Space>
+              {selectedPermissions.length > 0 && (
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleBatchRevoke}
+                >
+                  {t('teaching.batchRevoke')} ({selectedPermissions.length})
+                </Button>
+              )}
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setPermissionModalVisible(true)}
+              >
+                {t('teaching.grantPermission')}
+              </Button>
+            </Space>
+          }
+        >
+          <Table
+            columns={permissionColumns}
+            dataSource={permissions}
+            loading={permissionsLoading}
+            rowKey="id"
+            rowSelection={{
+              selectedRowKeys: selectedPermissions,
+              onChange: setSelectedPermissions
+            }}
+            scroll={{ x: 1200 }}
+            locale={{ emptyText: t('teaching.noPermissions') }}
+          />
+        </Card>
       )
     }
   ];
@@ -642,6 +812,116 @@ const ModuleDetail = () => {
               <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
               <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
               <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('teaching.grantPermission')}
+        open={permissionModalVisible}
+        onOk={handleGrantPermission}
+        onCancel={() => {
+          setPermissionModalVisible(false);
+          permissionForm.resetFields();
+        }}
+        width={600}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnClose
+      >
+        <Form form={permissionForm} layout="vertical">
+          <Form.Item
+            name="target_type"
+            label={t('teaching.targetType')}
+            rules={[{ required: true, message: t('teaching.targetTypeRequired') }]}
+          >
+            <Select 
+              placeholder={t('teaching.selectTargetType')}
+              onChange={() => {
+                permissionForm.setFieldsValue({
+                  user_id: undefined,
+                  group_id: undefined,
+                  tag_id: undefined
+                });
+              }}
+            >
+              <Select.Option value="user">
+                <UserOutlined /> {t('teaching.targetTypes.user')}
+              </Select.Option>
+              <Select.Option value="group">
+                <TeamOutlined /> {t('teaching.targetTypes.group')}
+              </Select.Option>
+              <Select.Option value="tag">
+                <TagOutlined /> {t('teaching.targetTypes.tag')}
+              </Select.Option>
+            </Select>
+          </Form.Item>
+          
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => 
+              prevValues.target_type !== currentValues.target_type
+            }
+          >
+            {({ getFieldValue }) => {
+              const targetType = getFieldValue('target_type');
+              
+              if (targetType === 'user') {
+                return (
+                  <Form.Item
+                    name="user_id"
+                    label={t('teaching.selectUser')}
+                    rules={[{ required: true, message: t('teaching.userRequired') }]}
+                  >
+                    <UserSelector placeholder={t('teaching.selectUser')} />
+                  </Form.Item>
+                );
+              }
+              
+              if (targetType === 'group') {
+                return (
+                  <Form.Item
+                    name="group_id"
+                    label={t('teaching.selectGroup')}
+                    rules={[{ required: true, message: t('teaching.groupRequired') }]}
+                  >
+                    <GroupSelector placeholder={t('teaching.selectGroup')} />
+                  </Form.Item>
+                );
+              }
+              
+              if (targetType === 'tag') {
+                return (
+                  <Form.Item
+                    name="tag_id"
+                    label={t('teaching.selectTag')}
+                    rules={[{ required: true, message: t('teaching.tagRequired') }]}
+                  >
+                    <TagSelector 
+                      placeholder={t('teaching.selectTag')}
+                      groupId={user?.group_id}
+                    />
+                  </Form.Item>
+                );
+              }
+              
+              return null;
+            }}
+          </Form.Item>
+
+          <Form.Item
+            name="permission_type"
+            label={t('teaching.permissionType')}
+            initialValue="view"
+          >
+            <Select>
+              <Select.Option value="view">
+                <LockOutlined /> {t('teaching.permissionTypes.view')}
+              </Select.Option>
+              <Select.Option value="edit">
+                <UnlockOutlined /> {t('teaching.permissionTypes.edit')}
+              </Select.Option>
             </Select>
           </Form.Item>
         </Form>

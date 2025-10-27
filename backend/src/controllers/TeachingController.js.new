@@ -1,0 +1,214 @@
+
+  // ==================== 全局授权管理（新增）====================
+
+  /**
+   * 批量保存全局授权配置
+   */
+  static async saveGlobalAuthorizations(req, res) {
+    try {
+      const user = req.user;
+
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可操作');
+      }
+
+      const { authorizations } = req.body;
+
+      if (!Array.isArray(authorizations) || authorizations.length === 0) {
+        return ResponseHelper.validation(res, ['授权配置不能为空']);
+      }
+
+      const dbConnection = require('../database/connection');
+
+      // 使用事务保存所有配置
+      await dbConnection.transaction(async (query) => {
+        for (const auth of authorizations) {
+          const { groupId, modulePermissions, tags } = auth;
+
+          if (!groupId) {
+            continue;
+          }
+
+          const configData = {
+            modulePermissions: modulePermissions || [],
+            tags: tags || []
+          };
+
+          // 使用 REPLACE INTO 或 INSERT ... ON DUPLICATE KEY UPDATE
+          const sql = `
+            INSERT INTO teaching_global_authorizations 
+            (group_id, config_data, created_by, updated_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE 
+            config_data = VALUES(config_data),
+            updated_by = VALUES(updated_by),
+            updated_at = NOW()
+          `;
+
+          await query(sql, [
+            groupId,
+            JSON.stringify(configData),
+            user.id,
+            user.id
+          ]);
+        }
+      });
+
+      logger.info('全局授权配置保存成功', {
+        adminId: user.id,
+        groupCount: authorizations.length
+      });
+
+      return ResponseHelper.success(res, null, '授权配置保存成功');
+    } catch (error) {
+      logger.error('保存全局授权配置失败:', error);
+      return ResponseHelper.error(res, '保存授权配置失败');
+    }
+  }
+
+  /**
+   * 获取全局授权配置列表
+   */
+  static async getGlobalAuthorizations(req, res) {
+    try {
+      const user = req.user;
+
+      if (user.role !== 'super_admin') {
+        return ResponseHelper.forbidden(res, '仅超级管理员可访问');
+      }
+
+      const dbConnection = require('../database/connection');
+
+      const sql = `
+        SELECT 
+          tga.id,
+          tga.group_id,
+          tga.config_data,
+          ug.name as group_name,
+          ug.user_count,
+          tga.created_at,
+          tga.updated_at
+        FROM teaching_global_authorizations tga
+        LEFT JOIN user_groups ug ON tga.group_id = ug.id
+        WHERE ug.id IS NOT NULL
+        ORDER BY ug.name ASC
+      `;
+
+      const { rows } = await dbConnection.query(sql);
+
+      const authorizations = rows.map(row => ({
+        id: row.id,
+        groupId: row.group_id,
+        groupName: row.group_name,
+        userCount: row.user_count,
+        config: typeof row.config_data === 'string' 
+          ? JSON.parse(row.config_data) 
+          : row.config_data,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      }));
+
+      return ResponseHelper.success(res, authorizations, '获取授权配置成功');
+    } catch (error) {
+      logger.error('获取全局授权配置失败:', error);
+      return ResponseHelper.error(res, '获取授权配置失败');
+    }
+  }
+
+  /**
+   * 获取标签下的用户列表（分页）
+   */
+  static async getTagUsers(req, res) {
+    try {
+      const { tagId } = req.params;
+      const { page = 1, limit = 20 } = req.query;
+
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit)));
+      const offset = (pageNum - 1) * limitNum;
+
+      const dbConnection = require('../database/connection');
+
+      // 获取总数
+      const countSql = `
+        SELECT COUNT(DISTINCT u.id) as total
+        FROM users u
+        INNER JOIN user_tag_assignments uta ON u.id = uta.user_id
+        WHERE uta.tag_id = ? 
+        AND uta.is_active = 1
+        AND u.is_deleted = 0
+      `;
+
+      const { rows: countRows } = await dbConnection.query(countSql, [tagId]);
+      const total = countRows[0].total;
+
+      // 获取用户列表
+      const dataSql = `
+        SELECT 
+          u.id,
+          u.username,
+          u.email,
+          u.remark,
+          u.created_at
+        FROM users u
+        INNER JOIN user_tag_assignments uta ON u.id = uta.user_id
+        WHERE uta.tag_id = ? 
+        AND uta.is_active = 1
+        AND u.is_deleted = 0
+        ORDER BY u.username ASC
+        LIMIT ? OFFSET ?
+      `;
+
+      const { rows: users } = await dbConnection.simpleQuery(dataSql, [tagId, limitNum, offset]);
+
+      return ResponseHelper.success(res, {
+        users,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum)
+        }
+      }, '获取标签用户列表成功');
+    } catch (error) {
+      logger.error('获取标签用户列表失败:', error);
+      return ResponseHelper.error(res, '获取标签用户列表失败');
+    }
+  }
+
+  /**
+   * 获取模块的课程列表（用于授权选择）
+   */
+  static async getModuleLessonsForAuth(req, res) {
+    try {
+      const { moduleId } = req.params;
+
+      const dbConnection = require('../database/connection');
+
+      const sql = `
+        SELECT 
+          id,
+          title,
+          description,
+          cover_image,
+          content_type,
+          status,
+          order_index
+        FROM teaching_lessons
+        WHERE module_id = ? 
+        AND is_deleted = 0
+        AND status = 'published'
+        ORDER BY order_index ASC, created_at ASC
+      `;
+
+      const { rows: lessons } = await dbConnection.query(sql, [moduleId]);
+
+      return ResponseHelper.success(res, lessons, '获取课程列表成功');
+    } catch (error) {
+      logger.error('获取模块课程列表失败:', error);
+      return ResponseHelper.error(res, '获取课程列表失败');
+    }
+  }
+}
+
+module.exports = TeachingController;

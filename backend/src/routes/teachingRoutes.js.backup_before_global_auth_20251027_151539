@@ -1,7 +1,6 @@
 /**
- * 教学系统路由（全局授权管理增强版）
+ * 教学系统路由（分组增强版）
  * 新增：教学模块分组管理路由
- * 新增：全局三级授权管理路由
  */
 
 const express = require('express');
@@ -195,37 +194,6 @@ router.post(
   canManagePermissions(),
   TeachingController.revokeMultiplePermissions
 );
-
-// ==================== 全局授权管理路由（新增）====================
-
-/**
- * @route   POST /api/teaching/authorization/save
- * @desc    批量保存全局授权配置（组→标签→用户三级）
- * @access  仅超级管理员
- */
-router.post('/authorization/save', TeachingController.saveGlobalAuthorizations);
-
-/**
- * @route   GET /api/teaching/authorization
- * @desc    获取全局授权配置列表
- * @access  仅超级管理员
- */
-router.get('/authorization', TeachingController.getGlobalAuthorizations);
-
-/**
- * @route   GET /api/teaching/tags/:tagId/users
- * @desc    获取标签下的用户列表（分页，用于授权管理）
- * @access  仅超级管理员
- * @query   page=1&limit=20
- */
-router.get('/tags/:tagId/users', TeachingController.getTagUsers);
-
-/**
- * @route   GET /api/teaching/modules/:moduleId/lessons-for-auth
- * @desc    获取模块的课程列表（用于授权选择）
- * @access  仅超级管理员
- */
-router.get('/modules/:moduleId/lessons-for-auth', TeachingController.getModuleLessonsForAuth);
 
 // ==================== 草稿管理路由 ====================
 

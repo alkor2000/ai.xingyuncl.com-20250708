@@ -1,8 +1,7 @@
 /**
- * 教学系统控制器（全局授权管理增强版 - 数据库修复）
+ * 教学系统控制器（全局授权管理增强版）
  * 新增：教学模块分组管理功能（支持多对多关系）
  * 新增：全局三级授权管理（组→标签→用户）
- * 修复：使用正确的表名和字段名
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -942,7 +941,7 @@ class TeachingController {
     }
   }
 
-  // ==================== 全局授权管理（新增 - 数据库修复版）====================
+  // ==================== 全局授权管理（新增）====================
 
   /**
    * 批量保存全局授权配置
@@ -1009,7 +1008,7 @@ class TeachingController {
   }
 
   /**
-   * 获取全局授权配置列表（数据库修复版）
+   * 获取全局授权配置列表
    */
   static async getGlobalAuthorizations(req, res) {
     try {
@@ -1021,14 +1020,13 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 修复：使用子查询动态统计用户数量
       const sql = `
         SELECT 
           tga.id,
           tga.group_id,
           tga.config_data,
           ug.name as group_name,
-          (SELECT COUNT(*) FROM users WHERE group_id = ug.id AND deleted_at IS NULL) as user_count,
+          ug.user_count,
           tga.created_at,
           tga.updated_at
         FROM teaching_global_authorizations tga
@@ -1059,7 +1057,7 @@ class TeachingController {
   }
 
   /**
-   * 获取标签下的用户列表（分页 - 数据库修复版）
+   * 获取标签下的用户列表（分页）
    */
   static async getTagUsers(req, res) {
     try {
@@ -1072,13 +1070,14 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 修复：使用 user_tag_relations 表和 deleted_at IS NULL
+      // 获取总数
       const countSql = `
         SELECT COUNT(DISTINCT u.id) as total
         FROM users u
-        INNER JOIN user_tag_relations utr ON u.id = utr.user_id
-        WHERE utr.tag_id = ? 
-        AND u.deleted_at IS NULL
+        INNER JOIN user_tag_assignments uta ON u.id = uta.user_id
+        WHERE uta.tag_id = ? 
+        AND uta.is_active = 1
+        AND u.is_deleted = 0
       `;
 
       const { rows: countRows } = await dbConnection.query(countSql, [tagId]);
@@ -1093,9 +1092,10 @@ class TeachingController {
           u.remark,
           u.created_at
         FROM users u
-        INNER JOIN user_tag_relations utr ON u.id = utr.user_id
-        WHERE utr.tag_id = ? 
-        AND u.deleted_at IS NULL
+        INNER JOIN user_tag_assignments uta ON u.id = uta.user_id
+        WHERE uta.tag_id = ? 
+        AND uta.is_active = 1
+        AND u.is_deleted = 0
         ORDER BY u.username ASC
         LIMIT ? OFFSET ?
       `;

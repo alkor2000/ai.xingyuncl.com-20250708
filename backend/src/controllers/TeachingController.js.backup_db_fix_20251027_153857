@@ -1,8 +1,12 @@
 /**
- * 教学系统控制器（全局授权管理增强版 - 数据库修复）
+ * 教学系统控制器（全局授权管理增强版 - SQL修复）
  * 新增：教学模块分组管理功能（支持多对多关系）
  * 新增：全局三级授权管理（组→标签→用户）
- * 修复：使用正确的表名和字段名
+ * 
+ * SQL修复：
+ * - user_tag_assignments -> user_tag_relations
+ * - is_deleted -> deleted_at IS NULL
+ * - ug.user_count -> 子查询统计
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -942,7 +946,7 @@ class TeachingController {
     }
   }
 
-  // ==================== 全局授权管理（新增 - 数据库修复版）====================
+  // ==================== 全局授权管理（新增 - SQL已修复）====================
 
   /**
    * 批量保存全局授权配置
@@ -1009,7 +1013,7 @@ class TeachingController {
   }
 
   /**
-   * 获取全局授权配置列表（数据库修复版）
+   * 获取全局授权配置列表 (已修复SQL)
    */
   static async getGlobalAuthorizations(req, res) {
     try {
@@ -1021,7 +1025,6 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 修复：使用子查询动态统计用户数量
       const sql = `
         SELECT 
           tga.id,
@@ -1059,7 +1062,7 @@ class TeachingController {
   }
 
   /**
-   * 获取标签下的用户列表（分页 - 数据库修复版）
+   * 获取标签下的用户列表（分页 - 已修复SQL）
    */
   static async getTagUsers(req, res) {
     try {
@@ -1072,7 +1075,7 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
-      // 修复：使用 user_tag_relations 表和 deleted_at IS NULL
+      // 获取总数
       const countSql = `
         SELECT COUNT(DISTINCT u.id) as total
         FROM users u

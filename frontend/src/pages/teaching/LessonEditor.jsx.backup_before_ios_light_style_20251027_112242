@@ -1,8 +1,7 @@
 /**
- * 课程编辑器组件（纯白底iOS科技风）
- * 设计理念：白色为主 + 精致卡片 + 轻柔阴影 + iOS细节
- * 配色：纯白背景，白色卡片，深色文字，蓝色点缀
- * 三栏布局：左侧页面管理 | 中间Monaco编辑器 | 右侧实时预览
+ * 课程编辑器组件（布局优化版）
+ * 修复：保持预览功能正常，优化整体三栏布局
+ * 三栏布局：左侧页面管理(300px) | 中间Monaco编辑器(flex) | 右侧实时预览(800px)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -38,23 +37,18 @@ import useTeachingStore from '../../stores/teachingStore';
 
 const { Sider, Content } = Layout;
 
-// iOS科技风配色方案（纯白底）
+// 清爽蓝色配色方案
 const iosColors = {
   primary: '#0A84FF',
   success: '#30D158',
   warning: '#FF9F0A',
   danger: '#FF453A',
-  bgPrimary: '#FFFFFF',                     // 纯白背景
-  bgSecondary: '#F5F7FA',                   // 浅灰白背景
-  cardWhite: '#FFFFFF',                     // 白色卡片
-  border: 'rgba(0, 0, 0, 0.06)',            // 超浅边框
-  textPrimary: '#1a1a1a',                   // 深色文字
-  textSecondary: '#666666',                 // 次要文字
-  textTertiary: '#999999',                  // 三级文字
-  selectedBg: '#F0F8FF',                    // 选中浅蓝色
-  hoverBg: '#F8FAFB',                       // 悬浮背景
-  shadow: '0 2px 8px rgba(0, 0, 0, 0.06)',  // 卡片阴影
-  shadowHover: '0 4px 16px rgba(0, 0, 0, 0.08)'
+  glass: 'rgba(255, 255, 255, 0.15)',
+  glassBorder: 'rgba(255, 255, 255, 0.25)',
+  textPrimary: '#FFFFFF',
+  textSecondary: 'rgba(255, 255, 255, 0.8)',
+  cardDark: 'rgba(0, 0, 0, 0.25)',
+  selectedGlow: 'rgba(10, 132, 255, 0.5)'
 };
 
 const LessonEditor = () => {
@@ -301,9 +295,9 @@ const LessonEditor = () => {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        background: iosColors.bgSecondary
+        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
       }}>
-        <SyncOutlined spin style={{ fontSize: 48, color: iosColors.primary }} />
+        <SyncOutlined spin style={{ fontSize: 48, color: iosColors.textPrimary }} />
       </div>
     );
   }
@@ -311,19 +305,21 @@ const LessonEditor = () => {
   return (
     <div style={{ 
       height: '100vh', 
-      background: iosColors.bgSecondary,
+      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* 顶部操作栏 - 白色卡片 */}
+      {/* 顶部操作栏 */}
       <div style={{
-        background: iosColors.cardWhite,
+        background: iosColors.cardDark,
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         padding: '16px 24px',
         borderRadius: '0 0 20px 20px',
         margin: '0 16px 16px 16px',
-        boxShadow: iosColors.shadow,
-        border: `1px solid ${iosColors.border}`,
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+        border: `1px solid ${iosColors.glassBorder}`,
         flexShrink: 0
       }}>
         {/* 第一行：面包屑 + 操作按钮 */}
@@ -344,13 +340,13 @@ const LessonEditor = () => {
                   fontSize: 13,
                   transition: 'color 0.2s'
                 }}
-                onMouseEnter={(e) => e.target.style.color = iosColors.primary}
+                onMouseEnter={(e) => e.target.style.color = iosColors.textPrimary}
                 onMouseLeave={(e) => e.target.style.color = iosColors.textSecondary}
               >
                 {currentLesson.module_name}
               </a>
             </Breadcrumb.Item>
-            <Breadcrumb.Item style={{ color: iosColors.textPrimary, fontSize: 13, fontWeight: 500 }}>
+            <Breadcrumb.Item style={{ color: iosColors.textPrimary, fontSize: 13 }}>
               {t('teaching.editLesson')}
             </Breadcrumb.Item>
           </Breadcrumb>
@@ -360,25 +356,14 @@ const LessonEditor = () => {
               icon={<ArrowLeftOutlined />} 
               onClick={handleBack}
               style={{
-                background: iosColors.cardWhite,
-                border: `1px solid ${iosColors.border}`,
+                background: 'rgba(255, 255, 255, 0.2)',
+                backdropFilter: 'blur(10px)',
+                border: `1px solid ${iosColors.glassBorder}`,
                 borderRadius: 10,
                 color: iosColors.textPrimary,
                 height: 40,
                 padding: '0 20px',
-                fontWeight: 500,
-                transition: 'all 0.2s',
-                boxShadow: iosColors.shadow
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = iosColors.shadowHover;
-                e.currentTarget.style.borderColor = iosColors.primary;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = iosColors.shadow;
-                e.currentTarget.style.borderColor = iosColors.border;
+                fontWeight: 500
               }}
             >
               {t('common.back')}
@@ -388,25 +373,14 @@ const LessonEditor = () => {
               icon={<EyeOutlined />} 
               onClick={handlePreview}
               style={{
-                background: iosColors.cardWhite,
-                border: `1px solid ${iosColors.border}`,
+                background: 'rgba(255, 255, 255, 0.2)',
+                backdropFilter: 'blur(10px)',
+                border: `1px solid ${iosColors.glassBorder}`,
                 borderRadius: 10,
                 color: iosColors.textPrimary,
                 height: 40,
                 padding: '0 20px',
-                fontWeight: 500,
-                transition: 'all 0.2s',
-                boxShadow: iosColors.shadow
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = iosColors.shadowHover;
-                e.currentTarget.style.borderColor = iosColors.primary;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = iosColors.shadow;
-                e.currentTarget.style.borderColor = iosColors.border;
+                fontWeight: 500
               }}
             >
               {t('teaching.preview')}
@@ -422,22 +396,11 @@ const LessonEditor = () => {
                 background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
                 border: 'none',
                 borderRadius: 10,
-                color: '#FFFFFF',
+                color: iosColors.textPrimary,
                 height: 40,
                 padding: '0 24px',
                 fontWeight: 600,
-                boxShadow: `0 4px 12px rgba(10, 132, 255, 0.3)`,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = `0 6px 20px rgba(10, 132, 255, 0.4)`;
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = `0 4px 12px rgba(10, 132, 255, 0.3)`;
+                boxShadow: `0 4px 12px ${iosColors.selectedGlow}`
               }}
             >
               {t('common.save')}
@@ -457,11 +420,11 @@ const LessonEditor = () => {
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              background: iosColors.selectedBg,
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(10px)',
               padding: '10px 16px',
               borderRadius: 10,
-              border: `1px solid ${iosColors.border}`,
-              borderLeft: `4px solid ${iosColors.primary}`
+              border: `1px solid ${iosColors.glassBorder}`
             }}
           >
             <FileTextOutlined style={{ 
@@ -484,16 +447,7 @@ const LessonEditor = () => {
                 icon={<EditOutlined />}
                 onClick={handleEditTitle}
                 style={{
-                  color: iosColors.primary,
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(10, 132, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.transform = 'scale(1)';
+                  color: iosColors.textSecondary
                 }}
               />
             </Tooltip>
@@ -520,17 +474,18 @@ const LessonEditor = () => {
       <div style={{
         flex: 1,
         display: 'flex',
-        gap: 16,
+        gap: 2,
         padding: '0 16px 16px 16px',
         overflow: 'hidden'
       }}>
-        {/* 左侧 - 页面列表（白色卡片）*/}
+        {/* 左侧 - 页面列表 (300px固定宽度) */}
         <div style={{
           width: 300,
-          background: iosColors.cardWhite,
-          borderRadius: 20,
-          border: `1px solid ${iosColors.border}`,
-          boxShadow: iosColors.shadow,
+          background: iosColors.cardDark,
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: '20px 0 0 20px',
+          border: `1px solid ${iosColors.glassBorder}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -556,15 +511,15 @@ const LessonEditor = () => {
                 alignItems: 'center',
                 gap: 8
               }}>
-                <FileTextOutlined style={{ color: iosColors.primary, fontSize: 18 }} />
+                <FileTextOutlined style={{ color: iosColors.primary }} />
                 {t('teaching.pageManagement')}
               </h4>
               <Badge 
                 count={pages.length} 
                 showZero 
                 style={{ 
-                  background: iosColors.primary,
-                  boxShadow: `0 2px 8px rgba(10, 132, 255, 0.3)`
+                  background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+                  boxShadow: `0 2px 8px ${iosColors.selectedGlow}`
                 }}
               />
             </div>
@@ -574,26 +529,14 @@ const LessonEditor = () => {
               onClick={handleAddPage}
               block
               style={{
-                background: iosColors.cardWhite,
-                border: `1px dashed ${iosColors.primary}`,
+                background: 'rgba(255, 255, 255, 0.15)',
+                backdropFilter: 'blur(10px)',
+                border: `1px dashed ${iosColors.glassBorder}`,
                 borderRadius: 12,
-                color: iosColors.primary,
+                color: iosColors.textPrimary,
                 height: 44,
                 marginBottom: 16,
-                fontWeight: 500,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = iosColors.selectedBg;
-                e.currentTarget.style.borderStyle = 'solid';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = iosColors.shadowHover;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = iosColors.cardWhite;
-                e.currentTarget.style.borderStyle = 'dashed';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
+                fontWeight: 500
               }}
             >
               {t('teaching.addPage')}
@@ -609,34 +552,22 @@ const LessonEditor = () => {
                     <List.Item
                       key={page.id}
                       style={{
-                        background: isActive ? iosColors.selectedBg : 'transparent',
+                        background: isActive 
+                          ? `linear-gradient(90deg, ${iosColors.primary}, #5AC8FA)`
+                          : 'transparent',
                         padding: '12px 16px',
                         borderRadius: 12,
                         marginBottom: 10,
                         cursor: 'pointer',
-                        border: `1px solid ${isActive ? iosColors.border : 'transparent'}`,
-                        borderLeft: isActive ? `4px solid ${iosColors.primary}` : '4px solid transparent',
-                        boxShadow: isActive ? iosColors.shadow : 'none',
-                        transition: 'all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)'
+                        border: isActive ? 'none' : `1px solid transparent`,
+                        boxShadow: isActive ? `0 0 20px ${iosColors.selectedGlow}` : 'none'
                       }}
                       onClick={() => handlePageChange(index)}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = iosColors.hoverBg;
-                          e.currentTarget.style.borderColor = iosColors.border;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.borderColor = 'transparent';
-                        }
-                      }}
                     >
                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <FileTextOutlined 
                           style={{ 
-                            color: isActive ? iosColors.primary : iosColors.textSecondary,
+                            color: isActive ? iosColors.textPrimary : iosColors.primary,
                             fontSize: 16
                           }} 
                         />
@@ -659,8 +590,7 @@ const LessonEditor = () => {
                               handleEditPage(index);
                             }}
                             style={{
-                              color: isActive ? iosColors.primary : iosColors.textSecondary,
-                              transition: 'all 0.2s'
+                              color: isActive ? iosColors.textPrimary : iosColors.textSecondary
                             }}
                           />
                         </Tooltip>
@@ -682,8 +612,7 @@ const LessonEditor = () => {
                                 icon={<DeleteOutlined />}
                                 onClick={(e) => e.stopPropagation()}
                                 style={{
-                                  color: iosColors.danger,
-                                  transition: 'all 0.2s'
+                                  color: isActive ? iosColors.textPrimary : iosColors.danger
                                 }}
                               />
                             </Tooltip>
@@ -698,24 +627,24 @@ const LessonEditor = () => {
           </div>
         </div>
 
-        {/* 中间 - Monaco编辑器（白色卡片）*/}
+        {/* 中间 - Monaco编辑器 (flex自动填充) */}
         <div style={{ 
           flex: 1,
           display: 'flex', 
           flexDirection: 'column',
-          background: iosColors.cardWhite,
-          borderRadius: 20,
-          border: `1px solid ${iosColors.border}`,
-          boxShadow: iosColors.shadow,
+          background: iosColors.cardDark,
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1px solid ${iosColors.glassBorder}`,
           overflow: 'hidden'
         }}>
           <div style={{
             padding: '12px 20px',
-            background: iosColors.bgSecondary,
+            background: 'rgba(0, 0, 0, 0.2)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            borderBottom: `1px solid ${iosColors.border}`,
+            borderBottom: `1px solid ${iosColors.glassBorder}`,
             flexShrink: 0
           }}>
             <span style={{ 
@@ -760,21 +689,23 @@ const LessonEditor = () => {
           </div>
         </div>
 
-        {/* 右侧 - 实时预览（白色卡片）*/}
+        {/* 右侧 - 实时预览 (800px固定宽度) */}
         <div style={{
           width: 800,
-          background: iosColors.cardWhite,
-          borderRadius: 20,
-          border: `1px solid ${iosColors.border}`,
-          boxShadow: iosColors.shadow,
+          background: '#ffffff',
+          borderRadius: '0 20px 20px 0',
+          border: `1px solid ${iosColors.glassBorder}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           <div style={{
             padding: '12px 20px',
-            background: iosColors.bgSecondary,
-            borderBottom: `1px solid ${iosColors.border}`,
+            background: iosColors.cardDark,
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderBottom: `1px solid ${iosColors.glassBorder}`,
+            borderRadius: '0 20px 0 0',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
@@ -793,7 +724,7 @@ const LessonEditor = () => {
           <div style={{ 
             flex: 1,
             overflow: 'auto',
-            background: iosColors.cardWhite
+            background: '#ffffff'
           }}>
             <iframe
               srcDoc={previewContent}
@@ -818,35 +749,10 @@ const LessonEditor = () => {
         onCancel={() => { setPageModalVisible(false); pageForm.resetFields(); }}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
-        okButtonProps={{
-          style: {
-            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
-            border: 'none',
-            borderRadius: 8,
-            height: 40,
-            fontWeight: 600
-          }
-        }}
-        cancelButtonProps={{
-          style: {
-            background: iosColors.cardWhite,
-            border: `1px solid ${iosColors.border}`,
-            borderRadius: 8,
-            color: iosColors.textPrimary,
-            height: 40
-          }
-        }}
       >
         <Form form={pageForm} layout="vertical">
           <Form.Item name="title" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.pageTitle')}</span>} rules={[{ required: true, message: t('teaching.pageTitleRequired') }]}>
-            <Input 
-              placeholder={t('teaching.pageTitlePlaceholder')}
-              style={{
-                height: 44,
-                borderRadius: 10,
-                fontSize: 15
-              }}
-            />
+            <Input placeholder={t('teaching.pageTitlePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
@@ -857,46 +763,16 @@ const LessonEditor = () => {
         onOk={handleTitleSubmit}
         onCancel={() => { setTitleEditModalVisible(false); titleForm.resetFields(); }}
         width={600}
-        okButtonProps={{
-          style: {
-            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
-            border: 'none',
-            borderRadius: 8,
-            height: 40,
-            fontWeight: 600
-          }
-        }}
-        cancelButtonProps={{
-          style: {
-            background: iosColors.cardWhite,
-            border: `1px solid ${iosColors.border}`,
-            borderRadius: 8,
-            color: iosColors.textPrimary,
-            height: 40
-          }
-        }}
       >
         <Form form={titleForm} layout="vertical">
           <Form.Item name="title" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.lessonTitle')}</span>} rules={[{ required: true }]}>
-            <Input 
-              style={{
-                height: 44,
-                borderRadius: 10,
-                fontSize: 15
-              }}
-            />
+            <Input />
           </Form.Item>
           <Form.Item name="description" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.lessonDescription')}</span>}>
-            <Input.TextArea 
-              rows={3}
-              style={{
-                borderRadius: 10,
-                fontSize: 14
-              }}
-            />
+            <Input.TextArea rows={3} />
           </Form.Item>
           <Form.Item name="content_type" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.contentType')}</span>}>
-            <Select style={{ height: 44 }}>
+            <Select>
               <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
               <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
               <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>

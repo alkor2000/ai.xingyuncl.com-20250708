@@ -1,0 +1,663 @@
+/**
+ * 教育模块全局授权管理组件
+ * 
+ * 功能特性：
+ * ✅ 垂直展开的三级结构：组 → 标签 → 用户
+ * ✅ 每级可独立选择模块和课程进行授权
+ * ✅ 支持权限继承机制（组→标签→用户）
+ * ✅ 单页面完成所有操作，无需跳转
+ * ✅ iOS清爽风格设计
+ * ✅ 批量授权操作
+ * 
+ * 位置：系统设置 → 教学管理 → 教育模块授权管理（第一个子标签）
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  Button,
+  Space,
+  Empty,
+  Modal,
+  Checkbox,
+  Input,
+  message,
+  Spin,
+  Alert,
+  Tag,
+  Collapse,
+  Tree,
+  Switch,
+  Tooltip,
+  Badge,
+  Divider
+} from 'antd';
+import {
+  PlusOutlined,
+  SaveOutlined,
+  ReloadOutlined,
+  TeamOutlined,
+  TagOutlined,
+  UserOutlined,
+  BookOutlined,
+  FileTextOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  RightOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined
+} from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import api from '../../../utils/api';
+
+const { Panel } = Collapse;
+const { Search } = Input;
+
+const ModuleAuthorizationManagement = () => {
+  const { t } = useTranslation();
+
+  // ==================== 状态管理 ====================
+  const [loading, setLoading] = useState(false);
+  const [authorizedGroups, setAuthorizedGroups] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
+  const [allModules, setAllModules] = useState([]);
+  const [groupSelectModalVisible, setGroupSelectModalVisible] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // ==================== 数据加载 ====================
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      // 并行加载数据
+      const [groupsRes, modulesRes] = await Promise.all([
+        api.get('/admin/user-groups'),
+        api.get('/teaching/admin/modules', { params: { all: true } })
+      ]);
+
+      const groups = groupsRes.data.data || [];
+      const modules = (modulesRes.data.data?.modules || modulesRes.data.data || [])
+        .filter(m => m.status === 'published'); // 只显示已发布的模块
+
+      setAllGroups(groups);
+      setAllModules(modules);
+
+      // 加载已授权的组配置
+      await loadAuthorizedGroups();
+    } catch (error) {
+      console.error('加载数据失败:', error);
+      message.error('加载数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAuthorizedGroups = async () => {
+    try {
+      // TODO: 实现后端API获取已授权的组配置
+      // 现在先返回空数组
+      setAuthorizedGroups([]);
+    } catch (error) {
+      console.error('加载授权配置失败:', error);
+    }
+  };
+
+  // ==================== 组管理 ====================
+
+  const handleOpenGroupSelectModal = () => {
+    setSelectedGroups([]);
+    setGroupSelectModalVisible(true);
+  };
+
+  const handleAddGroups = () => {
+    if (selectedGroups.length === 0) {
+      message.warning('请选择至少一个用户组');
+      return;
+    }
+
+    const newGroups = selectedGroups
+      .filter(gid => !authorizedGroups.find(ag => ag.groupId === gid))
+      .map(gid => {
+        const group = allGroups.find(g => g.id === gid);
+        return {
+          groupId: gid,
+          groupName: group?.name || '',
+          userCount: group?.user_count || 0,
+          expanded: true,
+          showTags: false,
+          inheritEnabled: true,
+          modulePermissions: [],
+          tags: [],
+          untaggedUsers: []
+        };
+      });
+
+    setAuthorizedGroups([...authorizedGroups, ...newGroups]);
+    setGroupSelectModalVisible(false);
+    setHasUnsavedChanges(true);
+    message.success(`已添加 ${newGroups.length} 个用户组`);
+  };
+
+  const handleRemoveGroup = (groupId) => {
+    Modal.confirm({
+      title: '确认移除授权',
+      content: '移除此用户组将删除其所有授权配置，确定继续吗？',
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setAuthorizedGroups(authorizedGroups.filter(g => g.groupId !== groupId));
+        setHasUnsavedChanges(true);
+        message.success('已移除用户组授权');
+      }
+    });
+  };
+
+  // ==================== 模块权限管理 ====================
+
+  const handleToggleModulePermission = (groupId, tagId, userId, moduleId, permType) => {
+    setAuthorizedGroups(prev => {
+      const newGroups = prev.map(group => {
+        if (group.groupId !== groupId) return group;
+
+        // 组级权限
+        if (!tagId && !userId) {
+          const modulePerms = group.modulePermissions || [];
+          const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
+          
+          if (existingIndex >= 0) {
+            const updated = [...modulePerms];
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              [permType]: !updated[existingIndex][permType]
+            };
+            return { ...group, modulePermissions: updated };
+          } else {
+            return {
+              ...group,
+              modulePermissions: [
+                ...modulePerms,
+                {
+                  moduleId,
+                  moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                  view: permType === 'view',
+                  edit: permType === 'edit',
+                  lessons: []
+                }
+              ]
+            };
+          }
+        }
+
+        // 标签级权限
+        if (tagId && !userId) {
+          const tags = group.tags || [];
+          const tagIndex = tags.findIndex(t => t.tagId === tagId);
+          
+          if (tagIndex >= 0) {
+            const tag = tags[tagIndex];
+            const modulePerms = tag.modulePermissions || [];
+            const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
+            
+            const updatedTags = [...tags];
+            if (existingIndex >= 0) {
+              const updated = [...modulePerms];
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                [permType]: !updated[existingIndex][permType]
+              };
+              updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
+            } else {
+              updatedTags[tagIndex] = {
+                ...tag,
+                modulePermissions: [
+                  ...modulePerms,
+                  {
+                    moduleId,
+                    moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                    view: permType === 'view',
+                    edit: permType === 'edit',
+                    lessons: []
+                  }
+                ]
+              };
+            }
+            
+            return { ...group, tags: updatedTags };
+          }
+        }
+
+        return group;
+      });
+      
+      setHasUnsavedChanges(true);
+      return newGroups;
+    });
+  };
+
+  // ==================== 标签管理 ====================
+
+  const handleLoadTags = async (groupId) => {
+    try {
+      const tagsRes = await api.get(`/admin/user-tags/group/${groupId}`);
+      const tags = (tagsRes.data.data || [])
+        .filter(t => t.is_active)
+        .map(tag => ({
+          tagId: tag.id,
+          tagName: tag.name,
+          tagColor: tag.color,
+          userCount: tag.user_count || 0,
+          expanded: false,
+          showUsers: false,
+          inheritFromGroup: true,
+          modulePermissions: [],
+          users: []
+        }));
+
+      setAuthorizedGroups(prev =>
+        prev.map(g =>
+          g.groupId === groupId
+            ? { ...g, tags, showTags: true }
+            : g
+        )
+      );
+    } catch (error) {
+      console.error('加载标签失败:', error);
+      message.error('加载标签失败');
+    }
+  };
+
+  // ==================== 保存配置 ====================
+
+  const handleSaveAll = async () => {
+    setLoading(true);
+    try {
+      // TODO: 实现后端API保存所有授权配置
+      // 格式化数据并发送到后端
+      const configData = authorizedGroups.map(group => ({
+        groupId: group.groupId,
+        modulePermissions: group.modulePermissions,
+        tags: group.tags.map(tag => ({
+          tagId: tag.tagId,
+          inheritFromGroup: tag.inheritFromGroup,
+          modulePermissions: tag.modulePermissions,
+          users: tag.users.map(user => ({
+            userId: user.userId,
+            inheritFromTag: user.inheritFromTag,
+            modulePermissions: user.modulePermissions
+          }))
+        }))
+      }));
+
+      // await api.post('/teaching/authorization/batch-save', { config: configData });
+      
+      message.success('授权配置保存成功');
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('保存失败:', error);
+      message.error('保存授权配置失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    Modal.confirm({
+      title: '确认重置',
+      content: '重置将放弃所有未保存的更改，确定继续吗？',
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        loadAuthorizedGroups();
+        setHasUnsavedChanges(false);
+        message.info('已重置为上次保存的状态');
+      }
+    });
+  };
+
+  // ==================== 渲染函数 ====================
+
+  const renderModulePermissionSelector = (groupId, tagId, userId, permissions, inheritedPermissions) => {
+    return (
+      <Card size="small" style={{ marginTop: 12, background: '#fafafa' }}>
+        <div style={{ marginBottom: 12 }}>
+          <strong>模块与课程权限配置：</strong>
+        </div>
+        
+        {allModules.length === 0 ? (
+          <Empty description="暂无可授权的模块" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            {allModules.map(module => {
+              const perm = permissions.find(p => p.moduleId === module.id);
+              const inherited = inheritedPermissions?.find(p => p.moduleId === module.id);
+              const hasView = perm?.view || inherited?.view || false;
+              const hasEdit = perm?.edit || inherited?.edit || false;
+              const isInherited = !perm && inherited;
+
+              return (
+                <div
+                  key={module.id}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'white',
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 4
+                  }}
+                >
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Space>
+                      <BookOutlined style={{ color: '#1890ff' }} />
+                      <span>{module.name}</span>
+                      {isInherited && (
+                        <Tag color="blue" style={{ fontSize: 11 }}>
+                          继承
+                        </Tag>
+                      )}
+                    </Space>
+                    <Space>
+                      <Checkbox
+                        checked={hasView}
+                        disabled={isInherited}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, 'view')}
+                      >
+                        查看
+                      </Checkbox>
+                      <Checkbox
+                        checked={hasEdit}
+                        disabled={isInherited}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, 'edit')}
+                      >
+                        编辑
+                      </Checkbox>
+                    </Space>
+                  </Space>
+                </div>
+              );
+            })}
+          </Space>
+        )}
+      </Card>
+    );
+  };
+
+  const renderGroupItem = (group) => {
+    const header = (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <Space>
+          <TeamOutlined style={{ fontSize: 18, color: '#1890ff' }} />
+          <strong style={{ fontSize: 15 }}>{group.groupName}</strong>
+          <Badge count={group.userCount} showZero style={{ backgroundColor: '#52c41a' }} />
+        </Space>
+        <Button
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveGroup(group.groupId);
+          }}
+        >
+          移除授权
+        </Button>
+      </div>
+    );
+
+    return (
+      <Panel
+        header={header}
+        key={`group-${group.groupId}`}
+        style={{
+          marginBottom: 16,
+          background: 'white',
+          borderRadius: 8,
+          border: '1px solid #e8e8e8',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        }}
+      >
+        <div style={{ padding: '8px 0' }}>
+          {/* 组级权限配置 */}
+          {renderModulePermissionSelector(
+            group.groupId,
+            null,
+            null,
+            group.modulePermissions || [],
+            null
+          )}
+
+          {/* 展开标签按钮 */}
+          <div style={{ marginTop: 16 }}>
+            {!group.showTags ? (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => handleLoadTags(group.groupId)}
+                block
+              >
+                展开标签列表
+              </Button>
+            ) : (
+              <div>
+                <Divider orientation="left">标签列表</Divider>
+                {group.tags.length === 0 ? (
+                  <Empty description="该组织暂无标签" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                    {group.tags.map(tag => (
+                      <Card
+                        key={tag.tagId}
+                        size="small"
+                        style={{ marginLeft: 40, background: '#f5f5f5' }}
+                        title={
+                          <Space>
+                            <Tag color={tag.tagColor}>
+                              <TagOutlined /> {tag.tagName}
+                            </Tag>
+                            <Badge count={tag.userCount} showZero />
+                          </Space>
+                        }
+                      >
+                        <div>
+                          <Space style={{ marginBottom: 12 }}>
+                            <Switch
+                              checked={tag.inheritFromGroup}
+                              onChange={(checked) => {
+                                setAuthorizedGroups(prev =>
+                                  prev.map(g =>
+                                    g.groupId === group.groupId
+                                      ? {
+                                          ...g,
+                                          tags: g.tags.map(t =>
+                                            t.tagId === tag.tagId
+                                              ? { ...t, inheritFromGroup: checked }
+                                              : t
+                                          )
+                                        }
+                                      : g
+                                  )
+                                );
+                                setHasUnsavedChanges(true);
+                              }}
+                            />
+                            <span>继承"{group.groupName}"的权限</span>
+                          </Space>
+
+                          {!tag.inheritFromGroup && renderModulePermissionSelector(
+                            group.groupId,
+                            tag.tagId,
+                            null,
+                            tag.modulePermissions || [],
+                            tag.inheritFromGroup ? group.modulePermissions : null
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </Space>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </Panel>
+    );
+  };
+
+  // ==================== 主渲染 ====================
+
+  if (loading && authorizedGroups.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60 }}>
+        <Spin size="large" tip="加载授权配置..." />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      {/* 操作栏 */}
+      <Card style={{ marginBottom: 16 }}>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenGroupSelectModal}
+            >
+              新建组授权
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={loadInitialData} loading={loading}>
+              刷新
+            </Button>
+          </Space>
+          <Space>
+            {hasUnsavedChanges && (
+              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+                有未保存的更改
+              </Tag>
+            )}
+            <Button onClick={handleReset} disabled={!hasUnsavedChanges}>
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveAll}
+              loading={loading}
+              disabled={!hasUnsavedChanges}
+            >
+              保存所有更改
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      {/* 说明卡片 */}
+      <Alert
+        message="权限管理说明"
+        description={
+          <div>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>组级授权</strong>：为整个用户组授权模块和课程，该组下所有标签和用户自动继承
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>标签授权</strong>：可以继承组权限，也可以独立配置或添加额外权限
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              • <strong>用户授权</strong>：可以继承标签权限，也可以独立配置或添加额外权限
+            </p>
+          </div>
+        }
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+      />
+
+      {/* 授权组列表 */}
+      {authorizedGroups.length === 0 ? (
+        <Card>
+          <Empty
+            description={
+              <div>
+                <p>当前还未配置任何组的授权</p>
+                <p style={{ color: '#999' }}>点击上方"新建组授权"按钮开始添加授权组</p>
+              </div>
+            }
+          >
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenGroupSelectModal}
+            >
+              新建组授权
+            </Button>
+          </Empty>
+        </Card>
+      ) : (
+        <Collapse
+          expandIconPosition="right"
+          style={{ background: 'transparent', border: 'none' }}
+        >
+          {authorizedGroups.map(group => renderGroupItem(group))}
+        </Collapse>
+      )}
+
+      {/* 选择用户组模态框 */}
+      <Modal
+        title="选择要授权的用户组"
+        open={groupSelectModalVisible}
+        onOk={handleAddGroups}
+        onCancel={() => setGroupSelectModalVisible(false)}
+        width={600}
+        okText={`确认添加 (${selectedGroups.length})`}
+        cancelText="取消"
+      >
+        <Search
+          placeholder="搜索用户组..."
+          style={{ marginBottom: 16 }}
+          allowClear
+        />
+        
+        <Checkbox.Group
+          value={selectedGroups}
+          onChange={setSelectedGroups}
+          style={{ width: '100%' }}
+        >
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {allGroups.map(group => (
+              <Card
+                key={group.id}
+                size="small"
+                hoverable
+                style={{ cursor: 'pointer' }}
+              >
+                <Checkbox value={group.id} style={{ width: '100%' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Space>
+                      <TeamOutlined style={{ color: '#1890ff' }} />
+                      <strong>{group.name}</strong>
+                    </Space>
+                    <Space>
+                      <Tag>{group.user_count || 0} 人</Tag>
+                    </Space>
+                  </Space>
+                </Checkbox>
+              </Card>
+            ))}
+          </Space>
+        </Checkbox.Group>
+
+        {allGroups.length === 0 && (
+          <Empty description="暂无用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default ModuleAuthorizationManagement;

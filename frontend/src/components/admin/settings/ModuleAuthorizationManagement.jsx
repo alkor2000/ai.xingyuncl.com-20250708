@@ -1,0 +1,1264 @@
+/**
+ * 教育模块全局授权管理组件（最终版：课程权限可覆盖模块权限）
+ * 
+ * 功能特性：
+ * ✅ 垂直展开的三级结构：组 → 标签 → 用户
+ * ✅ 模块展开显示课程列表，支持课程级权限配置
+ * ✅ 标签展开显示用户列表，支持分页懒加载
+ * ✅ 每级可独立选择模块和课程进行授权
+ * ✅ 支持权限继承机制（组→标签→用户，模块→课程）
+ * ✅ 课程权限可以覆盖模块权限（细粒度控制）
+ * ✅ 单页面完成所有操作，无需跳转
+ * ✅ 真实后端API集成
+ * ✅ 重新加载时保持已保存的配置
+ * 
+ * 位置：系统设置 → 教学管理 → 教育模块授权管理（第一个子标签）
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  Button,
+  Space,
+  Empty,
+  Modal,
+  Checkbox,
+  Input,
+  message,
+  Spin,
+  Alert,
+  Tag,
+  Collapse,
+  Switch,
+  Badge,
+  Divider,
+  Pagination,
+  Tooltip
+} from 'antd';
+import {
+  PlusOutlined,
+  SaveOutlined,
+  ReloadOutlined,
+  TeamOutlined,
+  TagOutlined,
+  UserOutlined,
+  BookOutlined,
+  FileTextOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  RightOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  CaretRightOutlined,
+  CaretDownOutlined
+} from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import api from '../../../utils/api';
+
+const { Panel } = Collapse;
+const { Search } = Input;
+
+const ModuleAuthorizationManagement = () => {
+  const { t } = useTranslation();
+
+  // ==================== 状态管理 ====================
+  const [loading, setLoading] = useState(false);
+  const [authorizedGroups, setAuthorizedGroups] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
+  const [allModules, setAllModules] = useState([]);
+  const [groupSelectModalVisible, setGroupSelectModalVisible] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // 课程加载状态
+  const [loadingLessons, setLoadingLessons] = useState({});
+  const [moduleLessons, setModuleLessons] = useState({});
+  
+  // 用户加载状态
+  const [loadingUsers, setLoadingUsers] = useState({});
+  const [tagUsers, setTagUsers] = useState({});
+  const [userPagination, setUserPagination] = useState({});
+
+  // ==================== 数据加载 ====================
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      // 并行加载数据
+      const [groupsRes, modulesRes] = await Promise.all([
+        api.get('/admin/user-groups'),
+        api.get('/teaching/admin/modules', { params: { limit: 1000 } })
+      ]);
+
+      const groups = groupsRes.data.data || [];
+      const modules = (modulesRes.data.data?.modules || modulesRes.data.data || [])
+        .filter(m => m.status === 'published'); // 只显示已发布的模块
+
+      setAllGroups(groups);
+      setAllModules(modules);
+
+      // 加载已授权的组配置
+      await loadAuthorizedGroups();
+    } catch (error) {
+      console.error('加载数据失败:', error);
+      message.error('加载数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAuthorizedGroups = async () => {
+    try {
+      const res = await api.get('/teaching/authorization');
+      const authorizations = res.data.data || [];
+      
+      // 转换为前端数据结构
+      const formattedGroups = authorizations.map(auth => ({
+        groupId: auth.groupId,
+        groupName: auth.groupName,
+        userCount: auth.userCount,
+        expanded: false,
+        showTags: false,
+        modulePermissions: auth.config?.modulePermissions || [],
+        tags: (auth.config?.tags || []).map(tag => ({
+          ...tag,
+          showUsers: false,
+          expanded: false
+        }))
+      }));
+      
+      setAuthorizedGroups(formattedGroups);
+      setHasUnsavedChanges(false); // 重新加载后清除未保存标记
+    } catch (error) {
+      console.error('加载授权配置失败:', error);
+      setAuthorizedGroups([]);
+    }
+  };
+
+  // ==================== 课程加载 ====================
+
+  const handleLoadLessons = async (moduleId) => {
+    if (moduleLessons[moduleId]) {
+      // 已加载，切换展开状态
+      return;
+    }
+
+    setLoadingLessons(prev => ({ ...prev, [moduleId]: true }));
+    try {
+      const res = await api.get(`/teaching/modules/${moduleId}/lessons-for-auth`);
+      const lessons = res.data.data || [];
+      
+      setModuleLessons(prev => ({
+        ...prev,
+        [moduleId]: lessons
+      }));
+    } catch (error) {
+      console.error('加载课程列表失败:', error);
+      message.error('加载课程列表失败');
+    } finally {
+      setLoadingLessons(prev => ({ ...prev, [moduleId]: false }));
+    }
+  };
+
+  // ==================== 用户加载（分页）====================
+
+  const handleLoadUsers = async (groupId, tagId, page = 1) => {
+    const key = `${groupId}-${tagId}`;
+    setLoadingUsers(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      const res = await api.get(`/teaching/tags/${tagId}/users`, {
+        params: { page, limit: 20 }
+      });
+      
+      const { users, pagination } = res.data.data;
+      
+      setTagUsers(prev => ({
+        ...prev,
+        [key]: {
+          ...(prev[key] || {}),
+          [page]: users
+        }
+      }));
+      
+      setUserPagination(prev => ({
+        ...prev,
+        [key]: pagination
+      }));
+
+      // 更新组数据结构 - 合并已保存的用户配置
+      setAuthorizedGroups(prevGroups =>
+        prevGroups.map(group => {
+          if (group.groupId !== groupId) return group;
+          
+          return {
+            ...group,
+            tags: group.tags.map(tag => {
+              if (tag.tagId !== tagId) return tag;
+              
+              // 获取已保存的用户配置
+              const existingUsers = tag.users || [];
+              
+              // 新加载的用户
+              const newUsers = users.map(u => {
+                // 检查是否已有配置
+                const existingUser = existingUsers.find(eu => eu.userId === u.id);
+                
+                if (existingUser) {
+                  // 保持已有的配置，只更新基本信息
+                  return {
+                    ...existingUser,
+                    username: u.username,
+                    email: u.email,
+                    remark: u.remark
+                  };
+                } else {
+                  // 新用户，使用默认配置
+                  return {
+                    userId: u.id,
+                    username: u.username,
+                    email: u.email,
+                    remark: u.remark,
+                    inheritFromTag: true,
+                    modulePermissions: []
+                  };
+                }
+              });
+              
+              return {
+                ...tag,
+                users: newUsers,
+                showUsers: true,
+                currentPage: page
+              };
+            })
+          };
+        })
+      );
+    } catch (error) {
+      console.error('加载用户列表失败:', error);
+      message.error('加载用户列表失败');
+    } finally {
+      setLoadingUsers(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // ==================== 组管理 ====================
+
+  const handleOpenGroupSelectModal = () => {
+    setSelectedGroups([]);
+    setGroupSelectModalVisible(true);
+  };
+
+  const handleAddGroups = () => {
+    if (selectedGroups.length === 0) {
+      message.warning('请选择至少一个用户组');
+      return;
+    }
+
+    const newGroups = selectedGroups
+      .filter(gid => !authorizedGroups.find(ag => ag.groupId === gid))
+      .map(gid => {
+        const group = allGroups.find(g => g.id === gid);
+        return {
+          groupId: gid,
+          groupName: group?.name || '',
+          userCount: group?.user_count || 0,
+          expanded: true,
+          showTags: false,
+          modulePermissions: [],
+          tags: []
+        };
+      });
+
+    setAuthorizedGroups([...authorizedGroups, ...newGroups]);
+    setGroupSelectModalVisible(false);
+    setHasUnsavedChanges(true);
+    message.success(`已添加 ${newGroups.length} 个用户组`);
+  };
+
+  const handleRemoveGroup = (groupId) => {
+    Modal.confirm({
+      title: '确认移除授权',
+      content: '移除此用户组将删除其所有授权配置，确定继续吗？',
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setAuthorizedGroups(authorizedGroups.filter(g => g.groupId !== groupId));
+        setHasUnsavedChanges(true);
+        message.success('已移除用户组授权');
+      }
+    });
+  };
+
+  // ==================== 模块和课程权限管理 ====================
+
+  const handleToggleModulePermission = (groupId, tagId, userId, moduleId, lessonId, permType) => {
+    setAuthorizedGroups(prev => {
+      const newGroups = prev.map(group => {
+        if (group.groupId !== groupId) return group;
+
+        // 组级权限
+        if (!tagId && !userId) {
+          const modulePerms = group.modulePermissions || [];
+          const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
+          
+          if (!lessonId) {
+            // 模块级权限
+            if (existingIndex >= 0) {
+              const updated = [...modulePerms];
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                [permType]: !updated[existingIndex][permType]
+              };
+              return { ...group, modulePermissions: updated };
+            } else {
+              return {
+                ...group,
+                modulePermissions: [
+                  ...modulePerms,
+                  {
+                    moduleId,
+                    moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                    view: permType === 'view',
+                    edit: permType === 'edit',
+                    expanded: false,
+                    lessons: []
+                  }
+                ]
+              };
+            }
+          } else {
+            // 课程级权限
+            if (existingIndex >= 0) {
+              const modulePerm = modulePerms[existingIndex];
+              const lessons = modulePerm.lessons || [];
+              const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
+              
+              const updated = [...modulePerms];
+              if (lessonIndex >= 0) {
+                const updatedLessons = [...lessons];
+                updatedLessons[lessonIndex] = {
+                  ...updatedLessons[lessonIndex],
+                  [permType]: !updatedLessons[lessonIndex][permType]
+                };
+                updated[existingIndex] = {
+                  ...modulePerm,
+                  lessons: updatedLessons
+                };
+              } else {
+                updated[existingIndex] = {
+                  ...modulePerm,
+                  lessons: [
+                    ...lessons,
+                    {
+                      lessonId,
+                      lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                      view: permType === 'view',
+                      edit: permType === 'edit',
+                      inheritFromModule: false
+                    }
+                  ]
+                };
+              }
+              return { ...group, modulePermissions: updated };
+            }
+          }
+        }
+
+        // 标签级权限
+        if (tagId && !userId) {
+          const tags = group.tags || [];
+          const tagIndex = tags.findIndex(t => t.tagId === tagId);
+          
+          if (tagIndex >= 0) {
+            const tag = tags[tagIndex];
+            const modulePerms = tag.modulePermissions || [];
+            const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
+            
+            const updatedTags = [...tags];
+            
+            if (!lessonId) {
+              // 模块级权限
+              if (existingIndex >= 0) {
+                const updated = [...modulePerms];
+                updated[existingIndex] = {
+                  ...updated[existingIndex],
+                  [permType]: !updated[existingIndex][permType]
+                };
+                updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
+              } else {
+                updatedTags[tagIndex] = {
+                  ...tag,
+                  modulePermissions: [
+                    ...modulePerms,
+                    {
+                      moduleId,
+                      moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                      view: permType === 'view',
+                      edit: permType === 'edit',
+                      expanded: false,
+                      lessons: []
+                    }
+                  ]
+                };
+              }
+            } else {
+              // 课程级权限（标签级）
+              if (existingIndex >= 0) {
+                const modulePerm = modulePerms[existingIndex];
+                const lessons = modulePerm.lessons || [];
+                const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
+                
+                const updated = [...modulePerms];
+                if (lessonIndex >= 0) {
+                  const updatedLessons = [...lessons];
+                  updatedLessons[lessonIndex] = {
+                    ...updatedLessons[lessonIndex],
+                    [permType]: !updatedLessons[lessonIndex][permType]
+                  };
+                  updated[existingIndex] = {
+                    ...modulePerm,
+                    lessons: updatedLessons
+                  };
+                } else {
+                  updated[existingIndex] = {
+                    ...modulePerm,
+                    lessons: [
+                      ...lessons,
+                      {
+                        lessonId,
+                        lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                        view: permType === 'view',
+                        edit: permType === 'edit',
+                        inheritFromModule: false
+                      }
+                    ]
+                  };
+                }
+                updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
+              }
+            }
+            
+            return { ...group, tags: updatedTags };
+          }
+        }
+
+        // 用户级权限
+        if (userId) {
+          const tags = group.tags || [];
+          const tagIndex = tags.findIndex(t => t.tagId === tagId);
+          
+          if (tagIndex >= 0) {
+            const tag = tags[tagIndex];
+            const users = tag.users || [];
+            const userIndex = users.findIndex(u => u.userId === userId);
+            
+            if (userIndex >= 0) {
+              const user = users[userIndex];
+              const modulePerms = user.modulePermissions || [];
+              const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
+              
+              const updatedUsers = [...users];
+              
+              if (!lessonId) {
+                // 模块级权限（用户级）
+                if (existingIndex >= 0) {
+                  const updated = [...modulePerms];
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    [permType]: !updated[existingIndex][permType]
+                  };
+                  updatedUsers[userIndex] = { ...user, modulePermissions: updated };
+                } else {
+                  updatedUsers[userIndex] = {
+                    ...user,
+                    modulePermissions: [
+                      ...modulePerms,
+                      {
+                        moduleId,
+                        moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                        view: permType === 'view',
+                        edit: permType === 'edit',
+                        expanded: false,
+                        lessons: []
+                      }
+                    ]
+                  };
+                }
+              } else {
+                // 课程级权限（用户级）
+                if (existingIndex >= 0) {
+                  const modulePerm = modulePerms[existingIndex];
+                  const lessons = modulePerm.lessons || [];
+                  const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
+                  
+                  const updated = [...modulePerms];
+                  if (lessonIndex >= 0) {
+                    const updatedLessons = [...lessons];
+                    updatedLessons[lessonIndex] = {
+                      ...updatedLessons[lessonIndex],
+                      [permType]: !updatedLessons[lessonIndex][permType]
+                    };
+                    updated[existingIndex] = {
+                      ...modulePerm,
+                      lessons: updatedLessons
+                    };
+                  } else {
+                    updated[existingIndex] = {
+                      ...modulePerm,
+                      lessons: [
+                        ...lessons,
+                        {
+                          lessonId,
+                          lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                          view: permType === 'view',
+                          edit: permType === 'edit',
+                          inheritFromModule: false
+                        }
+                      ]
+                    };
+                  }
+                  updatedUsers[userIndex] = { ...user, modulePermissions: updated };
+                }
+              }
+              
+              const updatedTags = [...tags];
+              updatedTags[tagIndex] = { ...tag, users: updatedUsers };
+              return { ...group, tags: updatedTags };
+            }
+          }
+        }
+
+        return group;
+      });
+      
+      setHasUnsavedChanges(true);
+      return newGroups;
+    });
+  };
+
+  // ==================== 标签管理 ====================
+
+  const handleLoadTags = async (groupId) => {
+    try {
+      const tagsRes = await api.get(`/admin/user-tags/group/${groupId}`);
+      const apiTags = (tagsRes.data.data || []).filter(t => t.is_active);
+
+      setAuthorizedGroups(prev =>
+        prev.map(g => {
+          if (g.groupId !== groupId) return g;
+          
+          // 获取已保存的标签配置
+          const existingTags = g.tags || [];
+          
+          // 合并API返回的标签和已保存的配置
+          const mergedTags = apiTags.map(apiTag => {
+            const existingTag = existingTags.find(et => et.tagId === apiTag.id);
+            
+            if (existingTag) {
+              // 保持已有的配置，只更新基本信息
+              return {
+                ...existingTag,
+                tagName: apiTag.name,
+                tagColor: apiTag.color,
+                userCount: apiTag.user_count || 0
+              };
+            } else {
+              // 新标签，使用默认配置
+              return {
+                tagId: apiTag.id,
+                tagName: apiTag.name,
+                tagColor: apiTag.color,
+                userCount: apiTag.user_count || 0,
+                expanded: false,
+                showUsers: false,
+                inheritFromGroup: true,
+                modulePermissions: [],
+                users: []
+              };
+            }
+          });
+          
+          return { ...g, tags: mergedTags, showTags: true };
+        })
+      );
+    } catch (error) {
+      console.error('加载标签失败:', error);
+      message.error('加载标签失败');
+    }
+  };
+
+  // ==================== 保存配置 ====================
+
+  const handleSaveAll = async () => {
+    setLoading(true);
+    try {
+      // 格式化数据并发送到后端
+      const configData = authorizedGroups.map(group => ({
+        groupId: group.groupId,
+        modulePermissions: group.modulePermissions,
+        tags: group.tags.map(tag => ({
+          tagId: tag.tagId,
+          inheritFromGroup: tag.inheritFromGroup,
+          modulePermissions: tag.modulePermissions,
+          users: tag.users.map(user => ({
+            userId: user.userId,
+            inheritFromTag: user.inheritFromTag,
+            modulePermissions: user.modulePermissions
+          }))
+        }))
+      }));
+
+      await api.post('/teaching/authorization/save', { authorizations: configData });
+      
+      message.success('授权配置保存成功');
+      setHasUnsavedChanges(false);
+      await loadAuthorizedGroups(); // 重新加载确认
+    } catch (error) {
+      console.error('保存失败:', error);
+      message.error(error.response?.data?.message || '保存授权配置失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    Modal.confirm({
+      title: '确认重置',
+      content: '重置将放弃所有未保存的更改，确定继续吗？',
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        loadAuthorizedGroups();
+        setHasUnsavedChanges(false);
+        message.info('已重置为上次保存的状态');
+      }
+    });
+  };
+
+  // ==================== 渲染函数（修复：课程权限可覆盖）====================
+
+  const renderModulePermissionSelector = (groupId, tagId, userId, permissions, inheritedPermissions) => {
+    return (
+      <Card size="small" style={{ marginTop: 12, background: '#fafafa' }}>
+        <div style={{ marginBottom: 12 }}>
+          <strong>模块与课程权限配置：</strong>
+        </div>
+        
+        {allModules.length === 0 ? (
+          <Empty description="暂无可授权的模块" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            {allModules.map(module => {
+              const perm = permissions.find(p => p.moduleId === module.id);
+              const inherited = inheritedPermissions?.find(p => p.moduleId === module.id);
+              const hasView = perm?.view || inherited?.view || false;
+              const hasEdit = perm?.edit || inherited?.edit || false;
+              const isInherited = !perm && inherited;
+              const isExpanded = perm?.expanded || false;
+              const lessons = moduleLessons[module.id] || [];
+              const hasLessons = (module.lesson_count || 0) > 0;
+
+              return (
+                <div
+                  key={module.id}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'white',
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 4
+                  }}
+                >
+                  {/* 模块级权限 */}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    width: '100%' 
+                  }}>
+                    <Space size="small">
+                      {hasLessons && (
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                          onClick={() => {
+                            if (!isExpanded) {
+                              handleLoadLessons(module.id);
+                            }
+                            handleToggleModuleExpand(groupId, tagId, userId, module.id);
+                          }}
+                          loading={loadingLessons[module.id]}
+                        />
+                      )}
+                      <BookOutlined style={{ color: '#1890ff' }} />
+                      <span>{module.name}</span>
+                      {hasLessons && (
+                        <Tag color="geekblue" style={{ fontSize: 11 }}>
+                          {module.lesson_count}课
+                        </Tag>
+                      )}
+                      {isInherited && (
+                        <Tag color="blue" style={{ fontSize: 11 }}>
+                          继承
+                        </Tag>
+                      )}
+                    </Space>
+                    <Space size="small">
+                      <Checkbox
+                        checked={hasView}
+                        disabled={isInherited}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'view')}
+                      >
+                        查看
+                      </Checkbox>
+                      <Checkbox
+                        checked={hasEdit}
+                        disabled={isInherited}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'edit')}
+                      >
+                        编辑
+                      </Checkbox>
+                    </Space>
+                  </div>
+
+                  {/* 课程列表 - 修复：移除disabled，允许覆盖模块权限 */}
+                  {isExpanded && lessons.length > 0 && (
+                    <div style={{ marginLeft: 32, marginTop: 8, paddingLeft: 12, borderLeft: '2px solid #e8e8e8' }}>
+                      {lessons.map(lesson => {
+                        const lessonPerm = perm?.lessons?.find(l => l.lessonId === lesson.id);
+                        const inheritedLesson = inherited?.lessons?.find(l => l.lessonId === lesson.id);
+                        
+                        // 修复：课程权限计算 - 优先使用课程级权限，其次继承
+                        const lessonHasView = lessonPerm 
+                          ? lessonPerm.view 
+                          : (inheritedLesson?.view || perm?.view || inherited?.view || false);
+                        
+                        const lessonHasEdit = lessonPerm 
+                          ? lessonPerm.edit 
+                          : (inheritedLesson?.edit || perm?.edit || inherited?.edit || false);
+                        
+                        // 仅用于显示标签，不影响编辑能力
+                        const lessonInherited = !lessonPerm && (perm || inherited);
+
+                        return (
+                          <div
+                            key={lesson.id}
+                            style={{
+                              padding: '6px 10px',
+                              background: '#f9f9f9',
+                              marginBottom: 6,
+                              borderRadius: 3
+                            }}
+                          >
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              width: '100%' 
+                            }}>
+                              <Space size="small">
+                                <FileTextOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />
+                                <span style={{ fontSize: 13 }}>{lesson.title}</span>
+                                {lessonInherited && (
+                                  <Tag color="cyan" style={{ fontSize: 10 }}>
+                                    继承自模块
+                                  </Tag>
+                                )}
+                              </Space>
+                              <Space size="small">
+                                {/* 修复：移除 disabled={lessonInherited}，允许用户覆盖 */}
+                                <Checkbox
+                                  checked={lessonHasView}
+                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'view')}
+                                  style={{ fontSize: 12 }}
+                                >
+                                  查看
+                                </Checkbox>
+                                <Checkbox
+                                  checked={lessonHasEdit}
+                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'edit')}
+                                  style={{ fontSize: 12 }}
+                                >
+                                  编辑
+                                </Checkbox>
+                              </Space>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Space>
+        )}
+      </Card>
+    );
+  };
+
+  const handleToggleModuleExpand = (groupId, tagId, userId, moduleId) => {
+    setAuthorizedGroups(prev =>
+      prev.map(group => {
+        if (group.groupId !== groupId) return group;
+
+        if (!tagId && !userId) {
+          // 组级
+          return {
+            ...group,
+            modulePermissions: group.modulePermissions.map(mp =>
+              mp.moduleId === moduleId ? { ...mp, expanded: !mp.expanded } : mp
+            )
+          };
+        }
+
+        if (tagId && !userId) {
+          // 标签级
+          return {
+            ...group,
+            tags: group.tags.map(tag =>
+              tag.tagId === tagId
+                ? {
+                    ...tag,
+                    modulePermissions: tag.modulePermissions.map(mp =>
+                      mp.moduleId === moduleId ? { ...mp, expanded: !mp.expanded } : mp
+                    )
+                  }
+                : tag
+            )
+          };
+        }
+
+        if (userId) {
+          // 用户级
+          return {
+            ...group,
+            tags: group.tags.map(tag =>
+              tag.tagId === tagId
+                ? {
+                    ...tag,
+                    users: tag.users.map(user =>
+                      user.userId === userId
+                        ? {
+                            ...user,
+                            modulePermissions: user.modulePermissions.map(mp =>
+                              mp.moduleId === moduleId ? { ...mp, expanded: !mp.expanded } : mp
+                            )
+                          }
+                        : user
+                    )
+                  }
+                : tag
+            )
+          };
+        }
+
+        return group;
+      })
+    );
+  };
+
+  const renderUserItem = (groupId, tagId, user, groupPermissions, tagPermissions) => {
+    const userKey = `user-${groupId}-${tagId}-${user.userId}`;
+    const inheritedPerms = user.inheritFromTag ? tagPermissions : null;
+
+    return (
+      <Card
+        key={userKey}
+        size="small"
+        style={{ marginLeft: 60, marginBottom: 12, background: '#f0f0f0' }}
+        title={
+          <Space>
+            <UserOutlined style={{ color: '#52c41a' }} />
+            <span>{user.username}</span>
+            {user.remark && <span style={{ color: '#999', fontSize: 12 }}>({user.remark})</span>}
+          </Space>
+        }
+      >
+        <div>
+          <Space style={{ marginBottom: 12 }}>
+            <Switch
+              checked={user.inheritFromTag}
+              onChange={(checked) => {
+                setAuthorizedGroups(prev =>
+                  prev.map(g =>
+                    g.groupId === groupId
+                      ? {
+                          ...g,
+                          tags: g.tags.map(t =>
+                            t.tagId === tagId
+                              ? {
+                                  ...t,
+                                  users: t.users.map(u =>
+                                    u.userId === user.userId
+                                      ? { ...u, inheritFromTag: checked }
+                                      : u
+                                  )
+                                }
+                              : t
+                          )
+                        }
+                      : g
+                  )
+                );
+                setHasUnsavedChanges(true);
+              }}
+            />
+            <span>继承标签权限</span>
+          </Space>
+
+          {!user.inheritFromTag && renderModulePermissionSelector(
+            groupId,
+            tagId,
+            user.userId,
+            user.modulePermissions || [],
+            inheritedPerms
+          )}
+        </div>
+      </Card>
+    );
+  };
+
+  const renderGroupItem = (group) => {
+    const header = (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <Space>
+          <TeamOutlined style={{ fontSize: 18, color: '#1890ff' }} />
+          <strong style={{ fontSize: 15 }}>{group.groupName}</strong>
+          <Badge count={group.userCount} showZero style={{ backgroundColor: '#52c41a' }} />
+        </Space>
+        <Button
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveGroup(group.groupId);
+          }}
+        >
+          移除授权
+        </Button>
+      </div>
+    );
+
+    return (
+      <Panel
+        header={header}
+        key={`group-${group.groupId}`}
+        style={{
+          marginBottom: 16,
+          background: 'white',
+          borderRadius: 8,
+          border: '1px solid #e8e8e8',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        }}
+      >
+        <div style={{ padding: '8px 0' }}>
+          {/* 组级权限配置 */}
+          {renderModulePermissionSelector(
+            group.groupId,
+            null,
+            null,
+            group.modulePermissions || [],
+            null
+          )}
+
+          {/* 展开标签按钮 */}
+          <div style={{ marginTop: 16 }}>
+            {!group.showTags ? (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => handleLoadTags(group.groupId)}
+                block
+              >
+                展开标签列表
+              </Button>
+            ) : (
+              <div>
+                <Divider orientation="left">标签列表</Divider>
+                {group.tags.length === 0 ? (
+                  <Empty description="该组织暂无标签" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                    {group.tags.map(tag => {
+                      const tagUserKey = `${group.groupId}-${tag.tagId}`;
+                      const pagination = userPagination[tagUserKey];
+
+                      return (
+                        <Card
+                          key={tag.tagId}
+                          size="small"
+                          style={{ marginLeft: 40, background: '#f5f5f5' }}
+                          title={
+                            <Space>
+                              <Tag color={tag.tagColor}>
+                                <TagOutlined /> {tag.tagName}
+                              </Tag>
+                              <Badge count={tag.userCount} showZero />
+                            </Space>
+                          }
+                        >
+                          <div>
+                            <Space style={{ marginBottom: 12 }}>
+                              <Switch
+                                checked={tag.inheritFromGroup}
+                                onChange={(checked) => {
+                                  setAuthorizedGroups(prev =>
+                                    prev.map(g =>
+                                      g.groupId === group.groupId
+                                        ? {
+                                            ...g,
+                                            tags: g.tags.map(t =>
+                                              t.tagId === tag.tagId
+                                                ? { ...t, inheritFromGroup: checked }
+                                                : t
+                                            )
+                                          }
+                                        : g
+                                    )
+                                  );
+                                  setHasUnsavedChanges(true);
+                                }}
+                              />
+                              <span>继承"{group.groupName}"的权限</span>
+                            </Space>
+
+                            {!tag.inheritFromGroup && renderModulePermissionSelector(
+                              group.groupId,
+                              tag.tagId,
+                              null,
+                              tag.modulePermissions || [],
+                              tag.inheritFromGroup ? group.modulePermissions : null
+                            )}
+
+                            {/* 用户列表展开 */}
+                            <div style={{ marginTop: 16 }}>
+                              {!tag.showUsers ? (
+                                <Button
+                                  type="dashed"
+                                  icon={<PlusOutlined />}
+                                  onClick={() => handleLoadUsers(group.groupId, tag.tagId, 1)}
+                                  loading={loadingUsers[tagUserKey]}
+                                  block
+                                  size="small"
+                                >
+                                  展开用户列表 ({tag.userCount}人)
+                                </Button>
+                              ) : (
+                                <div>
+                                  <Divider orientation="left" style={{ fontSize: 13 }}>
+                                    用户列表
+                                  </Divider>
+                                  
+                                  {tag.users.length === 0 ? (
+                                    <Empty description="该标签暂无用户" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                                  ) : (
+                                    <>
+                                      {tag.users.map(user =>
+                                        renderUserItem(
+                                          group.groupId,
+                                          tag.tagId,
+                                          user,
+                                          group.modulePermissions,
+                                          tag.modulePermissions
+                                        )
+                                      )}
+
+                                      {/* 分页 */}
+                                      {pagination && pagination.pages > 1 && (
+                                        <div style={{ textAlign: 'center', marginTop: 16 }}>
+                                          <Pagination
+                                            current={pagination.page}
+                                            total={pagination.total}
+                                            pageSize={pagination.limit}
+                                            onChange={(page) => handleLoadUsers(group.groupId, tag.tagId, page)}
+                                            showSizeChanger={false}
+                                            showTotal={(total) => `共 ${total} 位用户`}
+                                            size="small"
+                                          />
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </Space>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </Panel>
+    );
+  };
+
+  // ==================== 主渲染 ====================
+
+  if (loading && authorizedGroups.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60 }}>
+        <Spin size="large" tip="加载授权配置..." />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      {/* 操作栏 */}
+      <Card style={{ marginBottom: 16 }}>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenGroupSelectModal}
+            >
+              新建组授权
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={loadInitialData} loading={loading}>
+              刷新
+            </Button>
+          </Space>
+          <Space>
+            {hasUnsavedChanges && (
+              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+                有未保存的更改
+              </Tag>
+            )}
+            <Button onClick={handleReset} disabled={!hasUnsavedChanges}>
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveAll}
+              loading={loading}
+              disabled={!hasUnsavedChanges}
+            >
+              保存所有更改
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      {/* 说明卡片 */}
+      <Alert
+        message="权限管理说明"
+        description={
+          <div>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>组级授权</strong>：为整个用户组授权模块和课程，该组下所有标签和用户自动继承
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>标签授权</strong>：可以继承组权限，也可以独立配置或添加额外权限
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>用户授权</strong>：可以继承标签权限，也可以独立配置或添加额外权限
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              • <strong>课程权限</strong>：点击模块左侧箭头展开课程列表，可覆盖模块权限进行细粒度控制
+            </p>
+          </div>
+        }
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+      />
+
+      {/* 授权组列表 */}
+      {authorizedGroups.length === 0 ? (
+        <Card>
+          <Empty
+            description={
+              <div>
+                <p>当前还未配置任何组的授权</p>
+                <p style={{ color: '#999' }}>点击上方"新建组授权"按钮开始添加授权组</p>
+              </div>
+            }
+          >
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenGroupSelectModal}
+            >
+              新建组授权
+            </Button>
+          </Empty>
+        </Card>
+      ) : (
+        <Collapse
+          expandIconPosition="right"
+          style={{ background: 'transparent', border: 'none' }}
+        >
+          {authorizedGroups.map(group => renderGroupItem(group))}
+        </Collapse>
+      )}
+
+      {/* 选择用户组模态框 */}
+      <Modal
+        title="选择要授权的用户组"
+        open={groupSelectModalVisible}
+        onOk={handleAddGroups}
+        onCancel={() => setGroupSelectModalVisible(false)}
+        width={600}
+        okText={`确认添加 (${selectedGroups.length})`}
+        cancelText="取消"
+      >
+        <Search
+          placeholder="搜索用户组..."
+          style={{ marginBottom: 16 }}
+          allowClear
+        />
+        
+        <Checkbox.Group
+          value={selectedGroups}
+          onChange={setSelectedGroups}
+          style={{ width: '100%' }}
+        >
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {allGroups.map(group => (
+              <Card
+                key={group.id}
+                size="small"
+                hoverable
+                style={{ cursor: 'pointer' }}
+              >
+                <Checkbox value={group.id} style={{ width: '100%' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Space>
+                      <TeamOutlined style={{ color: '#1890ff' }} />
+                      <strong>{group.name}</strong>
+                    </Space>
+                    <Space>
+                      <Tag>{group.user_count || 0} 人</Tag>
+                    </Space>
+                  </Space>
+                </Checkbox>
+              </Card>
+            ))}
+          </Space>
+        </Checkbox.Group>
+
+        {allGroups.length === 0 && (
+          <Empty description="暂无用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default ModuleAuthorizationManagement;

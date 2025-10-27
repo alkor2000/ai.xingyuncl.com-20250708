@@ -1,9 +1,9 @@
 /**
- * 教学管理后台组件（全局授权管理增强版）
+ * 教学管理后台组件（分组管理增强版）
  * 新增功能：
- * 1. Tab结构：教育模块授权管理 + 模块管理 + 分组管理 + 页面头部配置
- * 2. 教育模块授权管理：全局三级授权（组→标签→用户）
- * 3. 分组管理：创建、编辑、删除、排序、批量操作
+ * 1. Tab结构：模块管理 + 分组管理
+ * 2. 分组管理：创建、编辑、删除、排序、批量操作
+ * 3. 拖拽排序功能
  * 权限：仅超级管理员可见
  */
 
@@ -50,8 +50,7 @@ import {
   AppstoreOutlined,
   HolderOutlined,
   ArrowUpOutlined,
-  ArrowDownOutlined,
-  SafetyCertificateOutlined
+  ArrowDownOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -59,9 +58,6 @@ import useTeachingStore from '../../../stores/teachingStore';
 import useSystemConfigStore from '../../../stores/systemConfigStore';
 import moment from 'moment';
 import MonacoEditor from '@monaco-editor/react';
-
-// 导入全局授权管理组件
-import ModuleAuthorizationManagement from './ModuleAuthorizationManagement';
 
 const { Option } = Select;
 const { Search, TextArea } = Input;
@@ -605,18 +601,8 @@ const TeachingManagement = () => {
     return true;
   });
 
-  // Tab项配置（新增教育模块授权管理Tab）
+  // Tab项配置
   const tabItems = [
-    {
-      key: 'authorization',
-      label: (
-        <span>
-          <SafetyCertificateOutlined />
-          教育模块授权管理
-        </span>
-      ),
-      children: <ModuleAuthorizationManagement />
-    },
     {
       key: 'modules',
       label: (
@@ -921,9 +907,9 @@ const TeachingManagement = () => {
         </Col>
       </Row>
 
-      {/* Tab区域（默认显示教育模块授权管理Tab）*/}
+      {/* Tab区域 */}
       <Card>
-        <Tabs items={tabItems} defaultActiveKey="authorization" />
+        <Tabs items={tabItems} defaultActiveKey="modules" />
       </Card>
 
       {/* 分组编辑模态框 */}
