@@ -1,5 +1,5 @@
 /**
- * 教育模块全局授权管理组件（修复版：取消勾选时删除配置而非设置为false）
+ * 教育模块全局授权管理组件（最终版：课程权限可覆盖模块权限）
  * 
  * 功能特性：
  * ✅ 垂直展开的三级结构：组 → 标签 → 用户
@@ -11,10 +11,6 @@
  * ✅ 单页面完成所有操作，无需跳转
  * ✅ 真实后端API集成
  * ✅ 重新加载时保持已保存的配置
- * 
- * 修复内容：
- * - 取消勾选时删除权限配置（恢复继承），而不是设置为false
- * - 确保不会保存 view:false 或 edit:false 的配置
  * 
  * 位置：系统设置 → 教学管理 → 教育模块授权管理（第一个子标签）
  */
@@ -300,9 +296,9 @@ const ModuleAuthorizationManagement = () => {
     });
   };
 
-  // ==================== 模块和课程权限管理（核心修复）====================
+  // ==================== 模块和课程权限管理 ====================
 
-  const handleToggleModulePermission = (groupId, tagId, userId, moduleId, lessonId, permType, currentValue) => {
+  const handleToggleModulePermission = (groupId, tagId, userId, moduleId, lessonId, permType) => {
     setAuthorizedGroups(prev => {
       const newGroups = prev.map(group => {
         if (group.groupId !== groupId) return group;
@@ -314,46 +310,28 @@ const ModuleAuthorizationManagement = () => {
           
           if (!lessonId) {
             // 模块级权限
-            if (currentValue) {
-              // 当前有权限，取消勾选时删除或设置为false
-              if (existingIndex >= 0) {
-                const updated = [...modulePerms];
-                const otherPermType = permType === 'view' ? 'edit' : 'view';
-                
-                // 如果另一个权限类型也为false或不存在，则删除整个配置
-                if (!updated[existingIndex][otherPermType]) {
-                  updated.splice(existingIndex, 1);
-                } else {
-                  // 否则只设置当前权限为false
-                  delete updated[existingIndex][permType];
-                }
-                return { ...group, modulePermissions: updated };
-              }
+            if (existingIndex >= 0) {
+              const updated = [...modulePerms];
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                [permType]: !updated[existingIndex][permType]
+              };
+              return { ...group, modulePermissions: updated };
             } else {
-              // 当前无权限，勾选时添加
-              if (existingIndex >= 0) {
-                const updated = [...modulePerms];
-                updated[existingIndex] = {
-                  ...updated[existingIndex],
-                  [permType]: true
-                };
-                return { ...group, modulePermissions: updated };
-              } else {
-                return {
-                  ...group,
-                  modulePermissions: [
-                    ...modulePerms,
-                    {
-                      moduleId,
-                      moduleName: allModules.find(m => m.id === moduleId)?.name || '',
-                      view: permType === 'view',
-                      edit: permType === 'edit',
-                      expanded: false,
-                      lessons: []
-                    }
-                  ]
-                };
-              }
+              return {
+                ...group,
+                modulePermissions: [
+                  ...modulePerms,
+                  {
+                    moduleId,
+                    moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                    view: permType === 'view',
+                    edit: permType === 'edit',
+                    expanded: false,
+                    lessons: []
+                  }
+                ]
+              };
             }
           } else {
             // 课程级权限
@@ -363,54 +341,30 @@ const ModuleAuthorizationManagement = () => {
               const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
               
               const updated = [...modulePerms];
-              
-              if (currentValue) {
-                // 当前有权限，取消勾选时删除课程配置
-                if (lessonIndex >= 0) {
-                  const updatedLessons = [...lessons];
-                  const otherPermType = permType === 'view' ? 'edit' : 'view';
-                  
-                  // 如果另一个权限类型也为false或不存在，则删除整个课程配置
-                  if (!updatedLessons[lessonIndex][otherPermType]) {
-                    updatedLessons.splice(lessonIndex, 1);
-                  } else {
-                    // 否则删除当前权限属性
-                    delete updatedLessons[lessonIndex][permType];
-                  }
-                  
-                  updated[existingIndex] = {
-                    ...modulePerm,
-                    lessons: updatedLessons
-                  };
-                }
+              if (lessonIndex >= 0) {
+                const updatedLessons = [...lessons];
+                updatedLessons[lessonIndex] = {
+                  ...updatedLessons[lessonIndex],
+                  [permType]: !updatedLessons[lessonIndex][permType]
+                };
+                updated[existingIndex] = {
+                  ...modulePerm,
+                  lessons: updatedLessons
+                };
               } else {
-                // 当前无权限，勾选时添加
-                if (lessonIndex >= 0) {
-                  const updatedLessons = [...lessons];
-                  updatedLessons[lessonIndex] = {
-                    ...updatedLessons[lessonIndex],
-                    [permType]: true,
-                    inheritFromModule: false
-                  };
-                  updated[existingIndex] = {
-                    ...modulePerm,
-                    lessons: updatedLessons
-                  };
-                } else {
-                  updated[existingIndex] = {
-                    ...modulePerm,
-                    lessons: [
-                      ...lessons,
-                      {
-                        lessonId,
-                        lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
-                        view: permType === 'view',
-                        edit: permType === 'edit',
-                        inheritFromModule: false
-                      }
-                    ]
-                  };
-                }
+                updated[existingIndex] = {
+                  ...modulePerm,
+                  lessons: [
+                    ...lessons,
+                    {
+                      lessonId,
+                      lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                      view: permType === 'view',
+                      edit: permType === 'edit',
+                      inheritFromModule: false
+                    }
+                  ]
+                };
               }
               return { ...group, modulePermissions: updated };
             }
@@ -431,44 +385,28 @@ const ModuleAuthorizationManagement = () => {
             
             if (!lessonId) {
               // 模块级权限
-              if (currentValue) {
-                // 取消勾选
-                if (existingIndex >= 0) {
-                  const updated = [...modulePerms];
-                  const otherPermType = permType === 'view' ? 'edit' : 'view';
-                  
-                  if (!updated[existingIndex][otherPermType]) {
-                    updated.splice(existingIndex, 1);
-                  } else {
-                    delete updated[existingIndex][permType];
-                  }
-                  updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
-                }
+              if (existingIndex >= 0) {
+                const updated = [...modulePerms];
+                updated[existingIndex] = {
+                  ...updated[existingIndex],
+                  [permType]: !updated[existingIndex][permType]
+                };
+                updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
               } else {
-                // 勾选
-                if (existingIndex >= 0) {
-                  const updated = [...modulePerms];
-                  updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    [permType]: true
-                  };
-                  updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
-                } else {
-                  updatedTags[tagIndex] = {
-                    ...tag,
-                    modulePermissions: [
-                      ...modulePerms,
-                      {
-                        moduleId,
-                        moduleName: allModules.find(m => m.id === moduleId)?.name || '',
-                        view: permType === 'view',
-                        edit: permType === 'edit',
-                        expanded: false,
-                        lessons: []
-                      }
-                    ]
-                  };
-                }
+                updatedTags[tagIndex] = {
+                  ...tag,
+                  modulePermissions: [
+                    ...modulePerms,
+                    {
+                      moduleId,
+                      moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                      view: permType === 'view',
+                      edit: permType === 'edit',
+                      expanded: false,
+                      lessons: []
+                    }
+                  ]
+                };
               }
             } else {
               // 课程级权限（标签级）
@@ -478,52 +416,30 @@ const ModuleAuthorizationManagement = () => {
                 const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
                 
                 const updated = [...modulePerms];
-                
-                if (currentValue) {
-                  // 取消勾选
-                  if (lessonIndex >= 0) {
-                    const updatedLessons = [...lessons];
-                    const otherPermType = permType === 'view' ? 'edit' : 'view';
-                    
-                    if (!updatedLessons[lessonIndex][otherPermType]) {
-                      updatedLessons.splice(lessonIndex, 1);
-                    } else {
-                      delete updatedLessons[lessonIndex][permType];
-                    }
-                    
-                    updated[existingIndex] = {
-                      ...modulePerm,
-                      lessons: updatedLessons
-                    };
-                  }
+                if (lessonIndex >= 0) {
+                  const updatedLessons = [...lessons];
+                  updatedLessons[lessonIndex] = {
+                    ...updatedLessons[lessonIndex],
+                    [permType]: !updatedLessons[lessonIndex][permType]
+                  };
+                  updated[existingIndex] = {
+                    ...modulePerm,
+                    lessons: updatedLessons
+                  };
                 } else {
-                  // 勾选
-                  if (lessonIndex >= 0) {
-                    const updatedLessons = [...lessons];
-                    updatedLessons[lessonIndex] = {
-                      ...updatedLessons[lessonIndex],
-                      [permType]: true,
-                      inheritFromModule: false
-                    };
-                    updated[existingIndex] = {
-                      ...modulePerm,
-                      lessons: updatedLessons
-                    };
-                  } else {
-                    updated[existingIndex] = {
-                      ...modulePerm,
-                      lessons: [
-                        ...lessons,
-                        {
-                          lessonId,
-                          lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
-                          view: permType === 'view',
-                          edit: permType === 'edit',
-                          inheritFromModule: false
-                        }
-                      ]
-                    };
-                  }
+                  updated[existingIndex] = {
+                    ...modulePerm,
+                    lessons: [
+                      ...lessons,
+                      {
+                        lessonId,
+                        lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                        view: permType === 'view',
+                        edit: permType === 'edit',
+                        inheritFromModule: false
+                      }
+                    ]
+                  };
                 }
                 updatedTags[tagIndex] = { ...tag, modulePermissions: updated };
               }
@@ -552,44 +468,28 @@ const ModuleAuthorizationManagement = () => {
               
               if (!lessonId) {
                 // 模块级权限（用户级）
-                if (currentValue) {
-                  // 取消勾选
-                  if (existingIndex >= 0) {
-                    const updated = [...modulePerms];
-                    const otherPermType = permType === 'view' ? 'edit' : 'view';
-                    
-                    if (!updated[existingIndex][otherPermType]) {
-                      updated.splice(existingIndex, 1);
-                    } else {
-                      delete updated[existingIndex][permType];
-                    }
-                    updatedUsers[userIndex] = { ...user, modulePermissions: updated };
-                  }
+                if (existingIndex >= 0) {
+                  const updated = [...modulePerms];
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    [permType]: !updated[existingIndex][permType]
+                  };
+                  updatedUsers[userIndex] = { ...user, modulePermissions: updated };
                 } else {
-                  // 勾选
-                  if (existingIndex >= 0) {
-                    const updated = [...modulePerms];
-                    updated[existingIndex] = {
-                      ...updated[existingIndex],
-                      [permType]: true
-                    };
-                    updatedUsers[userIndex] = { ...user, modulePermissions: updated };
-                  } else {
-                    updatedUsers[userIndex] = {
-                      ...user,
-                      modulePermissions: [
-                        ...modulePerms,
-                        {
-                          moduleId,
-                          moduleName: allModules.find(m => m.id === moduleId)?.name || '',
-                          view: permType === 'view',
-                          edit: permType === 'edit',
-                          expanded: false,
-                          lessons: []
-                        }
-                      ]
-                    };
-                  }
+                  updatedUsers[userIndex] = {
+                    ...user,
+                    modulePermissions: [
+                      ...modulePerms,
+                      {
+                        moduleId,
+                        moduleName: allModules.find(m => m.id === moduleId)?.name || '',
+                        view: permType === 'view',
+                        edit: permType === 'edit',
+                        expanded: false,
+                        lessons: []
+                      }
+                    ]
+                  };
                 }
               } else {
                 // 课程级权限（用户级）
@@ -599,52 +499,30 @@ const ModuleAuthorizationManagement = () => {
                   const lessonIndex = lessons.findIndex(l => l.lessonId === lessonId);
                   
                   const updated = [...modulePerms];
-                  
-                  if (currentValue) {
-                    // 取消勾选
-                    if (lessonIndex >= 0) {
-                      const updatedLessons = [...lessons];
-                      const otherPermType = permType === 'view' ? 'edit' : 'view';
-                      
-                      if (!updatedLessons[lessonIndex][otherPermType]) {
-                        updatedLessons.splice(lessonIndex, 1);
-                      } else {
-                        delete updatedLessons[lessonIndex][permType];
-                      }
-                      
-                      updated[existingIndex] = {
-                        ...modulePerm,
-                        lessons: updatedLessons
-                      };
-                    }
+                  if (lessonIndex >= 0) {
+                    const updatedLessons = [...lessons];
+                    updatedLessons[lessonIndex] = {
+                      ...updatedLessons[lessonIndex],
+                      [permType]: !updatedLessons[lessonIndex][permType]
+                    };
+                    updated[existingIndex] = {
+                      ...modulePerm,
+                      lessons: updatedLessons
+                    };
                   } else {
-                    // 勾选
-                    if (lessonIndex >= 0) {
-                      const updatedLessons = [...lessons];
-                      updatedLessons[lessonIndex] = {
-                        ...updatedLessons[lessonIndex],
-                        [permType]: true,
-                        inheritFromModule: false
-                      };
-                      updated[existingIndex] = {
-                        ...modulePerm,
-                        lessons: updatedLessons
-                      };
-                    } else {
-                      updated[existingIndex] = {
-                        ...modulePerm,
-                        lessons: [
-                          ...lessons,
-                          {
-                            lessonId,
-                            lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
-                            view: permType === 'view',
-                            edit: permType === 'edit',
-                            inheritFromModule: false
-                          }
-                        ]
-                      };
-                    }
+                    updated[existingIndex] = {
+                      ...modulePerm,
+                      lessons: [
+                        ...lessons,
+                        {
+                          lessonId,
+                          lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
+                          view: permType === 'view',
+                          edit: permType === 'edit',
+                          inheritFromModule: false
+                        }
+                      ]
+                    };
                   }
                   updatedUsers[userIndex] = { ...user, modulePermissions: updated };
                 }
@@ -716,57 +594,23 @@ const ModuleAuthorizationManagement = () => {
     }
   };
 
-  // ==================== 保存配置（增加清理逻辑）====================
+  // ==================== 保存配置 ====================
 
   const handleSaveAll = async () => {
     setLoading(true);
     try {
-      // 清理数据：删除所有 view:false 和 edit:false 的配置
-      const cleanPermissions = (permissions) => {
-        if (!permissions || !Array.isArray(permissions)) return [];
-        
-        return permissions
-          .map(perm => {
-            // 清理课程权限
-            if (perm.lessons && Array.isArray(perm.lessons)) {
-              perm.lessons = perm.lessons
-                .filter(lesson => lesson.view || lesson.edit) // 只保留至少有一个权限的课程
-                .map(lesson => {
-                  const cleaned = { ...lesson };
-                  // 删除false值
-                  if (!cleaned.view) delete cleaned.view;
-                  if (!cleaned.edit) delete cleaned.edit;
-                  return cleaned;
-                });
-            }
-            
-            // 如果模块本身没有权限且没有课程权限，则移除整个模块配置
-            if (!perm.view && !perm.edit && (!perm.lessons || perm.lessons.length === 0)) {
-              return null;
-            }
-            
-            // 删除模块级的false值
-            const cleanedPerm = { ...perm };
-            if (!cleanedPerm.view) delete cleanedPerm.view;
-            if (!cleanedPerm.edit) delete cleanedPerm.edit;
-            
-            return cleanedPerm;
-          })
-          .filter(perm => perm !== null); // 移除null值
-      };
-      
       // 格式化数据并发送到后端
       const configData = authorizedGroups.map(group => ({
         groupId: group.groupId,
-        modulePermissions: cleanPermissions(group.modulePermissions),
+        modulePermissions: group.modulePermissions,
         tags: group.tags.map(tag => ({
           tagId: tag.tagId,
           inheritFromGroup: tag.inheritFromGroup,
-          modulePermissions: cleanPermissions(tag.modulePermissions),
+          modulePermissions: tag.modulePermissions,
           users: tag.users.map(user => ({
             userId: user.userId,
             inheritFromTag: user.inheritFromTag,
-            modulePermissions: cleanPermissions(user.modulePermissions)
+            modulePermissions: user.modulePermissions
           }))
         }))
       }));
@@ -799,7 +643,7 @@ const ModuleAuthorizationManagement = () => {
     });
   };
 
-  // ==================== 渲染函数（修复：正确传递当前值）====================
+  // ==================== 渲染函数（修复：课程权限可覆盖）====================
 
   const renderModulePermissionSelector = (groupId, tagId, userId, permissions, inheritedPermissions) => {
     return (
@@ -871,37 +715,38 @@ const ModuleAuthorizationManagement = () => {
                       <Checkbox
                         checked={hasView}
                         disabled={isInherited}
-                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'view', hasView)}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'view')}
                       >
                         查看
                       </Checkbox>
                       <Checkbox
                         checked={hasEdit}
                         disabled={isInherited}
-                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'edit', hasEdit)}
+                        onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, null, 'edit')}
                       >
                         编辑
                       </Checkbox>
                     </Space>
                   </div>
 
-                  {/* 课程列表 */}
+                  {/* 课程列表 - 修复：移除disabled，允许覆盖模块权限 */}
                   {isExpanded && lessons.length > 0 && (
                     <div style={{ marginLeft: 32, marginTop: 8, paddingLeft: 12, borderLeft: '2px solid #e8e8e8' }}>
                       {lessons.map(lesson => {
                         const lessonPerm = perm?.lessons?.find(l => l.lessonId === lesson.id);
                         const inheritedLesson = inherited?.lessons?.find(l => l.lessonId === lesson.id);
                         
-                        // 课程权限计算
-                        const lessonHasView = lessonPerm?.view || 
-                          (lessonPerm === undefined && (perm?.view || inherited?.view)) || 
-                          false;
+                        // 修复：课程权限计算 - 优先使用课程级权限，其次继承
+                        const lessonHasView = lessonPerm 
+                          ? lessonPerm.view 
+                          : (inheritedLesson?.view || perm?.view || inherited?.view || false);
                         
-                        const lessonHasEdit = lessonPerm?.edit || 
-                          (lessonPerm === undefined && (perm?.edit || inherited?.edit)) || 
-                          false;
+                        const lessonHasEdit = lessonPerm 
+                          ? lessonPerm.edit 
+                          : (inheritedLesson?.edit || perm?.edit || inherited?.edit || false);
                         
-                        const lessonInherited = !lessonPerm && (perm?.view || perm?.edit || inherited);
+                        // 仅用于显示标签，不影响编辑能力
+                        const lessonInherited = !lessonPerm && (perm || inherited);
 
                         return (
                           <div
@@ -929,16 +774,17 @@ const ModuleAuthorizationManagement = () => {
                                 )}
                               </Space>
                               <Space size="small">
+                                {/* 修复：移除 disabled={lessonInherited}，允许用户覆盖 */}
                                 <Checkbox
                                   checked={lessonHasView}
-                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'view', lessonHasView)}
+                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'view')}
                                   style={{ fontSize: 12 }}
                                 >
                                   查看
                                 </Checkbox>
                                 <Checkbox
                                   checked={lessonHasEdit}
-                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'edit', lessonHasEdit)}
+                                  onChange={() => handleToggleModulePermission(groupId, tagId, userId, module.id, lesson.id, 'edit')}
                                   style={{ fontSize: 12 }}
                                 >
                                   编辑
@@ -1323,11 +1169,8 @@ const ModuleAuthorizationManagement = () => {
             <p style={{ marginBottom: 8 }}>
               • <strong>用户授权</strong>：可以继承标签权限，也可以独立配置或添加额外权限
             </p>
-            <p style={{ marginBottom: 8 }}>
+            <p style={{ marginBottom: 0 }}>
               • <strong>课程权限</strong>：点击模块左侧箭头展开课程列表，可覆盖模块权限进行细粒度控制
-            </p>
-            <p style={{ marginBottom: 0, color: '#ff4d4f' }}>
-              • <strong>重要</strong>：取消勾选权限将删除该配置，恢复到继承上级权限的状态
             </p>
           </div>
         }

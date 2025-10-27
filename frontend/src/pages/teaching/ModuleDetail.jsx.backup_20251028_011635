@@ -1,6 +1,7 @@
 /**
- * 教学模块详情页面（权限修复版）
- * 修复：PermissionTreeManager仅对super_admin显示，避免admin用户报错
+ * 教学模块详情页面（树状权限管理版）
+ * 优化：将权限Tab替换为垂直树状授权管理器
+ * 特性：单页面操作、实时状态、批量授权、权限继承
  */
 
 import React, { useEffect, useState } from 'react';
@@ -88,18 +89,9 @@ const ModuleDetail = () => {
     try {
       await fetchModule(id);
       await fetchLessons(id);
-      
-      // 修复：只有super_admin才加载权限数据
-      if (user?.role === 'super_admin') {
-        await fetchPermissions(id);
-      }
+      await fetchPermissions(id);
     } catch (error) {
-      // 处理权限错误，返回列表页
-      if (error.code === 'PERMISSION_DENIED' || error.status === 403) {
-        navigate('/teaching');
-      } else {
-        message.error(t('teaching.loadFailed'));
-      }
+      message.error(t('teaching.loadFailed'));
     }
   };
 
@@ -262,14 +254,6 @@ const ModuleDetail = () => {
     ]
   });
 
-  // 检查用户是否有编辑权限
-  const hasEditPermission = () => {
-    if (user?.role === 'super_admin') return true;
-    if (currentModule?.creator_id === user?.id) return true;
-    if (currentModule?.user_permission === 'edit') return true;
-    return false;
-  };
-
   if (currentModuleLoading || !currentModule) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
@@ -278,7 +262,6 @@ const ModuleDetail = () => {
     );
   }
 
-  // 构建Tab项，根据权限决定是否显示权限管理Tab
   const tabItems = [
     {
       key: 'lessons',
@@ -292,15 +275,13 @@ const ModuleDetail = () => {
         <div>
           <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
-            {hasEditPermission() && (
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setLessonModalVisible(true)}
-              >
-                {t('teaching.createLesson')}
-              </Button>
-            )}
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setLessonModalVisible(true)}
+            >
+              {t('teaching.createLesson')}
+            </Button>
           </div>
 
           <Spin spinning={lessonsLoading}>
@@ -309,15 +290,13 @@ const ModuleDetail = () => {
                 description={t('teaching.noLessons')}
                 style={{ marginTop: 60 }}
               >
-                {hasEditPermission() && (
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />}
-                    onClick={() => setLessonModalVisible(true)}
-                  >
-                    {t('teaching.createLesson')}
-                  </Button>
-                )}
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />}
+                  onClick={() => setLessonModalVisible(true)}
+                >
+                  {t('teaching.createLesson')}
+                </Button>
               </Empty>
             ) : (
               <List
@@ -412,35 +391,33 @@ const ModuleDetail = () => {
                                 <Badge count={lesson.page_count} showZero style={{ backgroundColor: '#52c41a', marginRight: 8 }} />
                                 {lesson.view_count} {t('teaching.views')}
                               </span>
-                              {hasEditPermission() && (
-                                <Space size={4}>
-                                  <Tooltip title={t('teaching.editInfo')}>
-                                    <EditOutlined 
-                                      style={{ 
-                                        fontSize: 14, 
-                                        padding: '4px',
-                                        cursor: 'pointer',
-                                        color: '#1890ff'
-                                      }}
-                                      onClick={(e) => handleEditLessonInfo(lesson, e)}
-                                    />
-                                  </Tooltip>
-                                  <Dropdown 
-                                    menu={getLessonActionMenu(lesson)} 
-                                    trigger={['click']}
-                                  >
-                                    <MoreOutlined 
-                                      style={{ 
-                                        fontSize: 16, 
-                                        padding: '4px',
-                                        cursor: 'pointer',
-                                        color: '#666'
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </Dropdown>
-                                </Space>
-                              )}
+                              <Space size={4}>
+                                <Tooltip title={t('teaching.editInfo')}>
+                                  <EditOutlined 
+                                    style={{ 
+                                      fontSize: 14, 
+                                      padding: '4px',
+                                      cursor: 'pointer',
+                                      color: '#1890ff'
+                                    }}
+                                    onClick={(e) => handleEditLessonInfo(lesson, e)}
+                                  />
+                                </Tooltip>
+                                <Dropdown 
+                                  menu={getLessonActionMenu(lesson)} 
+                                  trigger={['click']}
+                                >
+                                  <MoreOutlined 
+                                    style={{ 
+                                      fontSize: 16, 
+                                      padding: '4px',
+                                      cursor: 'pointer',
+                                      color: '#666'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </Dropdown>
+                              </Space>
                             </div>
                           </Space>
                         }
@@ -453,12 +430,8 @@ const ModuleDetail = () => {
           </Spin>
         </div>
       )
-    }
-  ];
-
-  // 修复：只有super_admin才显示权限管理Tab
-  if (user?.role === 'super_admin') {
-    tabItems.push({
+    },
+    {
       key: 'permissions',
       label: (
         <span>
@@ -472,8 +445,8 @@ const ModuleDetail = () => {
           onRefresh={loadModuleData}
         />
       )
-    });
-  }
+    }
+  ];
 
   return (
     <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
@@ -517,25 +490,21 @@ const ModuleDetail = () => {
             <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
               {t('common.back')}
             </Button>
-            {hasEditPermission() && (
-              <>
-                <Button icon={<EditOutlined />} onClick={handleEdit}>
-                  {t('common.edit')}
-                </Button>
-                <Popconfirm
-                  title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
-                  onConfirm={handleDelete}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                  okButtonProps={{ danger: true }}
-                  disabled={lessons.length > 0}
-                >
-                  <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>
-              </>
-            )}
+            <Button icon={<EditOutlined />} onClick={handleEdit}>
+              {t('common.edit')}
+            </Button>
+            <Popconfirm
+              title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
+              onConfirm={handleDelete}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+              disabled={lessons.length > 0}
+            >
+              <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
           </Space>
         </div>
       </Card>

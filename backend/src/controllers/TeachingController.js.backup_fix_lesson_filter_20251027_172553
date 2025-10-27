@@ -1,16 +1,14 @@
 /**
- * 教学系统控制器（修复版：过滤空分组）
- * 
- * 核心修复：
- * - getModules: 按分组返回时，过滤掉没有可访问模块的空分组
- * - 支持课程级权限过滤
+ * 教学系统控制器（全局授权管理增强版 - 数据库修复）
+ * 新增：教学模块分组管理功能（支持多对多关系）
+ * 新增：全局三级授权管理（组→标签→用户）
+ * 修复：使用正确的表名和字段名
  */
 
 const TeachingModule = require('../models/TeachingModule');
 const TeachingLesson = require('../models/TeachingLesson');
 const TeachingPermission = require('../models/TeachingPermission');
 const TeachingModuleGroup = require('../models/TeachingModuleGroup');
-const GlobalAuthorizationService = require('../services/GlobalAuthorizationService');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { getUserTags } = require('../middleware/teachingPermissions');
@@ -31,7 +29,7 @@ class TeachingController {
         visibility = 'private',
         status = 'draft',
         owner_group_id,
-        group_ids = []
+        group_ids = [] // 新增：分组ID数组
       } = req.body;
 
       if (!name) {
@@ -53,6 +51,7 @@ class TeachingController {
         status
       });
 
+      // 设置模块的分组
       if (group_ids.length > 0) {
         await TeachingModuleGroup.setModuleGroups(module.id, group_ids);
       }
@@ -72,7 +71,7 @@ class TeachingController {
   }
 
   /**
-   * 获取模块列表（修复：过滤空分组）
+   * 获取模块列表（增强：按分组返回）
    */
   static async getModules(req, res) {
     try {
@@ -83,7 +82,7 @@ class TeachingController {
         status,
         visibility,
         search,
-        group_by = 'none'
+        group_by = 'none' // 新增：'none' | 'group'
       } = req.query;
 
       const userTags = await getUserTags(user.id);
@@ -102,41 +101,38 @@ class TeachingController {
         }
       );
 
+      // 如果需要按分组返回
       if (group_by === 'group') {
         const dbConnection = require('../database/connection');
         
+        // 获取所有启用的分组
         const groups = await TeachingModuleGroup.getAll({ is_active: true });
         
-        // 修复：构建分组数据，过滤掉没有可访问模块的分组
-        const groupedData = [];
-        
-        for (const group of groups) {
-          const modules = await TeachingModuleGroup.getGroupModules(group.id);
-          
-          // 只包含用户有权限访问的模块
-          const accessibleModules = modules.filter(m => 
-            result.modules.some(rm => rm.id === m.id)
-          );
-          
-          // 只有当分组有可访问的模块时才添加到结果中
-          if (accessibleModules.length > 0) {
-            groupedData.push({
+        // 为每个分组获取模块
+        const groupedData = await Promise.all(
+          groups.map(async (group) => {
+            const modules = await TeachingModuleGroup.getGroupModules(group.id);
+            
+            // 过滤用户有权限访问的模块
+            const accessibleModules = modules.filter(m => 
+              result.modules.some(rm => rm.id === m.id)
+            );
+            
+            return {
               ...group.toJSON(),
               modules: accessibleModules
-            });
-          }
-        }
+            };
+          })
+        );
 
-        // 收集已分组的模块ID
+        // 添加"未分组"模块
         const groupedModuleIds = new Set();
         groupedData.forEach(g => {
           g.modules.forEach(m => groupedModuleIds.add(m.id));
         });
 
-        // 处理未分组的模块
         const ungroupedModules = result.modules.filter(m => !groupedModuleIds.has(m.id));
         
-        // 只有当有未分组模块时才添加"未分组"分组
         if (ungroupedModules.length > 0) {
           groupedData.push({
             id: null,
@@ -148,12 +144,6 @@ class TeachingController {
             modules: ungroupedModules
           });
         }
-
-        logger.info('返回分组模块列表', {
-          userId: user.id,
-          totalGroups: groupedData.length,
-          totalModules: result.modules.length
-        });
 
         return ResponseHelper.success(res, {
           groups: groupedData,
@@ -178,6 +168,7 @@ class TeachingController {
 
       await module.incrementViewCount();
 
+      // 获取模块的分组
       const groups = await TeachingModuleGroup.getModuleGroups(module.id);
 
       const result = {
@@ -206,7 +197,7 @@ class TeachingController {
         visibility,
         status,
         order_index,
-        group_ids
+        group_ids // 新增：分组ID数组
       } = req.body;
 
       const updateData = {};
@@ -219,6 +210,7 @@ class TeachingController {
 
       await module.update(updateData);
 
+      // 更新分组关系
       if (group_ids !== undefined) {
         await TeachingModuleGroup.setModuleGroups(module.id, group_ids);
       }
@@ -259,6 +251,9 @@ class TeachingController {
 
   // ==================== 分组管理（新增）====================
 
+  /**
+   * 获取所有分组列表
+   */
   static async getGroups(req, res) {
     try {
       const { is_active } = req.query;
@@ -274,6 +269,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 创建分组（仅超级管理员）
+   */
   static async createGroup(req, res) {
     try {
       const user = req.user;
@@ -318,6 +316,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 更新分组（仅超级管理员）
+   */
   static async updateGroup(req, res) {
     try {
       const user = req.user;
@@ -363,6 +364,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 删除分组（仅超级管理员）
+   */
   static async deleteGroup(req, res) {
     try {
       const user = req.user;
@@ -391,6 +395,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 获取分组的模块列表
+   */
   static async getGroupModules(req, res) {
     try {
       const { groupId } = req.params;
@@ -406,6 +413,9 @@ class TeachingController {
 
   // ==================== 管理员功能 ====================
 
+  /**
+   * 获取所有模块（管理员视角）
+   */
   static async getAllModules(req, res) {
     try {
       const user = req.user;
@@ -483,6 +493,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 批量更新模块
+   */
   static async batchUpdateModules(req, res) {
     try {
       const user = req.user;
@@ -606,9 +619,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 获取模块的课程列表（修复：添加课程级权限过滤）
-   */
   static async getModuleLessons(req, res) {
     try {
       const { moduleId } = req.params;
@@ -628,8 +638,7 @@ class TeachingController {
         return ResponseHelper.forbidden(res, '无权访问此模块');
       }
 
-      // 获取所有课程（不过滤）
-      const allLessons = await TeachingLesson.getModuleLessons(
+      const lessons = await TeachingLesson.getModuleLessons(
         moduleId,
         user.id,
         user.role,
@@ -640,38 +649,7 @@ class TeachingController {
         }
       );
 
-      // 修复：根据全局授权过滤课程
-      let filteredLessons = allLessons;
-
-      // 超级管理员和创建者看所有课程
-      const module = await TeachingModule.findById(moduleId);
-      const isSuperAdmin = user.role === 'super_admin';
-      const isCreator = module && module.creator_id === user.id;
-
-      if (!isSuperAdmin && !isCreator) {
-        // 普通用户和admin：检查课程级授权
-        const authorizedLessonIds = await GlobalAuthorizationService.getUserAuthorizedLessonIds(
-          user.id,
-          parseInt(moduleId),
-          user.group_id,
-          userTags
-        );
-
-        if (authorizedLessonIds === null) {
-          // null 表示所有课程可见（有模块级权限）
-          filteredLessons = allLessons;
-        } else if (authorizedLessonIds.length === 0) {
-          // 空数组表示没有任何课程权限
-          filteredLessons = [];
-        } else {
-          // 只返回授权的课程
-          filteredLessons = allLessons.filter(lesson => 
-            authorizedLessonIds.includes(lesson.id)
-          );
-        }
-      }
-
-      return ResponseHelper.success(res, filteredLessons, '获取课程列表成功');
+      return ResponseHelper.success(res, lessons, '获取课程列表成功');
     } catch (error) {
       logger.error('获取课程列表失败:', error);
       return ResponseHelper.error(res, '获取课程列表失败');
@@ -964,8 +942,11 @@ class TeachingController {
     }
   }
 
-  // ==================== 全局授权管理 ====================
+  // ==================== 全局授权管理（新增 - 数据库修复版）====================
 
+  /**
+   * 批量保存全局授权配置
+   */
   static async saveGlobalAuthorizations(req, res) {
     try {
       const user = req.user;
@@ -982,6 +963,7 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
+      // 使用事务保存所有配置
       await dbConnection.transaction(async (query) => {
         for (const auth of authorizations) {
           const { groupId, modulePermissions, tags } = auth;
@@ -1026,6 +1008,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 获取全局授权配置列表（数据库修复版）
+   */
   static async getGlobalAuthorizations(req, res) {
     try {
       const user = req.user;
@@ -1036,6 +1021,7 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
+      // 修复：使用子查询动态统计用户数量
       const sql = `
         SELECT 
           tga.id,
@@ -1072,6 +1058,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 获取标签下的用户列表（分页 - 数据库修复版）
+   */
   static async getTagUsers(req, res) {
     try {
       const { tagId } = req.params;
@@ -1083,6 +1072,7 @@ class TeachingController {
 
       const dbConnection = require('../database/connection');
 
+      // 修复：使用 user_tag_relations 表和 deleted_at IS NULL
       const countSql = `
         SELECT COUNT(DISTINCT u.id) as total
         FROM users u
@@ -1094,6 +1084,7 @@ class TeachingController {
       const { rows: countRows } = await dbConnection.query(countSql, [tagId]);
       const total = countRows[0].total;
 
+      // 获取用户列表
       const dataSql = `
         SELECT 
           u.id,
@@ -1126,6 +1117,9 @@ class TeachingController {
     }
   }
 
+  /**
+   * 获取模块的课程列表（用于授权选择）
+   */
   static async getModuleLessonsForAuth(req, res) {
     try {
       const { moduleId } = req.params;

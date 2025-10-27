@@ -1,9 +1,9 @@
 /**
- * 教学系统控制器（修复版：过滤空分组）
+ * 教学系统控制器（修复版：添加课程级权限过滤）
  * 
  * 核心修复：
- * - getModules: 按分组返回时，过滤掉没有可访问模块的空分组
- * - 支持课程级权限过滤
+ * - getModuleLessons: 根据全局授权过滤课程列表
+ * - 支持"只授权部分课程"的场景
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -72,7 +72,7 @@ class TeachingController {
   }
 
   /**
-   * 获取模块列表（修复：过滤空分组）
+   * 获取模块列表（增强：按分组返回）
    */
   static async getModules(req, res) {
     try {
@@ -107,36 +107,28 @@ class TeachingController {
         
         const groups = await TeachingModuleGroup.getAll({ is_active: true });
         
-        // 修复：构建分组数据，过滤掉没有可访问模块的分组
-        const groupedData = [];
-        
-        for (const group of groups) {
-          const modules = await TeachingModuleGroup.getGroupModules(group.id);
-          
-          // 只包含用户有权限访问的模块
-          const accessibleModules = modules.filter(m => 
-            result.modules.some(rm => rm.id === m.id)
-          );
-          
-          // 只有当分组有可访问的模块时才添加到结果中
-          if (accessibleModules.length > 0) {
-            groupedData.push({
+        const groupedData = await Promise.all(
+          groups.map(async (group) => {
+            const modules = await TeachingModuleGroup.getGroupModules(group.id);
+            
+            const accessibleModules = modules.filter(m => 
+              result.modules.some(rm => rm.id === m.id)
+            );
+            
+            return {
               ...group.toJSON(),
               modules: accessibleModules
-            });
-          }
-        }
+            };
+          })
+        );
 
-        // 收集已分组的模块ID
         const groupedModuleIds = new Set();
         groupedData.forEach(g => {
           g.modules.forEach(m => groupedModuleIds.add(m.id));
         });
 
-        // 处理未分组的模块
         const ungroupedModules = result.modules.filter(m => !groupedModuleIds.has(m.id));
         
-        // 只有当有未分组模块时才添加"未分组"分组
         if (ungroupedModules.length > 0) {
           groupedData.push({
             id: null,
@@ -148,12 +140,6 @@ class TeachingController {
             modules: ungroupedModules
           });
         }
-
-        logger.info('返回分组模块列表', {
-          userId: user.id,
-          totalGroups: groupedData.length,
-          totalModules: result.modules.length
-        });
 
         return ResponseHelper.success(res, {
           groups: groupedData,

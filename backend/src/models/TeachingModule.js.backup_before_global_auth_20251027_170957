@@ -1,16 +1,11 @@
 /**
- * 教学模块模型（修复版：严格权限控制）
- * 
- * 核心修复：
- * - admin 角色也要遵守全局授权（只有 super_admin 完全绕过）
- * - 严格按授权过滤模块列表（移除 visibility 兜底逻辑）
- * - 创建者始终有编辑权限
+ * 教学模块模型
+ * 管理教学模块的创建、查询、更新和权限控制
  */
 
 const dbConnection = require('../database/connection');
 const { DatabaseError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
-const GlobalAuthorizationService = require('../services/GlobalAuthorizationService');
 
 class TeachingModule {
   constructor(data = {}) {
@@ -111,7 +106,7 @@ class TeachingModule {
   }
 
   /**
-   * 获取用户可访问的模块列表（修复：严格权限控制）
+   * 获取用户可访问的模块列表（核心权限过滤）
    */
   static async getUserModules(userId, userRole, userGroupId, userTags = [], options = {}) {
     try {
@@ -124,47 +119,33 @@ class TeachingModule {
       } = options;
 
       const offset = (page - 1) * limit;
-
-      // 只有超级管理员查看所有模块
-      if (userRole === 'super_admin') {
-        return await this._getAdminModules(page, limit, status, visibility, search);
-      }
-
-      // 普通用户和 admin：严格使用全局授权系统
-      const authorizedModuleIds = await GlobalAuthorizationService.getUserAuthorizedModuleIds(
-        userId,
-        userGroupId,
-        userTags
-      );
-
-      // 获取用户创建的模块ID
-      const creatorSql = 'SELECT id FROM teaching_modules WHERE creator_id = ? AND is_deleted = 0';
-      const { rows: creatorModules } = await dbConnection.query(creatorSql, [userId]);
-      const creatorModuleIds = creatorModules.map(m => m.id);
-
-      // 合并授权的和创建的模块ID
-      const allAuthorizedIds = [...new Set([...authorizedModuleIds, ...creatorModuleIds])];
-
-      if (allAuthorizedIds.length === 0) {
-        // 没有任何授权，返回空列表
-        return {
-          modules: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            pages: 0
-          }
-        };
-      }
-
       let whereConditions = ['tm.is_deleted = 0'];
       let params = [];
 
-      // 修复：严格按授权ID过滤，不使用 OR visibility
-      const placeholders = allAuthorizedIds.map(() => '?').join(',');
-      whereConditions.push(`tm.id IN (${placeholders})`);
-      params.push(...allAuthorizedIds);
+      // 权限过滤逻辑
+      if (userRole !== 'super_admin' && userRole !== 'admin') {
+        // 普通用户权限过滤
+        const tagIds = userTags.map(t => t.id);
+        const tagPlaceholders = tagIds.length > 0 ? tagIds.map(() => '?').join(',') : 'NULL';
+
+        whereConditions.push(`(
+          tm.creator_id = ? OR
+          tm.visibility = 'public' OR
+          (tm.visibility = 'group' AND tm.owner_group_id = ?) OR
+          EXISTS (
+            SELECT 1 FROM teaching_permissions tp
+            WHERE tp.module_id = tm.id
+            AND (tp.expires_at IS NULL OR tp.expires_at > NOW())
+            AND (
+              tp.user_id = ? OR
+              tp.group_id = ? OR
+              (tp.tag_id IN (${tagPlaceholders}))
+            )
+          )
+        )`);
+
+        params.push(userId, userGroupId, userId, userGroupId, ...tagIds);
+      }
 
       // 状态过滤
       if (status) {
@@ -219,60 +200,6 @@ class TeachingModule {
       logger.error('获取用户模块列表失败:', error);
       throw new DatabaseError('获取模块列表失败', error);
     }
-  }
-
-  /**
-   * 管理员获取所有模块（内部方法）
-   */
-  static async _getAdminModules(page, limit, status, visibility, search) {
-    const offset = (page - 1) * limit;
-    let whereConditions = ['tm.is_deleted = 0'];
-    let params = [];
-
-    if (status) {
-      whereConditions.push('tm.status = ?');
-      params.push(status);
-    }
-
-    if (visibility) {
-      whereConditions.push('tm.visibility = ?');
-      params.push(visibility);
-    }
-
-    if (search) {
-      whereConditions.push('(tm.name LIKE ? OR tm.description LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`);
-    }
-
-    const whereClause = whereConditions.join(' AND ');
-
-    const countSql = `SELECT COUNT(*) as total FROM teaching_modules tm WHERE ${whereClause}`;
-    const { rows: totalRows } = await dbConnection.query(countSql, params);
-    const total = totalRows[0].total;
-
-    const listSql = `
-      SELECT tm.*,
-             u.username as creator_name,
-             ug.name as owner_group_name
-      FROM teaching_modules tm
-      LEFT JOIN users u ON tm.creator_id = u.id
-      LEFT JOIN user_groups ug ON tm.owner_group_id = ug.id
-      WHERE ${whereClause}
-      ORDER BY tm.order_index ASC, tm.created_at DESC
-      LIMIT ? OFFSET ?
-    `;
-
-    const { rows: modules } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
-
-    return {
-      modules: modules.map(m => new TeachingModule(m)),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    };
   }
 
   /**
@@ -361,7 +288,7 @@ class TeachingModule {
   }
 
   /**
-   * 检查用户对模块的权限（修复：admin 也要遵守授权）
+   * 检查用户对模块的权限
    * @returns {string} 'edit' | 'view' | null
    */
   static async checkUserPermission(moduleId, userId, userRole, userGroupId, userTags = []) {
@@ -371,8 +298,8 @@ class TeachingModule {
         return null;
       }
 
-      // 修复：只有超级管理员拥有所有权限
-      if (userRole === 'super_admin') {
+      // 超级管理员和管理员拥有所有权限
+      if (userRole === 'super_admin' || userRole === 'admin') {
         return 'edit';
       }
 
@@ -381,60 +308,49 @@ class TeachingModule {
         return 'edit';
       }
 
-      // 1. 优先检查全局授权系统（admin 也要遵守）
-      const globalPerm = await GlobalAuthorizationService.getUserModulePermission(
-        userId,
-        moduleId,
-        userGroupId,
-        userTags
-      );
+      // 检查显式授权
+      const tagIds = userTags.map(t => t.id);
+      const tagPlaceholders = tagIds.length > 0 ? tagIds.map(() => '?').join(',') : 'NULL';
 
-      if (globalPerm.hasEdit) {
-        return 'edit';
+      const sql = `
+        SELECT permission_type 
+        FROM teaching_permissions
+        WHERE module_id = ?
+        AND (expires_at IS NULL OR expires_at > NOW())
+        AND (
+          user_id = ? OR
+          group_id = ? OR
+          (tag_id IN (${tagPlaceholders}))
+        )
+        ORDER BY 
+          CASE 
+            WHEN user_id IS NOT NULL THEN 1
+            WHEN group_id IS NOT NULL THEN 2
+            WHEN tag_id IS NOT NULL THEN 3
+          END,
+          CASE permission_type
+            WHEN 'edit' THEN 1
+            WHEN 'view' THEN 2
+          END
+        LIMIT 1
+      `;
+
+      const params = [moduleId, userId, userGroupId, ...tagIds];
+      const { rows } = await dbConnection.query(sql, params);
+
+      if (rows.length > 0) {
+        return rows[0].permission_type;
       }
 
-      if (globalPerm.hasView) {
+      // 检查可见性规则
+      if (module.visibility === 'public') {
         return 'view';
       }
 
-      // 2. 检查旧的显式授权（向后兼容）
-      const tagIds = userTags.map(t => t.id);
-      
-      if (tagIds.length > 0) {
-        const tagPlaceholders = tagIds.map(() => '?').join(',');
-
-        const sql = `
-          SELECT permission_type 
-          FROM teaching_permissions
-          WHERE module_id = ?
-          AND (expires_at IS NULL OR expires_at > NOW())
-          AND (
-            user_id = ? OR
-            group_id = ? OR
-            tag_id IN (${tagPlaceholders})
-          )
-          ORDER BY 
-            CASE 
-              WHEN user_id IS NOT NULL THEN 1
-              WHEN group_id IS NOT NULL THEN 2
-              WHEN tag_id IS NOT NULL THEN 3
-            END,
-            CASE permission_type
-              WHEN 'edit' THEN 1
-              WHEN 'view' THEN 2
-            END
-          LIMIT 1
-        `;
-
-        const params = [moduleId, userId, userGroupId, ...tagIds];
-        const { rows } = await dbConnection.query(sql, params);
-
-        if (rows.length > 0) {
-          return rows[0].permission_type;
-        }
+      if (module.visibility === 'group' && module.owner_group_id === userGroupId) {
+        return 'view';
       }
 
-      // 3. 不再使用 visibility 兜底（严格权限控制）
       return null;
     } catch (error) {
       logger.error('检查用户权限失败:', error);

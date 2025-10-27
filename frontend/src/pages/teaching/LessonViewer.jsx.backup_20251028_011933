@@ -1,6 +1,6 @@
 /**
- * 课程页面查看器（权限控制版）
- * 修复：根据用户实际权限显示编辑按钮
+ * 课程页面查看器（支持指定页码）
+ * 修改：支持通过 URL 参数 pageNumber 指定初始页面
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -36,16 +36,14 @@ import useAuthStore from '../../stores/authStore';
 
 const LessonViewer = () => {
   const { t } = useTranslation();
-  const { id, pageNumber } = useParams();
+  const { id, pageNumber } = useParams(); // 新增：获取 pageNumber 参数
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
   const {
     currentLesson,
-    currentModule,
     currentLessonLoading,
     fetchLesson,
-    fetchModule,
     recordView
   } = useTeachingStore();
 
@@ -65,7 +63,7 @@ const LessonViewer = () => {
     }
   }, [id]);
 
-  // URL pageNumber 变化时更新当前页
+  // 新增：URL pageNumber 变化时更新当前页
   useEffect(() => {
     if (pageNumber) {
       const page = parseInt(pageNumber);
@@ -78,31 +76,12 @@ const LessonViewer = () => {
 
   const loadLesson = async () => {
     try {
-      const lessonData = await fetchLesson(id);
-      // 同时加载模块信息以获取权限
-      if (lessonData?.module_id) {
-        await fetchModule(lessonData.module_id);
-      }
+      await fetchLesson(id);
       setViewStartTime(Date.now());
       setPageViewTime(Date.now());
     } catch (error) {
       message.error(t('teaching.loadFailed'));
     }
-  };
-
-  // 检查用户是否有编辑权限
-  const hasEditPermission = () => {
-    // 超级管理员总是有权限
-    if (user?.role === 'super_admin') return true;
-    
-    // 创建者有权限
-    if (currentLesson?.creator_id === user?.id) return true;
-    
-    // 检查模块级权限
-    if (currentModule?.user_permission === 'edit') return true;
-    if (currentModule?.creator_id === user?.id) return true;
-    
-    return false;
   };
 
   // 记录页面浏览
@@ -236,18 +215,13 @@ const LessonViewer = () => {
   };
 
   const handleEdit = () => {
-    // 权限检查
-    if (!hasEditPermission()) {
-      message.error(t('teaching.noEditPermission'));
-      return;
-    }
     navigate(`/teaching/lessons/${id}/edit`);
   };
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
     setPageViewTime(Date.now());
-    // 更新 URL
+    // 更新 URL（可选）
     navigate(`/teaching/lessons/${id}/pages/${page}`, { replace: true });
   };
 
@@ -301,28 +275,21 @@ const LessonViewer = () => {
     };
   }, []);
 
-  // 构建更多菜单项，根据权限决定是否显示设置
-  const buildMoreMenuItems = () => {
-    const items = [
+  const moreMenuItems = {
+    items: [
       {
         key: 'page_list',
         label: t('teaching.pageList'),
         icon: <UnorderedListOutlined />,
         onClick: () => navigate(`/teaching/lessons/${id}`)
-      }
-    ];
-
-    // 只有有权限的用户才显示设置
-    if (hasEditPermission()) {
-      items.push({
+      },
+      {
         key: 'settings',
         label: t('common.settings'),
         icon: <SettingOutlined />,
         onClick: () => message.info('设置功能开发中')
-      });
-    }
-
-    return { items };
+      }
+    ]
   };
 
   if (currentLessonLoading || !currentLesson) {
@@ -341,7 +308,6 @@ const LessonViewer = () => {
   const pages = getPages();
   const totalPages = pages.length;
   const progress = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-  const canEdit = hasEditPermission();
 
   return (
     <div 
@@ -421,12 +387,9 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
-            {/* 修复：只有有权限才显示编辑按钮 */}
-            {canEdit && (
-              <Button icon={<EditOutlined />} onClick={handleEdit}>
-                {t('common.edit')}
-              </Button>
-            )}
+            <Button icon={<EditOutlined />} onClick={handleEdit}>
+              {t('common.edit')}
+            </Button>
 
             <Tooltip title={t('teaching.fullscreen')}>
               <Button
@@ -588,20 +551,17 @@ const LessonViewer = () => {
               />
             </Tooltip>
 
-            {/* 修复：全屏模式下也要检查权限 */}
-            {canEdit && (
-              <Tooltip title={t('common.edit')} placement="top">
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  onClick={handleEdit}
-                  style={{
-                    color: 'white',
-                    borderRadius: 20
-                  }}
-                />
-              </Tooltip>
-            )}
+            <Tooltip title={t('common.edit')} placement="top">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={handleEdit}
+                style={{
+                  color: 'white',
+                  borderRadius: 20
+                }}
+              />
+            </Tooltip>
 
             <Tooltip title={t('teaching.exitFullscreen')} placement="top">
               <Button
@@ -616,7 +576,7 @@ const LessonViewer = () => {
             </Tooltip>
 
             <Dropdown 
-              menu={buildMoreMenuItems()} 
+              menu={moreMenuItems} 
               trigger={['click']}
               placement="topRight"
             >

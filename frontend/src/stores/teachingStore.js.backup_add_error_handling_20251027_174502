@@ -1,6 +1,6 @@
 /**
- * 智能教学系统 Store（错误处理增强版）
- * 修复：添加403错误的友好处理，避免跳转到详情页后报错
+ * 智能教学系统 Store（分组增强版）
+ * 新增：教学模块分组管理功能
  */
 
 import { create } from 'zustand';
@@ -10,6 +10,7 @@ import { message } from 'antd';
 const useTeachingStore = create((set, get) => ({
   // ==================== 状态 ====================
   
+  // 模块列表
   modules: [],
   modulesPagination: {
     page: 1,
@@ -19,32 +20,43 @@ const useTeachingStore = create((set, get) => ({
   },
   modulesLoading: false,
   
+  // 分组列表（新增）
   groups: [],
   groupsLoading: false,
   
+  // 分组模块数据（新增）
   groupedModules: [],
   groupedModulesLoading: false,
   
+  // 管理员全局模块列表
   allModules: [],
   allModulesLoading: false,
   
+  // 当前模块
   currentModule: null,
   currentModuleLoading: false,
   
+  // 课程列表
   lessons: [],
   lessonsLoading: false,
   
+  // 当前课程
   currentLesson: null,
   currentLessonLoading: false,
   
+  // 权限列表
   permissions: [],
   permissionsLoading: false,
   
+  // 草稿
   draft: null,
   draftSaving: false,
   
-  // ==================== 分组操作 ====================
+  // ==================== 分组操作（新增）====================
   
+  /**
+   * 获取所有分组列表
+   */
   fetchGroups: async (params = {}) => {
     set({ groupsLoading: true });
     try {
@@ -62,6 +74,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 获取按分组返回的模块数据
+   */
   fetchGroupedModules: async (params = {}) => {
     set({ groupedModulesLoading: true });
     try {
@@ -85,6 +100,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 创建分组（仅超级管理员）
+   */
   createGroup: async (data) => {
     try {
       const response = await api.post('/teaching/groups', data);
@@ -97,6 +115,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 更新分组（仅超级管理员）
+   */
   updateGroup: async (id, data) => {
     try {
       const response = await api.put(`/teaching/groups/${id}`, data);
@@ -109,6 +130,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 删除分组（仅超级管理员）
+   */
   deleteGroup: async (id) => {
     try {
       await api.delete(`/teaching/groups/${id}`);
@@ -121,6 +145,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 获取分组的模块列表
+   */
   fetchGroupModules: async (groupId) => {
     try {
       const response = await api.get(`/teaching/groups/${groupId}/modules`);
@@ -133,6 +160,9 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 模块操作 ====================
   
+  /**
+   * 获取模块列表（用户视角，受权限限制）
+   */
   fetchModules: async (params = {}) => {
     set({ modulesLoading: true });
     try {
@@ -151,6 +181,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 获取所有模块（管理员视角，不受权限限制）
+   */
   fetchAllModules: async (params = {}) => {
     set({ allModulesLoading: true });
     try {
@@ -176,7 +209,7 @@ const useTeachingStore = create((set, get) => ({
   },
   
   /**
-   * 获取单个模块详情（修复：添加权限错误处理）
+   * 获取单个模块详情（增强：包含分组信息）
    */
   fetchModule: async (id) => {
     set({ currentModuleLoading: true });
@@ -189,25 +222,15 @@ const useTeachingStore = create((set, get) => ({
       });
       return moduleData;
     } catch (error) {
-      set({ currentModuleLoading: false });
-      
-      // 修复：针对403错误进行特殊处理
-      if (error.response?.status === 403) {
-        const errorMsg = error.response?.data?.message || '无权查看此教学模块';
-        message.error(errorMsg);
-        // 抛出特殊错误，让页面组件可以处理（例如返回列表页）
-        const permissionError = new Error(errorMsg);
-        permissionError.code = 'PERMISSION_DENIED';
-        permissionError.status = 403;
-        throw permissionError;
-      }
-      
-      // 其他错误
       message.error(error.response?.data?.message || '获取模块详情失败');
+      set({ currentModuleLoading: false });
       throw error;
     }
   },
   
+  /**
+   * 创建模块（增强：支持分组）
+   */
   createModule: async (data) => {
     try {
       const response = await api.post('/teaching/modules', data);
@@ -220,6 +243,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 更新模块（增强：支持更新分组）
+   */
   updateModule: async (id, data) => {
     try {
       const response = await api.put(`/teaching/modules/${id}`, data);
@@ -236,6 +262,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 批量更新模块（管理员功能）
+   */
   batchUpdateModules: async (moduleIds, updateData) => {
     try {
       const response = await api.post('/teaching/admin/modules/batch-update', {
@@ -251,6 +280,9 @@ const useTeachingStore = create((set, get) => ({
     }
   },
   
+  /**
+   * 删除模块
+   */
   deleteModule: async (id) => {
     try {
       await api.delete(`/teaching/modules/${id}`);
@@ -264,9 +296,6 @@ const useTeachingStore = create((set, get) => ({
   
   // ==================== 课程操作 ====================
   
-  /**
-   * 获取课程列表（修复：添加权限错误处理）
-   */
   fetchLessons: async (moduleId, params = {}) => {
     set({ lessonsLoading: true });
     try {
@@ -278,14 +307,8 @@ const useTeachingStore = create((set, get) => ({
       });
       return lessonsData;
     } catch (error) {
+      message.error(error.response?.data?.message || '获取课程列表失败');
       set({ lessonsLoading: false });
-      
-      // 针对403错误进行特殊处理
-      if (error.response?.status === 403) {
-        message.error(error.response?.data?.message || '无权访问此模块的课程');
-      } else {
-        message.error(error.response?.data?.message || '获取课程列表失败');
-      }
       throw error;
     }
   },
@@ -301,13 +324,8 @@ const useTeachingStore = create((set, get) => ({
       });
       return lessonData;
     } catch (error) {
+      message.error(error.response?.data?.message || '获取课程详情失败');
       set({ currentLessonLoading: false });
-      
-      if (error.response?.status === 403) {
-        message.error(error.response?.data?.message || '无权查看此课程');
-      } else {
-        message.error(error.response?.data?.message || '获取课程详情失败');
-      }
       throw error;
     }
   },
@@ -349,7 +367,7 @@ const useTeachingStore = create((set, get) => ({
         await get().fetchLessons(moduleId);
       }
     } catch (error) {
-      message.error(error.response?.data||message || '删除课程失败');
+      message.error(error.response?.data?.message || '删除课程失败');
       throw error;
     }
   },
