@@ -1,0 +1,640 @@
+/**
+ * 教学模块详情页面（移除权限管理功能）
+ * 权限管理功能已移至：系统设置 → 教学管理 → 教育模块授权管理
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Card,
+  Tabs,
+  Button,
+  Space,
+  Tag,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Breadcrumb,
+  Empty,
+  Popconfirm,
+  Tooltip,
+  Badge,
+  Dropdown,
+  List,
+  Spin
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  EyeOutlined,
+  BookOutlined,
+  FileTextOutlined,
+  GlobalOutlined,
+  MoreOutlined
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import useAuthStore from '../../stores/authStore';
+import moment from 'moment';
+
+const { TextArea } = Input;
+
+const ModuleDetail = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  const {
+    currentModule,
+    lessons,
+    currentModuleLoading,
+    lessonsLoading,
+    fetchModule,
+    fetchLessons,
+    updateModule,
+    deleteModule,
+    createLesson,
+    updateLesson,
+    deleteLesson
+  } = useTeachingStore();
+
+  const [activeTab, setActiveTab] = useState('lessons');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [lessonModalVisible, setLessonModalVisible] = useState(false);
+  const [editLessonModalVisible, setEditLessonModalVisible] = useState(false);
+  const [editingLesson, setEditingLesson] = useState(null);
+  const [editForm] = Form.useForm();
+  const [lessonForm] = Form.useForm();
+  const [editLessonForm] = Form.useForm();
+
+  useEffect(() => {
+    if (id) {
+      loadModuleData();
+    }
+  }, [id]);
+
+  const loadModuleData = async () => {
+    try {
+      await fetchModule(id);
+      await fetchLessons(id);
+    } catch (error) {
+      // 处理权限错误，返回列表页
+      if (error.code === 'PERMISSION_DENIED' || error.status === 403) {
+        navigate('/teaching');
+      } else {
+        message.error(t('teaching.loadFailed'));
+      }
+    }
+  };
+
+  const handleBack = () => {
+    navigate('/teaching');
+  };
+
+  const handleEdit = () => {
+    editForm.setFieldsValue({
+      name: currentModule.name,
+      description: currentModule.description,
+      cover_image: currentModule.cover_image,
+      visibility: currentModule.visibility,
+      status: currentModule.status
+    });
+    setEditModalVisible(true);
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      await updateModule(id, values);
+      setEditModalVisible(false);
+      message.success(t('teaching.updateSuccess'));
+      await fetchModule(id);
+    } catch (error) {
+      message.error(t('teaching.updateFailed'));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (lessons.length > 0) {
+      message.warning('请先删除模块内的所有课程');
+      return;
+    }
+    
+    try {
+      await deleteModule(id);
+      message.success(t('teaching.deleteSuccess'));
+      navigate('/teaching');
+    } catch (error) {
+      message.error(t('teaching.deleteFailed'));
+    }
+  };
+
+  const handleCreateLesson = async () => {
+    try {
+      const values = await lessonForm.validateFields();
+      await createLesson({
+        ...values,
+        module_id: id,
+        content: JSON.stringify({ pages: [{ id: 1, title: 'Page 1', html: '<h1>新页面</h1>' }] })
+      });
+      setLessonModalVisible(false);
+      lessonForm.resetFields();
+      message.success(t('teaching.createSuccess'));
+      await fetchLessons(id);
+    } catch (error) {
+      message.error(t('teaching.createFailed'));
+    }
+  };
+
+  const handleViewLesson = (lesson) => {
+    navigate(`/teaching/lessons/${lesson.id}`);
+  };
+
+  const handleEditLessonInfo = (lesson, e) => {
+    if (e) e.stopPropagation();
+    setEditingLesson(lesson);
+    editLessonForm.setFieldsValue({
+      title: lesson.title,
+      description: lesson.description,
+      cover_image: lesson.cover_image,
+      content_type: lesson.content_type,
+      status: lesson.status
+    });
+    setEditLessonModalVisible(true);
+  };
+
+  const handleEditLessonSubmit = async () => {
+    try {
+      const values = await editLessonForm.validateFields();
+      await updateLesson(editingLesson.id, values);
+      setEditLessonModalVisible(false);
+      editLessonForm.resetFields();
+      setEditingLesson(null);
+      message.success(t('teaching.updateSuccess'));
+      await fetchLessons(id);
+    } catch (error) {
+      message.error(t('teaching.updateFailed'));
+    }
+  };
+
+  const handleEditLessonContent = (lesson, e) => {
+    if (e) e.stopPropagation();
+    navigate(`/teaching/lessons/${lesson.id}/edit`);
+  };
+
+  const handleDeleteLesson = async (lessonId, e) => {
+    if (e) e.stopPropagation();
+    try {
+      await deleteLesson(lessonId, id);
+      message.success(t('teaching.deleteSuccess'));
+    } catch (error) {
+      message.error(t('teaching.deleteFailed'));
+    }
+  };
+
+  const visibilityColors = {
+    public: 'green',
+    group: 'blue',
+    private: 'orange'
+  };
+
+  const statusColors = {
+    draft: 'default',
+    published: 'success',
+    archived: 'error'
+  };
+
+  const contentTypeColors = {
+    course: 'blue',
+    experiment: 'cyan',
+    exercise: 'geekblue',
+    reference: 'purple',
+    teaching_plan: 'orange',
+    answer: 'red',
+    guide: 'magenta',
+    assessment: 'volcano'
+  };
+
+  const getLessonActionMenu = (lesson) => ({
+    items: [
+      {
+        key: 'edit_content',
+        label: t('teaching.editContent'),
+        icon: <FileTextOutlined />,
+        onClick: (e) => handleEditLessonContent(lesson, e)
+      },
+      {
+        type: 'divider'
+      },
+      {
+        key: 'delete',
+        label: t('common.delete'),
+        icon: <DeleteOutlined />,
+        danger: true,
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          Modal.confirm({
+            title: t('teaching.confirmDeleteLesson'),
+            content: lesson.title,
+            okText: t('common.confirm'),
+            cancelText: t('common.cancel'),
+            okButtonProps: { danger: true },
+            onOk: () => handleDeleteLesson(lesson.id)
+          });
+        }
+      }
+    ]
+  });
+
+  // 检查用户是否有编辑权限
+  const hasEditPermission = () => {
+    if (user?.role === 'super_admin') return true;
+    if (currentModule?.creator_id === user?.id) return true;
+    if (currentModule?.user_permission === 'edit') return true;
+    return false;
+  };
+
+  if (currentModuleLoading || !currentModule) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
+      <Breadcrumb style={{ marginBottom: 16 }}>
+        <Breadcrumb.Item>
+          <a onClick={handleBack}>{t('teaching.teaching')}</a>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
+      </Breadcrumb>
+
+      <Card 
+        style={{ marginBottom: 20 }}
+        bodyStyle={{ padding: '16px 24px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space size="large">
+            <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20 }}>
+                {currentModule.name}
+              </h2>
+              <Space style={{ marginTop: 6 }} size="middle">
+                <Tag color={visibilityColors[currentModule.visibility]}>
+                  <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
+                </Tag>
+                <Tag color={statusColors[currentModule.status]}>
+                  {t(`teaching.status.${currentModule.status}`)}
+                </Tag>
+                {currentModule.description && (
+                  <span style={{ color: '#666', fontSize: 13 }}>
+                    {currentModule.description.length > 50 
+                      ? currentModule.description.substring(0, 50) + '...' 
+                      : currentModule.description}
+                  </span>
+                )}
+              </Space>
+            </div>
+          </Space>
+
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+              {t('common.back')}
+            </Button>
+            {hasEditPermission() && (
+              <>
+                <Button icon={<EditOutlined />} onClick={handleEdit}>
+                  {t('common.edit')}
+                </Button>
+                <Popconfirm
+                  title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
+                  onConfirm={handleDelete}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                  okButtonProps={{ danger: true }}
+                  disabled={lessons.length > 0}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
+                    {t('common.delete')}
+                  </Button>
+                </Popconfirm>
+              </>
+            )}
+          </Space>
+        </div>
+      </Card>
+
+      {/* 只保留课程列表Tab */}
+      <Card>
+        <div>
+          <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
+            {hasEditPermission() && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setLessonModalVisible(true)}
+              >
+                {t('teaching.createLesson')}
+              </Button>
+            )}
+          </div>
+
+          <Spin spinning={lessonsLoading}>
+            {lessons.length === 0 ? (
+              <Empty 
+                description={t('teaching.noLessons')}
+                style={{ marginTop: 60 }}
+              >
+                {hasEditPermission() && (
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />}
+                    onClick={() => setLessonModalVisible(true)}
+                  >
+                    {t('teaching.createLesson')}
+                  </Button>
+                )}
+              </Empty>
+            ) : (
+              <List
+                grid={{ gutter: 20, xs: 1, sm: 2, md: 3, lg: 4, xl: 4, xxl: 4 }}
+                dataSource={lessons}
+                renderItem={lesson => (
+                  <List.Item>
+                    <Card
+                      hoverable
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        border: '1px solid #f0f0f0'
+                      }}
+                      bodyStyle={{ padding: '16px' }}
+                      onClick={() => handleViewLesson(lesson)}
+                      cover={
+                        lesson.cover_image ? (
+                          <img 
+                            alt={lesson.title} 
+                            src={lesson.cover_image} 
+                            style={{ 
+                              height: 180, 
+                              objectFit: 'cover',
+                              borderRadius: '8px 8px 0 0'
+                            }}
+                          />
+                        ) : (
+                          <div style={{ 
+                            height: 180, 
+                            background: `linear-gradient(135deg, ${
+                              contentTypeColors[lesson.content_type] === 'blue' ? '#667eea 0%, #764ba2' :
+                              contentTypeColors[lesson.content_type] === 'cyan' ? '#30cfd0 0%, #330867' :
+                              contentTypeColors[lesson.content_type] === 'purple' ? '#a8c0ff 0%, #3f2b96' :
+                              '#fa709a 0%, #fee140'
+                            } 100%)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px 8px 0 0'
+                          }}>
+                            <FileTextOutlined style={{ fontSize: 48, color: 'white', opacity: 0.9 }} />
+                          </div>
+                        )
+                      }
+                    >
+                      <Card.Meta
+                        title={
+                          <div style={{ 
+                            marginBottom: 8,
+                            fontSize: 15,
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {lesson.title}
+                          </div>
+                        }
+                        description={
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <div style={{ 
+                              minHeight: 36, 
+                              fontSize: 12, 
+                              color: '#666',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              lineHeight: '1.4'
+                            }}>
+                              {lesson.description || t('teaching.noDescription')}
+                            </div>
+                            <Space wrap style={{ marginTop: 4 }}>
+                              <Tag color={contentTypeColors[lesson.content_type]}>
+                                {t(`teaching.contentTypes.${lesson.content_type}`)}
+                              </Tag>
+                              <Tag color={statusColors[lesson.status]}>
+                                {t(`teaching.status.${lesson.status}`)}
+                              </Tag>
+                            </Space>
+                            <div style={{ 
+                              fontSize: 12, 
+                              color: '#999',
+                              marginTop: 8,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span>
+                                <Badge count={lesson.page_count} showZero style={{ backgroundColor: '#52c41a', marginRight: 8 }} />
+                                {lesson.view_count} {t('teaching.views')}
+                              </span>
+                              {hasEditPermission() && (
+                                <Space size={4}>
+                                  <Tooltip title={t('teaching.editInfo')}>
+                                    <EditOutlined 
+                                      style={{ 
+                                        fontSize: 14, 
+                                        padding: '4px',
+                                        cursor: 'pointer',
+                                        color: '#1890ff'
+                                      }}
+                                      onClick={(e) => handleEditLessonInfo(lesson, e)}
+                                    />
+                                  </Tooltip>
+                                  <Dropdown 
+                                    menu={getLessonActionMenu(lesson)} 
+                                    trigger={['click']}
+                                  >
+                                    <MoreOutlined 
+                                      style={{ 
+                                        fontSize: 16, 
+                                        padding: '4px',
+                                        cursor: 'pointer',
+                                        color: '#666'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </Dropdown>
+                                </Space>
+                              )}
+                            </div>
+                          </Space>
+                        }
+                      />
+                    </Card>
+                  </List.Item>
+                )}
+              />
+            )}
+          </Spin>
+        </div>
+      </Card>
+
+      {/* 编辑模块模态框 */}
+      <Modal
+        title={t('teaching.editModule')}
+        open={editModalVisible}
+        onOk={handleEditSubmit}
+        onCancel={() => setEditModalVisible(false)}
+        width={600}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label={t('teaching.moduleName')}
+            rules={[{ required: true, message: t('teaching.moduleNameRequired') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label={t('teaching.moduleDescription')}>
+            <TextArea rows={4} />
+          </Form.Item>
+          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+            <Input placeholder={t('teaching.coverImagePlaceholder')} />
+          </Form.Item>
+          <Form.Item name="visibility" label={t('teaching.visibility.label')}>
+            <Select>
+              <Select.Option value="private">{t('teaching.visibility.private')}</Select.Option>
+              <Select.Option value="group">{t('teaching.visibility.group')}</Select.Option>
+              <Select.Option value="public">{t('teaching.visibility.public')}</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="status" label={t('teaching.status.label')}>
+            <Select>
+              <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+              <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+              <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 创建课程模态框 */}
+      <Modal
+        title={t('teaching.createLesson')}
+        open={lessonModalVisible}
+        onOk={handleCreateLesson}
+        onCancel={() => setLessonModalVisible(false)}
+        width={600}
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
+      >
+        <Form form={lessonForm} layout="vertical">
+          <Form.Item
+            name="title"
+            label={t('teaching.lessonTitle')}
+            rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label={t('teaching.lessonDescription')}>
+            <TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+            <Input placeholder={t('teaching.coverImagePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="content_type"
+            label={t('teaching.contentType')}
+            initialValue="course"
+          >
+            <Select>
+              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑课程信息模态框 */}
+      <Modal
+        title={t('teaching.editLessonInfo')}
+        open={editLessonModalVisible}
+        onOk={handleEditLessonSubmit}
+        onCancel={() => {
+          setEditLessonModalVisible(false);
+          editLessonForm.resetFields();
+          setEditingLesson(null);
+        }}
+        width={600}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
+        destroyOnClose
+      >
+        <Form form={editLessonForm} layout="vertical">
+          <Form.Item
+            name="title"
+            label={t('teaching.lessonTitle')}
+            rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label={t('teaching.lessonDescription')}>
+            <TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+            <Input placeholder={t('teaching.coverImagePlaceholder')} />
+          </Form.Item>
+          <Form.Item name="content_type" label={t('teaching.contentType')}>
+            <Select>
+              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="status" label={t('teaching.status.label')}>
+            <Select>
+              <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+              <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+              <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default ModuleDetail;

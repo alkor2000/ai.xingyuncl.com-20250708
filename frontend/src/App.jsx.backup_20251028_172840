@@ -8,7 +8,6 @@ import {
 import { ConfigProvider, Spin, message } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
-import './styles/ios-unified-theme.css';
 import { useTranslation } from 'react-i18next'
 import useAuthStore from './stores/authStore'
 import useSystemConfigStore from './stores/systemConfigStore'

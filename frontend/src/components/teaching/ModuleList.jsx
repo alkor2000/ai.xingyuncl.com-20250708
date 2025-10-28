@@ -1,30 +1,40 @@
 /**
- * 教学模块列表组件（分组折叠版）
+ * 教学模块列表组件（iOS风格版）
  * 功能：
  * 1. 使用Collapse折叠面板展示分组
  * 2. 支持模块属于多个分组
  * 3. 创建/编辑模块时可选择分组
  * 4. 未分组模块显示在"未分组"面板
+ * 5. 统一iOS设计风格
  */
 
 import React, { useEffect, useState } from 'react';
 import { 
-  Card, List, Button, Empty, Spin, Modal, 
-  Form, Input, Select, message, Dropdown, Collapse
+  Modal, Form, Input, Select, message, Dropdown
 } from 'antd';
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, 
-  FileTextOutlined, MoreOutlined, RightOutlined
+  FileTextOutlined, MoreOutlined, RightOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useSystemConfigStore from '../../stores/systemConfigStore';
+import { 
+  IOSPageContainer,
+  IOSButton,
+  IOSTag,
+  IOSEmpty,
+  IOSLoading 
+} from './IOSLayout';
+import '../../styles/ios-unified-theme.css';
 
 const { TextArea } = Input;
-const { Panel } = Collapse;
 
 const ModuleList = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   
   const {
     groupedModules,
@@ -76,9 +86,12 @@ const ModuleList = () => {
   };
   
   // 折叠面板变化时保存状态
-  const handleCollapseChange = (keys) => {
-    setActiveKeys(keys);
-    localStorage.setItem('teaching_collapse_keys', JSON.stringify(keys));
+  const handleCollapseChange = (key) => {
+    const newKeys = activeKeys.includes(key) 
+      ? activeKeys.filter(k => k !== key)
+      : [...activeKeys, key];
+    setActiveKeys(newKeys);
+    localStorage.setItem('teaching_collapse_keys', JSON.stringify(newKeys));
   };
   
   // 打开创建/编辑模态框
@@ -89,7 +102,6 @@ const ModuleList = () => {
     
     setEditingModule(module);
     if (module) {
-      // 获取模块的分组ID数组
       const groupIds = module.groups?.map(g => g.id) || [];
       form.setFieldsValue({
         ...module,
@@ -108,12 +120,15 @@ const ModuleList = () => {
       
       if (editingModule) {
         await updateModule(editingModule.id, values);
+        message.success(t('teaching.updateSuccess'));
       } else {
         await createModule(values);
+        message.success(t('teaching.createSuccess'));
       }
       
       setModalVisible(false);
       form.resetFields();
+      loadData();
     } catch (error) {
       console.error('提交失败:', error);
     }
@@ -126,13 +141,15 @@ const ModuleList = () => {
     }
     
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除模块"${module.name}"吗？`,
-      okText: '确认',
-      cancelText: '取消',
+      title: t('teaching.confirmDeleteModule'),
+      content: module.name,
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: async () => {
         await deleteModule(module.id);
+        message.success(t('teaching.deleteSuccess'));
+        loadData();
       }
     });
   };
@@ -147,7 +164,7 @@ const ModuleList = () => {
     items: [
       {
         key: 'edit',
-        label: '编辑',
+        label: t('common.edit'),
         icon: <EditOutlined />,
         onClick: (e) => {
           e.domEvent.stopPropagation();
@@ -159,7 +176,7 @@ const ModuleList = () => {
       },
       {
         key: 'delete',
-        label: '删除',
+        label: t('common.delete'),
         icon: <DeleteOutlined />,
         danger: true,
         onClick: (e) => {
@@ -170,313 +187,252 @@ const ModuleList = () => {
     ]
   });
   
-  // 渲染模块卡片
+  // 渲染模块卡片（iOS风格）
   const renderModuleCard = (module) => (
-    <Card
-      hoverable
-      style={{
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        border: '1px solid #f0f0f0',
-        borderRadius: '8px',
-        overflow: 'hidden'
-      }}
-      bodyStyle={{ padding: '16px' }}
+    <div 
+      className="ios-module-card"
       onClick={() => handleView(module)}
-      cover={
-        <div style={{ position: 'relative' }}>
-          {module.cover_image ? (
-            <img 
-              alt={module.name} 
-              src={module.cover_image} 
-              style={{ 
-                height: 200, 
-                width: '100%',
-                objectFit: 'cover'
-              }}
-            />
-          ) : (
-            <div style={{ 
-              height: 200, 
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <FileTextOutlined style={{ fontSize: 56, color: 'white', opacity: 0.9 }} />
-            </div>
-          )}
-          
-          {/* 操作按钮（右下角浮动） */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '12px',
-              right: '12px',
-              background: 'rgba(255, 255, 255, 0.95)',
-              borderRadius: '50%',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              transition: 'all 0.3s ease',
-              cursor: 'pointer',
-              zIndex: 10
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
-              e.currentTarget.style.transform = 'scale(1.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-          >
-            <Dropdown 
-              menu={getActionMenu(module)} 
-              trigger={['click']}
-              placement="topRight"
-            >
-              <MoreOutlined 
-                style={{ 
-                  fontSize: 20, 
-                  color: '#666'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-              />
-            </Dropdown>
-          </div>
-        </div>
-      }
     >
-      {/* 标题 */}
-      <div style={{ 
-        marginBottom: 8,
-        fontSize: 16,
-        fontWeight: 500,
-        color: '#1a1a1a',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        lineHeight: '1.5'
-      }}>
-        {module.name}
+      <div className="ios-module-card-cover">
+        {module.cover_image ? (
+          <img alt={module.name} src={module.cover_image} />
+        ) : (
+          <FileTextOutlined style={{ fontSize: 48, color: 'white', opacity: 0.9 }} />
+        )}
+        
+        {/* 操作按钮 */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
+            background: 'rgba(255, 255, 255, 0.95)',
+            borderRadius: '50%',
+            width: 36,
+            height: 36,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Dropdown 
+            menu={getActionMenu(module)} 
+            trigger={['click']}
+            placement="topRight"
+          >
+            <MoreOutlined style={{ fontSize: 18, color: '#666', cursor: 'pointer' }} />
+          </Dropdown>
+        </div>
       </div>
       
-      {/* 描述 */}
-      <div style={{ 
-        minHeight: 40, 
-        fontSize: 13, 
-        color: '#666',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        lineHeight: '1.5'
-      }}>
-        {module.description || '暂无描述'}
+      <div className="ios-module-card-body">
+        <div className="ios-module-card-title">{module.name}</div>
+        <div className="ios-module-card-description">
+          {module.description || t('teaching.noDescription')}
+        </div>
       </div>
-    </Card>
+    </div>
   );
   
-  // 渲染分组面板
+  // 渲染分组面板（iOS风格）
   const renderGroupPanel = (group) => {
     const modules = group.modules || [];
     const panelKey = group.id ? String(group.id) : 'ungrouped';
+    const isActive = activeKeys.includes(panelKey);
     
     return (
-      <Panel 
-        header={
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            paddingRight: '16px'
-          }}>
-            <span style={{ 
-              fontSize: 16, 
-              fontWeight: 500,
-              color: '#1a1a1a'
-            }}>
-              {group.name}
-              <span style={{ 
-                marginLeft: 8, 
-                fontSize: 14, 
+      <div key={panelKey} className="ios-collapse-panel">
+        <div 
+          className="ios-collapse-header"
+          onClick={() => handleCollapseChange(panelKey)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <RightOutlined 
+              style={{ 
+                fontSize: 12,
                 color: '#999',
-                fontWeight: 'normal'
-              }}>
-                {modules.length} 个模块
-              </span>
+                transform: isActive ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s'
+              }} 
+            />
+            <span style={{ fontSize: 16, fontWeight: 500, color: '#000' }}>
+              {group.name}
             </span>
+            <IOSTag color="blue">
+              {modules.length} {t('teaching.modules')}
+            </IOSTag>
           </div>
-        }
-        key={panelKey}
-      >
-        {modules.length === 0 ? (
-          <Empty 
-            description="暂无模块"
-            style={{ padding: '40px 0' }}
-          />
-        ) : (
-          <List
-            grid={{ gutter: 20, xs: 1, sm: 2, md: 2, lg: 3, xl: 4, xxl: 4 }}
-            dataSource={modules}
-            renderItem={module => (
-              <List.Item>
-                {renderModuleCard(module)}
-              </List.Item>
+        </div>
+        
+        {isActive && (
+          <div className="ios-collapse-content">
+            {modules.length === 0 ? (
+              <IOSEmpty 
+                icon={<AppstoreOutlined style={{ fontSize: 48, color: '#999' }} />}
+                text={t('teaching.noModules')}
+              />
+            ) : (
+              <div style={{
+                display: 'grid',
+                gap: 20,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
+              }}>
+                {modules.map(module => renderModuleCard(module))}
+              </div>
             )}
-          />
+          </div>
         )}
-      </Panel>
+      </div>
     );
   };
   
+  if (groupedModulesLoading) {
+    return (
+      <IOSPageContainer>
+        <IOSLoading text={t('common.loading')} />
+      </IOSPageContainer>
+    );
+  }
+  
   return (
-    <div style={{ padding: '24px' }}>
-      {/* 自定义HTML头部区域 */}
-      {customHeaderHtml && (
-        <div 
-          dangerouslySetInnerHTML={{ __html: customHeaderHtml }}
-          style={{ marginBottom: '24px' }}
-        />
-      )}
-      
-      {/* 创建按钮 */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />}
-          onClick={() => handleOpenModal()}
-        >
-          创建模块
-        </Button>
-      </div>
-      
-      {/* 分组折叠面板 */}
-      <Spin spinning={groupedModulesLoading}>
-        {groupedModules.length === 0 ? (
-          <Empty 
-            description="暂无模块分组"
-            style={{ marginTop: '60px' }}
+    <IOSPageContainer>
+      <div style={{ padding: 24 }}>
+        {/* 自定义HTML头部区域 */}
+        {customHeaderHtml && (
+          <div 
+            dangerouslySetInnerHTML={{ __html: customHeaderHtml }}
+            style={{ marginBottom: 24 }}
+          />
+        )}
+        
+        {/* 创建按钮 */}
+        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'flex-end' }}>
+          <IOSButton
+            variant="primary"
+            icon={<PlusOutlined />}
+            onClick={() => handleOpenModal()}
           >
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />}
-              onClick={() => handleOpenModal()}
-            >
-              创建第一个模块
-            </Button>
-          </Empty>
+            {t('teaching.createModule')}
+          </IOSButton>
+        </div>
+        
+        {/* 分组列表 */}
+        {groupedModules.length === 0 ? (
+          <div className="ios-card" style={{ marginTop: 60, textAlign: 'center', padding: 60 }}>
+            <IOSEmpty 
+              icon={<AppstoreOutlined style={{ fontSize: 64, color: '#999' }} />}
+              text={t('teaching.noModuleGroups')}
+              action={
+                <IOSButton
+                  variant="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => handleOpenModal()}
+                  style={{ marginTop: 20 }}
+                >
+                  {t('teaching.createFirstModule')}
+                </IOSButton>
+              }
+            />
+          </div>
         ) : (
-          <Collapse 
-            activeKey={activeKeys}
-            onChange={handleCollapseChange}
-            expandIcon={({ isActive }) => <RightOutlined rotate={isActive ? 90 : 0} />}
-            style={{ 
-              background: 'transparent',
-              border: 'none'
+          <div className="ios-collapse">
+            {groupedModules.map(group => renderGroupPanel(group))}
+          </div>
+        )}
+        
+        {/* 创建/编辑模态框 */}
+        <Modal
+          title={editingModule ? t('teaching.editModule') : t('teaching.createModule')}
+          open={modalVisible}
+          onOk={handleSubmit}
+          onCancel={() => {
+            setModalVisible(false);
+            form.resetFields();
+          }}
+          width={600}
+          okText={t('common.submit')}
+          cancelText={t('common.cancel')}
+          className="ios-modal"
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{
+              visibility: 'private',
+              status: 'draft',
+              group_ids: []
             }}
           >
-            {groupedModules.map(group => renderGroupPanel(group))}
-          </Collapse>
-        )}
-      </Spin>
-      
-      {/* 创建/编辑模态框 */}
-      <Modal
-        title={editingModule ? '编辑模块' : '创建模块'}
-        open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        width={600}
-        okText="提交"
-        cancelText="取消"
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            visibility: 'private',
-            status: 'draft',
-            group_ids: []
-          }}
-        >
-          <Form.Item
-            name="name"
-            label="模块名称"
-            rules={[{ required: true, message: '请输入模块名称' }]}
-          >
-            <Input placeholder="请输入模块名称" />
-          </Form.Item>
-          
-          <Form.Item
-            name="description"
-            label="模块描述"
-          >
-            <TextArea 
-              rows={4} 
-              placeholder="请输入模块描述" 
-            />
-          </Form.Item>
-          
-          <Form.Item
-            name="cover_image"
-            label="封面图片"
-          >
-            <Input placeholder="请输入封面图片URL" />
-          </Form.Item>
-          
-          <Form.Item
-            name="group_ids"
-            label="所属分组"
-            tooltip="一个模块可以属于多个分组"
-          >
-            <Select
-              mode="multiple"
-              placeholder="请选择分组（可多选）"
-              allowClear
+            <Form.Item
+              name="name"
+              label={t('teaching.moduleName')}
+              rules={[{ required: true, message: t('teaching.moduleNameRequired') }]}
             >
-              {groups.filter(g => g.is_active).map(group => (
-                <Select.Option key={group.id} value={group.id}>
-                  {group.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="visibility"
-            label="可见性"
-          >
-            <Select>
-              <Select.Option value="private">私有</Select.Option>
-              <Select.Option value="group">组织内</Select.Option>
-              <Select.Option value="public">公开</Select.Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="status"
-            label="状态"
-          >
-            <Select>
-              <Select.Option value="draft">草稿</Select.Option>
-              <Select.Option value="published">已发布</Select.Option>
-              <Select.Option value="archived">已归档</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
+              <Input placeholder={t('teaching.moduleNamePlaceholder')} />
+            </Form.Item>
+            
+            <Form.Item
+              name="description"
+              label={t('teaching.moduleDescription')}
+            >
+              <TextArea 
+                rows={4} 
+                placeholder={t('teaching.moduleDescriptionPlaceholder')} 
+              />
+            </Form.Item>
+            
+            <Form.Item
+              name="cover_image"
+              label={t('teaching.coverImage')}
+            >
+              <Input placeholder={t('teaching.coverImagePlaceholder')} />
+            </Form.Item>
+            
+            <Form.Item
+              name="group_ids"
+              label={t('teaching.belongGroups')}
+              tooltip={t('teaching.moduleCanBelongMultipleGroups')}
+            >
+              <Select
+                mode="multiple"
+                placeholder={t('teaching.selectGroups')}
+                allowClear
+              >
+                {groups.filter(g => g.is_active).map(group => (
+                  <Select.Option key={group.id} value={group.id}>
+                    {group.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            
+            <Form.Item
+              name="visibility"
+              label={t('teaching.visibility.label')}
+            >
+              <Select>
+                <Select.Option value="private">{t('teaching.visibility.private')}</Select.Option>
+                <Select.Option value="group">{t('teaching.visibility.group')}</Select.Option>
+                <Select.Option value="public">{t('teaching.visibility.public')}</Select.Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item
+              name="status"
+              label={t('teaching.status.label')}
+            >
+              <Select>
+                <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+                <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+                <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    </IOSPageContainer>
   );
 };
 

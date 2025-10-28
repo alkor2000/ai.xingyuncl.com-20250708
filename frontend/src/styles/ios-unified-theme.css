@@ -1,0 +1,479 @@
+/**
+ * iOS统一设计系统 - 教学平台专用
+ * 设计原则：简洁、优雅、连贯
+ * 颜色、间距、组件样式统一规范
+ */
+
+/* ==================== 设计变量定义 ==================== */
+:root {
+  /* 核心颜色 */
+  --ios-blue: #007AFF;
+  --ios-blue-hover: #0051D5;
+  --ios-gray-bg: #F2F2F7;
+  --ios-white: #FFFFFF;
+  --ios-black: #000000;
+  --ios-text-primary: #000000;
+  --ios-text-secondary: #666666;
+  --ios-text-tertiary: #999999;
+  --ios-border: #E5E5EA;
+  --ios-border-light: #F0F0F0;
+  
+  /* 语义颜色 */
+  --ios-success: #34C759;
+  --ios-warning: #FF9500;
+  --ios-danger: #FF3B30;
+  --ios-info: #5AC8FA;
+  
+  /* 阴影系统 */
+  --ios-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ios-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --ios-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --ios-shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.10);
+  --ios-shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.12);
+  
+  /* 圆角系统 */
+  --ios-radius-xs: 4px;
+  --ios-radius-sm: 8px;
+  --ios-radius-md: 12px;
+  --ios-radius-lg: 16px;
+  --ios-radius-xl: 20px;
+  --ios-radius-full: 9999px;
+  
+  /* 间距系统（8的倍数） */
+  --ios-spacing-xs: 4px;
+  --ios-spacing-sm: 8px;
+  --ios-spacing-md: 16px;
+  --ios-spacing-lg: 24px;
+  --ios-spacing-xl: 32px;
+  --ios-spacing-2xl: 48px;
+  --ios-spacing-3xl: 64px;
+  
+  /* 毛玻璃效果 */
+  --ios-blur: blur(20px);
+  --ios-blur-light: blur(10px);
+  
+  /* 动画 */
+  --ios-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --ios-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==================== 全局重置 ==================== */
+.ios-teaching-container {
+  min-height: 100vh;
+  background: var(--ios-gray-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==================== 导航栏样式 ==================== */
+.ios-nav-bar {
+  height: 64px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: var(--ios-blur);
+  -webkit-backdrop-filter: var(--ios-blur);
+  border-bottom: 1px solid var(--ios-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--ios-spacing-lg);
+  transition: var(--ios-transition);
+}
+
+.ios-nav-back-button {
+  display: flex;
+  align-items: center;
+  gap: var(--ios-spacing-xs);
+  padding: var(--ios-spacing-sm) var(--ios-spacing-md);
+  color: var(--ios-blue);
+  font-weight: 500;
+  font-size: 15px;
+  background: none;
+  border: none;
+  border-radius: var(--ios-radius-sm);
+  cursor: pointer;
+  transition: var(--ios-transition-fast);
+}
+
+.ios-nav-back-button:hover {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.ios-nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+}
+
+.ios-nav-actions {
+  display: flex;
+  gap: var(--ios-spacing-sm);
+}
+
+/* ==================== 面包屑导航 ==================== */
+.ios-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--ios-spacing-sm);
+  padding: var(--ios-spacing-md) 0;
+  font-size: 14px;
+}
+
+.ios-breadcrumb-item {
+  color: var(--ios-text-secondary);
+  cursor: pointer;
+  transition: var(--ios-transition-fast);
+}
+
+.ios-breadcrumb-item:hover {
+  color: var(--ios-blue);
+}
+
+.ios-breadcrumb-item.active {
+  color: var(--ios-text-primary);
+  font-weight: 500;
+  cursor: default;
+}
+
+.ios-breadcrumb-separator {
+  color: var(--ios-text-tertiary);
+}
+
+/* ==================== 卡片样式 ==================== */
+.ios-card {
+  background: var(--ios-white);
+  border-radius: var(--ios-radius-md);
+  padding: var(--ios-spacing-lg);
+  box-shadow: var(--ios-shadow-sm);
+  transition: var(--ios-transition);
+  border: 1px solid var(--ios-border-light);
+}
+
+.ios-card:hover {
+  box-shadow: var(--ios-shadow-md);
+  transform: translateY(-2px);
+}
+
+.ios-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--ios-spacing-md);
+  padding-bottom: var(--ios-spacing-md);
+  border-bottom: 1px solid var(--ios-border-light);
+}
+
+.ios-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+}
+
+.ios-card-body {
+  color: var(--ios-text-secondary);
+  line-height: 1.6;
+}
+
+/* ==================== 模块卡片（特殊样式） ==================== */
+.ios-module-card {
+  background: var(--ios-white);
+  border-radius: var(--ios-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--ios-shadow-sm);
+  transition: var(--ios-transition);
+  cursor: pointer;
+  border: 1px solid var(--ios-border-light);
+}
+
+.ios-module-card:hover {
+  box-shadow: var(--ios-shadow-lg);
+  transform: translateY(-4px);
+}
+
+.ios-module-card-cover {
+  height: 160px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.ios-module-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ios-module-card-body {
+  padding: var(--ios-spacing-md);
+}
+
+.ios-module-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+  margin-bottom: var(--ios-spacing-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-module-card-description {
+  font-size: 14px;
+  color: var(--ios-text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ==================== 按钮系统 ==================== */
+.ios-button {
+  padding: var(--ios-spacing-sm) var(--ios-spacing-lg);
+  border-radius: var(--ios-radius-full);
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: var(--ios-transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ios-spacing-xs);
+}
+
+.ios-button-primary {
+  background: var(--ios-blue);
+  color: var(--ios-white);
+}
+
+.ios-button-primary:hover {
+  background: var(--ios-blue-hover);
+  transform: scale(1.02);
+}
+
+.ios-button-secondary {
+  background: var(--ios-gray-bg);
+  color: var(--ios-text-primary);
+}
+
+.ios-button-secondary:hover {
+  background: #E5E5EA;
+}
+
+.ios-button-ghost {
+  background: transparent;
+  color: var(--ios-blue);
+  border: 1px solid var(--ios-blue);
+}
+
+.ios-button-ghost:hover {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.ios-button-danger {
+  background: var(--ios-danger);
+  color: var(--ios-white);
+}
+
+.ios-button-danger:hover {
+  background: #D70015;
+}
+
+/* ==================== 标签样式 ==================== */
+.ios-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--ios-radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  gap: 4px;
+}
+
+.ios-tag-blue {
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--ios-blue);
+  border: 1px solid rgba(0, 122, 255, 0.2);
+}
+
+.ios-tag-green {
+  background: rgba(52, 199, 89, 0.1);
+  color: var(--ios-success);
+  border: 1px solid rgba(52, 199, 89, 0.2);
+}
+
+.ios-tag-orange {
+  background: rgba(255, 149, 0, 0.1);
+  color: var(--ios-warning);
+  border: 1px solid rgba(255, 149, 0, 0.2);
+}
+
+.ios-tag-red {
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--ios-danger);
+  border: 1px solid rgba(255, 59, 48, 0.2);
+}
+
+/* ==================== 空状态 ==================== */
+.ios-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ios-spacing-3xl) var(--ios-spacing-xl);
+  text-align: center;
+}
+
+.ios-empty-icon {
+  font-size: 48px;
+  color: var(--ios-text-tertiary);
+  margin-bottom: var(--ios-spacing-md);
+}
+
+.ios-empty-text {
+  font-size: 16px;
+  color: var(--ios-text-secondary);
+  margin-bottom: var(--ios-spacing-lg);
+}
+
+/* ==================== 页面列表项 ==================== */
+.ios-page-item {
+  background: var(--ios-white);
+  border-radius: var(--ios-radius-md);
+  padding: var(--ios-spacing-md);
+  margin-bottom: var(--ios-spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--ios-spacing-md);
+  cursor: pointer;
+  transition: var(--ios-transition-fast);
+  border: 1px solid var(--ios-border-light);
+}
+
+.ios-page-item:hover {
+  background: var(--ios-gray-bg);
+  transform: translateX(4px);
+}
+
+.ios-page-item-number {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--ios-radius-md);
+  background: var(--ios-blue);
+  color: var(--ios-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ios-page-item-number.viewed {
+  background: var(--ios-success);
+}
+
+.ios-page-item-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ios-text-primary);
+}
+
+.ios-page-item-action {
+  color: var(--ios-blue);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==================== 加载动画 ==================== */
+.ios-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.ios-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--ios-border);
+  border-top-color: var(--ios-blue);
+  border-radius: 50%;
+  animation: ios-spin 0.8s linear infinite;
+}
+
+@keyframes ios-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== 折叠面板 ==================== */
+.ios-collapse {
+  background: transparent;
+  border: none;
+}
+
+.ios-collapse-panel {
+  background: var(--ios-white);
+  border-radius: var(--ios-radius-md);
+  margin-bottom: var(--ios-spacing-md);
+  overflow: hidden;
+  box-shadow: var(--ios-shadow-xs);
+  border: 1px solid var(--ios-border-light);
+}
+
+.ios-collapse-header {
+  padding: var(--ios-spacing-md) var(--ios-spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: var(--ios-transition-fast);
+}
+
+.ios-collapse-header:hover {
+  background: var(--ios-gray-bg);
+}
+
+.ios-collapse-content {
+  padding: 0 var(--ios-spacing-lg) var(--ios-spacing-lg);
+}
+
+/* ==================== 响应式设计 ==================== */
+@media (max-width: 768px) {
+  .ios-nav-bar {
+    padding: 0 var(--ios-spacing-md);
+  }
+  
+  .ios-card {
+    padding: var(--ios-spacing-md);
+  }
+  
+  .ios-module-card-cover {
+    height: 120px;
+  }
+  
+  .ios-page-item {
+    padding: var(--ios-spacing-sm);
+  }
+  
+  .ios-page-item-number {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+}
+
+/* ==================== 深色模式支持（预留） ==================== */
+@media (prefers-color-scheme: dark) {
+  /* 未来可以添加深色模式支持 */
+}

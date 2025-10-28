@@ -1,14 +1,18 @@
 /**
- * 课程页面查看器（iOS风格版）
- * 功能：显示和浏览课程的具体页面内容
+ * 课程页面查看器（权限控制版）
+ * 修复：根据用户实际权限显示编辑按钮
  */
 
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Button,
+  Space,
+  Empty,
+  Spin,
   Progress,
   Tooltip,
   message,
+  Divider,
   Dropdown
 } from 'antd';
 import {
@@ -19,21 +23,16 @@ import {
   FullscreenOutlined,
   FullscreenExitOutlined,
   EllipsisOutlined,
-  UnorderedListOutlined,
-  AimOutlined
+  SettingOutlined,
+  BookOutlined,
+  FileTextOutlined,
+  AimOutlined,
+  UnorderedListOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
-import {
-  IOSPageContainer,
-  IOSNavBar,
-  IOSButton,
-  IOSEmpty,
-  IOSLoading
-} from '../../components/teaching/IOSLayout';
-import '../../styles/ios-unified-theme.css';
 
 const LessonViewer = () => {
   const { t } = useTranslation();
@@ -80,6 +79,7 @@ const LessonViewer = () => {
   const loadLesson = async () => {
     try {
       const lessonData = await fetchLesson(id);
+      // 同时加载模块信息以获取权限
       if (lessonData?.module_id) {
         await fetchModule(lessonData.module_id);
       }
@@ -92,10 +92,16 @@ const LessonViewer = () => {
 
   // 检查用户是否有编辑权限
   const hasEditPermission = () => {
+    // 超级管理员总是有权限
     if (user?.role === 'super_admin') return true;
+    
+    // 创建者有权限
     if (currentLesson?.creator_id === user?.id) return true;
+    
+    // 检查模块级权限
     if (currentModule?.user_permission === 'edit') return true;
     if (currentModule?.creator_id === user?.id) return true;
+    
     return false;
   };
 
@@ -171,9 +177,6 @@ const LessonViewer = () => {
         case 'F':
           toggleFullscreen();
           break;
-        case 'Escape':
-          toggleFullscreen();
-          break;
       }
     };
 
@@ -211,9 +214,8 @@ const LessonViewer = () => {
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                font-family: system-ui;
                 color: #999;
-                background: #F2F2F7;
               }
             </style>
           </head>
@@ -234,6 +236,7 @@ const LessonViewer = () => {
   };
 
   const handleEdit = () => {
+    // 权限检查
     if (!hasEditPermission()) {
       message.error(t('teaching.noEditPermission'));
       return;
@@ -244,6 +247,7 @@ const LessonViewer = () => {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     setPageViewTime(Date.now());
+    // 更新 URL
     navigate(`/teaching/lessons/${id}/pages/${page}`, { replace: true });
   };
 
@@ -297,6 +301,7 @@ const LessonViewer = () => {
     };
   }, []);
 
+  // 构建更多菜单项，根据权限决定是否显示设置
   const buildMoreMenuItems = () => {
     const items = [
       {
@@ -307,14 +312,29 @@ const LessonViewer = () => {
       }
     ];
 
+    // 只有有权限的用户才显示设置
+    if (hasEditPermission()) {
+      items.push({
+        key: 'settings',
+        label: t('common.settings'),
+        icon: <SettingOutlined />,
+        onClick: () => message.info('设置功能开发中')
+      });
+    }
+
     return { items };
   };
 
   if (currentLessonLoading || !currentLesson) {
     return (
-      <IOSPageContainer>
-        <IOSLoading text={t('common.loading')} />
-      </IOSPageContainer>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
     );
   }
 
@@ -330,120 +350,108 @@ const LessonViewer = () => {
         height: '100vh', 
         display: 'flex', 
         flexDirection: 'column',
-        background: isFullscreen ? '#000' : '#F2F2F7',
+        background: isFullscreen ? '#000' : '#f0f2f5',
         position: 'relative',
         overflow: 'hidden'
       }}
     >
       {!isFullscreen && (
-        <>
-          {/* iOS风格导航栏 */}
-          <IOSNavBar
-            title={`${currentLesson.title} - ${t('teaching.pageInfo', { current: currentPage, total: totalPages })}`}
-            onBack={handleBack}
-            backText={t('teaching.backToPageList')}
-            actions={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {/* 进度显示 */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 12px',
-                  background: 'rgba(0, 122, 255, 0.08)',
-                  borderRadius: 20
-                }}>
-                  <AimOutlined style={{ color: '#007AFF', fontSize: 14 }} />
-                  <span style={{ fontSize: 13, color: '#007AFF', fontWeight: 500 }}>
-                    {progress}%
-                  </span>
-                </div>
+        <div style={{
+          background: 'white',
+          padding: '12px 24px',
+          borderBottom: '1px solid #e8e8e8',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={handleBack}
+            size="large"
+          >
+            {t('teaching.backToPageList')}
+          </Button>
 
-                {canEdit && (
-                  <IOSButton variant="secondary" size="small" icon={<EditOutlined />} onClick={handleEdit}>
-                    {t('common.edit')}
-                  </IOSButton>
-                )}
-
-                <IOSButton
-                  variant="primary"
-                  size="small"
-                  icon={<FullscreenOutlined />}
-                  onClick={toggleFullscreen}
-                >
-                  {t('teaching.fullscreen')}
-                </IOSButton>
-              </div>
-            }
-          />
-
-          {/* 页面控制栏 */}
-          <div style={{
-            background: 'white',
-            padding: '12px 24px',
-            borderBottom: '1px solid #E5E5EA',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 20
-          }}>
-            <IOSButton
-              variant="secondary"
+          <Space size="middle">
+            <Button
               icon={<LeftOutlined />}
               disabled={currentPage === 1}
               onClick={handlePrevPage}
             >
               {t('teaching.prevPage')}
-            </IOSButton>
+            </Button>
 
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              background: '#F2F2F7',
-              borderRadius: 20,
-              minWidth: 140,
-              justifyContent: 'center'
+            <span style={{ 
+              fontSize: 14, 
+              color: '#666',
+              fontWeight: 500,
+              minWidth: 120,
+              textAlign: 'center'
             }}>
-              <span style={{ 
-                fontSize: 18, 
-                fontWeight: 600,
-                color: '#007AFF'
-              }}>
-                {currentPage < 10 ? `0${currentPage}` : currentPage}
-              </span>
-              <span style={{ color: '#999', fontSize: 14 }}>/</span>
-              <span style={{ 
-                fontSize: 14, 
-                color: '#666'
-              }}>
-                {totalPages}
-              </span>
-            </div>
+              {t('teaching.pageInfo', { current: currentPage, total: totalPages })}
+            </span>
 
-            <IOSButton
-              variant="primary"
+            <Button
               icon={<RightOutlined />}
-              iconPosition="right"
               disabled={currentPage === totalPages}
               onClick={handleNextPage}
+              type="primary"
             >
               {t('teaching.nextPage')}
-            </IOSButton>
-          </div>
-        </>
+            </Button>
+          </Space>
+
+          <Space size="middle">
+            <Tooltip title={`${t('teaching.progress')}: ${progress}%`}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 8,
+                cursor: 'default'
+              }}>
+                <AimOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                <Progress
+                  type="circle"
+                  percent={progress}
+                  width={40}
+                  strokeColor="#52c41a"
+                  format={(percent) => `${percent}%`}
+                />
+              </div>
+            </Tooltip>
+
+            {/* 修复：只有有权限才显示编辑按钮 */}
+            {canEdit && (
+              <Button icon={<EditOutlined />} onClick={handleEdit}>
+                {t('common.edit')}
+              </Button>
+            )}
+
+            <Tooltip title={t('teaching.fullscreen')}>
+              <Button
+                type="primary"
+                size="large"
+                icon={<FullscreenOutlined style={{ fontSize: 18 }} />}
+                onClick={toggleFullscreen}
+                style={{
+                  height: 44,
+                  paddingLeft: 20,
+                  paddingRight: 20
+                }}
+              >
+                {t('teaching.fullscreen')}
+              </Button>
+            </Tooltip>
+          </Space>
+        </div>
       )}
 
-      {/* 内容区域 */}
       <div style={{ 
         flex: 1,
         background: '#fff',
         overflow: 'hidden',
-        position: 'relative',
-        margin: isFullscreen ? 0 : '0 24px 24px',
-        borderRadius: isFullscreen ? 0 : 12,
-        boxShadow: isFullscreen ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.06)'
+        position: 'relative'
       }}>
         {totalPages > 0 ? (
           <iframe
@@ -459,25 +467,18 @@ const LessonViewer = () => {
             title={`Page ${currentPage}`}
           />
         ) : (
-          <IOSEmpty
-            text={t('teaching.noContent')}
-            action={
-              canEdit && (
-                <IOSButton
-                  variant="primary"
-                  icon={<EditOutlined />}
-                  onClick={handleEdit}
-                  style={{ marginTop: 20 }}
-                >
-                  {t('teaching.editContent')}
-                </IOSButton>
-              )
-            }
+          <Empty
+            description={t('teaching.noContent')}
+            style={{ 
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)'
+            }}
           />
         )}
       </div>
 
-      {/* 全屏模式控制条 */}
       {isFullscreen && (
         <>
           <div
@@ -500,14 +501,13 @@ const LessonViewer = () => {
               bottom: 30,
               left: '50%',
               transform: 'translateX(-50%)',
-              background: 'rgba(0, 0, 0, 0.75)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
+              background: 'rgba(0, 0, 0, 0.25)',
+              backdropFilter: 'blur(10px)',
               borderRadius: 40,
-              padding: '12px 24px',
+              padding: '8px 16px',
               display: 'flex',
               alignItems: 'center',
-              gap: 16,
+              gap: 8,
               transition: 'opacity 0.3s ease',
               opacity: showControls ? 1 : 0,
               pointerEvents: showControls ? 'auto' : 'none',
@@ -515,7 +515,6 @@ const LessonViewer = () => {
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
             }}
           >
-            {/* 上一页按钮 */}
             <Tooltip title={t('teaching.prevPage')} placement="top">
               <Button
                 type="text"
@@ -524,46 +523,23 @@ const LessonViewer = () => {
                 onClick={handlePrevPage}
                 style={{
                   color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: currentPage === 1 ? 0.3 : 1,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  if (currentPage > 1) {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  borderRadius: 20,
+                  opacity: currentPage === 1 ? 0.3 : 1
                 }}
               />
             </Tooltip>
 
-            {/* 页码显示 */}
-            <div style={{ 
+            <span style={{ 
               color: 'white', 
-              fontSize: 16,
-              fontWeight: 600,
-              minWidth: 100,
+              fontSize: 13,
+              fontWeight: 'bold',
+              minWidth: 80,
               textAlign: 'center',
-              userSelect: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              justifyContent: 'center'
+              userSelect: 'none'
             }}>
-              <span style={{ fontSize: 20, color: '#007AFF' }}>{currentPage}</span>
-              <span style={{ opacity: 0.6 }}>/</span>
-              <span>{totalPages}</span>
-            </div>
+              {currentPage} / {totalPages}
+            </span>
 
-            {/* 下一页按钮 */}
             <Tooltip title={t('teaching.nextPage')} placement="top">
               <Button
                 type="text"
@@ -572,54 +548,34 @@ const LessonViewer = () => {
                 onClick={handleNextPage}
                 style={{
                   color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: currentPage === totalPages ? 0.3 : 1,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  if (currentPage < totalPages) {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  borderRadius: 20,
+                  opacity: currentPage === totalPages ? 0.3 : 1
                 }}
               />
             </Tooltip>
 
-            {/* 分隔线 */}
-            <div style={{ 
-              width: 1, 
-              height: 24,
-              background: 'rgba(255, 255, 255, 0.2)'
+            <Divider type="vertical" style={{ 
+              background: 'rgba(255, 255, 255, 0.2)', 
+              height: 20,
+              margin: '0 4px'
             }} />
 
-            {/* 进度显示 */}
             <Tooltip title={`${t('teaching.progress')}: ${progress}%`} placement="top">
-              <div style={{ 
-                width: 120,
-                height: 4,
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: 2,
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${progress}%`,
-                  height: '100%',
-                  background: 'linear-gradient(90deg, #007AFF, #5856D6)',
-                  borderRadius: 2,
-                  transition: 'width 0.3s'
-                }} />
+              <div style={{ cursor: 'default' }}>
+                <Progress
+                  type="circle"
+                  percent={progress}
+                  width={32}
+                  strokeWidth={8}
+                  strokeColor="#52c41a"
+                  trailColor="rgba(255, 255, 255, 0.2)"
+                  format={(percent) => (
+                    <span style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{percent}%</span>
+                  )}
+                />
               </div>
             </Tooltip>
 
-            {/* 页面列表按钮 */}
             <Tooltip title={t('teaching.pageList')} placement="top">
               <Button
                 type="text"
@@ -627,25 +583,12 @@ const LessonViewer = () => {
                 onClick={handleBack}
                 style={{
                   color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  borderRadius: 20
                 }}
               />
             </Tooltip>
 
-            {/* 编辑按钮 */}
+            {/* 修复：全屏模式下也要检查权限 */}
             {canEdit && (
               <Tooltip title={t('common.edit')} placement="top">
                 <Button
@@ -654,26 +597,12 @@ const LessonViewer = () => {
                   onClick={handleEdit}
                   style={{
                     color: 'white',
-                    borderRadius: '50%',
-                    width: 36,
-                    height: 36,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.3s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    borderRadius: 20
                   }}
                 />
               </Tooltip>
             )}
 
-            {/* 退出全屏按钮 */}
             <Tooltip title={t('teaching.exitFullscreen')} placement="top">
               <Button
                 type="text"
@@ -681,25 +610,11 @@ const LessonViewer = () => {
                 onClick={toggleFullscreen}
                 style={{
                   color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  borderRadius: 20
                 }}
               />
             </Tooltip>
 
-            {/* 更多菜单 */}
             <Dropdown 
               menu={buildMoreMenuItems()} 
               trigger={['click']}
@@ -710,20 +625,7 @@ const LessonViewer = () => {
                 icon={<EllipsisOutlined />}
                 style={{
                   color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  borderRadius: 20
                 }}
               />
             </Dropdown>

@@ -1,32 +1,40 @@
 /**
- * 课程详情页面（极简专业版 - 添加权限控制）
- * 功能：显示课程包含的所有页面，用户可以选择要查看的页面
- * 设计：极简风格，去除冗余信息，突出核心内容
- * 权限：根据用户权限决定是否显示编辑按钮
+ * 课程详情页面（iOS风格版）
+ * 功能：显示课程包含的所有页面列表，统一iOS设计风格
  */
 
 import React, { useEffect, useState } from 'react';
 import {
-  Button,
-  Empty,
-  Spin
+  message
 } from 'antd';
 import {
   ArrowLeftOutlined,
   RightOutlined,
   FileTextOutlined,
-  EditOutlined
+  EditOutlined,
+  BookOutlined,
+  CheckCircleFilled
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
-import useAuthStore from '../../stores/authStore';  // 修正：使用authStore而不是userStore
+import useAuthStore from '../../stores/authStore';
+import {
+  IOSPageContainer,
+  IOSNavBar,
+  IOSBreadcrumb,
+  IOSCard,
+  IOSButton,
+  IOSEmpty,
+  IOSLoading
+} from '../../components/teaching/IOSLayout';
+import '../../styles/ios-unified-theme.css';
 
 const LessonDetail = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();  // 从authStore获取用户信息
+  const { user } = useAuthStore();
 
   const {
     currentLesson,
@@ -42,6 +50,7 @@ const LessonDetail = () => {
     if (id) {
       loadLesson();
       
+      // 从localStorage加载已查看的页面
       const saved = localStorage.getItem(`lesson_${id}_viewed_pages`);
       if (saved) {
         try {
@@ -57,31 +66,22 @@ const LessonDetail = () => {
   const loadLesson = async () => {
     try {
       const lesson = await fetchLesson(id);
-      // 如果有模块ID，加载模块信息以获取权限
       if (lesson?.module_id) {
         await fetchModule(lesson.module_id);
       }
     } catch (error) {
       console.error('加载课程失败:', error);
+      message.error(t('teaching.loadFailed'));
     }
   };
 
-  // 权限检查函数（与LessonViewer保持一致）
+  // 权限检查
   const hasEditPermission = () => {
     if (!user) return false;
-    
-    // 超级管理员有所有权限
     if (user.role === 'super_admin') return true;
-    
-    // 课程创建者有编辑权限
     if (currentLesson?.creator_id === user.id) return true;
-    
-    // 模块创建者有编辑权限
     if (currentModule?.creator_id === user.id) return true;
-    
-    // 检查用户对模块的权限
     if (currentModule?.user_permission === 'edit') return true;
-    
     return false;
   };
 
@@ -94,9 +94,8 @@ const LessonDetail = () => {
   };
 
   const handleEdit = () => {
-    // 再次检查权限
     if (!hasEditPermission()) {
-      console.warn('用户没有编辑权限');
+      message.warning(t('teaching.noEditPermission'));
       return;
     }
     navigate(`/teaching/lessons/${id}/edit`);
@@ -128,277 +127,220 @@ const LessonDetail = () => {
 
   if (currentLessonLoading || !currentLesson) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: '#0f2847'
-      }}>
-        <Spin size="large" tip={t('common.loading')} />
-      </div>
+      <IOSPageContainer>
+        <IOSLoading text={t('common.loading')} />
+      </IOSPageContainer>
     );
   }
 
   const pages = getPages();
   const totalPages = pages.length;
-  const canEdit = hasEditPermission(); // 计算编辑权限
+  const canEdit = hasEditPermission();
 
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      background: '#0f2847',
-      padding: '16px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-    }}>
-      {/* 顶部导航栏 - 超紧凑版 */}
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.08)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        borderRadius: '12px',
-        padding: '6px 16px',
-        marginBottom: '16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        height: '48px'
-      }}>
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined style={{ fontSize: 14 }} />}
-          onClick={handleBack}
-          style={{
-            color: 'white',
-            fontWeight: 500,
-            fontSize: 13,
-            height: 32,
-            padding: '0 12px',
-            border: 'none'
-          }}
-        >
-          {t('common.back')}
-        </Button>
-        
-        <div style={{ 
-          flex: 1,
-          color: 'rgba(255, 255, 255, 0.7)',
-          fontSize: 13,
-          textAlign: 'center',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8
-        }}>
-          <span>{t('teaching.teaching')}</span>
-          <span>/</span>
-          <span>{t('teaching.module')}</span>
-          <span>/</span>
-          <span style={{ color: 'white' }}>{currentLesson.title}</span>
-        </div>
+    <IOSPageContainer>
+      {/* iOS风格导航栏 */}
+      <IOSNavBar
+        title={currentLesson.title}
+        onBack={handleBack}
+        backText={t('common.back')}
+        actions={
+          canEdit && (
+            <IOSButton variant="primary" icon={<EditOutlined />} onClick={handleEdit}>
+              {t('common.edit')}
+            </IOSButton>
+          )
+        }
+      />
 
-        {/* 根据权限决定是否显示编辑按钮 */}
-        {canEdit ? (
-          <Button
-            type="text"
-            icon={<EditOutlined style={{ fontSize: 13 }} />}
-            onClick={handleEdit}
-            style={{
-              color: 'white',
-              fontSize: 13,
-              height: 32,
-              padding: '0 12px',
-              border: 'none'
-            }}
-          >
-            {t('common.edit')}
-          </Button>
-        ) : (
-          <div style={{ width: 80 }}></div> // 占位符，保持布局平衡
-        )}
-      </div>
+      <div style={{ padding: '0 24px 24px' }}>
+        {/* 面包屑导航 */}
+        <IOSBreadcrumb
+          items={[
+            { label: t('teaching.teaching'), path: '/teaching' },
+            { label: t('teaching.module'), path: currentLesson?.module_id ? `/teaching/modules/${currentLesson.module_id}` : null },
+            { label: currentLesson.title }
+          ]}
+        />
 
-      {/* 课程信息卡片 - 极简版（居中） */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '16px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-        textAlign: 'center'
-      }}>
-        <h1 style={{ 
-          margin: 0,
-          fontSize: 24,
-          fontWeight: 600,
-          color: '#1a1a1a',
-          marginBottom: 8
-        }}>
-          {currentLesson.title}
-        </h1>
-        
-        {currentLesson.description && (
-          <p style={{ 
-            color: '#666',
+        {/* 课程信息卡片 */}
+        <IOSCard style={{ marginBottom: 24, textAlign: 'center', padding: 32 }}>
+          <div style={{
+            width: 80,
+            height: 80,
+            margin: '0 auto 20px',
+            borderRadius: 20,
+            background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <BookOutlined style={{ fontSize: 40, color: 'white' }} />
+          </div>
+          
+          <h1 style={{ 
+            margin: '0 0 12px 0',
+            fontSize: 28,
+            fontWeight: 700,
+            color: '#000'
+          }}>
+            {currentLesson.title}
+          </h1>
+          
+          {currentLesson.description && (
+            <p style={{ 
+              color: '#666',
+              fontSize: 16,
+              lineHeight: 1.6,
+              margin: '0 auto',
+              maxWidth: 600
+            }}>
+              {currentLesson.description}
+            </p>
+          )}
+          
+          <div style={{
+            marginTop: 20,
+            padding: '12px 24px',
+            background: '#F2F2F7',
+            borderRadius: 12,
+            display: 'inline-block',
             fontSize: 14,
-            lineHeight: 1.6,
-            margin: 0
+            color: '#666'
           }}>
-            {currentLesson.description}
-          </p>
-        )}
-      </div>
-
-      {/* 页面列表 */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '20px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 16,
-          paddingBottom: 12,
-          borderBottom: '1px solid #f0f0f0'
-        }}>
-          <FileTextOutlined style={{ fontSize: 16, color: '#1890ff' }} />
-          <h2 style={{ 
-            margin: 0,
-            fontSize: 16,
-            fontWeight: 600,
-            color: '#1a1a1a'
-          }}>
-            {t('teaching.pageList')}
-          </h2>
-          <span style={{ 
-            fontSize: 13,
-            color: '#999',
-            marginLeft: 'auto'
-          }}>
-            ({totalPages} {t('teaching.pages')})
-          </span>
-        </div>
-
-        {totalPages === 0 ? (
-          <Empty 
-            description={
-              <span style={{ color: '#999', fontSize: 13 }}>
-                {t('teaching.noPages')}
-              </span>
-            }
-            style={{ marginTop: 40, marginBottom: 40 }}
-          >
-            {/* 只有有权限时才显示编辑按钮 */}
-            {canEdit && (
-              <Button 
-                type="primary"
-                icon={<EditOutlined />}
-                onClick={handleEdit}
-                style={{
-                  height: 40,
-                  borderRadius: '8px',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  padding: '0 24px'
-                }}
-              >
-                {t('teaching.editContent')}
-              </Button>
+            <strong style={{ color: '#000', marginRight: 8 }}>{totalPages}</strong>
+            {t('teaching.totalPages')}
+            {viewedPages.size > 0 && (
+              <>
+                <span style={{ margin: '0 12px', color: '#E5E5EA' }}>•</span>
+                <strong style={{ color: '#34C759', marginRight: 8 }}>{viewedPages.size}</strong>
+                {t('teaching.viewedPages')}
+              </>
             )}
-          </Empty>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {pages.map((page, index) => {
-              const pageNumber = index + 1;
-              const isViewed = viewedPages.has(pageNumber);
-              
-              return (
-                <div
-                  key={pageNumber}
-                  onClick={() => handleViewPage(pageNumber)}
-                  style={{
-                    background: isViewed ? '#f0f7ff' : '#fafafa',
-                    borderRadius: '10px',
-                    padding: '14px 16px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    border: `1px solid ${isViewed ? '#d6e4ff' : '#f0f0f0'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateX(2px)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateX(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  {/* 序号 */}
-                  <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '8px',
-                    background: isViewed ? '#1890ff' : '#d9d9d9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: 'white',
-                    flexShrink: 0
-                  }}>
-                    {pageNumber < 10 ? `0${pageNumber}` : pageNumber}
-                  </div>
+          </div>
+        </IOSCard>
 
-                  {/* 页面标题 */}
-                  <div style={{ 
-                    flex: 1,
-                    minWidth: 0
-                  }}>
-                    <div style={{
-                      fontSize: 15,
-                      fontWeight: 500,
-                      color: '#1a1a1a',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {page.title || `${t('teaching.page')} ${pageNumber}`}
-                    </div>
-                  </div>
-
-                  {/* 进入按钮 */}
-                  <Button
-                    type="link"
-                    icon={<RightOutlined />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewPage(pageNumber);
-                    }}
+        {/* 页面列表 */}
+        <IOSCard
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileTextOutlined style={{ fontSize: 18, color: '#007AFF' }} />
+              <span>{t('teaching.pageList')}</span>
+            </div>
+          }
+        >
+          {totalPages === 0 ? (
+            <IOSEmpty 
+              icon={<FileTextOutlined style={{ fontSize: 48 }} />}
+              text={t('teaching.noPages')}
+              action={
+                canEdit && (
+                  <IOSButton 
+                    variant="primary"
+                    icon={<EditOutlined />}
+                    onClick={handleEdit}
+                    style={{ marginTop: 20 }}
+                  >
+                    {t('teaching.editContent')}
+                  </IOSButton>
+                )
+              }
+            />
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              gap: 12
+            }}>
+              {pages.map((page, index) => {
+                const pageNumber = index + 1;
+                const isViewed = viewedPages.has(pageNumber);
+                
+                return (
+                  <div
+                    key={pageNumber}
+                    onClick={() => handleViewPage(pageNumber)}
+                    className="ios-page-item"
                     style={{
-                      color: '#1890ff',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      padding: '0 8px',
-                      height: 32
+                      background: isViewed ? '#F0F9FF' : '#FFFFFF',
+                      borderColor: isViewed ? '#007AFF20' : '#F0F0F0'
                     }}
                   >
-                    {t('teaching.enterPage')}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    {/* 页码 */}
+                    <div className={`ios-page-item-number ${isViewed ? 'viewed' : ''}`}>
+                      {isViewed ? (
+                        <CheckCircleFilled style={{ fontSize: 24, color: 'white' }} />
+                      ) : (
+                        <span>{pageNumber < 10 ? `0${pageNumber}` : pageNumber}</span>
+                      )}
+                    </div>
+
+                    {/* 页面标题 */}
+                    <div className="ios-page-item-title">
+                      {page.title || `${t('teaching.page')} ${pageNumber}`}
+                      {isViewed && (
+                        <span style={{
+                          marginLeft: 8,
+                          fontSize: 12,
+                          color: '#34C759',
+                          fontWeight: 'normal'
+                        }}>
+                          {t('teaching.viewed')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 进入按钮 */}
+                    <div className="ios-page-item-action">
+                      {t('teaching.enterPage')}
+                      <RightOutlined style={{ fontSize: 12 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
+          {/* 进度统计 */}
+          {totalPages > 0 && (
+            <div style={{
+              marginTop: 24,
+              padding: 20,
+              background: '#F2F2F7',
+              borderRadius: 12
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12
+              }}>
+                <span style={{ fontSize: 14, color: '#666' }}>
+                  {t('teaching.learningProgress')}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#007AFF' }}>
+                  {Math.round((viewedPages.size / totalPages) * 100)}%
+                </span>
+              </div>
+              <div style={{
+                height: 8,
+                background: '#E5E5EA',
+                borderRadius: 4,
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${(viewedPages.size / totalPages) * 100}%`,
+                  background: 'linear-gradient(90deg, #007AFF 0%, #5856D6 100%)',
+                  borderRadius: 4,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+        </IOSCard>
       </div>
-    </div>
+    </IOSPageContainer>
   );
 };
 

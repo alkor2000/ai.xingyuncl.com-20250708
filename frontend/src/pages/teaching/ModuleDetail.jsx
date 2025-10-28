@@ -1,28 +1,18 @@
 /**
- * 教学模块详情页面（移除权限管理功能）
- * 权限管理功能已移至：系统设置 → 教学管理 → 教育模块授权管理
+ * 教学模块详情页面（iOS风格版）
+ * 统一设计风格，优化视觉体验
  */
 
 import React, { useEffect, useState } from 'react';
 import {
-  Card,
-  Tabs,
-  Button,
-  Space,
-  Tag,
   Modal,
   Form,
   Input,
   Select,
   message,
-  Breadcrumb,
-  Empty,
-  Popconfirm,
-  Tooltip,
-  Badge,
   Dropdown,
-  List,
-  Spin
+  Badge,
+  Tooltip
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -39,7 +29,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
-import moment from 'moment';
+import {
+  IOSPageContainer,
+  IOSNavBar,
+  IOSBreadcrumb,
+  IOSCard,
+  IOSButton,
+  IOSTag,
+  IOSEmpty,
+  IOSLoading
+} from '../../components/teaching/IOSLayout';
+import '../../styles/ios-unified-theme.css';
 
 const { TextArea } = Input;
 
@@ -63,7 +63,6 @@ const ModuleDetail = () => {
     deleteLesson
   } = useTeachingStore();
 
-  const [activeTab, setActiveTab] = useState('lessons');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [lessonModalVisible, setLessonModalVisible] = useState(false);
   const [editLessonModalVisible, setEditLessonModalVisible] = useState(false);
@@ -83,7 +82,6 @@ const ModuleDetail = () => {
       await fetchModule(id);
       await fetchLessons(id);
     } catch (error) {
-      // 处理权限错误，返回列表页
       if (error.code === 'PERMISSION_DENIED' || error.status === 403) {
         navigate('/teaching');
       } else {
@@ -121,17 +119,26 @@ const ModuleDetail = () => {
 
   const handleDelete = async () => {
     if (lessons.length > 0) {
-      message.warning('请先删除模块内的所有课程');
+      message.warning(t('teaching.deleteModuleWithLessonsWarning'));
       return;
     }
     
-    try {
-      await deleteModule(id);
-      message.success(t('teaching.deleteSuccess'));
-      navigate('/teaching');
-    } catch (error) {
-      message.error(t('teaching.deleteFailed'));
-    }
+    Modal.confirm({
+      title: t('teaching.confirmDeleteModule'),
+      content: currentModule.name,
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteModule(id);
+          message.success(t('teaching.deleteSuccess'));
+          navigate('/teaching');
+        } catch (error) {
+          message.error(t('teaching.deleteFailed'));
+        }
+      }
+    });
   };
 
   const handleCreateLesson = async () => {
@@ -189,12 +196,22 @@ const ModuleDetail = () => {
 
   const handleDeleteLesson = async (lessonId, e) => {
     if (e) e.stopPropagation();
-    try {
-      await deleteLesson(lessonId, id);
-      message.success(t('teaching.deleteSuccess'));
-    } catch (error) {
-      message.error(t('teaching.deleteFailed'));
-    }
+    
+    Modal.confirm({
+      title: t('teaching.confirmDeleteLesson'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteLesson(lessonId, id);
+          message.success(t('teaching.deleteSuccess'));
+          await fetchLessons(id);
+        } catch (error) {
+          message.error(t('teaching.deleteFailed'));
+        }
+      }
+    });
   };
 
   const visibilityColors = {
@@ -204,17 +221,17 @@ const ModuleDetail = () => {
   };
 
   const statusColors = {
-    draft: 'default',
-    published: 'success',
-    archived: 'error'
+    draft: 'blue',
+    published: 'green',
+    archived: 'red'
   };
 
   const contentTypeColors = {
     course: 'blue',
     experiment: 'cyan',
-    exercise: 'geekblue',
-    reference: 'purple',
-    teaching_plan: 'orange',
+    exercise: 'purple',
+    reference: 'orange',
+    teaching_plan: 'green',
     answer: 'red',
     guide: 'magenta',
     assessment: 'volcano'
@@ -238,20 +255,12 @@ const ModuleDetail = () => {
         danger: true,
         onClick: (e) => {
           e.domEvent.stopPropagation();
-          Modal.confirm({
-            title: t('teaching.confirmDeleteLesson'),
-            content: lesson.title,
-            okText: t('common.confirm'),
-            cancelText: t('common.cancel'),
-            okButtonProps: { danger: true },
-            onOk: () => handleDeleteLesson(lesson.id)
-          });
+          handleDeleteLesson(lesson.id, e.domEvent);
         }
       }
     ]
   });
 
-  // 检查用户是否有编辑权限
   const hasEditPermission = () => {
     if (user?.role === 'super_admin') return true;
     if (currentModule?.creator_id === user?.id) return true;
@@ -261,379 +270,382 @@ const ModuleDetail = () => {
 
   if (currentModuleLoading || !currentModule) {
     return (
-      <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin size="large" tip={t('common.loading')} />
-      </div>
+      <IOSPageContainer>
+        <IOSLoading text={t('common.loading')} />
+      </IOSPageContainer>
     );
   }
 
-  return (
-    <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
-      <Breadcrumb style={{ marginBottom: 16 }}>
-        <Breadcrumb.Item>
-          <a onClick={handleBack}>{t('teaching.teaching')}</a>
-        </Breadcrumb.Item>
-        <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
-      </Breadcrumb>
+  const canEdit = hasEditPermission();
 
-      <Card 
-        style={{ marginBottom: 20 }}
-        bodyStyle={{ padding: '16px 24px' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space size="large">
-            <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
-            <div>
-              <h2 style={{ margin: 0, fontSize: 20 }}>
+  return (
+    <IOSPageContainer>
+      {/* iOS风格导航栏 */}
+      <IOSNavBar
+        title={currentModule.name}
+        onBack={handleBack}
+        backText={t('common.back')}
+        actions={
+          canEdit && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <IOSButton variant="secondary" icon={<EditOutlined />} onClick={handleEdit}>
+                {t('common.edit')}
+              </IOSButton>
+              <IOSButton 
+                variant="danger" 
+                icon={<DeleteOutlined />} 
+                onClick={handleDelete}
+                disabled={lessons.length > 0}
+              >
+                {t('common.delete')}
+              </IOSButton>
+            </div>
+          )
+        }
+      />
+
+      <div style={{ padding: '0 24px 24px' }}>
+        {/* 面包屑导航 */}
+        <IOSBreadcrumb
+          items={[
+            { label: t('teaching.teaching'), path: '/teaching' },
+            { label: currentModule.name }
+          ]}
+        />
+
+        {/* 模块信息卡片 */}
+        <IOSCard className="module-info-card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <BookOutlined style={{ fontSize: 32, color: 'white' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 600 }}>
                 {currentModule.name}
               </h2>
-              <Space style={{ marginTop: 6 }} size="middle">
-                <Tag color={visibilityColors[currentModule.visibility]}>
-                  <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
-                </Tag>
-                <Tag color={statusColors[currentModule.status]}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <IOSTag color={visibilityColors[currentModule.visibility]}>
+                  <GlobalOutlined style={{ marginRight: 4 }} />
+                  {t(`teaching.visibility.${currentModule.visibility}`)}
+                </IOSTag>
+                <IOSTag color={statusColors[currentModule.status]}>
                   {t(`teaching.status.${currentModule.status}`)}
-                </Tag>
-                {currentModule.description && (
-                  <span style={{ color: '#666', fontSize: 13 }}>
-                    {currentModule.description.length > 50 
-                      ? currentModule.description.substring(0, 50) + '...' 
-                      : currentModule.description}
-                  </span>
-                )}
-              </Space>
+                </IOSTag>
+              </div>
+              {currentModule.description && (
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8, marginBottom: 0 }}>
+                  {currentModule.description}
+                </p>
+              )}
             </div>
-          </Space>
+          </div>
+        </IOSCard>
 
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-              {t('common.back')}
-            </Button>
-            {hasEditPermission() && (
-              <>
-                <Button icon={<EditOutlined />} onClick={handleEdit}>
-                  {t('common.edit')}
-                </Button>
-                <Popconfirm
-                  title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
-                  onConfirm={handleDelete}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                  okButtonProps={{ danger: true }}
-                  disabled={lessons.length > 0}
-                >
-                  <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>
-              </>
-            )}
-          </Space>
-        </div>
-      </Card>
-
-      {/* 只保留课程列表Tab */}
-      <Card>
-        <div>
-          <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
-            {hasEditPermission() && (
-              <Button
-                type="primary"
+        {/* 课程列表卡片 */}
+        <IOSCard
+          title={t('teaching.lessonList')}
+          actions={
+            canEdit && (
+              <IOSButton
+                variant="primary"
                 icon={<PlusOutlined />}
                 onClick={() => setLessonModalVisible(true)}
               >
                 {t('teaching.createLesson')}
-              </Button>
-            )}
-          </div>
-
-          <Spin spinning={lessonsLoading}>
-            {lessons.length === 0 ? (
-              <Empty 
-                description={t('teaching.noLessons')}
-                style={{ marginTop: 60 }}
-              >
-                {hasEditPermission() && (
-                  <Button 
-                    type="primary" 
+              </IOSButton>
+            )
+          }
+        >
+          {lessonsLoading ? (
+            <IOSLoading text={t('teaching.loadingLessons')} />
+          ) : lessons.length === 0 ? (
+            <IOSEmpty
+              icon={<FileTextOutlined style={{ fontSize: 48 }} />}
+              text={t('teaching.noLessons')}
+              action={
+                canEdit && (
+                  <IOSButton
+                    variant="primary"
                     icon={<PlusOutlined />}
                     onClick={() => setLessonModalVisible(true)}
+                    style={{ marginTop: 20 }}
                   >
                     {t('teaching.createLesson')}
-                  </Button>
-                )}
-              </Empty>
-            ) : (
-              <List
-                grid={{ gutter: 20, xs: 1, sm: 2, md: 3, lg: 4, xl: 4, xxl: 4 }}
-                dataSource={lessons}
-                renderItem={lesson => (
-                  <List.Item>
-                    <Card
-                      hoverable
-                      style={{
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        border: '1px solid #f0f0f0'
-                      }}
-                      bodyStyle={{ padding: '16px' }}
-                      onClick={() => handleViewLesson(lesson)}
-                      cover={
-                        lesson.cover_image ? (
-                          <img 
-                            alt={lesson.title} 
-                            src={lesson.cover_image} 
-                            style={{ 
-                              height: 180, 
-                              objectFit: 'cover',
-                              borderRadius: '8px 8px 0 0'
-                            }}
-                          />
-                        ) : (
-                          <div style={{ 
-                            height: 180, 
-                            background: `linear-gradient(135deg, ${
-                              contentTypeColors[lesson.content_type] === 'blue' ? '#667eea 0%, #764ba2' :
-                              contentTypeColors[lesson.content_type] === 'cyan' ? '#30cfd0 0%, #330867' :
-                              contentTypeColors[lesson.content_type] === 'purple' ? '#a8c0ff 0%, #3f2b96' :
-                              '#fa709a 0%, #fee140'
-                            } 100%)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: '8px 8px 0 0'
-                          }}>
-                            <FileTextOutlined style={{ fontSize: 48, color: 'white', opacity: 0.9 }} />
-                          </div>
-                        )
-                      }
-                    >
-                      <Card.Meta
-                        title={
-                          <div style={{ 
-                            marginBottom: 8,
-                            fontSize: 15,
-                            fontWeight: 500,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {lesson.title}
-                          </div>
-                        }
-                        description={
-                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                            <div style={{ 
-                              minHeight: 36, 
-                              fontSize: 12, 
-                              color: '#666',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              lineHeight: '1.4'
-                            }}>
-                              {lesson.description || t('teaching.noDescription')}
-                            </div>
-                            <Space wrap style={{ marginTop: 4 }}>
-                              <Tag color={contentTypeColors[lesson.content_type]}>
-                                {t(`teaching.contentTypes.${lesson.content_type}`)}
-                              </Tag>
-                              <Tag color={statusColors[lesson.status]}>
-                                {t(`teaching.status.${lesson.status}`)}
-                              </Tag>
-                            </Space>
-                            <div style={{ 
-                              fontSize: 12, 
-                              color: '#999',
-                              marginTop: 8,
+                  </IOSButton>
+                )
+              }
+            />
+          ) : (
+            <div style={{
+              display: 'grid',
+              gap: 20,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
+            }}>
+              {lessons.map(lesson => (
+                <div
+                  key={lesson.id}
+                  className="ios-module-card"
+                  onClick={() => handleViewLesson(lesson)}
+                >
+                  <div className="ios-module-card-cover" style={{ height: 140 }}>
+                    {lesson.cover_image ? (
+                      <img alt={lesson.title} src={lesson.cover_image} />
+                    ) : (
+                      <div style={{
+                        width: '100%',
+                        height: '100%',
+                        background: `linear-gradient(135deg, ${
+                          contentTypeColors[lesson.content_type] === 'blue' ? '#007AFF, #5856D6' :
+                          contentTypeColors[lesson.content_type] === 'cyan' ? '#30cfd0, #330867' :
+                          contentTypeColors[lesson.content_type] === 'purple' ? '#a8c0ff, #3f2b96' :
+                          '#fa709a, #fee140'
+                        })`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <FileTextOutlined style={{ fontSize: 40, color: 'white', opacity: 0.9 }} />
+                      </div>
+                    )}
+                    
+                    {canEdit && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          display: 'flex',
+                          gap: 8
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Tooltip title={t('teaching.editInfo')}>
+                          <div
+                            onClick={(e) => handleEditLessonInfo(lesson, e)}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              background: 'rgba(255, 255, 255, 0.95)',
                               display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}>
-                              <span>
-                                <Badge count={lesson.page_count} showZero style={{ backgroundColor: '#52c41a', marginRight: 8 }} />
-                                {lesson.view_count} {t('teaching.views')}
-                              </span>
-                              {hasEditPermission() && (
-                                <Space size={4}>
-                                  <Tooltip title={t('teaching.editInfo')}>
-                                    <EditOutlined 
-                                      style={{ 
-                                        fontSize: 14, 
-                                        padding: '4px',
-                                        cursor: 'pointer',
-                                        color: '#1890ff'
-                                      }}
-                                      onClick={(e) => handleEditLessonInfo(lesson, e)}
-                                    />
-                                  </Tooltip>
-                                  <Dropdown 
-                                    menu={getLessonActionMenu(lesson)} 
-                                    trigger={['click']}
-                                  >
-                                    <MoreOutlined 
-                                      style={{ 
-                                        fontSize: 16, 
-                                        padding: '4px',
-                                        cursor: 'pointer',
-                                        color: '#666'
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </Dropdown>
-                                </Space>
-                              )}
-                            </div>
-                          </Space>
-                        }
-                      />
-                    </Card>
-                  </List.Item>
-                )}
-              />
-            )}
-          </Spin>
-        </div>
-      </Card>
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <EditOutlined style={{ fontSize: 14, color: '#007AFF' }} />
+                          </div>
+                        </Tooltip>
+                        <Dropdown menu={getLessonActionMenu(lesson)} trigger={['click']}>
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              background: 'rgba(255, 255, 255, 0.95)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <MoreOutlined style={{ fontSize: 14, color: '#666' }} />
+                          </div>
+                        </Dropdown>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="ios-module-card-body">
+                    <div className="ios-module-card-title">{lesson.title}</div>
+                    <div className="ios-module-card-description">
+                      {lesson.description || t('teaching.noDescription')}
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <IOSTag color={contentTypeColors[lesson.content_type]}>
+                        {t(`teaching.contentTypes.${lesson.content_type}`)}
+                      </IOSTag>
+                      <IOSTag color={statusColors[lesson.status]}>
+                        {t(`teaching.status.${lesson.status}`)}
+                      </IOSTag>
+                    </div>
+                    <div style={{ 
+                      marginTop: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 12,
+                      color: '#999'
+                    }}>
+                      <span>
+                        <Badge 
+                          count={lesson.page_count} 
+                          showZero 
+                          style={{ backgroundColor: '#52c41a', marginRight: 8 }} 
+                        />
+                        {t('teaching.pages')}
+                      </span>
+                      <span>
+                        <EyeOutlined style={{ marginRight: 4 }} />
+                        {lesson.view_count} {t('teaching.views')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </IOSCard>
 
-      {/* 编辑模块模态框 */}
-      <Modal
-        title={t('teaching.editModule')}
-        open={editModalVisible}
-        onOk={handleEditSubmit}
-        onCancel={() => setEditModalVisible(false)}
-        width={600}
-        okText={t('common.save')}
-        cancelText={t('common.cancel')}
-      >
-        <Form form={editForm} layout="vertical">
-          <Form.Item
-            name="name"
-            label={t('teaching.moduleName')}
-            rules={[{ required: true, message: t('teaching.moduleNameRequired') }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label={t('teaching.moduleDescription')}>
-            <TextArea rows={4} />
-          </Form.Item>
-          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
-            <Input placeholder={t('teaching.coverImagePlaceholder')} />
-          </Form.Item>
-          <Form.Item name="visibility" label={t('teaching.visibility.label')}>
-            <Select>
-              <Select.Option value="private">{t('teaching.visibility.private')}</Select.Option>
-              <Select.Option value="group">{t('teaching.visibility.group')}</Select.Option>
-              <Select.Option value="public">{t('teaching.visibility.public')}</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="status" label={t('teaching.status.label')}>
-            <Select>
-              <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
-              <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
-              <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+        {/* 编辑模块模态框 */}
+        <Modal
+          title={t('teaching.editModule')}
+          open={editModalVisible}
+          onOk={handleEditSubmit}
+          onCancel={() => setEditModalVisible(false)}
+          width={600}
+          okText={t('common.save')}
+          cancelText={t('common.cancel')}
+          className="ios-modal"
+        >
+          <Form form={editForm} layout="vertical">
+            <Form.Item
+              name="name"
+              label={t('teaching.moduleName')}
+              rules={[{ required: true, message: t('teaching.moduleNameRequired') }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item name="description" label={t('teaching.moduleDescription')}>
+              <TextArea rows={4} />
+            </Form.Item>
+            <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+              <Input placeholder={t('teaching.coverImagePlaceholder')} />
+            </Form.Item>
+            <Form.Item name="visibility" label={t('teaching.visibility.label')}>
+              <Select>
+                <Select.Option value="private">{t('teaching.visibility.private')}</Select.Option>
+                <Select.Option value="group">{t('teaching.visibility.group')}</Select.Option>
+                <Select.Option value="public">{t('teaching.visibility.public')}</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="status" label={t('teaching.status.label')}>
+              <Select>
+                <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+                <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+                <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
 
-      {/* 创建课程模态框 */}
-      <Modal
-        title={t('teaching.createLesson')}
-        open={lessonModalVisible}
-        onOk={handleCreateLesson}
-        onCancel={() => setLessonModalVisible(false)}
-        width={600}
-        okText={t('common.create')}
-        cancelText={t('common.cancel')}
-      >
-        <Form form={lessonForm} layout="vertical">
-          <Form.Item
-            name="title"
-            label={t('teaching.lessonTitle')}
-            rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label={t('teaching.lessonDescription')}>
-            <TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
-            <Input placeholder={t('teaching.coverImagePlaceholder')} />
-          </Form.Item>
-          <Form.Item
-            name="content_type"
-            label={t('teaching.contentType')}
-            initialValue="course"
-          >
-            <Select>
-              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
-              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
-              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
-              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
-              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
-              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
-              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
-              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+        {/* 创建课程模态框 */}
+        <Modal
+          title={t('teaching.createLesson')}
+          open={lessonModalVisible}
+          onOk={handleCreateLesson}
+          onCancel={() => setLessonModalVisible(false)}
+          width={600}
+          okText={t('common.create')}
+          cancelText={t('common.cancel')}
+          className="ios-modal"
+        >
+          <Form form={lessonForm} layout="vertical">
+            <Form.Item
+              name="title"
+              label={t('teaching.lessonTitle')}
+              rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item name="description" label={t('teaching.lessonDescription')}>
+              <TextArea rows={3} />
+            </Form.Item>
+            <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+              <Input placeholder={t('teaching.coverImagePlaceholder')} />
+            </Form.Item>
+            <Form.Item
+              name="content_type"
+              label={t('teaching.contentType')}
+              initialValue="course"
+            >
+              <Select>
+                <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+                <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+                <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+                <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+                <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+                <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+                <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+                <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
 
-      {/* 编辑课程信息模态框 */}
-      <Modal
-        title={t('teaching.editLessonInfo')}
-        open={editLessonModalVisible}
-        onOk={handleEditLessonSubmit}
-        onCancel={() => {
-          setEditLessonModalVisible(false);
-          editLessonForm.resetFields();
-          setEditingLesson(null);
-        }}
-        width={600}
-        okText={t('common.save')}
-        cancelText={t('common.cancel')}
-        destroyOnClose
-      >
-        <Form form={editLessonForm} layout="vertical">
-          <Form.Item
-            name="title"
-            label={t('teaching.lessonTitle')}
-            rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label={t('teaching.lessonDescription')}>
-            <TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="cover_image" label={t('teaching.coverImage')}>
-            <Input placeholder={t('teaching.coverImagePlaceholder')} />
-          </Form.Item>
-          <Form.Item name="content_type" label={t('teaching.contentType')}>
-            <Select>
-              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
-              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
-              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
-              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
-              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
-              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
-              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
-              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="status" label={t('teaching.status.label')}>
-            <Select>
-              <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
-              <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
-              <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
+        {/* 编辑课程信息模态框 */}
+        <Modal
+          title={t('teaching.editLessonInfo')}
+          open={editLessonModalVisible}
+          onOk={handleEditLessonSubmit}
+          onCancel={() => {
+            setEditLessonModalVisible(false);
+            editLessonForm.resetFields();
+            setEditingLesson(null);
+          }}
+          width={600}
+          okText={t('common.save')}
+          cancelText={t('common.cancel')}
+          destroyOnClose
+          className="ios-modal"
+        >
+          <Form form={editLessonForm} layout="vertical">
+            <Form.Item
+              name="title"
+              label={t('teaching.lessonTitle')}
+              rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item name="description" label={t('teaching.lessonDescription')}>
+              <TextArea rows={3} />
+            </Form.Item>
+            <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+              <Input placeholder={t('teaching.coverImagePlaceholder')} />
+            </Form.Item>
+            <Form.Item name="content_type" label={t('teaching.contentType')}>
+              <Select>
+                <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+                <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+                <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+                <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+                <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+                <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+                <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+                <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="status" label={t('teaching.status.label')}>
+              <Select>
+                <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+                <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+                <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    </IOSPageContainer>
   );
 };
 
