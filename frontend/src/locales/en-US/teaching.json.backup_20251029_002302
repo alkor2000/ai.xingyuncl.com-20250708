@@ -27,7 +27,6 @@
     "coverImagePlaceholder": "Enter image URL or upload",
     
     "module": "Module",
-    "modules": "Modules",
     "lessons": "Lessons",
     "lesson": "Lesson",
     "lessonList": "Lesson List",
@@ -50,12 +49,9 @@
     "noPages": "No pages",
     "viewed": "Viewed",
     "notViewed": "Not Viewed",
-    "viewedPages": "Viewed Pages",
-    "totalPages": "Total Pages",
     "enterPage": "Enter Page",
     "backToPageList": "Back to Page List",
     "created": "Created",
-    "learningProgress": "Learning Progress",
     
     "lessonTitle": "Lesson Title",
     "lessonTitleRequired": "Please enter lesson title",
@@ -64,30 +60,6 @@
     "creator": "Creator",
     "createdAt": "Created At",
     "updatedAt": "Updated At",
-    
-    "materials": "Course Materials",
-    "courseMaterials": "Course Materials",
-    "noMaterials": "No course materials",
-    "addMaterial": "Add Material",
-    "materialTitle": "Material Name",
-    "materialTitleRequired": "Please enter material name",
-    "materialTitlePlaceholder": "e.g.: Homework, Reference Documents",
-    "materialUrl": "Material URL",
-    "materialUrlRequired": "Please enter material URL",
-    "materialUrlPlaceholder": "Enter cloud drive link or document URL",
-    "materialDescription": "Material Description",
-    "materialDescriptionPlaceholder": "Brief description of material content (optional)",
-    "deleteMaterial": "Delete Material",
-    "confirmDeleteMaterial": "Are you sure to delete this material?",
-    "maxMaterials": "Maximum 5 materials",
-    "openLink": "Open Link",
-    "viewMaterial": "View Material",
-    "downloadMaterial": "Download Material",
-    "copyLink": "Copy Link",
-    "linkCopied": "Link copied",
-    
-    "noEditPermission": "No edit permission",
-    "loadingLessons": "Loading lessons...",
     
     "visibility": {
       "label": "Visibility",
@@ -192,17 +164,13 @@
     "prevPage": "Previous",
     "nextPage": "Next",
     "pageInfo": "Page {{current}} of {{total}}",
+    "totalPages": "Total {{total}} pages",
     "switchPage": "Switch Page",
     "progress": "Progress",
     "viewTime": "View Time",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "toggleFullscreen": "Toggle Fullscreen",
-    
-    "belongGroups": "Belong Groups",
-    "selectGroups": "Select Groups",
-    "moduleCanBelongMultipleGroups": "Module can belong to multiple groups",
-    "noModuleGroups": "No groups",
     
     "teachingPlan": "Teaching Plan",
     "homework": "Homework",
@@ -236,7 +204,6 @@
     "revokeSuccess": "Permission revoked",
     "revokeFailed": "Revoke failed",
     "batchRevokeSuccess": "Batch revoked successfully",
-    "batchRevokeFailed": "Batch revoke failed",
-    "deleteModuleWithLessonsWarning": "Please delete all lessons in this module first"
+    "batchRevokeFailed": "Batch revoke failed"
   }
 }

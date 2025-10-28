@@ -1,6 +1,7 @@
 /**
- * 教学模块详情页面（iOS风格版 + 课程资料功能修复版）
- * 修复：事件处理错误和资料保存问题
+ * 教学模块详情页面（iOS风格版 + 课程资料功能）
+ * 统一设计风格，优化视觉体验
+ * 增强：支持课程资料管理
  */
 
 import React, { useEffect, useState } from 'react';
@@ -148,30 +149,21 @@ const ModuleDetail = () => {
     try {
       const values = await lessonForm.validateFields();
       
-      // 验证并过滤资料
+      // 验证资料
       const materials = values.materials || [];
-      const validMaterials = materials.filter(m => m && m.title && m.url);
-      
-      // 移除临时ID
-      const cleanMaterials = validMaterials.map(m => ({
-        title: m.title,
-        url: m.url,
-        description: m.description || ''
-      }));
+      const validMaterials = materials.filter(m => m.title && m.url);
       
       await createLesson({
         ...values,
-        materials: cleanMaterials,
+        materials: validMaterials,
         module_id: id,
         content: JSON.stringify({ pages: [{ id: 1, title: 'Page 1', html: '<h1>新页面</h1>' }] })
       });
-      
       setLessonModalVisible(false);
       lessonForm.resetFields();
       message.success(t('teaching.createSuccess'));
       await fetchLessons(id);
     } catch (error) {
-      console.error('创建课程失败:', error);
       message.error(t('teaching.createFailed'));
     }
   };
@@ -198,29 +190,20 @@ const ModuleDetail = () => {
     try {
       const values = await editLessonForm.validateFields();
       
-      // 验证并过滤资料
+      // 验证资料
       const materials = values.materials || [];
-      const validMaterials = materials.filter(m => m && m.title && m.url);
-      
-      // 移除临时ID
-      const cleanMaterials = validMaterials.map(m => ({
-        title: m.title,
-        url: m.url,
-        description: m.description || ''
-      }));
+      const validMaterials = materials.filter(m => m.title && m.url);
       
       await updateLesson(editingLesson.id, {
         ...values,
-        materials: cleanMaterials
+        materials: validMaterials
       });
-      
       setEditLessonModalVisible(false);
       editLessonForm.resetFields();
       setEditingLesson(null);
       message.success(t('teaching.updateSuccess'));
       await fetchLessons(id);
     } catch (error) {
-      console.error('更新课程失败:', error);
       message.error(t('teaching.updateFailed'));
     }
   };
@@ -230,7 +213,9 @@ const ModuleDetail = () => {
     navigate(`/teaching/lessons/${lesson.id}/edit`);
   };
 
-  const handleDeleteLesson = async (lessonId) => {
+  const handleDeleteLesson = async (lessonId, e) => {
+    if (e) e.stopPropagation();
+    
     Modal.confirm({
       title: t('teaching.confirmDeleteLesson'),
       okText: t('common.confirm'),
@@ -277,7 +262,7 @@ const ModuleDetail = () => {
         key: 'edit_content',
         label: t('teaching.editContent'),
         icon: <FileTextOutlined />,
-        onClick: () => handleEditLessonContent(lesson)
+        onClick: (e) => handleEditLessonContent(lesson, e)
       },
       {
         type: 'divider'
@@ -287,7 +272,10 @@ const ModuleDetail = () => {
         label: t('common.delete'),
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => handleDeleteLesson(lesson.id)
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          handleDeleteLesson(lesson.id, e.domEvent);
+        }
       }
     ]
   });
@@ -448,7 +436,7 @@ const ModuleDetail = () => {
                     )}
                     
                     {/* 资料标识 */}
-                    {lesson.materials && Array.isArray(lesson.materials) && lesson.materials.length > 0 && (
+                    {lesson.materials && lesson.materials.length > 0 && (
                       <div style={{
                         position: 'absolute',
                         top: 8,
@@ -497,13 +485,8 @@ const ModuleDetail = () => {
                             <EditOutlined style={{ fontSize: 14, color: '#007AFF' }} />
                           </div>
                         </Tooltip>
-                        <Dropdown 
-                          menu={getLessonActionMenu(lesson)} 
-                          trigger={['click']}
-                          placement="bottomRight"
-                        >
+                        <Dropdown menu={getLessonActionMenu(lesson)} trigger={['click']}>
                           <div
-                            onClick={(e) => e.stopPropagation()}
                             style={{
                               width: 32,
                               height: 32,

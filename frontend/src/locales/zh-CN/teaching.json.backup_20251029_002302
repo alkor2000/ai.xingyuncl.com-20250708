@@ -29,7 +29,6 @@
     "coverImagePlaceholder": "输入图片URL或上传图片",
     
     "module": "模块",
-    "modules": "模块",
     "lessons": "课程",
     "lesson": "课程",
     "lessonList": "课程列表",
@@ -52,12 +51,9 @@
     "noPages": "暂无页面",
     "viewed": "已查看",
     "notViewed": "未查看",
-    "viewedPages": "已查看页面",
-    "totalPages": "总页数",
     "enterPage": "进入页面",
     "backToPageList": "返回页面列表",
     "created": "创建",
-    "learningProgress": "学习进度",
     
     "lessonTitle": "课程标题",
     "lessonTitleRequired": "请输入课程标题",
@@ -66,30 +62,6 @@
     "creator": "创建者",
     "createdAt": "创建时间",
     "updatedAt": "更新时间",
-    
-    "materials": "课程资料",
-    "courseMaterials": "课程资料",
-    "noMaterials": "暂无课程资料",
-    "addMaterial": "添加资料",
-    "materialTitle": "资料名称",
-    "materialTitleRequired": "请输入资料名称",
-    "materialTitlePlaceholder": "例如：课后作业、参考文档",
-    "materialUrl": "资料链接",
-    "materialUrlRequired": "请输入资料链接",
-    "materialUrlPlaceholder": "输入云盘链接或文档URL",
-    "materialDescription": "资料描述",
-    "materialDescriptionPlaceholder": "简要描述资料内容（可选）",
-    "deleteMaterial": "删除资料",
-    "confirmDeleteMaterial": "确定要删除此资料吗？",
-    "maxMaterials": "最多添加5个资料",
-    "openLink": "打开链接",
-    "viewMaterial": "查看资料",
-    "downloadMaterial": "下载资料",
-    "copyLink": "复制链接",
-    "linkCopied": "链接已复制",
-    
-    "noEditPermission": "无编辑权限",
-    "loadingLessons": "正在加载课程...",
     
     "visibility": {
       "label": "可见性",
@@ -206,17 +178,13 @@
     "prevPage": "上一页",
     "nextPage": "下一页",
     "pageInfo": "第 {{current}} 页 / 共 {{total}} 页",
+    "totalPages": "共 {{total}} 页",
     "switchPage": "切换页面",
     "progress": "进度",
     "viewTime": "浏览时长",
     "fullscreen": "全屏",
     "exitFullscreen": "退出全屏",
     "toggleFullscreen": "切换全屏",
-    
-    "belongGroups": "所属分组",
-    "selectGroups": "选择分组",
-    "moduleCanBelongMultipleGroups": "模块可以属于多个分组",
-    "noModuleGroups": "暂无分组",
     
     "teachingPlan": "教案",
     "homework": "作业",
@@ -254,7 +222,6 @@
     "batchUpdateSuccess": "批量更新成功",
     "batchUpdateFailed": "批量更新失败",
     "batchDeleteSuccess": "批量删除成功",
-    "batchDeleteFailed": "批量删除失败",
-    "deleteModuleWithLessonsWarning": "请先删除该模块下的所有课程"
+    "batchDeleteFailed": "批量删除失败"
   }
 }

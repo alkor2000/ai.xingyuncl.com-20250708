@@ -1,6 +1,6 @@
 /**
- * 教学模块详情页面（iOS风格版 + 课程资料功能修复版）
- * 修复：事件处理错误和资料保存问题
+ * 教学模块详情页面（iOS风格版）
+ * 统一设计风格，优化视觉体验
  */
 
 import React, { useEffect, useState } from 'react';
@@ -12,8 +12,7 @@ import {
   message,
   Dropdown,
   Badge,
-  Tooltip,
-  Divider
+  Tooltip
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -24,14 +23,12 @@ import {
   BookOutlined,
   FileTextOutlined,
   GlobalOutlined,
-  MoreOutlined,
-  CloudOutlined
+  MoreOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
-import MaterialsManager from '../../components/teaching/MaterialsManager';
 import {
   IOSPageContainer,
   IOSNavBar,
@@ -147,31 +144,16 @@ const ModuleDetail = () => {
   const handleCreateLesson = async () => {
     try {
       const values = await lessonForm.validateFields();
-      
-      // 验证并过滤资料
-      const materials = values.materials || [];
-      const validMaterials = materials.filter(m => m && m.title && m.url);
-      
-      // 移除临时ID
-      const cleanMaterials = validMaterials.map(m => ({
-        title: m.title,
-        url: m.url,
-        description: m.description || ''
-      }));
-      
       await createLesson({
         ...values,
-        materials: cleanMaterials,
         module_id: id,
         content: JSON.stringify({ pages: [{ id: 1, title: 'Page 1', html: '<h1>新页面</h1>' }] })
       });
-      
       setLessonModalVisible(false);
       lessonForm.resetFields();
       message.success(t('teaching.createSuccess'));
       await fetchLessons(id);
     } catch (error) {
-      console.error('创建课程失败:', error);
       message.error(t('teaching.createFailed'));
     }
   };
@@ -187,7 +169,6 @@ const ModuleDetail = () => {
       title: lesson.title,
       description: lesson.description,
       cover_image: lesson.cover_image,
-      materials: lesson.materials || [],
       content_type: lesson.content_type,
       status: lesson.status
     });
@@ -197,30 +178,13 @@ const ModuleDetail = () => {
   const handleEditLessonSubmit = async () => {
     try {
       const values = await editLessonForm.validateFields();
-      
-      // 验证并过滤资料
-      const materials = values.materials || [];
-      const validMaterials = materials.filter(m => m && m.title && m.url);
-      
-      // 移除临时ID
-      const cleanMaterials = validMaterials.map(m => ({
-        title: m.title,
-        url: m.url,
-        description: m.description || ''
-      }));
-      
-      await updateLesson(editingLesson.id, {
-        ...values,
-        materials: cleanMaterials
-      });
-      
+      await updateLesson(editingLesson.id, values);
       setEditLessonModalVisible(false);
       editLessonForm.resetFields();
       setEditingLesson(null);
       message.success(t('teaching.updateSuccess'));
       await fetchLessons(id);
     } catch (error) {
-      console.error('更新课程失败:', error);
       message.error(t('teaching.updateFailed'));
     }
   };
@@ -230,7 +194,9 @@ const ModuleDetail = () => {
     navigate(`/teaching/lessons/${lesson.id}/edit`);
   };
 
-  const handleDeleteLesson = async (lessonId) => {
+  const handleDeleteLesson = async (lessonId, e) => {
+    if (e) e.stopPropagation();
+    
     Modal.confirm({
       title: t('teaching.confirmDeleteLesson'),
       okText: t('common.confirm'),
@@ -277,7 +243,7 @@ const ModuleDetail = () => {
         key: 'edit_content',
         label: t('teaching.editContent'),
         icon: <FileTextOutlined />,
-        onClick: () => handleEditLessonContent(lesson)
+        onClick: (e) => handleEditLessonContent(lesson, e)
       },
       {
         type: 'divider'
@@ -287,7 +253,10 @@ const ModuleDetail = () => {
         label: t('common.delete'),
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => handleDeleteLesson(lesson.id)
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          handleDeleteLesson(lesson.id, e.domEvent);
+        }
       }
     ]
   });
@@ -447,27 +416,6 @@ const ModuleDetail = () => {
                       </div>
                     )}
                     
-                    {/* 资料标识 */}
-                    {lesson.materials && Array.isArray(lesson.materials) && lesson.materials.length > 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: 8,
-                        left: 8,
-                        background: 'rgba(255, 255, 255, 0.95)',
-                        borderRadius: 12,
-                        padding: '4px 8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                      }}>
-                        <CloudOutlined style={{ fontSize: 12, color: '#007AFF' }} />
-                        <span style={{ fontSize: 11, color: '#007AFF', fontWeight: 500 }}>
-                          {lesson.materials.length}
-                        </span>
-                      </div>
-                    )}
-                    
                     {canEdit && (
                       <div
                         style={{
@@ -497,13 +445,8 @@ const ModuleDetail = () => {
                             <EditOutlined style={{ fontSize: 14, color: '#007AFF' }} />
                           </div>
                         </Tooltip>
-                        <Dropdown 
-                          menu={getLessonActionMenu(lesson)} 
-                          trigger={['click']}
-                          placement="bottomRight"
-                        >
+                        <Dropdown menu={getLessonActionMenu(lesson)} trigger={['click']}>
                           <div
-                            onClick={(e) => e.stopPropagation()}
                             style={{
                               width: 32,
                               height: 32,
@@ -611,15 +554,11 @@ const ModuleDetail = () => {
           title={t('teaching.createLesson')}
           open={lessonModalVisible}
           onOk={handleCreateLesson}
-          onCancel={() => {
-            setLessonModalVisible(false);
-            lessonForm.resetFields();
-          }}
-          width={700}
+          onCancel={() => setLessonModalVisible(false)}
+          width={600}
           okText={t('common.create')}
           cancelText={t('common.cancel')}
           className="ios-modal"
-          bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
         >
           <Form form={lessonForm} layout="vertical">
             <Form.Item
@@ -635,20 +574,6 @@ const ModuleDetail = () => {
             <Form.Item name="cover_image" label={t('teaching.coverImage')}>
               <Input placeholder={t('teaching.coverImagePlaceholder')} />
             </Form.Item>
-            
-            <Divider />
-            
-            {/* 课程资料管理 */}
-            <Form.Item 
-              name="materials" 
-              label={null}
-              initialValue={[]}
-            >
-              <MaterialsManager />
-            </Form.Item>
-            
-            <Divider />
-            
             <Form.Item
               name="content_type"
               label={t('teaching.contentType')}
@@ -678,12 +603,11 @@ const ModuleDetail = () => {
             editLessonForm.resetFields();
             setEditingLesson(null);
           }}
-          width={700}
+          width={600}
           okText={t('common.save')}
           cancelText={t('common.cancel')}
           destroyOnClose
           className="ios-modal"
-          bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
         >
           <Form form={editLessonForm} layout="vertical">
             <Form.Item
@@ -699,19 +623,6 @@ const ModuleDetail = () => {
             <Form.Item name="cover_image" label={t('teaching.coverImage')}>
               <Input placeholder={t('teaching.coverImagePlaceholder')} />
             </Form.Item>
-            
-            <Divider />
-            
-            {/* 课程资料管理 */}
-            <Form.Item 
-              name="materials" 
-              label={null}
-            >
-              <MaterialsManager />
-            </Form.Item>
-            
-            <Divider />
-            
             <Form.Item name="content_type" label={t('teaching.contentType')}>
               <Select>
                 <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>

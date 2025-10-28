@@ -1,7 +1,7 @@
 /**
  * 教学课程模型
  * 管理课程页面的创建、查询、更新和内容类型权限
- * 增强：添加课程资料(materials)支持
+ * 修复：添加cover_image字段支持
  */
 
 const dbConnection = require('../database/connection');
@@ -37,8 +37,7 @@ class TeachingLesson {
     this.module_id = data.module_id || null;
     this.title = data.title || '';
     this.description = data.description || null;
-    this.cover_image = data.cover_image || null;
-    this.materials = data.materials || []; // 新增：课程资料
+    this.cover_image = data.cover_image || null; // 新增：封面图
     this.content_type = data.content_type || CONTENT_TYPES.COURSE;
     this.content = data.content || null;
     this.page_count = data.page_count || 1;
@@ -55,38 +54,6 @@ class TeachingLesson {
   }
 
   /**
-   * 验证并格式化课程资料
-   */
-  static validateMaterials(materials) {
-    if (!materials) return [];
-    
-    // 确保是数组
-    if (!Array.isArray(materials)) {
-      throw new ValidationError('课程资料必须是数组格式');
-    }
-    
-    // 最多5个资料
-    if (materials.length > 5) {
-      throw new ValidationError('课程资料最多只能添加5个');
-    }
-    
-    // 验证每个资料的格式
-    const validatedMaterials = materials.map((material, index) => {
-      if (!material.title || !material.url) {
-        throw new ValidationError(`第${index + 1}个资料的标题和链接不能为空`);
-      }
-      
-      return {
-        title: String(material.title).substring(0, 100), // 限制标题长度
-        url: String(material.url).substring(0, 500),     // 限制URL长度
-        description: material.description ? String(material.description).substring(0, 200) : ''
-      };
-    });
-    
-    return validatedMaterials;
-  }
-
-  /**
    * 创建课程
    */
   static async create(lessonData) {
@@ -96,7 +63,6 @@ class TeachingLesson {
         title,
         description = null,
         cover_image = null,
-        materials = [],
         content_type = CONTENT_TYPES.COURSE,
         content,
         creator_id,
@@ -107,9 +73,6 @@ class TeachingLesson {
       if (!module_id || !title || !content || !creator_id) {
         throw new ValidationError('模块ID、标题、内容和创建者为必填项');
       }
-
-      // 验证课程资料
-      const validatedMaterials = TeachingLesson.validateMaterials(materials);
 
       // 解析页面数量
       let pageCount = 1;
@@ -122,15 +85,14 @@ class TeachingLesson {
 
       const sql = `
         INSERT INTO teaching_lessons (
-          module_id, title, description, cover_image, materials, content_type, content,
+          module_id, title, description, cover_image, content_type, content,
           page_count, creator_id, status, order_index, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-      const materialsStr = JSON.stringify(validatedMaterials);
       const params = [
-        module_id, title, description, cover_image, materialsStr, content_type, contentStr,
+        module_id, title, description, cover_image, content_type, contentStr,
         pageCount, creator_id, status, order_index
       ];
 
@@ -142,8 +104,7 @@ class TeachingLesson {
         module_id,
         title,
         content_type,
-        pageCount,
-        materialsCount: validatedMaterials.length
+        pageCount
       });
 
       return await TeachingLesson.findById(lessonId);
@@ -183,21 +144,6 @@ class TeachingLesson {
         } catch (e) {
           logger.warn('解析课程内容JSON失败', { lessonId: id });
         }
-      }
-      
-      // 解析课程资料
-      if (typeof lesson.materials === 'string') {
-        try {
-          lesson.materials = JSON.parse(lesson.materials) || [];
-        } catch (e) {
-          logger.warn('解析课程资料JSON失败', { lessonId: id });
-          lesson.materials = [];
-        }
-      }
-      
-      // 确保materials是数组
-      if (!Array.isArray(lesson.materials)) {
-        lesson.materials = [];
       }
 
       return lesson;
@@ -259,22 +205,6 @@ class TeachingLesson {
             logger.warn('解析课程内容JSON失败', { lessonId: lesson.id });
           }
         }
-        
-        // 解析课程资料
-        if (typeof lesson.materials === 'string') {
-          try {
-            lesson.materials = JSON.parse(lesson.materials) || [];
-          } catch (e) {
-            logger.warn('解析课程资料JSON失败', { lessonId: lesson.id });
-            lesson.materials = [];
-          }
-        }
-        
-        // 确保materials是数组
-        if (!Array.isArray(lesson.materials)) {
-          lesson.materials = [];
-        }
-        
         return lesson;
       });
     } catch (error) {
@@ -285,12 +215,12 @@ class TeachingLesson {
 
   /**
    * 更新课程信息
-   * 增强：支持更新课程资料
+   * 修复：添加cover_image到allowedFields
    */
   async update(updateData) {
     try {
       const allowedFields = [
-        'title', 'description', 'cover_image', 'materials', 'content_type', 'content',
+        'title', 'description', 'cover_image', 'content_type', 'content',
         'status', 'order_index'
       ];
 
@@ -300,11 +230,6 @@ class TeachingLesson {
 
       if (updateFields.length === 0) {
         return this;
-      }
-
-      // 如果更新资料，进行验证
-      if ('materials' in updateData) {
-        updateData.materials = TeachingLesson.validateMaterials(updateData.materials);
       }
 
       // 如果更新了content，重新计算页数
@@ -329,9 +254,6 @@ class TeachingLesson {
       const setClause = updateFields.map(field => `${field} = ?`).join(', ');
       const values = updateFields.map(field => {
         if (field === 'content' && typeof updateData[field] !== 'string') {
-          return JSON.stringify(updateData[field]);
-        }
-        if (field === 'materials') {
           return JSON.stringify(updateData[field]);
         }
         return updateData[field];
@@ -425,7 +347,6 @@ class TeachingLesson {
       title: this.title,
       description: this.description,
       cover_image: this.cover_image,
-      materials: this.materials, // 包含课程资料
       content_type: this.content_type,
       content: this.content,
       page_count: this.page_count,

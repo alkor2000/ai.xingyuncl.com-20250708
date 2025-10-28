@@ -1,7 +1,10 @@
 /**
- * 教学系统控制器（支持课程级false权限版 + 课程资料功能）
+ * 教学系统控制器（支持课程级false权限版）
  * 
- * 修复：添加materials字段处理
+ * 核心修复：
+ * - getModuleLessons: 正确处理新的授权返回格式
+ * - 支持 {mode: 'all_except', deniedLessonIds: [...]} 格式
+ * - 过滤掉被明确禁用的课程
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -547,9 +550,6 @@ class TeachingController {
 
   // ==================== 课程管理 ====================
 
-  /**
-   * 创建课程（修复：添加materials字段支持）
-   */
   static async createLesson(req, res) {
     try {
       const user = req.user;
@@ -558,7 +558,6 @@ class TeachingController {
         title,
         description,
         cover_image,
-        materials,  // 新增：课程资料
         content_type = 'course',
         content,
         status = 'draft',
@@ -582,13 +581,11 @@ class TeachingController {
         return ResponseHelper.forbidden(res, '无权在此模块创建课程');
       }
 
-      // 创建课程，包含materials字段
       const lesson = await TeachingLesson.create({
         module_id,
         title,
         description,
         cover_image,
-        materials: materials || [],  // 传递materials字段
         content_type,
         content,
         creator_id: user.id,
@@ -600,8 +597,7 @@ class TeachingController {
         lessonId: lesson.id,
         moduleId: module_id,
         userId: user.id,
-        title,
-        materialsCount: materials ? materials.length : 0
+        title
       });
 
       return ResponseHelper.success(res, lesson, '课程创建成功', 201);
@@ -721,9 +717,6 @@ class TeachingController {
     }
   }
 
-  /**
-   * 更新课程（修复：添加materials字段支持）
-   */
   static async updateLesson(req, res) {
     try {
       const lesson = req.lesson;
@@ -731,7 +724,6 @@ class TeachingController {
         title,
         description,
         cover_image,
-        materials,  // 新增：课程资料
         content_type,
         content,
         status,
@@ -742,7 +734,6 @@ class TeachingController {
       if (title !== undefined) updateData.title = title;
       if (description !== undefined) updateData.description = description;
       if (cover_image !== undefined) updateData.cover_image = cover_image;
-      if (materials !== undefined) updateData.materials = materials;  // 处理materials字段
       if (content_type !== undefined) updateData.content_type = content_type;
       if (content !== undefined) updateData.content = content;
       if (status !== undefined) updateData.status = status;
@@ -752,8 +743,7 @@ class TeachingController {
 
       logger.info('课程更新成功', {
         lessonId: lesson.id,
-        userId: req.user.id,
-        materialsCount: materials ? materials.length : undefined
+        userId: req.user.id
       });
 
       return ResponseHelper.success(res, lesson, '课程更新成功');

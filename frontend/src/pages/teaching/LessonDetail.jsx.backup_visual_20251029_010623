@@ -1,0 +1,353 @@
+/**
+ * 课程详情页面（iOS风格版 + 课程资料功能）
+ * 功能：显示课程包含的所有页面列表和课程资料
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  message
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  RightOutlined,
+  FileTextOutlined,
+  EditOutlined,
+  BookOutlined,
+  CheckCircleFilled
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import useAuthStore from '../../stores/authStore';
+import MaterialsDisplay from '../../components/teaching/MaterialsDisplay';
+import {
+  IOSPageContainer,
+  IOSNavBar,
+  IOSBreadcrumb,
+  IOSCard,
+  IOSButton,
+  IOSEmpty,
+  IOSLoading
+} from '../../components/teaching/IOSLayout';
+import '../../styles/ios-unified-theme.css';
+
+const LessonDetail = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    currentModule,
+    fetchLesson,
+    fetchModule
+  } = useTeachingStore();
+
+  const [viewedPages, setViewedPages] = useState(new Set());
+
+  useEffect(() => {
+    if (id) {
+      loadLesson();
+      
+      // 从localStorage加载已查看的页面
+      const saved = localStorage.getItem(`lesson_${id}_viewed_pages`);
+      if (saved) {
+        try {
+          setViewedPages(new Set(JSON.parse(saved)));
+        } catch (e) {
+          console.error('解析已查看页面失败:', e);
+        }
+      }
+    }
+  }, [id]);
+
+  // 加载课程和模块信息
+  const loadLesson = async () => {
+    try {
+      const lesson = await fetchLesson(id);
+      if (lesson?.module_id) {
+        await fetchModule(lesson.module_id);
+      }
+    } catch (error) {
+      console.error('加载课程失败:', error);
+      message.error(t('teaching.loadFailed'));
+    }
+  };
+
+  // 权限检查
+  const hasEditPermission = () => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if (currentLesson?.creator_id === user.id) return true;
+    if (currentModule?.creator_id === user.id) return true;
+    if (currentModule?.user_permission === 'edit') return true;
+    return false;
+  };
+
+  const handleBack = () => {
+    if (currentLesson?.module_id) {
+      navigate(`/teaching/modules/${currentLesson.module_id}`);
+    } else {
+      navigate('/teaching');
+    }
+  };
+
+  const handleEdit = () => {
+    if (!hasEditPermission()) {
+      message.warning(t('teaching.noEditPermission'));
+      return;
+    }
+    navigate(`/teaching/lessons/${id}/edit`);
+  };
+
+  const handleViewPage = (pageNumber) => {
+    const newViewed = new Set(viewedPages);
+    newViewed.add(pageNumber);
+    setViewedPages(newViewed);
+    localStorage.setItem(`lesson_${id}_viewed_pages`, JSON.stringify([...newViewed]));
+    
+    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
+  };
+
+  const getPages = () => {
+    if (!currentLesson?.content) return [];
+    
+    try {
+      const content = typeof currentLesson.content === 'string'
+        ? JSON.parse(currentLesson.content)
+        : currentLesson.content;
+      
+      return content.pages || [];
+    } catch (error) {
+      console.error('解析课程内容失败:', error);
+      return [];
+    }
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <IOSPageContainer>
+        <IOSLoading text={t('common.loading')} />
+      </IOSPageContainer>
+    );
+  }
+
+  const pages = getPages();
+  const totalPages = pages.length;
+  const canEdit = hasEditPermission();
+
+  return (
+    <IOSPageContainer>
+      {/* iOS风格导航栏 */}
+      <IOSNavBar
+        title={currentLesson.title}
+        onBack={handleBack}
+        backText={t('common.back')}
+        actions={
+          canEdit && (
+            <IOSButton variant="primary" icon={<EditOutlined />} onClick={handleEdit}>
+              {t('common.edit')}
+            </IOSButton>
+          )
+        }
+      />
+
+      <div style={{ padding: '0 24px 24px' }}>
+        {/* 面包屑导航 */}
+        <IOSBreadcrumb
+          items={[
+            { label: t('teaching.teaching'), path: '/teaching' },
+            { label: t('teaching.module'), path: currentLesson?.module_id ? `/teaching/modules/${currentLesson.module_id}` : null },
+            { label: currentLesson.title }
+          ]}
+        />
+
+        {/* 课程信息卡片 */}
+        <IOSCard style={{ marginBottom: 24, textAlign: 'center', padding: 32 }}>
+          <div style={{
+            width: 80,
+            height: 80,
+            margin: '0 auto 20px',
+            borderRadius: 20,
+            background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <BookOutlined style={{ fontSize: 40, color: 'white' }} />
+          </div>
+          
+          <h1 style={{ 
+            margin: '0 0 12px 0',
+            fontSize: 28,
+            fontWeight: 700,
+            color: '#000'
+          }}>
+            {currentLesson.title}
+          </h1>
+          
+          {currentLesson.description && (
+            <p style={{ 
+              color: '#666',
+              fontSize: 16,
+              lineHeight: 1.6,
+              margin: '0 auto',
+              maxWidth: 600
+            }}>
+              {currentLesson.description}
+            </p>
+          )}
+          
+          <div style={{
+            marginTop: 20,
+            padding: '12px 24px',
+            background: '#F2F2F7',
+            borderRadius: 12,
+            display: 'inline-block',
+            fontSize: 14,
+            color: '#666'
+          }}>
+            <strong style={{ color: '#000', marginRight: 8 }}>{totalPages}</strong>
+            {t('teaching.totalPages')}
+            {viewedPages.size > 0 && (
+              <>
+                <span style={{ margin: '0 12px', color: '#E5E5EA' }}>•</span>
+                <strong style={{ color: '#34C759', marginRight: 8 }}>{viewedPages.size}</strong>
+                {t('teaching.viewedPages')}
+              </>
+            )}
+          </div>
+        </IOSCard>
+
+        {/* 课程资料展示 - 新增功能 */}
+        {currentLesson.materials && currentLesson.materials.length > 0 && (
+          <MaterialsDisplay materials={currentLesson.materials} />
+        )}
+
+        {/* 页面列表 */}
+        <IOSCard
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileTextOutlined style={{ fontSize: 18, color: '#007AFF' }} />
+              <span>{t('teaching.pageList')}</span>
+            </div>
+          }
+        >
+          {totalPages === 0 ? (
+            <IOSEmpty 
+              icon={<FileTextOutlined style={{ fontSize: 48 }} />}
+              text={t('teaching.noPages')}
+              action={
+                canEdit && (
+                  <IOSButton 
+                    variant="primary"
+                    icon={<EditOutlined />}
+                    onClick={handleEdit}
+                    style={{ marginTop: 20 }}
+                  >
+                    {t('teaching.editContent')}
+                  </IOSButton>
+                )
+              }
+            />
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              gap: 12
+            }}>
+              {pages.map((page, index) => {
+                const pageNumber = index + 1;
+                const isViewed = viewedPages.has(pageNumber);
+                
+                return (
+                  <div
+                    key={pageNumber}
+                    onClick={() => handleViewPage(pageNumber)}
+                    className="ios-page-item"
+                    style={{
+                      background: isViewed ? '#F0F9FF' : '#FFFFFF',
+                      borderColor: isViewed ? '#007AFF20' : '#F0F0F0'
+                    }}
+                  >
+                    {/* 页码 */}
+                    <div className={`ios-page-item-number ${isViewed ? 'viewed' : ''}`}>
+                      {isViewed ? (
+                        <CheckCircleFilled style={{ fontSize: 24, color: 'white' }} />
+                      ) : (
+                        <span>{pageNumber < 10 ? `0${pageNumber}` : pageNumber}</span>
+                      )}
+                    </div>
+
+                    {/* 页面标题 */}
+                    <div className="ios-page-item-title">
+                      {page.title || `${t('teaching.page')} ${pageNumber}`}
+                      {isViewed && (
+                        <span style={{
+                          marginLeft: 8,
+                          fontSize: 12,
+                          color: '#34C759',
+                          fontWeight: 'normal'
+                        }}>
+                          {t('teaching.viewed')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 进入按钮 */}
+                    <div className="ios-page-item-action">
+                      {t('teaching.enterPage')}
+                      <RightOutlined style={{ fontSize: 12 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
+          {/* 进度统计 */}
+          {totalPages > 0 && (
+            <div style={{
+              marginTop: 24,
+              padding: 20,
+              background: '#F2F2F7',
+              borderRadius: 12
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12
+              }}>
+                <span style={{ fontSize: 14, color: '#666' }}>
+                  {t('teaching.learningProgress')}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#007AFF' }}>
+                  {Math.round((viewedPages.size / totalPages) * 100)}%
+                </span>
+              </div>
+              <div style={{
+                height: 8,
+                background: '#E5E5EA',
+                borderRadius: 4,
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${(viewedPages.size / totalPages) * 100}%`,
+                  background: 'linear-gradient(90deg, #007AFF 0%, #5856D6 100%)',
+                  borderRadius: 4,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+        </IOSCard>
+      </div>
+    </IOSPageContainer>
+  );
+};
+
+export default LessonDetail;
