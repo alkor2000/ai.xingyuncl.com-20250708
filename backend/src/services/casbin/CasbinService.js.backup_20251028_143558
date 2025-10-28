@@ -1,0 +1,362 @@
+/**
+ * Casbin权限服务
+ * 
+ * 核心功能：
+ * - 初始化和管理Casbin实例
+ * - 提供权限检查接口
+ * - 支持策略的动态更新
+ * - 与现有GlobalAuthorizationService并行运行
+ */
+
+const { newEnforcer } = require('casbin');
+const path = require('path');
+const dbConnection = require('../../database/connection');
+const logger = require('../../utils/logger');
+
+class CasbinService {
+  constructor() {
+    this.enforcer = null;
+    this.initialized = false;
+  }
+
+  /**
+   * 初始化Casbin执行器
+   */
+  async initialize() {
+    try {
+      logger.info('初始化Casbin权限引擎...');
+      
+      // 模型文件路径
+      const modelPath = path.join(__dirname, '../../config/casbin/teaching_model.conf');
+      
+      // 创建自定义MySQL适配器
+      const adapter = await this.createMySQLAdapter();
+      
+      // 创建执行器
+      this.enforcer = await newEnforcer(modelPath, adapter);
+      
+      // 添加自定义函数
+      await this.addCustomFunctions();
+      
+      this.initialized = true;
+      logger.info('Casbin权限引擎初始化成功');
+      
+      return this.enforcer;
+    } catch (error) {
+      logger.error('Casbin初始化失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 创建自定义MySQL适配器
+   */
+  async createMySQLAdapter() {
+    // 使用原生MySQL连接实现简单的适配器
+    const adapter = {
+      loadPolicy: async (model) => {
+        try {
+          const sql = 'SELECT * FROM casbin_rule';
+          const { rows } = await dbConnection.query(sql);
+          
+          for (const row of rows) {
+            const line = this.loadPolicyLine(row, model);
+            if (line) {
+              logger.debug('加载策略:', line);
+            }
+          }
+        } catch (error) {
+          logger.error('加载策略失败:', error);
+        }
+      },
+      
+      savePolicy: async (model) => {
+        try {
+          // 清空现有策略
+          await dbConnection.query('DELETE FROM casbin_rule');
+          
+          // 保存新策略
+          const lines = [];
+          
+          // 保存 p 策略
+          if (model.model.has('p')) {
+            for (const [key, ast] of model.model.get('p')) {
+              for (const rule of ast.policy) {
+                const line = { ptype: 'p' };
+                rule.forEach((value, index) => {
+                  line[`v${index}`] = value;
+                });
+                lines.push(line);
+              }
+            }
+          }
+          
+          // 保存 g 策略（角色继承）
+          if (model.model.has('g')) {
+            for (const [key, ast] of model.model.get('g')) {
+              for (const rule of ast.policy) {
+                const line = { ptype: key };
+                rule.forEach((value, index) => {
+                  line[`v${index}`] = value;
+                });
+                lines.push(line);
+              }
+            }
+          }
+          
+          // 批量插入
+          for (const line of lines) {
+            const sql = `INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            await dbConnection.query(sql, [
+              line.ptype,
+              line.v0 || null,
+              line.v1 || null,
+              line.v2 || null,
+              line.v3 || null,
+              line.v4 || null,
+              line.v5 || null
+            ]);
+          }
+          
+          return true;
+        } catch (error) {
+          logger.error('保存策略失败:', error);
+          return false;
+        }
+      },
+      
+      addPolicy: async (sec, ptype, rule) => {
+        try {
+          const sql = `INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?)`;
+          await dbConnection.query(sql, [
+            ptype,
+            rule[0] || null,
+            rule[1] || null,
+            rule[2] || null,
+            rule[3] || null,
+            rule[4] || null,
+            rule[5] || null
+          ]);
+          return true;
+        } catch (error) {
+          logger.error('添加策略失败:', error);
+          return false;
+        }
+      },
+      
+      removePolicy: async (sec, ptype, rule) => {
+        try {
+          const sql = `DELETE FROM casbin_rule 
+                      WHERE ptype = ? AND v0 = ? AND v1 = ? AND v2 = ?`;
+          await dbConnection.query(sql, [ptype, rule[0], rule[1], rule[2]]);
+          return true;
+        } catch (error) {
+          logger.error('删除策略失败:', error);
+          return false;
+        }
+      }
+    };
+    
+    return adapter;
+  }
+
+  /**
+   * 加载策略行
+   */
+  loadPolicyLine(row, model) {
+    const lineArray = [];
+    
+    if (row.v0) lineArray.push(row.v0);
+    if (row.v1) lineArray.push(row.v1);
+    if (row.v2) lineArray.push(row.v2);
+    if (row.v3) lineArray.push(row.v3);
+    if (row.v4) lineArray.push(row.v4);
+    if (row.v5) lineArray.push(row.v5);
+    
+    if (lineArray.length === 0) return null;
+    
+    if (row.ptype === 'p' || row.ptype === 'p2') {
+      model.addPolicy('p', row.ptype, lineArray);
+    } else if (row.ptype.startsWith('g')) {
+      model.addRolePolicy('g', row.ptype, lineArray);
+    }
+    
+    return lineArray;
+  }
+
+  /**
+   * 添加自定义函数
+   */
+  async addCustomFunctions() {
+    // 添加自定义匹配函数
+    this.enforcer.addFunction('keyMatch', (key1, key2) => {
+      // 支持通配符匹配
+      if (key2 === '*') return true;
+      if (key2.includes('*')) {
+        const regex = new RegExp('^' + key2.replace(/\*/g, '.*') + '$');
+        return regex.test(key1);
+      }
+      return key1 === key2;
+    });
+  }
+
+  /**
+   * 检查权限
+   */
+  async checkPermission(subject, object, action) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      const result = await this.enforcer.enforce(subject, object, action);
+      
+      logger.debug('Casbin权限检查', {
+        subject,
+        object,
+        action,
+        result
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error('权限检查失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 添加策略
+   */
+  async addPolicy(subject, object, action, effect = 'allow') {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      const result = await this.enforcer.addPolicy(subject, object, action, effect);
+      if (result) {
+        await this.enforcer.savePolicy();
+      }
+      return result;
+    } catch (error) {
+      logger.error('添加策略失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 删除策略
+   */
+  async removePolicy(subject, object, action) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      const result = await this.enforcer.removePolicy(subject, object, action);
+      if (result) {
+        await this.enforcer.savePolicy();
+      }
+      return result;
+    } catch (error) {
+      logger.error('删除策略失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 添加角色继承
+   */
+  async addRoleForUser(user, role) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      const result = await this.enforcer.addGroupingPolicy(user, role);
+      if (result) {
+        await this.enforcer.savePolicy();
+      }
+      return result;
+    } catch (error) {
+      logger.error('添加角色继承失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 删除角色继承
+   */
+  async deleteRoleForUser(user, role) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      const result = await this.enforcer.removeGroupingPolicy(user, role);
+      if (result) {
+        await this.enforcer.savePolicy();
+      }
+      return result;
+    } catch (error) {
+      logger.error('删除角色继承失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 获取用户的所有角色
+   */
+  async getRolesForUser(user) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      return await this.enforcer.getRolesForUser(user);
+    } catch (error) {
+      logger.error('获取用户角色失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取用户的所有权限
+   */
+  async getPermissionsForUser(user) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    try {
+      return await this.enforcer.getPermissionsForUser(user);
+    } catch (error) {
+      logger.error('获取用户权限失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 重新加载策略
+   */
+  async reloadPolicy() {
+    if (!this.initialized) {
+      return false;
+    }
+    
+    try {
+      await this.enforcer.loadPolicy();
+      logger.info('策略重新加载成功');
+      return true;
+    } catch (error) {
+      logger.error('重新加载策略失败:', error);
+      return false;
+    }
+  }
+}
+
+// 导出单例
+module.exports = new CasbinService();
