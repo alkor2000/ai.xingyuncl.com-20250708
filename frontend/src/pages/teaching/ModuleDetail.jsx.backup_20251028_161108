@@ -1,6 +1,6 @@
 /**
- * 教学模块详情页面（移除权限管理功能）
- * 权限管理功能已移至：系统设置 → 教学管理 → 教育模块授权管理
+ * 教学模块详情页面（权限修复版）
+ * 修复：PermissionTreeManager仅对super_admin显示，避免admin用户报错
  */
 
 import React, { useEffect, useState } from 'react';
@@ -31,6 +31,7 @@ import {
   PlusOutlined,
   EyeOutlined,
   BookOutlined,
+  SettingOutlined,
   FileTextOutlined,
   GlobalOutlined,
   MoreOutlined
@@ -40,6 +41,9 @@ import { useTranslation } from 'react-i18next';
 import useTeachingStore from '../../stores/teachingStore';
 import useAuthStore from '../../stores/authStore';
 import moment from 'moment';
+
+// 导入树状权限管理组件
+import PermissionTreeManager from '../../components/teaching/PermissionTreeManager';
 
 const { TextArea } = Input;
 
@@ -52,10 +56,12 @@ const ModuleDetail = () => {
   const {
     currentModule,
     lessons,
+    permissions,
     currentModuleLoading,
     lessonsLoading,
     fetchModule,
     fetchLessons,
+    fetchPermissions,
     updateModule,
     deleteModule,
     createLesson,
@@ -82,6 +88,11 @@ const ModuleDetail = () => {
     try {
       await fetchModule(id);
       await fetchLessons(id);
+      
+      // 修复：只有super_admin才加载权限数据
+      if (user?.role === 'super_admin') {
+        await fetchPermissions(id);
+      }
     } catch (error) {
       // 处理权限错误，返回列表页
       if (error.code === 'PERMISSION_DENIED' || error.status === 403) {
@@ -267,73 +278,17 @@ const ModuleDetail = () => {
     );
   }
 
-  return (
-    <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
-      <Breadcrumb style={{ marginBottom: 16 }}>
-        <Breadcrumb.Item>
-          <a onClick={handleBack}>{t('teaching.teaching')}</a>
-        </Breadcrumb.Item>
-        <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
-      </Breadcrumb>
-
-      <Card 
-        style={{ marginBottom: 20 }}
-        bodyStyle={{ padding: '16px 24px' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space size="large">
-            <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
-            <div>
-              <h2 style={{ margin: 0, fontSize: 20 }}>
-                {currentModule.name}
-              </h2>
-              <Space style={{ marginTop: 6 }} size="middle">
-                <Tag color={visibilityColors[currentModule.visibility]}>
-                  <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
-                </Tag>
-                <Tag color={statusColors[currentModule.status]}>
-                  {t(`teaching.status.${currentModule.status}`)}
-                </Tag>
-                {currentModule.description && (
-                  <span style={{ color: '#666', fontSize: 13 }}>
-                    {currentModule.description.length > 50 
-                      ? currentModule.description.substring(0, 50) + '...' 
-                      : currentModule.description}
-                  </span>
-                )}
-              </Space>
-            </div>
-          </Space>
-
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-              {t('common.back')}
-            </Button>
-            {hasEditPermission() && (
-              <>
-                <Button icon={<EditOutlined />} onClick={handleEdit}>
-                  {t('common.edit')}
-                </Button>
-                <Popconfirm
-                  title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
-                  onConfirm={handleDelete}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                  okButtonProps={{ danger: true }}
-                  disabled={lessons.length > 0}
-                >
-                  <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>
-              </>
-            )}
-          </Space>
-        </div>
-      </Card>
-
-      {/* 只保留课程列表Tab */}
-      <Card>
+  // 构建Tab项，根据权限决定是否显示权限管理Tab
+  const tabItems = [
+    {
+      key: 'lessons',
+      label: (
+        <span>
+          <FileTextOutlined />
+          {t('teaching.lessons')} ({lessons.length})
+        </span>
+      ),
+      children: (
         <div>
           <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>{t('teaching.lessonList')}</h3>
@@ -497,9 +452,100 @@ const ModuleDetail = () => {
             )}
           </Spin>
         </div>
+      )
+    }
+  ];
+
+  // 修复：只有super_admin才显示权限管理Tab
+  if (user?.role === 'super_admin') {
+    tabItems.push({
+      key: 'permissions',
+      label: (
+        <span>
+          <SettingOutlined />
+          {t('teaching.permissions')} ({permissions.length})
+        </span>
+      ),
+      children: (
+        <PermissionTreeManager 
+          moduleId={id}
+          onRefresh={loadModuleData}
+        />
+      )
+    });
+  }
+
+  return (
+    <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
+      <Breadcrumb style={{ marginBottom: 16 }}>
+        <Breadcrumb.Item>
+          <a onClick={handleBack}>{t('teaching.teaching')}</a>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>{currentModule.name}</Breadcrumb.Item>
+      </Breadcrumb>
+
+      <Card 
+        style={{ marginBottom: 20 }}
+        bodyStyle={{ padding: '16px 24px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space size="large">
+            <BookOutlined style={{ fontSize: 28, color: '#1890ff' }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20 }}>
+                {currentModule.name}
+              </h2>
+              <Space style={{ marginTop: 6 }} size="middle">
+                <Tag color={visibilityColors[currentModule.visibility]}>
+                  <GlobalOutlined /> {t(`teaching.visibility.${currentModule.visibility}`)}
+                </Tag>
+                <Tag color={statusColors[currentModule.status]}>
+                  {t(`teaching.status.${currentModule.status}`)}
+                </Tag>
+                {currentModule.description && (
+                  <span style={{ color: '#666', fontSize: 13 }}>
+                    {currentModule.description.length > 50 
+                      ? currentModule.description.substring(0, 50) + '...' 
+                      : currentModule.description}
+                  </span>
+                )}
+              </Space>
+            </div>
+          </Space>
+
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+              {t('common.back')}
+            </Button>
+            {hasEditPermission() && (
+              <>
+                <Button icon={<EditOutlined />} onClick={handleEdit}>
+                  {t('common.edit')}
+                </Button>
+                <Popconfirm
+                  title={lessons.length > 0 ? '请先删除模块内的所有课程' : t('teaching.confirmDeleteModule')}
+                  onConfirm={handleDelete}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                  okButtonProps={{ danger: true }}
+                  disabled={lessons.length > 0}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={lessons.length > 0}>
+                    {t('common.delete')}
+                  </Button>
+                </Popconfirm>
+              </>
+            )}
+          </Space>
+        </div>
       </Card>
 
-      {/* 编辑模块模态框 */}
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+      />
+
       <Modal
         title={t('teaching.editModule')}
         open={editModalVisible}
@@ -540,7 +586,6 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
-      {/* 创建课程模态框 */}
       <Modal
         title={t('teaching.createLesson')}
         open={lessonModalVisible}
@@ -583,7 +628,6 @@ const ModuleDetail = () => {
         </Form>
       </Modal>
 
-      {/* 编辑课程信息模态框 */}
       <Modal
         title={t('teaching.editLessonInfo')}
         open={editLessonModalVisible}

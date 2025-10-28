@@ -1,8 +1,8 @@
 /**
  * 教学管理后台组件（全局授权管理增强版）
  * 新增功能：
- * 1. Tab结构：智能教学授权管理 + 模块管理 + 分组管理 + 页面头部配置
- * 2. 智能教学授权管理：全局三级授权（组→标签→用户）
+ * 1. Tab结构：教育模块授权管理 + 模块管理 + 分组管理 + 页面头部配置
+ * 2. 教育模块授权管理：全局三级授权（组→标签→用户）
  * 3. 分组管理：创建、编辑、删除、排序、批量操作
  * 权限：仅超级管理员可见
  */
@@ -605,14 +605,14 @@ const TeachingManagement = () => {
     return true;
   });
 
-  // Tab项配置（新增智能教学授权管理Tab）
+  // Tab项配置（新增教育模块授权管理Tab）
   const tabItems = [
     {
       key: 'authorization',
       label: (
         <span>
           <SafetyCertificateOutlined />
-          智能教学授权管理
+          教育模块授权管理
         </span>
       ),
       children: <ModuleAuthorizationManagement />
@@ -921,7 +921,7 @@ const TeachingManagement = () => {
         </Col>
       </Row>
 
-      {/* Tab区域（默认显示智能教学授权管理Tab）*/}
+      {/* Tab区域（默认显示教育模块授权管理Tab）*/}
       <Card>
         <Tabs items={tabItems} defaultActiveKey="authorization" />
       </Card>

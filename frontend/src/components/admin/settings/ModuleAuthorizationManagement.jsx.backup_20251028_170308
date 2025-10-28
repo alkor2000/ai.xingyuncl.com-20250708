@@ -11,13 +11,11 @@
  * ✅ 单页面完成所有操作，无需跳转
  * ✅ 真实后端API集成
  * ✅ 重新加载时保持已保存的配置
- * ✅ 支持展开/收回功能
  * 
  * 核心修复：
  * - 区分"无配置（继承）"和"明确配置为false（无权限）"
  * - 取消权限时保留配置并设为false，而不是删除
  * - 允许完全移除某个课程的权限（view:false, edit:false）
- * - 支持列表和用户列表的展开/收回功能
  * 
  * 位置：系统设置 → 教学管理 → 智能教学授权管理（第一个子标签）
  */
@@ -53,13 +51,11 @@ import {
   FileTextOutlined,
   DeleteOutlined,
   DownOutlined,
-  UpOutlined,
   RightOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   CaretRightOutlined,
-  CaretDownOutlined,
-  MinusOutlined
+  CaretDownOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -303,52 +299,6 @@ const ModuleAuthorizationManagement = () => {
         message.success('已移除用户组授权');
       }
     });
-  };
-
-  // 切换标签列表展开/收起
-  const handleToggleTags = (groupId) => {
-    setAuthorizedGroups(prev =>
-      prev.map(group => {
-        if (group.groupId === groupId) {
-          if (!group.showTags) {
-            // 如果要展开，先加载标签
-            handleLoadTags(groupId);
-            return group;
-          } else {
-            // 如果要收起，直接收起
-            return { ...group, showTags: false };
-          }
-        }
-        return group;
-      })
-    );
-  };
-
-  // 切换用户列表展开/收起
-  const handleToggleUsers = (groupId, tagId) => {
-    setAuthorizedGroups(prev =>
-      prev.map(group => {
-        if (group.groupId === groupId) {
-          return {
-            ...group,
-            tags: group.tags.map(tag => {
-              if (tag.tagId === tagId) {
-                if (!tag.showUsers) {
-                  // 如果要展开，加载用户
-                  handleLoadUsers(groupId, tagId, 1);
-                  return tag;
-                } else {
-                  // 如果要收起，直接收起
-                  return { ...tag, showUsers: false };
-                }
-              }
-              return tag;
-            })
-          };
-        }
-        return group;
-      })
-    );
   };
 
   // ==================== 核心权限管理逻辑（修复：保留false配置）====================
@@ -1335,18 +1285,18 @@ const ModuleAuthorizationManagement = () => {
             null
           )}
 
-          {/* 展开/收起列表按钮 - 修改为可收起 */}
+          {/* 展开标签按钮 - 修改文案 */}
           <div style={{ marginTop: 16 }}>
-            <Button
-              type="dashed"
-              icon={group.showTags ? <MinusOutlined /> : <PlusOutlined />}
-              onClick={() => handleToggleTags(group.groupId)}
-              block
-            >
-              {group.showTags ? '收起列表' : '展开列表'}
-            </Button>
-            
-            {group.showTags && (
+            {!group.showTags ? (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => handleLoadTags(group.groupId)}
+                block
+              >
+                展开列表
+              </Button>
+            ) : (
               <div>
                 <Divider orientation="left">列表</Divider>
                 {group.tags.length === 0 ? (
@@ -1404,20 +1354,20 @@ const ModuleAuthorizationManagement = () => {
                               tag.inheritFromGroup ? group.modulePermissions : null
                             )}
 
-                            {/* 用户列表展开/收起 - 修改为可收起 */}
+                            {/* 用户列表展开 */}
                             <div style={{ marginTop: 16 }}>
-                              <Button
-                                type="dashed"
-                                icon={tag.showUsers ? <MinusOutlined /> : <PlusOutlined />}
-                                onClick={() => handleToggleUsers(group.groupId, tag.tagId)}
-                                loading={loadingUsers[tagUserKey]}
-                                block
-                                size="small"
-                              >
-                                {tag.showUsers ? `收起用户列表 (${tag.userCount}人)` : `展开用户列表 (${tag.userCount}人)`}
-                              </Button>
-                              
-                              {tag.showUsers && (
+                              {!tag.showUsers ? (
+                                <Button
+                                  type="dashed"
+                                  icon={<PlusOutlined />}
+                                  onClick={() => handleLoadUsers(group.groupId, tag.tagId, 1)}
+                                  loading={loadingUsers[tagUserKey]}
+                                  block
+                                  size="small"
+                                >
+                                  展开用户列表 ({tag.userCount}人)
+                                </Button>
+                              ) : (
                                 <div>
                                   <Divider orientation="left" style={{ fontSize: 13 }}>
                                     用户列表

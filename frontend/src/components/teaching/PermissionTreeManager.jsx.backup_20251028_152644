@@ -46,7 +46,6 @@ import {
   ReloadOutlined,
   FilterOutlined,
   EyeOutlined,
-  EditOutlined,
   DownloadOutlined,
   UploadOutlined,
   CloseCircleOutlined
@@ -66,6 +65,7 @@ const PermissionTreeManager = ({ moduleId, onRefresh }) => {
   const [treeData, setTreeData] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [permissionType, setPermissionType] = useState('view');
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, group, tag, user
   const [filterGroup, setFilterGroup] = useState(null);

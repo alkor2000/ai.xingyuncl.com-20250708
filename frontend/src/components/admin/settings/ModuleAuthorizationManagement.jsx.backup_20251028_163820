@@ -1,5 +1,5 @@
 /**
- * 智能教学授权管理组件（明确权限控制版）
+ * 教育模块全局授权管理组件（明确权限控制版）
  * 
  * 功能特性：
  * ✅ 垂直展开的三级结构：组 → 标签 → 用户
@@ -11,15 +11,13 @@
  * ✅ 单页面完成所有操作，无需跳转
  * ✅ 真实后端API集成
  * ✅ 重新加载时保持已保存的配置
- * ✅ 支持展开/收回功能
  * 
  * 核心修复：
  * - 区分"无配置（继承）"和"明确配置为false（无权限）"
  * - 取消权限时保留配置并设为false，而不是删除
  * - 允许完全移除某个课程的权限（view:false, edit:false）
- * - 支持列表和用户列表的展开/收回功能
  * 
- * 位置：系统设置 → 教学管理 → 智能教学授权管理（第一个子标签）
+ * 位置：系统设置 → 教学管理 → 教育模块授权管理（第一个子标签）
  */
 
 import React, { useState, useEffect } from 'react';
@@ -53,13 +51,11 @@ import {
   FileTextOutlined,
   DeleteOutlined,
   DownOutlined,
-  UpOutlined,
   RightOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   CaretRightOutlined,
-  CaretDownOutlined,
-  MinusOutlined
+  CaretDownOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -303,52 +299,6 @@ const ModuleAuthorizationManagement = () => {
         message.success('已移除用户组授权');
       }
     });
-  };
-
-  // 切换标签列表展开/收起
-  const handleToggleTags = (groupId) => {
-    setAuthorizedGroups(prev =>
-      prev.map(group => {
-        if (group.groupId === groupId) {
-          if (!group.showTags) {
-            // 如果要展开，先加载标签
-            handleLoadTags(groupId);
-            return group;
-          } else {
-            // 如果要收起，直接收起
-            return { ...group, showTags: false };
-          }
-        }
-        return group;
-      })
-    );
-  };
-
-  // 切换用户列表展开/收起
-  const handleToggleUsers = (groupId, tagId) => {
-    setAuthorizedGroups(prev =>
-      prev.map(group => {
-        if (group.groupId === groupId) {
-          return {
-            ...group,
-            tags: group.tags.map(tag => {
-              if (tag.tagId === tagId) {
-                if (!tag.showUsers) {
-                  // 如果要展开，加载用户
-                  handleLoadUsers(groupId, tagId, 1);
-                  return tag;
-                } else {
-                  // 如果要收起，直接收起
-                  return { ...tag, showUsers: false };
-                }
-              }
-              return tag;
-            })
-          };
-        }
-        return group;
-      })
-    );
   };
 
   // ==================== 核心权限管理逻辑（修复：保留false配置）====================
@@ -1276,7 +1226,7 @@ const ModuleAuthorizationManagement = () => {
                 setHasUnsavedChanges(true);
               }}
             />
-            <span>继承上级权限</span>
+            <span>继承标签权限</span>
           </Space>
 
           {!user.inheritFromTag && renderModulePermissionSelector(
@@ -1335,20 +1285,20 @@ const ModuleAuthorizationManagement = () => {
             null
           )}
 
-          {/* 展开/收起列表按钮 - 修改为可收起 */}
+          {/* 展开标签按钮 */}
           <div style={{ marginTop: 16 }}>
-            <Button
-              type="dashed"
-              icon={group.showTags ? <MinusOutlined /> : <PlusOutlined />}
-              onClick={() => handleToggleTags(group.groupId)}
-              block
-            >
-              {group.showTags ? '收起列表' : '展开列表'}
-            </Button>
-            
-            {group.showTags && (
+            {!group.showTags ? (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => handleLoadTags(group.groupId)}
+                block
+              >
+                展开标签列表
+              </Button>
+            ) : (
               <div>
-                <Divider orientation="left">列表</Divider>
+                <Divider orientation="left">标签列表</Divider>
                 {group.tags.length === 0 ? (
                   <Empty description="该组织暂无标签" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
@@ -1404,20 +1354,20 @@ const ModuleAuthorizationManagement = () => {
                               tag.inheritFromGroup ? group.modulePermissions : null
                             )}
 
-                            {/* 用户列表展开/收起 - 修改为可收起 */}
+                            {/* 用户列表展开 */}
                             <div style={{ marginTop: 16 }}>
-                              <Button
-                                type="dashed"
-                                icon={tag.showUsers ? <MinusOutlined /> : <PlusOutlined />}
-                                onClick={() => handleToggleUsers(group.groupId, tag.tagId)}
-                                loading={loadingUsers[tagUserKey]}
-                                block
-                                size="small"
-                              >
-                                {tag.showUsers ? `收起用户列表 (${tag.userCount}人)` : `展开用户列表 (${tag.userCount}人)`}
-                              </Button>
-                              
-                              {tag.showUsers && (
+                              {!tag.showUsers ? (
+                                <Button
+                                  type="dashed"
+                                  icon={<PlusOutlined />}
+                                  onClick={() => handleLoadUsers(group.groupId, tag.tagId, 1)}
+                                  loading={loadingUsers[tagUserKey]}
+                                  block
+                                  size="small"
+                                >
+                                  展开用户列表 ({tag.userCount}人)
+                                </Button>
+                              ) : (
                                 <div>
                                   <Divider orientation="left" style={{ fontSize: 13 }}>
                                     用户列表
@@ -1482,7 +1432,7 @@ const ModuleAuthorizationManagement = () => {
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-      {/* 操作栏 - 修改文案 */}
+      {/* 操作栏 */}
       <Card style={{ marginBottom: 16 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
           <Space>
@@ -1491,7 +1441,7 @@ const ModuleAuthorizationManagement = () => {
               icon={<PlusOutlined />}
               onClick={handleOpenGroupSelectModal}
             >
-              新建授权
+              新建组授权
             </Button>
             <Button icon={<ReloadOutlined />} onClick={loadInitialData} loading={loading}>
               刷新
@@ -1519,14 +1469,44 @@ const ModuleAuthorizationManagement = () => {
         </Space>
       </Card>
 
+      {/* 说明卡片 */}
+      <Alert
+        message="权限管理说明"
+        description={
+          <div>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>组级授权</strong>：为整个用户组授权模块和课程，该组下所有标签和用户自动继承
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>标签授权</strong>：可以继承组权限，也可以独立配置或添加额外权限
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>用户授权</strong>：可以继承标签权限，也可以独立配置或添加额外权限
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              • <strong>课程权限</strong>：点击模块左侧箭头展开课程列表，可单独控制每个课程的权限
+            </p>
+            <p style={{ marginBottom: 8, color: '#1890ff' }}>
+              • <strong>权限覆盖</strong>：取消继承的权限将明确标记为无权限（红色背景），而非恢复继承
+            </p>
+            <p style={{ marginBottom: 0, color: '#52c41a' }}>
+              • <strong>灵活控制</strong>：可以完全移除某个课程的所有权限，实现精细化授权
+            </p>
+          </div>
+        }
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+      />
+
       {/* 授权组列表 */}
       {authorizedGroups.length === 0 ? (
         <Card>
           <Empty
             description={
               <div>
-                <p>当前还未配置任何授权</p>
-                <p style={{ color: '#999' }}>点击上方"新建授权"按钮开始添加授权</p>
+                <p>当前还未配置任何组的授权</p>
+                <p style={{ color: '#999' }}>点击上方"新建组授权"按钮开始添加授权组</p>
               </div>
             }
           >
@@ -1535,7 +1515,7 @@ const ModuleAuthorizationManagement = () => {
               icon={<PlusOutlined />}
               onClick={handleOpenGroupSelectModal}
             >
-              新建授权
+              新建组授权
             </Button>
           </Empty>
         </Card>
