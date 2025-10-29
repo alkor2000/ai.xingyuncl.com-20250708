@@ -1,0 +1,1131 @@
+/**
+ * 课程编辑器组件（纯白底iOS科技风 + 教案编辑功能）
+ * 设计理念：白色为主 + 精致卡片 + 轻柔阴影 + iOS细节
+ * 配色：纯白背景，白色卡片，深色文字，蓝色点缀
+ * 三栏布局：左侧页面管理 | 中间Monaco编辑器 | 右侧实时预览
+ * 修复：TinyMCE使用英文界面（v1.1.2 - 2025-10-29）
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Layout,
+  Button,
+  Input,
+  List,
+  Space,
+  Breadcrumb,
+  message,
+  Modal,
+  Form,
+  Select,
+  Tooltip,
+  Popconfirm,
+  Badge,
+  Spin
+} from 'antd';
+import {
+  SaveOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  ArrowLeftOutlined,
+  FileTextOutlined,
+  EditOutlined,
+  SyncOutlined,
+  BookOutlined
+} from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+
+const { Sider, Content } = Layout;
+
+// iOS科技风配色方案（纯白底）
+const iosColors = {
+  primary: '#0A84FF',
+  success: '#30D158',
+  warning: '#FF9F0A',
+  danger: '#FF453A',
+  bgPrimary: '#FFFFFF',
+  bgSecondary: '#F5F7FA',
+  cardWhite: '#FFFFFF',
+  border: 'rgba(0, 0, 0, 0.06)',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#666666',
+  textTertiary: '#999999',
+  selectedBg: '#F0F8FF',
+  hoverBg: '#F8FAFB',
+  shadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+  shadowHover: '0 4px 16px rgba(0, 0, 0, 0.08)'
+};
+
+const LessonEditor = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    fetchLesson,
+    updateLesson,
+    saveTeachingPlan,
+    fetchTeachingPlan,
+    teachingPlanSaving,
+    teachingPlanLoading
+  } = useTeachingStore();
+
+  // 页面状态
+  const [pages, setPages] = useState([
+    { id: 1, title: 'Page 1', html: '<h1>新页面</h1>' }
+  ]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [htmlContent, setHtmlContent] = useState('');
+  const [lessonInfo, setLessonInfo] = useState({
+    title: '',
+    description: '',
+    content_type: 'course',
+    status: 'draft'
+  });
+
+  // UI状态
+  const [isSaving, setIsSaving] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+  const [pageModalVisible, setPageModalVisible] = useState(false);
+  const [titleEditModalVisible, setTitleEditModalVisible] = useState(false);
+  const [editingPageIndex, setEditingPageIndex] = useState(null);
+  const [editorReady, setEditorReady] = useState(false);
+
+  // 教案编辑状态（新增）
+  const [teachingPlanModalVisible, setTeachingPlanModalVisible] = useState(false);
+  const [currentTeachingPlanPageIndex, setCurrentTeachingPlanPageIndex] = useState(null);
+  const [teachingPlanContent, setTeachingPlanContent] = useState('');
+  const [tinyMCEReady, setTinyMCEReady] = useState(false);
+  const teachingPlanEditorRef = useRef(null);
+
+  const [pageForm] = Form.useForm();
+  const [titleForm] = Form.useForm();
+
+  // 加载课程数据
+  useEffect(() => {
+    if (id) {
+      loadLessonData();
+    }
+  }, [id]);
+
+  // 加载TinyMCE脚本（修复：确保完整路径）
+  useEffect(() => {
+    if (!window.tinymce) {
+      const script = document.createElement('script');
+      script.src = '/tinymce/tinymce.min.js';
+      script.onload = () => {
+        console.log('TinyMCE 加载成功');
+        setTinyMCEReady(true);
+      };
+      script.onerror = () => {
+        console.error('TinyMCE 加载失败');
+        message.error('富文本编辑器加载失败');
+      };
+      document.head.appendChild(script);
+    } else {
+      setTinyMCEReady(true);
+    }
+
+    return () => {
+      if (teachingPlanEditorRef.current && window.tinymce) {
+        window.tinymce.remove(teachingPlanEditorRef.current);
+      }
+    };
+  }, []);
+
+  const loadLessonData = async () => {
+    try {
+      const lesson = await fetchLesson(id);
+      
+      setLessonInfo({
+        title: lesson.title,
+        description: lesson.description,
+        content_type: lesson.content_type,
+        status: lesson.status
+      });
+
+      if (lesson.content) {
+        const content = typeof lesson.content === 'string'
+          ? JSON.parse(lesson.content)
+          : lesson.content;
+        
+        if (content.pages && content.pages.length > 0) {
+          setPages(content.pages);
+          setHtmlContent(content.pages[0].html || '');
+        }
+      }
+    } catch (error) {
+      message.error(t('teaching.loadFailed'));
+    }
+  };
+
+  // 实时预览更新
+  useEffect(() => {
+    setPreviewContent(htmlContent || '<div style="padding:20px;color:#999;">开始编写内容...</div>');
+  }, [htmlContent]);
+
+  // 保存当前页面到pages数组
+  const saveCurrentPageContent = () => {
+    const newPages = [...pages];
+    newPages[currentPageIndex] = {
+      ...newPages[currentPageIndex],
+      html: htmlContent
+    };
+    setPages(newPages);
+    return newPages;
+  };
+
+  // 切换页面
+  const handlePageChange = (index) => {
+    const newPages = saveCurrentPageContent();
+    setCurrentPageIndex(index);
+    setHtmlContent(newPages[index].html || '');
+  };
+
+  // 添加页面
+  const handleAddPage = () => {
+    pageForm.setFieldsValue({ title: `Page ${pages.length + 1}` });
+    setEditingPageIndex(null);
+    setPageModalVisible(true);
+  };
+
+  // 编辑页面标题
+  const handleEditPage = (index) => {
+    pageForm.setFieldsValue({ title: pages[index].title });
+    setEditingPageIndex(index);
+    setPageModalVisible(true);
+  };
+
+  // 确认页面操作
+  const handlePageSubmit = async () => {
+    try {
+      const values = await pageForm.validateFields();
+      
+      if (editingPageIndex !== null) {
+        const newPages = [...pages];
+        newPages[editingPageIndex].title = values.title;
+        setPages(newPages);
+        message.success(t('teaching.updateSuccess'));
+      } else {
+        const newPage = {
+          id: Date.now(),
+          title: values.title,
+          html: '<h1>新页面</h1>'
+        };
+        setPages([...pages, newPage]);
+        message.success(t('teaching.pageAdded'));
+      }
+      
+      setPageModalVisible(false);
+      pageForm.resetFields();
+    } catch (error) {
+      console.error('页面操作失败:', error);
+    }
+  };
+
+  // 删除页面
+  const handleDeletePage = (index) => {
+    if (pages.length === 1) {
+      message.warning(t('teaching.lastPageCannotDelete'));
+      return;
+    }
+
+    const newPages = pages.filter((_, i) => i !== index);
+    setPages(newPages);
+    
+    if (index === currentPageIndex) {
+      setCurrentPageIndex(0);
+      setHtmlContent(newPages[0].html || '');
+    } else if (index < currentPageIndex) {
+      setCurrentPageIndex(currentPageIndex - 1);
+    }
+    
+    message.success(t('teaching.deleteSuccess'));
+  };
+
+  // 打开标题编辑模态框
+  const handleEditTitle = () => {
+    titleForm.setFieldsValue({
+      title: lessonInfo.title,
+      description: lessonInfo.description,
+      content_type: lessonInfo.content_type
+    });
+    setTitleEditModalVisible(true);
+  };
+
+  // 确认标题编辑
+  const handleTitleSubmit = async () => {
+    try {
+      const values = await titleForm.validateFields();
+      setLessonInfo({
+        ...lessonInfo,
+        ...values
+      });
+      setTitleEditModalVisible(false);
+      message.success(t('teaching.updateSuccess'));
+    } catch (error) {
+      console.error('标题编辑失败:', error);
+    }
+  };
+
+  // 保存课程
+  const handleSave = async () => {
+    if (!lessonInfo.title.trim()) {
+      message.warning(t('teaching.lessonTitleRequired'));
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const finalPages = saveCurrentPageContent();
+
+      const updateData = {
+        title: lessonInfo.title,
+        description: lessonInfo.description,
+        content_type: lessonInfo.content_type,
+        status: lessonInfo.status,
+        content: JSON.stringify({ pages: finalPages })
+      };
+
+      await updateLesson(id, updateData);
+      message.success(t('teaching.saveSuccess'));
+    } catch (error) {
+      message.error(t('teaching.saveFailed'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 返回课程页面列表
+  const handleBack = () => {
+    navigate(`/teaching/lessons/${id}`);
+  };
+
+  // 预览第一页
+  const handlePreview = () => {
+    navigate(`/teaching/lessons/${id}/pages/1`);
+  };
+
+  // ==================== 教案编辑功能（修复版）====================
+
+  /**
+   * 打开教案编辑器
+   */
+  const handleOpenTeachingPlan = async (pageIndex) => {
+    if (!tinyMCEReady) {
+      message.warning('富文本编辑器尚未加载完成，请稍候');
+      return;
+    }
+
+    setCurrentTeachingPlanPageIndex(pageIndex);
+    setTeachingPlanContent('');
+    setTeachingPlanModalVisible(true);
+
+    // 加载教案内容
+    try {
+      const pageNumber = pageIndex + 1;
+      const plan = await fetchTeachingPlan(id, pageNumber);
+      
+      if (plan && plan.content) {
+        setTeachingPlanContent(plan.content);
+      } else {
+        setTeachingPlanContent('<p>开始编写教案...</p>');
+      }
+    } catch (error) {
+      console.error('加载教案失败:', error);
+      setTeachingPlanContent('<p>开始编写教案...</p>');
+    }
+  };
+
+  /**
+   * 初始化TinyMCE编辑器（修复：使用英文界面）
+   */
+  useEffect(() => {
+    if (teachingPlanModalVisible && tinyMCEReady && window.tinymce) {
+      // 延迟初始化，确保DOM已渲染
+      const timer = setTimeout(() => {
+        if (document.getElementById('teachingPlanEditor')) {
+          window.tinymce.init({
+            selector: '#teachingPlanEditor',
+            // 🔥 关键修复：指定本地路径
+            base_url: '/tinymce',
+            suffix: '.min',
+            // 其他配置
+            height: 500,
+            language: 'en', // 🔥 改用英文界面（中文包缺失）
+            menubar: true,
+            plugins: [
+              'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+              'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+              'insertdatetime', 'media', 'table', 'help', 'wordcount'
+            ],
+            toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
+            content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 14px; }',
+            setup: (editor) => {
+              teachingPlanEditorRef.current = editor;
+              editor.on('init', () => {
+                editor.setContent(teachingPlanContent);
+              });
+            }
+          });
+        }
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        if (teachingPlanEditorRef.current && window.tinymce) {
+          window.tinymce.remove(teachingPlanEditorRef.current);
+          teachingPlanEditorRef.current = null;
+        }
+      };
+    }
+  }, [teachingPlanModalVisible, tinyMCEReady, teachingPlanContent]);
+
+  /**
+   * 保存教案
+   */
+  const handleSaveTeachingPlan = async () => {
+    if (!teachingPlanEditorRef.current) {
+      message.error('编辑器未初始化');
+      return;
+    }
+
+    try {
+      const content = teachingPlanEditorRef.current.getContent();
+      const pageNumber = currentTeachingPlanPageIndex + 1;
+      
+      await saveTeachingPlan(id, pageNumber, content);
+      
+      setTeachingPlanModalVisible(false);
+      
+      // 清理编辑器
+      if (window.tinymce && teachingPlanEditorRef.current) {
+        window.tinymce.remove(teachingPlanEditorRef.current);
+        teachingPlanEditorRef.current = null;
+      }
+    } catch (error) {
+      console.error('保存教案失败:', error);
+    }
+  };
+
+  /**
+   * 关闭教案编辑器
+   */
+  const handleCloseTeachingPlan = () => {
+    setTeachingPlanModalVisible(false);
+    
+    // 清理编辑器
+    if (window.tinymce && teachingPlanEditorRef.current) {
+      window.tinymce.remove(teachingPlanEditorRef.current);
+      teachingPlanEditorRef.current = null;
+    }
+  };
+
+  // Monaco编辑器配置
+  const editorOptions = {
+    minimap: { enabled: false },
+    fontSize: 14,
+    fontFamily: 'SF Mono, Monaco, Consolas, monospace',
+    formatOnPaste: true,
+    formatOnType: true,
+    automaticLayout: true,
+    tabSize: 2,
+    wordWrap: 'on',
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on',
+    renderWhitespace: 'selection',
+    folding: true,
+    bracketPairColorization: { enabled: true }
+  };
+
+  const handleEditorDidMount = (editor, monaco) => {
+    setEditorReady(true);
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: iosColors.bgSecondary
+      }}>
+        <SyncOutlined spin style={{ fontSize: 48, color: iosColors.primary }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ 
+      height: '100vh', 
+      background: iosColors.bgSecondary,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* 顶部操作栏 - 白色卡片 */}
+      <div style={{
+        background: iosColors.cardWhite,
+        padding: '16px 24px',
+        borderRadius: '0 0 20px 20px',
+        margin: '0 16px 16px 16px',
+        boxShadow: iosColors.shadow,
+        border: `1px solid ${iosColors.border}`,
+        flexShrink: 0
+      }}>
+        {/* 第一行：面包屑 + 操作按钮 */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: 12
+        }}>
+          <Breadcrumb 
+            separator={<span style={{ color: iosColors.textSecondary }}>›</span>}
+          >
+            <Breadcrumb.Item>
+              <a 
+                onClick={handleBack}
+                style={{ 
+                  color: iosColors.textSecondary,
+                  fontSize: 13,
+                  transition: 'color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.color = iosColors.primary}
+                onMouseLeave={(e) => e.target.style.color = iosColors.textSecondary}
+              >
+                {currentLesson.module_name}
+              </a>
+            </Breadcrumb.Item>
+            <Breadcrumb.Item style={{ color: iosColors.textPrimary, fontSize: 13, fontWeight: 500 }}>
+              {t('teaching.editLesson')}
+            </Breadcrumb.Item>
+          </Breadcrumb>
+
+          <Space size={12}>
+            <Button 
+              icon={<ArrowLeftOutlined />} 
+              onClick={handleBack}
+              style={{
+                background: iosColors.cardWhite,
+                border: `1px solid ${iosColors.border}`,
+                borderRadius: 10,
+                color: iosColors.textPrimary,
+                height: 40,
+                padding: '0 20px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+                boxShadow: iosColors.shadow
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = iosColors.shadowHover;
+                e.currentTarget.style.borderColor = iosColors.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = iosColors.shadow;
+                e.currentTarget.style.borderColor = iosColors.border;
+              }}
+            >
+              {t('common.back')}
+            </Button>
+            
+            <Button 
+              icon={<EyeOutlined />} 
+              onClick={handlePreview}
+              style={{
+                background: iosColors.cardWhite,
+                border: `1px solid ${iosColors.border}`,
+                borderRadius: 10,
+                color: iosColors.textPrimary,
+                height: 40,
+                padding: '0 20px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+                boxShadow: iosColors.shadow
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = iosColors.shadowHover;
+                e.currentTarget.style.borderColor = iosColors.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = iosColors.shadow;
+                e.currentTarget.style.borderColor = iosColors.border;
+              }}
+            >
+              {t('teaching.preview')}
+            </Button>
+            
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSave}
+              loading={isSaving}
+              disabled={!lessonInfo.title.trim()}
+              style={{
+                background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+                border: 'none',
+                borderRadius: 10,
+                color: '#FFFFFF',
+                height: 40,
+                padding: '0 24px',
+                fontWeight: 600,
+                boxShadow: `0 4px 12px rgba(10, 132, 255, 0.3)`,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 6px 20px rgba(10, 132, 255, 0.4)`;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = `0 4px 12px rgba(10, 132, 255, 0.3)`;
+              }}
+            >
+              {t('common.save')}
+            </Button>
+          </Space>
+        </div>
+
+        {/* 第二行：标题显示 + 内容类型 */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          gap: 16
+        }}>
+          <div 
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              background: iosColors.selectedBg,
+              padding: '10px 16px',
+              borderRadius: 10,
+              border: `1px solid ${iosColors.border}`,
+              borderLeft: `4px solid ${iosColors.primary}`
+            }}
+          >
+            <FileTextOutlined style={{ 
+              fontSize: 18,
+              color: iosColors.primary
+            }} />
+            <h2 style={{ 
+              margin: 0,
+              fontSize: 16,
+              fontWeight: 600,
+              color: iosColors.textPrimary,
+              flex: 1
+            }}>
+              {lessonInfo.title || t('teaching.lessonTitle')}
+            </h2>
+            <Tooltip title={t('teaching.editInfo')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={handleEditTitle}
+                style={{
+                  color: iosColors.primary,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(10, 132, 255, 0.1)';
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              />
+            </Tooltip>
+          </div>
+
+          <Select
+            value={lessonInfo.content_type}
+            onChange={(value) => setLessonInfo({ ...lessonInfo, content_type: value })}
+            style={{ width: 160 }}
+          >
+            <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+            <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+            <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+            <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+            <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+            <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+            <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+            <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+          </Select>
+        </div>
+      </div>
+
+      {/* 主体内容 - 三栏布局 */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        gap: 16,
+        padding: '0 16px 16px 16px',
+        overflow: 'hidden'
+      }}>
+        {/* 左侧 - 页面列表（白色卡片）*/}
+        <div style={{
+          width: 300,
+          background: iosColors.cardWhite,
+          borderRadius: 20,
+          border: `1px solid ${iosColors.border}`,
+          boxShadow: iosColors.shadow,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{ 
+            padding: '20px',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: 16
+            }}>
+              <h4 style={{ 
+                margin: 0,
+                color: iosColors.textPrimary,
+                fontSize: 16,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <FileTextOutlined style={{ color: iosColors.primary, fontSize: 18 }} />
+                {t('teaching.pageManagement')}
+              </h4>
+              <Badge 
+                count={pages.length} 
+                showZero 
+                style={{ 
+                  background: iosColors.primary,
+                  boxShadow: `0 2px 8px rgba(10, 132, 255, 0.3)`
+                }}
+              />
+            </div>
+
+            <Button
+              icon={<PlusOutlined />}
+              onClick={handleAddPage}
+              block
+              style={{
+                background: iosColors.cardWhite,
+                border: `1px dashed ${iosColors.primary}`,
+                borderRadius: 12,
+                color: iosColors.primary,
+                height: 44,
+                marginBottom: 16,
+                fontWeight: 500,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = iosColors.selectedBg;
+                e.currentTarget.style.borderStyle = 'solid';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = iosColors.shadowHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = iosColors.cardWhite;
+                e.currentTarget.style.borderStyle = 'dashed';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {t('teaching.addPage')}
+            </Button>
+
+            <div style={{ flex: 1, overflow: 'auto', marginRight: -8, paddingRight: 8 }}>
+              <List
+                size="small"
+                dataSource={pages}
+                renderItem={(page, index) => {
+                  const isActive = index === currentPageIndex;
+                  return (
+                    <List.Item
+                      key={page.id}
+                      style={{
+                        background: isActive ? iosColors.selectedBg : 'transparent',
+                        padding: '12px 16px',
+                        borderRadius: 12,
+                        marginBottom: 10,
+                        cursor: 'pointer',
+                        border: `1px solid ${isActive ? iosColors.border : 'transparent'}`,
+                        borderLeft: isActive ? `4px solid ${iosColors.primary}` : '4px solid transparent',
+                        boxShadow: isActive ? iosColors.shadow : 'none',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)'
+                      }}
+                      onClick={() => handlePageChange(index)}
+                      onMouseEnter={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.background = iosColors.hoverBg;
+                          e.currentTarget.style.borderColor = iosColors.border;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.borderColor = 'transparent';
+                        }
+                      }}
+                    >
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <FileTextOutlined 
+                          style={{ 
+                            color: isActive ? iosColors.primary : iosColors.textSecondary,
+                            fontSize: 16
+                          }} 
+                        />
+                        <span style={{ 
+                          fontWeight: isActive ? 600 : 400,
+                          color: isActive ? iosColors.textPrimary : iosColors.textSecondary,
+                          flex: 1
+                        }}>
+                          {page.title}
+                        </span>
+                      </div>
+                      <Space size={4}>
+                        <Tooltip title={t('teaching.editTeachingPlan')}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<BookOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenTeachingPlan(index);
+                            }}
+                            style={{
+                              color: iosColors.warning,
+                              transition: 'all 0.2s'
+                            }}
+                          />
+                        </Tooltip>
+                        <Tooltip title={t('common.edit')}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditPage(index);
+                            }}
+                            style={{
+                              color: isActive ? iosColors.primary : iosColors.textSecondary,
+                              transition: 'all 0.2s'
+                            }}
+                          />
+                        </Tooltip>
+                        {pages.length > 1 && (
+                          <Popconfirm
+                            title={t('teaching.confirmDeletePage')}
+                            onConfirm={(e) => {
+                              e.stopPropagation();
+                              handleDeletePage(index);
+                            }}
+                            okText={t('common.confirm')}
+                            cancelText={t('common.cancel')}
+                          >
+                            <Tooltip title={t('common.delete')}>
+                              <Button
+                                type="text"
+                                size="small"
+                                danger
+                                icon={<DeleteOutlined />}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  color: iosColors.danger,
+                                  transition: 'all 0.2s'
+                                }}
+                              />
+                            </Tooltip>
+                          </Popconfirm>
+                        )}
+                      </Space>
+                    </List.Item>
+                  );
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 中间 - Monaco编辑器（白色卡片）*/}
+        <div style={{ 
+          flex: 1,
+          display: 'flex', 
+          flexDirection: 'column',
+          background: iosColors.cardWhite,
+          borderRadius: 20,
+          border: `1px solid ${iosColors.border}`,
+          boxShadow: iosColors.shadow,
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            padding: '12px 20px',
+            background: iosColors.bgSecondary,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: `1px solid ${iosColors.border}`,
+            flexShrink: 0
+          }}>
+            <span style={{ 
+              fontWeight: 600,
+              fontSize: 14,
+              color: iosColors.textPrimary
+            }}>
+              {t('teaching.htmlEditor')}: {pages[currentPageIndex]?.title}
+            </span>
+            <span style={{ 
+              fontSize: 12,
+              color: editorReady ? iosColors.success : iosColors.textSecondary,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: editorReady ? iosColors.success : iosColors.textSecondary,
+                boxShadow: editorReady ? `0 0 10px ${iosColors.success}` : 'none'
+              }} />
+              {editorReady ? t('teaching.editorReady') : t('teaching.editorLoading')}
+            </span>
+          </div>
+
+          <div style={{ 
+            flex: 1,
+            background: '#1e1e1e',
+            overflow: 'hidden'
+          }}>
+            <Editor
+              height="100%"
+              language="html"
+              theme="vs-dark"
+              value={htmlContent}
+              onChange={(value) => setHtmlContent(value || '')}
+              options={editorOptions}
+              onMount={handleEditorDidMount}
+            />
+          </div>
+        </div>
+
+        {/* 右侧 - 实时预览（白色卡片）*/}
+        <div style={{
+          width: 800,
+          background: iosColors.cardWhite,
+          borderRadius: 20,
+          border: `1px solid ${iosColors.border}`,
+          boxShadow: iosColors.shadow,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            padding: '12px 20px',
+            background: iosColors.bgSecondary,
+            borderBottom: `1px solid ${iosColors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexShrink: 0
+          }}>
+            <EyeOutlined style={{ color: iosColors.primary, fontSize: 16 }} />
+            <span style={{ 
+              fontWeight: 600,
+              fontSize: 14,
+              color: iosColors.textPrimary
+            }}>
+              {t('teaching.realTimePreview')}
+            </span>
+          </div>
+
+          <div style={{ 
+            flex: 1,
+            overflow: 'auto',
+            background: iosColors.cardWhite
+          }}>
+            <iframe
+              srcDoc={previewContent}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                display: 'block'
+              }}
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+              title="Preview"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 页面标题编辑模态框 */}
+      <Modal
+        title={<span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>{editingPageIndex !== null ? t('teaching.editPageTitle') : t('teaching.addPage')}</span>}
+        open={pageModalVisible}
+        onOk={handlePageSubmit}
+        onCancel={() => { setPageModalVisible(false); pageForm.resetFields(); }}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{
+          style: {
+            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+            border: 'none',
+            borderRadius: 8,
+            height: 40,
+            fontWeight: 600
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            background: iosColors.cardWhite,
+            border: `1px solid ${iosColors.border}`,
+            borderRadius: 8,
+            color: iosColors.textPrimary,
+            height: 40
+          }
+        }}
+      >
+        <Form form={pageForm} layout="vertical">
+          <Form.Item name="title" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.pageTitle')}</span>} rules={[{ required: true, message: t('teaching.pageTitleRequired') }]}>
+            <Input 
+              placeholder={t('teaching.pageTitlePlaceholder')}
+              style={{
+                height: 44,
+                borderRadius: 10,
+                fontSize: 15
+              }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 课程信息编辑模态框 */}
+      <Modal
+        title={<span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>{t('teaching.editLessonInfo')}</span>}
+        open={titleEditModalVisible}
+        onOk={handleTitleSubmit}
+        onCancel={() => { setTitleEditModalVisible(false); titleForm.resetFields(); }}
+        width={600}
+        okButtonProps={{
+          style: {
+            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+            border: 'none',
+            borderRadius: 8,
+            height: 40,
+            fontWeight: 600
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            background: iosColors.cardWhite,
+            border: `1px solid ${iosColors.border}`,
+            borderRadius: 8,
+            color: iosColors.textPrimary,
+            height: 40
+          }
+        }}
+      >
+        <Form form={titleForm} layout="vertical">
+          <Form.Item name="title" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.lessonTitle')}</span>} rules={[{ required: true }]}>
+            <Input 
+              style={{
+                height: 44,
+                borderRadius: 10,
+                fontSize: 15
+              }}
+            />
+          </Form.Item>
+          <Form.Item name="description" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.lessonDescription')}</span>}>
+            <Input.TextArea 
+              rows={3}
+              style={{
+                borderRadius: 10,
+                fontSize: 14
+              }}
+            />
+          </Form.Item>
+          <Form.Item name="content_type" label={<span style={{ color: iosColors.textPrimary }}>{t('teaching.contentType')}</span>}>
+            <Select style={{ height: 44 }}>
+              <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+              <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+              <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+              <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+              <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+              <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+              <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+              <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 教案编辑模态框（修复版）*/}
+      <Modal
+        title={
+          <span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>
+            <BookOutlined style={{ marginRight: 8, color: iosColors.warning }} />
+            {t('teaching.editTeachingPlan')} - {pages[currentTeachingPlanPageIndex]?.title}
+          </span>
+        }
+        open={teachingPlanModalVisible}
+        onOk={handleSaveTeachingPlan}
+        onCancel={handleCloseTeachingPlan}
+        width={1000}
+        okText={t('teaching.saveTeachingPlan')}
+        cancelText={t('common.cancel')}
+        confirmLoading={teachingPlanSaving}
+        okButtonProps={{
+          style: {
+            background: `linear-gradient(135deg, ${iosColors.warning}, #FFB340)`,
+            border: 'none',
+            borderRadius: 8,
+            height: 40,
+            fontWeight: 600
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            background: iosColors.cardWhite,
+            border: `1px solid ${iosColors.border}`,
+            borderRadius: 8,
+            color: iosColors.textPrimary,
+            height: 40
+          }
+        }}
+        bodyStyle={{ padding: '24px' }}
+      >
+        <Spin spinning={teachingPlanLoading} tip={t('teaching.loadingTeachingPlan')}>
+          <div style={{ minHeight: 500 }}>
+            <textarea 
+              id="teachingPlanEditor" 
+              style={{ width: '100%', height: '500px', display: 'none' }}
+            />
+          </div>
+        </Spin>
+      </Modal>
+    </div>
+  );
+};
+
+export default LessonEditor;

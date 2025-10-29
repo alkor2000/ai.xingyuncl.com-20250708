@@ -1,7 +1,8 @@
 /**
- * 教学系统路由（全局授权管理增强版）
+ * 教学系统路由（全局授权管理增强版 + 教案管理）
  * 新增：教学模块分组管理路由
  * 新增：全局三级授权管理路由
+ * 新增：教案管理路由（v1.1 - 2025-10-29）
  */
 
 const express = require('express');
@@ -149,6 +150,22 @@ router.put('/lessons/:id', canEditLesson(), TeachingController.updateLesson);
  * @access  有模块编辑权限的用户
  */
 router.delete('/lessons/:id', canEditLesson(), TeachingController.deleteLesson);
+
+// ==================== 教案管理路由（新增 - v1.1）====================
+
+/**
+ * @route   POST /api/teaching/lessons/:id/teaching-plan
+ * @desc    保存教案
+ * @access  有课程编辑权限的用户
+ */
+router.post('/lessons/:id/teaching-plan', TeachingController.saveTeachingPlan);
+
+/**
+ * @route   GET /api/teaching/lessons/:id/teaching-plan/:pageNumber
+ * @desc    获取教案
+ * @access  有课程查看权限的用户
+ */
+router.get('/lessons/:id/teaching-plan/:pageNumber', TeachingController.getTeachingPlan);
 
 // ==================== 权限管理路由 ====================
 

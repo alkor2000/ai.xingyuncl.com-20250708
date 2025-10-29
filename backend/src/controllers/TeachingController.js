@@ -1,7 +1,8 @@
 /**
- * 教学系统控制器（支持课程级false权限版 + 课程资料功能）
+ * 教学系统控制器（支持课程级权限版 + 课程资料功能 + 教案功能）
  * 
- * 修复：添加materials字段处理
+ * 修复：数据库连接方式（v1.1.2 - 2025-10-29）
+ * 使用正确的 dbConnection.query() 而非 pool.getConnection()
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -105,18 +106,15 @@ class TeachingController {
         
         const groups = await TeachingModuleGroup.getAll({ is_active: true });
         
-        // 修复：构建分组数据，过滤掉没有可访问模块的分组
         const groupedData = [];
         
         for (const group of groups) {
           const modules = await TeachingModuleGroup.getGroupModules(group.id);
           
-          // 只包含用户有权限访问的模块
           const accessibleModules = modules.filter(m => 
             result.modules.some(rm => rm.id === m.id)
           );
           
-          // 只有当分组有可访问的模块时才添加到结果中
           if (accessibleModules.length > 0) {
             groupedData.push({
               ...group.toJSON(),
@@ -125,16 +123,13 @@ class TeachingController {
           }
         }
 
-        // 收集已分组的模块ID
         const groupedModuleIds = new Set();
         groupedData.forEach(g => {
           g.modules.forEach(m => groupedModuleIds.add(m.id));
         });
 
-        // 处理未分组的模块
         const ungroupedModules = result.modules.filter(m => !groupedModuleIds.has(m.id));
         
-        // 只有当有未分组模块时才添加"未分组"分组
         if (ungroupedModules.length > 0) {
           groupedData.push({
             id: null,
@@ -558,7 +553,7 @@ class TeachingController {
         title,
         description,
         cover_image,
-        materials,  // 新增：课程资料
+        materials,
         content_type = 'course',
         content,
         status = 'draft',
@@ -582,13 +577,12 @@ class TeachingController {
         return ResponseHelper.forbidden(res, '无权在此模块创建课程');
       }
 
-      // 创建课程，包含materials字段
       const lesson = await TeachingLesson.create({
         module_id,
         title,
         description,
         cover_image,
-        materials: materials || [],  // 传递materials字段
+        materials: materials || [],
         content_type,
         content,
         creator_id: user.id,
@@ -633,7 +627,6 @@ class TeachingController {
         return ResponseHelper.forbidden(res, '无权访问此模块');
       }
 
-      // 获取所有课程（不过滤）
       const allLessons = await TeachingLesson.getModuleLessons(
         moduleId,
         user.id,
@@ -645,16 +638,13 @@ class TeachingController {
         }
       );
 
-      // 修复：根据全局授权过滤课程
       let filteredLessons = allLessons;
 
-      // 超级管理员和创建者看所有课程
       const module = await TeachingModule.findById(moduleId);
       const isSuperAdmin = user.role === 'super_admin';
       const isCreator = module && module.creator_id === user.id;
 
       if (!isSuperAdmin && !isCreator) {
-        // 普通用户和admin：检查课程级授权
         const authResult = await GlobalAuthorizationService.getUserAuthorizedLessonIds(
           user.id,
           parseInt(moduleId),
@@ -669,10 +659,8 @@ class TeachingController {
         });
 
         if (authResult === null) {
-          // null 表示所有课程可见（有模块级权限）
           filteredLessons = allLessons;
         } else if (authResult && typeof authResult === 'object' && authResult.mode === 'all_except') {
-          // 新格式：所有课程除了被禁用的
           const deniedIds = authResult.deniedLessonIds || [];
           filteredLessons = allLessons.filter(lesson => 
             !deniedIds.includes(lesson.id)
@@ -684,18 +672,14 @@ class TeachingController {
             remainingCount: filteredLessons.length
           });
         } else if (Array.isArray(authResult)) {
-          // 数组格式：只返回明确授权的课程
           if (authResult.length === 0) {
-            // 空数组表示没有任何课程权限
             filteredLessons = [];
           } else {
-            // 只返回授权的课程
             filteredLessons = allLessons.filter(lesson => 
               authResult.includes(lesson.id)
             );
           }
         } else {
-          // 未知格式，默认无权限
           logger.warn('未知的授权返回格式', { authResult });
           filteredLessons = [];
         }
@@ -731,7 +715,7 @@ class TeachingController {
         title,
         description,
         cover_image,
-        materials,  // 新增：课程资料
+        materials,
         content_type,
         content,
         status,
@@ -742,7 +726,7 @@ class TeachingController {
       if (title !== undefined) updateData.title = title;
       if (description !== undefined) updateData.description = description;
       if (cover_image !== undefined) updateData.cover_image = cover_image;
-      if (materials !== undefined) updateData.materials = materials;  // 处理materials字段
+      if (materials !== undefined) updateData.materials = materials;
       if (content_type !== undefined) updateData.content_type = content_type;
       if (content !== undefined) updateData.content = content;
       if (status !== undefined) updateData.status = status;
@@ -779,6 +763,135 @@ class TeachingController {
     } catch (error) {
       logger.error('删除课程失败:', error);
       return ResponseHelper.error(res, '删除课程失败');
+    }
+  }
+
+  // ==================== 教案管理（修复版 - 使用正确的数据库连接方式）====================
+
+  /**
+   * 保存教案
+   * POST /api/teaching/lessons/:id/teaching-plan
+   */
+  static async saveTeachingPlan(req, res) {
+    const dbConnection = require('../database/connection');
+    
+    try {
+      const { id } = req.params;
+      const { page_number, content } = req.body;
+      const userId = req.user.id;
+
+      if (!page_number || page_number < 1) {
+        return ResponseHelper.validation(res, ['页面编号无效']);
+      }
+
+      // 检查课程是否存在
+      const { rows: lessons } = await dbConnection.query(
+        'SELECT * FROM teaching_lessons WHERE id = ?',
+        [id]
+      );
+
+      if (lessons.length === 0) {
+        return ResponseHelper.notFound(res, '课程不存在');
+      }
+
+      const lesson = lessons[0];
+
+      // 权限检查
+      const userTags = await getUserTags(userId);
+      const permission = await TeachingModule.checkUserPermission(
+        lesson.module_id,
+        userId,
+        req.user.role,
+        req.user.group_id,
+        userTags
+      );
+
+      if (permission !== 'edit') {
+        return ResponseHelper.forbidden(res, '无权编辑此课程的教案');
+      }
+
+      // 保存教案（使用正确的字段名 creator_id）
+      const insertSql = `
+        INSERT INTO teaching_lesson_plans 
+        (lesson_id, page_number, content, creator_id) 
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+        content = VALUES(content),
+        updated_at = CURRENT_TIMESTAMP
+      `;
+
+      await dbConnection.query(insertSql, [id, page_number, content, userId]);
+
+      // 获取保存后的教案
+      const { rows: plans } = await dbConnection.query(
+        'SELECT * FROM teaching_lesson_plans WHERE lesson_id = ? AND page_number = ?',
+        [id, page_number]
+      );
+
+      logger.info('教案保存成功', {
+        lessonId: id,
+        pageNumber: page_number,
+        userId
+      });
+
+      return ResponseHelper.success(res, plans[0], '教案保存成功');
+    } catch (error) {
+      logger.error('保存教案失败:', error);
+      return ResponseHelper.error(res, error.message || '保存教案失败');
+    }
+  }
+
+  /**
+   * 获取教案
+   * GET /api/teaching/lessons/:id/teaching-plan/:pageNumber
+   */
+  static async getTeachingPlan(req, res) {
+    const dbConnection = require('../database/connection');
+    
+    try {
+      const { id, pageNumber } = req.params;
+      const userId = req.user.id;
+
+      // 检查课程是否存在
+      const { rows: lessons } = await dbConnection.query(
+        'SELECT * FROM teaching_lessons WHERE id = ?',
+        [id]
+      );
+
+      if (lessons.length === 0) {
+        return ResponseHelper.notFound(res, '课程不存在');
+      }
+
+      const lesson = lessons[0];
+
+      // 权限检查
+      const userTags = await getUserTags(userId);
+      const permission = await TeachingModule.checkUserPermission(
+        lesson.module_id,
+        userId,
+        req.user.role,
+        req.user.group_id,
+        userTags
+      );
+
+      if (!permission) {
+        return ResponseHelper.forbidden(res, '无权查看此课程的教案');
+      }
+
+      // 获取教案
+      const { rows: plans } = await dbConnection.query(
+        'SELECT * FROM teaching_lesson_plans WHERE lesson_id = ? AND page_number = ?',
+        [id, pageNumber]
+      );
+
+      if (plans.length === 0) {
+        return ResponseHelper.notFound(res, '该页面暂无教案');
+      }
+
+      return ResponseHelper.success(res, plans[0], '获取教案成功');
+    } catch (error) {
+      logger.error('获取教案失败:', error);
+      return ResponseHelper.error(res, error.message || '获取教案失败');
     }
   }
 

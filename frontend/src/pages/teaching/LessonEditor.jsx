@@ -1,11 +1,12 @@
 /**
- * 课程编辑器组件（纯白底iOS科技风）
+ * 课程编辑器组件（纯白底iOS科技风 + 教案编辑功能）
  * 设计理念：白色为主 + 精致卡片 + 轻柔阴影 + iOS细节
  * 配色：纯白背景，白色卡片，深色文字，蓝色点缀
  * 三栏布局：左侧页面管理 | 中间Monaco编辑器 | 右侧实时预览
+ * 修复：TinyMCE显示问题（移除display:none）（v1.1.3 - 2025-10-30）
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout,
   Button,
@@ -19,7 +20,8 @@ import {
   Select,
   Tooltip,
   Popconfirm,
-  Badge
+  Badge,
+  Spin
 } from 'antd';
 import {
   SaveOutlined,
@@ -29,7 +31,8 @@ import {
   ArrowLeftOutlined,
   FileTextOutlined,
   EditOutlined,
-  SyncOutlined
+  SyncOutlined,
+  BookOutlined
 } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -44,16 +47,16 @@ const iosColors = {
   success: '#30D158',
   warning: '#FF9F0A',
   danger: '#FF453A',
-  bgPrimary: '#FFFFFF',                     // 纯白背景
-  bgSecondary: '#F5F7FA',                   // 浅灰白背景
-  cardWhite: '#FFFFFF',                     // 白色卡片
-  border: 'rgba(0, 0, 0, 0.06)',            // 超浅边框
-  textPrimary: '#1a1a1a',                   // 深色文字
-  textSecondary: '#666666',                 // 次要文字
-  textTertiary: '#999999',                  // 三级文字
-  selectedBg: '#F0F8FF',                    // 选中浅蓝色
-  hoverBg: '#F8FAFB',                       // 悬浮背景
-  shadow: '0 2px 8px rgba(0, 0, 0, 0.06)',  // 卡片阴影
+  bgPrimary: '#FFFFFF',
+  bgSecondary: '#F5F7FA',
+  cardWhite: '#FFFFFF',
+  border: 'rgba(0, 0, 0, 0.06)',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#666666',
+  textTertiary: '#999999',
+  selectedBg: '#F0F8FF',
+  hoverBg: '#F8FAFB',
+  shadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
   shadowHover: '0 4px 16px rgba(0, 0, 0, 0.08)'
 };
 
@@ -66,7 +69,11 @@ const LessonEditor = () => {
     currentLesson,
     currentLessonLoading,
     fetchLesson,
-    updateLesson
+    updateLesson,
+    saveTeachingPlan,
+    fetchTeachingPlan,
+    teachingPlanSaving,
+    teachingPlanLoading
   } = useTeachingStore();
 
   // 页面状态
@@ -90,6 +97,13 @@ const LessonEditor = () => {
   const [editingPageIndex, setEditingPageIndex] = useState(null);
   const [editorReady, setEditorReady] = useState(false);
 
+  // 教案编辑状态（新增）
+  const [teachingPlanModalVisible, setTeachingPlanModalVisible] = useState(false);
+  const [currentTeachingPlanPageIndex, setCurrentTeachingPlanPageIndex] = useState(null);
+  const [teachingPlanContent, setTeachingPlanContent] = useState('');
+  const [tinyMCEReady, setTinyMCEReady] = useState(false);
+  const teachingPlanEditorRef = useRef(null);
+
   const [pageForm] = Form.useForm();
   const [titleForm] = Form.useForm();
 
@@ -99,6 +113,33 @@ const LessonEditor = () => {
       loadLessonData();
     }
   }, [id]);
+
+  // 加载TinyMCE脚本
+  useEffect(() => {
+    if (!window.tinymce) {
+      console.log('📦 开始加载TinyMCE...');
+      const script = document.createElement('script');
+      script.src = '/tinymce/tinymce.min.js';
+      script.onload = () => {
+        console.log('✅ TinyMCE加载成功');
+        setTinyMCEReady(true);
+      };
+      script.onerror = () => {
+        console.error('❌ TinyMCE加载失败');
+        message.error('富文本编辑器加载失败');
+      };
+      document.head.appendChild(script);
+    } else {
+      console.log('✅ TinyMCE已存在');
+      setTinyMCEReady(true);
+    }
+
+    return () => {
+      if (teachingPlanEditorRef.current && window.tinymce) {
+        window.tinymce.remove(teachingPlanEditorRef.current);
+      }
+    };
+  }, []);
 
   const loadLessonData = async () => {
     try {
@@ -271,6 +312,152 @@ const LessonEditor = () => {
   // 预览第一页
   const handlePreview = () => {
     navigate(`/teaching/lessons/${id}/pages/1`);
+  };
+
+  // ==================== 教案编辑功能（修复版）====================
+
+  /**
+   * 打开教案编辑器
+   */
+  const handleOpenTeachingPlan = async (pageIndex) => {
+    console.log('🔵 打开教案编辑器', { pageIndex, tinyMCEReady });
+    
+    if (!tinyMCEReady) {
+      message.warning('富文本编辑器尚未加载完成，请稍候');
+      return;
+    }
+
+    setCurrentTeachingPlanPageIndex(pageIndex);
+    setTeachingPlanContent('');
+    setTeachingPlanModalVisible(true);
+
+    // 加载教案内容
+    try {
+      const pageNumber = pageIndex + 1;
+      console.log('📖 开始加载教案', { lessonId: id, pageNumber });
+      
+      const plan = await fetchTeachingPlan(id, pageNumber);
+      
+      console.log('✅ 教案加载结果', plan);
+      
+      if (plan && plan.content) {
+        setTeachingPlanContent(plan.content);
+      } else {
+        setTeachingPlanContent('<p>Start writing teaching plan...</p>');
+      }
+    } catch (error) {
+      console.error('❌ 加载教案失败:', error);
+      setTeachingPlanContent('<p>Start writing teaching plan...</p>');
+    }
+  };
+
+  /**
+   * 初始化TinyMCE编辑器（修复版：增加调试日志）
+   */
+  useEffect(() => {
+    if (teachingPlanModalVisible && tinyMCEReady && window.tinymce) {
+      console.log('🎨 准备初始化TinyMCE编辑器');
+      
+      // 延迟初始化，确保DOM已渲染
+      const timer = setTimeout(() => {
+        const editorElement = document.getElementById('teachingPlanEditor');
+        
+        if (!editorElement) {
+          console.error('❌ 找不到编辑器元素 #teachingPlanEditor');
+          return;
+        }
+        
+        console.log('✅ 找到编辑器元素，开始初始化', {
+          visible: editorElement.offsetParent !== null,
+          width: editorElement.offsetWidth,
+          height: editorElement.offsetHeight
+        });
+        
+        try {
+          window.tinymce.init({
+            selector: '#teachingPlanEditor',
+            base_url: '/tinymce',
+            suffix: '.min',
+            height: 500,
+            language: 'en',
+            menubar: true,
+            plugins: [
+              'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+              'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+              'insertdatetime', 'media', 'table', 'help', 'wordcount'
+            ],
+            toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
+            content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 14px; }',
+            setup: (editor) => {
+              console.log('🎯 TinyMCE setup回调执行');
+              teachingPlanEditorRef.current = editor;
+              
+              editor.on('init', () => {
+                console.log('✅ TinyMCE初始化完成');
+                editor.setContent(teachingPlanContent);
+              });
+              
+              editor.on('error', (e) => {
+                console.error('❌ TinyMCE错误:', e);
+              });
+            }
+          });
+        } catch (error) {
+          console.error('❌ TinyMCE初始化异常:', error);
+        }
+      }, 200);
+
+      return () => {
+        clearTimeout(timer);
+        if (teachingPlanEditorRef.current && window.tinymce) {
+          console.log('🧹 清理TinyMCE编辑器');
+          window.tinymce.remove(teachingPlanEditorRef.current);
+          teachingPlanEditorRef.current = null;
+        }
+      };
+    }
+  }, [teachingPlanModalVisible, tinyMCEReady, teachingPlanContent]);
+
+  /**
+   * 保存教案
+   */
+  const handleSaveTeachingPlan = async () => {
+    if (!teachingPlanEditorRef.current) {
+      message.error('编辑器未初始化');
+      return;
+    }
+
+    try {
+      const content = teachingPlanEditorRef.current.getContent();
+      const pageNumber = currentTeachingPlanPageIndex + 1;
+      
+      console.log('💾 保存教案', { lessonId: id, pageNumber, contentLength: content.length });
+      
+      await saveTeachingPlan(id, pageNumber, content);
+      
+      setTeachingPlanModalVisible(false);
+      
+      // 清理编辑器
+      if (window.tinymce && teachingPlanEditorRef.current) {
+        window.tinymce.remove(teachingPlanEditorRef.current);
+        teachingPlanEditorRef.current = null;
+      }
+    } catch (error) {
+      console.error('保存教案失败:', error);
+    }
+  };
+
+  /**
+   * 关闭教案编辑器
+   */
+  const handleCloseTeachingPlan = () => {
+    setTeachingPlanModalVisible(false);
+    
+    // 清理编辑器
+    if (window.tinymce && teachingPlanEditorRef.current) {
+      window.tinymce.remove(teachingPlanEditorRef.current);
+      teachingPlanEditorRef.current = null;
+    }
   };
 
   // Monaco编辑器配置
@@ -649,6 +836,21 @@ const LessonEditor = () => {
                         </span>
                       </div>
                       <Space size={4}>
+                        <Tooltip title={t('teaching.editTeachingPlan')}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<BookOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenTeachingPlan(index);
+                            }}
+                            style={{
+                              color: iosColors.warning,
+                              transition: 'all 0.2s'
+                            }}
+                          />
+                        </Tooltip>
                         <Tooltip title={t('common.edit')}>
                           <Button
                             type="text"
@@ -810,7 +1012,7 @@ const LessonEditor = () => {
         </div>
       </div>
 
-      {/* 模态框 */}
+      {/* 页面标题编辑模态框 */}
       <Modal
         title={<span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>{editingPageIndex !== null ? t('teaching.editPageTitle') : t('teaching.addPage')}</span>}
         open={pageModalVisible}
@@ -851,6 +1053,7 @@ const LessonEditor = () => {
         </Form>
       </Modal>
 
+      {/* 课程信息编辑模态框 */}
       <Modal
         title={<span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>{t('teaching.editLessonInfo')}</span>}
         open={titleEditModalVisible}
@@ -908,6 +1111,50 @@ const LessonEditor = () => {
             </Select>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 教案编辑模态框（修复版：移除display:none）*/}
+      <Modal
+        title={
+          <span style={{ color: iosColors.textPrimary, fontSize: 18, fontWeight: 600 }}>
+            <BookOutlined style={{ marginRight: 8, color: iosColors.warning }} />
+            {t('teaching.editTeachingPlan')} - {pages[currentTeachingPlanPageIndex]?.title}
+          </span>
+        }
+        open={teachingPlanModalVisible}
+        onOk={handleSaveTeachingPlan}
+        onCancel={handleCloseTeachingPlan}
+        width={1000}
+        okText={t('teaching.saveTeachingPlan')}
+        cancelText={t('common.cancel')}
+        confirmLoading={teachingPlanSaving}
+        okButtonProps={{
+          style: {
+            background: `linear-gradient(135deg, ${iosColors.warning}, #FFB340)`,
+            border: 'none',
+            borderRadius: 8,
+            height: 40,
+            fontWeight: 600
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            background: iosColors.cardWhite,
+            border: `1px solid ${iosColors.border}`,
+            borderRadius: 8,
+            color: iosColors.textPrimary,
+            height: 40
+          }
+        }}
+        bodyStyle={{ padding: '24px', minHeight: 550 }}
+      >
+        <Spin spinning={teachingPlanLoading} tip={t('teaching.loadingTeachingPlan')}>
+          {/* 🔥 关键修复：移除 display: 'none'，让textarea可见 */}
+          <textarea 
+            id="teachingPlanEditor" 
+            style={{ width: '100%', height: '500px' }}
+          />
+        </Spin>
       </Modal>
     </div>
   );

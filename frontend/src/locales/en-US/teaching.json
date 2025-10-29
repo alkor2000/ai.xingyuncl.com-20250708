@@ -209,6 +209,16 @@
     
     "teachingPlan": "Teaching Plan",
     "homework": "Homework",
+    "editTeachingPlan": "Edit Teaching Plan",
+    "saveTeachingPlan": "Save Teaching Plan",
+    "teachingPlanTitle": "Teaching Plan - Page {{page}}: {{title}}",
+    "noTeachingPlan": "No teaching plan for this page",
+    "teachingPlanSaveSuccess": "Teaching plan saved successfully",
+    "teachingPlanSaveFailed": "Failed to save teaching plan",
+    "teachingPlanLoadFailed": "Failed to load teaching plan",
+    "teachingPlanContent": "Teaching Plan Content",
+    "savingTeachingPlan": "Saving teaching plan...",
+    "loadingTeachingPlan": "Loading teaching plan...",
     
     "header": {
       "title": "Page Header HTML Configuration",

@@ -1,6 +1,7 @@
 /**
- * 智能教学系统 Store（错误处理增强版）
+ * 智能教学系统 Store（错误处理增强版 + 教案功能）
  * 修复：添加403错误的友好处理，避免跳转到详情页后报错
+ * 新增：教案保存和获取功能（v1.1 - 2025-10-29）
  */
 
 import { create } from 'zustand';
@@ -42,6 +43,10 @@ const useTeachingStore = create((set, get) => ({
   
   draft: null,
   draftSaving: false,
+  
+  // 教案相关状态（新增）
+  teachingPlanSaving: false,
+  teachingPlanLoading: false,
   
   // ==================== 分组操作 ====================
   
@@ -191,18 +196,15 @@ const useTeachingStore = create((set, get) => ({
     } catch (error) {
       set({ currentModuleLoading: false });
       
-      // 修复：针对403错误进行特殊处理
       if (error.response?.status === 403) {
         const errorMsg = error.response?.data?.message || '无权查看此教学模块';
         message.error(errorMsg);
-        // 抛出特殊错误，让页面组件可以处理（例如返回列表页）
         const permissionError = new Error(errorMsg);
         permissionError.code = 'PERMISSION_DENIED';
         permissionError.status = 403;
         throw permissionError;
       }
       
-      // 其他错误
       message.error(error.response?.data?.message || '获取模块详情失败');
       throw error;
     }
@@ -280,7 +282,6 @@ const useTeachingStore = create((set, get) => ({
     } catch (error) {
       set({ lessonsLoading: false });
       
-      // 针对403错误进行特殊处理
       if (error.response?.status === 403) {
         message.error(error.response?.data?.message || '无权访问此模块的课程');
       } else {
@@ -349,7 +350,61 @@ const useTeachingStore = create((set, get) => ({
         await get().fetchLessons(moduleId);
       }
     } catch (error) {
-      message.error(error.response?.data||message || '删除课程失败');
+      message.error(error.response?.data?.message || '删除课程失败');
+      throw error;
+    }
+  },
+  
+  // ==================== 教案操作（新增 - v1.1）====================
+  
+  /**
+   * 保存教案
+   * @param {number} lessonId - 课程ID
+   * @param {number} pageNumber - 页码（从1开始）
+   * @param {string} content - 教案HTML内容
+   */
+  saveTeachingPlan: async (lessonId, pageNumber, content) => {
+    set({ teachingPlanSaving: true });
+    try {
+      const response = await api.post(`/teaching/lessons/${lessonId}/teaching-plan`, {
+        page_number: pageNumber,
+        content: content
+      });
+      
+      const planData = response.data.data || response.data;
+      message.success('教案保存成功');
+      set({ teachingPlanSaving: false });
+      return planData;
+    } catch (error) {
+      set({ teachingPlanSaving: false });
+      message.error(error.response?.data?.message || '教案保存失败');
+      throw error;
+    }
+  },
+  
+  /**
+   * 获取教案
+   * @param {number} lessonId - 课程ID
+   * @param {number} pageNumber - 页码（从1开始）
+   * @returns {object|null} 教案数据或null
+   */
+  fetchTeachingPlan: async (lessonId, pageNumber) => {
+    set({ teachingPlanLoading: true });
+    try {
+      const response = await api.get(`/teaching/lessons/${lessonId}/teaching-plan/${pageNumber}`);
+      const planData = response.data.data || response.data;
+      
+      set({ teachingPlanLoading: false });
+      return planData;
+    } catch (error) {
+      set({ teachingPlanLoading: false });
+      
+      // 404是正常情况（没有教案）
+      if (error.response?.status === 404) {
+        return null;
+      }
+      
+      message.error(error.response?.data?.message || '教案加载失败');
       throw error;
     }
   },

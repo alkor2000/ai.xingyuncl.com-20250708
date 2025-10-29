@@ -223,6 +223,16 @@
     
     "teachingPlan": "教案",
     "homework": "作业",
+    "editTeachingPlan": "编辑教案",
+    "saveTeachingPlan": "保存教案",
+    "teachingPlanTitle": "教案 - 第{{page}}页: {{title}}",
+    "noTeachingPlan": "当前页面暂无教案",
+    "teachingPlanSaveSuccess": "教案保存成功",
+    "teachingPlanSaveFailed": "教案保存失败",
+    "teachingPlanLoadFailed": "教案加载失败",
+    "teachingPlanContent": "教案内容",
+    "savingTeachingPlan": "正在保存教案...",
+    "loadingTeachingPlan": "正在加载教案...",
     
     "header": {
       "title": "页面头部HTML配置",
