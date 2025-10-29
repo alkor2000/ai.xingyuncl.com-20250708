@@ -36,10 +36,7 @@
   "common.confirm": "Confirm",
   "common.cancel": "Cancel",
   "common.back": "Back",
-  "common.save": "Save",
   "common.edit": "Edit",
-  "common.copy": "Copy",
-  "common.open": "Open",
   "common.settings": "Settings",
   "common.status": "Status",
   "common.credits": "Credits",
@@ -54,7 +51,6 @@
   "common.deleteSuccess": "Delete successful",
   "common.deleteFailed": "Delete failed",
   "common.noData": "No data",
-  "common.loading": "Loading...",
   
   "status.success": "Success",
   "status.error": "Error",

@@ -1,35 +1,7 @@
 /**
- * 课程详情页面（简洁版 - 纵向列表布局）
- * 
- * 【设计目标】
- * 1. 显示课程基本信息（通过导航栏标题展示）
- * 2. 展示课程资料（MaterialsDisplay组件）
- * 3. 列出课程页面列表（纵向单列布局，便于教师上课使用）
- * 
- * 【布局说明】
- * - 删除了紫色渐变横幅：过于占用空间，信息重复，影响内容聚焦
- * - 采用纵向列表布局：每个页面占一行，左侧序号+中间标题+右侧进入按钮
- * - 删除了底部编辑按钮：减少干扰，编辑功能通过顶部按钮触发即可
- * 
- * 【页面结构】
- * ┌─────────────────────────────────┐
- * │ 导航栏（包含课程标题）           │
- * ├─────────────────────────────────┤
- * │ 面包屑导航                       │
- * ├─────────────────────────────────┤
- * │ 课程资料展示（如果有）           │
- * ├─────────────────────────────────┤
- * │ 课程页面列表（纵向单列）         │
- * │ ┌─────────────────────────────┐ │
- * │ │ 01  11111        进入页面 › │ │
- * │ └─────────────────────────────┘ │
- * │ ┌─────────────────────────────┐ │
- * │ │ 02   22          进入页面 › │ │
- * │ └─────────────────────────────┘ │
- * └─────────────────────────────────┘
- * 
- * 功能：支持教师上课展示、学生浏览学习
- * 优化：完整i18n支持、iOS风格、流畅动画
+ * 课程详情页面（iOS科技风优化版）
+ * 功能：显示课程页面列表，支持教师上课展示
+ * 优化：完整i18n支持 + iOS设计美学 + 流畅动画
  */
 
 import React, { useEffect, useState } from 'react';
@@ -42,9 +14,12 @@ import {
   Divider
 } from 'antd';
 import {
+  ArrowLeftOutlined,
   RightOutlined,
   FileTextOutlined,
-  EditOutlined
+  EditOutlined,
+  BookOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -83,20 +58,13 @@ const LessonDetail = () => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editForm] = Form.useForm();
 
-  // ==================== 生命周期 ====================
-  
   useEffect(() => {
     if (id) {
       loadLesson();
     }
   }, [id]);
 
-  // ==================== 数据加载 ====================
-  
-  /**
-   * 加载课程和模块信息
-   * 先加载课程详情，再根据module_id加载所属模块信息
-   */
+  // 加载课程和模块信息
   const loadLesson = async () => {
     try {
       const lesson = await fetchLesson(id);
@@ -109,16 +77,7 @@ const LessonDetail = () => {
     }
   };
 
-  // ==================== 权限控制 ====================
-  
-  /**
-   * 检查当前用户是否有编辑权限
-   * 权限规则：
-   * 1. 超级管理员 - 全部权限
-   * 2. 课程创建者 - 可编辑
-   * 3. 模块创建者 - 可编辑
-   * 4. 拥有模块编辑权限的用户 - 可编辑
-   */
+  // 权限检查
   const hasEditPermission = () => {
     if (!user) return false;
     if (user.role === 'super_admin') return true;
@@ -128,11 +87,6 @@ const LessonDetail = () => {
     return false;
   };
 
-  // ==================== 导航操作 ====================
-  
-  /**
-   * 返回上一级（模块详情页或教学首页）
-   */
   const handleBack = () => {
     if (currentLesson?.module_id) {
       navigate(`/teaching/modules/${currentLesson.module_id}`);
@@ -141,31 +95,7 @@ const LessonDetail = () => {
     }
   };
 
-  /**
-   * 查看指定页面
-   * @param {number} pageNumber - 页面序号（从1开始）
-   */
-  const handleViewPage = (pageNumber) => {
-    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
-  };
-
-  /**
-   * 跳转到课程内容编辑页面（Monaco编辑器）
-   */
-  const handleEditContent = () => {
-    if (!hasEditPermission()) {
-      message.warning(t('teaching.noEditPermission'));
-      return;
-    }
-    navigate(`/teaching/lessons/${id}/edit`);
-  };
-
-  // ==================== 课程信息编辑 ====================
-  
-  /**
-   * 打开编辑课程信息模态框
-   * 包含：标题、描述、封面、资料、内容类型、状态
-   */
+  // 打开编辑课程信息模态框
   const handleEditInfo = () => {
     if (!hasEditPermission()) {
       message.warning(t('teaching.noEditPermission'));
@@ -183,19 +113,16 @@ const LessonDetail = () => {
     setEditModalVisible(true);
   };
 
-  /**
-   * 提交课程信息编辑
-   * 特别处理：清理materials中的临时ID，只保留有效数据
-   */
+  // 提交编辑
   const handleEditSubmit = async () => {
     try {
       const values = await editForm.validateFields();
       
-      // 验证并过滤资料：只保留有标题和链接的有效资料
+      // 验证并过滤资料
       const materials = values.materials || [];
       const validMaterials = materials.filter(m => m && m.title && m.url);
       
-      // 移除临时ID（_tempId用于React key，不应保存到数据库）
+      // 移除临时ID
       const cleanMaterials = validMaterials.map(m => ({
         title: m.title,
         url: m.url,
@@ -211,7 +138,7 @@ const LessonDetail = () => {
       editForm.resetFields();
       message.success(t('teaching.updateSuccess'));
       
-      // 重新加载课程信息以显示最新数据
+      // 重新加载课程信息
       await fetchLesson(id);
     } catch (error) {
       console.error('更新课程失败:', error);
@@ -219,13 +146,20 @@ const LessonDetail = () => {
     }
   };
 
-  // ==================== 辅助函数 ====================
-  
-  /**
-   * 解析课程内容，提取页面列表
-   * 课程内容是JSON格式：{ pages: [{ id, title, html }] }
-   * @returns {Array} 页面数组
-   */
+  // 查看页面
+  const handleViewPage = (pageNumber) => {
+    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
+  };
+
+  // 跳转到编辑内容页面
+  const handleEditContent = () => {
+    if (!hasEditPermission()) {
+      message.warning(t('teaching.noEditPermission'));
+      return;
+    }
+    navigate(`/teaching/lessons/${id}/edit`);
+  };
+
   const getPages = () => {
     if (!currentLesson?.content) return [];
     
@@ -241,9 +175,6 @@ const LessonDetail = () => {
     }
   };
 
-  // ==================== 渲染逻辑 ====================
-  
-  // 加载状态
   if (currentLessonLoading || !currentLesson) {
     return (
       <IOSPageContainer>
@@ -258,10 +189,7 @@ const LessonDetail = () => {
 
   return (
     <IOSPageContainer>
-      {/* 
-        导航栏：显示课程标题，提供返回和编辑按钮
-        注意：删除了下方的紫色横幅，标题只在导航栏显示
-      */}
+      {/* iOS风格导航栏 */}
       <IOSNavBar
         title={currentLesson.title}
         onBack={handleBack}
@@ -276,7 +204,7 @@ const LessonDetail = () => {
       />
 
       <div style={{ padding: '0 24px 40px' }}>
-        {/* 面包屑导航：智能教学 > 模块名 > 课程名 */}
+        {/* 面包屑导航 */}
         <IOSBreadcrumb
           items={[
             { label: t('teaching.teaching'), path: '/teaching' },
@@ -288,24 +216,134 @@ const LessonDetail = () => {
           ]}
         />
 
-        {/* 
-          课程资料展示区域
-          只在有资料时显示，使用MaterialsDisplay组件
-          显示格式：卡片网格，支持打开链接和复制链接
-        */}
+        {/* 课程标题横幅（全新设计） */}
+        <div style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: 24,
+          padding: '32px 36px',
+          marginBottom: 32,
+          boxShadow: '0 12px 40px rgba(102, 126, 234, 0.25)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* 装饰背景图案 */}
+          <div style={{
+            position: 'absolute',
+            top: -50,
+            right: -50,
+            width: 200,
+            height: 200,
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%',
+            filter: 'blur(40px)'
+          }} />
+          <div style={{
+            position: 'absolute',
+            bottom: -30,
+            left: -30,
+            width: 150,
+            height: 150,
+            background: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '50%',
+            filter: 'blur(30px)'
+          }} />
+
+          {/* 内容 */}
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 20
+            }}>
+              {/* 图标 */}
+              <div style={{
+                width: 64,
+                height: 64,
+                borderRadius: 16,
+                background: 'rgba(255, 255, 255, 0.2)',
+                backdropFilter: 'blur(20px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <BookOutlined style={{ fontSize: 32, color: '#fff' }} />
+              </div>
+
+              {/* 文字信息 */}
+              <div style={{ flex: 1 }}>
+                <h1 style={{
+                  margin: 0,
+                  fontSize: 32,
+                  fontWeight: 700,
+                  color: '#fff',
+                  marginBottom: 12,
+                  letterSpacing: '-0.5px',
+                  textShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  {currentLesson.title}
+                </h1>
+                
+                {currentLesson.description && (
+                  <p style={{
+                    margin: 0,
+                    fontSize: 16,
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    lineHeight: 1.6,
+                    maxWidth: 800
+                  }}>
+                    {currentLesson.description}
+                  </p>
+                )}
+
+                {/* 元信息标签 */}
+                <div style={{
+                  display: 'flex',
+                  gap: 12,
+                  marginTop: 20,
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{
+                    padding: '6px 16px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: 20,
+                    fontSize: 13,
+                    color: '#fff',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    <FileTextOutlined style={{ fontSize: 14 }} />
+                    {totalPages} {t('teaching.pages')}
+                  </div>
+                  
+                  {currentLesson.content_type && (
+                    <div style={{
+                      padding: '6px 16px',
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      backdropFilter: 'blur(10px)',
+                      borderRadius: 20,
+                      fontSize: 13,
+                      color: '#fff',
+                      fontWeight: 500
+                    }}>
+                      {t(`teaching.contentTypes.${currentLesson.content_type}`)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 课程资料展示 */}
         {currentLesson.materials && currentLesson.materials.length > 0 && (
           <MaterialsDisplay materials={currentLesson.materials} />
         )}
 
-        {/* 
-          课程页面列表（纵向布局）
-          设计说明：
-          1. 采用单列纵向布局，每个页面占一行
-          2. 卡片内部：左侧序号徽章 + 中间标题 + 右侧进入按钮
-          3. 保留iOS风格的圆角和间距
-          4. 悬停时有动画效果（上移+阴影）
-          5. 删除了底部的"编辑页面内容"按钮，减少视觉干扰
-        */}
+        {/* 页面列表（优化版） */}
         <IOSCard
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -342,7 +380,6 @@ const LessonDetail = () => {
           }}
         >
           {totalPages === 0 ? (
-            /* 空状态：无页面时的提示和操作入口 */
             <IOSEmpty 
               icon={<FileTextOutlined style={{ fontSize: 48, color: '#bbb' }} />}
               text={t('teaching.noPages')}
@@ -360,22 +397,10 @@ const LessonDetail = () => {
               }
             />
           ) : (
-            /* 
-              页面列表：纵向单列布局
-              每个卡片包含：
-              - 左侧：渐变序号徽章（40x40）
-              - 中间：页面标题（flex:1 自适应宽度）
-              - 右侧：进入按钮（带箭头图标）
-              
-              交互效果：
-              - 点击整个卡片可进入页面
-              - 悬停时卡片上移4px并添加阴影
-              - 悬停时进入按钮文字变色
-            */
             <div style={{ 
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12  // 卡片之间12px间距
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 16
             }}>
               {pages.map((page, index) => {
                 const pageNumber = index + 1;
@@ -385,15 +410,14 @@ const LessonDetail = () => {
                     key={pageNumber}
                     onClick={() => handleViewPage(pageNumber)}
                     style={{
-                      padding: '16px 20px',
+                      padding: 20,
                       background: 'white',
                       border: '1px solid #f0f0f0',
-                      borderRadius: 12,
+                      borderRadius: 16,
                       cursor: 'pointer',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 16
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-4px)';
@@ -406,38 +430,46 @@ const LessonDetail = () => {
                       e.currentTarget.style.borderColor = '#f0f0f0';
                     }}
                   >
-                    {/* 左侧：渐变序号徽章 */}
+                    {/* 渐变装饰条 */}
                     <div style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 3,
+                      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                    }} />
+
+                    {/* 序号徽章 */}
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
                       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: 700,
                       color: '#fff',
-                      flexShrink: 0,  // 固定宽度，不缩小
+                      marginBottom: 16,
                       boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
                     }}>
                       {pageNumber < 10 ? `0${pageNumber}` : pageNumber}
                     </div>
                     
-                    {/* 中间：页面标题（自适应宽度） */}
+                    {/* 标题 */}
                     <div style={{
-                      flex: 1,  // 占据剩余空间
                       fontSize: 16,
                       color: '#262626',
-                      fontWeight: 500,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'  // 标题过长时显示省略号
+                      fontWeight: 600,
+                      marginBottom: 12,
+                      lineHeight: 1.5
                     }}>
                       {page.title || `${t('teaching.page')} ${pageNumber}`}
                     </div>
 
-                    {/* 右侧：进入按钮 */}
+                    {/* 进入按钮 */}
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -445,7 +477,9 @@ const LessonDetail = () => {
                       color: '#667eea',
                       fontSize: 14,
                       fontWeight: 500,
-                      flexShrink: 0  // 固定宽度，不缩小
+                      marginTop: 16,
+                      paddingTop: 16,
+                      borderTop: '1px solid #f5f5f5'
                     }}>
                       {t('teaching.enterPage')}
                       <RightOutlined style={{ fontSize: 12 }} />
@@ -456,25 +490,31 @@ const LessonDetail = () => {
             </div>
           )}
 
-          {/* 
-            注意：已删除底部的"编辑页面内容"按钮
-            理由：
-            1. 顶部已有"编辑课程信息"按钮，可以触发编辑
-            2. 底部按钮容易造成视觉干扰
-            3. 教师上课时不需要频繁编辑，简化界面更好
-          */}
+          {/* 编辑内容入口（在列表底部） */}
+          {canEdit && totalPages > 0 && (
+            <div style={{
+              marginTop: 24,
+              paddingTop: 24,
+              borderTop: '2px dashed #e8e8e8',
+              textAlign: 'center'
+            }}>
+              <IOSButton
+                variant="secondary"
+                icon={<FileTextOutlined />}
+                onClick={handleEditContent}
+                style={{
+                  height: 48,
+                  padding: '0 32px',
+                  fontSize: 15
+                }}
+              >
+                {t('teaching.editPageContent')}
+              </IOSButton>
+            </div>
+          )}
         </IOSCard>
 
-        {/* 
-          编辑课程信息模态框
-          包含字段：
-          - 标题（必填）
-          - 描述
-          - 封面图片URL
-          - 课程资料（使用MaterialsManager组件，最多5个）
-          - 内容类型（课程/实验/练习等8种类型）
-          - 状态（草稿/已发布/已归档）
-        */}
+        {/* 编辑课程信息模态框 */}
         <Modal
           title={
             <div style={{
@@ -549,7 +589,7 @@ const LessonDetail = () => {
             
             <Divider style={{ margin: '24px 0' }} />
             
-            {/* 课程资料管理组件：支持添加、编辑、删除、排序资料 */}
+            {/* 课程资料管理 */}
             <Form.Item 
               name="materials" 
               label={null}

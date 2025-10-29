@@ -1,0 +1,420 @@
+/**
+ * 课程详情页面（最终简化版）
+ * 功能：显示课程页面列表，支持教师上课展示
+ * 优化：移除重复信息，完善国际化
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Divider
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  RightOutlined,
+  FileTextOutlined,
+  EditOutlined
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import useTeachingStore from '../../stores/teachingStore';
+import useAuthStore from '../../stores/authStore';
+import MaterialsDisplay from '../../components/teaching/MaterialsDisplay';
+import MaterialsManager from '../../components/teaching/MaterialsManager';
+import {
+  IOSPageContainer,
+  IOSNavBar,
+  IOSBreadcrumb,
+  IOSCard,
+  IOSButton,
+  IOSEmpty,
+  IOSLoading
+} from '../../components/teaching/IOSLayout';
+import '../../styles/ios-unified-theme.css';
+
+const { TextArea } = Input;
+
+const LessonDetail = () => {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  const {
+    currentLesson,
+    currentLessonLoading,
+    currentModule,
+    fetchLesson,
+    fetchModule,
+    updateLesson
+  } = useTeachingStore();
+
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editForm] = Form.useForm();
+
+  useEffect(() => {
+    if (id) {
+      loadLesson();
+    }
+  }, [id]);
+
+  // 加载课程和模块信息
+  const loadLesson = async () => {
+    try {
+      const lesson = await fetchLesson(id);
+      if (lesson?.module_id) {
+        await fetchModule(lesson.module_id);
+      }
+    } catch (error) {
+      console.error('加载课程失败:', error);
+      message.error(t('teaching.loadFailed'));
+    }
+  };
+
+  // 权限检查
+  const hasEditPermission = () => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if (currentLesson?.creator_id === user.id) return true;
+    if (currentModule?.creator_id === user.id) return true;
+    if (currentModule?.user_permission === 'edit') return true;
+    return false;
+  };
+
+  const handleBack = () => {
+    if (currentLesson?.module_id) {
+      navigate(`/teaching/modules/${currentLesson.module_id}`);
+    } else {
+      navigate('/teaching');
+    }
+  };
+
+  // 打开编辑课程信息模态框
+  const handleEditInfo = () => {
+    if (!hasEditPermission()) {
+      message.warning(t('teaching.noEditPermission'));
+      return;
+    }
+    
+    editForm.setFieldsValue({
+      title: currentLesson.title,
+      description: currentLesson.description,
+      cover_image: currentLesson.cover_image,
+      materials: currentLesson.materials || [],
+      content_type: currentLesson.content_type,
+      status: currentLesson.status
+    });
+    setEditModalVisible(true);
+  };
+
+  // 提交编辑
+  const handleEditSubmit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      
+      // 验证并过滤资料
+      const materials = values.materials || [];
+      const validMaterials = materials.filter(m => m && m.title && m.url);
+      
+      // 移除临时ID
+      const cleanMaterials = validMaterials.map(m => ({
+        title: m.title,
+        url: m.url,
+        description: m.description || ''
+      }));
+      
+      await updateLesson(id, {
+        ...values,
+        materials: cleanMaterials
+      });
+      
+      setEditModalVisible(false);
+      editForm.resetFields();
+      message.success(t('teaching.updateSuccess'));
+      
+      // 重新加载课程信息
+      await fetchLesson(id);
+    } catch (error) {
+      console.error('更新课程失败:', error);
+      message.error(t('teaching.updateFailed'));
+    }
+  };
+
+  // 查看页面
+  const handleViewPage = (pageNumber) => {
+    navigate(`/teaching/lessons/${id}/pages/${pageNumber}`);
+  };
+
+  // 跳转到编辑内容页面
+  const handleEditContent = () => {
+    if (!hasEditPermission()) {
+      message.warning(t('teaching.noEditPermission'));
+      return;
+    }
+    navigate(`/teaching/lessons/${id}/edit`);
+  };
+
+  const getPages = () => {
+    if (!currentLesson?.content) return [];
+    
+    try {
+      const content = typeof currentLesson.content === 'string'
+        ? JSON.parse(currentLesson.content)
+        : currentLesson.content;
+      
+      return content.pages || [];
+    } catch (error) {
+      console.error('解析课程内容失败:', error);
+      return [];
+    }
+  };
+
+  if (currentLessonLoading || !currentLesson) {
+    return (
+      <IOSPageContainer>
+        <IOSLoading text={t('common.loading')} />
+      </IOSPageContainer>
+    );
+  }
+
+  const pages = getPages();
+  const totalPages = pages.length;
+  const canEdit = hasEditPermission();
+
+  return (
+    <IOSPageContainer>
+      {/* iOS风格导航栏 */}
+      <IOSNavBar
+        title={currentLesson.title}
+        onBack={handleBack}
+        backText={t('common.back')}
+        actions={
+          canEdit && (
+            <IOSButton variant="secondary" icon={<EditOutlined />} onClick={handleEditInfo}>
+              {t('teaching.editLessonInfo')}
+            </IOSButton>
+          )
+        }
+      />
+
+      <div style={{ padding: '0 24px 24px' }}>
+        {/* 面包屑导航 */}
+        <IOSBreadcrumb
+          items={[
+            { label: t('teaching.teaching'), path: '/teaching' },
+            { label: currentModule?.name || t('teaching.module'), path: currentLesson?.module_id ? `/teaching/modules/${currentLesson.module_id}` : null },
+            { label: currentLesson.title }
+          ]}
+        />
+
+        {/* 课程资料展示 */}
+        {currentLesson.materials && currentLesson.materials.length > 0 && (
+          <MaterialsDisplay materials={currentLesson.materials} />
+        )}
+
+        {/* 页面列表 */}
+        <IOSCard
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileTextOutlined style={{ fontSize: 18, color: '#007AFF' }} />
+              <span>{t('teaching.coursePageList')}</span>
+              <span style={{
+                marginLeft: 'auto',
+                fontSize: 14,
+                fontWeight: 'normal',
+                color: '#666'
+              }}>
+                {totalPages} {t('teaching.pages')}
+              </span>
+            </div>
+          }
+        >
+          {totalPages === 0 ? (
+            <IOSEmpty 
+              icon={<FileTextOutlined style={{ fontSize: 48 }} />}
+              text={t('teaching.noPages')}
+              action={
+                canEdit && (
+                  <IOSButton 
+                    variant="primary"
+                    icon={<EditOutlined />}
+                    onClick={handleEditContent}
+                    style={{ marginTop: 20 }}
+                  >
+                    {t('teaching.addPages')}
+                  </IOSButton>
+                )
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {pages.map((page, index) => {
+                const pageNumber = index + 1;
+                
+                return (
+                  <div
+                    key={pageNumber}
+                    onClick={() => handleViewPage(pageNumber)}
+                    style={{
+                      padding: '12px 16px',
+                      background: 'white',
+                      border: '1px solid #F0F0F0',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#F8F9FA';
+                      e.currentTarget.style.borderColor = '#007AFF';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.borderColor = '#F0F0F0';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {/* 序号 */}
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        background: '#F0F2F5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#666'
+                      }}>
+                        {pageNumber < 10 ? `0${pageNumber}` : pageNumber}
+                      </div>
+                      
+                      {/* 标题 */}
+                      <div style={{
+                        fontSize: 14,
+                        color: '#262626',
+                        fontWeight: 500
+                      }}>
+                        {page.title || `${t('teaching.page')} ${pageNumber}`}
+                      </div>
+                    </div>
+
+                    {/* 进入按钮 */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      color: '#007AFF',
+                      fontSize: 13
+                    }}>
+                      {t('teaching.enterPage')}
+                      <RightOutlined style={{ fontSize: 11 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </IOSCard>
+
+        {/* 编辑课程信息模态框 */}
+        <Modal
+          title={t('teaching.editLessonInfo')}
+          open={editModalVisible}
+          onOk={handleEditSubmit}
+          onCancel={() => {
+            setEditModalVisible(false);
+            editForm.resetFields();
+          }}
+          width={700}
+          okText={t('common.save')}
+          cancelText={t('common.cancel')}
+          destroyOnClose
+          className="ios-modal"
+          bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+        >
+          <Form form={editForm} layout="vertical">
+            <Form.Item
+              name="title"
+              label={t('teaching.lessonTitle')}
+              rules={[{ required: true, message: t('teaching.lessonTitleRequired') }]}
+            >
+              <Input />
+            </Form.Item>
+            
+            <Form.Item name="description" label={t('teaching.lessonDescription')}>
+              <TextArea rows={3} />
+            </Form.Item>
+            
+            <Form.Item name="cover_image" label={t('teaching.coverImage')}>
+              <Input placeholder={t('teaching.coverImagePlaceholder')} />
+            </Form.Item>
+            
+            <Divider />
+            
+            {/* 课程资料管理 */}
+            <Form.Item 
+              name="materials" 
+              label={null}
+            >
+              <MaterialsManager />
+            </Form.Item>
+            
+            <Divider />
+            
+            <Form.Item name="content_type" label={t('teaching.contentType')}>
+              <Select>
+                <Select.Option value="course">{t('teaching.contentTypes.course')}</Select.Option>
+                <Select.Option value="experiment">{t('teaching.contentTypes.experiment')}</Select.Option>
+                <Select.Option value="exercise">{t('teaching.contentTypes.exercise')}</Select.Option>
+                <Select.Option value="reference">{t('teaching.contentTypes.reference')}</Select.Option>
+                <Select.Option value="teaching_plan">{t('teaching.contentTypes.teaching_plan')}</Select.Option>
+                <Select.Option value="answer">{t('teaching.contentTypes.answer')}</Select.Option>
+                <Select.Option value="guide">{t('teaching.contentTypes.guide')}</Select.Option>
+                <Select.Option value="assessment">{t('teaching.contentTypes.assessment')}</Select.Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item name="status" label={t('teaching.status.label')}>
+              <Select>
+                <Select.Option value="draft">{t('teaching.status.draft')}</Select.Option>
+                <Select.Option value="published">{t('teaching.status.published')}</Select.Option>
+                <Select.Option value="archived">{t('teaching.status.archived')}</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+          
+          {/* 编辑内容入口 */}
+          {canEdit && totalPages > 0 && (
+            <div style={{
+              marginTop: 20,
+              paddingTop: 20,
+              borderTop: '1px solid #F0F0F0',
+              textAlign: 'center'
+            }}>
+              <IOSButton
+                variant="primary"
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  setEditModalVisible(false);
+                  handleEditContent();
+                }}
+              >
+                {t('teaching.editPageContent')}
+              </IOSButton>
+            </div>
+          )}
+        </Modal>
+      </div>
+    </IOSPageContainer>
+  );
+};
+
+export default LessonDetail;
