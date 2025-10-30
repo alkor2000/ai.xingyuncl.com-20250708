@@ -1,7 +1,7 @@
 /**
- * 课程页面查看器（iOS风格版 + 教案查看功能 v1.2.1）
+ * 课程页面查看器（iOS风格版 + 教案查看功能）
  * 功能：显示和浏览课程的具体页面内容，支持查看教案
- * 修复：按钮位置+样式+Drawer显示问题（2025-10-30）
+ * v1.2.0 - 2025-10-30：新增教案查看抽屉
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -408,16 +408,6 @@ const LessonViewer = () => {
                   </span>
                 </div>
 
-                {/* 查看教案按钮 - 移到这里 */}
-                <IOSButton 
-                  variant="secondary" 
-                  size="small" 
-                  icon={<BookOutlined />} 
-                  onClick={handleOpenTeachingPlan}
-                >
-                  {t('teaching.viewTeachingPlan')}
-                </IOSButton>
-
                 {canEdit && (
                   <IOSButton variant="secondary" size="small" icon={<EditOutlined />} onClick={handleEdit}>
                     {t('common.edit')}
@@ -489,6 +479,20 @@ const LessonViewer = () => {
               onClick={handleNextPage}
             >
               {t('teaching.nextPage')}
+            </IOSButton>
+
+            {/* 查看教案按钮 */}
+            <IOSButton
+              variant="secondary"
+              icon={<BookOutlined />}
+              onClick={handleOpenTeachingPlan}
+              style={{
+                marginLeft: 8,
+                borderColor: '#FF9500',
+                color: '#FF9500'
+              }}
+            >
+              {t('teaching.viewTeachingPlan')}
             </IOSButton>
           </div>
         </>
@@ -678,28 +682,28 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
-            {/* 查看教案按钮（全屏模式 - 修复为白色风格）*/}
+            {/* 查看教案按钮（全屏模式）*/}
             <Tooltip title={t('teaching.viewTeachingPlan')} placement="top">
               <Button
                 type="text"
                 icon={<BookOutlined />}
                 onClick={handleOpenTeachingPlan}
                 style={{
-                  color: 'white',
+                  color: '#FF9500',
                   borderRadius: '50%',
                   width: 36,
                   height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(255, 149, 0, 0.15)',
                   transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.background = 'rgba(255, 149, 0, 0.25)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.background = 'rgba(255, 149, 0, 0.15)';
                 }}
               />
             </Tooltip>
@@ -816,7 +820,7 @@ const LessonViewer = () => {
         </>
       )}
 
-      {/* 教案查看抽屉 - 修复显示问题 */}
+      {/* 教案查看抽屉 */}
       <Drawer
         title={
           <div style={{ 
@@ -835,8 +839,6 @@ const LessonViewer = () => {
         width={800}
         onClose={handleCloseTeachingPlan}
         open={teachingPlanDrawerVisible}
-        getContainer={false}
-        style={{ position: 'absolute', zIndex: 10000 }}
         styles={{
           header: {
             background: '#F2F2F7',

@@ -1,7 +1,6 @@
 /**
- * 课程页面查看器（iOS风格版 + 教案查看功能 v1.2.1）
- * 功能：显示和浏览课程的具体页面内容，支持查看教案
- * 修复：按钮位置+样式+Drawer显示问题（2025-10-30）
+ * 课程页面查看器（iOS风格版）
+ * 功能：显示和浏览课程的具体页面内容
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -10,10 +9,7 @@ import {
   Progress,
   Tooltip,
   message,
-  Dropdown,
-  Drawer,
-  Spin,
-  Empty
+  Dropdown
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -24,8 +20,7 @@ import {
   FullscreenExitOutlined,
   EllipsisOutlined,
   UnorderedListOutlined,
-  AimOutlined,
-  BookOutlined
+  AimOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -52,9 +47,7 @@ const LessonViewer = () => {
     currentLessonLoading,
     fetchLesson,
     fetchModule,
-    recordView,
-    fetchTeachingPlan,
-    teachingPlanLoading
+    recordView
   } = useTeachingStore();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -62,12 +55,6 @@ const LessonViewer = () => {
   const [viewStartTime, setViewStartTime] = useState(Date.now());
   const [pageViewTime, setPageViewTime] = useState(Date.now());
   const [showControls, setShowControls] = useState(false);
-  
-  // 教案查看状态
-  const [teachingPlanDrawerVisible, setTeachingPlanDrawerVisible] = useState(false);
-  const [currentTeachingPlan, setCurrentTeachingPlan] = useState('');
-  const [planLoading, setPlanLoading] = useState(false);
-  
   const iframeRef = useRef(null);
   const containerRef = useRef(null);
   const hideTimerRef = useRef(null);
@@ -310,41 +297,6 @@ const LessonViewer = () => {
     };
   }, []);
 
-  /**
-   * 打开教案查看抽屉
-   */
-  const handleOpenTeachingPlan = async () => {
-    console.log('📖 打开教案查看', { lessonId: id, currentPage });
-    
-    setTeachingPlanDrawerVisible(true);
-    setPlanLoading(true);
-    setCurrentTeachingPlan('');
-
-    try {
-      const plan = await fetchTeachingPlan(id, currentPage);
-      
-      console.log('✅ 教案加载结果', plan);
-      
-      if (plan && plan.content) {
-        setCurrentTeachingPlan(plan.content);
-      } else {
-        setCurrentTeachingPlan('');
-      }
-    } catch (error) {
-      console.error('❌ 加载教案失败:', error);
-      setCurrentTeachingPlan('');
-    } finally {
-      setPlanLoading(false);
-    }
-  };
-
-  /**
-   * 关闭教案抽屉
-   */
-  const handleCloseTeachingPlan = () => {
-    setTeachingPlanDrawerVisible(false);
-  };
-
   const buildMoreMenuItems = () => {
     const items = [
       {
@@ -370,7 +322,6 @@ const LessonViewer = () => {
   const totalPages = pages.length;
   const progress = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
   const canEdit = hasEditPermission();
-  const currentPageData = pages[currentPage - 1];
 
   return (
     <div 
@@ -407,16 +358,6 @@ const LessonViewer = () => {
                     {progress}%
                   </span>
                 </div>
-
-                {/* 查看教案按钮 - 移到这里 */}
-                <IOSButton 
-                  variant="secondary" 
-                  size="small" 
-                  icon={<BookOutlined />} 
-                  onClick={handleOpenTeachingPlan}
-                >
-                  {t('teaching.viewTeachingPlan')}
-                </IOSButton>
 
                 {canEdit && (
                   <IOSButton variant="secondary" size="small" icon={<EditOutlined />} onClick={handleEdit}>
@@ -678,32 +619,6 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
-            {/* 查看教案按钮（全屏模式 - 修复为白色风格）*/}
-            <Tooltip title={t('teaching.viewTeachingPlan')} placement="top">
-              <Button
-                type="text"
-                icon={<BookOutlined />}
-                onClick={handleOpenTeachingPlan}
-                style={{
-                  color: 'white',
-                  borderRadius: '50%',
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                }}
-              />
-            </Tooltip>
-
             {/* 页面列表按钮 */}
             <Tooltip title={t('teaching.pageList')} placement="top">
               <Button
@@ -815,99 +730,6 @@ const LessonViewer = () => {
           </div>
         </>
       )}
-
-      {/* 教案查看抽屉 - 修复显示问题 */}
-      <Drawer
-        title={
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 12,
-            fontSize: 18,
-            fontWeight: 600,
-            color: '#1a1a1a'
-          }}>
-            <BookOutlined style={{ color: '#FF9500', fontSize: 20 }} />
-            <span>{t('teaching.teachingPlan')} - {currentPageData?.title || `${t('teaching.page')} ${currentPage}`}</span>
-          </div>
-        }
-        placement="right"
-        width={800}
-        onClose={handleCloseTeachingPlan}
-        open={teachingPlanDrawerVisible}
-        getContainer={false}
-        style={{ position: 'absolute', zIndex: 10000 }}
-        styles={{
-          header: {
-            background: '#F2F2F7',
-            borderBottom: '1px solid #E5E5EA',
-            padding: '20px 24px'
-          },
-          body: {
-            padding: 0,
-            background: '#fff'
-          }
-        }}
-      >
-        <Spin spinning={planLoading} tip={t('teaching.loadingTeachingPlan')}>
-          <div style={{ 
-            minHeight: 'calc(100vh - 120px)',
-            padding: '24px'
-          }}>
-            {currentTeachingPlan ? (
-              <div 
-                className="teaching-plan-content"
-                style={{
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  color: '#1a1a1a'
-                }}
-                dangerouslySetInnerHTML={{ __html: currentTeachingPlan }}
-              />
-            ) : (
-              !planLoading && (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <div style={{ marginTop: 20 }}>
-                      <div style={{ fontSize: 16, color: '#666', marginBottom: 8 }}>
-                        {t('teaching.noTeachingPlan')}
-                      </div>
-                      {canEdit && (
-                        <div style={{ fontSize: 14, color: '#999' }}>
-                          {t('teaching.pleaseAddTeachingPlanInEditor')}
-                        </div>
-                      )}
-                    </div>
-                  }
-                  style={{ marginTop: 60 }}
-                >
-                  {canEdit && (
-                    <Button
-                      type="primary"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        handleCloseTeachingPlan();
-                        handleEdit();
-                      }}
-                      style={{
-                        marginTop: 16,
-                        borderRadius: 8,
-                        height: 40,
-                        background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-                        border: 'none'
-                      }}
-                    >
-                      {t('teaching.goToEdit')}
-                    </Button>
-                  )}
-                </Empty>
-              )
-            )}
-          </div>
-        </Spin>
-      </Drawer>
     </div>
   );
 };
