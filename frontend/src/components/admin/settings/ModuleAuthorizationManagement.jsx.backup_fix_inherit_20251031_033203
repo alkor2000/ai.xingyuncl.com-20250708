@@ -1,10 +1,7 @@
 /**
- * 智能教学授权管理组件（三级权限版 v2.1.0 - 修复继承开关）
+ * 智能教学授权管理组件（三级权限版 v2.0.0）
  * 
  * 版本更新 (2025-10-31):
- * ✅ 修复"取消继承权限消失"问题
- *    - 取消继承时自动复制上级权限到当前级别
- *    - 保持权限连续性，用户体验平滑过渡
  * ✅ 三级权限体系实施：
  *    - view_lesson（查看课程）- Level 1: 学生权限
  *    - view_plan（查看教案）- Level 2: 教师权限
@@ -13,6 +10,24 @@
  *    - 授予高级权限自动授予下级（edit→view_plan→view_lesson）
  *    - 撤销低级权限自动撤销上级（view_lesson←view_plan←edit）
  * ✅ 数据兼容性：自动迁移旧的view字段为view_lesson
+ * ✅ UI增强：3个Checkbox带图标和说明
+ * 
+ * 功能特性（保留）：
+ * ✅ 垂直展开的三级结构：组 → 标签 → 用户
+ * ✅ 模块展开显示课程列表，支持课程级权限配置
+ * ✅ 标签展开显示用户列表，支持分页懒加载
+ * ✅ 每级可独立选择模块和课程进行授权
+ * ✅ 支持权限继承机制（组→标签→用户，模块→课程）
+ * ✅ 课程权限可以覆盖模块权限（细粒度控制）
+ * ✅ 单页面完成所有操作，无需跳转
+ * ✅ 真实后端API集成
+ * ✅ 重新加载时保持已保存的配置
+ * ✅ 支持展开/收回功能
+ * 
+ * 核心修复：
+ * - 区分"无配置（继承）"和"明确配置为false（无权限）"
+ * - 取消权限时保留配置并设为false，而不是删除
+ * - 允许完全移除某个课程的权限
  * 
  * 位置：系统设置 → 教学管理 → 智能教学授权管理（第一个子标签）
  */
@@ -76,9 +91,11 @@ const ModuleAuthorizationManagement = () => {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
+  // 课程加载状态
   const [loadingLessons, setLoadingLessons] = useState({});
   const [moduleLessons, setModuleLessons] = useState({});
   
+  // 用户加载状态
   const [loadingUsers, setLoadingUsers] = useState({});
   const [tagUsers, setTagUsers] = useState({});
   const [userPagination, setUserPagination] = useState({});
@@ -92,6 +109,7 @@ const ModuleAuthorizationManagement = () => {
   const loadInitialData = async () => {
     setLoading(true);
     try {
+      // 并行加载数据
       const [groupsRes, modulesRes] = await Promise.all([
         api.get('/admin/user-groups'),
         api.get('/teaching/admin/modules', { params: { limit: 1000 } })
@@ -99,11 +117,12 @@ const ModuleAuthorizationManagement = () => {
 
       const groups = groupsRes.data.data || [];
       const modules = (modulesRes.data.data?.modules || modulesRes.data.data || [])
-        .filter(m => m.status === 'published');
+        .filter(m => m.status === 'published'); // 只显示已发布的模块
 
       setAllGroups(groups);
       setAllModules(modules);
 
+      // 加载已授权的组配置
       await loadAuthorizedGroups();
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -119,11 +138,13 @@ const ModuleAuthorizationManagement = () => {
   const migratePermissionData = (perm) => {
     const migrated = { ...perm };
     
+    // 如果有旧的view字段，迁移为view_lesson
     if (migrated.view !== undefined && migrated.view_lesson === undefined) {
       migrated.view_lesson = migrated.view;
       delete migrated.view;
     }
     
+    // 迁移课程权限
     if (migrated.lessons && Array.isArray(migrated.lessons)) {
       migrated.lessons = migrated.lessons.map(lesson => {
         const migratedLesson = { ...lesson };
@@ -143,6 +164,7 @@ const ModuleAuthorizationManagement = () => {
       const res = await api.get('/teaching/authorization');
       const authorizations = res.data.data || [];
       
+      // 转换为前端数据结构并应用数据迁移
       const formattedGroups = authorizations.map(auth => ({
         groupId: auth.groupId,
         groupName: auth.groupName,
@@ -364,6 +386,12 @@ const ModuleAuthorizationManagement = () => {
 
   /**
    * 三级权限切换处理（核心函数）
+   * 
+   * 级联规则：
+   * 1. 勾选 edit → 自动勾选 view_plan 和 view_lesson
+   * 2. 勾选 view_plan → 自动勾选 view_lesson
+   * 3. 取消 view_lesson → 自动取消 view_plan 和 edit
+   * 4. 取消 view_plan → 自动取消 edit
    */
   const handleToggleModulePermission = (groupId, tagId, userId, moduleId, lessonId, permType, currentValue) => {
     setAuthorizedGroups(prev => {
@@ -376,11 +404,14 @@ const ModuleAuthorizationManagement = () => {
           const existingIndex = modulePerms.findIndex(mp => mp.moduleId === moduleId);
           
           if (!lessonId) {
+            // 模块级权限
             if (currentValue) {
+              // 取消勾选 - 级联撤销
               if (existingIndex >= 0) {
                 const updated = [...modulePerms];
                 
                 if (permType === 'view_lesson') {
+                  // 取消查看课程 → 同时取消查看教案和编辑
                   delete updated[existingIndex].view_lesson;
                   delete updated[existingIndex].view_plan;
                   delete updated[existingIndex].edit;
@@ -389,6 +420,7 @@ const ModuleAuthorizationManagement = () => {
                     updated.splice(existingIndex, 1);
                   }
                 } else if (permType === 'view_plan') {
+                  // 取消查看教案 → 同时取消编辑
                   delete updated[existingIndex].view_plan;
                   delete updated[existingIndex].edit;
                   
@@ -396,6 +428,7 @@ const ModuleAuthorizationManagement = () => {
                     updated.splice(existingIndex, 1);
                   }
                 } else if (permType === 'edit') {
+                  // 只取消编辑
                   delete updated[existingIndex].edit;
                   
                   if (!updated[existingIndex].view_lesson && !updated[existingIndex].view_plan && !updated[existingIndex].edit) {
@@ -406,10 +439,12 @@ const ModuleAuthorizationManagement = () => {
                 return { ...group, modulePermissions: updated };
               }
             } else {
+              // 勾选 - 级联授予
               if (existingIndex >= 0) {
                 const updated = [...modulePerms];
                 
                 if (permType === 'edit') {
+                  // 勾选编辑 → 同时勾选查看教案和查看课程
                   updated[existingIndex] = {
                     ...updated[existingIndex],
                     view_lesson: true,
@@ -417,12 +452,14 @@ const ModuleAuthorizationManagement = () => {
                     edit: true
                   };
                 } else if (permType === 'view_plan') {
+                  // 勾选查看教案 → 同时勾选查看课程
                   updated[existingIndex] = {
                     ...updated[existingIndex],
                     view_lesson: true,
                     view_plan: true
                   };
                 } else {
+                  // 勾选查看课程
                   updated[existingIndex] = {
                     ...updated[existingIndex],
                     view_lesson: true
@@ -431,6 +468,7 @@ const ModuleAuthorizationManagement = () => {
                 
                 return { ...group, modulePermissions: updated };
               } else {
+                // 新增配置
                 const newPerm = {
                   moduleId,
                   moduleName: allModules.find(m => m.id === moduleId)?.name || '',
@@ -456,6 +494,7 @@ const ModuleAuthorizationManagement = () => {
               }
             }
           } else {
+            // 课程级权限（三级）
             if (existingIndex >= 0) {
               const modulePerm = modulePerms[existingIndex];
               const lessons = modulePerm.lessons || [];
@@ -464,6 +503,7 @@ const ModuleAuthorizationManagement = () => {
               const updated = [...modulePerms];
               
               if (currentValue) {
+                // 取消勾选 - 级联撤销
                 if (lessonIndex >= 0) {
                   const updatedLessons = [...lessons];
                   
@@ -495,6 +535,7 @@ const ModuleAuthorizationManagement = () => {
                     lessons: updatedLessons
                   };
                 } else {
+                  // 没有独立配置，现在要取消继承
                   const newLesson = {
                     lessonId,
                     lessonTitle: moduleLessons[moduleId]?.find(l => l.id === lessonId)?.title || '',
@@ -521,6 +562,7 @@ const ModuleAuthorizationManagement = () => {
                   };
                 }
               } else {
+                // 勾选 - 级联授予
                 if (lessonIndex >= 0) {
                   const updatedLessons = [...lessons];
                   
@@ -580,7 +622,7 @@ const ModuleAuthorizationManagement = () => {
           }
         }
 
-        // ==================== 标签级权限 ====================
+        // ==================== 标签级权限（应用相同逻辑）====================
         if (tagId && !userId) {
           const tags = group.tags || [];
           const tagIndex = tags.findIndex(t => t.tagId === tagId);
@@ -593,6 +635,7 @@ const ModuleAuthorizationManagement = () => {
             const updatedTags = [...tags];
             
             if (!lessonId) {
+              // 模块级权限
               if (currentValue) {
                 if (existingIndex >= 0) {
                   const updated = [...modulePerms];
@@ -673,6 +716,7 @@ const ModuleAuthorizationManagement = () => {
                 }
               }
             } else {
+              // 课程级权限（三级）
               if (existingIndex >= 0) {
                 const modulePerm = modulePerms[existingIndex];
                 const lessons = modulePerm.lessons || [];
@@ -800,7 +844,7 @@ const ModuleAuthorizationManagement = () => {
           }
         }
 
-        // ==================== 用户级权限 ====================
+        // ==================== 用户级权限（应用相同逻辑）====================
         if (userId) {
           const tags = group.tags || [];
           const tagIndex = tags.findIndex(t => t.tagId === tagId);
@@ -818,6 +862,7 @@ const ModuleAuthorizationManagement = () => {
               const updatedUsers = [...users];
               
               if (!lessonId) {
+                // 模块级权限
                 if (currentValue) {
                   if (existingIndex >= 0) {
                     const updated = [...modulePerms];
@@ -898,6 +943,7 @@ const ModuleAuthorizationManagement = () => {
                   }
                 }
               } else {
+                // 课程级权限（三级）
                 if (existingIndex >= 0) {
                   const modulePerm = modulePerms[existingIndex];
                   const lessons = modulePerm.lessons || [];
@@ -1133,16 +1179,6 @@ const ModuleAuthorizationManagement = () => {
 
   // ==================== 渲染函数（三级权限UI）====================
 
-  /**
-   * 深拷贝权限配置（用于复制上级权限）
-   */
-  const deepCopyPermissions = (permissions) => {
-    return permissions.map(perm => ({
-      ...perm,
-      lessons: (perm.lessons || []).map(lesson => ({ ...lesson }))
-    }));
-  };
-
   const renderModulePermissionSelector = (groupId, tagId, userId, permissions, inheritedPermissions) => {
     return (
       <Card size="small" style={{ marginTop: 12, background: '#fafafa' }}>
@@ -1187,6 +1223,7 @@ const ModuleAuthorizationManagement = () => {
                     borderRadius: 4
                   }}
                 >
+                  {/* 模块级权限（三列）*/}
                   <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -1252,6 +1289,7 @@ const ModuleAuthorizationManagement = () => {
                     </Space>
                   </div>
 
+                  {/* 课程列表（三级权限）*/}
                   {isExpanded && lessons.length > 0 && (
                     <div style={{ marginLeft: 32, marginTop: 8, paddingLeft: 12, borderLeft: '2px solid #e8e8e8' }}>
                       {lessons.map(lesson => {
@@ -1445,14 +1483,7 @@ const ModuleAuthorizationManagement = () => {
                                   ...t,
                                   users: t.users.map(u =>
                                     u.userId === user.userId
-                                      ? { 
-                                          ...u, 
-                                          inheritFromTag: checked,
-                                          // 【核心修复】取消继承时复制标签权限
-                                          modulePermissions: checked 
-                                            ? [] 
-                                            : deepCopyPermissions(t.inheritFromGroup ? groupPermissions : t.modulePermissions)
-                                        }
+                                      ? { ...u, inheritFromTag: checked }
                                       : u
                                   )
                                 }
@@ -1463,18 +1494,9 @@ const ModuleAuthorizationManagement = () => {
                   )
                 );
                 setHasUnsavedChanges(true);
-                
-                if (!checked) {
-                  message.success('已将上级权限复制到用户配置，您现在可以独立修改');
-                }
               }}
             />
             <span>继承上级权限</span>
-            {!user.inheritFromTag && (
-              <Tag color="orange" style={{ fontSize: 11 }}>
-                独立配置
-              </Tag>
-            )}
           </Space>
 
           {!user.inheritFromTag && renderModulePermissionSelector(
@@ -1579,14 +1601,7 @@ const ModuleAuthorizationManagement = () => {
                                             ...g,
                                             tags: g.tags.map(t =>
                                               t.tagId === tag.tagId
-                                                ? { 
-                                                    ...t, 
-                                                    inheritFromGroup: checked,
-                                                    // 【核心修复】取消继承时复制组权限
-                                                    modulePermissions: checked 
-                                                      ? [] 
-                                                      : deepCopyPermissions(g.modulePermissions)
-                                                  }
+                                                ? { ...t, inheritFromGroup: checked }
                                                 : t
                                             )
                                           }
@@ -1594,18 +1609,9 @@ const ModuleAuthorizationManagement = () => {
                                     )
                                   );
                                   setHasUnsavedChanges(true);
-                                  
-                                  if (!checked) {
-                                    message.success('已将组权限复制到标签配置，您现在可以独立修改');
-                                  }
                                 }}
                               />
                               <span>继承"{group.groupName}"的权限</span>
-                              {!tag.inheritFromGroup && (
-                                <Tag color="orange" style={{ fontSize: 11 }}>
-                                  独立配置
-                                </Tag>
-                              )}
                             </Space>
 
                             {!tag.inheritFromGroup && renderModulePermissionSelector(
@@ -1692,6 +1698,7 @@ const ModuleAuthorizationManagement = () => {
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      {/* 三级权限说明 */}
       <Alert
         message="三级权限体系说明"
         description={
@@ -1713,9 +1720,6 @@ const ModuleAuthorizationManagement = () => {
               <div style={{ fontSize: 12, color: '#666' }}>
                 💡 级联规则：授予高级权限自动授予下级，撤销低级权限自动撤销上级
               </div>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                🔄 继承逻辑：取消继承时自动复制上级权限，保持权限连续性
-              </div>
             </Space>
           </div>
         }
@@ -1725,6 +1729,7 @@ const ModuleAuthorizationManagement = () => {
         style={{ marginBottom: 16 }}
       />
 
+      {/* 操作栏 */}
       <Card style={{ marginBottom: 16 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
           <Space>
@@ -1761,6 +1766,7 @@ const ModuleAuthorizationManagement = () => {
         </Space>
       </Card>
 
+      {/* 授权组列表 */}
       {authorizedGroups.length === 0 ? (
         <Card>
           <Empty
@@ -1789,6 +1795,7 @@ const ModuleAuthorizationManagement = () => {
         </Collapse>
       )}
 
+      {/* 选择用户组模态框 */}
       <Modal
         title="选择要授权的用户组"
         open={groupSelectModalVisible}

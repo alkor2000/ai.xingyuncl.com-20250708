@@ -1,13 +1,8 @@
 /**
- * 教学系统控制器（三级权限版 + 课程资料功能 + 教案功能）
+ * 教学系统控制器（支持课程级权限版 + 课程资料功能 + 教案功能）
  * 
- * 版本更新：
- * - v1.2.0 (2025-10-31): 支持三级权限体系
- *   * view_lesson: 查看课程（学生）
- *   * view_plan: 查看教案（教师）
- *   * edit: 编辑权限（创建者/管理员）
- * 
- * - v1.1.2 (2025-10-29): 修复数据库连接方式
+ * 修复：数据库连接方式（v1.1.2 - 2025-10-29）
+ * 使用正确的 dbConnection.query() 而非 pool.getConnection()
  */
 
 const TeachingModule = require('../models/TeachingModule');
@@ -771,12 +766,11 @@ class TeachingController {
     }
   }
 
-  // ==================== 教案管理（三级权限版）====================
+  // ==================== 教案管理（修复版 - 使用正确的数据库连接方式）====================
 
   /**
    * 保存教案
    * POST /api/teaching/lessons/:id/teaching-plan
-   * 权限要求：edit（编辑权限）
    */
   static async saveTeachingPlan(req, res) {
     const dbConnection = require('../database/connection');
@@ -802,7 +796,7 @@ class TeachingController {
 
       const lesson = lessons[0];
 
-      // 权限检查：只有edit权限才能保存教案
+      // 权限检查
       const userTags = await getUserTags(userId);
       const permission = await TeachingModule.checkUserPermission(
         lesson.module_id,
@@ -837,8 +831,7 @@ class TeachingController {
       logger.info('教案保存成功', {
         lessonId: id,
         pageNumber: page_number,
-        userId,
-        permission
+        userId
       });
 
       return ResponseHelper.success(res, plans[0], '教案保存成功');
@@ -851,7 +844,6 @@ class TeachingController {
   /**
    * 获取教案
    * GET /api/teaching/lessons/:id/teaching-plan/:pageNumber
-   * 权限要求：view_plan（查看教案）或 edit（编辑）- 三级权限核心逻辑
    */
   static async getTeachingPlan(req, res) {
     const dbConnection = require('../database/connection');
@@ -872,7 +864,7 @@ class TeachingController {
 
       const lesson = lessons[0];
 
-      // 【核心修改】三级权限检查：只有 view_plan 或 edit 才能查看教案
+      // 权限检查
       const userTags = await getUserTags(userId);
       const permission = await TeachingModule.checkUserPermission(
         lesson.module_id,
@@ -882,16 +874,8 @@ class TeachingController {
         userTags
       );
 
-      // 权限层级验证
-      if (!['view_plan', 'edit'].includes(permission)) {
-        logger.warn('用户尝试查看教案但权限不足', {
-          userId,
-          username: req.user.username,
-          lessonId: id,
-          currentPermission: permission,
-          requiredPermission: 'view_plan 或 edit'
-        });
-        return ResponseHelper.forbidden(res, '无权查看此课程的教案，需要教师权限或更高级别');
+      if (!permission) {
+        return ResponseHelper.forbidden(res, '无权查看此课程的教案');
       }
 
       // 获取教案
@@ -903,13 +887,6 @@ class TeachingController {
       if (plans.length === 0) {
         return ResponseHelper.notFound(res, '该页面暂无教案');
       }
-
-      logger.info('教案访问成功', {
-        lessonId: id,
-        pageNumber,
-        userId,
-        permission
-      });
 
       return ResponseHelper.success(res, plans[0], '获取教案成功');
     } catch (error) {
@@ -941,19 +918,13 @@ class TeachingController {
         user_id,
         group_id,
         tag_id,
-        permission_type = 'view_lesson', // 【修改】默认值改为 view_lesson（向后兼容）
+        permission_type = 'view',
         expires_at,
         note
       } = req.body;
 
       if (!module_id) {
         return ResponseHelper.validation(res, ['模块ID不能为空']);
-      }
-
-      // 验证权限类型（三级权限）
-      const validPermissions = ['view_lesson', 'view_plan', 'edit'];
-      if (!validPermissions.includes(permission_type)) {
-        return ResponseHelper.validation(res, ['权限类型无效，必须是 view_lesson、view_plan 或 edit']);
       }
 
       const permission = await TeachingPermission.grant({
@@ -970,7 +941,6 @@ class TeachingController {
       logger.info('权限授予成功', {
         permissionId: permission.id,
         moduleId: module_id,
-        permissionType: permission_type,
         grantedBy: user.id
       });
 

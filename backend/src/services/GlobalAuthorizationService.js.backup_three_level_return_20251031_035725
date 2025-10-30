@@ -1,10 +1,19 @@
 /**
- * 全局授权服务（三级权限完整返回版 v2.2.0）
+ * 全局授权服务（三级权限完整支持版）
  * 
- * 版本更新 (2025-10-31):
- * ✅ 返回三级权限详情：hasViewLesson, hasViewPlan, hasEdit
- * ✅ 修复与 checkUserPermission 返回值不匹配问题
- * ✅ 正确支持教案访问权限验证
+ * 版本更新 v2.1.0 (2025-10-31):
+ * ✅ 完整支持三级权限字段：
+ *    - view_lesson (Level 1 - 查看课程)
+ *    - view_plan (Level 2 - 查看教案)
+ *    - edit (Level 3 - 编辑)
+ * ✅ 向后兼容旧的 view 字段
+ * ✅ 正确处理权限继承链
+ * ✅ 修复"取消继承权限消失"问题
+ * 
+ * 核心修复：
+ * - 所有权限判断支持三级权限字段
+ * - 课程false权限正确处理
+ * - 权限层级关系清晰
  */
 
 const dbConnection = require('../database/connection');
@@ -12,13 +21,20 @@ const logger = require('../utils/logger');
 
 class GlobalAuthorizationService {
   /**
-   * 获取用户对模块的权限（三级权限完整返回）
-   * @returns { hasViewLesson: boolean, hasViewPlan: boolean, hasEdit: boolean }
+   * 检查模块是否有任何权限（三级权限版）
+   */
+  static _hasAnyPermission(perm) {
+    if (!perm) return false;
+    return perm.view_lesson || perm.view_plan || perm.edit || perm.view || false;
+  }
+
+  /**
+   * 获取用户对模块的权限（三级权限完整支持）
    */
   static async getUserModulePermission(userId, moduleId, userGroupId, userTags = []) {
     try {
       if (!userGroupId) {
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
       const sql = `
@@ -30,7 +46,7 @@ class GlobalAuthorizationService {
       const { rows } = await dbConnection.query(sql, [userGroupId]);
 
       if (rows.length === 0) {
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
       let config;
@@ -40,24 +56,17 @@ class GlobalAuthorizationService {
           : rows[0].config_data;
       } catch (error) {
         logger.error('解析授权配置失败:', error);
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
-      // 1. 组级权限
+      // 1. 组级权限（基础权限）
       const groupModulePerm = this._findModulePermission(config.modulePermissions || [], moduleId);
-      
-      let groupHasViewLesson = groupModulePerm?.view_lesson || groupModulePerm?.view || false;
-      let groupHasViewPlan = groupModulePerm?.view_plan || false;
-      let groupHasEdit = groupModulePerm?.edit || false;
-      
-      // 如果有课程权限，也算有查看课程权限
-      if (!groupHasViewLesson && this._hasAnyLessonPermission(groupModulePerm)) {
-        groupHasViewLesson = true;
-      }
-
-      let hasViewLesson = false;
-      let hasViewPlan = false;
+      let hasView = false;
       let hasEdit = false;
+      
+      // 记录组级权限（三级权限支持）
+      const groupView = groupModulePerm?.view_lesson || groupModulePerm?.view_plan || groupModulePerm?.view || this._hasAnyLessonPermission(groupModulePerm) || false;
+      const groupEdit = groupModulePerm?.edit || false;
 
       // 2. 处理标签和用户权限
       const tags = config.tags || [];
@@ -74,61 +83,90 @@ class GlobalAuthorizationService {
         if (userConfig) {
           if (userConfig.inheritFromTag) {
             if (tag.inheritFromGroup) {
-              hasViewLesson = groupHasViewLesson;
-              hasViewPlan = groupHasViewPlan;
-              hasEdit = groupHasEdit;
+              hasView = groupView;
+              hasEdit = groupEdit;
+              
+              logger.info('用户继承标签，标签继承组（使用组权限）', {
+                userId,
+                moduleId,
+                tagId: tag.tagId,
+                groupView,
+                groupEdit,
+                hasView,
+                hasEdit
+              });
             } else {
               const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
               if (tagModulePerm) {
-                hasViewLesson = tagModulePerm.view_lesson || tagModulePerm.view || false;
-                hasViewPlan = tagModulePerm.view_plan || false;
+                const tagHasAnyLessonPerm = this._hasAnyLessonPermission(tagModulePerm);
+                hasView = tagModulePerm.view_lesson || tagModulePerm.view_plan || tagModulePerm.view || tagHasAnyLessonPerm || false;
                 hasEdit = tagModulePerm.edit || false;
-                
-                if (!hasViewLesson && this._hasAnyLessonPermission(tagModulePerm)) {
-                  hasViewLesson = true;
-                }
               } else {
-                hasViewLesson = false;
-                hasViewPlan = false;
+                hasView = false;
                 hasEdit = false;
               }
+              
+              logger.info('用户继承标签权限', {
+                userId,
+                moduleId,
+                tagId: tag.tagId,
+                hasView,
+                hasEdit
+              });
             }
           } else {
             const userModulePerm = this._findModulePermission(userConfig.modulePermissions || [], moduleId);
             if (userModulePerm) {
-              hasViewLesson = userModulePerm.view_lesson || userModulePerm.view || false;
-              hasViewPlan = userModulePerm.view_plan || false;
+              const userHasAnyLessonPerm = this._hasAnyLessonPermission(userModulePerm);
+              hasView = userModulePerm.view_lesson || userModulePerm.view_plan || userModulePerm.view || userHasAnyLessonPerm || false;
               hasEdit = userModulePerm.edit || false;
               
-              if (!hasViewLesson && this._hasAnyLessonPermission(userModulePerm)) {
-                hasViewLesson = true;
-              }
+              logger.info('用户使用自定义权限', {
+                userId,
+                moduleId,
+                hasView,
+                hasEdit
+              });
             } else {
-              hasViewLesson = false;
-              hasViewPlan = false;
+              hasView = false;
               hasEdit = false;
+              
+              logger.info('用户无此模块权限配置', {
+                userId,
+                moduleId
+              });
             }
           }
         } else {
           if (tag.inheritFromGroup) {
-            hasViewLesson = groupHasViewLesson;
-            hasViewPlan = groupHasViewPlan;
-            hasEdit = groupHasEdit;
+            hasView = groupView;
+            hasEdit = groupEdit;
+            
+            logger.info('用户无配置，标签继承组权限', {
+              userId,
+              moduleId,
+              tagId: tag.tagId,
+              hasView,
+              hasEdit
+            });
           } else {
             const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
             if (tagModulePerm) {
-              hasViewLesson = tagModulePerm.view_lesson || tagModulePerm.view || false;
-              hasViewPlan = tagModulePerm.view_plan || false;
+              const tagHasAnyLessonPerm = this._hasAnyLessonPermission(tagModulePerm);
+              hasView = tagModulePerm.view_lesson || tagModulePerm.view_plan || tagModulePerm.view || tagHasAnyLessonPerm || false;
               hasEdit = tagModulePerm.edit || false;
-              
-              if (!hasViewLesson && this._hasAnyLessonPermission(tagModulePerm)) {
-                hasViewLesson = true;
-              }
             } else {
-              hasViewLesson = false;
-              hasViewPlan = false;
+              hasView = false;
               hasEdit = false;
             }
+            
+            logger.info('用户无配置，使用标签权限', {
+              userId,
+              moduleId,
+              tagId: tag.tagId,
+              hasView,
+              hasEdit
+            });
           }
         }
         
@@ -136,33 +174,31 @@ class GlobalAuthorizationService {
       }
 
       if (userTagIds.length === 0) {
-        hasViewLesson = groupHasViewLesson;
-        hasViewPlan = groupHasViewPlan;
-        hasEdit = groupHasEdit;
+        hasView = groupView;
+        hasEdit = groupEdit;
+        
+        logger.info('用户无标签，使用组权限', {
+          userId,
+          moduleId,
+          hasView,
+          hasEdit
+        });
       }
 
-      logger.info('用户模块权限（三级）', {
-        userId,
-        moduleId,
-        hasViewLesson,
-        hasViewPlan,
-        hasEdit
-      });
-
-      return { hasViewLesson, hasViewPlan, hasEdit };
+      return { hasView, hasEdit };
     } catch (error) {
       logger.error('获取用户模块权限失败:', error);
-      return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+      return { hasView: false, hasEdit: false };
     }
   }
 
   /**
-   * 获取用户对课程的权限（三级权限完整返回）
+   * 获取用户对课程的权限（三级权限完整支持）
    */
   static async getUserLessonPermission(userId, moduleId, lessonId, userGroupId, userTags = []) {
     try {
       if (!userGroupId) {
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
       const sql = `
@@ -174,7 +210,7 @@ class GlobalAuthorizationService {
       const { rows } = await dbConnection.query(sql, [userGroupId]);
 
       if (rows.length === 0) {
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
       let config;
@@ -184,27 +220,26 @@ class GlobalAuthorizationService {
           : rows[0].config_data;
       } catch (error) {
         logger.error('解析授权配置失败:', error);
-        return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+        return { hasView: false, hasEdit: false };
       }
 
+      // 1. 组级权限
       const groupModulePerm = this._findModulePermission(config.modulePermissions || [], moduleId);
       const groupLessonPerm = this._findLessonPermission(groupModulePerm?.lessons || [], lessonId);
 
-      let groupHasViewLesson, groupHasViewPlan, groupHasEdit;
+      let groupView, groupEdit;
       if (groupLessonPerm) {
-        groupHasViewLesson = groupLessonPerm.view_lesson || groupLessonPerm.view || false;
-        groupHasViewPlan = groupLessonPerm.view_plan || false;
-        groupHasEdit = groupLessonPerm.edit || false;
+        groupView = groupLessonPerm.view_lesson || groupLessonPerm.view_plan || groupLessonPerm.view || false;
+        groupEdit = groupLessonPerm.edit || false;
       } else {
-        groupHasViewLesson = groupModulePerm?.view_lesson || groupModulePerm?.view || false;
-        groupHasViewPlan = groupModulePerm?.view_plan || false;
-        groupHasEdit = groupModulePerm?.edit || false;
+        groupView = groupModulePerm?.view_lesson || groupModulePerm?.view_plan || groupModulePerm?.view || false;
+        groupEdit = groupModulePerm?.edit || false;
       }
 
-      let hasViewLesson = false;
-      let hasViewPlan = false;
+      let hasView = false;
       let hasEdit = false;
 
+      // 2. 处理标签和用户权限
       const tags = config.tags || [];
       const userTagIds = userTags.map(t => t.id);
 
@@ -219,20 +254,17 @@ class GlobalAuthorizationService {
         if (userConfig) {
           if (userConfig.inheritFromTag) {
             if (tag.inheritFromGroup) {
-              hasViewLesson = groupHasViewLesson;
-              hasViewPlan = groupHasViewPlan;
-              hasEdit = groupHasEdit;
+              hasView = groupView;
+              hasEdit = groupEdit;
             } else {
               const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
               const tagLessonPerm = this._findLessonPermission(tagModulePerm?.lessons || [], lessonId);
               
               if (tagLessonPerm) {
-                hasViewLesson = tagLessonPerm.view_lesson || tagLessonPerm.view || false;
-                hasViewPlan = tagLessonPerm.view_plan || false;
+                hasView = tagLessonPerm.view_lesson || tagLessonPerm.view_plan || tagLessonPerm.view || false;
                 hasEdit = tagLessonPerm.edit || false;
               } else {
-                hasViewLesson = tagModulePerm?.view_lesson || tagModulePerm?.view || false;
-                hasViewPlan = tagModulePerm?.view_plan || false;
+                hasView = tagModulePerm?.view_lesson || tagModulePerm?.view_plan || tagModulePerm?.view || false;
                 hasEdit = tagModulePerm?.edit || false;
               }
             }
@@ -241,31 +273,26 @@ class GlobalAuthorizationService {
             const userLessonPerm = this._findLessonPermission(userModulePerm?.lessons || [], lessonId);
             
             if (userLessonPerm) {
-              hasViewLesson = userLessonPerm.view_lesson || userLessonPerm.view || false;
-              hasViewPlan = userLessonPerm.view_plan || false;
+              hasView = userLessonPerm.view_lesson || userLessonPerm.view_plan || userLessonPerm.view || false;
               hasEdit = userLessonPerm.edit || false;
             } else {
-              hasViewLesson = userModulePerm?.view_lesson || userModulePerm?.view || false;
-              hasViewPlan = userModulePerm?.view_plan || false;
+              hasView = userModulePerm?.view_lesson || userModulePerm?.view_plan || userModulePerm?.view || false;
               hasEdit = userModulePerm?.edit || false;
             }
           }
         } else {
           if (tag.inheritFromGroup) {
-            hasViewLesson = groupHasViewLesson;
-            hasViewPlan = groupHasViewPlan;
-            hasEdit = groupHasEdit;
+            hasView = groupView;
+            hasEdit = groupEdit;
           } else {
             const tagModulePerm = this._findModulePermission(tag.modulePermissions || [], moduleId);
             const tagLessonPerm = this._findLessonPermission(tagModulePerm?.lessons || [], lessonId);
             
             if (tagLessonPerm) {
-              hasViewLesson = tagLessonPerm.view_lesson || tagLessonPerm.view || false;
-              hasViewPlan = tagLessonPerm.view_plan || false;
+              hasView = tagLessonPerm.view_lesson || tagLessonPerm.view_plan || tagLessonPerm.view || false;
               hasEdit = tagLessonPerm.edit || false;
             } else {
-              hasViewLesson = tagModulePerm?.view_lesson || tagModulePerm?.view || false;
-              hasViewPlan = tagModulePerm?.view_plan || false;
+              hasView = tagModulePerm?.view_lesson || tagModulePerm?.view_plan || tagModulePerm?.view || false;
               hasEdit = tagModulePerm?.edit || false;
             }
           }
@@ -275,20 +302,19 @@ class GlobalAuthorizationService {
       }
 
       if (userTagIds.length === 0) {
-        hasViewLesson = groupHasViewLesson;
-        hasViewPlan = groupHasViewPlan;
-        hasEdit = groupHasEdit;
+        hasView = groupView;
+        hasEdit = groupEdit;
       }
 
-      return { hasViewLesson, hasViewPlan, hasEdit };
+      return { hasView, hasEdit };
     } catch (error) {
       logger.error('获取用户课程权限失败:', error);
-      return { hasViewLesson: false, hasViewPlan: false, hasEdit: false };
+      return { hasView: false, hasEdit: false };
     }
   }
 
   /**
-   * 获取用户有权限访问的所有模块ID列表
+   * 获取用户有权限访问的所有模块ID列表（三级权限完整支持）
    */
   static async getUserAuthorizedModuleIds(userId, userGroupId, userTags = []) {
     try {
@@ -320,6 +346,7 @@ class GlobalAuthorizationService {
 
       const moduleIds = new Set();
 
+      // 1. 收集组级权限的模块（三级权限支持）
       const groupPerms = config.modulePermissions || [];
       const groupModuleIds = new Set();
       groupPerms.forEach(perm => {
@@ -328,6 +355,7 @@ class GlobalAuthorizationService {
         }
       });
 
+      // 2. 根据用户标签确定最终权限
       const tags = config.tags || [];
       const userTagIds = userTags.map(t => t.id);
       
@@ -356,6 +384,7 @@ class GlobalAuthorizationService {
               });
             }
           } else {
+            // 【核心修复】用户自定义权限 - 支持三级权限字段
             const userPerms = userConfig.modulePermissions || [];
             userPerms.forEach(perm => {
               if (perm.view_lesson || perm.view_plan || perm.edit || perm.view || this._hasAnyLessonPermission(perm)) {
@@ -388,7 +417,9 @@ class GlobalAuthorizationService {
       logger.info('用户授权模块列表', {
         userId,
         userGroupId,
-        totalModules: result.length
+        totalModules: result.length,
+        moduleIds: result,
+        userTags: userTags.map(t => ({ id: t.id, name: t.name }))
       });
 
       return result;
@@ -399,7 +430,7 @@ class GlobalAuthorizationService {
   }
 
   /**
-   * 获取用户对指定模块有权限的课程ID列表
+   * 获取用户对指定模块有权限的课程ID列表（三级权限完整支持）
    */
   static async getUserAuthorizedLessonIds(userId, moduleId, userGroupId, userTags = []) {
     try {
@@ -433,6 +464,7 @@ class GlobalAuthorizationService {
       const authorizedLessonIds = new Set();
       const deniedLessonIds = new Set();
 
+      // 1. 组级权限（三级权限支持）
       const groupModulePerm = this._findModulePermission(config.modulePermissions || [], moduleId);
       const groupHasModulePermission = groupModulePerm?.view_lesson || groupModulePerm?.view_plan || groupModulePerm?.edit || groupModulePerm?.view || false;
       
@@ -446,6 +478,7 @@ class GlobalAuthorizationService {
         });
       }
 
+      // 2. 标签和用户权限
       const tags = config.tags || [];
       const userTagIds = userTags.map(t => t.id);
 
@@ -550,21 +583,43 @@ class GlobalAuthorizationService {
 
       if (hasModulePermission) {
         if (deniedLessonIds.size > 0) {
-          return {
+          const result = {
             mode: 'all_except',
             deniedLessonIds: Array.from(deniedLessonIds)
           };
+          
+          logger.info('用户有模块权限但排除部分课程', {
+            userId,
+            moduleId,
+            deniedLessonIds: result.deniedLessonIds
+          });
+          
+          return result;
         }
+        
         return null;
       }
       
-      return Array.from(authorizedLessonIds);
+      const result = Array.from(authorizedLessonIds);
+      
+      logger.info('用户课程授权列表', {
+        userId,
+        moduleId,
+        hasModulePermission,
+        authorizedCount: result.length,
+        deniedCount: deniedLessonIds.size
+      });
+      
+      return result;
     } catch (error) {
       logger.error('获取用户授权课程ID失败:', error);
       return [];
     }
   }
 
+  /**
+   * 辅助方法：检查模块权限中是否有任何课程权限（三级权限支持）
+   */
   static _hasAnyLessonPermission(modulePerm) {
     if (!modulePerm || !modulePerm.lessons) {
       return false;
@@ -577,22 +632,34 @@ class GlobalAuthorizationService {
     );
   }
 
+  /**
+   * 辅助方法：从权限列表中查找指定模块的权限
+   */
   static _findModulePermission(permissions, moduleId) {
     return permissions.find(p => p.moduleId === parseInt(moduleId));
   }
 
+  /**
+   * 辅助方法：从课程权限列表中查找指定课程的权限
+   */
   static _findLessonPermission(lessons, lessonId) {
     return lessons.find(l => l.lessonId === parseInt(lessonId));
   }
 
+  /**
+   * 检查用户是否有模块的任意权限
+   */
   static async hasAnyModulePermission(userId, moduleId, userGroupId, userTags = []) {
     const perm = await this.getUserModulePermission(userId, moduleId, userGroupId, userTags);
-    return perm.hasViewLesson || perm.hasViewPlan || perm.hasEdit;
+    return perm.hasView || perm.hasEdit;
   }
 
+  /**
+   * 检查用户是否有课程的任意权限
+   */
   static async hasAnyLessonPermission(userId, moduleId, lessonId, userGroupId, userTags = []) {
     const perm = await this.getUserLessonPermission(userId, moduleId, lessonId, userGroupId, userTags);
-    return perm.hasViewLesson || perm.hasViewPlan || perm.hasEdit;
+    return perm.hasView || perm.hasEdit;
   }
 }
 

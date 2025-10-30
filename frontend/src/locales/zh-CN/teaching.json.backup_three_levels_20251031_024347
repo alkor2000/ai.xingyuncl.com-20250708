@@ -138,14 +138,8 @@
     
     "permissionType": "权限类型",
     "permissionTypes": {
-      "view_lesson": "查看课程",
-      "view_plan": "查看教案",
+      "view": "查看",
       "edit": "编辑"
-    },
-    "permissionLevels": {
-      "view_lesson": "学生权限 - 仅查看课程内容",
-      "view_plan": "教师权限 - 查看课程+教案",
-      "edit": "编辑权限 - 完全控制"
     },
     
     "targetType": "对象类型",

@@ -1,10 +1,10 @@
 /**
- * 教学模块模型（三级权限返回版 v2.2.0）
+ * 教学模块模型（修复版：严格权限控制）
  * 
  * 核心修复：
- * - checkUserPermission 返回三级权限字符串：'view_lesson' | 'view_plan' | 'edit' | null
- * - 匹配 GlobalAuthorizationService 的三级权限返回
- * - 正确支持教案访问权限验证
+ * - admin 角色也要遵守全局授权（只有 super_admin 完全绕过）
+ * - 严格按授权过滤模块列表（移除 visibility 兜底逻辑）
+ * - 创建者始终有编辑权限
  */
 
 const dbConnection = require('../database/connection');
@@ -33,6 +33,9 @@ class TeachingModule {
     this.deleted_by = data.deleted_by || null;
   }
 
+  /**
+   * 创建教学模块
+   */
   static async create(moduleData) {
     try {
       const {
@@ -79,6 +82,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 根据ID查找模块
+   */
   static async findById(id) {
     try {
       const sql = `
@@ -104,6 +110,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 获取用户可访问的模块列表（修复：严格权限控制）
+   */
   static async getUserModules(userId, userRole, userGroupId, userTags = [], options = {}) {
     try {
       const {
@@ -116,23 +125,28 @@ class TeachingModule {
 
       const offset = (page - 1) * limit;
 
+      // 只有超级管理员查看所有模块
       if (userRole === 'super_admin') {
         return await this._getAdminModules(page, limit, status, visibility, search);
       }
 
+      // 普通用户和 admin：严格使用全局授权系统
       const authorizedModuleIds = await GlobalAuthorizationService.getUserAuthorizedModuleIds(
         userId,
         userGroupId,
         userTags
       );
 
+      // 获取用户创建的模块ID
       const creatorSql = 'SELECT id FROM teaching_modules WHERE creator_id = ? AND is_deleted = 0';
       const { rows: creatorModules } = await dbConnection.query(creatorSql, [userId]);
       const creatorModuleIds = creatorModules.map(m => m.id);
 
+      // 合并授权的和创建的模块ID
       const allAuthorizedIds = [...new Set([...authorizedModuleIds, ...creatorModuleIds])];
 
       if (allAuthorizedIds.length === 0) {
+        // 没有任何授权，返回空列表
         return {
           modules: [],
           pagination: {
@@ -147,20 +161,24 @@ class TeachingModule {
       let whereConditions = ['tm.is_deleted = 0'];
       let params = [];
 
+      // 修复：严格按授权ID过滤，不使用 OR visibility
       const placeholders = allAuthorizedIds.map(() => '?').join(',');
       whereConditions.push(`tm.id IN (${placeholders})`);
       params.push(...allAuthorizedIds);
 
+      // 状态过滤
       if (status) {
         whereConditions.push('tm.status = ?');
         params.push(status);
       }
 
+      // 可见性过滤
       if (visibility) {
         whereConditions.push('tm.visibility = ?');
         params.push(visibility);
       }
 
+      // 搜索过滤
       if (search) {
         whereConditions.push('(tm.name LIKE ? OR tm.description LIKE ?)');
         params.push(`%${search}%`, `%${search}%`);
@@ -168,10 +186,12 @@ class TeachingModule {
 
       const whereClause = whereConditions.join(' AND ');
 
+      // 获取总数
       const countSql = `SELECT COUNT(*) as total FROM teaching_modules tm WHERE ${whereClause}`;
       const { rows: totalRows } = await dbConnection.query(countSql, params);
       const total = totalRows[0].total;
 
+      // 获取列表
       const listSql = `
         SELECT tm.*,
                u.username as creator_name,
@@ -201,6 +221,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 管理员获取所有模块（内部方法）
+   */
   static async _getAdminModules(page, limit, status, visibility, search) {
     const offset = (page - 1) * limit;
     let whereConditions = ['tm.is_deleted = 0'];
@@ -252,6 +275,9 @@ class TeachingModule {
     };
   }
 
+  /**
+   * 更新模块信息
+   */
   async update(updateData) {
     try {
       const allowedFields = [
@@ -267,6 +293,7 @@ class TeachingModule {
         return this;
       }
 
+      // 如果状态变为published，设置发布时间
       if (updateData.status === 'published' && this.status !== 'published') {
         updateFields.push('published_at');
         updateData.published_at = new Date();
@@ -279,6 +306,7 @@ class TeachingModule {
       const sql = `UPDATE teaching_modules SET ${setClause}, updated_at = NOW() WHERE id = ? AND is_deleted = 0`;
       await dbConnection.query(sql, values);
 
+      // 更新实例属性
       updateFields.forEach(field => {
         this[field] = updateData[field];
       });
@@ -292,6 +320,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 软删除模块
+   */
   async softDelete(deletedBy) {
     try {
       const sql = `
@@ -316,6 +347,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 增加查看次数
+   */
   async incrementViewCount() {
     try {
       const sql = 'UPDATE teaching_modules SET view_count = view_count + 1 WHERE id = ?';
@@ -327,8 +361,8 @@ class TeachingModule {
   }
 
   /**
-   * 检查用户对模块的权限（三级权限版）
-   * @returns {string} 'edit' | 'view_plan' | 'view_lesson' | null
+   * 检查用户对模块的权限（修复：admin 也要遵守授权）
+   * @returns {string} 'edit' | 'view' | null
    */
   static async checkUserPermission(moduleId, userId, userRole, userGroupId, userTags = []) {
     try {
@@ -337,15 +371,17 @@ class TeachingModule {
         return null;
       }
 
+      // 修复：只有超级管理员拥有所有权限
       if (userRole === 'super_admin') {
         return 'edit';
       }
 
+      // 创建者拥有编辑权限
       if (module.creator_id === userId) {
         return 'edit';
       }
 
-      // 【核心修复】获取三级权限详情
+      // 1. 优先检查全局授权系统（admin 也要遵守）
       const globalPerm = await GlobalAuthorizationService.getUserModulePermission(
         userId,
         moduleId,
@@ -353,20 +389,15 @@ class TeachingModule {
         userTags
       );
 
-      // 【核心修复】根据三级权限返回对应字符串
       if (globalPerm.hasEdit) {
         return 'edit';
       }
 
-      if (globalPerm.hasViewPlan) {
-        return 'view_plan';
+      if (globalPerm.hasView) {
+        return 'view';
       }
 
-      if (globalPerm.hasViewLesson) {
-        return 'view_lesson';
-      }
-
-      // 检查旧的显式授权（向后兼容）
+      // 2. 检查旧的显式授权（向后兼容）
       const tagIds = userTags.map(t => t.id);
       
       if (tagIds.length > 0) {
@@ -390,9 +421,7 @@ class TeachingModule {
             END,
             CASE permission_type
               WHEN 'edit' THEN 1
-              WHEN 'view_plan' THEN 2
-              WHEN 'view_lesson' THEN 3
-              WHEN 'view' THEN 4
+              WHEN 'view' THEN 2
             END
           LIMIT 1
         `;
@@ -401,15 +430,11 @@ class TeachingModule {
         const { rows } = await dbConnection.query(sql, params);
 
         if (rows.length > 0) {
-          const oldPerm = rows[0].permission_type;
-          // 兼容旧的 'view' 字段
-          if (oldPerm === 'view') {
-            return 'view_lesson';
-          }
-          return oldPerm;
+          return rows[0].permission_type;
         }
       }
 
+      // 3. 不再使用 visibility 兜底（严格权限控制）
       return null;
     } catch (error) {
       logger.error('检查用户权限失败:', error);
@@ -417,6 +442,9 @@ class TeachingModule {
     }
   }
 
+  /**
+   * 转换为JSON
+   */
   toJSON() {
     return {
       id: this.id,

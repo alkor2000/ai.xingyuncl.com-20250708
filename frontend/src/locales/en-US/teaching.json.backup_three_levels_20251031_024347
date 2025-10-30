@@ -136,14 +136,8 @@
     
     "permissionType": "Permission Type",
     "permissionTypes": {
-      "view_lesson": "View Lesson",
-      "view_plan": "View Plan",
+      "view": "View",
       "edit": "Edit"
-    },
-    "permissionLevels": {
-      "view_lesson": "Student - View lessons only",
-      "view_plan": "Teacher - View lessons & plans",
-      "edit": "Editor - Full control"
     },
     
     "targetType": "Target Type",
