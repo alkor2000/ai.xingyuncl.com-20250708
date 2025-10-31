@@ -1,7 +1,7 @@
 /**
- * 课程页面查看器（iOS风格版 + 精致全屏控制栏 v1.2.2）
+ * 课程页面查看器（iOS风格版 + 教案查看功能 v1.2.1）
  * 功能：显示和浏览课程的具体页面内容，支持查看教案
- * 优化：全屏控制栏更小巧、更透明、更高级（2025-10-31）
+ * 修复：按钮位置+样式+Drawer显示问题（2025-10-30）
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -63,6 +63,7 @@ const LessonViewer = () => {
   const [pageViewTime, setPageViewTime] = useState(Date.now());
   const [showControls, setShowControls] = useState(false);
   
+  // 教案查看状态
   const [teachingPlanDrawerVisible, setTeachingPlanDrawerVisible] = useState(false);
   const [currentTeachingPlan, setCurrentTeachingPlan] = useState('');
   const [planLoading, setPlanLoading] = useState(false);
@@ -71,12 +72,14 @@ const LessonViewer = () => {
   const containerRef = useRef(null);
   const hideTimerRef = useRef(null);
 
+  // 加载课程数据
   useEffect(() => {
     if (id) {
       loadLesson();
     }
   }, [id]);
 
+  // URL pageNumber 变化时更新当前页
   useEffect(() => {
     if (pageNumber) {
       const page = parseInt(pageNumber);
@@ -100,6 +103,7 @@ const LessonViewer = () => {
     }
   };
 
+  // 检查用户是否有编辑权限
   const hasEditPermission = () => {
     if (user?.role === 'super_admin') return true;
     if (currentLesson?.creator_id === user?.id) return true;
@@ -108,6 +112,7 @@ const LessonViewer = () => {
     return false;
   };
 
+  // 记录页面浏览
   useEffect(() => {
     if (!currentLesson) return;
 
@@ -130,6 +135,7 @@ const LessonViewer = () => {
     };
   }, [currentPage, currentLesson]);
 
+  // 鼠标进入触发区域显示控制条
   const handleMouseEnterTrigger = () => {
     if (!isFullscreen) return;
     
@@ -162,6 +168,7 @@ const LessonViewer = () => {
     };
   }, []);
 
+  // 全屏模式快捷键
   useEffect(() => {
     if (!isFullscreen) return;
 
@@ -234,6 +241,7 @@ const LessonViewer = () => {
     return page?.html || page?.content || '';
   };
 
+  // 返回课程页面列表
   const handleBack = () => {
     navigate(`/teaching/lessons/${id}`);
   };
@@ -302,6 +310,9 @@ const LessonViewer = () => {
     };
   }, []);
 
+  /**
+   * 打开教案查看抽屉
+   */
   const handleOpenTeachingPlan = async () => {
     console.log('📖 打开教案查看', { lessonId: id, currentPage });
     
@@ -327,6 +338,9 @@ const LessonViewer = () => {
     }
   };
 
+  /**
+   * 关闭教案抽屉
+   */
   const handleCloseTeachingPlan = () => {
     setTeachingPlanDrawerVisible(false);
   };
@@ -372,12 +386,14 @@ const LessonViewer = () => {
     >
       {!isFullscreen && (
         <>
+          {/* iOS风格导航栏 */}
           <IOSNavBar
             title={`${currentLesson.title} - ${t('teaching.pageInfo', { current: currentPage, total: totalPages })}`}
             onBack={handleBack}
             backText={t('teaching.backToPageList')}
             actions={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* 进度显示 */}
                 <div style={{ 
                   display: 'flex', 
                   alignItems: 'center',
@@ -392,6 +408,7 @@ const LessonViewer = () => {
                   </span>
                 </div>
 
+                {/* 查看教案按钮 - 移到这里 */}
                 <IOSButton 
                   variant="secondary" 
                   size="small" 
@@ -419,6 +436,7 @@ const LessonViewer = () => {
             }
           />
 
+          {/* 页面控制栏 */}
           <div style={{
             background: 'white',
             padding: '12px 24px',
@@ -476,6 +494,7 @@ const LessonViewer = () => {
         </>
       )}
 
+      {/* 内容区域 */}
       <div style={{ 
         flex: 1,
         background: '#fff',
@@ -517,7 +536,7 @@ const LessonViewer = () => {
         )}
       </div>
 
-      {/* 全屏模式控制条 - 精致版 */}
+      {/* 全屏模式控制条 */}
       {isFullscreen && (
         <>
           <div
@@ -537,116 +556,114 @@ const LessonViewer = () => {
             onMouseMove={handleMouseMoveOnControls}
             style={{
               position: 'fixed',
-              bottom: 24,
+              bottom: 30,
               left: '50%',
               transform: 'translateX(-50%)',
-              background: 'rgba(0, 0, 0, 0.6)',
-              backdropFilter: 'blur(20px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              borderRadius: 24,
-              padding: '8px 20px',
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderRadius: 40,
+              padding: '12px 24px',
               display: 'flex',
               alignItems: 'center',
-              gap: 12,
+              gap: 16,
               transition: 'opacity 0.3s ease',
               opacity: showControls ? 1 : 0,
               pointerEvents: showControls ? 'auto' : 'none',
               zIndex: 999,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2)',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
             }}
           >
+            {/* 上一页按钮 */}
             <Tooltip title={t('teaching.prevPage')} placement="top">
               <Button
                 type="text"
-                icon={<LeftOutlined style={{ fontSize: 14 }} />}
+                icon={<LeftOutlined />}
                 disabled={currentPage === 1}
                 onClick={handlePrevPage}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   opacity: currentPage === 1 ? 0.3 : 1,
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   if (currentPage > 1) {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Tooltip>
 
+            {/* 页码显示 */}
             <div style={{ 
               color: 'white', 
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: 600,
-              minWidth: 90,
+              minWidth: 100,
               textAlign: 'center',
               userSelect: 'none',
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 8,
               justifyContent: 'center'
             }}>
-              <span style={{ fontSize: 18, color: '#007AFF' }}>{currentPage}</span>
-              <span style={{ opacity: 0.5, fontSize: 13 }}>/</span>
-              <span style={{ fontSize: 13, opacity: 0.8 }}>{totalPages}</span>
+              <span style={{ fontSize: 20, color: '#007AFF' }}>{currentPage}</span>
+              <span style={{ opacity: 0.6 }}>/</span>
+              <span>{totalPages}</span>
             </div>
 
+            {/* 下一页按钮 */}
             <Tooltip title={t('teaching.nextPage')} placement="top">
               <Button
                 type="text"
-                icon={<RightOutlined style={{ fontSize: 14 }} />}
+                icon={<RightOutlined />}
                 disabled={currentPage === totalPages}
                 onClick={handleNextPage}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   opacity: currentPage === totalPages ? 0.3 : 1,
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   if (currentPage < totalPages) {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Tooltip>
 
+            {/* 分隔线 */}
             <div style={{ 
               width: 1, 
-              height: 20,
-              background: 'rgba(255, 255, 255, 0.15)'
+              height: 24,
+              background: 'rgba(255, 255, 255, 0.2)'
             }} />
 
+            {/* 进度显示 */}
             <Tooltip title={`${t('teaching.progress')}: ${progress}%`} placement="top">
               <div style={{ 
-                width: 100,
-                height: 3,
+                width: 120,
+                height: 4,
                 background: 'rgba(255, 255, 255, 0.2)',
                 borderRadius: 2,
                 overflow: 'hidden'
@@ -661,120 +678,113 @@ const LessonViewer = () => {
               </div>
             </Tooltip>
 
+            {/* 查看教案按钮（全屏模式 - 修复为白色风格）*/}
             <Tooltip title={t('teaching.viewTeachingPlan')} placement="top">
               <Button
                 type="text"
-                icon={<BookOutlined style={{ fontSize: 14 }} />}
+                icon={<BookOutlined />}
                 onClick={handleOpenTeachingPlan}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.transform = 'scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Tooltip>
 
+            {/* 页面列表按钮 */}
             <Tooltip title={t('teaching.pageList')} placement="top">
               <Button
                 type="text"
-                icon={<UnorderedListOutlined style={{ fontSize: 14 }} />}
+                icon={<UnorderedListOutlined />}
                 onClick={handleBack}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.transform = 'scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Tooltip>
 
+            {/* 编辑按钮 */}
             {canEdit && (
               <Tooltip title={t('common.edit')} placement="top">
                 <Button
                   type="text"
-                  icon={<EditOutlined style={{ fontSize: 14 }} />}
+                  icon={<EditOutlined />}
                   onClick={handleEdit}
                   style={{
                     color: 'white',
                     borderRadius: '50%',
-                    width: 32,
-                    height: 32,
+                    width: 36,
+                    height: 36,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: 'rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s',
-                    padding: 0
+                    transition: 'all 0.3s'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.transform = 'scale(1.1)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                 />
               </Tooltip>
             )}
 
+            {/* 退出全屏按钮 */}
             <Tooltip title={t('teaching.exitFullscreen')} placement="top">
               <Button
                 type="text"
-                icon={<FullscreenExitOutlined style={{ fontSize: 14 }} />}
+                icon={<FullscreenExitOutlined />}
                 onClick={toggleFullscreen}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.transform = 'scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Tooltip>
 
+            {/* 更多菜单 */}
             <Dropdown 
               menu={buildMoreMenuItems()} 
               trigger={['click']}
@@ -782,26 +792,23 @@ const LessonViewer = () => {
             >
               <Button
                 type="text"
-                icon={<EllipsisOutlined style={{ fontSize: 14 }} />}
+                icon={<EllipsisOutlined />}
                 style={{
                   color: 'white',
                   borderRadius: '50%',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   background: 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s',
-                  padding: 0
+                  transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.transform = 'scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               />
             </Dropdown>
@@ -809,6 +816,7 @@ const LessonViewer = () => {
         </>
       )}
 
+      {/* 教案查看抽屉 - 修复显示问题 */}
       <Drawer
         title={
           <div style={{ 
