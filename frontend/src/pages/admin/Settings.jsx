@@ -1,6 +1,10 @@
 /**
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
- * 新增：教学管理Tab（仅超级管理员）
+ * 
+ * 版本更新：
+ * - v1.3.0 (2025-11-09): 组管理员也能访问教学管理
+ *   * 组管理员可以管理本组的教学授权
+ * - v1.2.0: 教学管理Tab（仅超级管理员）
  */
 
 import React, { useEffect, useState } from 'react'
@@ -118,6 +122,7 @@ const Settings = () => {
   const isSuperAdmin = userRole === ROLES.SUPER_ADMIN
   const isGroupAdmin = userRole === ROLES.ADMIN
   const canViewSettings = isSuperAdmin || isGroupAdmin
+  const canManageTeaching = isSuperAdmin || isGroupAdmin // 新增：组管理员也能管理教学
 
   // 初始化加载数据
   useEffect(() => {
@@ -440,13 +445,14 @@ const Settings = () => {
       ),
       children: <UsageLogs />
     },
-    // 只有超级管理员可见的教学管理Tab（新增）
-    ...(isSuperAdmin ? [{
+    // 教学管理Tab - 超级管理员和组管理员都可见（修改：从仅超级管理员改为包含组管理员）
+    ...(canManageTeaching ? [{
       key: 'teaching',
       label: (
         <span>
           <BookOutlined />
           教学管理
+          {isGroupAdmin && <Tag color="blue" style={{ marginLeft: 8 }}>本组</Tag>}
         </span>
       ),
       children: <TeachingManagement />

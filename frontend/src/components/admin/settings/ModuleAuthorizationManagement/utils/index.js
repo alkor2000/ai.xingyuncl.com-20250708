@@ -3,5 +3,6 @@
  */
 
 export * from './deepCopy';
-export * from './permissionMigration';
 export * from './permissionCalculator';
+export * from './permissionMigration';
+export * from './permissionBoundary';

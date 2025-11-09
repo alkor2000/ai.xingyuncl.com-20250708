@@ -2,16 +2,20 @@
  * 顶部操作栏组件
  * 包含：新建授权、刷新、重置、保存按钮
  * 
+ * 版本：v1.1.0 (2025-11-09)
+ * 更新：支持组管理员权限控制
+ * 
  * @module components/OperationBar
  */
 
 import React from 'react';
-import { Card, Button, Space, Tag } from 'antd';
+import { Card, Button, Space, Tag, Tooltip } from 'antd';
 import {
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  LockOutlined
 } from '@ant-design/icons';
 import { BUTTON_TEXTS, WARNING_MESSAGES } from '../constants';
 
@@ -25,6 +29,7 @@ import { BUTTON_TEXTS, WARNING_MESSAGES } from '../constants';
  * @property {boolean} loading - 加载状态
  * @property {boolean} saving - 保存状态
  * @property {boolean} hasUnsavedChanges - 是否有未保存的更改
+ * @property {boolean} canAddAuth - 是否可以添加新授权（组管理员为false）
  */
 
 /**
@@ -37,21 +42,35 @@ const OperationBar = React.memo(({
   onSave,
   loading = false,
   saving = false,
-  hasUnsavedChanges = false
+  hasUnsavedChanges = false,
+  canAddAuth = true // 默认可以添加
 }) => {
   return (
     <Card style={{ marginBottom: 16 }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
         {/* 左侧操作按钮 */}
         <Space>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={onNewAuth}
-            disabled={loading}
-          >
-            {BUTTON_TEXTS.NEW_AUTH}
-          </Button>
+          {canAddAuth ? (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={onNewAuth}
+              disabled={loading}
+            >
+              {BUTTON_TEXTS.NEW_AUTH}
+            </Button>
+          ) : (
+            <Tooltip title="组管理员只能管理本组的授权配置，不能添加新组织">
+              <Button
+                type="primary"
+                icon={<LockOutlined />}
+                disabled
+              >
+                {BUTTON_TEXTS.NEW_AUTH}
+              </Button>
+            </Tooltip>
+          )}
+          
           <Button
             icon={<ReloadOutlined />}
             onClick={onRefresh}

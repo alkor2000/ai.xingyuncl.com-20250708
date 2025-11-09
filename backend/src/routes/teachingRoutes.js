@@ -1,8 +1,13 @@
 /**
- * 教学系统路由（全局授权管理增强版 + 教案管理）
- * 新增：教学模块分组管理路由
- * 新增：全局三级授权管理路由
- * 新增：教案管理路由（v1.1 - 2025-10-29）
+ * 教学系统路由（全局授权管理增强版 + 教案管理 + 组管理员授权）
+ * 
+ * 版本更新：
+ * - v1.3.0 (2025-11-09): 支持组管理员二次授权
+ *   * 组管理员可以访问授权管理接口
+ *   * 权限检查在控制器中实现
+ * 
+ * - v1.2.0: 全局三级授权管理路由
+ * - v1.1.0 (2025-10-29): 教案管理路由
  */
 
 const express = require('express');
@@ -23,7 +28,7 @@ const router = express.Router();
 // 所有路由都需要认证
 router.use(authenticate);
 
-// ==================== 分组管理路由（新增）====================
+// ==================== 分组管理路由 ====================
 
 /**
  * @route   GET /api/teaching/groups
@@ -64,8 +69,9 @@ router.get('/groups/:groupId/modules', TeachingController.getGroupModules);
 
 /**
  * @route   GET /api/teaching/admin/modules
- * @desc    获取所有教学模块（管理员视角，不受权限限制）
- * @access  仅超级管理员
+ * @desc    获取所有教学模块（管理员视角）
+ * @access  超级管理员查看所有，组管理员查看本组授权的模块
+ * @update  v1.3.0: 支持组管理员访问
  */
 router.get('/admin/modules', TeachingController.getAllModules);
 
@@ -151,7 +157,7 @@ router.put('/lessons/:id', canEditLesson(), TeachingController.updateLesson);
  */
 router.delete('/lessons/:id', canEditLesson(), TeachingController.deleteLesson);
 
-// ==================== 教案管理路由（新增 - v1.1）====================
+// ==================== 教案管理路由 ====================
 
 /**
  * @route   POST /api/teaching/lessons/:id/teaching-plan
@@ -213,34 +219,40 @@ router.post(
   TeachingController.revokeMultiplePermissions
 );
 
-// ==================== 全局授权管理路由（新增）====================
+// ==================== 全局授权管理路由（增强：支持组管理员）====================
 
 /**
  * @route   POST /api/teaching/authorization/save
  * @desc    批量保存全局授权配置（组→标签→用户三级）
- * @access  仅超级管理员
+ * @access  超级管理员：可以管理所有组
+ *          组管理员：只能管理本组，且只能分配已授权的模块
+ * @update  v1.3.0: 支持组管理员二次授权
  */
 router.post('/authorization/save', TeachingController.saveGlobalAuthorizations);
 
 /**
  * @route   GET /api/teaching/authorization
  * @desc    获取全局授权配置列表
- * @access  仅超级管理员
+ * @access  超级管理员：获取所有组的配置
+ *          组管理员：只获取本组的配置
+ * @update  v1.3.0: 支持组管理员访问
  */
 router.get('/authorization', TeachingController.getGlobalAuthorizations);
 
 /**
  * @route   GET /api/teaching/tags/:tagId/users
  * @desc    获取标签下的用户列表（分页，用于授权管理）
- * @access  仅超级管理员
+ * @access  超级管理员、组管理员（只能查看本组标签）
  * @query   page=1&limit=20
+ * @update  v1.3.0: 支持组管理员访问
  */
 router.get('/tags/:tagId/users', TeachingController.getTagUsers);
 
 /**
  * @route   GET /api/teaching/modules/:moduleId/lessons-for-auth
  * @desc    获取模块的课程列表（用于授权选择）
- * @access  仅超级管理员
+ * @access  超级管理员、组管理员（只能查看已授权的模块）
+ * @update  v1.3.0: 支持组管理员访问
  */
 router.get('/modules/:moduleId/lessons-for-auth', TeachingController.getModuleLessonsForAuth);
 
