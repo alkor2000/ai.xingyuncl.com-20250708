@@ -1,11 +1,14 @@
 /**
- * 教学系统路由（全局授权管理增强版 + 教案管理 + 组管理员授权）
+ * 教学系统路由（v1.5.0 - Phase 3 授权路由加固版）
  * 
  * 版本更新：
- * - v1.3.0 (2025-11-09): 支持组管理员二次授权
- *   * 组管理员可以访问授权管理接口
- *   * 权限检查在控制器中实现
+ * - v1.5.0 (2025-11-11): Phase 3 授权路由加固
+ *   * 添加 requireAdmin() 中间件保护授权管理路由
+ *   * 防止未授权访问授权管理接口
+ *   * 实现双层防护（路由层+控制器层）
  * 
+ * - v1.4.0 (2025-11-11): 新增组管理员权限边界接口
+ * - v1.3.0 (2025-11-09): 支持组管理员二次授权
  * - v1.2.0: 全局三级授权管理路由
  * - v1.1.0 (2025-10-29): 教案管理路由
  */
@@ -22,11 +25,54 @@ const {
   canEditLesson,
   canManagePermissions
 } = require('../middleware/teachingPermissions');
+const ResponseHelper = require('../utils/response');
 
 const router = express.Router();
 
 // 所有路由都需要认证
 router.use(authenticate);
+
+// ==================== 中间件定义 ====================
+
+/**
+ * 【新增】要求用户为管理员或超级管理员
+ * @version 1.5.0 (Phase 3)
+ */
+const requireAdmin = () => {
+  return (req, res, next) => {
+    const user = req.user;
+    
+    if (!user) {
+      return ResponseHelper.unauthorized(res, '用户未认证');
+    }
+    
+    if (user.role === 'super_admin' || user.role === 'admin') {
+      return next();
+    }
+    
+    return ResponseHelper.forbidden(res, '需要管理员权限才能访问此接口');
+  };
+};
+
+/**
+ * 【新增】要求用户为超级管理员
+ * @version 1.5.0 (Phase 3)
+ */
+const requireSuperAdmin = () => {
+  return (req, res, next) => {
+    const user = req.user;
+    
+    if (!user) {
+      return ResponseHelper.unauthorized(res, '用户未认证');
+    }
+    
+    if (user.role === 'super_admin') {
+      return next();
+    }
+    
+    return ResponseHelper.forbidden(res, '需要超级管理员权限才能访问此接口');
+  };
+};
 
 // ==================== 分组管理路由 ====================
 
@@ -42,21 +88,21 @@ router.get('/groups', TeachingController.getGroups);
  * @desc    创建分组
  * @access  仅超级管理员
  */
-router.post('/groups', TeachingController.createGroup);
+router.post('/groups', requireSuperAdmin(), TeachingController.createGroup);
 
 /**
  * @route   PUT /api/teaching/groups/:groupId
  * @desc    更新分组信息
  * @access  仅超级管理员
  */
-router.put('/groups/:groupId', TeachingController.updateGroup);
+router.put('/groups/:groupId', requireSuperAdmin(), TeachingController.updateGroup);
 
 /**
  * @route   DELETE /api/teaching/groups/:groupId
  * @desc    删除分组
  * @access  仅超级管理员
  */
-router.delete('/groups/:groupId', TeachingController.deleteGroup);
+router.delete('/groups/:groupId', requireSuperAdmin(), TeachingController.deleteGroup);
 
 /**
  * @route   GET /api/teaching/groups/:groupId/modules
@@ -71,16 +117,17 @@ router.get('/groups/:groupId/modules', TeachingController.getGroupModules);
  * @route   GET /api/teaching/admin/modules
  * @desc    获取所有教学模块（管理员视角）
  * @access  超级管理员查看所有，组管理员查看本组授权的模块
- * @update  v1.3.0: 支持组管理员访问
+ * @update  v1.5.0: 添加中间件保护
  */
-router.get('/admin/modules', TeachingController.getAllModules);
+router.get('/admin/modules', requireAdmin(), TeachingController.getAllModules);
 
 /**
  * @route   POST /api/teaching/admin/modules/batch-update
  * @desc    批量更新模块状态
  * @access  仅超级管理员
+ * @update  v1.5.0: 添加中间件保护
  */
-router.post('/admin/modules/batch-update', TeachingController.batchUpdateModules);
+router.post('/admin/modules/batch-update', requireSuperAdmin(), TeachingController.batchUpdateModules);
 
 // ==================== 教学模块路由 ====================
 
@@ -219,42 +266,56 @@ router.post(
   TeachingController.revokeMultiplePermissions
 );
 
-// ==================== 全局授权管理路由（增强：支持组管理员）====================
+// ==================== 全局授权管理路由（v1.5.0 - 添加中间件保护）====================
 
 /**
  * @route   POST /api/teaching/authorization/save
  * @desc    批量保存全局授权配置（组→标签→用户三级）
  * @access  超级管理员：可以管理所有组
  *          组管理员：只能管理本组，且只能分配已授权的模块
- * @update  v1.3.0: 支持组管理员二次授权
+ * @update  v1.5.0: 添加 requireAdmin() 中间件保护
  */
-router.post('/authorization/save', TeachingController.saveGlobalAuthorizations);
+router.post('/authorization/save', requireAdmin(), TeachingController.saveGlobalAuthorizations);
 
 /**
  * @route   GET /api/teaching/authorization
  * @desc    获取全局授权配置列表
  * @access  超级管理员：获取所有组的配置
  *          组管理员：只获取本组的配置
- * @update  v1.3.0: 支持组管理员访问
+ * @update  v1.5.0: 添加 requireAdmin() 中间件保护
  */
-router.get('/authorization', TeachingController.getGlobalAuthorizations);
+router.get('/authorization', requireAdmin(), TeachingController.getGlobalAuthorizations);
+
+/**
+ * @route   GET /api/teaching/authorization/super-admin-config
+ * @desc    获取超级管理员对本组的授权配置（权限上限）
+ * @access  仅组管理员
+ * @update  v1.5.0: 添加 requireAdmin() 中间件保护
+ * @returns {Object} { config: { modulePermissions: [...] }, groupId: number }
+ * 
+ * 功能说明：
+ * - 组管理员通过此接口获取超级管理员授权的模块列表
+ * - 返回的配置作为组管理员分配权限的上限
+ * - 用于前端显示权限边界和禁用超限选项
+ */
+router.get('/authorization/super-admin-config', requireAdmin(), TeachingController.getSuperAdminConfigForGroup);
 
 /**
  * @route   GET /api/teaching/tags/:tagId/users
  * @desc    获取标签下的用户列表（分页，用于授权管理）
  * @access  超级管理员、组管理员（只能查看本组标签）
  * @query   page=1&limit=20
- * @update  v1.3.0: 支持组管理员访问
+ * @update  v1.5.0: 添加 requireAdmin() 中间件保护
  */
-router.get('/tags/:tagId/users', TeachingController.getTagUsers);
+router.get('/tags/:tagId/users', requireAdmin(), TeachingController.getTagUsers);
 
 /**
  * @route   GET /api/teaching/modules/:moduleId/lessons-for-auth
  * @desc    获取模块的课程列表（用于授权选择）
  * @access  超级管理员、组管理员（只能查看已授权的模块）
- * @update  v1.3.0: 支持组管理员访问
+ * @update  v1.5.0: 添加 requireAdmin() 中间件保护
  */
-router.get('/modules/:moduleId/lessons-for-auth', TeachingController.getModuleLessonsForAuth);
+router.get('/modules/:moduleId/lessons-for-auth', requireAdmin(), TeachingController.getModuleLessonsForAuth);
 
 // ==================== 草稿管理路由 ====================
 

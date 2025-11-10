@@ -1,5 +1,12 @@
 /**
- * 教学系统权限中间件
+ * 教学系统权限中间件（v2.0 - 请求级缓存优化）
+ * 
+ * 版本更新：
+ * - v2.0 (2025-11-11): 添加getUserTags请求级缓存
+ *   * 避免同一请求多次查询数据库
+ *   * 缓存存储在req对象上
+ *   * 显著提升权限检查性能
+ * 
  * 基于用户角色、标签和明确授权的权限控制
  */
 
@@ -9,10 +16,22 @@ const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 
 /**
- * 获取用户的标签列表
+ * 获取用户的标签列表（带请求级缓存）
+ * @param {number} userId - 用户ID
+ * @param {Object} req - Express请求对象（可选，用于缓存）
+ * @returns {Promise<Array>} 用户标签列表
+ * 
+ * @version 2.0 - 添加请求级缓存
  */
-const getUserTags = async (userId) => {
+const getUserTags = async (userId, req = null) => {
   try {
+    // 【新增】检查请求级缓存
+    if (req && req._userTagsCache && req._userTagsCache[userId]) {
+      logger.debug('使用缓存的用户标签', { userId });
+      return req._userTagsCache[userId];
+    }
+
+    // 查询数据库
     const dbConnection = require('../database/connection');
     const sql = `
       SELECT ut.id, ut.name, ut.color, ut.icon, ut.description
@@ -21,6 +40,16 @@ const getUserTags = async (userId) => {
       WHERE utr.user_id = ? AND ut.is_active = 1
     `;
     const { rows } = await dbConnection.query(sql, [userId]);
+    
+    // 【新增】存储到请求级缓存
+    if (req) {
+      if (!req._userTagsCache) {
+        req._userTagsCache = {};
+      }
+      req._userTagsCache[userId] = rows;
+      logger.debug('缓存用户标签', { userId, tagCount: rows.length });
+    }
+    
     return rows;
   } catch (error) {
     logger.error('获取用户标签失败:', error);
@@ -46,12 +75,12 @@ const canCreateModule = () => {
         return next();
       }
 
-      // 检查是否有 developer 标签
-      const userTags = await getUserTags(user.id);
+      // 【修改】传入req对象以使用缓存
+      const userTags = await getUserTags(user.id, req);
       const hasDeveloperTag = userTags.some(tag => tag.name === 'developer');
 
       if (hasDeveloperTag) {
-        req.userTags = userTags; // 附加到请求对象供后续使用
+        req.userTags = userTags;
         return next();
       }
 
@@ -72,7 +101,6 @@ const canCreateModule = () => {
 
 /**
  * 检查用户是否可以编辑指定的教学模块
- * 规则：创建者、super_admin、admin 或有明确的 edit 权限
  */
 const canEditModule = () => {
   return async (req, res, next) => {
@@ -88,16 +116,14 @@ const canEditModule = () => {
         return ResponseHelper.validation(res, ['缺少模块ID']);
       }
 
-      // 获取模块信息
       const module = await TeachingModule.findById(moduleId);
       if (!module) {
         return ResponseHelper.notFound(res, '教学模块不存在');
       }
 
-      // 获取用户标签
-      const userTags = await getUserTags(user.id);
+      // 【修改】传入req对象以使用缓存
+      const userTags = await getUserTags(user.id, req);
 
-      // 检查权限
       const permission = await TeachingModule.checkUserPermission(
         moduleId,
         user.id,
@@ -107,7 +133,7 @@ const canEditModule = () => {
       );
 
       if (permission === 'edit') {
-        req.module = module; // 附加模块对象供后续使用
+        req.module = module;
         req.userTags = userTags;
         return next();
       }
@@ -130,7 +156,6 @@ const canEditModule = () => {
 
 /**
  * 检查用户是否可以查看指定的教学模块
- * 规则：创建者、管理员、有明确授权或符合可见性规则
  */
 const canViewModule = () => {
   return async (req, res, next) => {
@@ -146,16 +171,14 @@ const canViewModule = () => {
         return ResponseHelper.validation(res, ['缺少模块ID']);
       }
 
-      // 获取模块信息
       const module = await TeachingModule.findById(moduleId);
       if (!module) {
         return ResponseHelper.notFound(res, '教学模块不存在');
       }
 
-      // 获取用户标签
-      const userTags = await getUserTags(user.id);
+      // 【修改】传入req对象以使用缓存
+      const userTags = await getUserTags(user.id, req);
 
-      // 检查权限
       const permission = await TeachingModule.checkUserPermission(
         moduleId,
         user.id,
@@ -167,7 +190,7 @@ const canViewModule = () => {
       if (permission) {
         req.module = module;
         req.userTags = userTags;
-        req.modulePermission = permission; // 'edit' 或 'view'
+        req.modulePermission = permission;
         return next();
       }
 
@@ -188,7 +211,6 @@ const canViewModule = () => {
 
 /**
  * 检查用户是否可以删除指定的教学模块
- * 规则：创建者、super_admin 或 admin（同组）
  */
 const canDeleteModule = () => {
   return async (req, res, next) => {
@@ -204,7 +226,6 @@ const canDeleteModule = () => {
         return ResponseHelper.validation(res, ['缺少模块ID']);
       }
 
-      // 获取模块信息
       const module = await TeachingModule.findById(moduleId);
       if (!module) {
         return ResponseHelper.notFound(res, '教学模块不存在');
@@ -246,7 +267,6 @@ const canDeleteModule = () => {
 
 /**
  * 检查用户是否可以查看指定的课程
- * 规则：需要先有模块查看权限，然后根据 content_type 判断
  */
 const canViewLesson = () => {
   return async (req, res, next) => {
@@ -262,22 +282,19 @@ const canViewLesson = () => {
         return ResponseHelper.validation(res, ['缺少课程ID']);
       }
 
-      // 获取课程信息
       const lesson = await TeachingLesson.findById(lessonId);
       if (!lesson) {
         return ResponseHelper.notFound(res, '课程不存在');
       }
 
-      // 获取模块信息
       const module = await TeachingModule.findById(lesson.module_id);
       if (!module) {
         return ResponseHelper.notFound(res, '所属模块不存在');
       }
 
-      // 获取用户标签
-      const userTags = await getUserTags(user.id);
+      // 【修改】传入req对象以使用缓存
+      const userTags = await getUserTags(user.id, req);
 
-      // 检查模块访问权限
       const modulePermission = await TeachingModule.checkUserPermission(
         lesson.module_id,
         user.id,
@@ -290,7 +307,6 @@ const canViewLesson = () => {
         return ResponseHelper.forbidden(res, '无权访问此课程所属的教学模块');
       }
 
-      // 检查课程内容类型访问权限
       const canView = TeachingLesson.canUserViewLesson(lesson, user.role, userTags);
 
       if (!canView) {
@@ -320,7 +336,6 @@ const canViewLesson = () => {
 
 /**
  * 检查用户是否可以编辑指定的课程
- * 规则：需要有模块的 edit 权限
  */
 const canEditLesson = () => {
   return async (req, res, next) => {
@@ -336,16 +351,14 @@ const canEditLesson = () => {
         return ResponseHelper.validation(res, ['缺少课程ID']);
       }
 
-      // 获取课程信息
       const lesson = await TeachingLesson.findById(lessonId);
       if (!lesson) {
         return ResponseHelper.notFound(res, '课程不存在');
       }
 
-      // 获取用户标签
-      const userTags = await getUserTags(user.id);
+      // 【修改】传入req对象以使用缓存
+      const userTags = await getUserTags(user.id, req);
 
-      // 检查模块编辑权限
       const modulePermission = await TeachingModule.checkUserPermission(
         lesson.module_id,
         user.id,
@@ -378,7 +391,6 @@ const canEditLesson = () => {
 
 /**
  * 检查用户是否可以管理模块权限
- * 规则：super_admin 或 admin（同组）
  */
 const canManagePermissions = () => {
   return async (req, res, next) => {
@@ -394,7 +406,6 @@ const canManagePermissions = () => {
         return ResponseHelper.validation(res, ['缺少模块ID']);
       }
 
-      // 获取模块信息
       const module = await TeachingModule.findById(moduleId);
       if (!module) {
         return ResponseHelper.notFound(res, '教学模块不存在');
