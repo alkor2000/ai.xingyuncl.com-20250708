@@ -2,6 +2,7 @@
  * 系统配置模型
  * 管理站点名称、Logo等全局配置
  * 修复：添加 teaching_page_header_html 的保存支持
+ * 修复：default_credits 优先级问题 - user_config 优先于旧的 credits_config
  */
 
 const dbConnection = require('../database/connection');
@@ -160,6 +161,9 @@ class SystemConfig {
 
   /**
    * 获取格式化的系统设置（兼容旧接口）
+   * ✅ 修复：default_credits 和 default_tokens 的优先级问题
+   *    - user_config 中的值优先
+   *    - 只有 user_config 中没有该字段时，才从旧配置（credits_config）读取
    */
   static async getFormattedSettings() {
     try {
@@ -210,27 +214,51 @@ class SystemConfig {
         },
         theme: settings.theme_config || null,
         html_editor: Object.keys(htmlEditorConfig).length > 0 ? htmlEditorConfig : null,
-        // ✅ 新增：教学页面头部HTML配置
+        // 教学页面头部HTML配置
         teaching_page_header_html: settings.teaching_page_header_html || ''
       };
 
-      // 处理用户配置兼容性
+      // ✅ 修复：处理用户配置兼容性 - user_config 优先级最高
       if (formattedSettings.user) {
-        if (formattedSettings.user.default_token_quota !== undefined && formattedSettings.user.default_tokens === undefined) {
+        // 处理旧字段名兼容（default_token_quota -> default_tokens）
+        // 只有当 user_config 中没有 default_tokens 时，才从旧字段读取
+        if (formattedSettings.user.default_tokens === undefined && 
+            formattedSettings.user.default_token_quota !== undefined) {
           formattedSettings.user.default_tokens = formattedSettings.user.default_token_quota;
         }
-        if (formattedSettings.user.default_credits_quota !== undefined && formattedSettings.user.default_credits === undefined) {
+        
+        // 处理旧字段名兼容（default_credits_quota -> default_credits）
+        // 只有当 user_config 中没有 default_credits 时，才从旧字段读取
+        if (formattedSettings.user.default_credits === undefined && 
+            formattedSettings.user.default_credits_quota !== undefined) {
           formattedSettings.user.default_credits = formattedSettings.user.default_credits_quota;
         }
         
-        if (settings.credits_config && settings.credits_config.default_credits !== undefined) {
+        // ✅ 关键修复：只有当 user_config 中没有 default_credits 时，
+        //    才从旧的 credits_config 读取（向后兼容）
+        if (formattedSettings.user.default_credits === undefined && 
+            settings.credits_config && 
+            settings.credits_config.default_credits !== undefined) {
           formattedSettings.user.default_credits = settings.credits_config.default_credits;
+          logger.info('从旧 credits_config 读取 default_credits（兼容模式）', {
+            value: settings.credits_config.default_credits
+          });
         }
         
+        // 确保 require_invitation_code 有默认值
         if (formattedSettings.user.require_invitation_code === undefined) {
           formattedSettings.user.require_invitation_code = false;
         }
         
+        // 确保有默认值
+        if (formattedSettings.user.default_tokens === undefined) {
+          formattedSettings.user.default_tokens = 10000;
+        }
+        if (formattedSettings.user.default_credits === undefined) {
+          formattedSettings.user.default_credits = 1000;
+        }
+        
+        // 清理旧字段名
         delete formattedSettings.user.default_token_quota;
         delete formattedSettings.user.default_credits_quota;
       }
@@ -332,7 +360,7 @@ class SystemConfig {
         settings.theme_config = formattedSettings.theme;
       }
       
-      // ✅ 新增：保存教学页面头部HTML配置
+      // 保存教学页面头部HTML配置
       if (formattedSettings.teaching_page_header_html !== undefined) {
         settings.teaching_page_header_html = formattedSettings.teaching_page_header_html;
         logger.info('保存教学页面头部HTML配置', { 
