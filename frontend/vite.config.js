@@ -5,13 +5,33 @@ import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 export default defineConfig({
   plugins: [
     react(),
-    // Monaco Editor 插件 - 自动处理workers
+    // Monaco Editor 插件 - 完整配置，支持HTML/CSS/JS
     monacoEditorPlugin.default({
-      languageWorkers: ['editorWorkerService'],
+      // 启用HTML相关的语言Worker
+      languageWorkers: ['html', 'css', 'json', 'typescript', 'editorWorkerService'],
+      // 全局变量配置
+      globalAPI: false,
+      // 自定义Worker配置
       customWorkers: [
         {
           label: 'editorWorkerService',
           entry: 'monaco-editor/esm/vs/editor/editor.worker'
+        },
+        {
+          label: 'html',
+          entry: 'monaco-editor/esm/vs/language/html/html.worker'
+        },
+        {
+          label: 'css',
+          entry: 'monaco-editor/esm/vs/language/css/css.worker'
+        },
+        {
+          label: 'json',
+          entry: 'monaco-editor/esm/vs/language/json/json.worker'
+        },
+        {
+          label: 'typescript',
+          entry: 'monaco-editor/esm/vs/language/typescript/ts.worker'
         }
       ]
     })
@@ -47,13 +67,15 @@ export default defineConfig({
           'router-vendor': ['react-router-dom'],
           'utils-vendor': ['axios', 'zustand'],
           'antd-vendor': ['antd', '@ant-design/icons'],
-          'monaco-vendor': ['monaco-editor', '@monaco-editor/react'],
+          // Monaco单独打包
+          'monaco-vendor': ['monaco-editor'],
+          'monaco-react': ['@monaco-editor/react'],
           'prism-vendor': ['prismjs'],
           'markdown-vendor': ['react-markdown']
         }
       }
     },
-    chunkSizeWarningLimit: 1500
+    chunkSizeWarningLimit: 2000
   },
   optimizeDeps: {
     include: [
