@@ -1,4 +1,11 @@
+/**
+ * 聊天状态管理 Store
+ * 使用 Zustand 管理对话相关状态
+ * 修复：API错误信息显示给用户
+ */
+
 import { create } from 'zustand'
+import { message } from 'antd'
 import apiClient from '../utils/api'
 
 const useChatStore = create((set, get) => ({
@@ -425,7 +432,7 @@ const useChatStore = create((set, get) => ({
     }
   },
   
-  // 🔥 发送流式消息 - 修复超时机制
+  // 🔥 发送流式消息 - 修复超时机制和错误信息显示
   sendStreamMessage: async (content, fileInfo = null) => {
     const state = get()
     if (!state.currentConversation) return
@@ -684,6 +691,7 @@ const useChatStore = create((set, get) => ({
             }
           },
           
+          // 🔥 关键修复：错误处理 - 显示错误信息给用户
           onError: (error) => {
             console.error('流式传输错误:', error)
             
@@ -693,16 +701,41 @@ const useChatStore = create((set, get) => ({
               set({ streamingTimeout: null })
             }
             
-            // 清理状态（当前对话或后台对话）
+            // 🔥 提取用户友好的错误信息
+            let errorMessage = '请求失败，请稍后重试'
+            if (error && error.message) {
+              errorMessage = error.message
+            }
+            
+            // 🔥 显示错误提示（Toast）
+            message.error(errorMessage)
+            
             const currentState = get()
+            
             if (currentState.currentConversationId === conversationId) {
-              // 移除临时消息
+              // 🔥 关键修改：保留用户消息，将AI消息标记为失败并显示错误信息
+              const effectiveAiMessageId = realAiMessageId || tempAiMessageId
+              
               set(state => ({
-                messages: state.messages.filter(msg => 
-                  msg.id !== tempUserMessageId && 
-                  msg.id !== tempAiMessageId &&
-                  msg.id !== realAiMessageId
-                ),
+                messages: state.messages.map(msg => {
+                  // 保留用户消息（临时的转为正式的）
+                  if (msg.id === tempUserMessageId) {
+                    return { ...msg, temp: false }
+                  }
+                  // 将AI消息标记为失败，显示错误信息
+                  if (msg.id === effectiveAiMessageId || msg.id === tempAiMessageId) {
+                    return {
+                      ...msg,
+                      id: effectiveAiMessageId,
+                      content: `⚠️ ${errorMessage}`,
+                      streaming: false,
+                      temp: false,
+                      error: true,  // 标记为错误消息
+                      model_name: modelName
+                    }
+                  }
+                  return msg
+                }),
                 typing: false,
                 isStreaming: false,
                 streamingContent: '',
@@ -719,7 +752,8 @@ const useChatStore = create((set, get) => ({
               })
             }
             
-            throw error
+            // 不抛出错误，避免上层再次处理
+            // throw error
           }
         }
       )
@@ -737,8 +771,33 @@ const useChatStore = create((set, get) => ({
         clearTimeout(currentState.streamingTimeout)
       }
       
+      // 🔥 修复：提取错误信息并显示
+      let errorMessage = '消息发送失败，请稍后重试'
+      if (error && error.message) {
+        errorMessage = error.message
+      }
+      
+      // 显示错误提示
+      message.error(errorMessage)
+      
+      // 🔥 修复：保留用户消息，显示错误信息在AI消息位置
       set(state => ({
-        messages: state.messages.filter(msg => !msg.temp && !msg.streaming),
+        messages: state.messages.map(msg => {
+          if (msg.id === tempUserMessageId) {
+            return { ...msg, temp: false }
+          }
+          if (msg.id === tempAiMessageId) {
+            return {
+              ...msg,
+              content: `⚠️ ${errorMessage}`,
+              streaming: false,
+              temp: false,
+              error: true,
+              model_name: modelName
+            }
+          }
+          return msg
+        }).filter(msg => !msg.streaming || msg.error), // 移除其他streaming状态的消息
         typing: false,
         isStreaming: false,
         streamingContent: '',
@@ -748,7 +807,7 @@ const useChatStore = create((set, get) => ({
       }))
       
       console.error('流式消息发送失败:', error)
-      throw error
+      // 不再抛出错误，避免上层重复处理
     }
   },
   

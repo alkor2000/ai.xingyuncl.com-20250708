@@ -1,10 +1,11 @@
 /**
  * 流式消息服务 - 处理流式消息发送的业务逻辑
+ * 修复：空内容检查，失败时标记消息并退还积分
  */
 
 const { v4: uuidv4 } = require('uuid');
 const Message = require('../../models/Message');
-const File = require('../../models/File');  // 添加缺失的File引用
+const File = require('../../models/File');
 const AIStreamService = require('../aiStreamService');
 const MessageService = require('./MessageService');
 const logger = require('../../utils/logger');
@@ -89,6 +90,7 @@ class StreamMessageService {
   
   /**
    * 创建完成处理器
+   * 修复：检查空内容，失败时标记消息并退还积分
    */
   static createCompleteHandler(params) {
     const {
@@ -103,7 +105,36 @@ class StreamMessageService {
     
     return async (fullContent, tokens, generatedImages) => {
       try {
-        // 更新消息状态
+        // 修复：检查内容是否为空（null表示失败）
+        if (fullContent === null || fullContent === undefined || fullContent === '') {
+          logger.warn('流式AI返回空内容，标记消息为失败并退还积分', {
+            userId,
+            conversationId: conversation.id,
+            messageId: aiMessageId,
+            creditsToRefund: creditsConsumed,
+            modelName: conversation.model_name
+          });
+          
+          // 标记消息为失败
+          await Message.updateStatus(aiMessageId, 'failed', '[AI响应为空，可能是网络问题或模型响应超时]', 0);
+          
+          // 退还积分
+          await MessageService.refundCredits(
+            user,
+            creditsConsumed,
+            `流式AI返回空内容退款 - 模型: ${conversation.model_name}`
+          );
+          
+          logger.info('空内容处理完成：消息已标记失败，积分已退还', {
+            userId,
+            messageId: aiMessageId,
+            creditsRefunded: creditsConsumed
+          });
+          
+          return;
+        }
+        
+        // 正常情况：更新消息状态
         await Message.updateStatus(
           aiMessageId, 
           'completed', 
@@ -138,12 +169,26 @@ class StreamMessageService {
           creditsConsumed,
           modelName: conversation.model_name,
           status: 'completed',
+          contentLength: fullContent.length,
           hasGeneratedImages: !!(generatedImages && generatedImages.length > 0)
         });
       } catch (error) {
         logger.error('更新流式消息状态失败:', error);
         try {
           await Message.updateStatus(aiMessageId, 'failed');
+          
+          // 更新失败也要尝试退还积分
+          logger.info('尝试退还积分（更新状态失败）', {
+            userId,
+            messageId: aiMessageId,
+            creditsToRefund: creditsConsumed
+          });
+          
+          await MessageService.refundCredits(
+            user,
+            creditsConsumed,
+            `流式AI处理异常退款 - ${error.message}`
+          );
         } catch (updateError) {
           logger.error('标记消息失败状态也失败:', updateError);
         }
