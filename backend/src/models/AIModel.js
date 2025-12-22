@@ -1,6 +1,7 @@
 /**
  * AI模型数据模型 - 支持积分消费配置、流式输出、图片上传、文档上传、用户组分配和用户限制
  * 支持Azure OpenAI配置和免费模型（0积分）
+ * v1.1修复：更新时api_key和api_endpoint留空保持原值的逻辑
  */
 
 const dbConnection = require('../database/connection');
@@ -357,7 +358,18 @@ class AIModel {
   }
 
   /**
+   * 检查值是否为有效的非空字符串
+   * 用于判断是否应该更新敏感字段（api_key、api_endpoint）
+   * @param {*} value - 要检查的值
+   * @returns {boolean} - 是否为有效的非空字符串
+   */
+  static isValidNonEmptyString(value) {
+    return value !== undefined && value !== null && value !== '' && typeof value === 'string' && value.trim() !== '';
+  }
+
+  /**
    * 更新AI模型（支持流式输出、图片上传、文档上传配置和免费模型）
+   * v1.1修复：api_key和api_endpoint留空时保持原值不变
    */
   async update(updateData) {
     try {
@@ -374,9 +386,23 @@ class AIModel {
         sort_order 
       } = updateData;
       
-      // 处理api_key和api_endpoint - 空字符串视为不更新
-      const shouldUpdateApiKey = api_key !== undefined && api_key !== '';
-      const shouldUpdateApiEndpoint = api_endpoint !== undefined && api_endpoint !== '';
+      // 🔥 修复：使用更严格的检查，确保只有真正有值的字符串才会更新
+      // 空字符串、null、undefined都视为"不更新"
+      const shouldUpdateApiKey = AIModel.isValidNonEmptyString(api_key);
+      const shouldUpdateApiEndpoint = AIModel.isValidNonEmptyString(api_endpoint);
+      
+      // 记录更新决策日志
+      logger.info('AI模型更新字段决策', {
+        modelId: this.id,
+        apiKeyProvided: api_key !== undefined,
+        apiKeyValue: api_key ? `${String(api_key).substring(0, 5)}...` : '(empty)',
+        apiKeyType: typeof api_key,
+        shouldUpdateApiKey,
+        apiEndpointProvided: api_endpoint !== undefined,
+        apiEndpointValue: api_endpoint ? `${String(api_endpoint).substring(0, 20)}...` : '(empty)',
+        apiEndpointType: typeof api_endpoint,
+        shouldUpdateApiEndpoint
+      });
       
       const sql = `
         UPDATE ai_models 
@@ -387,10 +413,14 @@ class AIModel {
         WHERE id = ?
       `;
       
+      // 计算最终使用的值
+      const finalApiKey = shouldUpdateApiKey ? api_key : this.api_key;
+      const finalApiEndpoint = shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint;
+      
       await dbConnection.query(sql, [
         display_name !== undefined ? display_name : this.display_name,
-        shouldUpdateApiKey ? api_key : this.api_key,
-        shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint,
+        finalApiKey,
+        finalApiEndpoint,
         model_config ? JSON.stringify(model_config) : JSON.stringify(this.model_config),
         stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
