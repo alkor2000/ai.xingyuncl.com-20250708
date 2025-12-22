@@ -2,6 +2,7 @@
  * 聊天页面 - 主界面（移动端适配版）
  * 优化：改进滚动逻辑，解决代码块输出时的滚动冲突
  * 修复：对话名称更新和置顶功能问题
+ * 修复：编辑非当前对话时配置覆盖错误的bug - 使用editingConversation状态
  * 新增：移动端返回工作台功能
  */
 
@@ -126,6 +127,9 @@ const Chat = () => {
   const [uploadedDocument, setUploadedDocument] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  
+  // 🔥 新增：正在编辑的对话状态，解决编辑非当前对话时配置覆盖错误的bug
+  const [editingConversation, setEditingConversation] = useState(null)
   
   // 移动端专用状态
   const [mobileView, setMobileView] = useState('list')
@@ -293,8 +297,11 @@ const Chat = () => {
     navigate('/dashboard')
   }
 
-  // 编辑对话
+  // 🔥 修复：编辑对话 - 保存正在编辑的对话引用
   const handleEditConversation = (conversation) => {
+    // 保存正在编辑的对话，用于后续保存时使用正确的ID
+    setEditingConversation(conversation)
+    
     settingsForm.setFieldsValue({
       title: conversation.title,
       model_name: conversation.model_name,
@@ -309,17 +316,30 @@ const Chat = () => {
     setShowSettings(true)
   }
 
-  // 更新对话设置
+  // 🔥 修复：更新对话设置 - 使用editingConversation而不是currentConversation
   const handleUpdateSettings = async (values) => {
-    if (!currentConversation) return
+    // 使用正在编辑的对话，而不是当前选中的对话
+    const targetConversation = editingConversation
+    
+    if (!targetConversation) {
+      message.error('未找到要编辑的对话')
+      return
+    }
 
     try {
-      await updateConversation(currentConversation.id, values)
+      await updateConversation(targetConversation.id, values)
       setShowSettings(false)
+      setEditingConversation(null)  // 清除编辑状态
       message.success(t('chat.conversation.update.success'))
     } catch (error) {
       message.error(t('chat.conversation.update.failed'))
     }
+  }
+
+  // 🔥 修复：关闭设置弹窗时清除编辑状态
+  const handleCloseSettings = () => {
+    setShowSettings(false)
+    setEditingConversation(null)
   }
 
   // 删除对话
@@ -828,13 +848,13 @@ const Chat = () => {
           />
         </Drawer>
 
-        {/* 对话设置抽屉 */}
+        {/* 🔥 修复：对话设置抽屉 - 传入editingConversation而不是currentConversation */}
         <ConversationSettingsDrawer
           visible={showSettings}
-          conversation={currentConversation}
+          conversation={editingConversation}
           aiModels={aiModels}
           form={settingsForm}
-          onClose={() => setShowSettings(false)}
+          onClose={handleCloseSettings}
           onSubmit={handleUpdateSettings}
         />
 
@@ -975,12 +995,13 @@ const Chat = () => {
         </Content>
       </Layout>
 
+      {/* 🔥 修复：对话设置抽屉 - 传入editingConversation而不是currentConversation */}
       <ConversationSettingsDrawer
         visible={showSettings}
-        conversation={currentConversation}
+        conversation={editingConversation}
         aiModels={aiModels}
         form={settingsForm}
-        onClose={() => setShowSettings(false)}
+        onClose={handleCloseSettings}
         onSubmit={handleUpdateSettings}
       />
 
