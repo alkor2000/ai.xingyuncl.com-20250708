@@ -2,6 +2,9 @@
  * 图像生成服务
  * 处理与火山方舟API的交互
  * 支持OSS存储、用户目录隔离和图生图功能
+ * 
+ * 更新记录：
+ * - 2025-12-23: 支持Seedream系列模型自动识别（包括4.0、4.5等版本）
  */
 
 const axios = require('axios');
@@ -16,6 +19,67 @@ const logger = require('../utils/logger');
 const config = require('../config');
 
 class ImageService {
+  /**
+   * 判断是否为Seedream系列模型
+   * 支持所有版本：doubao-seedream-4-0、doubao-seedream-4-5等
+   * @param {object} model - 模型对象
+   * @returns {boolean}
+   */
+  static isSeedreamModel(model) {
+    if (!model || !model.model_id) return false;
+    // 匹配所有doubao-seedream开头的模型
+    return model.provider === 'volcano' && model.model_id.startsWith('doubao-seedream');
+  }
+
+  /**
+   * 获取Seedream模型版本号
+   * @param {string} modelId - 模型ID
+   * @returns {string} 版本号，如 "4.0", "4.5"
+   */
+  static getSeedreamVersion(modelId) {
+    if (!modelId) return '4.0';
+    // 从 doubao-seedream-4-5-251128 提取 4.5
+    const match = modelId.match(/doubao-seedream-(\d+)-(\d+)/);
+    if (match) {
+      return `${match[1]}.${match[2]}`;
+    }
+    return '4.0';
+  }
+
+  /**
+   * 将标准尺寸转换为Seedream API格式
+   * Seedream 4.5要求最低2560x1440（约368万像素）
+   * @param {string} size - 原始尺寸参数
+   * @param {string} version - Seedream版本号
+   * @returns {string} API接受的尺寸格式
+   */
+  static convertSizeForSeedream(size, version = '4.0') {
+    // Seedream系列使用特殊的尺寸格式：2K、4K
+    const sizeMapping = {
+      // 标准尺寸映射到2K或4K
+      '1024x1024': '2K',
+      '2048x2048': '4K',
+      '864x1152': '2K',
+      '1152x864': '2K',
+      '1280x720': '2K',
+      '720x1280': '2K',
+      '832x1248': '2K',
+      '1248x832': '2K',
+      '1512x648': '2K',
+      // 直接支持2K/4K格式
+      '2K': '2K',
+      '4K': '4K',
+      // 比例格式也映射到2K
+      '1:1': '2K',
+      '4:3': '2K',
+      '3:4': '2K',
+      '16:9': '2K',
+      '9:16': '2K'
+    };
+    
+    return sizeMapping[size] || '2K';  // 默认使用2K
+  }
+
   /**
    * 批量生成图片
    * @param {number} userId - 用户ID
@@ -68,6 +132,7 @@ class ImageService {
         pricePerImage,
         requiredCredits,
         isMidjourney,
+        isSeedream: this.isSeedreamModel(model),
         hasReferenceImages: params.reference_images && params.reference_images.length > 0
       });
 
@@ -160,6 +225,9 @@ class ImageService {
     try {
       // 判断是否为Midjourney
       const isMidjourney = model.provider === 'midjourney';
+      // 判断是否为Seedream系列模型（包括4.0、4.5等所有版本）
+      const isSeedream = this.isSeedreamModel(model);
+      const seedreamVersion = isSeedream ? this.getSeedreamVersion(model.model_id) : null;
       
       // 1. 创建生成记录
       const creditsToConsume = isMidjourney 
@@ -215,8 +283,8 @@ class ImageService {
         if (params.size && params.size !== '1:1' && params.size !== '1024x1024') {
           requestData.prompt += ` --ar ${params.size}`;
         }
-      } else if (model.provider === 'volcano' && model.model_id === 'doubao-seedream-4-0-250828') {
-        // 火山引擎SeedDream 4.0的特殊请求格式
+      } else if (isSeedream) {
+        // 火山引擎Seedream系列模型（4.0、4.5等）的统一请求格式
         requestData = {
           model: model.model_id,
           prompt: params.prompt
@@ -224,7 +292,7 @@ class ImageService {
         
         // 添加参考图片（图生图功能）
         if (params.reference_images && params.reference_images.length > 0) {
-          // SeedDream 4.0 使用image参数传递参考图片URL数组
+          // Seedream使用image参数传递参考图片URL数组
           requestData.image = params.reference_images;
           
           // 如果配置了连续图像生成选项
@@ -238,46 +306,30 @@ class ImageService {
           
           logger.info('使用图生图模式', {
             modelId: model.model_id,
+            seedreamVersion,
             referenceImages: params.reference_images.length,
             sequential: requestData.sequential_image_generation
           });
         }
         
-        // 处理尺寸参数 - SeedDream 4.0支持特殊的尺寸格式
-        if (params.size) {
-          // 将标准尺寸映射到SeedDream 4.0格式
-          const sizeMapping = {
-            '1024x1024': '2K',      // 2K (默认)
-            '2048x2048': '4K',      // 4K
-            '864x1152': '2K',       // 竖屏2K
-            '1152x864': '2K',       // 横屏2K
-            '1280x720': '2K',       // 16:9横屏
-            '720x1280': '2K',       // 9:16竖屏
-            '832x1248': '2K',       // 2:3竖屏
-            '1248x832': '2K',       // 3:2横屏
-            '1512x648': '2K'        // 超宽屏
-          };
-          requestData.size = sizeMapping[params.size] || '2K';
-        } else {
-          requestData.size = '2K';  // 默认使用2K
-        }
+        // 处理尺寸参数 - 使用统一的转换方法
+        requestData.size = this.convertSizeForSeedream(params.size, seedreamVersion);
         
         // 设置响应格式
         requestData.response_format = 'url';
         
-        // 添加流式响应（SeedDream 4.0特性）
-        requestData.stream = false;  // 暂时不使用流式，简化处理
+        // 添加流式响应（暂时不使用，简化处理）
+        requestData.stream = false;
         
         // 添加水印设置
         requestData.watermark = params.watermark !== false;
         
-        // 如果有负向提示词，添加到请求中
+        // 如果有负向提示词，添加到请求中（图生图模式下可能不支持）
         if (params.negative_prompt && !params.reference_images) {
-          // 图生图模式下，负向提示词可能不支持
           requestData.prompt = `${params.prompt}, avoid: ${params.negative_prompt}`;
         }
         
-        // 如果提供了引导系数，转换为SeedDream 4.0的格式
+        // 如果提供了引导系数，转换为cfg_scale
         if (params.guidance_scale) {
           requestData.cfg_scale = params.guidance_scale;
         }
@@ -287,17 +339,19 @@ class ImageService {
           requestData.seed = params.seed;
         }
         
-        logger.info('使用SeedDream 4.0 API格式', {
+        logger.info('使用Seedream API格式', {
           modelId: model.model_id,
+          seedreamVersion,
           hasReferenceImages: !!requestData.image,
+          size: requestData.size,
           requestData: {
             ...requestData,
-            prompt: requestData.prompt.substring(0, 100) + '...',  // 只记录部分提示词
+            prompt: requestData.prompt.substring(0, 100) + '...',
             image: requestData.image ? `[${requestData.image.length} images]` : undefined
           }
         });
       } else {
-        // 普通模型或SeedDream 3.0的请求格式
+        // 普通火山引擎模型的请求格式
         requestData = {
           model: model.model_id,
           prompt: params.prompt,
@@ -320,6 +374,8 @@ class ImageService {
         generationId,
         creditsToConsume,
         isMidjourney,
+        isSeedream,
+        seedreamVersion,
         provider: model.provider,
         modelName: model.name,
         isImage2Image: params.reference_images && params.reference_images.length > 0
@@ -348,7 +404,9 @@ class ImageService {
           statusText: response.statusText,
           data: response.data,
           modelId: model.model_id,
-          provider: model.provider
+          provider: model.provider,
+          isSeedream,
+          seedreamVersion
         });
         
         // 尝试从响应中提取错误信息
@@ -379,11 +437,13 @@ class ImageService {
           throw new Error('Midjourney API未返回图片URL');
         }
       } else {
-        // 火山引擎API响应格式
+        // 火山引擎API响应格式（包括Seedream系列）
         if (!response.data || !response.data.data || !response.data.data[0]) {
           logger.error('API响应格式错误', {
             responseData: response.data,
-            modelId: model.model_id
+            modelId: model.model_id,
+            isSeedream,
+            seedreamVersion
           });
           throw new Error('API返回数据格式错误');
         }
@@ -677,12 +737,12 @@ class ImageService {
       errors.push('提示词长度不能超过4000字符');
     }
     
-    // 验证尺寸
+    // 验证尺寸 - 支持更多格式
     if (params.size) {
       const validSizes = [
         '1024x1024', '864x1152', '1152x864', '1280x720',
         '720x1280', '832x1248', '1248x832', '1512x648',
-        '2048x2048', '4K', '2K',  // 添加SeedDream 4.0支持的尺寸
+        '2048x2048', '4K', '2K',  // Seedream系列支持的尺寸
         '1:1', '4:3', '3:4', '16:9', '9:16'  // 支持Midjourney的比例格式
       ];
       if (!validSizes.includes(params.size)) {
