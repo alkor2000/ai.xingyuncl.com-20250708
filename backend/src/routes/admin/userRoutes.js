@@ -1,5 +1,14 @@
 /**
- * 用户管理路由 - 使用优化的权限中间件（包含账号有效期管理）
+ * 用户管理路由 - 使用优化的权限中间件
+ * 
+ * 功能包含：
+ * - 用户CRUD操作
+ * - 账号有效期管理
+ * - 模型权限管理
+ * - 批量创建用户（v1.1新增）
+ * 
+ * 更新记录：
+ * - v1.1: 新增 POST /batch-create 批量创建用户路由
  */
 const express = require('express');
 const UserManagementController = require('../../controllers/admin/UserManagementController');
@@ -26,6 +35,31 @@ router.post('/',
   requirePermission('user.manage'),
   canCreateUser(),
   UserManagementController.createUser
+);
+
+/**
+ * @route POST /api/admin/users/batch-create
+ * @desc 批量创建用户（v1.1新增）
+ * @body {
+ *   group_id: number,           // 目标组ID（必填）
+ *   username_prefix: string,    // 用户名前缀（必填）
+ *   username_connector: string, // 连接符，默认'_'
+ *   start_number: number,       // 起始序号，默认1
+ *   number_digits: number,      // 序号位数，默认3
+ *   count: number,              // 创建数量（必填，1-500）
+ *   credits_per_user: number,   // 每用户积分，默认0
+ *   password: string            // 统一密码（可选，不填则随机生成）
+ * }
+ * @returns {
+ *   created_count: number,      // 创建成功数量
+ *   total_credits_used: number, // 消耗的组积分总额
+ *   users: Array<{id, username, password, credits}> // 用户列表
+ * }
+ * @access Admin / SuperAdmin
+ */
+router.post('/batch-create',
+  requirePermission('user.manage'),
+  UserManagementController.batchCreateUsers
 );
 
 /**

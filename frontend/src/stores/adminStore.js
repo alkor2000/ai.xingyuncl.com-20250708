@@ -1,3 +1,16 @@
+/**
+ * 管理后台状态管理
+ * 
+ * 功能包含：
+ * - 用户管理（含批量创建 v1.1新增）
+ * - 用户分组管理
+ * - 积分管理
+ * - AI模型管理
+ * - 系统模块管理
+ * - API服务管理
+ * - 系统提示词管理
+ * - 使用记录管理
+ */
 import { create } from 'zustand'
 import apiClient from '../utils/api'
 
@@ -11,8 +24,8 @@ const useAdminStore = create((set) => ({
   aiModels: [],
   modules: [],
   apiServices: [],
-  systemPrompts: [],  // 新增：系统提示词列表
-  systemPromptsEnabled: false,  // 新增：系统提示词功能开关状态
+  systemPrompts: [],
+  systemPromptsEnabled: false,
   systemStats: {
     users: {},
     groups: [],
@@ -24,14 +37,15 @@ const useAdminStore = create((set) => ({
   loading: false,
   creditsLoading: false,
   
-  // 用户管理 - 修改：支持include_tags参数
+  // ===== 用户管理 =====
+  
+  // 获取用户列表 - 支持include_tags参数
   getUsers: async (params = {}) => {
     set({ loading: true })
     try {
-      // 默认包含标签信息
       const requestParams = {
         ...params,
-        include_tags: params.include_tags !== false  // 默认为true，除非明确设置为false
+        include_tags: params.include_tags !== false
       }
       
       const response = await apiClient.get('/admin/users', { params: requestParams })
@@ -64,6 +78,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
+  // 创建单个用户
   createUser: async (userData) => {
     try {
       const response = await apiClient.post('/admin/users', userData)
@@ -74,6 +89,31 @@ const useAdminStore = create((set) => ({
     }
   },
   
+  /**
+   * 批量创建用户（v1.1新增）
+   * 
+   * @param {Object} batchData - 批量创建参数
+   * @param {number} batchData.group_id - 目标组ID
+   * @param {string} batchData.username_prefix - 用户名前缀
+   * @param {string} batchData.username_connector - 连接符（默认_）
+   * @param {number} batchData.start_number - 起始序号
+   * @param {number} batchData.number_digits - 序号位数
+   * @param {number} batchData.count - 创建数量
+   * @param {number} batchData.credits_per_user - 每用户积分
+   * @param {string} batchData.password - 统一密码（可选）
+   * @returns {Object} 创建结果
+   */
+  batchCreateUsers: async (batchData) => {
+    try {
+      const response = await apiClient.post('/admin/users/batch-create', batchData)
+      return response.data
+    } catch (error) {
+      console.error('批量创建用户失败:', error)
+      throw error
+    }
+  },
+  
+  // 更新用户
   updateUser: async (userId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}`, updateData)
@@ -84,6 +124,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
+  // 删除用户
   deleteUser: async (userId) => {
     try {
       await apiClient.delete(`/admin/users/${userId}`)
@@ -104,6 +145,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
+  // 重置用户密码
   resetUserPassword: async (userId, newPassword) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/password`, {
@@ -116,7 +158,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 用户分组管理
+  // ===== 用户分组管理 =====
+  
   getUserGroups: async () => {
     try {
       const response = await apiClient.get('/admin/user-groups')
@@ -128,7 +171,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 新增：在获取用户组时使用别名，避免与系统提示词的冲突
   fetchUserGroups: async () => {
     return useAdminStore.getState().getUserGroups()
   },
@@ -168,7 +210,6 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/user-groups/${groupId}/credits-pool`, {
         credits_pool: creditsPool
       })
-      // 刷新组列表以更新积分池信息
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -199,7 +240,6 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/user-groups/${groupId}/user-limit`, {
         user_limit: userLimit
       })
-      // 刷新组列表以更新组员上限信息
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -215,7 +255,6 @@ const useAdminStore = create((set) => ({
         expire_date: expireDate,
         sync_to_users: syncToUsers
       })
-      // 刷新组列表以更新有效期信息
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -235,13 +274,12 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 切换组站点自定义开关（新增）
+  // 切换组站点自定义开关
   toggleGroupSiteCustomization: async (groupId, enabled) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/site-customization`, {
         enabled
       })
-      // 刷新组列表以更新配置
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -250,11 +288,10 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 更新组站点配置（新增）
+  // 更新组站点配置
   updateGroupSiteConfig: async (groupId, config) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/site-config`, config)
-      // 刷新组列表以更新配置
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -263,12 +300,11 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // ===== 邀请码管理（新增） =====
-  // 设置组邀请码
+  // ===== 邀请码管理 =====
+  
   setGroupInvitationCode: async (groupId, invitationData) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/invitation-code`, invitationData)
-      // 刷新组列表以更新邀请码信息
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
@@ -277,7 +313,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 获取邀请码使用记录
   getInvitationCodeLogs: async (groupId, params = {}) => {
     try {
       const response = await apiClient.get(`/admin/user-groups/${groupId}/invitation-logs`, { params })
@@ -288,7 +323,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 积分管理
+  // ===== 积分管理 =====
+  
   getUserCredits: async (userId) => {
     set({ creditsLoading: true })
     try {
@@ -407,7 +443,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // AI模型管理
+  // ===== AI模型管理 =====
+  
   getAIModels: async () => {
     set({ loading: true })
     try {
@@ -463,7 +500,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 测试AI模型连接
   testAIModel: async (modelId) => {
     try {
       const response = await apiClient.post(`/admin/models/${modelId}/test`)
@@ -474,7 +510,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 获取模型分配的用户组
   getModelGroups: async (modelId) => {
     try {
       const response = await apiClient.get(`/admin/models/${modelId}/groups`)
@@ -485,13 +520,11 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 更新模型分配的用户组
   updateModelGroups: async (modelId, groupIds) => {
     try {
       const response = await apiClient.put(`/admin/models/${modelId}/groups`, {
         group_ids: groupIds
       })
-      // 刷新AI模型列表
       await useAdminStore.getState().getAIModels()
       return response.data.data
     } catch (error) {
@@ -500,7 +533,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 系统统计
+  // ===== 系统统计 =====
+  
   getSystemStats: async (params = {}) => {
     try {
       const response = await apiClient.get('/admin/stats', { params })
@@ -522,7 +556,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 系统健康监控
   getSystemHealth: async () => {
     try {
       const response = await apiClient.get('/admin/stats/health')
@@ -534,7 +567,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 执行系统维护操作
   performMaintenance: async (action) => {
     try {
       const response = await apiClient.post('/admin/stats/maintenance', { action })
@@ -545,7 +577,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 系统设置
+  // ===== 系统设置 =====
+  
   getSystemSettings: async () => {
     try {
       const response = await apiClient.get('/admin/settings')
@@ -568,7 +601,8 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 模块管理 - 超级管理员使用
+  // ===== 模块管理 =====
+  
   getModules: async () => {
     set({ loading: true })
     try {
@@ -585,7 +619,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 获取用户可访问的模块 - 所有登录用户都可以使用
   getUserModules: async () => {
     set({ loading: true })
     try {
@@ -605,7 +638,6 @@ const useAdminStore = create((set) => ({
   createModule: async (moduleData) => {
     try {
       const response = await apiClient.post('/admin/modules', moduleData)
-      // 刷新模块列表
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
@@ -617,7 +649,6 @@ const useAdminStore = create((set) => ({
   updateModule: async (moduleId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/modules/${moduleId}`, updateData)
-      // 刷新模块列表
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
@@ -629,7 +660,6 @@ const useAdminStore = create((set) => ({
   deleteModule: async (moduleId) => {
     try {
       await apiClient.delete(`/admin/modules/${moduleId}`)
-      // 刷新模块列表
       await useAdminStore.getState().getModules()
     } catch (error) {
       console.error('删除模块失败:', error)
@@ -640,7 +670,6 @@ const useAdminStore = create((set) => ({
   toggleModuleStatus: async (moduleId) => {
     try {
       const response = await apiClient.patch(`/admin/modules/${moduleId}/toggle-status`)
-      // 刷新模块列表
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
@@ -659,7 +688,8 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // API服务管理
+  // ===== API服务管理 =====
+  
   getApiServices: async () => {
     set({ loading: true })
     try {
@@ -689,7 +719,6 @@ const useAdminStore = create((set) => ({
   createApiService: async (serviceData) => {
     try {
       const response = await apiClient.post('/admin/api-services', serviceData)
-      // 刷新服务列表
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
@@ -701,7 +730,6 @@ const useAdminStore = create((set) => ({
   updateApiService: async (serviceId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/api-services/${serviceId}`, updateData)
-      // 刷新服务列表
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
@@ -713,7 +741,6 @@ const useAdminStore = create((set) => ({
   deleteApiService: async (serviceId) => {
     try {
       await apiClient.delete(`/admin/api-services/${serviceId}`)
-      // 刷新服务列表
       await useAdminStore.getState().getApiServices()
     } catch (error) {
       console.error('删除API服务失败:', error)
@@ -724,7 +751,6 @@ const useAdminStore = create((set) => ({
   resetApiServiceKey: async (serviceId) => {
     try {
       const response = await apiClient.post(`/admin/api-services/${serviceId}/reset-key`)
-      // 刷新服务列表
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
@@ -773,7 +799,7 @@ const useAdminStore = create((set) => ({
   },
 
   // ===== 系统提示词管理 =====
-  // 获取系统提示词列表
+  
   getSystemPrompts: async (includeInactive = false) => {
     set({ loading: true })
     try {
@@ -784,7 +810,6 @@ const useAdminStore = create((set) => ({
         systemPrompts: response.data.data,
         loading: false 
       })
-      // 同时获取功能开关状态
       await useAdminStore.getState().getSystemPromptsStatus()
       return response.data.data
     } catch (error) {
@@ -794,7 +819,6 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 获取系统提示词功能状态
   getSystemPromptsStatus: async () => {
     try {
       const response = await apiClient.get('/admin/system-prompts/status')
@@ -806,7 +830,6 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 获取单个系统提示词详情
   getSystemPrompt: async (promptId) => {
     try {
       const response = await apiClient.get(`/admin/system-prompts/${promptId}`)
@@ -817,11 +840,9 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 创建系统提示词
   createSystemPrompt: async (promptData) => {
     try {
       const response = await apiClient.post('/admin/system-prompts', promptData)
-      // 刷新列表
       await useAdminStore.getState().getSystemPrompts()
       return { success: true, data: response.data.data }
     } catch (error) {
@@ -830,11 +851,9 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 更新系统提示词
   updateSystemPrompt: async (promptId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/system-prompts/${promptId}`, updateData)
-      // 刷新列表
       await useAdminStore.getState().getSystemPrompts()
       return { success: true, data: response.data.data }
     } catch (error) {
@@ -843,11 +862,9 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 删除系统提示词
   deleteSystemPrompt: async (promptId) => {
     try {
       await apiClient.delete(`/admin/system-prompts/${promptId}`)
-      // 刷新列表
       await useAdminStore.getState().getSystemPrompts()
       return { success: true }
     } catch (error) {
@@ -856,7 +873,6 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 切换系统提示词功能开关
   toggleSystemPromptsFeature: async (enabled) => {
     try {
       const response = await apiClient.put('/admin/system-prompts/toggle', { enabled })
@@ -869,7 +885,7 @@ const useAdminStore = create((set) => ({
   },
 
   // ===== 使用记录管理 =====
-  // 获取使用记录列表
+  
   getUsageLogs: async (params = {}) => {
     try {
       const response = await apiClient.get('/admin/usage-logs', { params })
@@ -880,7 +896,6 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 获取使用统计汇总
   getUsageSummary: async (params = {}) => {
     try {
       const response = await apiClient.get('/admin/usage-logs/summary', { params })
@@ -891,7 +906,6 @@ const useAdminStore = create((set) => ({
     }
   },
 
-  // 导出使用记录为Excel
   exportUsageLogs: async (params = {}) => {
     try {
       const response = await apiClient.get('/admin/usage-logs/export', {
@@ -899,7 +913,6 @@ const useAdminStore = create((set) => ({
         responseType: 'blob'
       })
       
-      // 创建下载链接
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url

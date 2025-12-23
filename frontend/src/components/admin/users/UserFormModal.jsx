@@ -1,5 +1,14 @@
 /**
- * 用户表单弹窗组件（创建/编辑用户）- 包含账号有效期管理和UUID显示
+ * 用户表单弹窗组件（创建/编辑用户）
+ * 
+ * 功能包含：
+ * - 用户基本信息管理
+ * - 账号有效期管理
+ * - UUID显示
+ * - 密码重置
+ * 
+ * 更新记录：
+ * - v1.1: 邮箱改为非必填项
  */
 
 import React, { useEffect, useState } from 'react'
@@ -220,7 +229,7 @@ const UserFormModal = ({
               </Form.Item>
             )}
 
-            {/* 邮箱字段：创建时必填，编辑时超级管理员可修改 */}
+            {/* 邮箱字段：v1.1改为非必填 */}
             {(!editingUser || canEditEmail()) && (
               <Form.Item
                 name="email"
@@ -228,16 +237,17 @@ const UserFormModal = ({
                   <Space>
                     <MailOutlined />
                     {t('admin.users.form.email')}
+                    <span style={{ color: '#999', fontSize: '12px' }}>（选填）</span>
                   </Space>
                 }
                 rules={[
-                  { required: !editingUser, message: t('admin.users.form.email.required') },
+                  // v1.1: 邮箱改为非必填，但如果填了要验证格式
                   { type: 'email', message: t('admin.users.form.email.invalid') }
                 ]}
-                extra={editingUser && isSuperAdmin ? '修改邮箱后，用户需使用新邮箱登录' : null}
+                extra={editingUser && isSuperAdmin ? '修改邮箱后，用户需使用新邮箱登录' : '可选，不填则用户只能通过用户名登录'}
               >
                 <Input 
-                  placeholder={t('admin.users.form.email.required')} 
+                  placeholder="可选，填写后支持邮箱登录" 
                   disabled={editingUser && !canEditEmail()}
                 />
               </Form.Item>
@@ -254,9 +264,9 @@ const UserFormModal = ({
                 }
               >
                 <Input 
-                  value={editingUser.email}
+                  value={editingUser.email || '未设置'}
                   disabled
-                  style={{ color: '#000' }}
+                  style={{ color: editingUser.email ? '#000' : '#999' }}
                 />
               </Form.Item>
             )}
@@ -279,7 +289,10 @@ const UserFormModal = ({
             <Form.Item
               name="username"
               label={t('admin.users.form.username')}
-              rules={[{ required: true, message: t('admin.users.form.username.required') }]}
+              rules={[
+                { required: true, message: t('admin.users.form.username.required') },
+                { pattern: /^[a-zA-Z0-9_-]{3,20}$/, message: '用户名只能包含字母、数字、下划线和横线，长度3-20个字符' }
+              ]}
               extra={editingUser && canEditUsername() ? '修改用户名后，用户可使用新用户名登录' : null}
             >
               <Input 

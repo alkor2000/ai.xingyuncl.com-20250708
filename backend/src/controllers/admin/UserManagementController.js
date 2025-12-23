@@ -1,5 +1,15 @@
 /**
- * 用户管理控制器 - 使用Service层处理业务逻辑（包含账号有效期管理和标签支持）
+ * 用户管理控制器 - 使用Service层处理业务逻辑
+ * 
+ * 功能包含：
+ * - 用户CRUD操作
+ * - 账号有效期管理
+ * - 标签支持
+ * - 模型权限管理
+ * - 批量创建用户（v1.1新增）
+ * 
+ * 更新记录：
+ * - v1.1: 新增 batchCreateUsers 批量创建用户接口
  */
 
 const { UserService } = require('../../services/admin');
@@ -21,7 +31,7 @@ class UserManagementController {
         status: req.query.status,
         group_id: req.query.group_id ? parseInt(req.query.group_id) : null,
         search: req.query.search,
-        include_tags: req.query.include_tags === 'true'  // 新增：是否包含标签信息
+        include_tags: req.query.include_tags === 'true'
       };
 
       const result = await UserService.getUserList(filters, currentUser);
@@ -82,6 +92,85 @@ class UserManagementController {
       }
       
       return ResponseHelper.error(res, error.message || '创建用户失败');
+    }
+  }
+
+  /**
+   * 批量创建用户（v1.1新增）
+   * 
+   * 请求体参数：
+   * - group_id: 目标组ID（必填）
+   * - username_prefix: 用户名前缀（必填）
+   * - username_connector: 连接符，默认'_'
+   * - start_number: 起始序号，默认1
+   * - number_digits: 序号位数，默认3（如001, 002）
+   * - count: 创建数量（必填，1-500）
+   * - credits_per_user: 每用户积分，默认0
+   * - password: 统一密码（可选，不填则随机生成）
+   * 
+   * 返回：
+   * - created_count: 创建成功数量
+   * - total_credits_used: 消耗的组积分总额
+   * - users: 用户列表（包含用户名和密码）
+   */
+  static async batchCreateUsers(req, res) {
+    try {
+      const currentUser = req.user;
+      const batchData = req.body;
+
+      // 基本参数验证
+      if (!batchData.group_id) {
+        return ResponseHelper.validation(res, ['请选择目标用户组']);
+      }
+
+      if (!batchData.username_prefix || batchData.username_prefix.trim() === '') {
+        return ResponseHelper.validation(res, ['用户名前缀不能为空']);
+      }
+
+      if (!batchData.count || batchData.count < 1) {
+        return ResponseHelper.validation(res, ['创建数量必须大于0']);
+      }
+
+      if (batchData.count > 500) {
+        return ResponseHelper.validation(res, ['单次最多创建500个用户']);
+      }
+
+      // 调用服务层批量创建
+      const result = await UserService.batchCreateUsers(batchData, currentUser);
+
+      logger.info('批量创建用户成功', {
+        operatorId: currentUser.id,
+        operatorName: currentUser.username,
+        groupId: batchData.group_id,
+        createdCount: result.created_count,
+        totalCreditsUsed: result.total_credits_used
+      });
+
+      return ResponseHelper.success(res, result, result.message, 201);
+    } catch (error) {
+      logger.error('批量创建用户失败', { 
+        adminId: req.user?.id,
+        adminName: req.user?.username,
+        error: error.message,
+        requestBody: req.body
+      });
+
+      // 权限错误
+      if (error.message.includes('只能') || error.message.includes('无权')) {
+        return ResponseHelper.forbidden(res, error.message);
+      }
+
+      // 验证错误
+      if (error.message.includes('不能') || 
+          error.message.includes('必须') || 
+          error.message.includes('不存在') ||
+          error.message.includes('不足') ||
+          error.message.includes('已存在') ||
+          error.message.includes('超过')) {
+        return ResponseHelper.validation(res, [error.message]);
+      }
+      
+      return ResponseHelper.error(res, error.message || '批量创建用户失败');
     }
   }
 
@@ -290,7 +379,7 @@ class UserManagementController {
   }
 
   /**
-   * 设置用户账号有效期（新增）
+   * 设置用户账号有效期
    */
   static async setUserAccountExpireDate(req, res) {
     try {
@@ -340,7 +429,7 @@ class UserManagementController {
   }
 
   /**
-   * 延长用户账号有效期（新增）
+   * 延长用户账号有效期
    */
   static async extendUserAccountExpireDate(req, res) {
     try {
@@ -384,7 +473,7 @@ class UserManagementController {
   }
 
   /**
-   * 同步用户有效期到组有效期（新增）
+   * 同步用户有效期到组有效期
    */
   static async syncUserAccountExpireWithGroup(req, res) {
     try {

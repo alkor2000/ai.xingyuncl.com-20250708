@@ -1,9 +1,19 @@
 /**
- * 用户管理主页面 - 包含组积分池功能、账号有效期管理、站点配置、邀请码管理和标签管理
- * 修复：搜索状态保持，确保分页时不丢失搜索条件
- * 修改：允许组管理员管理自己组的邀请码和标签
- * 新增：添加数据分析入口按钮
- * 优化：为用户组表格添加分页功能
+ * 用户管理主页面
+ * 
+ * 功能包含：
+ * - 用户列表管理（搜索、分页、CRUD）
+ * - 用户分组管理
+ * - 组积分池管理
+ * - 账号有效期管理
+ * - 站点配置管理
+ * - 邀请码管理
+ * - 标签管理
+ * - 批量创建用户（v1.1新增）
+ * - 数据分析入口
+ * 
+ * 更新记录：
+ * - v1.1: 新增批量创建用户功能
  */
 
 import React, { useEffect, useState } from 'react'
@@ -18,7 +28,8 @@ import {
   TagsOutlined,
   PieChartOutlined,
   BarChartOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  UsergroupAddOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -36,7 +47,8 @@ import {
   UserGroupTable,
   UserGroupFormModal,
   GroupInvitationCodeModal,
-  GroupInvitationLogsModal
+  GroupInvitationLogsModal,
+  BatchCreateUsersModal
 } from '../../components/admin/users'
 
 // 导入模型限制管理组件
@@ -89,7 +101,8 @@ const Users = () => {
     toggleGroupSiteCustomization,
     updateGroupSiteConfig,
     setGroupInvitationCode,
-    getInvitationCodeLogs
+    getInvitationCodeLogs,
+    batchCreateUsers
   } = useAdminStore()
 
   // 表单实例
@@ -109,6 +122,7 @@ const Users = () => {
   const [isInvitationCodeModalVisible, setIsInvitationCodeModalVisible] = useState(false)
   const [isInvitationLogsModalVisible, setIsInvitationLogsModalVisible] = useState(false)
   const [isTagAssignModalVisible, setIsTagAssignModalVisible] = useState(false)
+  const [isBatchCreateModalVisible, setIsBatchCreateModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -122,8 +136,9 @@ const Users = () => {
   const [tagAssignUser, setTagAssignUser] = useState(null)
   const [activeTab, setActiveTab] = useState('users')
   const [activeGroupTab, setActiveGroupTab] = useState('info')
+  const [batchCreateLoading, setBatchCreateLoading] = useState(false)
   
-  // 🔥 核心修复：添加搜索状态管理
+  // 搜索状态管理
   const [currentSearchParams, setCurrentSearchParams] = useState({})
   
   // 用户分页状态
@@ -133,7 +148,7 @@ const Users = () => {
     total: 0
   })
 
-  // 🆕 用户组分页状态
+  // 用户组分页状态
   const [groupPagination, setGroupPagination] = useState({
     current: 1,
     pageSize: 20,
@@ -147,7 +162,7 @@ const Users = () => {
   // 获取当前组信息
   const currentGroupInfo = userGroups.find(g => g.id === currentUser?.group_id)
   
-  // 🔥 核心修复：统一的加载用户列表函数，支持搜索条件和分页
+  // 统一的加载用户列表函数
   const loadUsers = async (searchParams = {}, pageParams = {}) => {
     try {
       const finalParams = {
@@ -179,7 +194,6 @@ const Users = () => {
   const loadUserGroups = async () => {
     try {
       await getUserGroups()
-      // 🆕 更新分组分页总数
       setGroupPagination(prev => ({
         ...prev,
         total: userGroups.length
@@ -198,7 +212,7 @@ const Users = () => {
     }
   }, [hasPermission])
 
-  // 🆕 监听 userGroups 变化，更新分页总数
+  // 监听 userGroups 变化，更新分页总数
   useEffect(() => {
     if (userGroups.length > 0) {
       setGroupPagination(prev => ({
@@ -208,7 +222,7 @@ const Users = () => {
     }
   }, [userGroups])
 
-  // 🔥 核心修复：用户搜索 - 保存搜索条件并重置到第一页
+  // 用户搜索
   const handleSearch = async (searchValues) => {
     console.log('🔍 执行用户搜索:', searchValues)
     
@@ -220,7 +234,7 @@ const Users = () => {
     await loadUsers(searchValues, newPagination)
   }
 
-  // 🔥 核心修复：分页处理 - 保持搜索条件
+  // 分页处理
   const handlePageChange = async (page, pageSize) => {
     console.log('📄 分页切换:', { page, pageSize, currentSearchParams })
     
@@ -230,7 +244,7 @@ const Users = () => {
     await loadUsers({}, newPagination)
   }
 
-  // 🆕 用户组分页处理（前端分页）
+  // 用户组分页处理（前端分页）
   const handleGroupPageChange = (page, pageSize) => {
     console.log('📄 用户组分页切换:', { page, pageSize })
     setGroupPagination({
@@ -240,7 +254,7 @@ const Users = () => {
     })
   }
 
-  // 🔥 核心修复：重置搜索 - 清空搜索条件并回到第一页
+  // 重置搜索
   const handleResetSearch = async () => {
     console.log('🔄 重置搜索')
     
@@ -276,6 +290,27 @@ const Users = () => {
       await loadUsers()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.users.create.failed'))
+    }
+  }
+
+  // 批量创建用户（v1.1新增）
+  const handleBatchCreateUsers = async (batchData) => {
+    try {
+      setBatchCreateLoading(true)
+      const result = await batchCreateUsers(batchData)
+      
+      if (result.success) {
+        // 刷新用户列表和组信息
+        await loadUsers()
+        await loadUserGroups()
+      }
+      
+      return result
+    } catch (error) {
+      message.error(error.response?.data?.message || '批量创建用户失败')
+      throw error
+    } finally {
+      setBatchCreateLoading(false)
     }
   }
 
@@ -633,7 +668,7 @@ const Users = () => {
     navigate('/admin/analytics')
   }
 
-  // 🆕 获取当前页显示的用户组数据
+  // 获取当前页显示的用户组数据
   const getCurrentPageGroups = () => {
     const { current, pageSize } = groupPagination
     const start = (current - 1) * pageSize
@@ -778,6 +813,19 @@ const Users = () => {
             title={t('admin.users.title')}
             extra={
               <Space>
+                {/* 批量创建用户按钮 - v1.1新增 */}
+                <Button 
+                  type="default"
+                  icon={<UsergroupAddOutlined />}
+                  onClick={() => setIsBatchCreateModalVisible(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                    color: 'white',
+                    border: 'none'
+                  }}
+                >
+                  批量创建
+                </Button>
                 <Button 
                   type="primary" 
                   icon={<UserAddOutlined />}
@@ -929,6 +977,16 @@ const Users = () => {
           setEditingUser(null)
           userForm.resetFields()
         }}
+      />
+
+      {/* 批量创建用户弹窗 - v1.1新增 */}
+      <BatchCreateUsersModal
+        visible={isBatchCreateModalVisible}
+        userGroups={userGroups}
+        currentUser={currentUser}
+        loading={batchCreateLoading}
+        onSubmit={handleBatchCreateUsers}
+        onCancel={() => setIsBatchCreateModalVisible(false)}
       />
 
       {/* 分组表单弹窗 */}
