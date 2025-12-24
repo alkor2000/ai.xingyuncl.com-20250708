@@ -1,5 +1,8 @@
 /**
  * 图像模型表单弹窗组件
+ * 
+ * 更新记录：
+ * - 2025-12-24: 添加阿里云通义万相(dashscope)提供商支持
  */
 
 import React from 'react'
@@ -30,8 +33,9 @@ import { useTranslation } from 'react-i18next'
 const { TextArea } = Input
 const { Option } = Select
 
-// 预设尺寸选项
+// 预设尺寸选项 - 支持火山引擎和阿里万相两种格式
 const presetSizes = [
+  // 火山引擎格式 (用x分隔)
   '1024x1024',
   '864x1152', 
   '1152x864',
@@ -39,8 +43,68 @@ const presetSizes = [
   '720x1280',
   '832x1248',
   '1248x832',
-  '1512x648'
+  '1512x648',
+  '2048x2048',
+  // 阿里万相格式 (用*分隔)
+  '1280*1280',
+  '1024*1024',
+  '1280*960',
+  '960*1280',
+  '1280*720',
+  '720*1280',
+  '800*1200',
+  '1200*800',
+  '1344*576',
+  // Seedream特殊格式
+  '2K',
+  '4K'
 ]
+
+// 提供商配置信息
+const providerConfigs = {
+  volcano: {
+    label: '火山引擎',
+    defaultEndpoint: 'https://ark.cn-beijing.volcanicengineapi.com/api/v3/images/generations',
+    modelIdPlaceholder: 'doubao-seeddream-3-0-t2i-250415',
+    description: '火山方舟豆包文生图大模型'
+  },
+  dashscope: {
+    label: '阿里云百炼(通义万相)',
+    defaultEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+    modelIdPlaceholder: 'wan2.6-image',
+    description: '阿里云通义万相2.6图像生成模型'
+  },
+  aliyun: {
+    label: '阿里云(万相)',
+    defaultEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+    modelIdPlaceholder: 'wan2.6-image',
+    description: '阿里云通义万相图像生成模型'
+  },
+  openai: {
+    label: 'OpenAI',
+    defaultEndpoint: 'https://api.openai.com/v1/images/generations',
+    modelIdPlaceholder: 'dall-e-3',
+    description: 'OpenAI DALL-E图像生成模型'
+  },
+  'stable-diffusion': {
+    label: 'Stable Diffusion',
+    defaultEndpoint: '',
+    modelIdPlaceholder: 'stable-diffusion-xl-1024-v1-0',
+    description: 'Stability AI图像生成模型'
+  },
+  midjourney: {
+    label: 'Midjourney',
+    defaultEndpoint: '',
+    modelIdPlaceholder: 'midjourney',
+    description: 'Midjourney图像生成服务'
+  },
+  other: {
+    label: '其他',
+    defaultEndpoint: '',
+    modelIdPlaceholder: '',
+    description: ''
+  }
+}
 
 const ImageModelFormModal = ({
   visible,
@@ -77,6 +141,20 @@ const ImageModelFormModal = ({
     
     onSubmit(submitData)
   }
+
+  // 当提供商改变时，自动填充默认端点
+  const handleProviderChange = (provider) => {
+    const config = providerConfigs[provider]
+    if (config && config.defaultEndpoint && !editingModel) {
+      form.setFieldsValue({
+        endpoint: config.defaultEndpoint
+      })
+    }
+  }
+
+  // 获取当前选中的提供商配置
+  const currentProvider = Form.useWatch('provider', form) || 'volcano'
+  const currentConfig = providerConfigs[currentProvider] || providerConfigs.volcano
 
   return (
     <Modal
@@ -150,8 +228,13 @@ const ImageModelFormModal = ({
                 label="提供商"
                 rules={[{ required: true, message: '请选择提供商' }]}
               >
-                <Select placeholder="选择提供商">
+                <Select 
+                  placeholder="选择提供商"
+                  onChange={handleProviderChange}
+                >
                   <Option value="volcano">火山引擎</Option>
+                  <Option value="dashscope">阿里云百炼(通义万相)</Option>
+                  <Option value="aliyun">阿里云(万相)</Option>
                   <Option value="openai">OpenAI</Option>
                   <Option value="stable-diffusion">Stable Diffusion</Option>
                   <Option value="midjourney">Midjourney</Option>
@@ -166,7 +249,7 @@ const ImageModelFormModal = ({
                 rules={[{ required: true, message: '请输入模型ID' }]}
                 extra="API调用时使用的模型ID"
               >
-                <Input placeholder="doubao-seeddream-3-0-t2i-250415" />
+                <Input placeholder={currentConfig.modelIdPlaceholder || "模型ID"} />
               </Form.Item>
             </Col>
           </Row>
@@ -177,7 +260,7 @@ const ImageModelFormModal = ({
           >
             <TextArea 
               rows={2} 
-              placeholder="火山方舟豆包文生图大模型，支持多种尺寸和风格" 
+              placeholder={currentConfig.description || "模型描述信息"} 
             />
           </Form.Item>
         </Card>
@@ -202,7 +285,7 @@ const ImageModelFormModal = ({
                 extra="API请求地址"
               >
                 <Input 
-                  placeholder="https://ark.cn-beijing.volcanicengineapi.com/api/v3/images/generations" 
+                  placeholder={currentConfig.defaultEndpoint || "https://api.example.com/v1/images/generations"} 
                 />
               </Form.Item>
             </Col>
@@ -229,6 +312,23 @@ const ImageModelFormModal = ({
               </Form.Item>
             </Col>
           </Row>
+          
+          {/* 阿里云万相特殊提示 */}
+          {(currentProvider === 'dashscope' || currentProvider === 'aliyun') && (
+            <Alert
+              message="阿里云万相配置提示"
+              description={
+                <div>
+                  <p style={{ margin: '4px 0' }}>• 模型ID推荐使用: <Tag color="blue">wan2.6-image</Tag></p>
+                  <p style={{ margin: '4px 0' }}>• API密钥格式: <Tag color="green">sk-xxxxxxxx</Tag> (百炼平台获取)</p>
+                  <p style={{ margin: '4px 0' }}>• 尺寸格式使用 * 分隔，如: <Tag>1280*1280</Tag></p>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginTop: 8 }}
+            />
+          )}
         </Card>
 
         {/* 生成配置 */}

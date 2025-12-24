@@ -1,6 +1,9 @@
 /**
  * 图像模型管理组件
- * 改进：添加图生图功能开关和配置
+ * 
+ * 更新记录：
+ * - 添加图生图功能开关和配置
+ * - 2025-12-24: 添加阿里云通义万相(dashscope/aliyun)提供商支持
  */
 
 import React, { useState, useEffect } from 'react';
@@ -36,12 +39,59 @@ import {
   InfoCircleOutlined,
   LockOutlined,
   PictureOutlined,
-  UploadOutlined
+  UploadOutlined,
+  CloudOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
 
 const { TextArea } = Input;
+
+// 提供商配置信息
+const PROVIDER_CONFIG = {
+  volcano: {
+    label: '火山方舟',
+    color: 'red',
+    defaultEndpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+    defaultSizes: '["1024x1024", "864x1152", "1152x864", "1280x720", "720x1280"]',
+    description: '火山引擎Seedream系列模型'
+  },
+  dashscope: {
+    label: '阿里云百炼(万相)',
+    color: 'orange',
+    defaultEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+    defaultSizes: '["1280*1280", "1024*1024", "1280*960", "960*1280", "1280*720", "720*1280"]',
+    description: '阿里云通义万相2.6图像生成模型'
+  },
+  aliyun: {
+    label: '阿里云(万相)',
+    color: 'orange',
+    defaultEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+    defaultSizes: '["1280*1280", "1024*1024", "1280*960", "960*1280", "1280*720", "720*1280"]',
+    description: '阿里云通义万相图像生成模型'
+  },
+  midjourney: {
+    label: 'Midjourney',
+    color: 'purple',
+    defaultEndpoint: '',
+    defaultSizes: '["1:1", "4:3", "3:4", "16:9", "9:16"]',
+    description: 'Midjourney图像生成服务'
+  },
+  openai: {
+    label: 'OpenAI',
+    color: 'green',
+    defaultEndpoint: 'https://api.openai.com/v1/images/generations',
+    defaultSizes: '["1024x1024", "1792x1024", "1024x1792"]',
+    description: 'OpenAI DALL-E图像生成模型'
+  },
+  'stable-diffusion': {
+    label: 'Stable Diffusion',
+    color: 'blue',
+    defaultEndpoint: '',
+    defaultSizes: '["1024x1024", "512x512"]',
+    description: 'Stability AI图像生成模型'
+  }
+};
 
 const ImageModelSettings = () => {
   const { t } = useTranslation();
@@ -52,6 +102,7 @@ const ImageModelSettings = () => {
   const [editingModel, setEditingModel] = useState(null);
   const [toggleLoading, setToggleLoading] = useState({}); // 记录每个开关的加载状态
   const [supportsImage2Image, setSupportsImage2Image] = useState(false); // 图生图功能开关状态
+  const [currentProvider, setCurrentProvider] = useState('volcano'); // 当前选择的提供商
 
   // 加载模型列表
   const loadModels = async () => {
@@ -138,6 +189,7 @@ const ImageModelSettings = () => {
           form.resetFields();
           setEditingModel(null);
           setSupportsImage2Image(false);
+          setCurrentProvider('volcano');
           loadModels();
         }
       } else {
@@ -148,6 +200,7 @@ const ImageModelSettings = () => {
           setModalVisible(false);
           form.resetFields();
           setSupportsImage2Image(false);
+          setCurrentProvider('volcano');
           loadModels();
         }
       }
@@ -201,6 +254,7 @@ const ImageModelSettings = () => {
   // 打开编辑窗口
   const openEditModal = (model) => {
     setEditingModel(model);
+    setCurrentProvider(model.provider || 'volcano');
     
     // 设置表单初始值
     const formValues = {
@@ -228,8 +282,32 @@ const ImageModelSettings = () => {
   const openAddModal = () => {
     setEditingModel(null);
     setSupportsImage2Image(false);
+    setCurrentProvider('volcano');
     form.resetFields();
     setModalVisible(true);
+  };
+
+  // 处理提供商变更 - 自动填充默认值
+  const handleProviderChange = (provider) => {
+    setCurrentProvider(provider);
+    const config = PROVIDER_CONFIG[provider];
+    if (config && !editingModel) {
+      // 只在新建时自动填充
+      form.setFieldsValue({
+        endpoint: config.defaultEndpoint,
+        sizes_supported: config.defaultSizes
+      });
+    }
+  };
+
+  // 获取提供商颜色
+  const getProviderColor = (provider) => {
+    return PROVIDER_CONFIG[provider]?.color || 'default';
+  };
+
+  // 获取提供商标签
+  const getProviderLabel = (provider) => {
+    return PROVIDER_CONFIG[provider]?.label || provider;
   };
 
   const columns = [
@@ -252,8 +330,8 @@ const ImageModelSettings = () => {
       dataIndex: 'provider',
       key: 'provider',
       render: (provider) => (
-        <Tag color={provider === 'volcano' ? 'red' : provider === 'midjourney' ? 'purple' : 'blue'}>
-          {provider}
+        <Tag color={getProviderColor(provider)}>
+          {getProviderLabel(provider)}
         </Tag>
       )
     },
@@ -336,6 +414,9 @@ const ImageModelSettings = () => {
     }
   ];
 
+  // 获取当前提供商配置
+  const currentProviderConfig = PROVIDER_CONFIG[currentProvider] || PROVIDER_CONFIG.volcano;
+
   return (
     <Card
       title={
@@ -384,6 +465,7 @@ const ImageModelSettings = () => {
           form.resetFields();
           setEditingModel(null);
           setSupportsImage2Image(false);
+          setCurrentProvider('volcano');
         }}
         onOk={() => form.submit()}
         width={800}
@@ -442,11 +524,43 @@ const ImageModelSettings = () => {
                 rules={[{ required: true }]}
                 initialValue="volcano"
               >
-                <Select>
-                  <Select.Option value="volcano">火山方舟</Select.Option>
-                  <Select.Option value="midjourney">Midjourney</Select.Option>
-                  <Select.Option value="openai">OpenAI</Select.Option>
-                  <Select.Option value="stable-diffusion">Stable Diffusion</Select.Option>
+                <Select onChange={handleProviderChange}>
+                  <Select.Option value="volcano">
+                    <Space>
+                      <FireOutlined style={{ color: '#ff4d4f' }} />
+                      火山方舟
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="dashscope">
+                    <Space>
+                      <CloudOutlined style={{ color: '#fa8c16' }} />
+                      阿里云百炼(通义万相)
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="aliyun">
+                    <Space>
+                      <CloudOutlined style={{ color: '#fa8c16' }} />
+                      阿里云(万相)
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="midjourney">
+                    <Space>
+                      <PictureOutlined style={{ color: '#722ed1' }} />
+                      Midjourney
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="openai">
+                    <Space>
+                      <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                      OpenAI
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="stable-diffusion">
+                    <Space>
+                      <PictureOutlined style={{ color: '#1890ff' }} />
+                      Stable Diffusion
+                    </Space>
+                  </Select.Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -466,12 +580,31 @@ const ImageModelSettings = () => {
             </Col>
           </Row>
 
+          {/* 阿里云万相提示 */}
+          {(currentProvider === 'dashscope' || currentProvider === 'aliyun') && (
+            <Alert
+              message="阿里云通义万相配置提示"
+              description={
+                <div>
+                  <p style={{ margin: '4px 0' }}>• 模型ID推荐: <Tag color="blue">wan2.6-image</Tag></p>
+                  <p style={{ margin: '4px 0' }}>• API密钥格式: <Tag color="green">sk-xxxxxxxx</Tag> (从百炼平台获取)</p>
+                  <p style={{ margin: '4px 0' }}>• 尺寸使用 * 分隔，如: <Tag>1280*1280</Tag></p>
+                  <p style={{ margin: '4px 0' }}>• 支持图生图(垫图)功能</p>
+                </div>
+              }
+              type="info"
+              showIcon
+              icon={<CloudOutlined />}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Form.Item
             name="endpoint"
             label="API端点"
             rules={[{ required: true, message: '请输入API端点' }]}
           >
-            <Input placeholder="https://ark.cn-beijing.volces.com/api/v3/images/generations" />
+            <Input placeholder={currentProviderConfig.defaultEndpoint || "API端点地址"} />
           </Form.Item>
 
           <Form.Item
@@ -513,8 +646,15 @@ const ImageModelSettings = () => {
             name="model_id"
             label="模型ID"
             rules={[{ required: true, message: '请输入模型ID' }]}
+            extra={currentProvider === 'dashscope' || currentProvider === 'aliyun' 
+              ? "阿里万相推荐: wan2.6-image" 
+              : "如：doubao-seedream-3-0-t2i-250415"}
           >
-            <Input placeholder="如：doubao-seedream-3-0-t2i-250415" />
+            <Input placeholder={
+              currentProvider === 'dashscope' || currentProvider === 'aliyun'
+                ? "wan2.6-image"
+                : "doubao-seedream-3-0-t2i-250415"
+            } />
           </Form.Item>
 
           <Row gutter={16}>
@@ -595,12 +735,14 @@ const ImageModelSettings = () => {
           <Form.Item
             name="sizes_supported"
             label="支持的尺寸（JSON数组）"
-            extra='如：["1024x1024", "864x1152", "1280x720"]'
+            extra={currentProvider === 'dashscope' || currentProvider === 'aliyun'
+              ? '阿里万相格式: ["1280*1280", "1024*1024", "1280*960"]'
+              : '如：["1024x1024", "864x1152", "1280x720"]'}
             initialValue='["1024x1024"]'
           >
             <TextArea 
               rows={3} 
-              placeholder='["1024x1024", "864x1152"]'
+              placeholder={currentProviderConfig.defaultSizes || '["1024x1024"]'}
             />
           </Form.Item>
 
@@ -611,7 +753,11 @@ const ImageModelSettings = () => {
                 label="默认尺寸"
                 initialValue="1024x1024"
               >
-                <Input placeholder="1024x1024" />
+                <Input placeholder={
+                  currentProvider === 'dashscope' || currentProvider === 'aliyun'
+                    ? "1280*1280"
+                    : "1024x1024"
+                } />
               </Form.Item>
             </Col>
             <Col span={12}>
