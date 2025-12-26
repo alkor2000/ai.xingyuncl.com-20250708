@@ -5,11 +5,15 @@
  * 支持国际化(i18n)
  * 
  * v1.1 修复右键菜单Paste不生效问题 - 2025-12-26
- *   - Monaco内置粘贴使用已废弃的execCommand，现代浏览器受限
- *   - 添加自定义粘贴Action使用Clipboard API
+ * v1.2 修复自动创建页面循环刷新问题 - 2025-12-26
+ * v1.3 修复积分加载状态闭包问题 - 2025-12-26
+ * v1.4 修复执行顺序问题 - 2025-12-26
+ * v1.5 优化永久链接体验 - 2025-12-26
+ *   - 移除生成前的确认对话框，点击直接生成
+ *   - 成功弹窗添加"关闭"按钮
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout,
   Button,
@@ -132,7 +136,24 @@ const HtmlEditor = () => {
   const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [loadingPages, setLoadingPages] = useState(false);
-  const [autoPageCreated, setAutoPageCreated] = useState(false);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false); // v1.5 生成链接loading状态
+  
+  // v1.2-v1.4 使用useRef跟踪状态
+  const autoPageCreatedRef = useRef(false);
+  const isAutoCreatingRef = useRef(false);
+  const creditsLoadingRef = useRef(true);
+  const creditsConfigRef = useRef(creditsConfig);
+
+  // v1.4 同步creditsLoading到ref
+  useEffect(() => {
+    creditsLoadingRef.current = creditsLoading;
+    console.log('[HtmlEditor] creditsLoading状态变化:', creditsLoading);
+  }, [creditsLoading]);
+
+  // 同步creditsConfig到ref
+  useEffect(() => {
+    creditsConfigRef.current = creditsConfig;
+  }, [creditsConfig]);
 
   // 初始化加载
   useEffect(() => {
@@ -149,18 +170,23 @@ const HtmlEditor = () => {
 
   // 初始化积分信息
   const initializeCredits = async () => {
+    console.log('[HtmlEditor] 开始加载积分信息...');
     setCreditsLoading(true);
+    creditsLoadingRef.current = true;
     try {
       await Promise.all([
         fetchCreditsConfig(),
         getCurrentUser()
       ]);
       updateUserCredits();
+      console.log('[HtmlEditor] 积分信息加载成功');
     } catch (error) {
-      console.error('初始化积分信息失败:', error);
+      console.error('[HtmlEditor] 初始化积分信息失败:', error);
       updateUserCredits();
     } finally {
       setCreditsLoading(false);
+      creditsLoadingRef.current = false;
+      console.log('[HtmlEditor] 积分加载完成，creditsLoading=false');
     }
   };
 
@@ -179,16 +205,67 @@ const HtmlEditor = () => {
     }
   };
 
-  // 自动选择默认项目
+  /**
+   * v1.4 从authStore直接获取最新用户积分
+   */
+  const getLatestUserCredits = () => {
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return 0;
+    
+    let credits = 0;
+    if (currentUser.credits_stats && typeof currentUser.credits_stats.remaining !== 'undefined') {
+      credits = currentUser.credits_stats.remaining;
+    } else if (typeof currentUser.credits_quota !== 'undefined' && typeof currentUser.used_credits !== 'undefined') {
+      credits = (currentUser.credits_quota || 0) - (currentUser.used_credits || 0);
+    } else if (typeof currentUser.credits !== 'undefined') {
+      credits = currentUser.credits;
+    }
+    return Math.max(0, credits);
+  };
+
+  /**
+   * v1.4 等待积分加载完成
+   */
+  const waitForCreditsLoaded = () => {
+    return new Promise((resolve) => {
+      if (!creditsLoadingRef.current) {
+        console.log('[HtmlEditor] waitForCreditsLoaded: 积分已加载');
+        resolve(true);
+        return;
+      }
+      
+      console.log('[HtmlEditor] waitForCreditsLoaded: 等待积分加载...');
+      let checkCount = 0;
+      const maxChecks = 100;
+      
+      const checkInterval = setInterval(() => {
+        checkCount++;
+        if (!creditsLoadingRef.current) {
+          clearInterval(checkInterval);
+          console.log('[HtmlEditor] waitForCreditsLoaded: 积分加载完成');
+          resolve(true);
+        } else if (checkCount >= maxChecks) {
+          clearInterval(checkInterval);
+          console.log('[HtmlEditor] waitForCreditsLoaded: 等待超时');
+          resolve(false);
+        }
+      }, 100);
+    });
+  };
+
+  /**
+   * v1.4 自动选择默认项目 - 等待积分加载完成后再执行
+   */
   useEffect(() => {
-    if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
+    if (projects.length > 0 && !defaultProjectSelected && !selectedProject && !creditsLoading) {
       const defaultProject = projects.find(p => p.name === '默认项目' || p.is_default === 1);
       if (defaultProject) {
+        console.log('[HtmlEditor] 积分已加载，自动选择默认项目:', defaultProject.name);
         handleSelectProject(defaultProject);
         setDefaultProjectSelected(true);
       }
     }
-  }, [projects, defaultProjectSelected]);
+  }, [projects, defaultProjectSelected, creditsLoading]);
 
   // 获取积分配置
   const fetchCreditsConfig = async () => {
@@ -196,6 +273,7 @@ const HtmlEditor = () => {
       const response = await apiClient.get('/html-editor/credits-config');
       if (response.data.success) {
         setCreditsConfig(response.data.data);
+        creditsConfigRef.current = response.data.data;
         return response.data.data;
       }
     } catch (error) {
@@ -258,64 +336,96 @@ const HtmlEditor = () => {
     setCompiledContent(htmlContent || `<!DOCTYPE html><html><body style="padding:20px;color:#999;font-family:system-ui;">${t('htmlEditor.editor.startWriting')}</body></html>`);
   }, [htmlContent, t]);
 
-  // 自动创建或选择页面
+  /**
+   * v1.4 重构自动创建或选择页面逻辑
+   */
   const autoHandlePage = async (projectId) => {
-    if (autoPageCreated) return;
+    if (autoPageCreatedRef.current) {
+      console.log('[HtmlEditor] autoHandlePage: 已完成，跳过');
+      return;
+    }
     
+    if (isAutoCreatingRef.current) {
+      console.log('[HtmlEditor] autoHandlePage: 正在执行中，跳过');
+      return;
+    }
+    
+    isAutoCreatingRef.current = true;
     setLoadingPages(true);
+    
     try {
-      await getPages(projectId);
+      console.log('[HtmlEditor] autoHandlePage: 开始, projectId=', projectId);
       
-      setTimeout(async () => {
-        const currentPages = useHtmlEditorStore.getState().pages;
-        
-        if (currentPages && currentPages.length > 0) {
-          const firstPage = currentPages[0];
-          setSelectedPageId(firstPage.id);
-          await loadPage(firstPage.id);
-          message.info(t('htmlEditor.page.loaded', { title: firstPage.title }));
-        } else {
-          if (creditsLoading) {
-            setTimeout(() => autoHandlePage(projectId), 500);
-            return;
-          }
-          
-          setAutoPageCreated(true);
-          const autoTitle = generateTimestampTitle();
-          
-          if (!canPerformCreditAction(creditsConfig.credits_per_page, t('htmlEditor.page.create'))) {
-            message.warning(t('htmlEditor.credits.cannotAutoCreate'));
-            setHtmlContent(BLANK_HTML_TEMPLATE);
-            return;
-          }
-          
-          try {
-            const pageData = {
-              title: autoTitle,
-              project_id: projectId,
-              html_content: BLANK_HTML_TEMPLATE,
-              css_content: '',
-              js_content: ''
-            };
-            
-            const newPage = await createPage(pageData);
-            message.success(t('htmlEditor.page.autoCreated', { title: autoTitle }));
-            setSelectedPageId(newPage.id);
-            await loadPage(newPage.id);
-            setHtmlContent(BLANK_HTML_TEMPLATE);
-            
-            await getPages(projectId);
-            await refreshUserCredits();
-          } catch (error) {
-            console.error('自动创建页面失败:', error);
-            message.error(t('htmlEditor.page.createFailed'));
-            setHtmlContent(BLANK_HTML_TEMPLATE);
-          }
+      if (creditsLoadingRef.current) {
+        console.log('[HtmlEditor] autoHandlePage: 积分正在加载，等待...');
+        const loaded = await waitForCreditsLoaded();
+        if (!loaded) {
+          console.log('[HtmlEditor] autoHandlePage: 积分加载超时，继续尝试');
         }
-      }, 300);
+      }
       
+      await getPages(projectId);
+      const currentPages = useHtmlEditorStore.getState().pages;
+      console.log('[HtmlEditor] autoHandlePage: 获取到页面数量=', currentPages?.length || 0);
+      
+      if (currentPages && currentPages.length > 0) {
+        const firstPage = currentPages[0];
+        console.log('[HtmlEditor] autoHandlePage: 选择已有页面=', firstPage.title);
+        setSelectedPageId(firstPage.id);
+        await loadPage(firstPage.id);
+        message.info(t('htmlEditor.page.loaded', { title: firstPage.title }));
+        autoPageCreatedRef.current = true;
+      } else {
+        console.log('[HtmlEditor] autoHandlePage: 没有页面，准备自动创建');
+        
+        const latestCredits = getLatestUserCredits();
+        const config = creditsConfigRef.current;
+        console.log('[HtmlEditor] autoHandlePage: 当前积分=', latestCredits, ', 创建需要=', config.credits_per_page);
+        
+        if (config.credits_per_page > 0 && latestCredits < config.credits_per_page) {
+          console.log('[HtmlEditor] autoHandlePage: 积分不足，显示空白模板');
+          message.warning(t('htmlEditor.credits.cannotAutoCreate', '积分不足，请手动创建页面'));
+          setHtmlContent(BLANK_HTML_TEMPLATE);
+          autoPageCreatedRef.current = true;
+          return;
+        }
+        
+        const autoTitle = generateTimestampTitle();
+        console.log('[HtmlEditor] autoHandlePage: 创建新页面=', autoTitle);
+        
+        try {
+          const pageData = {
+            title: autoTitle,
+            project_id: projectId,
+            html_content: BLANK_HTML_TEMPLATE,
+            css_content: '',
+            js_content: ''
+          };
+          
+          const newPage = await createPage(pageData);
+          console.log('[HtmlEditor] autoHandlePage: 创建成功, pageId=', newPage.id);
+          
+          message.success(t('htmlEditor.page.autoCreated', { title: autoTitle }));
+          setSelectedPageId(newPage.id);
+          await loadPage(newPage.id);
+          setHtmlContent(BLANK_HTML_TEMPLATE);
+          
+          await getPages(projectId);
+          await refreshUserCredits();
+          
+          autoPageCreatedRef.current = true;
+        } catch (error) {
+          console.error('[HtmlEditor] autoHandlePage: 创建失败', error);
+          message.error(t('htmlEditor.page.createFailed'));
+          setHtmlContent(BLANK_HTML_TEMPLATE);
+          autoPageCreatedRef.current = true;
+        }
+      }
+    } catch (error) {
+      console.error('[HtmlEditor] autoHandlePage: 执行失败', error);
     } finally {
       setLoadingPages(false);
+      isAutoCreatingRef.current = false;
     }
   };
 
@@ -347,10 +457,14 @@ const HtmlEditor = () => {
 
   // 选择项目
   const handleSelectProject = async (project) => {
+    console.log('[HtmlEditor] handleSelectProject: 选择项目=', project.name);
     setSelectedProject(project);
     setSelectedPageId(null);
     setHtmlContent(BLANK_HTML_TEMPLATE);
-    setAutoPageCreated(false);
+    
+    autoPageCreatedRef.current = false;
+    isAutoCreatingRef.current = false;
+    
     await autoHandlePage(project.id);
   };
 
@@ -525,7 +639,8 @@ const HtmlEditor = () => {
             
             const remainingPages = pages.filter(p => p.id !== page.id);
             if (remainingPages.length === 0 && selectedProject) {
-              setAutoPageCreated(false);
+              autoPageCreatedRef.current = false;
+              isAutoCreatingRef.current = false;
               await autoHandlePage(selectedProject.id);
             }
           }
@@ -556,56 +671,53 @@ const HtmlEditor = () => {
     message.success(t('htmlEditor.editor.cleared'));
   };
 
-  // 生成永久链接
+  /**
+   * v1.5 生成永久链接 - 移除确认对话框，直接生成
+   */
   const handleGeneratePermalink = async () => {
     if (!selectedPageId) {
       message.warning(t('htmlEditor.link.saveFirst'));
       return;
     }
 
+    // 如果已发布，直接显示链接
     const currentPageData = pages.find(p => p.id === selectedPageId);
     if (currentPageData?.is_published) {
       showPermalinkModal(currentPageData);
       return;
     }
 
+    // 检查积分
     if (!canPerformCreditAction(creditsConfig.credits_per_publish, t('htmlEditor.link.generate'))) {
       return;
     }
 
-    Modal.confirm({
-      title: t('htmlEditor.link.generate'),
-      content: (
-        <div>
-          <p>{t('htmlEditor.link.generateConfirm')}</p>
-          {creditsConfig.credits_per_publish > 0 && (
-            <p>{t('htmlEditor.link.costCredits')} <Text strong type="warning">{creditsConfig.credits_per_publish}</Text> {t('htmlEditor.credits.creditsUnit')}</p>
-          )}
-        </div>
-      ),
-      okText: t('htmlEditor.link.confirmGenerate'),
-      cancelText: t('htmlEditor.action.cancel'),
-      onOk: async () => {
-        try {
-          const result = await togglePublish(selectedPageId);
-          if (result.is_published) {
-            showPermalinkModal(result);
-            await refreshUserCredits();
-          }
-        } catch (error) {
-          message.error(t('htmlEditor.link.generateFailed'));
-        }
+    // v1.5 直接生成，不再需要确认
+    setIsGeneratingLink(true);
+    try {
+      const result = await togglePublish(selectedPageId);
+      if (result.is_published) {
+        showPermalinkModal(result);
+        await refreshUserCredits();
+        await getPages(selectedProject?.id); // 刷新页面列表更新发布状态
       }
-    });
+    } catch (error) {
+      message.error(t('htmlEditor.link.generateFailed'));
+    } finally {
+      setIsGeneratingLink(false);
+    }
   };
 
-  // 显示永久链接弹窗
+  /**
+   * v1.5 显示永久链接弹窗 - 使用Modal.info并添加关闭按钮
+   */
   const showPermalinkModal = (page) => {
     const publishUrl = `${window.location.origin}/pages/${user.id}/${page.slug}`;
     
-    Modal.success({
+    Modal.info({
       title: t('htmlEditor.link.permanentLink'),
       width: 600,
+      icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
       content: (
         <div>
           <p>{t('htmlEditor.link.yourLink')}</p>
@@ -624,6 +736,8 @@ const HtmlEditor = () => {
         </div>
       ),
       okText: t('htmlEditor.link.openPage'),
+      cancelText: t('htmlEditor.action.close', '关闭'),
+      okCancel: true, // v1.5 显示取消按钮作为关闭按钮
       onOk: () => window.open(publishUrl, '_blank')
     });
   };
@@ -647,62 +761,36 @@ const HtmlEditor = () => {
     padding: { top: 16, bottom: 16 }
   };
 
-  /**
-   * 编辑器就绪回调
-   * v1.1 修复右键菜单Paste不工作的问题
-   * 
-   * 问题原因：
-   *   Monaco内置的粘贴命令使用已废弃的document.execCommand('paste')
-   *   现代浏览器出于安全考虑限制了这个API
-   *   而Ctrl+V使用的是浏览器原生paste事件，可以正常工作
-   * 
-   * 解决方案：
-   *   添加自定义粘贴Action，使用现代的navigator.clipboard.readText() API
-   */
+  // 编辑器就绪回调 - v1.1 修复右键菜单
   const handleEditorDidMount = (editor, monaco) => {
     setEditorReady(true);
     console.log('[HtmlEditor] Monaco编辑器已就绪');
     
-    // ===== 修复右键菜单Paste不工作的问题 =====
-    // 添加自定义粘贴Action到右键菜单
     editor.addAction({
-      // Action的唯一标识
       id: 'custom-clipboard-paste',
-      // 右键菜单中显示的标签
       label: '📋 粘贴 (Paste)',
-      // 不需要快捷键，Ctrl+V已经能正常工作
       keybindings: [],
-      // 放在剪贴板操作组（与Cut、Copy同组）
       contextMenuGroupId: '9_cutcopypaste',
-      // 排序：放在Copy之后
       contextMenuOrder: 3,
-      // 执行粘贴操作
       run: async (ed) => {
         try {
-          // 使用现代Clipboard API读取剪贴板内容
           const text = await navigator.clipboard.readText();
           if (text) {
-            // 获取当前选区
             const selection = ed.getSelection();
-            // 执行编辑操作：替换选区内容为剪贴板文本
             ed.executeEdits('custom-paste', [{
               range: selection,
               text: text,
               forceMoveMarkers: true
             }]);
-            // 聚焦编辑器
             ed.focus();
           }
         } catch (err) {
-          // Clipboard API可能因权限问题失败
           console.error('[HtmlEditor] 剪贴板访问失败:', err);
-          // 提示用户使用Ctrl+V
           message.warning(t('htmlEditor.editor.pasteFailedUseCtrlV', '右键粘贴失败，请使用 Ctrl+V'));
         }
       }
     });
     
-    // 同样添加自定义复制Action（确保一致性）
     editor.addAction({
       id: 'custom-clipboard-copy',
       label: '📄 复制 (Copy)',
@@ -711,7 +799,6 @@ const HtmlEditor = () => {
       contextMenuOrder: 2,
       run: async (ed) => {
         try {
-          // 获取选中的文本
           const selection = ed.getSelection();
           const selectedText = ed.getModel().getValueInRange(selection);
           if (selectedText) {
@@ -725,7 +812,6 @@ const HtmlEditor = () => {
       }
     });
     
-    // 添加自定义剪切Action
     editor.addAction({
       id: 'custom-clipboard-cut',
       label: '✂️ 剪切 (Cut)',
@@ -734,13 +820,10 @@ const HtmlEditor = () => {
       contextMenuOrder: 1,
       run: async (ed) => {
         try {
-          // 获取选中的文本
           const selection = ed.getSelection();
           const selectedText = ed.getModel().getValueInRange(selection);
           if (selectedText) {
-            // 复制到剪贴板
             await navigator.clipboard.writeText(selectedText);
-            // 删除选中内容
             ed.executeEdits('custom-cut', [{
               range: selection,
               text: '',
@@ -788,7 +871,6 @@ const HtmlEditor = () => {
 
   return (
     <Layout style={iosStyles.container}>
-      {/* 顶部工具栏 */}
       <Header style={iosStyles.header}>
         <Space size={12}>
           <Button style={iosStyles.iconButton} icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
@@ -796,7 +878,7 @@ const HtmlEditor = () => {
           <Button style={iosStyles.previewButton} icon={<EyeOutlined />} onClick={handlePreview}>{t('htmlEditor.preview')}</Button>
           <Button style={iosStyles.copyButton} icon={<CopyOutlined />} onClick={handleCopyContent}>{t('htmlEditor.copy')}</Button>
           <Button style={iosStyles.clearButton} icon={<ClearOutlined />} onClick={handleClearContent}>{t('htmlEditor.clear')}</Button>
-          <Button style={iosStyles.linkButton} icon={<LinkOutlined />} onClick={handleGeneratePermalink} disabled={!selectedPageId || creditsLoading}>{t('htmlEditor.generateLink')} ({formatCreditsDisplay(creditsConfig.credits_per_publish)})</Button>
+          <Button style={iosStyles.linkButton} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId || creditsLoading}>{t('htmlEditor.generateLink')} ({formatCreditsDisplay(creditsConfig.credits_per_publish)})</Button>
         </Space>
         
         <div style={{ flex: 1, textAlign: 'center' }}>
@@ -824,7 +906,6 @@ const HtmlEditor = () => {
       </Header>
 
       <Layout style={{ background: 'transparent' }}>
-        {/* 侧边栏 */}
         <Sider width={300} collapsed={sidebarCollapsed} collapsedWidth={0} style={iosStyles.sidebar}>
           <div style={iosStyles.sidebarContent}>
             <div style={iosStyles.sidebarSection}>
@@ -888,7 +969,6 @@ const HtmlEditor = () => {
           </div>
         </Sider>
 
-        {/* 主内容区 */}
         <Content style={{ display: 'flex', background: 'transparent', padding: 0 }}>
           <div style={iosStyles.editorSection}>
             <div style={iosStyles.editorHeader}>
@@ -928,7 +1008,6 @@ const HtmlEditor = () => {
         </Content>
       </Layout>
 
-      {/* 创建项目弹窗 */}
       <Modal title={t('htmlEditor.project.create')} open={showProjectModal} onOk={() => projectForm.submit()} onCancel={() => { setShowProjectModal(false); projectForm.resetFields(); }} centered>
         <Form form={projectForm} layout="vertical" onFinish={handleCreateProject}>
           <Form.Item name="name" label={t('htmlEditor.project.name')} rules={[{ required: true, message: t('htmlEditor.project.nameRequired') }]}>
@@ -941,7 +1020,6 @@ const HtmlEditor = () => {
         </Form>
       </Modal>
 
-      {/* 创建页面弹窗 */}
       <Modal
         title={t('htmlEditor.page.createIn', { project: selectedProject?.name })}
         open={showPageModal}
@@ -974,7 +1052,6 @@ const HtmlEditor = () => {
         )}
       </Modal>
 
-      {/* 重命名弹窗 */}
       <Modal title={renameType === 'project' ? t('htmlEditor.project.rename') : t('htmlEditor.page.rename')} open={showRenameModal} onOk={() => renameForm.submit()} onCancel={() => { setShowRenameModal(false); renameForm.resetFields(); setRenameItem(null); }} centered>
         <Form form={renameForm} layout="vertical" onFinish={handleRename}>
           <Form.Item name="name" label={renameType === 'project' ? t('htmlEditor.project.name') : t('htmlEditor.page.name')} rules={[{ required: true, message: t('htmlEditor.page.nameRequired') }]}>
