@@ -1,6 +1,10 @@
 /**
  * 思维导图工具 - iOS 科技风优化版
- * 修复：主动设置连线 stroke 颜色
+ * 
+ * v1.1 修复PDF导出和布局优化 - 2025-12-26
+ * v1.2 修复SVG模式下d3-zoom报错 - 2025-12-26
+ *   - SVG模式不使用d3-zoom，使用CSS transform缩放
+ *   - 修复zoom-BEuyXPeo.js报错问题
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
@@ -40,14 +44,14 @@ const Mindmap = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [creditsConfig, setCreditsConfig] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(0.7);
+  const [zoomLevel, setZoomLevel] = useState(1);
   
   const svgRef = useRef(null);
   const markmapRef = useRef(null);
   const previewRef = useRef(null);
   const user = useAuthStore(state => state.user);
 
-  // iOS 系统配色方案（在组件外定义，供多处使用）
+  // iOS 系统配色方案
   const iosColors = [
     '#007AFF', // SF Blue
     '#34C759', // SF Green
@@ -72,9 +76,11 @@ const Mindmap = () => {
     }
   };
 
+  // v1.2 切换tab时重置缩放级别
   const handleTabChange = (key) => {
     setContentType(key);
-    setZoomLevel(key === 'markdown' ? 1 : 0.7);
+    // 根据不同类型设置初始缩放
+    setZoomLevel(key === 'markdown' ? 1 : 0.8);
     
     if (key === 'markdown') {
       setContent(MARKDOWN_TEMPLATE);
@@ -114,10 +120,9 @@ const Mindmap = () => {
       setTimeout(() => {
         mm.fit();
         
-        // ✅ 关键修复：主动设置连线颜色
+        // 主动设置连线颜色
         const svg = svgRef.current;
         if (svg) {
-          // 1. 先收集所有节点的层级信息（通过 class 或 data 属性）
           const nodeGroups = svg.querySelectorAll('g[data-depth]');
           const depthMap = new Map();
           
@@ -129,17 +134,12 @@ const Mindmap = () => {
             });
           });
 
-          // 2. 遍历所有 path 并设置样式
           const allPaths = svg.querySelectorAll('path');
           allPaths.forEach((path, index) => {
-            // 检测是连线（fill="none"）
             if (path.getAttribute('fill') === 'none' || !path.getAttribute('fill')) {
-              // ✅ 主动设置连线颜色
-              // 尝试从 map 中获取深度，如果没有则根据索引推断
               const depth = depthMap.get(path) || (index % iosColors.length);
               const lineColor = iosColors[depth % iosColors.length];
               
-              // 设置连线样式
               path.style.stroke = lineColor;
               path.style.strokeWidth = '1.5px';
               path.style.opacity = '0.75';
@@ -148,12 +148,8 @@ const Mindmap = () => {
               path.style.fill = 'none';
               
               path.setAttribute('class', 'markmap-link');
-              
-              console.log(`✅ 连线 ${index}: 深度=${depth}, 颜色=${lineColor}`);
             }
           });
-          
-          console.log(`✅ iOS 风格渲染完成，共 ${allPaths.length} 条路径`);
         }
       }, 300);
     } catch (error) {
@@ -168,21 +164,28 @@ const Mindmap = () => {
     }
   }, [content, contentType]);
 
+  /**
+   * v1.2 重构缩放逻辑
+   * - Markdown模式：使用markmap的rescale方法
+   * - Mermaid/SVG模式：使用CSS transform（不调用d3-zoom）
+   */
   const handleZoom = (type) => {
     if (contentType === 'markdown') {
+      // Markdown使用markmap内置缩放
       if (!markmapRef.current) return;
       try {
         if (type === 'in') markmapRef.current.rescale(1.25);
         else if (type === 'out') markmapRef.current.rescale(0.8);
         else if (type === 'fit') markmapRef.current.fit();
       } catch (error) {
-        console.error('缩放失败:', error);
+        console.error('Markdown缩放失败:', error);
       }
     } else {
+      // v1.2 Mermaid和SVG使用CSS transform缩放（避免d3-zoom错误）
       setZoomLevel(prev => {
         if (type === 'in') return Math.min(prev * 1.2, 3);
-        if (type === 'out') return Math.max(prev / 1.2, 0.3);
-        if (type === 'fit') return 0.7;
+        if (type === 'out') return Math.max(prev / 1.2, 0.2);
+        if (type === 'fit') return 0.8;
         return prev;
       });
     }
@@ -271,6 +274,7 @@ const Mindmap = () => {
     if (contentType === 'markdown') return svgRef.current;
     else if (contentType === 'mermaid') return previewRef.current?.querySelector('svg');
     else if (contentType === 'svg') {
+      // v1.2 SVG模式：从content直接解析
       const div = document.createElement('div');
       div.innerHTML = content;
       return div.querySelector('svg');
@@ -294,15 +298,47 @@ const Mindmap = () => {
   const exportPNG = async () => {
     const svg = getSVGElement();
     if (!svg) throw new Error('未找到 SVG 元素');
-    const data = new XMLSerializer().serializeToString(svg);
+    
+    const clonedSvg = svg.cloneNode(true);
+    const bbox = svg.getBBox ? svg.getBBox() : { x: 0, y: 0, width: 800, height: 600 };
+    const svgWidth = Math.max(bbox.width + bbox.x + 100, svg.clientWidth || 800);
+    const svgHeight = Math.max(bbox.height + bbox.y + 100, svg.clientHeight || 600);
+    
+    clonedSvg.setAttribute('width', svgWidth);
+    clonedSvg.setAttribute('height', svgHeight);
+    if (!clonedSvg.getAttribute('viewBox')) {
+      clonedSvg.setAttribute('viewBox', `${bbox.x - 50} ${bbox.y - 50} ${svgWidth} ${svgHeight}`);
+    }
+    
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', bbox.x - 50);
+    bgRect.setAttribute('y', bbox.y - 50);
+    bgRect.setAttribute('width', svgWidth);
+    bgRect.setAttribute('height', svgHeight);
+    bgRect.setAttribute('fill', 'white');
+    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+    
+    const allElements = clonedSvg.querySelectorAll('*');
+    allElements.forEach(el => {
+      const computedStyle = window.getComputedStyle(el);
+      const importantStyles = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'opacity'];
+      importantStyles.forEach(prop => {
+        const value = computedStyle.getPropertyValue(prop);
+        if (value) el.style[prop] = value;
+      });
+    });
+    
+    const data = new XMLSerializer().serializeToString(clonedSvg);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
+    
+    const scale = 2;
+    canvas.width = svgWidth * scale;
+    canvas.height = svgHeight * scale;
 
     return new Promise((resolve, reject) => {
       img.onload = () => {
-        canvas.width = img.width * 2;
-        canvas.height = img.height * 2;
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -316,23 +352,112 @@ const Mindmap = () => {
           resolve();
         }, 'image/png');
       };
-      img.onerror = reject;
-      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+      img.onerror = (e) => {
+        console.error('PNG图片加载失败:', e);
+        reject(new Error('PNG导出失败'));
+      };
+      const svgBase64 = btoa(unescape(encodeURIComponent(data)));
+      img.src = 'data:image/svg+xml;base64,' + svgBase64;
     });
   };
 
   const exportPDF = async () => {
-    const { jsPDF } = await import('jspdf');
-    await import('svg2pdf.js');
     const svg = getSVGElement();
     if (!svg) throw new Error('未找到 SVG 元素');
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    await pdf.svg(svg, {
-      x: 0, y: 0,
-      width: pdf.internal.pageSize.getWidth(),
-      height: pdf.internal.pageSize.getHeight()
+    
+    const { jsPDF } = await import('jspdf');
+    
+    const clonedSvg = svg.cloneNode(true);
+    const bbox = svg.getBBox ? svg.getBBox() : { x: 0, y: 0, width: 800, height: 600 };
+    const svgWidth = Math.max(bbox.width + bbox.x + 100, svg.clientWidth || 800);
+    const svgHeight = Math.max(bbox.height + bbox.y + 100, svg.clientHeight || 600);
+    
+    clonedSvg.setAttribute('width', svgWidth);
+    clonedSvg.setAttribute('height', svgHeight);
+    if (!clonedSvg.getAttribute('viewBox')) {
+      clonedSvg.setAttribute('viewBox', `${bbox.x - 50} ${bbox.y - 50} ${svgWidth} ${svgHeight}`);
+    }
+    
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', bbox.x - 50);
+    bgRect.setAttribute('y', bbox.y - 50);
+    bgRect.setAttribute('width', svgWidth);
+    bgRect.setAttribute('height', svgHeight);
+    bgRect.setAttribute('fill', 'white');
+    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+    
+    const allElements = clonedSvg.querySelectorAll('*');
+    allElements.forEach(el => {
+      const computedStyle = window.getComputedStyle(el);
+      const importantStyles = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'opacity', 'color'];
+      importantStyles.forEach(prop => {
+        const value = computedStyle.getPropertyValue(prop);
+        if (value && value !== 'none' && value !== '') {
+          el.style[prop] = value;
+        }
+      });
+      
+      if (el.tagName === 'text' || el.tagName === 'tspan') {
+        if (!el.getAttribute('fill') && !el.style.fill) {
+          el.setAttribute('fill', '#1C1C1E');
+        }
+      }
     });
-    pdf.save(`${title || 'mindmap'}.pdf`);
+    
+    const data = new XMLSerializer().serializeToString(clonedSvg);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    const scale = 2;
+    canvas.width = svgWidth * scale;
+    canvas.height = svgHeight * scale;
+
+    return new Promise((resolve, reject) => {
+      img.onload = () => {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        
+        const isLandscape = svgWidth > svgHeight;
+        const pdf = new jsPDF({
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          unit: 'pt',
+          format: 'a4'
+        });
+        
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        const margin = 40;
+        const availableWidth = pageWidth - margin * 2;
+        const availableHeight = pageHeight - margin * 2;
+        
+        const scaleX = availableWidth / svgWidth;
+        const scaleY = availableHeight / svgHeight;
+        const finalScale = Math.min(scaleX, scaleY, 1);
+        
+        const finalWidth = svgWidth * finalScale;
+        const finalHeight = svgHeight * finalScale;
+        
+        const x = (pageWidth - finalWidth) / 2;
+        const y = (pageHeight - finalHeight) / 2;
+        
+        pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+        pdf.save(`${title || 'mindmap'}.pdf`);
+        resolve();
+      };
+      
+      img.onerror = (e) => {
+        console.error('PDF导出图片加载失败:', e);
+        reject(new Error('PDF导出失败'));
+      };
+      
+      const svgBase64 = btoa(unescape(encodeURIComponent(data)));
+      img.src = 'data:image/svg+xml;base64,' + svgBase64;
+    });
   };
 
   const exportMarkdown = async () => {
@@ -345,6 +470,11 @@ const Mindmap = () => {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * v1.2 渲染预览内容
+   * - Markdown：使用markmap渲染到svg
+   * - Mermaid/SVG：使用CSS transform缩放，不使用d3-zoom
+   */
   const renderPreviewContent = () => {
     if (contentType === 'markdown') {
       return (
@@ -354,19 +484,23 @@ const Mindmap = () => {
       );
     }
 
+    // v1.2 Mermaid和SVG使用CSS transform缩放
     return (
-      <div style={{ 
-        transform: `scale(${zoomLevel})`,
-        transformOrigin: 'top left',
-        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        padding: '20px',
-        background: '#fff',
-        borderRadius: '12px',
-        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
-        width: 'max-content',
-        maxWidth: '1400px'
-      }} ref={previewRef}>
-        {contentType === 'mermaid' ? <MermaidPreview code={content} /> : <SvgPreview code={content} />}
+      <div 
+        style={{ 
+          transform: `scale(${zoomLevel})`,
+          transformOrigin: 'top left',
+          transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          width: 'fit-content',
+          minWidth: '100%'
+        }} 
+        ref={previewRef}
+      >
+        {contentType === 'mermaid' ? (
+          <MermaidPreview code={content} />
+        ) : (
+          <SvgPreview code={content} />
+        )}
       </div>
     );
   };
@@ -450,7 +584,11 @@ const Mindmap = () => {
               {contentType === 'markdown' && (
                 <Tooltip title="展开所有"><button className="zoom-button" onClick={handleExpandAll}><ExpandOutlined /></button></Tooltip>
               )}
-              {contentType !== 'markdown' && <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px', color: '#8E8E93' }}>{Math.round(zoomLevel * 100)}%</Text>}
+              {contentType !== 'markdown' && (
+                <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px', color: '#8E8E93' }}>
+                  {Math.round(zoomLevel * 100)}%
+                </Text>
+              )}
             </Space>
           </div>
           <div className="mindmap-canvas">

@@ -1,4 +1,12 @@
-// 思维导图编辑器样式 - iOS 科技风优化版
+/**
+ * 思维导图编辑器样式 - iOS 科技风优化版
+ * 
+ * v1.1 布局优化 - 2025-12-26
+ * v1.2 修复d3-zoom报错 - 2025-12-26
+ *   - 给markmap的SVG容器添加明确的初始尺寸
+ *   - 避免d3-zoom在处理相对尺寸时报错
+ */
+
 .mindmap-page-container {
   position: absolute;
   top: 0;
@@ -10,6 +18,7 @@
   background: #F2F2F7;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
 
+  // 顶部头部
   .mindmap-page-header {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
@@ -50,6 +59,7 @@
     }
   }
 
+  // Tab切换区域
   .mindmap-tabs-container {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(20px);
@@ -94,6 +104,7 @@
     }
   }
 
+  // 主布局区域
   .mindmap-main-layout {
     flex: 1;
     overflow: hidden;
@@ -103,7 +114,7 @@
     gap: 16px;
     padding: 16px;
 
-    // 左侧编辑器 - iOS 卡片风格
+    // 左侧编辑器 - 30%宽度
     .mindmap-editor-sider {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(20px);
@@ -114,10 +125,10 @@
       flex-direction: column;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06),
                   0 1px 4px rgba(0, 0, 0, 0.04);
-      flex: 0 0 50%;
-      width: 50%;
-      max-width: 50%;
-      min-width: 600px;
+      flex: 0 0 30%;
+      width: 30%;
+      max-width: 30%;
+      min-width: 320px;
       overflow: hidden;
 
       .editor-header {
@@ -149,10 +160,10 @@
         textarea {
           flex: 1;
           width: 100%;
-          padding: 20px;
+          padding: 16px;
           font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
-          font-size: 14px;
-          line-height: 1.8;
+          font-size: 13px;
+          line-height: 1.6;
           border: none;
           outline: none;
           resize: none;
@@ -169,9 +180,8 @@
             background: rgba(242, 242, 247, 0.3);
           }
 
-          // 自定义滚动条 - iOS 风格
           &::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
           }
 
           &::-webkit-scrollbar-track {
@@ -180,7 +190,7 @@
 
           &::-webkit-scrollbar-thumb {
             background: rgba(0, 0, 0, 0.15);
-            border-radius: 4px;
+            border-radius: 3px;
 
             &:hover {
               background: rgba(0, 0, 0, 0.25);
@@ -190,7 +200,7 @@
       }
     }
 
-    // 右侧预览 - iOS 卡片风格
+    // 右侧预览 - 70%宽度
     .mindmap-preview-content {
       flex: 1;
       background: rgba(255, 255, 255, 0.95);
@@ -257,7 +267,7 @@
 
       .mindmap-canvas {
         flex: 1;
-        padding: 24px;
+        padding: 16px;
         overflow: auto;
         position: relative;
         background: #FAFAFA;
@@ -281,19 +291,27 @@
           }
         }
 
+        // v1.2 修复d3-zoom报错：给SVG容器添加明确的尺寸
         .mindmap-svg {
           background: #FFFFFF;
           border-radius: 12px;
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04),
                       0 1px 4px rgba(0, 0, 0, 0.02);
-          padding: 48px;
-          min-height: 600px;
+          padding: 24px;
+          // v1.2 使用明确的像素尺寸而非100%
+          // 这样d3-zoom可以正确获取SVG的尺寸
           width: 100%;
+          min-width: 600px;
           height: 100%;
+          min-height: 500px;
 
           svg {
+            // v1.2 关键修复：使用明确的像素尺寸
+            // d3-zoom需要明确的尺寸才能正常工作
             width: 100%;
             height: 100%;
+            min-width: 600px;
+            min-height: 500px;
             display: block;
           }
         }
@@ -302,7 +320,7 @@
   }
 }
 
-// Markmap 节点样式 - XMind + iOS 风格
+// Markmap 节点样式
 .markmap-node {
   cursor: pointer;
 
@@ -345,7 +363,7 @@
   }
 }
 
-// Markmap 连线样式 - 柔和平滑
+// Markmap 连线样式
 .markmap-link,
 .mindmap-svg svg path[fill="none"],
 .mindmap-svg svg g path,
@@ -377,17 +395,30 @@ svg.markmap path {
 }
 
 // 响应式布局
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
+  .mindmap-page-container {
+    .mindmap-main-layout {
+      .mindmap-editor-sider {
+        flex: 0 0 30%;
+        width: 30%;
+        max-width: 30%;
+        min-width: 300px;
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
   .mindmap-page-container {
     .mindmap-main-layout {
       gap: 12px;
       padding: 12px;
 
       .mindmap-editor-sider {
-        flex: 0 0 45%;
-        width: 45%;
-        max-width: 45%;
-        min-width: 500px;
+        flex: 0 0 35%;
+        width: 35%;
+        max-width: 35%;
+        min-width: 280px;
       }
     }
   }
@@ -404,12 +435,12 @@ svg.markmap path {
         width: 100%;
         max-width: 100%;
         min-width: 100%;
-        height: 45%;
-        flex: 0 0 45%;
+        height: 35%;
+        flex: 0 0 35%;
       }
 
       .mindmap-preview-content {
-        height: 55%;
+        height: 65%;
         flex: 1;
       }
     }
