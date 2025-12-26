@@ -3,6 +3,10 @@
  * 
  * 修改：移除手动Monaco加载逻辑，让@monaco-editor/react自动处理
  * 支持国际化(i18n)
+ * 
+ * v1.1 修复右键菜单Paste不生效问题 - 2025-12-26
+ *   - Monaco内置粘贴使用已废弃的execCommand，现代浏览器受限
+ *   - 添加自定义粘贴Action使用Clipboard API
  */
 
 import React, { useState, useEffect } from 'react';
@@ -643,10 +647,113 @@ const HtmlEditor = () => {
     padding: { top: 16, bottom: 16 }
   };
 
-  // 编辑器就绪
+  /**
+   * 编辑器就绪回调
+   * v1.1 修复右键菜单Paste不工作的问题
+   * 
+   * 问题原因：
+   *   Monaco内置的粘贴命令使用已废弃的document.execCommand('paste')
+   *   现代浏览器出于安全考虑限制了这个API
+   *   而Ctrl+V使用的是浏览器原生paste事件，可以正常工作
+   * 
+   * 解决方案：
+   *   添加自定义粘贴Action，使用现代的navigator.clipboard.readText() API
+   */
   const handleEditorDidMount = (editor, monaco) => {
     setEditorReady(true);
     console.log('[HtmlEditor] Monaco编辑器已就绪');
+    
+    // ===== 修复右键菜单Paste不工作的问题 =====
+    // 添加自定义粘贴Action到右键菜单
+    editor.addAction({
+      // Action的唯一标识
+      id: 'custom-clipboard-paste',
+      // 右键菜单中显示的标签
+      label: '📋 粘贴 (Paste)',
+      // 不需要快捷键，Ctrl+V已经能正常工作
+      keybindings: [],
+      // 放在剪贴板操作组（与Cut、Copy同组）
+      contextMenuGroupId: '9_cutcopypaste',
+      // 排序：放在Copy之后
+      contextMenuOrder: 3,
+      // 执行粘贴操作
+      run: async (ed) => {
+        try {
+          // 使用现代Clipboard API读取剪贴板内容
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            // 获取当前选区
+            const selection = ed.getSelection();
+            // 执行编辑操作：替换选区内容为剪贴板文本
+            ed.executeEdits('custom-paste', [{
+              range: selection,
+              text: text,
+              forceMoveMarkers: true
+            }]);
+            // 聚焦编辑器
+            ed.focus();
+          }
+        } catch (err) {
+          // Clipboard API可能因权限问题失败
+          console.error('[HtmlEditor] 剪贴板访问失败:', err);
+          // 提示用户使用Ctrl+V
+          message.warning(t('htmlEditor.editor.pasteFailedUseCtrlV', '右键粘贴失败，请使用 Ctrl+V'));
+        }
+      }
+    });
+    
+    // 同样添加自定义复制Action（确保一致性）
+    editor.addAction({
+      id: 'custom-clipboard-copy',
+      label: '📄 复制 (Copy)',
+      keybindings: [],
+      contextMenuGroupId: '9_cutcopypaste',
+      contextMenuOrder: 2,
+      run: async (ed) => {
+        try {
+          // 获取选中的文本
+          const selection = ed.getSelection();
+          const selectedText = ed.getModel().getValueInRange(selection);
+          if (selectedText) {
+            await navigator.clipboard.writeText(selectedText);
+            message.success(t('htmlEditor.editor.copied', '已复制到剪贴板'));
+          }
+        } catch (err) {
+          console.error('[HtmlEditor] 复制失败:', err);
+          message.warning(t('htmlEditor.editor.copyFailedUseCtrlC', '复制失败，请使用 Ctrl+C'));
+        }
+      }
+    });
+    
+    // 添加自定义剪切Action
+    editor.addAction({
+      id: 'custom-clipboard-cut',
+      label: '✂️ 剪切 (Cut)',
+      keybindings: [],
+      contextMenuGroupId: '9_cutcopypaste',
+      contextMenuOrder: 1,
+      run: async (ed) => {
+        try {
+          // 获取选中的文本
+          const selection = ed.getSelection();
+          const selectedText = ed.getModel().getValueInRange(selection);
+          if (selectedText) {
+            // 复制到剪贴板
+            await navigator.clipboard.writeText(selectedText);
+            // 删除选中内容
+            ed.executeEdits('custom-cut', [{
+              range: selection,
+              text: '',
+              forceMoveMarkers: true
+            }]);
+            message.success(t('htmlEditor.editor.cut', '已剪切到剪贴板'));
+          }
+        } catch (err) {
+          console.error('[HtmlEditor] 剪切失败:', err);
+          message.warning(t('htmlEditor.editor.cutFailedUseCtrlX', '剪切失败，请使用 Ctrl+X'));
+        }
+      }
+    });
   };
 
   // iOS风格样式
