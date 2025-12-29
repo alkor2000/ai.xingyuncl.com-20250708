@@ -6,9 +6,12 @@
  * - 账号有效期管理
  * - UUID显示
  * - 密码重置
+ * - 组管理员对话查看权限设置（v1.2新增）
  * 
  * 更新记录：
  * - v1.1: 邮箱改为非必填项
+ * - v1.2: 新增组管理员查看对话记录权限开关
+ * - v1.3: 修复Switch初始值绑定问题
  */
 
 import React, { useEffect, useState } from 'react'
@@ -26,7 +29,8 @@ import {
   DatePicker,
   Tooltip,
   Alert,
-  Divider
+  Divider,
+  Switch
 } from 'antd'
 import { 
   ExclamationCircleOutlined,
@@ -35,7 +39,8 @@ import {
   UserOutlined,
   KeyOutlined,
   MailOutlined,
-  CopyOutlined
+  CopyOutlined,
+  EyeOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
@@ -60,6 +65,8 @@ const UserFormModal = ({
   const [activeKey, setActiveKey] = useState('basic')
   const { systemConfig } = useSystemConfigStore()
   const [selectedGroupId, setSelectedGroupId] = useState(null)
+  // v1.2新增：选中的角色
+  const [selectedRole, setSelectedRole] = useState(null)
   
   const isGroupAdmin = currentUser?.role === 'admin'
   const isSuperAdmin = currentUser?.role === 'super_admin'
@@ -118,6 +125,15 @@ const UserFormModal = ({
       }
     }
   }
+
+  // v1.2新增：监听角色变化
+  const handleRoleChange = (role) => {
+    setSelectedRole(role)
+    // 如果切换为非组管理员角色，清除查看对话权限
+    if (role !== 'admin') {
+      form.setFieldValue('can_view_chat_history', false)
+    }
+  }
   
   // 复制UUID到剪贴板
   const handleCopyUUID = () => {
@@ -132,16 +148,35 @@ const UserFormModal = ({
     }
   }
   
-  // 每次打开时重置到基本信息Tab
+  // v1.3修复：每次打开时正确设置表单初始值
   useEffect(() => {
     if (visible) {
       setActiveKey('basic')
-      // 如果是新建用户，设置默认值
-      if (!editingUser && !isGroupAdmin) {
-        form.setFieldsValue({
-          token_quota: defaultTokens,
-          credits_quota: defaultCredits
-        })
+      
+      if (editingUser) {
+        // 编辑模式：设置当前角色状态
+        setSelectedRole(editingUser.role)
+        setSelectedGroupId(editingUser.group_id)
+        
+        // v1.3修复：确保can_view_chat_history正确设置到表单
+        // 使用setTimeout确保表单已挂载
+        setTimeout(() => {
+          form.setFieldsValue({
+            can_view_chat_history: editingUser.can_view_chat_history === 1 || editingUser.can_view_chat_history === true
+          })
+        }, 0)
+      } else {
+        // 新建模式
+        setSelectedRole('user')
+        setSelectedGroupId(null)
+        
+        if (!isGroupAdmin) {
+          form.setFieldsValue({
+            token_quota: defaultTokens,
+            credits_quota: defaultCredits,
+            can_view_chat_history: false
+          })
+        }
       }
     }
   }, [visible, editingUser, isGroupAdmin, defaultTokens, defaultCredits, form])
@@ -177,6 +212,17 @@ const UserFormModal = ({
     return false
   }
 
+  // v1.2新增：检查是否可以设置查看对话权限（只有超级管理员可以）
+  const canSetViewChatPermission = () => {
+    return isSuperAdmin
+  }
+
+  // v1.2新增：判断当前编辑的用户是否是组管理员
+  const isEditingGroupAdmin = () => {
+    const role = selectedRole || editingUser?.role
+    return role === 'admin'
+  }
+
   return (
     <Modal
       title={editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}
@@ -190,6 +236,12 @@ const UserFormModal = ({
         form={form}
         layout="vertical"
         onFinish={onSubmit}
+        // v1.3修复：设置表单初始值
+        initialValues={{
+          status: 'active',
+          role: 'user',
+          can_view_chat_history: false
+        }}
       >
         <Tabs activeKey={activeKey} onChange={setActiveKey}>
           <TabPane tab={t('admin.users.tabs.basic')} key="basic">
@@ -306,9 +358,11 @@ const UserFormModal = ({
                 name="role"
                 label={t('admin.users.form.role')}
                 rules={[{ required: true, message: t('admin.users.form.role.required') }]}
-                initialValue="user"
               >
-                <Select placeholder={t('admin.users.form.role.required')}>
+                <Select 
+                  placeholder={t('admin.users.form.role.required')}
+                  onChange={handleRoleChange}
+                >
                   <Select.Option value="user">{t('role.user')}</Select.Option>
                   {isSuperAdmin && (
                     <>
@@ -349,7 +403,6 @@ const UserFormModal = ({
             <Form.Item
               name="status"
               label={t('admin.users.form.status')}
-              initialValue="active"
             >
               <Select>
                 <Select.Option value="active">{t('status.active')}</Select.Option>
@@ -410,6 +463,42 @@ const UserFormModal = ({
                   </Form.Item>
                 </Col>
               </Row>
+            )}
+
+            {/* v1.2新增：组管理员查看对话记录权限设置 */}
+            {isSuperAdmin && isEditingGroupAdmin() && (
+              <>
+                <Divider style={{ margin: '16px 0' }}>
+                  <Space>
+                    <EyeOutlined />
+                    <span style={{ fontSize: '13px', color: '#666' }}>组管理员特殊权限</span>
+                  </Space>
+                </Divider>
+                
+                <Form.Item
+                  name="can_view_chat_history"
+                  label={
+                    <Space>
+                      <EyeOutlined />
+                      <span>{t('admin.users.form.canViewChatHistory')}</span>
+                    </Space>
+                  }
+                  valuePropName="checked"
+                  extra={t('admin.users.form.canViewChatHistory.help')}
+                >
+                  <Switch 
+                    checkedChildren="允许" 
+                    unCheckedChildren="禁止"
+                  />
+                </Form.Item>
+
+                <Alert
+                  message={t('admin.users.form.canViewChatHistory.warning')}
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              </>
             )}
           </TabPane>
 

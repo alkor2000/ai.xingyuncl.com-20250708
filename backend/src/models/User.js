@@ -6,6 +6,11 @@
  * - deleted_at IS NOT NULL → 已删除用户
  * - 删除时自动重命名 email/username/uuid，释放唯一字段，允许重新注册
  * - 所有查询自动过滤已删除用户
+ * 
+ * 更新记录：
+ * - v1.1 (2025-01-XX): 新增 can_view_chat_history 字段
+ *   * 仅对组管理员(role=admin)有效
+ *   * 控制组管理员是否可以查看组员的对话记录
  */
 
 const bcrypt = require('bcryptjs');
@@ -44,6 +49,9 @@ class User {
         site_logo: this.group_site_logo
       };
     }
+
+    // v1.1新增：添加查看对话记录权限字段（仅对组管理员有意义）
+    safeUser.can_view_chat_history = this.can_view_chat_history === 1 || this.can_view_chat_history === true;
     
     return safeUser;
   }
@@ -531,13 +539,15 @@ class User {
 
   /**
    * 更新用户信息
+   * v1.1更新：添加 can_view_chat_history 字段支持
    */
   async update(updateData) {
     try {
+      // v1.1更新：添加 can_view_chat_history 到允许更新的字段列表
       const allowedFields = [
         'email', 'username', 'phone', 'role', 'group_id', 'status', 'remark',
         'token_quota', 'credits_quota', 'credits_expire_at', 'expire_at',
-        'email_verified', 'password'
+        'email_verified', 'password', 'can_view_chat_history'
       ];
       
       const updateFields = Object.keys(updateData).filter(field => allowedFields.includes(field));

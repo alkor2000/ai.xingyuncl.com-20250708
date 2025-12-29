@@ -1,5 +1,10 @@
 /**
  * 使用记录控制器
+ * 
+ * 更新记录：
+ * - v1.1 (2025-01-XX): 新增组管理员查看对话记录权限控制
+ *   * 组管理员需要 can_view_chat_history = 1 才能查看组员对话记录
+ *   * 超级管理员不受此限制
  */
 
 const UsageLogService = require('../../services/admin/UsageLogService');
@@ -141,6 +146,12 @@ class UsageLogController {
   /**
    * 获取会话的完整消息记录（管理员专用）
    * GET /api/admin/conversations/:conversationId/messages
+   * 
+   * 权限控制：
+   * - 超级管理员：可以查看所有人的对话记录
+   * - 组管理员：需要 can_view_chat_history = 1 才能查看本组用户的对话记录
+   * 
+   * v1.1更新：新增 can_view_chat_history 权限检查
    */
   static async getConversationMessages(req, res) {
     try {
@@ -158,8 +169,19 @@ class UsageLogController {
         return ResponseHelper.notFound(res, '会话不存在');
       }
 
-      // 组管理员只能查看本组用户的会话
+      // 组管理员特殊权限检查
       if (userRole === ROLES.ADMIN) {
+        // v1.1新增：检查组管理员是否有查看对话记录的权限
+        if (!req.user.can_view_chat_history) {
+          logger.warn('组管理员尝试查看对话记录但没有权限', {
+            adminId: req.user.id,
+            adminUsername: req.user.username,
+            conversationId,
+            can_view_chat_history: req.user.can_view_chat_history
+          });
+          return ResponseHelper.forbidden(res, '您没有查看对话记录的权限');
+        }
+
         // 需要验证会话所属用户是否在当前管理员的组
         const dbConnection = require('../../database/connection');
         const checkSql = `
@@ -193,13 +215,53 @@ class UsageLogController {
         adminId: req.user.id,
         adminRole: userRole,
         conversationId,
-        messageCount: result.messages.length
+        messageCount: result.messages.length,
+        can_view_chat_history: req.user.can_view_chat_history
       });
 
       return ResponseHelper.success(res, responseData, '获取对话记录成功');
     } catch (error) {
       logger.error('获取会话消息失败:', error);
       return ResponseHelper.error(res, error.message || '获取对话记录失败');
+    }
+  }
+
+  /**
+   * 检查当前用户是否有查看对话记录的权限
+   * GET /api/admin/usage-logs/can-view-chat
+   * 
+   * 用于前端判断是否显示"查看"按钮
+   */
+  static async checkCanViewChat(req, res) {
+    try {
+      const userRole = req.user.role;
+
+      // 超级管理员始终可以查看
+      if (userRole === ROLES.SUPER_ADMIN) {
+        return ResponseHelper.success(res, { 
+          canView: true,
+          reason: '超级管理员'
+        }, '权限检查成功');
+      }
+
+      // 组管理员检查 can_view_chat_history 字段
+      if (userRole === ROLES.ADMIN) {
+        const canView = req.user.can_view_chat_history === 1 || 
+                        req.user.can_view_chat_history === true;
+        return ResponseHelper.success(res, { 
+          canView,
+          reason: canView ? '已授权查看' : '未授权查看'
+        }, '权限检查成功');
+      }
+
+      // 普通用户不能查看
+      return ResponseHelper.success(res, { 
+        canView: false,
+        reason: '无权限'
+      }, '权限检查成功');
+    } catch (error) {
+      logger.error('检查查看对话权限失败:', error);
+      return ResponseHelper.error(res, error.message || '权限检查失败');
     }
   }
 }

@@ -1,8 +1,15 @@
 /**
  * 使用记录组件 - 支持查看对话内容
+ * 
+ * 更新记录：
+ * - v1.1 (2025-01-XX): 新增组管理员查看对话记录权限控制
+ *   * 组管理员需要 can_view_chat_history = true 才能查看对话内容
+ *   * 超级管理员始终可以查看
+ *   * 初始化时检查权限状态
+ * - v1.2: 无权限时完全隐藏"内容"列，不显示任何提示
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Card,
   Table,
@@ -35,6 +42,7 @@ import useAdminStore from '../../../stores/adminStore'
 import useAuthStore from '../../../stores/authStore'
 import moment from 'moment'
 import ConversationContentDrawer from './ConversationContentDrawer'
+import apiClient from '../../../utils/api'
 
 const { Search } = Input
 const { RangePicker } = DatePicker
@@ -75,8 +83,40 @@ const UsageLogs = () => {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [selectedConversationId, setSelectedConversationId] = useState(null)
 
+  // v1.1新增：查看对话记录权限状态
+  const [canViewChat, setCanViewChat] = useState(false)
+  const [permissionChecked, setPermissionChecked] = useState(false)
+
   // 是否是超级管理员
   const isSuperAdmin = user?.role === 'super_admin'
+  // 是否是组管理员
+  const isGroupAdmin = user?.role === 'admin'
+
+  // v1.1新增：检查查看对话记录的权限
+  const checkViewChatPermission = async () => {
+    try {
+      // 超级管理员始终有权限
+      if (isSuperAdmin) {
+        setCanViewChat(true)
+        setPermissionChecked(true)
+        return
+      }
+
+      // 组管理员检查权限
+      if (isGroupAdmin) {
+        const response = await apiClient.get('/admin/usage-logs/can-view-chat')
+        if (response.data?.data) {
+          setCanViewChat(response.data.data.canView)
+          console.log('查看对话权限检查结果:', response.data.data)
+        }
+      }
+    } catch (error) {
+      console.error('检查查看对话权限失败:', error)
+      setCanViewChat(false)
+    } finally {
+      setPermissionChecked(true)
+    }
+  }
 
   // 初始化加载
   useEffect(() => {
@@ -86,6 +126,8 @@ const UsageLogs = () => {
     if (isSuperAdmin) {
       getUserGroups()
     }
+    // v1.1新增：检查查看对话权限
+    checkViewChatPermission()
   }, [])
 
   // 加载使用记录
@@ -203,112 +245,124 @@ const UsageLogs = () => {
     setDrawerVisible(true)
   }
 
-  // 表格列定义
-  const columns = [
-    {
-      title: '使用时间',
-      dataIndex: 'usage_time',
-      key: 'usage_time',
-      width: 170,
-      fixed: 'left',
-      render: (time) => moment(time).format('YYYY-MM-DD HH:mm:ss')
-    },
-    {
-      title: '用户',
-      key: 'user',
-      width: 200,
-      fixed: 'left',
-      render: (record) => (
-        <Space direction="vertical" size={0}>
-          <Space>
-            <UserOutlined />
-            <span>{record.username}</span>
+  // v1.2更新：根据权限动态生成表格列
+  const columns = useMemo(() => {
+    // 基础列定义
+    const baseColumns = [
+      {
+        title: '使用时间',
+        dataIndex: 'usage_time',
+        key: 'usage_time',
+        width: 170,
+        fixed: 'left',
+        render: (time) => moment(time).format('YYYY-MM-DD HH:mm:ss')
+      },
+      {
+        title: '用户',
+        key: 'user',
+        width: 200,
+        fixed: 'left',
+        render: (record) => (
+          <Space direction="vertical" size={0}>
+            <Space>
+              <UserOutlined />
+              <span>{record.username}</span>
+            </Space>
+            <span style={{ fontSize: 12, color: '#999' }}>{record.email}</span>
           </Space>
-          <span style={{ fontSize: 12, color: '#999' }}>{record.email}</span>
-        </Space>
-      )
-    },
-    {
-      title: '所属组',
-      dataIndex: 'group_name',
-      key: 'group_name',
-      width: 120,
-      render: (name, record) => name ? (
-        <Tag color={record.group_color || 'default'}>
-          <TeamOutlined /> {name}
-        </Tag>
-      ) : '-'
-    },
-    {
-      title: '使用模型',
-      key: 'model',
-      width: 200,
-      render: (record) => (
-        <Space>
-          <RobotOutlined />
-          <span>{record.model_display_name || record.model_name || '-'}</span>
-          {record.model_provider && (
-            <Tag size="small">{record.model_provider}</Tag>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: '消耗积分',
-      dataIndex: 'credits_consumed',
-      key: 'credits_consumed',
-      width: 100,
-      align: 'right',
-      render: (credits) => (
-        <span style={{ color: '#f5222d', fontWeight: 'bold' }}>
-          -{credits}
-        </span>
-      )
-    },
-    {
-      title: '剩余积分',
-      dataIndex: 'balance_after',
-      key: 'balance_after',
-      width: 100,
-      align: 'right',
-      render: (balance) => (
-        <span style={{ color: balance > 0 ? '#52c41a' : '#999' }}>
-          {balance}
-        </span>
-      )
-    },
-    {
-      title: '会话',
-      dataIndex: 'conversation_title',
-      key: 'conversation_title',
-      width: 120,
-      fixed: 'right',
-      ellipsis: true,
-      render: (title) => (
-        <Tooltip title={title}>
-          {title || '-'}
-        </Tooltip>
-      )
-    },
-    {
-      title: '内容',
-      key: 'content',
-      width: 80,
-      fixed: 'right',
-      align: 'center',
-      render: (_, record) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewConversation(record)}
-          disabled={!record.related_conversation_id}
-        >
-          查看
-        </Button>
-      )
+        )
+      },
+      {
+        title: '所属组',
+        dataIndex: 'group_name',
+        key: 'group_name',
+        width: 120,
+        render: (name, record) => name ? (
+          <Tag color={record.group_color || 'default'}>
+            <TeamOutlined /> {name}
+          </Tag>
+        ) : '-'
+      },
+      {
+        title: '使用模型',
+        key: 'model',
+        width: 200,
+        render: (record) => (
+          <Space>
+            <RobotOutlined />
+            <span>{record.model_display_name || record.model_name || '-'}</span>
+            {record.model_provider && (
+              <Tag size="small">{record.model_provider}</Tag>
+            )}
+          </Space>
+        )
+      },
+      {
+        title: '消耗积分',
+        dataIndex: 'credits_consumed',
+        key: 'credits_consumed',
+        width: 100,
+        align: 'right',
+        render: (credits) => (
+          <span style={{ color: '#f5222d', fontWeight: 'bold' }}>
+            -{credits}
+          </span>
+        )
+      },
+      {
+        title: '剩余积分',
+        dataIndex: 'balance_after',
+        key: 'balance_after',
+        width: 100,
+        align: 'right',
+        render: (balance) => (
+          <span style={{ color: balance > 0 ? '#52c41a' : '#999' }}>
+            {balance}
+          </span>
+        )
+      },
+      {
+        title: '会话',
+        dataIndex: 'conversation_title',
+        key: 'conversation_title',
+        width: 120,
+        fixed: 'right',
+        ellipsis: true,
+        render: (title) => (
+          <Tooltip title={title}>
+            {title || '-'}
+          </Tooltip>
+        )
+      }
+    ]
+
+    // v1.2更新：只有有权限时才添加"内容"列
+    if (canViewChat) {
+      baseColumns.push({
+        title: '内容',
+        key: 'content',
+        width: 80,
+        fixed: 'right',
+        align: 'center',
+        render: (_, record) => (
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleViewConversation(record)}
+            disabled={!record.related_conversation_id}
+          >
+            查看
+          </Button>
+        )
+      })
     }
-  ]
+
+    return baseColumns
+  }, [canViewChat])
+
+  // 计算表格滚动宽度（根据是否有内容列）
+  const tableScrollX = canViewChat ? 1300 : 1220
 
   return (
     <div>
@@ -501,22 +555,24 @@ const UsageLogs = () => {
             pagination={pagination}
             onChange={handleTableChange}
             scroll={{ 
-              x: 1300,
+              x: tableScrollX,
               y: 600
             }}
           />
         </Space>
       </Card>
 
-      {/* 对话内容Drawer */}
-      <ConversationContentDrawer
-        visible={drawerVisible}
-        conversationId={selectedConversationId}
-        onClose={() => {
-          setDrawerVisible(false)
-          setSelectedConversationId(null)
-        }}
-      />
+      {/* 对话内容Drawer - 只有有权限时才渲染 */}
+      {canViewChat && (
+        <ConversationContentDrawer
+          visible={drawerVisible}
+          conversationId={selectedConversationId}
+          onClose={() => {
+            setDrawerVisible(false)
+            setSelectedConversationId(null)
+          }}
+        />
+      )}
     </div>
   )
 }
