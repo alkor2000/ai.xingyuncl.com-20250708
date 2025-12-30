@@ -1,62 +1,23 @@
 /**
- * Agent工作流主工作区
- * 统一入口，内部使用Tab切换：工作流列表、执行历史
+ * Agent工作流主工作区 v2.0
+ * 简化版本，直接渲染工作流列表
  */
 
-import React, { useState } from 'react'
-import { Card, Tabs } from 'antd'
-import {
-  AppstoreOutlined,
-  HistoryOutlined,
-  BarChartOutlined
-} from '@ant-design/icons'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import WorkflowList from './WorkflowList'
-import ExecutionHistory from './ExecutionHistory'
 import './AgentWorkspace.less'
 
+/**
+ * Agent工作区主组件
+ * 直接展示工作流列表，无Tab切换
+ */
 const AgentWorkspace = () => {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState('workflows')
-
-  // Tab配置
-  const tabItems = [
-    {
-      key: 'workflows',
-      label: (
-        <span>
-          <AppstoreOutlined />
-          工作流列表
-        </span>
-      ),
-      children: <WorkflowList />
-    },
-    {
-      key: 'executions',
-      label: (
-        <span>
-          <HistoryOutlined />
-          执行历史
-        </span>
-      ),
-      children: <ExecutionHistory />
-    }
-  ]
 
   return (
     <div className="agent-workspace">
-      <Card
-        className="agent-workspace-card"
-        bodyStyle={{ padding: 0 }}
-      >
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={tabItems}
-          size="large"
-          className="agent-workspace-tabs"
-        />
-      </Card>
+      <WorkflowList />
     </div>
   )
 }

@@ -1,13 +1,14 @@
 /**
- * Agent工作流列表页
- * 展示用户的所有工作流，支持创建、编辑、删除、执行
+ * Agent工作流列表页 v2.1
+ * 卡片式网格布局，FastGPT风格
+ * 支持创建、编辑、删除、执行、发布等操作
+ * v2.1 修复：Dropdown菜单点击事件冒泡问题
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { 
   Card, 
   Button, 
-  Table, 
   Space, 
   Tag, 
   Modal, 
@@ -16,27 +17,189 @@ import {
   Switch,
   Tooltip,
   Popconfirm,
-  message
+  message,
+  Empty,
+  Spin,
+  Dropdown,
+  Row,
+  Col,
+  Segmented
 } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
-  EyeOutlined,
-  CopyOutlined,
+  MoreOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  ClockCircleOutlined,
+  SearchOutlined,
+  AppstoreOutlined,
+  RobotOutlined,
+  CloseCircleOutlined,
+  ReloadOutlined
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAgentStore from '../../stores/agentStore'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+import './WorkflowList.less'
 
+// 配置dayjs
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
+
+/**
+ * 工作流卡片组件
+ */
+const WorkflowCard = ({ workflow, onEdit, onDelete, onTogglePublish, onExecute }) => {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  
+  // 格式化更新时间为相对时间
+  const formatRelativeTime = (date) => {
+    const now = dayjs()
+    const target = dayjs(date)
+    const diffDays = now.diff(target, 'day')
+    
+    if (diffDays === 0) {
+      return target.format('HH:mm')
+    } else if (diffDays === 1) {
+      return '昨天'
+    } else if (diffDays < 7) {
+      return `${diffDays}天前`
+    } else {
+      return target.format('MM-DD')
+    }
+  }
+  
+  // 处理编辑
+  const handleEdit = (e) => {
+    e.domEvent?.stopPropagation()
+    onEdit(workflow)
+  }
+  
+  // 处理执行
+  const handleExecute = (e) => {
+    e.domEvent?.stopPropagation()
+    onExecute(workflow)
+  }
+  
+  // 处理发布/取消发布
+  const handleTogglePublish = (e) => {
+    e.domEvent?.stopPropagation()
+    onTogglePublish(workflow.id)
+  }
+  
+  // 处理删除
+  const handleDelete = (e) => {
+    e.domEvent?.stopPropagation()
+    onDelete(workflow)
+  }
+  
+  // 更多操作菜单
+  const menuItems = [
+    {
+      key: 'edit',
+      label: t('agent.workflow.edit'),
+      icon: <EditOutlined />,
+      onClick: handleEdit
+    },
+    {
+      key: 'execute',
+      label: t('agent.workflow.execute'),
+      icon: <PlayCircleOutlined />,
+      disabled: !workflow.is_published,
+      onClick: handleExecute
+    },
+    {
+      key: 'publish',
+      label: workflow.is_published ? t('agent.workflow.unpublish') : t('agent.workflow.publish'),
+      icon: workflow.is_published ? <CloseCircleOutlined /> : <CheckCircleOutlined />,
+      onClick: handleTogglePublish
+    },
+    { type: 'divider' },
+    {
+      key: 'delete',
+      label: t('agent.workflow.delete'),
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: handleDelete
+    }
+  ]
+  
+  // 点击卡片进入编辑器
+  const handleCardClick = () => {
+    navigate(`/agent/editor/${workflow.id}`)
+  }
+  
+  // 阻止Dropdown区域的点击事件冒泡
+  const handleDropdownAreaClick = (e) => {
+    e.stopPropagation()
+  }
+  
+  return (
+    <div className="workflow-card" onClick={handleCardClick}>
+      {/* 卡片头部：图标、名称、状态 */}
+      <div className="workflow-card-header">
+        <div className="workflow-icon">
+          <RobotOutlined />
+        </div>
+        <div className="workflow-title-area">
+          <div className="workflow-name">{workflow.name}</div>
+          <Tag className="workflow-type-tag">工作流</Tag>
+        </div>
+        {workflow.is_published && (
+          <Tag color="success" className="workflow-status-tag">
+            <CheckCircleOutlined /> 已发布
+          </Tag>
+        )}
+      </div>
+      
+      {/* 卡片描述 */}
+      <div className="workflow-card-body">
+        <div className="workflow-description">
+          {workflow.description || '暂无介绍'}
+        </div>
+      </div>
+      
+      {/* 卡片底部：版本、时间、更多操作 */}
+      <div className="workflow-card-footer">
+        <div className="workflow-meta">
+          <span className="workflow-version">v{workflow.version || 1}</span>
+          <span className="workflow-time">
+            <ClockCircleOutlined /> {formatRelativeTime(workflow.updated_at)}
+          </span>
+        </div>
+        {/* 用div包裹Dropdown，阻止事件冒泡 */}
+        <div onClick={handleDropdownAreaClick}>
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button 
+              type="text" 
+              icon={<MoreOutlined />} 
+              className="workflow-more-btn"
+            />
+          </Dropdown>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 工作流列表主组件
+ */
 const WorkflowList = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   
+  // 从store获取状态和方法
   const {
     workflows,
     workflowsLoading,
@@ -47,13 +210,41 @@ const WorkflowList = () => {
     togglePublish
   } = useAgentStore()
   
+  // 本地状态
   const [createModalVisible, setCreateModalVisible] = useState(false)
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false)
+  const [workflowToDelete, setWorkflowToDelete] = useState(null)
+  const [searchText, setSearchText] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all') // all, published, draft
   const [form] = Form.useForm()
   
   // 初始加载
   useEffect(() => {
-    fetchWorkflows({ current: 1 })
+    fetchWorkflows({ current: 1, pageSize: 50 })
   }, [])
+  
+  // 筛选后的工作流列表
+  const filteredWorkflows = useMemo(() => {
+    let result = workflows || []
+    
+    // 按搜索文本筛选
+    if (searchText) {
+      const lowerSearch = searchText.toLowerCase()
+      result = result.filter(w => 
+        w.name.toLowerCase().includes(lowerSearch) ||
+        (w.description && w.description.toLowerCase().includes(lowerSearch))
+      )
+    }
+    
+    // 按发布状态筛选
+    if (filterStatus === 'published') {
+      result = result.filter(w => w.is_published)
+    } else if (filterStatus === 'draft') {
+      result = result.filter(w => !w.is_published)
+    }
+    
+    return result
+  }, [workflows, searchText, filterStatus])
   
   // 创建工作流
   const handleCreate = async (values) => {
@@ -78,10 +269,25 @@ const WorkflowList = () => {
     }
   }
   
-  // 删除工作流
-  const handleDelete = async (id) => {
+  // 编辑工作流
+  const handleEdit = (workflow) => {
+    navigate(`/agent/editor/${workflow.id}`)
+  }
+  
+  // 删除工作流 - 显示确认弹窗
+  const handleDeleteClick = (workflow) => {
+    setWorkflowToDelete(workflow)
+    setDeleteConfirmVisible(true)
+  }
+  
+  // 确认删除
+  const handleDeleteConfirm = async () => {
+    if (!workflowToDelete) return
+    
     try {
-      await deleteWorkflow(id)
+      await deleteWorkflow(workflowToDelete.id)
+      setDeleteConfirmVisible(false)
+      setWorkflowToDelete(null)
     } catch (error) {
       console.error('删除失败:', error)
     }
@@ -97,171 +303,136 @@ const WorkflowList = () => {
   }
   
   // 执行工作流
-  const handleExecute = (record) => {
-    if (!record.is_published) {
+  const handleExecute = (workflow) => {
+    if (!workflow.is_published) {
       message.warning('请先发布工作流后再执行')
       return
     }
-    navigate(`/agent/execute/${record.id}`)
+    navigate(`/agent/execute/${workflow.id}`)
   }
   
-  // 表格列定义
-  const columns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80
-    },
-    {
-      title: t('agent.workflow.name'),
-      dataIndex: 'name',
-      key: 'name',
-      ellipsis: true,
-      render: (text, record) => (
-        <Space>
-          <a onClick={() => navigate(`/agent/editor/${record.id}`)}>
-            {text}
-          </a>
-          {record.is_published && (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              已发布
-            </Tag>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: t('agent.workflow.description'),
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true
-    },
-    {
-      title: '版本',
-      dataIndex: 'version',
-      key: 'version',
-      width: 80,
-      align: 'center'
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (text) => dayjs(text).format('YYYY-MM-DD HH:mm')
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: 180,
-      render: (text) => dayjs(text).format('YYYY-MM-DD HH:mm')
-    },
-    {
-      title: t('common.actions'),
-      key: 'actions',
-      width: 280,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="编辑">
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/agent/editor/${record.id}`)}
-            />
-          </Tooltip>
-          
-          <Tooltip title={record.is_published ? '取消发布' : '发布'}>
-            <Button
-              type="text"
-              icon={record.is_published ? <CloseCircleOutlined /> : <CheckCircleOutlined />}
-              onClick={() => handleTogglePublish(record.id)}
-            />
-          </Tooltip>
-          
-          <Tooltip title="执行">
-            <Button
-              type="text"
-              icon={<PlayCircleOutlined />}
-              onClick={() => handleExecute(record)}
-              disabled={!record.is_published}
-            />
-          </Tooltip>
-          
-          <Tooltip title="查看详情">
-            <Button
-              type="text"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/agent/detail/${record.id}`)}
-            />
-          </Tooltip>
-          
-          <Popconfirm
-            title="确定要删除这个工作流吗？"
-            description="删除后无法恢复"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Tooltip title="删除">
-              <Button
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ]
+  // 刷新列表
+  const handleRefresh = () => {
+    fetchWorkflows({ current: 1, pageSize: 50 })
+  }
   
   return (
-    <div style={{ padding: '24px' }}>
-      <Card
-        title="工作流列表"
-        extra={
+    <div className="workflow-list-container">
+      {/* 顶部操作栏 */}
+      <div className="workflow-list-header">
+        <div className="header-left">
+          <h2 className="page-title">
+            <AppstoreOutlined /> {t('agent.workflow.list')}
+          </h2>
+        </div>
+        <div className="header-right">
+          <Input
+            placeholder="搜索工作流..."
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="search-input"
+            allowClear
+          />
+          <Button 
+            icon={<ReloadOutlined />} 
+            onClick={handleRefresh}
+            className="refresh-btn"
+          />
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setCreateModalVisible(true)}
+            className="create-btn"
           >
-            创建工作流
+            {t('agent.workflow.create')}
           </Button>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={workflows}
-          rowKey="id"
-          loading={workflowsLoading}
-          pagination={{
-            current: workflowsPagination.current,
-            pageSize: workflowsPagination.pageSize,
-            total: workflowsPagination.total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 条`,
-            onChange: (page, pageSize) => {
-              fetchWorkflows({ current: page, pageSize })
-            }
-          }}
-          scroll={{ x: 1200 }}
+        </div>
+      </div>
+      
+      {/* 筛选标签 */}
+      <div className="workflow-list-filter">
+        <Segmented
+          value={filterStatus}
+          onChange={setFilterStatus}
+          options={[
+            { label: '全部', value: 'all' },
+            { label: '已发布', value: 'published' },
+            { label: '未发布', value: 'draft' }
+          ]}
         />
-      </Card>
+        <span className="workflow-count">
+          共 {filteredWorkflows.length} 个工作流
+        </span>
+      </div>
+      
+      {/* 工作流卡片网格 */}
+      <div className="workflow-list-content">
+        {workflowsLoading ? (
+          <div className="loading-container">
+            <Spin size="large" tip="加载中..." />
+          </div>
+        ) : filteredWorkflows.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              searchText || filterStatus !== 'all' 
+                ? '没有找到匹配的工作流' 
+                : '还没有创建工作流'
+            }
+          >
+            {!searchText && filterStatus === 'all' && (
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={() => setCreateModalVisible(true)}
+              >
+                创建第一个工作流
+              </Button>
+            )}
+          </Empty>
+        ) : (
+          <Row gutter={[16, 16]} className="workflow-grid">
+            {filteredWorkflows.map((workflow) => (
+              <Col 
+                key={workflow.id} 
+                xs={24} 
+                sm={12} 
+                md={8} 
+                lg={6}
+                xl={6}
+              >
+                <WorkflowCard
+                  workflow={workflow}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                  onTogglePublish={handleTogglePublish}
+                  onExecute={handleExecute}
+                />
+              </Col>
+            ))}
+          </Row>
+        )}
+      </div>
       
       {/* 创建工作流弹窗 */}
       <Modal
-        title="创建工作流"
+        title={
+          <Space>
+            <RobotOutlined />
+            {t('agent.workflow.create')}
+          </Space>
+        }
         open={createModalVisible}
         onCancel={() => {
           setCreateModalVisible(false)
           form.resetFields()
         }}
         onOk={() => form.submit()}
-        width={600}
+        okText="创建"
+        cancelText="取消"
+        width={520}
+        className="create-workflow-modal"
       >
         <Form
           form={form}
@@ -281,14 +452,16 @@ const WorkflowList = () => {
           
           <Form.Item
             name="description"
-            label="描述"
+            label="描述（可选）"
             rules={[
               { max: 500, message: '描述不能超过500个字符' }
             ]}
           >
             <Input.TextArea
-              rows={4}
+              rows={3}
               placeholder="描述这个工作流的用途..."
+              showCount
+              maxLength={500}
             />
           </Form.Item>
           
@@ -296,10 +469,28 @@ const WorkflowList = () => {
             name="is_published"
             label="创建后立即发布"
             valuePropName="checked"
+            tooltip="发布后才能执行工作流"
           >
             <Switch />
           </Form.Item>
         </Form>
+      </Modal>
+      
+      {/* 删除确认弹窗 */}
+      <Modal
+        title="确认删除"
+        open={deleteConfirmVisible}
+        onCancel={() => {
+          setDeleteConfirmVisible(false)
+          setWorkflowToDelete(null)
+        }}
+        onOk={handleDeleteConfirm}
+        okText="确认删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+      >
+        <p>确定要删除工作流 <strong>"{workflowToDelete?.name}"</strong> 吗？</p>
+        <p style={{ color: '#999', fontSize: '12px' }}>删除后无法恢复，相关的执行历史也会被删除。</p>
       </Modal>
     </div>
   )
