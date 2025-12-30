@@ -2,8 +2,8 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v1.4.0 (2025-12-30): 新增智能应用管理Tab
  * - v1.3.0 (2025-11-09): 组管理员也能访问教学管理
- *   * 组管理员可以管理本组的教学授权
  * - v1.2.0: 教学管理Tab（仅超级管理员）
  */
 
@@ -35,7 +35,8 @@ import {
   ShareAltOutlined,
   ScanOutlined,
   CalendarOutlined,
-  BookOutlined
+  BookOutlined,
+  RocketOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -69,7 +70,8 @@ import {
   MindmapCreditsConfig,
   OcrSettings,
   CalendarConfigSettings,
-  TeachingManagement
+  TeachingManagement,
+  SmartAppSettings
 } from '../../components/admin/settings'
 
 const Settings = () => {
@@ -122,7 +124,7 @@ const Settings = () => {
   const isSuperAdmin = userRole === ROLES.SUPER_ADMIN
   const isGroupAdmin = userRole === ROLES.ADMIN
   const canViewSettings = isSuperAdmin || isGroupAdmin
-  const canManageTeaching = isSuperAdmin || isGroupAdmin // 新增：组管理员也能管理教学
+  const canManageTeaching = isSuperAdmin || isGroupAdmin
 
   // 初始化加载数据
   useEffect(() => {
@@ -164,8 +166,6 @@ const Settings = () => {
     
     try {
       setSettingsLoading(true)
-      
-      // 同时更新后端和前端Store
       await updateSystemSettings(values)
       const result = await updateSystemConfig(values)
       
@@ -181,7 +181,7 @@ const Settings = () => {
     }
   }
 
-  // AI模型相关方法（只有超级管理员可以创建/更新/删除）
+  // AI模型相关方法
   const handleCreateModel = async (values) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -193,7 +193,7 @@ const Settings = () => {
       setIsModelModalVisible(false)
       modelForm.resetFields()
       message.success(t('admin.models.success.create'))
-      await getAIModels() // 刷新列表
+      await getAIModels()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.create'))
     }
@@ -206,7 +206,6 @@ const Settings = () => {
     }
     
     try {
-      // 过滤掉空的api_key和api_endpoint，避免覆盖原有值
       const updateData = { ...values }
       if (!updateData.api_key) {
         delete updateData.api_key
@@ -220,7 +219,7 @@ const Settings = () => {
       setEditingModel(null)
       modelForm.resetFields()
       message.success(t('admin.models.success.update'))
-      await getAIModels() // 刷新列表
+      await getAIModels()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.update'))
     }
@@ -269,11 +268,9 @@ const Settings = () => {
     }
     
     setEditingModel(model)
-    // 不设置api_key和api_endpoint，让用户选择是否更新
     modelForm.setFieldsValue({
       name: model.name,
       display_name: model.display_name,
-      // 不设置 api_key 和 api_endpoint，保持为空
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
       image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
       document_upload_enabled: model.document_upload_enabled !== undefined ? model.document_upload_enabled : false,
@@ -294,7 +291,7 @@ const Settings = () => {
     try {
       await updateAIModel(modelId, { stream_enabled: streamEnabled })
       message.success(t('admin.models.success.update'))
-      await getAIModels() // 刷新列表
+      await getAIModels()
     } catch (error) {
       message.error(t('admin.models.error.update'))
     }
@@ -309,7 +306,7 @@ const Settings = () => {
     try {
       await updateAIModel(modelId, { image_upload_enabled: imageUploadEnabled })
       message.success(t('admin.models.success.update'))
-      await getAIModels() // 刷新列表
+      await getAIModels()
     } catch (error) {
       message.error(t('admin.models.error.update'))
     }
@@ -324,13 +321,13 @@ const Settings = () => {
     try {
       await updateAIModel(modelId, { document_upload_enabled: documentUploadEnabled })
       message.success(t('admin.models.success.update'))
-      await getAIModels() // 刷新列表
+      await getAIModels()
     } catch (error) {
       message.error(t('admin.models.error.update'))
     }
   }
 
-  // 系统模块相关方法（只有超级管理员可以管理）
+  // 系统模块相关方法
   const handleCreateModule = async (values) => {
     try {
       await createModule(values)
@@ -364,7 +361,6 @@ const Settings = () => {
   }
 
   const handleEditModule = (module) => {
-    // 只设置editingModule，让子组件自己处理表单值
     setEditingModule(module)
     setIsModuleModalVisible(true)
   }
@@ -394,7 +390,7 @@ const Settings = () => {
     }
   }
 
-  // API服务相关方法（只有超级管理员可以管理）
+  // API服务相关方法
   const handleDeleteApiService = async (serviceId) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -409,7 +405,7 @@ const Settings = () => {
     }
   }
 
-  // 权限检查 - 使用角色判断而不是权限
+  // 权限检查
   if (!canViewSettings) {
     return (
       <div className="page-container">
@@ -422,7 +418,7 @@ const Settings = () => {
     )
   }
 
-  // Tab配置项 - 使用items属性（Ant Design 5.x）
+  // Tab配置项
   const tabItems = [
     // 第一组：基础功能
     {
@@ -445,7 +441,7 @@ const Settings = () => {
       ),
       children: <UsageLogs />
     },
-    // 教学管理Tab - 超级管理员和组管理员都可见（修改：从仅超级管理员改为包含组管理员）
+    // 教学管理Tab
     ...(canManageTeaching ? [{
       key: 'teaching',
       label: (
@@ -527,6 +523,17 @@ const Settings = () => {
     },
     // 只有超级管理员可见的Tab
     ...(isSuperAdmin ? [
+      // 新增：智能应用管理Tab
+      {
+        key: 'smartApps',
+        label: (
+          <span>
+            <RocketOutlined />
+            智能应用
+          </span>
+        ),
+        children: <SmartAppSettings />
+      },
       {
         key: 'imageModels',
         label: (
@@ -762,7 +769,6 @@ const Settings = () => {
     <div className="page-container">
       <style>
         {`
-          /* 自定义Tab样式，实现自适应多排显示 */
           .settings-tabs .ant-tabs-nav-wrap {
             flex-wrap: wrap !important;
             height: auto !important;
@@ -790,7 +796,7 @@ const Settings = () => {
         items={tabItems}
       />
 
-      {/* AI模型弹窗（只有超级管理员可以使用） */}
+      {/* AI模型弹窗 */}
       {isSuperAdmin && (
         <AIModelFormModal
           visible={isModelModalVisible}
@@ -806,7 +812,7 @@ const Settings = () => {
         />
       )}
 
-      {/* 系统模块弹窗（只有超级管理员可以使用） */}
+      {/* 系统模块弹窗 */}
       {isSuperAdmin && (
         <SystemModuleFormModal
           visible={isModuleModalVisible}

@@ -25,3 +25,5 @@ export { default as CalendarConfigSettings } from './CalendarConfigSettings'
 export { default as ConversationContentDrawer } from './ConversationContentDrawer'
 export { default as TeachingManagement } from './TeachingManagement'
 export { default as ModuleAuthorizationManagement } from './ModuleAuthorizationManagement'
+// 新增：智能应用管理
+export { default as SmartAppSettings } from './SmartAppSettings'

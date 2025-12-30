@@ -67,9 +67,12 @@ const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEdi
 // 智能教学系统页面组件 - 懒加载
 const Teaching = React.lazy(() => import('./pages/teaching/Teaching'))
 const ModuleDetail = React.lazy(() => import('./pages/teaching/ModuleDetail'))
-const LessonDetail = React.lazy(() => import('./pages/teaching/LessonDetail')) // 新增：课程详情（页面列表）
+const LessonDetail = React.lazy(() => import('./pages/teaching/LessonDetail'))
 const LessonEditor = React.lazy(() => import('./pages/teaching/LessonEditor'))
 const LessonViewer = React.lazy(() => import('./pages/teaching/LessonViewer'))
+
+// 智能应用广场 - 懒加载（新增）
+const SmartApps = React.lazy(() => import('./pages/smartApps/SmartApps'))
 
 // 布局组件
 import BasicLayout from './layouts/BasicLayout'
@@ -254,6 +257,16 @@ const App = () => {
                         <Route path="/chat" element={<Chat />} />
                         <Route path="/profile" element={<Profile />} />
                         
+                        {/* 智能应用广场路由（新增）*/}
+                        <Route 
+                          path="/smart-apps" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <SmartApps />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
                         {/* 知识库页面路由 */}
                         <Route 
                           path="/knowledge" 
@@ -374,7 +387,7 @@ const App = () => {
                           } 
                         />
                         
-                        {/* 课程详情路由（新增：页面列表）*/}
+                        {/* 课程详情路由 */}
                         <Route 
                           path="/teaching/lessons/:id" 
                           element={
@@ -384,7 +397,7 @@ const App = () => {
                           } 
                         />
                         
-                        {/* 课程页面查看路由（修改：支持 pageNumber）*/}
+                        {/* 课程页面查看路由 */}
                         <Route 
                           path="/teaching/lessons/:id/pages/:pageNumber" 
                           element={

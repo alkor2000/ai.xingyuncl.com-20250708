@@ -31,6 +31,8 @@ const ocrRoutes = require('./routes/ocrRoutes'); // 新增OCR路由
 const calendarRoutes = require('./routes/calendar'); // 新增日历路由
 const agentRoutes = require('./routes/agent'); // 新增AI工作流路由
 const teachingRoutes = require('./routes/teachingRoutes'); // 新增智能教学路由
+const smartAppRoutes = require('./routes/smartAppRoutes'); // 新增智能应用路由
+const { adminRouter: smartAppAdminRoutes } = require('./routes/smartAppRoutes'); // 智能应用管理路由
 
 // 创建 Express 应用
 const app = express();
@@ -146,6 +148,7 @@ app.get('/health/detailed', async (req, res) => {
 // API 路由
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/smart-apps', smartAppAdminRoutes); // 智能应用管理路由
 app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/public', publicRoutes);
@@ -160,6 +163,7 @@ app.use('/api/ocr', ocrRoutes); // 新增OCR路由
 app.use('/api/calendar', calendarRoutes); // 新增日历路由
 app.use('/api/agent', agentRoutes); // 新增AI工作流路由
 app.use('/api/teaching', teachingRoutes); // 新增智能教学路由
+app.use('/api/smart-apps', smartAppRoutes); // 新增智能应用用户端路由
 
 // 公开的HTML页面访问路由（不需要认证）
 app.get('/pages/:userId/:slug', require('./controllers/HtmlEditorController').previewPage);
