@@ -1,6 +1,7 @@
 /**
  * Agent工作流控制器（用户端）
  * 处理工作流的CRUD和执行
+ * v2.1 - 修复测试对话AI回复显示问题
  */
 
 const AgentWorkflow = require('../models/AgentWorkflow');
@@ -265,7 +266,7 @@ class AgentController {
     }
   }
 
-  // ========== 测试对话接口（新增）==========
+  // ========== 测试对话接口 ==========
 
   /**
    * 创建测试会话
@@ -303,7 +304,73 @@ class AgentController {
   }
 
   /**
+   * 从工作流输出中提取纯文本内容
+   * v2.1 新增：智能提取AI回复文本
+   * @param {any} output - ExecutorService返回的output
+   * @returns {string} 纯文本内容
+   */
+  static extractTextFromOutput(output) {
+    if (!output) {
+      return '无响应';
+    }
+
+    // 如果是字符串，直接返回
+    if (typeof output === 'string') {
+      return output;
+    }
+
+    // 如果是对象，按优先级尝试提取
+    if (typeof output === 'object') {
+      // 优先级1: result 字段（formatFinalOutput的输出格式）
+      if (output.result !== undefined) {
+        // result 可能还是对象
+        if (typeof output.result === 'string') {
+          return output.result;
+        }
+        if (typeof output.result === 'object' && output.result !== null) {
+          // 递归提取
+          return AgentController.extractTextFromOutput(output.result);
+        }
+        return String(output.result);
+      }
+
+      // 优先级2: content 字段（LLM节点原始输出格式）
+      if (output.content !== undefined) {
+        return String(output.content);
+      }
+
+      // 优先级3: output 字段
+      if (output.output !== undefined) {
+        return AgentController.extractTextFromOutput(output.output);
+      }
+
+      // 优先级4: text 字段
+      if (output.text !== undefined) {
+        return String(output.text);
+      }
+
+      // 优先级5: message 字段
+      if (output.message !== undefined) {
+        return String(output.message);
+      }
+
+      // 最后：如果只有 type 字段，说明是空响应
+      if (Object.keys(output).length === 1 && output.type) {
+        return '处理完成';
+      }
+
+      // 兜底：转为JSON（但这不应该发生了）
+      logger.warn('无法提取文本内容，使用JSON序列化', { output });
+      return JSON.stringify(output);
+    }
+
+    // 其他类型转字符串
+    return String(output);
+  }
+
+  /**
    * 发送测试消息（对话式执行）
+   * v2.1 修复：正确提取AI回复文本
    */
   static async sendTestMessage(req, res) {
     try {
@@ -336,7 +403,7 @@ class AgentController {
         sessionId: session_id, 
         workflowId: id, 
         userId,
-        message: message.substring(0, 50) + '...'
+        message: message.substring(0, 50) + (message.length > 50 ? '...' : '')
       });
 
       // 添加用户消息到会话
@@ -358,8 +425,15 @@ class AgentController {
         }
       );
 
-      // 提取AI回复
-      const aiReply = result.output?.content || JSON.stringify(result.output);
+      // v2.1 修复：使用智能提取方法获取AI回复文本
+      const aiReply = AgentController.extractTextFromOutput(result.output);
+
+      logger.info('AI回复提取成功', {
+        sessionId: session_id,
+        outputType: typeof result.output,
+        replyLength: aiReply.length,
+        replyPreview: aiReply.substring(0, 100)
+      });
 
       // 添加AI回复到会话
       TestSessionService.addMessage(session_id, 'assistant', aiReply);

@@ -1,5 +1,6 @@
 /**
  * Agent工作流执行引擎
+ * v2.1 - 修复output_data JSON格式问题
  * 负责工作流的编排、执行、积分管理和错误处理
  * 支持节点间数据传递和上下游连接
  */
@@ -73,7 +74,7 @@ class ExecutorService {
         edgeCount: edges.length
       });
 
-      // 5. 验证工作流连接性
+      // 5. 验证工作流连接性（移除结束节点强制检查）
       this.validateWorkflowConnections(nodes, edges);
 
       // 6. 验证节点类型和预估积分
@@ -158,7 +159,7 @@ class ExecutorService {
           // 获取节点类型配置（积分消耗）
           const nodeTypeConfig = nodeTypeMap.get(node.type);
 
-          // ===== 🔥 新增：查找上游节点输出并传递 =====
+          // 查找上游节点输出并传递
           const incomingEdges = edges.filter(e => e.target === node.id);
           
           if (incomingEdges.length > 0) {
@@ -178,13 +179,12 @@ class ExecutorService {
             // 没有上游节点
             context.upstreamOutput = null;
           }
-          // ===== 结束 =====
 
           logger.info('执行节点', {
             executionId,
             nodeId: node.id,
             nodeType: node.type,
-            creditsPerExecution: nodeTypeConfig.credits_per_execution,
+            creditsPerExecution: nodeTypeConfig?.credits_per_execution || 0,
             hasUpstream: !!context.upstreamOutput
           });
 
@@ -264,10 +264,13 @@ class ExecutorService {
         logger.info('退还多扣积分', { userId, amount: creditsToRefund });
       }
 
-      // 12. 更新执行记录为成功
+      // 12. 格式化最终输出（确保是对象格式）
+      const finalOutput = this.formatFinalOutput(lastNodeOutput);
+
+      // 13. 更新执行记录为成功
       await AgentExecution.update(executionId, {
         status: 'success',
-        output_data: lastNodeOutput,
+        output_data: finalOutput,  // 确保是对象格式
         total_credits_used: totalCreditsUsed,
         completed_at: new Date()
       });
@@ -286,7 +289,7 @@ class ExecutorService {
       return {
         success: true,
         executionId,
-        output: lastNodeOutput,
+        output: finalOutput,
         credits: {
           estimated: estimatedCredits,
           used: totalCreditsUsed,
@@ -309,6 +312,7 @@ class ExecutorService {
         await AgentExecution.update(executionId, {
           status: 'failed',
           error_message: error.message,
+          output_data: { error: error.message },  // 确保是对象格式
           completed_at: new Date()
         });
       }
@@ -334,12 +338,58 @@ class ExecutorService {
   }
 
   /**
-   * 验证工作流连接性（新增）
-   * 检查LLM节点是否有上游连接
+   * 格式化最终输出（确保返回对象格式，用于JSON字段存储）
+   * @param {any} output - 最后一个节点的输出
+   * @returns {Object} 对象格式的输出
+   */
+  formatFinalOutput(output) {
+    // 如果是 null 或 undefined，返回空对象
+    if (output === null || output === undefined) {
+      return { result: null };
+    }
+    
+    // 如果已经是对象，检查并处理
+    if (typeof output === 'object') {
+      // 如果对象有 output 属性，提取它但保持对象格式
+      if (output.output !== undefined) {
+        const innerOutput = output.output;
+        // 如果内层也是字符串，包装成对象
+        if (typeof innerOutput === 'string') {
+          return { result: innerOutput, type: 'text' };
+        }
+        return typeof innerOutput === 'object' ? innerOutput : { result: innerOutput };
+      }
+      
+      // 如果对象有 content 属性（LLM节点的输出格式）
+      if (output.content !== undefined) {
+        return { result: output.content, type: 'llm_response' };
+      }
+      
+      // 其他对象直接返回
+      return output;
+    }
+    
+    // 如果是字符串或其他基础类型，包装成对象
+    return { result: output, type: typeof output };
+  }
+
+  /**
+   * 验证工作流连接性
+   * v2.0 - 移除结束节点强制要求，只检查LLM节点必须有上游连接
    */
   validateWorkflowConnections(nodes, edges) {
+    // 检查是否有开始节点
+    const startNodes = nodes.filter(n => n.type === 'start');
+    if (startNodes.length === 0) {
+      throw new Error('工作流必须包含一个开始节点');
+    }
+    
+    if (startNodes.length > 1) {
+      throw new Error('工作流只能有一个开始节点');
+    }
+
+    // 检查LLM节点必须有上游连接
     for (const node of nodes) {
-      // LLM节点必须有上游连接
       if (node.type === 'llm') {
         const incomingEdges = edges.filter(e => e.target === node.id);
         
@@ -352,6 +402,8 @@ class ExecutorService {
         }
       }
     }
+    
+    // v2.0: 不再强制要求结束节点，最后一个节点的输出自动作为工作流输出
   }
 
   /**
@@ -372,8 +424,19 @@ class ExecutorService {
       // 从数据库获取节点类型配置（如果已缓存则跳过）
       if (!nodeTypeMap.has(node.type)) {
         const nodeTypeConfig = await AgentNodeType.findByTypeKey(node.type);
+        
+        // 如果数据库没有配置，使用默认值（支持内置节点）
         if (!nodeTypeConfig) {
-          throw new Error(`节点类型配置不存在: ${node.type}`);
+          // 内置节点默认配置
+          const defaultConfig = {
+            type_key: node.type,
+            display_name: node.type,
+            credits_per_execution: 0,
+            is_active: true
+          };
+          nodeTypeMap.set(node.type, defaultConfig);
+          logger.warn('节点类型配置不存在，使用默认值', { type: node.type });
+          continue;
         }
 
         if (!nodeTypeConfig.is_active) {
@@ -484,6 +547,7 @@ class ExecutorService {
       // 更新状态为已取消
       await AgentExecution.update(executionId, {
         status: 'cancelled',
+        output_data: { cancelled: true, message: '用户取消' },  // 确保是对象格式
         completed_at: new Date()
       });
 

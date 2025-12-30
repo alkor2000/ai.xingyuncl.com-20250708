@@ -54,7 +54,47 @@
       "start": "开始",
       "llm": "AI对话",
       "knowledge": "知识库检索",
-      "end": "结束"
+      "end": "结束",
+      "basic": "基础节点",
+      "extension": "扩展节点",
+      "custom": "自定义节点",
+      "comingSoon": "敬请期待",
+      "noPermission": "暂无权限"
+    },
+    "extensionNodes": {
+      "mcp": "MCP 服务",
+      "mcpDesc": "连接外部MCP服务",
+      "a2a": "A2A 调用",
+      "a2aDesc": "Agent间协作调用",
+      "text2image": "文生图",
+      "text2imageDesc": "AI图像生成",
+      "mysql": "MySQL",
+      "mysqlDesc": "数据库查询",
+      "http": "HTTP请求",
+      "httpDesc": "调用外部API",
+      "code": "代码执行",
+      "codeDesc": "运行Python/JS",
+      "condition": "条件判断",
+      "conditionDesc": "IF/ELSE分支",
+      "loop": "循环遍历",
+      "loopDesc": "批量处理数据",
+      "timer": "定时触发",
+      "timerDesc": "定时执行任务",
+      "email": "邮件发送",
+      "emailDesc": "发送通知邮件",
+      "document": "文档解析",
+      "documentDesc": "PDF/Word提取",
+      "vector": "向量检索",
+      "vectorDesc": "语义相似搜索"
+    },
+    "editor": {
+      "nodeLibrary": "节点库",
+      "nodeConfig": "节点配置",
+      "selectNode": "请选择一个节点",
+      "clickToAdd": "点击节点添加到画布",
+      "unsavedChanges": "有未保存的更改",
+      "saveFirst": "请先保存工作流再进行测试",
+      "confirmLeave": "有未保存的更改，确定要离开吗？"
     }
   }
 }

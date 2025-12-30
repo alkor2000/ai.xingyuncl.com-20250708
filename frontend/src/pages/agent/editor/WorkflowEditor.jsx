@@ -1,12 +1,12 @@
 /**
  * Agent工作流可视化编辑器
  * 基于 ReactFlow 实现拖拽式工作流编排
- * 支持编辑器内测试运行
+ * v2.2 - 修复节点名称同步问题
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { message, Spin } from 'antd'
+import { message, Spin, Drawer } from 'antd'
 import ReactFlow, {
   Background,
   Controls,
@@ -29,7 +29,7 @@ import EndNode from './nodes/EndNode'
 import KnowledgeNode from './nodes/KnowledgeNode'
 import './styles/editor.css'
 
-// 注册自定义节点类型
+// 注册自定义节点类型（保留end以兼容旧数据）
 const nodeTypes = {
   start: StartNode,
   llm: LLMNode,
@@ -64,6 +64,12 @@ const WorkflowEditor = () => {
   
   // 测试抽屉状态
   const [testDrawerOpen, setTestDrawerOpen] = useState(false)
+  
+  // 配置面板抽屉状态
+  const [configDrawerOpen, setConfigDrawerOpen] = useState(false)
+  
+  // 保存中状态
+  const [saving, setSaving] = useState(false)
   
   // 加载工作流数据
   useEffect(() => {
@@ -123,22 +129,34 @@ const WorkflowEditor = () => {
     setHasUnsavedChanges(true)
   }, [setEdges])
   
-  // 节点选中
+  // 节点选中 - 打开配置抽屉
   const onNodeClick = useCallback((event, node) => {
     setSelectedNode(node)
     setSelectedEdge(null)
+    // 打开配置抽屉
+    setConfigDrawerOpen(true)
   }, [])
   
   // 边选中
   const onEdgeClick = useCallback((event, edge) => {
     setSelectedEdge(edge)
     setSelectedNode(null)
+    // 关闭配置抽屉（边没有配置）
+    setConfigDrawerOpen(false)
   }, [])
   
   // 画布点击（取消选中）
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
     setSelectedEdge(null)
+    // 关闭配置抽屉
+    setConfigDrawerOpen(false)
+  }, [])
+  
+  // 关闭配置抽屉
+  const onCloseConfigDrawer = useCallback(() => {
+    setConfigDrawerOpen(false)
+    // 不取消节点选中，保持高亮状态
   }, [])
   
   // 添加新节点（从节点面板拖拽）
@@ -165,6 +183,7 @@ const WorkflowEditor = () => {
         e.source !== selectedNode.id && e.target !== selectedNode.id
       ))
       setSelectedNode(null)
+      setConfigDrawerOpen(false)
       setHasUnsavedChanges(true)
     }
     
@@ -175,15 +194,40 @@ const WorkflowEditor = () => {
     }
   }, [selectedNode, selectedEdge, setNodes, setEdges])
   
-  // 更新节点配置
+  // 更新节点配置（修复：同时更新label和config）
   const onUpdateNodeConfig = useCallback((nodeId, config) => {
     setNodes((nds) => 
-      nds.map(node => 
-        node.id === nodeId 
-          ? { ...node, data: { ...node.data, config } }
-          : node
-      )
+      nds.map(node => {
+        if (node.id !== nodeId) return node
+        
+        // 如果配置中有label，同时更新node.data.label
+        const newLabel = config.label || node.data.label
+        
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            label: newLabel,  // 同步更新显示的label
+            config: config    // 保存完整配置
+          }
+        }
+      })
     )
+    
+    // 同步更新selectedNode，使配置面板显示最新数据
+    setSelectedNode(prev => {
+      if (!prev || prev.id !== nodeId) return prev
+      const newLabel = config.label || prev.data.label
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          label: newLabel,
+          config: config
+        }
+      }
+    })
+    
     setHasUnsavedChanges(true)
   }, [setNodes])
   
@@ -191,6 +235,7 @@ const WorkflowEditor = () => {
   const onSave = useCallback(async () => {
     if (!currentWorkflow) return
     
+    setSaving(true)
     try {
       const flowData = {
         nodes: nodes.map(node => ({
@@ -214,6 +259,8 @@ const WorkflowEditor = () => {
       message.success('工作流保存成功')
     } catch (error) {
       message.error('保存失败')
+    } finally {
+      setSaving(false)
     }
   }, [currentWorkflow, nodes, edges, updateWorkflow])
   
@@ -274,8 +321,8 @@ const WorkflowEditor = () => {
           onAddNode={onAddNode}
         />
         
-        {/* 中间画布 */}
-        <div className="workflow-editor-canvas">
+        {/* 中间画布 - 现在占据更大空间 */}
+        <div className="workflow-editor-canvas workflow-editor-canvas-full">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -287,9 +334,13 @@ const WorkflowEditor = () => {
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             fitView
-            minZoom={0.2}
+            fitViewOptions={{
+              padding: 0.3,
+              maxZoom: 0.8
+            }}
+            minZoom={0.1}
             maxZoom={2}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
           >
             <Background color="#aaa" gap={16} />
             <Controls />
@@ -312,11 +363,27 @@ const WorkflowEditor = () => {
           </ReactFlow>
         </div>
         
-        {/* 右侧配置面板 */}
-        <ConfigPanel
-          selectedNode={selectedNode}
-          onUpdateConfig={onUpdateNodeConfig}
-        />
+        {/* 右侧配置面板 - Drawer抽屉 */}
+        <Drawer
+          title={selectedNode ? `${selectedNode.data?.label || selectedNode.type} 配置` : '节点配置'}
+          placement="right"
+          width={360}
+          onClose={onCloseConfigDrawer}
+          open={configDrawerOpen}
+          mask={false}
+          getContainer={false}
+          style={{ position: 'absolute' }}
+          styles={{ body: { padding: '16px' } }}
+        >
+          <ConfigPanel
+            selectedNode={selectedNode}
+            onUpdateConfig={onUpdateNodeConfig}
+            onSave={onSave}
+            saving={saving}
+            hasUnsavedChanges={hasUnsavedChanges}
+            inDrawer={true}
+          />
+        </Drawer>
       </div>
       
       {/* 测试抽屉 */}
