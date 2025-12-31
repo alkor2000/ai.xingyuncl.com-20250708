@@ -2,29 +2,10 @@
  * 智能应用控制器
  * 功能：处理智能应用的CRUD操作和用户端应用访问
  * 
- * 管理端API（需要超级管理员权限）：
- * - GET    /admin/smart-apps           获取所有应用列表
- * - GET    /admin/smart-apps/:id       获取应用详情
- * - POST   /admin/smart-apps           创建新应用
- * - PUT    /admin/smart-apps/:id       更新应用
- * - DELETE /admin/smart-apps/:id       删除应用
- * - POST   /admin/smart-apps/:id/toggle-publish  切换发布状态
- * - GET    /admin/smart-apps/categories        获取分类列表
- * - POST   /admin/smart-apps/categories        创建分类
- * - PUT    /admin/smart-apps/categories/:id    更新分类
- * - DELETE /admin/smart-apps/categories/:id    删除分类
- * 
- * 用户端API（需要登录）：
- * - GET    /smart-apps                 获取已发布的应用列表
- * - GET    /smart-apps/:id             获取应用详情
- * - GET    /smart-apps/categories      获取分类列表和统计
- * - GET    /smart-apps/:id/config      获取应用配置（用于创建会话）
- * - POST   /smart-apps/:id/use         记录应用使用
- * - GET    /smart-apps/:id/conversation  获取或创建智能应用会话
- * - POST   /smart-apps/:id/conversation/clear  清空会话消息
- * 
- * 版本：v2.0.0
- * 更新：2025-12-30 支持多分类管理和应用积分扣减
+ * 版本：v2.1.0
+ * 更新：
+ * - 2025-12-30 v2.0.0 支持多分类管理和应用积分扣减
+ * - 2025-12-30 v2.1.0 修复会话配置同步问题：当智能应用配置更新后，自动同步到已有会话
  */
 
 const SmartApp = require('../models/SmartApp');
@@ -53,7 +34,6 @@ const SmartAppAdminController = {
         keyword
       });
       
-      // 返回完整信息给管理员
       const apps = result.apps.map(app => app.toFullJSON());
       
       ResponseHelper.success(res, {
@@ -106,7 +86,6 @@ const SmartAppAdminController = {
         sort_order
       } = req.body;
       
-      // 验证必填字段
       if (!name) {
         return ResponseHelper.validationError(res, '应用名称不能为空');
       }
@@ -115,13 +94,11 @@ const SmartAppAdminController = {
         return ResponseHelper.validationError(res, '请选择AI模型');
       }
       
-      // 验证模型是否存在
       const model = await AIModel.findById(model_id);
       if (!model) {
         return ResponseHelper.validationError(res, '所选AI模型不存在');
       }
       
-      // 创建应用
       const app = await SmartApp.create({
         name,
         description,
@@ -165,7 +142,6 @@ const SmartAppAdminController = {
         return ResponseHelper.notFound(res, '智能应用不存在');
       }
       
-      // 如果更新了模型ID，验证模型是否存在
       if (updateData.model_id) {
         const model = await AIModel.findById(updateData.model_id);
         if (!model) {
@@ -351,10 +327,8 @@ const SmartAppUserController = {
         keyword
       });
       
-      // 用户端不返回系统提示词内容，直接返回apps数组
       const apps = result.apps.map(app => app.toJSON());
       
-      // 直接返回数组格式，方便前端使用
       ResponseHelper.success(res, apps, '获取应用列表成功');
     } catch (error) {
       logger.error('获取应用列表失败:', error);
@@ -375,12 +349,10 @@ const SmartAppUserController = {
         return ResponseHelper.notFound(res, '应用不存在');
       }
       
-      // 未发布的应用普通用户无法访问
       if (!app.is_published) {
         return ResponseHelper.forbidden(res, '该应用暂未开放');
       }
       
-      // 用户端不返回系统提示词
       ResponseHelper.success(res, app.toJSON(), '获取应用详情成功');
     } catch (error) {
       logger.error('获取应用详情失败:', error);
@@ -425,10 +397,8 @@ const SmartAppUserController = {
         return ResponseHelper.forbidden(res, '该应用暂未开放');
       }
       
-      // 增加使用次数
       await app.incrementUseCount();
       
-      // 返回创建会话所需的配置
       ResponseHelper.success(res, {
         smart_app_id: app.id,
         name: app.name,
@@ -447,7 +417,7 @@ const SmartAppUserController = {
   },
 
   /**
-   * 记录应用使用（仅增加使用次数）
+   * 记录应用使用
    */
   async recordUse(req, res) {
     try {
@@ -463,7 +433,6 @@ const SmartAppUserController = {
         return ResponseHelper.forbidden(res, '该应用暂未开放');
       }
       
-      // 增加使用次数
       await app.incrementUseCount();
       
       logger.info('应用使用记录', {
@@ -484,7 +453,7 @@ const SmartAppUserController = {
 
   /**
    * 获取或创建智能应用专属会话
-   * v2.0.0 支持应用积分扣减
+   * v2.1.0 修复：当智能应用配置更新后，自动同步到已有会话
    */
   async getOrCreateConversation(req, res) {
     try {
@@ -514,12 +483,61 @@ const SmartAppUserController = {
       let conversation;
       let messages = [];
       let isNew = false;
+      let configUpdated = false;
       
       if (existingConversations.length > 0) {
-        // 3a. 有现有会话，获取会话和消息
+        // 3a. 有现有会话
         conversation = existingConversations[0];
         
-        // 获取会话消息（考虑 cleared_at 清空时间，按sequence_number排序）
+        /**
+         * v2.1.0 关键修复：检查并同步智能应用配置
+         * 比较会话配置与智能应用当前配置，如果不同则更新
+         */
+        const needsUpdate = (
+          conversation.model_name !== app.model_name ||
+          conversation.system_prompt !== app.system_prompt ||
+          conversation.context_length !== app.context_length ||
+          parseFloat(conversation.ai_temperature) !== app.temperature
+        );
+        
+        if (needsUpdate) {
+          // 更新会话配置以匹配智能应用最新配置
+          const updateSql = `
+            UPDATE conversations 
+            SET model_name = ?, 
+                system_prompt = ?, 
+                context_length = ?, 
+                ai_temperature = ?,
+                title = ?,
+                updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+          `;
+          await dbConnection.query(updateSql, [
+            app.model_name,
+            app.system_prompt,
+            app.context_length,
+            app.temperature,
+            app.name,
+            conversation.id
+          ]);
+          
+          // 更新本地变量
+          conversation.model_name = app.model_name;
+          conversation.system_prompt = app.system_prompt;
+          conversation.context_length = app.context_length;
+          conversation.ai_temperature = app.temperature;
+          conversation.title = app.name;
+          configUpdated = true;
+          
+          logger.info('智能应用会话配置已同步更新', {
+            appId: id,
+            conversationId: conversation.id,
+            userId,
+            updatedFields: ['model_name', 'system_prompt', 'context_length', 'ai_temperature', 'title']
+          });
+        }
+        
+        // 获取会话消息（考虑 cleared_at 清空时间）
         let msgSql;
         let msgParams;
         
@@ -547,11 +565,26 @@ const SmartAppUserController = {
         const { rows: msgRows } = await dbConnection.query(msgSql, msgParams);
         messages = msgRows;
         
+        // 重新获取更新后的会话信息（包含正确的model_display_name）
+        if (configUpdated) {
+          const refreshSql = `
+            SELECT c.*, am.name as model_name, am.display_name as model_display_name
+            FROM conversations c
+            LEFT JOIN ai_models am ON c.model_name = am.name
+            WHERE c.id = ?
+          `;
+          const { rows: refreshedRows } = await dbConnection.query(refreshSql, [conversation.id]);
+          if (refreshedRows.length > 0) {
+            conversation = refreshedRows[0];
+          }
+        }
+        
         logger.info('获取智能应用现有会话', {
           appId: id,
           conversationId: conversation.id,
           userId,
-          messageCount: messages.length
+          messageCount: messages.length,
+          configUpdated
         });
       } else {
         // 3b. 没有现有会话，创建新会话
@@ -623,8 +656,9 @@ const SmartAppUserController = {
           is_stream: app.is_stream,
           credits_per_use: app.credits_per_use
         },
-        isNew
-      }, isNew ? '会话创建成功' : '获取会话成功');
+        isNew,
+        configUpdated  // v2.1.0 新增：告知前端配置是否已更新
+      }, isNew ? '会话创建成功' : (configUpdated ? '会话配置已更新' : '获取会话成功'));
       
     } catch (error) {
       logger.error('获取智能应用会话失败:', error);
@@ -640,13 +674,11 @@ const SmartAppUserController = {
       const { id } = req.params;
       const userId = req.user.id;
       
-      // 1. 验证应用存在
       const app = await SmartApp.findById(id);
       if (!app) {
         return ResponseHelper.notFound(res, '应用不存在');
       }
       
-      // 2. 查找该用户该应用的会话
       const findSql = `
         SELECT id FROM conversations 
         WHERE user_id = ? AND smart_app_id = ?
@@ -660,7 +692,6 @@ const SmartAppUserController = {
       
       const conversationId = rows[0].id;
       
-      // 3. 更新 cleared_at 时间戳
       const updateSql = `
         UPDATE conversations 
         SET cleared_at = CURRENT_TIMESTAMP, message_count = 0, total_tokens = 0, updated_at = CURRENT_TIMESTAMP 
