@@ -2,22 +2,10 @@
  * 智能应用数据模型
  * 功能：管理预设的AI应用配置，用户可一键使用无需配置
  * 
- * 核心字段：
- * - name: 应用名称
- * - description: 应用描述
- * - icon: 应用图标
- * - system_prompt: 系统提示词
- * - temperature: AI温度参数 (0-2)
- * - context_length: 上下文条数
- * - model_id: 关联的AI模型
- * - is_stream: 是否流式输出
- * - category_ids: 分类ID数组（支持1-3个分类）
- * - credits_per_use: 每次使用扣减积分（0-9999）
- * - is_published: 是否发布
- * 
- * 版本：v2.0.0
+ * 版本：v2.2.0
  * 更新：
  * - 2025-12-30 v2.0.0 支持多分类(category_ids)和应用积分(credits_per_use)
+ * - 2025-12-30 v2.2.0 新增用户收藏功能
  */
 
 const dbConnection = require('../database/connection');
@@ -45,7 +33,7 @@ class SmartApp {
     
     // v2.0.0 兼容处理：category_ids是JSON数组，category是旧的单值字段
     this.category_ids = this._parseCategoryIds(data.category_ids);
-    this.category = data.category || null; // 保留旧字段用于兼容
+    this.category = data.category || null;
     
     // v2.0.0 新增：每次使用扣减积分
     const parsedCredits = parseInt(data.credits_per_use);
@@ -69,6 +57,9 @@ class SmartApp {
     
     // v2.0.0 分类详情（JOIN查询时填充）
     this.categories = data.categories || [];
+    
+    // v2.2.0 收藏状态（查询时填充）
+    this.is_favorited = data.is_favorited || false;
   }
 
   /**
@@ -152,11 +143,9 @@ class SmartApp {
         keyword = null 
       } = options;
       
-      // 构建WHERE条件
       const conditions = [];
       const params = [];
       
-      // v2.0.0 按分类ID筛选（使用JSON_CONTAINS）
       if (category_id) {
         conditions.push('JSON_CONTAINS(sa.category_ids, ?)');
         params.push(JSON.stringify(parseInt(category_id)));
@@ -174,12 +163,10 @@ class SmartApp {
       
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       
-      // 获取总数
       const countSql = `SELECT COUNT(*) as total FROM smart_apps sa ${whereClause}`;
       const { rows: countRows } = await dbConnection.query(countSql, params);
       const total = countRows[0].total;
       
-      // 获取列表
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT sa.*, 
@@ -196,7 +183,6 @@ class SmartApp {
       
       const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
       
-      // 批量获取分类详情
       const apps = rows.map(row => new SmartApp(row));
       await SmartApp.populateCategories(apps);
       
@@ -221,7 +207,6 @@ class SmartApp {
   static async populateCategories(apps) {
     if (!apps || apps.length === 0) return;
     
-    // 收集所有分类ID
     const allCategoryIds = new Set();
     apps.forEach(app => {
       (app.category_ids || []).forEach(id => allCategoryIds.add(id));
@@ -229,11 +214,9 @@ class SmartApp {
     
     if (allCategoryIds.size === 0) return;
     
-    // 一次性查询所有分类
     const categories = await SmartApp.getCategoriesByIds([...allCategoryIds]);
     const categoryMap = new Map(categories.map(c => [c.id, c]));
     
-    // 填充到每个应用
     apps.forEach(app => {
       app.categories = (app.category_ids || [])
         .map(id => categoryMap.get(id))
@@ -243,6 +226,7 @@ class SmartApp {
 
   /**
    * 获取已发布的智能应用（用户端用）
+   * v2.2.0 支持获取用户收藏状态
    */
   static async findPublished(options = {}) {
     try {
@@ -250,14 +234,13 @@ class SmartApp {
         page = 1, 
         limit = 50, 
         category_id = null,
-        keyword = null 
+        keyword = null,
+        userId = null  // v2.2.0 新增：用于获取收藏状态
       } = options;
       
-      // 构建WHERE条件
       const conditions = ['sa.is_published = 1'];
       const params = [];
       
-      // v2.0.0 按分类ID筛选
       if (category_id) {
         conditions.push('JSON_CONTAINS(sa.category_ids, ?)');
         params.push(JSON.stringify(parseInt(category_id)));
@@ -270,27 +253,43 @@ class SmartApp {
       
       const whereClause = `WHERE ${conditions.join(' AND ')}`;
       
-      // 获取总数
       const countSql = `SELECT COUNT(*) as total FROM smart_apps sa ${whereClause}`;
       const { rows: countRows } = await dbConnection.query(countSql, params);
       const total = countRows[0].total;
       
-      // 获取列表
       const offset = (page - 1) * limit;
-      const listSql = `
-        SELECT sa.*, 
-               am.name as model_name, 
-               am.display_name as model_display_name
-        FROM smart_apps sa
-        LEFT JOIN ai_models am ON sa.model_id = am.id
-        ${whereClause}
-        ORDER BY sa.sort_order ASC, sa.use_count DESC, sa.created_at DESC
-        LIMIT ? OFFSET ?
-      `;
+      
+      // v2.2.0 如果提供userId，则LEFT JOIN收藏表获取收藏状态
+      let listSql;
+      if (userId) {
+        listSql = `
+          SELECT sa.*, 
+                 am.name as model_name, 
+                 am.display_name as model_display_name,
+                 IF(usf.id IS NOT NULL, 1, 0) as is_favorited
+          FROM smart_apps sa
+          LEFT JOIN ai_models am ON sa.model_id = am.id
+          LEFT JOIN user_smart_app_favorites usf ON sa.id = usf.smart_app_id AND usf.user_id = ?
+          ${whereClause}
+          ORDER BY sa.sort_order ASC, sa.use_count DESC, sa.created_at DESC
+          LIMIT ? OFFSET ?
+        `;
+        params.unshift(userId);  // 将userId放到参数最前面
+      } else {
+        listSql = `
+          SELECT sa.*, 
+                 am.name as model_name, 
+                 am.display_name as model_display_name
+          FROM smart_apps sa
+          LEFT JOIN ai_models am ON sa.model_id = am.id
+          ${whereClause}
+          ORDER BY sa.sort_order ASC, sa.use_count DESC, sa.created_at DESC
+          LIMIT ? OFFSET ?
+        `;
+      }
       
       const { rows } = await dbConnection.simpleQuery(listSql, [...params, limit, offset]);
       
-      // 批量获取分类详情
       const apps = rows.map(row => new SmartApp(row));
       await SmartApp.populateCategories(apps);
       
@@ -330,23 +329,18 @@ class SmartApp {
         creator_id
       } = appData;
       
-      // 验证必填字段
       if (!name || !model_id || !creator_id) {
         throw new Error('应用名称、模型ID和创建者ID为必填项');
       }
       
-      // 验证温度范围0-2
       const parsedTemp = parseFloat(temperature);
       const validTemperature = isNaN(parsedTemp) ? 0.7 : Math.max(0, Math.min(2, parsedTemp));
       
-      // 验证上下文条数范围
       const parsedContext = parseInt(context_length);
       const validContextLength = isNaN(parsedContext) ? 10 : Math.max(0, Math.min(1000, parsedContext));
       
-      // v2.0.0 验证分类数量（1-3个）
       const validCategoryIds = Array.isArray(category_ids) ? category_ids.slice(0, 3) : [];
       
-      // v2.0.0 验证积分范围（0-9999）
       const parsedCredits = parseInt(credits_per_use);
       const validCredits = isNaN(parsedCredits) ? 0 : Math.max(0, Math.min(9999, parsedCredits));
       
@@ -395,7 +389,6 @@ class SmartApp {
       const fields = [];
       const values = [];
       
-      // 允许更新的字段
       const allowedFields = [
         'name', 'description', 'icon', 'system_prompt', 
         'temperature', 'context_length', 'model_id', 
@@ -415,11 +408,9 @@ class SmartApp {
           } else if (field === 'is_stream' || field === 'is_published') {
             values.push(updateData[field] ? 1 : 0);
           } else if (field === 'category_ids') {
-            // v2.0.0 分类ID数组，限制最多3个
             const ids = Array.isArray(updateData[field]) ? updateData[field].slice(0, 3) : [];
             values.push(JSON.stringify(ids));
           } else if (field === 'credits_per_use') {
-            // v2.0.0 积分范围0-9999
             const credits = parseInt(updateData[field]);
             values.push(isNaN(credits) ? 0 : Math.max(0, Math.min(9999, credits)));
           } else {
@@ -454,16 +445,17 @@ class SmartApp {
    */
   async delete() {
     try {
-      // 检查是否有关联的会话
       const checkSql = 'SELECT COUNT(*) as count FROM conversations WHERE smart_app_id = ?';
       const { rows: checkRows } = await dbConnection.query(checkSql, [this.id]);
       
       if (checkRows[0].count > 0) {
-        // 有关联会话时，只解除关联而不阻止删除
         const unlinkSql = 'UPDATE conversations SET smart_app_id = NULL WHERE smart_app_id = ?';
         await dbConnection.query(unlinkSql, [this.id]);
         logger.info('已解除会话关联', { appId: this.id, conversationCount: checkRows[0].count });
       }
+      
+      // 删除收藏记录（外键CASCADE会自动删除，但为了安全手动处理）
+      await dbConnection.query('DELETE FROM user_smart_app_favorites WHERE smart_app_id = ?', [this.id]);
       
       const sql = 'DELETE FROM smart_apps WHERE id = ?';
       await dbConnection.query(sql, [this.id]);
@@ -511,6 +503,110 @@ class SmartApp {
     }
   }
 
+  // ==================== 收藏功能 v2.2.0 ====================
+
+  /**
+   * 添加收藏
+   * @param {number} userId - 用户ID
+   * @param {number} appId - 应用ID
+   */
+  static async addFavorite(userId, appId) {
+    try {
+      const sql = `
+        INSERT INTO user_smart_app_favorites (user_id, smart_app_id)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP
+      `;
+      await dbConnection.query(sql, [userId, appId]);
+      
+      logger.info('智能应用收藏成功', { userId, appId });
+      return true;
+    } catch (error) {
+      logger.error('添加收藏失败:', error);
+      throw new DatabaseError(`添加收藏失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 取消收藏
+   * @param {number} userId - 用户ID
+   * @param {number} appId - 应用ID
+   */
+  static async removeFavorite(userId, appId) {
+    try {
+      const sql = 'DELETE FROM user_smart_app_favorites WHERE user_id = ? AND smart_app_id = ?';
+      await dbConnection.query(sql, [userId, appId]);
+      
+      logger.info('智能应用取消收藏', { userId, appId });
+      return true;
+    } catch (error) {
+      logger.error('取消收藏失败:', error);
+      throw new DatabaseError(`取消收藏失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取用户收藏的应用列表
+   * @param {number} userId - 用户ID
+   */
+  static async getFavorites(userId) {
+    try {
+      const sql = `
+        SELECT sa.*, 
+               am.name as model_name, 
+               am.display_name as model_display_name,
+               1 as is_favorited
+        FROM smart_apps sa
+        INNER JOIN user_smart_app_favorites usf ON sa.id = usf.smart_app_id
+        LEFT JOIN ai_models am ON sa.model_id = am.id
+        WHERE usf.user_id = ? AND sa.is_published = 1
+        ORDER BY usf.created_at DESC
+      `;
+      const { rows } = await dbConnection.query(sql, [userId]);
+      
+      const apps = rows.map(row => new SmartApp(row));
+      await SmartApp.populateCategories(apps);
+      
+      return apps;
+    } catch (error) {
+      logger.error('获取收藏列表失败:', error);
+      throw new DatabaseError(`获取收藏列表失败: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 获取用户收藏的应用ID列表
+   * @param {number} userId - 用户ID
+   */
+  static async getFavoriteIds(userId) {
+    try {
+      const sql = 'SELECT smart_app_id FROM user_smart_app_favorites WHERE user_id = ?';
+      const { rows } = await dbConnection.query(sql, [userId]);
+      return rows.map(r => r.smart_app_id);
+    } catch (error) {
+      logger.error('获取收藏ID列表失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 检查是否已收藏
+   * @param {number} userId - 用户ID
+   * @param {number} appId - 应用ID
+   */
+  static async isFavorited(userId, appId) {
+    try {
+      const sql = 'SELECT 1 FROM user_smart_app_favorites WHERE user_id = ? AND smart_app_id = ? LIMIT 1';
+      const { rows } = await dbConnection.query(sql, [userId, appId]);
+      return rows.length > 0;
+    } catch (error) {
+      logger.error('检查收藏状态失败:', error);
+      return false;
+    }
+  }
+
+  // ==================== 分类功能 ====================
+
   /**
    * 获取所有分类（从数据库）
    */
@@ -534,7 +630,6 @@ class SmartApp {
    */
   static async getCategoryStats() {
     try {
-      // 使用子查询统计每个分类的应用数量
       const sql = `
         SELECT 
           sac.id,
@@ -623,7 +718,6 @@ class SmartApp {
       
       logger.info('分类更新成功', { categoryId: id });
       
-      // 返回更新后的数据
       const { rows } = await dbConnection.query('SELECT * FROM smart_app_categories WHERE id = ?', [id]);
       return rows[0] || null;
     } catch (error) {
@@ -640,7 +734,6 @@ class SmartApp {
    */
   static async deleteCategory(id) {
     try {
-      // 检查是否有应用使用此分类
       const checkSql = `
         SELECT COUNT(*) as count FROM smart_apps 
         WHERE JSON_CONTAINS(category_ids, ?)
@@ -683,6 +776,7 @@ class SmartApp {
       is_published: this.is_published,
       sort_order: this.sort_order,
       use_count: this.use_count,
+      is_favorited: this.is_favorited,  // v2.2.0 新增
       created_at: this.created_at,
       updated_at: this.updated_at
     };

@@ -1,6 +1,18 @@
 /**
  * 智能应用路由定义
  * 
+ * 用户端路由（/api/smart-apps）：
+ * - GET    /                    获取已发布的应用列表（含收藏状态）
+ * - GET    /categories          获取分类列表和统计
+ * - GET    /favorites           获取我的收藏列表
+ * - GET    /:id                 获取应用详情
+ * - GET    /:id/config          获取应用配置
+ * - POST   /:id/use             记录应用使用
+ * - POST   /:id/favorite        添加收藏
+ * - DELETE /:id/favorite        取消收藏
+ * - GET    /:id/conversation    获取或创建会话
+ * - POST   /:id/conversation/clear  清空会话消息
+ * 
  * 管理端路由（/api/admin/smart-apps）：
  * - GET    /                    获取所有应用列表
  * - GET    /categories          获取分类列表
@@ -13,17 +25,8 @@
  * - DELETE /:id                 删除应用
  * - POST   /:id/toggle-publish  切换发布状态
  * 
- * 用户端路由（/api/smart-apps）：
- * - GET    /                    获取已发布的应用列表
- * - GET    /categories          获取分类列表和统计
- * - GET    /:id                 获取应用详情
- * - GET    /:id/config          获取应用配置
- * - POST   /:id/use             记录应用使用
- * - GET    /:id/conversation    获取或创建会话
- * - POST   /:id/conversation/clear  清空会话消息
- * 
- * 版本：v2.0.0
- * 更新：2025-12-30 新增分类管理路由
+ * 版本：v2.2.0
+ * 更新：2025-12-30 新增收藏功能路由
  */
 
 const express = require('express');
@@ -36,9 +39,8 @@ const router = express.Router();
 
 /**
  * @route   GET /api/smart-apps
- * @desc    获取已发布的智能应用列表
+ * @desc    获取已发布的智能应用列表（含收藏状态）
  * @access  需要登录
- * @query   page, limit, category_id, keyword
  */
 router.get('/', authenticate, SmartAppUserController.list);
 
@@ -48,6 +50,13 @@ router.get('/', authenticate, SmartAppUserController.list);
  * @access  需要登录
  */
 router.get('/categories', authenticate, SmartAppUserController.getCategories);
+
+/**
+ * @route   GET /api/smart-apps/favorites
+ * @desc    获取我的收藏列表
+ * @access  需要登录
+ */
+router.get('/favorites', authenticate, SmartAppUserController.getFavorites);
 
 /**
  * @route   GET /api/smart-apps/:id
@@ -71,6 +80,20 @@ router.get('/:id/config', authenticate, SmartAppUserController.getConfig);
 router.post('/:id/use', authenticate, SmartAppUserController.recordUse);
 
 /**
+ * @route   POST /api/smart-apps/:id/favorite
+ * @desc    添加收藏
+ * @access  需要登录
+ */
+router.post('/:id/favorite', authenticate, SmartAppUserController.addFavorite);
+
+/**
+ * @route   DELETE /api/smart-apps/:id/favorite
+ * @desc    取消收藏
+ * @access  需要登录
+ */
+router.delete('/:id/favorite', authenticate, SmartAppUserController.removeFavorite);
+
+/**
  * @route   GET /api/smart-apps/:id/conversation
  * @desc    获取或创建智能应用专属会话
  * @access  需要登录
@@ -88,74 +111,15 @@ router.post('/:id/conversation/clear', authenticate, SmartAppUserController.clea
 // ==================== 管理端路由 ====================
 const adminRouter = express.Router();
 
-/**
- * @route   GET /api/admin/smart-apps
- * @desc    获取所有智能应用列表
- * @access  超级管理员
- */
 adminRouter.get('/', authenticate, requireSuperAdmin(), SmartAppAdminController.list);
-
-/**
- * @route   GET /api/admin/smart-apps/categories
- * @desc    获取分类列表
- * @access  超级管理员
- */
 adminRouter.get('/categories', authenticate, requireSuperAdmin(), SmartAppAdminController.getCategories);
-
-/**
- * @route   POST /api/admin/smart-apps/categories
- * @desc    创建分类
- * @access  超级管理员
- */
 adminRouter.post('/categories', authenticate, requireSuperAdmin(), SmartAppAdminController.createCategory);
-
-/**
- * @route   PUT /api/admin/smart-apps/categories/:id
- * @desc    更新分类
- * @access  超级管理员
- */
 adminRouter.put('/categories/:id', authenticate, requireSuperAdmin(), SmartAppAdminController.updateCategory);
-
-/**
- * @route   DELETE /api/admin/smart-apps/categories/:id
- * @desc    删除分类
- * @access  超级管理员
- */
 adminRouter.delete('/categories/:id', authenticate, requireSuperAdmin(), SmartAppAdminController.deleteCategory);
-
-/**
- * @route   GET /api/admin/smart-apps/:id
- * @desc    获取智能应用详情
- * @access  超级管理员
- */
 adminRouter.get('/:id', authenticate, requireSuperAdmin(), SmartAppAdminController.getById);
-
-/**
- * @route   POST /api/admin/smart-apps
- * @desc    创建新智能应用
- * @access  超级管理员
- */
 adminRouter.post('/', authenticate, requireSuperAdmin(), SmartAppAdminController.create);
-
-/**
- * @route   PUT /api/admin/smart-apps/:id
- * @desc    更新智能应用
- * @access  超级管理员
- */
 adminRouter.put('/:id', authenticate, requireSuperAdmin(), SmartAppAdminController.update);
-
-/**
- * @route   DELETE /api/admin/smart-apps/:id
- * @desc    删除智能应用
- * @access  超级管理员
- */
 adminRouter.delete('/:id', authenticate, requireSuperAdmin(), SmartAppAdminController.delete);
-
-/**
- * @route   POST /api/admin/smart-apps/:id/toggle-publish
- * @desc    切换应用发布状态
- * @access  超级管理员
- */
 adminRouter.post('/:id/toggle-publish', authenticate, requireSuperAdmin(), SmartAppAdminController.togglePublish);
 
 

@@ -2,9 +2,10 @@
  * 智能应用广场页面
  * 功能：展示已发布的预设AI应用，点击打开弹窗对话
  * 
- * 版本：v2.0.1
+ * 版本：v2.2.0
  * 更新：
  * - 2025-12-30 v2.0.1 去掉应用卡片上的模型名称
+ * - 2025-12-30 v2.2.0 新增用户收藏功能，卡片底部心形按钮
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -28,7 +29,9 @@ import {
   FireOutlined,
   AppstoreOutlined,
   StarFilled,
-  DollarOutlined
+  DollarOutlined,
+  HeartOutlined,
+  HeartFilled
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useSmartAppStore from '../../stores/smartAppStore';
@@ -49,13 +52,18 @@ const SmartApps = () => {
     loading, 
     categories,
     categoryStats,
+    favoriteCount,
     getPublishedApps, 
-    getCategories
+    getCategories,
+    getFavorites,
+    toggleFavorite
   } = useSmartAppStore();
   
   // 本地状态
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [favoriteApps, setFavoriteApps] = useState([]);  // v2.2.0 收藏列表
+  const [favoriteLoading, setFavoriteLoading] = useState({});  // 收藏按钮加载状态
   
   // 弹窗对话状态
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -77,9 +85,58 @@ const SmartApps = () => {
   }, []);
 
   /**
+   * v2.2.0 当选择"我的收藏"时加载收藏列表
+   */
+  useEffect(() => {
+    if (selectedCategoryId === 'favorites') {
+      loadFavorites();
+    }
+  }, [selectedCategoryId]);
+
+  /**
+   * v2.2.0 加载收藏列表
+   */
+  const loadFavorites = async () => {
+    const list = await getFavorites();
+    setFavoriteApps(list);
+  };
+
+  /**
+   * v2.2.0 处理收藏点击
+   */
+  const handleFavoriteClick = async (e, appId) => {
+    e.stopPropagation();  // 阻止冒泡，避免触发卡片点击
+    
+    setFavoriteLoading(prev => ({ ...prev, [appId]: true }));
+    
+    const newStatus = await toggleFavorite(appId);
+    
+    // 如果当前在收藏列表且取消收藏，需要从列表移除
+    if (selectedCategoryId === 'favorites' && !newStatus) {
+      setFavoriteApps(prev => prev.filter(app => app.id !== appId));
+    }
+    
+    setFavoriteLoading(prev => ({ ...prev, [appId]: false }));
+  };
+
+  /**
    * 过滤应用列表
+   * v2.2.0 支持收藏筛选
    */
   const filteredApps = useMemo(() => {
+    // 如果选择"我的收藏"，显示收藏列表
+    if (selectedCategoryId === 'favorites') {
+      let result = favoriteApps;
+      if (searchKeyword.trim()) {
+        const keyword = searchKeyword.toLowerCase();
+        result = result.filter(app => 
+          app.name.toLowerCase().includes(keyword) ||
+          (app.description && app.description.toLowerCase().includes(keyword))
+        );
+      }
+      return result;
+    }
+    
     let result = apps;
     
     // 分类过滤
@@ -100,13 +157,29 @@ const SmartApps = () => {
     }
     
     return result;
-  }, [apps, selectedCategoryId, searchKeyword]);
+  }, [apps, favoriteApps, selectedCategoryId, searchKeyword]);
 
   /**
    * 构建分类选项（从数据库动态加载）
+   * v2.2.0 新增"我的收藏"选项
    */
   const categoryOptions = useMemo(() => {
-    const options = [{ label: '全部', value: 'all' }];
+    const options = [
+      { label: '全部', value: 'all' },
+      // v2.2.0 "我的收藏"选项
+      { 
+        label: (
+          <Space size={4}>
+            <HeartFilled style={{ color: '#ff4d4f' }} />
+            <span>我的收藏</span>
+            {favoriteCount > 0 && (
+              <Badge count={favoriteCount} style={{ backgroundColor: '#ff4d4f' }} />
+            )}
+          </Space>
+        ), 
+        value: 'favorites' 
+      }
+    ];
     
     // 从categoryStats获取每个分类的应用数量
     const statsMap = new Map(categoryStats.map(s => [s.id, s.count]));
@@ -135,7 +208,7 @@ const SmartApps = () => {
     });
     
     return options;
-  }, [categories, categoryStats]);
+  }, [categories, categoryStats, favoriteCount]);
 
   /**
    * 点击应用卡片 - 打开弹窗对话
@@ -174,9 +247,12 @@ const SmartApps = () => {
 
   /**
    * 渲染应用卡片
+   * v2.2.0 增加收藏按钮
    */
   const renderAppCard = (app) => {
     const categoryStyle = getPrimaryCategoryStyle(app);
+    const isFavorited = app.is_favorited;
+    const isLoadingFavorite = favoriteLoading[app.id];
     
     return (
       <Col xs={24} sm={12} md={8} lg={6} key={app.id}>
@@ -245,7 +321,7 @@ const SmartApps = () => {
             {app.description || '暂无描述'}
           </Paragraph>
           
-          {/* 应用信息 - v2.0.1 去掉模型名称，只保留积分和使用次数 */}
+          {/* 应用信息 - v2.2.0 增加收藏按钮 */}
           <div className="app-footer">
             <Space size="small">
               {/* 显示积分消耗 */}
@@ -258,11 +334,27 @@ const SmartApps = () => {
               )}
             </Space>
             
-            {/* 使用次数 */}
-            <Text type="secondary" className="use-count">
-              <StarFilled style={{ color: '#faad14', marginRight: 4 }} />
-              {app.use_count || 0}次
-            </Text>
+            <Space size="small">
+              {/* 使用次数 */}
+              <Text type="secondary" className="use-count">
+                <StarFilled style={{ color: '#faad14', marginRight: 4 }} />
+                {app.use_count || 0}次
+              </Text>
+              
+              {/* v2.2.0 收藏按钮 */}
+              <Tooltip title={isFavorited ? '取消收藏' : '收藏'}>
+                <span 
+                  className={`favorite-btn ${isFavorited ? 'favorited' : ''} ${isLoadingFavorite ? 'loading' : ''}`}
+                  onClick={(e) => handleFavoriteClick(e, app.id)}
+                >
+                  {isFavorited ? (
+                    <HeartFilled style={{ color: '#ff4d4f' }} />
+                  ) : (
+                    <HeartOutlined style={{ color: '#8c8c8c' }} />
+                  )}
+                </span>
+              </Tooltip>
+            </Space>
           </div>
         </Card>
       </Col>
@@ -306,9 +398,11 @@ const SmartApps = () => {
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              searchKeyword || selectedCategoryId !== 'all'
-                ? '没有找到匹配的应用'
-                : '暂无可用应用'
+              selectedCategoryId === 'favorites'
+                ? '暂无收藏的应用'
+                : searchKeyword || selectedCategoryId !== 'all'
+                  ? '没有找到匹配的应用'
+                  : '暂无可用应用'
             }
           />
         )}

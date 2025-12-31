@@ -2,10 +2,11 @@
  * 智能应用控制器
  * 功能：处理智能应用的CRUD操作和用户端应用访问
  * 
- * 版本：v2.1.0
+ * 版本：v2.2.0
  * 更新：
  * - 2025-12-30 v2.0.0 支持多分类管理和应用积分扣减
- * - 2025-12-30 v2.1.0 修复会话配置同步问题：当智能应用配置更新后，自动同步到已有会话
+ * - 2025-12-30 v2.1.0 修复会话配置同步问题
+ * - 2025-12-30 v2.2.0 新增用户收藏功能
  */
 
 const SmartApp = require('../models/SmartApp');
@@ -52,7 +53,6 @@ const SmartAppAdminController = {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -72,18 +72,8 @@ const SmartAppAdminController = {
   async create(req, res) {
     try {
       const {
-        name,
-        description,
-        icon,
-        system_prompt,
-        temperature,
-        context_length,
-        model_id,
-        is_stream,
-        category_ids,
-        credits_per_use,
-        is_published,
-        sort_order
+        name, description, icon, system_prompt, temperature, context_length,
+        model_id, is_stream, category_ids, credits_per_use, is_published, sort_order
       } = req.body;
       
       if (!name) {
@@ -100,12 +90,7 @@ const SmartAppAdminController = {
       }
       
       const app = await SmartApp.create({
-        name,
-        description,
-        icon,
-        system_prompt,
-        temperature,
-        context_length,
+        name, description, icon, system_prompt, temperature, context_length,
         model_id,
         is_stream: is_stream !== undefined ? is_stream : true,
         category_ids: category_ids || [],
@@ -115,11 +100,7 @@ const SmartAppAdminController = {
         creator_id: req.user.id
       });
       
-      logger.info('智能应用创建成功', {
-        appId: app.id,
-        name: app.name,
-        creatorId: req.user.id
-      });
+      logger.info('智能应用创建成功', { appId: app.id, name: app.name, creatorId: req.user.id });
       
       ResponseHelper.success(res, app.toFullJSON(), '智能应用创建成功', 201);
     } catch (error) {
@@ -137,7 +118,6 @@ const SmartAppAdminController = {
       const updateData = req.body;
       
       const app = await SmartApp.findById(id);
-      
       if (!app) {
         return ResponseHelper.notFound(res, '智能应用不存在');
       }
@@ -151,10 +131,7 @@ const SmartAppAdminController = {
       
       const updatedApp = await app.update(updateData);
       
-      logger.info('智能应用更新成功', {
-        appId: id,
-        updatedBy: req.user.id
-      });
+      logger.info('智能应用更新成功', { appId: id, updatedBy: req.user.id });
       
       ResponseHelper.success(res, updatedApp.toFullJSON(), '智能应用更新成功');
     } catch (error) {
@@ -169,7 +146,6 @@ const SmartAppAdminController = {
   async delete(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -178,11 +154,7 @@ const SmartAppAdminController = {
       
       await app.delete();
       
-      logger.info('智能应用删除成功', {
-        appId: id,
-        name: app.name,
-        deletedBy: req.user.id
-      });
+      logger.info('智能应用删除成功', { appId: id, name: app.name, deletedBy: req.user.id });
       
       ResponseHelper.success(res, null, '智能应用删除成功');
     } catch (error) {
@@ -197,7 +169,6 @@ const SmartAppAdminController = {
   async togglePublish(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -223,9 +194,6 @@ const SmartAppAdminController = {
 
   // ==================== 分类管理 ====================
 
-  /**
-   * 获取所有分类（管理员）
-   */
   async getCategories(req, res) {
     try {
       const categories = await SmartApp.getCategories();
@@ -236,9 +204,6 @@ const SmartAppAdminController = {
     }
   },
 
-  /**
-   * 创建分类
-   */
   async createCategory(req, res) {
     try {
       const { name, color, sort_order } = req.body;
@@ -262,20 +227,12 @@ const SmartAppAdminController = {
     }
   },
 
-  /**
-   * 更新分类
-   */
   async updateCategory(req, res) {
     try {
       const { id } = req.params;
       const { name, color, sort_order, is_active } = req.body;
       
-      const category = await SmartApp.updateCategory(parseInt(id), {
-        name,
-        color,
-        sort_order,
-        is_active
-      });
+      const category = await SmartApp.updateCategory(parseInt(id), { name, color, sort_order, is_active });
       
       if (!category) {
         return ResponseHelper.notFound(res, '分类不存在');
@@ -290,9 +247,6 @@ const SmartAppAdminController = {
     }
   },
 
-  /**
-   * 删除分类
-   */
   async deleteCategory(req, res) {
     try {
       const { id } = req.params;
@@ -315,16 +269,19 @@ const SmartAppAdminController = {
 const SmartAppUserController = {
   /**
    * 获取已发布的智能应用列表
+   * v2.2.0 返回收藏状态
    */
   async list(req, res) {
     try {
       const { page = 1, limit = 50, category_id, keyword } = req.query;
+      const userId = req.user.id;
       
       const result = await SmartApp.findPublished({
         page: parseInt(page),
         limit: parseInt(limit),
         category_id,
-        keyword
+        keyword,
+        userId  // v2.2.0 传入userId以获取收藏状态
       });
       
       const apps = result.apps.map(app => app.toJSON());
@@ -342,7 +299,6 @@ const SmartAppUserController = {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -352,6 +308,9 @@ const SmartAppUserController = {
       if (!app.is_published) {
         return ResponseHelper.forbidden(res, '该应用暂未开放');
       }
+      
+      // v2.2.0 检查收藏状态
+      app.is_favorited = await SmartApp.isFavorited(req.user.id, id);
       
       ResponseHelper.success(res, app.toJSON(), '获取应用详情成功');
     } catch (error) {
@@ -370,9 +329,13 @@ const SmartAppUserController = {
         SmartApp.getCategoryStats()
       ]);
       
+      // v2.2.0 获取用户收藏数量
+      const favoriteIds = await SmartApp.getFavoriteIds(req.user.id);
+      
       ResponseHelper.success(res, {
         categories,
-        stats
+        stats,
+        favoriteCount: favoriteIds.length  // v2.2.0 新增
       }, '获取分类信息成功');
     } catch (error) {
       logger.error('获取分类信息失败:', error);
@@ -386,7 +349,6 @@ const SmartAppUserController = {
   async getConfig(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -422,7 +384,6 @@ const SmartAppUserController = {
   async recordUse(req, res) {
     try {
       const { id } = req.params;
-      
       const app = await SmartApp.findById(id);
       
       if (!app) {
@@ -436,31 +397,43 @@ const SmartAppUserController = {
       await app.incrementUseCount();
       
       logger.info('应用使用记录', {
-        appId: app.id,
-        appName: app.name,
-        userId: req.user.id,
-        username: req.user.username
+        appId: app.id, appName: app.name,
+        userId: req.user.id, username: req.user.username
       });
       
-      ResponseHelper.success(res, { 
-        use_count: app.use_count + 1 
-      }, '记录成功');
+      ResponseHelper.success(res, { use_count: app.use_count + 1 }, '记录成功');
     } catch (error) {
       logger.error('记录应用使用失败:', error);
       ResponseHelper.success(res, null, '记录成功');
     }
   },
 
+  // ==================== 收藏功能 v2.2.0 ====================
+
   /**
-   * 获取或创建智能应用专属会话
-   * v2.1.0 修复：当智能应用配置更新后，自动同步到已有会话
+   * 获取用户收藏的应用列表
    */
-  async getOrCreateConversation(req, res) {
+  async getFavorites(req, res) {
+    try {
+      const userId = req.user.id;
+      const apps = await SmartApp.getFavorites(userId);
+      
+      ResponseHelper.success(res, apps.map(app => app.toJSON()), '获取收藏列表成功');
+    } catch (error) {
+      logger.error('获取收藏列表失败:', error);
+      ResponseHelper.error(res, error.message || '获取收藏列表失败');
+    }
+  },
+
+  /**
+   * 添加收藏
+   */
+  async addFavorite(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
       
-      // 1. 验证应用存在且已发布
+      // 验证应用存在且已发布
       const app = await SmartApp.findById(id);
       if (!app) {
         return ResponseHelper.notFound(res, '应用不存在');
@@ -469,7 +442,50 @@ const SmartAppUserController = {
         return ResponseHelper.forbidden(res, '该应用暂未开放');
       }
       
-      // 2. 查找该用户该应用的现有会话
+      await SmartApp.addFavorite(userId, id);
+      
+      ResponseHelper.success(res, { is_favorited: true }, '收藏成功');
+    } catch (error) {
+      logger.error('添加收藏失败:', error);
+      ResponseHelper.error(res, error.message || '添加收藏失败');
+    }
+  },
+
+  /**
+   * 取消收藏
+   */
+  async removeFavorite(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      await SmartApp.removeFavorite(userId, id);
+      
+      ResponseHelper.success(res, { is_favorited: false }, '已取消收藏');
+    } catch (error) {
+      logger.error('取消收藏失败:', error);
+      ResponseHelper.error(res, error.message || '取消收藏失败');
+    }
+  },
+
+  // ==================== 会话功能 ====================
+
+  /**
+   * 获取或创建智能应用专属会话
+   */
+  async getOrCreateConversation(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      const app = await SmartApp.findById(id);
+      if (!app) {
+        return ResponseHelper.notFound(res, '应用不存在');
+      }
+      if (!app.is_published) {
+        return ResponseHelper.forbidden(res, '该应用暂未开放');
+      }
+      
       const findSql = `
         SELECT c.*, am.name as model_name, am.display_name as model_display_name
         FROM conversations c
@@ -486,13 +502,9 @@ const SmartAppUserController = {
       let configUpdated = false;
       
       if (existingConversations.length > 0) {
-        // 3a. 有现有会话
         conversation = existingConversations[0];
         
-        /**
-         * v2.1.0 关键修复：检查并同步智能应用配置
-         * 比较会话配置与智能应用当前配置，如果不同则更新
-         */
+        // v2.1.0 检查并同步配置
         const needsUpdate = (
           conversation.model_name !== app.model_name ||
           conversation.system_prompt !== app.system_prompt ||
@@ -501,27 +513,15 @@ const SmartAppUserController = {
         );
         
         if (needsUpdate) {
-          // 更新会话配置以匹配智能应用最新配置
           const updateSql = `
             UPDATE conversations 
-            SET model_name = ?, 
-                system_prompt = ?, 
-                context_length = ?, 
-                ai_temperature = ?,
-                title = ?,
-                updated_at = CURRENT_TIMESTAMP 
+            SET model_name = ?, system_prompt = ?, context_length = ?, ai_temperature = ?, title = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE id = ?
           `;
           await dbConnection.query(updateSql, [
-            app.model_name,
-            app.system_prompt,
-            app.context_length,
-            app.temperature,
-            app.name,
-            conversation.id
+            app.model_name, app.system_prompt, app.context_length, app.temperature, app.name, conversation.id
           ]);
           
-          // 更新本地变量
           conversation.model_name = app.model_name;
           conversation.system_prompt = app.system_prompt;
           conversation.context_length = app.context_length;
@@ -529,110 +529,50 @@ const SmartAppUserController = {
           conversation.title = app.name;
           configUpdated = true;
           
-          logger.info('智能应用会话配置已同步更新', {
-            appId: id,
-            conversationId: conversation.id,
-            userId,
-            updatedFields: ['model_name', 'system_prompt', 'context_length', 'ai_temperature', 'title']
-          });
+          logger.info('智能应用会话配置已同步更新', { appId: id, conversationId: conversation.id, userId });
         }
         
-        // 获取会话消息（考虑 cleared_at 清空时间）
-        let msgSql;
-        let msgParams;
-        
+        // 获取消息
+        let msgSql, msgParams;
         if (conversation.cleared_at) {
-          msgSql = `
-            SELECT * FROM messages 
-            WHERE conversation_id = ? 
-              AND created_at > ?
-              AND status IN ('completed', 'pending')
-            ORDER BY sequence_number ASC, created_at ASC
-            LIMIT 1000
-          `;
+          msgSql = `SELECT * FROM messages WHERE conversation_id = ? AND created_at > ? AND status IN ('completed', 'pending') ORDER BY sequence_number ASC, created_at ASC LIMIT 1000`;
           msgParams = [conversation.id, conversation.cleared_at];
         } else {
-          msgSql = `
-            SELECT * FROM messages 
-            WHERE conversation_id = ?
-              AND status IN ('completed', 'pending')
-            ORDER BY sequence_number ASC, created_at ASC
-            LIMIT 1000
-          `;
+          msgSql = `SELECT * FROM messages WHERE conversation_id = ? AND status IN ('completed', 'pending') ORDER BY sequence_number ASC, created_at ASC LIMIT 1000`;
           msgParams = [conversation.id];
         }
         
         const { rows: msgRows } = await dbConnection.query(msgSql, msgParams);
         messages = msgRows;
         
-        // 重新获取更新后的会话信息（包含正确的model_display_name）
         if (configUpdated) {
-          const refreshSql = `
-            SELECT c.*, am.name as model_name, am.display_name as model_display_name
-            FROM conversations c
-            LEFT JOIN ai_models am ON c.model_name = am.name
-            WHERE c.id = ?
-          `;
+          const refreshSql = `SELECT c.*, am.name as model_name, am.display_name as model_display_name FROM conversations c LEFT JOIN ai_models am ON c.model_name = am.name WHERE c.id = ?`;
           const { rows: refreshedRows } = await dbConnection.query(refreshSql, [conversation.id]);
           if (refreshedRows.length > 0) {
             conversation = refreshedRows[0];
           }
         }
         
-        logger.info('获取智能应用现有会话', {
-          appId: id,
-          conversationId: conversation.id,
-          userId,
-          messageCount: messages.length,
-          configUpdated
-        });
+        logger.info('获取智能应用现有会话', { appId: id, conversationId: conversation.id, userId, messageCount: messages.length, configUpdated });
       } else {
-        // 3b. 没有现有会话，创建新会话
         const { v4: uuidv4 } = require('uuid');
         const conversationId = uuidv4();
         
-        const createSql = `
-          INSERT INTO conversations 
-          (id, user_id, title, model_name, system_prompt, context_length, ai_temperature, smart_app_id, priority)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        await dbConnection.query(createSql, [
-          conversationId,
-          userId,
-          app.name,
-          app.model_name,
-          app.system_prompt,
-          app.context_length,
-          app.temperature,
-          id,
-          -1
-        ]);
+        const createSql = `INSERT INTO conversations (id, user_id, title, model_name, system_prompt, context_length, ai_temperature, smart_app_id, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        await dbConnection.query(createSql, [conversationId, userId, app.name, app.model_name, app.system_prompt, app.context_length, app.temperature, id, -1]);
         
-        // 获取新创建的会话
-        const getNewSql = `
-          SELECT c.*, am.name as model_name, am.display_name as model_display_name
-          FROM conversations c
-          LEFT JOIN ai_models am ON c.model_name = am.name
-          WHERE c.id = ?
-        `;
+        const getNewSql = `SELECT c.*, am.name as model_name, am.display_name as model_display_name FROM conversations c LEFT JOIN ai_models am ON c.model_name = am.name WHERE c.id = ?`;
         const { rows: newRows } = await dbConnection.query(getNewSql, [conversationId]);
         conversation = newRows[0];
         isNew = true;
         
-        logger.info('创建智能应用新会话', {
-          appId: id,
-          conversationId: conversation.id,
-          userId,
-          appName: app.name
-        });
+        logger.info('创建智能应用新会话', { appId: id, conversationId: conversation.id, userId, appName: app.name });
       }
       
-      // 4. 增加应用使用次数（仅首次）
       if (isNew) {
         await app.incrementUseCount();
       }
       
-      // 5. 返回会话信息和消息
       ResponseHelper.success(res, {
         conversation: {
           id: conversation.id,
@@ -647,7 +587,7 @@ const SmartAppUserController = {
           created_at: conversation.created_at,
           updated_at: conversation.updated_at
         },
-        messages: messages,
+        messages,
         app: {
           id: app.id,
           name: app.name,
@@ -657,7 +597,7 @@ const SmartAppUserController = {
           credits_per_use: app.credits_per_use
         },
         isNew,
-        configUpdated  // v2.1.0 新增：告知前端配置是否已更新
+        configUpdated
       }, isNew ? '会话创建成功' : (configUpdated ? '会话配置已更新' : '获取会话成功'));
       
     } catch (error) {
@@ -679,11 +619,7 @@ const SmartAppUserController = {
         return ResponseHelper.notFound(res, '应用不存在');
       }
       
-      const findSql = `
-        SELECT id FROM conversations 
-        WHERE user_id = ? AND smart_app_id = ?
-        LIMIT 1
-      `;
+      const findSql = `SELECT id FROM conversations WHERE user_id = ? AND smart_app_id = ? LIMIT 1`;
       const { rows } = await dbConnection.query(findSql, [userId, id]);
       
       if (rows.length === 0) {
@@ -692,18 +628,10 @@ const SmartAppUserController = {
       
       const conversationId = rows[0].id;
       
-      const updateSql = `
-        UPDATE conversations 
-        SET cleared_at = CURRENT_TIMESTAMP, message_count = 0, total_tokens = 0, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `;
+      const updateSql = `UPDATE conversations SET cleared_at = CURRENT_TIMESTAMP, message_count = 0, total_tokens = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
       await dbConnection.query(updateSql, [conversationId]);
       
-      logger.info('清空智能应用会话消息', {
-        appId: id,
-        conversationId,
-        userId
-      });
+      logger.info('清空智能应用会话消息', { appId: id, conversationId, userId });
       
       ResponseHelper.success(res, { conversationId }, '会话已清空');
       

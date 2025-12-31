@@ -2,9 +2,10 @@
  * 智能应用状态管理Store
  * 管理用户端应用广场的数据
  * 
- * 版本：v2.0.0
+ * 版本：v2.2.0
  * 更新：
  * - 2025-12-30 v2.0.0 支持动态分类和多分类筛选
+ * - 2025-12-30 v2.2.0 新增用户收藏功能
  */
 
 import { create } from 'zustand';
@@ -19,12 +20,13 @@ const useSmartAppStore = create((set, get) => ({
   apps: [],                 // 已发布的应用列表
   categories: [],           // 分类列表（从数据库加载）
   categoryStats: [],        // 分类统计（每个分类的应用数量）
+  favoriteCount: 0,         // v2.2.0 收藏数量
   loading: false,           // 加载状态
   currentApp: null,         // 当前选中的应用
   
   /**
    * 获取已发布的应用列表（用户端）
-   * @param {number} categoryId - 可选，按分类ID筛选
+   * v2.2.0 返回含收藏状态
    */
   getPublishedApps: async (categoryId = null) => {
     set({ loading: true });
@@ -54,6 +56,7 @@ const useSmartAppStore = create((set, get) => ({
   
   /**
    * 获取分类列表和统计（从数据库动态加载）
+   * v2.2.0 返回收藏数量
    */
   getCategories: async () => {
     try {
@@ -62,13 +65,76 @@ const useSmartAppStore = create((set, get) => ({
         const data = response.data.data || {};
         set({ 
           categories: data.categories || [],
-          categoryStats: data.stats || []
+          categoryStats: data.stats || [],
+          favoriteCount: data.favoriteCount || 0  // v2.2.0
         });
         return data;
       }
     } catch (error) {
       console.error('获取分类列表失败:', error);
-      return { categories: [], stats: [] };
+      return { categories: [], stats: [], favoriteCount: 0 };
+    }
+  },
+  
+  /**
+   * v2.2.0 获取我的收藏列表
+   */
+  getFavorites: async () => {
+    set({ loading: true });
+    try {
+      const response = await apiClient.get('/smart-apps/favorites');
+      if (response.data.success) {
+        const apps = response.data.data || [];
+        set({ loading: false });
+        return apps;
+      }
+      set({ loading: false });
+      return [];
+    } catch (error) {
+      console.error('获取收藏列表失败:', error);
+      set({ loading: false });
+      return [];
+    }
+  },
+  
+  /**
+   * v2.2.0 切换收藏状态
+   */
+  toggleFavorite: async (appId) => {
+    const { apps } = get();
+    const app = apps.find(a => a.id === appId);
+    const isFavorited = app?.is_favorited;
+    
+    try {
+      let response;
+      if (isFavorited) {
+        // 取消收藏
+        response = await apiClient.delete(`/smart-apps/${appId}/favorite`);
+      } else {
+        // 添加收藏
+        response = await apiClient.post(`/smart-apps/${appId}/favorite`);
+      }
+      
+      if (response.data.success) {
+        // 更新本地状态
+        set(state => ({
+          apps: state.apps.map(a => 
+            a.id === appId 
+              ? { ...a, is_favorited: !isFavorited }
+              : a
+          ),
+          favoriteCount: isFavorited 
+            ? state.favoriteCount - 1 
+            : state.favoriteCount + 1
+        }));
+        
+        message.success(isFavorited ? '已取消收藏' : '收藏成功');
+        return !isFavorited;
+      }
+    } catch (error) {
+      console.error('切换收藏状态失败:', error);
+      message.error('操作失败');
+      return isFavorited;
     }
   },
   
@@ -89,7 +155,7 @@ const useSmartAppStore = create((set, get) => ({
   },
   
   /**
-   * 获取应用配置（包含系统提示词，用于创建会话）
+   * 获取应用配置
    */
   getAppConfig: async (appId) => {
     try {
@@ -172,7 +238,6 @@ const useSmartAppStore = create((set, get) => ({
   
   /**
    * 按分类获取应用（本地过滤）
-   * v2.0.0 支持多分类
    */
   getAppsByCategory: (categoryId) => {
     const { apps } = get();
@@ -215,6 +280,7 @@ const useSmartAppStore = create((set, get) => ({
       apps: [],
       categories: [],
       categoryStats: [],
+      favoriteCount: 0,
       loading: false,
       currentApp: null
     });
