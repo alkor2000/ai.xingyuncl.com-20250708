@@ -1,11 +1,10 @@
 /**
  * 智能应用管理组件
- * 功能：管理预设AI应用，包含增删改查、发布状态切换
+ * 功能：管理预设AI应用，包含增删改查、发布状态切换、分类管理
  * 
- * 版本：v1.2.0
+ * 版本：v2.0.0
  * 更新：
- * - 2025-12-30 v1.1.0 修复温度为0无法保存的问题
- * - 2025-12-30 v1.2.0 温度改为手动输入框，范围0-2
+ * - 2025-12-30 v2.0.0 支持多分类(1-3个)、应用积分、自定义分类管理
  */
 
 import React, { useState, useEffect } from 'react';
@@ -28,7 +27,10 @@ import {
   Divider,
   Row,
   Col,
-  Typography
+  Typography,
+  ColorPicker,
+  List,
+  Drawer
 } from 'antd';
 import {
   PlusOutlined,
@@ -40,7 +42,10 @@ import {
   AppstoreOutlined,
   ThunderboltOutlined,
   FireOutlined,
-  CopyOutlined
+  CopyOutlined,
+  SettingOutlined,
+  BgColorsOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../../../utils/api';
@@ -49,24 +54,12 @@ const { TextArea } = Input;
 const { Text } = Typography;
 
 /**
- * 分类配置 - 与后端数据库保持一致
- */
-const CATEGORY_CONFIG = {
-  '写作助手': { icon: 'EditOutlined', color: 'blue' },
-  '编程开发': { icon: 'CodeOutlined', color: 'green' },
-  '学习教育': { icon: 'BookOutlined', color: 'purple' },
-  '办公效率': { icon: 'ScheduleOutlined', color: 'orange' },
-  '创意设计': { icon: 'BulbOutlined', color: 'magenta' },
-  '生活助手': { icon: 'HomeOutlined', color: 'cyan' },
-  '其他': { icon: 'AppstoreOutlined', color: 'default' }
-};
-
-/**
  * 智能应用管理组件
  */
 const SmartAppSettings = () => {
   const { t } = useTranslation();
   const [form] = Form.useForm();
+  const [categoryForm] = Form.useForm();
   
   // 状态管理
   const [apps, setApps] = useState([]);
@@ -77,7 +70,13 @@ const SmartAppSettings = () => {
   const [editingApp, setEditingApp] = useState(null);
   const [toggleLoading, setToggleLoading] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [filters, setFilters] = useState({ category: null, is_published: null, keyword: '' });
+  const [filters, setFilters] = useState({ category_id: null, is_published: null, keyword: '' });
+  
+  // 分类管理状态
+  const [categoryDrawerVisible, setCategoryDrawerVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [categoryLoading, setCategoryLoading] = useState(false);
 
   /**
    * 加载智能应用列表
@@ -115,7 +114,7 @@ const SmartAppSettings = () => {
   };
 
   /**
-   * 加载AI模型列表（用于下拉选择）
+   * 加载AI模型列表
    */
   const loadAiModels = async () => {
     try {
@@ -135,7 +134,7 @@ const SmartAppSettings = () => {
     try {
       const response = await api.get('/admin/smart-apps/categories');
       if (response.data.success) {
-        setCategories(response.data.data);
+        setCategories(response.data.data || []);
       }
     } catch (error) {
       console.error('加载分类失败:', error);
@@ -156,22 +155,22 @@ const SmartAppSettings = () => {
 
   /**
    * 处理表单提交
-   * v1.2.0 温度范围改为0-2
    */
   const handleSubmit = async (values) => {
     try {
       const submitData = {
         ...values,
-        // 温度：使用typeof检查，确保0值能正确传递，范围0-2
         temperature: typeof values.temperature === 'number' ? values.temperature : 0.7,
         context_length: typeof values.context_length === 'number' ? values.context_length : 10,
         is_stream: values.is_stream !== false,
         is_published: values.is_published || false,
-        sort_order: typeof values.sort_order === 'number' ? values.sort_order : 0
+        sort_order: typeof values.sort_order === 'number' ? values.sort_order : 0,
+        // v2.0.0 新增字段
+        category_ids: values.category_ids || [],
+        credits_per_use: typeof values.credits_per_use === 'number' ? values.credits_per_use : 0
       };
 
       if (editingApp) {
-        // 更新应用
         const response = await api.put(`/admin/smart-apps/${editingApp.id}`, submitData);
         if (response.data.success) {
           message.success('应用更新成功');
@@ -181,7 +180,6 @@ const SmartAppSettings = () => {
           loadApps(pagination.current, pagination.pageSize);
         }
       } else {
-        // 创建应用
         const response = await api.post('/admin/smart-apps', submitData);
         if (response.data.success) {
           message.success('应用创建成功');
@@ -204,7 +202,6 @@ const SmartAppSettings = () => {
     try {
       const response = await api.post(`/admin/smart-apps/${id}/toggle-publish`);
       if (response.data.success) {
-        // 更新本地状态
         setApps(prevApps =>
           prevApps.map(app =>
             app.id === id
@@ -252,7 +249,8 @@ const SmartAppSettings = () => {
       context_length: app.context_length,
       model_id: app.model_id,
       is_stream: app.is_stream,
-      category: app.category,
+      category_ids: app.category_ids || [],
+      credits_per_use: app.credits_per_use || 0,
       is_published: app.is_published,
       sort_order: app.sort_order
     });
@@ -265,13 +263,14 @@ const SmartAppSettings = () => {
   const openAddModal = () => {
     setEditingApp(null);
     form.resetFields();
-    // 设置默认值
     form.setFieldsValue({
       temperature: 0.7,
       context_length: 10,
       is_stream: true,
       is_published: false,
-      sort_order: 0
+      sort_order: 0,
+      category_ids: [],
+      credits_per_use: 0
     });
     setModalVisible(true);
   };
@@ -290,11 +289,92 @@ const SmartAppSettings = () => {
       context_length: app.context_length,
       model_id: app.model_id,
       is_stream: app.is_stream,
-      category: app.category,
+      category_ids: app.category_ids || [],
+      credits_per_use: app.credits_per_use || 0,
       is_published: false,
       sort_order: app.sort_order
     });
     setModalVisible(true);
+  };
+
+  // ==================== 分类管理方法 ====================
+
+  /**
+   * 保存分类
+   */
+  const handleSaveCategory = async (values) => {
+    setCategoryLoading(true);
+    try {
+      // 处理颜色值
+      const color = typeof values.color === 'string' 
+        ? values.color 
+        : values.color?.toHexString?.() || '#1677ff';
+      
+      const data = {
+        name: values.name,
+        color: color,
+        sort_order: values.sort_order || 0
+      };
+
+      if (editingCategory) {
+        const response = await api.put(`/admin/smart-apps/categories/${editingCategory.id}`, data);
+        if (response.data.success) {
+          message.success('分类更新成功');
+        }
+      } else {
+        const response = await api.post('/admin/smart-apps/categories', data);
+        if (response.data.success) {
+          message.success('分类创建成功');
+        }
+      }
+      
+      setCategoryModalVisible(false);
+      categoryForm.resetFields();
+      setEditingCategory(null);
+      loadCategories();
+    } catch (error) {
+      console.error('保存分类失败:', error);
+      message.error(error.response?.data?.message || '保存失败');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  /**
+   * 删除分类
+   */
+  const handleDeleteCategory = async (id) => {
+    try {
+      const response = await api.delete(`/admin/smart-apps/categories/${id}`);
+      if (response.data.success) {
+        message.success('分类删除成功');
+        loadCategories();
+      }
+    } catch (error) {
+      console.error('删除分类失败:', error);
+      message.error(error.response?.data?.message || '删除失败');
+    }
+  };
+
+  /**
+   * 打开分类编辑弹窗
+   */
+  const openCategoryModal = (category = null) => {
+    setEditingCategory(category);
+    if (category) {
+      categoryForm.setFieldsValue({
+        name: category.name,
+        color: category.color,
+        sort_order: category.sort_order
+      });
+    } else {
+      categoryForm.resetFields();
+      categoryForm.setFieldsValue({
+        color: '#1677ff',
+        sort_order: 0
+      });
+    }
+    setCategoryModalVisible(true);
   };
 
   /**
@@ -320,13 +400,20 @@ const SmartAppSettings = () => {
     },
     {
       title: '分类',
-      dataIndex: 'category',
-      key: 'category',
-      width: 100,
-      render: (category) => {
-        const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['其他'];
-        return <Tag color={config.color}>{category || '未分类'}</Tag>;
-      }
+      dataIndex: 'categories',
+      key: 'categories',
+      width: 150,
+      render: (categories) => (
+        <Space size={[0, 4]} wrap>
+          {categories && categories.length > 0 ? (
+            categories.map(cat => (
+              <Tag key={cat.id} color={cat.color}>{cat.name}</Tag>
+            ))
+          ) : (
+            <Tag color="default">未分类</Tag>
+          )}
+        </Space>
+      )
     },
     {
       title: 'AI模型',
@@ -342,7 +429,7 @@ const SmartAppSettings = () => {
     {
       title: '配置',
       key: 'config',
-      width: 180,
+      width: 220,
       render: (_, record) => (
         <Space size="small" wrap>
           <Tooltip title={`温度: ${record.temperature}`}>
@@ -356,6 +443,12 @@ const SmartAppSettings = () => {
           ) : (
             <Tag color="default">非流式</Tag>
           )}
+          {/* v2.0.0 显示积分 */}
+          <Tooltip title={`每次使用扣减 ${record.credits_per_use} 积分`}>
+            <Tag icon={<DollarOutlined />} color={record.credits_per_use > 0 ? 'gold' : 'default'}>
+              {record.credits_per_use}分
+            </Tag>
+          </Tooltip>
         </Space>
       )
     },
@@ -438,15 +531,17 @@ const SmartAppSettings = () => {
       }
       extra={
         <Space>
-          {/* 筛选器 */}
+          {/* 分类筛选 */}
           <Select
             placeholder="分类筛选"
             allowClear
             style={{ width: 120 }}
-            onChange={(value) => setFilters({ ...filters, category: value })}
+            onChange={(value) => setFilters({ ...filters, category_id: value })}
           >
             {categories.map(cat => (
-              <Select.Option key={cat.id} value={cat.name}>{cat.name}</Select.Option>
+              <Select.Option key={cat.id} value={cat.id}>
+                <Tag color={cat.color}>{cat.name}</Tag>
+              </Select.Option>
             ))}
           </Select>
           <Select
@@ -464,6 +559,15 @@ const SmartAppSettings = () => {
             style={{ width: 180 }}
             onSearch={(value) => setFilters({ ...filters, keyword: value })}
           />
+          {/* 管理分类按钮 */}
+          <Tooltip title="管理分类">
+            <Button
+              icon={<BgColorsOutlined />}
+              onClick={() => setCategoryDrawerVisible(true)}
+            >
+              管理分类
+            </Button>
+          </Tooltip>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -477,7 +581,7 @@ const SmartAppSettings = () => {
       {/* 提示信息 */}
       <Alert
         message="智能应用说明"
-        description="智能应用是预设好系统提示词和参数的AI对话入口，用户可一键使用无需配置。发布后的应用将显示在用户端应用广场中。"
+        description="智能应用是预设好系统提示词和参数的AI对话入口，用户可一键使用无需配置。发布后的应用将显示在用户端应用广场中。每个应用可设置1-3个分类和独立的积分消耗。"
         type="info"
         showIcon
         closable
@@ -496,7 +600,7 @@ const SmartAppSettings = () => {
           showTotal: (total) => `共 ${total} 个应用`,
           onChange: (page, pageSize) => loadApps(page, pageSize)
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1100 }}
       />
 
       {/* 应用编辑弹窗 */}
@@ -528,14 +632,21 @@ const SmartAppSettings = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
+              {/* v2.0.0 改为多选分类 */}
               <Form.Item
-                name="category"
+                name="category_ids"
                 label="应用分类"
+                extra="可选择1-3个分类"
               >
-                <Select placeholder="选择分类" allowClear>
-                  {Object.keys(CATEGORY_CONFIG).map(cat => (
-                    <Select.Option key={cat} value={cat}>
-                      <Tag color={CATEGORY_CONFIG[cat].color}>{cat}</Tag>
+                <Select
+                  mode="multiple"
+                  placeholder="选择分类（可多选）"
+                  allowClear
+                  maxTagCount={3}
+                >
+                  {categories.map(cat => (
+                    <Select.Option key={cat.id} value={cat.id}>
+                      <Tag color={cat.color}>{cat.name}</Tag>
                     </Select.Option>
                   ))}
                 </Select>
@@ -591,19 +702,18 @@ const SmartAppSettings = () => {
           <Divider orientation="left">参数配置</Divider>
 
           <Row gutter={16}>
-            <Col span={12}>
-              {/* v1.2.0 温度改为手动输入框，范围0-2 */}
+            <Col span={8}>
               <Form.Item
                 name="temperature"
                 label={
                   <Space>
                     温度 (Temperature)
-                    <Tooltip title="控制输出的随机性，0更确定，2更随机。推荐值：精确任务0-0.3，平衡0.5-0.7，创意1-2">
+                    <Tooltip title="控制输出的随机性，0更确定，2更随机">
                       <span style={{ color: '#8c8c8c', cursor: 'help' }}>?</span>
                     </Tooltip>
                   </Space>
                 }
-                extra="范围 0-2，值越小回复越确定，值越大回复越随机"
+                extra="范围 0-2"
               >
                 <InputNumber 
                   min={0} 
@@ -615,23 +725,39 @@ const SmartAppSettings = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 name="context_length"
-                label={
-                  <Space>
-                    上下文条数
-                    <Tooltip title="携带多少条历史消息作为上下文">
-                      <span style={{ color: '#8c8c8c', cursor: 'help' }}>?</span>
-                    </Tooltip>
-                  </Space>
-                }
+                label="上下文条数"
               >
                 <InputNumber 
                   min={0} 
                   max={100} 
                   style={{ width: '100%' }} 
                   placeholder="10"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              {/* v2.0.0 新增：应用积分 */}
+              <Form.Item
+                name="credits_per_use"
+                label={
+                  <Space>
+                    应用积分
+                    <Tooltip title="每次使用此应用扣减的积分，0表示免费">
+                      <span style={{ color: '#8c8c8c', cursor: 'help' }}>?</span>
+                    </Tooltip>
+                  </Space>
+                }
+                extra="范围 0-9999"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={9999} 
+                  style={{ width: '100%' }} 
+                  placeholder="0"
+                  addonAfter="积分/次"
                 />
               </Form.Item>
             </Col>
@@ -679,6 +805,121 @@ const SmartAppSettings = () => {
             extra="可选，留空使用默认图标"
           >
             <Input placeholder="https://example.com/icon.png" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 分类管理抽屉 */}
+      <Drawer
+        title={
+          <Space>
+            <BgColorsOutlined />
+            分类管理
+          </Space>
+        }
+        placement="right"
+        width={400}
+        open={categoryDrawerVisible}
+        onClose={() => setCategoryDrawerVisible(false)}
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openCategoryModal()}>
+            添加分类
+          </Button>
+        }
+      >
+        <List
+          dataSource={categories}
+          renderItem={(cat) => (
+            <List.Item
+              actions={[
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<EditOutlined />}
+                  onClick={() => openCategoryModal(cat)}
+                />,
+                <Popconfirm
+                  title="确定删除此分类吗？"
+                  description="如果有应用使用此分类，需要先移除"
+                  onConfirm={() => handleDeleteCategory(cat.id)}
+                  okText="确定"
+                  cancelText="取消"
+                >
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              ]}
+            >
+              <List.Item.Meta
+                avatar={
+                  <div 
+                    style={{ 
+                      width: 24, 
+                      height: 24, 
+                      borderRadius: 4, 
+                      backgroundColor: cat.color 
+                    }} 
+                  />
+                }
+                title={cat.name}
+                description={`排序: ${cat.sort_order}`}
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
+
+      {/* 分类编辑弹窗 */}
+      <Modal
+        title={editingCategory ? '编辑分类' : '添加分类'}
+        open={categoryModalVisible}
+        onCancel={() => {
+          setCategoryModalVisible(false);
+          categoryForm.resetFields();
+          setEditingCategory(null);
+        }}
+        onOk={() => categoryForm.submit()}
+        confirmLoading={categoryLoading}
+        width={400}
+      >
+        <Form
+          form={categoryForm}
+          layout="vertical"
+          onFinish={handleSaveCategory}
+        >
+          <Form.Item
+            name="name"
+            label="分类名称"
+            rules={[{ required: true, message: '请输入分类名称' }]}
+          >
+            <Input placeholder="如：写作助手" maxLength={50} />
+          </Form.Item>
+          
+          <Form.Item
+            name="color"
+            label="分类颜色"
+          >
+            <ColorPicker 
+              showText 
+              format="hex"
+              presets={[
+                {
+                  label: '推荐颜色',
+                  colors: [
+                    '#1677ff', '#52c41a', '#722ed1', '#fa8c16', 
+                    '#eb2f96', '#13c2c2', '#8c8c8c', '#faad14',
+                    '#f5222d', '#2f54eb', '#a0d911', '#fa541c'
+                  ]
+                }
+              ]}
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="sort_order"
+            label="排序"
+            extra="数字越小越靠前"
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>

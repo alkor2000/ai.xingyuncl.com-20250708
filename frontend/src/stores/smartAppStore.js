@@ -2,8 +2,9 @@
  * 智能应用状态管理Store
  * 管理用户端应用广场的数据
  * 
- * 版本：v1.1.0
- * 更新：2025-12-30 修复数据结构匹配
+ * 版本：v2.0.0
+ * 更新：
+ * - 2025-12-30 v2.0.0 支持动态分类和多分类筛选
  */
 
 import { create } from 'zustand';
@@ -16,21 +17,25 @@ import apiClient from '../utils/api';
 const useSmartAppStore = create((set, get) => ({
   // 状态
   apps: [],                 // 已发布的应用列表
-  categories: [],           // 分类列表
-  categoryStats: [],        // 分类统计
+  categories: [],           // 分类列表（从数据库加载）
+  categoryStats: [],        // 分类统计（每个分类的应用数量）
   loading: false,           // 加载状态
   currentApp: null,         // 当前选中的应用
   
   /**
    * 获取已发布的应用列表（用户端）
-   * 后端直接返回数组格式
+   * @param {number} categoryId - 可选，按分类ID筛选
    */
-  getPublishedApps: async () => {
+  getPublishedApps: async (categoryId = null) => {
     set({ loading: true });
     try {
-      const response = await apiClient.get('/smart-apps');
+      const params = {};
+      if (categoryId) {
+        params.category_id = categoryId;
+      }
+      
+      const response = await apiClient.get('/smart-apps', { params });
       if (response.data.success) {
-        // 后端直接返回数组
         const apps = response.data.data || [];
         set({ 
           apps: apps,
@@ -48,7 +53,7 @@ const useSmartAppStore = create((set, get) => ({
   },
   
   /**
-   * 获取分类列表和统计
+   * 获取分类列表和统计（从数据库动态加载）
    */
   getCategories: async () => {
     try {
@@ -106,7 +111,6 @@ const useSmartAppStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/smart-apps/${appId}/use`);
       if (response.data.success) {
-        // 更新本地使用次数
         set(state => ({
           apps: state.apps.map(app => 
             app.id === appId 
@@ -118,19 +122,67 @@ const useSmartAppStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('记录应用使用失败:', error);
-      // 不阻断流程，静默失败
     }
   },
   
   /**
-   * 按分类获取应用
+   * 获取或创建智能应用会话
    */
-  getAppsByCategory: (category) => {
+  getOrCreateConversation: async (appId) => {
+    try {
+      const response = await apiClient.get(`/smart-apps/${appId}/conversation`);
+      if (response.data.success) {
+        const data = response.data.data;
+        
+        if (data.isNew) {
+          set(state => ({
+            apps: state.apps.map(app => 
+              app.id === appId 
+                ? { ...app, use_count: (app.use_count || 0) + 1 }
+                : app
+            )
+          }));
+        }
+        
+        return data;
+      }
+      throw new Error('获取会话失败');
+    } catch (error) {
+      console.error('获取智能应用会话失败:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * 清空智能应用会话
+   */
+  clearConversation: async (appId) => {
+    try {
+      const response = await apiClient.post(`/smart-apps/${appId}/conversation/clear`);
+      if (response.data.success) {
+        message.success('对话已清空');
+        return response.data.data;
+      }
+      throw new Error('清空会话失败');
+    } catch (error) {
+      console.error('清空智能应用会话失败:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * 按分类获取应用（本地过滤）
+   * v2.0.0 支持多分类
+   */
+  getAppsByCategory: (categoryId) => {
     const { apps } = get();
-    if (!category || category === '全部') {
+    if (!categoryId || categoryId === 'all') {
       return apps;
     }
-    return apps.filter(app => app.category === category);
+    const catId = parseInt(categoryId);
+    return apps.filter(app => 
+      app.category_ids && app.category_ids.includes(catId)
+    );
   },
   
   /**
