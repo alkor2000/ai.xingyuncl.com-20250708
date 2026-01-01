@@ -1,38 +1,38 @@
 /**
  * 智能应用广场样式
- * iOS风格设计，移动端优化
+ * iOS风格设计，移动端六宫格优化
  * 
- * 版本：v1.2.0
- * 更新：2025-12-30 删除页面头部样式，增大应用图标
+ * 版本：v2.3.0
+ * 更新：
+ * - 2025-12-30 v1.2.0 删除页面头部样式，增大应用图标
+ * - 2026-01-01 v2.3.0 PC端紧凑4列，移动端六宫格2列，分类横向滚动
  */
 
 .smart-apps-container {
-  padding: 20px;
+  padding: 16px;
   min-height: 100%;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
   
   @media (max-width: 768px) {
-    padding: 12px;
+    padding: 10px;
   }
 }
-
-/* v1.2.0 删除页面头部样式，不再需要 */
 
 /* 搜索和筛选区 */
 .filter-section {
   background: white;
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   
   .search-input {
     max-width: 400px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     
     .ant-input-affix-wrapper {
-      border-radius: 10px;
-      padding: 10px 14px;
+      border-radius: 8px;
+      padding: 8px 12px;
       
       &:hover, &:focus {
         border-color: #1677ff;
@@ -40,13 +40,26 @@
     }
   }
   
+  /* v2.3.0 分类筛选横向滚动 */
   .category-filter {
     overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;  /* IE/Edge */
+    
+    &::-webkit-scrollbar {
+      display: none;  /* Chrome/Safari */
+    }
     
     .category-segmented {
+      display: inline-flex;
+      min-width: max-content;
+      
       .ant-segmented-item {
-        padding: 8px 16px;
-        border-radius: 8px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        white-space: nowrap;
         
         &-selected {
           background: #1677ff;
@@ -57,20 +70,27 @@
   }
   
   @media (max-width: 768px) {
-    padding: 16px;
-    margin-bottom: 16px;
-    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 10px;
     
     .search-input {
       max-width: 100%;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
+      
+      .ant-input-affix-wrapper {
+        padding: 6px 10px;
+      }
     }
     
     .category-filter {
+      margin: 0 -12px;
+      padding: 0 12px;
+      
       .category-segmented {
         .ant-segmented-item {
-          padding: 6px 12px;
-          font-size: 13px;
+          padding: 5px 10px;
+          font-size: 12px;
         }
       }
     }
@@ -87,25 +107,25 @@
   }
 }
 
-/* 应用卡片 */
+/* 应用卡片 - v2.3.0 紧凑版 */
 .smart-app-card {
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
   height: 100%;
-  min-height: 220px;
+  min-height: 160px;  /* v2.3.0 减小高度 */
   
   .ant-card-body {
-    padding: 20px;
+    padding: 14px;  /* v2.3.0 减小内边距 */
     height: 100%;
     display: flex;
     flex-direction: column;
   }
   
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
   }
   
   &:active {
@@ -117,47 +137,47 @@
     opacity: 0.8;
   }
   
-  /* 热门标识 */
+  /* 热门标识 - v2.3.0 缩小 */
   .hot-badge {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 8px;
+    right: 8px;
     background: linear-gradient(135deg, #ff6b6b, #ff8e53);
     color: white;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
     font-weight: 500;
-    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+    box-shadow: 0 2px 6px rgba(255, 107, 107, 0.4);
   }
   
-  /* 应用头部 - v1.2.0 增大图标 */
+  /* 应用头部 - v2.3.0 调整图标和布局 */
   .app-header {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 10px;
     
-    /* v1.2.0 增大图标尺寸：PC端72px，移动端60px */
+    /* PC端图标 */
     .app-icon {
-      width: 72px;
-      height: 72px;
-      border-radius: 18px;
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
       
       img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: 18px;
+        border-radius: 14px;
       }
       
       .anticon {
-        font-size: 36px;
+        font-size: 28px;
         color: white;
       }
     }
@@ -165,47 +185,56 @@
     .app-title-area {
       flex: 1;
       overflow: hidden;
-      padding-top: 4px;
+      min-width: 0;
       
       .app-name {
-        font-size: 18px;
+        font-size: 15px;
         display: block;
         line-height: 1.3;
       }
       
       .ant-tag {
-        font-size: 12px;
-        padding: 2px 10px;
-        border-radius: 6px;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        line-height: 1.5;
       }
     }
   }
   
-  /* 应用描述 */
+  /* 应用描述 - v2.3.0 缩小 */
   .app-description {
     flex: 1;
-    font-size: 14px;
-    line-height: 1.6;
-    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 10px;
     opacity: 0.85;
   }
   
-  /* 应用底部 */
+  /* 应用底部 - v2.3.0 紧凑 */
   .app-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 4px;
     margin-top: auto;
     
     .ant-tag {
       margin: 0;
-      border-radius: 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 1px 6px;
+    }
+    
+    .credits-tag {
+      .anticon {
+        font-size: 10px;
+      }
     }
     
     .use-count {
-      font-size: 12px;
+      font-size: 11px;
     }
   }
   
@@ -220,61 +249,108 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 16px;
+    border-radius: 12px;
   }
   
-  /* 移动端适配 - v1.2.0 调整移动端图标大小 */
+  /* ========== 移动端六宫格适配 v2.3.0 ========== */
   @media (max-width: 768px) {
-    border-radius: 12px;
-    min-height: 200px;
+    border-radius: 10px;
+    min-height: 140px;  /* 移动端更紧凑 */
     
     .ant-card-body {
-      padding: 16px;
+      padding: 10px;
+    }
+    
+    /* 移动端热门标识只显示图标 */
+    .hot-badge {
+      top: 6px;
+      right: 6px;
+      padding: 2px 5px;
+      font-size: 10px;
+      border-radius: 8px;
     }
     
     .app-header {
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 10px;
+      margin-bottom: 8px;
       
-      /* 移动端图标60px */
+      /* 移动端图标稍大以突出 */
       .app-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 14px;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
         
         img {
-          border-radius: 14px;
+          border-radius: 12px;
         }
         
         .anticon {
-          font-size: 30px;
+          font-size: 24px;
         }
       }
       
       .app-title-area {
-        padding-top: 2px;
-        
         .app-name {
-          font-size: 16px;
-        }
-        
-        .ant-tag {
-          font-size: 11px;
+          font-size: 14px;
+          line-height: 1.2;
         }
       }
     }
     
+    /* 移动端描述单行 */
     .app-description {
-      font-size: 13px;
-      margin-bottom: 12px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      line-height: 1.4;
     }
     
-    .hot-badge {
-      top: 10px;
-      right: 10px;
-      padding: 3px 8px;
-      font-size: 11px;
+    /* 移动端底部更紧凑 */
+    .app-footer {
+      gap: 2px;
+      
+      .ant-tag {
+        font-size: 10px;
+        padding: 0 4px;
+      }
+      
+      .use-count {
+        font-size: 10px;
+      }
     }
+  }
+}
+
+/* v2.3.0 移动端卡片特殊样式类 */
+.smart-app-card.mobile-card {
+  /* 移动端额外优化 */
+  .app-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    
+    .app-icon {
+      width: 52px;
+      height: 52px;
+    }
+    
+    .app-title-area {
+      width: 100%;
+      
+      .app-name {
+        font-size: 13px;
+        text-align: center;
+      }
+    }
+  }
+  
+  .app-description {
+    text-align: center;
+    font-size: 11px;
+  }
+  
+  .app-footer {
+    justify-content: center;
   }
 }
 
@@ -300,7 +376,7 @@
 /* v2.2.0 收藏按钮样式 */
 .favorite-btn {
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
   transition: all 0.3s ease;
   display: inline-flex;
@@ -322,7 +398,15 @@
   }
   
   .anticon {
-    font-size: 16px;
+    font-size: 14px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 2px;
+    
+    .anticon {
+      font-size: 12px;
+    }
   }
 }
 

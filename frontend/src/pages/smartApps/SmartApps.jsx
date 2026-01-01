@@ -2,10 +2,11 @@
  * 智能应用广场页面
  * 功能：展示已发布的预设AI应用，点击打开弹窗对话
  * 
- * 版本：v2.2.0
+ * 版本：v2.3.0
  * 更新：
  * - 2025-12-30 v2.0.1 去掉应用卡片上的模型名称
  * - 2025-12-30 v2.2.0 新增用户收藏功能，卡片底部心形按钮
+ * - 2026-01-01 v2.3.0 优化卡片尺寸：PC端4列紧凑卡片，移动端六宫格2列布局，分类横向滚动
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -42,6 +43,7 @@ const { Text, Paragraph } = Typography;
 
 /**
  * 智能应用广场组件
+ * v2.3.0 优化：PC端4列紧凑布局，移动端六宫格
  */
 const SmartApps = () => {
   const { t } = useTranslation();
@@ -69,7 +71,7 @@ const SmartApps = () => {
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   
-  // 响应式检测
+  // 响应式检测 - v2.3.0 用于移动端卡片简化显示
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   
   useEffect(() => {
@@ -248,6 +250,7 @@ const SmartApps = () => {
   /**
    * 渲染应用卡片
    * v2.2.0 增加收藏按钮
+   * v2.3.0 移动端简化显示：隐藏分类标签，紧凑布局
    */
   const renderAppCard = (app) => {
     const categoryStyle = getPrimaryCategoryStyle(app);
@@ -255,9 +258,10 @@ const SmartApps = () => {
     const isLoadingFavorite = favoriteLoading[app.id];
     
     return (
-      <Col xs={24} sm={12} md={8} lg={6} key={app.id}>
+      // v2.3.0 修改列配置：移动端2列实现六宫格
+      <Col xs={12} sm={12} md={8} lg={6} key={app.id}>
         <Card
-          className="smart-app-card"
+          className={`smart-app-card ${isMobile ? 'mobile-card' : ''}`}
           hoverable
           onClick={() => handleAppClick(app)}
           style={{
@@ -268,7 +272,7 @@ const SmartApps = () => {
           {/* 热门标识 */}
           {app.use_count > 10 && (
             <div className="hot-badge">
-              <FireOutlined /> 热门
+              <FireOutlined /> {!isMobile && '热门'}
             </div>
           )}
           
@@ -288,34 +292,36 @@ const SmartApps = () => {
               <Text strong className="app-name" ellipsis={{ tooltip: app.name }}>
                 {app.name}
               </Text>
-              {/* 显示多个分类标签 */}
-              <div style={{ marginTop: 4 }}>
-                {app.categories && app.categories.length > 0 ? (
-                  app.categories.slice(0, 2).map(cat => (
-                    <Tag 
-                      key={cat.id}
-                      color={cat.color}
-                      style={{ marginRight: 4, marginBottom: 2 }}
-                    >
-                      {cat.name}
-                    </Tag>
-                  ))
-                ) : (
-                  <Tag color="default">未分类</Tag>
-                )}
-                {app.categories && app.categories.length > 2 && (
-                  <Tooltip title={app.categories.slice(2).map(c => c.name).join('、')}>
-                    <Tag>+{app.categories.length - 2}</Tag>
-                  </Tooltip>
-                )}
-              </div>
+              {/* v2.3.0 移动端隐藏分类标签 */}
+              {!isMobile && (
+                <div style={{ marginTop: 4 }}>
+                  {app.categories && app.categories.length > 0 ? (
+                    app.categories.slice(0, 2).map(cat => (
+                      <Tag 
+                        key={cat.id}
+                        color={cat.color}
+                        style={{ marginRight: 4, marginBottom: 2 }}
+                      >
+                        {cat.name}
+                      </Tag>
+                    ))
+                  ) : (
+                    <Tag color="default">未分类</Tag>
+                  )}
+                  {app.categories && app.categories.length > 2 && (
+                    <Tooltip title={app.categories.slice(2).map(c => c.name).join('、')}>
+                      <Tag>+{app.categories.length - 2}</Tag>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           
           {/* 应用描述 */}
           <Paragraph 
             className="app-description"
-            ellipsis={{ rows: 2 }}
+            ellipsis={{ rows: isMobile ? 1 : 2 }}
             style={{ color: categoryStyle.color }}
           >
             {app.description || '暂无描述'}
@@ -327,18 +333,18 @@ const SmartApps = () => {
               {/* 显示积分消耗 */}
               {app.credits_per_use > 0 && (
                 <Tooltip title="每次使用消耗积分">
-                  <Tag icon={<DollarOutlined />} color="gold">
-                    {app.credits_per_use}积分
+                  <Tag icon={<DollarOutlined />} color="gold" className="credits-tag">
+                    {app.credits_per_use}{!isMobile && '积分'}
                   </Tag>
                 </Tooltip>
               )}
             </Space>
             
             <Space size="small">
-              {/* 使用次数 */}
+              {/* 使用次数 - v2.3.0 移动端简化 */}
               <Text type="secondary" className="use-count">
-                <StarFilled style={{ color: '#faad14', marginRight: 4 }} />
-                {app.use_count || 0}次
+                <StarFilled style={{ color: '#faad14', marginRight: 2 }} />
+                {app.use_count || 0}
               </Text>
               
               {/* v2.2.0 收藏按钮 */}
@@ -374,6 +380,7 @@ const SmartApps = () => {
           className="search-input"
         />
         
+        {/* v2.3.0 分类筛选添加滚动容器 */}
         <div className="category-filter">
           <Segmented
             options={categoryOptions}
@@ -391,7 +398,7 @@ const SmartApps = () => {
             <Spin size="large" tip="加载应用中..." />
           </div>
         ) : filteredApps.length > 0 ? (
-          <Row gutter={[16, 16]}>
+          <Row gutter={isMobile ? [8, 8] : [12, 12]}>
             {filteredApps.map(renderAppCard)}
           </Row>
         ) : (
