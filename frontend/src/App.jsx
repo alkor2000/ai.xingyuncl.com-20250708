@@ -71,8 +71,11 @@ const LessonDetail = React.lazy(() => import('./pages/teaching/LessonDetail'))
 const LessonEditor = React.lazy(() => import('./pages/teaching/LessonEditor'))
 const LessonViewer = React.lazy(() => import('./pages/teaching/LessonViewer'))
 
-// 智能应用广场 - 懒加载（新增）
+// 智能应用广场 - 懒加载
 const SmartApps = React.lazy(() => import('./pages/smartApps/SmartApps'))
+
+// 知识库模块 - 懒加载（新增）
+const Wiki = React.lazy(() => import('./pages/wiki/Wiki'))
 
 // 布局组件
 import BasicLayout from './layouts/BasicLayout'
@@ -257,7 +260,7 @@ const App = () => {
                         <Route path="/chat" element={<Chat />} />
                         <Route path="/profile" element={<Profile />} />
                         
-                        {/* 智能应用广场路由（新增）*/}
+                        {/* 智能应用广场路由 */}
                         <Route 
                           path="/smart-apps" 
                           element={
@@ -273,6 +276,16 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <KnowledgeBase />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* 知识库模块路由（新增）*/}
+                        <Route 
+                          path="/wiki" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <Wiki />
                             </LazyLoadingWrapper>
                           } 
                         />

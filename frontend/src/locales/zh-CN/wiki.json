@@ -1,0 +1,103 @@
+{
+  "wiki": {
+    "title": "知识库",
+    "subtitle": "管理您的知识文档",
+    "searchPlaceholder": "搜索知识库...",
+    "loading": "加载中...",
+    "empty": "暂无知识库",
+    "noDescription": "暂无描述",
+    "count": "共 {{count}} 条",
+    
+    "scope": {
+      "all": "全部",
+      "personal": "个人",
+      "team": "团队",
+      "global": "全局",
+      "personalDesc": "仅自己可见",
+      "teamDesc": "同组成员可见",
+      "globalDesc": "所有人可见"
+    },
+    
+    "actions": {
+      "create": "新建",
+      "createFirst": "创建第一个知识库",
+      "view": "查看详情",
+      "edit": "编辑",
+      "delete": "删除",
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "saveVersion": "保存版本",
+      "viewHistory": "版本历史",
+      "viewVersion": "查看",
+      "rollback": "回滚",
+      "clearContent": "清空内容",
+      "copyContent": "复制内容"
+    },
+    
+    "createModal": {
+      "title": "新建知识库"
+    },
+    
+    "editDrawer": {
+      "title": "编辑知识库"
+    },
+    
+    "versionDrawer": {
+      "title": "版本历史",
+      "count": "个版本",
+      "empty": "暂无版本历史"
+    },
+    
+    "versionDetail": {
+      "title": "版本详情"
+    },
+    
+    "saveVersionModal": {
+      "title": "保存新版本",
+      "tip": "保存当前内容为新版本，方便后续查看或回滚"
+    },
+    
+    "deleteConfirm": {
+      "title": "确认删除",
+      "content": "删除后无法恢复，确定要删除吗？"
+    },
+    
+    "rollbackConfirm": {
+      "title": "确认回滚？",
+      "content": "回滚后当前内容将被覆盖"
+    },
+    
+    "form": {
+      "title": "标题",
+      "titleRequired": "请输入标题",
+      "titlePlaceholder": "请输入知识库标题",
+      "scope": "范围",
+      "description": "描述",
+      "descriptionPlaceholder": "请输入描述（可选）",
+      "content": "内容",
+      "contentPlaceholder": "请输入内容...",
+      "contentHint": "支持Markdown格式，最多{{max}}字符",
+      "notes": "备注",
+      "notesHint": "（最多10条）",
+      "notePlaceholder": "输入备注内容",
+      "addNote": "添加备注",
+      "links": "相关链接",
+      "linksHint": "（最多10条）",
+      "linkTitle": "链接标题",
+      "linkUrl": "https://...",
+      "addLink": "添加链接",
+      "changeSummary": "版本说明",
+      "changeSummaryPlaceholder": "简要描述此版本的修改内容（可选）"
+    },
+    
+    "meta": {
+      "creator": "创建者",
+      "version": "版本",
+      "updated": "更新"
+    },
+    
+    "version": {
+      "current": "当前"
+    }
+  }
+}

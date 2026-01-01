@@ -1,6 +1,9 @@
 /**
  * 系统模块表单弹窗组件 - 支持系统内置模块和外部模块管理
  * 增强SSO单点登录配置功能
+ * 
+ * 版本：v1.1.0
+ * 更新：2026-01-01 扩展图标选择器，从22个增加到80+个常用图标
  */
 
 import React, { useEffect, useState } from 'react'
@@ -39,31 +42,284 @@ import * as Icons from '@ant-design/icons'
 
 const { TextArea } = Input
 
-// 常用图标列表
+/**
+ * 常用图标列表 - v1.1.0 扩展版
+ * 分类：通用、数据、文件、用户、设备、编辑、媒体、品牌、其他
+ */
 const commonIcons = [
+  // ===== 通用图标 =====
   'AppstoreOutlined',
-  'ApiOutlined', 
-  'CloudOutlined',
-  'DatabaseOutlined',
-  'FileTextOutlined',
-  'FolderOutlined',
-  'GlobalOutlined',
+  'AppstoreAddOutlined',
   'HomeOutlined',
-  'LinkOutlined',
-  'PictureOutlined',
-  'ProjectOutlined',
-  'RocketOutlined',
   'SettingOutlined',
-  'TeamOutlined',
   'ToolOutlined',
-  'UserOutlined',
-  'VideoCameraOutlined',
+  'GlobalOutlined',
+  'ApiOutlined',
+  'CloudOutlined',
+  'CloudServerOutlined',
+  'CloudUploadOutlined',
+  'CloudDownloadOutlined',
+  'DatabaseOutlined',
+  'ServerOutlined',
+  'ClusterOutlined',
+  'DeploymentUnitOutlined',
+  'ApartmentOutlined',
+  'BlockOutlined',
+  'BuildOutlined',
+  'ExperimentOutlined',
+  'FireOutlined',
+  'ThunderboltOutlined',
+  'RocketOutlined',
+  'SendOutlined',
+  'AimOutlined',
+  'FlagOutlined',
+  'PushpinOutlined',
+  'TagOutlined',
+  'TagsOutlined',
+  'BellOutlined',
+  'AlertOutlined',
+  'BulbOutlined',
+  'InfoCircleOutlined',
+  'QuestionCircleOutlined',
+  'CheckCircleOutlined',
+  'CloseCircleOutlined',
+  'ExclamationCircleOutlined',
+  'SafetyCertificateOutlined',
+  'SecurityScanOutlined',
+  'AuditOutlined',
+  'ShieldOutlined',
+  
+  // ===== 数据分析图标 =====
   'BarChartOutlined',
-  'CodeOutlined',
+  'LineChartOutlined',
+  'PieChartOutlined',
+  'AreaChartOutlined',
+  'DotChartOutlined',
+  'RadarChartOutlined',
+  'HeatMapOutlined',
+  'FundOutlined',
+  'StockOutlined',
+  'RiseOutlined',
+  'FallOutlined',
   'DashboardOutlined',
+  'ConsoleSqlOutlined',
+  'MonitorOutlined',
+  'DesktopOutlined',
+  
+  // ===== 文件文档图标 =====
+  'FileOutlined',
+  'FileTextOutlined',
+  'FileImageOutlined',
+  'FilePdfOutlined',
+  'FileExcelOutlined',
+  'FileWordOutlined',
+  'FilePptOutlined',
+  'FileZipOutlined',
+  'FileMarkdownOutlined',
+  'FileAddOutlined',
+  'FileSearchOutlined',
+  'FileDoneOutlined',
+  'FileProtectOutlined',
+  'FileSyncOutlined',
+  'FolderOutlined',
+  'FolderOpenOutlined',
+  'FolderAddOutlined',
+  'FolderViewOutlined',
+  'ContainerOutlined',
+  'InboxOutlined',
+  'BookOutlined',
+  'ReadOutlined',
+  'ProfileOutlined',
+  'SnippetsOutlined',
+  'SolutionOutlined',
+  'FormOutlined',
+  'CopyOutlined',
+  'DiffOutlined',
+  
+  // ===== 用户组织图标 =====
+  'UserOutlined',
+  'UserAddOutlined',
+  'UserDeleteOutlined',
+  'UsergroupAddOutlined',
+  'UsergroupDeleteOutlined',
+  'TeamOutlined',
+  'IdcardOutlined',
+  'ContactsOutlined',
+  'SkinOutlined',
+  'SmileOutlined',
+  'CrownOutlined',
+  'TrophyOutlined',
+  
+  // ===== 编辑工具图标 =====
+  'EditOutlined',
+  'FormOutlined',
+  'HighlightOutlined',
+  'ScissorOutlined',
+  'DeleteOutlined',
+  'AlignCenterOutlined',
+  'AlignLeftOutlined',
+  'AlignRightOutlined',
+  'BoldOutlined',
+  'ItalicOutlined',
+  'UnderlineOutlined',
+  'StrikethroughOutlined',
+  'FontSizeOutlined',
+  'FontColorsOutlined',
+  'BgColorsOutlined',
+  'OrderedListOutlined',
+  'UnorderedListOutlined',
+  
+  // ===== 媒体图标 =====
+  'PictureOutlined',
+  'CameraOutlined',
+  'VideoCameraOutlined',
+  'VideoCameraAddOutlined',
+  'PlayCircleOutlined',
+  'PlaySquareOutlined',
+  'PauseCircleOutlined',
+  'SoundOutlined',
+  'AudioOutlined',
+  'AudioMutedOutlined',
+  'NotificationOutlined',
+  'CustomerServiceOutlined',
+  'EyeOutlined',
+  'EyeInvisibleOutlined',
+  
+  // ===== 交通出行图标 =====
+  'CarOutlined',
+  'RocketOutlined',
+  'EnvironmentOutlined',
+  'CompassOutlined',
+  'GlobalOutlined',
+  'AimOutlined',
+  
+  // ===== 电商购物图标 =====
+  'ShoppingOutlined',
+  'ShoppingCartOutlined',
+  'ShopOutlined',
+  'GiftOutlined',
+  'DollarOutlined',
+  'EuroOutlined',
+  'PayCircleOutlined',
+  'WalletOutlined',
+  'BankOutlined',
+  'MoneyCollectOutlined',
+  'AccountBookOutlined',
+  'InsuranceOutlined',
+  'TransactionOutlined',
+  'CalculatorOutlined',
+  'PropertySafetyOutlined',
+  'RedEnvelopeOutlined',
+  
+  // ===== 代码开发图标 =====
+  'CodeOutlined',
+  'CodeSandboxOutlined',
+  'CodepenOutlined',
+  'BranchesOutlined',
+  'MergeCellsOutlined',
+  'PullRequestOutlined',
+  'ForkOutlined',
+  'BugOutlined',
+  'Html5Outlined',
+  'ConsoleSqlOutlined',
+  'FunctionOutlined',
+  
+  // ===== 通信社交图标 =====
   'MessageOutlined',
-  'AppstoreAddOutlined'
+  'CommentOutlined',
+  'MailOutlined',
+  'PhoneOutlined',
+  'MobileOutlined',
+  'TabletOutlined',
+  'LaptopOutlined',
+  'WifiOutlined',
+  'LinkOutlined',
+  'DisconnectOutlined',
+  'ShareAltOutlined',
+  'LikeOutlined',
+  'DislikeOutlined',
+  'HeartOutlined',
+  'StarOutlined',
+  'TrophyOutlined',
+  
+  // ===== 时间日期图标 =====
+  'CalendarOutlined',
+  'ScheduleOutlined',
+  'FieldTimeOutlined',
+  'ClockCircleOutlined',
+  'HistoryOutlined',
+  'HourglassOutlined',
+  
+  // ===== 其他常用图标 =====
+  'SearchOutlined',
+  'ZoomInOutlined',
+  'ZoomOutOutlined',
+  'FilterOutlined',
+  'SortAscendingOutlined',
+  'SortDescendingOutlined',
+  'UploadOutlined',
+  'DownloadOutlined',
+  'ImportOutlined',
+  'ExportOutlined',
+  'SyncOutlined',
+  'ReloadOutlined',
+  'UndoOutlined',
+  'RedoOutlined',
+  'SaveOutlined',
+  'PrinterOutlined',
+  'ScanOutlined',
+  'QrcodeOutlined',
+  'BarcodeOutlined',
+  'FullscreenOutlined',
+  'FullscreenExitOutlined',
+  'ExpandOutlined',
+  'CompressOutlined',
+  'LockOutlined',
+  'UnlockOutlined',
+  'KeyOutlined',
+  'LoginOutlined',
+  'LogoutOutlined',
+  'SettingOutlined',
+  'ControlOutlined',
+  'SliderOutlined',
+  'MenuOutlined',
+  'MenuFoldOutlined',
+  'MenuUnfoldOutlined',
+  'MoreOutlined',
+  'EllipsisOutlined',
+  'PlusOutlined',
+  'MinusOutlined',
+  'CloseOutlined',
+  'CheckOutlined',
+  'QuestionOutlined',
+  'InfoOutlined',
+  'WarningOutlined',
+  'StopOutlined',
+  'PauseOutlined',
+  'PoweroffOutlined',
+  'ProjectOutlined',
+  'PartitionOutlined',
+  'SisternodeOutlined',
+  'SubnodeOutlined',
+  'NodeIndexOutlined',
+  'NodeExpandOutlined',
+  'NodeCollapseOutlined',
+  'GatewayOutlined',
+  'RobotOutlined',
+  'MacCommandOutlined',
+  'WindowsOutlined',
+  'AppleOutlined',
+  'AndroidOutlined',
+  'ChromeOutlined',
+  'GithubOutlined',
+  'GitlabOutlined',
+  'CopyrightOutlined',
+  'TrademarkOutlined',
+  'TrademarkCircleOutlined'
 ]
+
+// 去重并排序（以防万一有重复）
+const uniqueIcons = [...new Set(commonIcons)].sort()
 
 // JWT算法选项
 const jwtAlgorithms = [
@@ -96,6 +352,9 @@ const availableUserFields = [
   { field: 'group_name', label: '组名称', checked: false, description: '用户所属组名称' }
 ]
 
+/**
+ * 系统模块表单弹窗组件
+ */
 const SystemModuleFormModal = ({
   visible,
   editingModule,
@@ -167,7 +426,7 @@ const SystemModuleFormModal = ({
       if (!isCoreModule) {
         submitData.allowed_groups = values.allowed_groups
         submitData.is_active = values.is_active
-        submitData.sort_order = values.sort_order  // ✅ 修复：允许修改排序
+        submitData.sort_order = values.sort_order
       }
     } else {
       // 外部模块可以修改所有字段
@@ -360,6 +619,7 @@ const SystemModuleFormModal = ({
               </Form.Item>
             </Col>
             <Col span={8}>
+              {/* v1.1.0 扩展图标选择器，支持搜索和更多图标 */}
               <Form.Item
                 name="menu_icon"
                 label="菜单图标"
@@ -367,14 +627,30 @@ const SystemModuleFormModal = ({
               >
                 <Select
                   showSearch
-                  placeholder="选择图标"
+                  placeholder="搜索或选择图标"
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    option?.value?.toLowerCase().includes(input.toLowerCase())
+                  }
+                  listHeight={400}
+                  dropdownStyle={{ maxHeight: 400 }}
+                  optionLabelProp="label"
                 >
-                  {commonIcons.map(iconName => {
+                  {uniqueIcons.map(iconName => {
                     const IconComponent = Icons[iconName]
                     return (
-                      <Select.Option key={iconName} value={iconName}>
+                      <Select.Option 
+                        key={iconName} 
+                        value={iconName}
+                        label={
+                          <Space>
+                            {IconComponent && <IconComponent />}
+                            <span>{iconName}</span>
+                          </Space>
+                        }
+                      >
                         <Space>
-                          {IconComponent && <IconComponent />}
+                          {IconComponent && <IconComponent style={{ fontSize: 16 }} />}
                           <span>{iconName}</span>
                         </Space>
                       </Select.Option>
@@ -406,7 +682,7 @@ const SystemModuleFormModal = ({
                 <InputNumber 
                   min={0} 
                   style={{ width: '100%' }} 
-                  disabled={isCoreModule}  // ✅ 修复：只有核心模块不能改，普通系统模块可以改
+                  disabled={isCoreModule}
                   placeholder={isCoreModule ? "系统固定" : "输入排序数字"}
                 />
               </Form.Item>
