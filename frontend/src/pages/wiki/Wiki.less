@@ -1,19 +1,21 @@
 /**
- * 知识库页面样式 v2.0
- * iOS简洁科技风
+ * 知识库页面样式 v3.1
+ * iOS毛玻璃科技风 - 修复版
  * 更新：2026-01-02
  */
 
-// 变量定义
 @primary-color: #007AFF;
 @success-color: #34C759;
 @warning-color: #FF9500;
 @danger-color: #FF3B30;
-@bg-gradient: linear-gradient(180deg, #f8fafc 0%, #e8f4f8 100%);
-@card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-@card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+@bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #e4ecf7 100%);
+@glass-bg: rgba(255, 255, 255, 0.72);
+@glass-blur: saturate(180%) blur(20px);
+@card-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+@card-shadow-hover: 0 12px 32px rgba(0, 0, 0, 0.12);
 @border-radius: 16px;
 @border-radius-sm: 12px;
+@border-radius-xs: 8px;
 
 .wiki-page {
   min-height: 100vh;
@@ -29,8 +31,10 @@
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      background: #fff;
+      background: @glass-bg;
+      backdrop-filter: @glass-blur;
       border-radius: @border-radius;
+      border: 1px solid rgba(255, 255, 255, 0.5);
       box-shadow: @card-shadow;
     }
 
@@ -40,16 +44,17 @@
       gap: 16px;
 
       .wiki-header-icon-wrapper {
-        width: 48px;
-        height: 48px;
+        width: 52px;
+        height: 52px;
         display: flex;
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, @primary-color 0%, #5856D6 100%);
         border-radius: @border-radius-sm;
+        box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
 
         .wiki-header-icon {
-          font-size: 24px;
+          font-size: 26px;
           color: #fff;
         }
       }
@@ -57,14 +62,14 @@
       .wiki-header-text {
         .wiki-header-title {
           margin: 0;
-          font-size: 22px;
-          font-weight: 600;
+          font-size: 24px;
+          font-weight: 700;
           color: #1a1a1a;
         }
 
         .wiki-header-subtitle {
           margin: 4px 0 0;
-          font-size: 13px;
+          font-size: 14px;
           color: #8e8e93;
         }
       }
@@ -76,18 +81,26 @@
       gap: 12px;
 
       .wiki-search-input {
-        width: 260px;
-        border-radius: 10px;
+        width: 280px;
         
-        .ant-input {
-          border-radius: 10px;
+        .ant-input-affix-wrapper {
+          border-radius: @border-radius-xs;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          background: rgba(255, 255, 255, 0.8);
+          
+          &:hover, &:focus, &.ant-input-affix-wrapper-focused {
+            border-color: @primary-color;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+          }
         }
       }
 
       .wiki-create-btn {
-        border-radius: 10px;
-        height: 36px;
-        font-weight: 500;
+        border-radius: @border-radius-xs;
+        height: 40px;
+        padding: 0 20px;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
       }
     }
   }
@@ -98,22 +111,23 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
-    padding: 12px 20px;
-    background: #fff;
+    padding: 14px 20px;
+    background: @glass-bg;
+    backdrop-filter: @glass-blur;
     border-radius: @border-radius-sm;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.5);
 
     .wiki-scope-filter {
-      background: #f5f5f7;
-      border-radius: 10px;
-      padding: 4px;
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: @border-radius-xs;
+      padding: 3px;
 
       .ant-segmented-item {
-        border-radius: 8px;
+        border-radius: 6px;
         
         &-selected {
           background: #fff;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
       }
     }
@@ -121,25 +135,23 @@
     .wiki-count {
       font-size: 13px;
       color: #8e8e93;
+      font-weight: 500;
     }
   }
 
   // ==================== 内容区域 ====================
   .wiki-content-section {
-    .wiki-loading,
-    .wiki-empty {
+    .wiki-loading, .wiki-empty {
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       min-height: 400px;
-      background: #fff;
+      background: @glass-bg;
+      backdrop-filter: @glass-blur;
       border-radius: @border-radius;
 
-      p {
-        margin-top: 16px;
-        color: #8e8e93;
-      }
+      p { margin-top: 16px; color: #8e8e93; }
     }
   }
 
@@ -154,7 +166,7 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      transform: translateY(-4px);
+      transform: translateY(-6px);
       box-shadow: @card-shadow-hover;
     }
 
@@ -164,22 +176,17 @@
       &::before {
         content: '';
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
+        top: 0; left: 0; right: 0;
         height: 3px;
         background: linear-gradient(90deg, @warning-color, #FFCC00);
       }
     }
 
-    .ant-card-body {
-      padding: 0;
-    }
+    .ant-card-body { padding: 0; }
 
     .wiki-card-pin-badge {
       position: absolute;
-      top: 12px;
-      right: 12px;
+      top: 14px; right: 14px;
       color: @warning-color;
       font-size: 16px;
       z-index: 2;
@@ -188,22 +195,18 @@
     .wiki-card-scope-badge {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
+      gap: 5px;
+      padding: 5px 12px;
       margin: 16px 16px 0;
       border-radius: 20px;
       font-size: 11px;
-      font-weight: 500;
+      font-weight: 600;
       color: #fff;
 
-      .anticon {
-        font-size: 10px;
-      }
+      .anticon { font-size: 11px; }
     }
 
-    .wiki-card-body {
-      padding: 12px 16px 16px;
-    }
+    .wiki-card-body { padding: 14px 16px 16px; }
 
     .wiki-card-header {
       display: flex;
@@ -213,7 +216,7 @@
 
       .wiki-card-title {
         flex: 1;
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 600;
         color: #1a1a1a;
         line-height: 1.4;
@@ -221,14 +224,13 @@
 
       .wiki-card-menu-btn {
         flex-shrink: 0;
-        width: 28px;
-        height: 28px;
+        width: 30px; height: 30px;
         color: #c7c7cc;
         
         &:hover {
           color: @primary-color;
-          background: rgba(0, 122, 255, 0.1);
-          border-radius: 6px;
+          background: rgba(0, 122, 255, 0.08);
+          border-radius: 8px;
         }
       }
     }
@@ -236,9 +238,9 @@
     .wiki-card-description {
       font-size: 13px;
       color: #8e8e93;
-      margin-bottom: 12px;
-      min-height: 38px;
-      line-height: 1.5;
+      margin-bottom: 14px;
+      min-height: 40px;
+      line-height: 1.6;
     }
 
     .wiki-card-footer {
@@ -246,23 +248,18 @@
       justify-content: space-between;
       align-items: center;
       padding-top: 12px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid #f5f5f5;
 
       .wiki-card-meta {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
         font-size: 12px;
         color: #8e8e93;
-
-        .anticon {
-          font-size: 12px;
-        }
+        font-weight: 500;
       }
 
-      .wiki-card-time {
-        font-size: 12px;
-      }
+      .wiki-card-time { font-size: 12px; }
     }
   }
 
@@ -270,427 +267,308 @@
   .wiki-modal-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     
-    .anticon {
-      color: @primary-color;
+    .anticon { color: @primary-color; font-size: 18px; }
+  }
+
+  // ==================== 编辑抽屉 ====================
+  .wiki-edit-drawer {
+    .ant-drawer-content { background: #f8f9fa; }
+    .ant-drawer-body {
+      padding: 0;
+      background: linear-gradient(180deg, #f0f2f5 0%, #e8ecf0 100%);
     }
   }
 
-  // ==================== 编辑抽屉样式 ====================
-  .wiki-edit-drawer {
-    .ant-drawer-body {
-      padding: 0;
-    }
+  .wiki-drawer-mask {
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(4px);
   }
 
   .wiki-edit-container {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 100vh;
   }
 
   .wiki-edit-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background: #fff;
-    border-bottom: 1px solid #f0f0f0;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 100;
+    padding: 16px 24px 20px;
+    background: @glass-bg;
+    backdrop-filter: @glass-blur;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 
-    .wiki-edit-header-left {
+    .wiki-edit-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+
+      .wiki-close-btn {
+        width: 36px; height: 36px;
+        border-radius: 18px;
+        color: #666;
+        background: rgba(0, 0, 0, 0.05);
+        border: none;
+        
+        &:hover { background: rgba(0, 0, 0, 0.1); color: #333; }
+      }
+
+      .wiki-edit-actions {
+        display: flex;
+        gap: 10px;
+
+        .ant-btn { border-radius: @border-radius-xs; }
+      }
+    }
+
+    .wiki-edit-title-row {
       display: flex;
       align-items: center;
       gap: 12px;
-      flex: 1;
-      overflow: hidden;
+      margin-bottom: 16px;
 
-      .wiki-close-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        color: #8e8e93;
-        
-        &:hover {
-          background: #f5f5f7;
-          color: #1a1a1a;
-        }
-      }
-
-      .wiki-edit-title-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+      .wiki-edit-main-title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        color: #1a1a1a;
+        max-width: 450px;
         overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-        .wiki-edit-title {
-          font-size: 17px;
-          max-width: 300px;
-        }
+      .wiki-scope-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid;
+        
+        .anticon { font-size: 11px; }
       }
     }
 
-    .wiki-edit-header-right {
+    .wiki-edit-meta-row {
       display: flex;
-      gap: 8px;
-
-      .ant-btn {
-        border-radius: 8px;
-      }
-    }
-  }
-
-  .wiki-edit-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 20px;
-    background: #f8f9fa;
-    font-size: 13px;
-    color: #8e8e93;
-
-    .wiki-edit-meta-left {
-      display: flex;
+      justify-content: space-between;
       align-items: center;
 
-      strong {
-        color: #1a1a1a;
+      .wiki-meta-info {
+        display: flex;
+        align-items: center;
+        font-size: 13px;
+        color: #8e8e93;
+        gap: 6px;
+
+        .anticon { font-size: 12px; }
+        .wiki-meta-dot { color: #d1d1d6; }
       }
 
-      .wiki-meta-divider {
-        margin: 0 12px;
-        color: #d1d1d6;
-      }
-    }
+      .wiki-version-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: @border-radius-xs;
+        border: 1px solid #e0e0e0;
+        background: #fff;
+        font-size: 13px;
+        color: #333;
+        cursor: pointer;
 
-    .wiki-version-link {
-      padding: 0;
-      font-size: 13px;
+        &:hover {
+          border-color: @primary-color;
+          color: @primary-color;
+          box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
+        }
+
+        .anticon:first-child { color: @primary-color; }
+        .wiki-version-total { color: #8e8e93; font-size: 12px; }
+      }
     }
   }
 
   .wiki-edit-body {
     flex: 1;
-    padding: 20px;
+    padding: 24px;
     overflow-y: auto;
   }
 
   // ==================== 表单样式 ====================
   .wiki-form {
     .ant-form-item-label > label {
-      font-weight: 500;
+      font-weight: 600;
       color: #1a1a1a;
+      font-size: 14px;
     }
 
-    .ant-input,
-    .ant-input-affix-wrapper,
-    .ant-select-selector {
-      border-radius: 10px;
-    }
-
-    .ant-input-textarea-show-count::after {
-      font-size: 11px;
-      color: #8e8e93;
+    .ant-input, .ant-input-affix-wrapper, .ant-select-selector {
+      border-radius: @border-radius-xs;
     }
   }
 
-  // 内容编辑器
-  .wiki-content-label {
+  // ==================== 内容编辑器标签行 v3.1新增 ====================
+  .wiki-content-label-row {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    width: 100%;
 
-    .wiki-content-hint {
-      font-size: 12px;
-      font-weight: 400;
-      color: #8e8e93;
-    }
-  }
+    .wiki-content-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
 
-  .wiki-content-editor-wrapper {
-    border: 1px solid #d9d9d9;
-    border-radius: 10px;
-    overflow: hidden;
-    transition: border-color 0.3s;
-
-    &:focus-within {
-      border-color: @primary-color;
-      box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+      .wiki-content-hint {
+        font-size: 12px;
+        font-weight: 400;
+        color: #8e8e93;
+      }
     }
 
     .wiki-content-toolbar {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 8px 12px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #f0f0f0;
+      gap: 4px;
 
       .ant-btn-text {
         color: #8e8e93;
+        border-radius: 6px;
         
-        &:hover {
-          color: @primary-color;
-          background: rgba(0, 122, 255, 0.1);
-        }
+        &:hover { color: @primary-color; background: rgba(0, 122, 255, 0.08); }
       }
 
       .wiki-content-count {
         font-size: 12px;
         color: #8e8e93;
-      }
-    }
-
-    .wiki-content-textarea {
-      border: none;
-      border-radius: 0;
-      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
-      font-size: 13px;
-      line-height: 1.7;
-      resize: none;
-
-      &:focus {
-        box-shadow: none;
+        font-weight: 500;
+        font-family: 'SF Mono', Monaco, monospace;
+        margin-left: 8px;
       }
     }
   }
 
-  // 列表项
-  .wiki-section-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  // ==================== 内容文本框样式 ====================
+  .wiki-content-textarea {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    border-radius: @border-radius-sm !important;
+
+    &:focus {
+      border-color: @primary-color;
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    }
   }
 
   .wiki-list-container {
-    .wiki-list-item,
-    .wiki-link-item {
+    .wiki-list-item, .wiki-link-item {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 10px;
+      margin-bottom: 10px;
 
       .wiki-list-index {
-        width: 24px;
-        height: 24px;
+        width: 26px; height: 26px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #f5f5f7;
-        border-radius: 6px;
+        background: linear-gradient(135deg, #f0f2f5 0%, #e8ecf0 100%);
+        border-radius: 8px;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 600;
         color: #8e8e93;
         flex-shrink: 0;
       }
 
-      .ant-input {
-        flex: 1;
-      }
-
-      .wiki-list-delete {
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-      }
+      .ant-input { flex: 1; }
+      .wiki-list-delete { flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; }
     }
 
     .wiki-list-add {
       width: 100%;
-      border-radius: 10px;
+      border-radius: @border-radius-xs;
       border-style: dashed;
+      height: 40px;
     }
   }
 
-  // ==================== 版本历史抽屉 ====================
-  .wiki-version-drawer-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    .anticon {
-      color: @primary-color;
-    }
-  }
-
-  .wiki-version-list {
-    .wiki-version-card {
-      padding: 14px 16px;
-      margin-bottom: 12px;
-      background: #fff;
-      border: 1px solid #f0f0f0;
-      border-radius: @border-radius-sm;
-      transition: all 0.2s;
-
-      &:hover {
-        border-color: @primary-color;
-        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
-      }
-
-      &.wiki-version-current {
-        background: linear-gradient(135deg, #f0f9ff 0%, #fff 100%);
-        border-color: @primary-color;
-      }
-
-      .wiki-version-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-
-        .wiki-version-number {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-
-          .wiki-version-badge {
-            font-weight: 600;
-            color: @primary-color;
-          }
-        }
-
-        .wiki-version-time {
-          font-size: 12px;
-        }
-      }
-
-      .wiki-version-card-body {
-        .wiki-version-title {
-          display: block;
-          font-size: 14px;
-          color: #1a1a1a;
-          margin-bottom: 4px;
-        }
-
-        .wiki-version-summary {
-          display: block;
-          font-size: 12px;
-          font-style: italic;
-          margin-bottom: 4px;
-        }
-
-        .wiki-version-author {
-          display: block;
-          font-size: 12px;
-        }
-      }
-
-      .wiki-version-card-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px dashed #f0f0f0;
-      }
-    }
-  }
-
-  // ==================== 版本详情弹窗 ====================
-  .wiki-version-detail {
-    .wiki-version-detail-section {
-      margin-bottom: 20px;
-
-      label {
-        display: block;
-        font-size: 13px;
-        font-weight: 500;
-        color: #8e8e93;
-        margin-bottom: 8px;
-      }
-
-      .wiki-version-detail-value {
-        padding: 12px;
-        background: #f8f9fa;
-        border-radius: 10px;
-        font-size: 14px;
-        color: #1a1a1a;
-      }
-
-      .wiki-version-detail-content {
-        max-height: 300px;
-        padding: 12px;
-        background: #f8f9fa;
-        border-radius: 10px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-family: 'SF Mono', monospace;
-        font-size: 13px;
-        line-height: 1.6;
-      }
-
-      .wiki-version-detail-list {
-        margin: 0;
-        padding: 12px 12px 12px 28px;
-        background: #f8f9fa;
-        border-radius: 10px;
-
-        li {
-          margin-bottom: 6px;
-          
-          &:last-child {
-            margin-bottom: 0;
-          }
-
-          a {
-            color: @primary-color;
-          }
-        }
-      }
-    }
-  }
-
-  // ==================== 保存版本弹窗 ====================
-  .wiki-save-version-form {
-    .wiki-save-version-tip {
-      margin-bottom: 16px;
-      padding: 12px;
-      background: #f0f9ff;
-      border-radius: 10px;
-      font-size: 13px;
-      color: #1a1a1a;
-    }
-
-    .ant-input {
-      border-radius: 10px;
-    }
-  }
-
-  // ==================== 通用抽屉加载 ====================
   .wiki-drawer-loading {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 200px;
+    min-height: 400px;
   }
 }
 
-// ==================== 全局弹窗样式覆盖 ====================
+// ==================== 版本下拉菜单 ====================
+.wiki-version-dropdown {
+  .ant-dropdown-menu {
+    padding: 8px;
+    border-radius: @border-radius-sm;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    max-height: 360px;
+    overflow-y: auto;
+
+    .ant-dropdown-menu-item {
+      padding: 0;
+      border-radius: @border-radius-xs;
+      
+      &:hover { background: rgba(0, 122, 255, 0.06); }
+    }
+  }
+}
+
+.wiki-version-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+
+  .wiki-version-num {
+    font-weight: 700;
+    color: @primary-color;
+    font-size: 13px;
+    min-width: 32px;
+  }
+
+  .wiki-version-user {
+    font-size: 13px;
+    color: #333;
+  }
+
+  .wiki-version-time {
+    font-size: 12px;
+    color: #8e8e93;
+    margin-left: auto;
+  }
+
+  .ant-tag {
+    margin-left: 6px;
+    margin-right: 0;
+  }
+}
+
+// ==================== 全局弹窗 ====================
 .wiki-modal {
-  .ant-modal-content {
-    border-radius: @border-radius;
-    overflow: hidden;
-  }
-
-  .ant-modal-header {
-    border-bottom: none;
-    padding: 20px 24px 12px;
-  }
-
-  .ant-modal-body {
-    padding: 12px 24px 24px;
-  }
-
+  .ant-modal-content { border-radius: @border-radius; overflow: hidden; }
+  .ant-modal-header { border-bottom: none; padding: 24px 24px 12px; }
+  .ant-modal-body { padding: 12px 24px 24px; }
   .ant-modal-footer {
     border-top: none;
-    padding: 12px 24px 20px;
-
-    .ant-btn {
-      border-radius: 8px;
-    }
+    padding: 12px 24px 24px;
+    .ant-btn { border-radius: @border-radius-xs; height: 36px; }
   }
 }
 
@@ -710,40 +588,54 @@
         width: 100%;
         flex-direction: column;
 
-        .wiki-search-input {
-          width: 100%;
-        }
-
-        .wiki-create-btn {
-          width: 100%;
-        }
+        .wiki-search-input, .wiki-create-btn { width: 100%; }
       }
     }
 
     .wiki-filter-section {
       flex-direction: column;
       gap: 12px;
-      align-items: flex-start;
+      align-items: stretch;
+      
+      .wiki-scope-filter { width: 100%; }
     }
 
     .wiki-edit-header {
-      flex-direction: column;
-      gap: 12px;
-      align-items: flex-start;
+      padding: 14px 16px 16px;
 
-      .wiki-edit-header-right {
-        width: 100%;
-        
-        .ant-btn {
-          flex: 1;
+      .wiki-edit-header-top {
+        .wiki-edit-actions {
+          flex-wrap: wrap;
+          .ant-btn { flex: 1; min-width: 70px; font-size: 12px; padding: 4px 8px; }
         }
+      }
+
+      .wiki-edit-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+
+        .wiki-edit-main-title { font-size: 18px; max-width: 100%; }
+      }
+
+      .wiki-edit-meta-row {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
       }
     }
 
-    .wiki-edit-meta {
+    .wiki-edit-body { padding: 16px; }
+
+    .wiki-link-item {
+      flex-wrap: wrap;
+      .ant-input { width: 100% !important; flex: none !important; }
+    }
+
+    .wiki-content-label-row {
       flex-direction: column;
-      gap: 8px;
       align-items: flex-start;
+      gap: 8px;
     }
   }
 }

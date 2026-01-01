@@ -1,9 +1,9 @@
 /**
- * 知识库控制器
+ * 知识库控制器 v2.1
  * 
  * 功能：
  * - 知识库CRUD操作
- * - 版本管理（保存、历史、回滚）
+ * - 版本管理（创建、历史、删除、回滚）
  * - 编辑者管理（添加、移除）
  * - 权限控制（三级范围：personal/team/global）
  * 
@@ -12,7 +12,7 @@
  * - team: 同组成员可以查看，组管理员和指定编辑者可以编辑
  * - global: 所有人可以查看，只有超级管理员可以编辑
  * 
- * 创建时间：2026-01-02
+ * 更新：2026-01-02 v2.1 修复updateItem返回can_edit丢失问题
  */
 
 const WikiItem = require('../models/WikiItem');
@@ -120,6 +120,8 @@ const createItem = async (req, res) => {
     }
     
     const item = await WikiItem.create(data, userId);
+    // 创建者肯定有编辑权限
+    item.can_edit = true;
     
     return ResponseHelper.success(res, item.toJSON(), '创建知识库成功', 201);
   } catch (error) {
@@ -132,7 +134,8 @@ const createItem = async (req, res) => {
 };
 
 /**
- * 更新知识库
+ * 更新知识库（覆盖保存，不创建新版本）
+ * v2.1修复：返回数据时包含正确的can_edit
  */
 const updateItem = async (req, res) => {
   try {
@@ -158,15 +161,21 @@ const updateItem = async (req, res) => {
     delete data.creator_id;
     delete data.group_id;
     
-    const updatedItem = await WikiItem.update(id, data, userId);
+    // 执行更新
+    await WikiItem.update(id, data, userId);
     
-    return ResponseHelper.success(res, updatedItem.toJSON(), '更新知识库成功');
+    // 重新获取完整详情（包含用户信息以计算can_edit）
+    const fullItem = await WikiItem.findById(id, userId, groupId, userRole);
+    // 使用之前检查权限得到的canEdit（更准确）
+    fullItem.can_edit = canEdit;
+    
+    return ResponseHelper.success(res, fullItem.toJSON(), '保存成功');
   } catch (error) {
     logger.error('更新知识库失败:', error);
     if (error.name === 'ValidationError') {
       return ResponseHelper.validationError(res, error.message);
     }
-    return ResponseHelper.error(res, error.message || '更新知识库失败');
+    return ResponseHelper.error(res, error.message || '保存失败');
   }
 };
 
@@ -204,7 +213,7 @@ const deleteItem = async (req, res) => {
 };
 
 /**
- * 保存新版本
+ * 创建新版本
  */
 const saveVersion = async (req, res) => {
   try {
@@ -236,10 +245,10 @@ const saveVersion = async (req, res) => {
       links: fullItem.links
     }, userId, change_summary);
     
-    return ResponseHelper.success(res, result, '保存版本成功');
+    return ResponseHelper.success(res, result, '新版本创建成功');
   } catch (error) {
-    logger.error('保存版本失败:', error);
-    return ResponseHelper.error(res, error.message || '保存版本失败');
+    logger.error('创建版本失败:', error);
+    return ResponseHelper.error(res, error.message || '创建版本失败');
   }
 };
 
@@ -304,6 +313,40 @@ const getVersionDetail = async (req, res) => {
 };
 
 /**
+ * 删除指定版本
+ */
+const deleteVersion = async (req, res) => {
+  try {
+    const { id, versionId } = req.params;
+    const userId = req.user.id;
+    const groupId = req.user.group_id;
+    const userRole = req.user.role;
+    
+    // 检查编辑权限
+    const { canEdit, item } = await WikiItem.checkAccess(id, userId, groupId, userRole);
+    
+    if (!item) {
+      return ResponseHelper.notFound(res, '知识库不存在');
+    }
+    
+    if (!canEdit) {
+      return ResponseHelper.forbidden(res, '无权编辑此知识库');
+    }
+    
+    // 调用模型层删除版本
+    const result = await WikiItem.deleteVersion(parseInt(id), parseInt(versionId));
+    
+    return ResponseHelper.success(res, result, '版本删除成功');
+  } catch (error) {
+    logger.error('删除版本失败:', error);
+    if (error.name === 'ValidationError') {
+      return ResponseHelper.validationError(res, error.message);
+    }
+    return ResponseHelper.error(res, error.message || '删除版本失败');
+  }
+};
+
+/**
  * 回滚到指定版本
  */
 const rollbackToVersion = async (req, res) => {
@@ -325,6 +368,7 @@ const rollbackToVersion = async (req, res) => {
     }
     
     const result = await WikiItem.rollbackToVersion(parseInt(id), parseInt(versionId), userId);
+    result.can_edit = canEdit;
     
     return ResponseHelper.success(res, result.toJSON(), '回滚版本成功');
   } catch (error) {
@@ -358,6 +402,7 @@ const togglePin = async (req, res) => {
     }
     
     const result = await WikiItem.togglePin(id);
+    result.can_edit = canEdit;
     
     return ResponseHelper.success(res, result.toJSON(), '切换置顶状态成功');
   } catch (error) {
@@ -495,6 +540,7 @@ module.exports = {
   saveVersion,
   getVersions,
   getVersionDetail,
+  deleteVersion,
   rollbackToVersion,
   togglePin,
   getEditors,

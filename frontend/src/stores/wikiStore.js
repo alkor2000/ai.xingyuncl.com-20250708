@@ -1,13 +1,14 @@
 /**
- * 知识库状态管理
+ * 知识库状态管理 v2.1
  * 
  * 功能：
  * - 知识库列表管理（按范围筛选）
  * - 知识库CRUD操作
- * - 版本管理（保存、历史、回滚）
+ * - 版本管理（创建、切换、删除）
  * - 编辑者管理
  * 
- * 创建时间：2026-01-02
+ * 更新：2026-01-02 v2.1 
+ *   - 修复updateItem后can_edit丢失问题
  */
 
 import { create } from 'zustand'
@@ -23,6 +24,8 @@ const useWikiStore = create((set, get) => ({
   currentItem: null,
   // 版本历史
   versions: [],
+  // 当前选中的版本号（用于版本切换）
+  selectedVersionNumber: null,
   // 编辑者列表
   editors: [],
   // 加载状态
@@ -40,7 +43,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 获取知识库列表
-   * @param {string} scope - 筛选范围：personal/team/global/null(全部)
    */
   getItems: async (scope = null) => {
     set({ loading: true, error: null, currentScope: scope })
@@ -65,7 +67,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 获取知识库详情
-   * @param {number} id - 知识库ID
    */
   getItem: async (id) => {
     set({ detailLoading: true, error: null })
@@ -74,6 +75,7 @@ const useWikiStore = create((set, get) => ({
       const item = response.data.data
       set({ 
         currentItem: item,
+        selectedVersionNumber: item.current_version,
         detailLoading: false 
       })
       return item
@@ -96,7 +98,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 创建知识库
-   * @param {Object} data - 知识库数据
    */
   createItem: async (data) => {
     set({ loading: true, error: null })
@@ -104,7 +105,6 @@ const useWikiStore = create((set, get) => ({
       const response = await apiClient.post('/wiki/items', data)
       const newItem = response.data.data
       
-      // 更新列表
       set(state => ({
         items: [newItem, ...state.items],
         loading: false
@@ -124,17 +124,23 @@ const useWikiStore = create((set, get) => ({
   },
 
   /**
-   * 更新知识库
-   * @param {number} id - 知识库ID
-   * @param {Object} data - 更新数据
+   * 更新知识库（覆盖保存，不创建版本）
+   * v2.1修复：确保can_edit不丢失
    */
   updateItem: async (id, data) => {
     set({ loading: true, error: null })
     try {
+      // 保存当前的can_edit状态，以防后端返回不完整
+      const currentCanEdit = get().currentItem?.can_edit
+      
       const response = await apiClient.put(`/wiki/items/${id}`, data)
       const updatedItem = response.data.data
       
-      // 更新列表中的项
+      // 确保can_edit不丢失：优先使用后端返回的，如果没有则保留原值
+      if (updatedItem.can_edit === undefined || updatedItem.can_edit === null) {
+        updatedItem.can_edit = currentCanEdit
+      }
+      
       set(state => ({
         items: state.items.map(item => 
           item.id === id ? { ...item, ...updatedItem } : item
@@ -148,24 +154,22 @@ const useWikiStore = create((set, get) => ({
     } catch (error) {
       console.error('更新知识库失败:', error)
       set({ 
-        error: error.response?.data?.message || '更新知识库失败',
+        error: error.response?.data?.message || '保存失败',
         loading: false 
       })
-      message.error(error.response?.data?.message || '更新知识库失败')
+      message.error(error.response?.data?.message || '保存失败')
       throw error
     }
   },
 
   /**
    * 删除知识库
-   * @param {number} id - 知识库ID
    */
   deleteItem: async (id) => {
     set({ loading: true, error: null })
     try {
       await apiClient.delete(`/wiki/items/${id}`)
       
-      // 从列表中移除
       set(state => ({
         items: state.items.filter(item => item.id !== id),
         currentItem: state.currentItem?.id === id ? null : state.currentItem,
@@ -187,14 +191,12 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 切换置顶状态
-   * @param {number} id - 知识库ID
    */
   togglePin: async (id) => {
     try {
       const response = await apiClient.put(`/wiki/items/${id}/pin`)
       const updatedItem = response.data.data
       
-      // 更新列表
       set(state => ({
         items: state.items.map(item => 
           item.id === id ? { ...item, is_pinned: updatedItem.is_pinned } : item
@@ -216,17 +218,13 @@ const useWikiStore = create((set, get) => ({
   // ==================== 版本管理 ====================
 
   /**
-   * 保存新版本
-   * @param {number} id - 知识库ID
-   * @param {string} changeSummary - 版本说明（可选）
+   * 创建新版本
    */
-  saveVersion: async (id, changeSummary = null) => {
+  createVersion: async (id) => {
     try {
-      const response = await apiClient.post(`/wiki/items/${id}/version`, {
-        change_summary: changeSummary
-      })
+      const response = await apiClient.post(`/wiki/items/${id}/version`)
       
-      // 更新版本号
+      // 更新版本号和版本数
       set(state => ({
         currentItem: state.currentItem?.id === id 
           ? { 
@@ -234,21 +232,24 @@ const useWikiStore = create((set, get) => ({
               current_version: response.data.data.version,
               version_count: (state.currentItem.version_count || 1) + 1
             }
-          : state.currentItem
+          : state.currentItem,
+        selectedVersionNumber: response.data.data.version
       }))
       
-      message.success('版本保存成功')
+      // 刷新版本列表
+      get().getVersions(id)
+      
+      message.success('新版本创建成功')
       return response.data.data
     } catch (error) {
-      console.error('保存版本失败:', error)
-      message.error(error.response?.data?.message || '保存版本失败')
+      console.error('创建版本失败:', error)
+      message.error(error.response?.data?.message || '创建版本失败')
       throw error
     }
   },
 
   /**
    * 获取版本历史
-   * @param {number} id - 知识库ID
    */
   getVersions: async (id) => {
     set({ versionsLoading: true })
@@ -268,8 +269,65 @@ const useWikiStore = create((set, get) => ({
   },
 
   /**
-   * 获取版本详情
-   * @param {number} versionId - 版本ID
+   * 切换到指定版本（加载版本内容到表单，不改变数据库）
+   */
+  switchToVersion: async (versionId) => {
+    try {
+      const response = await apiClient.get(`/wiki/versions/${versionId}`)
+      const versionData = response.data.data
+      
+      // 更新selectedVersionNumber，返回版本数据供前端填充表单
+      set({ selectedVersionNumber: versionData.version_number })
+      
+      return versionData
+    } catch (error) {
+      console.error('切换版本失败:', error)
+      message.error(error.response?.data?.message || '切换版本失败')
+      throw error
+    }
+  },
+
+  /**
+   * 删除指定版本
+   */
+  deleteVersion: async (wikiId, versionId) => {
+    try {
+      const response = await apiClient.delete(`/wiki/items/${wikiId}/versions/${versionId}`)
+      const result = response.data.data
+      
+      // 更新currentItem的版本信息
+      set(state => ({
+        currentItem: state.currentItem?.id === wikiId 
+          ? { 
+              ...state.currentItem, 
+              current_version: result.currentVersion,
+              version_count: result.versionCount
+            }
+          : state.currentItem,
+        selectedVersionNumber: result.currentVersion
+      }))
+      
+      // 刷新版本列表
+      get().getVersions(wikiId)
+      
+      message.success(`版本 v${result.deletedVersion} 已删除`)
+      return result
+    } catch (error) {
+      console.error('删除版本失败:', error)
+      message.error(error.response?.data?.message || '删除版本失败')
+      throw error
+    }
+  },
+
+  /**
+   * 保存新版本（兼容旧接口）
+   */
+  saveVersion: async (id, changeSummary = null) => {
+    return get().createVersion(id)
+  },
+
+  /**
+   * 获取版本详情（兼容旧接口）
    */
   getVersionDetail: async (versionId) => {
     try {
@@ -283,21 +341,19 @@ const useWikiStore = create((set, get) => ({
   },
 
   /**
-   * 回滚到指定版本
-   * @param {number} wikiId - 知识库ID
-   * @param {number} versionId - 版本ID
+   * 回滚到指定版本（兼容旧接口）
    */
   rollbackToVersion: async (wikiId, versionId) => {
     try {
       const response = await apiClient.post(`/wiki/items/${wikiId}/rollback/${versionId}`)
       const updatedItem = response.data.data
       
-      // 更新当前项
       set(state => ({
         currentItem: updatedItem,
         items: state.items.map(item => 
           item.id === wikiId ? { ...item, ...updatedItem } : item
-        )
+        ),
+        selectedVersionNumber: updatedItem.current_version
       }))
       
       message.success('版本回滚成功')
@@ -313,7 +369,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 获取编辑者列表
-   * @param {number} id - 知识库ID
    */
   getEditors: async (id) => {
     try {
@@ -329,8 +384,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 添加编辑者
-   * @param {number} wikiId - 知识库ID
-   * @param {number} userId - 用户ID
    */
   addEditor: async (wikiId, userId) => {
     try {
@@ -349,8 +402,6 @@ const useWikiStore = create((set, get) => ({
 
   /**
    * 移除编辑者
-   * @param {number} wikiId - 知识库ID
-   * @param {number} userId - 用户ID
    */
   removeEditor: async (wikiId, userId) => {
     try {
@@ -371,7 +422,7 @@ const useWikiStore = create((set, get) => ({
    * 清除当前选中项
    */
   clearCurrentItem: () => {
-    set({ currentItem: null, versions: [], editors: [] })
+    set({ currentItem: null, versions: [], editors: [], selectedVersionNumber: null })
   },
 
   /**
@@ -389,6 +440,7 @@ const useWikiStore = create((set, get) => ({
       items: [],
       currentItem: null,
       versions: [],
+      selectedVersionNumber: null,
       editors: [],
       loading: false,
       detailLoading: false,

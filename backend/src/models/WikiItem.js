@@ -1,14 +1,13 @@
 /**
- * 知识库数据模型
+ * 知识库数据模型 v2.2
  * 
  * 功能：
  * - 三级范围管理：personal个人/team团队/global全局
- * - 版本管理：保存历史版本，支持回滚
+ * - 版本管理：保存、删除、回滚历史版本
  * - 协作编辑：团队知识库可指定额外编辑者
  * - JSON字段：notes备注数组(最多10条)、links链接数组(最多10条)
  * 
- * 创建时间：2026-01-02
- * 更新：修复getVersions方法LIMIT参数问题
+ * 更新：2026-01-02 v2.2 修复update方法，保存时同步更新当前版本的wiki_versions记录
  */
 
 const dbConnection = require('../database/connection');
@@ -60,7 +59,6 @@ class WikiItem {
   static validateNotes(notes) {
     if (!notes) return [];
     const arr = Array.isArray(notes) ? notes : [];
-    // 最多10条，每条限制500字符
     return arr.slice(0, 10).map(note => 
       typeof note === 'string' ? note.substring(0, 500) : ''
     ).filter(note => note.trim());
@@ -72,7 +70,6 @@ class WikiItem {
   static validateLinks(links) {
     if (!links) return [];
     const arr = Array.isArray(links) ? links : [];
-    // 最多10条，每条包含title和url
     return arr.slice(0, 10).map(link => ({
       title: (link.title || '').substring(0, 200),
       url: (link.url || '').substring(0, 1000)
@@ -81,10 +78,6 @@ class WikiItem {
 
   /**
    * 获取用户可访问的知识库列表
-   * @param {number} userId - 用户ID
-   * @param {number} groupId - 用户所属组ID
-   * @param {string} userRole - 用户角色
-   * @param {string} scope - 筛选范围（可选）
    */
   static async getUserAccessibleItems(userId, groupId, userRole, scope = null) {
     try {
@@ -96,18 +89,14 @@ class WikiItem {
         LEFT JOIN users u ON wi.creator_id = u.id
         LEFT JOIN user_groups ug ON wi.group_id = ug.id
         WHERE (
-          -- 个人知识库：只能看自己的
           (wi.scope = 'personal' AND wi.creator_id = ?)
-          -- 团队知识库：同组可见
           OR (wi.scope = 'team' AND wi.group_id = ?)
-          -- 全局知识库：所有人可见
           OR wi.scope = 'global'
         )
       `;
       
       const params = [userId, groupId];
       
-      // 按范围筛选
       if (scope && ['personal', 'team', 'global'].includes(scope)) {
         sql += ' AND wi.scope = ?';
         params.push(scope);
@@ -134,25 +123,18 @@ class WikiItem {
    * 检查用户是否有编辑权限
    */
   static checkCanEdit(item, userId, groupId, userRole) {
-    // 超级管理员可以编辑所有
     if (userRole === 'super_admin') return true;
     
-    // 个人知识库：只有创建者可以编辑
     if (item.scope === 'personal') {
       return item.creator_id === userId;
     }
     
-    // 团队知识库：组管理员或指定编辑者可以编辑
     if (item.scope === 'team') {
-      // 创建者可以编辑
       if (item.creator_id === userId) return true;
-      // 组管理员可以编辑同组的
       if (userRole === 'admin' && item.group_id === groupId) return true;
-      // 检查是否是指定编辑者（需要额外查询）
-      return false; // 这个在控制器层面再判断
+      return false;
     }
     
-    // 全局知识库：只有超级管理员可以编辑
     if (item.scope === 'global') {
       return userRole === 'super_admin';
     }
@@ -198,10 +180,8 @@ class WikiItem {
       item.notes = WikiItem.parseJsonField(row.notes);
       item.links = WikiItem.parseJsonField(row.links);
       
-      // 计算编辑权限
       if (userId) {
         item.can_edit = WikiItem.checkCanEdit(row, userId, groupId, userRole);
-        // 如果是团队知识库且基本权限为false，检查是否是指定编辑者
         if (!item.can_edit && row.scope === 'team') {
           item.can_edit = await WikiItem.isEditor(id, userId);
         }
@@ -225,7 +205,6 @@ class WikiItem {
       let hasAccess = false;
       let canEdit = false;
       
-      // 超级管理员有所有权限
       if (userRole === 'super_admin') {
         return { hasAccess: true, canEdit: true, item };
       }
@@ -260,23 +239,19 @@ class WikiItem {
   static async create(data, creatorId) {
     const transaction = await dbConnection.beginTransaction();
     try {
-      // 验证必填字段
       if (!data.title || !data.title.trim()) {
         throw new ValidationError('标题不能为空');
       }
       
-      // 验证scope
       const scope = data.scope || 'personal';
       if (!['personal', 'team', 'global'].includes(scope)) {
         throw new ValidationError('无效的范围类型');
       }
       
-      // 团队知识库必须有group_id
       if (scope === 'team' && !data.group_id) {
         throw new ValidationError('团队知识库必须指定所属组');
       }
       
-      // 验证并处理notes和links
       const notes = WikiItem.validateNotes(data.notes);
       const links = WikiItem.validateLinks(data.links);
       
@@ -326,40 +301,73 @@ class WikiItem {
   }
 
   /**
-   * 更新知识库（不保存版本）
+   * 更新知识库（覆盖保存）
+   * v2.2修复：同时更新wiki_items和当前版本的wiki_versions记录
    */
   static async update(id, data, operatorId) {
+    const transaction = await dbConnection.beginTransaction();
     try {
+      // 先获取当前版本号
+      const { rows: wikiRows } = await transaction.query(
+        'SELECT current_version FROM wiki_items WHERE id = ? FOR UPDATE', 
+        [id]
+      );
+      
+      if (wikiRows.length === 0) {
+        throw new ValidationError('知识库不存在');
+      }
+      
+      const currentVersion = wikiRows[0].current_version;
+      
+      // 构建wiki_items的更新
       const updateFields = [];
       const updateValues = [];
       
-      // 允许更新的字段
+      // 同时准备wiki_versions的更新
+      const versionUpdateFields = [];
+      const versionUpdateValues = [];
+      
       if (data.title !== undefined) {
         if (!data.title.trim()) {
           throw new ValidationError('标题不能为空');
         }
+        const titleValue = data.title.trim().substring(0, 500);
         updateFields.push('title = ?');
-        updateValues.push(data.title.trim().substring(0, 500));
+        updateValues.push(titleValue);
+        versionUpdateFields.push('title = ?');
+        versionUpdateValues.push(titleValue);
       }
       
       if (data.description !== undefined) {
+        const descValue = (data.description || '').substring(0, 2000);
         updateFields.push('description = ?');
-        updateValues.push((data.description || '').substring(0, 2000));
+        updateValues.push(descValue);
+        versionUpdateFields.push('description = ?');
+        versionUpdateValues.push(descValue);
       }
       
       if (data.content !== undefined) {
+        const contentValue = data.content || '';
         updateFields.push('content = ?');
-        updateValues.push(data.content || '');
+        updateValues.push(contentValue);
+        versionUpdateFields.push('content = ?');
+        versionUpdateValues.push(contentValue);
       }
       
       if (data.notes !== undefined) {
+        const notesValue = JSON.stringify(WikiItem.validateNotes(data.notes));
         updateFields.push('notes = ?');
-        updateValues.push(JSON.stringify(WikiItem.validateNotes(data.notes)));
+        updateValues.push(notesValue);
+        versionUpdateFields.push('notes_snapshot = ?');
+        versionUpdateValues.push(notesValue);
       }
       
       if (data.links !== undefined) {
+        const linksValue = JSON.stringify(WikiItem.validateLinks(data.links));
         updateFields.push('links = ?');
-        updateValues.push(JSON.stringify(WikiItem.validateLinks(data.links)));
+        updateValues.push(linksValue);
+        versionUpdateFields.push('links_snapshot = ?');
+        versionUpdateValues.push(linksValue);
       }
       
       if (data.is_pinned !== undefined) {
@@ -376,15 +384,28 @@ class WikiItem {
         throw new ValidationError('没有要更新的字段');
       }
       
+      // 更新wiki_items
       updateValues.push(id);
       const sql = `UPDATE wiki_items SET ${updateFields.join(', ')} WHERE id = ?`;
+      await transaction.query(sql, updateValues);
       
-      await dbConnection.query(sql, updateValues);
+      // 同步更新当前版本的wiki_versions记录
+      if (versionUpdateFields.length > 0) {
+        versionUpdateValues.push(id);
+        versionUpdateValues.push(currentVersion);
+        const versionSql = `UPDATE wiki_versions SET ${versionUpdateFields.join(', ')} WHERE wiki_id = ? AND version_number = ?`;
+        await transaction.query(versionSql, versionUpdateValues);
+        
+        logger.info('同步更新版本记录', { wikiId: id, versionNumber: currentVersion });
+      }
       
-      logger.info('更新知识库成功', { id, operatorId });
+      await transaction.commit();
+      
+      logger.info('更新知识库成功', { id, operatorId, currentVersion });
       
       return await WikiItem.findById(id);
     } catch (error) {
+      await transaction.rollback();
       logger.error('更新知识库失败:', error);
       throw error;
     }
@@ -394,7 +415,6 @@ class WikiItem {
    * 在事务中保存版本
    */
   static async saveVersionInTransaction(transaction, wikiId, data, userId, changeSummary = null) {
-    // 获取当前版本号
     const versionSql = 'SELECT current_version, version_count FROM wiki_items WHERE id = ? FOR UPDATE';
     const { rows } = await transaction.query(versionSql, [wikiId]);
     
@@ -407,7 +427,6 @@ class WikiItem {
     
     // 限制最多50个版本
     if (newCount > 50) {
-      // 删除最旧的版本 - 使用子查询方式
       const deleteOldSql = `
         DELETE FROM wiki_versions 
         WHERE wiki_id = ? AND id IN (
@@ -420,7 +439,6 @@ class WikiItem {
       newCount = 50;
     }
     
-    // 插入新版本
     const insertSql = `
       INSERT INTO wiki_versions (
         wiki_id, version_number, title, description, content,
@@ -440,7 +458,6 @@ class WikiItem {
       userId
     ]);
     
-    // 更新主表版本号
     const updateSql = 'UPDATE wiki_items SET current_version = ?, version_count = ? WHERE id = ?';
     await transaction.query(updateSql, [newVersion, newCount, wikiId]);
     
@@ -471,16 +488,11 @@ class WikiItem {
 
   /**
    * 获取版本历史
-   * 注意：MySQL2的prepared statement对LIMIT参数处理有问题，所以limit直接拼入SQL
-   * @param {number} wikiId - 知识库ID
-   * @param {number} limit - 返回条数（默认50，最大100）
    */
   static async getVersions(wikiId, limit = 50) {
     try {
-      // 确保limit是合法的整数，防止SQL注入
       const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 100);
       
-      // 将limit直接拼入SQL，避免MySQL2的prepared statement参数问题
       const sql = `
         SELECT wv.*, u.username as created_by_name
         FROM wiki_versions wv
@@ -536,18 +548,108 @@ class WikiItem {
   }
 
   /**
+   * 删除指定版本
+   * 规则：
+   * - 不能删除唯一的版本
+   * - 删除后自动更新version_count
+   * - 如果删除的是当前版本，自动切换到最新的版本
+   */
+  static async deleteVersion(wikiId, versionId) {
+    const transaction = await dbConnection.beginTransaction();
+    try {
+      // 获取要删除的版本信息
+      const versionSql = 'SELECT * FROM wiki_versions WHERE id = ? AND wiki_id = ?';
+      const { rows: versionRows } = await transaction.query(versionSql, [versionId, wikiId]);
+      
+      if (versionRows.length === 0) {
+        throw new ValidationError('版本不存在');
+      }
+      
+      const targetVersion = versionRows[0];
+      
+      // 检查是否是唯一的版本
+      const countSql = 'SELECT COUNT(*) as cnt FROM wiki_versions WHERE wiki_id = ?';
+      const { rows: countRows } = await transaction.query(countSql, [wikiId]);
+      
+      if (countRows[0].cnt <= 1) {
+        throw new ValidationError('不能删除唯一的版本');
+      }
+      
+      // 获取当前wiki的current_version
+      const wikiSql = 'SELECT current_version FROM wiki_items WHERE id = ? FOR UPDATE';
+      const { rows: wikiRows } = await transaction.query(wikiSql, [wikiId]);
+      const currentVersion = wikiRows[0].current_version;
+      
+      // 删除版本
+      const deleteSql = 'DELETE FROM wiki_versions WHERE id = ?';
+      await transaction.query(deleteSql, [versionId]);
+      
+      // 更新version_count
+      const updateCountSql = 'UPDATE wiki_items SET version_count = version_count - 1 WHERE id = ?';
+      await transaction.query(updateCountSql, [wikiId]);
+      
+      // 如果删除的是当前版本，需要切换到最新的版本
+      if (targetVersion.version_number === currentVersion) {
+        // 找到最新的版本
+        const latestSql = `
+          SELECT version_number, title, description, content, notes_snapshot, links_snapshot 
+          FROM wiki_versions 
+          WHERE wiki_id = ? 
+          ORDER BY version_number DESC 
+          LIMIT 1
+        `;
+        const { rows: latestRows } = await transaction.query(latestSql, [wikiId]);
+        
+        if (latestRows.length > 0) {
+          const latest = latestRows[0];
+          // 更新wiki_items的current_version和内容
+          const updateWikiSql = `
+            UPDATE wiki_items 
+            SET current_version = ?, title = ?, description = ?, content = ?, notes = ?, links = ?
+            WHERE id = ?
+          `;
+          await transaction.query(updateWikiSql, [
+            latest.version_number,
+            latest.title,
+            latest.description,
+            latest.content,
+            latest.notes_snapshot,
+            latest.links_snapshot,
+            wikiId
+          ]);
+        }
+      }
+      
+      await transaction.commit();
+      
+      logger.info('删除版本成功', { wikiId, versionId, deletedVersion: targetVersion.version_number });
+      
+      // 返回更新后的wiki信息
+      const updatedWiki = await WikiItem.findById(wikiId);
+      return {
+        success: true,
+        deletedVersion: targetVersion.version_number,
+        currentVersion: updatedWiki.current_version,
+        versionCount: updatedWiki.version_count
+      };
+    } catch (error) {
+      await transaction.rollback();
+      logger.error('删除版本失败:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 回滚到指定版本
    */
   static async rollbackToVersion(wikiId, versionId, userId) {
     const transaction = await dbConnection.beginTransaction();
     try {
-      // 获取版本详情
       const version = await WikiItem.getVersionDetail(versionId);
       if (!version || version.wiki_id !== wikiId) {
         throw new ValidationError('版本不存在');
       }
       
-      // 更新主表内容
       const updateSql = `
         UPDATE wiki_items 
         SET title = ?, description = ?, content = ?, notes = ?, links = ?
@@ -563,7 +665,6 @@ class WikiItem {
         wikiId
       ]);
       
-      // 保存回滚版本
       await WikiItem.saveVersionInTransaction(transaction, wikiId, {
         title: version.title,
         description: version.description,
@@ -589,7 +690,6 @@ class WikiItem {
    */
   static async delete(id) {
     try {
-      // 级联删除会自动删除版本和编辑者
       const sql = 'DELETE FROM wiki_items WHERE id = ?';
       await dbConnection.query(sql, [id]);
       
