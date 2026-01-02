@@ -1,6 +1,6 @@
 /**
- * 知识库页面样式 v3.1
- * iOS毛玻璃科技风 - 修复版
+ * 知识库页面样式 v3.2
+ * iOS毛玻璃科技风 - 添加历史版本提示
  * 更新：2026-01-02
  */
 
@@ -327,6 +327,16 @@
       }
     }
 
+    // 历史版本提示
+    .wiki-history-alert {
+      margin-bottom: 16px;
+      border-radius: @border-radius-xs;
+      
+      .ant-alert-message {
+        font-size: 13px;
+      }
+    }
+
     .wiki-edit-title-row {
       display: flex;
       align-items: center;
@@ -394,6 +404,16 @@
 
         .anticon:first-child { color: @primary-color; }
         .wiki-version-total { color: #8e8e93; font-size: 12px; }
+        
+        // 查看历史版本时的样式
+        &.wiki-version-btn-history {
+          border-color: @warning-color;
+          background: rgba(255, 149, 0, 0.08);
+          color: @warning-color;
+          
+          .anticon:first-child { color: @warning-color; }
+          .wiki-version-total { color: #b36800; }
+        }
       }
     }
   }
@@ -417,7 +437,7 @@
     }
   }
 
-  // ==================== 内容编辑器标签行 v3.1新增 ====================
+  // ==================== 内容编辑器标签行 ====================
   .wiki-content-label-row {
     display: flex;
     justify-content: space-between;

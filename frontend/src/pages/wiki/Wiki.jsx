@@ -1,17 +1,13 @@
 /**
- * 知识库主页面 v3.1
+ * 知识库主页面 v4.0
  * 
- * 功能：
- * - 知识库列表展示（卡片式布局）
- * - 三级范围筛选（个人/团队/全局）
- * - 知识库CRUD操作
- * - 版本管理简化版：
- *   - 下拉选择版本，点击直接加载内容
- *   - 三个按钮：新建版本、保存、删除版本
+ * 版本管理逻辑（v4.0重构）：
+ * - 所有版本平等，切换到哪个就编辑哪个
+ * - 保存=保存到当前查看的版本
+ * - 新建版本=基于当前版本复制一份
+ * - 删除版本=删除当前查看的版本
  * 
- * 设计风格：iOS毛玻璃科技风
- * 
- * 更新：2026-01-02 v3.1 修复Form.Item包裹div导致content无法收集的问题
+ * 更新：2026-01-02 v4.0 简化版本管理
  */
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -44,24 +40,18 @@ dayjs.locale('zh-cn')
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
 
-// 内容最大字符数
 const MAX_CONTENT_LENGTH = 100000
 
-/**
- * 知识库主页面组件
- */
 const Wiki = () => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
   const {
-    items, currentItem, versions, loading, detailLoading, versionsLoading,
-    selectedVersionNumber,
-    getItems, getItem, createItem, updateItem, deleteItem, togglePin,
-    createVersion, getVersions, switchToVersion, deleteVersion,
+    items, currentItem, currentVersion, versions, loading, detailLoading,
+    getItems, getItem, createItem, deleteItem, togglePin,
+    getVersions, switchToVersion, saveVersion, createVersion, deleteVersion,
     clearCurrentItem
   } = useWikiStore()
 
-  // ==================== 本地状态 ====================
   const [searchText, setSearchText] = useState('')
   const [currentScope, setCurrentScope] = useState('all')
   const [createModalVisible, setCreateModalVisible] = useState(false)
@@ -70,17 +60,11 @@ const Wiki = () => {
   const [createForm] = Form.useForm()
   const [editForm] = Form.useForm()
 
-  // ==================== 数据加载 ====================
   useEffect(() => {
-    loadItems()
-  }, [currentScope])
-
-  const loadItems = useCallback(() => {
     const scope = currentScope === 'all' ? null : currentScope
     getItems(scope)
   }, [currentScope, getItems])
 
-  // ==================== 范围配置 ====================
   const scopeIcons = {
     personal: <UserOutlined />,
     team: <TeamOutlined />,
@@ -99,7 +83,6 @@ const Wiki = () => {
     global: t('wiki.scope.global', '全局')
   }
 
-  // ==================== 筛选数据 ====================
   const filteredItems = items.filter(item => {
     if (!searchText) return true
     const search = searchText.toLowerCase()
@@ -107,7 +90,6 @@ const Wiki = () => {
            item.description?.toLowerCase().includes(search)
   })
 
-  // ==================== 创建知识库 ====================
   const handleCreate = async () => {
     try {
       const values = await createForm.validateFields()
@@ -119,99 +101,101 @@ const Wiki = () => {
     }
   }
 
-  // ==================== 打开编辑 ====================
+  /**
+   * 打开编辑抽屉
+   * 1. 获取知识库元信息
+   * 2. 获取版本列表
+   * 3. 切换到当前版本（加载内容）
+   */
   const handleOpenEdit = async (item) => {
     try {
       const detail = await getItem(item.id)
-      setContentLength(detail?.content?.length || 0)
+      const versionList = await getVersions(item.id)
       setEditDrawerVisible(true)
-      // 加载版本历史
-      getVersions(item.id)
+      
+      // 找到当前版本并加载
+      if (versionList && versionList.length > 0) {
+        const currentVer = versionList.find(v => v.version_number === detail.current_version)
+        if (currentVer) {
+          await switchToVersion(currentVer.id)
+        } else {
+          // 默认加载最新版本
+          await switchToVersion(versionList[0].id)
+        }
+      }
     } catch (error) {
       console.error('获取详情失败:', error)
     }
   }
 
-  // 当currentItem变化时，更新表单
+  // 当currentVersion变化时，更新表单
   useEffect(() => {
-    if (currentItem && editDrawerVisible) {
+    if (currentVersion && editDrawerVisible) {
       editForm.setFieldsValue({
-        title: currentItem.title,
-        description: currentItem.description,
-        content: currentItem.content,
-        notes: currentItem.notes || [],
-        links: currentItem.links || []
+        title: currentVersion.title,
+        description: currentVersion.description,
+        content: currentVersion.content,
+        notes: currentVersion.notes_snapshot || [],
+        links: currentVersion.links_snapshot || []
       })
-      setContentLength(currentItem.content?.length || 0)
+      setContentLength(currentVersion.content?.length || 0)
     }
-  }, [currentItem, editDrawerVisible, editForm])
+  }, [currentVersion, editDrawerVisible, editForm])
 
-  // ==================== 保存（覆盖当前） ====================
+  /**
+   * 保存到当前查看的版本
+   */
   const handleSave = async () => {
+    if (!currentVersion) return
     try {
       const values = await editForm.validateFields()
-      console.log('保存的数据:', values) // 调试用
-      await updateItem(currentItem.id, values)
+      await saveVersion(currentVersion.id, {
+        title: values.title,
+        description: values.description,
+        content: values.content,
+        notes: values.notes,
+        links: values.links
+      })
     } catch (error) {
       console.error('保存失败:', error)
     }
   }
 
-  // ==================== 新建版本 ====================
+  /**
+   * 新建版本（基于当前查看的版本）
+   */
   const handleCreateVersion = async () => {
-    if (!currentItem) return
+    if (!currentItem || !currentVersion) return
     try {
-      // 先保存当前内容
-      const values = await editForm.validateFields()
-      await updateItem(currentItem.id, values)
-      // 再创建新版本
-      await createVersion(currentItem.id)
-      // 刷新详情
-      await getItem(currentItem.id)
+      await createVersion(currentItem.id, currentVersion.id)
     } catch (error) {
       console.error('创建版本失败:', error)
     }
   }
 
-  // ==================== 删除版本 ====================
+  /**
+   * 删除当前查看的版本
+   */
   const handleDeleteVersion = async () => {
-    if (!currentItem || !selectedVersionNumber) return
-    
-    // 找到当前选中的版本ID
-    const selectedVersion = versions.find(v => v.version_number === selectedVersionNumber)
-    if (!selectedVersion) {
-      message.error('未找到选中的版本')
-      return
-    }
-    
+    if (!currentItem || !currentVersion) return
     try {
-      await deleteVersion(currentItem.id, selectedVersion.id)
-      // 刷新详情
-      await getItem(currentItem.id)
+      await deleteVersion(currentItem.id, currentVersion.id)
     } catch (error) {
       console.error('删除版本失败:', error)
     }
   }
 
-  // ==================== 切换版本 ====================
+  /**
+   * 切换版本
+   */
   const handleSwitchVersion = async (versionId) => {
     try {
-      const versionData = await switchToVersion(versionId)
-      // 用版本内容填充表单
-      editForm.setFieldsValue({
-        title: versionData.title,
-        description: versionData.description,
-        content: versionData.content,
-        notes: versionData.notes_snapshot || [],
-        links: versionData.links_snapshot || []
-      })
-      setContentLength(versionData.content?.length || 0)
+      await switchToVersion(versionId)
     } catch (error) {
       console.error('切换版本失败:', error)
     }
   }
 
-  // ==================== 关闭编辑抽屉 ====================
   const handleCloseEdit = () => {
     setEditDrawerVisible(false)
     clearCurrentItem()
@@ -219,7 +203,6 @@ const Wiki = () => {
     setContentLength(0)
   }
 
-  // ==================== 删除知识库 ====================
   const handleDelete = async (id) => {
     try {
       await deleteItem(id)
@@ -231,7 +214,6 @@ const Wiki = () => {
     }
   }
 
-  // ==================== 内容操作 ====================
   const handleClearContent = () => {
     editForm.setFieldsValue({ content: '' })
     setContentLength(0)
@@ -262,7 +244,6 @@ const Wiki = () => {
     setContentLength(e.target.value?.length || 0)
   }
 
-  // ==================== 版本下拉菜单 ====================
   const versionMenuItems = versions.map(v => ({
     key: v.id,
     label: (
@@ -273,63 +254,45 @@ const Wiki = () => {
         <span className="wiki-version-num">v{v.version_number}</span>
         <span className="wiki-version-user">{v.created_by_name}</span>
         <span className="wiki-version-time">{dayjs(v.created_at).format('MM-DD HH:mm')}</span>
-        {v.version_number === currentItem?.current_version && (
+        {currentVersion?.version_number === v.version_number && (
           <Tag color="blue" size="small">当前</Tag>
         )}
       </div>
     )
   }))
 
-  // ==================== 渲染卡片菜单 ====================
   const getCardMenuItems = (item) => {
     const menuItems = [
-      {
-        key: 'view',
-        icon: <EyeOutlined />,
-        label: '查看详情',
-        onClick: () => handleOpenEdit(item)
-      }
+      { key: 'view', icon: <EyeOutlined />, label: '查看详情', onClick: () => handleOpenEdit(item) }
     ]
 
     if (item.can_edit) {
       menuItems.push(
-        {
-          key: 'pin',
-          icon: item.is_pinned ? <PushpinFilled /> : <PushpinOutlined />,
-          label: item.is_pinned ? '取消置顶' : '置顶',
-          onClick: () => togglePin(item.id)
-        },
+        { key: 'pin', icon: item.is_pinned ? <PushpinFilled /> : <PushpinOutlined />, label: item.is_pinned ? '取消置顶' : '置顶', onClick: () => togglePin(item.id) },
         { type: 'divider' },
-        {
-          key: 'delete',
-          icon: <DeleteOutlined />,
-          label: '删除',
-          danger: true,
-          onClick: () => {
-            Modal.confirm({
-              title: '确认删除',
-              content: '删除后无法恢复，确定要删除吗？',
-              okText: '确定',
-              cancelText: '取消',
-              okButtonProps: { danger: true },
-              onOk: () => handleDelete(item.id)
-            })
-          }
-        }
+        { key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true, onClick: () => {
+          Modal.confirm({
+            title: '确认删除',
+            content: '删除后无法恢复，确定要删除吗？',
+            okText: '确定',
+            cancelText: '取消',
+            okButtonProps: { danger: true },
+            onOk: () => handleDelete(item.id)
+          })
+        }}
       )
     }
 
     return menuItems
   }
 
-  // ==================== 渲染内容编辑器标签 ====================
   const renderContentLabel = () => (
     <div className="wiki-content-label-row">
       <div className="wiki-content-label">
         <span>内容</span>
         <span className="wiki-content-hint">支持Markdown格式</span>
       </div>
-      {currentItem?.can_edit && (
+      {currentVersion?.can_edit && (
         <div className="wiki-content-toolbar">
           <Tooltip title="清空内容">
             <Button type="text" icon={<ClearOutlined />} onClick={handleClearContent} size="small" />
@@ -345,10 +308,9 @@ const Wiki = () => {
     </div>
   )
 
-  // ==================== 渲染 ====================
   return (
     <div className="wiki-page">
-      {/* 头部区域 */}
+      {/* 头部 */}
       <div className="wiki-header-section">
         <div className="wiki-header-content">
           <div className="wiki-header-left">
@@ -381,7 +343,7 @@ const Wiki = () => {
         </div>
       </div>
 
-      {/* 范围筛选 */}
+      {/* 筛选 */}
       <div className="wiki-filter-section">
         <Segmented
           value={currentScope}
@@ -394,18 +356,13 @@ const Wiki = () => {
             { label: <span><GlobalOutlined /> 全局</span>, value: 'global' }
           ]}
         />
-        <div className="wiki-count">
-          共 {filteredItems.length} 条
-        </div>
+        <div className="wiki-count">共 {filteredItems.length} 条</div>
       </div>
 
-      {/* 知识库列表 */}
+      {/* 列表 */}
       <div className="wiki-content-section">
         {loading ? (
-          <div className="wiki-loading">
-            <Spin size="large" />
-            <p>加载中...</p>
-          </div>
+          <div className="wiki-loading"><Spin size="large" /><p>加载中...</p></div>
         ) : filteredItems.length === 0 ? (
           <div className="wiki-empty">
             <Empty description="暂无知识库" image={Empty.PRESENTED_IMAGE_SIMPLE}>
@@ -423,15 +380,10 @@ const Wiki = () => {
                   hoverable
                   onClick={() => handleOpenEdit(item)}
                 >
-                  {item.is_pinned && (
-                    <div className="wiki-card-pin-badge"><PushpinFilled /></div>
-                  )}
-                  
+                  {item.is_pinned && <div className="wiki-card-pin-badge"><PushpinFilled /></div>}
                   <div className="wiki-card-scope-badge" style={{ backgroundColor: scopeColors[item.scope] }}>
-                    {scopeIcons[item.scope]}
-                    <span>{scopeLabels[item.scope]}</span>
+                    {scopeIcons[item.scope]}<span>{scopeLabels[item.scope]}</span>
                   </div>
-
                   <div className="wiki-card-body">
                     <div className="wiki-card-header">
                       <Text strong ellipsis className="wiki-card-title">{item.title}</Text>
@@ -439,19 +391,12 @@ const Wiki = () => {
                         <Button type="text" icon={<EllipsisOutlined />} className="wiki-card-menu-btn" onClick={(e) => e.stopPropagation()} />
                       </Dropdown>
                     </div>
-                    
                     <Paragraph ellipsis={{ rows: 2 }} className="wiki-card-description">
                       {item.description || '暂无描述'}
                     </Paragraph>
-                    
                     <div className="wiki-card-footer">
-                      <div className="wiki-card-meta">
-                        <FileTextOutlined />
-                        <span>v{item.current_version}</span>
-                      </div>
-                      <Text type="secondary" className="wiki-card-time">
-                        {dayjs(item.updated_at).fromNow()}
-                      </Text>
+                      <div className="wiki-card-meta"><FileTextOutlined /><span>v{item.current_version}</span></div>
+                      <Text type="secondary" className="wiki-card-time">{dayjs(item.updated_at).fromNow()}</Text>
                     </div>
                   </div>
                 </Card>
@@ -476,7 +421,6 @@ const Wiki = () => {
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
             <Input placeholder="请输入知识库标题" maxLength={500} showCount />
           </Form.Item>
-          
           <Form.Item name="scope" label="范围" initialValue="personal">
             <Select>
               <Select.Option value="personal">
@@ -494,7 +438,6 @@ const Wiki = () => {
               )}
             </Select>
           </Form.Item>
-          
           <Form.Item name="description" label="描述">
             <TextArea placeholder="请输入描述（可选）" rows={3} maxLength={2000} showCount />
           </Form.Item>
@@ -513,20 +456,19 @@ const Wiki = () => {
       >
         {detailLoading ? (
           <div className="wiki-drawer-loading"><Spin size="large" /></div>
-        ) : currentItem ? (
+        ) : currentItem && currentVersion ? (
           <div className="wiki-edit-container">
-            {/* 头部 */}
             <div className="wiki-edit-header">
               <div className="wiki-edit-header-top">
                 <Button type="text" icon={<CloseOutlined />} onClick={handleCloseEdit} className="wiki-close-btn" />
                 <div className="wiki-edit-actions">
-                  {currentItem.can_edit && (
+                  {currentVersion.can_edit && (
                     <>
                       <Button icon={<BranchesOutlined />} onClick={handleCreateVersion}>新建版本</Button>
                       <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={loading}>保存</Button>
                       <Popconfirm
                         title="确认删除此版本？"
-                        description={versions.length <= 1 ? "这是唯一的版本，不能删除" : `将删除 v${selectedVersionNumber}`}
+                        description={versions.length <= 1 ? "这是唯一的版本，不能删除" : `将删除 v${currentVersion.version_number}`}
                         onConfirm={handleDeleteVersion}
                         okText="确定"
                         cancelText="取消"
@@ -539,24 +481,21 @@ const Wiki = () => {
                 </div>
               </div>
 
-              {/* 标题和范围 */}
               <div className="wiki-edit-title-row">
-                <h2 className="wiki-edit-main-title">{currentItem.title}</h2>
+                <h2 className="wiki-edit-main-title">{currentVersion.title}</h2>
                 <Tag 
                   className="wiki-scope-tag"
                   style={{ backgroundColor: `${scopeColors[currentItem.scope]}15`, color: scopeColors[currentItem.scope], borderColor: scopeColors[currentItem.scope] }}
                 >
-                  {scopeIcons[currentItem.scope]}
-                  <span>{scopeLabels[currentItem.scope]}</span>
+                  {scopeIcons[currentItem.scope]}<span>{scopeLabels[currentItem.scope]}</span>
                 </Tag>
               </div>
 
-              {/* 元信息和版本选择器 */}
               <div className="wiki-edit-meta-row">
                 <div className="wiki-meta-info">
-                  <span><UserOutlined /> {currentItem.creator_name}</span>
+                  <span><UserOutlined /> {currentVersion.created_by_name}</span>
                   <span className="wiki-meta-dot">•</span>
-                  <span><ClockCircleOutlined /> {dayjs(currentItem.updated_at).format('YYYY-MM-DD HH:mm')}</span>
+                  <span><ClockCircleOutlined /> {dayjs(currentVersion.created_at).format('YYYY-MM-DD HH:mm')}</span>
                 </div>
                 
                 <Dropdown
@@ -567,7 +506,7 @@ const Wiki = () => {
                 >
                   <Button className="wiki-version-btn">
                     <HistoryOutlined />
-                    <span>v{selectedVersionNumber || currentItem.current_version}</span>
+                    <span>v{currentVersion.version_number}</span>
                     <span className="wiki-version-total">({versions.length}个版本)</span>
                     <DownOutlined />
                   </Button>
@@ -575,33 +514,27 @@ const Wiki = () => {
               </div>
             </div>
 
-            {/* 编辑表单 */}
             <div className="wiki-edit-body">
               <Form form={editForm} layout="vertical" className="wiki-form">
                 <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
-                  <Input placeholder="请输入标题" maxLength={500} disabled={!currentItem.can_edit} />
+                  <Input placeholder="请输入标题" maxLength={500} disabled={!currentVersion.can_edit} />
                 </Form.Item>
                 
                 <Form.Item name="description" label="描述">
-                  <TextArea placeholder="请输入描述" rows={2} maxLength={2000} disabled={!currentItem.can_edit} />
+                  <TextArea placeholder="请输入描述" rows={2} maxLength={2000} disabled={!currentVersion.can_edit} />
                 </Form.Item>
                 
-                {/* 
-                  v3.1修复：content的Form.Item子元素必须是TextArea而不是div
-                  把工具栏移到label里面，确保TextArea是Form.Item的直接子元素
-                */}
                 <Form.Item name="content" label={renderContentLabel()}>
                   <TextArea 
                     placeholder="请输入内容..." 
                     rows={12} 
                     maxLength={MAX_CONTENT_LENGTH} 
-                    disabled={!currentItem.can_edit} 
+                    disabled={!currentVersion.can_edit} 
                     className="wiki-content-textarea" 
                     onChange={handleContentChange} 
                   />
                 </Form.Item>
 
-                {/* 备注 */}
                 <Form.Item label={<span>备注 <Text type="secondary" style={{ fontWeight: 400 }}>（最多10条）</Text></span>}>
                   <Form.List name="notes">
                     {(fields, { add, remove }) => (
@@ -610,14 +543,14 @@ const Wiki = () => {
                           <div key={field.key} className="wiki-list-item">
                             <span className="wiki-list-index">{index + 1}</span>
                             <Form.Item {...field} noStyle>
-                              <Input placeholder="输入备注内容" maxLength={500} disabled={!currentItem.can_edit} />
+                              <Input placeholder="输入备注内容" maxLength={500} disabled={!currentVersion.can_edit} />
                             </Form.Item>
-                            {currentItem.can_edit && (
+                            {currentVersion.can_edit && (
                               <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} className="wiki-list-delete" />
                             )}
                           </div>
                         ))}
-                        {currentItem.can_edit && fields.length < 10 && (
+                        {currentVersion.can_edit && fields.length < 10 && (
                           <Button type="dashed" onClick={() => add('')} icon={<PlusOutlined />} className="wiki-list-add">添加备注</Button>
                         )}
                       </div>
@@ -625,7 +558,6 @@ const Wiki = () => {
                   </Form.List>
                 </Form.Item>
 
-                {/* 链接 */}
                 <Form.Item label={<span>相关链接 <Text type="secondary" style={{ fontWeight: 400 }}>（最多10条）</Text></span>}>
                   <Form.List name="links">
                     {(fields, { add, remove }) => (
@@ -634,17 +566,17 @@ const Wiki = () => {
                           <div key={field.key} className="wiki-link-item">
                             <span className="wiki-list-index">{index + 1}</span>
                             <Form.Item name={[field.name, 'title']} noStyle>
-                              <Input placeholder="链接标题" style={{ width: 140 }} maxLength={200} disabled={!currentItem.can_edit} />
+                              <Input placeholder="链接标题" style={{ width: 140 }} maxLength={200} disabled={!currentVersion.can_edit} />
                             </Form.Item>
                             <Form.Item name={[field.name, 'url']} noStyle>
-                              <Input placeholder="https://..." prefix={<LinkOutlined style={{ color: '#bbb' }} />} style={{ flex: 1 }} maxLength={1000} disabled={!currentItem.can_edit} />
+                              <Input placeholder="https://..." prefix={<LinkOutlined style={{ color: '#bbb' }} />} style={{ flex: 1 }} maxLength={1000} disabled={!currentVersion.can_edit} />
                             </Form.Item>
-                            {currentItem.can_edit && (
+                            {currentVersion.can_edit && (
                               <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} className="wiki-list-delete" />
                             )}
                           </div>
                         ))}
-                        {currentItem.can_edit && fields.length < 10 && (
+                        {currentVersion.can_edit && fields.length < 10 && (
                           <Button type="dashed" onClick={() => add({ title: '', url: '' })} icon={<PlusOutlined />} className="wiki-list-add">添加链接</Button>
                         )}
                       </div>
