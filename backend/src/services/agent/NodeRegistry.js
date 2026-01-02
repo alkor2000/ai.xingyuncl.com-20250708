@@ -3,12 +3,14 @@
  * 管理所有可用的节点类型
  * v2.0 - 新增KnowledgeNode知识库节点
  * v2.1 - 修复createInstance方法兼容性
+ * v2.2 - 新增ClassifierNode问题分类节点
  */
 
 const StartNode = require('./nodes/StartNode');
 const LLMNode = require('./nodes/LLMNode');
 const EndNode = require('./nodes/EndNode');
 const KnowledgeNode = require('./nodes/KnowledgeNode');
+const ClassifierNode = require('./nodes/ClassifierNode');
 const logger = require('../../utils/logger');
 
 class NodeRegistry {
@@ -32,6 +34,9 @@ class NodeRegistry {
     
     // 知识库节点（v2.0新增）
     this.register('knowledge', KnowledgeNode);
+    
+    // 问题分类节点（v2.2新增）
+    this.register('classifier', ClassifierNode);
     
     logger.info('节点注册表初始化完成', {
       registeredNodes: Array.from(this.nodes.keys())

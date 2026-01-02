@@ -2,6 +2,8 @@
  * Agent工作流可视化编辑器
  * 基于 ReactFlow 实现拖拽式工作流编排
  * v2.2 - 修复节点名称同步问题
+ * v2.3 - 添加问题分类节点 ClassifierNode
+ * v2.4 - 修复边的 sourceHandle/targetHandle 保存和加载问题
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -27,14 +29,16 @@ import StartNode from './nodes/StartNode'
 import LLMNode from './nodes/LLMNode'
 import EndNode from './nodes/EndNode'
 import KnowledgeNode from './nodes/KnowledgeNode'
+import ClassifierNode from './nodes/ClassifierNode'
 import './styles/editor.css'
 
-// 注册自定义节点类型（保留end以兼容旧数据）
+// 注册自定义节点类型（v2.3 添加 classifier）
 const nodeTypes = {
   start: StartNode,
   llm: LLMNode,
   end: EndNode,
-  knowledge: KnowledgeNode
+  knowledge: KnowledgeNode,
+  classifier: ClassifierNode
 }
 
 const WorkflowEditor = () => {
@@ -99,11 +103,14 @@ const WorkflowEditor = () => {
         }
       }))
       
-      // 转换边数据格式
+      // v2.4 修复：转换边数据格式时保留 sourceHandle 和 targetHandle
       const initialEdges = flowEdges.map(edge => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
+        // v2.4: 保留 sourceHandle 和 targetHandle（用于条件分支）
+        sourceHandle: edge.sourceHandle || null,
+        targetHandle: edge.targetHandle || null,
         type: 'smoothstep',
         animated: true,
         markerEnd: {
@@ -118,6 +125,7 @@ const WorkflowEditor = () => {
   
   // 连接节点
   const onConnect = useCallback((params) => {
+    // v2.4: 连接时自动包含 sourceHandle 和 targetHandle
     setEdges((eds) => addEdge({
       ...params,
       type: 'smoothstep',
@@ -161,12 +169,21 @@ const WorkflowEditor = () => {
   
   // 添加新节点（从节点面板拖拽）
   const onAddNode = useCallback((nodeType, position) => {
+    // 根据节点类型设置默认标签
+    const defaultLabels = {
+      start: '开始',
+      llm: 'AI对话',
+      end: '结束',
+      knowledge: '知识检索',
+      classifier: '问题分类'
+    }
+    
     const newNode = {
       id: `${nodeType}-${Date.now()}`,
       type: nodeType,
       position: position || { x: 100, y: 100 },
       data: {
-        label: nodeType.toUpperCase(),
+        label: defaultLabels[nodeType] || nodeType.toUpperCase(),
         config: {}
       }
     }
@@ -232,6 +249,7 @@ const WorkflowEditor = () => {
   }, [setNodes])
   
   // 保存工作流
+  // v2.4 修复：保存时包含 sourceHandle 和 targetHandle
   const onSave = useCallback(async () => {
     if (!currentWorkflow) return
     
@@ -244,10 +262,13 @@ const WorkflowEditor = () => {
           position: node.position,
           data: node.data
         })),
+        // v2.4: 保存边时包含 sourceHandle 和 targetHandle
         edges: edges.map(edge => ({
           id: edge.id,
           source: edge.source,
-          target: edge.target
+          target: edge.target,
+          sourceHandle: edge.sourceHandle || null,
+          targetHandle: edge.targetHandle || null
         }))
       }
       
@@ -355,6 +376,8 @@ const WorkflowEditor = () => {
                     return '#ff4d4f'
                   case 'knowledge':
                     return '#722ed1'
+                  case 'classifier':
+                    return '#faad14'
                   default:
                     return '#ccc'
                 }

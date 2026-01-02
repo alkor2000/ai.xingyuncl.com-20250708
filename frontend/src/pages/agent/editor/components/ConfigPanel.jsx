@@ -2,13 +2,14 @@
  * 配置面板 - 显示选中节点的配置选项
  * v2.1 - 添加保存按钮，显示保存状态
  * v2.2 - 知识库节点支持选择Wiki文档，显示Token数量
+ * v2.3 - 添加问题分类节点配置（动态分类列表）
  * 支持编辑节点参数
  */
 
 import React, { useEffect, useState } from 'react'
 import { 
   Card, Form, Input, Select, InputNumber, Empty, Spin, Slider, Divider, 
-  Button, Space, Tag, List, Tooltip, Typography 
+  Button, Space, Tag, List, Tooltip, Typography, message 
 } from 'antd'
 import { 
   SettingOutlined,
@@ -21,11 +22,13 @@ import {
   TeamOutlined,
   GlobalOutlined,
   DeleteOutlined,
-  PlusOutlined
+  PlusOutlined,
+  BranchesOutlined,
+  TagOutlined
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
 
-const { Text } = Typography
+const { Text, TextArea } = Typography
 
 const ConfigPanel = ({ 
   selectedNode, 
@@ -46,6 +49,9 @@ const ConfigPanel = ({
   // 已选择的知识库列表（本地状态）
   const [selectedWikis, setSelectedWikis] = useState([])
   
+  // 分类列表（本地状态）
+  const [categories, setCategories] = useState([])
+  
   // 加载模型列表
   useEffect(() => {
     if (availableModels.length === 0) {
@@ -61,7 +67,6 @@ const ConfigPanel = ({
       
       // 如果是知识库节点，恢复已选择的知识库
       if (selectedNode.type === 'knowledge' && config.wiki_ids) {
-        // 从wikiItems中找到对应的完整信息
         const selected = (config.wiki_ids || []).map(id => {
           const item = wikiItems.find(w => w.id === id)
           return item || { id, title: `知识库 #${id}`, tokens_display: '未知' }
@@ -70,9 +75,17 @@ const ConfigPanel = ({
       } else {
         setSelectedWikis([])
       }
+      
+      // 如果是分类节点，恢复分类列表
+      if (selectedNode.type === 'classifier' && config.categories) {
+        setCategories(config.categories || [])
+      } else {
+        setCategories([])
+      }
     } else {
       form.resetFields()
       setSelectedWikis([])
+      setCategories([])
     }
   }, [selectedNode, form, wikiItems])
   
@@ -90,6 +103,10 @@ const ConfigPanel = ({
       if (selectedNode.type === 'knowledge') {
         allValues.wiki_ids = selectedWikis.map(w => w.id)
       }
+      // 如果是分类节点，需要同步categories
+      if (selectedNode.type === 'classifier') {
+        allValues.categories = categories
+      }
       onUpdateConfig(selectedNode.id, allValues)
     }
   }
@@ -101,7 +118,6 @@ const ConfigPanel = ({
       const newSelected = [...selectedWikis, wiki]
       setSelectedWikis(newSelected)
       
-      // 更新表单和节点配置
       const currentValues = form.getFieldsValue()
       currentValues.wiki_ids = newSelected.map(w => w.id)
       onUpdateConfig(selectedNode.id, currentValues)
@@ -113,9 +129,54 @@ const ConfigPanel = ({
     const newSelected = selectedWikis.filter(w => w.id !== wikiId)
     setSelectedWikis(newSelected)
     
-    // 更新表单和节点配置
     const currentValues = form.getFieldsValue()
     currentValues.wiki_ids = newSelected.map(w => w.id)
+    onUpdateConfig(selectedNode.id, currentValues)
+  }
+  
+  // ========== 分类节点相关方法 ==========
+  
+  // 添加分类
+  const handleAddCategory = () => {
+    if (categories.length >= 100) {
+      message.warning('最多支持100个分类')
+      return
+    }
+    
+    const newCategory = {
+      id: `cat-${Date.now()}`,
+      name: `分类${categories.length + 1}`,
+      description: ''
+    }
+    const newCategories = [...categories, newCategory]
+    setCategories(newCategories)
+    
+    // 更新节点配置
+    const currentValues = form.getFieldsValue()
+    currentValues.categories = newCategories
+    onUpdateConfig(selectedNode.id, currentValues)
+  }
+  
+  // 更新分类
+  const handleUpdateCategory = (index, field, value) => {
+    const newCategories = [...categories]
+    newCategories[index] = { ...newCategories[index], [field]: value }
+    setCategories(newCategories)
+    
+    // 更新节点配置
+    const currentValues = form.getFieldsValue()
+    currentValues.categories = newCategories
+    onUpdateConfig(selectedNode.id, currentValues)
+  }
+  
+  // 删除分类
+  const handleRemoveCategory = (index) => {
+    const newCategories = categories.filter((_, i) => i !== index)
+    setCategories(newCategories)
+    
+    // 更新节点配置
+    const currentValues = form.getFieldsValue()
+    currentValues.categories = newCategories
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
@@ -321,6 +382,134 @@ const ConfigPanel = ({
     </>
   )
   
+  // 渲染分类节点配置
+  const renderClassifierConfig = () => (
+    <>
+      <Divider orientation="left" plain style={{ fontSize: '12px', margin: '16px 0 12px' }}>
+        <BranchesOutlined /> 分类配置
+      </Divider>
+      
+      <Form.Item
+        label="AI模型"
+        name="model"
+        rules={[{ required: true, message: '请选择AI模型' }]}
+        tooltip="选择用于分类的AI模型（推荐使用轻量模型）"
+      >
+        {modelsLoading ? (
+          <Spin size="small" />
+        ) : (
+          <Select
+            placeholder="选择AI模型"
+            showSearch
+            optionFilterProp="children"
+          >
+            {availableModels.map((model) => (
+              <Select.Option key={model.name} value={model.name}>
+                {model.display_name}
+              </Select.Option>
+            ))}
+          </Select>
+        )}
+      </Form.Item>
+      
+      <Form.Item
+        label="背景知识"
+        name="background_knowledge"
+        tooltip="提供给AI的背景信息，帮助更准确地分类"
+      >
+        <Input.TextArea
+          rows={4}
+          placeholder="例如：这是一个电商客服系统，用户主要咨询商品、订单、售后相关问题..."
+        />
+      </Form.Item>
+      
+      <Form.Item
+        label="聊天记录"
+        name="history_turns"
+        initialValue={6}
+        tooltip="参考的历史对话轮数，帮助理解上下文"
+      >
+        <InputNumber
+          min={0}
+          max={20}
+          style={{ width: '100%' }}
+          addonAfter="轮"
+        />
+      </Form.Item>
+      
+      <Divider orientation="left" plain style={{ fontSize: '12px', margin: '16px 0 12px' }}>
+        <TagOutlined /> 分类列表 ({categories.length}/100)
+      </Divider>
+      
+      {/* 分类列表 */}
+      <div style={{ marginBottom: '16px' }}>
+        {categories.map((cat, index) => (
+          <div 
+            key={cat.id} 
+            style={{ 
+              marginBottom: '12px',
+              padding: '12px',
+              background: '#fafafa',
+              borderRadius: '8px',
+              border: '1px solid #f0f0f0'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+              <Tag color="orange" style={{ marginRight: '8px' }}>
+                {index + 1}
+              </Tag>
+              <Input
+                placeholder="分类名称"
+                value={cat.name}
+                onChange={(e) => handleUpdateCategory(index, 'name', e.target.value)}
+                style={{ flex: 1, marginRight: '8px' }}
+              />
+              <Tooltip title="删除分类">
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleRemoveCategory(index)}
+                />
+              </Tooltip>
+            </div>
+            <Input.TextArea
+              placeholder="分类描述（可选，帮助AI理解分类标准）"
+              value={cat.description}
+              onChange={(e) => handleUpdateCategory(index, 'description', e.target.value)}
+              rows={2}
+              style={{ fontSize: '12px' }}
+            />
+          </div>
+        ))}
+        
+        <Button
+          type="dashed"
+          block
+          icon={<PlusOutlined />}
+          onClick={handleAddCategory}
+          disabled={categories.length >= 100}
+        >
+          添加分类
+        </Button>
+        
+        {categories.length === 0 && (
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '8px 12px', 
+            background: '#fff7e6', 
+            borderRadius: '6px',
+            fontSize: '12px'
+          }}>
+            <InfoCircleOutlined style={{ color: '#faad14', marginRight: '6px' }} />
+            请至少添加一个分类类别
+          </div>
+        )}
+      </div>
+    </>
+  )
+  
   // 渲染配置表单内容
   const renderConfigForm = () => (
     <Form
@@ -481,6 +670,9 @@ const ConfigPanel = ({
       
       {/* 知识库节点配置 */}
       {selectedNode.type === 'knowledge' && renderKnowledgeConfig()}
+      
+      {/* 分类节点配置 */}
+      {selectedNode.type === 'classifier' && renderClassifierConfig()}
     </Form>
   )
   

@@ -1,6 +1,7 @@
 /**
  * Agent工作流执行引擎
  * v2.1 - 修复output_data JSON格式问题
+ * v2.2 - 支持条件分支执行（问题分类节点多输出）
  * 负责工作流的编排、执行、积分管理和错误处理
  * 支持节点间数据传递和上下游连接
  */
@@ -20,6 +21,7 @@ class ExecutorService {
 
   /**
    * 执行工作流
+   * v2.2 - 支持条件分支执行
    * @param {number} workflowId - 工作流ID
    * @param {number} userId - 用户ID
    * @param {Object} inputData - 输入数据
@@ -74,7 +76,7 @@ class ExecutorService {
         edgeCount: edges.length
       });
 
-      // 5. 验证工作流连接性（移除结束节点强制检查）
+      // 5. 验证工作流连接性
       this.validateWorkflowConnections(nodes, edges);
 
       // 6. 验证节点类型和预估积分
@@ -123,13 +125,16 @@ class ExecutorService {
         executionOrder: sortedNodes.map(n => `${n.type}:${n.id}`)
       });
 
-      // 10. 执行节点
+      // 10. 执行节点（v2.2: 支持条件分支）
       const context = {
         input: inputData,
         variables: {},
         userId,
         workflowId,
-        executionId
+        executionId,
+        // v2.2: 记录分支决策，用于条件执行
+        branchDecisions: {},  // { classifierNodeId: 'output-cat-xxx' }
+        skippedNodes: new Set()  // 被跳过的节点ID集合
       };
 
       let totalCreditsUsed = 0;
@@ -139,6 +144,17 @@ class ExecutorService {
         // 检查超时
         if (Date.now() - startTime > this.maxExecutionTime) {
           throw new Error('执行超时（10分钟）');
+        }
+
+        // v2.2: 检查节点是否应该被跳过（条件分支）
+        if (this.shouldSkipNode(node, edges, context)) {
+          logger.info('跳过节点（条件分支未命中）', {
+            executionId,
+            nodeId: node.id,
+            nodeType: node.type
+          });
+          context.skippedNodes.add(node.id);
+          continue;
         }
 
         const nodeStartTime = Date.now();
@@ -163,20 +179,23 @@ class ExecutorService {
           const incomingEdges = edges.filter(e => e.target === node.id);
           
           if (incomingEdges.length > 0) {
-            // 有上游节点，获取上游输出
-            const sourceNodeId = incomingEdges[0].source;
-            const upstreamOutput = context.variables[sourceNodeId];
-            
-            // 传递给当前节点
+            // 有上游节点，获取上游输出（优先选择未被跳过的上游）
+            let upstreamOutput = null;
+            for (const edge of incomingEdges) {
+              if (!context.skippedNodes.has(edge.source)) {
+                upstreamOutput = context.variables[edge.source];
+                if (upstreamOutput) {
+                  logger.info('传递上游节点输出', {
+                    currentNode: node.id,
+                    upstreamNode: edge.source,
+                    hasOutput: !!upstreamOutput
+                  });
+                  break;
+                }
+              }
+            }
             context.upstreamOutput = upstreamOutput;
-            
-            logger.info('传递上游节点输出', {
-              currentNode: node.id,
-              upstreamNode: sourceNodeId,
-              hasOutput: !!upstreamOutput
-            });
           } else {
-            // 没有上游节点
             context.upstreamOutput = null;
           }
 
@@ -211,6 +230,20 @@ class ExecutorService {
           context.variables[node.id] = result.output;
           lastNodeOutput = result.output;
 
+          // v2.2: 如果是分类节点，记录分支决策
+          if (node.type === 'classifier' && result.output) {
+            const categoryId = result.output.category_id;
+            if (categoryId) {
+              // 记录选中的输出端口
+              context.branchDecisions[node.id] = `output-${categoryId}`;
+              logger.info('记录分类分支决策', {
+                nodeId: node.id,
+                categoryId,
+                selectedOutput: `output-${categoryId}`
+              });
+            }
+          }
+
           // 更新节点执行记录
           await AgentNodeExecution.update(nodeExecutionId, {
             status: 'success',
@@ -236,7 +269,6 @@ class ExecutorService {
             error: error.message
           });
 
-          // 获取对象后使用 .id 属性
           const nodeExecution = await AgentNodeExecution.findByExecutionAndNode(executionId, node.id);
           if (nodeExecution && nodeExecution.id) {
             await AgentNodeExecution.update(nodeExecution.id, {
@@ -253,7 +285,6 @@ class ExecutorService {
       const creditsToRefund = Math.max(0, preDeductedCredits - totalCreditsUsed);
 
       if (creditsToRefund > 0) {
-        // 退还多扣的积分
         await user.addCredits(
           creditsToRefund,
           `工作流退款: ${workflow.name}`,
@@ -264,13 +295,13 @@ class ExecutorService {
         logger.info('退还多扣积分', { userId, amount: creditsToRefund });
       }
 
-      // 12. 格式化最终输出（确保是对象格式）
+      // 12. 格式化最终输出
       const finalOutput = this.formatFinalOutput(lastNodeOutput);
 
       // 13. 更新执行记录为成功
       await AgentExecution.update(executionId, {
         status: 'success',
-        output_data: finalOutput,  // 确保是对象格式
+        output_data: finalOutput,
         total_credits_used: totalCreditsUsed,
         completed_at: new Date()
       });
@@ -283,7 +314,8 @@ class ExecutorService {
         userId,
         totalCreditsUsed,
         creditsRefunded: creditsToRefund,
-        duration: totalDuration
+        duration: totalDuration,
+        skippedNodes: Array.from(context.skippedNodes)
       });
 
       return {
@@ -307,17 +339,15 @@ class ExecutorService {
         stack: error.stack
       });
 
-      // 如果已经创建执行记录，更新为失败状态
       if (executionId) {
         await AgentExecution.update(executionId, {
           status: 'failed',
           error_message: error.message,
-          output_data: { error: error.message },  // 确保是对象格式
+          output_data: { error: error.message },
           completed_at: new Date()
         });
       }
 
-      // 如果预扣了积分但未退款，则退还
       if (preDeductedCredits > 0 && !creditsRefunded) {
         try {
           const user = await User.findById(userId);
@@ -338,47 +368,102 @@ class ExecutorService {
   }
 
   /**
-   * 格式化最终输出（确保返回对象格式，用于JSON字段存储）
-   * @param {any} output - 最后一个节点的输出
-   * @returns {Object} 对象格式的输出
+   * v2.2 新增：判断节点是否应该被跳过
+   * 基于条件分支决策判断
+   * @param {Object} node - 当前节点
+   * @param {Array} edges - 所有边
+   * @param {Object} context - 执行上下文
+   * @returns {boolean} 是否跳过
+   */
+  shouldSkipNode(node, edges, context) {
+    // 查找所有指向此节点的边
+    const incomingEdges = edges.filter(e => e.target === node.id);
+    
+    if (incomingEdges.length === 0) {
+      // 没有上游连接（开始节点），不跳过
+      return false;
+    }
+
+    // 检查每条入边
+    for (const edge of incomingEdges) {
+      const sourceNodeId = edge.source;
+      const sourceHandle = edge.sourceHandle;
+      
+      // 如果上游节点已被跳过，当前节点也应跳过
+      if (context.skippedNodes.has(sourceNodeId)) {
+        continue; // 检查其他入边
+      }
+      
+      // 检查是否是分类节点的条件分支
+      if (sourceHandle && sourceHandle.startsWith('output-')) {
+        // 这是一个条件分支边
+        const branchDecision = context.branchDecisions[sourceNodeId];
+        
+        if (branchDecision) {
+          // 有分支决策
+          if (branchDecision === sourceHandle) {
+            // 命中分支，不跳过
+            logger.info('条件分支命中', {
+              targetNode: node.id,
+              sourceNode: sourceNodeId,
+              sourceHandle,
+              decision: branchDecision
+            });
+            return false;
+          } else {
+            // 未命中此分支，继续检查其他入边
+            logger.info('条件分支未命中', {
+              targetNode: node.id,
+              sourceNode: sourceNodeId,
+              sourceHandle,
+              decision: branchDecision
+            });
+            continue;
+          }
+        }
+      }
+      
+      // 普通边（非条件分支），如果上游已执行，不跳过
+      if (context.variables[sourceNodeId] !== undefined) {
+        return false;
+      }
+    }
+    
+    // 所有入边都未命中或上游被跳过
+    return true;
+  }
+
+  /**
+   * 格式化最终输出
    */
   formatFinalOutput(output) {
-    // 如果是 null 或 undefined，返回空对象
     if (output === null || output === undefined) {
       return { result: null };
     }
     
-    // 如果已经是对象，检查并处理
     if (typeof output === 'object') {
-      // 如果对象有 output 属性，提取它但保持对象格式
       if (output.output !== undefined) {
         const innerOutput = output.output;
-        // 如果内层也是字符串，包装成对象
         if (typeof innerOutput === 'string') {
           return { result: innerOutput, type: 'text' };
         }
         return typeof innerOutput === 'object' ? innerOutput : { result: innerOutput };
       }
       
-      // 如果对象有 content 属性（LLM节点的输出格式）
       if (output.content !== undefined) {
         return { result: output.content, type: 'llm_response' };
       }
       
-      // 其他对象直接返回
       return output;
     }
     
-    // 如果是字符串或其他基础类型，包装成对象
     return { result: output, type: typeof output };
   }
 
   /**
    * 验证工作流连接性
-   * v2.0 - 移除结束节点强制要求，只检查LLM节点必须有上游连接
    */
   validateWorkflowConnections(nodes, edges) {
-    // 检查是否有开始节点
     const startNodes = nodes.filter(n => n.type === 'start');
     if (startNodes.length === 0) {
       throw new Error('工作流必须包含一个开始节点');
@@ -388,7 +473,6 @@ class ExecutorService {
       throw new Error('工作流只能有一个开始节点');
     }
 
-    // 检查LLM节点必须有上游连接
     for (const node of nodes) {
       if (node.type === 'llm') {
         const incomingEdges = edges.filter(e => e.target === node.id);
@@ -396,38 +480,26 @@ class ExecutorService {
         if (incomingEdges.length === 0) {
           throw new Error(`LLM节点 "${node.data?.label || node.id}" 必须连接上游节点`);
         }
-        
-        if (incomingEdges.length > 1) {
-          throw new Error(`LLM节点 "${node.data?.label || node.id}" 只能有一个上游节点`);
-        }
       }
     }
-    
-    // v2.0: 不再强制要求结束节点，最后一个节点的输出自动作为工作流输出
   }
 
   /**
    * 验证节点并估算积分消耗
-   * @param {Array} nodes - 节点数组
-   * @returns {Promise<Object>} { nodeTypeMap, estimatedCredits }
    */
   async validateAndEstimateCredits(nodes) {
     const nodeTypeMap = new Map();
     let estimatedCredits = 0;
 
     for (const node of nodes) {
-      // 检查节点类型是否已注册
       if (!NodeRegistry.has(node.type)) {
         throw new Error(`未知节点类型: ${node.type}`);
       }
 
-      // 从数据库获取节点类型配置（如果已缓存则跳过）
       if (!nodeTypeMap.has(node.type)) {
         const nodeTypeConfig = await AgentNodeType.findByTypeKey(node.type);
         
-        // 如果数据库没有配置，使用默认值（支持内置节点）
         if (!nodeTypeConfig) {
-          // 内置节点默认配置
           const defaultConfig = {
             type_key: node.type,
             display_name: node.type,
@@ -444,8 +516,6 @@ class ExecutorService {
         }
 
         nodeTypeMap.set(node.type, nodeTypeConfig);
-
-        // 累计积分
         estimatedCredits += nodeTypeConfig.credits_per_execution || 0;
       }
     }
@@ -454,25 +524,19 @@ class ExecutorService {
   }
 
   /**
-   * 拓扑排序 - 确定节点执行顺序，检测环形依赖
-   * @param {Array} nodes - 节点数组
-   * @param {Array} edges - 连线数组
-   * @returns {Array} 排序后的节点数组
+   * 拓扑排序
    */
   topologicalSort(nodes, edges) {
-    // 构建邻接表和入度表
-    const adjList = new Map(); // node.id -> [target node ids]
-    const inDegree = new Map(); // node.id -> count
-    const nodeMap = new Map(); // node.id -> node object
+    const adjList = new Map();
+    const inDegree = new Map();
+    const nodeMap = new Map();
 
-    // 初始化
     nodes.forEach(node => {
       adjList.set(node.id, []);
       inDegree.set(node.id, 0);
       nodeMap.set(node.id, node);
     });
 
-    // 构建图
     edges.forEach(edge => {
       const source = edge.source;
       const target = edge.target;
@@ -485,11 +549,9 @@ class ExecutorService {
       inDegree.set(target, inDegree.get(target) + 1);
     });
 
-    // Kahn算法
     const queue = [];
     const sorted = [];
 
-    // 找到所有入度为0的节点（开始节点）
     inDegree.forEach((degree, nodeId) => {
       if (degree === 0) {
         queue.push(nodeId);
@@ -500,12 +562,10 @@ class ExecutorService {
       throw new Error('工作流必须有至少一个开始节点（无输入连线）');
     }
 
-    // BFS排序
     while (queue.length > 0) {
       const currentId = queue.shift();
       sorted.push(nodeMap.get(currentId));
 
-      // 处理所有邻居
       adjList.get(currentId).forEach(neighborId => {
         inDegree.set(neighborId, inDegree.get(neighborId) - 1);
 
@@ -515,7 +575,6 @@ class ExecutorService {
       });
     }
 
-    // 检测环形依赖
     if (sorted.length !== nodes.length) {
       throw new Error('工作流存在环形依赖，无法执行');
     }
@@ -524,9 +583,7 @@ class ExecutorService {
   }
 
   /**
-   * 取消执行（预留）
-   * @param {number} executionId - 执行ID
-   * @param {number} userId - 用户ID
+   * 取消执行
    */
   async cancelExecution(executionId, userId) {
     try {
@@ -544,10 +601,9 @@ class ExecutorService {
         throw new Error('只能取消正在运行的执行');
       }
 
-      // 更新状态为已取消
       await AgentExecution.update(executionId, {
         status: 'cancelled',
-        output_data: { cancelled: true, message: '用户取消' },  // 确保是对象格式
+        output_data: { cancelled: true, message: '用户取消' },
         completed_at: new Date()
       });
 
@@ -564,5 +620,4 @@ class ExecutorService {
   }
 }
 
-// 导出单例
 module.exports = new ExecutorService();

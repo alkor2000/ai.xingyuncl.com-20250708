@@ -1,6 +1,7 @@
 /**
  * 节点面板 - 显示可用的节点类型
  * v2.1 - 扩展节点彩色显示，点击提示"请申请模块权限"
+ * v2.2 - 添加问题分类节点
  * 用户可以点击添加到画布
  */
 
@@ -26,7 +27,7 @@ import {
 } from '@ant-design/icons'
 
 const NodePanel = ({ nodeTypes, onAddNode }) => {
-  // 基础节点类型（移除了结束节点）
+  // 基础节点类型（v2.2 添加问题分类）
   const builtInNodes = [
     {
       type: 'start',
@@ -50,6 +51,14 @@ const NodePanel = ({ nodeTypes, onAddNode }) => {
       icon: <DatabaseOutlined />,
       color: '#722ed1',
       description: '从知识库检索',
+      available: true
+    },
+    {
+      type: 'classifier',
+      label: '问题分类',
+      icon: <BranchesOutlined />,
+      color: '#faad14',
+      description: 'AI智能分类',
       available: true
     }
   ]
@@ -102,14 +111,6 @@ const NodePanel = ({ nodeTypes, onAddNode }) => {
       icon: <CodeOutlined />,
       color: '#2f54eb',
       description: '运行Python/JS',
-      available: false
-    },
-    {
-      type: 'condition',
-      label: '条件判断',
-      icon: <BranchesOutlined />,
-      color: '#faad14',
-      description: 'IF/ELSE分支',
       available: false
     },
     {
