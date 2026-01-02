@@ -1,25 +1,40 @@
 /**
- * 节点注册表（工厂模式）
- * 管理所有节点类型的注册和实例化
+ * 节点注册表
+ * 管理所有可用的节点类型
+ * v2.0 - 新增KnowledgeNode知识库节点
+ * v2.1 - 修复createInstance方法兼容性
  */
 
 const StartNode = require('./nodes/StartNode');
 const LLMNode = require('./nodes/LLMNode');
 const EndNode = require('./nodes/EndNode');
+const KnowledgeNode = require('./nodes/KnowledgeNode');
 const logger = require('../../utils/logger');
 
 class NodeRegistry {
   constructor() {
-    // 节点类型映射表
-    this.nodeTypes = new Map();
-    
-    // 注册内置节点类型
+    this.nodes = new Map();
+    this.registerBuiltinNodes();
+  }
+
+  /**
+   * 注册内置节点
+   */
+  registerBuiltinNodes() {
+    // 开始节点
     this.register('start', StartNode);
+    
+    // LLM对话节点
     this.register('llm', LLMNode);
+    
+    // 结束节点（保留兼容）
     this.register('end', EndNode);
     
+    // 知识库节点（v2.0新增）
+    this.register('knowledge', KnowledgeNode);
+    
     logger.info('节点注册表初始化完成', {
-      registeredTypes: Array.from(this.nodeTypes.keys())
+      registeredNodes: Array.from(this.nodes.keys())
     });
   }
 
@@ -29,81 +44,73 @@ class NodeRegistry {
    * @param {Class} NodeClass - 节点类
    */
   register(type, NodeClass) {
-    if (this.nodeTypes.has(type)) {
-      logger.warn('节点类型已存在，将被覆盖', { type });
-    }
-    
-    this.nodeTypes.set(type, NodeClass);
-    logger.debug('注册节点类型', { type, className: NodeClass.name });
+    this.nodes.set(type, NodeClass);
+    logger.info(`注册节点类型: ${type}`);
   }
 
   /**
    * 获取节点类
    * @param {string} type - 节点类型标识
-   * @returns {Class|null} 节点类
+   * @returns {Class|null} - 节点类
    */
   get(type) {
-    const NodeClass = this.nodeTypes.get(type);
-    
-    if (!NodeClass) {
-      logger.error('未找到节点类型', { type, availableTypes: Array.from(this.nodeTypes.keys()) });
-      return null;
-    }
-    
-    return NodeClass;
+    return this.nodes.get(type) || null;
   }
 
   /**
-   * 创建节点实例
-   * @param {Object} nodeData - 节点数据
-   * @returns {BaseNode|null} 节点实例
-   */
-  createInstance(nodeData) {
-    const NodeClass = this.get(nodeData.type);
-    
-    if (!NodeClass) {
-      logger.error('无法创建节点实例：未知类型', { 
-        nodeId: nodeData.id, 
-        type: nodeData.type 
-      });
-      return null;
-    }
-    
-    try {
-      const instance = new NodeClass(nodeData);
-      logger.debug('创建节点实例', { 
-        nodeId: nodeData.id, 
-        type: nodeData.type,
-        className: NodeClass.name
-      });
-      return instance;
-    } catch (error) {
-      logger.error('创建节点实例失败', { 
-        nodeId: nodeData.id, 
-        type: nodeData.type,
-        error: error.message
-      });
-      return null;
-    }
-  }
-
-  /**
-   * 获取所有已注册的节点类型
-   * @returns {Array<string>} 节点类型列表
-   */
-  getRegisteredTypes() {
-    return Array.from(this.nodeTypes.keys());
-  }
-
-  /**
-   * 检查节点类型是否已注册
+   * 检查节点类型是否存在
    * @param {string} type - 节点类型标识
    * @returns {boolean}
    */
   has(type) {
-    return this.nodeTypes.has(type);
+    return this.nodes.has(type);
+  }
+
+  /**
+   * 创建节点实例
+   * v2.1 修复：兼容ExecutorService的调用方式
+   * 支持两种调用方式：
+   *   1. createInstance(nodeObject) - 传入完整的node对象
+   *   2. createInstance(type, nodeData) - 分别传入类型和数据
+   * 
+   * @param {string|Object} typeOrNode - 节点类型标识 或 完整的节点对象
+   * @param {Object} [nodeData] - 节点数据（当第一个参数是类型时使用）
+   * @returns {Object|null} - 节点实例
+   */
+  createInstance(typeOrNode, nodeData) {
+    let type;
+    let data;
+    
+    // 判断调用方式
+    if (typeof typeOrNode === 'object' && typeOrNode !== null) {
+      // 方式1: 传入完整的node对象
+      type = typeOrNode.type;
+      data = typeOrNode;
+    } else {
+      // 方式2: 分别传入类型和数据
+      type = typeOrNode;
+      data = nodeData || {};
+    }
+    
+    const NodeClass = this.get(type);
+    if (!NodeClass) {
+      logger.warn(`未知的节点类型: ${type}`);
+      return null;
+    }
+    
+    return new NodeClass(data);
+  }
+
+  /**
+   * 获取所有已注册的节点类型
+   * @returns {string[]}
+   */
+  getRegisteredTypes() {
+    return Array.from(this.nodes.keys());
   }
 }
 
-// 导出单例
-module.exports = new NodeRegistry();
+// 单例模式
+const instance = new NodeRegistry();
+
+module.exports = instance;

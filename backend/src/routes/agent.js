@@ -1,5 +1,6 @@
 /**
  * Agent工作流路由（用户端）
+ * v2.0 - 新增知识库集成
  */
 const express = require('express');
 const router = express.Router();
@@ -12,6 +13,10 @@ router.use(authenticate);
 // ========== 节点类型 ==========
 // 获取可用的节点类型列表
 router.get('/node-types', AgentController.getNodeTypes);
+
+// ========== 知识库集成（新增）==========
+// 获取用户可访问的知识库列表（用于知识节点配置）
+router.get('/wiki-items', AgentController.getWikiItems);
 
 // ========== 工作流管理 ==========
 // 获取用户的工作流列表
@@ -36,7 +41,7 @@ router.post('/workflows/:id/toggle-publish', AgentController.togglePublish);
 // 执行工作流（一次性执行）
 router.post('/workflows/:id/execute', AgentController.executeWorkflow);
 
-// ========== 测试对话（新增）==========
+// ========== 测试对话 ==========
 // 创建测试会话
 router.post('/workflows/:id/test/session', AgentController.createTestSession);
 

@@ -1,6 +1,7 @@
 /**
  * Agent工作流状态管理
  * 使用 Zustand 管理工作流的CRUD、执行、历史等状态
+ * v2.0 - 新增知识库集成
  */
 
 import { create } from 'zustand'
@@ -17,6 +18,10 @@ const useAgentStore = create((set, get) => ({
   // 用户可用模型列表
   availableModels: [],
   modelsLoading: false,
+  
+  // 用户可访问的知识库列表（v2.0新增）
+  wikiItems: [],
+  wikiItemsLoading: false,
   
   // 工作流列表
   workflows: [],
@@ -48,7 +53,7 @@ const useAgentStore = create((set, get) => ({
   stats: null,
   statsLoading: false,
   
-  // 测试会话状态（新增）
+  // 测试会话状态
   testSession: null,
   testMessages: [],
   testLoading: false,
@@ -113,6 +118,48 @@ const useAgentStore = create((set, get) => ({
   getModelByName: (modelName) => {
     const { availableModels } = get()
     return availableModels.find(m => m.name === modelName)
+  },
+  
+  // ========== 知识库相关（v2.0新增）==========
+  
+  /**
+   * 获取用户可访问的知识库列表
+   */
+  fetchWikiItems: async () => {
+    set({ wikiItemsLoading: true })
+    try {
+      const response = await apiClient.get('/agent/wiki-items')
+      if (response.data.success) {
+        set({ 
+          wikiItems: response.data.data,
+          wikiItemsLoading: false 
+        })
+        return response.data.data
+      }
+    } catch (error) {
+      console.error('获取知识库列表失败:', error)
+      message.error('获取知识库列表失败')
+      set({ wikiItemsLoading: false })
+      return []
+    }
+  },
+  
+  /**
+   * 根据ID获取知识库信息
+   */
+  getWikiById: (wikiId) => {
+    const { wikiItems } = get()
+    return wikiItems.find(w => w.id === wikiId)
+  },
+  
+  /**
+   * 根据多个ID获取知识库列表
+   */
+  getWikisByIds: (wikiIds) => {
+    const { wikiItems } = get()
+    return wikiIds
+      .map(id => wikiItems.find(w => w.id === id))
+      .filter(Boolean)
   },
   
   // ========== 工作流列表相关 ==========
@@ -320,7 +367,7 @@ const useAgentStore = create((set, get) => ({
     }
   },
   
-  // ========== 测试对话相关（新增）==========
+  // ========== 测试对话相关 ==========
   
   /**
    * 创建测试会话

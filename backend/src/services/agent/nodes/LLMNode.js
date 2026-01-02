@@ -2,6 +2,7 @@
  * AI对话节点
  * 调用大语言模型进行对话和推理（非流式，用于工作流执行）
  * 支持对话历史管理、轮数控制和上游节点输出传递
+ * v2.0 - 添加知识库上下文支持
  */
 
 const BaseNode = require('./BaseNode');
@@ -30,7 +31,21 @@ class LLMNode extends BaseNode {
   }
 
   /**
+   * 检查上游输出是否为知识库节点的输出
+   * @param {*} upstreamOutput - 上游节点输出
+   * @returns {boolean}
+   */
+  isKnowledgeOutput(upstreamOutput) {
+    if (!upstreamOutput || typeof upstreamOutput !== 'object') {
+      return false;
+    }
+    // 知识库节点输出包含 knowledge_context 字段
+    return 'knowledge_context' in upstreamOutput;
+  }
+
+  /**
    * 提取上游输出的文本内容
+   * v2.0 - 支持知识库节点输出
    * @param {*} upstreamOutput - 上游节点输出
    * @returns {string} 提取的文本内容
    */
@@ -39,12 +54,24 @@ class LLMNode extends BaseNode {
       return null;
     }
 
-    // 如果是对象，尝试提取 content 字段
+    // 如果是对象，尝试提取内容
     if (typeof upstreamOutput === 'object') {
+      // 优先级1: knowledge_context（知识库节点输出）
+      if (upstreamOutput.knowledge_context) {
+        return upstreamOutput.knowledge_context;
+      }
+      
+      // 优先级2: content 字段（LLM节点输出）
       if (upstreamOutput.content) {
         return upstreamOutput.content;
       }
-      // 如果没有 content 字段，转为 JSON 字符串
+      
+      // 优先级3: query 字段（开始节点输出）
+      if (upstreamOutput.query) {
+        return upstreamOutput.query;
+      }
+      
+      // 优先级4: 如果没有特定字段，转为 JSON 字符串
       return JSON.stringify(upstreamOutput);
     }
 
@@ -59,6 +86,7 @@ class LLMNode extends BaseNode {
 
   /**
    * 执行AI对话节点
+   * v2.0 - 支持知识库上下文注入
    * @param {Object} context - 执行上下文
    * @param {number} userId - 用户ID
    * @param {Object} nodeTypeConfig - 节点类型配置（包含积分消耗）
@@ -123,6 +151,23 @@ class LLMNode extends BaseNode {
       const systemPromptTemplate = this.getConfig('system_prompt', '');
       const userPromptTemplate = this.getConfig('user_prompt') || this.getConfig('prompt');
 
+      // ========== v2.0 新增：处理知识库上下文 ==========
+      let knowledgeContext = '';
+      let originalUserQuery = context.input?.query || '';
+      
+      // 检查上游是否为知识库节点
+      if (context.upstreamOutput && this.isKnowledgeOutput(context.upstreamOutput)) {
+        knowledgeContext = context.upstreamOutput.knowledge_context || '';
+        
+        this.log('info', '检测到知识库上下文', {
+          hasKnowledgeContext: !!knowledgeContext,
+          contextLength: knowledgeContext.length,
+          wikiCount: context.upstreamOutput.wiki_count || 0,
+          totalTokens: context.upstreamOutput.total_tokens || 0
+        });
+      }
+      // ========== v2.0 新增结束 ==========
+
       // 7. 获取当前用户消息（优先级：模板 > 上游输出 > 原始输入）
       let currentUserMessage;
       
@@ -131,8 +176,17 @@ class LLMNode extends BaseNode {
         currentUserMessage = this.replaceVariables(userPromptTemplate, context);
         this.log('info', '使用提示词模板', { templateLength: userPromptTemplate.length });
       } 
+      else if (knowledgeContext) {
+        // v2.0 优先级2: 如果有知识库上下文，将其与用户问题组合
+        currentUserMessage = this.buildKnowledgePrompt(knowledgeContext, originalUserQuery);
+        this.log('info', '使用知识库上下文 + 用户问题', { 
+          knowledgeLength: knowledgeContext.length,
+          queryLength: originalUserQuery.length,
+          combinedLength: currentUserMessage.length
+        });
+      }
       else if (context.upstreamOutput) {
-        // 优先级2: 如果有上游节点输出，使用上游输出
+        // 优先级3: 如果有上游节点输出，使用上游输出
         currentUserMessage = this.extractUpstreamContent(context.upstreamOutput);
         this.log('info', '使用上游节点输出', { 
           upstreamType: typeof context.upstreamOutput,
@@ -140,12 +194,12 @@ class LLMNode extends BaseNode {
         });
       }
       else if (context.input && context.input.query) {
-        // 优先级3: 使用输入的 query
+        // 优先级4: 使用输入的 query
         currentUserMessage = context.input.query;
         this.log('info', '使用原始输入query', { queryLength: currentUserMessage.length });
       }
       else if (context.input) {
-        // 优先级4: 使用整个输入对象
+        // 优先级5: 使用整个输入对象
         currentUserMessage = JSON.stringify(context.input);
         this.log('info', '使用整个输入对象', { inputLength: currentUserMessage.length });
       }
@@ -160,6 +214,7 @@ class LLMNode extends BaseNode {
 
       this.log('debug', '提示词处理完成', {
         hasSystemPrompt: !!systemPrompt,
+        hasKnowledgeContext: !!knowledgeContext,
         currentMessageLength: currentUserMessage.length,
         historyMessageCount: recentMessages.length
       });
@@ -181,6 +236,7 @@ class LLMNode extends BaseNode {
       this.log('info', '消息数组构建完成', {
         totalMessages: messages.length,
         systemPromptIncluded: !!systemPrompt,
+        knowledgeContextIncluded: !!knowledgeContext,
         historyIncluded: recentMessages.length,
         structure: messages.map(m => m.role)
       });
@@ -220,6 +276,38 @@ class LLMNode extends BaseNode {
 
       throw new Error(`AI对话失败: ${error.message}`);
     }
+  }
+
+  /**
+   * v2.0 新增：构建包含知识库上下文的提示词
+   * 将知识库内容和用户问题组合成完整的提示词
+   * @param {string} knowledgeContext - 知识库内容
+   * @param {string} userQuery - 用户问题
+   * @returns {string} 组合后的提示词
+   */
+  buildKnowledgePrompt(knowledgeContext, userQuery) {
+    // 如果没有知识库内容，直接返回用户问题
+    if (!knowledgeContext || knowledgeContext.trim() === '') {
+      return userQuery;
+    }
+    
+    // 如果没有用户问题，返回让AI总结知识库的提示
+    if (!userQuery || userQuery.trim() === '') {
+      return `请阅读以下知识库内容：\n\n${knowledgeContext}\n\n请根据以上内容提供帮助。`;
+    }
+    
+    // 组合知识库内容和用户问题
+    const prompt = `请参考以下知识库内容来回答用户的问题：
+
+【知识库内容】
+${knowledgeContext}
+
+【用户问题】
+${userQuery}
+
+请根据知识库内容准确回答用户的问题。如果知识库中没有相关信息，请说明并尽可能提供帮助。`;
+
+    return prompt;
   }
 
   /**

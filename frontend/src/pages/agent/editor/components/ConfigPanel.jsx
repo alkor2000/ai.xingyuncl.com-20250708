@@ -1,18 +1,31 @@
 /**
  * 配置面板 - 显示选中节点的配置选项
  * v2.1 - 添加保存按钮，显示保存状态
+ * v2.2 - 知识库节点支持选择Wiki文档，显示Token数量
  * 支持编辑节点参数
  */
 
-import React, { useEffect } from 'react'
-import { Card, Form, Input, Select, InputNumber, Empty, Spin, Slider, Divider, Button, Space } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { 
+  Card, Form, Input, Select, InputNumber, Empty, Spin, Slider, Divider, 
+  Button, Space, Tag, List, Tooltip, Typography 
+} from 'antd'
 import { 
   SettingOutlined,
   InfoCircleOutlined,
   SaveOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  DatabaseOutlined,
+  FileTextOutlined,
+  UserOutlined,
+  TeamOutlined,
+  GlobalOutlined,
+  DeleteOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
+
+const { Text } = Typography
 
 const ConfigPanel = ({ 
   selectedNode, 
@@ -24,8 +37,14 @@ const ConfigPanel = ({
 }) => {
   const [form] = Form.useForm()
   
-  // 获取用户可用模型列表
-  const { availableModels, modelsLoading, fetchAvailableModels } = useAgentStore()
+  // 获取用户可用模型列表和知识库列表
+  const { 
+    availableModels, modelsLoading, fetchAvailableModels,
+    wikiItems, wikiItemsLoading, fetchWikiItems
+  } = useAgentStore()
+  
+  // 已选择的知识库列表（本地状态）
+  const [selectedWikis, setSelectedWikis] = useState([])
   
   // 加载模型列表
   useEffect(() => {
@@ -37,17 +56,82 @@ const ConfigPanel = ({
   // 当选中节点变化时，重置表单
   useEffect(() => {
     if (selectedNode) {
-      form.setFieldsValue(selectedNode.data?.config || {})
+      const config = selectedNode.data?.config || {}
+      form.setFieldsValue(config)
+      
+      // 如果是知识库节点，恢复已选择的知识库
+      if (selectedNode.type === 'knowledge' && config.wiki_ids) {
+        // 从wikiItems中找到对应的完整信息
+        const selected = (config.wiki_ids || []).map(id => {
+          const item = wikiItems.find(w => w.id === id)
+          return item || { id, title: `知识库 #${id}`, tokens_display: '未知' }
+        }).filter(Boolean)
+        setSelectedWikis(selected)
+      } else {
+        setSelectedWikis([])
+      }
     } else {
       form.resetFields()
+      setSelectedWikis([])
     }
-  }, [selectedNode, form])
+  }, [selectedNode, form, wikiItems])
+  
+  // 知识库节点选中时加载知识库列表
+  useEffect(() => {
+    if (selectedNode?.type === 'knowledge' && wikiItems.length === 0) {
+      fetchWikiItems()
+    }
+  }, [selectedNode?.type])
   
   // 表单值变化时更新节点配置
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
+      // 如果是知识库节点，需要同步wiki_ids
+      if (selectedNode.type === 'knowledge') {
+        allValues.wiki_ids = selectedWikis.map(w => w.id)
+      }
       onUpdateConfig(selectedNode.id, allValues)
     }
+  }
+  
+  // 添加知识库
+  const handleAddWiki = (wikiId) => {
+    const wiki = wikiItems.find(w => w.id === wikiId)
+    if (wiki && !selectedWikis.find(w => w.id === wikiId)) {
+      const newSelected = [...selectedWikis, wiki]
+      setSelectedWikis(newSelected)
+      
+      // 更新表单和节点配置
+      const currentValues = form.getFieldsValue()
+      currentValues.wiki_ids = newSelected.map(w => w.id)
+      onUpdateConfig(selectedNode.id, currentValues)
+    }
+  }
+  
+  // 移除知识库
+  const handleRemoveWiki = (wikiId) => {
+    const newSelected = selectedWikis.filter(w => w.id !== wikiId)
+    setSelectedWikis(newSelected)
+    
+    // 更新表单和节点配置
+    const currentValues = form.getFieldsValue()
+    currentValues.wiki_ids = newSelected.map(w => w.id)
+    onUpdateConfig(selectedNode.id, currentValues)
+  }
+  
+  // 计算总Token
+  const totalTokens = selectedWikis.reduce((sum, w) => sum + (w.tokens || 0), 0)
+  const formatTotalTokens = (tokens) => {
+    if (tokens === 0) return '0'
+    if (tokens < 1000) return `${tokens}`
+    return `${(tokens / 1000).toFixed(1)}K`
+  }
+  
+  // 范围图标
+  const scopeIcons = {
+    personal: <UserOutlined style={{ color: '#007AFF' }} />,
+    team: <TeamOutlined style={{ color: '#34C759' }} />,
+    global: <GlobalOutlined style={{ color: '#FF9500' }} />
   }
   
   // 无选中节点时显示空状态
@@ -95,6 +179,147 @@ const ConfigPanel = ({
       </div>
     )
   }
+  
+  // 渲染知识库节点配置
+  const renderKnowledgeConfig = () => (
+    <>
+      <Divider orientation="left" plain style={{ fontSize: '12px', margin: '16px 0 12px' }}>
+        <DatabaseOutlined /> 知识库配置
+      </Divider>
+      
+      <Form.Item
+        label="数据来源"
+        name="source"
+        initialValue="wiki"
+      >
+        <Select>
+          <Select.Option value="wiki">
+            <Space>
+              <FileTextOutlined />
+              <span>知识库文档（Wiki）</span>
+            </Space>
+          </Select.Option>
+        </Select>
+      </Form.Item>
+      
+      <Form.Item
+        label="加载模式"
+        name="mode"
+        initialValue="direct"
+      >
+        <Select>
+          <Select.Option value="direct">直接加载（完整内容）</Select.Option>
+        </Select>
+      </Form.Item>
+      
+      <Form.Item
+        label="选择知识库"
+        tooltip="可选择多个知识库，内容将合并后传递给下游节点"
+      >
+        {wikiItemsLoading ? (
+          <Spin size="small" />
+        ) : (
+          <Select
+            placeholder="搜索并选择知识库..."
+            showSearch
+            optionFilterProp="children"
+            value={null}
+            onChange={handleAddWiki}
+            style={{ width: '100%' }}
+            filterOption={(input, option) =>
+              (option?.children?.props?.children?.[1]?.props?.children || '')
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          >
+            {wikiItems
+              .filter(w => !selectedWikis.find(s => s.id === w.id))
+              .map((wiki) => (
+                <Select.Option key={wiki.id} value={wiki.id}>
+                  <Space>
+                    {scopeIcons[wiki.scope]}
+                    <span>{wiki.title}</span>
+                    <Tag color="blue" style={{ marginLeft: 'auto' }}>
+                      {wiki.tokens_display} tokens
+                    </Tag>
+                  </Space>
+                </Select.Option>
+              ))}
+          </Select>
+        )}
+      </Form.Item>
+      
+      {/* 已选择的知识库列表 */}
+      {selectedWikis.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              已选择 ({selectedWikis.length}个，共 {formatTotalTokens(totalTokens)} tokens)
+            </Text>
+          </div>
+          
+          <List
+            size="small"
+            bordered
+            dataSource={selectedWikis}
+            style={{ 
+              maxHeight: '200px', 
+              overflow: 'auto',
+              borderRadius: '8px',
+              background: '#fafafa'
+            }}
+            renderItem={(wiki) => (
+              <List.Item
+                style={{ padding: '8px 12px' }}
+                actions={[
+                  <Tooltip title="移除" key="remove">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveWiki(wiki.id)}
+                    />
+                  </Tooltip>
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={scopeIcons[wiki.scope] || <FileTextOutlined />}
+                  title={
+                    <Space>
+                      <span style={{ fontSize: '13px' }}>{wiki.title}</span>
+                    </Space>
+                  }
+                  description={
+                    <Tag color="processing" style={{ fontSize: '11px' }}>
+                      {wiki.tokens_display} tokens
+                    </Tag>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+          
+          {/* Token统计 */}
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '8px 12px', 
+            background: '#e6f7ff', 
+            borderRadius: '6px',
+            fontSize: '12px'
+          }}>
+            <InfoCircleOutlined style={{ color: '#1890ff', marginRight: '6px' }} />
+            总计 <strong>{formatTotalTokens(totalTokens)}</strong> tokens 将作为上下文传递给下游LLM节点
+          </div>
+        </div>
+      )}
+    </>
+  )
   
   // 渲染配置表单内容
   const renderConfigForm = () => (
@@ -255,60 +480,7 @@ const ConfigPanel = ({
       )}
       
       {/* 知识库节点配置 */}
-      {selectedNode.type === 'knowledge' && (
-        <>
-          <Divider orientation="left" plain style={{ fontSize: '12px', margin: '16px 0 12px' }}>
-            <InfoCircleOutlined /> 检索配置
-          </Divider>
-          
-          <Form.Item
-            label="知识库"
-            name="knowledge_base"
-            tooltip="选择要检索的知识库"
-          >
-            <Input placeholder="输入知识库名称" />
-          </Form.Item>
-          
-          <Form.Item
-            label="检索模式"
-            name="search_mode"
-            initialValue="vector"
-          >
-            <Select>
-              <Select.Option value="vector">向量检索</Select.Option>
-              <Select.Option value="keyword">关键词检索</Select.Option>
-              <Select.Option value="hybrid">混合检索</Select.Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            label="Top-K"
-            name="top_k"
-            initialValue={5}
-            tooltip="返回前K个最相关的结果"
-          >
-            <InputNumber
-              min={1}
-              max={20}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          
-          <Form.Item
-            label="相似度阈值"
-            name="threshold"
-            initialValue={0.7}
-            tooltip="最低相似度分数"
-          >
-            <InputNumber
-              min={0}
-              max={1}
-              step={0.1}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-        </>
-      )}
+      {selectedNode.type === 'knowledge' && renderKnowledgeConfig()}
     </Form>
   )
   

@@ -2,14 +2,17 @@
  * Agent工作流控制器（用户端）
  * 处理工作流的CRUD和执行
  * v2.1 - 修复测试对话AI回复显示问题
+ * v2.2 - 新增知识库集成getWikiItems方法
  */
 
 const AgentWorkflow = require('../models/AgentWorkflow');
 const AgentNodeType = require('../models/AgentNodeType');
 const AgentExecution = require('../models/AgentExecution');
+const WikiItem = require('../models/WikiItem');
 const ExecutorService = require('../services/agent/ExecutorService');
 const TestSessionService = require('../services/agent/TestSessionService');
 const ResponseHelper = require('../utils/response');
+const { calculateTokens, formatTokenCount } = require('../utils/tokenCalculator');
 const logger = require('../utils/logger');
 
 class AgentController {
@@ -23,6 +26,49 @@ class AgentController {
     } catch (error) {
       logger.error('获取节点类型失败:', error);
       return ResponseHelper.error(res, '获取节点类型失败');
+    }
+  }
+
+  /**
+   * 获取用户可访问的知识库列表（v2.2新增）
+   * 用于知识节点配置时选择知识库
+   * 返回带有token数量的知识库列表
+   */
+  static async getWikiItems(req, res) {
+    try {
+      const userId = req.user.id;
+      const groupId = req.user.group_id;
+      const userRole = req.user.role;
+
+      // 获取用户可访问的所有知识库
+      const items = await WikiItem.getUserAccessibleItems(userId, groupId, userRole);
+
+      // 为每个知识库计算token数量
+      const itemsWithTokens = items.map(item => {
+        const tokens = calculateTokens(item.content || '');
+        return {
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          scope: item.scope,
+          creator_name: item.creator_name,
+          group_name: item.group_name,
+          current_version: item.current_version,
+          tokens: tokens,
+          tokens_display: formatTokenCount(tokens),
+          updated_at: item.updated_at
+        };
+      });
+
+      logger.info('获取知识库列表成功', { 
+        userId, 
+        count: itemsWithTokens.length 
+      });
+
+      return ResponseHelper.success(res, itemsWithTokens, '获取知识库列表成功');
+    } catch (error) {
+      logger.error('获取知识库列表失败:', error);
+      return ResponseHelper.error(res, '获取知识库列表失败');
     }
   }
 
@@ -213,6 +259,8 @@ class AgentController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const groupId = req.user.group_id;
+      const userRole = req.user.role;
       const { input_data = {} } = req.body;
 
       logger.info('开始执行工作流请求', { 
@@ -221,11 +269,12 @@ class AgentController {
         inputData: input_data 
       });
 
-      // 调用执行引擎
+      // 调用执行引擎，传入用户信息用于权限检查
       const result = await ExecutorService.executeWorkflow(
         parseInt(id), 
         userId, 
-        input_data
+        input_data,
+        { groupId, userRole }  // 传入用户上下文
       );
 
       logger.info('工作流执行成功', { 
@@ -376,6 +425,8 @@ class AgentController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const groupId = req.user.group_id;
+      const userRole = req.user.role;
       const { session_id, message } = req.body;
 
       if (!session_id || !message) {
@@ -422,7 +473,8 @@ class AgentController {
             role: m.role,
             content: m.content
           }))
-        }
+        },
+        { groupId, userRole }  // 传入用户上下文
       );
 
       // v2.1 修复：使用智能提取方法获取AI回复文本
