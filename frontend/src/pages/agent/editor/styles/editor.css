@@ -1,4 +1,9 @@
-/* 工作流编辑器样式 - 增强版 */
+/**
+ * 工作流编辑器样式 - 增强版
+ * 修复：配置抽屉不再遮挡顶部工具栏
+ */
+
+/* ========== 编辑器整体布局 ========== */
 
 .workflow-editor {
   display: flex;
@@ -7,7 +12,8 @@
   background: #f0f2f5;
 }
 
-/* 工具栏 */
+/* ========== 顶部工具栏 ========== */
+
 .workflow-editor-toolbar {
   display: flex;
   justify-content: space-between;
@@ -16,7 +22,9 @@
   background: #fff;
   border-bottom: 1px solid #e8e8e8;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  z-index: 100;
+  /* 确保工具栏在抽屉之上 */
+  z-index: 1001;
+  position: relative;
 }
 
 .toolbar-left {
@@ -38,20 +46,67 @@
   align-items: center;
 }
 
-/* 主体区域 */
+/* ========== 主体区域 ========== */
+
 .workflow-editor-body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  /* 关键：设置相对定位，让内部的抽屉相对于此区域定位 */
+  position: relative;
 }
 
-/* 节点面板 */
+/* ========== 配置抽屉样式覆盖 ========== */
+
+/* 让抽屉只在 body 区域内显示，不遮挡工具栏 */
+.workflow-editor-body .ant-drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+}
+
+.workflow-editor-body .ant-drawer-right {
+  right: 0;
+}
+
+/* 抽屉内容区域 */
+.workflow-editor-body .ant-drawer-content-wrapper {
+  height: 100% !important;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.workflow-editor-body .ant-drawer-content {
+  height: 100%;
+  overflow: auto;
+}
+
+/* 抽屉头部样式 */
+.workflow-editor-body .ant-drawer-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.workflow-editor-body .ant-drawer-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* 抽屉关闭按钮 */
+.workflow-editor-body .ant-drawer-close {
+  padding: 8px;
+}
+
+/* ========== 左侧节点面板 ========== */
+
 .workflow-editor-node-panel {
   width: 280px;
   background: #fff;
   border-right: 1px solid #e8e8e8;
   overflow-y: auto;
   padding: 16px;
+  /* 确保节点面板在抽屉之下 */
+  z-index: 1;
 }
 
 .node-panel-section h4 {
@@ -68,14 +123,23 @@
   margin-top: 8px;
 }
 
-/* 画布区域 */
+/* ========== 中间画布区域 ========== */
+
 .workflow-editor-canvas {
   flex: 1;
   position: relative;
   background: #fafafa;
+  /* 确保画布在抽屉之下 */
+  z-index: 1;
 }
 
-/* 配置面板 */
+/* 画布全宽模式（配置面板改为抽屉后） */
+.workflow-editor-canvas-full {
+  flex: 1;
+}
+
+/* ========== 右侧配置面板（如果使用固定面板模式） ========== */
+
 .workflow-editor-config-panel {
   width: 320px;
   background: #fff;
@@ -170,6 +234,24 @@
   color: #531dab;
   border-bottom: 1px solid #d3adf7;
 }
+
+/* 分类节点 */
+.classifier-node.enhanced {
+  border-color: #faad14;
+}
+
+.classifier-node.enhanced.selected {
+  border-color: #faad14;
+  box-shadow: 0 0 0 4px rgba(250, 173, 20, 0.2);
+}
+
+.classifier-node.enhanced .node-header {
+  background: linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%);
+  color: #ad6800;
+  border-bottom: 1px solid #ffe58f;
+}
+
+/* ========== 节点内部结构样式 ========== */
 
 /* 节点头部 */
 .node-header {
@@ -318,7 +400,8 @@
   font-style: italic;
 }
 
-/* 自定义连接点 */
+/* ========== 自定义连接点 ========== */
+
 .custom-handle {
   width: 12px;
   height: 12px;
@@ -327,7 +410,8 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* ReactFlow 覆盖样式 */
+/* ========== ReactFlow 覆盖样式 ========== */
+
 .react-flow__node {
   cursor: pointer;
 }
@@ -348,7 +432,8 @@
   stroke-width: 3;
 }
 
-/* 加载状态 */
+/* ========== 加载和错误状态 ========== */
+
 .workflow-editor-loading,
 .workflow-editor-error {
   display: flex;
@@ -359,7 +444,8 @@
   color: #8c8c8c;
 }
 
-/* 响应式 */
+/* ========== 响应式布局 ========== */
+
 @media (max-width: 1024px) {
   .workflow-editor-node-panel {
     width: 220px;
@@ -372,5 +458,30 @@
   .custom-node.enhanced {
     min-width: 220px;
     max-width: 240px;
+  }
+  
+  /* 小屏幕上抽屉宽度调整 */
+  .workflow-editor-body .ant-drawer-content-wrapper {
+    width: 300px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .workflow-editor-node-panel {
+    width: 180px;
+    padding: 12px;
+  }
+  
+  .workflow-editor-toolbar {
+    padding: 8px 16px;
+  }
+  
+  .toolbar-left {
+    gap: 8px;
+  }
+  
+  /* 移动端抽屉全宽 */
+  .workflow-editor-body .ant-drawer-content-wrapper {
+    width: 100% !important;
   }
 }
