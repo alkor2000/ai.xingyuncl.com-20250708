@@ -1,13 +1,29 @@
 /**
  * 测试对话抽屉样式
+ * v1.1 调整 z-index 确保不被工具栏遮挡
  */
 
+/* v1.1 确保抽屉在最上层 */
 .test-drawer {
+  /* 抽屉整体的 z-index 由组件的 zIndex 属性控制 */
+  
+  .ant-drawer-content-wrapper {
+    /* 确保内容区域也有正确的层级 */
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .ant-drawer-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fff;
+  }
+  
   .ant-drawer-body {
     padding: 0;
     display: flex;
     flex-direction: column;
     height: 100%;
+    background: #fafafa;
   }
 }
 
@@ -25,7 +41,7 @@
   margin-bottom: 16px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  background: #fafafa;
+  background: #fff;
   padding: 16px;
 }
 
@@ -47,12 +63,18 @@
     
     .message-content {
       align-items: flex-end;
-      background: #1890ff;
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
       color: white;
+      
+      .message-header {
+        .message-role, .message-time {
+          color: rgba(255, 255, 255, 0.9);
+        }
+      }
     }
     
     .message-avatar {
-      background: #1890ff;
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
       color: white;
     }
   }
@@ -60,10 +82,11 @@
   &.ai-message {
     .message-content {
       background: white;
+      border: 1px solid #f0f0f0;
     }
     
     .message-avatar {
-      background: #52c41a;
+      background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
       color: white;
     }
   }
@@ -78,15 +101,16 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* 消息内容 */
 .message-content {
   flex: 1;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 12px 16px;
   max-width: 80%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -98,27 +122,33 @@
   align-items: center;
   margin-bottom: 4px;
   font-size: 12px;
-  opacity: 0.8;
 }
 
 .message-role {
-  font-weight: 500;
+  font-weight: 600;
+  color: #262626;
 }
 
 .message-time {
   font-size: 11px;
+  color: #8c8c8c;
 }
 
 .message-text {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 14px;
 }
 
 /* 输入区域 */
 .test-input-container {
   border-top: 1px solid #f0f0f0;
   padding-top: 12px;
+  background: #fff;
+  margin: 0 -16px -16px -16px;
+  padding: 12px 16px 16px 16px;
+  border-radius: 0 0 0 0;
 }
 
 .test-actions {
@@ -137,12 +167,18 @@
 .test-input {
   flex: 1;
   border-radius: 8px;
+  
+  &:focus {
+    border-color: #1890ff;
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  }
 }
 
 .test-send-button {
   height: 40px;
   padding: 0 20px;
   border-radius: 8px;
+  font-weight: 500;
 }
 
 /* 动画 */
@@ -163,7 +199,7 @@
 }
 
 .test-messages-container::-webkit-scrollbar-track {
-  background: #f0f0f0;
+  background: #f5f5f5;
   border-radius: 3px;
 }
 
@@ -173,5 +209,20 @@
   
   &:hover {
     background: #bfbfbf;
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .test-chat-container {
+    padding: 12px;
+  }
+  
+  .message-content {
+    max-width: 85%;
+  }
+  
+  .test-send-button {
+    padding: 0 12px;
   }
 }

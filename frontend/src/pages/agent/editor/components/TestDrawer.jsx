@@ -1,10 +1,12 @@
 /**
  * 工作流测试抽屉 - 对话式测试界面
  * 类似 FastGPT 的运行预览，支持多轮对话
+ * 
+ * v1.1 优化：删除顶部无用的说明文字，调整 z-index 避免被遮挡
  */
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Drawer, Input, Button, Alert, Empty, Space, Tag, Spin } from 'antd'
+import { Drawer, Input, Button, Empty, Space, Tag, Spin } from 'antd'
 import {
   SendOutlined,
   DeleteOutlined,
@@ -107,21 +109,16 @@ const TestDrawer = ({ open, onClose, workflow }) => {
         </Space>
       }
       placement="right"
-      width={600}
+      width={480}
       onClose={handleClose}
       open={open}
       destroyOnClose={false}
       className="test-drawer"
+      // v1.1 设置较高的 z-index 确保不被遮挡
+      zIndex={1100}
     >
       <div className="test-chat-container">
-        <Alert
-          message="对话测试模式"
-          description="每次发送消息都会从START节点开始执行工作流，LLM节点会记住完整对话历史。"
-          type="info"
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-        />
+        {/* v1.1 删除了无用的 Alert 说明文字 */}
         
         {/* 对话消息列表 */}
         <div className="test-messages-container">

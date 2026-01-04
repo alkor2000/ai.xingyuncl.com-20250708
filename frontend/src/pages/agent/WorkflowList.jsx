@@ -1,8 +1,10 @@
 /**
- * Agent工作流列表页 v2.1
+ * Agent工作流列表页 v2.2
  * 卡片式网格布局，FastGPT风格
  * 支持创建、编辑、删除、执行、发布等操作
+ * 
  * v2.1 修复：Dropdown菜单点击事件冒泡问题
+ * v2.2 新增：重命名功能，可以在列表中修改工作流名称和描述
  */
 
 import React, { useEffect, useState, useMemo } from 'react'
@@ -37,7 +39,8 @@ import {
   AppstoreOutlined,
   RobotOutlined,
   CloseCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  FormOutlined
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -54,7 +57,7 @@ dayjs.locale('zh-cn')
 /**
  * 工作流卡片组件
  */
-const WorkflowCard = ({ workflow, onEdit, onDelete, onTogglePublish, onExecute }) => {
+const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, onExecute }) => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   
@@ -75,10 +78,16 @@ const WorkflowCard = ({ workflow, onEdit, onDelete, onTogglePublish, onExecute }
     }
   }
   
-  // 处理编辑
+  // 处理编辑（进入画布）
   const handleEdit = (e) => {
     e.domEvent?.stopPropagation()
     onEdit(workflow)
+  }
+  
+  // v2.2 处理重命名
+  const handleRename = (e) => {
+    e.domEvent?.stopPropagation()
+    onRename(workflow)
   }
   
   // 处理执行
@@ -99,8 +108,14 @@ const WorkflowCard = ({ workflow, onEdit, onDelete, onTogglePublish, onExecute }
     onDelete(workflow)
   }
   
-  // 更多操作菜单
+  // 更多操作菜单 - v2.2 添加重命名选项
   const menuItems = [
+    {
+      key: 'rename',
+      label: '重命名',
+      icon: <FormOutlined />,
+      onClick: handleRename
+    },
     {
       key: 'edit',
       label: t('agent.workflow.edit'),
@@ -206,6 +221,7 @@ const WorkflowList = () => {
     workflowsPagination,
     fetchWorkflows,
     createWorkflow,
+    updateWorkflow,
     deleteWorkflow,
     togglePublish
   } = useAgentStore()
@@ -217,6 +233,12 @@ const WorkflowList = () => {
   const [searchText, setSearchText] = useState('')
   const [filterStatus, setFilterStatus] = useState('all') // all, published, draft
   const [form] = Form.useForm()
+  
+  // v2.2 重命名弹窗状态
+  const [renameModalVisible, setRenameModalVisible] = useState(false)
+  const [workflowToRename, setWorkflowToRename] = useState(null)
+  const [renameForm] = Form.useForm()
+  const [renaming, setRenaming] = useState(false)
   
   // 初始加载
   useEffect(() => {
@@ -269,9 +291,41 @@ const WorkflowList = () => {
     }
   }
   
-  // 编辑工作流
+  // 编辑工作流（进入画布）
   const handleEdit = (workflow) => {
     navigate(`/agent/editor/${workflow.id}`)
+  }
+  
+  // v2.2 打开重命名弹窗
+  const handleRenameClick = (workflow) => {
+    setWorkflowToRename(workflow)
+    renameForm.setFieldsValue({
+      name: workflow.name,
+      description: workflow.description || ''
+    })
+    setRenameModalVisible(true)
+  }
+  
+  // v2.2 确认重命名
+  const handleRenameConfirm = async (values) => {
+    if (!workflowToRename) return
+    
+    setRenaming(true)
+    try {
+      await updateWorkflow(workflowToRename.id, {
+        name: values.name,
+        description: values.description || ''
+      })
+      
+      setRenameModalVisible(false)
+      setWorkflowToRename(null)
+      renameForm.resetFields()
+      message.success('工作流信息已更新')
+    } catch (error) {
+      console.error('重命名失败:', error)
+    } finally {
+      setRenaming(false)
+    }
   }
   
   // 删除工作流 - 显示确认弹窗
@@ -405,6 +459,7 @@ const WorkflowList = () => {
                 <WorkflowCard
                   workflow={workflow}
                   onEdit={handleEdit}
+                  onRename={handleRenameClick}
                   onDelete={handleDeleteClick}
                   onTogglePublish={handleTogglePublish}
                   onExecute={handleExecute}
@@ -472,6 +527,60 @@ const WorkflowList = () => {
             tooltip="发布后才能执行工作流"
           >
             <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+      
+      {/* v2.2 重命名工作流弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <FormOutlined />
+            重命名工作流
+          </Space>
+        }
+        open={renameModalVisible}
+        onCancel={() => {
+          setRenameModalVisible(false)
+          setWorkflowToRename(null)
+          renameForm.resetFields()
+        }}
+        onOk={() => renameForm.submit()}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={renaming}
+        width={520}
+        className="rename-workflow-modal"
+      >
+        <Form
+          form={renameForm}
+          layout="vertical"
+          onFinish={handleRenameConfirm}
+        >
+          <Form.Item
+            name="name"
+            label="工作流名称"
+            rules={[
+              { required: true, message: '请输入工作流名称' },
+              { max: 100, message: '名称不能超过100个字符' }
+            ]}
+          >
+            <Input placeholder="例如：AI客服自动回复" />
+          </Form.Item>
+          
+          <Form.Item
+            name="description"
+            label="描述（可选）"
+            rules={[
+              { max: 500, message: '描述不能超过500个字符' }
+            ]}
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder="描述这个工作流的用途..."
+              showCount
+              maxLength={500}
+            />
           </Form.Item>
         </Form>
       </Modal>
