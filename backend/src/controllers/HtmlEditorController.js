@@ -1,5 +1,8 @@
 /**
  * HTML编辑器控制器
+ * 
+ * v1.1 修复页面列表加载上限问题 - 2025-01-04
+ *   - getPages 方法默认 limit 从 20 改为 500
  */
 
 const HtmlProject = require('../models/HtmlProject');
@@ -195,11 +198,14 @@ class HtmlEditorController {
 
   /**
    * 获取页面列表
+   * 
+   * v1.1 修复：默认 limit 从 20 改为 500，解决页面丢失问题
    */
   static async getPages(req, res) {
     try {
       const userId = req.user.id;
-      const { project_id, page = 1, limit = 20, is_published } = req.query;
+      // v1.1 默认 limit 改为 500，确保用户能看到所有页面
+      const { project_id, page = 1, limit = 500, is_published } = req.query;
 
       const result = await HtmlPage.getUserPages(userId, project_id, {
         page: parseInt(page),
