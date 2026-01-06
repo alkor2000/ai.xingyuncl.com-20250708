@@ -1,7 +1,11 @@
 /**
- * 文件管理系统 - 优化配色版
+ * 文件管理系统 - 优化配色版 v1.1
  * 文件夹和文件使用鲜艳渐变色，存储卡片更紧凑
- * 新增：文件夹悬停操作按钮样式
+ * v1.1 更新：
+ * - 左侧标题改为"智能云盘"
+ * - 新增"文件夹列表"小标题样式
+ * - 新增右侧当前文件夹名称样式
+ * - 文件夹树扁平化，"我的文件夹"与其他文件夹齐平
  */
 
 // 渐变色系统
@@ -52,6 +56,7 @@
       display: flex;
       flex-direction: column;
 
+      // v1.1 顶部标题改为"智能云盘"
       .folder-tree-header {
         background: @indigo-gradient;
         padding: 14px 18px;
@@ -60,10 +65,22 @@
         font-weight: 600;
       }
 
+      // v1.1 新增"文件夹列表"小标题
+      .folder-list-title {
+        padding: 12px 18px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: @text-muted;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #f1f5f9;
+        background: #fafbfc;
+      }
+
       .folder-tree {
         flex: 1;
         overflow-y: auto;
-        padding: 16px;
+        padding: 12px 16px;
 
         &::-webkit-scrollbar {
           width: 6px;
@@ -78,10 +95,17 @@
           background: transparent;
           color: @text-dark;
 
+          // v1.1 调整树节点样式，让所有文件夹齐平
+          .ant-tree-treenode {
+            padding: 2px 0;
+            width: 100%;
+          }
+
           .ant-tree-node-content-wrapper {
             padding: 8px 12px;
             border-radius: 8px;
             transition: all 0.2s;
+            flex: 1;
 
             &:hover {
               background: #f1f5f9;
@@ -90,12 +114,28 @@
             &.ant-tree-node-selected {
               background: @blue-gradient;
               color: white;
+
+              .ant-tree-iconEle {
+                color: white;
+              }
             }
           }
 
-          .ant-tree-icon {
+          .ant-tree-switcher {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          // v1.1 文件夹图标统一颜色
+          .ant-tree-iconEle {
             color: #f59e0b;
             font-size: 16px;
+          }
+
+          // 选中状态的图标颜色
+          .ant-tree-node-selected .ant-tree-iconEle {
+            color: white;
           }
         }
       }
@@ -108,7 +148,7 @@
       padding: 16px;
       color: white;
       box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.3);
-      height: 140px; // 固定高度，更紧凑
+      height: 140px;
 
       > div:first-child {
         font-size: 14px;
@@ -170,7 +210,28 @@
       justify-content: space-between;
 
       .breadcrumb-nav {
+        display: flex;
+        align-items: center;
+        gap: 16px;
         flex: 1;
+
+        // v1.1 新增当前文件夹名称显示
+        .current-folder-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px;
+          background: @blue-gradient;
+          color: white;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+
+          .folder-icon {
+            font-size: 16px;
+          }
+        }
 
         .ant-breadcrumb {
           font-size: 14px;
@@ -334,7 +395,7 @@
                 color: white !important;
               }
 
-              // 文件夹悬停操作按钮 - 新增
+              // 文件夹悬停操作按钮
               .folder-actions {
                 position: absolute;
                 top: 8px;
@@ -721,6 +782,11 @@
         height: auto;
         padding: 12px;
       }
+    }
+
+    .storage-main .storage-toolbar .breadcrumb-nav .current-folder-name {
+      padding: 4px 10px;
+      font-size: 12px;
     }
 
     .storage-content.grid-view .file-grid {

@@ -1,10 +1,14 @@
 /**
- * 文件存储管理页面 - iOS风格界面（增强版）
+ * 文件存储管理页面 - iOS风格界面（增强版）v1.1
  * 支持拖拽上传、多视图切换、右键菜单、文件夹删除等功能
- * 新增功能：
- * 1. 文件夹重命名
- * 2. 批量上传优化（明显提示、继续添加按钮）- 修复批量选择问题
- * 3. 网格视图文件夹操作按钮（悬停显示）
+ * 
+ * v1.1 更新：
+ * 1. 左侧顶部标题改为"智能云盘"
+ * 2. 新增"文件夹列表"小标题
+ * 3. "我的文件夹"与其他文件夹齐平（扁平化）
+ * 4. 右侧显示当前文件夹名称
+ * 5. 进入页面默认选中"我的文件夹"
+ * 
  * 修改：完整国际化支持(i18n)
  */
 
@@ -109,47 +113,30 @@ const ViewMode = {
 const getFileTypeClass = (mimeType, fileName) => {
   const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
   
-  // 图片类型
   if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
     return 'image-file'
   }
-  
-  // 视频类型
   if (mimeType?.startsWith('video/') || ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
     return 'video-file'
   }
-  
-  // PDF
   if (mimeType?.includes('pdf') || ext === 'pdf') {
     return 'pdf-file'
   }
-  
-  // Word文档
   if (mimeType?.includes('word') || ['doc', 'docx'].includes(ext)) {
     return 'document-file'
   }
-  
-  // Excel表格
   if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet') || ['xls', 'xlsx'].includes(ext)) {
     return 'excel-file'
   }
-  
-  // PPT演示
   if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
     return 'ppt-file'
   }
-  
-  // 压缩文件
   if (mimeType?.includes('zip') || mimeType?.includes('rar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
     return 'archive-file'
   }
-  
-  // 文本文件
   if (mimeType?.includes('text') || ['txt', 'md', 'json', 'js', 'css', 'html', 'xml', 'csv'].includes(ext)) {
     return 'text-file'
   }
-  
-  // 未知类型
   return 'unknown-file'
 }
 
@@ -195,55 +182,36 @@ const DraggableItem = ({ item, type, children, onMove }) => {
 }
 
 /**
- * 文件图标组件 - 增强版本，更多文件类型
+ * 文件图标组件
  */
 const FileIcon = ({ mimeType, fileName, size = 64 }) => {
   const iconProps = { style: { fontSize: size } }
-  
-  // 根据文件扩展名判断
   const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
   
-  // 图片类型
   if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
     return <FileImageOutlined {...iconProps} className="file-icon image-icon" />
   }
-  
-  // 视频类型
   if (mimeType?.startsWith('video/') || ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
     return <VideoCameraOutlined {...iconProps} className="file-icon video-icon" />
   }
-  
-  // PDF
   if (mimeType?.includes('pdf') || ext === 'pdf') {
     return <FilePdfOutlined {...iconProps} className="file-icon pdf-icon" />
   }
-  
-  // Word文档
   if (mimeType?.includes('word') || ['doc', 'docx'].includes(ext)) {
     return <FileWordOutlined {...iconProps} className="file-icon document-icon" />
   }
-  
-  // Excel表格
   if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet') || ['xls', 'xlsx'].includes(ext)) {
     return <FileExcelOutlined {...iconProps} className="file-icon excel-icon" style={{ color: '#10b981' }} />
   }
-  
-  // PPT演示
   if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
     return <FilePptOutlined {...iconProps} className="file-icon ppt-icon" style={{ color: '#f97316' }} />
   }
-  
-  // 压缩文件
   if (mimeType?.includes('zip') || mimeType?.includes('rar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
     return <FileZipOutlined {...iconProps} className="file-icon archive-icon" />
   }
-  
-  // 文本文件
   if (mimeType?.includes('text') || ['txt', 'md', 'json', 'js', 'css', 'html', 'xml', 'csv'].includes(ext)) {
     return <FileTextOutlined {...iconProps} className="file-icon document-icon" />
   }
-  
-  // 未知类型
   return <FileUnknownOutlined {...iconProps} className="file-icon" />
 }
 
@@ -298,7 +266,9 @@ const StorageManager = () => {
   const [fileList, setFileList] = useState([])
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewFile, setPreviewFile] = useState(null)
-  const [treeExpandedKeys, setTreeExpandedKeys] = useState(['root'])
+  // v1.1 默认选中"我的文件夹"（key='root'）
+  const [treeSelectedKeys, setTreeSelectedKeys] = useState(['root'])
+  const [treeExpandedKeys, setTreeExpandedKeys] = useState([])
   const [dragActive, setDragActive] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -308,16 +278,14 @@ const StorageManager = () => {
   const [hoveredFolderId, setHoveredFolderId] = useState(null)
 
   /**
-   * 复制链接到剪贴板的辅助函数 - 移到组件内部
+   * 复制链接到剪贴板
    */
   const copyToClipboard = useCallback(async (text, successMessage, errorMessage) => {
     try {
-      // 优先使用现代API
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
         message.success(successMessage || t('storage.linkCopied'))
       } else {
-        // 降级方案
         const textArea = document.createElement('textarea')
         textArea.value = text
         textArea.style.position = 'fixed'
@@ -337,16 +305,14 @@ const StorageManager = () => {
   // 初始化加载数据
   useEffect(() => {
     loadData()
-    // 获取积分配置
     getCreditConfig()
-    // 获取用户当前积分
     if (user) {
       const credits = (user.credits_quota || 0) - (user.used_credits || 0)
       setUserCredits(Math.max(0, credits))
     }
   }, [currentFolder])
 
-  // 监听用户信息变化，更新积分显示
+  // 监听用户信息变化
   useEffect(() => {
     if (user) {
       const credits = (user.credits_quota || 0) - (user.used_credits || 0)
@@ -358,7 +324,6 @@ const StorageManager = () => {
   useEffect(() => {
     const counts = {}
     folders.forEach(folder => {
-      // 计算每个文件夹内的文件数
       const count = files.filter(file => file.folder_id === folder.id).length
       counts[folder.id] = count
     })
@@ -422,17 +387,13 @@ const StorageManager = () => {
 
     try {
       const result = await uploadFiles(droppedFiles, currentFolder?.id)
-      
       if (result.success && result.success.length > 0) {
         message.success(t('storage.uploadSuccess', { count: result.success.length }))
       }
-      
       if (result.failed && result.failed.length > 0) {
         message.error(t('storage.uploadPartialFailed', { count: result.failed.length }))
       }
-      
       await loadData()
-      // 刷新用户信息以更新积分
       if (window.useAuthStore) {
         const authStore = window.useAuthStore.getState()
         if (authStore.getCurrentUser) {
@@ -444,14 +405,12 @@ const StorageManager = () => {
     }
   }
 
-  // 处理文件上传（点击按钮）
+  // 处理文件上传
   const handleUpload = async () => {
     if (fileList.length === 0) {
       message.warning(t('storage.selectFilesFirst'))
       return
     }
-
-    // 检查积分是否足够
     if (uploadCreditsNeeded > 0 && userCredits < uploadCreditsNeeded) {
       message.error(t('storage.insufficientCredits', { 
         required: uploadCreditsNeeded, 
@@ -461,22 +420,17 @@ const StorageManager = () => {
     }
 
     const files = fileList.map(f => f.originFileObj || f)
-    
     try {
       const result = await uploadFiles(files, currentFolder?.id)
-      
       if (result.success && result.success.length > 0) {
         message.success(t('storage.uploadSuccess', { count: result.success.length }))
       }
-      
       if (result.failed && result.failed.length > 0) {
         message.error(t('storage.uploadPartialFailed', { count: result.failed.length }))
       }
-      
       setUploadModalVisible(false)
       setFileList([])
       await loadData()
-      // 刷新用户信息以更新积分
       if (window.useAuthStore) {
         const authStore = window.useAuthStore.getState()
         if (authStore.getCurrentUser) {
@@ -491,15 +445,9 @@ const StorageManager = () => {
   // 处理右键菜单
   const handleContextMenu = (e, item, type) => {
     e.preventDefault()
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      item,
-      type
-    })
+    setContextMenu({ x: e.clientX, y: e.clientY, item, type })
   }
 
-  // 关闭右键菜单
   const closeContextMenu = () => {
     setContextMenu(null)
   }
@@ -563,7 +511,6 @@ const StorageManager = () => {
       message.warning(t('storage.selectFilesFirst'))
       return
     }
-
     Modal.confirm({
       title: t('common.confirmDelete'),
       content: t('storage.confirmDeleteFiles', { count: selectedFiles.length }),
@@ -586,7 +533,6 @@ const StorageManager = () => {
       message.warning(t('storage.enterFolderName'))
       return
     }
-
     try {
       await createFolder(folderName, currentFolder?.id)
       message.success(t('storage.createFolderSuccess'))
@@ -612,12 +558,10 @@ const StorageManager = () => {
       message.warning(t('storage.enterNewFolderName'))
       return
     }
-
     if (newFolderName.trim() === renamingFolder.name) {
       setRenameFolderVisible(false)
       return
     }
-
     try {
       await renameFolder(renamingFolder.id, newFolderName.trim())
       message.success(t('storage.renameFolderSuccess'))
@@ -638,7 +582,9 @@ const StorageManager = () => {
     folder.name.toLowerCase().includes(searchKeyword.toLowerCase())
   )
 
-  // 转换文件夹数据为树形结构
+  /**
+   * v1.1 转换文件夹数据为树形结构（扁平化，不再有根节点嵌套）
+   */
   const convertToTreeData = (folders) => {
     return folders.map(folder => ({
       key: folder.id,
@@ -658,6 +604,39 @@ const StorageManager = () => {
     }))
   }
 
+  /**
+   * v1.1 构建扁平化的树数据
+   * "我的文件夹"与其他文件夹（全局共享、组织共享）齐平
+   */
+  const buildFlatTreeData = () => {
+    // "我的文件夹"作为第一个节点
+    const myFolderNode = {
+      key: 'root',
+      title: (
+        <span style={{ fontWeight: 600 }}>
+          {t('storage.myFolder')}
+        </span>
+      ),
+      icon: <FolderOutlined />,
+      children: []
+    }
+    
+    // 将folderTree中的文件夹作为同级节点
+    const otherFolders = convertToTreeData(folderTree)
+    
+    return [myFolderNode, ...otherFolders]
+  }
+
+  /**
+   * v1.1 获取当前文件夹的显示名称
+   */
+  const getCurrentFolderDisplayName = () => {
+    if (!currentFolder) {
+      return t('storage.myFolder')
+    }
+    return currentFolder.name
+  }
+
   // 面包屑导航项
   const breadcrumbItems = []
   let current = currentFolder
@@ -675,10 +654,10 @@ const StorageManager = () => {
     onClick: () => setCurrentFolder(null)
   })
 
-  // 渲染网格视图 - 新增悬停操作按钮
+  // 渲染网格视图
   const renderGridView = () => (
     <div className="file-grid">
-      {/* 文件夹 - 添加folder-item类名和悬停操作按钮 */}
+      {/* 文件夹 */}
       {filteredFolders.map(folder => {
         const fileCount = files.filter(f => f.folder_id === folder.id).length
         const isHovered = hoveredFolderId === folder.id
@@ -694,21 +673,16 @@ const StorageManager = () => {
               className="file-item folder-item"
               onMouseEnter={() => setHoveredFolderId(folder.id)}
               onMouseLeave={() => setHoveredFolderId(null)}
-              onDoubleClick={() => {
-                setCurrentFolder(folder)
-              }}
+              onDoubleClick={() => setCurrentFolder(folder)}
               onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
             >
               <div className="file-icon folder-icon">
                 {fileCount > 0 ? <FolderFilled /> : <FolderOutlined />}
-                {fileCount > 0 && (
-                  <span className="file-count">{fileCount}</span>
-                )}
+                {fileCount > 0 && <span className="file-count">{fileCount}</span>}
               </div>
               <div className="file-name">{folder.name}</div>
               <div className="file-size">{t('storage.folder')}</div>
               
-              {/* 悬停时显示的操作按钮 */}
               {isHovered && (
                 <div className="folder-actions" onClick={(e) => e.stopPropagation()}>
                   <Tooltip title={t('storage.rename')}>
@@ -741,7 +715,7 @@ const StorageManager = () => {
         )
       })}
       
-      {/* 文件 - 根据类型添加对应的类名 */}
+      {/* 文件 */}
       {filteredFiles.map(file => {
         const fileTypeClass = getFileTypeClass(file.mime_type, file.original_name)
         
@@ -776,7 +750,7 @@ const StorageManager = () => {
     </div>
   )
 
-  // 表格列配置（列表视图）- 添加重命名操作
+  // 表格列配置（列表视图）
   const columns = [
     {
       title: () => (
@@ -807,9 +781,7 @@ const StorageManager = () => {
             <Space>
               {fileCount > 0 ? <FolderFilled style={{ color: '#fbbf24', fontSize: 24 }} /> : <FolderOutlined style={{ color: '#fbbf24', fontSize: 24 }} />}
               <span style={{ fontWeight: 600 }}>{record.name}</span>
-              {fileCount > 0 && (
-                <Tag color="orange">{fileCount} {t('storage.files')}</Tag>
-              )}
+              {fileCount > 0 && <Tag color="orange">{fileCount} {t('storage.files')}</Tag>}
             </Space>
           )
         }
@@ -837,7 +809,6 @@ const StorageManager = () => {
         if (record.isFolder) {
           return <Tag color="gold">{t('storage.folder')}</Tag>
         }
-        
         const typeMap = {
           'image': { color: 'green', text: t('storage.type.image') },
           'video': { color: 'blue', text: t('storage.type.video') },
@@ -845,14 +816,12 @@ const StorageManager = () => {
           'document': { color: 'orange', text: t('storage.type.document') },
           'zip': { color: 'purple', text: t('storage.type.archive') }
         }
-        
         let typeInfo = { color: 'default', text: t('storage.type.other') }
         Object.keys(typeMap).forEach(key => {
           if (type?.includes(key)) {
             typeInfo = typeMap[key]
           }
         })
-        
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>
       }
     },
@@ -871,26 +840,13 @@ const StorageManager = () => {
         if (record.isFolder) {
           return (
             <Space>
-              <Button 
-                type="link" 
-                size="small"
-                onClick={() => setCurrentFolder(record)}
-              >
+              <Button type="link" size="small" onClick={() => setCurrentFolder(record)}>
                 {t('storage.open')}
               </Button>
-              <Button 
-                type="link" 
-                size="small"
-                onClick={() => openRenameFolder(record)}
-              >
+              <Button type="link" size="small" onClick={() => openRenameFolder(record)}>
                 <EditOutlined />
               </Button>
-              <Button 
-                type="link" 
-                size="small" 
-                danger 
-                onClick={() => handleDeleteFolder(record)}
-              >
+              <Button type="link" size="small" danger onClick={() => handleDeleteFolder(record)}>
                 <DeleteOutlined />
               </Button>
             </Space>
@@ -908,20 +864,12 @@ const StorageManager = () => {
               </Button>
             </Tooltip>
             <Tooltip title={t('common.download')}>
-              <Button type="link" size="small" onClick={() => {
-                window.open(record.oss_url, '_blank')
-              }}>
+              <Button type="link" size="small" onClick={() => window.open(record.oss_url, '_blank')}>
                 <DownloadOutlined />
               </Button>
             </Tooltip>
             <Tooltip title={t('storage.copyLink')}>
-              <Button 
-                type="link" 
-                size="small" 
-                onClick={() => {
-                  copyToClipboard(record.oss_url, t('storage.linkCopied'), t('storage.copyFailed'))
-                }}
-              >
+              <Button type="link" size="small" onClick={() => copyToClipboard(record.oss_url, t('storage.linkCopied'), t('storage.copyFailed'))}>
                 <LinkOutlined />
               </Button>
             </Tooltip>
@@ -939,11 +887,24 @@ const StorageManager = () => {
   // 生成积分说明文本
   const getCreditDescription = () => {
     if (!creditConfig) return ''
-    
     return t('storage.creditRule5MB', {
       base: creditConfig.base_credits,
       per5mb: creditConfig.credits_per_5mb
     })
+  }
+
+  /**
+   * v1.1 处理树节点选择
+   */
+  const handleTreeSelect = (keys, info) => {
+    setTreeSelectedKeys(keys)
+    if (keys[0] === 'root') {
+      setCurrentFolder(null)
+    } else {
+      const folder = info.node
+      setCurrentFolder(folder)
+    }
+    clearSelection()
   }
 
   return (
@@ -954,41 +915,28 @@ const StorageManager = () => {
           <div className={`storage-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
             {/* 文件夹树卡片 */}
             <div className="folder-tree-card">
+              {/* v1.1 顶部标题改为"智能云盘" */}
               <div className="folder-tree-header">
-                {t('storage.rootFolder')}
+                {t('storage.smartStorage')}
+              </div>
+              {/* v1.1 新增"文件夹列表"小标题 */}
+              <div className="folder-list-title">
+                {t('storage.folderList')}
               </div>
               <div className="folder-tree">
                 <Tree
                   showIcon
                   showLine={{ showLeafIcon: false }}
-                  treeData={[
-                    {
-                      key: 'root',
-                      title: (
-                        <span style={{ fontWeight: 600 }}>
-                          {t('storage.rootFolder')}
-                        </span>
-                      ),
-                      icon: <HomeOutlined />,
-                      children: convertToTreeData(folderTree)
-                    }
-                  ]}
-                  onSelect={(keys, info) => {
-                    if (keys[0] === 'root') {
-                      setCurrentFolder(null)
-                    } else {
-                      const folder = info.node
-                      setCurrentFolder(folder)
-                    }
-                    clearSelection()
-                  }}
+                  selectedKeys={treeSelectedKeys}
+                  treeData={buildFlatTreeData()}
+                  onSelect={handleTreeSelect}
                   expandedKeys={treeExpandedKeys}
                   onExpand={setTreeExpandedKeys}
                 />
               </div>
             </div>
             
-            {/* 存储信息卡片 - 更紧凑 */}
+            {/* 存储信息卡片 */}
             {storageStats && !sidebarCollapsed && (
               <div className="storage-info-card">
                 <div>{t('storage.storageInfo')}</div>
@@ -1017,11 +965,15 @@ const StorageManager = () => {
             {/* 工具栏 */}
             <div className="storage-toolbar">
               <div className="breadcrumb-nav">
+                {/* v1.1 新增当前文件夹名称显示 */}
+                <div className="current-folder-name">
+                  <FolderOutlined className="folder-icon" />
+                  {getCurrentFolderDisplayName()}
+                </div>
                 <Breadcrumb items={breadcrumbItems} />
               </div>
               
               <div className="toolbar-actions">
-                {/* 搜索框 */}
                 <div className="search-box">
                   <Input
                     placeholder={t('storage.searchPlaceholder')}
@@ -1032,7 +984,6 @@ const StorageManager = () => {
                   <SearchOutlined className="search-icon" />
                 </div>
                 
-                {/* 视图切换 */}
                 <div className="view-switcher">
                   <button 
                     className={viewMode === ViewMode.GRID ? 'active' : ''}
@@ -1050,7 +1001,6 @@ const StorageManager = () => {
                   </button>
                 </div>
                 
-                {/* 操作按钮 */}
                 <Button icon={<FolderAddOutlined />} onClick={() => setCreateFolderVisible(true)}>
                   {screens.md && t('storage.newFolder')}
                 </Button>
@@ -1123,7 +1073,7 @@ const StorageManager = () => {
           <CloudUploadOutlined />
         </button>
         
-        {/* 右键菜单 - 添加重命名选项 */}
+        {/* 右键菜单 */}
         {contextMenu && (
           <div 
             className="context-menu"
@@ -1138,16 +1088,11 @@ const StorageManager = () => {
                   <FolderOpenOutlined className="menu-icon" />
                   {t('storage.open')}
                 </div>
-                
-                <div className="menu-item" onClick={() => {
-                  openRenameFolder(contextMenu.item)
-                }}>
+                <div className="menu-item" onClick={() => openRenameFolder(contextMenu.item)}>
                   <EditOutlined className="menu-icon" />
                   {t('storage.rename')}
                 </div>
-                
                 <div className="menu-divider" />
-                
                 <div className="menu-item danger" onClick={() => {
                   handleDeleteFolder(contextMenu.item)
                   closeContextMenu()
@@ -1166,7 +1111,6 @@ const StorageManager = () => {
                   <EyeOutlined className="menu-icon" />
                   {t('common.preview')}
                 </div>
-                
                 <div className="menu-item" onClick={() => {
                   window.open(contextMenu.item.oss_url, '_blank')
                   closeContextMenu()
@@ -1174,7 +1118,6 @@ const StorageManager = () => {
                   <DownloadOutlined className="menu-icon" />
                   {t('common.download')}
                 </div>
-                
                 <div className="menu-item" onClick={() => {
                   copyToClipboard(contextMenu.item.oss_url, t('storage.linkCopied'), t('storage.copyFailed'))
                   closeContextMenu()
@@ -1182,9 +1125,7 @@ const StorageManager = () => {
                   <CopyOutlined className="menu-icon" />
                   {t('storage.copyLink')}
                 </div>
-                
                 <div className="menu-divider" />
-                
                 <div className="menu-item danger" onClick={() => {
                   handleDelete(contextMenu.item)
                   closeContextMenu()
@@ -1197,7 +1138,7 @@ const StorageManager = () => {
           </div>
         )}
         
-        {/* 上传弹窗 - 增强版，显示批量上传提示，修复批量选择问题 */}
+        {/* 上传弹窗 */}
         <Modal
           title={t('storage.uploadFiles')}
           open={uploadModalVisible}
@@ -1210,7 +1151,6 @@ const StorageManager = () => {
           confirmLoading={uploading}
           width={700}
         >
-          {/* 积分和限制信息 */}
           {creditConfig && (
             <Alert
               message={t('storage.uploadDescription')}
@@ -1241,7 +1181,6 @@ const StorageManager = () => {
             />
           )}
           
-          {/* 批量上传提示 */}
           <Alert
             message={t('storage.batchUploadTip')}
             type="success"
@@ -1253,13 +1192,11 @@ const StorageManager = () => {
             multiple
             fileList={fileList}
             beforeUpload={(file) => {
-              // 检查文件大小
               const maxSize = (creditConfig?.max_file_size || 100) * 1024 * 1024
               if (file.size > maxSize) {
                 message.error(t('storage.singleFileLimit', { size: creditConfig?.max_file_size || 100 }))
                 return false
               }
-              // 使用函数式setState确保正确累加所有文件
               setFileList(prevList => [...prevList, file])
               return false
             }}
@@ -1279,7 +1216,6 @@ const StorageManager = () => {
             </p>
           </Dragger>
           
-          {/* 显示选中文件的积分消耗 */}
           {fileList.length > 0 && creditConfig && (
             <div style={{ marginTop: 16 }}>
               <Divider />
@@ -1341,7 +1277,7 @@ const StorageManager = () => {
           />
         </Modal>
         
-        {/* 重命名文件夹弹窗 - 新增 */}
+        {/* 重命名文件夹弹窗 */}
         <Modal
           title={t('storage.renameFolder')}
           open={renameFolderVisible}

@@ -1,5 +1,8 @@
 {
   "storage.title": "文件管理",
+  "storage.smartStorage": "智能云盘",
+  "storage.folderList": "文件夹列表",
+  "storage.myFolder": "我的文件夹",
   "storage.myFiles": "默认文件夹",
   "storage.rootFolder": "默认文件夹",
   "storage.personalFiles": "个人文件",
@@ -84,5 +87,6 @@
   "storage.insufficientCredits": "积分不足！需要 {{required}} 积分，当前余额 {{current}} 积分",
   "storage.copyFailed": "复制失败，请手动复制",
   "storage.dragActive": "松开鼠标即可上传",
-  "storage.continueAddFiles": "继续添加文件"
+  "storage.continueAddFiles": "继续添加文件",
+  "storage.currentLocation": "当前位置"
 }
