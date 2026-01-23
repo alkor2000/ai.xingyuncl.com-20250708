@@ -25,6 +25,19 @@ This repository contains the complete source code for the **AI Practice Platform
 
 ---
 
+## Live Demo
+
+Experience the system without installation:
+
+| | |
+|---|---|
+| **URL** | https://ai.xingyuncl.com |
+| **Username** | fsetest |
+| **Password** | fse2026 |
+| **Role** | Group Admin (limited permissions) |
+
+---
+
 ## AOCI Index
 
 The AOCI index files referenced in the paper are available at:
@@ -159,6 +172,19 @@ MIT License - see [LICENSE](LICENSE) file.
 | Git提交次数 | 454次 |
 | 活跃用户 | 4,400+ |
 | 开发周期 | 8个月（业余时间） |
+
+---
+
+## 在线演示
+
+无需安装，直接体验：
+
+| | |
+|---|---|
+| **网址** | https://ai.xingyuncl.com |
+| **用户名** | fsetest |
+| **密码** | fse2026 |
+| **角色** | 组管理员（有限权限） |
 
 ---
 
