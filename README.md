@@ -134,11 +134,29 @@ npm install
 npm run build
 
 # Database initialization
-mysql -u root -p < docker/mysql-init/01-complete-database-structure.sql
+mysql -u root -p ai_platform < docker/mysql-init/01-complete-database-structure.sql
+mysql -u root -p ai_platform < docker/mysql-init/02-initial-data.sql
 
 # Start services
 pm2 start ecosystem.config.js
 ```
+
+### Default Admin Account
+
+After installation, login with:
+
+| Username | Password |
+|----------|----------|
+| admin | Admin@123456 |
+
+**⚠️ Important**: Change the admin password immediately after first login.
+
+### Post-Installation Configuration
+
+1. Login as admin
+2. Go to **Settings > AI Models** and configure API keys
+3. Enable the models you want to use
+4. Configure other settings as needed (SMTP, registration, etc.)
 
 ### Configuration
 
@@ -327,12 +345,30 @@ cd ../frontend
 npm install
 npm run build
 
-# 数据库初始化
-mysql -u root -p < docker/mysql-init/01-complete-database-structure.sql
+# 数据库初始化（需先创建数据库：CREATE DATABASE ai_platform;）
+mysql -u root -p ai_platform < docker/mysql-init/01-complete-database-structure.sql
+mysql -u root -p ai_platform < docker/mysql-init/02-initial-data.sql
 
 # 启动服务
 pm2 start ecosystem.config.js
 ```
+
+### 默认管理员账户
+
+安装完成后，使用以下账户登录：
+
+| 用户名 | 密码 |
+|--------|------|
+| admin | Admin@123456 |
+
+**⚠️ 重要**：首次登录后请立即修改管理员密码。
+
+### 安装后配置
+
+1. 以管理员身份登录
+2. 进入**设置 > AI模型管理**，配置API密钥
+3. 启用需要使用的模型
+4. 根据需要配置其他设置（邮件SMTP、注册开关等）
 
 ---
 
