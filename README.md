@@ -56,10 +56,12 @@ The complete AOCI index for this 156K LOC system is approximately **600 lines**.
 
 ## AOCI Index
 
-The complete AOCI index (code + database schema) is available in two languages:
+The complete AOCI index (code + database schema) is available in:
 
-- **English**: [AOCI-INDEX-EN.md](AOCI-INDEX-EN.md)
-- **中文**: [AOCI-INDEX-ZH.md](AOCI-INDEX-ZH.md)
+| Language | Location |
+|----------|----------|
+| English | [docs/aoci/index-en-US-20260123.txt](docs/aoci/index-en-US-20260123.txt) |
+| 中文 | [docs/aoci/index-zh-CN-20260123.txt](docs/aoci/index-zh-CN-20260123.txt) |
 
 ---
 
@@ -100,7 +102,7 @@ The complete AOCI index (code + database schema) is available in two languages:
 
 ### Database Schema
 
-- **86 tables** (including 3 views)
+- **90 objects** (83 tables + 4 backup tables + 3 views)
 - Organized into 12 logical modules
 
 ---
@@ -164,8 +166,8 @@ This repository supports the empirical claims in our FSE 2026 submission:
 |-------|---------------------|
 | 156,454 lines of code | `find . -name "*.js" -o -name "*.jsx" \| xargs wc -l` |
 | 454 Git commits | `git rev-list --count HEAD` |
-| ~600 line AOCI index | `wc -l AOCI-INDEX-*.md` |
-| 86 database tables | Check AOCI index database section |
+| ~600 line AOCI index | `wc -l docs/aoci/index-*.txt` |
+| 90 database objects | Check AOCI index database section |
 
 ---
 
@@ -250,8 +252,10 @@ MIT License - see [LICENSE](LICENSE) file.
 
 完整的AOCI索引（代码+数据库）提供两种语言版本：
 
-- **English**: [AOCI-INDEX-EN.md](AOCI-INDEX-EN.md)
-- **中文**: [AOCI-INDEX-ZH.md](AOCI-INDEX-ZH.md)
+| 语言 | 位置 |
+|------|------|
+| English | [docs/aoci/index-en-US-20260123.txt](docs/aoci/index-en-US-20260123.txt) |
+| 中文 | [docs/aoci/index-zh-CN-20260123.txt](docs/aoci/index-zh-CN-20260123.txt) |
 
 ---
 
@@ -292,7 +296,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ### 数据库架构
 
-- **86张表**（含3个视图）
+- **90个对象**（83张表 + 4张备份表 + 3个视图）
 - 按12个逻辑模块组织
 
 ---

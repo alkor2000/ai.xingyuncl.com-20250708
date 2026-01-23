@@ -1,0 +1,721 @@
+===AI应用与实践平台文档完整索引-20260123===
+
+[索引说明]
+本索引用于AI注意力机制快速理解系统全貌,内容力求简洁精准
+
+===代码索引部分===
+
+格式: 文件名[标签]: F:功能 | R:关联文件 | A:API路径 | S:简述
+标签[ABCDE]: 层级(F前端/B后端/S服务/C控制器/M中间件/D数据库/U工具/R路由) 模块(C核心/A认证/T对话/R积分/K知识/I图像/V视频/S存储/L日历/E教学/G工作流/H编辑器/P智能应用/O其他/W知识库) 重要度(9核心/8高频/7业务/5常规/3辅助) 特征(P积分/A异步流式/T事务并发/E外部API/C配置/R权限) 大小(L大/M中/S小)
+
+模块一:核心系统与启动
+--后端核心--
+/var/www/ai-platform/backend/src/
+server.js[BCC9S]: F:服务器启动入口 | R:app.js,dbConnection,redisConnection | A:无 | S:PM2启动,数据库/Redis初始化,SIGTERM优雅关闭,端口4000
+app.js[BCC9M]: F:Express应用初始化 | R:所有routes,middleware | A:/health,/health/detailed,/pages/:userId/:slug | S:17模块路由注册含smartAppRoutes+wikiRoutes,动态速率限制,健康检查,CORS/helmet,静态文件
+.env[BCC9S]: F:环境变量配置 | R:config/index.js | A:无 | S:生产环境,MySQL/Redis连接,JWT强密钥,CORS白名单,Casbin权限开关
+--配置与连接--
+/var/www/ai-platform/backend/src/config/
+index.js[BCC9M]: F:统一配置管理 | R:所有模块 | A:无 | S:环境变量管理,智能检测Docker/PM2,存储路径统一,JWT/CORS/Redis配置
+/var/www/ai-platform/backend/src/database/
+connection.js[DCC9M]: F:MySQL连接池管理 | R:所有Model层 | A:无 | S:MySQL2单例,事务自动管理,execute预编译,simpleQuery解决LIMIT/OFFSET
+redis.js[DCC9M]: F:Redis缓存连接 | R:cacheService,rateLimitService | A:无 | S:Redis单例,自动重连,keyPrefix隔离,JSON序列化,错误容错不阻塞
+--工具类--
+/var/www/ai-platform/backend/src/utils/
+logger.js[UCC9M]: F:Winston日志管理 | R:所有模块 | A:无 | S:自动创建目录,文件+控制台双输出,5MB轮转,支持Docker/PM2
+response.js[UCC9S]: F:统一响应格式 | R:所有Controller | A:无 | S:8种响应方法,success/error/validation/unauthorized,统一时间戳和结构
+errors.js[UCC9S]: F:自定义错误类体系 | R:errorHandler,所有Service | A:无 | S:9种错误类,AppError基类,ValidationError/AuthenticationError等
+tokenCalculator.js[UTC8PM]: F:Token计算估算 | R:ChatController,积分系统 | A:无 | S:中英文分别计算,中文1.5倍英文1.3倍,formatTokenCount格式化K单位
+--中间件--
+/var/www/ai-platform/backend/src/middleware/
+errorHandler.js[MCC9M]: F:全局错误处理 | R:app.js,logger,response | A:无 | S:捕获未处理异常,JWT/数据库/Multer错误,生产隐藏堆栈,进程信号处理
+authMiddleware.js[MAC9RM]: F:JWT认证和权限检查 | R:User模型,redisConnection,所有路由 | A:无 | S:支持SSE查询参数,Token黑名单,账号有效期,角色/权限/组权限4层检查
+uploadMiddleware.js[MO7S]: F:文件上传中间件 | R:multer,config,logger | A:中间件 | S:Multer图片上传处理支持6种图片格式,10MB大小限制单文件,按年月chat-images分目录,唯一文件名generateFileName时间戳+MD5,getFileUrl获取公开访问URL,deleteFile删除文件,handleUpload错误处理包装
+cacheMiddleware.js[MC7M]: F:API响应缓存中间件 | R:redisConnection,logger | A:中间件工厂 | S:只缓存GET请求,Redis存储TTL默认300秒,拦截res.json方法缓存成功响应,X-Cache响应头HIT/MISS,按用户ID或anonymous生成缓存键,Redis不可用降级不阻塞
+documentUploadMiddleware.js[MO5M]: F:文档上传中间件 | R:multer,config,logger,fs,crypto | A:中间件 | S:支持PDF/Word/TXT/Excel/PPT/RTF等12种格式,磁盘存储避免内存溢出,50MB大小限制,按年月分类,文件名编码修复latin1->utf8,extractDocumentContent内容提取限制10000字符
+publicUploadMiddleware.js[MO5S]: F:公开上传中间件 | R:multer,logger | A:中间件 | S:营业执照等无需认证文件上传,内存存储memoryStorage准备上传OSS,支持6种图片MIME+PDF,10MB大小限制
+systemUploadMiddleware.js[MO3S]: F:系统文件上传中间件 | R:multer,config,logger,crypto,fs | A:中间件 | S:站点Logo等系统级文件上传,磁盘存储,支持6种图片格式含SVG,2MB大小限制
+--系统服务--
+/var/www/ai-platform/backend/src/services/
+healthCheckService.js[SC9S]: F:健康检查服务 | R:dbConnection,redisConnection,os | A:/health,/health/detailed | S:系统/数据库/Redis/内存4项检查,快速检查负载均衡器用,详细检查监控用,内存>90%告警
+cacheService.js[SCC9TM]: F:Redis缓存统一管理 | R:redisConnection | A:无 | S:7种缓存类型,4级TTL(5分钟/30分钟/2小时/24小时),fallback降级机制,SCAN批量清除
+rateLimitService.js[SC9CM]: F:动态速率限制服务 | R:SystemConfig,express-rate-limit | A:内部服务 | S:5种限制器(auth/emailCode/global/adminRead/adminWrite),enabled字段支持禁用,配置热更新清除缓存,默认2000次/15分钟全局
+emailService.js[SA7ECS]: F:邮件服务 | R:nodemailer,SystemConfig,logger | A:SMTP外部 | S:Nodemailer邮件发送,sendVerificationCode发送6位验证码5分钟有效,sendTestEmail测试邮件,从SystemConfig读SMTP配置
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+SystemConfig.js[DSC8M]: F:系统配置管理 | R:dbConnection | A:无 | S:键值对存储+类型自动转换(json/boolean/number/string),批量UPSERT更新,getFormattedSettings嵌套结构
+Module.js[DCO9CRL]: F:系统模块模型 | R:dbConnection,crypto | A:无 | S:系统/外部模块双类型,allowed_groups JSON权限,超级管理员强制访问管理模块,config加密AES-256-CBC
+--PM2配置--
+/var/www/ai-platform/
+ecosystem.config.js[UC9CS]: F:PM2进程管理配置 | R:无 | A:无 | S:PM2配置2进程ai-platform-auth后端4000+ai-platform-frontend前端3000,后端2GB内存+前端500M,日志路径logs分离,自动重启5秒延迟最多10次
+--前端核心--
+/var/www/ai-platform/frontend/src/
+main.jsx[FC9S]: F:React应用入口 | R:App,i18n,networkService | A:应用启动 | S:网络监测服务初始化挂载到window.networkService,网络恢复时刷新用户状态,生产环境不用StrictMode避免双重渲染
+App.jsx[FC9CM]: F:应用入口主组件v1.2知识库Wiki路由 | R:Router,ConfigProvider,ThemeProvider,authStore,systemConfigStore | A:路由配置 | S:React路由配置,懒加载19个页面模块含SmartApps+Wiki,ProtectedRoute/PublicRoute守卫,动态favicon+title更新,多语言支持,v1.2新增/wiki路由
+--前端工具与服务--
+/var/www/ai-platform/frontend/src/utils/
+api.js[FU9ACEL]: F:API客户端封装 | R:axios,authStore | A:拦截器全局配置 | S:智能Token自动刷新最多3次,401拦截+队列重试,流式SSE支持postStream,AbortController取消机制,请求追踪X-Request-ID
+/var/www/ai-platform/frontend/src/services/
+tokenRefreshService.js[SA9CM]: F:Token自动刷新服务 | R:authStore | A:后台定时任务 | S:提前5分钟自动刷新,parseExpiresIn(s/m/h/d),页面可见性监听,30秒定期检查,防重复刷新锁,单例模式
+networkService.js[FC9S]: F:网络状态监测服务 | R:message(antd) | A:浏览器事件 | S:简化版只监听浏览器online/offline事件不主动检查,message提示网络状态,单例模式
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+systemConfigStore.js[FC9CL]: F:系统配置状态管理 | R:apiClient,authStore | A:/admin/settings,/public/system-config,/admin/settings/upload-logo | S:站点配置name/logo/description,用户配置注册开关/默认积分token,组级配置优先userSiteConfig,管理员/普通用户双接口
+--前端构建配置--
+/var/www/ai-platform/frontend/
+vite.config.js[FC5CS]: F:Vite构建配置 | R:vite,react,vite-plugin-monaco-editor | A:构建配置 | S:Monaco Editor插件完整Worker配置,dev服务器0.0.0.0监听+proxy代理/api到4000,manualChunks分包策略8个vendor包
+package.json[FC9CS]: F:前端依赖管理 | R:无 | A:项目配置 | S:React 18+Vite 5+Antd 5技术栈,48个dependencies含Monaco+ReactFlow+ECharts+Mermaid+Prism
+
+模块二:认证授权系统
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+auth.js[RAC9S]: F:认证路由定义 | R:AuthControllerRefactored,authMiddleware | A:/auth/login,/auth/register,/auth/sso,/auth/send-email-code,/auth/verify-invitation-code,/auth/check-email | S:4种登录方式,邀请码验证,注册检查端点,9个公开+5个认证端点
+public.js[RC7CS]: F:公开路由定义 | R:dbConnection,OrgApplicationController,PublicUploadController,publicUploadMiddleware | A:/public/custom-homepage,/public/system-config,/public/org-application/* | S:4个公开端点无需认证,JSON_OBJECT查询配置避免多次查询,错误兜底返回默认值保证可用性
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+AuthControllerRefactored.js[CAC9RL]: F:认证控制器核心 | R:User,SystemConfig,SSOService,EmailAuthService,TokenService,SiteConfigService,GroupService | A:对应auth路由所有端点 | S:16个方法,4种登录(密码/验证码/邮箱密码验证码/SSO),邀请码注册,账号有效期检查,强制验证模式
+PublicUploadController.js[CO5ES]: F:公开上传控制器 | R:multer,ossService,ResponseHelper,crypto | A:内部调用 | S:营业执照等无需登录文件上传,OSS/本地自动切换,public/applications/{year}/{month}目录隔离
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+jwtService.js[SAC9M]: F:模块JWT生成 | R:User模型,config | A:无 | S:支持uuid/sub/name等标准字段,4种传输方式query/header/cookie/post,SSO验证接口
+authService.js[SAC5M]: F:认证服务老版本 | R:jwt,User,config,errors | A:内部服务 | S:JWT生成/验证双Token,注册/登录/刷新令牌,邮箱格式验证,密码强度检查6位
+/var/www/ai-platform/backend/src/services/auth/
+TokenService.js[SAC9TM]: F:JWT令牌生成刷新 | R:SystemConfig,redisConnection,config | A:无 | S:access/refresh双Token,动态过期时间,Redis黑名单,jti唯一标识,支持SSO用户标记
+EmailAuthService.js[SAC8S]: F:邮箱验证码服务 | R:EmailService,redisConnection | A:无 | S:6位验证码,5分钟有效,60秒发送限制,Redis存储,邮件服务依赖检查
+SSOService.js[SAC9RS]: F:SSO单点登录 | R:User,SystemConfig | A:无 | S:MD5签名验证,IP白名单,时间戳防重放5分钟,自动创建/更新SSO用户,账号有效期检查
+SiteConfigService.js[SAC7CS]: F:站点配置服务 | R:SystemConfig,logger | A:内部服务 | S:getUserSiteConfig获取用户站点配置,组级配置优先group_site_name/group_site_logo,兜底默认配置防错误
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+User.js[DAC9PTRL]: F:用户模型核心 | R:bcrypt,dbConnection,logger | A:无 | S:软删除自动重命名释放唯一字段,3层权限super_admin/admin/user,积分全生命周期管理(充值/扣减/消费/有效期),账号有效期管理,UUID支持
+--Casbin权限引擎--
+/var/www/ai-platform/backend/src/services/casbin/
+CasbinService.js[SAC9RL]: F:Casbin权限引擎服务 | R:casbin,dbConnection,logger | A:内部服务 | S:RBAC权限管理单例,自定义MySQL适配器+deny策略表分离,checkPermission先检查deny再检查allow,角色继承+权限查询,策略热重载
+CasbinAuthAdapter.js[SAC9RL]: F:Casbin权限适配器 | R:CasbinService,GlobalAuthorizationService,logger,config | A:内部服务 | S:Casbin与原系统并行适配器,灰度切换开关ENABLE_CASBIN/USE_CASBIN_RESULT,权限检查对比日志,deny策略处理
+CasbinSyncService.js[SAC8RTM]: F:Casbin数据同步服务 | R:dbConnection,CasbinService,logger | A:内部服务 | S:从teaching_global_authorizations同步到Casbin,组/标签/用户三级权限映射,allow/deny策略批量导入,增量/全量同步
+--Casbin配置--
+/var/www/ai-platform/backend/src/config/casbin/
+teaching_model.conf[SC5CR]: F:Casbin教学系统权限模型配置 | R:CasbinService,GlobalAuthorizationService | A:无 | S:RBAC with domains模型支持多级继承,g用户->标签->组和g2课程->模块双继承,用于教学系统三级权限view_lesson/view_plan/edit
+--权限中间件--
+/var/www/ai-platform/backend/src/middleware/permissions/
+superAdminMiddleware.js[MAC9RS]: F:超级管理员权限中间件 | R:ResponseHelper,logger | A:中间件 | S:5个权限检查器requireSuperAdmin/canManageCredits/canManageSystem/canManageAIModels/canManageGroups,role严格检查super_admin,403 forbidden响应
+groupAdminMiddleware.js[MAC8RS]: F:组管理员权限中间件 | R:User,ResponseHelper,logger | A:中间件 | S:5个权限检查器,canManageUser同组验证,canCreateUser强制role=user+group_id,restrictFieldsForGroupAdmin过滤7个受限字段
+index.js[MAC5S]: F:权限中间件统一导出 | R:groupAdminMiddleware,superAdminMiddleware | A:中间件 | S:导出组管理员和超级管理员权限中间件,统一入口
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/auth/
+Login.jsx[FA9AL]: F:登录页面 | R:authStore,apiClient,LanguageSwitch | A:/auth/login,/auth/login-by-code,/auth/login-by-email-password | S:3种登录模式(密码/验证码/邮箱密码验证码),iOS风格设计,邮箱验证码60秒倒计时,企业申请入口,移动端适配
+/var/www/ai-platform/frontend/src/pages/profile/
+Profile.jsx[FA8M]: F:个人中心页面 | R:authStore,i18n,antd | A:通过authStore | S:3个Tab(基本信息/积分历史/权限列表),修改密码移除原密码验证,积分统计卡片3指标,角色Tag颜色映射
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+authStore.js[FA9ACRM]: F:认证状态管理 | R:tokenRefreshService,systemConfigStore,apiClient | A:/auth/login,/auth/refresh,/auth/me,/auth/register | S:4种登录方式,双Token机制,parseExpiresIn解析,persist持久化,登录清理chatStore,站点配置同步
+
+模块三:对话系统
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+chat.js[RTC9M]: F:对话路由定义 | R:ChatControllerRefactored,authMiddleware,uploadMiddleware | A:/chat/models,/chat/conversations,/chat/messages | S:17个端点,5种限流(对话15/上传30/积分60/草稿120/消息30次/分钟),文件上传中间件
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+ChatControllerRefactored.js[CTC9APTL]: F:对话控制器核心 | R:ConversationService,MessageService,StreamMessageService,NonStreamMessageService,Conversation,Message,File,User,AIModel,CacheService | A:对应chat路由所有端点 | S:21个方法,流式/非流式双模式,积分预扣减,草稿管理,消息缓存,文件上传,0积分免费模型支持,消息对删除
+--后端服务--
+/var/www/ai-platform/backend/src/services/chat/
+ConversationService.js[STC8RS]: F:会话业务逻辑 | R:Conversation,SystemPrompt,ModuleCombination,AIModel,CacheService | A:无 | S:会话创建/更新验证,权限检查(模型/提示词/组合),参数规范化context_length 0-1000,temperature 0-1
+MessageService.js[STC9PAM]: F:消息业务逻辑核心 | R:Message,File,SystemPrompt,ModuleCombination,AIService,AIStreamService,CacheService,StatsService | A:无 | S:消息验证(内容/积分/Token),文件处理(图片/PDF file字段),AI上下文构建(系统提示词+模块组合+历史),统计更新,积分退款
+StreamMessageService.js[STC8AS]: F:流式消息服务 | R:Message,File,AIStreamService,MessageService | A:无 | S:SSE流式发送,占位符创建status=streaming,完成处理器回调,失败积分退还,支持图片生成
+NonStreamMessageService.js[STC8S]: F:非流式消息服务v1.1修复图片显示 | R:Message,File,AIService,MessageService | A:无 | S:普通消息发送,AI调用,统计更新,响应数据组装file信息,v1.1修复MySQL JSON字段自动解析导致图片数据处理失败+parseGeneratedImages智能解析
+/var/www/ai-platform/backend/src/services/
+aiService.js[SAC9EPTL]: F:非流式AI调用核心 | R:AIModel,ImageGenerationService,axios | A:无 | S:Azure配置解析api_key三段式,OpenRouter PDF格式file字段+plugins,图片生成OpenRouter/Gemini,多provider适配,120秒超时
+aiStreamService.js[SAC9AETL]: F:流式AI调用核心v2.0错误处理增强 | R:AIModel,axios | A:无 | S:SSE严格规范event+data格式,X-Accel-Buffering防Nginx缓冲,OpenRouter PDF插件,Azure流式独立实现,v2.0新增safeStringify处理循环引用+parseAPIError将API错误转中文提示+空内容发送error事件
+streamRecoveryService.js[STC8AS]: F:流式响应恢复服务 | R:logger | A:内部服务 | S:流式会话内存管理Map,检查点机制每10个保存,5分钟超时自动清理,断线恢复content+checkpoints,单例模式
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+Conversation.js[DTC9M]: F:会话数据模型v1.1智能应用支持 | R:SystemConfig,Message | A:无 | S:支持context_length(0-1000)/temperature(0-1)/priority(0-10),系统提示词ID/模块组合ID/smart_app_id,cleared_at清空时间过滤,按优先级+时间排序,v1.1新增smart_app_id字段关联智能应用
+Message.js[DTC9TM]: F:消息数据模型 | R:Conversation,File,dbConnection | A:无 | S:sequence_number序号自增,4种状态pending/streaming/completed/failed,流式消息恢复机制,deleteMessagePair事务删除+序号重排,generated_images JSON字段
+File.js[DFC7M]: F:文件信息管理 | R:config,dbConnection | A:无 | S:智能URL生成支持Docker/PM2路径,8种前缀自动清理,协议自动选择http/https,file_path->stored_name映射
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/chat/
+Chat.jsx[FT9AL]: F:聊天主界面 | R:chatStore,authStore,MessageList,ChatInputArea,ConversationSidebar | A:/chat/* | S:PC/移动端双布局,改进滚动逻辑防冲突,userScrolled状态控制,流式输出500ms间隔滚动,移动端三视图,图片/文档上传,导出聊天txt,清空对话,删除消息对,置顶对话,v1.1修复编辑非当前对话配置覆盖bug
+--前端组件--
+/var/www/ai-platform/frontend/src/components/chat/
+MessageList.jsx[FT8M]: F:消息列表组件 | R:MessageContent,ReactMarkdown,apiClient | A:无 | S:MessageItem+EmptyMessages分离,React.memo优化渲染,系统公告展示,用户头像首字母,AI闪电图标SVG,typing状态,流式消息标记
+/var/www/ai-platform/frontend/src/components/chat/new/
+ChatHeader.jsx[FT7S]: F:对话头部组件简化版 | R:Button,Typography,Space,MenuOutlined,SettingOutlined,i18n | A:无 | S:显示会话标题和模型名Tag,菜单按钮切换侧边栏,设置按钮打开设置,左右分栏布局
+ChatInputArea.jsx[FT8M]: F:聊天输入区域组件移动端优化版 | R:ModelSelector,Upload,Tooltip,TextArea,forwardRef,i18n | A:无 | S:支持图片和文档上传双模式,移动端优化16px字体防iOS缩放,forwardRef暴露focus/blur方法,已上传文件预览,ModelSelector集成,发送/停止按钮切换
+ConversationSidebar.jsx[FT8M]: F:会话侧边栏组件iOS风格优化版 | R:Button,Empty,Spin,Tag,Typography,i18n | A:无 | S:折叠/展开功能,置顶图标PushpinFilled,消息计数,最后消息时间格式化,新建对话按钮,iOS风格卡片设计
+ModelSelector.jsx[FT7M]: F:模型选择器组件移动端显示完整别名 | R:Popover,Button,List,Typography,ThunderboltOutlined,CheckOutlined | A:无 | S:Popover弹出选择,显示模型名+积分+图片支持,点击外部关闭,响应式placement移动top/PC topLeft
+EmptyConversation.jsx[FT5S]: F:空对话状态组件显示系统公告 | R:apiClient,ReactMarkdown,Empty,Card,Spin,i18n | A:/admin/announcement | S:显示系统公告Markdown渲染,空状态Empty组件,开始新对话按钮
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+chatStore.js[FT9APL]: F:对话状态管理v2.0错误显示增强 | R:apiClient,message | A:/chat/conversations,/chat/messages,/chat/models,/knowledge/combinations | S:状态分离conversations独立currentConversation,流式/非流式双模式,500条对话limit+1000条消息limit,30秒动态超时,v2.0修复onError回调保留用户消息+AI消息位置显示错误信息
+
+模块四:积分管理系统
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+admin.js[RC8RM]: F:管理员路由聚合 | R:13个子路由,各种Controller,权限中间件,rateLimitService | A:/api/admin/* | S:动态分层限流read/write,14个子路由挂载,缓存管理+速率限制配置+邮件+SSO+公告+自定义首页
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/admin/
+UserCreditsController.js[CR7PTS]: F:用户积分管理控制器 | R:CreditsService,User,ResponseHelper | A:GET/POST /admin/users/:id/credits/* | S:积分信息查询,配额设置,充值/扣减,有效期设置/延长,积分历史分页查询
+--后端服务--
+/var/www/ai-platform/backend/src/services/admin/
+CreditsService.js[SAC7C]: F:积分管理服务 | R:User,dbConnection | A:无 | S:设置/充值/扣减/消费四操作,有效期设置/延长,积分历史查询,批量充值事务,积分统计报表,支持0积分免费模型
+
+模块五:知识模块系统-万智魔方
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+knowledgeRoutes.js[RK7S]: F:知识模块路由 | R:KnowledgeModuleController,ModuleCombinationController,authMiddleware | A:/knowledge/modules,/knowledge/combinations | S:模块/组合CRUD端点,分类/标签查询,authenticate认证
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+KnowledgeModule.js[DKC9RPTL]: F:知识模块管理 | R:User,UserGroup,dbConnection,tokenCalculator | A:无 | S:3种作用域personal/team/system,group_ids JSON数组MEMBER OF查询,标签权限knowledge_module_tag_permissions表,content_visible内容可见性,token自动计算
+ModuleCombination.js[DKC9RPM]: F:模块组合管理 | R:KnowledgeModule,tokenCalculator | A:无 | S:逐个模块权限验证,findByIdForExecution执行专用不隐藏内容,getCombinedContent黑盒模式内容不可见仍生效,超级管理员特权
+SystemPrompt.js[DKC7RM]: F:系统提示词管理 | R:User,UserGroup,system_settings | A:无 | S:content按需加载不在列表返回,组权限分配system_prompt_groups表,功能开关system_prompts_enabled
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/knowledge/
+KnowledgeBase.jsx[FK8L]: F:万智魔方知识模块组装页 | R:useKnowledgeStore,useAuthStore,dnd-kit,i18n | A:无 | S:5卡槽拖拽组装,模块广场+组合列表,token计算100K限制,三范围模块personal/team/system,权限控制,模块激活开关,iOS风格设计
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+knowledgeStore.js[FK7M]: F:知识模块状态 | R:apiClient | A:/knowledge/modules,/knowledge/combinations | S:知识模块CRUD,模块组合CRUD,复制组合,分类管理,include_inactive参数
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+KnowledgeModuleController.js[CK7RM]: F:知识模块控制器 | R:KnowledgeModule,ResponseHelper,logger,dbConnection | A:/knowledge/modules,/knowledge/modules/:id,/knowledge/categories,/knowledge/group-tags | S:7个方法,三范围过滤,权限验证超管创建全局+所有组内用户创建团队,标签权限处理
+ModuleCombinationController.js[CK7RS]: F:模块组合控制器 | R:ModuleCombination,ResponseHelper,logger | A:/knowledge/combinations,/knowledge/combinations/:id,/knowledge/combinations/:id/copy,/knowledge/combinations/:id/content | S:7个方法,权限验证只能操作自己的组合,copy复制功能
+
+模块六:AI模型管理
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/admin/
+AIModelController.js[CC7RCEM]: F:AI模型管理控制器 | R:AIModel,CacheService,ResponseHelper,logger | A:/admin/models | S:CRUD+测试连接+分组管理,超级管理员全部可见组管理员隐藏敏感信息,新建默认分配所有激活组,document_upload_enabled支持
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+AIModel.js[DCC9RETL]: F:AI模型配置管理v1.1修复敏感字段保持 | R:UserGroup,dbConnection,axios | A:无 | S:Azure配置解析api_key三段式,组分配+用户限制双层权限,credits_per_chat支持0值免费模型,stream/image/document三开关,v1.1修复update方法api_key/api_endpoint留空时保持原值
+
+模块七:图像生成系统
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+image.js[RI8S]: F:图像生成路由定义 | R:ImageController,ImageAdminController,authenticate,multer | A:/image/models,/image/generate,/image/upload-reference,/image/midjourney/*,/image/history,/image/gallery | S:multer内存存储10MB图片上传限制6种MIME类型,用户端12个端点+管理端5个端点,Midjourney专用路由,Webhook不需认证
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+imageController.js[CI8PEL]: F:图像生成控制器 | R:ImageService,MidjourneyService,ImageModel,ImageGeneration,ossService | A:/image/models,/image/generate,/image/upload-reference,/image/midjourney/*,/image/history,/image/gallery | S:用户端+管理端双控制器,批量生成1-4张,Midjourney U/V/Reroll操作,图生图参考图上传OSS,收藏/公开切换
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+imageService.js[SI9PETL]: F:图像生成服务集成v2.0万相API支持 | R:ImageModel,ImageGeneration,User,ossService,sharp | A:内部服务 | S:批量生成1-4张并发Promise.allSettled,Seedream系列自动识别,火山/Midjourney/万相三provider,图生图image参数,用户目录隔离,积分按实际成功数扣减,sharp缩略图400x400,v2.0新增isWanxiangModel万相模型识别+buildWanxiangRequest请求构建stream:true+enable_interleave+callWanxiangAPI SSE流式调用X-DashScope-SSE请求头+collectedImages收集所有数据块图片URL+convertSizeForWanxiang尺寸转换x->*
+imageGenerationService.js[SI9EM]: F:图片生成服务 | R:ossService,dbConnection,logger | A:内部服务 | S:OpenRouter+Gemini双格式解析,Base64转Buffer保存,用户隔离目录,OSS/本地自动切换,消息ID追溯用户,图片生成模型检测
+midjourneyService.js[SI8PEAL]: F:Midjourney图像生成服务 | R:ImageModel,ImageGeneration,User,ossService,axios | A:Midjourney API | S:Imagine文生图/图生图+Action操作U/V/Reroll,垫图base64Array支持,2秒轮询5分钟超时,状态映射mapTaskStatus,Webhook回调处理
+midjourneyProxyService.js[SI7PEPL]: F:Midjourney代理服务同步API | R:ImageModel,ImageGeneration,User,axios,logger | A:goapi.gptnb.ai | S:同步返回Midjourney图像非轮询,4图网格grid_layout,积分扣减按实际成功数,5分钟超时
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+ImageModel.js[DI7CEM]: F:图像模型配置管理 | R:dbConnection,crypto | A:无 | S:AES-256-CBC加密API密钥,has_api_key标识,sizes_supported JSON解析,price_per_image类型转换,支持4种provider(volcano/midjourney/dashscope/aliyun)
+ImageGeneration.js[DI7M]: F:图片生成记录模型 | R:dbConnection,logger | A:无 | S:Midjourney字段支持task_id/buttons/grid_layout,用户历史分页,收藏/公开切换,公开画廊,用户统计
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/image/
+ImageGeneration.jsx[FI7S]: F:图像生成页面导出 | R:./index | A:无 | S:导出重构后的图像生成页面index
+--前端组件--
+/var/www/ai-platform/frontend/src/components/admin/settings/
+ImageModelSettings.jsx[FI7CEM]: F:图像模型管理设置组件v1.1万相支持 | R:adminStore,Form,Input,Select,InputNumber | A:/admin/image-models | S:图像模型CRUD表单,v1.1新增PROVIDER_CONFIG配置对象volcano/midjourney/dashscope/aliyun,提供商选择自动填充默认端点和尺寸格式,万相配置提示模型ID推荐wan2.6-image+尺寸格式宽*高,提供商下拉框图标颜色区分
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+imageStore.js[FI8AL]: F:图像生成状态管理 | R:api,message | A:/image/generate,/image/midjourney/* | S:Midjourney异步轮询2秒间隔/5分钟超时,processingTasks状态防重复,base64Array支持,批量生成,收藏/公开切换
+
+模块八:视频生成
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+video.js[RV7S]: F:视频生成路由定义 | R:VideoController,VideoAdminController,authenticate,uploadMiddleware,ossService | A:/video/models,/video/generate,/video/upload-frame,/video/task/:id,/video/history,/video/gallery | S:首帧上传uploadImage中间件+OSS保存video-frames目录,用户端9个端点+管理端5个端点
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+videoController.js[CV7PEAL]: F:视频生成控制器用户+管理 | R:VideoService,VideoModel,VideoGeneration,klingVideoService,sora2VideoService | A:/video/models,/video/generate,/video/task/:id,/video/history,/video/gallery | S:双控制器结构,三provider支持volcano/kling/sora2,轮询任务状态完成回调,收藏/公开/批量删除,积分扣除402错误码
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+videoService.js[SV9EPTL]: F:视频生成服务集成 | R:VideoModel,VideoGeneration,User,ossService,klingVideoService,sora2VideoService | A:内部服务 | S:三provider统一接口火山/可灵/Sora2,积分扣减+轮询状态,火山textContent命令行参数,可灵Image2Video/Text2Video分支,视频下载保存OSS,10秒轮询10分钟超时
+klingVideoService.js[SV7PEM]: F:可灵视频生成服务 | R:ossService,jwt,redis,axios | A:https://api-beijing.klingai.com | S:JWT签名认证HS256算法,25分钟Token内存缓存,Text2Video/Image2Video双模式,运镜控制buildCameraControl,宽高比转换
+sora2VideoService.js[SV7EL]: F:Sora2视频生成服务 | R:ossService,axios | A:https://goapi.gptnb.ai | S:GoAPI Provider,sora-2基础版/sora-2-pro专业版双模型支持,orientation转换,OpenAI错误翻译中文,进度百分比progress_pct
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+VideoModel.js[DV7CEM]: F:视频模型配置管理 | R:dbConnection,crypto | A:无 | S:三provider支持volcano/kling/sora2,AES-256-CBC加密仅火山,可灵access_key+secret_key在api_config,分辨率/时长/帧率/比例配置
+VideoGeneration.js[DV7M]: F:视频生成记录模型 | R:dbConnection | A:无 | S:三provider支持provider/orientation/generation_id/reference_images,用户历史分页,公开画廊,收藏/公开切换,批量删除
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/video/
+VideoGeneration.jsx[FV8PEL]: F:视频生成完整页面 | R:videoStore,authStore,apiClient,i18n | A:/video/upload-frame | S:4种模式文本/首帧/尾帧/双帧+多分辨率时长宽高比,首尾帧Upload图片上传10MB,积分计费calculatePrice展示,竖版视频isVerticalVideo适配contain,全屏预览Modal
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+videoStore.js[FV8AL]: F:视频生成状态管理 | R:apiClient,message | A:/video/models,/video/generate,/video/task/:id,/video/history | S:5秒轮询10分钟超时,processingTasks+completedTasks防状态回退,智能合并数据已完成任务不覆盖,恢复未完成任务轮询
+
+模块九:Agent工作流
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+agent.js[RG7S]: F:Agent工作流路由定义 | R:AgentController,authenticate | A:/agent/workflows,/agent/node-types,/agent/executions,/agent/test/*,/agent/wiki-items | S:节点类型1端点+工作流CRUD6端点+执行1端点+测试对话4端点+执行历史3端点+统计1端点+知识库列表1端点
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+AgentController.js[CG8PRM]: F:Agent工作流控制器 | R:AgentWorkflow,AgentNodeType,AgentExecution,ExecutorService,TestSessionService | A:/agent/workflows,/agent/execute/:id,/agent/test/:id/session | S:工作流CRUD,一次性执行+测试对话双模式,测试会话管理,节点类型列表,执行历史分页,权限验证,积分不足402,extractTextFromOutput智能提取AI回复文本支持result/content/output/text多字段递归提取
+--后端服务--
+/var/www/ai-platform/backend/src/services/agent/
+ExecutorService.js[SG9PTL]: F:Agent工作流执行引擎 | R:NodeRegistry,AgentWorkflow,AgentExecution,AgentNodeExecution,AgentNodeType,User | A:内部服务 | S:工作流编排+拓扑排序Kahn算法检测环形依赖,积分预扣+实际消耗退款机制,10分钟超时,上游节点输出传递upstreamOutput,validateWorkflowConnections验证LLM节点必须有上游连接,formatFinalOutput确保返回对象格式,shouldSkipNode条件分支判断+branchDecisions分支决策记录+skippedNodes跳过节点集合支持分类节点多输出条件执行
+TestSessionService.js[SG5S]: F:Agent测试会话管理服务 | R:logger | A:内部服务 | S:内存存储Map管理会话+消息历史,30分钟超时+每10分钟自动清理过期会话,单例模式
+NodeRegistry.js[SG9S]: F:节点注册表工厂模式 | R:StartNode,LLMNode,EndNode,KnowledgeNode,ClassifierNode,logger | A:内部服务 | S:节点类型注册register+获取get+创建实例createInstance,内置5种节点start/llm/end/knowledge/classifier,单例模式,createInstance兼容两种调用方式
+--节点实现--
+/var/www/ai-platform/backend/src/services/agent/nodes/
+BaseNode.js[SG9S]: F:节点抽象基类 | R:logger | A:基类 | S:execute抽象方法子类必须实现,validate验证节点配置,replaceVariables变量替换支持嵌套路径
+StartNode.js[SG5S]: F:开始节点 | R:BaseNode | A:节点实现 | S:工作流入口接收用户输入参数,不消耗积分,直接返回输入数据
+LLMNode.js[SG8EL]: F:AI对话节点 | R:BaseNode,AIModel,axios | A:节点实现 | S:调用大语言模型进行对话推理,历史轮数控制historyTurns默认10轮,上游输出传递extractUpstreamContent,Azure+标准API双支持,120秒超时,isKnowledgeOutput检测知识库输出+buildKnowledgePrompt构建知识库提示词+extractUpstreamContent支持knowledge_context字段
+EndNode.js[SG5S]: F:结束节点 | R:BaseNode | A:节点实现 | S:工作流出口输出最终结果,支持3种格式text/json/markdown,自动获取上游节点输出
+KnowledgeNode.js[SG7M]: F:知识库节点 | R:BaseNode,WikiItem,tokenCalculator | A:节点实现 | S:从知识库加载内容作为上下文传递给下游节点,直接加载模式executeDirectLoad,支持多知识库合并,Token计算,formatContentBlock格式化内容块,getConfig方法修复配置读取路径this.data.config
+ClassifierNode.js[SG8EPM]: F:问题分类节点 | R:BaseNode,AIModel,axios,logger | A:节点实现 | S:使用AI对用户问题进行智能分类,支持最多100个分类类别,背景知识background_knowledge提供分类上下文,历史轮数history_turns参考对话历史,buildSystemPrompt构建分类提示词,buildClassificationPrompt构建用户提示词,parseClassificationResult解析分类结果返回category_id/category_name/category_index/confidence,Azure+标准API双支持,低温度0.1保证分类稳定性,60秒超时
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+AgentWorkflow.js[DG7M]: F:Agent工作流模型 | R:dbConnection,logger | A:无 | S:工作流CRUD+发布切换+统计,flow_data JSON字段自动解析,update修复过滤undefined值,分页查询支持is_published筛选
+AgentExecution.js[DG7M]: F:Agent执行记录模型 | R:dbConnection,logger | A:无 | S:执行记录CRUD+统计+取消,input_data/output_data/execution_log三JSON字段,status状态管理,total_credits_used积分记录,duration_ms执行时长
+AgentNodeExecution.js[DG7S]: F:Agent节点执行日志模型 | R:dbConnection,logger | A:无 | S:节点执行追踪CRUD,JSON字段解析,findByExecutionAndNode主方法,批量创建batchCreate事务支持
+AgentNodeType.js[DG7CM]: F:Agent节点类型模型 | R:dbConnection,logger | A:无 | S:节点类型配置管理CRUD,findByTypeKey查询,config_schema JSON配置,credits_per_execution积分消耗,max_inputs/max_outputs输入输出限制,切换激活状态toggleActive
+APIService.js[DC7PM]: F:API服务模型 | R:dbConnection,crypto,errors | A:无 | S:API服务管理+密钥生成MD5,validateApiKey验证+重置密钥,请求去重checkDuplicateRequest 24小时
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/agent/
+AgentWorkspace.jsx[FG7S]: F:Agent工作区简化版 | R:WorkflowList | A:无 | S:移除Tab标签页,直接渲染WorkflowList组件,渐变背景
+WorkflowList.jsx[FG8M]: F:工作流列表卡片式布局v2.2重命名功能 | R:agentStore,dayjs,Dropdown | A:/agent/workflows | S:FastGPT风格卡片网格,搜索+Segmented筛选(全部/已发布/未发布),响应式4/3/2/1列,Dropdown菜单事件冒泡修复,相对时间显示,创建/删除Modal,v2.2新增重命名菜单项+重命名弹窗修改工作流名称和描述
+WorkflowList.less[FG5M]: F:工作流列表样式 | R:WorkflowList.jsx | A:无 | S:iOS/FastGPT风格卡片,渐变背景,hover上浮动画,响应式布局,Segmented筛选器样式
+AgentWorkspace.less[FG3S]: F:Agent工作区样式 | R:AgentWorkspace.jsx | A:无 | S:简化版渐变背景样式
+--工作流编辑器--
+/var/www/ai-platform/frontend/src/pages/agent/editor/
+WorkflowEditor.jsx[FG8L]: F:工作流编辑器 | R:agentStore,ReactFlow,ReactFlowProvider,useReactFlow,Toolbar,NodePanel,ConfigPanel,TestDrawer | A:无 | S:ReactFlow画布拖拽编排,配置面板Drawer抽屉形式,画布初始缩放0.6+fitView maxZoom 0.8,onUpdateNodeConfig同时更新node.data.label和selectedNode,ClassifierNode分类节点注册,边的sourceHandle/targetHandle保存和加载支持条件分支连线持久化,拖拽放置支持ReactFlowProvider包裹+useReactFlow获取实例+onDragOver/onDrop处理+screenToFlowPosition坐标转换
+/var/www/ai-platform/frontend/src/pages/agent/editor/components/
+NodePanel.jsx[FG7M]: F:节点面板拖拽添加 | R:Card,Space,Divider,Tooltip,message,DragOutlined | A:无 | S:基础节点开始/LLM/知识检索/问题分类,11个扩展节点占位MCP/A2A/文生图/MySQL/HTTP/代码/循环/定时/邮件/文档/向量,扩展节点彩色显示+点击提示请申请模块权限,问题分类节点橙色主题BranchesOutlined图标,拖拽添加节点draggable+onDragStart+dataTransfer传递节点类型
+ConfigPanel.jsx[FG7M]: F:配置面板 | R:Form,Input,Select,InputNumber,Slider,agentStore | A:无 | S:节点配置表单LLM/开始/结束/知识库/分类,适配Drawer抽屉模式inDrawer参数,顶部保存按钮+状态提示已保存/有未保存的更改+loading状态,renderClassifierConfig分类节点配置面板AI模型选择+背景知识textarea+聊天记录轮数+动态分类列表categories数组增删改最多100个
+Toolbar.jsx[FG5S]: F:工具栏组件 | R:Button,Space | A:无 | S:返回/保存/删除/测试按钮,未保存提示
+TestDrawer.jsx[FG7M]: F:测试抽屉组件v1.1优化 | R:Drawer,Input,Button,agentStore | A:无 | S:对话测试界面,消息列表,输入发送,清空对话,加载状态,v1.1删除顶部无用Alert说明文字+zIndex=1100避免被遮挡+宽度调整为480px
+TestDrawer.less[FG5S]: F:测试抽屉样式v1.1 | R:TestDrawer.jsx | A:无 | S:对话气泡样式用户蓝色渐变/AI绿色渐变,消息列表滚动,输入区域固定底部,v1.1调整z-index确保不被遮挡
+/var/www/ai-platform/frontend/src/pages/agent/editor/nodes/
+StartNode.jsx[FG5S]: F:开始节点组件 | R:reactflow,Handle | A:无 | S:绿色主题,输入参数显示,工作流入口
+LLMNode.jsx[FG5S]: F:LLM节点组件 | R:reactflow,Handle | A:无 | S:蓝色主题,模型名显示,参数预览
+EndNode.jsx[FG5S]: F:结束节点组件 | R:reactflow,Handle | A:无 | S:红色主题,输出映射显示,工作流出口
+KnowledgeNode.jsx[FG5S]: F:知识库节点组件 | R:reactflow,Handle | A:无 | S:紫色主题,知识库名和检索配置显示
+ClassifierNode.jsx[FG7M]: F:问题分类节点组件 | R:reactflow,Handle,Tag,Tooltip | A:无 | S:橙色主题渐变背景,多输出端口支持每个分类对应一个彩色Handle,getHandleTopPosition计算输出Handle垂直位置均匀分布25%-75%,getCategoryColor生成10种分类颜色循环,动态节点高度minHeight根据分类数量调整,显示AI模型+分类列表+背景知识提示
+/var/www/ai-platform/frontend/src/pages/agent/editor/styles/
+editor.css[FG3S]: F:编辑器样式 | R:WorkflowEditor | A:无 | S:三栏布局样式,节点面板/画布/配置面板
+--前端国际化--
+/var/www/ai-platform/frontend/src/locales/zh-CN/
+agent.json[FG5C]: F:Agent国际化 | R:i18n | A:无 | S:工作流/执行/节点中文文案,搜索/筛选/空状态文案,12个扩展节点文案extensionNodes对象MCP/A2A/文生图等+编辑器相关文案editor对象
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+agentStore.js[FG7AL]: F:Agent工作流状态管理 | R:apiClient,message | A:/agent/workflows,/agent/node-types,/agent/executions,/agent/test/* | S:Zustand管理工作流CRUD+节点类型+模型列表+执行历史+测试会话,测试对话6方法,120秒超时,402积分不足处理
+
+模块十:智能教学
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+teachingRoutes.js[RE9RL]: F:教学系统路由定义v1.5.0 Phase3路由加固 | R:TeachingController,authenticate,requireAdmin,requireSuperAdmin,7个权限中间件 | A:/teaching/modules,/teaching/lessons,/teaching/permissions,/teaching/groups,/teaching/authorization,/teaching/teaching-plan | S:30+个路由端点,三级权限体系view_lesson/view_plan/edit,7种权限中间件细粒度控制,Phase3添加requireAdmin和requireSuperAdmin中间件实现授权路由双层防护
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+TeachingController.js[CE9TRL]: F:教学系统控制器v2.3.0 Phase1-4完整修复 | R:TeachingModule,TeachingLesson,TeachingPermission,TeachingModuleGroup,GlobalAuthorizationService | A:/teaching/modules,/teaching/lessons,/teaching/permissions,/teaching/groups,/teaching/authorization,/teaching/teaching-plan | S:三级权限体系view_lesson学生/view_plan教师/edit编辑,模块+课程+分组+教案管理,Phase4权限边界验证validatePermissionBoundary递归检查标签用户防止组管理员越权,Phase1事务回滚+行锁并发控制
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+GlobalAuthorizationService.js[SE9RL]: F:全局授权服务三级权限v4.2.0多标签合并+权限边界验证 | R:dbConnection,logger | A:内部服务 | S:三级权限完整返回hasViewLesson/hasViewPlan/hasEdit,组->标签->用户三级权限继承,getUserModulePermission+getUserLessonPermission,v4.2.0修复多标签权限合并bug取最大权限遍历所有标签不break,validatePermissionBoundary递归权限边界检查
+--权限中间件--
+/var/www/ai-platform/backend/src/middleware/
+teachingPermissions.js[ME9RM]: F:教学系统权限中间件v2.0请求级缓存优化 | R:TeachingModule,TeachingLesson,ResponseHelper,logger | A:中间件 | S:7个权限中间件创建/编辑/查看/删除模块+查看/编辑课程+管理权限,getUserTags获取用户标签+v2.0请求级缓存优化存储在req._userTagsCache,教师专属内容检查
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+TeachingModule.js[DE7RM]: F:教学模块模型 | R:dbConnection,GlobalAuthorizationService | A:无 | S:三级权限返回版checkUserPermission返回字符串edit/view_plan/view_lesson/null,匹配GlobalAuthorizationService三级权限,creator_id自动edit权限
+TeachingLesson.js[DE7M]: F:教学课程模型 | R:dbConnection | A:无 | S:课程CRUD+内容类型权限,materials课程资料支持最多5个限制,TEACHER_ONLY_TYPES教师专属内容teaching_plan/answer/guide/assessment
+TeachingPermission.js[DE5M]: F:教学权限模型 | R:dbConnection | A:无 | S:模块/课程权限授予撤销,user/group/tag三级授权,expires_at过期时间,revoke/revokeMultiple批量撤销
+TeachingModuleGroup.js[DE5M]: F:教学分组模型 | R:dbConnection | A:无 | S:模块分组管理CRUD,sort_order排序,setModuleGroups批量关联,getGroupModules查询分组模块
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/teaching/
+Teaching.jsx[FE7S]: F:教学系统主页面 | R:ModuleList | A:无 | S:简化版直接渲染ModuleList组件无Tab标签
+ModuleDetail.jsx[FE8L]: F:模块详情页 | R:teachingStore,authStore,LessonList | A:/teaching/modules/:id,/teaching/modules/:id/lessons | S:模块信息展示+课程列表,权限控制view_lesson/view_plan/edit,创建/编辑/删除课程,iOS风格
+LessonDetail.jsx[FE8L]: F:课程详情页 | R:teachingStore,authStore,LessonViewer,LessonEditor | A:/teaching/lessons/:id | S:根据权限切换查看器/编辑器,三级权限判断view_lesson只读/view_plan含教案/edit完整编辑,面包屑导航
+LessonEditor.jsx[FE8L]: F:课程编辑器 | R:teachingStore,Monaco,ReactQuill,MaterialsManager | A:/teaching/lessons,/teaching/lessons/:id | S:富文本编辑+代码编辑切换,教案编辑分页teacher_plan/answer/guide/assessment,课程资料管理,草稿自动保存
+LessonViewer.jsx[FE7M]: F:课程查看器 | R:teachingStore,ReactMarkdown,Prism | A:/teaching/lessons/:id,/teaching/lessons/:id/teaching-plan/:page | S:只读展示课程内容,教案分页查看view_plan权限,代码高亮,Markdown渲染,浏览记录
+--前端组件--
+/var/www/ai-platform/frontend/src/components/teaching/
+ModuleList.jsx[FE8L]: F:模块列表核心组件 | R:teachingStore,authStore | A:无 | S:分组展示+搜索过滤+权限控制,创建者/超管/组管编辑权限,移动端适配,模块卡片+收藏+置顶,iOS风格设计
+MaterialsManager.jsx[FE5M]: F:课程资料管理组件 | R:Upload,message | A:无 | S:最多5个资料限制,文件上传/删除/排序,支持文档/图片/视频,资料数组JSON格式
+MaterialsDisplay.jsx[FE5S]: F:课程资料展示组件 | R:Card,Tag | A:无 | S:只读展示课程资料列表,文件类型图标映射,下载链接生成,文件大小格式化
+IOSLayout.jsx[FE7M]: F:iOS风格布局容器 | R:Layout | A:无 | S:iOS设计风格统一布局,毛玻璃效果,圆角卡片,渐变背景,响应式适配
+/var/www/ai-platform/frontend/src/components/teaching/selectors/
+GroupSelector.jsx[FE5S]: F:用户组选择器 | R:adminStore,Select | A:/admin/user-groups | S:下拉选择组织,支持搜索,权限过滤,多选模式
+TagSelector.jsx[FE5S]: F:用户标签选择器 | R:adminStore,Select | A:/admin/user-tags | S:下拉选择标签,组内标签过滤,支持搜索,多选模式
+UserSelector.jsx[FE5S]: F:用户选择器 | R:adminStore,Select | A:/admin/users | S:下拉选择用户,支持搜索,显示用户名+备注,权限过滤
+--授权管理组件--
+/var/www/ai-platform/frontend/src/components/admin/settings/ModuleAuthorizationManagement/
+index.jsx[FE9RL]: F:模块授权管理主组件v2.0双层架构 | R:useAuthorizationData,useAuthorizationState,usePermissionLogic | A:/teaching/authorization,/teaching/modules,/admin/user-groups,/admin/user-tags | S:超级管理员组级授权+组管理员标签用户分配,双层配置架构superAdminConfig/groupAdminConfig,权限边界验证前端预检查,三级权限+课程级细粒度控制
+/var/www/ai-platform/frontend/src/components/admin/settings/ModuleAuthorizationManagement/components/
+GroupList.jsx[FE7M]: F:组织列表组件 | R:Collapse,GroupItem | A:无 | S:展开折叠组织列表,选中高亮,未配置组提示,统计信息显示
+GroupItem.jsx[FE7M]: F:组织项组件 | R:Card,Tag | A:无 | S:单个组织卡片,模块统计/用户统计,操作按钮查看/编辑/删除
+ModulePermissionSelector.jsx[FE8L]: F:模块权限选择器核心 | R:Tree,Checkbox,Button | A:/teaching/modules/:id/lessons | S:树形结构模块->课程,三级权限复选框,全选/清除/继承,懒加载课程列表,权限边界前端预检查
+TagItem.jsx[FE7M]: F:标签项组件 | R:Card,Switch,Badge | A:无 | S:标签权限配置卡片,继承开关,用户列表展开,统计信息
+UserItem.jsx[FE5S]: F:用户项组件 | R:Card,Tag | A:无 | S:用户权限配置卡片,继承开关,删除按钮,权限状态显示
+OperationBar.jsx[FE5S]: F:操作栏组件 | R:Space,Button | A:无 | S:保存/取消/重置/预览按钮,状态提示,快捷操作
+PermissionHelpAlert.jsx[FE3S]: F:权限说明提示组件 | R:Alert | A:无 | S:三级权限说明,操作提示,折叠展开
+/var/www/ai-platform/frontend/src/components/admin/settings/ModuleAuthorizationManagement/hooks/
+useAuthorizationData.js[FE8M]: F:授权数据Hook | R:teachingStore,adminStore,authStore | A:数据获取和管理 | S:获取模块/组织/标签/用户列表,双层配置加载,权限上限查询getSuperAdminConfig
+useAuthorizationState.js[FE7M]: F:授权状态Hook | R:useState,useCallback | A:状态管理 | S:currentGroup/selectedModules/tagConfigs/userConfigs状态管理,状态重置/更新方法
+usePermissionLogic.js[FE8L]: F:权限逻辑Hook | R:permissionBoundary,permissionCalculator | A:业务逻辑 | S:权限计算/验证/合并,继承逻辑处理,边界检查,冲突检测
+/var/www/ai-platform/frontend/src/components/admin/settings/ModuleAuthorizationManagement/utils/
+permissionBoundary.js[FE7S]: F:权限边界验证工具 | R:无 | A:工具函数 | S:validatePermissionBoundary前端验证,递归检查标签用户,错误信息收集
+permissionCalculator.js[FE5S]: F:权限计算工具 | R:无 | A:工具函数 | S:计算有效权限,继承链计算,最大权限合并
+permissionMigration.js[FE5S]: F:权限迁移工具 | R:无 | A:工具函数 | S:v1->v2双层架构迁移,配置格式转换,兼容性处理
+deepCopy.js[FE3S]: F:深拷贝工具 | R:无 | A:工具函数 | S:深度克隆对象,防止引用污染
+/var/www/ai-platform/frontend/src/components/admin/settings/ModuleAuthorizationManagement/constants/
+permissionTypes.js[FE5S]: F:权限类型常量 | R:无 | A:常量定义 | S:三级权限定义view_lesson/view_plan/edit,权限映射,默认值
+uiMessages.js[FE3S]: F:UI消息常量 | R:无 | A:常量定义 | S:错误提示/成功消息/确认对话框文案
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+teachingStore.js[FE7RL]: F:智能教学系统状态管理 | R:api,message | A:/teaching/modules,/teaching/lessons,/teaching/permissions,/teaching/groups,/teaching/teaching-plan | S:Zustand管理模块+课程+分组+权限+教案,403错误友好处理避免跳转详情页报错,教案保存+获取功能,草稿自动保存+浏览记录
+
+模块十一:HTML编辑器
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+htmlEditor.js[RH5S]: F:HTML编辑器路由定义 | R:HtmlEditorController,authenticate | A:/html-editor/credits-config,/html-editor/projects,/html-editor/pages,/html-editor/templates | S:积分配置查询+项目CRUD4端点+页面CRUD6端点+发布切换+模板列表
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+HtmlEditorController.js[CH7PL]: F:HTML编辑器控制器v1.1页面列表上限修复 | R:HtmlProject,HtmlPage,User,dbConnection | A:/html-editor/projects,/html-editor/pages,/pages/:userId/:slug | S:自动创建默认项目,三种积分扣减创建10/更新2/发布5,只更新标题不扣积分,默认项目防删除,永久链接生成,v1.1 getPages默认limit从20改为500解决页面丢失问题
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+HtmlProject.js[DH7M]: F:HTML项目/文件夹模型 | R:dbConnection | A:无 | S:树形结构递归查询,标签safeJsonParse编码修复,级联删除子项目,所有权检查,默认项目标记
+HtmlPage.js[DH7M]: F:HTML页面模型 | R:dbConnection,crypto | A:无 | S:页面CRUD,slug唯一生成只保留英文数字+6位随机,compileContent编译HTML+CSS+JS,发布管理is_published/publish_url,版本号自增
+--前端工具--
+/var/www/ai-platform/frontend/src/utils/
+monacoConfig.js[FUH5CS]: F:Monaco编辑器配置 | R:无 | A:无 | S:简化版只提供编辑器选项配置不干预加载,defaultEditorOptions默认配置,themes主题配置vs-dark/vs-light
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/htmlEditor/
+HtmlEditor.jsx[FH8PL]: F:HTML编辑器主页面v1.5永久链接优化 | R:htmlEditorStore,authStore,@monaco-editor/react,i18n | A:/html-editor/projects,/html-editor/pages,/html-editor/credits-config | S:iOS风格设计,Monaco编辑器集成,项目/页面管理CRUD,三种积分扣减,实时预览iframe desktop/tablet/mobile三种模式,永久链接生成,深色/浅色主题切换,v1.1修复Monaco右键菜单Paste不生效+自定义剪贴板Action,v1.2-v1.4修复自动创建页面循环刷新+useRef跟踪状态+等待积分加载完成,v1.5移除生成链接确认框+成功弹窗添加关闭按钮
+HtmlEditor.less[FH3S]: F:HTML编辑器样式 | R:HtmlEditor.jsx | A:无 | S:iOS风格样式,页面列表滚动样式page-list-scroll
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+htmlEditorStore.js[FH7M]: F:HTML编辑器状态管理v1.1页面列表上限修复 | R:apiClient,message | A:/html-editor/projects,/html-editor/pages,/html-editor/templates | S:项目/页面/模板CRUD,当前页面状态,发布/取消发布,页面列表本地更新,v1.1 getPages默认limit改为500解决页面丢失+新增pagination/hasMore状态+新增loadMorePages方法为滚动加载预留
+
+模块十二:智能日历
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+calendar.js[RL7PM]: F:日历路由定义 | R:CalendarController,authenticate,requirePermission,rateLimit | A:/calendar/events,/calendar/categories,/calendar/ai-analysis,/calendar/background-knowledge,/calendar/settings | S:26个端点,事项管理8端点+分类4端点+AI分析5端点+背景知识5端点+设置3端点+统计1端点,双重限流60次/分钟+AI分析5次/5分钟
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+CalendarController.js[CL7PL]: F:日历控制器 | R:CalendarEvent,CalendarCategory,CalendarAIAnalysis,CalendarUserSettings,CalendarBackgroundKnowledge,CalendarService | A:/calendar/events,/calendar/categories,/calendar/ai-analysis,/calendar/background-knowledge,/calendar/settings | S:事项CRUD+分类管理+AI分析+背景知识管理,content可选title必填默认状态daily,月度统计+批量删除+快速完成
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+CalendarService.js[SL8PECM]: F:日历AI分析服务 | R:CalendarEvent,CalendarAIAnalysis,CalendarConfig,CalendarPromptTemplate,CalendarBackgroundKnowledge,AIModel,User,AIService,dayjs | A:内部服务 | S:配置化积分倍数+提示词模板渲染+背景知识拼接,Prompt构建含title字段,时区修复dayjs处理
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+CalendarEvent.js[DL7M]: F:日历事项模型 | R:dbConnection | A:无 | S:title必填content可选,事项CRUD+状态管理+重复事项+月度统计反引号避免MySQL保留字冲突,importance范围0-10验证
+CalendarConfig.js[DL5CS]: F:日历配置模型 | R:dbConnection | A:无 | S:积分倍数配置单例模式范围1.0-10.0,不存在自动创建默认配置1.0
+CalendarAIAnalysis.js[DL7M]: F:日历AI分析记录模型 | R:dbConnection,errors,logger | A:无 | S:分析历史CRUD+统计getUserStats,analysis_result JSON解析,积分消耗credits_consumed,分页查询getUserAnalyses,所有权检查
+CalendarCategory.js[DL5M]: F:日历分类数据模型 | R:dbConnection,errors,logger | A:无 | S:系统预设+用户自定义双类型,getUserCategories获取用户可用分类,系统分类不可修改删除保护,检查分类下事项防误删
+CalendarUserSettings.js[DL5M]: F:日历用户设置模型 | R:dbConnection,errors,logger | A:无 | S:getOrCreate自动创建默认设置,AI分析配置scan_days_before/scan_days_after/template_id,自动分析频率daily/weekly/monthly,reset重置
+CalendarBackgroundKnowledge.js[DL5M]: F:日历背景知识模型 | R:dbConnection,errors,logger | A:无 | S:用户背景信息管理供AI分析上下文,getEnabledKnowledge获取启用条目,标题100+内容2000字符限制,reorder批量排序事务,toggleEnabled状态切换
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/calendar/
+Calendar.jsx[FL8L]: F:智能日历页面 | R:useCalendarStore,useAuthStore,BackgroundKnowledgeManager,dayjs,ReactMarkdown,antd | A:无 | S:移动端Tab导航优化+网格日历视图3x3/4x4,AI分析设置持久化到数据库,content可选默认状态daily,背景知识管理Modal
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+calendarStore.js[FL8L]: F:日历状态管理 | R:api,message | A:/calendar/events,/calendar/categories,/calendar/ai-analysis,/calendar/background-knowledge,/calendar/settings | S:Zustand管理事项+分类+AI分析+背景知识+设置,autoPerformAnalysis自动分析24小时检查
+
+模块十三:存储管理系统
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/storage/
+StorageManager.jsx[FS8L]: F:智能云盘主页面v1.1 | R:storageStore,authStore,react-dnd | A:无 | S:iOS风格界面,拖拽上传,网格/列表双视图,右键菜单,文件夹树扁平化,v1.1新增智能云盘标题+文件夹列表小标题+当前文件夹名称显示
+StorageManager.less[FS5M]: F:智能云盘样式v1.1 | R:StorageManager.jsx | A:无 | S:渐变色系统,iOS风格卡片,文件类型彩色渐变,v1.1新增folder-list-title+current-folder-name样式
+--前端国际化--
+/var/www/ai-platform/frontend/src/locales/zh-CN/
+storage.json[FS5C]: F:智能云盘国际化 | R:i18n | A:无 | S:文件管理全部中文文案,v1.1新增smartStorage/folderList/myFolder
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+storageRoutes.js[RS7S]: F:存储管理路由 | R:StorageController,authMiddleware | A:/storage/files,/storage/folders | S:文件上传/删除/移动,文件夹创建/重命名/删除,存储统计,批量删除
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+StorageController.js[CS8PTRL]: F:存储管理控制器 | R:UserFile,UserFolder,ossService,multer,dbConnection | A:/storage/files/upload,/storage/folders/:id/rename | S:磁盘存储避免内存溢出,文件名编码修复latin1->utf8,三类文件夹权限global/group/personal,积分扣除事务+行锁修复并发,100+文件类型白名单,文件夹重命名递归更新子路径
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+ossService.js[SS9EM]: F:OSS存储服务 | R:ali-oss,fs,dbConnection | A:内部服务 | S:阿里云OSS+本地存储双模式,配置从system_settings读取,密钥隐藏检测******,签名URL生成,缩略图处理OSS图片处理,批量删除
+--数据模型--
+/var/www/ai-platform/backend/src/models/
+UserFolder.js[DS7RTM]: F:用户文件夹模型 | R:dbConnection | A:无 | S:三类文件夹personal/global/group,递归更新子文件夹路径重命名,树形结构查询,级联软删除,自动创建组织文件夹
+UserFile.js[DS7RM]: F:用户文件模型 | R:dbConnection,ossService | A:无 | S:uploaded_by记录上传者,软删除+存储统计更新,三类文件夹权限查询,文件移动,所有权检查,默认10GB配额
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+storageStore.js[FS7M]: F:存储管理状态 | R:apiClient | A:/storage/files,/storage/folders,/admin/oss/,/admin/storage-credits/ | S:文件夹树+三类文件夹global/org/personal,文件上传进度,批量删除,文件夹重命名,OSS配置管理,积分计算5MB分段
+
+模块十四:OCR
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+ocrRoutes.js[RO5ES]: F:OCR路由定义 | R:OcrController,authenticate,multer,requireSuperAdmin | A:/ocr/config,/ocr/process-image,/ocr/process-pdf,/ocr/process-batch,/ocr/tasks | S:7个端点,multer配置50MB+20文件+7种MIME,单图/PDF/批量处理+任务详情历史+管理员配置更新
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+OcrController.js[CO5EPS]: F:OCR控制器 | R:ocrService,ResponseHelper,dbConnection,User | A:/ocr/config,/ocr/process-image,/ocr/process-pdf,/ocr/process-batch,/ocr/tasks | S:7个端点,单图/PDF/批量处理+任务历史+配置管理,multer文件上传验证7种MIME,积分检查+扣减,批量处理错误收集
+--后端服务--
+/var/www/ai-platform/backend/src/services/
+ocrService.js[SO7PEL]: F:OCR识别服务 | R:axios,dbConnection,ossService,User | A:Mistral OCR API | S:Mistral OCR API集成支持图片+PDF,Base64转换+180秒超时,按页数计费图片5积分/PDF页3积分,文件名编码修复latin1->utf8,清理OCR结果cleanupOCRResult去除空表格,24小时去重
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+ocrStore.js[FO5S]: F:OCR前端状态管理 | R:zustand,apiClient,message | A:/ocr/config,/ocr/process-image,/ocr/process-pdf,/ocr/process-batch,/ocr/tasks | S:单图/PDF/批量处理三模式,FormData上传multipart,任务列表分页,配置管理config
+
+模块十五:思维导图
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/mindmap/
+Mindmap.jsx[FH8PL]: F:思维导图主页面v1.2修复zoom报错 | R:markmap-lib,markmap-view,MermaidPreview,SvgPreview,authStore | A:/mindmap,/mindmap/credits-config,/mindmap/export-log | S:iOS科技风设计,Markdown/Mermaid/SVG三种模式,积分管理,导出SVG/PNG/PDF/MD,v1.1修复PDF导出文字为空+布局30%/70%,v1.2修复SVG模式d3-zoom报错+CSS transform缩放
+Mindmap.less[FH3S]: F:思维导图样式v1.2修复zoom | R:Mindmap.jsx | A:无 | S:iOS科技风样式,编辑器30%预览70%布局,v1.2给SVG添加明确像素尺寸避免d3-zoom报错
+/var/www/ai-platform/frontend/src/pages/mindmap/components/
+SvgPreview.jsx[FH4M]: F:SVG预览组件v1.5安全渲染 | R:DOMPurify | A:无 | S:v1.1修复SVG尺寸问题,v1.2支持foreignObject+HTML内容,v1.3复杂SVG使用iframe渲染,v1.4-v1.5修复sandbox安全警告+CSS正常工作
+MermaidPreview.jsx[FH3S]: F:Mermaid流程图预览组件 | R:mermaid | A:无 | S:Mermaid语法渲染,实时预览
+/var/www/ai-platform/frontend/src/pages/mindmap/constants/
+templates.js[FH2S]: F:思维导图默认模板 | R:无 | A:无 | S:Markdown/Mermaid/SVG三种模板示例代码
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+mindmapRoutes.js[RO5PBM]: F:思维导图路由定义 | R:authenticate,dbConnection,SystemConfig,User | A:/mindmap/credits-config,/mindmap/,/mindmap/export-log | S:7个端点,积分配置+检查积分+列表+保存+更新+导出记录+删除,支持markdown/mermaid/svg三种模式
+
+模块十六:管理后台
+--后端路由--
+/var/www/ai-platform/backend/src/routes/admin/
+userRoutes.js[RAC8RS]: F:用户管理路由v1.1批量创建 | R:UserManagementController,authMiddleware,permissions | A:/api/admin/users,/api/admin/users/batch-create,/api/admin/users/:id/* | S:用户CRUD+账号有效期+模型权限+挪出组,v1.1新增POST /batch-create批量创建用户路由
+usageLogRoutes.js[RAC7RS]: F:使用记录路由v1.1查看对话权限 | R:UsageLogController,authMiddleware | A:/api/admin/usage-logs,/api/admin/usage-logs/can-view-chat | S:使用记录列表+汇总+导出,v1.1新增GET /can-view-chat检查组管理员查看对话权限
+userTagRoutes.js[RAC7RS]: F:用户标签路由 | R:UserTagController,authMiddleware | A:/admin/user-tags/* | S:12个端点,组内标签CRUD+用户标签分配/移除+批量操作+筛选用户+统计,requirePermission('user.manage')权限控制
+systemPromptRoutes.js[RAC7RS]: F:系统提示词路由 | R:SystemPromptController,authMiddleware | A:/admin/system-prompts/* | S:7个端点,CRUD+功能开关toggle+状态查询,requireRole(['super_admin'])超级管理员专属
+groupRoutes.js[RAC8RSL]: F:用户分组路由 | R:UserGroupController,permissions,systemUploadMiddleware | A:/admin/user-groups/* | S:16个端点,组CRUD+积分池+邀请码+有效期+站点配置+Logo上传,双层权限user.manage/group.manage区分组管理员和超级管理员
+modelRoutes.js[RAC7RS]: F:AI模型管理路由 | R:AIModelController,permissions | A:/admin/models/* | S:7个端点,CRUD+测试连接+分组管理,canViewAIModels/canManageAIModels双层权限
+analyticsRoutes.js[RAC7RS]: F:数据分析路由 | R:AnalyticsController,authMiddleware | A:/admin/analytics/* | S:3个端点,综合分析+导出报表+实时看板,requireRole(['admin','super_admin'])
+moduleRoutes.js[RAC8RS]: F:系统模块路由 | R:ModuleController,superAdminMiddleware | A:/admin/modules/* | S:9个端点,用户模块2个公开+模块CRUD7个超管专属,健康检查+状态切换
+ossRoutes.js[RAC5RS]: F:OSS配置路由 | R:OSSConfigController,permissions | A:/admin/oss/* | S:6个端点,OSS配置+测试连接+积分配置+统计,canManageSystem()超级管理员专属
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/admin/
+UserManagementController.js[CA8RMv1.2]: F:用户管理控制器v1.2查看对话权限 | R:UserService,ResponseHelper,CacheService | A:GET/POST/PUT/DELETE /admin/users/*,POST /admin/users/batch-create | S:用户列表含标签/详情/CRUD,模型权限查询更新,挪出组,账号有效期设置/延长/同步组有效期,v1.1批量创建用户,v1.2新增can_view_chat_history字段读写支持组管理员查看对话权限
+UsageLogController.js[CA7RSv1.1]: F:使用记录控制器v1.1查看对话权限 | R:UsageLogService,User,ResponseHelper | A:/admin/usage-logs,/admin/usage-logs/summary,/admin/usage-logs/export,/admin/usage-logs/can-view-chat | S:使用记录列表+汇总统计+Excel导出,v1.1新增canViewChat方法检查组管理员can_view_chat_history权限
+UserGroupController.js[CA8RETM]: F:用户分组管理控制器 | R:GroupService,UserFolder,ossService,CacheService | A:GET/POST/PUT/DELETE /admin/groups/* | S:组CRUD+自动创建OSS文件夹,积分池分配/回收,邀请码CRUD+日志查询,组员上限/有效期/站点配置
+AnalyticsController.js[CC7RS]: F:数据分析控制器 | R:AnalyticsService,ResponseHelper,moment,ROLES | A:/admin/analytics,/admin/analytics/export,/admin/analytics/dashboard | S:3个方法getAnalytics/exportAnalytics/getDashboard,组管理员数据隔离actualGroupId,Excel导出buffer响应,串行查询修复MySQL并发问题
+UserTagController.js[CA7RSM]: F:用户标签管理控制器 | R:UserTagService,ResponseHelper,logger,dbConnection | A:/admin/user-tags/group/:groupId,/admin/user-tags,/admin/user-tags/:id,/admin/user-tags/user/:userId,/admin/user-tags/filter-users,/admin/user-tags/statistics/:groupId | S:12个方法,组内标签CRUD+批量获取getBatchTagInfo,用户标签分配/移除/覆盖更新,按标签筛选用户AND/OR,组管理员权限检查只能操作本组
+SystemPromptController.js[CA7RSM]: F:系统提示词管理控制器 | R:SystemPrompt,SystemConfig,ResponseHelper,logger,CacheService | A:/admin/system-prompts,/admin/system-prompts/:id,/admin/system-prompts/toggle,/admin/system-prompts/status | S:7个方法,CRUD+功能开关toggle+状态查询,缓存清除,超级管理员专属
+ModuleController.js[CA8RSL]: F:系统模块管理控制器 | R:Module,ResponseHelper,JWTService,logger,CacheService | A:/admin/modules,/admin/modules/:id,/admin/modules/user-modules,/admin/modules/:id/auth-url,/admin/modules/:id/health | S:9个方法,系统/外部模块双类型管理,getUserModules用户可访问模块,getModuleAuthUrl JWT认证URL生成,健康检查,核心模块不可禁用/删除保护
+OSSConfigController.js[CA5RCEM]: F:OSS配置管理控制器 | R:ResponseHelper,logger,dbConnection,ali-oss | A:/admin/oss/config,/admin/oss/test,/admin/oss/credits,/admin/oss/stats | S:6个方法,OSS配置CRUD+测试连接,阿里云OSS+本地存储双模式,accessKeySecret密钥隐藏******,存储积分配置事务更新,存储统计
+--后端服务--
+/var/www/ai-platform/backend/src/services/admin/
+UserService.js[SAC9URETL]: F:用户管理服务v1.1批量创建+邮箱非必填 | R:User,GroupService,SystemConfig,moment,bcrypt | A:无 | S:用户CRUD+软删除,分组变更积分返还逻辑,模型权限管理,挪出组功能,账号有效期管理+组同步,v1.1新增batchCreateUsers批量创建用户用户名规则生成+组积分池扣减+随机/统一密码+事务行锁,邮箱改为非必填validateUserData
+UsageLogService.js[SAC7S]: F:使用记录服务 | R:dbConnection | A:无 | S:使用记录列表分页+汇总统计+TOP用户+模型使用分布,组管理员数据隔离,Excel导出数据格式化
+GroupService.js[SAC9GRETL]: F:用户分组服务 | R:User,AIModel,dbConnection | A:无 | S:组CRUD+克隆,积分池credits_pool/credits_pool_used分配回收,组员上限user_limit检查,组有效期expire_date同步,站点配置site_customization,邀请码系统5位大写+使用限制+日志,自动分配AI模型
+UserTagService.js[SAC7UT]: F:用户标签服务 | R:dbConnection | A:无 | S:标签CRUD,批量获取getBatchTagInfo,分配/移除/覆盖更新用户标签,根据标签筛选用户AND/OR关系,标签统计+用户计数,组内标签隔离
+AnalyticsService.js[SCC7L]: F:数据分析BI服务 | R:dbConnection,XLSX,moment,errors | A:内部服务 | S:综合分析6维度overview/timeSeries/users/models/modules/tags,时间粒度day/week/month,用户分布5档积分范围,TOP20用户排行,模型分析chat+image双类型,Excel导出多Sheet,修复deleted_at过滤20+处查询
+StatsService.js[SCC8M]: F:系统统计服务 | R:dbConnection,errors | A:内部服务 | S:6种统计用户/分组/对话/模型/积分/实时,组管理员数据隔离,在线用户5分钟判活,今日数据统计,7日趋势分析,积分到期提醒expiring_soon,修复deleted_at过滤15+处查询
+--统计控制器--
+/var/www/ai-platform/backend/src/controllers/
+statsController.js[COC7S]: F:统计控制器 | R:StatsService,User,dbConnection | A:/stats/realtime,/stats/online-users,/stats/heartbeat,/stats/user-credits | S:实时统计,在线用户列表,心跳接口5分钟判活,用户积分统计今日消耗+组信息+过期状态,直接查库无Redis
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/admin/
+Settings.jsx[FA9CRL]: F:管理后台设置主页面v1.4智能应用 | R:adminStore,authStore,systemConfigStore,25+设置组件 | A:聚合所有/admin/*设置 | S:Tabs聚合25+设置组件,超级管理员全部可见/组管理员统计+记录+教学+模型可见,AI模型CRUD+测试,系统模块CRUD+健康检查,v1.4新增智能应用管理Tab
+Users.jsx[FC8RL]: F:用户管理主页面v1.1批量创建 | R:adminStore,authStore,14个子组件 | A:/admin/users,/admin/user-groups,/admin/user-tags | S:三标签页users/groups/tags,搜索状态保持防丢失,分页双层用户+组,组积分池+邀请码+站点配置+有效期管理,v1.1新增批量创建按钮+BatchCreateUsersModal弹窗
+/var/www/ai-platform/frontend/src/pages/dashboard/
+Dashboard.jsx[FC8M]: F:工作台页面 | R:authStore,moduleStore,apiClient,ReactMarkdown | A:/stats/user-credits,/admin/announcement | S:欢迎语+日期时间,功能模块网格排除admin和dashboard,积分中心4项统计,系统公告Markdown编辑超级管理员,移动端响应式
+--前端组件--
+/var/www/ai-platform/frontend/src/components/admin/settings/
+UsageLogs.jsx[FA7RMv1.2]: F:使用记录组件v1.2权限隐藏 | R:adminStore,authStore,apiClient,ConversationContentDrawer | A:/admin/usage-logs,/admin/usage-logs/summary,/admin/usage-logs/can-view-chat | S:使用记录列表+统计汇总+TOP用户,v1.1权限检查canViewChat,v1.2无权限时完全隐藏内容列useMemo动态列生成,组管理员无感知查看功能存在
+SmartAppSettings.jsx[FA8CMv1.2]: F:智能应用管理组件v1.2温度输入优化 | R:api,Form,Table,Modal,Switch | A:/admin/smart-apps/* | S:智能应用CRUD表格+编辑弹窗,分类/发布状态筛选,切换发布Switch,复制应用功能,v1.2温度从Slider改为InputNumber手动输入范围0-2步进0.1
+SystemModuleFormModal.jsx[FA7CRLv1.1]: F:系统模块表单弹窗v1.1图标扩展 | R:adminStore,Form,Modal,Select,*Icons | A:通过Settings.jsx | S:系统/外部模块编辑表单,v1.1图标选择器从22扩展到180+个uniqueIcons去重排序+listHeight 400+filterOption模糊搜索,SSO JWT认证配置secret/algorithm/expiresIn/tokenMethod/ssoEndpoint,Payload字段选择11个用户字段,访问权限allowed_groups多选,核心模块isCoreModule限制编辑
+/var/www/ai-platform/frontend/src/components/admin/users/
+BatchCreateUsersModal.jsx[FA7UPM]: F:批量创建用户弹窗v1.1新增 | R:Form,InputNumber,Select,Table,Statistic,adminStore | A:无 | S:用户名规则生成前缀+连接符+序号+位数,组积分池余额检查+扣减预览,统一密码/随机密码切换,创建结果表格,复制到剪贴板+CSV导出功能
+UserFormModal.jsx[FA7UMv1.3]: F:用户表单弹窗v1.3查看对话权限 | R:Form,Input,Select,Tabs,Switch,moment | A:无 | S:用户创建/编辑表单,UUID显示+复制,账号有效期管理Tab,密码重置Tab,v1.1邮箱改为非必填,v1.2组管理员特殊权限区域+查看组员对话记录开关can_view_chat_history,v1.3修复Switch初始值绑定问题initialValues+setTimeout延迟设置
+index.js[FA5S]: F:用户组件导出索引v1.1更新 | R:16个用户管理组件 | A:无 | S:导出UserTable/UserFormModal/UserSearchForm/UserDetailDrawer/UserGroupTable/UserGroupFormModal/UserCreditsTab/DistributeCreditsModal/GroupCreditsPoolModal/GroupUserLimitModal/GroupExpireDateModal/GroupSiteConfigModal/GroupInvitationCodeModal/GroupInvitationLogsModal/UserModelRestrictModal,v1.1新增BatchCreateUsersModal导出
+UserTable.jsx[FA7M]: F:用户列表表格 | R:Table,Tag,Space,Popconfirm | A:无 | S:用户表格展示,状态/角色/分组Tag,操作按钮编辑/删除/重置密码/模型权限/标签管理/积分分配,权限控制,分页
+UserSearchForm.jsx[FA5S]: F:用户搜索表单 | R:Form,Input,Select,Button | A:无 | S:用户名/邮箱/角色/状态/分组多条件搜索,重置功能
+UserDetailDrawer.jsx[FA5M]: F:用户详情抽屉 | R:Drawer,Descriptions,Statistic | A:无 | S:用户基本信息/积分信息/账号信息展示,Token使用统计,有效期显示
+UserGroupTable.jsx[FA7M]: F:用户组列表表格 | R:Table,Tag,Space,Popconfirm | A:无 | S:分组表格展示,积分池/组员数/有效期,操作按钮编辑/删除/积分池/上限/有效期/站点配置/邀请码,权限控制
+UserGroupFormModal.jsx[FA5M]: F:用户组表单弹窗 | R:Form,Input,ColorPicker | A:无 | S:分组创建/编辑表单,颜色选择器,有效期设置
+UserCreditsTab.jsx[FA7PM]: F:用户积分管理Tab | R:Statistic,Table,Button | A:无 | S:积分统计卡片,充值/扣减操作,积分历史表格,有效期管理
+DistributeCreditsModal.jsx[FA5PM]: F:积分分配弹窗 | R:Form,InputNumber,Radio | A:无 | S:组积分池分配/回收切换,余额显示,原因说明
+GroupCreditsPoolModal.jsx[FA5PM]: F:组积分池设置弹窗 | R:Form,InputNumber,Statistic | A:无 | S:积分池总额设置,当前状态显示
+GroupUserLimitModal.jsx[FA5S]: F:组员上限设置弹窗 | R:Form,InputNumber | A:无 | S:组员上限设置,当前人数显示
+GroupExpireDateModal.jsx[FA5S]: F:组有效期设置弹窗 | R:Form,DatePicker,Switch | A:无 | S:组有效期设置,同步到组员开关
+GroupSiteConfigModal.jsx[FA5M]: F:组站点配置弹窗 | R:Form,Input,Upload | A:无 | S:站点名称/Logo配置,预览功能
+GroupInvitationCodeModal.jsx[FA5M]: F:组邀请码管理弹窗 | R:Form,Input,Switch,InputNumber | A:无 | S:邀请码设置/生成,使用限制,有效期
+GroupInvitationLogsModal.jsx[FA5M]: F:邀请码使用记录弹窗 | R:Table,Modal | A:无 | S:邀请注册记录列表,分页查询
+UserModelRestrictModal.jsx[FA7RM]: F:用户模型限制弹窗 | R:Modal,Checkbox,Table | A:/admin/users/:id/model-permissions,/admin/users/:id/model-restrictions | S:用户可用模型列表,限制模型选择,保存限制配置
+--前端国际化--
+/var/www/ai-platform/frontend/src/locales/zh-CN/
+admin.json[FA5Cv1.1]: F:管理后台中文国际化v1.1查看对话权限 | R:i18n | A:无 | S:管理后台全部中文文案,v1.1新增canViewChatHistory/canViewChatHistory.help/canViewChatHistory.warning组管理员查看对话权限相关文案
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+moduleStore.js[FC7RS]: F:系统模块状态管理 | R:apiClient | A:/admin/modules/user-modules | S:Zustand管理用户可访问模块,getUserModules获取激活模块列表,getModuleByName按名称查询,控制侧边栏模块显示权限
+adminStore.js[FA8OL]: F:管理后台状态v1.1批量创建 | R:apiClient | A:/admin/users,/admin/users/batch-create,/admin/user-groups,/admin/models,/admin/settings,/admin/system-prompts,/admin/usage-logs | S:用户/组/积分/模型/系统全管理,include_tags支持,邀请码管理,站点配置,有效期管理,v1.1新增batchCreateUsers批量创建用户API调用
+analyticsStore.js[FC7S]: F:数据分析前端状态 | R:zustand,api,message | A:/admin/analytics,/admin/analytics/dashboard,/admin/analytics/export | S:修复API路径去掉/api前缀,filters过滤器startDate/endDate/groupId/tagIds/timeGranularity,Excel导出blob下载
+statsStore.js[FC7S]: F:统计数据前端状态 | R:zustand,apiClient | A:/stats/realtime,/stats/heartbeat | S:取消WebSocket改为30秒轮询,realtimeStats 7项指标,在线人数onlineCount,心跳接口
+
+模块十七:其他工具与服务
+--数据库服务--
+/var/www/ai-platform/backend/src/services/
+statsService.js[SOC7M]: F:统计数据服务 | R:dbConnection | A:无 | S:无Redis直接查库,用户在线5分钟判断,今日活跃统计,热门模型Top3,实时统计7指标
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+stats.js[RC7S]: F:统计数据路由定义 | R:StatsController,authMiddleware | A:/api/stats/realtime,/api/stats/online-users,/api/stats/heartbeat,/api/stats/user-credits | S:4个端点实时统计+在线用户+心跳+用户积分统计,所有路由需认证authenticate,在线用户列表需user.manage权限
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/ocr/
+OcrTool.jsx[FO7PEL]: F:OCR文字识别工具页面 | R:useOcrStore,useAuthStore,Upload,Modal,Tabs,Collapse | A:/ocr/process-image,/ocr/process-pdf,/ocr/process-batch,/ocr/tasks,/ocr/config | S:三种识别模式单图+PDF+批量最多20个文件,积分计费图片5分/张+PDF按页数3分/页,文件上传最大50MB,拖拽上传Dragger组件,历史记录Table展示,iOS玻璃卡片风格
+
+模块十八:智能应用广场
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+smartAppRoutes.js[RP8RM]: F:智能应用路由定义v2.2收藏功能 | R:SmartAppController,authenticate,requireSuperAdmin | A:用户端/smart-apps,管理端/admin/smart-apps | S:用户端10个端点GET列表+GET分类+GET收藏列表+GET详情+GET配置+POST使用记录+POST添加收藏+DELETE取消收藏+GET会话+POST清空会话,管理端11个端点CRUD+切换发布+分类CRUD,v2.2新增3个收藏路由GET /favorites+POST/:id/favorite+DELETE/:id/favorite,双路由导出router+adminRouter
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+SmartAppController.js[CP8RM]: F:智能应用控制器v2.2收藏功能 | R:SmartApp,AIModel,ResponseHelper,logger,dbConnection | A:对应smartAppRoutes所有端点 | S:双控制器SmartAppAdminController+SmartAppUserController,管理端CRUD+切换发布+分类CRUD返回toFullJSON含系统提示词,用户端列表返回数组格式含is_favorited收藏状态+详情+配置+使用记录,v2.2新增3个收藏方法getFavorites/addFavorite/removeFavorite,getCategories返回favoriteCount收藏数量,v2.1配置同步getOrCreateConversation比较四项配置自动UPDATE
+--后端数据模型--
+/var/www/ai-platform/backend/src/models/
+SmartApp.js[DP7CRMv2.2]: F:智能应用数据模型v2.2收藏功能 | R:dbConnection,logger | A:无 | S:智能应用CRUD+发布切换+使用次数统计,v2.2新增5个收藏方法addFavorite/removeFavorite/getFavorites/getFavoriteIds/isFavorited,findPublished支持userId参数LEFT JOIN收藏表返回is_favorited状态,toJSON输出is_favorited字段,v2.0 category_ids JSON数组1-3分类+credits_per_use积分0-9999+JSON_CONTAINS查询+populateCategories批量填充
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/smartApps/
+SmartApps.jsx[FP8L]: F:应用广场主页面v2.3紧凑布局 | R:useSmartAppStore,SmartAppChatModal,HeartOutlined,HeartFilled | A:/smart-apps,/smart-apps/categories,/smart-apps/favorites | S:iOS风格应用卡片网格,v2.2收藏功能favoriteCount+toggleFavorite+handleFavoriteClick阻止冒泡,动态分类categories+categoryStats,Segmented分类筛选支持favorites值,热门标识use_count>10,v2.3新增PC端4列xs=12/sm=12/md=8/lg=6+移动端六宫格2列+isMobile响应式隐藏分类标签+描述单行ellipsis rows=1+Row gutter移动端8/PC端12
+SmartApps.less[FP5S]: F:应用广场样式v2.3紧凑六宫格 | R:SmartApps.jsx | A:无 | S:iOS风格设计,v2.2收藏按钮heartBeat动画,v2.3新增分类横向滚动overflow-x:auto+隐藏滚动条scrollbar-width:none+卡片紧凑min-height PC端160px/移动端140px+padding PC端14px/移动端10px+.mobile-card移动端居中布局flex-direction:column+图标52px
+--前端组件--
+/var/www/ai-platform/frontend/src/components/admin/settings/
+SmartAppSettings.jsx[FA8CM]: F:智能应用管理组件v2.0分类管理+多分类+积分 | R:api,Form,Table,Modal,Switch,Drawer,ColorPicker | A:/admin/smart-apps/*,/admin/smart-apps/categories/* | S:智能应用CRUD表格+编辑弹窗,v2.0新增分类管理Drawer抽屉+分类CRUD+ColorPicker颜色选择,category_ids多选Select最多3个分类,credits_per_use积分InputNumber范围0-9999,分类/发布状态筛选按category_id,表格显示多分类Tag+积分Tag,复制应用功能
+/var/www/ai-platform/frontend/src/components/smartApps/
+SmartAppChatModal.jsx[FP8AL]: F:智能应用对话窗口组件 | R:apiClient,authStore,ReactMarkdown,remarkGfm,SyntaxHighlighter | A:/smart-apps/:id/conversation,/chat/conversations/:id/messages | S:固定居中弹窗不可拖拽,右下角resize-handle缩放手柄调整大小,最小化悬浮球右下角fixed定位,pointer-events:none允许点击窗口外部,会话持久化localStorage存储窗口大小,流式输出postStream,消息按created_at排序,AI头像闪电SVG+用户首字母,代码块高亮oneDark,ESC关闭
+SmartAppChatModal.less[FP5S]: F:智能应用对话窗口样式 | R:SmartAppChatModal.jsx | A:无 | S:wrapper层pointer-events:none穿透+窗口pointer-events:auto,固定居中flex布局,渐变标题栏+AI气泡,resize-handle右下角缩放手柄渐变背景,minimized-ball悬浮球hover放大动画,streaming-cursor闪烁动画,响应式移动端全宽
+index.js[FP3S]: F:智能应用组件导出索引 | R:SmartAppChatModal | A:无 | S:导出SmartAppChatModal组件
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+smartAppStore.js[FP7M]: F:智能应用状态管理v2.2收藏功能 | R:apiClient,message | A:/smart-apps,/smart-apps/categories,/smart-apps/favorites,/smart-apps/:id,/smart-apps/:id/config,/smart-apps/:id/use,/smart-apps/:id/favorite,/smart-apps/:id/conversation,/smart-apps/:id/conversation/clear | S:Zustand管理apps数组含is_favorited+categories+categoryStats+favoriteCount从数据库动态加载,v2.2新增getFavorites获取收藏列表+toggleFavorite切换收藏状态更新本地apps和favoriteCount,getCategories返回{categories,stats,favoriteCount}三数据,getAppsByCategory按category_ids多分类过滤,getOrCreateConversation获取或创建会话+clearConversation清空会话
+
+模块十九:知识库Wiki
+--后端路由--
+/var/www/ai-platform/backend/src/routes/
+wikiRoutes.js[RW7S]: F:知识库路由定义v3.0版本平等化 | R:WikiController,authMiddleware | A:/wiki/items,/wiki/items/:id,/wiki/items/:id/version,/wiki/items/:id/versions,/wiki/versions/:id(GET+PUT),/wiki/items/:id/versions/:versionId(DELETE),/wiki/items/:id/pin,/wiki/items/:id/editors | S:知识库CRUD+版本管理,v3.0新增PUT /wiki/versions/:id保存到指定版本,移除rollback回滚(版本平等不需要),13个端点
+--后端控制器--
+/var/www/ai-platform/backend/src/controllers/
+WikiController.js[CW8RML]: F:知识库控制器v3.0版本平等化 | R:WikiItem,ResponseHelper,logger | A:对应wikiRoutes所有端点 | S:14个方法,v3.0新增updateVersion保存到指定版本,updateItem改为只更新基本信息is_pinned/sort_order,三级范围权限personal/team/global,版本创建/历史/删除,编辑者增删,置顶切换
+--后端数据模型--
+/var/www/ai-platform/backend/src/models/
+WikiItem.js[DW9RTJM]: F:知识库数据模型 类型修复 | R:dbConnection,errors,logger | A:无 | S:重构版本管理所有版本平等,新增updateVersion保存到指定版本+createNewVersion基于指定版本复制+updateBasicInfo更新基本信息,三级范围personal/team/global,版本管理最多50版本自动清理,JSON字段notes/links各最多10条,编辑者管理wiki_editors表,权限检查checkAccess/checkCanEdit/isEditor,修复createNewVersion类型比较bug将wikiId/baseVersionId转为parseInt+Number()确保类型一致+当前版本不存在时自动回退到最新版本
+--前端状态管理--
+/var/www/ai-platform/frontend/src/stores/
+wikiStore.js[FW8M]: F:知识库状态管理v3.0版本平等化 | R:apiClient,message | A:/wiki/items,/wiki/items/:id,/wiki/items/:id/version,/wiki/items/:id/versions,/wiki/versions/:id(GET+PUT),/wiki/items/:id/versions/:versionId | S:v3.0重构用currentVersion替代selectedVersionNumber,新增saveVersion保存到指定版本,切换版本=切换工作区加载完整内容,Zustand管理items+currentItem+currentVersion+versions+editors,CRUD+版本管理createVersion/getVersions/switchToVersion/saveVersion/deleteVersion+编辑者管理+置顶切换
+--前端页面--
+/var/www/ai-platform/frontend/src/pages/wiki/
+Wiki.jsx[FW8L]: F:知识库主页面v4.0版本平等化 | R:wikiStore,authStore,dayjs,i18n | A:无 | S:v4.0重构版本管理逻辑:切换到哪个版本就编辑哪个+保存到当前查看的版本+新建版本基于当前版本复制,iOS毛玻璃科技风设计,三级范围筛选Segmented,卡片式列表Grid,编辑Drawer抽屉,版本下拉选择+三按钮(新建版本/保存/删除版本),备注notes/链接links各最多10条Form.List
+Wiki.less[FW5M]: F:知识库样式v3.1 | R:Wiki.jsx | A:无 | S:iOS毛玻璃科技风,渐变头部+图标,卡片悬浮动效,范围标签彩色,编辑抽屉自定义头部,版本下拉菜单wiki-version-dropdown,内容标签行wiki-content-label-row工具栏内联,响应式移动端适配
+--前端国际化--
+/var/www/ai-platform/frontend/src/locales/zh-CN/
+wiki.json[FW5C]: F:知识库国际化 | R:i18n | A:无 | S:知识库全部中文文案,三级范围/操作按钮/表单字段/版本管理/确认弹窗
+
+===AI应用与实践平台代码索引部分-完毕===
+
+===AI应用与实践平台数据库完整索引-20260123===
+[索引说明]
+精简标签[ABC]: A-表类型(U用户/T事务/C内容/S系统/L日志/E教学/A工作流/P智能应用/W知识库) B-特性(P积分/S软删除/U=UUID主键/J=JSON字段/F多外键) C-重要度(9核心/7业务/5配置/3辅助)
+字段约束: PK主键 UK唯一键 FK外键 IX索引 SD软删除 JS=JSON CR积分 DT时间
+格式: 表名[ABC] | 主键 | 唯一键 | 外键 | 索引 | 特殊字段
+
+总计:86个表(含3视图,3备份表)
+
+用户认证模块-11表
+users[U9PS] | id[PK] | uuid,email,username[UK] | group_id->user_groups[FK] | role,status,expire_at,credits_expire_at[IX] | credits_quota/used[CR],deleted_at[SD],can_view_chat_history[BOOL]
+user_groups[U7PSJ] | id[PK] | name,invitation_code[UK] | created_by->users[FK] | is_active,sort_order[IX] | credits_pool/used[CR],expire_date[DT],site_customization[JS]
+user_tags[U5F] | id[PK] | group_id+name[UK] | group_id->user_groups,created_by->users[FK] | is_active,sort_order[IX] | -
+user_tag_relations[T5F] | id[PK] | - | user_id->users,tag_id->user_tags[FK] | - | -
+user_tag_history[L3] | id[PK] | - | user_id->users,tag_id->user_tags,operator_id->users[FK] | created_at[IX] | -
+user_sessions[L3] | id[PK] | - | user_id->users[FK] | expires_at[IX] | -
+token_blacklist[L5] | id[PK] | token_jti[UK] | user_id->users[FK] | expires_at[IX] | -
+invitation_codes[S5] | id[PK] | code[UK] | created_by->users[FK] | is_active,expires_at[IX] | -
+invitation_code_logs[L3] | id[PK] | - | code_id->invitation_codes,user_id->users[FK] | created_at[IX] | -
+user_activities[L5F] | id[PK] | - | user_id->users[FK] | created_at[IX] | -
+permissions[S5] | id[PK] | - | - | - | -
+
+积分系统-3表
+credit_transactions[T9PF] | id[PK] | - | user_id->users,operator_id->users,model_id->ai_models,conversation_id->conversations[FK] | user_id+created_at,transaction_type,request_id[IX] | amount,balance_after[CR]
+billing_logs[L5PF] | id[PK] | - | user_id->users,conversation_id->conversations[FK] | user_id,created_at,billing_type[IX] | tokens_used,credits_used[CR]
+storage_credit_config[S3P] | id[PK] | - | - | - | price_per_mb[CR]
+storage_credits_config_simple[S3P] | id[PK] | - | - | - | base_credits,credits_per_5mb[CR]
+
+对话系统-3表
+conversations[C9USJF] | id(uuid)[PK] | - | user_id->users,system_prompt_id->system_prompts,module_combination_id->module_combinations,smart_app_id->smart_apps[FK] | user_id,priority,model_name,cleared_at[IX] | cleared_at[DT],smart_app_id[FK]
+messages[C9USJF] | id(uuid)[PK] | - | conversation_id->conversations,file_id->files[FK] | conversation_id,sequence_number,status[IX] | generated_images[JS]
+files[C7UF] | id(uuid)[PK] | - | user_id->users,conversation_id->conversations[FK] | user_id,status[IX] | extracted_content[TEXT]
+
+AI模型配置-5表
+ai_models[S7PJCF] | id[PK] | name[UK] | - | provider,is_active,is_public,credits_per_chat[IX] | api_key[ENC],model_config[JS],credits_per_chat[CR]
+ai_model_groups[T5F] | id[PK] | model_id+group_id[UK] | model_id->ai_models,group_id->user_groups[FK] | - | -
+user_model_restrictions[T3F] | id[PK] | - | user_id->users,model_id->ai_models[FK] | - | -
+system_prompts[S5J] | id[PK] | - | - | is_active,sort_order[IX] | group_ids[JS],content[TEXT]
+system_prompt_groups[T3F] | id[PK] | - | prompt_id->system_prompts,group_id->user_groups[FK] | - | -
+
+知识模块万智魔方-5表
+knowledge_modules[C7PSJ] | id[PK] | - | creator_id->users,group_id->user_groups[FK] | module_scope,is_active[IX] | group_ids[JS],content[TEXT],tokens[CR]
+module_combinations[C5J] | id[PK] | - | user_id->users[FK] | is_active[IX] | estimated_tokens[CR]
+module_combination_items[T5F] | id[PK] | combination_id+module_id[UK] | combination_id->module_combinations,module_id->knowledge_modules[FK] | order_index[IX] | -
+knowledge_module_tag_permissions[T3F] | id[PK] | - | module_id->knowledge_modules,tag_id->user_tags[FK] | - | -
+system_modules[S5J] | id[PK] | name[UK] | - | module_category,is_active,sort_order[IX] | config[JS]
+
+智能应用广场-3表
+smart_apps[P7PJCF] | id[PK] | - | model_id->ai_models,creator_id->users[FK] | is_published,sort_order[IX] | system_prompt[TEXT],temperature[DEC],context_length[INT],use_count[CR],credits_per_use[CR],category_ids[JS]
+smart_app_categories[P5C] | id[PK] | name[UK] | - | sort_order,is_active[IX] | color[VARCHAR],updated_at[DT]
+user_smart_app_favorites[P5F] | id[PK] | user_id+smart_app_id[UK] | user_id->users,smart_app_id->smart_apps[FK] | user_id,smart_app_id[IX] | created_at[DT]
+
+Agent工作流-6表
+agent_workflows[A7UJ] | id[PK] | - | user_id->users[FK] | is_published[IX] | flow_data[JS]
+agent_executions[A7PJF] | id[PK] | - | workflow_id->agent_workflows,user_id->users[FK] | status,started_at[IX] | input/output_data,execution_log[JS],total_credits_used[CR]
+agent_node_executions[A5PJF] | id[PK] | - | execution_id->agent_executions[FK] | node_type,status[IX] | input/output_data[JS],credits_used[CR]
+agent_node_types[S5PJ] | id[PK] | type_key[UK] | - | category,is_active,display_order[IX] | config_schema[JS],credits_per_execution[CR],max_inputs[INT],max_outputs[INT]
+agent_workflow_templates[S3J] | id[PK] | - | - | - | template_data[JS]
+api_services[S5PF] | id[PK] | service_id[UK] | - | - | api_key[ENC],credits_per_call[CR]
+api_service_actions[S3PF] | id[PK] | service_id+action_type[UK] | service_id->api_services[FK] | status[IX] | credits[CR]
+
+智能教学-10表
+teaching_modules[E7SF] | id[PK] | - | creator_id->users,owner_group_id->user_groups,deleted_by->users[FK] | visibility,status,is_deleted[IX] | deleted_at[SD]
+teaching_lessons[E7SJF] | id[PK] | - | module_id->teaching_modules,creator_id->users,deleted_by->users[FK] | content_type,status,is_deleted[IX] | materials,content[JS],deleted_at[SD]
+teaching_permissions[E5F] | id[PK] | module_id+lesson_id+user_id/group_id/tag_id+permission_type[UK] | module_id->teaching_modules,user_id->users,group_id->user_groups,tag_id->user_tags[FK] | permission_type[IX] | expires_at[DT]
+teaching_module_groups[E3F] | id[PK] | - | - | - | -
+teaching_module_group_relations[T3F] | id[PK] | - | module_id->teaching_modules,group_id->teaching_module_groups[FK] | - | -
+teaching_global_authorizations[E5J] | id[PK] | - | - | - | permissions[JS]
+teaching_lesson_plans[E3J] | id[PK] | - | lesson_id->teaching_lessons,user_id->users[FK] | - | content[JS]
+teaching_lesson_drafts[E3J] | id[PK] | - | lesson_id->teaching_lessons,user_id->users[FK] | - | draft_content[JS]
+teaching_view_logs[L5F] | id[PK] | - | module_id->teaching_modules,lesson_id->teaching_lessons,user_id->users[FK] | created_at[IX] | -
+teaching_permissions_backup_20251031[L1] | - | - | - | - | BACKUP
+
+图像生成-4表
+image_models[S5PJ] | id[PK] | - | - | - | api_key[ENC],sizes_supported[JS],price_per_image[CR]
+image_generations[C7PSJF] | id[PK] | - | user_id->users,model_id->image_models,parent_id->image_generations[FK] | task_id,status,is_public[IX] | buttons[JS],credits_consumed[CR]
+midjourney_tasks[C5J] | id[PK] | - | user_id->users[FK] | task_id[IX] | response_data[JS]
+gemini_files[L3] | id[PK] | - | - | - | -
+
+视频生成-2表
+video_models[S5PJ] | id[PK] | - | - | - | api_config[JS],price_multiplier[CR]
+video_generations[C7PSJF] | id[PK] | - | user_id->users,model_id->video_models[FK] | task_id,status,is_public,provider[IX] | raw_response[JS],credits_consumed[CR]
+
+HTML编辑器-5表
+html_projects[E5SF] | id[PK] | - | user_id->users[FK] | is_default[IX] | deleted_at[SD]
+html_pages[E7SJ] | id[PK] | user_id+slug[UK] | project_id->html_projects,user_id->users[FK] | is_published,view_count[IX] | compiled_content[TEXT],credits_consumed[CR]
+html_templates[E3] | id[PK] | - | - | - | content[TEXT]
+html_resources[E3] | id[PK] | - | - | - | -
+html_pages_slug_backup[L1] | - | - | - | - | BACKUP
+
+存储系统-3表
+user_folders[S7SF] | id[PK] | - | user_id->users,parent_id->user_folders,group_id->user_groups[FK] | folder_type,is_deleted[IX] | is_deleted[SD]
+user_files[S7SF] | id[PK] | - | user_id->users,folder_id->user_folders,uploaded_by->users[FK] | is_deleted[IX] | is_deleted,deleted_at[SD]
+user_storage[S5] | id[PK] | - | user_id->users[FK] | - | storage_used,quota[INT]
+
+智能日历-8表
+calendar_events[E5F] | id[PK] | - | user_id->users,parent_event_id->calendar_events[FK] | event_date,status,category[IX] | -
+calendar_categories[E3] | id[PK] | - | user_id->users[FK] | - | -
+calendar_ai_analyses[E5PJ] | id[PK] | - | user_id->users[FK] | analysis_date[IX] | ai_response[JS],credits_used[CR]
+calendar_background_knowledge[E3J] | id[PK] | - | user_id->users[FK] | - | knowledge_content[JS]
+calendar_config[S3P] | id[PK] | - | - | - | credit_multiplier[CR]
+calendar_prompt_templates[E3] | id[PK] | - | - | - | template[TEXT]
+calendar_prompt_templates_backup_20251011[L1] | - | - | - | - | BACKUP
+calendar_user_settings[E3J] | id[PK] | - | user_id->users[FK] | - | settings[JS]
+
+OCR-2表
+ocr_tasks[C5PF] | id[PK] | - | user_id->users[FK] | status[IX] | credits_consumed[CR]
+ocr_results[C5J] | id[PK] | - | task_id->ocr_tasks[FK] | - | ocr_result[JS]
+
+知识库Wiki-3表
+wiki_items[W7SJF] | id[PK] | - | creator_id->users,group_id->user_groups[FK] | scope,is_pinned,creator_id,group_id[IX] | notes[JS],links[JS],content[TEXT],current_version[INT],version_count[INT]
+wiki_versions[W5JF] | id[PK] | wiki_id+version_number[UK] | wiki_id->wiki_items,created_by->users[FK] | wiki_id,version_number[IX] | notes_snapshot[JS],links_snapshot[JS],content[TEXT],change_summary[VARCHAR]
+wiki_editors[W3F] | id[PK] | wiki_id+user_id[UK] | wiki_id->wiki_items,user_id->users,added_by->users[FK] | wiki_id[IX] | -
+
+其他系统-10表
+org_applications[S3] | id[PK] | - | - | - | -
+application_form_config[S3J] | id[PK] | - | - | - | form_config[JS]
+user_mindmaps[C3PJ] | id[PK] | - | user_id->users[FK] | - | mindmap_data[JS],credits_consumed[CR]
+file_shares[C3F] | id[PK] | - | file_id->files,shared_by->users[FK] | - | expires_at[DT]
+oss_config[S3J] | id[PK] | - | - | - | config[JS]
+system_settings[S9J] | id[PK] | setting_key[UK] | - | - | setting_value[TEXT]
+migrations_history[L3] | id[PK] | - | - | - | -
+schema_migrations[L3] | version[PK] | - | - | - | -
+casbin_rule[S5] | id[PK] | - | - | - | -
+casbin_deny_policies[S3] | id[PK] | - | - | - | -
+casbin_metadata[S3] | id[PK] | - | - | - | -
+
+视图-3个
+v_teaching_permission_hierarchy[VIEW] | 教学权限层级视图
+v_user_accessible_teaching_modules[VIEW] | 用户可访问模块视图
+v_user_tags_detail[VIEW] | 用户标签详情视图
+
+===AI应用与实践平台数据库完整索引-20260123-完毕===
