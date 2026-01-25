@@ -2,6 +2,7 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v1.5.0 (2025-01-07): 完整国际化支持，所有Tab标签使用i18n
  * - v1.4.0 (2025-12-30): 新增智能应用管理Tab
  * - v1.3.0 (2025-11-09): 组管理员也能访问教学管理
  * - v1.2.0: 教学管理Tab（仅超级管理员）
@@ -418,7 +419,7 @@ const Settings = () => {
     )
   }
 
-  // Tab配置项
+  // Tab配置项 - 所有标签使用i18n
   const tabItems = [
     // 第一组：基础功能
     {
@@ -447,8 +448,8 @@ const Settings = () => {
       label: (
         <span>
           <BookOutlined />
-          教学管理
-          {isGroupAdmin && <Tag color="blue" style={{ marginLeft: 8 }}>本组</Tag>}
+          {t('admin.settings.tabs.teaching')}
+          {isGroupAdmin && <Tag color="blue" style={{ marginLeft: 8 }}>{t('admin.settings.tabs.teaching.thisGroup')}</Tag>}
         </span>
       ),
       children: <TeachingManagement />
@@ -523,13 +524,13 @@ const Settings = () => {
     },
     // 只有超级管理员可见的Tab
     ...(isSuperAdmin ? [
-      // 新增：智能应用管理Tab
+      // 智能应用管理Tab
       {
         key: 'smartApps',
         label: (
           <span>
             <RocketOutlined />
-            智能应用
+            {t('admin.settings.tabs.smartApps')}
           </span>
         ),
         children: <SmartAppSettings />
@@ -539,7 +540,7 @@ const Settings = () => {
         label: (
           <span>
             <PictureOutlined />
-            图像生成模型
+            {t('admin.settings.tabs.imageModels')}
           </span>
         ),
         children: <ImageModelSettings />
@@ -549,7 +550,7 @@ const Settings = () => {
         label: (
           <span>
             <VideoCameraOutlined />
-            视频生成模型
+            {t('admin.settings.tabs.videoModels')}
           </span>
         ),
         children: <VideoModelSettings />
@@ -559,7 +560,7 @@ const Settings = () => {
         label: (
           <span>
             <ScanOutlined />
-            OCR识别配置
+            {t('admin.settings.tabs.ocrSettings')}
           </span>
         ),
         children: <OcrSettings disabled={!isSuperAdmin} />
@@ -636,7 +637,7 @@ const Settings = () => {
         label: (
           <span>
             <BankOutlined />
-            企业申请管理
+            {t('admin.settings.tabs.orgApplications')}
           </span>
         ),
         children: <OrgApplicationManagement />
@@ -646,7 +647,7 @@ const Settings = () => {
         label: (
           <span>
             <CloudServerOutlined />
-            OSS存储配置
+            {t('admin.settings.tabs.ossSettings')}
           </span>
         ),
         children: <OSSSettings />
@@ -656,7 +657,7 @@ const Settings = () => {
         label: (
           <span>
             <DollarOutlined />
-            存储积分配置
+            {t('admin.settings.tabs.storageCredits')}
           </span>
         ),
         children: <StorageCreditsConfig />
@@ -666,7 +667,7 @@ const Settings = () => {
         label: (
           <span>
             <ShareAltOutlined />
-            思维导图积分配置
+            {t('admin.settings.tabs.mindmapCredits')}
           </span>
         ),
         children: <MindmapCreditsConfig />
@@ -676,7 +677,7 @@ const Settings = () => {
         label: (
           <span>
             <CalendarOutlined />
-            日历配置
+            {t('admin.settings.tabs.calendarConfig')}
           </span>
         ),
         children: <CalendarConfigSettings />
@@ -707,7 +708,7 @@ const Settings = () => {
         label: (
           <span>
             <CodeOutlined />
-            HTML编辑器
+            {t('admin.settings.tabs.htmlEditor')}
           </span>
         ),
         children: <HtmlEditorSettings disabled={!isSuperAdmin} />
@@ -718,8 +719,8 @@ const Settings = () => {
           <span>
             <BgColorsOutlined />
             {t('admin.settings.tabs.theme')}
-        </span>
-      ),
+          </span>
+        ),
         children: <ThemeSettings disabled={!isSuperAdmin} />
       },
       {
@@ -728,8 +729,8 @@ const Settings = () => {
           <span>
             <ThunderboltOutlined />
             {t('admin.settings.tabs.rateLimit')}
-        </span>
-      ),
+          </span>
+        ),
         children: <RateLimitSettings disabled={!isSuperAdmin} />
       },
       {
@@ -738,8 +739,8 @@ const Settings = () => {
           <span>
             <MailOutlined />
             {t('admin.settings.tabs.email')}
-        </span>
-      ),
+          </span>
+        ),
         children: <EmailSettings disabled={!isSuperAdmin} />
       },
       {
@@ -748,8 +749,8 @@ const Settings = () => {
           <span>
             <KeyOutlined />
             {t('admin.settings.tabs.sso')}
-        </span>
-      ),
+          </span>
+        ),
         children: <SSOSettings />
       },
       {
@@ -758,8 +759,8 @@ const Settings = () => {
           <span>
             <GlobalOutlined />
             {t('admin.settings.tabs.customHomepage')}
-        </span>
-      ),
+          </span>
+        ),
         children: <CustomHomepage disabled={!isSuperAdmin} />
       }
     ] : [])
