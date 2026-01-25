@@ -1,3 +1,15 @@
+/**
+ * 应用主入口组件
+ * 
+ * 功能说明：
+ * 1. 路由配置和权限控制
+ * 2. 全局主题和国际化配置
+ * 3. 系统配置初始化（包括默认语言）
+ * 
+ * 版本更新：
+ * - v1.2.0 (2025-01-07): 添加系统默认语言初始化支持
+ */
+
 import React, { Suspense, useEffect, useState } from 'react'
 import { 
   BrowserRouter as Router, 
@@ -12,6 +24,8 @@ import './styles/ios-unified-theme.css';
 import { useTranslation } from 'react-i18next'
 import useAuthStore from './stores/authStore'
 import useSystemConfigStore from './stores/systemConfigStore'
+import apiClient from './utils/api'
+import { setSystemDefaultLanguage, hasUserSelectedLanguage } from './utils/i18n'
 
 // 导入主题Provider
 import ThemeProvider from './components/ThemeProvider'
@@ -162,6 +176,9 @@ const App = () => {
   const currentLanguage = i18n.language
   const locale = currentLanguage === 'zh-CN' ? zhCN : enUS
   
+  // 系统默认语言初始化状态
+  const [languageInitialized, setLanguageInitialized] = useState(false)
+  
   // 获取系统配置
   const { systemConfig, initialized, getSiteLogo, getSiteDescription } = useSystemConfigStore()
 
@@ -172,6 +189,44 @@ const App = () => {
       duration: 3,
       maxCount: 3,
     })
+  }, [])
+  
+  /**
+   * 初始化系统默认语言
+   * 在应用启动时从公开API获取系统默认语言配置
+   * 仅当用户没有主动选择过语言时才应用
+   */
+  useEffect(() => {
+    const initDefaultLanguage = async () => {
+      // 如果用户已经主动选择过语言，不需要获取系统默认语言
+      if (hasUserSelectedLanguage()) {
+        console.log('🌐 用户已有语言偏好，跳过系统默认语言')
+        setLanguageInitialized(true)
+        return
+      }
+      
+      try {
+        // 从公开API获取系统配置
+        const response = await apiClient.get('/public/system-config')
+        
+        if (response.data?.success && response.data?.data) {
+          const defaultLanguage = response.data.data.site?.default_language
+          
+          if (defaultLanguage) {
+            // 应用系统默认语言
+            setSystemDefaultLanguage(defaultLanguage)
+            console.log('✅ 系统默认语言已应用:', defaultLanguage)
+          }
+        }
+      } catch (error) {
+        // 获取失败不影响应用运行，使用i18n的默认检测逻辑
+        console.warn('⚠️ 获取系统默认语言配置失败，使用默认检测:', error.message)
+      } finally {
+        setLanguageInitialized(true)
+      }
+    }
+    
+    initDefaultLanguage()
   }, [])
   
   // 动态更新浏览器标签栏的favicon和title

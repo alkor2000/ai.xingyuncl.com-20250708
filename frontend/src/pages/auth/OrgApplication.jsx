@@ -1,5 +1,8 @@
 /**
- * 申请页面 - 支持动态字段标签显示
+ * 企业申请页面 - 支持动态字段标签显示和完整国际化
+ * 
+ * 版本更新：
+ * - v1.1.0 (2025-01-07): 完整i18n国际化支持
  */
 
 import React, { useState, useEffect } from 'react';
@@ -17,6 +20,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import LanguageSwitch from '../../components/common/LanguageSwitch';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -43,13 +47,13 @@ const OrgApplication = () => {
         }
       } catch (error) {
         console.error('获取表单配置失败:', error);
-        message.error('获取表单配置失败');
+        message.error(t('auth.orgApplication.configLoadFailed'));
       } finally {
         setConfigLoading(false);
       }
     };
     fetchFormConfig();
-  }, []);
+  }, [t]);
 
   // 自定义文件上传处理
   const customUploadRequest = async ({ file, onSuccess, onError, onProgress }) => {
@@ -74,14 +78,14 @@ const OrgApplication = () => {
         const { url, fileName } = response.data.data;
         setBusinessLicenseUrl(url);
         onSuccess(response.data.data, file);
-        message.success(`${fileName} 上传成功`);
+        message.success(`${fileName} ${t('auth.orgApplication.businessLicense.success')}`);
       } else {
-        throw new Error(response.data.message || '上传失败');
+        throw new Error(response.data.message || t('auth.orgApplication.businessLicense.failed'));
       }
     } catch (error) {
       console.error('文件上传失败:', error);
       onError(error);
-      message.error(error.response?.data?.message || '文件上传失败');
+      message.error(error.response?.data?.message || t('auth.orgApplication.businessLicense.failed'));
     }
   };
 
@@ -102,7 +106,7 @@ const OrgApplication = () => {
   const beforeUpload = (file) => {
     const isLt10M = file.size / 1024 / 1024 < 10;
     if (!isLt10M) {
-      message.error('文件大小不能超过10MB');
+      message.error(t('auth.orgApplication.businessLicense.sizeError'));
       return false;
     }
     
@@ -116,7 +120,7 @@ const OrgApplication = () => {
     ].includes(file.type);
     
     if (!isAllowedType) {
-      message.error('只支持上传图片或PDF文件');
+      message.error(t('auth.orgApplication.businessLicense.typeError'));
       return false;
     }
     
@@ -139,11 +143,11 @@ const OrgApplication = () => {
       if (response.data.success) {
         // 设置提交成功状态，锁定表单
         setSubmitted(true);
-        message.success('提交成功！');
+        message.success(t('auth.orgApplication.submitSuccess'));
       }
     } catch (error) {
       console.error('提交申请失败:', error);
-      const errorMsg = error.response?.data?.message || '提交申请失败，请稍后重试';
+      const errorMsg = error.response?.data?.message || t('auth.orgApplication.submitFailed');
       message.error(errorMsg);
     } finally {
       setLoading(false);
@@ -170,12 +174,10 @@ const OrgApplication = () => {
     return null;
   }
 
-  // 从配置中获取字段标签，如果没有则使用默认值
-  const fieldLabels = formConfig?.field_labels || {
-    org_name: '企业/组织/学校名称',
-    applicant_email: '申请人邮箱',
-    business_license: '营业执照',
-    invitation_code: '邀请码'
+  // 从配置中获取字段标签，如果没有则使用i18n默认值
+  const fieldLabels = formConfig?.field_labels || {};
+  const getFieldLabel = (field, defaultKey) => {
+    return fieldLabels[field] || t(defaultKey);
   };
 
   return (
@@ -185,8 +187,19 @@ const OrgApplication = () => {
       alignItems: 'center',
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
+      padding: '20px',
+      position: 'relative'
     }}>
+      {/* 语言切换器 */}
+      <div style={{ 
+        position: 'absolute', 
+        top: 20, 
+        right: 20,
+        zIndex: 10
+      }}>
+        <LanguageSwitch />
+      </div>
+
       {/* 返回登录按钮 */}
       <Button
         icon={<ArrowLeftOutlined />}
@@ -195,24 +208,37 @@ const OrgApplication = () => {
           position: 'absolute', 
           top: 20, 
           left: 20,
-          zIndex: 10
+          zIndex: 10,
+          background: 'rgba(255, 255, 255, 0.95)',
+          border: 'none',
+          borderRadius: '24px',
+          padding: '0 20px',
+          height: '44px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '15px',
+          fontWeight: 600,
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)'
         }}
       >
-        返回登录
+        {t('auth.orgApplication.backToLogin')}
       </Button>
 
       <Card
         style={{
           width: '100%',
           maxWidth: '600px',
-          borderRadius: '8px'
+          borderRadius: '16px',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)'
         }}
       >
         {/* 提交成功提示 */}
         {submitted && (
           <Alert
-            message="提交成功"
-            description="您已经提交完成"
+            message={t('auth.orgApplication.submitSuccess')}
+            description={t('auth.orgApplication.submitSuccessDesc')}
             type="success"
             showIcon
             icon={<CheckCircleOutlined />}
@@ -223,7 +249,7 @@ const OrgApplication = () => {
                 size="small"
                 onClick={() => navigate('/login')}
               >
-                返回登录
+                {t('auth.orgApplication.backToLogin')}
               </Button>
             }
           />
@@ -231,16 +257,16 @@ const OrgApplication = () => {
 
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <BankOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
-          <Title level={2}>申请</Title>
+          <Title level={2}>{t('auth.orgApplication.title')}</Title>
           <Paragraph type="secondary">
-            请填写以下信息，我们会尽快审核您的申请
+            {t('auth.orgApplication.subtitle')}
           </Paragraph>
         </div>
 
         {/* 显示申请规则 */}
         {formConfig?.application_rules && (
           <Alert
-            message="申请规则"
+            message={t('auth.orgApplication.rules')}
             description={
               <pre style={{ 
                 margin: 0, 
@@ -264,38 +290,42 @@ const OrgApplication = () => {
           autoComplete="off"
           disabled={submitted}
         >
-          {/* 组织名称 - 使用动态标签 */}
+          {/* 组织名称 - 使用动态标签或i18n */}
           <Form.Item
-            label={fieldLabels.org_name}
+            label={getFieldLabel('org_name', 'auth.orgApplication.orgName')}
             name="org_name"
-            rules={[{ required: true, message: `请输入${fieldLabels.org_name}` }]}
+            rules={[{ required: true, message: t('auth.orgApplication.orgName.required') }]}
           >
             <Input 
               prefix={<BankOutlined />} 
-              placeholder={`请输入您的${fieldLabels.org_name}`}
+              placeholder={fieldLabels.org_name 
+                ? `${t('common.pleaseInput')}${fieldLabels.org_name}` 
+                : t('auth.orgApplication.orgName.placeholder')}
               size="large"
             />
           </Form.Item>
 
-          {/* 申请人邮箱 - 使用动态标签 */}
+          {/* 申请人邮箱 - 使用动态标签或i18n */}
           <Form.Item
-            label={fieldLabels.applicant_email}
+            label={getFieldLabel('applicant_email', 'auth.orgApplication.email')}
             name="applicant_email"
             rules={[
-              { required: true, message: `请输入${fieldLabels.applicant_email}` },
-              { type: 'email', message: '请输入有效的邮箱地址' }
+              { required: true, message: t('auth.orgApplication.email.required') },
+              { type: 'email', message: t('auth.orgApplication.email.invalid') }
             ]}
           >
             <Input 
               prefix={<MailOutlined />} 
-              placeholder={`请输入您的${fieldLabels.applicant_email}`}
+              placeholder={fieldLabels.applicant_email 
+                ? `${t('common.pleaseInput')}${fieldLabels.applicant_email}` 
+                : t('auth.orgApplication.email.placeholder')}
               size="large"
             />
           </Form.Item>
 
-          {/* 营业执照上传 - 使用动态标签 */}
+          {/* 营业执照上传 - 使用动态标签或i18n */}
           <Form.Item
-            label={fieldLabels.business_license}
+            label={getFieldLabel('business_license', 'auth.orgApplication.businessLicense')}
             name="business_license_upload"
           >
             <Dragger
@@ -314,10 +344,10 @@ const OrgApplication = () => {
                 <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
               </p>
               <p className="ant-upload-text">
-                点击或拖拽文件到此处上传{fieldLabels.business_license}
+                {t('auth.orgApplication.businessLicense.upload')}
               </p>
               <p className="ant-upload-hint">
-                支持 JPG、PNG、PDF 格式，文件大小不超过 10MB
+                {t('auth.orgApplication.businessLicense.hint')}
               </p>
             </Dragger>
           </Form.Item>
@@ -328,15 +358,15 @@ const OrgApplication = () => {
               key={field.name}
               label={field.label}
               name={field.name}
-              rules={field.required ? [{ required: true, message: `请输入${field.label}` }] : []}
+              rules={field.required ? [{ required: true, message: `${t('common.pleaseInput')}${field.label}` }] : []}
             >
               {field.type === 'textarea' ? (
                 <TextArea 
-                  placeholder={`请输入${field.label}`}
+                  placeholder={`${t('common.pleaseInput')}${field.label}`}
                   rows={4}
                 />
               ) : field.type === 'select' && field.options ? (
-                <Select placeholder={`请选择${field.label}`} size="large">
+                <Select placeholder={`${t('common.pleaseSelect')}${field.label}`} size="large">
                   {field.options.map(opt => (
                     <Select.Option key={opt.value} value={opt.value}>
                       {opt.label}
@@ -345,25 +375,25 @@ const OrgApplication = () => {
                 </Select>
               ) : (
                 <Input 
-                  placeholder={`请输入${field.label}`}
+                  placeholder={`${t('common.pleaseInput')}${field.label}`}
                   size="large"
                 />
               )}
             </Form.Item>
           ))}
 
-          {/* 邀请码 - 使用动态标签 */}
+          {/* 邀请码 - 使用动态标签或i18n */}
           <Form.Item
-            label={fieldLabels.invitation_code}
+            label={getFieldLabel('invitation_code', 'auth.orgApplication.invitationCode')}
             name="invitation_code"
             rules={formConfig?.invitation_code_required 
-              ? [{ required: true, message: `请输入${fieldLabels.invitation_code}` }] 
+              ? [{ required: true, message: t('auth.orgApplication.invitationCode.required') }] 
               : []
             }
           >
             <Input 
               prefix={<SafetyOutlined />}
-              placeholder={`请输入6位${fieldLabels.invitation_code}`}
+              placeholder={t('auth.orgApplication.invitationCode.placeholder')}
               maxLength={6}
               size="large"
             />
@@ -378,8 +408,17 @@ const OrgApplication = () => {
                 loading={loading}
                 size="large"
                 block
+                style={{
+                  height: '50px',
+                  borderRadius: '12px',
+                  fontSize: '17px',
+                  fontWeight: '600',
+                  background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+                  border: 'none',
+                  boxShadow: '0 4px 15px rgba(0, 122, 255, 0.3)'
+                }}
               >
-                提交申请
+                {t('auth.orgApplication.submit')}
               </Button>
             </Form.Item>
           )}

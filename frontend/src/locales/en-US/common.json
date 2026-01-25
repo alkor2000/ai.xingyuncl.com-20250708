@@ -55,6 +55,8 @@
   "common.deleteFailed": "Delete failed",
   "common.noData": "No data",
   "common.loading": "Loading...",
+  "common.pleaseInput": "Please enter ",
+  "common.pleaseSelect": "Please select ",
   
   "status.success": "Success",
   "status.error": "Error",

@@ -1,77 +1,74 @@
 /**
- * 语言切换组件 - 移动端精简版
- * PC端：显示完整文字
- * 移动端：显示简化版本 "中/EN"
+ * 语言切换组件
+ * 
+ * 功能说明：
+ * 1. 显示当前语言
+ * 2. 提供下拉菜单切换语言
+ * 3. 用户主动切换的语言会保存到localStorage
+ * 
+ * 版本更新：
+ * - v1.1.0 (2025-01-07): 使用统一的changeLanguage函数，标记用户主动选择
  */
-import React, { useState, useEffect } from 'react'
-import { Select, Space } from 'antd'
-import { GlobalOutlined } from '@ant-design/icons'
-import { useTranslation } from 'react-i18next'
 
-const LanguageSwitch = () => {
+import React from 'react'
+import { Dropdown, Button, Space } from 'antd'
+import { GlobalOutlined, DownOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import { changeLanguage, getSupportedLanguages } from '../../utils/i18n'
+
+const LanguageSwitch = ({ style = {} }) => {
   const { i18n } = useTranslation()
-  const [isMobile, setIsMobile] = useState(false)
   
-  // 检测移动端
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
-    
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+  // 获取支持的语言列表
+  const languages = getSupportedLanguages()
   
-  const languages = [
-    { value: 'zh-CN', label: '简体中文', flag: '🇨🇳', short: '中' },
-    { value: 'en-US', label: 'English', flag: '🇺🇸', short: 'EN' }
-  ]
+  // 当前语言
+  const currentLanguage = i18n.language || 'zh-CN'
+  const currentLang = languages.find(lang => lang.code === currentLanguage) || languages[0]
   
-  const handleChange = (value) => {
-    i18n.changeLanguage(value)
+  // 处理语言切换
+  const handleLanguageChange = ({ key }) => {
+    // 使用统一的语言切换函数，会标记为用户主动选择
+    changeLanguage(key)
   }
   
-  // 移动端：精简显示
-  if (isMobile) {
-    const currentLang = languages.find(lang => lang.value === i18n.language) || languages[0]
-    
-    return (
-      <Select
-        value={i18n.language}
-        onChange={handleChange}
-        style={{ width: 70 }}
-        size="small"
-        suffixIcon={null}
-        className="mobile-language-switch"
-      >
-        {languages.map(lang => (
-          <Select.Option key={lang.value} value={lang.value}>
-            {lang.short}
-          </Select.Option>
-        ))}
-      </Select>
+  // 下拉菜单项
+  const menuItems = languages.map(lang => ({
+    key: lang.code,
+    label: (
+      <Space>
+        <span>{lang.flag}</span>
+        <span>{lang.name}</span>
+      </Space>
     )
-  }
-  
-  // PC端：完整显示
+  }))
+
   return (
-    <Select
-      value={i18n.language}
-      onChange={handleChange}
-      style={{ width: 140 }}
-      suffixIcon={<GlobalOutlined />}
+    <Dropdown
+      menu={{
+        items: menuItems,
+        onClick: handleLanguageChange,
+        selectedKeys: [currentLanguage]
+      }}
+      trigger={['click']}
     >
-      {languages.map(lang => (
-        <Select.Option key={lang.value} value={lang.value}>
-          <Space>
-            <span>{lang.flag}</span>
-            <span>{lang.label}</span>
-          </Space>
-        </Select.Option>
-      ))}
-    </Select>
+      <Button 
+        type="text" 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          padding: '4px 8px',
+          ...style 
+        }}
+      >
+        <Space size={4}>
+          <GlobalOutlined />
+          <span>{currentLang.flag}</span>
+          <span style={{ fontSize: '12px' }}>{currentLang.name}</span>
+          <DownOutlined style={{ fontSize: '10px' }} />
+        </Space>
+      </Button>
+    </Dropdown>
   )
 }
 

@@ -1,5 +1,9 @@
 /**
- * 基础设置表单组件 - 支持只读模式和Logo上传，新增强制邀请码开关
+ * 基础设置表单组件 - 支持只读模式、Logo上传、强制邀请码开关和默认语言设置
+ * 
+ * 版本更新：
+ * - v1.2.0 (2025-01-07): 新增系统默认语言设置选项
+ * - v1.1.0: 新增强制邀请码开关
  */
 
 import React, { useState } from 'react'
@@ -35,7 +39,8 @@ import {
   SafetyOutlined,
   ClockCircleOutlined,
   InfoCircleOutlined,
-  TeamOutlined
+  TeamOutlined,
+  GlobalOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
@@ -65,6 +70,12 @@ const FONT_SIZE_OPTIONS = [
   { label: '16px (大)', value: 16 },
   { label: '18px (较大)', value: 18 },
   { label: '20px (特大)', value: 20 },
+]
+
+// 语言选项
+const LANGUAGE_OPTIONS = [
+  { label: '简体中文', value: 'zh-CN', flag: '🇨🇳' },
+  { label: 'English', value: 'en-US', flag: '🇺🇸' },
 ]
 
 const BasicSettings = ({
@@ -199,6 +210,44 @@ const BasicSettings = ({
               <Form.Item name={['site', 'description']} label={t('admin.settings.site.description')}>
                 <TextArea rows={3} placeholder={t('app.description')} disabled={disabled} />
               </Form.Item>
+
+              {/* 新增：系统默认语言设置 */}
+              <Form.Item 
+                name={['site', 'default_language']} 
+                label={
+                  <Space>
+                    <GlobalOutlined />
+                    <span>{t('admin.settings.site.defaultLanguage')}</span>
+                    <Tooltip title={t('admin.settings.site.defaultLanguage.tooltip')}>
+                      <InfoCircleOutlined style={{ color: '#999' }} />
+                    </Tooltip>
+                  </Space>
+                }
+                initialValue="zh-CN"
+              >
+                <Select 
+                  disabled={disabled}
+                  placeholder={t('admin.settings.site.defaultLanguage.placeholder')}
+                >
+                  {LANGUAGE_OPTIONS.map(lang => (
+                    <Select.Option key={lang.value} value={lang.value}>
+                      <Space>
+                        <span>{lang.flag}</span>
+                        <span>{lang.label}</span>
+                      </Space>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+
+              <Alert
+                message={t('admin.settings.site.languageHint.title')}
+                description={t('admin.settings.site.languageHint.description')}
+                type="info"
+                showIcon
+                icon={<GlobalOutlined />}
+                style={{ marginTop: 8 }}
+              />
             </Card>
 
             {/* 用户设置 - 增强注册控制 */}

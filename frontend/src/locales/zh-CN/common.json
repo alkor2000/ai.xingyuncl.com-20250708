@@ -55,6 +55,8 @@
   "common.deleteFailed": "删除失败",
   "common.noData": "暂无数据",
   "common.loading": "加载中...",
+  "common.pleaseInput": "请输入",
+  "common.pleaseSelect": "请选择",
   
   "status.success": "成功",
   "status.error": "错误",
@@ -86,7 +88,7 @@
   "message.copySuccess": "复制成功",
   "message.copyFailed": "复制失败",
   "message.networkError": "网络错误，请检查网络连接",
-  "message.serverError": "服务器错误，请稍后重试",
+  "message.serverError": "服务器错误，请稀后重试",
   "message.timeout": "请求超时，请稍后重试",
   "message.invalidInput": "输入无效，请检查",
   "message.required": "必填项不能为空",
