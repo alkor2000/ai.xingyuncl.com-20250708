@@ -387,6 +387,36 @@ pm2 startup
 
 ---
 
+## 🐳 Docker Deployment (Production)
+
+For production environments, we recommend Docker deployment:
+```bash
+# Clone and initialize
+git clone https://github.com/alkor2000/ai.xingyuncl.com-20250708.git ai-platform
+cd ai-platform
+./docker/scripts/init-customer.sh your-domain.com
+
+# Start all services (MySQL + Redis + Backend + Frontend)
+docker-compose up -d
+
+# Verify (4 containers should show "healthy")
+docker-compose ps
+```
+
+**What's included:**
+- MySQL 8.0 + Redis 7 + Node.js Backend + Nginx Frontend
+- Auto SSL certificate via Let's Encrypt
+- Health checks for all services
+- Zero-downtime rolling updates
+
+**Production deployments using Docker:**
+| Domain | Users |
+|--------|-------|
+| www.nebulink.com.cn | 1,474 |
+| ai.pkuailab.com | 909 |
+
+---
+
 ## Troubleshooting
 
 ### npm install is slow or fails
@@ -855,6 +885,36 @@ pm2 startup
 1. 以管理员身份登录
 2. 进入**设置 > AI模型管理**，配置API密钥
 3. 启用需要使用的模型
+
+---
+
+## 🐳 Docker部署（生产环境）
+
+生产环境推荐使用Docker部署：
+```bash
+# 克隆并初始化
+git clone https://github.com/alkor2000/ai.xingyuncl.com-20250708.git ai-platform
+cd ai-platform
+./docker/scripts/init-customer.sh your-domain.com
+
+# 启动所有服务（MySQL + Redis + Backend + Frontend）
+docker-compose up -d
+
+# 验证（4个容器都应显示 "healthy"）
+docker-compose ps
+```
+
+**包含内容：**
+- MySQL 8.0 + Redis 7 + Node.js后端 + Nginx前端
+- Let's Encrypt自动SSL证书
+- 所有服务健康检查
+- 零停机滚动更新
+
+**已使用Docker部署的生产环境：**
+| 域名 | 用户数 |
+|------|--------|
+| www.nebulink.com.cn | 1,474 |
+| ai.pkuailab.com | 909 |
 
 ---
 
