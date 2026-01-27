@@ -97,7 +97,7 @@ A production-grade enterprise AI platform with **19 subsystem modules**:
 
 | Item | Recommendation |
 |------|----------------|
-| Operating System | Ubuntu 22.04 LTS (recommended) / Debian 12 / CentOS Stream 9 |
+| Operating System | Ubuntu 24.04 LTS (recommended) / Debian 12 / CentOS Stream 9 |
 | Server Specs | Minimum: 2 vCPU + 4GB RAM, Recommended: 2 vCPU + 8GB RAM |
 | Cloud Provider | AWS, Google Cloud, Azure, Alibaba Cloud, etc. |
 
@@ -105,7 +105,7 @@ A production-grade enterprise AI platform with **19 subsystem modules**:
 
 ---
 
-### Step 1: Install Required Software (Ubuntu 22.04)
+### Step 1: Install Required Software (Ubuntu 24.04)
 
 #### 1.1 Update System
 ```bash
@@ -233,6 +233,26 @@ mysql -u ai_user -p ai_platform < docker/mysql-init/01-complete-database-structu
 
 # Import initial data
 mysql -u ai_user -p ai_platform < docker/mysql-init/02-initial-data.sql
+
+# Configure Knex migrations (mark baseline as completed)
+mysql -u ai_user -p ai_platform << 'SQLEOF'
+CREATE TABLE IF NOT EXISTS knex_migrations (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255),
+  batch INT,
+  migration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS knex_migrations_lock (
+  `index` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  is_locked INT,
+  PRIMARY KEY (`index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO knex_migrations_lock (`index`, is_locked) VALUES (1, 0);
+INSERT INTO knex_migrations (name, batch, migration_time) VALUES ('20260127032549_000_baseline.js', 1, NOW());
+SQLEOF
 ```
 
 ---
@@ -604,8 +624,6 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
----
-
 <a name="中文文档"></a>
 
 # 中文文档
@@ -699,7 +717,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 | 项目 | 推荐配置 |
 |-----|---------|
-| 操作系统 | Ubuntu 22.04 LTS（推荐）/ Debian 12 / CentOS Stream 9 |
+| 操作系统 | Ubuntu 24.04 LTS（推荐）/ Debian 12 / CentOS Stream 9 |
 | 服务器配置 | 最低2核4G，推荐2核8G |
 | 云服务商 | 阿里云、腾讯云、华为云、AWS等均可 |
 
@@ -707,7 +725,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
-### 第一步：安装必需软件（Ubuntu 22.04）
+### 第一步：安装必需软件（Ubuntu 24.04）
 
 #### 1.1 更新系统
 ```bash
@@ -835,6 +853,26 @@ mysql -u ai_user -p ai_platform < docker/mysql-init/01-complete-database-structu
 
 # 导入初始数据
 mysql -u ai_user -p ai_platform < docker/mysql-init/02-initial-data.sql
+
+# 配置 Knex 迁移（标记基线为已完成）
+mysql -u ai_user -p ai_platform << 'SQLEOF'
+CREATE TABLE IF NOT EXISTS knex_migrations (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255),
+  batch INT,
+  migration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS knex_migrations_lock (
+  `index` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  is_locked INT,
+  PRIMARY KEY (`index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO knex_migrations_lock (`index`, is_locked) VALUES (1, 0);
+INSERT INTO knex_migrations (name, batch, migration_time) VALUES ('20260127032549_000_baseline.js', 1, NOW());
+SQLEOF
 ```
 
 ---
@@ -1192,5 +1230,3 @@ certbot renew --dry-run
 ## 许可证
 
 MIT许可证 - 详见[LICENSE](LICENSE)文件。
-
----
