@@ -1,68 +1,53 @@
 # 后端Dockerfile - 多阶段构建
 FROM node:18-alpine AS builder
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
-
 # 安装构建依赖
 RUN apk add --no-cache python3 make g++
-
 # 设置工作目录
 WORKDIR /app
-
 # 复制package文件
 COPY backend/package*.json ./
-
 # 安装依赖
 RUN npm ci --only=production
 
 # 生产环境镜像
 FROM node:18-alpine
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
-
 # 安装运行时依赖、mysql客户端、netcat和su-exec
 RUN apk add --no-cache tini mysql-client netcat-openbsd su-exec
-
 # 创建非root用户
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-
 # 设置工作目录
 WORKDIR /app
-
 # 从builder阶段复制node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-
-# 复制package.json文件（重要：这是之前缺失的）
+# 复制package.json文件
 COPY --chown=nodejs:nodejs backend/package*.json ./
-
 # 复制应用代码
 COPY --chown=nodejs:nodejs backend/src ./src
-
-# 复制数据库迁移文件
+# 复制 Knex 配置和迁移文件（2026-01-27 新增）
+COPY --chown=nodejs:nodejs backend/knexfile.js ./
+COPY --chown=nodejs:nodejs backend/migrations ./migrations
+# 复制数据库迁移文件（旧的迁移方式，保留兼容）
 COPY --chown=nodejs:nodejs database/migrations ./database/migrations
-
 # 复制迁移脚本（root权限）
 COPY docker/scripts/run-migrations.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/run-migrations.sh
-
 # 创建必要的目录并设置正确权限
 RUN mkdir -p /app/logs/backend /app/storage/uploads && \
     chown -R nodejs:nodejs /app/logs /app/storage && \
     chmod -R 755 /app/logs /app/storage
-
 # 添加数据库schema和升级工具
 COPY database/schema /app/database/schema
 COPY tools/database-upgrade /app/tools/database-upgrade
 COPY docker/scripts/database-upgrade.sh /usr/local/bin/db-upgrade
 RUN chmod +x /usr/local/bin/db-upgrade
-
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
-
 # 暴露端口
 EXPOSE 4000
-
 # 使用tini作为PID 1进程
 ENTRYPOINT ["/sbin/tini", "--"]
-
 # 启动应用（先以root执行迁移，然后切换用户启动应用）
 CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]
