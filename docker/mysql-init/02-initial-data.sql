@@ -2,7 +2,7 @@
 -- AI Practice Platform - Initial Data (Complete Version)
 -- Run after 01-complete-database-structure.sql
 -- Default admin: admin / Admin@123456
--- Updated: 2026-01-26
+-- Updated: 2026-01-27
 -- =====================================================
 
 SET NAMES utf8mb4;
@@ -18,7 +18,7 @@ INSERT INTO `user_groups` (`id`, `name`, `description`, `color`, `is_active`, `s
 -- 2. Admin User (password: Admin@123456)
 -- =====================================================
 INSERT INTO `users` (`id`, `uuid`, `username`, `email`, `password_hash`, `role`, `group_id`, `status`, `credits_quota`, `used_credits`, `created_at`, `updated_at`) VALUES
-(1, UUID(), 'admin', 'admin@example.com', '$2b$10$EpRnTzVlqHNP0.fUbXUwSOyuiXe0JhbNFrdOTkG8d0LULZ0Z4Qq.i', 'super_admin', 1, 'active', 999999, 0, NOW(), NOW());
+(1, UUID(), 'admin', 'admin@example.com', '$2a$10$KnuvGt71GENWfRoIzlza.eLIPxY0xOkWbwtlCD0JP8I5.c0MUkJKC', 'super_admin', 1, 'active', 999999, 0, NOW(), NOW());
 
 -- =====================================================
 -- 3. System Settings (Essential Configuration)
