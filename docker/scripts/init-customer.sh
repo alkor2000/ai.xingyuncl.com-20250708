@@ -37,7 +37,7 @@ JWT_ACCESS=$(node -e "console.log(require('crypto').randomBytes(64).toString('ba
 JWT_REFRESH=$(node -e "console.log(require('crypto').randomBytes(64).toString('base64'))")
 
 # 创建.env文件
-cat > .env << EOF
+cat > .env << ENVEOF
 # 自动生成时间: $(date)
 # 客户域名: $CUSTOMER_DOMAIN
 
@@ -58,14 +58,13 @@ CORS_ORIGINS=https://$CUSTOMER_DOMAIN
 
 # SSL证书路径
 SSL_CERT_PATH=/etc/letsencrypt
-EOF
+ENVEOF
 
 echo "✓ 环境变量配置完成"
 
 # 创建必需目录
 echo "创建必需目录..."
 mkdir -p storage/uploads logs/backend certbot
-
 echo "✓ 目录创建完成"
 
 # 申请SSL证书
@@ -74,6 +73,30 @@ if [ ! -d "/etc/letsencrypt/live/$CUSTOMER_DOMAIN" ]; then
     if command -v certbot >/dev/null 2>&1; then
         certbot certonly --standalone -d $CUSTOMER_DOMAIN --non-interactive --agree-tos --email admin@$CUSTOMER_DOMAIN
         echo "✓ SSL证书申请完成"
+        
+        # 配置 webroot 续期模式（避免80端口冲突）
+        echo "配置SSL证书自动续期..."
+        ACCOUNT_ID=$(grep "account" /etc/letsencrypt/renewal/$CUSTOMER_DOMAIN.conf | cut -d'=' -f2 | tr -d ' ')
+        cat > /etc/letsencrypt/renewal/$CUSTOMER_DOMAIN.conf << CERTEOF
+# renew_before_expiry = 30 days
+version = 2.9.0
+archive_dir = /etc/letsencrypt/archive/$CUSTOMER_DOMAIN
+cert = /etc/letsencrypt/live/$CUSTOMER_DOMAIN/cert.pem
+privkey = /etc/letsencrypt/live/$CUSTOMER_DOMAIN/privkey.pem
+chain = /etc/letsencrypt/live/$CUSTOMER_DOMAIN/chain.pem
+fullchain = /etc/letsencrypt/live/$CUSTOMER_DOMAIN/fullchain.pem
+
+[renewalparams]
+account = $ACCOUNT_ID
+authenticator = webroot
+server = https://acme-v02.api.letsencrypt.org/directory
+key_type = ecdsa
+webroot_path = /var/www/ai-platform/certbot
+
+[[webroot_map]]
+$CUSTOMER_DOMAIN = /var/www/ai-platform/certbot
+CERTEOF
+        echo "✓ SSL自动续期配置完成（webroot模式）"
     else
         echo "⚠ certbot未安装，请手动申请SSL证书"
         echo "  安装命令: apt-get install certbot"
