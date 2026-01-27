@@ -389,27 +389,111 @@ pm2 startup
 
 ## 🐳 Docker Deployment (Production)
 
-For production environments, we recommend Docker deployment:
+For production environments, we recommend Docker deployment.
+
+### Prerequisites
+
+| Requirement | Details |
+|-------------|---------|
+| OS | Ubuntu 24.04 LTS (recommended) |
+| Server | 2 vCPU + 8GB RAM minimum |
+| Domain | DNS A record pointing to server IP |
+
+### Complete Deployment Steps
 ```bash
-# Clone and initialize
+# 1. Update system
+apt-get update && apt-get upgrade -y
+
+# 2. Install Docker
+curl -fsSL https://get.docker.com | sh
+systemctl enable docker
+systemctl start docker
+
+# 3. Install Docker Compose
+apt-get install -y docker-compose
+
+# 4. Install Git
+apt-get install -y git
+
+# 5. Install Certbot (SSL)
+apt-get install -y certbot
+
+# 6. Install Node.js 24 LTS
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+apt-get install -y nodejs
+
+# 7. Verify installations
+docker --version
+docker-compose --version
+git --version
+certbot --version
+node --version
+npm --version
+
+# 8. Clone repository
+mkdir -p /var/www
+cd /var/www
 git clone https://github.com/alkor2000/ai.xingyuncl.com-20250708.git ai-platform
 cd ai-platform
+
+# 9. Initialize (⚠️ SAVE the database password output!)
 ./docker/scripts/init-customer.sh your-domain.com
 
-# Start all services (MySQL + Redis + Backend + Frontend)
+# 10. Start all containers (first build takes 10-20 minutes)
 docker-compose up -d
 
-# Verify (4 containers should show "healthy")
+# 11. Wait for health checks and verify
+sleep 30
 docker-compose ps
+curl http://localhost:4000/health
+curl -I https://your-domain.com
+
+# 12. Configure Knex migrations (replace YOUR_DB_PASSWORD from step 9)
+docker exec -i ai-platform-mysql mysql -uai_user -p'YOUR_DB_PASSWORD' ai_platform << 'SQLEOF'
+CREATE TABLE IF NOT EXISTS knex_migrations (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255),
+  batch INT,
+  migration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS knex_migrations_lock (
+  `index` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  is_locked INT,
+  PRIMARY KEY (`index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO knex_migrations_lock (`index`, is_locked) VALUES (1, 0);
+INSERT INTO knex_migrations (name, batch, migration_time) VALUES ('20260127032549_000_baseline.js', 1, NOW());
+SQLEOF
+
+# 13. Verify Knex status
+docker exec ai-platform-backend npm run migrate:status
+
+# 14. Verify SSL auto-renewal
+certbot renew --dry-run
 ```
 
-**What's included:**
+### Post-Deployment
+
+| Item | Value |
+|------|-------|
+| URL | https://your-domain.com |
+| Admin Username | admin |
+| Admin Password | Admin@123456 |
+
+**⚠️ Change admin password immediately after first login!**
+
+### What's Included
+
 - MySQL 8.0 + Redis 7 + Node.js Backend + Nginx Frontend
-- Auto SSL certificate via Let's Encrypt
+- Auto SSL certificate via Let's Encrypt (webroot renewal mode)
 - Health checks for all services
 - Zero-downtime rolling updates
 
-**Production deployments using Docker:**
+### Production Deployments
+
 | Domain | Users |
 |--------|-------|
 | www.nebulink.com.cn | 1,474 |
@@ -467,6 +551,28 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 npm run build
 ```
 
+### Docker: Container not starting
+```bash
+# View container logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Restart containers
+docker-compose restart
+
+# Rebuild containers
+docker-compose up -d --build
+```
+
+### Docker: SSL renewal fails
+```bash
+# Verify webroot mode is configured
+cat /etc/letsencrypt/renewal/your-domain.com.conf
+
+# Test renewal
+certbot renew --dry-run
+```
+
 ---
 
 ## Research Reproducibility
@@ -497,11 +603,6 @@ npm run build
 MIT License - see [LICENSE](LICENSE) file.
 
 ---
-
-## Acknowledgments
-
-- AI Application and Innovation Lab, School of New Media, Peking University
-- Xingyun Zhixue (Beijing) Technology Co., Ltd.
 
 ---
 
@@ -890,27 +991,111 @@ pm2 startup
 
 ## 🐳 Docker部署（生产环境）
 
-生产环境推荐使用Docker部署：
+生产环境推荐使用Docker部署。
+
+### 前置条件
+
+| 项目 | 要求 |
+|------|------|
+| 操作系统 | Ubuntu 24.04 LTS（推荐） |
+| 服务器配置 | 最低2核8G |
+| 域名 | 已将DNS A记录解析到服务器IP |
+
+### 完整部署步骤
 ```bash
-# 克隆并初始化
+# 1. 更新系统
+apt-get update && apt-get upgrade -y
+
+# 2. 安装 Docker
+curl -fsSL https://get.docker.com | sh
+systemctl enable docker
+systemctl start docker
+
+# 3. 安装 Docker Compose
+apt-get install -y docker-compose
+
+# 4. 安装 Git
+apt-get install -y git
+
+# 5. 安装 Certbot（SSL证书）
+apt-get install -y certbot
+
+# 6. 安装 Node.js 24 LTS
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+apt-get install -y nodejs
+
+# 7. 验证安装
+docker --version
+docker-compose --version
+git --version
+certbot --version
+node --version
+npm --version
+
+# 8. 创建目录并克隆代码
+mkdir -p /var/www
+cd /var/www
 git clone https://github.com/alkor2000/ai.xingyuncl.com-20250708.git ai-platform
 cd ai-platform
-./docker/scripts/init-customer.sh your-domain.com
 
-# 启动所有服务（MySQL + Redis + Backend + Frontend）
+# 9. 运行初始化脚本（⚠️ 务必保存输出的数据库密码！）
+./docker/scripts/init-customer.sh 你的域名.com
+
+# 10. 启动所有容器（首次构建约10-20分钟）
 docker-compose up -d
 
-# 验证（4个容器都应显示 "healthy"）
+# 11. 等待健康检查完成并验证
+sleep 30
 docker-compose ps
+curl http://localhost:4000/health
+curl -I https://你的域名.com
+
+# 12. 配置 Knex 迁移（将 YOUR_DB_PASSWORD 替换为第9步输出的数据库密码）
+docker exec -i ai-platform-mysql mysql -uai_user -p'YOUR_DB_PASSWORD' ai_platform << 'SQLEOF'
+CREATE TABLE IF NOT EXISTS knex_migrations (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255),
+  batch INT,
+  migration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS knex_migrations_lock (
+  `index` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  is_locked INT,
+  PRIMARY KEY (`index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO knex_migrations_lock (`index`, is_locked) VALUES (1, 0);
+INSERT INTO knex_migrations (name, batch, migration_time) VALUES ('20260127032549_000_baseline.js', 1, NOW());
+SQLEOF
+
+# 13. 验证 Knex 状态
+docker exec ai-platform-backend npm run migrate:status
+
+# 14. 验证 SSL 自动续期
+certbot renew --dry-run
 ```
 
-**包含内容：**
+### 部署完成后
+
+| 项目 | 值 |
+|------|------|
+| 访问地址 | https://你的域名.com |
+| 管理员用户名 | admin |
+| 管理员密码 | Admin@123456 |
+
+**⚠️ 首次登录后请立即修改管理员密码！**
+
+### 包含内容
+
 - MySQL 8.0 + Redis 7 + Node.js后端 + Nginx前端
-- Let's Encrypt自动SSL证书
+- Let's Encrypt自动SSL证书（webroot续期模式）
 - 所有服务健康检查
 - 零停机滚动更新
 
-**已使用Docker部署的生产环境：**
+### 已使用Docker部署的生产环境
+
 | 域名 | 用户数 |
 |------|--------|
 | www.nebulink.com.cn | 1,474 |
@@ -968,6 +1153,28 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 npm run build
 ```
 
+### Docker：容器无法启动
+```bash
+# 查看容器日志
+docker-compose logs backend
+docker-compose logs frontend
+
+# 重启容器
+docker-compose restart
+
+# 重新构建容器
+docker-compose up -d --build
+```
+
+### Docker：SSL续期失败
+```bash
+# 验证webroot模式是否配置
+cat /etc/letsencrypt/renewal/你的域名.com.conf
+
+# 测试续期
+certbot renew --dry-run
+```
+
 ---
 
 ## 引用
@@ -987,8 +1194,3 @@ npm run build
 MIT许可证 - 详见[LICENSE](LICENSE)文件。
 
 ---
-
-## 致谢
-
-- 北京大学新媒体学院AI应用与创新实验室
-- 星云智学（北京）科技有限公司
