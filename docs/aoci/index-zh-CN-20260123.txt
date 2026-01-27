@@ -1,12 +1,18 @@
-===AI应用与实践平台文档完整索引-20260123===
+===AI应用与实践平台文档完整AOCI索引-20260127===
 
-[索引说明]
+[AOCI索引说明]
 本索引用于AI注意力机制快速理解系统全貌,内容力求简洁精准
 
-===代码索引部分===
-
+[格式与规则]
 格式: 文件名[标签]: F:功能 | R:关联文件 | A:API路径 | S:简述
-标签[ABCDE]: 层级(F前端/B后端/S服务/C控制器/M中间件/D数据库/U工具/R路由) 模块(C核心/A认证/T对话/R积分/K知识/I图像/V视频/S存储/L日历/E教学/G工作流/H编辑器/P智能应用/O其他/W知识库) 重要度(9核心/8高频/7业务/5常规/3辅助) 特征(P积分/A异步流式/T事务并发/E外部API/C配置/R权限) 大小(L大/M中/S小)
+边缘文件（无需索引的边缘文件，在模块末尾列出完整路径和文件全名，无则省略）
+版本历史只保留最新功能描述，不写v1.1/v2.0
+所有目录路径必须是完整绝对路径，不可以省略
+
+标签[ABCDE]: 
+层级(F前端/B后端/S服务/C控制器/M中间件/D数据库/U工具/R路由) 模块(C核心/A认证/T对话/R积分/K知识/I图像/V视频/S存储/L日历/E教学/G工作流/H编辑器/P智能应用/O其他/W知识库) 重要度(9核心/8高频/7业务/5常规/3辅助) 特征(P积分/A异步流式/T事务并发/E外部API/C配置/R权限) 大小(L大/M中/S小)
+
+===代码索引部分===
 
 模块一:核心系统与启动
 --后端核心--
@@ -20,6 +26,11 @@ index.js[BCC9M]: F:统一配置管理 | R:所有模块 | A:无 | S:环境变量�
 /var/www/ai-platform/backend/src/database/
 connection.js[DCC9M]: F:MySQL连接池管理 | R:所有Model层 | A:无 | S:MySQL2单例,事务自动管理,execute预编译,simpleQuery解决LIMIT/OFFSET
 redis.js[DCC9M]: F:Redis缓存连接 | R:cacheService,rateLimitService | A:无 | S:Redis单例,自动重连,keyPrefix隔离,JSON序列化,错误容错不阻塞
+--数据库迁移--
+/var/www/ai-platform/backend/
+knexfile.js[DCC8CS]: F:Knex数据库迁移配置 | R:backend/.env,docker环境变量 | A:无 | S:支持开发/生产双环境,开发读backend/.env(localhost),生产读环境变量(mysql Docker服务名),mysql2驱动,迁移目录./migrations
+/var/www/ai-platform/backend/migrations/
+20260127032549_000_baseline.js[DC9S]: F:基线迁移文件 | R:knexfile.js | A:无 | S:89张业务表基线,up方法空操作(表已存在),down方法空操作(不可回滚),标记现有数据库为迁移起点
 --工具类--
 /var/www/ai-platform/backend/src/utils/
 logger.js[UCC9M]: F:Winston日志管理 | R:所有模块 | A:无 | S:自动创建目录,文件+控制台双输出,5MB轮转,支持Docker/PM2
@@ -51,7 +62,9 @@ ecosystem.config.js[UC9CS]: F:PM2进程管理配置 | R:无 | A:无 | S:PM2配�
 --前端核心--
 /var/www/ai-platform/frontend/src/
 main.jsx[FC9S]: F:React应用入口 | R:App,i18n,networkService | A:应用启动 | S:网络监测服务初始化挂载到window.networkService,网络恢复时刷新用户状态,生产环境不用StrictMode避免双重渲染
-App.jsx[FC9CM]: F:应用入口主组件v1.2知识库Wiki路由 | R:Router,ConfigProvider,ThemeProvider,authStore,systemConfigStore | A:路由配置 | S:React路由配置,懒加载19个页面模块含SmartApps+Wiki,ProtectedRoute/PublicRoute守卫,动态favicon+title更新,多语言支持,v1.2新增/wiki路由
+App.jsx[FC9CL]: F:应用主入口v1.2默认语言初始化 | R:Router,ConfigProvider,ThemeProvider,authStore,systemConfigStore,apiClient,i18n | A:/public/system-config | S:v1.2新增initDefaultLanguage useEffect启动时获取系统默认语言,hasUserSelectedLanguage检查+setSystemDefaultLanguage应用,languageInitialized状态,19个懒加载页面含SmartApps+Wiki,ProtectedRoute/PublicRoute守卫,动态favicon+title更新
+/var/www/ai-platform/frontend/src/utils/
+i18n.js[FUC9CS]: F:i18n国际化配置v1.1系统默认语言 | R:i18next,react-i18next,i18next-browser-languagedetector,locales | A:无 | S:v1.1新增5个导出函数hasUserSelectedLanguage+markUserSelectedLanguage+setSystemDefaultLanguage+changeLanguage+getSupportedLanguages,双localStorage键i18nextLng+userSelectedLanguage,优先级用户选择>系统默认>浏览器>zh-CN
 --前端工具与服务--
 /var/www/ai-platform/frontend/src/utils/
 api.js[FU9ACEL]: F:API客户端封装 | R:axios,authStore | A:拦截器全局配置 | S:智能Token自动刷新最多3次,401拦截+队列重试,流式SSE支持postStream,AbortController取消机制,请求追踪X-Request-ID
@@ -65,6 +78,14 @@ systemConfigStore.js[FC9CL]: F:系统配置状态管理 | R:apiClient,authStore 
 /var/www/ai-platform/frontend/
 vite.config.js[FC5CS]: F:Vite构建配置 | R:vite,react,vite-plugin-monaco-editor | A:构建配置 | S:Monaco Editor插件完整Worker配置,dev服务器0.0.0.0监听+proxy代理/api到4000,manualChunks分包策略8个vendor包
 package.json[FC9CS]: F:前端依赖管理 | R:无 | A:项目配置 | S:React 18+Vite 5+Antd 5技术栈,48个dependencies含Monaco+ReactFlow+ECharts+Mermaid+Prism
+--边缘文件--
+/var/www/ai-platform/backend/src/controllers/adminController.js, fileController.js, statsController.js
+/var/www/ai-platform/backend/src/models/User.js.broken.20250907_141827
+/var/www/ai-platform/backend/src/services/admin/UserTagService.batch.js
+/var/www/ai-platform/backend/src/middleware/moduleProxy.js, permissions.js
+/var/www/ai-platform/backend/src/routes/admin_mindmap_credits.js, admin_storage_route_addition.js
+/var/www/ai-platform/backend/src/routes/services/index.js
+/var/www/ai-platform/backend/test.sh, jest.config.js, .npmrc, sync-auth-to-casbin.js
 
 模块二:认证授权系统
 --后端路由--
@@ -146,6 +167,10 @@ EmptyConversation.jsx[FT5S]: F:空对话状态组件显示系统公告 | R:apiCl
 --前端状态管理--
 /var/www/ai-platform/frontend/src/stores/
 chatStore.js[FT9APL]: F:对话状态管理v2.0错误显示增强 | R:apiClient,message | A:/chat/conversations,/chat/messages,/chat/models,/knowledge/combinations | S:状态分离conversations独立currentConversation,流式/非流式双模式,500条对话limit+1000条消息limit,30秒动态超时,v2.0修复onError回调保留用户消息+AI消息位置显示错误信息
+--边缘文件--
+/var/www/ai-platform/frontend/src/pages/chat/Chat.jsx.optimized.20250808_195237, Chat.jsx.stable.20250808_194134, Chat_optimized_v1.jsx
+/var/www/ai-platform/frontend/src/components/chat/CodeBlock.jsx, ConversationList.jsx, VirtualMessageList.jsx, MessageContent.less, MessageList.less
+/var/www/ai-platform/frontend/src/components/chat/new/ConversationFormModal.jsx, ConversationSettingsDrawer.jsx, MobileChatInput.jsx, MobileChatInput.less, ModelSelector.less, OptimizedChatInput.jsx, EmptyConversation.less, index.js
 
 模块四:积分管理系统
 --后端路由--
@@ -177,6 +202,8 @@ knowledgeStore.js[FK7M]: F:知识模块状态 | R:apiClient | A:/knowledge/modul
 /var/www/ai-platform/backend/src/controllers/
 KnowledgeModuleController.js[CK7RM]: F:知识模块控制器 | R:KnowledgeModule,ResponseHelper,logger,dbConnection | A:/knowledge/modules,/knowledge/modules/:id,/knowledge/categories,/knowledge/group-tags | S:7个方法,三范围过滤,权限验证超管创建全局+所有组内用户创建团队,标签权限处理
 ModuleCombinationController.js[CK7RS]: F:模块组合控制器 | R:ModuleCombination,ResponseHelper,logger | A:/knowledge/combinations,/knowledge/combinations/:id,/knowledge/combinations/:id/copy,/knowledge/combinations/:id/content | S:7个方法,权限验证只能操作自己的组合,copy复制功能
+--边缘文件--
+/var/www/ai-platform/frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx, KnowledgeModuleList.jsx, KnowledgeModuleList.less, ModuleCombinationFormModal.jsx, ModuleCombinationList.jsx, ModuleCombinationList.less
 
 模块六:AI模型管理
 --后端控制器--
@@ -212,6 +239,13 @@ ImageModelSettings.jsx[FI7CEM]: F:图像模型管理设置组件v1.1万相支持
 --前端状态管理--
 /var/www/ai-platform/frontend/src/stores/
 imageStore.js[FI8AL]: F:图像生成状态管理 | R:api,message | A:/image/generate,/image/midjourney/* | S:Midjourney异步轮询2秒间隔/5分钟超时,processingTasks状态防重复,base64Array支持,批量生成,收藏/公开切换
+--边缘文件--
+/var/www/ai-platform/backend/src/models/MidjourneyTask.js, GeminiFile.js
+/var/www/ai-platform/frontend/src/pages/image/index.jsx, ImageGeneration.less
+/var/www/ai-platform/frontend/src/pages/image/components/GenerationPanel/MidjourneyUploader.jsx, ModelSelector.jsx, ParameterSettings.jsx, PromptInput.jsx, ReferenceUploader.jsx, ReferenceUploader.less
+/var/www/ai-platform/frontend/src/pages/image/components/ImageGallery/ImageCard.jsx, MidjourneyActions.jsx
+/var/www/ai-platform/frontend/src/pages/image/hooks/useImageGeneration.js, useImageUpload.js, usePagination.js
+/var/www/ai-platform/frontend/src/pages/image/utils/constants.js, imageHelpers.js
 
 模块八:视频生成
 --后端路由--
@@ -292,6 +326,8 @@ agent.json[FG5C]: F:Agent国际化 | R:i18n | A:无 | S:工作流/执行/节点�
 --前端状态管理--
 /var/www/ai-platform/frontend/src/stores/
 agentStore.js[FG7AL]: F:Agent工作流状态管理 | R:apiClient,message | A:/agent/workflows,/agent/node-types,/agent/executions,/agent/test/* | S:Zustand管理工作流CRUD+节点类型+模型列表+执行历史+测试会话,测试对话6方法,120秒超时,402积分不足处理
+--边缘文件--
+/var/www/ai-platform/frontend/src/pages/agent/ExecutionHistory.jsx
 
 模块十:智能教学
 --后端路由--
@@ -355,6 +391,8 @@ uiMessages.js[FE3S]: F:UI消息常量 | R:无 | A:常量定义 | S:错误提示/
 --前端状态管理--
 /var/www/ai-platform/frontend/src/stores/
 teachingStore.js[FE7RL]: F:智能教学系统状态管理 | R:api,message | A:/teaching/modules,/teaching/lessons,/teaching/permissions,/teaching/groups,/teaching/teaching-plan | S:Zustand管理模块+课程+分组+权限+教案,403错误友好处理避免跳转详情页报错,教案保存+获取功能,草稿自动保存+浏览记录
+--边缘文件--
+/var/www/ai-platform/backend/src/controllers/TeachingController.dual_layer_save.js, TeachingController.js.new
 
 模块十一:HTML编辑器
 --后端路由--
@@ -396,6 +434,7 @@ CalendarAIAnalysis.js[DL7M]: F:日历AI分析记录模型 | R:dbConnection,error
 CalendarCategory.js[DL5M]: F:日历分类数据模型 | R:dbConnection,errors,logger | A:无 | S:系统预设+用户自定义双类型,getUserCategories获取用户可用分类,系统分类不可修改删除保护,检查分类下事项防误删
 CalendarUserSettings.js[DL5M]: F:日历用户设置模型 | R:dbConnection,errors,logger | A:无 | S:getOrCreate自动创建默认设置,AI分析配置scan_days_before/scan_days_after/template_id,自动分析频率daily/weekly/monthly,reset重置
 CalendarBackgroundKnowledge.js[DL5M]: F:日历背景知识模型 | R:dbConnection,errors,logger | A:无 | S:用户背景信息管理供AI分析上下文,getEnabledKnowledge获取启用条目,标题100+内容2000字符限制,reorder批量排序事务,toggleEnabled状态切换
+CalendarPromptTemplate.js[DL5CM]: F:日历提示词模板模型 | R:dbConnection,errors,logger | A:无 | S:提示词模板CRUD+默认模板管理,renderPrompt变量替换{key}占位符,display_order排序,is_default唯一默认保护不可删除,CalendarService引用
 --前端页面--
 /var/www/ai-platform/frontend/src/pages/calendar/
 Calendar.jsx[FL8L]: F:智能日历页面 | R:useCalendarStore,useAuthStore,BackgroundKnowledgeManager,dayjs,ReactMarkdown,antd | A:无 | S:移动端Tab导航优化+网格日历视图3x3/4x4,AI分析设置持久化到数据库,content可选默认状态daily,背景知识管理Modal
@@ -427,6 +466,8 @@ UserFile.js[DS7RM]: F:用户文件模型 | R:dbConnection,ossService | A:无 | S
 --前端状态管理--
 /var/www/ai-platform/frontend/src/stores/
 storageStore.js[FS7M]: F:存储管理状态 | R:apiClient | A:/storage/files,/storage/folders,/admin/oss/,/admin/storage-credits/ | S:文件夹树+三类文件夹global/org/personal,文件上传进度,批量删除,文件夹重命名,OSS配置管理,积分计算5MB分段
+--边缘文件--
+/var/www/ai-platform/frontend/src/pages/storage/StorageManager.jsx.error.20250827_024403
 
 模块十四:OCR
 --后端路由--
@@ -455,6 +496,8 @@ templates.js[FH2S]: F:思维导图默认模板 | R:无 | A:无 | S:Markdown/Merm
 --后端路由--
 /var/www/ai-platform/backend/src/routes/
 mindmapRoutes.js[RO5PBM]: F:思维导图路由定义 | R:authenticate,dbConnection,SystemConfig,User | A:/mindmap/credits-config,/mindmap/,/mindmap/export-log | S:7个端点,积分配置+检查积分+列表+保存+更新+导出记录+删除,支持markdown/mermaid/svg三种模式
+--边缘文件--
+/var/www/ai-platform/frontend/src/pages/mindmap/components/index.js
 
 模块十六:管理后台
 --后端路由--
@@ -493,6 +536,7 @@ statsController.js[COC7S]: F:统计控制器 | R:StatsService,User,dbConnection 
 /var/www/ai-platform/frontend/src/pages/admin/
 Settings.jsx[FA9CRL]: F:管理后台设置主页面v1.4智能应用 | R:adminStore,authStore,systemConfigStore,25+设置组件 | A:聚合所有/admin/*设置 | S:Tabs聚合25+设置组件,超级管理员全部可见/组管理员统计+记录+教学+模型可见,AI模型CRUD+测试,系统模块CRUD+健康检查,v1.4新增智能应用管理Tab
 Users.jsx[FC8RL]: F:用户管理主页面v1.1批量创建 | R:adminStore,authStore,14个子组件 | A:/admin/users,/admin/user-groups,/admin/user-tags | S:三标签页users/groups/tags,搜索状态保持防丢失,分页双层用户+组,组积分池+邀请码+站点配置+有效期管理,v1.1新增批量创建按钮+BatchCreateUsersModal弹窗
+Analytics.jsx[FA8L]: F:数据分析BI页面iOS风格 | R:analyticsStore,adminStore,authStore,ECharts,dayjs | A:无 | S:6维度分析overview/timeSeries/users/models/modules,iOS科技风渐变色图表,TOP20用户排行含模块消耗明细chat/image/video/storage/html,时间粒度day/week/month筛选,RangePicker日期范围,Excel导出,组管理员数据隔离actualGroupId
 /var/www/ai-platform/frontend/src/pages/dashboard/
 Dashboard.jsx[FC8M]: F:工作台页面 | R:authStore,moduleStore,apiClient,ReactMarkdown | A:/stats/user-credits,/admin/announcement | S:欢迎语+日期时间,功能模块网格排除admin和dashboard,积分中心4项统计,系统公告Markdown编辑超级管理员,移动端响应式
 --前端组件--
@@ -527,6 +571,12 @@ moduleStore.js[FC7RS]: F:系统模块状态管理 | R:apiClient | A:/admin/modul
 adminStore.js[FA8OL]: F:管理后台状态v1.1批量创建 | R:apiClient | A:/admin/users,/admin/users/batch-create,/admin/user-groups,/admin/models,/admin/settings,/admin/system-prompts,/admin/usage-logs | S:用户/组/积分/模型/系统全管理,include_tags支持,邀请码管理,站点配置,有效期管理,v1.1新增batchCreateUsers批量创建用户API调用
 analyticsStore.js[FC7S]: F:数据分析前端状态 | R:zustand,api,message | A:/admin/analytics,/admin/analytics/dashboard,/admin/analytics/export | S:修复API路径去掉/api前缀,filters过滤器startDate/endDate/groupId/tagIds/timeGranularity,Excel导出blob下载
 statsStore.js[FC7S]: F:统计数据前端状态 | R:zustand,apiClient | A:/stats/realtime,/stats/heartbeat | S:取消WebSocket改为30秒轮询,realtimeStats 7项指标,在线人数onlineCount,心跳接口
+--边缘文件--
+/var/www/ai-platform/backend/src/routes/admin/agentNodeTypes.js, apiServiceRoutes.js, calendarConfigRoutes.js, creditsRoutes.js, orgApplicationRoutes.js, statsRoutes.js, storageCreditRoutes.js
+/var/www/ai-platform/backend/src/controllers/admin/AgentNodeTypeController.js, APIServiceController.js, CalendarConfigController.js, MindmapCreditsController.js, OrgApplicationController.js, StorageCreditController.js, SystemStatsController.js
+/var/www/ai-platform/frontend/src/components/admin/settings/APIServiceActionModal.jsx, APIServiceFormModal.jsx, APIServiceTable.jsx, index.js, index.less
+/var/www/ai-platform/frontend/src/components/admin/tags/index.js, TagStatistics.jsx, UserTagAssign.jsx, UserTagManager.jsx
+/var/www/ai-platform/frontend/src/components/admin/users/UserTagFilter.jsx
 
 模块十七:其他工具与服务
 --数据库服务--
@@ -538,6 +588,8 @@ stats.js[RC7S]: F:统计数据路由定义 | R:StatsController,authMiddleware | 
 --前端页面--
 /var/www/ai-platform/frontend/src/pages/ocr/
 OcrTool.jsx[FO7PEL]: F:OCR文字识别工具页面 | R:useOcrStore,useAuthStore,Upload,Modal,Tabs,Collapse | A:/ocr/process-image,/ocr/process-pdf,/ocr/process-batch,/ocr/tasks,/ocr/config | S:三种识别模式单图+PDF+批量最多20个文件,积分计费图片5分/张+PDF按页数3分/页,文件上传最大50MB,拖拽上传Dragger组件,历史记录Table展示,iOS玻璃卡片风格
+--边缘文件--
+/var/www/ai-platform/backend/src/services/statsService.js
 
 模块十八:智能应用广场
 --后端路由--
@@ -585,9 +637,21 @@ Wiki.less[FW5M]: F:知识库样式v3.1 | R:Wiki.jsx | A:无 | S:iOS毛玻璃科�
 /var/www/ai-platform/frontend/src/locales/zh-CN/
 wiki.json[FW5C]: F:知识库国际化 | R:i18n | A:无 | S:知识库全部中文文案,三级范围/操作按钮/表单字段/版本管理/确认弹窗
 
+--其他未分类边缘文件--
+/var/www/ai-platform/frontend/src/pages/CustomLanding.jsx
+/var/www/ai-platform/frontend/src/pages/error/NotFound.jsx
+/var/www/ai-platform/frontend/src/pages/module/ModulePage.jsx, ModulePage.less
+/var/www/ai-platform/frontend/src/pages/auth/OrgApplication.jsx, Register.jsx, SSOCallback.jsx
+/var/www/ai-platform/frontend/src/components/common/ImageViewer.jsx, ImageViewer.less, LanguageSwitch.jsx
+/var/www/ai-platform/frontend/src/components/Layout/MainLayout.jsx
+/var/www/ai-platform/frontend/src/components/ProtectedRoute.jsx, ThemeProvider.jsx
+/var/www/ai-platform/frontend/src/layout/AuthLayout.jsx, MainLayout.jsx
+/var/www/ai-platform/frontend/src/services/messageRetryService.js
+/var/www/ai-platform/frontend/src/utils/dateFormat.js, monacoConfig.js, permissions.js, socket.js, tagExport.js, tokenCalculator.js
+
 ===AI应用与实践平台代码索引部分-完毕===
 
-===AI应用与实践平台数据库完整索引-20260123===
+===AI应用与实践平台数据库完整索引-20260126===
 [索引说明]
 精简标签[ABC]: A-表类型(U用户/T事务/C内容/S系统/L日志/E教学/A工作流/P智能应用/W知识库) B-特性(P积分/S软删除/U=UUID主键/J=JSON字段/F多外键) C-重要度(9核心/7业务/5配置/3辅助)
 字段约束: PK主键 UK唯一键 FK外键 IX索引 SD软删除 JS=JSON CR积分 DT时间
@@ -700,7 +764,7 @@ wiki_items[W7SJF] | id[PK] | - | creator_id->users,group_id->user_groups[FK] | s
 wiki_versions[W5JF] | id[PK] | wiki_id+version_number[UK] | wiki_id->wiki_items,created_by->users[FK] | wiki_id,version_number[IX] | notes_snapshot[JS],links_snapshot[JS],content[TEXT],change_summary[VARCHAR]
 wiki_editors[W3F] | id[PK] | wiki_id+user_id[UK] | wiki_id->wiki_items,user_id->users,added_by->users[FK] | wiki_id[IX] | -
 
-其他系统-10表
+其他系统-12表
 org_applications[S3] | id[PK] | - | - | - | -
 application_form_config[S3J] | id[PK] | - | - | - | form_config[JS]
 user_mindmaps[C3PJ] | id[PK] | - | user_id->users[FK] | - | mindmap_data[JS],credits_consumed[CR]
@@ -712,10 +776,12 @@ schema_migrations[L3] | version[PK] | - | - | - | -
 casbin_rule[S5] | id[PK] | - | - | - | -
 casbin_deny_policies[S3] | id[PK] | - | - | - | -
 casbin_metadata[S3] | id[PK] | - | - | - | -
+knex_migrations[L5] | id[PK] | - | - | - | name[VARCHAR],batch[INT],migration_time[DT]
+knex_migrations_lock[S3] | index[PK] | - | - | - | is_locked[INT]
 
 视图-3个
 v_teaching_permission_hierarchy[VIEW] | 教学权限层级视图
 v_user_accessible_teaching_modules[VIEW] | 用户可访问模块视图
 v_user_tags_detail[VIEW] | 用户标签详情视图
 
-===AI应用与实践平台数据库完整索引-20260123-完毕===
+===AI应用与实践平台数据库完整索引-20260127-完毕===
