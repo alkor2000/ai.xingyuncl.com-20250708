@@ -1,5 +1,10 @@
 /**
  * 公开路由 - 不需要认证的API端点
+ * 
+ * 版本更新：
+ * - v1.1.0 (2026-01-29): 修复 default_language 不返回问题
+ *   - 修正 SQL 查询 key: site -> site_config
+ *   - 添加 default_language 字段返回
  */
 const express = require('express');
 const router = express.Router();
@@ -10,7 +15,10 @@ const OrgApplicationController = require('../controllers/admin/OrgApplicationCon
 const PublicUploadController = require('../controllers/PublicUploadController');
 const { uploadBusinessLicense } = require('../middleware/publicUploadMiddleware');
 
-// 获取自定义首页配置（新增）
+/**
+ * 获取自定义首页配置
+ * GET /public/custom-homepage
+ */
 router.get('/custom-homepage', async (req, res) => {
   try {
     // 从数据库获取自定义首页配置
@@ -49,9 +57,24 @@ router.get('/custom-homepage', async (req, res) => {
   }
 });
 
-// 获取系统公开配置（已存在的）
+/**
+ * 获取系统公开配置
+ * GET /public/system-config
+ * 
+ * 返回内容：
+ * - user.allow_register: 是否允许注册
+ * - login.mode: 登录模式
+ * - site.site_name: 站点名称
+ * - site.site_logo: 站点Logo
+ * - site.default_language: 默认语言 (v1.1.0 新增)
+ * 
+ * v1.1.0 修复：
+ * - 修正 SQL 查询 key: site -> site_config
+ * - 添加 default_language 字段返回
+ */
 router.get('/system-config', async (req, res) => {
   try {
+    // v1.1.0 修复：使用正确的 setting_key = 'site_config'，并添加 default_language
     const sql = `
       SELECT 
         JSON_OBJECT(
@@ -59,7 +82,7 @@ router.get('/system-config', async (req, res) => {
           COALESCE(
             (SELECT CAST(JSON_EXTRACT(setting_value, '$.allow_register') AS UNSIGNED)
              FROM system_settings 
-             WHERE setting_key = 'user'),
+             WHERE setting_key = 'user_config'),
             1
           )
         ) as user,
@@ -68,24 +91,31 @@ router.get('/system-config', async (req, res) => {
           COALESCE(
             (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.mode'))
              FROM system_settings 
-             WHERE setting_key = 'login'),
+             WHERE setting_key = 'login_config'),
             'standard'
           )
         ) as login,
         JSON_OBJECT(
           'site_name',
           COALESCE(
-            (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.site_name'))
+            (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.name'))
              FROM system_settings 
-             WHERE setting_key = 'site'),
+             WHERE setting_key = 'site_config'),
             '星云AI平台'
           ),
           'site_logo',
           COALESCE(
-            (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.site_logo'))
+            (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.logo'))
              FROM system_settings 
-             WHERE setting_key = 'site'),
+             WHERE setting_key = 'site_config'),
             NULL
+          ),
+          'default_language',
+          COALESCE(
+            (SELECT JSON_UNQUOTE(JSON_EXTRACT(setting_value, '$.default_language'))
+             FROM system_settings 
+             WHERE setting_key = 'site_config'),
+            'zh-CN'
           )
         ) as site
     `;
@@ -94,7 +124,7 @@ router.get('/system-config', async (req, res) => {
     const config = rows[0] || {
       user: { allow_register: true },
       login: { mode: 'standard' },
-      site: { site_name: '星云AI平台', site_logo: null }
+      site: { site_name: '星云AI平台', site_logo: null, default_language: 'zh-CN' }
     };
     
     // 解析JSON字符串
@@ -108,13 +138,19 @@ router.get('/system-config', async (req, res) => {
       config.site = JSON.parse(config.site);
     }
     
+    // 日志记录（调试用）
+    logger.info('公开系统配置返回:', {
+      default_language: config.site?.default_language,
+      site_name: config.site?.site_name
+    });
+    
     return ResponseHelper.success(res, config);
   } catch (error) {
     logger.error('获取系统公开配置失败:', error);
     return ResponseHelper.success(res, {
       user: { allow_register: true },
       login: { mode: 'standard' },
-      site: { site_name: '星云AI平台', site_logo: null }
+      site: { site_name: '星云AI平台', site_logo: null, default_language: 'zh-CN' }
     });
   }
 });

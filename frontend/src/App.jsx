@@ -8,6 +8,8 @@
  * 
  * 版本更新：
  * - v1.2.0 (2025-01-07): 添加系统默认语言初始化支持
+ * - v1.2.1 (2026-01-29): 修复无痕浏览器默认语言不生效问题，在语言初始化完成前显示loading
+ * - v1.2.2 (2026-01-29): 修复 setSystemDefaultLanguage 异步等待问题，确保语言切换完成后再渲染
  */
 
 import React, { Suspense, useEffect, useState } from 'react'
@@ -195,6 +197,10 @@ const App = () => {
    * 初始化系统默认语言
    * 在应用启动时从公开API获取系统默认语言配置
    * 仅当用户没有主动选择过语言时才应用
+   * 
+   * v1.2.2 修复：
+   * - await setSystemDefaultLanguage()，确保语言切换完成后再设置 languageInitialized
+   * - 这样 useTranslation() 会触发重新渲染，显示正确的语言
    */
   useEffect(() => {
     const initDefaultLanguage = async () => {
@@ -207,21 +213,24 @@ const App = () => {
       
       try {
         // 从公开API获取系统配置
+        console.log('🌐 正在获取系统默认语言配置...')
         const response = await apiClient.get('/public/system-config')
         
         if (response.data?.success && response.data?.data) {
           const defaultLanguage = response.data.data.site?.default_language
+          console.log('🌐 API返回的默认语言:', defaultLanguage)
           
           if (defaultLanguage) {
-            // 应用系统默认语言
-            setSystemDefaultLanguage(defaultLanguage)
-            console.log('✅ 系统默认语言已应用:', defaultLanguage)
+            // v1.2.2 关键修复：await 等待语言切换完成
+            await setSystemDefaultLanguage(defaultLanguage)
+            console.log('✅ 系统默认语言设置完成')
           }
         }
       } catch (error) {
         // 获取失败不影响应用运行，使用i18n的默认检测逻辑
-        console.warn('⚠️ 获取系统默认语言配置失败，使用默认检测:', error.message)
+        console.warn('⚠️ 获取系统默认语言配置失败，使用默认语言:', error.message)
       } finally {
+        // 只有在语言切换完成后才设置 initialized
         setLanguageInitialized(true)
       }
     }
@@ -262,6 +271,28 @@ const App = () => {
       console.error('❌ 更新favicon或title失败:', error)
     }
   }, [initialized, systemConfig, getSiteLogo, getSiteDescription])
+
+  /**
+   * 等待语言初始化完成后再渲染页面
+   * 
+   * v1.2.2 说明：
+   * 因为 i18n.js 移除了 navigator 检测，初始语言是 fallbackLng (zh-CN)
+   * 我们需要等待从 API 获取系统默认语言并应用后，再渲染页面
+   * 这样可以避免页面先显示中文再闪到英文的问题
+   */
+  if (!languageInitialized) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   return (
     <ConfigProvider locale={locale}>
