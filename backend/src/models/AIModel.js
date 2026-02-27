@@ -2,7 +2,8 @@
  * AI模型数据模型 - 支持积分消费配置、流式输出、图片上传、文档上传、用户组分配和用户限制
  * 支持Azure OpenAI配置和免费模型（0积分）
  * v1.1修复：更新时api_key和api_endpoint留空保持原值的逻辑
- * v1.2新增：batchUpdateSortOrder 批量排序方法 - 2026-02-27
+ * v1.2新增：batchUpdateSortOrder 批量排序方法
+ * v1.3优化：toJSON脱敏显示头尾可见 + name字段可更新 + 去除sort_order表单（拖拽排序）
  */
 
 const dbConnection = require('../database/connection');
@@ -29,6 +30,24 @@ class AIModel {
     this.last_tested_at = data.last_tested_at || null;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
+  }
+
+  /**
+   * v1.3 敏感值脱敏：头尾可见，中间用****替代
+   * 例：sk-proj-abc123xyz456 → sk-proj****z456
+   * 
+   * @param {string} value - 原始敏感值
+   * @returns {string|null} - 脱敏后的值
+   */
+  static maskSensitiveValue(value) {
+    if (!value || typeof value !== 'string') return null;
+    const len = value.length;
+    // 极短值：只显示少量字符
+    if (len <= 8) {
+      return value.slice(0, 2) + '****' + value.slice(-2);
+    }
+    // 正常长度：显示前8后4
+    return value.slice(0, 8) + '****' + value.slice(-4);
   }
 
   /**
@@ -403,12 +422,13 @@ class AIModel {
   }
 
   /**
-   * 更新AI模型（支持流式输出、图片上传、文档上传配置和免费模型）
-   * v1.1修复：api_key和api_endpoint留空时保持原值不变
+   * v1.3 更新AI模型 - 支持name字段可修改
+   * 修复：api_key和api_endpoint留空时保持原值不变
    */
   async update(updateData) {
     try {
       const { 
+        name,
         display_name, 
         api_key,
         api_endpoint, 
@@ -429,6 +449,7 @@ class AIModel {
       // 记录更新决策日志
       logger.info('AI模型更新字段决策', {
         modelId: this.id,
+        nameChange: name !== undefined ? `${this.name} → ${name}` : '不变',
         apiKeyProvided: api_key !== undefined,
         apiKeyValue: api_key ? `${String(api_key).substring(0, 5)}...` : '(empty)',
         apiKeyType: typeof api_key,
@@ -439,9 +460,10 @@ class AIModel {
         shouldUpdateApiEndpoint
       });
       
+      // v1.3 新增name字段到UPDATE语句
       const sql = `
         UPDATE ai_models 
-        SET display_name = ?, api_key = ?, api_endpoint = ?, 
+        SET name = ?, display_name = ?, api_key = ?, api_endpoint = ?, 
             model_config = ?, stream_enabled = ?, image_upload_enabled = ?, document_upload_enabled = ?,
             credits_per_chat = ?, is_active = ?, 
             sort_order = ?, test_status = 'untested', updated_at = CURRENT_TIMESTAMP
@@ -451,8 +473,12 @@ class AIModel {
       // 计算最终使用的值
       const finalApiKey = shouldUpdateApiKey ? api_key : this.api_key;
       const finalApiEndpoint = shouldUpdateApiEndpoint ? api_endpoint : this.api_endpoint;
+      // v1.3 name变更时自动更新provider
+      const finalName = name !== undefined ? name : this.name;
+      const finalProvider = name !== undefined ? AIModel.inferProvider(name) : this.provider;
       
       await dbConnection.query(sql, [
+        finalName,
         display_name !== undefined ? display_name : this.display_name,
         finalApiKey,
         finalApiEndpoint,
@@ -466,10 +492,25 @@ class AIModel {
         this.id
       ]);
 
+      // 同步更新provider字段（name变更时需要）
+      if (name !== undefined && name !== this.name) {
+        await dbConnection.query(
+          'UPDATE ai_models SET provider = ? WHERE id = ?',
+          [finalProvider, this.id]
+        );
+        logger.info('AI模型名称变更，provider已同步更新', {
+          modelId: this.id,
+          oldName: this.name,
+          newName: name,
+          newProvider: finalProvider
+        });
+      }
+
       const finalCredits = credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat;
       
       logger.info('AI模型更新成功', { 
         modelId: this.id,
+        nameUpdated: name !== undefined && name !== this.name,
         stream_enabled: stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled: image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
         document_upload_enabled: document_upload_enabled !== undefined ? document_upload_enabled : this.document_upload_enabled,
@@ -533,24 +574,18 @@ class AIModel {
    * 检测是否为Azure配置
    */
   isAzureConfig() {
-    // 1. 通过provider判断
     if (this.provider === 'azure' || this.provider === 'azure-openai') {
       return true;
     }
-    
-    // 2. 通过api_key格式判断（包含|分隔符）
     if (this.api_key && this.api_key.includes('|')) {
       const parts = this.api_key.split('|');
       if (parts.length === 3) {
         return true;
       }
     }
-    
-    // 3. 通过endpoint判断
     if (this.api_endpoint === 'azure' || this.api_endpoint === 'use-from-key') {
       return true;
     }
-    
     return false;
   }
 
@@ -561,7 +596,6 @@ class AIModel {
     if (!this.api_key || !this.api_key.includes('|')) {
       return null;
     }
-    
     const parts = this.api_key.split('|');
     if (parts.length === 3) {
       return {
@@ -592,7 +626,6 @@ class AIModel {
           modelName: this.name
         });
 
-        // 解析Azure配置
         const azureConfig = this.parseAzureConfig();
         if (!azureConfig) {
           await this.updateTestStatus('failed', 'Azure配置格式错误');
@@ -600,59 +633,34 @@ class AIModel {
         }
 
         const { apiKey, endpoint, apiVersion } = azureConfig;
-
-        // 从model.name提取deployment名称
         let deploymentName = this.name;
         if (this.name.includes('/')) {
           const parts = this.name.split('/');
           deploymentName = parts[parts.length - 1];
         }
 
-        // 构造Azure特定的URL
         const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
         const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
 
-        logger.info('测试Azure连接', {
-          deployment: deploymentName,
-          endpoint: baseUrl,
-          apiVersion: apiVersion
-        });
-
-        // 解析model_config获取测试温度
         let config = this.model_config;
         if (typeof config === 'string') {
-          try {
-            config = JSON.parse(config);
-          } catch (e) {
-            config = {};
-          }
+          try { config = JSON.parse(config); } catch (e) { config = {}; }
         }
         const testTemperature = config.test_temperature || 1;
 
-        // 构造测试请求 - Azure不需要model字段
         const testPayload = {
-          messages: [
-            { role: 'user', content: 'Hello, please respond with a short greeting.' }
-          ],
+          messages: [{ role: 'user', content: 'Hello, please respond with a short greeting.' }],
           temperature: testTemperature,
           stream: false
         };
 
         const response = await axios.post(azureUrl, testPayload, {
-          headers: {
-            'api-key': apiKey,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           timeout: 30000
         });
 
         if (response.status === 200 && response.data.choices) {
           await this.updateTestStatus('success', '连通性测试成功');
-          logger.info('Azure模型连通性测试成功', { 
-            modelId: this.id, 
-            modelName: this.name,
-            deployment: deploymentName
-          });
           return { success: true, message: '连通性测试成功' };
         } else {
           await this.updateTestStatus('failed', 'API响应格式异常');
@@ -666,31 +674,15 @@ class AIModel {
           return { success: false, message: 'API端点未配置' };
         }
 
-        // 解析model_config
         let config = this.model_config;
         if (typeof config === 'string') {
-          try {
-            config = JSON.parse(config);
-          } catch (e) {
-            config = {};
-          }
+          try { config = JSON.parse(config); } catch (e) { config = {}; }
         }
-
-        // 获取测试温度，默认为1
         const testTemperature = config.test_temperature || 1;
 
-        logger.info('使用测试温度', {
-          modelId: this.id,
-          modelName: this.name,
-          testTemperature
-        });
-
-        // 构造测试请求 - 使用配置的温度值
         const testPayload = {
           model: this.name,
-          messages: [
-            { role: 'user', content: 'Hello, please respond with a short greeting.' }
-          ],
+          messages: [{ role: 'user', content: 'Hello, please respond with a short greeting.' }],
           temperature: testTemperature,
           stream: false
         };
@@ -711,11 +703,6 @@ class AIModel {
 
         if (response.status === 200 && response.data.choices) {
           await this.updateTestStatus('success', '连通性测试成功');
-          logger.info('AI模型连通性测试成功', { 
-            modelId: this.id, 
-            modelName: this.name,
-            testTemperature
-          });
           return { success: true, message: '连通性测试成功' };
         } else {
           await this.updateTestStatus('failed', 'API响应格式异常');
@@ -732,10 +719,7 @@ class AIModel {
         error: errorMsg,
         response: error.response?.data
       });
-      return { 
-        success: false, 
-        message: errorMsg
-      };
+      return { success: false, message: errorMsg };
     }
   }
 
@@ -763,30 +747,22 @@ class AIModel {
     };
   }
 
-  /**
-   * 检查是否支持流式输出
-   */
+  /** 检查是否支持流式输出 */
   isStreamEnabled() {
     return this.stream_enabled === true || this.stream_enabled === 1;
   }
 
-  /**
-   * 检查是否支持图片上传
-   */
+  /** 检查是否支持图片上传 */
   isImageUploadEnabled() {
     return this.image_upload_enabled === true || this.image_upload_enabled === 1;
   }
 
-  /**
-   * 检查是否支持文档上传
-   */
+  /** 检查是否支持文档上传 */
   isDocumentUploadEnabled() {
     return this.document_upload_enabled === true || this.document_upload_enabled === 1;
   }
 
-  /**
-   * 检查是否为免费模型
-   */
+  /** 检查是否为免费模型 */
   isFreeModel() {
     return this.credits_per_chat === 0;
   }
@@ -795,14 +771,9 @@ class AIModel {
    * 获取模型的默认配置 - 移除maxToken限制
    */
   getDefaultConfig() {
-    // 解析model_config
     let config = this.model_config;
     if (typeof config === 'string') {
-      try {
-        config = JSON.parse(config);
-      } catch (e) {
-        config = {};
-      }
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
     }
 
     const defaultConfig = {
@@ -812,23 +783,21 @@ class AIModel {
       frequency_penalty: 0
     };
 
-    return {
-      ...defaultConfig,
-      ...config
-    };
+    return { ...defaultConfig, ...config };
   }
 
   /**
-   * 转换为JSON（隐藏敏感信息）
+   * v1.3 转换为JSON - 敏感字段脱敏显示（头尾可见）
+   * 例：sk-proj-abc123xyz456 → sk-proj****z456
    */
   toJSON() {
     return {
       id: this.id,
       name: this.name,
       display_name: this.display_name,
-      api_key: this.api_key ? '***已配置***' : null,
+      api_key: this.api_key ? AIModel.maskSensitiveValue(this.api_key) : null,
       provider: this.provider,
-      api_endpoint: this.api_endpoint ? '***已配置***' : null,
+      api_endpoint: this.api_endpoint ? AIModel.maskSensitiveValue(this.api_endpoint) : null,
       model_config: this.model_config,
       stream_enabled: this.stream_enabled,
       image_upload_enabled: this.image_upload_enabled,

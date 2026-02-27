@@ -1,5 +1,12 @@
 /**
- * AI模型表单弹窗组件 - 支持文档上传配置和免费模型（0积分）
+ * AI模型表单弹窗组件 - v1.4 保存并测试
+ * 
+ * v1.4 (2026-02-27):
+ *   - 测试按钮改为"保存并测试"，先保存再测试确保用最新配置
+ * v1.3 (2026-02-27):
+ *   1. 模型标识(name)可编辑
+ *   2. key/url脱敏显示头尾可见中间****
+ *   3. 弹窗内置测试按钮
  */
 
 import React from 'react'
@@ -26,7 +33,8 @@ import {
   WalletOutlined,
   InfoCircleOutlined,
   ExperimentOutlined,
-  GiftOutlined
+  GiftOutlined,
+  ApiOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -36,12 +44,21 @@ const AIModelFormModal = ({
   form,
   loading = false,
   onSubmit,
-  onCancel
+  onCancel,
+  onSaveAndTest,      // v1.4 保存并测试回调
+  testingModelId       // v1.4 正在测试的模型ID
 }) => {
   const { t } = useTranslation()
   const [creditsValue, setCreditsValue] = React.useState(editingModel?.credits_per_chat || 10)
 
-  // 处理表单提交，确保 model_config 包含测试温度
+  // 当editingModel变化时同步积分值
+  React.useEffect(() => {
+    setCreditsValue(editingModel?.credits_per_chat ?? 10)
+  }, [editingModel])
+
+  /**
+   * 处理表单提交，确保 model_config 包含测试温度
+   */
   const handleFormSubmit = (values) => {
     const submitData = {
       ...values,
@@ -50,13 +67,52 @@ const AIModelFormModal = ({
         test_temperature: values.test_temperature || 1
       }
     }
-    delete submitData.test_temperature // 从顶层移除，因为已经在 model_config 中
+    delete submitData.test_temperature
     onSubmit(submitData)
+  }
+
+  /**
+   * v1.4 保存并测试 - 先验证表单，再调用保存并测试回调
+   */
+  const handleSaveAndTest = async () => {
+    try {
+      const values = await form.validateFields()
+      const submitData = {
+        ...values,
+        model_config: {
+          ...(values.model_config || {}),
+          test_temperature: values.test_temperature || 1
+        }
+      }
+      delete submitData.test_temperature
+      onSaveAndTest(submitData)
+    } catch (err) {
+      // 表单验证失败，不处理
+    }
   }
 
   // 监听积分值变化
   const handleCreditsChange = (value) => {
     setCreditsValue(value)
+  }
+
+  /**
+   * v1.3 渲染当前配置脱敏值提示
+   */
+  const renderMaskedHint = (maskedValue, label) => {
+    if (!editingModel || !maskedValue) return null
+    return (
+      <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+        {label}：<code style={{ 
+          background: '#f5f5f5', 
+          padding: '1px 6px', 
+          borderRadius: 3,
+          fontFamily: 'monospace',
+          color: '#595959'
+        }}>{maskedValue}</code>
+        <span style={{ marginLeft: 8, color: '#bfbfbf' }}>（留空保持不变）</span>
+      </span>
+    )
   }
 
   return (
@@ -77,11 +133,10 @@ const AIModelFormModal = ({
           credits_per_chat: editingModel?.credits_per_chat || 10
         }}
       >
-        {/* 编辑模式的提示信息 */}
+        {/* 编辑模式提示 */}
         {editingModel && (
           <Alert
-            message={t('admin.models.form.editTip')}
-            description={t('admin.models.form.editTipDesc')}
+            message="编辑模式：API密钥和端点留空则保持当前配置不变"
             type="info"
             showIcon
             icon={<InfoCircleOutlined />}
@@ -89,6 +144,7 @@ const AIModelFormModal = ({
           />
         )}
 
+        {/* 模型标识 + 显示名称 */}
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
@@ -96,10 +152,7 @@ const AIModelFormModal = ({
               label={t('admin.models.form.name')}
               rules={[{ required: true, message: t('admin.models.form.name.required') }]}
             >
-              <Input 
-                placeholder={t('admin.models.form.name.placeholder')} 
-                disabled={!!editingModel} 
-              />
+              <Input placeholder={t('admin.models.form.name.placeholder')} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -113,28 +166,17 @@ const AIModelFormModal = ({
           </Col>
         </Row>
 
+        {/* API密钥 + API端点 */}
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
               name="api_key"
-              label={
-                <Space>
-                  {t('admin.models.form.apiKey')}
-                  {editingModel && (
-                    <Tag color="blue" style={{ fontSize: '12px' }}>
-                      {t('admin.models.form.apiKey.keepEmpty')}
-                    </Tag>
-                  )}
-                </Space>
-              }
+              label={t('admin.models.form.apiKey')}
               rules={[{ required: !editingModel, message: t('admin.models.form.apiKey.required') }]}
-              extra={editingModel ? t('admin.models.form.apiKey.updateTip') : null}
+              extra={renderMaskedHint(editingModel?.api_key, '当前密钥')}
             >
               <Input.Password 
-                placeholder={editingModel ? 
-                  t('admin.models.form.apiKey.placeholder.edit') : 
-                  t('admin.models.form.apiKey.placeholder.new')
-                } 
+                placeholder={editingModel ? '留空保持当前密钥不变' : t('admin.models.form.apiKey.placeholder.new')}
                 autoComplete="new-password"
               />
             </Form.Item>
@@ -142,24 +184,12 @@ const AIModelFormModal = ({
           <Col span={12}>
             <Form.Item
               name="api_endpoint"
-              label={
-                <Space>
-                  {t('admin.models.form.apiEndpoint')}
-                  {editingModel && (
-                    <Tag color="blue" style={{ fontSize: '12px' }}>
-                      {t('admin.models.form.apiEndpoint.keepEmpty')}
-                    </Tag>
-                  )}
-                </Space>
-              }
+              label={t('admin.models.form.apiEndpoint')}
               rules={[{ required: !editingModel, message: t('admin.models.form.apiEndpoint.required') }]}
-              extra={editingModel ? t('admin.models.form.apiEndpoint.updateTip') : null}
+              extra={renderMaskedHint(editingModel?.api_endpoint, '当前端点')}
             >
               <Input 
-                placeholder={editingModel ? 
-                  t('admin.models.form.apiEndpoint.placeholder.edit') : 
-                  t('admin.models.form.apiEndpoint.placeholder.new')
-                } 
+                placeholder={editingModel ? '留空保持当前端点不变' : t('admin.models.form.apiEndpoint.placeholder.new')}
               />
             </Form.Item>
           </Col>
@@ -254,9 +284,7 @@ const AIModelFormModal = ({
                     fontSize: '12px',
                     color: '#1677ff'
                   }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: t('admin.models.form.streamTip')
-                  }}
+                  dangerouslySetInnerHTML={{ __html: t('admin.models.form.streamTip') }}
                   />
                 </Col>
               </Row>
@@ -302,9 +330,7 @@ const AIModelFormModal = ({
                     fontSize: '12px',
                     color: '#52c41a'
                   }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: t('admin.models.form.imageTip')
-                  }}
+                  dangerouslySetInnerHTML={{ __html: t('admin.models.form.imageTip') }}
                   />
                 </Col>
               </Row>
@@ -312,7 +338,7 @@ const AIModelFormModal = ({
           </Col>
         </Row>
 
-        {/* 文档上传配置 - 新增 */}
+        {/* 文档上传配置 */}
         <Row gutter={16}>
           <Col span={24}>
             <Card 
@@ -350,9 +376,7 @@ const AIModelFormModal = ({
                     fontSize: '12px',
                     color: '#fa8c16'
                   }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: t('admin.models.form.documentTip')
-                  }}
+                  dangerouslySetInnerHTML={{ __html: t('admin.models.form.documentTip') }}
                   />
                 </Col>
               </Row>
@@ -360,7 +384,7 @@ const AIModelFormModal = ({
           </Col>
         </Row>
 
-        {/* 积分配置 - 支持0积分（免费模型） */}
+        {/* 积分配置 */}
         <Row gutter={16}>
           <Col span={24}>
             <Card 
@@ -388,7 +412,7 @@ const AIModelFormModal = ({
                   >
                     <InputNumber
                       style={{ width: '100%' }}
-                      min={0}  // 改为0，支持免费模型
+                      min={0}
                       max={1000}
                       addonAfter={creditsValue === 0 ? '免费' : t('admin.models.perChat')}
                       formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -422,6 +446,7 @@ const AIModelFormModal = ({
           </Col>
         </Row>
 
+        {/* 状态 + 排序 */}
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item 
@@ -436,14 +461,27 @@ const AIModelFormModal = ({
             <Form.Item 
               name="sort_order" 
               label={t('admin.models.form.sort')}
+              extra="提示：可在列表中拖拽排序"
             >
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
         </Row>
 
+        {/* 底部操作按钮 - v1.4 "保存并测试"替代"测试连接" */}
         <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
           <Space>
+            {/* v1.4 保存并测试：先保存最新配置，再自动测试连接 */}
+            {editingModel && onSaveAndTest && (
+              <Button 
+                icon={<ApiOutlined />}
+                loading={testingModelId === editingModel.id}
+                onClick={handleSaveAndTest}
+                style={{ color: '#fa8c16', borderColor: '#fa8c16' }}
+              >
+                保存并测试
+              </Button>
+            )}
             <Button onClick={onCancel}>
               {t('button.cancel')}
             </Button>

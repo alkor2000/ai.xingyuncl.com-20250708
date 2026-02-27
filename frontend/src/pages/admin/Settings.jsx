@@ -2,6 +2,8 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v1.8.0 (2026-02-27): 更新模型后自动测试 + 保存并测试回调
+ * - v1.7.0 (2026-02-27): 模型弹窗传递onTest+testingModelId支持弹窗内测试
  * - v1.6.0 (2026-02-27): 修复删除模型不刷新列表 + 新增拖拽排序
  * - v1.5.0 (2025-01-07): 完整国际化支持，所有Tab标签使用i18n
  * - v1.4.0 (2025-12-30): 新增智能应用管理Tab
@@ -160,7 +162,7 @@ const Settings = () => {
     }
   }, [aiModels, systemSettings, settingsForm])
 
-  // 保存系统设置（只有超级管理员可以）
+  // 保存系统设置
   const handleSaveSettings = async (values) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -184,7 +186,7 @@ const Settings = () => {
     }
   }
 
-  // AI模型相关方法
+  // AI模型 - 创建
   const handleCreateModel = async (values) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -202,6 +204,9 @@ const Settings = () => {
     }
   }
 
+  /**
+   * v1.8 更新模型 - 成功后自动测试连接
+   */
   const handleUpdateModel = async (values) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -210,12 +215,9 @@ const Settings = () => {
     
     try {
       const updateData = { ...values }
-      if (!updateData.api_key) {
-        delete updateData.api_key
-      }
-      if (!updateData.api_endpoint) {
-        delete updateData.api_endpoint
-      }
+      // key/url留空则不发送，后端保持原值
+      if (!updateData.api_key) delete updateData.api_key
+      if (!updateData.api_endpoint) delete updateData.api_endpoint
       
       await updateAIModel(editingModel.id, updateData)
       setIsModelModalVisible(false)
@@ -223,13 +225,16 @@ const Settings = () => {
       modelForm.resetFields()
       message.success(t('admin.models.success.update'))
       await getAIModels()
+      
+      // v1.8 更新成功后自动测试连接
+      handleTestModel(editingModel.id)
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.update'))
     }
   }
 
   /**
-   * v1.6 修复：删除模型后刷新列表
+   * v1.6 删除模型后刷新列表
    */
   const handleDeleteModel = async (modelId) => {
     if (!isSuperAdmin) {
@@ -240,13 +245,13 @@ const Settings = () => {
     try {
       await deleteAIModel(modelId)
       message.success(t('admin.models.success.delete'))
-      // v1.6 修复：删除后立即刷新模型列表
       await getAIModels()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.delete'))
     }
   }
 
+  // AI模型 - 测试连接
   const handleTestModel = async (modelId) => {
     setTestingModelId(modelId)
     try {
@@ -269,6 +274,39 @@ const Settings = () => {
     }
   }
 
+  /**
+   * v1.8 保存并测试 - 弹窗内先保存再自动测试
+   * 与handleUpdateModel逻辑相同，但测试结果在弹窗关闭后显示
+   */
+  const handleSaveAndTest = async (values) => {
+    if (!isSuperAdmin) {
+      message.warning(t('admin.noPermission'))
+      return
+    }
+    
+    const modelId = editingModel?.id
+    if (!modelId) return
+    
+    try {
+      const updateData = { ...values }
+      if (!updateData.api_key) delete updateData.api_key
+      if (!updateData.api_endpoint) delete updateData.api_endpoint
+      
+      // 先保存
+      await updateAIModel(modelId, updateData)
+      setIsModelModalVisible(false)
+      setEditingModel(null)
+      modelForm.resetFields()
+      message.success(t('admin.models.success.update'))
+      await getAIModels()
+      
+      // 再测试
+      handleTestModel(modelId)
+    } catch (error) {
+      message.error(error.response?.data?.message || t('admin.models.error.update'))
+    }
+  }
+
   const handleEditModel = (model) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -279,6 +317,7 @@ const Settings = () => {
     modelForm.setFieldsValue({
       name: model.name,
       display_name: model.display_name,
+      // 不设置api_key和api_endpoint，留空让用户选择是否更新
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
       image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
       document_upload_enabled: model.document_upload_enabled !== undefined ? model.document_upload_enabled : false,
@@ -336,7 +375,7 @@ const Settings = () => {
   }
 
   /**
-   * v1.6 拖拽排序处理：接收排好序的模型数组，生成sort_order并保存
+   * v1.6 拖拽排序处理
    */
   const handleDragSort = async (sortedModels) => {
     try {
@@ -442,9 +481,8 @@ const Settings = () => {
     )
   }
 
-  // Tab配置项 - 所有标签使用i18n
+  // Tab配置项
   const tabItems = [
-    // 第一组：基础功能
     {
       key: 'statistics',
       label: (
@@ -465,7 +503,6 @@ const Settings = () => {
       ),
       children: <UsageLogs />
     },
-    // 教学管理Tab
     ...(canManageTeaching ? [{
       key: 'teaching',
       label: (
@@ -477,7 +514,6 @@ const Settings = () => {
       ),
       children: <TeachingManagement />
     }] : []),
-    // 只有超级管理员可见的系统健康监控
     ...(isSuperAdmin ? [{
       key: 'health',
       label: (
@@ -546,9 +582,7 @@ const Settings = () => {
         </Card>
       )
     },
-    // 只有超级管理员可见的Tab
     ...(isSuperAdmin ? [
-      // 智能应用管理Tab
       {
         key: 'smartApps',
         label: (
@@ -725,7 +759,6 @@ const Settings = () => {
         />
       )
     },
-    // 只有超级管理员可见的配置Tab
     ...(isSuperAdmin ? [
       {
         key: 'htmlEditor',
@@ -821,7 +854,7 @@ const Settings = () => {
         items={tabItems}
       />
 
-      {/* AI模型弹窗 */}
+      {/* AI模型弹窗 - v1.8 传递onSaveAndTest支持保存并测试 */}
       {isSuperAdmin && (
         <AIModelFormModal
           visible={isModelModalVisible}
@@ -834,6 +867,8 @@ const Settings = () => {
             setEditingModel(null)
             modelForm.resetFields()
           }}
+          onSaveAndTest={handleSaveAndTest}
+          testingModelId={testingModelId}
         />
       )}
 
