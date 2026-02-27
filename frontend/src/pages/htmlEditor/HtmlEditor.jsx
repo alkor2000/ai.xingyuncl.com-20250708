@@ -11,6 +11,13 @@
  * v1.5 优化永久链接体验 - 2025-12-26
  *   - 移除生成前的确认对话框，点击直接生成
  *   - 成功弹窗添加"关闭"按钮
+ * v1.6 修复删除最后页面自动补充导致项目无法删除 - 2026-02-27
+ *   - 删除最后页面后不再自动创建新页面
+ *   - 项目可保持空页面状态，允许正常删除项目
+ * v1.7 修复工具栏滚出视野+按钮布局优化 - 2026-02-27
+ *   - 容器高度改为calc(100vh-60px)防止页面级滚动，工具栏始终可见
+ *   - "生成链接"缩为图标按钮+Tooltip移至右侧，减少工具栏拥挤
+ *   - 按钮优先级：保存>预览>复制>清空（左侧常用），链接(右侧低频)
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -27,7 +34,8 @@ import {
   Tag,
   Divider,
   Typography,
-  Spin
+  Spin,
+  Tooltip
 } from 'antd';
 import {
   FolderOutlined,
@@ -338,6 +346,7 @@ const HtmlEditor = () => {
 
   /**
    * v1.4 重构自动创建或选择页面逻辑
+   * 仅在首次进入项目时调用，删除页面后不再触发
    */
   const autoHandlePage = async (projectId) => {
     if (autoPageCreatedRef.current) {
@@ -621,7 +630,10 @@ const HtmlEditor = () => {
     loadPage(page.id);
   };
 
-  // 删除页面
+  /**
+   * 删除页面
+   * v1.6 修复：删除最后一个页面后不再自动创建新页面
+   */
   const handleDeletePage = (page) => {
     Modal.confirm({
       title: t('htmlEditor.project.deleteConfirm'),
@@ -633,17 +645,14 @@ const HtmlEditor = () => {
         try {
           await deletePage(page.id);
           message.success(t('htmlEditor.page.deleteSuccess'));
+
+          // 如果删除的是当前选中的页面，清空编辑器状态
           if (selectedPageId === page.id) {
             setSelectedPageId(null);
             setHtmlContent(BLANK_HTML_TEMPLATE);
-            
-            const remainingPages = pages.filter(p => p.id !== page.id);
-            if (remainingPages.length === 0 && selectedProject) {
-              autoPageCreatedRef.current = false;
-              isAutoCreatingRef.current = false;
-              await autoHandlePage(selectedProject.id);
-            }
           }
+
+          // v1.6 只刷新页面列表，不再自动创建新页面
           await getPages(selectedProject.id);
         } catch (error) {
           message.error(t('htmlEditor.page.deleteFailed'));
@@ -699,7 +708,7 @@ const HtmlEditor = () => {
       if (result.is_published) {
         showPermalinkModal(result);
         await refreshUserCredits();
-        await getPages(selectedProject?.id); // 刷新页面列表更新发布状态
+        await getPages(selectedProject?.id);
       }
     } catch (error) {
       message.error(t('htmlEditor.link.generateFailed'));
@@ -709,7 +718,7 @@ const HtmlEditor = () => {
   };
 
   /**
-   * v1.5 显示永久链接弹窗 - 使用Modal.info并添加关闭按钮
+   * v1.5 显示永久链接弹窗
    */
   const showPermalinkModal = (page) => {
     const publishUrl = `${window.location.origin}/pages/${user.id}/${page.slug}`;
@@ -737,7 +746,7 @@ const HtmlEditor = () => {
       ),
       okText: t('htmlEditor.link.openPage'),
       cancelText: t('htmlEditor.action.close', '关闭'),
-      okCancel: true, // v1.5 显示取消按钮作为关闭按钮
+      okCancel: true,
       onOk: () => window.open(publishUrl, '_blank')
     });
   };
@@ -766,6 +775,7 @@ const HtmlEditor = () => {
     setEditorReady(true);
     console.log('[HtmlEditor] Monaco编辑器已就绪');
     
+    // 自定义粘贴动作
     editor.addAction({
       id: 'custom-clipboard-paste',
       label: '📋 粘贴 (Paste)',
@@ -791,6 +801,7 @@ const HtmlEditor = () => {
       }
     });
     
+    // 自定义复制动作
     editor.addAction({
       id: 'custom-clipboard-copy',
       label: '📄 复制 (Copy)',
@@ -812,6 +823,7 @@ const HtmlEditor = () => {
       }
     });
     
+    // 自定义剪切动作
     editor.addAction({
       id: 'custom-clipboard-cut',
       label: '✂️ 剪切 (Cut)',
@@ -839,12 +851,30 @@ const HtmlEditor = () => {
     });
   };
 
-  // iOS风格样式
+  /**
+   * v1.7 iOS风格样式
+   * - container: 减去BasicLayout顶部导航栏高度(60px)，overflow:hidden防止页面级滚动
+   * - header: flexShrink:0确保工具栏不被压缩，始终可见
+   */
   const iosStyles = {
-    container: { height: '100vh', background: '#F2F2F7' },
-    header: { background: 'rgba(255, 255, 255, 0.98)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(60, 60, 67, 0.12)', height: 60, padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    container: {
+      height: 'calc(100vh - 60px)',
+      background: '#F2F2F7',
+      overflow: 'hidden'
+    },
+    header: {
+      background: 'rgba(255, 255, 255, 0.98)',
+      backdropFilter: 'blur(20px)',
+      borderBottom: '1px solid rgba(60, 60, 67, 0.12)',
+      height: 52,
+      padding: '0 16px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexShrink: 0
+    },
     sidebar: { background: 'rgba(255, 255, 255, 0.98)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(60, 60, 67, 0.12)' },
-    sidebarContent: { height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+    sidebarContent: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     sidebarSection: { padding: '20px', borderBottom: '1px solid rgba(60, 60, 67, 0.08)', flexShrink: 0 },
     pageListSection: { padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' },
     pageListScrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingRight: '4px', minHeight: 0 },
@@ -859,31 +889,51 @@ const HtmlEditor = () => {
     previewSection: { width: '50%', display: 'flex', flexDirection: 'column', background: '#F2F2F7' },
     previewContent: { flex: 1, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     previewFrame: { background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)' },
-    saveButton: { background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)', borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 38, color: 'white' },
-    previewButton: { background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)', borderColor: 'transparent', color: 'white', borderRadius: 8, fontWeight: 600, height: 38 },
-    copyButton: { background: 'rgba(142, 142, 147, 0.12)', borderColor: 'transparent', color: '#3C3C43', borderRadius: 8, fontWeight: 600, height: 38 },
-    clearButton: { background: 'linear-gradient(135deg, #FF9500 0%, #FF8200 100%)', borderColor: 'transparent', color: 'white', borderRadius: 8, fontWeight: 600, height: 38 },
-    linkButton: { background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)', borderColor: 'transparent', color: 'white', borderRadius: 8, fontWeight: 600, height: 38 },
-    iconButton: { borderRadius: 8, width: 38, height: 38, background: 'rgba(142, 142, 147, 0.12)', border: 'none' },
+    saveButton: { background: 'linear-gradient(135deg, #34C759 0%, #30B854 100%)', borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 34, color: 'white' },
+    previewButton: { background: 'linear-gradient(135deg, #AF52DE 0%, #9F44D3 100%)', borderColor: 'transparent', color: 'white', borderRadius: 8, fontWeight: 600, height: 34 },
+    copyButton: { background: 'rgba(142, 142, 147, 0.12)', borderColor: 'transparent', color: '#3C3C43', borderRadius: 8, fontWeight: 600, height: 34 },
+    clearButton: { background: 'linear-gradient(135deg, #FF9500 0%, #FF8200 100%)', borderColor: 'transparent', color: 'white', borderRadius: 8, fontWeight: 600, height: 34 },
+    linkButton: {
+      borderRadius: 8,
+      width: 34,
+      height: 34,
+      background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)',
+      borderColor: 'transparent',
+      color: 'white',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    iconButton: { borderRadius: 8, width: 34, height: 34, background: 'rgba(142, 142, 147, 0.12)', border: 'none' },
     tag: { borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, border: 'none' },
     smallButton: { borderRadius: 6, fontSize: 13, height: 30, fontWeight: 600, background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)', borderColor: 'transparent' }
   };
 
   return (
     <Layout style={iosStyles.container}>
+      {/* v1.7 工具栏：左侧常用操作 | 中间页面信息 | 右侧低频操作+状态 */}
       <Header style={iosStyles.header}>
-        <Space size={12}>
+        {/* 左侧：侧边栏切换 + 常用编辑按钮 */}
+        <Space size={8}>
           <Button style={iosStyles.iconButton} icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-          <Button type="primary" style={iosStyles.saveButton} icon={<SaveOutlined />} onClick={handleSavePage} loading={isSaving} disabled={!selectedPageId || creditsLoading}>{t('htmlEditor.save')} {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}</Button>
-          <Button style={iosStyles.previewButton} icon={<EyeOutlined />} onClick={handlePreview}>{t('htmlEditor.preview')}</Button>
-          <Button style={iosStyles.copyButton} icon={<CopyOutlined />} onClick={handleCopyContent}>{t('htmlEditor.copy')}</Button>
-          <Button style={iosStyles.clearButton} icon={<ClearOutlined />} onClick={handleClearContent}>{t('htmlEditor.clear')}</Button>
-          <Button style={iosStyles.linkButton} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId || creditsLoading}>{t('htmlEditor.generateLink')} ({formatCreditsDisplay(creditsConfig.credits_per_publish)})</Button>
+          <Button type="primary" style={iosStyles.saveButton} icon={<SaveOutlined />} onClick={handleSavePage} loading={isSaving} disabled={!selectedPageId || creditsLoading}>
+            {t('htmlEditor.save')} {formatCreditsDisplayForSave(creditsConfig.credits_per_update)}
+          </Button>
+          <Button style={iosStyles.previewButton} icon={<EyeOutlined />} onClick={handlePreview}>
+            {t('htmlEditor.preview')}
+          </Button>
+          <Button style={iosStyles.copyButton} icon={<CopyOutlined />} onClick={handleCopyContent}>
+            {t('htmlEditor.copy')}
+          </Button>
+          <Button style={iosStyles.clearButton} icon={<ClearOutlined />} onClick={handleClearContent}>
+            {t('htmlEditor.clear')}
+          </Button>
         </Space>
         
-        <div style={{ flex: 1, textAlign: 'center' }}>
+        {/* 中间：当前页面信息 */}
+        <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           {currentPage && (
-            <Space size={8}>
+            <Space size={6}>
               <Tag style={{ ...iosStyles.tag, background: 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)', color: 'white' }}>
                 <Html5Outlined /> {currentPage.title}
               </Tag>
@@ -896,16 +946,26 @@ const HtmlEditor = () => {
           )}
         </div>
         
-        <Space size={12}>
+        {/* v1.7 右侧：生成链接(图标按钮+Tooltip) + 积分 + 预览模式 + 主题 */}
+        <Space size={8}>
+          <Tooltip title={`${t('htmlEditor.generateLink')} (${formatCreditsDisplay(creditsConfig.credits_per_publish)})`}>
+            <Button
+              style={iosStyles.linkButton}
+              icon={<LinkOutlined />}
+              onClick={handleGeneratePermalink}
+              loading={isGeneratingLink}
+              disabled={!selectedPageId || creditsLoading}
+            />
+          </Tooltip>
           <Tag style={{ ...iosStyles.tag, background: creditsLoading ? '#C7C7CC' : 'linear-gradient(135deg, #FFD60A 0%, #FFCC00 100%)', color: creditsLoading ? '#666' : '#000' }}>
             {creditsLoading ? <><LoadingOutlined spin /> {t('htmlEditor.loading')}</> : <><DollarOutlined /> {t('htmlEditor.credits')}: {userCredits}</>}
           </Tag>
-          <Select value={previewMode} onChange={setPreviewMode} style={{ width: 100 }} options={[{ value: 'desktop', label: t('htmlEditor.desktop') }, { value: 'tablet', label: t('htmlEditor.tablet') }, { value: 'mobile', label: t('htmlEditor.mobile') }]} />
-          <Select value={editorTheme} onChange={setEditorTheme} style={{ width: 90 }} options={[{ value: 'vs-dark', label: t('htmlEditor.dark') }, { value: 'vs-light', label: t('htmlEditor.light') }]} />
+          <Select value={previewMode} onChange={setPreviewMode} style={{ width: 80 }} size="small" options={[{ value: 'desktop', label: t('htmlEditor.desktop') }, { value: 'tablet', label: t('htmlEditor.tablet') }, { value: 'mobile', label: t('htmlEditor.mobile') }]} />
+          <Select value={editorTheme} onChange={setEditorTheme} style={{ width: 76 }} size="small" options={[{ value: 'vs-dark', label: t('htmlEditor.dark') }, { value: 'vs-light', label: t('htmlEditor.light') }]} />
         </Space>
       </Header>
 
-      <Layout style={{ background: 'transparent' }}>
+      <Layout style={{ background: 'transparent', flex: 1, overflow: 'hidden' }}>
         <Sider width={300} collapsed={sidebarCollapsed} collapsedWidth={0} style={iosStyles.sidebar}>
           <div style={iosStyles.sidebarContent}>
             <div style={iosStyles.sidebarSection}>
@@ -969,7 +1029,7 @@ const HtmlEditor = () => {
           </div>
         </Sider>
 
-        <Content style={{ display: 'flex', background: 'transparent', padding: 0 }}>
+        <Content style={{ display: 'flex', background: 'transparent', padding: 0, overflow: 'hidden' }}>
           <div style={iosStyles.editorSection}>
             <div style={iosStyles.editorHeader}>
               <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}</span>
@@ -1008,6 +1068,7 @@ const HtmlEditor = () => {
         </Content>
       </Layout>
 
+      {/* 创建项目弹窗 */}
       <Modal title={t('htmlEditor.project.create')} open={showProjectModal} onOk={() => projectForm.submit()} onCancel={() => { setShowProjectModal(false); projectForm.resetFields(); }} centered>
         <Form form={projectForm} layout="vertical" onFinish={handleCreateProject}>
           <Form.Item name="name" label={t('htmlEditor.project.name')} rules={[{ required: true, message: t('htmlEditor.project.nameRequired') }]}>
@@ -1020,6 +1081,7 @@ const HtmlEditor = () => {
         </Form>
       </Modal>
 
+      {/* 创建页面弹窗 */}
       <Modal
         title={t('htmlEditor.page.createIn', { project: selectedProject?.name })}
         open={showPageModal}
@@ -1052,6 +1114,7 @@ const HtmlEditor = () => {
         )}
       </Modal>
 
+      {/* 重命名弹窗 */}
       <Modal title={renameType === 'project' ? t('htmlEditor.project.rename') : t('htmlEditor.page.rename')} open={showRenameModal} onOk={() => renameForm.submit()} onCancel={() => { setShowRenameModal(false); renameForm.resetFields(); setRenameItem(null); }} centered>
         <Form form={renameForm} layout="vertical" onFinish={handleRename}>
           <Form.Item name="name" label={renameType === 'project' ? t('htmlEditor.project.name') : t('htmlEditor.page.name')} rules={[{ required: true, message: t('htmlEditor.page.nameRequired') }]}>
