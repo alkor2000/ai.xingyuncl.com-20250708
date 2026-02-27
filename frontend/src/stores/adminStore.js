@@ -5,7 +5,7 @@
  * - 用户管理（含批量创建 v1.1新增）
  * - 用户分组管理
  * - 积分管理
- * - AI模型管理
+ * - AI模型管理（v1.2新增拖拽排序）
  * - 系统模块管理
  * - API服务管理
  * - 系统提示词管理
@@ -486,6 +486,30 @@ const useAdminStore = create((set) => ({
       await apiClient.delete(`/admin/models/${modelId}`)
     } catch (error) {
       console.error('删除AI模型失败:', error)
+      throw error
+    }
+  },
+  
+  /**
+   * v1.2 批量更新模型排序（拖拽排序）
+   * 先乐观更新本地状态（即时响应），再同步到后端
+   * 
+   * @param {Array<{id: number, sort_order: number}>} sortOrders - 排序数组
+   * @param {Array} newModels - 排序后的完整模型数组（用于乐观更新）
+   */
+  updateModelSortOrder: async (sortOrders, newModels) => {
+    // 乐观更新：先更新本地列表顺序，用户立即看到效果
+    if (newModels) {
+      set({ aiModels: newModels })
+    }
+    try {
+      await apiClient.put('/admin/models/sort-order', { sort_orders: sortOrders })
+      // 成功后从后端刷新，确保数据一致
+      await useAdminStore.getState().getAIModels()
+    } catch (error) {
+      console.error('更新模型排序失败:', error)
+      // 失败则回滚：重新从后端获取
+      await useAdminStore.getState().getAIModels()
       throw error
     }
   },

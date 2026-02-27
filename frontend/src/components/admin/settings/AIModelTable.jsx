@@ -1,8 +1,13 @@
 /**
- * AI模型列表表格组件 - 支持基于角色的权限控制、分组管理和免费模型
+ * AI模型列表表格组件 - 支持基于角色的权限控制、分组管理、免费模型和拖拽排序
+ * 
+ * v1.1 新增拖拽排序功能 - 2026-02-27
+ *   - 使用 @dnd-kit 实现行级拖拽排序
+ *   - 左侧拖拽手柄列（仅超级管理员可见）
+ *   - 拖拽后自动保存排序到后端
  */
 
-import React, { useState } from 'react'
+import React, { useState, useContext, useMemo } from 'react'
 import { Table, Tag, Space, Button, Switch, Tooltip, Popconfirm, Modal, Checkbox, message } from 'antd'
 import {
   EyeOutlined,
@@ -21,12 +26,72 @@ import {
   WalletOutlined,
   LockOutlined,
   TeamOutlined,
-  GiftOutlined
+  GiftOutlined,
+  MenuOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+
+// @dnd-kit 拖拽排序
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+
 import useAuthStore from '../../../stores/authStore'
 import useAdminStore from '../../../stores/adminStore'
 import { getFieldPermission, ROLES } from '../../../utils/permissions'
+
+/**
+ * 行上下文：将拖拽手柄的listeners从行传递到手柄列
+ * 这样只有手柄图标触发拖拽，表格其他按钮不受影响
+ */
+const RowContext = React.createContext({})
+
+/**
+ * 可排序行组件 - 使用useSortable实现拖拽
+ */
+const SortableRow = (props) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props['data-row-key'],
+  })
+
+  const style = {
+    ...props.style,
+    // 只使用translate，不缩放
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    // 拖拽中高亮
+    ...(isDragging ? { position: 'relative', zIndex: 9999, background: '#e6f4ff' } : {}),
+  }
+
+  return (
+    <RowContext.Provider value={{ listeners, attributes }}>
+      <tr {...props} ref={setNodeRef} style={style} />
+    </RowContext.Provider>
+  )
+}
+
+/**
+ * 拖拽手柄组件 - 只有这个图标能触发拖拽
+ */
+const DragHandle = () => {
+  const { listeners, attributes } = useContext(RowContext)
+  return (
+    <MenuOutlined
+      {...listeners}
+      {...attributes}
+      style={{ cursor: 'grab', color: '#999', fontSize: 14, touchAction: 'none' }}
+    />
+  )
+}
+
+/**
+ * 数组元素移动工具函数（不依赖特定版本的@dnd-kit导出）
+ */
+const arrayMove = (array, from, to) => {
+  const newArray = [...array]
+  const [item] = newArray.splice(from, 1)
+  newArray.splice(to, 0, item)
+  return newArray
+}
 
 const AIModelTable = ({
   models = [],
@@ -37,7 +102,8 @@ const AIModelTable = ({
   onDelete,
   onToggleStreamEnabled,
   onToggleImageUploadEnabled,
-  onToggleDocumentUploadEnabled
+  onToggleDocumentUploadEnabled,
+  onDragSort  // v1.1 新增：拖拽排序回调
 }) => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
@@ -49,6 +115,31 @@ const AIModelTable = ({
   const [groupsLoading, setGroupsLoading] = useState(false)
   
   const userRole = user?.role || ROLES.USER
+  const isSuperAdmin = userRole === ROLES.SUPER_ADMIN
+
+  // @dnd-kit 传感器配置：需要拖动5px以上才触发，避免误触
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 }
+    })
+  )
+
+  /**
+   * v1.1 拖拽结束处理：计算新顺序，调用父组件回调保存到后端
+   */
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id || !onDragSort) return
+
+    const oldIndex = models.findIndex(item => item.id === active.id)
+    const newIndex = models.findIndex(item => item.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const newModels = arrayMove(models, oldIndex, newIndex)
+    onDragSort(newModels)
+  }
+
+  // 模型ID列表，用于SortableContext
+  const modelIds = useMemo(() => models.map(m => m.id), [models])
 
   // 显示分组管理弹窗
   const showGroupModal = async (model) => {
@@ -85,51 +176,36 @@ const AIModelTable = ({
   // 渲染测试状态
   const renderTestStatus = (status, lastTestedAt, modelId) => {
     if (testingModelId === modelId) {
-      return (
-        <Tag icon={<ClockCircleOutlined />} color="processing">
-          {t('status.loading')}
-        </Tag>
-      )
+      return <Tag icon={<ClockCircleOutlined />} color="processing">{t('status.loading')}</Tag>
     }
-
     switch (status) {
       case 'success':
-        return (
-          <Tag icon={<CheckCircleOutlined />} color="success">
-            {t('status.success')}
-          </Tag>
-        )
+        return <Tag icon={<CheckCircleOutlined />} color="success">{t('status.success')}</Tag>
       case 'failed':
-        return (
-          <Tag icon={<CloseCircleOutlined />} color="error">
-            {t('status.failed')}
-          </Tag>
-        )
+        return <Tag icon={<CloseCircleOutlined />} color="error">{t('status.failed')}</Tag>
       default:
-        return (
-          <Tag icon={<QuestionCircleOutlined />} color="default">
-            {t('status.error')}
-          </Tag>
-        )
+        return <Tag icon={<QuestionCircleOutlined />} color="default">{t('status.error')}</Tag>
     }
   }
 
   // 根据权限渲染字段
   const renderFieldWithPermission = (fieldName, value, renderFunc) => {
     const permission = getFieldPermission(userRole, fieldName)
-    
     if (!permission.visible) {
-      return (
-        <Tooltip title={t('admin.noPermission')}>
-          <LockOutlined style={{ color: '#ccc' }} />
-        </Tooltip>
-      )
+      return <Tooltip title={t('admin.noPermission')}><LockOutlined style={{ color: '#ccc' }} /></Tooltip>
     }
-    
     return renderFunc ? renderFunc(value, permission) : value
   }
 
+  // 表格列定义
   const columns = [
+    // v1.1 拖拽手柄列（仅超级管理员可见）
+    ...(isSuperAdmin && onDragSort ? [{
+      key: 'sort',
+      width: 40,
+      align: 'center',
+      render: () => <DragHandle />
+    }] : []),
     {
       title: t('admin.models.table.name'),
       dataIndex: 'name',
@@ -150,24 +226,18 @@ const AIModelTable = ({
       key: 'credits_per_chat',
       width: 120,
       render: (credits) => renderFieldWithPermission('credits_per_chat', credits, (value) => {
-        // 如果积分为0，显示免费标签
         if (value === 0) {
           return (
             <Space>
               <GiftOutlined style={{ color: '#52c41a' }} />
-              <Tag color="success" icon={<GiftOutlined />}>
-                免费
-              </Tag>
+              <Tag color="success" icon={<GiftOutlined />}>免费</Tag>
             </Space>
           )
         }
-        // 否则显示正常的积分数量
         return (
           <Space>
             <WalletOutlined style={{ color: '#1677ff' }} />
-            <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
-              {value}{t('admin.models.perChat')}
-            </span>
+            <span style={{ fontWeight: 'bold', color: '#1677ff' }}>{value}{t('admin.models.perChat')}</span>
           </Space>
         )
       })
@@ -179,24 +249,11 @@ const AIModelTable = ({
       width: 120,
       render: (streamEnabled, record) => renderFieldWithPermission('stream_enabled', streamEnabled, (value, permission) => (
         <Space>
-          <Switch
-            checked={value}
-            size="small"
-            loading={loading}
-            disabled={!permission.editable}
+          <Switch checked={value} size="small" loading={loading} disabled={!permission.editable}
             onChange={(checked) => permission.editable && onToggleStreamEnabled(record.id, checked)}
-            checkedChildren={<ThunderboltOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {value ? (
-            <Tag color="processing" icon={<ThunderboltOutlined />} size="small">
-              {t('admin.models.stream')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.standard')}
-            </Tag>
-          )}
+            checkedChildren={<ThunderboltOutlined />} unCheckedChildren={<CloseCircleOutlined />} />
+          {value ? <Tag color="processing" icon={<ThunderboltOutlined />} size="small">{t('admin.models.stream')}</Tag>
+            : <Tag color="default" icon={<CloseCircleOutlined />} size="small">{t('admin.models.standard')}</Tag>}
         </Space>
       ))
     },
@@ -207,24 +264,11 @@ const AIModelTable = ({
       width: 120,
       render: (imageUploadEnabled, record) => renderFieldWithPermission('image_upload_enabled', imageUploadEnabled, (value, permission) => (
         <Space>
-          <Switch
-            checked={value}
-            size="small"
-            loading={loading}
-            disabled={!permission.editable}
+          <Switch checked={value} size="small" loading={loading} disabled={!permission.editable}
             onChange={(checked) => permission.editable && onToggleImageUploadEnabled(record.id, checked)}
-            checkedChildren={<PictureOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {value ? (
-            <Tag color="success" icon={<FileImageOutlined />} size="small">
-              {t('admin.models.image')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.textOnly')}
-            </Tag>
-          )}
+            checkedChildren={<PictureOutlined />} unCheckedChildren={<CloseCircleOutlined />} />
+          {value ? <Tag color="success" icon={<FileImageOutlined />} size="small">{t('admin.models.image')}</Tag>
+            : <Tag color="default" icon={<CloseCircleOutlined />} size="small">{t('admin.models.textOnly')}</Tag>}
         </Space>
       ))
     },
@@ -235,24 +279,11 @@ const AIModelTable = ({
       width: 120,
       render: (documentUploadEnabled, record) => renderFieldWithPermission('document_upload_enabled', documentUploadEnabled, (value, permission) => (
         <Space>
-          <Switch
-            checked={value}
-            size="small"
-            loading={loading}
-            disabled={!permission.editable}
+          <Switch checked={value} size="small" loading={loading} disabled={!permission.editable}
             onChange={(checked) => permission.editable && onToggleDocumentUploadEnabled(record.id, checked)}
-            checkedChildren={<FileTextOutlined />}
-            unCheckedChildren={<CloseCircleOutlined />}
-          />
-          {value ? (
-            <Tag color="orange" icon={<FileTextOutlined />} size="small">
-              {t('admin.models.document')}
-            </Tag>
-          ) : (
-            <Tag color="default" icon={<CloseCircleOutlined />} size="small">
-              {t('admin.models.textOnly')}
-            </Tag>
-          )}
+            checkedChildren={<FileTextOutlined />} unCheckedChildren={<CloseCircleOutlined />} />
+          {value ? <Tag color="orange" icon={<FileTextOutlined />} size="small">{t('admin.models.document')}</Tag>
+            : <Tag color="default" icon={<CloseCircleOutlined />} size="small">{t('admin.models.textOnly')}</Tag>}
         </Space>
       ))
     },
@@ -263,27 +294,18 @@ const AIModelTable = ({
       width: 120,
       render: (apiKey, record) => renderFieldWithPermission('api_key', apiKey, (value, permission) => {
         if (!permission.visible) {
-          return (
-            <Tooltip title={t('admin.noPermission')}>
-              <LockOutlined style={{ color: '#ccc' }} />
-            </Tooltip>
-          )
+          return <Tooltip title={t('admin.noPermission')}><LockOutlined style={{ color: '#ccc' }} /></Tooltip>
         }
-        
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ minWidth: 80 }}>
               {showApiKey[record.id] ? 
                 (value ? `${value.substring(0, 15)}...` : t('admin.models.notConfigured')) : 
-                '••••••••••••••••'
-              }
+                '••••••••••••••••'}
             </span>
-            <Button
-              type="text"
-              size="small"
+            <Button type="text" size="small"
               icon={showApiKey[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-              onClick={() => setShowApiKey(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
-            />
+              onClick={() => setShowApiKey(prev => ({ ...prev, [record.id]: !prev[record.id] }))} />
           </div>
         )
       })
@@ -295,11 +317,8 @@ const AIModelTable = ({
       render: (_, record) => renderFieldWithPermission('is_active', record.is_active, (value) => (
         <Space direction="vertical" size="small">
           <div>
-            {value ? (
-              <Tag color="success" size="small">{t('status.active')}</Tag>
-            ) : (
-              <Tag color="default" size="small">{t('status.inactive')}</Tag>
-            )}
+            {value ? <Tag color="success" size="small">{t('status.active')}</Tag>
+              : <Tag color="default" size="small">{t('status.inactive')}</Tag>}
             {renderTestStatus(record.test_status, record.last_tested_at, record.id)}
           </div>
         </Space>
@@ -319,58 +338,33 @@ const AIModelTable = ({
           <Space size="small">
             {canManageGroups && (
               <Tooltip title={t('admin.models.groups.assign')}>
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<TeamOutlined />}
-                  onClick={() => showGroupModal(record)}
-                >
+                <Button type="primary" size="small" icon={<TeamOutlined />} onClick={() => showGroupModal(record)}>
                   {t('admin.models.groups.assign')}
                 </Button>
               </Tooltip>
             )}
             {canTest && (
               <Tooltip title={t('admin.models.testConnection')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ExperimentOutlined />}
-                  loading={testingModelId === record.id}
-                  onClick={() => onTest(record.id)}
-                />
+                <Button type="text" size="small" icon={<ExperimentOutlined />}
+                  loading={testingModelId === record.id} onClick={() => onTest(record.id)} />
               </Tooltip>
             )}
             {canEdit && (
               <Tooltip title={t('button.edit')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => onEdit(record)}
-                />
+                <Button type="text" size="small" icon={<EditOutlined />} onClick={() => onEdit(record)} />
               </Tooltip>
             )}
             {canDelete && (
               <Tooltip title={t('button.delete')}>
-                <Popconfirm
-                  title={t('admin.models.delete.confirm')}
+                <Popconfirm title={t('admin.models.delete.confirm')}
                   onConfirm={() => onDelete(record.id)}
-                  okText={t('button.confirm')}
-                  cancelText={t('button.cancel')}
-                >
-                  <Button
-                    type="text"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                  />
+                  okText={t('button.confirm')} cancelText={t('button.cancel')}>
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Tooltip>
             )}
             {!canEdit && !canDelete && !canTest && !canManageGroups && (
-              <Tooltip title={t('admin.noPermission')}>
-                <LockOutlined style={{ color: '#ccc' }} />
-              </Tooltip>
+              <Tooltip title={t('admin.noPermission')}><LockOutlined style={{ color: '#ccc' }} /></Tooltip>
             )}
           </Space>
         )
@@ -378,17 +372,44 @@ const AIModelTable = ({
     }
   ]
 
+  /**
+   * v1.1 表格渲染：超级管理员且有onDragSort时启用拖拽排序
+   * 使用DndContext + SortableContext包裹，自定义行组件为SortableRow
+   */
+  const renderTable = () => {
+    const tableProps = {
+      columns,
+      dataSource: models,
+      rowKey: 'id',
+      loading,
+      pagination: false,
+      size: 'small',
+      scroll: { x: 'max-content' }
+    }
+
+    // 超级管理员且提供了onDragSort回调时，启用拖拽
+    if (isSuperAdmin && onDragSort) {
+      return (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={modelIds} strategy={verticalListSortingStrategy}>
+            <Table
+              {...tableProps}
+              components={{
+                body: { row: SortableRow }
+              }}
+            />
+          </SortableContext>
+        </DndContext>
+      )
+    }
+
+    // 非超级管理员或无拖拽回调时，使用普通表格
+    return <Table {...tableProps} />
+  }
+
   return (
     <>
-      <Table
-        columns={columns}
-        dataSource={models}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-        size="small"
-        scroll={{ x: 'max-content' }}
-      />
+      {renderTable()}
       
       {/* 分组管理弹窗 */}
       <Modal
@@ -407,23 +428,13 @@ const AIModelTable = ({
         width={600}
       >
         <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#666' }}>
-            {t('admin.models.groups.assignDesc')}
-          </p>
+          <p style={{ color: '#666' }}>{t('admin.models.groups.assignDesc')}</p>
         </div>
         
-        <Checkbox.Group
-          style={{ width: '100%' }}
-          value={selectedGroups}
-          onChange={setSelectedGroups}
-        >
+        <Checkbox.Group style={{ width: '100%' }} value={selectedGroups} onChange={setSelectedGroups}>
           <Space direction="vertical" style={{ width: '100%' }}>
             {userGroups.map(group => (
-              <Checkbox 
-                key={group.id} 
-                value={group.id}
-                style={{ width: '100%' }}
-              >
+              <Checkbox key={group.id} value={group.id} style={{ width: '100%' }}>
                 <Space>
                   <Tag color={group.color || '#1677ff'}>{group.name}</Tag>
                   <span style={{ color: '#999' }}>
@@ -439,9 +450,7 @@ const AIModelTable = ({
           <div style={{ marginTop: 16, padding: '12px', background: '#fff7e6', borderRadius: '4px' }}>
             <Space>
               <span style={{ color: '#fa8c16' }}>⚠️</span>
-              <span style={{ color: '#666' }}>
-                {t('admin.models.groups.noGroupWarning')}
-              </span>
+              <span style={{ color: '#666' }}>{t('admin.models.groups.noGroupWarning')}</span>
             </Space>
           </div>
         )}

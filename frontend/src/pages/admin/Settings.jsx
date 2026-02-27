@@ -2,6 +2,7 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v1.6.0 (2026-02-27): 修复删除模型不刷新列表 + 新增拖拽排序
  * - v1.5.0 (2025-01-07): 完整国际化支持，所有Tab标签使用i18n
  * - v1.4.0 (2025-12-30): 新增智能应用管理Tab
  * - v1.3.0 (2025-11-09): 组管理员也能访问教学管理
@@ -91,6 +92,7 @@ const Settings = () => {
     updateAIModel,
     deleteAIModel,
     testAIModel,
+    updateModelSortOrder,
     getModules,
     createModule,
     updateModule,
@@ -226,6 +228,9 @@ const Settings = () => {
     }
   }
 
+  /**
+   * v1.6 修复：删除模型后刷新列表
+   */
   const handleDeleteModel = async (modelId) => {
     if (!isSuperAdmin) {
       message.warning(t('admin.noPermission'))
@@ -235,6 +240,8 @@ const Settings = () => {
     try {
       await deleteAIModel(modelId)
       message.success(t('admin.models.success.delete'))
+      // v1.6 修复：删除后立即刷新模型列表
+      await getAIModels()
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.delete'))
     }
@@ -325,6 +332,22 @@ const Settings = () => {
       await getAIModels()
     } catch (error) {
       message.error(t('admin.models.error.update'))
+    }
+  }
+
+  /**
+   * v1.6 拖拽排序处理：接收排好序的模型数组，生成sort_order并保存
+   */
+  const handleDragSort = async (sortedModels) => {
+    try {
+      const sortOrders = sortedModels.map((model, index) => ({
+        id: model.id,
+        sort_order: index
+      }))
+      await updateModelSortOrder(sortOrders, sortedModels)
+      message.success(t('admin.models.success.sort', { defaultValue: '模型排序已更新' }))
+    } catch (error) {
+      message.error(t('admin.models.error.sort', { defaultValue: '模型排序更新失败' }))
     }
   }
 
@@ -518,6 +541,7 @@ const Settings = () => {
             onToggleStreamEnabled={handleToggleStreamEnabled}
             onToggleImageUploadEnabled={handleToggleImageUploadEnabled}
             onToggleDocumentUploadEnabled={handleToggleDocumentUploadEnabled}
+            onDragSort={isSuperAdmin ? handleDragSort : undefined}
           />
         </Card>
       )

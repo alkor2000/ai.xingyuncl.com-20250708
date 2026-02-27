@@ -2,6 +2,7 @@
  * AI模型数据模型 - 支持积分消费配置、流式输出、图片上传、文档上传、用户组分配和用户限制
  * 支持Azure OpenAI配置和免费模型（0积分）
  * v1.1修复：更新时api_key和api_endpoint留空保持原值的逻辑
+ * v1.2新增：batchUpdateSortOrder 批量排序方法 - 2026-02-27
  */
 
 const dbConnection = require('../database/connection');
@@ -227,6 +228,40 @@ class AIModel {
   }
 
   /**
+   * v1.2 批量更新模型排序（支持拖拽排序）
+   * 使用CASE语句一次性更新，避免多次SQL调用
+   * 
+   * @param {Array<{id: number, sort_order: number}>} sortOrders - 排序配置数组
+   */
+  static async batchUpdateSortOrder(sortOrders) {
+    try {
+      if (!sortOrders || sortOrders.length === 0) return;
+
+      // 构建CASE WHEN语句，一条SQL完成所有更新
+      const ids = sortOrders.map(item => item.id);
+      const caseClauses = sortOrders.map(item => `WHEN ${parseInt(item.id)} THEN ${parseInt(item.sort_order)}`).join(' ');
+      const idPlaceholders = ids.map(() => '?').join(',');
+
+      const sql = `
+        UPDATE ai_models 
+        SET sort_order = CASE id ${caseClauses} END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id IN (${idPlaceholders})
+      `;
+
+      await dbConnection.query(sql, ids);
+
+      logger.info('批量更新模型排序成功', {
+        modelCount: sortOrders.length,
+        sortOrders: sortOrders.map(s => `${s.id}→${s.sort_order}`).join(', ')
+      });
+    } catch (error) {
+      logger.error('批量更新模型排序失败:', error);
+      throw new DatabaseError(`批量更新排序失败: ${error.message}`, error);
+    }
+  }
+
+  /**
    * 根据名称查找AI模型
    */
   static async findByName(name) {
@@ -425,7 +460,7 @@ class AIModel {
         stream_enabled !== undefined ? stream_enabled : this.stream_enabled,
         image_upload_enabled !== undefined ? image_upload_enabled : this.image_upload_enabled,
         document_upload_enabled !== undefined ? document_upload_enabled : this.document_upload_enabled,
-        credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,  // 支持0值
+        credits_per_chat !== undefined ? credits_per_chat : this.credits_per_chat,
         is_active !== undefined ? is_active : this.is_active,
         sort_order !== undefined ? sort_order : this.sort_order,
         this.id
@@ -605,7 +640,7 @@ class AIModel {
 
         const response = await axios.post(azureUrl, testPayload, {
           headers: {
-            'api-key': apiKey,  // Azure使用api-key头
+            'api-key': apiKey,
             'Content-Type': 'application/json'
           },
           timeout: 30000
@@ -657,7 +692,7 @@ class AIModel {
             { role: 'user', content: 'Hello, please respond with a short greeting.' }
           ],
           temperature: testTemperature,
-          stream: false // 测试时不使用流式，避免复杂处理
+          stream: false
         };
 
         const response = await axios.post(

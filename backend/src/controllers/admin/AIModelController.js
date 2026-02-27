@@ -1,5 +1,7 @@
 /**
- * AI模型管理控制器 - 支持基于角色的数据过滤和模型分组管理
+ * AI模型管理控制器 - 支持基于角色的数据过滤、模型分组管理和拖拽排序
+ * 
+ * v1.1 新增 updateSortOrder 批量排序方法 - 2026-02-27
  */
 
 const AIModel = require('../../models/AIModel');
@@ -76,7 +78,7 @@ class AIModelController {
             credits_per_chat: model.credits_per_chat,
             stream_enabled: model.stream_enabled,
             image_upload_enabled: model.image_upload_enabled,
-            document_upload_enabled: model.document_upload_enabled, // 添加文档上传字段
+            document_upload_enabled: model.document_upload_enabled,
             is_active: model.is_active,
             sort_order: model.sort_order,
             test_status: model.test_status,
@@ -352,6 +354,48 @@ class AIModelController {
         error: error.message
       });
       return ResponseHelper.error(res, '更新模型分配组失败');
+    }
+  }
+
+  /**
+   * v1.1 批量更新模型排序 - 支持前端拖拽排序
+   * 
+   * @param {Object} req.body.sort_orders - 排序数组 [{id: 1, sort_order: 0}, {id: 2, sort_order: 1}, ...]
+   */
+  static async updateSortOrder(req, res) {
+    try {
+      const { sort_orders } = req.body;
+
+      // 参数校验
+      if (!Array.isArray(sort_orders) || sort_orders.length === 0) {
+        return ResponseHelper.validation(res, ['sort_orders 必须是非空数组']);
+      }
+
+      // 校验每个元素格式
+      for (const item of sort_orders) {
+        if (!item.id || typeof item.sort_order !== 'number') {
+          return ResponseHelper.validation(res, ['每个排序项必须包含 id 和 sort_order(数字)']);
+        }
+      }
+
+      // 执行批量排序更新
+      await AIModel.batchUpdateSortOrder(sort_orders);
+
+      logger.info('批量更新模型排序成功', {
+        adminId: req.user.id,
+        modelCount: sort_orders.length
+      });
+
+      // 清除AI模型缓存
+      await CacheService.clearAIModelsCache();
+
+      return ResponseHelper.success(res, null, '模型排序更新成功');
+    } catch (error) {
+      logger.error('批量更新模型排序失败', {
+        adminId: req.user?.id,
+        error: error.message
+      });
+      return ResponseHelper.error(res, '模型排序更新失败');
     }
   }
 }

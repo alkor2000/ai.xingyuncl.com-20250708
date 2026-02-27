@@ -1,5 +1,7 @@
 /**
- * AI模型管理路由 - 支持模型分组管理
+ * AI模型管理路由 - 支持模型分组管理和拖拽排序
+ * 
+ * v1.1 新增批量排序接口 PUT /sort-order - 2026-02-27
  */
 
 const express = require('express');
@@ -14,6 +16,14 @@ const router = express.Router();
  * @access Admin
  */
 router.get('/', canViewAIModels(), AIModelController.getAIModels);
+
+/**
+ * @route PUT /api/admin/models/sort-order
+ * @desc 批量更新模型排序 - 支持拖拽排序
+ * @access SuperAdmin
+ * @note 必须放在 /:id 路由之前，否则 sort-order 会被当作 :id 参数
+ */
+router.put('/sort-order', canManageAIModels(), AIModelController.updateSortOrder);
 
 /**
  * @route POST /api/admin/models
