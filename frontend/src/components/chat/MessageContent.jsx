@@ -271,7 +271,16 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
           </div>
         ) : (
           <>
-            {isStreaming && message.streaming ? (
+            {/* v2.1 修复吐泡泡：错误消息红色显示，空消息提示 */}
+            {message.error ? (
+              <div style={{ color: '#ff4d4f', fontSize: '13px', padding: '4px 0' }}>
+                {message.content || '⚠️ AI响应异常'}
+              </div>
+            ) : !message.content && !message.streaming ? (
+              <div style={{ color: '#999', fontSize: '13px', fontStyle: 'italic', padding: '4px 0' }}>
+                ⚠️ AI返回内容为空，可能是网络问题或模型响应异常
+              </div>
+            ) : isStreaming && message.streaming ? (
               <div className="streaming-content">
                 <ReactMarkdown 
                   components={markdownComponents}

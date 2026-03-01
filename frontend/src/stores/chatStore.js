@@ -644,6 +644,25 @@ const useChatStore = create((set, get) => ({
               set({ streamingTimeout: null })
             }
             
+            // v2.1 修复吐泡泡：如果是兜底stream_end且没有content，忽略
+            if (data.reason === 'stream_end' && !data.content) {
+              console.log('兜底stream_end且无content，忽略（可能error已处理）')
+              // 确保重置状态
+              if (currentState.currentConversationId === conversationId) {
+                set({ typing: false, isStreaming: false, streamingContent: '', streamingMessageId: null, userStoppedStreaming: false })
+              }
+              return
+            }
+            
+            // v2.1 修复：cancelled也忽略
+            if (data.cancelled) {
+              console.log('流式请求已取消，忽略onComplete')
+              if (currentState.currentConversationId === conversationId) {
+                set({ typing: false, isStreaming: false, streamingContent: '', streamingMessageId: null, userStoppedStreaming: false })
+              }
+              return
+            }
+            
             const finalContent = data.content || ''
             const wasUserStopped = currentState.userStoppedStreaming && currentState.currentConversationId === conversationId
             

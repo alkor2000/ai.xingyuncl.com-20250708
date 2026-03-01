@@ -420,6 +420,9 @@ apiClient.postStream = async (url, data, options = {}) => {
   const controller = new AbortController()
   currentStreamController = controller
   
+  // v2.1 防止error/done事件后兜底onComplete重复触发（修复吐泡泡）
+  let hasEnded = false
+  
   try {
     const response = await fetch(`/api${url}`, {
       method: 'POST',
@@ -492,13 +495,15 @@ apiClient.postStream = async (url, data, options = {}) => {
                   
                 case 'done':
                   console.log('流式完成:', jsonData)
+                  hasEnded = true  // v2.1 标记已结束
                   if (onComplete) onComplete(jsonData)
                   return // 结束处理
                   
                 case 'error':
                   console.error('流式错误:', jsonData)
+                  hasEnded = true  // v2.1 标记已结束，防止兜底onComplete再触发
                   if (onError) onError(new Error(jsonData.error || '未知错误'))
-                  break
+                  return // v2.1 error后直接结束，不再继续处理
                   
                 default:
                   console.log(`收到事件 ${currentEvent}:`, jsonData)
@@ -535,16 +540,16 @@ apiClient.postStream = async (url, data, options = {}) => {
       console.warn('未处理的流式数据:', buffer)
     }
     
-    // 如果没有收到done事件，手动触发完成
-    if (onComplete) {
-      console.log('流结束，触发完成回调')
+    // v2.1 只有在没收到done/error事件时才兜底触发完成
+    if (onComplete && !hasEnded) {
+      console.log('流结束且未收到done/error事件，触发兜底完成回调')
       onComplete({ reason: 'stream_end' })
     }
 
   } catch (error) {
     if (error.name === 'AbortError') {
       console.log('流式请求已取消')
-      if (onComplete) {
+      if (onComplete && !hasEnded) {
         onComplete({ cancelled: true })
       }
     } else {
