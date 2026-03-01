@@ -1,6 +1,7 @@
 /**
  * LLM节点 - AI大模型对话
  * 显示模型配置详情
+ * v1.1 - P3优化：去除硬编码模型名和映射表，动态显示模型名
  */
 
 import React from 'react'
@@ -10,19 +11,39 @@ import { Tooltip } from 'antd'
 
 const LLMNode = ({ data, selected }) => {
   const config = data.config || {}
-  const model = config.model || 'claude-3-5-sonnet-20241022'
+  // v1.1: 去除硬编码默认值，未配置时显示提示文字
+  const model = config.model || ''
   const temperature = config.temperature ?? 0.7
-  const maxTokens = config.max_tokens ?? 1000
+  const maxTokens = config.max_tokens ?? 2000
   const systemPrompt = config.system_prompt || ''
   
-  // 模型显示名称
-  const modelNames = {
-    'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
-    'gpt-4': 'GPT-4',
-    'gpt-3.5-turbo': 'GPT-3.5 Turbo'
+  /**
+   * 智能提取模型显示名称
+   * v1.1: 不再使用硬编码映射表，而是从模型名中智能提取可读名称
+   * 支持各种格式：
+   * - "claude-3-5-sonnet-20241022" → "claude-3-5-sonnet"
+   * - "openai/gpt-4o" → "gpt-4o"
+   * - "gpt-4" → "gpt-4"
+   * @param {string} modelId - 原始模型标识符
+   * @returns {string} 可读的显示名称
+   */
+  const getModelDisplayName = (modelId) => {
+    if (!modelId) return '未选择模型'
+    
+    // 如果包含 provider/ 前缀（如 openai/gpt-4o），取最后部分
+    let name = modelId
+    if (name.includes('/')) {
+      const parts = name.split('/')
+      name = parts[parts.length - 1]
+    }
+    
+    // 去除尾部日期版本号（如 -20241022、-20250101）
+    name = name.replace(/-\d{8}$/, '')
+    
+    return name
   }
   
-  const modelName = modelNames[model] || model
+  const modelName = getModelDisplayName(model)
   
   return (
     <div className={`custom-node llm-node enhanced ${selected ? 'selected' : ''}`}>
@@ -40,7 +61,9 @@ const LLMNode = ({ data, selected }) => {
             <RobotOutlined style={{ fontSize: '12px', marginRight: '4px' }} />
             AI模型
           </div>
-          <div className="param-value model-name">{modelName}</div>
+          <div className="param-value model-name" style={!model ? { color: '#999', fontStyle: 'italic' } : {}}>
+            {modelName}
+          </div>
         </div>
         
         {/* 参数配置 */}

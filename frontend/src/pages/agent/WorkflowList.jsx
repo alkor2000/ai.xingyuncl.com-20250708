@@ -1,10 +1,11 @@
 /**
- * Agent工作流列表页 v2.2
+ * Agent工作流列表页 v2.3
  * 卡片式网格布局，FastGPT风格
  * 支持创建、编辑、删除、执行、发布等操作
  * 
  * v2.1 修复：Dropdown菜单点击事件冒泡问题
  * v2.2 新增：重命名功能，可以在列表中修改工作流名称和描述
+ * v2.3 P3优化：dayjs语言跟随i18n设置，去除硬编码中文
  */
 
 import React, { useEffect, useState, useMemo } from 'react'
@@ -48,20 +49,25 @@ import useAgentStore from '../../stores/agentStore'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
+import 'dayjs/locale/en'
 import './WorkflowList.less'
 
-// 配置dayjs
+// 配置dayjs插件（语言在组件内动态设置）
 dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
 
 /**
  * 工作流卡片组件
  */
 const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, onExecute }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   
-  // 格式化更新时间为相对时间
+  /**
+   * 格式化更新时间为相对时间
+   * v2.3: 使用i18n翻译键替代硬编码中文
+   * @param {string} date - 日期字符串
+   * @returns {string} 格式化后的相对时间
+   */
   const formatRelativeTime = (date) => {
     const now = dayjs()
     const target = dayjs(date)
@@ -70,9 +76,9 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
     if (diffDays === 0) {
       return target.format('HH:mm')
     } else if (diffDays === 1) {
-      return '昨天'
+      return t('agent.workflow.yesterday', '昨天')
     } else if (diffDays < 7) {
-      return `${diffDays}天前`
+      return t('agent.workflow.daysAgo', '{{count}}天前', { count: diffDays })
     } else {
       return target.format('MM-DD')
     }
@@ -112,7 +118,7 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
   const menuItems = [
     {
       key: 'rename',
-      label: '重命名',
+      label: t('agent.workflow.rename', '重命名'),
       icon: <FormOutlined />,
       onClick: handleRename
     },
@@ -164,11 +170,11 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
         </div>
         <div className="workflow-title-area">
           <div className="workflow-name">{workflow.name}</div>
-          <Tag className="workflow-type-tag">工作流</Tag>
+          <Tag className="workflow-type-tag">{t('agent.workflow.type', '工作流')}</Tag>
         </div>
         {workflow.is_published && (
           <Tag color="success" className="workflow-status-tag">
-            <CheckCircleOutlined /> 已发布
+            <CheckCircleOutlined /> {t('agent.workflow.published', '已发布')}
           </Tag>
         )}
       </div>
@@ -176,7 +182,7 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
       {/* 卡片描述 */}
       <div className="workflow-card-body">
         <div className="workflow-description">
-          {workflow.description || '暂无介绍'}
+          {workflow.description || t('agent.workflow.noDescription', '暂无介绍')}
         </div>
       </div>
       
@@ -211,8 +217,14 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
  * 工作流列表主组件
  */
 const WorkflowList = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  
+  // v2.3: dayjs语言跟随i18n设置
+  useEffect(() => {
+    const lang = i18n.language || 'zh'
+    dayjs.locale(lang.startsWith('zh') ? 'zh-cn' : 'en')
+  }, [i18n.language])
   
   // 从store获取状态和方法
   const {
@@ -320,7 +332,7 @@ const WorkflowList = () => {
       setRenameModalVisible(false)
       setWorkflowToRename(null)
       renameForm.resetFields()
-      message.success('工作流信息已更新')
+      message.success(t('agent.workflow.renameSuccess', '工作流信息已更新'))
     } catch (error) {
       console.error('重命名失败:', error)
     } finally {
@@ -359,7 +371,7 @@ const WorkflowList = () => {
   // 执行工作流
   const handleExecute = (workflow) => {
     if (!workflow.is_published) {
-      message.warning('请先发布工作流后再执行')
+      message.warning(t('agent.workflow.publishFirst', '请先发布工作流后再执行'))
       return
     }
     navigate(`/agent/execute/${workflow.id}`)
@@ -381,7 +393,7 @@ const WorkflowList = () => {
         </div>
         <div className="header-right">
           <Input
-            placeholder="搜索工作流..."
+            placeholder={t('agent.workflow.searchPlaceholder', '搜索工作流...')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -410,13 +422,13 @@ const WorkflowList = () => {
           value={filterStatus}
           onChange={setFilterStatus}
           options={[
-            { label: '全部', value: 'all' },
-            { label: '已发布', value: 'published' },
-            { label: '未发布', value: 'draft' }
+            { label: t('agent.workflow.filterAll', '全部'), value: 'all' },
+            { label: t('agent.workflow.filterPublished', '已发布'), value: 'published' },
+            { label: t('agent.workflow.filterDraft', '未发布'), value: 'draft' }
           ]}
         />
         <span className="workflow-count">
-          共 {filteredWorkflows.length} 个工作流
+          {t('agent.workflow.totalCount', '共 {{count}} 个工作流', { count: filteredWorkflows.length })}
         </span>
       </div>
       
@@ -424,15 +436,15 @@ const WorkflowList = () => {
       <div className="workflow-list-content">
         {workflowsLoading ? (
           <div className="loading-container">
-            <Spin size="large" tip="加载中..." />
+            <Spin size="large" tip={t('common.loading', '加载中...')} />
           </div>
         ) : filteredWorkflows.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               searchText || filterStatus !== 'all' 
-                ? '没有找到匹配的工作流' 
-                : '还没有创建工作流'
+                ? t('agent.workflow.noMatch', '没有找到匹配的工作流') 
+                : t('agent.workflow.empty', '还没有创建工作流')
             }
           >
             {!searchText && filterStatus === 'all' && (
@@ -441,7 +453,7 @@ const WorkflowList = () => {
                 icon={<PlusOutlined />}
                 onClick={() => setCreateModalVisible(true)}
               >
-                创建第一个工作流
+                {t('agent.workflow.createFirst', '创建第一个工作流')}
               </Button>
             )}
           </Empty>
@@ -484,8 +496,8 @@ const WorkflowList = () => {
           form.resetFields()
         }}
         onOk={() => form.submit()}
-        okText="创建"
-        cancelText="取消"
+        okText={t('common.create', '创建')}
+        cancelText={t('common.cancel', '取消')}
         width={520}
         className="create-workflow-modal"
       >
@@ -496,25 +508,25 @@ const WorkflowList = () => {
         >
           <Form.Item
             name="name"
-            label="工作流名称"
+            label={t('agent.workflow.nameLabel', '工作流名称')}
             rules={[
-              { required: true, message: '请输入工作流名称' },
-              { max: 100, message: '名称不能超过100个字符' }
+              { required: true, message: t('agent.workflow.nameRequired', '请输入工作流名称') },
+              { max: 100, message: t('agent.workflow.nameMaxLength', '名称不能超过100个字符') }
             ]}
           >
-            <Input placeholder="例如：AI客服自动回复" />
+            <Input placeholder={t('agent.workflow.namePlaceholder', '例如：AI客服自动回复')} />
           </Form.Item>
           
           <Form.Item
             name="description"
-            label="描述（可选）"
+            label={t('agent.workflow.descriptionLabel', '描述（可选）')}
             rules={[
-              { max: 500, message: '描述不能超过500个字符' }
+              { max: 500, message: t('agent.workflow.descMaxLength', '描述不能超过500个字符') }
             ]}
           >
             <Input.TextArea
               rows={3}
-              placeholder="描述这个工作流的用途..."
+              placeholder={t('agent.workflow.descPlaceholder', '描述这个工作流的用途...')}
               showCount
               maxLength={500}
             />
@@ -522,9 +534,9 @@ const WorkflowList = () => {
           
           <Form.Item
             name="is_published"
-            label="创建后立即发布"
+            label={t('agent.workflow.publishOnCreate', '创建后立即发布')}
             valuePropName="checked"
-            tooltip="发布后才能执行工作流"
+            tooltip={t('agent.workflow.publishTooltip', '发布后才能执行工作流')}
           >
             <Switch />
           </Form.Item>
@@ -536,7 +548,7 @@ const WorkflowList = () => {
         title={
           <Space>
             <FormOutlined />
-            重命名工作流
+            {t('agent.workflow.rename', '重命名工作流')}
           </Space>
         }
         open={renameModalVisible}
@@ -546,8 +558,8 @@ const WorkflowList = () => {
           renameForm.resetFields()
         }}
         onOk={() => renameForm.submit()}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save', '保存')}
+        cancelText={t('common.cancel', '取消')}
         confirmLoading={renaming}
         width={520}
         className="rename-workflow-modal"
@@ -559,25 +571,25 @@ const WorkflowList = () => {
         >
           <Form.Item
             name="name"
-            label="工作流名称"
+            label={t('agent.workflow.nameLabel', '工作流名称')}
             rules={[
-              { required: true, message: '请输入工作流名称' },
-              { max: 100, message: '名称不能超过100个字符' }
+              { required: true, message: t('agent.workflow.nameRequired', '请输入工作流名称') },
+              { max: 100, message: t('agent.workflow.nameMaxLength', '名称不能超过100个字符') }
             ]}
           >
-            <Input placeholder="例如：AI客服自动回复" />
+            <Input placeholder={t('agent.workflow.namePlaceholder', '例如：AI客服自动回复')} />
           </Form.Item>
           
           <Form.Item
             name="description"
-            label="描述（可选）"
+            label={t('agent.workflow.descriptionLabel', '描述（可选）')}
             rules={[
-              { max: 500, message: '描述不能超过500个字符' }
+              { max: 500, message: t('agent.workflow.descMaxLength', '描述不能超过500个字符') }
             ]}
           >
             <Input.TextArea
               rows={3}
-              placeholder="描述这个工作流的用途..."
+              placeholder={t('agent.workflow.descPlaceholder', '描述这个工作流的用途...')}
               showCount
               maxLength={500}
             />
@@ -587,19 +599,19 @@ const WorkflowList = () => {
       
       {/* 删除确认弹窗 */}
       <Modal
-        title="确认删除"
+        title={t('agent.workflow.deleteConfirmTitle', '确认删除')}
         open={deleteConfirmVisible}
         onCancel={() => {
           setDeleteConfirmVisible(false)
           setWorkflowToDelete(null)
         }}
         onOk={handleDeleteConfirm}
-        okText="确认删除"
-        cancelText="取消"
+        okText={t('agent.workflow.confirmDelete', '确认删除')}
+        cancelText={t('common.cancel', '取消')}
         okButtonProps={{ danger: true }}
       >
-        <p>确定要删除工作流 <strong>"{workflowToDelete?.name}"</strong> 吗？</p>
-        <p style={{ color: '#999', fontSize: '12px' }}>删除后无法恢复，相关的执行历史也会被删除。</p>
+        <p>{t('agent.workflow.deleteConfirmMsg', '确定要删除工作流 "{{name}}" 吗？', { name: workflowToDelete?.name })}</p>
+        <p style={{ color: '#999', fontSize: '12px' }}>{t('agent.workflow.deleteWarning', '删除后无法恢复，相关的执行历史也会被删除。')}</p>
       </Modal>
     </div>
   )
