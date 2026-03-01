@@ -1,5 +1,9 @@
 /**
  * 速率限制设置组件
+ * 
+ * v1.1 (2026-03-01):
+ *   - 新增chat对话限流配置卡片
+ *   - 预设模板同步新增chat配置
  */
 
 import React, { useState, useEffect } from 'react'
@@ -30,8 +34,13 @@ import apiClient from '../../../utils/api'
 
 const { TextArea } = Input
 
-// 速率限制配置说明
+// 速率限制配置说明 - v1.1 新增chat
 const RATE_LIMIT_INFO = {
+  chat: {
+    title: 'AI对话限制',
+    description: '控制用户发送AI对话消息的频率，防止滥用API调用',
+    icon: '💬'
+  },
   auth: {
     title: '认证请求限制',
     description: '控制登录、注册、刷新令牌等认证相关接口的请求频率',
@@ -59,12 +68,13 @@ const RATE_LIMIT_INFO = {
   }
 }
 
-// 预设配置模板
+// 预设配置模板 - v1.1 新增chat
 const PRESETS = {
   loose: {
     name: '宽松',
     color: 'green',
     config: {
+      chat: { windowMinutes: 1, max: 60, message: '对话频率过高，请稍后再试' },
       auth: { windowMinutes: 15, max: 200, message: '认证请求过于频繁，请稍后再试' },
       emailCode: { windowMinutes: 60, max: 20, message: '发送验证码过于频繁，请稍后再试' },
       global: { windowMinutes: 15, max: 5000, message: '请求过于频繁，请稍后再试' },
@@ -76,6 +86,7 @@ const PRESETS = {
     name: '标准',
     color: 'blue',
     config: {
+      chat: { windowMinutes: 1, max: 15, message: '对话频率过高，请稍后再试' },
       auth: { windowMinutes: 15, max: 100, message: '认证请求过于频繁，请稍后再试' },
       emailCode: { windowMinutes: 60, max: 10, message: '发送验证码过于频繁，请稍后再试' },
       global: { windowMinutes: 15, max: 2000, message: '请求过于频繁，请稍后再试' },
@@ -87,6 +98,7 @@ const PRESETS = {
     name: '严格',
     color: 'orange',
     config: {
+      chat: { windowMinutes: 1, max: 5, message: '对话频率过高，请稍后再试' },
       auth: { windowMinutes: 15, max: 30, message: '认证请求过于频繁，请稍后再试' },
       emailCode: { windowMinutes: 60, max: 5, message: '发送验证码过于频繁，请稍后再试' },
       global: { windowMinutes: 15, max: 500, message: '请求过于频繁，请稍后再试' },
@@ -262,13 +274,13 @@ const RateLimitSettings = ({ disabled = false }) => {
                         }
                         rules={[
                           { required: true, message: '请输入最大请求数' },
-                          { type: 'number', min: 1, max: 10000, message: '范围：1-10000' }
+                          { type: 'number', min: 1, max: 100000, message: '范围：1-100000' }
                         ]}
                       >
                         <InputNumber
                           style={{ width: '100%' }}
                           min={1}
-                          max={10000}
+                          max={100000}
                           addonAfter="次"
                           placeholder="100"
                         />

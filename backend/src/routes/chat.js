@@ -1,5 +1,12 @@
 /**
  * 对话路由 - 使用重构后的控制器
+ * 
+ * v1.1 (2026-03-01):
+ *   - 移除硬编码rateLimit，改为通过rateLimitService动态获取
+ *   - 对话限流纳入后台设置统一管理，支持enabled禁用
+ *   - 与admin.js保持一致的动态限流模式
+ * v1.0:
+ *   - 5种硬编码限流(chat/upload/credits/draft/message)
  */
 
 const express = require('express');
@@ -7,84 +14,23 @@ const ChatControllerRefactored = require('../controllers/ChatControllerRefactore
 const { authenticate, requirePermission } = require('../middleware/authMiddleware');
 const { uploadImage } = require('../middleware/uploadMiddleware');
 const { uploadDocument } = require('../middleware/documentUploadMiddleware');
-const rateLimit = require('express-rate-limit');
+const rateLimitService = require('../services/rateLimitService');
 
 const router = express.Router();
 
-// AI对话限流配置
-const chatLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 15, // 每分钟最多15次对话请求
-  message: {
-    success: false,
-    code: 429,
-    message: '对话频率过高，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 文件上传限流
-const uploadLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 30, // 每分钟最多30次上传
-  message: {
-    success: false,
-    code: 429,
-    message: '上传频率过高，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 用户积分查询限流
-const creditsLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 60, // 每分钟最多60次积分查询
-  message: {
-    success: false,
-    code: 429,
-    message: '积分查询过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 草稿操作限流
-const draftLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 120, // 每分钟最多120次草稿操作
-  message: {
-    success: false,
-    code: 429,
-    message: '草稿操作过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 消息操作限流
-const messageLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 30, // 每分钟最多30次消息操作
-  message: {
-    success: false,
-    code: 429,
-    message: '消息操作过于频繁，请稍后再试',
-    data: null,
-    timestamp: new Date().toISOString()
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
+/**
+ * v1.1 动态对话限流中间件
+ * 通过rateLimitService获取，后台可配置，支持enabled禁用
+ */
+const dynamicChatLimiter = async (req, res, next) => {
+  try {
+    const limiter = await rateLimitService.getLimiter('chat');
+    limiter(req, res, next);
+  } catch (error) {
+    // 获取限制器失败时不阻塞请求
+    next();
+  }
+};
 
 // 所有路由都需要认证
 router.use(authenticate);
@@ -122,7 +68,6 @@ router.get('/module-combinations',
  * @access Private
  */
 router.get('/credits',
-  creditsLimiter,
   requirePermission('chat.use'),
   ChatControllerRefactored.getUserCredits
 );
@@ -133,7 +78,6 @@ router.get('/credits',
  * @access Private
  */
 router.post('/upload-image',
-  uploadLimiter,
   requirePermission('chat.use'),
   uploadImage,
   ChatControllerRefactored.uploadImage
@@ -145,7 +89,6 @@ router.post('/upload-image',
  * @access Private
  */
 router.post('/upload-document',
-  uploadLimiter,
   requirePermission('chat.use'),
   uploadDocument,
   ChatControllerRefactored.uploadDocument
@@ -213,11 +156,11 @@ router.get('/conversations/:id/messages',
 
 /**
  * @route POST /api/chat/conversations/:id/messages
- * @desc 发送消息并获取AI回复
+ * @desc 发送消息并获取AI回复（受对话限流保护）
  * @access Private
  */
 router.post('/conversations/:id/messages',
-  chatLimiter,
+  dynamicChatLimiter,
   requirePermission('chat.use'),
   ChatControllerRefactored.sendMessage
 );
@@ -228,7 +171,6 @@ router.post('/conversations/:id/messages',
  * @access Private
  */
 router.delete('/conversations/:id/messages/:messageId',
-  messageLimiter,
   requirePermission('chat.use'),
   ChatControllerRefactored.deleteMessagePair
 );
@@ -239,7 +181,6 @@ router.delete('/conversations/:id/messages/:messageId',
  * @access Private
  */
 router.post('/conversations/:id/clear',
-  messageLimiter,
   requirePermission('chat.use'),
   ChatControllerRefactored.clearMessages
 );
@@ -250,7 +191,6 @@ router.post('/conversations/:id/clear',
  * @access Private
  */
 router.post('/conversations/:id/draft',
-  draftLimiter,
   requirePermission('chat.use'),
   ChatControllerRefactored.saveDraft
 );

@@ -1,6 +1,12 @@
 /**
  * 速率限制服务 - 管理动态速率限制配置
- * 修复：支持enabled字段，禁用时不应用速率限制
+ * 
+ * v1.1 (2026-03-01):
+ *   - 新增chat类型，对话限流纳入动态管理
+ *   - chat.js不再硬编码，统一通过本服务获取限制器
+ * v1.0:
+ *   - 5种限制器(auth/emailCode/global/adminRead/adminWrite)
+ *   - enabled字段支持禁用，配置热更新清除缓存
  */
 
 const SystemConfig = require('../models/SystemConfig');
@@ -15,32 +21,39 @@ class RateLimitService {
     this.defaultConfig = {
       auth: {
         windowMs: 15 * 60 * 1000, // 15分钟
-        max: 100, // 默认提升到100次
+        max: 100,
         message: '认证请求过于频繁，请稍后再试',
-        enabled: true // 默认启用
+        enabled: true
       },
       emailCode: {
         windowMs: 60 * 60 * 1000, // 1小时
-        max: 10, // 提升到10次
+        max: 10,
         message: '发送验证码过于频繁，请稍后再试',
         enabled: true
       },
       global: {
         windowMs: 15 * 60 * 1000, // 15分钟
-        max: 2000, // 全局限制2000次
+        max: 2000,
         message: '请求过于频繁，请稍后再试',
         enabled: true
       },
       adminRead: {
         windowMs: 15 * 60 * 1000, // 15分钟
-        max: 3000, // 管理读操作3000次
+        max: 3000,
         message: '读取操作过于频繁，请稍后再试',
         enabled: true
       },
       adminWrite: {
         windowMs: 15 * 60 * 1000, // 15分钟
-        max: 500, // 管理写操作500次
+        max: 500,
         message: '写入操作过于频繁，请稍后再试',
+        enabled: true
+      },
+      // v1.1 新增：对话系统限流，统一管理
+      chat: {
+        windowMs: 1 * 60 * 1000, // 1分钟
+        max: 15,
+        message: '对话频率过高，请稍后再试',
         enabled: true
       }
     };
@@ -81,7 +94,7 @@ class RateLimitService {
 
   /**
    * 获取或创建速率限制器
-   * 🔥 修复：支持enabled字段，禁用时返回空中间件
+   * 支持enabled字段，禁用时返回空中间件
    */
   async getLimiter(type) {
     // 如果已有缓存的限制器，直接返回
@@ -98,10 +111,9 @@ class RateLimitService {
       return this.createDefaultLimiter();
     }
 
-    // 🔥 核心修复：检查enabled字段
+    // 核心：检查enabled字段，禁用时直接放行
     if (limitConfig.enabled === false) {
       logger.info(`速率限制 ${type} 已禁用，跳过限制`);
-      // 返回一个空中间件（直接放行，不限制）
       const noopMiddleware = (req, res, next) => next();
       this.limiters.set(type, noopMiddleware);
       return noopMiddleware;
@@ -120,18 +132,17 @@ class RateLimitService {
       },
       standardHeaders: true,
       legacyHeaders: false,
-      // 使用内存存储（可以考虑使用Redis）
-      store: undefined
+      store: undefined // 使用内存存储
     });
 
     // 缓存限制器
     this.limiters.set(type, limiter);
-    logger.info(`速率限制 ${type} 已启用: ${limitConfig.max}次/${Math.floor(limitConfig.windowMs/60000)}分钟`);
+    logger.info(`速率限制 ${type} 已启用: ${limitConfig.max}次/${Math.floor(limitConfig.windowMs / 60000)}分钟`);
     return limiter;
   }
 
   /**
-   * 创建默认限制器
+   * 创建默认限制器（找不到类型时的兜底）
    */
   createDefaultLimiter() {
     return rateLimit({
@@ -150,7 +161,7 @@ class RateLimitService {
   }
 
   /**
-   * 合并配置
+   * 合并配置 - 已保存的配置覆盖默认配置
    */
   mergeConfig(defaultConfig, savedConfig) {
     const merged = { ...defaultConfig };
@@ -174,7 +185,7 @@ class RateLimitService {
     for (const [key, value] of Object.entries(config)) {
       formatted[key] = {
         ...value,
-        windowMinutes: Math.floor(value.windowMs / 60000), // 转换为分钟
+        windowMinutes: Math.floor(value.windowMs / 60000),
         enabled: value.enabled !== false // 默认启用
       };
     }
@@ -190,7 +201,7 @@ class RateLimitService {
     
     for (const [key, value] of Object.entries(formattedConfig)) {
       config[key] = {
-        windowMs: value.windowMinutes * 60000, // 转换回毫秒
+        windowMs: value.windowMinutes * 60000,
         max: value.max,
         message: value.message,
         enabled: value.enabled !== false
