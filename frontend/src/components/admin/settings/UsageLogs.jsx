@@ -7,6 +7,11 @@
  *   * 超级管理员始终可以查看
  *   * 初始化时检查权限状态
  * - v1.2: 无权限时完全隐藏"内容"列，不显示任何提示
+ * - v1.3 (2026-03-01): 查看按钮三种状态区分
+ *   * 对话存在 → 红色"查看"可点击
+ *   * 对话已删除 → 灰色"已删除"+Tooltip提示
+ *   * 非对话类消费 → 灰色"-"+Tooltip提示
+ *   * 会话列同步三状态显示
  */
 
 import React, { useState, useEffect, useMemo } from 'react'
@@ -245,7 +250,7 @@ const UsageLogs = () => {
     setDrawerVisible(true)
   }
 
-  // v1.2更新：根据权限动态生成表格列
+  // v1.3更新：根据权限动态生成表格列，支持三种状态区分
   const columns = useMemo(() => {
     // 基础列定义
     const baseColumns = [
@@ -322,21 +327,33 @@ const UsageLogs = () => {
         )
       },
       {
+        // v1.3更新：会话列三种状态显示
         title: '会话',
         dataIndex: 'conversation_title',
         key: 'conversation_title',
         width: 120,
         fixed: 'right',
         ellipsis: true,
-        render: (title) => (
-          <Tooltip title={title}>
-            {title || '-'}
-          </Tooltip>
-        )
+        render: (title, record) => {
+          // 情况1: 有标题，正常显示
+          if (title) {
+            return (
+              <Tooltip title={title}>
+                {title}
+              </Tooltip>
+            )
+          }
+          // 情况2: 有关联对话ID但对话已被删除（conversation_exists=0）
+          if (record.related_conversation_id && !record.conversation_exists) {
+            return <span style={{ color: '#faad14', fontSize: 12 }}>已删除</span>
+          }
+          // 情况3: 无关联对话（非对话类消费）
+          return <span style={{ color: '#ccc' }}>-</span>
+        }
       }
     ]
 
-    // v1.2更新：只有有权限时才添加"内容"列
+    // v1.3更新：只有有权限时才添加"内容"列，支持三种状态
     if (canViewChat) {
       baseColumns.push({
         title: '内容',
@@ -344,17 +361,38 @@ const UsageLogs = () => {
         width: 80,
         fixed: 'right',
         align: 'center',
-        render: (_, record) => (
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewConversation(record)}
-            disabled={!record.related_conversation_id}
-          >
-            查看
-          </Button>
-        )
+        render: (_, record) => {
+          // 情况1: 有关联对话且对话存在 → 红色"查看"可点击
+          if (record.related_conversation_id && record.conversation_exists) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewConversation(record)}
+                style={{ color: '#ff4d4f' }}
+              >
+                查看
+              </Button>
+            )
+          }
+          // 情况2: 有关联对话但对话已被删除 → 灰色"已删除"+Tooltip
+          if (record.related_conversation_id && !record.conversation_exists) {
+            return (
+              <Tooltip title="该对话已被用户删除，无法查看">
+                <Button type="text" size="small" icon={<EyeOutlined />} disabled>
+                  已删除
+                </Button>
+              </Tooltip>
+            )
+          }
+          // 情况3: 无关联对话（非对话类消费） → 灰色"-"+Tooltip
+          return (
+            <Tooltip title="非对话类消费（图像/视频/HTML等）">
+              <span style={{ color: '#ccc' }}>-</span>
+            </Tooltip>
+          )
+        }
       })
     }
 

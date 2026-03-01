@@ -99,7 +99,8 @@ class UsageLogService {
           am.display_name as model_display_name,
           am.provider as model_provider,
           ct.description,
-          ct.request_id
+          ct.request_id,
+          CASE WHEN c.id IS NOT NULL THEN 1 ELSE 0 END as conversation_exists
         FROM credit_transactions ct
         LEFT JOIN users u ON ct.user_id = u.id
         LEFT JOIN user_groups g ON u.group_id = g.id
