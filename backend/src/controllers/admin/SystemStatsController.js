@@ -1,5 +1,8 @@
 /**
  * 系统统计控制器 - 支持基于角色的数据过滤、配置持久化和缓存统计
+ * 
+ * v1.1 (2026-03-01):
+ *   - updateRateLimitSettings: max验证上限从10000放宽到100000，与前端一致
  */
 
 const { StatsService } = require('../../services/admin');
@@ -728,7 +731,7 @@ class SystemStatsController {
       const userRole = req.user.role;
       
       // 获取配置
-      const config = await SystemConfig.getSetting('custom_homepage');
+      const homepageConfig = await SystemConfig.getSetting('custom_homepage');
       
       // 如果没有配置，返回默认值
       const defaultConfig = {
@@ -795,7 +798,7 @@ class SystemStatsController {
         updated_at: new Date().toISOString()
       };
       
-      const result = config || defaultConfig;
+      const result = homepageConfig || defaultConfig;
       
       // 组管理员：添加只读标记
       if (userRole === ROLES.ADMIN) {
@@ -842,7 +845,7 @@ class SystemStatsController {
       }
       
       // 构建配置对象
-      const config = {
+      const homepageConfig = {
         enabled,
         content,
         updated_at: new Date().toISOString(),
@@ -850,14 +853,14 @@ class SystemStatsController {
       };
       
       // 保存到数据库
-      await SystemConfig.updateSetting('custom_homepage', config, 'json');
+      await SystemConfig.updateSetting('custom_homepage', homepageConfig, 'json');
       
       logger.info('管理员更新自定义首页配置', { 
         adminId: req.user.id,
-        enabled: config.enabled
+        enabled: homepageConfig.enabled
       });
 
-      return ResponseHelper.success(res, config, '自定义首页配置更新成功');
+      return ResponseHelper.success(res, homepageConfig, '自定义首页配置更新成功');
     } catch (error) {
       logger.error('更新自定义首页配置失败', { 
         adminId: req.user?.id, 
@@ -868,7 +871,7 @@ class SystemStatsController {
   }
 
   /**
-   * 获取速率限制设置（新增）
+   * 获取速率限制设置
    */
   static async getRateLimitSettings(req, res) {
     try {
@@ -893,7 +896,8 @@ class SystemStatsController {
   }
 
   /**
-   * 更新速率限制设置（新增）
+   * 更新速率限制设置
+   * v1.1: max验证上限从10000放宽到100000，与前端RateLimitSettings.jsx一致
    */
   static async updateRateLimitSettings(req, res) {
     try {
@@ -922,8 +926,9 @@ class SystemStatsController {
           return ResponseHelper.validation(res, [`配置项 ${key} 的时间窗口必须在1-1440分钟之间`]);
         }
         
-        if (config.max < 1 || config.max > 10000) {
-          return ResponseHelper.validation(res, [`配置项 ${key} 的最大请求数必须在1-10000之间`]);
+        // v1.1: 上限从10000放宽到100000
+        if (config.max < 1 || config.max > 100000) {
+          return ResponseHelper.validation(res, [`配置项 ${key} 的最大请求数必须在1-100000之间`]);
         }
       }
       
