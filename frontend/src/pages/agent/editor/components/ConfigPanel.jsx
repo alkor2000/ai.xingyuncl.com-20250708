@@ -3,6 +3,7 @@
  * v2.1 - 添加保存按钮，显示保存状态
  * v2.2 - 知识库节点支持选择Wiki文档，显示Token数量
  * v2.3 - 添加问题分类节点配置（动态分类列表）
+ * v2.4 - P2修复：保存知识库配置时同步保存元数据(selected_wikis)
  * 支持编辑节点参数
  */
 
@@ -28,7 +29,7 @@ import {
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
 
-const { Text, TextArea } = Typography
+const { Text } = Typography
 
 const ConfigPanel = ({ 
   selectedNode, 
@@ -67,11 +68,17 @@ const ConfigPanel = ({
       
       // 如果是知识库节点，恢复已选择的知识库
       if (selectedNode.type === 'knowledge' && config.wiki_ids) {
-        const selected = (config.wiki_ids || []).map(id => {
-          const item = wikiItems.find(w => w.id === id)
-          return item || { id, title: `知识库 #${id}`, tokens_display: '未知' }
-        }).filter(Boolean)
-        setSelectedWikis(selected)
+        // v2.4: 优先从已保存的 selected_wikis 元数据恢复
+        if (config.selected_wikis && config.selected_wikis.length > 0) {
+          setSelectedWikis(config.selected_wikis)
+        } else {
+          // 兜底：从 wikiItems 中查找
+          const selected = (config.wiki_ids || []).map(id => {
+            const item = wikiItems.find(w => w.id === id)
+            return item || { id, title: `知识库 #${id}`, tokens_display: '未知', tokens: 0 }
+          }).filter(Boolean)
+          setSelectedWikis(selected)
+        }
       } else {
         setSelectedWikis([])
       }
@@ -96,12 +103,30 @@ const ConfigPanel = ({
     }
   }, [selectedNode?.type])
   
+  /**
+   * 构建知识库元数据（用于保存到节点配置和前端节点渲染）
+   * v2.4 新增：每次wiki选择变化时，同步生成精简的元数据
+   * @param {Array} wikis - 选中的知识库对象数组
+   * @returns {Array} 精简的元数据数组
+   */
+  const buildWikiMetadata = (wikis) => {
+    return wikis.map(w => ({
+      id: w.id,
+      title: w.title,
+      scope: w.scope,
+      tokens: w.tokens || 0,
+      tokens_display: w.tokens_display || '未知'
+    }))
+  }
+  
   // 表单值变化时更新节点配置
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
-      // 如果是知识库节点，需要同步wiki_ids
+      // 如果是知识库节点，需要同步wiki_ids和元数据
       if (selectedNode.type === 'knowledge') {
         allValues.wiki_ids = selectedWikis.map(w => w.id)
+        // v2.4: 同步保存元数据，供前端节点渲染使用
+        allValues.selected_wikis = buildWikiMetadata(selectedWikis)
       }
       // 如果是分类节点，需要同步categories
       if (selectedNode.type === 'classifier') {
@@ -120,6 +145,8 @@ const ConfigPanel = ({
       
       const currentValues = form.getFieldsValue()
       currentValues.wiki_ids = newSelected.map(w => w.id)
+      // v2.4: 同步保存元数据
+      currentValues.selected_wikis = buildWikiMetadata(newSelected)
       onUpdateConfig(selectedNode.id, currentValues)
     }
   }
@@ -131,6 +158,8 @@ const ConfigPanel = ({
     
     const currentValues = form.getFieldsValue()
     currentValues.wiki_ids = newSelected.map(w => w.id)
+    // v2.4: 同步保存元数据
+    currentValues.selected_wikis = buildWikiMetadata(newSelected)
     onUpdateConfig(selectedNode.id, currentValues)
   }
   

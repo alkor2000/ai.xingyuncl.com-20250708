@@ -3,11 +3,12 @@
  * 调用大语言模型进行对话和推理（非流式，用于工作流执行）
  * 支持对话历史管理、轮数控制和上游节点输出传递
  * v2.0 - 添加知识库上下文支持
+ * v2.1 - P1重构：AI调用方法提取到AICallHelper，消除代码重复
  */
 
 const BaseNode = require('./BaseNode');
+const AICallHelper = require('./AICallHelper');
 const AIModel = require('../../../models/AIModel');
-const axios = require('axios');
 const logger = require('../../../utils/logger');
 
 class LLMNode extends BaseNode {
@@ -87,6 +88,7 @@ class LLMNode extends BaseNode {
   /**
    * 执行AI对话节点
    * v2.0 - 支持知识库上下文注入
+   * v2.1 - 使用AICallHelper统一调用AI
    * @param {Object} context - 执行上下文
    * @param {number} userId - 用户ID
    * @param {Object} nodeTypeConfig - 节点类型配置（包含积分消耗）
@@ -168,7 +170,7 @@ class LLMNode extends BaseNode {
       }
       // ========== v2.0 新增结束 ==========
 
-      // 7. 获取当前用户消息（优先级：模板 > 上游输出 > 原始输入）
+      // 7. 获取当前用户消息（优先级：模板 > 知识库 > 上游输出 > 原始输入）
       let currentUserMessage;
       
       if (userPromptTemplate) {
@@ -245,15 +247,15 @@ class LLMNode extends BaseNode {
       const temperature = parseFloat(this.getConfig('temperature', 0.7));
       const maxTokens = parseInt(this.getConfig('max_tokens', 2000));
 
-      // 11. 调用AI（非流式）
-      const response = await this.callAI(model, messages, {
+      // 11. 调用AI（v2.1: 使用公共AICallHelper）
+      const response = await AICallHelper.callAI(model, messages, {
         temperature,
         max_tokens: maxTokens
       });
 
       this.log('info', 'AI响应成功', {
         responseLength: response.length,
-        tokensUsed: this.estimateTokens(response)
+        tokensUsed: AICallHelper.estimateTokens(response)
       });
 
       // 12. 返回结果（包含积分消耗信息）
@@ -263,7 +265,7 @@ class LLMNode extends BaseNode {
           content: response,
           model: model.name,
           display_name: model.display_name,
-          tokens_used: this.estimateTokens(response)
+          tokens_used: AICallHelper.estimateTokens(response)
         },
         credits_used: nodeTypeConfig.credits_per_execution || 0
       };
@@ -311,158 +313,8 @@ ${userQuery}
   }
 
   /**
-   * 调用AI模型（非流式）
-   * @param {Object} model - AI模型对象
-   * @param {Array} messages - 消息数组
-   * @param {Object} options - 调用参数
-   * @returns {Promise<string>} AI响应内容
-   */
-  async callAI(model, messages, options = {}) {
-    try {
-      // 检测是否为Azure配置
-      if (this.isAzureConfig(model)) {
-        return await this.callAzureAPI(model, messages, options);
-      } else {
-        return await this.callStandardAPI(model, messages, options);
-      }
-    } catch (error) {
-      logger.error('调用AI失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 检测是否为Azure配置
-   */
-  isAzureConfig(model) {
-    if (model.provider === 'azure' || model.provider === 'azure-openai') {
-      return true;
-    }
-    
-    if (model.api_key && model.api_key.includes('|')) {
-      const parts = model.api_key.split('|');
-      if (parts.length === 3) {
-        return true;
-      }
-    }
-    
-    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * 解析Azure配置
-   */
-  parseAzureConfig(apiKey) {
-    const parts = apiKey.split('|');
-    if (parts.length === 3) {
-      return {
-        apiKey: parts[0].trim(),
-        endpoint: parts[1].trim(),
-        apiVersion: parts[2].trim()
-      };
-    }
-    return null;
-  }
-
-  /**
-   * 调用标准OpenAI格式API
-   */
-  async callStandardAPI(model, messages, options) {
-    const endpoint = model.api_endpoint.endsWith('/chat/completions')
-      ? model.api_endpoint
-      : `${model.api_endpoint}/chat/completions`;
-
-    const requestData = {
-      model: model.name,
-      messages: messages,
-      temperature: options.temperature || 0.7,
-      max_tokens: options.max_tokens || 2000,
-      stream: false
-    };
-
-    const headers = {
-      'Authorization': `Bearer ${model.api_key}`,
-      'Content-Type': 'application/json'
-    };
-
-    // 如果是OpenRouter，添加额外的headers
-    if (endpoint.includes('openrouter')) {
-      headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
-      headers['X-Title'] = 'AI Platform Agent';
-    }
-
-    const response = await axios.post(endpoint, requestData, {
-      headers,
-      timeout: 120000 // 2分钟超时
-    });
-
-    if (response.data && response.data.choices && response.data.choices[0]) {
-      return response.data.choices[0].message.content;
-    }
-
-    throw new Error('AI响应格式异常');
-  }
-
-  /**
-   * 调用Azure OpenAI API
-   */
-  async callAzureAPI(model, messages, options) {
-    const azureConfig = this.parseAzureConfig(model.api_key);
-    if (!azureConfig) {
-      throw new Error('Azure配置格式错误');
-    }
-
-    const { apiKey, endpoint, apiVersion } = azureConfig;
-
-    // 提取deployment名称
-    let deploymentName = model.name;
-    if (model.name.includes('/')) {
-      const parts = model.name.split('/');
-      deploymentName = parts[parts.length - 1];
-    }
-
-    // 构建Azure URL
-    const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
-    const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
-
-    const requestData = {
-      messages: messages,
-      temperature: options.temperature || 0.7,
-      max_tokens: options.max_tokens || 2000,
-      stream: false
-    };
-
-    const response = await axios.post(azureUrl, requestData, {
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000
-    });
-
-    if (response.data && response.data.choices && response.data.choices[0]) {
-      return response.data.choices[0].message.content;
-    }
-
-    throw new Error('Azure AI响应格式异常');
-  }
-
-  /**
-   * 估算Token数量
-   */
-  estimateTokens(content) {
-    if (!content) return 0;
-    const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length;
-    const otherChars = content.length - chineseChars;
-    return Math.ceil(chineseChars * 0.67 + otherChars * 0.25);
-  }
-
-  /**
    * 验证LLM节点配置
+   * v2.1 修复：max_tokens上限与前端保持一致（8192）
    */
   validate() {
     const errors = [];
@@ -486,9 +338,10 @@ ${userQuery}
       errors.push('温度值必须在0-2之间');
     }
 
+    // v2.1 修复：上限从4000提升到8192，与前端ConfigPanel一致
     const maxTokens = this.getConfig('max_tokens');
-    if (maxTokens !== undefined && (maxTokens < 100 || maxTokens > 4000)) {
-      errors.push('最大Token数必须在100-4000之间');
+    if (maxTokens !== undefined && (maxTokens < 100 || maxTokens > 8192)) {
+      errors.push('最大Token数必须在100-8192之间');
     }
 
     return {

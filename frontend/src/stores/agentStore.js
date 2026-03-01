@@ -2,6 +2,7 @@
  * Agent工作流状态管理
  * 使用 Zustand 管理工作流的CRUD、执行、历史等状态
  * v2.0 - 新增知识库集成
+ * v2.1 - P0修复：执行历史响应字段名修正(data→兼容两种格式)
  */
 
 import { create } from 'zustand'
@@ -336,7 +337,7 @@ const useAgentStore = create((set, get) => ({
   // ========== 执行相关 ==========
   
   /**
-   * 执行工作流（一次性执行）
+   * 执行工作流（一次性执行，非对话模式）
    */
   executeWorkflow: async (id, inputData = {}) => {
     try {
@@ -513,6 +514,7 @@ const useAgentStore = create((set, get) => ({
   
   /**
    * 获取执行历史
+   * v2.1 修复：后端返回字段名是 data 而非 executions，做兼容处理
    */
   fetchExecutions: async (params = {}) => {
     set({ executionsLoading: true })
@@ -530,14 +532,20 @@ const useAgentStore = create((set, get) => ({
       const response = await apiClient.get(`/agent/executions?${queryParams}`)
       
       if (response.data.success) {
-        const { executions, pagination } = response.data.data
+        const responseData = response.data.data
+        
+        // v2.1 修复：兼容后端返回的 data 字段名和 executions 字段名
+        // 后端 AgentExecution.findByUserId 返回 { data: [...], pagination: {...} }
+        // 前端之前错误地解构为 { executions, pagination }
+        const executionList = responseData.executions || responseData.data || []
+        const pagination = responseData.pagination || {}
         
         set({
-          executions,
+          executions: executionList,
           executionsPagination: {
-            current: pagination.page,
-            pageSize: pagination.limit,
-            total: pagination.total
+            current: pagination.page || current,
+            pageSize: pagination.limit || pageSize,
+            total: pagination.total || 0
           },
           executionsLoading: false
         })

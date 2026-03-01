@@ -1,6 +1,7 @@
 /**
  * 问题分类节点 - 使用AI对用户问题进行智能分类
  * v1.0 - 基础分类功能（单输出，第一阶段）
+ * v1.1 - P1重构：AI调用方法提取到AICallHelper，消除代码重复
  * 
  * 功能：
  * - 使用选定的AI模型进行问题分类
@@ -16,8 +17,8 @@
  */
 
 const BaseNode = require('./BaseNode');
+const AICallHelper = require('./AICallHelper');
 const AIModel = require('../../../models/AIModel');
-const axios = require('axios');
 const logger = require('../../../utils/logger');
 
 class ClassifierNode extends BaseNode {
@@ -83,6 +84,7 @@ class ClassifierNode extends BaseNode {
 
   /**
    * 执行问题分类
+   * v1.1 - 使用AICallHelper统一调用AI
    * @param {Object} context - 执行上下文
    * @param {number} userId - 用户ID
    * @param {Object} nodeTypeConfig - 节点类型配置
@@ -174,7 +176,7 @@ class ClassifierNode extends BaseNode {
         promptLength: classificationPrompt.length
       });
 
-      // 6. 调用AI进行分类
+      // 6. 调用AI进行分类（v1.1: 使用公共AICallHelper）
       const messages = [
         {
           role: 'system',
@@ -186,9 +188,10 @@ class ClassifierNode extends BaseNode {
         }
       ];
 
-      const response = await this.callAI(model, messages, {
+      const response = await AICallHelper.callAI(model, messages, {
         temperature: 0.1, // 低温度保证分类稳定性
-        max_tokens: 100   // 分类只需要短回复
+        max_tokens: 100,  // 分类只需要短回复
+        timeout: 60000    // 1分钟超时（分类应该很快）
       });
 
       this.log('info', 'AI分类响应', {
@@ -349,147 +352,6 @@ class ClassifierNode extends BaseNode {
       category_index: 0,
       confidence: 'low'
     };
-  }
-
-  /**
-   * 调用AI模型（非流式）
-   * @param {Object} model - AI模型对象
-   * @param {Array} messages - 消息数组
-   * @param {Object} options - 调用参数
-   * @returns {Promise<string>} AI响应内容
-   */
-  async callAI(model, messages, options = {}) {
-    try {
-      // 检测是否为Azure配置
-      if (this.isAzureConfig(model)) {
-        return await this.callAzureAPI(model, messages, options);
-      } else {
-        return await this.callStandardAPI(model, messages, options);
-      }
-    } catch (error) {
-      logger.error('调用AI失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 检测是否为Azure配置
-   */
-  isAzureConfig(model) {
-    if (model.provider === 'azure' || model.provider === 'azure-openai') {
-      return true;
-    }
-    
-    if (model.api_key && model.api_key.includes('|')) {
-      const parts = model.api_key.split('|');
-      if (parts.length === 3) {
-        return true;
-      }
-    }
-    
-    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * 解析Azure配置
-   */
-  parseAzureConfig(apiKey) {
-    const parts = apiKey.split('|');
-    if (parts.length === 3) {
-      return {
-        apiKey: parts[0].trim(),
-        endpoint: parts[1].trim(),
-        apiVersion: parts[2].trim()
-      };
-    }
-    return null;
-  }
-
-  /**
-   * 调用标准OpenAI格式API
-   */
-  async callStandardAPI(model, messages, options) {
-    const endpoint = model.api_endpoint.endsWith('/chat/completions')
-      ? model.api_endpoint
-      : `${model.api_endpoint}/chat/completions`;
-
-    const requestData = {
-      model: model.name,
-      messages: messages,
-      temperature: options.temperature || 0.1,
-      max_tokens: options.max_tokens || 100,
-      stream: false
-    };
-
-    const headers = {
-      'Authorization': `Bearer ${model.api_key}`,
-      'Content-Type': 'application/json'
-    };
-
-    // 如果是OpenRouter，添加额外的headers
-    if (endpoint.includes('openrouter')) {
-      headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
-      headers['X-Title'] = 'AI Platform Agent Classifier';
-    }
-
-    const response = await axios.post(endpoint, requestData, {
-      headers,
-      timeout: 60000 // 1分钟超时（分类应该很快）
-    });
-
-    if (response.data && response.data.choices && response.data.choices[0]) {
-      return response.data.choices[0].message.content;
-    }
-
-    throw new Error('AI响应格式异常');
-  }
-
-  /**
-   * 调用Azure OpenAI API
-   */
-  async callAzureAPI(model, messages, options) {
-    const azureConfig = this.parseAzureConfig(model.api_key);
-    if (!azureConfig) {
-      throw new Error('Azure配置格式错误');
-    }
-
-    const { apiKey, endpoint, apiVersion } = azureConfig;
-
-    // 提取deployment名称
-    let deploymentName = model.name;
-    if (model.name.includes('/')) {
-      const parts = model.name.split('/');
-      deploymentName = parts[parts.length - 1];
-    }
-
-    // 构建Azure URL
-    const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
-    const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
-
-    const requestData = {
-      messages: messages,
-      temperature: options.temperature || 0.1,
-      max_tokens: options.max_tokens || 100,
-      stream: false
-    };
-
-    const response = await axios.post(azureUrl, requestData, {
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json'
-      },
-      timeout: 60000
-    });
-
-    if (response.data && response.data.choices && response.data.choices[0]) {
-      return response.data.choices[0].message.content;
-    }
-
-    throw new Error('Azure AI响应格式异常');
   }
 
   /**

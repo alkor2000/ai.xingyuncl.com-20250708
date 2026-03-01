@@ -2,6 +2,7 @@
  * Agent工作流执行引擎
  * v2.1 - 修复output_data JSON格式问题
  * v2.2 - 支持条件分支执行（问题分类节点多输出）
+ * v2.3 - P0修复：积分预估按节点数量累加 + groupId/userRole传入context
  * 负责工作流的编排、执行、积分管理和错误处理
  * 支持节点间数据传递和上下游连接
  */
@@ -22,12 +23,14 @@ class ExecutorService {
   /**
    * 执行工作流
    * v2.2 - 支持条件分支执行
+   * v2.3 - 修复：接收并传递用户上下文(groupId, userRole)到context
    * @param {number} workflowId - 工作流ID
    * @param {number} userId - 用户ID
    * @param {Object} inputData - 输入数据
+   * @param {Object} options - 可选参数 { groupId, userRole }
    * @returns {Promise<Object>} 执行结果
    */
-  async executeWorkflow(workflowId, userId, inputData = {}) {
+  async executeWorkflow(workflowId, userId, inputData = {}, options = {}) {
     const startTime = Date.now();
     let executionId = null;
     let preDeductedCredits = 0;
@@ -80,6 +83,7 @@ class ExecutorService {
       this.validateWorkflowConnections(nodes, edges);
 
       // 6. 验证节点类型和预估积分
+      // v2.3 修复：按节点数量累加积分，而非按类型只算一次
       const { nodeTypeMap, estimatedCredits } = await this.validateAndEstimateCredits(nodes);
 
       logger.info('积分预估完成', { estimatedCredits });
@@ -126,10 +130,13 @@ class ExecutorService {
       });
 
       // 10. 执行节点（v2.2: 支持条件分支）
+      // v2.3 修复：将 groupId 和 userRole 加入 context，供知识库节点等使用
       const context = {
         input: inputData,
         variables: {},
         userId,
+        groupId: options.groupId || null,      // v2.3 新增：用户组ID
+        userRole: options.userRole || null,     // v2.3 新增：用户角色
         workflowId,
         executionId,
         // v2.2: 记录分支决策，用于条件执行
@@ -486,6 +493,8 @@ class ExecutorService {
 
   /**
    * 验证节点并估算积分消耗
+   * v2.3 修复：按每个节点累加积分，而非按节点类型只算一次
+   * 例如：工作流有2个LLM节点（每个10积分），应预估20积分而非10积分
    */
   async validateAndEstimateCredits(nodes) {
     const nodeTypeMap = new Map();
@@ -496,6 +505,7 @@ class ExecutorService {
         throw new Error(`未知节点类型: ${node.type}`);
       }
 
+      // 获取或缓存节点类型配置（只查一次数据库，缓存到Map）
       if (!nodeTypeMap.has(node.type)) {
         const nodeTypeConfig = await AgentNodeType.findByTypeKey(node.type);
         
@@ -508,16 +518,18 @@ class ExecutorService {
           };
           nodeTypeMap.set(node.type, defaultConfig);
           logger.warn('节点类型配置不存在，使用默认值', { type: node.type });
-          continue;
+        } else {
+          if (!nodeTypeConfig.is_active) {
+            throw new Error(`节点类型已禁用: ${node.type}`);
+          }
+          nodeTypeMap.set(node.type, nodeTypeConfig);
         }
-
-        if (!nodeTypeConfig.is_active) {
-          throw new Error(`节点类型已禁用: ${node.type}`);
-        }
-
-        nodeTypeMap.set(node.type, nodeTypeConfig);
-        estimatedCredits += nodeTypeConfig.credits_per_execution || 0;
       }
+
+      // v2.3 修复：每个节点都累加积分（移到if外面）
+      // 之前的bug：只在第一次遇到某类型时累加，导致同类型多节点漏算
+      const cachedConfig = nodeTypeMap.get(node.type);
+      estimatedCredits += cachedConfig?.credits_per_execution || 0;
     }
 
     return { nodeTypeMap, estimatedCredits };
