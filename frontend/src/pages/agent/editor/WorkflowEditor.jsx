@@ -5,6 +5,10 @@
  * v2.3 - 添加问题分类节点 ClassifierNode
  * v2.4 - 修复边的 sourceHandle/targetHandle 保存和加载问题
  * v2.5 - 支持从节点面板拖拽放置节点到画布
+ * v3.0 - UX大优化：
+ *   1. 节点库改为浮动弹窗（左上角+按钮）
+ *   2. 连线上显示X删除按钮（自定义边）
+ *   3. 增大连接点吸附范围（connectionRadius）
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
@@ -19,7 +23,9 @@ import ReactFlow, {
   addEdge,
   MarkerType,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  getBezierPath,
+  BaseEdge
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -37,7 +43,6 @@ import './styles/editor.css'
 
 /**
  * 注册自定义节点类型
- * v2.3 添加 classifier 问题分类节点
  */
 const nodeTypes = {
   start: StartNode,
@@ -59,8 +64,60 @@ const defaultLabels = {
 }
 
 /**
+ * v3.0 自定义可删除边组件
+ * 在连线中间显示X按钮，点击可直接删除连线
+ * 不需要再找右上角的删除按钮
+ */
+const DeletableEdge = ({ 
+  id, sourceX, sourceY, targetX, targetY, 
+  sourcePosition, targetPosition, style, markerEnd, selected,
+  data 
+}) => {
+  // 计算贝塞尔曲线路径
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition
+  })
+
+  // 删除边的处理函数（通过data.onDelete回调）
+  const handleDelete = useCallback((event) => {
+    event.stopPropagation()
+    if (data?.onDelete) {
+      data.onDelete(id)
+    }
+  }, [id, data])
+
+  return (
+    <>
+      {/* 绘制连线路径 */}
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      
+      {/* 连线中间的删除按钮（悬浮时显示） */}
+      <foreignObject
+        width={24}
+        height={24}
+        x={labelX - 12}
+        y={labelY - 12}
+        className="edge-delete-foreignobject"
+        requiredExtensions="http://www.w3.org/1999/xhtml"
+      >
+        <div className="edge-delete-btn" onClick={handleDelete} title="删除连线">
+          ×
+        </div>
+      </foreignObject>
+    </>
+  )
+}
+
+/**
+ * 注册自定义边类型
+ */
+const edgeTypes = {
+  deletable: DeletableEdge
+}
+
+/**
  * 工作流编辑器内部组件
- * 需要在 ReactFlowProvider 内部使用 useReactFlow hook
  */
 const WorkflowEditorInner = () => {
   const { id } = useParams()
@@ -69,7 +126,7 @@ const WorkflowEditorInner = () => {
   // 获取 ReactFlow 实例（用于坐标转换）
   const reactFlowInstance = useReactFlow()
   
-  // 画布容器引用（用于拖拽放置坐标计算）
+  // 画布容器引用
   const reactFlowWrapper = useRef(null)
   
   const {
@@ -90,7 +147,7 @@ const WorkflowEditorInner = () => {
   const [selectedNode, setSelectedNode] = useState(null)
   const [selectedEdge, setSelectedEdge] = useState(null)
   
-  // 是否有未保存的更改
+  // 未保存更改标记
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   
   // 测试抽屉状态
@@ -99,8 +156,22 @@ const WorkflowEditorInner = () => {
   // 配置面板抽屉状态
   const [configDrawerOpen, setConfigDrawerOpen] = useState(false)
   
+  // v3.0: 节点面板弹窗状态
+  const [nodePanelOpen, setNodePanelOpen] = useState(false)
+  
   // 保存中状态
   const [saving, setSaving] = useState(false)
+  
+  /**
+   * v3.0: 删除指定边的回调
+   * 传递给自定义DeletableEdge组件使用
+   */
+  const handleDeleteEdge = useCallback((edgeId) => {
+    setEdges((eds) => eds.filter(e => e.id !== edgeId))
+    setSelectedEdge(null)
+    setHasUnsavedChanges(true)
+    message.success('连线已删除')
+  }, [setEdges])
   
   /**
    * 加载工作流数据
@@ -110,7 +181,6 @@ const WorkflowEditorInner = () => {
       fetchWorkflowById(id)
       fetchNodeTypes()
     }
-    
     return () => {
       clearCurrentWorkflow()
     }
@@ -118,13 +188,11 @@ const WorkflowEditorInner = () => {
   
   /**
    * 初始化画布数据
-   * 从工作流数据中恢复节点和边
    */
   useEffect(() => {
     if (currentWorkflow?.flow_data) {
       const { nodes: flowNodes = [], edges: flowEdges = [] } = currentWorkflow.flow_data
       
-      // 转换节点数据格式
       const initialNodes = flowNodes.map(node => ({
         id: node.id,
         type: node.type,
@@ -135,41 +203,38 @@ const WorkflowEditorInner = () => {
         }
       }))
       
-      // v2.4 修复：转换边数据格式时保留 sourceHandle 和 targetHandle
+      // v3.0: 所有边使用自定义可删除边类型，注入onDelete回调
       const initialEdges = flowEdges.map(edge => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        // v2.4: 保留 sourceHandle 和 targetHandle（用于条件分支）
         sourceHandle: edge.sourceHandle || null,
         targetHandle: edge.targetHandle || null,
-        type: 'smoothstep',
+        type: 'deletable',
         animated: true,
-        markerEnd: {
-          type: MarkerType.ArrowClosed
-        }
+        markerEnd: { type: MarkerType.ArrowClosed },
+        data: { onDelete: handleDeleteEdge }
       }))
       
       setNodes(initialNodes)
       setEdges(initialEdges)
     }
-  }, [currentWorkflow])
+  }, [currentWorkflow, handleDeleteEdge])
   
   /**
    * 连接节点
-   * v2.4: 连接时自动包含 sourceHandle 和 targetHandle
+   * v3.0: 新连线也使用自定义可删除边
    */
   const onConnect = useCallback((params) => {
     setEdges((eds) => addEdge({
       ...params,
-      type: 'smoothstep',
+      type: 'deletable',
       animated: true,
-      markerEnd: {
-        type: MarkerType.ArrowClosed
-      }
+      markerEnd: { type: MarkerType.ArrowClosed },
+      data: { onDelete: handleDeleteEdge }
     }, eds))
     setHasUnsavedChanges(true)
-  }, [setEdges])
+  }, [setEdges, handleDeleteEdge])
   
   /**
    * 节点选中 - 打开配置抽屉
@@ -177,7 +242,6 @@ const WorkflowEditorInner = () => {
   const onNodeClick = useCallback((event, node) => {
     setSelectedNode(node)
     setSelectedEdge(null)
-    // 打开配置抽屉
     setConfigDrawerOpen(true)
   }, [])
   
@@ -187,7 +251,6 @@ const WorkflowEditorInner = () => {
   const onEdgeClick = useCallback((event, edge) => {
     setSelectedEdge(edge)
     setSelectedNode(null)
-    // 关闭配置抽屉（边没有配置）
     setConfigDrawerOpen(false)
   }, [])
   
@@ -197,8 +260,9 @@ const WorkflowEditorInner = () => {
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
     setSelectedEdge(null)
-    // 关闭配置抽屉
     setConfigDrawerOpen(false)
+    // 点击画布也关闭节点面板
+    setNodePanelOpen(false)
   }, [])
   
   /**
@@ -206,12 +270,10 @@ const WorkflowEditorInner = () => {
    */
   const onCloseConfigDrawer = useCallback(() => {
     setConfigDrawerOpen(false)
-    // 不取消节点选中，保持高亮状态
   }, [])
   
   /**
-   * v2.5: 处理拖拽经过事件
-   * 必须调用 preventDefault 才能允许放置
+   * 处理拖拽经过事件
    */
   const onDragOver = useCallback((event) => {
     event.preventDefault()
@@ -219,56 +281,42 @@ const WorkflowEditorInner = () => {
   }, [])
   
   /**
-   * v2.5: 处理拖拽放置事件
-   * 从 dataTransfer 获取节点类型，计算放置位置，添加节点
+   * 处理拖拽放置事件
    */
   const onDrop = useCallback((event) => {
     event.preventDefault()
     
-    // 获取拖拽的节点类型
     const nodeType = event.dataTransfer.getData('application/reactflow')
+    if (!nodeType) return
     
-    // 验证节点类型
-    if (!nodeType) {
-      return
-    }
-    
-    // 获取画布容器的边界
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect()
-    if (!reactFlowBounds) {
-      return
-    }
+    if (!reactFlowBounds) return
     
-    // 计算放置位置：将屏幕坐标转换为画布坐标
-    // screenToFlowPosition 会考虑画布的缩放和平移
     const position = reactFlowInstance.screenToFlowPosition({
       x: event.clientX - reactFlowBounds.left,
       y: event.clientY - reactFlowBounds.top
     })
     
-    // 创建新节点
     const newNode = {
       id: `${nodeType}-${Date.now()}`,
       type: nodeType,
-      position: position,
+      position,
       data: {
         label: defaultLabels[nodeType] || nodeType.toUpperCase(),
         config: {}
       }
     }
     
-    // 添加到画布
     setNodes((nds) => [...nds, newNode])
     setHasUnsavedChanges(true)
-    
-    // 提示用户
     message.success(`已添加 ${defaultLabels[nodeType] || nodeType} 节点`)
+    
+    // 添加节点后关闭节点面板
+    setNodePanelOpen(false)
   }, [reactFlowInstance, setNodes])
   
   /**
-   * 添加新节点（保留此方法用于其他方式添加节点）
-   * @param {string} nodeType - 节点类型
-   * @param {Object} position - 节点位置
+   * 添加新节点
    */
   const onAddNode = useCallback((nodeType, position) => {
     const newNode = {
@@ -308,28 +356,23 @@ const WorkflowEditorInner = () => {
   
   /**
    * 更新节点配置
-   * v2.2 修复：同时更新 label 和 config
    */
   const onUpdateNodeConfig = useCallback((nodeId, config) => {
     setNodes((nds) => 
       nds.map(node => {
         if (node.id !== nodeId) return node
-        
-        // 如果配置中有label，同时更新node.data.label
         const newLabel = config.label || node.data.label
-        
         return {
           ...node,
           data: {
             ...node.data,
-            label: newLabel,  // 同步更新显示的label
-            config: config    // 保存完整配置
+            label: newLabel,
+            config: config
           }
         }
       })
     )
     
-    // 同步更新selectedNode，使配置面板显示最新数据
     setSelectedNode(prev => {
       if (!prev || prev.id !== nodeId) return prev
       const newLabel = config.label || prev.data.label
@@ -348,7 +391,6 @@ const WorkflowEditorInner = () => {
   
   /**
    * 保存工作流
-   * v2.4 修复：保存时包含 sourceHandle 和 targetHandle
    */
   const onSave = useCallback(async () => {
     if (!currentWorkflow) return
@@ -362,7 +404,6 @@ const WorkflowEditorInner = () => {
           position: node.position,
           data: node.data
         })),
-        // v2.4: 保存边时包含 sourceHandle 和 targetHandle
         edges: edges.map(edge => ({
           id: edge.id,
           source: edge.source,
@@ -372,10 +413,7 @@ const WorkflowEditorInner = () => {
         }))
       }
       
-      await updateWorkflow(currentWorkflow.id, {
-        flow_data: flowData
-      })
-      
+      await updateWorkflow(currentWorkflow.id, { flow_data: flowData })
       setHasUnsavedChanges(false)
       message.success('工作流保存成功')
     } catch (error) {
@@ -409,7 +447,7 @@ const WorkflowEditorInner = () => {
     }
   }, [hasUnsavedChanges, navigate])
   
-  // 加载中状态
+  // 加载中
   if (currentWorkflowLoading) {
     return (
       <div className="workflow-editor-loading">
@@ -442,15 +480,18 @@ const WorkflowEditorInner = () => {
       />
       
       <div className="workflow-editor-body">
-        {/* 左侧节点面板 */}
+        {/* v3.0: 浮动节点面板（替代固定左侧面板） */}
         <NodePanel
           nodeTypes={availableNodeTypes}
           onAddNode={onAddNode}
+          open={nodePanelOpen}
+          onToggle={() => setNodePanelOpen(!nodePanelOpen)}
+          onClose={() => setNodePanelOpen(false)}
         />
         
-        {/* 中间画布 - v2.5: 添加拖拽放置支持 */}
+        {/* 画布 - 现在占满整个body区域 */}
         <div 
-          className="workflow-editor-canvas workflow-editor-canvas-full"
+          className="workflow-editor-canvas"
           ref={reactFlowWrapper}
           onDragOver={onDragOver}
           onDrop={onDrop}
@@ -465,39 +506,34 @@ const WorkflowEditorInner = () => {
             onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
-            fitViewOptions={{
-              padding: 0.3,
-              maxZoom: 0.8
-            }}
+            fitViewOptions={{ padding: 0.3, maxZoom: 0.8 }}
             minZoom={0.1}
             maxZoom={2}
             defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+            connectionRadius={40}
+            snapToGrid={true}
+            snapGrid={[16, 16]}
           >
             <Background color="#aaa" gap={16} />
             <Controls />
             <MiniMap
               nodeColor={(node) => {
                 switch (node.type) {
-                  case 'start':
-                    return '#52c41a'
-                  case 'llm':
-                    return '#1890ff'
-                  case 'end':
-                    return '#ff4d4f'
-                  case 'knowledge':
-                    return '#722ed1'
-                  case 'classifier':
-                    return '#faad14'
-                  default:
-                    return '#ccc'
+                  case 'start': return '#52c41a'
+                  case 'llm': return '#1890ff'
+                  case 'end': return '#ff4d4f'
+                  case 'knowledge': return '#722ed1'
+                  case 'classifier': return '#faad14'
+                  default: return '#ccc'
                 }
               }}
             />
           </ReactFlow>
         </div>
         
-        {/* 右侧配置面板 - Drawer抽屉 */}
+        {/* 右侧配置面板 - Drawer */}
         <Drawer
           title={selectedNode ? `${selectedNode.data?.label || selectedNode.type} 配置` : '节点配置'}
           placement="right"
@@ -533,7 +569,6 @@ const WorkflowEditorInner = () => {
 
 /**
  * 工作流编辑器主组件
- * 必须用 ReactFlowProvider 包裹才能使用 useReactFlow hook
  */
 const WorkflowEditor = () => {
   return (

@@ -1,7 +1,7 @@
 /**
  * 知识库节点 - 知识检索/直接加载
  * v2.0 - 支持显示已选Wiki和Token数量
- * 从知识库中加载内容作为上下文
+ * v3.0 - 视觉优化：颜色对比度增强，节点更大更清晰
  */
 
 import React from 'react'
@@ -39,25 +39,25 @@ const KnowledgeNode = ({ data, selected }) => {
   
   // 范围图标
   const scopeIcons = {
-    personal: <UserOutlined style={{ fontSize: '10px', color: '#007AFF' }} />,
-    team: <TeamOutlined style={{ fontSize: '10px', color: '#34C759' }} />,
-    global: <GlobalOutlined style={{ fontSize: '10px', color: '#FF9500' }} />
+    personal: <UserOutlined style={{ fontSize: '11px', color: '#1890ff' }} />,
+    team: <TeamOutlined style={{ fontSize: '11px', color: '#52c41a' }} />,
+    global: <GlobalOutlined style={{ fontSize: '11px', color: '#fa8c16' }} />
   }
   
   return (
     <div className={`custom-node knowledge-node enhanced ${selected ? 'selected' : ''}`}>
-      {/* 头部 */}
-      <div className="node-header" style={{ background: 'linear-gradient(135deg, #722ed1 0%, #9254de 100%)' }}>
+      {/* 头部 - 深紫色背景白色文字 */}
+      <div className="node-header">
         <DatabaseOutlined className="node-icon" />
         <span className="node-title">{data.label || '知识检索'}</span>
       </div>
       
       {/* 主体 */}
       <div className="node-body">
-        {/* 数据来源和模式 */}
+        {/* 配置信息 */}
         <div className="node-section">
           <div className="section-title">
-            <FileTextOutlined style={{ fontSize: '12px', marginRight: '4px' }} />
+            <FileTextOutlined style={{ fontSize: '13px', marginRight: '4px' }} />
             配置
           </div>
           <div className="param-list">
@@ -76,38 +76,41 @@ const KnowledgeNode = ({ data, selected }) => {
         {wikiIds.length > 0 ? (
           <div className="node-section">
             <div className="section-title">
-              <DatabaseOutlined style={{ fontSize: '12px', marginRight: '4px' }} />
+              <DatabaseOutlined style={{ fontSize: '13px', marginRight: '4px' }} />
               已选知识库 ({wikiIds.length}个)
             </div>
             <div style={{ marginTop: '6px' }}>
               {selectedWikis.length > 0 ? (
                 <>
-                  {selectedWikis.slice(0, 2).map((wiki, index) => (
+                  {selectedWikis.slice(0, 3).map((wiki, index) => (
                     <Tooltip key={wiki.id || index} title={`${wiki.title} - ${wiki.tokens_display || '?'} tokens`}>
                       <Tag 
                         color="purple" 
                         style={{ 
                           marginBottom: '4px', 
-                          fontSize: '11px',
-                          maxWidth: '120px',
+                          fontSize: '12px',
+                          maxWidth: '180px',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
                         }}
                       >
                         {scopeIcons[wiki.scope]}
-                        <span style={{ marginLeft: '4px' }}>{wiki.title}</span>
+                        <span>{wiki.title}</span>
                       </Tag>
                     </Tooltip>
                   ))}
-                  {selectedWikis.length > 2 && (
-                    <Tag color="default" style={{ fontSize: '11px' }}>
-                      +{selectedWikis.length - 2}
+                  {selectedWikis.length > 3 && (
+                    <Tag color="default" style={{ fontSize: '12px' }}>
+                      +{selectedWikis.length - 3}
                     </Tag>
                   )}
                 </>
               ) : (
-                <Tag color="default" style={{ fontSize: '11px' }}>
+                <Tag color="default" style={{ fontSize: '12px' }}>
                   {wikiIds.length} 个已选
                 </Tag>
               )}
@@ -115,7 +118,7 @@ const KnowledgeNode = ({ data, selected }) => {
           </div>
         ) : (
           <div className="node-section">
-            <div className="section-title" style={{ color: '#999' }}>
+            <div style={{ color: '#999', fontSize: '13px', padding: '4px 0' }}>
               未选择知识库
             </div>
           </div>
@@ -124,13 +127,10 @@ const KnowledgeNode = ({ data, selected }) => {
       
       {/* 底部 - Token统计 */}
       <div className="node-footer" style={{ 
-        background: totalTokens > 0 ? '#f6ffed' : '#f5f5f5',
-        borderTop: '1px solid #e8e8e8',
-        padding: '6px 10px',
-        borderRadius: '0 0 8px 8px'
+        background: totalTokens > 0 ? '#f6ffed' : '#fafafa'
       }}>
         {totalTokens > 0 ? (
-          <span style={{ color: '#52c41a', fontSize: '11px', fontWeight: 500 }}>
+          <span style={{ color: '#389e0d', fontSize: '12px', fontWeight: 500 }}>
             📊 总计 {formatTokens(totalTokens)} tokens
           </span>
         ) : (
@@ -138,22 +138,20 @@ const KnowledgeNode = ({ data, selected }) => {
         )}
       </div>
       
-      {/* 输入连接点 */}
+      {/* 连接点 */}
       <Handle
         type="target"
         position={Position.Left}
         id="input"
         className="custom-handle"
-        style={{ background: '#722ed1' }}
+        style={{ background: '#531dab' }}
       />
-      
-      {/* 输出连接点 */}
       <Handle
         type="source"
         position={Position.Right}
         id="output"
         className="custom-handle"
-        style={{ background: '#722ed1' }}
+        style={{ background: '#531dab' }}
       />
     </div>
   )

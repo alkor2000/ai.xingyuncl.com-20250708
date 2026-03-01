@@ -1,15 +1,18 @@
 /**
- * 节点面板 - 显示可用的节点类型
- * v2.1 - 扩展节点彩色显示，点击提示"请申请模块权限"
+ * 节点面板 - 浮动弹窗模式
+ * v2.1 - 扩展节点彩色显示
  * v2.2 - 添加问题分类节点
- * v2.3 - 改为拖拽添加节点（解决点击添加位置不可控问题）
- * 
- * 用户通过拖拽节点到画布来添加
+ * v2.3 - 改为拖拽添加节点
+ * v3.0 - UX优化：改为浮动弹窗，左上角+按钮触发
+ *   不再占用固定280px侧边栏，画布空间更大
+ *   弹窗可关闭，拖拽节点到画布后自动关闭
  */
 
 import React from 'react'
-import { Card, Space, Divider, message, Tooltip } from 'antd'
+import { Button, Space, Divider, message, Tooltip } from 'antd'
 import {
+  PlusOutlined,
+  CloseOutlined,
   PlayCircleOutlined,
   RobotOutlined,
   DatabaseOutlined,
@@ -31,13 +34,16 @@ import {
 
 /**
  * 节点面板组件
+ * v3.0: 新增 open/onToggle/onClose 属性，支持浮动弹窗模式
  * @param {Array} nodeTypes - 从数据库加载的自定义节点类型
- * @param {Function} onAddNode - 添加节点的回调函数（保留用于自定义节点）
+ * @param {Function} onAddNode - 添加节点的回调函数
+ * @param {boolean} open - 弹窗是否打开
+ * @param {Function} onToggle - 切换弹窗开关
+ * @param {Function} onClose - 关闭弹窗
  */
-const NodePanel = ({ nodeTypes, onAddNode }) => {
+const NodePanel = ({ nodeTypes, onAddNode, open, onToggle, onClose }) => {
   /**
    * 基础节点类型定义
-   * v2.2 添加了问题分类节点(classifier)
    */
   const builtInNodes = [
     {
@@ -75,371 +81,132 @@ const NodePanel = ({ nodeTypes, onAddNode }) => {
   ]
   
   /**
-   * 扩展节点定义
-   * 这些节点暂未开放，点击会提示申请权限
-   * 彩色显示增强视觉效果
+   * 扩展节点定义（暂未开放）
    */
   const extensionNodes = [
-    {
-      type: 'mcp',
-      label: 'MCP 服务',
-      icon: <ApiOutlined />,
-      color: '#13c2c2',
-      description: '连接外部MCP服务',
-      available: false
-    },
-    {
-      type: 'a2a',
-      label: 'A2A 调用',
-      icon: <TeamOutlined />,
-      color: '#eb2f96',
-      description: 'Agent间协作调用',
-      available: false
-    },
-    {
-      type: 'text2image',
-      label: '文生图',
-      icon: <PictureOutlined />,
-      color: '#fa8c16',
-      description: 'AI图像生成',
-      available: false
-    },
-    {
-      type: 'mysql',
-      label: 'MySQL',
-      icon: <CloudServerOutlined />,
-      color: '#1677ff',
-      description: '数据库查询',
-      available: false
-    },
-    {
-      type: 'http',
-      label: 'HTTP请求',
-      icon: <GlobalOutlined />,
-      color: '#52c41a',
-      description: '调用外部API',
-      available: false
-    },
-    {
-      type: 'code',
-      label: '代码执行',
-      icon: <CodeOutlined />,
-      color: '#2f54eb',
-      description: '运行Python/JS',
-      available: false
-    },
-    {
-      type: 'loop',
-      label: '循环遍历',
-      icon: <SyncOutlined />,
-      color: '#722ed1',
-      description: '批量处理数据',
-      available: false
-    },
-    {
-      type: 'timer',
-      label: '定时触发',
-      icon: <ClockCircleOutlined />,
-      color: '#8c8c8c',
-      description: '定时执行任务',
-      available: false
-    },
-    {
-      type: 'email',
-      label: '邮件发送',
-      icon: <MailOutlined />,
-      color: '#f5222d',
-      description: '发送通知邮件',
-      available: false
-    },
-    {
-      type: 'document',
-      label: '文档解析',
-      icon: <FileTextOutlined />,
-      color: '#13c2c2',
-      description: 'PDF/Word提取',
-      available: false
-    },
-    {
-      type: 'vector',
-      label: '向量检索',
-      icon: <SearchOutlined />,
-      color: '#9254de',
-      description: '语义相似搜索',
-      available: false
-    }
+    { type: 'mcp', label: 'MCP 服务', icon: <ApiOutlined />, color: '#13c2c2', description: '连接外部MCP服务', available: false },
+    { type: 'a2a', label: 'A2A 调用', icon: <TeamOutlined />, color: '#eb2f96', description: 'Agent间协作调用', available: false },
+    { type: 'text2image', label: '文生图', icon: <PictureOutlined />, color: '#fa8c16', description: 'AI图像生成', available: false },
+    { type: 'mysql', label: 'MySQL', icon: <CloudServerOutlined />, color: '#1677ff', description: '数据库查询', available: false },
+    { type: 'http', label: 'HTTP请求', icon: <GlobalOutlined />, color: '#52c41a', description: '调用外部API', available: false },
+    { type: 'code', label: '代码执行', icon: <CodeOutlined />, color: '#2f54eb', description: '运行Python/JS', available: false },
+    { type: 'loop', label: '循环遍历', icon: <SyncOutlined />, color: '#722ed1', description: '批量处理数据', available: false },
+    { type: 'timer', label: '定时触发', icon: <ClockCircleOutlined />, color: '#8c8c8c', description: '定时执行任务', available: false },
+    { type: 'email', label: '邮件发送', icon: <MailOutlined />, color: '#f5222d', description: '发送通知邮件', available: false },
+    { type: 'document', label: '文档解析', icon: <FileTextOutlined />, color: '#13c2c2', description: 'PDF/Word提取', available: false },
+    { type: 'vector', label: '向量检索', icon: <SearchOutlined />, color: '#9254de', description: '语义相似搜索', available: false }
   ]
   
   /**
    * 处理拖拽开始事件
-   * 将节点类型信息存入 dataTransfer，供 WorkflowEditor 的 onDrop 使用
-   * @param {DragEvent} event - 拖拽事件
-   * @param {Object} node - 节点配置对象
    */
   const handleDragStart = (event, node) => {
-    // 不可用的扩展节点不允许拖拽
     if (!node.available) {
       event.preventDefault()
-      message.warning({
-        content: '请申请模块权限',
-        icon: <LockOutlined style={{ color: '#faad14' }} />
-      })
+      message.warning({ content: '请申请模块权限', icon: <LockOutlined style={{ color: '#faad14' }} /> })
       return
     }
-    
-    // 设置拖拽数据：节点类型
     event.dataTransfer.setData('application/reactflow', node.type)
-    // 设置拖拽效果
     event.dataTransfer.effectAllowed = 'move'
   }
   
   /**
-   * 处理扩展节点点击（显示权限提示）
-   * @param {Object} node - 节点配置对象
+   * 渲染节点项（精简版，适配弹窗小空间）
    */
-  const handleExtensionClick = (node) => {
-    if (!node.available) {
-      message.warning({
-        content: '请申请模块权限',
-        icon: <LockOutlined style={{ color: '#faad14' }} />
-      })
-    }
-  }
-  
-  /**
-   * 渲染可拖拽的节点项
-   * @param {Object} node - 节点配置对象
-   * @returns {JSX.Element} 节点按钮元素
-   */
-  const renderNodeItem = (node) => {
-    // 样式配置：无论是否可用都使用彩色样式
-    const itemStyle = {
-      display: 'flex',
-      alignItems: 'center',
-      padding: '8px 12px',
-      border: `1px solid ${node.color}`,
-      borderRadius: '6px',
-      background: node.available ? '#fff' : `${node.color}08`,
-      cursor: node.available ? 'grab' : 'not-allowed',
-      transition: 'all 0.2s',
-      marginBottom: '8px'
-    }
-    
-    // 鼠标悬停样式（仅可用节点）
-    const hoverStyle = node.available ? {
-      boxShadow: `0 2px 8px ${node.color}40`
-    } : {}
-    
-    return (
-      <Tooltip 
-        key={node.type} 
-        title={!node.available ? '请申请模块权限' : '拖拽到画布添加'}
-        placement="right"
+  const renderNodeItem = (node) => (
+    <Tooltip 
+      key={node.type} 
+      title={!node.available ? '请申请模块权限' : '拖拽到画布添加'}
+      placement="right"
+    >
+      <div
+        className={`floating-node-item ${node.available ? 'available' : 'locked'}`}
+        style={{ '--node-color': node.color }}
+        draggable={node.available}
+        onDragStart={(e) => handleDragStart(e, node)}
+        onClick={() => !node.available && message.warning('请申请模块权限')}
       >
-        <div
-          style={itemStyle}
-          draggable={node.available}
-          onDragStart={(e) => handleDragStart(e, node)}
-          onClick={() => !node.available && handleExtensionClick(node)}
-          onMouseEnter={(e) => {
-            if (node.available) {
-              Object.assign(e.currentTarget.style, hoverStyle)
-              e.currentTarget.style.transform = 'translateX(2px)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'none'
-            e.currentTarget.style.transform = 'none'
-          }}
-        >
-          {/* 节点图标 */}
-          <div style={{ 
-            color: node.color, 
-            fontSize: '20px',
-            marginRight: '10px',
-            display: 'flex',
-            alignItems: 'center'
-          }}>
-            {node.icon}
-          </div>
-          
-          {/* 节点信息 */}
-          <div style={{ flex: 1 }}>
-            <div style={{ 
-              fontWeight: 'bold', 
-              color: node.color,
-              fontSize: '14px'
-            }}>
-              {node.label}
-            </div>
-            <div style={{ 
-              fontSize: '12px', 
-              color: '#999',
-              marginTop: '2px'
-            }}>
-              {node.description}
-            </div>
-          </div>
-          
-          {/* 状态图标：可用显示拖拽图标，不可用显示锁图标 */}
-          <div style={{ 
-            color: node.available ? '#bbb' : node.color,
-            fontSize: '14px',
-            opacity: 0.6
-          }}>
-            {node.available ? <DragOutlined /> : <LockOutlined />}
-          </div>
+        <div className="floating-node-icon" style={{ color: node.color }}>
+          {node.icon}
         </div>
-      </Tooltip>
-    )
-  }
-  
-  /**
-   * 渲染自定义节点（从数据库加载）
-   * @param {Object} node - 数据库节点配置
-   * @returns {JSX.Element} 节点元素
-   */
-  const renderCustomNodeItem = (node) => {
-    const itemStyle = {
-      display: 'flex',
-      alignItems: 'center',
-      padding: '8px 12px',
-      border: '1px solid #d9d9d9',
-      borderRadius: '6px',
-      background: '#fff',
-      cursor: 'grab',
-      transition: 'all 0.2s',
-      marginBottom: '8px'
-    }
-    
-    /**
-     * 处理自定义节点拖拽开始
-     */
-    const handleCustomDragStart = (event) => {
-      event.dataTransfer.setData('application/reactflow', node.type_key)
-      event.dataTransfer.effectAllowed = 'move'
-    }
-    
-    return (
-      <Tooltip 
-        key={node.type_key} 
-        title="拖拽到画布添加"
-        placement="right"
-      >
-        <div
-          style={itemStyle}
-          draggable
-          onDragStart={handleCustomDragStart}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'
-            e.currentTarget.style.transform = 'translateX(2px)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'none'
-            e.currentTarget.style.transform = 'none'
-          }}
-        >
-          <div style={{ 
-            color: '#1890ff', 
-            fontSize: '20px',
-            marginRight: '10px'
-          }}>
-            <DatabaseOutlined />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 'bold', color: '#333' }}>
-              {node.display_name}
-            </div>
-            {node.description && (
-              <div style={{ fontSize: '12px', color: '#999' }}>
-                {node.description}
-              </div>
-            )}
-          </div>
-          <div style={{ color: '#bbb', fontSize: '14px' }}>
-            <DragOutlined />
-          </div>
+        <div className="floating-node-info">
+          <div className="floating-node-label" style={{ color: node.color }}>{node.label}</div>
+          <div className="floating-node-desc">{node.description}</div>
         </div>
-      </Tooltip>
-    )
-  }
+        <div className="floating-node-action">
+          {node.available ? <DragOutlined /> : <LockOutlined style={{ color: node.color }} />}
+        </div>
+      </div>
+    </Tooltip>
+  )
   
   return (
-    <div className="workflow-editor-node-panel">
-      <Card
-        title="节点库"
-        size="small"
-        bodyStyle={{ padding: '12px' }}
-      >
-        {/* 基础节点区域 */}
-        <div className="node-panel-section">
-          <h4 style={{ 
-            margin: '0 0 8px 0', 
-            fontSize: '13px', 
-            color: '#666',
-            fontWeight: 'normal'
-          }}>
-            基础节点
-          </h4>
-          <Space direction="vertical" style={{ width: '100%' }} size={0}>
-            {builtInNodes.map(renderNodeItem)}
-          </Space>
-        </div>
-        
-        <Divider style={{ margin: '12px 0' }} />
-        
-        {/* 扩展节点区域（彩色显示，暂不可用） */}
-        <div className="node-panel-section">
-          <h4 style={{ 
-            margin: '0 0 8px 0', 
-            fontSize: '13px', 
-            color: '#666',
-            fontWeight: 'normal'
-          }}>
-            扩展节点
-          </h4>
-          <Space direction="vertical" style={{ width: '100%' }} size={0}>
-            {extensionNodes.map(renderNodeItem)}
-          </Space>
-        </div>
-        
-        {/* 从数据库加载的自定义节点类型 */}
-        {nodeTypes && nodeTypes.length > 0 && (
-          <>
-            <Divider style={{ margin: '12px 0' }} />
-            <div className="node-panel-section">
-              <h4 style={{ 
-                margin: '0 0 8px 0', 
-                fontSize: '13px', 
-                color: '#666',
-                fontWeight: 'normal'
-              }}>
-                自定义节点
-              </h4>
-              <Space direction="vertical" style={{ width: '100%' }} size={0}>
-                {nodeTypes.map(renderCustomNodeItem)}
-              </Space>
+    <>
+      {/* v3.0: 左上角浮动+按钮 */}
+      <div className="node-panel-trigger">
+        <Tooltip title={open ? '关闭节点库' : '添加节点'} placement="right">
+          <Button
+            type="primary"
+            shape="circle"
+            size="large"
+            icon={open ? <CloseOutlined /> : <PlusOutlined />}
+            onClick={onToggle}
+            className={`node-panel-trigger-btn ${open ? 'active' : ''}`}
+          />
+        </Tooltip>
+      </div>
+      
+      {/* v3.0: 浮动节点面板 */}
+      {open && (
+        <div className="floating-node-panel" onClick={(e) => e.stopPropagation()}>
+          {/* 面板头部 */}
+          <div className="floating-panel-header">
+            <span className="floating-panel-title">节点库</span>
+            <Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} />
+          </div>
+          
+          {/* 面板内容 - 可滚动 */}
+          <div className="floating-panel-body">
+            {/* 基础节点 */}
+            <div className="floating-panel-section">
+              <div className="floating-section-title">基础节点</div>
+              {builtInNodes.map(renderNodeItem)}
             </div>
-          </>
-        )}
-        
-        <Divider style={{ margin: '12px 0' }} />
-        
-        {/* 操作提示 */}
-        <div className="node-panel-tips">
-          <p style={{ 
-            fontSize: '12px', 
-            color: '#999', 
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <DragOutlined /> 拖拽节点到画布添加
-          </p>
+            
+            <Divider style={{ margin: '8px 0' }} />
+            
+            {/* 扩展节点 */}
+            <div className="floating-panel-section">
+              <div className="floating-section-title">扩展节点</div>
+              {extensionNodes.map(renderNodeItem)}
+            </div>
+            
+            {/* 自定义节点 */}
+            {nodeTypes && nodeTypes.length > 0 && (
+              <>
+                <Divider style={{ margin: '8px 0' }} />
+                <div className="floating-panel-section">
+                  <div className="floating-section-title">自定义节点</div>
+                  {nodeTypes.map(nt => renderNodeItem({
+                    type: nt.type_key,
+                    label: nt.display_name,
+                    icon: <DatabaseOutlined />,
+                    color: '#1890ff',
+                    description: nt.description || '',
+                    available: true
+                  }))}
+                </div>
+              </>
+            )}
+          </div>
+          
+          {/* 面板底部提示 */}
+          <div className="floating-panel-footer">
+            <DragOutlined /> 拖拽节点到画布
+          </div>
         </div>
-      </Card>
-    </div>
+      )}
+    </>
   )
 }
 

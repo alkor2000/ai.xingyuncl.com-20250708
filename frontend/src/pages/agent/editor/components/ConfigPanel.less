@@ -1,0 +1,208 @@
+/**
+ * 配置面板专用样式 v1.0
+ * 美化节点配置面板的表单、分隔线、信息卡片
+ */
+
+/* 空状态 */
+.cp-empty {
+  padding: 40px 16px;
+  text-align: center;
+}
+
+/* 面板内容区 */
+.cp-content {
+  padding: 0;
+}
+
+/* 保存按钮栏 */
+.cp-save-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
+}
+
+.cp-save-status {
+  font-size: 13px;
+}
+
+.cp-unsaved {
+  color: #faad14;
+  font-weight: 500;
+}
+
+.cp-saved {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+/* 分区标题 */
+.cp-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #262626;
+  padding: 12px 0 8px;
+  margin-top: 4px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 表单美化 */
+.cp-form {
+  /* 加大表单标签字体 */
+  .ant-form-item-label > label {
+    font-size: 14px !important;
+    font-weight: 500;
+    color: #333 !important;
+  }
+  
+  /* 加大输入框字体 */
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select-selection-item {
+    font-size: 14px !important;
+  }
+  
+  .ant-input-textarea textarea {
+    font-size: 14px !important;
+  }
+  
+  /* Select下拉 */
+  .ant-select {
+    font-size: 14px;
+  }
+  
+  /* 表单项间距 */
+  .ant-form-item {
+    margin-bottom: 18px;
+  }
+  
+  /* Slider轨道颜色 */
+  .ant-slider-track {
+    background: #1890ff;
+  }
+  
+  .ant-slider-handle {
+    border-color: #1890ff;
+  }
+}
+
+/* 知识库列表 */
+.cp-wiki-list {
+  margin-bottom: 16px;
+}
+
+.cp-wiki-list-header {
+  margin-bottom: 8px;
+}
+
+.cp-wiki-items {
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #fafafa;
+  
+  .ant-list-item-meta-title {
+    font-size: 13px !important;
+  }
+}
+
+/* 信息卡片 */
+.cp-info-card {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  
+  &.purple {
+    background: #f0e6ff;
+    color: #531dab;
+    border: 1px solid #d3adf7;
+  }
+  
+  &.amber {
+    background: #fff7e6;
+    color: #ad6800;
+    border: 1px solid #ffd591;
+  }
+  
+  &.blue {
+    background: #e6f7ff;
+    color: #096dd9;
+    border: 1px solid #91d5ff;
+  }
+}
+
+/* 分类列表 */
+.cp-category-list {
+  margin-bottom: 16px;
+}
+
+.cp-category-item {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  transition: border-color 0.2s;
+  
+  &:hover {
+    border-color: #d9d9d9;
+  }
+}
+
+.cp-category-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cp-category-desc {
+  font-size: 13px !important;
+}
+
+.cp-add-category-btn {
+  margin-top: 4px;
+  border-radius: 8px;
+  height: 38px;
+  font-size: 14px;
+}
+
+/* 节点信息卡片 */
+.cp-node-info {
+  margin-top: 20px;
+  padding: 12px 14px;
+  background: #fafafa;
+  border-radius: 8px;
+  border-left: 3px solid #1890ff;
+}
+
+.cp-node-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  
+  & + & {
+    margin-top: 6px;
+  }
+}
+
+.cp-node-info-label {
+  color: #8c8c8c;
+  font-weight: 500;
+}
+
+.cp-node-info-value {
+  color: #262626;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 12px;
+}
