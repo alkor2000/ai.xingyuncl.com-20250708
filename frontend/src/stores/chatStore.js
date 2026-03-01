@@ -720,13 +720,21 @@ const useChatStore = create((set, get) => ({
               set({ streamingTimeout: null })
             }
             
-            // 🔥 提取用户友好的错误信息
+            // v2.2 修复：提取完整错误信息（中文提示 + 原始API报错）
             let errorMessage = '请求失败，请稍后重试'
             if (error && error.message) {
               errorMessage = error.message
             }
+            // 拼接原始API返回的技术细节（如果有）
+            let fullErrorMessage = errorMessage
+            if (error && error.details) {
+              fullErrorMessage = errorMessage + '\n[详情] ' + error.details
+            }
+            if (error && error.code) {
+              fullErrorMessage = fullErrorMessage + ' (HTTP ' + error.code + ')'
+            }
             
-            // 🔥 显示错误提示（Toast）
+            // 🔥 显示错误提示（Toast）- 只显示简短的中文提示
             message.error(errorMessage)
             
             const currentState = get()
@@ -741,12 +749,12 @@ const useChatStore = create((set, get) => ({
                   if (msg.id === tempUserMessageId) {
                     return { ...msg, temp: false }
                   }
-                  // 将AI消息标记为失败，显示错误信息
+                  // 将AI消息标记为失败，显示完整错误信息（含原始API报错）
                   if (msg.id === effectiveAiMessageId || msg.id === tempAiMessageId) {
                     return {
                       ...msg,
                       id: effectiveAiMessageId,
-                      content: `⚠️ ${errorMessage}`,
+                      content: fullErrorMessage,  // v2.2 使用包含原始details的完整错误信息
                       streaming: false,
                       temp: false,
                       error: true,  // 标记为错误消息
@@ -790,16 +798,23 @@ const useChatStore = create((set, get) => ({
         clearTimeout(currentState.streamingTimeout)
       }
       
-      // 🔥 修复：提取错误信息并显示
+      // v2.2 修复：提取完整错误信息并显示
       let errorMessage = '消息发送失败，请稍后重试'
       if (error && error.message) {
         errorMessage = error.message
+      }
+      let fullErrorMsg = errorMessage
+      if (error && error.details) {
+        fullErrorMsg = errorMessage + '\n[详情] ' + error.details
+      }
+      if (error && error.code) {
+        fullErrorMsg = fullErrorMsg + ' (HTTP ' + error.code + ')'
       }
       
       // 显示错误提示
       message.error(errorMessage)
       
-      // 🔥 修复：保留用户消息，显示错误信息在AI消息位置
+      // v2.2 修复：保留用户消息，显示完整错误信息在AI消息位置
       set(state => ({
         messages: state.messages.map(msg => {
           if (msg.id === tempUserMessageId) {
@@ -808,7 +823,7 @@ const useChatStore = create((set, get) => ({
           if (msg.id === tempAiMessageId) {
             return {
               ...msg,
-              content: `⚠️ ${errorMessage}`,
+              content: fullErrorMsg,  // v2.2 使用包含原始details的完整错误信息
               streaming: false,
               temp: false,
               error: true,

@@ -357,7 +357,9 @@ class AIStreamService {
       
       if (!res.writableEnded) {
         AIStreamService.sendSSE(res, 'error', { 
-          error: errorInfo.userMessage 
+          error: errorInfo.userMessage,
+          details: errorInfo.technicalDetails || '',
+          code: errorInfo.statusCode || ''
         });
         res.end();
       }
@@ -656,6 +658,7 @@ class AIStreamService {
           if (!res.writableEnded) {
             AIStreamService.sendSSE(res, 'error', { 
               error: errorInfo.userMessage,
+              details: errorInfo.technicalDetails || '',
               code: errorInfo.statusCode
             });
             res.end();
@@ -925,6 +928,7 @@ class AIStreamService {
           if (!res.writableEnded) {
             AIStreamService.sendSSE(res, 'error', { 
               error: errorInfo.userMessage,
+              details: errorInfo.technicalDetails || '',
               code: errorInfo.statusCode
             });
             res.end();

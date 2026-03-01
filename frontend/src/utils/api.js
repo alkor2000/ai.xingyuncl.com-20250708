@@ -502,7 +502,13 @@ apiClient.postStream = async (url, data, options = {}) => {
                 case 'error':
                   console.error('流式错误:', jsonData)
                   hasEnded = true  // v2.1 标记已结束，防止兜底onComplete再触发
-                  if (onError) onError(new Error(jsonData.error || '未知错误'))
+                  // v2.2 修复：携带完整错误信息（中文提示+原始API报错+状态码）
+                  if (onError) {
+                    const err = new Error(jsonData.error || '未知错误')
+                    err.details = jsonData.details || ''  // 原始API返回内容
+                    err.code = jsonData.code || ''        // HTTP状态码
+                    onError(err)
+                  }
                   return // v2.1 error后直接结束，不再继续处理
                   
                 default:
