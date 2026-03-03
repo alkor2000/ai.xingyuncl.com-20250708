@@ -17,6 +17,11 @@
  *   - 新增上下文Token数量显示：在工具栏显示当前对话携带的上下文Token总量
  *   - 接收 contextTokens prop，格式化为 K 单位显示
  *   - 包含系统提示词 + 万智魔方 + 历史消息 + 图片/文档估算
+ * 
+ * v3.0 变更：
+ *   - 新增HTML画布开关按钮：在工具栏显示画布开关
+ *   - 接收 canvasEnabled / hasHtmlContent / onToggleCanvas props
+ *   - 开关仅在PC端显示，移动端隐藏
  */
 
 import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
@@ -38,7 +43,8 @@ import {
   CloseOutlined,
   DownloadOutlined,
   ClearOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  CodeOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
@@ -66,6 +72,9 @@ const ChatInputArea = forwardRef(({
   currentModel,
   availableModels,
   contextTokens,                // v2.2: 上下文Token数量
+  canvasEnabled,                // v3.0: 画布开关状态
+  hasHtmlContent,               // v3.0: 当前对话是否有HTML内容
+  onToggleCanvas,               // v3.0: 切换画布开关回调
   onInputChange,
   onSend,
   onStop,
@@ -421,6 +430,26 @@ const ChatInputArea = forwardRef(({
 
         <div className="right-tools">
           <Space size={4}>
+            {/* v3.0: HTML画布开关按钮 - 仅PC端显示 */}
+            {!isMobile && onToggleCanvas && (
+              <Tooltip title={
+                canvasEnabled
+                  ? (t('chat.canvas.disable') || '关闭HTML画布')
+                  : (t('chat.canvas.enable') || '开启HTML画布')
+              }>
+                <Button
+                  type="text"
+                  icon={<CodeOutlined />}
+                  onClick={onToggleCanvas}
+                  className={`mobile-action-btn canvas-toggle-btn ${canvasEnabled ? 'canvas-active' : ''}`}
+                  style={{
+                    color: canvasEnabled ? '#1890ff' : undefined,
+                    background: canvasEnabled ? 'rgba(24, 144, 255, 0.08)' : undefined,
+                    borderRadius: '6px'
+                  }}
+                />
+              </Tooltip>
+            )}
             <Tooltip title={isMobile ? '' : t('chat.export')}>
               <Button
                 type="text"

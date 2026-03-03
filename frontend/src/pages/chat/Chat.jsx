@@ -14,6 +14,18 @@
  *   - 通过 contextTokens prop 传递给 ChatInputArea 显示
  *   - 每次消息变化、对话切换时重新计算
  * 
+ * v3.0 变更：
+ *   - 新增HTML画布面板：对话中AI回复含HTML代码块时，右侧自动渲染预览
+ *   - PC端左右双栏布局（对话区 + 画布区），画布开关默认开启
+ *   - 画布开关状态保存到 localStorage
+ *   - 支持全屏预览和返回
+ *   - 移动端不显示画布（仅PC端可用）
+ * 
+ * v3.1 修复：
+ *   - 画布关闭按钮(X)只隐藏当前画布，不关闭canvasEnabled开关
+ *   - 新增canvasDismissed状态，切换对话时自动重置
+ *   - 工具栏的画布开关按钮才真正控制canvasEnabled
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -37,7 +49,8 @@ import { calculateTokens } from '../../utils/tokenCalculator'
 
 import {
   ConversationSidebar, ChatInputArea,
-  ConversationSettingsDrawer, ConversationFormModal, EmptyConversation
+  ConversationSettingsDrawer, ConversationFormModal, EmptyConversation,
+  HtmlCanvasPanel
 } from '../../components/chat/new'
 
 import './Chat.less'
@@ -57,6 +70,8 @@ const { Sider, Content } = Layout
 const TOKENS_PER_IMAGE = 85
 /** 文档的默认Token估算（如果没有extracted_content） */
 const TOKENS_PER_DOCUMENT_DEFAULT = 500
+/** localStorage 中画布开关的键名 */
+const CANVAS_ENABLED_KEY = 'chat_html_canvas_enabled'
 
 // ================================================================
 // 自定义Hooks
@@ -93,6 +108,25 @@ const useViewportHeight = () => {
   return viewportHeight
 }
 
+/**
+ * v3.0: 检测消息列表中是否包含已完成的HTML代码块
+ * 用于决定是否显示右侧画布面板
+ * 
+ * @param {Array} messages - 消息列表
+ * @returns {boolean} - 是否有HTML代码块
+ */
+const useHasHtmlContent = (messages) => {
+  return useMemo(() => {
+    if (!messages || messages.length === 0) return false
+    // 只检查AI助手消息中是否有完整的 ```html ... ``` 代码块
+    return messages.some(msg => {
+      if (msg.role !== 'assistant' || !msg.content) return false
+      // 匹配已闭合的HTML代码块
+      return /```(?:html|HTML)\s*\n[\s\S]*?```/.test(msg.content)
+    })
+  }, [messages])
+}
+
 // ================================================================
 // 主组件
 // ================================================================
@@ -127,6 +161,21 @@ const Chat = () => {
   const [isSending, setIsSending] = useState(false)
   const [editingConversation, setEditingConversation] = useState(null)
 
+  // v3.0: HTML画布状态
+  // 画布功能开关（全局偏好，默认开启，从localStorage读取）
+  const [canvasEnabled, setCanvasEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CANVAS_ENABLED_KEY)
+      return saved !== null ? saved === 'true' : true
+    } catch {
+      return true
+    }
+  })
+
+  // v3.1: 画布临时关闭状态（用户点了X关闭按钮，只在当前对话有效）
+  // 切换对话时自动重置为false，这样新对话的画布还会自动出现
+  const [canvasDismissed, setCanvasDismissed] = useState(false)
+
   // 移动端专用状态
   const [mobileView, setMobileView] = useState('list')
   const [mobileDrawerVisible, setMobileDrawerVisible] = useState(false)
@@ -140,6 +189,41 @@ const Chat = () => {
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
+
+  // v3.0: 检测当前对话消息中是否有HTML内容
+  const hasHtmlContent = useHasHtmlContent(messages)
+  // v3.1: 画布是否实际显示：功能开关开启 + 未被临时关闭 + 有HTML内容 + 不是移动端
+  const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
+
+  // ================================================================
+  // v3.0/v3.1: 画布开关和关闭处理
+  // ================================================================
+
+  /** 切换画布开关（工具栏按钮），保存到localStorage */
+  const handleToggleCanvas = useCallback(() => {
+    setCanvasEnabled(prev => {
+      const newValue = !prev
+      try {
+        localStorage.setItem(CANVAS_ENABLED_KEY, String(newValue))
+      } catch {
+        // localStorage不可用时静默忽略
+      }
+      // 如果重新开启画布，清除临时关闭状态
+      if (newValue) {
+        setCanvasDismissed(false)
+      }
+      return newValue
+    })
+  }, [])
+
+  /**
+   * v3.1: 关闭画布（画布面板的X按钮触发）
+   * 只临时隐藏当前对话的画布，不改变canvasEnabled全局开关
+   * 切换对话后画布会自动恢复显示
+   */
+  const handleDismissCanvas = useCallback(() => {
+    setCanvasDismissed(true)
+  }, [])
 
   // ================================================================
   // 初始化和副作用
@@ -162,11 +246,13 @@ const Chat = () => {
     }
   }, [currentConversationId, isMobile])
 
-  // 切换对话时清空输入和重置滚动
+  // 切换对话时清空输入、重置滚动、重置画布临时关闭状态
   useEffect(() => {
     setInputValue('')
     setUserScrolled(false)
     setLastScrollTop(0)
+    // v3.1: 切换对话时重置画布临时关闭状态，让新对话的画布自动出现
+    setCanvasDismissed(false)
   }, [currentConversationId])
 
   // 完成输入后聚焦
@@ -221,27 +307,18 @@ const Chat = () => {
   // v2.2: 上下文Token计算
   // ================================================================
 
-  /**
-   * 计算当前对话的上下文Token总量
-   * 包含：系统提示词 + 万智魔方 + 历史消息上下文 + 图片/文档估算
-   * 
-   * 使用 useMemo 缓存计算结果，依赖项变化时重新计算
-   */
   const contextTokens = useMemo(() => {
-    // 没有当前对话时返回0
     if (!currentConversation) return 0
 
     let totalTokens = 0
 
     // ---- 1. 系统提示词 Token ----
-    // 优先检查 system_prompt_id（引用的系统提示词）
     if (currentConversation.system_prompt_id && systemPrompts.length > 0) {
       const matchedPrompt = systemPrompts.find(p => p.id === currentConversation.system_prompt_id)
       if (matchedPrompt && matchedPrompt.token_count) {
         totalTokens += matchedPrompt.token_count
       }
     }
-    // 自定义系统提示词文本（如果有）
     if (currentConversation.system_prompt) {
       totalTokens += calculateTokens(currentConversation.system_prompt)
     }
@@ -257,26 +334,20 @@ const Chat = () => {
     }
 
     // ---- 3. 历史消息上下文 Token ----
-    // 根据 context_length 设置，取最近N条消息
     if (messages && messages.length > 0) {
       const contextLength = currentConversation.context_length || 20
-      // 取最近的 contextLength 条消息（与后端 getRecentMessages 逻辑一致）
       const recentMessages = messages.slice(-contextLength)
 
       for (const msg of recentMessages) {
-        // 消息文本Token
         if (msg.content) {
           totalTokens += calculateTokens(msg.content)
         }
 
-        // 消息附带的图片Token估算
         const files = msg.files || (msg.file ? [msg.file] : [])
         for (const file of files) {
           if (file.mime_type && file.mime_type.startsWith('image/')) {
-            // 图片：按固定值估算（vision模型每张约85 token）
             totalTokens += TOKENS_PER_IMAGE
           } else {
-            // 文档：如果有提取内容按内容计算，否则用默认值
             if (file.extracted_content) {
               totalTokens += calculateTokens(file.extracted_content)
             } else {
@@ -406,13 +477,10 @@ const Chat = () => {
     if (!currentConversation) { message.warning(t('chat.selectConversation')); return }
 
     const messageContent = inputValue.trim()
-    // v2.0: 收集所有文件信息
     const currentImages = [...uploadedImages]
     const currentDocument = uploadedDocument
 
-    // 构建 fileInfo 用于 chatStore（向后兼容：取第一个文件用于临时消息显示）
     const fileInfo = currentImages.length > 0 ? currentImages[0] : (currentDocument || null)
-    // v2.0: 文件ID数组
     const fileIds = currentImages.length > 0
       ? currentImages.map(img => img.id)
       : (currentDocument ? [currentDocument.id] : [])
@@ -424,13 +492,11 @@ const Chat = () => {
     setUploadedDocument(null)
 
     try {
-      // v2.0: 传递 fileIds 数组给 sendMessage
       await sendMessage(messageContent, fileInfo, fileIds)
       if (!isMobile) setTimeout(() => inputRef.current?.focus(), 100)
     } catch (error) {
       console.error('Send message error:', error)
       message.error(error.message || t('chat.send.failed'))
-      // 恢复输入状态
       setInputValue(messageContent)
       if (currentImages.length > 0) setUploadedImages(currentImages)
       if (currentDocument) setUploadedDocument(currentDocument)
@@ -456,17 +522,12 @@ const Chat = () => {
   // v2.0: 多图上传处理
   // ================================================================
 
-  /**
-   * 处理图片上传 - v2.0: 接收文件数组，批量上传后追加到 uploadedImages
-   * @param {File[]} files - 要上传的文件数组（来自Upload组件或Ctrl+V粘贴）
-   */
   const handleImageUpload = async (files) => {
     if (!files || files.length === 0) return
 
     setUploading(true)
     const formData = new FormData()
 
-    // v2.0: 将所有文件以相同字段名 'image' 添加（multer array 模式）
     for (const file of files) {
       formData.append('image', file)
     }
@@ -476,13 +537,11 @@ const Chat = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
-      // v2.0: 后端返回文件数组
       if (response.data?.success && response.data?.data) {
         const newFiles = Array.isArray(response.data.data) ? response.data.data : [response.data.data]
 
         setUploadedImages(prev => {
           const combined = [...prev, ...newFiles]
-          // 确保不超过5张
           return combined.slice(0, 5)
         })
 
@@ -505,16 +564,12 @@ const Chat = () => {
     }
   }
 
-  /**
-   * v2.0: 删除指定位置的已上传图片
-   * @param {number} index - 要删除的图片索引
-   */
   const handleRemoveImage = (index) => {
     setUploadedImages(prev => prev.filter((_, i) => i !== index))
   }
 
   // ================================================================
-  // 文档上传（保持不变）
+  // 文档上传
   // ================================================================
 
   const handleDocumentUpload = async (file) => {
@@ -568,7 +623,6 @@ const Chat = () => {
         const role = msg.role === 'user' ? '【用户】' : '【AI助手】'
         const time = formatDateTime(msg.created_at)
         content += `${role} ${time}\n`
-        // v2.0: 支持多文件导出
         if (msg.files && msg.files.length > 0) {
           msg.files.forEach(f => {
             const fileType = f.mime_type?.startsWith('image/') ? '图片' : '文档'
@@ -618,29 +672,32 @@ const Chat = () => {
   const availableModels = aiModels.filter(m => m.is_active)
 
   // ================================================================
-  // 构建 ChatInputArea 通用 props（PC和移动端共用）
-  // v2.2: 新增 contextTokens prop
+  // 构建 ChatInputArea 通用 props
+  // v3.0: 新增 canvasEnabled / hasHtmlContent / onToggleCanvas props
   // ================================================================
 
   const inputAreaProps = {
     ref: inputRef,
     inputValue,
-    uploadedImages,                                              // v2.0: 图片数组
+    uploadedImages,
     uploadedDocument,
     uploading, typing, isStreaming,
     imageUploadEnabled: currentModel?.image_upload_enabled,
     documentUploadEnabled: currentModel?.document_upload_enabled,
     hasMessages: messages && messages.length > 0,
     currentModel, availableModels,
-    contextTokens,                                               // v2.2: 上下文Token数量
+    contextTokens,
+    canvasEnabled,
+    hasHtmlContent,
+    onToggleCanvas: handleToggleCanvas,
     disabled: !currentConversation || isSending,
     onInputChange: handleInputChange,
     onKeyPress: handleKeyPress,
     onSend: handleSendMessage,
     onStop: handleStopStreaming,
-    onImageUpload: handleImageUpload,                            // v2.0: 接收文件数组
+    onImageUpload: handleImageUpload,
     onDocumentUpload: handleDocumentUpload,
-    onRemoveImage: handleRemoveImage,                            // v2.0: 接收index
+    onRemoveImage: handleRemoveImage,
     onRemoveDocument: () => setUploadedDocument(null),
     onExportChat: handleExportChat,
     onClearChat: handleClearChat,
@@ -748,7 +805,7 @@ const Chat = () => {
   }
 
   // ================================================================
-  // PC端布局
+  // PC端布局 - v3.0: 支持左右双栏（对话区 + HTML画布）
   // ================================================================
 
   return (
@@ -768,28 +825,46 @@ const Chat = () => {
         </div>
       </Sider>
 
+      {/* v3.0: 主区域改为水平双栏布局 */}
       <Layout className="chat-main">
-        <Content className="chat-content">
-          {initialLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '16px' }}>
-              <Spin size="large" tip={t('status.loading')} />
-              <div style={{ color: '#666', fontSize: '14px' }}>{t('chat.loadingConversations') || '正在加载对话列表...'}</div>
+        <div className={`chat-main-split ${showCanvas ? 'with-canvas' : ''}`}>
+          {/* 左侧：对话区域 */}
+          <div className="chat-conversation-area">
+            <Content className="chat-content">
+              {initialLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '16px' }}>
+                  <Spin size="large" tip={t('status.loading')} />
+                  <div style={{ color: '#666', fontSize: '14px' }}>{t('chat.loadingConversations') || '正在加载对话列表...'}</div>
+                </div>
+              ) : !currentConversation ? (
+                <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
+              ) : (
+                <>
+                  <div className="messages-container" ref={messagesContainerRef}>
+                    <MessageList messages={messages} loading={messagesLoading} typing={typing}
+                      isStreaming={isStreaming} currentModel={currentModel} aiModels={aiModels}
+                      user={user} streamingMessageId={streamingMessageId}
+                      messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage} />
+                    <div ref={messagesEndRef} />
+                  </div>
+                  <ChatInputArea {...inputAreaProps} />
+                </>
+              )}
+            </Content>
+          </div>
+
+          {/* v3.0/v3.1: 右侧：HTML画布面板，onClose改为handleDismissCanvas */}
+          {showCanvas && (
+            <div className="chat-canvas-area">
+              <HtmlCanvasPanel
+                messages={messages}
+                isStreaming={isStreaming}
+                visible={showCanvas}
+                onClose={handleDismissCanvas}
+              />
             </div>
-          ) : !currentConversation ? (
-            <EmptyConversation onCreateConversation={handleQuickCreateConversation} />
-          ) : (
-            <>
-              <div className="messages-container" ref={messagesContainerRef}>
-                <MessageList messages={messages} loading={messagesLoading} typing={typing}
-                  isStreaming={isStreaming} currentModel={currentModel} aiModels={aiModels}
-                  user={user} streamingMessageId={streamingMessageId}
-                  messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage} />
-                <div ref={messagesEndRef} />
-              </div>
-              <ChatInputArea {...inputAreaProps} />
-            </>
           )}
-        </Content>
+        </div>
       </Layout>
 
       <ConversationSettingsDrawer visible={showSettings} conversation={editingConversation}

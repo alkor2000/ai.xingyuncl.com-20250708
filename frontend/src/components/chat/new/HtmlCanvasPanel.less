@@ -1,0 +1,227 @@
+/**
+ * HTML画布面板样式
+ * 
+ * v1.1 修复：
+ *   - 全屏按钮改为醒目primary样式
+ *   - 关闭按钮去掉Tooltip避免抖动
+ *   - 去掉标题文字节省空间
+ * 
+ * 布局：
+ *   - 作为对话页面右侧面板
+ *   - 支持全屏模式覆盖整个视口
+ *   - 设备预览模式切换（桌面/平板/手机）
+ */
+
+// ================================================================
+// 画布面板主容器
+// ================================================================
+.html-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #e8e8e8;
+  position: relative;
+  overflow: hidden;
+
+  // ---- 全屏模式 ----
+  &.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1200;
+    border-left: none;
+    animation: canvasFullscreenIn 0.25s ease-out;
+  }
+
+  // ---- 工具栏 ----
+  .canvas-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+    min-height: 42px;
+    gap: 8px;
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+
+      // v1.1: 全屏按钮 - 醒目样式
+      .fullscreen-btn {
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 6px;
+        height: 30px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+
+        .anticon {
+          font-size: 14px;
+        }
+      }
+
+      .block-switcher {
+        display: flex;
+        align-items: center;
+
+        .ant-btn {
+          padding: 2px 6px;
+          height: 24px;
+          width: 24px;
+          min-width: unset;
+
+          .anticon {
+            font-size: 11px;
+          }
+        }
+      }
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+
+      .toolbar-divider {
+        width: 1px;
+        height: 16px;
+        background: #e0e0e0;
+        margin: 0 4px;
+      }
+
+      .ant-btn {
+        padding: 4px 6px;
+        height: 28px;
+        
+        &:hover {
+          background: rgba(0, 0, 0, 0.06);
+        }
+
+        .anticon {
+          font-size: 14px;
+        }
+      }
+
+      // v1.1: 关闭按钮样式
+      .close-btn {
+        margin-left: 2px;
+        color: #999;
+
+        &:hover {
+          color: #ff4d4f;
+          background: rgba(255, 77, 79, 0.08);
+        }
+      }
+    }
+  }
+
+  // ---- 内容区域 ----
+  .canvas-content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    background: #f5f5f5;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+
+    .iframe-wrapper {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transition: max-width 0.3s ease;
+      background: #ffffff;
+
+      // 非桌面模式时添加设备框效果
+      &.device-tablet,
+      &.device-mobile {
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+        margin: 16px auto;
+        height: calc(100% - 32px);
+        overflow: hidden;
+      }
+
+      .streaming-hint {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 4px 12px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 10;
+        white-space: nowrap;
+      }
+
+      .preview-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: #ffffff;
+        display: block;
+      }
+    }
+  }
+}
+
+// ================================================================
+// 动画
+// ================================================================
+@keyframes canvasFullscreenIn {
+  from {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// ================================================================
+// 响应式 - 移动端画布不可见（仅PC端使用）
+// ================================================================
+@media (max-width: 768px) {
+  .html-canvas-panel {
+    display: none !important;
+  }
+}
+
+// ================================================================
+// 深色模式支持
+// ================================================================
+@media (prefers-color-scheme: dark) {
+  .html-canvas-panel {
+    background: var(--component-bg, #1f1f1f);
+    border-left-color: var(--border-color, #333);
+
+    .canvas-toolbar {
+      background: var(--component-bg, #1f1f1f);
+      border-bottom-color: var(--border-color, #333);
+    }
+
+    .canvas-content {
+      background: var(--body-bg, #141414);
+
+      .iframe-wrapper {
+        background: #ffffff; // iframe内容始终白色背景
+      }
+    }
+  }
+}

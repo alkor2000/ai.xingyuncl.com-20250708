@@ -1,5 +1,6 @@
 /**
  * 聊天组件导出
+ * v3.0: 新增 HtmlCanvasPanel 组件导出
  */
 
 export { default as ConversationSidebar } from './ConversationSidebar'
@@ -10,3 +11,4 @@ export { default as ConversationSettingsDrawer } from './ConversationSettingsDra
 export { default as ConversationFormModal } from './ConversationFormModal'
 export { default as EmptyConversation } from './EmptyConversation'
 export { default as ModelSelector } from './ModelSelector'
+export { default as HtmlCanvasPanel } from './HtmlCanvasPanel'
