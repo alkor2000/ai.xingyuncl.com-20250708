@@ -12,6 +12,11 @@
  *   - 输入框高度增大：PC端maxRows从6增至16，移动端从4增至8
  *   - 输入框字体跟随系统设置：从systemConfigStore读取font_family和font_size
  *   - 整体视觉优化：输入区域样式改进
+ * 
+ * v2.2 变更：
+ *   - 新增上下文Token数量显示：在工具栏显示当前对话携带的上下文Token总量
+ *   - 接收 contextTokens prop，格式化为 K 单位显示
+ *   - 包含系统提示词 + 万智魔方 + 历史消息 + 图片/文档估算
  */
 
 import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
@@ -32,11 +37,13 @@ import {
   FileTextOutlined,
   CloseOutlined,
   DownloadOutlined,
-  ClearOutlined
+  ClearOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
+import { formatTokenCount } from '../../../utils/tokenCalculator'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -58,6 +65,7 @@ const ChatInputArea = forwardRef(({
   hasMessages,
   currentModel,
   availableModels,
+  contextTokens,                // v2.2: 上下文Token数量
   onInputChange,
   onSend,
   onStop,
@@ -230,6 +238,23 @@ const ChatInputArea = forwardRef(({
     return style
   }
 
+  // v2.2: 获取上下文Token的显示颜色（根据数量级变色）
+  const getTokenColor = (tokens) => {
+    if (!tokens || tokens === 0) return '#bfbfbf'     // 灰色 - 无上下文
+    if (tokens < 2000) return '#8c8c8c'               // 深灰 - 较少
+    if (tokens < 10000) return '#1890ff'               // 蓝色 - 正常
+    if (tokens < 50000) return '#faad14'               // 橙色 - 较多
+    return '#ff4d4f'                                    // 红色 - 很多
+  }
+
+  // v2.2: 构建上下文Token的Tooltip详情
+  const getTokenTooltip = () => {
+    if (!contextTokens || contextTokens === 0) {
+      return t('chat.context.noContext') || '当前无额外上下文'
+    }
+    return `${t('chat.context.totalTokens') || '上下文约'} ${contextTokens.toLocaleString()} tokens`
+  }
+
   return (
     <div className="input-container" ref={inputWrapperRef}>
       {/* v2.0: 多图预览区域 */}
@@ -368,6 +393,29 @@ const ChatInputArea = forwardRef(({
                 />
               </Tooltip>
             </Upload>
+          )}
+
+          {/* v2.2: 上下文Token数量显示 */}
+          {contextTokens > 0 && (
+            <Tooltip title={getTokenTooltip()}>
+              <span className="context-token-indicator" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: isMobile ? '2px 6px' : '2px 8px',
+                borderRadius: '10px',
+                fontSize: isMobile ? '11px' : '12px',
+                color: getTokenColor(contextTokens),
+                background: 'rgba(0,0,0,0.04)',
+                cursor: 'default',
+                whiteSpace: 'nowrap',
+                lineHeight: '20px',
+                userSelect: 'none'
+              }}>
+                <DatabaseOutlined style={{ fontSize: isMobile ? '11px' : '12px' }} />
+                <span>{formatTokenCount(contextTokens)}</span>
+              </span>
+            </Tooltip>
           )}
         </div>
 

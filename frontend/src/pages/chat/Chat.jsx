@@ -8,6 +8,12 @@
  *   - handleRemoveImage: 接收 index 参数删除指定图片
  *   - ChatInputArea props 全部适配多图
  * 
+ * v2.2 变更：
+ *   - 新增上下文Token计算功能 calculateContextTokens
+ *   - 实时计算系统提示词 + 万智魔方 + 历史消息 + 图片/文档的Token总量
+ *   - 通过 contextTokens prop 传递给 ChatInputArea 显示
+ *   - 每次消息变化、对话切换时重新计算
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -15,7 +21,7 @@
  *   - 滚动逻辑优化，解决代码块输出时的滚动冲突
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Layout, Modal, Form, message, Spin, Drawer, Button, Dropdown } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -27,6 +33,7 @@ import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
 import apiClient from '../../utils/api'
+import { calculateTokens } from '../../utils/tokenCalculator'
 
 import {
   ConversationSidebar, ChatInputArea,
@@ -41,6 +48,15 @@ if (typeof window !== 'undefined') {
 }
 
 const { Sider, Content } = Layout
+
+// ================================================================
+// 常量定义
+// ================================================================
+
+/** 每张图片估算的Token数（图片经过vision模型处理，约85 token） */
+const TOKENS_PER_IMAGE = 85
+/** 文档的默认Token估算（如果没有extracted_content） */
+const TOKENS_PER_DOCUMENT_DEFAULT = 500
 
 // ================================================================
 // 自定义Hooks
@@ -95,6 +111,7 @@ const Chat = () => {
     selectConversation, createConversation, updateConversation, deleteConversation,
     deleteMessagePair, togglePin, getAIModels, aiModels, userCredits, getUserCredits,
     typing, isStreaming, streamingMessageId, stopStreaming, clearMessages,
+    systemPrompts, getSystemPrompts, moduleCombinations, getModuleCombinations,
   } = useChatStore()
 
   // 本地状态
@@ -132,6 +149,9 @@ const Chat = () => {
     getConversations(true, true)
     getAIModels()
     getUserCredits()
+    // v2.2: 加载系统提示词和模块组合列表（用于Token计算）
+    getSystemPrompts()
+    getModuleCombinations()
   }, [])
 
   // 移动端：选择会话后自动切换到聊天视图
@@ -196,6 +216,88 @@ const Chat = () => {
       return () => clearInterval(scrollInterval)
     }
   }, [isStreaming, streamingMessageId, userScrolled, scrollToBottom])
+
+  // ================================================================
+  // v2.2: 上下文Token计算
+  // ================================================================
+
+  /**
+   * 计算当前对话的上下文Token总量
+   * 包含：系统提示词 + 万智魔方 + 历史消息上下文 + 图片/文档估算
+   * 
+   * 使用 useMemo 缓存计算结果，依赖项变化时重新计算
+   */
+  const contextTokens = useMemo(() => {
+    // 没有当前对话时返回0
+    if (!currentConversation) return 0
+
+    let totalTokens = 0
+
+    // ---- 1. 系统提示词 Token ----
+    // 优先检查 system_prompt_id（引用的系统提示词）
+    if (currentConversation.system_prompt_id && systemPrompts.length > 0) {
+      const matchedPrompt = systemPrompts.find(p => p.id === currentConversation.system_prompt_id)
+      if (matchedPrompt && matchedPrompt.token_count) {
+        totalTokens += matchedPrompt.token_count
+      }
+    }
+    // 自定义系统提示词文本（如果有）
+    if (currentConversation.system_prompt) {
+      totalTokens += calculateTokens(currentConversation.system_prompt)
+    }
+
+    // ---- 2. 万智魔方（模块组合）Token ----
+    if (currentConversation.module_combination_id && moduleCombinations.length > 0) {
+      const matchedCombination = moduleCombinations.find(
+        c => c.id === currentConversation.module_combination_id
+      )
+      if (matchedCombination && matchedCombination.estimated_tokens) {
+        totalTokens += matchedCombination.estimated_tokens
+      }
+    }
+
+    // ---- 3. 历史消息上下文 Token ----
+    // 根据 context_length 设置，取最近N条消息
+    if (messages && messages.length > 0) {
+      const contextLength = currentConversation.context_length || 20
+      // 取最近的 contextLength 条消息（与后端 getRecentMessages 逻辑一致）
+      const recentMessages = messages.slice(-contextLength)
+
+      for (const msg of recentMessages) {
+        // 消息文本Token
+        if (msg.content) {
+          totalTokens += calculateTokens(msg.content)
+        }
+
+        // 消息附带的图片Token估算
+        const files = msg.files || (msg.file ? [msg.file] : [])
+        for (const file of files) {
+          if (file.mime_type && file.mime_type.startsWith('image/')) {
+            // 图片：按固定值估算（vision模型每张约85 token）
+            totalTokens += TOKENS_PER_IMAGE
+          } else {
+            // 文档：如果有提取内容按内容计算，否则用默认值
+            if (file.extracted_content) {
+              totalTokens += calculateTokens(file.extracted_content)
+            } else {
+              totalTokens += TOKENS_PER_DOCUMENT_DEFAULT
+            }
+          }
+        }
+      }
+    }
+
+    return totalTokens
+  }, [
+    currentConversation?.id,
+    currentConversation?.system_prompt_id,
+    currentConversation?.system_prompt,
+    currentConversation?.module_combination_id,
+    currentConversation?.context_length,
+    messages,
+    systemPrompts,
+    moduleCombinations
+  ])
 
   // ================================================================
   // 会话操作
@@ -517,6 +619,7 @@ const Chat = () => {
 
   // ================================================================
   // 构建 ChatInputArea 通用 props（PC和移动端共用）
+  // v2.2: 新增 contextTokens prop
   // ================================================================
 
   const inputAreaProps = {
@@ -529,6 +632,7 @@ const Chat = () => {
     documentUploadEnabled: currentModel?.document_upload_enabled,
     hasMessages: messages && messages.length > 0,
     currentModel, availableModels,
+    contextTokens,                                               // v2.2: 上下文Token数量
     disabled: !currentConversation || isSending,
     onInputChange: handleInputChange,
     onKeyPress: handleKeyPress,

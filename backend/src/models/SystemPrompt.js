@@ -1,10 +1,15 @@
 /**
  * 系统提示词模型
+ * 
+ * v1.1 变更：
+ *   - getUserAvailablePrompts 新增返回 token_count 字段（基于content长度估算，不暴露内容）
+ *   - 用于前端显示上下文token数量
  */
 
 const dbConnection = require('../database/connection');
 const { DatabaseError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const { calculateTokens } = require('../utils/tokenCalculator');
 
 class SystemPrompt {
   constructor(data = {}) {
@@ -96,7 +101,10 @@ class SystemPrompt {
   }
 
   /**
-   * 获取用户可用的系统提示词（不包含内容）
+   * 获取用户可用的系统提示词（不包含内容，但包含token_count）
+   * 
+   * v1.1: 新增 token_count 字段，基于content估算token数量
+   *        不返回content本身，保护提示词内容
    */
   static async getUserAvailablePrompts(userId, groupId) {
     try {
@@ -112,9 +120,9 @@ class SystemPrompt {
         return [];
       }
       
-      // 获取用户组可用的提示词（修复DISTINCT和ORDER BY的问题）
+      // v1.1: 查询时包含 content 用于计算 token_count（不返回给前端）
       let sql = `
-        SELECT DISTINCT sp.id, sp.name, sp.description, sp.sort_order
+        SELECT DISTINCT sp.id, sp.name, sp.description, sp.sort_order, sp.content
         FROM system_prompts sp
         WHERE sp.is_active = 1
       `;
@@ -134,11 +142,12 @@ class SystemPrompt {
       const params = groupId ? [groupId] : [];
       const { rows } = await dbConnection.query(sql, params);
       
-      // 返回时不包含content字段和sort_order字段
+      // v1.1: 返回时不包含content字段，但包含token_count
       return rows.map(row => ({
         id: row.id,
         name: row.name,
-        description: row.description
+        description: row.description,
+        token_count: calculateTokens(row.content || '')
       }));
     } catch (error) {
       logger.error('获取用户可用系统提示词失败:', error);
