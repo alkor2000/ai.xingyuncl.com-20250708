@@ -7,6 +7,11 @@
  *   - uploadedImage(单个) -> uploadedImages(数组)
  *   - 多图缩略图预览，支持单张删除
  *   - Upload组件支持multiple多选
+ * 
+ * v2.1 变更：
+ *   - 输入框高度增大：PC端maxRows从6增至16，移动端从4增至8
+ *   - 输入框字体跟随系统设置：从systemConfigStore读取font_family和font_size
+ *   - 整体视觉优化：输入区域样式改进
  */
 
 import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
@@ -31,6 +36,7 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
+import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -67,6 +73,10 @@ const ChatInputArea = forwardRef(({
   const { t } = useTranslation()
   const inputRef = useRef(null)
   const inputWrapperRef = useRef(null)
+
+  // v2.1: 从系统配置中获取字体设置
+  const { getChatFontConfig } = useSystemConfigStore()
+  const fontConfig = getChatFontConfig()
 
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
@@ -191,6 +201,33 @@ const ChatInputArea = forwardRef(({
     return isMobile
       ? t('chat.input.placeholder.mobile')
       : t('chat.input.placeholder')
+  }
+
+  // v2.1: 构建输入框样式 - 跟随系统字体设置
+  const getInputStyle = () => {
+    const style = {}
+
+    // 移动端强制16px防止iOS缩放，PC端使用系统配置的字号
+    if (isMobile) {
+      style.fontSize = '16px'
+    } else {
+      // 使用系统配置的字号，默认14px
+      const configFontSize = fontConfig?.fontSize || 14
+      style.fontSize = `${configFontSize}px`
+    }
+
+    // 字体跟随系统设置
+    const configFontFamily = fontConfig?.fontFamily
+    if (configFontFamily && configFontFamily !== 'system-ui') {
+      // 如果配置了特定字体，使用配置字体并追加兜底字体
+      style.fontFamily = `${configFontFamily}, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`
+    }
+    // 如果是 system-ui 或未配置，不设置 fontFamily，使用浏览器默认
+
+    // 行高设置
+    style.lineHeight = '1.6'
+
+    return style
   }
 
   return (
@@ -358,6 +395,7 @@ const ChatInputArea = forwardRef(({
         </div>
       </div>
 
+      {/* v2.1: 输入框 - 增大maxRows + 字体跟随系统设置 */}
       <div className="input-wrapper">
         <TextArea
           ref={inputRef}
@@ -365,10 +403,10 @@ const ChatInputArea = forwardRef(({
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={onKeyPress}
           placeholder={getPlaceholder()}
-          autoSize={{ minRows: isMobile ? 2 : 3, maxRows: isMobile ? 4 : 6 }}
+          autoSize={{ minRows: isMobile ? 2 : 3, maxRows: isMobile ? 8 : 16 }}
           disabled={typing || isStreaming}
           className="message-input"
-          style={{ fontSize: isMobile ? '16px' : '14px' }}
+          style={getInputStyle()}
         />
 
         <div className="input-actions-right">
