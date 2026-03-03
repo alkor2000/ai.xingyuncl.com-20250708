@@ -1,5 +1,12 @@
 /**
- * 聊天输入区域组件 - 支持图片和文档上传（移动端优化版）
+ * 聊天输入区域组件 - 支持多图上传和Ctrl+V粘贴（移动端优化版）
+ * 
+ * v2.0 变更：
+ *   - 支持多图上传（最多5张，每张≤5MB）
+ *   - 支持 Ctrl+V / Command+V 粘贴图片
+ *   - uploadedImage(单个) -> uploadedImages(数组)
+ *   - 多图缩略图预览，支持单张删除
+ *   - Upload组件支持multiple多选
  */
 
 import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
@@ -10,7 +17,8 @@ import {
   Tooltip,
   Badge,
   Space,
-  Typography
+  Typography,
+  message as antMessage
 } from 'antd'
 import {
   SendOutlined,
@@ -27,10 +35,14 @@ import ModelSelector from './ModelSelector'
 const { TextArea } = Input
 const { Text } = Typography
 
-// 使用forwardRef使组件可以接收ref
+/** 单张图片最大大小：5MB */
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+/** 最大图片数量 */
+const MAX_IMAGE_COUNT = 5
+
 const ChatInputArea = forwardRef(({
   inputValue,
-  uploadedImage,
+  uploadedImages = [],          // v2.0: 图片数组（替代原 uploadedImage 单对象）
   uploadedDocument,
   uploading,
   typing,
@@ -43,9 +55,9 @@ const ChatInputArea = forwardRef(({
   onInputChange,
   onSend,
   onStop,
-  onImageUpload,
+  onImageUpload,               // v2.0: 接收文件数组进行上传
   onDocumentUpload,
-  onRemoveImage,
+  onRemoveImage,               // v2.0: 接收index参数，删除指定图片
   onRemoveDocument,
   onKeyPress,
   onExportChat,
@@ -54,39 +66,120 @@ const ChatInputArea = forwardRef(({
 }, ref) => {
   const { t } = useTranslation()
   const inputRef = useRef(null)
-  
+  const inputWrapperRef = useRef(null)
+
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  
+
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // 暴露focus方法给父组件
+  // 暴露 focus/blur 方法给父组件
   useImperativeHandle(ref, () => ({
-    focus: () => {
-      if (inputRef.current) {
-        inputRef.current.focus()
-      }
-    },
-    blur: () => {
-      if (inputRef.current) {
-        inputRef.current.blur()
-      }
-    }
+    focus: () => inputRef.current?.focus(),
+    blur: () => inputRef.current?.blur()
   }))
 
-  // 判断是否有已上传的文件（图片或文档）
-  const hasUploadedFile = uploadedImage || uploadedDocument
-  
-  // 根据移动端/PC端获取不同的placeholder
+  // 是否有已上传的文件
+  const hasUploadedFile = uploadedImages.length > 0 || uploadedDocument
+  // 是否已达到图片上限
+  const isImageLimitReached = uploadedImages.length >= MAX_IMAGE_COUNT
+
+  // ---- Ctrl+V 粘贴图片处理 ----
+  useEffect(() => {
+    const wrapper = inputWrapperRef.current
+    if (!wrapper) return
+
+    const handlePaste = (e) => {
+      // 如果不支持图片上传或正在输入/流式中，不处理粘贴
+      if (!imageUploadEnabled || uploading || typing || isStreaming) return
+      // 如果有文档已上传，不允许再贴图
+      if (uploadedDocument) return
+
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      // 从剪贴板提取图片文件
+      const imageFiles = []
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) imageFiles.push(file)
+        }
+      }
+
+      if (imageFiles.length === 0) return
+
+      // 阻止默认粘贴行为（避免图片base64插入文本框）
+      e.preventDefault()
+
+      // 检查数量限制
+      const remaining = MAX_IMAGE_COUNT - uploadedImages.length
+      if (remaining <= 0) {
+        antMessage.warning(t('chat.image.upload.maxReached') || `最多上传 ${MAX_IMAGE_COUNT} 张图片`)
+        return
+      }
+
+      // 取允许数量的图片
+      const filesToUpload = imageFiles.slice(0, remaining)
+
+      // 检查单张大小
+      for (const file of filesToUpload) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          antMessage.error(t('chat.image.upload.tooLarge') || '图片大小不能超过 5MB')
+          return
+        }
+      }
+
+      // 调用父组件的上传方法
+      if (onImageUpload) {
+        onImageUpload(filesToUpload)
+      }
+    }
+
+    wrapper.addEventListener('paste', handlePaste)
+    return () => wrapper.removeEventListener('paste', handlePaste)
+  }, [imageUploadEnabled, uploading, typing, isStreaming, uploadedDocument, uploadedImages.length, onImageUpload, t])
+
+  // ---- Upload beforeUpload 钩子：拦截文件选择，交给父组件处理 ----
+  const handleBeforeUpload = (file, fileList) => {
+    // 检查数量限制
+    const remaining = MAX_IMAGE_COUNT - uploadedImages.length
+    if (remaining <= 0) {
+      antMessage.warning(t('chat.image.upload.maxReached') || `最多上传 ${MAX_IMAGE_COUNT} 张图片`)
+      return false
+    }
+
+    // 检查单张大小
+    if (file.size > MAX_IMAGE_SIZE) {
+      antMessage.error(t('chat.image.upload.tooLarge') || `图片 ${file.name} 大小超过 5MB`)
+      return false
+    }
+
+    // 取允许数量的文件（fileList 是本次选择的所有文件）
+    const filesToUpload = fileList.slice(0, remaining)
+
+    // 只在处理第一个文件时触发上传（避免多次调用）
+    if (file === fileList[0] && onImageUpload) {
+      // 再次过滤大小
+      const validFiles = filesToUpload.filter(f => f.size <= MAX_IMAGE_SIZE)
+      if (validFiles.length > 0) {
+        onImageUpload(validFiles)
+      }
+    }
+
+    // 返回false阻止antd Upload自动上传
+    return false
+  }
+
+  // ---- 根据状态获取placeholder ----
   const getPlaceholder = () => {
-    if (uploadedImage) {
-      return isMobile 
+    if (uploadedImages.length > 0) {
+      return isMobile
         ? t('chat.input.placeholderWithImage.mobile')
         : t('chat.input.placeholderWithImage')
     }
@@ -101,34 +194,63 @@ const ChatInputArea = forwardRef(({
   }
 
   return (
-    <div className="input-container">
-      {/* 已上传的图片预览 */}
-      {uploadedImage && (
-        <div className="uploaded-image-preview">
-          <Badge
-            count={
-              <Button
-                type="text"
-                size="small"
-                icon={<CloseOutlined />}
-                onClick={onRemoveImage}
-                className="remove-image-btn"
+    <div className="input-container" ref={inputWrapperRef}>
+      {/* v2.0: 多图预览区域 */}
+      {uploadedImages.length > 0 && (
+        <div className="uploaded-images-preview" style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          padding: '8px 12px',
+          borderBottom: '1px solid #f0f0f0'
+        }}>
+          {uploadedImages.map((img, index) => (
+            <Badge
+              key={img.id || index}
+              count={
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={() => onRemoveImage && onRemoveImage(index)}
+                  className="remove-image-btn"
+                  style={{
+                    background: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px',
+                    padding: 0,
+                    minWidth: 'unset'
+                  }}
+                />
+              }
+            >
+              <img
+                src={img.url}
+                alt={img.original_name}
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  objectFit: 'cover',
+                  borderRadius: '6px',
+                  border: '1px solid #e8e8e8'
+                }}
               />
-            }
-          >
-            <img 
-              src={uploadedImage.url} 
-              alt={uploadedImage.original_name}
-              className="preview-image"
-            />
-          </Badge>
-          <Text size="small" type="secondary">
-            {uploadedImage.original_name}
+            </Badge>
+          ))}
+          {/* 剩余上传数量提示 */}
+          <Text type="secondary" style={{ fontSize: '12px', alignSelf: 'flex-end', marginBottom: '4px' }}>
+            {uploadedImages.length}/{MAX_IMAGE_COUNT}
           </Text>
         </div>
       )}
-      
-      {/* 已上传的文档预览 */}
+
+      {/* 已上传的文档预览（保持不变） */}
       {uploadedDocument && (
         <div className="uploaded-document-preview">
           <Badge
@@ -154,7 +276,7 @@ const ChatInputArea = forwardRef(({
           </Badge>
         </div>
       )}
-      
+
       {/* 模型选择器和工具栏 */}
       <div className="input-header">
         <div className="left-tools">
@@ -165,16 +287,21 @@ const ChatInputArea = forwardRef(({
             disabled={typing || isStreaming}
             isMobile={isMobile}
           />
-          
-          {/* 图片上传按钮 */}
-          {imageUploadEnabled && !hasUploadedFile && (
+
+          {/* v2.0: 图片上传按钮 - 支持多选，未达上限且无文档时显示 */}
+          {imageUploadEnabled && !uploadedDocument && !isImageLimitReached && (
             <Upload
-              beforeUpload={onImageUpload}
+              beforeUpload={handleBeforeUpload}
               showUploadList={false}
               accept="image/*"
+              multiple
               disabled={uploading || typing || isStreaming}
             >
-              <Tooltip title={isMobile ? '' : t('chat.upload.image')}>
+              <Tooltip title={isMobile ? '' : (
+                uploadedImages.length > 0
+                  ? `${t('chat.upload.image')} (${uploadedImages.length}/${MAX_IMAGE_COUNT})`
+                  : t('chat.upload.image')
+              )}>
                 <Button
                   type="text"
                   icon={<PictureOutlined />}
@@ -185,9 +312,9 @@ const ChatInputArea = forwardRef(({
               </Tooltip>
             </Upload>
           )}
-          
-          {/* 文档上传按钮 */}
-          {documentUploadEnabled && !hasUploadedFile && (
+
+          {/* 文档上传按钮 - 无图片上传时才显示 */}
+          {documentUploadEnabled && uploadedImages.length === 0 && !uploadedDocument && (
             <Upload
               beforeUpload={onDocumentUpload}
               showUploadList={false}
@@ -206,9 +333,8 @@ const ChatInputArea = forwardRef(({
             </Upload>
           )}
         </div>
-        
+
         <div className="right-tools">
-          {/* 导出和清空按钮并排 */}
           <Space size={4}>
             <Tooltip title={isMobile ? '' : t('chat.export')}>
               <Button
@@ -219,7 +345,6 @@ const ChatInputArea = forwardRef(({
                 className="mobile-action-btn"
               />
             </Tooltip>
-            
             <Tooltip title={isMobile ? '' : t('chat.clear')}>
               <Button
                 type="text"
@@ -232,7 +357,7 @@ const ChatInputArea = forwardRef(({
           </Space>
         </div>
       </div>
-      
+
       <div className="input-wrapper">
         <TextArea
           ref={inputRef}
@@ -243,22 +368,13 @@ const ChatInputArea = forwardRef(({
           autoSize={{ minRows: isMobile ? 2 : 3, maxRows: isMobile ? 4 : 6 }}
           disabled={typing || isStreaming}
           className="message-input"
-          style={{
-            fontSize: isMobile ? '16px' : '14px' // 移动端确保16px防止iOS缩放
-          }}
+          style={{ fontSize: isMobile ? '16px' : '14px' }}
         />
-        
+
         <div className="input-actions-right">
-          {/* 发送/停止按钮 */}
           {isStreaming ? (
             <Tooltip title={isMobile ? '' : t('chat.stop')}>
-              <Button
-                type="primary"
-                danger
-                icon={<StopOutlined />}
-                onClick={onStop}
-                className="mobile-send-btn"
-              />
+              <Button type="primary" danger icon={<StopOutlined />} onClick={onStop} className="mobile-send-btn" />
             </Tooltip>
           ) : (
             <Tooltip title={isMobile ? '' : t('chat.send')}>
@@ -278,7 +394,6 @@ const ChatInputArea = forwardRef(({
   )
 })
 
-// 设置displayName以便调试
 ChatInputArea.displayName = 'ChatInputArea'
 
 export default ChatInputArea
