@@ -26,6 +26,11 @@
  *   - 新增canvasDismissed状态，切换对话时自动重置
  *   - 工具栏的画布开关按钮才真正控制canvasEnabled
  * 
+ * v3.2 修复：
+ *   - 修复关闭画布后再开启，新生成HTML不自动弹出的问题
+ *   - handleToggleCanvas中setCanvasDismissed移到setCanvasEnabled外部，避免嵌套setter时序问题
+ *   - 新增hasHtmlContent变化时自动重置canvasDismissed，确保新HTML代码块触发画布显示
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -196,10 +201,14 @@ const Chat = () => {
   const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
 
   // ================================================================
-  // v3.0/v3.1: 画布开关和关闭处理
+  // v3.0/v3.1/v3.2: 画布开关和关闭处理
   // ================================================================
 
-  /** 切换画布开关（工具栏按钮），保存到localStorage */
+  /**
+   * v3.2: 切换画布开关（工具栏按钮），保存到localStorage
+   * 修复：将setCanvasDismissed移到setCanvasEnabled外部，
+   * 避免在函数式setter内部嵌套调用另一个setter导致的时序问题
+   */
   const handleToggleCanvas = useCallback(() => {
     setCanvasEnabled(prev => {
       const newValue = !prev
@@ -208,12 +217,12 @@ const Chat = () => {
       } catch {
         // localStorage不可用时静默忽略
       }
-      // 如果重新开启画布，清除临时关闭状态
-      if (newValue) {
-        setCanvasDismissed(false)
-      }
       return newValue
     })
+    // v3.2: 在setCanvasEnabled外部重置临时关闭状态
+    // 无论开启还是关闭，都重置dismissed状态
+    // 这样用户再次开启时，画布会立即显示（如果有HTML内容）
+    setCanvasDismissed(false)
   }, [])
 
   /**
@@ -224,6 +233,19 @@ const Chat = () => {
   const handleDismissCanvas = useCallback(() => {
     setCanvasDismissed(true)
   }, [])
+
+  /**
+   * v3.2: 当检测到新的HTML内容出现时，自动重置临时关闭状态
+   * 场景：用户关闭了画布(dismissed=true)，然后又生成了新的HTML代码
+   * 此时应该自动弹出画布，因为这是新的内容
+   */
+  useEffect(() => {
+    if (hasHtmlContent && canvasEnabled && canvasDismissed) {
+      // 有新HTML内容 + 画布功能开启 + 之前被临时关闭
+      // 自动重置临时关闭状态，让画布重新显示
+      setCanvasDismissed(false)
+    }
+  }, [hasHtmlContent, canvasEnabled, canvasDismissed])
 
   // ================================================================
   // 初始化和副作用
