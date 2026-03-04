@@ -26,10 +26,11 @@
  *   - 新增canvasDismissed状态，切换对话时自动重置
  *   - 工具栏的画布开关按钮才真正控制canvasEnabled
  * 
- * v3.2 修复：
- *   - 修复关闭画布后再开启，新生成HTML不自动弹出的问题
- *   - handleToggleCanvas中setCanvasDismissed移到setCanvasEnabled外部，避免嵌套setter时序问题
- *   - 新增hasHtmlContent变化时自动重置canvasDismissed，确保新HTML代码块触发画布显示
+ * v3.3 修复：
+ *   - 修复v3.2中useEffect导致点X关不掉画布的问题
+ *   - 使用htmlBlockCountRef记录HTML代码块数量，只有数量增加（新生成HTML）时才自动重置dismissed
+ *   - 点X关闭后，已有的HTML不会触发重新弹出；新生成HTML才会触发弹出
+ *   - handleToggleCanvas中开启时重置dismissed，确保手动开启立即生效
  * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
@@ -132,6 +133,27 @@ const useHasHtmlContent = (messages) => {
   }, [messages])
 }
 
+/**
+ * v3.3: 统计消息列表中HTML代码块的总数量
+ * 用于判断是否有"新"HTML生成（数量增加 = 有新内容）
+ * 
+ * @param {Array} messages - 消息列表
+ * @returns {number} - HTML代码块总数
+ */
+const useHtmlBlockCount = (messages) => {
+  return useMemo(() => {
+    if (!messages || messages.length === 0) return 0
+    let count = 0
+    for (const msg of messages) {
+      if (msg.role !== 'assistant' || !msg.content) continue
+      // 统计所有已闭合的 ```html ... ``` 代码块数量
+      const matches = msg.content.match(/```(?:html|HTML)\s*\n[\s\S]*?```/g)
+      if (matches) count += matches.length
+    }
+    return count
+  }, [messages])
+}
+
 // ================================================================
 // 主组件
 // ================================================================
@@ -195,19 +217,27 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
+  /**
+   * v3.3: 用ref记录上一次的HTML代码块数量
+   * 只有数量增加时才自动重置canvasDismissed（表示有新HTML生成）
+   * 数量不变或减少时不做任何操作（用户点X关闭后不会被重新弹出）
+   */
+  const htmlBlockCountRef = useRef(0)
+
   // v3.0: 检测当前对话消息中是否有HTML内容
   const hasHtmlContent = useHasHtmlContent(messages)
+  // v3.3: 统计当前对话中HTML代码块的数量
+  const htmlBlockCount = useHtmlBlockCount(messages)
   // v3.1: 画布是否实际显示：功能开关开启 + 未被临时关闭 + 有HTML内容 + 不是移动端
   const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
 
   // ================================================================
-  // v3.0/v3.1/v3.2: 画布开关和关闭处理
+  // v3.0/v3.1/v3.3: 画布开关和关闭处理
   // ================================================================
 
   /**
-   * v3.2: 切换画布开关（工具栏按钮），保存到localStorage
-   * 修复：将setCanvasDismissed移到setCanvasEnabled外部，
-   * 避免在函数式setter内部嵌套调用另一个setter导致的时序问题
+   * v3.3: 切换画布开关（工具栏按钮），保存到localStorage
+   * 开启时同时重置dismissed状态，确保画布立即显示
    */
   const handleToggleCanvas = useCallback(() => {
     setCanvasEnabled(prev => {
@@ -219,7 +249,6 @@ const Chat = () => {
       }
       return newValue
     })
-    // v3.2: 在setCanvasEnabled外部重置临时关闭状态
     // 无论开启还是关闭，都重置dismissed状态
     // 这样用户再次开启时，画布会立即显示（如果有HTML内容）
     setCanvasDismissed(false)
@@ -235,17 +264,25 @@ const Chat = () => {
   }, [])
 
   /**
-   * v3.2: 当检测到新的HTML内容出现时，自动重置临时关闭状态
-   * 场景：用户关闭了画布(dismissed=true)，然后又生成了新的HTML代码
-   * 此时应该自动弹出画布，因为这是新的内容
+   * v3.3: 监听HTML代码块数量变化
+   * 只有数量增加时（说明有新的HTML代码块生成），才自动重置dismissed状态
+   * 这样：
+   *   - 用户点X关闭画布 → dismissed=true，数量不变 → 画布保持关闭 ✓
+   *   - 用户再生成新HTML → 数量增加 → 自动重置dismissed → 画布弹出 ✓
+   *   - 切换对话 → currentConversationId变化的useEffect已经重置dismissed ✓
    */
   useEffect(() => {
-    if (hasHtmlContent && canvasEnabled && canvasDismissed) {
-      // 有新HTML内容 + 画布功能开启 + 之前被临时关闭
-      // 自动重置临时关闭状态，让画布重新显示
+    const prevCount = htmlBlockCountRef.current
+
+    if (htmlBlockCount > prevCount && canvasDismissed && canvasEnabled) {
+      // HTML代码块数量增加了 + 画布被临时关闭 + 功能开关开启
+      // 说明有新的HTML生成，自动重置临时关闭状态
       setCanvasDismissed(false)
     }
-  }, [hasHtmlContent, canvasEnabled, canvasDismissed])
+
+    // 更新ref记录当前数量
+    htmlBlockCountRef.current = htmlBlockCount
+  }, [htmlBlockCount, canvasDismissed, canvasEnabled])
 
   // ================================================================
   // 初始化和副作用
@@ -275,6 +312,8 @@ const Chat = () => {
     setLastScrollTop(0)
     // v3.1: 切换对话时重置画布临时关闭状态，让新对话的画布自动出现
     setCanvasDismissed(false)
+    // v3.3: 切换对话时重置HTML代码块计数，避免旧对话的计数影响新对话
+    htmlBlockCountRef.current = 0
   }, [currentConversationId])
 
   // 完成输入后聚焦
