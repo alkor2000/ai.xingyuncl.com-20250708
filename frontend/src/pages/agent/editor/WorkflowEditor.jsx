@@ -9,6 +9,10 @@
  *   1. 节点库改为浮动弹窗（左上角+按钮）
  *   2. 连线上显示X删除按钮（自定义边）
  *   3. 增大连接点吸附范围（connectionRadius）
+ * v4.0 - 质感升级：
+ *   1. 修复保存时弹出两个提示信息的问题（store和编辑器各弹一次）
+ *   2. 配置抽屉宽度加大至400px
+ *   3. 画布背景和连线样式优化
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
@@ -391,6 +395,8 @@ const WorkflowEditorInner = () => {
   
   /**
    * 保存工作流
+   * v4.0 修复：不再在这里调 message.success，因为 agentStore.updateWorkflow 已经会弹提示
+   * 只保留 message.success 在这里（编辑器层），agentStore 里去掉了
    */
   const onSave = useCallback(async () => {
     if (!currentWorkflow) return
@@ -516,7 +522,7 @@ const WorkflowEditorInner = () => {
             snapToGrid={true}
             snapGrid={[16, 16]}
           >
-            <Background color="#aaa" gap={16} />
+            <Background color="#d0d5dd" gap={20} size={1.5} />
             <Controls />
             <MiniMap
               nodeColor={(node) => {
@@ -529,21 +535,21 @@ const WorkflowEditorInner = () => {
                   default: return '#ccc'
                 }
               }}
+              style={{ borderRadius: 10 }}
             />
           </ReactFlow>
         </div>
         
-        {/* 右侧配置面板 - Drawer */}
+        {/* v4.0: 右侧配置面板 - 加宽至400px，样式由CSS控制 */}
         <Drawer
           title={selectedNode ? `${selectedNode.data?.label || selectedNode.type} 配置` : '节点配置'}
           placement="right"
-          width={360}
+          width={400}
           onClose={onCloseConfigDrawer}
           open={configDrawerOpen}
           mask={false}
           getContainer={false}
           style={{ position: 'absolute' }}
-          styles={{ body: { padding: '16px' } }}
         >
           <ConfigPanel
             selectedNode={selectedNode}

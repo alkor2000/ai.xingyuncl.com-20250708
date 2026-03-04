@@ -3,6 +3,8 @@
  * 使用 Zustand 管理工作流的CRUD、执行、历史等状态
  * v2.0 - 新增知识库集成
  * v2.1 - P0修复：执行历史响应字段名修正(data→兼容两种格式)
+ * v2.2 - 修复：updateWorkflow去掉message.success，由调用方自行提示
+ *         避免编辑器保存时弹出两个成功提示（store+编辑器各一个）
  */
 
 import { create } from 'zustand'
@@ -251,20 +253,23 @@ const useAgentStore = create((set, get) => ({
   
   /**
    * 更新工作流
+   * v2.2: 去掉 message.success，由调用方自行决定是否提示
+   * 原因：编辑器保存时 onSave 已经会弹 message.success('工作流保存成功')
+   *       如果这里也弹，就会出现两个提示叠加
    */
   updateWorkflow: async (id, workflowData) => {
     try {
       const response = await apiClient.put(`/agent/workflows/${id}`, workflowData)
       
       if (response.data.success) {
-        message.success('工作流更新成功')
+        // v2.2: 不再在这里弹成功提示，由调用方自行处理
         
         // 更新当前工作流
         if (get().currentWorkflow?.id === id) {
           await get().fetchWorkflowById(id)
         }
         
-        // 刷新列表
+        // 静默刷新列表
         await get().fetchWorkflows()
         
         return response.data.data
@@ -535,8 +540,6 @@ const useAgentStore = create((set, get) => ({
         const responseData = response.data.data
         
         // v2.1 修复：兼容后端返回的 data 字段名和 executions 字段名
-        // 后端 AgentExecution.findByUserId 返回 { data: [...], pagination: {...} }
-        // 前端之前错误地解构为 { executions, pagination }
         const executionList = responseData.executions || responseData.data || []
         const pagination = responseData.pagination || {}
         

@@ -1,10 +1,13 @@
 /**
- * 工作流编辑器样式 v3.1
+ * 工作流编辑器样式 v4.0
  * v3.0 - 浮动面板+可删除边+大连接点
- * v3.1 - 视觉优化：
- *   1. 节点更大 320px，字体加大
- *   2. 节点header颜色改为深色背景白色文字（高对比度）
- *   3. 分类节点专用样式（分类列表+描述）
+ * v3.1 - 视觉优化：节点更大320px，深色header，分类节点专用样式
+ * v4.0 - 全面质感升级：
+ *   1. 节点放大至360px，标题18px，内容14px，整体更清晰
+ *   2. 画布背景改为柔和点阵+渐变，MiniMap美化
+ *   3. 配置抽屉视觉大幅升级：深色标题栏、分区卡片、阴影层次
+ *   4. 连线样式优化：更粗、颜色更深、箭头更清晰
+ *   5. 工具栏微调：更紧凑的间距和按钮样式
  */
 
 /* ========== 编辑器整体布局 ========== */
@@ -22,12 +25,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: #fff;
-  border-bottom: 1px solid #e8e8e8;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   z-index: 1001;
   position: relative;
+  min-height: 56px;
 }
 
 .toolbar-left {
@@ -38,10 +42,11 @@
 
 .workflow-info h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   display: inline-block;
   margin-right: 8px;
+  color: #1a1a1a;
 }
 
 .toolbar-right {
@@ -58,7 +63,7 @@
   position: relative;
 }
 
-/* ========== 配置抽屉覆盖 ========== */
+/* ========== 配置抽屉 - v4.0 视觉大幅升级 ========== */
 
 .workflow-editor-body .ant-drawer {
   position: absolute;
@@ -71,22 +76,41 @@
 
 .workflow-editor-body .ant-drawer-content-wrapper {
   height: 100% !important;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12) !important;
 }
 
 .workflow-editor-body .ant-drawer-content {
   height: 100%;
   overflow: auto;
+  background: #f8f9fb;
 }
 
+/* v4.0: 抽屉标题栏 - 深色背景白色文字 */
 .workflow-editor-body .ant-drawer-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 20px;
+  border-bottom: none;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
 }
 
 .workflow-editor-body .ant-drawer-title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
+  color: #fff !important;
+}
+
+/* 关闭按钮白色 */
+.workflow-editor-body .ant-drawer-close {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.workflow-editor-body .ant-drawer-close:hover {
+  color: #fff !important;
+}
+
+/* v4.0: 抽屉内容区域 */
+.workflow-editor-body .ant-drawer-body {
+  padding: 20px !important;
+  background: #f8f9fb;
 }
 
 /* ========== 浮动节点面板 ========== */
@@ -204,13 +228,18 @@
 .floating-node-desc { font-size: 11px; color: #999; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .floating-node-action { color: #bfbfbf; font-size: 13px; flex-shrink: 0; margin-left: 6px; }
 
-/* ========== 画布区域 ========== */
+/* ========== 画布区域 - v4.0 背景优化 ========== */
 
 .workflow-editor-canvas {
   flex: 1;
   position: relative;
-  background: #fafafa;
+  background: #f5f7fa;
   z-index: 1;
+}
+
+/* v4.0: 画布背景 - 柔和点阵 */
+.workflow-editor-canvas .react-flow__background {
+  opacity: 0.6;
 }
 
 /* ========== 自定义可删除边 ========== */
@@ -239,7 +268,34 @@
 .react-flow__edge:hover .edge-delete-btn { opacity: 1; }
 .edge-delete-btn:hover { background: #ff4d4f; color: #fff; transform: scale(1.2); }
 
-/* ========== v3.1: 增大连接点 ========== */
+/* ========== v4.0: 连线样式优化 ========== */
+
+.react-flow__edge-path {
+  stroke-width: 2.5 !important;
+  stroke: #8c8c8c !important;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #1890ff !important;
+  stroke-width: 3 !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #1890ff !important;
+  stroke-width: 3 !important;
+}
+
+/* 连线动画效果 */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 6 3;
+  animation: edgeFlow 0.8s linear infinite;
+}
+
+@keyframes edgeFlow {
+  to { stroke-dashoffset: -9; }
+}
+
+/* ========== v4.0: 增大连接点（更显眼） ========== */
 
 .react-flow__handle {
   width: 14px;
@@ -278,34 +334,34 @@
   box-shadow: 0 0 0 6px rgba(24, 144, 255, 0.2);
 }
 
-/* ========== v3.1: 节点更大更清晰 ========== */
+/* ========== v4.0: 节点更大更清晰（360px，字体全面加大） ========== */
 
 .custom-node.enhanced {
   background: #fff;
   border: 2px solid #d9d9d9;
-  border-radius: 12px;
-  min-width: 320px;
-  max-width: 360px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  min-width: 360px;
+  max-width: 400px;
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   overflow: hidden;
 }
 
 .custom-node.enhanced:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.16);
   transform: translateY(-2px);
 }
 
 .custom-node.enhanced.selected {
   border-color: #1890ff;
-  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2);
+  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12);
 }
 
-/* === v3.1: 深色header白色文字（高对比度） === */
+/* === v4.0: 深色header白色文字（高对比度，字体更大） === */
 
 /* 开始节点 - 绿色 */
 .start-node.enhanced { border-color: #389e0d; }
-.start-node.enhanced.selected { border-color: #389e0d; box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.2); }
+.start-node.enhanced.selected { border-color: #389e0d; box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
 .start-node.enhanced .node-header {
   background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
   color: #fff;
@@ -314,7 +370,7 @@
 
 /* LLM节点 - 蓝色 */
 .llm-node.enhanced { border-color: #1890ff; }
-.llm-node.enhanced.selected { border-color: #1890ff; box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2); }
+.llm-node.enhanced.selected { border-color: #1890ff; box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
 .llm-node.enhanced .node-header {
   background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
   color: #fff;
@@ -323,7 +379,7 @@
 
 /* 结束节点 - 红色 */
 .end-node.enhanced { border-color: #ff4d4f; }
-.end-node.enhanced.selected { border-color: #ff4d4f; box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.2); }
+.end-node.enhanced.selected { border-color: #ff4d4f; box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
 .end-node.enhanced .node-header {
   background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
   color: #fff;
@@ -332,7 +388,7 @@
 
 /* 知识库节点 - 紫色 */
 .knowledge-node.enhanced { border-color: #722ed1; }
-.knowledge-node.enhanced.selected { border-color: #722ed1; box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.2); }
+.knowledge-node.enhanced.selected { border-color: #722ed1; box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
 .knowledge-node.enhanced .node-header {
   background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
   color: #fff;
@@ -341,38 +397,42 @@
 
 /* 分类节点 - 琥珀色 */
 .classifier-node.enhanced { border-color: #d48806; }
-.classifier-node.enhanced.selected { border-color: #d48806; box-shadow: 0 0 0 4px rgba(212, 136, 6, 0.2); }
+.classifier-node.enhanced.selected { border-color: #d48806; box-shadow: 0 0 0 4px rgba(212, 136, 6, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
 .classifier-node.enhanced .node-header {
   background: linear-gradient(135deg, #faad14 0%, #d48806 100%);
   color: #fff;
   border-bottom: none;
 }
 
-/* ========== v3.1: 节点内部结构（字体加大） ========== */
+/* ========== v4.0: 节点内部结构（字体全面加大） ========== */
 
 .node-header {
   display: flex;
   align-items: center;
-  padding: 14px 18px;
-  gap: 8px;
+  padding: 16px 20px;
+  gap: 10px;
   font-weight: 600;
 }
 
-.node-icon { font-size: 20px; }
-.node-title { font-size: 16px; font-weight: 600; }
+.node-icon { font-size: 22px; }
+.node-title { font-size: 18px; font-weight: 700; letter-spacing: 0.3px; }
 
-.node-body { padding: 14px 18px; }
+.node-body { padding: 16px 20px; }
 
-.node-section { margin-bottom: 14px; }
+.node-section { margin-bottom: 16px; }
 .node-section:last-child { margin-bottom: 0; }
 
 .section-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #595959;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
+}
+
+.section-title .anticon {
+  font-size: 14px;
 }
 
 .param-list {
@@ -385,34 +445,35 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 12px;
-  background: #fafafa;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 8px 14px;
+  background: #f7f8fa;
+  border-radius: 8px;
+  font-size: 14px;
 }
 
 .param-name { color: #595959; font-weight: 500; }
-.param-value { color: #262626; font-weight: 500; font-size: 13px; }
-.param-empty { font-size: 13px; color: #bfbfbf; font-style: italic; }
+.param-value { color: #262626; font-weight: 600; font-size: 14px; }
+.param-empty { font-size: 14px; color: #bfbfbf; font-style: italic; }
 
 .model-name {
   font-weight: 600;
   color: #1890ff;
-  padding: 7px 12px;
+  padding: 8px 14px;
   background: #f0f5ff;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 14px;
+  border: 1px solid #d6e4ff;
 }
 
 .prompt-preview {
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
+  background: #f7f8fa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
   color: #595959;
-  line-height: 1.5;
-  max-height: 70px;
+  line-height: 1.6;
+  max-height: 80px;
   overflow: hidden;
 }
 
@@ -420,26 +481,26 @@
 .prompt-more { text-align: center; color: #8c8c8c; margin-top: 4px; }
 
 .node-footer {
-  padding: 10px 18px;
-  background: #fafafa;
-  border-top: 1px solid #f0f0f0;
+  padding: 12px 20px;
+  background: #f7f8fa;
+  border-top: 1px solid #eee;
 }
 
-.node-hint { font-size: 12px; color: #8c8c8c; font-style: italic; }
+.node-hint { font-size: 13px; color: #8c8c8c; font-style: italic; }
 
-/* ========== v3.1: 分类节点专用样式 ========== */
+/* ========== v4.0: 分类节点专用样式（字体加大） ========== */
 
 .classifier-category-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .classifier-category-item {
-  padding: 8px 10px;
-  background: #fafafa;
-  border-radius: 6px;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border-radius: 8px;
   border-left: 3px solid #d9d9d9;
 }
 
@@ -449,26 +510,54 @@
   align-items: center;
 }
 
+.classifier-category-header .ant-tag {
+  font-size: 13px !important;
+}
+
 .classifier-category-arrow {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
 }
 
 .classifier-category-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: #8c8c8c;
-  margin-top: 4px;
-  line-height: 1.4;
-  max-height: 32px;
+  margin-top: 5px;
+  line-height: 1.5;
+  max-height: 36px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ========== v4.0: MiniMap 美化 ========== */
+
+.react-flow__minimap {
+  border-radius: 10px !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden;
+}
+
+/* ========== v4.0: Controls 美化 ========== */
+
+.react-flow__controls {
+  border-radius: 10px !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
 }
 
 /* ========== ReactFlow覆盖 ========== */
 
 .react-flow__node { cursor: pointer; }
-.react-flow__edge-path { stroke-width: 2; }
-.react-flow__edge.selected .react-flow__edge-path { stroke: #1890ff; stroke-width: 3; }
 
 /* ========== 加载和错误 ========== */
 
@@ -486,8 +575,8 @@
 
 @media (max-width: 1024px) {
   .floating-node-panel { width: 250px; }
-  .custom-node.enhanced { min-width: 280px; max-width: 300px; }
-  .workflow-editor-body .ant-drawer-content-wrapper { width: 300px !important; }
+  .custom-node.enhanced { min-width: 300px; max-width: 340px; }
+  .workflow-editor-body .ant-drawer-content-wrapper { width: 320px !important; }
 }
 
 @media (max-width: 768px) {
