@@ -22,6 +22,12 @@
  *   - 新增HTML画布开关按钮：在工具栏显示画布开关
  *   - 接收 canvasEnabled / hasHtmlContent / onToggleCanvas props
  *   - 开关仅在PC端显示，移动端隐藏
+ * 
+ * v3.1 变更：
+ *   - 新增思考过程开关按钮（BulbOutlined图标）
+ *   - 接收 showThinking / onToggleThinking props
+ *   - 仅PC端显示，点击切换是否显示Claude推理模型的思考过程
+ *   - 开启时图标高亮为橙色，关闭时默认灰色
  */
 
 import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
@@ -44,7 +50,8 @@ import {
   DownloadOutlined,
   ClearOutlined,
   DatabaseOutlined,
-  CodeOutlined
+  CodeOutlined,
+  BulbOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
@@ -75,6 +82,8 @@ const ChatInputArea = forwardRef(({
   canvasEnabled,                // v3.0: 画布开关状态
   hasHtmlContent,               // v3.0: 当前对话是否有HTML内容
   onToggleCanvas,               // v3.0: 切换画布开关回调
+  showThinking,                 // v3.1: 思考过程显示开关
+  onToggleThinking,             // v3.1: 切换思考过程显示回调
   onInputChange,
   onSend,
   onStop,
@@ -430,6 +439,27 @@ const ChatInputArea = forwardRef(({
 
         <div className="right-tools">
           <Space size={4}>
+            {/* v3.1: 思考过程开关按钮 - 仅PC端显示 */}
+            {!isMobile && onToggleThinking && (
+              <Tooltip title={
+                showThinking
+                  ? (t('chat.thinking.hide') || '隐藏思考过程')
+                  : (t('chat.thinking.show') || '显示思考过程')
+              }>
+                <Button
+                  type="text"
+                  icon={<BulbOutlined />}
+                  onClick={onToggleThinking}
+                  className={`mobile-action-btn thinking-toggle-btn ${showThinking ? 'thinking-active' : ''}`}
+                  style={{
+                    color: showThinking ? '#fa8c16' : undefined,
+                    background: showThinking ? 'rgba(250, 140, 22, 0.08)' : undefined,
+                    borderRadius: '6px'
+                  }}
+                />
+              </Tooltip>
+            )}
+
             {/* v3.0: HTML画布开关按钮 - 仅PC端显示 */}
             {!isMobile && onToggleCanvas && (
               <Tooltip title={

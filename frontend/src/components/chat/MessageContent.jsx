@@ -5,11 +5,22 @@
  * v2.0 变更：
  *   - 支持显示多张用户附件图片（message.files 数组）
  *   - 向后兼容 message.file 单文件字段
+ * 
+ * v3.0 变更：
+ *   - 新增 thinking 内容过滤/显示功能
+ *   - Claude推理模型会输出 <thinking>...</thinking> 标签包裹的思考过程
+ *   - 默认过滤隐藏，用户可在工具栏开关显示
+ *   - 开启时以灰色折叠区域展示思考过程
+ *   - 流式输出和已完成消息都支持过滤
  */
 
-import React, { useState } from 'react'
-import { Typography, Image, Spin, Button, Space, message as antMessage, Row, Col } from 'antd'
-import { LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined, ClockCircleOutlined, ThunderboltOutlined, PictureOutlined } from '@ant-design/icons'
+import React, { useState, useMemo } from 'react'
+import { Typography, Image, Spin, Button, Space, message as antMessage, Row, Col, Collapse } from 'antd'
+import {
+  LoadingOutlined, CopyOutlined, DeleteOutlined, RobotOutlined,
+  ClockCircleOutlined, ThunderboltOutlined, PictureOutlined,
+  BulbOutlined
+} from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import CodeBlock from './CodeBlock'
@@ -18,7 +29,39 @@ import './MessageContent.less'
 
 const { Text } = Typography
 
-const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMessage, aiModels = [] }) => {
+/**
+ * v3.0: 过滤/提取 thinking 内容
+ * 支持 <thinking>...</thinking> 和 <think>...</think> 两种标签格式
+ * @param {string} content - 原始消息内容
+ * @returns {{ cleanContent: string, thinkingBlocks: string[] }}
+ *   cleanContent: 过滤掉 thinking 后的正文内容
+ *   thinkingBlocks: 提取出的 thinking 内容数组
+ */
+const extractThinkingContent = (content) => {
+  if (!content) return { cleanContent: '', thinkingBlocks: [] }
+
+  const thinkingBlocks = []
+
+  // 匹配 <thinking>...</thinking> 和 <think>...</think>
+  // 使用非贪婪匹配 [\s\S]*?，支持多行内容
+  const thinkingRegex = /<(thinking|think)>([\s\S]*?)<\/\1>\n*/gi
+
+  // 提取所有 thinking 块的内容
+  let match
+  while ((match = thinkingRegex.exec(content)) !== null) {
+    const thinkContent = match[2].trim()
+    if (thinkContent) {
+      thinkingBlocks.push(thinkContent)
+    }
+  }
+
+  // 从原文中移除 thinking 标签及其内容
+  const cleanContent = content.replace(thinkingRegex, '').trim()
+
+  return { cleanContent, thinkingBlocks }
+}
+
+const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMessage, aiModels = [], showThinking = false }) => {
   const [imageLoading, setImageLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
 
@@ -30,13 +73,22 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
 
+  // v3.0: 处理 thinking 内容 - 使用 useMemo 避免重复计算
+  const { cleanContent, thinkingBlocks } = useMemo(() => {
+    if (!isAssistant || !message.content) {
+      return { cleanContent: message.content || '', thinkingBlocks: [] }
+    }
+    return extractThinkingContent(message.content)
+  }, [message.content, isAssistant])
+
+  // v3.0: 实际用于渲染的内容（根据 showThinking 开关决定）
+  const displayContent = isAssistant ? cleanContent : message.content
+
   // v2.0: 获取消息的附件文件列表（兼容 files 数组和 file 单对象）
   const getAttachedFiles = () => {
-    // 优先使用 files 数组
     if (message.files && Array.isArray(message.files) && message.files.length > 0) {
       return message.files
     }
-    // 向后兼容：单个 file 对象
     if (message.file) {
       return [message.file]
     }
@@ -44,7 +96,6 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
   }
 
   const attachedFiles = getAttachedFiles()
-  // 分类：图片文件和文档文件
   const imageFiles = attachedFiles.filter(f => f.mime_type && f.mime_type.startsWith('image/'))
   const docFiles = attachedFiles.filter(f => f.mime_type && !f.mime_type.startsWith('image/'))
 
@@ -99,10 +150,11 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     ))
   }
 
-  // 复制消息内容
+  // 复制消息内容（复制过滤后的干净内容）
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content)
+      const contentToCopy = isAssistant ? cleanContent : message.content
+      await navigator.clipboard.writeText(contentToCopy)
       antMessage.success('内容已复制到剪贴板')
     } catch (error) {
       antMessage.error('复制失败，请手动选择复制')
@@ -193,6 +245,52 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
     td: ({ children }) => <td style={messageTextStyle}>{children}</td>,
   }
 
+  /**
+   * v3.0: 渲染 thinking 折叠区域
+   * 仅当 showThinking=true 且有 thinking 内容时展示
+   */
+  const renderThinkingBlocks = () => {
+    if (!showThinking || thinkingBlocks.length === 0) return null
+
+    return (
+      <div className="thinking-blocks" style={{ marginBottom: '12px' }}>
+        <Collapse
+          size="small"
+          ghost
+          items={thinkingBlocks.map((block, index) => ({
+            key: `thinking-${index}`,
+            label: (
+              <span style={{ color: '#8c8c8c', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <BulbOutlined />
+                思考过程 {thinkingBlocks.length > 1 ? `#${index + 1}` : ''}
+              </span>
+            ),
+            children: (
+              <div style={{
+                fontSize: '13px',
+                color: '#666',
+                lineHeight: '1.6',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxHeight: '300px',
+                overflow: 'auto',
+                fontFamily: chatFontFamily
+              }}>
+                {block}
+              </div>
+            ),
+            style: {
+              background: '#f9f9fb',
+              borderRadius: '8px',
+              border: '1px solid #f0f0f0',
+              marginBottom: thinkingBlocks.length > 1 ? '6px' : 0
+            }
+          }))}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className={`message-content ${isUser ? 'user-message' : 'assistant-message'}`}>
 
@@ -229,12 +327,15 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
         </div>
       )}
 
-      {/* 显示上传的文档（保持不变） */}
+      {/* 显示上传的文档 */}
       {docFiles.length > 0 && docFiles.map((file, index) => (
         <div key={file.id || index} className="message-document" style={{ marginBottom: '8px' }}>
           <Text type="secondary">[文档: {file.original_name}]</Text>
         </div>
       ))}
+
+      {/* v3.0: thinking 折叠区域（显示在正文之前） */}
+      {isAssistant && renderThinkingBlocks()}
 
       {/* 消息文本内容 */}
       <div className="message-text" style={messageTextStyle}>
@@ -248,20 +349,23 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
               <div style={{ color: '#ff4d4f', fontSize: '13px', padding: '4px 0' }}>
                 {message.content || '⚠️ AI响应异常'}
               </div>
-            ) : !message.content && !message.streaming ? (
+            ) : !displayContent && !message.streaming ? (
               <div style={{ color: '#999', fontSize: '13px', fontStyle: 'italic', padding: '4px 0' }}>
-                ⚠️ AI返回内容为空，可能是网络问题或模型响应异常
+                {thinkingBlocks.length > 0
+                  ? '💭 AI仅输出了思考过程，无正文内容'
+                  : '⚠️ AI返回内容为空，可能是网络问题或模型响应异常'
+                }
               </div>
             ) : isStreaming && message.streaming ? (
               <div className="streaming-content">
                 <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                  {message.content || ''}
+                  {displayContent || ''}
                 </ReactMarkdown>
                 <span className="streaming-cursor"><LoadingOutlined /></span>
               </div>
             ) : (
               <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             )}
           </>
@@ -329,11 +433,18 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
               </span>
             )}
 
-            {/* v2.0: 显示附件图片数量 */}
             {imageFiles.length > 1 && (
               <span className="info-item">
                 <PictureOutlined />
                 <Text type="secondary" className="info-text">{imageFiles.length} 张附件</Text>
+              </span>
+            )}
+
+            {/* v3.0: 显示有隐藏的 thinking 内容提示 */}
+            {isAssistant && !showThinking && thinkingBlocks.length > 0 && (
+              <span className="info-item" style={{ opacity: 0.6 }}>
+                <BulbOutlined />
+                <Text type="secondary" className="info-text">有思考过程</Text>
               </span>
             )}
           </Space>

@@ -1,6 +1,12 @@
 /**
  * 对话设置抽屉组件 - 支持系统提示词选择和模块组合
  * 支持Azure模型温度限制
+ * 
+ * v2.0 变更：
+ *   - 新增"深度思考"开关（enable_thinking）
+ *   - 仅在选择 Claude 系列模型时显示
+ *   - 默认关闭（不思考），用户可手动开启
+ *   - 开启后模型会先思考再回答，消耗更多 Token
  */
 
 import React, { useEffect, useState } from 'react'
@@ -16,20 +22,33 @@ import {
   Tag,
   Tooltip,
   Divider,
-  Alert
+  Alert,
+  Switch
 } from 'antd'
 import {
   InfoCircleOutlined,
   FileTextOutlined,
   GroupOutlined,
   AppstoreAddOutlined,
-  WarningOutlined
+  WarningOutlined,
+  BulbOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useChatStore from '../../../stores/chatStore'
 
 const { TextArea } = Input
 const { Option } = Select
+
+/**
+ * 检测模型名称是否为 Claude 系列（支持深度思考的模型）
+ * @param {string} modelName - 模型名称
+ * @returns {boolean} 是否为 Claude 模型
+ */
+const isClaudeModel = (modelName) => {
+  if (!modelName) return false
+  const lowerName = modelName.toLowerCase()
+  return lowerName.includes('claude')
+}
 
 const ConversationSettingsDrawer = ({
   visible,
@@ -45,6 +64,8 @@ const ConversationSettingsDrawer = ({
   const [selectedCombination, setSelectedCombination] = useState(null)
   const [isAzureModel, setIsAzureModel] = useState(false)
   const [temperatureValue, setTemperatureValue] = useState(0.7)
+  // v2.0: 是否为 Claude 模型（控制深度思考开关的显示）
+  const [showThinkingSwitch, setShowThinkingSwitch] = useState(false)
 
   // 加载系统提示词和模块组合
   useEffect(() => {
@@ -59,22 +80,11 @@ const ConversationSettingsDrawer = ({
     const model = aiModels.find(m => m.name === modelName)
     if (!model) return false
     
-    // 检查provider是否为azure
-    if (model.provider === 'azure' || model.provider === 'azure-openai') {
-      return true
-    }
-    
-    // 检查api_endpoint是否为azure
-    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
-      return true
-    }
-    
-    // 检查api_key是否包含Azure格式（包含|分隔符）
+    if (model.provider === 'azure' || model.provider === 'azure-openai') return true
+    if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') return true
     if (model.api_key && model.api_key.includes('|')) {
       const parts = model.api_key.split('|')
-      if (parts.length === 3) {
-        return true
-      }
+      if (parts.length === 3) return true
     }
     
     return false
@@ -86,13 +96,20 @@ const ConversationSettingsDrawer = ({
     setIsAzureModel(isAzure)
     
     if (isAzure) {
-      // Azure模型强制设置温度为1
       setTemperatureValue(1)
       form.setFieldValue('ai_temperature', 1)
     } else {
-      // 非Azure模型保持当前温度或使用默认值
       const currentTemp = form.getFieldValue('ai_temperature') || 0.7
       setTemperatureValue(currentTemp)
+    }
+
+    // v2.0: 检测是否为 Claude 模型，控制深度思考开关显示
+    const isClaude = isClaudeModel(modelName)
+    setShowThinkingSwitch(isClaude)
+
+    // 如果切换到非 Claude 模型，自动关闭深度思考
+    if (!isClaude) {
+      form.setFieldValue('enable_thinking', false)
     }
   }
 
@@ -116,6 +133,9 @@ const ConversationSettingsDrawer = ({
       } else {
         setTemperatureValue(currentTemp)
       }
+
+      // v2.0: 检测是否为 Claude 模型
+      setShowThinkingSwitch(isClaudeModel(modelName))
       
       // 如果有模块组合
       if (moduleCombinationId) {
@@ -124,13 +144,11 @@ const ConversationSettingsDrawer = ({
         setCustomPromptMode(false)
         setSelectedPromptContent('')
       }
-      // 如果有自定义的系统提示词但没有system_prompt_id，设置为自定义模式
       else if (systemPrompt && !systemPromptId) {
         setCustomPromptMode(true)
         setSelectedPromptContent('')
         setSelectedCombination(null)
       } else if (systemPromptId) {
-        // 如果有system_prompt_id，显示对应的描述
         setCustomPromptMode(false)
         const selectedPrompt = systemPrompts.find(p => p.id === systemPromptId)
         if (selectedPrompt) {
@@ -138,7 +156,6 @@ const ConversationSettingsDrawer = ({
         }
         setSelectedCombination(null)
       } else {
-        // 都没有的情况
         setCustomPromptMode(false)
         setSelectedPromptContent('')
         setSelectedCombination(null)
@@ -149,29 +166,26 @@ const ConversationSettingsDrawer = ({
   // 处理系统提示词选择
   const handleSystemPromptChange = (promptId) => {
     if (promptId === 'custom') {
-      // 切换到自定义模式
       setCustomPromptMode(true)
       form.setFieldsValue({
         system_prompt_id: null,
         system_prompt: form.getFieldValue('system_prompt') || '',
-        module_combination_id: null // 清空模块组合
+        module_combination_id: null
       })
       setSelectedCombination(null)
     } else if (promptId) {
-      // 选择了预设提示词
       setCustomPromptMode(false)
       const selectedPrompt = systemPrompts.find(p => p.id === promptId)
       if (selectedPrompt) {
         setSelectedPromptContent(selectedPrompt.description || '')
         form.setFieldsValue({
           system_prompt_id: promptId,
-          system_prompt: '', // 清空自定义内容
-          module_combination_id: null // 清空模块组合
+          system_prompt: '',
+          module_combination_id: null
         })
         setSelectedCombination(null)
       }
     } else {
-      // 清空选择
       setCustomPromptMode(false)
       setSelectedPromptContent('')
       form.setFieldsValue({
@@ -187,7 +201,6 @@ const ConversationSettingsDrawer = ({
       const combination = moduleCombinations.find(c => c.id === combinationId)
       setSelectedCombination(combination)
       
-      // 如果选择了模块组合，清空系统提示词选择（避免冲突）
       if (combination && combination.module_count > 0) {
         setCustomPromptMode(false)
         setSelectedPromptContent('')
@@ -207,17 +220,19 @@ const ConversationSettingsDrawer = ({
 
   // 处理表单提交
   const handleSubmit = (values) => {
-    // 如果是自定义模式，清空system_prompt_id
     if (customPromptMode) {
       values.system_prompt_id = null
     } else if (values.system_prompt_id) {
-      // 如果选择了预设提示词，清空自定义内容
       values.system_prompt = null
     }
     
-    // 确保Azure模型的温度为1
     if (isAzureModel) {
       values.ai_temperature = 1
+    }
+
+    // v2.0: 将 enable_thinking 布尔值转为 0/1
+    if (values.enable_thinking !== undefined) {
+      values.enable_thinking = values.enable_thinking ? 1 : 0
     }
     
     onSubmit(values)
@@ -293,6 +308,40 @@ const ConversationSettingsDrawer = ({
             ))}
           </Select>
         </Form.Item>
+
+        {/* v2.0: 深度思考开关 - 仅 Claude 系列模型显示 */}
+        {showThinkingSwitch && (
+          <Form.Item
+            name="enable_thinking"
+            label={
+              <Space>
+                <BulbOutlined style={{ color: '#fa8c16' }} />
+                {t('chat.thinking.enableLabel') || '深度思考'}
+                <Tooltip title={t('chat.thinking.enableTooltip') || 'Claude推理模型支持深度思考能力，开启后模型会先进行推理分析再输出答案，回答质量更高但消耗更多Token和时间'}>
+                  <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
+                </Tooltip>
+              </Space>
+            }
+            valuePropName="checked"
+          >
+            <Switch
+              checkedChildren="开启"
+              unCheckedChildren="关闭"
+            />
+          </Form.Item>
+        )}
+
+        {/* 深度思考开启时的提示 */}
+        {showThinkingSwitch && form.getFieldValue('enable_thinking') && (
+          <Alert
+            message={t('chat.thinking.enabledWarning') || '深度思考已开启'}
+            description={t('chat.thinking.enabledWarningDesc') || '模型将在回答前进行推理分析，会消耗更多Token和响应时间。可在工具栏的💡按钮控制是否显示思考过程。'}
+            type="info"
+            showIcon
+            icon={<BulbOutlined />}
+            style={{ marginBottom: 16, marginTop: -8 }}
+          />
+        )}
 
         {/* 模块组合选择 */}
         {moduleCombinations.length > 0 && (

@@ -1,5 +1,10 @@
 /**
  * 对话会话数据模型 - 支持动态上下文数量配置、temperature设置、优先级排序、系统提示词、模块组合和智能应用
+ * 
+ * v2.0 变更：
+ *   - 新增 enable_thinking 字段（是否启用AI深度思考）
+ *   - Claude推理模型支持，默认关闭思考，用户可在对话设置中开启
+ *   - create/update/toJSON 全部支持 enable_thinking
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -17,7 +22,7 @@ class Conversation {
     this.system_prompt = data.system_prompt || null;
     this.system_prompt_id = data.system_prompt_id || null; // 系统提示词ID
     this.module_combination_id = data.module_combination_id || null; // 模块组合ID
-    this.smart_app_id = data.smart_app_id || null; // 新增：智能应用ID
+    this.smart_app_id = data.smart_app_id || null; // 智能应用ID
     this.is_pinned = data.is_pinned || 0;
     this.priority = data.priority || 0; // 优先级字段
     this.message_count = data.message_count || 0;
@@ -25,6 +30,7 @@ class Conversation {
     this.last_message_at = data.last_message_at || null;
     this.context_length = data.context_length || 20; // 上下文携带数量
     this.ai_temperature = data.ai_temperature || 0.0; // AI温度参数
+    this.enable_thinking = data.enable_thinking || 0; // v2.0: 是否启用AI深度思考（默认关闭）
     this.cleared_at = data.cleared_at || null; // 清空时间
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
@@ -69,7 +75,7 @@ class Conversation {
   }
 
   /**
-   * 创建新会话 - 支持上下文数量、temperature设置、优先级、系统提示词、模块组合和智能应用
+   * 创建新会话 - 支持上下文数量、temperature设置、优先级、系统提示词、模块组合、智能应用和深度思考
    */
   static async create(conversationData) {
     try {
@@ -78,12 +84,13 @@ class Conversation {
         title = 'New Chat',
         model_name,
         system_prompt = null,
-        system_prompt_id = null, // 系统提示词ID
-        module_combination_id = null, // 模块组合ID
-        smart_app_id = null, // 新增：智能应用ID
-        context_length = 20, // 默认20条上下文
+        system_prompt_id = null,
+        module_combination_id = null,
+        smart_app_id = null,
+        context_length = 20,
         ai_temperature,
-        priority = 0 // 默认优先级为0
+        enable_thinking = 0, // v2.0: 默认不启用深度思考
+        priority = 0
       } = conversationData;
 
       // 如果没有传入temperature，从系统配置获取默认值
@@ -103,8 +110,8 @@ class Conversation {
       const conversationId = uuidv4();
       
       const sql = `
-        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, system_prompt_id, module_combination_id, smart_app_id, priority, context_length, ai_temperature)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, title, model_name, system_prompt, system_prompt_id, module_combination_id, smart_app_id, priority, context_length, ai_temperature, enable_thinking)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       await dbConnection.query(sql, [
@@ -115,12 +122,13 @@ class Conversation {
         system_prompt,
         system_prompt_id,
         module_combination_id,
-        smart_app_id, // 新增：智能应用ID
-        Math.max(0, Math.min(10, parseInt(priority) || 0)), // 确保优先级在0-10范围内
+        smart_app_id,
+        Math.max(0, Math.min(10, parseInt(priority) || 0)),
         parseInt(context_length) || 20,
         ai_temperature !== undefined && ai_temperature !== null 
           ? parseFloat(ai_temperature) || 0.0 
-          : defaultTemperature
+          : defaultTemperature,
+        enable_thinking ? 1 : 0
       ]);
 
       logger.info('会话创建成功', { 
@@ -129,10 +137,11 @@ class Conversation {
         modelName: model_name,
         contextLength: context_length,
         aiTemperature: ai_temperature !== undefined ? ai_temperature : defaultTemperature,
+        enableThinking: enable_thinking,
         priority: priority,
         systemPromptId: system_prompt_id,
         moduleCombinationId: module_combination_id,
-        smartAppId: smart_app_id // 新增日志
+        smartAppId: smart_app_id
       });
 
       return await Conversation.findById(conversationId);
@@ -168,7 +177,7 @@ class Conversation {
       
       logger.info('获取会话总数成功', { userId, total });
       
-      // 获取会话列表 - 修改排序逻辑：先按优先级降序，再按创建时间降序
+      // 获取会话列表 - 先按优先级降序，再按创建时间降序
       const offset = (page - 1) * limit;
       const listSql = `
         SELECT * FROM conversations 
@@ -207,15 +216,15 @@ class Conversation {
   }
 
   /**
-   * 更新会话 - 支持上下文数量、temperature、优先级、系统提示词、模块组合和智能应用更新
+   * 更新会话 - 支持上下文数量、temperature、优先级、系统提示词、模块组合、智能应用和深度思考更新
    */
   async update(updateData) {
     try {
       const fields = [];
       const values = [];
       
-      // 新增 smart_app_id 到允许更新的字段
-      const allowedFields = ['title', 'model_name', 'system_prompt', 'system_prompt_id', 'module_combination_id', 'smart_app_id', 'is_pinned', 'priority', 'context_length', 'ai_temperature', 'message_count', 'total_tokens', 'last_message_at', 'cleared_at'];
+      // v2.0: 新增 enable_thinking 到允许更新的字段
+      const allowedFields = ['title', 'model_name', 'system_prompt', 'system_prompt_id', 'module_combination_id', 'smart_app_id', 'is_pinned', 'priority', 'context_length', 'ai_temperature', 'enable_thinking', 'message_count', 'total_tokens', 'last_message_at', 'cleared_at'];
       
       logger.info('开始更新会话', { 
         conversationId: this.id,
@@ -243,8 +252,11 @@ class Conversation {
             // 确保优先级在0-10范围内
             const priority = parseInt(updateData[field]) || 0;
             values.push(Math.max(0, Math.min(10, priority)));
+          } else if (field === 'enable_thinking') {
+            // v2.0: 布尔值转换为 0/1
+            values.push(updateData[field] ? 1 : 0);
           } else if (field === 'system_prompt' || field === 'system_prompt_id' || field === 'module_combination_id' || field === 'smart_app_id' || field === 'cleared_at' || field === 'last_message_at') {
-            // 这些字段可以是null，但不能是undefined
+            // 这些字段可以是null
             values.push(updateData[field] === null || updateData[field] === '' ? null : updateData[field]);
           } else {
             // 其他字段：将undefined转换为null
@@ -366,6 +378,13 @@ class Conversation {
   }
 
   /**
+   * v2.0: 检查是否启用深度思考
+   */
+  isThinkingEnabled() {
+    return this.enable_thinking === 1 || this.enable_thinking === true;
+  }
+
+  /**
    * 检查是否为智能应用会话
    */
   isSmartAppConversation() {
@@ -382,15 +401,16 @@ class Conversation {
       title: this.title,
       model_name: this.model_name,
       system_prompt: this.system_prompt,
-      system_prompt_id: this.system_prompt_id, // 返回系统提示词ID
-      module_combination_id: this.module_combination_id, // 返回模块组合ID
-      smart_app_id: this.smart_app_id, // 新增：返回智能应用ID
+      system_prompt_id: this.system_prompt_id,
+      module_combination_id: this.module_combination_id,
+      smart_app_id: this.smart_app_id,
       is_pinned: this.is_pinned,
-      priority: this.priority, // 返回优先级
+      priority: this.priority,
       message_count: this.message_count,
       total_tokens: this.total_tokens,
       context_length: this.context_length,
       ai_temperature: this.ai_temperature,
+      enable_thinking: this.enable_thinking, // v2.0: 返回深度思考开关
       cleared_at: this.cleared_at,
       last_message_at: this.last_message_at,
       created_at: this.created_at,

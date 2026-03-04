@@ -7,6 +7,10 @@
  *   - sendMessage: 支持 file_ids 数组参数
  *   - getMessages: 通过 _attachFilesToMessage 支持多文件展示
  *   - 新增 _attachFilesToMessage 内部方法
+ * 
+ * v3.0 变更：
+ *   - updateConversation: 新增 enable_thinking 字段解构和传递
+ *   - 支持对话级别的深度思考开关配置
  */
 
 const ConversationService = require('../services/chat/ConversationService');
@@ -92,6 +96,7 @@ class ChatControllerRefactored {
   /**
    * 更新会话设置
    * PUT /api/chat/conversations/:id
+   * v3.0: 新增 enable_thinking 字段支持
    */
   static async updateConversation(req, res) {
     try {
@@ -104,14 +109,17 @@ class ChatControllerRefactored {
       if (!conversation) return ResponseHelper.notFound(res, '会话不存在');
       await ConversationService.validateUpdatePermissions({ conversation, userId, userGroupId, ...req.body });
 
-      const { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned, context_length, ai_temperature, priority } = req.body;
+      // v3.0: 解构新增 enable_thinking
+      const { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned, context_length, ai_temperature, priority, enable_thinking } = req.body;
       let updateData = { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned };
       if (context_length !== undefined) updateData.context_length = ConversationService.validateContextLength(context_length);
       if (ai_temperature !== undefined) updateData.ai_temperature = ConversationService.validateTemperature(ai_temperature);
       if (priority !== undefined) updateData.priority = parseInt(priority) || 0;
+      // v3.0: 如果传入了 enable_thinking，加入更新数据
+      if (enable_thinking !== undefined) updateData.enable_thinking = enable_thinking;
 
       const updatedConversation = await conversation.update(updateData);
-      logger.info('会话更新成功', { userId, conversationId: id });
+      logger.info('会话更新成功', { userId, conversationId: id, enableThinking: enable_thinking });
       return ResponseHelper.success(res, updatedConversation.toJSON(), '会话更新成功');
     } catch (error) {
       logger.error('会话更新失败', { conversationId: req.params.id, userId: req.user?.id, error: error.message });
@@ -193,28 +201,20 @@ class ChatControllerRefactored {
 
   /**
    * v2.0 内部方法：为消息附加文件信息（兼容 file_id 和 file_ids）
-   * 为消息数据添加 file（单个，向后兼容）和 files（数组）字段
-   * 
-   * @param {Object} msgData - 消息JSON数据
-   * @returns {Object} 附加了文件信息的消息数据
    */
   static async _attachFilesToMessage(msgData) {
-    // 解析 file_ids
     let fileIds = null;
     if (msgData.file_ids) {
       fileIds = typeof msgData.file_ids === 'string' ? JSON.parse(msgData.file_ids) : msgData.file_ids;
     }
 
     if (fileIds && Array.isArray(fileIds) && fileIds.length > 0) {
-      // v2.0 多文件模式：批量查询
       const files = await File.findByIds(fileIds);
       msgData.files = files.map(f => f.toJSON());
-      // 向后兼容：file 字段取第一个
       if (files.length > 0) {
         msgData.file = files[0].toJSON();
       }
     } else if (msgData.file_id) {
-      // 向后兼容：单文件模式
       const file = await File.findById(msgData.file_id);
       if (file) {
         msgData.file = file.toJSON();
@@ -228,12 +228,6 @@ class ChatControllerRefactored {
   /**
    * 发送消息并获取AI回复 - v2.0: 支持 file_ids 多文件
    * POST /api/chat/conversations/:id/messages
-   * 
-   * 请求体参数：
-   *   content {string} - 消息文本
-   *   file_id {string} - 单文件ID（向后兼容）
-   *   file_ids {string[]} - 多文件ID数组（v2.0新增，优先级高于file_id）
-   *   stream {boolean} - 是否使用流式输出
    */
   static async sendMessage(req, res) {
     let creditsConsumed = 0;
@@ -279,7 +273,7 @@ class ChatControllerRefactored {
         requiredCredits
       });
 
-      // 5. v2.0: 处理多文件附件（验证权限、获取文件信息）
+      // 5. v2.0: 处理多文件附件
       const { fileInfos } = await MessageService.processFileAttachments(allFileIds, userId, aiModel);
 
       // 6. 清除草稿
@@ -299,7 +293,7 @@ class ChatControllerRefactored {
       );
       creditsConsumed = requiredCredits;
 
-      // 8. 创建用户消息 - v2.0: 传入 file_ids
+      // 8. 创建用户消息
       const actualContent = MessageService.buildActualContent(content, fileInfos.length > 0 ? fileInfos[0] : null);
       userMessage = await Message.create({
         conversation_id: id,
@@ -315,7 +309,7 @@ class ChatControllerRefactored {
       // 9. 获取历史消息
       const recentMessages = await Message.getRecentMessages(id);
 
-      // 10. v2.0: 构建AI上下文（传递多文件信息数组）
+      // 10. 构建AI上下文
       const aiMessages = await MessageService.buildAIContext({
         conversation, recentMessages,
         systemPromptId: conversation.system_prompt_id,
@@ -330,6 +324,7 @@ class ChatControllerRefactored {
 
       if (useStream) {
         try {
+          // v3.0: 传递 conversation 对象，让 StreamMessageService 读取 enable_thinking
           aiMessageId = await StreamMessageService.sendStreamMessage({
             res, conversation, aiMessages, userMessage,
             user, userId, creditsConsumed, creditsResult, content
@@ -356,7 +351,7 @@ class ChatControllerRefactored {
   }
 
   /**
-   * 删除消息对（用户消息和AI回复）
+   * 删除消息对
    * DELETE /api/chat/conversations/:id/messages/:messageId
    */
   static async deleteMessagePair(req, res) {
@@ -386,22 +381,18 @@ class ChatControllerRefactored {
   // ================================================================
 
   /**
-   * 上传图片 - v2.0: 支持多图上传，返回文件数组
+   * 上传图片 - v2.0: 支持多图上传
    * POST /api/chat/upload-image
-   * 中间件使用 multer.array('image', 5)，req.files 为数组
    */
   static async uploadImage(req, res) {
     try {
       const userId = req.user.id;
-
-      // v2.0: req.files 是数组（array模式），兼容 req.file（不会触发但防御性处理）
       const files = req.files || (req.file ? [req.file] : []);
 
       if (files.length === 0) {
         return ResponseHelper.validation(res, ['请选择要上传的图片']);
       }
 
-      // 批量创建文件记录
       const createdFiles = [];
       for (const file of files) {
         const { filename, originalname, mimetype, size, path: filePath } = file;
@@ -418,8 +409,6 @@ class ChatControllerRefactored {
       }
 
       logger.info('图片上传成功', { userId, fileCount: createdFiles.length, fileIds: createdFiles.map(f => f.id) });
-
-      // v2.0: 返回文件数组（前端需要适配）
       return ResponseHelper.success(res, createdFiles, `成功上传 ${createdFiles.length} 张图片`);
     } catch (error) {
       logger.error('图片上传失败', { userId: req.user?.id, error: error.message });
@@ -428,7 +417,7 @@ class ChatControllerRefactored {
   }
 
   /**
-   * 上传文档（保持不变，仍为单文件）
+   * 上传文档
    * POST /api/chat/upload-document
    */
   static async uploadDocument(req, res) {
@@ -462,10 +451,7 @@ class ChatControllerRefactored {
   // 模型/提示词/模块/积分
   // ================================================================
 
-  /**
-   * 获取可用的AI模型列表
-   * GET /api/chat/models
-   */
+  /** 获取可用的AI模型列表 - GET /api/chat/models */
   static async getModels(req, res) {
     try {
       const userId = req.user.id;
@@ -534,7 +520,7 @@ class ChatControllerRefactored {
   // 草稿管理
   // ================================================================
 
-  /** 保存草稿 - POST /api/chat/conversations/:id/draft */
+  /** 保存草稿 */
   static async saveDraft(req, res) {
     try {
       const { id } = req.params;
@@ -549,7 +535,7 @@ class ChatControllerRefactored {
     }
   }
 
-  /** 获取草稿 - GET /api/chat/conversations/:id/draft */
+  /** 获取草稿 */
   static async getDraft(req, res) {
     try {
       const { id } = req.params;
@@ -564,7 +550,7 @@ class ChatControllerRefactored {
     }
   }
 
-  /** 删除草稿 - DELETE /api/chat/conversations/:id/draft */
+  /** 删除草稿 */
   static async deleteDraft(req, res) {
     try {
       const { id } = req.params;
@@ -584,7 +570,7 @@ class ChatControllerRefactored {
   // ================================================================
 
   /**
-   * 清空对话消息（设置 cleared_at，不物理删除）
+   * 清空对话消息
    * POST /api/chat/conversations/:id/clear
    */
   static async clearMessages(req, res) {

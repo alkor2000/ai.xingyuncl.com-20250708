@@ -4,6 +4,10 @@
  * v2.0 变更：
  *   - prepareUserMessageData: 支持 file_ids 多文件，附加 files 数组
  * 
+ * v3.0 变更：
+ *   - sendStreamMessage: 从 conversation 读取 enable_thinking，传递给 AIStreamService
+ *   - 支持对话级别的深度思考开关，控制是否允许模型输出推理过程
+ * 
  * 修复记录：
  *   - 空内容检查，失败时标记消息并退还积分
  */
@@ -18,6 +22,8 @@ const logger = require('../../utils/logger');
 class StreamMessageService {
   /**
    * 处理流式消息发送
+   * v3.0: 读取 conversation.enable_thinking，传递给 AIStreamService
+   * 
    * @param {Object} params - 发送参数
    * @returns {string} AI消息ID
    */
@@ -42,15 +48,20 @@ class StreamMessageService {
     logger.info('创建流式消息占位符', {
       messageId: aiMessageId,
       conversationId: conversation.id,
+      enableThinking: conversation.isThinkingEnabled(),
       status: 'streaming'
     });
 
     // 准备用户消息数据（v2.0: 包含多文件信息）
     const userMessageData = await this.prepareUserMessageData(userMessage);
 
-    // 调用流式服务
+    // v3.0: 读取对话的深度思考开关配置
+    const enableThinking = conversation.isThinkingEnabled();
+
+    // 调用流式服务 - v3.0: 传递 enableThinking 参数
     await AIStreamService.sendStreamMessage(res, conversation.model_name, aiMessages, {
       temperature: conversation.getTemperature(),
+      enableThinking: enableThinking,  // v3.0: 是否启用深度思考
       messageId: aiMessageId,
       conversationId: conversation.id,
       userId: userId,
@@ -71,33 +82,23 @@ class StreamMessageService {
 
   /**
    * 准备用户消息数据（包含文件信息）
-   * v2.0: 支持 file_ids 多文件，附加 files 数组字段
-   * 
-   * @param {Message} userMessage - 用户消息对象
-   * @returns {Object} 包含文件信息的用户消息JSON
+   * v2.0: 支持 file_ids 多文件
    */
   static async prepareUserMessageData(userMessage) {
     const userMessageData = userMessage.toJSON();
-
-    // v2.0: 优先使用 getAllFileIds() 获取所有关联文件
     const allFileIds = userMessage.getAllFileIds();
 
     if (allFileIds.length > 0) {
-      // 批量查询文件信息
       const files = await File.findByIds(allFileIds);
       userMessageData.files = files.map(f => f.toJSON());
-
-      // 向后兼容：file 字段取第一个
       if (files.length > 0) {
         userMessageData.file = files[0].toJSON();
       }
-
       logger.info('准备用户消息文件数据', {
         messageId: userMessage.id,
         fileCount: files.length
       });
     } else if (userMessageData.file_id) {
-      // 向后兼容：只有 file_id 的旧消息
       const file = await File.findById(userMessageData.file_id);
       if (file) {
         userMessageData.file = file.toJSON();
@@ -111,10 +112,6 @@ class StreamMessageService {
   /**
    * 创建完成处理器
    * 处理流式AI响应完成后的逻辑：更新消息、统计、标题
-   * 修复：检查空内容，失败时标记消息并退还积分
-   * 
-   * @param {Object} params - 处理器参数
-   * @returns {Function} 完成处理器回调函数
    */
   static createCompleteHandler(params) {
     const {
@@ -124,7 +121,7 @@ class StreamMessageService {
 
     return async (fullContent, tokens, generatedImages) => {
       try {
-        // 检查内容是否为空（null表示失败）
+        // 检查内容是否为空
         if (fullContent === null || fullContent === undefined || fullContent === '') {
           logger.warn('流式AI返回空内容，标记消息为失败并退还积分', {
             userId, conversationId: conversation.id,
@@ -190,8 +187,7 @@ class StreamMessageService {
   }
 
   /**
-   * 处理流式消息失败（退还积分、标记失败状态）
-   * @param {Object} params - 错误处理参数
+   * 处理流式消息失败
    */
   static async handleStreamError(params) {
     const { aiMessageId, user, creditsConsumed, error } = params;

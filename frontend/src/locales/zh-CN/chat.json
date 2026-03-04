@@ -148,5 +148,15 @@
   "chat.canvas.desktop": "桌面预览",
   "chat.canvas.tablet": "平板预览",
   "chat.canvas.mobile": "手机预览",
-  "chat.canvas.streaming": "内容生成中，显示最近完成的代码..."
+  "chat.canvas.streaming": "内容生成中，显示最近完成的代码...",
+
+  "chat.thinking.show": "显示思考过程",
+  "chat.thinking.hide": "隐藏思考过程",
+  "chat.thinking.tooltip": "Claude推理模型会输出思考过程，开启后可查看AI的推理链",
+  "chat.thinking.hasThinking": "有思考过程",
+  "chat.thinking.onlyThinking": "AI仅输出了思考过程，无正文内容",
+  "chat.thinking.enableLabel": "深度思考",
+  "chat.thinking.enableTooltip": "Claude推理模型支持深度思考能力，开启后模型会先进行推理分析再输出答案，回答质量更高但消耗更多Token和时间",
+  "chat.thinking.enabledWarning": "深度思考已开启",
+  "chat.thinking.enabledWarningDesc": "模型将在回答前进行推理分析，会消耗更多Token和响应时间。可在工具栏的💡按钮控制是否显示思考过程。"
 }

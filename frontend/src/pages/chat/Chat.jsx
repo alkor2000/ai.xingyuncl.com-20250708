@@ -32,6 +32,13 @@
  *   - 点X关闭后，已有的HTML不会触发重新弹出；新生成HTML才会触发弹出
  *   - handleToggleCanvas中开启时重置dismissed，确保手动开启立即生效
  * 
+ * v4.0 变更：
+ *   - 新增思考过程(thinking)显示开关
+ *   - Claude推理模型输出的<thinking>标签内容默认隐藏
+ *   - 用户可通过工具栏按钮切换显示/隐藏
+ *   - 状态通过 localStorage 持久化，默认关闭
+ *   - showThinking prop 通过 MessageList → MessageItem → MessageContent 传递
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -78,6 +85,8 @@ const TOKENS_PER_IMAGE = 85
 const TOKENS_PER_DOCUMENT_DEFAULT = 500
 /** localStorage 中画布开关的键名 */
 const CANVAS_ENABLED_KEY = 'chat_html_canvas_enabled'
+/** v4.0: localStorage 中思考过程开关的键名 */
+const SHOW_THINKING_KEY = 'chat_show_thinking'
 
 // ================================================================
 // 自定义Hooks
@@ -117,17 +126,12 @@ const useViewportHeight = () => {
 /**
  * v3.0: 检测消息列表中是否包含已完成的HTML代码块
  * 用于决定是否显示右侧画布面板
- * 
- * @param {Array} messages - 消息列表
- * @returns {boolean} - 是否有HTML代码块
  */
 const useHasHtmlContent = (messages) => {
   return useMemo(() => {
     if (!messages || messages.length === 0) return false
-    // 只检查AI助手消息中是否有完整的 ```html ... ``` 代码块
     return messages.some(msg => {
       if (msg.role !== 'assistant' || !msg.content) return false
-      // 匹配已闭合的HTML代码块
       return /```(?:html|HTML)\s*\n[\s\S]*?```/.test(msg.content)
     })
   }, [messages])
@@ -136,9 +140,6 @@ const useHasHtmlContent = (messages) => {
 /**
  * v3.3: 统计消息列表中HTML代码块的总数量
  * 用于判断是否有"新"HTML生成（数量增加 = 有新内容）
- * 
- * @param {Array} messages - 消息列表
- * @returns {number} - HTML代码块总数
  */
 const useHtmlBlockCount = (messages) => {
   return useMemo(() => {
@@ -146,7 +147,6 @@ const useHtmlBlockCount = (messages) => {
     let count = 0
     for (const msg of messages) {
       if (msg.role !== 'assistant' || !msg.content) continue
-      // 统计所有已闭合的 ```html ... ``` 代码块数量
       const matches = msg.content.match(/```(?:html|HTML)\s*\n[\s\S]*?```/g)
       if (matches) count += matches.length
     }
@@ -182,14 +182,13 @@ const Chat = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [deletingConversation, setDeletingConversation] = useState(null)
   const [showNewChatModal, setShowNewChatModal] = useState(false)
-  const [uploadedImages, setUploadedImages] = useState([])         // v2.0: 图片数组
+  const [uploadedImages, setUploadedImages] = useState([])
   const [uploadedDocument, setUploadedDocument] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [editingConversation, setEditingConversation] = useState(null)
 
   // v3.0: HTML画布状态
-  // 画布功能开关（全局偏好，默认开启，从localStorage读取）
   const [canvasEnabled, setCanvasEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem(CANVAS_ENABLED_KEY)
@@ -199,9 +198,22 @@ const Chat = () => {
     }
   })
 
-  // v3.1: 画布临时关闭状态（用户点了X关闭按钮，只在当前对话有效）
-  // 切换对话时自动重置为false，这样新对话的画布还会自动出现
+  // v3.1: 画布临时关闭状态
   const [canvasDismissed, setCanvasDismissed] = useState(false)
+
+  /**
+   * v4.0: 思考过程显示开关
+   * 默认关闭（false），从 localStorage 读取用户偏好
+   * 控制是否在消息中展示 Claude 推理模型的 <thinking> 内容
+   */
+  const [showThinking, setShowThinking] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SHOW_THINKING_KEY)
+      return saved === 'true'  // 默认 false，只有明确保存了 'true' 才开启
+    } catch {
+      return false
+    }
+  })
 
   // 移动端专用状态
   const [mobileView, setMobileView] = useState('list')
@@ -217,70 +229,53 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
-  /**
-   * v3.3: 用ref记录上一次的HTML代码块数量
-   * 只有数量增加时才自动重置canvasDismissed（表示有新HTML生成）
-   * 数量不变或减少时不做任何操作（用户点X关闭后不会被重新弹出）
-   */
+  // v3.3: 用ref记录上一次的HTML代码块数量
   const htmlBlockCountRef = useRef(0)
 
   // v3.0: 检测当前对话消息中是否有HTML内容
   const hasHtmlContent = useHasHtmlContent(messages)
   // v3.3: 统计当前对话中HTML代码块的数量
   const htmlBlockCount = useHtmlBlockCount(messages)
-  // v3.1: 画布是否实际显示：功能开关开启 + 未被临时关闭 + 有HTML内容 + 不是移动端
+  // v3.1: 画布是否实际显示
   const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
 
   // ================================================================
   // v3.0/v3.1/v3.3: 画布开关和关闭处理
   // ================================================================
 
-  /**
-   * v3.3: 切换画布开关（工具栏按钮），保存到localStorage
-   * 开启时同时重置dismissed状态，确保画布立即显示
-   */
+  /** v3.3: 切换画布开关（工具栏按钮） */
   const handleToggleCanvas = useCallback(() => {
     setCanvasEnabled(prev => {
       const newValue = !prev
-      try {
-        localStorage.setItem(CANVAS_ENABLED_KEY, String(newValue))
-      } catch {
-        // localStorage不可用时静默忽略
-      }
+      try { localStorage.setItem(CANVAS_ENABLED_KEY, String(newValue)) } catch {}
       return newValue
     })
-    // 无论开启还是关闭，都重置dismissed状态
-    // 这样用户再次开启时，画布会立即显示（如果有HTML内容）
     setCanvasDismissed(false)
   }, [])
 
-  /**
-   * v3.1: 关闭画布（画布面板的X按钮触发）
-   * 只临时隐藏当前对话的画布，不改变canvasEnabled全局开关
-   * 切换对话后画布会自动恢复显示
-   */
+  /** v3.1: 关闭画布（画布面板的X按钮触发） */
   const handleDismissCanvas = useCallback(() => {
     setCanvasDismissed(true)
   }, [])
 
   /**
-   * v3.3: 监听HTML代码块数量变化
-   * 只有数量增加时（说明有新的HTML代码块生成），才自动重置dismissed状态
-   * 这样：
-   *   - 用户点X关闭画布 → dismissed=true，数量不变 → 画布保持关闭 ✓
-   *   - 用户再生成新HTML → 数量增加 → 自动重置dismissed → 画布弹出 ✓
-   *   - 切换对话 → currentConversationId变化的useEffect已经重置dismissed ✓
+   * v4.0: 切换思考过程显示开关
+   * 保存到 localStorage，在所有对话中生效
    */
+  const handleToggleThinking = useCallback(() => {
+    setShowThinking(prev => {
+      const newValue = !prev
+      try { localStorage.setItem(SHOW_THINKING_KEY, String(newValue)) } catch {}
+      return newValue
+    })
+  }, [])
+
+  // v3.3: 监听HTML代码块数量变化
   useEffect(() => {
     const prevCount = htmlBlockCountRef.current
-
     if (htmlBlockCount > prevCount && canvasDismissed && canvasEnabled) {
-      // HTML代码块数量增加了 + 画布被临时关闭 + 功能开关开启
-      // 说明有新的HTML生成，自动重置临时关闭状态
       setCanvasDismissed(false)
     }
-
-    // 更新ref记录当前数量
     htmlBlockCountRef.current = htmlBlockCount
   }, [htmlBlockCount, canvasDismissed, canvasEnabled])
 
@@ -292,7 +287,6 @@ const Chat = () => {
     getConversations(true, true)
     getAIModels()
     getUserCredits()
-    // v2.2: 加载系统提示词和模块组合列表（用于Token计算）
     getSystemPrompts()
     getModuleCombinations()
   }, [])
@@ -310,9 +304,7 @@ const Chat = () => {
     setInputValue('')
     setUserScrolled(false)
     setLastScrollTop(0)
-    // v3.1: 切换对话时重置画布临时关闭状态，让新对话的画布自动出现
     setCanvasDismissed(false)
-    // v3.3: 切换对话时重置HTML代码块计数，避免旧对话的计数影响新对话
     htmlBlockCountRef.current = 0
   }, [currentConversationId])
 
@@ -373,7 +365,7 @@ const Chat = () => {
 
     let totalTokens = 0
 
-    // ---- 1. 系统提示词 Token ----
+    // 1. 系统提示词 Token
     if (currentConversation.system_prompt_id && systemPrompts.length > 0) {
       const matchedPrompt = systemPrompts.find(p => p.id === currentConversation.system_prompt_id)
       if (matchedPrompt && matchedPrompt.token_count) {
@@ -384,7 +376,7 @@ const Chat = () => {
       totalTokens += calculateTokens(currentConversation.system_prompt)
     }
 
-    // ---- 2. 万智魔方（模块组合）Token ----
+    // 2. 万智魔方（模块组合）Token
     if (currentConversation.module_combination_id && moduleCombinations.length > 0) {
       const matchedCombination = moduleCombinations.find(
         c => c.id === currentConversation.module_combination_id
@@ -394,7 +386,7 @@ const Chat = () => {
       }
     }
 
-    // ---- 3. 历史消息上下文 Token ----
+    // 3. 历史消息上下文 Token
     if (messages && messages.length > 0) {
       const contextLength = currentConversation.context_length || 20
       const recentMessages = messages.slice(-contextLength)
@@ -734,7 +726,8 @@ const Chat = () => {
 
   // ================================================================
   // 构建 ChatInputArea 通用 props
-  // v3.0: 新增 canvasEnabled / hasHtmlContent / onToggleCanvas props
+  // v3.0: 新增 canvasEnabled / hasHtmlContent / onToggleCanvas
+  // v4.0: 新增 showThinking / onToggleThinking
   // ================================================================
 
   const inputAreaProps = {
@@ -751,6 +744,8 @@ const Chat = () => {
     canvasEnabled,
     hasHtmlContent,
     onToggleCanvas: handleToggleCanvas,
+    showThinking,
+    onToggleThinking: handleToggleThinking,
     disabled: !currentConversation || isSending,
     onInputChange: handleInputChange,
     onKeyPress: handleKeyPress,
@@ -813,10 +808,12 @@ const Chat = () => {
         ) : (
           <>
             <div className="mobile-messages-container" ref={messagesContainerRef}>
+              {/* v4.0: 传递 showThinking 给 MessageList */}
               <MessageList messages={messages} loading={messagesLoading} typing={typing}
                 isStreaming={isStreaming} currentModel={currentModel} aiModels={aiModels}
                 user={user} streamingMessageId={streamingMessageId}
-                messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage} />
+                messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage}
+                showThinking={showThinking} />
               <div ref={messagesEndRef} />
             </div>
             <div className="mobile-input-container">
@@ -902,10 +899,12 @@ const Chat = () => {
               ) : (
                 <>
                   <div className="messages-container" ref={messagesContainerRef}>
+                    {/* v4.0: 传递 showThinking 给 MessageList */}
                     <MessageList messages={messages} loading={messagesLoading} typing={typing}
                       isStreaming={isStreaming} currentModel={currentModel} aiModels={aiModels}
                       user={user} streamingMessageId={streamingMessageId}
-                      messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage} />
+                      messagesEndRef={messagesEndRef} onDeleteMessage={handleDeleteMessage}
+                      showThinking={showThinking} />
                     <div ref={messagesEndRef} />
                   </div>
                   <ChatInputArea {...inputAreaProps} />
@@ -914,7 +913,7 @@ const Chat = () => {
             </Content>
           </div>
 
-          {/* v3.0/v3.1: 右侧：HTML画布面板，onClose改为handleDismissCanvas */}
+          {/* v3.0/v3.1: 右侧：HTML画布面板 */}
           {showCanvas && (
             <div className="chat-canvas-area">
               <HtmlCanvasPanel

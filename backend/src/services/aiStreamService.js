@@ -6,6 +6,11 @@
  *   - processMessagesForOpenRouter: 支持 msg.image_urls 多图数组
  *   - processMessagesStandard: 支持 msg.image_urls 多图数组
  * 
+ * v3.0 变更：
+ *   - callStreamAPI: 支持 options.enableThinking 参数
+ *   - 针对 OpenRouter 端点，当 enableThinking 为 false 时添加 include_reasoning: false
+ *   - 从源头控制是否让模型输出推理/思考过程，节省 token 和响应时间
+ * 
  * 修复记录：
  *   - Gemini空回答问题 - 添加空内容检查和调试日志
  *   - API错误信息通过SSE发送给前端
@@ -53,8 +58,6 @@ class AIStreamService {
 
   /**
    * v2.0: 构建图片 content 块数组
-   * @param {string[]} urls - 图片URL数组
-   * @returns {Object[]} content块数组（OpenAI image_url 格式）
    */
   static _buildImageContentBlocks(urls) {
     if (!urls || urls.length === 0) return [];
@@ -219,6 +222,7 @@ class AIStreamService {
     try {
       logger.info('开始流式AI服务', {
         model: modelName, messageCount: messages.length,
+        enableThinking: options.enableThinking,
         hasPDFs: messages.some(m => m.file),
         hasMultiImages: messages.some(m => m.image_urls)
       });
@@ -263,7 +267,6 @@ class AIStreamService {
 
   /**
    * 内部方法：处理流式数据的通用逻辑
-   * 抽取 callStreamAPI 和 callAzureStreamAPI 中重复的 on('data')/on('end')/on('error') 逻辑
    */
   static _handleStreamResponse(res, response, model, options, startTime) {
     let fullContent = '';
@@ -362,7 +365,7 @@ class AIStreamService {
   }
 
   /**
-   * 内部方法：完成流式响应（发送done或error事件）
+   * 内部方法：完成流式响应
    */
   static _finishStream(res, fullContent, options) {
     if (fullContent.length > 0) {
@@ -386,7 +389,8 @@ class AIStreamService {
   }
 
   /**
-   * 调用标准OpenAI格式的流式API - v2.0: 使用统一的流处理逻辑
+   * 调用标准OpenAI格式的流式API
+   * v3.0: 支持 enableThinking 参数，针对 OpenRouter 控制推理输出
    */
   static async callStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
@@ -414,6 +418,19 @@ class AIStreamService {
       };
       if (plugins) requestData.plugins = plugins;
 
+      /**
+       * v3.0: 针对 OpenRouter 端点，根据 enableThinking 控制推理输出
+       * - enableThinking 为 false（默认）：添加 include_reasoning: false，禁止模型输出思考过程
+       * - enableThinking 为 true：不添加限制参数，允许模型自由思考
+       * 
+       * 注意：include_reasoning 是 OpenRouter 特有参数
+       * 参考：https://openrouter.ai/docs/parameters
+       */
+      if (isOpenRouter && !options.enableThinking) {
+        requestData.include_reasoning = false;
+        logger.info('OpenRouter: 禁用推理输出（enableThinking=false）', { model: model.name });
+      }
+
       const endpoint = model.api_endpoint.endsWith('/chat/completions')
         ? model.api_endpoint : `${model.api_endpoint}/chat/completions`;
 
@@ -439,7 +456,11 @@ class AIStreamService {
         throw axiosError;
       }
 
-      logger.info('开始接收流式响应', { model: model.name, isOpenRouter, responseTimeMs: Date.now() - startTime });
+      logger.info('开始接收流式响应', {
+        model: model.name, isOpenRouter,
+        enableThinking: options.enableThinking,
+        responseTimeMs: Date.now() - startTime
+      });
 
       return await AIStreamService._handleStreamResponse(res, response, model, options, startTime);
     } catch (error) {
@@ -449,7 +470,7 @@ class AIStreamService {
   }
 
   /**
-   * 调用Azure流式API - v2.0: 使用统一的流处理逻辑
+   * 调用Azure流式API
    */
   static async callAzureStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
