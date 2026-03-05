@@ -1,14 +1,10 @@
 /**
  * 配置面板 - 显示选中节点的配置选项
- * v2.1 - 保存按钮和状态
- * v2.2 - 知识库节点Wiki选择+Token显示
- * v2.3 - 问题分类节点配置
- * v2.4 - P2修复：保存知识库元数据
- * v2.5 - 视觉美化：表单字体加大、间距优化、节点信息卡片化
- * v2.6 - 优化：
- *   1. 保存按钮改为"保存节点"，颜色固定蓝色不再跟随节点主题色
- *   2. 最大Token上限从8192改为100000
- *   3. 保存按钮样式统一
+ * v2.7 - 新建LLM/分类节点时自动填充系统默认模型
+ * v2.8 - 保存按钮改为"节点配置已同步"状态指示：
+ *   1. 节点配置通过 onValuesChange 实时同步到画布，无需手动保存
+ *   2. 顶部状态栏仅显示同步状态，不再有保存按钮
+ *   3. 提示用户"修改已实时生效，请通过工具栏保存工作流"
  */
 
 import React, { useEffect, useState } from 'react'
@@ -29,7 +25,8 @@ import {
   DeleteOutlined,
   PlusOutlined,
   BranchesOutlined,
-  TagOutlined
+  TagOutlined,
+  SyncOutlined
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
 import './ConfigPanel.less'
@@ -54,18 +51,18 @@ const ConfigPanel = ({
   const [selectedWikis, setSelectedWikis] = useState([])
   const [categories, setCategories] = useState([])
   
-  // 加载可用模型列表
+  /* 加载可用模型列表 */
   useEffect(() => {
     if (availableModels.length === 0) fetchAvailableModels()
   }, [])
   
-  // 节点选中时同步表单数据
+  /* 节点选中时同步表单数据 */
   useEffect(() => {
     if (selectedNode) {
       const config = selectedNode.data?.config || {}
       form.setFieldsValue(config)
       
-      // 知识库节点：恢复已选知识库
+      /* 知识库节点：恢复已选知识库 */
       if (selectedNode.type === 'knowledge' && config.wiki_ids) {
         if (config.selected_wikis && config.selected_wikis.length > 0) {
           setSelectedWikis(config.selected_wikis)
@@ -80,7 +77,7 @@ const ConfigPanel = ({
         setSelectedWikis([])
       }
       
-      // 分类节点：恢复分类列表
+      /* 分类节点：恢复分类列表 */
       if (selectedNode.type === 'classifier' && config.categories) {
         setCategories(config.categories || [])
       } else {
@@ -93,7 +90,30 @@ const ConfigPanel = ({
     }
   }, [selectedNode, form, wikiItems])
   
-  // 知识库节点自动加载知识库列表
+  /**
+   * v2.7: 当模型列表加载完成后，自动为LLM/分类节点填充默认模型
+   */
+  useEffect(() => {
+    if (!selectedNode || availableModels.length === 0) return
+    
+    const needsDefaultModel = selectedNode.type === 'llm' || selectedNode.type === 'classifier'
+    const currentModel = selectedNode.data?.config?.model
+    
+    if (needsDefaultModel && !currentModel) {
+      const defaultModel = availableModels[0]?.name
+      if (defaultModel) {
+        form.setFieldsValue({ model: defaultModel })
+        const allValues = form.getFieldsValue()
+        allValues.model = defaultModel
+        if (selectedNode.type === 'classifier') {
+          allValues.categories = categories
+        }
+        onUpdateConfig(selectedNode.id, allValues)
+      }
+    }
+  }, [selectedNode, availableModels])
+  
+  /* 知识库节点自动加载知识库列表 */
   useEffect(() => {
     if (selectedNode?.type === 'knowledge' && wikiItems.length === 0) fetchWikiItems()
   }, [selectedNode?.type])
@@ -104,7 +124,7 @@ const ConfigPanel = ({
     tokens: w.tokens || 0, tokens_display: w.tokens_display || '未知'
   }))
   
-  /** 表单值变化回调 */
+  /** 表单值变化回调 - 实时同步到画布节点 */
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
       if (selectedNode.type === 'knowledge') {
@@ -171,25 +191,25 @@ const ConfigPanel = ({
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
-  // 计算知识库总Token
+  /* 计算知识库总Token */
   const totalTokens = selectedWikis.reduce((sum, w) => sum + (w.tokens || 0), 0)
   const formatTotalTokens = (t) => t === 0 ? '0' : t < 1000 ? `${t}` : `${(t/1000).toFixed(1)}K`
   
-  // 范围图标映射
+  /* 范围图标映射 */
   const scopeIcons = {
     personal: <UserOutlined style={{ color: '#1890ff' }} />,
     team: <TeamOutlined style={{ color: '#52c41a' }} />,
     global: <GlobalOutlined style={{ color: '#fa8c16' }} />
   }
   
-  // 节点类型对应的主题色（仅用于节点信息卡片边框）
+  /* 节点类型对应的主题色 */
   const nodeThemeColors = {
     start: '#52c41a', llm: '#1890ff', end: '#ff4d4f',
     knowledge: '#722ed1', classifier: '#d48806'
   }
   const themeColor = nodeThemeColors[selectedNode?.type] || '#1890ff'
   
-  // 空状态
+  /* 空状态 */
   if (!selectedNode) {
     return (
       <div className="cp-empty">
@@ -199,25 +219,21 @@ const ConfigPanel = ({
   }
   
   /**
-   * 保存按钮区域
-   * v2.6 修改：文案改为"保存节点"，颜色固定蓝色（#1890ff），不再跟随节点主题色
+   * v2.8: 状态栏 - 不再有保存按钮
+   * 节点配置通过表单 onValuesChange 实时同步到画布
+   * 用户只需通过顶部工具栏的"保存工作流"来持久化所有更改
    */
-  const renderSaveButton = () => {
-    if (!inDrawer || !onSave) return null
+  const renderStatusBar = () => {
+    if (!inDrawer) return null
     return (
       <div className="cp-save-bar">
         <span className="cp-save-status">
           {hasUnsavedChanges ? (
-            <span className="cp-unsaved">● 有未保存的更改</span>
+            <span className="cp-unsaved"><SyncOutlined spin /> 节点配置已修改，请保存工作流</span>
           ) : (
             <span className="cp-saved"><CheckCircleOutlined /> 已保存</span>
           )}
         </span>
-        <Button type="primary" icon={<SaveOutlined />} onClick={onSave}
-          loading={saving} disabled={!hasUnsavedChanges} size="small"
-        >
-          保存
-        </Button>
       </div>
     )
   }
@@ -357,7 +373,6 @@ const ConfigPanel = ({
     <Form form={form} layout="vertical" onValuesChange={handleValuesChange}
       size="middle" className="cp-form">
       
-      {/* 所有节点都有的节点名称 */}
       <Form.Item label="节点名称" name="label" initialValue={selectedNode.data?.label}>
         <Input placeholder="输入节点名称" />
       </Form.Item>
@@ -398,7 +413,6 @@ const ConfigPanel = ({
             <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
           </Form.Item>
           
-          {/* v2.6: 最大Token上限从8192改为100000 */}
           <Form.Item label="最大Token数" name="max_tokens" initialValue={2000}
             tooltip="单次回复最大长度（取决于模型支持的上限）">
             <InputNumber min={100} max={100000} style={{ width: '100%' }} />
@@ -433,10 +447,7 @@ const ConfigPanel = ({
         </>
       )}
       
-      {/* 知识库节点配置 */}
       {selectedNode.type === 'knowledge' && renderKnowledgeConfig()}
-      
-      {/* 分类节点配置 */}
       {selectedNode.type === 'classifier' && renderClassifierConfig()}
     </Form>
   )
@@ -455,18 +466,16 @@ const ConfigPanel = ({
     </div>
   )
   
-  // 抽屉模式渲染
   if (inDrawer) {
     return (
       <div className="cp-content">
-        {renderSaveButton()}
+        {renderStatusBar()}
         {renderConfigForm()}
         {renderNodeInfo()}
       </div>
     )
   }
   
-  // 面板模式渲染
   return (
     <div className="workflow-editor-config-panel">
       {renderConfigForm()}

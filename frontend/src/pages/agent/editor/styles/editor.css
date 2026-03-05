@@ -1,31 +1,38 @@
 /**
- * 工作流编辑器样式 v4.1
- * v3.0 - 浮动面板+可删除边+大连接点
- * v3.1 - 视觉优化：节点更大320px，深色header，分类节点专用样式
- * v4.0 - 全面质感升级：
- *   1. 节点放大至360px，标题18px，内容14px，整体更清晰
- *   2. 画布背景改为柔和点阵+渐变，MiniMap美化
- *   3. 配置抽屉视觉大幅升级：深色标题栏、分区卡片、阴影层次
- *   4. 连线样式优化：更粗、颜色更深、箭头更清晰
- *   5. 工具栏微调：更紧凑的间距和按钮样式
- * v4.1 - 节点可读性优化：
- *   1. section-title 从14px加大到15px
- *   2. param-item/param-name/param-value 从14px加大到15px
- *   3. param-empty 从14px加大到14px（保持）
- *   4. model-name 从14px加大到15px
- *   5. prompt-preview 从13px加大到14px
- *   6. node-hint 从13px加大到14px
- *   7. 知识库Tag和分类Tag字体加大
- *   8. section-title图标从14px加大到15px
+ * 工作流编辑器样式 v4.3
+ * v4.0 - 全面质感升级
+ * v4.1 - 节点可读性优化，字体加大
+ * v4.2 - 布局修复：overflow:hidden, flex-shrink:0
+ * v4.3 - 关键修复：
+ *   1. 工具栏消失问题：通过覆盖外层 .basic-layout-content 的 overflow
+ *      当编辑器页面加载时，禁止外层容器滚动
+ *   2. 分类节点Handle位置：用 !important 覆盖 ReactFlow 默认的 top:50%
+ *      确保自定义 top 值生效
  */
 
-/* ========== 编辑器整体布局 ========== */
+/* ========== v4.3 关键修复：覆盖外层布局容器滚动 ========== */
+/* 当工作流编辑器页面加载时，外层 Content 容器不应有滚动 */
+/* 这样 .workflow-editor 的 height:100vh + overflow:hidden 才能生效 */
+.basic-layout-content:has(.workflow-editor) {
+  overflow: hidden !important;
+  padding: 0 !important;
+  height: 100%;
+}
 
+/* 备用方案：如果浏览器不支持 :has()，编辑器自身也做绝对定位覆盖 */
 .workflow-editor {
   display: flex;
   flex-direction: column;
   height: 100vh;
   background: #f0f2f5;
+  overflow: hidden;
+  /* v4.3: 绝对定位占满父容器，确保不会被外层滚动影响 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
 }
 
 /* ========== 顶部工具栏 ========== */
@@ -41,6 +48,7 @@
   z-index: 1001;
   position: relative;
   min-height: 56px;
+  flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -72,7 +80,7 @@
   position: relative;
 }
 
-/* ========== 配置抽屉 - v4.0 视觉大幅升级 ========== */
+/* ========== 配置抽屉 ========== */
 
 .workflow-editor-body .ant-drawer {
   position: absolute;
@@ -94,7 +102,6 @@
   background: #f8f9fb;
 }
 
-/* v4.0: 抽屉标题栏 - 深色背景白色文字 */
 .workflow-editor-body .ant-drawer-header {
   padding: 16px 20px;
   border-bottom: none;
@@ -107,7 +114,6 @@
   color: #fff !important;
 }
 
-/* 关闭按钮白色 */
 .workflow-editor-body .ant-drawer-close {
   color: rgba(255, 255, 255, 0.75) !important;
 }
@@ -116,7 +122,6 @@
   color: #fff !important;
 }
 
-/* v4.0: 抽屉内容区域 */
 .workflow-editor-body .ant-drawer-body {
   padding: 20px !important;
   background: #f8f9fb;
@@ -237,7 +242,7 @@
 .floating-node-desc { font-size: 11px; color: #999; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .floating-node-action { color: #bfbfbf; font-size: 13px; flex-shrink: 0; margin-left: 6px; }
 
-/* ========== 画布区域 - v4.0 背景优化 ========== */
+/* ========== 画布区域 ========== */
 
 .workflow-editor-canvas {
   flex: 1;
@@ -246,7 +251,6 @@
   z-index: 1;
 }
 
-/* v4.0: 画布背景 - 柔和点阵 */
 .workflow-editor-canvas .react-flow__background {
   opacity: 0.6;
 }
@@ -277,7 +281,7 @@
 .react-flow__edge:hover .edge-delete-btn { opacity: 1; }
 .edge-delete-btn:hover { background: #ff4d4f; color: #fff; transform: scale(1.2); }
 
-/* ========== v4.0: 连线样式优化 ========== */
+/* ========== 连线样式 ========== */
 
 .react-flow__edge-path {
   stroke-width: 2.5 !important;
@@ -294,7 +298,6 @@
   stroke-width: 3 !important;
 }
 
-/* 连线动画效果 */
 .react-flow__edge.animated .react-flow__edge-path {
   stroke-dasharray: 6 3;
   animation: edgeFlow 0.8s linear infinite;
@@ -304,7 +307,7 @@
   to { stroke-dashoffset: -9; }
 }
 
-/* ========== v4.0: 增大连接点（更显眼） ========== */
+/* ========== 连接点 ========== */
 
 .react-flow__handle {
   width: 14px;
@@ -343,7 +346,7 @@
   box-shadow: 0 0 0 6px rgba(24, 144, 255, 0.2);
 }
 
-/* ========== v4.1: 节点更大更清晰（360px，字体全面再加大） ========== */
+/* ========== 节点基础样式 ========== */
 
 .custom-node.enhanced {
   background: #fff;
@@ -366,54 +369,29 @@
   box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12);
 }
 
-/* === 深色header白色文字（各节点主题色） === */
+/* === 各节点主题色 === */
 
-/* 开始节点 - 绿色 */
 .start-node.enhanced { border-color: #389e0d; }
 .start-node.enhanced.selected { border-color: #389e0d; box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
-.start-node.enhanced .node-header {
-  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
-  color: #fff;
-  border-bottom: none;
-}
+.start-node.enhanced .node-header { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); color: #fff; border-bottom: none; }
 
-/* LLM节点 - 蓝色 */
 .llm-node.enhanced { border-color: #1890ff; }
 .llm-node.enhanced.selected { border-color: #1890ff; box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
-.llm-node.enhanced .node-header {
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-  color: #fff;
-  border-bottom: none;
-}
+.llm-node.enhanced .node-header { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: #fff; border-bottom: none; }
 
-/* 结束节点 - 红色 */
 .end-node.enhanced { border-color: #ff4d4f; }
 .end-node.enhanced.selected { border-color: #ff4d4f; box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
-.end-node.enhanced .node-header {
-  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
-  color: #fff;
-  border-bottom: none;
-}
+.end-node.enhanced .node-header { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); color: #fff; border-bottom: none; }
 
-/* 知识库节点 - 紫色 */
 .knowledge-node.enhanced { border-color: #722ed1; }
 .knowledge-node.enhanced.selected { border-color: #722ed1; box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
-.knowledge-node.enhanced .node-header {
-  background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
-  color: #fff;
-  border-bottom: none;
-}
+.knowledge-node.enhanced .node-header { background: linear-gradient(135deg, #722ed1 0%, #531dab 100%); color: #fff; border-bottom: none; }
 
-/* 分类节点 - 琥珀色 */
 .classifier-node.enhanced { border-color: #d48806; }
 .classifier-node.enhanced.selected { border-color: #d48806; box-shadow: 0 0 0 4px rgba(212, 136, 6, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12); }
-.classifier-node.enhanced .node-header {
-  background: linear-gradient(135deg, #faad14 0%, #d48806 100%);
-  color: #fff;
-  border-bottom: none;
-}
+.classifier-node.enhanced .node-header { background: linear-gradient(135deg, #faad14 0%, #d48806 100%); color: #fff; border-bottom: none; }
 
-/* ========== v4.1: 节点内部结构（字体全面再加大，提升可读性） ========== */
+/* ========== 节点内部结构 ========== */
 
 .node-header {
   display: flex;
@@ -431,7 +409,6 @@
 .node-section { margin-bottom: 16px; }
 .node-section:last-child { margin-bottom: 0; }
 
-/* v4.1: section-title 加大到15px，图标同步加大 */
 .section-title {
   font-size: 15px;
   font-weight: 600;
@@ -441,9 +418,7 @@
   align-items: center;
 }
 
-.section-title .anticon {
-  font-size: 15px;
-}
+.section-title .anticon { font-size: 15px; }
 
 .param-list {
   display: flex;
@@ -451,7 +426,6 @@
   gap: 6px;
 }
 
-/* v4.1: param-item 内文字加大到15px */
 .param-item {
   display: flex;
   justify-content: space-between;
@@ -466,7 +440,6 @@
 .param-value { color: #262626; font-weight: 600; font-size: 15px; }
 .param-empty { font-size: 14px; color: #bfbfbf; font-style: italic; }
 
-/* v4.1: model-name 加大到15px */
 .model-name {
   font-weight: 600;
   color: #1890ff;
@@ -477,7 +450,6 @@
   border: 1px solid #d6e4ff;
 }
 
-/* v4.1: prompt-preview 加大到14px */
 .prompt-preview {
   background: #f7f8fa;
   border: 1px solid #eee;
@@ -490,6 +462,13 @@
   overflow: hidden;
 }
 
+.prompt-preview.llm-prompt-expanded {
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .prompt-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prompt-more { text-align: center; color: #8c8c8c; margin-top: 4px; }
 
@@ -499,10 +478,9 @@
   border-top: 1px solid #eee;
 }
 
-/* v4.1: node-hint 加大到14px */
 .node-hint { font-size: 14px; color: #8c8c8c; font-style: italic; }
 
-/* ========== v4.1: 分类节点专用样式（字体加大） ========== */
+/* ========== 分类节点专用样式 ========== */
 
 .classifier-category-list {
   display: flex;
@@ -524,7 +502,6 @@
   align-items: center;
 }
 
-/* v4.1: 分类Tag字体加大到14px */
 .classifier-category-header .ant-tag {
   font-size: 14px !important;
 }
@@ -534,7 +511,6 @@
   font-weight: bold;
 }
 
-/* v4.1: 分类描述字体从12px加大到13px */
 .classifier-category-desc {
   font-size: 13px;
   color: #8c8c8c;
@@ -545,7 +521,13 @@
   text-overflow: ellipsis;
 }
 
-/* ========== v4.0: MiniMap 美化 ========== */
+/* ========== v4.3: 分类节点 Handle 位置修复 ========== */
+/* ReactFlow 的 Handle 默认 CSS 会设置 top:50%，需要用 !important 覆盖 */
+.classifier-node .classifier-output-handle {
+  top: var(--handle-top) !important;
+}
+
+/* ========== MiniMap ========== */
 
 .react-flow__minimap {
   border-radius: 10px !important;
@@ -554,7 +536,7 @@
   overflow: hidden;
 }
 
-/* ========== v4.0: Controls 美化 ========== */
+/* ========== Controls ========== */
 
 .react-flow__controls {
   border-radius: 10px !important;

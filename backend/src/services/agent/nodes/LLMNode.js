@@ -4,6 +4,7 @@
  * 支持对话历史管理、轮数控制和上游节点输出传递
  * v2.0 - 添加知识库上下文支持
  * v2.1 - P1重构：AI调用方法提取到AICallHelper，消除代码重复
+ * v2.2 - 修复max_tokens验证上限与前端一致（100000）
  */
 
 const BaseNode = require('./BaseNode');
@@ -20,11 +21,11 @@ class LLMNode extends BaseNode {
    * 获取配置（兼容旧版和新版）
    */
   getConfig(key, defaultValue = undefined) {
-    // 优先从 data.config 读取（新版）
+    /* 优先从 data.config 读取（新版） */
     if (this.data.config && this.data.config[key] !== undefined) {
       return this.data.config[key];
     }
-    // 兼容旧版直接从 data 读取
+    /* 兼容旧版直接从 data 读取 */
     if (this.data[key] !== undefined) {
       return this.data[key];
     }
@@ -40,7 +41,7 @@ class LLMNode extends BaseNode {
     if (!upstreamOutput || typeof upstreamOutput !== 'object') {
       return false;
     }
-    // 知识库节点输出包含 knowledge_context 字段
+    /* 知识库节点输出包含 knowledge_context 字段 */
     return 'knowledge_context' in upstreamOutput;
   }
 
@@ -55,33 +56,27 @@ class LLMNode extends BaseNode {
       return null;
     }
 
-    // 如果是对象，尝试提取内容
     if (typeof upstreamOutput === 'object') {
-      // 优先级1: knowledge_context（知识库节点输出）
+      /* 优先级1: knowledge_context（知识库节点输出） */
       if (upstreamOutput.knowledge_context) {
         return upstreamOutput.knowledge_context;
       }
-      
-      // 优先级2: content 字段（LLM节点输出）
+      /* 优先级2: content 字段（LLM节点输出） */
       if (upstreamOutput.content) {
         return upstreamOutput.content;
       }
-      
-      // 优先级3: query 字段（开始节点输出）
+      /* 优先级3: query 字段（开始节点输出） */
       if (upstreamOutput.query) {
         return upstreamOutput.query;
       }
-      
-      // 优先级4: 如果没有特定字段，转为 JSON 字符串
+      /* 优先级4: 转为 JSON 字符串 */
       return JSON.stringify(upstreamOutput);
     }
 
-    // 如果是字符串，直接返回
     if (typeof upstreamOutput === 'string') {
       return upstreamOutput;
     }
 
-    // 其他类型，转为字符串
     return String(upstreamOutput);
   }
 
@@ -102,7 +97,7 @@ class LLMNode extends BaseNode {
         hasUpstream: !!context.upstreamOutput
       });
 
-      // 1. 获取模型名称（从 config.model 或 data.model_name）
+      /* 1. 获取模型名称 */
       const modelName = this.getConfig('model') || this.getConfig('model_name');
       
       if (!modelName) {
@@ -111,7 +106,7 @@ class LLMNode extends BaseNode {
 
       this.log('info', '查找AI模型', { modelName });
 
-      // 2. 根据名称查找模型
+      /* 2. 查找模型 */
       const model = await AIModel.findByName(modelName);
       if (!model) {
         throw new Error(`AI模型不存在: ${modelName}`);
@@ -127,18 +122,16 @@ class LLMNode extends BaseNode {
         displayName: model.display_name
       });
 
-      // 3. 获取历史轮数配置（默认10轮）
+      /* 3. 获取历史轮数配置（默认10轮） */
       const historyTurns = parseInt(this.getConfig('history_turns', 10));
-      
       this.log('info', '历史轮数配置', { historyTurns });
 
-      // 4. 获取对话历史（从输入数据）
+      /* 4. 获取对话历史 */
       const inputMessages = context.input?.messages || [];
       
-      // 5. 截取历史（保留最近N轮，每轮包含user+assistant）
+      /* 5. 截取历史（保留最近N轮，每轮包含user+assistant） */
       let recentMessages = [];
       if (historyTurns > 0 && inputMessages.length > 0) {
-        // 每轮包含2条消息（user + assistant），所以取最后 historyTurns * 2 条
         const messagesToKeep = historyTurns * 2;
         recentMessages = inputMessages.slice(-messagesToKeep);
         
@@ -149,15 +142,14 @@ class LLMNode extends BaseNode {
         });
       }
 
-      // 6. 获取系统提示词和用户提示词模板
+      /* 6. 获取系统提示词和用户提示词模板 */
       const systemPromptTemplate = this.getConfig('system_prompt', '');
       const userPromptTemplate = this.getConfig('user_prompt') || this.getConfig('prompt');
 
-      // ========== v2.0 新增：处理知识库上下文 ==========
+      /* ========== v2.0: 处理知识库上下文 ========== */
       let knowledgeContext = '';
       let originalUserQuery = context.input?.query || '';
       
-      // 检查上游是否为知识库节点
       if (context.upstreamOutput && this.isKnowledgeOutput(context.upstreamOutput)) {
         knowledgeContext = context.upstreamOutput.knowledge_context || '';
         
@@ -168,18 +160,17 @@ class LLMNode extends BaseNode {
           totalTokens: context.upstreamOutput.total_tokens || 0
         });
       }
-      // ========== v2.0 新增结束 ==========
 
-      // 7. 获取当前用户消息（优先级：模板 > 知识库 > 上游输出 > 原始输入）
+      /* 7. 获取当前用户消息（多级优先级） */
       let currentUserMessage;
       
       if (userPromptTemplate) {
-        // 优先级1: 如果配置了提示词模板，使用模板并替换变量
+        /* 优先级1: 提示词模板 */
         currentUserMessage = this.replaceVariables(userPromptTemplate, context);
         this.log('info', '使用提示词模板', { templateLength: userPromptTemplate.length });
       } 
       else if (knowledgeContext) {
-        // v2.0 优先级2: 如果有知识库上下文，将其与用户问题组合
+        /* 优先级2: 知识库上下文 + 用户问题 */
         currentUserMessage = this.buildKnowledgePrompt(knowledgeContext, originalUserQuery);
         this.log('info', '使用知识库上下文 + 用户问题', { 
           knowledgeLength: knowledgeContext.length,
@@ -188,7 +179,7 @@ class LLMNode extends BaseNode {
         });
       }
       else if (context.upstreamOutput) {
-        // 优先级3: 如果有上游节点输出，使用上游输出
+        /* 优先级3: 上游节点输出 */
         currentUserMessage = this.extractUpstreamContent(context.upstreamOutput);
         this.log('info', '使用上游节点输出', { 
           upstreamType: typeof context.upstreamOutput,
@@ -196,12 +187,12 @@ class LLMNode extends BaseNode {
         });
       }
       else if (context.input && context.input.query) {
-        // 优先级4: 使用输入的 query
+        /* 优先级4: 输入的query */
         currentUserMessage = context.input.query;
         this.log('info', '使用原始输入query', { queryLength: currentUserMessage.length });
       }
       else if (context.input) {
-        // 优先级5: 使用整个输入对象
+        /* 优先级5: 整个输入对象 */
         currentUserMessage = JSON.stringify(context.input);
         this.log('info', '使用整个输入对象', { inputLength: currentUserMessage.length });
       }
@@ -209,7 +200,7 @@ class LLMNode extends BaseNode {
         throw new Error('无法获取用户输入：没有提示词模板、上游输出或输入数据');
       }
 
-      // 8. 处理系统提示词变量替换
+      /* 8. 系统提示词变量替换 */
       const systemPrompt = systemPromptTemplate 
         ? this.replaceVariables(systemPromptTemplate, context)
         : '';
@@ -221,18 +212,14 @@ class LLMNode extends BaseNode {
         historyMessageCount: recentMessages.length
       });
 
-      // 9. 构建完整消息数组
+      /* 9. 构建完整消息数组 */
       const messages = [];
       
-      // 添加系统提示词（始终在最前面）
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
       
-      // 添加历史消息（按时间顺序）
       messages.push(...recentMessages);
-      
-      // 添加当前用户消息
       messages.push({ role: 'user', content: currentUserMessage });
 
       this.log('info', '消息数组构建完成', {
@@ -243,11 +230,11 @@ class LLMNode extends BaseNode {
         structure: messages.map(m => m.role)
       });
 
-      // 10. 获取模型参数
+      /* 10. 获取模型参数 */
       const temperature = parseFloat(this.getConfig('temperature', 0.7));
       const maxTokens = parseInt(this.getConfig('max_tokens', 2000));
 
-      // 11. 调用AI（v2.1: 使用公共AICallHelper）
+      /* 11. 调用AI（v2.1: 使用公共AICallHelper） */
       const response = await AICallHelper.callAI(model, messages, {
         temperature,
         max_tokens: maxTokens
@@ -258,7 +245,7 @@ class LLMNode extends BaseNode {
         tokensUsed: AICallHelper.estimateTokens(response)
       });
 
-      // 12. 返回结果（包含积分消耗信息）
+      /* 12. 返回结果 */
       return {
         success: true,
         output: {
@@ -281,24 +268,20 @@ class LLMNode extends BaseNode {
   }
 
   /**
-   * v2.0 新增：构建包含知识库上下文的提示词
-   * 将知识库内容和用户问题组合成完整的提示词
+   * v2.0: 构建包含知识库上下文的提示词
    * @param {string} knowledgeContext - 知识库内容
    * @param {string} userQuery - 用户问题
    * @returns {string} 组合后的提示词
    */
   buildKnowledgePrompt(knowledgeContext, userQuery) {
-    // 如果没有知识库内容，直接返回用户问题
     if (!knowledgeContext || knowledgeContext.trim() === '') {
       return userQuery;
     }
     
-    // 如果没有用户问题，返回让AI总结知识库的提示
     if (!userQuery || userQuery.trim() === '') {
       return `请阅读以下知识库内容：\n\n${knowledgeContext}\n\n请根据以上内容提供帮助。`;
     }
     
-    // 组合知识库内容和用户问题
     const prompt = `请参考以下知识库内容来回答用户的问题：
 
 【知识库内容】
@@ -314,7 +297,7 @@ ${userQuery}
 
   /**
    * 验证LLM节点配置
-   * v2.1 修复：max_tokens上限与前端保持一致（8192）
+   * v2.2 修复：max_tokens上限从8192改为100000，与前端ConfigPanel一致
    */
   validate() {
     const errors = [];
@@ -324,7 +307,7 @@ ${userQuery}
       errors.push('必须选择AI模型');
     }
 
-    // 验证历史轮数
+    /* 验证历史轮数 */
     const historyTurns = this.getConfig('history_turns');
     if (historyTurns !== undefined) {
       const turns = parseInt(historyTurns);
@@ -333,15 +316,16 @@ ${userQuery}
       }
     }
 
+    /* 验证温度 */
     const temperature = this.getConfig('temperature');
     if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
       errors.push('温度值必须在0-2之间');
     }
 
-    // v2.1 修复：上限从4000提升到8192，与前端ConfigPanel一致
+    /* v2.2 修复：上限从8192提升到100000，与前端ConfigPanel v2.6一致 */
     const maxTokens = this.getConfig('max_tokens');
-    if (maxTokens !== undefined && (maxTokens < 100 || maxTokens > 8192)) {
-      errors.push('最大Token数必须在100-8192之间');
+    if (maxTokens !== undefined && (maxTokens < 100 || maxTokens > 100000)) {
+      errors.push('最大Token数必须在100-100000之间');
     }
 
     return {

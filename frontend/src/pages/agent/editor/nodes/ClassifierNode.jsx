@@ -2,14 +2,13 @@
  * 问题分类节点 - 智能问题分类
  * v1.0 - 基础分类功能（单输出）
  * v2.0 - 多输出端口支持，每个分类对应一个输出Handle
- * v3.0 - 视觉优化：
- *   1. 节点更大更清晰
- *   2. 直接显示分类描述
- *   3. Handle位置与分类列表项精确对齐
- *   4. 颜色对比度优化
+ * v3.0 - 视觉优化：节点更大更清晰，颜色对比度优化
+ * v3.1 - 改用均匀分布算法
+ * v3.2 - 关键修复：Handle位置用CSS变量+!important覆盖ReactFlow默认top:50%
+ *         使用 className 而非 style.top，确保自定义位置生效
  */
 
-import React, { useRef, useEffect, useState } from 'react'
+import React from 'react'
 import { Handle, Position } from 'reactflow'
 import { 
   BranchesOutlined,
@@ -24,40 +23,7 @@ const ClassifierNode = ({ data, selected }) => {
   const categories = config.categories || []
   const backgroundKnowledge = config.background_knowledge || ''
   
-  // 分类项的DOM引用，用于精确计算Handle位置
-  const categoryRefs = useRef([])
-  const nodeRef = useRef(null)
-  const [handlePositions, setHandlePositions] = useState([])
-  
-  /**
-   * 计算每个分类项对应的Handle垂直位置
-   * 基于DOM实际位置而非百分比估算，确保Handle与分类项精确对齐
-   */
-  useEffect(() => {
-    if (categories.length === 0 || !nodeRef.current) return
-    
-    // 延迟计算，等DOM渲染完成
-    const timer = setTimeout(() => {
-      const nodeRect = nodeRef.current?.getBoundingClientRect()
-      if (!nodeRect) return
-      
-      const positions = categoryRefs.current.map((ref) => {
-        if (!ref) return 50
-        const itemRect = ref.getBoundingClientRect()
-        // 计算分类项中心点相对于节点的百分比位置
-        const itemCenter = itemRect.top + itemRect.height / 2
-        const relativeTop = itemCenter - nodeRect.top
-        const percent = (relativeTop / nodeRect.height) * 100
-        return Math.max(10, Math.min(90, percent))
-      })
-      
-      setHandlePositions(positions)
-    }, 50)
-    
-    return () => clearTimeout(timer)
-  }, [categories, data])
-  
-  // 提取模型显示名
+  /** 提取模型显示名 */
   const getModelDisplayName = (modelName) => {
     if (!modelName) return '未选择'
     const parts = modelName.split('/')
@@ -66,7 +32,7 @@ const ClassifierNode = ({ data, selected }) => {
     return name
   }
   
-  // 生成分类对应的颜色
+  /** 生成分类对应的颜色 */
   const getCategoryColor = (index) => {
     const colors = [
       '#52c41a', '#1890ff', '#722ed1', '#eb2f96', '#fa8c16',
@@ -75,12 +41,23 @@ const ClassifierNode = ({ data, selected }) => {
     return colors[index % colors.length]
   }
   
+  /**
+   * v3.2: 计算每个分类Handle的top百分比
+   * 在 40%~85% 范围内均匀分布（这个范围大致对应分类列表在节点中的垂直位置）
+   */
+  const getHandleTopPercent = (index, total) => {
+    if (total <= 0) return 50
+    if (total === 1) return 62
+    /* 分类列表大致在节点的40%~85%高度范围 */
+    const minPercent = 42
+    const maxPercent = 85
+    const step = (maxPercent - minPercent) / (total - 1)
+    return minPercent + step * index
+  }
+  
   return (
-    <div 
-      ref={nodeRef}
-      className={`custom-node classifier-node enhanced ${selected ? 'selected' : ''}`}
-    >
-      {/* 头部 - 深色背景白色文字，高对比度 */}
+    <div className={`custom-node classifier-node enhanced ${selected ? 'selected' : ''}`}>
+      {/* 头部 */}
       <div className="node-header">
         <BranchesOutlined className="node-icon" />
         <span className="node-title">{data.label || '问题分类'}</span>
@@ -91,7 +68,7 @@ const ClassifierNode = ({ data, selected }) => {
         {/* AI模型 */}
         <div className="node-section">
           <div className="section-title">
-            <RobotOutlined style={{ fontSize: '13px', marginRight: '4px' }} />
+            <RobotOutlined style={{ fontSize: '15px', marginRight: '4px' }} />
             AI模型
           </div>
           <div className="model-name" style={!model ? { color: '#999', background: '#fafafa', fontStyle: 'italic' } : {}}>
@@ -99,10 +76,10 @@ const ClassifierNode = ({ data, selected }) => {
           </div>
         </div>
         
-        {/* 分类列表 - 显示名称+描述，每项对应一个输出Handle */}
+        {/* 分类列表 */}
         <div className="node-section">
           <div className="section-title">
-            <TagOutlined style={{ fontSize: '13px', marginRight: '4px' }} />
+            <TagOutlined style={{ fontSize: '15px', marginRight: '4px' }} />
             分类输出 ({categories.length}个)
           </div>
           <div className="classifier-category-list">
@@ -110,7 +87,6 @@ const ClassifierNode = ({ data, selected }) => {
               categories.map((cat, index) => (
                 <div 
                   key={cat.id || index}
-                  ref={(el) => categoryRefs.current[index] = el}
                   className="classifier-category-item"
                   style={{ borderLeftColor: getCategoryColor(index) }}
                 >
@@ -133,7 +109,7 @@ const ClassifierNode = ({ data, selected }) => {
                 </div>
               ))
             ) : (
-              <div style={{ color: '#999', fontSize: '13px', padding: '8px 0' }}>
+              <div style={{ color: '#999', fontSize: '14px', padding: '8px 0' }}>
                 未定义分类
               </div>
             )}
@@ -147,7 +123,7 @@ const ClassifierNode = ({ data, selected }) => {
       }}>
         {backgroundKnowledge ? (
           <Tooltip title={backgroundKnowledge}>
-            <span style={{ color: '#d48806', fontSize: '12px' }}>
+            <span style={{ color: '#d48806', fontSize: '13px' }}>
               📚 已配置背景知识
             </span>
           </Tooltip>
@@ -156,7 +132,7 @@ const ClassifierNode = ({ data, selected }) => {
         )}
       </div>
       
-      {/* 输入连接点 - 左侧 */}
+      {/* 输入连接点 - 左侧居中 */}
       <Handle
         type="target"
         position={Position.Left}
@@ -165,7 +141,10 @@ const ClassifierNode = ({ data, selected }) => {
         style={{ background: '#d48806' }}
       />
       
-      {/* 输出连接点 - 右侧，每个分类一个，精确对齐 */}
+      {/* 
+        v3.2: 输出连接点 - 每个分类一个
+        使用 CSS 变量 --handle-top 配合 CSS 中的 !important 覆盖 ReactFlow 默认定位
+      */}
       {categories.length > 0 ? (
         categories.map((cat, index) => (
           <Handle
@@ -173,10 +152,10 @@ const ClassifierNode = ({ data, selected }) => {
             type="source"
             position={Position.Right}
             id={`output-${cat.id || `cat-${index}`}`}
-            className="custom-handle"
+            className="custom-handle classifier-output-handle"
             style={{ 
               background: getCategoryColor(index),
-              top: handlePositions[index] ? `${handlePositions[index]}%` : `${25 + (50 / Math.max(categories.length - 1, 1)) * index}%`
+              '--handle-top': `${getHandleTopPercent(index, categories.length)}%`
             }}
           />
         ))

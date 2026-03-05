@@ -3,8 +3,10 @@
  * v2.1 - 修复output_data JSON格式问题
  * v2.2 - 支持条件分支执行（问题分类节点多输出）
  * v2.3 - P0修复：积分预估按节点数量累加 + groupId/userRole传入context
- * 负责工作流的编排、执行、积分管理和错误处理
- * 支持节点间数据传递和上下游连接
+ * v2.4 - 连接完整性验证：
+ *   1. 所有非开始节点必须有上游连接（知识库、分类、LLM、结束节点）
+ *   2. 执行前严格校验，缺少上游连接直接报错阻止运行
+ *   3. 错误信息友好化，明确指出哪个节点缺少连接
  */
 
 const NodeRegistry = require('./NodeRegistry');
@@ -22,8 +24,6 @@ class ExecutorService {
 
   /**
    * 执行工作流
-   * v2.2 - 支持条件分支执行
-   * v2.3 - 修复：接收并传递用户上下文(groupId, userRole)到context
    * @param {number} workflowId - 工作流ID
    * @param {number} userId - 用户ID
    * @param {Object} inputData - 输入数据
@@ -39,13 +39,13 @@ class ExecutorService {
     try {
       logger.info('开始执行工作流', { workflowId, userId, inputData });
 
-      // 1. 加载工作流定义
+      /* 1. 加载工作流定义 */
       const workflow = await AgentWorkflow.findById(workflowId);
       if (!workflow) {
         throw new Error(`工作流不存在: ${workflowId}`);
       }
 
-      // 2. 权限检查
+      /* 2. 权限检查 */
       if (workflow.user_id !== userId) {
         const user = await User.findById(userId);
         if (user.role !== 'super_admin') {
@@ -53,12 +53,12 @@ class ExecutorService {
         }
       }
 
-      // 3. 检查工作流是否已发布
+      /* 3. 检查工作流是否已发布 */
       if (!workflow.is_published) {
         throw new Error('工作流未发布，无法执行');
       }
 
-      // 4. 解析工作流数据
+      /* 4. 解析工作流数据 */
       let flowData;
       try {
         flowData = typeof workflow.flow_data === 'string' 
@@ -79,16 +79,15 @@ class ExecutorService {
         edgeCount: edges.length
       });
 
-      // 5. 验证工作流连接性
+      /* 5. v2.4: 验证工作流连接完整性（所有非开始节点必须有上游连接） */
       this.validateWorkflowConnections(nodes, edges);
 
-      // 6. 验证节点类型和预估积分
-      // v2.3 修复：按节点数量累加积分，而非按类型只算一次
+      /* 6. 验证节点类型和预估积分 */
       const { nodeTypeMap, estimatedCredits } = await this.validateAndEstimateCredits(nodes);
 
       logger.info('积分预估完成', { estimatedCredits });
 
-      // 7. 预扣积分
+      /* 7. 预扣积分 */
       const user = await User.findById(userId);
       if (!user) {
         throw new Error('用户不存在');
@@ -99,7 +98,6 @@ class ExecutorService {
           throw new Error(`积分不足，需要 ${estimatedCredits} 积分，当前余额 ${user.getCredits()}`);
         }
 
-        // 预扣积分
         await user.consumeCredits(
           estimatedCredits,
           null,
@@ -111,7 +109,7 @@ class ExecutorService {
         logger.info('积分预扣成功', { userId, amount: estimatedCredits });
       }
 
-      // 8. 创建执行记录
+      /* 8. 创建执行记录 */
       executionId = await AgentExecution.create({
         workflow_id: workflowId,
         user_id: userId,
@@ -122,38 +120,36 @@ class ExecutorService {
 
       logger.info('执行记录创建成功', { executionId });
 
-      // 9. 拓扑排序（检测环形依赖）
+      /* 9. 拓扑排序（检测环形依赖） */
       const sortedNodes = this.topologicalSort(nodes, edges);
 
       logger.info('拓扑排序完成', { 
         executionOrder: sortedNodes.map(n => `${n.type}:${n.id}`)
       });
 
-      // 10. 执行节点（v2.2: 支持条件分支）
-      // v2.3 修复：将 groupId 和 userRole 加入 context，供知识库节点等使用
+      /* 10. 执行节点（v2.2: 支持条件分支） */
       const context = {
         input: inputData,
         variables: {},
         userId,
-        groupId: options.groupId || null,      // v2.3 新增：用户组ID
-        userRole: options.userRole || null,     // v2.3 新增：用户角色
+        groupId: options.groupId || null,
+        userRole: options.userRole || null,
         workflowId,
         executionId,
-        // v2.2: 记录分支决策，用于条件执行
-        branchDecisions: {},  // { classifierNodeId: 'output-cat-xxx' }
-        skippedNodes: new Set()  // 被跳过的节点ID集合
+        branchDecisions: {},
+        skippedNodes: new Set()
       };
 
       let totalCreditsUsed = 0;
       let lastNodeOutput = null;
 
       for (const node of sortedNodes) {
-        // 检查超时
+        /* 检查超时 */
         if (Date.now() - startTime > this.maxExecutionTime) {
           throw new Error('执行超时（10分钟）');
         }
 
-        // v2.2: 检查节点是否应该被跳过（条件分支）
+        /* v2.2: 检查节点是否应该被跳过（条件分支） */
         if (this.shouldSkipNode(node, edges, context)) {
           logger.info('跳过节点（条件分支未命中）', {
             executionId,
@@ -167,26 +163,25 @@ class ExecutorService {
         const nodeStartTime = Date.now();
 
         try {
-          // 创建节点实例
+          /* 创建节点实例 */
           const nodeInstance = NodeRegistry.createInstance(node);
           if (!nodeInstance) {
             throw new Error(`无法创建节点实例: ${node.type}`);
           }
 
-          // 验证节点配置
+          /* 验证节点配置 */
           const validation = nodeInstance.validate();
           if (!validation.valid) {
             throw new Error(`节点配置错误: ${validation.errors.join(', ')}`);
           }
 
-          // 获取节点类型配置（积分消耗）
+          /* 获取节点类型配置 */
           const nodeTypeConfig = nodeTypeMap.get(node.type);
 
-          // 查找上游节点输出并传递
+          /* 查找上游节点输出并传递 */
           const incomingEdges = edges.filter(e => e.target === node.id);
           
           if (incomingEdges.length > 0) {
-            // 有上游节点，获取上游输出（优先选择未被跳过的上游）
             let upstreamOutput = null;
             for (const edge of incomingEdges) {
               if (!context.skippedNodes.has(edge.source)) {
@@ -214,7 +209,7 @@ class ExecutorService {
             hasUpstream: !!context.upstreamOutput
           });
 
-          // 记录节点开始执行
+          /* 记录节点开始执行 */
           const nodeExecutionId = await AgentNodeExecution.create({
             execution_id: executionId,
             node_id: node.id,
@@ -223,25 +218,24 @@ class ExecutorService {
             input_data: context.variables
           });
 
-          // 执行节点
+          /* 执行节点 */
           const result = await nodeInstance.execute(context, userId, nodeTypeConfig);
 
           const nodeEndTime = Date.now();
           const duration = nodeEndTime - nodeStartTime;
 
-          // 累计积分消耗
+          /* 累计积分消耗 */
           const creditsUsed = result.credits_used || 0;
           totalCreditsUsed += creditsUsed;
 
-          // 保存节点输出到上下文
+          /* 保存节点输出到上下文 */
           context.variables[node.id] = result.output;
           lastNodeOutput = result.output;
 
-          // v2.2: 如果是分类节点，记录分支决策
+          /* v2.2: 如果是分类节点，记录分支决策 */
           if (node.type === 'classifier' && result.output) {
             const categoryId = result.output.category_id;
             if (categoryId) {
-              // 记录选中的输出端口
               context.branchDecisions[node.id] = `output-${categoryId}`;
               logger.info('记录分类分支决策', {
                 nodeId: node.id,
@@ -251,7 +245,7 @@ class ExecutorService {
             }
           }
 
-          // 更新节点执行记录
+          /* 更新节点执行记录 */
           await AgentNodeExecution.update(nodeExecutionId, {
             status: 'success',
             output_data: result.output,
@@ -288,7 +282,7 @@ class ExecutorService {
         }
       }
 
-      // 11. 计算实际消耗和退款
+      /* 11. 计算实际消耗和退款 */
       const creditsToRefund = Math.max(0, preDeductedCredits - totalCreditsUsed);
 
       if (creditsToRefund > 0) {
@@ -302,10 +296,10 @@ class ExecutorService {
         logger.info('退还多扣积分', { userId, amount: creditsToRefund });
       }
 
-      // 12. 格式化最终输出
+      /* 12. 格式化最终输出 */
       const finalOutput = this.formatFinalOutput(lastNodeOutput);
 
-      // 13. 更新执行记录为成功
+      /* 13. 更新执行记录为成功 */
       await AgentExecution.update(executionId, {
         status: 'success',
         output_data: finalOutput,
@@ -375,41 +369,28 @@ class ExecutorService {
   }
 
   /**
-   * v2.2 新增：判断节点是否应该被跳过
-   * 基于条件分支决策判断
-   * @param {Object} node - 当前节点
-   * @param {Array} edges - 所有边
-   * @param {Object} context - 执行上下文
-   * @returns {boolean} 是否跳过
+   * v2.2: 判断节点是否应该被跳过（条件分支）
    */
   shouldSkipNode(node, edges, context) {
-    // 查找所有指向此节点的边
     const incomingEdges = edges.filter(e => e.target === node.id);
     
     if (incomingEdges.length === 0) {
-      // 没有上游连接（开始节点），不跳过
       return false;
     }
 
-    // 检查每条入边
     for (const edge of incomingEdges) {
       const sourceNodeId = edge.source;
       const sourceHandle = edge.sourceHandle;
       
-      // 如果上游节点已被跳过，当前节点也应跳过
       if (context.skippedNodes.has(sourceNodeId)) {
-        continue; // 检查其他入边
+        continue;
       }
       
-      // 检查是否是分类节点的条件分支
       if (sourceHandle && sourceHandle.startsWith('output-')) {
-        // 这是一个条件分支边
         const branchDecision = context.branchDecisions[sourceNodeId];
         
         if (branchDecision) {
-          // 有分支决策
           if (branchDecision === sourceHandle) {
-            // 命中分支，不跳过
             logger.info('条件分支命中', {
               targetNode: node.id,
               sourceNode: sourceNodeId,
@@ -418,7 +399,6 @@ class ExecutorService {
             });
             return false;
           } else {
-            // 未命中此分支，继续检查其他入边
             logger.info('条件分支未命中', {
               targetNode: node.id,
               sourceNode: sourceNodeId,
@@ -430,13 +410,11 @@ class ExecutorService {
         }
       }
       
-      // 普通边（非条件分支），如果上游已执行，不跳过
       if (context.variables[sourceNodeId] !== undefined) {
         return false;
       }
     }
     
-    // 所有入边都未命中或上游被跳过
     return true;
   }
 
@@ -468,33 +446,68 @@ class ExecutorService {
   }
 
   /**
-   * 验证工作流连接性
+   * 验证工作流连接完整性
+   * v2.4 重构：所有非开始节点都必须有上游连接
+   * 
+   * 规则：
+   * - start节点：不需要上游连接（它是入口）
+   * - llm节点：必须有上游连接（需要接收输入或知识库上下文）
+   * - knowledge节点：必须有上游连接（明确数据流向，教学场景避免混淆）
+   * - classifier节点：必须有上游连接（需要接收用户问题来分类）
+   * - end节点：必须有上游连接（需要接收最终输出）
+   * 
+   * @param {Array} nodes - 节点列表
+   * @param {Array} edges - 连线列表
+   * @throws {Error} 验证失败时抛出错误
    */
   validateWorkflowConnections(nodes, edges) {
+    /* 必须有且仅有一个开始节点 */
     const startNodes = nodes.filter(n => n.type === 'start');
     if (startNodes.length === 0) {
       throw new Error('工作流必须包含一个开始节点');
     }
-    
     if (startNodes.length > 1) {
       throw new Error('工作流只能有一个开始节点');
     }
 
+    /* v2.4: 检查所有非开始节点是否都有上游连接 */
+    const disconnectedNodes = [];
+
     for (const node of nodes) {
-      if (node.type === 'llm') {
-        const incomingEdges = edges.filter(e => e.target === node.id);
+      /* 开始节点不需要上游连接 */
+      if (node.type === 'start') continue;
+
+      /* 检查是否有入边（上游连接） */
+      const incomingEdges = edges.filter(e => e.target === node.id);
+      
+      if (incomingEdges.length === 0) {
+        /* 获取节点显示名称 */
+        const nodeName = node.data?.label || node.data?.config?.label || node.type;
         
-        if (incomingEdges.length === 0) {
-          throw new Error(`LLM节点 "${node.data?.label || node.id}" 必须连接上游节点`);
-        }
+        /* 根据节点类型给出具体的错误提示 */
+        const typeNames = {
+          llm: 'AI模型',
+          knowledge: '知识检索',
+          classifier: '问题分类',
+          end: '结束'
+        };
+        const typeName = typeNames[node.type] || node.type;
+        
+        disconnectedNodes.push(`${typeName}节点「${nodeName}」`);
       }
+    }
+
+    /* 如果有未连接的节点，抛出友好的错误信息 */
+    if (disconnectedNodes.length > 0) {
+      throw new Error(
+        `以下节点缺少上游连接，请用连线将它们连接到工作流中：${disconnectedNodes.join('、')}`
+      );
     }
   }
 
   /**
    * 验证节点并估算积分消耗
-   * v2.3 修复：按每个节点累加积分，而非按节点类型只算一次
-   * 例如：工作流有2个LLM节点（每个10积分），应预估20积分而非10积分
+   * v2.3: 按每个节点累加积分
    */
   async validateAndEstimateCredits(nodes) {
     const nodeTypeMap = new Map();
@@ -505,7 +518,6 @@ class ExecutorService {
         throw new Error(`未知节点类型: ${node.type}`);
       }
 
-      // 获取或缓存节点类型配置（只查一次数据库，缓存到Map）
       if (!nodeTypeMap.has(node.type)) {
         const nodeTypeConfig = await AgentNodeType.findByTypeKey(node.type);
         
@@ -526,8 +538,6 @@ class ExecutorService {
         }
       }
 
-      // v2.3 修复：每个节点都累加积分（移到if外面）
-      // 之前的bug：只在第一次遇到某类型时累加，导致同类型多节点漏算
       const cachedConfig = nodeTypeMap.get(node.type);
       estimatedCredits += cachedConfig?.credits_per_execution || 0;
     }
@@ -536,7 +546,7 @@ class ExecutorService {
   }
 
   /**
-   * 拓扑排序
+   * 拓扑排序（Kahn算法）
    */
   topologicalSort(nodes, edges) {
     const adjList = new Map();
