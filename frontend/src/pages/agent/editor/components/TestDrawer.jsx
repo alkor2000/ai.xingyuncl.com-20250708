@@ -1,10 +1,12 @@
 /**
- * 工作流测试抽屉 - 对话式测试界面 v2.2
+ * 工作流测试抽屉 - 对话式测试界面 v2.3
  * v1.1 - 删除顶部说明文字，调整z-index
  * v2.0 - 重新设计对话气泡+打字机效果
- * v2.2 - 新增功能：
- *   1. 停止输出按钮（打字机期间可跳过，等待API期间可取消）
- *   2. 消息区滚动条加粗+始终可见
+ * v2.2 - 停止输出按钮+滚动条加粗
+ * v2.3 - UI修复：
+ *   1. 去掉用户消息上方的"你"字
+ *   2. 去掉AI消息上方的"AI助手"字（头像已经够区分了）
+ *   3. 用户头像固定在消息右侧，布局更整齐
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -36,15 +38,12 @@ const TestDrawer = ({ open, onClose, workflow }) => {
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   
-  // 打字机效果状态
+  /* 打字机效果状态 */
   const [displayedText, setDisplayedText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const typingRef = useRef(null)
   
-  // API请求中止控制器
-  const abortControllerRef = useRef(null)
-  
-  // 滚动到底部
+  /* 滚动到底部 */
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
@@ -92,7 +91,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
     }
   }, [testMessages])
   
-  // 打开/关闭抽屉
+  /* 打开/关闭抽屉 */
   useEffect(() => {
     if (open && workflow?.id) {
       handleCreateSession()
@@ -113,9 +112,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
     }
   }
   
-  /**
-   * 发送消息
-   */
+  /** 发送消息 */
   const handleSend = async () => {
     if (!inputValue.trim()) return
     const messageContent = inputValue.trim()
@@ -131,16 +128,13 @@ const TestDrawer = ({ open, onClose, workflow }) => {
   
   /**
    * v2.2: 停止输出
-   * 如果正在打字机效果中 → 立即跳到全文
-   * 如果正在等待API响应 → 无法真正取消HTTP，但停止前端等待状态
+   * 打字机效果中 → 跳到全文
+   * 等待API响应 → 前端提示
    */
   const handleStop = useCallback(() => {
-    // 情况1: 打字机效果进行中，跳到全文
     if (isTyping && typingRef.current) {
       clearInterval(typingRef.current)
       typingRef.current = null
-      
-      // 获取完整文本
       const lastMsg = testMessages[testMessages.length - 1]
       if (lastMsg?.role === 'assistant') {
         setDisplayedText(lastMsg.content || '')
@@ -148,14 +142,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
       setIsTyping(false)
       return
     }
-    
-    // 情况2: 等待API响应中（打字机还没开始）
-    // 目前无法取消后端执行，但可以提示用户
-    if (testLoading && !isTyping) {
-      // 暂时仅作为UI反馈，后端请求仍会继续
-      // 未来可以通过AbortController实现真正取消
-    }
-  }, [isTyping, testLoading, testMessages])
+  }, [isTyping, testMessages])
   
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -191,7 +178,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
     return msg.content
   }
   
-  // 是否显示停止按钮：打字机进行中或等待API响应
+  /* 是否显示停止按钮 */
   const showStopBtn = isTyping || testLoading
   
   return (
@@ -231,11 +218,12 @@ const TestDrawer = ({ open, onClose, workflow }) => {
             <>
               {testMessages.map((msg, index) => (
                 <div key={index} className={`td-msg ${msg.role === 'user' ? 'td-msg-user' : 'td-msg-ai'}`}>
+                  {/* AI头像在左侧 */}
                   {msg.role === 'assistant' && (
                     <div className="td-avatar td-avatar-ai"><RobotOutlined /></div>
                   )}
+                  {/* 消息气泡 - v2.3: 去掉sender文字 */}
                   <div className="td-bubble-wrap">
-                    <div className="td-sender">{msg.role === 'user' ? '你' : 'AI助手'}</div>
                     <div className={`td-bubble ${msg.role === 'user' ? 'td-bubble-user' : 'td-bubble-ai'}`}>
                       <div className="td-text">
                         {getMessageText(msg, index)}
@@ -245,6 +233,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
                       </div>
                     </div>
                   </div>
+                  {/* 用户头像在右侧 */}
                   {msg.role === 'user' && (
                     <div className="td-avatar td-avatar-user"><UserOutlined /></div>
                   )}
@@ -256,7 +245,6 @@ const TestDrawer = ({ open, onClose, workflow }) => {
                 <div className="td-msg td-msg-ai">
                   <div className="td-avatar td-avatar-ai"><RobotOutlined /></div>
                   <div className="td-bubble-wrap">
-                    <div className="td-sender">AI助手</div>
                     <div className="td-bubble td-bubble-ai">
                       <div className="td-typing-dots">
                         <span></span><span></span><span></span>

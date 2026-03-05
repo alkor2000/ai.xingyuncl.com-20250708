@@ -1,6 +1,9 @@
 /**
  * 工作流编辑器工具栏
- * 提供保存、返回、删除、测试等操作
+ * 提供保存工作流、返回、删除、测试等操作
+ * 
+ * v1.1 更新：
+ * - 保存按钮文案从"保存"改为"保存工作流"，与配置面板的"保存节点"区分
  */
 
 import React from 'react'
@@ -45,8 +48,9 @@ const Toolbar = ({
       
       <div className="toolbar-right">
         <Space>
+          {/* 删除选中项按钮 */}
           {(selectedNode || selectedEdge) && (
-            <Tooltip title="删除选中项">
+            <Tooltip title="删除选中的节点或连线">
               <Button
                 danger
                 icon={<DeleteOutlined />}
@@ -57,6 +61,7 @@ const Toolbar = ({
             </Tooltip>
           )}
           
+          {/* 测试运行按钮 */}
           <Tooltip title="测试运行工作流">
             <Button
               type="default"
@@ -67,13 +72,14 @@ const Toolbar = ({
             </Button>
           </Tooltip>
           
+          {/* v1.1: 文案从"保存"改为"保存工作流" */}
           <Button
             type="primary"
             icon={<SaveOutlined />}
             onClick={onSave}
             disabled={!hasUnsavedChanges}
           >
-            保存
+            保存工作流
           </Button>
         </Space>
       </div>

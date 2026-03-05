@@ -1,5 +1,5 @@
 /**
- * 工作流编辑器样式 v4.0
+ * 工作流编辑器样式 v4.1
  * v3.0 - 浮动面板+可删除边+大连接点
  * v3.1 - 视觉优化：节点更大320px，深色header，分类节点专用样式
  * v4.0 - 全面质感升级：
@@ -8,6 +8,15 @@
  *   3. 配置抽屉视觉大幅升级：深色标题栏、分区卡片、阴影层次
  *   4. 连线样式优化：更粗、颜色更深、箭头更清晰
  *   5. 工具栏微调：更紧凑的间距和按钮样式
+ * v4.1 - 节点可读性优化：
+ *   1. section-title 从14px加大到15px
+ *   2. param-item/param-name/param-value 从14px加大到15px
+ *   3. param-empty 从14px加大到14px（保持）
+ *   4. model-name 从14px加大到15px
+ *   5. prompt-preview 从13px加大到14px
+ *   6. node-hint 从13px加大到14px
+ *   7. 知识库Tag和分类Tag字体加大
+ *   8. section-title图标从14px加大到15px
  */
 
 /* ========== 编辑器整体布局 ========== */
@@ -334,7 +343,7 @@
   box-shadow: 0 0 0 6px rgba(24, 144, 255, 0.2);
 }
 
-/* ========== v4.0: 节点更大更清晰（360px，字体全面加大） ========== */
+/* ========== v4.1: 节点更大更清晰（360px，字体全面再加大） ========== */
 
 .custom-node.enhanced {
   background: #fff;
@@ -357,7 +366,7 @@
   box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.2), 0 6px 28px rgba(0, 0, 0, 0.12);
 }
 
-/* === v4.0: 深色header白色文字（高对比度，字体更大） === */
+/* === 深色header白色文字（各节点主题色） === */
 
 /* 开始节点 - 绿色 */
 .start-node.enhanced { border-color: #389e0d; }
@@ -404,7 +413,7 @@
   border-bottom: none;
 }
 
-/* ========== v4.0: 节点内部结构（字体全面加大） ========== */
+/* ========== v4.1: 节点内部结构（字体全面再加大，提升可读性） ========== */
 
 .node-header {
   display: flex;
@@ -422,8 +431,9 @@
 .node-section { margin-bottom: 16px; }
 .node-section:last-child { margin-bottom: 0; }
 
+/* v4.1: section-title 加大到15px，图标同步加大 */
 .section-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #595959;
   margin-bottom: 10px;
@@ -432,7 +442,7 @@
 }
 
 .section-title .anticon {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .param-list {
@@ -441,6 +451,7 @@
   gap: 6px;
 }
 
+/* v4.1: param-item 内文字加大到15px */
 .param-item {
   display: flex;
   justify-content: space-between;
@@ -448,29 +459,31 @@
   padding: 8px 14px;
   background: #f7f8fa;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
 }
 
-.param-name { color: #595959; font-weight: 500; }
-.param-value { color: #262626; font-weight: 600; font-size: 14px; }
+.param-name { color: #595959; font-weight: 500; font-size: 15px; }
+.param-value { color: #262626; font-weight: 600; font-size: 15px; }
 .param-empty { font-size: 14px; color: #bfbfbf; font-style: italic; }
 
+/* v4.1: model-name 加大到15px */
 .model-name {
   font-weight: 600;
   color: #1890ff;
   padding: 8px 14px;
   background: #f0f5ff;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   border: 1px solid #d6e4ff;
 }
 
+/* v4.1: prompt-preview 加大到14px */
 .prompt-preview {
   background: #f7f8fa;
   border: 1px solid #eee;
   border-radius: 8px;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: 14px;
   color: #595959;
   line-height: 1.6;
   max-height: 80px;
@@ -486,9 +499,10 @@
   border-top: 1px solid #eee;
 }
 
-.node-hint { font-size: 13px; color: #8c8c8c; font-style: italic; }
+/* v4.1: node-hint 加大到14px */
+.node-hint { font-size: 14px; color: #8c8c8c; font-style: italic; }
 
-/* ========== v4.0: 分类节点专用样式（字体加大） ========== */
+/* ========== v4.1: 分类节点专用样式（字体加大） ========== */
 
 .classifier-category-list {
   display: flex;
@@ -510,8 +524,9 @@
   align-items: center;
 }
 
+/* v4.1: 分类Tag字体加大到14px */
 .classifier-category-header .ant-tag {
-  font-size: 13px !important;
+  font-size: 14px !important;
 }
 
 .classifier-category-arrow {
@@ -519,8 +534,9 @@
   font-weight: bold;
 }
 
+/* v4.1: 分类描述字体从12px加大到13px */
 .classifier-category-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #8c8c8c;
   margin-top: 5px;
   line-height: 1.5;

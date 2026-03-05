@@ -1,8 +1,9 @@
 /**
- * 测试对话抽屉样式 v2.2
+ * 测试对话抽屉样式 v2.3
  * v2.0 - ChatGPT风格
  * v2.1 - 清空按钮可见性
  * v2.2 - 滚动条加粗+停止按钮样式
+ * v2.3 - 去掉sender文字后的间距调整
  */
 
 .test-drawer-v2 {
@@ -70,27 +71,48 @@
 .td-empty-hint { font-size: 13px; color: #8c8c8c; }
 
 /* ===== 消息 ===== */
-.td-msg { display: flex; gap: 10px; margin-bottom: 20px; animation: msgFadeIn 0.3s ease; }
-@keyframes msgFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.td-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  animation: msgFadeIn 0.3s ease;
+}
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
+/* 用户消息：头像在右侧 */
 .td-msg-user {
   flex-direction: row-reverse;
   .td-bubble-wrap { align-items: flex-end; }
-  .td-sender { text-align: right; }
 }
-.td-msg-ai { .td-bubble-wrap { align-items: flex-start; } }
 
+/* AI消息：头像在左侧 */
+.td-msg-ai {
+  .td-bubble-wrap { align-items: flex-start; }
+}
+
+/* 头像 */
 .td-avatar {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; font-size: 16px;
+  margin-top: 2px;
 }
 .td-avatar-user { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: #fff; }
 .td-avatar-ai { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
 
-.td-bubble-wrap { display: flex; flex-direction: column; max-width: 75%; min-width: 0; }
-.td-sender { font-size: 12px; color: #8c8c8c; margin-bottom: 4px; padding: 0 4px; }
+/* v2.3: 气泡容器 - 去掉sender文字后直接包裹气泡 */
+.td-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 75%;
+  min-width: 0;
+}
 
+/* 气泡 */
 .td-bubble { padding: 10px 14px; border-radius: 12px; word-break: break-word; }
 .td-bubble-user {
   background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
@@ -104,6 +126,7 @@
 
 .td-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; text-align: left; }
 
+/* 打字光标 */
 .td-cursor {
   display: inline-block;
   animation: cursorBlink 0.8s step-end infinite;
@@ -111,6 +134,7 @@
 }
 @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
+/* 等待打字动画 */
 .td-typing-dots {
   display: flex; gap: 4px; padding: 4px 0;
   span {

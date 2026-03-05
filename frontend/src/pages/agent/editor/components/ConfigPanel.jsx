@@ -4,11 +4,11 @@
  * v2.2 - 知识库节点Wiki选择+Token显示
  * v2.3 - 问题分类节点配置
  * v2.4 - P2修复：保存知识库元数据
- * v2.5 - 视觉美化：
- *   1. 表单字体加大、间距优化
- *   2. 分隔线颜色层次
- *   3. 节点信息卡片化
- *   4. 引入专用样式文件
+ * v2.5 - 视觉美化：表单字体加大、间距优化、节点信息卡片化
+ * v2.6 - 优化：
+ *   1. 保存按钮改为"保存节点"，颜色固定蓝色不再跟随节点主题色
+ *   2. 最大Token上限从8192改为100000
+ *   3. 保存按钮样式统一
  */
 
 import React, { useEffect, useState } from 'react'
@@ -54,15 +54,18 @@ const ConfigPanel = ({
   const [selectedWikis, setSelectedWikis] = useState([])
   const [categories, setCategories] = useState([])
   
+  // 加载可用模型列表
   useEffect(() => {
     if (availableModels.length === 0) fetchAvailableModels()
   }, [])
   
+  // 节点选中时同步表单数据
   useEffect(() => {
     if (selectedNode) {
       const config = selectedNode.data?.config || {}
       form.setFieldsValue(config)
       
+      // 知识库节点：恢复已选知识库
       if (selectedNode.type === 'knowledge' && config.wiki_ids) {
         if (config.selected_wikis && config.selected_wikis.length > 0) {
           setSelectedWikis(config.selected_wikis)
@@ -77,6 +80,7 @@ const ConfigPanel = ({
         setSelectedWikis([])
       }
       
+      // 分类节点：恢复分类列表
       if (selectedNode.type === 'classifier' && config.categories) {
         setCategories(config.categories || [])
       } else {
@@ -89,15 +93,18 @@ const ConfigPanel = ({
     }
   }, [selectedNode, form, wikiItems])
   
+  // 知识库节点自动加载知识库列表
   useEffect(() => {
     if (selectedNode?.type === 'knowledge' && wikiItems.length === 0) fetchWikiItems()
   }, [selectedNode?.type])
   
+  /** 构建知识库元数据 */
   const buildWikiMetadata = (wikis) => wikis.map(w => ({
     id: w.id, title: w.title, scope: w.scope,
     tokens: w.tokens || 0, tokens_display: w.tokens_display || '未知'
   }))
   
+  /** 表单值变化回调 */
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
       if (selectedNode.type === 'knowledge') {
@@ -111,6 +118,7 @@ const ConfigPanel = ({
     }
   }
   
+  /** 添加知识库 */
   const handleAddWiki = (wikiId) => {
     const wiki = wikiItems.find(w => w.id === wikiId)
     if (wiki && !selectedWikis.find(w => w.id === wikiId)) {
@@ -123,6 +131,7 @@ const ConfigPanel = ({
     }
   }
   
+  /** 移除知识库 */
   const handleRemoveWiki = (wikiId) => {
     const newSelected = selectedWikis.filter(w => w.id !== wikiId)
     setSelectedWikis(newSelected)
@@ -132,6 +141,7 @@ const ConfigPanel = ({
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
+  /** 添加分类 */
   const handleAddCategory = () => {
     if (categories.length >= 100) { message.warning('最多支持100个分类'); return }
     const newCategory = { id: `cat-${Date.now()}`, name: `分类${categories.length + 1}`, description: '' }
@@ -142,6 +152,7 @@ const ConfigPanel = ({
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
+  /** 更新分类 */
   const handleUpdateCategory = (index, field, value) => {
     const newCategories = [...categories]
     newCategories[index] = { ...newCategories[index], [field]: value }
@@ -151,6 +162,7 @@ const ConfigPanel = ({
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
+  /** 删除分类 */
   const handleRemoveCategory = (index) => {
     const newCategories = categories.filter((_, i) => i !== index)
     setCategories(newCategories)
@@ -159,22 +171,25 @@ const ConfigPanel = ({
     onUpdateConfig(selectedNode.id, currentValues)
   }
   
+  // 计算知识库总Token
   const totalTokens = selectedWikis.reduce((sum, w) => sum + (w.tokens || 0), 0)
   const formatTotalTokens = (t) => t === 0 ? '0' : t < 1000 ? `${t}` : `${(t/1000).toFixed(1)}K`
   
+  // 范围图标映射
   const scopeIcons = {
     personal: <UserOutlined style={{ color: '#1890ff' }} />,
     team: <TeamOutlined style={{ color: '#52c41a' }} />,
     global: <GlobalOutlined style={{ color: '#fa8c16' }} />
   }
   
-  // 节点类型对应的主题色
+  // 节点类型对应的主题色（仅用于节点信息卡片边框）
   const nodeThemeColors = {
     start: '#52c41a', llm: '#1890ff', end: '#ff4d4f',
     knowledge: '#722ed1', classifier: '#d48806'
   }
   const themeColor = nodeThemeColors[selectedNode?.type] || '#1890ff'
   
+  // 空状态
   if (!selectedNode) {
     return (
       <div className="cp-empty">
@@ -183,7 +198,10 @@ const ConfigPanel = ({
     )
   }
   
-  // 保存按钮区域
+  /**
+   * 保存按钮区域
+   * v2.6 修改：文案改为"保存节点"，颜色固定蓝色（#1890ff），不再跟随节点主题色
+   */
   const renderSaveButton = () => {
     if (!inDrawer || !onSave) return null
     return (
@@ -197,7 +215,6 @@ const ConfigPanel = ({
         </span>
         <Button type="primary" icon={<SaveOutlined />} onClick={onSave}
           loading={saving} disabled={!hasUnsavedChanges} size="small"
-          style={{ background: themeColor, borderColor: themeColor }}
         >
           保存
         </Button>
@@ -205,7 +222,7 @@ const ConfigPanel = ({
     )
   }
   
-  // 知识库配置
+  /** 知识库配置区域 */
   const renderKnowledgeConfig = () => (
     <>
       <div className="cp-section-header">
@@ -270,7 +287,7 @@ const ConfigPanel = ({
     </>
   )
   
-  // 分类配置
+  /** 分类配置区域 */
   const renderClassifierConfig = () => (
     <>
       <div className="cp-section-header">
@@ -335,16 +352,17 @@ const ConfigPanel = ({
     </>
   )
   
-  // 主表单
+  /** 主配置表单 */
   const renderConfigForm = () => (
     <Form form={form} layout="vertical" onValuesChange={handleValuesChange}
       size="middle" className="cp-form">
       
+      {/* 所有节点都有的节点名称 */}
       <Form.Item label="节点名称" name="label" initialValue={selectedNode.data?.label}>
         <Input placeholder="输入节点名称" />
       </Form.Item>
       
-      {/* LLM节点 */}
+      {/* LLM节点配置 */}
       {selectedNode.type === 'llm' && (
         <>
           <div className="cp-section-header">
@@ -380,14 +398,15 @@ const ConfigPanel = ({
             <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
           </Form.Item>
           
+          {/* v2.6: 最大Token上限从8192改为100000 */}
           <Form.Item label="最大Token数" name="max_tokens" initialValue={2000}
-            tooltip="单次回复最大长度">
-            <InputNumber min={100} max={8192} style={{ width: '100%' }} />
+            tooltip="单次回复最大长度（取决于模型支持的上限）">
+            <InputNumber min={100} max={100000} style={{ width: '100%' }} />
           </Form.Item>
         </>
       )}
       
-      {/* 开始节点 */}
+      {/* 开始节点配置 */}
       {selectedNode.type === 'start' && (
         <>
           <div className="cp-section-header">
@@ -402,7 +421,7 @@ const ConfigPanel = ({
         </>
       )}
       
-      {/* 结束节点 */}
+      {/* 结束节点配置 */}
       {selectedNode.type === 'end' && (
         <>
           <div className="cp-section-header">
@@ -414,12 +433,15 @@ const ConfigPanel = ({
         </>
       )}
       
+      {/* 知识库节点配置 */}
       {selectedNode.type === 'knowledge' && renderKnowledgeConfig()}
+      
+      {/* 分类节点配置 */}
       {selectedNode.type === 'classifier' && renderClassifierConfig()}
     </Form>
   )
   
-  // 节点信息
+  /** 节点信息卡片 */
   const renderNodeInfo = () => (
     <div className="cp-node-info" style={{ borderLeftColor: themeColor }}>
       <div className="cp-node-info-item">
@@ -433,6 +455,7 @@ const ConfigPanel = ({
     </div>
   )
   
+  // 抽屉模式渲染
   if (inDrawer) {
     return (
       <div className="cp-content">
@@ -443,6 +466,7 @@ const ConfigPanel = ({
     )
   }
   
+  // 面板模式渲染
   return (
     <div className="workflow-editor-config-panel">
       {renderConfigForm()}
