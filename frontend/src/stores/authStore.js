@@ -1,5 +1,15 @@
 /**
  * 认证状态管理
+ * 
+ * 职责：
+ * 1. 管理用户认证状态（登录/登出/Token刷新）
+ * 2. 4种登录方式（密码/验证码/邮箱密码验证码/SSO）
+ * 3. 用户信息/权限/积分查询
+ * 4. Token自动刷新和持久化
+ * 
+ * 修复：
+ * - changePassword 增加 oldPassword 参数，配合后端原密码验证
+ * - 提取 _handleLoginSuccess 消除三个登录方法的重复代码
  */
 
 import { create } from 'zustand'
@@ -8,10 +18,81 @@ import apiClient from '../utils/api'
 import useSystemConfigStore from './systemConfigStore'
 import tokenRefreshService from '../services/tokenRefreshService'
 
+/**
+ * 登录成功后的统一处理逻辑（内部函数）
+ * 提取自 login/loginByEmailCode/loginByEmailPassword 三个方法的公共部分
+ * 
+ * @param {Function} set - Zustand set 函数
+ * @param {Function} get - Zustand get 函数
+ * @param {Object} responseData - API 响应中的 data 字段
+ * @param {string} loginMethod - 登录方式描述（用于日志）
+ */
+const _handleLoginSuccess = (set, get, responseData, loginMethod = '登录') => {
+  const {
+    user,
+    permissions = [],
+    siteConfig,
+    accessToken,
+    refreshToken,
+    expiresIn
+  } = responseData
+
+  // 解析Token过期时间
+  const tokenExpiresAt = get().parseExpiresIn(expiresIn)
+
+  // 更新认证状态
+  set({
+    user,
+    permissions: permissions || [],
+    accessToken,
+    refreshToken,
+    tokenExpiresAt,
+    isAuthenticated: true,
+    loading: false
+  })
+
+  // 设置默认请求头
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+
+  // 更新站点配置（支持组级覆盖）
+  if (siteConfig) {
+    useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
+    console.log('🎨 已更新用户站点配置:', siteConfig)
+  }
+
+  // 清理之前用户的聊天数据，防止数据串用户
+  try {
+    const { default: useChatStore } = require('./chatStore')
+    if (useChatStore) {
+      const chatStore = useChatStore.getState()
+      if (chatStore && chatStore.reset) {
+        console.log('🧹 清除之前的聊天数据...')
+        chatStore.reset()
+      }
+    }
+  } catch (e) {
+    // chatStore 可能还没加载，不影响登录流程
+    console.warn('清理聊天数据跳过:', e.message)
+  }
+
+  // 启动Token自动刷新
+  tokenRefreshService.startAutoRefresh({ getState: get })
+
+  console.log(`✅ ${loginMethod}成功:`, {
+    user: user.email,
+    role: user.role,
+    permissions: permissions.length,
+    tokenExpires: tokenExpiresAt?.toLocaleString(),
+    hasSiteConfig: !!siteConfig
+  })
+}
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
+      // ============================================================
       // 状态
+      // ============================================================
       user: null,
       permissions: [],
       accessToken: null,
@@ -20,99 +101,52 @@ const useAuthStore = create(
       loading: false,
       tokenExpiresAt: null,
 
-      // 解析过期时间字符串（支持 s/m/h/d 格式）
+      // ============================================================
+      // 工具方法
+      // ============================================================
+
+      /**
+       * 解析过期时间字符串（支持 s/m/h/d 格式）
+       * @param {string} expiresIn - 如 '24h', '30d', '3600s'
+       * @returns {Date|null} 过期时间点
+       */
       parseExpiresIn: (expiresIn) => {
         if (!expiresIn) return null
-        
-        // 提取数字和单位
+
         const match = expiresIn.match(/^(\d+)([smhd])$/i)
         if (!match) {
-          // 如果没有单位，默认按秒处理
           const seconds = parseInt(expiresIn)
           if (isNaN(seconds)) return null
           return new Date(Date.now() + seconds * 1000)
         }
-        
+
         const [, num, unit] = match
         const value = parseInt(num)
         let milliseconds = 0
-        
+
         switch (unit.toLowerCase()) {
-          case 's': // 秒
-            milliseconds = value * 1000
-            break
-          case 'm': // 分钟
-            milliseconds = value * 60 * 1000
-            break
-          case 'h': // 小时
-            milliseconds = value * 60 * 60 * 1000
-            break
-          case 'd': // 天
-            milliseconds = value * 24 * 60 * 60 * 1000
-            break
-          default:
-            return null
+          case 's': milliseconds = value * 1000; break
+          case 'm': milliseconds = value * 60 * 1000; break
+          case 'h': milliseconds = value * 60 * 60 * 1000; break
+          case 'd': milliseconds = value * 24 * 60 * 60 * 1000; break
+          default: return null
         }
-        
+
         return new Date(Date.now() + milliseconds)
       },
 
-      // 登录
+      // ============================================================
+      // 登录方法
+      // ============================================================
+
+      /**
+       * 密码登录（用户名/邮箱/手机号 + 密码）
+       */
       login: async (credentials) => {
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/login', credentials)
-          const { 
-            user, 
-            permissions = [], 
-            siteConfig,
-            accessToken, 
-            refreshToken, 
-            expiresIn 
-          } = response.data.data
-
-          // 使用改进的时间解析
-          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
-
-          set({
-            user,
-            permissions: permissions || [],
-            accessToken,
-            refreshToken,
-            tokenExpiresAt,
-            isAuthenticated: true,
-            loading: false
-          })
-
-          // 设置默认请求头
-          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-
-          // 更新站点配置（如果有）
-          if (siteConfig) {
-            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
-            console.log('🎨 已更新用户站点配置:', siteConfig)
-          }
-
-          // 🔥 重要：登录成功后清理之前用户的聊天数据
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除之前的聊天数据...')
-              chatStore.reset()
-            }
-          }
-
-          // 启动Token自动刷新
-          tokenRefreshService.startAutoRefresh({ getState: get })
-
-          console.log('✅ 用户登录成功:', {
-            user: user.email,
-            role: user.role,
-            permissions: permissions.length,
-            tokenExpires: tokenExpiresAt?.toLocaleString(),
-            hasSiteConfig: !!siteConfig
-          })
-
+          _handleLoginSuccess(set, get, response.data.data, '密码登录')
           return response.data
         } catch (error) {
           set({ loading: false })
@@ -121,7 +155,44 @@ const useAuthStore = create(
         }
       },
 
+      /**
+       * 邮箱验证码登录
+       */
+      loginByEmailCode: async (email, code) => {
+        set({ loading: true })
+        try {
+          const response = await apiClient.post('/auth/login-by-code', { email, code })
+          _handleLoginSuccess(set, get, response.data.data, '验证码登录')
+          return response.data
+        } catch (error) {
+          set({ loading: false })
+          console.error('❌ 验证码登录失败:', error)
+          throw error
+        }
+      },
+
+      /**
+       * 邮箱+密码+验证码登录（强制验证模式）
+       */
+      loginByEmailPassword: async (email, password, code) => {
+        set({ loading: true })
+        try {
+          const response = await apiClient.post('/auth/login-by-email-password', {
+            email, password, code
+          })
+          _handleLoginSuccess(set, get, response.data.data, '邮箱密码验证码登录')
+          return response.data
+        } catch (error) {
+          set({ loading: false })
+          console.error('❌ 邮箱密码验证码登录失败:', error)
+          throw error
+        }
+      },
+
+      // ============================================================
       // 登出
+      // ============================================================
+
       logout: async () => {
         try {
           const state = get()
@@ -134,8 +205,8 @@ const useAuthStore = create(
         } finally {
           // 停止Token自动刷新
           tokenRefreshService.stopAutoRefresh()
-          
-          // 清除状态
+
+          // 清除认证状态
           set({
             user: null,
             permissions: [],
@@ -147,27 +218,38 @@ const useAuthStore = create(
 
           // 清除默认请求头
           delete apiClient.defaults.headers.common['Authorization']
-          
+
           // 清除站点配置
           useSystemConfigStore.getState().setUserSiteConfig(null)
-          
-          // 🔥 重要：清除聊天相关的所有状态
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除聊天数据...')
-              chatStore.reset()
+
+          // 清除聊天数据
+          try {
+            const { default: useChatStore } = require('./chatStore')
+            if (useChatStore) {
+              const chatStore = useChatStore.getState()
+              if (chatStore && chatStore.reset) {
+                console.log('🧹 清除聊天数据...')
+                chatStore.reset()
+              }
             }
+          } catch (e) {
+            console.warn('清理聊天数据跳过:', e.message)
           }
-          
+
           console.log('🚪 用户已登出')
-          
-          // 跳转到首页（自定义首页）
+
+          // 跳转到首页
           window.location.href = '/'
         }
       },
 
-      // 获取当前用户信息
+      // ============================================================
+      // 用户信息管理
+      // ============================================================
+
+      /**
+       * 获取当前用户信息
+       */
       getCurrentUser: async () => {
         try {
           const response = await apiClient.get('/auth/me')
@@ -178,7 +260,6 @@ const useAuthStore = create(
             permissions: permissions || []
           })
 
-          // 更新站点配置（如果有）
           if (siteConfig) {
             useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
             console.log('🎨 已更新用户站点配置:', siteConfig)
@@ -188,7 +269,6 @@ const useAuthStore = create(
           return response.data
         } catch (error) {
           console.error('获取用户信息失败:', error)
-          // 如果获取用户信息失败，可能token已过期，执行登出
           if (error.response?.status === 401) {
             get().logout()
           }
@@ -196,14 +276,14 @@ const useAuthStore = create(
         }
       },
 
-      // 更新个人信息
+      /**
+       * 更新个人信息
+       */
       updateProfile: async (profileData) => {
         try {
           const response = await apiClient.put('/auth/profile', profileData)
           const { user } = response.data.data
-
           set({ user })
-
           console.log('✅ 个人信息更新成功')
           return response.data
         } catch (error) {
@@ -212,13 +292,21 @@ const useAuthStore = create(
         }
       },
 
-      // 修改密码 - 简化版，不需要原密码
-      changePassword: async (newPassword) => {
+      /**
+       * 修改密码 - 必须提供原密码
+       * 
+       * 安全说明：即使用户已通过JWT认证，修改密码仍需验证原密码
+       * 防止 token 被盗后攻击者永久接管账号
+       * 
+       * @param {string} oldPassword - 原密码
+       * @param {string} newPassword - 新密码
+       */
+      changePassword: async (oldPassword, newPassword) => {
         try {
           const response = await apiClient.put('/auth/password', {
-            newPassword  // 只传新密码，后端会自动处理
+            oldPassword,
+            newPassword
           })
-
           console.log('✅ 密码修改成功')
           return response.data
         } catch (error) {
@@ -227,13 +315,14 @@ const useAuthStore = create(
         }
       },
 
-      // 获取积分历史
+      /**
+       * 获取积分历史
+       */
       getCreditHistory: async (page = 1, limit = 20) => {
         try {
           const response = await apiClient.get('/auth/credit-history', {
             params: { page, limit }
           })
-
           console.log('📊 获取积分历史成功')
           return response.data.data
         } catch (error) {
@@ -242,7 +331,13 @@ const useAuthStore = create(
         }
       },
 
-      // 注册
+      // ============================================================
+      // 注册与验证
+      // ============================================================
+
+      /**
+       * 用户注册
+       */
       register: async (userData) => {
         set({ loading: true })
         try {
@@ -253,12 +348,14 @@ const useAuthStore = create(
         } catch (error) {
           set({ loading: false })
           console.error('❌ 注册失败:', error)
-          const message = error.response?.data?.message || '注册失败'
-          return { success: false, message }
+          const msg = error.response?.data?.message || '注册失败'
+          return { success: false, message: msg }
         }
       },
 
-      // 检查邮箱是否可用
+      /**
+       * 检查邮箱是否可用
+       */
       checkEmailAvailable: async (email) => {
         try {
           const response = await apiClient.post('/auth/check-email', { email })
@@ -268,7 +365,9 @@ const useAuthStore = create(
         }
       },
 
-      // 检查用户名是否可用
+      /**
+       * 检查用户名是否可用
+       */
       checkUsernameAvailable: async (username) => {
         try {
           const response = await apiClient.post('/auth/check-username', { username })
@@ -278,7 +377,28 @@ const useAuthStore = create(
         }
       },
 
-      // 刷新令牌 - 改进版，使用新的时间解析
+      /**
+       * 发送邮箱验证码
+       */
+      sendEmailCode: async (email) => {
+        try {
+          const response = await apiClient.post('/auth/send-email-code', { email })
+          console.log('📧 验证码发送成功')
+          return { success: true, message: response.data.message }
+        } catch (error) {
+          console.error('发送验证码失败:', error)
+          const msg = error.response?.data?.message || '发送验证码失败'
+          return { success: false, message: msg }
+        }
+      },
+
+      // ============================================================
+      // Token管理
+      // ============================================================
+
+      /**
+       * 刷新访问令牌
+       */
       refreshAccessToken: async () => {
         const state = get()
         if (!state.refreshToken) {
@@ -291,205 +411,66 @@ const useAuthStore = create(
           })
 
           const { accessToken, expiresIn } = response.data.data
-
-          // 使用改进的时间解析
           const tokenExpiresAt = get().parseExpiresIn(expiresIn)
 
-          set({
-            accessToken,
-            tokenExpiresAt
-          })
-
-          // 更新默认请求头
+          set({ accessToken, tokenExpiresAt })
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
           console.log('🔄 Token刷新成功，新过期时间:', tokenExpiresAt?.toLocaleString())
           return accessToken
         } catch (error) {
           console.error('Token刷新失败:', error)
-          // 停止自动刷新
           tokenRefreshService.stopAutoRefresh()
-          // 刷新失败，执行登出
           get().logout()
           throw error
         }
       },
 
-      // 发送邮箱验证码
-      sendEmailCode: async (email) => {
-        try {
-          const response = await apiClient.post('/auth/send-email-code', { email })
-          console.log('📧 验证码发送成功')
-          return { success: true, message: response.data.message }
-        } catch (error) {
-          console.error('发送验证码失败:', error)
-          const message = error.response?.data?.message || '发送验证码失败'
-          return { success: false, message }
-        }
-      },
+      // ============================================================
+      // 权限检查
+      // ============================================================
 
-      // 邮箱验证码登录
-      loginByEmailCode: async (email, code) => {
-        set({ loading: true })
-        try {
-          const response = await apiClient.post('/auth/login-by-code', { email, code })
-          const { 
-            user, 
-            permissions = [], 
-            siteConfig,
-            accessToken, 
-            refreshToken, 
-            expiresIn 
-          } = response.data.data
-
-          // 使用改进的时间解析
-          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
-
-          set({
-            user,
-            permissions: permissions || [],
-            accessToken,
-            refreshToken,
-            tokenExpiresAt,
-            isAuthenticated: true,
-            loading: false
-          })
-
-          // 设置默认请求头
-          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-
-          // 更新站点配置（如果有）
-          if (siteConfig) {
-            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
-            console.log('🎨 已更新用户站点配置:', siteConfig)
-          }
-
-          // 清理之前用户的聊天数据
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除之前的聊天数据...')
-              chatStore.reset()
-            }
-          }
-
-          // 启动Token自动刷新
-          tokenRefreshService.startAutoRefresh({ getState: get })
-
-          console.log('✅ 验证码登录成功:', {
-            user: user.email,
-            role: user.role,
-            permissions: permissions.length,
-            tokenExpires: tokenExpiresAt?.toLocaleString(),
-            hasSiteConfig: !!siteConfig
-          })
-
-          return response.data
-        } catch (error) {
-          set({ loading: false })
-          console.error('❌ 验证码登录失败:', error)
-          throw error
-        }
-      },
-
-      // 邮箱+密码+验证码登录
-      loginByEmailPassword: async (email, password, code) => {
-        set({ loading: true })
-        try {
-          const response = await apiClient.post('/auth/login-by-email-password', { 
-            email, 
-            password, 
-            code 
-          })
-          const { 
-            user, 
-            permissions = [], 
-            siteConfig,
-            accessToken, 
-            refreshToken, 
-            expiresIn 
-          } = response.data.data
-
-          // 使用改进的时间解析
-          const tokenExpiresAt = get().parseExpiresIn(expiresIn)
-
-          set({
-            user,
-            permissions: permissions || [],
-            accessToken,
-            refreshToken,
-            tokenExpiresAt,
-            isAuthenticated: true,
-            loading: false
-          })
-
-          // 设置默认请求头
-          apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-
-          // 更新站点配置（如果有）
-          if (siteConfig) {
-            useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
-            console.log('🎨 已更新用户站点配置:', siteConfig)
-          }
-
-          // 清理之前用户的聊天数据
-          if (window.useChatStore) {
-            const chatStore = window.useChatStore.getState()
-            if (chatStore && chatStore.reset) {
-              console.log('🧹 清除之前的聊天数据...')
-              chatStore.reset()
-            }
-          }
-
-          // 启动Token自动刷新
-          tokenRefreshService.startAutoRefresh({ getState: get })
-
-          console.log('✅ 邮箱密码验证码登录成功:', {
-            user: user.email,
-            role: user.role,
-            permissions: permissions.length,
-            tokenExpires: tokenExpiresAt?.toLocaleString(),
-            hasSiteConfig: !!siteConfig
-          })
-
-          return response.data
-        } catch (error) {
-          set({ loading: false })
-          console.error('❌ 邮箱密码验证码登录失败:', error)
-          throw error
-        }
-      },
-
-      // 检查权限
+      /**
+       * 检查是否拥有指定权限
+       */
       hasPermission: (permission) => {
         const { permissions } = get()
-        return permissions.includes(permission) || 
+        return permissions.includes(permission) ||
                permissions.includes('system.all') ||
                permissions.some(p => p.endsWith('.*') && permission.startsWith(p.slice(0, -1)))
       },
 
-      // 检查角色
+      /**
+       * 检查是否拥有指定角色
+       */
       hasRole: (role) => {
         const { user } = get()
         if (!user) return false
-        
         if (Array.isArray(role)) {
           return role.includes(user.role)
         }
         return user.role === role
       },
 
-      // 检查Token是否过期
+      /**
+       * 检查Token是否过期
+       */
       isTokenExpired: () => {
         const { tokenExpiresAt } = get()
         if (!tokenExpiresAt) return true
         return new Date() >= new Date(tokenExpiresAt)
       },
 
-      // 初始化认证状态 - 改进版，支持自动刷新
+      // ============================================================
+      // 初始化
+      // ============================================================
+
+      /**
+       * 初始化认证状态（应用启动时调用）
+       */
       initializeAuth: async () => {
         const state = get()
-        
+
         if (!state.accessToken) {
           console.log('🔐 无访问令牌，跳过初始化')
           return
@@ -503,14 +484,12 @@ const useAuthStore = create(
           console.log('⏰ Token已过期，尝试刷新...')
           try {
             await state.refreshAccessToken()
-            // 刷新成功后启动自动刷新
             tokenRefreshService.startAutoRefresh({ getState: get })
           } catch (error) {
             console.error('Token刷新失败，需要重新登录')
             return
           }
         } else {
-          // Token未过期，启动自动刷新
           tokenRefreshService.startAutoRefresh({ getState: get })
         }
 
@@ -534,7 +513,6 @@ const useAuthStore = create(
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {
-        // 存储恢复后初始化认证状态
         console.log('🔄 恢复认证状态...')
         if (state?.accessToken) {
           state.initializeAuth()
@@ -544,7 +522,7 @@ const useAuthStore = create(
   )
 )
 
-// 在开发环境下暴露到window对象方便调试
+// 开发环境暴露到window方便调试
 if (process.env.NODE_ENV === 'development') {
   window.useAuthStore = useAuthStore
 }
