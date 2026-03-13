@@ -1,8 +1,10 @@
 /**
- * 用户分组服务层 - 处理用户分组相关的业务逻辑（包含积分池功能、组员上限、组有效期、站点配置和邀请码功能）
+ * 用户分组服务层 - 处理用户分组相关的业务逻辑
+ * 包含：积分池功能、组员上限、组有效期、站点配置、邀请码功能、组公告功能
  * 
  * 修复记录：
  * - getGroupUserCount: 改用deleted_at IS NULL过滤已删除用户
+ * - 新增 getGroupAnnouncement / updateGroupAnnouncement 组公告方法
  */
 
 const User = require('../../models/User');
@@ -1161,6 +1163,67 @@ class GroupService {
       };
     } catch (error) {
       logger.error('为现有组补充分配AI模型失败', { error: error.message, groupId });
+      throw error;
+    }
+  }
+
+  // ========== 组公告功能 ==========
+
+  /**
+   * 获取组公告内容
+   * @param {number} groupId - 组ID
+   * @returns {Object} 公告内容和组信息
+   */
+  static async getGroupAnnouncement(groupId) {
+    try {
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      return {
+        group_id: group.id,
+        group_name: group.name,
+        content: group.announcement || '',
+        updated_at: group.updated_at
+      };
+    } catch (error) {
+      logger.error('获取组公告失败', { error: error.message, groupId });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新组公告内容（支持Markdown）
+   * @param {number} groupId - 组ID
+   * @param {string} content - 公告内容（Markdown格式）
+   * @param {number} operatorId - 操作者ID
+   * @returns {Object} 更新后的公告信息
+   */
+  static async updateGroupAnnouncement(groupId, content, operatorId = null) {
+    try {
+      const group = await GroupService.findGroupById(groupId);
+      if (!group) {
+        throw new ValidationError('用户分组不存在');
+      }
+
+      const sql = 'UPDATE user_groups SET announcement = ?, updated_at = NOW() WHERE id = ?';
+      await dbConnection.query(sql, [content || null, groupId]);
+
+      logger.info('更新组公告成功', {
+        operatorId,
+        groupId,
+        contentLength: (content || '').length
+      });
+
+      return {
+        group_id: groupId,
+        group_name: group.name,
+        content: content || '',
+        updated_at: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('更新组公告失败', { error: error.message, groupId });
       throw error;
     }
   }

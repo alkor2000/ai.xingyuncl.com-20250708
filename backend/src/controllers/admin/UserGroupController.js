@@ -1,7 +1,11 @@
 /**
  * 用户分组管理控制器 - 增强版，支持自动创建组织文件夹
- * 使用Service层处理业务逻辑（包含积分池功能、组有效期、站点配置和邀请码功能）
- * 修改：创建组时自动创建组织共享文件夹
+ * 使用Service层处理业务逻辑
+ * 包含：积分池功能、组有效期、站点配置、邀请码功能、组公告功能
+ * 
+ * 更新：
+ * - 创建组时自动创建组织共享文件夹
+ * - 新增组公告 getGroupAnnouncement / updateGroupAnnouncement
  */
 
 const { GroupService } = require('../../services/admin');
@@ -9,7 +13,7 @@ const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
 const CacheService = require('../../services/cacheService');
 const ossService = require('../../services/ossService');
-const UserFolder = require('../../models/UserFolder');  // 引入文件夹模型
+const UserFolder = require('../../models/UserFolder');
 const fs = require('fs').promises;
 
 class UserGroupController {
@@ -21,7 +25,6 @@ class UserGroupController {
       const currentUser = req.user;
       const groups = await GroupService.getGroups(currentUser);
 
-      // 恢复原格式：直接返回数组
       return ResponseHelper.success(res, groups, '获取用户分组列表成功');
     } catch (error) {
       logger.error('获取用户分组列表失败', { 
@@ -53,7 +56,6 @@ class UserGroupController {
           groupId: group.id,
           error: folderError.message 
         });
-        // 不影响主流程，只记录错误
       }
 
       return ResponseHelper.success(res, group, '用户分组创建成功', 201);
@@ -85,7 +87,6 @@ class UserGroupController {
       
       const group = await GroupService.updateGroup(id, updateData, req.user.id);
 
-      // 清除相关缓存
       await CacheService.clearUserGroupsCache();
       await CacheService.clearAIModelsCache();
 
@@ -117,7 +118,6 @@ class UserGroupController {
       const { id } = req.params;
       const result = await GroupService.deleteGroup(id, req.user.id);
 
-      // 清除相关缓存
       await CacheService.clearUserGroupsCache();
       await CacheService.clearAIModelsCache();
 
@@ -138,7 +138,7 @@ class UserGroupController {
   }
 
   /**
-   * 设置组邀请码（修改：允许组管理员管理自己组的邀请码）
+   * 设置组邀请码（允许组管理员管理自己组的邀请码）
    */
   static async setGroupInvitationCode(req, res) {
     try {
@@ -147,7 +147,6 @@ class UserGroupController {
 
       // 权限检查：超级管理员可以设置所有组，组管理员只能设置自己的组
       if (req.user.role === 'admin') {
-        // 组管理员只能管理自己组的邀请码
         if (req.user.group_id !== parseInt(id)) {
           return ResponseHelper.forbidden(res, '只能管理本组的邀请码');
         }
@@ -166,7 +165,6 @@ class UserGroupController {
         expire_at
       }, req.user.id);
 
-      // 清除缓存
       await CacheService.clearUserGroupsCache();
 
       return ResponseHelper.success(res, result, result.message);
@@ -201,7 +199,6 @@ class UserGroupController {
       const { id } = req.params;
       const { page = 1, limit = 20 } = req.query;
 
-      // 仅超级管理员可以查看邀请码使用记录
       if (req.user.role !== 'super_admin') {
         return ResponseHelper.forbidden(res, '仅超级管理员可以查看邀请码使用记录');
       }
@@ -271,7 +268,6 @@ class UserGroupController {
       const { user_id, amount, reason, operation = 'distribute' } = req.body;
       const operatorId = req.user.id;
 
-      // 权限检查
       if (req.user.role === 'admin' && req.user.group_id !== parseInt(groupId)) {
         return ResponseHelper.forbidden(res, '只能管理本组的积分池');
       }
@@ -282,9 +278,7 @@ class UserGroupController {
 
       let result;
       
-      // 根据操作类型调用不同的方法
       if (operation === 'recycle') {
-        // 回收积分
         result = await GroupService.recycleCreditsToPool(
           parseInt(groupId),
           user_id,
@@ -294,7 +288,6 @@ class UserGroupController {
         );
         return ResponseHelper.success(res, result, '积分回收成功');
       } else {
-        // 分配积分
         result = await GroupService.distributeCreditsFromPool(
           parseInt(groupId),
           user_id,
@@ -359,7 +352,7 @@ class UserGroupController {
   }
 
   /**
-   * 设置组有效期（新增，仅超级管理员）
+   * 设置组有效期（仅超级管理员）
    */
   static async setGroupExpireDate(req, res) {
     try {
@@ -370,7 +363,6 @@ class UserGroupController {
         return ResponseHelper.validation(res, ['有效期日期不能为空']);
       }
 
-      // 验证日期格式
       const expireDate = new Date(expire_date);
       if (isNaN(expireDate.getTime())) {
         return ResponseHelper.validation(res, ['无效的日期格式']);
@@ -400,7 +392,7 @@ class UserGroupController {
   }
 
   /**
-   * 同步组有效期到所有组员（新增，仅超级管理员）
+   * 同步组有效期到所有组员（仅超级管理员）
    */
   static async syncGroupExpireDateToUsers(req, res) {
     try {
@@ -467,7 +459,6 @@ class UserGroupController {
       const { site_name, site_logo } = req.body;
       const operatorId = req.user.id;
 
-      // 权限检查 - 组管理员只能更新自己组的配置
       if (req.user.role === 'admin') {
         if (req.user.group_id !== parseInt(id)) {
           return ResponseHelper.forbidden(res, '只能管理本组的站点配置');
@@ -508,19 +499,16 @@ class UserGroupController {
       const { id } = req.params;
       const operatorId = req.user.id;
 
-      // 权限检查 - 组管理员只能上传自己组的logo
       if (req.user.role === 'admin') {
         if (req.user.group_id !== parseInt(id)) {
           return ResponseHelper.forbidden(res, '只能管理本组的站点配置');
         }
       }
 
-      // 检查是否有文件上传
       if (!req.file) {
         return ResponseHelper.validation(res, ['请选择要上传的Logo图片']);
       }
 
-      // 检查组是否开启了自定义功能
       const group = await GroupService.findGroupById(id);
       if (!group) {
         return ResponseHelper.notFound(res, '用户分组不存在');
@@ -530,20 +518,16 @@ class UserGroupController {
         return ResponseHelper.forbidden(res, '该组未开启站点自定义功能');
       }
 
-      // 初始化OSS服务
       await ossService.initialize();
       
-      // 读取上传的文件
       const fileBuffer = await fs.readFile(req.file.path);
       
-      // 生成OSS key - 组logo存储路径
       const ossKey = ossService.generateOSSKey(
-        `group_${id}`, // 使用组ID作为用户标识
-        `logo_${req.file.filename}`, // 文件名
-        'logos' // 存储在logos文件夹
+        `group_${id}`,
+        `logo_${req.file.filename}`,
+        'logos'
       );
       
-      // 上传到OSS或本地存储
       const uploadResult = await ossService.uploadFile(fileBuffer, ossKey, {
         headers: {
           'Content-Type': req.file.mimetype,
@@ -551,13 +535,10 @@ class UserGroupController {
         }
       });
       
-      // 删除临时文件
       await fs.unlink(req.file.path);
       
-      // 如果有旧logo，尝试删除（不影响主流程）
       if (group.site_logo) {
         try {
-          // 从URL提取OSS key
           const oldKey = group.site_logo.replace(/^https?:\/\/[^\/]+\//, '');
           await ossService.deleteFile(oldKey);
         } catch (err) {
@@ -587,7 +568,6 @@ class UserGroupController {
         error: error.message 
       });
       
-      // 清理临时文件
       if (req.file && req.file.path) {
         try {
           await fs.unlink(req.file.path);
@@ -597,6 +577,95 @@ class UserGroupController {
       }
       
       return ResponseHelper.error(res, error.message || '上传Logo失败');
+    }
+  }
+
+  // ========== 组公告功能 ==========
+
+  /**
+   * 获取组公告
+   * 权限：超管可查看所有组，组管理员只能查看自己组
+   */
+  static async getGroupAnnouncement(req, res) {
+    try {
+      const { id } = req.params;
+
+      // 权限检查：组管理员只能查看自己组的公告
+      if (req.user.role === 'admin') {
+        if (req.user.group_id !== parseInt(id)) {
+          return ResponseHelper.forbidden(res, '只能查看本组的公告');
+        }
+      }
+
+      const result = await GroupService.getGroupAnnouncement(parseInt(id));
+
+      return ResponseHelper.success(res, result, '获取组公告成功');
+    } catch (error) {
+      logger.error('获取组公告失败', {
+        adminId: req.user?.id,
+        groupId: req.params.id,
+        error: error.message
+      });
+
+      if (error.message === '用户分组不存在') {
+        return ResponseHelper.notFound(res, error.message);
+      }
+
+      return ResponseHelper.error(res, error.message || '获取组公告失败');
+    }
+  }
+
+  /**
+   * 更新组公告（支持Markdown）
+   * 权限：超管可编辑所有组，组管理员只能编辑自己组
+   */
+  static async updateGroupAnnouncement(req, res) {
+    try {
+      const { id } = req.params;
+      const { content } = req.body;
+
+      // 权限检查：组管理员只能编辑自己组的公告
+      if (req.user.role === 'admin') {
+        if (req.user.group_id !== parseInt(id)) {
+          return ResponseHelper.forbidden(res, '只能编辑本组的公告');
+        }
+      }
+
+      // 内容验证
+      if (content !== undefined && content !== null && typeof content !== 'string') {
+        return ResponseHelper.validation(res, ['公告内容必须是文本']);
+      }
+
+      // 限制内容大小（100KB）
+      if (content && content.length > 100 * 1024) {
+        return ResponseHelper.validation(res, ['公告内容不能超过100KB']);
+      }
+
+      const result = await GroupService.updateGroupAnnouncement(
+        parseInt(id),
+        content || '',
+        req.user.id
+      );
+
+      logger.info('组公告更新成功', {
+        operatorId: req.user.id,
+        groupId: id,
+        contentLength: (content || '').length
+      });
+
+      return ResponseHelper.success(res, result, '组公告更新成功');
+    } catch (error) {
+      logger.error('更新组公告失败', {
+        adminId: req.user?.id,
+        groupId: req.params.id,
+        error: error.message
+      });
+
+      if (error.message === '用户分组不存在') {
+        return ResponseHelper.notFound(res, error.message);
+      }
+
+      return ResponseHelper.error(res, error.message || '更新组公告失败');
     }
   }
 }

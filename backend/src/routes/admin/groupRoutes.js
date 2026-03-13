@@ -1,6 +1,10 @@
 /**
- * 用户分组管理路由 - 使用优化的权限中间件（包含积分池功能、组有效期、站点配置和邀请码功能）
- * 修改：允许组管理员管理自己组的邀请码
+ * 用户分组管理路由 - 使用优化的权限中间件
+ * 包含积分池功能、组有效期、站点配置、邀请码功能、组公告功能
+ * 
+ * 更新：
+ * - 允许组管理员管理自己组的邀请码
+ * - 新增组公告 GET/PUT 路由（超管+组管理员）
  */
 const express = require('express');
 const UserGroupController = require('../../controllers/admin/UserGroupController');
@@ -59,7 +63,7 @@ router.delete('/:id',
  * @access SuperAdmin可以管理所有组，Admin可以管理自己的组
  */
 router.put('/:id/invitation-code',
-  requirePermission('user.manage'), // 改为user.manage，让组管理员也能访问
+  requirePermission('user.manage'),
   UserGroupController.setGroupInvitationCode
 );
 
@@ -158,6 +162,28 @@ router.post('/:id/upload-logo',
   requirePermission('user.manage'),
   uploadSiteLogo,
   UserGroupController.uploadGroupLogo
+);
+
+// ========== 组公告功能 ==========
+
+/**
+ * @route GET /api/admin/user-groups/:id/announcement
+ * @desc 获取组公告内容
+ * @access Admin / SuperAdmin（Admin只能查看自己组的公告）
+ */
+router.get('/:id/announcement',
+  requirePermission('user.manage'),
+  UserGroupController.getGroupAnnouncement
+);
+
+/**
+ * @route PUT /api/admin/user-groups/:id/announcement
+ * @desc 更新组公告内容（支持Markdown）
+ * @access SuperAdmin可以编辑所有组，Admin只能编辑自己组
+ */
+router.put('/:id/announcement',
+  requirePermission('user.manage'),
+  UserGroupController.updateGroupAnnouncement
 );
 
 module.exports = router;

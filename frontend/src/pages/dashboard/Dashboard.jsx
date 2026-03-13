@@ -63,13 +63,25 @@ const Dashboard = () => {
   const [creditsData, setCreditsData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modulesLoading, setModulesLoading] = useState(true)
+
+  // 系统公告状态
   const [announcement, setAnnouncement] = useState(null)
   const [announcementLoading, setAnnouncementLoading] = useState(true)
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false)
   const [editingContent, setEditingContent] = useState('')
   const [savingAnnouncement, setSavingAnnouncement] = useState(false)
 
+  // 组公告状态
+  const [orgAnnouncement, setOrgAnnouncement] = useState(null)
+  const [orgAnnouncementLoading, setOrgAnnouncementLoading] = useState(true)
+  const [isEditingOrgAnnouncement, setIsEditingOrgAnnouncement] = useState(false)
+  const [editingOrgContent, setEditingOrgContent] = useState('')
+  const [savingOrgAnnouncement, setSavingOrgAnnouncement] = useState(false)
+
   const isSuperAdmin = user?.role === 'super_admin'
+  const isAdmin = user?.role === 'admin'
+  // 超管和组管理员都可以编辑组公告
+  const canEditOrgAnnouncement = isSuperAdmin || isAdmin
   
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
@@ -100,7 +112,6 @@ const Dashboard = () => {
     const date = now.getDate()
     const weekDay = t(`time.weekDays.${now.getDay()}`)
     
-    // 根据语言选择不同的日期格式
     if (i18n.language === 'en-US') {
       return t('time.monthDate', { month, date }) + ' ' + weekDay
     } else {
@@ -162,19 +173,43 @@ const Dashboard = () => {
     fetchAnnouncement()
   }, [])
 
-  // 开始编辑公告
+  // 加载组公告（所有用户都加载自己所在组的公告）
+  useEffect(() => {
+    const fetchOrgAnnouncement = async () => {
+      // 需要用户的 group_id
+      if (!user?.group_id) {
+        setOrgAnnouncementLoading(false)
+        return
+      }
+      
+      try {
+        setOrgAnnouncementLoading(true)
+        const response = await apiClient.get(`/admin/user-groups/${user.group_id}/announcement`)
+        if (response.data.success) {
+          setOrgAnnouncement(response.data.data)
+        }
+      } catch (error) {
+        // 普通用户可能没有权限访问管理接口，静默处理
+        console.error('获取组公告失败:', error)
+      } finally {
+        setOrgAnnouncementLoading(false)
+      }
+    }
+
+    fetchOrgAnnouncement()
+  }, [user?.group_id])
+
+  // ========== 系统公告编辑 ==========
   const handleEditAnnouncement = () => {
     setEditingContent(announcement?.content || '')
     setIsEditingAnnouncement(true)
   }
 
-  // 取消编辑
   const handleCancelEdit = () => {
     setIsEditingAnnouncement(false)
     setEditingContent('')
   }
 
-  // 保存公告
   const handleSaveAnnouncement = async () => {
     try {
       setSavingAnnouncement(true)
@@ -197,7 +232,6 @@ const Dashboard = () => {
     }
   }
 
-  // 显示Markdown预览
   const showPreview = () => {
     Modal.info({
       title: t('dashboard.announcement.previewTitle'),
@@ -210,22 +244,63 @@ const Dashboard = () => {
       okText: t('button.close')
     })
   }
+
+  // ========== 组公告编辑 ==========
+  const handleEditOrgAnnouncement = () => {
+    setEditingOrgContent(orgAnnouncement?.content || '')
+    setIsEditingOrgAnnouncement(true)
+  }
+
+  const handleCancelOrgEdit = () => {
+    setIsEditingOrgAnnouncement(false)
+    setEditingOrgContent('')
+  }
+
+  const handleSaveOrgAnnouncement = async () => {
+    try {
+      setSavingOrgAnnouncement(true)
+      const response = await apiClient.put(`/admin/user-groups/${user.group_id}/announcement`, {
+        content: editingOrgContent
+      })
+      
+      if (response.data.success) {
+        setOrgAnnouncement(response.data.data)
+        setIsEditingOrgAnnouncement(false)
+        message.success(t('dashboard.announcement.orgUpdateSuccess'))
+      }
+    } catch (error) {
+      console.error('更新组公告失败:', error)
+      message.error(t('dashboard.announcement.orgUpdateFailed'))
+    } finally {
+      setSavingOrgAnnouncement(false)
+    }
+  }
+
+  const showOrgPreview = () => {
+    Modal.info({
+      title: t('dashboard.announcement.previewTitle'),
+      width: 600,
+      content: (
+        <div className="markdown-content" style={{ maxHeight: '400px', overflow: 'auto' }}>
+          <ReactMarkdown>{editingOrgContent || t('dashboard.announcement.empty')}</ReactMarkdown>
+        </div>
+      ),
+      okText: t('button.close')
+    })
+  }
   
   // 获取模块图标
   const getModuleIcon = (iconName, module) => {
-    // 优先使用映射的图标
     if (iconMap[iconName]) {
       const IconComponent = iconMap[iconName]
       return <IconComponent />
     }
     
-    // 动态获取Ant Design图标
     const IconComponent = Icons[iconName]
     if (IconComponent) {
       return <IconComponent />
     }
     
-    // 根据模块名称返回默认图标
     switch(module?.name) {
       case 'chat':
         return <MessageOutlined />
@@ -257,15 +332,13 @@ const Dashboard = () => {
   const getDisplayModules = () => {
     if (!userModules || userModules.length === 0) return []
     
-    // 过滤出非管理员模块，并排除dashboard
     const displayModules = userModules.filter(m => 
       m.module_category === 'system' && 
       !m.name.startsWith('admin_') &&
-      m.name !== 'dashboard' &&  // 排除工作台自己
+      m.name !== 'dashboard' &&
       m.is_active
     )
     
-    // 按sort_order排序
     return displayModules.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }
 
@@ -305,7 +378,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 功能模块区域 - 移动端优化 */}
+      {/* 功能模块区域 */}
       <Card 
         className="modules-card"
         title={
@@ -415,7 +488,6 @@ const Dashboard = () => {
           </Col>
         </Row>
 
-        {/* 积分过期提醒 */}
         {creditsData?.is_expired && (
           <Alert
             message={t('dashboard.creditsCenter.expiredAlert')}
@@ -535,12 +607,75 @@ const Dashboard = () => {
                 <span>{t('dashboard.announcement.organization')}</span>
               </Space>
             }
+            extra={
+              canEditOrgAnnouncement && !isEditingOrgAnnouncement && (
+                <Button 
+                  type="link" 
+                  icon={<EditOutlined />} 
+                  onClick={handleEditOrgAnnouncement}
+                  size={isMobile ? 'small' : 'middle'}
+                >
+                  {!isMobile && t('dashboard.announcement.editButton')}
+                </Button>
+              )
+            }
+            loading={orgAnnouncementLoading}
           >
-            <Alert
-              message={t('dashboard.announcement.organizationDefault')}
-              type="warning"
-              showIcon={false}
-            />
+            {isEditingOrgAnnouncement ? (
+              <div>
+                <TextArea
+                  value={editingOrgContent}
+                  onChange={(e) => setEditingOrgContent(e.target.value)}
+                  placeholder={t('dashboard.announcement.orgPlaceholder')}
+                  autoSize={{ minRows: 8, maxRows: 20 }}
+                  style={{ marginBottom: 16 }}
+                />
+                <Space wrap>
+                  <Button 
+                    type="primary" 
+                    icon={<SaveOutlined />} 
+                    onClick={handleSaveOrgAnnouncement}
+                    loading={savingOrgAnnouncement}
+                    size={isMobile ? 'small' : 'middle'}
+                  >
+                    {t('dashboard.announcement.save')}
+                  </Button>
+                  <Button 
+                    onClick={showOrgPreview}
+                    size={isMobile ? 'small' : 'middle'}
+                  >
+                    {t('dashboard.announcement.preview')}
+                  </Button>
+                  <Button 
+                    icon={<CloseOutlined />} 
+                    onClick={handleCancelOrgEdit}
+                    disabled={savingOrgAnnouncement}
+                    size={isMobile ? 'small' : 'middle'}
+                  >
+                    {t('dashboard.announcement.cancel')}
+                  </Button>
+                </Space>
+                {!isMobile && (
+                  <div className="announcement-edit-tips">
+                    <div>{t('dashboard.announcement.tips')}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {orgAnnouncement?.content ? (
+                  <div className="markdown-content">
+                    <ReactMarkdown>{orgAnnouncement.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <Alert
+                    message={t('dashboard.announcement.organizationDefault')}
+                    type="warning"
+                    showIcon={false}
+                  />
+                )}
+              </>
+            )}
           </Card>
         </Col>
       </Row>
