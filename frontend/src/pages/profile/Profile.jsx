@@ -1,3 +1,15 @@
+/**
+ * 个人中心页面
+ * 
+ * 功能：
+ * 1. 基本信息展示与编辑（用户名/手机号）
+ * 2. 修改密码（必须验证原密码）
+ * 3. 积分统计与历史查询
+ * 4. 权限列表展示
+ * 
+ * 修复：恢复原密码验证，修改密码弹窗加回原密码输入框
+ */
+
 import React, { useState, useEffect } from 'react'
 import {
   Card,
@@ -74,7 +86,9 @@ const Profile = () => {
     loadCreditHistory()
   }, [])
 
-  // 获取积分历史
+  /**
+   * 获取积分历史（分页）
+   */
   const loadCreditHistory = async (page = 1) => {
     setHistoryLoading(true)
     try {
@@ -92,7 +106,9 @@ const Profile = () => {
     }
   }
 
-  // 更新个人信息
+  /**
+   * 更新个人信息
+   */
   const handleUpdateProfile = async (values) => {
     setLoading(true)
     try {
@@ -102,14 +118,11 @@ const Profile = () => {
       })
       message.success(t('profile.update.success'))
     } catch (error) {
-      // 改进错误处理，解析validation错误
       if (error.response?.status === 400 && error.response?.data?.data?.errors) {
-        // 如果是validation错误，显示具体的错误信息
         const errors = error.response.data.data.errors
         const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
         message.error(errorMessage)
       } else {
-        // 其他错误显示通用错误信息
         message.error(error.response?.data?.message || t('profile.update.failed'))
       }
       console.error('更新个人信息失败:', error)
@@ -118,21 +131,28 @@ const Profile = () => {
     }
   }
 
-  // 修改密码 - 不再需要原密码
+  /**
+   * 修改密码 - 必须验证原密码
+   * 
+   * 安全说明：即使用户已通过JWT认证，修改密码仍需验证原密码
+   * 防止 token 被盗后攻击者永久接管账号
+   */
   const handleChangePassword = async (values) => {
     setLoading(true)
     try {
-      // 现在只传新密码，不需要原密码了
-      await changePassword(values.newPassword)
+      // 传递原密码和新密码，后端会验证原密码是否正确
+      await changePassword(values.oldPassword, values.newPassword)
       message.success(t('profile.password.changeSuccess'))
       setPasswordModalVisible(false)
       passwordForm.resetFields()
     } catch (error) {
-      // 同样改进密码修改的错误处理
       if (error.response?.status === 400 && error.response?.data?.data?.errors) {
         const errors = error.response.data.data.errors
         const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
         message.error(errorMessage)
+      } else if (error.response?.status === 401) {
+        // 原密码错误
+        message.error(error.response?.data?.message || t('profile.password.oldPasswordWrong'))
       } else {
         message.error(error.response?.data?.message || t('profile.password.changeFailed'))
       }
@@ -356,7 +376,7 @@ const Profile = () => {
         </Col>
       </Row>
 
-      {/* 修改密码弹窗 - 已移除原密码输入框 */}
+      {/* 修改密码弹窗 - 需要验证原密码 */}
       <Modal
         title={t('profile.password.title')}
         open={passwordModalVisible}
@@ -371,7 +391,17 @@ const Profile = () => {
           layout="vertical"
           onFinish={handleChangePassword}
         >
-          {/* 已移除原密码输入框，直接输入新密码 */}
+          {/* 原密码输入框 - 安全要求：修改密码必须验证原密码 */}
+          <Form.Item
+            name="oldPassword"
+            label={t('profile.password.old')}
+            rules={[
+              { required: true, message: t('profile.password.old.required') }
+            ]}
+          >
+            <Input.Password prefix={<LockOutlined />} placeholder={t('profile.password.old.placeholder')} />
+          </Form.Item>
+
           <Form.Item
             name="newPassword"
             label={t('profile.password.new')}
