@@ -1,10 +1,15 @@
 /**
  * 图片生成服务 - 处理Gemini等模型生成的图片
- * 支持OpenRouter API格式和OSS存储
+ * 
+ * 职责：
+ * 1. 处理 OpenRouter 格式的图片响应（Base64/URL）
+ * 2. 处理 Gemini 原始格式的图片响应（inline_data）
+ * 3. 保存生成的图片到 OSS/本地存储
+ * 4. 用户目录隔离存储
+ * 
+ * 修复：saveGeneratedImage 本地存储URL提取不再硬编码域名，改用 URL 解析
  */
 
-const fs = require('fs').promises;
-const path = require('path');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const ossService = require('./ossService');
@@ -18,7 +23,6 @@ class ImageGenerationService {
    */
   static async getUserIdFromMessage(messageId) {
     try {
-      // 通过消息ID查找对应的会话和用户
       const sql = `
         SELECT c.user_id 
         FROM messages m
@@ -26,13 +30,13 @@ class ImageGenerationService {
         WHERE m.id = ?
         LIMIT 1
       `;
-      
+
       const { rows } = await dbConnection.query(sql, [messageId]);
-      
+
       if (rows.length > 0) {
         return rows[0].user_id;
       }
-      
+
       logger.warn('无法找到消息对应的用户ID', { messageId });
       return null;
     } catch (error) {
@@ -57,75 +61,74 @@ class ImageGenerationService {
       // 检查OpenRouter格式的响应
       if (response.choices && response.choices[0]) {
         const message = response.choices[0].message;
-        
+
         // 提取文本内容
         if (message.content) {
           result.content = message.content;
         }
-        
+
         // 提取图片（OpenRouter格式）
         if (message.images && Array.isArray(message.images)) {
           logger.info('发现OpenRouter格式的图片数据', {
             messageId,
             imageCount: message.images.length
           });
-          
+
           // 获取用户ID用于隔离存储
           const userId = await this.getUserIdFromMessage(messageId);
           if (!userId) {
             logger.warn('无法获取用户ID，使用默认目录');
           }
-          
+
           for (let i = 0; i < message.images.length; i++) {
             const imageData = message.images[i];
-            
-            // OpenRouter返回的格式是: { type: "image_url", image_url: { url: "data:..." } }
+
+            // OpenRouter返回的格式多样，逐一兼容
             let imageUrl = null;
-            
-            // 主要格式：嵌套的image_url对象
+
+            // 主要格式：嵌套的 image_url 对象
             if (imageData && imageData.image_url && imageData.image_url.url) {
               imageUrl = imageData.image_url.url;
-              logger.info(`找到第${i+1}张图片（嵌套格式）`);
+              logger.info(`找到第${i + 1}张图片（嵌套格式）`);
             }
-            // 备用格式1: 直接的url字段
+            // 备用格式1: 直接的 url 字段
             else if (imageData && imageData.url) {
               imageUrl = imageData.url;
-              logger.info(`找到第${i+1}张图片（直接url格式）`);
+              logger.info(`找到第${i + 1}张图片（直接url格式）`);
             }
             // 备用格式2: 直接是字符串
             else if (typeof imageData === 'string') {
               imageUrl = imageData;
-              logger.info(`找到第${i+1}张图片（字符串格式）`);
+              logger.info(`找到第${i + 1}张图片（字符串格式）`);
             }
-            
+
             if (imageUrl) {
-              logger.info(`处理图片数据`, {
+              logger.info('处理图片数据', {
                 imageIndex: i + 1,
                 urlPrefix: imageUrl.substring(0, 50),
                 urlLength: imageUrl.length
               });
-              
+
               if (imageUrl.startsWith('data:image')) {
                 // 提取Base64数据
                 const base64Match = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
                 if (base64Match) {
                   const mimeType = `image/${base64Match[1]}`;
                   const base64Data = base64Match[2];
-                  
+
                   logger.info('正在保存Base64图片', {
                     mimeType,
                     dataLength: base64Data.length
                   });
-                  
+
                   try {
-                    // 保存图片（使用OSS服务）
                     const savedImage = await this.saveGeneratedImage(
                       base64Data,
                       mimeType,
                       messageId,
                       userId
                     );
-                    
+
                     if (savedImage) {
                       result.images.push(savedImage);
                       logger.info('图片保存成功', savedImage);
@@ -149,12 +152,12 @@ class ImageGenerationService {
                 logger.info('记录外部图片URL', { url: imageUrl });
               }
             } else {
-              logger.warn(`第${i+1}张图片没有找到有效的URL`, {
+              logger.warn(`第${i + 1}张图片没有找到有效的URL`, {
                 imageDataKeys: imageData ? Object.keys(imageData) : null
               });
             }
           }
-          
+
           logger.info('OpenRouter图片处理完成', {
             totalImages: message.images.length,
             savedImages: result.images.length
@@ -185,7 +188,6 @@ class ImageGenerationService {
         images: []
       };
 
-      // 检查响应格式
       if (!response.candidates || !response.candidates[0]) {
         return result;
       }
@@ -203,12 +205,10 @@ class ImageGenerationService {
 
       // 遍历parts，提取文本和图片
       for (const part of candidate.content.parts) {
-        // 文本部分
         if (part.text) {
           result.content += part.text;
         }
-        
-        // 图片部分（inline_data）
+
         if (part.inline_data) {
           try {
             const imageInfo = await this.saveGeneratedImage(
@@ -217,7 +217,7 @@ class ImageGenerationService {
               messageId,
               userId
             );
-            
+
             if (imageInfo) {
               result.images.push(imageInfo);
             }
@@ -236,11 +236,12 @@ class ImageGenerationService {
 
   /**
    * 保存生成的图片（支持OSS和本地存储）
+   * 
    * @param {string} base64Data - Base64编码的图片数据
    * @param {string} mimeType - MIME类型
    * @param {string} messageId - 消息ID
    * @param {number} userId - 用户ID（用于隔离存储）
-   * @returns {Object} 图片信息
+   * @returns {Object} 图片信息 { filename, url, size, mime_type, created_at }
    */
   static async saveGeneratedImage(base64Data, mimeType, messageId, userId = null) {
     try {
@@ -259,12 +260,10 @@ class ImageGenerationService {
       // 生成OSS key，包含用户隔离路径
       const yearMonth = new Date().toISOString().slice(0, 7).replace('-', '/');
       let ossKey;
-      
+
       if (userId) {
-        // 有用户ID，使用用户隔离目录
         ossKey = `generations/user_${userId}/${yearMonth}/${filename}`;
       } else {
-        // 没有用户ID，使用共享目录（保持向后兼容）
         ossKey = `generations/shared/${yearMonth}/${filename}`;
       }
 
@@ -289,15 +288,18 @@ class ImageGenerationService {
       }
 
       // 从上传结果中提取URL
-      // ossService会根据配置返回正确的URL
       let url = uploadResult.url;
-      
-      // 如果是本地存储，确保URL路径正确
-      if (uploadResult.isLocal) {
-        // 本地存储时，ossService返回的是完整的https URL
-        // 但为了前端显示，我们需要返回相对路径
-        const urlPath = url.replace('https://ai.xingyuncl.com', '');
-        url = urlPath;
+
+      // 如果是本地存储，提取路径部分作为相对URL
+      // 修复：不再硬编码域名，使用 URL 解析提取 pathname
+      if (uploadResult.isLocal && url.startsWith('http')) {
+        try {
+          const urlObj = new URL(url);
+          url = urlObj.pathname;
+        } catch (e) {
+          // URL解析失败时保持原值
+          logger.warn('URL解析失败，保持原始URL', { url, error: e.message });
+        }
       }
 
       logger.info('生成的图片已保存', {
@@ -339,12 +341,12 @@ class ImageGenerationService {
     if (model.image_generation_enabled === 1 || model.image_generation_enabled === true) {
       return true;
     }
-    
+
     // 检查模型名称（备用）
     if (model.name && model.name.includes('image-preview')) {
       return true;
     }
-    
+
     return false;
   }
 }

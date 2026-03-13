@@ -1,5 +1,11 @@
 /**
  * 视频生成控制器
+ * 
+ * 职责：
+ * 1. 用户端：模型列表、生成任务提交、任务状态查询、历史/画廊/收藏/删除
+ * 2. 管理端：模型CRUD（火山/可灵/Sora2三provider）
+ * 
+ * 修复：getTaskStatus 去掉重复的 findByTaskId 查询
  */
 
 const VideoService = require('../services/videoService');
@@ -15,13 +21,13 @@ class VideoController {
   static async getModels(req, res) {
     try {
       const models = await VideoService.getAvailableModels();
-      
+
       // 不返回API密钥
       const safeModels = models.map(model => {
         const { api_key, ...safeModel } = model;
         return safeModel;
       });
-      
+
       return ResponseHelper.success(res, safeModels);
     } catch (error) {
       logger.error('获取视频模型列表失败:', error);
@@ -35,8 +41,8 @@ class VideoController {
   static async generateVideo(req, res) {
     try {
       const userId = req.user.id;
-      const { 
-        model_id, 
+      const {
+        model_id,
         prompt,
         negative_prompt,
         first_frame_image,
@@ -51,7 +57,7 @@ class VideoController {
         camera_fixed,
         return_last_frame
       } = req.body;
-      
+
       // 验证必填参数
       if (!model_id || !prompt) {
         return ResponseHelper.validation(res, {
@@ -59,28 +65,28 @@ class VideoController {
           prompt: !prompt ? '请输入提示词' : null
         }, '参数不完整');
       }
-      
+
       // 获取模型信息
       const model = await VideoModel.findById(model_id);
       if (!model) {
         return ResponseHelper.notFound(res, '模型不存在');
       }
-      
+
       // 验证生成模式
       if (generation_mode === 'first_frame' && !model.supports_first_frame) {
         return ResponseHelper.validation(res, null, '该模型不支持首帧图生视频');
       }
-      
+
       if ((generation_mode === 'last_frame' || generation_mode === 'first_last_frame') && !model.supports_last_frame) {
         return ResponseHelper.validation(res, null, '该模型不支持尾帧图生视频');
       }
-      
+
       // 验证参数
       const errors = VideoService.validateGenerationParams(req.body, model);
       if (errors.length > 0) {
         return ResponseHelper.validation(res, null, errors.join('; '));
       }
-      
+
       // 提交生成任务
       const result = await VideoService.submitVideoGeneration(userId, model_id, {
         prompt,
@@ -97,123 +103,121 @@ class VideoController {
         camera_fixed,
         return_last_frame
       });
-      
+
       return ResponseHelper.success(res, result, result.message);
     } catch (error) {
       logger.error('生成视频失败:', error);
-      
+
       if (error.message.includes('积分不足')) {
         return ResponseHelper.error(res, error.message, 402);
       }
-      
+
       return ResponseHelper.error(res, error.message || '视频生成失败');
     }
   }
-  
+
   /**
    * 查询任务状态
+   * 修复：去掉重复的 findByTaskId 查询，复用第一次查询结果
    */
   static async getTaskStatus(req, res) {
     try {
       const { task_id } = req.params;
       const userId = req.user.id;
-      
-      // 根据task_id查询生成记录
+
+      // 查询生成记录（只查一次）
       const generation = await VideoGeneration.findByTaskId(task_id);
-      
+
       if (!generation) {
         return ResponseHelper.notFound(res, '任务不存在');
       }
-      
+
       // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权查看此任务');
       }
-      
-      // 重要修改：始终先获取数据库的最新状态
-      const latestGeneration = await VideoGeneration.findByTaskId(task_id);
-      
+
       // 如果任务已完成（成功或失败），直接返回数据库中的完整数据
-      if (latestGeneration.status === 'succeeded' || latestGeneration.status === 'failed') {
+      if (generation.status === 'succeeded' || generation.status === 'failed') {
         logger.info('返回已完成任务的数据库状态', {
           taskId: task_id,
-          status: latestGeneration.status,
-          hasLocalPath: !!latestGeneration.local_path
+          status: generation.status,
+          hasLocalPath: !!generation.local_path
         });
-        
+
         return ResponseHelper.success(res, {
-          id: latestGeneration.id,
-          task_id: latestGeneration.task_id,
-          status: latestGeneration.status,
+          id: generation.id,
+          task_id: generation.task_id,
+          status: generation.status,
           progress: 100,
-          video_url: latestGeneration.video_url,
-          local_path: latestGeneration.local_path,
-          thumbnail_path: latestGeneration.thumbnail_path,
-          preview_gif_path: latestGeneration.preview_gif_path,
-          error_message: latestGeneration.error_message,
-          prompt: latestGeneration.prompt,
-          resolution: latestGeneration.resolution,
-          duration: latestGeneration.duration,
-          credits_consumed: latestGeneration.credits_consumed,
-          created_at: latestGeneration.created_at,
-          updated_at: latestGeneration.updated_at,
-          completed_at: latestGeneration.completed_at
+          video_url: generation.video_url,
+          local_path: generation.local_path,
+          thumbnail_path: generation.thumbnail_path,
+          preview_gif_path: generation.preview_gif_path,
+          error_message: generation.error_message,
+          prompt: generation.prompt,
+          resolution: generation.resolution,
+          duration: generation.duration,
+          credits_consumed: generation.credits_consumed,
+          created_at: generation.created_at,
+          updated_at: generation.updated_at,
+          completed_at: generation.completed_at
         });
       }
-      
-      // 如果任务还在进行中，尝试查询火山方舟API的最新状态
-      if (latestGeneration.status === 'submitted' || latestGeneration.status === 'queued' || latestGeneration.status === 'running') {
+
+      // 如果任务还在进行中，尝试查询API的最新状态
+      if (generation.status === 'submitted' || generation.status === 'queued' || generation.status === 'running') {
         try {
-          const model = await VideoModel.findById(latestGeneration.model_id);
+          const model = await VideoModel.findById(generation.model_id);
           if (model) {
             const taskData = await VideoService.queryTaskStatus(task_id, model);
-            
-            // 如果火山方舟返回成功但数据库还没更新，等待数据库更新
-            if (taskData.status === 'succeeded' && !latestGeneration.local_path) {
-              logger.info('火山方舟返回成功但数据库未更新，返回处理中状态', {
+
+            // 如果API返回成功但数据库还没更新（轮询还没处理完），等待数据库更新
+            if (taskData.status === 'succeeded' && !generation.local_path) {
+              logger.info('API返回成功但数据库未更新，返回处理中状态', {
                 taskId: task_id
               });
-              
+
               // 返回处理中状态，让前端继续轮询
               return ResponseHelper.success(res, {
-                id: latestGeneration.id,
-                task_id: latestGeneration.task_id,
+                id: generation.id,
+                task_id: generation.task_id,
                 status: 'running',
-                progress: 95, // 显示接近完成
+                progress: 95,
                 video_url: null,
                 local_path: null,
                 thumbnail_path: null,
-                prompt: latestGeneration.prompt,
-                resolution: latestGeneration.resolution,
-                duration: latestGeneration.duration,
-                created_at: latestGeneration.created_at,
-                updated_at: latestGeneration.updated_at
+                prompt: generation.prompt,
+                resolution: generation.resolution,
+                duration: generation.duration,
+                created_at: generation.created_at,
+                updated_at: generation.updated_at
               });
             }
-            
+
             // 返回合并后的状态
             return ResponseHelper.success(res, {
-              id: latestGeneration.id,
-              task_id: latestGeneration.task_id,
-              status: taskData.status || latestGeneration.status,
-              progress: taskData.progress ? parseInt(taskData.progress * 100) : latestGeneration.progress,
-              video_url: taskData.video_url || latestGeneration.video_url,
-              local_path: latestGeneration.local_path,
-              thumbnail_path: latestGeneration.thumbnail_path,
-              prompt: latestGeneration.prompt,
-              resolution: latestGeneration.resolution,
-              duration: latestGeneration.duration,
-              created_at: latestGeneration.created_at,
-              updated_at: latestGeneration.updated_at
+              id: generation.id,
+              task_id: generation.task_id,
+              status: taskData.status || generation.status,
+              progress: taskData.progress ? parseInt(taskData.progress * 100) : generation.progress,
+              video_url: taskData.video_url || generation.video_url,
+              local_path: generation.local_path,
+              thumbnail_path: generation.thumbnail_path,
+              prompt: generation.prompt,
+              resolution: generation.resolution,
+              duration: generation.duration,
+              created_at: generation.created_at,
+              updated_at: generation.updated_at
             });
           }
         } catch (error) {
           logger.warn('查询视频任务状态失败，返回数据库状态', { task_id, error: error.message });
         }
       }
-      
+
       // 默认返回数据库中的状态
-      return ResponseHelper.success(res, latestGeneration);
+      return ResponseHelper.success(res, generation);
     } catch (error) {
       logger.error('获取任务状态失败:', error);
       return ResponseHelper.error(res, '获取任务状态失败');
@@ -227,7 +231,7 @@ class VideoController {
     try {
       const userId = req.user.id;
       const { page = 1, limit = 20, status, is_favorite, model_id } = req.query;
-      
+
       const result = await VideoGeneration.getUserHistory(userId, {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -235,7 +239,7 @@ class VideoController {
         is_favorite: is_favorite === 'true' ? 1 : is_favorite === 'false' ? 0 : null,
         model_id: model_id ? parseInt(model_id) : null
       });
-      
+
       return ResponseHelper.success(res, result);
     } catch (error) {
       logger.error('获取生成历史失败:', error);
@@ -250,23 +254,23 @@ class VideoController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      
+
       const generation = await VideoGeneration.findById(id);
-      
+
       if (!generation) {
         return ResponseHelper.notFound(res, '记录不存在');
       }
-      
+
       // 验证权限（只能查看自己的或公开的）
       if (generation.user_id !== userId && !generation.is_public) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
-      
+
       // 增加查看次数
       if (generation.is_public && generation.user_id !== userId) {
         await VideoGeneration.incrementViewCount(id);
       }
-      
+
       return ResponseHelper.success(res, generation);
     } catch (error) {
       logger.error('获取生成记录失败:', error);
@@ -281,32 +285,31 @@ class VideoController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      
-      // 获取记录信息
+
       const generation = await VideoGeneration.findById(id);
       if (!generation) {
         return ResponseHelper.notFound(res, '记录不存在');
       }
-      
+
       // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权删除此记录');
       }
-      
+
       // 删除文件
       await VideoService.deleteVideoFile(
-        generation.local_path, 
+        generation.local_path,
         generation.thumbnail_path,
         generation.preview_gif_path
       );
-      
+
       // 删除记录
       const success = await VideoGeneration.delete(id, userId);
-      
+
       if (!success) {
         return ResponseHelper.error(res, '删除失败');
       }
-      
+
       return ResponseHelper.success(res, null, '删除成功');
     } catch (error) {
       logger.error('删除生成记录失败:', error);
@@ -321,11 +324,11 @@ class VideoController {
     try {
       const { ids } = req.body;
       const userId = req.user.id;
-      
+
       if (!Array.isArray(ids) || ids.length === 0) {
         return ResponseHelper.validation(res, { ids: '请选择要删除的记录' });
       }
-      
+
       // 获取要删除的记录并删除文件
       for (const id of ids) {
         const generation = await VideoGeneration.findById(id);
@@ -337,10 +340,10 @@ class VideoController {
           );
         }
       }
-      
+
       // 批量删除记录
       const deletedCount = await VideoGeneration.batchDelete(ids, userId);
-      
+
       return ResponseHelper.success(res, { deletedCount }, `成功删除 ${deletedCount} 条记录`);
     } catch (error) {
       logger.error('批量删除失败:', error);
@@ -355,18 +358,18 @@ class VideoController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      
+
       const success = await VideoGeneration.toggleFavorite(id, userId);
-      
+
       if (!success) {
         return ResponseHelper.error(res, '操作失败');
       }
-      
+
       // 获取更新后的状态
       const generation = await VideoGeneration.findById(id);
-      
-      return ResponseHelper.success(res, { 
-        is_favorite: generation.is_favorite 
+
+      return ResponseHelper.success(res, {
+        is_favorite: generation.is_favorite
       }, '操作成功');
     } catch (error) {
       logger.error('切换收藏状态失败:', error);
@@ -380,13 +383,13 @@ class VideoController {
   static async getPublicGallery(req, res) {
     try {
       const { page = 1, limit = 20, model_id } = req.query;
-      
+
       const result = await VideoGeneration.getPublicGallery({
         page: parseInt(page),
         limit: parseInt(limit),
         model_id: model_id ? parseInt(model_id) : null
       });
-      
+
       return ResponseHelper.success(res, result);
     } catch (error) {
       logger.error('获取公开画廊失败:', error);
@@ -401,30 +404,29 @@ class VideoController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      
-      // 获取记录
+
       const generation = await VideoGeneration.findById(id);
       if (!generation) {
         return ResponseHelper.notFound(res, '记录不存在');
       }
-      
+
       // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权操作此记录');
       }
-      
+
       // 切换公开状态
       const newPublicStatus = generation.is_public ? 0 : 1;
       const success = await VideoGeneration.update(id, {
         is_public: newPublicStatus
       });
-      
+
       if (!success) {
         return ResponseHelper.error(res, '操作失败');
       }
-      
-      return ResponseHelper.success(res, { 
-        is_public: newPublicStatus === 1 
+
+      return ResponseHelper.success(res, {
+        is_public: newPublicStatus === 1
       }, '操作成功');
     } catch (error) {
       logger.error('切换公开状态失败:', error);
@@ -439,7 +441,7 @@ class VideoController {
     try {
       const userId = req.user.id;
       const stats = await VideoGeneration.getUserStats(userId);
-      
+
       return ResponseHelper.success(res, stats);
     } catch (error) {
       logger.error('获取统计信息失败:', error);
@@ -448,7 +450,10 @@ class VideoController {
   }
 }
 
+// ============================================================
 // 管理端控制器
+// ============================================================
+
 class VideoAdminController {
   /**
    * 获取所有视频模型（管理端）
@@ -464,13 +469,12 @@ class VideoAdminController {
   }
 
   /**
-   * 创建视频模型
+   * 创建视频模型（按provider分别验证）
    */
   static async createModel(req, res) {
     try {
       const modelData = req.body;
-      
-      // 根据provider类型进行不同的验证
+
       if (modelData.provider === 'kling') {
         // ========== 可灵模型验证 ==========
         if (!modelData.name || !modelData.display_name || !modelData.endpoint) {
@@ -480,17 +484,15 @@ class VideoAdminController {
             endpoint: !modelData.endpoint ? 'API端点不能为空' : null
           });
         }
-        
-        // 验证api_config中必须有access_key和secret_key
+
         if (!modelData.api_config || !modelData.api_config.access_key || !modelData.api_config.secret_key) {
           return ResponseHelper.validation(res, {
             api_config: 'Access Key和Secret Key不能为空'
           });
         }
-        
-        // 可灵模型不需要model_id，设置为null
+
         modelData.model_id = null;
-        
+
       } else if (modelData.provider === 'sora2_goapi') {
         // ========== Sora2 模型验证 ==========
         if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.api_key) {
@@ -501,11 +503,9 @@ class VideoAdminController {
             api_key: !modelData.api_key ? 'API密钥不能为空' : null
           });
         }
-        
-        // Sora2模型不需要model_id，设置为null
+
         modelData.model_id = null;
-        
-        // 确保api_config包含必要的端点配置
+
         if (!modelData.api_config) {
           modelData.api_config = {};
         }
@@ -515,7 +515,7 @@ class VideoAdminController {
           create_endpoint: '/sora2/v1/create',
           query_endpoint: '/sora2/v1/query'
         };
-        
+
       } else {
         // ========== 火山引擎模型验证 ==========
         if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.model_id) {
@@ -527,23 +527,22 @@ class VideoAdminController {
           });
         }
       }
-      
+
       const modelId = await VideoModel.create(modelData);
       const newModel = await VideoModel.findById(modelId);
-      
-      // 添加has_api_key标识
+
+      // 添加has_api_key标识，不返回原始密钥
       const safeModel = { ...newModel };
       delete safeModel.api_key;
-      
-      // 对于可灵模型，检查api_config是否包含必要的密钥
+
       if (newModel.provider === 'kling') {
-        safeModel.has_api_key = !!(newModel.api_config && 
-          newModel.api_config.access_key && 
+        safeModel.has_api_key = !!(newModel.api_config &&
+          newModel.api_config.access_key &&
           newModel.api_config.secret_key);
       } else {
         safeModel.has_api_key = !!newModel.api_key;
       }
-      
+
       return ResponseHelper.success(res, safeModel, '模型创建成功');
     } catch (error) {
       logger.error('创建视频模型失败:', error);
@@ -552,27 +551,25 @@ class VideoAdminController {
   }
 
   /**
-   * 更新视频模型
+   * 更新视频模型（合并api_config防止意外清除密钥）
    */
   static async updateModel(req, res) {
     try {
       const { id } = req.params;
       const updateData = req.body;
-      
-      // 获取现有模型信息
+
       const existingModel = await VideoModel.findById(id);
       if (!existingModel) {
         return ResponseHelper.notFound(res, '模型不存在');
       }
-      
-      // 如果是可灵模型，确保不会意外清除api_config
+
+      // 可灵模型：合并api_config而不是完全替换
       if (existingModel.provider === 'kling' && updateData.api_config) {
-        // 合并api_config而不是完全替换
         const existingConfig = existingModel.api_config || {};
         updateData.api_config = { ...existingConfig, ...updateData.api_config };
       }
-      
-      // 如果是Sora2模型，确保api_config正确
+
+      // Sora2模型：确保api_config正确
       if (existingModel.provider === 'sora2_goapi' && updateData.api_config) {
         const existingConfig = existingModel.api_config || {};
         updateData.api_config = {
@@ -583,28 +580,26 @@ class VideoAdminController {
           query_endpoint: '/sora2/v1/query'
         };
       }
-      
+
       const success = await VideoModel.update(id, updateData);
-      
+
       if (!success) {
         return ResponseHelper.error(res, '更新失败');
       }
-      
+
       const updatedModel = await VideoModel.findById(id);
-      
-      // 添加has_api_key标识
+
       const safeModel = { ...updatedModel };
       delete safeModel.api_key;
-      
-      // 对于可灵模型，检查api_config是否包含必要的密钥
+
       if (updatedModel.provider === 'kling') {
-        safeModel.has_api_key = !!(updatedModel.api_config && 
-          updatedModel.api_config.access_key && 
+        safeModel.has_api_key = !!(updatedModel.api_config &&
+          updatedModel.api_config.access_key &&
           updatedModel.api_config.secret_key);
       } else {
         safeModel.has_api_key = !!updatedModel.api_key;
       }
-      
+
       return ResponseHelper.success(res, safeModel, '模型更新成功');
     } catch (error) {
       logger.error('更新视频模型失败:', error);
@@ -618,13 +613,13 @@ class VideoAdminController {
   static async deleteModel(req, res) {
     try {
       const { id } = req.params;
-      
+
       const success = await VideoModel.delete(id);
-      
+
       if (!success) {
         return ResponseHelper.error(res, '删除失败');
       }
-      
+
       return ResponseHelper.success(res, null, '模型删除成功');
     } catch (error) {
       logger.error('删除视频模型失败:', error);
@@ -638,20 +633,20 @@ class VideoAdminController {
   static async toggleModelStatus(req, res) {
     try {
       const { id } = req.params;
-      
+
       const model = await VideoModel.findById(id);
       if (!model) {
         return ResponseHelper.notFound(res, '模型不存在');
       }
-      
+
       const success = await VideoModel.update(id, {
         is_active: model.is_active ? 0 : 1
       });
-      
+
       if (!success) {
         return ResponseHelper.error(res, '操作失败');
       }
-      
+
       return ResponseHelper.success(res, null, '状态更新成功');
     } catch (error) {
       logger.error('切换模型状态失败:', error);
