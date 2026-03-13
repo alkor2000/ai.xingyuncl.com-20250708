@@ -13,6 +13,7 @@
  *   * 新增批量创建用户功能，支持从组积分池扣减
  * - deleteUser方法改为调用User Model的softDelete()
  * - 支持软删除，保留所有关联数据
+ * - 安全审查修复：generateRandomPassword改用crypto.randomBytes，generateUUID改用uuid库
  */
 
 const User = require('../../models/User');
@@ -24,6 +25,8 @@ const logger = require('../../utils/logger');
 const { DatabaseError, ValidationError, ConflictError } = require('../../utils/errors');
 const moment = require('moment');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
 class UserService {
   /**
@@ -291,7 +294,7 @@ class UserService {
           // 生成密码
           let rawPassword;
           if (useRandomPassword) {
-            // 生成8位随机密码（字母+数字）
+            // 生成8位随机密码（字母+数字，使用密码学安全随机源）
             rawPassword = UserService.generateRandomPassword(8);
           } else {
             rawPassword = customPassword;
@@ -301,7 +304,7 @@ class UserService {
           const salt = await bcrypt.genSalt(10);
           const passwordHash = await bcrypt.hash(rawPassword, salt);
           
-          // 生成UUID
+          // 生成UUID（使用标准uuid库）
           const uuid = UserService.generateUUID();
           
           // 计算有效期（同步组有效期）
@@ -383,29 +386,34 @@ class UserService {
   }
 
   /**
-   * 生成随机密码
+   * 生成随机密码（使用密码学安全随机源）
+   * 
+   * 安全说明：使用 crypto.randomBytes 替代 Math.random
+   * 字符集排除了容易混淆的字符（0/O/1/l/I）
+   * 
    * @param {number} length - 密码长度
    * @returns {string} 随机密码
    */
   static generateRandomPassword(length = 8) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const randomBytes = crypto.randomBytes(length);
     let password = '';
     for (let i = 0; i < length; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+      password += chars.charAt(randomBytes[i] % chars.length);
     }
     return password;
   }
 
   /**
-   * 生成UUID
+   * 生成UUID（使用标准uuid库v4）
+   * 
+   * 安全说明：使用 uuid 库替代手动 Math.random 实现
+   * uuid v4 基于 crypto.randomBytes，无碰撞风险
+   * 
    * @returns {string} UUID字符串
    */
   static generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
+    return uuidv4();
   }
 
   /**
