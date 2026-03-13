@@ -1,12 +1,14 @@
 /**
  * AI服务层 - 非流式版本
- * 负责与AI模型交互，支持Azure OpenAI、OpenRouter、标准OpenAI格式
- * 支持图片识别、PDF解析、图片生成（Gemini）
  * 
- * v2.0 变更：
- *   - processMessagesForOpenRouter: 支持 msg.image_urls 多图数组
- *   - processMessagesStandard: 支持 msg.image_urls 多图数组
- *   - 多图场景下生成多个 image_url content块
+ * 职责：
+ * 1. 与AI模型交互（Azure OpenAI / OpenRouter / 标准OpenAI格式）
+ * 2. 消息格式化（图片/PDF/多图适配）
+ * 3. 图片生成响应处理（Gemini / OpenRouter）
+ * 
+ * 安全设计：
+ * - 模型找不到时直接报错，不做静默替换（防止积分消耗不一致）
+ * - 调试文件使用 config 配置路径，限制最大文件数量
  */
 
 const axios = require('axios');
@@ -14,12 +16,24 @@ const fs = require('fs').promises;
 const path = require('path');
 const AIModel = require('../models/AIModel');
 const ImageGenerationService = require('./imageGenerationService');
+const config = require('../config');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
+/**
+ * 调试响应文件最大保留数量
+ * 超过此数量时删除最旧的文件，防止磁盘被填满
+ */
+const MAX_DEBUG_FILES = 50;
+
 class AIService {
   /**
-   * 发送消息到AI模型 - 支持会话级temperature和图片/PDF
+   * 发送消息到AI模型
+   * 
+   * @param {string} modelName - 模型名称（必须精确匹配）
+   * @param {Object[]} messages - 消息数组
+   * @param {Object} options - 选项（temperature, messageId 等）
+   * @returns {Object} { content, finish_reason, usage, model }
    */
   static async sendMessage(modelName, messages, options = {}) {
     try {
@@ -34,17 +48,9 @@ class AIService {
 
       const model = await AIModel.findByName(modelName);
       if (!model) {
-        const allModels = await AIModel.getAvailableModels();
-        const similarModel = allModels.find(m =>
-          modelName.includes(m.name) || m.name.includes(modelName)
-        );
-
-        if (!similarModel) {
-          throw new Error(`AI模型 ${modelName} 未找到或未启用`);
-        }
-
-        logger.info('使用相似模型', { requestedModel: modelName, foundModel: similarModel.name });
-        return await AIService.callModelAPI(similarModel, messages, options);
+        // 不做相似模型回退，直接报错
+        // 原因：不同模型积分消耗不同，静默替换会导致用户被扣错积分
+        throw new Error(`AI模型 ${modelName} 未找到或未启用，请在会话设置中选择其他模型`);
       }
 
       return await AIService.callModelAPI(model, messages, options);
@@ -82,36 +88,31 @@ class AIService {
   }
 
   /**
-   * v2.0: 构建图片 content 块数组（支持单图和多图）
-   * 根据provider生成对应格式的图片块
+   * 构建图片 content 块数组（支持单图和多图）
+   * 根据 provider 生成对应格式的图片块
    * 
    * @param {string[]} urls - 图片URL数组
-   * @param {string} provider - 模型provider
-   * @returns {Object[]} content块数组
+   * @param {string} provider - 模型 provider
+   * @returns {Object[]} content 块数组
    */
   static _buildImageContentBlocks(urls, provider) {
     if (!urls || urls.length === 0) return [];
 
     return urls.map(url => {
       if (provider === 'anthropic') {
-        // Claude格式
         return { type: 'image', source: { type: 'url', url: url } };
       } else {
-        // OpenAI / OpenRouter / Gemini / 默认格式
         return { type: 'image_url', image_url: { url: url } };
       }
     });
   }
 
   /**
-   * 处理消息为OpenRouter格式 - v2.0: 支持多图
-   * @param {Object[]} messages - 消息数组
-   * @param {Object} model - 模型配置
-   * @returns {Object[]} 处理后的消息数组
+   * 处理消息为 OpenRouter 格式 - 支持多图和PDF
    */
   static processMessagesForOpenRouter(messages, model) {
     return messages.map(msg => {
-      // 如果消息包含PDF文件
+      // PDF文件
       if (msg.file && msg.file.mime_type === 'application/pdf') {
         logger.info('处理PDF消息为OpenRouter格式', { role: msg.role });
         return {
@@ -123,7 +124,7 @@ class AIService {
         };
       }
 
-      // v2.0: 收集所有图片URL（兼容单图和多图）
+      // 收集所有图片URL（兼容单图和多图）
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -131,7 +132,7 @@ class AIService {
         imageUrls.push(msg.image_url);
       }
 
-      // 如果有图片且模型支持
+      // 图片消息
       if (imageUrls.length > 0 && model.image_upload_enabled) {
         const contentBlocks = [{ type: 'text', text: msg.content }];
         const imageBlocks = AIService._buildImageContentBlocks(imageUrls, 'openrouter');
@@ -150,14 +151,11 @@ class AIService {
   }
 
   /**
-   * 处理消息为标准格式（非OpenRouter）- v2.0: 支持多图
-   * @param {Object[]} messages - 消息数组
-   * @param {Object} model - 模型配置
-   * @returns {Object[]} 处理后的消息数组
+   * 处理消息为标准格式（非OpenRouter）- 支持多图
    */
   static processMessagesStandard(messages, model) {
     return messages.map(msg => {
-      // v2.0: 收集所有图片URL（兼容单图和多图）
+      // 收集所有图片URL
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -165,7 +163,7 @@ class AIService {
         imageUrls.push(msg.image_url);
       }
 
-      // 如果有图片且模型支持
+      // 图片消息
       if (imageUrls.length > 0 && model.image_upload_enabled) {
         const contentBlocks = [{ type: 'text', text: msg.content }];
         const imageBlocks = AIService._buildImageContentBlocks(imageUrls, model.provider);
@@ -178,7 +176,7 @@ class AIService {
         return { role: msg.role, content: contentBlocks };
       }
 
-      // 对于PDF文件，非OpenRouter只能作为文本处理
+      // PDF文件在非OpenRouter下作为文本附件
       if (msg.file) {
         logger.warn('非OpenRouter端点不支持PDF直接处理', { provider: model.provider });
         return { role: msg.role, content: `${msg.content}\n\n[附件: ${msg.file.url}]` };
@@ -242,7 +240,44 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 支持会话级temperature和图片生成、PDF
+   * 保存调试响应文件（限制数量防止磁盘满）
+   * 
+   * @param {Object} responseData - API响应数据
+   */
+  static async _saveDebugResponse(responseData) {
+    try {
+      // 使用 config 中的日志目录，兼容 Docker 和 PM2
+      const debugDir = path.join(config.logging.dirname, 'debug');
+      await fs.mkdir(debugDir, { recursive: true });
+
+      const debugFile = path.join(debugDir, `response_${Date.now()}.json`);
+      await fs.writeFile(debugFile, JSON.stringify(responseData, null, 2));
+      logger.info('调试响应已保存', { file: debugFile });
+
+      // 清理旧文件，保留最新的 MAX_DEBUG_FILES 个
+      try {
+        const files = await fs.readdir(debugDir);
+        const jsonFiles = files
+          .filter(f => f.startsWith('response_') && f.endsWith('.json'))
+          .sort();
+
+        if (jsonFiles.length > MAX_DEBUG_FILES) {
+          const filesToDelete = jsonFiles.slice(0, jsonFiles.length - MAX_DEBUG_FILES);
+          for (const f of filesToDelete) {
+            await fs.unlink(path.join(debugDir, f));
+          }
+          logger.info('清理旧调试文件', { deleted: filesToDelete.length, remaining: MAX_DEBUG_FILES });
+        }
+      } catch (cleanupErr) {
+        logger.warn('清理调试文件失败:', cleanupErr.message);
+      }
+    } catch (err) {
+      logger.warn('保存调试响应失败:', err.message);
+    }
+  }
+
+  /**
+   * 调用模型API - 支持会话级 temperature 和图片生成、PDF
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -297,14 +332,18 @@ class AIService {
 
       if (plugins) requestData.plugins = plugins;
 
+      // 使用 config 中的域名，避免硬编码
+      const siteDomain = config.app.domain || 'ai.xingyuncl.com';
+      const siteName = config.app.name || 'AI Platform';
+
       let headers = {
         'Authorization': `Bearer ${model.api_key}`,
         'Content-Type': 'application/json'
       };
 
       if (isOpenRouter) {
-        headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
-        headers['X-Title'] = 'AI Platform';
+        headers['HTTP-Referer'] = `https://${siteDomain}`;
+        headers['X-Title'] = siteName;
       }
 
       const endpoint = model.api_endpoint.endsWith('/chat/completions')
@@ -312,13 +351,9 @@ class AIService {
 
       const response = await axios.post(endpoint, requestData, { headers, timeout: 120000 });
 
-      // 增强调试：保存完整响应
+      // 调试响应保存（仅图片生成或PDF场景，使用 config 路径+限制文件数量）
       if (model.image_generation_enabled || messages.some(m => m.file)) {
-        const debugDir = '/var/www/ai-platform/logs/debug';
-        await fs.mkdir(debugDir, { recursive: true });
-        const debugFile = path.join(debugDir, `response_${Date.now()}.json`);
-        await fs.writeFile(debugFile, JSON.stringify(response.data, null, 2));
-        logger.info('【调试】API响应已保存', { file: debugFile });
+        await AIService._saveDebugResponse(response.data);
       }
 
       return AIService.formatResponse(response.data, model, options);
@@ -330,7 +365,7 @@ class AIService {
   }
 
   /**
-   * 格式化响应 - 支持图片生成（OpenRouter格式）
+   * 格式化响应 - 支持图片生成（OpenRouter / Gemini 格式）
    */
   static async formatResponse(response, model, options = {}) {
     try {
@@ -343,7 +378,6 @@ class AIService {
 
         let processedResult = { content: '', images: [] };
 
-        // 检查OpenRouter格式
         if (response.choices && response.choices[0] && response.choices[0].message) {
           const message = response.choices[0].message;
 
@@ -354,9 +388,7 @@ class AIService {
               response, options.messageId
             );
           }
-        }
-        // 尝试Gemini格式
-        else if (response.candidates && response.candidates[0]) {
+        } else if (response.candidates && response.candidates[0]) {
           processedResult = await ImageGenerationService.processGeminiImageResponse(
             response, options.messageId
           );
@@ -401,7 +433,7 @@ class AIService {
     }
   }
 
-  /** 估算消息Token数量 */
+  /** 估算消息 Token 数量 */
   static estimateTokens(messages) {
     if (!Array.isArray(messages)) return 0;
     return messages.reduce((total, message) => {

@@ -1,16 +1,19 @@
 /**
- * 重构后的对话控制器 - 采用服务层架构
- * 控制器只负责：接收请求 -> 调用服务 -> 返回响应
+ * 对话控制器（重构版）
  * 
- * v2.0 变更：
- *   - uploadImage: req.file -> req.files，返回文件数组
- *   - sendMessage: 支持 file_ids 数组参数
- *   - getMessages: 通过 _attachFilesToMessage 支持多文件展示
- *   - 新增 _attachFilesToMessage 内部方法
+ * 职责：接收请求 -> 调用服务 -> 返回响应
  * 
- * v3.0 变更：
- *   - updateConversation: 新增 enable_thinking 字段解构和传递
- *   - 支持对话级别的深度思考开关配置
+ * 功能：
+ * - 会话 CRUD（创建/查询/更新/删除/清空）
+ * - 消息发送（流式/非流式双模式）
+ * - 文件上传（多图/文档）
+ * - 模型/提示词/模块/积分查询
+ * - 草稿管理
+ * 
+ * 安全设计：
+ * - 所有操作前 checkOwnership 权限验证
+ * - 积分预扣减 + 失败退款保护（sendMessage catch 块中退还积分）
+ * - 流式传输空内容检测 + 积分退还（StreamMessageService 处理）
  */
 
 const ConversationService = require('../services/chat/ConversationService');
@@ -96,7 +99,7 @@ class ChatControllerRefactored {
   /**
    * 更新会话设置
    * PUT /api/chat/conversations/:id
-   * v3.0: 新增 enable_thinking 字段支持
+   * 支持 enable_thinking 深度思考开关
    */
   static async updateConversation(req, res) {
     try {
@@ -109,13 +112,11 @@ class ChatControllerRefactored {
       if (!conversation) return ResponseHelper.notFound(res, '会话不存在');
       await ConversationService.validateUpdatePermissions({ conversation, userId, userGroupId, ...req.body });
 
-      // v3.0: 解构新增 enable_thinking
       const { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned, context_length, ai_temperature, priority, enable_thinking } = req.body;
       let updateData = { title, model_name, system_prompt, system_prompt_id, module_combination_id, is_pinned };
       if (context_length !== undefined) updateData.context_length = ConversationService.validateContextLength(context_length);
       if (ai_temperature !== undefined) updateData.ai_temperature = ConversationService.validateTemperature(ai_temperature);
       if (priority !== undefined) updateData.priority = parseInt(priority) || 0;
-      // v3.0: 如果传入了 enable_thinking，加入更新数据
       if (enable_thinking !== undefined) updateData.enable_thinking = enable_thinking;
 
       const updatedConversation = await conversation.update(updateData);
@@ -154,8 +155,10 @@ class ChatControllerRefactored {
   // ================================================================
 
   /**
-   * 获取会话消息列表 - v2.0: 支持 file_ids 多文件
+   * 获取会话消息列表 - 支持缓存和多文件
    * GET /api/chat/conversations/:id/messages
+   * 
+   * 修复：缓存已包含文件信息，读取缓存时不再重复查询文件
    */
   static async getMessages(req, res) {
     try {
@@ -167,19 +170,16 @@ class ChatControllerRefactored {
       const hasAccess = await Conversation.checkOwnership(id, userId);
       if (!hasAccess) return ResponseHelper.forbidden(res, '无权访问此会话消息');
 
-      // 尝试从缓存获取
+      // 尝试从缓存获取（缓存中已包含文件信息，无需再次查询）
       if (useCache !== 'false') {
         const cachedMessages = await CacheService.getCachedMessages(userId, id);
         if (cachedMessages) {
           logger.info('从缓存返回消息', { conversationId: id, count: cachedMessages.length });
-          const messagesWithFiles = await Promise.all(
-            cachedMessages.map(msg => ChatControllerRefactored._attachFilesToMessage(msg))
-          );
-          return ResponseHelper.success(res, messagesWithFiles, '获取消息列表成功');
+          return ResponseHelper.success(res, cachedMessages, '获取消息列表成功');
         }
       }
 
-      // 从数据库获取
+      // 从数据库获取并附加文件信息
       const result = await Message.getConversationMessages(id, { page: parseInt(page), limit: parseInt(limit), order: 'ASC' });
 
       const messagesWithFiles = await Promise.all(result.messages.map(async msg => {
@@ -187,7 +187,7 @@ class ChatControllerRefactored {
         return await ChatControllerRefactored._attachFilesToMessage(msgData);
       }));
 
-      // 缓存消息（仅第一页）
+      // 缓存消息（包含文件信息，下次读取缓存时直接使用）
       if (page == 1 && messagesWithFiles.length > 0) {
         await CacheService.cacheMessages(userId, id, messagesWithFiles);
       }
@@ -200,7 +200,7 @@ class ChatControllerRefactored {
   }
 
   /**
-   * v2.0 内部方法：为消息附加文件信息（兼容 file_id 和 file_ids）
+   * 内部方法：为消息附加文件信息（兼容 file_id 和 file_ids）
    */
   static async _attachFilesToMessage(msgData) {
     let fileIds = null;
@@ -226,13 +226,16 @@ class ChatControllerRefactored {
   }
 
   /**
-   * 发送消息并获取AI回复 - v2.0: 支持 file_ids 多文件
+   * 发送消息并获取AI回复 - 支持多文件和流式/非流式双模式
    * POST /api/chat/conversations/:id/messages
+   * 
+   * 积分安全：预扣减后如果任何步骤失败，catch 块中退还积分
    */
   static async sendMessage(req, res) {
     let creditsConsumed = 0;
     let userMessage = null;
     let aiMessageId = null;
+    let user = null;
 
     try {
       const { id } = req.params;
@@ -240,7 +243,7 @@ class ChatControllerRefactored {
       const userGroupId = req.user.group_id;
       const { content, file_id, file_ids, stream = false } = req.body;
 
-      // 1. 基础验证
+      // 1. 权限验证
       const hasAccess = await Conversation.checkOwnership(id, userId);
       if (!hasAccess) return ResponseHelper.forbidden(res, '无权在此会话中发送消息');
 
@@ -256,9 +259,9 @@ class ChatControllerRefactored {
       const requiredCredits = aiModel?.credits_per_chat !== undefined ? aiModel.credits_per_chat : 10;
 
       // 3. 获取用户信息
-      const user = await User.findById(userId);
+      user = await User.findById(userId);
 
-      // v2.0: 统一合并 file_ids 和 file_id 为数组
+      // 统一合并 file_ids 和 file_id 为数组
       let allFileIds = [];
       if (file_ids && Array.isArray(file_ids) && file_ids.length > 0) {
         allFileIds = file_ids;
@@ -273,13 +276,13 @@ class ChatControllerRefactored {
         requiredCredits
       });
 
-      // 5. v2.0: 处理多文件附件
+      // 5. 处理多文件附件
       const { fileInfos } = await MessageService.processFileAttachments(allFileIds, userId, aiModel);
 
       // 6. 清除草稿
       await CacheService.deleteDraft(userId, id);
 
-      // 7. 扣减积分
+      // 7. 扣减积分（预扣减，失败时在 catch 中退还）
       logger.info('预扣减积分开始', {
         userId, conversationId: id, requiredCredits,
         isFreeModel: requiredCredits === 0,
@@ -294,7 +297,7 @@ class ChatControllerRefactored {
       creditsConsumed = requiredCredits;
 
       // 8. 创建用户消息
-      const actualContent = MessageService.buildActualContent(content, fileInfos.length > 0 ? fileInfos[0] : null);
+      const actualContent = MessageService.buildActualContent(content);
       userMessage = await Message.create({
         conversation_id: id,
         role: 'user',
@@ -324,7 +327,6 @@ class ChatControllerRefactored {
 
       if (useStream) {
         try {
-          // v3.0: 传递 conversation 对象，让 StreamMessageService 读取 enable_thinking
           aiMessageId = await StreamMessageService.sendStreamMessage({
             res, conversation, aiMessages, userMessage,
             user, userId, creditsConsumed, creditsResult, content
@@ -343,7 +345,31 @@ class ChatControllerRefactored {
       }
 
     } catch (error) {
-      logger.error('发送消息失败', { conversationId: req.params.id, userId: req.user?.id, creditsConsumed, error: error.message });
+      logger.error('发送消息失败', {
+        conversationId: req.params.id, userId: req.user?.id,
+        creditsConsumed, error: error.message
+      });
+
+      // 积分退还保护：如果已扣减积分但消息发送失败，退还积分
+      if (creditsConsumed > 0 && user) {
+        try {
+          await MessageService.refundCredits(
+            user, creditsConsumed,
+            `消息发送失败退款 - ${error.message}`
+          );
+          logger.info('消息发送失败，积分已退还', {
+            userId: user.id, creditsRefunded: creditsConsumed
+          });
+        } catch (refundError) {
+          // 退款失败是严重问题，记录详细日志供人工处理
+          logger.error('严重：消息发送失败且积分退还也失败', {
+            userId: user.id, creditsConsumed,
+            originalError: error.message,
+            refundError: refundError.message
+          });
+        }
+      }
+
       if (!res.headersSent) {
         return ResponseHelper.error(res, error.message || '消息发送失败');
       }
@@ -381,7 +407,7 @@ class ChatControllerRefactored {
   // ================================================================
 
   /**
-   * 上传图片 - v2.0: 支持多图上传
+   * 上传图片 - 支持多图上传
    * POST /api/chat/upload-image
    */
   static async uploadImage(req, res) {
@@ -509,7 +535,11 @@ class ChatControllerRefactored {
       const user = await User.findById(req.user.id);
       if (!user) return ResponseHelper.notFound(res, '用户不存在');
       const creditsStats = user.getCreditsStats();
-      return ResponseHelper.success(res, { user_id: req.user.id, credits_stats: creditsStats, can_chat: user.hasCredits(10) }, '获取用户积分状态成功');
+      return ResponseHelper.success(res, {
+        user_id: req.user.id,
+        credits_stats: creditsStats,
+        can_chat: creditsStats.remaining > 0 || creditsStats.quota === 0
+      }, '获取用户积分状态成功');
     } catch (error) {
       logger.error('获取用户积分状态失败', { userId: req.user?.id, error: error.message });
       return ResponseHelper.error(res, '获取积分状态失败');
