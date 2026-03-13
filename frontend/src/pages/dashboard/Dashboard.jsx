@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, message, Modal, Badge, Empty } from 'antd'
+import React, { useEffect, useState, useCallback } from 'react'
+import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, Select, message, Modal, Badge, Empty } from 'antd'
 import {
   BankOutlined,
   DollarOutlined,
@@ -78,6 +78,10 @@ const Dashboard = () => {
   const [editingOrgContent, setEditingOrgContent] = useState('')
   const [savingOrgAnnouncement, setSavingOrgAnnouncement] = useState(false)
 
+  // 超管组选择器状态
+  const [groupList, setGroupList] = useState([])
+  const [selectedGroupId, setSelectedGroupId] = useState(null)
+
   const isSuperAdmin = user?.role === 'super_admin'
   const isAdmin = user?.role === 'admin'
   // 超管和组管理员都可以编辑组公告
@@ -93,6 +97,29 @@ const Dashboard = () => {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // 初始化选中的组ID
+  useEffect(() => {
+    if (user?.group_id && selectedGroupId === null) {
+      setSelectedGroupId(user.group_id)
+    }
+  }, [user?.group_id, selectedGroupId])
+
+  // 超管加载所有组列表（用于组公告切换）
+  useEffect(() => {
+    const fetchGroupList = async () => {
+      if (!isSuperAdmin) return
+      try {
+        const response = await apiClient.get('/admin/user-groups')
+        if (response.data.success) {
+          setGroupList(response.data.data || [])
+        }
+      } catch (error) {
+        console.error('获取组列表失败:', error)
+      }
+    }
+    fetchGroupList()
+  }, [isSuperAdmin])
   
   // 获取当前时间段的问候语
   const getGreeting = () => {
@@ -173,31 +200,34 @@ const Dashboard = () => {
     fetchAnnouncement()
   }, [])
 
-  // 加载组公告（所有用户都加载自己所在组的公告）
-  useEffect(() => {
-    const fetchOrgAnnouncement = async () => {
-      // 需要用户的 group_id
-      if (!user?.group_id) {
-        setOrgAnnouncementLoading(false)
-        return
-      }
-      
-      try {
-        setOrgAnnouncementLoading(true)
-        const response = await apiClient.get(`/admin/user-groups/${user.group_id}/announcement`)
-        if (response.data.success) {
-          setOrgAnnouncement(response.data.data)
-        }
-      } catch (error) {
-        // 普通用户可能没有权限访问管理接口，静默处理
-        console.error('获取组公告失败:', error)
-      } finally {
-        setOrgAnnouncementLoading(false)
-      }
+  // 加载组公告（根据selectedGroupId变化重新加载）
+  const fetchOrgAnnouncement = useCallback(async (groupId) => {
+    if (!groupId) {
+      setOrgAnnouncementLoading(false)
+      return
     }
+    
+    try {
+      setOrgAnnouncementLoading(true)
+      const response = await apiClient.get(`/admin/user-groups/${groupId}/announcement`)
+      if (response.data.success) {
+        setOrgAnnouncement(response.data.data)
+      }
+    } catch (error) {
+      // 普通用户可能没有权限，静默处理
+      console.error('获取组公告失败:', error)
+      setOrgAnnouncement(null)
+    } finally {
+      setOrgAnnouncementLoading(false)
+    }
+  }, [])
 
-    fetchOrgAnnouncement()
-  }, [user?.group_id])
+  // selectedGroupId 变化时重新加载组公告
+  useEffect(() => {
+    if (selectedGroupId) {
+      fetchOrgAnnouncement(selectedGroupId)
+    }
+  }, [selectedGroupId, fetchOrgAnnouncement])
 
   // ========== 系统公告编辑 ==========
   const handleEditAnnouncement = () => {
@@ -259,7 +289,9 @@ const Dashboard = () => {
   const handleSaveOrgAnnouncement = async () => {
     try {
       setSavingOrgAnnouncement(true)
-      const response = await apiClient.put(`/admin/user-groups/${user.group_id}/announcement`, {
+      // 使用selectedGroupId而非user.group_id，这样超管可以保存其他组的公告
+      const targetGroupId = selectedGroupId || user.group_id
+      const response = await apiClient.put(`/admin/user-groups/${targetGroupId}/announcement`, {
         content: editingOrgContent
       })
       
@@ -287,6 +319,16 @@ const Dashboard = () => {
       ),
       okText: t('button.close')
     })
+  }
+
+  // 超管切换组时的处理
+  const handleGroupChange = (groupId) => {
+    // 如果正在编辑，先取消
+    if (isEditingOrgAnnouncement) {
+      setIsEditingOrgAnnouncement(false)
+      setEditingOrgContent('')
+    }
+    setSelectedGroupId(groupId)
   }
   
   // 获取模块图标
@@ -605,6 +647,19 @@ const Dashboard = () => {
               <Space>
                 <TeamOutlined style={{ color: '#fa8c16' }} />
                 <span>{t('dashboard.announcement.organization')}</span>
+                {/* 超管显示组选择下拉框 */}
+                {isSuperAdmin && groupList.length > 0 && (
+                  <Select
+                    value={selectedGroupId}
+                    onChange={handleGroupChange}
+                    size="small"
+                    style={{ minWidth: 120 }}
+                    options={groupList.map(g => ({
+                      value: g.id,
+                      label: g.name
+                    }))}
+                  />
+                )}
               </Space>
             }
             extra={
