@@ -1,22 +1,21 @@
 /**
- * 知识库节点 - 从知识库加载内容
- * v1.0 - 支持直接加载Wiki文档作为上下文
- * v1.1 - 修复validate返回格式
- * v1.2 - 修复配置读取路径（this.data.config）
+ * 知识库节点 - 支持直接加载和RAG检索两种模式
  * 
- * 功能：
- * - 直接加载模式：将整个Wiki文档内容作为上下文传递给下游节点
- * - 支持多个知识库的内容合并
- * - 自动计算Token数量
+ * 模式说明：
+ * - direct: 直接加载Wiki全部内容作为上下文（适合小文档）
+ * - rag: 语义检索TOP-K相关片段作为上下文（适合大文档）
+ * - auto: 自动选择（有向量索引用RAG，否则直接加载）
  * 
  * 配置参数：
- * - source: 数据来源 'wiki'
- * - mode: 加载模式 'direct'（直接加载）
+ * - source: 'wiki'
+ * - mode: 'direct' | 'rag' | 'auto'
  * - wiki_ids: 选中的Wiki ID数组
+ * - top_k: RAG检索返回数量（默认5）
  */
 
 const BaseNode = require('./BaseNode');
 const WikiItem = require('../../../models/WikiItem');
+const RAGService = require('../../ragService');
 const { calculateTokens, formatTokenCount } = require('../../../utils/tokenCalculator');
 const logger = require('../../../utils/logger');
 
@@ -27,233 +26,208 @@ class KnowledgeNode extends BaseNode {
   }
 
   /**
-   * 获取配置（兼容旧版和新版）
-   * v1.2 新增：与LLMNode保持一致的配置读取方式
-   * @param {string} key - 配置键名
-   * @param {*} defaultValue - 默认值
-   * @returns {*} 配置值
+   * 获取配置（兼容新旧版）
    */
   getConfig(key, defaultValue = undefined) {
-    // 优先从 data.config 读取（新版）
-    if (this.data && this.data.config && this.data.config[key] !== undefined) {
-      return this.data.config[key];
-    }
-    // 兼容旧版直接从 data 读取
-    if (this.data && this.data[key] !== undefined) {
-      return this.data[key];
-    }
+    if (this.data?.config?.[key] !== undefined) return this.data.config[key];
+    if (this.data?.[key] !== undefined) return this.data[key];
     return defaultValue;
   }
 
   /**
    * 验证节点配置
-   * v1.1 修复：返回 { valid: boolean, errors: string[] } 格式
-   * @returns {Object} { valid: boolean, errors: string[] }
    */
   validate() {
     const source = this.getConfig('source');
     const mode = this.getConfig('mode');
     const wikiIds = this.getConfig('wiki_ids');
     const errors = [];
-    
-    // 如果配置了Wiki来源和直接加载模式，必须选择知识库
-    if (source === 'wiki' && mode === 'direct') {
+
+    if (source === 'wiki' && (mode === 'direct' || mode === 'rag' || mode === 'auto')) {
       if (!wikiIds || !Array.isArray(wikiIds) || wikiIds.length === 0) {
         errors.push('请至少选择一个知识库');
       }
     }
-    
-    // 如果没有配置source，使用默认值，不报错
-    // 这样知识库节点可以作为可选节点存在
-    
-    return {
-      valid: errors.length === 0,
-      errors
-    };
+
+    return { valid: errors.length === 0, errors };
   }
 
   /**
-   * 执行节点 - 加载知识库内容
-   * v1.2 修复：使用getConfig方法读取配置
-   * @param {Object} context - 执行上下文（包含用户信息等）
-   * @param {number} userId - 用户ID
-   * @param {Object} nodeTypeConfig - 节点类型配置
-   * @returns {Object} - 包含知识库内容的输出
+   * 执行节点 - 加载或检索知识库内容
    */
   async execute(context = {}, userId, nodeTypeConfig) {
-    // 使用getConfig方法读取配置
     const source = this.getConfig('source');
-    const mode = this.getConfig('mode');
+    const mode = this.getConfig('mode', 'auto');
     const wikiIds = this.getConfig('wiki_ids');
-    
-    // 从context中获取用户信息（如果有的话）
+    const topK = this.getConfig('top_k', 5);
     const groupId = context.groupId;
     const userRole = context.userRole;
 
-    logger.info('知识库节点开始执行', {
-      nodeId: this.id,
-      source: source,
-      mode: mode,
-      wikiIds: wikiIds,
-      dataConfig: this.data?.config  // 调试用
-    });
+    logger.info('知识库节点开始执行', { nodeId: this.id, source, mode, wikiIds });
 
-    // 如果没有配置，返回空上下文（节点可选）
-    if (!source || source !== 'wiki') {
-      logger.info('知识库节点未配置数据源，跳过', { source });
+    /* 未配置数据源 */
+    if (!source || source !== 'wiki' || !wikiIds || wikiIds.length === 0) {
+      return { output: { knowledge_context: '', total_tokens: 0, wiki_count: 0 }, credits_used: 0 };
+    }
+
+    /* 获取用户查询（从上游输入或context） */
+    const query = context.input?.query || context.upstreamOutput?.content || '';
+
+    /* 根据模式选择加载方式 */
+    if (mode === 'rag') {
+      return await this.executeRAG(wikiIds, query, topK, userId, groupId, userRole);
+    } else if (mode === 'direct') {
+      return await this.executeDirect(wikiIds, userId, groupId, userRole);
+    } else {
+      /* auto模式：检查是否有向量索引 */
+      return await this.executeAuto(wikiIds, query, topK, userId, groupId, userRole);
+    }
+  }
+
+  /**
+   * RAG检索模式
+   */
+  async executeRAG(wikiIds, query, topK, userId, groupId, userRole) {
+    try {
+      if (!query) {
+        logger.warn('RAG模式但无查询文本，回退到直接加载');
+        return await this.executeDirect(wikiIds, userId, groupId, userRole);
+      }
+
+      const results = await RAGService.search(wikiIds, query, topK);
+
+      if (results.length === 0) {
+        logger.warn('RAG检索无结果，回退到直接加载');
+        return await this.executeDirect(wikiIds, userId, groupId, userRole);
+      }
+
+      const context = RAGService.formatAsContext(results);
+      const totalTokens = calculateTokens(context);
+
+      logger.info('RAG检索完成', {
+        nodeId: this.id, resultCount: results.length,
+        totalTokens, topSimilarity: results[0]?.similarity?.toFixed(4)
+      });
+
       return {
         output: {
-          knowledge_context: '',
-          total_tokens: 0,
-          wiki_count: 0
+          knowledge_context: context,
+          total_tokens: totalTokens,
+          total_tokens_display: formatTokenCount(totalTokens),
+          wiki_count: wikiIds.length,
+          mode: 'rag',
+          result_count: results.length
         },
         credits_used: 0
       };
+    } catch (error) {
+      logger.error('RAG检索失败，回退到直接加载:', error.message);
+      return await this.executeDirect(wikiIds, userId, groupId, userRole);
+    }
+  }
+
+  /**
+   * 直接加载模式（原有逻辑）
+   */
+  async executeDirect(wikiIds, userId, groupId, userRole) {
+    const contentParts = [];
+    const loadedWikis = [];
+    let totalTokens = 0;
+
+    for (const wikiId of wikiIds) {
+      try {
+        const fullItem = await WikiItem.findById(wikiId, userId, groupId, userRole);
+        if (!fullItem || !fullItem.content) continue;
+
+        const tokens = calculateTokens(fullItem.content);
+        totalTokens += tokens;
+        contentParts.push(this.formatContentBlock(fullItem));
+        loadedWikis.push({ id: fullItem.id, title: fullItem.title, tokens, tokens_display: formatTokenCount(tokens) });
+      } catch (error) {
+        logger.error('加载知识库失败', { wikiId, error: error.message });
+      }
     }
 
-    // 如果没有选择知识库，返回空
-    if (!wikiIds || !Array.isArray(wikiIds) || wikiIds.length === 0) {
-      logger.info('知识库节点未选择知识库，跳过', { wikiIds });
-      return {
-        output: {
-          knowledge_context: '',
-          total_tokens: 0,
-          wiki_count: 0
-        },
-        credits_used: 0
-      };
-    }
-
-    // 直接加载模式
-    if (mode === 'direct') {
-      const result = await this.executeDirectLoad(wikiIds, userId, groupId, userRole);
-      return {
-        output: result,
-        credits_used: 0  // 知识库加载不消耗积分
-      };
-    }
-
-    // 其他模式暂不支持
-    logger.warn('知识库节点不支持的加载模式', { mode: mode });
     return {
       output: {
-        knowledge_context: '',
-        total_tokens: 0,
-        wiki_count: 0
+        knowledge_context: contentParts.join('\n\n'),
+        total_tokens: totalTokens,
+        total_tokens_display: formatTokenCount(totalTokens),
+        wiki_count: loadedWikis.length,
+        loaded_wikis: loadedWikis,
+        mode: 'direct'
       },
       credits_used: 0
     };
   }
 
   /**
-   * 执行直接加载模式
-   * @param {Array<number>} wikiIds - 要加载的Wiki ID列表
-   * @param {number} userId - 用户ID
-   * @param {number} groupId - 组ID
-   * @param {string} userRole - 用户角色
-   * @returns {Object} - 合并后的知识库内容
+   * 自动模式：有索引用RAG，否则直接加载
    */
-  async executeDirectLoad(wikiIds, userId, groupId, userRole) {
-    const loadedWikis = [];
-    const contentParts = [];
-    let totalTokens = 0;
+  async executeAuto(wikiIds, query, topK, userId, groupId, userRole) {
+    try {
+      const dbConnection = require('../../../database/connection');
+      const placeholders = wikiIds.map(() => '?').join(',');
+      const sql = `SELECT id, rag_enabled, index_status, chunk_count FROM wiki_items WHERE id IN (${placeholders})`;
+      const { rows } = await dbConnection.query(sql, wikiIds);
 
-    logger.info('开始直接加载知识库', { 
-      wikiIds, 
-      userId, 
-      groupId, 
-      userRole 
-    });
+      /* 检查是否有任何知识库有可用的向量索引 */
+      const hasRAG = rows.some(r => r.rag_enabled && r.index_status === 'completed' && r.chunk_count > 0);
 
-    for (const wikiId of wikiIds) {
-      try {
-        // 获取知识库内容（会自动检查权限）
-        const fullItem = await WikiItem.findById(wikiId, userId, groupId, userRole);
-        
-        if (!fullItem) {
-          logger.warn('知识库不存在或无权访问，跳过', { wikiId, userId });
-          continue;
+      if (hasRAG && query) {
+        /* 只对有索引的知识库用RAG */
+        const ragWikiIds = rows.filter(r => r.rag_enabled && r.index_status === 'completed').map(r => r.id);
+        const directWikiIds = wikiIds.filter(id => !ragWikiIds.includes(id));
+
+        let ragResult = { output: { knowledge_context: '', total_tokens: 0 }, credits_used: 0 };
+        let directResult = { output: { knowledge_context: '', total_tokens: 0 }, credits_used: 0 };
+
+        if (ragWikiIds.length > 0) {
+          ragResult = await this.executeRAG(ragWikiIds, query, topK, userId, groupId, userRole);
+        }
+        if (directWikiIds.length > 0) {
+          directResult = await this.executeDirect(directWikiIds, userId, groupId, userRole);
         }
 
-        if (!fullItem.content) {
-          logger.warn('知识库内容为空，跳过', { wikiId });
-          continue;
-        }
+        /* 合并结果 */
+        const combinedContext = [ragResult.output.knowledge_context, directResult.output.knowledge_context]
+          .filter(Boolean).join('\n\n');
+        const combinedTokens = (ragResult.output.total_tokens || 0) + (directResult.output.total_tokens || 0);
 
-        // 计算Token
-        const tokens = calculateTokens(fullItem.content);
-        totalTokens += tokens;
-
-        // 格式化内容块
-        const contentBlock = this.formatContentBlock(fullItem);
-        contentParts.push(contentBlock);
-
-        loadedWikis.push({
-          id: fullItem.id,
-          title: fullItem.title,
-          tokens: tokens,
-          tokens_display: formatTokenCount(tokens)
-        });
-
-        logger.info('成功加载知识库', {
-          wikiId,
-          title: fullItem.title,
-          contentLength: fullItem.content.length,
-          tokens
-        });
-
-      } catch (error) {
-        logger.error('加载知识库失败', { wikiId, error: error.message });
-        // 继续处理其他知识库
+        return {
+          output: {
+            knowledge_context: combinedContext,
+            total_tokens: combinedTokens,
+            total_tokens_display: formatTokenCount(combinedTokens),
+            wiki_count: wikiIds.length,
+            mode: 'auto(rag+direct)'
+          },
+          credits_used: 0
+        };
       }
+
+      /* 没有索引，全部直接加载 */
+      return await this.executeDirect(wikiIds, userId, groupId, userRole);
+    } catch (error) {
+      logger.error('Auto模式失败，回退直接加载:', error.message);
+      return await this.executeDirect(wikiIds, userId, groupId, userRole);
     }
-
-    // 合并所有内容
-    const combinedContent = contentParts.join('\n\n');
-
-    logger.info('知识库节点执行完成', {
-      nodeId: this.id,
-      loadedCount: loadedWikis.length,
-      totalTokens,
-      totalTokensDisplay: formatTokenCount(totalTokens),
-      combinedContentLength: combinedContent.length
-    });
-
-    return {
-      knowledge_context: combinedContent,
-      total_tokens: totalTokens,
-      total_tokens_display: formatTokenCount(totalTokens),
-      wiki_count: loadedWikis.length,
-      loaded_wikis: loadedWikis
-    };
   }
 
   /**
-   * 格式化单个知识库的内容块
-   * @param {Object} wikiItem - 知识库对象
-   * @returns {string} - 格式化后的内容
+   * 格式化知识库内容块
    */
   formatContentBlock(wikiItem) {
     const separator = '='.repeat(50);
     const header = `=== 知识库：${wikiItem.title} ===`;
-    
-    let content = `${separator}\n${header}\n${separator}\n\n`;
-    content += wikiItem.content;
-    
-    // 如果有描述，添加到开头
+    let content = `${separator}\n${header}\n${separator}\n\n${wikiItem.content}`;
     if (wikiItem.description) {
       content = `${separator}\n${header}\n【描述】${wikiItem.description}\n${separator}\n\n${wikiItem.content}`;
     }
-    
     return content;
   }
 
-  /**
-   * 获取节点消耗的积分（知识库加载不消耗积分）
-   */
-  getCreditsPerExecution() {
-    return 0;
-  }
+  getCreditsPerExecution() { return 0; }
 }
 
 module.exports = KnowledgeNode;

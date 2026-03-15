@@ -1,60 +1,82 @@
 /**
- * 知识库路由 v3.0
+ * 知识库路由
  * 
- * 功能：
- * - 知识库CRUD
- * - 版本管理（创建、查看、保存、删除）
- * - 编辑者管理
- * - 置顶切换
- * 
- * 版本管理说明（v3.0重构）：
- * - 所有版本平等，没有"当前版本"和"历史版本"的区分
- * - 切换版本 = 切换工作区
- * - 保存到用户当前查看的版本
- * 
- * 更新：2026-01-02 v3.0 重构版本管理逻辑
+ * 功能：知识库CRUD + 版本管理 + 编辑者管理 + RAG文件上传/索引/检索 + Embedding配置
  */
 
 const express = require('express');
 const router = express.Router();
 const WikiController = require('../controllers/WikiController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, requireRole } = require('../middleware/authMiddleware');
+const multer = require('multer');
+const path = require('path');
+const crypto = require('crypto');
+const fs = require('fs');
+const config = require('../config');
 
-// 所有路由都需要认证
+/* 所有路由需要认证 */
 router.use(authenticate);
 
-// ==================== 知识库CRUD ====================
-// 获取知识库列表
+/* ========== 文件上传中间件（Wiki文档上传） ========== */
+const wikiUploadDir = path.join(config.storage?.paths?.uploads || '/var/www/ai-platform/storage/uploads', 'wiki-documents');
+/* 确保目录存在 */
+if (!fs.existsSync(wikiUploadDir)) {
+  fs.mkdirSync(wikiUploadDir, { recursive: true });
+}
+
+const wikiUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, wikiUploadDir),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+      const ext = path.extname(file.originalname);
+      cb(null, `wiki-${uniqueSuffix}${ext}`);
+    }
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, /* 50MB */
+  fileFilter: (req, file, cb) => {
+    const allowedExts = ['.pdf', '.docx', '.txt', '.md', '.markdown'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`不支持的文件格式: ${ext}，支持 PDF/Word/TXT/Markdown`));
+    }
+  }
+});
+
+/* ========== 知识库CRUD ========== */
 router.get('/items', WikiController.getItems);
-// 获取知识库详情
 router.get('/items/:id', WikiController.getItem);
-// 创建知识库
 router.post('/items', WikiController.createItem);
-// 更新知识库基本信息（不涉及版本内容）
 router.put('/items/:id', WikiController.updateItem);
-// 删除知识库
 router.delete('/items/:id', WikiController.deleteItem);
 
-// ==================== 版本管理 ====================
-// 获取版本历史列表
+/* ========== 版本管理 ========== */
 router.get('/items/:id/versions', WikiController.getVersions);
-// 创建新版本（基于当前查看的版本复制）
 router.post('/items/:id/version', WikiController.createVersion);
-// 获取指定版本详情
 router.get('/versions/:id', WikiController.getVersionDetail);
-// 保存到指定版本（v3.0核心API）
 router.put('/versions/:id', WikiController.updateVersion);
-// 删除指定版本
 router.delete('/items/:id/versions/:versionId', WikiController.deleteVersion);
 
-// ==================== 其他功能 ====================
-// 切换置顶状态
+/* ========== RAG文件上传与索引 ========== */
+/* 上传文档到知识库（解析内容写入wiki） */
+router.post('/items/:id/upload', wikiUpload.single('file'), WikiController.uploadDocument);
+/* 构建/重建向量索引 */
+router.post('/items/:id/build-index', WikiController.buildIndex);
+/* 获取索引状态 */
+router.get('/items/:id/index-status', WikiController.getIndexStatus);
+/* RAG检索测试 */
+router.post('/items/:id/search', WikiController.ragSearch);
+
+/* ========== Embedding配置（超级管理员） ========== */
+router.get('/embedding-config', requireRole(['super_admin']), WikiController.getEmbeddingConfig);
+router.put('/embedding-config', requireRole(['super_admin']), WikiController.updateEmbeddingConfig);
+
+/* ========== 其他功能 ========== */
 router.put('/items/:id/pin', WikiController.togglePin);
-// 获取编辑者列表
 router.get('/items/:id/editors', WikiController.getEditors);
-// 添加编辑者
 router.post('/items/:id/editors', WikiController.addEditor);
-// 移除编辑者
 router.delete('/items/:id/editors/:userId', WikiController.removeEditor);
 
 module.exports = router;

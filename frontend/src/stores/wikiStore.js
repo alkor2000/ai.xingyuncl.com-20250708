@@ -1,13 +1,6 @@
 /**
- * 知识库状态管理 v3.0
- * 
- * 版本管理逻辑（v3.0重构）：
- * - 所有版本平等，没有"当前版本"和"历史版本"的区分
- * - 切换版本 = 切换工作区，加载该版本的完整内容
- * - 保存 = 保存到当前查看的版本
- * - 新建版本 = 基于当前查看的版本复制一份
- * 
- * 更新：2026-01-02 v3.0 重构版本管理
+ * 知识库状态管理
+ * 支持CRUD + 版本管理 + 编辑者管理 + RAG文件上传/索引/检索
  */
 
 import { create } from 'zustand'
@@ -15,19 +8,26 @@ import apiClient from '../utils/api'
 import { message } from 'antd'
 
 const useWikiStore = create((set, get) => ({
-  // ==================== 状态 ====================
-  items: [],                      // 知识库列表
-  currentItem: null,              // 当前知识库元信息
-  currentVersion: null,           // 当前查看的版本（完整数据）
-  versions: [],                   // 版本历史列表
-  editors: [],                    // 编辑者列表
+  /* ========== 状态 ========== */
+  items: [],
+  currentItem: null,
+  currentVersion: null,
+  versions: [],
+  editors: [],
   loading: false,
   detailLoading: false,
   versionsLoading: false,
   currentScope: null,
   error: null,
 
-  // ==================== 知识库列表操作 ====================
+  /* RAG状态 */
+  indexStatus: null,
+  indexing: false,
+  uploading: false,
+  searchResults: null,
+  searching: false,
+
+  /* ========== 知识库列表 ========== */
 
   getItems: async (scope = null) => {
     set({ loading: true, error: null, currentScope: scope })
@@ -43,9 +43,6 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /**
-   * 获取知识库详情（元信息）
-   */
   getItem: async (id) => {
     set({ detailLoading: true, error: null })
     try {
@@ -99,10 +96,10 @@ const useWikiStore = create((set, get) => ({
       const response = await apiClient.put(`/wiki/items/${id}/pin`)
       const updatedItem = response.data.data
       set(state => ({
-        items: state.items.map(item => 
+        items: state.items.map(item =>
           item.id === id ? { ...item, is_pinned: updatedItem.is_pinned } : item
         ),
-        currentItem: state.currentItem?.id === id 
+        currentItem: state.currentItem?.id === id
           ? { ...state.currentItem, is_pinned: updatedItem.is_pinned }
           : state.currentItem
       }))
@@ -114,11 +111,8 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  // ==================== 版本管理（v3.0核心） ====================
+  /* ========== 版本管理 ========== */
 
-  /**
-   * 获取版本历史列表
-   */
   getVersions: async (wikiId) => {
     set({ versionsLoading: true })
     try {
@@ -132,17 +126,12 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /**
-   * 切换到指定版本（加载完整内容）
-   * 这是v3.0的核心：切换版本=切换工作区
-   */
   switchToVersion: async (versionId) => {
     set({ detailLoading: true })
     try {
       const response = await apiClient.get(`/wiki/versions/${versionId}`)
-      const versionData = response.data.data
-      set({ currentVersion: versionData, detailLoading: false })
-      return versionData
+      set({ currentVersion: response.data.data, detailLoading: false })
+      return response.data.data
     } catch (error) {
       set({ detailLoading: false })
       message.error(error.response?.data?.message || '切换版本失败')
@@ -150,34 +139,26 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /**
-   * 保存到当前版本（v3.0核心API）
-   * 保存的是currentVersion，不是某个固定的"当前版本"
-   */
   saveVersion: async (versionId, data) => {
     set({ loading: true, error: null })
     try {
       const response = await apiClient.put(`/wiki/versions/${versionId}`, data)
       const updatedVersion = response.data.data
-      
       set(state => ({
         currentVersion: updatedVersion,
-        // 同步更新currentItem的标题等信息
         currentItem: state.currentItem ? {
           ...state.currentItem,
           title: updatedVersion.title,
           description: updatedVersion.description,
           current_version: updatedVersion.version_number
         } : null,
-        // 更新列表中的条目
-        items: state.items.map(item => 
-          item.id === updatedVersion.wiki_id 
+        items: state.items.map(item =>
+          item.id === updatedVersion.wiki_id
             ? { ...item, title: updatedVersion.title, current_version: updatedVersion.version_number }
             : item
         ),
         loading: false
       }))
-      
       message.success('保存成功')
       return updatedVersion
     } catch (error) {
@@ -187,23 +168,13 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /**
-   * 创建新版本（基于当前查看的版本）
-   */
   createVersion: async (wikiId, baseVersionId = null) => {
     set({ loading: true })
     try {
-      const response = await apiClient.post(`/wiki/items/${wikiId}/version`, {
-        base_version_id: baseVersionId
-      })
+      const response = await apiClient.post(`/wiki/items/${wikiId}/version`, { base_version_id: baseVersionId })
       const result = response.data.data
-      
-      // 刷新版本列表
       await get().getVersions(wikiId)
-      // 切换到新版本
       await get().switchToVersion(result.id)
-      
-      // 更新currentItem
       set(state => ({
         currentItem: state.currentItem ? {
           ...state.currentItem,
@@ -212,7 +183,6 @@ const useWikiStore = create((set, get) => ({
         } : null,
         loading: false
       }))
-      
       message.success(`新版本 v${result.version_number} 创建成功`)
       return result
     } catch (error) {
@@ -222,36 +192,23 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /**
-   * 删除指定版本
-   */
   deleteVersion: async (wikiId, versionId) => {
     set({ loading: true })
     try {
       const response = await apiClient.delete(`/wiki/items/${wikiId}/versions/${versionId}`)
       const result = response.data.data
-      
-      // 刷新版本列表
       await get().getVersions(wikiId)
-      
-      // 如果删除的是当前查看的版本，切换到最新版本
-      const currentVersion = get().currentVersion
-      if (currentVersion && currentVersion.id === versionId) {
-        const versions = get().versions
-        if (versions.length > 0) {
-          await get().switchToVersion(versions[0].id)
-        }
+      const currentVer = get().currentVersion
+      if (currentVer && currentVer.id === versionId) {
+        const vers = get().versions
+        if (vers.length > 0) await get().switchToVersion(vers[0].id)
       }
-      
       set(state => ({
         currentItem: state.currentItem ? {
-          ...state.currentItem,
-          current_version: result.currentVersion,
-          version_count: result.versionCount
+          ...state.currentItem, current_version: result.currentVersion, version_count: result.versionCount
         } : null,
         loading: false
       }))
-      
       message.success(`版本 v${result.deletedVersion} 已删除`)
       return result
     } catch (error) {
@@ -261,7 +218,104 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  // ==================== 编辑者管理 ====================
+  /* ========== RAG：文件上传 ========== */
+
+  uploadDocument: async (wikiId, file) => {
+    set({ uploading: true })
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post(`/wiki/items/${wikiId}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000
+      })
+      set({ uploading: false })
+      message.success('文档上传成功，内容已导入')
+      return response.data.data
+    } catch (error) {
+      set({ uploading: false })
+      message.error(error.response?.data?.message || '文档上传失败')
+      throw error
+    }
+  },
+
+  /* ========== RAG：构建索引 ========== */
+
+  buildIndex: async (wikiId) => {
+    set({ indexing: true })
+    try {
+      const response = await apiClient.post(`/wiki/items/${wikiId}/build-index`, {}, { timeout: 300000 })
+      /* 索引是异步的，立即开始轮询状态 */
+      get().pollIndexStatus(wikiId)
+      return response.data.data
+    } catch (error) {
+      set({ indexing: false })
+      message.error(error.response?.data?.message || '启动索引失败')
+      throw error
+    }
+  },
+
+  /* ========== RAG：获取索引状态 ========== */
+
+  getIndexStatus: async (wikiId) => {
+    try {
+      const response = await apiClient.get(`/wiki/items/${wikiId}/index-status`)
+      const status = response.data.data
+      set({ indexStatus: status })
+      return status
+    } catch (error) {
+      console.error('获取索引状态失败:', error)
+      return null
+    }
+  },
+
+  /* 轮询索引状态（3秒间隔，最多60次=3分钟） */
+  pollIndexStatus: async (wikiId) => {
+    let attempts = 0
+    const maxAttempts = 60
+    const poll = async () => {
+      const status = await get().getIndexStatus(wikiId)
+      if (!status) { set({ indexing: false }); return }
+      if (status.index_status === 'completed') {
+        set({ indexing: false })
+        message.success(`向量索引构建完成，共 ${status.chunk_count} 个分块`)
+        /* 刷新列表 */
+        const scope = get().currentScope
+        get().getItems(scope)
+        return
+      }
+      if (status.index_status === 'failed') {
+        set({ indexing: false })
+        message.error('向量索引构建失败')
+        return
+      }
+      attempts++
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 3000)
+      } else {
+        set({ indexing: false })
+        message.warning('索引构建超时，请稍后查看状态')
+      }
+    }
+    poll()
+  },
+
+  /* ========== RAG：语义检索测试 ========== */
+
+  ragSearch: async (wikiId, query, topK = 5) => {
+    set({ searching: true })
+    try {
+      const response = await apiClient.post(`/wiki/items/${wikiId}/search`, { query, top_k: topK })
+      set({ searchResults: response.data.data, searching: false })
+      return response.data.data
+    } catch (error) {
+      set({ searching: false })
+      message.error(error.response?.data?.message || '检索失败')
+      throw error
+    }
+  },
+
+  /* ========== 编辑者管理 ========== */
 
   getEditors: async (id) => {
     try {
@@ -298,25 +352,18 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  // ==================== 辅助方法 ====================
+  /* ========== 辅助 ========== */
 
-  clearCurrentItem: () => {
-    set({ currentItem: null, currentVersion: null, versions: [], editors: [] })
-  },
-
+  clearCurrentItem: () => set({
+    currentItem: null, currentVersion: null, versions: [], editors: [],
+    indexStatus: null, searchResults: null
+  }),
   clearError: () => set({ error: null }),
-
   reset: () => set({
-    items: [],
-    currentItem: null,
-    currentVersion: null,
-    versions: [],
-    editors: [],
-    loading: false,
-    detailLoading: false,
-    versionsLoading: false,
-    currentScope: null,
-    error: null
+    items: [], currentItem: null, currentVersion: null, versions: [],
+    editors: [], loading: false, detailLoading: false, versionsLoading: false,
+    currentScope: null, error: null, indexStatus: null, indexing: false,
+    uploading: false, searchResults: null, searching: false
   })
 }))
 

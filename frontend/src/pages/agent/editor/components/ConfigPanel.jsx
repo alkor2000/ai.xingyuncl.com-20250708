@@ -264,9 +264,12 @@ const ConfigPanel = ({
         </Select>
       </Form.Item>
       
-      <Form.Item label="加载模式" name="mode" initialValue="direct">
+      <Form.Item label="加载模式" name="mode" initialValue="auto"
+        tooltip="auto=自动（有索引用RAG否则直接加载） / rag=仅语义检索 / direct=加载全文">
         <Select>
-          <Select.Option value="direct">直接加载（完整内容）</Select.Option>
+          <Select.Option value="auto">自动（推荐）</Select.Option>
+          <Select.Option value="rag">RAG语义检索（适合大文档）</Select.Option>
+          <Select.Option value="direct">直接加载全文（适合小文档）</Select.Option>
         </Select>
       </Form.Item>
       
