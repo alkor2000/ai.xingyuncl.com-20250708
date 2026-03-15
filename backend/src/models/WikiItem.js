@@ -39,6 +39,13 @@ class WikiItem {
     this.updated_at = data.updated_at || null;
     this.creator_name = data.creator_name || null;
     this.group_name = data.group_name || null;
+    this.rag_enabled = data.rag_enabled || false;
+    this.index_status = data.index_status || 'none';
+    this.chunk_count = data.chunk_count || 0;
+    this.source_type = data.source_type || 'text';
+    this.file_name = data.file_name || null;
+    this.file_size = data.file_size || null;
+    this.indexed_at = data.indexed_at || null;
     this.can_edit = data.can_edit || false;
   }
 
@@ -839,6 +846,13 @@ class WikiItem {
       sort_order: this.sort_order,
       current_version: this.current_version,
       version_count: this.version_count,
+      rag_enabled: this.rag_enabled,
+      index_status: this.index_status,
+      chunk_count: this.chunk_count,
+      source_type: this.source_type,
+      file_name: this.file_name,
+      file_size: this.file_size,
+      indexed_at: this.indexed_at,
       can_edit: this.can_edit,
       created_at: this.created_at,
       updated_at: this.updated_at

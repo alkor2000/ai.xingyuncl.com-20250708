@@ -38,12 +38,22 @@ class AgentController {
       const items = await WikiItem.getUserAccessibleItems(userId, groupId, userRole);
 
       const itemsWithTokens = items.map(item => {
-        const tokens = calculateTokens(item.content || '');
+        /* RAG知识库：用chunk_count估算tokens，普通知识库：用content计算 */
+        let tokens = 0;
+        if (item.rag_enabled && item.chunk_count > 0) {
+          /* RAG知识库按平均每chunk 400 tokens估算 */
+          tokens = item.chunk_count * 400;
+        } else {
+          tokens = calculateTokens(item.content || '');
+        }
         return {
           id: item.id, title: item.title, description: item.description,
           scope: item.scope, creator_name: item.creator_name,
           group_name: item.group_name, current_version: item.current_version,
           tokens, tokens_display: formatTokenCount(tokens),
+          rag_enabled: item.rag_enabled || false,
+          index_status: item.index_status || 'none',
+          chunk_count: item.chunk_count || 0,
           updated_at: item.updated_at
         };
       });
