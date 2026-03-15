@@ -1,0 +1,358 @@
+/**
+ * API接入管理抽屉样式
+ * iOS毛玻璃科技风，与ConfigPanel风格统一
+ */
+
+.api-drawer {
+  /* Drawer内部整体背景 */
+  .ant-drawer-body {
+    padding: 0 !important;
+    background: #f7f8fa;
+  }
+
+  /* Tab标签栏 */
+  .ant-tabs {
+    .ant-tabs-nav {
+      padding: 0 20px;
+      margin-bottom: 0;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+
+      .ant-tabs-tab {
+        padding: 12px 4px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+    }
+
+    .ant-tabs-content-holder {
+      padding: 20px;
+    }
+  }
+
+  /* ========== 新Key警告 ========== */
+  .api-new-key-alert {
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid #ffd591;
+    background: linear-gradient(135deg, #fffbe6 0%, #fff7e6 100%);
+
+    .api-new-key-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+
+      .ant-input-affix-wrapper {
+        border-radius: 8px;
+        font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        font-size: 12px;
+      }
+    }
+  }
+
+  /* ========== Key信息卡片 ========== */
+  .api-key-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 1px solid #eee;
+    margin-bottom: 20px;
+
+    .api-key-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+
+      .api-key-value {
+        font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        font-size: 14px;
+        color: #262626;
+        background: #f5f5f5;
+        padding: 6px 14px;
+        border-radius: 8px;
+        letter-spacing: 0.5px;
+      }
+    }
+
+    .api-key-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: #8c8c8c;
+      font-size: 13px;
+
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+    }
+  }
+
+  /* ========== 统计卡片组 ========== */
+  .api-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+
+    .api-stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid #f0f0f0;
+      transition: all 0.2s ease;
+
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transform: translateY(-1px);
+      }
+
+      .stat-icon {
+        font-size: 20px;
+        margin-bottom: 6px;
+        display: block;
+      }
+
+      .stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #1a1a2e;
+        line-height: 1.2;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: #8c8c8c;
+        margin-top: 4px;
+      }
+
+      &.calls .stat-icon { color: #1890ff; }
+      &.calls .stat-value { color: #1890ff; }
+      &.credits .stat-icon { color: #722ed1; }
+      &.credits .stat-value { color: #722ed1; }
+      &.time .stat-icon { color: #52c41a; }
+      &.time .stat-value { color: #52c41a; font-size: 14px; }
+    }
+  }
+
+  /* ========== 操作按钮组 ========== */
+  .api-actions {
+    display: flex;
+    gap: 10px;
+
+    .ant-btn {
+      border-radius: 10px;
+      height: 38px;
+      font-weight: 500;
+    }
+  }
+
+  /* ========== 空状态 - 生成Key ========== */
+  .api-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 1px solid #eee;
+
+    .api-empty-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 32px;
+      color: #1890ff;
+    }
+
+    .api-empty-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #262626;
+      margin-bottom: 8px;
+    }
+
+    .api-empty-desc {
+      font-size: 13px;
+      color: #8c8c8c;
+      margin-bottom: 24px;
+    }
+
+    .ant-btn-primary {
+      border-radius: 10px;
+      height: 42px;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 0 28px;
+    }
+
+    .api-empty-hint {
+      font-size: 12px;
+      color: #bfbfbf;
+      margin-top: 12px;
+    }
+  }
+
+  /* ========== 访问控制表单 ========== */
+  .api-access-form {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 1px solid #eee;
+
+    .ant-form-item-label > label {
+      font-size: 14px !important;
+      font-weight: 600;
+      color: #262626 !important;
+    }
+
+    .ant-input,
+    .ant-input-number,
+    .ant-input-affix-wrapper,
+    .ant-picker {
+      border-radius: 8px;
+    }
+
+    .ant-input-textarea textarea {
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .ant-input-number {
+      width: 100%;
+    }
+
+    .ant-form-item {
+      margin-bottom: 20px;
+    }
+
+    .api-save-btn {
+      border-radius: 10px;
+      height: 42px;
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+  }
+
+  .api-access-alert {
+    border-radius: 10px;
+    margin-bottom: 20px;
+  }
+
+  /* ========== 接入文档 ========== */
+  .api-docs {
+    .api-docs-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid #eee;
+      margin-bottom: 16px;
+
+      .api-docs-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .api-docs-endpoint {
+        font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        font-size: 13px;
+        color: #1890ff;
+        background: #e6f7ff;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-bottom: 12px;
+        font-weight: 500;
+      }
+    }
+
+    .api-code-block {
+      position: relative;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+      border-radius: 10px;
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow: auto;
+      max-height: 220px;
+      white-space: pre;
+      -webkit-overflow-scrolling: touch;
+
+      .api-copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+
+        &:hover {
+          opacity: 1;
+        }
+      }
+    }
+
+    /* 错误码表格 */
+    .api-error-table {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #eee;
+
+      .ant-descriptions-item-label {
+        font-family: 'SF Mono', 'Menlo', monospace;
+        font-weight: 700;
+        font-size: 13px;
+        width: 60px;
+      }
+
+      .ant-descriptions-item-content {
+        font-size: 13px;
+      }
+    }
+  }
+
+  /* ========== 调用日志 ========== */
+  .api-logs {
+    .api-logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .ant-table {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    }
+
+    .ant-table-thead > tr > th {
+      background: #fafafa;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .ant-table-tbody > tr > td {
+      font-size: 12px;
+    }
+  }
+}
