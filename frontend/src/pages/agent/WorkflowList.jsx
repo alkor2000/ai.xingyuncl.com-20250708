@@ -1,11 +1,12 @@
 /**
- * Agent工作流列表页 v2.3
+ * Agent工作流列表页 v2.4
  * 卡片式网格布局，FastGPT风格
  * 支持创建、编辑、删除、执行、发布等操作
  * 
  * v2.1 修复：Dropdown菜单点击事件冒泡问题
  * v2.2 新增：重命名功能，可以在列表中修改工作流名称和描述
  * v2.3 P3优化：dayjs语言跟随i18n设置，去除硬编码中文
+ * v2.4 移除"运行"按钮的发布限制：未发布的工作流也可以直接运行
  */
 
 import React, { useEffect, useState, useMemo } from 'react'
@@ -96,7 +97,7 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
     onRename(workflow)
   }
   
-  // 处理执行
+  // 处理执行 - v2.4: 不再检查发布状态
   const handleExecute = (e) => {
     e.domEvent?.stopPropagation()
     onExecute(workflow)
@@ -114,7 +115,7 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
     onDelete(workflow)
   }
   
-  // 更多操作菜单 - v2.2 添加重命名选项
+  // 更多操作菜单 - v2.4: "运行"不再受发布状态限制
   const menuItems = [
     {
       key: 'rename',
@@ -132,7 +133,6 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
       key: 'execute',
       label: t('agent.workflow.execute'),
       icon: <PlayCircleOutlined />,
-      disabled: !workflow.is_published,
       onClick: handleExecute
     },
     {
@@ -172,7 +172,7 @@ const WorkflowCard = ({ workflow, onEdit, onRename, onDelete, onTogglePublish, o
           <div className="workflow-name">{workflow.name}</div>
           <Tag className="workflow-type-tag">{t('agent.workflow.type', '工作流')}</Tag>
         </div>
-        {workflow.is_published && (
+        {!!workflow.is_published && (
           <Tag color="success" className="workflow-status-tag">
             <CheckCircleOutlined /> {t('agent.workflow.published', '已发布')}
           </Tag>
@@ -290,7 +290,7 @@ const WorkflowList = () => {
           nodes: [],
           edges: []
         },
-        is_published: values.is_published || false
+        is_published: false
       })
       
       setCreateModalVisible(false)
@@ -368,12 +368,8 @@ const WorkflowList = () => {
     }
   }
   
-  // 执行工作流
+  // 执行工作流 - v2.4: 不再检查发布状态，直接跳转执行页
   const handleExecute = (workflow) => {
-    if (!workflow.is_published) {
-      message.warning(t('agent.workflow.publishFirst', '请先发布工作流后再执行'))
-      return
-    }
     navigate(`/agent/execute/${workflow.id}`)
   }
   
@@ -482,7 +478,7 @@ const WorkflowList = () => {
         )}
       </div>
       
-      {/* 创建工作流弹窗 */}
+      {/* 创建工作流弹窗 - v2.4: 移除"创建后立即发布"开关 */}
       <Modal
         title={
           <Space>
@@ -530,15 +526,6 @@ const WorkflowList = () => {
               showCount
               maxLength={500}
             />
-          </Form.Item>
-          
-          <Form.Item
-            name="is_published"
-            label={t('agent.workflow.publishOnCreate', '创建后立即发布')}
-            valuePropName="checked"
-            tooltip={t('agent.workflow.publishTooltip', '发布后才能执行工作流')}
-          >
-            <Switch />
           </Form.Item>
         </Form>
       </Modal>

@@ -103,11 +103,13 @@ check_environment() {
 
     # --- Nginx ---
     echo -e "\n${BLUE}🌐 Nginx${NC}"
-    if nginx -t 2>&1 | grep -q "syntax is ok"; then
+    local nginx_test_output
+    nginx_test_output=$(nginx -t 2>&1) || true
+    if echo "$nginx_test_output" | grep -q "syntax is ok"; then
         info "配置语法正常"
     else
         warn "Nginx 配置检查失败"
-        nginx -t 2>&1 | head -3
+        echo "$nginx_test_output" | head -3
         has_warning=1
     fi
     if systemctl is-active --quiet nginx; then

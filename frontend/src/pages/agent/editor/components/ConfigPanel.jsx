@@ -1,10 +1,9 @@
 /**
  * 配置面板 - 显示选中节点的配置选项
  * v2.7 - 新建LLM/分类节点时自动填充系统默认模型
- * v2.8 - 保存按钮改为"节点配置已同步"状态指示：
- *   1. 节点配置通过 onValuesChange 实时同步到画布，无需手动保存
- *   2. 顶部状态栏仅显示同步状态，不再有保存按钮
- *   3. 提示用户"修改已实时生效，请通过工具栏保存工作流"
+ * v2.8 - 保存按钮改为"节点配置已同步"状态指示
+ * v2.9 - 模型选择时同步保存model_display_name到节点配置：
+ *   让LLM节点卡片能直接显示模型的友好名称，而非API模型ID
  */
 
 import React, { useEffect, useState } from 'react'
@@ -92,6 +91,7 @@ const ConfigPanel = ({
   
   /**
    * v2.7: 当模型列表加载完成后，自动为LLM/分类节点填充默认模型
+   * v2.9: 同时写入model_display_name
    */
   useEffect(() => {
     if (!selectedNode || availableModels.length === 0) return
@@ -100,11 +100,13 @@ const ConfigPanel = ({
     const currentModel = selectedNode.data?.config?.model
     
     if (needsDefaultModel && !currentModel) {
-      const defaultModel = availableModels[0]?.name
-      if (defaultModel) {
-        form.setFieldsValue({ model: defaultModel })
+      const defaultModelObj = availableModels[0]
+      if (defaultModelObj?.name) {
+        form.setFieldsValue({ model: defaultModelObj.name })
         const allValues = form.getFieldsValue()
-        allValues.model = defaultModel
+        allValues.model = defaultModelObj.name
+        /* v2.9: 同步写入显示名称 */
+        allValues.model_display_name = defaultModelObj.display_name || defaultModelObj.name
         if (selectedNode.type === 'classifier') {
           allValues.categories = categories
         }
@@ -124,9 +126,20 @@ const ConfigPanel = ({
     tokens: w.tokens || 0, tokens_display: w.tokens_display || '未知'
   }))
   
-  /** 表单值变化回调 - 实时同步到画布节点 */
+  /**
+   * 表单值变化回调 - 实时同步到画布节点
+   * v2.9: 当模型选择变化时，自动查找并写入model_display_name
+   */
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
+      /* v2.9: 模型变更时同步写入display_name */
+      if (changedValues.model !== undefined) {
+        const selectedModelObj = availableModels.find(m => m.name === changedValues.model)
+        if (selectedModelObj) {
+          allValues.model_display_name = selectedModelObj.display_name || selectedModelObj.name
+        }
+      }
+      
       if (selectedNode.type === 'knowledge') {
         allValues.wiki_ids = selectedWikis.map(w => w.id)
         allValues.selected_wikis = buildWikiMetadata(selectedWikis)
@@ -220,8 +233,6 @@ const ConfigPanel = ({
   
   /**
    * v2.8: 状态栏 - 不再有保存按钮
-   * 节点配置通过表单 onValuesChange 实时同步到画布
-   * 用户只需通过顶部工具栏的"保存工作流"来持久化所有更改
    */
   const renderStatusBar = () => {
     if (!inDrawer) return null

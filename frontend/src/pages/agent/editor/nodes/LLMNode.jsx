@@ -6,6 +6,9 @@
  *   1. 预览区域从2行30字符扩大到4行，每行50字符
  *   2. 增加max-height和overflow滚动，可看到更多内容
  *   3. 去掉Tooltip包裹，内容直接在节点中可读
+ * v1.3 - 模型显示名称优化：
+ *   优先使用config中保存的model_display_name（由ConfigPanel写入）
+ *   回退到智能提取逻辑
  */
 
 import React from 'react'
@@ -14,19 +17,23 @@ import { RobotOutlined, ThunderboltOutlined, FileTextOutlined } from '@ant-desig
 
 const LLMNode = ({ data, selected }) => {
   const config = data.config || {}
-  /* v1.1: 去除硬编码默认值，未配置时显示提示文字 */
   const model = config.model || ''
   const temperature = config.temperature ?? 0.7
   const maxTokens = config.max_tokens ?? 2000
   const systemPrompt = config.system_prompt || ''
   
   /**
-   * 智能提取模型显示名称
-   * v1.1: 不再使用硬编码映射表，从模型名中智能提取可读名称
+   * 获取模型显示名称
+   * v1.3: 优先使用ConfigPanel保存的display_name，回退到智能提取
    * @param {string} modelId - 原始模型标识符
    * @returns {string} 可读的显示名称
    */
   const getModelDisplayName = (modelId) => {
+    /* v1.3: 优先使用配置中保存的显示名称 */
+    if (config.model_display_name) {
+      return config.model_display_name
+    }
+    
     if (!modelId) return '未选择模型'
     
     /* 如果包含 provider/ 前缀（如 openai/gpt-4o），取最后部分 */
@@ -50,7 +57,6 @@ const LLMNode = ({ data, selected }) => {
    */
   const getPromptPreview = (prompt) => {
     if (!prompt) return ''
-    /* 将换行替换为可见的格式，保留原始换行 */
     const trimmed = prompt.substring(0, 200)
     return trimmed + (prompt.length > 200 ? '...' : '')
   }
