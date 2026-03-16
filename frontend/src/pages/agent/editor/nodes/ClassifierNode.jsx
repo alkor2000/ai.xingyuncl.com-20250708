@@ -1,11 +1,9 @@
 /**
  * 问题分类节点 - 智能问题分类
- * v1.0 - 基础分类功能（单输出）
- * v2.0 - 多输出端口支持，每个分类对应一个输出Handle
- * v3.0 - 视觉优化：节点更大更清晰，颜色对比度优化
- * v3.1 - 改用均匀分布算法
- * v3.2 - 关键修复：Handle位置用CSS变量+!important覆盖ReactFlow默认top:50%
- *         使用 className 而非 style.top，确保自定义位置生效
+ * v3.3 - Handle位置对齐修复：
+ *   根据分类数量动态计算Handle位置
+ *   每个Handle精确对齐到对应分类项的垂直中心
+ *   使用CSS变量 --handle-top + !important覆盖ReactFlow默认top:50%
  */
 
 import React from 'react'
@@ -42,17 +40,43 @@ const ClassifierNode = ({ data, selected }) => {
   }
   
   /**
-   * v3.2: 计算每个分类Handle的top百分比
-   * 在 40%~85% 范围内均匀分布（这个范围大致对应分类列表在节点中的垂直位置）
+   * v3.3: 精确计算每个分类Handle的top百分比
+   * 
+   * 节点结构高度估算（像素）：
+   * - header: ~54px (padding 16px*2 + font 22px)
+   * - AI模型区域: ~70px (section-title 25px + model-name 36px + margin 9px)
+   * - 分类标题行: ~35px (section-title 25px + margin-top 8px)
+   * - 每个分类项: ~46px (padding 10px*2 + tag 22px + 描述行约14px 如果有的话平均~46px)
+   * - 分类项间距: 8px gap
+   * - footer: ~42px
+   * 
+   * 关键思路：计算每个分类项中心相对于节点总高度的百分比
    */
   const getHandleTopPercent = (index, total) => {
     if (total <= 0) return 50
-    if (total === 1) return 62
-    /* 分类列表大致在节点的40%~85%高度范围 */
-    const minPercent = 42
-    const maxPercent = 85
-    const step = (maxPercent - minPercent) / (total - 1)
-    return minPercent + step * index
+    
+    /* 固定区域高度（header + AI模型 + 分类标题） */
+    const fixedTopHeight = 54 + 70 + 35
+    /* 每个分类项的高度 */
+    const itemHeight = 46
+    /* 分类项间距 */
+    const itemGap = 8
+    /* footer高度 */
+    const footerHeight = 42
+    /* body上下padding */
+    const bodyPadding = 16
+    
+    /* 分类列表区域总高度 */
+    const listHeight = total * itemHeight + (total - 1) * itemGap
+    /* 节点总高度 */
+    const totalHeight = fixedTopHeight + bodyPadding + listHeight + bodyPadding + footerHeight
+    
+    /* 当前分类项的中心Y坐标 */
+    const itemTop = fixedTopHeight + bodyPadding + index * (itemHeight + itemGap)
+    const itemCenterY = itemTop + itemHeight / 2
+    
+    /* 转换为百分比 */
+    return (itemCenterY / totalHeight) * 100
   }
   
   return (
@@ -142,7 +166,7 @@ const ClassifierNode = ({ data, selected }) => {
       />
       
       {/* 
-        v3.2: 输出连接点 - 每个分类一个
+        v3.3: 输出连接点 - 精确对齐每个分类项中心
         使用 CSS 变量 --handle-top 配合 CSS 中的 !important 覆盖 ReactFlow 默认定位
       */}
       {categories.length > 0 ? (
