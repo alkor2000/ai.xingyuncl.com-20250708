@@ -1,5 +1,7 @@
 /**
- * 社区论坛主页面
+ * 社区论坛主页面 v2.1
+ * 
+ * 修复：从帖子详情返回列表时自动刷新数据，确保状态变更(锁定/置顶等)即时生效
  * 
  * 单页面内部状态切换架构，通过 view 状态在不同视图间导航：
  * - home:       论坛首页（版块列表 + 热帖推荐）
@@ -9,13 +11,11 @@
  * - myPosts:    我的帖子
  * - favorites:  我的收藏
  * 
- * iOS 毛玻璃风格，延续平台统一设计语言
- * 
  * @module pages/forum/Forum
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Spin, message } from 'antd';
+import { Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import useForumStore from '../../stores/forumStore';
 import useAuthStore from '../../stores/authStore';
@@ -40,7 +40,8 @@ const Forum = () => {
   const {
     boards, boardsLoading, fetchBoards,
     hotPosts, fetchHotPosts,
-    fetchUnreadCount, unreadCount
+    fetchUnreadCount, unreadCount,
+    fetchBoardPosts, postsSort
   } = useForumStore();
 
   /* 初始化 */
@@ -60,7 +61,11 @@ const Forum = () => {
   }, [view, viewParams]);
 
   /**
-   * 返回上一视图
+   * 返回上一视图 — 自动刷新列表数据
+   * 
+   * v2.1 修复：返回时根据目标视图刷新对应数据
+   * - 返回到 board 视图 → 刷新该版块帖子列表
+   * - 返回到 home 视图 → 刷新版块列表和热帖
    */
   const goBack = useCallback(() => {
     if (viewHistory.length > 0) {
@@ -68,11 +73,29 @@ const Forum = () => {
       setViewHistory(h => h.slice(0, -1));
       setView(prev.view);
       setViewParams(prev.params);
+
+      /* 根据返回目标刷新数据 */
+      if (prev.view === 'board' && prev.params.boardId) {
+        /* 延迟一帧确保视图切换完成后再刷新 */
+        setTimeout(() => {
+          fetchBoardPosts(prev.params.boardId, { page: 1, sort: postsSort });
+        }, 50);
+      } else if (prev.view === 'home') {
+        setTimeout(() => {
+          fetchBoards();
+          fetchHotPosts(8);
+        }, 50);
+      }
     } else {
       setView('home');
       setViewParams({});
+      /* 返回首页也刷新 */
+      setTimeout(() => {
+        fetchBoards();
+        fetchHotPosts(8);
+      }, 50);
     }
-  }, [viewHistory]);
+  }, [viewHistory, postsSort, fetchBoardPosts, fetchBoards, fetchHotPosts]);
 
   /**
    * 渲染当前视图
