@@ -1,18 +1,19 @@
 /**
- * 帖子详情组件
+ * 帖子详情组件 v2.0
  * 
- * 展示帖子内容、作者信息、互动按钮、回复列表
- * 版主操作面板（有权限时显示）
- * Markdown 内容渲染
+ * 优化：
+ * - 附件图片使用 Antd Image 组件支持点击放大预览
+ * - 标题更突出，作者区域卡片化
+ * - 互动栏按钮更大更醒目
  * 
  * @module pages/forum/components/PostDetail
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Typography, Space, Tag, Button, Empty, Spin, Avatar,
   Divider, Input, Pagination, Popconfirm, Dropdown,
-  Tooltip, Card, message
+  Tooltip, Card, message, Image
 } from 'antd';
 import {
   ArrowLeftOutlined, LikeOutlined, LikeFilled,
@@ -20,7 +21,7 @@ import {
   EyeOutlined, EditOutlined, DeleteOutlined,
   MoreOutlined, PushpinFilled, LockOutlined,
   EyeInvisibleOutlined, StopOutlined, TrophyOutlined,
-  SendOutlined, ClockCircleOutlined
+  SendOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
@@ -31,7 +32,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Title } = Typography;
 const { TextArea } = Input;
 
 const PostDetail = ({ postId, user, onBack, onEditPost }) => {
@@ -50,7 +51,6 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const [replyToName, setReplyToName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  /* 加载帖子和回复 */
   useEffect(() => {
     if (postId) {
       fetchPostDetail(postId);
@@ -63,15 +63,11 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const isModerator = user?.role === 'super_admin' || user?.role === 'admin';
   const isAuthor = post?.user_id === user?.id;
 
-  /* 发回复 */
   const handleSubmitReply = async () => {
     if (!replyContent.trim()) return message.warning('回复内容不能为空');
     setSubmitting(true);
     try {
-      await createReply(postId, {
-        content: replyContent.trim(),
-        reply_to_id: replyToId
-      });
+      await createReply(postId, { content: replyContent.trim(), reply_to_id: replyToId });
       setReplyContent('');
       setReplyToId(null);
       setReplyToName('');
@@ -79,17 +75,9 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
     setSubmitting(false);
   };
 
-  /* 回复翻页 */
-  const handleReplyPage = (page) => {
-    fetchReplies(postId, { page });
-  };
+  const handleReplyPage = (page) => fetchReplies(postId, { page });
+  const handleModAction = async (action) => await modTogglePostStatus(postId, action);
 
-  /* 版主操作 */
-  const handleModAction = async (action) => {
-    await modTogglePostStatus(postId, action);
-  };
-
-  /* 版主下拉菜单 */
   const modMenuItems = post ? [
     { key: 'pin', icon: <PushpinFilled />, label: post.is_pinned ? t('forum.moderator.unpin') : t('forum.moderator.pin') },
     { key: 'feature', icon: <TrophyOutlined />, label: post.is_featured ? t('forum.moderator.unfeature') : t('forum.moderator.feature') },
@@ -102,16 +90,18 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
     return <div className="loading-center" style={{ minHeight: 400 }}><Spin size="large" /></div>;
   }
 
+  /* 图片附件 */
+  const imageAttachments = (post.attachments || []).filter(a => a.file_type === 'image');
+  const fileAttachments = (post.attachments || []).filter(a => a.file_type === 'file');
+
   return (
     <div className="post-detail">
       {/* 头部导航 */}
       <div className="post-detail-header">
-        <Button icon={<ArrowLeftOutlined />} type="text" onClick={onBack} />
+        <Button icon={<ArrowLeftOutlined />} type="text" onClick={onBack} style={{ fontSize: 16 }} />
         <Space>
           {(isAuthor || isModerator) && (
-            <Button icon={<EditOutlined />} onClick={() => onEditPost(post)}>
-              {t('forum.post.edit')}
-            </Button>
+            <Button icon={<EditOutlined />} onClick={() => onEditPost(post)}>{t('forum.post.edit')}</Button>
           )}
           {(isAuthor || isModerator) && (
             <Popconfirm title={t('forum.post.deleteConfirm')} onConfirm={() => { deletePost(postId); onBack(); }}>
@@ -119,10 +109,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
             </Popconfirm>
           )}
           {isModerator && (
-            <Dropdown
-              menu={{ items: modMenuItems, onClick: ({ key }) => handleModAction(key) }}
-              trigger={['click']}
-            >
+            <Dropdown menu={{ items: modMenuItems, onClick: ({ key }) => handleModAction(key) }} trigger={['click']}>
               <Button icon={<MoreOutlined />}>{t('forum.moderator.actions')}</Button>
             </Dropdown>
           )}
@@ -132,83 +119,94 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
       {/* 帖子内容区 */}
       <Card className="post-content-card">
         {/* 标签 */}
-        <Space size={4} wrap style={{ marginBottom: 8 }}>
+        <Space size={4} wrap style={{ marginBottom: 12 }}>
           {post.is_pinned === 1 && <Tag color="red">{t('forum.post.pinned')}</Tag>}
           {post.is_featured === 1 && <Tag color="gold">{t('forum.post.featured')}</Tag>}
           {post.is_locked === 1 && <Tag icon={<LockOutlined />}>{t('forum.post.locked')}</Tag>}
-          {post.board_name && <Tag>{post.board_name}</Tag>}
+          {post.board_name && <Tag color="blue">{post.board_name}</Tag>}
         </Space>
 
-        {/* 标题 */}
-        <Title level={3} style={{ marginBottom: 12 }}>{post.title}</Title>
+        {/* 标题 - 更大更醒目 */}
+        <Title level={2} style={{ marginBottom: 16, lineHeight: 1.3 }}>{post.title}</Title>
 
-        {/* 作者信息 */}
+        {/* 作者信息 - 卡片化 */}
         <div className="post-author-row">
-          <Space>
-            <Avatar style={{ backgroundColor: '#1890ff' }}>
+          <Space align="center">
+            <Avatar size={42} style={{ backgroundColor: '#1890ff', fontSize: 18 }}>
               {(post.author_name || '?')[0]?.toUpperCase()}
             </Avatar>
             <div>
-              <Text strong>{post.author_name}</Text>
+              <Text strong style={{ fontSize: 15 }}>{post.author_name}</Text>
               <br />
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {dayjs(post.created_at).format('YYYY-MM-DD HH:mm')}
                 {post.edit_count > 0 && (
-                  <span style={{ marginLeft: 8, color: '#faad14' }}>
-                    ({t('forum.post.edited')})
-                  </span>
+                  <Tag color="orange" style={{ marginLeft: 8, fontSize: 10 }}>{t('forum.post.edited')}</Tag>
                 )}
               </Text>
             </div>
           </Space>
         </div>
 
-        {/* 正文（锁定时遮蔽） */}
+        {/* 正文 */}
         {post.is_locked && !post.content ? (
           <div className="locked-notice">
-            <LockOutlined style={{ fontSize: 24, marginBottom: 8 }} />
-            <Text type="secondary">{t('forum.post.lockedNotice')}</Text>
+            <LockOutlined style={{ fontSize: 32, marginBottom: 12, color: '#bbb' }} />
+            <Text type="secondary" style={{ fontSize: 15 }}>{t('forum.post.lockedNotice')}</Text>
           </div>
         ) : (
           <div className="post-markdown-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {post.content || ''}
-            </ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content || ''}</ReactMarkdown>
           </div>
         )}
 
-        {/* 附件展示 */}
-        {post.attachments && post.attachments.length > 0 && (
-          <div className="post-attachments">
-            {post.attachments.filter(a => a.file_type === 'image').map(att => (
-              <img key={att.id} src={`/uploads/${att.file_path}`} alt={att.file_name} className="attachment-image" />
-            ))}
-            {post.attachments.filter(a => a.file_type === 'file').map(att => (
+        {/* 图片附件 - Antd Image 支持放大 */}
+        {imageAttachments.length > 0 && (
+          <div className="post-attachments-images">
+            <Image.PreviewGroup>
+              {imageAttachments.map(att => (
+                <Image
+                  key={att.id}
+                  src={`/uploads/${att.file_path}`}
+                  alt={att.file_name}
+                  width={200}
+                  style={{ borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }}
+                  placeholder={<div style={{ width: 200, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
+                />
+              ))}
+            </Image.PreviewGroup>
+          </div>
+        )}
+
+        {/* 文件附件 */}
+        {fileAttachments.length > 0 && (
+          <div className="post-attachments-files">
+            {fileAttachments.map(att => (
               <a key={att.id} href={`/uploads/${att.file_path}`} target="_blank" rel="noreferrer" className="attachment-file">
-                📎 {att.file_name}
+                📎 {att.file_name} <Text type="secondary" style={{ fontSize: 11 }}>({Math.round((att.file_size || 0) / 1024)}KB)</Text>
               </a>
             ))}
           </div>
         )}
 
-        {/* 互动栏 */}
-        <Divider style={{ margin: '16px 0 12px' }} />
+        {/* 互动栏 - 更大按钮 */}
+        <Divider style={{ margin: '20px 0 14px' }} />
         <div className="post-actions-bar">
           <Space size="large">
             <span className="action-btn" onClick={() => togglePostLike(postId)}>
-              {post.is_liked ? <LikeFilled style={{ color: '#1890ff' }} /> : <LikeOutlined />}
+              {post.is_liked ? <LikeFilled style={{ color: '#1890ff', fontSize: 18 }} /> : <LikeOutlined style={{ fontSize: 18 }} />}
               <span className="action-count">{post.like_count || 0}</span>
             </span>
             <span className="action-btn" onClick={() => toggleFavorite(postId)}>
-              {post.is_favorited ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />}
+              {post.is_favorited ? <StarFilled style={{ color: '#faad14', fontSize: 18 }} /> : <StarOutlined style={{ fontSize: 18 }} />}
               <span className="action-count">{post.favorite_count || 0}</span>
             </span>
             <span className="action-btn">
-              <EyeOutlined />
+              <EyeOutlined style={{ fontSize: 18 }} />
               <span className="action-count">{post.view_count || 0}</span>
             </span>
             <span className="action-btn">
-              <CommentOutlined />
+              <CommentOutlined style={{ fontSize: 18 }} />
               <span className="action-count">{post.reply_count || 0}</span>
             </span>
           </Space>
@@ -218,14 +216,13 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
       {/* 回复区 */}
       <div className="replies-section">
         <Title level={5} style={{ marginBottom: 16 }}>
-          {t('forum.reply.title')} ({post.reply_count || 0})
+          💬 {t('forum.reply.title')} ({post.reply_count || 0})
         </Title>
 
-        {/* 回复输入 */}
         {!post.is_reply_disabled ? (
           <div className="reply-input-area">
             {replyToName && (
-              <Tag closable onClose={() => { setReplyToId(null); setReplyToName(''); }}>
+              <Tag closable onClose={() => { setReplyToId(null); setReplyToName(''); }} style={{ marginBottom: 8 }}>
                 {t('forum.reply.replyTo')} @{replyToName}
               </Tag>
             )}
@@ -238,24 +235,15 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                 maxLength={5000}
                 showCount
               />
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={handleSubmitReply}
-                loading={submitting}
-                disabled={!replyContent.trim()}
-              >
+              <Button type="primary" icon={<SendOutlined />} onClick={handleSubmitReply} loading={submitting} disabled={!replyContent.trim()}>
                 {t('forum.reply.submit')}
               </Button>
             </div>
           </div>
         ) : (
-          <div className="reply-disabled-notice">
-            <StopOutlined /> {t('forum.post.replyDisabled')}
-          </div>
+          <div className="reply-disabled-notice"><StopOutlined /> {t('forum.post.replyDisabled')}</div>
         )}
 
-        {/* 回复列表 */}
         {repliesLoading ? (
           <div className="loading-center"><Spin /></div>
         ) : replies.length === 0 ? (
@@ -266,32 +254,21 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
               <div key={reply.id} className={`reply-item ${reply.is_hidden ? 'reply-hidden' : ''}`}>
                 <div className="reply-header">
                   <Space>
-                    <Avatar size={28} style={{ backgroundColor: '#722ed1', fontSize: 12 }}>
+                    <Avatar size={30} style={{ backgroundColor: '#722ed1', fontSize: 13 }}>
                       {(reply.author_name || '?')[0]?.toUpperCase()}
                     </Avatar>
-                    <Text strong style={{ fontSize: 13 }}>{reply.author_name}</Text>
-                    <Text type="secondary" style={{ fontSize: 11 }}>#{reply.floor_number}{t('forum.reply.floor')}</Text>
-                    {reply.reply_to_username && (
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        » @{reply.reply_to_username}
-                      </Text>
-                    )}
-                    <Text type="secondary" style={{ fontSize: 11 }}>
-                      {dayjs(reply.created_at).fromNow()}
-                    </Text>
-                    {reply.edit_count > 0 && (
-                      <Tag color="orange" style={{ fontSize: 10 }}>{t('forum.reply.edited')}</Tag>
-                    )}
+                    <Text strong style={{ fontSize: 14 }}>{reply.author_name}</Text>
+                    <Tag color="processing" style={{ fontSize: 10, borderRadius: 10 }}>#{reply.floor_number}{t('forum.reply.floor')}</Tag>
+                    {reply.reply_to_username && <Text type="secondary" style={{ fontSize: 12 }}>» @{reply.reply_to_username}</Text>}
+                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(reply.created_at).fromNow()}</Text>
+                    {reply.edit_count > 0 && <Tag color="orange" style={{ fontSize: 10 }}>{t('forum.reply.edited')}</Tag>}
                   </Space>
                   <Space size={4}>
                     <span className="action-btn-sm" onClick={() => toggleReplyLike(reply.id)}>
                       {reply.is_liked ? <LikeFilled style={{ color: '#1890ff' }} /> : <LikeOutlined />}
                       <span>{reply.like_count || 0}</span>
                     </span>
-                    <span
-                      className="action-btn-sm"
-                      onClick={() => { setReplyToId(reply.id); setReplyToName(reply.author_name); }}
-                    >
+                    <span className="action-btn-sm" onClick={() => { setReplyToId(reply.id); setReplyToName(reply.author_name); }}>
                       <CommentOutlined />
                     </span>
                     {(reply.user_id === user?.id || isModerator) && (
@@ -301,15 +278,13 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                     )}
                     {isModerator && (
                       <Tooltip title={reply.is_hidden ? t('forum.moderator.unhideReply') : t('forum.moderator.hideReply')}>
-                        <span className="action-btn-sm" onClick={() => modHideReply(reply.id)}>
-                          <EyeInvisibleOutlined />
-                        </span>
+                        <span className="action-btn-sm" onClick={() => modHideReply(reply.id)}><EyeInvisibleOutlined /></span>
                       </Tooltip>
                     )}
                   </Space>
                 </div>
                 {reply.is_hidden ? (
-                  <Text type="secondary" italic>{t('forum.reply.hidden')}</Text>
+                  <Text type="secondary" italic style={{ paddingLeft: 38 }}>{t('forum.reply.hidden')}</Text>
                 ) : (
                   <div className="reply-markdown">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{reply.content}</ReactMarkdown>
@@ -317,17 +292,9 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                 )}
               </div>
             ))}
-
             {repliesPagination.totalPages > 1 && (
               <div className="pagination-wrapper">
-                <Pagination
-                  current={repliesPagination.page}
-                  total={repliesPagination.total}
-                  pageSize={repliesPagination.limit}
-                  onChange={handleReplyPage}
-                  showSizeChanger={false}
-                  size="small"
-                />
+                <Pagination current={repliesPagination.page} total={repliesPagination.total} pageSize={repliesPagination.limit} onChange={handleReplyPage} showSizeChanger={false} size="small" />
               </div>
             )}
           </>

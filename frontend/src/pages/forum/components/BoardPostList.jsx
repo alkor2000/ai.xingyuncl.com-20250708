@@ -1,22 +1,22 @@
 /**
- * 版块帖子列表组件
+ * 版块帖子列表组件 v2.0
  * 
- * 展示某个版块的帖子列表，支持排序切换和分页
- * 帖子卡片展示：标题、作者、统计、标签、附件预览
+ * 优化：
+ * - 锁定帖可见标题但不可点击进入
+ * - 锁定帖视觉灰化 + 锁图标 + 删除线
  * 
  * @module pages/forum/components/BoardPostList
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Typography, Space, Tag, Button, Empty, Spin, Segmented,
-  Pagination, Card, Tooltip, Avatar
+  Pagination, Avatar, Tooltip, message
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined,
   EyeOutlined, CommentOutlined, LikeOutlined,
-  PushpinFilled, StarFilled, LockOutlined,
-  ClockCircleOutlined, FireOutlined
+  LockOutlined, ClockCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useForumStore from '../../../stores/forumStore';
@@ -41,46 +41,68 @@ const BoardPostList = ({
     fetchBoardPosts, setPostsSort
   } = useForumStore();
 
-  /* 初始加载 */
   useEffect(() => {
-    if (boardId) {
-      fetchBoardPosts(boardId, { page: 1, sort: postsSort });
-    }
+    if (boardId) fetchBoardPosts(boardId, { page: 1, sort: postsSort });
   }, [boardId]);
 
-  /* 排序切换 */
   const handleSortChange = (sort) => {
     setPostsSort(sort);
     fetchBoardPosts(boardId, { page: 1, sort });
   };
 
-  /* 分页 */
   const handlePageChange = (page) => {
     fetchBoardPosts(boardId, { page, sort: postsSort });
   };
 
-  /* 渲染帖子卡片 */
+  /** 点击帖子 - 锁定帖不可进入 */
+  const handlePostClick = (post) => {
+    const isLocked = post.is_locked === 1 || post.is_locked === true;
+    if (isLocked) {
+      message.info(t('forum.post.lockedNotice'));
+      return;
+    }
+    onPostClick(post);
+  };
+
   const renderPostItem = (post) => {
     const hasImages = post.attachments?.some(a => a.file_type === 'image');
+    const isLocked = post.is_locked === 1 || post.is_locked === true;
+    const isPinned = post.is_pinned === 1 || post.is_pinned === true;
+    const isFeatured = post.is_featured === 1 || post.is_featured === true;
+    const isHidden = post.is_hidden === 1 || post.is_hidden === true;
 
     return (
       <div
         key={post.id}
-        className="post-list-item"
-        onClick={() => onPostClick(post)}
+        className={`post-list-item ${isLocked ? 'post-locked' : ''}`}
+        onClick={() => handlePostClick(post)}
+        style={isLocked ? { cursor: 'not-allowed' } : {}}
       >
-        {/* 左侧内容 */}
         <div className="post-item-content">
           {/* 标签行 */}
           <div className="post-tags">
-            {post.is_pinned === 1 && <Tag color="red">{t('forum.post.pinned')}</Tag>}
-            {post.is_featured === 1 && <Tag color="gold">{t('forum.post.featured')}</Tag>}
-            {post.is_locked === 1 && <Tag color="default" icon={<LockOutlined />}>{t('forum.post.locked')}</Tag>}
-            {post.is_hidden === 1 && <Tag color="orange">{t('forum.post.hidden')}</Tag>}
+            {isPinned && <Tag color="red">{t('forum.post.pinned')}</Tag>}
+            {isFeatured && <Tag color="gold">{t('forum.post.featured')}</Tag>}
+            {isLocked && <Tag color="default" icon={<LockOutlined />}>{t('forum.post.locked')}</Tag>}
+            {isHidden && <Tag color="orange">{t('forum.post.hidden')}</Tag>}
           </div>
 
           {/* 标题 */}
-          <Text strong className="post-item-title">{post.title}</Text>
+          <Text
+            strong
+            className="post-item-title"
+            style={isLocked ? { textDecoration: 'line-through', color: '#999' } : {}}
+          >
+            {isLocked && <LockOutlined style={{ marginRight: 6, color: '#bbb' }} />}
+            {post.title}
+          </Text>
+
+          {/* 锁定提示 */}
+          {isLocked && (
+            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+              {t('forum.post.lockedNotice')}
+            </Text>
+          )}
 
           {/* 元信息 */}
           <div className="post-item-meta">
@@ -95,26 +117,17 @@ const BoardPostList = ({
                 <ClockCircleOutlined style={{ marginRight: 2 }} />
                 {dayjs(post.created_at).fromNow()}
               </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <EyeOutlined style={{ marginRight: 2 }} />{post.view_count || 0}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <CommentOutlined style={{ marginRight: 2 }} />{post.reply_count || 0}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <LikeOutlined style={{ marginRight: 2 }} />{post.like_count || 0}
-              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}><EyeOutlined style={{ marginRight: 2 }} />{post.view_count || 0}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}><CommentOutlined style={{ marginRight: 2 }} />{post.reply_count || 0}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}><LikeOutlined style={{ marginRight: 2 }} />{post.like_count || 0}</Text>
             </Space>
           </div>
         </div>
 
-        {/* 右侧图片预览 */}
-        {hasImages && (
+        {/* 右侧图片预览（锁定帖不显示） */}
+        {hasImages && !isLocked && (
           <div className="post-item-preview">
-            <img
-              src={`/uploads/${post.attachments.find(a => a.file_type === 'image').file_path}`}
-              alt="preview"
-            />
+            <img src={`/uploads/${post.attachments.find(a => a.file_type === 'image').file_path}`} alt="preview" />
           </div>
         )}
       </div>
@@ -123,7 +136,6 @@ const BoardPostList = ({
 
   return (
     <div className="board-post-list">
-      {/* 头部 */}
       <div className="board-header">
         <div className="header-left">
           <Button icon={<ArrowLeftOutlined />} type="text" onClick={onBack} />
@@ -140,13 +152,10 @@ const BoardPostList = ({
             value={postsSort}
             onChange={handleSortChange}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={onNewPost}>
-            {t('forum.post.new')}
-          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={onNewPost}>{t('forum.post.new')}</Button>
         </Space>
       </div>
 
-      {/* 帖子列表 */}
       <div className="post-list-container">
         {postsLoading ? (
           <div className="loading-center"><Spin /></div>
