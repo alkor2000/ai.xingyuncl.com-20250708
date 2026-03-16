@@ -3,6 +3,9 @@
  * 
  * 支持解析PDF、Word(.docx)、纯文本/Markdown文档
  * 提取纯文本内容用于后续分块和向量化
+ * 
+ * 注意：pdf-parse v2.x 使用 new PDFParse(Uint8Array) + load() + getText()
+ * getText()返回 { pages, text, total }，取.text获取完整文本
  */
 
 const fs = require('fs');
@@ -18,7 +21,6 @@ class DocumentParserService {
    */
   static async parseFile(filePath, originalName) {
     const ext = path.extname(originalName || filePath).toLowerCase();
-
     logger.info('开始解析文档', { filePath, originalName, ext });
 
     switch (ext) {
@@ -31,48 +33,48 @@ class DocumentParserService {
       case '.markdown':
         return await DocumentParserService.parseText(filePath);
       default:
-        throw new Error(`不支持的文件格式: ${ext}，支持 PDF、Word(.docx)、TXT、Markdown`);
+        throw new Error('不支持的文件格式: ' + ext + '，支持 PDF、Word(.docx)、TXT、Markdown');
     }
   }
 
   /**
    * 解析PDF文件
-   * @param {string} filePath - PDF文件路径
-   * @returns {Object} { content, pageCount, charCount }
+   * pdf-parse v2.x API:
+   *   new PDFParse(Uint8Array) -> load() -> getText() -> { pages, text, total }
    */
   static async parsePDF(filePath) {
     try {
-      const pdfParse = require('pdf-parse');
+      const { PDFParse } = require('pdf-parse');
       const buffer = fs.readFileSync(filePath);
-      const data = await pdfParse(buffer);
+      /* v2.x 要求 Uint8Array 而非 Buffer */
+      const uint8 = new Uint8Array(buffer);
+      const parser = new PDFParse(uint8);
+      await parser.load();
+      const result = await parser.getText();
 
-      const content = data.text || '';
-      /* 清理多余空白 */
-      const cleaned = content
+      /* result.text 是完整文本，result.total 是页数 */
+      const rawText = result.text || '';
+      const content = rawText
         .replace(/\r\n/g, '\n')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
+      const pageCount = result.total || 0;
 
-      logger.info('PDF解析成功', {
-        pages: data.numpages,
-        charCount: cleaned.length
-      });
+      logger.info('PDF解析成功', { pages: pageCount, charCount: content.length });
 
       return {
-        content: cleaned,
-        pageCount: data.numpages || 0,
-        charCount: cleaned.length
+        content: content,
+        pageCount: pageCount,
+        charCount: content.length
       };
     } catch (error) {
       logger.error('PDF解析失败:', error);
-      throw new Error(`PDF解析失败: ${error.message}`);
+      throw new Error('PDF解析失败: ' + error.message);
     }
   }
 
   /**
    * 解析Word文档(.docx)
-   * @param {string} filePath - docx文件路径
-   * @returns {Object} { content, pageCount, charCount }
    */
   static async parseDocx(filePath) {
     try {
@@ -89,19 +91,17 @@ class DocumentParserService {
 
       return {
         content: content,
-        pageCount: 0, /* Word无法直接获取页数 */
+        pageCount: 0,
         charCount: content.length
       };
     } catch (error) {
       logger.error('Word文档解析失败:', error);
-      throw new Error(`Word文档解析失败: ${error.message}`);
+      throw new Error('Word文档解析失败: ' + error.message);
     }
   }
 
   /**
    * 解析纯文本/Markdown文件
-   * @param {string} filePath - 文件路径
-   * @returns {Object} { content, pageCount, charCount }
    */
   static async parseText(filePath) {
     try {
@@ -118,25 +118,25 @@ class DocumentParserService {
       };
     } catch (error) {
       logger.error('文本文件解析失败:', error);
-      throw new Error(`文本文件解析失败: ${error.message}`);
+      throw new Error('文本文件解析失败: ' + error.message);
     }
   }
 
   /**
-   * 从Buffer解析文档（用于内存中的文件，如multer memoryStorage）
-   * @param {Buffer} buffer - 文件buffer
-   * @param {string} originalName - 原始文件名
-   * @returns {Object} { content, pageCount, charCount }
+   * 从Buffer解析文档（用于内存中的文件）
    */
   static async parseBuffer(buffer, originalName) {
     const ext = path.extname(originalName).toLowerCase();
 
     switch (ext) {
       case '.pdf': {
-        const pdfParse = require('pdf-parse');
-        const data = await pdfParse(buffer);
-        const content = (data.text || '').replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-        return { content, pageCount: data.numpages || 0, charCount: content.length };
+        const { PDFParse } = require('pdf-parse');
+        const uint8 = new Uint8Array(buffer);
+        const parser = new PDFParse(uint8);
+        await parser.load();
+        const result = await parser.getText();
+        const content = (result.text || '').replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        return { content, pageCount: result.total || 0, charCount: content.length };
       }
       case '.docx': {
         const mammoth = require('mammoth');
@@ -151,7 +151,7 @@ class DocumentParserService {
         return { content, pageCount: 0, charCount: content.length };
       }
       default:
-        throw new Error(`不支持的文件格式: ${ext}`);
+        throw new Error('不支持的文件格式: ' + ext);
     }
   }
 }

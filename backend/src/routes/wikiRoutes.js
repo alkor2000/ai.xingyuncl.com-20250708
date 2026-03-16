@@ -61,13 +61,15 @@ router.delete('/items/:id/versions/:versionId', WikiController.deleteVersion);
 
 /* ========== RAG文件上传与索引 ========== */
 /* 上传文档到知识库（解析内容写入wiki） */
-router.post('/items/:id/upload', wikiUpload.single('file'), WikiController.uploadDocument);
+router.post('/items/:id/upload', wikiUpload.array('files', 20), WikiController.uploadDocument);
 /* 构建/重建向量索引 */
 router.post('/items/:id/build-index', WikiController.buildIndex);
 /* 获取索引状态 */
 router.get('/items/:id/index-status', WikiController.getIndexStatus);
 /* RAG检索测试 */
 router.post('/items/:id/search', WikiController.ragSearch);
+/* 获取chunks列表（预览用） */
+router.get('/items/:id/chunks', WikiController.getChunks);
 
 /* ========== Embedding配置（超级管理员） ========== */
 router.get('/embedding-config', requireRole(['super_admin']), WikiController.getEmbeddingConfig);

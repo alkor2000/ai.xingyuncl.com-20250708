@@ -65,6 +65,12 @@ const createItem = async (req, res) => {
       if (userRole !== 'super_admin' && data.group_id !== groupId) return ResponseHelper.forbidden(res, '只能为自己的组创建团队知识库');
     }
     const item = await WikiItem.create(data, userId);
+    /* 如果指定了file类型，更新source_type */
+    if (data.source_type === 'file') {
+      const dbConn = require('../database/connection');
+      await dbConn.query('UPDATE wiki_items SET source_type = ? WHERE id = ?', ['file', item.id]);
+      item.source_type = 'file';
+    }
     item.can_edit = true;
     return ResponseHelper.success(res, item.toJSON(), '创建知识库成功', 201);
   } catch (error) {
@@ -194,7 +200,7 @@ const deleteVersion = async (req, res) => {
   }
 };
 
-/* ========== RAG：上传文档 ========== */
+/* ========== RAG：上传文档（支持多文件追加） ========== */
 const uploadDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -203,43 +209,99 @@ const uploadDocument = async (req, res) => {
     if (!item) return ResponseHelper.notFound(res, '知识库不存在');
     if (!canEdit) return ResponseHelper.forbidden(res, '无权编辑');
 
-    if (!req.file) return ResponseHelper.validationError(res, '请上传文件');
+    /* 支持单文件(req.file)和多文件(req.files) */
+    const files = req.files || (req.file ? [req.file] : []);
+    if (files.length === 0) return ResponseHelper.validationError(res, '请上传文件');
 
     logger.info('开始解析上传文档', {
-      wikiId: id, fileName: req.file.originalname, size: req.file.size
+      wikiId: id, fileCount: files.length,
+      fileNames: files.map(f => f.originalname)
     });
 
-    /* 解析文档内容 */
-    const parsed = await DocumentParserService.parseFile(req.file.path, req.file.originalname);
+    /* 逐个解析文档并合并内容 */
+    const results = [];
+    const contentParts = [];
+    const fileNames = [];
+    let totalSize = 0;
+    /* 双换行分隔符 */
+    const SEPARATOR = '\n\n';
+    /* 文档标题分隔线 */
+    const DOC_DIVIDER = '\n===== 文档: ';
+    const DOC_DIVIDER_END = ' =====\n\n';
 
-    if (!parsed.content || parsed.content.trim().length === 0) {
-      return ResponseHelper.error(res, '文档内容为空，无法导入');
+    for (const file of files) {
+      try {
+        const parsed = await DocumentParserService.parseFile(file.path, file.originalname);
+        if (parsed.content && parsed.content.trim().length > 0) {
+          /* 每个文档前加标题分隔 */
+          contentParts.push(DOC_DIVIDER + file.originalname + DOC_DIVIDER_END + parsed.content);
+          fileNames.push(file.originalname);
+          totalSize += file.size;
+          results.push({
+            file_name: file.originalname,
+            file_size: file.size,
+            char_count: parsed.charCount,
+            page_count: parsed.pageCount,
+            status: 'success'
+          });
+        } else {
+          results.push({ file_name: file.originalname, status: 'empty', message: '文档内容为空' });
+        }
+      } catch (parseErr) {
+        logger.warn('解析文档失败，跳过', { fileName: file.originalname, error: parseErr.message });
+        results.push({ file_name: file.originalname, status: 'failed', message: parseErr.message });
+      }
     }
 
-    /* 更新知识库内容和文件信息 */
+    if (contentParts.length === 0) {
+      return ResponseHelper.error(res, '所有文档内容为空或解析失败');
+    }
+
+    /* 获取已有内容，追加新内容 */
     const dbConnection = require('../database/connection');
+    const { rows: existingRows } = await dbConnection.query('SELECT content FROM wiki_items WHERE id = ?', [id]);
+    const existingContent = existingRows[0]?.content || '';
+    const newContent = contentParts.join(SEPARATOR);
+    const mergedContent = existingContent
+      ? existingContent + SEPARATOR + newContent
+      : newContent.trim();
+
+    /* 文件名合并（多个文件用逗号分隔） */
+    const existingFileName = item.file_name || '';
+    const allFileNames = existingFileName
+      ? existingFileName + ', ' + fileNames.join(', ')
+      : fileNames.join(', ');
+
+    /* 更新知识库 */
     await dbConnection.query(
-      `UPDATE wiki_items SET content = ?, source_type = 'file', file_path = ?, file_name = ?, file_size = ? WHERE id = ?`,
-      [parsed.content, req.file.path, req.file.originalname, req.file.size, id]
+      'UPDATE wiki_items SET content = ?, source_type = ?, file_name = ?, file_size = ? WHERE id = ?',
+      [mergedContent, 'file', allFileNames, totalSize, id]
     );
 
     /* 同步更新当前版本的内容 */
     await dbConnection.query(
-      `UPDATE wiki_versions SET content = ? WHERE wiki_id = ? AND version_number = (SELECT current_version FROM wiki_items WHERE id = ?)`,
-      [parsed.content, id, id]
+      'UPDATE wiki_versions SET content = ? WHERE wiki_id = ? AND version_number = (SELECT current_version FROM wiki_items WHERE id = ?)',
+      [mergedContent, id, id]
     );
 
     logger.info('文档上传解析成功', {
-      wikiId: id, charCount: parsed.charCount, pageCount: parsed.pageCount
+      wikiId: id, fileCount: files.length,
+      successCount: results.filter(r => r.status === 'success').length,
+      totalChars: mergedContent.length
     });
 
+    const successCount = results.filter(r => r.status === 'success').length;
+    const msg = files.length === 1
+      ? '文档上传成功'
+      : successCount + '/' + files.length + ' 个文档上传成功';
+
     return ResponseHelper.success(res, {
-      file_name: req.file.originalname,
-      file_size: req.file.size,
-      char_count: parsed.charCount,
-      page_count: parsed.pageCount,
-      content_preview: parsed.content.substring(0, 200) + '...'
-    }, '文档上传成功，内容已导入');
+      file_count: files.length,
+      success_count: successCount,
+      files: results,
+      total_char_count: mergedContent.length,
+      file_names: allFileNames
+    }, msg);
 
   } catch (error) {
     logger.error('上传文档失败:', error);
@@ -310,13 +372,44 @@ const ragSearch = async (req, res) => {
     const context = RAGService.formatAsContext(results);
 
     return ResponseHelper.success(res, {
-      results,
-      context,
-      result_count: results.length
+      results, context, result_count: results.length
     }, '检索完成');
   } catch (error) {
     logger.error('RAG检索失败:', error);
     return ResponseHelper.error(res, error.message || '检索失败');
+  }
+};
+
+/* ========== RAG：获取chunks列表 ========== */
+const getChunks = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { id: userId, group_id: groupId, role: userRole } = req.user;
+    const { hasAccess } = await WikiItem.checkAccess(id, userId, groupId, userRole);
+    if (!hasAccess) return ResponseHelper.forbidden(res, '无权访问');
+
+    const chunks = await WikiChunk.findByWikiId(parseInt(id));
+    /* 返回chunks列表（不含向量数据） */
+    const chunkList = chunks.map(c => ({
+      id: c.id,
+      chunk_index: c.chunk_index,
+      content_preview: c.content ? c.content.substring(0, 200) : '',
+      content_full: c.content || '',
+      token_count: c.token_count,
+      char_count: c.char_count,
+      embedding_model: c.embedding_model,
+      has_embedding: !!(c.embedding && Array.isArray(c.embedding) && c.embedding.length > 0)
+    }));
+
+    return ResponseHelper.success(res, {
+      wiki_id: parseInt(id),
+      total_chunks: chunkList.length,
+      total_tokens: chunkList.reduce((sum, c) => sum + (c.token_count || 0), 0),
+      chunks: chunkList
+    }, '获取chunks成功');
+  } catch (error) {
+    logger.error('获取chunks失败:', error);
+    return ResponseHelper.error(res, error.message || '获取chunks失败');
   }
 };
 
@@ -430,5 +523,6 @@ module.exports = {
   getVersions, createVersion, getVersionDetail, updateVersion, deleteVersion,
   uploadDocument, buildIndex, getIndexStatus, ragSearch,
   getEmbeddingConfig, updateEmbeddingConfig,
+  getChunks,
   togglePin, getEditors, addEditor, removeEditor
 };

@@ -1,6 +1,6 @@
 /**
  * 知识库状态管理
- * 支持CRUD + 版本管理 + 编辑者管理 + RAG文件上传/索引/检索
+ * 支持CRUD + 版本管理 + 编辑者管理 + RAG文件上传/索引/检索/chunks预览
  */
 
 import { create } from 'zustand'
@@ -26,6 +26,9 @@ const useWikiStore = create((set, get) => ({
   uploading: false,
   searchResults: null,
   searching: false,
+  /* chunks预览 */
+  chunks: null,
+  chunksLoading: false,
 
   /* ========== 知识库列表 ========== */
 
@@ -220,11 +223,13 @@ const useWikiStore = create((set, get) => ({
 
   /* ========== RAG：文件上传 ========== */
 
-  uploadDocument: async (wikiId, file) => {
+  uploadDocument: async (wikiId, files) => {
     set({ uploading: true })
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      /* 支持单文件或多文件 */
+      const fileList = Array.isArray(files) ? files : [files]
+      fileList.forEach(f => formData.append('files', f))
       const response = await apiClient.post(`/wiki/items/${wikiId}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000
@@ -245,7 +250,6 @@ const useWikiStore = create((set, get) => ({
     set({ indexing: true })
     try {
       const response = await apiClient.post(`/wiki/items/${wikiId}/build-index`, {}, { timeout: 300000 })
-      /* 索引是异步的，立即开始轮询状态 */
       get().pollIndexStatus(wikiId)
       return response.data.data
     } catch (error) {
@@ -269,7 +273,7 @@ const useWikiStore = create((set, get) => ({
     }
   },
 
-  /* 轮询索引状态（3秒间隔，最多60次=3分钟） */
+  /* 轮询索引状态 */
   pollIndexStatus: async (wikiId) => {
     let attempts = 0
     const maxAttempts = 60
@@ -279,9 +283,10 @@ const useWikiStore = create((set, get) => ({
       if (status.index_status === 'completed') {
         set({ indexing: false })
         message.success(`向量索引构建完成，共 ${status.chunk_count} 个分块`)
-        /* 刷新列表 */
         const scope = get().currentScope
         get().getItems(scope)
+        /* 自动加载chunks预览 */
+        get().getChunks(wikiId)
         return
       }
       if (status.index_status === 'failed') {
@@ -298,6 +303,21 @@ const useWikiStore = create((set, get) => ({
       }
     }
     poll()
+  },
+
+  /* ========== RAG：获取chunks列表 ========== */
+
+  getChunks: async (wikiId) => {
+    set({ chunksLoading: true })
+    try {
+      const response = await apiClient.get(`/wiki/items/${wikiId}/chunks`)
+      set({ chunks: response.data.data, chunksLoading: false })
+      return response.data.data
+    } catch (error) {
+      set({ chunksLoading: false })
+      console.error('获取chunks失败:', error)
+      return null
+    }
   },
 
   /* ========== RAG：语义检索测试 ========== */
@@ -356,14 +376,15 @@ const useWikiStore = create((set, get) => ({
 
   clearCurrentItem: () => set({
     currentItem: null, currentVersion: null, versions: [], editors: [],
-    indexStatus: null, searchResults: null
+    indexStatus: null, searchResults: null, chunks: null
   }),
   clearError: () => set({ error: null }),
   reset: () => set({
     items: [], currentItem: null, currentVersion: null, versions: [],
     editors: [], loading: false, detailLoading: false, versionsLoading: false,
     currentScope: null, error: null, indexStatus: null, indexing: false,
-    uploading: false, searchResults: null, searching: false
+    uploading: false, searchResults: null, searching: false,
+    chunks: null, chunksLoading: false
   })
 }))
 
