@@ -2,8 +2,9 @@
  * 配置面板 - 显示选中节点的配置选项
  * v2.7 - 新建LLM/分类节点时自动填充系统默认模型
  * v2.8 - 保存按钮改为"节点配置已同步"状态指示
- * v2.9 - 模型选择时同步保存model_display_name到节点配置：
- *   让LLM节点卡片能直接显示模型的友好名称，而非API模型ID
+ * v2.9 - 模型选择时同步保存model_display_name到节点配置
+ * v3.0 - 知识库选择改为手动点击添加，去掉自动推荐高亮
+ *       - 知识库加载模式支持auto/rag/direct三选项
  */
 
 import React, { useEffect, useState } from 'react'
@@ -25,7 +26,8 @@ import {
   PlusOutlined,
   BranchesOutlined,
   TagOutlined,
-  SyncOutlined
+  SyncOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 import useAgentStore from '../../../../stores/agentStore'
 import './ConfigPanel.less'
@@ -49,6 +51,8 @@ const ConfigPanel = ({
   
   const [selectedWikis, setSelectedWikis] = useState([])
   const [categories, setCategories] = useState([])
+  /* v3.0: 知识库搜索关键词状态（用于搜索过滤） */
+  const [wikiSearchValue, setWikiSearchValue] = useState('')
   
   /* 加载可用模型列表 */
   useEffect(() => {
@@ -151,7 +155,10 @@ const ConfigPanel = ({
     }
   }
   
-  /** 添加知识库 */
+  /**
+   * v3.0: 手动添加知识库 - 用户必须明确点击选项才添加
+   * Select的onChange只在用户主动点击选项时触发
+   */
   const handleAddWiki = (wikiId) => {
     const wiki = wikiItems.find(w => w.id === wikiId)
     if (wiki && !selectedWikis.find(w => w.id === wikiId)) {
@@ -162,6 +169,8 @@ const ConfigPanel = ({
       currentValues.selected_wikis = buildWikiMetadata(newSelected)
       onUpdateConfig(selectedNode.id, currentValues)
     }
+    /* v3.0: 选择后清空搜索框，恢复完整列表 */
+    setWikiSearchValue('')
   }
   
   /** 移除知识库 */
@@ -249,73 +258,126 @@ const ConfigPanel = ({
     )
   }
   
-  /** 知识库配置区域 */
-  const renderKnowledgeConfig = () => (
-    <>
-      <div className="cp-section-header">
-        <DatabaseOutlined style={{ color: '#722ed1' }} /> 知识库配置
-      </div>
-      
-      <Form.Item label="数据来源" name="source" initialValue="wiki">
-        <Select>
-          <Select.Option value="wiki">
-            <Space><FileTextOutlined /><span>知识库文档（Wiki）</span></Space>
-          </Select.Option>
-        </Select>
-      </Form.Item>
-      
-      <Form.Item label="加载模式" name="mode" initialValue="auto"
-        tooltip="auto=自动（有索引用RAG否则直接加载） / rag=仅语义检索 / direct=加载全文">
-        <Select>
-          <Select.Option value="auto">自动（推荐）</Select.Option>
-          <Select.Option value="rag">RAG语义检索（适合大文档）</Select.Option>
-          <Select.Option value="direct">直接加载全文（适合小文档）</Select.Option>
-        </Select>
-      </Form.Item>
-      
-      <Form.Item label="选择知识库" tooltip="可选择多个知识库，内容合并后传递给下游节点">
-        {wikiItemsLoading ? <Spin size="small" /> : (
-          <Select placeholder="搜索并选择知识库..." showSearch optionFilterProp="label"
-            value={null} onChange={handleAddWiki} style={{ width: '100%' }}
-            options={wikiItems.filter(w => !selectedWikis.find(s => s.id === w.id)).map(wiki => ({
-              value: wiki.id,
-              label: `${wiki.title} (${wiki.tokens_display} tokens)`
-            }))}
-          />
-        )}
-      </Form.Item>
-      
-      {selectedWikis.length > 0 && (
-        <div className="cp-wiki-list">
-          <div className="cp-wiki-list-header">
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              已选 {selectedWikis.length}个，共 {formatTotalTokens(totalTokens)} tokens
-            </Text>
+  /**
+   * v3.0: 知识库配置区域 - 去掉自动推荐选择
+   * Select组件使用 value={undefined} 确保不自动选中任何选项
+   * 用户必须手动点击下拉列表中的选项才会添加
+   */
+  const renderKnowledgeConfig = () => {
+    /* 过滤掉已选的，生成可选列表 */
+    const availableWikiOptions = wikiItems
+      .filter(w => !selectedWikis.find(s => s.id === w.id))
+      .map(wiki => ({
+        value: wiki.id,
+        label: (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{wiki.title}</span>
+            <Space size={4}>
+              {wiki.rag_enabled && wiki.index_status === 'completed' && (
+                <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>
+                  <ThunderboltOutlined /> RAG
+                </Tag>
+              )}
+              <Tag color="default" style={{ margin: 0, fontSize: 11 }}>
+                {wiki.tokens_display} tokens
+              </Tag>
+            </Space>
           </div>
-          <List size="small" bordered dataSource={selectedWikis}
-            className="cp-wiki-items"
-            renderItem={(wiki) => (
-              <List.Item style={{ padding: '8px 12px' }}
-                actions={[
-                  <Button type="text" danger size="small" key="rm"
-                    icon={<DeleteOutlined />} onClick={() => handleRemoveWiki(wiki.id)} />
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={scopeIcons[wiki.scope] || <FileTextOutlined />}
-                  title={<span style={{ fontSize: '13px' }}>{wiki.title}</span>}
-                  description={<Tag color="processing" style={{ fontSize: '11px' }}>{wiki.tokens_display} tokens</Tag>}
-                />
-              </List.Item>
-            )}
-          />
-          <div className="cp-info-card purple">
-            <InfoCircleOutlined /> 总计 <strong>{formatTotalTokens(totalTokens)}</strong> tokens 作为上下文传递给下游LLM
-          </div>
+        ),
+        /* 用于搜索过滤 */
+        searchText: wiki.title
+      }))
+
+    return (
+      <>
+        <div className="cp-section-header">
+          <DatabaseOutlined style={{ color: '#722ed1' }} /> 知识库配置
         </div>
-      )}
-    </>
-  )
+        
+        <Form.Item label="数据来源" name="source" initialValue="wiki">
+          <Select>
+            <Select.Option value="wiki">
+              <Space><FileTextOutlined /><span>知识库文档（Wiki）</span></Space>
+            </Select.Option>
+          </Select>
+        </Form.Item>
+        
+        <Form.Item label="加载模式" name="mode" initialValue="direct"
+          tooltip="rag=语义检索相关片段（需先构建索引） / direct=加载完整文档内容">
+          <Select>
+            <Select.Option value="rag">RAG语义检索（适合大文档，需构建索引）</Select.Option>
+            <Select.Option value="direct">直接加载全文（适合小文档）</Select.Option>
+          </Select>
+        </Form.Item>
+        
+        <Form.Item label="选择知识库" tooltip="点击下方列表中的知识库进行添加，可选择多个">
+          {wikiItemsLoading ? <Spin size="small" /> : (
+            <Select
+              placeholder="搜索并选择知识库..."
+              showSearch
+              /* v3.0: 始终保持value为undefined，不自动选中 */
+              value={undefined}
+              onChange={handleAddWiki}
+              style={{ width: '100%' }}
+              options={availableWikiOptions}
+              /* v3.0: 自定义搜索过滤，基于标题文本 */
+              filterOption={(input, option) => {
+                return (option?.searchText || '').toLowerCase().includes(input.toLowerCase())
+              }}
+              /* v3.0: 关闭后清空搜索词 */
+              onBlur={() => setWikiSearchValue('')}
+              searchValue={wikiSearchValue}
+              onSearch={setWikiSearchValue}
+              /* 不显示选中的值，纯粹作为添加入口 */
+              labelInValue={false}
+              notFoundContent={wikiItems.length === 0 ? '暂无可用知识库' : '未找到匹配项'}
+            />
+          )}
+        </Form.Item>
+        
+        {selectedWikis.length > 0 && (
+          <div className="cp-wiki-list">
+            <div className="cp-wiki-list-header">
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                已选 {selectedWikis.length}个，共 {formatTotalTokens(totalTokens)} tokens
+              </Text>
+            </div>
+            <List size="small" bordered dataSource={selectedWikis}
+              className="cp-wiki-items"
+              renderItem={(wiki) => (
+                <List.Item style={{ padding: '8px 12px' }}
+                  actions={[
+                    <Button type="text" danger size="small" key="rm"
+                      icon={<DeleteOutlined />} onClick={() => handleRemoveWiki(wiki.id)} />
+                  ]}
+                >
+                  <List.Item.Meta
+                    avatar={scopeIcons[wiki.scope] || <FileTextOutlined />}
+                    title={<span style={{ fontSize: '13px' }}>{wiki.title}</span>}
+                    description={
+                      <Space size={4}>
+                        <Tag color="processing" style={{ fontSize: '11px' }}>
+                          {wiki.tokens_display} tokens
+                        </Tag>
+                        {wiki.rag_enabled && wiki.index_status === 'completed' && (
+                          <Tag color="purple" style={{ fontSize: '11px' }}>
+                            <ThunderboltOutlined /> RAG
+                          </Tag>
+                        )}
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+            <div className="cp-info-card purple">
+              <InfoCircleOutlined /> 总计 <strong>{formatTotalTokens(totalTokens)}</strong> tokens 作为上下文传递给下游LLM
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
   
   /** 分类配置区域 */
   const renderClassifierConfig = () => (

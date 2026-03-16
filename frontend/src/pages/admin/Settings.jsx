@@ -75,7 +75,8 @@ import {
   OcrSettings,
   CalendarConfigSettings,
   TeachingManagement,
-  SmartAppSettings
+  SmartAppSettings,
+  EmbeddingSettings
 } from '../../components/admin/settings'
 
 const Settings = () => {
@@ -622,6 +623,16 @@ const Settings = () => {
           </span>
         ),
         children: <OcrSettings disabled={!isSuperAdmin} />
+      },
+      {
+        key: 'embeddingSettings',
+        label: (
+          <span>
+            <ThunderboltOutlined />
+            Embedding配置
+          </span>
+        ),
+        children: <EmbeddingSettings disabled={!isSuperAdmin} />
       },
       {
         key: 'systemPrompts',
