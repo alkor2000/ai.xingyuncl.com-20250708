@@ -28,3 +28,5 @@ export { default as ModuleAuthorizationManagement } from './ModuleAuthorizationM
 export { default as SmartAppSettings } from './SmartAppSettings'
 /* RAG知识库Embedding配置 */
 export { default as EmbeddingSettings } from './EmbeddingSettings'
+/* 论坛管理 */
+export { default as ForumManagement } from './ForumManagement'

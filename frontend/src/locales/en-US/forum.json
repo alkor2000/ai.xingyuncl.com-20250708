@@ -1,0 +1,176 @@
+{
+  "forum": {
+    "title": "Forum",
+    "subtitle": "Discuss, Share and Learn",
+    "loading": "Loading...",
+
+    "board": {
+      "title": "Boards",
+      "all": "All Boards",
+      "posts": "Posts",
+      "lastPost": "Latest Post",
+      "empty": "No boards available",
+      "rules": "Board Rules",
+      "visibility": {
+        "public": "Public",
+        "group": "Group"
+      }
+    },
+
+    "post": {
+      "title": "Post",
+      "new": "New Post",
+      "edit": "Edit Post",
+      "delete": "Delete Post",
+      "deleteConfirm": "Are you sure to delete this post? This action cannot be undone.",
+      "empty": "No posts yet. Be the first to post!",
+      "detail": "Post Detail",
+      "edited": "Edited",
+      "pinned": "Pinned",
+      "featured": "Featured",
+      "locked": "Locked",
+      "lockedNotice": "This post has been locked by administrator",
+      "hidden": "Hidden",
+      "replyDisabled": "Replies Disabled",
+      "views": "Views",
+      "replies": "Replies",
+      "likes": "Likes",
+      "favorites": "Favorites",
+      "sort": {
+        "active": "Latest Reply",
+        "latest": "Latest Post",
+        "hot": "Hot"
+      },
+      "form": {
+        "titleLabel": "Title",
+        "titlePlaceholder": "Enter post title",
+        "titleRequired": "Please enter post title",
+        "contentLabel": "Content",
+        "contentPlaceholder": "Write your post content, Markdown supported...",
+        "contentRequired": "Please enter post content",
+        "boardLabel": "Select Board",
+        "boardRequired": "Please select a board",
+        "submit": "Publish",
+        "cancel": "Cancel",
+        "attachments": "Attachments",
+        "uploadImage": "Upload Image",
+        "uploadFile": "Upload File"
+      }
+    },
+
+    "reply": {
+      "title": "Reply",
+      "placeholder": "Write your reply, Markdown and @mention supported...",
+      "submit": "Post Reply",
+      "edit": "Edit Reply",
+      "delete": "Delete Reply",
+      "deleteConfirm": "Are you sure to delete this reply?",
+      "floor": "F",
+      "replyTo": "Reply to",
+      "edited": "Edited",
+      "hidden": "This reply has been hidden",
+      "empty": "No replies yet. Be the first to reply!"
+    },
+
+    "like": {
+      "liked": "Liked",
+      "like": "Like",
+      "unlike": "Unlike"
+    },
+
+    "favorite": {
+      "favorited": "Favorited",
+      "favorite": "Favorite",
+      "unfavorite": "Unfavorite",
+      "myFavorites": "My Favorites",
+      "empty": "No favorites"
+    },
+
+    "notification": {
+      "title": "Forum Notifications",
+      "empty": "No notifications",
+      "markAllRead": "Mark All Read",
+      "unread": "Unread",
+      "type": {
+        "mention": "Mention",
+        "reply": "Reply",
+        "like": "Like",
+        "system": "System"
+      }
+    },
+
+    "moderator": {
+      "title": "Moderator",
+      "actions": "Moderator Actions",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "feature": "Feature",
+      "unfeature": "Unfeature",
+      "hide": "Hide",
+      "unhide": "Unhide",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "disableReply": "Disable Replies",
+      "enableReply": "Enable Replies",
+      "hideReply": "Hide Reply",
+      "unhideReply": "Unhide Reply"
+    },
+
+    "myPosts": {
+      "title": "My Posts",
+      "empty": "You haven't posted anything yet"
+    },
+
+    "hotPosts": {
+      "title": "Hot Posts",
+      "empty": "No hot posts"
+    },
+
+    "admin": {
+      "title": "Forum Management",
+      "boards": "Board Management",
+      "moderators": "Moderator Management",
+      "stats": "Forum Statistics",
+      "createBoard": "Create Board",
+      "editBoard": "Edit Board",
+      "deleteBoard": "Delete Board",
+      "deleteBoardConfirm": "Are you sure to delete this board?",
+      "appointModerator": "Appoint Moderator",
+      "removeModerator": "Remove Moderator",
+      "removeModeratorConfirm": "Are you sure to remove this moderator?",
+      "boardForm": {
+        "name": "Board Name",
+        "namePlaceholder": "Enter board name",
+        "nameRequired": "Please enter board name",
+        "description": "Description",
+        "descriptionPlaceholder": "Enter board description",
+        "icon": "Icon",
+        "color": "Theme Color",
+        "rules": "Board Rules",
+        "rulesPlaceholder": "Enter board rules (Markdown supported)",
+        "visibility": "Visibility",
+        "allowedGroups": "Allowed Groups",
+        "sortOrder": "Sort Order",
+        "isActive": "Active"
+      },
+      "statLabels": {
+        "boardCount": "Boards",
+        "postCount": "Posts",
+        "replyCount": "Replies",
+        "activeUserCount": "Active Users"
+      }
+    },
+
+    "search": {
+      "placeholder": "Search posts...",
+      "userPlaceholder": "Search users..."
+    },
+
+    "upload": {
+      "imageLimitExceeded": "Maximum 9 images allowed",
+      "fileLimitExceeded": "Maximum 5 files allowed",
+      "success": "Upload successful",
+      "failed": "Upload failed"
+    }
+  }
+}

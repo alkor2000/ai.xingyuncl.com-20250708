@@ -1,0 +1,176 @@
+{
+  "forum": {
+    "title": "社区论坛",
+    "subtitle": "交流讨论，分享知识",
+    "loading": "加载中...",
+
+    "board": {
+      "title": "版块",
+      "all": "全部版块",
+      "posts": "帖子",
+      "lastPost": "最新发帖",
+      "empty": "暂无版块",
+      "rules": "版块规则",
+      "visibility": {
+        "public": "公开",
+        "group": "组内"
+      }
+    },
+
+    "post": {
+      "title": "帖子",
+      "new": "发帖",
+      "edit": "编辑帖子",
+      "delete": "删除帖子",
+      "deleteConfirm": "确定要删除这篇帖子吗？删除后无法恢复。",
+      "empty": "暂无帖子，来发第一帖吧！",
+      "detail": "帖子详情",
+      "edited": "已编辑",
+      "pinned": "置顶",
+      "featured": "精华",
+      "locked": "已锁定",
+      "lockedNotice": "该帖子已被管理员锁定，内容不可查看",
+      "hidden": "已隐藏",
+      "replyDisabled": "已禁止回复",
+      "views": "浏览",
+      "replies": "回复",
+      "likes": "点赞",
+      "favorites": "收藏",
+      "sort": {
+        "active": "最新回复",
+        "latest": "最新发帖",
+        "hot": "最热"
+      },
+      "form": {
+        "titleLabel": "标题",
+        "titlePlaceholder": "请输入帖子标题",
+        "titleRequired": "请输入帖子标题",
+        "contentLabel": "内容",
+        "contentPlaceholder": "请输入帖子内容，支持 Markdown 格式...",
+        "contentRequired": "请输入帖子内容",
+        "boardLabel": "选择版块",
+        "boardRequired": "请选择版块",
+        "submit": "发布",
+        "cancel": "取消",
+        "attachments": "附件",
+        "uploadImage": "上传图片",
+        "uploadFile": "上传文件"
+      }
+    },
+
+    "reply": {
+      "title": "回复",
+      "placeholder": "写下你的回复，支持 Markdown 和 @提及...",
+      "submit": "发布回复",
+      "edit": "编辑回复",
+      "delete": "删除回复",
+      "deleteConfirm": "确定要删除这条回复吗？",
+      "floor": "楼",
+      "replyTo": "回复",
+      "edited": "已编辑",
+      "hidden": "该回复已被隐藏",
+      "empty": "暂无回复，来抢沙发吧！"
+    },
+
+    "like": {
+      "liked": "已点赞",
+      "like": "点赞",
+      "unlike": "取消点赞"
+    },
+
+    "favorite": {
+      "favorited": "已收藏",
+      "favorite": "收藏",
+      "unfavorite": "取消收藏",
+      "myFavorites": "我的收藏",
+      "empty": "暂无收藏"
+    },
+
+    "notification": {
+      "title": "论坛通知",
+      "empty": "暂无通知",
+      "markAllRead": "全部已读",
+      "unread": "未读",
+      "type": {
+        "mention": "@提及",
+        "reply": "回复",
+        "like": "点赞",
+        "system": "系统"
+      }
+    },
+
+    "moderator": {
+      "title": "版主",
+      "actions": "管理操作",
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "feature": "设为精华",
+      "unfeature": "取消精华",
+      "hide": "隐藏",
+      "unhide": "取消隐藏",
+      "lock": "锁定",
+      "unlock": "解锁",
+      "disableReply": "禁止回复",
+      "enableReply": "允许回复",
+      "hideReply": "隐藏回复",
+      "unhideReply": "取消隐藏回复"
+    },
+
+    "myPosts": {
+      "title": "我的帖子",
+      "empty": "你还没有发过帖子"
+    },
+
+    "hotPosts": {
+      "title": "热门帖子",
+      "empty": "暂无热帖"
+    },
+
+    "admin": {
+      "title": "论坛管理",
+      "boards": "版块管理",
+      "moderators": "版主管理",
+      "stats": "论坛统计",
+      "createBoard": "创建版块",
+      "editBoard": "编辑版块",
+      "deleteBoard": "删除版块",
+      "deleteBoardConfirm": "确定要删除该版块吗？",
+      "appointModerator": "指定版主",
+      "removeModerator": "移除版主",
+      "removeModeratorConfirm": "确定要移除该版主吗？",
+      "boardForm": {
+        "name": "版块名称",
+        "namePlaceholder": "请输入版块名称",
+        "nameRequired": "请输入版块名称",
+        "description": "版块描述",
+        "descriptionPlaceholder": "请输入版块描述",
+        "icon": "图标",
+        "color": "主题色",
+        "rules": "版块规则",
+        "rulesPlaceholder": "请输入版块规则（支持 Markdown）",
+        "visibility": "可见范围",
+        "allowedGroups": "允许访问的组",
+        "sortOrder": "排序权重",
+        "isActive": "启用"
+      },
+      "statLabels": {
+        "boardCount": "版块数",
+        "postCount": "帖子数",
+        "replyCount": "回复数",
+        "activeUserCount": "活跃用户数"
+      }
+    },
+
+    "search": {
+      "placeholder": "搜索帖子...",
+      "userPlaceholder": "搜索用户..."
+    },
+
+    "upload": {
+      "imageLimitExceeded": "最多上传9张图片",
+      "fileLimitExceeded": "最多上传5个文件",
+      "success": "上传成功",
+      "failed": "上传失败"
+    }
+  }
+}

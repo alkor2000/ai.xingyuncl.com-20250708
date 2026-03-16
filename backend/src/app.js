@@ -3,7 +3,7 @@
  * 
  * 职责：
  * 1. 中间件配置（安全、CORS、压缩、解析）
- * 2. 路由注册（19个业务模块 + 外部API + 健康检查 + 公开页面）
+ * 2. 路由注册（20个业务模块 + 外部API + 健康检查 + 公开页面）
  * 3. 全局错误处理
  * 4. 动态速率限制
  */
@@ -44,6 +44,7 @@ const teachingRoutes = require('./routes/teachingRoutes');
 const smartAppRoutes = require('./routes/smartAppRoutes');
 const { adminRouter: smartAppAdminRoutes } = require('./routes/smartAppRoutes');
 const wikiRoutes = require('./routes/wikiRoutes');
+const forumRoutes = require('./routes/forum');
 
 /* 创建 Express 应用 */
 const app = express();
@@ -195,6 +196,7 @@ app.use('/api/agent', agentRoutes);
 app.use('/api/teaching', teachingRoutes);
 app.use('/api/smart-apps', smartAppRoutes);
 app.use('/api/wiki', wikiRoutes);
+app.use('/api/forum', forumRoutes);
 
 /* 外部API（Agent工作流对外接口，使用API Key认证） */
 app.use('/api/v1/agent', agentExternalRoutes);

@@ -12,7 +12,7 @@ import video from './video.json'
 import calendar from './calendar.json'
 import agent from './agent.json'
 import teaching from './teaching.json'
-
+import forum from './forum.json'
 export default {
   ...common,
   ...profile,
@@ -27,5 +27,6 @@ export default {
   ...video,
   ...calendar,
   ...agent,
-  ...teaching
+  ...teaching,
+  ...forum
 }

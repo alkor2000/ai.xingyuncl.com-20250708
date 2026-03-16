@@ -2,6 +2,7 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v1.9.0 (2026-03-16): 新增论坛管理Tab
  * - v1.8.0 (2026-02-27): 更新模型后自动测试 + 保存并测试回调
  * - v1.7.0 (2026-02-27): 模型弹窗传递onTest+testingModelId支持弹窗内测试
  * - v1.6.0 (2026-02-27): 修复删除模型不刷新列表 + 新增拖拽排序
@@ -40,7 +41,8 @@ import {
   ScanOutlined,
   CalendarOutlined,
   BookOutlined,
-  RocketOutlined
+  RocketOutlined,
+  CommentOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAdminStore from '../../stores/adminStore'
@@ -76,7 +78,8 @@ import {
   CalendarConfigSettings,
   TeachingManagement,
   SmartAppSettings,
-  EmbeddingSettings
+  EmbeddingSettings,
+  ForumManagement
 } from '../../components/admin/settings'
 
 const Settings = () => {
@@ -216,7 +219,6 @@ const Settings = () => {
     
     try {
       const updateData = { ...values }
-      // key/url留空则不发送，后端保持原值
       if (!updateData.api_key) delete updateData.api_key
       if (!updateData.api_endpoint) delete updateData.api_endpoint
       
@@ -227,7 +229,6 @@ const Settings = () => {
       message.success(t('admin.models.success.update'))
       await getAIModels()
       
-      // v1.8 更新成功后自动测试连接
       handleTestModel(editingModel.id)
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.update'))
@@ -276,8 +277,7 @@ const Settings = () => {
   }
 
   /**
-   * v1.8 保存并测试 - 弹窗内先保存再自动测试
-   * 与handleUpdateModel逻辑相同，但测试结果在弹窗关闭后显示
+   * v1.8 保存并测试
    */
   const handleSaveAndTest = async (values) => {
     if (!isSuperAdmin) {
@@ -293,7 +293,6 @@ const Settings = () => {
       if (!updateData.api_key) delete updateData.api_key
       if (!updateData.api_endpoint) delete updateData.api_endpoint
       
-      // 先保存
       await updateAIModel(modelId, updateData)
       setIsModelModalVisible(false)
       setEditingModel(null)
@@ -301,7 +300,6 @@ const Settings = () => {
       message.success(t('admin.models.success.update'))
       await getAIModels()
       
-      // 再测试
       handleTestModel(modelId)
     } catch (error) {
       message.error(error.response?.data?.message || t('admin.models.error.update'))
@@ -318,7 +316,6 @@ const Settings = () => {
     modelForm.setFieldsValue({
       name: model.name,
       display_name: model.display_name,
-      // 不设置api_key和api_endpoint，留空让用户选择是否更新
       stream_enabled: model.stream_enabled !== undefined ? model.stream_enabled : true,
       image_upload_enabled: model.image_upload_enabled !== undefined ? model.image_upload_enabled : false,
       document_upload_enabled: model.document_upload_enabled !== undefined ? model.document_upload_enabled : false,
@@ -593,6 +590,17 @@ const Settings = () => {
           </span>
         ),
         children: <SmartAppSettings />
+      },
+      /* v1.9.0 论坛管理Tab */
+      {
+        key: 'forumManagement',
+        label: (
+          <span>
+            <CommentOutlined />
+            {t('forum.admin.title')}
+          </span>
+        ),
+        children: <ForumManagement />
       },
       {
         key: 'imageModels',
