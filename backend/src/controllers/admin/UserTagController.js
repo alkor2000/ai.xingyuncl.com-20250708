@@ -1,10 +1,15 @@
 /**
  * 用户标签控制器 - 处理标签相关HTTP请求
+ * 
+ * 修复：updateTag和deleteTag中查找标签的方式
+ * 原来用getGroupTags(null)传null导致SQL WHERE group_id=null永远返回空
+ * 改为直接通过id查询单个标签
  */
 
 const UserTagService = require('../../services/admin/UserTagService');
 const ResponseHelper = require('../../utils/response');
 const logger = require('../../utils/logger');
+const dbConnection = require('../../database/connection');
 
 class UserTagController {
   /**
@@ -17,7 +22,7 @@ class UserTagController {
       const { includeInactive } = req.query;
       const currentUser = req.user;
 
-      // 权限检查：组管理员只能查看本组标签
+      /* 权限检查：组管理员只能查看本组标签 */
       if (currentUser.role === 'admin' && currentUser.group_id !== parseInt(groupId)) {
         return ResponseHelper.forbidden(res, '无权查看其他组的标签');
       }
@@ -41,19 +46,16 @@ class UserTagController {
   /**
    * 批量获取标签信息
    * POST /api/admin/user-tags/batch-info
-   * 新增：用于批量获取标签的详细信息
    */
   static async getBatchTagInfo(req, res) {
     try {
       const { tag_ids } = req.body;
       const currentUser = req.user;
 
-      // 验证输入
       if (!Array.isArray(tag_ids) || tag_ids.length === 0) {
         return ResponseHelper.validation(res, ['tag_ids必须是非空数组']);
       }
 
-      // 批量获取标签信息
       const tags = await UserTagService.getBatchTagInfo(tag_ids, currentUser);
 
       return ResponseHelper.success(res, tags, '批量获取标签信息成功');
@@ -76,10 +78,10 @@ class UserTagController {
       const currentUser = req.user;
       const tagData = req.body;
 
-      // 权限检查：组管理员只能为本组创建标签
+      /* 权限检查：组管理员只能为本组创建标签 */
       if (currentUser.role === 'admin') {
         if (!tagData.group_id || tagData.group_id !== currentUser.group_id) {
-          tagData.group_id = currentUser.group_id; // 强制设置为本组
+          tagData.group_id = currentUser.group_id;
         }
       }
 
@@ -104,6 +106,8 @@ class UserTagController {
   /**
    * 更新标签
    * PUT /api/admin/user-tags/:id
+   * 
+   * 修复：直接通过id查询标签，不再用getGroupTags(null)
    */
   static async updateTag(req, res) {
     try {
@@ -111,15 +115,17 @@ class UserTagController {
       const updateData = req.body;
       const currentUser = req.user;
 
-      // 先获取标签信息以检查权限
-      const tags = await UserTagService.getGroupTags(null, true);
-      const tag = tags.find(t => t.id === parseInt(id));
+      /* 直接通过id查询标签 */
+      const { rows } = await dbConnection.query(
+        'SELECT * FROM user_tags WHERE id = ?', [parseInt(id)]
+      );
+      const tag = rows[0];
       
       if (!tag) {
         return ResponseHelper.notFound(res, '标签不存在');
       }
 
-      // 权限检查：组管理员只能更新本组标签
+      /* 权限检查：组管理员只能更新本组标签 */
       if (currentUser.role === 'admin' && tag.group_id !== currentUser.group_id) {
         return ResponseHelper.forbidden(res, '无权更新其他组的标签');
       }
@@ -146,21 +152,25 @@ class UserTagController {
   /**
    * 删除标签
    * DELETE /api/admin/user-tags/:id
+   * 
+   * 修复：直接通过id查询标签，不再用getGroupTags(null)
    */
   static async deleteTag(req, res) {
     try {
       const { id } = req.params;
       const currentUser = req.user;
 
-      // 先获取标签信息以检查权限
-      const tags = await UserTagService.getGroupTags(null, true);
-      const tag = tags.find(t => t.id === parseInt(id));
+      /* 直接通过id查询标签 */
+      const { rows } = await dbConnection.query(
+        'SELECT * FROM user_tags WHERE id = ?', [parseInt(id)]
+      );
+      const tag = rows[0];
       
       if (!tag) {
         return ResponseHelper.notFound(res, '标签不存在');
       }
 
-      // 权限检查：组管理员只能删除本组标签
+      /* 权限检查：组管理员只能删除本组标签 */
       if (currentUser.role === 'admin' && tag.group_id !== currentUser.group_id) {
         return ResponseHelper.forbidden(res, '无权删除其他组的标签');
       }
@@ -187,9 +197,9 @@ class UserTagController {
       const { userId } = req.params;
       const currentUser = req.user;
 
-      // 权限检查：组管理员只能查看本组用户的标签
+      /* 权限检查：组管理员只能查看本组用户的标签 */
       if (currentUser.role === 'admin') {
-        const { rows: [user] } = await require('../../database/connection').query(
+        const { rows: [user] } = await dbConnection.query(
           'SELECT group_id FROM users WHERE id = ?',
           [userId]
         );
@@ -222,9 +232,9 @@ class UserTagController {
       const { tagIds } = req.body;
       const currentUser = req.user;
 
-      // 权限检查：组管理员只能管理本组用户的标签
+      /* 权限检查：组管理员只能管理本组用户的标签 */
       if (currentUser.role === 'admin') {
-        const { rows: [user] } = await require('../../database/connection').query(
+        const { rows: [user] } = await dbConnection.query(
           'SELECT group_id FROM users WHERE id = ?',
           [userId]
         );
@@ -234,14 +244,12 @@ class UserTagController {
         }
       }
 
-      // 验证标签ID数组
       if (!Array.isArray(tagIds)) {
         return ResponseHelper.validation(res, ['标签ID必须是数组']);
       }
 
       await UserTagService.updateUserTags(userId, tagIds, currentUser.id);
 
-      // 返回更新后的标签列表
       const updatedTags = await UserTagService.getUserTags(userId);
 
       return ResponseHelper.success(res, updatedTags, '用户标签更新成功');
@@ -266,9 +274,8 @@ class UserTagController {
       const { tagIds } = req.body;
       const currentUser = req.user;
 
-      // 权限检查
       if (currentUser.role === 'admin') {
-        const { rows: [user] } = await require('../../database/connection').query(
+        const { rows: [user] } = await dbConnection.query(
           'SELECT group_id FROM users WHERE id = ?',
           [userId]
         );
@@ -280,7 +287,6 @@ class UserTagController {
 
       await UserTagService.assignTagsToUser(userId, tagIds, currentUser.id);
 
-      // 返回更新后的标签列表
       const updatedTags = await UserTagService.getUserTags(userId);
 
       return ResponseHelper.success(res, updatedTags, '标签分配成功');
@@ -305,9 +311,8 @@ class UserTagController {
       const { tagIds } = req.body;
       const currentUser = req.user;
 
-      // 权限检查
       if (currentUser.role === 'admin') {
-        const { rows: [user] } = await require('../../database/connection').query(
+        const { rows: [user] } = await dbConnection.query(
           'SELECT group_id FROM users WHERE id = ?',
           [userId]
         );
@@ -319,7 +324,6 @@ class UserTagController {
 
       await UserTagService.removeUserTags(userId, tagIds, currentUser.id);
 
-      // 返回更新后的标签列表
       const updatedTags = await UserTagService.getUserTags(userId);
 
       return ResponseHelper.success(res, updatedTags, '标签移除成功');
@@ -343,7 +347,6 @@ class UserTagController {
       const { groupId, tagIds, includeAll = false } = req.body;
       const currentUser = req.user;
 
-      // 权限检查：组管理员只能筛选本组用户
       const targetGroupId = currentUser.role === 'admin' 
         ? currentUser.group_id 
         : (groupId || currentUser.group_id);
@@ -378,7 +381,6 @@ class UserTagController {
       const { groupId } = req.params;
       const currentUser = req.user;
 
-      // 权限检查：组管理员只能查看本组统计
       const targetGroupId = currentUser.role === 'admin' 
         ? currentUser.group_id 
         : (groupId || currentUser.group_id);
