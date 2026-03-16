@@ -367,7 +367,7 @@ const Wiki = () => {
               ) : (
                 <div style={{ padding: '16px 0' }}><UploadOutlined style={{ fontSize: 28, color: '#8c8c8c' }} />
                   <p style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
-                    {is.file_name ? '点击或拖拽新文件替换当前文档' : '点击或拖拽上传文档（PDF / Word / TXT / Markdown）'}
+                    {is.file_name ? '点击或拖拽文件追加上传（最多20个，支持PDF/Word/TXT/MD）' : '点击或拖拽上传文档（最多20个，支持PDF/Word/TXT/MD）'}
                   </p></div>
               )}
             </Upload.Dragger>
