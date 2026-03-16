@@ -643,3 +643,47 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ============ v2.2 帖子详情附件删除按钮 ============ */
+.attachment-image-wrapper {
+  position: relative;
+  display: inline-block;
+
+  .attachment-delete-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 10;
+    font-size: 20px;
+    color: rgba(255, 77, 79, 0.8);
+    cursor: pointer;
+    background: #fff;
+    border-radius: 50%;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: all 0.2s;
+
+    &:hover {
+      color: #ff4d4f;
+      transform: scale(1.15);
+    }
+  }
+}
+
+.attachment-file-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  .file-delete-btn {
+    font-size: 16px;
+    color: rgba(255, 77, 79, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      color: #ff4d4f;
+      transform: scale(1.15);
+    }
+  }
+}

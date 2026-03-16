@@ -1,10 +1,7 @@
 /**
- * 帖子详情组件 v2.0
+ * 帖子详情组件 v2.2
  * 
- * 优化：
- * - 附件图片使用 Antd Image 组件支持点击放大预览
- * - 标题更突出，作者区域卡片化
- * - 互动栏按钮更大更醒目
+ * 修复：帖子附件（图片+文件）支持作者/版主删除
  * 
  * @module pages/forum/components/PostDetail
  */
@@ -21,7 +18,7 @@ import {
   EyeOutlined, EditOutlined, DeleteOutlined,
   MoreOutlined, PushpinFilled, LockOutlined,
   EyeInvisibleOutlined, StopOutlined, TrophyOutlined,
-  SendOutlined
+  SendOutlined, CloseCircleFilled
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
@@ -43,18 +40,23 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
     fetchPostDetail, clearCurrentPost,
     fetchReplies, createReply, deletePost, deleteReply,
     togglePostLike, toggleReplyLike, toggleFavorite,
-    modTogglePostStatus, modHideReply
+    modTogglePostStatus, modHideReply,
+    deleteAttachment
   } = useForumStore();
 
   const [replyContent, setReplyContent] = useState('');
   const [replyToId, setReplyToId] = useState(null);
   const [replyToName, setReplyToName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  /* v2.2 本地跟踪已删除的附件ID，避免重新拉数据 */
+  const [deletedAttIds, setDeletedAttIds] = useState(new Set());
+  const [deletingAttId, setDeletingAttId] = useState(null);
 
   useEffect(() => {
     if (postId) {
       fetchPostDetail(postId);
       fetchReplies(postId, { page: 1 });
+      setDeletedAttIds(new Set());
     }
     return () => clearCurrentPost();
   }, [postId]);
@@ -62,6 +64,8 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const post = currentPost;
   const isModerator = user?.role === 'super_admin' || user?.role === 'admin';
   const isAuthor = post?.user_id === user?.id;
+  /** 是否可以管理附件（作者或版主） */
+  const canManageAttachments = isAuthor || isModerator;
 
   const handleSubmitReply = async () => {
     if (!replyContent.trim()) return message.warning('回复内容不能为空');
@@ -78,6 +82,18 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const handleReplyPage = (page) => fetchReplies(postId, { page });
   const handleModAction = async (action) => await modTogglePostStatus(postId, action);
 
+  /**
+   * v2.2 删除帖子附件
+   */
+  const handleDeleteAttachment = async (attId) => {
+    setDeletingAttId(attId);
+    try {
+      await deleteAttachment(attId);
+      setDeletedAttIds(prev => new Set([...prev, attId]));
+    } catch (e) { /* store已处理 */ }
+    setDeletingAttId(null);
+  };
+
   const modMenuItems = post ? [
     { key: 'pin', icon: <PushpinFilled />, label: post.is_pinned ? t('forum.moderator.unpin') : t('forum.moderator.pin') },
     { key: 'feature', icon: <TrophyOutlined />, label: post.is_featured ? t('forum.moderator.unfeature') : t('forum.moderator.feature') },
@@ -90,9 +106,10 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
     return <div className="loading-center" style={{ minHeight: 400 }}><Spin size="large" /></div>;
   }
 
-  /* 图片附件 */
-  const imageAttachments = (post.attachments || []).filter(a => a.file_type === 'image');
-  const fileAttachments = (post.attachments || []).filter(a => a.file_type === 'file');
+  /* 过滤掉已删除的附件 */
+  const allAttachments = (post.attachments || []).filter(a => !deletedAttIds.has(a.id));
+  const imageAttachments = allAttachments.filter(a => a.file_type === 'image');
+  const fileAttachments = allAttachments.filter(a => a.file_type === 'file');
 
   return (
     <div className="post-detail">
@@ -126,10 +143,10 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           {post.board_name && <Tag color="blue">{post.board_name}</Tag>}
         </Space>
 
-        {/* 标题 - 更大更醒目 */}
+        {/* 标题 */}
         <Title level={2} style={{ marginBottom: 16, lineHeight: 1.3 }}>{post.title}</Title>
 
-        {/* 作者信息 - 卡片化 */}
+        {/* 作者信息 */}
         <div className="post-author-row">
           <Space align="center">
             <Avatar size={42} style={{ backgroundColor: '#1890ff', fontSize: 18 }}>
@@ -160,36 +177,71 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           </div>
         )}
 
-        {/* 图片附件 - Antd Image 支持放大 */}
+        {/* 图片附件 - v2.2 作者/版主可删除 */}
         {imageAttachments.length > 0 && (
           <div className="post-attachments-images">
             <Image.PreviewGroup>
               {imageAttachments.map(att => (
-                <Image
-                  key={att.id}
-                  src={`/uploads/${att.file_path}`}
-                  alt={att.file_name}
-                  width={200}
-                  style={{ borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }}
-                  placeholder={<div style={{ width: 200, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
-                />
+                <div key={att.id} className="attachment-image-wrapper">
+                  <Image
+                    src={`/uploads/${att.file_path}`}
+                    alt={att.file_name}
+                    width={200}
+                    style={{ borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }}
+                    placeholder={<div style={{ width: 200, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
+                  />
+                  {/* v2.2 删除按钮 - 仅作者/版主可见 */}
+                  {canManageAttachments && (
+                    <Popconfirm
+                      title="确定删除这张图片？删除后无法恢复"
+                      onConfirm={(e) => { e?.stopPropagation(); handleDeleteAttachment(att.id); }}
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <span
+                        className="attachment-delete-btn"
+                        onClick={(e) => e.stopPropagation()}
+                        style={deletingAttId === att.id ? { opacity: 0.5 } : {}}
+                      >
+                        <CloseCircleFilled />
+                      </span>
+                    </Popconfirm>
+                  )}
+                </div>
               ))}
             </Image.PreviewGroup>
           </div>
         )}
 
-        {/* 文件附件 */}
+        {/* 文件附件 - v2.2 作者/版主可删除 */}
         {fileAttachments.length > 0 && (
           <div className="post-attachments-files">
             {fileAttachments.map(att => (
-              <a key={att.id} href={`/uploads/${att.file_path}`} target="_blank" rel="noreferrer" className="attachment-file">
-                📎 {att.file_name} <Text type="secondary" style={{ fontSize: 11 }}>({Math.round((att.file_size || 0) / 1024)}KB)</Text>
-              </a>
+              <div key={att.id} className="attachment-file-wrapper">
+                <a href={`/uploads/${att.file_path}`} target="_blank" rel="noreferrer" className="attachment-file">
+                  📎 {att.file_name} <Text type="secondary" style={{ fontSize: 11 }}>({Math.round((att.file_size || 0) / 1024)}KB)</Text>
+                </a>
+                {canManageAttachments && (
+                  <Popconfirm
+                    title="确定删除这个文件？"
+                    onConfirm={() => handleDeleteAttachment(att.id)}
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <CloseCircleFilled
+                      className="file-delete-btn"
+                      style={deletingAttId === att.id ? { opacity: 0.5 } : {}}
+                    />
+                  </Popconfirm>
+                )}
+              </div>
             ))}
           </div>
         )}
 
-        {/* 互动栏 - 更大按钮 */}
+        {/* 互动栏 */}
         <Divider style={{ margin: '20px 0 14px' }} />
         <div className="post-actions-bar">
           <Space size="large">
