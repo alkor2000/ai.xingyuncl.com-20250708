@@ -1,33 +1,34 @@
 /**
- * 论坛管理后台组件
+ * 论坛管理后台组件 v2.1
  * 
- * 嵌入 Settings.jsx 的 Tab 中，提供：
- * 1. 论坛统计概览
- * 2. 版块管理（CRUD + 排序 + 可见范围配置）
- * 3. 版主管理（指定/移除版主）
+ * 优化：版主管理支持搜索用户名指定（非输入ID），一个版块支持多个版主
  * 
  * @module components/admin/settings/ForumManagement
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, Select,
   Switch, Space, Tag, Popconfirm, Statistic, Row, Col, ColorPicker,
-  message, Tooltip, Divider, Typography, Empty
+  message, Tooltip, Divider, Typography, Empty, Spin, Avatar
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
   CommentOutlined, UserOutlined, BarChartOutlined,
   TeamOutlined, GlobalOutlined, CrownOutlined,
-  ReloadOutlined
+  ReloadOutlined, SearchOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useForumStore from '../../../stores/forumStore';
 import useAdminStore from '../../../stores/adminStore';
+import apiClient from '../../../utils/api';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
+
+/* 用户搜索防抖延迟（毫秒） */
+const SEARCH_DEBOUNCE_MS = 400;
 
 const ForumManagement = () => {
   const { t } = useTranslation();
@@ -41,16 +42,22 @@ const ForumManagement = () => {
 
   const { userGroups, getUserGroups } = useAdminStore();
 
-  /* 弹窗状态 */
+  /* 版块编辑弹窗状态 */
   const [boardModalVisible, setBoardModalVisible] = useState(false);
   const [editingBoard, setEditingBoard] = useState(null);
   const [boardForm] = Form.useForm();
 
-  /* 版主管理状态 */
+  /* 版主管理弹窗状态 */
   const [modModalVisible, setModModalVisible] = useState(false);
   const [modBoardId, setModBoardId] = useState(null);
   const [modBoardName, setModBoardName] = useState('');
-  const [appointUserId, setAppointUserId] = useState('');
+
+  /* v2.1 用户搜索状态 */
+  const [userSearchKeyword, setUserSearchKeyword] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [searchTimer, setSearchTimer] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState(null);
 
   /* 初始化 */
   useEffect(() => {
@@ -58,6 +65,39 @@ const ForumManagement = () => {
     adminFetchStats();
     getUserGroups();
   }, []);
+
+  /* ================================================================
+   * v2.1 用户搜索（防抖）
+   * ================================================================ */
+
+  const handleUserSearch = useCallback((keyword) => {
+    setUserSearchKeyword(keyword);
+    setSelectedUserId(null);
+
+    /* 清除上一次定时器 */
+    if (searchTimer) clearTimeout(searchTimer);
+
+    if (!keyword || keyword.trim().length < 1) {
+      setUserSearchResults([]);
+      return;
+    }
+
+    /* 防抖搜索 */
+    const timer = setTimeout(async () => {
+      setUserSearchLoading(true);
+      try {
+        const res = await apiClient.get('/forum/users/search', { params: { keyword: keyword.trim() } });
+        if (res.data.success) {
+          setUserSearchResults(res.data.data || []);
+        }
+      } catch (e) {
+        console.error('搜索用户失败:', e);
+      }
+      setUserSearchLoading(false);
+    }, SEARCH_DEBOUNCE_MS);
+
+    setSearchTimer(timer);
+  }, [searchTimer]);
 
   /* ================================================================
    * 版块 CRUD
@@ -89,7 +129,6 @@ const ForumManagement = () => {
   const handleBoardSubmit = async () => {
     try {
       const values = await boardForm.validateFields();
-      /* ColorPicker 返回对象需要转字符串 */
       if (values.color && typeof values.color === 'object') {
         values.color = values.color.toHexString ? values.color.toHexString() : '#1890ff';
       }
@@ -105,9 +144,7 @@ const ForumManagement = () => {
       setBoardModalVisible(false);
       setEditingBoard(null);
       boardForm.resetFields();
-    } catch (e) {
-      /* 表单校验失败或API错误(store已处理) */
-    }
+    } catch (e) { /* 表单校验失败或API错误 */ }
   };
 
   /* ================================================================
@@ -117,17 +154,28 @@ const ForumManagement = () => {
   const openModeratorModal = (board) => {
     setModBoardId(board.id);
     setModBoardName(board.name);
-    setAppointUserId('');
+    setUserSearchKeyword('');
+    setUserSearchResults([]);
+    setSelectedUserId(null);
     adminFetchModerators(board.id);
     setModModalVisible(true);
   };
 
+  /** v2.1 指定版主 - 使用搜索选择的用户ID */
   const handleAppointModerator = async () => {
-    if (!appointUserId) return message.warning('请输入用户ID');
-    const uid = parseInt(appointUserId);
-    if (isNaN(uid)) return message.warning('用户ID必须是数字');
-    await adminAppointModerator(modBoardId, uid);
-    setAppointUserId('');
+    if (!selectedUserId) return message.warning('请先搜索并选择用户');
+
+    /* 检查是否已经是版主 */
+    const existing = moderators.find(m => m.user_id === selectedUserId);
+    if (existing) {
+      message.warning('该用户已经是版主');
+      return;
+    }
+
+    await adminAppointModerator(modBoardId, selectedUserId);
+    setUserSearchKeyword('');
+    setUserSearchResults([]);
+    setSelectedUserId(null);
   };
 
   /* ================================================================
@@ -135,33 +183,19 @@ const ForumManagement = () => {
    * ================================================================ */
 
   const boardColumns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      width: 60
-    },
+    { title: 'ID', dataIndex: 'id', width: 60 },
     {
       title: t('forum.admin.boardForm.name'),
       dataIndex: 'name',
       width: 150,
       render: (name, record) => (
         <Space>
-          <span style={{
-            display: 'inline-block',
-            width: 12, height: 12,
-            borderRadius: 3,
-            backgroundColor: record.color || '#1890ff'
-          }} />
+          <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, backgroundColor: record.color || '#1890ff' }} />
           <Text strong>{name}</Text>
         </Space>
       )
     },
-    {
-      title: t('forum.admin.boardForm.description'),
-      dataIndex: 'description',
-      ellipsis: true,
-      width: 200
-    },
+    { title: t('forum.admin.boardForm.description'), dataIndex: 'description', ellipsis: true, width: 200 },
     {
       title: t('forum.admin.boardForm.visibility'),
       dataIndex: 'visibility',
@@ -172,18 +206,8 @@ const ForumManagement = () => {
         </Tag>
       )
     },
-    {
-      title: t('forum.board.posts'),
-      dataIndex: 'post_count',
-      width: 80,
-      align: 'center'
-    },
-    {
-      title: t('forum.admin.boardForm.sortOrder'),
-      dataIndex: 'sort_order',
-      width: 80,
-      align: 'center'
-    },
+    { title: t('forum.board.posts'), dataIndex: 'post_count', width: 80, align: 'center' },
+    { title: t('forum.admin.boardForm.sortOrder'), dataIndex: 'sort_order', width: 80, align: 'center' },
     {
       title: t('forum.admin.boardForm.isActive'),
       dataIndex: 'is_active',
@@ -197,37 +221,13 @@ const ForumManagement = () => {
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title={t('forum.admin.moderators')}>
-            <Button
-              type="link"
-              size="small"
-              icon={<CrownOutlined />}
-              onClick={() => openModeratorModal(record)}
-            >
+            <Button type="link" size="small" icon={<CrownOutlined />} onClick={() => openModeratorModal(record)}>
               版主
             </Button>
           </Tooltip>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => openEditBoard(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title={t('forum.admin.deleteBoardConfirm')}
-            onConfirm={() => adminDeleteBoard(record.id)}
-            disabled={record.post_count > 0}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={record.post_count > 0}
-            >
-              删除
-            </Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditBoard(record)}>编辑</Button>
+          <Popconfirm title={t('forum.admin.deleteBoardConfirm')} onConfirm={() => adminDeleteBoard(record.id)} disabled={record.post_count > 0}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={record.post_count > 0}>删除</Button>
           </Popconfirm>
         </Space>
       )
@@ -236,27 +236,34 @@ const ForumManagement = () => {
 
   const moderatorColumns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '用户名', dataIndex: 'username', width: 120 },
-    { title: '邮箱', dataIndex: 'email', width: 180 },
     {
-      title: '指定人',
-      dataIndex: 'appointed_by_name',
-      width: 120
+      title: '用户',
+      width: 180,
+      render: (_, record) => (
+        <Space>
+          <Avatar size={28} style={{ backgroundColor: '#1890ff', fontSize: 12 }}>
+            {(record.username || '?')[0]?.toUpperCase()}
+          </Avatar>
+          <div>
+            <Text strong style={{ fontSize: 13 }}>{record.username}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 11 }}>{record.email || '-'}</Text>
+          </div>
+        </Space>
+      )
     },
+    { title: '指定人', dataIndex: 'appointed_by_name', width: 100 },
     {
       title: '指定时间',
       dataIndex: 'created_at',
-      width: 160,
+      width: 140,
       render: (v) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'
     },
     {
       title: '操作',
       width: 100,
       render: (_, record) => (
-        <Popconfirm
-          title={t('forum.admin.removeModeratorConfirm')}
-          onConfirm={() => adminRemoveModerator(record.id, modBoardId)}
-        >
+        <Popconfirm title={t('forum.admin.removeModeratorConfirm')} onConfirm={() => adminRemoveModerator(record.id, modBoardId)}>
           <Button type="link" size="small" danger>{t('forum.admin.removeModerator')}</Button>
         </Popconfirm>
       )
@@ -269,71 +276,37 @@ const ForumManagement = () => {
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic
-              title={t('forum.admin.statLabels.boardCount')}
-              value={forumStats?.board_count || 0}
-              prefix={<CommentOutlined />}
-            />
+            <Statistic title={t('forum.admin.statLabels.boardCount')} value={forumStats?.board_count || 0} prefix={<CommentOutlined />} />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic
-              title={t('forum.admin.statLabels.postCount')}
-              value={forumStats?.post_count || 0}
-              valueStyle={{ color: '#1890ff' }}
-            />
+            <Statistic title={t('forum.admin.statLabels.postCount')} value={forumStats?.post_count || 0} valueStyle={{ color: '#1890ff' }} />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic
-              title={t('forum.admin.statLabels.replyCount')}
-              value={forumStats?.reply_count || 0}
-              valueStyle={{ color: '#52c41a' }}
-            />
+            <Statistic title={t('forum.admin.statLabels.replyCount')} value={forumStats?.reply_count || 0} valueStyle={{ color: '#52c41a' }} />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic
-              title={t('forum.admin.statLabels.activeUserCount')}
-              value={forumStats?.active_user_count || 0}
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
+            <Statistic title={t('forum.admin.statLabels.activeUserCount')} value={forumStats?.active_user_count || 0} prefix={<UserOutlined />} valueStyle={{ color: '#722ed1' }} />
           </Card>
         </Col>
       </Row>
 
       {/* 版块管理表格 */}
       <Card
-        title={
-          <Space>
-            <CommentOutlined />
-            {t('forum.admin.boards')}
-          </Space>
-        }
+        title={<Space><CommentOutlined />{t('forum.admin.boards')}</Space>}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => { adminFetchBoards(); adminFetchStats(); }}>
-              刷新
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateBoard}>
-              {t('forum.admin.createBoard')}
-            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => { adminFetchBoards(); adminFetchStats(); }}>刷新</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateBoard}>{t('forum.admin.createBoard')}</Button>
           </Space>
         }
       >
-        <Table
-          dataSource={adminBoards}
-          columns={boardColumns}
-          rowKey="id"
-          loading={adminBoardsLoading}
-          pagination={false}
-          size="small"
-          scroll={{ x: 900 }}
-        />
+        <Table dataSource={adminBoards} columns={boardColumns} rowKey="id" loading={adminBoardsLoading} pagination={false} size="small" scroll={{ x: 900 }} />
       </Card>
 
       {/* 版块编辑弹窗 */}
@@ -346,18 +319,12 @@ const ForumManagement = () => {
         destroyOnClose
       >
         <Form form={boardForm} layout="vertical">
-          <Form.Item
-            name="name"
-            label={t('forum.admin.boardForm.name')}
-            rules={[{ required: true, message: t('forum.admin.boardForm.nameRequired') }]}
-          >
+          <Form.Item name="name" label={t('forum.admin.boardForm.name')} rules={[{ required: true, message: t('forum.admin.boardForm.nameRequired') }]}>
             <Input placeholder={t('forum.admin.boardForm.namePlaceholder')} maxLength={100} />
           </Form.Item>
-
           <Form.Item name="description" label={t('forum.admin.boardForm.description')}>
             <TextArea placeholder={t('forum.admin.boardForm.descriptionPlaceholder')} rows={3} maxLength={500} />
           </Form.Item>
-
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="icon" label={t('forum.admin.boardForm.icon')}>
@@ -370,20 +337,16 @@ const ForumManagement = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Form.Item name="rules" label={t('forum.admin.boardForm.rules')}>
             <TextArea placeholder={t('forum.admin.boardForm.rulesPlaceholder')} rows={4} maxLength={5000} />
           </Form.Item>
-
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="visibility" label={t('forum.admin.boardForm.visibility')}>
-                <Select
-                  options={[
-                    { label: t('forum.board.visibility.public'), value: 'public' },
-                    { label: t('forum.board.visibility.group'), value: 'group' }
-                  ]}
-                />
+                <Select options={[
+                  { label: t('forum.board.visibility.public'), value: 'public' },
+                  { label: t('forum.board.visibility.group'), value: 'group' }
+                ]} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -392,64 +355,124 @@ const ForumManagement = () => {
               </Form.Item>
             </Col>
           </Row>
-
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, cur) => prev.visibility !== cur.visibility}
-          >
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.visibility !== cur.visibility}>
             {({ getFieldValue }) =>
               getFieldValue('visibility') === 'group' && (
                 <Form.Item name="allowed_group_ids" label={t('forum.admin.boardForm.allowedGroups')}>
-                  <Select
-                    mode="multiple"
-                    placeholder="选择允许访问的用户组"
-                    options={(userGroups || []).map(g => ({ label: g.name, value: g.id }))}
-                  />
+                  <Select mode="multiple" placeholder="选择允许访问的用户组"
+                    options={(userGroups || []).map(g => ({ label: g.name, value: g.id }))} />
                 </Form.Item>
               )
             }
           </Form.Item>
-
           <Form.Item name="is_active" label={t('forum.admin.boardForm.isActive')} valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>
       </Modal>
 
-      {/* 版主管理弹窗 */}
+      {/* v2.1 版主管理弹窗 - 搜索用户名指定 */}
       <Modal
         title={`${t('forum.admin.moderators')} - ${modBoardName}`}
         open={modModalVisible}
         onCancel={() => setModModalVisible(false)}
         footer={null}
-        width={700}
+        width={720}
         destroyOnClose
       >
-        {/* 指定版主 */}
+        {/* 搜索+指定区域 */}
         <div style={{ marginBottom: 16 }}>
-          <Space>
-            <Input
-              placeholder="输入用户ID"
-              value={appointUserId}
-              onChange={e => setAppointUserId(e.target.value)}
-              style={{ width: 200 }}
-            />
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+            <PlusOutlined /> {t('forum.admin.appointModerator')}
+          </Text>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            {/* 用户搜索输入框 */}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <Input
+                prefix={<SearchOutlined />}
+                placeholder="输入用户名搜索..."
+                value={userSearchKeyword}
+                onChange={(e) => handleUserSearch(e.target.value)}
+                allowClear
+                onClear={() => { setUserSearchResults([]); setSelectedUserId(null); }}
+              />
+
+              {/* 搜索结果下拉列表 */}
+              {(userSearchResults.length > 0 || userSearchLoading) && userSearchKeyword && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                  background: '#fff', border: '1px solid #e8e8e8', borderRadius: 8,
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.1)', maxHeight: 240, overflowY: 'auto',
+                  marginTop: 4
+                }}>
+                  {userSearchLoading ? (
+                    <div style={{ padding: 16, textAlign: 'center' }}><Spin size="small" /> 搜索中...</div>
+                  ) : userSearchResults.length === 0 ? (
+                    <div style={{ padding: 16, textAlign: 'center', color: '#999' }}>未找到用户</div>
+                  ) : (
+                    userSearchResults.map(u => {
+                      const isAlreadyMod = moderators.some(m => m.user_id === u.id);
+                      const isSelected = selectedUserId === u.id;
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => {
+                            if (isAlreadyMod) return;
+                            setSelectedUserId(u.id);
+                            setUserSearchKeyword(u.username);
+                            setUserSearchResults([]);
+                          }}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: isAlreadyMod ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            background: isSelected ? '#e6f7ff' : (isAlreadyMod ? '#fafafa' : '#fff'),
+                            opacity: isAlreadyMod ? 0.5 : 1,
+                            borderBottom: '1px solid #f5f5f5',
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => { if (!isAlreadyMod) e.currentTarget.style.background = '#f0f5ff'; }}
+                          onMouseLeave={(e) => { if (!isAlreadyMod) e.currentTarget.style.background = isSelected ? '#e6f7ff' : '#fff'; }}
+                        >
+                          <Avatar size={32} style={{ backgroundColor: '#1890ff', flexShrink: 0 }}>
+                            {u.username[0]?.toUpperCase()}
+                          </Avatar>
+                          <div style={{ flex: 1 }}>
+                            <Text strong>{u.username}</Text>
+                            <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>ID: {u.id}</Text>
+                          </div>
+                          {isAlreadyMod && <Tag color="orange" style={{ fontSize: 10 }}>已是版主</Tag>}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
             <Button
               type="primary"
-              icon={<PlusOutlined />}
+              icon={<CrownOutlined />}
               onClick={handleAppointModerator}
+              disabled={!selectedUserId}
             >
               {t('forum.admin.appointModerator')}
             </Button>
-          </Space>
-          <Text type="secondary" style={{ display: 'block', marginTop: 6, fontSize: 12 }}>
-            组管理员对本组版块自动拥有版主权限，无需手动指定
+          </div>
+
+          <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+            💡 组管理员对本组版块自动拥有版主权限，无需手动指定。一个版块可以指定多个版主。
           </Text>
         </div>
 
         <Divider style={{ margin: '12px 0' }} />
 
         {/* 版主列表 */}
+        <Text strong style={{ display: 'block', marginBottom: 10 }}>
+          <CrownOutlined style={{ color: '#faad14', marginRight: 4 }} />
+          当前版主 ({moderators.length})
+        </Text>
         <Table
           dataSource={moderators}
           columns={moderatorColumns}
