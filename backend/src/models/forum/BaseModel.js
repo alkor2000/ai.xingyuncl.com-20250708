@@ -1,5 +1,7 @@
 /**
- * 论坛模块 - 数据模型基类
+ * 论坛模块 - 数据模型基类 v2.1
+ * 
+ * 修复：create/updateById 中 undefined 值自动转为 null，防止 MySQL 驱动报错
  * 
  * 提供通用的 CRUD、分页、软删除、JSON解析等能力
  * 所有论坛模型继承此类，消除重复代码
@@ -200,6 +202,9 @@ class BaseModel {
   /**
    * 插入单条记录
    * 
+   * v2.1 修复：自动过滤 undefined 字段，将 undefined 值转为 null
+   * 防止 MySQL 驱动报 "Bind parameters must not contain undefined"
+   * 
    * @param {Object} data - 要插入的字段键值对
    * @returns {Object} 包含 insertId 的结果
    */
@@ -208,9 +213,23 @@ class BaseModel {
       /* 自动序列化 JSON 字段 */
       const processedData = this._serializeJson(data);
 
-      const fields = Object.keys(processedData);
+      /* v2.1 过滤掉值为 undefined 的字段，将其余 undefined 转 null */
+      const cleanData = {};
+      for (const [key, value] of Object.entries(processedData)) {
+        if (value === undefined) {
+          /* 跳过 undefined 字段，不插入该列（使用数据库默认值） */
+          continue;
+        }
+        cleanData[key] = value;
+      }
+
+      const fields = Object.keys(cleanData);
+      if (fields.length === 0) {
+        throw new ValidationError('没有有效的字段可插入');
+      }
+
       const placeholders = fields.map(() => '?').join(', ');
-      const values = fields.map(f => processedData[f]);
+      const values = fields.map(f => cleanData[f] === null ? null : cleanData[f]);
 
       const sql = `INSERT INTO ${this.tableName} (${fields.join(', ')}) VALUES (${placeholders})`;
       const { rows } = await dbConnection.query(sql, values);
@@ -233,6 +252,8 @@ class BaseModel {
   /**
    * 根据主键更新记录
    * 
+   * v2.1 修复：自动过滤 undefined 字段
+   * 
    * @param {number|string} id - 主键值
    * @param {Object} data - 要更新的字段键值对
    * @returns {Object|null} 更新后的完整记录
@@ -240,12 +261,20 @@ class BaseModel {
   static async updateById(id, data) {
     try {
       const processedData = this._serializeJson(data);
-      const fields = Object.keys(processedData);
 
+      /* v2.1 过滤 undefined 值 */
+      const cleanData = {};
+      for (const [key, value] of Object.entries(processedData)) {
+        if (value !== undefined) {
+          cleanData[key] = value === undefined ? null : value;
+        }
+      }
+
+      const fields = Object.keys(cleanData);
       if (fields.length === 0) return await this.findById(id);
 
       const setClause = fields.map(f => `${f} = ?`).join(', ');
-      const values = [...fields.map(f => processedData[f]), id];
+      const values = [...fields.map(f => cleanData[f] === null ? null : cleanData[f]), id];
 
       const sql = `UPDATE ${this.tableName} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE ${this.primaryKey} = ?`;
       await dbConnection.query(sql, values);
