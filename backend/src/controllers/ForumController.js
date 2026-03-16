@@ -1,10 +1,10 @@
 /**
- * 论坛控制器 v2.1
+ * 论坛控制器 v2.2
  * 
  * 修复：
- * - 新增 deleteAttachment 方法（删除单个附件+磁盘文件清理）
- * - deletePost 时联动清理帖子附件
- * - deleteReply 时联动清理回复附件
+ * - v2.2 Redis只读环境兼容：浏览量防刷Redis操作包裹try-catch，写入失败静默降级
+ * - v2.1 新增 deleteAttachment 方法（删除单个附件+磁盘文件清理）
+ * - v2.1 deletePost/deleteReply 时联动清理附件
  * 
  * @module controllers/ForumController
  */
@@ -33,12 +33,10 @@ const cleanupAttachmentFiles = async (attachments) => {
       await fs.unlink(filePath);
       logger.info('附件文件已删除', { id: att.id, path: att.file_path });
     } catch (err) {
-      /* 文件不存在不报错 */
       if (err.code !== 'ENOENT') {
         logger.warn('附件文件删除失败', { id: att.id, path: att.file_path, error: err.message });
       }
     }
-    /* 删除缩略图 */
     if (att.thumbnail_path) {
       try {
         const thumbPath = path.join(config.upload.uploadDir, att.thumbnail_path);
@@ -109,6 +107,13 @@ const ForumController = {
     }
   },
 
+  /**
+   * 获取帖子详情
+   * 
+   * v2.2 修复：Redis 浏览量防刷操作包裹 try-catch
+   * 兼容 Redis 只读副本环境（Docker 部署常见场景）
+   * Redis 写入失败时静默降级为每次都计数
+   */
   async getPostDetail(req, res) {
     try {
       const { id } = req.params;
@@ -130,16 +135,23 @@ const ForumController = {
         }
       }
 
-      const viewKey = `forum:view:${id}:${req.user.id}`;
+      /* v2.2 浏览量防刷 - Redis操作包裹try-catch，兼容只读Redis */
       let shouldCount = true;
-      if (redisConnection.isConnected) {
-        const viewed = await redisConnection.get(viewKey);
-        if (viewed) {
-          shouldCount = false;
-        } else {
-          await redisConnection.set(viewKey, '1', VIEW_COOLDOWN_SECONDS);
+      try {
+        if (redisConnection.isConnected) {
+          const viewKey = `forum:view:${id}:${req.user.id}`;
+          const viewed = await redisConnection.get(viewKey);
+          if (viewed) {
+            shouldCount = false;
+          } else {
+            await redisConnection.set(viewKey, '1', VIEW_COOLDOWN_SECONDS);
+          }
         }
+      } catch (redisErr) {
+        /* Redis 只读或不可用时静默降级，不影响正常功能 */
+        logger.debug('论坛浏览量Redis防刷降级', { postId: id, error: redisErr.message });
       }
+
       if (shouldCount) {
         await ForumPost.incrementViewCount(id);
       }
@@ -214,11 +226,9 @@ const ForumController = {
       const { canManage } = await ForumModeratorService.canManagePost(req.user.id, post, req.user);
       if (!canManage) return ResponseHelper.forbidden(res, '无权删除此帖子');
 
-      /* 清理帖子附件(数据库记录+磁盘文件) */
       const postAttachments = await ForumAttachment.deleteByTarget('post', id);
       await cleanupAttachmentFiles(postAttachments);
 
-      /* 清理所有回复的附件 */
       const replySql = 'SELECT id FROM forum_replies WHERE post_id = ? AND deleted_at IS NULL';
       const { rows: replyRows } = await dbConnection.query(replySql, [id]);
       for (const reply of replyRows) {
@@ -348,7 +358,6 @@ const ForumController = {
       const { canManage } = await ForumModeratorService.canManageReply(req.user.id, reply, post.board_id, req.user);
       if (!canManage) return ResponseHelper.forbidden(res, '无权删除此回复');
 
-      /* v2.1 清理回复附件 */
       const replyAtts = await ForumAttachment.deleteByTarget('reply', id);
       await cleanupAttachmentFiles(replyAtts);
 
@@ -473,26 +482,17 @@ const ForumController = {
     }
   },
 
-  /**
-   * v2.1 新增：删除单个附件（数据库记录+磁盘文件）
-   * 
-   * 权限：只有上传者本人或超级管理员可以删除
-   */
   async deleteAttachment(req, res) {
     try {
       const { id } = req.params;
       const att = await ForumAttachment.findById(id);
       if (!att) return ResponseHelper.notFound(res, '附件不存在');
 
-      /* 权限检查：只有上传者或超管可删 */
       if (att.user_id !== req.user.id && req.user.role !== 'super_admin') {
         return ResponseHelper.forbidden(res, '无权删除此附件');
       }
 
-      /* 删除数据库记录 */
       await ForumAttachment.deleteById(id);
-
-      /* 删除磁盘文件 */
       await cleanupAttachmentFiles([att]);
 
       logger.info('附件删除成功', { attachmentId: id, userId: req.user.id });
