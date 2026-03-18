@@ -3,6 +3,7 @@
  * 集成ReactFlow画布、配置面板、测试抽屉、API接入管理
  * v2.1 - 拖入LLM/分类节点时自动填充默认模型
  * v2.2 - 拖拽放置节点后不自动收起节点面板
+ * v2.3 - 分类节点默认2个分类 + updateNodeInternals修复Handle位置
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
@@ -12,7 +13,8 @@ import ReactFlow, {
   Background, Controls, MiniMap,
   useNodesState, useEdgesState, addEdge,
   MarkerType, useReactFlow, ReactFlowProvider,
-  getBezierPath, BaseEdge
+  getBezierPath, BaseEdge,
+  useUpdateNodeInternals
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -80,6 +82,13 @@ const WorkflowEditorInner = () => {
   const navigate = useNavigate()
   const reactFlowInstance = useReactFlow()
   const reactFlowWrapper = useRef(null)
+  
+  /**
+   * v2.3: useUpdateNodeInternals - 通知ReactFlow重新计算节点Handle位置
+   * 当分类节点的分类数量变化时，Handle数量和CSS位置都会变
+   * 但ReactFlow不会自动感知CSS变量的变化，需要手动触发
+   */
+  const updateNodeInternals = useUpdateNodeInternals()
 
   const {
     currentWorkflow, currentWorkflowLoading,
@@ -164,8 +173,9 @@ const WorkflowEditorInner = () => {
   const onDragOver = useCallback((e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }, [])
 
   /**
-   * 为需要模型的节点类型构建默认配置
-   * 拖入LLM/分类节点时自动填充第一个可用模型
+   * v2.1+v2.3: 为需要模型的节点类型构建默认配置
+   * - LLM/分类节点：自动填充第一个可用模型
+   * - 分类节点：预设2个默认分类
    */
   const buildDefaultConfig = useCallback((nodeType) => {
     const config = {}
@@ -177,14 +187,18 @@ const WorkflowEditorInner = () => {
       config.model_display_name = defaultModel.display_name || defaultModel.name
     }
     
+    /* v2.3: 分类节点预设2个默认分类 */
+    if (nodeType === 'classifier') {
+      config.categories = [
+        { id: `cat-${Date.now()}-1`, name: '分类1', description: '' },
+        { id: `cat-${Date.now()}-2`, name: '分类2', description: '' }
+      ]
+    }
+    
     return config
   }, [availableModels])
 
-  /**
-   * 拖拽放置节点
-   * v2.1: 携带默认模型配置
-   * v2.2: 不再自动收起节点面板，方便连续拖入多个节点
-   */
+  /** 拖拽放置节点 */
   const onDrop = useCallback((event) => {
     event.preventDefault()
     const nodeType = event.dataTransfer.getData('application/reactflow')
@@ -201,7 +215,6 @@ const WorkflowEditorInner = () => {
     }])
     setHasUnsavedChanges(true)
     message.success(`已添加 ${defaultLabels[nodeType] || nodeType} 节点`)
-    /* v2.2: 移除 setNodePanelOpen(false)，保持面板展开 */
   }, [reactFlowInstance, setNodes, buildDefaultConfig])
 
   /** 添加新节点 - 携带默认模型配置 */
@@ -228,7 +241,11 @@ const WorkflowEditorInner = () => {
     }
   }, [selectedNode, selectedEdge, setNodes, setEdges])
 
-  /** 更新节点配置 */
+  /**
+   * 更新节点配置
+   * v2.3: 对分类节点，配置更新后延迟调用updateNodeInternals
+   *       让ReactFlow重新测量Handle位置，修复连线起点错位
+   */
   const onUpdateNodeConfig = useCallback((nodeId, config) => {
     setNodes((nds) => nds.map(node => {
       if (node.id !== nodeId) return node
@@ -239,7 +256,16 @@ const WorkflowEditorInner = () => {
       return { ...prev, data: { ...prev.data, label: config.label || prev.data.label, config } }
     })
     setHasUnsavedChanges(true)
-  }, [setNodes])
+    
+    /**
+     * v2.3: 通知ReactFlow重新计算该节点的Handle位置
+     * 需要延迟执行，等React渲染完成后DOM已更新
+     * 对所有节点类型都安全调用，ReactFlow会自行判断
+     */
+    requestAnimationFrame(() => {
+      updateNodeInternals(nodeId)
+    })
+  }, [setNodes, updateNodeInternals])
 
   /** 校验连线完整性 */
   const validateConnections = useCallback(() => {
