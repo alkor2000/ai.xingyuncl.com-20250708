@@ -62,7 +62,27 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-/* CORS 跨域配置 */
+/* ============================================================
+ * CORS 跨域配置
+ * 
+ * Agent外部API（/api/v1/agent）单独配置宽松CORS：
+ *   - 允许任意origin（包括file://协议的null origin）
+ *   - 该路由使用API Key认证，不依赖Cookie/Session
+ *   - 适用于本地HTML文件、第三方网站、Postman等场景
+ * 
+ * 其他所有路由使用白名单CORS策略
+ * ============================================================ */
+
+/* Agent外部API - 宽松CORS（允许任意来源） */
+app.use('/api/v1/agent', cors({
+  origin: true,                   // 允许任意origin，自动回显请求的Origin头
+  credentials: false,             // API Key认证，不需要Cookie凭证
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  maxAge: 86400                   // preflight缓存24小时，减少OPTIONS请求
+}));
+
+/* 其他路由 - 白名单CORS */
 const corsOrigin = config.app?.corsOrigin || config.security?.cors?.origin || '*';
 const corsCredentials = config.security?.cors?.credentials !== false;
 
