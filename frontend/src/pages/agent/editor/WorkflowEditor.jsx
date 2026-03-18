@@ -1,6 +1,8 @@
 /**
  * Agent工作流可视化编辑器
  * 集成ReactFlow画布、配置面板、测试抽屉、API接入管理
+ * v2.1 - 拖入LLM/分类节点时自动填充默认模型
+ * v2.2 - 拖拽放置节点后不自动收起节点面板
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
@@ -82,7 +84,8 @@ const WorkflowEditorInner = () => {
   const {
     currentWorkflow, currentWorkflowLoading,
     fetchWorkflowById, updateWorkflow, clearCurrentWorkflow,
-    fetchNodeTypes, nodeTypes: availableNodeTypes
+    fetchNodeTypes, nodeTypes: availableNodeTypes,
+    availableModels, fetchAvailableModels
   } = useAgentStore()
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
@@ -109,6 +112,11 @@ const WorkflowEditorInner = () => {
     if (id) { fetchWorkflowById(id); fetchNodeTypes() }
     return () => { clearCurrentWorkflow() }
   }, [id])
+
+  /** 确保模型列表在编辑器加载时就已获取 */
+  useEffect(() => {
+    if (availableModels.length === 0) fetchAvailableModels()
+  }, [])
 
   /** 初始化画布数据 */
   useEffect(() => {
@@ -155,7 +163,28 @@ const WorkflowEditorInner = () => {
 
   const onDragOver = useCallback((e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }, [])
 
-  /** 拖拽放置节点 */
+  /**
+   * 为需要模型的节点类型构建默认配置
+   * 拖入LLM/分类节点时自动填充第一个可用模型
+   */
+  const buildDefaultConfig = useCallback((nodeType) => {
+    const config = {}
+    const needsModel = nodeType === 'llm' || nodeType === 'classifier'
+    
+    if (needsModel && availableModels.length > 0) {
+      const defaultModel = availableModels[0]
+      config.model = defaultModel.name
+      config.model_display_name = defaultModel.display_name || defaultModel.name
+    }
+    
+    return config
+  }, [availableModels])
+
+  /**
+   * 拖拽放置节点
+   * v2.1: 携带默认模型配置
+   * v2.2: 不再自动收起节点面板，方便连续拖入多个节点
+   */
   const onDrop = useCallback((event) => {
     event.preventDefault()
     const nodeType = event.dataTransfer.getData('application/reactflow')
@@ -165,24 +194,26 @@ const WorkflowEditorInner = () => {
     const position = reactFlowInstance.screenToFlowPosition({
       x: event.clientX - bounds.left, y: event.clientY - bounds.top
     })
+    const defaultConfig = buildDefaultConfig(nodeType)
     setNodes((nds) => [...nds, {
       id: `${nodeType}-${Date.now()}`, type: nodeType, position,
-      data: { label: defaultLabels[nodeType] || nodeType.toUpperCase(), config: {} }
+      data: { label: defaultLabels[nodeType] || nodeType.toUpperCase(), config: defaultConfig }
     }])
     setHasUnsavedChanges(true)
     message.success(`已添加 ${defaultLabels[nodeType] || nodeType} 节点`)
-    setNodePanelOpen(false)
-  }, [reactFlowInstance, setNodes])
+    /* v2.2: 移除 setNodePanelOpen(false)，保持面板展开 */
+  }, [reactFlowInstance, setNodes, buildDefaultConfig])
 
-  /** 添加新节点 */
+  /** 添加新节点 - 携带默认模型配置 */
   const onAddNode = useCallback((nodeType, position) => {
+    const defaultConfig = buildDefaultConfig(nodeType)
     setNodes((nds) => [...nds, {
       id: `${nodeType}-${Date.now()}`, type: nodeType,
       position: position || { x: 100, y: 100 },
-      data: { label: defaultLabels[nodeType] || nodeType.toUpperCase(), config: {} }
+      data: { label: defaultLabels[nodeType] || nodeType.toUpperCase(), config: defaultConfig }
     }])
     setHasUnsavedChanges(true)
-  }, [setNodes])
+  }, [setNodes, buildDefaultConfig])
 
   /** 删除选中项 */
   const onDelete = useCallback(() => {

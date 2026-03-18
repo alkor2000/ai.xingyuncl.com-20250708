@@ -1,12 +1,10 @@
 /**
- * 工作流测试抽屉 - 对话式测试界面 v2.3
- * v1.1 - 删除顶部说明文字，调整z-index
- * v2.0 - 重新设计对话气泡+打字机效果
- * v2.2 - 停止输出按钮+滚动条加粗
- * v2.3 - UI修复：
- *   1. 去掉用户消息上方的"你"字
- *   2. 去掉AI消息上方的"AI助手"字（头像已经够区分了）
- *   3. 用户头像固定在消息右侧，布局更整齐
+ * 工作流测试抽屉 - 对话式测试界面 v2.4
+ * v2.3 - UI修复：去掉消息上方文字标签
+ * v2.4 - 修复：清空对话后无法发送消息
+ *   原因: clearTestSession将testSession置null，handleCreateSession
+ *         检查if(!testSession)时因React状态未同步读到旧值，跳过创建
+ *   修复: handleClear直接调用createTestSession，不依赖state检查
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
@@ -91,10 +89,10 @@ const TestDrawer = ({ open, onClose, workflow }) => {
     }
   }, [testMessages])
   
-  /* 打开/关闭抽屉 */
+  /* 打开抽屉时创建会话 */
   useEffect(() => {
-    if (open && workflow?.id) {
-      handleCreateSession()
+    if (open && workflow?.id && !testSession) {
+      createTestSession(workflow.id).catch(e => console.error(e))
     }
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 300)
@@ -105,12 +103,6 @@ const TestDrawer = ({ open, onClose, workflow }) => {
       if (typingRef.current) { clearInterval(typingRef.current); typingRef.current = null }
     }
   }, [open])
-  
-  const handleCreateSession = async () => {
-    if (!testSession) {
-      try { await createTestSession(workflow.id) } catch (e) { console.error(e) }
-    }
-  }
   
   /** 发送消息 */
   const handleSend = async () => {
@@ -151,12 +143,28 @@ const TestDrawer = ({ open, onClose, workflow }) => {
     }
   }
   
-  const handleClear = () => {
-    clearTestSession()
+  /**
+   * v2.4: 清空对话 - 直接创建新会话
+   * 先清空状态，再立即调用createTestSession创建新会话
+   * 不再通过handleCreateSession间接调用，避免state同步问题
+   */
+  const handleClear = async () => {
+    /* 清空打字机状态 */
     setDisplayedText('')
     setIsTyping(false)
     if (typingRef.current) { clearInterval(typingRef.current); typingRef.current = null }
-    handleCreateSession()
+    
+    /* 清空会话状态 */
+    clearTestSession()
+    
+    /* 直接创建新的测试会话 */
+    if (workflow?.id) {
+      try {
+        await createTestSession(workflow.id)
+      } catch (e) {
+        console.error('重新创建会话失败:', e)
+      }
+    }
   }
   
   const handleClose = () => {
@@ -222,7 +230,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
                   {msg.role === 'assistant' && (
                     <div className="td-avatar td-avatar-ai"><RobotOutlined /></div>
                   )}
-                  {/* 消息气泡 - v2.3: 去掉sender文字 */}
+                  {/* 消息气泡 */}
                   <div className="td-bubble-wrap">
                     <div className={`td-bubble ${msg.role === 'user' ? 'td-bubble-user' : 'td-bubble-ai'}`}>
                       <div className="td-text">
@@ -291,7 +299,7 @@ const TestDrawer = ({ open, onClose, workflow }) => {
               className="td-textarea"
             />
             
-            {/* v2.2: 发送/停止按钮切换 */}
+            {/* 发送/停止按钮切换 */}
             {showStopBtn ? (
               <Button
                 type="default"

@@ -1,10 +1,8 @@
 /**
  * 配置面板 - 显示选中节点的配置选项
- * v2.7 - 新建LLM/分类节点时自动填充系统默认模型
- * v2.8 - 保存按钮改为"节点配置已同步"状态指示
- * v2.9 - 模型选择时同步保存model_display_name到节点配置
  * v3.0 - 知识库选择改为手动点击添加，去掉自动推荐高亮
- *       - 知识库加载模式支持auto/rag/direct三选项
+ * v3.1 - 默认max_tokens从2000改为5000
+ *       - 新建节点自动填充默认模型逻辑保留（配合WorkflowEditor v2.1双重保障）
  */
 
 import React, { useEffect, useState } from 'react'
@@ -94,8 +92,8 @@ const ConfigPanel = ({
   }, [selectedNode, form, wikiItems])
   
   /**
-   * v2.7: 当模型列表加载完成后，自动为LLM/分类节点填充默认模型
-   * v2.9: 同时写入model_display_name
+   * 当模型列表加载完成后，自动为LLM/分类节点填充默认模型
+   * （双重保障：WorkflowEditor创建时填充 + ConfigPanel打开时补充）
    */
   useEffect(() => {
     if (!selectedNode || availableModels.length === 0) return
@@ -109,7 +107,6 @@ const ConfigPanel = ({
         form.setFieldsValue({ model: defaultModelObj.name })
         const allValues = form.getFieldsValue()
         allValues.model = defaultModelObj.name
-        /* v2.9: 同步写入显示名称 */
         allValues.model_display_name = defaultModelObj.display_name || defaultModelObj.name
         if (selectedNode.type === 'classifier') {
           allValues.categories = categories
@@ -132,11 +129,11 @@ const ConfigPanel = ({
   
   /**
    * 表单值变化回调 - 实时同步到画布节点
-   * v2.9: 当模型选择变化时，自动查找并写入model_display_name
+   * 当模型选择变化时，自动查找并写入model_display_name
    */
   const handleValuesChange = (changedValues, allValues) => {
     if (selectedNode) {
-      /* v2.9: 模型变更时同步写入display_name */
+      /* 模型变更时同步写入display_name */
       if (changedValues.model !== undefined) {
         const selectedModelObj = availableModels.find(m => m.name === changedValues.model)
         if (selectedModelObj) {
@@ -157,7 +154,6 @@ const ConfigPanel = ({
   
   /**
    * v3.0: 手动添加知识库 - 用户必须明确点击选项才添加
-   * Select的onChange只在用户主动点击选项时触发
    */
   const handleAddWiki = (wikiId) => {
     const wiki = wikiItems.find(w => w.id === wikiId)
@@ -169,7 +165,7 @@ const ConfigPanel = ({
       currentValues.selected_wikis = buildWikiMetadata(newSelected)
       onUpdateConfig(selectedNode.id, currentValues)
     }
-    /* v3.0: 选择后清空搜索框，恢复完整列表 */
+    /* 选择后清空搜索框，恢复完整列表 */
     setWikiSearchValue('')
   }
   
@@ -240,9 +236,7 @@ const ConfigPanel = ({
     )
   }
   
-  /**
-   * v2.8: 状态栏 - 不再有保存按钮
-   */
+  /** 状态栏 */
   const renderStatusBar = () => {
     if (!inDrawer) return null
     return (
@@ -259,9 +253,7 @@ const ConfigPanel = ({
   }
   
   /**
-   * v3.0: 知识库配置区域 - 去掉自动推荐选择
-   * Select组件使用 value={undefined} 确保不自动选中任何选项
-   * 用户必须手动点击下拉列表中的选项才会添加
+   * 知识库配置区域
    */
   const renderKnowledgeConfig = () => {
     /* 过滤掉已选的，生成可选列表 */
@@ -315,20 +307,16 @@ const ConfigPanel = ({
             <Select
               placeholder="搜索并选择知识库..."
               showSearch
-              /* v3.0: 始终保持value为undefined，不自动选中 */
               value={undefined}
               onChange={handleAddWiki}
               style={{ width: '100%' }}
               options={availableWikiOptions}
-              /* v3.0: 自定义搜索过滤，基于标题文本 */
               filterOption={(input, option) => {
                 return (option?.searchText || '').toLowerCase().includes(input.toLowerCase())
               }}
-              /* v3.0: 关闭后清空搜索词 */
               onBlur={() => setWikiSearchValue('')}
               searchValue={wikiSearchValue}
               onSearch={setWikiSearchValue}
-              /* 不显示选中的值，纯粹作为添加入口 */
               labelInValue={false}
               notFoundContent={wikiItems.length === 0 ? '暂无可用知识库' : '未找到匹配项'}
             />
@@ -489,7 +477,8 @@ const ConfigPanel = ({
             <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
           </Form.Item>
           
-          <Form.Item label="最大Token数" name="max_tokens" initialValue={2000}
+          {/* v3.1: 默认max_tokens从2000改为5000 */}
+          <Form.Item label="最大Token数" name="max_tokens" initialValue={5000}
             tooltip="单次回复最大长度（取决于模型支持的上限）">
             <InputNumber min={100} max={100000} style={{ width: '100%' }} />
           </Form.Item>

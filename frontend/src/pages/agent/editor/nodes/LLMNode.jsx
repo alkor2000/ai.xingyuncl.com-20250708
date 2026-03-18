@@ -1,14 +1,7 @@
 /**
  * LLM节点 - AI大模型对话
- * 显示模型配置详情
- * v1.1 - P3优化：去除硬编码模型名和映射表，动态显示模型名
- * v1.2 - 系统提示词显示优化：
- *   1. 预览区域从2行30字符扩大到4行，每行50字符
- *   2. 增加max-height和overflow滚动，可看到更多内容
- *   3. 去掉Tooltip包裹，内容直接在节点中可读
- * v1.3 - 模型显示名称优化：
- *   优先使用config中保存的model_display_name（由ConfigPanel写入）
- *   回退到智能提取逻辑
+ * v1.3 - 模型显示名称优化：优先使用config.model_display_name
+ * v1.4 - max_tokens默认fallback从2000改为5000
  */
 
 import React from 'react'
@@ -19,31 +12,30 @@ const LLMNode = ({ data, selected }) => {
   const config = data.config || {}
   const model = config.model || ''
   const temperature = config.temperature ?? 0.7
-  const maxTokens = config.max_tokens ?? 2000
+  /* v1.4: 默认fallback改为5000，与ConfigPanel initialValue保持一致 */
+  const maxTokens = config.max_tokens ?? 5000
   const systemPrompt = config.system_prompt || ''
   
   /**
    * 获取模型显示名称
-   * v1.3: 优先使用ConfigPanel保存的display_name，回退到智能提取
-   * @param {string} modelId - 原始模型标识符
-   * @returns {string} 可读的显示名称
+   * 优先使用ConfigPanel保存的display_name，回退到智能提取
    */
   const getModelDisplayName = (modelId) => {
-    /* v1.3: 优先使用配置中保存的显示名称 */
+    /* 优先使用配置中保存的显示名称 */
     if (config.model_display_name) {
       return config.model_display_name
     }
     
     if (!modelId) return '未选择模型'
     
-    /* 如果包含 provider/ 前缀（如 openai/gpt-4o），取最后部分 */
+    /* 如果包含 provider/ 前缀，取最后部分 */
     let name = modelId
     if (name.includes('/')) {
       const parts = name.split('/')
       name = parts[parts.length - 1]
     }
     
-    /* 去除尾部日期版本号（如 -20241022、-20250101） */
+    /* 去除尾部日期版本号 */
     name = name.replace(/-\d{8}$/, '')
     
     return name
@@ -52,8 +44,8 @@ const LLMNode = ({ data, selected }) => {
   const modelName = getModelDisplayName(model)
   
   /**
-   * v1.2: 截断系统提示词用于预览
-   * 保留前200个字符，足够看清内容
+   * 截断系统提示词用于预览
+   * 保留前200个字符
    */
   const getPromptPreview = (prompt) => {
     if (!prompt) return ''
@@ -100,7 +92,7 @@ const LLMNode = ({ data, selected }) => {
           </div>
         </div>
         
-        {/* v1.2: 系统提示词预览 - 显示更多内容 */}
+        {/* 系统提示词预览 */}
         {systemPrompt && (
           <div className="node-section">
             <div className="section-title">

@@ -1,9 +1,7 @@
 /**
  * 问题分类节点 - 智能问题分类
- * v3.3 - Handle位置对齐修复：
- *   根据分类数量动态计算Handle位置
- *   每个Handle精确对齐到对应分类项的垂直中心
- *   使用CSS变量 --handle-top + !important覆盖ReactFlow默认top:50%
+ * v3.3 - Handle位置对齐修复
+ * v3.4 - 模型显示名称优化：优先使用config.model_display_name
  */
 
 import React from 'react'
@@ -21,8 +19,15 @@ const ClassifierNode = ({ data, selected }) => {
   const categories = config.categories || []
   const backgroundKnowledge = config.background_knowledge || ''
   
-  /** 提取模型显示名 */
+  /**
+   * v3.4: 提取模型显示名
+   * 优先使用ConfigPanel保存的model_display_name，回退到智能提取
+   */
   const getModelDisplayName = (modelName) => {
+    /* 优先使用配置中保存的显示名称 */
+    if (config.model_display_name) {
+      return config.model_display_name
+    }
     if (!modelName) return '未选择'
     const parts = modelName.split('/')
     let name = parts[parts.length - 1]
@@ -41,16 +46,6 @@ const ClassifierNode = ({ data, selected }) => {
   
   /**
    * v3.3: 精确计算每个分类Handle的top百分比
-   * 
-   * 节点结构高度估算（像素）：
-   * - header: ~54px (padding 16px*2 + font 22px)
-   * - AI模型区域: ~70px (section-title 25px + model-name 36px + margin 9px)
-   * - 分类标题行: ~35px (section-title 25px + margin-top 8px)
-   * - 每个分类项: ~46px (padding 10px*2 + tag 22px + 描述行约14px 如果有的话平均~46px)
-   * - 分类项间距: 8px gap
-   * - footer: ~42px
-   * 
-   * 关键思路：计算每个分类项中心相对于节点总高度的百分比
    */
   const getHandleTopPercent = (index, total) => {
     if (total <= 0) return 50
@@ -165,10 +160,7 @@ const ClassifierNode = ({ data, selected }) => {
         style={{ background: '#d48806' }}
       />
       
-      {/* 
-        v3.3: 输出连接点 - 精确对齐每个分类项中心
-        使用 CSS 变量 --handle-top 配合 CSS 中的 !important 覆盖 ReactFlow 默认定位
-      */}
+      {/* 输出连接点 - 精确对齐每个分类项中心 */}
       {categories.length > 0 ? (
         categories.map((cat, index) => (
           <Handle
