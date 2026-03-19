@@ -1,10 +1,9 @@
 /**
- * 论坛首页组件 v2.0
+ * 论坛首页组件 v2.2
  * 
- * 优化：
- * - 版块卡片使用Emoji图标 + 渐变背景增强视觉层次
- * - 锁定帖在热帖列表中可见标题但不可点击
- * - 热帖标题渲染修复，Tag和标题分离显示
+ * v2.2 - 版块卡片显示版主标识（后端返回is_moderator）
+ * v2.1 - 锁定帖标题去掉删除线
+ * v2.0 - 版块卡片Emoji图标+渐变背景
  * 
  * @module pages/forum/components/ForumHome
  */
@@ -14,10 +13,11 @@ import {
   Card, Row, Col, Typography, Space, Tag, Button, Empty, Spin, Badge, Tooltip
 } from 'antd';
 import {
-  PlusOutlined, FireOutlined, CommentOutlined,
+  PlusOutlined, CommentOutlined,
   UserOutlined, BellOutlined,
   HeartOutlined, EyeOutlined, LikeOutlined,
-  TeamOutlined, GlobalOutlined, LockOutlined
+  TeamOutlined, GlobalOutlined, LockOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -29,7 +29,7 @@ dayjs.locale('zh-cn');
 
 const { Text, Title, Paragraph } = Typography;
 
-/* 版块图标映射：根据icon字段返回Emoji，增加辨识度 */
+/* 版块图标映射 */
 const BOARD_EMOJI_MAP = {
   'CommentOutlined': '💬',
   'CodeOutlined': '💻',
@@ -65,7 +65,7 @@ const ForumHome = ({
 
   return (
     <div className="forum-home">
-      {/* 顶部工具栏 - 渐变背景 */}
+      {/* 顶部工具栏 */}
       <div className="forum-toolbar">
         <div className="toolbar-left">
           <Title level={4} style={{ margin: 0, color: '#1a1a2e' }}>
@@ -120,7 +120,6 @@ const ForumHome = ({
                     hoverable
                     onClick={() => onBoardClick(board)}
                   >
-                    {/* 顶部渐变条 */}
                     <div className="board-color-bar" style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }} />
                     <div className="board-card-body">
                       <div className="board-card-header">
@@ -129,13 +128,24 @@ const ForumHome = ({
                         </div>
                         <div className="board-info">
                           <Text strong className="board-name">{board.name}</Text>
-                          <Tag
-                            color={board.visibility === 'public' ? 'blue' : 'green'}
-                            style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px', borderRadius: 4 }}
-                          >
-                            {board.visibility === 'public' ? <GlobalOutlined /> : <TeamOutlined />}
-                            {' '}{t(`forum.board.visibility.${board.visibility}`)}
-                          </Tag>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            <Tag
+                              color={board.visibility === 'public' ? 'blue' : 'green'}
+                              style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px', borderRadius: 4 }}
+                            >
+                              {board.visibility === 'public' ? <GlobalOutlined /> : <TeamOutlined />}
+                              {' '}{t(`forum.board.visibility.${board.visibility}`)}
+                            </Tag>
+                            {/* v2.2: 版主标识 — 后端返回is_moderator */}
+                            {board.is_moderator && (
+                              <Tag
+                                color="purple"
+                                style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px', borderRadius: 4 }}
+                              >
+                                <SafetyCertificateOutlined /> 版主
+                              </Tag>
+                            )}
+                          </div>
                         </div>
                       </div>
                       {board.description && (
@@ -185,18 +195,16 @@ const ForumHome = ({
                     {index + 1}
                   </span>
                   <div className="hot-post-content">
-                    {/* 标签行（独立一行） */}
                     <div className="hot-post-tags">
                       {post.is_pinned ? <Tag color="red" style={{ fontSize: 10 }}>{t('forum.post.pinned')}</Tag> : null}
                       {post.is_featured ? <Tag color="gold" style={{ fontSize: 10 }}>{t('forum.post.featured')}</Tag> : null}
                       {isLocked && <Tag color="default" icon={<LockOutlined />} style={{ fontSize: 10 }}>{t('forum.post.locked')}</Tag>}
                     </div>
-                    {/* 标题（独立一行） */}
                     <Text
                       strong
                       ellipsis={{ tooltip: isLocked ? `${post.title}（已锁定）` : post.title }}
                       className="hot-post-title"
-                      style={isLocked ? { textDecoration: 'line-through', color: '#999' } : {}}
+                      style={isLocked ? { color: '#999' } : {}}
                     >
                       {post.title}
                     </Text>

@@ -1,10 +1,10 @@
 /**
- * 论坛控制器 v2.2
+ * 论坛控制器 v2.4
  * 
- * 修复：
- * - v2.2 Redis只读环境兼容：浏览量防刷Redis操作包裹try-catch，写入失败静默降级
- * - v2.1 新增 deleteAttachment 方法（删除单个附件+磁盘文件清理）
- * - v2.1 deletePost/deleteReply 时联动清理附件
+ * v2.4 - getBoards返回每个版块is_moderator + getBoardPosts返回is_board_moderator
+ * v2.3 - getPostDetail返回is_moderator字段
+ * v2.2 - Redis只读环境兼容
+ * v2.1 - deleteAttachment + deletePost/deleteReply联动清理附件
  * 
  * @module controllers/ForumController
  */
@@ -24,7 +24,6 @@ const VIEW_COOLDOWN_SECONDS = 900;
 
 /**
  * 清理磁盘上的附件文件（内部工具方法）
- * @param {Object[]} attachments - 附件记录数组
  */
 const cleanupAttachmentFiles = async (attachments) => {
   for (const att of attachments) {
@@ -52,16 +51,36 @@ const ForumController = {
    * 版块
    * ================================================================ */
 
+  /**
+   * 获取版块列表
+   * v2.4: 对每个版块检查当前用户的版主权限，返回is_moderator字段
+   *       版主在前端版块卡片上显示"版主"标识
+   */
   async getBoards(req, res) {
     try {
       const boards = await ForumBoard.getVisibleBoards(req.user);
-      ResponseHelper.success(res, boards, '获取版块列表成功');
+
+      /* v2.4: 批量检查每个版块的版主权限 */
+      const boardsWithModStatus = await Promise.all(
+        boards.map(async (board) => {
+          const { isModerator } = await ForumModeratorService.checkModeratorPermission(
+            req.user.id, board.id, req.user
+          );
+          return { ...board, is_moderator: isModerator };
+        })
+      );
+
+      ResponseHelper.success(res, boardsWithModStatus, '获取版块列表成功');
     } catch (error) {
       logger.error('获取版块列表失败:', error);
       ResponseHelper.error(res, '获取版块列表失败');
     }
   },
 
+  /**
+   * 获取版块帖子列表
+   * v2.4: 返回is_board_moderator字段，前端据此显示帖子管理按钮
+   */
   async getBoardPosts(req, res) {
     try {
       const { boardId } = req.params;
@@ -85,7 +104,19 @@ const ForumController = {
         post.attachments = attachmentMap.get(post.id) || [];
       });
 
-      ResponseHelper.paginated(res, result.items, result.pagination, '获取帖子列表成功');
+      /* v2.4: 在分页响应的额外数据中返回版主标识 */
+      const responseData = {
+        success: true,
+        data: result.items,
+        pagination: result.pagination,
+        message: '获取帖子列表成功',
+        /* v2.4: 额外元数据 */
+        meta: {
+          is_board_moderator: isModerator
+        }
+      };
+
+      res.json(responseData);
     } catch (error) {
       logger.error('获取版块帖子失败:', error);
       ResponseHelper.error(res, '获取帖子列表失败');
@@ -109,10 +140,7 @@ const ForumController = {
 
   /**
    * 获取帖子详情
-   * 
-   * v2.2 修复：Redis 浏览量防刷操作包裹 try-catch
-   * 兼容 Redis 只读副本环境（Docker 部署常见场景）
-   * Redis 写入失败时静默降级为每次都计数
+   * v2.3: 返回 is_moderator 字段
    */
   async getPostDetail(req, res) {
     try {
@@ -123,19 +151,21 @@ const ForumController = {
       const { hasAccess } = await ForumBoard.checkAccess(post.board_id, req.user);
       if (!hasAccess) return ResponseHelper.forbidden(res, '无权访问此帖子');
 
+      const { isModerator } = await ForumModeratorService.checkModeratorPermission(
+        req.user.id, post.board_id, req.user
+      );
+
       if (post.is_hidden) {
-        const { isModerator } = await ForumModeratorService.checkModeratorPermission(req.user.id, post.board_id, req.user);
         if (!isModerator) return ResponseHelper.notFound(res, '帖子不存在');
       }
 
       if (post.is_locked) {
-        const { isModerator } = await ForumModeratorService.checkModeratorPermission(req.user.id, post.board_id, req.user);
         if (!isModerator) {
           post.content = null;
         }
       }
 
-      /* v2.2 浏览量防刷 - Redis操作包裹try-catch，兼容只读Redis */
+      /* 浏览量防刷 */
       let shouldCount = true;
       try {
         if (redisConnection.isConnected) {
@@ -148,7 +178,6 @@ const ForumController = {
           }
         }
       } catch (redisErr) {
-        /* Redis 只读或不可用时静默降级，不影响正常功能 */
         logger.debug('论坛浏览量Redis防刷降级', { postId: id, error: redisErr.message });
       }
 
@@ -157,6 +186,7 @@ const ForumController = {
       }
 
       post.attachments = await ForumAttachment.getByTarget('post', id);
+      post.is_moderator = isModerator;
 
       ResponseHelper.success(res, post, '获取帖子详情成功');
     } catch (error) {
@@ -214,9 +244,6 @@ const ForumController = {
     }
   },
 
-  /**
-   * 删除帖子 - v2.1 联动清理附件
-   */
   async deletePost(req, res) {
     try {
       const { id } = req.params;
@@ -343,9 +370,6 @@ const ForumController = {
     }
   },
 
-  /**
-   * 删除回复 - v2.1 联动清理附件
-   */
   async deleteReply(req, res) {
     try {
       const { id } = req.params;

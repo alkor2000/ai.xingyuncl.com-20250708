@@ -1,7 +1,8 @@
 /**
- * 论坛模块状态管理 Store v2.1
+ * 论坛模块状态管理 Store v2.2
  * 
- * 新增：deleteAttachment 删除单个附件
+ * v2.2 - fetchBoardPosts解析后端返回的meta.is_board_moderator
+ * v2.1 - deleteAttachment 删除单个附件
  * 
  * @module stores/forumStore
  */
@@ -22,6 +23,8 @@ const useForumStore = create((set, get) => ({
   postsLoading: false,
   postsPagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
   postsSort: 'active',
+  /* v2.2: 当前版块的版主身份 */
+  isBoardModerator: false,
   currentPost: null,
   currentPostLoading: false,
   replies: [],
@@ -61,15 +64,35 @@ const useForumStore = create((set, get) => ({
   /* ================================================================
    * 帖子列表
    * ================================================================ */
+
+  /**
+   * 获取版块帖子列表
+   * v2.2: 后端getBoardPosts返回自定义格式含meta.is_board_moderator
+   *       这里直接解析原始响应，同时兼容标准paginated格式
+   */
   fetchBoardPosts: async (boardId, options = {}) => {
     set({ postsLoading: true });
     try {
       const { page = 1, limit = 20, sort } = options;
       const currentSort = sort || get().postsSort;
       const res = await apiClient.get(`/forum/boards/${boardId}/posts`, { params: { page, limit, sort: currentSort } });
-      if (res.data.success) {
-        set({ posts: res.data.data || [], postsPagination: res.data.pagination || { page, limit, total: 0, totalPages: 0 }, postsSort: currentSort, postsLoading: false });
-      } else set({ postsLoading: false });
+      
+      const resData = res.data;
+      
+      /* v2.2: 解析版主身份（后端自定义格式，meta在顶层） */
+      const isBoardMod = resData.meta?.is_board_moderator === true;
+      
+      /* 兼容两种响应格式 */
+      const posts = resData.data || [];
+      const pagination = resData.pagination || { page, limit, total: 0, totalPages: 0 };
+      
+      set({
+        posts,
+        postsPagination: pagination,
+        postsSort: currentSort,
+        isBoardModerator: isBoardMod,
+        postsLoading: false
+      });
     } catch (error) {
       console.error('获取帖子列表失败:', error);
       set({ postsLoading: false });
@@ -299,7 +322,6 @@ const useForumStore = create((set, get) => ({
     } catch (error) { message.error(error.response?.data?.message || '文件上传失败'); throw error; }
   },
 
-  /** v2.1 删除单个附件（后端同步删除磁盘文件） */
   deleteAttachment: async (attachmentId) => {
     try {
       const res = await apiClient.delete(`/forum/attachments/${attachmentId}`);
@@ -453,6 +475,7 @@ const useForumStore = create((set, get) => ({
     set({
       boards: [], currentBoard: null,
       posts: [], postsPagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      isBoardModerator: false,
       currentPost: null, replies: [],
       hotPosts: [], myPosts: [], favorites: [],
       notifications: [], unreadCount: 0,

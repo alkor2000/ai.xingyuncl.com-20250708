@@ -1,9 +1,9 @@
 /**
- * 版块帖子列表组件 v2.0
+ * 版块帖子列表组件 v2.3
  * 
- * 优化：
- * - 锁定帖可见标题但不可点击进入
- * - 锁定帖视觉灰化 + 锁图标 + 删除线
+ * v2.3 - 版主管理按钮：从store读取isBoardModerator，每个帖子右侧显示"管理"按钮
+ * v2.1 - 锁定帖标题去掉删除线
+ * v2.0 - 锁定帖可见标题但不可点击进入
  * 
  * @module pages/forum/components/BoardPostList
  */
@@ -11,12 +11,14 @@
 import React, { useEffect } from 'react';
 import {
   Typography, Space, Tag, Button, Empty, Spin, Segmented,
-  Pagination, Avatar, Tooltip, message
+  Pagination, Avatar, message, Dropdown
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined,
   EyeOutlined, CommentOutlined, LikeOutlined,
-  LockOutlined, ClockCircleOutlined
+  LockOutlined, ClockCircleOutlined, SettingOutlined,
+  PushpinFilled, TrophyOutlined, EyeInvisibleOutlined,
+  StopOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useForumStore from '../../../stores/forumStore';
@@ -38,7 +40,9 @@ const BoardPostList = ({
   const { t } = useTranslation();
   const {
     posts, postsLoading, postsPagination, postsSort,
-    fetchBoardPosts, setPostsSort
+    isBoardModerator,
+    fetchBoardPosts, setPostsSort,
+    modTogglePostStatus
   } = useForumStore();
 
   useEffect(() => {
@@ -63,6 +67,27 @@ const BoardPostList = ({
     }
     onPostClick(post);
   };
+
+  /**
+   * v2.3: 版主快捷操作 — 在帖子列表中直接管理
+   */
+  const handleModAction = async (postId, action, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    try {
+      await modTogglePostStatus(postId, action);
+      /* 操作成功后刷新列表 */
+      await fetchBoardPosts(boardId, { page: postsPagination.page, sort: postsSort });
+    } catch (err) { /* store已处理 */ }
+  };
+
+  /** 构建版主操作菜单 */
+  const getModMenuItems = (post) => [
+    { key: 'pin', icon: <PushpinFilled />, label: post.is_pinned ? t('forum.moderator.unpin') : t('forum.moderator.pin') },
+    { key: 'feature', icon: <TrophyOutlined />, label: post.is_featured ? t('forum.moderator.unfeature') : t('forum.moderator.feature') },
+    { key: 'hide', icon: <EyeInvisibleOutlined />, label: post.is_hidden ? t('forum.moderator.unhide') : t('forum.moderator.hide') },
+    { key: 'lock', icon: <LockOutlined />, label: post.is_locked ? t('forum.moderator.unlock') : t('forum.moderator.lock') },
+    { key: 'disable-reply', icon: <StopOutlined />, label: post.is_reply_disabled ? t('forum.moderator.enableReply') : t('forum.moderator.disableReply') }
+  ];
 
   const renderPostItem = (post) => {
     const hasImages = post.attachments?.some(a => a.file_type === 'image');
@@ -91,7 +116,7 @@ const BoardPostList = ({
           <Text
             strong
             className="post-item-title"
-            style={isLocked ? { textDecoration: 'line-through', color: '#999' } : {}}
+            style={isLocked ? { color: '#999' } : {}}
           >
             {isLocked && <LockOutlined style={{ marginRight: 6, color: '#bbb' }} />}
             {post.title}
@@ -124,12 +149,37 @@ const BoardPostList = ({
           </div>
         </div>
 
-        {/* 右侧图片预览（锁定帖不显示） */}
-        {hasImages && !isLocked && (
-          <div className="post-item-preview">
-            <img src={`/uploads/${post.attachments.find(a => a.file_type === 'image').file_path}`} alt="preview" />
-          </div>
-        )}
+        {/* 右侧区域 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* 图片预览（锁定帖不显示） */}
+          {hasImages && !isLocked && (
+            <div className="post-item-preview">
+              <img src={`/uploads/${post.attachments.find(a => a.file_type === 'image').file_path}`} alt="preview" />
+            </div>
+          )}
+
+          {/* v2.3: 版主管理按钮 — 显眼的"管理"文字按钮 */}
+          {isBoardModerator && (
+            <Dropdown
+              menu={{
+                items: getModMenuItems(post),
+                onClick: ({ key, domEvent }) => handleModAction(post.id, key, domEvent)
+              }}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <Button
+                type="default"
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={(e) => { e.stopPropagation(); }}
+                style={{ borderColor: '#722ed1', color: '#722ed1' }}
+              >
+                管理
+              </Button>
+            </Dropdown>
+          )}
+        </div>
       </div>
     );
   };
@@ -140,6 +190,12 @@ const BoardPostList = ({
         <div className="header-left">
           <Button icon={<ArrowLeftOutlined />} type="text" onClick={onBack} />
           <Title level={4} style={{ margin: 0 }}>{boardName}</Title>
+          {/* v2.3: 版主身份标识 */}
+          {isBoardModerator && (
+            <Tag color="purple" style={{ marginLeft: 8, fontSize: 11 }}>
+              <SafetyCertificateOutlined /> 版主
+            </Tag>
+          )}
         </div>
         <Space>
           <Segmented

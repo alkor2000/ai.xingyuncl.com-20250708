@@ -1,7 +1,9 @@
 /**
- * 帖子详情组件 v2.2
+ * 帖子详情组件 v2.3
  * 
- * 修复：帖子附件（图片+文件）支持作者/版主删除
+ * v2.3 - 版主权限：使用后端返回的is_moderator字段判断，指定版主也能看到管理操作
+ *      - 返回按钮：从小箭头改为"← 返回论坛"文字按钮
+ * v2.2 - 帖子附件支持作者/版主删除
  * 
  * @module pages/forum/components/PostDetail
  */
@@ -48,7 +50,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const [replyToId, setReplyToId] = useState(null);
   const [replyToName, setReplyToName] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  /* v2.2 本地跟踪已删除的附件ID，避免重新拉数据 */
+  /* v2.2 本地跟踪已删除的附件ID */
   const [deletedAttIds, setDeletedAttIds] = useState(new Set());
   const [deletingAttId, setDeletingAttId] = useState(null);
 
@@ -62,7 +64,16 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   }, [postId]);
 
   const post = currentPost;
-  const isModerator = user?.role === 'super_admin' || user?.role === 'admin';
+
+  /**
+   * v2.3: 版主权限判断 — 使用后端返回的 is_moderator 字段
+   * 后端 ForumModeratorService.checkModeratorPermission 会检查：
+   * 1. super_admin → 全局版主
+   * 2. admin(组管理员) → 本组group版块自动版主
+   * 3. forum_moderators表 → 指定版主
+   * 前端不再仅靠role判断，指定版主也能看到管理操作
+   */
+  const isModerator = post?.is_moderator === true || post?.is_moderator === 1;
   const isAuthor = post?.user_id === user?.id;
   /** 是否可以管理附件（作者或版主） */
   const canManageAttachments = isAuthor || isModerator;
@@ -113,9 +124,16 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
 
   return (
     <div className="post-detail">
-      {/* 头部导航 */}
+      {/* 头部导航 - v2.3: 返回按钮改为"返回论坛"文字 */}
       <div className="post-detail-header">
-        <Button icon={<ArrowLeftOutlined />} type="text" onClick={onBack} style={{ fontSize: 16 }} />
+        <Button
+          icon={<ArrowLeftOutlined />}
+          type="text"
+          onClick={onBack}
+          style={{ fontSize: 15, padding: '4px 12px' }}
+        >
+          返回论坛
+        </Button>
         <Space>
           {(isAuthor || isModerator) && (
             <Button icon={<EditOutlined />} onClick={() => onEditPost(post)}>{t('forum.post.edit')}</Button>
@@ -125,6 +143,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
               <Button icon={<DeleteOutlined />} danger>{t('forum.post.delete')}</Button>
             </Popconfirm>
           )}
+          {/* v2.3: 版主操作菜单 — 使用后端is_moderator判断 */}
           {isModerator && (
             <Dropdown menu={{ items: modMenuItems, onClick: ({ key }) => handleModAction(key) }} trigger={['click']}>
               <Button icon={<MoreOutlined />}>{t('forum.moderator.actions')}</Button>
@@ -165,7 +184,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           </Space>
         </div>
 
-        {/* 正文 */}
+        {/* 正文 - Markdown排版渲染 */}
         {post.is_locked && !post.content ? (
           <div className="locked-notice">
             <LockOutlined style={{ fontSize: 32, marginBottom: 12, color: '#bbb' }} />
@@ -177,7 +196,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           </div>
         )}
 
-        {/* 图片附件 - v2.2 作者/版主可删除 */}
+        {/* 图片附件 */}
         {imageAttachments.length > 0 && (
           <div className="post-attachments-images">
             <Image.PreviewGroup>
@@ -190,7 +209,6 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                     style={{ borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }}
                     placeholder={<div style={{ width: 200, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
                   />
-                  {/* v2.2 删除按钮 - 仅作者/版主可见 */}
                   {canManageAttachments && (
                     <Popconfirm
                       title="确定删除这张图片？删除后无法恢复"
@@ -214,7 +232,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           </div>
         )}
 
-        {/* 文件附件 - v2.2 作者/版主可删除 */}
+        {/* 文件附件 */}
         {fileAttachments.length > 0 && (
           <div className="post-attachments-files">
             {fileAttachments.map(att => (
