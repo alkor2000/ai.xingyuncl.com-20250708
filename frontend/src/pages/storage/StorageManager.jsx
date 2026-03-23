@@ -1,5 +1,11 @@
 /**
- * 智能云盘 - Windows风格文件管理器 v2.0
+ * 智能云盘 - Windows风格文件管理器 v2.1
+ * 
+ * v2.1 修复：
+ * - 修复拖拽移动文件后上传遮罩不消失的bug
+ *   原因：内部拖拽（文件移动）触发了外层容器的handleDragEnter，dragActive被设为true但未重置
+ *   方案：handleDragEnter中判断是否为外部文件拖入（检查dataTransfer.types），
+ *         只有外部文件才激活上传遮罩；onDragEnd中也重置dragActive状态
  * 
  * v2.0 完整重构：
  * 1. 拖拽上传 - 拖拽文件到页面区域直接上传，全屏遮罩视觉反馈
@@ -102,6 +108,18 @@ const copyToClipboard = async (text, successMsg, errorMsg) => {
     }
     message.success(successMsg || '已复制')
   } catch { message.error(errorMsg || '复制失败') }
+}
+
+/**
+ * v2.1 判断拖拽事件是否来自外部文件（浏览器外拖入）
+ * 内部拖拽（文件卡片拖动）会设置 text/plain 数据，外部文件拖入只有 Files 类型
+ * @param {DragEvent} e - 拖拽事件
+ * @returns {boolean} 是否是外部文件拖入
+ */
+const isExternalFileDrag = (e) => {
+  const types = Array.from(e.dataTransfer.types || [])
+  // 外部文件拖入：有 Files 类型，没有 text/plain（内部拖拽标记）
+  return types.includes('Files') && !types.includes('text/plain')
 }
 
 // ===== 主组件 =====
@@ -290,15 +308,50 @@ const StorageManager = () => {
     }
   }, [clearSelection])
 
-  // ===== 拖拽上传 =====
+  // ===== v2.1 修复：拖拽上传（只响应外部文件拖入，不响应内部文件卡片拖拽） =====
   const dragCounter = useRef(0)
-  const handleDragEnter = (e) => { e.preventDefault(); dragCounter.current++; setDragActive(true) }
-  const handleDragLeave = (e) => { e.preventDefault(); dragCounter.current--; if (dragCounter.current <= 0) { setDragActive(false); dragCounter.current = 0 } }
+
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    // v2.1 关键修复：只有外部文件拖入才激活上传遮罩
+    // 内部拖拽（文件卡片拖动移动）会在dataTransfer中设置text/plain，不应触发上传遮罩
+    if (!isExternalFileDrag(e)) return
+    dragCounter.current++
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    // v2.1 只有外部文件拖拽才处理leave事件
+    if (!isExternalFileDrag(e)) return
+    dragCounter.current--
+    if (dragCounter.current <= 0) {
+      setDragActive(false)
+      dragCounter.current = 0
+    }
+  }
+
   const handleDragOver = (e) => { e.preventDefault() }
+
   const handleDrop = async (e) => {
-    e.preventDefault(); setDragActive(false); dragCounter.current = 0
+    e.preventDefault()
+    // v2.1 无论什么情况，drop时都重置上传遮罩状态
+    setDragActive(false)
+    dragCounter.current = 0
+
+    // 只处理外部文件拖入的上传
     const droppedFiles = Array.from(e.dataTransfer.files)
     if (droppedFiles.length === 0) return
+
+    // 如果是内部拖拽（有text/plain数据），不执行上传
+    try {
+      const plainData = e.dataTransfer.getData('text/plain')
+      if (plainData) {
+        const parsed = JSON.parse(plainData)
+        if (parsed?.id && parsed?.type) return // 这是内部文件移动，不上传
+      }
+    } catch { /* 解析失败说明不是内部拖拽，继续上传 */ }
+
     try {
       const result = await uploadFiles(droppedFiles, currentFolder?.id)
       if (result.success?.length > 0) message.success(t('storage.uploadSuccess', { count: result.success.length }))
@@ -311,7 +364,7 @@ const StorageManager = () => {
 
   // ===== 拖拽移动文件 =====
   const handleFileDragStart = useCallback((e, item, type) => {
-    // 设置拖拽数据
+    // 设置拖拽数据（text/plain标记为内部拖拽，供handleDragEnter判断）
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: item.id, type }))
     e.dataTransfer.effectAllowed = 'move'
     // 如果拖拽的项目不在选中列表中，先选中它
@@ -336,7 +389,12 @@ const StorageManager = () => {
   }, [])
 
   const handleFolderDrop = useCallback(async (e, targetFolderId) => {
-    e.preventDefault(); e.stopPropagation(); setDragOverFolderId(null)
+    e.preventDefault(); e.stopPropagation()
+    // v2.1 重置所有拖拽状态
+    setDragOverFolderId(null)
+    setDragActive(false)
+    dragCounter.current = 0
+
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'))
       if (!data?.id) return
@@ -358,6 +416,10 @@ const StorageManager = () => {
   // 拖到左侧树的根目录
   const handleDropToRoot = useCallback(async (e) => {
     e.preventDefault(); e.stopPropagation()
+    // v2.1 重置拖拽状态
+    setDragActive(false)
+    dragCounter.current = 0
+
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'))
       if (!data?.id || data.type !== 'file') return
@@ -367,6 +429,18 @@ const StorageManager = () => {
       await loadData()
     } catch {}
   }, [selectedFiles, batchMoveFiles, t, loadData])
+
+  /**
+   * v2.1 统一的拖拽结束处理
+   * 在所有文件/文件夹卡片的onDragEnd中调用，确保所有拖拽状态被清理
+   */
+  const handleDragEnd = useCallback(() => {
+    setDraggingItems([])
+    setDragOverFolderId(null)
+    // v2.1 关键修复：内部拖拽结束时也要确保上传遮罩被清除
+    setDragActive(false)
+    dragCounter.current = 0
+  }, [])
 
   // ===== 右键菜单 =====
   const handleContextMenu = useCallback((e, item = null, type = 'blank') => {
@@ -625,7 +699,7 @@ const StorageManager = () => {
             onDragOver={(e) => handleFolderDragOver(e, folder.id)}
             onDragLeave={handleFolderDragLeave}
             onDrop={(e) => handleFolderDrop(e, folder.id)}
-            onDragEnd={() => { setDraggingItems([]); setDragOverFolderId(null) }}
+            onDragEnd={handleDragEnd}
           >
             <div className="select-badge">{isSelected ? <CheckOutlined /> : null}</div>
             <div className="file-icon folder-icon">
@@ -666,7 +740,7 @@ const StorageManager = () => {
             onDoubleClick={() => !isRenaming && (() => { setPreviewFile(file); setPreviewVisible(true) })()}
             onContextMenu={(e) => handleContextMenu(e, file, 'file')}
             onDragStart={(e) => handleFileDragStart(e, file, 'file')}
-            onDragEnd={() => setDraggingItems([])}
+            onDragEnd={handleDragEnd}
           >
             <div className="select-badge">{isSelected ? <CheckOutlined /> : null}</div>
             <FileIcon mimeType={file.mime_type} fileName={file.original_name} />
