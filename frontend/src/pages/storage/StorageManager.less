@@ -1,14 +1,16 @@
 /**
- * 文件管理系统 - 优化配色版 v1.1
- * 文件夹和文件使用鲜艳渐变色，存储卡片更紧凑
- * v1.1 更新：
- * - 左侧标题改为"智能云盘"
- * - 新增"文件夹列表"小标题样式
- * - 新增右侧当前文件夹名称样式
- * - 文件夹树扁平化，"我的文件夹"与其他文件夹齐平
+ * 智能云盘 - Windows风格文件管理器样式 v2.0
+ * 
+ * v2.0 重构：
+ * 1. Windows风格右键菜单（含子菜单"移动到"）
+ * 2. 拖拽上传全屏遮罩
+ * 3. 拖拽移动视觉反馈（文件夹高亮）
+ * 4. 多选样式（Ctrl+Click蓝色选中框）
+ * 5. 状态栏（底部显示选中数量/总项目数）
+ * 6. 内联重命名输入框样式
  */
 
-// 渐变色系统
+// ===== 渐变色系统 =====
 @orange-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
 @green-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
 @blue-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
@@ -18,7 +20,7 @@
 @cyan-gradient: linear-gradient(135deg, #67e8f9 0%, #06b6d4 100%);
 @indigo-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
 
-// 基础色
+// ===== 基础色 =====
 @background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
 @text-white: #ffffff;
 @text-dark: #1e293b;
@@ -30,23 +32,25 @@
   position: relative;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  // 禁止默认浏览器右键菜单（由自定义菜单替代）
+  user-select: none;
 
-  // 主布局
+  // ===== 主布局 =====
   .storage-layout {
     display: flex;
     height: 100%;
     gap: 20px;
     padding: 20px;
+    padding-bottom: 0; // 留给状态栏
   }
 
-  // 侧边栏
+  // ===== 侧边栏 =====
   .storage-sidebar {
     width: 280px;
     display: flex;
     flex-direction: column;
     gap: 16px;
 
-    // 文件夹树卡片
     .folder-tree-card {
       background: white;
       border-radius: 16px;
@@ -56,7 +60,6 @@
       display: flex;
       flex-direction: column;
 
-      // v1.1 顶部标题改为"智能云盘"
       .folder-tree-header {
         background: @indigo-gradient;
         padding: 14px 18px;
@@ -65,7 +68,6 @@
         font-weight: 600;
       }
 
-      // v1.1 新增"文件夹列表"小标题
       .folder-list-title {
         padding: 12px 18px 8px;
         font-size: 12px;
@@ -82,24 +84,14 @@
         overflow-y: auto;
         padding: 12px 16px;
 
-        &::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        &::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
-          border-radius: 3px;
-        }
+        &::-webkit-scrollbar { width: 6px; }
+        &::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px; }
 
         .ant-tree {
           background: transparent;
           color: @text-dark;
 
-          // v1.1 调整树节点样式，让所有文件夹齐平
-          .ant-tree-treenode {
-            padding: 2px 0;
-            width: 100%;
-          }
+          .ant-tree-treenode { padding: 2px 0; width: 100%; }
 
           .ant-tree-node-content-wrapper {
             padding: 8px 12px;
@@ -107,41 +99,31 @@
             transition: all 0.2s;
             flex: 1;
 
-            &:hover {
-              background: #f1f5f9;
-            }
-
+            &:hover { background: #f1f5f9; }
             &.ant-tree-node-selected {
               background: @blue-gradient;
               color: white;
-
-              .ant-tree-iconEle {
-                color: white;
-              }
+              .ant-tree-iconEle { color: white; }
             }
           }
 
-          .ant-tree-switcher {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
+          .ant-tree-switcher { display: flex; align-items: center; justify-content: center; }
+          .ant-tree-iconEle { color: #f59e0b; font-size: 16px; }
+          .ant-tree-node-selected .ant-tree-iconEle { color: white; }
+        }
 
-          // v1.1 文件夹图标统一颜色
-          .ant-tree-iconEle {
-            color: #f59e0b;
-            font-size: 16px;
-          }
-
-          // 选中状态的图标颜色
-          .ant-tree-node-selected .ant-tree-iconEle {
-            color: white;
+        // v2.0 侧边栏文件夹拖拽放置高亮
+        .tree-drop-target {
+          .ant-tree-node-content-wrapper {
+            background: rgba(59, 130, 246, 0.15) !important;
+            outline: 2px dashed #3b82f6;
+            outline-offset: -2px;
           }
         }
       }
     }
 
-    // 存储信息卡片 - 更紧凑
+    // 存储信息卡片
     .storage-info-card {
       background: @purple-gradient;
       border-radius: 16px;
@@ -150,21 +132,11 @@
       box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.3);
       height: 140px;
 
-      > div:first-child {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 10px;
-      }
+      > div:first-child { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
 
       .storage-progress {
-        .ant-progress-inner {
-          background: rgba(255, 255, 255, 0.3);
-          height: 6px;
-        }
-
-        .ant-progress-bg {
-          background: white;
-        }
+        .ant-progress-inner { background: rgba(255, 255, 255, 0.3); height: 6px; }
+        .ant-progress-bg { background: white; }
       }
 
       .storage-stats {
@@ -174,23 +146,14 @@
 
         .stat-item {
           text-align: center;
-
-          .stat-value {
-            font-size: 16px;
-            font-weight: 700;
-          }
-
-          .stat-label {
-            font-size: 11px;
-            opacity: 0.9;
-            margin-top: 2px;
-          }
+          .stat-value { font-size: 16px; font-weight: 700; }
+          .stat-label { font-size: 11px; opacity: 0.9; margin-top: 2px; }
         }
       }
     }
   }
 
-  // 主内容区
+  // ===== 主内容区 =====
   .storage-main {
     flex: 1;
     background: white;
@@ -203,11 +166,12 @@
     // 工具栏
     .storage-toolbar {
       background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-      padding: 16px 20px;
+      padding: 12px 20px;
       border-bottom: 1px solid #e2e8f0;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-shrink: 0;
 
       .breadcrumb-nav {
         display: flex;
@@ -215,7 +179,6 @@
         gap: 16px;
         flex: 1;
 
-        // v1.1 新增当前文件夹名称显示
         .current-folder-name {
           display: flex;
           align-items: center;
@@ -227,25 +190,18 @@
           font-size: 14px;
           font-weight: 600;
           box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-
-          .folder-icon {
-            font-size: 16px;
-          }
+          .folder-icon { font-size: 16px; }
         }
 
         .ant-breadcrumb {
           font-size: 14px;
-
           .ant-breadcrumb-link {
             color: @text-muted;
             padding: 6px 10px;
             border-radius: 6px;
+            cursor: pointer;
             transition: all 0.2s;
-
-            &:hover {
-              background: @blue-gradient;
-              color: white;
-            }
+            &:hover { background: @blue-gradient; color: white; }
           }
         }
       }
@@ -257,24 +213,21 @@
 
         .search-box {
           position: relative;
-
           input {
             padding: 8px 36px 8px 14px;
             border-radius: 10px;
             border: 1px solid #e2e8f0;
             background: white;
-            width: 260px;
+            width: 220px;
             transition: all 0.2s;
             font-size: 14px;
-
             &:focus {
-              width: 320px;
+              width: 280px;
               border-color: #3b82f6;
               box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
               outline: none;
             }
           }
-
           .search-icon {
             position: absolute;
             right: 12px;
@@ -286,11 +239,9 @@
 
         .view-switcher {
           display: flex;
-          gap: 0;
           background: #f1f5f9;
           padding: 2px;
           border-radius: 8px;
-
           button {
             padding: 6px 10px;
             border: none;
@@ -299,15 +250,8 @@
             color: @text-muted;
             transition: all 0.2s;
             cursor: pointer;
-
-            &.active {
-              background: @blue-gradient;
-              color: white;
-            }
-
-            &:hover:not(.active) {
-              color: @text-dark;
-            }
+            &.active { background: @blue-gradient; color: white; }
+            &:hover:not(.active) { color: @text-dark; }
           }
         }
 
@@ -318,51 +262,34 @@
           padding: 0 16px;
           border: none;
           transition: all 0.2s;
-
           &:not(.ant-btn-danger) {
             background: @blue-gradient;
             color: white;
-
-            &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
-            }
+            &:hover { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3); }
           }
-
           &.ant-btn-danger {
             background: @red-gradient;
             color: white;
-
-            &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
-            }
-          }
-
-          &[icon] {
-            padding: 0 10px;
+            &:hover { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3); }
           }
         }
       }
     }
 
-    // 内容区域
+    // ===== 内容区域 =====
     .storage-content {
       flex: 1;
       overflow-y: auto;
       padding: 20px;
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      position: relative;
+      // v2.0 点击空白处取消选择
+      min-height: 300px;
 
-      &::-webkit-scrollbar {
-        width: 8px;
-      }
+      &::-webkit-scrollbar { width: 8px; }
+      &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
-      &::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
-      }
-
-      // 网格视图
+      // ===== 网格视图 =====
       &.grid-view {
         .file-grid {
           display: grid;
@@ -373,7 +300,7 @@
             border-radius: 14px;
             padding: 20px 14px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
             position: relative;
             display: flex;
             flex-direction: column;
@@ -382,20 +309,35 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             overflow: hidden;
 
+            // v2.0 选中状态 - Windows蓝色选中框
+            &.selected {
+              outline: 3px solid #3b82f6;
+              outline-offset: -3px;
+              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+              transform: scale(1.02);
+            }
+
+            // v2.0 拖拽中的文件半透明
+            &.dragging {
+              opacity: 0.4;
+            }
+
+            // v2.0 文件夹拖拽放置目标高亮
+            &.drop-target {
+              outline: 3px dashed #3b82f6;
+              outline-offset: -3px;
+              background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%) !important;
+              transform: scale(1.05);
+            }
+
             // 文件夹样式 - 橙色渐变
             &.folder-item {
               background: @orange-gradient;
-              
-              &:hover {
-                transform: translateY(-4px) scale(1.02);
-                box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4);
-              }
+              &:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4); }
+              &.selected { transform: scale(1.02); }
+              &.drop-target { transform: scale(1.05); }
+              .file-icon svg { color: white !important; }
 
-              .file-icon svg {
-                color: white !important;
-              }
-
-              // 文件夹悬停操作按钮
               .folder-actions {
                 position: absolute;
                 top: 8px;
@@ -419,109 +361,26 @@
                   border: none;
                   background: transparent;
                   color: #64748b;
-                  transition: all 0.2s;
-
-                  &:hover {
-                    background: #f1f5f9;
-                    color: #3b82f6;
-                  }
-
-                  &.ant-btn-dangerous {
-                    &:hover {
-                      background: #fee2e2;
-                      color: #ef4444;
-                    }
-                  }
+                  &:hover { background: #f1f5f9; color: #3b82f6; }
+                  &.ant-btn-dangerous:hover { background: #fee2e2; color: #ef4444; }
                 }
               }
 
-              &:hover .folder-actions {
-                opacity: 1;
-                transform: translateY(0);
-              }
+              &:hover .folder-actions { opacity: 1; transform: translateY(0); }
             }
 
             // 根据文件类型设置渐变背景
-            &.image-file {
-              background: @green-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
-              }
-            }
+            &.image-file { background: @green-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4); } }
+            &.video-file { background: @blue-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4); } }
+            &.document-file { background: @cyan-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(6, 182, 212, 0.4); } }
+            &.pdf-file { background: @red-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4); } }
+            &.excel-file { background: @green-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(5, 150, 105, 0.4); } }
+            &.ppt-file { background: @pink-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(236, 72, 153, 0.4); } }
+            &.archive-file { background: @purple-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(139, 92, 246, 0.4); } }
+            &.text-file { background: @indigo-gradient; &:hover { box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4); } }
+            &.unknown-file { background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%); &:hover { box-shadow: 0 10px 20px -5px rgba(100, 116, 139, 0.4); } }
 
-            &.video-file {
-              background: @blue-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4);
-              }
-            }
-
-            &.document-file {
-              background: @cyan-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(6, 182, 212, 0.4);
-              }
-            }
-
-            &.pdf-file {
-              background: @red-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4);
-              }
-            }
-
-            &.excel-file {
-              background: @green-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(5, 150, 105, 0.4);
-              }
-            }
-
-            &.ppt-file {
-              background: @pink-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(236, 72, 153, 0.4);
-              }
-            }
-
-            &.archive-file {
-              background: @purple-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(139, 92, 246, 0.4);
-              }
-            }
-
-            &.text-file {
-              background: @indigo-gradient;
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
-              }
-            }
-
-            &.unknown-file {
-              background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
-              
-              &:hover {
-                box-shadow: 0 10px 20px -5px rgba(100, 116, 139, 0.4);
-              }
-            }
-
-            &:hover {
-              transform: translateY(-4px) scale(1.02);
-            }
-
-            &.selected {
-              transform: scale(1.05);
-              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-            }
+            &:hover:not(.selected):not(.drop-target) { transform: translateY(-4px) scale(1.02); }
 
             // 文件图标
             .file-icon {
@@ -531,15 +390,8 @@
               align-items: center;
               justify-content: center;
               margin-bottom: 12px;
-
-              svg {
-                width: 100%;
-                height: 100%;
-                color: white;
-                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-              }
-
-              // 文件数量标记
+              position: relative;
+              svg { width: 100%; height: 100%; color: white; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)); }
               .file-count {
                 position: absolute;
                 top: -6px;
@@ -566,73 +418,71 @@
               text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }
 
-            // 文件大小
-            .file-size {
-              font-size: 11px;
-              margin-top: 4px;
-              opacity: 0.95;
+            // v2.0 内联重命名输入框
+            .rename-input {
+              width: 100%;
+              padding: 4px 8px;
+              border: 2px solid #3b82f6;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              text-align: center;
+              background: rgba(255, 255, 255, 0.95);
+              color: @text-dark;
+              outline: none;
+              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+              text-shadow: none;
             }
 
-            // 选择框
-            .select-checkbox {
+            .file-size { font-size: 11px; margin-top: 4px; opacity: 0.95; }
+
+            // 选择勾号（v2.0 替换Checkbox为角标）
+            .select-badge {
               position: absolute;
               top: 8px;
               left: 8px;
-              opacity: 0;
-              transition: opacity 0.2s;
+              width: 22px;
+              height: 22px;
+              border-radius: 50%;
+              background: rgba(255, 255, 255, 0.3);
+              border: 2px solid rgba(255, 255, 255, 0.6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 12px;
+              color: transparent;
+              transition: all 0.2s;
               z-index: 2;
-
-              .ant-checkbox-wrapper {
-                .ant-checkbox {
-                  border-color: white;
-                  background: rgba(255, 255, 255, 0.2);
-
-                  &.ant-checkbox-checked {
-                    background: white;
-                    
-                    .ant-checkbox-inner::after {
-                      border-color: #3b82f6;
-                    }
-                  }
-                }
-              }
             }
 
-            &:hover .select-checkbox,
-            &.selected .select-checkbox {
-              opacity: 1;
+            &.selected .select-badge {
+              background: #3b82f6;
+              border-color: #3b82f6;
+              color: white;
+            }
+
+            &:hover .select-badge {
+              border-color: white;
             }
           }
         }
       }
 
-      // 列表视图
+      // ===== 列表视图 =====
       &.list-view {
         .ant-table {
           font-size: 14px;
-
-          .ant-table-thead {
-            > tr > th {
-              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-              border-bottom: 2px solid #e2e8f0;
-              font-weight: 600;
-              color: @text-dark;
-            }
+          .ant-table-thead > tr > th {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: @text-dark;
           }
-
-          .ant-table-tbody {
-            > tr {
-              transition: all 0.2s;
-
-              &:hover {
-                background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
-              }
-
-              > td {
-                padding: 12px;
-                border-bottom: 1px solid #f1f5f9;
-              }
-            }
+          .ant-table-tbody > tr {
+            transition: all 0.2s;
+            &:hover { background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%); }
+            &.selected-row { background: rgba(59, 130, 246, 0.08); }
+            > td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
           }
         }
       }
@@ -644,7 +494,6 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-
         .empty-icon {
           font-size: 72px;
           background: @purple-gradient;
@@ -653,41 +502,73 @@
           background-clip: text;
           margin-bottom: 20px;
         }
-
-        .empty-text {
-          font-size: 16px;
-          color: @text-muted;
-          font-weight: 500;
-        }
+        .empty-text { font-size: 16px; color: @text-muted; font-weight: 500; }
+        .empty-hint { font-size: 13px; color: #94a3b8; margin-top: 8px; }
       }
 
-      // 拖拽状态
+      // ===== v2.0 拖拽上传全屏遮罩 =====
       &.drag-active {
         &::after {
-          content: '释放以上传文件';
+          content: '';
           position: absolute;
           top: 0;
           left: 0;
           right: 0;
           bottom: 0;
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%);
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.92) 0%, rgba(139, 92, 246, 0.92) 100%);
           border-radius: 16px;
+          z-index: 10;
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 10;
+          pointer-events: none;
+        }
+        &::before {
+          content: '📂 释放以上传文件到当前文件夹';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 11;
           color: white;
           font-size: 22px;
           font-weight: 700;
+          pointer-events: none;
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
       }
     }
   }
 
-  // 浮动上传按钮
+  // ===== v2.0 底部状态栏 =====
+  .storage-status-bar {
+    height: 32px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 12px;
+    color: @text-muted;
+    flex-shrink: 0;
+
+    .status-left {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .status-right {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+  }
+
+  // ===== 浮动上传按钮 =====
   .upload-fab {
     position: fixed;
-    bottom: 32px;
+    bottom: 52px; // 留出状态栏空间
     right: 32px;
     width: 60px;
     height: 60px;
@@ -703,67 +584,96 @@
     transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     z-index: 100;
     font-size: 26px;
-
-    &:hover {
-      transform: scale(1.1) rotate(15deg);
-      box-shadow: 0 12px 30px -5px rgba(139, 92, 246, 0.5);
-    }
-
-    &:active {
-      transform: scale(1);
-    }
+    &:hover { transform: scale(1.1) rotate(15deg); box-shadow: 0 12px 30px -5px rgba(139, 92, 246, 0.5); }
+    &:active { transform: scale(1); }
   }
 
-  // 右键菜单
+  // ===== v2.0 Windows风格右键菜单 =====
   .context-menu {
     position: fixed;
     background: white;
-    border-radius: 10px;
-    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.2);
-    padding: 6px;
-    min-width: 200px;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+    padding: 4px;
+    min-width: 220px;
     z-index: 1000;
+    animation: contextMenuFadeIn 0.12s ease-out;
+
+    @keyframes contextMenuFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
 
     .menu-item {
-      padding: 10px 14px;
-      border-radius: 6px;
+      padding: 8px 12px;
+      border-radius: 4px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 12px;
-      transition: all 0.2s;
-      font-size: 14px;
-      font-weight: 500;
+      gap: 10px;
+      transition: background 0.1s;
+      font-size: 13px;
       color: @text-dark;
+      position: relative;
 
-      &:hover {
-        background: @blue-gradient;
-        color: white;
-      }
+      &:hover { background: #f1f5f9; }
+      &.danger { color: #ef4444; &:hover { background: #fef2f2; } }
+      &.disabled { color: #cbd5e1; cursor: not-allowed; &:hover { background: transparent; } }
 
-      &.danger {
-        color: #ef4444;
+      .menu-icon { width: 16px; font-size: 14px; text-align: center; color: @text-muted; }
+      .menu-label { flex: 1; }
+      .menu-shortcut { font-size: 11px; color: #94a3b8; margin-left: auto; }
 
-        &:hover {
-          background: @red-gradient;
-          color: white;
+      // 子菜单箭头
+      .submenu-arrow { margin-left: auto; font-size: 10px; color: #94a3b8; }
+
+      // 子菜单容器
+      .submenu {
+        position: absolute;
+        left: 100%;
+        top: -4px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 8px 30px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+        padding: 4px;
+        min-width: 200px;
+        display: none;
+        z-index: 1001;
+
+        .submenu-item {
+          padding: 8px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13px;
+          color: @text-dark;
+          transition: background 0.1s;
+          &:hover { background: #f1f5f9; }
+          .submenu-icon { width: 16px; font-size: 14px; color: @text-muted; }
         }
       }
 
-      .menu-icon {
-        width: 18px;
-        font-size: 16px;
-      }
+      &:hover > .submenu { display: block; }
     }
 
-    .menu-divider {
-      height: 1px;
-      background: #e2e8f0;
-      margin: 6px 0;
+    .menu-divider { height: 1px; background: #e2e8f0; margin: 4px 0; }
+  }
+
+  // ===== v2.0 移动到弹窗中的文件夹树 =====
+  .move-folder-tree {
+    .ant-tree {
+      .ant-tree-node-content-wrapper {
+        padding: 6px 10px;
+        border-radius: 6px;
+        &:hover { background: #f1f5f9; }
+        &.ant-tree-node-selected { background: @blue-gradient; color: white; }
+      }
     }
   }
 
-  // 响应式
+  // ===== 响应式 =====
   @media (max-width: 768px) {
     .storage-layout {
       flex-direction: column;
@@ -773,25 +683,23 @@
 
     .storage-sidebar {
       width: 100%;
-
-      .folder-tree-card {
-        max-height: 180px;
-      }
-
-      .storage-info-card {
-        height: auto;
-        padding: 12px;
-      }
+      .folder-tree-card { max-height: 180px; }
+      .storage-info-card { height: auto; padding: 12px; }
     }
 
-    .storage-main .storage-toolbar .breadcrumb-nav .current-folder-name {
-      padding: 4px 10px;
-      font-size: 12px;
+    .storage-main .storage-toolbar {
+      flex-wrap: wrap;
+      gap: 8px;
+      .breadcrumb-nav .current-folder-name { padding: 4px 10px; font-size: 12px; }
+      .toolbar-actions { flex-wrap: wrap; }
     }
 
     .storage-content.grid-view .file-grid {
       grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
       gap: 10px;
     }
+
+    .storage-status-bar { display: none; }
+    .upload-fab { bottom: 32px; }
   }
 }

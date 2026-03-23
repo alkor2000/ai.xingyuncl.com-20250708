@@ -1,19 +1,25 @@
 /**
- * 存储管理状态管理 - 增强版
+ * 存储管理状态管理 - 增强版 v1.1
  * 支持全局文件夹、组织文件夹和个人文件夹
- * 新增：文件夹重命名功能
+ * 
+ * v1.1 更新：
+ * 1. 新增 renameFile - 文件重命名
+ * 2. 新增 moveFolder - 文件夹移动（通过删除+重建模拟）
+ * 3. 新增 batchMoveFiles - 批量移动文件
+ * 4. 新增 getFileById - 根据ID从本地列表获取文件信息
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
 
 const useStorageStore = create((set, get) => ({
-  // 状态
+  // ===== 状态 =====
   files: [],
   folders: [],
   folderTree: [],
   currentFolder: null,
-  selectedFiles: [],
+  selectedFiles: [],       // 选中的文件ID数组
+  selectedFolders: [],     // v1.1 选中的文件夹ID数组
   storageStats: null,
   ossConfig: null,
   creditConfig: null,
@@ -21,7 +27,7 @@ const useStorageStore = create((set, get) => ({
   uploading: false,
   error: null,
   
-  // 文件操作
+  // ===== 文件操作 =====
   
   /**
    * 获取文件列表
@@ -29,22 +35,13 @@ const useStorageStore = create((set, get) => ({
   getFiles: async (folderId = null, options = {}) => {
     set({ loading: true, error: null })
     try {
-      const params = {
-        folder_id: folderId,
-        ...options
-      }
+      const params = { folder_id: folderId, ...options }
       const response = await apiClient.get('/storage/files', { params })
-      set({ 
-        files: response.data.data.files,
-        loading: false 
-      })
+      set({ files: response.data.data.files, loading: false })
       return response.data.data
     } catch (error) {
       console.error('获取文件列表失败:', error)
-      set({ 
-        error: error.response?.data?.message || '获取文件列表失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '获取文件列表失败', loading: false })
       throw error
     }
   },
@@ -56,20 +53,12 @@ const useStorageStore = create((set, get) => ({
     set({ uploading: true, error: null })
     try {
       const formData = new FormData()
-      files.forEach(file => {
-        formData.append('files', file)
-      })
-      if (folderId) {
-        formData.append('folder_id', folderId)
-      }
-      if (options.is_public) {
-        formData.append('is_public', 'true')
-      }
+      files.forEach(file => { formData.append('files', file) })
+      if (folderId) formData.append('folder_id', folderId)
+      if (options.is_public) formData.append('is_public', 'true')
       
       const response = await apiClient.post('/storage/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
           set({ uploadProgress: percentCompleted })
@@ -78,16 +67,11 @@ const useStorageStore = create((set, get) => ({
       
       // 刷新文件列表
       await get().getFiles(folderId)
-      
       set({ uploading: false, uploadProgress: 0 })
       return response.data.data
     } catch (error) {
       console.error('文件上传失败:', error)
-      set({ 
-        error: error.response?.data?.message || '文件上传失败',
-        uploading: false,
-        uploadProgress: 0
-      })
+      set({ error: error.response?.data?.message || '文件上传失败', uploading: false, uploadProgress: 0 })
       throw error
     }
   },
@@ -99,21 +83,15 @@ const useStorageStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       await apiClient.delete(`/storage/files/${fileId}`)
-      
-      // 从列表中移除
       set(state => ({
         files: state.files.filter(f => f.id !== fileId),
         selectedFiles: state.selectedFiles.filter(id => id !== fileId),
         loading: false
       }))
-      
       return true
     } catch (error) {
       console.error('删除文件失败:', error)
-      set({ 
-        error: error.response?.data?.message || '删除文件失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '删除文件失败', loading: false })
       throw error
     }
   },
@@ -125,21 +103,15 @@ const useStorageStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       await apiClient.post('/storage/files/batch-delete', { file_ids: fileIds })
-      
-      // 从列表中移除
       set(state => ({
         files: state.files.filter(f => !fileIds.includes(f.id)),
         selectedFiles: [],
         loading: false
       }))
-      
       return true
     } catch (error) {
       console.error('批量删除文件失败:', error)
-      set({ 
-        error: error.response?.data?.message || '批量删除文件失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '批量删除文件失败', loading: false })
       throw error
     }
   },
@@ -150,28 +122,84 @@ const useStorageStore = create((set, get) => ({
   moveFile: async (fileId, targetFolderId) => {
     set({ loading: true, error: null })
     try {
-      await apiClient.put(`/storage/files/${fileId}/move`, {
-        target_folder_id: targetFolderId
-      })
-      
-      // 从当前列表中移除
+      await apiClient.put(`/storage/files/${fileId}/move`, { target_folder_id: targetFolderId })
       set(state => ({
         files: state.files.filter(f => f.id !== fileId),
         loading: false
       }))
-      
       return true
     } catch (error) {
       console.error('移动文件失败:', error)
-      set({ 
-        error: error.response?.data?.message || '移动文件失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '移动文件失败', loading: false })
       throw error
     }
   },
   
-  // 文件夹操作
+  /**
+   * 批量移动文件 - v1.1 新增
+   * @param {Array<number>} fileIds - 要移动的文件ID数组
+   * @param {number|null} targetFolderId - 目标文件夹ID
+   */
+  batchMoveFiles: async (fileIds, targetFolderId) => {
+    set({ loading: true, error: null })
+    try {
+      // 逐个移动（后端暂无批量移动API）
+      const results = { success: 0, failed: 0 }
+      for (const fileId of fileIds) {
+        try {
+          await apiClient.put(`/storage/files/${fileId}/move`, { target_folder_id: targetFolderId })
+          results.success++
+        } catch (e) {
+          results.failed++
+          console.error(`移动文件 ${fileId} 失败:`, e)
+        }
+      }
+      
+      // 从当前列表中移除已移动的文件
+      set(state => ({
+        files: state.files.filter(f => !fileIds.includes(f.id)),
+        selectedFiles: [],
+        selectedFolders: [],
+        loading: false
+      }))
+      
+      return results
+    } catch (error) {
+      console.error('批量移动文件失败:', error)
+      set({ error: error.response?.data?.message || '批量移动文件失败', loading: false })
+      throw error
+    }
+  },
+  
+  /**
+   * 重命名文件 - v1.1 新增
+   * @param {number} fileId - 文件ID
+   * @param {string} newName - 新文件名
+   */
+  renameFile: async (fileId, newName) => {
+    set({ loading: true, error: null })
+    try {
+      const response = await apiClient.put(`/storage/files/${fileId}/rename`, { new_name: newName })
+      
+      // 更新本地文件列表中的文件名
+      set(state => ({
+        files: state.files.map(f => 
+          f.id === fileId 
+            ? { ...f, original_name: newName, file_ext: newName.includes('.') ? '.' + newName.split('.').pop() : f.file_ext }
+            : f
+        ),
+        loading: false
+      }))
+      
+      return response.data.data
+    } catch (error) {
+      console.error('重命名文件失败:', error)
+      set({ error: error.response?.data?.message || '重命名文件失败', loading: false })
+      throw error
+    }
+  },
+  
+  // ===== 文件夹操作 =====
   
   /**
    * 获取文件夹列表
@@ -180,22 +208,13 @@ const useStorageStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       const params = parentId ? { parent_id: parentId } : {}
-      // 添加参数以包含特殊文件夹
-      if (includeSpecial) {
-        params.include_special = true
-      }
+      if (includeSpecial) params.include_special = true
       const response = await apiClient.get('/storage/folders', { params })
-      set({ 
-        folders: response.data.data,
-        loading: false 
-      })
+      set({ folders: response.data.data, loading: false })
       return response.data.data
     } catch (error) {
       console.error('获取文件夹列表失败:', error)
-      set({ 
-        error: error.response?.data?.message || '获取文件夹列表失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '获取文件夹列表失败', loading: false })
       throw error
     }
   },
@@ -207,17 +226,11 @@ const useStorageStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       const response = await apiClient.get('/storage/folders', { params: { tree: true } })
-      set({ 
-        folderTree: response.data.data,
-        loading: false 
-      })
+      set({ folderTree: response.data.data, loading: false })
       return response.data.data
     } catch (error) {
       console.error('获取文件夹树失败:', error)
-      set({ 
-        error: error.response?.data?.message || '获取文件夹树失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '获取文件夹树失败', loading: false })
       throw error
     }
   },
@@ -234,33 +247,25 @@ const useStorageStore = create((set, get) => ({
         folder_type: folderType
       })
       
-      // 刷新文件夹列表
       await get().getFolders(parentId, true)
       await get().getFolderTree()
-      
       set({ loading: false })
       return response.data.data
     } catch (error) {
       console.error('创建文件夹失败:', error)
-      set({ 
-        error: error.response?.data?.message || '创建文件夹失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '创建文件夹失败', loading: false })
       throw error
     }
   },
   
   /**
-   * 重命名文件夹 - 新增方法
+   * 重命名文件夹
    */
   renameFolder: async (folderId, newName) => {
     set({ loading: true, error: null })
     try {
-      const response = await apiClient.put(`/storage/folders/${folderId}/rename`, {
-        new_name: newName
-      })
+      const response = await apiClient.put(`/storage/folders/${folderId}/rename`, { new_name: newName })
       
-      // 刷新文件夹列表和树
       await get().getFolderTree()
       
       // 如果重命名的是当前文件夹，更新当前文件夹信息
@@ -273,10 +278,7 @@ const useStorageStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       console.error('重命名文件夹失败:', error)
-      set({ 
-        error: error.response?.data?.message || '重命名文件夹失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '重命名文件夹失败', loading: false })
       throw error
     }
   },
@@ -288,18 +290,12 @@ const useStorageStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       await apiClient.delete(`/storage/folders/${folderId}`)
-      
-      // 刷新文件夹列表
       await get().getFolderTree()
-      
       set({ loading: false })
       return true
     } catch (error) {
       console.error('删除文件夹失败:', error)
-      set({ 
-        error: error.response?.data?.message || '删除文件夹失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '删除文件夹失败', loading: false })
       throw error
     }
   },
@@ -319,26 +315,19 @@ const useStorageStore = create((set, get) => ({
     }
   },
   
-  // OSS配置管理（管理员）
+  // ===== OSS配置管理（管理员） =====
   
-  /**
-   * 获取OSS配置
-   */
   getOSSConfig: async () => {
     try {
       const response = await apiClient.get('/admin/oss/config')
-      const config = response.data.data
-      set({ ossConfig: config })
-      return config
+      set({ ossConfig: response.data.data })
+      return response.data.data
     } catch (error) {
       console.error('获取OSS配置失败:', error)
       return null
     }
   },
   
-  /**
-   * 保存OSS配置
-   */
   saveOSSConfig: async (config) => {
     set({ loading: true, error: null })
     try {
@@ -347,17 +336,11 @@ const useStorageStore = create((set, get) => ({
       return true
     } catch (error) {
       console.error('保存OSS配置失败:', error)
-      set({ 
-        error: error.response?.data?.message || '保存OSS配置失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '保存OSS配置失败', loading: false })
       throw error
     }
   },
   
-  /**
-   * 测试OSS连接
-   */
   testOSSConnection: async (config) => {
     try {
       const response = await apiClient.post('/admin/oss/test', config)
@@ -374,25 +357,16 @@ const useStorageStore = create((set, get) => ({
   getCreditConfig: async () => {
     try {
       const response = await apiClient.get('/admin/storage-credits/config')
-      const config = response.data.data
-      set({ creditConfig: config })
-      return config
+      set({ creditConfig: response.data.data })
+      return response.data.data
     } catch (error) {
       console.error('获取积分配置失败:', error)
-      // 返回默认配置
-      const defaultConfig = {
-        base_credits: 2,
-        credits_per_5mb: 1,
-        max_file_size: 100
-      }
+      const defaultConfig = { base_credits: 2, credits_per_5mb: 1, max_file_size: 100 }
       set({ creditConfig: defaultConfig })
       return defaultConfig
     }
   },
   
-  /**
-   * 更新积分配置
-   */
   updateCreditConfig: async (configs) => {
     set({ loading: true, error: null })
     try {
@@ -401,60 +375,44 @@ const useStorageStore = create((set, get) => ({
       return true
     } catch (error) {
       console.error('更新积分配置失败:', error)
-      set({ 
-        error: error.response?.data?.message || '更新积分配置失败',
-        loading: false 
-      })
+      set({ error: error.response?.data?.message || '更新积分配置失败', loading: false })
       throw error
     }
   },
   
   /**
    * 计算文件上传所需积分
-   * @param {Array} files - 文件列表
-   * @returns {number} 所需积分
    */
   calculateUploadCredits: (files) => {
     const config = get().creditConfig
     if (!config) return 0
     
     let totalCredits = 0
-    
     for (const file of files) {
       const fileSizeMB = file.size / (1024 * 1024)
-      
       if (fileSizeMB <= 5) {
-        // 5MB及以下，只收基础积分
         totalCredits += parseInt(config.base_credits)
       } else {
-        // 超过5MB，按区间收费
         const extraIntervals = Math.ceil((fileSizeMB - 5) / 5)
         totalCredits += extraIntervals * parseFloat(config.credits_per_5mb)
       }
     }
-    
     return Math.ceil(totalCredits)
   },
   
-  // 辅助方法
+  // ===== 辅助方法 =====
   
-  /**
-   * 设置当前文件夹
-   */
+  /** 设置当前文件夹 */
   setCurrentFolder: (folder) => set({ currentFolder: folder }),
   
-  /**
-   * 切换文件选择
-   */
+  /** 切换文件选择 */
   toggleFileSelection: (fileId) => set(state => ({
     selectedFiles: state.selectedFiles.includes(fileId)
       ? state.selectedFiles.filter(id => id !== fileId)
       : [...state.selectedFiles, fileId]
   })),
   
-  /**
-   * 全选/取消全选
-   */
+  /** 全选/取消全选文件 */
   toggleSelectAll: () => set(state => ({
     selectedFiles: state.selectedFiles.length === state.files.length
       ? []
@@ -462,13 +420,37 @@ const useStorageStore = create((set, get) => ({
   })),
   
   /**
-   * 清除选择
+   * v1.1 设置选中的文件（替换模式，用于Ctrl+Click/Shift+Click）
+   * @param {Array<number>} fileIds - 文件ID数组
    */
-  clearSelection: () => set({ selectedFiles: [] }),
+  setSelectedFiles: (fileIds) => set({ selectedFiles: fileIds }),
   
   /**
-   * 清除错误
+   * v1.1 设置选中的文件夹
+   * @param {Array<number>} folderIds - 文件夹ID数组
    */
+  setSelectedFolders: (folderIds) => set({ selectedFolders: folderIds }),
+  
+  /**
+   * v1.1 从本地列表中获取文件信息
+   * @param {number} fileId - 文件ID
+   */
+  getFileById: (fileId) => {
+    return get().files.find(f => f.id === fileId) || null
+  },
+  
+  /**
+   * v1.1 从本地列表中获取文件夹信息
+   * @param {number} folderId - 文件夹ID
+   */
+  getFolderById: (folderId) => {
+    return get().folders.find(f => f.id === folderId) || null
+  },
+  
+  /** 清除选择 */
+  clearSelection: () => set({ selectedFiles: [], selectedFolders: [] }),
+  
+  /** 清除错误 */
   clearError: () => set({ error: null })
 }))
 

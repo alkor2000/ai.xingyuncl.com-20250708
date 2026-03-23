@@ -1,6 +1,10 @@
 /**
- * 用户文件模型 - 增强版
+ * 用户文件模型 - 增强版 v1.1
  * 管理用户上传到OSS的文件，支持上传者记录
+ * 
+ * v1.1 更新：
+ * 1. 新增 rename() 实例方法 - 文件重命名
+ * 2. 新增 findByIds() 静态方法 - 批量查询文件
  */
 
 const dbConnection = require('../database/connection');
@@ -42,7 +46,7 @@ class UserFile {
       
       const params = [
         fileData.user_id,
-        fileData.uploaded_by || fileData.user_id, // 如果没有指定上传者，默认为user_id
+        fileData.uploaded_by || fileData.user_id,
         fileData.folder_id || null,
         fileData.original_name,
         fileData.stored_name,
@@ -56,8 +60,6 @@ class UserFile {
       ];
       
       const result = await dbConnection.query(sql, params);
-      
-      // 正确访问insertId
       const fileId = result.rows.insertId;
       
       // 更新用户存储统计
@@ -93,6 +95,70 @@ class UserFile {
     } catch (error) {
       logger.error('查找文件失败:', error);
       throw new DatabaseError('查找文件失败', error);
+    }
+  }
+
+  /**
+   * 批量查询文件 - v1.1 新增
+   * @param {Array<number>} ids - 文件ID数组
+   * @returns {Array<UserFile>} 文件列表
+   */
+  static async findByIds(ids) {
+    try {
+      if (!ids || ids.length === 0) return [];
+      
+      const placeholders = ids.map(() => '?').join(',');
+      const sql = `SELECT * FROM user_files WHERE id IN (${placeholders}) AND is_deleted = 0`;
+      const { rows } = await dbConnection.query(sql, ids);
+      
+      return rows.map(row => new UserFile(row));
+    } catch (error) {
+      logger.error('批量查询文件失败:', error);
+      throw new DatabaseError('批量查询文件失败', error);
+    }
+  }
+
+  /**
+   * 重命名文件 - v1.1 新增
+   * 只修改数据库中的 original_name 字段，不修改OSS存储的文件
+   * @param {string} newName - 新文件名（包含扩展名）
+   */
+  async rename(newName) {
+    try {
+      // 验证新文件名
+      if (!newName || newName.trim() === '') {
+        throw new Error('文件名不能为空');
+      }
+      
+      const trimmedName = newName.trim();
+      
+      // 提取新扩展名
+      const newExt = trimmedName.includes('.') 
+        ? '.' + trimmedName.split('.').pop().toLowerCase()
+        : this.file_ext;
+      
+      const sql = `
+        UPDATE user_files 
+        SET original_name = ?, file_ext = ?, updated_at = NOW()
+        WHERE id = ? AND is_deleted = 0
+      `;
+      
+      await dbConnection.query(sql, [trimmedName, newExt, this.id]);
+      
+      // 更新实例属性
+      this.original_name = trimmedName;
+      this.file_ext = newExt;
+      
+      logger.info('文件重命名成功', {
+        fileId: this.id,
+        newName: trimmedName,
+        newExt: newExt
+      });
+      
+      return this;
+    } catch (error) {
+      logger.error('文件重命名失败:', error);
+      throw new DatabaseError('文件重命名失败', error);
     }
   }
 
@@ -133,7 +199,7 @@ class UserFile {
             sqlParts = ['SELECT * FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
             params = [folderId];
           } else if (folder.folder_type === 'group') {
-            // 组织文件夹：显示组内所有文件（需要验证用户是否属于该组）
+            // 组织文件夹：显示组内所有文件
             if (userGroupId === folder.group_id) {
               sqlParts = ['SELECT * FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
               params = [folderId];
@@ -141,12 +207,7 @@ class UserFile {
               // 用户不属于该组，返回空结果
               return {
                 files: [],
-                pagination: {
-                  page: parseInt(page),
-                  limit: parseInt(limit),
-                  total: 0,
-                  pages: 0
-                }
+                pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 }
               };
             }
           } else {
@@ -155,7 +216,6 @@ class UserFile {
             params = [userId, folderId];
           }
         } else {
-          // 文件夹不存在
           sqlParts = ['SELECT * FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
           params = [userId, folderId];
         }
@@ -172,7 +232,7 @@ class UserFile {
       const sql = sqlParts.join(' ');
       const { rows } = await dbConnection.query(sql, params);
       
-      // 获取总数
+      // 获取总数（复用相同的条件查询）
       let countSqlParts = [];
       let countParams = [];
       
@@ -187,15 +247,9 @@ class UserFile {
             countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE folder_id = ? AND is_deleted = 0'];
             countParams = [folderId];
           } else if (folder.folder_type === 'group' && userGroupId !== folder.group_id) {
-            // 用户不属于该组
             return {
               files: [],
-              pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total: 0,
-                pages: 0
-              }
+              pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 }
             };
           } else {
             countSqlParts = ['SELECT COUNT(*) as total FROM user_files WHERE user_id = ? AND folder_id = ? AND is_deleted = 0'];
@@ -234,19 +288,16 @@ class UserFile {
    */
   static async updateUserStorage(userId, sizeChange, fileCountChange = 0) {
     try {
-      // 检查是否存在记录
       const checkSql = 'SELECT id FROM user_storage WHERE user_id = ?';
       const { rows } = await dbConnection.query(checkSql, [userId]);
       
       if (rows.length === 0) {
-        // 创建新记录
         const insertSql = `
           INSERT INTO user_storage (user_id, storage_used, file_count)
           VALUES (?, ?, ?)
         `;
         await dbConnection.query(insertSql, [userId, Math.max(0, sizeChange), Math.max(0, fileCountChange)]);
       } else {
-        // 更新现有记录
         const updateSql = `
           UPDATE user_storage 
           SET storage_used = GREATEST(0, storage_used + ?),
@@ -290,7 +341,7 @@ class UserFile {
    */
   async moveTo(targetFolderId) {
     try {
-      const sql = 'UPDATE user_files SET folder_id = ? WHERE id = ?';
+      const sql = 'UPDATE user_files SET folder_id = ?, updated_at = NOW() WHERE id = ?';
       await dbConnection.query(sql, [targetFolderId, this.id]);
       
       this.folder_id = targetFolderId;
@@ -335,7 +386,6 @@ class UserFile {
       const { rows } = await dbConnection.query(sql, [userId]);
       
       if (rows.length === 0) {
-        // 返回默认值
         return {
           storage_quota: 10737418240, // 10GB
           storage_used: 0,

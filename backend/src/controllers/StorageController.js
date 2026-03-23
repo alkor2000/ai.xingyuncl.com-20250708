@@ -868,6 +868,52 @@ class StorageController {
     }
   }
 
+
+  /**
+   * 重命名文件 - v1.1 新增
+   * 只修改数据库中的显示名称，不修改OSS存储
+   */
+  static async renameFile(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { new_name } = req.body;
+      
+      // 验证新名称
+      if (!new_name || new_name.trim() === '') {
+        return ResponseHelper.validation(res, ['文件名不能为空']);
+      }
+      
+      // 获取文件信息
+      const file = await UserFile.findById(id);
+      if (!file) {
+        return ResponseHelper.notFound(res, '文件不存在');
+      }
+      
+      // 检查权限（只有文件所有者或超管可以重命名）
+      const hasPermission = await StorageController.checkFilePermission(file, req.user, 'delete');
+      if (!hasPermission) {
+        return ResponseHelper.forbidden(res, '无权重命名此文件');
+      }
+      
+      // 执行重命名
+      const oldName = file.original_name;
+      await file.rename(new_name.trim());
+      
+      logger.info('文件重命名成功', {
+        fileId: id,
+        oldName: oldName,
+        newName: new_name.trim(),
+        userId: userId
+      });
+      
+      return ResponseHelper.success(res, file, '文件重命名成功');
+    } catch (error) {
+      logger.error('重命名文件失败:', error);
+      return ResponseHelper.error(res, error.message || '重命名文件失败');
+    }
+  }
+
   /**
    * 重命名文件夹 - 新增方法
    */
