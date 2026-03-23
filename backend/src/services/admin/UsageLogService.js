@@ -239,7 +239,7 @@ class UsageLogService {
   static _buildChartData(rows, mode) {
     const timeLabelSet = new Set();
     rows.forEach(r => timeLabelSet.add(String(r.time_bucket)));
-    const timeLabels = Array.from(timeLabelSet).sort();
+    const timeLabels = Array.from(timeLabelSet).sort((a, b) => a.localeCompare(b));
 
     const segmentTotals = {};
     rows.forEach(r => {

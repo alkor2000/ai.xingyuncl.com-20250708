@@ -28,7 +28,7 @@ const fixFileName = (filename) => {
   
   try {
     // 检测是否已经是正确的UTF-8编码
-    if (/^[\x00-\x7F]*$/.test(filename)) {
+    if (/^[\x20-\x7F]*$/.test(filename)) {
       return filename;
     }
     

@@ -257,14 +257,16 @@ ${jsContent || '// 无JavaScript代码'}
 
   /**
    * 生成唯一slug - 改进版：只使用英文和数字
+   * 使用两步replace替代单正则中的|运算符，避免SonarQube S5850警告
    */
   static generateSlug(title) {
     // 移除所有非英文字母和数字的字符
     const baseSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')  // 只保留英文字母和数字
-      .replace(/^-+|-+$/g, '')       // 移除首尾的连字符
-      .substring(0, 30);             // 限制长度
+      .replace(/^-+/g, '')          // 移除开头的连字符
+      .replace(/-+$/g, '')          // 移除结尾的连字符
+      .substring(0, 30);            // 限制长度
     
     // 如果baseSlug为空或太短，使用默认值
     const finalBase = (baseSlug && baseSlug.length > 2) ? baseSlug : 'page';

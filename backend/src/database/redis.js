@@ -202,6 +202,9 @@ class RedisConnection {
   /**
    * 检查键是否存在
    * 
+   * 兼容处理：redis v4客户端exists()返回数字（0/1），
+   * 部分版本可能返回boolean，统一用Boolean()转换确保类型安全
+   * 
    * @param {string} key - 键名（自动添加 keyPrefix）
    * @returns {boolean} true 表示键存在
    */
@@ -210,7 +213,7 @@ class RedisConnection {
       this._ensureConnected();
       const fullKey = config.database.redis.keyPrefix + key;
       const result = await this.client.exists(fullKey);
-      return result === 1;
+      return Boolean(result);
     } catch (error) {
       logger.error('Redis EXISTS操作失败:', { key, error: error.message });
       throw error;
@@ -219,6 +222,9 @@ class RedisConnection {
 
   /**
    * 设置过期时间
+   * 
+   * 兼容处理：redis v4客户端expire()返回boolean，
+   * 部分版本可能返回数字（0/1），统一用Boolean()转换确保类型安全
    * 
    * @param {string} key - 键名（自动添加 keyPrefix）
    * @param {number} seconds - 过期秒数
@@ -229,7 +235,7 @@ class RedisConnection {
       this._ensureConnected();
       const fullKey = config.database.redis.keyPrefix + key;
       const result = await this.client.expire(fullKey, seconds);
-      return result === 1;
+      return Boolean(result);
     } catch (error) {
       logger.error('Redis EXPIRE操作失败:', { key, seconds, error: error.message });
       throw error;

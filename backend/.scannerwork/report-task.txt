@@ -1,0 +1,6 @@
+projectKey=nebula-ai-platform
+serverUrl=http://localhost:9876
+serverVersion=26.3.0.120487
+dashboardUrl=http://localhost:9876/dashboard?id=nebula-ai-platform
+ceTaskId=fc49bedc-11a4-4dbf-aa38-376c325c3fb3
+ceTaskUrl=http://localhost:9876/api/ce/task?id=fc49bedc-11a4-4dbf-aa38-376c325c3fb3

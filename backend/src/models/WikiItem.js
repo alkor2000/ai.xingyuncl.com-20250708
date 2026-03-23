@@ -614,7 +614,7 @@ class WikiItem {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      const baseVersionNumber = baseVersion.version_number || baseVersion.version_number;
+      const baseVersionNumber = baseVersion.version_number || 1;
       
       const result = await transaction.query(insertSql, [
         numericWikiId,

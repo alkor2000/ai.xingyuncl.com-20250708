@@ -259,7 +259,7 @@ class AIService {
         const files = await fs.readdir(debugDir);
         const jsonFiles = files
           .filter(f => f.startsWith('response_') && f.endsWith('.json'))
-          .sort();
+          .sort((a, b) => a.localeCompare(b));
 
         if (jsonFiles.length > MAX_DEBUG_FILES) {
           const filesToDelete = jsonFiles.slice(0, jsonFiles.length - MAX_DEBUG_FILES);

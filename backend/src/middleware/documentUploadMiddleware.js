@@ -56,7 +56,7 @@ const fixFileName = (filename) => {
 
   try {
     // 纯ASCII字符不需要转换
-    if (/^[\x00-\x7F]*$/.test(filename)) {
+    if (/^[\x20-\x7F]*$/.test(filename)) {
       return filename;
     }
 
