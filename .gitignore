@@ -91,3 +91,6 @@ storage/uploads/
 # Docker volumes数据
 mysql_data/
 redis_data/
+
+# 测试覆盖率报告（不提交到仓库）
+backend/coverage*/
