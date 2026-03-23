@@ -1,12 +1,14 @@
 /**
- * 图像模型管理组件
+ * 图像模型管理组件 v1.1
+ * 
+ * v1.1 - 模型标识编辑时可修改 + 新建时model_id自动同步到name
  * 
  * 更新记录：
  * - 添加图生图功能开关和配置
  * - 2025-12-24: 添加阿里云通义万相(dashscope/aliyun)提供商支持
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Table,
@@ -47,7 +49,7 @@ import api from '../../../utils/api';
 
 const { TextArea } = Input;
 
-// 提供商配置信息
+/* 提供商配置信息 */
 const PROVIDER_CONFIG = {
   volcano: {
     label: '火山方舟',
@@ -100,11 +102,16 @@ const ImageModelSettings = () => {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
-  const [toggleLoading, setToggleLoading] = useState({}); // 记录每个开关的加载状态
-  const [supportsImage2Image, setSupportsImage2Image] = useState(false); // 图生图功能开关状态
-  const [currentProvider, setCurrentProvider] = useState('volcano'); // 当前选择的提供商
+  const [toggleLoading, setToggleLoading] = useState({});
+  const [supportsImage2Image, setSupportsImage2Image] = useState(false);
+  const [currentProvider, setCurrentProvider] = useState('volcano');
+  /**
+   * v1.1: 跟踪用户是否手动修改过name字段
+   * 新建时，如果用户没有手动改过name，model_id变化会自动同步到name
+   */
+  const nameManuallyEdited = useRef(false);
 
-  // 加载模型列表
+  /* 加载模型列表 */
   const loadModels = async () => {
     setLoading(true);
     try {
@@ -124,14 +131,13 @@ const ImageModelSettings = () => {
     loadModels();
   }, []);
 
-  // 处理表单提交
+  /* 处理表单提交 */
   const handleSubmit = async (values) => {
     try {
-      // 处理sizes_supported字段
+      /* 处理sizes_supported字段 */
       const processedValues = { ...values };
       if (values.sizes_supported) {
         try {
-          // 尝试解析JSON字符串
           const sizesArray = JSON.parse(values.sizes_supported);
           if (!Array.isArray(sizesArray)) {
             message.error('尺寸配置必须是JSON数组格式');
@@ -144,15 +150,11 @@ const ImageModelSettings = () => {
         }
       }
 
-      // 处理api_config字段 - 合并图生图配置
+      /* 处理api_config字段 - 合并图生图配置 */
       let apiConfig = {};
-      
-      // 如果是编辑模式，先获取原有的api_config
       if (editingModel && editingModel.api_config) {
         apiConfig = { ...editingModel.api_config };
       }
-      
-      // 尝试解析用户输入的api_config（如果有）
       if (values.api_config_json) {
         try {
           const userConfig = JSON.parse(values.api_config_json);
@@ -162,26 +164,21 @@ const ImageModelSettings = () => {
           return;
         }
       }
-      
-      // 合并图生图相关配置
       apiConfig.supports_image2image = values.supports_image2image || false;
       if (values.supports_image2image) {
         apiConfig.max_reference_images = values.max_reference_images || 2;
       }
-      
-      // 将处理后的api_config添加到提交数据中
       processedValues.api_config = apiConfig;
-      delete processedValues.api_config_json; // 删除临时字段
-      delete processedValues.supports_image2image; // 删除临时字段
-      delete processedValues.max_reference_images; // 删除临时字段
+      delete processedValues.api_config_json;
+      delete processedValues.supports_image2image;
+      delete processedValues.max_reference_images;
 
-      // 修复：编辑时如果API密钥为空，从提交数据中删除该字段
+      /* 编辑时如果API密钥为空，从提交数据中删除该字段 */
       if (editingModel && (!processedValues.api_key || processedValues.api_key === '')) {
         delete processedValues.api_key;
       }
 
       if (editingModel) {
-        // 更新模型
         const response = await api.put(`/image/admin/models/${editingModel.id}`, processedValues);
         if (response.data.success) {
           message.success('模型更新成功');
@@ -190,10 +187,10 @@ const ImageModelSettings = () => {
           setEditingModel(null);
           setSupportsImage2Image(false);
           setCurrentProvider('volcano');
+          nameManuallyEdited.current = false;
           loadModels();
         }
       } else {
-        // 创建模型
         const response = await api.post('/image/admin/models', processedValues);
         if (response.data.success) {
           message.success('模型创建成功');
@@ -201,6 +198,7 @@ const ImageModelSettings = () => {
           form.resetFields();
           setSupportsImage2Image(false);
           setCurrentProvider('volcano');
+          nameManuallyEdited.current = false;
           loadModels();
         }
       }
@@ -210,18 +208,15 @@ const ImageModelSettings = () => {
     }
   };
 
-  // 切换模型状态 - 改进版，支持直接Switch操作
+  /* 切换模型状态 */
   const handleToggleStatus = async (id, currentStatus) => {
-    // 设置当前模型的loading状态
     setToggleLoading({ ...toggleLoading, [id]: true });
-    
     try {
       const response = await api.patch(`/image/admin/models/${id}/toggle`);
       if (response.data.success) {
-        // 直接更新本地状态，避免重新加载整个列表
-        setModels(prevModels => 
-          prevModels.map(model => 
-            model.id === id 
+        setModels(prevModels =>
+          prevModels.map(model =>
+            model.id === id
               ? { ...model, is_active: currentStatus ? 0 : 1 }
               : model
           )
@@ -232,12 +227,11 @@ const ImageModelSettings = () => {
       console.error('切换状态失败:', error);
       message.error('操作失败');
     } finally {
-      // 清除loading状态
       setToggleLoading({ ...toggleLoading, [id]: false });
     }
   };
 
-  // 删除模型
+  /* 删除模型 */
   const deleteModel = async (id) => {
     try {
       const response = await api.delete(`/image/admin/models/${id}`);
@@ -251,48 +245,45 @@ const ImageModelSettings = () => {
     }
   };
 
-  // 打开编辑窗口
+  /* 打开编辑窗口 */
   const openEditModal = (model) => {
     setEditingModel(model);
     setCurrentProvider(model.provider || 'volcano');
-    
-    // 设置表单初始值
+    nameManuallyEdited.current = true; /* 编辑模式下标记为已手动编辑 */
+
     const formValues = {
       ...model,
       sizes_supported: model.sizes_supported ? JSON.stringify(model.sizes_supported, null, 2) : '',
-      api_key: '', // 编辑时不显示原密钥
+      api_key: '',
       supports_image2image: model.api_config?.supports_image2image || false,
       max_reference_images: model.api_config?.max_reference_images || 2
     };
-    
-    // 将其他api_config内容转为JSON字符串（排除图生图相关字段）
     if (model.api_config) {
       const { supports_image2image, max_reference_images, ...otherConfig } = model.api_config;
       if (Object.keys(otherConfig).length > 0) {
         formValues.api_config_json = JSON.stringify(otherConfig, null, 2);
       }
     }
-    
     form.setFieldsValue(formValues);
     setSupportsImage2Image(model.api_config?.supports_image2image || false);
     setModalVisible(true);
   };
 
-  // 打开新增窗口
+  /* 打开新增窗口 */
   const openAddModal = () => {
     setEditingModel(null);
     setSupportsImage2Image(false);
     setCurrentProvider('volcano');
+    nameManuallyEdited.current = false;
     form.resetFields();
     setModalVisible(true);
   };
 
-  // 处理提供商变更 - 自动填充默认值
+  /* 处理提供商变更 - 自动填充默认值 */
   const handleProviderChange = (provider) => {
     setCurrentProvider(provider);
     const config = PROVIDER_CONFIG[provider];
     if (config && !editingModel) {
-      // 只在新建时自动填充
       form.setFieldsValue({
         endpoint: config.defaultEndpoint,
         sizes_supported: config.defaultSizes
@@ -300,12 +291,30 @@ const ImageModelSettings = () => {
     }
   };
 
-  // 获取提供商颜色
+  /**
+   * v1.1: model_id变化时自动同步到name
+   * 仅在新建模式且用户未手动修改name时生效
+   */
+  const handleModelIdChange = (e) => {
+    const modelId = e.target.value;
+    if (!editingModel && !nameManuallyEdited.current) {
+      form.setFieldsValue({ name: modelId });
+    }
+  };
+
+  /**
+   * v1.1: name字段手动修改标记
+   */
+  const handleNameChange = () => {
+    nameManuallyEdited.current = true;
+  };
+
+  /* 获取提供商颜色 */
   const getProviderColor = (provider) => {
     return PROVIDER_CONFIG[provider]?.color || 'default';
   };
 
-  // 获取提供商标签
+  /* 获取提供商标签 */
   const getProviderLabel = (provider) => {
     return PROVIDER_CONFIG[provider]?.label || provider;
   };
@@ -414,7 +423,7 @@ const ImageModelSettings = () => {
     }
   ];
 
-  // 获取当前提供商配置
+  /* 获取当前提供商配置 */
   const currentProviderConfig = PROVIDER_CONFIG[currentProvider] || PROVIDER_CONFIG.volcano;
 
   return (
@@ -435,7 +444,6 @@ const ImageModelSettings = () => {
         </Button>
       }
     >
-      {/* 提示信息 */}
       <Alert
         message="模型管理说明"
         description="您可以通过状态列的开关直接启用或禁用模型。支持图生图的模型会显示相应标记。"
@@ -444,7 +452,7 @@ const ImageModelSettings = () => {
         closable
         style={{ marginBottom: 16 }}
       />
-      
+
       <Table
         columns={columns}
         dataSource={models}
@@ -466,6 +474,7 @@ const ImageModelSettings = () => {
           setEditingModel(null);
           setSupportsImage2Image(false);
           setCurrentProvider('volcano');
+          nameManuallyEdited.current = false;
         }}
         onOk={() => form.submit()}
         width={800}
@@ -475,7 +484,7 @@ const ImageModelSettings = () => {
           layout="vertical"
           onFinish={handleSubmit}
         >
-          {/* 编辑模式的提示信息 */}
+          {/* 编辑模式提示 */}
           {editingModel && editingModel.has_api_key && (
             <Alert
               message="API密钥已配置"
@@ -487,15 +496,25 @@ const ImageModelSettings = () => {
             />
           )}
 
+          {/* v1.1: 调整字段顺序，先填model_id再自动填充name */}
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                name="name"
-                label="模型标识"
-                rules={[{ required: true, message: '请输入模型标识' }]}
-                extra="唯一标识，如：volcano_seedream"
+                name="model_id"
+                label="模型ID"
+                rules={[{ required: true, message: '请输入模型ID' }]}
+                extra={currentProvider === 'dashscope' || currentProvider === 'aliyun'
+                  ? '阿里万相推荐: wan2.6-image'
+                  : '如：doubao-seedream-3-0-t2i-250415'}
               >
-                <Input placeholder="模型标识" disabled={!!editingModel} />
+                <Input
+                  placeholder={
+                    currentProvider === 'dashscope' || currentProvider === 'aliyun'
+                      ? 'wan2.6-image'
+                      : 'doubao-seedream-3-0-t2i-250415'
+                  }
+                  onChange={handleModelIdChange}
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -508,6 +527,21 @@ const ImageModelSettings = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          {/* v1.1: 模型标识 — 编辑时可修改，新建时自动从model_id同步 */}
+          <Form.Item
+            name="name"
+            label="模型标识"
+            rules={[{ required: true, message: '请输入模型标识' }]}
+            extra={editingModel
+              ? '系统内部唯一标识，修改后不影响已有数据'
+              : '自动从模型ID填充，也可手动修改'}
+          >
+            <Input
+              placeholder="自动从模型ID填充"
+              onChange={handleNameChange}
+            />
+          </Form.Item>
 
           <Form.Item
             name="description"
@@ -526,40 +560,22 @@ const ImageModelSettings = () => {
               >
                 <Select onChange={handleProviderChange}>
                   <Select.Option value="volcano">
-                    <Space>
-                      <FireOutlined style={{ color: '#ff4d4f' }} />
-                      火山方舟
-                    </Space>
+                    <Space><FireOutlined style={{ color: '#ff4d4f' }} />火山方舟</Space>
                   </Select.Option>
                   <Select.Option value="dashscope">
-                    <Space>
-                      <CloudOutlined style={{ color: '#fa8c16' }} />
-                      阿里云百炼(通义万相)
-                    </Space>
+                    <Space><CloudOutlined style={{ color: '#fa8c16' }} />阿里云百炼(通义万相)</Space>
                   </Select.Option>
                   <Select.Option value="aliyun">
-                    <Space>
-                      <CloudOutlined style={{ color: '#fa8c16' }} />
-                      阿里云(万相)
-                    </Space>
+                    <Space><CloudOutlined style={{ color: '#fa8c16' }} />阿里云(万相)</Space>
                   </Select.Option>
                   <Select.Option value="midjourney">
-                    <Space>
-                      <PictureOutlined style={{ color: '#722ed1' }} />
-                      Midjourney
-                    </Space>
+                    <Space><PictureOutlined style={{ color: '#722ed1' }} />Midjourney</Space>
                   </Select.Option>
                   <Select.Option value="openai">
-                    <Space>
-                      <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                      OpenAI
-                    </Space>
+                    <Space><CheckCircleOutlined style={{ color: '#52c41a' }} />OpenAI</Space>
                   </Select.Option>
                   <Select.Option value="stable-diffusion">
-                    <Space>
-                      <PictureOutlined style={{ color: '#1890ff' }} />
-                      Stable Diffusion
-                    </Space>
+                    <Space><PictureOutlined style={{ color: '#1890ff' }} />Stable Diffusion</Space>
                   </Select.Option>
                 </Select>
               </Form.Item>
@@ -604,7 +620,7 @@ const ImageModelSettings = () => {
             label="API端点"
             rules={[{ required: true, message: '请输入API端点' }]}
           >
-            <Input placeholder={currentProviderConfig.defaultEndpoint || "API端点地址"} />
+            <Input placeholder={currentProviderConfig.defaultEndpoint || 'API端点地址'} />
           </Form.Item>
 
           <Form.Item
@@ -613,48 +629,31 @@ const ImageModelSettings = () => {
               <Space>
                 <span>API密钥</span>
                 {editingModel && editingModel.has_api_key && (
-                  <Tag color="green" icon={<CheckCircleOutlined />}>
-                    已配置
-                  </Tag>
+                  <Tag color="green" icon={<CheckCircleOutlined />}>已配置</Tag>
                 )}
               </Space>
             }
             extra={
-              editingModel 
-                ? (editingModel.has_api_key 
-                    ? "当前已配置密钥，留空则保持不变，输入新值则更新" 
-                    : "请输入API密钥")
-                : "请输入API密钥"
+              editingModel
+                ? (editingModel.has_api_key
+                    ? '当前已配置密钥，留空则保持不变，输入新值则更新'
+                    : '请输入API密钥')
+                : '请输入API密钥'
             }
             rules={
-              editingModel 
+              editingModel
                 ? (editingModel.has_api_key ? [] : [{ required: true, message: '请输入API密钥' }])
                 : [{ required: true, message: '请输入API密钥' }]
             }
           >
-            <Input.Password 
+            <Input.Password
               placeholder={
-                editingModel && editingModel.has_api_key 
-                  ? "已配置，留空保持不变" 
-                  : "输入API密钥"
+                editingModel && editingModel.has_api_key
+                  ? '已配置，留空保持不变'
+                  : '输入API密钥'
               }
               prefix={<KeyOutlined />}
             />
-          </Form.Item>
-
-          <Form.Item
-            name="model_id"
-            label="模型ID"
-            rules={[{ required: true, message: '请输入模型ID' }]}
-            extra={currentProvider === 'dashscope' || currentProvider === 'aliyun' 
-              ? "阿里万相推荐: wan2.6-image" 
-              : "如：doubao-seedream-3-0-t2i-250415"}
-          >
-            <Input placeholder={
-              currentProvider === 'dashscope' || currentProvider === 'aliyun'
-                ? "wan2.6-image"
-                : "doubao-seedream-3-0-t2i-250415"
-            } />
           </Form.Item>
 
           <Row gutter={16}>
@@ -680,10 +679,7 @@ const ImageModelSettings = () => {
           </Row>
 
           <Divider orientation="left">
-            <Space>
-              <PictureOutlined />
-              图生图功能配置
-            </Space>
+            <Space><PictureOutlined />图生图功能配置</Space>
           </Divider>
 
           <Row gutter={16}>
@@ -694,7 +690,7 @@ const ImageModelSettings = () => {
                 valuePropName="checked"
                 extra="开启后用户可以上传参考图片生成新图片"
               >
-                <Switch 
+                <Switch
                   checkedChildren={<UploadOutlined />}
                   unCheckedChildren={<CloseCircleOutlined />}
                   onChange={(checked) => setSupportsImage2Image(checked)}
@@ -709,12 +705,7 @@ const ImageModelSettings = () => {
                   initialValue={2}
                   extra="用户一次最多可以上传的参考图片数量"
                 >
-                  <InputNumber 
-                    min={1} 
-                    max={5} 
-                    style={{ width: '100%' }} 
-                    placeholder="建议1-2张"
-                  />
+                  <InputNumber min={1} max={5} style={{ width: '100%' }} placeholder="建议1-2张" />
                 </Form.Item>
               )}
             </Col>
@@ -740,8 +731,8 @@ const ImageModelSettings = () => {
               : '如：["1024x1024", "864x1152", "1280x720"]'}
             initialValue='["1024x1024"]'
           >
-            <TextArea 
-              rows={3} 
+            <TextArea
+              rows={3}
               placeholder={currentProviderConfig.defaultSizes || '["1024x1024"]'}
             />
           </Form.Item>
@@ -755,8 +746,8 @@ const ImageModelSettings = () => {
               >
                 <Input placeholder={
                   currentProvider === 'dashscope' || currentProvider === 'aliyun'
-                    ? "1280*1280"
-                    : "1024x1024"
+                    ? '1280*1280'
+                    : '1024x1024'
                 } />
               </Form.Item>
             </Col>
@@ -776,8 +767,8 @@ const ImageModelSettings = () => {
             label="其他API配置（JSON格式）"
             extra="可选，用于配置其他高级参数"
           >
-            <TextArea 
-              rows={4} 
+            <TextArea
+              rows={4}
               placeholder='{"timeout": 60000, "retry": 3}'
             />
           </Form.Item>

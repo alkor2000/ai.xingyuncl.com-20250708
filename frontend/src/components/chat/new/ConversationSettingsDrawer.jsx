@@ -1,12 +1,12 @@
 /**
- * 对话设置抽屉组件 - 支持系统提示词选择和模块组合
- * 支持Azure模型温度限制
+ * 对话设置抽屉组件
  * 
+ * v3.0 变更：
+ *   - 移除预设系统提示词选择功能（SystemPromptSettings已从后台移除）
+ *   - 保留自定义系统提示词输入框
  * v2.0 变更：
  *   - 新增"深度思考"开关（enable_thinking）
  *   - 仅在选择 Claude 系列模型时显示
- *   - 默认关闭（不思考），用户可手动开启
- *   - 开启后模型会先思考再回答，消耗更多 Token
  */
 
 import React, { useEffect, useState } from 'react'
@@ -21,7 +21,6 @@ import {
   Button,
   Tag,
   Tooltip,
-  Divider,
   Alert,
   Switch
 } from 'antd'
@@ -40,14 +39,11 @@ const { TextArea } = Input
 const { Option } = Select
 
 /**
- * 检测模型名称是否为 Claude 系列（支持深度思考的模型）
- * @param {string} modelName - 模型名称
- * @returns {boolean} 是否为 Claude 模型
+ * 检测模型名称是否为 Claude 系列
  */
 const isClaudeModel = (modelName) => {
   if (!modelName) return false
-  const lowerName = modelName.toLowerCase()
-  return lowerName.includes('claude')
+  return modelName.toLowerCase().includes('claude')
 }
 
 const ConversationSettingsDrawer = ({
@@ -58,39 +54,33 @@ const ConversationSettingsDrawer = ({
   onSubmit
 }) => {
   const { t } = useTranslation()
-  const { systemPrompts, getSystemPrompts, moduleCombinations, getModuleCombinations } = useChatStore()
-  const [customPromptMode, setCustomPromptMode] = useState(false)
-  const [selectedPromptContent, setSelectedPromptContent] = useState('')
+  const { moduleCombinations, getModuleCombinations } = useChatStore()
   const [selectedCombination, setSelectedCombination] = useState(null)
   const [isAzureModel, setIsAzureModel] = useState(false)
   const [temperatureValue, setTemperatureValue] = useState(0.7)
-  // v2.0: 是否为 Claude 模型（控制深度思考开关的显示）
   const [showThinkingSwitch, setShowThinkingSwitch] = useState(false)
 
-  // 加载系统提示词和模块组合
+  /* 加载模块组合（不再加载系统提示词） */
   useEffect(() => {
     if (visible) {
-      getSystemPrompts()
       getModuleCombinations()
     }
-  }, [visible, getSystemPrompts, getModuleCombinations])
+  }, [visible, getModuleCombinations])
 
-  // 检查是否为Azure模型
+  /* 检查是否为Azure模型 */
   const checkIsAzureModel = (modelName) => {
     const model = aiModels.find(m => m.name === modelName)
     if (!model) return false
-    
     if (model.provider === 'azure' || model.provider === 'azure-openai') return true
     if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') return true
     if (model.api_key && model.api_key.includes('|')) {
       const parts = model.api_key.split('|')
       if (parts.length === 3) return true
     }
-    
     return false
   }
 
-  // 处理模型选择变化
+  /* 处理模型选择变化 */
   const handleModelChange = (modelName) => {
     const isAzure = checkIsAzureModel(modelName)
     setIsAzureModel(isAzure)
@@ -103,30 +93,23 @@ const ConversationSettingsDrawer = ({
       setTemperatureValue(currentTemp)
     }
 
-    // v2.0: 检测是否为 Claude 模型，控制深度思考开关显示
     const isClaude = isClaudeModel(modelName)
     setShowThinkingSwitch(isClaude)
-
-    // 如果切换到非 Claude 模型，自动关闭深度思考
     if (!isClaude) {
       form.setFieldValue('enable_thinking', false)
     }
   }
 
-  // 初始化表单状态
+  /* 初始化表单状态 */
   useEffect(() => {
     if (visible) {
-      const systemPromptId = form.getFieldValue('system_prompt_id')
-      const systemPrompt = form.getFieldValue('system_prompt')
       const moduleCombinationId = form.getFieldValue('module_combination_id')
       const modelName = form.getFieldValue('model_name')
       const currentTemp = form.getFieldValue('ai_temperature') || 0.7
       
-      // 检查当前模型是否为Azure
       const isAzure = checkIsAzureModel(modelName)
       setIsAzureModel(isAzure)
       
-      // 设置温度值
       if (isAzure) {
         setTemperatureValue(1)
         form.setFieldValue('ai_temperature', 1)
@@ -134,114 +117,47 @@ const ConversationSettingsDrawer = ({
         setTemperatureValue(currentTemp)
       }
 
-      // v2.0: 检测是否为 Claude 模型
       setShowThinkingSwitch(isClaudeModel(modelName))
       
-      // 如果有模块组合
       if (moduleCombinationId) {
         const combination = moduleCombinations.find(c => c.id === moduleCombinationId)
         setSelectedCombination(combination)
-        setCustomPromptMode(false)
-        setSelectedPromptContent('')
-      }
-      else if (systemPrompt && !systemPromptId) {
-        setCustomPromptMode(true)
-        setSelectedPromptContent('')
-        setSelectedCombination(null)
-      } else if (systemPromptId) {
-        setCustomPromptMode(false)
-        const selectedPrompt = systemPrompts.find(p => p.id === systemPromptId)
-        if (selectedPrompt) {
-          setSelectedPromptContent(selectedPrompt.description || '')
-        }
-        setSelectedCombination(null)
       } else {
-        setCustomPromptMode(false)
-        setSelectedPromptContent('')
         setSelectedCombination(null)
       }
     }
-  }, [visible, form, systemPrompts, moduleCombinations, aiModels])
+  }, [visible, form, moduleCombinations, aiModels])
 
-  // 处理系统提示词选择
-  const handleSystemPromptChange = (promptId) => {
-    if (promptId === 'custom') {
-      setCustomPromptMode(true)
-      form.setFieldsValue({
-        system_prompt_id: null,
-        system_prompt: form.getFieldValue('system_prompt') || '',
-        module_combination_id: null
-      })
-      setSelectedCombination(null)
-    } else if (promptId) {
-      setCustomPromptMode(false)
-      const selectedPrompt = systemPrompts.find(p => p.id === promptId)
-      if (selectedPrompt) {
-        setSelectedPromptContent(selectedPrompt.description || '')
-        form.setFieldsValue({
-          system_prompt_id: promptId,
-          system_prompt: '',
-          module_combination_id: null
-        })
-        setSelectedCombination(null)
-      }
-    } else {
-      setCustomPromptMode(false)
-      setSelectedPromptContent('')
-      form.setFieldsValue({
-        system_prompt_id: null,
-        system_prompt: ''
-      })
-    }
-  }
-
-  // 处理模块组合选择
+  /* 处理模块组合选择 */
   const handleCombinationChange = (combinationId) => {
     if (combinationId) {
       const combination = moduleCombinations.find(c => c.id === combinationId)
       setSelectedCombination(combination)
-      
-      if (combination && combination.module_count > 0) {
-        setCustomPromptMode(false)
-        setSelectedPromptContent('')
-        form.setFieldsValue({
-          system_prompt_id: null,
-          system_prompt: '',
-          module_combination_id: combinationId
-        })
-      }
+      form.setFieldsValue({
+        system_prompt_id: null,
+        system_prompt: '',
+        module_combination_id: combinationId
+      })
     } else {
       setSelectedCombination(null)
-      form.setFieldsValue({
-        module_combination_id: null
-      })
+      form.setFieldsValue({ module_combination_id: null })
     }
   }
 
-  // 处理表单提交
+  /* 处理表单提交 */
   const handleSubmit = (values) => {
-    if (customPromptMode) {
-      values.system_prompt_id = null
-    } else if (values.system_prompt_id) {
-      values.system_prompt = null
-    }
+    /* v3.0: 不再处理system_prompt_id，只保留自定义system_prompt */
+    values.system_prompt_id = null
     
     if (isAzureModel) {
       values.ai_temperature = 1
     }
 
-    // v2.0: 将 enable_thinking 布尔值转为 0/1
     if (values.enable_thinking !== undefined) {
       values.enable_thinking = values.enable_thinking ? 1 : 0
     }
     
     onSubmit(values)
-  }
-
-  // 获取当前选择的值
-  const getCurrentPromptValue = () => {
-    if (customPromptMode) return 'custom'
-    return form.getFieldValue('system_prompt_id')
   }
 
   return (
@@ -253,20 +169,12 @@ const ConversationSettingsDrawer = ({
       onClose={onClose}
       footer={
         <Space>
-          <Button onClick={onClose}>
-            {t('button.cancel')}
-          </Button>
-          <Button type="primary" onClick={() => form.submit()}>
-            {t('button.save')}
-          </Button>
+          <Button onClick={onClose}>{t('button.cancel')}</Button>
+          <Button type="primary" onClick={() => form.submit()}>{t('button.save')}</Button>
         </Space>
       }
     >
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleSubmit}
-      >
+      <Form form={form} layout="vertical" onFinish={handleSubmit}>
         <Form.Item
           name="title"
           label={t('chat.form.title')}
@@ -285,31 +193,17 @@ const ConversationSettingsDrawer = ({
               <Option key={model.name} value={model.name}>
                 <Space>
                   {model.display_name}
-                  <Tag color="blue" size="small">
-                    {model.credits_per_chat}{t('unit.credits')}
-                  </Tag>
-                  {model.stream_enabled && (
-                    <Tag color="processing" size="small">
-                      {t('chat.stream')}
-                    </Tag>
-                  )}
-                  {model.image_upload_enabled && (
-                    <Tag color="success" size="small">
-                      {t('chat.image')}
-                    </Tag>
-                  )}
-                  {(model.provider === 'azure' || model.api_endpoint === 'azure') && (
-                    <Tag color="orange" size="small">
-                      Azure
-                    </Tag>
-                  )}
+                  <Tag color="blue" size="small">{model.credits_per_chat}{t('unit.credits')}</Tag>
+                  {model.stream_enabled && <Tag color="processing" size="small">{t('chat.stream')}</Tag>}
+                  {model.image_upload_enabled && <Tag color="success" size="small">{t('chat.image')}</Tag>}
+                  {(model.provider === 'azure' || model.api_endpoint === 'azure') && <Tag color="orange" size="small">Azure</Tag>}
                 </Space>
               </Option>
             ))}
           </Select>
         </Form.Item>
 
-        {/* v2.0: 深度思考开关 - 仅 Claude 系列模型显示 */}
+        {/* 深度思考开关 - 仅 Claude 系列模型显示 */}
         {showThinkingSwitch && (
           <Form.Item
             name="enable_thinking"
@@ -317,25 +211,21 @@ const ConversationSettingsDrawer = ({
               <Space>
                 <BulbOutlined style={{ color: '#fa8c16' }} />
                 {t('chat.thinking.enableLabel') || '深度思考'}
-                <Tooltip title={t('chat.thinking.enableTooltip') || 'Claude推理模型支持深度思考能力，开启后模型会先进行推理分析再输出答案，回答质量更高但消耗更多Token和时间'}>
+                <Tooltip title={t('chat.thinking.enableTooltip') || 'Claude推理模型支持深度思考能力，开启后模型会先进行推理分析再输出答案'}>
                   <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
                 </Tooltip>
               </Space>
             }
             valuePropName="checked"
           >
-            <Switch
-              checkedChildren="开启"
-              unCheckedChildren="关闭"
-            />
+            <Switch checkedChildren="开启" unCheckedChildren="关闭" />
           </Form.Item>
         )}
 
-        {/* 深度思考开启时的提示 */}
         {showThinkingSwitch && form.getFieldValue('enable_thinking') && (
           <Alert
             message={t('chat.thinking.enabledWarning') || '深度思考已开启'}
-            description={t('chat.thinking.enabledWarningDesc') || '模型将在回答前进行推理分析，会消耗更多Token和响应时间。可在工具栏的💡按钮控制是否显示思考过程。'}
+            description={t('chat.thinking.enabledWarningDesc') || '模型将在回答前进行推理分析，会消耗更多Token和响应时间。'}
             type="info"
             showIcon
             icon={<BulbOutlined />}
@@ -367,40 +257,18 @@ const ConversationSettingsDrawer = ({
               dropdownStyle={{ minWidth: 400 }}
             >
               {moduleCombinations.map(combination => (
-                <Option 
-                  key={combination.id} 
-                  value={combination.id}
-                  label={combination.name}
-                  disabled={!combination.is_active}
-                >
+                <Option key={combination.id} value={combination.id} label={combination.name} disabled={!combination.is_active}>
                   <div style={{ padding: '4px 0' }}>
-                    <div style={{ 
-                      fontWeight: 500,
-                      marginBottom: 4,
-                      whiteSpace: 'normal',
-                      wordBreak: 'break-word'
-                    }}>
+                    <div style={{ fontWeight: 500, marginBottom: 4, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                       <Space>
                         <GroupOutlined />
                         {combination.name}
-                        <Tag color="blue" size="small">
-                          {combination.module_count || 0} 个模块
-                        </Tag>
-                        {combination.estimated_tokens > 0 && (
-                          <Tag color="orange" size="small">
-                            约 {combination.estimated_tokens} tokens
-                          </Tag>
-                        )}
+                        <Tag color="blue" size="small">{combination.module_count || 0} 个模块</Tag>
+                        {combination.estimated_tokens > 0 && <Tag color="orange" size="small">约 {combination.estimated_tokens} tokens</Tag>}
                       </Space>
                     </div>
                     {combination.description && (
-                      <div style={{ 
-                        fontSize: '12px', 
-                        color: '#666',
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word',
-                        lineHeight: '1.5'
-                      }}>
+                      <div style={{ fontSize: '12px', color: '#666', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                         {combination.description}
                       </div>
                     )}
@@ -411,7 +279,6 @@ const ConversationSettingsDrawer = ({
           </Form.Item>
         )}
 
-        {/* 显示选中的模块组合信息 */}
         {selectedCombination && (
           <Alert
             message="已选择模块组合"
@@ -431,128 +298,36 @@ const ConversationSettingsDrawer = ({
           />
         )}
 
-        {/* 系统提示词选择 - 仅在未选择模块组合时显示 */}
-        {!selectedCombination && systemPrompts.length > 0 && (
+        {/* v3.0: 自定义系统提示词输入框（始终显示，不再有预设选择） */}
+        {!selectedCombination && (
           <Form.Item
+            name="system_prompt"
             label={
               <Space>
                 <FileTextOutlined />
-                系统提示词
+                {t('chat.form.systemPrompt')}
               </Space>
             }
           >
-            <Select
-              placeholder="选择预设的系统提示词（可选）"
-              allowClear
-              value={getCurrentPromptValue()}
-              onChange={handleSystemPromptChange}
-              style={{ width: '100%' }}
-              optionLabelProp="label"
-              dropdownMatchSelectWidth={false}
-              dropdownStyle={{ minWidth: 400 }}
-              dropdownRender={menu => (
-                <>
-                  {menu}
-                  <Divider style={{ margin: '8px 0' }} />
-                  <div style={{ padding: '0 8px 4px' }}>
-                    <Button
-                      type="text"
-                      icon={<FileTextOutlined />}
-                      block
-                      onClick={() => handleSystemPromptChange('custom')}
-                    >
-                      自定义系统提示词
-                    </Button>
-                  </div>
-                </>
-              )}
-            >
-              {systemPrompts.map(prompt => (
-                <Option 
-                  key={prompt.id} 
-                  value={prompt.id}
-                  label={prompt.name}
-                >
-                  <div style={{ padding: '4px 0' }}>
-                    <div style={{ 
-                      fontWeight: 500,
-                      marginBottom: prompt.description ? 4 : 0,
-                      whiteSpace: 'normal',
-                      wordBreak: 'break-word'
-                    }}>
-                      {prompt.name}
-                    </div>
-                    {prompt.description && (
-                      <div style={{ 
-                        fontSize: '12px', 
-                        color: '#666',
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word',
-                        lineHeight: '1.5'
-                      }}>
-                        {prompt.description}
-                      </div>
-                    )}
-                  </div>
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-        )}
-
-        {/* 显示选中的提示词描述 */}
-        {selectedPromptContent && !customPromptMode && !selectedCombination && (
-          <div style={{ 
-            marginTop: -16, 
-            marginBottom: 16, 
-            padding: '8px 12px', 
-            background: '#f5f5f5', 
-            borderRadius: 4,
-            fontSize: '13px',
-            color: '#666',
-            lineHeight: '1.5'
-          }}>
-            {selectedPromptContent}
-          </div>
-        )}
-
-        {/* 自定义系统提示词输入框 */}
-        {!selectedCombination && (customPromptMode || systemPrompts.length === 0) && (
-          <Form.Item
-            name="system_prompt"
-            label={t('chat.form.systemPrompt')}
-          >
-            <TextArea 
-              rows={4} 
-              placeholder={t('chat.form.systemPrompt.placeholder')} 
-            />
+            <TextArea rows={4} placeholder={t('chat.form.systemPrompt.placeholder')} />
           </Form.Item>
         )}
 
         {/* 隐藏的字段 */}
-        <Form.Item name="system_prompt_id" hidden>
-          <Input />
-        </Form.Item>
+        <Form.Item name="system_prompt_id" hidden><Input /></Form.Item>
 
         <Form.Item
           name="context_length"
           label={
             <Space>
               {t('chat.form.contextLength')}
-              <Tooltip title={t('chat.form.contextLength.tooltip')}>
-                <InfoCircleOutlined />
-              </Tooltip>
+              <Tooltip title={t('chat.form.contextLength.tooltip')}><InfoCircleOutlined /></Tooltip>
             </Space>
           }
         >
-          <InputNumber 
-            min={0} 
-            max={100} 
-            style={{ width: '100%' }} 
-          />
+          <InputNumber min={0} max={100} style={{ width: '100%' }} />
         </Form.Item>
 
-        {/* Azure模型温度提示 */}
         {isAzureModel && (
           <Alert
             message="Azure 模型温度限制"
@@ -569,27 +344,16 @@ const ConversationSettingsDrawer = ({
           label={
             <Space>
               {t('chat.form.temperature')}
-              <Tooltip title={
-                isAzureModel 
-                  ? "Azure 模型仅支持温度值 1.0" 
-                  : t('chat.form.temperature.tooltip')
-              }>
+              <Tooltip title={isAzureModel ? "Azure 模型仅支持温度值 1.0" : t('chat.form.temperature.tooltip')}>
                 <InfoCircleOutlined />
               </Tooltip>
             </Space>
           }
         >
           <Slider
-            min={0}
-            max={1}
-            step={0.1}
+            min={0} max={1} step={0.1}
             value={temperatureValue}
-            onChange={(value) => {
-              if (!isAzureModel) {
-                setTemperatureValue(value)
-                form.setFieldValue('ai_temperature', value)
-              }
-            }}
+            onChange={(value) => { if (!isAzureModel) { setTemperatureValue(value); form.setFieldValue('ai_temperature', value) } }}
             disabled={isAzureModel}
             marks={{
               0: t('chat.form.temperature.precise'),
@@ -604,17 +368,11 @@ const ConversationSettingsDrawer = ({
           label={
             <Space>
               {t('chat.form.priority')}
-              <Tooltip title={t('chat.form.priority.tooltip')}>
-                <InfoCircleOutlined />
-              </Tooltip>
+              <Tooltip title={t('chat.form.priority.tooltip')}><InfoCircleOutlined /></Tooltip>
             </Space>
           }
         >
-          <InputNumber 
-            min={0} 
-            max={10} 
-            style={{ width: '100%' }} 
-          />
+          <InputNumber min={0} max={10} style={{ width: '100%' }} />
         </Form.Item>
       </Form>
     </Drawer>
