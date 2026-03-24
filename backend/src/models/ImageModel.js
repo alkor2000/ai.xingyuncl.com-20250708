@@ -1,10 +1,13 @@
 /**
  * 图像生成模型配置
+ * 
+ * API密钥加密使用AES-256-GCM模式（符合SonarQube S5542安全要求）
+ * 解密兼容旧的AES-256-CBC数据，确保历史数据可正常读取
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
-const crypto = require('crypto');
+const { encrypt, decrypt } = require('../utils/cryptoHelper');
 
 class ImageModel {
   /**
@@ -158,21 +161,8 @@ class ImageModel {
         sort_order = 0
       } = modelData;
 
-      // 加密API密钥
-      let encryptedApiKey = null;
-      if (api_key) {
-        const algorithm = 'aes-256-cbc';
-        const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        let encrypted = cipher.update(api_key, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-        encryptedApiKey = JSON.stringify({
-          encrypted: true,
-          data: encrypted,
-          iv: iv.toString('hex')
-        });
-      }
+      // 使用AES-256-GCM加密API密钥
+      const encryptedApiKey = encrypt(api_key);
 
       const query = `
         INSERT INTO image_models 
@@ -257,18 +247,8 @@ class ImageModel {
           let value = updateData[field];
           
           if (field === 'api_key' && value) {
-            // 加密API密钥
-            const algorithm = 'aes-256-cbc';
-            const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
-            const iv = crypto.randomBytes(16);
-            const cipher = crypto.createCipheriv(algorithm, key, iv);
-            let encrypted = cipher.update(value, 'utf8', 'hex');
-            encrypted += cipher.final('hex');
-            value = JSON.stringify({
-              encrypted: true,
-              data: encrypted,
-              iv: iv.toString('hex')
-            });
+            // 使用AES-256-GCM加密API密钥
+            value = encrypt(value);
           } else if (field === 'sizes_supported' && Array.isArray(value)) {
             value = JSON.stringify(value);
           } else if (field === 'api_config' && typeof value === 'object') {
@@ -318,30 +298,10 @@ class ImageModel {
   }
 
   /**
-   * 解密API密钥
+   * 解密API密钥（自动兼容GCM和CBC两种模式）
    */
   static decryptApiKey(encryptedData) {
-    try {
-      if (!encryptedData) return null;
-      
-      const data = typeof encryptedData === 'string' 
-        ? JSON.parse(encryptedData) 
-        : encryptedData;
-      
-      if (!data.encrypted) return data;
-      
-      const algorithm = 'aes-256-cbc';
-      const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
-      const iv = Buffer.from(data.iv, 'hex');
-      const decipher = crypto.createDecipheriv(algorithm, key, iv);
-      let decrypted = decipher.update(data.data, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
-    } catch (error) {
-      logger.error('解密API密钥失败:', error);
-      return null;
-    }
+    return decrypt(encryptedData);
   }
 }
 

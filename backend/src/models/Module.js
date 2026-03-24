@@ -1,10 +1,13 @@
 /**
  * 系统模块模型 - 支持系统内置模块和外部模块
+ * 
+ * 模块配置中的敏感字段（如auth.secret）使用AES-256-GCM加密
+ * 解密兼容旧的AES-256-CBC数据
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
-const crypto = require('crypto');
+const { encrypt, decrypt } = require('../utils/cryptoHelper');
 
 class Module {
   /**
@@ -205,7 +208,7 @@ class Module {
       // 系统模块基础可修改字段：display_name, description, menu_icon, allowed_groups
       const systemAllowedFields = ['display_name', 'description', 'menu_icon', 'allowed_groups'];
       
-      // ✅ 修复：非核心系统模块可以修改sort_order
+      // 非核心系统模块可以修改sort_order
       if (module.can_disable) {
         systemAllowedFields.push('sort_order');
       }
@@ -365,7 +368,7 @@ class Module {
   }
   
   /**
-   * 加密配置信息
+   * 加密配置信息（使用AES-256-GCM加密auth.secret字段）
    */
   static encryptConfig(config) {
     if (!config || typeof config !== 'object') return null;
@@ -373,26 +376,18 @@ class Module {
     const configCopy = JSON.parse(JSON.stringify(config));
     
     if (configCopy.auth && configCopy.auth.secret) {
-      const algorithm = 'aes-256-cbc';
-      const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
-      const iv = crypto.randomBytes(16);
-      
-      const cipher = crypto.createCipheriv(algorithm, key, iv);
-      let encrypted = cipher.update(configCopy.auth.secret, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      
-      configCopy.auth.secret = {
-        encrypted: true,
-        data: encrypted,
-        iv: iv.toString('hex')
-      };
+      // 使用公共加密工具（AES-256-GCM）加密敏感字段
+      const encryptedSecret = encrypt(configCopy.auth.secret);
+      if (encryptedSecret) {
+        configCopy.auth.secret = JSON.parse(encryptedSecret);
+      }
     }
     
     return JSON.stringify(configCopy);
   }
   
   /**
-   * 解密配置信息
+   * 解密配置信息（自动兼容GCM和CBC两种模式）
    */
   static decryptConfig(configStr) {
     if (!configStr) return null;
@@ -401,15 +396,8 @@ class Module {
       const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr;
       
       if (config.auth && config.auth.secret && config.auth.secret.encrypted) {
-        const algorithm = 'aes-256-cbc';
-        const key = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || 'default-encryption-key', 'salt', 32);
-        const iv = Buffer.from(config.auth.secret.iv, 'hex');
-        
-        const decipher = crypto.createDecipheriv(algorithm, key, iv);
-        let decrypted = decipher.update(config.auth.secret.data, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        
-        config.auth.secret = decrypted;
+        // 使用公共解密工具（自动兼容GCM和CBC）
+        config.auth.secret = decrypt(config.auth.secret);
       }
       
       return config;

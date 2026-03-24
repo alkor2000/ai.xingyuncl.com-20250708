@@ -1,10 +1,14 @@
 /**
  * 视频生成模型配置
+ * 
+ * API密钥加密使用AES-256-GCM模式（符合SonarQube S5542安全要求）
+ * 解密兼容旧的AES-256-CBC数据，确保历史数据可正常读取
+ * 注意：仅火山引擎provider使用加密，其他provider保持明文
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
-const crypto = require('crypto');
+const { encrypt, decrypt } = require('../utils/cryptoHelper');
 
 class VideoModel {
   /**
@@ -171,14 +175,14 @@ class VideoModel {
         sort_order = 0
       } = modelData;
 
-      // ✅ 修复：根据提供商决定是否加密API密钥
+      // 根据提供商决定是否加密API密钥（仅火山引擎加密）
       let processedApiKey = null;
       if (api_key) {
-        // 只对火山引擎加密，其他提供商保持明文
         if (provider === 'volcano') {
-          processedApiKey = VideoModel.encryptApiKey(api_key);
+          // 火山引擎使用AES-256-GCM加密
+          processedApiKey = encrypt(api_key);
         } else {
-          // sora2_goapi、kling 等保持明文
+          // sora2_goapi、kling等保持明文
           processedApiKey = api_key;
         }
       }
@@ -250,7 +254,7 @@ class VideoModel {
         'icon', 'is_active', 'sort_order'
       ];
 
-      // ✅ 获取现有模型信息，确定provider
+      // 获取现有模型信息，确定provider
       const existingModel = await VideoModel.findById(id);
       if (!existingModel) {
         throw new Error('模型不存在');
@@ -263,13 +267,13 @@ class VideoModel {
         if (updateData.hasOwnProperty(field)) {
           let value = updateData[field];
           
-          // ✅ 修复：根据提供商决定是否加密API密钥
+          // 根据提供商决定是否加密API密钥
           if (field === 'api_key' && value) {
             if (existingModel.provider === 'volcano') {
-              // 只对火山引擎加密
-              value = VideoModel.encryptApiKey(value);
+              // 火山引擎使用AES-256-GCM加密
+              value = encrypt(value);
             }
-            // 其他提供商（sora2_goapi、kling等）保持明文，不加密
+            // 其他提供商保持明文
           }
           
           // 处理JSON字段
@@ -314,67 +318,17 @@ class VideoModel {
   }
 
   /**
-   * 加密API密钥（仅用于火山引擎）
+   * 加密API密钥（仅用于火山引擎，使用AES-256-GCM）
    */
   static encryptApiKey(apiKey) {
-    if (!apiKey) return null;
-    
-    try {
-      const algorithm = 'aes-256-cbc';
-      const key = crypto.scryptSync(
-        process.env.JWT_ACCESS_SECRET || 'default-encryption-key',
-        'salt',
-        32
-      );
-      const iv = crypto.randomBytes(16);
-      
-      const cipher = crypto.createCipheriv(algorithm, key, iv);
-      let encrypted = cipher.update(apiKey, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      
-      return JSON.stringify({
-        encrypted: true,
-        data: encrypted,
-        iv: iv.toString('hex')
-      });
-    } catch (error) {
-      logger.error('加密API密钥失败:', error);
-      throw error;
-    }
+    return encrypt(apiKey);
   }
 
   /**
-   * 解密API密钥（仅用于火山引擎）
+   * 解密API密钥（自动兼容GCM和CBC两种模式）
    */
   static decryptApiKey(encryptedData) {
-    if (!encryptedData) return null;
-    
-    try {
-      const data = typeof encryptedData === 'string' 
-        ? JSON.parse(encryptedData) 
-        : encryptedData;
-      
-      if (!data.encrypted) {
-        return encryptedData;
-      }
-      
-      const algorithm = 'aes-256-cbc';
-      const key = crypto.scryptSync(
-        process.env.JWT_ACCESS_SECRET || 'default-encryption-key',
-        'salt',
-        32
-      );
-      const iv = Buffer.from(data.iv, 'hex');
-      
-      const decipher = crypto.createDecipheriv(algorithm, key, iv);
-      let decrypted = decipher.update(data.data, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
-    } catch (error) {
-      logger.error('解密API密钥失败:', error);
-      return null;
-    }
+    return decrypt(encryptedData);
   }
 
   /**
