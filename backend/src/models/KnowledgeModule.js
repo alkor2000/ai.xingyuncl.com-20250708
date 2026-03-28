@@ -1,5 +1,6 @@
 /**
  * 知识模块模型
+ * v1.1: 新增 combination_count 字段，显示每个模块被多少个组合引用
  * 最终修复：使用MEMBER OF进行类型安全的JSON数组查询
  */
 
@@ -26,20 +27,21 @@ class KnowledgeModule {
     this.sort_order = data.sort_order || 0;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.usage_count = data.usage_count || 0;
+    // v1.1 新增：被多少个组合引用
+    this.combination_count = data.combination_count || 0;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
-    // 新增：允许访问的标签ID列表
+    // 允许访问的标签ID列表
     this.allowed_tag_ids = data.allowed_tag_ids || [];
   }
 
   /**
-   * 🔧 辅助方法：统一group_ids为整数数组
+   * 辅助方法：统一group_ids为整数数组
    * 确保所有ID都是数字类型，避免类型匹配问题
    */
   static normalizeGroupIds(groupIds) {
     if (!groupIds) return null;
     
-    // 如果是字符串，尝试解析
     if (typeof groupIds === 'string') {
       try {
         groupIds = JSON.parse(groupIds);
@@ -49,12 +51,10 @@ class KnowledgeModule {
       }
     }
     
-    // 如果是数组，确保所有元素都是整数
     if (Array.isArray(groupIds)) {
       const normalized = groupIds
         .map(id => parseInt(id, 10))
         .filter(id => !isNaN(id) && id > 0);
-      
       return normalized.length > 0 ? normalized : null;
     }
     
@@ -63,7 +63,8 @@ class KnowledgeModule {
 
   /**
    * 获取用户可用的知识模块列表（优化版本）
-   * 🔧 最终修复：使用MEMBER OF进行JSON数组匹配
+   * v1.1: 新增 combination_count 子查询
+   * 使用MEMBER OF进行JSON数组匹配
    */
   static async getUserAvailableModules(userId, groupId, includeInactive = false, userRole = null) {
     try {
@@ -76,8 +77,16 @@ class KnowledgeModule {
       // 超级管理员可以看到所有模块
       if (userRole === 'super_admin') {
         let sql = `
-          SELECT km.*, u.username as creator_name, ug.name as group_name,
-                 GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
+          SELECT km.*,
+                 u.username as creator_name,
+                 ug.name as group_name,
+                 GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str,
+                 (SELECT COUNT(*)
+                  FROM module_combination_items mci
+                  JOIN module_combinations mc ON mci.combination_id = mc.id
+                  WHERE mci.module_id = km.id
+                  AND mc.is_active = 1
+                 ) as combination_count
           FROM knowledge_modules km
           LEFT JOIN users u ON km.creator_id = u.id
           LEFT JOIN user_groups ug ON km.group_id = ug.id
@@ -96,8 +105,9 @@ class KnowledgeModule {
           const module = new KnowledgeModule(row);
           module.creator_name = row.creator_name;
           module.group_name = row.group_name;
+          module.combination_count = parseInt(row.combination_count, 10) || 0;
           
-          // 解析group_ids - 使用统一的规范化方法
+          // 解析group_ids
           module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
           
           // 解析allowed_tag_ids
@@ -127,13 +137,21 @@ class KnowledgeModule {
       const { rows: userTagRows } = await dbConnection.query(userTagsSql, [userId]);
       const userTagIds = userTagRows.map(row => row.tag_id);
       
-      // 🔧 修复：确保groupId是整数
+      // 确保groupId是整数
       const normalizedGroupId = parseInt(groupId, 10);
       
-      // 🔧 核心修复：使用MEMBER OF代替JSON_SEARCH
+      // 核心修复：使用MEMBER OF代替JSON_SEARCH，并加入 combination_count 子查询
       let sql = `
-        SELECT DISTINCT km.*, u.username as creator_name, ug.name as group_name,
-               GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str
+        SELECT DISTINCT km.*,
+               u.username as creator_name,
+               ug.name as group_name,
+               GROUP_CONCAT(DISTINCT kmtp.tag_id) as allowed_tag_ids_str,
+               (SELECT COUNT(*)
+                FROM module_combination_items mci
+                JOIN module_combinations mc ON mci.combination_id = mc.id
+                WHERE mci.module_id = km.id
+                AND mc.is_active = 1
+               ) as combination_count
         FROM knowledge_modules km
         LEFT JOIN users u ON km.creator_id = u.id
         LEFT JOIN user_groups ug ON km.group_id = ug.id
@@ -143,26 +161,23 @@ class KnowledgeModule {
           (km.module_scope = 'personal' AND km.creator_id = ?)
           -- 团队模块：同组可见，需要检查标签权限
           OR (km.module_scope = 'team' AND km.group_id = ? AND (
-            -- 创建者始终可见
             km.creator_id = ?
-            -- 没有标签限制的模块对所有组内用户可见
             OR NOT EXISTS (
-              SELECT 1 FROM knowledge_module_tag_permissions 
+              SELECT 1 FROM knowledge_module_tag_permissions
               WHERE module_id = km.id
             )
             ${userTagIds.length > 0 ? `
-            -- 有标签限制的模块，用户必须拥有至少一个允许的标签
             OR EXISTS (
               SELECT 1 FROM knowledge_module_tag_permissions kmtp2
-              WHERE kmtp2.module_id = km.id 
+              WHERE kmtp2.module_id = km.id
               AND kmtp2.tag_id IN (${userTagIds.map(() => '?').join(',')})
             )` : ''}
           ))
-          -- 🔧 最终修复：全局模块使用MEMBER OF进行类型安全的匹配
+          -- 全局模块：使用MEMBER OF进行类型安全的匹配
           OR (km.module_scope = 'system' AND (
-            km.group_ids IS NULL  -- NULL表示所有组可见
-            OR JSON_LENGTH(km.group_ids) = 0  -- 空数组也表示所有组可见
-            OR (? MEMBER OF (km.group_ids))  -- 使用MEMBER OF匹配整数
+            km.group_ids IS NULL
+            OR JSON_LENGTH(km.group_ids) = 0
+            OR (? MEMBER OF (km.group_ids))
           ))
         )
       `;
@@ -171,7 +186,7 @@ class KnowledgeModule {
       if (userTagIds.length > 0) {
         params.push(...userTagIds);
       }
-      params.push(normalizedGroupId); // MEMBER OF使用整数参数
+      params.push(normalizedGroupId);
       
       if (!includeInactive) {
         sql += ' AND km.is_active = 1';
@@ -185,8 +200,9 @@ class KnowledgeModule {
         const module = new KnowledgeModule(row);
         module.creator_name = row.creator_name;
         module.group_name = row.group_name;
+        module.combination_count = parseInt(row.combination_count, 10) || 0;
         
-        // 解析group_ids - 使用统一的规范化方法
+        // 解析group_ids
         module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
         
         // 解析allowed_tag_ids
@@ -247,10 +263,8 @@ class KnowledgeModule {
   static async setModuleTagPermissions(moduleId, tagIds, operatorId) {
     const transaction = await dbConnection.beginTransaction();
     try {
-      // 删除旧的权限
       await transaction.query('DELETE FROM knowledge_module_tag_permissions WHERE module_id = ?', [moduleId]);
       
-      // 添加新的权限
       if (tagIds && tagIds.length > 0) {
         for (const tagId of tagIds) {
           await transaction.query(
@@ -262,11 +276,7 @@ class KnowledgeModule {
       
       await transaction.commit();
       
-      logger.info('设置模块标签权限成功', {
-        moduleId,
-        tagIds,
-        operatorId
-      });
+      logger.info('设置模块标签权限成功', { moduleId, tagIds, operatorId });
     } catch (error) {
       await transaction.rollback();
       logger.error('设置模块标签权限失败:', error);
@@ -280,7 +290,13 @@ class KnowledgeModule {
   static async getSystemModules(includeInactive = false) {
     try {
       let sql = `
-        SELECT km.*, u.username as creator_name
+        SELECT km.*, u.username as creator_name,
+               (SELECT COUNT(*)
+                FROM module_combination_items mci
+                JOIN module_combinations mc ON mci.combination_id = mc.id
+                WHERE mci.module_id = km.id
+                AND mc.is_active = 1
+               ) as combination_count
         FROM knowledge_modules km
         LEFT JOIN users u ON km.creator_id = u.id
         WHERE km.module_scope = 'system'
@@ -297,10 +313,8 @@ class KnowledgeModule {
       return rows.map(row => {
         const module = new KnowledgeModule(row);
         module.creator_name = row.creator_name;
-        
-        // 解析group_ids - 使用统一的规范化方法
+        module.combination_count = parseInt(row.combination_count, 10) || 0;
         module.group_ids = KnowledgeModule.normalizeGroupIds(row.group_ids);
-        
         return module;
       });
     } catch (error) {
@@ -316,7 +330,13 @@ class KnowledgeModule {
     try {
       const sql = `
         SELECT km.*, u.username as creator_name, ug.name as group_name,
-               GROUP_CONCAT(kmtp.tag_id) as allowed_tag_ids_str
+               GROUP_CONCAT(kmtp.tag_id) as allowed_tag_ids_str,
+               (SELECT COUNT(*)
+                FROM module_combination_items mci
+                JOIN module_combinations mc ON mci.combination_id = mc.id
+                WHERE mci.module_id = km.id
+                AND mc.is_active = 1
+               ) as combination_count
         FROM knowledge_modules km
         LEFT JOIN users u ON km.creator_id = u.id
         LEFT JOIN user_groups ug ON km.group_id = ug.id
@@ -327,18 +347,15 @@ class KnowledgeModule {
       
       const { rows } = await dbConnection.query(sql, [id]);
       
-      if (rows.length === 0) {
-        return null;
-      }
+      if (rows.length === 0) return null;
       
       const module = new KnowledgeModule(rows[0]);
       module.creator_name = rows[0].creator_name;
       module.group_name = rows[0].group_name;
+      module.combination_count = parseInt(rows[0].combination_count, 10) || 0;
       
-      // 解析group_ids - 使用统一的规范化方法
       module.group_ids = KnowledgeModule.normalizeGroupIds(rows[0].group_ids);
       
-      // 解析allowed_tag_ids
       if (rows[0].allowed_tag_ids_str) {
         module.allowed_tag_ids = rows[0].allowed_tag_ids_str.split(',').map(id => parseInt(id));
       } else {
@@ -347,34 +364,24 @@ class KnowledgeModule {
       
       // 检查内容可见性
       if (userId) {
-        // 获取用户角色
         const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
         const userRole = userResult.rows[0]?.role;
         
-        // 超级管理员可以看到所有内容
         if (userRole === 'super_admin') {
-          logger.debug('超级管理员查看模块', {
-            moduleId: id,
-            moduleName: module.name,
-            userId
-          });
           return module;
         }
         
-        // 系统级模块的内容可见性处理
         if (module.module_scope === 'system') {
           if (!module.content_visible) {
             module.content = null;
             module.content_hidden = true;
           }
         } else if (module.module_scope === 'team') {
-          // 团队模块：非创建者需要检查content_visible
           if (module.creator_id !== userId && !module.content_visible) {
             module.content = null;
             module.content_hidden = true;
           }
         } else if (module.module_scope === 'personal' && module.creator_id !== userId) {
-          // 个人模块：非创建者不应该能访问
           return null;
         }
       }
@@ -388,29 +395,24 @@ class KnowledgeModule {
 
   /**
    * 创建知识模块
-   * 🔧 修复：统一group_ids为整数数组
+   * 修复：统一group_ids为整数数组
    */
   static async create(data, creatorId) {
     const transaction = await dbConnection.beginTransaction();
     try {
-      // 验证权限
       const { module_scope, group_id, group_ids, allowed_tag_ids } = data;
       
-      // 如果是团队模块，必须有group_id
       if (module_scope === 'team' && !group_id) {
         throw new ValidationError('团队模块必须指定所属组');
       }
       
-      // 计算token数量
       const tokenCount = calculateTokens(data.content || '');
       
-      // 🔧 修复：处理group_ids，统一为整数数组并序列化
       let processedGroupIds = null;
       if (module_scope === 'system' && group_ids) {
         const normalized = KnowledgeModule.normalizeGroupIds(group_ids);
         if (normalized && normalized.length > 0) {
           processedGroupIds = JSON.stringify(normalized);
-          
           logger.info('保存系统模块的group_ids', {
             原始值: group_ids,
             规范化后: normalized,
@@ -447,7 +449,6 @@ class KnowledgeModule {
       const result = await transaction.query(sql, params);
       const insertId = result.rows.insertId;
       
-      // 如果是团队模块且设置了标签权限，保存标签权限
       if (module_scope === 'team' && allowed_tag_ids && allowed_tag_ids.length > 0) {
         for (const tagId of allowed_tag_ids) {
           await transaction.query(
@@ -459,8 +460,8 @@ class KnowledgeModule {
       
       await transaction.commit();
       
-      logger.info('创建知识模块成功', { 
-        moduleId: insertId, 
+      logger.info('创建知识模块成功', {
+        moduleId: insertId,
         name: data.name,
         creatorId,
         scope: module_scope,
@@ -479,18 +480,16 @@ class KnowledgeModule {
 
   /**
    * 更新知识模块
-   * 🔧 修复：统一group_ids为整数数组
+   * 修复：统一group_ids为整数数组
    */
   static async update(id, data, operatorId) {
     const transaction = await dbConnection.beginTransaction();
     try {
-      // 获取原模块信息
       const originalModule = await KnowledgeModule.findById(id);
       if (!originalModule) {
         throw new ValidationError('知识模块不存在');
       }
       
-      // 检查权限
       if (originalModule.creator_id !== operatorId) {
         const operator = await transaction.query('SELECT role FROM users WHERE id = ?', [operatorId]);
         if (operator.rows[0]?.role !== 'super_admin') {
@@ -501,25 +500,21 @@ class KnowledgeModule {
       const updateFields = [];
       const updateValues = [];
       
-      // 如果更新了内容，重新计算token
       if (data.content !== undefined) {
         const tokenCount = calculateTokens(data.content);
         updateFields.push('content = ?', 'token_count = ?');
         updateValues.push(data.content, tokenCount);
       }
       
-      // 允许更新的其他字段
-      const allowedFields = ['name', 'description', 'prompt_type', 'content_visible', 
-                           'category', 'tags', 'sort_order', 'is_active'];
+      const allowedFields = ['name', 'description', 'prompt_type', 'content_visible',
+                             'category', 'tags', 'sort_order', 'is_active'];
       
-      // 🔧 修复：如果是系统级模块，允许更新group_ids（统一为整数数组）
       if (originalModule.module_scope === 'system' && data.group_ids !== undefined) {
         updateFields.push('group_ids = ?');
         const normalized = KnowledgeModule.normalizeGroupIds(data.group_ids);
         if (normalized && normalized.length > 0) {
           const processedGroupIds = JSON.stringify(normalized);
           updateValues.push(processedGroupIds);
-          
           logger.info('更新系统模块的group_ids', {
             moduleId: id,
             原始值: data.group_ids,
@@ -549,12 +544,9 @@ class KnowledgeModule {
         await transaction.query(sql, updateValues);
       }
       
-      // 如果是团队模块，更新标签权限
       if (originalModule.module_scope === 'team' && data.allowed_tag_ids !== undefined) {
-        // 删除旧的权限
         await transaction.query('DELETE FROM knowledge_module_tag_permissions WHERE module_id = ?', [id]);
         
-        // 添加新的权限
         if (data.allowed_tag_ids && data.allowed_tag_ids.length > 0) {
           for (const tagId of data.allowed_tag_ids) {
             await transaction.query(
@@ -567,8 +559,8 @@ class KnowledgeModule {
       
       await transaction.commit();
       
-      logger.info('更新知识模块成功', { 
-        moduleId: id, 
+      logger.info('更新知识模块成功', {
+        moduleId: id,
         operatorId,
         updatedFields: updateFields,
         allowed_tag_ids: data.allowed_tag_ids
@@ -583,17 +575,15 @@ class KnowledgeModule {
   }
 
   /**
-   * 删除知识模块
+   * 删除知识模块（软删除）
    */
   static async delete(id, operatorId) {
     try {
-      // 获取模块信息
       const module = await KnowledgeModule.findById(id);
       if (!module) {
         throw new ValidationError('知识模块不存在');
       }
       
-      // 检查权限
       if (module.creator_id !== operatorId) {
         const operator = await dbConnection.query('SELECT role FROM users WHERE id = ?', [operatorId]);
         if (operator.rows[0]?.role !== 'super_admin') {
@@ -601,7 +591,6 @@ class KnowledgeModule {
         }
       }
       
-      // 软删除
       const sql = 'UPDATE knowledge_modules SET is_active = 0 WHERE id = ?';
       await dbConnection.query(sql, [id]);
       
@@ -616,41 +605,30 @@ class KnowledgeModule {
 
   /**
    * 检查用户是否有权限使用该模块
-   * 🔧 核心修复：确保类型安全的权限比较
+   * 核心修复：确保类型安全的权限比较
    */
   static async checkUserAccess(moduleId, userId, groupId, userRole = null) {
     try {
-      // 如果没有传入用户角色，查询用户角色
       if (!userRole) {
         const userResult = await dbConnection.query('SELECT role FROM users WHERE id = ?', [userId]);
         userRole = userResult.rows[0]?.role;
       }
       
-      // 超级管理员总是有权限
       if (userRole === 'super_admin') {
-        logger.debug('超级管理员访问模块', {
-          moduleId,
-          userId
-        });
         return true;
       }
       
-      // 🔧 修复：确保groupId是整数
       const normalizedGroupId = parseInt(groupId, 10);
       
-      // 获取用户的标签ID列表
-      const userTagsSql = `
-        SELECT tag_id FROM user_tag_relations WHERE user_id = ?
-      `;
+      const userTagsSql = `SELECT tag_id FROM user_tag_relations WHERE user_id = ?`;
       const { rows: userTagRows } = await dbConnection.query(userTagsSql, [userId]);
       const userTagIds = userTagRows.map(row => row.tag_id);
       
-      // 检查模块访问权限
       const sql = `
-        SELECT km.*, 
+        SELECT km.*,
                (SELECT COUNT(*) FROM knowledge_module_tag_permissions WHERE module_id = km.id) as tag_permission_count
         FROM knowledge_modules km
-        WHERE km.id = ? 
+        WHERE km.id = ?
         AND km.is_active = 1
       `;
       
@@ -663,102 +641,33 @@ class KnowledgeModule {
       
       const module = rows[0];
       
-      // 个人模块：只有创建者可以访问
       if (module.module_scope === 'personal') {
-        const hasAccess = module.creator_id === userId;
-        logger.debug('个人模块权限检查', {
-          moduleId,
-          userId,
-          creatorId: module.creator_id,
-          hasAccess
-        });
-        return hasAccess;
+        return module.creator_id === userId;
       }
       
-      // 团队模块：检查组和标签权限
       if (module.module_scope === 'team') {
-        // 首先检查是否同组
-        if (module.group_id !== normalizedGroupId) {
-          logger.debug('团队模块组不匹配', {
-            moduleId,
-            userId,
-            moduleGroupId: module.group_id,
-            userGroupId: normalizedGroupId
-          });
-          return false;
-        }
+        if (module.group_id !== normalizedGroupId) return false;
+        if (module.creator_id === userId) return true;
+        if (module.tag_permission_count === 0) return true;
         
-        // 创建者始终有权限
-        if (module.creator_id === userId) {
-          logger.debug('团队模块创建者访问', { moduleId, userId });
-          return true;
-        }
-        
-        // 如果没有标签限制，组内所有用户都有权限
-        if (module.tag_permission_count === 0) {
-          logger.debug('团队模块无标签限制', { moduleId, userId });
-          return true;
-        }
-        
-        // 如果有标签限制，检查用户是否拥有允许的标签
         if (userTagIds.length > 0) {
           const checkTagSql = `
-            SELECT COUNT(*) as count 
-            FROM knowledge_module_tag_permissions 
+            SELECT COUNT(*) as count
+            FROM knowledge_module_tag_permissions
             WHERE module_id = ? AND tag_id IN (${userTagIds.map(() => '?').join(',')})
           `;
           const { rows: tagCheckRows } = await dbConnection.query(checkTagSql, [moduleId, ...userTagIds]);
-          const hasAccess = tagCheckRows[0].count > 0;
-          
-          logger.debug('团队模块标签权限检查', {
-            moduleId,
-            userId,
-            userTagIds,
-            matchCount: tagCheckRows[0].count,
-            hasAccess
-          });
-          
-          return hasAccess;
+          return tagCheckRows[0].count > 0;
         }
         
-        logger.debug('团队模块：用户无标签且模块有标签限制', { moduleId, userId });
         return false;
       }
       
-      // 🔧 核心修复：系统模块权限检查 - 类型安全的比较
       if (module.module_scope === 'system') {
-        // 解析group_ids - 使用统一的规范化方法
         const allowedGroups = KnowledgeModule.normalizeGroupIds(module.group_ids);
-        
-        // NULL或空数组表示所有组可见
-        if (!allowedGroups || allowedGroups.length === 0) {
-          logger.debug('系统模块对所有组可见', {
-            moduleId,
-            userId,
-            userGroupId: normalizedGroupId
-          });
-          return true;
-        }
-        
-        // 🔧 类型安全的比较：统一为整数后比较
-        const hasAccess = allowedGroups.includes(normalizedGroupId);
-        
-        logger.debug('系统模块组权限检查', {
-          moduleId,
-          userId,
-          userGroupId: normalizedGroupId,
-          allowedGroups,
-          hasAccess
-        });
-        
-        return hasAccess;
+        if (!allowedGroups || allowedGroups.length === 0) return true;
+        return allowedGroups.includes(normalizedGroupId);
       }
-      
-      logger.warn('未知的模块类型', {
-        moduleId,
-        moduleScope: module.module_scope,
-        userId
-      });
       
       return false;
     } catch (error) {
@@ -781,6 +690,7 @@ class KnowledgeModule {
 
   /**
    * 转换为JSON（控制内容可见性）
+   * v1.1: 新增 combination_count 字段
    */
   toJSON() {
     const data = {
@@ -799,25 +709,20 @@ class KnowledgeModule {
       sort_order: this.sort_order,
       is_active: this.is_active,
       usage_count: this.usage_count,
+      combination_count: this.combination_count,  // v1.1 新增
       created_at: this.created_at,
       updated_at: this.updated_at,
       allowed_tag_ids: this.allowed_tag_ids
     };
     
-    // 如果内容被隐藏，添加标识
     if (this.content_hidden) {
       data.content_hidden = true;
     } else {
       data.content = this.content;
     }
     
-    // 添加额外信息
-    if (this.creator_name) {
-      data.creator_name = this.creator_name;
-    }
-    if (this.group_name) {
-      data.group_name = this.group_name;
-    }
+    if (this.creator_name) data.creator_name = this.creator_name;
+    if (this.group_name)   data.group_name = this.group_name;
     
     return data;
   }

@@ -29,7 +29,7 @@
   "knowledge.usageCount": "uses",
   "knowledge.tokenUsage": "Token Usage",
   "knowledge.tokenLimit": "Token limit exceeded, please reduce modules",
-  "knowledge.maxModules": "Maximum 5 modules allowed",
+  "knowledge.maxModules": "Slots full, please add more slots or remove existing modules",
   "knowledge.tokenExceeded": "Adding this module ({{moduleTokens}}) will exceed token limit ({{totalTokens}}/100K)",
   "knowledge.moduleAdded": "Module added",
   "knowledge.loadedCombination": "Loaded combination: {{name}}",
@@ -64,7 +64,18 @@
   "knowledge.loadingData": "Failed to load data",
   "knowledge.showInactive": "Show hidden modules",
   "knowledge.hideInactive": "Hide inactive modules",
-  
+
+  "knowledge.usedInCombinations": "Used in {{count}} combination(s)",
+  "knowledge.notUsed": "Not used in any combination",
+  "knowledge.combinationUsage": "Referenced by {{count}} combination(s)",
+
+  "knowledge.slotAdd": "Add a slot",
+  "knowledge.slotRemove": "Remove a slot",
+  "knowledge.slotMax": "Maximum {{max}} slots",
+  "knowledge.slotMin": "Minimum {{min}} slot",
+  "knowledge.slotCannotReduce": "Slots are occupied by modules, please remove modules first",
+  "knowledge.slotCount": "slots (max {{max}})",
+
   "knowledge.form.editModule": "Edit Knowledge Module",
   "knowledge.form.createModule": "Create Knowledge Module",
   "knowledge.form.creator": "Creator",

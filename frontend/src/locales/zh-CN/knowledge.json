@@ -29,7 +29,7 @@
   "knowledge.usageCount": "次使用",
   "knowledge.tokenUsage": "Token使用",
   "knowledge.tokenLimit": "Token数超过限制，请减少模块",
-  "knowledge.maxModules": "最多只能添加5个模块",
+  "knowledge.maxModules": "卡槽已满，请先增加卡槽或移除已有模块",
   "knowledge.tokenExceeded": "添加此模块({{moduleTokens}})后，总Token数({{totalTokens}})将超过限制(100K)",
   "knowledge.moduleAdded": "模块已添加",
   "knowledge.loadedCombination": "已加载组合：{{name}}",
@@ -64,7 +64,18 @@
   "knowledge.loadingData": "加载数据失败",
   "knowledge.showInactive": "显示隐藏模块",
   "knowledge.hideInactive": "隐藏非激活模块",
-  
+
+  "knowledge.usedInCombinations": "被{{count}}个组合使用",
+  "knowledge.notUsed": "未被组合使用",
+  "knowledge.combinationUsage": "被{{count}}个组合引用",
+
+  "knowledge.slotAdd": "增加一个卡槽",
+  "knowledge.slotRemove": "减少一个卡槽",
+  "knowledge.slotMax": "最多 {{max}} 个卡槽",
+  "knowledge.slotMin": "最少 {{min}} 个卡槽",
+  "knowledge.slotCannotReduce": "当前卡槽已被模块占用，请先移除模块再减少卡槽",
+  "knowledge.slotCount": "个卡槽（最多{{max}}个）",
+
   "knowledge.form.editModule": "编辑知识模块",
   "knowledge.form.createModule": "创建知识模块",
   "knowledge.form.creator": "创建人",

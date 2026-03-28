@@ -1,15 +1,17 @@
 /**
  * 万智魔方 - iOS风格模块组装页面
+ * v2.3: 模块卡片显示"被X个组合使用"引用数
+ * v2.2: 支持用户自定义卡槽数量（1-20个），localStorage持久化
  * 支持国际化(i18n)
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { 
-  Layout, 
-  Card, 
-  Button, 
+import {
+  Layout,
+  Card,
+  Button,
   Input,
-  Space, 
+  Space,
   Empty,
   Spin,
   message,
@@ -38,16 +40,16 @@ import {
   ThunderboltOutlined,
   MoreOutlined,
   CloseOutlined,
-  CheckOutlined,
   LockOutlined,
   UnlockOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
   InfoCircleOutlined,
-  FilterOutlined,
   PlusCircleOutlined,
   FileTextOutlined,
-  WarningOutlined
+  WarningOutlined,
+  MinusOutlined,
+  ApartmentOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -63,16 +65,24 @@ import './KnowledgeBase.less'
 const { Content } = Layout
 const { Search } = Input
 
-// 卡槽中的模块组件 - Token显示在顶部
+// 卡槽数量常量
+const SLOT_MIN     = 1   // 最少卡槽数
+const SLOT_MAX     = 20  // 最多卡槽数
+const SLOT_DEFAULT = 5   // 默认卡槽数
+
+/**
+ * 获取用户卡槽数量的 localStorage key（按用户ID隔离）
+ */
+const getSlotCountKey = (userId) => `knowledge_slot_count_${userId}`
+
+// ==========================================
+// 卡槽中的模块组件
+// ==========================================
 const SlotModule = ({ module, onRemove, index }) => {
   const { t } = useTranslation()
   const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging
   } = useSortable({ id: module.id })
 
   const style = {
@@ -82,68 +92,56 @@ const SlotModule = ({ module, onRemove, index }) => {
     zIndex: isDragging ? 1000 : 1
   }
 
-  // 获取模块颜色 - 只根据module_scope决定
   const getModuleColor = () => {
     switch (module.module_scope) {
       case 'personal': return 'slot-module-blue'
-      case 'team': return 'slot-module-green'
-      case 'system': return 'slot-module-orange'
-      default: return 'slot-module-blue'
+      case 'team':     return 'slot-module-green'
+      case 'system':   return 'slot-module-orange'
+      default:         return 'slot-module-blue'
     }
   }
 
-  // 获取范围图标
   const getScopeIcon = () => {
     switch (module.module_scope) {
       case 'personal': return <UserOutlined />
-      case 'team': return <TeamOutlined />
-      case 'system': return <GlobalOutlined />
-      default: return <UserOutlined />
+      case 'team':     return <TeamOutlined />
+      case 'system':   return <GlobalOutlined />
+      default:         return <UserOutlined />
     }
   }
 
-  // 获取范围文本
   const getScopeText = () => {
     switch (module.module_scope) {
       case 'personal': return t('knowledge.scope.personal')
-      case 'team': return t('knowledge.scope.team')
-      case 'system': return t('knowledge.scope.system')
-      default: return t('knowledge.scope.personal')
+      case 'team':     return t('knowledge.scope.team')
+      case 'system':   return t('knowledge.scope.system')
+      default:         return t('knowledge.scope.personal')
     }
   }
 
   return (
-    <div 
-      ref={setNodeRef} 
+    <div
+      ref={setNodeRef}
       style={style}
       className={`slot-module ${getModuleColor()} ${isDragging ? 'dragging' : ''}`}
       {...attributes}
       {...listeners}
     >
-      {/* 顶部标签区域 - 显示所有信息包括token */}
       <div className="module-badges-bar">
-        {/* 系统级标识 - 这个是prompt_type，保持不变 */}
         {module.prompt_type === 'system' && (
           <Tag className="system-prompt-tag">
             <ThunderboltOutlined /> {t('knowledge.systemLevel')}
           </Tag>
         )}
-        
-        {/* 锁定状态 */}
         <span className="lock-status">
-          {module.content_visible ? (
-            <UnlockOutlined className="unlock-icon" />
-          ) : (
-            <LockOutlined className="lock-icon" />
-          )}
+          {module.content_visible
+            ? <UnlockOutlined className="unlock-icon" />
+            : <LockOutlined className="lock-icon" />
+          }
         </span>
-        
-        {/* 使用范围 */}
         <Tag className="scope-tag">
           {getScopeIcon()} {getScopeText()}
         </Tag>
-        
-        {/* Token显示 - 移到顶部标签栏 */}
         {module.token_count > 0 && (
           <Tag className="token-tag">
             <FileTextOutlined />
@@ -151,14 +149,12 @@ const SlotModule = ({ module, onRemove, index }) => {
           </Tag>
         )}
       </div>
-      
+
       <div className="module-content">
-        <div className="module-icon">
-          {getScopeIcon()}
-        </div>
+        <div className="module-icon">{getScopeIcon()}</div>
         <div className="module-name">{module.name}</div>
       </div>
-      
+
       <button className="module-remove" onClick={() => onRemove(module.id)}>
         <CloseOutlined />
       </button>
@@ -166,104 +162,80 @@ const SlotModule = ({ module, onRemove, index }) => {
   )
 }
 
-// 模块广场卡片 - Token显示在顶部
+// ==========================================
+// 模块广场卡片 - v2.3 新增引用数显示
+// ==========================================
 const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete }) => {
   const { t } = useTranslation()
   const [isDragging, setIsDragging] = useState(false)
-  
-  // 获取模块颜色 - 只根据module_scope决定
+
   const getModuleColor = () => {
     switch (module.module_scope) {
       case 'personal': return 'card-blue'
-      case 'team': return 'card-green'
-      case 'system': return 'card-orange'
-      default: return 'card-blue'
+      case 'team':     return 'card-green'
+      case 'system':   return 'card-orange'
+      default:         return 'card-blue'
     }
   }
 
-  // 获取范围图标
   const getScopeIcon = () => {
     switch (module.module_scope) {
       case 'personal': return <UserOutlined />
-      case 'team': return <TeamOutlined />
-      case 'system': return <GlobalOutlined />
-      default: return <UserOutlined />
+      case 'team':     return <TeamOutlined />
+      case 'system':   return <GlobalOutlined />
+      default:         return <UserOutlined />
     }
   }
 
-  // 获取范围文本
   const getScopeText = () => {
     switch (module.module_scope) {
       case 'personal': return t('knowledge.scope.personal')
-      case 'team': return t('knowledge.scope.team')
-      case 'system': return t('knowledge.scope.system')
-      default: return t('knowledge.scope.personal')
+      case 'team':     return t('knowledge.scope.team')
+      case 'system':   return t('knowledge.scope.system')
+      default:         return t('knowledge.scope.personal')
     }
   }
 
-  // 操作菜单项
+  // 操作菜单
   const menuItems = []
-  if (canEdit) {
-    menuItems.push({
-      key: 'edit',
-      label: t('knowledge.edit'),
-      icon: <EditOutlined />
-    })
-  }
-  if (canDelete) {
-    menuItems.push({
-      key: 'delete',
-      label: t('knowledge.delete'),
-      icon: <DeleteOutlined />,
-      danger: true
-    })
-  }
+  if (canEdit)   menuItems.push({ key: 'edit',   label: t('knowledge.edit'),   icon: <EditOutlined /> })
+  if (canDelete) menuItems.push({ key: 'delete', label: t('knowledge.delete'), icon: <DeleteOutlined />, danger: true })
 
   const handleMenuClick = ({ key }) => {
-    if (key === 'edit' && onEdit) {
-      onEdit(module)
-    } else if (key === 'delete' && onDelete) {
-      onDelete(module.id)
-    }
+    if (key === 'edit'   && onEdit)   onEdit(module)
+    if (key === 'delete' && onDelete) onDelete(module.id)
   }
 
+  // 引用数：被多少个组合使用
+  const combinationCount = module.combination_count || 0
+
   return (
-    <div 
+    <div
       className={`square-module-card ${getModuleColor()} ${isDragging ? 'dragging' : ''} ${!module.is_active ? 'inactive' : ''}`}
       draggable
       onDragStart={(e) => {
         setIsDragging(true)
         e.dataTransfer.effectAllowed = 'copy'
         e.dataTransfer.setData('module', JSON.stringify(module))
-        e.dataTransfer.setData('type', 'module')  // 标识拖拽类型
+        e.dataTransfer.setData('type', 'module')
         onDragStart(module)
       }}
       onDragEnd={() => setIsDragging(false)}
     >
-      {/* 顶部显示所有信息 - 包括token */}
+      {/* 顶部标签：系统级 / 锁 / 范围 / Token */}
       <div className="module-badges">
-        {/* 系统级标识 - 这个是prompt_type，保持不变 */}
         {module.prompt_type === 'system' && (
-          <Tag className="type-tag type-tag-purple">
-            {t('knowledge.systemLevel')}
-          </Tag>
+          <Tag className="type-tag type-tag-purple">{t('knowledge.systemLevel')}</Tag>
         )}
-        
-        {/* 锁定状态 */}
         <Tooltip title={module.content_visible ? t('knowledge.contentVisible') : t('knowledge.contentHidden')}>
-          {module.content_visible ? (
-            <UnlockOutlined className="unlock-icon" />
-          ) : (
-            <LockOutlined className="lock-icon" />
-          )}
+          {module.content_visible
+            ? <UnlockOutlined className="unlock-icon" />
+            : <LockOutlined className="lock-icon" />
+          }
         </Tooltip>
-        
-        {/* 使用范围 */}
         <Tag className={`type-tag type-tag-${getModuleColor().replace('card-', '')}`}>
           {getScopeText()}
         </Tag>
-        
-        {/* Token显示 - 移到顶部 */}
         {module.token_count > 0 && (
           <Tag className="token-tag">
             <FileTextOutlined />
@@ -272,7 +244,7 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
         )}
       </div>
 
-      {/* 右上角操作按钮 */}
+      {/* 右上角更多操作 */}
       {menuItems.length > 0 && !isDragging && (
         <Dropdown
           menu={{ items: menuItems, onClick: handleMenuClick }}
@@ -285,60 +257,63 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
         </Dropdown>
       )}
 
-      {/* 模块主体内容 */}
+      {/* 图标 + 名称 */}
       <div className="card-main">
-        <div className="card-icon">
-          {getScopeIcon()}
-        </div>
+        <div className="card-icon">{getScopeIcon()}</div>
         <div className="card-name">{module.name}</div>
-        {/* 未激活标识 */}
         {!module.is_active && (
-          <Tag className="inactive-tag" color="warning">
-            {t('knowledge.inactive')}
-          </Tag>
+          <Tag className="inactive-tag" color="warning">{t('knowledge.inactive')}</Tag>
         )}
       </div>
+
+      {/* 底部引用数 - v2.3 新增 */}
+      <Tooltip title={t('knowledge.combinationUsage', { count: combinationCount })}>
+        <div className={`card-usage-bar ${combinationCount > 0 ? 'has-usage' : 'no-usage'}`}>
+          <ApartmentOutlined className="usage-icon" />
+          <span className="usage-count">
+            {combinationCount > 0
+              ? t('knowledge.usedInCombinations', { count: combinationCount })
+              : t('knowledge.notUsed')
+            }
+          </span>
+        </div>
+      </Tooltip>
     </div>
   )
 }
 
-// 组合卡片 - 可拖拽，显示token
+// ==========================================
+// 组合卡片
+// ==========================================
 const CombinationCard = ({ combination, onEdit, onDelete }) => {
   const { t } = useTranslation()
   const [isDragging, setIsDragging] = useState(false)
-  
-  // 计算组合的总token数
   const totalTokens = combination.estimated_tokens || 0
-  
-  // 只保留编辑和删除
+
   const menuItems = [
-    { key: 'edit', label: t('knowledge.loadEdit'), icon: <EditOutlined /> },
-    { key: 'delete', label: t('knowledge.delete'), icon: <DeleteOutlined />, danger: true }
+    { key: 'edit',   label: t('knowledge.loadEdit'), icon: <EditOutlined /> },
+    { key: 'delete', label: t('knowledge.delete'),   icon: <DeleteOutlined />, danger: true }
   ]
 
   const handleMenuClick = ({ key }) => {
-    switch (key) {
-      case 'edit': onEdit(combination); break
-      case 'delete': onDelete(combination.id); break
-    }
+    if (key === 'edit')   onEdit(combination)
+    if (key === 'delete') onDelete(combination.id)
   }
 
   return (
-    <div 
+    <div
       className={`combination-card-ios ${isDragging ? 'dragging' : ''}`}
       draggable
       onDragStart={(e) => {
         setIsDragging(true)
         e.dataTransfer.effectAllowed = 'copy'
         e.dataTransfer.setData('combination', JSON.stringify(combination))
-        e.dataTransfer.setData('type', 'combination')  // 标识拖拽类型
+        e.dataTransfer.setData('type', 'combination')
       }}
       onDragEnd={() => setIsDragging(false)}
     >
       <div className="card-content">
-        <div className="card-icon-large">
-          <AppstoreOutlined />
-        </div>
+        <div className="card-icon-large"><AppstoreOutlined /></div>
         <div className="card-info">
           <div className="card-title">{combination.name}</div>
           <div className="card-meta">
@@ -352,79 +327,83 @@ const CombinationCard = ({ combination, onEdit, onDelete }) => {
           </div>
         </div>
       </div>
-      <Dropdown 
-        menu={{ items: menuItems, onClick: handleMenuClick }} 
+      <Dropdown
+        menu={{ items: menuItems, onClick: handleMenuClick }}
         trigger={['click']}
         placement="bottomRight"
       >
-        <button className="card-more">
-          <MoreOutlined />
-        </button>
+        <button className="card-more"><MoreOutlined /></button>
       </Dropdown>
     </div>
   )
 }
 
+// ==========================================
+// 主组件
+// ==========================================
 const KnowledgeBase = () => {
   const { t } = useTranslation()
   const { user, hasRole } = useAuthStore()
-  const { 
-    modules, 
-    combinations, 
-    loading,
-    getModules,
-    getCombinations,
-    createCombination,
-    updateCombination,
-    deleteCombination,
-    deleteModule,
-    updateModule
+  const {
+    modules, combinations, loading,
+    getModules, getCombinations,
+    createCombination, updateCombination, deleteCombination,
+    deleteModule, updateModule
   } = useKnowledgeStore()
 
-  const [canvasModules, setCanvasModules] = useState([])
-  const [searchText, setSearchText] = useState('')
-  const [filterScope, setFilterScope] = useState('all')
-  const [showInactive, setShowInactive] = useState(false) // 添加显示隐藏模块的开关
-  const [draggedModule, setDraggedModule] = useState(null)
+  const [canvasModules, setCanvasModules]           = useState([])
+  const [searchText, setSearchText]                 = useState('')
+  const [filterScope, setFilterScope]               = useState('all')
+  const [showInactive, setShowInactive]             = useState(false)
+  const [draggedModule, setDraggedModule]           = useState(null)
   const [currentCombination, setCurrentCombination] = useState(null)
   const [moduleModalVisible, setModuleModalVisible] = useState(false)
-  const [editingModule, setEditingModule] = useState(null)
+  const [editingModule, setEditingModule]           = useState(null)
   const [saveCombinationName, setSaveCombinationName] = useState('')
-  const [saveDescription, setSaveDescription] = useState('')
-  const [showSaveModal, setShowSaveModal] = useState(false)
-  const [isDragOver, setIsDragOver] = useState(false)
+  const [saveDescription, setSaveDescription]       = useState('')
+  const [showSaveModal, setShowSaveModal]           = useState(false)
+  const [isDragOver, setIsDragOver]                 = useState(false)
+
+  /**
+   * 卡槽数量：从 localStorage 读取（按用户ID），默认5，范围1-20
+   */
+  const [slotCount, setSlotCount] = useState(() => {
+    if (!user?.id) return SLOT_DEFAULT
+    const saved = localStorage.getItem(getSlotCountKey(user.id))
+    if (saved) {
+      const num = parseInt(saved, 10)
+      if (!isNaN(num) && num >= SLOT_MIN && num <= SLOT_MAX) return num
+    }
+    return SLOT_DEFAULT
+  })
 
   const canvasRef = useRef(null)
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  // 修改权限判断：所有组内用户都可以创建团队模块
-  const canCreateTeamModule = !!user.group_id  // 只要用户属于某个组就可以创建团队模块
+  const canCreateTeamModule   = !!user.group_id
   const canCreateSystemModule = hasRole(['super_admin'])
 
-  // 计算当前canvas中模块的总token数
-  const totalCanvasTokens = useMemo(() => {
-    return canvasModules.reduce((sum, module) => sum + (module.token_count || 0), 0)
-  }, [canvasModules])
+  // 组装区总Token
+  const totalCanvasTokens = useMemo(
+    () => canvasModules.reduce((sum, m) => sum + (m.token_count || 0), 0),
+    [canvasModules]
+  )
 
-  // 获取token状态
-  const tokenStatus = useMemo(() => {
-    return getTokenStatus(totalCanvasTokens, 100000)
-  }, [totalCanvasTokens])
+  const tokenStatus = useMemo(
+    () => getTokenStatus(totalCanvasTokens, 100000),
+    [totalCanvasTokens]
+  )
 
   useEffect(() => {
     loadData()
-  }, [showInactive]) // 当开关变化时重新加载数据
+  }, [showInactive])
 
   const loadData = async () => {
     try {
       await Promise.all([
-        getModules(showInactive), // 传入是否包含隐藏模块
+        getModules(showInactive),
         getCombinations(false)
       ])
     } catch (error) {
@@ -432,47 +411,55 @@ const KnowledgeBase = () => {
     }
   }
 
-  // 判断是否可以编辑模块
-  // 修复：超级管理员可以编辑所有模块
-  const canEditModule = (module) => {
-    // 超级管理员可以编辑所有模块
-    if (hasRole(['super_admin'])) return true
-    
-    // 创建者可以编辑自己的模块
-    if (module.creator_id === user.id) return true
-    
-    // 团队管理员可以编辑本组的团队模块
-    if (module.module_scope === 'team' && module.group_id === user.group_id && hasRole(['admin'])) {
-      return true
+  // 增加卡槽
+  const handleAddSlot = () => {
+    if (slotCount >= SLOT_MAX) {
+      message.warning(t('knowledge.slotMax', { max: SLOT_MAX }))
+      return
     }
-    
-    return false
+    const next = slotCount + 1
+    setSlotCount(next)
+    if (user?.id) localStorage.setItem(getSlotCountKey(user.id), String(next))
   }
 
-  // 判断是否可以删除模块
-  // 修复：超级管理员可以删除所有模块
-  const canDeleteModule = (module) => {
-    // 超级管理员可以删除所有模块
+  // 减少卡槽（不能低于已填充数）
+  const handleRemoveSlot = () => {
+    if (slotCount <= SLOT_MIN) {
+      message.warning(t('knowledge.slotMin', { min: SLOT_MIN }))
+      return
+    }
+    if (slotCount <= canvasModules.length) {
+      message.warning(t('knowledge.slotCannotReduce'))
+      return
+    }
+    const next = slotCount - 1
+    setSlotCount(next)
+    if (user?.id) localStorage.setItem(getSlotCountKey(user.id), String(next))
+  }
+
+  const canEditModule = (module) => {
     if (hasRole(['super_admin'])) return true
-    
-    // 创建者可以删除自己的模块
     if (module.creator_id === user.id) return true
-    
+    if (module.module_scope === 'team' && module.group_id === user.group_id && hasRole(['admin'])) return true
     return false
   }
 
-  // 处理编辑模块
+  const canDeleteModule = (module) => {
+    if (hasRole(['super_admin'])) return true
+    if (module.creator_id === user.id) return true
+    return false
+  }
+
   const handleEditModule = (module) => {
     setEditingModule(module)
     setModuleModalVisible(true)
   }
 
-  // 处理删除模块
   const handleDeleteModule = async (moduleId) => {
     Modal.confirm({
-      title: t('knowledge.confirmDelete'),
+      title:   t('knowledge.confirmDelete'),
       content: t('knowledge.confirmDeleteContent', { type: t('knowledge.module') }),
-      onOk: async () => {
+      onOk:    async () => {
         try {
           await deleteModule(moduleId)
           message.success(t('knowledge.deleteSuccess'))
@@ -484,79 +471,61 @@ const KnowledgeBase = () => {
     })
   }
 
-  // 过滤模块
+  // 过滤模块列表
   const filteredModules = modules.filter(module => {
-    // 根据开关决定是否显示隐藏的模块
     if (!showInactive && !module.is_active) return false
-    
-    if (searchText && !module.name.toLowerCase().includes(searchText.toLowerCase())) {
-      return false
-    }
-    if (filterScope !== 'all' && module.module_scope !== filterScope) {
-      return false
-    }
-    if (canvasModules.find(m => m.id === module.id)) {
-      return false
-    }
+    if (searchText && !module.name.toLowerCase().includes(searchText.toLowerCase())) return false
+    if (filterScope !== 'all' && module.module_scope !== filterScope) return false
+    if (canvasModules.find(m => m.id === module.id)) return false
     return true
   })
 
-  // 处理拖拽
-  const handleDragStart = (module) => {
-    setDraggedModule(module)
-  }
+  const handleDragStart = (module) => setDraggedModule(module)
 
-  // 修改处理拖入，支持模块和组合
+  // 组装区拖入
   const handleCanvasDrop = (e) => {
     e.preventDefault()
     setIsDragOver(false)
-    
+
     const dragType = e.dataTransfer.getData('type')
-    
+
     if (dragType === 'module') {
-      // 处理模块拖入
       const moduleData = e.dataTransfer.getData('module')
-      if (moduleData) {
-        const module = JSON.parse(moduleData)
-        if (!canvasModules.find(m => m.id === module.id)) {
-          if (canvasModules.length >= 5) {
-            message.warning(t('knowledge.maxModules'))
-            return
-          }
-          
-          // 检查token是否超限
-          const newTotalTokens = totalCanvasTokens + (module.token_count || 0)
-          if (newTotalTokens > 100000) {
-            message.warning(t('knowledge.tokenExceeded', {
-              moduleTokens: formatTokenCount(module.token_count),
-              totalTokens: formatTokenCount(newTotalTokens)
-            }))
-            return
-          }
-          
-          setCanvasModules([...canvasModules, module])
-          message.success(t('knowledge.moduleAdded'))
-        }
+      if (!moduleData) return
+      const module = JSON.parse(moduleData)
+
+      if (canvasModules.find(m => m.id === module.id)) return
+
+      if (canvasModules.length >= slotCount) {
+        message.warning(t('knowledge.maxModules'))
+        return
       }
+
+      const newTotalTokens = totalCanvasTokens + (module.token_count || 0)
+      if (newTotalTokens > 100000) {
+        message.warning(t('knowledge.tokenExceeded', {
+          moduleTokens: formatTokenCount(module.token_count),
+          totalTokens:  formatTokenCount(newTotalTokens)
+        }))
+        return
+      }
+
+      setCanvasModules([...canvasModules, module])
+      message.success(t('knowledge.moduleAdded'))
+
     } else if (dragType === 'combination') {
-      // 处理组合拖入
       const combinationData = e.dataTransfer.getData('combination')
-      if (combinationData) {
-        const combination = JSON.parse(combinationData)
-        handleLoadCombination(combination)
-      }
+      if (!combinationData) return
+      handleLoadCombination(JSON.parse(combinationData))
     }
   }
 
-  const handleCanvasDragOver = (e) => {
+  const handleCanvasDragOver  = (e) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
     setIsDragOver(true)
   }
-
-  const handleCanvasDragLeave = () => {
-    setIsDragOver(false)
-  }
+  const handleCanvasDragLeave = () => setIsDragOver(false)
 
   const handleDragEnd = (event) => {
     const { active, over } = event
@@ -573,9 +542,9 @@ const KnowledgeBase = () => {
 
   const handleClearCanvas = () => {
     Modal.confirm({
-      title: t('knowledge.confirmClear'),
+      title:   t('knowledge.confirmClear'),
       content: t('knowledge.confirmClearContent'),
-      onOk: () => {
+      onOk:    () => {
         setCanvasModules([])
         setCurrentCombination(null)
       }
@@ -587,24 +556,18 @@ const KnowledgeBase = () => {
       message.warning(t('knowledge.pleaseAddModules'))
       return
     }
-    
-    // 检查token是否超限
     if (totalCanvasTokens > 100000) {
-      message.warning(t('knowledge.tokenLimitExceeded', {
-        tokens: formatTokenCount(totalCanvasTokens)
-      }))
+      message.warning(t('knowledge.tokenLimitExceeded', { tokens: formatTokenCount(totalCanvasTokens) }))
       return
     }
-    
+
     if (currentCombination) {
       Modal.confirm({
-        title: t('knowledge.updateCombination'),
+        title:   t('knowledge.updateCombination'),
         content: t('knowledge.confirmUpdate', { name: currentCombination.name }),
-        onOk: async () => {
+        onOk:    async () => {
           try {
-            await updateCombination(currentCombination.id, {
-              module_ids: canvasModules.map(m => m.id)
-            })
+            await updateCombination(currentCombination.id, { module_ids: canvasModules.map(m => m.id) })
             message.success(t('knowledge.updateSuccess'))
             getCombinations(false)
           } catch (error) {
@@ -624,27 +587,32 @@ const KnowledgeBase = () => {
       message.warning(t('knowledge.combinationNameRequired'))
       return
     }
-
     try {
       await createCombination({
-        name: saveCombinationName,
+        name:        saveCombinationName,
         description: saveDescription,
-        module_ids: canvasModules.map(m => m.id),
-        is_active: true
+        module_ids:  canvasModules.map(m => m.id),
+        is_active:   true
       })
       message.success(t('knowledge.saveSuccess'))
       setShowSaveModal(false)
       setSaveCombinationName('')
       setSaveDescription('')
-      getCombinations(false)
+      // 保存后刷新模块列表，更新引用数
+      await Promise.all([getCombinations(false), getModules(showInactive)])
     } catch (error) {
       message.error(t('knowledge.saveFailed'))
     }
   }
 
-  // 加载组合到编辑区
+  // 加载组合到组装区（自动扩展卡槽）
   const handleLoadCombination = (combination) => {
     if (combination.modules && combination.modules.length > 0) {
+      if (combination.modules.length > slotCount) {
+        const needed = Math.min(combination.modules.length, SLOT_MAX)
+        setSlotCount(needed)
+        if (user?.id) localStorage.setItem(getSlotCountKey(user.id), String(needed))
+      }
       setCanvasModules([...combination.modules])
       setCurrentCombination(combination)
       message.success(t('knowledge.loadedCombination', { name: combination.name }))
@@ -653,16 +621,15 @@ const KnowledgeBase = () => {
 
   const handleDeleteCombination = async (combinationId) => {
     Modal.confirm({
-      title: t('knowledge.confirmDelete'),
+      title:   t('knowledge.confirmDelete'),
       content: t('knowledge.confirmDeleteContent', { type: t('knowledge.combination') }),
-      onOk: async () => {
+      onOk:    async () => {
         try {
           await deleteCombination(combinationId)
           message.success(t('knowledge.deleteSuccess'))
-          getCombinations(false)
-          if (currentCombination?.id === combinationId) {
-            setCurrentCombination(null)
-          }
+          // 删除组合后刷新模块列表，更新引用数
+          await Promise.all([getCombinations(false), getModules(showInactive)])
+          if (currentCombination?.id === combinationId) setCurrentCombination(null)
         } catch (error) {
           message.error(t('knowledge.deleteFailed'))
         }
@@ -670,59 +637,52 @@ const KnowledgeBase = () => {
     })
   }
 
+  // ==========================================
+  // 渲染
+  // ==========================================
   return (
     <div className="knowledge-wizard-ios">
-      {/* 顶部标题栏 - 移除编辑状态显示 */}
+      {/* 顶部标题栏 */}
       <div className="wizard-header">
         <div className="header-left">
           <h1>{t('knowledge.title')}</h1>
         </div>
       </div>
 
-      {/* 主体区域 */}
       <div className="wizard-body">
-        {/* 左侧模块广场 */}
+
+        {/* ====== 左侧：模块广场 ====== */}
         <div className="panel-left">
           <div className="panel-header">
             <h3>{t('knowledge.moduleSquare')}</h3>
             <Space size={4}>
               <Badge count={filteredModules.length} showZero />
-              {/* 新建模块按钮改为图标按钮，降低视觉权重 */}
               <Tooltip title={t('knowledge.newModule')}>
-                <Button 
+                <Button
                   size="small"
                   type="text"
-                  icon={<PlusCircleOutlined />} 
+                  icon={<PlusCircleOutlined />}
                   onClick={() => {
                     setEditingModule(null)
                     setModuleModalVisible(true)
                   }}
-                  style={{ 
-                    color: '#666',
-                    fontSize: '16px',
-                    width: '24px',
-                    height: '24px'
-                  }}
+                  style={{ color: '#666', fontSize: '16px', width: '24px', height: '24px' }}
                 />
               </Tooltip>
             </Space>
           </div>
-          
-          {/* 添加工具栏区域，统一高度 */}
-          <div className="panel-toolbar" style={{
-            padding: '8px 12px',
-            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
-            backgroundColor: 'rgba(248, 248, 250, 0.5)'
-          }}>
+
+          {/* 搜索 + 过滤 + 隐藏开关 */}
+          <div className="panel-toolbar">
             <Search
               placeholder={t('knowledge.searchModule')}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              style={{ marginBottom: 8 }}
+              style={{ marginBottom: 6 }}
               size="small"
               prefix={<SearchOutlined />}
+              allowClear
             />
-            
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="filter-tags" style={{ display: 'flex', gap: 4 }}>
                 {['all', 'personal', 'team', 'system'].map(scope => (
@@ -730,18 +690,12 @@ const KnowledgeBase = () => {
                     key={scope}
                     className={`filter-tag ${filterScope === scope ? 'active' : ''}`}
                     onClick={() => setFilterScope(scope)}
-                    style={{ 
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      padding: '2px 6px',
-                      lineHeight: '16px'
-                    }}
+                    style={{ cursor: 'pointer', fontSize: '11px', padding: '2px 6px', lineHeight: '16px' }}
                   >
                     {t(`knowledge.filter.${scope}`)}
                   </Tag>
                 ))}
               </div>
-              
               <Switch
                 size="small"
                 checked={showInactive}
@@ -751,7 +705,8 @@ const KnowledgeBase = () => {
               />
             </div>
           </div>
-          
+
+          {/* 模块卡片网格 */}
           <div className="panel-content">
             <div className="module-grid">
               {loading ? (
@@ -771,13 +726,15 @@ const KnowledgeBase = () => {
                   />
                 ))
               ) : (
-                <Empty description={showInactive ? t('knowledge.noModules') : t('knowledge.noActiveModules')} />
+                <Empty description={
+                  showInactive ? t('knowledge.noModules') : t('knowledge.noActiveModules')
+                } />
               )}
             </div>
           </div>
         </div>
 
-        {/* 中间模块组装 */}
+        {/* ====== 中间：模块组装区 ====== */}
         <div className="panel-center">
           <div className="panel-header">
             <div className="header-title">
@@ -788,20 +745,20 @@ const KnowledgeBase = () => {
             </div>
             <div className="header-actions">
               <Space size={4}>
-                <Button 
+                <Button
                   size="small"
                   type="default"
-                  icon={<SaveOutlined />} 
+                  icon={<SaveOutlined />}
                   onClick={handleSaveCombination}
                   style={{ fontSize: '12px' }}
                   disabled={totalCanvasTokens > 100000}
                 >
                   {t('knowledge.save')}
                 </Button>
-                <Button 
+                <Button
                   size="small"
                   type="text"
-                  icon={<ClearOutlined />} 
+                  icon={<ClearOutlined />}
                   onClick={handleClearCanvas}
                   style={{ fontSize: '12px' }}
                 >
@@ -810,7 +767,7 @@ const KnowledgeBase = () => {
               </Space>
             </div>
           </div>
-          
+
           {/* Token进度条 */}
           <div className="token-progress-area">
             <div className="token-progress-wrapper">
@@ -818,7 +775,7 @@ const KnowledgeBase = () => {
                 <FileTextOutlined />
                 {t('knowledge.tokenUsage')}
               </div>
-              <Progress 
+              <Progress
                 percent={tokenStatus.percentage}
                 strokeColor={tokenStatus.color}
                 size="small"
@@ -835,15 +792,13 @@ const KnowledgeBase = () => {
               </div>
             )}
           </div>
-          
-          {/* 组合信息工具栏 */}
+
+          {/* 当前组合信息 */}
           <div className="panel-toolbar" style={{
-            padding: '8px 12px',
-            minHeight: '40px',
-            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
-            backgroundColor: 'rgba(248, 248, 250, 0.5)',
-            display: 'flex',
-            alignItems: 'center'
+            padding: '8px 12px', minHeight: '40px',
+            borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+            backgroundColor: 'rgba(248,248,250,0.5)',
+            display: 'flex', alignItems: 'center'
           }}>
             {currentCombination ? (
               <Space>
@@ -859,9 +814,10 @@ const KnowledgeBase = () => {
               </span>
             )}
           </div>
-          
+
+          {/* 卡槽区域 */}
           <div className="panel-content">
-            <div 
+            <div
               className={`slots-container ${isDragOver ? 'drag-over' : ''}`}
               onDrop={handleCanvasDrop}
               onDragOver={handleCanvasDragOver}
@@ -878,11 +834,10 @@ const KnowledgeBase = () => {
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="slots-wrapper">
-                    {/* 渲染5个卡槽 */}
-                    {[0, 1, 2, 3, 4].map(index => (
+                    {Array.from({ length: slotCount }, (_, index) => (
                       <div key={`slot-${index}`} className="module-slot">
                         {canvasModules[index] ? (
-                          <SlotModule 
+                          <SlotModule
                             module={canvasModules[index]}
                             onRemove={handleRemoveModule}
                             index={index}
@@ -898,36 +853,69 @@ const KnowledgeBase = () => {
                   </div>
                 </SortableContext>
               </DndContext>
+
+              {/* 卡槽数量控制器 */}
+              <div className="slot-count-control">
+                <Tooltip title={
+                  slotCount <= canvasModules.length
+                    ? t('knowledge.slotCannotReduce')
+                    : slotCount <= SLOT_MIN
+                      ? t('knowledge.slotMin', { min: SLOT_MIN })
+                      : t('knowledge.slotRemove')
+                }>
+                  <button
+                    className="slot-ctrl-btn slot-ctrl-minus"
+                    onClick={handleRemoveSlot}
+                    disabled={slotCount <= SLOT_MIN || slotCount <= canvasModules.length}
+                  >
+                    <MinusOutlined />
+                  </button>
+                </Tooltip>
+
+                <div className="slot-ctrl-info">
+                  <span className="slot-ctrl-count">{slotCount}</span>
+                  <span className="slot-ctrl-label">
+                    {t('knowledge.slotCount', { max: SLOT_MAX })}
+                  </span>
+                </div>
+
+                <Tooltip title={
+                  slotCount >= SLOT_MAX
+                    ? t('knowledge.slotMax', { max: SLOT_MAX })
+                    : t('knowledge.slotAdd')
+                }>
+                  <button
+                    className="slot-ctrl-btn slot-ctrl-plus"
+                    onClick={handleAddSlot}
+                    disabled={slotCount >= SLOT_MAX}
+                  >
+                    <PlusOutlined />
+                  </button>
+                </Tooltip>
+              </div>
+
             </div>
           </div>
         </div>
 
-        {/* 右侧组合列表 */}
+        {/* ====== 右侧：我的组合 ====== */}
         <div className="panel-right">
           <div className="panel-header">
             <h3>{t('knowledge.myCombinations')}</h3>
             <Badge count={combinations.length} showZero />
           </div>
-          
-          {/* 添加工具栏区域保持一致高度 */}
+
           <div className="panel-toolbar" style={{
-            padding: '8px 12px',
-            minHeight: '57px',
-            borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
-            backgroundColor: 'rgba(248, 248, 250, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            padding: '8px 12px', minHeight: '57px',
+            borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+            backgroundColor: 'rgba(248,248,250,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <span style={{ 
-              color: '#999', 
-              fontSize: '11px',
-              textAlign: 'center'
-            }}>
+            <span style={{ color: '#999', fontSize: '11px', textAlign: 'center' }}>
               <InfoCircleOutlined /> {t('knowledge.dragCombinationHint')}
             </span>
           </div>
-          
+
           <div className="panel-content">
             <div className="combination-grid">
               {loading ? (
@@ -949,9 +937,10 @@ const KnowledgeBase = () => {
             </div>
           </div>
         </div>
+
       </div>
 
-      {/* 模块表单 */}
+      {/* 模块编辑弹窗 */}
       <KnowledgeModuleFormModal
         visible={moduleModalVisible}
         module={editingModule}
@@ -1003,13 +992,9 @@ const KnowledgeBase = () => {
           <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: '#666' }}>
             {t('knowledge.tokenStatistics')}
           </label>
-          <div style={{ 
-            padding: '8px 12px', 
-            background: '#f5f5f5', 
-            borderRadius: '4px',
-            color: tokenStatus.color,
-            fontWeight: 600,
-            fontSize: '13px'
+          <div style={{
+            padding: '8px 12px', background: '#f5f5f5', borderRadius: '4px',
+            color: tokenStatus.color, fontWeight: 600, fontSize: '13px'
           }}>
             {t('knowledge.totalTokens', { tokens: formatTokenCount(totalCanvasTokens) })}
           </div>

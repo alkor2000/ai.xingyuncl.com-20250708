@@ -1,4 +1,4 @@
-// 万智魔方 - 高级质感卡槽设计
+// 万智魔方 - 高级质感卡槽设计（v2.1 紧凑模块卡片 + 突出搜索框）
 
 .knowledge-wizard-ios {
   height: 100vh;
@@ -7,7 +7,7 @@
   flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
   overflow: hidden;
-  
+
   // 顶部标题栏 - 简化
   .wizard-header {
     background: rgba(255, 255, 255, 0.8);
@@ -20,12 +20,12 @@
     align-items: center;
     z-index: 100;
     flex-shrink: 0;
-    
+
     .header-left {
       display: flex;
       align-items: center;
       gap: 16px;
-      
+
       h1 {
         margin: 0;
         font-size: 20px;
@@ -37,7 +37,7 @@
       }
     }
   }
-  
+
   // 主体区域 - 三等分布局
   .wizard-body {
     flex: 1;
@@ -45,20 +45,20 @@
     padding: 16px;
     gap: 16px;
     overflow: hidden;
-    min-height: 0; // 防止flex子元素溢出
-    
+    min-height: 0;
+
     // 面板通用样式
     .panel-left,
     .panel-center,
     .panel-right {
       flex: 1;
-      min-width: 0; // 防止flex子元素溢出
+      min-width: 0;
       background: rgba(255, 255, 255, 0.72);
       backdrop-filter: blur(20px) saturate(180%);
       -webkit-backdrop-filter: blur(20px) saturate(180%);
       border-radius: 12px;
       border: 0.5px solid rgba(255, 255, 255, 0.5);
-      box-shadow: 
+      box-shadow:
         0 0 0 0.5px rgba(0, 0, 0, 0.05),
         0 2px 5px rgba(0, 0, 0, 0.05),
         0 10px 40px rgba(0, 0, 0, 0.08),
@@ -66,7 +66,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      
+
       .panel-header {
         padding: 12px 16px;
         border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
@@ -75,7 +75,7 @@
         align-items: center;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
         flex-shrink: 0;
-        
+
         h3 {
           margin: 0;
           font-size: 14px;
@@ -83,7 +83,7 @@
           color: #1d1d1f;
           letter-spacing: -0.3px;
         }
-        
+
         .ant-badge-count {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
@@ -92,166 +92,153 @@
           line-height: 18px;
         }
       }
-      
+
+      // 面板工具栏 - 左侧专用（搜索 + 过滤）
       .panel-toolbar {
         padding: 8px 12px;
-        min-height: 57px;
         border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
         background: rgba(248, 248, 250, 0.5);
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        gap: 6px;
         flex-shrink: 0;
-      }
-      
-      .panel-content {
-        flex: 1;
-        padding: 12px;
-        padding-bottom: 20px; // 修复：增加底部padding确保最后的模块能完全显示
-        overflow-y: auto;
-        overflow-x: hidden; // 防止横向滚动
-        min-height: 0;
-        
-        &::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        &::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        &::-webkit-scrollbar-thumb {
-          background: rgba(0, 0, 0, 0.15);
-          border-radius: 3px;
-          
-          &:hover {
-            background: rgba(0, 0, 0, 0.25);
-          }
-        }
-      }
-    }
-    
-    // 左侧面板 - 模块广场
-    .panel-left {
-      .search-input {
-        margin-bottom: 10px;
-        
-        .ant-input {
-          background: rgba(118, 118, 128, 0.06);
-          border: 0.5px solid rgba(0, 0, 0, 0.04);
+
+        // 搜索框样式增强
+        .ant-input-affix-wrapper,
+        .ant-input-search .ant-input-affix-wrapper {
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(0, 0, 0, 0.1);
           border-radius: 8px;
-          height: 32px;
-          font-size: 13px;
-          
-          &::placeholder {
-            color: rgba(60, 60, 67, 0.6);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+          transition: all 0.2s ease;
+
+          &:hover {
+            border-color: rgba(74, 144, 226, 0.4);
+            box-shadow: 0 1px 5px rgba(74, 144, 226, 0.15);
           }
-          
-          &:focus {
-            background: white;
+
+          &:focus,
+          &.ant-input-affix-wrapper-focused {
             border-color: #4a90e2;
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.12);
+          }
+
+          input {
+            font-size: 12px;
+
+            &::placeholder {
+              color: rgba(60, 60, 67, 0.45);
+            }
+          }
+
+          // 搜索图标颜色
+          .ant-input-prefix {
+            color: rgba(0, 0, 0, 0.3);
           }
         }
-      }
-      
-      // 过滤控制区域
-      .filter-controls {
-        margin-bottom: 12px;
-        
+
+        // 过滤标签行
         .filter-tags {
           display: flex;
           gap: 4px;
-          margin-bottom: 8px;
-          flex-wrap: wrap;
-          
+          flex-wrap: nowrap;
+          overflow-x: auto;
+
+          &::-webkit-scrollbar {
+            display: none;
+          }
+
           .filter-tag {
             background: rgba(0, 0, 0, 0.03);
-            border: 0.5px solid rgba(0, 0, 0, 0.06);
-            border-radius: 8px;
-            padding: 3px 8px;
+            border: 0.5px solid rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            padding: 2px 7px;
             font-size: 11px;
             cursor: pointer;
             transition: all 0.2s;
-            
+            white-space: nowrap;
+            flex-shrink: 0;
+
             &.active {
               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
               color: white;
               border-color: transparent;
               box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
             }
-            
+
             &:hover:not(.active) {
-              background: rgba(0, 0, 0, 0.05);
+              background: rgba(0, 0, 0, 0.06);
             }
-          }
-        }
-        
-        // 显示隐藏模块开关
-        .show-inactive-switch {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 4px 0;
-          
-          .ant-switch {
-            min-width: 28px;
-            height: 16px;
-            line-height: 16px;
-            
-            &.ant-switch-small {
-              min-width: 32px;
-              
-              .ant-switch-handle {
-                width: 12px;
-                height: 12px;
-              }
-            }
-          }
-          
-          .switch-label {
-            font-size: 11px;
-            color: #666;
           }
         }
       }
-      
-      // 模块网格 - 2列以适应空间
+
+      .panel-content {
+        flex: 1;
+        padding: 10px;
+        padding-bottom: 20px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+
+        &::-webkit-scrollbar {
+          width: 5px;
+        }
+
+        &::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.12);
+          border-radius: 3px;
+
+          &:hover {
+            background: rgba(0, 0, 0, 0.22);
+          }
+        }
+      }
+    }
+
+    // 左侧面板 - 模块广场
+    .panel-left {
+      // 模块网格 - 2列紧凑排列
       .module-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-        margin-bottom: 8px; // 确保最后一行能完全显示
+        gap: 7px;
+        margin-bottom: 6px;
       }
     }
-    
+
     // 中间模块组装
     .panel-center {
       .panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        
+
         .header-title {
           display: flex;
           align-items: center;
           gap: 8px;
         }
-        
+
         .header-actions {
           display: flex;
           gap: 4px;
-          
+
           .ant-btn {
             height: 26px;
             padding: 0 10px;
             border-radius: 13px;
             font-size: 11px;
             font-weight: 500;
-            
+
             &.ant-btn-primary {
               background: linear-gradient(180deg, #4a90e2 0%, #357abd 100%);
               border: none;
-              
+
               &:hover {
                 background: linear-gradient(180deg, #5ba0f2 0%, #4a90e2 100%);
               }
@@ -259,18 +246,18 @@
           }
         }
       }
-      
+
       // Token进度条区域
       .token-progress-area {
         padding: 8px 12px;
         background: rgba(248, 248, 250, 0.5);
         border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
-        
+
         .token-progress-wrapper {
           display: flex;
           align-items: center;
           gap: 12px;
-          
+
           .token-label {
             font-size: 11px;
             color: #666;
@@ -278,21 +265,21 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            
+
             .anticon {
               font-size: 12px;
             }
           }
-          
+
           .ant-progress {
             flex: 1;
             margin: 0;
-            
+
             .ant-progress-text {
               font-size: 11px;
             }
           }
-          
+
           .token-value {
             font-size: 11px;
             color: #333;
@@ -301,7 +288,7 @@
             text-align: right;
           }
         }
-        
+
         .token-warning {
           margin-top: 4px;
           font-size: 10px;
@@ -309,51 +296,61 @@
           display: flex;
           align-items: center;
           gap: 4px;
-          
+
           .anticon {
             font-size: 10px;
           }
         }
       }
-      
+
+      // 中间面板工具栏（组合信息）
+      .panel-toolbar {
+        padding: 8px 12px;
+        min-height: 40px;
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+        background: rgba(248, 248, 250, 0.5);
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
       // 卡槽容器 - 高级质感
       .slots-container {
         height: calc(100% - 50px);
         padding: 12px;
-        padding-bottom: 20px; // 确保底部有足够空间
+        padding-bottom: 20px;
         overflow-y: auto;
         background: linear-gradient(180deg, rgba(248, 248, 250, 0.5) 0%, transparent 100%);
-        
+
         &.drag-over {
           background: linear-gradient(180deg, rgba(74, 144, 226, 0.03) 0%, transparent 100%);
         }
-        
+
         &::-webkit-scrollbar {
-          width: 6px;
+          width: 5px;
         }
-        
+
         &::-webkit-scrollbar-track {
           background: transparent;
         }
-        
+
         &::-webkit-scrollbar-thumb {
-          background: rgba(0, 0, 0, 0.15);
+          background: rgba(0, 0, 0, 0.12);
           border-radius: 3px;
         }
-        
+
         .slots-wrapper {
           display: flex;
           flex-direction: column;
           gap: 10px;
         }
-        
+
         // 卡槽 - 高级内凹效果
         .module-slot {
           position: relative;
-          
-          // 空卡槽 - 内凹效果
+
           .empty-slot {
-            height: 85px; // 增加高度以适应三个信息
+            height: 80px;
             background: linear-gradient(180deg, #e8e8ed 0%, #f2f2f7 100%);
             border-radius: 12px;
             display: flex;
@@ -363,23 +360,19 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
-            box-shadow: 
+            box-shadow:
               inset 0 2px 4px rgba(0, 0, 0, 0.1),
               inset 0 4px 8px rgba(0, 0, 0, 0.08),
               inset 0 -1px 0 rgba(255, 255, 255, 0.5);
-            
-            // 内部光晕
+
             &::before {
               content: '';
               position: absolute;
-              top: 0;
-              left: 0;
-              right: 0;
-              bottom: 0;
+              top: 0; left: 0; right: 0; bottom: 0;
               background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
               pointer-events: none;
             }
-            
+
             .slot-number {
               font-size: 16px;
               font-weight: 600;
@@ -387,20 +380,20 @@
               margin-bottom: 2px;
               text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
             }
-            
+
             .slot-hint {
               font-size: 11px;
               color: rgba(0, 0, 0, 0.2);
               font-weight: 500;
             }
-            
+
             &:hover {
               background: linear-gradient(180deg, #dfe3ec 0%, #eef2f7 100%);
-              box-shadow: 
+              box-shadow:
                 inset 0 2px 6px rgba(74, 144, 226, 0.15),
                 inset 0 4px 10px rgba(74, 144, 226, 0.1),
                 inset 0 -1px 0 rgba(255, 255, 255, 0.6);
-              
+
               .slot-hint {
                 color: rgba(74, 144, 226, 0.6);
               }
@@ -409,9 +402,21 @@
         }
       }
     }
-    
+
     // 右侧面板 - 我的组合
     .panel-right {
+      // 右侧工具栏（提示文字）
+      .panel-toolbar {
+        padding: 8px 12px;
+        min-height: 57px;
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+        background: rgba(248, 248, 250, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
       .combination-grid {
         display: flex;
         flex-direction: column;
@@ -419,92 +424,84 @@
       }
     }
   }
-  
+
   // 加载中心
   .loading-center {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 200px;
+    height: 120px;
   }
 }
 
-// 模块广场卡片 - 优化显示，token移到顶部
+// ==========================================
+// 模块广场卡片 - 紧凑版（v2.1）
+// ==========================================
 .square-module-card {
   width: 100%;
-  height: 115px; // 修复：增加高度从105px到115px，给文字更多空间
-  border-radius: 10px;
-  padding: 10px;
+  height: 78px;           // 从 115px 缩减到 78px
+  border-radius: 9px;
+  padding: 7px 8px;
   cursor: grab;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   border: 0.5px solid rgba(255, 255, 255, 0.5);
-  
-  // 拖拽中状态
+
   &.dragging {
     opacity: 0.5;
     cursor: grabbing;
   }
-  
-  // 未激活状态
+
   &.inactive {
-    opacity: 0.7;
-    
+    opacity: 0.65;
+
     &::after {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.1);
-      border-radius: 10px;
+      border-radius: 9px;
       pointer-events: none;
     }
   }
-  
-  // 顶部显示所有标签信息
+
+  // 顶部标签区域
   .module-badges {
     position: absolute;
-    top: 6px;
-    left: 6px;
-    right: 26px; // 给操作按钮留空间
+    top: 5px;
+    left: 5px;
+    right: 22px;           // 给操作按钮留位置
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     z-index: 2;
-    flex-wrap: wrap;
-    max-height: 20px; // 限制标签区域高度
-    
-    // 系统级标签
+    flex-wrap: nowrap;
+    overflow: hidden;
+    max-height: 16px;
+
     .type-tag-purple {
-      padding: 1px 4px;
+      padding: 1px 3px;
       font-size: 8px;
       font-weight: 600;
       border-radius: 3px;
-      background: rgba(159, 122, 234, 0.2);
+      background: rgba(159, 122, 234, 0.22);
       color: rgba(255, 255, 255, 0.95);
       line-height: 1.3;
+      flex-shrink: 0;
     }
-    
-    // 锁定/解锁图标
+
     .unlock-icon,
     .lock-icon {
-      font-size: 10px;
+      font-size: 9px;
       filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+      flex-shrink: 0;
     }
-    
-    .unlock-icon {
-      color: rgba(255, 255, 255, 0.8);
-    }
-    
-    .lock-icon {
-      color: rgba(255, 215, 0, 0.9); // 金色锁
-    }
-    
-    // 范围标签
+
+    .unlock-icon { color: rgba(255, 255, 255, 0.75); }
+    .lock-icon   { color: rgba(255, 215, 0, 0.9); }
+
     .type-tag {
-      padding: 1px 4px;
+      padding: 1px 3px;
       font-size: 8px;
       font-weight: 600;
       border-radius: 3px;
@@ -512,47 +509,38 @@
       backdrop-filter: blur(10px);
       color: rgba(255, 255, 255, 0.95);
       line-height: 1.3;
-      
-      &.type-tag-blue {
-        background: rgba(74, 144, 226, 0.2);
-      }
-      
-      &.type-tag-green {
-        background: rgba(72, 187, 120, 0.2);
-      }
-      
-      &.type-tag-orange {
-        background: rgba(237, 137, 54, 0.2);
-      }
+      flex-shrink: 0;
+
+      &.type-tag-blue   { background: rgba(74, 144, 226, 0.22); }
+      &.type-tag-green  { background: rgba(72, 187, 120, 0.22); }
+      &.type-tag-orange { background: rgba(237, 137, 54, 0.22); }
     }
-    
-    // Token标签 - 移到顶部
+
     .token-tag {
-      padding: 1px 4px;
+      padding: 1px 3px;
       font-size: 8px;
       font-weight: 600;
       border-radius: 3px;
-      background: rgba(0, 0, 0, 0.25);
+      background: rgba(0, 0, 0, 0.22);
       backdrop-filter: blur(10px);
       color: rgba(255, 255, 255, 0.95);
       display: inline-flex;
       align-items: center;
       gap: 2px;
       line-height: 1.3;
-      
-      .anticon {
-        font-size: 8px;
-      }
+      flex-shrink: 0;
+
+      .anticon { font-size: 7px; }
     }
   }
-  
+
   // 右上角更多按钮
   .module-more-btn {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 20px;
-    height: 20px;
+    top: 5px;
+    right: 5px;
+    width: 17px;
+    height: 17px;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(10px);
@@ -564,16 +552,16 @@
     justify-content: center;
     opacity: 0;
     transition: all 0.2s;
-    z-index: 2;
-    font-size: 12px;
-    
+    z-index: 3;
+    font-size: 11px;
+
     &:hover {
-      background: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.28);
       color: white;
     }
   }
-  
-  // 主体内容区域
+
+  // 主体内容 - 垂直居中，图标 + 名称
   .card-main {
     height: 100%;
     display: flex;
@@ -581,85 +569,83 @@
     align-items: center;
     justify-content: center;
     color: white;
-    padding-top: 24px; // 给顶部标签留出空间
-    
+    padding-top: 18px;     // 给顶部标签腾出空间
+
     .card-icon {
-      font-size: 18px; // 修复：减小图标从22px到18px
-      margin-bottom: 4px; // 减小间距
-      opacity: 0.95;
+      font-size: 14px;     // 从 18px 缩小到 14px
+      margin-bottom: 3px;
+      opacity: 0.92;
     }
-    
+
     .card-name {
-      font-size: 12px;
+      font-size: 11px;     // 从 12px 缩小
       font-weight: 500;
       text-align: center;
-      line-height: 1.4; // 增加行高
-      max-width: 95%; // 增加宽度利用率
+      line-height: 1.35;
+      max-width: 96%;
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
-      -webkit-line-clamp: 3; // 修复：允许显示3行而不是2行
+      -webkit-line-clamp: 2;   // 最多2行
       -webkit-box-orient: vertical;
-      padding: 0 2px; // 减小内边距
-      word-break: break-all; // 允许在任意位置断行
+      word-break: break-all;
     }
-    
-    // 未激活标签
+
     .inactive-tag {
-      margin-top: 4px;
+      margin-top: 3px;
       font-size: 9px;
-      padding: 1px 4px;
+      padding: 1px 3px;
     }
   }
-  
-  // 个人模块 - 蓝色系
+
+  // 颜色主题
   &.card-blue {
     background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.1),
-      0 4px 8px rgba(74, 144, 226, 0.15),
+      0 3px 7px rgba(74, 144, 226, 0.18),
       0 1px 0 rgba(255, 255, 255, 0.1) inset;
   }
-  
-  // 团队模块 - 绿色系
+
   &.card-green {
     background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.1),
-      0 4px 8px rgba(72, 187, 120, 0.15),
+      0 3px 7px rgba(72, 187, 120, 0.18),
       0 1px 0 rgba(255, 255, 255, 0.1) inset;
   }
-  
-  // 系统模块 - 橙色系
+
   &.card-orange {
     background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.1),
-      0 4px 8px rgba(237, 137, 54, 0.15),
+      0 3px 7px rgba(237, 137, 54, 0.18),
       0 1px 0 rgba(255, 255, 255, 0.1) inset;
   }
-  
+
   &:hover:not(.dragging) {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 
-      0 4px 8px rgba(0, 0, 0, 0.15),
-      0 8px 16px rgba(0, 0, 0, 0.1),
+    transform: translateY(-2px) scale(1.03);
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.15),
+      0 6px 14px rgba(0, 0, 0, 0.1),
       0 1px 0 rgba(255, 255, 255, 0.2) inset;
-    
+
     .module-more-btn {
       opacity: 1;
     }
   }
-  
+
   &:active {
     cursor: grabbing;
-    transform: scale(0.98);
+    transform: scale(0.97);
   }
 }
 
-// 卡槽中的模块 - 优化显示
+// ==========================================
+// 卡槽中的模块 - 保持原尺寸
+// ==========================================
 .slot-module {
-  height: 85px; // 增加高度
+  height: 82px;
   border-radius: 12px;
   padding: 10px;
   position: relative;
@@ -668,20 +654,18 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: move;
   border: 0.5px solid rgba(255, 255, 255, 0.3);
-  
-  // 顶部标签栏 - 显示所有信息包括token
+
   .module-badges-bar {
     position: absolute;
     top: 6px;
     left: 10px;
-    right: 30px;
+    right: 28px;
     display: flex;
     align-items: center;
     gap: 4px;
     z-index: 2;
     flex-wrap: wrap;
-    
-    // 系统级标签
+
     .system-prompt-tag {
       padding: 2px 5px;
       font-size: 9px;
@@ -693,33 +677,24 @@
       display: inline-flex;
       align-items: center;
       gap: 2px;
-      
-      .anticon {
-        font-size: 9px;
-      }
+
+      .anticon { font-size: 9px; }
     }
-    
-    // 锁定状态
+
     .lock-status {
       display: inline-flex;
       align-items: center;
-      
+
       .unlock-icon,
       .lock-icon {
         font-size: 11px;
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
       }
-      
-      .unlock-icon {
-        color: rgba(255, 255, 255, 0.7);
-      }
-      
-      .lock-icon {
-        color: rgba(255, 215, 0, 0.9); // 金色锁
-      }
+
+      .unlock-icon { color: rgba(255, 255, 255, 0.7); }
+      .lock-icon   { color: rgba(255, 215, 0, 0.9); }
     }
-    
-    // 范围标签
+
     .scope-tag {
       padding: 2px 5px;
       font-size: 9px;
@@ -731,13 +706,10 @@
       display: inline-flex;
       align-items: center;
       gap: 2px;
-      
-      .anticon {
-        font-size: 9px;
-      }
+
+      .anticon { font-size: 9px; }
     }
-    
-    // Token标签 - 移到顶部
+
     .token-tag {
       padding: 2px 5px;
       font-size: 9px;
@@ -749,17 +721,14 @@
       display: inline-flex;
       align-items: center;
       gap: 2px;
-      
-      .anticon {
-        font-size: 9px;
-      }
+
+      .anticon { font-size: 9px; }
     }
   }
-  
-  // 个人模块 - 蓝色系
+
   &.slot-module-blue {
     background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.07),
       0 2px 4px rgba(0, 0, 0, 0.07),
       0 4px 8px rgba(0, 0, 0, 0.07),
@@ -767,11 +736,10 @@
       0 1px 0 rgba(255, 255, 255, 0.3) inset;
     color: white;
   }
-  
-  // 团队模块 - 绿色系
+
   &.slot-module-green {
     background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.07),
       0 2px 4px rgba(0, 0, 0, 0.07),
       0 4px 8px rgba(0, 0, 0, 0.07),
@@ -779,11 +747,10 @@
       0 1px 0 rgba(255, 255, 255, 0.3) inset;
     color: white;
   }
-  
-  // 系统模块 - 橙色系
+
   &.slot-module-orange {
     background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-    box-shadow: 
+    box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.07),
       0 2px 4px rgba(0, 0, 0, 0.07),
       0 4px 8px rgba(0, 0, 0, 0.07),
@@ -791,36 +758,32 @@
       0 1px 0 rgba(255, 255, 255, 0.3) inset;
     color: white;
   }
-  
-  // 添加光泽效果
+
   &::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 0; left: 0; right: 0;
     height: 50%;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%);
     border-radius: 12px 12px 0 0;
     pointer-events: none;
   }
-  
-  // 模块内容
+
   .module-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 15px 30px 0; // 顶部留出空间给标签
-    
+    padding: 14px 28px 0;
+
     .module-icon {
-      font-size: 20px;
+      font-size: 18px;
       margin-bottom: 3px;
       opacity: 0.95;
       filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
     }
-    
+
     .module-name {
       font-size: 12px;
       font-weight: 500;
@@ -832,8 +795,7 @@
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
   }
-  
-  // 删除按钮
+
   .module-remove {
     position: absolute;
     right: 6px;
@@ -852,34 +814,32 @@
     opacity: 0;
     transition: all 0.2s;
     font-size: 9px;
-    
+
     &:hover {
       background: rgba(255, 59, 48, 0.8);
       color: white;
       transform: scale(1.1);
     }
   }
-  
+
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 
+    box-shadow:
       0 2px 4px rgba(0, 0, 0, 0.1),
       0 4px 8px rgba(0, 0, 0, 0.1),
       0 8px 16px rgba(0, 0, 0, 0.1),
       0 12px 24px rgba(0, 0, 0, 0.15),
       0 1px 0 rgba(255, 255, 255, 0.4) inset;
-    
-    .module-remove {
-      opacity: 1;
-    }
+
+    .module-remove { opacity: 1; }
   }
-  
-  &.dragging {
-    opacity: 0.3;
-  }
+
+  &.dragging { opacity: 0.3; }
 }
 
-// 组合卡片 - 保持简洁但优化大小
+// ==========================================
+// 组合卡片
+// ==========================================
 .combination-card-ios {
   width: 100%;
   height: 60px;
@@ -892,28 +852,26 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: 0.5px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 
+  box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 2px 4px rgba(0, 0, 0, 0.03);
-  
+
   &:hover {
     transform: translateX(3px);
-    box-shadow: 
+    box-shadow:
       0 2px 4px rgba(0, 0, 0, 0.08),
       0 4px 8px rgba(0, 0, 0, 0.05);
     background: linear-gradient(90deg, white 0%, #fafafa 100%);
-    
-    .card-more {
-      opacity: 1;
-    }
+
+    .card-more { opacity: 1; }
   }
-  
+
   .card-content {
     display: flex;
     align-items: center;
     gap: 10px;
     flex: 1;
-    
+
     .card-icon-large {
       width: 36px;
       height: 36px;
@@ -927,11 +885,11 @@
       box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
       flex-shrink: 0;
     }
-    
+
     .card-info {
       flex: 1;
       min-width: 0;
-      
+
       .card-title {
         font-size: 13px;
         font-weight: 600;
@@ -941,29 +899,27 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      
+
       .card-meta {
         font-size: 11px;
         color: #8e8e93;
         display: flex;
         align-items: center;
         gap: 6px;
-        
+
         span {
           display: flex;
           align-items: center;
           gap: 2px;
-          
+
           &:not(:last-child)::after {
             content: ' · ';
             margin: 0 1px;
           }
-          
-          .anticon {
-            font-size: 10px;
-          }
+
+          .anticon { font-size: 10px; }
         }
-        
+
         .token-info {
           color: #666;
           font-weight: 500;
@@ -971,7 +927,7 @@
       }
     }
   }
-  
+
   .card-more {
     width: 24px;
     height: 24px;
@@ -987,7 +943,7 @@
     transition: all 0.2s;
     font-size: 12px;
     flex-shrink: 0;
-    
+
     &:hover {
       background: rgba(0, 0, 0, 0.06);
       color: #3c3c43;
@@ -995,34 +951,36 @@
   }
 }
 
+// ==========================================
 // iOS风格弹窗
+// ==========================================
 .ios-modal {
   .ant-modal-content {
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 
+    box-shadow:
       0 0 0 0.5px rgba(0, 0, 0, 0.05),
       0 5px 10px rgba(0, 0, 0, 0.1),
       0 15px 40px rgba(0, 0, 0, 0.1);
   }
-  
+
   .ant-modal-header {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
   }
-  
+
   .ant-modal-title {
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.3px;
   }
-  
+
   .ant-input {
     border-radius: 8px;
     border: 0.5px solid rgba(0, 0, 0, 0.08);
-    
+
     &:focus {
       border-color: #4a90e2;
       box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
@@ -1030,56 +988,101 @@
   }
 }
 
+// ==========================================
 // 响应式
+// ==========================================
 @media (max-width: 1200px) {
-  .knowledge-wizard-ios {
-    .wizard-body {
-      .panel-left {
-        .module-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-    }
+  .knowledge-wizard-ios .wizard-body .panel-left .module-grid {
+    grid-template-columns: 1fr;  // 窄屏单列
   }
 }
 
 @media (max-width: 992px) {
-  .knowledge-wizard-ios {
-    .wizard-body {
-      .panel-right {
-        display: none;
-      }
-      
-      .panel-left,
-      .panel-center {
-        flex: 1;
-      }
-    }
+  .knowledge-wizard-ios .wizard-body {
+    .panel-right { display: none; }
+    .panel-left, .panel-center { flex: 1; }
   }
 }
 
 @media (max-width: 768px) {
-  .knowledge-wizard-ios {
-    .wizard-body {
-      flex-direction: column;
-      
-      .panel-left,
-      .panel-center {
-        width: 100%;
-        max-width: 100%;
-      }
-      
-      .panel-left {
-        height: 300px;
-        
-        .module-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
-      }
-      
-      .panel-center {
-        flex: 1;
+  .knowledge-wizard-ios .wizard-body {
+    flex-direction: column;
+
+    .panel-left, .panel-center {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .panel-left {
+      height: 320px;
+
+      .module-grid {
+        grid-template-columns: repeat(3, 1fr);  // 移动端三列
       }
     }
+
+    .panel-center { flex: 1; }
+  }
+}
+
+// ==========================================
+// 模块卡片底部引用数 - v2.3 新增
+// ==========================================
+.square-module-card {
+  // 覆盖高度以容纳底部引用栏
+  height: 95px;
+
+  // 底部引用数条
+  .card-usage-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    border-radius: 0 0 9px 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 6px;
+    transition: all 0.2s ease;
+
+    // 有引用时：半透明深色底
+    &.has-usage {
+      background: rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(8px);
+    }
+
+    // 无引用时：更透明
+    &.no-usage {
+      background: rgba(0, 0, 0, 0.10);
+    }
+
+    .usage-icon {
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.85);
+      flex-shrink: 0;
+    }
+
+    .usage-count {
+      font-size: 9px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.85);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.1px;
+    }
+
+    // 有引用时文字亮一些
+    &.has-usage .usage-count,
+    &.has-usage .usage-icon {
+      color: rgba(255, 255, 255, 0.95);
+    }
+  }
+
+  // card-main 同步调整，避免与底部引用栏重叠
+  .card-main {
+    padding-bottom: 20px;
   }
 }
