@@ -1,3 +1,12 @@
+/**
+ * 工作台页面
+ * 
+ * v1.1 变更：
+ *   - 普通用户读取组公告改用 /stats/my-group-announcement 端点（无需admin权限）
+ *   - 管理员仍使用 /admin/user-groups/:id/announcement 端点（支持切换组查看）
+ *   - 彻底消除普通用户登录时的"权限不足"403错误提示
+ */
+
 import React, { useEffect, useState, useCallback } from 'react'
 import { Card, Row, Col, Statistic, Typography, Space, Tag, Alert, Spin, Button, Input, Select, message, Modal, Badge, Empty } from 'antd'
 import {
@@ -200,7 +209,12 @@ const Dashboard = () => {
     fetchAnnouncement()
   }, [])
 
-  // 加载组公告（根据selectedGroupId变化重新加载）
+  /**
+   * 加载组公告
+   * v1.1: 根据用户角色选择不同的API端点
+   * - 管理员(super_admin/admin)：使用 /admin/user-groups/:id/announcement（支持切换组查看）
+   * - 普通用户(user)：使用 /stats/my-group-announcement（只读自己组，无需admin权限）
+   */
   const fetchOrgAnnouncement = useCallback(async (groupId) => {
     if (!groupId) {
       setOrgAnnouncementLoading(false)
@@ -209,18 +223,26 @@ const Dashboard = () => {
     
     try {
       setOrgAnnouncementLoading(true)
-      const response = await apiClient.get(`/admin/user-groups/${groupId}/announcement`)
+      
+      let response
+      if (isSuperAdmin || isAdmin) {
+        // 管理员使用admin端点，支持查看任意组的公告
+        response = await apiClient.get(`/admin/user-groups/${groupId}/announcement`)
+      } else {
+        // 普通用户使用stats端点，只能读取自己所在组的公告
+        response = await apiClient.get('/stats/my-group-announcement')
+      }
+      
       if (response.data.success) {
         setOrgAnnouncement(response.data.data)
       }
     } catch (error) {
-      // 普通用户可能没有权限，静默处理
       console.error('获取组公告失败:', error)
       setOrgAnnouncement(null)
     } finally {
       setOrgAnnouncementLoading(false)
     }
-  }, [])
+  }, [isSuperAdmin, isAdmin])
 
   // selectedGroupId 变化时重新加载组公告
   useEffect(() => {

@@ -1,5 +1,10 @@
 /**
  * 统计控制器
+ * 
+ * v1.1 变更：
+ *   - 新增 getMyGroupAnnouncement 方法
+ *   - 允许所有认证用户读取自己所在组的公告
+ *   - getUserCreditsStats 中 today_consumed 查询改用范围条件优化性能
  */
 
 const StatsService = require('../services/statsService');
@@ -64,6 +69,8 @@ class StatsController {
   /**
    * 获取用户积分统计信息
    * GET /api/stats/user-credits
+   * 
+   * v1.1: today_consumed查询改用范围条件 created_at >= CURDATE() 优化性能
    */
   static async getUserCreditsStats(req, res) {
     try {
@@ -75,12 +82,12 @@ class StatsController {
         return ResponseHelper.notFound(res, '用户不存在');
       }
       
-      // 获取今日积分消耗
+      // v1.1: 改用范围查询避免DATE()函数导致索引失效
       const todaySql = `
         SELECT COALESCE(SUM(ABS(amount)), 0) as today_consumed
         FROM credit_transactions
         WHERE user_id = ?
-          AND DATE(created_at) = CURDATE()
+          AND created_at >= CURDATE()
           AND transaction_type = 'chat_consume'
       `;
       
@@ -105,6 +112,65 @@ class StatsController {
     } catch (error) {
       logger.error('获取用户积分统计失败:', error);
       return ResponseHelper.error(res, '获取用户积分统计失败');
+    }
+  }
+
+  /**
+   * 获取当前用户所在组的公告
+   * GET /api/stats/my-group-announcement
+   * 
+   * v1.1 新增：解决普通用户无法读取组公告的权限问题
+   * - 所有认证用户都可以调用，只返回自己所在组的公告
+   * - 无需admin/super_admin权限
+   * - 用户未分组时返回空公告
+   */
+  static async getMyGroupAnnouncement(req, res) {
+    try {
+      const userId = req.user.id;
+      const groupId = req.user.group_id;
+
+      // 用户未分配到任何组，返回空公告
+      if (!groupId) {
+        return ResponseHelper.success(res, {
+          group_id: null,
+          group_name: null,
+          content: '',
+          updated_at: null
+        }, '获取组公告成功');
+      }
+
+      // 直接查询组的公告字段，不依赖admin层的GroupService
+      const sql = `
+        SELECT id, name, announcement, updated_at
+        FROM user_groups
+        WHERE id = ? AND is_active = 1
+      `;
+      const { rows } = await dbConnection.query(sql, [groupId]);
+
+      if (!rows || rows.length === 0) {
+        return ResponseHelper.success(res, {
+          group_id: groupId,
+          group_name: null,
+          content: '',
+          updated_at: null
+        }, '获取组公告成功');
+      }
+
+      const group = rows[0];
+      return ResponseHelper.success(res, {
+        group_id: group.id,
+        group_name: group.name,
+        content: group.announcement || '',
+        updated_at: group.updated_at
+      }, '获取组公告成功');
+
+    } catch (error) {
+      logger.error('获取用户组公告失败:', {
+        userId: req.user?.id,
+        groupId: req.user?.group_id,
+        error: error.message
+      });
+      return ResponseHelper.error(res, '获取组公告失败');
     }
   }
 }
