@@ -7,6 +7,10 @@
  * 3. SSE 流式请求（postStream）
  * 4. 可取消请求（AbortController）
  * 
+ * v1.1 变更：
+ *   - postStream 新增 onHeartbeat 回调，感知后端SSE心跳注释行
+ *   - 心跳感知使chatStore能准确判断连接是否真正断开
+ * 
  * 修复：全局超时从0改为120秒，防止请求无限挂起
  */
 
@@ -404,9 +408,11 @@ apiClient.getTokenInfo = () => {
 /**
  * 发送流式POST请求，解析SSE事件
  * 
+ * v1.1: 新增 onHeartbeat 回调，感知后端SSE心跳注释行
+ * 
  * @param {string} url - API路径（自动添加 /api 前缀）
  * @param {Object} data - 请求体
- * @param {Object} options - 回调 { onMessage, onError, onComplete, onInit }
+ * @param {Object} options - 回调 { onMessage, onError, onComplete, onInit, onHeartbeat }
  */
 apiClient.postStream = async (url, data, options = {}) => {
   const authData = getAuthData()
@@ -414,7 +420,7 @@ apiClient.postStream = async (url, data, options = {}) => {
     throw new Error('未认证，无法创建流式连接')
   }
 
-  const { onMessage, onError, onComplete, onInit } = options
+  const { onMessage, onError, onComplete, onInit, onHeartbeat } = options
 
   const controller = new AbortController()
   currentStreamController = controller
@@ -513,6 +519,13 @@ apiClient.postStream = async (url, data, options = {}) => {
             currentEvent = null
             currentData = ''
           }
+          continue
+        }
+
+        // v1.1: 识别SSE注释行（以冒号开头），触发心跳回调
+        // 后端发送的心跳格式为 ":heartbeat <timestamp>"
+        if (trimmed.startsWith(':')) {
+          if (onHeartbeat) onHeartbeat()
           continue
         }
 

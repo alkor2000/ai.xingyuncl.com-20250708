@@ -7,6 +7,15 @@
  *   - sendStreamMessage: 新增第三个参数 fileIds，API请求传 file_ids
  *   - 临时消息同时设置 file（向后兼容）和 files（数组，多图渲染）
  * 
+ * v2.1 变更：
+ *   - 流式超时检测从30秒放宽到90秒，支持AI大段代码生成场景
+ *   - 超时警告从20秒改为60秒，减少误报
+ *   - 后端新增SSE心跳保活机制，前端通过onHeartbeat回调更新活动时间
+ * 
+ * v2.2 变更：
+ *   - 新增onHeartbeat回调传递给postStream，收到后端心跳时更新lastActivityTime
+ *   - 确保心跳能正确重置超时检测计时器，彻底解决AI长时间思考导致的误超时
+ * 
  * 修复记录：
  *   - API错误信息显示给用户
  *   - 流式超时机制
@@ -16,6 +25,19 @@
 import { create } from 'zustand'
 import { message } from 'antd'
 import apiClient from '../utils/api'
+
+/**
+ * 流式超时检测时间（毫秒）
+ * AI输出大段代码时，两个chunk之间可能间隔较长（特别是思考阶段）
+ * 后端每15秒发送心跳，90秒检测间隔允许错过几次心跳再报警
+ */
+const STREAM_TIMEOUT_MS = 90000;
+
+/**
+ * 流式超时强制重置时间（毫秒）
+ * 超过此时间无任何数据（包括心跳），强制重置状态
+ */
+const STREAM_FORCE_TIMEOUT_MS = 120000;
 
 const useChatStore = create((set, get) => ({
   // 对话列表状态
@@ -242,10 +264,6 @@ const useChatStore = create((set, get) => ({
   /**
    * 发送消息（非流式）
    * v2.0: 新增第三个参数 fileIds，支持多文件上传
-   * 
-   * @param {string} content - 消息文本
-   * @param {Object|null} fileInfo - 第一个文件信息（用于临时消息显示，向后兼容）
-   * @param {string[]} fileIds - v2.0: 文件ID数组
    */
   sendMessage: async (content, fileInfo = null, fileIds = []) => {
     const state = get()
@@ -274,13 +292,13 @@ const useChatStore = create((set, get) => ({
     
     if (!state.userCredits) await get().getUserCredits()
     
-    // 立即添加用户消息到界面 - v2.0: 同时设置 file 和 files
+    // 立即添加用户消息到界面
     const userMessage = {
       id: `temp-${Date.now()}`,
       role: 'user',
       content,
-      file: fileInfo,                               // 向后兼容：单个文件
-      files: fileInfo ? [fileInfo] : [],             // v2.0: 文件数组（供 MessageContent 多图渲染）
+      file: fileInfo,
+      files: fileInfo ? [fileInfo] : [],
       created_at: new Date().toISOString(),
       temp: true,
       model_name: state.currentConversation.model_name
@@ -289,7 +307,6 @@ const useChatStore = create((set, get) => ({
     set(state => ({ messages: [...state.messages, userMessage] }))
     
     try {
-      // v2.0: API请求体传 file_ids 数组（同时保留 file_id 向后兼容）
       const requestBody = {
         content,
         file_id: fileIds.length > 0 ? fileIds[0] : (fileInfo?.id || null),
@@ -307,7 +324,6 @@ const useChatStore = create((set, get) => ({
       const response = await request
       const responseData = response.data.data
       
-      // 移除临时消息，添加真实消息
       set(state => ({
         messages: [
           ...state.messages.filter(msg => !msg.temp),
@@ -318,7 +334,6 @@ const useChatStore = create((set, get) => ({
         activeRequest: null
       }))
       
-      // 更新积分
       if (responseData.credits_info) {
         set(state => ({
           userCredits: state.userCredits ? {
@@ -332,7 +347,6 @@ const useChatStore = create((set, get) => ({
         }))
       }
       
-      // 更新会话信息
       if (responseData.conversation) {
         set(state => ({
           currentConversation: responseData.conversation,
@@ -357,10 +371,8 @@ const useChatStore = create((set, get) => ({
   /**
    * 发送流式消息
    * v2.0: 新增第三个参数 fileIds，支持多文件上传
-   * 
-   * @param {string} content - 消息文本
-   * @param {Object|null} fileInfo - 第一个文件信息（用于临时消息显示）
-   * @param {string[]} fileIds - v2.0: 文件ID数组
+   * v2.1: 放宽超时检测至90秒，配合后端心跳保活机制
+   * v2.2: 新增onHeartbeat回调，后端心跳能正确重置超时计时器
    */
   sendStreamMessage: async (content, fileInfo = null, fileIds = []) => {
     const state = get()
@@ -380,7 +392,7 @@ const useChatStore = create((set, get) => ({
     
     if (!state.userCredits) await get().getUserCredits()
     
-    // 立即添加用户消息到界面（临时）- v2.0: 同时设置 file 和 files
+    // 立即添加用户消息到界面（临时）
     const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage = {
       id: tempUserMessageId,
@@ -410,23 +422,36 @@ const useChatStore = create((set, get) => ({
       streamingMessageId: tempAiMessageId
     }))
     
-    // 动态超时机制
-    let lastMessageTime = Date.now()
+    // v2.2: lastActivityTime 记录最后一次收到任何数据的时间（包括心跳）
+    let lastActivityTime = Date.now()
     let timeoutId = null
+    
+    /**
+     * 更新活动时间并重置超时定时器
+     * 被 onInit、onMessage、onHeartbeat 共同调用
+     */
+    const refreshActivity = () => {
+      lastActivityTime = Date.now()
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = createTimeout()
+        set({ streamingTimeout: timeoutId })
+      }
+    }
     
     const createTimeout = () => {
       if (timeoutId) clearTimeout(timeoutId)
       
       timeoutId = setTimeout(() => {
-        const timeSinceLastMessage = Date.now() - lastMessageTime
-        console.warn(`流式传输可能卡住了，${timeSinceLastMessage / 1000}秒没有新消息`)
+        const timeSinceLastActivity = Date.now() - lastActivityTime
         
         const currentState = get()
         
+        // 超过强制超时时间无任何活动（包括心跳），强制重置
         if (currentState.currentConversationId === conversationId &&
-            currentState.isStreaming && timeSinceLastMessage > 30000) {
+            currentState.isStreaming && timeSinceLastActivity > STREAM_FORCE_TIMEOUT_MS) {
           
-          console.error('流式传输真的超时了，强制重置状态')
+          console.error(`流式传输超时（${Math.round(timeSinceLastActivity / 1000)}秒无任何响应，包括心跳），强制重置状态`)
           
           set({
             typing: false, isStreaming: false, streamingContent: '',
@@ -439,13 +464,16 @@ const useChatStore = create((set, get) => ({
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === streamingMsg.id
-                  ? { ...msg, streaming: false, content: msg.content + '\n\n[响应超时]' }
+                  ? { ...msg, streaming: false, content: msg.content + '\n\n[响应超时，已收到部分内容]' }
                   : msg
               )
             }))
           }
+        } else if (currentState.isStreaming) {
+          // 未超过强制超时，继续等待下一个检测周期
+          timeoutId = createTimeout()
         }
-      }, 30000)
+      }, STREAM_TIMEOUT_MS)
       
       return timeoutId
     }
@@ -458,7 +486,6 @@ const useChatStore = create((set, get) => ({
       let realAiMessageId = null
       let hasCompleted = false
       
-      // v2.0: API请求体传 file_ids 数组
       const requestBody = {
         content,
         file_id: fileIds.length > 0 ? fileIds[0] : (fileInfo?.id || null),
@@ -475,7 +502,8 @@ const useChatStore = create((set, get) => ({
             realUserMessage = data.user_message
             realAiMessageId = data.ai_message_id
             
-            lastMessageTime = Date.now()
+            // 收到init事件，更新活动时间
+            refreshActivity()
             
             set(state => ({
               messages: state.messages.map(msg =>
@@ -486,7 +514,6 @@ const useChatStore = create((set, get) => ({
               streamingMessageId: realAiMessageId
             }))
             
-            // 更新积分信息
             if (data.credits_info) {
               set(state => ({
                 userCredits: state.userCredits ? {
@@ -504,12 +531,8 @@ const useChatStore = create((set, get) => ({
             const currentFullContent = data.fullContent || ''
             const currentState = get()
             
-            lastMessageTime = Date.now()
-            
-            if (currentState.streamingTimeout === timeoutId) {
-              timeoutId = createTimeout()
-              set({ streamingTimeout: timeoutId })
-            }
+            // 收到消息数据，更新活动时间并重置超时
+            refreshActivity()
             
             if (currentState.userStoppedStreaming && currentState.currentConversationId === conversationId) return
             
@@ -536,6 +559,11 @@ const useChatStore = create((set, get) => ({
             }
           },
           
+          // v2.2: 心跳回调 - 后端每15秒发送心跳，前端更新活动时间防止误超时
+          onHeartbeat: () => {
+            refreshActivity()
+          },
+          
           onComplete: (data) => {
             console.log('流式完成:', data)
             
@@ -545,7 +573,6 @@ const useChatStore = create((set, get) => ({
             const currentState = get()
             if (timeoutId) { clearTimeout(timeoutId); set({ streamingTimeout: null }) }
             
-            // 兜底stream_end且无content，忽略
             if (data.reason === 'stream_end' && !data.content) {
               console.log('兜底stream_end且无content，忽略')
               if (currentState.currentConversationId === conversationId) {
@@ -554,7 +581,6 @@ const useChatStore = create((set, get) => ({
               return
             }
             
-            // cancelled忽略
             if (data.cancelled) {
               console.log('流式请求已取消，忽略onComplete')
               if (currentState.currentConversationId === conversationId) {
@@ -592,7 +618,6 @@ const useChatStore = create((set, get) => ({
             }
           },
           
-          // 错误处理 - 显示错误信息给用户
           onError: (error) => {
             console.error('流式传输错误:', error)
             
@@ -634,7 +659,6 @@ const useChatStore = create((set, get) => ({
         }
       )
       
-      // 流式传输完成后清除超时定时器
       if (timeoutId) { clearTimeout(timeoutId); set({ streamingTimeout: null }) }
       
     } catch (error) {

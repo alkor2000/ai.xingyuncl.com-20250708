@@ -11,6 +11,12 @@
  *   - 针对 OpenRouter 端点，当 enableThinking 为 false 时添加 include_reasoning: false
  *   - 从源头控制是否让模型输出推理/思考过程，节省 token 和响应时间
  * 
+ * v4.0 变更：
+ *   - 新增SSE心跳保活机制：每15秒发送heartbeat事件，防止Nginx/浏览器断开空闲连接
+ *   - 延长上游AI请求超时至300秒（5分钟），支持大段代码生成场景
+ *   - _handleStreamResponse增加心跳定时器，在等待AI响应chunk间隔期间持续发送心跳
+ *   - 修复ERR_HTTP2_PING_FAILED和流式传输超时断开问题
+ * 
  * 修复记录：
  *   - Gemini空回答问题 - 添加空内容检查和调试日志
  *   - API错误信息通过SSE发送给前端
@@ -22,6 +28,20 @@ const axios = require('axios');
 const AIModel = require('../models/AIModel');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
+
+/**
+ * SSE心跳间隔（毫秒）
+ * 每15秒发送一次心跳，防止Nginx proxy_read_timeout和浏览器断开空闲连接
+ * 需小于Nginx的proxy_read_timeout（900s）和浏览器的TCP keep-alive超时
+ */
+const SSE_HEARTBEAT_INTERVAL_MS = 15000;
+
+/**
+ * 上游AI API请求超时（毫秒）
+ * 大段代码生成场景（如Claude输出完整文件）可能需要3-5分钟
+ * 设置为5分钟，确保不会过早中断上游AI的响应
+ */
+const UPSTREAM_API_TIMEOUT_MS = 300000;
 
 class AIStreamService {
   /** 解析Azure配置字符串 */
@@ -142,6 +162,41 @@ class AIStreamService {
   }
 
   /**
+   * 发送SSE心跳事件
+   * 用于保持连接活跃，防止Nginx/浏览器因空闲断开
+   * 前端收到heartbeat事件应忽略（不影响业务逻辑）
+   */
+  static sendHeartbeat(res) {
+    try {
+      if (res.writableEnded || !res.headersSent) return false;
+      // 使用SSE注释格式发送心跳，不会被前端SSE解析器当作事件处理
+      // 同时发送一个heartbeat事件，前端可选择性处理
+      res.write(`:heartbeat ${Date.now()}\n\n`);
+      return true;
+    } catch (error) {
+      // 心跳发送失败说明连接已断开，静默处理
+      return false;
+    }
+  }
+
+  /**
+   * 启动SSE心跳定时器
+   * @param {Object} res - HTTP响应对象
+   * @returns {NodeJS.Timeout} 定时器ID，用于后续清除
+   */
+  static startHeartbeat(res) {
+    const heartbeatTimer = setInterval(() => {
+      const sent = AIStreamService.sendHeartbeat(res);
+      if (!sent) {
+        // 心跳发送失败，连接已断开，清除定时器
+        clearInterval(heartbeatTimer);
+      }
+    }, SSE_HEARTBEAT_INTERVAL_MS);
+
+    return heartbeatTimer;
+  }
+
+  /**
    * 安全地序列化对象，处理循环引用
    */
   static safeStringify(obj, maxLength = 500) {
@@ -205,7 +260,7 @@ class AIStreamService {
         default: userMessage = `AI服务错误 (${status})，请稍后重试`;
       }
     } else if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
-      userMessage = 'AI服务响应超时，请稍后重试';
+      userMessage = 'AI服务响应超时，请稍后重试或尝试缩短提问内容';
     } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
       userMessage = 'AI服务连接失败，请检查网络';
     } else if (error.message) {
@@ -240,6 +295,11 @@ class AIStreamService {
         'Access-Control-Allow-Origin': '*'
       });
 
+      // 立即刷新响应头，确保客户端尽快收到
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+
       // 发送初始化数据
       if (options.userMessage || options.creditsInfo) {
         AIStreamService.sendSSE(res, 'init', {
@@ -267,6 +327,7 @@ class AIStreamService {
 
   /**
    * 内部方法：处理流式数据的通用逻辑
+   * v4.0: 新增心跳保活机制，防止连接空闲断开
    */
   static _handleStreamResponse(res, response, model, options, startTime) {
     let fullContent = '';
@@ -274,7 +335,20 @@ class AIStreamService {
     let isDone = false;
     let chunkCount = 0;
 
+    // v4.0: 启动SSE心跳保活定时器
+    const heartbeatTimer = AIStreamService.startHeartbeat(res);
+
     return new Promise((resolve, reject) => {
+      /**
+       * 清理资源的统一方法
+       * 确保心跳定时器在任何情况下都被清除
+       */
+      const cleanup = () => {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+        }
+      };
+
       response.data.on('data', (chunk) => {
         try {
           chunkCount++;
@@ -291,6 +365,7 @@ class AIStreamService {
             if (data === '[DONE]') {
               if (!isDone) {
                 isDone = true;
+                cleanup();
                 logger.info('流式传输完成[DONE]', {
                   model: model.name, messageId: options.messageId,
                   chunkCount, contentLength: fullContent.length, totalTimeMs: Date.now() - startTime
@@ -310,6 +385,7 @@ class AIStreamService {
               }
               if (parsed.choices?.[0]?.finish_reason === 'stop' && !isDone) {
                 isDone = true;
+                cleanup();
                 logger.info('流式传输完成[stop]', {
                   model: model.name, messageId: options.messageId,
                   chunkCount, contentLength: fullContent.length, totalTimeMs: Date.now() - startTime
@@ -329,6 +405,7 @@ class AIStreamService {
       response.data.on('end', () => {
         if (!isDone) {
           isDone = true;
+          cleanup();
           logger.info('流式传输结束[on end]', {
             model: model.name, messageId: options.messageId,
             chunkCount, contentLength: fullContent.length, totalTimeMs: Date.now() - startTime
@@ -339,6 +416,7 @@ class AIStreamService {
       });
 
       response.data.on('error', (error) => {
+        cleanup();
         logger.error('流式响应错误:', error);
         const errorInfo = AIStreamService.parseAPIError(error, model);
         if (!res.writableEnded) {
@@ -349,6 +427,7 @@ class AIStreamService {
       });
 
       res.on('close', () => {
+        cleanup();
         logger.info('客户端断开连接', {
           model: model.name, messageId: options.messageId,
           chunkCount, contentLength: fullContent.length, isDone, totalTimeMs: Date.now() - startTime
@@ -391,6 +470,7 @@ class AIStreamService {
   /**
    * 调用标准OpenAI格式的流式API
    * v3.0: 支持 enableThinking 参数，针对 OpenRouter 控制推理输出
+   * v4.0: 延长上游超时至300秒，支持大段代码生成
    */
   static async callStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
@@ -446,7 +526,15 @@ class AIStreamService {
 
       let response;
       try {
-        response = await axios({ method: 'post', url: endpoint, data: requestData, headers, responseType: 'stream', timeout: 120000 });
+        // v4.0: 延长上游超时至300秒（5分钟），支持大段代码生成场景
+        response = await axios({
+          method: 'post',
+          url: endpoint,
+          data: requestData,
+          headers,
+          responseType: 'stream',
+          timeout: UPSTREAM_API_TIMEOUT_MS
+        });
       } catch (axiosError) {
         const errorInfo = AIStreamService.parseAPIError(axiosError, model);
         logger.error('API请求失败', { model: model.name, statusCode: errorInfo.statusCode, userMessage: errorInfo.userMessage });
@@ -459,6 +547,7 @@ class AIStreamService {
       logger.info('开始接收流式响应', {
         model: model.name, isOpenRouter,
         enableThinking: options.enableThinking,
+        upstreamTimeout: UPSTREAM_API_TIMEOUT_MS,
         responseTimeMs: Date.now() - startTime
       });
 
@@ -471,6 +560,7 @@ class AIStreamService {
 
   /**
    * 调用Azure流式API
+   * v4.0: 延长上游超时至300秒
    */
   static async callAzureStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
@@ -491,10 +581,11 @@ class AIStreamService {
 
       let response;
       try {
+        // v4.0: 延长上游超时至300秒
         response = await axios({
           method: 'post', url: azureUrl, data: requestData,
           headers: { 'api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-          responseType: 'stream', timeout: 120000
+          responseType: 'stream', timeout: UPSTREAM_API_TIMEOUT_MS
         });
       } catch (axiosError) {
         const errorInfo = AIStreamService.parseAPIError(axiosError, model);
