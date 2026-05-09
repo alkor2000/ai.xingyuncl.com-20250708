@@ -3,25 +3,25 @@
  * 
  * 功能包含：
  * - 用户列表管理（搜索、分页、CRUD）
- * - 用户分组管理
+ * - 用户分组管理（含批量导入学校 v1.2新增）
  * - 组积分池管理
  * - 账号有效期管理
  * - 站点配置管理
  * - 邀请码管理
  * - 标签管理
- * - 批量创建用户（v1.1新增）
+ * - 批量创建用户（v1.1）
  * - 数据分析入口
- * 
+ *
  * 更新记录：
  * - v1.1: 新增批量创建用户功能
+ * - v1.2 (2026-05-09): 新增"批量导入学校"按钮（仅超管），打开 SchoolImportModal
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs, Divider } from 'antd'
+import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs } from 'antd'
 import { 
   UserAddOutlined, 
   PlusOutlined,
-  LockOutlined,
   WalletOutlined,
   GiftOutlined,
   GlobalOutlined,
@@ -29,7 +29,8 @@ import {
   PieChartOutlined,
   BarChartOutlined,
   DashboardOutlined,
-  UsergroupAddOutlined
+  UsergroupAddOutlined,
+  BankOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -48,24 +49,17 @@ import {
   UserGroupFormModal,
   GroupInvitationCodeModal,
   GroupInvitationLogsModal,
-  BatchCreateUsersModal
+  BatchCreateUsersModal,
+  SchoolImportModal
 } from '../../components/admin/users'
 
-// 导入模型限制管理组件
 import UserModelRestrictModal from '../../components/admin/users/UserModelRestrictModal'
-
-// 导入积分池相关组件
 import GroupCreditsPoolModal from '../../components/admin/users/GroupCreditsPoolModal'
 import DistributeCreditsModal from '../../components/admin/users/DistributeCreditsModal'
 import GroupUserLimitModal from '../../components/admin/users/GroupUserLimitModal'
-
-// 导入组有效期管理组件
 import GroupExpireDateModal from '../../components/admin/users/GroupExpireDateModal'
-
-// 导入组站点配置组件
 import GroupSiteConfigModal from '../../components/admin/users/GroupSiteConfigModal'
 
-// 导入标签管理组件
 import { UserTagAssign, UserTagManager, TagStatistics } from '../../components/admin/tags'
 
 const { TabPane } = Tabs
@@ -94,22 +88,17 @@ const Users = () => {
     distributeGroupCredits,
     setGroupUserLimit,
     setGroupExpireDate,
-    syncGroupExpireDateToUsers,
     setUserAccountExpireDate,
     extendUserAccountExpireDate,
-    syncUserAccountExpireWithGroup,
     toggleGroupSiteCustomization,
     updateGroupSiteConfig,
     setGroupInvitationCode,
-    getInvitationCodeLogs,
     batchCreateUsers
   } = useAdminStore()
 
-  // 表单实例
   const [userForm] = Form.useForm()
   const [groupForm] = Form.useForm()
   
-  // 状态管理
   const [isUserModalVisible, setIsUserModalVisible] = useState(false)
   const [isGroupModalVisible, setIsGroupModalVisible] = useState(false)
   const [isDetailVisible, setIsDetailVisible] = useState(false)
@@ -123,6 +112,7 @@ const Users = () => {
   const [isInvitationLogsModalVisible, setIsInvitationLogsModalVisible] = useState(false)
   const [isTagAssignModalVisible, setIsTagAssignModalVisible] = useState(false)
   const [isBatchCreateModalVisible, setIsBatchCreateModalVisible] = useState(false)
+  const [isSchoolImportModalVisible, setIsSchoolImportModalVisible] = useState(false)  // v1.2 新增
   const [editingUser, setEditingUser] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [modelRestrictUser, setModelRestrictUser] = useState(null)
@@ -138,31 +128,25 @@ const Users = () => {
   const [activeGroupTab, setActiveGroupTab] = useState('info')
   const [batchCreateLoading, setBatchCreateLoading] = useState(false)
   
-  // 搜索状态管理
   const [currentSearchParams, setCurrentSearchParams] = useState({})
   
-  // 用户分页状态
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
     total: 0
   })
 
-  // 用户组分页状态
   const [groupPagination, setGroupPagination] = useState({
     current: 1,
     pageSize: 20,
     total: 0
   })
   
-  // 判断用户权限
   const isSuperAdmin = currentUser?.role === 'super_admin'
   const isGroupAdmin = currentUser?.role === 'admin'
   
-  // 获取当前组信息
   const currentGroupInfo = userGroups.find(g => g.id === currentUser?.group_id)
   
-  // 统一的加载用户列表函数
   const loadUsers = async (searchParams = {}, pageParams = {}) => {
     try {
       const finalParams = {
@@ -172,8 +156,6 @@ const Users = () => {
         limit: pageParams.pageSize || pagination.pageSize,
         include_tags: true
       }
-
-      console.log('🔍 加载用户列表参数:', finalParams)
 
       const result = await getUsers(finalParams)
       
@@ -190,7 +172,6 @@ const Users = () => {
     }
   }
 
-  // 加载用户分组
   const loadUserGroups = async () => {
     try {
       await getUserGroups()
@@ -204,7 +185,6 @@ const Users = () => {
     }
   }
 
-  // 初始化加载
   useEffect(() => {
     if (hasPermission('user.manage') || hasPermission('user.manage.group')) {
       loadUsers()
@@ -212,7 +192,6 @@ const Users = () => {
     }
   }, [hasPermission])
 
-  // 监听 userGroups 变化，更新分页总数
   useEffect(() => {
     if (userGroups.length > 0) {
       setGroupPagination(prev => ({
@@ -222,31 +201,20 @@ const Users = () => {
     }
   }, [userGroups])
 
-  // 用户搜索
   const handleSearch = async (searchValues) => {
-    console.log('🔍 执行用户搜索:', searchValues)
-    
     setCurrentSearchParams(searchValues)
-    
     const newPagination = { current: 1, pageSize: pagination.pageSize }
     setPagination(prev => ({ ...prev, current: 1 }))
-    
     await loadUsers(searchValues, newPagination)
   }
 
-  // 分页处理
   const handlePageChange = async (page, pageSize) => {
-    console.log('📄 分页切换:', { page, pageSize, currentSearchParams })
-    
     const newPagination = { current: page, pageSize }
     setPagination(prev => ({ ...prev, ...newPagination }))
-    
     await loadUsers({}, newPagination)
   }
 
-  // 用户组分页处理（前端分页）
   const handleGroupPageChange = (page, pageSize) => {
-    console.log('📄 用户组分页切换:', { page, pageSize })
     setGroupPagination({
       current: page,
       pageSize: pageSize,
@@ -254,19 +222,13 @@ const Users = () => {
     })
   }
 
-  // 重置搜索
   const handleResetSearch = async () => {
-    console.log('🔄 重置搜索')
-    
     setCurrentSearchParams({})
-    
     const newPagination = { current: 1, pageSize: pagination.pageSize }
     setPagination(prev => ({ ...prev, current: 1 }))
-    
     await loadUsers({}, newPagination)
   }
 
-  // 创建用户
   const handleCreateUser = async (values) => {
     try {
       let account_expire_days = null
@@ -293,14 +255,12 @@ const Users = () => {
     }
   }
 
-  // 批量创建用户（v1.1新增）
   const handleBatchCreateUsers = async (batchData) => {
     try {
       setBatchCreateLoading(true)
       const result = await batchCreateUsers(batchData)
       
       if (result.success) {
-        // 刷新用户列表和组信息
         await loadUsers()
         await loadUserGroups()
       }
@@ -314,7 +274,13 @@ const Users = () => {
     }
   }
 
-  // 更新用户
+  // v1.2 新增：学校批量导入成功后刷新组列表 + 用户列表
+  const handleSchoolImportSuccess = async () => {
+    await loadUserGroups()
+    await loadUsers()
+    message.success('已刷新组列表和用户列表')
+  }
+
   const handleUpdateUser = async (values) => {
     try {
       const { 
@@ -369,30 +335,26 @@ const Users = () => {
     }
   }
 
-  // 切换用户状态
   const handleToggleUserStatus = async (userId, currentStatus) => {
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
       await updateUser(userId, { status: newStatus })
       message.success('用户状态更新成功')
-      
       await loadUsers()
     } catch (error) {
       message.error('用户状态更新失败')
     }
   }
 
-  // 查看用户详情
   const handleViewDetail = async (userId) => {
     try {
-      const detail = await getUserDetail(userId)
+      await getUserDetail(userId)
       setIsDetailVisible(true)
     } catch (error) {
       message.error('获取用户详情失败')
     }
   }
 
-  // 编辑用户
   const handleEditUser = async (user) => {
     setEditingUser(user)
     
@@ -412,7 +374,6 @@ const Users = () => {
     setIsUserModalVisible(true)
   }
 
-  // 删除用户
   const handleDeleteUser = async (userId) => {
     try {
       await deleteUser(userId)
@@ -434,19 +395,16 @@ const Users = () => {
     }
   }
 
-  // 管理用户模型权限
   const handleManageModels = (user) => {
     setModelRestrictUser(user)
     setIsModelRestrictModalVisible(true)
   }
 
-  // 管理用户标签
   const handleManageTags = (user) => {
     setTagAssignUser(user)
     setIsTagAssignModalVisible(true)
   }
 
-  // 挪出用户
   const handleRemoveFromGroup = async (user) => {
     try {
       const result = await removeUserFromGroup(user.id)
@@ -464,7 +422,6 @@ const Users = () => {
     }
   }
 
-  // 创建分组
   const handleCreateGroup = async (values) => {
     try {
       await createUserGroup(values)
@@ -477,7 +434,6 @@ const Users = () => {
     }
   }
 
-  // 更新分组
   const handleUpdateGroup = async (values) => {
     try {
       await updateUserGroup(editingGroup.id, values)
@@ -491,7 +447,6 @@ const Users = () => {
     }
   }
 
-  // 删除分组
   const handleDeleteGroup = async (groupId) => {
     try {
       await deleteUserGroup(groupId)
@@ -502,7 +457,6 @@ const Users = () => {
     }
   }
 
-  // 编辑分组
   const handleEditGroup = (group) => {
     setEditingGroup(group)
     groupForm.setFieldsValue({
@@ -516,7 +470,6 @@ const Users = () => {
     setIsGroupModalVisible(true)
   }
 
-  // 设置组积分池
   const handleSetCreditsPool = (group) => {
     setCreditsPoolGroup(group)
     setIsCreditsPoolModalVisible(true)
@@ -534,7 +487,6 @@ const Users = () => {
     }
   }
 
-  // 分配积分
   const handleDistributeCredits = (user) => {
     setDistributeUser(user)
     setIsDistributeModalVisible(true)
@@ -558,7 +510,6 @@ const Users = () => {
     }
   }
 
-  // 设置组员上限
   const handleSetUserLimit = (group) => {
     setUserLimitGroup(group)
     setIsUserLimitModalVisible(true)
@@ -576,7 +527,6 @@ const Users = () => {
     }
   }
 
-  // 设置组有效期
   const handleSetExpireDate = (group) => {
     setExpireDateGroup(group)
     setIsExpireDateModalVisible(true)
@@ -597,7 +547,6 @@ const Users = () => {
     }
   }
 
-  // 切换组站点自定义开关
   const handleToggleSiteCustomization = async (group, enabled) => {
     try {
       await toggleGroupSiteCustomization(group.id, enabled)
@@ -608,7 +557,6 @@ const Users = () => {
     }
   }
 
-  // 编辑组站点配置
   const handleEditSiteConfig = (group) => {
     setSiteConfigGroup(group)
     setIsSiteConfigModalVisible(true)
@@ -626,7 +574,6 @@ const Users = () => {
     }
   }
 
-  // 管理邀请码
   const handleManageInvitationCode = (group) => {
     if (isGroupAdmin && group.id !== currentUser.group_id) {
       message.warning('只能管理本组的邀请码')
@@ -649,13 +596,11 @@ const Users = () => {
     }
   }
 
-  // 查看邀请记录
   const handleViewInvitationLogs = (group) => {
     setInvitationLogsGroup(group)
     setIsInvitationLogsModalVisible(true)
   }
 
-  // 获取分配积分时使用的组信息
   const getDistributeGroupInfo = () => {
     if (isSuperAdmin && distributeUser?.group_id) {
       return userGroups.find(g => g.id === distributeUser.group_id)
@@ -663,12 +608,10 @@ const Users = () => {
     return currentGroupInfo
   }
 
-  // 跳转到数据分析页面
   const handleGoToAnalytics = () => {
     navigate('/admin/analytics')
   }
 
-  // 获取当前页显示的用户组数据
   const getCurrentPageGroups = () => {
     const { current, pageSize } = groupPagination
     const start = (current - 1) * pageSize
@@ -676,7 +619,6 @@ const Users = () => {
     return userGroups.slice(start, end)
   }
 
-  // 权限检查
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
     return (
       <div className="page-container">
@@ -711,7 +653,6 @@ const Users = () => {
             </Space>
           </Col>
           <Col>
-            {/* 数据分析入口按钮 */}
             <Button 
               type="default"
               icon={<BarChartOutlined />}
@@ -730,7 +671,6 @@ const Users = () => {
 
       {activeTab === 'users' ? (
         <>
-          {/* 用户搜索表单 */}
           <Card style={{ marginBottom: 16 }}>
             <UserSearchForm
               userGroups={userGroups}
@@ -741,7 +681,6 @@ const Users = () => {
             />
           </Card>
 
-          {/* 组管理员看到的组积分池信息 */}
           {isGroupAdmin && currentGroupInfo && (
             <Card style={{ marginBottom: 16 }}>
               <Row gutter={16}>
@@ -808,12 +747,10 @@ const Users = () => {
             </Card>
           )}
 
-          {/* 用户列表 */}
           <Card 
             title={t('admin.users.title')}
             extra={
               <Space>
-                {/* 批量创建用户按钮 - v1.1新增 */}
                 <Button 
                   type="default"
                   icon={<UsergroupAddOutlined />}
@@ -868,7 +805,6 @@ const Users = () => {
         </>
       ) : (
         <>
-          {/* 分组管理标签页 */}
           <Card>
             <Tabs activeKey={activeGroupTab} onChange={setActiveGroupTab}>
               <TabPane tab="分组信息" key="info">
@@ -876,17 +812,32 @@ const Users = () => {
                   title={t('admin.groups.title')}
                   extra={
                     isSuperAdmin && (
-                      <Button 
-                        type="primary" 
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          setEditingGroup(null)
-                          groupForm.resetFields()
-                          setIsGroupModalVisible(true)
-                        }}
-                      >
-                        {t('admin.groups.addGroup')}
-                      </Button>
+                      <Space>
+                        {/* v1.2 新增：批量导入学校 */}
+                        <Button 
+                          type="default"
+                          icon={<BankOutlined />}
+                          onClick={() => setIsSchoolImportModalVisible(true)}
+                          style={{
+                            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                            color: 'white',
+                            border: 'none'
+                          }}
+                        >
+                          批量导入学校
+                        </Button>
+                        <Button 
+                          type="primary" 
+                          icon={<PlusOutlined />}
+                          onClick={() => {
+                            setEditingGroup(null)
+                            groupForm.resetFields()
+                            setIsGroupModalVisible(true)
+                          }}
+                        >
+                          {t('admin.groups.addGroup')}
+                        </Button>
+                      </Space>
                     )
                   }
                 >
@@ -928,7 +879,6 @@ const Users = () => {
                 </Card>
               </TabPane>
 
-              {/* 标签管理Tab */}
               <TabPane 
                 tab={
                   <span>
@@ -944,7 +894,6 @@ const Users = () => {
                 />
               </TabPane>
 
-              {/* 标签统计Tab */}
               <TabPane 
                 tab={
                   <span>
@@ -979,7 +928,7 @@ const Users = () => {
         }}
       />
 
-      {/* 批量创建用户弹窗 - v1.1新增 */}
+      {/* 批量创建用户弹窗 */}
       <BatchCreateUsersModal
         visible={isBatchCreateModalVisible}
         userGroups={userGroups}
@@ -988,6 +937,15 @@ const Users = () => {
         onSubmit={handleBatchCreateUsers}
         onCancel={() => setIsBatchCreateModalVisible(false)}
       />
+
+      {/* v1.2 新增：学校批量导入弹窗 - 仅超管 */}
+      {isSuperAdmin && (
+        <SchoolImportModal
+          visible={isSchoolImportModalVisible}
+          onCancel={() => setIsSchoolImportModalVisible(false)}
+          onSuccess={handleSchoolImportSuccess}
+        />
+      )}
 
       {/* 分组表单弹窗 */}
       {isSuperAdmin && (
@@ -1005,14 +963,12 @@ const Users = () => {
         />
       )}
 
-      {/* 用户详情抽屉 */}
       <UserDetailDrawer
         visible={isDetailVisible}
         userDetail={userDetail}
         onClose={() => setIsDetailVisible(false)}
       />
 
-      {/* 用户模型限制管理弹窗 */}
       <UserModelRestrictModal
         visible={isModelRestrictModalVisible}
         user={modelRestrictUser}
@@ -1025,7 +981,6 @@ const Users = () => {
         }}
       />
 
-      {/* 用户标签分配弹窗 */}
       <UserTagAssign
         visible={isTagAssignModalVisible}
         user={tagAssignUser}
@@ -1041,7 +996,6 @@ const Users = () => {
         }}
       />
 
-      {/* 组积分池设置弹窗 */}
       {isSuperAdmin && (
         <GroupCreditsPoolModal
           visible={isCreditsPoolModalVisible}
@@ -1055,7 +1009,6 @@ const Users = () => {
         />
       )}
 
-      {/* 积分分配弹窗 */}
       {(isGroupAdmin || isSuperAdmin) && (
         <DistributeCreditsModal
           visible={isDistributeModalVisible}
@@ -1070,7 +1023,6 @@ const Users = () => {
         />
       )}
 
-      {/* 组员上限设置弹窗 */}
       {isSuperAdmin && (
         <GroupUserLimitModal
           visible={isUserLimitModalVisible}
@@ -1084,7 +1036,6 @@ const Users = () => {
         />
       )}
 
-      {/* 组有效期设置弹窗 */}
       {isSuperAdmin && (
         <GroupExpireDateModal
           visible={isExpireDateModalVisible}
@@ -1098,7 +1049,6 @@ const Users = () => {
         />
       )}
 
-      {/* 组站点配置弹窗 */}
       {(isGroupAdmin || isSuperAdmin) && (
         <GroupSiteConfigModal
           visible={isSiteConfigModalVisible}
@@ -1112,7 +1062,6 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请码管理弹窗 */}
       {(isSuperAdmin || isGroupAdmin) && (
         <GroupInvitationCodeModal
           visible={isInvitationCodeModalVisible}
@@ -1126,7 +1075,6 @@ const Users = () => {
         />
       )}
 
-      {/* 邀请记录查看弹窗 */}
       {isSuperAdmin && (
         <GroupInvitationLogsModal
           visible={isInvitationLogsModalVisible}
@@ -1138,7 +1086,6 @@ const Users = () => {
         />
       )}
 
-      {/* 响应式样式 */}
       <style jsx>{`
         @media (max-width: 768px) {
           .mobile-analytics-btn {

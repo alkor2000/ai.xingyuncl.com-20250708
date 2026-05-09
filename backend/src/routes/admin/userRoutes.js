@@ -5,16 +5,82 @@
  * - 用户CRUD操作
  * - 账号有效期管理
  * - 模型权限管理
- * - 批量创建用户（v1.1新增）
- * 
+ * - 批量创建用户（v1.1）
+ * - 学校批量导入与按组导出（v1.2 新增）
+ *
  * 更新记录：
  * - v1.1: 新增 POST /batch-create 批量创建用户路由
+ * - v1.2 (2026-05-09):
+ *   * 新增 GET  /school-import/template       下载学校导入模板
+ *   * 新增 POST /school-import/preview        预览导入校验
+ *   * 新增 POST /school-import/execute        执行批量导入
+ *   * 新增 GET  /export-by-group/:id          按用户组导出用户为 Excel
+ *   注意：因为本路由在 app.js 中以 /admin/users 挂载，所以学校导入路由
+ *        最终路径为 /admin/users/school-import/*，按组导出路径为
+ *        /admin/users/export-by-group/:id
  */
 const express = require('express');
 const UserManagementController = require('../../controllers/admin/UserManagementController');
+const SchoolImportController = require('../../controllers/admin/SchoolImportController');
 const { requirePermission } = require('../../middleware/authMiddleware');
 const { canManageUser, canCreateUser, restrictFieldsForGroupAdmin } = require('../../middleware/permissions');
+const { requireSuperAdmin } = require('../../middleware/permissions/superAdminMiddleware');
 const router = express.Router();
+
+// ============================================================
+// 学校批量导入相关路由（必须放在 /:id 之前避免参数冲突）
+// 全部要求 super_admin 权限
+// ============================================================
+
+/**
+ * @route GET /api/admin/users/school-import/template
+ * @desc 下载学校批量导入 Excel 模板
+ * @access SuperAdmin
+ */
+router.get('/school-import/template',
+  requireSuperAdmin(),
+  SchoolImportController.downloadTemplate
+);
+
+/**
+ * @route POST /api/admin/users/school-import/preview
+ * @desc 预览学校批量导入（不入库）
+ * @form  file: <Excel 文件>
+ * @access SuperAdmin
+ */
+router.post('/school-import/preview',
+  requireSuperAdmin(),
+  SchoolImportController.uploadMiddleware,
+  SchoolImportController.handleMulterError,
+  SchoolImportController.previewImport
+);
+
+/**
+ * @route POST /api/admin/users/school-import/execute
+ * @desc 执行学校批量导入
+ * @form  file: <Excel 文件>
+ * @access SuperAdmin
+ */
+router.post('/school-import/execute',
+  requireSuperAdmin(),
+  SchoolImportController.uploadMiddleware,
+  SchoolImportController.handleMulterError,
+  SchoolImportController.executeImport
+);
+
+/**
+ * @route GET /api/admin/users/export-by-group/:id
+ * @desc 按用户组导出全部用户为 Excel
+ * @access SuperAdmin
+ */
+router.get('/export-by-group/:id',
+  requireSuperAdmin(),
+  SchoolImportController.exportGroupUsers
+);
+
+// ============================================================
+// 原有用户管理路由
+// ============================================================
 
 /**
  * @route GET /api/admin/users
@@ -39,22 +105,7 @@ router.post('/',
 
 /**
  * @route POST /api/admin/users/batch-create
- * @desc 批量创建用户（v1.1新增）
- * @body {
- *   group_id: number,           // 目标组ID（必填）
- *   username_prefix: string,    // 用户名前缀（必填）
- *   username_connector: string, // 连接符，默认'_'
- *   start_number: number,       // 起始序号，默认1
- *   number_digits: number,      // 序号位数，默认3
- *   count: number,              // 创建数量（必填，1-500）
- *   credits_per_user: number,   // 每用户积分，默认0
- *   password: string            // 统一密码（可选，不填则随机生成）
- * }
- * @returns {
- *   created_count: number,      // 创建成功数量
- *   total_credits_used: number, // 消耗的组积分总额
- *   users: Array<{id, username, password, credits}> // 用户列表
- * }
+ * @desc 批量创建用户（v1.1）
  * @access Admin / SuperAdmin
  */
 router.post('/batch-create',

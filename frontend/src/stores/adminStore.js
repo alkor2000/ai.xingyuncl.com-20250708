@@ -10,6 +10,7 @@
  * - API服务管理
  * - 系统提示词管理
  * - 使用记录管理
+ * - 学校批量导入与按组导出（v1.3 新增 2026-05-09）
  */
 import { create } from 'zustand'
 import apiClient from '../utils/api'
@@ -89,20 +90,7 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  /**
-   * 批量创建用户（v1.1新增）
-   * 
-   * @param {Object} batchData - 批量创建参数
-   * @param {number} batchData.group_id - 目标组ID
-   * @param {string} batchData.username_prefix - 用户名前缀
-   * @param {string} batchData.username_connector - 连接符（默认_）
-   * @param {number} batchData.start_number - 起始序号
-   * @param {number} batchData.number_digits - 序号位数
-   * @param {number} batchData.count - 创建数量
-   * @param {number} batchData.credits_per_user - 每用户积分
-   * @param {string} batchData.password - 统一密码（可选）
-   * @returns {Object} 创建结果
-   */
+  // 批量创建用户（v1.1）
   batchCreateUsers: async (batchData) => {
     try {
       const response = await apiClient.post('/admin/users/batch-create', batchData)
@@ -113,7 +101,122 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 更新用户
+  // ============================================================
+  // v1.3 学校批量导入与按组导出
+  // ============================================================
+  
+  /**
+   * 下载学校导入 Excel 模板（直接触发浏览器下载）
+   */
+  downloadSchoolImportTemplate: async () => {
+    try {
+      const response = await apiClient.get('/admin/users/school-import/template', {
+        responseType: 'blob',
+        timeout: 30000
+      })
+      const blob = new Blob(
+        [response.data],
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+      )
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const dateStr = new Date().toISOString().split('T')[0]
+      link.setAttribute('download', `学校批量导入模板_${dateStr}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      return { success: true }
+    } catch (error) {
+      console.error('下载导入模板失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 预览学校批量导入（不入库，仅校验）
+   * @param {File} file - 用户上传的 Excel File 对象
+   */
+  previewSchoolImport: async (file) => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post(
+        '/admin/users/school-import/preview',
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000
+        }
+      )
+      return response.data.data
+    } catch (error) {
+      console.error('预览学校导入失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 执行学校批量导入
+   * @param {File} file - 用户上传的 Excel File 对象
+   */
+  executeSchoolImport: async (file) => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post(
+        '/admin/users/school-import/execute',
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 300000  // 5 分钟，应对大批量导入
+        }
+      )
+      return response.data.data
+    } catch (error) {
+      console.error('执行学校导入失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 按用户组导出全部用户为 Excel
+   * @param {number} groupId
+   * @param {string} groupName - 用于设置下载文件名
+   */
+  exportGroupUsers: async (groupId, groupName) => {
+    try {
+      const response = await apiClient.get(
+        `/admin/users/export-by-group/${groupId}`,
+        {
+          responseType: 'blob',
+          timeout: 120000
+        }
+      )
+      const blob = new Blob(
+        [response.data],
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+      )
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const safeName = (groupName || 'group').replace(/[\\/:*?"<>|]/g, '_')
+      const dateStr = new Date().toISOString().split('T')[0]
+      link.setAttribute('download', `${safeName}_用户列表_${dateStr}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      return { success: true }
+    } catch (error) {
+      console.error('导出组用户失败:', error)
+      throw error
+    }
+  },
+  
+  // ===== 用户管理 - 其他方法 =====
+  
   updateUser: async (userId, updateData) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}`, updateData)
@@ -124,7 +227,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 删除用户
   deleteUser: async (userId) => {
     try {
       await apiClient.delete(`/admin/users/${userId}`)
@@ -134,7 +236,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 将用户挪出当前组
   removeUserFromGroup: async (userId) => {
     try {
       const response = await apiClient.post(`/admin/users/${userId}/remove-from-group`)
@@ -145,7 +246,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 重置用户密码
   resetUserPassword: async (userId, newPassword) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/password`, {
@@ -204,7 +304,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组积分池
   setGroupCreditsPool: async (groupId, creditsPool) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/credits-pool`, {
@@ -218,7 +317,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 从组积分池分配/回收积分
   distributeGroupCredits: async (groupId, userId, amount, reason, operation = 'distribute') => {
     try {
       const response = await apiClient.post(`/admin/user-groups/${groupId}/distribute-credits`, {
@@ -234,7 +332,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组员上限
   setGroupUserLimit: async (groupId, userLimit) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/user-limit`, {
@@ -248,7 +345,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置组有效期
   setGroupExpireDate: async (groupId, expireDate, syncToUsers = false) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/expire-date`, {
@@ -263,7 +359,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 同步组有效期到所有组员
   syncGroupExpireDateToUsers: async (groupId) => {
     try {
       const response = await apiClient.post(`/admin/user-groups/${groupId}/sync-expire-date`)
@@ -274,7 +369,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 切换组站点自定义开关
   toggleGroupSiteCustomization: async (groupId, enabled) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/site-customization`, {
@@ -288,7 +382,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 更新组站点配置
   updateGroupSiteConfig: async (groupId, config) => {
     try {
       const response = await apiClient.put(`/admin/user-groups/${groupId}/site-config`, config)
@@ -404,7 +497,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 设置用户账号有效期
   setUserAccountExpireDate: async (userId, expireDate, reason = '管理员设置') => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/expire-date`, {
@@ -418,7 +510,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 延长用户账号有效期
   extendUserAccountExpireDate: async (userId, days, reason = '管理员延期') => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/extend-expire-date`, {
@@ -432,7 +523,6 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  // 同步用户有效期到组有效期
   syncUserAccountExpireWithGroup: async (userId) => {
     try {
       const response = await apiClient.post(`/admin/users/${userId}/sync-expire-date`)
@@ -490,25 +580,15 @@ const useAdminStore = create((set) => ({
     }
   },
   
-  /**
-   * v1.2 批量更新模型排序（拖拽排序）
-   * 先乐观更新本地状态（即时响应），再同步到后端
-   * 
-   * @param {Array<{id: number, sort_order: number}>} sortOrders - 排序数组
-   * @param {Array} newModels - 排序后的完整模型数组（用于乐观更新）
-   */
   updateModelSortOrder: async (sortOrders, newModels) => {
-    // 乐观更新：先更新本地列表顺序，用户立即看到效果
     if (newModels) {
       set({ aiModels: newModels })
     }
     try {
       await apiClient.put('/admin/models/sort-order', { sort_orders: sortOrders })
-      // 成功后从后端刷新，确保数据一致
       await useAdminStore.getState().getAIModels()
     } catch (error) {
       console.error('更新模型排序失败:', error)
-      // 失败则回滚：重新从后端获取
       await useAdminStore.getState().getAIModels()
       throw error
     }

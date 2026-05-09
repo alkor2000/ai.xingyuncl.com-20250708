@@ -2,10 +2,14 @@
  * 用户分组表格组件（包含积分池、组员上限、组有效期、站点配置和邀请码功能）
  * 修改：允许组管理员编辑自己组的邀请码
  * 优化：添加固定列、固定表头、分页功能，解决横向和纵向滚动问题
+ *
+ * v1.1 (2026-05-09)：
+ *  - 新增"导出本组用户"按钮（FileExcelOutlined）
+ *  - 仅 super_admin 可见
  */
 
-import React from 'react'
-import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress, Switch, Badge } from 'antd'
+import React, { useState } from 'react'
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, Progress, Switch, Badge, message } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
@@ -20,11 +24,12 @@ import {
   GlobalOutlined,
   LinkOutlined,
   CopyOutlined,
-  EyeOutlined
+  EyeOutlined,
+  FileExcelOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import moment from 'moment'
-import { message } from 'antd'
+import useAdminStore from '../../../stores/adminStore'
 
 const UserGroupTable = ({
   groups = [],
@@ -32,8 +37,8 @@ const UserGroupTable = ({
   isGroupAdmin = false,
   isSuperAdmin = false,
   currentUser = null,
-  pagination = { current: 1, pageSize: 20, total: 0 }, // 新增：分页配置
-  onPageChange = () => {}, // 新增：分页回调
+  pagination = { current: 1, pageSize: 20, total: 0 },
+  onPageChange = () => {},
   onEdit,
   onDelete,
   onSetCreditsPool,
@@ -45,6 +50,8 @@ const UserGroupTable = ({
   onViewInvitationLogs
 }) => {
   const { t } = useTranslation()
+  const { exportGroupUsers } = useAdminStore()
+  const [exportingGroupId, setExportingGroupId] = useState(null)
 
   // 复制邀请码到剪贴板
   const copyInvitationCode = (code) => {
@@ -55,6 +62,21 @@ const UserGroupTable = ({
     }).catch(() => {
       message.error('复制失败，请手动复制')
     })
+  }
+
+  // 导出本组用户为 Excel
+  const handleExportGroupUsers = async (group) => {
+    try {
+      setExportingGroupId(group.id)
+      message.loading({ content: '正在生成 Excel 文件...', key: 'export', duration: 0 })
+      await exportGroupUsers(group.id, group.name)
+      message.success({ content: `用户组 "${group.name}" 导出成功`, key: 'export', duration: 2 })
+    } catch (error) {
+      const msg = error.response?.data?.message || error.message || '导出失败'
+      message.error({ content: '导出失败：' + msg, key: 'export', duration: 3 })
+    } finally {
+      setExportingGroupId(null)
+    }
   }
 
   // 获取组有效期状态标签
@@ -89,12 +111,10 @@ const UserGroupTable = ({
       return <Tag color="default">未启用</Tag>
     }
 
-    // 检查是否过期
     if (group.invitation_expire_at && moment(group.invitation_expire_at).isBefore(moment())) {
       return <Tag color="error">已过期</Tag>
     }
 
-    // 检查使用次数
     if (group.invitation_max_uses && group.invitation_usage_count >= group.invitation_max_uses) {
       return <Tag color="warning">已用完</Tag>
     }
@@ -108,7 +128,7 @@ const UserGroupTable = ({
       dataIndex: 'id',
       key: 'id',
       width: 80,
-      fixed: 'left', // 🔧 固定左侧
+      fixed: 'left',
       align: 'center'
     },
     {
@@ -116,7 +136,7 @@ const UserGroupTable = ({
       dataIndex: 'name',
       key: 'name',
       width: 150,
-      fixed: 'left', // 🔧 固定左侧
+      fixed: 'left',
       render: (name, record) => (
         <Space>
           <Tag color={record.color}>{name}</Tag>
@@ -128,9 +148,7 @@ const UserGroupTable = ({
       dataIndex: 'description',
       key: 'description',
       width: 180,
-      ellipsis: {
-        showTitle: false
-      },
+      ellipsis: { showTitle: false },
       render: (description) => (
         <Tooltip placement="topLeft" title={description}>
           {description || '-'}
@@ -330,20 +348,30 @@ const UserGroupTable = ({
     {
       title: t('table.actions'),
       key: 'actions',
-      width: 200,
-      fixed: 'right', // 🔧 固定右侧
+      width: 230,  // 加宽以容纳新的导出按钮
+      fixed: 'right',
       align: 'center',
       render: (_, record) => {
-        // 组管理员只能编辑自己组的站点配置和邀请码
         const canEditSiteConfig = record.site_customization_enabled && 
           (isSuperAdmin || (isGroupAdmin && currentUser && record.id === currentUser.group_id))
         
-        // 组管理员可以编辑自己组的邀请码
         const canManageInvitationCode = isSuperAdmin || 
           (isGroupAdmin && currentUser && record.id === currentUser.group_id)
         
         return (
           <Space size="small">
+            {/* v1.1 新增：导出本组用户 - 仅超管可见 */}
+            {isSuperAdmin && (
+              <Tooltip title="导出本组用户为 Excel">
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<FileExcelOutlined style={{ color: '#52c41a' }} />}
+                  loading={exportingGroupId === record.id}
+                  onClick={() => handleExportGroupUsers(record)}
+                />
+              </Tooltip>
+            )}
             {canEditSiteConfig && onEditSiteConfig && (
               <Tooltip title="配置站点信息">
                 <Button 
@@ -440,10 +468,7 @@ const UserGroupTable = ({
       dataSource={groups}
       rowKey="id"
       loading={loading}
-      scroll={{ 
-        x: 1800,  // 🔧 横向滚动宽度
-        y: 600    // 🔧 固定表头高度
-      }}
+      scroll={{ x: 1830, y: 600 }}
       pagination={{
         ...pagination,
         showSizeChanger: true,

@@ -94,3 +94,7 @@ redis_data/
 
 # 测试覆盖率报告（不提交到仓库）
 backend/coverage*/
+
+# SonarQube scanner 工作目录(自动生成,不应提交)
+.scannerwork/
+**/.scannerwork/
