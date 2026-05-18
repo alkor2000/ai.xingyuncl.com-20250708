@@ -7,6 +7,13 @@
  *     避免函数包装导致索引失效引起全表扫描（messages表30秒慢查询根因）
  *   - getRealtimeStats 改为 Promise.all 并行查询所有统计
  *   - 新增查询超时保护，单个查询最多10秒
+ * 
+ * v1.2 变更（2026-05-18）：
+ *   - 修复 getPopularModels 的 LIMIT 参数报错（Incorrect arguments to mysqld_stmt_execute）
+ *   - 根因：MySQL 预编译协议（pool.execute）不支持 LIMIT ? 参数绑定
+ *   - 修复：改用 dbConnection.simpleQuery（基于 pool.query 普通参数化查询）
+ *   - simpleQuery 支持 LIMIT/OFFSET 参数绑定且同样防 SQL 注入
+ *   - 这是 connection.js 中明确文档化的设计约定（见 query 方法注释）
  */
 
 const dbConnection = require('../database/connection');
@@ -108,7 +115,12 @@ class StatsService {
   /**
    * 获取热门模型
    * v1.1: 改用范围查询 created_at >= CURDATE()
-   * 使用参数化 LIMIT 防止 SQL 注入
+   * v1.2: 改用 simpleQuery 修复 LIMIT 参数报错
+   * 
+   * 注意：必须使用 simpleQuery（pool.query）而非 query（pool.execute）
+   * 原因：MySQL 预编译语句协议不支持 LIMIT ? 参数绑定
+   *      pool.query 是普通参数化查询，支持 LIMIT/OFFSET 参数
+   * 安全：simpleQuery 同样使用参数化查询，可防止 SQL 注入
    */
   static async getPopularModels(limit = 5) {
     try {
@@ -120,7 +132,7 @@ class StatsService {
         ORDER BY usage_count DESC
         LIMIT ?
       `;
-      const { rows } = await dbConnection.query(sql, [parseInt(limit)]);
+      const { rows } = await dbConnection.simpleQuery(sql, [parseInt(limit)]);
       return rows || [];
     } catch (error) {
       logger.error('获取热门模型失败:', error);
