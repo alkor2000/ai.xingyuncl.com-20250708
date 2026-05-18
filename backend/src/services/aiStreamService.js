@@ -1,47 +1,33 @@
 /**
  * 流式AI服务 - 增强PDF和多图支持版本
- * 基于业界最佳实践优化，支持PDF文档处理
  * 
- * v2.0 变更：
- *   - processMessagesForOpenRouter: 支持 msg.image_urls 多图数组
- *   - processMessagesStandard: 支持 msg.image_urls 多图数组
+ * v2.0：processMessagesForOpenRouter/Standard 支持多图数组
+ * v3.0：callStreamAPI 支持 enableThinking 参数控制 OpenRouter 推理输出
+ * v4.0：SSE心跳保活机制 + 上游超时延长至300秒
+ * v5.0：PDF base64 内嵌支持，修复 OneAPI 中转 Gemini 时 PDF 退化问题
  * 
- * v3.0 变更：
- *   - callStreamAPI: 支持 options.enableThinking 参数
- *   - 针对 OpenRouter 端点，当 enableThinking 为 false 时添加 include_reasoning: false
- *   - 从源头控制是否让模型输出推理/思考过程，节省 token 和响应时间
- * 
- * v4.0 变更：
- *   - 新增SSE心跳保活机制：每15秒发送heartbeat事件，防止Nginx/浏览器断开空闲连接
- *   - 延长上游AI请求超时至300秒（5分钟），支持大段代码生成场景
- *   - _handleStreamResponse增加心跳定时器，在等待AI响应chunk间隔期间持续发送心跳
- *   - 修复ERR_HTTP2_PING_FAILED和流式传输超时断开问题
- * 
- * 修复记录：
- *   - Gemini空回答问题 - 添加空内容检查和调试日志
- *   - API错误信息通过SSE发送给前端
- *   - 空内容时发送error事件而不是done事件
- *   - parseAPIError中JSON.stringify循环引用问题
+ * v5.1 变更（2026-05-18 性能优化）：
+ *   - 单请求内 PDF base64 缓存：同一 PDF 多次出现只读取/编码一次
+ *   - 配合 MessageService v3.0 的"PDF 最后一次出现保留"算法
+ *   - 即使在缓存失效场景，缓存机制也能容错
  */
 
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs').promises;
 const AIModel = require('../models/AIModel');
+const config = require('../config');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
-/**
- * SSE心跳间隔（毫秒）
- * 每15秒发送一次心跳，防止Nginx proxy_read_timeout和浏览器断开空闲连接
- * 需小于Nginx的proxy_read_timeout（900s）和浏览器的TCP keep-alive超时
- */
+/** SSE心跳间隔（毫秒）*/
 const SSE_HEARTBEAT_INTERVAL_MS = 15000;
 
-/**
- * 上游AI API请求超时（毫秒）
- * 大段代码生成场景（如Claude输出完整文件）可能需要3-5分钟
- * 设置为5分钟，确保不会过早中断上游AI的响应
- */
+/** 上游AI API请求超时（毫秒）*/
 const UPSTREAM_API_TIMEOUT_MS = 300000;
+
+/** PDF 文件 base64 编码后的最大尺寸（30MB）*/
+const MAX_PDF_BASE64_BYTES = 30 * 1024 * 1024;
 
 class AIStreamService {
   /** 解析Azure配置字符串 */
@@ -73,35 +59,108 @@ class AIStreamService {
     if (!fileInfo) return false;
     if (fileInfo.mime_type === 'application/pdf') return true;
     if (fileInfo.url && fileInfo.url.toLowerCase().endsWith('.pdf')) return true;
+    if (fileInfo.original_name && fileInfo.original_name.toLowerCase().endsWith('.pdf')) return true;
     return false;
   }
 
-  /**
-   * v2.0: 构建图片 content 块数组
-   */
+  /** 构建图片 content 块数组 */
   static _buildImageContentBlocks(urls) {
     if (!urls || urls.length === 0) return [];
     return urls.map(url => ({ type: 'image_url', image_url: { url: url } }));
   }
 
   /**
-   * 处理消息为OpenRouter格式 - v2.0: 支持多图
+   * 构建 PDF 的 content 块（base64 内嵌格式）
+   * v5.1: 增加 pdfCache 参数支持单请求内缓存
+   */
+  static async _buildPDFContentBlock(fileInfo, pdfCache = null) {
+    try {
+      if (!fileInfo || !fileInfo.file_path) {
+        logger.warn('PDF文件信息不完整，缺少 file_path 字段', { fileInfo });
+        return null;
+      }
+
+      // 缓存命中
+      if (pdfCache && pdfCache.has(fileInfo.file_path)) {
+        const cached = pdfCache.get(fileInfo.file_path);
+        logger.info('流式：PDF base64 缓存命中', {
+          file_path: fileInfo.file_path,
+          original_name: fileInfo.original_name
+        });
+        return {
+          type: 'file',
+          file: { ...cached.file }
+        };
+      }
+
+      try {
+        await fs.access(fileInfo.file_path);
+      } catch (e) {
+        logger.error('PDF文件不存在或无权访问', {
+          file_path: fileInfo.file_path,
+          original_name: fileInfo.original_name
+        });
+        return null;
+      }
+
+      const stats = await fs.stat(fileInfo.file_path);
+      if (stats.size > MAX_PDF_BASE64_BYTES) {
+        logger.warn('PDF文件过大，无法 base64 编码发送', {
+          file_path: fileInfo.file_path,
+          size: stats.size,
+          limit: MAX_PDF_BASE64_BYTES
+        });
+        return null;
+      }
+
+      const fileBuffer = await fs.readFile(fileInfo.file_path);
+      const base64Data = fileBuffer.toString('base64');
+      const mimeType = fileInfo.mime_type || 'application/pdf';
+      const filename = fileInfo.original_name || 'document.pdf';
+
+      logger.info('流式：PDF文件base64编码完成', {
+        filename,
+        rawSize: stats.size,
+        base64Size: base64Data.length,
+        mimeType,
+        cached: !!pdfCache
+      });
+
+      const block = {
+        type: 'file',
+        file: {
+          filename: filename,
+          file_data: `data:${mimeType};base64,${base64Data}`
+        }
+      };
+
+      if (pdfCache) {
+        pdfCache.set(fileInfo.file_path, block);
+      }
+
+      return block;
+    } catch (error) {
+      logger.error('流式：构建PDF content块失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 处理消息为OpenRouter格式（URL方式 + file-parser插件）
    */
   static processMessagesForOpenRouter(messages, model) {
     return messages.map(msg => {
-      // PDF文件
       if (msg.file && this.isPDFFile(msg.file)) {
         logger.info('处理PDF消息为OpenRouter流式格式', { role: msg.role });
         return {
           role: msg.role,
           content: [
             { type: 'text', text: msg.content },
-            { type: 'file', file: { filename: 'document.pdf', file_data: msg.file.url } }
+            { type: 'file', file: { filename: msg.file.original_name || 'document.pdf', file_data: msg.file.url } }
           ]
         };
       }
 
-      // v2.0: 收集所有图片URL
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -120,11 +179,14 @@ class AIStreamService {
   }
 
   /**
-   * 处理消息为标准格式 - v2.0: 支持多图
+   * 处理消息为标准格式 - v5.1: 支持 PDF 缓存
    */
-  static processMessagesStandard(messages, model) {
-    return messages.map(msg => {
-      // v2.0: 收集所有图片URL
+  static async processMessagesStandard(messages, model) {
+    // v5.1: 单请求内 base64 缓存
+    const pdfCache = new Map();
+    const result = [];
+
+    for (const msg of messages) {
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -132,20 +194,66 @@ class AIStreamService {
         imageUrls.push(msg.image_url);
       }
 
-      if (imageUrls.length > 0 && model.image_upload_enabled) {
+      const isPDF = msg.file && this.isPDFFile(msg.file);
+
+      // 场景一：仅有图片
+      if (imageUrls.length > 0 && !isPDF && model.image_upload_enabled) {
         const contentBlocks = [{ type: 'text', text: msg.content }];
         contentBlocks.push(...this._buildImageContentBlocks(imageUrls));
-        return { role: msg.role, content: contentBlocks };
+        result.push({ role: msg.role, content: contentBlocks });
+        continue;
       }
 
-      // PDF文件在非OpenRouter下作为文本
-      if (msg.file) {
-        logger.warn('非OpenRouter端点不支持PDF直接处理（流式）', { provider: model.provider });
-        return { role: msg.role, content: `${msg.content}\n\n[附件: ${msg.file.url}]` };
+      // 场景二：有 PDF
+      if (isPDF && model.document_upload_enabled) {
+        const pdfBlock = await this._buildPDFContentBlock(msg.file, pdfCache);
+
+        if (pdfBlock) {
+          const contentBlocks = [{ type: 'text', text: msg.content }];
+
+          if (imageUrls.length > 0 && model.image_upload_enabled) {
+            contentBlocks.push(...this._buildImageContentBlocks(imageUrls));
+          }
+
+          contentBlocks.push(pdfBlock);
+
+          result.push({ role: msg.role, content: contentBlocks });
+          continue;
+        } else {
+          logger.warn('流式：PDF base64 编码失败', { file: msg.file.original_name });
+          result.push({
+            role: msg.role,
+            content: `${msg.content}\n\n[系统提示：用户上传了文件 "${msg.file.original_name || '未知文件名'}"，但文件读取失败。请提示用户重新上传。]`
+          });
+          continue;
+        }
       }
 
-      return msg;
-    });
+      // 场景三：其他类型文件
+      if (msg.file && !isPDF) {
+        logger.warn('流式：遇到非图片非PDF的文件，作为文本附件处理', {
+          mime_type: msg.file.mime_type,
+          provider: model.provider
+        });
+        result.push({
+          role: msg.role,
+          content: `${msg.content}\n\n[附件: ${msg.file.original_name || msg.file.url}]`
+        });
+        continue;
+      }
+
+      // 场景四：纯文本消息
+      result.push(msg);
+    }
+
+    if (pdfCache.size > 0) {
+      logger.info('流式：单请求 PDF 缓存统计', {
+        uniquePdfCount: pdfCache.size,
+        cacheKeys: Array.from(pdfCache.keys()).map(k => path.basename(k))
+      });
+    }
+
+    return result;
   }
 
   /** 发送SSE事件 */
@@ -161,34 +269,22 @@ class AIStreamService {
     }
   }
 
-  /**
-   * 发送SSE心跳事件
-   * 用于保持连接活跃，防止Nginx/浏览器因空闲断开
-   * 前端收到heartbeat事件应忽略（不影响业务逻辑）
-   */
+  /** 发送SSE心跳事件 */
   static sendHeartbeat(res) {
     try {
       if (res.writableEnded || !res.headersSent) return false;
-      // 使用SSE注释格式发送心跳，不会被前端SSE解析器当作事件处理
-      // 同时发送一个heartbeat事件，前端可选择性处理
       res.write(`:heartbeat ${Date.now()}\n\n`);
       return true;
     } catch (error) {
-      // 心跳发送失败说明连接已断开，静默处理
       return false;
     }
   }
 
-  /**
-   * 启动SSE心跳定时器
-   * @param {Object} res - HTTP响应对象
-   * @returns {NodeJS.Timeout} 定时器ID，用于后续清除
-   */
+  /** 启动SSE心跳定时器 */
   static startHeartbeat(res) {
     const heartbeatTimer = setInterval(() => {
       const sent = AIStreamService.sendHeartbeat(res);
       if (!sent) {
-        // 心跳发送失败，连接已断开，清除定时器
         clearInterval(heartbeatTimer);
       }
     }, SSE_HEARTBEAT_INTERVAL_MS);
@@ -196,9 +292,7 @@ class AIStreamService {
     return heartbeatTimer;
   }
 
-  /**
-   * 安全地序列化对象，处理循环引用
-   */
+  /** 安全序列化对象 */
   static safeStringify(obj, maxLength = 500) {
     if (obj === null || obj === undefined) return '';
     if (typeof obj === 'string') return obj.substring(0, maxLength);
@@ -226,9 +320,7 @@ class AIStreamService {
     return String(obj).substring(0, maxLength);
   }
 
-  /**
-   * 解析API错误信息，提取用户友好的错误描述
-   */
+  /** 解析API错误信息 */
   static parseAPIError(error, model) {
     let userMessage = 'AI服务暂时不可用，请稍后重试';
     let technicalDetails = '';
@@ -270,9 +362,7 @@ class AIStreamService {
     return { userMessage, technicalDetails, statusCode: error.response?.status };
   }
 
-  /**
-   * 发送流式消息到AI模型
-   */
+  /** 发送流式消息到AI模型 */
   static async sendStreamMessage(res, modelName, messages, options = {}) {
     try {
       logger.info('开始流式AI服务', {
@@ -286,7 +376,6 @@ class AIStreamService {
       if (!model) throw new Error(`AI模型 ${modelName} 未找到`);
       if (!model.stream_enabled) throw new Error(`AI模型 ${modelName} 不支持流式输出`);
 
-      // 设置SSE响应头
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -295,12 +384,10 @@ class AIStreamService {
         'Access-Control-Allow-Origin': '*'
       });
 
-      // 立即刷新响应头，确保客户端尽快收到
       if (typeof res.flushHeaders === 'function') {
         res.flushHeaders();
       }
 
-      // 发送初始化数据
       if (options.userMessage || options.creditsInfo) {
         AIStreamService.sendSSE(res, 'init', {
           user_message: options.userMessage,
@@ -327,7 +414,6 @@ class AIStreamService {
 
   /**
    * 内部方法：处理流式数据的通用逻辑
-   * v4.0: 新增心跳保活机制，防止连接空闲断开
    */
   static _handleStreamResponse(res, response, model, options, startTime) {
     let fullContent = '';
@@ -335,14 +421,9 @@ class AIStreamService {
     let isDone = false;
     let chunkCount = 0;
 
-    // v4.0: 启动SSE心跳保活定时器
     const heartbeatTimer = AIStreamService.startHeartbeat(res);
 
     return new Promise((resolve, reject) => {
-      /**
-       * 清理资源的统一方法
-       * 确保心跳定时器在任何情况下都被清除
-       */
       const cleanup = () => {
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer);
@@ -443,9 +524,7 @@ class AIStreamService {
     });
   }
 
-  /**
-   * 内部方法：完成流式响应
-   */
+  /** 内部方法：完成流式响应 */
   static _finishStream(res, fullContent, options) {
     if (fullContent.length > 0) {
       AIStreamService.sendSSE(res, 'done', { content: fullContent, messageId: options.messageId });
@@ -467,11 +546,7 @@ class AIStreamService {
     }
   }
 
-  /**
-   * 调用标准OpenAI格式的流式API
-   * v3.0: 支持 enableThinking 参数，针对 OpenRouter 控制推理输出
-   * v4.0: 延长上游超时至300秒，支持大段代码生成
-   */
+  /** 调用标准OpenAI格式的流式API */
   static async callStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
 
@@ -487,7 +562,7 @@ class AIStreamService {
           plugins = [{ id: 'file-parser', pdf: { engine: 'pdf-text' } }];
         }
       } else {
-        processedMessages = AIStreamService.processMessagesStandard(messages, model);
+        processedMessages = await AIStreamService.processMessagesStandard(messages, model);
       }
 
       const requestData = {
@@ -498,14 +573,6 @@ class AIStreamService {
       };
       if (plugins) requestData.plugins = plugins;
 
-      /**
-       * v3.0: 针对 OpenRouter 端点，根据 enableThinking 控制推理输出
-       * - enableThinking 为 false（默认）：添加 include_reasoning: false，禁止模型输出思考过程
-       * - enableThinking 为 true：不添加限制参数，允许模型自由思考
-       * 
-       * 注意：include_reasoning 是 OpenRouter 特有参数
-       * 参考：https://openrouter.ai/docs/parameters
-       */
       if (isOpenRouter && !options.enableThinking) {
         requestData.include_reasoning = false;
         logger.info('OpenRouter: 禁用推理输出（enableThinking=false）', { model: model.name });
@@ -514,19 +581,21 @@ class AIStreamService {
       const endpoint = model.api_endpoint.endsWith('/chat/completions')
         ? model.api_endpoint : `${model.api_endpoint}/chat/completions`;
 
+      const siteDomain = config.app.domain || 'ai.xingyuncl.com';
+      const siteName = config.app.name || 'AI Platform';
+
       let headers = {
         'Authorization': `Bearer ${model.api_key}`,
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream'
       };
       if (isOpenRouter) {
-        headers['HTTP-Referer'] = 'https://ai.xingyuncl.com';
-        headers['X-Title'] = 'AI Platform';
+        headers['HTTP-Referer'] = `https://${siteDomain}`;
+        headers['X-Title'] = siteName;
       }
 
       let response;
       try {
-        // v4.0: 延长上游超时至300秒（5分钟），支持大段代码生成场景
         response = await axios({
           method: 'post',
           url: endpoint,
@@ -558,10 +627,7 @@ class AIStreamService {
     }
   }
 
-  /**
-   * 调用Azure流式API
-   * v4.0: 延长上游超时至300秒
-   */
+  /** 调用Azure流式API */
   static async callAzureStreamAPI(res, model, messages, options = {}) {
     const startTime = Date.now();
 
@@ -576,12 +642,11 @@ class AIStreamService {
       const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
       const azureUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`;
 
-      const processedMessages = AIStreamService.processMessagesStandard(messages, model);
+      const processedMessages = await AIStreamService.processMessagesStandard(messages, model);
       const requestData = { messages: processedMessages, temperature: options.temperature || 0.7, stream: true };
 
       let response;
       try {
-        // v4.0: 延长上游超时至300秒
         response = await axios({
           method: 'post', url: azureUrl, data: requestData,
           headers: { 'api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },

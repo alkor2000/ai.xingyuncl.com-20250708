@@ -2,13 +2,17 @@
  * AI服务层 - 非流式版本
  * 
  * 职责：
- * 1. 与AI模型交互（Azure OpenAI / OpenRouter / 标准OpenAI格式）
+ * 1. 与AI模型交互（Azure OpenAI / OpenRouter / OneAPI / 标准OpenAI格式）
  * 2. 消息格式化（图片/PDF/多图适配）
  * 3. 图片生成响应处理（Gemini / OpenRouter）
  * 
- * 安全设计：
- * - 模型找不到时直接报错，不做静默替换（防止积分消耗不一致）
- * - 调试文件使用 config 配置路径，限制最大文件数量
+ * v2.0：PDF base64 内嵌支持，修复 OneAPI 中转 Gemini 时 PDF 退化为纯文本链接的问题
+ * v3.0：MessageService 已实现"PDF 最后一次出现保留"算法（多轮对话优化）
+ * 
+ * v3.1 变更（2026-05-18 性能优化）：
+ *   - 单请求内 base64 缓存：同一 PDF 多次出现时只读取/编码一次
+ *   - 缓存范围为单次 API 请求生命周期（防止内存泄漏）
+ *   - 配合 MessageService v3.0，实际场景下单请求只编码 1 个 PDF
  */
 
 const axios = require('axios');
@@ -20,20 +24,15 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
 
-/**
- * 调试响应文件最大保留数量
- * 超过此数量时删除最旧的文件，防止磁盘被填满
- */
+/** 调试响应文件最大保留数量 */
 const MAX_DEBUG_FILES = 50;
+
+/** PDF 文件 base64 编码后的最大尺寸（30MB） */
+const MAX_PDF_BASE64_BYTES = 30 * 1024 * 1024;
 
 class AIService {
   /**
    * 发送消息到AI模型
-   * 
-   * @param {string} modelName - 模型名称（必须精确匹配）
-   * @param {Object[]} messages - 消息数组
-   * @param {Object} options - 选项（temperature, messageId 等）
-   * @returns {Object} { content, finish_reason, usage, model }
    */
   static async sendMessage(modelName, messages, options = {}) {
     try {
@@ -48,8 +47,6 @@ class AIService {
 
       const model = await AIModel.findByName(modelName);
       if (!model) {
-        // 不做相似模型回退，直接报错
-        // 原因：不同模型积分消耗不同，静默替换会导致用户被扣错积分
         throw new Error(`AI模型 ${modelName} 未找到或未启用，请在会话设置中选择其他模型`);
       }
 
@@ -60,9 +57,7 @@ class AIService {
     }
   }
 
-  /**
-   * 解析Azure配置字符串（格式：api_key|endpoint|api_version）
-   */
+  /** 解析Azure配置字符串 */
   static parseAzureConfig(configString) {
     const parts = configString.split('|');
     if (parts.length === 3) {
@@ -87,14 +82,7 @@ class AIService {
     return endpoint && endpoint.includes('openrouter');
   }
 
-  /**
-   * 构建图片 content 块数组（支持单图和多图）
-   * 根据 provider 生成对应格式的图片块
-   * 
-   * @param {string[]} urls - 图片URL数组
-   * @param {string} provider - 模型 provider
-   * @returns {Object[]} content 块数组
-   */
+  /** 构建图片 content 块数组 */
   static _buildImageContentBlocks(urls, provider) {
     if (!urls || urls.length === 0) return [];
 
@@ -108,23 +96,108 @@ class AIService {
   }
 
   /**
-   * 处理消息为 OpenRouter 格式 - 支持多图和PDF
+   * 构建 PDF 的 content 块（base64 内嵌格式）
+   * 
+   * v3.1: 增加 pdfCache 参数支持单请求内缓存，避免同一 PDF 重复编码
+   * 
+   * @param {Object} fileInfo - 文件信息对象
+   * @param {Map} [pdfCache] - 可选的 base64 缓存（按 file_path 做 key）
+   * @returns {Object|null} content 块对象
+   */
+  static async _buildPDFContentBlock(fileInfo, pdfCache = null) {
+    try {
+      if (!fileInfo || !fileInfo.file_path) {
+        logger.warn('PDF文件信息不完整，缺少 file_path 字段', { fileInfo });
+        return null;
+      }
+
+      // 缓存命中：直接返回（注意需要深拷贝，因为返回的对象可能被调用方修改）
+      if (pdfCache && pdfCache.has(fileInfo.file_path)) {
+        const cached = pdfCache.get(fileInfo.file_path);
+        logger.info('PDF base64 缓存命中', {
+          file_path: fileInfo.file_path,
+          original_name: fileInfo.original_name
+        });
+        // 返回新对象引用，避免上层污染缓存
+        return {
+          type: 'file',
+          file: { ...cached.file }
+        };
+      }
+
+      try {
+        await fs.access(fileInfo.file_path);
+      } catch (e) {
+        logger.error('PDF文件不存在或无权访问', {
+          file_path: fileInfo.file_path,
+          original_name: fileInfo.original_name
+        });
+        return null;
+      }
+
+      const stats = await fs.stat(fileInfo.file_path);
+      if (stats.size > MAX_PDF_BASE64_BYTES) {
+        logger.warn('PDF文件过大，无法 base64 编码发送', {
+          file_path: fileInfo.file_path,
+          size: stats.size,
+          limit: MAX_PDF_BASE64_BYTES
+        });
+        return null;
+      }
+
+      const fileBuffer = await fs.readFile(fileInfo.file_path);
+      const base64Data = fileBuffer.toString('base64');
+      const mimeType = fileInfo.mime_type || 'application/pdf';
+      const filename = fileInfo.original_name || 'document.pdf';
+
+      logger.info('PDF文件base64编码完成', {
+        filename,
+        rawSize: stats.size,
+        base64Size: base64Data.length,
+        mimeType,
+        cached: !!pdfCache
+      });
+
+      const block = {
+        type: 'file',
+        file: {
+          filename: filename,
+          file_data: `data:${mimeType};base64,${base64Data}`
+        }
+      };
+
+      // 写入缓存
+      if (pdfCache) {
+        pdfCache.set(fileInfo.file_path, block);
+      }
+
+      return block;
+    } catch (error) {
+      logger.error('构建PDF content块失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 处理消息为 OpenRouter 格式（URL 方式 + file-parser 插件）
+   * 不需要 pdfCache（OpenRouter 不读本地文件）
    */
   static processMessagesForOpenRouter(messages, model) {
     return messages.map(msg => {
-      // PDF文件
       if (msg.file && msg.file.mime_type === 'application/pdf') {
         logger.info('处理PDF消息为OpenRouter格式', { role: msg.role });
+
+        // 注意：v3.0 后 msg.content 可能已经被 MessageService 追加了文本引用
+        // 这里需要把 content 完整保留
         return {
           role: msg.role,
           content: [
             { type: 'text', text: msg.content },
-            { type: 'file', file: { filename: 'document.pdf', file_data: msg.file.url } }
+            { type: 'file', file: { filename: msg.file.original_name || 'document.pdf', file_data: msg.file.url } }
           ]
         };
       }
 
-      // 收集所有图片URL（兼容单图和多图）
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -132,7 +205,6 @@ class AIService {
         imageUrls.push(msg.image_url);
       }
 
-      // 图片消息
       if (imageUrls.length > 0 && model.image_upload_enabled) {
         const contentBlocks = [{ type: 'text', text: msg.content }];
         const imageBlocks = AIService._buildImageContentBlocks(imageUrls, 'openrouter');
@@ -145,17 +217,19 @@ class AIService {
         return { role: msg.role, content: contentBlocks };
       }
 
-      // 普通文本消息
       return { role: msg.role, content: msg.content };
     });
   }
 
   /**
-   * 处理消息为标准格式（非OpenRouter）- 支持多图
+   * 处理消息为标准格式（非OpenRouter）- v3.1: 支持 PDF 缓存
    */
-  static processMessagesStandard(messages, model) {
-    return messages.map(msg => {
-      // 收集所有图片URL
+  static async processMessagesStandard(messages, model) {
+    // v3.1: 单请求内 base64 缓存
+    const pdfCache = new Map();
+    const result = [];
+
+    for (const msg of messages) {
       const imageUrls = [];
       if (msg.image_urls && Array.isArray(msg.image_urls)) {
         imageUrls.push(...msg.image_urls);
@@ -163,27 +237,75 @@ class AIService {
         imageUrls.push(msg.image_url);
       }
 
-      // 图片消息
-      if (imageUrls.length > 0 && model.image_upload_enabled) {
+      const isPDF = msg.file && (
+        msg.file.mime_type === 'application/pdf' ||
+        (msg.file.original_name && msg.file.original_name.toLowerCase().endsWith('.pdf'))
+      );
+
+      // 场景一：仅有图片（无 PDF）
+      if (imageUrls.length > 0 && !isPDF && model.image_upload_enabled) {
         const contentBlocks = [{ type: 'text', text: msg.content }];
         const imageBlocks = AIService._buildImageContentBlocks(imageUrls, model.provider);
         contentBlocks.push(...imageBlocks);
 
-        logger.info('处理多图消息为标准格式', {
-          role: msg.role, imageCount: imageUrls.length, provider: model.provider
+        result.push({ role: msg.role, content: contentBlocks });
+        continue;
+      }
+
+      // 场景二：有 PDF
+      if (isPDF && model.document_upload_enabled) {
+        const pdfBlock = await AIService._buildPDFContentBlock(msg.file, pdfCache);
+
+        if (pdfBlock) {
+          const contentBlocks = [{ type: 'text', text: msg.content }];
+
+          if (imageUrls.length > 0 && model.image_upload_enabled) {
+            const imageBlocks = AIService._buildImageContentBlocks(imageUrls, model.provider);
+            contentBlocks.push(...imageBlocks);
+          }
+
+          contentBlocks.push(pdfBlock);
+
+          result.push({ role: msg.role, content: contentBlocks });
+          continue;
+        } else {
+          logger.warn('PDF base64 编码失败，告知模型文件无法处理', {
+            file: msg.file.original_name
+          });
+          result.push({
+            role: msg.role,
+            content: `${msg.content}\n\n[系统提示：用户上传了文件 "${msg.file.original_name || '未知文件名'}"，但文件读取失败。请提示用户重新上传。]`
+          });
+          continue;
+        }
+      }
+
+      // 场景三：其他类型的文件
+      if (msg.file && !isPDF) {
+        logger.warn('遇到非图片非PDF的文件，作为文本附件处理', {
+          mime_type: msg.file.mime_type,
+          provider: model.provider
         });
-
-        return { role: msg.role, content: contentBlocks };
+        result.push({
+          role: msg.role,
+          content: `${msg.content}\n\n[附件: ${msg.file.original_name || msg.file.url}]`
+        });
+        continue;
       }
 
-      // PDF文件在非OpenRouter下作为文本附件
-      if (msg.file) {
-        logger.warn('非OpenRouter端点不支持PDF直接处理', { provider: model.provider });
-        return { role: msg.role, content: `${msg.content}\n\n[附件: ${msg.file.url}]` };
-      }
+      // 场景四：纯文本消息
+      result.push(msg);
+    }
 
-      return msg;
-    });
+    // 记录缓存命中情况
+    if (pdfCache.size > 0) {
+      logger.info('单请求 PDF 缓存统计', {
+        uniquePdfCount: pdfCache.size,
+        cacheKeys: Array.from(pdfCache.keys()).map(k => path.basename(k))
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -213,7 +335,7 @@ class AIService {
       const finalTemperature = options.temperature !== undefined
         ? parseFloat(options.temperature) : (requestConfig.temperature || 0.7);
 
-      const processedMessages = AIService.processMessagesStandard(messages, model);
+      const processedMessages = await AIService.processMessagesStandard(messages, model);
 
       const requestData = {
         messages: processedMessages,
@@ -240,13 +362,10 @@ class AIService {
   }
 
   /**
-   * 保存调试响应文件（限制数量防止磁盘满）
-   * 
-   * @param {Object} responseData - API响应数据
+   * 保存调试响应文件
    */
   static async _saveDebugResponse(responseData) {
     try {
-      // 使用 config 中的日志目录，兼容 Docker 和 PM2
       const debugDir = path.join(config.logging.dirname, 'debug');
       await fs.mkdir(debugDir, { recursive: true });
 
@@ -254,7 +373,6 @@ class AIService {
       await fs.writeFile(debugFile, JSON.stringify(responseData, null, 2));
       logger.info('调试响应已保存', { file: debugFile });
 
-      // 清理旧文件，保留最新的 MAX_DEBUG_FILES 个
       try {
         const files = await fs.readdir(debugDir);
         const jsonFiles = files
@@ -277,7 +395,7 @@ class AIService {
   }
 
   /**
-   * 调用模型API - 支持会话级 temperature 和图片生成、PDF
+   * 调用模型API
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -317,7 +435,7 @@ class AIService {
           logger.info('为PDF添加OpenRouter插件配置');
         }
       } else {
-        processedMessages = AIService.processMessagesStandard(messages, model);
+        processedMessages = await AIService.processMessagesStandard(messages, model);
       }
 
       const requestData = {
@@ -332,7 +450,6 @@ class AIService {
 
       if (plugins) requestData.plugins = plugins;
 
-      // 使用 config 中的域名，避免硬编码
       const siteDomain = config.app.domain || 'ai.xingyuncl.com';
       const siteName = config.app.name || 'AI Platform';
 
@@ -351,7 +468,6 @@ class AIService {
 
       const response = await axios.post(endpoint, requestData, { headers, timeout: 120000 });
 
-      // 调试响应保存（仅图片生成或PDF场景，使用 config 路径+限制文件数量）
       if (model.image_generation_enabled || messages.some(m => m.file)) {
         await AIService._saveDebugResponse(response.data);
       }
@@ -365,7 +481,7 @@ class AIService {
   }
 
   /**
-   * 格式化响应 - 支持图片生成（OpenRouter / Gemini 格式）
+   * 格式化响应
    */
   static async formatResponse(response, model, options = {}) {
     try {
@@ -408,7 +524,6 @@ class AIService {
         }
       }
 
-      // 标准响应处理
       let content = '';
       let finish_reason = null;
 

@@ -2,11 +2,22 @@
  * 消息服务 - 处理消息发送的核心业务逻辑
  * 负责消息验证、积分管理、AI上下文构建等
  * 
- * v2.0 变更：
- *   - 新增 processFileAttachments(fileIds, userId, aiModel) 多文件处理方法
- *   - buildAIContext: currentFileInfo -> currentFileInfos 支持多图
- *   - 历史消息文件处理：使用 getAllFileIds() + findByIds() 支持多文件
- *   - 保留 processFileAttachment 单文件方法（向后兼容）
+ * v2.0：processFileAttachments 多文件处理 + buildAIContext 多图支持
+ * v2.1：PDF 文件附加 file_path 和 mime_type 给 AI 服务层做 base64 编码
+ * v3.0：实现"PDF 最后一次出现保留"算法（首版有缺陷，见下方 v3.1）
+ * 
+ * v3.1 变更（2026-05-18 算法修正）：
+ *   核心问题：v3.0 算法只看消息位置，导致"第 1 轮上传，第 2/3 轮不传"场景下，
+ *            PDF 在第 2/3 轮仍被完整加载（因为它在第 1 轮是"最后一次出现"）。
+ *   
+ *   正确算法（业界标准 - ChatGPT/Claude 实际做法）：
+ *   - 优先级 1：用户"本轮"显式新上传的 PDF → 完整加载
+ *   - 优先级 2：本轮没传新 PDF 时，找历史中"最近一次"带 PDF 的消息 → 完整加载
+ *   - 其余所有历史 PDF → 文本引用
+ *   
+ *   附加修复：
+ *   - 消除 recentMessages 与 currentContent 的重复处理
+ *     （刚创建的 user 消息已在 recentMessages 中，不应再作为"当前消息"处理）
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -23,14 +34,6 @@ const logger = require('../../utils/logger');
 class MessageService {
   /**
    * 验证消息发送前的所有条件
-   * @param {Object} params - 验证参数
-   * @param {string} params.content - 消息内容
-   * @param {Object} params.conversation - 会话对象
-   * @param {Object} params.aiModel - AI模型配置
-   * @param {Object} params.user - 用户对象
-   * @param {string} params.fileId - 文件ID（用于兼容性验证）
-   * @param {number} params.requiredCredits - 所需积分
-   * @returns {Object} { estimatedTokens }
    */
   static async validateMessageSending(params) {
     const { content, conversation, aiModel, user, fileId, requiredCredits } = params;
@@ -60,11 +63,7 @@ class MessageService {
   }
 
   /**
-   * 处理单文件附件（向后兼容方法）
-   * @param {string} fileId - 文件ID
-   * @param {number} userId - 用户ID
-   * @param {Object} aiModel - AI模型配置
-   * @returns {Object} { fileInfo, documentContent }
+   * 处理单文件附件（向后兼容）
    */
   static async processFileAttachment(fileId, userId, aiModel) {
     if (!fileId) {
@@ -96,27 +95,18 @@ class MessageService {
   }
 
   /**
-   * v2.0 新增：处理多文件附件
-   * 批量验证文件权限和类型，返回文件信息数组
-   * 
-   * @param {string[]} fileIds - 文件ID数组
-   * @param {number} userId - 用户ID
-   * @param {Object} aiModel - AI模型配置
-   * @returns {Object} { fileInfos: File[] }
+   * 处理多文件附件
    */
   static async processFileAttachments(fileIds, userId, aiModel) {
-    // 空数组直接返回
     if (!fileIds || fileIds.length === 0) {
       return { fileInfos: [] };
     }
 
-    // 批量检查文件所有权
     const ownershipOk = await File.checkOwnershipBatch(fileIds, userId);
     if (!ownershipOk) {
       throw new Error('无权使用部分文件，请确认文件归属');
     }
 
-    // 批量获取文件信息
     const fileInfos = await File.findByIds(fileIds);
 
     if (fileInfos.length !== fileIds.length) {
@@ -126,7 +116,6 @@ class MessageService {
       throw new Error('部分文件不存在，请重新上传');
     }
 
-    // 检查每个文件的类型是否被当前模型支持
     for (const fileInfo of fileInfos) {
       const isImage = fileInfo.mime_type && fileInfo.mime_type.startsWith('image/');
       const isDocument = !isImage;
@@ -149,11 +138,7 @@ class MessageService {
     return { fileInfos };
   }
 
-  /**
-   * 判断文件是否为PDF
-   * @param {Object} fileInfo - 文件信息对象
-   * @returns {boolean}
-   */
+  /** 判断文件是否为PDF */
   static isPDFFile(fileInfo) {
     if (!fileInfo) return false;
     if (fileInfo.mime_type === 'application/pdf') return true;
@@ -161,39 +146,130 @@ class MessageService {
     return false;
   }
 
-  /**
-   * 判断文件是否为图片
-   * @param {Object} fileInfo - 文件信息对象
-   * @returns {boolean}
-   */
+  /** 判断文件是否为图片 */
   static isImageFile(fileInfo) {
     if (!fileInfo) return false;
     return fileInfo.mime_type && fileInfo.mime_type.startsWith('image/');
   }
 
   /**
-   * 构建AI请求的消息上下文 - v2.0 增强版
-   * 支持多图：currentFileInfos 数组，每个图片生成一个 image_url 项
+   * v3.1 重写：构建消息文件附件计划
    * 
-   * @param {Object} params - 上下文参数
-   * @param {Object} params.conversation - 会话对象
-   * @param {Message[]} params.recentMessages - 最近的历史消息
-   * @param {string} params.systemPromptId - 系统提示词ID
-   * @param {string} params.moduleCombinationId - 模块组合ID
-   * @param {number} params.userId - 用户ID
-   * @param {Object} params.aiModel - AI模型配置
-   * @param {string} params.currentContent - 当前消息文本
-   * @param {File[]} [params.currentFileInfos] - v2.0: 当前消息的多文件信息数组
-   * @param {File} [params.currentFileInfo] - 向后兼容: 单文件信息（如果没传currentFileInfos则使用此字段）
-   * @returns {Object[]} AI消息数组
+   * 算法（业界标准做法）：
+   *   1. 从后往前遍历所有消息
+   *   2. 找到第一个（最近的）含 PDF 的 user 消息 → 标记其 PDF 为"完整加载"
+   *   3. 该消息之前的所有 PDF → 标记为"文本引用"
+   *   4. 该消息中的其他 PDF（如果一条消息有多个 PDF）也是"完整加载"
+   *   5. 图片：每条消息中的图片始终保留（图片本身较小，模型每次都需要看到）
+   * 
+   * 直观理解：
+   *   - 用户最近一次上传 PDF 的那一轮 = 最相关的文档讨论
+   *   - 之前轮次的 PDF，依靠 AI 在那些轮次中的回复（已总结）来回忆
+   *   - 模型记得"曾经看过哪些文件"，且能从历史回复中找到相关信息
+   * 
+   * @param {Array} allMessages - 完整消息列表（按时间顺序）
+   *                              每项格式：{ role, content, fileInfos: File[] }
+   * @returns {Map} 消息索引 -> { pdfFullLoad: File[], pdfTextRef: File[], images: File[] }
+   */
+  static _buildFileAttachmentPlan(allMessages) {
+    const plan = new Map();
+
+    // 步骤 1：从后往前找"最近一条含 PDF 的 user 消息"的索引
+    let latestPdfMsgIndex = -1;
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const msg = allMessages[i];
+      if (msg.role !== 'user') continue;
+      const hasPdf = (msg.fileInfos || []).some(f => this.isPDFFile(f));
+      if (hasPdf) {
+        latestPdfMsgIndex = i;
+        break;
+      }
+    }
+
+    // 步骤 2：构建每条消息的附件计划
+    for (let i = 0; i < allMessages.length; i++) {
+      const msg = allMessages[i];
+      const fileInfos = msg.fileInfos || [];
+
+      const pdfFullLoad = [];
+      const pdfTextRef = [];
+      const images = [];
+
+      for (const file of fileInfos) {
+        if (this.isImageFile(file)) {
+          // 图片始终保留（不参与 PDF 优化）
+          images.push(file);
+        } else if (this.isPDFFile(file)) {
+          if (i === latestPdfMsgIndex) {
+            // 这是"最近一条含 PDF 的 user 消息"，PDF 完整加载
+            pdfFullLoad.push(file);
+          } else {
+            // 其他位置的所有 PDF 都退化为文本引用
+            pdfTextRef.push(file);
+          }
+        }
+      }
+
+      plan.set(i, { pdfFullLoad, pdfTextRef, images });
+    }
+
+    logger.info('PDF附件计划构建', {
+      totalMessages: allMessages.length,
+      latestPdfMsgIndex,
+      strategy: 'latest-pdf-message-full-load'
+    });
+
+    return plan;
+  }
+
+  /**
+   * 根据附件计划构建消息的 file 字段
+   */
+  static _buildMessageAttachments(attachPlan) {
+    const imageUrls = attachPlan.images.map(img => img.url);
+
+    let primaryPdf = null;
+    if (attachPlan.pdfFullLoad.length > 0) {
+      const pdf = attachPlan.pdfFullLoad[0];
+      primaryPdf = {
+        url: pdf.url,
+        file_path: pdf.file_path,
+        mime_type: pdf.mime_type,
+        original_name: pdf.original_name
+      };
+
+      if (attachPlan.pdfFullLoad.length > 1) {
+        logger.warn('单条消息中有多个待完整加载 PDF，仅第一个完整加载', {
+          totalCount: attachPlan.pdfFullLoad.length,
+          loadedFile: pdf.original_name,
+          otherFiles: attachPlan.pdfFullLoad.slice(1).map(f => f.original_name)
+        });
+      }
+    }
+
+    const textPdfRefs = [
+      ...attachPlan.pdfTextRef,
+      ...attachPlan.pdfFullLoad.slice(1)
+    ].map(pdf => pdf.original_name || '未命名文件');
+
+    return { imageUrls, primaryPdf, textPdfRefs };
+  }
+
+  /**
+   * 构建AI请求的消息上下文 - v3.1 修复版
+   * 
+   * 关键修复：
+   *   1. 不再重复处理"当前消息"。Controller 调用前已经把 user 消息存入数据库，
+   *      它已经在 recentMessages 里。currentContent/currentFileInfos 仅作"健壮性兜底"。
+   *   2. 采用"最近一次含 PDF 的 user 消息完整加载"的正确算法。
    */
   static async buildAIContext(params) {
     const {
       conversation, recentMessages, systemPromptId,
       moduleCombinationId, userId, aiModel,
       currentContent,
-      currentFileInfos,   // v2.0: 多文件数组
-      currentFileInfo      // 向后兼容: 单文件
+      currentFileInfos,
+      currentFileInfo
     } = params;
 
     const aiMessages = [];
@@ -231,7 +307,6 @@ class MessageService {
         }
       } catch (error) {
         logger.error('获取模块组合内容失败', { moduleCombinationId, userId, error: error.message });
-        // 不中断对话
       }
     }
 
@@ -240,103 +315,142 @@ class MessageService {
       aiMessages.push({ role: 'system', content: systemPromptContent });
     }
 
-    // ---- 添加历史消息（v2.0: 支持多文件） ----
-    for (const msg of recentMessages) {
-      const aiMsg = msg.toAIFormat();
+    // ============================================================
+    // v3.1 核心：避免重复处理 + 正确的 PDF 算法
+    // ============================================================
 
-      // 获取消息关联的所有文件ID（兼容 file_id 和 file_ids）
-      const msgFileIds = msg.getAllFileIds();
+    // 检查 recentMessages 是否已经包含"当前消息"
+    // 判断依据：最后一条 user 消息的内容是否与 currentContent 相同
+    let needAppendCurrentMessage = !!currentContent;
 
-      if (msgFileIds.length > 0 && (aiModel.image_upload_enabled || aiModel.document_upload_enabled)) {
-        // 批量获取文件信息
-        const files = await File.findByIds(msgFileIds);
-
-        // 分类处理：图片和PDF
-        const imageUrls = [];
-        let pdfFile = null;
-
-        for (const file of files) {
-          if (this.isImageFile(file)) {
-            imageUrls.push(file.url);
-          } else if (this.isPDFFile(file)) {
-            pdfFile = file;
-          }
-        }
-
-        // 设置图片URL（多图场景用数组，单图兼容用单值）
-        if (imageUrls.length > 0) {
-          if (imageUrls.length === 1) {
-            aiMsg.image_url = imageUrls[0];
-          } else {
-            aiMsg.image_urls = imageUrls;   // v2.0: 多图URL数组
-          }
-        }
-
-        // 设置PDF文件
-        if (pdfFile) {
-          aiMsg.file = { url: pdfFile.url, mime_type: pdfFile.mime_type };
-        }
-
-        logger.info('处理历史消息中的文件', {
-          messageId: msg.id,
-          fileCount: files.length,
-          imageCount: imageUrls.length,
-          hasPDF: !!pdfFile
+    if (needAppendCurrentMessage && recentMessages.length > 0) {
+      const lastMsg = recentMessages[recentMessages.length - 1];
+      if (lastMsg.role === 'user' && lastMsg.content === currentContent) {
+        needAppendCurrentMessage = false;
+        logger.info('检测到 currentContent 已存在于 recentMessages 末尾，跳过重复添加', {
+          lastMsgId: lastMsg.id
         });
+      }
+    }
+
+    // 批量收集所有需要处理的消息引用的文件 ID
+    const allFileIds = new Set();
+    for (const msg of recentMessages) {
+      const ids = msg.getAllFileIds();
+      ids.forEach(id => allFileIds.add(id));
+    }
+
+    // 当前消息的文件（如果需要附加）
+    const currentFileInfosToProcess = currentFileInfos || (currentFileInfo ? [currentFileInfo] : []);
+
+    // 批量查询所有文件信息
+    const allFileIdsArr = Array.from(allFileIds);
+    const fileInfoMap = new Map();
+
+    if (allFileIdsArr.length > 0 && (aiModel.image_upload_enabled || aiModel.document_upload_enabled)) {
+      const allFiles = await File.findByIds(allFileIdsArr);
+      for (const f of allFiles) {
+        fileInfoMap.set(f.id, f);
+      }
+    }
+
+    // 构建"完整消息列表"用于附件计划
+    const allMessagesForPlan = recentMessages.map(msg => {
+      const ids = msg.getAllFileIds();
+      const fileInfos = ids
+        .map(id => fileInfoMap.get(id))
+        .filter(Boolean);
+
+      return { role: msg.role, content: msg.content, fileInfos, _msgObj: msg };
+    });
+
+    // 仅当 recentMessages 中不包含当前消息时，才追加（容错兜底）
+    if (needAppendCurrentMessage) {
+      logger.warn('当前消息未在 recentMessages 中，作为兜底追加', {
+        contentPreview: currentContent.substring(0, 30),
+        currentFileCount: currentFileInfosToProcess.length
+      });
+      allMessagesForPlan.push({
+        role: 'user',
+        content: currentContent,
+        fileInfos: currentFileInfosToProcess,
+        _isCurrent: true
+      });
+    }
+
+    // 运行"最近一次含 PDF 的 user 消息完整加载"算法
+    const attachmentPlan = this._buildFileAttachmentPlan(allMessagesForPlan);
+
+    // 根据计划构建 AI 消息
+    let totalPdfFullLoad = 0;
+    let totalPdfTextRef = 0;
+    let totalImages = 0;
+
+    for (let i = 0; i < allMessagesForPlan.length; i++) {
+      const planMsg = allMessagesForPlan[i];
+      const isCurrent = !!planMsg._isCurrent;
+
+      let aiMsg;
+      if (isCurrent) {
+        aiMsg = { role: planMsg.role, content: planMsg.content };
+      } else {
+        aiMsg = planMsg._msgObj.toAIFormat();
+      }
+
+      const attachPlan = attachmentPlan.get(i) || { pdfFullLoad: [], pdfTextRef: [], images: [] };
+      const { imageUrls, primaryPdf, textPdfRefs } = this._buildMessageAttachments(attachPlan);
+
+      // 应用图片
+      if (imageUrls.length > 0) {
+        if (imageUrls.length === 1) {
+          aiMsg.image_url = imageUrls[0];
+        } else {
+          aiMsg.image_urls = imageUrls;
+        }
+        totalImages += imageUrls.length;
+      }
+
+      // 应用 PDF 完整加载
+      if (primaryPdf) {
+        aiMsg.file = primaryPdf;
+        totalPdfFullLoad++;
+      }
+
+      // 应用 PDF 文本引用
+      if (textPdfRefs.length > 0) {
+        const refsText = textPdfRefs.map(name => `"${name}"`).join('、');
+        const refHint = `\n\n[此前对话中已上传过的文件: ${refsText}（请参考上文已提及的内容）]`;
+
+        if (typeof aiMsg.content === 'string') {
+          aiMsg.content = aiMsg.content + refHint;
+        } else if (Array.isArray(aiMsg.content)) {
+          const firstText = aiMsg.content.find(b => b.type === 'text');
+          if (firstText) {
+            firstText.text = firstText.text + refHint;
+          } else {
+            aiMsg.content.unshift({ type: 'text', text: refHint.trim() });
+          }
+        }
+        totalPdfTextRef += textPdfRefs.length;
       }
 
       aiMessages.push(aiMsg);
     }
 
-    // ---- 添加当前消息（v2.0: 支持多文件） ----
-    if (currentContent) {
-      const currentMsg = { role: 'user', content: currentContent };
-
-      // v2.0: 优先使用 currentFileInfos 数组
-      const fileInfosToProcess = currentFileInfos || (currentFileInfo ? [currentFileInfo] : []);
-
-      if (fileInfosToProcess.length > 0) {
-        const imageUrls = [];
-        let pdfFile = null;
-
-        for (const fi of fileInfosToProcess) {
-          if (this.isImageFile(fi)) {
-            imageUrls.push(fi.url);
-          } else if (this.isPDFFile(fi)) {
-            pdfFile = fi;
-          }
-        }
-
-        if (imageUrls.length > 0) {
-          if (imageUrls.length === 1) {
-            currentMsg.image_url = imageUrls[0];
-          } else {
-            currentMsg.image_urls = imageUrls;
-          }
-        }
-
-        if (pdfFile) {
-          currentMsg.file = { url: pdfFile.url, mime_type: pdfFile.mime_type };
-        }
-
-        logger.info('处理当前消息中的文件', {
-          fileCount: fileInfosToProcess.length,
-          imageCount: imageUrls.length,
-          hasPDF: !!pdfFile,
-          imageUrls: imageUrls
-        });
-      }
-
-      aiMessages.push(currentMsg);
-    }
+    logger.info('PDF多轮对话优化：附件分配完成', {
+      totalMessages: allMessagesForPlan.length,
+      pdfFullLoadCount: totalPdfFullLoad,
+      pdfTextRefCount: totalPdfTextRef,
+      imageCount: totalImages,
+      strategy: 'latest-pdf-message-full-load',
+      appendedCurrent: needAppendCurrentMessage
+    });
 
     return aiMessages;
   }
 
   /**
    * 处理消息发送后的统计更新
-   * @param {Object} params - 统计参数
-   * @returns {number} 总Token数
    */
   static async updateStatistics(params) {
     const { conversation, userMessage, assistantTokens, userId, user } = params;
@@ -358,11 +472,7 @@ class MessageService {
   }
 
   /**
-   * 自动生成会话标题（首条消息时使用消息内容截断作为标题）
-   * @param {Object} conversation - 会话对象
-   * @param {string} content - 消息内容
-   * @param {number} messageCount - 当前消息数量
-   * @returns {string|null} 生成的标题，或null
+   * 自动生成会话标题
    */
   static async autoGenerateTitle(conversation, content, messageCount) {
     if (conversation.title === 'New Chat' && messageCount === 0) {
@@ -375,10 +485,6 @@ class MessageService {
 
   /**
    * 处理积分退款
-   * @param {Object} user - 用户对象
-   * @param {number} credits - 退款积分数量
-   * @param {string} reason - 退款原因
-   * @returns {boolean} 是否成功
    */
   static async refundCredits(user, credits, reason) {
     try {
@@ -393,10 +499,6 @@ class MessageService {
 
   /**
    * 准备实际发送的内容
-   * PDF和图片都不需要附加URL到content中，通过专门的字段处理
-   * @param {string} content - 原始消息内容
-   * @param {Object} fileInfo - 文件信息（可选）
-   * @returns {string} 处理后的内容
    */
   static buildActualContent(content, fileInfo) {
     return content.trim();

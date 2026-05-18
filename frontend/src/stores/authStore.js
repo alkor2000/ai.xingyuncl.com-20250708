@@ -7,9 +7,12 @@
  * 3. 用户信息/权限/积分查询
  * 4. Token自动刷新和持久化
  * 
- * 修复：
+ * 修复记录：
  * - changePassword 增加 oldPassword 参数，配合后端原密码验证
  * - 提取 _handleLoginSuccess 消除三个登录方法的重复代码
+ * - 2026-05-18: 修复 "require is not defined" 错误
+ *   浏览器 ESM 环境没有 require()，改用顶部静态 import
+ *   chatStore 没有反向引用 authStore，无循环依赖风险
  */
 
 import { create } from 'zustand'
@@ -17,6 +20,8 @@ import { persist } from 'zustand/middleware'
 import apiClient from '../utils/api'
 import useSystemConfigStore from './systemConfigStore'
 import tokenRefreshService from '../services/tokenRefreshService'
+// 修复：使用 ESM 静态 import 替代 require('./chatStore')
+import useChatStore from './chatStore'
 
 /**
  * 登录成功后的统一处理逻辑（内部函数）
@@ -61,18 +66,18 @@ const _handleLoginSuccess = (set, get, responseData, loginMethod = '登录') => 
   }
 
   // 清理之前用户的聊天数据，防止数据串用户
+  // 修复：改用顶部 import 的 useChatStore，不再使用 require
   try {
-    const { default: useChatStore } = require('./chatStore')
-    if (useChatStore) {
+    if (useChatStore && typeof useChatStore.getState === 'function') {
       const chatStore = useChatStore.getState()
-      if (chatStore && chatStore.reset) {
+      if (chatStore && typeof chatStore.reset === 'function') {
         console.log('🧹 清除之前的聊天数据...')
         chatStore.reset()
       }
     }
   } catch (e) {
-    // chatStore 可能还没加载，不影响登录流程
-    console.warn('清理聊天数据跳过:', e.message)
+    // 异常时不阻塞登录流程
+    console.warn('清理聊天数据失败:', e.message)
   }
 
   // 启动Token自动刷新
@@ -223,17 +228,17 @@ const useAuthStore = create(
           useSystemConfigStore.getState().setUserSiteConfig(null)
 
           // 清除聊天数据
+          // 修复：改用顶部 import 的 useChatStore，不再使用 require
           try {
-            const { default: useChatStore } = require('./chatStore')
-            if (useChatStore) {
+            if (useChatStore && typeof useChatStore.getState === 'function') {
               const chatStore = useChatStore.getState()
-              if (chatStore && chatStore.reset) {
+              if (chatStore && typeof chatStore.reset === 'function') {
                 console.log('🧹 清除聊天数据...')
                 chatStore.reset()
               }
             }
           } catch (e) {
-            console.warn('清理聊天数据跳过:', e.message)
+            console.warn('清理聊天数据失败:', e.message)
           }
 
           console.log('🚪 用户已登出')

@@ -5,10 +5,15 @@
  * 1. 处理文档上传（PDF/Word/TXT/Excel/PPT/RTF 等12种格式）
  * 2. 磁盘存储（避免内存溢出），50MB大小限制
  * 3. 文档内容提取（纯文本格式直接读取，其他格式返回占位符）
+ * 4. 大文件预警（PDF > 25MB 时记录警告日志，提醒用户性能影响）
  * 
  * 存储路径：{uploadDir}/documents/{YYYY-MM}/doc_{timestamp}_{random}{ext}
  * 
- * 修复：中文文件名编码修复（latin1 -> utf8），与 uploadMiddleware.js 保持一致
+ * v2.0 变更（2026-05-18 大文件预警）：
+ *   - 增加 PDF_SIZE_WARN_THRESHOLD（25MB）软阈值，超过时记录警告
+ *   - 50MB 硬限制不变（Multer 层）
+ *   - 30MB base64 编码硬限制由 AI 服务层处理
+ *   - 提供 getSizeWarning() 工具函数给上层判断是否需要给前端返回警告
  */
 
 const multer = require('multer');
@@ -19,8 +24,14 @@ const logger = require('../utils/logger');
 const config = require('../config');
 
 /**
- * 确保上传目录存在，不存在则递归创建
- * @param {string} dirPath - 目录路径
+ * 文件大小相关常量
+ */
+const MAX_FILE_SIZE = 50 * 1024 * 1024;           // 硬限制：50MB
+const PDF_SIZE_WARN_THRESHOLD = 25 * 1024 * 1024;  // 软警告：25MB（接近 30MB base64 限制）
+const PDF_SIZE_HARD_LIMIT = 30 * 1024 * 1024;      // base64 编码硬限制：30MB
+
+/**
+ * 确保上传目录存在
  */
 const ensureUploadDir = async (dirPath) => {
   try {
@@ -32,9 +43,7 @@ const ensureUploadDir = async (dirPath) => {
 };
 
 /**
- * 生成唯一文件名：doc_ + 时间戳 + 随机8字节hex + 扩展名
- * @param {string} originalName - 原始文件名
- * @returns {string} 唯一文件名
+ * 生成唯一文件名
  */
 const generateFileName = (originalName) => {
   const timestamp = Date.now();
@@ -45,26 +54,18 @@ const generateFileName = (originalName) => {
 
 /**
  * 修复中文文件名编码问题
- * Multer 默认使用 latin1 编码读取文件名，中文会乱码
- * 需要从 latin1 转换回 utf8
- * 
- * @param {string} filename - 原始文件名（可能是 latin1 编码）
- * @returns {string} 修复后的 utf8 文件名
  */
 const fixFileName = (filename) => {
   if (!filename) return filename;
 
   try {
-    // 纯ASCII字符不需要转换
     if (/^[\x20-\x7F]*$/.test(filename)) {
       return filename;
     }
 
-    // 从 latin1 转换为 utf8
     const buffer = Buffer.from(filename, 'latin1');
     const decoded = buffer.toString('utf8');
 
-    // 验证解码结果是否有效
     if (decoded.includes('�')) {
       logger.warn('文档文件名解码失败，使用原始文件名', { original: filename });
       return filename;
@@ -79,7 +80,6 @@ const fixFileName = (filename) => {
 
 /**
  * Multer 磁盘存储配置
- * 文档按年月分目录：documents/YYYY-MM/
  */
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -96,7 +96,6 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, cb) => {
-    // 修复中文文件名编码问题
     const fixedName = fixFileName(file.originalname);
     file.originalname = fixedName;
     const fileName = generateFileName(fixedName);
@@ -106,10 +105,8 @@ const storage = multer.diskStorage({
 
 /**
  * 文档文件过滤器
- * 支持 MIME 类型白名单 + 扩展名备用检查
  */
 const fileFilter = (req, file, cb) => {
-  // 支持的文档 MIME 类型
   const allowedMimes = [
     'application/pdf',
     'application/msword',
@@ -126,7 +123,6 @@ const fileFilter = (req, file, cb) => {
     'text/rtf'
   ];
 
-  // 备用扩展名白名单
   const allowedExtensions = [
     '.pdf', '.doc', '.docx', '.txt', '.csv',
     '.html', '.htm', '.md', '.markdown',
@@ -144,19 +140,53 @@ const fileFilter = (req, file, cb) => {
 
 /**
  * 文档上传 Multer 实例
- * 单文件上传，最大50MB
  */
 const uploadDocument = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024,
+    fileSize: MAX_FILE_SIZE,
     files: 1
   }
 }).single('document');
 
 /**
- * 文档上传中间件 - 统一处理 Multer 错误
+ * v2.0：获取文件大小警告信息
+ * 
+ * @param {Object} file - Multer 上传的文件对象
+ * @returns {Object|null} 警告信息对象，无警告时返回 null
+ */
+const getSizeWarning = (file) => {
+  if (!file) return null;
+
+  const isPDF = file.mimetype === 'application/pdf' ||
+                (file.originalname && file.originalname.toLowerCase().endsWith('.pdf'));
+
+  if (!isPDF) return null;
+
+  if (file.size > PDF_SIZE_HARD_LIMIT) {
+    return {
+      level: 'error',
+      message: `PDF 文件 ${(file.size / 1024 / 1024).toFixed(1)}MB 超过 ${PDF_SIZE_HARD_LIMIT / 1024 / 1024}MB 限制，可能无法被AI模型处理`,
+      sizeMB: (file.size / 1024 / 1024).toFixed(1),
+      limitMB: PDF_SIZE_HARD_LIMIT / 1024 / 1024
+    };
+  }
+
+  if (file.size > PDF_SIZE_WARN_THRESHOLD) {
+    return {
+      level: 'warning',
+      message: `PDF 文件 ${(file.size / 1024 / 1024).toFixed(1)}MB 较大，可能影响 AI 响应速度`,
+      sizeMB: (file.size / 1024 / 1024).toFixed(1),
+      thresholdMB: PDF_SIZE_WARN_THRESHOLD / 1024 / 1024
+    };
+  }
+
+  return null;
+};
+
+/**
+ * 文档上传中间件 - 统一处理 Multer 错误，并附加大文件警告
  */
 const handleDocumentUpload = (req, res, next) => {
   uploadDocument(req, res, (err) => {
@@ -166,7 +196,7 @@ const handleDocumentUpload = (req, res, next) => {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
           success: false,
-          message: '文档大小不能超过50MB'
+          message: `文档大小不能超过 ${MAX_FILE_SIZE / 1024 / 1024}MB`
         });
       }
 
@@ -182,23 +212,29 @@ const handleDocumentUpload = (req, res, next) => {
       });
     }
 
+    // v2.0: 大文件预警
+    if (req.file) {
+      const warning = getSizeWarning(req.file);
+      if (warning) {
+        logger.warn('大文件上传预警', {
+          filename: req.file.originalname,
+          size: req.file.size,
+          warning
+        });
+        // 把警告挂到 req 对象，供 Controller 选择性返回给前端
+        req.fileSizeWarning = warning;
+      }
+    }
+
     next();
   });
 };
 
 /**
  * 文档内容提取器
- * 
- * 目前支持纯文本格式的直接读取，内容限制10000字符
- * PDF/Word/Excel 等格式返回占位符（这些格式通过 URL 发送给 AI 处理）
- * 
- * @param {string} filePath - 文件磁盘路径
- * @param {string} mimeType - MIME 类型
- * @returns {string|null} 提取的文本内容
  */
 const extractDocumentContent = async (filePath, mimeType) => {
   try {
-    // 纯文本格式直接读取
     if (mimeType === 'text/plain' ||
         mimeType === 'text/csv' ||
         mimeType === 'text/html' ||
@@ -207,8 +243,6 @@ const extractDocumentContent = async (filePath, mimeType) => {
       return content.substring(0, 10000);
     }
 
-    // 其他格式返回文件信息占位符
-    // PDF 等通过 URL 直接发送给 OpenRouter 的 file-parser 插件处理
     return `[文档文件: ${path.basename(filePath)}]`;
   } catch (error) {
     logger.error('提取文档内容失败', { filePath, error: error.message });
@@ -221,25 +255,14 @@ const extractDocumentContent = async (filePath, mimeType) => {
 // ============================================================
 
 module.exports = {
-  /** 文档上传中间件（单文件，最大50MB） */
   uploadDocument: handleDocumentUpload,
 
-  /**
-   * 获取文档的公开访问 URL
-   * 将磁盘绝对路径转换为相对 URL 路径
-   * @param {string} filePath - 文件的绝对磁盘路径
-   * @returns {string} 相对 URL 路径
-   */
   getDocumentUrl: (filePath) => {
     const storageDir = path.join(path.dirname(config.upload.uploadDir), 'storage');
     const relativePath = path.relative(storageDir, filePath);
     return '/' + relativePath.split(path.sep).join('/');
   },
 
-  /**
-   * 删除上传的文档
-   * @param {string} filePath - 文件的绝对磁盘路径
-   */
   deleteDocument: async (filePath) => {
     try {
       await fs.unlink(filePath);
@@ -249,6 +272,13 @@ module.exports = {
     }
   },
 
-  /** 提取文档内容 */
-  extractContent: extractDocumentContent
+  extractContent: extractDocumentContent,
+
+  /** v2.0：导出大小警告工具函数 */
+  getSizeWarning,
+
+  /** 导出常量供其他模块使用 */
+  MAX_FILE_SIZE,
+  PDF_SIZE_WARN_THRESHOLD,
+  PDF_SIZE_HARD_LIMIT
 };
