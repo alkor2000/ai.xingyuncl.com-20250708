@@ -1,24 +1,21 @@
 /**
  * HTML画布面板组件
- * 
+ *
  * 功能：
  *   - 自动渲染对话中AI回复的HTML代码
  *   - 从消息内容中提取 ```html ... ``` 代码块
  *   - iframe沙箱安全渲染
- *   - 支持全屏预览和返回（醒目大按钮）
+ *   - 真全屏预览（浏览器原生Fullscreen API，隐藏所有浏览器UI）
  *   - 多个HTML代码块时可切换查看
  *   - 流式输出时等待代码块闭合后再渲染
- * 
- * v1.1 修复：
- *   - 去掉关闭按钮的Tooltip，避免面板关闭时布局重排导致抖动
- *   - 全屏按钮改为醒目的primary样式，放在工具栏最左侧
- *   - 去掉"HTML预览"标题文字，节省空间
- * 
- * v1.2 修复：
- *   - iframe加载完成后自动focus，让键盘事件直接作用于HTML内容
- *   - 全屏切换后也自动focus到iframe
- *   - 切换HTML块、刷新后也自动focus
- * 
+ *
+ * 全屏实现：
+ *   - 调用 element.requestFullscreen() 进入浏览器真全屏
+ *   - 监听 fullscreenchange 事件同步React state
+ *   - 支持ESC/F11/开发者工具等任意方式退出
+ *   - 全屏状态下右上角显示悬浮退出按钮
+ *   - API不支持时降级为CSS模拟全屏（position:fixed）
+ *
  * Props:
  *   - messages: 消息列表
  *   - isStreaming: 是否正在流式输出
@@ -49,18 +46,18 @@ const { Text } = Typography
 /**
  * 从消息内容中提取所有完整的HTML代码块
  * 只提取已闭合的 ```html ... ``` 代码块
- * 
+ *
  * @param {string} content - 消息内容文本
  * @returns {string[]} - 提取到的HTML代码数组
  */
 const extractHtmlBlocks = (content) => {
   if (!content) return []
-  
+
   const blocks = []
   // 匹配 ```html 或 ```HTML 开头，以 ``` 结束的代码块
   const regex = /```(?:html|HTML)\s*\n([\s\S]*?)```/g
   let match
-  
+
   while ((match = regex.exec(content)) !== null) {
     const htmlContent = match[1].trim()
     // 只保留有实际内容的HTML块（至少包含一个HTML标签）
@@ -68,26 +65,26 @@ const extractHtmlBlocks = (content) => {
       blocks.push(htmlContent)
     }
   }
-  
+
   return blocks
 }
 
 /**
  * 从所有消息中收集HTML代码块
  * 只从AI助手消息中提取
- * 
+ *
  * @param {Array} messages - 消息列表
  * @returns {Array<{html: string, messageId: string, index: number, messageIndex: number}>}
  */
 const collectHtmlFromMessages = (messages) => {
   if (!messages || messages.length === 0) return []
-  
+
   const allBlocks = []
-  
+
   messages.forEach((msg, msgIndex) => {
     // 只从AI助手的消息中提取HTML
     if (msg.role !== 'assistant') return
-    
+
     const blocks = extractHtmlBlocks(msg.content)
     blocks.forEach((html, blockIndex) => {
       allBlocks.push({
@@ -100,7 +97,7 @@ const collectHtmlFromMessages = (messages) => {
       })
     })
   })
-  
+
   return allBlocks
 }
 
@@ -114,12 +111,79 @@ const DEVICE_SIZES = {
 }
 
 // ================================================================
+// 浏览器原生Fullscreen API兼容性封装
+// 处理不同浏览器的前缀差异（webkit/moz/ms）
+// ================================================================
+
+/**
+ * 请求元素进入全屏
+ * @param {HTMLElement} element
+ * @returns {Promise<void>}
+ */
+const requestFullscreen = (element) => {
+  if (!element) return Promise.reject(new Error('元素不存在'))
+
+  if (element.requestFullscreen) {
+    return element.requestFullscreen()
+  } else if (element.webkitRequestFullscreen) {
+    return element.webkitRequestFullscreen()
+  } else if (element.mozRequestFullScreen) {
+    return element.mozRequestFullScreen()
+  } else if (element.msRequestFullscreen) {
+    return element.msRequestFullscreen()
+  }
+  return Promise.reject(new Error('Fullscreen API not supported'))
+}
+
+/**
+ * 退出全屏
+ * @returns {Promise<void>}
+ */
+const exitFullscreen = () => {
+  if (document.exitFullscreen) {
+    return document.exitFullscreen()
+  } else if (document.webkitExitFullscreen) {
+    return document.webkitExitFullscreen()
+  } else if (document.mozCancelFullScreen) {
+    return document.mozCancelFullScreen()
+  } else if (document.msExitFullscreen) {
+    return document.msExitFullscreen()
+  }
+  return Promise.reject(new Error('Fullscreen API not supported'))
+}
+
+/**
+ * 获取当前全屏元素（兼容多浏览器）
+ * @returns {Element|null}
+ */
+const getFullscreenElement = () => {
+  return document.fullscreenElement
+    || document.webkitFullscreenElement
+    || document.mozFullScreenElement
+    || document.msFullscreenElement
+    || null
+}
+
+/**
+ * 判断浏览器是否支持Fullscreen API
+ */
+const isFullscreenSupported = () => {
+  if (typeof document === 'undefined') return false
+  return Boolean(
+    document.fullscreenEnabled
+    || document.webkitFullscreenEnabled
+    || document.mozFullScreenEnabled
+    || document.msFullscreenEnabled
+  )
+}
+
+// ================================================================
 // 主组件
 // ================================================================
 const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const { t } = useTranslation()
-  
-  // 全屏状态
+
+  // 全屏状态（由fullscreenchange事件驱动更新，不直接由按钮控制）
   const [isFullscreen, setIsFullscreen] = useState(false)
   // 当前查看的HTML块索引（默认最新）
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -127,7 +191,9 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const [deviceMode, setDeviceMode] = useState('desktop')
   // iframe刷新key
   const [refreshKey, setRefreshKey] = useState(0)
-  
+
+  // 画布根容器ref（用于requestFullscreen的目标元素）
+  const panelRef = useRef(null)
   const iframeRef = useRef(null)
 
   // ================================================================
@@ -149,8 +215,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const currentHtml = currentBlock?.html || ''
 
   // ================================================================
-  // v1.2: iframe自动聚焦
-  // 让键盘事件直接作用于HTML内容（如游戏的方向键控制）
+  // iframe自动聚焦（让键盘事件直接作用于HTML内容）
   // ================================================================
 
   /**
@@ -162,9 +227,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
       try {
         const iframe = iframeRef.current
         if (iframe) {
-          // 先focus iframe元素本身
           iframe.focus()
-          // 再尝试focus iframe内部的body（需要same-origin）
           if (iframe.contentWindow) {
             iframe.contentWindow.focus()
           }
@@ -177,7 +240,6 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   /**
    * iframe加载完成后自动聚焦
-   * 通过onLoad事件触发
    */
   const handleIframeLoad = useCallback(() => {
     focusIframe()
@@ -202,24 +264,68 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   }, [currentIndex, refreshKey, visible, focusIframe, currentHtml])
 
   // ================================================================
+  // 浏览器原生全屏API：监听fullscreenchange事件
+  // 用户通过ESC/F11/调用exitFullscreen等任意方式退出时都能同步状态
+  // ================================================================
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const fullscreenEl = getFullscreenElement()
+      // 当前全屏元素是本组件的根容器时isFullscreen为true，否则为false
+      setIsFullscreen(fullscreenEl === panelRef.current)
+    }
+
+    // 兼容多浏览器前缀
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+    }
+  }, [])
+
+  // ================================================================
   // 操作处理
   // ================================================================
 
-  /** 切换全屏 */
-  const handleToggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev)
-  }, [])
-
-  /** ESC退出全屏 */
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false)
-      }
+  /**
+   * 切换全屏
+   * 调用浏览器原生Fullscreen API，让浏览器UI完全隐藏
+   * API不支持或调用失败时降级为CSS模拟全屏
+   */
+  const handleToggleFullscreen = useCallback(async () => {
+    // 检测API支持
+    if (!isFullscreenSupported()) {
+      // 降级：直接切换React state，由CSS .fullscreen 类模拟全屏
+      setIsFullscreen(prev => !prev)
+      antMessage.info('当前浏览器不支持真全屏，使用CSS模拟全屏')
+      return
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isFullscreen])
+
+    try {
+      const currentFullscreenEl = getFullscreenElement()
+
+      if (currentFullscreenEl) {
+        // 已在全屏：退出
+        await exitFullscreen()
+        // 注意：state 由 fullscreenchange 事件回调统一更新，此处不手动 setState
+      } else {
+        // 不在全屏：进入
+        if (panelRef.current) {
+          await requestFullscreen(panelRef.current)
+        }
+      }
+    } catch (error) {
+      console.error('全屏切换失败:', error)
+      antMessage.error('全屏操作失败：' + (error.message || '未知错误'))
+      // 失败时降级
+      setIsFullscreen(prev => !prev)
+    }
+  }, [])
 
   /** 切换到上一个/下一个HTML块 */
   const handlePrev = () => {
@@ -256,12 +362,15 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   // 渲染
   // ================================================================
   return (
-    <div className={`html-canvas-panel ${isFullscreen ? 'fullscreen' : ''}`}>
+    <div
+      ref={panelRef}
+      className={`html-canvas-panel ${isFullscreen ? 'fullscreen' : ''}`}
+    >
       {/* 工具栏 */}
       <div className="canvas-toolbar">
         {/* 左侧：全屏按钮（醒目） + HTML块切换器 */}
         <div className="toolbar-left">
-          {/* v1.1: 全屏/退出全屏 - 醒目的primary按钮 */}
+          {/* 全屏/退出全屏 - 醒目的primary按钮 */}
           <Button
             type="primary"
             size="small"
@@ -269,29 +378,29 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
             onClick={handleToggleFullscreen}
             className="fullscreen-btn"
           >
-            {isFullscreen 
-              ? (t('chat.canvas.exitFullscreen') || '退出全屏') 
+            {isFullscreen
+              ? (t('chat.canvas.exitFullscreen') || '退出全屏')
               : (t('chat.canvas.fullscreen') || '全屏预览')
             }
           </Button>
-          
+
           {/* 多个HTML块时显示切换器 */}
           {htmlBlocks.length > 1 && (
             <div className="block-switcher">
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<LeftOutlined />} 
+              <Button
+                type="text"
+                size="small"
+                icon={<LeftOutlined />}
                 onClick={handlePrev}
                 disabled={currentIndex <= 0}
               />
               <Tag color="blue" style={{ margin: '0 4px', userSelect: 'none' }}>
                 {currentIndex + 1} / {htmlBlocks.length}
               </Tag>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<RightOutlined />} 
+              <Button
+                type="text"
+                size="small"
+                icon={<RightOutlined />}
                 onClick={handleNext}
                 disabled={currentIndex >= htmlBlocks.length - 1}
               />
@@ -304,27 +413,27 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           {/* 设备预览切换 */}
           <Space size={2}>
             <Tooltip title={t('chat.canvas.desktop') || '桌面'}>
-              <Button 
-                type={deviceMode === 'desktop' ? 'primary' : 'text'} 
-                size="small" 
+              <Button
+                type={deviceMode === 'desktop' ? 'primary' : 'text'}
+                size="small"
                 icon={<DesktopOutlined />}
                 onClick={() => setDeviceMode('desktop')}
                 ghost={deviceMode === 'desktop'}
               />
             </Tooltip>
             <Tooltip title={t('chat.canvas.tablet') || '平板'}>
-              <Button 
-                type={deviceMode === 'tablet' ? 'primary' : 'text'} 
-                size="small" 
+              <Button
+                type={deviceMode === 'tablet' ? 'primary' : 'text'}
+                size="small"
                 icon={<TabletOutlined />}
                 onClick={() => setDeviceMode('tablet')}
                 ghost={deviceMode === 'tablet'}
               />
             </Tooltip>
             <Tooltip title={t('chat.canvas.mobile') || '手机'}>
-              <Button 
-                type={deviceMode === 'mobile' ? 'primary' : 'text'} 
-                size="small" 
+              <Button
+                type={deviceMode === 'mobile' ? 'primary' : 'text'}
+                size="small"
                 icon={<MobileOutlined />}
                 onClick={() => setDeviceMode('mobile')}
                 ghost={deviceMode === 'mobile'}
@@ -342,11 +451,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
             <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyHtml} />
           </Tooltip>
 
-          {/* v1.1: 关闭按钮 - 不用Tooltip，避免面板消失时抖动 */}
-          <Button 
-            type="text" 
-            size="small" 
-            icon={<CloseOutlined />} 
+          {/* 关闭按钮 */}
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseOutlined />}
             onClick={onClose}
             className="close-btn"
           />
@@ -355,7 +464,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
       {/* HTML渲染区域 */}
       <div className="canvas-content">
-        <div 
+        <div
           className={`iframe-wrapper device-${deviceMode}`}
           style={{
             maxWidth: deviceMode !== 'desktop' ? DEVICE_SIZES[deviceMode].width : '100%',
@@ -370,19 +479,37 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
               </Text>
             </div>
           )}
-          
-          {/* v1.2: 添加onLoad自动聚焦 */}
+
           <iframe
             key={`${currentIndex}-${refreshKey}`}
             ref={iframeRef}
             srcDoc={currentHtml}
             title="HTML Preview"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+            allow="fullscreen"
             className="preview-iframe"
             onLoad={handleIframeLoad}
           />
         </div>
       </div>
+
+      {/* ================================================================
+          全屏模式下的悬浮退出按钮
+          位置：右上角，z-index极高保证在所有内容之上
+          始终可见，让用户随时能退出
+          ================================================================ */}
+      {isFullscreen && (
+        <Button
+          type="primary"
+          danger
+          size="large"
+          icon={<FullscreenExitOutlined />}
+          onClick={handleToggleFullscreen}
+          className="canvas-floating-exit-btn"
+        >
+          {t('chat.canvas.exitFullscreen') || '退出全屏'}
+        </Button>
+      )}
     </div>
   )
 }

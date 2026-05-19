@@ -1,15 +1,17 @@
 /**
  * HTML画布面板样式
- * 
- * v1.1 修复：
- *   - 全屏按钮改为醒目primary样式
- *   - 关闭按钮去掉Tooltip避免抖动
- *   - 去掉标题文字节省空间
- * 
+ *
  * 布局：
  *   - 作为对话页面右侧面板
- *   - 支持全屏模式覆盖整个视口
+ *   - 真全屏模式由浏览器Fullscreen API处理（隐藏所有浏览器UI）
+ *   - .fullscreen 类作为API不支持时的CSS模拟全屏降级方案
  *   - 设备预览模式切换（桌面/平板/手机）
+ *
+ * 全屏样式策略：
+ *   - 全屏时隐藏画布工具栏（极致沉浸体验，只保留右上角悬浮退出按钮）
+ *   - 浏览器:fullscreen伪类生效时：取消边框，避免视觉断层
+ *   - .fullscreen类（降级模式）：position:fixed覆盖视口
+ *   - .canvas-floating-exit-btn：全屏时右上角悬浮退出按钮
  */
 
 // ================================================================
@@ -24,7 +26,7 @@
   position: relative;
   overflow: hidden;
 
-  // ---- 全屏模式 ----
+  // ---- CSS模拟全屏（降级方案） ----
   &.fullscreen {
     position: fixed;
     top: 0;
@@ -34,6 +36,54 @@
     z-index: 1200;
     border-left: none;
     animation: canvasFullscreenIn 0.25s ease-out;
+
+    // 全屏时隐藏画布顶部工具栏，只保留右上角悬浮退出按钮
+    // 让HTML内容占据整个屏幕，实现极致沉浸体验
+    .canvas-toolbar {
+      display: none;
+    }
+  }
+
+  // ---- 浏览器原生全屏（:fullscreen 伪类） ----
+  // 浏览器Fullscreen API将元素全屏后会自动应用此伪类
+  // 此处确保边框/动画/背景在真全屏时也表现正确
+  &:fullscreen {
+    border-left: none;
+    background: #ffffff;
+    animation: canvasFullscreenIn 0.25s ease-out;
+
+    // 全屏时隐藏画布顶部工具栏
+    .canvas-toolbar {
+      display: none;
+    }
+  }
+
+  // 兼容老旧Webkit浏览器（Safari等）
+  &:-webkit-full-screen {
+    border-left: none;
+    background: #ffffff;
+
+    .canvas-toolbar {
+      display: none;
+    }
+  }
+
+  &:-moz-full-screen {
+    border-left: none;
+    background: #ffffff;
+
+    .canvas-toolbar {
+      display: none;
+    }
+  }
+
+  &:-ms-fullscreen {
+    border-left: none;
+    background: #ffffff;
+
+    .canvas-toolbar {
+      display: none;
+    }
   }
 
   // ---- 工具栏 ----
@@ -56,7 +106,7 @@
       min-width: 0;
       overflow: hidden;
 
-      // v1.1: 全屏按钮 - 醒目样式
+      // 全屏按钮 - 醒目样式
       .fullscreen-btn {
         font-size: 13px;
         font-weight: 500;
@@ -106,7 +156,7 @@
       .ant-btn {
         padding: 4px 6px;
         height: 28px;
-        
+
         &:hover {
           background: rgba(0, 0, 0, 0.06);
         }
@@ -116,7 +166,7 @@
         }
       }
 
-      // v1.1: 关闭按钮样式
+      // 关闭按钮样式
       .close-btn {
         margin-left: 2px;
         color: #999;
@@ -178,6 +228,42 @@
       }
     }
   }
+
+  // ================================================================
+  // 全屏模式下的悬浮退出按钮
+  // 位置：右上角，固定定位（在全屏元素的视口坐标系内）
+  // z-index 极高保证在所有HTML内容之上
+  // ================================================================
+  .canvas-floating-exit-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 999999;
+    height: 44px;
+    padding: 0 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 22px;
+    box-shadow: 0 4px 16px rgba(255, 77, 79, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    animation: floatingBtnIn 0.3s ease-out;
+
+    .anticon {
+      font-size: 16px;
+    }
+
+    &:hover {
+      transform: scale(1.05) translateY(-1px);
+      box-shadow: 0 6px 20px rgba(255, 77, 79, 0.5);
+    }
+
+    &:active {
+      transform: scale(0.98);
+    }
+  }
 }
 
 // ================================================================
@@ -194,10 +280,22 @@
   }
 }
 
+@keyframes floatingBtnIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 // ================================================================
 // 响应式 - 移动端画布不可见（仅PC端使用）
+// 阈值与 Chat.less 保持一致 1024px
 // ================================================================
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .html-canvas-panel {
     display: none !important;
   }
