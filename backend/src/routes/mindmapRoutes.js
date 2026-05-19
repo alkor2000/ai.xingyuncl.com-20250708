@@ -1,9 +1,16 @@
 /**
  * 思维导图相关路由 - 支持 Markdown/Mermaid/SVG 三种模式
- * 提供思维导图的保存、加载、导出等功能（支持积分扣减）
+ *
+ * v2.1 修复 PUT 接口 title/content 必填校验缺失（数据完整性 bug）
+ * v2.0 项目式持久化
+ *   - GET /:id 按ID加载自己的导图（含 share_token）
+ *   - GET /share/:id/:token 公开分享，HMAC 签名验证（免认证）
+ *   - 列表接口轻量字段（不带 content）
+ *   - 保存/更新免积分；导出仍按配置扣分
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const { authenticate } = require('../middleware/authMiddleware');
 const dbConnection = require('../database/connection');
@@ -11,16 +18,42 @@ const ResponseHelper = require('../utils/response');
 const SystemConfig = require('../models/SystemConfig');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const config = require('../config');
 
-// 获取思维导图积分配置
+/**
+ * HMAC 分享 token 工具
+ * 用 JWT_ACCESS_SECRET 派生密钥，对 id 做 HMAC-SHA256，截前12字符
+ * 不存数据库，12位 base64url 约 72bit 熵
+ */
+const SHARE_TOKEN_LENGTH = 12;
+
+function generateShareToken(mindmapId) {
+  const secret = config.jwt?.accessSecret || process.env.JWT_ACCESS_SECRET || 'mindmap-fallback-key';
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(`mindmap-share-${mindmapId}`);
+  return hmac.digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+    .substring(0, SHARE_TOKEN_LENGTH);
+}
+
+function verifyShareToken(mindmapId, token) {
+  if (!token || typeof token !== 'string') return false;
+  const expected = generateShareToken(mindmapId);
+  return token === expected;
+}
+
+// ===================== 积分配置 =====================
+
 router.get('/credits-config', authenticate, async (req, res) => {
   try {
-    const saveCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
+    const saveCredits = await SystemConfig.getSetting('mindmap.save_credits') || 0;
     const exportSvgCredits = await SystemConfig.getSetting('mindmap.export_svg_credits') || 2;
     const exportMarkdownCredits = await SystemConfig.getSetting('mindmap.export_markdown_credits') || 1;
     const exportPngCredits = await SystemConfig.getSetting('mindmap.export_png_credits') || 3;
     const exportPdfCredits = await SystemConfig.getSetting('mindmap.export_pdf_credits') || 5;
-    
+
     return ResponseHelper.success(res, {
       save_credits: saveCredits,
       export_svg_credits: exportSvgCredits,
@@ -34,17 +67,15 @@ router.get('/credits-config', authenticate, async (req, res) => {
   }
 });
 
-// 检查积分是否充足（供前端调用）
 router.get('/check-credits', authenticate, async (req, res) => {
   try {
-    const { operation } = req.query; // save, export_svg, export_markdown, export_png, export_pdf
+    const { operation } = req.query;
     const userId = req.user.id;
-    
-    // 获取操作所需积分
+
     let requiredCredits = 0;
-    switch(operation) {
+    switch (operation) {
       case 'save':
-        requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
+        requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 0;
         break;
       case 'export_svg':
         requiredCredits = await SystemConfig.getSetting('mindmap.export_svg_credits') || 2;
@@ -61,8 +92,7 @@ router.get('/check-credits', authenticate, async (req, res) => {
       default:
         return ResponseHelper.validation(res, ['无效的操作类型']);
     }
-    
-    // 如果积分设置为0，表示不需要积分
+
     if (requiredCredits === 0) {
       return ResponseHelper.success(res, {
         sufficient: true,
@@ -71,17 +101,13 @@ router.get('/check-credits', authenticate, async (req, res) => {
         message: '该操作无需消耗积分'
       });
     }
-    
-    // 获取用户信息
+
     const user = await User.findById(userId);
-    
-    if (!user) {
-      return ResponseHelper.error(res, '用户不存在');
-    }
-    
+    if (!user) return ResponseHelper.error(res, '用户不存在');
+
     const currentCredits = user.getCredits();
     const sufficient = user.hasCredits(requiredCredits);
-    
+
     return ResponseHelper.success(res, {
       sufficient,
       requiredCredits,
@@ -94,20 +120,63 @@ router.get('/check-credits', authenticate, async (req, res) => {
   }
 });
 
-// 获取用户的思维导图列表
+// ===================== 公开分享（必须在 /:id 之前注册） =====================
+
+/**
+ * GET /mindmap/share/:id/:token
+ * 公开分享端点 - 无需认证，token 通过 HMAC 验证
+ * 仅返回内容字段，不返回 user_id 等敏感信息
+ */
+router.get('/share/:id/:token', async (req, res) => {
+  try {
+    const { id, token } = req.params;
+
+    if (!/^\d+$/.test(id)) {
+      return ResponseHelper.validation(res, {}, '无效的导图ID');
+    }
+
+    if (!verifyShareToken(id, token)) {
+      logger.warn('思维导图分享token验证失败', { id, token: token?.substring(0, 4) + '***' });
+      return ResponseHelper.error(res, '链接无效或已过期', 403);
+    }
+
+    const query = `
+      SELECT id, title, content, content_type, created_at, updated_at
+      FROM user_mindmaps
+      WHERE id = ?
+    `;
+    const result = await dbConnection.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return ResponseHelper.notFound(res, '思维导图不存在');
+    }
+
+    return ResponseHelper.success(res, result.rows[0]);
+  } catch (error) {
+    logger.error('获取公开思维导图失败:', error);
+    return ResponseHelper.error(res, '获取失败');
+  }
+});
+
+// ===================== 列表 / CRUD =====================
+
+/**
+ * GET /mindmap/
+ * 用户的思维导图列表（轻量字段，不带 content）
+ */
 router.get('/', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     const query = `
-      SELECT id, title, content, content_type, created_at, updated_at
+      SELECT id, title, content_type, created_at, updated_at,
+             CHAR_LENGTH(content) AS content_length
       FROM user_mindmaps
       WHERE user_id = ?
       ORDER BY updated_at DESC
     `;
-    
     const result = await dbConnection.query(query, [userId]);
-    
+
     return ResponseHelper.success(res, result.rows);
   } catch (error) {
     logger.error('获取思维导图列表失败:', error);
@@ -115,60 +184,88 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// 保存思维导图（需要扣减积分）
+/**
+ * GET /mindmap/:id
+ * 加载单个思维导图（含完整内容） + 返回 share_token
+ */
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    if (!/^\d+$/.test(id)) {
+      return ResponseHelper.validation(res, {}, '无效的导图ID');
+    }
+
+    const query = `
+      SELECT id, title, content, content_type, created_at, updated_at
+      FROM user_mindmaps
+      WHERE id = ? AND user_id = ?
+    `;
+    const result = await dbConnection.query(query, [id, userId]);
+
+    if (result.rows.length === 0) {
+      return ResponseHelper.notFound(res, '思维导图不存在');
+    }
+
+    const data = result.rows[0];
+    data.share_token = generateShareToken(data.id);
+
+    return ResponseHelper.success(res, data);
+  } catch (error) {
+    logger.error('获取思维导图失败:', error);
+    return ResponseHelper.error(res, '获取失败');
+  }
+});
+
+/**
+ * POST /mindmap/
+ * 新建思维导图
+ */
 router.post('/', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { title, content, content_type = 'markdown' } = req.body;
-    
+
     if (!title || !content) {
       return ResponseHelper.validation(res, {}, '标题和内容不能为空');
     }
-    
-    // 验证 content_type
+
     const validTypes = ['markdown', 'mermaid', 'svg'];
     if (!validTypes.includes(content_type)) {
       return ResponseHelper.validation(res, {}, '无效的内容类型');
     }
-    
-    // 获取保存所需积分
-    const requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
-    
-    // 如果需要积分
+
+    if (title.length > 200) {
+      return ResponseHelper.validation(res, {}, '标题过长（最多200字符）');
+    }
+
+    const requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 0;
+
     if (requiredCredits > 0) {
       const user = await User.findById(userId);
-      
-      if (!user) {
-        return ResponseHelper.error(res, '用户不存在');
-      }
-      
-      // 检查积分是否充足
+      if (!user) return ResponseHelper.error(res, '用户不存在');
+
       if (!user.hasCredits(requiredCredits)) {
         return ResponseHelper.error(res, `积分不足，需要${requiredCredits}积分，当前余额${user.getCredits()}积分`);
       }
-      
-      // 扣减积分
+
       await user.consumeCredits(
-        requiredCredits, 
-        null, 
-        null, 
-        `保存思维导图(${content_type})`,
-        'mindmap_save'
+        requiredCredits, null, null,
+        `保存思维导图(${content_type})`, 'mindmap_save'
       );
-      
-      logger.info('思维导图保存扣减积分', { userId, credits: requiredCredits, type: content_type });
     }
-    
-    // 保存思维导图
+
     const query = `
       INSERT INTO user_mindmaps (user_id, title, content, content_type)
       VALUES (?, ?, ?, ?)
     `;
-    
     const result = await dbConnection.query(query, [userId, title, content, content_type]);
-    
-    return ResponseHelper.success(res, { 
-      id: result.rows.insertId,
+    const newId = result.rows.insertId;
+
+    return ResponseHelper.success(res, {
+      id: newId,
+      share_token: generateShareToken(newId),
       message: requiredCredits > 0 ? `保存成功，消耗${requiredCredits}积分` : '保存成功'
     });
   } catch (error) {
@@ -177,60 +274,65 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// 更新思维导图（需要扣减积分）
+/**
+ * PUT /mindmap/:id
+ * 更新思维导图
+ * v2.1 修复：title/content 必填校验缺失（数据完整性 bug）
+ */
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
     const { title, content, content_type = 'markdown' } = req.body;
-    
-    // 验证 content_type
+
+    if (!/^\d+$/.test(id)) {
+      return ResponseHelper.validation(res, {}, '无效的导图ID');
+    }
+
+    // v2.1 修复：必填校验，避免 UPDATE 设置 title=NULL 破坏数据
+    if (!title || !content) {
+      return ResponseHelper.validation(res, {}, '标题和内容不能为空');
+    }
+
+    if (title.length > 200) {
+      return ResponseHelper.validation(res, {}, '标题过长（最多200字符）');
+    }
+
     const validTypes = ['markdown', 'mermaid', 'svg'];
     if (!validTypes.includes(content_type)) {
       return ResponseHelper.validation(res, {}, '无效的内容类型');
     }
-    
-    // 获取保存所需积分
-    const requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 5;
-    
-    // 如果需要积分
+
+    const requiredCredits = await SystemConfig.getSetting('mindmap.save_credits') || 0;
+
     if (requiredCredits > 0) {
       const user = await User.findById(userId);
-      
-      if (!user) {
-        return ResponseHelper.error(res, '用户不存在');
-      }
-      
-      // 检查积分是否充足
+      if (!user) return ResponseHelper.error(res, '用户不存在');
+
       if (!user.hasCredits(requiredCredits)) {
         return ResponseHelper.error(res, `积分不足，需要${requiredCredits}积分，当前余额${user.getCredits()}积分`);
       }
-      
-      // 扣减积分
+
       await user.consumeCredits(
-        requiredCredits,
-        null,
-        null,
-        `更新思维导图(${content_type})`,
-        'mindmap_save'
+        requiredCredits, null, null,
+        `更新思维导图(${content_type})`, 'mindmap_save'
       );
-      
-      logger.info('思维导图更新扣减积分', { userId, credits: requiredCredits, type: content_type });
     }
-    
+
     const query = `
       UPDATE user_mindmaps
       SET title = ?, content = ?, content_type = ?, updated_at = NOW()
       WHERE id = ? AND user_id = ?
     `;
-    
     const result = await dbConnection.query(query, [title, content, content_type, id, userId]);
-    
+
     if (result.rows.affectedRows === 0) {
-      return ResponseHelper.notFound(res, '思维导图不存在');
+      return ResponseHelper.notFound(res, '思维导图不存在或无权限');
     }
-    
-    return ResponseHelper.success(res, { 
+
+    return ResponseHelper.success(res, {
+      id: parseInt(id),
+      share_token: generateShareToken(id),
       message: requiredCredits > 0 ? `更新成功，消耗${requiredCredits}积分` : '更新成功'
     });
   } catch (error) {
@@ -239,16 +341,18 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// 导出操作记录（用于扣减积分）
+/**
+ * POST /mindmap/export-log
+ * 导出操作扣分
+ */
 router.post('/export-log', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { type } = req.body; // svg, markdown, png, pdf
-    
-    // 获取导出所需积分
+    const { type } = req.body;
+
     let requiredCredits = 0;
     let exportType = '';
-    
+
     if (type === 'svg') {
       requiredCredits = await SystemConfig.getSetting('mindmap.export_svg_credits') || 2;
       exportType = 'SVG';
@@ -264,33 +368,22 @@ router.post('/export-log', authenticate, async (req, res) => {
     } else {
       return ResponseHelper.validation(res, {}, '无效的导出类型');
     }
-    
-    // 如果需要积分
+
     if (requiredCredits > 0) {
       const user = await User.findById(userId);
-      
-      if (!user) {
-        return ResponseHelper.error(res, '用户不存在');
-      }
-      
-      // 检查积分是否充足
+      if (!user) return ResponseHelper.error(res, '用户不存在');
+
       if (!user.hasCredits(requiredCredits)) {
         return ResponseHelper.error(res, `积分不足，需要${requiredCredits}积分，当前余额${user.getCredits()}积分`);
       }
-      
-      // 扣减积分
+
       await user.consumeCredits(
-        requiredCredits,
-        null,
-        null,
-        `导出思维导图(${exportType})`,
-        'mindmap_export'
+        requiredCredits, null, null,
+        `导出思维导图(${exportType})`, 'mindmap_export'
       );
-      
-      logger.info('思维导图导出扣减积分', { userId, credits: requiredCredits, type: exportType });
     }
-    
-    return ResponseHelper.success(res, { 
+
+    return ResponseHelper.success(res, {
       message: requiredCredits > 0 ? `导出成功，消耗${requiredCredits}积分` : '导出成功',
       creditsUsed: requiredCredits
     });
@@ -300,23 +393,28 @@ router.post('/export-log', authenticate, async (req, res) => {
   }
 });
 
-// 删除思维导图
+/**
+ * DELETE /mindmap/:id
+ */
 router.delete('/:id', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    
+
+    if (!/^\d+$/.test(id)) {
+      return ResponseHelper.validation(res, {}, '无效的导图ID');
+    }
+
     const query = `
       DELETE FROM user_mindmaps
       WHERE id = ? AND user_id = ?
     `;
-    
     const result = await dbConnection.query(query, [id, userId]);
-    
+
     if (result.rows.affectedRows === 0) {
       return ResponseHelper.notFound(res, '思维导图不存在');
     }
-    
+
     return ResponseHelper.success(res, { message: '删除成功' });
   } catch (error) {
     logger.error('删除思维导图失败:', error);

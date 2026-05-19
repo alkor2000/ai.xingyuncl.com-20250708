@@ -11,6 +11,7 @@
  * - v1.2.1 (2026-01-29): 修复无痕浏览器默认语言不生效问题
  * - v1.2.2 (2026-01-29): 修复 setSystemDefaultLanguage 异步等待问题
  * - v1.3.0 (2026-03-16): 新增社区论坛模块路由
+ * - v1.4.0 (2026-05-19): 新增思维导图公开分享路由 /mindmap/share/:id/:token（无需登录）
  */
 
 import React, { Suspense, useEffect, useState } from 'react'
@@ -69,6 +70,9 @@ const StorageManager = React.lazy(() => import('./pages/storage/StorageManager')
 // 思维导图页面组件 - 懒加载
 const Mindmap = React.lazy(() => import('./pages/mindmap/Mindmap'))
 
+// 思维导图公开分享页面 - 懒加载（v1.4.0 新增，无需登录）
+const MindmapShare = React.lazy(() => import('./pages/mindmap/MindmapShare'))
+
 // OCR页面组件 - 懒加载
 const OcrTool = React.lazy(() => import('./pages/ocr/OcrTool'))
 
@@ -113,7 +117,7 @@ const LazyLoadingWrapper = ({ children }) => (
     }}>
       <Spin size="large" tip="加载模块中..." />
       <div style={{ color: '#666', fontSize: '14px' }}>
-        正在加载管理功能...
+        正在加载模块...
       </div>
     </div>
   }>
@@ -320,6 +324,17 @@ const App = () => {
                 element={<SSOCallback />} 
               />
 
+              {/* v1.4.0 思维导图公开分享路由 - 无需登录，登录用户也可访问 */}
+              {/* 注意：直接渲染，不包裹 PublicRoute（PublicRoute会把已登录用户跳走）也不包裹 ProtectedRoute（强制登录） */}
+              <Route 
+                path="/mindmap/share/:id/:token" 
+                element={
+                  <LazyLoadingWrapper>
+                    <MindmapShare />
+                  </LazyLoadingWrapper>
+                } 
+              />
+
               {/* 受保护的路由 */}
               <Route
                 path="/*"
@@ -411,7 +426,7 @@ const App = () => {
                           } 
                         />
                         
-                        {/* 思维导图页面路由 */}
+                        {/* 思维导图页面路由（编辑模式，需登录） */}
                         <Route 
                           path="/mindmap" 
                           element={

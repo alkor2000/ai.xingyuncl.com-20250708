@@ -573,3 +573,473 @@ svg.markmap path {
     }
   }
 }
+
+/* ====================== v3.0 项目式保存相关样式 ====================== */
+
+/* 我的导图按钮 */
+.mindmap-list-btn {
+  border-radius: 8px;
+  height: 36px;
+  margin-right: 12px;
+  background: rgba(0, 122, 255, 0.08) !important;
+  border: 1px solid rgba(0, 122, 255, 0.2) !important;
+  color: #007AFF !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 122, 255, 0.15) !important;
+    border-color: #007AFF !important;
+  }
+}
+
+/* header-left 容器：让按钮+输入框+Tag横排 */
+.mindmap-header-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 我的导图抽屉 */
+.mindmap-list-drawer {
+  .ant-drawer-body {
+    padding: 8px 0;
+  }
+
+  .ant-list-item {
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+    &:hover {
+      background: rgba(0, 122, 255, 0.06);
+    }
+
+    &.active {
+      background: rgba(0, 122, 255, 0.1);
+      border-left: 3px solid #007AFF;
+      padding-left: 17px;
+    }
+
+    .ant-list-item-meta-title {
+      margin-bottom: 6px;
+    }
+  }
+}
+
+.mindmap-list-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1C1C1E;
+  display: flex;
+  align-items: center;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.mindmap-list-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8E8E93;
+
+  .meta-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+  }
+}
+
+/* 保存按钮 Dropdown.Button 样式调整 */
+.mindmap-header-right {
+  .ant-dropdown-button {
+    .ant-btn-primary {
+      background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%) !important;
+      border: none !important;
+    }
+  }
+}
+
+/* ====================== 公开分享页样式 ====================== */
+.mindmap-share-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: #F2F2F7;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
+  overflow: hidden;
+}
+
+.mindmap-share-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mindmap-share-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1C1C1E;
+
+  .anticon {
+    font-size: 18px;
+    color: #007AFF;
+  }
+}
+
+.mindmap-share-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #8E8E93;
+}
+
+.mindmap-share-readonly-tag {
+  background: rgba(0, 122, 255, 0.1);
+  color: #007AFF;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mindmap-share-canvas {
+  flex: 1;
+  display: flex;
+  background: #fff;
+  margin: 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  overflow: auto;
+  min-height: 0;
+  justify-content: center;
+  align-items: stretch;
+
+  .mindmap-svg-wrapper {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+  }
+
+  .mindmap-transform-wrapper {
+    width: 100%;
+    padding: 20px;
+  }
+}
+
+.mindmap-share-loading,
+.mindmap-share-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #F2F2F7;
+  gap: 16px;
+}
+
+.mindmap-share-error-icon {
+  font-size: 64px;
+  color: #FF3B30;
+}
+
+.mindmap-share-error-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1C1C1E;
+}
+
+.mindmap-share-error-msg {
+  font-size: 14px;
+  color: #8E8E93;
+  max-width: 400px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 移动端适配分享页 */
+@media (max-width: 768px) {
+  .mindmap-share-header {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mindmap-share-canvas {
+    margin: 8px;
+  }
+}
+
+/* ====================== v3.1 顶部布局修复 ====================== */
+
+.mindmap-header {
+  /* 强制不换行 + 横向滚动兜底 */
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.mindmap-header-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap !important;
+}
+
+.mindmap-header-right {
+  flex: 0 0 auto;
+  flex-wrap: nowrap !important;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+
+  /* 所有按钮紧凑 */
+  .ant-btn {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 13px;
+    border-radius: 8px;
+    flex: 0 0 auto;
+  }
+}
+
+/* 标题输入框宽度自适应窗口 */
+.mindmap-title-input {
+  width: 260px !important;
+  min-width: 140px;
+  flex: 1 1 auto !important;
+}
+
+/* 我的导图按钮 */
+.mindmap-list-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 保存下拉按钮 */
+.mindmap-save-dropdown {
+  .ant-btn-primary {
+    background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%) !important;
+    border: none !important;
+    height: 34px;
+  }
+}
+
+/* 编辑状态Tag */
+.mindmap-editing-tag {
+  margin: 0 !important;
+  font-size: 11px;
+  height: 26px;
+  line-height: 24px;
+  padding: 0 8px;
+}
+
+/* 移动端折行处理 */
+@media (max-width: 1024px) {
+  .mindmap-header {
+    flex-wrap: wrap !important;
+  }
+  .mindmap-header-left {
+    width: 100%;
+  }
+  .mindmap-header-right {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .mindmap-title-input {
+    width: 100% !important;
+  }
+}
+
+/* ====================== v3.2 分享页 - 平台 Banner + 工具栏 ====================== */
+
+/* 顶部 Banner */
+.mindmap-share-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.25);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mindmap-share-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.mindmap-share-banner-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 4px;
+}
+
+.mindmap-share-banner-logo-text {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+
+.mindmap-share-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mindmap-share-banner-site {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 260px;
+}
+
+.mindmap-share-banner-subtitle {
+  font-size: 11px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.mindmap-share-banner-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  text-align: center;
+}
+
+.mindmap-share-banner-title {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 50vw;
+}
+
+.mindmap-share-readonly-tag {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.mindmap-share-banner-right {
+  flex: 0 0 auto;
+
+  .ant-btn-primary {
+    background: rgba(255, 255, 255, 0.95) !important;
+    color: #667eea !important;
+    border: none !important;
+    font-weight: 600;
+    border-radius: 8px;
+    height: 32px;
+
+    &:hover {
+      background: #fff !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+}
+
+/* 工具栏（更新时间 + 缩放按钮） */
+.mindmap-share-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.mindmap-share-toolbar-left,
+.mindmap-share-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mindmap-share-time {
+  font-size: 12px;
+  color: #8E8E93;
+}
+
+/* 移动端响应式 */
+@media (max-width: 768px) {
+  .mindmap-share-banner {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mindmap-share-banner-center {
+    width: 100%;
+    justify-content: flex-start;
+    order: 3;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .mindmap-share-banner-title {
+    max-width: 65vw;
+    font-size: 14px;
+  }
+
+  .mindmap-share-toolbar {
+    padding: 8px 12px;
+  }
+}
