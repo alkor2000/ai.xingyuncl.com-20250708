@@ -1,11 +1,12 @@
 /**
  * 视频生成页面 - 支持首尾帧控制和模型名称显示
  *
- * v1.2 关键词搜索优化
- *   - IME 输入法保护（中文输入回车不触发搜索）
- *   - 生成后清空搜索框（避免不一致）
- *   - 搜索结果计数提示
- *   - 移动端响应式（搜索框样式移至 less）
+ * v1.3 修复: 隐藏"尾帧图生视频"模式
+ *   - 火山 doubao-seedance API 不支持单独 last_frame（"last frame image content cannot be mixed with first frame or reference image content"）
+ *   - 实际可用模式: text_to_video / first_frame / first_last_frame
+ *   - 前端从下拉选项移除 last_frame，配合 useEffect 兜底自动切换非法已选值
+ *
+ * v1.2 关键词搜索 + IME 保护 + 移动端响应式
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -87,19 +88,9 @@ const VideoGeneration = () => {
   const [pageSize, setPageSize] = useState(20);
   const [previewVideo, setPreviewVideo] = useState(null);
   
-  // v1.1 搜索框本地输入值
   const [searchInput, setSearchInput] = useState(keyword || '');
-  
-  // v1.2 IME 输入法保护
   const isComposingRef = useRef(false);
 
-  /**
-   * v1.2 根据 Tab/分页/关键词加载列表
-   * @param {string} tab Tab标识 (all/favorites/public)
-   * @param {number} page 页码
-   * @param {number} size 每页条数
-   * @param {string} [overrideKeyword] 显式覆盖关键词（处理setState异步）
-   */
   const loadList = useCallback((tab, page, size, overrideKeyword) => {
     const k = overrideKeyword !== undefined ? overrideKeyword : keyword;
     const trimmed = (k || '').trim();
@@ -125,15 +116,20 @@ const VideoGeneration = () => {
     getUserStats();
   }, []);
 
+  /**
+   * v1.3 模型切换时，强制确保 generationMode 是合法的（不在隐藏列表中）
+   * 隐藏的模式: last_frame（火山API不支持单独尾帧）
+   */
   useEffect(() => {
     if (selectedModel) {
       setResolution(selectedModel.default_resolution || '720p');
       setDuration(selectedModel.default_duration || 5);
       setRatio(selectedModel.default_ratio || '16:9');
       
-      if (generationMode === 'first_frame' && !selectedModel.supports_first_frame) {
+      /* v1.3 兜底: 如果当前 mode 是已隐藏的 last_frame，或模型不支持，强制回退到 text_to_video */
+      if (generationMode === 'last_frame') {
         setGenerationMode('text_to_video');
-      } else if (generationMode === 'last_frame' && !selectedModel.supports_last_frame) {
+      } else if (generationMode === 'first_frame' && !selectedModel.supports_first_frame) {
         setGenerationMode('text_to_video');
       } else if (generationMode === 'first_last_frame' && 
                  (!selectedModel.supports_first_frame || !selectedModel.supports_last_frame)) {
@@ -225,9 +221,6 @@ const VideoGeneration = () => {
     });
   };
 
-  /**
-   * 处理生成（v1.2: 生成后清空搜索框）
-   */
   const handleGenerate = async () => {
     if (!prompt.trim()) { message.warning(t('video.pleaseInputPrompt')); return; }
     if (!selectedModel) { message.warning(t('video.pleaseSelectModel')); return; }
@@ -272,7 +265,6 @@ const VideoGeneration = () => {
     const result = await generateVideo(params);
 
     if (result) {
-      // v1.2 生成成功后清空搜索框，回到无过滤的"我的视频"
       if (keyword || searchInput) {
         setKeyword('');
         setSearchInput('');
@@ -297,11 +289,7 @@ const VideoGeneration = () => {
     loadList(activeTab, page, size);
   };
 
-  /**
-   * v1.2 处理搜索：IME 保护 + 重置第1页 + 重新查询
-   */
   const handleSearch = useCallback((value) => {
-    // IME 输入法保护
     if (isComposingRef.current) return;
     
     const newKeyword = (value || '').trim();
@@ -544,9 +532,7 @@ const VideoGeneration = () => {
     return selectedModel && selectedModel.provider !== 'sora2_goapi';
   };
 
-  // v1.2 是否处于搜索激活状态
   const isSearchActive = keyword && keyword.trim().length > 0;
-  // v1.2 当前总数
   const currentTotal = activeTab === 'public' ? galleryPagination.total : historyPagination.total;
 
   return (
@@ -577,7 +563,7 @@ const VideoGeneration = () => {
                 <Space wrap>
                   {selectedModel.supports_text_to_video && <Tag color="green">{t('video.textToVideo')}</Tag>}
                   {selectedModel.supports_first_frame && <Tag color="blue">{t('video.firstFrameToVideo')}</Tag>}
-                  {selectedModel.supports_last_frame && <Tag color="orange">{t('video.lastFrameToVideo')}</Tag>}
+                  {/* v1.3 隐藏单独尾帧标签（火山不支持单独 last_frame） */}
                   {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
                     <Tag color="purple">{t('video.firstLastFrameToVideo')}</Tag>}
                 </Space>
@@ -593,9 +579,7 @@ const VideoGeneration = () => {
               <Option value="first_frame" disabled={!selectedModel?.supports_first_frame}>
                 <Space><PictureOutlined /><span>{t('video.modeFirstFrame')}</span></Space>
               </Option>
-              <Option value="last_frame" disabled={!selectedModel?.supports_last_frame}>
-                <Space><PictureOutlined /><span>{t('video.modeLastFrame')}</span></Space>
-              </Option>
+              {/* v1.3 隐藏单独 last_frame 选项（火山 API: last frame image content cannot be mixed with first frame or reference image content） */}
               <Option value="first_last_frame" 
                 disabled={!selectedModel?.supports_first_frame || !selectedModel?.supports_last_frame}>
                 <Space><FileImageOutlined /><span>{t('video.modeFirstLastFrame')}</span></Space>
@@ -603,9 +587,6 @@ const VideoGeneration = () => {
             </Select>
             {generationMode === 'first_frame' && (
               <Alert message={t('video.firstFrameDesc')} type="info" showIcon style={{ marginTop: 10 }}/>
-            )}
-            {generationMode === 'last_frame' && (
-              <Alert message={t('video.lastFrameDesc')} type="info" showIcon style={{ marginTop: 10 }}/>
             )}
             {generationMode === 'first_last_frame' && (
               <Alert message={t('video.firstLastFrameDesc')} type="info" showIcon style={{ marginTop: 10 }}/>
@@ -647,7 +628,8 @@ const VideoGeneration = () => {
               </div>
             )}
             
-            {(generationMode === 'last_frame' || generationMode === 'first_last_frame') && (
+            {/* v1.3 尾帧上传仅在 first_last_frame 模式下显示（不再有单独 last_frame 模式） */}
+            {generationMode === 'first_last_frame' && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>
                   <PictureOutlined /> {t('video.lastFrameImage')}
@@ -748,7 +730,6 @@ const VideoGeneration = () => {
             <TabPane tab={t('video.myFavorites')} key="favorites" />
             <TabPane tab={t('video.publicGallery')} key="public" />
           </Tabs>
-          {/* v1.2 搜索框：IME 保护 */}
           <Search
             className="history-search"
             placeholder={t('video.searchPlaceholder', '搜索提示词或模型名...')}
@@ -763,7 +744,6 @@ const VideoGeneration = () => {
           />
         </div>
 
-        {/* v1.2 搜索结果计数提示 */}
         {!loading && isSearchActive && (
           <div className="search-result-tip">
             {currentTotal > 0

@@ -1,6 +1,10 @@
 /**
  * 视频生成服务
  * 处理与火山方舟、可灵和Sora2视频API的交互
+ *
+ * v1.2 改动:
+ * - submitToVolcano 增加 try/catch 提取上游响应体 response.data 写入日志
+ * - 上游400/422错误时把火山返回的具体 message 抛出（替代 axios 默认的 "Request failed with status code 400"）
  */
 
 const axios = require('axios');
@@ -15,18 +19,57 @@ const klingVideoService = require('./klingVideoService');
 const sora2VideoService = require('./sora2VideoService');
 const logger = require('../utils/logger');
 
+/**
+ * 从上游 API 错误响应中提取人类可读的错误信息
+ * 支持 OpenAI/火山/通用三种格式
+ * @param {Error} error - axios 错误对象
+ * @param {string} provider - 提供商标识用于日志
+ * @returns {string} 提取后的错误描述
+ */
+function extractUpstreamError(error, provider = 'upstream') {
+  /* 网络层错误（无 response）直接返回 */
+  if (!error.response) {
+    return error.message || `${provider} 网络错误`;
+  }
+
+  const status = error.response.status;
+  const data = error.response.data;
+
+  /* 详细日志：记录完整的上游响应体供排查 */
+  logger.error(`上游API错误响应详情 [${provider}]`, {
+    status,
+    statusText: error.response.statusText,
+    upstream_data: data,        // ← 关键：火山返回的具体错误体
+    requestUrl: error.config?.url,
+    requestMethod: error.config?.method
+  });
+
+  /* 尝试从常见字段提取 message */
+  let message = '';
+  if (typeof data === 'string') {
+    message = data;
+  } else if (data && typeof data === 'object') {
+    /* 火山格式: {"error": {"code": "xxx", "message": "yyy"}} 或 {"code": "xxx", "message": "yyy"} */
+    message = data.error?.message
+           || data.message
+           || data.error_msg
+           || data.msg
+           || JSON.stringify(data);
+  }
+
+  return message
+    ? `${provider}: ${message}`
+    : `${provider}: HTTP ${status} ${error.response.statusText || ''}`;
+}
+
 class VideoService {
   /**
    * 提交视频生成任务
-   * @param {number} userId - 用户ID
-   * @param {number} modelId - 模型ID
-   * @param {object} params - 生成参数
-   * @returns {object} 任务信息
    */
   static async submitVideoGeneration(userId, modelId, params) {
     const startTime = Date.now();
     let generationId = null;
-    
+
     try {
       // 1. 获取模型配置
       const model = await VideoModel.findById(modelId);
@@ -69,17 +112,16 @@ class VideoService {
         camera_fixed: params.camera_fixed || false,
         status: 'submitted',
         credits_consumed: creditsRequired,
-        provider: model.provider,  // 新增：保存provider
-        started_at: new Date()     // 新增：记录开始时间
+        provider: model.provider,
+        started_at: new Date()
       };
 
-      // 5. 如果是Sora2，添加orientation
+      // 5. Sora2 的 orientation 和 reference_images
       if (model.provider === 'sora2_goapi') {
         generationData.orientation = sora2VideoService.convertRatioToOrientation(
           params.ratio || model.default_ratio
         );
-        
-        // 如果有参考图片，保存为JSON
+
         if (params.first_frame_image || params.last_frame_image) {
           const images = [];
           if (params.first_frame_image) images.push(params.first_frame_image);
@@ -91,43 +133,34 @@ class VideoService {
       // 6. 创建生成记录
       generationId = await VideoGeneration.create(generationData);
 
-      // 7. 根据provider调用不同的API
+      // 7. 根据 provider 调用不同 API
       let taskResult;
-      
+
       if (model.provider === 'kling') {
-        // 调用可灵API
         logger.info('使用可灵API生成视频', {
-          userId,
-          modelId,
-          generationId,
+          userId, modelId, generationId,
           model_version: model.api_config?.model_version
         });
-        
-        // 根据生成模式调用不同的API
+
         if (params.generation_mode === 'first_frame' || params.generation_mode === 'image_to_video') {
           taskResult = await klingVideoService.submitImage2Video(model, params);
         } else {
           taskResult = await klingVideoService.submitText2Video(model, params);
         }
       } else if (model.provider === 'sora2_goapi') {
-        // 调用Sora2 API
         logger.info('使用Sora2 API生成视频', {
-          userId,
-          modelId,
-          generationId,
+          userId, modelId, generationId,
           orientation: generationData.orientation
         });
-        
-        // 根据生成模式调用不同的API
-        if (params.generation_mode === 'first_frame' || 
+
+        if (params.generation_mode === 'first_frame' ||
             params.generation_mode === 'image_to_video' ||
             params.first_frame_image) {
           taskResult = await sora2VideoService.submitImage2Video(model, params);
         } else {
           taskResult = await sora2VideoService.submitText2Video(model, params);
         }
-        
-        // 保存generation_id（如果有）
+
         if (taskResult.rawResponse && taskResult.rawResponse.detail) {
           const genId = taskResult.rawResponse.detail.draft_info?.generation_id;
           if (genId) {
@@ -138,13 +171,13 @@ class VideoService {
           }
         }
       } else {
-        // 调用火山方舟API（原有逻辑）
         logger.info('使用火山方舟API生成视频', {
-          userId,
-          modelId,
-          generationId
+          userId, modelId, generationId,
+          generation_mode: params.generation_mode,
+          has_first_frame: !!params.first_frame_image,
+          has_last_frame: !!params.last_frame_image
         });
-        
+
         taskResult = await this.submitToVolcano(model, params);
       }
 
@@ -176,13 +209,10 @@ class VideoService {
 
     } catch (error) {
       logger.error('提交视频生成任务失败', {
-        userId,
-        modelId,
-        generationId,
+        userId, modelId, generationId,
         error: error.message
       });
 
-      // 更新失败状态
       if (generationId) {
         await VideoGeneration.update(generationId, {
           status: 'failed',
@@ -196,43 +226,36 @@ class VideoService {
   }
 
   /**
-   * 提交到火山方舟（原有逻辑）
+   * 提交到火山方舟
+   * v1.2: 增加上游错误响应提取，把 400 的具体原因暴露出来
    */
   static async submitToVolcano(model, params) {
-    // 解密API密钥
     const apiKey = VideoModel.decryptApiKey(model.api_key);
     if (!apiKey) {
       throw new Error('API密钥未配置');
     }
 
-    // 构建请求内容
+    /* 构建请求内容 */
     const content = [];
-    
-    // 添加文本内容
+
     const textContent = this.buildTextContent(params, model);
     content.push({
       type: 'text',
       text: textContent
     });
 
-    // 如果有首帧图片，添加图片内容
     if (params.first_frame_image) {
       content.push({
         type: 'image_url',
-        image_url: {
-          url: params.first_frame_image
-        },
+        image_url: { url: params.first_frame_image },
         role: 'first_frame'
       });
     }
 
-    // 如果有尾帧图片，添加图片内容
     if (params.last_frame_image) {
       content.push({
         type: 'image_url',
-        image_url: {
-          url: params.last_frame_image
-        },
+        image_url: { url: params.last_frame_image },
         role: 'last_frame'
       });
     }
@@ -244,22 +267,44 @@ class VideoService {
       callback_url: params.callback_url || model.api_config?.webhook_url
     };
 
-    // 调用火山方舟API
-    const response = await axios.post(
-      model.endpoint,
-      requestData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        timeout: 30000
-      }
-    );
+    /* 详细日志：记录将要发送给火山的请求内容（脱敏） */
+    logger.info('调用火山方舟API', {
+      modelId: model.id,
+      modelName: model.model_id,
+      contentBlocks: content.map(c => ({
+        type: c.type,
+        role: c.role,
+        hasUrl: !!c.image_url,
+        textPreview: c.text ? c.text.substring(0, 80) : null
+      })),
+      return_last_frame: requestData.return_last_frame,
+      has_callback: !!requestData.callback_url
+    });
 
-    // 处理响应
+    /* v1.2 关键: try/catch 包装 axios 调用，提取上游错误 */
+    let response;
+    try {
+      response = await axios.post(
+        model.endpoint,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          timeout: 30000
+        }
+      );
+    } catch (axiosError) {
+      /* 提取上游真实错误信息并抛出 */
+      const detailedMessage = extractUpstreamError(axiosError, '火山方舟');
+      throw new Error(detailedMessage);
+    }
+
+    /* 处理响应 */
     if (!response.data || !response.data.id) {
-      throw new Error('API返回数据格式错误');
+      logger.error('火山API响应格式异常', { response_data: response.data });
+      throw new Error('火山方舟API返回数据格式错误（缺少 task id）');
     }
 
     return {
@@ -269,48 +314,34 @@ class VideoService {
   }
 
   /**
-   * 构建文本内容（包含参数）
+   * 构建文本内容
    */
   static buildTextContent(params, model) {
     let text = params.prompt;
     const commandParams = [];
 
-    // 添加分辨率参数
     if (params.resolution && params.resolution !== model.default_resolution) {
       commandParams.push(`--rs ${params.resolution}`);
     }
-
-    // 添加宽高比参数
     if (params.ratio && params.ratio !== model.default_ratio) {
       commandParams.push(`--rt ${params.ratio}`);
     }
-
-    // 添加时长参数
     if (params.duration && params.duration !== model.default_duration) {
       commandParams.push(`--dur ${params.duration}`);
     }
-
-    // 添加帧率参数
     if (params.fps && params.fps !== model.default_fps) {
       commandParams.push(`--fps ${params.fps}`);
     }
-
-    // 添加水印参数
     if (params.watermark === false) {
       commandParams.push('--wm false');
     }
-
-    // 添加固定摄像头参数
     if (params.camera_fixed) {
       commandParams.push('--cf true');
     }
-
-    // 添加种子参数
     if (params.seed && params.seed !== -1) {
       commandParams.push(`--seed ${params.seed}`);
     }
 
-    // 组合文本和参数
     if (commandParams.length > 0) {
       text = `${text} ${commandParams.join(' ')}`;
     }
@@ -320,31 +351,31 @@ class VideoService {
 
   /**
    * 查询任务状态
+   * v1.2: 火山查询也加上错误提取
    */
   static async queryTaskStatus(taskId, model) {
     try {
       if (model.provider === 'kling') {
-        // 查询可灵任务状态
         return await klingVideoService.queryTaskStatus(taskId, model);
       } else if (model.provider === 'sora2_goapi') {
-        // 查询Sora2任务状态
         return await sora2VideoService.queryTaskStatus(taskId, model);
       } else {
-        // 查询火山方舟任务状态（原有逻辑）
         const apiKey = VideoModel.decryptApiKey(model.api_key);
-        
-        // 构建查询URL
         const queryUrl = `https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`;
-        
-        const response = await axios.get(queryUrl, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`
-          },
-          timeout: 10000
-        });
+
+        let response;
+        try {
+          response = await axios.get(queryUrl, {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            timeout: 10000
+          });
+        } catch (axiosError) {
+          const detailedMessage = extractUpstreamError(axiosError, '火山方舟查询');
+          throw new Error(detailedMessage);
+        }
 
         const taskData = response.data;
-        
+
         return {
           status: taskData.status,
           progress: taskData.progress,
@@ -366,13 +397,12 @@ class VideoService {
    * 轮询任务状态
    */
   static async pollTaskStatus(taskId, generationId, model, userId) {
-    const pollingInterval = 10000; // 10秒
-    const maxPollingTime = 600000; // 10分钟
+    const pollingInterval = 10000;
+    const maxPollingTime = 600000;
     const startTime = Date.now();
 
     const poll = async () => {
       try {
-        // 检查是否超时
         if (Date.now() - startTime > maxPollingTime) {
           await VideoGeneration.update(generationId, {
             status: 'failed',
@@ -382,9 +412,8 @@ class VideoService {
           return;
         }
 
-        // 查询任务状态
         const taskData = await this.queryTaskStatus(taskId, model);
-        
+
         logger.info('查询到任务状态', {
           taskId,
           status: taskData.status,
@@ -392,50 +421,34 @@ class VideoService {
           hasVideoUrl: !!taskData.videoUrl || !!taskData.video_url
         });
 
-        // 更新进度
         if (taskData.progress !== undefined) {
           await VideoGeneration.update(generationId, {
             progress: parseInt(taskData.progress * 100)
           });
         }
 
-        // 根据状态处理
         if (taskData.status === 'succeeded') {
-          // 获取视频URL
           const videoUrl = taskData.videoUrl || taskData.video_url;
-          
+
           if (!videoUrl) {
             throw new Error('API返回成功但没有视频URL');
           }
 
-          // 下载并保存视频
           let saveResult;
           if (model.provider === 'kling') {
-            // 可灵视频下载
             saveResult = await klingVideoService.downloadAndSaveVideo(
-              videoUrl,
-              userId,
-              generationId
+              videoUrl, userId, generationId
             );
           } else if (model.provider === 'sora2_goapi') {
-            // Sora2视频下载
             saveResult = await sora2VideoService.downloadAndSaveVideo(
-              videoUrl,
-              taskData.thumbnailUrl,
-              taskData.gifUrl,
-              userId,
-              generationId
+              videoUrl, taskData.thumbnailUrl, taskData.gifUrl, userId, generationId
             );
           } else {
-            // 火山方舟视频下载
             saveResult = await this.downloadAndSaveVideo(
-              videoUrl,
-              generationId,
-              userId
+              videoUrl, generationId, userId
             );
           }
 
-          // 更新生成记录
           await VideoGeneration.update(generationId, {
             status: 'succeeded',
             video_url: videoUrl,
@@ -452,15 +465,12 @@ class VideoService {
           });
 
           logger.info('视频生成任务完成', {
-            taskId,
-            generationId,
-            userId,
+            taskId, generationId, userId,
             provider: model.provider,
             time: Date.now() - startTime
           });
 
         } else if (taskData.status === 'failed') {
-          // 任务失败
           await VideoGeneration.update(generationId, {
             status: 'failed',
             error_message: taskData.errorMessage || taskData.error || '生成失败',
@@ -468,34 +478,25 @@ class VideoService {
           });
 
           logger.error('视频生成任务失败', {
-            taskId,
-            generationId,
+            taskId, generationId,
             provider: model.provider,
             error: taskData.errorMessage || taskData.error
           });
 
         } else if (taskData.status === 'running') {
-          // 更新为运行中状态
-          await VideoGeneration.update(generationId, {
-            status: 'running'
-          });
-          
-          // 继续轮询
+          await VideoGeneration.update(generationId, { status: 'running' });
           setTimeout(poll, pollingInterval);
-          
+
         } else {
-          // 其他状态（queued等），继续轮询
           setTimeout(poll, pollingInterval);
         }
       } catch (error) {
         logger.error('轮询视频任务状态出错', {
-          taskId,
-          generationId,
+          taskId, generationId,
           provider: model.provider,
           error: error.message
         });
-        
-        // 如果是关键错误，标记为失败
+
         if (error.message.includes('没有视频URL')) {
           await VideoGeneration.update(generationId, {
             status: 'failed',
@@ -503,18 +504,16 @@ class VideoService {
             generation_time: Math.floor((Date.now() - startTime) / 1000)
           });
         } else {
-          // 其他错误重试
           setTimeout(poll, pollingInterval * 2);
         }
       }
     };
 
-    // 开始轮询
     setTimeout(poll, pollingInterval);
   }
 
   /**
-   * 下载并保存视频（火山方舟）
+   * 下载并保存视频（火山）
    */
   static async downloadAndSaveVideo(videoUrl, generationId, userId) {
     try {
@@ -524,68 +523,57 @@ class VideoService {
 
       logger.info('开始下载视频', {
         videoUrl: videoUrl.substring(0, 100) + '...',
-        generationId,
-        userId
+        generationId, userId
       });
 
-      // 下载视频
       const response = await axios.get(videoUrl, {
         responseType: 'arraybuffer',
-        timeout: 120000, // 2分钟超时
-        maxContentLength: 500 * 1024 * 1024, // 最大500MB
+        timeout: 120000,
+        maxContentLength: 500 * 1024 * 1024,
         maxBodyLength: 500 * 1024 * 1024
       });
 
       const videoBuffer = Buffer.from(response.data);
-      
-      // 初始化OSS服务
+
       await ossService.initialize();
-      
-      // 生成文件名和路径
-      const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+      const dateFolder = new Date().toISOString().slice(0, 7);
       const timestamp = Date.now();
       const random = crypto.randomBytes(8).toString('hex');
       const fileName = `video_${generationId}_${timestamp}_${random}.mp4`;
       const thumbFileName = `thumb_${generationId}_${timestamp}_${random}.jpg`;
-      
-      // 构建OSS key
+
       const ossKey = `videos/${userId}/${dateFolder}/${fileName}`;
       const thumbOssKey = `videos/${userId}/${dateFolder}/${thumbFileName}`;
-      
-      // 上传视频到OSS
+
       const uploadResult = await ossService.uploadFile(videoBuffer, ossKey, {
         headers: {
           'Content-Type': 'video/mp4',
           'Content-Disposition': `inline; filename="${fileName}"`
         }
       });
-      
-      // TODO: 生成缩略图（需要ffmpeg支持）
-      // 暂时使用视频URL作为缩略图
+
       const thumbnailUrl = uploadResult.url;
-      
+
       logger.info('视频已保存', {
-        generationId,
-        userId,
-        ossKey,
+        generationId, userId, ossKey,
         isLocal: uploadResult.isLocal,
         url: uploadResult.url
       });
-      
+
       return {
         localPath: uploadResult.url,
         thumbnailPath: thumbnailUrl,
-        previewGifPath: null, // TODO: 生成预览GIF
+        previewGifPath: null,
         fileSize: videoBuffer.length,
-        width: 1920, // TODO: 从视频元数据获取
+        width: 1920,
         height: 1080,
-        duration: null // TODO: 从视频元数据获取
+        duration: null
       };
-      
+
     } catch (error) {
       logger.error('下载保存视频失败', {
-        generationId,
-        userId,
+        generationId, userId,
         error: error.message
       });
       throw new Error('保存视频失败: ' + error.message);
@@ -598,19 +586,16 @@ class VideoService {
   static async deleteVideoFile(localPath, thumbnailPath, previewGifPath) {
     try {
       await ossService.initialize();
-      
+
       const extractOssKey = (url) => {
         if (!url) return null;
-        
         if (url.startsWith('/storage/uploads/')) {
           return url.replace('/storage/uploads/', '');
         }
-        
         if (url.includes('/storage/uploads/')) {
           const match = url.match(/\/storage\/uploads\/(.+)/);
           return match ? match[1] : null;
         }
-        
         if (url.startsWith('http://') || url.startsWith('https://')) {
           try {
             const urlObj = new URL(url);
@@ -620,34 +605,22 @@ class VideoService {
             return null;
           }
         }
-        
         return url;
       };
-      
-      // 删除视频文件
+
       const videoKey = extractOssKey(localPath);
-      if (videoKey) {
-        await ossService.deleteFile(videoKey);
-      }
-      
-      // 删除缩略图
+      if (videoKey) await ossService.deleteFile(videoKey);
+
       const thumbKey = extractOssKey(thumbnailPath);
-      if (thumbKey) {
-        await ossService.deleteFile(thumbKey);
-      }
-      
-      // 删除预览GIF
+      if (thumbKey) await ossService.deleteFile(thumbKey);
+
       const gifKey = extractOssKey(previewGifPath);
-      if (gifKey) {
-        await ossService.deleteFile(gifKey);
-      }
-      
+      if (gifKey) await ossService.deleteFile(gifKey);
+
     } catch (error) {
-      logger.error('删除视频文件失败', { 
-        localPath,
-        thumbnailPath,
-        previewGifPath,
-        error: error.message 
+      logger.error('删除视频文件失败', {
+        localPath, thumbnailPath, previewGifPath,
+        error: error.message
       });
     }
   }
@@ -669,42 +642,37 @@ class VideoService {
    */
   static validateGenerationParams(params, model) {
     const errors = [];
-    
-    // 验证提示词
+
     if (!params.prompt || params.prompt.trim().length === 0) {
       errors.push('提示词不能为空');
     } else if (params.prompt.length > (model?.max_prompt_length || 500)) {
       errors.push(`提示词长度不能超过${model?.max_prompt_length || 500}字符`);
     }
-    
-    // 验证分辨率
+
     if (params.resolution && model?.resolutions_supported) {
       if (!model.resolutions_supported.includes(params.resolution)) {
         errors.push('不支持的分辨率');
       }
     }
-    
-    // 验证时长
+
     if (params.duration && model?.durations_supported) {
       if (!model.durations_supported.includes(params.duration)) {
         errors.push('不支持的时长');
       }
     }
-    
-    // 验证帧率
+
     if (params.fps && model?.fps_supported) {
       if (!model.fps_supported.includes(params.fps)) {
         errors.push('不支持的帧率');
       }
     }
-    
-    // 验证宽高比
+
     if (params.ratio && model?.ratios_supported) {
       if (!model.ratios_supported.includes(params.ratio)) {
         errors.push('不支持的宽高比');
       }
     }
-    
+
     return errors;
   }
 }
