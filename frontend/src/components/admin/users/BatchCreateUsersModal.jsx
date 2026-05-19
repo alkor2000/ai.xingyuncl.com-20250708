@@ -8,7 +8,11 @@
  * - 预览用户名示例
  * - 创建结果导出（用户名和密码列表）
  * 
- * v1.1 新增
+ * 更新记录：
+ * - v1.1 新增
+ * - v1.2 (2026-05-19): 目标用户组Select增加搜索功能
+ *   - showSearch + optionFilterProp + filterOption 三重组合
+ *   - Option 内部为自定义渲染（含组名颜色和剩余积分），需设置 label 属性供过滤
  */
 
 import React, { useState, useEffect, useMemo } from 'react'
@@ -141,6 +145,14 @@ const BatchCreateUsersModal = ({
   
   // 检查积分是否充足
   const isCreditsEnough = totalCreditsNeeded <= poolRemaining
+
+  // v1.2 新增：用户组搜索过滤函数（不区分大小写匹配组名）
+  const filterGroupOption = (input, option) => {
+    if (!input) return true
+    const keyword = String(input).toLowerCase()
+    const label = String(option?.label || '').toLowerCase()
+    return label.includes(keyword)
+  }
   
   // 重置表单
   useEffect(() => {
@@ -309,12 +321,22 @@ const BatchCreateUsersModal = ({
         rules={[{ required: true, message: '请选择目标用户组' }]}
         extra="新用户将被添加到此组，积分从组积分池扣除"
       >
+        {/* v1.2: 增加搜索功能，showSearch + filterOption */}
+        {/* Option 内部用 <Space> 自定义渲染了组名颜色和剩余积分，需设置 label 让 filterOption 能根据组名匹配 */}
         <Select
-          placeholder="请选择用户组"
+          placeholder="请选择用户组（支持键入组名搜索）"
           disabled={isGroupAdmin}
+          showSearch
+          optionFilterProp="label"
+          filterOption={filterGroupOption}
+          notFoundContent={t('admin.groups.searchEmpty')}
         >
           {availableGroups.map(group => (
-            <Option key={group.id} value={group.id}>
+            <Option 
+              key={group.id} 
+              value={group.id}
+              label={group.name}
+            >
               <Space>
                 <span style={{ color: group.color }}>{group.name}</span>
                 <Text type="secondary">

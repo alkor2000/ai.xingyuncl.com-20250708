@@ -534,5 +534,10 @@
   "common.cancel": "Cancel",
   "common.status": "Status",
   "common.enabled": "Enabled",
-  "common.disabled": "Disabled"
+  "common.disabled": "Disabled",
+  "admin.groups.searchPlaceholder": "Search by name, description or invitation code",
+  "admin.groups.searchEmpty": "No matching groups found",
+  "admin.groups.searchResultCount": "({{count}} matched)",
+  "admin.groups.searchNoResult": "No matching groups found",
+  "admin.groups.searchNoResultHint": "Try different keywords or clear the search box to view all groups"
 }

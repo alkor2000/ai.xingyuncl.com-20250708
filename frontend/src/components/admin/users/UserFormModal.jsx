@@ -12,6 +12,10 @@
  * - v1.1: 邮箱改为非必填项
  * - v1.2: 新增组管理员查看对话记录权限开关
  * - v1.3: 修复Switch初始值绑定问题
+ * - v1.4 (2026-05-19): 用户分组Select增加搜索功能
+ *   - 支持键入分组名称模糊搜索
+ *   - showSearch + optionFilterProp + filterOption三重组合
+ *   - 因Option内为自定义渲染（含颜色和有效期），需要设置label属性供过滤匹配
  */
 
 import React, { useEffect, useState } from 'react'
@@ -146,6 +150,15 @@ const UserFormModal = ({
           message.error('复制失败，请手动复制')
         })
     }
+  }
+
+  // v1.4新增：分组Select搜索过滤函数（不区分大小写匹配组名）
+  // 用于showSearch模式下根据用户输入文本匹配选项
+  const filterGroupOption = (input, option) => {
+    if (!input) return true
+    const keyword = String(input).toLowerCase()
+    const label = String(option?.label || '').toLowerCase()
+    return label.includes(keyword)
   }
   
   // v1.3修复：每次打开时正确设置表单初始值
@@ -379,13 +392,24 @@ const UserFormModal = ({
                 name="group_id"
                 label={t('admin.users.form.group')}
               >
+                {/* v1.4: Select 增加搜索功能（showSearch + filterOption） */}
+                {/* 因 Option 内部用 <Space> 自定义渲染了颜色和有效期，*/}
+                {/* 单独传 label={group.name} 让 filterOption 能根据组名匹配 */}
                 <Select 
                   placeholder={t('admin.users.form.group.placeholder')} 
                   allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  filterOption={filterGroupOption}
                   onChange={handleGroupChange}
+                  notFoundContent={t('admin.groups.searchEmpty')}
                 >
                   {userGroups.filter(g => g.is_active).map(group => (
-                    <Select.Option key={group.id} value={group.id}>
+                    <Select.Option 
+                      key={group.id} 
+                      value={group.id}
+                      label={group.name}
+                    >
                       <Space>
                         <span style={{ color: group.color }}>{group.name}</span>
                         {group.expire_date && (

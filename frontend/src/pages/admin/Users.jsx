@@ -15,10 +15,16 @@
  * 更新记录：
  * - v1.1: 新增批量创建用户功能
  * - v1.2 (2026-05-09): 新增"批量导入学校"按钮（仅超管），打开 SchoolImportModal
+ * - v1.3 (2026-05-19): 用户分组列表增加搜索框（按分组名/描述/邀请码过滤）
+ *   - 搜索时自动回到第一页，避免空白页
+ *   - 前端纯切片实现，无需后端改造
+ * - v1.4 (2026-05-19): 空搜索结果友好提示 + 清理冗余useEffect
+ *   - 搜索无结果时显示 Empty 组件并隐藏表格，避免歧义
+ *   - 移除原"userGroups变化时更新分页total"的useEffect（与filteredUserGroups的useEffect功能重叠）
  */
 
-import React, { useEffect, useState } from 'react'
-import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs } from 'antd'
+import React, { useEffect, useState, useMemo } from 'react'
+import { Card, Button, Space, Alert, Form, message, Statistic, Row, Col, Tabs, Input, Empty } from 'antd'
 import { 
   UserAddOutlined, 
   PlusOutlined,
@@ -30,7 +36,9 @@ import {
   BarChartOutlined,
   DashboardOutlined,
   UsergroupAddOutlined,
-  BankOutlined
+  BankOutlined,
+  SearchOutlined,
+  InboxOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -130,6 +138,9 @@ const Users = () => {
   
   const [currentSearchParams, setCurrentSearchParams] = useState({})
   
+  // v1.3 新增：用户分组列表搜索关键字（按名称/描述/邀请码模糊匹配）
+  const [groupSearchKeyword, setGroupSearchKeyword] = useState('')
+  
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -175,10 +186,7 @@ const Users = () => {
   const loadUserGroups = async () => {
     try {
       await getUserGroups()
-      setGroupPagination(prev => ({
-        ...prev,
-        total: userGroups.length
-      }))
+      // v1.4: 分页total由filteredUserGroups的useEffect统一管理，此处不再重复设置
     } catch (error) {
       console.error('加载用户分组失败:', error)
       message.error('加载用户分组失败')
@@ -192,14 +200,33 @@ const Users = () => {
     }
   }, [hasPermission])
 
-  useEffect(() => {
-    if (userGroups.length > 0) {
-      setGroupPagination(prev => ({
-        ...prev,
-        total: userGroups.length
-      }))
+  // v1.3 新增：根据搜索关键字过滤后的分组列表
+  const filteredUserGroups = useMemo(() => {
+    if (!groupSearchKeyword || !groupSearchKeyword.trim()) {
+      return userGroups
     }
-  }, [userGroups])
+    const keyword = groupSearchKeyword.trim().toLowerCase()
+    return userGroups.filter(group => {
+      const name = (group.name || '').toLowerCase()
+      const description = (group.description || '').toLowerCase()
+      const invitationCode = (group.invitation_code || '').toLowerCase()
+      return name.includes(keyword) 
+        || description.includes(keyword) 
+        || invitationCode.includes(keyword)
+    })
+  }, [userGroups, groupSearchKeyword])
+
+  // v1.3 修改：分页总数随过滤结果变化（统一管理total，替代原v1.2前的userGroups依赖useEffect）
+  useEffect(() => {
+    setGroupPagination(prev => ({
+      ...prev,
+      total: filteredUserGroups.length
+    }))
+  }, [filteredUserGroups])
+
+  // v1.4 新增：判断是否处于"搜索激活但无结果"状态（用于显示Empty提示）
+  const isSearchActive = Boolean(groupSearchKeyword && groupSearchKeyword.trim())
+  const isSearchNoResult = isSearchActive && filteredUserGroups.length === 0
 
   const handleSearch = async (searchValues) => {
     setCurrentSearchParams(searchValues)
@@ -220,6 +247,25 @@ const Users = () => {
       pageSize: pageSize,
       total: groupPagination.total
     })
+  }
+
+  // v1.3 新增：分组搜索关键字变更时自动回到第一页
+  const handleGroupSearchChange = (e) => {
+    const value = e.target.value
+    setGroupSearchKeyword(value)
+    setGroupPagination(prev => ({
+      ...prev,
+      current: 1
+    }))
+  }
+
+  // v1.4 新增：清空搜索（Empty组件的引导按钮使用）
+  const handleClearGroupSearch = () => {
+    setGroupSearchKeyword('')
+    setGroupPagination(prev => ({
+      ...prev,
+      current: 1
+    }))
   }
 
   const handleResetSearch = async () => {
@@ -612,11 +658,12 @@ const Users = () => {
     navigate('/admin/analytics')
   }
 
+  // v1.3 修改：基于过滤后的分组列表做前端分页切片
   const getCurrentPageGroups = () => {
     const { current, pageSize } = groupPagination
     const start = (current - 1) * pageSize
     const end = start + pageSize
-    return userGroups.slice(start, end)
+    return filteredUserGroups.slice(start, end)
   }
 
   if (!hasPermission('user.manage') && !hasPermission('user.manage.group')) {
@@ -809,7 +856,30 @@ const Users = () => {
             <Tabs activeKey={activeGroupTab} onChange={setActiveGroupTab}>
               <TabPane tab="分组信息" key="info">
                 <Card 
-                  title={t('admin.groups.title')}
+                  title={
+                    /* v1.3 修改：标题区改为左右布局，左侧标题 + 中间搜索框 */
+                    <Space size="middle" style={{ width: '100%' }} wrap>
+                      <span>{t('admin.groups.title')}</span>
+                      {/* v1.3 新增：分组搜索框（按名称/描述/邀请码模糊匹配） */}
+                      <Input
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        placeholder={t('admin.groups.searchPlaceholder')}
+                        value={groupSearchKeyword}
+                        onChange={handleGroupSearchChange}
+                        allowClear
+                        style={{ 
+                          width: 280,
+                          fontWeight: 'normal'
+                        }}
+                      />
+                      {/* 显示过滤结果数（搜索激活时） */}
+                      {isSearchActive && (
+                        <span style={{ fontSize: 13, fontWeight: 'normal', color: '#8c8c8c' }}>
+                          {t('admin.groups.searchResultCount', { count: filteredUserGroups.length })}
+                        </span>
+                      )}
+                    </Space>
+                  }
                   extra={
                     isSuperAdmin && (
                       <Space>
@@ -858,24 +928,49 @@ const Users = () => {
                       style={{ marginBottom: 16 }}
                     />
                   )}
-                  <UserGroupTable
-                    groups={getCurrentPageGroups()}
-                    loading={loading}
-                    isGroupAdmin={isGroupAdmin}
-                    isSuperAdmin={isSuperAdmin}
-                    currentUser={currentUser}
-                    pagination={groupPagination}
-                    onPageChange={handleGroupPageChange}
-                    onEdit={handleEditGroup}
-                    onDelete={handleDeleteGroup}
-                    onSetCreditsPool={handleSetCreditsPool}
-                    onSetUserLimit={handleSetUserLimit}
-                    onSetExpireDate={handleSetExpireDate}
-                    onToggleSiteCustomization={handleToggleSiteCustomization}
-                    onEditSiteConfig={handleEditSiteConfig}
-                    onManageInvitationCode={handleManageInvitationCode}
-                    onViewInvitationLogs={handleViewInvitationLogs}
-                  />
+
+                  {/* v1.4 新增：搜索激活但无结果时显示Empty提示，否则显示Table */}
+                  {isSearchNoResult ? (
+                    <div style={{ padding: '60px 0' }}>
+                      <Empty
+                        image={<InboxOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />}
+                        imageStyle={{ height: 80, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                        description={
+                          <div>
+                            <div style={{ fontSize: 16, color: '#595959', marginBottom: 8 }}>
+                              {t('admin.groups.searchNoResult')}
+                            </div>
+                            <div style={{ fontSize: 13, color: '#8c8c8c' }}>
+                              {t('admin.groups.searchNoResultHint')}
+                            </div>
+                          </div>
+                        }
+                      >
+                        <Button type="primary" onClick={handleClearGroupSearch}>
+                          {t('button.reset')}
+                        </Button>
+                      </Empty>
+                    </div>
+                  ) : (
+                    <UserGroupTable
+                      groups={getCurrentPageGroups()}
+                      loading={loading}
+                      isGroupAdmin={isGroupAdmin}
+                      isSuperAdmin={isSuperAdmin}
+                      currentUser={currentUser}
+                      pagination={groupPagination}
+                      onPageChange={handleGroupPageChange}
+                      onEdit={handleEditGroup}
+                      onDelete={handleDeleteGroup}
+                      onSetCreditsPool={handleSetCreditsPool}
+                      onSetUserLimit={handleSetUserLimit}
+                      onSetExpireDate={handleSetExpireDate}
+                      onToggleSiteCustomization={handleToggleSiteCustomization}
+                      onEditSiteConfig={handleEditSiteConfig}
+                      onManageInvitationCode={handleManageInvitationCode}
+                      onViewInvitationLogs={handleViewInvitationLogs}
+                    />
+                  )}
                 </Card>
               </TabPane>
 

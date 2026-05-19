@@ -534,5 +534,10 @@
   "common.cancel": "取消",
   "common.status": "状态",
   "common.enabled": "启用",
-  "common.disabled": "禁用"
+  "common.disabled": "禁用",
+  "admin.groups.searchPlaceholder": "搜索分组名称、描述或邀请码",
+  "admin.groups.searchEmpty": "未找到匹配的分组",
+  "admin.groups.searchResultCount": "（共 {{count}} 个匹配）",
+  "admin.groups.searchNoResult": "未找到匹配的分组",
+  "admin.groups.searchNoResultHint": "请尝试其他关键词，或清空搜索框查看全部分组"
 }
