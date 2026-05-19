@@ -2,6 +2,12 @@
 // PC端样式
 // v2.1: 输入区域优化 - 增大输入框高度、改善视觉效果
 // v3.0: 新增HTML画布双栏布局
+// v4.0: 响应式断点从 768px 调整到 1024px
+//       让 iPhone Safari（视口常报告 800-980px）和小尺寸平板走移动端布局
+//       提供完整的移动端聊天 header（返回 + 标题 + 三点菜单）入口
+// v4.1: 移除 chat-mobile-container 的 fixed 定位
+//       让聊天页正常嵌入 BasicLayout 的 Content 区域
+//       避免与全局 Header 重叠遮挡
 // ================================================================
 .chat-container {
   height: 100%;
@@ -475,18 +481,18 @@
 // ================================================================
 // 移动端样式 - 优化对话卡片
 // v2.1: 移动端输入框高度和字体优化
+// v4.1: 移除 position:fixed，让聊天页正常嵌入 BasicLayout 文档流
+//       避免遮挡全局 Header 导致的视觉重叠问题
 // ================================================================
 .chat-mobile-container {
-  height: 100vh;
-  height: calc(var(--vh, 1vh) * 100);
+  // v4.1 改动：不再 fixed 脱离文档流
+  // 改用 100% 高度由父级 .basic-layout-content 决定
+  // BasicLayout 已经为 Content 区域分配了去除Header后的剩余高度
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   overflow: hidden;
   
   .mobile-loading {
@@ -871,9 +877,28 @@
 }
 
 // ================================================================
-// 响应式断点
+// v4.1: BasicLayout Content 容器在移动端聊天页的高度修正
+//       原因：BasicLayout 是 antd Layout 嵌套结构，
+//       默认 Content 没有明确高度，导致 chat-mobile-container 100% 高度失效
+//       这里通过 :has() 选择器精确修正包含聊天页的 Content
 // ================================================================
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  // 当 basic-layout-content 内含 chat-mobile-container 时
+  // 强制其高度撑满父级（即视口高度 - 全局Header高度）
+  .basic-layout-content:has(.chat-mobile-container) {
+    height: calc(100vh - 56px);
+    height: calc(calc(var(--vh, 1vh) * 100) - 56px);
+    overflow: hidden;
+    padding: 0 !important;
+  }
+}
+
+// ================================================================
+// 响应式断点
+// v4.0: 阈值从 768px 调整到 1024px，与 Chat.jsx 中 useIsMobile 保持一致
+//       让 iPhone Safari（视口报告 800-980px）走移动端布局
+// ================================================================
+@media (max-width: 1024px) {
   .chat-container {
     display: none !important;
   }
@@ -894,16 +919,11 @@
       max-width: 100% !important;
     }
   }
-  
-  body.mobile-chat-active {
-    position: fixed;
-    width: 100%;
-    overflow: hidden;
-  }
 }
 
-// 平板适配
-@media (min-width: 769px) and (max-width: 1024px) {
+// 中等尺寸PC适配（1025px - 1366px，含小屏笔记本）
+// v4.0: 原平板段（769-1024）已并入移动端，此段保留小屏笔记本调整
+@media (min-width: 1025px) and (max-width: 1366px) {
   .chat-container {
     .chat-sidebar {
       width: 280px !important;
@@ -921,7 +941,7 @@
       padding: 12px 16px;
     }
 
-    // v3.0: 平板上画布面板最小宽度调小
+    // v3.0: 小屏笔记本上画布面板最小宽度调小
     .chat-canvas-area {
       min-width: 300px !important;
     }
@@ -943,24 +963,12 @@
 
 // ================================================================
 // iOS安全区域适配
+// v4.1: 调整 padding-top（不再 fixed，安全区域由 BasicLayout Header 处理）
 // ================================================================
 @supports (padding: max(0px)) {
   .mobile-chat-view {
-    .mobile-chat-header {
-      padding-top: max(8px, env(safe-area-inset-top));
-      height: calc(54px + env(safe-area-inset-top));
-      min-height: calc(54px + env(safe-area-inset-top));
-    }
-    
     .mobile-input-container {
       padding-bottom: max(10px, env(safe-area-inset-bottom));
-    }
-  }
-  
-  .mobile-conversations-view {
-    .mobile-header {
-      padding-top: max(12px, env(safe-area-inset-top));
-      min-height: calc(56px + env(safe-area-inset-top));
     }
   }
 }
