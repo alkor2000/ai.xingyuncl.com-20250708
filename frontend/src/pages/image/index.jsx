@@ -1,58 +1,52 @@
 /**
  * 图像生成页面 - 重构版
- * 修复：图片查看器索引错位问题
+ *
+ * v1.2 关键词搜索优化
+ *   - IME 输入法保护（中文输入回车不触发搜索）
+ *   - 生成后清空搜索框（避免不一致）
+ *   - 搜索结果计数提示
+ *   - 移动端响应式
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Layout, Button, Space, Tabs, Empty, Spin, Pagination, Modal, message } from 'antd';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Layout, Button, Space, Tabs, Empty, Spin, Pagination, Modal, message, Input } from 'antd';
 import { 
   ReloadOutlined, 
   AppstoreOutlined, 
   UnorderedListOutlined,
-  GlobalOutlined 
+  GlobalOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
-// Store
 import useImageStore from '../../stores/imageStore';
 import useAuthStore from '../../stores/authStore';
 
-// Hooks
 import { useImageGeneration } from './hooks/useImageGeneration';
 import { useImageUpload } from './hooks/useImageUpload';
 import { usePagination } from './hooks/usePagination';
 
-// Components
 import ModelSelector from './components/GenerationPanel/ModelSelector';
 import PromptInput from './components/GenerationPanel/PromptInput';
 import ImageCard from './components/ImageGallery/ImageCard';
 import ImageViewer from '../../components/common/ImageViewer';
 
-// Utils
 import { TAB_KEYS, VIEW_MODES, ACTION_LABELS } from './utils/constants';
 import { isMidjourneyModel } from './utils/imageHelpers';
 
-// Styles
 import './ImageGeneration.less';
 
 const { Content, Sider } = Layout;
 const { TabPane } = Tabs;
+const { Search } = Input;
 
-/**
- * 参数设置面板组件（简化版）
- */
 const ParameterPanel = React.lazy(() => import('./components/GenerationPanel/ParameterSettings'));
-
-/**
- * Midjourney操作按钮组件（懒加载）
- */
 const MidjourneyActions = React.lazy(() => import('./components/ImageGallery/MidjourneyActions'));
 
 const ImageGeneration = () => {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   
-  // Store hooks
   const {
     generationHistory,
     historyPagination,
@@ -60,6 +54,8 @@ const ImageGeneration = () => {
     galleryPagination,
     loading,
     processingTasks,
+    keyword,
+    setKeyword,
     getUserHistory,
     getPublicGallery,
     deleteGeneration,
@@ -70,18 +66,56 @@ const ImageGeneration = () => {
     cleanupFailedTasks
   } = useImageStore();
 
-  // 自定义hooks
   const generation = useImageGeneration();
   const upload = useImageUpload();
   const historyPaging = usePagination();
   const publicPaging = usePagination();
   
-  // 本地状态
   const [viewMode, setViewMode] = useState(VIEW_MODES.GRID);
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState([]);
   const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
+  
+  // v1.1 搜索框本地输入值
+  const [searchInput, setSearchInput] = useState(keyword || '');
+  
+  // v1.2 IME 输入法保护：跟踪中文输入法的拼写态
+  // ref 而非 state，因为不需要触发渲染
+  const isComposingRef = useRef(false);
+
+  /**
+   * v1.2 工具方法：根据当前Tab、分页、关键词构建查询参数
+   * @param {object} extra 额外参数（如page/limit）
+   * @param {string} [overrideKeyword] 显式传入关键词覆盖store值（用于setState时序问题）
+   */
+  const buildQueryParams = useCallback((extra = {}, overrideKeyword) => {
+    const params = { ...extra };
+    const kw = (overrideKeyword !== undefined ? overrideKeyword : keyword) || '';
+    const trimmed = kw.trim();
+    if (trimmed) {
+      params.keyword = trimmed;
+    }
+    return params;
+  }, [keyword]);
+
+  /**
+   * 根据Tab和当前关键词刷新对应列表
+   */
+  const reloadCurrentTab = useCallback((tab, page = 1, limit = null, overrideKeyword) => {
+    if (tab === TAB_KEYS.PUBLIC) {
+      const size = limit || publicPaging.pageSize;
+      const params = buildQueryParams({ page, limit: size }, overrideKeyword);
+      getPublicGallery(params);
+    } else {
+      const size = limit || historyPaging.pageSize;
+      const params = buildQueryParams({ page, limit: size }, overrideKeyword);
+      if (tab === TAB_KEYS.FAVORITES) {
+        params.is_favorite = true;
+      }
+      getUserHistory(params);
+    }
+  }, [buildQueryParams, getPublicGallery, getUserHistory, publicPaging.pageSize, historyPaging.pageSize]);
 
   // 初始化
   useEffect(() => {
@@ -91,20 +125,30 @@ const ImageGeneration = () => {
     getUserStats();
   }, []);
 
-  // 处理生成
+  // 处理生成（v1.2: 生成成功后清空搜索框，回到无过滤的"我的图片"）
   const handleGenerate = useCallback(async () => {
     const result = await generation.handleGenerate(upload.referenceImages);
     if (result) {
-      // 生成成功后的处理
       if (isMidjourneyModel(generation.selectedModel)) {
         upload.clearReferenceImages();
       }
+      
+      // v1.2 生成成功后清空搜索框，避免新生成的图被过滤
+      if (keyword || searchInput) {
+        setKeyword('');
+        setSearchInput('');
+      }
+      
       historyPaging.setCurrentPage(1);
+      // 切回"我的图片"Tab无关键词查询，让用户看到新生成的
+      if (activeTab !== TAB_KEYS.ALL) {
+        setActiveTab(TAB_KEYS.ALL);
+      }
       getUserHistory({ page: 1, limit: historyPaging.pageSize });
     }
-  }, [generation, upload, historyPaging, getUserHistory]);
+  }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab]);
 
-  // 处理Midjourney操作
+  // Midjourney操作
   const handleMidjourneyAction = useCallback(async (generationId, action, index) => {
     const actionLabel = typeof ACTION_LABELS[action] === 'function' 
       ? ACTION_LABELS[action](index) 
@@ -126,110 +170,92 @@ const ImageGeneration = () => {
     
     if (confirm) {
       await midjourneyAction(generationId, action, index);
-      getUserHistory({ page: historyPaging.currentPage, limit: historyPaging.pageSize });
+      reloadCurrentTab(activeTab, historyPaging.currentPage);
     }
-  }, [generation.selectedModel, midjourneyAction, getUserHistory, historyPaging, t]);
+  }, [generation.selectedModel, midjourneyAction, reloadCurrentTab, historyPaging, t, activeTab]);
 
-  // 处理Tab切换
+  // Tab切换
   const handleTabChange = useCallback((key) => {
     setActiveTab(key);
-    
     if (key === TAB_KEYS.PUBLIC) {
       publicPaging.setCurrentPage(1);
-      getPublicGallery({ page: 1, limit: publicPaging.pageSize });
     } else {
       historyPaging.setCurrentPage(1);
-      const params = { page: 1, limit: historyPaging.pageSize };
-      if (key === TAB_KEYS.FAVORITES) {
-        params.is_favorite = true;
-      }
-      getUserHistory(params);
     }
-  }, [historyPaging, publicPaging, getUserHistory, getPublicGallery]);
+    reloadCurrentTab(key, 1);
+  }, [historyPaging, publicPaging, reloadCurrentTab]);
 
-  // 处理分页变化
+  // 分页变化
   const handlePageChange = useCallback((page, size) => {
     if (activeTab === TAB_KEYS.PUBLIC) {
-      const params = publicPaging.handlePageChange(page, size);
-      getPublicGallery(params);
+      publicPaging.handlePageChange(page, size);
     } else {
-      const params = historyPaging.handlePageChange(page, size);
-      if (activeTab === TAB_KEYS.FAVORITES) {
-        params.is_favorite = true;
-      }
-      getUserHistory(params);
+      historyPaging.handlePageChange(page, size);
     }
-  }, [activeTab, historyPaging, publicPaging, getUserHistory, getPublicGallery]);
+    reloadCurrentTab(activeTab, page, size);
+  }, [activeTab, historyPaging, publicPaging, reloadCurrentTab]);
 
-  // 处理刷新
+  // 刷新
   const handleRefresh = useCallback(() => {
-    if (activeTab === TAB_KEYS.PUBLIC) {
-      getPublicGallery({ page: publicPaging.currentPage, limit: publicPaging.pageSize });
-    } else {
-      const params = { page: historyPaging.currentPage, limit: historyPaging.pageSize };
-      if (activeTab === TAB_KEYS.FAVORITES) {
-        params.is_favorite = true;
-      }
-      getUserHistory(params).then(() => {
-        cleanupFailedTasks();
-      });
+    const currentPage = activeTab === TAB_KEYS.PUBLIC ? publicPaging.currentPage : historyPaging.currentPage;
+    reloadCurrentTab(activeTab, currentPage);
+    if (activeTab !== TAB_KEYS.PUBLIC) {
+      setTimeout(() => cleanupFailedTasks(), 100);
     }
-  }, [activeTab, historyPaging, publicPaging, getUserHistory, getPublicGallery, cleanupFailedTasks]);
+  }, [activeTab, historyPaging.currentPage, publicPaging.currentPage, reloadCurrentTab, cleanupFailedTasks]);
 
   /**
-   * 获取图片的最佳URL
-   * 优先级：local_path (OSS) > image_url (原始) > thumbnail_path
+   * v1.2 处理搜索：IME 保护 + 重置到第1页 + 重新查询
    */
+  const handleSearch = useCallback((value) => {
+    // IME 输入法保护：正在拼写中文则忽略此次回车
+    if (isComposingRef.current) {
+      return;
+    }
+    
+    const newKeyword = (value || '').trim();
+    setKeyword(newKeyword);
+    setSearchInput(newKeyword);
+
+    if (activeTab === TAB_KEYS.PUBLIC) {
+      publicPaging.setCurrentPage(1);
+    } else {
+      historyPaging.setCurrentPage(1);
+    }
+
+    // 使用新关键词查询（避免setState异步延迟）
+    reloadCurrentTab(activeTab, 1, null, newKeyword);
+  }, [activeTab, setKeyword, publicPaging, historyPaging, reloadCurrentTab]);
+
   const getBestImageUrl = (img) => {
-    // local_path通常是OSS URL或本地路径
     if (img.local_path) {
-      // 如果是OSS URL（以http开头），直接使用
       if (img.local_path.startsWith('http://') || img.local_path.startsWith('https://')) {
         return img.local_path;
       }
-      // 如果是本地路径，需要加上域名前缀
       if (img.local_path.startsWith('/')) {
         return `https://ai.xingyuncl.com${img.local_path}`;
       }
     }
-    
-    // image_url是原始URL（火山方舟或Midjourney返回的）
-    if (img.image_url) {
-      return img.image_url;
-    }
-    
-    // thumbnail_path作为最后备选
+    if (img.image_url) return img.image_url;
     if (img.thumbnail_path) {
-      // 如果是OSS URL，直接使用
       if (img.thumbnail_path.startsWith('http://') || img.thumbnail_path.startsWith('https://')) {
         return img.thumbnail_path;
       }
-      // 如果是本地路径，加上域名前缀
       if (img.thumbnail_path.startsWith('/')) {
         return `https://ai.xingyuncl.com${img.thumbnail_path}`;
       }
     }
-    
     return '';
   };
 
-  /**
-   * 修复：处理查看大图
-   * 关键修复：确保索引正确对应
-   */
   const handleViewImage = (item) => {
-    // 获取当前显示的数据
     const currentData = activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
-    
-    // 先构建完整的图片数据，并保留原始id
     const allImages = currentData.map(img => {
       const url = getBestImageUrl(img);
-      if (!url) return null; // 标记无效图片
-      
+      if (!url) return null;
       return {
-        id: img.id, // 保留原始id用于索引查找
+        id: img.id,
         url: url,
-        // 缩略图优先使用thumbnail_path
         thumbnail_path: img.thumbnail_path?.startsWith('http') 
           ? img.thumbnail_path 
           : (img.thumbnail_path ? `https://ai.xingyuncl.com${img.thumbnail_path}` : url),
@@ -244,41 +270,22 @@ const ImageGeneration = () => {
         gridLayout: img.grid_layout
       };
     });
-    
-    // 过滤掉无效图片（url为null的）
     const validImages = allImages.filter(img => img !== null);
-    
     if (validImages.length === 0) {
       message.error('图片加载失败');
       return;
     }
-    
-    // 重要修复：使用id查找正确的索引
     const correctIndex = validImages.findIndex(img => img.id === item.id);
-    
-    // 如果找不到对应的图片，使用第一张
     const finalIndex = correctIndex >= 0 ? correctIndex : 0;
-    
-    // 调试日志（生产环境可删除）
-    console.log('图片查看调试:', {
-      clickedItemId: item.id,
-      totalImages: currentData.length,
-      validImages: validImages.length,
-      foundIndex: correctIndex,
-      finalIndex: finalIndex
-    });
-    
     setViewerImages(validImages);
     setViewerInitialIndex(finalIndex);
     setViewerVisible(true);
   };
 
-  // 获取当前显示的数据
   const getCurrentData = () => {
     return activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
   };
 
-  // 获取当前分页信息
   const getCurrentPagination = useMemo(() => {
     if (activeTab === TAB_KEYS.PUBLIC) {
       return publicPaging.getPaginationConfig(galleryPagination.total);
@@ -286,61 +293,48 @@ const ImageGeneration = () => {
     return historyPaging.getPaginationConfig(historyPagination.total);
   }, [activeTab, publicPaging, historyPaging, galleryPagination.total, historyPagination.total]);
 
-  // 处理删除并刷新
+  // v1.2 当前总数（用于搜索结果计数提示）
+  const currentTotal = useMemo(() => {
+    return activeTab === TAB_KEYS.PUBLIC ? galleryPagination.total : historyPagination.total;
+  }, [activeTab, galleryPagination.total, historyPagination.total]);
+
   const handleDelete = useCallback(async (id) => {
     const success = await deleteGeneration(id);
     if (success) {
-      // 删除成功后刷新列表
-      const params = { page: historyPaging.currentPage, limit: historyPaging.pageSize };
-      if (activeTab === TAB_KEYS.FAVORITES) {
-        params.is_favorite = true;
-      }
-      getUserHistory(params);
+      reloadCurrentTab(activeTab, historyPaging.currentPage);
     }
-  }, [deleteGeneration, getUserHistory, historyPaging, activeTab]);
+  }, [deleteGeneration, reloadCurrentTab, historyPaging, activeTab]);
 
-  // 处理收藏切换
   const handleToggleFavorite = useCallback(async (item) => {
     const success = await toggleFavorite(item.id);
     if (success) {
-      // 如果在收藏标签页，刷新列表
       if (activeTab === TAB_KEYS.FAVORITES) {
-        getUserHistory({ 
-          page: historyPaging.currentPage, 
-          limit: historyPaging.pageSize,
-          is_favorite: true 
-        });
+        reloadCurrentTab(activeTab, historyPaging.currentPage);
       }
     }
-  }, [toggleFavorite, activeTab, getUserHistory, historyPaging]);
+  }, [toggleFavorite, activeTab, reloadCurrentTab, historyPaging]);
 
-  // 处理公开切换
   const handleTogglePublic = useCallback(async (item) => {
     const success = await togglePublic(item.id);
     if (success) {
-      // 如果在公开画廊标签页，刷新列表
       if (activeTab === TAB_KEYS.PUBLIC) {
-        getPublicGallery({ 
-          page: publicPaging.currentPage, 
-          limit: publicPaging.pageSize 
-        });
+        reloadCurrentTab(activeTab, publicPaging.currentPage);
       }
     }
-  }, [togglePublic, activeTab, getPublicGallery, publicPaging]);
+  }, [togglePublic, activeTab, reloadCurrentTab, publicPaging]);
+
+  // v1.2 是否处于搜索激活状态（用于显示计数提示和空状态文案）
+  const isSearchActive = keyword && keyword.trim().length > 0;
 
   return (
     <Layout className="image-generation-page">
-      {/* 左侧生成面板 */}
       <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
-          {/* 模型选择 */}
           <ModelSelector
             models={generation.models}
             selectedModel={generation.selectedModel}
             onModelChange={generation.handleModelChange}
           />
-
-          {/* 提示词输入 */}
           <PromptInput
             prompt={generation.prompt}
             negativePrompt={generation.negativePrompt}
@@ -348,8 +342,6 @@ const ImageGeneration = () => {
             onPromptChange={generation.setPrompt}
             onNegativePromptChange={generation.setNegativePrompt}
           />
-
-          {/* 参数设置 - 懒加载 */}
           <React.Suspense fallback={<Spin />}>
             <ParameterPanel
               selectedModel={generation.selectedModel}
@@ -374,16 +366,28 @@ const ImageGeneration = () => {
         </div>
       </Sider>
 
-      {/* 右侧历史记录 */}
       <Content className="history-content">
         <div className="history-header-wrapper">
           <div className="history-header">
-            <Tabs activeKey={activeTab} onChange={handleTabChange}>
+            <Tabs activeKey={activeTab} onChange={handleTabChange} className="history-tabs">
               <TabPane tab={t('image.myImages', '我的图片')} key={TAB_KEYS.ALL} />
               <TabPane tab={t('image.myFavorites', '我的收藏')} key={TAB_KEYS.FAVORITES} />
               <TabPane tab={<span><GlobalOutlined /> {t('image.publicGallery', '公开画廊')}</span>} key={TAB_KEYS.PUBLIC} />
             </Tabs>
-            <Space>
+            <Space className="history-actions" wrap>
+              {/* v1.2 搜索框：IME 保护 + 提示词/模型名模糊搜索 */}
+              <Search
+                className="history-search"
+                placeholder={t('image.searchPlaceholder', '搜索提示词或模型名...')}
+                allowClear
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onSearch={handleSearch}
+                onCompositionStart={() => { isComposingRef.current = true; }}
+                onCompositionEnd={() => { isComposingRef.current = false; }}
+                enterButton={<SearchOutlined />}
+                maxLength={100}
+              />
               <Button
                 icon={viewMode === VIEW_MODES.GRID ? <AppstoreOutlined /> : <UnorderedListOutlined />}
                 onClick={() => setViewMode(viewMode === VIEW_MODES.GRID ? VIEW_MODES.LIST : VIEW_MODES.GRID)}
@@ -396,6 +400,16 @@ const ImageGeneration = () => {
               </Button>
             </Space>
           </div>
+          
+          {/* v1.2 搜索结果计数提示 */}
+          {!loading && isSearchActive && (
+            <div className="search-result-tip">
+              {currentTotal > 0
+                ? <span>找到 <strong>{currentTotal}</strong> 条匹配 "<strong>{keyword}</strong>" 的结果</span>
+                : <span>没有匹配 "<strong>{keyword}</strong>" 的结果</span>
+              }
+            </div>
+          )}
           
           {!loading && getCurrentData().length > 0 && (
             <div className="history-pagination">
@@ -442,11 +456,13 @@ const ImageGeneration = () => {
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  activeTab === TAB_KEYS.PUBLIC 
-                    ? t('image.noPublicImages', '暂无公开的图片')
-                    : activeTab === TAB_KEYS.FAVORITES
-                    ? t('image.noFavorites', '暂无收藏的图片')
-                    : t('image.noHistory', '暂无生成记录')
+                  isSearchActive
+                    ? `没有匹配 "${keyword}" 的图片`
+                    : activeTab === TAB_KEYS.PUBLIC 
+                      ? t('image.noPublicImages', '暂无公开的图片')
+                      : activeTab === TAB_KEYS.FAVORITES
+                      ? t('image.noFavorites', '暂无收藏的图片')
+                      : t('image.noHistory', '暂无生成记录')
                 }
               />
             )}
@@ -454,7 +470,6 @@ const ImageGeneration = () => {
         </div>
       </Content>
 
-      {/* 图片查看器 */}
       <ImageViewer
         visible={viewerVisible}
         images={viewerImages}

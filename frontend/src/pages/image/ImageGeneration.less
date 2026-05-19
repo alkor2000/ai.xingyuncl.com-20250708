@@ -961,3 +961,71 @@
     }
   }
 }
+
+/* =========== v1.2 搜索框 + 计数提示 + 移动端响应式 =========== */
+
+.image-generation-page {
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .history-tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+
+  .history-actions {
+    flex: 0 0 auto;
+  }
+
+  /* 搜索框宽度（PC 端） */
+  .history-search {
+    width: 240px;
+  }
+
+  /* 搜索结果计数提示 */
+  .search-result-tip {
+    padding: 8px 16px;
+    margin: 0 0 8px 0;
+    background: rgba(24, 144, 255, 0.08);
+    border-left: 3px solid #1890ff;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #555;
+
+    strong {
+      color: #1890ff;
+      font-weight: 600;
+    }
+  }
+}
+
+/* 移动端响应式（≤768px） */
+@media (max-width: 768px) {
+  .image-generation-page {
+    .history-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .history-tabs {
+      width: 100%;
+    }
+
+    .history-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .history-search {
+      width: 100%;
+      flex: 1 1 auto;
+    }
+  }
+}

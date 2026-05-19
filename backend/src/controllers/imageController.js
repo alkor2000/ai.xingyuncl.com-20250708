@@ -1,5 +1,9 @@
 /**
  * 图像生成控制器
+ *
+ * v1.1 新增 keyword 关键词搜索透传
+ *   - getUserHistory 透传 req.query.keyword
+ *   - getPublicGallery 透传 req.query.keyword
  */
 
 const ImageService = require('../services/imageService');
@@ -18,13 +22,10 @@ class ImageController {
   static async getModels(req, res) {
     try {
       const models = await ImageService.getAvailableModels();
-      
-      // 不返回API密钥
       const safeModels = models.map(model => {
         const { api_key, ...safeModel } = model;
         return safeModel;
       });
-      
       return ResponseHelper.success(res, safeModels);
     } catch (error) {
       logger.error('获取图像模型列表失败:', error);
@@ -34,7 +35,6 @@ class ImageController {
 
   /**
    * 上传参考图片（用于图生图）
-   * 将图片上传到OSS/本地存储，返回URL供后续使用
    */
   static async uploadReferenceImage(req, res) {
     try {
@@ -44,21 +44,17 @@ class ImageController {
         return ResponseHelper.validation(res, null, '请选择要上传的图片');
       }
       
-      // 初始化OSS服务
       await ossService.initialize();
       
-      // 生成唯一的文件名
       const timestamp = Date.now();
       const random = crypto.randomBytes(8).toString('hex');
       const originalName = req.file.originalname;
       const ext = originalName.substring(originalName.lastIndexOf('.'));
       const fileName = `ref_${userId}_${timestamp}_${random}${ext}`;
       
-      // 构建OSS key
-      const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const dateFolder = new Date().toISOString().slice(0, 7);
       const ossKey = `image-reference/${userId}/${dateFolder}/${fileName}`;
       
-      // 上传到OSS/本地存储
       const uploadResult = await ossService.uploadFile(req.file.buffer, ossKey, {
         headers: {
           'Content-Type': req.file.mimetype,
@@ -78,7 +74,6 @@ class ImageController {
         url: uploadResult.url
       });
       
-      // 返回图片URL
       return ResponseHelper.success(res, {
         url: uploadResult.url,
         ossKey: ossKey,
@@ -107,12 +102,11 @@ class ImageController {
         seed, 
         guidance_scale, 
         watermark,
-        quantity = 1,  // 生成数量
-        mode = 'fast',  // Midjourney模式
-        reference_images = []  // 参考图片URL数组（用于图生图）
+        quantity = 1,
+        mode = 'fast',
+        reference_images = []
       } = req.body;
       
-      // 验证必填参数
       if (!model_id || !prompt) {
         return ResponseHelper.validation(res, {
           model_id: !model_id ? '请选择模型' : null,
@@ -120,15 +114,12 @@ class ImageController {
         }, '参数不完整');
       }
       
-      // 获取模型信息
       const model = await ImageModel.findById(model_id);
       if (!model) {
         return ResponseHelper.notFound(res, '模型不存在');
       }
       
-      // 判断是否为Midjourney模型
       if (model.provider === 'midjourney' && model.generation_type === 'async') {
-        // 使用Midjourney服务
         const result = await MidjourneyService.submitImagine(userId, model_id, {
           prompt,
           negative_prompt,
@@ -138,32 +129,26 @@ class ImageController {
         
         return ResponseHelper.success(res, result, result.message);
       } else {
-        // 使用普通图像服务（豆包等同步模型）
-        // 验证参数
         const errors = ImageService.validateGenerationParams(req.body);
         if (errors.length > 0) {
           return ResponseHelper.validation(res, null, errors.join('; '));
         }
         
-        // 检查模型是否支持图生图
         if (reference_images.length > 0) {
           const apiConfig = model.api_config || {};
           if (!apiConfig.supports_image2image) {
             return ResponseHelper.validation(res, null, '该模型不支持图生图功能');
           }
           
-          // 检查参考图片数量限制
           const maxImages = apiConfig.max_reference_images || 2;
           if (reference_images.length > maxImages) {
             return ResponseHelper.validation(res, null, `该模型最多支持${maxImages}张参考图片`);
           }
         }
         
-        // 限制数量范围
         const actualQuantity = Math.min(Math.max(1, parseInt(quantity) || 1), 4);
         
         if (actualQuantity === 1) {
-          // 单张生成（保持兼容性）
           const result = await ImageService.generateImage(userId, model_id, {
             prompt,
             negative_prompt,
@@ -171,12 +156,11 @@ class ImageController {
             seed,
             guidance_scale,
             watermark,
-            reference_images  // 传递参考图片URL
+            reference_images
           });
           
           return ResponseHelper.success(res, result, '图片生成成功');
         } else {
-          // 批量生成
           const result = await ImageService.generateImages(userId, model_id, {
             prompt,
             negative_prompt,
@@ -184,7 +168,7 @@ class ImageController {
             seed,
             guidance_scale,
             watermark,
-            reference_images  // 传递参考图片URL
+            reference_images
           }, actualQuantity);
           
           if (result.succeeded > 0) {
@@ -214,7 +198,6 @@ class ImageController {
       const userId = req.user.id;
       const { generation_id, action, index } = req.body;
       
-      // 验证参数
       if (!generation_id || !action) {
         return ResponseHelper.validation(res, {
           generation_id: !generation_id ? '请提供生成记录ID' : null,
@@ -222,13 +205,11 @@ class ImageController {
         });
       }
       
-      // 验证操作类型
       const validActions = ['UPSCALE', 'VARIATION', 'REROLL'];
       if (!validActions.includes(action)) {
         return ResponseHelper.validation(res, { action: '无效的操作类型' });
       }
       
-      // 对于U/V操作，需要index
       if ((action === 'UPSCALE' || action === 'VARIATION') && (!index || index < 1 || index > 4)) {
         return ResponseHelper.validation(res, { index: '请提供有效的图片索引(1-4)' });
       }
@@ -255,26 +236,22 @@ class ImageController {
       const { task_id } = req.params;
       const userId = req.user.id;
       
-      // 根据task_id查询生成记录（修复查询）
       const generation = await ImageGeneration.findByTaskId(task_id);
       
       if (!generation) {
         return ResponseHelper.notFound(res, '任务不存在');
       }
       
-      // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权查看此任务');
       }
       
-      // 如果任务还在进行中，尝试查询最新状态
       if (generation.task_status === 'SUBMITTED' || generation.task_status === 'IN_PROGRESS') {
         try {
           const model = await ImageModel.findById(generation.model_id);
           if (model) {
             const taskData = await MidjourneyService.fetchTaskStatus(task_id, model);
             
-            // 返回最新状态和当前数据
             return ResponseHelper.success(res, {
               id: generation.id,
               task_id: generation.task_id,
@@ -291,12 +268,10 @@ class ImageController {
             });
           }
         } catch (error) {
-          // 如果查询失败，返回数据库中的状态
           logger.warn('查询Midjourney任务状态失败，返回缓存状态', { task_id, error: error.message });
         }
       }
       
-      // 返回数据库中的状态
       return ResponseHelper.success(res, generation);
     } catch (error) {
       logger.error('获取任务状态失败:', error);
@@ -332,14 +307,11 @@ class ImageController {
     try {
       const data = req.body;
       
-      // 验证webhook密钥（如果配置了）
       const webhookSecret = process.env.MIDJOURNEY_WEBHOOK_SECRET;
       if (webhookSecret) {
         const signature = req.headers['x-webhook-signature'];
-        // TODO: 验证签名
       }
       
-      // 处理回调
       const success = await MidjourneyService.handleWebhook(data);
       
       if (success) {
@@ -355,18 +327,21 @@ class ImageController {
 
   /**
    * 获取用户的生成历史
+   *
+   * v1.1 新增 keyword 参数透传
    */
   static async getUserHistory(req, res) {
     try {
       const userId = req.user.id;
-      const { page = 1, limit = 20, status, is_favorite, model_id } = req.query;
+      const { page = 1, limit = 20, status, is_favorite, model_id, keyword } = req.query;
       
       const result = await ImageGeneration.getUserHistory(userId, {
         page: parseInt(page),
         limit: parseInt(limit),
         status,
         is_favorite: is_favorite === 'true' ? 1 : is_favorite === 'false' ? 0 : null,
-        model_id: model_id ? parseInt(model_id) : null
+        model_id: model_id ? parseInt(model_id) : null,
+        keyword: keyword || null
       });
       
       return ResponseHelper.success(res, result);
@@ -390,12 +365,10 @@ class ImageController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      // 验证权限（只能查看自己的或公开的）
       if (generation.user_id !== userId && !generation.is_public) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
       
-      // 增加查看次数
       if (generation.is_public && generation.user_id !== userId) {
         await ImageGeneration.incrementViewCount(id);
       }
@@ -415,21 +388,17 @@ class ImageController {
       const { id } = req.params;
       const userId = req.user.id;
       
-      // 获取记录信息
       const generation = await ImageGeneration.findById(id);
       if (!generation) {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权删除此记录');
       }
       
-      // 删除文件
       await ImageService.deleteImageFile(generation.local_path, generation.thumbnail_path);
       
-      // 删除记录
       const success = await ImageGeneration.delete(id, userId);
       
       if (!success) {
@@ -455,16 +424,13 @@ class ImageController {
         return ResponseHelper.validation(res, { ids: '请选择要删除的记录' });
       }
       
-      // 获取要删除的记录
       for (const id of ids) {
         const generation = await ImageGeneration.findById(id);
         if (generation && generation.user_id === userId) {
-          // 删除文件
           await ImageService.deleteImageFile(generation.local_path, generation.thumbnail_path);
         }
       }
       
-      // 批量删除记录
       const deletedCount = await ImageGeneration.batchDelete(ids, userId);
       
       return ResponseHelper.success(res, { deletedCount }, `成功删除 ${deletedCount} 条记录`);
@@ -497,15 +463,18 @@ class ImageController {
 
   /**
    * 获取公开画廊
+   *
+   * v1.1 新增 keyword 参数透传
    */
   static async getPublicGallery(req, res) {
     try {
-      const { page = 1, limit = 20, model_id } = req.query;
+      const { page = 1, limit = 20, model_id, keyword } = req.query;
       
       const result = await ImageGeneration.getPublicGallery({
         page: parseInt(page),
         limit: parseInt(limit),
-        model_id: model_id ? parseInt(model_id) : null
+        model_id: model_id ? parseInt(model_id) : null,
+        keyword: keyword || null
       });
       
       return ResponseHelper.success(res, result);
@@ -523,18 +492,15 @@ class ImageController {
       const { id } = req.params;
       const userId = req.user.id;
       
-      // 获取记录
       const generation = await ImageGeneration.findById(id);
       if (!generation) {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      // 验证权限
       if (generation.user_id !== userId) {
         return ResponseHelper.forbidden(res, '无权操作此记录');
       }
       
-      // 切换公开状态
       const success = await ImageGeneration.update(id, {
         is_public: generation.is_public ? 0 : 1
       });
@@ -566,17 +532,10 @@ class ImageController {
   }
 }
 
-// 管理端控制器
 class ImageAdminController {
-  /**
-   * 获取所有图像模型（管理端）- 修复：直接返回模型，不重复处理has_api_key
-   */
   static async getAllModels(req, res) {
     try {
-      // ImageModel.findAll()已经正确处理了：移除api_key，添加has_api_key
       const models = await ImageModel.findAll();
-      
-      // 直接返回，不再重复处理
       return ResponseHelper.success(res, models);
     } catch (error) {
       logger.error('获取图像模型列表失败:', error);
@@ -584,14 +543,10 @@ class ImageAdminController {
     }
   }
 
-  /**
-   * 创建图像模型
-   */
   static async createModel(req, res) {
     try {
       const modelData = req.body;
       
-      // 验证必填字段
       if (!modelData.name || !modelData.display_name || !modelData.endpoint || !modelData.model_id) {
         return ResponseHelper.validation(res, {
           name: !modelData.name ? '模型标识不能为空' : null,
@@ -604,7 +559,6 @@ class ImageAdminController {
       const modelId = await ImageModel.create(modelData);
       const newModel = await ImageModel.findById(modelId);
       
-      // 添加has_api_key标识
       const safeModel = { ...newModel };
       delete safeModel.api_key;
       safeModel.has_api_key = !!newModel.api_key;
@@ -616,9 +570,6 @@ class ImageAdminController {
     }
   }
 
-  /**
-   * 更新图像模型
-   */
   static async updateModel(req, res) {
     try {
       const { id } = req.params;
@@ -632,7 +583,6 @@ class ImageAdminController {
       
       const updatedModel = await ImageModel.findById(id);
       
-      // 添加has_api_key标识
       const safeModel = { ...updatedModel };
       delete safeModel.api_key;
       safeModel.has_api_key = !!updatedModel.api_key;
@@ -644,9 +594,6 @@ class ImageAdminController {
     }
   }
 
-  /**
-   * 删除图像模型
-   */
   static async deleteModel(req, res) {
     try {
       const { id } = req.params;
@@ -664,9 +611,6 @@ class ImageAdminController {
     }
   }
 
-  /**
-   * 切换模型状态
-   */
   static async toggleModelStatus(req, res) {
     try {
       const { id } = req.params;

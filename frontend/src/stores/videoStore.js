@@ -1,12 +1,16 @@
 /**
  * 视频生成状态管理
+ *
+ * v1.1 新增 keyword 关键词搜索能力
+ *   - 新增 keyword state 和 setKeyword action
+ *   - keyword 仅作为状态存储，由页面层在调用 getUserHistory/getPublicGallery 时传入参数
  */
 import { create } from 'zustand';
 import apiClient from '../utils/api';
 import { message } from 'antd';
 
 const useVideoStore = create((set, get) => ({
-  // 状态
+  // ========== 状态 ==========
   models: [],
   selectedModel: null,
   generating: false,
@@ -19,6 +23,14 @@ const useVideoStore = create((set, get) => ({
   userStats: null,
   processingTasks: {}, // 正在处理的任务
   completedTasks: {}, // 已完成的任务（避免状态回退）
+  
+  // v1.1 关键词搜索状态（页面切换Tab时保留）
+  keyword: '',
+
+  // v1.1 设置关键词（仅更新状态，不触发查询）
+  setKeyword: (keyword) => {
+    set({ keyword: keyword || '' });
+  },
 
   // 获取模型列表
   getModels: async () => {
@@ -60,7 +72,6 @@ const useVideoStore = create((set, get) => ({
       if (response.data.success) {
         const result = response.data.data;
         
-        // 添加到处理任务列表
         if (result.taskId) {
           set(state => ({
             processingTasks: {
@@ -75,7 +86,6 @@ const useVideoStore = create((set, get) => ({
           // 立即刷新历史记录，获取新创建的任务
           await get().getUserHistory({ page: 1, limit: 20 });
           
-          // 开始轮询任务状态
           get().pollTaskStatus(result.taskId, result.generationId);
         }
         
@@ -93,16 +103,14 @@ const useVideoStore = create((set, get) => ({
 
   // 轮询任务状态
   pollTaskStatus: async (taskId, generationId) => {
-    const pollInterval = 5000; // 5秒
-    const maxPollingTime = 600000; // 10分钟
+    const pollInterval = 5000;
+    const maxPollingTime = 600000;
     const startTime = Date.now();
     
     const poll = async () => {
       try {
-        // 检查是否超时
         if (Date.now() - startTime > maxPollingTime) {
           message.error('任务查询超时');
-          // 从处理任务列表中移除
           set(state => {
             const newTasks = { ...state.processingTasks };
             delete newTasks[taskId];
@@ -111,7 +119,6 @@ const useVideoStore = create((set, get) => ({
           return;
         }
 
-        // 检查是否已经在已完成列表中（避免重复轮询）
         if (get().completedTasks[taskId]) {
           return;
         }
@@ -121,7 +128,6 @@ const useVideoStore = create((set, get) => ({
         if (response.data.success) {
           const taskData = response.data.data;
           
-          // 实时更新历史记录中对应任务的状态
           set(state => ({
             generationHistory: state.generationHistory.map(item => {
               if (item.id === generationId || item.task_id === taskId) {
@@ -139,14 +145,11 @@ const useVideoStore = create((set, get) => ({
             })
           }));
           
-          // 更新全局进度（如果需要）
           if (taskData.progress !== undefined) {
             set({ generationProgress: taskData.progress });
           }
           
-          // 检查是否完成
           if (taskData.status === 'succeeded' || taskData.status === 'failed') {
-            // 标记为已完成，防止状态回退
             set(state => ({
               completedTasks: {
                 ...state.completedTasks,
@@ -164,7 +167,6 @@ const useVideoStore = create((set, get) => ({
               generationProgress: 0
             }));
             
-            // 最终更新一次状态，确保数据完整
             set(state => ({
               generationHistory: state.generationHistory.map(item => {
                 if (item.id === generationId || item.task_id === taskId) {
@@ -187,7 +189,6 @@ const useVideoStore = create((set, get) => ({
               message.error(`视频生成失败: ${taskData.error_message || '未知错误'}`);
             }
             
-            // 清理已完成任务记录（24小时后）
             setTimeout(() => {
               set(state => {
                 const newCompleted = { ...state.completedTasks };
@@ -197,22 +198,23 @@ const useVideoStore = create((set, get) => ({
             }, 24 * 60 * 60 * 1000);
             
           } else {
-            // 继续轮询
             setTimeout(poll, pollInterval);
           }
         }
       } catch (error) {
         console.error('查询任务状态失败:', error);
-        // 继续轮询，但增加间隔
         setTimeout(poll, pollInterval * 2);
       }
     };
     
-    // 开始轮询
     setTimeout(poll, pollInterval);
   },
 
-  // 获取用户历史
+  /**
+   * 获取用户历史
+   *
+   * v1.1 由调用方在 params 中传入 keyword（可选）
+   */
   getUserHistory: async (params = {}) => {
     set({ loading: true });
     try {
@@ -220,18 +222,15 @@ const useVideoStore = create((set, get) => ({
       if (response.data.success) {
         const { data, pagination } = response.data.data;
         
-        // 获取已完成和正在处理的任务
         const completedTasks = get().completedTasks;
         const processingTasks = get().processingTasks;
         const currentHistory = get().generationHistory;
         
         // 智能合并数据
         const mergedData = data.map(newItem => {
-          // 如果任务已完成，不要覆盖其状态
           if (completedTasks[newItem.task_id]) {
             const currentItem = currentHistory.find(item => item.task_id === newItem.task_id);
             if (currentItem && (currentItem.status === 'succeeded' || currentItem.status === 'failed')) {
-              // 保留已完成任务的最终状态
               return {
                 ...newItem,
                 status: currentItem.status,
@@ -243,11 +242,9 @@ const useVideoStore = create((set, get) => ({
             }
           }
           
-          // 如果任务正在处理，保留实时更新的状态
           if (processingTasks[newItem.task_id]) {
             const currentItem = currentHistory.find(item => item.task_id === newItem.task_id);
             if (currentItem && currentItem.status !== 'submitted') {
-              // 保留轮询更新的状态，除非是初始状态
               return {
                 ...newItem,
                 status: currentItem.status || newItem.status,
@@ -270,7 +267,6 @@ const useVideoStore = create((set, get) => ({
               (item.status === 'running' || item.status === 'queued' || item.status === 'submitted') &&
               !processingTasks[item.task_id] && 
               !completedTasks[item.task_id]) {
-            // 添加到处理列表并开始轮询
             set(state => ({
               processingTasks: {
                 ...state.processingTasks,
@@ -286,7 +282,6 @@ const useVideoStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('获取历史记录失败:', error);
-      // 暂时忽略错误，因为可能是空数据导致的SQL问题
       set({ 
         generationHistory: [],
         historyPagination: { total: 0, page: 1, limit: 20 }
@@ -296,7 +291,11 @@ const useVideoStore = create((set, get) => ({
     }
   },
 
-  // 获取公开画廊
+  /**
+   * 获取公开画廊
+   *
+   * v1.1 由调用方在 params 中传入 keyword（可选）
+   */
   getPublicGallery: async (params = {}) => {
     set({ loading: true });
     try {
@@ -322,12 +321,9 @@ const useVideoStore = create((set, get) => ({
       if (response.data.success) {
         message.success('删除成功');
         
-        // 获取要删除项的task_id
         const itemToDelete = get().generationHistory.find(item => item.id === id);
         
-        // 更新列表
         set(state => {
-          // 如果有task_id，从各种任务列表中清理
           const newState = {
             generationHistory: state.generationHistory.filter(item => item.id !== id),
             historyPagination: {
@@ -362,7 +358,6 @@ const useVideoStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/video/generation/${id}/favorite`);
       if (response.data.success) {
-        // 更新列表中的收藏状态
         set(state => ({
           generationHistory: state.generationHistory.map(item =>
             item.id === id ? { ...item, is_favorite: !item.is_favorite } : item
@@ -382,7 +377,6 @@ const useVideoStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/video/generation/${id}/public`);
       if (response.data.success) {
-        // 更新列表中的公开状态
         set(state => ({
           generationHistory: state.generationHistory.map(item =>
             item.id === id ? { ...item, is_public: !item.is_public } : item
@@ -414,7 +408,6 @@ const useVideoStore = create((set, get) => ({
     const { generationHistory } = get();
     generationHistory.forEach(item => {
       if (item.task_id && (item.status === 'running' || item.status === 'queued' || item.status === 'submitted')) {
-        // 添加到处理任务列表并开始轮询
         set(state => ({
           processingTasks: {
             ...state.processingTasks,

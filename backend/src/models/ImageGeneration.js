@@ -1,38 +1,40 @@
 /**
  * 图片生成历史记录模型
+ *
+ * v1.2 关键词搜索 + 通配符转义 + 长度限制
  */
 
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
 
+// 关键词最大长度（防止超长查询浪费资源）
+const KEYWORD_MAX_LENGTH = 100;
+
+/**
+ * 规范化关键词：去首尾空格 + 截断 + 转义 LIKE 通配符
+ * 转义 \  %  _ 三个字符，防止用户输入 50% 被当作通配符
+ * 返回空字符串表示无关键词
+ */
+function normalizeKeyword(keyword) {
+  if (typeof keyword !== 'string') return '';
+  const trimmed = keyword.trim();
+  if (!trimmed) return '';
+  const truncated = trimmed.substring(0, KEYWORD_MAX_LENGTH);
+  // 转义顺序：先转义反斜杠，再转义 % 和 _
+  return truncated.replace(/\\/g, '\\\\').replace(/[%_]/g, '\\$&');
+}
+
 class ImageGeneration {
-  /**
-   * 创建生成记录（支持Midjourney字段）
-   */
   static async create(data) {
     try {
       const {
-        user_id,
-        model_id,
-        parent_id = null,
-        prompt,
-        negative_prompt = null,
-        prompt_en = null,
-        size = '1024x1024',
-        seed = -1,
-        guidance_scale = 2.5,
-        watermark = 1,
-        status = 'pending',
-        task_status = null,
-        task_id = null,
-        action_type = 'IMAGINE',
-        action_index = null,
-        generation_mode = 'fast',
-        grid_layout = 0,
-        mj_custom_id = null,
-        buttons = null,
-        progress = null,
-        credits_consumed = 0
+        user_id, model_id, parent_id = null, prompt,
+        negative_prompt = null, prompt_en = null,
+        size = '1024x1024', seed = -1, guidance_scale = 2.5,
+        watermark = 1, status = 'pending', task_status = null,
+        task_id = null, action_type = 'IMAGINE', action_index = null,
+        generation_mode = 'fast', grid_layout = 0, mj_custom_id = null,
+        buttons = null, progress = null, credits_consumed = 0
       } = data;
 
       const query = `
@@ -45,27 +47,10 @@ class ImageGeneration {
       `;
 
       const result = await dbConnection.query(query, [
-        user_id,
-        model_id,
-        parent_id,
-        prompt,
-        negative_prompt,
-        prompt_en,
-        size,
-        seed,
-        guidance_scale,
-        watermark,
-        status,
-        task_status,
-        task_id,
-        action_type,
-        action_index,
-        generation_mode,
-        grid_layout,
-        mj_custom_id,
-        buttons ? JSON.stringify(buttons) : null,
-        progress,
-        credits_consumed
+        user_id, model_id, parent_id, prompt, negative_prompt, prompt_en,
+        size, seed, guidance_scale, watermark, status, task_status, task_id,
+        action_type, action_index, generation_mode, grid_layout, mj_custom_id,
+        buttons ? JSON.stringify(buttons) : null, progress, credits_consumed
       ]);
 
       return result.rows.insertId;
@@ -75,18 +60,12 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 更新生成记录（支持所有字段）
-   */
   static async update(id, updateData) {
     try {
-      // 扩展允许更新的字段，包含所有Midjourney相关字段
       const allowedFields = [
-        // 原有字段
         'image_url', 'local_path', 'thumbnail_path', 'file_size',
         'status', 'error_message', 'credits_consumed', 'generation_time',
         'is_favorite', 'is_public',
-        // Midjourney相关字段
         'task_id', 'task_status', 'buttons', 'grid_layout', 'prompt_en',
         'parent_id', 'action_type', 'action_index', 'generation_mode',
         'progress', 'mj_custom_id', 'fail_reason'
@@ -98,7 +77,6 @@ class ImageGeneration {
       for (const field of allowedFields) {
         if (updateData.hasOwnProperty(field)) {
           fields.push(`${field} = ?`);
-          // 特殊处理buttons字段（如果是对象则转JSON）
           if (field === 'buttons' && typeof updateData[field] === 'object') {
             values.push(JSON.stringify(updateData[field]));
           } else {
@@ -114,7 +92,6 @@ class ImageGeneration {
       values.push(id);
       const query = `UPDATE image_generations SET ${fields.join(', ')} WHERE id = ?`;
       const result = await dbConnection.query(query, values);
-
       return result.rows.affectedRows > 0;
     } catch (error) {
       logger.error('更新图片生成记录失败:', error);
@@ -124,6 +101,9 @@ class ImageGeneration {
 
   /**
    * 获取用户的生成历史
+   *
+   * v1.2 keyword 关键词搜索（提示词/负面提示词/模型显示名/provider 模糊匹配）
+   *      LIKE 通配符已转义，长度已截断
    */
   static async getUserHistory(userId, options = {}) {
     try {
@@ -132,7 +112,8 @@ class ImageGeneration {
         limit = 20,
         status = null,
         is_favorite = null,
-        model_id = null
+        model_id = null,
+        keyword = null
       } = options;
 
       const offset = (page - 1) * limit;
@@ -154,18 +135,27 @@ class ImageGeneration {
         params.push(model_id);
       }
 
+      // v1.2 关键词模糊匹配（转义通配符 + 长度限制 + 参数化）
+      const normalizedKeyword = normalizeKeyword(keyword);
+      if (normalizedKeyword) {
+        conditions.push('(ig.prompt LIKE ? OR ig.negative_prompt LIKE ? OR im.display_name LIKE ? OR im.provider LIKE ?)');
+        const likeValue = `%${normalizedKeyword}%`;
+        params.push(likeValue, likeValue, likeValue, likeValue);
+      }
+
       const whereClause = conditions.join(' AND ');
 
-      // 获取总数
+      // 总数查询（必须 JOIN image_models 以便引用 im.* 字段）
       const countQuery = `
         SELECT COUNT(*) as total 
         FROM image_generations ig
+        LEFT JOIN image_models im ON ig.model_id = im.id
         WHERE ${whereClause}
       `;
       const countResult = await dbConnection.query(countQuery, params);
       const total = countResult.rows[0].total;
 
-      // 获取数据 - 使用simpleQuery处理LIMIT和OFFSET
+      // 数据查询
       const query = `
         SELECT 
           ig.*,
@@ -179,7 +169,6 @@ class ImageGeneration {
         LIMIT ? OFFSET ?
       `;
 
-      // 使用simpleQuery而不是query，以正确处理LIMIT和OFFSET
       const queryParams = [...params, limit, offset];
       const result = await dbConnection.simpleQuery(query, queryParams);
 
@@ -198,9 +187,6 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 根据ID获取生成记录
-   */
   static async findById(id) {
     try {
       const query = `
@@ -216,13 +202,8 @@ class ImageGeneration {
         LEFT JOIN users u ON ig.user_id = u.id
         WHERE ig.id = ?
       `;
-
       const result = await dbConnection.query(query, [id]);
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
+      if (result.rows.length === 0) return null;
       return result.rows[0];
     } catch (error) {
       logger.error('获取图片生成记录失败:', error);
@@ -230,9 +211,6 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 根据task_id获取生成记录
-   */
   static async findByTaskId(taskId) {
     try {
       const query = `
@@ -245,13 +223,8 @@ class ImageGeneration {
         LEFT JOIN image_models im ON ig.model_id = im.id
         WHERE ig.task_id = ?
       `;
-
       const result = await dbConnection.query(query, [taskId]);
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
+      if (result.rows.length === 0) return null;
       return result.rows[0];
     } catch (error) {
       logger.error('根据task_id获取图片生成记录失败:', error);
@@ -259,20 +232,14 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 删除生成记录
-   */
   static async delete(id, userId = null) {
     try {
       let query = `DELETE FROM image_generations WHERE id = ?`;
       const params = [id];
-
-      // 如果指定了用户ID，确保只能删除自己的记录
       if (userId) {
         query += ' AND user_id = ?';
         params.push(userId);
       }
-
       const result = await dbConnection.query(query, params);
       return result.rows.affectedRows > 0;
     } catch (error) {
@@ -281,24 +248,16 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 批量删除用户的生成记录
-   */
   static async batchDelete(ids, userId) {
     try {
-      if (!Array.isArray(ids) || ids.length === 0) {
-        return false;
-      }
-
+      if (!Array.isArray(ids) || ids.length === 0) return false;
       const placeholders = ids.map(() => '?').join(',');
       const query = `
         DELETE FROM image_generations 
         WHERE id IN (${placeholders}) AND user_id = ?
       `;
-
       const params = [...ids, userId];
       const result = await dbConnection.query(query, params);
-
       return result.rows.affectedRows;
     } catch (error) {
       logger.error('批量删除图片生成记录失败:', error);
@@ -306,9 +265,6 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 切换收藏状态
-   */
   static async toggleFavorite(id, userId) {
     try {
       const query = `
@@ -316,7 +272,6 @@ class ImageGeneration {
         SET is_favorite = NOT is_favorite
         WHERE id = ? AND user_id = ?
       `;
-
       const result = await dbConnection.query(query, [id, userId]);
       return result.rows.affectedRows > 0;
     } catch (error) {
@@ -327,13 +282,15 @@ class ImageGeneration {
 
   /**
    * 获取公开的图片（画廊）
+   * v1.2 同样支持 keyword
    */
   static async getPublicGallery(options = {}) {
     try {
       const {
         page = 1,
         limit = 20,
-        model_id = null
+        model_id = null,
+        keyword = null
       } = options;
 
       const offset = (page - 1) * limit;
@@ -345,28 +302,30 @@ class ImageGeneration {
         params.push(model_id);
       }
 
+      const normalizedKeyword = normalizeKeyword(keyword);
+      if (normalizedKeyword) {
+        conditions.push('(ig.prompt LIKE ? OR ig.negative_prompt LIKE ? OR im.display_name LIKE ? OR im.provider LIKE ?)');
+        const likeValue = `%${normalizedKeyword}%`;
+        params.push(likeValue, likeValue, likeValue, likeValue);
+      }
+
       const whereClause = conditions.join(' AND ');
 
-      // 获取总数
       const countQuery = `
         SELECT COUNT(*) as total 
         FROM image_generations ig
+        LEFT JOIN image_models im ON ig.model_id = im.id
         WHERE ${whereClause}
       `;
       const countResult = await dbConnection.query(countQuery, params);
       const total = countResult.rows[0].total;
 
-      // 获取数据 - 使用simpleQuery处理LIMIT和OFFSET
       const query = `
         SELECT 
-          ig.id,
-          ig.prompt,
-          ig.size,
-          ig.local_path,
-          ig.thumbnail_path,
-          ig.view_count,
-          ig.created_at,
+          ig.id, ig.prompt, ig.size, ig.local_path, ig.thumbnail_path,
+          ig.view_count, ig.created_at,
           im.display_name as model_name,
+          im.provider,
           im.icon as model_icon,
           u.username
         FROM image_generations ig
@@ -377,16 +336,13 @@ class ImageGeneration {
         LIMIT ? OFFSET ?
       `;
 
-      // 使用simpleQuery
       const queryParams = [...params, limit, offset];
       const result = await dbConnection.simpleQuery(query, queryParams);
 
       return {
         data: result.rows,
         pagination: {
-          page,
-          limit,
-          total,
+          page, limit, total,
           totalPages: Math.ceil(total / limit)
         }
       };
@@ -396,9 +352,6 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 获取用户的统计信息
-   */
   static async getUserStats(userId) {
     try {
       const query = `
@@ -413,7 +366,6 @@ class ImageGeneration {
         FROM image_generations
         WHERE user_id = ?
       `;
-
       const result = await dbConnection.query(query, [userId]);
       return result.rows[0];
     } catch (error) {
@@ -422,17 +374,9 @@ class ImageGeneration {
     }
   }
 
-  /**
-   * 增加查看次数
-   */
   static async incrementViewCount(id) {
     try {
-      const query = `
-        UPDATE image_generations 
-        SET view_count = view_count + 1
-        WHERE id = ?
-      `;
-
+      const query = `UPDATE image_generations SET view_count = view_count + 1 WHERE id = ?`;
       const result = await dbConnection.query(query, [id]);
       return result.rows.affectedRows > 0;
     } catch (error) {

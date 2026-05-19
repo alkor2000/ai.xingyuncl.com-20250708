@@ -1,5 +1,10 @@
 /**
  * 图像生成状态管理
+ *
+ * v1.1 新增 keyword 关键词搜索能力
+ *   - 新增 keyword state 和 setKeyword action
+ *   - keyword 仅作为状态存储，由页面层在调用 getUserHistory/getPublicGallery 时传入参数
+ *   - 行为完全向后兼容
  */
 
 import { create } from 'zustand';
@@ -7,7 +12,7 @@ import api from '../utils/api';
 import { message } from 'antd';
 
 const useImageStore = create((set, get) => ({
-  // 状态
+  // ========== 状态 ==========
   models: [],
   selectedModel: null,
   generating: false,
@@ -29,10 +34,18 @@ const useImageStore = create((set, get) => ({
   userStats: null,
   loading: false,
   
+  // v1.1 关键词搜索状态（页面切换Tab时保留）
+  keyword: '',
+  
   // Midjourney相关状态
   midjourneyTasks: [], // 进行中的Midjourney任务
   pollingTimers: {}, // 轮询定时器
   processingTasks: {}, // 正在处理的任务状态
+
+  // v1.1 设置关键词（仅更新状态，不触发查询，由页面决定何时查询）
+  setKeyword: (keyword) => {
+    set({ keyword: keyword || '' });
+  },
 
   // 获取可用模型列表
   getModels: async () => {
@@ -79,7 +92,6 @@ const useImageStore = create((set, get) => ({
         // Midjourney生成（异步）
         message.loading('正在提交Midjourney任务...', 0);
         
-        // 构建请求数据，包含base64Array（如果有）
         const requestData = {
           model_id: selectedModel.id,
           prompt: params.prompt,
@@ -87,7 +99,6 @@ const useImageStore = create((set, get) => ({
           size: params.size
         };
 
-        // 添加base64Array（如果有）
         if (params.base64Array && params.base64Array.length > 0) {
           requestData.base64Array = params.base64Array;
         }
@@ -100,15 +111,13 @@ const useImageStore = create((set, get) => ({
           const result = response.data.data;
           message.success(result.message || '任务已提交，正在生成中...');
           
-          // 标记任务为处理中
           set(state => ({
             processingTasks: { ...state.processingTasks, [result.taskId]: true }
           }));
           
-          // 开始轮询任务状态
           get().pollMidjourneyTask(result.taskId, result.generationId);
           
-          // 立即刷新历史记录，显示处理中的任务
+          // 生成后刷新历史（不带搜索关键词，因为是想看新生成的）
           get().getUserHistory();
           
           return result;
@@ -146,7 +155,6 @@ const useImageStore = create((set, get) => ({
             message.success('图片生成成功');
           }
           
-          // 刷新历史记录
           get().getUserHistory();
           return result;
         } else {
@@ -171,8 +179,8 @@ const useImageStore = create((set, get) => ({
   
   // 轮询Midjourney任务状态
   pollMidjourneyTask: (taskId, generationId) => {
-    const pollInterval = 2000; // 2秒轮询一次
-    const maxPollingTime = 300000; // 最大轮询5分钟
+    const pollInterval = 2000;
+    const maxPollingTime = 300000;
     const startTime = Date.now();
     
     const poll = async () => {
@@ -182,47 +190,36 @@ const useImageStore = create((set, get) => ({
         if (response.data.success) {
           const task = response.data.data;
           
-          // 更新进度
           if (task.progress) {
             set({ generationProgress: task.progress });
           }
           
-          // 检查任务状态
           if (task.task_status === 'SUCCESS' || task.status === 'success') {
-            // 任务完成
             message.success('Midjourney生成完成！');
             
-            // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 清除进度
             set({ generationProgress: null });
             
-            // 重要：等待后端完成图片下载和保存
             console.log('任务成功，等待后端保存图片...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // 尝试获取最新数据，确保图片已经保存
             let retryCount = 0;
             let dataReady = false;
             
             while (retryCount < 3 && !dataReady) {
-              // 获取最新历史记录
               const historyResponse = await api.get('/image/history', { 
                 params: { page: 1, limit: 20 } 
               });
               
               if (historyResponse.data.success) {
                 const historyData = historyResponse.data.data.data;
-                // 查找对应的任务记录
                 const targetItem = historyData.find(item => item.task_id === taskId);
                 
-                // 检查图片是否已经准备好
                 if (targetItem && (targetItem.local_path || targetItem.thumbnail_path || targetItem.image_url)) {
                   dataReady = true;
                   console.log('图片数据已准备好:', targetItem);
                   
-                  // 更新历史记录
                   set({
                     generationHistory: historyData,
                     historyPagination: historyResponse.data.data.pagination
@@ -239,27 +236,22 @@ const useImageStore = create((set, get) => ({
               }
             }
             
-            // 只有在确认数据准备好或重试完成后才清除处理状态
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
               return { processingTasks: newProcessingTasks };
             });
             
-            // 如果数据还没准备好，再刷新一次
             if (!dataReady) {
               console.log('数据可能还未完全准备好，最后刷新一次');
               get().getUserHistory();
             }
             
           } else if (task.task_status === 'FAILURE' || task.status === 'failed') {
-            // 任务失败
             message.error(task.fail_reason || task.error_message || '生成失败');
             
-            // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 失败时立即清除处理状态，这样用户可以看到失败状态并删除
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
@@ -269,30 +261,24 @@ const useImageStore = create((set, get) => ({
               };
             });
             
-            // 延迟刷新历史记录，确保UI更新
             setTimeout(() => {
               get().getUserHistory();
             }, 500);
             
           } else if (Date.now() - startTime > maxPollingTime) {
-            // 超时
             message.error('任务超时');
             
-            // 清除轮询定时器
             get().clearPollingTimer(taskId);
             
-            // 超时也要清除处理状态，让用户可以操作
             set(state => {
               const newProcessingTasks = { ...state.processingTasks };
               delete newProcessingTasks[taskId];
               return { processingTasks: newProcessingTasks, generationProgress: null };
             });
             
-            // 刷新历史记录
             get().getUserHistory();
             
           } else {
-            // 继续轮询
             const timerId = setTimeout(poll, pollInterval);
             set(state => ({
               pollingTimers: { ...state.pollingTimers, [taskId]: timerId }
@@ -301,7 +287,6 @@ const useImageStore = create((set, get) => ({
         }
       } catch (error) {
         console.error('轮询任务状态失败:', error);
-        // 继续轮询，但增加间隔
         const timerId = setTimeout(poll, pollInterval * 2);
         set(state => ({
           pollingTimers: { ...state.pollingTimers, [taskId]: timerId }
@@ -309,7 +294,6 @@ const useImageStore = create((set, get) => ({
       }
     };
     
-    // 开始轮询
     poll();
   },
   
@@ -330,10 +314,8 @@ const useImageStore = create((set, get) => ({
     const newProcessingTasks = { ...processingTasks };
     let hasChanges = false;
     
-    // 遍历历史记录，清理失败任务的处理状态
     generationHistory.forEach(item => {
       if (item.task_id && newProcessingTasks[item.task_id]) {
-        // 如果任务已经失败或成功，清理其处理状态
         if (item.status === 'failed' || item.status === 'success' || 
             item.task_status === 'FAILURE' || item.task_status === 'SUCCESS') {
           delete newProcessingTasks[item.task_id];
@@ -366,15 +348,12 @@ const useImageStore = create((set, get) => ({
         const result = response.data.data;
         message.success(result.message || '操作已提交');
         
-        // 标记新任务为处理中
         set(state => ({
           processingTasks: { ...state.processingTasks, [result.taskId]: true }
         }));
         
-        // 开始轮询新任务
         get().pollMidjourneyTask(result.taskId, result.generationId);
         
-        // 立即刷新历史记录
         get().getUserHistory();
         
         return result;
@@ -415,27 +394,27 @@ const useImageStore = create((set, get) => ({
     return get().generateImages({ ...params, quantity: 1 });
   },
 
-  // 获取用户生成历史（优化避免loading闪烁）
+  /**
+   * 获取用户生成历史
+   *
+   * v1.1 由调用方在 params 中传入 keyword（可选）
+   */
   getUserHistory: async (params = {}, skipLoading = false) => {
     try {
-      // 如果是轮询触发的刷新，不显示loading
       if (!skipLoading) {
         set({ loading: true });
       }
       
       const response = await api.get('/image/history', { params });
       if (response.data.success) {
-        // 更新历史记录和分页信息
         set({
           generationHistory: response.data.data.data,
           historyPagination: response.data.data.pagination,
           loading: false
         });
         
-        // 每次获取历史记录后，自动清理失败任务的处理状态
         get().cleanupFailedTasks();
         
-        // 返回数据以便调用者使用
         return response.data.data;
       }
     } catch (error) {
@@ -453,7 +432,6 @@ const useImageStore = create((set, get) => ({
       const response = await api.delete(`/image/generation/${id}`);
       if (response.data.success) {
         message.success('删除成功');
-        // 刷新历史记录
         get().getUserHistory();
         return true;
       }
@@ -471,7 +449,6 @@ const useImageStore = create((set, get) => ({
       const response = await api.post('/image/generations/batch-delete', { ids });
       if (response.data.success) {
         message.success(response.data.message);
-        // 刷新历史记录
         get().getUserHistory();
         return true;
       }
@@ -488,7 +465,6 @@ const useImageStore = create((set, get) => ({
     try {
       const response = await api.post(`/image/generation/${id}/favorite`);
       if (response.data.success) {
-        // 更新本地状态而不是刷新整个列表
         set(state => ({
           generationHistory: state.generationHistory.map(item => 
             item.id === id ? { ...item, is_favorite: !item.is_favorite } : item
@@ -510,7 +486,6 @@ const useImageStore = create((set, get) => ({
     try {
       const response = await api.post(`/image/generation/${id}/public`);
       if (response.data.success) {
-        // 更新本地状态而不是刷新整个列表
         set(state => ({
           generationHistory: state.generationHistory.map(item => 
             item.id === id ? { ...item, is_public: !item.is_public } : item
@@ -527,7 +502,11 @@ const useImageStore = create((set, get) => ({
     }
   },
 
-  // 获取公开画廊
+  /**
+   * 获取公开画廊
+   *
+   * v1.1 由调用方在 params 中传入 keyword（可选）
+   */
   getPublicGallery: async (params = {}) => {
     try {
       set({ loading: true });
@@ -560,7 +539,6 @@ const useImageStore = create((set, get) => ({
 
   // 重置状态
   reset: () => {
-    // 清除所有轮询定时器
     const { pollingTimers } = get();
     Object.values(pollingTimers).forEach(timerId => clearTimeout(timerId));
     
@@ -585,6 +563,7 @@ const useImageStore = create((set, get) => ({
       },
       userStats: null,
       loading: false,
+      keyword: '',
       midjourneyTasks: [],
       pollingTimers: {},
       processingTasks: {}
