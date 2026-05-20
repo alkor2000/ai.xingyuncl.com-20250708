@@ -1,18 +1,25 @@
 /**
  * AI服务层 - 非流式版本
- * 
+ *
  * 职责：
  * 1. 与AI模型交互（Azure OpenAI / OpenRouter / OneAPI / 标准OpenAI格式）
  * 2. 消息格式化（图片/PDF/多图适配）
  * 3. 图片生成响应处理（Gemini / OpenRouter）
- * 
+ *
  * v2.0：PDF base64 内嵌支持，修复 OneAPI 中转 Gemini 时 PDF 退化为纯文本链接的问题
  * v3.0：MessageService 已实现"PDF 最后一次出现保留"算法（多轮对话优化）
- * 
+ *
  * v3.1 变更（2026-05-18 性能优化）：
  *   - 单请求内 base64 缓存：同一 PDF 多次出现时只读取/编码一次
  *   - 缓存范围为单次 API 请求生命周期（防止内存泄漏）
  *   - 配合 MessageService v3.0，实际场景下单请求只编码 1 个 PDF
+ *
+ * v3.2 变更（2026-05-20 图像生成模型支持增强）：
+ *   - callModelAPI 检测到图像生成模型时，自动追加 modalities: ["image","text"]
+ *     请求参数（OpenAI GPT-5.4 Image 2 等模型要求该参数才会输出图片）
+ *   - 图像生成模型的 axios 请求超时从 120 秒延长至 300 秒
+ *     （图像生成 E2E 延迟较高，平均约 165 秒，120 秒会超时）
+ *   - 图像生成模型识别统一委托 ImageGenerationService.isImageGenerationModel
  */
 
 const axios = require('axios');
@@ -29,6 +36,12 @@ const MAX_DEBUG_FILES = 50;
 
 /** PDF 文件 base64 编码后的最大尺寸（30MB） */
 const MAX_PDF_BASE64_BYTES = 30 * 1024 * 1024;
+
+/** 普通对话请求超时（毫秒） */
+const NORMAL_API_TIMEOUT_MS = 120000;
+
+/** 图像生成请求超时（毫秒）- 图像生成 E2E 延迟较高，平均约 165 秒 */
+const IMAGE_GEN_API_TIMEOUT_MS = 300000;
 
 class AIService {
   /**
@@ -97,9 +110,9 @@ class AIService {
 
   /**
    * 构建 PDF 的 content 块（base64 内嵌格式）
-   * 
+   *
    * v3.1: 增加 pdfCache 参数支持单请求内缓存，避免同一 PDF 重复编码
-   * 
+   *
    * @param {Object} fileInfo - 文件信息对象
    * @param {Map} [pdfCache] - 可选的 base64 缓存（按 file_path 做 key）
    * @returns {Object|null} content 块对象
@@ -348,7 +361,7 @@ class AIService {
 
       const response = await axios.post(azureUrl, requestData, {
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-        timeout: 120000
+        timeout: NORMAL_API_TIMEOUT_MS
       });
 
       return AIService.formatResponse(response.data, model, options);
@@ -396,6 +409,8 @@ class AIService {
 
   /**
    * 调用模型API
+   *
+   * v3.2: 图像生成模型自动追加 modalities 参数 + 延长超时
    */
   static async callModelAPI(model, messages, options = {}) {
     try {
@@ -415,12 +430,16 @@ class AIService {
 
       const isOpenRouter = AIService.isOpenRouterEndpoint(model.api_endpoint);
 
+      // v3.2: 判断是否为图像生成模型，决定是否追加 modalities 参数与延长超时
+      const isImageGenModel = ImageGenerationService.isImageGenerationModel(model);
+
       logger.info('调用AI模型API', {
         model: model.name, endpoint: model.api_endpoint, isOpenRouter,
         messageCount: messages.length, temperature: finalTemperature,
         supportsImages: model.image_upload_enabled,
         supportsDocuments: model.document_upload_enabled,
         provider: model.provider,
+        isImageGenModel,
         hasPDFs: messages.some(m => m.file),
         hasMultiImages: messages.some(m => m.image_urls)
       });
@@ -450,6 +469,15 @@ class AIService {
 
       if (plugins) requestData.plugins = plugins;
 
+      // v3.2: 图像生成模型必须声明 modalities 才会输出图片
+      // （OpenAI GPT-5.4 Image 2 等模型要求；Gemini image-preview 也兼容此参数）
+      if (isImageGenModel) {
+        requestData.modalities = ['image', 'text'];
+        logger.info('图像生成模型：已追加 modalities 参数', {
+          model: model.name, modalities: requestData.modalities
+        });
+      }
+
       const siteDomain = config.app.domain || 'ai.xingyuncl.com';
       const siteName = config.app.name || 'AI Platform';
 
@@ -466,9 +494,12 @@ class AIService {
       const endpoint = model.api_endpoint.endsWith('/chat/completions')
         ? model.api_endpoint : `${model.api_endpoint}/chat/completions`;
 
-      const response = await axios.post(endpoint, requestData, { headers, timeout: 120000 });
+      // v3.2: 图像生成模型使用更长的超时时间（E2E 延迟较高）
+      const apiTimeout = isImageGenModel ? IMAGE_GEN_API_TIMEOUT_MS : NORMAL_API_TIMEOUT_MS;
 
-      if (model.image_generation_enabled || messages.some(m => m.file)) {
+      const response = await axios.post(endpoint, requestData, { headers, timeout: apiTimeout });
+
+      if (isImageGenModel || messages.some(m => m.file)) {
         await AIService._saveDebugResponse(response.data);
       }
 

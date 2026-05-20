@@ -1,13 +1,19 @@
 /**
  * 图片生成服务 - 处理Gemini等模型生成的图片
- * 
+ *
  * 职责：
  * 1. 处理 OpenRouter 格式的图片响应（Base64/URL）
  * 2. 处理 Gemini 原始格式的图片响应（inline_data）
  * 3. 保存生成的图片到 OSS/本地存储
  * 4. 用户目录隔离存储
- * 
+ *
  * 修复：saveGeneratedImage 本地存储URL提取不再硬编码域名，改用 URL 解析
+ *
+ * v1.1 变更（2026-05-20 图像模型识别增强）：
+ *   - isImageGenerationModel 增加对 OpenAI 系列图像生成模型名的识别
+ *     （如 openai/gpt-5.4-image-2、gpt-image 等），不再仅依赖 image-preview
+ *   - 目的：让 GPT-5.4-image-2 等模型无需手动开启数据库 image_generation_enabled
+ *     字段即可走图片解析链路，与 Gemini image-preview 模型行为一致
  */
 
 const crypto = require('crypto');
@@ -236,7 +242,7 @@ class ImageGenerationService {
 
   /**
    * 保存生成的图片（支持OSS和本地存储）
-   * 
+   *
    * @param {string} base64Data - Base64编码的图片数据
    * @param {string} mimeType - MIME类型
    * @param {string} messageId - 消息ID
@@ -333,18 +339,45 @@ class ImageGenerationService {
 
   /**
    * 检查模型是否支持图片生成
+   *
+   * 识别优先级：
+   * 1. 数据库显式标记 image_generation_enabled = 1（最高优先级，管理员可强制开启）
+   * 2. 模型名称特征匹配（兜底逻辑，无需手动开数据库开关）
+   *    - 包含 image-preview：如 Gemini 系列 gemini-x.x-flash-image-preview
+   *    - 包含 image-2 / gpt-image：如 OpenAI 系列 openai/gpt-5.4-image-2、gpt-image-1 等
+   *    - 包含 -image- 或以 -image 结尾的图像生成模型名（通用兜底）
+   *
+   * 注意：此处仅匹配"图像生成"模型名特征，不会误判普通多模态对话模型
+   *      （普通模型名一般不含 image-preview / image-2 / gpt-image / -image 后缀）
+   *
    * @param {Object} model - AI模型对象
    * @returns {boolean}
    */
   static isImageGenerationModel(model) {
-    // 检查数据库标记
+    // 优先级1：数据库显式标记
     if (model.image_generation_enabled === 1 || model.image_generation_enabled === true) {
       return true;
     }
 
-    // 检查模型名称（备用）
-    if (model.name && model.name.includes('image-preview')) {
-      return true;
+    // 优先级2：模型名称特征匹配（兜底逻辑）
+    if (model.name) {
+      const name = model.name.toLowerCase();
+
+      // Gemini 系列图像预览模型
+      if (name.includes('image-preview')) {
+        return true;
+      }
+
+      // OpenAI 系列图像生成模型（gpt-5.4-image-2、gpt-image-1 等）
+      if (name.includes('image-2') || name.includes('gpt-image')) {
+        return true;
+      }
+
+      // 通用兜底：模型名包含 -image- 片段或以 -image 结尾
+      // 例如 some-provider/xxx-image、xxx-image-3 等图像生成模型
+      if (name.includes('-image-') || name.endsWith('-image')) {
+        return true;
+      }
     }
 
     return false;

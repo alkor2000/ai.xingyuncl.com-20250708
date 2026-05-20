@@ -349,7 +349,7 @@ const MessageContent = ({ message, isStreaming = false, currentModel, onDeleteMe
               <div style={{ color: '#ff4d4f', fontSize: '13px', padding: '4px 0' }}>
                 {message.content || '⚠️ AI响应异常'}
               </div>
-            ) : !displayContent && !message.streaming ? (
+            ) : !displayContent && !message.streaming && generatedImages.length === 0 ? (
               <div style={{ color: '#999', fontSize: '13px', fontStyle: 'italic', padding: '4px 0' }}>
                 {thinkingBlocks.length > 0
                   ? '💭 AI仅输出了思考过程，无正文内容'

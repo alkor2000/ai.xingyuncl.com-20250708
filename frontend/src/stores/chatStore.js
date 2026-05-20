@@ -16,6 +16,12 @@
  *   - 新增onHeartbeat回调传递给postStream，收到后端心跳时更新lastActivityTime
  *   - 确保心跳能正确重置超时检测计时器，彻底解决AI长时间思考导致的误超时
  * 
+ * v2.3 变更（2026-05-20 图像生成超时优化）：
+ *   - 非流式 sendMessage 针对图像生成模型单独使用 300 秒超时
+ *     （图像生成 E2E 延迟较高，平均约 165 秒，全局 120 秒会超时）
+ *   - 通过 isImageGenerationModel 判断模型类型，仅图像模型放宽超时
+ *     普通对话模型仍走全局 120 秒默认值，不受影响
+ * 
  * 修复记录：
  *   - API错误信息显示给用户
  *   - 流式超时机制
@@ -38,6 +44,45 @@ const STREAM_TIMEOUT_MS = 90000;
  * 超过此时间无任何数据（包括心跳），强制重置状态
  */
 const STREAM_FORCE_TIMEOUT_MS = 120000;
+
+/**
+ * 图像生成模型非流式请求超时（毫秒）
+ * 图像生成 E2E 延迟较高（如 GPT-5.4 Image 2 平均约 165 秒）
+ * 需放宽到 300 秒，与后端 aiService.js 的 IMAGE_GEN_API_TIMEOUT_MS 一致
+ */
+const IMAGE_GEN_REQUEST_TIMEOUT_MS = 300000;
+
+/**
+ * 判断模型是否为图像生成模型（与后端 ImageGenerationService.isImageGenerationModel 逻辑对齐）
+ * 
+ * 识别规则：
+ * 1. 数据库显式标记 image_generation_enabled = 1
+ * 2. 模型名称特征匹配：
+ *    - 包含 image-preview：如 Gemini 系列
+ *    - 包含 image-2 / gpt-image：如 OpenAI 系列 gpt-5.4-image-2
+ *    - 包含 -image- 片段或以 -image 结尾的图像生成模型
+ * 
+ * @param {Object} model - AI模型对象
+ * @returns {boolean} 是否为图像生成模型
+ */
+const isImageGenerationModel = (model) => {
+  if (!model) return false
+
+  // 优先级1：数据库显式标记
+  if (model.image_generation_enabled === 1 || model.image_generation_enabled === true) {
+    return true
+  }
+
+  // 优先级2：模型名称特征匹配
+  if (model.name) {
+    const name = model.name.toLowerCase()
+    if (name.includes('image-preview')) return true
+    if (name.includes('image-2') || name.includes('gpt-image')) return true
+    if (name.includes('-image-') || name.endsWith('-image')) return true
+  }
+
+  return false
+}
 
 const useChatStore = create((set, get) => ({
   // 对话列表状态
@@ -264,6 +309,7 @@ const useChatStore = create((set, get) => ({
   /**
    * 发送消息（非流式）
    * v2.0: 新增第三个参数 fileIds，支持多文件上传
+   * v2.3: 图像生成模型使用 300 秒超时，普通模型保持全局 120 秒
    */
   sendMessage: async (content, fileInfo = null, fileIds = []) => {
     const state = get()
@@ -314,9 +360,23 @@ const useChatStore = create((set, get) => ({
         stream: false
       }
       
+      // v2.3: 图像生成模型 E2E 延迟较高，单独放宽超时至 300 秒
+      // 普通对话模型不传 config，仍使用 api.js 全局默认 120 秒超时
+      const requestConfig = isImageGenerationModel(model)
+        ? { timeout: IMAGE_GEN_REQUEST_TIMEOUT_MS }
+        : undefined
+      
+      if (requestConfig) {
+        console.log('图像生成模型：使用扩展超时', {
+          model: model?.name,
+          timeout: IMAGE_GEN_REQUEST_TIMEOUT_MS
+        })
+      }
+      
       const request = apiClient.post(
         `/chat/conversations/${state.currentConversation.id}/messages`,
-        requestBody
+        requestBody,
+        requestConfig
       )
       
       set({ activeRequest: request })

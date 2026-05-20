@@ -10,12 +10,20 @@
  *   - 单请求内 PDF base64 缓存：同一 PDF 多次出现只读取/编码一次
  *   - 配合 MessageService v3.0 的"PDF 最后一次出现保留"算法
  *   - 即使在缓存失效场景，缓存机制也能容错
+ * 
+ * v5.2 变更（2026-05-20 图像生成模型防呆保护）：
+ *   - sendStreamMessage 入口检测图像生成模型并直接拒绝
+ *   - 流式链路不支持图像生成（不发 modalities、不解析 images 字段）
+ *   - 图像生成模型必须走非流式（stream_enabled=0），否则会返回空响应
+ *   - 此保护把"配置错误导致的诡异空响应"转为"清晰的错误提示"
+ *     防止管理员误开图像模型流式开关后难以排查
  */
 
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs').promises;
 const AIModel = require('../models/AIModel');
+const ImageGenerationService = require('./imageGenerationService');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { ExternalServiceError } = require('../utils/errors');
@@ -376,6 +384,18 @@ class AIStreamService {
       if (!model) throw new Error(`AI模型 ${modelName} 未找到`);
       if (!model.stream_enabled) throw new Error(`AI模型 ${modelName} 不支持流式输出`);
 
+      // v5.2: 图像生成模型防呆保护
+      // 流式链路不支持图像生成（不发 modalities 参数、不解析 images 字段），
+      // 图像生成模型必须走非流式（数据库 stream_enabled=0）。
+      // 若管理员误开图像模型的流式开关，此处给出清晰错误而非诡异的空响应。
+      if (ImageGenerationService.isImageGenerationModel(model)) {
+        logger.warn('图像生成模型被错误地以流式方式调用，已拒绝', {
+          model: modelName,
+          hint: '请在后台关闭该图像生成模型的"流式输出"开关，图像生成需走非流式'
+        });
+        throw new Error('图像生成模型不支持流式输出，请在模型设置中关闭"流式输出"开关后重试');
+      }
+
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -405,8 +425,13 @@ class AIStreamService {
       logger.error('流式AI服务失败:', error);
       const errorInfo = AIStreamService.parseAPIError(error, { name: modelName });
       if (!res.writableEnded) {
-        AIStreamService.sendSSE(res, 'error', { error: errorInfo.userMessage, details: errorInfo.technicalDetails || '', code: errorInfo.statusCode || '' });
-        res.end();
+        // 注意：图像模型防呆等入口错误发生在 writeHead 之前，
+        // 此时 headersSent 为 false，sendSSE 会因 !headersSent 返回 false 不写入。
+        // 因此这里需要确保错误能正常返回给上层（由 ChatController 退款并返回错误）。
+        if (res.headersSent) {
+          AIStreamService.sendSSE(res, 'error', { error: errorInfo.userMessage, details: errorInfo.technicalDetails || '', code: errorInfo.statusCode || '' });
+          res.end();
+        }
       }
       throw new ExternalServiceError(`流式AI服务失败: ${error.message}`, 'ai');
     }
