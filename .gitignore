@@ -98,3 +98,8 @@ backend/coverage*/
 # SonarQube scanner 工作目录(自动生成,不应提交)
 .scannerwork/
 **/.scannerwork/
+
+# 带时间戳的代码备份文件（before_fix/before_polish/before_debug 等手动备份）
+*.before_*
+# SonarQube 证据/导出文件（论文证据用，本地保留不入库）
+sonarqube_*.json
