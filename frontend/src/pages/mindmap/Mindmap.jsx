@@ -1,11 +1,31 @@
 /**
- * 思维导图工具 v3.2 - 体验优化
+ * 思维导图工具 v4.3 - 导出裁切根治（SVG序列化 + foreignObject 内部样式全量内联）
  *
- * v3.2 修复与优化：
- * 1. #17 切换 Tab 时未保存的非模板内容不再被重置（仅当 content 正好是某个模板时才切换）
- * 2. #8 顶部布局精简：去掉"新建"按钮、去掉编辑Tag、余额改为图标 tooltip
- * 3. 新建逻辑改为通过"我的导图"抽屉的"+新建"入口（清空 currentId/title/shareToken）
+ * v4.3 修复（基于 dom-to-image 核心原理 + v4.1 诊断数据）：
+ *   两条已被排除的死路：
+ *     - html2canvas foreignObjectRendering:false → 自身引擎解析 SVG 内
+ *       foreignObject，丢字（v4.0/v4.1）。
+ *     - html2canvas foreignObjectRendering:true → 整图空白（v4.2，浏览器对
+ *       SVG 内嵌 foreignObject 的原生截图路径在本环境崩溃）。
+ *   诊断数据（v4.1-debug）已证明：导出边界、截图区域都正确，问题不在尺寸。
+ *   真因（结合 dom-to-image-more 文档）：
+ *     SVG 序列化导出（v3.x）裁切，并非边界算错，而是序列化出的 SVG 里
+ *     foreignObject 内部 HTML 文字「缺少字体/CSS」。浏览器用 <img> 渲染该 SVG 时，
+ *     foreignObject 内 HTML 以默认字体重排版，大字号中文变宽并溢出，于是被裁。
+ *     v3.x 的 cloneAndPrepare 只内联了 SVG 原生元素样式，遗漏了 foreignObject
+ *     内部 HTML 子节点（div/span）的 font-family/font-size 等关键样式。
+ *   方案（与 dom-to-image-more 同源思路、零新依赖）：
+ *     回归 SVG 序列化导出（浏览器原生 <img> 渲染 SVG+foreignObject 可靠）；
+ *     对 foreignObject 内部「所有 HTML 后代」无差别内联完整 computed style
+ *     （字体/字号/字重/颜色/行高/换行/对齐/盒模型），令序列化 SVG 自包含样式，
+ *     <img> 渲染时文字宽度与页面完全一致，不再重排、不再溢出被裁。
+ *   导出尺寸：用诊断已证明正确的「内容 <g> 真实包围盒」换算到 viewBox。
  *
+ * v4.2 foreignObjectRendering:true（空白，失败）
+ * v4.1 html2canvas + 负偏移截取（缺字，失败）
+ * v4.0 改用 html2canvas 截 wrapper（缺字，失败）
+ * v3.x SVG 序列化系列（字体未内联导致溢出裁切，失败）
+ * v3.2 体验优化（#17 切 Tab 不重置 / 顶部精简 / 新建入口移至抽屉）
  * v3.1 修复导出黑底 + 顶部布局错乱
  * v3.0 项目式持久化基础架构
  */
@@ -43,10 +63,16 @@ const waitForFrame = () => new Promise(resolve =>
 
 const BG_RECT_MARK = 'data-mindmap-bg';
 
-/**
- * #17 判断 content 是否正好等于某个默认模板
- * 用于切 Tab 时判断是否可以"安全重置"
- */
+/* 需要内联到导出 SVG 的关键 CSS 属性（覆盖文字排版与盒模型，保证 <img> 渲染不重排） */
+const INLINE_STYLE_PROPS = [
+  'font-family', 'font-size', 'font-weight', 'font-style',
+  'line-height', 'letter-spacing', 'white-space', 'word-break',
+  'text-align', 'text-decoration', 'color', 'fill', 'stroke',
+  'stroke-width', 'opacity', 'display', 'box-sizing', 'padding',
+  'margin', 'border', 'background', 'background-color', 'border-radius',
+  'vertical-align', 'width', 'height'
+];
+
 const isDefaultTemplate = (content) => {
   if (!content) return true;
   const trimmed = content.trim();
@@ -56,7 +82,6 @@ const isDefaultTemplate = (content) => {
 };
 
 const Mindmap = () => {
-  /* 编辑状态 */
   const [contentType, setContentType] = useState('markdown');
   const [content, setContent] = useState(MARKDOWN_TEMPLATE);
   const [title, setTitle] = useState('');
@@ -67,12 +92,10 @@ const Mindmap = () => {
   const [creditsConfig, setCreditsConfig] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  /* 我的导图列表 */
   const [listDrawerOpen, setListDrawerOpen] = useState(false);
   const [mindmapList, setMindmapList] = useState([]);
   const [listLoading, setListLoading] = useState(false);
 
-  /* Modal */
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
@@ -81,6 +104,7 @@ const Mindmap = () => {
   const svgRef = useRef(null);
   const markmapRef = useRef(null);
   const previewRef = useRef(null);
+  const svgWrapperRef = useRef(null);
   const user = useAuthStore(state => state.user);
 
   useEffect(() => {
@@ -96,28 +120,17 @@ const Mindmap = () => {
     }
   };
 
-  /**
-   * v3.2 #17 修复：切换 Tab 时不强制重置内容
-   * 仅当用户当前 content 正好是某个默认模板时（说明用户没改过）才切换到新Tab对应模板
-   * 否则保留用户输入
-   */
   const handleTabChange = (key) => {
     setContentType(key);
     setZoomLevel(1);
-
-    /* 已打开的导图（有 currentId），其 content_type 应跟随用户切换但不替换内容 */
     if (currentId !== null) return;
-
-    /* 新建状态下，只有 content 正好是模板时才切换为新模板 */
     if (isDefaultTemplate(content)) {
       if (key === 'markdown') setContent(MARKDOWN_TEMPLATE);
       else if (key === 'mermaid') setContent(MERMAID_TEMPLATE);
       else if (key === 'svg') setContent(SVG_TEMPLATE);
     }
-    /* 否则保留用户已经输入的内容（用户可能在跨语法迁移） */
   };
 
-  /* Markdown 渲染 */
   const renderMarkdownPreview = useCallback(() => {
     if (!svgRef.current || !content || contentType !== 'markdown') return;
 
@@ -174,7 +187,6 @@ const Mindmap = () => {
     if (contentType === 'markdown') renderMarkdownPreview();
   }, [renderMarkdownPreview]);
 
-  /* 缩放 */
   const handleZoom = (type) => {
     if (contentType === 'markdown') {
       if (!markmapRef.current) return;
@@ -213,7 +225,6 @@ const Mindmap = () => {
     }
   };
 
-  /* 我的导图列表 */
   const openListDrawer = async () => {
     setListDrawerOpen(true);
     setListLoading(true);
@@ -247,12 +258,7 @@ const Mindmap = () => {
     }
   };
 
-  /**
-   * v3.2 新建：清空当前编辑状态，回到默认模板
-   * 此入口移到"我的导图"抽屉顶部
-   */
   const handleNew = () => {
-    /* 已有未保存内容 → 二次确认 */
     const hasUnsavedContent =
       currentId !== null ||
       title.trim() ||
@@ -336,7 +342,6 @@ const Mindmap = () => {
     }
   };
 
-  /* 保存 */
   const handleSave = async () => {
     if (!title.trim()) return message.warning('请输入标题');
     if (!content.trim()) return message.warning('请输入内容');
@@ -405,7 +410,6 @@ const Mindmap = () => {
     }
   };
 
-  /* 分享 */
   const buildShareUrl = useCallback(() => {
     if (!currentId || !shareToken) return '';
     return `${window.location.origin}/mindmap/share/${currentId}/${shareToken}`;
@@ -429,15 +433,11 @@ const Mindmap = () => {
     });
   };
 
-  /**
-   * v3.2 在新窗口打开分享链接预览
-   */
   const handleOpenShareInNewTab = () => {
     const url = buildShareUrl();
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  /* 导出 */
   const handleExport = async (format) => {
     if (!content.trim()) return message.warning('请先创建内容');
 
@@ -484,48 +484,134 @@ const Mindmap = () => {
   };
 
   /**
+   * v4.3 核心：计算 markmap 内容真实包围盒并换算到 SVG 用户坐标系
+   *
+   * 用内容总容器 <g> 的真实屏幕框（getBoundingClientRect，诊断已证明正确），
+   * 结合 svg 自身屏幕框与 viewBox 的比例，换算回 SVG 用户坐标，得到导出 viewBox。
+   *
+   * @param {SVGSVGElement} svg
+   * @returns {{x:number,y:number,width:number,height:number}}
+   */
+  const computeExportViewBox = (svg) => {
+    /* 默认回退：svg 自身 viewBox 或 client 尺寸 */
+    const fallback = () => {
+      const vb = svg.getAttribute('viewBox');
+      if (vb) {
+        const p = vb.trim().split(/[\s,]+/).map(Number);
+        if (p.length === 4 && p.every(isFinite) && p[2] > 0 && p[3] > 0) {
+          return { x: p[0], y: p[1], width: p[2], height: p[3] };
+        }
+      }
+      return { x: 0, y: 0, width: svg.clientWidth || 800, height: svg.clientHeight || 600 };
+    };
+
+    try {
+      const svgRect = svg.getBoundingClientRect();
+      const contentG = svg.querySelector('g');
+      if (!contentG || !svgRect.width || !svgRect.height) return fallback();
+
+      const gRect = contentG.getBoundingClientRect();
+      if (!gRect.width || !gRect.height) return fallback();
+
+      /* svg 用户坐标系（viewBox）到屏幕像素的比例 */
+      const vb = svg.getAttribute('viewBox');
+      let vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height;
+      if (vb) {
+        const p = vb.trim().split(/[\s,]+/).map(Number);
+        if (p.length === 4 && p.every(isFinite) && p[2] > 0 && p[3] > 0) {
+          [vbX, vbY, vbW, vbH] = p;
+        }
+      }
+      const scaleX = vbW / svgRect.width;   /* 每屏幕像素对应多少用户单位 */
+      const scaleY = vbH / svgRect.height;
+
+      /* 内容 <g> 屏幕框 → 相对 svg 左上的偏移 → 换算回用户坐标 */
+      const userX = vbX + (gRect.left - svgRect.left) * scaleX;
+      const userY = vbY + (gRect.top - svgRect.top) * scaleY;
+      const userW = gRect.width * scaleX;
+      const userH = gRect.height * scaleY;
+
+      /* 四周留白（用户坐标单位） */
+      const PAD = 20 * Math.max(scaleX, scaleY);
+
+      return {
+        x: userX - PAD,
+        y: userY - PAD,
+        width: userW + PAD * 2,
+        height: userH + PAD * 2
+      };
+    } catch (e) {
+      return fallback();
+    }
+  };
+
+  /**
+   * v4.3 关键：对 foreignObject 内部「所有 HTML 后代」无差别内联完整 computed style
+   *
+   * 这是修复的核心——序列化后的 SVG 必须自包含 foreignObject 内 HTML 的字体/排版样式，
+   * 否则 <img> 渲染时浏览器用默认字体重排，大字号中文变宽溢出被裁。
+   * 不依赖具体 class，遍历每个 foreignObject 的所有后代逐一内联。
+   *
+   * @param {SVGElement} sourceSvg  页面原始 svg（读取 computed style 的来源）
+   * @param {SVGElement} clonedSvg  克隆体（写入内联 style 的目标）
+   */
+  const inlineForeignObjectStyles = (sourceSvg, clonedSvg) => {
+    const srcFOs = sourceSvg.querySelectorAll('foreignObject');
+    const cloFOs = clonedSvg.querySelectorAll('foreignObject');
+
+    srcFOs.forEach((srcFO, foIdx) => {
+      const cloFO = cloFOs[foIdx];
+      if (!cloFO) return;
+
+      /* foreignObject 自身 + 其所有 HTML 后代 */
+      const srcNodes = [srcFO, ...srcFO.querySelectorAll('*')];
+      const cloNodes = [cloFO, ...cloFO.querySelectorAll('*')];
+
+      srcNodes.forEach((srcNode, idx) => {
+        const cloNode = cloNodes[idx];
+        if (!cloNode || cloNode.nodeType !== 1) return;
+        try {
+          const cs = window.getComputedStyle(srcNode);
+          INLINE_STYLE_PROPS.forEach(prop => {
+            const val = cs.getPropertyValue(prop);
+            if (val && val !== 'none' && val !== '') {
+              cloNode.style.setProperty(prop, val);
+            }
+          });
+        } catch (e) { /* 跳过不可读节点 */ }
+      });
+    });
+  };
+
+  /**
    * 克隆 SVG 并准备导出
-   * 先内联样式，再插入白色背景（避免被遍历影响），padding=40 防裁切
+   * v4.3：viewBox 用内容真实包围盒；内联 SVG 原生元素样式 + foreignObject 内部 HTML 样式。
    */
   const cloneAndPrepare = (svg) => {
     const cloned = svg.cloneNode(true);
 
-    let bbox;
-    try {
-      bbox = svg.getBBox();
-      if (!bbox.width || !bbox.height) throw new Error('bbox empty');
-    } catch (e) {
-      bbox = {
-        x: 0, y: 0,
-        width: svg.clientWidth || 800,
-        height: svg.clientHeight || 600
-      };
-    }
-
-    const PADDING = 40;
-    const x = bbox.x - PADDING;
-    const y = bbox.y - PADDING;
-    const w = bbox.width + PADDING * 2;
-    const h = bbox.height + PADDING * 2;
+    const bounds = computeExportViewBox(svg);
+    const x = bounds.x;
+    const y = bounds.y;
+    const w = bounds.width;
+    const h = bounds.height;
 
     cloned.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
     cloned.setAttribute('width', w);
     cloned.setAttribute('height', h);
     cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    cloned.setAttribute('overflow', 'visible');
+    cloned.style.overflow = 'visible';
 
-    /* 先内联样式 */
+    /* 1) 内联 SVG 原生元素样式（path/circle/text 等） */
     const sourceElements = svg.querySelectorAll('*');
     const targetElements = cloned.querySelectorAll('*');
-
     sourceElements.forEach((srcEl, idx) => {
       const tgtEl = targetElements[idx];
       if (!tgtEl) return;
-
       const tag = (srcEl.tagName || '').toLowerCase();
-      if (tag === 'style' || tag === 'defs' || tag === 'metadata' || tag === 'title') {
-        return;
-      }
-
+      if (tag === 'style' || tag === 'defs' || tag === 'metadata' || tag === 'title') return;
+      /* foreignObject 内部交由 inlineForeignObjectStyles 专门处理，这里只处理 SVG 原生元素 */
       try {
         const cs = window.getComputedStyle(srcEl);
         ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size',
@@ -535,7 +621,6 @@ const Mindmap = () => {
             tgtEl.style[prop] = val;
           }
         });
-
         if ((tag === 'text' || tag === 'tspan')
             && !tgtEl.getAttribute('fill') && !tgtEl.style.fill) {
           tgtEl.setAttribute('fill', '#1C1C1E');
@@ -543,7 +628,10 @@ const Mindmap = () => {
       } catch (e) { /* 跳过 */ }
     });
 
-    /* 后插入白色背景 */
+    /* 2) 关键：内联 foreignObject 内部 HTML 的完整排版样式（防 img 渲染重排溢出） */
+    inlineForeignObjectStyles(svg, cloned);
+
+    /* 3) 白色背景，覆盖整个 viewBox */
     const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     bg.setAttribute('x', x);
     bg.setAttribute('y', y);
@@ -561,8 +649,8 @@ const Mindmap = () => {
       const data = new XMLSerializer().serializeToString(svgEl);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      canvas.width = width * scale;
-      canvas.height = height * scale;
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
 
       const img = new Image();
       img.onload = () => {
@@ -593,7 +681,13 @@ const Mindmap = () => {
     await waitForFrame();
     const { cloned, width, height } = cloneAndPrepare(svg);
     const canvas = await svgToImage(cloned, width, height);
-    canvas.toBlob(blob => downloadBlob(blob, `${title || 'mindmap'}.png`), 'image/png');
+    await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (!blob) return reject(new Error('PNG 生成失败'));
+        downloadBlob(blob, `${title || 'mindmap'}.png`);
+        resolve();
+      }, 'image/png');
+    });
   };
 
   const exportPDF = async () => {
@@ -655,7 +749,7 @@ const Mindmap = () => {
   const renderPreviewContent = () => {
     if (contentType === 'markdown') {
       return (
-        <div className="mindmap-svg-wrapper" ref={previewRef}>
+        <div className="mindmap-svg-wrapper" ref={svgWrapperRef}>
           <svg ref={svgRef}></svg>
         </div>
       );
@@ -700,7 +794,6 @@ const Mindmap = () => {
 
   return (
     <div className="mindmap-page">
-      {/* v3.2 顶部工具栏 - 精简 */}
       <div className="mindmap-header">
         <div className="mindmap-header-left">
           <Button
@@ -719,7 +812,6 @@ const Mindmap = () => {
           />
         </div>
         <div className="mindmap-header-right">
-          {/* 保存（带另存为下拉） */}
           <Dropdown.Button
             type="primary"
             icon={<DownOutlined />}
@@ -731,7 +823,6 @@ const Mindmap = () => {
             <SaveOutlined /> 保存
           </Dropdown.Button>
 
-          {/* 分享 */}
           <Tooltip title={currentId ? '生成永久分享链接' : '请先保存后才能分享'}>
             <Button
               icon={<ShareAltOutlined />}
@@ -742,7 +833,6 @@ const Mindmap = () => {
             </Button>
           </Tooltip>
 
-          {/* 导出 */}
           <Dropdown
             menu={{ items: exportMenuItems, onClick: ({ key }) => handleExport(key) }}
             trigger={['click']}
@@ -752,7 +842,6 @@ const Mindmap = () => {
             </Button>
           </Dropdown>
 
-          {/* v3.2 余额改为图标 tooltip */}
           {creditsConfig && (
             <Tooltip title={`当前积分余额: ${currentCredits} 分`}>
               <span className="mindmap-credits-icon">
@@ -815,7 +904,6 @@ const Mindmap = () => {
         </div>
       </div>
 
-      {/* 我的导图抽屉 - 顶部"新建"入口 */}
       <Drawer
         title="我的导图"
         placement="left"
@@ -892,7 +980,6 @@ const Mindmap = () => {
         )}
       </Drawer>
 
-      {/* 分享Modal */}
       <Modal
         title={<><ShareAltOutlined /> 分享链接</>}
         open={shareModalOpen}
@@ -924,7 +1011,6 @@ const Mindmap = () => {
         </div>
       </Modal>
 
-      {/* 重命名Modal */}
       <Modal
         title="重命名导图"
         open={renameModalOpen}
