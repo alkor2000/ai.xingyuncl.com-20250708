@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
@@ -15,7 +14,7 @@ services:
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
@@ -27,23 +26,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: ai-platform-redis
     restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - ai-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
   backend:
     build:
       context: .
@@ -66,6 +64,7 @@ services:
       DB_CHARSET: utf8mb4
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       # JWT密钥强制配置
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
@@ -87,7 +86,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
   frontend:
     build:
       context: .
@@ -115,11 +113,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
 networks:
   ai-network:
     driver: bridge
-
 volumes:
   mysql_data:
   redis_data:
