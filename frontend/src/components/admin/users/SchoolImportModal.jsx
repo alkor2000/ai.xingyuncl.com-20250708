@@ -8,6 +8,18 @@
  *   4. 执行导入 + 结果展示（含失败/跳过行号、可下载创建报告）
  *
  * 创建日期：2026-05-09
+ *
+ * v1.1 异步化改造（2026-06-08）：
+ *   配合后端"提交任务 → 后台异步执行 → 前端轮询进度"模式，解决大批量导入超时问题。
+ *   - 点击"执行导入"后不再同步等待整个导入完成，而是：
+ *       提交任务拿 taskId → 进入"导入中"进度态 → 轮询进度（实时进度条）→ 完成展示报告
+ *   - 进度态期间锁死弹窗（不可关闭），避免用户中途关闭误以为失败
+ *   - Steps 顶部仍为 4 格，进度态停留在"预览"步，主体切换为进度渲染，体验连贯
+ *
+ * v1.2（2026-06-08 同日）：
+ *   进度条改用后端上报的 percent 字段（哈希阶段 0-40%、建用户阶段 40-100%，
+ *   后端保证单调递增），不再由前端用 processed/total 计算——避免两阶段各自
+ *   从 0 计数导致进度条"先涨后归零"。percent 缺失时回退旧算法兜底。
  */
 
 import React, { useState } from 'react'
@@ -28,6 +40,8 @@ import {
   Card,
   Empty,
   Tooltip,
+  Progress,
+  Spin,
   message
 } from 'antd'
 import {
@@ -41,7 +55,8 @@ import {
   RollbackOutlined,
   BankOutlined,
   TeamOutlined,
-  UserAddOutlined
+  UserAddOutlined,
+  LoadingOutlined
 } from '@ant-design/icons'
 import useAdminStore from '../../../stores/adminStore'
 
@@ -59,7 +74,8 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
   const {
     downloadSchoolImportTemplate,
     previewSchoolImport,
-    executeSchoolImport
+    executeSchoolImport,
+    pollSchoolImportStatus
   } = useAdminStore()
 
   // 步骤状态：0=说明 1=上传 2=预览 3=结果
@@ -69,6 +85,16 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
   const [importResult, setImportResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
+  // v1.1 异步化：导入进度态
+  const [importing, setImporting] = useState(false)        // 是否处于"导入中"进度态
+  const [importProgress, setImportProgress] = useState({   // 实时进度
+    phase: 'pending',   // pending | hashing | running | creating_users | completed | failed
+    percent: 0,         // v1.2：后端上报的单调递增百分比
+    processed: 0,
+    total: 0,
+    groups: 0
+  })
+
   // 重置弹窗状态
   const resetState = () => {
     setCurrentStep(0)
@@ -76,10 +102,17 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
     setPreviewResult(null)
     setImportResult(null)
     setLoading(false)
+    setImporting(false)
+    setImportProgress({ phase: 'pending', percent: 0, processed: 0, total: 0, groups: 0 })
   }
 
   // 关闭弹窗
   const handleCancel = () => {
+    // v1.1：导入进度态期间禁止关闭，防止用户误以为失败
+    if (importing) {
+      message.warning('正在导入中，请等待完成...')
+      return
+    }
     if (loading) {
       message.warning('正在处理，请稍候...')
       return
@@ -145,7 +178,7 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
     }
   }
 
-  // ========== 步骤 3：执行导入 ==========
+  // ========== 步骤 3：执行导入（v1.1 异步化）==========
   const handleExecute = async () => {
     if (!uploadedFile) {
       message.error('文件丢失，请重新上传')
@@ -163,24 +196,48 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
           <Paragraph type="secondary">
             导入后，所有用户的初始密码均为：<Text code>用户名 + 123456</Text>
           </Paragraph>
+          <Paragraph type="secondary">
+            大批量导入将在后台执行，过程中请勿关闭此窗口。
+          </Paragraph>
         </div>
       ),
       okText: '确认导入',
       cancelText: '取消',
       onOk: async () => {
         try {
-          setLoading(true)
-          const result = await executeSchoolImport(uploadedFile)
+          // 进入进度态：初始化进度（total 先用预览的将创建数，后端会上报准确值）
+          setImporting(true)
+          setImportProgress({
+            phase: 'pending',
+            percent: 0,
+            processed: 0,
+            total: previewResult.will_create_count || 0,
+            groups: 0
+          })
+
+          // 1) 提交任务，秒级拿到 taskId
+          const taskId = await executeSchoolImport(uploadedFile)
+
+          // 2) 轮询任务进度直到完成/失败
+          const result = await pollSchoolImportStatus(taskId, {
+            intervalMs: 2500,
+            onProgress: (progress) => {
+              setImportProgress(progress)
+            }
+          })
+
+          // 3) 完成：保存结果并切到结果步
           setImportResult(result)
+          setImporting(false)
           setCurrentStep(3)
           if (result.success) {
             message.success(result.message)
           }
         } catch (error) {
+          // 失败：退出进度态，退回预览步，提示错误
+          setImporting(false)
           const msg = error.response?.data?.message || error.message || '导入失败'
           message.error('导入失败：' + msg)
-        } finally {
-          setLoading(false)
         }
       }
     })
@@ -457,6 +514,79 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
   }
 
   // ========================================
+  // 渲染：导入进度态（v1.1 异步化新增，v1.2 进度条用后端 percent）
+  // 在点击"执行导入"后展示，停留在"预览"步，主体替换为进度
+  // ========================================
+  const renderImporting = () => {
+    const { phase, percent, processed, total, groups } = importProgress
+
+    // 阶段中文文案
+    const phaseTextMap = {
+      pending: '正在准备导入任务...',
+      hashing: '正在准备用户账号（加密密码）...',
+      running: '正在初始化导入...',
+      creating_users: '正在创建用户与分配标签...',
+      completed: '导入完成',
+      failed: '导入失败'
+    }
+    const phaseText = phaseTextMap[phase] || '正在处理...'
+
+    // v1.2：优先用后端上报的 percent（单调递增），缺失时回退按 processed/total 计算
+    const displayPercent = Number.isFinite(percent) && percent > 0
+      ? Math.min(99, percent)
+      : (total > 0 ? Math.min(99, Math.floor((processed / total) * 100)) : 0)
+
+    return (
+      <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+        <Spin
+          indicator={<LoadingOutlined style={{ fontSize: 36, color: '#1677ff' }} spin />}
+        />
+
+        <Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>
+          {phaseText}
+        </Title>
+
+        <Paragraph type="secondary" style={{ marginBottom: 24 }}>
+          大批量导入将在后台执行，请耐心等待，期间请勿关闭此窗口
+        </Paragraph>
+
+        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+          <Progress
+            percent={displayPercent}
+            status={phase === 'failed' ? 'exception' : 'active'}
+            strokeColor={{ from: '#1677ff', to: '#52c41a' }}
+          />
+
+          <Row gutter={16} style={{ marginTop: 24 }}>
+            <Col span={8}>
+              <Statistic
+                title="已处理用户"
+                value={processed}
+                valueStyle={{ color: '#1677ff', fontSize: 22 }}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="用户总数"
+                value={total}
+                valueStyle={{ fontSize: 22 }}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="已创建学校"
+                value={groups}
+                prefix={<BankOutlined />}
+                valueStyle={{ color: '#52c41a', fontSize: 22 }}
+              />
+            </Col>
+          </Row>
+        </div>
+      </div>
+    )
+  }
+
+  // ========================================
   // 渲染：步骤 3 - 结果
   // ========================================
   const renderStep3 = () => {
@@ -599,6 +729,14 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
   // 步骤底部按钮
   // ========================================
   const renderFooter = () => {
+    // v1.1：导入进度态期间，footer 只显示禁用的"导入中"按钮
+    if (importing) {
+      return (
+        <Button type="primary" loading disabled>
+          导入中，请勿关闭...
+        </Button>
+      )
+    }
     if (currentStep === 0) {
       return (
         <Space>
@@ -659,6 +797,7 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
       onCancel={handleCancel}
       width={920}
       maskClosable={false}
+      keyboard={!importing}
       destroyOnClose
       footer={renderFooter()}
     >
@@ -672,10 +811,18 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
       <Divider style={{ margin: '0 0 16px 0' }} />
 
       <div style={{ minHeight: 360 }}>
-        {currentStep === 0 && renderStep0()}
-        {currentStep === 1 && renderStep1()}
-        {currentStep === 2 && renderStep2()}
-        {currentStep === 3 && renderStep3()}
+        {/* v1.1：进度态优先渲染，覆盖在"预览"步之上 */}
+        {importing
+          ? renderImporting()
+          : (
+            <>
+              {currentStep === 0 && renderStep0()}
+              {currentStep === 1 && renderStep1()}
+              {currentStep === 2 && renderStep2()}
+              {currentStep === 3 && renderStep3()}
+            </>
+          )
+        }
       </div>
     </Modal>
   )

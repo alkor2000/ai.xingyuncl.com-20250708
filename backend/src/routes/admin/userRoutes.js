@@ -18,6 +18,10 @@
  *   注意：因为本路由在 app.js 中以 /admin/users 挂载，所以学校导入路由
  *        最终路径为 /admin/users/school-import/*，按组导出路径为
  *        /admin/users/export-by-group/:id
+ * - v1.3 (2026-06-08) 学校导入异步化：
+ *   * 新增 GET  /school-import/execute/status/:taskId  查询导入任务进度/结果
+ *     （配合 execute 改为"提交任务 → 后台异步执行 → 前端轮询"模式，规避大批量 HTTP 超时）
+ *     该路由为 GET 无文件上传，不挂 multer 中间件
  */
 const express = require('express');
 const UserManagementController = require('../../controllers/admin/UserManagementController');
@@ -57,7 +61,7 @@ router.post('/school-import/preview',
 
 /**
  * @route POST /api/admin/users/school-import/execute
- * @desc 执行学校批量导入
+ * @desc 提交学校批量导入异步任务（立即返回 task_id，后台执行）
  * @form  file: <Excel 文件>
  * @access SuperAdmin
  */
@@ -66,6 +70,18 @@ router.post('/school-import/execute',
   SchoolImportController.uploadMiddleware,
   SchoolImportController.handleMulterError,
   SchoolImportController.executeImport
+);
+
+/**
+ * @route GET /api/admin/users/school-import/execute/status/:taskId
+ * @desc 查询学校批量导入任务的进度与结果（v1.3 新增，前端轮询用）
+ * @access SuperAdmin
+ * @note  必须放在 POST /school-import/execute 之后、用户 /:id 路由之前
+ *        GET 请求无文件上传，不挂 multer 中间件
+ */
+router.get('/school-import/execute/status/:taskId',
+  requireSuperAdmin(),
+  SchoolImportController.getImportStatus
 );
 
 /**

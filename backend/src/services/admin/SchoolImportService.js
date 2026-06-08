@@ -25,11 +25,35 @@
  * v1.1 修复（2026-05-09 同日）：
  *   1. 新建用户自动继承所在组的 expire_date 到 user.expire_at
  *      （与 User.create 行为一致，避免组到期但用户仍可登录）
- *   2. 组初始积分池改为"实际所需 + 2000 积分冗余"（不再 ×2 倍翻倍）
+ *   2. 组初始积分池改为"实际所需 + 2000 积分冗余"（不再 ×2 倍）
  *      避免超管不知情时总积分超发
  *   3. Excel 模板"用户权限"列加 Excel 数据有效性下拉（仅"普通用户"/"学校管理员"）
- *      避免用户手填出错（"学生"/"老师"等错误值）
  *   4. Excel 模板表头行加蓝色背景，"用户权限"列标记为浅黄色提醒列
+ *
+ * v1.2 异步化改造（2026-06-08）：
+ *   解决"大批量导入（数千用户）同步 HTTP 请求 30 秒超时"问题。
+ *   1. execute 新增第三参数 taskId（可选）：通过 SchoolImportTaskManager 上报进度，
+ *      供"后台异步执行 + 前端轮询进度"模式使用。不传 taskId 时行为与旧版完全一致。
+ *   2. 密码哈希在进入事务【之前】分批预计算（每批 BCRYPT_BATCH_SIZE 个），
+ *      哈希仅依赖 username 与数据库无关，提前算好后存入行对象，事务内直接取用——
+ *      保证事务体只剩纯 SQL，既快又不破坏单连接事务语义。
+ *   3. 进度上报：解析校验后上报 total，组创建完上报 groups，
+ *      用户创建每完成一批上报 processed。
+ *   说明：行级业务逻辑（积分池行锁扣减、标签查找/创建、有效期继承、组名去重、
+ *         错误分组）保持与 v1.1 完全一致，仅改造循环结构与哈希时机。
+ *
+ * v1.3 健壮性与体验优化（2026-06-08 同日）：
+ *   1. 密码哈希批间让出事件循环：bcryptjs 是纯 JS 同步密集计算，在单线程 Node 里
+ *      Promise.all 是伪并发，会独占事件循环、阻塞其他用户请求。每批结束后插入
+ *      await setImmediate 让出事件循环，牺牲极少总时长换取"导入时全站不卡顿"。
+ *   2. 进度百分比按阶段单调映射：哈希阶段(hashing)映射 0-40%，创建用户阶段
+ *      (creating_users)映射 40-100%。由本服务算好 percent 上报给 TaskManager，
+ *      前端进度条直接用 percent，避免两阶段各自从 0 计数导致进度条"先涨后归零"。
+ *      （TaskManager 对 percent 另做单调递增保护，双重保险。）
+ *
+ * 【持久行为特征 - 修改本文件务必知悉】
+ *   密码哈希必须在 dbConnection.transaction() 之前完成（事务外预计算），
+ *   绝不可移回事务内逐个 await——否则会拉长事务持锁时间并退回串行性能陷阱。
  */
 
 const XLSX = require('xlsx');
@@ -39,6 +63,7 @@ const dbConnection = require('../../database/connection');
 const SystemConfig = require('../../models/SystemConfig');
 const logger = require('../../utils/logger');
 const { ValidationError } = require('../../utils/errors');
+const SchoolImportTaskManager = require('./SchoolImportTaskManager');
 
 class SchoolImportService {
   // ========== 静态常量 ==========
@@ -83,6 +108,15 @@ class SchoolImportService {
 
   /** v1.1 新增：组员上限的冗余（实际行数 + 该值，便于后期补录） */
   static GROUP_USER_LIMIT_RESERVE = 50;
+
+  /** v1.2 新增：密码哈希批大小（每批计算 N 个 bcrypt 哈希后让出事件循环） */
+  static BCRYPT_BATCH_SIZE = 50;
+
+  /** v1.2 新增：用户创建进度上报的批粒度（每创建 N 个用户上报一次进度） */
+  static PROGRESS_REPORT_BATCH = 50;
+
+  /** v1.3 新增：进度区间分配——哈希阶段占 0~HASH_PERCENT_END，建用户阶段占其后到 100 */
+  static HASH_PERCENT_END = 40;
 
   // ========== 模板生成 ==========
 
@@ -438,6 +472,64 @@ class SchoolImportService {
     return newId;
   }
 
+  // ========== v1.2/v1.3 内部工具：批量预计算密码哈希 ==========
+
+  /**
+   * 在进入数据库事务【之前】，分批预计算所有待创建用户的 bcrypt 密码哈希。
+   *
+   * 为什么放在事务外：
+   *   - bcrypt 哈希是 CPU 密集操作，与数据库无关，仅依赖 username
+   *   - 事务是单数据库连接，事务内并发 SQL 会互相阻塞，因此哈希必须在事务外做
+   *   - 提前算好后写入每行的 _passwordHash / _rawPassword 字段，事务内直接取用，
+   *     让事务体只剩纯 SQL，既快又安全
+   *
+   * v1.3 关键改动：批间让出事件循环
+   *   bcryptjs 是纯 JS 同步密集计算，在单线程 Node 里 Promise.all 是伪并发，
+   *   会独占事件循环、阻塞其他用户请求。每批结束后插入 await setImmediate 让出
+   *   事件循环，让其他 HTTP 请求有机会插队处理，牺牲极少总时长换"导入不卡全站"。
+   *
+   * v1.3 进度映射：哈希阶段占整体进度的 0 ~ HASH_PERCENT_END（默认 40%）。
+   *
+   * @param {Array<Object>} rows - 待创建的行对象数组（会就地写入 _rawPassword / _passwordHash）
+   * @param {string} taskId - 可选，用于上报哈希阶段进度
+   * @returns {Promise<void>}
+   */
+  static async precomputePasswordHashes(rows, taskId) {
+    const batchSize = SchoolImportService.BCRYPT_BATCH_SIZE;
+    const total = rows.length;
+    let done = 0;
+
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+
+      // 同一批计算哈希
+      await Promise.all(batch.map(async (row) => {
+        const rawPassword = row.username + SchoolImportService.PASSWORD_SUFFIX;
+        const passwordHash = await bcrypt.hash(rawPassword, 10);
+        row._rawPassword = rawPassword;
+        row._passwordHash = passwordHash;
+      }));
+
+      done += batch.length;
+
+      // v1.3：上报哈希阶段进度，percent 映射到 0 ~ HASH_PERCENT_END 区间
+      if (taskId) {
+        const percent = total > 0
+          ? Math.floor((done / total) * SchoolImportService.HASH_PERCENT_END)
+          : 0;
+        SchoolImportTaskManager.updateProgress(taskId, {
+          phase: 'hashing',
+          processed: done,
+          total,
+          percent
+        });
+      }
+
+      // v1.3：批间让出事件循环，避免密集 bcrypt 阻塞其他用户请求
+      await new Promise(resolve => setImmediate(resolve));
+    }
+  }
+
   // ========== 核心：执行导入 ==========
 
   /**
@@ -450,11 +542,17 @@ class SchoolImportService {
    *   - 新建用户自动继承所在组的 expire_date 到 user.expire_at
    *   - 组初始积分池改为"实际所需 + 2000"（不再 ×2 倍）
    *
+   * v1.2/v1.3 异步化与体验改造：
+   *   - 新增可选参数 taskId，用于向 SchoolImportTaskManager 上报进度
+   *   - 密码哈希在进入事务前分批预计算（precomputePasswordHashes，批间让出事件循环）
+   *   - 各阶段上报 percent（哈希 0-40%、建用户 40-100%）保证进度条单调递增
+   *
    * @param {Buffer} buffer
    * @param {Object} currentUser - 当前操作的超级管理员
+   * @param {string} [taskId] - 可选，异步任务 ID（不传则为纯同步行为，与旧版一致）
    * @returns {Object} 导入报告
    */
-  static async execute(buffer, currentUser) {
+  static async execute(buffer, currentUser, taskId = null) {
     if (!currentUser || currentUser.role !== 'super_admin') {
       throw new ValidationError('只有超级管理员可以执行学校批量导入');
     }
@@ -539,6 +637,11 @@ class SchoolImportService {
       };
     }
 
+    // v1.2：确定待创建总数后，上报 total 并切换为 running 状态
+    if (taskId) {
+      SchoolImportTaskManager.markRunning(taskId, rowsToCreate.length);
+    }
+
     // 4. 系统默认 token 配额
     let defaultTokens = 10000;
     let defaultCredits = 1000;
@@ -550,10 +653,15 @@ class SchoolImportService {
       logger.warn('读取系统默认配置失败，使用内置默认值', { error: e.message });
     }
 
+    // v1.2/v1.3：进入事务【之前】分批预计算所有密码哈希（批间让出事件循环）
+    // 这是大批量导入的核心——把 CPU 密集的 bcrypt 移出事务，且不阻塞全站
+    await SchoolImportService.precomputePasswordHashes(rowsToCreate, taskId);
+
     // 5. 整体事务执行
     const createdGroups = [];     // [{ school_name, group_id, group_name, ... }]
     const createdUsers = [];      // [{ row_number, username, password, role, group_name, ... }]
     const failedRows = [];        // 事务内业务错误（积分池不足等单行失败但不影响其他行）
+    const totalToCreate = rowsToCreate.length;  // v1.3：用户创建阶段 percent 映射基数
 
     try {
       await dbConnection.transaction(async (query) => {
@@ -624,9 +732,27 @@ class SchoolImportService {
           }
         }
 
+        // v1.2/v1.3：组创建完毕，上报已创建组数 + percent 推进到哈希阶段终点（进入建用户阶段起点）
+        if (taskId) {
+          SchoolImportTaskManager.updateProgress(taskId, {
+            phase: 'creating_users',
+            groups: createdGroups.length,
+            processed: 0,
+            percent: SchoolImportService.HASH_PERCENT_END
+          });
+        }
+
         // === 5.4 第二遍扫描：创建用户 + 标签分配 ===
         const tagCache = new Map();          // 标签缓存避免重复查询/创建
         const groupExpireCache = new Map();  // v1.1 新增：组有效期缓存（避免重复查询）
+        let userProcessed = 0;               // v1.2：已处理用户计数（用于进度上报）
+
+        // v1.3：把已处理用户数映射到 HASH_PERCENT_END ~ 100 的 percent 区间
+        const computeUserPercent = (processed) => {
+          if (totalToCreate <= 0) return SchoolImportService.HASH_PERCENT_END;
+          const span = 100 - SchoolImportService.HASH_PERCENT_END;
+          return SchoolImportService.HASH_PERCENT_END + Math.floor((processed / totalToCreate) * span);
+        };
 
         for (const row of rowsToCreate) {
           try {
@@ -656,9 +782,9 @@ class SchoolImportService {
               );
             }
 
-            // 5.4.2 加密密码（username + 123456）
-            const rawPassword = row.username + SchoolImportService.PASSWORD_SUFFIX;
-            const passwordHash = await bcrypt.hash(rawPassword, 10);
+            // 5.4.2 取用预计算的密码哈希（v1.2：事务外已算好）
+            const rawPassword = row._rawPassword;
+            const passwordHash = row._passwordHash;
             const uuid = uuidv4();
 
             // 5.4.3 拼装 remark：[姓名]张三 + 用户备注
@@ -768,6 +894,27 @@ class SchoolImportService {
               reason: rowError.message
             });
           }
+
+          // v1.2/v1.3：每处理一行计数 +1，按批粒度上报进度（percent 映射 40-100%）
+          userProcessed += 1;
+          if (taskId && (userProcessed % SchoolImportService.PROGRESS_REPORT_BATCH === 0)) {
+            SchoolImportTaskManager.updateProgress(taskId, {
+              phase: 'creating_users',
+              processed: userProcessed,
+              total: totalToCreate,
+              percent: computeUserPercent(userProcessed)
+            });
+          }
+        }
+
+        // v1.2/v1.3：循环结束，上报最终已处理数
+        if (taskId) {
+          SchoolImportTaskManager.updateProgress(taskId, {
+            phase: 'creating_users',
+            processed: userProcessed,
+            total: totalToCreate,
+            percent: computeUserPercent(userProcessed)
+          });
         }
       });
     } catch (txError) {

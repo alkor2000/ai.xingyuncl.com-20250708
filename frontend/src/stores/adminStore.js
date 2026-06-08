@@ -11,6 +11,11 @@
  * - 系统提示词管理
  * - 使用记录管理
  * - 学校批量导入与按组导出（v1.3 新增 2026-05-09）
+ *
+ * v1.4 学校导入异步化（2026-06-08）：
+ *   executeSchoolImport 由"同步等待整个导入完成"改为"提交任务拿 task_id（秒级返回）"，
+ *   新增 getSchoolImportStatus（单次查询）与 pollSchoolImportStatus（轮询直到完成），
+ *   彻底规避大批量导入的 HTTP 30 秒超时问题。
  */
 import { create } from 'zustand'
 import apiClient from '../utils/api'
@@ -103,6 +108,7 @@ const useAdminStore = create((set) => ({
   
   // ============================================================
   // v1.3 学校批量导入与按组导出
+  // v1.4 异步化：execute 改为提交任务 + 轮询进度
   // ============================================================
   
   /**
@@ -158,26 +164,118 @@ const useAdminStore = create((set) => ({
   },
 
   /**
-   * 执行学校批量导入
+   * 提交学校批量导入任务（v1.4 异步化）
+   * 仅提交并返回 task_id，实际导入由后端后台异步执行。
+   * 前端拿到 task_id 后调用 pollSchoolImportStatus 轮询进度与结果。
    * @param {File} file - 用户上传的 Excel File 对象
+   * @returns {Promise<string>} task_id
    */
   executeSchoolImport: async (file) => {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      // 仅提交任务，秒级返回 task_id（请求很快完成，沿用全局/管理请求超时即可）
       const response = await apiClient.post(
         '/admin/users/school-import/execute',
         formData,
         {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 300000  // 5 分钟，应对大批量导入
+          headers: { 'Content-Type': 'multipart/form-data' }
         }
+      )
+      // 后端返回 { task_id: '...' }
+      return response.data.data.task_id
+    } catch (error) {
+      console.error('提交学校导入任务失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 查询学校导入任务状态（单次）
+   * @param {string} taskId
+   * @returns {Promise<Object>} { task_id, status, progress, result, error }
+   */
+  getSchoolImportStatus: async (taskId) => {
+    try {
+      const response = await apiClient.get(
+        `/admin/users/school-import/execute/status/${taskId}`
       )
       return response.data.data
     } catch (error) {
-      console.error('执行学校导入失败:', error)
+      console.error('查询学校导入任务状态失败:', error)
       throw error
     }
+  },
+
+  /**
+   * 轮询学校导入任务直到完成/失败（v1.4 新增）
+   *
+   * 参照视频生成轮询思路：固定间隔 + 超时上限 + 进度回调。
+   * 大批量导入（数千用户）后端约 1-2 分钟完成，这里给足 20 分钟上限兜底。
+   *
+   * @param {string} taskId
+   * @param {Object} options
+   *   - onProgress: (progress) => void   每次轮询拿到进度时回调（progress = { phase, processed, total, groups }）
+   *   - intervalMs: number               轮询间隔，默认 2500ms
+   *   - maxAttempts: number              最大轮询次数，默认 480（480 × 2.5s ≈ 20 分钟）
+   * @returns {Promise<Object>} 完成时 resolve 完整导入报告（result）；失败时 reject(Error)
+   */
+  pollSchoolImportStatus: (taskId, options = {}) => {
+    const {
+      onProgress,
+      intervalMs = 2500,
+      maxAttempts = 480
+    } = options
+
+    return new Promise((resolve, reject) => {
+      let attempts = 0
+      let timer = null
+
+      const clear = () => {
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+      }
+
+      const tick = async () => {
+        attempts += 1
+        try {
+          const data = await useAdminStore.getState().getSchoolImportStatus(taskId)
+
+          // 上报进度（无论什么状态都把当前进度透出去）
+          if (onProgress && data.progress) {
+            onProgress(data.progress)
+          }
+
+          if (data.status === 'completed') {
+            clear()
+            resolve(data.result)
+            return
+          }
+          if (data.status === 'failed') {
+            clear()
+            reject(new Error(data.error || '导入失败'))
+            return
+          }
+
+          // pending / running：继续轮询
+          if (attempts >= maxAttempts) {
+            clear()
+            reject(new Error('导入超时：任务执行时间过长，请稍后到用户列表确认导入结果'))
+            return
+          }
+          timer = setTimeout(tick, intervalMs)
+        } catch (error) {
+          // 查询出错（如任务过期被清理返回 404）→ 停止轮询并抛出
+          clear()
+          reject(error)
+        }
+      }
+
+      // 立即发起首次查询，之后按间隔轮询
+      tick()
+    })
   },
 
   /**
