@@ -4,6 +4,15 @@
  * v1.1 新增 keyword 关键词搜索透传
  *   - getUserHistory 透传 req.query.keyword
  *   - getPublicGallery 透传 req.query.keyword
+ *
+ * 安全说明（用户端 getModels）：
+ *   VideoModel.findAll 返回的对象虽已 delete api_key，但仍保留解析后的 api_config 字段，
+ *   而可灵(kling)的真实密钥 access_key/secret_key 就存放在 api_config 内。
+ *   因此用户端 /video/models 必须按【白名单】显式挑选前端所需的非敏感字段返回，
+ *   绝不可用 { ...model } 或仅解构剔除 api_key 的黑名单方式——否则 api_config 连同
+ *   可灵双密钥会明文透传给任何登录用户。后端真正调用视频 API 所需的密钥由
+ *   VideoService 经 VideoModel.findById（另一条链路）读取，与本接口无关，
+ *   故白名单不含密钥不影响生成功能。
  */
 
 const VideoService = require('../services/videoService');
@@ -16,10 +25,40 @@ class VideoController {
   static async getModels(req, res) {
     try {
       const models = await VideoService.getAvailableModels();
-      const safeModels = models.map(model => {
-        const { api_key, ...safeModel } = model;
-        return safeModel;
-      });
+      // 白名单：仅返回前端选择/展示/参数计算所需的非敏感字段，
+      // 显式排除 api_key、api_config（含可灵 access_key/secret_key）、endpoint 等敏感/内部字段
+      const safeModels = models.map(model => ({
+        id: model.id,
+        name: model.name,
+        display_name: model.display_name,
+        description: model.description,
+        provider: model.provider,
+        model_id: model.model_id,
+        generation_type: model.generation_type,
+        supports_text_to_video: model.supports_text_to_video,
+        supports_image_to_video: model.supports_image_to_video,
+        supports_first_frame: model.supports_first_frame,
+        supports_last_frame: model.supports_last_frame,
+        resolutions_supported: model.resolutions_supported,
+        durations_supported: model.durations_supported,
+        fps_supported: model.fps_supported,
+        ratios_supported: model.ratios_supported,
+        max_prompt_length: model.max_prompt_length,
+        default_resolution: model.default_resolution,
+        default_duration: model.default_duration,
+        default_fps: model.default_fps,
+        default_ratio: model.default_ratio,
+        base_price: model.base_price,
+        price_config: model.price_config,
+        example_prompt: model.example_prompt,
+        example_video: model.example_video,
+        icon: model.icon,
+        is_active: model.is_active,
+        sort_order: model.sort_order,
+        // has_api_key 由 VideoModel.findAll 计算（kling 查 api_config，其他查 api_key），
+        // 前端仅据此布尔值判断"是否已配置"，无需也不应拿到密钥本身
+        has_api_key: model.has_api_key
+      }));
       return ResponseHelper.success(res, safeModels);
     } catch (error) {
       logger.error('获取视频模型列表失败:', error);

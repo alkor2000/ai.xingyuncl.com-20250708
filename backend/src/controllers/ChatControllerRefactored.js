@@ -14,6 +14,7 @@
  * - 所有操作前 checkOwnership 权限验证
  * - 积分预扣减 + 失败退款保护（sendMessage catch 块中退还积分）
  * - 流式传输空内容检测 + 积分退还（StreamMessageService 处理）
+ * - getModels 仅返回前端所需的白名单字段，绝不透传 api_key/api_endpoint 等敏感凭证
  */
 
 const ConversationService = require('../services/chat/ConversationService');
@@ -477,7 +478,17 @@ class ChatControllerRefactored {
   // 模型/提示词/模块/积分
   // ================================================================
 
-  /** 获取可用的AI模型列表 - GET /api/chat/models */
+  /**
+   * 获取可用的AI模型列表 - GET /api/chat/models
+   * 
+   * 安全说明：
+   * getUserAvailableModels 返回的是 AIModel 实例，实例上挂有 api_key/api_endpoint
+   * 等敏感凭证字段（构造函数全量赋值）。此处必须按【白名单】显式挑选前端所需字段返回，
+   * 绝不可用 { ...model } 全量展开——否则会把 api_key/api_endpoint 明文透传给前端，
+   * 任何登录用户都能从响应中提取付费模型真实密钥（已知安全漏洞，此即修复点）。
+   * 注意：后端真正调用模型时所需的真实 api_key 由 aiService/aiStreamService 自行持有
+   * AIModel 实例读取，与本接口返回前端的数据完全无关，因此白名单不含密钥不影响调用。
+   */
   static async getModels(req, res) {
     try {
       const userId = req.user.id;
@@ -489,14 +500,21 @@ class ChatControllerRefactored {
       const modelsWithInfo = models.map(model => {
         const credits = model.credits_per_chat !== undefined ? model.credits_per_chat : 10;
         const isFree = credits === 0;
+        // 白名单字段：仅返回前端选择/展示模型所需的非敏感字段，
+        // 显式排除 api_key、api_endpoint、model_config 等内部/敏感字段
         return {
-          ...model,
+          id: model.id,
+          name: model.name,
+          display_name: model.display_name,
+          provider: model.provider,
           credits_per_chat: credits,
           credits_display: isFree ? '免费' : `${credits} 积分/次`,
           is_free: isFree,
+          stream_enabled: !!model.stream_enabled,
           image_upload_enabled: !!model.image_upload_enabled,
           image_generation_enabled: !!model.image_generation_enabled,
-          document_upload_enabled: !!model.document_upload_enabled
+          document_upload_enabled: !!model.document_upload_enabled,
+          sort_order: model.sort_order
         };
       });
       logger.info('获取用户可用AI模型列表', { userId, groupId: userGroupId, modelCount: modelsWithInfo.length });
