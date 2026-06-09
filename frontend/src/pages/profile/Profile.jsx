@@ -8,6 +8,8 @@
  * 4. 权限列表展示
  * 
  * 修复：恢复原密码验证，修改密码弹窗加回原密码输入框
+ * 增强：超级管理员修改密码强制强密码（≥8位+大小写+数字），
+ *       新密码框下常驻规则提示+前端校验与后端规则对齐（避免前端放行后端打回）
  */
 
 import React, { useState, useEffect } from 'react'
@@ -63,12 +65,47 @@ const Profile = () => {
     total: 0
   })
 
+  // 是否超级管理员：决定改密码是否走强密码规则（与后端 _validateSuperAdminPassword 保持一致）
+  const isSuperAdmin = user?.role === 'super_admin'
+
   // 角色显示配置
   const roleConfig = {
     'super_admin': { name: t('role.super_admin'), color: 'red' },
     'admin': { name: t('role.admin'), color: 'blue' },
     'user': { name: t('role.user'), color: 'green' }
   }
+
+  /**
+   * 超级管理员强密码前端校验（与后端规则一致：≥8位+大写+小写+数字）
+   * 一次性收集所有未满足项，给出完整要求+当前缺少哪些，避免逐条试错。
+   * 返回 Promise.resolve() 通过，否则 Promise.reject(完整错误文案)。
+   */
+  const validateSuperAdminPassword = (_, value) => {
+    // 空值交给 required 规则处理，这里只在有值时校验强度
+    if (!value) {
+      return Promise.resolve()
+    }
+    const missing = []
+    if (value.length < 8) missing.push('至少8位')
+    if (!/[A-Z]/.test(value)) missing.push('大写字母')
+    if (!/[a-z]/.test(value)) missing.push('小写字母')
+    if (!/[0-9]/.test(value)) missing.push('数字')
+
+    if (missing.length === 0) {
+      return Promise.resolve()
+    }
+    return Promise.reject(
+      new Error(`超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字。当前缺少：${missing.join('、')}`)
+    )
+  }
+
+  // 新密码校验规则：超管走强密码自定义校验，其他角色保持≥6位
+  const newPasswordRules = [
+    { required: true, message: t('profile.password.new.required') },
+    isSuperAdmin
+      ? { validator: validateSuperAdminPassword }
+      : { min: 6, message: t('profile.password.new.min') }
+  ]
 
   // 初始化表单数据
   useEffect(() => {
@@ -402,13 +439,14 @@ const Profile = () => {
             <Input.Password prefix={<LockOutlined />} placeholder={t('profile.password.old.placeholder')} />
           </Form.Item>
 
+          {/* 新密码输入框
+              - 超级管理员：走强密码校验（≥8位+大小写+数字），框下常驻规则提示
+              - 其他角色：保持≥6位规则 */}
           <Form.Item
             name="newPassword"
             label={t('profile.password.new')}
-            rules={[
-              { required: true, message: t('profile.password.new.required') },
-              { min: 6, message: t('profile.password.new.min') }
-            ]}
+            rules={newPasswordRules}
+            extra={isSuperAdmin ? '超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字' : null}
           >
             <Input.Password prefix={<LockOutlined />} />
           </Form.Item>

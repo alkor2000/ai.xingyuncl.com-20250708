@@ -13,6 +13,7 @@
  * - 修改密码必须验证原密码（防止token被盗后永久接管账号）
  * - 登录失败信息统一为"账号或密码错误"，不暴露具体原因
  * - 登出即使内部失败也返回成功，不暴露系统状态
+ * - 超级管理员修改密码强制强密码（≥8位+大小写+数字），其他角色保持≥6位
  */
 
 const User = require('../models/User');
@@ -99,6 +100,43 @@ class AuthControllerRefactored {
       siteConfig,
       ...tokens
     }, '登录成功');
+  }
+
+  /**
+   * 校验超级管理员强密码规则
+   * 
+   * 规则：≥8位 且 同时包含 大写字母 + 小写字母 + 数字。
+   * 一次性收集所有未满足项，返回完整要求 + 当前缺少哪些（避免用户逐条试错）。
+   * 仅用于超级管理员自助修改密码场景（changePassword 内 role==='super_admin' 分支），
+   * 不影响：普通用户/学校管理员改密（仍≥6位）、用户注册、
+   * 管理员重置他人密码（UserService.resetPassword）、批量创建/学校导入的弱密码。
+   * 
+   * @param {string} password - 待校验的新密码
+   * @returns {string|null} 校验通过返回 null，否则返回完整错误提示文案
+   */
+  static _validateSuperAdminPassword(password) {
+    const pwd = typeof password === 'string' ? password : '';
+    const missing = [];
+
+    if (pwd.length < 8) {
+      missing.push('至少8位');
+    }
+    if (!/[A-Z]/.test(pwd)) {
+      missing.push('大写字母');
+    }
+    if (!/[a-z]/.test(pwd)) {
+      missing.push('小写字母');
+    }
+    if (!/[0-9]/.test(pwd)) {
+      missing.push('数字');
+    }
+
+    if (missing.length === 0) {
+      return null;
+    }
+
+    // 一次性给出完整要求 + 当前缺少项，便于用户一步到位
+    return `超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字。当前缺少：${missing.join('、')}`;
   }
 
   // ============================================================
@@ -695,6 +733,10 @@ class AuthControllerRefactored {
    * 原因：JWT token 可能被盗（XSS/设备被他人使用），
    * 仅凭token不应允许永久接管账号（改密码+改邮箱=完全接管）
    * 
+   * 密码强度：
+   * - 超级管理员：≥8位 且 含大写+小写+数字（_validateSuperAdminPassword，一次返回完整要求）
+   * - 其他角色：≥6位（保持原规则，不影响普通用户/学校管理员）
+   * 
    * PUT /api/auth/password
    */
   static async changePassword(req, res) {
@@ -711,15 +753,6 @@ class AuthControllerRefactored {
         return ResponseHelper.validation(res, ['新密码不能为空']);
       }
 
-      if (newPassword.length < 6) {
-        return ResponseHelper.validation(res, ['新密码长度至少6位']);
-      }
-
-      // 新旧密码不能相同
-      if (oldPassword === newPassword) {
-        return ResponseHelper.validation(res, ['新密码不能与原密码相同']);
-      }
-
       const user = await User.findById(userId);
       if (!user) {
         return ResponseHelper.notFound(res, '用户不存在');
@@ -728,6 +761,26 @@ class AuthControllerRefactored {
       // SSO用户不允许修改密码
       if (user.uuid_source === 'sso') {
         return ResponseHelper.forbidden(res, 'SSO用户不允许修改密码');
+      }
+
+      // 密码强度校验：超级管理员走强密码规则，其他角色走基础规则
+      if (user.role === 'super_admin') {
+        const strongPwdError = AuthControllerRefactored._validateSuperAdminPassword(newPassword);
+        if (strongPwdError) {
+          logger.warn('超级管理员修改密码失败：新密码不满足强密码规则', {
+            userId, username: user.username
+          });
+          return ResponseHelper.validation(res, [strongPwdError]);
+        }
+      } else {
+        if (newPassword.length < 6) {
+          return ResponseHelper.validation(res, ['新密码长度至少6位']);
+        }
+      }
+
+      // 新旧密码不能相同
+      if (oldPassword === newPassword) {
+        return ResponseHelper.validation(res, ['新密码不能与原密码相同']);
       }
 
       // 验证原密码
