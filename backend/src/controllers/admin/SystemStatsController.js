@@ -3,10 +3,16 @@
  * 
  * v1.1 (2026-03-01):
  *   - updateRateLimitSettings: max验证上限从10000放宽到100000，与前端一致
+ *
+ * v1.2 (多平台SSO):
+ *   - SSO配置的读取/校验/保存逻辑抽离到 SSOConfigService
+ *   - getSSOSettings / updateSSOSettings 改为调用该服务，支持多平台 platforms 列表
+ *   - generateSSOSecret 保持不变（生成32位随机密钥，全局与平台通用）
  */
 
 const { StatsService } = require('../../services/admin');
 const SystemConfig = require('../../models/SystemConfig');
+const SSOConfigService = require('../../services/auth/SSOConfigService');
 const EmailService = require('../../services/emailService');
 const CacheService = require('../../services/cacheService');
 const ResponseHelper = require('../../utils/response');
@@ -1006,6 +1012,9 @@ class SystemStatsController {
 
   /**
    * 获取SSO配置
+   *
+   * v1.2: 改为调用 SSOConfigService.getConfigMasked()，
+   *       返回的全局密钥与各平台密钥均已掩码，支持 platforms 多平台列表
    */
   static async getSSOSettings(req, res) {
     try {
@@ -1016,28 +1025,8 @@ class SystemStatsController {
         return ResponseHelper.forbidden(res, '只有超级管理员可以查看SSO配置');
       }
       
-      // 从数据库获取SSO配置
-      const ssoConfig = await SystemConfig.getSetting('sso_config');
-      
-      // 如果没有配置，返回默认值
-      const defaultConfig = {
-        enabled: false,
-        shared_secret: '',
-        target_group_id: 1,
-        default_credits: 100,
-        signature_valid_minutes: 5,
-        ip_whitelist_enabled: false,
-        allowed_ips: ''
-      };
-      
-      const result = ssoConfig || defaultConfig;
-      
-      // 隐藏密钥的部分字符
-      if (result.shared_secret && result.shared_secret.length > 8) {
-        result.shared_secret = result.shared_secret.substring(0, 4) + 
-          '*'.repeat(result.shared_secret.length - 8) + 
-          result.shared_secret.substring(result.shared_secret.length - 4);
-      }
+      // 读取掩码后的配置（全局密钥 + 各平台密钥均已掩码）
+      const result = await SSOConfigService.getConfigMasked();
 
       return ResponseHelper.success(res, result, '获取SSO配置成功');
     } catch (error) {
@@ -1051,6 +1040,10 @@ class SystemStatsController {
 
   /**
    * 更新SSO配置
+   *
+   * v1.2: 改为调用 SSOConfigService.saveConfig()，
+   *       支持 platforms 多平台列表的校验、掩码密钥回填与持久化。
+   *       校验失败时服务层抛出携带中文提示的 Error，这里统一转为 validation 响应。
    */
   static async updateSSOSettings(req, res) {
     try {
@@ -1061,95 +1054,25 @@ class SystemStatsController {
         return ResponseHelper.forbidden(res, '只有超级管理员可以修改SSO配置');
       }
       
-      const {
-        enabled,
-        shared_secret,
-        target_group_id,
-        default_credits,
-        signature_valid_minutes,
-        ip_whitelist_enabled,
-        allowed_ips
-      } = req.body;
-      
-      // 验证参数
-      if (typeof enabled !== 'boolean') {
-        return ResponseHelper.validation(res, ['enabled必须是布尔值']);
-      }
-      
-      if (enabled && !shared_secret) {
-        return ResponseHelper.validation(res, ['启用SSO时必须设置共享密钥']);
-      }
-      
-      // 验证组ID
-      const groupId = parseInt(target_group_id);
-      if (isNaN(groupId) || groupId < 1) {
-        return ResponseHelper.validation(res, ['目标组ID无效']);
-      }
-      
-      // 验证积分数量
-      const credits = parseInt(default_credits);
-      if (isNaN(credits) || credits < 0) {
-        return ResponseHelper.validation(res, ['默认积分数量必须大于等于0']);
-      }
-      
-      // 验证签名有效期
-      const validMinutes = parseInt(signature_valid_minutes);
-      if (isNaN(validMinutes) || validMinutes < 1 || validMinutes > 60) {
-        return ResponseHelper.validation(res, ['签名有效期必须在1-60分钟之间']);
-      }
-      
-      // 获取当前配置
-      const currentConfig = await SystemConfig.getSetting('sso_config') || {};
-      
-      // 如果密钥是掩码格式，保留原密钥
-      let finalSharedSecret = shared_secret;
-      if (shared_secret && shared_secret.includes('*') && currentConfig.shared_secret) {
-        // 如果新密钥包含*，说明是掩码，保留原密钥
-        finalSharedSecret = currentConfig.shared_secret;
-      }
-      
-      // 构建配置对象
-      const ssoConfig = {
-        enabled,
-        shared_secret: finalSharedSecret,
-        target_group_id: groupId,
-        default_credits: credits,
-        signature_valid_minutes: validMinutes,
-        ip_whitelist_enabled: ip_whitelist_enabled === true,
-        allowed_ips: allowed_ips || '',
-        updated_at: new Date().toISOString(),
-        updated_by: req.user.id
-      };
-      
-      // 保存到数据库
-      await SystemConfig.updateSetting('sso_config', ssoConfig, 'json');
-      
-      logger.info('管理员更新SSO配置', { 
-        adminId: req.user.id,
-        enabled: ssoConfig.enabled,
-        target_group_id: ssoConfig.target_group_id,
-        ip_whitelist_enabled: ssoConfig.ip_whitelist_enabled
-      });
+      // 交由服务层校验 + 保存，返回掩码后的配置
+      const savedConfig = await SSOConfigService.saveConfig(req.body, req.user.id);
 
-      // 返回时隐藏密钥
-      if (ssoConfig.shared_secret && ssoConfig.shared_secret.length > 8) {
-        ssoConfig.shared_secret = ssoConfig.shared_secret.substring(0, 4) + 
-          '*'.repeat(ssoConfig.shared_secret.length - 8) + 
-          ssoConfig.shared_secret.substring(ssoConfig.shared_secret.length - 4);
-      }
-
-      return ResponseHelper.success(res, ssoConfig, 'SSO配置更新成功');
+      return ResponseHelper.success(res, savedConfig, 'SSO配置更新成功');
     } catch (error) {
-      logger.error('更新SSO配置失败', { 
+      // 服务层的校验错误为业务错误，按 422 校验响应返回，便于前端展示具体原因
+      logger.warn('更新SSO配置被拒绝或失败', { 
         adminId: req.user?.id, 
         error: error.message 
       });
-      return ResponseHelper.error(res, error.message || '更新SSO配置失败');
+      return ResponseHelper.validation(res, [error.message || '更新SSO配置失败']);
     }
   }
 
   /**
    * 生成新的SSO共享密钥
+   *
+   * 说明：生成一个32位（16字节hex）随机密钥，全局密钥与各平台密钥通用，
+   *       前端可把它填入全局密钥框，或填入某个平台的密钥框。
    */
   static async generateSSOSecret(req, res) {
     try {
