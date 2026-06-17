@@ -7,7 +7,7 @@
  * 1. 密码登录（用户名/邮箱/手机号 + 密码）
  * 2. 邮箱验证码登录（邮箱 + 验证码）
  * 3. 邮箱+密码+验证码登录（强制验证模式）
- * 4. SSO单点登录（uuid + timestamp + signature）
+ * 4. SSO单点登录（uuid + timestamp + signature，支持 platform_key 多平台）
  * 
  * 安全说明：
  * - 修改密码必须验证原密码（防止token被盗后永久接管账号）
@@ -26,6 +26,9 @@ const { GroupService } = require('../services/admin');
 const bcrypt = require('bcryptjs');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
+
+// SSO name 字段为不可信展示输入，最大保留长度（超出截断，防止恶意超长字符串写入备注）
+const SSO_NAME_MAX_LENGTH = 100;
 
 class AuthControllerRefactored {
 
@@ -139,6 +142,24 @@ class AuthControllerRefactored {
     return `超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字。当前缺少：${missing.join('、')}`;
   }
 
+  /**
+   * 截断 SSO name 字段
+   *
+   * name 不在签名内，属不可信输入，仅用于备注展示。
+   * 非字符串置空，超长截断到 SSO_NAME_MAX_LENGTH，防止恶意超长字符串写入。
+   *
+   * @param {*} name - 原始 name
+   * @returns {string|null} 处理后的 name
+   */
+  static _sanitizeSSOName(name) {
+    if (typeof name !== 'string' || name.length === 0) {
+      return null;
+    }
+    return name.length > SSO_NAME_MAX_LENGTH
+      ? name.substring(0, SSO_NAME_MAX_LENGTH)
+      : name;
+  }
+
   // ============================================================
   // SSO登录
   // ============================================================
@@ -146,27 +167,51 @@ class AuthControllerRefactored {
   /**
    * SSO单点登录
    * POST /api/auth/sso
+   *
+   * 支持两种模式：
+   * - 多平台模式：请求体携带 platform_key，按对应平台密钥验签并落入平台指定组
+   * - 全局模式：请求体不带 platform_key，用全局共享密钥验签（向后兼容）
+   *
+   * 签名主体兼容 uuid 与历史 username，故二者均透传给服务层。
+   * name 为不可信展示字段，截断后再使用。
+   * 错误响应码：服务层抛出的错误携带 statusCode（400/403/500），按其映射 HTTP 状态。
    */
   static async ssoLogin(req, res) {
     try {
-      const { uuid, name, timestamp, signature } = req.body;
+      // 透传 platform_key（多平台路由关键字段）与 username（签名主体兼容）
+      const { uuid, username, name, timestamp, signature, platform_key } = req.body;
       const clientIp = req.ip || req.connection.remoteAddress;
 
-      // 验证SSO请求（签名+时间戳+IP白名单）
-      const ssoConfig = await SSOService.validateSSORequest(
-        { uuid, timestamp, signature },
+      // 验证SSO请求（按 platform_key 走多平台或全局分支：签名+时间戳+IP白名单）
+      const ssoContext = await SSOService.validateSSORequest(
+        { uuid, username, timestamp, signature, platform_key },
         clientIp
       );
 
-      // 处理SSO用户（查找或自动创建）
-      const user = await SSOService.handleSSOUser({ uuid, name }, ssoConfig);
+      // 处理SSO用户（查找或自动创建，落入 ssoContext 指定的组）
+      // name 经截断后传入，作为不可信展示字段
+      const safeName = AuthControllerRefactored._sanitizeSSOName(name);
+      const user = await SSOService.handleSSOUser(
+        { uuid: uuid || username, name: safeName },
+        ssoContext
+      );
 
       // 使用统一的登录成功处理
       return await AuthControllerRefactored._handleLoginSuccess(user, res, true, 'SSO登录');
 
     } catch (error) {
       logger.error('SSO登录处理失败:', error);
-      return ResponseHelper.error(res, error.message || 'SSO登录失败');
+
+      // 按服务层标记的 statusCode 映射 HTTP 状态：
+      // 400 参数错误 / 403 鉴权类（签名/IP/平台/账户）/ 其余按 500 服务端错误
+      const message = error.message || 'SSO登录失败';
+      if (error.statusCode === 400) {
+        return ResponseHelper.validation(res, [message]);
+      }
+      if (error.statusCode === 403) {
+        return ResponseHelper.forbidden(res, message);
+      }
+      return ResponseHelper.error(res, message);
     }
   }
 

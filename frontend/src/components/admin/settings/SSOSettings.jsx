@@ -46,6 +46,7 @@ const { Text, Paragraph } = Typography;
  *
  * 说明：
  *   - 密钥在后端做掩码后下发（形如 ab****yz），未改动时回传掩码即可保留原值
+ *   - 修改平台标识(platform_key)后必须重新填写密钥（后端按 platform_key 回填原密钥，改标识会导致原密钥匹配不到）
  *   - 新增文案使用 t(key, '中文兜底') 形式，locale 未补充 key 时显示中文，不影响使用
  */
 const SSOSettings = () => {
@@ -131,6 +132,18 @@ const SSOSettings = () => {
         return;
       }
       dupSet.add(k);
+    }
+
+    // C项校验：启用的平台必须选择目标组
+    for (const p of platforms) {
+      const enabled = p.enabled !== false;
+      if (enabled && (p.target_group_id === undefined || p.target_group_id === null)) {
+        const keyLabel = (p.platform_key || '').trim() || t('admin.sso.thisPlatform', '该平台');
+        message.error(
+          t('admin.sso.platformGroupRequired', '请为启用的平台选择目标组：') + keyLabel
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -542,6 +555,10 @@ const SSOSettings = () => {
           message={t(
             'admin.sso.platformsTip',
             '每个外部平台一行：请求携带对应的 platform_key 时，用该平台的独立密钥验签，并落入该平台指定的用户组。'
+          )}
+          description={t(
+            'admin.sso.platformsTipDetail',
+            '注意：修改某平台的「平台标识」后，必须重新填写该平台密钥（否则保存时原密钥会因标识变更而丢失）。平台 IP 白名单与全局白名单互相独立，平台关闭即不限制 IP。'
           )}
           type="success"
           showIcon
