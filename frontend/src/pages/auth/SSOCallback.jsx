@@ -1,50 +1,58 @@
+/**
+ * SSO 单点登录回调页面
+ *
+ * 职责：
+ *   接收第三方平台重定向带来的 token，完成本平台登录态建立后跳转。
+ *
+ * 流程：
+ *   1. 从 URL 参数读取 token（accessToken）与可选的 refreshToken
+ *   2. 写入 localStorage（authStore 使用的 auth-storage 键）
+ *   3. 设置 axios 默认 Authorization 头
+ *   4. 调 /auth/me 拉取用户信息 → 更新 authStore 登录态
+ *   5. 跳转到目标页（默认 /dashboard）
+ *
+ * 对接 URL 格式：
+ *   /auth/sso-callback?token={accessToken}&refreshToken={refreshToken}
+ *
+ * 说明：
+ *   本页面是一个"中转页"，用户只会短暂经过。这里只展示极简的加载态
+ *   （一个居中的转圈 + 一行小字），不展示成功弹窗、不做人为停留延迟，
+ *   拿到用户信息后立即跳转，让 SSO 跳转尽量无感。
+ *   仅在出错时（token 缺失 / 无效）才展示错误信息并跳回登录页。
+ */
+
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Spin, message } from 'antd'
+import { Spin } from 'antd'
 import useAuthStore from '../../stores/authStore'
 import apiClient from '../../utils/api'
 
 const SSOCallback = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
+  // 仅用于区分"加载中"与"出错"两种展示，正常成功时不停留、直接跳转
   const [error, setError] = useState(null)
-  
+
   useEffect(() => {
     const handleSSOCallback = async () => {
       try {
-        // 从URL参数获取token
+        // 从 URL 参数获取 token 与跳转目标
         const token = searchParams.get('token')
         const redirect = searchParams.get('redirect') || '/dashboard'
-        
+
         if (!token) {
           throw new Error('SSO认证失败：缺少token参数')
         }
-        
-        console.log('SSO回调：收到token', { tokenLength: token.length, redirect })
-        
-        // 解析JWT token获取基本信息（不验证签名，仅用于显示）
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]))
-          console.log('Token信息：', {
-            userId: payload.userId,
-            email: payload.email,
-            username: payload.username,
-            role: payload.role
-          })
-        } catch (e) {
-          console.warn('无法解析token payload:', e)
-        }
-        
-        // 方案1：直接使用token设置认证状态
-        // 将token存储到localStorage并设置认证状态
+
+        // refreshToken 可选，缺失时退回使用 accessToken（与原逻辑一致）
+        const refreshToken = searchParams.get('refreshToken') || token
+
+        // 写入 localStorage（authStore 持久化使用的 auth-storage 键）
         const authData = {
           accessToken: token,
-          refreshToken: searchParams.get('refreshToken') || token, // 如果没有refreshToken，使用相同的token
+          refreshToken,
           isAuthenticated: true
         }
-        
-        // 设置到localStorage（authStore使用的存储）
         const existingData = JSON.parse(localStorage.getItem('auth-storage') || '{}')
         const updatedData = {
           ...existingData,
@@ -54,128 +62,86 @@ const SSOCallback = () => {
           }
         }
         localStorage.setItem('auth-storage', JSON.stringify(updatedData))
-        
-        // 设置默认请求头
+
+        // 设置 axios 默认请求头，供后续 /auth/me 调用携带
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`
-        
-        // 获取用户信息以完成登录流程
-        try {
-          const response = await apiClient.get('/auth/me')
-          if (response.data?.success) {
-            const { user, permissions, siteConfig } = response.data.data
-            
-            // 更新authStore状态
-            useAuthStore.setState({
-              user,
-              permissions: permissions || [],
-              accessToken: token,
-              refreshToken: authData.refreshToken,
-              isAuthenticated: true,
-              loading: false
-            })
-            
-            // 如果有站点配置，更新它
-            if (siteConfig) {
-              const systemConfigStore = await import('../../stores/systemConfigStore')
-              systemConfigStore.default.getState().setUserSiteConfig(siteConfig)
-            }
-            
-            message.success('SSO登录成功')
-            
-            // 延迟跳转，让用户看到成功消息
-            setTimeout(() => {
-              navigate(redirect)
-            }, 500)
-          } else {
-            throw new Error('获取用户信息失败')
-          }
-        } catch (userError) {
-          console.error('获取用户信息失败:', userError)
-          
-          // 如果获取用户信息失败，可能token有问题，但还是尝试跳转
-          // 因为ProtectedRoute会再次验证
-          message.warning('SSO登录部分成功，正在跳转...')
-          setTimeout(() => {
-            navigate(redirect)
-          }, 1000)
+
+        // 拉取用户信息以完成登录态建立
+        const response = await apiClient.get('/auth/me')
+        if (!response.data?.success) {
+          throw new Error('获取用户信息失败')
         }
-        
-      } catch (error) {
-        console.error('SSO回调处理失败:', error)
-        setError(error.message || 'SSO登录失败')
-        message.error(error.message || 'SSO登录失败')
-        
-        // 3秒后跳转到登录页
+
+        const { user, permissions, siteConfig } = response.data.data
+
+        // 更新 authStore 登录态
+        useAuthStore.setState({
+          user,
+          permissions: permissions || [],
+          accessToken: token,
+          refreshToken,
+          isAuthenticated: true,
+          loading: false
+        })
+
+        // 更新站点配置（支持组级覆盖）
+        if (siteConfig) {
+          const systemConfigStore = await import('../../stores/systemConfigStore')
+          systemConfigStore.default.getState().setUserSiteConfig(siteConfig)
+        }
+
+        // 立即跳转，不做人为延迟、不展示成功画面
+        navigate(redirect, { replace: true })
+
+      } catch (err) {
+        console.error('SSO回调处理失败:', err)
+        setError(err.message || 'SSO登录失败')
+
+        // 出错时短暂展示错误信息后跳回登录页
         setTimeout(() => {
-          navigate('/login')
-        }, 3000)
-      } finally {
-        setLoading(false)
+          navigate('/login', { replace: true })
+        }, 2500)
       }
     }
-    
+
     handleSSOCallback()
   }, [searchParams, navigate])
-  
+
+  // 出错态：展示极简错误提示
+  if (error) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          padding: 20,
+          color: '#ff4d4f'
+        }}
+      >
+        <div style={{ fontSize: 16 }}>{error}</div>
+        <div style={{ fontSize: 13, color: '#999' }}>即将跳转到登录页...</div>
+      </div>
+    )
+  }
+
+  // 加载态：极简居中转圈 + 一行小字，正常情况下一闪而过
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '8px',
-        padding: '40px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        textAlign: 'center',
-        maxWidth: '400px',
-        width: '100%'
-      }}>
-        {loading ? (
-          <>
-            <Spin size="large" />
-            <h2 style={{ marginTop: '20px', color: '#333' }}>正在完成SSO登录...</h2>
-            <p style={{ color: '#666' }}>请稍候，正在验证您的身份</p>
-          </>
-        ) : error ? (
-          <>
-            <h2 style={{ color: '#ff4d4f' }}>SSO登录失败</h2>
-            <p style={{ color: '#666', marginTop: '10px' }}>{error}</p>
-            <p style={{ color: '#999', fontSize: '14px', marginTop: '20px' }}>
-              3秒后将跳转到登录页面...
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 style={{ color: '#52c41a' }}>SSO登录成功</h2>
-            <p style={{ color: '#666', marginTop: '10px' }}>正在跳转...</p>
-          </>
-        )}
-      </div>
-      
-      {/* 提示信息 */}
-      <div style={{
-        marginTop: '20px',
-        padding: '15px',
-        background: 'rgba(255, 255, 255, 0.9)',
-        borderRadius: '4px',
-        maxWidth: '400px',
-        width: '100%'
-      }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
-          <strong>SSO集成说明：</strong>
-        </p>
-        <ul style={{ margin: '10px 0 0 20px', fontSize: '12px', color: '#999' }}>
-          <li>第三方系统需要将用户重定向到此页面</li>
-          <li>URL格式: /auth/sso-callback?token=xxx&redirect=/path</li>
-          <li>token参数必须是有效的JWT令牌</li>
-        </ul>
-      </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16
+      }}
+    >
+      <Spin size="large" />
+      <div style={{ fontSize: 14, color: '#999' }}>正在登录...</div>
     </div>
   )
 }
