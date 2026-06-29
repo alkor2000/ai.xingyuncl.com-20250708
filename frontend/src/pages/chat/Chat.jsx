@@ -39,6 +39,18 @@
  *   - 状态通过 localStorage 持久化，默认关闭
  *   - showThinking prop 通过 MessageList → MessageItem → MessageContent 传递
  * 
+ * v4.1 修复（2026-06-29 模型选择器"暂无数据"全局故障）：
+ *   - 移除 availableModels 对 m.is_active 的冗余过滤，直接使用 aiModels
+ *   - 根因：后端 /chat/models 接口（getModels）于 6月10日改为白名单显式返回字段
+ *     以堵住 api_key 明文泄露漏洞，白名单中不含 is_active 字段（该字段为模型内部
+ *     管理状态，前端选择/展示不需要）。而本文件一直用 aiModels.filter(m => m.is_active)
+ *     做二次过滤，字段缺失后 m.is_active 全为 undefined，过滤后为空数组，导致所有用户
+ *     的模型选择器显示"暂无数据"（已选模型仍可用因其按 model_name 直接 find 不经此过滤）。
+ *   - 该 is_active 过滤本身是冗余的：后端 getModels 调用的 AIModel.getUserAvailableModels
+ *     返回的本就只有"激活的、当前用户有权限的"模型，前端无需再次过滤激活状态。
+ *   - 修复方式：去掉该过滤，直接 const availableModels = aiModels。零风险、纯前端、
+ *     不触碰后端刚加固的安全白名单（不让 api_key 有任何重新泄露的可能）。
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -722,7 +734,12 @@ const Chat = () => {
   }
 
   const currentModel = aiModels.find(m => m.name === currentConversation?.model_name)
-  const availableModels = aiModels.filter(m => m.is_active)
+  // v4.1 修复：直接使用 aiModels，不再对 m.is_active 做冗余过滤。
+  // 后端 /chat/models（getModels）调用的 AIModel.getUserAvailableModels 返回的本就
+  // 只有"激活的、当前用户有权限的"模型；且后端为堵 api_key 泄露已改为白名单返回，
+  // 白名单中不含 is_active 字段，旧的 filter(m => m.is_active) 会因字段缺失把列表
+  // 全部过滤为空，导致模型选择器"暂无数据"。此处直接透传 aiModels 即可。
+  const availableModels = aiModels
 
   // ================================================================
   // 构建 ChatInputArea 通用 props

@@ -1,6 +1,17 @@
 /**
  * 新建对话弹窗组件 - 支持系统提示词选择和模块组合
  * 支持Azure模型温度限制
+ *
+ * 修复（2026-06-29 模型选择器"暂无数据"全局故障）：
+ *   移除对 aiModels 的 m.is_active 过滤/判断（共3处：下拉渲染、默认模型查找、兜底默认模型），
+ *   直接使用 aiModels。
+ *   根因：后端 /chat/models（getModels）于 6月10日改为白名单显式返回字段以堵 api_key 泄露，
+ *   白名单中不含 is_active 字段，前端 m.is_active 全为 undefined，导致：
+ *     ① 下拉 filter(m => m.is_active) 过滤为空 → 模型下拉"暂无数据"；
+ *     ② 默认模型/兜底模型查找依赖 m.is_active 失效 → 无默认值 → 无法新建对话。
+ *   安全性确认：后端 AIModel.getUserAvailableModels 的 SQL 已含 WHERE m.is_active = true，
+ *   被超管禁用（is_active=0）的模型在数据库层面就不会返回给前端，前端这层 is_active
+ *   过滤是冗余的；去掉后管理员禁用模型功能依然有效（禁用模型根本不会出现在 aiModels 中）。
  */
 
 import React, { useEffect, useState } from 'react'
@@ -108,10 +119,12 @@ const ConversationFormModal = ({
       const defaultTemp = getDefaultTemperature()
       
       // 查找默认模型是否在可用模型列表中
-      const defaultModelAvailable = aiModels.find(m => m.is_active && m.name === defaultModel)
+      // 修复：去掉 m.is_active 判断（aiModels 已是后端返回的激活模型），仅按名称匹配
+      const defaultModelAvailable = aiModels.find(m => m.name === defaultModel)
       
       // 如果默认模型不可用，使用第一个可用模型
-      const modelToUse = defaultModelAvailable ? defaultModel : aiModels.find(m => m.is_active)?.name
+      // 修复：去掉 m.is_active 判断，直接取列表第一个
+      const modelToUse = defaultModelAvailable ? defaultModel : aiModels[0]?.name
       
       // 检查是否为Azure模型
       const isAzure = checkIsAzureModel(modelToUse)
@@ -238,7 +251,8 @@ const ConversationFormModal = ({
           rules={[{ required: true, message: t('chat.form.model.required') }]}
         >
           <Select onChange={handleModelChange}>
-            {aiModels.filter(m => m.is_active).map(model => (
+            {/* 修复：去掉 filter(m => m.is_active)，直接渲染 aiModels（后端已只返回激活模型） */}
+            {aiModels.map(model => (
               <Option key={model.name} value={model.name}>
                 <Space>
                   {model.display_name}

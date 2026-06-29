@@ -7,6 +7,13 @@
  * v2.0 变更：
  *   - 新增"深度思考"开关（enable_thinking）
  *   - 仅在选择 Claude 系列模型时显示
+ *
+ * 修复（2026-06-29 模型选择器"暂无数据"全局故障）：
+ *   移除模型下拉的 aiModels.filter(m => m.is_active)，直接渲染 aiModels。
+ *   根因与 ConversationFormModal 相同：后端 getModels 改为白名单返回后不含 is_active 字段，
+ *   前端 filter(m => m.is_active) 过滤为空导致编辑对话时模型下拉"暂无数据"。
+ *   安全性确认：后端 AIModel.getUserAvailableModels 的 SQL 已含 WHERE m.is_active = true，
+ *   被超管禁用的模型不会返回前端，前端这层过滤冗余，去掉不影响管理员禁用模型功能。
  */
 
 import React, { useEffect, useState } from 'react'
@@ -189,7 +196,8 @@ const ConversationSettingsDrawer = ({
           rules={[{ required: true, message: t('chat.form.model.required') }]}
         >
           <Select onChange={handleModelChange}>
-            {aiModels.filter(m => m.is_active).map(model => (
+            {/* 修复：去掉 filter(m => m.is_active)，直接渲染 aiModels（后端已只返回激活模型） */}
+            {aiModels.map(model => (
               <Option key={model.name} value={model.name}>
                 <Space>
                   {model.display_name}
