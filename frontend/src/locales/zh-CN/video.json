@@ -85,6 +85,15 @@
   "video.fullscreenPreview": "大屏预览",
   "video.videoPreview": "视频预览",
   
+  "video.searchPlaceholder": "搜索提示词或模型名...",
+  "video.promptCopied": "提示词已复制",
+  "video.copyFailed": "复制失败",
+  "video.copyPrompt": "复制提示词",
+  "video.submitSuccess": "视频生成任务已提交，输入已保留可继续使用",
+  "video.searchFound": "找到 {{count}} 条匹配 \"{{keyword}}\" 的结果",
+  "video.searchNoMatch": "没有匹配 \"{{keyword}}\" 的结果",
+  "video.searchNoVideo": "没有匹配 \"{{keyword}}\" 的视频",
+  
   "video.status.submitted": "已提交",
   "video.status.queued": "排队中",
   "video.status.running": "处理中",

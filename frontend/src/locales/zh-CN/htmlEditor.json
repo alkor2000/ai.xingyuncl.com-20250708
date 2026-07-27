@@ -77,6 +77,14 @@
   "htmlEditor.editor.cleared": "编辑器已清空",
   "htmlEditor.editor.previewOpened": "预览窗口已打开",
   "htmlEditor.editor.startWriting": "开始编写你的HTML代码...",
+  "htmlEditor.editor.basicMode": "基础模式",
+  "htmlEditor.editor.switchToAdvanced": "切换到高级编辑器",
+  "htmlEditor.editor.switchToBasic": "切换到基础编辑器",
+  "htmlEditor.editor.advancedBtn": "⚡ 高级",
+  "htmlEditor.editor.basicBtn": "📝 基础",
+  "htmlEditor.editor.cut": "剪切",
+  "htmlEditor.editor.copyMenu": "复制",
+  "htmlEditor.editor.paste": "粘贴",
   
   "htmlEditor.credits.free": "免费",
   "htmlEditor.credits.required": "{{credits}} 积分",
@@ -104,6 +112,7 @@
   
   "htmlEditor.action.cancel": "取消",
   "htmlEditor.action.confirm": "确定",
+  "htmlEditor.action.close": "关闭",
   "htmlEditor.action.rename": "重命名",
   "htmlEditor.action.delete": "删除",
   "htmlEditor.action.edit": "编辑"

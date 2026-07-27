@@ -77,6 +77,14 @@
   "htmlEditor.editor.cleared": "Editor cleared",
   "htmlEditor.editor.previewOpened": "Preview window opened",
   "htmlEditor.editor.startWriting": "Start writing your HTML code...",
+  "htmlEditor.editor.basicMode": "Basic Mode",
+  "htmlEditor.editor.switchToAdvanced": "Switch to advanced editor",
+  "htmlEditor.editor.switchToBasic": "Switch to basic editor",
+  "htmlEditor.editor.advancedBtn": "⚡ Advanced",
+  "htmlEditor.editor.basicBtn": "📝 Basic",
+  "htmlEditor.editor.cut": "Cut",
+  "htmlEditor.editor.copyMenu": "Copy",
+  "htmlEditor.editor.paste": "Paste",
   
   "htmlEditor.credits.free": "Free",
   "htmlEditor.credits.required": "{{credits}} Credits",
@@ -104,6 +112,7 @@
   
   "htmlEditor.action.cancel": "Cancel",
   "htmlEditor.action.confirm": "Confirm",
+  "htmlEditor.action.close": "Close",
   "htmlEditor.action.rename": "Rename",
   "htmlEditor.action.delete": "Delete",
   "htmlEditor.action.edit": "Edit"

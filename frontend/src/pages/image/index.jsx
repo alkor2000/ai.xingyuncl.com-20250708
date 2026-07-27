@@ -1,6 +1,12 @@
 /**
  * 图像生成页面 - 重构版
  *
+ * v1.3 i18n补全:
+ *   - 搜索框 placeholder 补全（之前 key 缺失，中英文都回退中文）
+ *   - 搜索结果计数提示改为纯文本 t()（去掉 <strong> 加粗，避免插值转义问题）
+ *   - 空状态搜索文案、图片加载失败提示走 t()
+ *   - Midjourney 操作确认标签配合 constants.ACTION_LABELS 新结构（{type,index}）用 t() 生成
+ *
  * v1.2 关键词搜索优化
  *   - IME 输入法保护（中文输入回车不触发搜索）
  *   - 生成后清空搜索框（避免不一致）
@@ -148,11 +154,37 @@ const ImageGeneration = () => {
     }
   }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab]);
 
+  /**
+   * v1.3 Midjourney 操作确认标签 i18n 生成
+   *   ACTION_LABELS[action] 现在返回 { type, index } 或函数
+   *   - UPSCALE/VARIATION 是函数 (index) => ({ type:'upscaleIndex', index })
+   *   - REROLL 是对象 { type:'reroll' }
+   *   根据 type 映射到 image.json 的 key：
+   *     upscaleIndex   -> image.action.upscaleIndex   放大第N张 / Upscale #N
+   *     variationIndex -> image.action.variationIndex 变体第N张 / Variation #N
+   *     reroll         -> image.action.reroll         重新生成 / Reroll
+   */
+  const buildActionLabel = useCallback((action, index) => {
+    const def = ACTION_LABELS[action];
+    const resolved = typeof def === 'function' ? def(index) : def;
+    if (!resolved || !resolved.type) {
+      return '';
+    }
+    if (resolved.type === 'reroll') {
+      return t('image.action.reroll', '重新生成');
+    }
+    if (resolved.type === 'upscaleIndex') {
+      return t('image.action.upscaleIndex', '放大第{{index}}张', { index: resolved.index });
+    }
+    if (resolved.type === 'variationIndex') {
+      return t('image.action.variationIndex', '变体第{{index}}张', { index: resolved.index });
+    }
+    return '';
+  }, [t]);
+
   // Midjourney操作
   const handleMidjourneyAction = useCallback(async (generationId, action, index) => {
-    const actionLabel = typeof ACTION_LABELS[action] === 'function' 
-      ? ACTION_LABELS[action](index) 
-      : ACTION_LABELS[action];
+    const actionLabel = buildActionLabel(action, index);
     
     const confirm = await new Promise((resolve) => {
       Modal.confirm({
@@ -172,7 +204,7 @@ const ImageGeneration = () => {
       await midjourneyAction(generationId, action, index);
       reloadCurrentTab(activeTab, historyPaging.currentPage);
     }
-  }, [generation.selectedModel, midjourneyAction, reloadCurrentTab, historyPaging, t, activeTab]);
+  }, [generation.selectedModel, midjourneyAction, reloadCurrentTab, historyPaging, t, activeTab, buildActionLabel]);
 
   // Tab切换
   const handleTabChange = useCallback((key) => {
@@ -272,7 +304,8 @@ const ImageGeneration = () => {
     });
     const validImages = allImages.filter(img => img !== null);
     if (validImages.length === 0) {
-      message.error('图片加载失败');
+      // v1.3 i18n: 图片加载失败提示
+      message.error(t('image.error.loadFailed', '图片加载失败'));
       return;
     }
     const correctIndex = validImages.findIndex(img => img.id === item.id);
@@ -401,12 +434,12 @@ const ImageGeneration = () => {
             </Space>
           </div>
           
-          {/* v1.2 搜索结果计数提示 */}
+          {/* v1.3 搜索结果计数提示（纯文本 t()，不再用 <strong> 加粗） */}
           {!loading && isSearchActive && (
             <div className="search-result-tip">
               {currentTotal > 0
-                ? <span>找到 <strong>{currentTotal}</strong> 条匹配 "<strong>{keyword}</strong>" 的结果</span>
-                : <span>没有匹配 "<strong>{keyword}</strong>" 的结果</span>
+                ? <span>{t('image.searchFound', '找到 {{count}} 条匹配 "{{keyword}}" 的结果', { count: currentTotal, keyword })}</span>
+                : <span>{t('image.searchNoMatch', '没有匹配 "{{keyword}}" 的结果', { keyword })}</span>
               }
             </div>
           )}
@@ -457,7 +490,7 @@ const ImageGeneration = () => {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   isSearchActive
-                    ? `没有匹配 "${keyword}" 的图片`
+                    ? t('image.searchNoImage', '没有匹配 "{{keyword}}" 的图片', { keyword })
                     : activeTab === TAB_KEYS.PUBLIC 
                       ? t('image.noPublicImages', '暂无公开的图片')
                       : activeTab === TAB_KEYS.FAVORITES

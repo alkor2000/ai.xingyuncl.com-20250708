@@ -1,6 +1,10 @@
 /**
  * HTML编辑器主页面
  * 
+ * v1.9 (i18n补全): 
+ *   - 编辑器表头"基础模式/高级/基础/切换Tooltip"走t()
+ *   - Monaco右键菜单剪切/复制/粘贴走t()（注：onMount时取值，切换语言后需刷新页面生效）
+ *   - htmlEditor.action.close补key（复制链接弹窗的"关闭"按钮）
  * v1.8 (2026-03-01): 修复转圈加载不出来 + Monaco降级textarea
  *   - 积分加载不再阻塞页面初始化(去掉creditsLoading对项目选择的阻塞)
  *   - 移除waitForCreditsLoaded轮询，autoHandlePage直接加载页面
@@ -146,6 +150,7 @@ const HtmlEditor = () => {
   useEffect(() => { if (user) updateUserCredits(); }, [user]);
 
   // v1.8 自动选择默认项目 - 不再等creditsLoading
+  // 注意: '默认项目' 是数据库中默认项目的实际名称，属业务匹配逻辑非显示文案，不可i18n化
   useEffect(() => {
     if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
       const def = projects.find(p => p.name === '默认项目' || p.is_default === 1);
@@ -242,13 +247,15 @@ const HtmlEditor = () => {
   };
 
   // v1.8 Monaco就绪回调
+  // v1.9 i18n: 右键菜单label走t()。注意：label在onMount时取值一次，
+  //           切换语言后编辑器不重新mount，需刷新页面菜单文案才会更新（可接受的已知限制）
   const handleEditorMount = (editor) => {
     clearTimeout(monacoTimerRef.current);
     setMonacoStatus('ready');
     [
-      { id: 'cut', label: '✂️ 剪切', order: 1, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) { await navigator.clipboard.writeText(t2); ed.executeEdits('cut', [{ range: s, text: '', forceMoveMarkers: true }]); } } },
-      { id: 'copy', label: '📄 复制', order: 2, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) await navigator.clipboard.writeText(t2); } },
-      { id: 'paste', label: '📋 粘贴', order: 3, fn: async (ed) => { const t2 = await navigator.clipboard.readText(); if (t2) { ed.executeEdits('paste', [{ range: ed.getSelection(), text: t2, forceMoveMarkers: true }]); ed.focus(); } } }
+      { id: 'cut', label: `✂️ ${t('htmlEditor.editor.cut', '剪切')}`, order: 1, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) { await navigator.clipboard.writeText(t2); ed.executeEdits('cut', [{ range: s, text: '', forceMoveMarkers: true }]); } } },
+      { id: 'copy', label: `📄 ${t('htmlEditor.editor.copyMenu', '复制')}`, order: 2, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) await navigator.clipboard.writeText(t2); } },
+      { id: 'paste', label: `📋 ${t('htmlEditor.editor.paste', '粘贴')}`, order: 3, fn: async (ed) => { const t2 = await navigator.clipboard.readText(); if (t2) { ed.executeEdits('paste', [{ range: ed.getSelection(), text: t2, forceMoveMarkers: true }]); ed.focus(); } } }
     ].forEach(a => editor.addAction({ id: `custom-${a.id}`, label: a.label, keybindings: [], contextMenuGroupId: '9_cutcopypaste', contextMenuOrder: a.order, run: a.fn }));
   };
 
@@ -362,10 +369,10 @@ const HtmlEditor = () => {
             <div style={S.edHead}>
               <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}</span>
               <Space size={8}>
-                <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? '基础模式' : t('htmlEditor.loadingEditor')}</span>
-                <Tooltip title={monacoStatus === 'failed' ? '切换到高级编辑器' : '切换到基础编辑器'}>
+                <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? t('htmlEditor.editor.basicMode', '基础模式') : t('htmlEditor.loadingEditor')}</span>
+                <Tooltip title={monacoStatus === 'failed' ? t('htmlEditor.editor.switchToAdvanced', '切换到高级编辑器') : t('htmlEditor.editor.switchToBasic', '切换到基础编辑器')}>
                   <Button size="small" type={monacoStatus === 'failed' ? 'primary' : 'default'} style={{ fontSize: 11, height: 24, borderRadius: 6 }} onClick={() => { if (monacoStatus === 'failed') { setMonacoStatus('loading'); startMonacoTimer(); } else { clearTimeout(monacoTimerRef.current); setMonacoStatus('failed'); } }}>
-                    {monacoStatus === 'failed' ? '⚡ 高级' : '📝 基础'}
+                    {monacoStatus === 'failed' ? t('htmlEditor.editor.advancedBtn', '⚡ 高级') : t('htmlEditor.editor.basicBtn', '📝 基础')}
                   </Button>
                 </Tooltip>
               </Space>

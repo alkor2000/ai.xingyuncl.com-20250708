@@ -6,6 +6,7 @@ import useAuthStore from '../../stores/authStore'
 import useStatsStore from '../../stores/statsStore'
 import useModuleStore from '../../stores/moduleStore'
 import apiClient from '../../utils/api'
+import { getModuleDisplayName } from '../../utils/moduleName'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import MobileDrawer from './MobileDrawer'
@@ -19,7 +20,8 @@ const BasicLayout = ({ children }) => {
   const { user, hasPermission, hasRole } = useAuthStore()
   const { initializeSocket, disconnectSocket } = useStatsStore()
   const { userModules, getUserModules } = useModuleStore()
-  const { t } = useTranslation()
+  // i18n实例用于getModuleDisplayName的exists判断；i18n.language加入依赖保证切换语言时菜单label重建
+  const { t, i18n } = useTranslation()
   
   // 移动端菜单状态
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
@@ -60,6 +62,7 @@ const BasicLayout = ({ children }) => {
   }, [user, getUserModules])
 
   // 构建菜单项（从后端获取的模块数据）
+  // i18n: label使用getModuleDisplayName优先取locale的module.{name}键，miss回退display_name
   useEffect(() => {
     if (!userModules || userModules.length === 0) {
       // 如果还没有加载模块，设置一个基础菜单
@@ -90,23 +93,23 @@ const BasicLayout = ({ children }) => {
         permission = 'chat.use'
       }
       
-      // 添加菜单项
+      // 添加菜单项（label走i18n映射，miss回退display_name）
       menuItems.push({
         key: module.route_path || `/${module.name}`,
         icon: module.menu_icon || 'AppstoreOutlined',
-        label: module.display_name || module.name,
+        label: getModuleDisplayName(module, t, i18n),
         permission: permission,
         isSystemModule: true,
         moduleData: module
       })
     })
     
-    // 2. 添加外部模块
+    // 2. 添加外部模块（外部模块通常无locale键，getModuleDisplayName自动回退display_name）
     externalModules.forEach(module => {
       menuItems.push({
         key: `/module/${module.name}`,
         icon: module.menu_icon || 'AppstoreOutlined',
-        label: module.display_name,
+        label: getModuleDisplayName(module, t, i18n),
         permission: null,
         isModule: true,
         openMode: module.open_mode,
@@ -125,7 +128,7 @@ const BasicLayout = ({ children }) => {
     if (adminUsersModule) {
       adminChildren.push({
         key: adminUsersModule.route_path || '/admin/users',
-        label: adminUsersModule.display_name || t('nav.users'),
+        label: getModuleDisplayName(adminUsersModule, t, i18n) || t('nav.users'),
         permission: ['user.manage', 'user.manage.group'],
         isSystemModule: true,
         moduleData: adminUsersModule
@@ -137,7 +140,7 @@ const BasicLayout = ({ children }) => {
     if (adminSettingsModule) {
       adminChildren.push({
         key: adminSettingsModule.route_path || '/admin/settings',
-        label: adminSettingsModule.display_name || t('nav.settings'),
+        label: getModuleDisplayName(adminSettingsModule, t, i18n) || t('nav.settings'),
         roles: ['super_admin', 'admin'],
         permission: null,
         isSystemModule: true,
@@ -157,7 +160,7 @@ const BasicLayout = ({ children }) => {
     }
     
     setDynamicMenuItems(menuItems)
-  }, [userModules, t])
+  }, [userModules, t, i18n, i18n.language])
 
   // 过滤菜单项（基于权限）
   const filterMenuItems = (items) => {

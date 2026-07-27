@@ -16,6 +16,10 @@
  *   - 全屏状态下右上角显示悬浮退出按钮
  *   - API不支持时降级为CSS模拟全屏（position:fixed）
  *
+ * i18n（v1.1）：
+ *   - 全屏降级提示、全屏失败提示走 t()（chat.canvas.fullscreenNotSupported / fullscreenFailed）
+ *   - 其余文案此前已走 t(...)，根因是 en-US/chat.json 缺 chat.canvas.* key，已在locale侧补齐
+ *
  * Props:
  *   - messages: 消息列表
  *   - isStreaming: 是否正在流式输出
@@ -103,6 +107,7 @@ const collectHtmlFromMessages = (messages) => {
 
 // ================================================================
 // 设备预览尺寸配置
+// （注：label 字段当前未在 UI 渲染，Tooltip 使用 t('chat.canvas.*')，保留作数据说明）
 // ================================================================
 const DEVICE_SIZES = {
   desktop: { width: '100%', label: '桌面' },
@@ -296,13 +301,14 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
    * 切换全屏
    * 调用浏览器原生Fullscreen API，让浏览器UI完全隐藏
    * API不支持或调用失败时降级为CSS模拟全屏
+   * v1.1 i18n: 提示文案走 t()
    */
   const handleToggleFullscreen = useCallback(async () => {
     // 检测API支持
     if (!isFullscreenSupported()) {
       // 降级：直接切换React state，由CSS .fullscreen 类模拟全屏
       setIsFullscreen(prev => !prev)
-      antMessage.info('当前浏览器不支持真全屏，使用CSS模拟全屏')
+      antMessage.info(t('chat.canvas.fullscreenNotSupported', '当前浏览器不支持真全屏，使用CSS模拟全屏'))
       return
     }
 
@@ -321,11 +327,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
       }
     } catch (error) {
       console.error('全屏切换失败:', error)
-      antMessage.error('全屏操作失败：' + (error.message || '未知错误'))
+      antMessage.error(t('chat.canvas.fullscreenFailed', '全屏操作失败：{{error}}', { error: error.message || '' }))
       // 失败时降级
       setIsFullscreen(prev => !prev)
     }
-  }, [])
+  }, [t])
 
   /** 切换到上一个/下一个HTML块 */
   const handlePrev = () => {

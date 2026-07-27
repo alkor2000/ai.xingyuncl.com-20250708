@@ -2,9 +2,14 @@
  * 参数设置面板组件
  * 支持图生图和Midjourney参考图片
  * 修复：Midjourney也遵守后台的图生图开关设置
+ *
+ * i18n 改造:
+ *   - QUANTITY_OPTIONS 已改为纯数值数组 [1,2,3,4]
+ *   - Segmented 的 options 在组件内用 t('image.imageCount', { count }) 实时生成
+ *     （解决常量文件无法调用 t() 导致"1张/2张"写死的问题）
  */
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Card, Button, Space, Row, Col, Slider, InputNumber, Switch, Segmented, Alert, Collapse, Tag, Tooltip } from 'antd';
 import { SendOutlined, CaretRightOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +46,15 @@ const ParameterSettings = memo(({
   const supportsImage2Image = selectedModel?.api_config?.supports_image2image === true;
   const maxReferenceImages = selectedModel?.api_config?.max_reference_images || 2;
 
+  // i18n: 数量选项 label 由 t() 实时生成（QUANTITY_OPTIONS 为纯数值 [1,2,3,4]）
+  const quantitySegmentedOptions = useMemo(
+    () => QUANTITY_OPTIONS.map(n => ({
+      label: t('image.imageCount', '{{count}}张', { count: n }),
+      value: n
+    })),
+    [t]
+  );
+
   return (
     <Card title={t('image.parameterSettings', '参数设置')} className="parameters">
       {/* 生成数量 - Midjourney和图生图模式不显示 */}
@@ -53,7 +67,7 @@ const ParameterSettings = memo(({
             </Tooltip>
           </div>
           <Segmented
-            options={QUANTITY_OPTIONS}
+            options={quantitySegmentedOptions}
             value={quantity}
             onChange={onQuantityChange}
             block

@@ -1,6 +1,11 @@
 /**
  * 视频生成页面 - 支持首尾帧控制和模型名称显示
  *
+ * v1.4 i18n补全:
+ *   - 补全搜索框 placeholder（之前 key 缺失导致中英文都显示中文 fallback）
+ *   - 清理零散硬编码中文：复制提示、生成成功提示、搜索结果条、Empty 文案、复制按钮 Tooltip
+ *   - 搜索结果提示条改为纯文本（不再依赖 <strong> 加粗，避免 i18next 插值转义问题）
+ *
  * v1.3 修复: 隐藏"尾帧图生视频"模式
  *   - 火山 doubao-seedance API 不支持单独 last_frame（"last frame image content cannot be mixed with first frame or reference image content"）
  *   - 实际可用模式: text_to_video / first_frame / first_last_frame
@@ -197,6 +202,7 @@ const VideoGeneration = () => {
       });
       onSuccess(response.data, file);
     } catch (error) {
+      // console 日志保留中文不影响界面
       console.error('上传失败:', error);
       onError(error);
     }
@@ -213,11 +219,12 @@ const VideoGeneration = () => {
   const handleRemoveFirstImage = () => { setFirstFrameImage(''); setFirstFrameFile(null); };
   const handleRemoveLastImage = () => { setLastFrameImage(''); setLastFrameFile(null); };
 
+  // v1.4 复制提示词：成功/失败提示走 i18n
   const handleCopyPrompt = (text) => {
     navigator.clipboard.writeText(text).then(() => {
-      message.success('提示词已复制');
+      message.success(t('video.promptCopied'));
     }).catch(() => {
-      message.error('复制失败');
+      message.error(t('video.copyFailed'));
     });
   };
 
@@ -273,7 +280,8 @@ const VideoGeneration = () => {
       if (activeTab !== 'all') {
         setActiveTab('all');
       }
-      message.success('视频生成任务已提交，输入已保留可继续使用');
+      // v1.4 生成成功提示走 i18n
+      message.success(t('video.submitSuccess'));
     }
   };
 
@@ -472,7 +480,7 @@ const VideoGeneration = () => {
                 <Tooltip title={item.prompt} placement="topLeft">
                   <span className="prompt-text-content">{item.prompt}</span>
                 </Tooltip>
-                <Tooltip title="复制提示词">
+                <Tooltip title={t('video.copyPrompt')}>
                   <Button
                     type="text" size="small"
                     icon={<CopyOutlined />}
@@ -732,7 +740,7 @@ const VideoGeneration = () => {
           </Tabs>
           <Search
             className="history-search"
-            placeholder={t('video.searchPlaceholder', '搜索提示词或模型名...')}
+            placeholder={t('video.searchPlaceholder')}
             allowClear
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -747,8 +755,8 @@ const VideoGeneration = () => {
         {!loading && isSearchActive && (
           <div className="search-result-tip">
             {currentTotal > 0
-              ? <span>找到 <strong>{currentTotal}</strong> 条匹配 "<strong>{keyword}</strong>" 的结果</span>
-              : <span>没有匹配 "<strong>{keyword}</strong>" 的结果</span>
+              ? <span>{t('video.searchFound', { count: currentTotal, keyword })}</span>
+              : <span>{t('video.searchNoMatch', { keyword })}</span>
             }
           </div>
         )}
@@ -773,7 +781,7 @@ const VideoGeneration = () => {
           ) : getCurrentData().length > 0 ? (
             getCurrentData().map(item => renderVideoCard(item, activeTab === 'public'))
           ) : (
-            <Empty description={isSearchActive ? `没有匹配 "${keyword}" 的视频` : t('video.noVideos')} />
+            <Empty description={isSearchActive ? t('video.searchNoVideo', { keyword }) : t('video.noVideos')} />
           )}
         </div>
       </Content>

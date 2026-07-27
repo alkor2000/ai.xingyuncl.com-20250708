@@ -1,6 +1,10 @@
 /**
  * 工作台页面
  * 
+ * v1.2 变更（i18n）：
+ *   - 功能模块卡片名称改用 getModuleDisplayName 工具：优先locale的module.{name}键，miss回退display_name
+ *   - 解决模块名称（数据库中文字段）在英文界面下无法翻译的问题
+ * 
  * v1.1 变更：
  *   - 普通用户读取组公告改用 /stats/my-group-announcement 端点（无需admin权限）
  *   - 管理员仍使用 /admin/user-groups/:id/announcement 端点（支持切换组查看）
@@ -34,6 +38,7 @@ import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
 import useModuleStore from '../../stores/moduleStore'
 import apiClient from '../../utils/api'
+import { getModuleDisplayName } from '../../utils/moduleName'
 import './Dashboard.less'
 
 const { Title, Paragraph, Text } = Typography
@@ -473,7 +478,7 @@ const Dashboard = () => {
                     </div>
                     <div className="module-info">
                       <div className="module-name" style={{ color: colorScheme.color }}>
-                        {module.display_name}
+                        {getModuleDisplayName(module, t, i18n)}
                       </div>
                       {module.description && !isMobile && (
                         <div className="module-desc" style={{ color: colorScheme.color }}>

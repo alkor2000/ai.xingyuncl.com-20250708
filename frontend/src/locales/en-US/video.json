@@ -85,6 +85,15 @@
   "video.fullscreenPreview": "Fullscreen Preview",
   "video.videoPreview": "Video Preview",
   
+  "video.searchPlaceholder": "Search prompt or model name...",
+  "video.promptCopied": "Prompt copied",
+  "video.copyFailed": "Copy failed",
+  "video.copyPrompt": "Copy prompt",
+  "video.submitSuccess": "Video generation task submitted. Your input is preserved for reuse.",
+  "video.searchFound": "Found {{count}} result(s) matching \"{{keyword}}\"",
+  "video.searchNoMatch": "No results matching \"{{keyword}}\"",
+  "video.searchNoVideo": "No videos matching \"{{keyword}}\"",
+  
   "video.status.submitted": "Submitted",
   "video.status.queued": "Queued",
   "video.status.running": "Processing",

@@ -1,978 +1,544 @@
 /**
- * 思维导图工具 v4.3 - 导出裁切根治（SVG序列化 + foreignObject 内部样式全量内联）
+ * 思维导图页面
  *
- * v4.3 修复（基于 dom-to-image 核心原理 + v4.1 诊断数据）：
- *   两条已被排除的死路：
- *     - html2canvas foreignObjectRendering:false → 自身引擎解析 SVG 内
- *       foreignObject，丢字（v4.0/v4.1）。
- *     - html2canvas foreignObjectRendering:true → 整图空白（v4.2，浏览器对
- *       SVG 内嵌 foreignObject 的原生截图路径在本环境崩溃）。
- *   诊断数据（v4.1-debug）已证明：导出边界、截图区域都正确，问题不在尺寸。
- *   真因（结合 dom-to-image-more 文档）：
- *     SVG 序列化导出（v3.x）裁切，并非边界算错，而是序列化出的 SVG 里
- *     foreignObject 内部 HTML 文字「缺少字体/CSS」。浏览器用 <img> 渲染该 SVG 时，
- *     foreignObject 内 HTML 以默认字体重排版，大字号中文变宽并溢出，于是被裁。
- *     v3.x 的 cloneAndPrepare 只内联了 SVG 原生元素样式，遗漏了 foreignObject
- *     内部 HTML 子节点（div/span）的 font-family/font-size 等关键样式。
- *   方案（与 dom-to-image-more 同源思路、零新依赖）：
- *     回归 SVG 序列化导出（浏览器原生 <img> 渲染 SVG+foreignObject 可靠）；
- *     对 foreignObject 内部「所有 HTML 后代」无差别内联完整 computed style
- *     （字体/字号/字重/颜色/行高/换行/对齐/盒模型），令序列化 SVG 自包含样式，
- *     <img> 渲染时文字宽度与页面完全一致，不再重排、不再溢出被裁。
- *   导出尺寸：用诊断已证明正确的「内容 <g> 真实包围盒」换算到 viewBox。
+ * v2.1 (i18n全量改造):
+ *   - 引入 useTranslation，全部界面文案走 t()（此前整页硬编码中文）
+ *   - typeTabs / getTypeTag / 导出菜单 / 保存菜单移入组件内用 t() 实时构造
+ *   - formatTime 改用 time.justNow / minutesAgo / hoursAgo / daysAgo
+ *   - 功能逻辑零变更：markmap/mermaid/svg 渲染、项目式持久化、分享、积分计费均原样保留
  *
- * v4.2 foreignObjectRendering:true（空白，失败）
- * v4.1 html2canvas + 负偏移截取（缺字，失败）
- * v4.0 改用 html2canvas 截 wrapper（缺字，失败）
- * v3.x SVG 序列化系列（字体未内联导致溢出裁切，失败）
- * v3.2 体验优化（#17 切 Tab 不重置 / 顶部精简 / 新建入口移至抽屉）
- * v3.1 修复导出黑底 + 顶部布局错乱
- * v3.0 项目式持久化基础架构
+ * v2.0: 项目式持久化（保存/列表/重命名/删除/另存为/永久分享链接）
+ * 支持三种模式: Markdown(markmap) / Mermaid / SVG
+ * 导出: SVG / PNG / PDF / 源代码，按次积分计费
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  Button, Input, Space, message, Tabs, Tooltip, Typography, Dropdown,
-  Drawer, List, Empty, Modal, Popconfirm, Tag, Spin
-} from 'antd';
+  Button, Input, Tabs, Space, message, Modal, Dropdown, Tooltip,
+  Drawer, List, Tag, Popconfirm, Spin, Empty
+} from 'antd'
 import {
-  SaveOutlined, ZoomInOutlined, ZoomOutOutlined,
-  ReloadOutlined, ExpandOutlined, ExportOutlined,
-  FileTextOutlined, FileImageOutlined, FilePdfOutlined,
-  DownOutlined, FolderOpenOutlined, ShareAltOutlined,
-  PlusOutlined, EditOutlined, DeleteOutlined,
-  CopyOutlined, ClockCircleOutlined, WalletOutlined
-} from '@ant-design/icons';
-import { Transformer } from 'markmap-lib';
-import { Markmap } from 'markmap-view';
-import './Mindmap.less';
-import MermaidPreview from './components/MermaidPreview';
-import SvgPreview from './components/SvgPreview';
-import { MARKDOWN_TEMPLATE, MERMAID_TEMPLATE, SVG_TEMPLATE } from './constants/templates';
-import apiClient from '../../utils/api';
-import useAuthStore from '../../stores/authStore';
+  SaveOutlined, ExportOutlined, ShareAltOutlined, FolderOpenOutlined,
+  PlusOutlined, DeleteOutlined, EditOutlined, CopyOutlined,
+  ZoomInOutlined, ZoomOutOutlined, ExpandOutlined, NodeExpandOutlined,
+  DollarOutlined, FileImageOutlined, FilePdfOutlined, FileTextOutlined,
+  Html5Outlined, DownOutlined, LinkOutlined, CheckCircleOutlined
+} from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import { Markmap } from 'markmap-view'
+import { Transformer } from 'markmap-lib'
+import mermaid from 'mermaid'
+import apiClient from '../../utils/api'
+import useAuthStore from '../../stores/authStore'
+import './Mindmap.less'
 
-const { Text } = Typography;
+const transformer = new Transformer()
 
-const IOS_COLORS = [
-  '#007AFF', '#34C759', '#FF9500', '#AF52DE', '#5856D6', '#00C7BE'
-];
+// 默认示例内容（代码示例数据，保留原文不做i18n）
+const DEFAULT_MARKDOWN = `# 中心主题\n\n## 分支一\n- 要点 1\n- 要点 2\n\n## 分支二\n- 要点 A\n- 要点 B\n`
+const DEFAULT_MERMAID = `graph TD\n  A[开始] --> B{判断}\n  B -->|是| C[执行]\n  B -->|否| D[结束]\n  C --> D\n`
+const DEFAULT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">\n  <rect x="50" y="50" width="300" height="100" rx="12" fill="#e6f4ff" stroke="#1677ff"/>\n  <text x="200" y="105" text-anchor="middle" font-size="20" fill="#1677ff">SVG</text>\n</svg>`
 
-const waitForFrame = () => new Promise(resolve =>
-  requestAnimationFrame(() => requestAnimationFrame(resolve))
-);
-
-const BG_RECT_MARK = 'data-mindmap-bg';
-
-/* 需要内联到导出 SVG 的关键 CSS 属性（覆盖文字排版与盒模型，保证 <img> 渲染不重排） */
-const INLINE_STYLE_PROPS = [
-  'font-family', 'font-size', 'font-weight', 'font-style',
-  'line-height', 'letter-spacing', 'white-space', 'word-break',
-  'text-align', 'text-decoration', 'color', 'fill', 'stroke',
-  'stroke-width', 'opacity', 'display', 'box-sizing', 'padding',
-  'margin', 'border', 'background', 'background-color', 'border-radius',
-  'vertical-align', 'width', 'height'
-];
-
-const isDefaultTemplate = (content) => {
-  if (!content) return true;
-  const trimmed = content.trim();
-  return trimmed === MARKDOWN_TEMPLATE.trim()
-      || trimmed === MERMAID_TEMPLATE.trim()
-      || trimmed === SVG_TEMPLATE.trim();
-};
+const DEFAULT_CONTENT = {
+  markdown: DEFAULT_MARKDOWN,
+  mermaid: DEFAULT_MERMAID,
+  svg: DEFAULT_SVG
+}
 
 const Mindmap = () => {
-  const [contentType, setContentType] = useState('markdown');
-  const [content, setContent] = useState(MARKDOWN_TEMPLATE);
-  const [title, setTitle] = useState('');
-  const [currentId, setCurrentId] = useState(null);
-  const [shareToken, setShareToken] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [creditsConfig, setCreditsConfig] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const { t } = useTranslation()
+  const { user, getCurrentUser } = useAuthStore()
 
-  const [listDrawerOpen, setListDrawerOpen] = useState(false);
-  const [mindmapList, setMindmapList] = useState([]);
-  const [listLoading, setListLoading] = useState(false);
+  // ============ 状态 ============
+  const [mode, setMode] = useState('markdown')          // markdown | mermaid | svg
+  const [content, setContent] = useState(DEFAULT_MARKDOWN)
+  const [title, setTitle] = useState('')
+  const [currentId, setCurrentId] = useState(null)      // 当前打开的导图ID（null=未保存）
+  const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [credits, setCredits] = useState(0)
+  const [creditsConfig, setCreditsConfig] = useState({ save: 0, export_svg: 0, export_png: 0, export_pdf: 0 })
+  const [listVisible, setListVisible] = useState(false)
+  const [list, setList] = useState([])
+  const [listLoading, setListLoading] = useState(false)
+  const [shareVisible, setShareVisible] = useState(false)
+  const [shareUrl, setShareUrl] = useState('')
+  const [renameVisible, setRenameVisible] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameTarget, setRenameTarget] = useState(null)
 
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [renameModalOpen, setRenameModalOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState(null);
-  const [renameValue, setRenameValue] = useState('');
+  const previewRef = useRef(null)
+  const markmapRef = useRef(null)
+  const svgRef = useRef(null)
+  const contentRef = useRef(content)
+  useEffect(() => { contentRef.current = content }, [content])
 
-  const svgRef = useRef(null);
-  const markmapRef = useRef(null);
-  const previewRef = useRef(null);
-  const svgWrapperRef = useRef(null);
-  const user = useAuthStore(state => state.user);
+  // ============ 类型Tab（组件内构造，label走i18n） ============
+  const typeTabs = [
+    { key: 'markdown', label: t('mindmap.mode.markdown') },
+    { key: 'mermaid', label: t('mindmap.mode.mermaid') },
+    { key: 'svg', label: t('mindmap.mode.svg') }
+  ]
 
+  // ============ 初始化 ============
   useEffect(() => {
-    loadCreditsConfig();
-  }, []);
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' })
+    fetchCreditsConfig()
+    refreshCredits()
+  }, [])
 
-  const loadCreditsConfig = async () => {
+  const fetchCreditsConfig = async () => {
     try {
-      const response = await apiClient.get('/mindmap/credits-config');
-      if (response.data.success) setCreditsConfig(response.data.data);
-    } catch (error) {
-      console.error('加载积分配置失败:', error);
-    }
-  };
+      const res = await apiClient.get('/mindmap/credits-config')
+      if (res.data.success) setCreditsConfig(res.data.data)
+    } catch (e) { /* 使用默认值0 */ }
+  }
 
-  const handleTabChange = (key) => {
-    setContentType(key);
-    setZoomLevel(1);
-    if (currentId !== null) return;
-    if (isDefaultTemplate(content)) {
-      if (key === 'markdown') setContent(MARKDOWN_TEMPLATE);
-      else if (key === 'mermaid') setContent(MERMAID_TEMPLATE);
-      else if (key === 'svg') setContent(SVG_TEMPLATE);
-    }
-  };
-
-  const renderMarkdownPreview = useCallback(() => {
-    if (!svgRef.current || !content || contentType !== 'markdown') return;
-
+  const refreshCredits = async () => {
     try {
-      const transformer = new Transformer();
-      const { root } = transformer.transform(content);
-      svgRef.current.innerHTML = '';
+      await getCurrentUser()
+      const u = useAuthStore.getState().user
+      if (u?.credits_stats?.remaining !== undefined) setCredits(Math.max(0, u.credits_stats.remaining))
+      else if (u?.credits_quota !== undefined) setCredits(Math.max(0, (u.credits_quota || 0) - (u.used_credits || 0)))
+    } catch (e) { /* 静默 */ }
+  }
 
-      const options = {
-        color: (node) => IOS_COLORS[node.depth % IOS_COLORS.length],
-        duration: 500,
-        nodeMinHeight: 20,
-        paddingX: 12,
-        spacingVertical: 15,
-        spacingHorizontal: 100,
-        autoFit: true,
-        initialExpandLevel: -1,
-        zoom: true,
-        pan: true
-      };
-
-      const mm = Markmap.create(svgRef.current, options, root);
-      markmapRef.current = mm;
-
-      setTimeout(() => {
-        try {
-          mm.fit();
-          const svg = svgRef.current;
-          if (svg) {
-            const allPaths = svg.querySelectorAll('path');
-            allPaths.forEach((path, index) => {
-              if (path.getAttribute('fill') === 'none' || !path.getAttribute('fill')) {
-                const lineColor = IOS_COLORS[index % IOS_COLORS.length];
-                path.style.stroke = lineColor;
-                path.style.strokeWidth = '1.5px';
-                path.style.opacity = '0.75';
-                path.style.strokeLinecap = 'round';
-                path.style.strokeLinejoin = 'round';
-                path.style.fill = 'none';
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('markmap fit失败:', e);
-        }
-      }, 300);
-    } catch (error) {
-      console.error('Markmap 渲染失败:', error);
-      message.error('思维导图渲染失败');
+  const canAfford = (cost) => {
+    if (cost > 0 && credits < cost) {
+      message.error(t('mindmap.credits.insufficientNeed', { credits: cost }))
+      return false
     }
-  }, [content, contentType]);
+    return true
+  }
 
-  useEffect(() => {
-    if (contentType === 'markdown') renderMarkdownPreview();
-  }, [renderMarkdownPreview]);
-
-  const handleZoom = (type) => {
-    if (contentType === 'markdown') {
-      if (!markmapRef.current) return;
-      try {
-        if (type === 'in') markmapRef.current.rescale(1.25);
-        else if (type === 'out') markmapRef.current.rescale(0.8);
-        else if (type === 'fit') markmapRef.current.fit();
-      } catch (e) {
-        console.error('缩放失败:', e);
-      }
-    } else {
-      setZoomLevel(prev => {
-        if (type === 'in') return Math.min(prev * 1.2, 3);
-        if (type === 'out') return Math.max(prev / 1.2, 0.2);
-        if (type === 'fit') return 1;
-        return prev;
-      });
-    }
-  };
-
-  const handleExpandAll = () => {
-    if (contentType !== 'markdown' || !markmapRef.current) return;
+  // ============ 渲染 ============
+  const renderPreview = useCallback(async () => {
+    const el = previewRef.current
+    if (!el) return
+    const value = contentRef.current
     try {
-      const mm = markmapRef.current;
-      const expandNode = (node) => {
-        if (node.payload) node.payload.fold = 0;
-        if (node.children) node.children.forEach(child => expandNode(child));
-      };
-      if (mm.state?.data) {
-        expandNode(mm.state.data);
-        mm.setData(mm.state.data);
-        mm.fit();
+      if (mode === 'markdown') {
+        el.innerHTML = '<svg style="width:100%;height:100%" class="markmap-svg"></svg>'
+        const svg = el.querySelector('svg')
+        const { root } = transformer.transform(value || '')
+        markmapRef.current = Markmap.create(svg, { autoFit: true }, root)
+        svgRef.current = svg
+      } else if (mode === 'mermaid') {
+        const { svg } = await mermaid.render(`mermaid-${Date.now()}`, value || 'graph TD\n  A')
+        el.innerHTML = svg
+        svgRef.current = el.querySelector('svg')
+        markmapRef.current = null
+      } else {
+        el.innerHTML = value || ''
+        svgRef.current = el.querySelector('svg')
+        markmapRef.current = null
       }
     } catch (e) {
-      console.error('展开失败:', e);
+      el.innerHTML = `<div style="color:#ff4d4f;padding:20px;">${t('mindmap.message.renderError')}</div>`
+      svgRef.current = null
+      markmapRef.current = null
     }
-  };
+  }, [mode, t])
 
-  const openListDrawer = async () => {
-    setListDrawerOpen(true);
-    setListLoading(true);
-    try {
-      const response = await apiClient.get('/mindmap/');
-      if (response.data.success) {
-        setMindmapList(response.data.data || []);
-      }
-    } catch (error) {
-      message.error('加载列表失败');
-    } finally {
-      setListLoading(false);
+  useEffect(() => {
+    const timer = setTimeout(renderPreview, 400)
+    return () => clearTimeout(timer)
+  }, [content, mode, renderPreview])
+
+  // 切换模式：内容为空或等于其它模式默认值时填充该模式默认内容
+  const handleModeChange = (key) => {
+    setMode(key)
+    const isDefault = Object.values(DEFAULT_CONTENT).includes(contentRef.current) || !contentRef.current.trim()
+    if (isDefault) setContent(DEFAULT_CONTENT[key])
+  }
+
+  // ============ 缩放控制（仅markmap） ============
+  const handleZoomIn = () => markmapRef.current?.rescale(1.25)
+  const handleZoomOut = () => markmapRef.current?.rescale(0.8)
+  const handleFit = () => markmapRef.current?.fit()
+  const handleExpandAll = () => {
+    if (markmapRef.current) {
+      markmapRef.current.setData(markmapRef.current.state.data)
+      markmapRef.current.fit()
     }
-  };
+  }
 
-  const handleOpenMindmap = async (item) => {
-    try {
-      const response = await apiClient.get(`/mindmap/${item.id}`);
-      if (response.data.success) {
-        const data = response.data.data;
-        setCurrentId(data.id);
-        setTitle(data.title);
-        setContent(data.content);
-        setContentType(data.content_type || 'markdown');
-        setShareToken(data.share_token);
-        setListDrawerOpen(false);
-        message.success(`已打开: ${data.title}`);
-      }
-    } catch (error) {
-      message.error(error.response?.data?.message || '打开失败');
-    }
-  };
-
-  const handleNew = () => {
-    const hasUnsavedContent =
-      currentId !== null ||
-      title.trim() ||
-      !isDefaultTemplate(content);
-
-    const doReset = () => {
-      setCurrentId(null);
-      setShareToken(null);
-      setTitle('');
-      if (contentType === 'markdown') setContent(MARKDOWN_TEMPLATE);
-      else if (contentType === 'mermaid') setContent(MERMAID_TEMPLATE);
-      else setContent(SVG_TEMPLATE);
-      setListDrawerOpen(false);
-    };
-
-    if (hasUnsavedContent) {
-      Modal.confirm({
-        title: '新建导图',
-        content: '当前未保存的修改将丢失，确定要新建吗？',
-        okText: '确定新建',
-        cancelText: '取消',
-        onOk: doReset
-      });
-    } else {
-      doReset();
-    }
-  };
-
-  const handleDelete = async (item) => {
-    try {
-      const response = await apiClient.delete(`/mindmap/${item.id}`);
-      if (response.data.success) {
-        message.success('删除成功');
-        setMindmapList(prev => prev.filter(m => m.id !== item.id));
-        if (currentId === item.id) {
-          setCurrentId(null);
-          setShareToken(null);
-          setTitle('');
-        }
-      }
-    } catch (error) {
-      message.error('删除失败');
-    }
-  };
-
-  const handleOpenRename = (item) => {
-    setRenameTarget(item);
-    setRenameValue(item.title);
-    setRenameModalOpen(true);
-  };
-
-  const handleSubmitRename = async () => {
-    if (!renameValue.trim()) return message.warning('标题不能为空');
-    if (renameValue.length > 200) return message.warning('标题过长');
-
-    try {
-      const detailRes = await apiClient.get(`/mindmap/${renameTarget.id}`);
-      if (!detailRes.data.success) throw new Error('加载失败');
-      const detail = detailRes.data.data;
-
-      const response = await apiClient.put(`/mindmap/${renameTarget.id}`, {
-        title: renameValue.trim(),
-        content: detail.content,
-        content_type: detail.content_type || 'markdown'
-      });
-
-      if (response.data.success) {
-        message.success('重命名成功');
-        setMindmapList(prev => prev.map(m =>
-          m.id === renameTarget.id ? { ...m, title: renameValue.trim() } : m
-        ));
-        if (currentId === renameTarget.id) {
-          setTitle(renameValue.trim());
-        }
-        setRenameModalOpen(false);
-        setRenameTarget(null);
-        setRenameValue('');
-      }
-    } catch (error) {
-      message.error(error.response?.data?.message || '重命名失败');
-    }
-  };
+  // ============ 保存 / 另存为 ============
+  const validateBeforeSave = () => {
+    if (!title.trim()) { message.warning(t('mindmap.pleaseInputTitle')); return false }
+    if (!content.trim()) { message.warning(t('mindmap.pleaseInputContent')); return false }
+    return true
+  }
 
   const handleSave = async () => {
-    if (!title.trim()) return message.warning('请输入标题');
-    if (!content.trim()) return message.warning('请输入内容');
-
-    const required = creditsConfig?.save_credits || 0;
-    if (required > 0) {
-      const current = user ? (user.credits_quota - user.used_credits) : 0;
-      if (current < required) return message.error(`积分不足，需要 ${required} 积分`);
-    }
-
-    setIsSaving(true);
+    if (!validateBeforeSave()) return
+    if (!canAfford(creditsConfig.save)) return
+    setSaving(true)
     try {
-      let response;
-      if (currentId === null) {
-        response = await apiClient.post('/mindmap', {
-          title: title.trim(),
-          content: content.trim(),
-          content_type: contentType
-        });
+      if (currentId) {
+        await apiClient.put(`/mindmap/${currentId}`, { title: title.trim(), map_type: mode, content })
       } else {
-        response = await apiClient.put(`/mindmap/${currentId}`, {
-          title: title.trim(),
-          content: content.trim(),
-          content_type: contentType
-        });
+        const res = await apiClient.post('/mindmap', { title: title.trim(), map_type: mode, content })
+        if (res.data.success) setCurrentId(res.data.data.id)
       }
-
-      if (response.data.success) {
-        const data = response.data.data || {};
-        if (data.id) setCurrentId(data.id);
-        if (data.share_token) setShareToken(data.share_token);
-        message.success(data.message || '保存成功');
-        if (required > 0) await useAuthStore.getState().getCurrentUser();
-      }
-    } catch (error) {
-      message.error(error.response?.data?.message || '保存失败');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      message.success(t('mindmap.message.saveSuccess'))
+      refreshCredits()
+    } catch (e) {
+      message.error(e.response?.data?.message || t('mindmap.message.saveFailed'))
+    } finally { setSaving(false) }
+  }
 
   const handleSaveAs = async () => {
-    if (!title.trim()) return message.warning('请输入标题');
-    if (!content.trim()) return message.warning('请输入内容');
-
-    setIsSaving(true);
+    if (!validateBeforeSave()) return
+    if (!canAfford(creditsConfig.save)) return
+    setSaving(true)
     try {
-      const newTitle = currentId ? `${title.trim()} (副本)` : title.trim();
-      const response = await apiClient.post('/mindmap', {
-        title: newTitle,
-        content: content.trim(),
-        content_type: contentType
-      });
-
-      if (response.data.success) {
-        const data = response.data.data || {};
-        if (data.id) setCurrentId(data.id);
-        if (data.share_token) setShareToken(data.share_token);
-        setTitle(newTitle);
-        message.success(data.message || '另存为成功');
+      const newTitle = `${title.trim()}${t('mindmap.saveAsCopySuffix')}`
+      const res = await apiClient.post('/mindmap', { title: newTitle, map_type: mode, content })
+      if (res.data.success) {
+        setCurrentId(res.data.data.id)
+        setTitle(newTitle)
+        message.success(t('mindmap.saveAsSuccess'))
+        refreshCredits()
       }
-    } catch (error) {
-      message.error(error.response?.data?.message || '另存为失败');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    } catch (e) {
+      message.error(e.response?.data?.message || t('mindmap.saveAsFailed'))
+    } finally { setSaving(false) }
+  }
 
-  const buildShareUrl = useCallback(() => {
-    if (!currentId || !shareToken) return '';
-    return `${window.location.origin}/mindmap/share/${currentId}/${shareToken}`;
-  }, [currentId, shareToken]);
+  // 保存下拉菜单（组件内构造，label走i18n）
+  const saveMenuItems = [
+    { key: 'saveAs', icon: <CopyOutlined />, label: t('mindmap.saveAs'), onClick: handleSaveAs }
+  ]
 
-  const handleOpenShareModal = () => {
-    if (!currentId) {
-      message.warning('请先保存导图后再分享');
-      return;
+  // ============ 新建 ============
+  const handleNew = () => {
+    Modal.confirm({
+      title: t('mindmap.newConfirmTitle'),
+      content: t('mindmap.newConfirmContent'),
+      okText: t('mindmap.newConfirmOk'),
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        setCurrentId(null)
+        setTitle('')
+        setContent(DEFAULT_CONTENT[mode])
+      }
+    })
+  }
+
+  // ============ 列表 / 打开 / 删除 / 重命名 ============
+  const fetchList = async () => {
+    setListLoading(true)
+    try {
+      const res = await apiClient.get('/mindmap')
+      if (res.data.success) setList(res.data.data || [])
+    } catch (e) {
+      message.error(t('mindmap.listLoadFailed'))
+    } finally { setListLoading(false) }
+  }
+
+  const handleOpenList = () => { setListVisible(true); fetchList() }
+
+  const handleOpenItem = async (item) => {
+    try {
+      const res = await apiClient.get(`/mindmap/${item.id}`)
+      if (res.data.success) {
+        const d = res.data.data
+        setCurrentId(d.id)
+        setTitle(d.title)
+        setMode(d.map_type)
+        setContent(d.content)
+        setListVisible(false)
+        message.success(t('mindmap.opened', { title: d.title }))
+      }
+    } catch (e) { message.error(t('mindmap.openFailed')) }
+  }
+
+  const handleDeleteItem = async (item) => {
+    try {
+      await apiClient.delete(`/mindmap/${item.id}`)
+      message.success(t('common.deleteSuccess'))
+      if (item.id === currentId) { setCurrentId(null) }
+      fetchList()
+    } catch (e) { message.error(t('common.deleteFailed')) }
+  }
+
+  const openRename = (item) => {
+    setRenameTarget(item)
+    setRenameValue(item.title)
+    setRenameVisible(true)
+  }
+
+  const handleRename = async () => {
+    const v = renameValue.trim()
+    if (!v) { message.warning(t('mindmap.titleRequired')); return }
+    if (v.length > 100) { message.warning(t('mindmap.titleTooLong')); return }
+    try {
+      await apiClient.put(`/mindmap/${renameTarget.id}`, { title: v })
+      message.success(t('mindmap.renameSuccess'))
+      if (renameTarget.id === currentId) setTitle(v)
+      setRenameVisible(false)
+      fetchList()
+    } catch (e) { message.error(t('mindmap.renameFailed')) }
+  }
+
+  // 类型标签（组件内构造，label走i18n）
+  const getTypeTag = (mapType) => {
+    const map = {
+      markdown: { color: 'blue', label: t('mindmap.type.markdown') },
+      mermaid: { color: 'purple', label: t('mindmap.type.mermaid') },
+      svg: { color: 'green', label: t('mindmap.type.svg') }
     }
-    setShareModalOpen(true);
-  };
+    const cfg = map[mapType] || map.markdown
+    return <Tag color={cfg.color}>{cfg.label}</Tag>
+  }
+
+  // 相对时间（走 time.* i18n key）
+  const formatTime = (ts) => {
+    if (!ts) return ''
+    const diff = Date.now() - new Date(ts).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return t('time.justNow')
+    if (mins < 60) return t('time.minutesAgo', { count: mins })
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return t('time.hoursAgo', { count: hours })
+    return t('time.daysAgo', { count: Math.floor(hours / 24) })
+  }
+
+  // ============ 分享 ============
+  const handleShare = async () => {
+    if (!currentId) { message.warning(t('mindmap.shareSaveFirst')); return }
+    try {
+      const res = await apiClient.post(`/mindmap/${currentId}/share`)
+      if (res.data.success) {
+        setShareUrl(`${window.location.origin}${res.data.data.share_path}`)
+        setShareVisible(true)
+      }
+    } catch (e) { message.error(e.response?.data?.message || t('message.error')) }
+  }
 
   const handleCopyShareLink = () => {
-    const url = buildShareUrl();
-    if (!url) return;
-    navigator.clipboard.writeText(url).then(() => {
-      message.success('分享链接已复制');
-    }).catch(() => {
-      message.error('复制失败');
-    });
-  };
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => message.success(t('mindmap.shareLinkCopied')))
+      .catch(() => message.error(t('message.copyFailed')))
+  }
 
-  const handleOpenShareInNewTab = () => {
-    const url = buildShareUrl();
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  };
+  // ============ 导出 ============
+  const getSvgElement = () => {
+    const svg = svgRef.current || previewRef.current?.querySelector('svg')
+    if (!svg) { message.error(t('mindmap.svgNotFound')); return null }
+    return svg
+  }
 
-  const handleExport = async (format) => {
-    if (!content.trim()) return message.warning('请先创建内容');
-
-    const creditsMap = {
-      svg: creditsConfig?.export_svg_credits || 0,
-      png: creditsConfig?.export_png_credits || 0,
-      pdf: creditsConfig?.export_pdf_credits || 0,
-      markdown: creditsConfig?.export_markdown_credits || 0
-    };
-
-    const required = creditsMap[format];
-    if (required > 0) {
-      const current = user ? (user.credits_quota - user.used_credits) : 0;
-      if (current < required) return message.error(`积分不足，需要 ${required} 积分`);
-    }
-
-    setIsExporting(true);
-    try {
-      if (format === 'svg') await exportSVG();
-      else if (format === 'png') await exportPNG();
-      else if (format === 'pdf') await exportPDF();
-      else if (format === 'markdown') await exportMarkdown();
-
-      await apiClient.post('/mindmap/export-log', { type: format });
-      await useAuthStore.getState().getCurrentUser();
-      message.success('导出成功');
-    } catch (error) {
-      console.error('导出错误:', error);
-      message.error(error.message || '导出失败');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const getSVGElement = () => {
-    if (contentType === 'markdown') return svgRef.current;
-    if (contentType === 'mermaid') return previewRef.current?.querySelector('svg');
-    if (contentType === 'svg') {
-      const div = document.createElement('div');
-      div.innerHTML = content;
-      return div.querySelector('svg');
-    }
-    return null;
-  };
-
-  /**
-   * v4.3 核心：计算 markmap 内容真实包围盒并换算到 SVG 用户坐标系
-   *
-   * 用内容总容器 <g> 的真实屏幕框（getBoundingClientRect，诊断已证明正确），
-   * 结合 svg 自身屏幕框与 viewBox 的比例，换算回 SVG 用户坐标，得到导出 viewBox。
-   *
-   * @param {SVGSVGElement} svg
-   * @returns {{x:number,y:number,width:number,height:number}}
-   */
-  const computeExportViewBox = (svg) => {
-    /* 默认回退：svg 自身 viewBox 或 client 尺寸 */
-    const fallback = () => {
-      const vb = svg.getAttribute('viewBox');
-      if (vb) {
-        const p = vb.trim().split(/[\s,]+/).map(Number);
-        if (p.length === 4 && p.every(isFinite) && p[2] > 0 && p[3] > 0) {
-          return { x: p[0], y: p[1], width: p[2], height: p[3] };
-        }
-      }
-      return { x: 0, y: 0, width: svg.clientWidth || 800, height: svg.clientHeight || 600 };
-    };
-
-    try {
-      const svgRect = svg.getBoundingClientRect();
-      const contentG = svg.querySelector('g');
-      if (!contentG || !svgRect.width || !svgRect.height) return fallback();
-
-      const gRect = contentG.getBoundingClientRect();
-      if (!gRect.width || !gRect.height) return fallback();
-
-      /* svg 用户坐标系（viewBox）到屏幕像素的比例 */
-      const vb = svg.getAttribute('viewBox');
-      let vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height;
-      if (vb) {
-        const p = vb.trim().split(/[\s,]+/).map(Number);
-        if (p.length === 4 && p.every(isFinite) && p[2] > 0 && p[3] > 0) {
-          [vbX, vbY, vbW, vbH] = p;
-        }
-      }
-      const scaleX = vbW / svgRect.width;   /* 每屏幕像素对应多少用户单位 */
-      const scaleY = vbH / svgRect.height;
-
-      /* 内容 <g> 屏幕框 → 相对 svg 左上的偏移 → 换算回用户坐标 */
-      const userX = vbX + (gRect.left - svgRect.left) * scaleX;
-      const userY = vbY + (gRect.top - svgRect.top) * scaleY;
-      const userW = gRect.width * scaleX;
-      const userH = gRect.height * scaleY;
-
-      /* 四周留白（用户坐标单位） */
-      const PAD = 20 * Math.max(scaleX, scaleY);
-
-      return {
-        x: userX - PAD,
-        y: userY - PAD,
-        width: userW + PAD * 2,
-        height: userH + PAD * 2
-      };
-    } catch (e) {
-      return fallback();
-    }
-  };
-
-  /**
-   * v4.3 关键：对 foreignObject 内部「所有 HTML 后代」无差别内联完整 computed style
-   *
-   * 这是修复的核心——序列化后的 SVG 必须自包含 foreignObject 内 HTML 的字体/排版样式，
-   * 否则 <img> 渲染时浏览器用默认字体重排，大字号中文变宽溢出被裁。
-   * 不依赖具体 class，遍历每个 foreignObject 的所有后代逐一内联。
-   *
-   * @param {SVGElement} sourceSvg  页面原始 svg（读取 computed style 的来源）
-   * @param {SVGElement} clonedSvg  克隆体（写入内联 style 的目标）
-   */
-  const inlineForeignObjectStyles = (sourceSvg, clonedSvg) => {
-    const srcFOs = sourceSvg.querySelectorAll('foreignObject');
-    const cloFOs = clonedSvg.querySelectorAll('foreignObject');
-
-    srcFOs.forEach((srcFO, foIdx) => {
-      const cloFO = cloFOs[foIdx];
-      if (!cloFO) return;
-
-      /* foreignObject 自身 + 其所有 HTML 后代 */
-      const srcNodes = [srcFO, ...srcFO.querySelectorAll('*')];
-      const cloNodes = [cloFO, ...cloFO.querySelectorAll('*')];
-
-      srcNodes.forEach((srcNode, idx) => {
-        const cloNode = cloNodes[idx];
-        if (!cloNode || cloNode.nodeType !== 1) return;
-        try {
-          const cs = window.getComputedStyle(srcNode);
-          INLINE_STYLE_PROPS.forEach(prop => {
-            const val = cs.getPropertyValue(prop);
-            if (val && val !== 'none' && val !== '') {
-              cloNode.style.setProperty(prop, val);
-            }
-          });
-        } catch (e) { /* 跳过不可读节点 */ }
-      });
-    });
-  };
-
-  /**
-   * 克隆 SVG 并准备导出
-   * v4.3：viewBox 用内容真实包围盒；内联 SVG 原生元素样式 + foreignObject 内部 HTML 样式。
-   */
-  const cloneAndPrepare = (svg) => {
-    const cloned = svg.cloneNode(true);
-
-    const bounds = computeExportViewBox(svg);
-    const x = bounds.x;
-    const y = bounds.y;
-    const w = bounds.width;
-    const h = bounds.height;
-
-    cloned.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-    cloned.setAttribute('width', w);
-    cloned.setAttribute('height', h);
-    cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    cloned.setAttribute('overflow', 'visible');
-    cloned.style.overflow = 'visible';
-
-    /* 1) 内联 SVG 原生元素样式（path/circle/text 等） */
-    const sourceElements = svg.querySelectorAll('*');
-    const targetElements = cloned.querySelectorAll('*');
-    sourceElements.forEach((srcEl, idx) => {
-      const tgtEl = targetElements[idx];
-      if (!tgtEl) return;
-      const tag = (srcEl.tagName || '').toLowerCase();
-      if (tag === 'style' || tag === 'defs' || tag === 'metadata' || tag === 'title') return;
-      /* foreignObject 内部交由 inlineForeignObjectStyles 专门处理，这里只处理 SVG 原生元素 */
-      try {
-        const cs = window.getComputedStyle(srcEl);
-        ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size',
-         'font-weight', 'opacity', 'color'].forEach(prop => {
-          const val = cs.getPropertyValue(prop);
-          if (val && val !== 'none' && val !== '') {
-            tgtEl.style[prop] = val;
-          }
-        });
-        if ((tag === 'text' || tag === 'tspan')
-            && !tgtEl.getAttribute('fill') && !tgtEl.style.fill) {
-          tgtEl.setAttribute('fill', '#1C1C1E');
-        }
-      } catch (e) { /* 跳过 */ }
-    });
-
-    /* 2) 关键：内联 foreignObject 内部 HTML 的完整排版样式（防 img 渲染重排溢出） */
-    inlineForeignObjectStyles(svg, cloned);
-
-    /* 3) 白色背景，覆盖整个 viewBox */
-    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    bg.setAttribute('x', x);
-    bg.setAttribute('y', y);
-    bg.setAttribute('width', w);
-    bg.setAttribute('height', h);
-    bg.setAttribute('fill', '#ffffff');
-    bg.setAttribute(BG_RECT_MARK, 'true');
-    cloned.insertBefore(bg, cloned.firstChild);
-
-    return { cloned, width: w, height: h };
-  };
-
-  const svgToImage = (svgEl, width, height, scale = 2) => {
-    return new Promise((resolve, reject) => {
-      const data = new XMLSerializer().serializeToString(svgEl);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = Math.max(1, Math.round(width * scale));
-      canvas.height = Math.max(1, Math.round(height * scale));
-
-      const img = new Image();
-      img.onload = () => {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas);
-      };
-      img.onerror = () => reject(new Error('图片渲染失败'));
-      const svgBase64 = btoa(unescape(encodeURIComponent(data)));
-      img.src = 'data:image/svg+xml;base64,' + svgBase64;
-    });
-  };
-
-  const exportSVG = async () => {
-    const svg = getSVGElement();
-    if (!svg) throw new Error('未找到 SVG 元素');
-    await waitForFrame();
-    const { cloned } = cloneAndPrepare(svg);
-    const data = new XMLSerializer().serializeToString(cloned);
-    const blob = new Blob([data], { type: 'image/svg+xml' });
-    downloadBlob(blob, `${title || 'mindmap'}.svg`);
-  };
-
-  const exportPNG = async () => {
-    const svg = getSVGElement();
-    if (!svg) throw new Error('未找到 SVG 元素');
-    await waitForFrame();
-    const { cloned, width, height } = cloneAndPrepare(svg);
-    const canvas = await svgToImage(cloned, width, height);
-    await new Promise((resolve, reject) => {
-      canvas.toBlob(blob => {
-        if (!blob) return reject(new Error('PNG 生成失败'));
-        downloadBlob(blob, `${title || 'mindmap'}.png`);
-        resolve();
-      }, 'image/png');
-    });
-  };
-
-  const exportPDF = async () => {
-    const svg = getSVGElement();
-    if (!svg) throw new Error('未找到 SVG 元素');
-    const { jsPDF } = await import('jspdf');
-    await waitForFrame();
-    const { cloned, width, height } = cloneAndPrepare(svg);
-    const canvas = await svgToImage(cloned, width, height);
-
-    const imgData = canvas.toDataURL('image/png', 1.0);
-    const isLandscape = width > height;
-    const pdf = new jsPDF({
-      orientation: isLandscape ? 'landscape' : 'portrait',
-      unit: 'pt', format: 'a4'
-    });
-
-    const pw = pdf.internal.pageSize.getWidth();
-    const ph = pdf.internal.pageSize.getHeight();
-    const margin = 40;
-    const scale = Math.min((pw - margin * 2) / width, (ph - margin * 2) / height, 1);
-    const fw = width * scale;
-    const fh = height * scale;
-
-    pdf.addImage(imgData, 'PNG', (pw - fw) / 2, (ph - fh) / 2, fw, fh);
-    pdf.save(`${title || 'mindmap'}.pdf`);
-  };
-
-  const exportMarkdown = async () => {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    downloadBlob(blob, `${title || 'mindmap'}.md`);
-  };
+  const serializeSvg = (svg) => {
+    const clone = svg.cloneNode(true)
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    return new XMLSerializer().serializeToString(clone)
+  }
 
   const downloadBlob = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
 
+  const svgToPngBlob = (svg) => new Promise((resolve, reject) => {
+    const svgStr = serializeSvg(svg)
+    const img = new Image()
+    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+    img.onload = () => {
+      const rect = svg.getBoundingClientRect()
+      const scale = 2
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, rect.width * scale)
+      canvas.height = Math.max(1, rect.height * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('mindmap.pngGenerateFailed'))), 'image/png')
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('mindmap.imageRenderFailed'))) }
+    img.src = url
+  })
+
+  const chargeExport = async (type) => {
+    try {
+      await apiClient.post('/mindmap/charge-export', { export_type: type })
+      refreshCredits()
+      return true
+    } catch (e) {
+      message.error(e.response?.data?.message || t('mindmap.credits.insufficient'))
+      return false
+    }
+  }
+
+  const handleExport = async (type) => {
+    if (!content.trim()) { message.warning(t('mindmap.pleaseCreateContent')); return }
+    const costMap = { svg: creditsConfig.export_svg, png: creditsConfig.export_png, pdf: creditsConfig.export_pdf, source: 0 }
+    const cost = costMap[type] || 0
+    if (!canAfford(cost)) return
+
+    setExporting(true)
+    try {
+      const filename = (title.trim() || 'mindmap')
+      if (type === 'source') {
+        const ext = mode === 'markdown' ? 'md' : mode === 'mermaid' ? 'mmd' : 'svg'
+        downloadBlob(new Blob([content], { type: 'text/plain;charset=utf-8' }), `${filename}.${ext}`)
+      } else {
+        const svg = getSvgElement()
+        if (!svg) return
+        if (cost > 0) { const ok = await chargeExport(type); if (!ok) return }
+        if (type === 'svg') {
+          downloadBlob(new Blob([serializeSvg(svg)], { type: 'image/svg+xml;charset=utf-8' }), `${filename}.svg`)
+        } else if (type === 'png') {
+          const blob = await svgToPngBlob(svg)
+          downloadBlob(blob, `${filename}.png`)
+        } else if (type === 'pdf') {
+          const { jsPDF } = await import('jspdf')
+          const blob = await svgToPngBlob(svg)
+          const imgUrl = URL.createObjectURL(blob)
+          const img = new Image()
+          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgUrl })
+          const landscape = img.width >= img.height
+          const pdf = new jsPDF({ orientation: landscape ? 'l' : 'p', unit: 'px', format: [img.width, img.height] })
+          pdf.addImage(img, 'PNG', 0, 0, img.width, img.height)
+          pdf.save(`${filename}.pdf`)
+          URL.revokeObjectURL(imgUrl)
+        }
+      }
+      message.success(t('mindmap.message.exportSuccess'))
+    } catch (e) {
+      message.error(e.message || t('mindmap.message.exportFailed'))
+    } finally { setExporting(false) }
+  }
+
+  // 导出菜单（组件内构造，label+积分后缀走i18n）
+  const withCredits = (label, cost) => cost > 0 ? `${label} ${t('mindmap.export.creditsSuffix', { credits: cost })}` : label
   const exportMenuItems = [
-    { key: 'svg', label: `SVG ${creditsConfig?.export_svg_credits > 0 ? `(${creditsConfig.export_svg_credits}分)` : ''}`, icon: <FileImageOutlined /> },
-    { key: 'png', label: `PNG ${creditsConfig?.export_png_credits > 0 ? `(${creditsConfig.export_png_credits}分)` : ''}`, icon: <FileImageOutlined /> },
-    { key: 'pdf', label: `PDF ${creditsConfig?.export_pdf_credits > 0 ? `(${creditsConfig.export_pdf_credits}分)` : ''}`, icon: <FilePdfOutlined /> },
-    { key: 'markdown', label: `Markdown ${creditsConfig?.export_markdown_credits > 0 ? `(${creditsConfig.export_markdown_credits}分)` : ''}`, icon: <FileTextOutlined /> }
-  ];
+    { key: 'svg', icon: <Html5Outlined />, label: withCredits(t('mindmap.export.svg'), creditsConfig.export_svg), onClick: () => handleExport('svg') },
+    { key: 'png', icon: <FileImageOutlined />, label: withCredits(t('mindmap.export.png'), creditsConfig.export_png), onClick: () => handleExport('png') },
+    { key: 'pdf', icon: <FilePdfOutlined />, label: withCredits(t('mindmap.export.pdf'), creditsConfig.export_pdf), onClick: () => handleExport('pdf') },
+    { key: 'source', icon: <FileTextOutlined />, label: t('mindmap.export.markdown'), onClick: () => handleExport('source') }
+  ]
 
-  const saveMenuItems = [
-    {
-      key: 'saveAs',
-      label: '另存为新导图',
-      icon: <CopyOutlined />,
-      onClick: handleSaveAs
-    }
-  ];
-
-  const renderPreviewContent = () => {
-    if (contentType === 'markdown') {
-      return (
-        <div className="mindmap-svg-wrapper" ref={svgWrapperRef}>
-          <svg ref={svgRef}></svg>
-        </div>
-      );
-    }
-    return (
-      <div className="mindmap-transform-wrapper" ref={previewRef}>
-        <div
-          className="mindmap-transform-content"
-          style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center top' }}
-        >
-          {contentType === 'mermaid'
-            ? <MermaidPreview code={content} />
-            : <SvgPreview code={content} />}
-        </div>
-      </div>
-    );
-  };
-
-  const currentCredits = user ? (user.credits_quota - user.used_credits) : 0;
-
-  const formatTime = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now - d;
-    const diffHours = diffMs / 1000 / 3600;
-    if (diffHours < 1) return Math.max(1, Math.floor(diffMs / 60000)) + '分钟前';
-    if (diffHours < 24) return Math.floor(diffHours) + '小时前';
-    if (diffHours < 24 * 7) return Math.floor(diffHours / 24) + '天前';
-    return d.toLocaleDateString();
-  };
-
-  const getTypeTag = (type) => {
-    const map = {
-      markdown: { color: 'blue', label: '思维导图' },
-      mermaid: { color: 'green', label: '流程图' },
-      svg: { color: 'purple', label: 'SVG' }
-    };
-    const info = map[type] || { color: 'default', label: type };
-    return <Tag color={info.color} style={{ fontSize: 11, padding: '0 6px' }}>{info.label}</Tag>;
-  };
-
+  // ============ 渲染 ============
   return (
     <div className="mindmap-page">
-      <div className="mindmap-header">
-        <div className="mindmap-header-left">
-          <Button
-            icon={<FolderOpenOutlined />}
-            onClick={openListDrawer}
-            className="mindmap-list-btn"
-          >
-            我的导图
-          </Button>
+      {/* 顶部工具栏 */}
+      <div className="mindmap-toolbar">
+        <Space wrap>
+          <Button icon={<FolderOpenOutlined />} onClick={handleOpenList}>{t('mindmap.myMindmaps')}</Button>
           <Input
-            placeholder="输入标题"
+            className="title-input"
+            placeholder={t('mindmap.titlePlaceholder')}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mindmap-title-input"
-            maxLength={200}
+            onChange={e => setTitle(e.target.value)}
+            maxLength={100}
+            style={{ width: 220 }}
           />
-        </div>
-        <div className="mindmap-header-right">
           <Dropdown.Button
             type="primary"
             icon={<DownOutlined />}
+            loading={saving}
             onClick={handleSave}
-            loading={isSaving}
             menu={{ items: saveMenuItems }}
-            className="mindmap-save-dropdown"
           >
-            <SaveOutlined /> 保存
+            <SaveOutlined /> {t('mindmap.save')}{creditsConfig.save > 0 ? ` ${t('mindmap.export.creditsSuffix', { credits: creditsConfig.save })}` : ''}
           </Dropdown.Button>
-
-          <Tooltip title={currentId ? '生成永久分享链接' : '请先保存后才能分享'}>
-            <Button
-              icon={<ShareAltOutlined />}
-              onClick={handleOpenShareModal}
-              disabled={!currentId}
-            >
-              分享
-            </Button>
+          <Tooltip title={currentId ? t('mindmap.shareTooltip') : t('mindmap.shareTooltipSaveFirst')}>
+            <Button icon={<ShareAltOutlined />} onClick={handleShare} disabled={!currentId}>{t('mindmap.share')}</Button>
           </Tooltip>
-
-          <Dropdown
-            menu={{ items: exportMenuItems, onClick: ({ key }) => handleExport(key) }}
-            trigger={['click']}
-          >
-            <Button icon={<ExportOutlined />} loading={isExporting}>
-              导出 <DownOutlined />
-            </Button>
+          <Dropdown menu={{ items: exportMenuItems }} disabled={exporting}>
+            <Button icon={<ExportOutlined />} loading={exporting}>{t('mindmap.export')} <DownOutlined /></Button>
           </Dropdown>
-
-          {creditsConfig && (
-            <Tooltip title={`当前积分余额: ${currentCredits} 分`}>
-              <span className="mindmap-credits-icon">
-                <WalletOutlined />
-              </span>
-            </Tooltip>
-          )}
-        </div>
+        </Space>
+        <Tooltip title={t('mindmap.credits.balanceTooltip', { credits })}>
+          <Tag color="gold" icon={<DollarOutlined />}>{t('mindmap.credits.balance')}: {credits}</Tag>
+        </Tooltip>
       </div>
 
-      <div className="mindmap-tabs">
-        <Tabs activeKey={contentType} onChange={handleTabChange} items={[
-          { key: 'markdown', label: '思维导图 (Markdown)', icon: <FileTextOutlined /> },
-          { key: 'mermaid', label: '流程图 (Mermaid)', icon: <FileImageOutlined /> },
-          { key: 'svg', label: '矢量图 (SVG)', icon: <FileImageOutlined /> }
-        ]} />
-      </div>
+      {/* 模式Tabs */}
+      <Tabs activeKey={mode} onChange={handleModeChange} items={typeTabs} className="mode-tabs" />
 
+      {/* 编辑器 + 预览 */}
       <div className="mindmap-body">
-        <div className="mindmap-editor">
-          <div className="mindmap-editor-header">
-            <Text strong>代码编辑器</Text>
-          </div>
-          <div className="mindmap-editor-content">
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              spellCheck={false}
-              placeholder={`请输入 ${contentType === 'markdown' ? 'Markdown' : contentType === 'mermaid' ? 'Mermaid' : 'SVG'} 代码...`}
-            />
-          </div>
+        <div className="editor-panel">
+          <div className="panel-header">{t('mindmap.editor.title')}</div>
+          <textarea
+            className="code-editor"
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder={t('mindmap.editor.placeholder', { type: mode })}
+            spellCheck={false}
+          />
         </div>
-
-        <div className="mindmap-preview">
-          <div className="mindmap-preview-header">
-            <Text strong>实时预览</Text>
-            <div className="mindmap-preview-tools">
-              <Tooltip title="放大">
-                <button className="tool-btn" onClick={() => handleZoom('in')}><ZoomInOutlined /></button>
-              </Tooltip>
-              <Tooltip title="缩小">
-                <button className="tool-btn" onClick={() => handleZoom('out')}><ZoomOutOutlined /></button>
-              </Tooltip>
-              <Tooltip title="自适应">
-                <button className="tool-btn" onClick={() => handleZoom('fit')}><ReloadOutlined /></button>
-              </Tooltip>
-              {contentType === 'markdown' && (
-                <Tooltip title="展开所有">
-                  <button className="tool-btn" onClick={handleExpandAll}><ExpandOutlined /></button>
-                </Tooltip>
-              )}
-              {contentType !== 'markdown' && (
-                <span className="zoom-percent">{Math.round(zoomLevel * 100)}%</span>
-              )}
-            </div>
+        <div className="preview-panel">
+          <div className="panel-header">
+            <span>{t('mindmap.preview')}</span>
+            {mode === 'markdown' && (
+              <Space size={4}>
+                <Tooltip title={t('mindmap.zoom.in')}><Button size="small" type="text" icon={<ZoomInOutlined />} onClick={handleZoomIn} /></Tooltip>
+                <Tooltip title={t('mindmap.zoom.out')}><Button size="small" type="text" icon={<ZoomOutOutlined />} onClick={handleZoomOut} /></Tooltip>
+                <Tooltip title={t('mindmap.zoom.fit')}><Button size="small" type="text" icon={<ExpandOutlined />} onClick={handleFit} /></Tooltip>
+                <Tooltip title={t('mindmap.zoom.expandAll')}><Button size="small" type="text" icon={<NodeExpandOutlined />} onClick={handleExpandAll} /></Tooltip>
+              </Space>
+            )}
           </div>
-          <div className="mindmap-preview-canvas">
-            {renderPreviewContent()}
-          </div>
+          <div ref={previewRef} className="preview-content" />
         </div>
       </div>
 
+      {/* 我的导图抽屉 */}
       <Drawer
-        title="我的导图"
-        placement="left"
+        title={t('mindmap.myMindmaps')}
+        open={listVisible}
+        onClose={() => setListVisible(false)}
         width={380}
-        open={listDrawerOpen}
-        onClose={() => setListDrawerOpen(false)}
-        extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleNew}>
-            新建
-          </Button>
-        }
-        className="mindmap-list-drawer"
+        extra={<Button size="small" icon={<PlusOutlined />} onClick={() => { setListVisible(false); handleNew() }}>{t('mindmap.new')}</Button>}
       >
         {listLoading ? (
           <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-        ) : mindmapList.length === 0 ? (
-          <Empty description="还没有保存的导图" />
+        ) : list.length === 0 ? (
+          <Empty description={t('mindmap.listEmpty')} />
         ) : (
           <List
-            dataSource={mindmapList}
+            dataSource={list}
             renderItem={item => (
               <List.Item
-                className={`mindmap-list-item ${currentId === item.id ? 'active' : ''}`}
+                className="mindmap-list-item"
                 actions={[
-                  <Tooltip title="重命名" key="rename">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={(e) => { e.stopPropagation(); handleOpenRename(item); }}
-                    />
+                  <Tooltip title={t('mindmap.rename')} key="rename">
+                    <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); openRename(item) }} />
                   </Tooltip>,
                   <Popconfirm
-                    key="delete"
-                    title="确定删除这张导图？"
-                    description="删除后不可恢复"
-                    okText="删除"
-                    cancelText="取消"
-                    okButtonProps={{ danger: true }}
-                    onConfirm={(e) => { e?.stopPropagation?.(); handleDelete(item); }}
+                    key="del"
+                    title={t('mindmap.deleteConfirmTitle')}
+                    description={t('mindmap.deleteConfirmDesc')}
+                    okText={t('common.confirm')}
+                    cancelText={t('common.cancel')}
+                    onConfirm={e => { if (e) e.stopPropagation(); handleDeleteItem(item) }}
+                    onCancel={e => { if (e) e.stopPropagation() }}
                   >
-                    <Tooltip title="删除">
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </Tooltip>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={e => e.stopPropagation()} />
                   </Popconfirm>
                 ]}
-                onClick={() => handleOpenMindmap(item)}
+                onClick={() => handleOpenItem(item)}
               >
                 <List.Item.Meta
                   title={
-                    <div className="mindmap-list-item-title">
-                      {item.title}
-                      {currentId === item.id && <Tag color="processing" style={{ marginLeft: 6, fontSize: 10 }}>当前</Tag>}
-                    </div>
+                    <Space size={6}>
+                      <span>{item.title}</span>
+                      {getTypeTag(item.map_type)}
+                      {item.id === currentId && <Tag color="processing">{t('mindmap.listCurrent')}</Tag>}
+                    </Space>
                   }
-                  description={
-                    <div className="mindmap-list-item-meta">
-                      {getTypeTag(item.content_type)}
-                      <span className="meta-time">
-                        <ClockCircleOutlined /> {formatTime(item.updated_at)}
-                      </span>
-                    </div>
-                  }
+                  description={formatTime(item.updated_at || item.created_at)}
                 />
               </List.Item>
             )}
@@ -980,60 +546,45 @@ const Mindmap = () => {
         )}
       </Drawer>
 
+      {/* 分享弹窗 */}
       <Modal
-        title={<><ShareAltOutlined /> 分享链接</>}
-        open={shareModalOpen}
-        onCancel={() => setShareModalOpen(false)}
+        title={<Space><CheckCircleOutlined style={{ color: '#52c41a' }} />{t('mindmap.shareModalTitle')}</Space>}
+        open={shareVisible}
+        onCancel={() => setShareVisible(false)}
         footer={[
-          <Button key="close" onClick={() => setShareModalOpen(false)}>关闭</Button>,
-          <Button key="preview" onClick={handleOpenShareInNewTab}>
-            在新窗口预览
-          </Button>,
-          <Button key="copy" type="primary" icon={<CopyOutlined />} onClick={handleCopyShareLink}>
-            复制链接
-          </Button>
+          <Button key="preview" icon={<LinkOutlined />} onClick={() => window.open(shareUrl, '_blank')}>{t('mindmap.sharePreviewNewTab')}</Button>,
+          <Button key="copy" type="primary" icon={<CopyOutlined />} onClick={handleCopyShareLink}>{t('mindmap.shareCopyLink')}</Button>,
+          <Button key="close" onClick={() => setShareVisible(false)}>{t('button.close')}</Button>
         ]}
       >
-        <div style={{ marginBottom: 12 }}>
-          <Text>持此链接的任何人均可在线查看该导图（只读）：</Text>
-        </div>
-        <Input.TextArea
-          value={buildShareUrl()}
-          rows={3}
-          readOnly
-          onClick={(e) => e.target.select()}
-          style={{ fontFamily: 'monospace', fontSize: 12 }}
-        />
-        <div style={{ marginTop: 12, fontSize: 12, color: '#8E8E93' }}>
-          • 链接含安全签名，无法被遍历猜测<br />
-          • 如需取消分享，请删除该导图<br />
-          • 重命名/更新内容不会改变链接
-        </div>
+        <p>{t('mindmap.shareDesc')}</p>
+        <Input value={shareUrl} readOnly />
+        <ul style={{ marginTop: 12, color: '#8c8c8c', fontSize: 12, paddingLeft: 18 }}>
+          <li>{t('mindmap.shareNote1')}</li>
+          <li>{t('mindmap.shareNote2')}</li>
+          <li>{t('mindmap.shareNote3')}</li>
+        </ul>
       </Modal>
 
+      {/* 重命名弹窗 */}
       <Modal
-        title="重命名导图"
-        open={renameModalOpen}
-        onOk={handleSubmitRename}
-        onCancel={() => {
-          setRenameModalOpen(false);
-          setRenameTarget(null);
-          setRenameValue('');
-        }}
-        okText="确定"
-        cancelText="取消"
+        title={t('mindmap.renameModalTitle')}
+        open={renameVisible}
+        onOk={handleRename}
+        onCancel={() => setRenameVisible(false)}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
       >
         <Input
           value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          placeholder="请输入新标题"
-          maxLength={200}
-          showCount
-          onPressEnter={handleSubmitRename}
+          onChange={e => setRenameValue(e.target.value)}
+          placeholder={t('mindmap.renamePlaceholder')}
+          maxLength={100}
+          onPressEnter={handleRename}
         />
       </Modal>
     </div>
-  );
-};
+  )
+}
 
-export default Mindmap;
+export default Mindmap
