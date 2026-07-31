@@ -5,6 +5,9 @@
  * 修复记录：
  * - getGroupUserCount: 改用deleted_at IS NULL过滤已删除用户
  * - 新增 getGroupAnnouncement / updateGroupAnnouncement 组公告方法
+ * - v1.1 (2026-07-29): distributeCreditsFromPool积分有效期"过期黑洞"修复
+ *   * 从组积分池分配积分时，若目标用户的积分已过期，自动清除其有效期（置NULL=永不过期），
+ *     否则分配的积分会因旧的过期时间而无法使用
  */
 
 const User = require('../../models/User');
@@ -477,6 +480,13 @@ class GroupService {
     }
   }
 
+  /**
+   * 从组积分池分配积分给用户
+   * 
+   * v1.1修复"过期黑洞"问题：
+   * 若目标用户的积分已过期（credits_expire_at < NOW()），分配时自动清除其有效期
+   * （置NULL=永不过期），保证分配的积分立即可用；未过期用户的有效期保持不变。
+   */
   static async distributeCreditsFromPool(groupId, userId, amount, reason, distributorId) {
     try {
       if (typeof amount !== 'number' || amount <= 0) {
@@ -519,15 +529,31 @@ class GroupService {
           throw new ValidationError('用户不属于该分组');
         }
 
+        // v1.1新增：判断目标用户积分是否已过期（过期后即使增加配额也无法使用）
+        const creditsWasExpired = !!(
+          user.credits_expire_at && new Date(user.credits_expire_at) < new Date()
+        );
+
         const oldQuota = user.credits_quota || 0;
         const newQuota = oldQuota + amount;
         
+        // v1.1修改：分配积分时，若原积分已过期则自动清除有效期（置NULL=永不过期）
+        // CASE表达式保证：未过期用户的有效期不受影响
         const updateUserSql = `
           UPDATE users 
-          SET credits_quota = ?, updated_at = NOW()
+          SET credits_quota = ?,
+              credits_expire_at = CASE
+                WHEN credits_expire_at IS NOT NULL AND credits_expire_at < NOW() THEN NULL
+                ELSE credits_expire_at
+              END,
+              updated_at = NOW()
           WHERE id = ?
         `;
         await query(updateUserSql, [newQuota, userId]);
+
+        // 流水描述：附加自动清除有效期的说明，便于审计追溯
+        const description = (reason || '组内积分分配')
+          + (creditsWasExpired ? ' (原积分已过期，自动清除有效期)' : '');
 
         const transactionSql = `
           INSERT INTO credit_transactions 
@@ -538,14 +564,15 @@ class GroupService {
           userId,
           amount,
           newQuota - (user.used_credits || 0),
-          reason || '组内积分分配',
+          description,
           distributorId,
           distributorId
         ]);
 
         return {
           credits_pool_remaining: group.credits_pool - group.credits_pool_used - amount,
-          user_new_balance: newQuota - (user.used_credits || 0)
+          user_new_balance: newQuota - (user.used_credits || 0),
+          credits_expire_cleared: creditsWasExpired
         };
       });
 
@@ -562,7 +589,9 @@ class GroupService {
         success: true,
         amount,
         ...result,
-        message: '积分分配成功'
+        message: result.credits_expire_cleared
+          ? '积分分配成功（原积分已过期，已自动清除有效期）'
+          : '积分分配成功'
       };
     } catch (error) {
       logger.error('组积分池分配失败', { error: error.message, groupId, userId, amount });

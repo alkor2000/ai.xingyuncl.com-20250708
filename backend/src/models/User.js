@@ -11,6 +11,11 @@
  * - v1.1 (2025-01-XX): 新增 can_view_chat_history 字段
  *   * 仅对组管理员(role=admin)有效
  *   * 控制组管理员是否可以查看组员的对话记录
+ * - v1.2 (2026-07-29): 积分有效期"过期黑洞"修复
+ *   * addCredits: 充值时若积分已过期且未指定延长天数，自动清除有效期（置NULL=永不过期），
+ *     避免新充值的积分因旧的过期时间而无法使用
+ *   * update: 修改credits_quota时若积分已过期且未显式指定新有效期，同样自动清除有效期
+ *   * setCreditsExpireDate: 支持传入null清除有效期（设为永不过期）
  */
 
 const bcrypt = require('bcryptjs');
@@ -540,6 +545,7 @@ class User {
   /**
    * 更新用户信息
    * v1.1更新：添加 can_view_chat_history 字段支持
+   * v1.2更新：修改credits_quota时，若积分已过期且未显式指定新有效期，自动清除过期的有效期
    */
   async update(updateData) {
     try {
@@ -560,6 +566,19 @@ class User {
         updateData.password_hash = await bcrypt.hash(updateData.password, 10);
         delete updateData.password;
         updateFields[updateFields.indexOf('password')] = 'password_hash';
+      }
+
+      // v1.2新增：修改积分配额时的"过期黑洞"保护
+      // 如果本次更新包含credits_quota、未显式指定credits_expire_at、且当前积分已过期，
+      // 则自动清除过期的有效期（置NULL=永不过期），避免新配额因旧过期时间而无法使用
+      if (
+        updateFields.includes('credits_quota') &&
+        !updateFields.includes('credits_expire_at') &&
+        this.isCreditsExpired()
+      ) {
+        updateData.credits_expire_at = null;
+        updateFields.push('credits_expire_at');
+        logger.info('检测到积分已过期，修改配额时自动清除积分有效期', { userId: this.id });
       }
 
       const setClause = updateFields.map(field => `${field} = ?`).join(', ');
@@ -1027,12 +1046,24 @@ class User {
       const usedCredits = this.used_credits || 0;
       const newUsedCredits = Math.min(usedCredits, newQuota);
 
+      // v1.2新增：设置配额时若积分已过期，自动清除有效期（避免新配额落入"过期黑洞"）
+      const wasExpired = this.isCreditsExpired();
+
       await dbConnection.transaction(async (query) => {
-        const updateSql = `
-          UPDATE users 
-          SET credits_quota = ?, used_credits = ?, updated_at = NOW()
-          WHERE id = ? AND deleted_at IS NULL
-        `;
+        let updateSql;
+        if (wasExpired) {
+          updateSql = `
+            UPDATE users 
+            SET credits_quota = ?, used_credits = ?, credits_expire_at = NULL, updated_at = NOW()
+            WHERE id = ? AND deleted_at IS NULL
+          `;
+        } else {
+          updateSql = `
+            UPDATE users 
+            SET credits_quota = ?, used_credits = ?, updated_at = NOW()
+            WHERE id = ? AND deleted_at IS NULL
+          `;
+        }
         await query(updateSql, [newQuota, newUsedCredits, this.id]);
 
         const balanceAfter = newQuota - newUsedCredits;
@@ -1046,18 +1077,22 @@ class User {
           this.id, 
           newQuota - oldQuota,
           balanceAfter,
-          reason,
+          reason + (wasExpired ? ' (原积分已过期，自动清除有效期)' : ''),
           operatorId
         ]);
       });
 
       this.credits_quota = newQuota;
       this.used_credits = newUsedCredits;
+      if (wasExpired) {
+        this.credits_expire_at = null;
+      }
 
       logger.info('设置用户积分配额成功', {
         userId: this.id,
         oldQuota,
         newQuota,
+        expireCleared: wasExpired,
         reason,
         operatorId
       });
@@ -1067,6 +1102,7 @@ class User {
         oldQuota,
         newQuota,
         balanceAfter: newQuota - newUsedCredits,
+        expireCleared: wasExpired,
         message: '积分配额设置成功'
       };
     } catch (error) {
@@ -1077,6 +1113,12 @@ class User {
 
   /**
    * 充值积分
+   * 
+   * v1.2修复"过期黑洞"问题：
+   * - 传入extendDays：保持原逻辑（已过期从现在起算，未过期在现有基础上延长）
+   * - 未传extendDays且积分已过期：自动清除有效期（置NULL=永不过期），
+   *   否则新充值的积分会因旧的过期时间而永远无法使用
+   * - 未传extendDays且积分未过期：不改变有效期（原逻辑）
    */
   async addCredits(amount, reason = '管理员充值', operatorId = null, extendDays = null) {
     try {
@@ -1088,14 +1130,18 @@ class User {
       const newQuota = oldQuota + amount;
       const usedCredits = this.used_credits || 0;
 
+      // v1.2新增：记录充值前积分是否已过期（决定是否自动清除有效期）
+      const wasExpired = this.isCreditsExpired();
+      const hasExtendDays = !!(extendDays && extendDays > 0);
+      // 是否触发"自动清除过期有效期"：已过期 且 未显式指定延长天数
+      const autoClearExpire = wasExpired && !hasExtendDays;
+
       await dbConnection.transaction(async (query) => {
-        let updateSql = `
-          UPDATE users 
-          SET credits_quota = ?, updated_at = NOW()
-        `;
+        let updateSql;
         const updateParams = [newQuota];
         
-        if (extendDays && extendDays > 0) {
+        if (hasExtendDays) {
+          // 显式延长：已过期则从现在起算，未过期则在现有到期时间基础上延长
           updateSql = `
             UPDATE users 
             SET credits_quota = ?, 
@@ -1107,6 +1153,20 @@ class User {
                 updated_at = NOW()
           `;
           updateParams.push(extendDays, extendDays);
+        } else if (autoClearExpire) {
+          // v1.2：积分已过期且未指定延长天数 → 自动清除有效期（永不过期）
+          updateSql = `
+            UPDATE users 
+            SET credits_quota = ?, 
+                credits_expire_at = NULL,
+                updated_at = NOW()
+          `;
+        } else {
+          // 未过期且未指定延长天数 → 只增加配额，不动有效期
+          updateSql = `
+            UPDATE users 
+            SET credits_quota = ?, updated_at = NOW()
+          `;
         }
         
         updateSql += ' WHERE id = ? AND deleted_at IS NULL';
@@ -1115,6 +1175,14 @@ class User {
         await query(updateSql, updateParams);
 
         const balanceAfter = newQuota - usedCredits;
+
+        // 流水描述：附加延长天数或自动清除有效期的说明，便于审计追溯
+        let description = reason;
+        if (hasExtendDays) {
+          description += ` (延长${extendDays}天)`;
+        } else if (autoClearExpire) {
+          description += ' (原积分已过期，自动清除有效期)';
+        }
 
         const historySql = `
           INSERT INTO credit_transactions 
@@ -1125,11 +1193,11 @@ class User {
           this.id,
           amount,
           balanceAfter,
-          reason + (extendDays ? ` (延长${extendDays}天)` : ''),
+          description,
           operatorId
         ]);
 
-        if (extendDays) {
+        if (hasExtendDays) {
           const { rows: [userData] } = await query(
             'SELECT credits_expire_at FROM users WHERE id = ? AND deleted_at IS NULL',
             [this.id]
@@ -1139,6 +1207,10 @@ class User {
       });
 
       this.credits_quota = newQuota;
+      // v1.2：内存对象同步清除有效期
+      if (autoClearExpire) {
+        this.credits_expire_at = null;
+      }
 
       logger.info('用户积分充值成功', {
         userId: this.id,
@@ -1146,6 +1218,7 @@ class User {
         oldQuota,
         newQuota,
         extendDays,
+        expireAutoCleared: autoClearExpire,
         reason,
         operatorId
       });
@@ -1159,8 +1232,13 @@ class User {
         message: '积分充值成功'
       };
 
-      if (extendDays) {
+      if (hasExtendDays) {
         result.newExpireAt = this.credits_expire_at;
+      }
+      if (autoClearExpire) {
+        result.expireCleared = true;
+        result.newExpireAt = null;
+        result.message = '积分充值成功（原积分已过期，已自动清除有效期）';
       }
 
       return result;
@@ -1353,16 +1431,33 @@ class User {
 
   /**
    * 设置积分过期时间
+   * 
+   * v1.2更新：支持传入null清除有效期（设为永不过期）
+   * @param {Date|null} expireDate - 过期时间，null表示清除有效期（永不过期）
    */
   async setCreditsExpireDate(expireDate, reason = '管理员设置', operatorId = null) {
     try {
+      // v1.2：null/undefined统一视为"清除有效期"
+      const isClear = expireDate === null || expireDate === undefined;
+      const normalizedDate = isClear ? null : new Date(expireDate);
+
+      // v1.2：非清除模式下校验日期有效性，防止Invalid Date写入数据库
+      if (!isClear && isNaN(normalizedDate.getTime())) {
+        throw new ValidationError('无效的过期日期格式');
+      }
+
       await dbConnection.transaction(async (query) => {
         const updateSql = `
           UPDATE users 
           SET credits_expire_at = ?, updated_at = NOW()
           WHERE id = ? AND deleted_at IS NULL
         `;
-        await query(updateSql, [expireDate, this.id]);
+        await query(updateSql, [normalizedDate, this.id]);
+
+        // 流水描述：区分"设置过期时间"和"清除有效期"两种操作
+        const description = isClear
+          ? `${reason} - 清除积分有效期（永不过期）`
+          : `${reason} - 设置过期时间为: ${normalizedDate.toLocaleDateString()}`;
 
         const historySql = `
           INSERT INTO credit_transactions 
@@ -1372,25 +1467,26 @@ class User {
         `;
         await query(historySql, [
           this.id, this.id,
-          `${reason} - 设置过期时间为: ${new Date(expireDate).toLocaleDateString()}`,
+          description,
           operatorId
         ]);
       });
 
-      this.credits_expire_at = expireDate;
+      this.credits_expire_at = normalizedDate;
 
       logger.info('设置用户积分过期时间成功', {
         userId: this.id,
-        expireDate,
+        expireDate: normalizedDate,
+        cleared: isClear,
         reason,
         operatorId
       });
 
       return {
         success: true,
-        expireDate,
+        expireDate: normalizedDate,
         remainingDays: this.getCreditsRemainingDays(),
-        message: '积分有效期设置成功'
+        message: isClear ? '积分有效期已清除（永不过期）' : '积分有效期设置成功'
       };
     } catch (error) {
       logger.error('设置用户积分过期时间失败:', error);

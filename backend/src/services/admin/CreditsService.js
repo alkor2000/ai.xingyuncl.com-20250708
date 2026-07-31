@@ -1,5 +1,16 @@
 /**
  * 积分服务层 - 处理积分相关的业务逻辑
+ * 
+ * 更新记录：
+ * - v1.1 (2026-07-29): 积分有效期"过期黑洞"修复配套
+ *   * setCreditsExpireDate: 支持传入null清除有效期（设为永不过期）
+ *   * addUserCredits: 底层User.addCredits已支持过期自动清除有效期，此处透传结果
+ * - v1.2 (2026-07-29): 修复batchAddCredits空壳事务问题
+ *   * 原实现外层dbConnection.transaction包裹循环，但循环内user.addCredits各自
+ *     开启独立事务（使用各自的连接），外层事务实际无任何回滚能力，且嵌套占用
+ *     连接池存在耗尽风险
+ *   * 改为逐用户独立处理：每个用户的充值由User.addCredits自身事务保证原子性，
+ *     单个用户失败不影响其他用户，results/errors分开收集（与原返回结构语义一致）
  */
 
 const User = require('../../models/User');
@@ -50,6 +61,10 @@ class CreditsService {
 
   /**
    * 充值用户积分
+   * 
+   * 说明：User.addCredits内部已实现"过期黑洞"保护——
+   * 若用户积分已过期且未指定延长天数，会自动清除有效期，
+   * 保证充值后的积分立即可用。结果中包含expireCleared标记。
    */
   static async addUserCredits(userId, amount, options = {}) {
     try {
@@ -74,7 +89,8 @@ class CreditsService {
         extendDays,
         reason,
         newQuota: result.newQuota,
-        balanceAfter: result.balanceAfter
+        balanceAfter: result.balanceAfter,
+        expireCleared: result.expireCleared || false
       });
 
       return result;
@@ -158,6 +174,10 @@ class CreditsService {
 
   /**
    * 设置积分有效期
+   * 
+   * v1.1更新：expireDate传null表示清除有效期（设为永不过期）
+   * @param {number} userId - 用户ID
+   * @param {string|Date|null} expireDate - 过期时间，null=清除（永不过期）
    */
   static async setCreditsExpireDate(userId, expireDate, options = {}) {
     try {
@@ -168,12 +188,18 @@ class CreditsService {
         throw new ValidationError('用户不存在');
       }
 
-      const result = await user.setCreditsExpireDate(new Date(expireDate), reason, operatorId);
+      // v1.1：null/undefined透传给模型层执行"清除有效期"，其他值转Date
+      const normalizedDate = (expireDate === null || expireDate === undefined)
+        ? null
+        : new Date(expireDate);
+
+      const result = await user.setCreditsExpireDate(normalizedDate, reason, operatorId);
 
       logger.info('设置积分有效期成功', {
         operatorId,
         userId,
-        expireDate,
+        expireDate: normalizedDate,
+        cleared: normalizedDate === null,
         reason
       });
 
@@ -244,6 +270,11 @@ class CreditsService {
 
   /**
    * 批量充值积分
+   * 
+   * v1.2重构：移除外层空壳事务
+   * - 每个用户的充值由User.addCredits内部事务保证原子性（配额更新+流水写入）
+   * - 逐用户独立处理，单个失败不影响其他用户（部分成功语义）
+   * - results收集成功项，errors收集失败项，summary汇总
    */
   static async batchAddCredits(userIds, amount, options = {}) {
     try {
@@ -260,23 +291,27 @@ class CreditsService {
       const results = [];
       const errors = [];
 
-      // 使用事务批量处理
-      await dbConnection.transaction(async (query) => {
-        for (const userId of userIds) {
-          try {
-            const user = await User.findById(userId);
-            if (!user) {
-              errors.push({ userId, error: '用户不存在' });
-              continue;
-            }
-
-            await user.addCredits(amount, reason, operatorId, extendDays);
-            results.push({ userId, success: true });
-          } catch (error) {
-            errors.push({ userId, error: error.message });
+      // v1.2：逐用户独立处理（无外层事务包裹）
+      // 单个用户的原子性由User.addCredits内部事务保证
+      for (const userId of userIds) {
+        try {
+          const user = await User.findById(userId);
+          if (!user) {
+            errors.push({ userId, error: '用户不存在' });
+            continue;
           }
+
+          const addResult = await user.addCredits(amount, reason, operatorId, extendDays);
+          results.push({ 
+            userId, 
+            success: true,
+            newQuota: addResult.newQuota,
+            expireCleared: addResult.expireCleared || false
+          });
+        } catch (error) {
+          errors.push({ userId, error: error.message });
         }
-      });
+      }
 
       logger.info('批量充值积分完成', {
         operatorId,

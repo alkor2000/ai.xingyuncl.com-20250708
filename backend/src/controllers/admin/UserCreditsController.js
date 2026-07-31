@@ -1,5 +1,9 @@
 /**
  * 用户积分管理控制器 - 使用Service层处理业务逻辑
+ * 
+ * 更新记录：
+ * - v1.1 (2026-07-29): setUserCreditsExpire支持permanent参数，
+ *   传permanent=true时清除积分有效期（设为永不过期）
  */
 
 const { CreditsService } = require('../../services/admin');
@@ -81,7 +85,7 @@ class UserCreditsController {
         extendDays: extend_days
       });
 
-      return ResponseHelper.success(res, result, '积分充值成功');
+      return ResponseHelper.success(res, result, result.message || '积分充值成功');
     } catch (error) {
       logger.error('充值用户积分失败', { 
         adminId: req.user?.id, 
@@ -136,14 +140,25 @@ class UserCreditsController {
 
   /**
    * 设置用户积分有效期
+   * 
+   * v1.1更新：请求体三选一（按优先级判断）
+   * - permanent: true      → 清除有效期（永不过期）
+   * - expire_date: 'YYYY-MM-DD' → 设置指定过期日期
+   * - extend_days: N       → 在现有有效期基础上延长N天（已过期则从今天起算）
    */
   static async setUserCreditsExpire(req, res) {
     try {
       const { id } = req.params;
-      const { expire_date, extend_days, reason } = req.body;
+      const { expire_date, extend_days, reason, permanent } = req.body;
       
       let result;
-      if (expire_date) {
+      if (permanent === true) {
+        // v1.1：清除有效期（永不过期）
+        result = await CreditsService.setCreditsExpireDate(id, null, {
+          reason: reason || '管理员设为永不过期',
+          operatorId: req.user.id
+        });
+      } else if (expire_date) {
         result = await CreditsService.setCreditsExpireDate(id, expire_date, {
           reason,
           operatorId: req.user.id
@@ -154,10 +169,10 @@ class UserCreditsController {
           operatorId: req.user.id
         });
       } else {
-        return ResponseHelper.validation(res, ['必须提供过期日期或延长天数']);
+        return ResponseHelper.validation(res, ['必须提供过期日期、延长天数或永不过期标记']);
       }
 
-      return ResponseHelper.success(res, result, '积分有效期设置成功');
+      return ResponseHelper.success(res, result, result.message || '积分有效期设置成功');
     } catch (error) {
       logger.error('设置用户积分有效期失败', { 
         adminId: req.user?.id, 
@@ -169,7 +184,7 @@ class UserCreditsController {
         return ResponseHelper.notFound(res, error.message);
       }
       
-      if (error.message.includes('必须')) {
+      if (error.message.includes('必须') || error.message.includes('无效')) {
         return ResponseHelper.validation(res, [error.message]);
       }
       

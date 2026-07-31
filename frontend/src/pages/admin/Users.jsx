@@ -21,6 +21,10 @@
  * - v1.4 (2026-05-19): 空搜索结果友好提示 + 清理冗余useEffect
  *   - 搜索无结果时显示 Empty 组件并隐藏表格，避免歧义
  *   - 移除原"userGroups变化时更新分页total"的useEffect（与filteredUserGroups的useEffect功能重叠）
+ * - v1.5 (2026-07-29): 积分有效期管理接线
+ *   - DistributeCreditsModal 新增 onExpireUpdated 回调，有效期变更后刷新用户列表
+ * - v1.6 (2026-07-29): 权限一致性修复
+ *   - DistributeCreditsModal 传入 isSuperAdmin，有效期管理Tab仅超管可见
  */
 
 import React, { useEffect, useState, useMemo } from 'react'
@@ -544,15 +548,33 @@ const Users = () => {
         ? distributeUser.group_id 
         : currentUser.group_id
         
-      await distributeGroupCredits(targetGroupId, userId, amount, reason, operation)
+      const result = await distributeGroupCredits(targetGroupId, userId, amount, reason, operation)
       setIsDistributeModalVisible(false)
       setDistributeUser(null)
-      message.success(operation === 'distribute' ? '积分分配成功' : '积分回收成功')
+      // v1.5：使用后端返回的message（包含"自动清除有效期"等提示信息）
+      message.success(
+        result?.message || (operation === 'distribute' ? '积分分配成功' : '积分回收成功')
+      )
       
       await loadUsers()
       await loadUserGroups()
     } catch (error) {
       message.error(error.response?.data?.message || (operation === 'distribute' ? '分配失败' : '回收失败'))
+    }
+  }
+
+  /**
+   * v1.5 新增：积分有效期变更成功后的回调
+   * 刷新用户列表（更新过期状态标签）并同步更新弹窗内的用户对象
+   */
+  const handleExpireUpdated = async () => {
+    const result = await loadUsers()
+    // 从刷新后的列表中找到当前弹窗用户，更新distributeUser使弹窗内状态同步
+    if (result?.data && distributeUser) {
+      const updatedUser = result.data.find(u => u.id === distributeUser.id)
+      if (updatedUser) {
+        setDistributeUser(updatedUser)
+      }
     }
   }
 
@@ -1110,7 +1132,9 @@ const Users = () => {
           user={distributeUser}
           groupInfo={getDistributeGroupInfo()} 
           loading={loading}
+          isSuperAdmin={isSuperAdmin}
           onSubmit={handleSubmitDistribute}
+          onExpireUpdated={handleExpireUpdated}
           onCancel={() => {
             setIsDistributeModalVisible(false)
             setDistributeUser(null)
