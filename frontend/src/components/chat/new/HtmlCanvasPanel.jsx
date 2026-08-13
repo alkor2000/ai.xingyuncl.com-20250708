@@ -20,6 +20,18 @@
  *   - 全屏降级提示、全屏失败提示走 t()（chat.canvas.fullscreenNotSupported / fullscreenFailed）
  *   - 其余文案此前已走 t(...)，根因是 en-US/chat.json 缺 chat.canvas.* key，已在locale侧补齐
  *
+ * v1.2 修复（HTML代码块被内部反引号截断导致预览失败 / 复制不完整）：
+ *   - 移除本地的 extractHtmlBlocks / collectHtmlFromMessages 正则实现
+ *   - 改为统一使用 utils/htmlBlockParser 的严格 CommonMark 逐行扫描解析器
+ *   - 根因：旧正则 /```(?:html|HTML)\s*\n([\s\S]*?)```/g 为非贪婪匹配，
+ *     不理解 Markdown 围栏规则，遇到 HTML 内部 JS 代码里的反引号字符串
+ *     字面量（如 jsonStr.startsWith('```json')）就提前闭合代码块，
+ *     导致 iframe 拿到残缺 HTML（script 未闭合、缺 </html>）渲染失败，
+ *     且工具栏"复制代码"复制的 currentHtml 同样被截断。
+ *   - Markdown 正文显示正常是因为 remank/remark 严格遵循 CommonMark：
+ *     闭合围栏必须行首缩进<=3 且该行反引号后无其它内容，被截断处不满足。
+ *   - 现在与 Chat 页面（是否弹画布/块数统计）共用同一解析口径，避免不一致。
+ *
  * Props:
  *   - messages: 消息列表
  *   - isStreaming: 是否正在流式输出
@@ -43,67 +55,11 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { message as antMessage } from 'antd'
+// v1.2: 统一使用共享的 CommonMark 围栏解析器，替代原有易误闭合的正则
+import { collectHtmlFromMessages } from '../../../utils/htmlBlockParser'
 import './HtmlCanvasPanel.less'
 
 const { Text } = Typography
-
-/**
- * 从消息内容中提取所有完整的HTML代码块
- * 只提取已闭合的 ```html ... ``` 代码块
- *
- * @param {string} content - 消息内容文本
- * @returns {string[]} - 提取到的HTML代码数组
- */
-const extractHtmlBlocks = (content) => {
-  if (!content) return []
-
-  const blocks = []
-  // 匹配 ```html 或 ```HTML 开头，以 ``` 结束的代码块
-  const regex = /```(?:html|HTML)\s*\n([\s\S]*?)```/g
-  let match
-
-  while ((match = regex.exec(content)) !== null) {
-    const htmlContent = match[1].trim()
-    // 只保留有实际内容的HTML块（至少包含一个HTML标签）
-    if (htmlContent && htmlContent.length > 10 && /<[a-zA-Z]/.test(htmlContent)) {
-      blocks.push(htmlContent)
-    }
-  }
-
-  return blocks
-}
-
-/**
- * 从所有消息中收集HTML代码块
- * 只从AI助手消息中提取
- *
- * @param {Array} messages - 消息列表
- * @returns {Array<{html: string, messageId: string, index: number, messageIndex: number}>}
- */
-const collectHtmlFromMessages = (messages) => {
-  if (!messages || messages.length === 0) return []
-
-  const allBlocks = []
-
-  messages.forEach((msg, msgIndex) => {
-    // 只从AI助手的消息中提取HTML
-    if (msg.role !== 'assistant') return
-
-    const blocks = extractHtmlBlocks(msg.content)
-    blocks.forEach((html, blockIndex) => {
-      allBlocks.push({
-        html,
-        messageId: msg.id,
-        index: allBlocks.length,          // 全局索引
-        blockIndex,                       // 在该消息中的索引
-        messageIndex: msgIndex,           // 消息在列表中的索引
-        label: `HTML #${allBlocks.length + 1}`
-      })
-    })
-  })
-
-  return allBlocks
-}
 
 // ================================================================
 // 设备预览尺寸配置
@@ -203,6 +159,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   // ================================================================
   // 从消息中提取所有HTML代码块
+  // v1.2: 使用 utils/htmlBlockParser 的严格 CommonMark 解析器
   // ================================================================
   const htmlBlocks = useMemo(() => {
     return collectHtmlFromMessages(messages)
@@ -346,13 +303,32 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     setRefreshKey(prev => prev + 1)
   }
 
-  /** 复制HTML代码 */
+  /**
+   * 复制HTML代码
+   * v1.2: currentHtml 现在由严格解析器提供，不会再被内部反引号截断
+   * 兼容非 HTTPS / 老浏览器缺失 navigator.clipboard 的降级方案
+   */
   const handleCopyHtml = async () => {
     if (!currentHtml) return
+
     try {
-      await navigator.clipboard.writeText(currentHtml)
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(currentHtml)
+      } else {
+        // 降级方案：临时 textarea + execCommand
+        const textarea = document.createElement('textarea')
+        textarea.value = currentHtml
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!ok) throw new Error('execCommand copy failed')
+      }
       antMessage.success(t('chat.canvas.copySuccess') || '代码已复制')
     } catch (error) {
+      console.error('复制HTML代码失败:', error)
       antMessage.error(t('chat.canvas.copyFailed') || '复制失败')
     }
   }

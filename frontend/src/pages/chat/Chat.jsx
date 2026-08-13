@@ -51,6 +51,15 @@
  *   - 修复方式：去掉该过滤，直接 const availableModels = aiModels。零风险、纯前端、
  *     不触碰后端刚加固的安全白名单（不让 api_key 有任何重新泄露的可能）。
  * 
+ * v4.2 修复（HTML代码块被内部反引号截断，导致画布判定与实际渲染口径不一致）：
+ *   - 删除本地的 useHasHtmlContent / useHtmlBlockCount 两个基于正则的 hook
+ *   - 合并为单个 useHtmlBlocks，内部调用 utils/htmlBlockParser.collectHtmlFromMessages
+ *   - 根因：旧正则 /```(?:html|HTML)\s*\n[\s\S]*?```/ 为非贪婪匹配，会被 HTML 内部
+ *     JS 代码中的反引号字符串字面量（如 startsWith('```json')）误闭合，
+ *     不仅让画布渲染/复制内容被截断，还导致「是否弹画布」「块数量统计」
+ *     与画布组件的真实提取结果不一致（可能出现有块不弹、或关闭后又被自动弹出）。
+ *   - 现在 Chat 与 HtmlCanvasPanel 共用同一个严格 CommonMark 解析器，口径完全一致。
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -71,6 +80,8 @@ import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
 import apiClient from '../../utils/api'
 import { calculateTokens } from '../../utils/tokenCalculator'
+// v4.2: 与 HtmlCanvasPanel 共用的严格 CommonMark 围栏解析器
+import { collectHtmlFromMessages } from '../../utils/htmlBlockParser'
 
 import {
   ConversationSidebar, ChatInputArea,
@@ -136,34 +147,17 @@ const useViewportHeight = () => {
 }
 
 /**
- * v3.0: 检测消息列表中是否包含已完成的HTML代码块
- * 用于决定是否显示右侧画布面板
+ * v4.2: 提取消息列表中所有已完成的 HTML 代码块
+ *
+ * 替代原来的 useHasHtmlContent / useHtmlBlockCount 两个正则 hook。
+ * 与 HtmlCanvasPanel 共用 utils/htmlBlockParser 的严格 CommonMark 解析器，
+ * 保证「是否弹出画布」「块数量统计」「实际渲染内容」三者口径完全一致。
+ *
+ * @param {Array} messages - 消息列表
+ * @returns {Array} HTML 代码块数组（含 html / messageId 等元信息）
  */
-const useHasHtmlContent = (messages) => {
-  return useMemo(() => {
-    if (!messages || messages.length === 0) return false
-    return messages.some(msg => {
-      if (msg.role !== 'assistant' || !msg.content) return false
-      return /```(?:html|HTML)\s*\n[\s\S]*?```/.test(msg.content)
-    })
-  }, [messages])
-}
-
-/**
- * v3.3: 统计消息列表中HTML代码块的总数量
- * 用于判断是否有"新"HTML生成（数量增加 = 有新内容）
- */
-const useHtmlBlockCount = (messages) => {
-  return useMemo(() => {
-    if (!messages || messages.length === 0) return 0
-    let count = 0
-    for (const msg of messages) {
-      if (msg.role !== 'assistant' || !msg.content) continue
-      const matches = msg.content.match(/```(?:html|HTML)\s*\n[\s\S]*?```/g)
-      if (matches) count += matches.length
-    }
-    return count
-  }, [messages])
+const useHtmlBlocks = (messages) => {
+  return useMemo(() => collectHtmlFromMessages(messages), [messages])
 }
 
 // ================================================================
@@ -244,10 +238,10 @@ const Chat = () => {
   // v3.3: 用ref记录上一次的HTML代码块数量
   const htmlBlockCountRef = useRef(0)
 
-  // v3.0: 检测当前对话消息中是否有HTML内容
-  const hasHtmlContent = useHasHtmlContent(messages)
-  // v3.3: 统计当前对话中HTML代码块的数量
-  const htmlBlockCount = useHtmlBlockCount(messages)
+  // v4.2: 一次解析得到 HTML 块数组，派生出「是否有内容」与「块数量」
+  const htmlBlocks = useHtmlBlocks(messages)
+  const hasHtmlContent = htmlBlocks.length > 0
+  const htmlBlockCount = htmlBlocks.length
   // v3.1: 画布是否实际显示
   const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
 
