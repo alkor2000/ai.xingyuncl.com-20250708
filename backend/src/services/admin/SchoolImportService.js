@@ -17,7 +17,7 @@
  * - 用户名全局唯一（users.username UK），重复跳过
  * - 不修改 users 表结构（年级/班级走标签系统）
  * - 姓名写入 users.remark 字段（前缀 [姓名]，便于识别）
- * - 密码规则：username + "123456"，bcrypt 加密
+ * - 密码规则：所有用户统一固定密码，bcrypt 加密（按用户决策：固定密码 123456，不再与用户名拼接）
  * - 学校管理员 role=admin（与现有组管理员完全一致）
  * - 整体调用 dbConnection.transaction()，遵循现有事务模式
  *
@@ -35,7 +35,7 @@
  *   1. execute 新增第三参数 taskId（可选）：通过 SchoolImportTaskManager 上报进度，
  *      供"后台异步执行 + 前端轮询进度"模式使用。不传 taskId 时行为与旧版完全一致。
  *   2. 密码哈希在进入事务【之前】分批预计算（每批 BCRYPT_BATCH_SIZE 个），
- *      哈希仅依赖 username 与数据库无关，提前算好后存入行对象，事务内直接取用——
+ *      哈希仅依赖固定密码常量与数据库无关，提前算好后存入行对象，事务内直接取用——
  *      保证事务体只剩纯 SQL，既快又不破坏单连接事务语义。
  *   3. 进度上报：解析校验后上报 total，组创建完上报 groups，
  *      用户创建每完成一批上报 processed。
@@ -50,6 +50,13 @@
  *      (creating_users)映射 40-100%。由本服务算好 percent 上报给 TaskManager，
  *      前端进度条直接用 percent，避免两阶段各自从 0 计数导致进度条"先涨后归零"。
  *      （TaskManager 对 percent 另做单调递增保护，双重保险。）
+ *
+ * v1.4 密码规则简化（同日）：
+ *   所有新建用户统一使用固定密码 123456（不再拼接用户名）。因所有用户密码
+ *   相同，precomputePasswordHashes 无需再逐用户计算哈希，改为只计算一次
+ *   全局共用的哈希值，显著减少 bcrypt 调用次数（原来 N 个用户 = N 次哈希，
+ *   现在 N 个用户 = 1 次哈希），同时消除了原批间让出事件循环的必要性根源
+ *   （但保留该机制以兼容未来若密码规则再次变为逐用户差异化）。
  *
  * 【持久行为特征 - 修改本文件务必知悉】
  *   密码哈希必须在 dbConnection.transaction() 之前完成（事务外预计算），
@@ -91,8 +98,8 @@ class SchoolImportService {
     'admin':      'admin'
   };
 
-  /** 默认密码后缀（按用户决策：username + 123456） */
-  static PASSWORD_SUFFIX = '123456';
+  /** 所有新建用户的统一固定密码（按用户决策：不再与用户名拼接） */
+  static DEFAULT_PASSWORD = '123456';
 
   /** 单次导入最大行数（防爆内存） */
   static MAX_ROWS = 5000;
@@ -171,7 +178,7 @@ class SchoolImportService {
       ['用户备注', '可选',     '附加说明，与姓名一起存入 remark 字段',                                                         '数学竞赛获奖'],
       ['标签',     '可选',     '多个标签用英文逗号或分号分隔。标签不存在时自动在该组下创建',                                    '优等生,班干部'],
       ['',         '',         '',                                                                                            ''],
-      ['密码规则', '',         '所有用户的初始密码 = 用户名 + 123456。例如用户名 zhangsan_pkz 的初始密码为 zhangsan_pkz123456', ''],
+      ['密码规则', '',         '所有用户的初始密码统一为 123456，与用户名无关',                                                ''],
       ['冲突处理', '',         '用户名已存在的行将被跳过，导入完成后会显示详细的成功/跳过/失败报告',                            ''],
       ['行数上限', '',         `单次导入最多 ${SchoolImportService.MAX_ROWS} 行（学生记录）`,                                  ''],
       ['有效期',   '',         '导入的用户自动继承所在组的有效期。组到期后用户也会自动失效',                                    ''],
@@ -472,61 +479,38 @@ class SchoolImportService {
     return newId;
   }
 
-  // ========== v1.2/v1.3 内部工具：批量预计算密码哈希 ==========
+  // ========== v1.4 内部工具：预计算统一密码哈希 ==========
 
   /**
-   * 在进入数据库事务【之前】，分批预计算所有待创建用户的 bcrypt 密码哈希。
+   * 在进入数据库事务【之前】，预计算所有待创建用户共用的 bcrypt 密码哈希。
    *
-   * 为什么放在事务外：
-   *   - bcrypt 哈希是 CPU 密集操作，与数据库无关，仅依赖 username
-   *   - 事务是单数据库连接，事务内并发 SQL 会互相阻塞，因此哈希必须在事务外做
-   *   - 提前算好后写入每行的 _passwordHash / _rawPassword 字段，事务内直接取用，
-   *     让事务体只剩纯 SQL，既快又安全
+   * v1.4 变更：所有用户密码统一为 DEFAULT_PASSWORD，哈希值与 username 无关，
+   * 因此只需计算一次，再写入每一行的 _passwordHash / _rawPassword 字段即可，
+   * 不再需要像 v1.2/v1.3 那样分批计算 N 次哈希。
    *
-   * v1.3 关键改动：批间让出事件循环
-   *   bcryptjs 是纯 JS 同步密集计算，在单线程 Node 里 Promise.all 是伪并发，
-   *   会独占事件循环、阻塞其他用户请求。每批结束后插入 await setImmediate 让出
-   *   事件循环，让其他 HTTP 请求有机会插队处理，牺牲极少总时长换"导入不卡全站"。
-   *
-   * v1.3 进度映射：哈希阶段占整体进度的 0 ~ HASH_PERCENT_END（默认 40%）。
+   * 保留 taskId 进度上报接口是为了不改变调用方 execute() 的进度语义——
+   * 哈希阶段依然占整体进度的 0 ~ HASH_PERCENT_END，只是这一步几乎瞬间完成。
    *
    * @param {Array<Object>} rows - 待创建的行对象数组（会就地写入 _rawPassword / _passwordHash）
    * @param {string} taskId - 可选，用于上报哈希阶段进度
    * @returns {Promise<void>}
    */
   static async precomputePasswordHashes(rows, taskId) {
-    const batchSize = SchoolImportService.BCRYPT_BATCH_SIZE;
-    const total = rows.length;
-    let done = 0;
+    const rawPassword = SchoolImportService.DEFAULT_PASSWORD;
+    const passwordHash = await bcrypt.hash(rawPassword, 10);
 
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize);
+    rows.forEach(row => {
+      row._rawPassword = rawPassword;
+      row._passwordHash = passwordHash;
+    });
 
-      // 同一批计算哈希
-      await Promise.all(batch.map(async (row) => {
-        const rawPassword = row.username + SchoolImportService.PASSWORD_SUFFIX;
-        const passwordHash = await bcrypt.hash(rawPassword, 10);
-        row._rawPassword = rawPassword;
-        row._passwordHash = passwordHash;
-      }));
-
-      done += batch.length;
-
-      // v1.3：上报哈希阶段进度，percent 映射到 0 ~ HASH_PERCENT_END 区间
-      if (taskId) {
-        const percent = total > 0
-          ? Math.floor((done / total) * SchoolImportService.HASH_PERCENT_END)
-          : 0;
-        SchoolImportTaskManager.updateProgress(taskId, {
-          phase: 'hashing',
-          processed: done,
-          total,
-          percent
-        });
-      }
-
-      // v1.3：批间让出事件循环，避免密集 bcrypt 阻塞其他用户请求
-      await new Promise(resolve => setImmediate(resolve));
+    if (taskId) {
+      SchoolImportTaskManager.updateProgress(taskId, {
+        phase: 'hashing',
+        processed: rows.length,
+        total: rows.length,
+        percent: SchoolImportService.HASH_PERCENT_END
+      });
     }
   }
 
@@ -544,8 +528,10 @@ class SchoolImportService {
    *
    * v1.2/v1.3 异步化与体验改造：
    *   - 新增可选参数 taskId，用于向 SchoolImportTaskManager 上报进度
-   *   - 密码哈希在进入事务前分批预计算（precomputePasswordHashes，批间让出事件循环）
+   *   - 密码哈希在进入事务前预计算（precomputePasswordHashes）
    *   - 各阶段上报 percent（哈希 0-40%、建用户 40-100%）保证进度条单调递增
+   *
+   * v1.4：密码统一为固定值，哈希预计算改为一次性计算（见 precomputePasswordHashes）
    *
    * @param {Buffer} buffer
    * @param {Object} currentUser - 当前操作的超级管理员
@@ -653,8 +639,7 @@ class SchoolImportService {
       logger.warn('读取系统默认配置失败，使用内置默认值', { error: e.message });
     }
 
-    // v1.2/v1.3：进入事务【之前】分批预计算所有密码哈希（批间让出事件循环）
-    // 这是大批量导入的核心——把 CPU 密集的 bcrypt 移出事务，且不阻塞全站
+    // v1.4：进入事务【之前】预计算统一密码哈希（一次性，不再逐用户循环）
     await SchoolImportService.precomputePasswordHashes(rowsToCreate, taskId);
 
     // 5. 整体事务执行
@@ -782,7 +767,7 @@ class SchoolImportService {
               );
             }
 
-            // 5.4.2 取用预计算的密码哈希（v1.2：事务外已算好）
+            // 5.4.2 取用预计算的密码哈希（v1.4：所有用户共用同一哈希值）
             const rawPassword = row._rawPassword;
             const passwordHash = row._passwordHash;
             const uuid = uuidv4();

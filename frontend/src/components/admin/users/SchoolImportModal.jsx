@@ -20,6 +20,10 @@
  *   进度条改用后端上报的 percent 字段（哈希阶段 0-40%、建用户阶段 40-100%，
  *   后端保证单调递增），不再由前端用 processed/total 计算——避免两阶段各自
  *   从 0 计数导致进度条"先涨后归零"。percent 缺失时回退旧算法兜底。
+ *
+ * v1.3 密码规则同步（同日）：
+ *   密码提示文案与后端 SchoolImportService.js 的 DEFAULT_PASSWORD 保持一致，
+ *   统一为固定密码 123456（不再是"用户名+123456"）。
  */
 
 import React, { useState } from 'react'
@@ -194,7 +198,7 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
             跳过 <Text strong type="warning">{previewResult.will_skip_count}</Text> 行。
           </Paragraph>
           <Paragraph type="secondary">
-            导入后，所有用户的初始密码均为：<Text code>用户名 + 123456</Text>
+            导入后，所有用户的初始密码均为：<Text code>123456</Text>
           </Paragraph>
           <Paragraph type="secondary">
             大批量导入将在后台执行，过程中请勿关闭此窗口。
@@ -296,7 +300,7 @@ const SchoolImportModal = ({ visible, onCancel, onSuccess }) => {
             <li>支持普通用户和学校管理员两种角色（学校管理员可登录管理后台管理本组）</li>
             <li>年级和班级会自动转为该组的标签，便于后续筛选用户</li>
             <li>已存在的用户名将被跳过，导入完成后会显示详细报告</li>
-            <li><Text strong>初始密码规则：用户名 + 123456</Text>（例如 zhangsan_pkz123456）</li>
+            <li><Text strong>初始密码规则：统一为 123456</Text>（所有用户密码相同）</li>
             <li>同名学校自动追加 _2/_3 后缀创建新组（防止误合并不同学校）</li>
             <li>单次导入最多 5000 行</li>
           </ul>
