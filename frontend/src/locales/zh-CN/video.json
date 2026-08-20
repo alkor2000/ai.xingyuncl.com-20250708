@@ -110,5 +110,17 @@
   "video.provider.stable": "Stable Diffusion",
   "video.provider.runway": "Runway",
   "video.provider.pika": "Pika",
-  "video.provider.sora": "Sora"
+  "video.provider.sora": "Sora",
+  
+  "video.modelsLoadFailed": "获取视频模型失败",
+  "video.taskSubmitted": "视频生成任务已提交",
+  "video.generationFailedDefault": "视频生成失败",
+  "video.taskQueryTimeout": "任务查询超时",
+  "video.generationCompleted": "视频生成完成",
+  "video.generationFailedWithReason": "视频生成失败: {{reason}}",
+  "video.galleryLoadFailed": "获取公开画廊失败",
+  "video.favoritedResult": "已收藏",
+  "video.unfavoritedResult": "已取消收藏",
+  "video.setPublicResult": "已设为公开",
+  "video.setPrivateResult": "已设为私密"
 }

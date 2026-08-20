@@ -96,6 +96,7 @@
   "storage.moveTo": "Move to...",
   "storage.moveToRoot": "Move to root",
   "storage.moveToFolder": "Move to \"{{name}}\"",
+  "storage.moveConfirmOk": "Move",
   "storage.selectTargetFolder": "Select target folder",
   "storage.batchMoveSuccess": "Successfully moved {{success}} files",
   "storage.batchMoveFailed": "{{failed}} files failed to move",
@@ -117,5 +118,14 @@
   "storage.fileInfo": "File Info",
   "storage.folderInfo": "Folder Info",
   "storage.createdAt": "Created",
-  "storage.modifiedAt": "Modified"
+  "storage.modifiedAt": "Modified",
+  "storage.getFilesFailed": "Failed to get file list",
+  "storage.deleteFileFailed": "Failed to delete file",
+  "storage.batchDeleteFailed": "Failed to batch delete files",
+  "storage.batchMoveRequestFailed": "Failed to move files",
+  "storage.getFoldersFailed": "Failed to get folder list",
+  "storage.getFolderTreeFailed": "Failed to get folder tree",
+  "storage.deleteFolderFailed": "Failed to delete folder",
+  "storage.saveOSSConfigFailed": "Failed to save OSS configuration",
+  "storage.updateCreditConfigFailed": "Failed to update credit configuration"
 }

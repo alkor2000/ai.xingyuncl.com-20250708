@@ -1,17 +1,58 @@
 /**
- * 新建对话弹窗组件 - 支持系统提示词选择和模块组合
- * 支持Azure模型温度限制
+ * 新建对话弹窗组件
  *
- * 修复（2026-06-29 模型选择器"暂无数据"全局故障）：
- *   移除对 aiModels 的 m.is_active 过滤/判断（共3处：下拉渲染、默认模型查找、兜底默认模型），
- *   直接使用 aiModels。
- *   根因：后端 /chat/models（getModels）于 6月10日改为白名单显式返回字段以堵 api_key 泄露，
- *   白名单中不含 is_active 字段，前端 m.is_active 全为 undefined，导致：
- *     ① 下拉 filter(m => m.is_active) 过滤为空 → 模型下拉"暂无数据"；
- *     ② 默认模型/兜底模型查找依赖 m.is_active 失效 → 无默认值 → 无法新建对话。
- *   安全性确认：后端 AIModel.getUserAvailableModels 的 SQL 已含 WHERE m.is_active = true，
- *   被超管禁用（is_active=0）的模型在数据库层面就不会返回给前端，前端这层 is_active
- *   过滤是冗余的；去掉后管理员禁用模型功能依然有效（禁用模型根本不会出现在 aiModels 中）。
+ * 功能：创建对话时选择模型、模块组合、系统提示词（预设或自定义）、
+ *       上下文长度、温度、优先级。支持 Azure 模型的温度限制。
+ *
+ * 历史修复（保留说明以免后人重蹈）：
+ *   曾对 aiModels 做 m.is_active 过滤/判断（共 3 处：下拉渲染、默认模型查找、
+ *   兜底默认模型），导致模型下拉"暂无数据"且无法新建对话。
+ *   根因：后端 /chat/models（getModels）改为白名单显式返回字段以堵 api_key 泄露，
+ *   白名单中不含 is_active，前端 m.is_active 全为 undefined。
+ *   安全性确认：后端 AIModel.getUserAvailableModels 的 SQL 已含
+ *   WHERE m.is_active = true，被禁用的模型根本不会出现在 aiModels 中，
+ *   前端这层过滤是冗余的，去掉后管理员禁用模型功能依然有效。
+ *
+ * ============================================================
+ * 国际化关键决策
+ * ============================================================
+ *
+ * 【1】15 处硬编码文案改 t()，全部复用第 17 批新增的 chat.* 键
+ *   与 ConversationSettingsDrawer 共用同一批键（模块组合 7 键、Azure 3 键），
+ *   两组件文案完全一致，不重复建键。
+ *
+ * 【2】跨行 JSX 拼接改整句插值
+ *   原代码分两行书写：
+ *     包含 {selectedCombination.module_count} 个知识模块，
+ *     预计消耗 {selectedCombination.estimated_tokens} tokens
+ *   英文须为 "Includes N knowledge modules, consuming about M tokens" ——
+ *   中文"预计消耗"为独立动词短语，英文用现在分词接续，语序不同，
+ *   无法用同样的分行拼接得到，故改 selectedDesc 整句插值。
+ *
+ * 【3】温度 Tooltip 使用 tooltipShort 而非复用 temperature.tooltip
+ *   本文件原有独立文案"Temperature控制AI回复的创造性。0=精确，1=创造性"，
+ *   与 Drawer 使用的 chat.form.temperature.tooltip
+ *   （"控制AI回复的创造性。值越低回复越保守精确..."）措辞不同、长度不同。
+ *   为保持两处原有的表达差异，新建 tooltipShort 键承载本文件的简短版本，
+ *   而非强行统一到一个键（那会改变其中一处的既有文案）。
+ *   0 与 1 抽为 TEMPERATURE_MIN/MAX 常量并作 {{min}}/{{max}} 插值。
+ *
+ * 【4】Azure 温度值抽常量并作插值
+ *   原文案硬编码"仅支持温度值 1.0"，与代码中三处赋值 1 脱钩。
+ *   现用 AZURE_FIXED_TEMPERATURE 同时驱动赋值与 {{value}} 插值。
+ *
+ * 【5】两个 useEffect 依赖数组均不含 t
+ *   第一个负责加载系统提示词与模块组合（加 t 会重复请求）；
+ *   第二个负责设置表单默认值，内含 setFieldsValue（加 t 会在切语言时
+ *   覆盖用户尚未提交的输入，属真实数据丢失风险）。
+ *   本文件所有 t() 调用均在渲染期，不在 callback 内，故无需 tRef 模式。
+ *
+ * 【6】不翻译的内容
+ *   combination.name / description、prompt.name / description
+ *   （用户创建或后台录入的业务数据）
+ *   model.display_name、Azure（产品名）、Temperature（参数名）、tokens（术语）
+ *   provider / api_endpoint 判定字符串（技术标识）
+ *   'custom' 特殊值（内部控制标识，非文案）
  */
 
 import React, { useEffect, useState } from 'react'
@@ -27,7 +68,6 @@ import {
   Tag,
   Tooltip,
   Divider,
-  Empty,
   Alert
 } from 'antd'
 import {
@@ -44,6 +84,45 @@ import useChatStore from '../../../stores/chatStore'
 const { TextArea } = Input
 const { Option } = Select
 
+// ==================== 业务规则常量 ====================
+
+/** Azure 模型强制使用的温度值，同时用于赋值与 {{value}} 插值 */
+const AZURE_FIXED_TEMPERATURE = 1
+
+/** 温度区间与步进 */
+const TEMPERATURE_MIN = 0
+const TEMPERATURE_MAX = 1
+const TEMPERATURE_STEP = 0.1
+/** 温度滑块中间刻度位置 */
+const TEMPERATURE_MID = 0.5
+/** 未取到系统配置时的兜底温度 */
+const FALLBACK_TEMPERATURE = 0.7
+
+/** 新建对话的默认上下文条数 */
+const DEFAULT_CONTEXT_LENGTH = 20
+/** 上下文条数区间 */
+const CONTEXT_MIN = 0
+const CONTEXT_MAX = 100
+
+/** 优先级区间与默认值（数值越大排序越靠前） */
+const PRIORITY_MIN = 0
+const PRIORITY_MAX = 10
+const DEFAULT_PRIORITY = 0
+
+/** 自定义系统提示词输入框行数 */
+const PROMPT_TEXTAREA_ROWS = 3
+
+/**
+ * 系统提示词下拉中"自定义"选项的特殊值。
+ * 属内部控制标识而非文案，不国际化。
+ */
+const CUSTOM_PROMPT_VALUE = 'custom'
+
+// ==================== 布局常量 ====================
+const MODAL_WIDTH = 600
+/** 下拉的最小展开宽度（组合名与描述较长，需比输入框更宽） */
+const DROPDOWN_MIN_WIDTH = 400
+
 const ConversationFormModal = ({
   visible,
   form,
@@ -53,14 +132,19 @@ const ConversationFormModal = ({
 }) => {
   const { t } = useTranslation()
   const { getDefaultAIModel, getDefaultTemperature } = useSystemConfigStore()
-  const { systemPrompts, getSystemPrompts, moduleCombinations, getModuleCombinations } = useChatStore()
+  const {
+    systemPrompts,
+    getSystemPrompts,
+    moduleCombinations,
+    getModuleCombinations
+  } = useChatStore()
   const [customPromptMode, setCustomPromptMode] = useState(false)
   const [selectedPromptContent, setSelectedPromptContent] = useState('')
   const [selectedCombination, setSelectedCombination] = useState(null)
   const [isAzureModel, setIsAzureModel] = useState(false)
-  const [temperatureValue, setTemperatureValue] = useState(0.7)
+  const [temperatureValue, setTemperatureValue] = useState(FALLBACK_TEMPERATURE)
 
-  // 加载系统提示词和模块组合
+  /* 加载系统提示词和模块组合。依赖不含 t：加了会在切语言时重复请求 */
   useEffect(() => {
     if (visible) {
       getSystemPrompts()
@@ -68,112 +152,105 @@ const ConversationFormModal = ({
     }
   }, [visible, getSystemPrompts, getModuleCombinations])
 
-  // 检查是否为Azure模型
+  /**
+   * 检查是否为 Azure 模型。
+   * 三种判定方式任一命中即为 Azure：provider 字段、api_endpoint 占位值、
+   * api_key 的三段式格式。这些都是技术标识，不参与国际化。
+   */
   const checkIsAzureModel = (modelName) => {
     const model = aiModels.find(m => m.name === modelName)
     if (!model) return false
-    
-    // 检查provider是否为azure
+
     if (model.provider === 'azure' || model.provider === 'azure-openai') {
       return true
     }
-    
-    // 检查api_endpoint是否为azure
     if (model.api_endpoint === 'azure' || model.api_endpoint === 'use-from-key') {
       return true
     }
-    
-    // 检查api_key是否包含Azure格式（包含|分隔符）
     if (model.api_key && model.api_key.includes('|')) {
       const parts = model.api_key.split('|')
       if (parts.length === 3) {
         return true
       }
     }
-    
     return false
   }
 
-  // 处理模型选择变化
+  /* 处理模型选择变化 */
   const handleModelChange = (modelName) => {
     const isAzure = checkIsAzureModel(modelName)
     setIsAzureModel(isAzure)
-    
+
     if (isAzure) {
-      // Azure模型强制设置温度为1
-      setTemperatureValue(1)
-      form.setFieldValue('ai_temperature', 1)
+      /* Azure 模型强制固定温度 */
+      setTemperatureValue(AZURE_FIXED_TEMPERATURE)
+      form.setFieldValue('ai_temperature', AZURE_FIXED_TEMPERATURE)
     } else {
-      // 非Azure模型恢复默认温度
+      /* 非 Azure 模型恢复系统配置的默认温度 */
       const defaultTemp = getDefaultTemperature()
       setTemperatureValue(defaultTemp)
       form.setFieldValue('ai_temperature', defaultTemp)
     }
   }
 
-  // 当弹窗打开时，设置默认值
+  /**
+   * 弹窗打开时设置默认值。
+   * 依赖数组绝不可含 t：本 effect 内有 setFieldsValue，
+   * 若因语言切换重跑，会覆盖用户尚未提交的输入（真实数据丢失）。
+   */
   useEffect(() => {
     if (visible && aiModels.length > 0) {
-      // 获取系统配置的默认模型
       const defaultModel = getDefaultAIModel()
       const defaultTemp = getDefaultTemperature()
-      
-      // 查找默认模型是否在可用模型列表中
-      // 修复：去掉 m.is_active 判断（aiModels 已是后端返回的激活模型），仅按名称匹配
+
+      /* 不判断 m.is_active：aiModels 已是后端返回的激活模型 */
       const defaultModelAvailable = aiModels.find(m => m.name === defaultModel)
-      
-      // 如果默认模型不可用，使用第一个可用模型
-      // 修复：去掉 m.is_active 判断，直接取列表第一个
       const modelToUse = defaultModelAvailable ? defaultModel : aiModels[0]?.name
-      
-      // 检查是否为Azure模型
+
       const isAzure = checkIsAzureModel(modelToUse)
       setIsAzureModel(isAzure)
-      
-      // 设置温度值
-      const tempToUse = isAzure ? 1 : defaultTemp
+
+      const tempToUse = isAzure ? AZURE_FIXED_TEMPERATURE : defaultTemp
       setTemperatureValue(tempToUse)
-      
-      // 设置表单默认值
+
       form.setFieldsValue({
         model_name: modelToUse,
-        context_length: 20,
+        context_length: DEFAULT_CONTEXT_LENGTH,
         ai_temperature: tempToUse,
-        priority: 0,
+        priority: DEFAULT_PRIORITY,
         system_prompt_id: null,
         system_prompt: '',
         module_combination_id: null
       })
-      
-      // 重置状态
+
       setCustomPromptMode(false)
       setSelectedPromptContent('')
       setSelectedCombination(null)
     }
   }, [visible, aiModels, form, getDefaultAIModel, getDefaultTemperature])
 
-  // 处理系统提示词选择
+  /* 处理系统提示词选择 */
   const handleSystemPromptChange = (promptId) => {
-    if (promptId === 'custom') {
-      // 切换到自定义模式
+    if (promptId === CUSTOM_PROMPT_VALUE) {
+      /* 切换到自定义模式 */
       setCustomPromptMode(true)
       form.setFieldsValue({
         system_prompt_id: null,
         system_prompt: selectedPromptContent || ''
       })
     } else if (promptId) {
-      // 选择了预设提示词
+      /* 选择了预设提示词 */
       setCustomPromptMode(false)
       const selectedPrompt = systemPrompts.find(p => p.id === promptId)
       if (selectedPrompt) {
         setSelectedPromptContent(selectedPrompt.description || '')
         form.setFieldsValue({
           system_prompt_id: promptId,
-          system_prompt: '' // 清空自定义内容
+          system_prompt: ''
         })
       }
     } else {
-      // 清空选择
+      /* 清空选择 */
       setCustomPromptMode(false)
       setSelectedPromptContent('')
       form.setFieldsValue({
@@ -183,13 +260,12 @@ const ConversationFormModal = ({
     }
   }
 
-  // 处理模块组合选择
+  /* 处理模块组合选择：选中含模块的组合时清空系统提示词（二者互斥） */
   const handleCombinationChange = (combinationId) => {
     if (combinationId) {
       const combination = moduleCombinations.find(c => c.id === combinationId)
       setSelectedCombination(combination)
-      
-      // 如果选择了模块组合，清空系统提示词选择（避免冲突）
+
       if (combination && combination.module_count > 0) {
         setCustomPromptMode(false)
         setSelectedPromptContent('')
@@ -207,21 +283,19 @@ const ConversationFormModal = ({
     }
   }
 
-  // 处理表单提交
+  /* 处理表单提交 */
   const handleSubmit = (values) => {
-    // 如果是自定义模式，清空system_prompt_id
     if (customPromptMode) {
       values.system_prompt_id = null
     } else if (values.system_prompt_id) {
-      // 如果选择了预设提示词，清空自定义内容
+      /* 选了预设提示词则清空自定义内容 */
       values.system_prompt = null
     }
-    
-    // 确保Azure模型的温度为1
+
     if (isAzureModel) {
-      values.ai_temperature = 1
+      values.ai_temperature = AZURE_FIXED_TEMPERATURE
     }
-    
+
     onSubmit(values)
   }
 
@@ -231,7 +305,7 @@ const ConversationFormModal = ({
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={600}
+      width={MODAL_WIDTH}
     >
       <Form
         form={form}
@@ -251,26 +325,28 @@ const ConversationFormModal = ({
           rules={[{ required: true, message: t('chat.form.model.required') }]}
         >
           <Select onChange={handleModelChange}>
-            {/* 修复：去掉 filter(m => m.is_active)，直接渲染 aiModels（后端已只返回激活模型） */}
+            {/* 不做 filter(m => m.is_active)：后端已只返回激活模型 */}
             {aiModels.map(model => (
               <Option key={model.name} value={model.name}>
                 <Space>
+                  {/* 模型显示名为后台录入的业务数据，不翻译 */}
                   {model.display_name}
-                  <Tag color="blue" size="small">
+                  <Tag color="blue">
                     {model.credits_per_chat}{t('unit.credits')}
                   </Tag>
                   {model.stream_enabled && (
-                    <Tag color="processing" size="small">
+                    <Tag color="processing">
                       {t('chat.stream')}
                     </Tag>
                   )}
                   {model.image_upload_enabled && (
-                    <Tag color="success" size="small">
+                    <Tag color="success">
                       {t('chat.image')}
                     </Tag>
                   )}
+                  {/* Azure 为产品名，不翻译 */}
                   {(model.provider === 'azure' || model.api_endpoint === 'azure') && (
-                    <Tag color="orange" size="small">
+                    <Tag color="orange">
                       Azure
                     </Tag>
                   )}
@@ -287,31 +363,31 @@ const ConversationFormModal = ({
             label={
               <Space>
                 <AppstoreAddOutlined />
-                模块组合
-                <Tooltip title="选择预设的知识模块组合，可以让AI获得特定领域的知识和能力">
+                {t('chat.combination.label')}
+                <Tooltip title={t('chat.combination.tooltip')}>
                   <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
                 </Tooltip>
               </Space>
             }
           >
             <Select
-              placeholder="选择知识模块组合（可选）"
+              placeholder={t('chat.combination.placeholder')}
               allowClear
               onChange={handleCombinationChange}
               style={{ width: '100%' }}
               optionLabelProp="label"
-              dropdownMatchSelectWidth={false}
-              dropdownStyle={{ minWidth: 400 }}
+              popupMatchSelectWidth={false}
+              dropdownStyle={{ minWidth: DROPDOWN_MIN_WIDTH }}
             >
               {moduleCombinations.map(combination => (
-                <Option 
-                  key={combination.id} 
+                <Option
+                  key={combination.id}
                   value={combination.id}
                   label={combination.name}
                   disabled={!combination.is_active}
                 >
                   <div style={{ padding: '4px 0' }}>
-                    <div style={{ 
+                    <div style={{
                       fontWeight: 500,
                       marginBottom: 4,
                       whiteSpace: 'normal',
@@ -319,20 +395,25 @@ const ConversationFormModal = ({
                     }}>
                       <Space>
                         <GroupOutlined />
+                        {/* 组合名为用户创建的业务数据，不翻译 */}
                         {combination.name}
-                        <Tag color="blue" size="small">
-                          {combination.module_count || 0} 个模块
+                        <Tag color="blue">
+                          {t('chat.combination.moduleCount', {
+                            count: combination.module_count || 0
+                          })}
                         </Tag>
                         {combination.estimated_tokens > 0 && (
-                          <Tag color="orange" size="small">
-                            约 {combination.estimated_tokens} tokens
+                          <Tag color="orange">
+                            {t('chat.combination.tokenEstimate', {
+                              tokens: combination.estimated_tokens
+                            })}
                           </Tag>
                         )}
                       </Space>
                     </div>
                     {combination.description && (
-                      <div style={{ 
-                        fontSize: '12px', 
+                      <div style={{
+                        fontSize: '12px',
                         color: '#666',
                         whiteSpace: 'normal',
                         wordBreak: 'break-word',
@@ -351,13 +432,17 @@ const ConversationFormModal = ({
         {/* 显示选中的模块组合信息 */}
         {selectedCombination && (
           <Alert
-            message="已选择模块组合"
+            message={t('chat.combination.selected')}
             description={
               <div>
+                {/* 组合描述为业务数据，不翻译 */}
                 <div>{selectedCombination.description}</div>
+                {/* 原为跨两行 JSX 拼接，改整句插值：英文语序与中文不同 */}
                 <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                  包含 {selectedCombination.module_count || 0} 个知识模块，
-                  预计消耗 {selectedCombination.estimated_tokens || 0} tokens
+                  {t('chat.combination.selectedDesc', {
+                    modules: selectedCombination.module_count || 0,
+                    tokens: selectedCombination.estimated_tokens || 0
+                  })}
                 </div>
               </div>
             }
@@ -374,19 +459,23 @@ const ConversationFormModal = ({
             label={
               <Space>
                 <FileTextOutlined />
-                系统提示词
+                {t('chat.systemPrompt.label')}
               </Space>
             }
           >
             <Select
-              placeholder="选择预设的系统提示词（可选）"
+              placeholder={t('chat.systemPrompt.selectPlaceholder')}
               allowClear
-              value={customPromptMode ? 'custom' : form.getFieldValue('system_prompt_id')}
+              value={
+                customPromptMode
+                  ? CUSTOM_PROMPT_VALUE
+                  : form.getFieldValue('system_prompt_id')
+              }
               onChange={handleSystemPromptChange}
               style={{ width: '100%' }}
               optionLabelProp="label"
-              dropdownMatchSelectWidth={false}
-              dropdownStyle={{ minWidth: 400 }}
+              popupMatchSelectWidth={false}
+              dropdownStyle={{ minWidth: DROPDOWN_MIN_WIDTH }}
               dropdownRender={menu => (
                 <>
                   {menu}
@@ -396,22 +485,23 @@ const ConversationFormModal = ({
                       type="text"
                       icon={<FileTextOutlined />}
                       block
-                      onClick={() => handleSystemPromptChange('custom')}
+                      onClick={() => handleSystemPromptChange(CUSTOM_PROMPT_VALUE)}
                     >
-                      自定义系统提示词
+                      {t('chat.systemPrompt.custom')}
                     </Button>
                   </div>
                 </>
               )}
             >
               {systemPrompts.map(prompt => (
-                <Option 
-                  key={prompt.id} 
+                <Option
+                  key={prompt.id}
                   value={prompt.id}
                   label={prompt.name}
                 >
                   <div style={{ padding: '4px 0' }}>
-                    <div style={{ 
+                    {/* 提示词名称与描述为后台录入的业务数据，不翻译 */}
+                    <div style={{
                       fontWeight: 500,
                       marginBottom: prompt.description ? 4 : 0,
                       whiteSpace: 'normal',
@@ -420,8 +510,8 @@ const ConversationFormModal = ({
                       {prompt.name}
                     </div>
                     {prompt.description && (
-                      <div style={{ 
-                        fontSize: '12px', 
+                      <div style={{
+                        fontSize: '12px',
                         color: '#666',
                         whiteSpace: 'normal',
                         wordBreak: 'break-word',
@@ -437,13 +527,13 @@ const ConversationFormModal = ({
           </Form.Item>
         )}
 
-        {/* 显示选中的提示词描述 */}
+        {/* 显示选中的提示词描述（业务数据，不翻译） */}
         {selectedPromptContent && !customPromptMode && !selectedCombination && (
-          <div style={{ 
-            marginTop: -16, 
-            marginBottom: 16, 
-            padding: '8px 12px', 
-            background: '#f5f5f5', 
+          <div style={{
+            marginTop: -16,
+            marginBottom: 16,
+            padding: '8px 12px',
+            background: '#f5f5f5',
             borderRadius: 4,
             fontSize: '13px',
             color: '#666',
@@ -459,14 +549,14 @@ const ConversationFormModal = ({
             name="system_prompt"
             label={t('chat.form.systemPrompt')}
           >
-            <TextArea 
-              rows={3} 
-              placeholder={t('chat.form.systemPrompt.placeholder')} 
+            <TextArea
+              rows={PROMPT_TEXTAREA_ROWS}
+              placeholder={t('chat.form.systemPrompt.placeholder')}
             />
           </Form.Item>
         )}
 
-        {/* 隐藏的字段 */}
+        {/* 隐藏字段：保留以兼容后端字段结构 */}
         <Form.Item name="system_prompt_id" hidden>
           <Input />
         </Form.Item>
@@ -475,18 +565,20 @@ const ConversationFormModal = ({
           name="context_length"
           label={t('chat.form.contextLength')}
         >
-          <InputNumber 
-            min={0} 
-            max={100} 
-            style={{ width: '100%' }} 
+          <InputNumber
+            min={CONTEXT_MIN}
+            max={CONTEXT_MAX}
+            style={{ width: '100%' }}
           />
         </Form.Item>
 
-        {/* Azure模型温度提示 */}
+        {/* Azure 模型温度提示 */}
         {isAzureModel && (
           <Alert
-            message="Azure 模型温度限制"
-            description="此 Azure 模型仅支持温度值 1.0（创造性），无法调整。"
+            message={t('chat.azure.tempLimitTitle')}
+            description={t('chat.azure.tempLimitDesc', {
+              value: AZURE_FIXED_TEMPERATURE
+            })}
             type="warning"
             showIcon
             icon={<WarningOutlined />}
@@ -499,20 +591,27 @@ const ConversationFormModal = ({
           label={
             <Space>
               {t('chat.form.temperature')}
-              <Tooltip title={
-                isAzureModel 
-                  ? "Azure 模型仅支持温度值 1.0" 
-                  : "Temperature控制AI回复的创造性。0=精确，1=创造性"
-              }>
+              <Tooltip
+                title={
+                  isAzureModel
+                    ? t('chat.azure.tempLimitTooltip', {
+                      value: AZURE_FIXED_TEMPERATURE
+                    })
+                    : t('chat.form.temperature.tooltipShort', {
+                      min: TEMPERATURE_MIN,
+                      max: TEMPERATURE_MAX
+                    })
+                }
+              >
                 <InfoCircleOutlined style={{ color: '#999' }} />
               </Tooltip>
             </Space>
           }
         >
           <Slider
-            min={0}
-            max={1}
-            step={0.1}
+            min={TEMPERATURE_MIN}
+            max={TEMPERATURE_MAX}
+            step={TEMPERATURE_STEP}
             value={temperatureValue}
             onChange={(value) => {
               if (!isAzureModel) {
@@ -522,9 +621,9 @@ const ConversationFormModal = ({
             }}
             disabled={isAzureModel}
             marks={{
-              0: t('chat.form.temperature.precise'),
-              0.5: t('chat.form.temperature.balanced'),
-              1: t('chat.form.temperature.creative')
+              [TEMPERATURE_MIN]: t('chat.form.temperature.precise'),
+              [TEMPERATURE_MID]: t('chat.form.temperature.balanced'),
+              [TEMPERATURE_MAX]: t('chat.form.temperature.creative')
             }}
           />
         </Form.Item>
@@ -533,10 +632,10 @@ const ConversationFormModal = ({
           name="priority"
           label={t('chat.form.priority')}
         >
-          <InputNumber 
-            min={0} 
-            max={10} 
-            style={{ width: '100%' }} 
+          <InputNumber
+            min={PRIORITY_MIN}
+            max={PRIORITY_MAX}
+            style={{ width: '100%' }}
           />
         </Form.Item>
 

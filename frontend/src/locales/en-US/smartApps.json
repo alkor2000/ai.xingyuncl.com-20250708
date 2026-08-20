@@ -1,0 +1,40 @@
+{
+  "smartApps.searchPlaceholder": "Search app name or description...",
+  "smartApps.loading": "Loading apps...",
+  "smartApps.configLoadFailed": "Failed to fetch config",
+  
+  "smartApps.filter.all": "All",
+  "smartApps.filter.favorites": "My Favorites",
+  
+  "smartApps.card.hot": "Hot",
+  "smartApps.card.uncategorized": "Uncategorized",
+  "smartApps.card.noDescription": "No description",
+  "smartApps.card.creditsTooltip": "Credits consumed per use",
+  "smartApps.card.creditsUnit": "credits",
+  "smartApps.card.categorySeparator": ", ",
+  
+  "smartApps.favorite.add": "Favorite",
+  "smartApps.favorite.remove": "Unfavorite",
+  "smartApps.favorite.addSuccess": "Added to favorites",
+  "smartApps.favorite.removeSuccess": "Removed from favorites",
+  
+  "smartApps.empty.favorites": "No favorite apps",
+  "smartApps.empty.search": "No matching apps found",
+  "smartApps.empty.default": "No apps available",
+  
+  "smartApps.chat.defaultAppName": "Smart App",
+  "smartApps.chat.restoreTooltip": "Restore {{name}}",
+  "smartApps.chat.minimize": "Minimize",
+  "smartApps.chat.close": "Close (ESC)",
+  "smartApps.chat.confirmOk": "OK",
+  "smartApps.chat.confirmCancel": "Cancel",
+  "smartApps.chat.emptyHint": "Send a message to start the conversation",
+  "smartApps.chat.inputPlaceholder": "Type a message. Enter to send, Shift+Enter for a new line, ESC to close",
+  "smartApps.chat.resizeTooltip": "Drag to resize",
+  "smartApps.chat.loadFailed": "Failed to load conversation",
+  "smartApps.chat.sendFailedWithReason": "Failed to send: {{reason}}",
+  "smartApps.chat.sendFailedRetry": "Failed to send. Please try again",
+  "smartApps.chat.requestFailed": "Request failed",
+  "smartApps.chat.clearSuccess": "Conversation cleared",
+  "smartApps.chat.clearFailed": "Failed to clear conversation"
+}

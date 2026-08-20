@@ -19,7 +19,8 @@ import {
   BrowserRouter as Router, 
   Routes, 
   Route, 
-  Navigate 
+  Navigate,
+  useLocation 
 } from 'react-router-dom'
 import { ConfigProvider, Spin, message } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
@@ -39,6 +40,7 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import OrgApplication from './pages/auth/OrgApplication'
 import SSOCallback from './pages/auth/SSOCallback'
+import IdentityCallback from './pages/auth/IdentityCallback'
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
 import Profile from './pages/profile/Profile'
@@ -127,6 +129,7 @@ const LazyLoadingWrapper = ({ children }) => (
 
 // 路由守卫组件
 const ProtectedRoute = ({ children }) => {
+  const location = useLocation()
   const { isAuthenticated, loading } = useAuthStore()
   const { initSystemConfig } = useSystemConfigStore()
   const { t } = useTranslation()
@@ -153,7 +156,7 @@ const ProtectedRoute = ({ children }) => {
   
   if (!isAuthenticated) {
     message.warning(t('auth.loginRequired'))
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
   
   return children
@@ -161,12 +164,26 @@ const ProtectedRoute = ({ children }) => {
 
 // 公开路由组件
 const PublicRoute = ({ children }) => {
+  const location = useLocation()
   const { isAuthenticated } = useAuthStore()
-  
+
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
+    const from =
+      location.state?.from
+
+    const returnTo =
+      from?.pathname
+        ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+        : '/dashboard'
+
+    return (
+      <Navigate
+        to={returnTo}
+        replace
+      />
+    )
   }
-  
+
   return children
 }
 
@@ -322,6 +339,13 @@ const App = () => {
               <Route 
                 path="/auth/sso-callback" 
                 element={<SSOCallback />} 
+              />
+
+              {/* PKU AI Lab Identity Center登录回调。
+                  不包裹PublicRoute，避免登录态建立后被提前重定向。 */}
+              <Route
+                path="/auth/identity/callback"
+                element={<IdentityCallback />}
               />
 
               {/* v1.4.0 思维导图公开分享路由 - 无需登录，登录用户也可访问 */}

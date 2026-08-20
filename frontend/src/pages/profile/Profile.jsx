@@ -1,15 +1,33 @@
 /**
  * 个人中心页面
- * 
+ *
  * 功能：
  * 1. 基本信息展示与编辑（用户名/手机号）
  * 2. 修改密码（必须验证原密码）
  * 3. 积分统计与历史查询
  * 4. 权限列表展示
- * 
- * 修复：恢复原密码验证，修改密码弹窗加回原密码输入框
- * 增强：超级管理员修改密码强制强密码（≥8位+大小写+数字），
- *       新密码框下常驻规则提示+前端校验与后端规则对齐（避免前端放行后端打回）
+ *
+ * 安全说明：即使用户已通过 JWT 认证，修改密码仍需验证原密码，
+ *          防止 token 被盗后攻击者永久接管账号。
+ *
+ * ── 本次国际化修复要点（为什么这样写）──
+ * 1. 补齐两个缺失键：
+ *    - profile.password.old.placeholder 此前语言包两侧均无此键且 t() 未传兜底，
+ *      导致输入框 placeholder 在中英文环境都直接显示键名字符串，是可见 Bug；
+ *    - profile.password.oldPasswordWrong 同样缺失。
+ *    注：该键与 profile.password.old 构成"前缀-延伸"关系，i18next 的 deepFind
+ *    会先用完整字符串键命中扁平语言包，故不会被 profile.password.old 截断，
+ *    这与既有的 profile.password.old.required 是同一模式。
+ * 2. 强密码校验的 4 个规则项、整句错误模板、常驻规则提示原为硬编码中文，
+ *    且规则项拼接用了中文顿号"、"（CJK 标点，只查汉字的正则扫不到），
+ *    现全部走 i18n：规则项独立成键，连接符走 rule.separator（中"、"/英", "），
+ *    整句用 strongRuleMissing 插值（中英语序不同，不可在 JS 里分段拼接）。
+ * 3. 后端 errors 数组的拼接分隔符原为全角分号"；"，改走 profile.errorSeparator。
+ * 4. 密码位数由模块常量统一提供并以 {{min}} 插值传入文案，
+ *    避免"常量改了但文案里的数字没改"的不一致。
+ * 5. 时间列与注册时间的 toLocale*String 原未传 locale，英文环境仍按浏览器
+ *    默认区域输出，现统一传 i18n.language。
+ * 6. console.error 改为英文：开发者日志与界面文案职责分离，不进语言包。
  */
 
 import React, { useState, useEffect } from 'react'
@@ -46,12 +64,26 @@ import {
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import './Profile.less'
+import IdentityAccountLinkPanel from '../../components/auth/IdentityAccountLinkPanel'
 
 const { Title, Text } = Typography
 const { TabPane } = Tabs
 
+/**
+ * 密码长度下限常量
+ * 与后端 AuthControllerRefactored._validateSuperAdminPassword 保持一致：
+ * 超级管理员 ≥8 位且含大小写与数字，其余角色仅 ≥6 位。
+ * 抽为常量后作为 {{min}} 插值传入文案，防止两处数字不同步。
+ */
+const PASSWORD_MIN_LENGTH_SUPER_ADMIN = 8
+const PASSWORD_MIN_LENGTH_NORMAL = 6
+
+/** 积分历史每页条数 */
+const CREDIT_HISTORY_PAGE_SIZE = 10
+
 const Profile = () => {
-  const { t } = useTranslation()
+  // i18n 一并取出，供 toLocale*String 传入当前语言使用
+  const { t, i18n } = useTranslation()
   const { user, permissions, updateProfile, changePassword, getCreditHistory } = useAuthStore()
   const [profileForm] = Form.useForm()
   const [passwordForm] = Form.useForm()
@@ -61,14 +93,21 @@ const Profile = () => {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPagination, setHistoryPagination] = useState({
     current: 1,
-    pageSize: 10,
+    pageSize: CREDIT_HISTORY_PAGE_SIZE,
     total: 0
   })
 
-  // 是否超级管理员：决定改密码是否走强密码规则（与后端 _validateSuperAdminPassword 保持一致）
+  // 是否超级管理员：决定改密码是否走强密码规则（与后端校验规则保持一致）
   const isSuperAdmin = user?.role === 'super_admin'
 
-  // 角色显示配置
+  /**
+   * 角色显示配置
+   * 定义在组件内而非模块级：模块级常量在文件加载时求值一次，
+   * 语言切换后不会重算，会固化为首次加载时的语言。
+   * 放在渲染期构建可天然跟随语言切换。
+   * 注意 role.admin 的实际生效值来自 admin.json（"组管理员"/"Group Admin"），
+   * 因 index.js 中 admin 在 common 之后展开会覆盖同名键，此为预期行为。
+   */
   const roleConfig = {
     'super_admin': { name: t('role.super_admin'), color: 'red' },
     'admin': { name: t('role.admin'), color: 'blue' },
@@ -76,35 +115,65 @@ const Profile = () => {
   }
 
   /**
+   * 把后端返回的 errors 数组拼成单行提示
+   * 分隔符走 i18n（中文全角"；" / 英文"; "），标点属译文的一部分。
+   */
+  const formatServerErrors = (errors) => {
+    return Array.isArray(errors) ? errors.join(t('profile.errorSeparator')) : errors
+  }
+
+  /**
    * 超级管理员强密码前端校验（与后端规则一致：≥8位+大写+小写+数字）
-   * 一次性收集所有未满足项，给出完整要求+当前缺少哪些，避免逐条试错。
-   * 返回 Promise.resolve() 通过，否则 Promise.reject(完整错误文案)。
+   *
+   * 一次性收集所有未满足项，给出"完整要求 + 当前缺少哪些"，避免用户逐条试错。
+   * 各规则项与连接符均取自语言包：连接符在中文为顿号、英文为逗号加空格，
+   * 若在此处硬编码 join('、') 会在英文环境露出 CJK 标点。
+   * 返回 Promise.resolve() 视为通过，否则 reject 完整错误文案。
    */
   const validateSuperAdminPassword = (_, value) => {
     // 空值交给 required 规则处理，这里只在有值时校验强度
     if (!value) {
       return Promise.resolve()
     }
+
     const missing = []
-    if (value.length < 8) missing.push('至少8位')
-    if (!/[A-Z]/.test(value)) missing.push('大写字母')
-    if (!/[a-z]/.test(value)) missing.push('小写字母')
-    if (!/[0-9]/.test(value)) missing.push('数字')
+    if (value.length < PASSWORD_MIN_LENGTH_SUPER_ADMIN) {
+      missing.push(t('profile.password.rule.minLength', { min: PASSWORD_MIN_LENGTH_SUPER_ADMIN }))
+    }
+    if (!/[A-Z]/.test(value)) {
+      missing.push(t('profile.password.rule.uppercase'))
+    }
+    if (!/[a-z]/.test(value)) {
+      missing.push(t('profile.password.rule.lowercase'))
+    }
+    if (!/[0-9]/.test(value)) {
+      missing.push(t('profile.password.rule.digit'))
+    }
 
     if (missing.length === 0) {
       return Promise.resolve()
     }
+
+    // 整句插值：中英文的"要求描述 + 缺少项"语序不同，必须交给语言包组织
     return Promise.reject(
-      new Error(`超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字。当前缺少：${missing.join('、')}`)
+      new Error(
+        t('profile.password.strongRuleMissing', {
+          min: PASSWORD_MIN_LENGTH_SUPER_ADMIN,
+          missing: missing.join(t('profile.password.rule.separator'))
+        })
+      )
     )
   }
 
-  // 新密码校验规则：超管走强密码自定义校验，其他角色保持≥6位
+  // 新密码校验规则：超管走强密码自定义校验，其他角色保持长度下限
   const newPasswordRules = [
     { required: true, message: t('profile.password.new.required') },
     isSuperAdmin
       ? { validator: validateSuperAdminPassword }
-      : { min: 6, message: t('profile.password.new.min') }
+      : {
+          min: PASSWORD_MIN_LENGTH_NORMAL,
+          message: t('profile.password.new.min', { min: PASSWORD_MIN_LENGTH_NORMAL })
+        }
   ]
 
   // 初始化表单数据
@@ -129,7 +198,7 @@ const Profile = () => {
   const loadCreditHistory = async (page = 1) => {
     setHistoryLoading(true)
     try {
-      const result = await getCreditHistory(page, 10)
+      const result = await getCreditHistory(page, CREDIT_HISTORY_PAGE_SIZE)
       setCreditHistory(result.history)
       setHistoryPagination({
         current: result.pagination.page,
@@ -156,13 +225,12 @@ const Profile = () => {
       message.success(t('profile.update.success'))
     } catch (error) {
       if (error.response?.status === 400 && error.response?.data?.data?.errors) {
-        const errors = error.response.data.data.errors
-        const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
-        message.error(errorMessage)
+        // 后端字段校验错误：原样展示（后端文案恒为中文，属服务端职责）
+        message.error(formatServerErrors(error.response.data.data.errors))
       } else {
         message.error(error.response?.data?.message || t('profile.update.failed'))
       }
-      console.error('更新个人信息失败:', error)
+      console.error('Failed to update profile:', error)
     } finally {
       setLoading(false)
     }
@@ -170,9 +238,8 @@ const Profile = () => {
 
   /**
    * 修改密码 - 必须验证原密码
-   * 
-   * 安全说明：即使用户已通过JWT认证，修改密码仍需验证原密码
-   * 防止 token 被盗后攻击者永久接管账号
+   *
+   * 原密码由后端 bcrypt.compare 校验，401 表示原密码错误，单独给出提示。
    */
   const handleChangePassword = async (values) => {
     setLoading(true)
@@ -184,28 +251,33 @@ const Profile = () => {
       passwordForm.resetFields()
     } catch (error) {
       if (error.response?.status === 400 && error.response?.data?.data?.errors) {
-        const errors = error.response.data.data.errors
-        const errorMessage = Array.isArray(errors) ? errors.join('；') : errors
-        message.error(errorMessage)
+        message.error(formatServerErrors(error.response.data.data.errors))
       } else if (error.response?.status === 401) {
         // 原密码错误
         message.error(error.response?.data?.message || t('profile.password.oldPasswordWrong'))
       } else {
         message.error(error.response?.data?.message || t('profile.password.changeFailed'))
       }
-      console.error('修改密码失败:', error)
+      console.error('Failed to change password:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  // 积分历史表格列
+  /**
+   * 积分历史表格列
+   *
+   * 定义在渲染期而非 useMemo：内部含 t() 与 i18n.language，
+   * 若用 useMemo 缓存则必须把 t 加入依赖，否则语言切换后列头与
+   * 时间格式不刷新。此处数据量小，直接每次渲染重建更简单可靠。
+   */
   const creditHistoryColumns = [
     {
       title: t('profile.creditHistory.time'),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (text) => new Date(text).toLocaleString()
+      // 必须传 i18n.language，否则英文环境仍按浏览器默认区域格式化
+      render: (text) => (text ? new Date(text).toLocaleString(i18n.language) : t('profile.unknown'))
     },
     {
       title: t('profile.creditHistory.type'),
@@ -218,6 +290,7 @@ const Profile = () => {
           'chat_consume': { text: t('profile.creditHistory.type.chatConsume'), color: 'blue' },
           'system_refund': { text: t('profile.creditHistory.type.systemRefund'), color: 'orange' }
         }
+        // 未收录的交易类型直接展示原始枚举值（技术标识，不翻译）
         const config = typeMap[type] || { text: type, color: 'default' }
         return <Tag color={config.color}>{config.text}</Tag>
       }
@@ -284,7 +357,10 @@ const Profile = () => {
                 </Space>
               </Descriptions.Item>
               <Descriptions.Item label={t('profile.registerTime')}>
-                {new Date(user?.created_at).toLocaleDateString()}
+                {/* created_at 缺失时不可直接 new Date(undefined)，会渲染出 Invalid Date */}
+                {user?.created_at
+                  ? new Date(user.created_at).toLocaleDateString(i18n.language)
+                  : t('profile.unknown')}
               </Descriptions.Item>
             </Descriptions>
 
@@ -384,6 +460,19 @@ const Profile = () => {
                 </Form>
               </TabPane>
 
+              <TabPane
+                tab={t(
+                  'profile.tabs.identity',
+                  {
+                    defaultValue:
+                      '统一身份'
+                  }
+                )}
+                key="identity"
+              >
+                <IdentityAccountLinkPanel />
+              </TabPane>
+
               <TabPane tab={t('profile.tabs.creditHistory')} key="history">
                 <Table
                   columns={creditHistoryColumns}
@@ -394,6 +483,7 @@ const Profile = () => {
                     ...historyPagination,
                     onChange: (page) => loadCreditHistory(page),
                     showSizeChanger: false,
+                    // 第二参数为插值对象而非中文兜底，写法正确
                     showTotal: (total) => t('table.total', { total })
                   }}
                 />
@@ -401,6 +491,7 @@ const Profile = () => {
 
               <TabPane tab={t('profile.tabs.permissions')} key="permissions">
                 <div className="permissions-list">
+                  {/* 权限标识为技术枚举值（如 user.manage），不翻译 */}
                   {permissions.map((perm) => (
                     <Tag key={perm} color="blue" style={{ marginBottom: 8 }}>
                       {perm}
@@ -436,17 +527,25 @@ const Profile = () => {
               { required: true, message: t('profile.password.old.required') }
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder={t('profile.password.old.placeholder')} />
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder={t('profile.password.old.placeholder')}
+            />
           </Form.Item>
 
           {/* 新密码输入框
               - 超级管理员：走强密码校验（≥8位+大小写+数字），框下常驻规则提示
-              - 其他角色：保持≥6位规则 */}
+              - 其他角色：保持长度下限规则
+              extra 文案走 i18n 并以 {{min}} 插值，与校验用的常量同源 */}
           <Form.Item
             name="newPassword"
             label={t('profile.password.new')}
             rules={newPasswordRules}
-            extra={isSuperAdmin ? '超级管理员密码需至少8位，且同时包含大写字母、小写字母和数字' : null}
+            extra={
+              isSuperAdmin
+                ? t('profile.password.strongRule', { min: PASSWORD_MIN_LENGTH_SUPER_ADMIN })
+                : null
+            }
           >
             <Input.Password prefix={<LockOutlined />} />
           </Form.Item>

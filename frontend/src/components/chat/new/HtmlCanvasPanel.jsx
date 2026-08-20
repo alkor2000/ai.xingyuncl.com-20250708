@@ -16,21 +16,53 @@
  *   - 全屏状态下右上角显示悬浮退出按钮
  *   - API不支持时降级为CSS模拟全屏（position:fixed）
  *
- * i18n（v1.1）：
- *   - 全屏降级提示、全屏失败提示走 t()（chat.canvas.fullscreenNotSupported / fullscreenFailed）
- *   - 其余文案此前已走 t(...)，根因是 en-US/chat.json 缺 chat.canvas.* key，已在locale侧补齐
+ * HTML提取（历史修复，保留说明以免后人重蹈）：
+ *   本文件曾自行用正则 /```(?:html|HTML)\s*\n([\s\S]*?)```/g 提取代码块。
+ *   该正则为非贪婪匹配且不理解 Markdown 围栏规则，遇到 HTML 内部 JS 里的
+ *   反引号字符串字面量（如 jsonStr.startsWith('```json')）会提前闭合，
+ *   导致 iframe 拿到残缺 HTML（script 未闭合、缺 </html>）渲染失败，
+ *   工具栏"复制代码"也复制到被截断的内容。
+ *   现统一使用 utils/htmlBlockParser 的严格 CommonMark 逐行扫描解析器，
+ *   与 Chat 页面（判断是否弹画布、统计块数）共用同一口径。
  *
- * v1.2 修复（HTML代码块被内部反引号截断导致预览失败 / 复制不完整）：
- *   - 移除本地的 extractHtmlBlocks / collectHtmlFromMessages 正则实现
- *   - 改为统一使用 utils/htmlBlockParser 的严格 CommonMark 逐行扫描解析器
- *   - 根因：旧正则 /```(?:html|HTML)\s*\n([\s\S]*?)```/g 为非贪婪匹配，
- *     不理解 Markdown 围栏规则，遇到 HTML 内部 JS 代码里的反引号字符串
- *     字面量（如 jsonStr.startsWith('```json')）就提前闭合代码块，
- *     导致 iframe 拿到残缺 HTML（script 未闭合、缺 </html>）渲染失败，
- *     且工具栏"复制代码"复制的 currentHtml 同样被截断。
- *   - Markdown 正文显示正常是因为 remank/remark 严格遵循 CommonMark：
- *     闭合围栏必须行首缩进<=3 且该行反引号后无其它内容，被截断处不满足。
- *   - 现在与 Chat 页面（是否弹画布/块数统计）共用同一解析口径，避免不一致。
+ * ============================================================
+ * 国际化关键决策
+ * ============================================================
+ *
+ * 【1】剥离全部 13 处兜底
+ *   原代码形如 t('chat.canvas.desktop') || '桌面'，共 11 处 || 形式
+ *   与 2 处 t(key, '中文') 第二参数形式。
+ *   经核查，这 12 个键在中英两侧语言包均真实存在，兜底从未生效过，
+ *   属纯防御性遗留。兜底的危害在于：一旦键真的缺失，中文环境完全正常，
+ *   英文环境静默显示中文，问题被永久隐藏。故一律剥离，让缺键立即暴露。
+ *
+ * 【2】修正 fullscreenFailed 的三参数调用 bug  ★实际显示缺陷
+ *   原代码：t('chat.canvas.fullscreenFailed', '全屏操作失败：{{error}}', { error })
+ *   i18next 的签名是 t(key, options)。第二参数为字符串时被当作 defaultValue，
+ *   第三个参数会被直接忽略，因此 {{error}} 永远不会被插值，
+ *   界面上会原样显示字面量 "{{error}}"。
+ *   现改为标准两参数 t(key, { error })，并按 error.message 是否存在
+ *   分流到 fullscreenFailed（带原因）或 fullscreenFailedNoReason（无原因），
+ *   冒号写在译文内，不在 JS 中拼接。
+ *
+ * 【3】删除 DEVICE_SIZES 的 label 死字段
+ *   三个 label（桌面/平板/手机）从未被渲染 —— 设备切换 Tooltip 走
+ *   t('chat.canvas.desktop|tablet|mobile')。原注释已自述"保留作数据说明"，
+ *   但含中文的死字段会持续污染 CJK 残留扫描结果，造成后续排查干扰，故删除。
+ *
+ * 【4】handleToggleFullscreen 的 useCallback 保留 t 依赖
+ *   判据不是"是不是 hook"，而是"重跑代价是否可接受"。
+ *   本 callback 未出现在任何 useEffect 的依赖数组中（仅被按钮 onClick 引用），
+ *   因此语言切换导致它重建不产生任何副作用，加 t 依赖是正确写法。
+ *   反例见 SmartAppChatModal：那里的 loadConversation 被初始化 effect 依赖，
+ *   加 t 会经依赖链传导触发重新请求，必须改用 tRef 模式。
+ *
+ * 【5】不翻译的内容
+ *   Error('Fullscreen API not supported') 等内部错误（开发者信息，且这些
+ *   Error 对象不会展示给用户，只用于 Promise.reject 的控制流）、
+ *   console.error 日志、iframe 的 title="HTML Preview"（技术标识，
+ *   供屏幕阅读器识别 iframe 用途，非界面可见文案）、
+ *   块序号 "1 / 3"（纯数字与符号）。
  *
  * Props:
  *   - messages: 消息列表
@@ -55,7 +87,7 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { message as antMessage } from 'antd'
-// v1.2: 统一使用共享的 CommonMark 围栏解析器，替代原有易误闭合的正则
+// 统一使用共享的 CommonMark 围栏解析器，替代原有易误闭合的正则
 import { collectHtmlFromMessages } from '../../../utils/htmlBlockParser'
 import './HtmlCanvasPanel.less'
 
@@ -63,17 +95,22 @@ const { Text } = Typography
 
 // ================================================================
 // 设备预览尺寸配置
-// （注：label 字段当前未在 UI 渲染，Tooltip 使用 t('chat.canvas.*')，保留作数据说明）
+// 仅保留 width；原 label 字段（桌面/平板/手机）从未渲染，已删除，
+// 设备名称统一由 t('chat.canvas.desktop|tablet|mobile') 提供
 // ================================================================
 const DEVICE_SIZES = {
-  desktop: { width: '100%', label: '桌面' },
-  tablet: { width: '768px', label: '平板' },
-  mobile: { width: '375px', label: '手机' }
+  desktop: { width: '100%' },
+  tablet: { width: '768px' },
+  mobile: { width: '375px' }
 }
+
+/** iframe 聚焦延时：等待 iframe 完成渲染后再 focus */
+const FOCUS_DELAY_MS = 200
 
 // ================================================================
 // 浏览器原生Fullscreen API兼容性封装
 // 处理不同浏览器的前缀差异（webkit/moz/ms）
+// 注：本区块内的 Error 消息为开发者控制流信息，不展示给用户，故不国际化
 // ================================================================
 
 /**
@@ -82,7 +119,7 @@ const DEVICE_SIZES = {
  * @returns {Promise<void>}
  */
 const requestFullscreen = (element) => {
-  if (!element) return Promise.reject(new Error('元素不存在'))
+  if (!element) return Promise.reject(new Error('Target element does not exist'))
 
   if (element.requestFullscreen) {
     return element.requestFullscreen()
@@ -159,7 +196,6 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   // ================================================================
   // 从消息中提取所有HTML代码块
-  // v1.2: 使用 utils/htmlBlockParser 的严格 CommonMark 解析器
   // ================================================================
   const htmlBlocks = useMemo(() => {
     return collectHtmlFromMessages(messages)
@@ -197,7 +233,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
       } catch (e) {
         // 跨域情况下contentWindow.focus可能失败，静默忽略
       }
-    }, 200)
+    }, FOCUS_DELAY_MS)
   }, [])
 
   /**
@@ -258,14 +294,16 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
    * 切换全屏
    * 调用浏览器原生Fullscreen API，让浏览器UI完全隐藏
    * API不支持或调用失败时降级为CSS模拟全屏
-   * v1.1 i18n: 提示文案走 t()
+   *
+   * 依赖数组含 t 是正确的：本 callback 不被任何 useEffect 依赖，
+   * 重建不产生副作用，而内部需要以当前语言弹出提示
    */
   const handleToggleFullscreen = useCallback(async () => {
     // 检测API支持
     if (!isFullscreenSupported()) {
       // 降级：直接切换React state，由CSS .fullscreen 类模拟全屏
       setIsFullscreen(prev => !prev)
-      antMessage.info(t('chat.canvas.fullscreenNotSupported', '当前浏览器不支持真全屏，使用CSS模拟全屏'))
+      antMessage.info(t('chat.canvas.fullscreenNotSupported'))
       return
     }
 
@@ -283,9 +321,16 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         }
       }
     } catch (error) {
-      console.error('全屏切换失败:', error)
-      antMessage.error(t('chat.canvas.fullscreenFailed', '全屏操作失败：{{error}}', { error: error.message || '' }))
-      // 失败时降级
+      console.error('Failed to toggle fullscreen:', error)
+      // 浏览器抛出的原因为技术诊断信息，作为 {{error}} 插值内容；
+      // 无原因时走独立的无占位符键，冒号形态由译文自行决定
+      const reason = error?.message || ''
+      antMessage.error(
+        reason
+          ? t('chat.canvas.fullscreenFailed', { error: reason })
+          : t('chat.canvas.fullscreenFailedNoReason')
+      )
+      // 失败时降级为CSS模拟全屏
       setIsFullscreen(prev => !prev)
     }
   }, [t])
@@ -305,7 +350,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   /**
    * 复制HTML代码
-   * v1.2: currentHtml 现在由严格解析器提供，不会再被内部反引号截断
+   * currentHtml 由严格解析器提供，不会被内部反引号截断
    * 兼容非 HTTPS / 老浏览器缺失 navigator.clipboard 的降级方案
    */
   const handleCopyHtml = async () => {
@@ -326,10 +371,10 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         document.body.removeChild(textarea)
         if (!ok) throw new Error('execCommand copy failed')
       }
-      antMessage.success(t('chat.canvas.copySuccess') || '代码已复制')
+      antMessage.success(t('chat.canvas.copySuccess'))
     } catch (error) {
-      console.error('复制HTML代码失败:', error)
-      antMessage.error(t('chat.canvas.copyFailed') || '复制失败')
+      console.error('Failed to copy HTML code:', error)
+      antMessage.error(t('chat.canvas.copyFailed'))
     }
   }
 
@@ -361,8 +406,8 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
             className="fullscreen-btn"
           >
             {isFullscreen
-              ? (t('chat.canvas.exitFullscreen') || '退出全屏')
-              : (t('chat.canvas.fullscreen') || '全屏预览')
+              ? t('chat.canvas.exitFullscreen')
+              : t('chat.canvas.fullscreen')
             }
           </Button>
 
@@ -376,6 +421,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                 onClick={handlePrev}
                 disabled={currentIndex <= 0}
               />
+              {/* 纯数字与斜杠，无需国际化 */}
               <Tag color="blue" style={{ margin: '0 4px', userSelect: 'none' }}>
                 {currentIndex + 1} / {htmlBlocks.length}
               </Tag>
@@ -394,7 +440,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         <div className="toolbar-right">
           {/* 设备预览切换 */}
           <Space size={2}>
-            <Tooltip title={t('chat.canvas.desktop') || '桌面'}>
+            <Tooltip title={t('chat.canvas.desktop')}>
               <Button
                 type={deviceMode === 'desktop' ? 'primary' : 'text'}
                 size="small"
@@ -403,7 +449,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                 ghost={deviceMode === 'desktop'}
               />
             </Tooltip>
-            <Tooltip title={t('chat.canvas.tablet') || '平板'}>
+            <Tooltip title={t('chat.canvas.tablet')}>
               <Button
                 type={deviceMode === 'tablet' ? 'primary' : 'text'}
                 size="small"
@@ -412,7 +458,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                 ghost={deviceMode === 'tablet'}
               />
             </Tooltip>
-            <Tooltip title={t('chat.canvas.mobile') || '手机'}>
+            <Tooltip title={t('chat.canvas.mobile')}>
               <Button
                 type={deviceMode === 'mobile' ? 'primary' : 'text'}
                 size="small"
@@ -426,21 +472,23 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           <div className="toolbar-divider" />
 
           {/* 刷新和复制 */}
-          <Tooltip title={t('chat.canvas.refresh') || '刷新'}>
+          <Tooltip title={t('chat.canvas.refresh')}>
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleRefresh} />
           </Tooltip>
-          <Tooltip title={t('chat.canvas.copyCode') || '复制代码'}>
+          <Tooltip title={t('chat.canvas.copyCode')}>
             <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyHtml} />
           </Tooltip>
 
           {/* 关闭按钮 */}
-          <Button
-            type="text"
-            size="small"
-            icon={<CloseOutlined />}
-            onClick={onClose}
-            className="close-btn"
-          />
+          <Tooltip title={t('chat.canvas.close')}>
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+              className="close-btn"
+            />
+          </Tooltip>
         </div>
       </div>
 
@@ -457,11 +505,12 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           {isStreaming && currentIndex === htmlBlocks.length - 1 && (
             <div className="streaming-hint">
               <Text type="secondary" style={{ fontSize: '12px' }}>
-                {t('chat.canvas.streaming') || '内容生成中，显示最近完成的代码...'}
+                {t('chat.canvas.streaming')}
               </Text>
             </div>
           )}
 
+          {/* title 为技术标识，供屏幕阅读器识别 iframe 用途，非界面可见文案 */}
           <iframe
             key={`${currentIndex}-${refreshKey}`}
             ref={iframeRef}
@@ -489,7 +538,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           onClick={handleToggleFullscreen}
           className="canvas-floating-exit-btn"
         >
-          {t('chat.canvas.exitFullscreen') || '退出全屏'}
+          {t('chat.canvas.exitFullscreen')}
         </Button>
       )}
     </div>

@@ -1,0 +1,40 @@
+{
+  "smartApps.searchPlaceholder": "搜索应用名称或描述...",
+  "smartApps.loading": "加载应用中...",
+  "smartApps.configLoadFailed": "获取配置失败",
+  
+  "smartApps.filter.all": "全部",
+  "smartApps.filter.favorites": "我的收藏",
+  
+  "smartApps.card.hot": "热门",
+  "smartApps.card.uncategorized": "未分类",
+  "smartApps.card.noDescription": "暂无描述",
+  "smartApps.card.creditsTooltip": "每次使用消耗积分",
+  "smartApps.card.creditsUnit": "积分",
+  "smartApps.card.categorySeparator": "、",
+  
+  "smartApps.favorite.add": "收藏",
+  "smartApps.favorite.remove": "取消收藏",
+  "smartApps.favorite.addSuccess": "收藏成功",
+  "smartApps.favorite.removeSuccess": "已取消收藏",
+  
+  "smartApps.empty.favorites": "暂无收藏的应用",
+  "smartApps.empty.search": "没有找到匹配的应用",
+  "smartApps.empty.default": "暂无可用应用",
+  
+  "smartApps.chat.defaultAppName": "智能应用",
+  "smartApps.chat.restoreTooltip": "恢复 {{name}}",
+  "smartApps.chat.minimize": "最小化",
+  "smartApps.chat.close": "关闭 (ESC)",
+  "smartApps.chat.confirmOk": "确定",
+  "smartApps.chat.confirmCancel": "取消",
+  "smartApps.chat.emptyHint": "发送消息开始对话",
+  "smartApps.chat.inputPlaceholder": "输入消息，Enter 发送，Shift+Enter 换行，ESC 关闭",
+  "smartApps.chat.resizeTooltip": "拖动调整大小",
+  "smartApps.chat.loadFailed": "加载会话失败",
+  "smartApps.chat.sendFailedWithReason": "发送失败：{{reason}}",
+  "smartApps.chat.sendFailedRetry": "发送失败，请重试",
+  "smartApps.chat.requestFailed": "请求失败",
+  "smartApps.chat.clearSuccess": "对话已清空",
+  "smartApps.chat.clearFailed": "清空会话失败"
+}

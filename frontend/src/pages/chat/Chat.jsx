@@ -60,6 +60,17 @@
  *     与画布组件的真实提取结果不一致（可能出现有块不弹、或关闭后又被自动弹出）。
  *   - 现在 Chat 与 HtmlCanvasPanel 共用同一个严格 CommonMark 解析器，口径完全一致。
  * 
+ * v4.3 国际化收尾：
+ *   - 24处硬编码中文改为chat.json翻译键，其中6处为假兜底(||)剥离、4处复用本文件
+ *     内已在使用的既有键、16处为真实遗漏新建键
+ *   - handleTogglePin的置顶/取消置顶toggle结果提示新建*Result独立键，与既有
+ *     pin/unpin按钮态标签语义不同不合并
+ *   - handleExportChat内的对话导出文本(标题/模型/时间/用户标识等标签)全部改为
+ *     翻译键——导出文件会写入本地磁盘由用户在文件系统中查看，属用户可见文本，
+ *     区别于纯业务数据不译规则
+ *   - formatDateTime内toLocaleString硬编码'zh-CN'改为i18n.language动态传入，
+ *     修复英文环境下导出文件时间仍按中文格式渲染的问题
+ * 
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -165,7 +176,7 @@ const useHtmlBlocks = (messages) => {
 // ================================================================
 
 const Chat = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
@@ -477,7 +488,7 @@ const Chat = () => {
 
   const handleUpdateSettings = async (values) => {
     const targetConversation = editingConversation
-    if (!targetConversation) { message.error('未找到要编辑的对话'); return }
+    if (!targetConversation) { message.error(t('chat.conversation.notFoundToEdit')); return }
     try {
       await updateConversation(targetConversation.id, values)
       setShowSettings(false)
@@ -511,7 +522,8 @@ const Chat = () => {
       const newPriority = (currentPriority > 0) ? 0 : 5
       await updateConversation(conversationId, { priority: newPriority })
       await getConversations(true)
-      message.success(newPriority > 0 ? '已置顶' : '已取消置顶')
+      /* toggle结果提示，与既有pin/unpin(按钮态标签)语义不同，用独立的*Result键 */
+      message.success(newPriority > 0 ? t('chat.conversation.pinnedResult') : t('chat.conversation.unpinnedResult'))
     } catch (error) {
       message.error(t('chat.conversation.pin.failed'))
     }
@@ -521,9 +533,9 @@ const Chat = () => {
     if (!currentConversation || !model) return
     try {
       await updateConversation(currentConversation.id, { model_name: model.name })
-      message.success(`已切换到 ${model.display_name || model.name}`)
+      message.success(t('chat.model.switchSuccess', { model: model.display_name || model.name }))
     } catch (error) {
-      message.error('切换模型失败')
+      message.error(t('chat.model.switchFailed'))
     }
   }
 
@@ -565,7 +577,7 @@ const Chat = () => {
     }
   }, [inputValue, uploadedImages, uploadedDocument, currentConversation, sendMessage, t, isMobile])
 
-  const handleStopStreaming = () => { stopStreaming(); message.info(t('chat.stopGeneration') || '已停止生成') }
+  const handleStopStreaming = () => { stopStreaming(); message.info(t('chat.stopGeneration')) }
 
   const handleDeleteMessage = async (aiMessageId) => {
     try { await deleteMessagePair(aiMessageId) } catch (error) { console.error('Delete message error:', error); throw error }
@@ -607,8 +619,8 @@ const Chat = () => {
         const count = newFiles.length
         message.success(
           count === 1
-            ? (t('chat.image.upload.success') || '图片上传成功')
-            : (t('chat.image.upload.multiSuccess') || `成功上传 ${count} 张图片`)
+            ? t('chat.image.upload.success')
+            : t('chat.image.upload.multiSuccess', { count })
         )
 
         if (!isMobile) setTimeout(() => inputRef.current?.focus(), 100)
@@ -617,7 +629,7 @@ const Chat = () => {
       }
     } catch (error) {
       console.error('Image upload error:', error)
-      message.error(t('chat.image.upload.failed') || '图片上传失败')
+      message.error(t('chat.image.upload.failed'))
     } finally {
       setUploading(false)
     }
@@ -662,37 +674,38 @@ const Chat = () => {
   const handleExportChat = () => {
     if (!messages || messages.length === 0) { message.warning(t('chat.export.empty')); return }
     try {
-      const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString('zh-CN', {
+      /* locale跟随当前界面语言，避免英文环境下导出文件时间仍按中文格式渲染 */
+      const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(i18n.language, {
         year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
       })
       const now = new Date()
       const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5)
-      const conversationTitle = currentConversation?.title || '未命名对话'
+      const conversationTitle = currentConversation?.title || t('chat.export.untitledConversation')
       const fileName = `${conversationTitle}_${timestamp}.txt`
 
       let content = '========================================\n'
-      content += `对话标题：${conversationTitle}\n`
-      content += `AI模型：${currentModel?.display_name || currentConversation?.model_name}\n`
-      content += `创建时间：${formatDateTime(currentConversation?.created_at)}\n`
-      content += `导出时间：${formatDateTime(now)}\n`
-      content += `消息数量：${messages.length}\n`
+      content += `${t('chat.export.titleLabel')}${conversationTitle}\n`
+      content += `${t('chat.export.modelLabel')}${currentModel?.display_name || currentConversation?.model_name}\n`
+      content += `${t('chat.export.createdAtLabel')}${formatDateTime(currentConversation?.created_at)}\n`
+      content += `${t('chat.export.exportedAtLabel')}${formatDateTime(now)}\n`
+      content += `${t('chat.export.messageCountLabel')}${messages.length}\n`
       content += '========================================\n\n'
 
       messages.forEach((msg) => {
-        const role = msg.role === 'user' ? '【用户】' : '【AI助手】'
+        const role = msg.role === 'user' ? t('chat.export.userLabel') : t('chat.export.aiLabel')
         const time = formatDateTime(msg.created_at)
         content += `${role} ${time}\n`
         if (msg.files && msg.files.length > 0) {
           msg.files.forEach(f => {
-            const fileType = f.mime_type?.startsWith('image/') ? '图片' : '文档'
-            content += `[${fileType}：${f.original_name}]\n`
+            const fileType = f.mime_type?.startsWith('image/') ? t('chat.image') : t('chat.document')
+            content += `${t('chat.export.fileLabel', { type: fileType, name: f.original_name })}\n`
           })
         } else if (msg.file && msg.file.original_name) {
-          const fileType = msg.file.type?.startsWith('image/') || msg.file.mime_type?.startsWith('image/') ? '图片' : '文档'
-          content += `[${fileType}：${msg.file.original_name}]\n`
+          const fileType = msg.file.type?.startsWith('image/') || msg.file.mime_type?.startsWith('image/') ? t('chat.image') : t('chat.document')
+          content += `${t('chat.export.fileLabel', { type: fileType, name: msg.file.original_name })}\n`
         }
         content += `${msg.content}\n`
-        if (msg.role === 'assistant' && msg.tokens) content += `(消耗 ${msg.tokens} tokens)\n`
+        if (msg.role === 'assistant' && msg.tokens) content += `${t('chat.export.tokensConsumed', { tokens: msg.tokens })}\n`
         content += '\n' + '-'.repeat(40) + '\n\n'
       })
 
@@ -776,9 +789,9 @@ const Chat = () => {
   // ================================================================
 
   const chatMenuItems = [
-    { key: 'home', icon: <HomeOutlined />, label: '返回工作台', onClick: handleBackToHome },
-    { key: 'settings', icon: <SettingOutlined />, label: '对话设置', onClick: () => { if (currentConversation) handleEditConversation(currentConversation) } },
-    { key: 'conversations', icon: <MenuOutlined />, label: '对话列表', onClick: () => setMobileDrawerVisible(true) }
+    { key: 'home', icon: <HomeOutlined />, label: t('chat.menu.backToDashboard'), onClick: handleBackToHome },
+    { key: 'settings', icon: <SettingOutlined />, label: t('chat.conversation.settings'), onClick: () => { if (currentConversation) handleEditConversation(currentConversation) } },
+    { key: 'conversations', icon: <MenuOutlined />, label: t('chat.conversations'), onClick: () => setMobileDrawerVisible(true) }
   ]
 
   // ================================================================
@@ -903,7 +916,7 @@ const Chat = () => {
               {initialLoading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '16px' }}>
                   <Spin size="large" tip={t('status.loading')} />
-                  <div style={{ color: '#666', fontSize: '14px' }}>{t('chat.loadingConversations') || '正在加载对话列表...'}</div>
+                  <div style={{ color: '#666', fontSize: '14px' }}>{t('chat.loadingConversations')}</div>
                 </div>
               ) : !currentConversation ? (
                 <EmptyConversation onCreateConversation={handleQuickCreateConversation} />

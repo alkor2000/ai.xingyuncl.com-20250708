@@ -1,5 +1,5 @@
 /**
- * 存储管理状态管理 - 增强版 v1.1
+ * 存储管理状态管理 - 增强版 v1.2
  * 支持全局文件夹、组织文件夹和个人文件夹
  * 
  * v1.1 更新：
@@ -7,10 +7,19 @@
  * 2. 新增 moveFolder - 文件夹移动（通过删除+重建模拟）
  * 3. 新增 batchMoveFiles - 批量移动文件
  * 4. 新增 getFileById - 根据ID从本地列表获取文件信息
+ * 
+ * v1.2 更新（国际化）：
+ * - 本文件为非React模块（Zustand store），无法使用useTranslation hook
+ * - 改为直接import i18n实例调用i18n.t()获取用户可见的错误提示文案
+ * - console.error日志属开发者诊断信息，统一改为英文标签，不进语言包
+ * - error状态兜底文案（||右侧硬编码中文）全部改为i18n.t()，
+ *   优先复用storage.json已有语义完全匹配的键，
+ *   无匹配项新建"获取/删除/批量操作/保存配置"类失败键
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
+import i18n from '../utils/i18n'
 
 const useStorageStore = create((set, get) => ({
   // ===== 状态 =====
@@ -40,8 +49,8 @@ const useStorageStore = create((set, get) => ({
       set({ files: response.data.data.files, loading: false })
       return response.data.data
     } catch (error) {
-      console.error('获取文件列表失败:', error)
-      set({ error: error.response?.data?.message || '获取文件列表失败', loading: false })
+      console.error('Failed to get file list:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.getFilesFailed'), loading: false })
       throw error
     }
   },
@@ -70,8 +79,8 @@ const useStorageStore = create((set, get) => ({
       set({ uploading: false, uploadProgress: 0 })
       return response.data.data
     } catch (error) {
-      console.error('文件上传失败:', error)
-      set({ error: error.response?.data?.message || '文件上传失败', uploading: false, uploadProgress: 0 })
+      console.error('File upload failed:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.uploadFailed'), uploading: false, uploadProgress: 0 })
       throw error
     }
   },
@@ -90,8 +99,8 @@ const useStorageStore = create((set, get) => ({
       }))
       return true
     } catch (error) {
-      console.error('删除文件失败:', error)
-      set({ error: error.response?.data?.message || '删除文件失败', loading: false })
+      console.error('Failed to delete file:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.deleteFileFailed'), loading: false })
       throw error
     }
   },
@@ -110,8 +119,8 @@ const useStorageStore = create((set, get) => ({
       }))
       return true
     } catch (error) {
-      console.error('批量删除文件失败:', error)
-      set({ error: error.response?.data?.message || '批量删除文件失败', loading: false })
+      console.error('Failed to batch delete files:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.batchDeleteFailed'), loading: false })
       throw error
     }
   },
@@ -129,8 +138,8 @@ const useStorageStore = create((set, get) => ({
       }))
       return true
     } catch (error) {
-      console.error('移动文件失败:', error)
-      set({ error: error.response?.data?.message || '移动文件失败', loading: false })
+      console.error('Failed to move file:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.moveFailed'), loading: false })
       throw error
     }
   },
@@ -151,7 +160,7 @@ const useStorageStore = create((set, get) => ({
           results.success++
         } catch (e) {
           results.failed++
-          console.error(`移动文件 ${fileId} 失败:`, e)
+          console.error(`Failed to move file ${fileId}:`, e)
         }
       }
       
@@ -165,8 +174,8 @@ const useStorageStore = create((set, get) => ({
       
       return results
     } catch (error) {
-      console.error('批量移动文件失败:', error)
-      set({ error: error.response?.data?.message || '批量移动文件失败', loading: false })
+      console.error('Batch move files failed:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.batchMoveRequestFailed'), loading: false })
       throw error
     }
   },
@@ -193,8 +202,8 @@ const useStorageStore = create((set, get) => ({
       
       return response.data.data
     } catch (error) {
-      console.error('重命名文件失败:', error)
-      set({ error: error.response?.data?.message || '重命名文件失败', loading: false })
+      console.error('Failed to rename file:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.renameFileFailed'), loading: false })
       throw error
     }
   },
@@ -213,8 +222,8 @@ const useStorageStore = create((set, get) => ({
       set({ folders: response.data.data, loading: false })
       return response.data.data
     } catch (error) {
-      console.error('获取文件夹列表失败:', error)
-      set({ error: error.response?.data?.message || '获取文件夹列表失败', loading: false })
+      console.error('Failed to get folder list:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.getFoldersFailed'), loading: false })
       throw error
     }
   },
@@ -229,8 +238,8 @@ const useStorageStore = create((set, get) => ({
       set({ folderTree: response.data.data, loading: false })
       return response.data.data
     } catch (error) {
-      console.error('获取文件夹树失败:', error)
-      set({ error: error.response?.data?.message || '获取文件夹树失败', loading: false })
+      console.error('Failed to get folder tree:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.getFolderTreeFailed'), loading: false })
       throw error
     }
   },
@@ -252,8 +261,8 @@ const useStorageStore = create((set, get) => ({
       set({ loading: false })
       return response.data.data
     } catch (error) {
-      console.error('创建文件夹失败:', error)
-      set({ error: error.response?.data?.message || '创建文件夹失败', loading: false })
+      console.error('Failed to create folder:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.createFolderFailed'), loading: false })
       throw error
     }
   },
@@ -277,8 +286,8 @@ const useStorageStore = create((set, get) => ({
       set({ loading: false })
       return response.data.data
     } catch (error) {
-      console.error('重命名文件夹失败:', error)
-      set({ error: error.response?.data?.message || '重命名文件夹失败', loading: false })
+      console.error('Failed to rename folder:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.renameFolderFailed'), loading: false })
       throw error
     }
   },
@@ -294,8 +303,8 @@ const useStorageStore = create((set, get) => ({
       set({ loading: false })
       return true
     } catch (error) {
-      console.error('删除文件夹失败:', error)
-      set({ error: error.response?.data?.message || '删除文件夹失败', loading: false })
+      console.error('Failed to delete folder:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.deleteFolderFailed'), loading: false })
       throw error
     }
   },
@@ -310,7 +319,7 @@ const useStorageStore = create((set, get) => ({
       set({ storageStats: stats })
       return stats
     } catch (error) {
-      console.error('获取存储统计失败:', error)
+      console.error('Failed to get storage stats:', error)
       return null
     }
   },
@@ -323,7 +332,7 @@ const useStorageStore = create((set, get) => ({
       set({ ossConfig: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取OSS配置失败:', error)
+      console.error('Failed to get OSS config:', error)
       return null
     }
   },
@@ -335,8 +344,8 @@ const useStorageStore = create((set, get) => ({
       set({ loading: false })
       return true
     } catch (error) {
-      console.error('保存OSS配置失败:', error)
-      set({ error: error.response?.data?.message || '保存OSS配置失败', loading: false })
+      console.error('Failed to save OSS config:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.saveOSSConfigFailed'), loading: false })
       throw error
     }
   },
@@ -346,7 +355,7 @@ const useStorageStore = create((set, get) => ({
       const response = await apiClient.post('/admin/oss/test', config)
       return response.data.success
     } catch (error) {
-      console.error('测试OSS连接失败:', error)
+      console.error('OSS connection test failed:', error)
       throw error
     }
   },
@@ -360,7 +369,7 @@ const useStorageStore = create((set, get) => ({
       set({ creditConfig: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取积分配置失败:', error)
+      console.error('Failed to get credit config:', error)
       const defaultConfig = { base_credits: 2, credits_per_5mb: 1, max_file_size: 100 }
       set({ creditConfig: defaultConfig })
       return defaultConfig
@@ -374,8 +383,8 @@ const useStorageStore = create((set, get) => ({
       set({ loading: false })
       return true
     } catch (error) {
-      console.error('更新积分配置失败:', error)
-      set({ error: error.response?.data?.message || '更新积分配置失败', loading: false })
+      console.error('Failed to update credit config:', error)
+      set({ error: error.response?.data?.message || i18n.t('storage.updateCreditConfigFailed'), loading: false })
       throw error
     }
   },

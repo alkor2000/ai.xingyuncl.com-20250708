@@ -1,0 +1,179 @@
+{
+  "wiki": {
+    "title": "Knowledge Base",
+    "subtitle": "Manage your knowledge documents",
+    "searchPlaceholder": "Search knowledge base...",
+    "loading": "Loading...",
+    "empty": "No knowledge base yet",
+    "noDescription": "No description",
+    "unknownUser": "Unknown",
+    "count": "{{count}} in total",
+
+    "scope": {
+      "all": "All",
+      "personal": "Personal",
+      "team": "Team",
+      "global": "Global",
+      "personalDesc": "Visible only to yourself",
+      "teamDesc": "Visible to members of your group",
+      "globalDesc": "Visible to everyone"
+    },
+
+    "type": {
+      "label": "Type",
+      "text": "📝 Text Knowledge Base",
+      "textDesc": "Edit text content manually",
+      "file": "🔍 RAG Document Base",
+      "fileDesc": "Upload documents for AI semantic search"
+    },
+
+    "actions": {
+      "create": "New",
+      "createOk": "Create",
+      "cancel": "Cancel",
+      "confirm": "OK",
+      "createFirst": "Create your first knowledge base",
+      "view": "View & Edit",
+      "edit": "Edit",
+      "delete": "Delete",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "save": "Save",
+      "saveTitleDesc": "Save Title & Description",
+      "newVersion": "New Version",
+      "deleteVersion": "Delete Version",
+      "clearContent": "Clear",
+      "copyContent": "Copy",
+      "copyText": "Copy Text"
+    },
+
+    "card": {
+      "ragTag": "RAG",
+      "chunkCount": "{{count}} chunks"
+    },
+
+    "createModal": {
+      "title": "New Knowledge Base"
+    },
+
+    "editDrawer": {
+      "ragTag": "RAG Document",
+      "versionTotal": "({{count}} versions)"
+    },
+
+    "item": {
+      "listLoadFailed": "Failed to load list",
+      "detailLoadFailed": "Failed to load details",
+      "pinnedResult": "Pinned",
+      "unpinnedResult": "Unpinned"
+    },
+
+    "version": {
+      "current": "Current",
+      "deleteConfirmTitle": "Delete this version?",
+      "deleteConfirmOnly": "The only version cannot be deleted",
+      "deleteConfirmDesc": "v{{version}} will be deleted",
+      "listLoadFailed": "Failed to load version history",
+      "switchFailed": "Failed to switch version",
+      "createSuccess": "New version v{{version}} created successfully",
+      "createFailed": "Failed to create version",
+      "deleteSuccess": "Version v{{version}} deleted",
+      "deleteFailed": "Failed to delete version"
+    },
+
+    "deleteWiki": {
+      "title": "Confirm Deletion",
+      "willDelete": "About to delete",
+      "warning": "All versions, content and vector indexes will be permanently lost!",
+      "okText": "Delete"
+    },
+
+    "danger": {
+      "title": "Delete this knowledge base",
+      "desc": "All versions, content and vector indexes will be permanently lost",
+      "button": "Delete Knowledge Base"
+    },
+
+    "form": {
+      "title": "Title",
+      "titleRequired": "Please enter a title",
+      "titlePlaceholder": "Enter knowledge base title",
+      "titleEditPlaceholder": "Enter a title",
+      "scope": "Scope",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter a description (optional)",
+      "descriptionEditPlaceholder": "Enter a description",
+      "content": "Content",
+      "contentPlaceholder": "Enter content...",
+      "contentHint": "Markdown supported, up to {{max}} characters",
+      "notes": "Notes",
+      "notesHint": "(up to {{max}})",
+      "notePlaceholder": "Enter note content",
+      "addNote": "Add Note",
+      "links": "Related Links",
+      "linksHint": "(up to {{max}})",
+      "linkTitle": "Link title",
+      "linkUrl": "https://...",
+      "addLink": "Add Link"
+    },
+
+    "rag": {
+      "docSection": "Document Management",
+      "currentFile": "Current File",
+      "fileSize": "File Size",
+      "uploadHint": "Click or drag to upload documents (up to {{max}}, PDF/Word/TXT/MD)",
+      "uploadAppendHint": "Click or drag to append more files (up to {{max}}, PDF/Word/TXT/MD)",
+      "parsing": "Parsing document...",
+
+      "indexSection": "Vector Index",
+      "statusNone": "Not Indexed",
+      "statusProcessing": "Indexing...",
+      "statusCompleted": "Indexed",
+      "statusFailed": "Index Failed",
+      "buildIndex": "Build Index",
+      "rebuildIndex": "Rebuild Index",
+
+      "chunkCount": "Chunks",
+      "totalTokens": "Total Tokens",
+      "indexedAt": "Indexed At",
+      "embeddingModel": "Embedding Model",
+      "vectorReady": "Vectors Ready",
+
+      "chunkPreview": "Chunk Preview",
+      "chunkTotal": "{{count}} chunk(s) in total",
+      "chunkEmpty": "No chunk data",
+      "tokens": "{{count}} tokens",
+
+      "showParsedText": "View parsed raw text",
+      "hideParsedText": "Hide parsed text",
+
+      "uploadSuccess": "Document uploaded successfully, content imported",
+      "uploadFailed": "Failed to upload document",
+      "buildIndexFailed": "Failed to start indexing",
+      "indexCompleteResult": "Vector index build complete, {{count}} chunk(s) in total",
+      "buildFailedResult": "Vector index build failed",
+      "buildTimeout": "Index build timed out, please check the status later",
+      "searchFailed": "Search failed"
+    },
+
+    "editor": {
+      "listLoadFailed": "Failed to load editor list",
+      "addSuccess": "Editor added successfully",
+      "addFailed": "Failed to add editor",
+      "removeSuccess": "Editor removed successfully",
+      "removeFailed": "Failed to remove editor"
+    },
+
+    "messages": {
+      "contentCleared": "Content cleared",
+      "contentEmpty": "Content is empty",
+      "copied": "Copied"
+    },
+
+    "meta": {
+      "creator": "Creator",
+      "version": "Version",
+      "updated": "Updated"
+    }
+  }
+}

@@ -1,9 +1,16 @@
 /**
- * 基础设置表单组件 - 支持只读模式、Logo上传、强制邀请码开关和默认语言设置
- * 
- * 版本更新：
- * - v1.2.0 (2025-01-07): 新增系统默认语言设置选项
- * - v1.1.0: 新增强制邀请码开关
+ * 基础设置表单组件 - 只读模式、Logo上传、强制邀请码开关、默认语言设置
+ *
+ * v1.3.0 (i18n): 70 处硬编码接入 i18n。三个常量数组差异化处理，理由见各自定义处。
+ *   另修两处隐患：
+ *   1) 清除 t('unit.credits', { defaultValue: '积分' }) —— 兜底藏在 options
+ *      的 defaultValue 里，常规"第二参数是否为中文"的检测扫不到它。
+ *   2) 登录有效期 InputNumber 的 formatter/parser 必须严格互逆。原 parser 硬编码
+ *      replace(' 天')，一旦 formatter 走 i18n，英文环境就减不掉 "day(s)"，
+ *      整串被当数值。现 parser 改为"仅保留数字"，与任何语言的单位写法兼容。
+ *
+ * v1.2.0 (2025-01-07): 新增系统默认语言设置
+ * v1.1.0: 新增强制邀请码开关
  */
 
 import React, { useState } from 'react'
@@ -47,9 +54,37 @@ import useSystemConfigStore from '../../../stores/systemConfigStore'
 
 const { TextArea } = Input
 
-// 预定义的字体列表
+/** Logo 上传大小上限（MB），同一值用于校验与提示文案插值，避免两处不一致 */
+const LOGO_MAX_SIZE_MB = 2
+const BYTES_PER_MB = 1024 * 1024
+
+/** 登录有效期天数范围，同时用于 InputNumber 约束与 placeholder 插值 */
+const LOGIN_EXPIRE_DAYS_MIN = 1
+const LOGIN_EXPIRE_DAYS_MAX = 365
+const LOGIN_EXPIRE_DAYS_DEFAULT = 14
+
+/** AI 温度参数范围 */
+const AI_TEMPERATURE_MIN = 0
+const AI_TEMPERATURE_MAX = 2
+const AI_TEMPERATURE_STEP = 0.1
+
+/** 默认字号，与 FONT_SIZE_OPTIONS 中标记为 default 的档位保持一致 */
+const DEFAULT_FONT_SIZE = 14
+
+/** 千分位分隔正则（用于 InputNumber 的 formatter/parser） */
+const THOUSANDS_SEPARATOR = /\B(?=(\d{3})+(?!\d))/g
+const THOUSANDS_STRIP = /\$\s?|(,*)/g
+
+/**
+ * 字体列表
+ *
+ * label 为【字体资源名】，故意保留中文不国际化：它与 value 中的
+ * "PingFang SC"/"Microsoft YaHei" 是同一字体的中英写法，且 Option 会用
+ * fontFamily 实时预览，名称须与用户系统的字体列表可对应。
+ * 唯一例外"系统默认"是描述性文案，用 labelKey 标记走 i18n。
+ */
 const FONT_OPTIONS = [
-  { label: '系统默认', value: 'system-ui' },
+  { labelKey: 'admin.settings.chat.font.systemDefault', value: 'system-ui' },
   { label: '苹方', value: '-apple-system, "PingFang SC"' },
   { label: '微软雅黑', value: '"Microsoft YaHei", "微软雅黑"' },
   { label: '思源黑体', value: '"Source Han Sans CN", "思源黑体"' },
@@ -58,24 +93,37 @@ const FONT_OPTIONS = [
   { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
   { label: '宋体', value: 'SimSun, "宋体"' },
   { label: '黑体', value: 'SimHei, "黑体"' },
-  { label: '楷体', value: 'KaiTi, "楷体"' },
+  { label: '楷体', value: 'KaiTi, "楷体"' }
 ]
 
-// 预定义的字体大小选项
+/**
+ * 字号档位
+ *
+ * 只存技术值 value 与文案键 sizeKey，不存拼好的字符串。
+ * 原值 '14px (默认)' 混合技术值与界面描述无法国际化；现由组件用
+ * t(sizeKey, { size: value }) 生成整句（中"14px（默认）"/英"14px (Default)"），
+ * 括号全角半角不同，故必须整句插值而非 JSX 拼接。
+ */
 const FONT_SIZE_OPTIONS = [
-  { label: '12px (较小)', value: 12 },
-  { label: '13px (小)', value: 13 },
-  { label: '14px (默认)', value: 14 },
-  { label: '15px (舒适)', value: 15 },
-  { label: '16px (大)', value: 16 },
-  { label: '18px (较大)', value: 18 },
-  { label: '20px (特大)', value: 20 },
+  { value: 12, sizeKey: 'admin.settings.chat.fontSize.smaller' },
+  { value: 13, sizeKey: 'admin.settings.chat.fontSize.small' },
+  { value: 14, sizeKey: 'admin.settings.chat.fontSize.default' },
+  { value: 15, sizeKey: 'admin.settings.chat.fontSize.comfortable' },
+  { value: 16, sizeKey: 'admin.settings.chat.fontSize.large' },
+  { value: 18, sizeKey: 'admin.settings.chat.fontSize.larger' },
+  { value: 20, sizeKey: 'admin.settings.chat.fontSize.largest' }
 ]
 
-// 语言选项
+/**
+ * 语言选项
+ *
+ * label 为【语言自称】，故意保留原文不国际化：语言选择器按国际通行做法
+ * 须以目标语言自身的名字呈现，否则英文环境把"简体中文"显示为
+ * "Simplified Chinese"，中文用户反而找不到自己的语言。国旗 Emoji 同理。
+ */
 const LANGUAGE_OPTIONS = [
   { label: '简体中文', value: 'zh-CN', flag: '🇨🇳' },
-  { label: 'English', value: 'en-US', flag: '🇺🇸' },
+  { label: 'English', value: 'en-US', flag: '🇺🇸' }
 ]
 
 const BasicSettings = ({
@@ -89,33 +137,34 @@ const BasicSettings = ({
   const { uploadSiteLogo, systemConfig } = useSystemConfigStore()
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoUrl, setLogoUrl] = useState(systemConfig?.site?.logo || '')
-  
+
   // 监听允许注册开关的变化
   const allowRegister = Form.useWatch(['user', 'allow_register'], form)
 
   // 处理Logo上传
   const handleLogoUpload = async (info) => {
     const { file } = info
-    
+
     if (file.status === 'uploading') {
       setLogoUploading(true)
       return
     }
-    
+
     if (file.status === 'done' || file.originFileObj) {
       try {
         setLogoUploading(true)
         const result = await uploadSiteLogo(file.originFileObj || file)
-        
+
         if (result.success) {
           setLogoUrl(result.url)
           form.setFieldValue(['site', 'logo'], result.url)
-          message.success('Logo上传成功')
+          message.success(t('admin.settings.site.logo.uploadSuccess'))
         } else {
-          message.error(result.error || 'Logo上传失败')
+          // result.error 来自后端（中文），优先展示；缺失时用本地文案兜底
+          message.error(result.error || t('admin.settings.site.logo.uploadFailed'))
         }
       } catch (error) {
-        message.error('Logo上传失败')
+        message.error(t('admin.settings.site.logo.uploadFailed'))
       } finally {
         setLogoUploading(false)
       }
@@ -126,23 +175,23 @@ const BasicSettings = ({
   const beforeUpload = (file) => {
     const isImage = file.type.startsWith('image/')
     if (!isImage) {
-      message.error('只能上传图片文件！')
+      message.error(t('admin.settings.site.logo.onlyImage'))
       return false
     }
-    
-    const isLt2M = file.size / 1024 / 1024 < 2
-    if (!isLt2M) {
-      message.error('图片大小不能超过2MB！')
+
+    const isWithinLimit = file.size / BYTES_PER_MB < LOGO_MAX_SIZE_MB
+    if (!isWithinLimit) {
+      message.error(t('admin.settings.site.logo.sizeLimit', { size: LOGO_MAX_SIZE_MB }))
       return false
     }
-    
+
     return true
   }
 
   const uploadButton = (
     <div>
       {logoUploading ? <LoadingOutlined /> : <PlusOutlined />}
-      <div style={{ marginTop: 8 }}>上传Logo</div>
+      <div style={{ marginTop: 8 }}>{t('admin.settings.site.logo.upload')}</div>
     </div>
   )
 
@@ -158,7 +207,7 @@ const BasicSettings = ({
           style={{ marginBottom: 16 }}
         />
       )}
-      
+
       <Form
         form={form}
         layout="vertical"
@@ -169,10 +218,11 @@ const BasicSettings = ({
             {/* 站点设置 */}
             <Card title={t('admin.settings.site.title')} size="small" style={{ marginBottom: 16 }}>
               <Form.Item name={['site', 'name']} label={t('admin.settings.site.name')}>
+                {/* "AI Platform" 为产品名示例，不翻译 */}
                 <Input placeholder="AI Platform" disabled={disabled} />
               </Form.Item>
-              
-              <Form.Item name={['site', 'logo']} label="站点Logo">
+
+              <Form.Item name={['site', 'logo']} label={t('admin.settings.site.logo')}>
                 <Upload
                   name="logo"
                   listType="picture-card"
@@ -189,31 +239,31 @@ const BasicSettings = ({
                   }}
                 >
                   {logoUrl ? (
-                    <img 
-                      src={logoUrl} 
-                      alt="logo" 
-                      style={{ 
+                    <img
+                      src={logoUrl}
+                      alt="logo"
+                      style={{
                         width: '100%',
                         height: '100%',
                         objectFit: 'contain'
-                      }} 
+                      }}
                     />
                   ) : (
                     uploadButton
                   )}
                 </Upload>
                 <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                  建议尺寸：200x50px，支持 JPG/PNG/GIF/SVG，最大2MB
+                  {t('admin.settings.site.logo.hint', { size: LOGO_MAX_SIZE_MB })}
                 </div>
               </Form.Item>
-              
+
               <Form.Item name={['site', 'description']} label={t('admin.settings.site.description')}>
                 <TextArea rows={3} placeholder={t('app.description')} disabled={disabled} />
               </Form.Item>
 
-              {/* 新增：系统默认语言设置 */}
-              <Form.Item 
-                name={['site', 'default_language']} 
+              {/* 系统默认语言设置 */}
+              <Form.Item
+                name={['site', 'default_language']}
                 label={
                   <Space>
                     <GlobalOutlined />
@@ -225,7 +275,7 @@ const BasicSettings = ({
                 }
                 initialValue="zh-CN"
               >
-                <Select 
+                <Select
                   disabled={disabled}
                   placeholder={t('admin.settings.site.defaultLanguage.placeholder')}
                 >
@@ -251,31 +301,31 @@ const BasicSettings = ({
             </Card>
 
             {/* 用户设置 - 增强注册控制 */}
-            <Card 
+            <Card
               title={
                 <Space>
                   <span>{t('admin.settings.user.title')}</span>
                   <TeamOutlined />
                 </Space>
               }
-              size="small" 
+              size="small"
               style={{ marginBottom: 16 }}
             >
-              <Form.Item 
-                name={['user', 'allow_register']} 
-                label={t('admin.settings.user.allowRegister')} 
+              <Form.Item
+                name={['user', 'allow_register']}
+                label={t('admin.settings.user.allowRegister')}
                 valuePropName="checked"
               >
                 <Switch disabled={disabled} />
               </Form.Item>
-              
-              {/* 新增：强制邀请码开关 */}
-              <Form.Item 
-                name={['user', 'require_invitation_code']} 
+
+              {/* 强制邀请码开关 */}
+              <Form.Item
+                name={['user', 'require_invitation_code']}
                 label={
                   <Space>
-                    <span>强制邀请码注册</span>
-                    <Tooltip title="开启后，新用户必须输入有效的邀请码才能注册">
+                    <span>{t('admin.settings.user.requireInvitationCode')}</span>
+                    <Tooltip title={t('admin.settings.user.requireInvitationCode.tooltip')}>
                       <InfoCircleOutlined style={{ color: '#999' }} />
                     </Tooltip>
                   </Space>
@@ -283,24 +333,25 @@ const BasicSettings = ({
                 valuePropName="checked"
                 dependencies={['user', 'allow_register']}
               >
-                <Switch 
+                <Switch
                   disabled={disabled || !allowRegister}
-                  checkedChildren="必须" 
-                  unCheckedChildren="可选" 
+                  checkedChildren={t('admin.settings.user.requireInvitationCode.on')}
+                  unCheckedChildren={t('admin.settings.user.requireInvitationCode.off')}
                 />
               </Form.Item>
-              
-              {/* 注册控制说明 */}
+
+              {/* 说明要点逐条独立成键（而非一整段长文本），便于各语言单独调整措辞；
+                  • 为视觉符号不进语言包 */}
               {allowRegister && (
                 <Alert
-                  message="注册控制说明"
+                  message={t('admin.settings.user.registerRule.title')}
                   description={
                     <div>
-                      <div>• <strong>允许注册关闭</strong>：完全禁止新用户注册</div>
-                      <div>• <strong>允许注册开启 + 强制邀请码关闭</strong>：开放注册，邀请码可选</div>
-                      <div>• <strong>允许注册开启 + 强制邀请码开启</strong>：必须有邀请码才能注册</div>
+                      <div>• {t('admin.settings.user.registerRule.item1')}</div>
+                      <div>• {t('admin.settings.user.registerRule.item2')}</div>
+                      <div>• {t('admin.settings.user.registerRule.item3')}</div>
                       <div style={{ marginTop: 8, color: '#1890ff' }}>
-                        <TeamOutlined /> 邀请码由超级管理员在"用户分组"中设置
+                        <TeamOutlined /> {t('admin.settings.user.registerRule.item4')}
                       </div>
                     </div>
                   }
@@ -309,116 +360,127 @@ const BasicSettings = ({
                   style={{ marginTop: 16, marginBottom: 16 }}
                 />
               )}
-              
-              <Form.Item 
-                name={['user', 'default_tokens']} 
-                label="新用户默认Token"
-                tooltip="新注册用户或管理员创建用户时的默认Token数量"
+
+              <Form.Item
+                name={['user', 'default_tokens']}
+                label={t('admin.settings.user.defaultTokens')}
+                tooltip={t('admin.settings.user.defaultTokens.tooltip')}
               >
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
-                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                  formatter={value => `${value}`.replace(THOUSANDS_SEPARATOR, ',')}
+                  parser={value => value.replace(THOUSANDS_STRIP, '')}
                   disabled={disabled}
                 />
               </Form.Item>
 
-              <Form.Item 
-                name={['user', 'default_credits']} 
-                label="新用户默认积分"
-                tooltip="新注册用户或管理员创建用户时的默认积分数量"
+              <Form.Item
+                name={['user', 'default_credits']}
+                label={t('admin.settings.user.defaultCredits')}
+                tooltip={t('admin.settings.user.defaultCredits.tooltip')}
               >
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
                   step={1}
                   precision={0}
-                  formatter={value => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                  parser={value => value ? parseInt(value.replace(/\$\s?|(,*)/g, ''), 10) : 0}
+                  formatter={value => value ? `${value}`.replace(THOUSANDS_SEPARATOR, ',') : ''}
+                  parser={value => value ? parseInt(value.replace(THOUSANDS_STRIP, ''), 10) : 0}
                   disabled={disabled}
                 />
               </Form.Item>
             </Card>
 
             {/* 登录方式设置 */}
-            <Card 
+            <Card
               title={
                 <Space>
                   <LoginOutlined />
-                  <span>登录方式设置</span>
+                  <span>{t('admin.settings.login.title')}</span>
                 </Space>
               }
               size="small"
             >
-              <Form.Item 
-                name={['login', 'mode']} 
-                label="登录模式"
-                tooltip="选择系统允许的登录方式"
+              <Form.Item
+                name={['login', 'mode']}
+                label={t('admin.settings.login.mode')}
+                tooltip={t('admin.settings.login.mode.tooltip')}
                 initialValue="standard"
               >
                 <Radio.Group disabled={disabled}>
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Radio value="standard">
                       <Space>
-                        <span style={{ fontWeight: 'bold' }}>标准模式</span>
-                        <Tag color="blue">推荐</Tag>
+                        <span style={{ fontWeight: 'bold' }}>{t('admin.settings.login.standard')}</span>
+                        <Tag color="blue">{t('admin.settings.login.standard.tag')}</Tag>
                       </Space>
                       <div style={{ marginLeft: 24, marginTop: 4, color: '#666', fontSize: 12 }}>
-                        <div>• 支持用户名/邮箱/手机号 + 密码登录</div>
-                        <div>• 支持邮箱 + 验证码登录</div>
-                        <div>• 灵活便捷，适合大多数场景</div>
+                        <div>• {t('admin.settings.login.standard.item1')}</div>
+                        <div>• {t('admin.settings.login.standard.item2')}</div>
+                        <div>• {t('admin.settings.login.standard.item3')}</div>
                       </div>
                     </Radio>
-                    
+
                     <Radio value="email_verify_required" style={{ marginTop: 16 }}>
                       <Space>
-                        <span style={{ fontWeight: 'bold' }}>强制邮箱验证模式</span>
-                        <Tag color="orange">高安全</Tag>
+                        <span style={{ fontWeight: 'bold' }}>{t('admin.settings.login.emailVerify')}</span>
+                        <Tag color="orange">{t('admin.settings.login.emailVerify.tag')}</Tag>
                       </Space>
                       <div style={{ marginLeft: 24, marginTop: 4, color: '#666', fontSize: 12 }}>
-                        <div>• 仅支持邮箱 + 密码 + 验证码登录</div>
-                        <div>• 每次登录都需要邮箱验证码</div>
-                        <div>• 安全性更高，适合敏感系统</div>
+                        <div>• {t('admin.settings.login.emailVerify.item1')}</div>
+                        <div>• {t('admin.settings.login.emailVerify.item2')}</div>
+                        <div>• {t('admin.settings.login.emailVerify.item3')}</div>
                       </div>
                     </Radio>
                   </Space>
                 </Radio.Group>
               </Form.Item>
 
-              <Form.Item 
-                name={['login', 'refresh_token_days']} 
+              <Form.Item
+                name={['login', 'refresh_token_days']}
                 label={
                   <Space>
-                    <span>登录有效期</span>
-                    <Tooltip title="用户多少天后需要重新输入密码登录，对新登录的用户生效">
+                    <span>{t('admin.settings.login.expireDays')}</span>
+                    <Tooltip title={t('admin.settings.login.expireDays.tooltip')}>
                       <InfoCircleOutlined style={{ color: '#999' }} />
                     </Tooltip>
                   </Space>
                 }
-                initialValue={14}
+                initialValue={LOGIN_EXPIRE_DAYS_DEFAULT}
               >
                 <InputNumber
                   style={{ width: '100%' }}
-                  min={1}
-                  max={365}
+                  min={LOGIN_EXPIRE_DAYS_MIN}
+                  max={LOGIN_EXPIRE_DAYS_MAX}
                   step={1}
                   precision={0}
                   disabled={disabled}
-                  formatter={value => `${value} 天`}
-                  parser={value => value.replace(' 天', '')}
-                  placeholder="输入天数（1-365）"
+                  /* formatter/parser 必须严格互逆：formatter 用整句插值输出带单位的
+                     显示值，parser 则"仅保留数字"反推数值。不可硬编码 replace(' 天')，
+                     否则英文环境减不掉 "day(s)"，整串被当数值。 */
+                  formatter={value => (value === undefined || value === null || value === ''
+                    ? ''
+                    : t('admin.settings.login.expireDays.unit', { days: value }))}
+                  parser={value => {
+                    const digits = String(value).replace(/[^\d]/g, '')
+                    return digits === '' ? '' : Number(digits)
+                  }}
+                  placeholder={t('admin.settings.login.expireDays.placeholder', {
+                    min: LOGIN_EXPIRE_DAYS_MIN,
+                    max: LOGIN_EXPIRE_DAYS_MAX
+                  })}
                 />
               </Form.Item>
 
               <Alert
-                message="登录设置说明"
+                message={t('admin.settings.login.hint.title')}
                 description={
                   <div>
-                    <div>• 切换登录模式后立即生效，影响所有用户</div>
-                    <div>• 强制邮箱验证模式下，用户必须同时提供密码和验证码</div>
-                    <div>• 登录有效期只对新登录的用户生效，已登录用户不受影响</div>
-                    <div>• 建议根据系统安全性要求合理设置登录有效期</div>
+                    <div>• {t('admin.settings.login.hint.item1')}</div>
+                    <div>• {t('admin.settings.login.hint.item2')}</div>
+                    <div>• {t('admin.settings.login.hint.item3')}</div>
+                    <div>• {t('admin.settings.login.hint.item4')}</div>
                   </div>
                 }
                 type="info"
@@ -432,17 +494,18 @@ const BasicSettings = ({
           <Col xs={24} lg={12}>
             {/* AI设置 */}
             <Card title={t('admin.settings.ai.title')} size="small" style={{ marginBottom: 16 }}>
-              <Form.Item 
-                name={['ai', 'default_model']} 
+              <Form.Item
+                name={['ai', 'default_model']}
                 label={t('admin.settings.ai.defaultModel')}
               >
                 <Select disabled={disabled}>
                   {aiModels.filter(m => m.is_active).map(model => (
                     <Select.Option key={model.name} value={model.name}>
                       <Space>
+                        {/* 模型显示名为后台录入的业务数据，不翻译 */}
                         <span>{model.display_name}</span>
                         <Tag color="blue" size="small">
-                          {model.credits_per_chat}{t('unit.credits', { defaultValue: '积分' })}
+                          {model.credits_per_chat}{t('unit.credits')}
                         </Tag>
                         {model.stream_enabled && (
                           <Tag color="processing" icon={<ThunderboltOutlined />} size="small">
@@ -459,73 +522,78 @@ const BasicSettings = ({
                   ))}
                 </Select>
               </Form.Item>
-              
-              <Form.Item 
-                name={['ai', 'temperature']} 
-                label={t('admin.settings.ai.temperature')} 
-                initialValue={0.0}
+
+              <Form.Item
+                name={['ai', 'temperature']}
+                label={t('admin.settings.ai.temperature')}
+                initialValue={AI_TEMPERATURE_MIN}
               >
-                <InputNumber 
-                  style={{ width: '100%' }} 
-                  min={0} 
-                  max={2} 
-                  step={0.1} 
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={AI_TEMPERATURE_MIN}
+                  max={AI_TEMPERATURE_MAX}
+                  step={AI_TEMPERATURE_STEP}
                   disabled={disabled}
                 />
               </Form.Item>
             </Card>
 
             {/* 对话字体设置 */}
-            <Card 
+            <Card
               title={
                 <Space>
                   <FontSizeOutlined />
-                  <span>对话字体设置</span>
+                  <span>{t('admin.settings.chat.fontTitle')}</span>
                 </Space>
               }
               size="small"
             >
-              <Form.Item 
-                name={['chat', 'font_family']} 
-                label="字体类型"
-                tooltip="设置对话界面的字体，对所有用户生效"
+              <Form.Item
+                name={['chat', 'font_family']}
+                label={t('admin.settings.chat.fontFamily')}
+                tooltip={t('admin.settings.chat.fontFamily.tooltip')}
                 initialValue="system-ui"
               >
-                <Select 
+                <Select
                   disabled={disabled}
-                  placeholder="选择字体"
+                  placeholder={t('admin.settings.chat.fontFamily.placeholder')}
                   showSearch
                   optionFilterProp="label"
                 >
-                  {FONT_OPTIONS.map(font => (
-                    <Select.Option key={font.value} value={font.value} label={font.label}>
-                      <span style={{ fontFamily: font.value }}>{font.label}</span>
-                    </Select.Option>
-                  ))}
+                  {FONT_OPTIONS.map(font => {
+                    // labelKey 存在时走 i18n（仅"系统默认"），否则用字体资源名原文；
+                    // label 需同时传给 Option 的 label 属性以支持 showSearch 过滤
+                    const fontLabel = font.labelKey ? t(font.labelKey) : font.label
+                    return (
+                      <Select.Option key={font.value} value={font.value} label={fontLabel}>
+                        <span style={{ fontFamily: font.value }}>{fontLabel}</span>
+                      </Select.Option>
+                    )
+                  })}
                 </Select>
               </Form.Item>
-              
-              <Form.Item 
-                name={['chat', 'font_size']} 
-                label="字体大小"
-                tooltip="设置对话内容的字体大小"
-                initialValue={14}
+
+              <Form.Item
+                name={['chat', 'font_size']}
+                label={t('admin.settings.chat.fontSize')}
+                tooltip={t('admin.settings.chat.fontSize.tooltip')}
+                initialValue={DEFAULT_FONT_SIZE}
               >
-                <Select 
+                <Select
                   disabled={disabled}
-                  placeholder="选择字体大小"
+                  placeholder={t('admin.settings.chat.fontSize.placeholder')}
                 >
                   {FONT_SIZE_OPTIONS.map(size => (
                     <Select.Option key={size.value} value={size.value}>
-                      {size.label}
+                      {t(size.sizeKey, { size: size.value })}
                     </Select.Option>
                   ))}
                 </Select>
               </Form.Item>
 
               <Alert
-                message="字体设置说明"
-                description="这里设置的字体将应用于所有用户的对话界面，包括用户消息和AI回复。某些字体可能需要用户系统已安装才能正常显示。"
+                message={t('admin.settings.chat.fontHint.title')}
+                description={t('admin.settings.chat.fontHint.description')}
                 type="info"
                 showIcon
                 style={{ marginTop: 16 }}
@@ -537,10 +605,10 @@ const BasicSettings = ({
         {!disabled && (
           <Form.Item style={{ textAlign: 'center', marginTop: 24 }}>
             <Space>
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />} 
-                htmlType="submit" 
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                htmlType="submit"
                 loading={loading}
               >
                 {t('button.save')}

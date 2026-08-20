@@ -1,11 +1,23 @@
 /**
  * Agent工作流状态管理
  * 使用 Zustand 管理工作流CRUD、执行、历史、API Key等状态
+ *
+ * v1.1 国际化：
+ *   本文件为非React模块（Zustand store），无法使用useTranslation hook，
+ *   改为直接import i18n实例调用i18n.t()。
+ *   全部console日志属开发者诊断信息，统一改英文不进语言包；
+ *   message.*用户可见文案改i18n.t()，新建agent.json的agent.store子命名空间(27键)，
+ *   语义与既有workflow/execution/api分组的UI专属文案存在歧义风险，保守新建不复用；
+ *   仅"操作失败"/"删除失败"两处与common.json的message.error/message.deleteFailed
+ *   文案完全一致，复用既有键；
+ *   sendTestMessage中throw new Error('测试会话不存在')属业务校验失败、可能被上层
+ *   展示给用户，同样改为i18n.t()
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
 import { message } from 'antd'
+import i18n from '../utils/i18n'
 
 const useAgentStore = create((set, get) => ({
   /* ========== 状态 ========== */
@@ -54,8 +66,8 @@ const useAgentStore = create((set, get) => ({
         set({ nodeTypes: response.data.data, nodeTypesLoading: false })
       }
     } catch (error) {
-      console.error('获取节点类型失败:', error)
-      message.error('获取节点类型失败')
+      console.error('Failed to get node types:', error)
+      message.error(i18n.t('agent.store.nodeTypesLoadFailed'))
       set({ nodeTypesLoading: false })
     }
   },
@@ -75,8 +87,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取可用模型失败:', error)
-      message.error('获取可用模型失败')
+      console.error('Failed to get available models:', error)
+      message.error(i18n.t('agent.store.modelsLoadFailed'))
       set({ modelsLoading: false })
       return []
     }
@@ -97,8 +109,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取知识库列表失败:', error)
-      message.error('获取知识库列表失败')
+      console.error('Failed to get knowledge base list:', error)
+      message.error(i18n.t('agent.store.wikiItemsLoadFailed'))
       set({ wikiItemsLoading: false })
       return []
     }
@@ -128,8 +140,8 @@ const useAgentStore = create((set, get) => ({
         })
       }
     } catch (error) {
-      console.error('获取工作流列表失败:', error)
-      message.error('获取工作流列表失败')
+      console.error('Failed to get workflow list:', error)
+      message.error(i18n.t('agent.store.workflowsLoadFailed'))
       set({ workflowsLoading: false })
     }
   },
@@ -143,8 +155,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取工作流详情失败:', error)
-      message.error('获取工作流详情失败')
+      console.error('Failed to get workflow detail:', error)
+      message.error(i18n.t('agent.store.workflowDetailLoadFailed'))
       set({ currentWorkflowLoading: false })
       throw error
     }
@@ -154,13 +166,13 @@ const useAgentStore = create((set, get) => ({
     try {
       const response = await apiClient.post('/agent/workflows', workflowData)
       if (response.data.success) {
-        message.success('工作流创建成功')
+        message.success(i18n.t('agent.store.createSuccess'))
         await get().fetchWorkflows({ current: 1 })
         return response.data.data
       }
     } catch (error) {
-      console.error('创建工作流失败:', error)
-      message.error(error.response?.data?.message || '创建工作流失败')
+      console.error('Failed to create workflow:', error)
+      message.error(error.response?.data?.message || i18n.t('agent.store.createFailed'))
       throw error
     }
   },
@@ -174,8 +186,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('更新工作流失败:', error)
-      message.error(error.response?.data?.message || '更新工作流失败')
+      console.error('Failed to update workflow:', error)
+      message.error(error.response?.data?.message || i18n.t('agent.store.updateFailed'))
       throw error
     }
   },
@@ -184,13 +196,13 @@ const useAgentStore = create((set, get) => ({
     try {
       const response = await apiClient.delete(`/agent/workflows/${id}`)
       if (response.data.success) {
-        message.success('工作流删除成功')
+        message.success(i18n.t('agent.store.deleteSuccess'))
         await get().fetchWorkflows()
         return true
       }
     } catch (error) {
-      console.error('删除工作流失败:', error)
-      message.error(error.response?.data?.message || '删除工作流失败')
+      console.error('Failed to delete workflow:', error)
+      message.error(error.response?.data?.message || i18n.t('agent.store.deleteFailed'))
       throw error
     }
   },
@@ -199,13 +211,13 @@ const useAgentStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/agent/workflows/${id}/toggle-publish`)
       if (response.data.success) {
-        message.success('发布状态已更新')
+        message.success(i18n.t('agent.store.publishStatusUpdated'))
         await get().fetchWorkflows()
         return true
       }
     } catch (error) {
-      console.error('切换发布状态失败:', error)
-      message.error(error.response?.data?.message || '操作失败')
+      console.error('Failed to toggle publish status:', error)
+      message.error(error.response?.data?.message || i18n.t('message.error'))
       throw error
     }
   },
@@ -223,14 +235,14 @@ const useAgentStore = create((set, get) => ({
         { timeout: 120000 }
       )
       if (response.data.success) {
-        message.success('工作流执行成功')
+        message.success(i18n.t('agent.store.executeSuccess'))
         await get().fetchExecutions({ current: 1 })
         return response.data.data
       }
     } catch (error) {
-      console.error('执行工作流失败:', error)
-      if (error.response?.status === 402) message.error('积分不足，请先充值')
-      else message.error(error.response?.data?.message || '执行工作流失败')
+      console.error('Failed to execute workflow:', error)
+      if (error.response?.status === 402) message.error(i18n.t('agent.store.insufficientCredits'))
+      else message.error(error.response?.data?.message || i18n.t('agent.store.executeFailed'))
       throw error
     }
   },
@@ -246,8 +258,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('创建测试会话失败:', error)
-      message.error('创建测试会话失败')
+      console.error('Failed to create test session:', error)
+      message.error(i18n.t('agent.store.createTestSessionFailed'))
       set({ testLoading: false })
       throw error
     }
@@ -255,7 +267,7 @@ const useAgentStore = create((set, get) => ({
 
   sendTestMessage: async (workflowId, messageContent) => {
     const { testSession, testMessages } = get()
-    if (!testSession) throw new Error('测试会话不存在')
+    if (!testSession) throw new Error(i18n.t('agent.store.testSessionNotFound'))
 
     set({ testLoading: true })
     const userMessage = { role: 'user', content: messageContent, timestamp: new Date().toISOString() }
@@ -273,10 +285,10 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('发送测试消息失败:', error)
+      console.error('Failed to send test message:', error)
       set({ testMessages: testMessages, testLoading: false })
-      if (error.response?.status === 402) message.error('积分不足，请先充值')
-      else message.error(error.response?.data?.message || '发送消息失败')
+      if (error.response?.status === 402) message.error(i18n.t('agent.store.insufficientCredits'))
+      else message.error(error.response?.data?.message || i18n.t('agent.store.sendTestMessageFailed'))
       throw error
     }
   },
@@ -291,8 +303,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取会话历史失败:', error)
-      message.error('获取会话历史失败')
+      console.error('Failed to get session history:', error)
+      message.error(i18n.t('agent.store.sessionHistoryLoadFailed'))
       throw error
     }
   },
@@ -308,8 +320,8 @@ const useAgentStore = create((set, get) => ({
         return true
       }
     } catch (error) {
-      console.error('删除测试会话失败:', error)
-      message.error('删除测试会话失败')
+      console.error('Failed to delete test session:', error)
+      message.error(i18n.t('agent.store.deleteTestSessionFailed'))
       throw error
     }
   },
@@ -328,7 +340,7 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取API Key失败:', error)
+      console.error('Failed to get API Key:', error)
       set({ apiKeyInfo: null, apiKeyLoading: false })
     }
   },
@@ -341,12 +353,12 @@ const useAgentStore = create((set, get) => ({
         { regenerate }
       )
       if (response.data.success) {
-        message.success(response.data.data?.message || 'API Key生成成功')
+        message.success(response.data.data?.message || i18n.t('agent.store.apiKeyCreateSuccess'))
         return response.data.data
       }
     } catch (error) {
-      console.error('生成API Key失败:', error)
-      message.error(error.response?.data?.message || '生成API Key失败')
+      console.error('Failed to generate API Key:', error)
+      message.error(error.response?.data?.message || i18n.t('agent.store.apiKeyCreateFailed'))
       throw error
     }
   },
@@ -364,8 +376,8 @@ const useAgentStore = create((set, get) => ({
         return true
       }
     } catch (error) {
-      console.error('更新API Key配置失败:', error)
-      message.error(error.response?.data?.message || '更新配置失败')
+      console.error('Failed to update API Key config:', error)
+      message.error(error.response?.data?.message || i18n.t('agent.store.apiKeyConfigUpdateFailed'))
       throw error
     }
   },
@@ -375,13 +387,13 @@ const useAgentStore = create((set, get) => ({
     try {
       const response = await apiClient.delete(`/agent/workflows/${workflowId}/api-key`)
       if (response.data.success) {
-        message.success('API Key已删除')
+        message.success(i18n.t('agent.store.apiKeyDeleteSuccess'))
         set({ apiKeyInfo: null })
         return true
       }
     } catch (error) {
-      console.error('删除API Key失败:', error)
-      message.error(error.response?.data?.message || '删除失败')
+      console.error('Failed to delete API Key:', error)
+      message.error(error.response?.data?.message || i18n.t('message.deleteFailed'))
       throw error
     }
   },
@@ -398,7 +410,7 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取调用日志失败:', error)
+      console.error('Failed to get call logs:', error)
       set({ apiKeyLogsLoading: false })
     }
   },
@@ -429,8 +441,8 @@ const useAgentStore = create((set, get) => ({
         })
       }
     } catch (error) {
-      console.error('获取执行历史失败:', error)
-      message.error('获取执行历史失败')
+      console.error('Failed to get execution history:', error)
+      message.error(i18n.t('agent.store.executionsLoadFailed'))
       set({ executionsLoading: false })
     }
   },
@@ -444,8 +456,8 @@ const useAgentStore = create((set, get) => ({
         return response.data.data
       }
     } catch (error) {
-      console.error('获取执行详情失败:', error)
-      message.error('获取执行详情失败')
+      console.error('Failed to get execution detail:', error)
+      message.error(i18n.t('agent.store.executionDetailLoadFailed'))
       set({ currentExecutionLoading: false })
       throw error
     }
@@ -455,13 +467,13 @@ const useAgentStore = create((set, get) => ({
     try {
       const response = await apiClient.delete(`/agent/executions/${id}`)
       if (response.data.success) {
-        message.success('执行记录已删除')
+        message.success(i18n.t('agent.store.executionDeleteSuccess'))
         await get().fetchExecutions()
         return true
       }
     } catch (error) {
-      console.error('删除执行记录失败:', error)
-      message.error('删除执行记录失败')
+      console.error('Failed to delete execution record:', error)
+      message.error(i18n.t('agent.store.executionDeleteFailed'))
       throw error
     }
   },
@@ -476,7 +488,7 @@ const useAgentStore = create((set, get) => ({
         set({ stats: response.data.data, statsLoading: false })
       }
     } catch (error) {
-      console.error('获取统计信息失败:', error)
+      console.error('Failed to get stats:', error)
       set({ statsLoading: false })
     }
   }

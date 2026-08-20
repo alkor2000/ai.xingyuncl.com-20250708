@@ -16,9 +16,20 @@
  *   executeSchoolImport 由"同步等待整个导入完成"改为"提交任务拿 task_id（秒级返回）"，
  *   新增 getSchoolImportStatus（单次查询）与 pollSchoolImportStatus（轮询直到完成），
  *   彻底规避大批量导入的 HTTP 30 秒超时问题。
+ *
+ * v1.5 国际化（本文件为非React模块，无法使用useTranslation hook，
+ *   改为直接import i18n实例调用i18n.t()）：
+ *   - 全部console.error日志属开发者诊断信息，统一改英文不进语言包
+ *   - 导出Excel的下载文件名前缀（学校导入模板/按组导出用户列表）改i18n.t()，
+ *     浏览器下载对话框与文件系统中会显示该文件名，属用户可见文本
+ *   - pollSchoolImportStatus内的失败兜底与超时Error改i18n.t()
+ *   - setUserAccountExpireDate/extendUserAccountExpireDate的reason默认参数改i18n.t()，
+ *     该值会写入数据库供后续查看，随当次操作发生时的界面语言固化（与后端message
+ *     恒为中文的既定行为模式一致，非模块加载期求值，JS默认参数在每次调用时求值无陈旧闭包风险）
  */
 import { create } from 'zustand'
 import apiClient from '../utils/api'
+import i18n from '../utils/i18n'
 
 const useAdminStore = create((set) => ({
   // 状态
@@ -61,7 +72,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data
     } catch (error) {
-      console.error('获取用户列表失败:', error)
+      console.error('Failed to get user list:', error)
       set({ loading: false })
       throw error
     }
@@ -78,7 +89,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取用户详情失败:', error)
+      console.error('Failed to get user detail:', error)
       set({ loading: false })
       throw error
     }
@@ -90,7 +101,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post('/admin/users', userData)
       return response.data.data
     } catch (error) {
-      console.error('创建用户失败:', error)
+      console.error('Failed to create user:', error)
       throw error
     }
   },
@@ -101,7 +112,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post('/admin/users/batch-create', batchData)
       return response.data
     } catch (error) {
-      console.error('批量创建用户失败:', error)
+      console.error('Failed to batch create users:', error)
       throw error
     }
   },
@@ -128,14 +139,14 @@ const useAdminStore = create((set) => ({
       const link = document.createElement('a')
       link.href = url
       const dateStr = new Date().toISOString().split('T')[0]
-      link.setAttribute('download', `学校批量导入模板_${dateStr}.xlsx`)
+      link.setAttribute('download', `${i18n.t('admin.store.schoolImportTemplateFilename')}_${dateStr}.xlsx`)
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
       return { success: true }
     } catch (error) {
-      console.error('下载导入模板失败:', error)
+      console.error('Failed to download import template:', error)
       throw error
     }
   },
@@ -158,7 +169,7 @@ const useAdminStore = create((set) => ({
       )
       return response.data.data
     } catch (error) {
-      console.error('预览学校导入失败:', error)
+      console.error('Failed to preview school import:', error)
       throw error
     }
   },
@@ -185,7 +196,7 @@ const useAdminStore = create((set) => ({
       // 后端返回 { task_id: '...' }
       return response.data.data.task_id
     } catch (error) {
-      console.error('提交学校导入任务失败:', error)
+      console.error('Failed to submit school import task:', error)
       throw error
     }
   },
@@ -202,7 +213,7 @@ const useAdminStore = create((set) => ({
       )
       return response.data.data
     } catch (error) {
-      console.error('查询学校导入任务状态失败:', error)
+      console.error('Failed to query school import task status:', error)
       throw error
     }
   },
@@ -255,14 +266,14 @@ const useAdminStore = create((set) => ({
           }
           if (data.status === 'failed') {
             clear()
-            reject(new Error(data.error || '导入失败'))
+            reject(new Error(data.error || i18n.t('admin.store.importFailed')))
             return
           }
 
           // pending / running：继续轮询
           if (attempts >= maxAttempts) {
             clear()
-            reject(new Error('导入超时：任务执行时间过长，请稍后到用户列表确认导入结果'))
+            reject(new Error(i18n.t('admin.store.importTimeout')))
             return
           }
           timer = setTimeout(tick, intervalMs)
@@ -301,14 +312,14 @@ const useAdminStore = create((set) => ({
       link.href = url
       const safeName = (groupName || 'group').replace(/[\\/:*?"<>|]/g, '_')
       const dateStr = new Date().toISOString().split('T')[0]
-      link.setAttribute('download', `${safeName}_用户列表_${dateStr}.xlsx`)
+      link.setAttribute('download', `${safeName}_${i18n.t('admin.store.groupUserListFilename')}_${dateStr}.xlsx`)
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
       return { success: true }
     } catch (error) {
-      console.error('导出组用户失败:', error)
+      console.error('Failed to export group users:', error)
       throw error
     }
   },
@@ -320,7 +331,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/users/${userId}`, updateData)
       return response.data.data
     } catch (error) {
-      console.error('更新用户失败:', error)
+      console.error('Failed to update user:', error)
       throw error
     }
   },
@@ -329,7 +340,7 @@ const useAdminStore = create((set) => ({
     try {
       await apiClient.delete(`/admin/users/${userId}`)
     } catch (error) {
-      console.error('删除用户失败:', error)
+      console.error('Failed to delete user:', error)
       throw error
     }
   },
@@ -339,7 +350,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/users/${userId}/remove-from-group`)
       return response.data.data
     } catch (error) {
-      console.error('挪出用户失败:', error)
+      console.error('Failed to remove user from group:', error)
       throw error
     }
   },
@@ -351,7 +362,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('重置密码失败:', error)
+      console.error('Failed to reset password:', error)
       throw error
     }
   },
@@ -364,7 +375,7 @@ const useAdminStore = create((set) => ({
       set({ userGroups: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取用户分组失败:', error)
+      console.error('Failed to get user groups:', error)
       throw error
     }
   },
@@ -378,7 +389,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post('/admin/user-groups', groupData)
       return response.data.data
     } catch (error) {
-      console.error('创建用户分组失败:', error)
+      console.error('Failed to create user group:', error)
       throw error
     }
   },
@@ -388,7 +399,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/user-groups/${groupId}`, updateData)
       return response.data.data
     } catch (error) {
-      console.error('更新用户分组失败:', error)
+      console.error('Failed to update user group:', error)
       throw error
     }
   },
@@ -397,7 +408,7 @@ const useAdminStore = create((set) => ({
     try {
       await apiClient.delete(`/admin/user-groups/${groupId}`)
     } catch (error) {
-      console.error('删除用户分组失败:', error)
+      console.error('Failed to delete user group:', error)
       throw error
     }
   },
@@ -410,7 +421,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('设置组积分池失败:', error)
+      console.error('Failed to set group credits pool:', error)
       throw error
     }
   },
@@ -425,7 +436,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error(`组积分${operation === 'distribute' ? '分配' : '回收'}失败:`, error)
+      console.error(`Group credits ${operation === 'distribute' ? 'distribution' : 'recycling'} failed:`, error)
       throw error
     }
   },
@@ -438,7 +449,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('设置组员上限失败:', error)
+      console.error('Failed to set group user limit:', error)
       throw error
     }
   },
@@ -452,7 +463,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('设置组有效期失败:', error)
+      console.error('Failed to set group expire date:', error)
       throw error
     }
   },
@@ -462,7 +473,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/user-groups/${groupId}/sync-expire-date`)
       return response.data.data
     } catch (error) {
-      console.error('同步组有效期失败:', error)
+      console.error('Failed to sync group expire date:', error)
       throw error
     }
   },
@@ -475,7 +486,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('切换站点自定义开关失败:', error)
+      console.error('Failed to toggle site customization:', error)
       throw error
     }
   },
@@ -486,7 +497,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('更新站点配置失败:', error)
+      console.error('Failed to update site config:', error)
       throw error
     }
   },
@@ -499,7 +510,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getUserGroups()
       return response.data.data
     } catch (error) {
-      console.error('设置组邀请码失败:', error)
+      console.error('Failed to set group invitation code:', error)
       throw error
     }
   },
@@ -509,7 +520,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/user-groups/${groupId}/invitation-logs`, { params })
       return response.data.data
     } catch (error) {
-      console.error('获取邀请码使用记录失败:', error)
+      console.error('Failed to get invitation code logs:', error)
       throw error
     }
   },
@@ -529,7 +540,7 @@ const useAdminStore = create((set) => ({
       }))
       return response.data.data
     } catch (error) {
-      console.error('获取用户积分信息失败:', error)
+      console.error('Failed to get user credits info:', error)
       set({ creditsLoading: false })
       throw error
     }
@@ -543,7 +554,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('设置用户积分配额失败:', error)
+      console.error('Failed to set user credits quota:', error)
       throw error
     }
   },
@@ -553,7 +564,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/users/${userId}/credits/history`, { params })
       return response.data.data
     } catch (error) {
-      console.error('获取用户积分历史失败:', error)
+      console.error('Failed to get user credits history:', error)
       throw error
     }
   },
@@ -567,7 +578,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('充值用户积分失败:', error)
+      console.error('Failed to add user credits:', error)
       throw error
     }
   },
@@ -580,7 +591,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('扣减用户积分失败:', error)
+      console.error('Failed to deduct user credits:', error)
       throw error
     }
   },
@@ -590,12 +601,12 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/users/${userId}/credits/expire`, params)
       return response.data.data
     } catch (error) {
-      console.error('设置积分有效期失败:', error)
+      console.error('Failed to set credits expire date:', error)
       throw error
     }
   },
   
-  setUserAccountExpireDate: async (userId, expireDate, reason = '管理员设置') => {
+  setUserAccountExpireDate: async (userId, expireDate, reason = i18n.t('admin.store.defaultReasonSetExpire')) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/expire-date`, {
         expire_date: expireDate,
@@ -603,12 +614,12 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('设置账号有效期失败:', error)
+      console.error('Failed to set account expire date:', error)
       throw error
     }
   },
   
-  extendUserAccountExpireDate: async (userId, days, reason = '管理员延期') => {
+  extendUserAccountExpireDate: async (userId, days, reason = i18n.t('admin.store.defaultReasonExtendExpire')) => {
     try {
       const response = await apiClient.put(`/admin/users/${userId}/extend-expire-date`, {
         days,
@@ -616,7 +627,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('延长账号有效期失败:', error)
+      console.error('Failed to extend account expire date:', error)
       throw error
     }
   },
@@ -626,7 +637,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/users/${userId}/sync-expire-date`)
       return response.data.data
     } catch (error) {
-      console.error('同步账号有效期失败:', error)
+      console.error('Failed to sync account expire date:', error)
       throw error
     }
   },
@@ -643,7 +654,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取AI模型列表失败:', error)
+      console.error('Failed to get AI model list:', error)
       set({ loading: false })
       throw error
     }
@@ -654,7 +665,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post('/admin/models', modelData)
       return response.data.data
     } catch (error) {
-      console.error('创建AI模型失败:', error)
+      console.error('Failed to create AI model:', error)
       throw error
     }
   },
@@ -664,7 +675,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.put(`/admin/models/${modelId}`, updateData)
       return response.data.data
     } catch (error) {
-      console.error('更新AI模型失败:', error)
+      console.error('Failed to update AI model:', error)
       throw error
     }
   },
@@ -673,7 +684,7 @@ const useAdminStore = create((set) => ({
     try {
       await apiClient.delete(`/admin/models/${modelId}`)
     } catch (error) {
-      console.error('删除AI模型失败:', error)
+      console.error('Failed to delete AI model:', error)
       throw error
     }
   },
@@ -686,7 +697,7 @@ const useAdminStore = create((set) => ({
       await apiClient.put('/admin/models/sort-order', { sort_orders: sortOrders })
       await useAdminStore.getState().getAIModels()
     } catch (error) {
-      console.error('更新模型排序失败:', error)
+      console.error('Failed to update model sort order:', error)
       await useAdminStore.getState().getAIModels()
       throw error
     }
@@ -697,7 +708,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/models/${modelId}/toggle-status`)
       return response.data.data
     } catch (error) {
-      console.error('切换AI模型状态失败:', error)
+      console.error('Failed to toggle AI model status:', error)
       throw error
     }
   },
@@ -707,7 +718,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/models/${modelId}/test`)
       return response.data
     } catch (error) {
-      console.error('测试AI模型失败:', error)
+      console.error('Failed to test AI model:', error)
       throw error
     }
   },
@@ -717,7 +728,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/models/${modelId}/groups`)
       return response.data.data
     } catch (error) {
-      console.error('获取模型分配组失败:', error)
+      console.error('Failed to get model assigned groups:', error)
       throw error
     }
   },
@@ -730,7 +741,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getAIModels()
       return response.data.data
     } catch (error) {
-      console.error('更新模型分配组失败:', error)
+      console.error('Failed to update model assigned groups:', error)
       throw error
     }
   },
@@ -743,7 +754,7 @@ const useAdminStore = create((set) => ({
       set({ systemStats: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取系统统计失败:', error)
+      console.error('Failed to get system stats:', error)
       throw error
     }
   },
@@ -753,7 +764,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get('/admin/stats/realtime')
       return response.data.data
     } catch (error) {
-      console.error('获取实时统计失败:', error)
+      console.error('Failed to get realtime stats:', error)
       throw error
     }
   },
@@ -764,7 +775,7 @@ const useAdminStore = create((set) => ({
       set({ systemHealth: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取系统健康状态失败:', error)
+      console.error('Failed to get system health status:', error)
       throw error
     }
   },
@@ -774,7 +785,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post('/admin/stats/maintenance', { action })
       return response.data
     } catch (error) {
-      console.error('执行维护操作失败:', error)
+      console.error('Failed to perform maintenance action:', error)
       throw error
     }
   },
@@ -787,7 +798,7 @@ const useAdminStore = create((set) => ({
       set({ systemSettings: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('获取系统设置失败:', error)
+      console.error('Failed to get system settings:', error)
       throw error
     }
   },
@@ -798,7 +809,7 @@ const useAdminStore = create((set) => ({
       set({ systemSettings: response.data.data })
       return response.data.data
     } catch (error) {
-      console.error('更新系统设置失败:', error)
+      console.error('Failed to update system settings:', error)
       throw error
     }
   },
@@ -815,7 +826,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取模块列表失败:', error)
+      console.error('Failed to get module list:', error)
       set({ loading: false })
       throw error
     }
@@ -831,7 +842,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取用户模块失败:', error)
+      console.error('Failed to get user modules:', error)
       set({ loading: false })
       throw error
     }
@@ -843,7 +854,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
-      console.error('创建模块失败:', error)
+      console.error('Failed to create module:', error)
       throw error
     }
   },
@@ -854,7 +865,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
-      console.error('更新模块失败:', error)
+      console.error('Failed to update module:', error)
       throw error
     }
   },
@@ -864,7 +875,7 @@ const useAdminStore = create((set) => ({
       await apiClient.delete(`/admin/modules/${moduleId}`)
       await useAdminStore.getState().getModules()
     } catch (error) {
-      console.error('删除模块失败:', error)
+      console.error('Failed to delete module:', error)
       throw error
     }
   },
@@ -875,7 +886,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getModules()
       return response.data.data
     } catch (error) {
-      console.error('切换模块状态失败:', error)
+      console.error('Failed to toggle module status:', error)
       throw error
     }
   },
@@ -885,7 +896,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/modules/${moduleId}/check-health`)
       return response.data
     } catch (error) {
-      console.error('检查模块健康状态失败:', error)
+      console.error('Failed to check module health status:', error)
       throw error
     }
   },
@@ -902,7 +913,7 @@ const useAdminStore = create((set) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取API服务列表失败:', error)
+      console.error('Failed to get API service list:', error)
       set({ loading: false })
       throw error
     }
@@ -913,7 +924,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/api-services/${serviceId}`)
       return response.data.data
     } catch (error) {
-      console.error('获取API服务详情失败:', error)
+      console.error('Failed to get API service detail:', error)
       throw error
     }
   },
@@ -924,7 +935,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
-      console.error('创建API服务失败:', error)
+      console.error('Failed to create API service:', error)
       throw error
     }
   },
@@ -935,7 +946,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
-      console.error('更新API服务失败:', error)
+      console.error('Failed to update API service:', error)
       throw error
     }
   },
@@ -945,7 +956,7 @@ const useAdminStore = create((set) => ({
       await apiClient.delete(`/admin/api-services/${serviceId}`)
       await useAdminStore.getState().getApiServices()
     } catch (error) {
-      console.error('删除API服务失败:', error)
+      console.error('Failed to delete API service:', error)
       throw error
     }
   },
@@ -956,7 +967,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getApiServices()
       return response.data.data
     } catch (error) {
-      console.error('重置API密钥失败:', error)
+      console.error('Failed to reset API key:', error)
       throw error
     }
   },
@@ -966,7 +977,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/api-services/${serviceId}/actions`)
       return response.data.data
     } catch (error) {
-      console.error('获取服务操作配置失败:', error)
+      console.error('Failed to get service action config:', error)
       throw error
     }
   },
@@ -976,7 +987,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.post(`/admin/api-services/${serviceId}/actions`, actionData)
       return response.data.data
     } catch (error) {
-      console.error('保存服务操作配置失败:', error)
+      console.error('Failed to save service action config:', error)
       throw error
     }
   },
@@ -985,7 +996,7 @@ const useAdminStore = create((set) => ({
     try {
       await apiClient.delete(`/admin/api-services/${serviceId}/actions/${actionType}`)
     } catch (error) {
-      console.error('删除服务操作配置失败:', error)
+      console.error('Failed to delete service action config:', error)
       throw error
     }
   },
@@ -995,7 +1006,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/api-services/${serviceId}/stats`, { params })
       return response.data.data
     } catch (error) {
-      console.error('获取服务统计失败:', error)
+      console.error('Failed to get service stats:', error)
       throw error
     }
   },
@@ -1015,7 +1026,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getSystemPromptsStatus()
       return response.data.data
     } catch (error) {
-      console.error('获取系统提示词列表失败:', error)
+      console.error('Failed to get system prompt list:', error)
       set({ loading: false })
       throw error
     }
@@ -1027,7 +1038,7 @@ const useAdminStore = create((set) => ({
       set({ systemPromptsEnabled: response.data.data.enabled })
       return response.data.data
     } catch (error) {
-      console.error('获取系统提示词功能状态失败:', error)
+      console.error('Failed to get system prompts feature status:', error)
       return { success: false, error: error.message }
     }
   },
@@ -1037,7 +1048,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get(`/admin/system-prompts/${promptId}`)
       return response.data.data
     } catch (error) {
-      console.error('获取系统提示词详情失败:', error)
+      console.error('Failed to get system prompt detail:', error)
       throw error
     }
   },
@@ -1048,7 +1059,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getSystemPrompts()
       return { success: true, data: response.data.data }
     } catch (error) {
-      console.error('创建系统提示词失败:', error)
+      console.error('Failed to create system prompt:', error)
       return { success: false, error: error.response?.data?.message || error.message }
     }
   },
@@ -1059,7 +1070,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getSystemPrompts()
       return { success: true, data: response.data.data }
     } catch (error) {
-      console.error('更新系统提示词失败:', error)
+      console.error('Failed to update system prompt:', error)
       return { success: false, error: error.response?.data?.message || error.message }
     }
   },
@@ -1070,7 +1081,7 @@ const useAdminStore = create((set) => ({
       await useAdminStore.getState().getSystemPrompts()
       return { success: true }
     } catch (error) {
-      console.error('删除系统提示词失败:', error)
+      console.error('Failed to delete system prompt:', error)
       return { success: false, error: error.response?.data?.message || error.message }
     }
   },
@@ -1081,7 +1092,7 @@ const useAdminStore = create((set) => ({
       set({ systemPromptsEnabled: enabled })
       return { success: true, data: response.data.data }
     } catch (error) {
-      console.error('切换系统提示词功能失败:', error)
+      console.error('Failed to toggle system prompts feature:', error)
       return { success: false, error: error.response?.data?.message || error.message }
     }
   },
@@ -1093,7 +1104,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get('/admin/usage-logs', { params })
       return response.data.data
     } catch (error) {
-      console.error('获取使用记录失败:', error)
+      console.error('Failed to get usage logs:', error)
       throw error
     }
   },
@@ -1103,7 +1114,7 @@ const useAdminStore = create((set) => ({
       const response = await apiClient.get('/admin/usage-logs/summary', { params })
       return response.data.data
     } catch (error) {
-      console.error('获取使用统计汇总失败:', error)
+      console.error('Failed to get usage summary:', error)
       throw error
     }
   },
@@ -1126,7 +1137,7 @@ const useAdminStore = create((set) => ({
       
       return { success: true }
     } catch (error) {
-      console.error('导出使用记录失败:', error)
+      console.error('Failed to export usage logs:', error)
       throw error
     }
   }

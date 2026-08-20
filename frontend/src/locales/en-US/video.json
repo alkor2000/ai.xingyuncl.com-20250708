@@ -110,5 +110,17 @@
   "video.provider.stable": "Stable Diffusion",
   "video.provider.runway": "Runway",
   "video.provider.pika": "Pika",
-  "video.provider.sora": "Sora"
+  "video.provider.sora": "Sora",
+  
+  "video.modelsLoadFailed": "Failed to fetch video models",
+  "video.taskSubmitted": "Video generation task submitted",
+  "video.generationFailedDefault": "Video generation failed",
+  "video.taskQueryTimeout": "Task query timed out",
+  "video.generationCompleted": "Video generation completed",
+  "video.generationFailedWithReason": "Video generation failed: {{reason}}",
+  "video.galleryLoadFailed": "Failed to fetch public gallery",
+  "video.favoritedResult": "Added to favorites",
+  "video.unfavoritedResult": "Removed from favorites",
+  "video.setPublicResult": "Set to public",
+  "video.setPrivateResult": "Set to private"
 }

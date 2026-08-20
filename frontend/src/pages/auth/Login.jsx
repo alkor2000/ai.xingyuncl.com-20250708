@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { Form, Input, Button, Card, message, Typography, Space, Spin, Tabs, Divider } from 'antd'
 import { UserOutlined, LockOutlined, LoginOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, HomeOutlined, ArrowLeftOutlined, BankOutlined } from '@ant-design/icons'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import LanguageSwitch from '../../components/common/LanguageSwitch'
 import apiClient from '../../utils/api'
+import IdentityLoginEntry from '../../components/auth/IdentityLoginEntry'
+import { buildReturnToFromLocation } from '../../utils/identityNavigation'
 
 const { Title, Text, Paragraph } = Typography
 const { TabPane } = Tabs
@@ -20,7 +22,9 @@ const Login = () => {
   const [orgAppConfig, setOrgAppConfig] = useState(null) // 企业申请配置
   const { login } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const { t } = useTranslation()
+
 
   // 获取公开系统配置
   useEffect(() => {
@@ -77,7 +81,7 @@ const Login = () => {
       }
       await login(loginData)
       message.success(t('auth.login.success'))
-      navigate('/')
+      navigate(buildReturnToFromLocation(location), { replace: true })
     } catch (error) {
       console.error('登录失败:', error)
       message.error(error.response?.data?.message || t('auth.login.failed'))
@@ -148,7 +152,7 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate('/')
+        navigate(buildReturnToFromLocation(location), { replace: true })
       }
     } catch (error) {
       console.error('验证码登录失败:', error)
@@ -195,7 +199,7 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate('/')
+        navigate(buildReturnToFromLocation(location), { replace: true })
       }
     } catch (error) {
       console.error('登录失败:', error)
@@ -681,6 +685,8 @@ const Login = () => {
             </Form.Item>
           </Form>
         )}
+
+                <IdentityLoginEntry />
 
         {/* 简化的提示区域 */}
         <div style={{ 

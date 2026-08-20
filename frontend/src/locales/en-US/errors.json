@@ -4,5 +4,7 @@
   "error.unauthorized": "Unauthorized, please login again",
   "error.forbidden": "Access forbidden",
   "error.notFound": "Resource not found",
-  "error.unknown": "Unknown error"
+  "error.unknown": "Unknown error",
+  "error.pageNotFound": "Sorry, the page you visited does not exist.",
+  "error.backHome": "Back to Home"
 }

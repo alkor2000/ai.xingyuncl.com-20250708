@@ -22,6 +22,12 @@
  *   - 通过 isImageGenerationModel 判断模型类型，仅图像模型放宽超时
  *     普通对话模型仍走全局 120 秒默认值，不受影响
  * 
+ * v2.4 变更（i18n国际化适配）：
+ *   - store层非React组件无法使用useTranslation hook，改用i18next实例的
+ *     i18n.t()直接调用（官方支持的用法，toast为即时消费不存在停留期切语言问题）
+ *   - 用户可见文案（错误提示、消息内容标记）改为i18n.t()，随当前语言实时生效
+ *   - 纯开发者诊断日志（console.log/error/warn）统一改为英文，不进语言包
+ * 
  * 修复记录：
  *   - API错误信息显示给用户
  *   - 流式超时机制
@@ -31,6 +37,7 @@
 import { create } from 'zustand'
 import { message } from 'antd'
 import apiClient from '../utils/api'
+import i18n from '../utils/i18n'
 
 /**
  * 流式超时检测时间（毫秒）
@@ -189,7 +196,7 @@ const useChatStore = create((set, get) => ({
       set({ initialLoading: false })
       return conversations
     } catch (error) {
-      console.error('获取会话列表失败:', error)
+      console.error('Failed to fetch conversation list:', error)
       set({ conversationsLoading: false, initialLoading: false })
       throw error
     }
@@ -203,7 +210,7 @@ const useChatStore = create((set, get) => ({
       set({ userCredits: response.data.data, creditsLoading: false })
       return response.data.data
     } catch (error) {
-      console.error('获取用户积分失败:', error)
+      console.error('Failed to fetch user credits:', error)
       set({ creditsLoading: false })
     }
   },
@@ -245,7 +252,7 @@ const useChatStore = create((set, get) => ({
       
       return newConversation
     } catch (error) {
-      console.error('创建会话失败:', error)
+      console.error('Failed to create conversation:', error)
       set({ conversationsLoading: false })
       throw error
     }
@@ -301,7 +308,7 @@ const useChatStore = create((set, get) => ({
       
       if (!state.aiModels.length) get().getAIModels()
     } catch (error) {
-      console.error('获取会话失败:', error)
+      console.error('Failed to fetch conversation:', error)
       set({ messagesLoading: false, currentConversationId: null, currentConversation: null, messages: [] })
     }
   },
@@ -320,7 +327,7 @@ const useChatStore = create((set, get) => ({
     const model = state.aiModels.find(m => m.name === state.currentConversation.model_name)
     const useStream = !!(model?.stream_enabled)
     
-    console.log('发送消息调试:', {
+    console.log('Send message debug:', {
       currentModel: state.currentConversation.model_name,
       foundModel: model,
       streamEnabled: model?.stream_enabled,
@@ -329,11 +336,11 @@ const useChatStore = create((set, get) => ({
     })
     
     if (useStream) {
-      console.log('使用流式发送')
+      console.log('Using stream send')
       return get().sendStreamMessage(content, fileInfo, fileIds)
     }
     
-    console.log('使用非流式发送')
+    console.log('Using non-stream send')
     set({ typing: true })
     
     if (!state.userCredits) await get().getUserCredits()
@@ -367,7 +374,7 @@ const useChatStore = create((set, get) => ({
         : undefined
       
       if (requestConfig) {
-        console.log('图像生成模型：使用扩展超时', {
+        console.log('Image generation model: using extended timeout', {
           model: model?.name,
           timeout: IMAGE_GEN_REQUEST_TIMEOUT_MS
         })
@@ -423,7 +430,7 @@ const useChatStore = create((set, get) => ({
         typing: false,
         activeRequest: null
       }))
-      console.error('发送消息失败:', error)
+      console.error('Failed to send message:', error)
       throw error
     }
   },
@@ -447,7 +454,7 @@ const useChatStore = create((set, get) => ({
       set({ streamingTimeout: null })
     }
     
-    console.log('开始流式发送消息', { fileIds })
+    console.log('Start streaming message', { fileIds })
     set({ typing: true, isStreaming: true, streamingContent: '', userStoppedStreaming: false })
     
     if (!state.userCredits) await get().getUserCredits()
@@ -511,7 +518,7 @@ const useChatStore = create((set, get) => ({
         if (currentState.currentConversationId === conversationId &&
             currentState.isStreaming && timeSinceLastActivity > STREAM_FORCE_TIMEOUT_MS) {
           
-          console.error(`流式传输超时（${Math.round(timeSinceLastActivity / 1000)}秒无任何响应，包括心跳），强制重置状态`)
+          console.error(`Stream timeout (no response for ${Math.round(timeSinceLastActivity / 1000)}s, including heartbeat), force resetting state`)
           
           set({
             typing: false, isStreaming: false, streamingContent: '',
@@ -524,7 +531,7 @@ const useChatStore = create((set, get) => ({
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === streamingMsg.id
-                  ? { ...msg, streaming: false, content: msg.content + '\n\n[响应超时，已收到部分内容]' }
+                  ? { ...msg, streaming: false, content: msg.content + i18n.t('chat.stream.timeoutPartial') }
                   : msg
               )
             }))
@@ -558,7 +565,7 @@ const useChatStore = create((set, get) => ({
         requestBody,
         {
           onInit: (data) => {
-            console.log('流式初始化:', data)
+            console.log('Stream init:', data)
             realUserMessage = data.user_message
             realAiMessageId = data.ai_message_id
             
@@ -625,16 +632,16 @@ const useChatStore = create((set, get) => ({
           },
           
           onComplete: (data) => {
-            console.log('流式完成:', data)
+            console.log('Stream complete:', data)
             
-            if (hasCompleted) { console.warn('onComplete已经调用过，忽略重复调用'); return }
+            if (hasCompleted) { console.warn('onComplete already called, ignoring duplicate call'); return }
             hasCompleted = true
             
             const currentState = get()
             if (timeoutId) { clearTimeout(timeoutId); set({ streamingTimeout: null }) }
             
             if (data.reason === 'stream_end' && !data.content) {
-              console.log('兜底stream_end且无content，忽略')
+              console.log('Fallback stream_end with no content, ignoring')
               if (currentState.currentConversationId === conversationId) {
                 set({ typing: false, isStreaming: false, streamingContent: '', streamingMessageId: null, userStoppedStreaming: false })
               }
@@ -642,7 +649,7 @@ const useChatStore = create((set, get) => ({
             }
             
             if (data.cancelled) {
-              console.log('流式请求已取消，忽略onComplete')
+              console.log('Stream request cancelled, ignoring onComplete')
               if (currentState.currentConversationId === conversationId) {
                 set({ typing: false, isStreaming: false, streamingContent: '', streamingMessageId: null, userStoppedStreaming: false })
               }
@@ -655,7 +662,7 @@ const useChatStore = create((set, get) => ({
             const finalAiMessage = {
               id: data.messageId || realAiMessageId,
               role: 'assistant',
-              content: wasUserStopped ? finalContent + '\n\n[已停止生成]' : finalContent,
+              content: wasUserStopped ? finalContent + `\n\n[${i18n.t('chat.stopGeneration')}]` : finalContent,
               tokens: data.tokens || 0,
               created_at: new Date().toISOString(),
               streaming: false,
@@ -679,14 +686,14 @@ const useChatStore = create((set, get) => ({
           },
           
           onError: (error) => {
-            console.error('流式传输错误:', error)
+            console.error('Stream transmission error:', error)
             
             if (timeoutId) { clearTimeout(timeoutId); set({ streamingTimeout: null }) }
             
-            let errorMessage = '请求失败，请稍后重试'
+            let errorMessage = i18n.t('chat.stream.requestFailed')
             if (error && error.message) errorMessage = error.message
             let fullErrorMessage = errorMessage
-            if (error && error.details) fullErrorMessage = errorMessage + '\n[详情] ' + error.details
+            if (error && error.details) fullErrorMessage = errorMessage + i18n.t('chat.error.detailPrefix') + error.details
             if (error && error.code) fullErrorMessage = fullErrorMessage + ' (HTTP ' + error.code + ')'
             
             message.error(errorMessage)
@@ -727,10 +734,10 @@ const useChatStore = create((set, get) => ({
         clearTimeout(currentState.streamingTimeout)
       }
       
-      let errorMessage = '消息发送失败，请稍后重试'
+      let errorMessage = i18n.t('chat.stream.sendFailed')
       if (error && error.message) errorMessage = error.message
       let fullErrorMsg = errorMessage
-      if (error && error.details) fullErrorMsg = errorMessage + '\n[详情] ' + error.details
+      if (error && error.details) fullErrorMsg = errorMessage + i18n.t('chat.error.detailPrefix') + error.details
       if (error && error.code) fullErrorMsg = fullErrorMsg + ' (HTTP ' + error.code + ')'
       
       message.error(errorMessage)
@@ -747,7 +754,7 @@ const useChatStore = create((set, get) => ({
         streamingMessageId: null, userStoppedStreaming: false, streamingTimeout: null
       }))
       
-      console.error('流式消息发送失败:', error)
+      console.error('Failed to send stream message:', error)
     }
   },
   
@@ -776,10 +783,10 @@ const useChatStore = create((set, get) => ({
         }
       }))
       
-      console.log('消息对删除成功', { deletedUserMessageId, deletedAiMessageId })
+      console.log('Message pair deleted successfully', { deletedUserMessageId, deletedAiMessageId })
       return response.data.data
     } catch (error) {
-      console.error('删除消息对失败:', error)
+      console.error('Failed to delete message pair:', error)
       throw error
     }
   },
@@ -805,17 +812,17 @@ const useChatStore = create((set, get) => ({
         }
       }))
       
-      console.log('对话已清空', { conversationId })
+      console.log('Conversation cleared', { conversationId })
       return response.data.data
     } catch (error) {
-      console.error('清空对话失败:', error)
+      console.error('Failed to clear conversation:', error)
       throw error
     }
   },
   
   // 停止生成
   stopGeneration: () => {
-    console.log('停止生成')
+    console.log('Stop generation')
     const state = get()
     
     if (state.isStreaming) {
@@ -869,7 +876,7 @@ const useChatStore = create((set, get) => ({
       
       return updatedConversation
     } catch (error) {
-      console.error('更新会话失败:', error)
+      console.error('Failed to update conversation:', error)
       throw error
     }
   },
@@ -892,7 +899,7 @@ const useChatStore = create((set, get) => ({
         messages: state.currentConversationId === conversationId ? [] : state.messages
       }))
     } catch (error) {
-      console.error('删除会话失败:', error)
+      console.error('Failed to delete conversation:', error)
       throw error
     }
   },
@@ -902,11 +909,11 @@ const useChatStore = create((set, get) => ({
     try {
       const response = await apiClient.get('/chat/models')
       const models = response.data.data
-      console.log('获取到的AI模型列表:', models)
+      console.log('Fetched AI model list:', models)
       set({ aiModels: models })
       return models
     } catch (error) {
-      console.error('获取AI模型列表失败:', error)
+      console.error('Failed to fetch AI model list:', error)
     }
   },
 
@@ -915,11 +922,11 @@ const useChatStore = create((set, get) => ({
     try {
       const response = await apiClient.get('/chat/system-prompts')
       const prompts = response.data.data
-      console.log('获取到的系统提示词列表:', prompts)
+      console.log('Fetched system prompt list:', prompts)
       set({ systemPrompts: prompts })
       return prompts
     } catch (error) {
-      console.error('获取系统提示词列表失败:', error)
+      console.error('Failed to fetch system prompt list:', error)
       return []
     }
   },
@@ -931,11 +938,11 @@ const useChatStore = create((set, get) => ({
         params: { include_inactive: false }
       })
       const combinations = response.data.data
-      console.log('获取到的模块组合列表:', combinations)
+      console.log('Fetched module combination list:', combinations)
       set({ moduleCombinations: combinations })
       return combinations
     } catch (error) {
-      console.error('获取模块组合列表失败:', error)
+      console.error('Failed to fetch module combination list:', error)
       return []
     }
   },

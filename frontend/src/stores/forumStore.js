@@ -1,8 +1,18 @@
 /**
- * 论坛模块状态管理 Store v2.2
+ * 论坛模块状态管理 Store v2.3
  * 
  * v2.2 - fetchBoardPosts解析后端返回的meta.is_board_moderator
  * v2.1 - deleteAttachment 删除单个附件
+ * v2.3 - i18n国际化适配：
+ *   非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   post/reply的create/update/delete结果提示新增forum.json的post.* 和 reply.* 两组键
+ *   favorite的toggle结果提示新增favorite.favoritedResult/unfavoritedResult
+ *   （与已有的favorited按钮态标签语义不同：一个是状态标签一个是操作结果toast）
+ *   点赞/收藏toggle失败复用common.json的message.error（通用操作失败）
+ *   图片/文件上传失败兜底复用forum.upload.failed（后端已返回message时不会触发）
+ *   版主操作失败新增moderator.actionFailed（与点赞收藏的通用操作失败语境不同）
+ *   管理端版块/版主CRUD新增admin.*Success/Failed共10个键
+ *   纯开发者日志（console.error）统一改英文，不进语言包
  * 
  * @module stores/forumStore
  */
@@ -10,6 +20,7 @@
 import { create } from 'zustand';
 import { message } from 'antd';
 import apiClient from '../utils/api';
+import i18n from '../utils/i18n';
 
 const useForumStore = create((set, get) => ({
 
@@ -56,7 +67,7 @@ const useForumStore = create((set, get) => ({
       if (res.data.success) set({ boards: res.data.data || [], boardsLoading: false });
       else set({ boardsLoading: false });
     } catch (error) {
-      console.error('获取版块失败:', error);
+      console.error('Failed to fetch boards:', error);
       set({ boardsLoading: false });
     }
   },
@@ -94,7 +105,7 @@ const useForumStore = create((set, get) => ({
         postsLoading: false
       });
     } catch (error) {
-      console.error('获取帖子列表失败:', error);
+      console.error('Failed to fetch board posts:', error);
       set({ postsLoading: false });
     }
   },
@@ -108,7 +119,7 @@ const useForumStore = create((set, get) => ({
       if (res.data.success) set({ hotPosts: res.data.data || [], hotPostsLoading: false });
       else set({ hotPostsLoading: false });
     } catch (error) {
-      console.error('获取热帖失败:', error);
+      console.error('Failed to fetch hot posts:', error);
       set({ hotPostsLoading: false });
     }
   },
@@ -124,9 +135,9 @@ const useForumStore = create((set, get) => ({
       set({ currentPostLoading: false });
       return null;
     } catch (error) {
-      console.error('获取帖子详情失败:', error);
+      console.error('Failed to fetch post detail:', error);
       set({ currentPostLoading: false });
-      if (error.response?.status === 404) message.error('帖子不存在或已被删除');
+      if (error.response?.status === 404) message.error(i18n.t('forum.post.notFound'));
       return null;
     }
   },
@@ -136,10 +147,10 @@ const useForumStore = create((set, get) => ({
   createPost: async (data) => {
     try {
       const res = await apiClient.post('/forum/posts', data);
-      if (res.data.success) { message.success('发帖成功'); return res.data.data; }
+      if (res.data.success) { message.success(i18n.t('forum.post.createSuccess')); return res.data.data; }
       throw new Error(res.data.message);
     } catch (error) {
-      message.error(error.response?.data?.message || error.message || '发帖失败');
+      message.error(error.response?.data?.message || error.message || i18n.t('forum.post.createFailed'));
       throw error;
     }
   },
@@ -148,13 +159,13 @@ const useForumStore = create((set, get) => ({
     try {
       const res = await apiClient.put(`/forum/posts/${postId}`, data);
       if (res.data.success) {
-        message.success('编辑成功');
+        message.success(i18n.t('forum.post.updateSuccess'));
         set(state => ({ currentPost: state.currentPost?.id === parseInt(postId) ? { ...state.currentPost, ...res.data.data } : state.currentPost }));
         return res.data.data;
       }
       throw new Error(res.data.message);
     } catch (error) {
-      message.error(error.response?.data?.message || '编辑失败');
+      message.error(error.response?.data?.message || i18n.t('forum.post.updateFailed'));
       throw error;
     }
   },
@@ -163,13 +174,13 @@ const useForumStore = create((set, get) => ({
     try {
       const res = await apiClient.delete(`/forum/posts/${postId}`);
       if (res.data.success) {
-        message.success('删除成功');
+        message.success(i18n.t('forum.post.deleteSuccess'));
         set(state => ({ posts: state.posts.filter(p => p.id !== parseInt(postId)), myPosts: state.myPosts.filter(p => p.id !== parseInt(postId)) }));
         return true;
       }
       throw new Error(res.data.message);
     } catch (error) {
-      message.error(error.response?.data?.message || '删除失败');
+      message.error(error.response?.data?.message || i18n.t('forum.post.deleteFailed'));
       throw error;
     }
   },
@@ -186,7 +197,7 @@ const useForumStore = create((set, get) => ({
         set({ replies: res.data.data || [], repliesPagination: res.data.pagination || { page, limit, total: 0, totalPages: 0 }, repliesLoading: false });
       } else set({ repliesLoading: false });
     } catch (error) {
-      console.error('获取回复列表失败:', error);
+      console.error('Failed to fetch replies:', error);
       set({ repliesLoading: false });
     }
   },
@@ -195,7 +206,7 @@ const useForumStore = create((set, get) => ({
     try {
       const res = await apiClient.post(`/forum/posts/${postId}/replies`, data);
       if (res.data.success) {
-        message.success('回复成功');
+        message.success(i18n.t('forum.reply.createSuccess'));
         set(state => ({
           replies: [...state.replies, res.data.data],
           currentPost: state.currentPost ? { ...state.currentPost, reply_count: (state.currentPost.reply_count || 0) + 1 } : null
@@ -204,7 +215,7 @@ const useForumStore = create((set, get) => ({
       }
       throw new Error(res.data.message);
     } catch (error) {
-      message.error(error.response?.data?.message || error.message || '回复失败');
+      message.error(error.response?.data?.message || error.message || i18n.t('forum.reply.createFailed'));
       throw error;
     }
   },
@@ -213,25 +224,25 @@ const useForumStore = create((set, get) => ({
     try {
       const res = await apiClient.put(`/forum/replies/${replyId}`, { content });
       if (res.data.success) {
-        message.success('编辑成功');
+        message.success(i18n.t('forum.reply.updateSuccess'));
         set(state => ({ replies: state.replies.map(r => r.id === parseInt(replyId) ? { ...r, ...res.data.data } : r) }));
         return res.data.data;
       }
-    } catch (error) { message.error('编辑失败'); throw error; }
+    } catch (error) { message.error(i18n.t('forum.reply.updateFailed')); throw error; }
   },
 
   deleteReply: async (replyId) => {
     try {
       const res = await apiClient.delete(`/forum/replies/${replyId}`);
       if (res.data.success) {
-        message.success('删除成功');
+        message.success(i18n.t('forum.reply.deleteSuccess'));
         set(state => ({
           replies: state.replies.filter(r => r.id !== parseInt(replyId)),
           currentPost: state.currentPost ? { ...state.currentPost, reply_count: Math.max((state.currentPost.reply_count || 0) - 1, 0) } : null
         }));
         return true;
       }
-    } catch (error) { message.error('删除失败'); throw error; }
+    } catch (error) { message.error(i18n.t('forum.reply.deleteFailed')); throw error; }
   },
 
   /* ================================================================
@@ -248,7 +259,7 @@ const useForumStore = create((set, get) => ({
         }));
         return liked;
       }
-    } catch (error) { message.error('操作失败'); }
+    } catch (error) { message.error(i18n.t('message.error')); }
   },
 
   toggleReplyLike: async (replyId) => {
@@ -261,7 +272,7 @@ const useForumStore = create((set, get) => ({
         }));
         return liked;
       }
-    } catch (error) { message.error('操作失败'); }
+    } catch (error) { message.error(i18n.t('message.error')); }
   },
 
   toggleFavorite: async (postId) => {
@@ -273,10 +284,10 @@ const useForumStore = create((set, get) => ({
           posts: state.posts.map(p => p.id === parseInt(postId) ? { ...p, is_favorited: favorited ? 1 : 0, favorite_count: favorited ? (p.favorite_count || 0) + 1 : Math.max((p.favorite_count || 0) - 1, 0) } : p),
           currentPost: state.currentPost?.id === parseInt(postId) ? { ...state.currentPost, is_favorited: favorited ? 1 : 0, favorite_count: favorited ? (state.currentPost.favorite_count || 0) + 1 : Math.max((state.currentPost.favorite_count || 0) - 1, 0) } : state.currentPost
         }));
-        message.success(favorited ? '已收藏' : '已取消收藏');
+        message.success(favorited ? i18n.t('forum.favorite.favoritedResult') : i18n.t('forum.favorite.unfavoritedResult'));
         return favorited;
       }
-    } catch (error) { message.error('操作失败'); }
+    } catch (error) { message.error(i18n.t('message.error')); }
   },
 
   fetchFavorites: async (options = {}) => {
@@ -309,7 +320,7 @@ const useForumStore = create((set, get) => ({
       const res = await apiClient.post('/forum/upload/images', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
       if (res.data.success) return res.data.data;
       throw new Error(res.data.message);
-    } catch (error) { message.error(error.response?.data?.message || '图片上传失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.upload.failed')); throw error; }
   },
 
   uploadFiles: async (files) => {
@@ -319,19 +330,19 @@ const useForumStore = create((set, get) => ({
       const res = await apiClient.post('/forum/upload/files', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 });
       if (res.data.success) return res.data.data;
       throw new Error(res.data.message);
-    } catch (error) { message.error(error.response?.data?.message || '文件上传失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.upload.failed')); throw error; }
   },
 
   deleteAttachment: async (attachmentId) => {
     try {
       const res = await apiClient.delete(`/forum/attachments/${attachmentId}`);
       if (res.data.success) {
-        message.success('附件已删除');
+        message.success(i18n.t('forum.attachment.deleteSuccess'));
         return true;
       }
       throw new Error(res.data.message);
     } catch (error) {
-      message.error(error.response?.data?.message || '删除附件失败');
+      message.error(error.response?.data?.message || i18n.t('forum.attachment.deleteFailed'));
       throw error;
     }
   },
@@ -355,7 +366,7 @@ const useForumStore = create((set, get) => ({
     try {
       const res = await apiClient.put('/forum/notifications/read-all');
       if (res.data.success) set(state => ({ notifications: state.notifications.map(n => ({ ...n, is_read: 1 })), unreadCount: 0 }));
-    } catch (error) { console.error('标记已读失败:', error); }
+    } catch (error) { console.error('Failed to mark all as read:', error); }
   },
 
   fetchUnreadCount: async () => {
@@ -390,7 +401,7 @@ const useForumStore = create((set, get) => ({
         }));
         return res.data.data;
       }
-    } catch (error) { message.error(error.response?.data?.message || '操作失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.moderator.actionFailed')); throw error; }
   },
 
   modHideReply: async (replyId) => {
@@ -401,7 +412,7 @@ const useForumStore = create((set, get) => ({
         set(state => ({ replies: state.replies.map(r => r.id === parseInt(replyId) ? { ...r, is_hidden: res.data.data.is_hidden } : r) }));
         return res.data.data;
       }
-    } catch (error) { message.error('操作失败'); throw error; }
+    } catch (error) { message.error(i18n.t('forum.moderator.actionFailed')); throw error; }
   },
 
   /* ================================================================
@@ -419,53 +430,53 @@ const useForumStore = create((set, get) => ({
   adminCreateBoard: async (data) => {
     try {
       const res = await apiClient.post('/forum/admin/boards', data);
-      if (res.data.success) { message.success('版块创建成功'); get().adminFetchBoards(); return res.data.data; }
+      if (res.data.success) { message.success(i18n.t('forum.admin.createBoardSuccess')); get().adminFetchBoards(); return res.data.data; }
       throw new Error(res.data.message);
-    } catch (error) { message.error(error.response?.data?.message || '创建失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.admin.createBoardFailed')); throw error; }
   },
 
   adminUpdateBoard: async (boardId, data) => {
     try {
       const res = await apiClient.put(`/forum/admin/boards/${boardId}`, data);
-      if (res.data.success) { message.success('版块更新成功'); get().adminFetchBoards(); return res.data.data; }
+      if (res.data.success) { message.success(i18n.t('forum.admin.updateBoardSuccess')); get().adminFetchBoards(); return res.data.data; }
       throw new Error(res.data.message);
-    } catch (error) { message.error(error.response?.data?.message || '更新失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.admin.updateBoardFailed')); throw error; }
   },
 
   adminDeleteBoard: async (boardId) => {
     try {
       const res = await apiClient.delete(`/forum/admin/boards/${boardId}`);
-      if (res.data.success) { message.success('版块删除成功'); get().adminFetchBoards(); return true; }
+      if (res.data.success) { message.success(i18n.t('forum.admin.deleteBoardSuccess')); get().adminFetchBoards(); return true; }
       throw new Error(res.data.message);
-    } catch (error) { message.error(error.response?.data?.message || '删除失败'); throw error; }
+    } catch (error) { message.error(error.response?.data?.message || i18n.t('forum.admin.deleteBoardFailed')); throw error; }
   },
 
   adminFetchModerators: async (boardId) => {
     try {
       const res = await apiClient.get(`/forum/admin/boards/${boardId}/moderators`);
       if (res.data.success) { set({ moderators: res.data.data || [] }); return res.data.data; }
-    } catch (error) { console.error('获取版主列表失败:', error); }
+    } catch (error) { console.error('Failed to fetch moderator list:', error); }
   },
 
   adminAppointModerator: async (boardId, userId) => {
     try {
       const res = await apiClient.post(`/forum/admin/boards/${boardId}/moderators`, { user_id: userId });
-      if (res.data.success) { message.success('版主指定成功'); get().adminFetchModerators(boardId); return true; }
-    } catch (error) { message.error('指定版主失败'); throw error; }
+      if (res.data.success) { message.success(i18n.t('forum.admin.appointModeratorSuccess')); get().adminFetchModerators(boardId); return true; }
+    } catch (error) { message.error(i18n.t('forum.admin.appointModeratorFailed')); throw error; }
   },
 
   adminRemoveModerator: async (moderatorId, boardId) => {
     try {
       const res = await apiClient.delete(`/forum/admin/moderators/${moderatorId}`);
-      if (res.data.success) { message.success('版主移除成功'); get().adminFetchModerators(boardId); return true; }
-    } catch (error) { message.error('移除版主失败'); throw error; }
+      if (res.data.success) { message.success(i18n.t('forum.admin.removeModeratorSuccess')); get().adminFetchModerators(boardId); return true; }
+    } catch (error) { message.error(i18n.t('forum.admin.removeModeratorFailed')); throw error; }
   },
 
   adminFetchStats: async () => {
     try {
       const res = await apiClient.get('/forum/admin/stats');
       if (res.data.success) { set({ forumStats: res.data.data }); return res.data.data; }
-    } catch (error) { console.error('获取论坛统计失败:', error); }
+    } catch (error) { console.error('Failed to fetch forum stats:', error); }
   },
 
   /* ================================================================

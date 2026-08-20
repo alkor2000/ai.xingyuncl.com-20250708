@@ -1,9 +1,16 @@
 /**
  * 知识模块状态管理
+ * 
+ * v1.1 变更（i18n国际化适配）：
+ *   - 非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   - error.response?.data?.message的兜底文案（会展示给调用方组件）改为i18n.t()
+ *     新增knowledge.module.*与knowledge.combination.*两个子命名空间共11个键
+ *   - 纯开发者日志（console.error）统一改英文，不进语言包
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
+import i18n from '../utils/i18n'
 
 const useKnowledgeStore = create((set, get) => ({
   // 状态
@@ -30,9 +37,9 @@ const useKnowledgeStore = create((set, get) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取知识模块列表失败:', error)
+      console.error('Failed to fetch knowledge module list:', error)
       set({ 
-        error: error.response?.data?.message || '获取知识模块列表失败',
+        error: error.response?.data?.message || i18n.t('knowledge.module.listLoadFailed'),
         loading: false 
       })
       throw error
@@ -48,9 +55,9 @@ const useKnowledgeStore = create((set, get) => ({
       const response = await apiClient.get(`/knowledge/modules/${moduleId}`)
       return response.data.data
     } catch (error) {
-      console.error('获取知识模块详情失败:', error)
+      console.error('Failed to fetch knowledge module detail:', error)
       set({ 
-        error: error.response?.data?.message || '获取知识模块详情失败',
+        error: error.response?.data?.message || i18n.t('knowledge.module.detailLoadFailed'),
         loading: false 
       })
       throw error
@@ -76,9 +83,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return newModule
     } catch (error) {
-      console.error('创建知识模块失败:', error)
+      console.error('Failed to create knowledge module:', error)
       set({ 
-        error: error.response?.data?.message || '创建知识模块失败',
+        error: error.response?.data?.message || i18n.t('knowledge.module.createFailed'),
         loading: false 
       })
       throw error
@@ -104,9 +111,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return updatedModule
     } catch (error) {
-      console.error('更新知识模块失败:', error)
+      console.error('Failed to update knowledge module:', error)
       set({ 
-        error: error.response?.data?.message || '更新知识模块失败',
+        error: error.response?.data?.message || i18n.t('knowledge.module.updateFailed'),
         loading: false 
       })
       throw error
@@ -129,9 +136,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return true
     } catch (error) {
-      console.error('删除知识模块失败:', error)
+      console.error('Failed to delete knowledge module:', error)
       set({ 
-        error: error.response?.data?.message || '删除知识模块失败',
+        error: error.response?.data?.message || i18n.t('knowledge.module.deleteFailed'),
         loading: false 
       })
       throw error
@@ -148,7 +155,7 @@ const useKnowledgeStore = create((set, get) => ({
       set({ categories })
       return categories
     } catch (error) {
-      console.error('获取分类列表失败:', error)
+      console.error('Failed to fetch category list:', error)
       return []
     }
   },
@@ -170,9 +177,9 @@ const useKnowledgeStore = create((set, get) => ({
       })
       return response.data.data
     } catch (error) {
-      console.error('获取模块组合列表失败:', error)
+      console.error('Failed to fetch combination list:', error)
       set({ 
-        error: error.response?.data?.message || '获取模块组合列表失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.listLoadFailed'),
         loading: false 
       })
       throw error
@@ -188,9 +195,9 @@ const useKnowledgeStore = create((set, get) => ({
       const response = await apiClient.get(`/knowledge/combinations/${combinationId}`)
       return response.data.data
     } catch (error) {
-      console.error('获取模块组合详情失败:', error)
+      console.error('Failed to fetch combination detail:', error)
       set({ 
-        error: error.response?.data?.message || '获取模块组合详情失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.detailLoadFailed'),
         loading: false 
       })
       throw error
@@ -216,9 +223,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return newCombination
     } catch (error) {
-      console.error('创建模块组合失败:', error)
+      console.error('Failed to create combination:', error)
       set({ 
-        error: error.response?.data?.message || '创建模块组合失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.createFailed'),
         loading: false 
       })
       throw error
@@ -244,9 +251,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return updatedCombination
     } catch (error) {
-      console.error('更新模块组合失败:', error)
+      console.error('Failed to update combination:', error)
       set({ 
-        error: error.response?.data?.message || '更新模块组合失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.updateFailed'),
         loading: false 
       })
       throw error
@@ -269,9 +276,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return true
     } catch (error) {
-      console.error('删除模块组合失败:', error)
+      console.error('Failed to delete combination:', error)
       set({ 
-        error: error.response?.data?.message || '删除模块组合失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.deleteFailed'),
         loading: false 
       })
       throw error
@@ -295,9 +302,9 @@ const useKnowledgeStore = create((set, get) => ({
       
       return newCombination
     } catch (error) {
-      console.error('复制模块组合失败:', error)
+      console.error('Failed to copy combination:', error)
       set({ 
-        error: error.response?.data?.message || '复制模块组合失败',
+        error: error.response?.data?.message || i18n.t('knowledge.combination.copyFailed'),
         loading: false 
       })
       throw error

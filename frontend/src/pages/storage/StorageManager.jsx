@@ -1,19 +1,47 @@
 /**
- * 智能云盘 - Windows风格文件管理器 v2.1
- * 
+ * 智能云盘 - Windows风格文件管理器 v2.2
+ *
+ * ── v2.2 国际化修复（说明为何这样改）──
+ * 1) copyToClipboard 职责收窄【设计性修复，同时修掉一个真实 Bug】
+ *    原实现在模块级工具函数内部直接 message 提示，并用
+ *    `successMsg || '已复制'` / `errorMsg || '复制失败'` 兜底。
+ *    模块级函数拿不到 t()，一旦调用方漏传参数就必然露出硬编码中文。
+ *    列表视图那处正是只传了 successMsg 没传 errorMsg，因此复制失败时
+ *    英文环境会弹出中文"复制失败"。
+ *    现改为：该函数只做复制动作并返回 boolean，提示统一交给组件内的
+ *    handleCopyLink（组件内可访问 t）。从设计上消除模块级函数的文案职责，
+ *    杜绝同类漏传再次发生。
+ *
+ * 2) 移动弹窗确认按钮文案修正【Bug】
+ *    原 okText={t('storage.moveSuccess')}，按钮上显示"移动成功"/
+ *    "Move successful"，属键选用错误。改用新增的 storage.moveConfirmOk
+ *    （"移动"/"Move"）。
+ *
+ * 3) 上传时间列补 locale
+ *    原 new Date(d).toLocaleString() 未传 locale，英文环境仍按浏览器默认
+ *    区域格式化。改为传 i18n.language。
+ *
+ * 4) 底部状态栏去掉冗余前缀
+ *    原 <span>Ctrl+Click {t('storage.ctrlClickTip')}</span> 渲染为
+ *    "Ctrl+Click 按住 Ctrl 点击可多选"（英文 "Ctrl+Click Hold Ctrl to
+ *    multi-select"）。按键名已包含在译文中，硬编码前缀属重复。
+ *
+ * 5) 魔法值抽为模块常量（菜单尺寸、文件大小上限、字节换算、告警阈值），
+ *    避免同一数字散落多处后改一处漏一处。
+ *
+ * 注：本文件超过 600 行属既有状况，拆分为容器 + 子组件属重构范畴，
+ *     风险高于国际化本身，故本次不做结构性调整。
+ *
  * v2.1 修复：
  * - 修复拖拽移动文件后上传遮罩不消失的bug
  *   原因：内部拖拽（文件移动）触发了外层容器的handleDragEnter，dragActive被设为true但未重置
  *   方案：handleDragEnter中判断是否为外部文件拖入（检查dataTransfer.types），
  *         只有外部文件才激活上传遮罩；onDragEnd中也重置dragActive状态
- * 
+ *
  * v2.0 完整重构：
  * 1. 拖拽上传 - 拖拽文件到页面区域直接上传，全屏遮罩视觉反馈
  * 2. 拖拽移动 - 拖拽文件/文件夹到其他文件夹或左侧树实现移动
  * 3. 右键菜单 - Windows风格上下文菜单（打开/重命名/移动到/删除/下载/复制链接/属性）
- *    - 文件夹右键：打开、重命名、删除
- *    - 文件右键：预览、下载、重命名、移动到（含子菜单）、复制链接、删除
- *    - 空白处右键：上传、新建文件夹、粘贴、刷新、全选
  * 4. 多选操作 - Ctrl+点击多选、Shift+范围选
  * 5. 键盘快捷键 - Delete删除、F2重命名、Ctrl+A全选、Escape取消选择
  * 6. 内联重命名 - 双击文件名/F2直接在卡片上输入新名称
@@ -47,6 +75,25 @@ const { useBreakpoint } = Grid
 // ===== 常量 =====
 const ViewMode = { GRID: 'grid', LIST: 'list' }
 
+/** 默认单文件大小上限（MB）—— 后端未下发 creditConfig.max_file_size 时的兜底 */
+const DEFAULT_MAX_FILE_SIZE_MB = 100
+
+/** 字节换算基数 */
+const BYTES_PER_KB = 1024
+const BYTES_PER_MB = 1024 * 1024
+
+/** 右键菜单尺寸估值，用于靠近屏幕边缘时翻转位置防溢出 */
+const CONTEXT_MENU_WIDTH = 240
+const CONTEXT_MENU_HEIGHT = 300
+const CONTEXT_MENU_FLIP_OFFSET_Y = 200
+
+/** 存储使用率超过该比例时进度条转为告警色 */
+const STORAGE_WARN_RATIO = 0.9
+
+/** 网格视图与列表视图的文件图标尺寸 */
+const ICON_SIZE_GRID = 64
+const ICON_SIZE_LIST = 24
+
 // ===== 工具函数 =====
 
 /** 获取文件类型对应的CSS类名 */
@@ -63,8 +110,8 @@ const getFileTypeClass = (mimeType, fileName) => {
   return 'unknown-file'
 }
 
-/** 文件图标组件 */
-const FileIcon = ({ mimeType, fileName, size = 64 }) => {
+/** 文件图标组件（纯图标映射，无文案，可安全放模块级） */
+const FileIcon = ({ mimeType, fileName, size = ICON_SIZE_GRID }) => {
   const iconProps = { style: { fontSize: size } }
   const ext = fileName ? fileName.split('.').pop().toLowerCase() : ''
   if (mimeType?.startsWith('image/') || ['jpg','jpeg','png','gif','svg','webp','bmp'].includes(ext))
@@ -86,28 +133,43 @@ const FileIcon = ({ mimeType, fileName, size = 64 }) => {
   return <FileUnknownOutlined {...iconProps} className="file-icon" />
 }
 
-/** 格式化文件大小 */
+/**
+ * 格式化文件大小
+ * B/KB/MB/GB 为国际通用技术单位，不参与国际化
+ */
 const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return '0 B'
-  const k = 1024
+  const k = BYTES_PER_KB
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-/** 复制到剪贴板 */
-const copyToClipboard = async (text, successMsg, errorMsg) => {
+/**
+ * 复制文本到剪贴板
+ *
+ * v2.2 职责收窄：只负责复制动作并返回是否成功，不做任何界面提示。
+ * 原因：本函数为模块级工具，无法访问 t()，若在内部提示就必须硬编码中文兜底，
+ * 且调用方漏传参数时会静默露出中文。提示改由组件内的 handleCopyLink 负责。
+ *
+ * @param {string} text 待复制文本
+ * @returns {Promise<boolean>} 是否复制成功
+ */
+const copyToClipboard = async (text) => {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
     } else {
+      // 非安全上下文（http）下 navigator.clipboard 不可用，降级到 execCommand
       const ta = document.createElement('textarea')
       ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
       document.body.appendChild(ta); ta.select(); document.execCommand('copy')
       document.body.removeChild(ta)
     }
-    message.success(successMsg || '已复制')
-  } catch { message.error(errorMsg || '复制失败') }
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -124,7 +186,8 @@ const isExternalFileDrag = (e) => {
 
 // ===== 主组件 =====
 const StorageManager = () => {
-  const { t } = useTranslation()
+  // 一并取出 i18n：上传时间列的 toLocaleString 需要当前语言
+  const { t, i18n } = useTranslation()
   const screens = useBreakpoint()
   const contentRef = useRef(null)
 
@@ -162,6 +225,9 @@ const StorageManager = () => {
   const [uploadCreditsNeeded, setUploadCreditsNeeded] = useState(0)
   const [dragOverFolderId, setDragOverFolderId] = useState(null) // 拖拽经过的文件夹ID
   const [draggingItems, setDraggingItems] = useState([])  // 正在拖拽的项目
+
+  // 当前生效的单文件大小上限（MB）
+  const maxFileSizeMB = creditConfig?.max_file_size || DEFAULT_MAX_FILE_SIZE_MB
 
   // 用户积分
   const userCredits = useMemo(() => {
@@ -271,7 +337,7 @@ const StorageManager = () => {
     if (e.ctrlKey || e.metaKey) {
       // Ctrl+点击：切换单个选择
       if (itemType === 'file') {
-        setSelectedFiles(prev => 
+        setSelectedFiles(prev =>
           prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
         )
       } else {
@@ -307,6 +373,20 @@ const StorageManager = () => {
       setLastClickedIndex(-1)
     }
   }, [clearSelection])
+
+  /**
+   * v2.2 复制链接并给出提示
+   * 提示放在组件内而非模块级 copyToClipboard，因为只有组件内能访问 t()。
+   * 依赖含 t：本回调直接产出界面文案，语言切换后必须使用新的翻译函数。
+   */
+  const handleCopyLink = useCallback(async (url) => {
+    const ok = await copyToClipboard(url)
+    if (ok) {
+      message.success(t('storage.linkCopied'))
+    } else {
+      message.error(t('storage.copyFailed'))
+    }
+  }, [t])
 
   // ===== v2.1 修复：拖拽上传（只响应外部文件拖入，不响应内部文件卡片拖拽） =====
   const dragCounter = useRef(0)
@@ -401,7 +481,7 @@ const StorageManager = () => {
       // 不能移动到自身
       if (data.type === 'folder' && data.id === targetFolderId) return
       // 移动选中的所有文件
-      const fileIdsToMove = data.type === 'file' 
+      const fileIdsToMove = data.type === 'file'
         ? (selectedFiles.includes(data.id) ? selectedFiles : [data.id])
         : []
       if (fileIdsToMove.length > 0) {
@@ -502,6 +582,7 @@ const StorageManager = () => {
   const handleDelete = useCallback(async (file) => {
     Modal.confirm({
       title: t('common.confirmDelete'),
+      // 文件名为业务数据，作为插值嵌入整句
       content: t('storage.confirmDeleteFile', { name: file.original_name }),
       onOk: async () => {
         try { await deleteFile(file.id); message.success(t('common.deleteSuccess')); await loadData() }
@@ -574,7 +655,13 @@ const StorageManager = () => {
     clearSelection()
   }
 
+  /**
+   * 侧边栏文件夹树数据
+   * 在渲染期构建：内部含 t()（根节点名称），
+   * 若改用 useMemo 缓存则必须把 t 加入依赖，否则语言切换后根节点名不刷新。
+   */
   const buildFlatTreeData = () => {
+    // 文件夹名为用户创建的业务数据，不翻译
     const convertToTreeData = (fds) => fds.map(folder => ({
       key: folder.id, title: folder.name,
       icon: folder.children?.length > 0 ? <FolderFilled /> : <FolderOutlined />,
@@ -587,7 +674,7 @@ const StorageManager = () => {
     ]
   }
 
-  // 移动弹窗的树数据
+  // 移动弹窗的树数据（同上，渲染期构建以跟随语言切换）
   const buildMoveTreeData = () => {
     const convertToTreeData = (fds) => fds.map(folder => ({
       key: folder.id, title: folder.name, icon: <FolderOutlined />,
@@ -599,6 +686,7 @@ const StorageManager = () => {
     ]
   }
 
+  // 当前文件夹显示名：有文件夹时用其业务名称，根目录用 i18n 文案
   const getCurrentFolderDisplayName = () => currentFolder ? currentFolder.name : t('storage.myFolder')
 
   // ===== 右键菜单渲染 =====
@@ -608,8 +696,8 @@ const StorageManager = () => {
 
     // 调整菜单位置防止溢出屏幕
     const menuStyle = { left: x, top: y }
-    if (x + 240 > window.innerWidth) menuStyle.left = x - 240
-    if (y + 300 > window.innerHeight) menuStyle.top = y - 200
+    if (x + CONTEXT_MENU_WIDTH > window.innerWidth) menuStyle.left = x - CONTEXT_MENU_WIDTH
+    if (y + CONTEXT_MENU_HEIGHT > window.innerHeight) menuStyle.top = y - CONTEXT_MENU_FLIP_OFFSET_Y
 
     if (type === 'folder') {
       return (
@@ -618,6 +706,7 @@ const StorageManager = () => {
             <FolderOpenOutlined className="menu-icon" /><span className="menu-label">{t('storage.open')}</span>
           </div>
           <div className="menu-item" onClick={() => startRename(item.id, 'folder', item.name)}>
+            {/* F2 / Del 为键盘按键名，属技术标识不翻译 */}
             <EditOutlined className="menu-icon" /><span className="menu-label">{t('storage.rename')}</span><span className="menu-shortcut">F2</span>
           </div>
           <div className="menu-divider" />
@@ -646,7 +735,8 @@ const StorageManager = () => {
             <span className="menu-label">{t('storage.moveTo')}</span>
             <RightOutlined className="submenu-arrow" />
           </div>
-          <div className="menu-item" onClick={() => { copyToClipboard(item.oss_url, t('storage.linkCopied'), t('storage.copyFailed')); setContextMenu(null) }}>
+          {/* v2.2 复制链接统一走 handleCopyLink，成功/失败提示均在其内部处理 */}
+          <div className="menu-item" onClick={() => { handleCopyLink(item.oss_url); setContextMenu(null) }}>
             <LinkOutlined className="menu-icon" /><span className="menu-label">{t('storage.copyLink')}</span>
           </div>
           <div className="menu-divider" />
@@ -717,6 +807,7 @@ const StorageManager = () => {
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
+              /* 文件夹名为用户创建的业务数据，不翻译 */
               <div className="file-name">{folder.name}</div>
             )}
             <div className="file-size">{t('storage.folder')}</div>
@@ -755,6 +846,7 @@ const StorageManager = () => {
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
+              /* 文件名为用户上传的业务数据，不翻译 */
               <div className="file-name">{file.original_name}</div>
             )}
             <div className="file-size">{formatFileSize(file.file_size)}</div>
@@ -764,40 +856,50 @@ const StorageManager = () => {
     </div>
   )
 
-  // ===== 列表视图表格列配置 =====
+  /**
+   * 列表视图表格列配置
+   * 在渲染期构建：内部含 t() 与 i18n.language，
+   * 若用 useMemo 缓存则必须把 t 加入依赖，否则语言切换后列头与时间格式不刷新。
+   */
   const columns = [
     {
       title: t('storage.fileName'), dataIndex: 'name', key: 'name',
       render: (_, record) => {
         if (record._isFolder) {
           const count = folderCounts[record.id] || 0
-          return (<Space><FolderFilled style={{ color: '#fbbf24', fontSize: 24 }} /><span style={{ fontWeight: 600 }}>{record.name}</span>{count > 0 && <Tag color="orange">{count}</Tag>}</Space>)
+          return (<Space><FolderFilled style={{ color: '#fbbf24', fontSize: ICON_SIZE_LIST }} /><span style={{ fontWeight: 600 }}>{record.name}</span>{count > 0 && <Tag color="orange">{count}</Tag>}</Space>)
         }
-        return (<Space><FileIcon mimeType={record.mime_type} fileName={record.original_name} size={24} /><span>{record.original_name}</span></Space>)
+        return (<Space><FileIcon mimeType={record.mime_type} fileName={record.original_name} size={ICON_SIZE_LIST} /><span>{record.original_name}</span></Space>)
       }
     },
     { title: t('storage.fileSize'), dataIndex: 'file_size', key: 'size', width: 120, render: (s, r) => r._isFolder ? '-' : formatFileSize(s) },
-    { title: t('storage.uploadTime'), dataIndex: 'created_at', key: 'time', width: 180, render: (d) => d ? new Date(d).toLocaleString() : '-' },
+    {
+      title: t('storage.uploadTime'), dataIndex: 'created_at', key: 'time', width: 180,
+      // v2.2 必须传 i18n.language，否则英文环境仍按浏览器默认区域格式化
+      render: (d) => d ? new Date(d).toLocaleString(i18n.language) : '-'
+    },
     {
       title: t('common.operation'), key: 'action', width: 200,
       render: (_, record) => {
         if (record._isFolder) {
           return (<Space>
             <Button type="link" size="small" onClick={() => setCurrentFolder(record)}>{t('storage.open')}</Button>
-            <Button type="link" size="small" onClick={() => startRename(record.id, 'folder', record.name)}><EditOutlined /></Button>
-            <Button type="link" size="small" danger onClick={() => handleDeleteFolder(record)}><DeleteOutlined /></Button>
+            <Tooltip title={t('storage.rename')}><Button type="link" size="small" onClick={() => startRename(record.id, 'folder', record.name)}><EditOutlined /></Button></Tooltip>
+            <Tooltip title={t('common.delete')}><Button type="link" size="small" danger onClick={() => handleDeleteFolder(record)}><DeleteOutlined /></Button></Tooltip>
           </Space>)
         }
         return (<Space>
           <Tooltip title={t('common.preview')}><Button type="link" size="small" onClick={() => { setPreviewFile(record); setPreviewVisible(true) }}><EyeOutlined /></Button></Tooltip>
           <Tooltip title={t('common.download')}><Button type="link" size="small" onClick={() => window.open(record.oss_url, '_blank')}><DownloadOutlined /></Button></Tooltip>
-          <Tooltip title={t('storage.copyLink')}><Button type="link" size="small" onClick={() => copyToClipboard(record.oss_url, t('storage.linkCopied'))}><LinkOutlined /></Button></Tooltip>
+          {/* v2.2 原此处只传 successMsg 漏传 errorMsg，复制失败会露出中文；现统一走 handleCopyLink */}
+          <Tooltip title={t('storage.copyLink')}><Button type="link" size="small" onClick={() => handleCopyLink(record.oss_url)}><LinkOutlined /></Button></Tooltip>
           <Tooltip title={t('common.delete')}><Button type="link" size="small" danger onClick={() => handleDelete(record)}><DeleteOutlined /></Button></Tooltip>
         </Space>)
       }
     }
   ]
 
+  // 积分规则说明：整句插值，中英文语序不同不可分段拼接
   const getCreditDescription = () => {
     if (!creditConfig) return ''
     return t('storage.creditRule5MB', { base: creditConfig.base_credits, per5mb: creditConfig.credits_per_5mb })
@@ -829,7 +931,7 @@ const StorageManager = () => {
               <div>{t('storage.storageInfo')}</div>
               <Progress className="storage-progress"
                 percent={Math.round((storageStats.storage_used / storageStats.storage_quota) * 100)}
-                status={storageStats.storage_used > storageStats.storage_quota * 0.9 ? 'exception' : 'active'}
+                status={storageStats.storage_used > storageStats.storage_quota * STORAGE_WARN_RATIO ? 'exception' : 'active'}
                 strokeLinecap="round" />
               <div className="storage-stats">
                 <div className="stat-item"><div className="stat-value">{formatFileSize(storageStats.storage_used)}</div><div className="stat-label">{t('storage.used')}</div></div>
@@ -901,6 +1003,7 @@ const StorageManager = () => {
                   <div className="empty-state">
                     <InboxOutlined className="empty-icon" />
                     <div className="empty-text">{t('storage.noFiles')}</div>
+                    {/* 分隔符 | 为纯视觉符号，两侧提示各自为完整句子 */}
                     <div className="empty-hint">{t('storage.ctrlClickTip')} | {t('storage.deleteKeyTip')}</div>
                   </div>
                 )}
@@ -919,14 +1022,16 @@ const StorageManager = () => {
               )}
             </div>
             <div className="status-right">
-              <span>Ctrl+Click {t('storage.ctrlClickTip')}</span>
+              {/* v2.2 去掉硬编码的 "Ctrl+Click" 前缀：按键名已包含在 ctrlClickTip 译文中，
+                  原写法会渲染成"Ctrl+Click 按住 Ctrl 点击可多选"造成重复 */}
+              <span>{t('storage.ctrlClickTip')}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* 浮动上传按钮 */}
-      <button className="upload-fab" onClick={() => setUploadModalVisible(true)}><CloudUploadOutlined /></button>
+      <button className="upload-fab" onClick={() => setUploadModalVisible(true)} title={t('storage.upload')}><CloudUploadOutlined /></button>
 
       {/* 右键菜单 */}
       {renderContextMenu()}
@@ -940,7 +1045,8 @@ const StorageManager = () => {
         {creditConfig && (
           <Alert message={t('storage.uploadDescription')} description={
             <div>
-              <div style={{ marginBottom: 8 }}><InfoCircleOutlined style={{ marginRight: 8 }} /><strong>{t('storage.fileSizeLimit')}</strong>{t('storage.singleFileLimit', { size: creditConfig.max_file_size || 100 })}</div>
+              {/* 冒号包含在 fileSizeLimit / creditCalculation / currentCredits 译文内 */}
+              <div style={{ marginBottom: 8 }}><InfoCircleOutlined style={{ marginRight: 8 }} /><strong>{t('storage.fileSizeLimit')}</strong>{t('storage.singleFileLimit', { size: maxFileSizeMB })}</div>
               <div style={{ marginBottom: 8 }}><DollarOutlined style={{ marginRight: 8 }} /><strong>{t('storage.creditCalculation')}</strong>{getCreditDescription()}</div>
               <div><DollarOutlined style={{ marginRight: 8 }} /><strong>{t('storage.currentCredits')}</strong><span style={{ color: userCredits > 0 ? '#52c41a' : '#ff4d4f' }}>{userCredits} {t('storage.credits')}</span></div>
             </div>
@@ -948,8 +1054,9 @@ const StorageManager = () => {
         )}
         <Dragger multiple fileList={fileList}
           beforeUpload={(file) => {
-            const maxSize = (creditConfig?.max_file_size || 100) * 1024 * 1024
-            if (file.size > maxSize) { message.error(t('storage.singleFileLimit', { size: creditConfig?.max_file_size || 100 })); return false }
+            const maxSize = maxFileSizeMB * BYTES_PER_MB
+            if (file.size > maxSize) { message.error(t('storage.singleFileLimit', { size: maxFileSizeMB })); return false }
+            // 返回 false 阻止 antd 自动上传，改由 handleUpload 统一提交
             setFileList(prev => [...prev, file]); return false
           }}
           onRemove={(file) => setFileList(prev => prev.filter(f => f.uid !== file.uid))}>
@@ -973,9 +1080,11 @@ const StorageManager = () => {
         <Input placeholder={t('storage.folderNamePlaceholder')} value={folderName} onChange={(e) => setFolderName(e.target.value)} onPressEnter={handleCreateFolder} />
       </Modal>
 
-      {/* 移动到弹窗 */}
+      {/* 移动到弹窗
+          v2.2 okText 修正：原用 storage.moveSuccess 会让按钮显示"移动成功"，
+          现改用 storage.moveConfirmOk（"移动"/"Move"） */}
       <Modal title={t('storage.selectTargetFolder')} open={moveModalVisible}
-        onOk={handleMoveConfirm} onCancel={() => setMoveModalVisible(false)} okText={t('storage.moveSuccess')} width={400}>
+        onOk={handleMoveConfirm} onCancel={() => setMoveModalVisible(false)} okText={t('storage.moveConfirmOk')} width={400}>
         <div className="move-folder-tree">
           <Tree showIcon treeData={buildMoveTreeData()}
             selectedKeys={moveTargetFolderId ? [moveTargetFolderId] : ['root-target']}
@@ -984,7 +1093,7 @@ const StorageManager = () => {
         </div>
       </Modal>
 
-      {/* 文件预览弹窗 */}
+      {/* 文件预览弹窗（标题为文件名，业务数据不翻译） */}
       <Modal title={previewFile?.original_name} open={previewVisible} footer={null} onCancel={() => setPreviewVisible(false)} width={800}>
         {previewFile && (
           <div className="file-preview">

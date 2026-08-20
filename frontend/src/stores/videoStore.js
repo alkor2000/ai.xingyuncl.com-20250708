@@ -4,10 +4,21 @@
  * v1.1 新增 keyword 关键词搜索能力
  *   - 新增 keyword state 和 setKeyword action
  *   - keyword 仅作为状态存储，由页面层在调用 getUserHistory/getPublicGallery 时传入参数
+ *
+ * v1.2 变更（i18n国际化适配）：
+ *   - 非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   - message.error/success的用户可见提示改为i18n.t()，复用video.json已有键
+ *     （pleaseSelectModel）+ 新增11个专属键（modelsLoadFailed/taskSubmitted等）
+ *   - 通用的删除成功/失败/操作失败复用common.json的message.*键
+ *   - toggleFavorite/togglePublic的结果提示（已收藏/已设为公开等）与video.json
+ *     已有的按钮文案键（favorite/setPublic等）语义不同（结果提示vs按钮文案），
+ *     不合并，新建*Result后缀专属键
+ *   - 纯开发者日志（console.error）统一改英文，不进语言包
  */
 import { create } from 'zustand';
 import apiClient from '../utils/api';
 import { message } from 'antd';
+import i18n from '../utils/i18n';
 
 const useVideoStore = create((set, get) => ({
   // ========== 状态 ==========
@@ -44,7 +55,7 @@ const useVideoStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      message.error('获取视频模型失败');
+      message.error(i18n.t('video.modelsLoadFailed'));
     }
   },
 
@@ -57,7 +68,7 @@ const useVideoStore = create((set, get) => ({
   generateVideo: async (params) => {
     const { selectedModel } = get();
     if (!selectedModel) {
-      message.error('请选择视频模型');
+      message.error(i18n.t('video.pleaseSelectModel'));
       return null;
     }
 
@@ -89,11 +100,11 @@ const useVideoStore = create((set, get) => ({
           get().pollTaskStatus(result.taskId, result.generationId);
         }
         
-        message.success('视频生成任务已提交');
+        message.success(i18n.t('video.taskSubmitted'));
         return result;
       }
     } catch (error) {
-      const errorMsg = error.response?.data?.message || '视频生成失败';
+      const errorMsg = error.response?.data?.message || i18n.t('video.generationFailedDefault');
       message.error(errorMsg);
       return null;
     } finally {
@@ -110,7 +121,7 @@ const useVideoStore = create((set, get) => ({
     const poll = async () => {
       try {
         if (Date.now() - startTime > maxPollingTime) {
-          message.error('任务查询超时');
+          message.error(i18n.t('video.taskQueryTimeout'));
           set(state => {
             const newTasks = { ...state.processingTasks };
             delete newTasks[taskId];
@@ -184,9 +195,11 @@ const useVideoStore = create((set, get) => ({
             }));
             
             if (taskData.status === 'succeeded') {
-              message.success('视频生成完成！');
+              message.success(i18n.t('video.generationCompleted'));
             } else {
-              message.error(`视频生成失败: ${taskData.error_message || '未知错误'}`);
+              message.error(i18n.t('video.generationFailedWithReason', {
+                reason: taskData.error_message || i18n.t('common.api.unknownError')
+              }));
             }
             
             setTimeout(() => {
@@ -202,7 +215,7 @@ const useVideoStore = create((set, get) => ({
           }
         }
       } catch (error) {
-        console.error('查询任务状态失败:', error);
+        console.error('Failed to query task status:', error);
         setTimeout(poll, pollInterval * 2);
       }
     };
@@ -281,7 +294,7 @@ const useVideoStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('获取历史记录失败:', error);
+      console.error('Failed to fetch history:', error);
       set({ 
         generationHistory: [],
         historyPagination: { total: 0, page: 1, limit: 20 }
@@ -308,7 +321,7 @@ const useVideoStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      message.error('获取公开画廊失败');
+      message.error(i18n.t('video.galleryLoadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -319,7 +332,7 @@ const useVideoStore = create((set, get) => ({
     try {
       const response = await apiClient.delete(`/video/generation/${id}`);
       if (response.data.success) {
-        message.success('删除成功');
+        message.success(i18n.t('message.deleteSuccess'));
         
         const itemToDelete = get().generationHistory.find(item => item.id === id);
         
@@ -348,7 +361,7 @@ const useVideoStore = create((set, get) => ({
         return true;
       }
     } catch (error) {
-      message.error('删除失败');
+      message.error(i18n.t('message.deleteFailed'));
       return false;
     }
   },
@@ -363,11 +376,11 @@ const useVideoStore = create((set, get) => ({
             item.id === id ? { ...item, is_favorite: !item.is_favorite } : item
           )
         }));
-        message.success(response.data.data?.is_favorite ? '已收藏' : '已取消收藏');
+        message.success(response.data.data?.is_favorite ? i18n.t('video.favoritedResult') : i18n.t('video.unfavoritedResult'));
         return true;
       }
     } catch (error) {
-      message.error('操作失败');
+      message.error(i18n.t('message.error'));
       return false;
     }
   },
@@ -382,11 +395,11 @@ const useVideoStore = create((set, get) => ({
             item.id === id ? { ...item, is_public: !item.is_public } : item
           )
         }));
-        message.success(response.data.data?.is_public ? '已设为公开' : '已设为私密');
+        message.success(response.data.data?.is_public ? i18n.t('video.setPublicResult') : i18n.t('video.setPrivateResult'));
         return true;
       }
     } catch (error) {
-      message.error('操作失败');
+      message.error(i18n.t('message.error'));
       return false;
     }
   },
@@ -399,7 +412,7 @@ const useVideoStore = create((set, get) => ({
         set({ userStats: response.data.data });
       }
     } catch (error) {
-      console.error('获取统计信息失败:', error);
+      console.error('Failed to fetch user stats:', error);
     }
   },
 

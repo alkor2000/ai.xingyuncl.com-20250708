@@ -3,10 +3,23 @@
  * 支持图生图和Midjourney参考图片
  * 修复：Midjourney也遵守后台的图生图开关设置
  *
- * i18n 改造:
- *   - QUANTITY_OPTIONS 已改为纯数值数组 [1,2,3,4]
- *   - Segmented 的 options 在组件内用 t('image.imageCount', { count }) 实时生成
- *     （解决常量文件无法调用 t() 导致"1张/2张"写死的问题）
+ * ── 本次 i18n 清理（零行为变更）──
+ * 剥离全部 23 处 t() 的中文兜底第二参数。
+ * 原因：i18next 在键缺失时会直接返回 defaultValue，使得"键没配"在中文
+ * 环境下完全看不出来（显示正常），只有切到英文才暴露。诊断已确认本文件
+ * 引用的 23 个键在 zh-CN/image.json 与 en-US/image.json 两侧均存在，
+ * 兜底纯属冗余且有害，故一并移除。
+ *
+ * 注意插值调用的参数形态变化：
+ *   旧: t('key', '默认文案 {{n}}', { n })   // 三参数：键 + defaultValue + options
+ *   新: t('key', { n })                    // 两参数：键 + options
+ * 若误写成 t('key', { n }) 之外的形式（例如漏掉 options），插值会渲染成
+ * 原始的 {{n}} 字面量，因此下方每处插值都保留了 options 对象。
+ *
+ * i18n 结构说明:
+ *   - QUANTITY_OPTIONS 为纯数值数组 [1,2,3,4]（常量文件不存文案）
+ *   - Segmented 的 options 在组件内用 t('image.imageCount', { count }) 实时生成，
+ *     且 useMemo 依赖包含 t，保证语言切换后选项文案刷新
  */
 
 import React, { memo, useMemo } from 'react';
@@ -19,6 +32,18 @@ import { PRESET_SIZES, QUANTITY_OPTIONS } from '../../utils/constants';
 import { isMidjourneyModel } from '../../utils/imageHelpers';
 
 const { Panel } = Collapse;
+
+/** 未配置 max_reference_images 时的默认参考图数量上限 */
+const DEFAULT_MAX_REFERENCE_IMAGES = 2;
+
+/** 引导系数取值范围与步长（模型侧约束） */
+const GUIDANCE_SCALE_MIN = 1;
+const GUIDANCE_SCALE_MAX = 10;
+const GUIDANCE_SCALE_STEP = 0.5;
+
+/** 随机种子取值范围：-1 表示随机，上限为 int32 最大值 */
+const SEED_RANDOM = -1;
+const SEED_MAX = 2147483647;
 
 const ParameterSettings = memo(({
   selectedModel,
@@ -41,28 +66,36 @@ const ParameterSettings = memo(({
 }) => {
   const { t } = useTranslation();
   const isMj = selectedModel && isMidjourneyModel(selectedModel);
-  
+
   // 检查模型是否支持图生图 - 统一检查逻辑
   const supportsImage2Image = selectedModel?.api_config?.supports_image2image === true;
-  const maxReferenceImages = selectedModel?.api_config?.max_reference_images || 2;
+  const maxReferenceImages = selectedModel?.api_config?.max_reference_images || DEFAULT_MAX_REFERENCE_IMAGES;
 
-  // i18n: 数量选项 label 由 t() 实时生成（QUANTITY_OPTIONS 为纯数值 [1,2,3,4]）
+  // 是否处于图生图模式（已上传参考图且非 Midjourney）
+  const isImage2ImageMode = Boolean(referenceImages && referenceImages.length > 0);
+
+  /**
+   * 数量选项 label 由 t() 实时生成
+   * 依赖必须含 t：t 在语言切换时是新引用，若不加入依赖则 useMemo 缓存不失效，
+   * 切换语言后"1张/2张"不会更新（该问题在中文环境完全无法察觉）
+   */
   const quantitySegmentedOptions = useMemo(
     () => QUANTITY_OPTIONS.map(n => ({
-      label: t('image.imageCount', '{{count}}张', { count: n }),
+      label: t('image.imageCount', { count: n }),
       value: n
     })),
     [t]
   );
 
   return (
-    <Card title={t('image.parameterSettings', '参数设置')} className="parameters">
+    <Card title={t('image.parameterSettings')} className="parameters">
       {/* 生成数量 - Midjourney和图生图模式不显示 */}
-      {selectedModel && !isMj && (!referenceImages || referenceImages.length === 0) && (
+      {selectedModel && !isMj && !isImage2ImageMode && (
         <div className="param-item">
           <div className="param-label">
-            {t('image.quantity', '生成数量')}
-            <Tooltip title={t('image.quantityTip', '一次生成多张图片，每张使用不同的随机种子')}>
+            {t('image.quantity')}
+            <Tooltip title={t('image.quantityTip')}>
+              {/* ❓ 为视觉符号，保留在 JSX 不进语言包 */}
               <span className="info-icon"> ❓</span>
             </Tooltip>
           </div>
@@ -75,7 +108,7 @@ const ParameterSettings = memo(({
           {quantity > 1 && (
             <div style={{ marginTop: 8 }}>
               <Alert
-                message={t('image.batchGenerateInfo', '批量生成将消耗 {{credits}} 积分', { credits: getTotalPrice() })}
+                message={t('image.batchGenerateInfo', { credits: getTotalPrice() })}
                 type="info"
                 showIcon={false}
                 banner
@@ -88,7 +121,7 @@ const ParameterSettings = memo(({
       {/* 图片尺寸 - 仅非Midjourney模型显示 */}
       {selectedModel && !isMj && (
         <div className="param-item">
-          <div className="param-label">{t('image.imageSize', '图片尺寸')}</div>
+          <div className="param-label">{t('image.imageSize')}</div>
           <div className="size-grid">
             {PRESET_SIZES.default.map(size => (
               <Button
@@ -96,15 +129,17 @@ const ParameterSettings = memo(({
                 className={selectedSize === size.value ? 'selected' : ''}
                 onClick={() => onSizeChange(size.value)}
               >
+                {/* 比例写法为国际通用技术标识，不翻译 */}
                 {size.ratio}
               </Button>
             ))}
           </div>
+          {/* 像素尺寸为技术参数，不翻译 */}
           <div className="size-display">{selectedSize}</div>
         </div>
       )}
 
-      {/* Midjourney参考图片功能 - 修复：检查supports_image2image配置 */}
+      {/* Midjourney参考图片功能 - 检查supports_image2image配置 */}
       {selectedModel && isMj && supportsImage2Image && (
         <MidjourneyUploader
           referenceImages={referenceImages}
@@ -127,11 +162,11 @@ const ParameterSettings = memo(({
       {/* 如果模型不支持图生图，显示提示 */}
       {selectedModel && !supportsImage2Image && (
         <Alert
-          message={t('image.noImage2ImageSupport', '图生图功能未启用')}
+          message={t('image.noImage2ImageSupport')}
           description={
-            isMj 
-              ? t('image.mjNoImage2ImageDesc', '该Midjourney模型未启用参考图片功能，请联系管理员开启')
-              : t('image.noImage2ImageDesc', '该模型不支持上传参考图片生成新图片')
+            isMj
+              ? t('image.mjNoImage2ImageDesc')
+              : t('image.noImage2ImageDesc')
           }
           type="info"
           showIcon
@@ -140,10 +175,10 @@ const ParameterSettings = memo(({
       )}
 
       {/* 图生图模式提示 */}
-      {referenceImages && referenceImages.length > 0 && !isMj && (
+      {isImage2ImageMode && !isMj && (
         <Alert
-          message={t('image.image2imageMode', '图生图模式')}
-          description={t('image.image2imageDesc', '将基于参考图片生成新图片，批量生成功能已禁用')}
+          message={t('image.image2imageMode')}
+          description={t('image.image2imageDesc')}
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -162,15 +197,15 @@ const ParameterSettings = memo(({
           block
         >
           {generating ? (
-            t('image.generating', '生成中...')
+            t('image.generating')
           ) : (
             <Space>
               <span>
-                {referenceImages && referenceImages.length > 0 && !isMj
-                  ? t('image.generateFromImage', '图生图')
-                  : t('image.generateImage', '生成图片')}
+                {isImage2ImageMode && !isMj
+                  ? t('image.generateFromImage')
+                  : t('image.generateImage')}
               </span>
-              <Tag color="blue">{t('image.credits', '{{credits}} 积分', { credits: getTotalPrice() })}</Tag>
+              <Tag color="blue">{t('image.credits', { credits: getTotalPrice() })}</Tag>
             </Space>
           )}
         </Button>
@@ -183,48 +218,48 @@ const ParameterSettings = memo(({
           expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}
           className="advanced-options"
         >
-          <Panel 
+          <Panel
             header={
               <Space>
                 <SettingOutlined />
-                <span>{t('image.advancedOptions', '高级选项')}</span>
+                <span>{t('image.advancedOptions')}</span>
               </Space>
-            } 
+            }
             key="1"
           >
             {/* 引导系数 - 图生图模式可能不支持 */}
             <div className="param-item">
               <div className="param-label">
-                {t('image.guidanceScale', '引导系数')}
-                <Tooltip title={t('image.guidanceScaleTip', '控制生成图像与提示词的相关程度，值越大越相关')}>
+                {t('image.guidanceScale')}
+                <Tooltip title={t('image.guidanceScaleTip')}>
                   <span className="info-icon"> ❓</span>
                 </Tooltip>
-                {referenceImages && referenceImages.length > 0 && (
+                {isImage2ImageMode && (
                   <Tag color="orange" style={{ marginLeft: 8 }}>
-                    {t('image.mayNotSupport', '图生图模式可能不支持')}
+                    {t('image.mayNotSupport')}
                   </Tag>
                 )}
               </div>
               <Row gutter={16}>
                 <Col span={16}>
                   <Slider
-                    min={1}
-                    max={10}
-                    step={0.5}
+                    min={GUIDANCE_SCALE_MIN}
+                    max={GUIDANCE_SCALE_MAX}
+                    step={GUIDANCE_SCALE_STEP}
                     value={guidanceScale}
                     onChange={onGuidanceScaleChange}
-                    disabled={referenceImages && referenceImages.length > 0}
+                    disabled={isImage2ImageMode}
                   />
                 </Col>
                 <Col span={8}>
                   <InputNumber
-                    min={1}
-                    max={10}
-                    step={0.5}
+                    min={GUIDANCE_SCALE_MIN}
+                    max={GUIDANCE_SCALE_MAX}
+                    step={GUIDANCE_SCALE_STEP}
                     value={guidanceScale}
                     onChange={onGuidanceScaleChange}
                     style={{ width: '100%' }}
-                    disabled={referenceImages && referenceImages.length > 0}
+                    disabled={isImage2ImageMode}
                   />
                 </Col>
               </Row>
@@ -232,24 +267,24 @@ const ParameterSettings = memo(({
 
             <div className="param-item">
               <div className="param-label">
-                {t('image.seed', '随机种子')}
-                <Tooltip title={t('image.seedTip', '使用相同的种子值可以生成相似的图片，-1为随机')}>
+                {t('image.seed')}
+                <Tooltip title={t('image.seedTip')}>
                   <span className="info-icon"> ❓</span>
                 </Tooltip>
               </div>
               <InputNumber
-                min={-1}
-                max={2147483647}
+                min={SEED_RANDOM}
+                max={SEED_MAX}
                 value={seed}
                 onChange={onSeedChange}
                 style={{ width: '100%' }}
-                placeholder={t('image.seedPlaceholder', '-1 为随机')}
+                placeholder={t('image.seedPlaceholder')}
               />
             </div>
 
             <div className="param-item">
               <Row justify="space-between" align="middle">
-                <Col>{t('image.addWatermark', '添加水印')}</Col>
+                <Col>{t('image.addWatermark')}</Col>
                 <Col>
                   <Switch checked={watermark} onChange={onWatermarkChange} />
                 </Col>

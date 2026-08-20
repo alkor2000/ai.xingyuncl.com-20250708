@@ -3,6 +3,7 @@
     "title": "社区论坛",
     "subtitle": "交流讨论，分享知识",
     "loading": "加载中...",
+    "backToForum": "返回论坛",
 
     "board": {
       "title": "版块",
@@ -55,7 +56,14 @@
         "attachments": "附件",
         "uploadImage": "上传图片",
         "uploadFile": "上传文件"
-      }
+      },
+      "notFound": "帖子不存在或已被删除",
+      "createSuccess": "发帖成功",
+      "createFailed": "发帖失败",
+      "updateSuccess": "编辑成功",
+      "updateFailed": "编辑失败",
+      "deleteSuccess": "删除成功",
+      "deleteFailed": "删除失败"
     },
 
     "reply": {
@@ -66,10 +74,18 @@
       "delete": "删除回复",
       "deleteConfirm": "确定要删除这条回复吗？",
       "floor": "楼",
+      "floorLabel": "#{{floor}}楼",
       "replyTo": "回复",
       "edited": "已编辑",
       "hidden": "该回复已被隐藏",
-      "empty": "暂无回复，来抢沙发吧！"
+      "empty": "暂无回复，来抢沙发吧！",
+      "emptyWarning": "回复内容不能为空",
+      "createSuccess": "回复成功",
+      "createFailed": "回复失败",
+      "updateSuccess": "编辑成功",
+      "updateFailed": "编辑失败",
+      "deleteSuccess": "删除成功",
+      "deleteFailed": "删除失败"
     },
 
     "like": {
@@ -83,7 +99,9 @@
       "favorite": "收藏",
       "unfavorite": "取消收藏",
       "myFavorites": "我的收藏",
-      "empty": "暂无收藏"
+      "empty": "暂无收藏",
+      "favoritedResult": "已收藏",
+      "unfavoritedResult": "已取消收藏"
     },
 
     "notification": {
@@ -113,7 +131,8 @@
       "disableReply": "禁止回复",
       "enableReply": "允许回复",
       "hideReply": "隐藏回复",
-      "unhideReply": "取消隐藏回复"
+      "unhideReply": "取消隐藏回复",
+      "actionFailed": "操作失败"
     },
 
     "myPosts": {
@@ -138,6 +157,16 @@
       "appointModerator": "指定版主",
       "removeModerator": "移除版主",
       "removeModeratorConfirm": "确定要移除该版主吗？",
+      "createBoardSuccess": "版块创建成功",
+      "createBoardFailed": "创建失败",
+      "updateBoardSuccess": "版块更新成功",
+      "updateBoardFailed": "更新失败",
+      "deleteBoardSuccess": "版块删除成功",
+      "deleteBoardFailed": "删除失败",
+      "appointModeratorSuccess": "版主指定成功",
+      "appointModeratorFailed": "指定版主失败",
+      "removeModeratorSuccess": "版主移除成功",
+      "removeModeratorFailed": "移除版主失败",
       "boardForm": {
         "name": "版块名称",
         "namePlaceholder": "请输入版块名称",
@@ -164,6 +193,15 @@
     "search": {
       "placeholder": "搜索帖子...",
       "userPlaceholder": "搜索用户..."
+    },
+
+    "attachment": {
+      "deleteImageConfirm": "确定删除这张图片？删除后无法恢复",
+      "deleteFileConfirm": "确定删除这个文件？",
+      "deleteOk": "删除",
+      "deleteCancel": "取消",
+      "deleteSuccess": "附件已删除",
+      "deleteFailed": "删除附件失败"
     },
 
     "upload": {

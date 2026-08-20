@@ -47,6 +47,7 @@
   "htmlEditor.project.defaultCannotDelete": "默认项目不能删除",
   "htmlEditor.project.rename": "修改项目名称",
   "htmlEditor.project.renameSuccess": "项目名称更新成功",
+  "htmlEditor.project.listLoadFailed": "获取项目列表失败",
   
   "htmlEditor.page.create": "创建页面",
   "htmlEditor.page.createIn": "在 \"{{project}}\" 中创建页面",
@@ -70,6 +71,9 @@
   "htmlEditor.page.saveSuccess": "页面保存成功",
   "htmlEditor.page.saveFailed": "保存失败",
   "htmlEditor.page.loadingPages": "加载页面中...",
+  "htmlEditor.page.listLoadFailed": "获取页面列表失败",
+  "htmlEditor.page.loadMoreFailed": "加载更多页面失败",
+  "htmlEditor.page.loadFailed": "加载页面失败",
   
   "htmlEditor.editor.empty": "编辑器内容为空",
   "htmlEditor.editor.copied": "内容已复制到剪贴板",

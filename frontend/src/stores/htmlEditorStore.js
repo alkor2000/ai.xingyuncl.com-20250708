@@ -4,11 +4,19 @@
  * v1.1 修复页面列表加载上限问题 - 2025-01-04
  *   - getPages 方法增加 limit=500 参数，解决页面超过20个后"丢失"的问题
  *   - 增加 hasMore 和 pagination 状态支持未来分页扩展
+ * 
+ * v1.2 变更（i18n国际化适配）：
+ *   - 非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   - message.error()用户可见提示改为i18n.t()，新增4个htmlEditor.json键：
+ *     project.listLoadFailed / page.listLoadFailed / page.loadMoreFailed / page.loadFailed
+ *     （与已有的createFailed/deleteFailed/saveFailed语义不同，均为"获取/加载"类失败，不合并）
+ *   - 纯开发者日志（console.error）统一改英文，不进语言包
  */
 
 import { create } from 'zustand';
 import apiClient from '../utils/api';
 import { message } from 'antd';
+import i18n from '../utils/i18n';
 
 const useHtmlEditorStore = create((set, get) => ({
   // 状态
@@ -37,9 +45,9 @@ const useHtmlEditorStore = create((set, get) => ({
         set({ projects: response.data.data });
       }
     } catch (error) {
-      console.error('获取项目列表失败:', error);
+      console.error('Failed to fetch project list:', error);
       set({ error: error.message });
-      message.error('获取项目列表失败');
+      message.error(i18n.t('htmlEditor.project.listLoadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -55,7 +63,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('创建项目失败:', error);
+      console.error('Failed to create project:', error);
       throw error;
     }
   },
@@ -69,7 +77,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('更新项目失败:', error);
+      console.error('Failed to update project:', error);
       throw error;
     }
   },
@@ -83,7 +91,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return true;
       }
     } catch (error) {
-      console.error('删除项目失败:', error);
+      console.error('Failed to delete project:', error);
       throw error;
     }
   },
@@ -132,8 +140,8 @@ const useHtmlEditorStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('获取页面列表失败:', error);
-      message.error('获取页面列表失败');
+      console.error('Failed to fetch page list:', error);
+      message.error(i18n.t('htmlEditor.page.listLoadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -176,8 +184,8 @@ const useHtmlEditorStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('加载更多页面失败:', error);
-      message.error('加载更多页面失败');
+      console.error('Failed to load more pages:', error);
+      message.error(i18n.t('htmlEditor.page.loadMoreFailed'));
     } finally {
       set({ loading: false });
     }
@@ -193,7 +201,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('创建页面失败:', error);
+      console.error('Failed to create page:', error);
       throw error;
     }
   },
@@ -208,8 +216,8 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('加载页面失败:', error);
-      message.error('加载页面失败');
+      console.error('Failed to load page:', error);
+      message.error(i18n.t('htmlEditor.page.loadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -227,7 +235,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('更新页面失败:', error);
+      console.error('Failed to update page:', error);
       throw error;
     }
   },
@@ -244,7 +252,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return true;
       }
     } catch (error) {
-      console.error('删除页面失败:', error);
+      console.error('Failed to delete page:', error);
       throw error;
     }
   },
@@ -269,7 +277,7 @@ const useHtmlEditorStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('切换发布状态失败:', error);
+      console.error('Failed to toggle publish state:', error);
       throw error;
     }
   },
@@ -283,7 +291,7 @@ const useHtmlEditorStore = create((set, get) => ({
         set({ templates: response.data.data });
       }
     } catch (error) {
-      console.error('获取模板列表失败:', error);
+      console.error('Failed to fetch template list:', error);
     }
   },
 

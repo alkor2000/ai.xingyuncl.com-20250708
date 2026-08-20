@@ -6,8 +6,9 @@
     "loading": "加载中...",
     "empty": "暂无知识库",
     "noDescription": "暂无描述",
+    "unknownUser": "未知",
     "count": "共 {{count}} 条",
-    
+
     "scope": {
       "all": "全部",
       "personal": "个人",
@@ -17,87 +18,162 @@
       "teamDesc": "同组成员可见",
       "globalDesc": "所有人可见"
     },
-    
+
+    "type": {
+      "label": "类型",
+      "text": "📝 文本知识库",
+      "textDesc": "手动编辑文本内容",
+      "file": "🔍 RAG文档知识库",
+      "fileDesc": "上传文档，AI语义检索"
+    },
+
     "actions": {
       "create": "新建",
+      "createOk": "创建",
+      "cancel": "取消",
+      "confirm": "确定",
       "createFirst": "创建第一个知识库",
-      "view": "查看详情",
+      "view": "查看编辑",
       "edit": "编辑",
       "delete": "删除",
       "pin": "置顶",
       "unpin": "取消置顶",
-      "saveVersion": "保存版本",
-      "viewHistory": "版本历史",
-      "viewVersion": "查看",
-      "rollback": "回滚",
-      "clearContent": "清空内容",
-      "copyContent": "复制内容"
+      "save": "保存",
+      "saveTitleDesc": "保存标题和描述",
+      "newVersion": "新建版本",
+      "deleteVersion": "删除版本",
+      "clearContent": "清空",
+      "copyContent": "复制",
+      "copyText": "复制文本"
     },
-    
+
+    "card": {
+      "ragTag": "RAG",
+      "chunkCount": "{{count}}块"
+    },
+
     "createModal": {
       "title": "新建知识库"
     },
-    
+
     "editDrawer": {
-      "title": "编辑知识库"
+      "ragTag": "RAG文档",
+      "versionTotal": "({{count}}个版本)"
     },
-    
-    "versionDrawer": {
-      "title": "版本历史",
-      "count": "个版本",
-      "empty": "暂无版本历史"
+
+    "item": {
+      "listLoadFailed": "获取列表失败",
+      "detailLoadFailed": "获取详情失败",
+      "pinnedResult": "已置顶",
+      "unpinnedResult": "已取消置顶"
     },
-    
-    "versionDetail": {
-      "title": "版本详情"
+
+    "version": {
+      "current": "当前",
+      "deleteConfirmTitle": "确认删除此版本？",
+      "deleteConfirmOnly": "唯一版本不能删除",
+      "deleteConfirmDesc": "将删除 v{{version}}",
+      "listLoadFailed": "获取版本历史失败",
+      "switchFailed": "切换版本失败",
+      "createSuccess": "新版本 v{{version}} 创建成功",
+      "createFailed": "创建版本失败",
+      "deleteSuccess": "版本 v{{version}} 已删除",
+      "deleteFailed": "删除版本失败"
     },
-    
-    "saveVersionModal": {
-      "title": "保存新版本",
-      "tip": "保存当前内容为新版本，方便后续查看或回滚"
+
+    "deleteWiki": {
+      "title": "确认删除知识库",
+      "willDelete": "即将删除",
+      "warning": "删除后所有版本、内容和向量索引将永久丢失！",
+      "okText": "确认删除"
     },
-    
-    "deleteConfirm": {
-      "title": "确认删除",
-      "content": "删除后无法恢复，确定要删除吗？"
+
+    "danger": {
+      "title": "删除此知识库",
+      "desc": "删除后所有版本、内容和向量索引将永久丢失",
+      "button": "删除知识库"
     },
-    
-    "rollbackConfirm": {
-      "title": "确认回滚？",
-      "content": "回滚后当前内容将被覆盖"
-    },
-    
+
     "form": {
       "title": "标题",
       "titleRequired": "请输入标题",
       "titlePlaceholder": "请输入知识库标题",
+      "titleEditPlaceholder": "请输入标题",
       "scope": "范围",
       "description": "描述",
       "descriptionPlaceholder": "请输入描述（可选）",
+      "descriptionEditPlaceholder": "请输入描述",
       "content": "内容",
       "contentPlaceholder": "请输入内容...",
       "contentHint": "支持Markdown格式，最多{{max}}字符",
       "notes": "备注",
-      "notesHint": "（最多10条）",
+      "notesHint": "（最多{{max}}条）",
       "notePlaceholder": "输入备注内容",
       "addNote": "添加备注",
       "links": "相关链接",
-      "linksHint": "（最多10条）",
+      "linksHint": "（最多{{max}}条）",
       "linkTitle": "链接标题",
       "linkUrl": "https://...",
-      "addLink": "添加链接",
-      "changeSummary": "版本说明",
-      "changeSummaryPlaceholder": "简要描述此版本的修改内容（可选）"
+      "addLink": "添加链接"
     },
-    
+
+    "rag": {
+      "docSection": "文档管理",
+      "currentFile": "当前文件",
+      "fileSize": "文件大小",
+      "uploadHint": "点击或拖拽上传文档（最多{{max}}个，支持PDF/Word/TXT/MD）",
+      "uploadAppendHint": "点击或拖拽文件追加上传（最多{{max}}个，支持PDF/Word/TXT/MD）",
+      "parsing": "正在解析文档...",
+
+      "indexSection": "向量索引",
+      "statusNone": "未索引",
+      "statusProcessing": "索引中...",
+      "statusCompleted": "已索引",
+      "statusFailed": "索引失败",
+      "buildIndex": "构建索引",
+      "rebuildIndex": "重建索引",
+
+      "chunkCount": "分块数",
+      "totalTokens": "总Tokens",
+      "indexedAt": "索引时间",
+      "embeddingModel": "Embedding模型",
+      "vectorReady": "向量已就绪",
+
+      "chunkPreview": "文档分块预览",
+      "chunkTotal": "共 {{count}} 个分块",
+      "chunkEmpty": "暂无分块数据",
+      "tokens": "{{count}} tokens",
+
+      "showParsedText": "查看解析后的原始文本",
+      "hideParsedText": "收起解析文本",
+
+      "uploadSuccess": "文档上传成功，内容已导入",
+      "uploadFailed": "文档上传失败",
+      "buildIndexFailed": "启动索引失败",
+      "indexCompleteResult": "向量索引构建完成，共 {{count}} 个分块",
+      "buildFailedResult": "向量索引构建失败",
+      "buildTimeout": "索引构建超时，请稍后查看状态",
+      "searchFailed": "检索失败"
+    },
+
+    "editor": {
+      "listLoadFailed": "获取编辑者列表失败",
+      "addSuccess": "添加编辑者成功",
+      "addFailed": "添加编辑者失败",
+      "removeSuccess": "移除编辑者成功",
+      "removeFailed": "移除编辑者失败"
+    },
+
+    "messages": {
+      "contentCleared": "内容已清空",
+      "contentEmpty": "内容为空",
+      "copied": "已复制"
+    },
+
     "meta": {
       "creator": "创建者",
       "version": "版本",
       "updated": "更新"
-    },
-    
-    "version": {
-      "current": "当前"
     }
   }
 }

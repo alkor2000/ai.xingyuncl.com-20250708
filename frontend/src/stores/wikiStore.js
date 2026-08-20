@@ -1,11 +1,16 @@
 /**
  * 知识库状态管理
  * 支持CRUD + 版本管理 + 编辑者管理 + RAG文件上传/索引/检索/chunks预览
+ *
+ * 国际化说明：本文件是非React模块（zustand store），无法使用useTranslation hook，
+ * 按项目规约直接import i18n实例调用i18n.t()（官方支持的非hook用法）。
+ * message为即时消费的toast提示，不存在停留期切语言问题，故不需要tRef模式。
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
 import { message } from 'antd'
+import i18n from '../utils/i18n'
 
 const useWikiStore = create((set, get) => ({
   /* ========== 状态 ========== */
@@ -40,8 +45,9 @@ const useWikiStore = create((set, get) => ({
       set({ items: response.data.data || [], loading: false })
       return response.data.data
     } catch (error) {
-      set({ error: error.response?.data?.message || '获取列表失败', loading: false })
-      message.error(error.response?.data?.message || '获取列表失败')
+      const errMsg = error.response?.data?.message || i18n.t('wiki.item.listLoadFailed')
+      set({ error: errMsg, loading: false })
+      message.error(errMsg)
       throw error
     }
   },
@@ -54,8 +60,9 @@ const useWikiStore = create((set, get) => ({
       set({ currentItem: item, detailLoading: false })
       return item
     } catch (error) {
-      set({ error: error.response?.data?.message || '获取详情失败', detailLoading: false })
-      message.error(error.response?.data?.message || '获取详情失败')
+      const errMsg = error.response?.data?.message || i18n.t('wiki.item.detailLoadFailed')
+      set({ error: errMsg, detailLoading: false })
+      message.error(errMsg)
       throw error
     }
   },
@@ -66,11 +73,12 @@ const useWikiStore = create((set, get) => ({
       const response = await apiClient.post('/wiki/items', data)
       const newItem = response.data.data
       set(state => ({ items: [newItem, ...state.items], loading: false }))
-      message.success('创建成功')
+      message.success(i18n.t('message.createSuccess'))
       return newItem
     } catch (error) {
-      set({ error: error.response?.data?.message || '创建失败', loading: false })
-      message.error(error.response?.data?.message || '创建失败')
+      const errMsg = error.response?.data?.message || i18n.t('message.createFailed')
+      set({ error: errMsg, loading: false })
+      message.error(errMsg)
       throw error
     }
   },
@@ -85,11 +93,12 @@ const useWikiStore = create((set, get) => ({
         currentVersion: state.currentItem?.id === id ? null : state.currentVersion,
         loading: false
       }))
-      message.success('删除成功')
+      message.success(i18n.t('message.deleteSuccess'))
       return true
     } catch (error) {
-      set({ error: error.response?.data?.message || '删除失败', loading: false })
-      message.error(error.response?.data?.message || '删除失败')
+      const errMsg = error.response?.data?.message || i18n.t('message.deleteFailed')
+      set({ error: errMsg, loading: false })
+      message.error(errMsg)
       throw error
     }
   },
@@ -106,10 +115,11 @@ const useWikiStore = create((set, get) => ({
           ? { ...state.currentItem, is_pinned: updatedItem.is_pinned }
           : state.currentItem
       }))
-      message.success(updatedItem.is_pinned ? '已置顶' : '已取消置顶')
+      /* toggle结果提示，与actions.pin/unpin(按钮态标签)语义不同，用独立的*Result键 */
+      message.success(updatedItem.is_pinned ? i18n.t('wiki.item.pinnedResult') : i18n.t('wiki.item.unpinnedResult'))
       return updatedItem
     } catch (error) {
-      message.error(error.response?.data?.message || '操作失败')
+      message.error(error.response?.data?.message || i18n.t('message.error'))
       throw error
     }
   },
@@ -124,7 +134,7 @@ const useWikiStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       set({ versionsLoading: false })
-      message.error(error.response?.data?.message || '获取版本历史失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.version.listLoadFailed'))
       throw error
     }
   },
@@ -137,7 +147,7 @@ const useWikiStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       set({ detailLoading: false })
-      message.error(error.response?.data?.message || '切换版本失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.version.switchFailed'))
       throw error
     }
   },
@@ -162,11 +172,12 @@ const useWikiStore = create((set, get) => ({
         ),
         loading: false
       }))
-      message.success('保存成功')
+      message.success(i18n.t('message.saveSuccess'))
       return updatedVersion
     } catch (error) {
-      set({ error: error.response?.data?.message || '保存失败', loading: false })
-      message.error(error.response?.data?.message || '保存失败')
+      const errMsg = error.response?.data?.message || i18n.t('message.saveFailed')
+      set({ error: errMsg, loading: false })
+      message.error(errMsg)
       throw error
     }
   },
@@ -186,11 +197,11 @@ const useWikiStore = create((set, get) => ({
         } : null,
         loading: false
       }))
-      message.success(`新版本 v${result.version_number} 创建成功`)
+      message.success(i18n.t('wiki.version.createSuccess', { version: result.version_number }))
       return result
     } catch (error) {
       set({ loading: false })
-      message.error(error.response?.data?.message || '创建版本失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.version.createFailed'))
       throw error
     }
   },
@@ -212,11 +223,11 @@ const useWikiStore = create((set, get) => ({
         } : null,
         loading: false
       }))
-      message.success(`版本 v${result.deletedVersion} 已删除`)
+      message.success(i18n.t('wiki.version.deleteSuccess', { version: result.deletedVersion }))
       return result
     } catch (error) {
       set({ loading: false })
-      message.error(error.response?.data?.message || '删除版本失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.version.deleteFailed'))
       throw error
     }
   },
@@ -235,11 +246,11 @@ const useWikiStore = create((set, get) => ({
         timeout: 120000
       })
       set({ uploading: false })
-      message.success('文档上传成功，内容已导入')
+      message.success(i18n.t('wiki.rag.uploadSuccess'))
       return response.data.data
     } catch (error) {
       set({ uploading: false })
-      message.error(error.response?.data?.message || '文档上传失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.rag.uploadFailed'))
       throw error
     }
   },
@@ -254,7 +265,7 @@ const useWikiStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       set({ indexing: false })
-      message.error(error.response?.data?.message || '启动索引失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.rag.buildIndexFailed'))
       throw error
     }
   },
@@ -268,7 +279,7 @@ const useWikiStore = create((set, get) => ({
       set({ indexStatus: status })
       return status
     } catch (error) {
-      console.error('获取索引状态失败:', error)
+      console.error('Failed to get index status:', error)
       return null
     }
   },
@@ -282,7 +293,7 @@ const useWikiStore = create((set, get) => ({
       if (!status) { set({ indexing: false }); return }
       if (status.index_status === 'completed') {
         set({ indexing: false })
-        message.success(`向量索引构建完成，共 ${status.chunk_count} 个分块`)
+        message.success(i18n.t('wiki.rag.indexCompleteResult', { count: status.chunk_count }))
         const scope = get().currentScope
         get().getItems(scope)
         /* 自动加载chunks预览 */
@@ -291,7 +302,7 @@ const useWikiStore = create((set, get) => ({
       }
       if (status.index_status === 'failed') {
         set({ indexing: false })
-        message.error('向量索引构建失败')
+        message.error(i18n.t('wiki.rag.buildFailedResult'))
         return
       }
       attempts++
@@ -299,7 +310,7 @@ const useWikiStore = create((set, get) => ({
         setTimeout(poll, 3000)
       } else {
         set({ indexing: false })
-        message.warning('索引构建超时，请稍后查看状态')
+        message.warning(i18n.t('wiki.rag.buildTimeout'))
       }
     }
     poll()
@@ -315,7 +326,7 @@ const useWikiStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       set({ chunksLoading: false })
-      console.error('获取chunks失败:', error)
+      console.error('Failed to get chunks:', error)
       return null
     }
   },
@@ -330,7 +341,7 @@ const useWikiStore = create((set, get) => ({
       return response.data.data
     } catch (error) {
       set({ searching: false })
-      message.error(error.response?.data?.message || '检索失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.rag.searchFailed'))
       throw error
     }
   },
@@ -343,7 +354,7 @@ const useWikiStore = create((set, get) => ({
       set({ editors: response.data.data || [] })
       return response.data.data
     } catch (error) {
-      message.error(error.response?.data?.message || '获取编辑者列表失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.editor.listLoadFailed'))
       throw error
     }
   },
@@ -352,10 +363,10 @@ const useWikiStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/wiki/items/${wikiId}/editors`, { user_id: userId })
       set({ editors: response.data.data || [] })
-      message.success('添加编辑者成功')
+      message.success(i18n.t('wiki.editor.addSuccess'))
       return response.data.data
     } catch (error) {
-      message.error(error.response?.data?.message || '添加编辑者失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.editor.addFailed'))
       throw error
     }
   },
@@ -364,10 +375,10 @@ const useWikiStore = create((set, get) => ({
     try {
       const response = await apiClient.delete(`/wiki/items/${wikiId}/editors/${userId}`)
       set({ editors: response.data.data || [] })
-      message.success('移除编辑者成功')
+      message.success(i18n.t('wiki.editor.removeSuccess'))
       return response.data.data
     } catch (error) {
-      message.error(error.response?.data?.message || '移除编辑者失败')
+      message.error(error.response?.data?.message || i18n.t('wiki.editor.removeFailed'))
       throw error
     }
   },

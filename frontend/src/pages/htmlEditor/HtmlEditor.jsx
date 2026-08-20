@@ -1,19 +1,41 @@
 /**
  * HTML编辑器主页面
- * 
- * v1.9 (i18n补全): 
- *   - 编辑器表头"基础模式/高级/基础/切换Tooltip"走t()
- *   - Monaco右键菜单剪切/复制/粘贴走t()（注：onMount时取值，切换语言后需刷新页面生效）
- *   - htmlEditor.action.close补key（复制链接弹窗的"关闭"按钮）
- * v1.8 (2026-03-01): 修复转圈加载不出来 + Monaco降级textarea
- *   - 积分加载不再阻塞页面初始化(去掉creditsLoading对项目选择的阻塞)
- *   - 移除waitForCreditsLoaded轮询，autoHandlePage直接加载页面
- *   - initializeCredits加5秒超时保护
- *   - Monaco加载超时15秒自动降级为FallbackEditor(原生textarea)
- *   - FallbackEditor提取为独立组件，主文件保持<600行
- * v1.7: 容器高度calc(100vh-60px)+工具栏按钮紧凑化
- * v1.6: 删除最后页面不再自动创建新页面
- * v1.5: 生成链接移除确认框
+ *
+ * ===== v2.0 国际化收尾要点 =====
+ *
+ * 1. 移除全部 10 处 t() 的中文兜底第二参数。
+ *    这些键经核对在中英两侧均真实存在，兜底参数虽未造成显示错误，
+ *    但会掩盖将来键被误删/改名的问题（键缺失时会静默显示中文），
+ *    按规约统一剥离。
+ *
+ * 2. 开发者日志（console.warn / new Error）改用英文：
+ *    它们不是界面文案，写中文在不同环境的控制台可能出现编码问题，
+ *    且日志检索通常以英文关键字为主。
+ *
+ * 3. 【重要 - 不可 i18n 的部分】'默认项目' 字符串必须保留中文：
+ *    该值是数据库中默认项目记录的实际 name 字段值，
+ *    用于 projects.find(p => p.name === '默认项目') 的业务匹配，
+ *    翻译它会导致英文环境下匹配失败、无法自动选中默认项目。
+ *    （代码中已用 is_default === 1 作为主判据，name 匹配是兼容旧数据的兜底。）
+ *
+ * 4. 【已知限制】Monaco 右键菜单文案在 onMount 时取值一次，
+ *    切换语言后编辑器不会重新 mount，需刷新页面菜单文案才更新。
+ *    这是 Monaco addAction API 的固有限制，属可接受范围。
+ *
+ * 5. 【待决策的技术债】BLANK_HTML 模板中 <html lang="zh-CN"> 为硬编码。
+ *    该模板内容会存入数据库成为用户页面正文，
+ *    改为动态语言属业务行为变更，未经确认不擅自修改。
+ *
+ * ===== 版本历史 =====
+ * v1.9 编辑器表头与 Monaco 右键菜单接入 i18n
+ * v1.8 修复转圈加载不出来 + Monaco 降级 textarea
+ *      - 积分加载不再阻塞页面初始化
+ *      - 移除 waitForCreditsLoaded 轮询
+ *      - initializeCredits 加 5 秒超时保护
+ *      - Monaco 加载超时 15 秒自动降级为 FallbackEditor
+ * v1.7 容器高度 calc(100vh-60px) + 工具栏按钮紧凑化
+ * v1.6 删除最后页面不再自动创建新页面
+ * v1.5 生成链接移除确认框
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -39,7 +61,20 @@ import './HtmlEditor.less';
 const { Sider, Content, Header } = Layout;
 const { Text } = Typography;
 
-// v1.8 Monaco懒加载，不阻塞页面渲染
+/* Monaco 加载超时时间，超时后自动降级为原生 textarea */
+const MONACO_TIMEOUT_MS = 15000;
+
+/* 积分初始化的超时保护，避免接口卡住导致页面一直转圈 */
+const CREDITS_INIT_TIMEOUT_MS = 5000;
+
+/**
+ * 数据库中默认项目的实际名称
+ * 【不可翻译】这是业务数据匹配用的字面量，不是界面文案。
+ * 翻译后英文环境将无法匹配到默认项目。
+ */
+const DEFAULT_PROJECT_NAME = '默认项目';
+
+/* Monaco 懒加载，不阻塞页面首屏渲染 */
 const MonacoEditor = React.lazy(() => import('@monaco-editor/react'));
 
 const HtmlEditor = () => {
@@ -51,8 +86,14 @@ const HtmlEditor = () => {
     deletePage, deleteProject, togglePublish, loadPage, updateProject
   } = useHtmlEditorStore();
 
+  /**
+   * 新建页面的初始 HTML 模板
+   * 注：lang="zh-CN" 为硬编码（见文件头技术债说明），
+   * 标题与正文文案已走 i18n
+   */
   const BLANK_HTML = `<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${t('htmlEditor.newPage')}</title>\n    <style>\n        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; line-height: 1.6; }\n    </style>\n</head>\n<body>\n    <h1>${t('htmlEditor.startCreate')}</h1>\n    <p>${t('htmlEditor.blankPage')}</p>\n</body>\n</html>`;
 
+  /* 页面默认标题：前缀走 i18n，时间戳为纯数字格式不受 locale 影响 */
   const genTitle = () => `${t('htmlEditor.page')}_${moment().format('YYYYMMDD_HHmmss')}`;
 
   // ============ 状态 ============
@@ -78,7 +119,7 @@ const HtmlEditor = () => {
   const [defaultProjectSelected, setDefaultProjectSelected] = useState(false);
   const [loadingPages, setLoadingPages] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  // v1.8 Monaco状态: 'loading' | 'ready' | 'failed'
+  /* Monaco 状态: 'loading' | 'ready' | 'failed' */
   const [monacoStatus, setMonacoStatus] = useState('loading');
 
   const autoPageCreatedRef = useRef(false);
@@ -88,25 +129,34 @@ const HtmlEditor = () => {
 
   useEffect(() => { creditsConfigRef.current = creditsConfig; }, [creditsConfig]);
 
-  // v1.8 Monaco 15秒超时降级
+  /* Monaco 超时降级计时器 */
   const startMonacoTimer = () => {
     clearTimeout(monacoTimerRef.current);
     monacoTimerRef.current = setTimeout(() => {
       setMonacoStatus(prev => {
-        if (prev === 'loading') { console.warn('[HtmlEditor] Monaco超时15秒，降级textarea'); return 'failed'; }
+        if (prev === 'loading') {
+          /* 开发者日志用英文，便于日志检索与跨环境显示 */
+          console.warn('[HtmlEditor] Monaco load timeout, falling back to textarea');
+          return 'failed';
+        }
         return prev;
       });
-    }, 15000);
+    }, MONACO_TIMEOUT_MS);
   };
   useEffect(() => { startMonacoTimer(); return () => clearTimeout(monacoTimerRef.current); }, []);
 
-  // ============ 积分（v1.8 不阻塞页面） ============
+  // ============ 积分（不阻塞页面初始化） ============
   const initializeCredits = async () => {
     setCreditsLoading(true);
     try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('超时')), 5000));
+      /* Error message 用英文：属技术信息，仅出现在 console 不展示给用户 */
+      const timeout = new Promise((_, rej) => setTimeout(
+        () => rej(new Error('credits init timeout')), CREDITS_INIT_TIMEOUT_MS
+      ));
       await Promise.race([Promise.all([fetchCreditsConfig(), getCurrentUser()]), timeout]);
-    } catch (e) { console.warn('[HtmlEditor] 积分加载失败/超时:', e.message); }
+    } catch (e) {
+      console.warn('[HtmlEditor] credits init failed or timed out:', e.message);
+    }
     finally { updateUserCredits(); setCreditsLoading(false); }
   };
 
@@ -132,7 +182,7 @@ const HtmlEditor = () => {
     try {
       const res = await apiClient.get('/html-editor/credits-config');
       if (res.data.success) { setCreditsConfig(res.data.data); creditsConfigRef.current = res.data.data; }
-    } catch (e) { /* 使用默认值 */ }
+    } catch (e) { /* 拿不到配置时使用默认值，不阻断流程 */ }
   };
 
   const refreshCredits = async () => { try { await getCurrentUser(); updateUserCredits(); } catch (e) { /* 静默 */ } };
@@ -149,16 +199,21 @@ const HtmlEditor = () => {
   useEffect(() => { getProjects(); initializeCredits(); }, []);
   useEffect(() => { if (user) updateUserCredits(); }, [user]);
 
-  // v1.8 自动选择默认项目 - 不再等creditsLoading
-  // 注意: '默认项目' 是数据库中默认项目的实际名称，属业务匹配逻辑非显示文案，不可i18n化
+  /**
+   * 自动选中默认项目
+   * 主判据为 is_default === 1，name 匹配是兼容旧数据的兜底（详见 DEFAULT_PROJECT_NAME 说明）
+   */
   useEffect(() => {
     if (projects.length > 0 && !defaultProjectSelected && !selectedProject) {
-      const def = projects.find(p => p.name === '默认项目' || p.is_default === 1);
+      const def = projects.find(p => p.name === DEFAULT_PROJECT_NAME || p.is_default === 1);
       if (def) { handleSelectProject(def); setDefaultProjectSelected(true); }
     }
   }, [projects, defaultProjectSelected]);
 
-  // v1.8 autoHandlePage - 不再等积分
+  /**
+   * 自动处理页面：有页面则打开第一个，无页面则尝试自动创建
+   * 用 ref 双重防抖，避免 React 严格模式或状态变化导致重复创建
+   */
   const autoHandlePage = async (projectId) => {
     if (autoPageCreatedRef.current || isAutoCreatingRef.current) return;
     isAutoCreatingRef.current = true;
@@ -175,7 +230,7 @@ const HtmlEditor = () => {
         const credits = getLatestCredits();
         const cfg = creditsConfigRef.current;
         if (cfg.credits_per_page > 0 && credits < cfg.credits_per_page) {
-          message.warning(t('htmlEditor.credits.cannotAutoCreate', '积分不足，请手动创建页面'));
+          message.warning(t('htmlEditor.credits.cannotAutoCreate'));
           setHtmlContent(BLANK_HTML);
         } else {
           const title = genTitle();
@@ -188,7 +243,7 @@ const HtmlEditor = () => {
         }
       }
       autoPageCreatedRef.current = true;
-    } catch (e) { console.error('[HtmlEditor] autoHandlePage:', e); }
+    } catch (e) { console.error('[HtmlEditor] autoHandlePage failed:', e); }
     finally { setLoadingPages(false); isAutoCreatingRef.current = false; }
   };
 
@@ -203,7 +258,8 @@ const HtmlEditor = () => {
   const handleEditProject = (p) => { setRenameType('project'); setRenameItem(p); renameForm.setFieldsValue({ name: p.name }); setShowRenameModal(true); };
 
   const handleDeleteProject = (p) => {
-    if (p.is_default === 1 || p.name === '默认项目') { message.warning(t('htmlEditor.project.defaultCannotDelete')); return; }
+    /* 默认项目受保护不可删除，同样用 is_default 与 name 双重判断 */
+    if (p.is_default === 1 || p.name === DEFAULT_PROJECT_NAME) { message.warning(t('htmlEditor.project.defaultCannotDelete')); return; }
     Modal.confirm({ title: t('htmlEditor.project.deleteConfirm'), content: (<div><p>{t('htmlEditor.project.deleteContent', { name: p.name })}</p><p style={{ color: '#ff4d4f', marginTop: 8 }}>{t('htmlEditor.project.deleteWarning')}</p></div>), okText: t('htmlEditor.project.deleteButton'), okType: 'danger', cancelText: t('htmlEditor.action.cancel'),
       onOk: async () => { try { await deleteProject(p.id); message.success(t('htmlEditor.project.deleteSuccess')); if (selectedProject?.id === p.id) { setSelectedProject(null); setSelectedPageId(null); setHtmlContent(BLANK_HTML); } await getProjects(); } catch (e) { message.error(e.response?.data?.message || t('htmlEditor.project.deleteFailed')); } }
     });
@@ -241,31 +297,36 @@ const HtmlEditor = () => {
     try { const r = await togglePublish(selectedPageId); if (r.is_published) { showLinkModal(r); await refreshCredits(); await getPages(selectedProject?.id); } } catch (e) { message.error(t('htmlEditor.link.generateFailed')); } finally { setIsGeneratingLink(false); }
   };
 
+  /* 永久链接弹窗：URL 用 window.location.origin 动态拼接，支持多域名部署 */
   const showLinkModal = (page) => {
     const url = `${window.location.origin}/pages/${user.id}/${page.slug}`;
-    Modal.info({ title: t('htmlEditor.link.permanentLink'), width: 600, icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, content: (<div><p>{t('htmlEditor.link.yourLink')}</p><Space.Compact style={{ width: '100%', marginTop: 10 }}><Input value={url} readOnly /><Button icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(url); message.success(t('htmlEditor.link.copied')); }} /></Space.Compact><Divider /><Text type="secondary">{t('htmlEditor.link.tip')}</Text></div>), okText: t('htmlEditor.link.openPage'), cancelText: t('htmlEditor.action.close', '关闭'), okCancel: true, onOk: () => window.open(url, '_blank') });
+    Modal.info({ title: t('htmlEditor.link.permanentLink'), width: 600, icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, content: (<div><p>{t('htmlEditor.link.yourLink')}</p><Space.Compact style={{ width: '100%', marginTop: 10 }}><Input value={url} readOnly /><Button icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(url); message.success(t('htmlEditor.link.copied')); }} /></Space.Compact><Divider /><Text type="secondary">{t('htmlEditor.link.tip')}</Text></div>), okText: t('htmlEditor.link.openPage'), cancelText: t('htmlEditor.action.close'), okCancel: true, onOk: () => window.open(url, '_blank') });
   };
 
-  // v1.8 Monaco就绪回调
-  // v1.9 i18n: 右键菜单label走t()。注意：label在onMount时取值一次，
-  //           切换语言后编辑器不重新mount，需刷新页面菜单文案才会更新（可接受的已知限制）
+  /**
+   * Monaco 就绪回调：注册自定义剪切/复制/粘贴右键菜单
+   *
+   * 【已知限制】label 在 onMount 时取值一次，切换语言后编辑器不重新 mount，
+   * 需刷新页面菜单文案才会更新。这是 Monaco addAction API 的固有行为。
+   * Emoji 图标属视觉符号，保留在代码中不进语言包。
+   */
   const handleEditorMount = (editor) => {
     clearTimeout(monacoTimerRef.current);
     setMonacoStatus('ready');
     [
-      { id: 'cut', label: `✂️ ${t('htmlEditor.editor.cut', '剪切')}`, order: 1, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) { await navigator.clipboard.writeText(t2); ed.executeEdits('cut', [{ range: s, text: '', forceMoveMarkers: true }]); } } },
-      { id: 'copy', label: `📄 ${t('htmlEditor.editor.copyMenu', '复制')}`, order: 2, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) await navigator.clipboard.writeText(t2); } },
-      { id: 'paste', label: `📋 ${t('htmlEditor.editor.paste', '粘贴')}`, order: 3, fn: async (ed) => { const t2 = await navigator.clipboard.readText(); if (t2) { ed.executeEdits('paste', [{ range: ed.getSelection(), text: t2, forceMoveMarkers: true }]); ed.focus(); } } }
+      { id: 'cut', label: `✂️ ${t('htmlEditor.editor.cut')}`, order: 1, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) { await navigator.clipboard.writeText(t2); ed.executeEdits('cut', [{ range: s, text: '', forceMoveMarkers: true }]); } } },
+      { id: 'copy', label: `📄 ${t('htmlEditor.editor.copyMenu')}`, order: 2, fn: async (ed) => { const s = ed.getSelection(); const t2 = ed.getModel().getValueInRange(s); if (t2) await navigator.clipboard.writeText(t2); } },
+      { id: 'paste', label: `📋 ${t('htmlEditor.editor.paste')}`, order: 3, fn: async (ed) => { const t2 = await navigator.clipboard.readText(); if (t2) { ed.executeEdits('paste', [{ range: ed.getSelection(), text: t2, forceMoveMarkers: true }]); ed.focus(); } } }
     ].forEach(a => editor.addAction({ id: `custom-${a.id}`, label: a.label, keybindings: [], contextMenuGroupId: '9_cutcopypaste', contextMenuOrder: a.order, run: a.fn }));
   };
 
-  // v1.8 重试Monaco加载
+  /* 手动重试 Monaco 加载（从降级态切回高级编辑器） */
   const handleRetryMonaco = () => { setMonacoStatus('loading'); startMonacoTimer(); };
 
   // ============ 编辑器选项 ============
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, fontFamily: 'SF Mono, Monaco, Consolas, monospace', formatOnPaste: true, formatOnType: true, automaticLayout: true, tabSize: 2, wordWrap: 'on', scrollBeyondLastLine: false, lineNumbers: 'on', renderWhitespace: 'selection', folding: true, bracketPairColorization: { enabled: true }, guides: { indentation: true, bracketPairs: true }, padding: { top: 16, bottom: 16 } };
 
-  // ============ 样式 ============
+  // ============ 样式（iOS 风格，与语言无关） ============
   const S = {
     container: { height: 'calc(100vh - 60px)', background: '#F2F2F7', overflow: 'hidden' },
     header: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(60,60,67,0.12)', height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
@@ -302,6 +363,7 @@ const HtmlEditor = () => {
         </Space>
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           {currentPage && <Space size={6}>
+            {/* 页面标题为用户录入的业务数据，不翻译 */}
             <Tag style={{ ...S.tag, background: 'linear-gradient(135deg,#007AFF,#0051D5)', color: 'white' }}><Html5Outlined /> {currentPage.title}</Tag>
             {currentPage.is_published && <Tag style={{ ...S.tag, background: 'linear-gradient(135deg,#34C759,#30B854)', color: 'white' }}><GlobalOutlined /> {t('htmlEditor.published')}</Tag>}
           </Space>}
@@ -329,6 +391,7 @@ const HtmlEditor = () => {
               </div>
               {projects.length > 0 ? projects.map(p => (
                 <div key={p.id} style={S.projItem(selectedProject?.id === p.id)} onClick={() => handleSelectProject(p)}>
+                  {/* 项目名为用户录入的业务数据，不翻译 */}
                   <Space size={8}><FolderOutlined /><span style={{ fontWeight: 500 }}>{p.name}</span>{p.is_default === 1 && <Tag style={{ ...S.tag, background: 'rgba(0,122,255,0.1)', color: '#007AFF', padding: '2px 6px', fontSize: 11 }}>{t('htmlEditor.default')}</Tag>}</Space>
                   <Space size={4}>
                     <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); handleEditProject(p); }} style={{ color: selectedProject?.id === p.id ? 'white' : '#8E8E93' }} />
@@ -348,6 +411,7 @@ const HtmlEditor = () => {
                 : pages.length > 0 ? <div style={S.pageScroll}>{pages.map(p => (
                   <div key={p.id} style={S.pageCard(selectedPageId === p.id)} onClick={() => handleSelectPage(p)}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {/* 页面标题与 slug 均为业务数据，不翻译 */}
                       <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{p.title}</div><div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>{p.slug}</div></div>
                       <Space size={6}>
                         <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); handleEditPage(p); }} style={{ color: '#8E8E93' }} />
@@ -369,10 +433,10 @@ const HtmlEditor = () => {
             <div style={S.edHead}>
               <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}</span>
               <Space size={8}>
-                <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? t('htmlEditor.editor.basicMode', '基础模式') : t('htmlEditor.loadingEditor')}</span>
-                <Tooltip title={monacoStatus === 'failed' ? t('htmlEditor.editor.switchToAdvanced', '切换到高级编辑器') : t('htmlEditor.editor.switchToBasic', '切换到基础编辑器')}>
+                <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? t('htmlEditor.editor.basicMode') : t('htmlEditor.loadingEditor')}</span>
+                <Tooltip title={monacoStatus === 'failed' ? t('htmlEditor.editor.switchToAdvanced') : t('htmlEditor.editor.switchToBasic')}>
                   <Button size="small" type={monacoStatus === 'failed' ? 'primary' : 'default'} style={{ fontSize: 11, height: 24, borderRadius: 6 }} onClick={() => { if (monacoStatus === 'failed') { setMonacoStatus('loading'); startMonacoTimer(); } else { clearTimeout(monacoTimerRef.current); setMonacoStatus('failed'); } }}>
-                    {monacoStatus === 'failed' ? t('htmlEditor.editor.advancedBtn', '⚡ 高级') : t('htmlEditor.editor.basicBtn', '📝 基础')}
+                    {monacoStatus === 'failed' ? t('htmlEditor.editor.advancedBtn') : t('htmlEditor.editor.basicBtn')}
                   </Button>
                 </Tooltip>
               </Space>
@@ -402,7 +466,7 @@ const HtmlEditor = () => {
         </Content>
       </Layout>
 
-      {/* 弹窗 */}
+      {/* 创建项目弹窗 */}
       <Modal title={t('htmlEditor.project.create')} open={showProjectModal} onOk={() => projectForm.submit()} onCancel={() => { setShowProjectModal(false); projectForm.resetFields(); }} centered>
         <Form form={projectForm} layout="vertical" onFinish={handleCreateProject}>
           <Form.Item name="name" label={t('htmlEditor.project.name')} rules={[{ required: true, message: t('htmlEditor.project.nameRequired') }]}><Input placeholder={t('htmlEditor.project.namePlaceholder')} style={{ borderRadius: 8 }} /></Form.Item>
@@ -411,6 +475,7 @@ const HtmlEditor = () => {
         </Form>
       </Modal>
 
+      {/* 创建页面弹窗 */}
       <Modal title={t('htmlEditor.page.createIn', { project: selectedProject?.name })} open={showPageModal} onOk={() => pageForm.submit()} onCancel={() => { setShowPageModal(false); pageForm.resetFields(); }} centered
         footer={[<Button key="c" onClick={() => { setShowPageModal(false); pageForm.resetFields(); }}>{t('htmlEditor.action.cancel')}</Button>, <Button key="s" type="primary" onClick={() => pageForm.submit()} icon={creditsConfig.credits_per_page > 0 ? <DollarOutlined /> : null} style={{ background: 'linear-gradient(135deg,#34C759,#30B854)', border: 'none' }} disabled={creditsLoading}>{t('htmlEditor.page.createButton')} ({fmtCredits(creditsConfig.credits_per_page)})</Button>]}>
         <Form form={pageForm} layout="vertical" onFinish={handleCreatePage}>
@@ -419,6 +484,7 @@ const HtmlEditor = () => {
         {creditsConfig.credits_per_page > 0 && <><Divider /><Space direction="vertical" style={{ width: '100%' }}><Text type="secondary">{t('htmlEditor.credits.perPage', { credits: creditsConfig.credits_per_page })}</Text><Text type="secondary">{t('htmlEditor.credits.currentBalance')}{creditsLoading ? <Text strong><LoadingOutlined spin /> {t('htmlEditor.loading')}</Text> : <Text strong type={userCredits < creditsConfig.credits_per_page ? 'danger' : 'success'}>{userCredits}</Text>} {t('htmlEditor.credits.creditsUnit')}</Text></Space></>}
       </Modal>
 
+      {/* 重命名弹窗（项目与页面共用） */}
       <Modal title={renameType === 'project' ? t('htmlEditor.project.rename') : t('htmlEditor.page.rename')} open={showRenameModal} onOk={() => renameForm.submit()} onCancel={() => { setShowRenameModal(false); renameForm.resetFields(); setRenameItem(null); }} centered>
         <Form form={renameForm} layout="vertical" onFinish={handleRename}>
           <Form.Item name="name" label={renameType === 'project' ? t('htmlEditor.project.name') : t('htmlEditor.page.name')} rules={[{ required: true, message: t('htmlEditor.page.nameRequired') }]}><Input placeholder={t('htmlEditor.page.namePlaceholder')} style={{ borderRadius: 8 }} /></Form.Item>

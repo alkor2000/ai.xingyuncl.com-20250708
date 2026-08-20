@@ -76,6 +76,19 @@
   "knowledge.slotCannotReduce": "当前卡槽已被模块占用，请先移除模块再减少卡槽",
   "knowledge.slotCount": "个卡槽（最多{{max}}个）",
 
+  "knowledge.module.listLoadFailed": "获取知识模块列表失败",
+  "knowledge.module.detailLoadFailed": "获取知识模块详情失败",
+  "knowledge.module.createFailed": "创建知识模块失败",
+  "knowledge.module.updateFailed": "更新知识模块失败",
+  "knowledge.module.deleteFailed": "删除知识模块失败",
+
+  "knowledge.combination.listLoadFailed": "获取模块组合列表失败",
+  "knowledge.combination.detailLoadFailed": "获取模块组合详情失败",
+  "knowledge.combination.createFailed": "创建模块组合失败",
+  "knowledge.combination.updateFailed": "更新模块组合失败",
+  "knowledge.combination.deleteFailed": "删除模块组合失败",
+  "knowledge.combination.copyFailed": "复制模块组合失败",
+
   "knowledge.form.editModule": "编辑知识模块",
   "knowledge.form.createModule": "创建知识模块",
   "knowledge.form.creator": "创建人",

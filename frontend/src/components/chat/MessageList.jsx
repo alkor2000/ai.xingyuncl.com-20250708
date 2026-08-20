@@ -6,6 +6,13 @@
  *   - 新增 showThinking prop 透传给 MessageContent
  *   - 支持控制是否显示 Claude 推理模型的思考过程
  *   - MessageItem 的 React.memo 比较函数新增 showThinking 比较
+ *
+ * v3.1 国际化收尾：
+ *   - EmptyMessages 内的公告标题此前完全遗漏t()调用，复用
+ *     chat.announcement.title 键（该键已在 EmptyConversation.jsx 处理时
+ *     新建，两个组件内的公告展示逻辑同属Chat模块内的相同语义，故直接复用
+ *     而非重新新建）
+ *   - console.error开发者日志改为英文（不进语言包，属内部诊断信息）
  */
 
 import React, { useState, useEffect } from 'react'
@@ -142,7 +149,7 @@ const EmptyMessages = () => {
           setAnnouncement(response.data.data)
         }
       } catch (error) {
-        console.error('获取系统公告失败:', error)
+        console.error('Failed to fetch system announcement:', error)
       } finally {
         setLoading(false)
       }
@@ -163,7 +170,7 @@ const EmptyMessages = () => {
           <Card className="announcement-card">
             <div className="announcement-header">
               <InfoCircleOutlined style={{ color: 'var(--primary-color)', marginRight: 8 }} />
-              <span>系统公告</span>
+              <span>{t('chat.announcement.title')}</span>
             </div>
             <div className="announcement-content markdown-content">
               <ReactMarkdown>{announcement.content}</ReactMarkdown>

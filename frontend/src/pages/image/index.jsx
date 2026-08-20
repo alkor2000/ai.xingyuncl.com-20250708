@@ -1,24 +1,39 @@
 /**
- * 图像生成页面 - 重构版
+ * 图像生成页面
  *
- * v1.3 i18n补全:
- *   - 搜索框 placeholder 补全（之前 key 缺失，中英文都回退中文）
- *   - 搜索结果计数提示改为纯文本 t()（去掉 <strong> 加粗，避免插值转义问题）
- *   - 空状态搜索文案、图片加载失败提示走 t()
- *   - Midjourney 操作确认标签配合 constants.ACTION_LABELS 新结构（{type,index}）用 t() 生成
+ * ===== v1.4 国际化收尾 =====
  *
- * v1.2 关键词搜索优化
- *   - IME 输入法保护（中文输入回车不触发搜索）
- *   - 生成后清空搜索框（避免不一致）
- *   - 搜索结果计数提示
- *   - 移动端响应式
+ * 1. 移除全部 19 处 t() 的中文兜底第二参数。
+ *    该页面的键此前经核对全部真实存在，兜底参数虽未造成显示错误，
+ *    但会掩盖将来键被误删/改名的问题，因此按规约统一剥离。
+ *
+ * 2. 不翻译的内容：图片提示词、模型名、用户名等业务数据。
+ *
+ * ===== v1.4 附带的技术债收敛（行为零变化）=====
+ *
+ * 原代码在 getBestImageUrl 与 handleViewImage 中共出现 3 次硬编码域名
+ * 'https://ai.xingyuncl.com'。现提取为模块级常量 IMAGE_HOST，
+ * 取值完全不变、行为完全一致，仅把 3 个改动点收敛为 1 个。
+ *
+ * 【待决策的技术债】该常量理想实现应为 window.location.origin
+ * （参考 MindmapShare 分享链接的做法），以支持更换域名或多域名部署。
+ * 因涉及线上图片访问路径，属业务行为变更，未经确认不擅自修改。
+ *
+ * ===== 已知遗留（本次不动）=====
+ * Tabs 的 TabPane 子组件写法在 Antd v5 已废弃（建议改 items 属性），
+ * 改造会影响 Tab 结构与样式，需单独验证，故本次保留。
+ *
+ * ===== 原有功能说明（逻辑未变更）=====
+ * - IME 输入法保护：中文拼写态下回车不触发搜索
+ * - 生成成功后清空搜索框并切回"我的图片"，避免新图被过滤掉看不见
+ * - 搜索结果计数提示
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Layout, Button, Space, Tabs, Empty, Spin, Pagination, Modal, message, Input } from 'antd';
-import { 
-  ReloadOutlined, 
-  AppstoreOutlined, 
+import {
+  ReloadOutlined,
+  AppstoreOutlined,
   UnorderedListOutlined,
   GlobalOutlined,
   SearchOutlined
@@ -46,13 +61,26 @@ const { Content, Sider } = Layout;
 const { TabPane } = Tabs;
 const { Search } = Input;
 
+/**
+ * 图片资源域名前缀
+ * 用于把后端返回的相对路径（如 /uploads/xxx.png）补全为可访问的绝对地址。
+ *
+ * 【技术债】此处为硬编码，更换域名或多域名部署时需要改代码。
+ * 理想实现是 window.location.origin，但属业务行为变更，待确认后再调整。
+ * 当前提取为单一常量，是为了让将来的修改只需动这一行。
+ */
+const IMAGE_HOST = 'https://ai.xingyuncl.com';
+
+/* 搜索关键词最大长度，与后端 normalizeKeyword 的截断长度保持一致 */
+const SEARCH_MAX_LENGTH = 100;
+
 const ParameterPanel = React.lazy(() => import('./components/GenerationPanel/ParameterSettings'));
 const MidjourneyActions = React.lazy(() => import('./components/ImageGallery/MidjourneyActions'));
 
 const ImageGeneration = () => {
   const { t } = useTranslation();
   const { user } = useAuthStore();
-  
+
   const {
     generationHistory,
     historyPagination,
@@ -76,24 +104,26 @@ const ImageGeneration = () => {
   const upload = useImageUpload();
   const historyPaging = usePagination();
   const publicPaging = usePagination();
-  
+
   const [viewMode, setViewMode] = useState(VIEW_MODES.GRID);
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState([]);
   const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
-  
-  // v1.1 搜索框本地输入值
+
+  /* 搜索框本地输入值（与 store 的 keyword 分离，避免每次输入都触发查询） */
   const [searchInput, setSearchInput] = useState(keyword || '');
-  
-  // v1.2 IME 输入法保护：跟踪中文输入法的拼写态
-  // ref 而非 state，因为不需要触发渲染
+
+  /**
+   * IME 输入法保护：跟踪中文输入法的拼写态
+   * 用 ref 而非 state，因为该值仅用于事件判断，不需要触发渲染
+   */
   const isComposingRef = useRef(false);
 
   /**
-   * v1.2 工具方法：根据当前Tab、分页、关键词构建查询参数
-   * @param {object} extra 额外参数（如page/limit）
-   * @param {string} [overrideKeyword] 显式传入关键词覆盖store值（用于setState时序问题）
+   * 根据当前 Tab、分页、关键词组装查询参数
+   * @param {object} extra 额外参数（如 page/limit）
+   * @param {string} [overrideKeyword] 显式覆盖关键词，用于 setState 异步未生效的场景
    */
   const buildQueryParams = useCallback((extra = {}, overrideKeyword) => {
     const params = { ...extra };
@@ -105,9 +135,7 @@ const ImageGeneration = () => {
     return params;
   }, [keyword]);
 
-  /**
-   * 根据Tab和当前关键词刷新对应列表
-   */
+  /* 按 Tab 分发到对应的列表接口并刷新 */
   const reloadCurrentTab = useCallback((tab, page = 1, limit = null, overrideKeyword) => {
     if (tab === TAB_KEYS.PUBLIC) {
       const size = limit || publicPaging.pageSize;
@@ -123,7 +151,7 @@ const ImageGeneration = () => {
     }
   }, [buildQueryParams, getPublicGallery, getUserHistory, publicPaging.pageSize, historyPaging.pageSize]);
 
-  // 初始化
+  /* 初始化：加载历史 + 清理残留的失败任务状态 + 拉取统计 */
   useEffect(() => {
     getUserHistory({ page: 1, limit: historyPaging.pageSize }).then(() => {
       cleanupFailedTasks();
@@ -131,22 +159,24 @@ const ImageGeneration = () => {
     getUserStats();
   }, []);
 
-  // 处理生成（v1.2: 生成成功后清空搜索框，回到无过滤的"我的图片"）
+  /**
+   * 生成图片
+   * 成功后清空搜索框并切回"我的图片"，否则新生成的图会被关键词过滤掉，
+   * 用户会误以为生成失败。
+   */
   const handleGenerate = useCallback(async () => {
     const result = await generation.handleGenerate(upload.referenceImages);
     if (result) {
       if (isMidjourneyModel(generation.selectedModel)) {
         upload.clearReferenceImages();
       }
-      
-      // v1.2 生成成功后清空搜索框，避免新生成的图被过滤
+
       if (keyword || searchInput) {
         setKeyword('');
         setSearchInput('');
       }
-      
+
       historyPaging.setCurrentPage(1);
-      // 切回"我的图片"Tab无关键词查询，让用户看到新生成的
       if (activeTab !== TAB_KEYS.ALL) {
         setActiveTab(TAB_KEYS.ALL);
       }
@@ -155,14 +185,15 @@ const ImageGeneration = () => {
   }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab]);
 
   /**
-   * v1.3 Midjourney 操作确认标签 i18n 生成
-   *   ACTION_LABELS[action] 现在返回 { type, index } 或函数
-   *   - UPSCALE/VARIATION 是函数 (index) => ({ type:'upscaleIndex', index })
-   *   - REROLL 是对象 { type:'reroll' }
-   *   根据 type 映射到 image.json 的 key：
-   *     upscaleIndex   -> image.action.upscaleIndex   放大第N张 / Upscale #N
-   *     variationIndex -> image.action.variationIndex 变体第N张 / Variation #N
-   *     reroll         -> image.action.reroll         重新生成 / Reroll
+   * 生成 Midjourney 操作的确认文案
+   *
+   * ACTION_LABELS[action] 返回 { type, index } 或返回该结构的函数：
+   *   - UPSCALE / VARIATION 是函数 (index) => ({ type, index })
+   *   - REROLL 是对象 { type: 'reroll' }
+   * 再按 type 映射到语言包：
+   *   upscaleIndex   -> image.action.upscaleIndex   放大第N张 / Upscale #N
+   *   variationIndex -> image.action.variationIndex 变体第N张 / Variation #N
+   *   reroll         -> image.action.reroll         重新生成 / Reroll
    */
   const buildActionLabel = useCallback((action, index) => {
     const def = ACTION_LABELS[action];
@@ -171,42 +202,43 @@ const ImageGeneration = () => {
       return '';
     }
     if (resolved.type === 'reroll') {
-      return t('image.action.reroll', '重新生成');
+      return t('image.action.reroll');
     }
     if (resolved.type === 'upscaleIndex') {
-      return t('image.action.upscaleIndex', '放大第{{index}}张', { index: resolved.index });
+      return t('image.action.upscaleIndex', { index: resolved.index });
     }
     if (resolved.type === 'variationIndex') {
-      return t('image.action.variationIndex', '变体第{{index}}张', { index: resolved.index });
+      return t('image.action.variationIndex', { index: resolved.index });
     }
     return '';
   }, [t]);
 
-  // Midjourney操作
+  /* Midjourney 二次操作（U/V/Reroll），需用户确认扣费 */
   const handleMidjourneyAction = useCallback(async (generationId, action, index) => {
     const actionLabel = buildActionLabel(action, index);
-    
+
     const confirm = await new Promise((resolve) => {
       Modal.confirm({
-        title: t('image.confirmAction', '确认操作'),
-        content: t('image.confirmActionDesc', '确定要{{action}}吗？此操作将消耗 {{credits}} 积分', {
+        title: t('image.confirmAction'),
+        /* 整句插值：操作名与积分数嵌入译文，中英语序不同不可分段拼接 */
+        content: t('image.confirmActionDesc', {
           action: actionLabel,
           credits: generation.selectedModel.price_per_image
         }),
-        okText: t('common.confirm', '确定'),
-        cancelText: t('common.cancel', '取消'),
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
         onOk: () => resolve(true),
         onCancel: () => resolve(false)
       });
     });
-    
+
     if (confirm) {
       await midjourneyAction(generationId, action, index);
       reloadCurrentTab(activeTab, historyPaging.currentPage);
     }
   }, [generation.selectedModel, midjourneyAction, reloadCurrentTab, historyPaging, t, activeTab, buildActionLabel]);
 
-  // Tab切换
+  /* 切换 Tab：重置到第 1 页并重新查询 */
   const handleTabChange = useCallback((key) => {
     setActiveTab(key);
     if (key === TAB_KEYS.PUBLIC) {
@@ -217,7 +249,7 @@ const ImageGeneration = () => {
     reloadCurrentTab(key, 1);
   }, [historyPaging, publicPaging, reloadCurrentTab]);
 
-  // 分页变化
+  /* 分页变化 */
   const handlePageChange = useCallback((page, size) => {
     if (activeTab === TAB_KEYS.PUBLIC) {
       publicPaging.handlePageChange(page, size);
@@ -227,24 +259,25 @@ const ImageGeneration = () => {
     reloadCurrentTab(activeTab, page, size);
   }, [activeTab, historyPaging, publicPaging, reloadCurrentTab]);
 
-  // 刷新
+  /* 手动刷新当前页 */
   const handleRefresh = useCallback(() => {
-    const currentPage = activeTab === TAB_KEYS.PUBLIC ? publicPaging.currentPage : historyPaging.currentPage;
+    const currentPage = activeTab === TAB_KEYS.PUBLIC
+      ? publicPaging.currentPage
+      : historyPaging.currentPage;
     reloadCurrentTab(activeTab, currentPage);
     if (activeTab !== TAB_KEYS.PUBLIC) {
+      /* 延迟清理，等列表数据落地后再比对状态 */
       setTimeout(() => cleanupFailedTasks(), 100);
     }
   }, [activeTab, historyPaging.currentPage, publicPaging.currentPage, reloadCurrentTab, cleanupFailedTasks]);
 
-  /**
-   * v1.2 处理搜索：IME 保护 + 重置到第1页 + 重新查询
-   */
+  /* 执行搜索：IME 保护 + 回到第 1 页 + 用新关键词立即查询 */
   const handleSearch = useCallback((value) => {
-    // IME 输入法保护：正在拼写中文则忽略此次回车
+    /* 正在拼写中文时的回车属于确认候选词，不应触发搜索 */
     if (isComposingRef.current) {
       return;
     }
-    
+
     const newKeyword = (value || '').trim();
     setKeyword(newKeyword);
     setSearchInput(newKeyword);
@@ -255,17 +288,21 @@ const ImageGeneration = () => {
       historyPaging.setCurrentPage(1);
     }
 
-    // 使用新关键词查询（避免setState异步延迟）
+    /* 传 newKeyword 而不依赖 store，规避 setState 异步延迟 */
     reloadCurrentTab(activeTab, 1, null, newKeyword);
   }, [activeTab, setKeyword, publicPaging, historyPaging, reloadCurrentTab]);
 
+  /**
+   * 按优先级取可用的图片地址：local_path > image_url > thumbnail_path
+   * 相对路径需用 IMAGE_HOST 补全为绝对地址
+   */
   const getBestImageUrl = (img) => {
     if (img.local_path) {
       if (img.local_path.startsWith('http://') || img.local_path.startsWith('https://')) {
         return img.local_path;
       }
       if (img.local_path.startsWith('/')) {
-        return `https://ai.xingyuncl.com${img.local_path}`;
+        return `${IMAGE_HOST}${img.local_path}`;
       }
     }
     if (img.image_url) return img.image_url;
@@ -274,12 +311,16 @@ const ImageGeneration = () => {
         return img.thumbnail_path;
       }
       if (img.thumbnail_path.startsWith('/')) {
-        return `https://ai.xingyuncl.com${img.thumbnail_path}`;
+        return `${IMAGE_HOST}${img.thumbnail_path}`;
       }
     }
     return '';
   };
 
+  /**
+   * 打开大图查看器
+   * 把当前列表整体转成查看器所需结构，便于左右切换浏览
+   */
   const handleViewImage = (item) => {
     const currentData = activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
     const allImages = currentData.map(img => {
@@ -288,9 +329,9 @@ const ImageGeneration = () => {
       return {
         id: img.id,
         url: url,
-        thumbnail_path: img.thumbnail_path?.startsWith('http') 
-          ? img.thumbnail_path 
-          : (img.thumbnail_path ? `https://ai.xingyuncl.com${img.thumbnail_path}` : url),
+        thumbnail_path: img.thumbnail_path?.startsWith('http')
+          ? img.thumbnail_path
+          : (img.thumbnail_path ? `${IMAGE_HOST}${img.thumbnail_path}` : url),
         title: img.prompt,
         prompt: img.prompt,
         negative_prompt: img.negative_prompt,
@@ -304,10 +345,10 @@ const ImageGeneration = () => {
     });
     const validImages = allImages.filter(img => img !== null);
     if (validImages.length === 0) {
-      // v1.3 i18n: 图片加载失败提示
-      message.error(t('image.error.loadFailed', '图片加载失败'));
+      message.error(t('image.error.loadFailed'));
       return;
     }
+    /* 按 id 精确定位当前图片的下标，避免过滤后索引错位 */
     const correctIndex = validImages.findIndex(img => img.id === item.id);
     const finalIndex = correctIndex >= 0 ? correctIndex : 0;
     setViewerImages(validImages);
@@ -326,7 +367,7 @@ const ImageGeneration = () => {
     return historyPaging.getPaginationConfig(historyPagination.total);
   }, [activeTab, publicPaging, historyPaging, galleryPagination.total, historyPagination.total]);
 
-  // v1.2 当前总数（用于搜索结果计数提示）
+  /* 当前 Tab 的总数，用于搜索结果计数提示 */
   const currentTotal = useMemo(() => {
     return activeTab === TAB_KEYS.PUBLIC ? galleryPagination.total : historyPagination.total;
   }, [activeTab, galleryPagination.total, historyPagination.total]);
@@ -341,6 +382,7 @@ const ImageGeneration = () => {
   const handleToggleFavorite = useCallback(async (item) => {
     const success = await toggleFavorite(item.id);
     if (success) {
+      /* 收藏 Tab 下取消收藏会导致该项应从列表移除，需重新拉取 */
       if (activeTab === TAB_KEYS.FAVORITES) {
         reloadCurrentTab(activeTab, historyPaging.currentPage);
       }
@@ -350,13 +392,14 @@ const ImageGeneration = () => {
   const handleTogglePublic = useCallback(async (item) => {
     const success = await togglePublic(item.id);
     if (success) {
+      /* 公开画廊下取消公开同理需重新拉取 */
       if (activeTab === TAB_KEYS.PUBLIC) {
         reloadCurrentTab(activeTab, publicPaging.currentPage);
       }
     }
   }, [togglePublic, activeTab, reloadCurrentTab, publicPaging]);
 
-  // v1.2 是否处于搜索激活状态（用于显示计数提示和空状态文案）
+  /* 是否处于搜索态，决定计数提示与空状态文案 */
   const isSearchActive = keyword && keyword.trim().length > 0;
 
   return (
@@ -403,15 +446,18 @@ const ImageGeneration = () => {
         <div className="history-header-wrapper">
           <div className="history-header">
             <Tabs activeKey={activeTab} onChange={handleTabChange} className="history-tabs">
-              <TabPane tab={t('image.myImages', '我的图片')} key={TAB_KEYS.ALL} />
-              <TabPane tab={t('image.myFavorites', '我的收藏')} key={TAB_KEYS.FAVORITES} />
-              <TabPane tab={<span><GlobalOutlined /> {t('image.publicGallery', '公开画廊')}</span>} key={TAB_KEYS.PUBLIC} />
+              <TabPane tab={t('image.myImages')} key={TAB_KEYS.ALL} />
+              <TabPane tab={t('image.myFavorites')} key={TAB_KEYS.FAVORITES} />
+              <TabPane
+                tab={<span><GlobalOutlined /> {t('image.publicGallery')}</span>}
+                key={TAB_KEYS.PUBLIC}
+              />
             </Tabs>
             <Space className="history-actions" wrap>
-              {/* v1.2 搜索框：IME 保护 + 提示词/模型名模糊搜索 */}
+              {/* 搜索框：IME 保护 + 提示词/模型名模糊搜索 */}
               <Search
                 className="history-search"
-                placeholder={t('image.searchPlaceholder', '搜索提示词或模型名...')}
+                placeholder={t('image.searchPlaceholder')}
                 allowClear
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
@@ -419,31 +465,33 @@ const ImageGeneration = () => {
                 onCompositionStart={() => { isComposingRef.current = true; }}
                 onCompositionEnd={() => { isComposingRef.current = false; }}
                 enterButton={<SearchOutlined />}
-                maxLength={100}
+                maxLength={SEARCH_MAX_LENGTH}
               />
               <Button
                 icon={viewMode === VIEW_MODES.GRID ? <AppstoreOutlined /> : <UnorderedListOutlined />}
-                onClick={() => setViewMode(viewMode === VIEW_MODES.GRID ? VIEW_MODES.LIST : VIEW_MODES.GRID)}
+                onClick={() => setViewMode(
+                  viewMode === VIEW_MODES.GRID ? VIEW_MODES.LIST : VIEW_MODES.GRID
+                )}
               />
               <Button
                 icon={<ReloadOutlined />}
                 onClick={handleRefresh}
               >
-                {t('common.refresh', '刷新')}
+                {t('common.refresh')}
               </Button>
             </Space>
           </div>
-          
-          {/* v1.3 搜索结果计数提示（纯文本 t()，不再用 <strong> 加粗） */}
+
+          {/* 搜索结果计数提示：整句插值，不用 <strong> 包裹以避免插值转义问题 */}
           {!loading && isSearchActive && (
             <div className="search-result-tip">
               {currentTotal > 0
-                ? <span>{t('image.searchFound', '找到 {{count}} 条匹配 "{{keyword}}" 的结果', { count: currentTotal, keyword })}</span>
-                : <span>{t('image.searchNoMatch', '没有匹配 "{{keyword}}" 的结果', { keyword })}</span>
+                ? <span>{t('image.searchFound', { count: currentTotal, keyword })}</span>
+                : <span>{t('image.searchNoMatch', { keyword })}</span>
               }
             </div>
           )}
-          
+
           {!loading && getCurrentData().length > 0 && (
             <div className="history-pagination">
               <Pagination
@@ -475,10 +523,10 @@ const ImageGeneration = () => {
                   onToggleFavorite={handleToggleFavorite}
                   onTogglePublic={handleTogglePublic}
                   onDelete={handleDelete}
-                  renderActions={(item) => (
+                  renderActions={(actionItem) => (
                     <React.Suspense fallback={null}>
                       <MidjourneyActions
-                        item={item}
+                        item={actionItem}
                         onAction={handleMidjourneyAction}
                       />
                     </React.Suspense>
@@ -490,12 +538,12 @@ const ImageGeneration = () => {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   isSearchActive
-                    ? t('image.searchNoImage', '没有匹配 "{{keyword}}" 的图片', { keyword })
-                    : activeTab === TAB_KEYS.PUBLIC 
-                      ? t('image.noPublicImages', '暂无公开的图片')
+                    ? t('image.searchNoImage', { keyword })
+                    : activeTab === TAB_KEYS.PUBLIC
+                      ? t('image.noPublicImages')
                       : activeTab === TAB_KEYS.FAVORITES
-                      ? t('image.noFavorites', '暂无收藏的图片')
-                      : t('image.noHistory', '暂无生成记录')
+                        ? t('image.noFavorites')
+                        : t('image.noHistory')
                 }
               />
             )}

@@ -3,6 +3,7 @@
     "title": "Forum",
     "subtitle": "Discuss, Share and Learn",
     "loading": "Loading...",
+    "backToForum": "Back to Forum",
 
     "board": {
       "title": "Boards",
@@ -55,7 +56,14 @@
         "attachments": "Attachments",
         "uploadImage": "Upload Image",
         "uploadFile": "Upload File"
-      }
+      },
+      "notFound": "Post not found or has been deleted",
+      "createSuccess": "Post created successfully",
+      "createFailed": "Failed to create post",
+      "updateSuccess": "Updated successfully",
+      "updateFailed": "Failed to update",
+      "deleteSuccess": "Deleted successfully",
+      "deleteFailed": "Failed to delete"
     },
 
     "reply": {
@@ -66,10 +74,18 @@
       "delete": "Delete Reply",
       "deleteConfirm": "Are you sure to delete this reply?",
       "floor": "F",
+      "floorLabel": "#{{floor}}",
       "replyTo": "Reply to",
       "edited": "Edited",
       "hidden": "This reply has been hidden",
-      "empty": "No replies yet. Be the first to reply!"
+      "empty": "No replies yet. Be the first to reply!",
+      "emptyWarning": "Reply content cannot be empty",
+      "createSuccess": "Reply posted successfully",
+      "createFailed": "Failed to post reply",
+      "updateSuccess": "Updated successfully",
+      "updateFailed": "Failed to update",
+      "deleteSuccess": "Deleted successfully",
+      "deleteFailed": "Failed to delete"
     },
 
     "like": {
@@ -83,7 +99,9 @@
       "favorite": "Favorite",
       "unfavorite": "Unfavorite",
       "myFavorites": "My Favorites",
-      "empty": "No favorites"
+      "empty": "No favorites",
+      "favoritedResult": "Added to favorites",
+      "unfavoritedResult": "Removed from favorites"
     },
 
     "notification": {
@@ -113,7 +131,8 @@
       "disableReply": "Disable Replies",
       "enableReply": "Enable Replies",
       "hideReply": "Hide Reply",
-      "unhideReply": "Unhide Reply"
+      "unhideReply": "Unhide Reply",
+      "actionFailed": "Operation failed"
     },
 
     "myPosts": {
@@ -138,6 +157,16 @@
       "appointModerator": "Appoint Moderator",
       "removeModerator": "Remove Moderator",
       "removeModeratorConfirm": "Are you sure to remove this moderator?",
+      "createBoardSuccess": "Board created successfully",
+      "createBoardFailed": "Failed to create",
+      "updateBoardSuccess": "Board updated successfully",
+      "updateBoardFailed": "Failed to update",
+      "deleteBoardSuccess": "Board deleted successfully",
+      "deleteBoardFailed": "Failed to delete",
+      "appointModeratorSuccess": "Moderator appointed successfully",
+      "appointModeratorFailed": "Failed to appoint moderator",
+      "removeModeratorSuccess": "Moderator removed successfully",
+      "removeModeratorFailed": "Failed to remove moderator",
       "boardForm": {
         "name": "Board Name",
         "namePlaceholder": "Enter board name",
@@ -164,6 +193,15 @@
     "search": {
       "placeholder": "Search posts...",
       "userPlaceholder": "Search users..."
+    },
+
+    "attachment": {
+      "deleteImageConfirm": "Delete this image? This action cannot be undone.",
+      "deleteFileConfirm": "Delete this file?",
+      "deleteOk": "Delete",
+      "deleteCancel": "Cancel",
+      "deleteSuccess": "Attachment deleted",
+      "deleteFailed": "Failed to delete attachment"
     },
 
     "upload": {

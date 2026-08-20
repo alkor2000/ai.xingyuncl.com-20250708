@@ -1,10 +1,26 @@
 /**
- * 帖子详情组件 v2.3
- * 
+ * 帖子详情组件 v2.4
+ *
+ * v2.4 - 国际化修复：
+ *        1) 8 处硬编码中文接入 i18n（返回按钮、空回复告警、附件删除确认框的
+ *           title/okText/cancelText）；
+ *        2) 修复 dayjs 相对时间语言错误【重要】：
+ *           原代码模块顶层只有 dayjs.extend(relativeTime)，从未设置 locale，
+ *           而 dayjs 默认 locale 为 'en'，导致回复列表的 fromNow() 在中文环境
+ *           下也输出 "2 hours ago"。且 dayjs.locale() 是全局状态，本组件的
+ *           实际显示语言会取决于"此前哪个组件恰好设置过全局 locale"
+ *           （例如 Agent 的 ApiAccessDrawer），形成跨模块隐式耦合。
+ *           此处改用【实例级 locale】dayjs(x).locale(l).fromNow()：
+ *           既不产生全局副作用，也不受其他组件的全局设置影响。
+ *        3) 楼层号原为 `#{floor}` + t('forum.reply.floor') 分段拼接，
+ *           中文得到"#1楼"、英文得到"#1F"（不地道）。改为整句插值
+ *           forum.reply.floorLabel（中"#{{floor}}楼" / 英"#{{floor}}"）。
+ *           旧的 forum.reply.floor 键予以保留，避免影响其他潜在引用。
+ *
  * v2.3 - 版主权限：使用后端返回的is_moderator字段判断，指定版主也能看到管理操作
  *      - 返回按钮：从小箭头改为"← 返回论坛"文字按钮
  * v2.2 - 帖子附件支持作者/版主删除
- * 
+ *
  * @module pages/forum/components/PostDetail
  */
 
@@ -28,14 +44,39 @@ import remarkGfm from 'remark-gfm';
 import useForumStore from '../../../stores/forumStore';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+// 必须显式引入中文 locale 才能在实例上调用 .locale('zh-cn')，
+// 仅 import dayjs 时只注册了默认的 'en'
+import 'dayjs/locale/zh-cn';
 
+// extend 为一次性插件注册，属幂等操作，可安全放在模块顶层；
+// 与之相对，dayjs.locale() 是全局可变状态，绝不可在模块顶层设置
 dayjs.extend(relativeTime);
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
 
+/** 回复内容最大长度，与后端 forum_replies.content 校验保持一致 */
+const REPLY_MAX_LENGTH = 5000;
+
+/** 文件大小换算基数：字节 → KB */
+const BYTES_PER_KB = 1024;
+
+/** 图片附件预览宽度（px） */
+const ATTACHMENT_IMAGE_WIDTH = 200;
+
+/**
+ * 把 i18n 语言标识映射为 dayjs 的 locale 名
+ * 站点语言为 'zh-CN'，dayjs 对应的 locale 名是 'zh-cn'（小写且横线形式不同），
+ * 因此不能直接把 i18n.language 传给 dayjs。
+ * 用 startsWith('zh') 而非全等，可兼容 zh-TW / zh-Hans 等未来变体。
+ */
+const toDayjsLocale = (lang) => {
+  return lang && lang.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en';
+};
+
 const PostDetail = ({ postId, user, onBack, onEditPost }) => {
-  const { t } = useTranslation();
+  // i18n 一并取出：dayjs 实例级 locale 需要当前语言
+  const { t, i18n } = useTranslation();
   const {
     currentPost, currentPostLoading,
     replies, repliesLoading, repliesPagination,
@@ -54,6 +95,9 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const [deletedAttIds, setDeletedAttIds] = useState(new Set());
   const [deletingAttId, setDeletingAttId] = useState(null);
 
+  // 当前生效的 dayjs locale，随语言切换重算（渲染期求值，无需缓存）
+  const dayjsLocale = toDayjsLocale(i18n.language);
+
   useEffect(() => {
     if (postId) {
       fetchPostDetail(postId);
@@ -61,6 +105,8 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
       setDeletedAttIds(new Set());
     }
     return () => clearCurrentPost();
+    // 依赖只含 postId：本 effect 只负责拉取数据、不产生界面文案，
+    // 若把 t 加入依赖，语言切换会重复请求帖子与回复并重置附件删除记录
   }, [postId]);
 
   const post = currentPost;
@@ -79,14 +125,18 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
   const canManageAttachments = isAuthor || isModerator;
 
   const handleSubmitReply = async () => {
-    if (!replyContent.trim()) return message.warning('回复内容不能为空');
+    // 提交按钮已有 disabled 保护，此处为防御性校验（例如未来改为回车提交）
+    if (!replyContent.trim()) {
+      message.warning(t('forum.reply.emptyWarning'));
+      return;
+    }
     setSubmitting(true);
     try {
       await createReply(postId, { content: replyContent.trim(), reply_to_id: replyToId });
       setReplyContent('');
       setReplyToId(null);
       setReplyToName('');
-    } catch (e) { /* store已处理 */ }
+    } catch (e) { /* store已处理错误提示 */ }
     setSubmitting(false);
   };
 
@@ -101,10 +151,15 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
     try {
       await deleteAttachment(attId);
       setDeletedAttIds(prev => new Set([...prev, attId]));
-    } catch (e) { /* store已处理 */ }
+    } catch (e) { /* store已处理错误提示 */ }
     setDeletingAttId(null);
   };
 
+  /**
+   * 版主操作菜单
+   * 在渲染期构建而非 useMemo：内部含 t()，若用 useMemo 缓存则必须把 t
+   * 加入依赖，否则语言切换后菜单文案不刷新。此处仅 5 项，重建成本可忽略。
+   */
   const modMenuItems = post ? [
     { key: 'pin', icon: <PushpinFilled />, label: post.is_pinned ? t('forum.moderator.unpin') : t('forum.moderator.pin') },
     { key: 'feature', icon: <TrophyOutlined />, label: post.is_featured ? t('forum.moderator.unfeature') : t('forum.moderator.feature') },
@@ -132,7 +187,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           onClick={onBack}
           style={{ fontSize: 15, padding: '4px 12px' }}
         >
-          返回论坛
+          {t('forum.backToForum')}
         </Button>
         <Space>
           {(isAuthor || isModerator) && (
@@ -159,22 +214,25 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           {post.is_pinned === 1 && <Tag color="red">{t('forum.post.pinned')}</Tag>}
           {post.is_featured === 1 && <Tag color="gold">{t('forum.post.featured')}</Tag>}
           {post.is_locked === 1 && <Tag icon={<LockOutlined />}>{t('forum.post.locked')}</Tag>}
+          {/* 版块名为后台录入的业务数据，不翻译 */}
           {post.board_name && <Tag color="blue">{post.board_name}</Tag>}
         </Space>
 
-        {/* 标题 */}
+        {/* 标题 - 用户发布的业务内容，不翻译 */}
         <Title level={2} style={{ marginBottom: 16, lineHeight: 1.3 }}>{post.title}</Title>
 
         {/* 作者信息 */}
         <div className="post-author-row">
           <Space align="center">
             <Avatar size={42} style={{ backgroundColor: '#1890ff', fontSize: 18 }}>
+              {/* '?' 为无名用户的占位符号，非文案 */}
               {(post.author_name || '?')[0]?.toUpperCase()}
             </Avatar>
             <div>
               <Text strong style={{ fontSize: 15 }}>{post.author_name}</Text>
               <br />
               <Text type="secondary" style={{ fontSize: 12 }}>
+                {/* 纯数字日期格式，中英通用无需本地化 */}
                 {dayjs(post.created_at).format('YYYY-MM-DD HH:mm')}
                 {post.edit_count > 0 && (
                   <Tag color="orange" style={{ marginLeft: 8, fontSize: 10 }}>{t('forum.post.edited')}</Tag>
@@ -205,16 +263,16 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                   <Image
                     src={`/uploads/${att.file_path}`}
                     alt={att.file_name}
-                    width={200}
+                    width={ATTACHMENT_IMAGE_WIDTH}
                     style={{ borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }}
-                    placeholder={<div style={{ width: 200, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
+                    placeholder={<div style={{ width: ATTACHMENT_IMAGE_WIDTH, height: 150, background: '#f5f5f5', borderRadius: 8 }} />}
                   />
                   {canManageAttachments && (
                     <Popconfirm
-                      title="确定删除这张图片？删除后无法恢复"
+                      title={t('forum.attachment.deleteImageConfirm')}
                       onConfirm={(e) => { e?.stopPropagation(); handleDeleteAttachment(att.id); }}
-                      okText="删除"
-                      cancelText="取消"
+                      okText={t('forum.attachment.deleteOk')}
+                      cancelText={t('forum.attachment.deleteCancel')}
                       okButtonProps={{ danger: true }}
                     >
                       <span
@@ -238,14 +296,15 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
             {fileAttachments.map(att => (
               <div key={att.id} className="attachment-file-wrapper">
                 <a href={`/uploads/${att.file_path}`} target="_blank" rel="noreferrer" className="attachment-file">
-                  📎 {att.file_name} <Text type="secondary" style={{ fontSize: 11 }}>({Math.round((att.file_size || 0) / 1024)}KB)</Text>
+                  {/* 📎 为视觉符号、KB 为技术单位、文件名为业务数据，三者均不翻译 */}
+                  📎 {att.file_name} <Text type="secondary" style={{ fontSize: 11 }}>({Math.round((att.file_size || 0) / BYTES_PER_KB)}KB)</Text>
                 </a>
                 {canManageAttachments && (
                   <Popconfirm
-                    title="确定删除这个文件？"
+                    title={t('forum.attachment.deleteFileConfirm')}
                     onConfirm={() => handleDeleteAttachment(att.id)}
-                    okText="删除"
-                    cancelText="取消"
+                    okText={t('forum.attachment.deleteOk')}
+                    cancelText={t('forum.attachment.deleteCancel')}
                     okButtonProps={{ danger: true }}
                   >
                     <CloseCircleFilled
@@ -286,6 +345,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
       {/* 回复区 */}
       <div className="replies-section">
         <Title level={5} style={{ marginBottom: 16 }}>
+          {/* 💬 为视觉符号，保留在 JSX 不进语言包 */}
           💬 {t('forum.reply.title')} ({post.reply_count || 0})
         </Title>
 
@@ -293,6 +353,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
           <div className="reply-input-area">
             {replyToName && (
               <Tag closable onClose={() => { setReplyToId(null); setReplyToName(''); }} style={{ marginBottom: 8 }}>
+                {/* @ 为技术标识、用户名为业务数据，仅前缀走 i18n */}
                 {t('forum.reply.replyTo')} @{replyToName}
               </Tag>
             )}
@@ -302,7 +363,7 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                 onChange={(e) => setReplyContent(e.target.value)}
                 placeholder={t('forum.reply.placeholder')}
                 autoSize={{ minRows: 2, maxRows: 6 }}
-                maxLength={5000}
+                maxLength={REPLY_MAX_LENGTH}
                 showCount
               />
               <Button type="primary" icon={<SendOutlined />} onClick={handleSubmitReply} loading={submitting} disabled={!replyContent.trim()}>
@@ -328,9 +389,15 @@ const PostDetail = ({ postId, user, onBack, onEditPost }) => {
                       {(reply.author_name || '?')[0]?.toUpperCase()}
                     </Avatar>
                     <Text strong style={{ fontSize: 14 }}>{reply.author_name}</Text>
-                    <Tag color="processing" style={{ fontSize: 10, borderRadius: 10 }}>#{reply.floor_number}{t('forum.reply.floor')}</Tag>
+                    {/* 楼层号整句插值：中文"#1楼"、英文"#1"，语序与后缀差异交由语言包处理 */}
+                    <Tag color="processing" style={{ fontSize: 10, borderRadius: 10 }}>
+                      {t('forum.reply.floorLabel', { floor: reply.floor_number })}
+                    </Tag>
                     {reply.reply_to_username && <Text type="secondary" style={{ fontSize: 12 }}>» @{reply.reply_to_username}</Text>}
-                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(reply.created_at).fromNow()}</Text>
+                    {/* 相对时间：用实例级 locale，不调用全局 dayjs.locale() 以免污染其他模块 */}
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {dayjs(reply.created_at).locale(dayjsLocale).fromNow()}
+                    </Text>
                     {reply.edit_count > 0 && <Tag color="orange" style={{ fontSize: 10 }}>{t('forum.reply.edited')}</Tag>}
                   </Space>
                   <Space size={4}>

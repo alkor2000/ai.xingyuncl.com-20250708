@@ -13,6 +13,11 @@
  * - 2026-05-18: 修复 "require is not defined" 错误
  *   浏览器 ESM 环境没有 require()，改用顶部静态 import
  *   chatStore 没有反向引用 authStore，无循环依赖风险
+ * - v1.1 国际化：本文件为非React模块（Zustand store），无法使用useTranslation hook，
+ *   改为直接import i18n实例调用i18n.t()。
+ *   全部console日志属开发者诊断信息（loginMethod也仅用于日志拼接），统一改英文不进语言包；
+ *   2处error兜底文案改i18n.t()，一处新建auth.register.failed，一处复用既有auth.login.codeSendFailed（文案完全一致）；
+ *   console.log调试对象中的toLocaleString()补传i18n.language消除硬编码locale
  */
 
 import { create } from 'zustand'
@@ -22,6 +27,7 @@ import useSystemConfigStore from './systemConfigStore'
 import tokenRefreshService from '../services/tokenRefreshService'
 // 修复：使用 ESM 静态 import 替代 require('./chatStore')
 import useChatStore from './chatStore'
+import i18n from '../utils/i18n'
 
 /**
  * 登录成功后的统一处理逻辑（内部函数）
@@ -30,9 +36,9 @@ import useChatStore from './chatStore'
  * @param {Function} set - Zustand set 函数
  * @param {Function} get - Zustand get 函数
  * @param {Object} responseData - API 响应中的 data 字段
- * @param {string} loginMethod - 登录方式描述（用于日志）
+ * @param {string} loginMethod - 登录方式描述（仅用于console.log调试输出，非用户可见）
  */
-const _handleLoginSuccess = (set, get, responseData, loginMethod = '登录') => {
+const _handleLoginSuccess = (set, get, responseData, loginMethod = 'Login') => {
   const {
     user,
     permissions = [],
@@ -62,7 +68,7 @@ const _handleLoginSuccess = (set, get, responseData, loginMethod = '登录') => 
   // 更新站点配置（支持组级覆盖）
   if (siteConfig) {
     useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
-    console.log('🎨 已更新用户站点配置:', siteConfig)
+    console.log('🎨 User site config updated:', siteConfig)
   }
 
   // 清理之前用户的聊天数据，防止数据串用户
@@ -71,25 +77,57 @@ const _handleLoginSuccess = (set, get, responseData, loginMethod = '登录') => 
     if (useChatStore && typeof useChatStore.getState === 'function') {
       const chatStore = useChatStore.getState()
       if (chatStore && typeof chatStore.reset === 'function') {
-        console.log('🧹 清除之前的聊天数据...')
+        console.log('🧹 Clearing previous chat data...')
         chatStore.reset()
       }
     }
   } catch (e) {
     // 异常时不阻塞登录流程
-    console.warn('清理聊天数据失败:', e.message)
+    console.warn('Failed to clear chat data:', e.message)
   }
 
   // 启动Token自动刷新
   tokenRefreshService.startAutoRefresh({ getState: get })
 
-  console.log(`✅ ${loginMethod}成功:`, {
+  console.log(`✅ ${loginMethod} successful:`, {
     user: user.email,
     role: user.role,
     permissions: permissions.length,
-    tokenExpires: tokenExpiresAt?.toLocaleString(),
+    tokenExpires: tokenExpiresAt?.toLocaleString(i18n.language),
     hasSiteConfig: !!siteConfig
   })
+}
+
+/**
+ * Identity登录后的return_to只接受后端Handoff返回的站内路径。
+ */
+const normalizeIdentityReturnTo = (value) => {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('\\')
+  ) {
+    return '/dashboard'
+  }
+
+  for (
+    let index = 0;
+    index < value.length;
+    index++
+  ) {
+    const code =
+      value.charCodeAt(index)
+
+    if (
+      code < 0x20 ||
+      code === 0x7F
+    ) {
+      return '/dashboard'
+    }
+  }
+
+  return value
 }
 
 const useAuthStore = create(
@@ -151,11 +189,11 @@ const useAuthStore = create(
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/login', credentials)
-          _handleLoginSuccess(set, get, response.data.data, '密码登录')
+          _handleLoginSuccess(set, get, response.data.data, 'Password Login')
           return response.data
         } catch (error) {
           set({ loading: false })
-          console.error('❌ 登录失败:', error)
+          console.error('❌ Login failed:', error)
           throw error
         }
       },
@@ -167,11 +205,11 @@ const useAuthStore = create(
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/login-by-code', { email, code })
-          _handleLoginSuccess(set, get, response.data.data, '验证码登录')
+          _handleLoginSuccess(set, get, response.data.data, 'Code Login')
           return response.data
         } catch (error) {
           set({ loading: false })
-          console.error('❌ 验证码登录失败:', error)
+          console.error('❌ Code login failed:', error)
           throw error
         }
       },
@@ -185,11 +223,68 @@ const useAuthStore = create(
           const response = await apiClient.post('/auth/login-by-email-password', {
             email, password, code
           })
-          _handleLoginSuccess(set, get, response.data.data, '邮箱密码验证码登录')
+          _handleLoginSuccess(set, get, response.data.data, 'Email+Password+Code Login')
           return response.data
         } catch (error) {
           set({ loading: false })
-          console.error('❌ 邮箱密码验证码登录失败:', error)
+          console.error('❌ Email+password+code login failed:', error)
+          throw error
+        }
+      },
+
+      // ============================================================
+      // PKU AI Lab统一身份登录
+      // ============================================================
+
+      /**
+       * 消费Identity一次性Handoff。
+       *
+       * 后端返回本平台标准登录成功结构，
+       * 继续复用_handleLoginSuccess建立唯一认证状态。
+       */
+      loginWithIdentityHandoff: async (handoff) => {
+        set({
+          loading: true
+        })
+
+        try {
+          const response =
+            await apiClient.post(
+              '/auth/identity/login/consume',
+              {
+                handoff
+              }
+            )
+
+          _handleLoginSuccess(
+            set,
+            get,
+            response.data.data,
+            'Identity Login'
+          )
+
+          const returnTo =
+            normalizeIdentityReturnTo(
+              response.headers?.[
+                'x-identity-return-to'
+              ]
+            )
+
+          return {
+            response:
+              response.data,
+            returnTo
+          }
+        } catch (error) {
+          set({
+            loading: false
+          })
+
+          console.error(
+            '❌ Identity login handoff failed:',
+            error
+          )
+
           throw error
         }
       },
@@ -203,10 +298,10 @@ const useAuthStore = create(
           const state = get()
           if (state.accessToken) {
             await apiClient.post('/auth/logout')
-            console.log('📤 登出API调用成功')
+            console.log('📤 Logout API call successful')
           }
         } catch (error) {
-          console.warn('登出API调用失败:', error)
+          console.warn('Logout API call failed:', error)
         } finally {
           // 停止Token自动刷新
           tokenRefreshService.stopAutoRefresh()
@@ -233,15 +328,15 @@ const useAuthStore = create(
             if (useChatStore && typeof useChatStore.getState === 'function') {
               const chatStore = useChatStore.getState()
               if (chatStore && typeof chatStore.reset === 'function') {
-                console.log('🧹 清除聊天数据...')
+                console.log('🧹 Clearing chat data...')
                 chatStore.reset()
               }
             }
           } catch (e) {
-            console.warn('清理聊天数据失败:', e.message)
+            console.warn('Failed to clear chat data:', e.message)
           }
 
-          console.log('🚪 用户已登出')
+          console.log('🚪 User logged out')
 
           // 跳转到首页
           window.location.href = '/'
@@ -267,13 +362,13 @@ const useAuthStore = create(
 
           if (siteConfig) {
             useSystemConfigStore.getState().setUserSiteConfig(siteConfig)
-            console.log('🎨 已更新用户站点配置:', siteConfig)
+            console.log('🎨 User site config updated:', siteConfig)
           }
 
-          console.log('👤 用户信息已更新')
+          console.log('👤 User info updated')
           return response.data
         } catch (error) {
-          console.error('获取用户信息失败:', error)
+          console.error('Failed to get user info:', error)
           if (error.response?.status === 401) {
             get().logout()
           }
@@ -289,10 +384,10 @@ const useAuthStore = create(
           const response = await apiClient.put('/auth/profile', profileData)
           const { user } = response.data.data
           set({ user })
-          console.log('✅ 个人信息更新成功')
+          console.log('✅ Profile updated successfully')
           return response.data
         } catch (error) {
-          console.error('更新个人信息失败:', error)
+          console.error('Failed to update profile:', error)
           throw error
         }
       },
@@ -312,10 +407,10 @@ const useAuthStore = create(
             oldPassword,
             newPassword
           })
-          console.log('✅ 密码修改成功')
+          console.log('✅ Password changed successfully')
           return response.data
         } catch (error) {
-          console.error('修改密码失败:', error)
+          console.error('Failed to change password:', error)
           throw error
         }
       },
@@ -328,10 +423,10 @@ const useAuthStore = create(
           const response = await apiClient.get('/auth/credit-history', {
             params: { page, limit }
           })
-          console.log('📊 获取积分历史成功')
+          console.log('📊 Credit history fetched successfully')
           return response.data.data
         } catch (error) {
-          console.error('获取积分历史失败:', error)
+          console.error('Failed to get credit history:', error)
           throw error
         }
       },
@@ -347,13 +442,13 @@ const useAuthStore = create(
         set({ loading: true })
         try {
           const response = await apiClient.post('/auth/register', userData)
-          console.log('✅ 注册成功')
+          console.log('✅ Registration successful')
           set({ loading: false })
           return { success: true, data: response.data }
         } catch (error) {
           set({ loading: false })
-          console.error('❌ 注册失败:', error)
-          const msg = error.response?.data?.message || '注册失败'
+          console.error('❌ Registration failed:', error)
+          const msg = error.response?.data?.message || i18n.t('auth.register.failed')
           return { success: false, message: msg }
         }
       },
@@ -388,11 +483,11 @@ const useAuthStore = create(
       sendEmailCode: async (email) => {
         try {
           const response = await apiClient.post('/auth/send-email-code', { email })
-          console.log('📧 验证码发送成功')
+          console.log('📧 Verification code sent successfully')
           return { success: true, message: response.data.message }
         } catch (error) {
-          console.error('发送验证码失败:', error)
-          const msg = error.response?.data?.message || '发送验证码失败'
+          console.error('Failed to send verification code:', error)
+          const msg = error.response?.data?.message || i18n.t('auth.login.codeSendFailed')
           return { success: false, message: msg }
         }
       },
@@ -421,10 +516,10 @@ const useAuthStore = create(
           set({ accessToken, tokenExpiresAt })
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
-          console.log('🔄 Token刷新成功，新过期时间:', tokenExpiresAt?.toLocaleString())
+          console.log('🔄 Token refreshed, new expiry:', tokenExpiresAt?.toLocaleString(i18n.language))
           return accessToken
         } catch (error) {
-          console.error('Token刷新失败:', error)
+          console.error('Token refresh failed:', error)
           tokenRefreshService.stopAutoRefresh()
           get().logout()
           throw error
@@ -477,7 +572,7 @@ const useAuthStore = create(
         const state = get()
 
         if (!state.accessToken) {
-          console.log('🔐 无访问令牌，跳过初始化')
+          console.log('🔐 No access token, skipping initialization')
           return
         }
 
@@ -486,12 +581,12 @@ const useAuthStore = create(
 
         // 检查Token是否过期
         if (state.isTokenExpired()) {
-          console.log('⏰ Token已过期，尝试刷新...')
+          console.log('⏰ Token expired, attempting refresh...')
           try {
             await state.refreshAccessToken()
             tokenRefreshService.startAutoRefresh({ getState: get })
           } catch (error) {
-            console.error('Token刷新失败，需要重新登录')
+            console.error('Token refresh failed, re-login required')
             return
           }
         } else {
@@ -501,9 +596,9 @@ const useAuthStore = create(
         // 获取最新用户信息
         try {
           await state.getCurrentUser()
-          console.log('✅ 认证状态初始化成功')
+          console.log('✅ Auth state initialized successfully')
         } catch (error) {
-          console.error('❌ 获取用户信息失败:', error)
+          console.error('❌ Failed to get user info:', error)
         }
       }
     }),
@@ -518,7 +613,7 @@ const useAuthStore = create(
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {
-        console.log('🔄 恢复认证状态...')
+        console.log('🔄 Restoring auth state...')
         if (state?.accessToken) {
           state.initializeAuth()
         }

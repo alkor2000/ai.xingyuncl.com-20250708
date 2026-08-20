@@ -47,6 +47,7 @@
   "htmlEditor.project.defaultCannotDelete": "Default project cannot be deleted",
   "htmlEditor.project.rename": "Rename Project",
   "htmlEditor.project.renameSuccess": "Project name updated successfully",
+  "htmlEditor.project.listLoadFailed": "Failed to fetch project list",
   
   "htmlEditor.page.create": "Create Page",
   "htmlEditor.page.createIn": "Create page in \"{{project}}\"",
@@ -70,6 +71,9 @@
   "htmlEditor.page.saveSuccess": "Page saved successfully",
   "htmlEditor.page.saveFailed": "Failed to save",
   "htmlEditor.page.loadingPages": "Loading pages...",
+  "htmlEditor.page.listLoadFailed": "Failed to fetch page list",
+  "htmlEditor.page.loadMoreFailed": "Failed to load more pages",
+  "htmlEditor.page.loadFailed": "Failed to load page",
   
   "htmlEditor.editor.empty": "Editor content is empty",
   "htmlEditor.editor.copied": "Content copied to clipboard",

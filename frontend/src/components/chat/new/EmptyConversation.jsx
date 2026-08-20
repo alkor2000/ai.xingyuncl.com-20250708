@@ -1,5 +1,11 @@
 /**
  * 空对话状态组件 - 显示系统公告
+ *
+ * v1.1 国际化收尾：
+ * - 公告标题此前完全遗漏t()调用，新建chat.announcement.title键
+ *   （未复用common.json的dashboard.announcement.system：该键专属Dashboard页面的
+ *     公告板块命名空间，跨模块耦合会导致Chat模块文案变更意外影响Dashboard显示）
+ * - console.error开发者日志改为英文（不进语言包，属内部诊断信息）
  */
 
 import React, { useState, useEffect } from 'react'
@@ -38,7 +44,7 @@ const EmptyConversation = ({ onCreateConversation }) => {
           setAnnouncement(response.data.data)
         }
       } catch (error) {
-        console.error('获取系统公告失败:', error)
+        console.error('Failed to fetch system announcement:', error)
       } finally {
         setLoading(false)
       }
@@ -59,7 +65,7 @@ const EmptyConversation = ({ onCreateConversation }) => {
           <Card className="announcement-card">
             <div className="announcement-header">
               <InfoCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />
-              <span>系统公告</span>
+              <span>{t('chat.announcement.title')}</span>
             </div>
             <div className="announcement-content markdown-content">
               <ReactMarkdown>{announcement.content}</ReactMarkdown>

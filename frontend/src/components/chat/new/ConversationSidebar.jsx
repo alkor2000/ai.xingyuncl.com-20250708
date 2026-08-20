@@ -12,6 +12,11 @@
  * - 紧凑模式偏好通过 localStorage 持久化
  * - 搜索激活时显示匹配数；无结果时显示友好Empty提示
  *
+ * v2.1 国际化收尾：
+ * - 折叠/展开按钮的Tooltip此前完全遗漏t()调用，补chat.sidebar.expand/collapse两键
+ * - 最后活跃时间的toLocaleString此前写死'zh-CN'，改用i18n.language动态传入，
+ *   否则英文环境下时间格式仍按中文规则渲染
+ *
  * 说明：搜索关键字和紧凑模式状态在组件内部自管理，
  *      不影响父组件Chat.jsx的状态结构和props契约
  */
@@ -60,7 +65,7 @@ const ConversationSidebar = ({
   collapsed = false,
   onToggleCollapse
 }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   // v2.0: 对话标题搜索关键字（前端实时过滤，无需后端）
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -243,7 +248,7 @@ const ConversationSidebar = ({
         </div>
         {conversation.last_message_at && (
           <div className="conversation-time">
-            <ClockCircleOutlined /> {new Date(conversation.last_message_at).toLocaleString('zh-CN', {
+            <ClockCircleOutlined /> {new Date(conversation.last_message_at).toLocaleString(i18n.language, {
               month: '2-digit',
               day: '2-digit',
               hour: '2-digit',
@@ -260,7 +265,7 @@ const ConversationSidebar = ({
     return (
       <div className="sidebar-wrapper collapsed-sidebar">
         <div className="sidebar-collapsed-header">
-          <Tooltip title="展开侧边栏" placement="right">
+          <Tooltip title={t('chat.sidebar.expand')} placement="right">
             <Button
               type="text"
               icon={<MenuUnfoldOutlined />}
@@ -323,7 +328,7 @@ const ConversationSidebar = ({
             {t('chat.newConversation')}
           </Button>
           {/* 折叠/展开按钮 */}
-          <Tooltip title="收起侧边栏">
+          <Tooltip title={t('chat.sidebar.collapse')}>
             <Button
               type="text"
               icon={<MenuFoldOutlined />}

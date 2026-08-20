@@ -76,6 +76,19 @@
   "knowledge.slotCannotReduce": "Slots are occupied by modules, please remove modules first",
   "knowledge.slotCount": "slots (max {{max}})",
 
+  "knowledge.module.listLoadFailed": "Failed to fetch knowledge module list",
+  "knowledge.module.detailLoadFailed": "Failed to fetch knowledge module detail",
+  "knowledge.module.createFailed": "Failed to create knowledge module",
+  "knowledge.module.updateFailed": "Failed to update knowledge module",
+  "knowledge.module.deleteFailed": "Failed to delete knowledge module",
+
+  "knowledge.combination.listLoadFailed": "Failed to fetch combination list",
+  "knowledge.combination.detailLoadFailed": "Failed to fetch combination detail",
+  "knowledge.combination.createFailed": "Failed to create combination",
+  "knowledge.combination.updateFailed": "Failed to update combination",
+  "knowledge.combination.deleteFailed": "Failed to delete combination",
+  "knowledge.combination.copyFailed": "Failed to copy combination",
+
   "knowledge.form.editModule": "Edit Knowledge Module",
   "knowledge.form.createModule": "Create Knowledge Module",
   "knowledge.form.creator": "Creator",

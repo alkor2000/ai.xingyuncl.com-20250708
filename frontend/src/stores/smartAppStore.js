@@ -6,11 +6,19 @@
  * 更新：
  * - 2025-12-30 v2.0.0 支持动态分类和多分类筛选
  * - 2025-12-30 v2.2.0 新增用户收藏功能
+ * 
+ * v2.3.0 变更（i18n国际化适配）：
+ *   - 非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   - toggleFavorite成功提示、getAppConfig/getOrCreateConversation/clearConversation
+ *     的throw Error（会被上层组件catch读取message展示给用户）改为i18n.t()
+ *   - message.error('操作失败')复用common.json已有message.error键
+ *   - 纯开发者日志（console.error）统一改英文，不进语言包
  */
 
 import { create } from 'zustand';
 import { message } from 'antd';
 import apiClient from '../utils/api';
+import i18n from '../utils/i18n';
 
 /**
  * 智能应用Store
@@ -48,7 +56,7 @@ const useSmartAppStore = create((set, get) => ({
       set({ loading: false });
       return [];
     } catch (error) {
-      console.error('获取智能应用列表失败:', error);
+      console.error('Failed to fetch smart app list:', error);
       set({ loading: false });
       return [];
     }
@@ -71,7 +79,7 @@ const useSmartAppStore = create((set, get) => ({
         return data;
       }
     } catch (error) {
-      console.error('获取分类列表失败:', error);
+      console.error('Failed to fetch category list:', error);
       return { categories: [], stats: [], favoriteCount: 0 };
     }
   },
@@ -91,7 +99,7 @@ const useSmartAppStore = create((set, get) => ({
       set({ loading: false });
       return [];
     } catch (error) {
-      console.error('获取收藏列表失败:', error);
+      console.error('Failed to fetch favorites list:', error);
       set({ loading: false });
       return [];
     }
@@ -128,12 +136,12 @@ const useSmartAppStore = create((set, get) => ({
             : state.favoriteCount + 1
         }));
         
-        message.success(isFavorited ? '已取消收藏' : '收藏成功');
+        message.success(isFavorited ? i18n.t('smartApps.favorite.removeSuccess') : i18n.t('smartApps.favorite.addSuccess'));
         return !isFavorited;
       }
     } catch (error) {
-      console.error('切换收藏状态失败:', error);
-      message.error('操作失败');
+      console.error('Failed to toggle favorite state:', error);
+      message.error(i18n.t('message.error'));
       return isFavorited;
     }
   },
@@ -149,7 +157,7 @@ const useSmartAppStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('获取应用详情失败:', error);
+      console.error('Failed to fetch app detail:', error);
       throw error;
     }
   },
@@ -163,9 +171,9 @@ const useSmartAppStore = create((set, get) => ({
       if (response.data.success) {
         return response.data.data;
       }
-      throw new Error('获取配置失败');
+      throw new Error(i18n.t('smartApps.configLoadFailed'));
     } catch (error) {
-      console.error('获取应用配置失败:', error);
+      console.error('Failed to fetch app config:', error);
       throw error;
     }
   },
@@ -187,7 +195,7 @@ const useSmartAppStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('记录应用使用失败:', error);
+      console.error('Failed to record app usage:', error);
     }
   },
   
@@ -212,9 +220,9 @@ const useSmartAppStore = create((set, get) => ({
         
         return data;
       }
-      throw new Error('获取会话失败');
+      throw new Error(i18n.t('smartApps.chat.loadFailed'));
     } catch (error) {
-      console.error('获取智能应用会话失败:', error);
+      console.error('Failed to fetch smart app conversation:', error);
       throw error;
     }
   },
@@ -226,12 +234,12 @@ const useSmartAppStore = create((set, get) => ({
     try {
       const response = await apiClient.post(`/smart-apps/${appId}/conversation/clear`);
       if (response.data.success) {
-        message.success('对话已清空');
+        message.success(i18n.t('smartApps.chat.clearSuccess'));
         return response.data.data;
       }
-      throw new Error('清空会话失败');
+      throw new Error(i18n.t('smartApps.chat.clearFailed'));
     } catch (error) {
-      console.error('清空智能应用会话失败:', error);
+      console.error('Failed to clear smart app conversation:', error);
       throw error;
     }
   },

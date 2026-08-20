@@ -5,11 +5,19 @@
  *   - 新增 keyword state 和 setKeyword action
  *   - keyword 仅作为状态存储，由页面层在调用 getUserHistory/getPublicGallery 时传入参数
  *   - 行为完全向后兼容
+ *
+ * v1.2 国际化：
+ *   本文件为非React模块（Zustand store），无法使用useTranslation hook，
+ *   改为直接import i18n实例调用i18n.t()。
+ *   全部console日志属开发者诊断信息，统一改英文不进语言包；
+ *   message.*用户可见文案改i18n.t()，优先复用image.json已有键（如generateFailed/deleteSuccess/deleteFailed）
+ *   与common.json通用键（message.error/message.success），无匹配项新建20个store专属键
  */
 
 import { create } from 'zustand';
 import api from '../utils/api';
 import { message } from 'antd';
+import i18n from '../utils/i18n';
 
 const useImageStore = create((set, get) => ({
   // ========== 状态 ==========
@@ -59,8 +67,8 @@ const useImageStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('获取模型列表失败:', error);
-      message.error('获取模型列表失败');
+      console.error('Failed to get model list:', error);
+      message.error(i18n.t('image.modelsLoadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -80,7 +88,7 @@ const useImageStore = create((set, get) => ({
   generateImages: async (params) => {
     const { selectedModel } = get();
     if (!selectedModel) {
-      message.error('请先选择模型');
+      message.error(i18n.t('image.pleaseSelectModelFirst'));
       return null;
     }
 
@@ -90,7 +98,7 @@ const useImageStore = create((set, get) => ({
       // 判断是否为Midjourney模型
       if (get().isMidjourneyModel(selectedModel)) {
         // Midjourney生成（异步）
-        message.loading('正在提交Midjourney任务...', 0);
+        message.loading(i18n.t('image.submittingMjTask'), 0);
         
         const requestData = {
           model_id: selectedModel.id,
@@ -109,7 +117,7 @@ const useImageStore = create((set, get) => ({
         
         if (response.data.success) {
           const result = response.data.data;
-          message.success(result.message || '任务已提交，正在生成中...');
+          message.success(result.message || i18n.t('image.taskSubmitted'));
           
           set(state => ({
             processingTasks: { ...state.processingTasks, [result.taskId]: true }
@@ -122,7 +130,7 @@ const useImageStore = create((set, get) => ({
           
           return result;
         } else {
-          message.error(response.data.message || '提交失败');
+          message.error(response.data.message || i18n.t('image.submitFailed'));
           return null;
         }
       } else {
@@ -130,7 +138,7 @@ const useImageStore = create((set, get) => ({
         const quantity = params.quantity || 1;
         if (quantity > 1) {
           set({ generationProgress: `0/${quantity}` });
-          message.loading(`正在生成 ${quantity} 张图片，请稍候...`, 0);
+          message.loading(i18n.t('image.generatingCount', { count: quantity }), 0);
         }
 
         const response = await api.post('/image/generate', {
@@ -145,31 +153,31 @@ const useImageStore = create((set, get) => ({
           
           if (quantity > 1) {
             if (result.succeeded === result.requested) {
-              message.success(`成功生成 ${result.succeeded} 张图片，消耗 ${result.creditsConsumed} 积分`);
+              message.success(i18n.t('image.batchGenerateSuccess', { count: result.succeeded, credits: result.creditsConsumed }));
             } else if (result.succeeded > 0) {
-              message.warning(`部分成功：生成了 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`);
+              message.warning(i18n.t('image.batchGeneratePartial', { succeeded: result.succeeded, requested: result.requested, credits: result.creditsConsumed }));
             } else {
-              message.error('所有图片生成失败');
+              message.error(i18n.t('image.allGenerationFailed'));
             }
           } else {
-            message.success('图片生成成功');
+            message.success(i18n.t('image.generateSuccess'));
           }
           
           get().getUserHistory();
           return result;
         } else {
           message.destroy();
-          message.error(response.data.message || '生成失败');
+          message.error(response.data.message || i18n.t('image.generateFailed'));
           return null;
         }
       }
     } catch (error) {
       message.destroy();
-      console.error('生成图片失败:', error);
+      console.error('Failed to generate image:', error);
       if (error.response?.data?.message) {
         message.error(error.response.data.message);
       } else {
-        message.error('生成图片失败，请稍后重试');
+        message.error(i18n.t('image.generateFailedRetry'));
       }
       return null;
     } finally {
@@ -195,13 +203,13 @@ const useImageStore = create((set, get) => ({
           }
           
           if (task.task_status === 'SUCCESS' || task.status === 'success') {
-            message.success('Midjourney生成完成！');
+            message.success(i18n.t('image.mjGenerateComplete'));
             
             get().clearPollingTimer(taskId);
             
             set({ generationProgress: null });
             
-            console.log('任务成功，等待后端保存图片...');
+            console.log('Task succeeded, waiting for backend to save image...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             let retryCount = 0;
@@ -218,7 +226,7 @@ const useImageStore = create((set, get) => ({
                 
                 if (targetItem && (targetItem.local_path || targetItem.thumbnail_path || targetItem.image_url)) {
                   dataReady = true;
-                  console.log('图片数据已准备好:', targetItem);
+                  console.log('Image data ready:', targetItem);
                   
                   set({
                     generationHistory: historyData,
@@ -230,7 +238,7 @@ const useImageStore = create((set, get) => ({
               if (!dataReady) {
                 retryCount++;
                 if (retryCount < 3) {
-                  console.log(`图片数据未准备好，等待后重试... (${retryCount}/3)`);
+                  console.log(`Image data not ready, retrying after wait... (${retryCount}/3)`);
                   await new Promise(resolve => setTimeout(resolve, 1500));
                 }
               }
@@ -243,12 +251,12 @@ const useImageStore = create((set, get) => ({
             });
             
             if (!dataReady) {
-              console.log('数据可能还未完全准备好，最后刷新一次');
+              console.log('Data may not be fully ready, refreshing one last time');
               get().getUserHistory();
             }
             
           } else if (task.task_status === 'FAILURE' || task.status === 'failed') {
-            message.error(task.fail_reason || task.error_message || '生成失败');
+            message.error(task.fail_reason || task.error_message || i18n.t('image.generateFailed'));
             
             get().clearPollingTimer(taskId);
             
@@ -266,7 +274,7 @@ const useImageStore = create((set, get) => ({
             }, 500);
             
           } else if (Date.now() - startTime > maxPollingTime) {
-            message.error('任务超时');
+            message.error(i18n.t('image.taskTimeout'));
             
             get().clearPollingTimer(taskId);
             
@@ -286,7 +294,7 @@ const useImageStore = create((set, get) => ({
           }
         }
       } catch (error) {
-        console.error('轮询任务状态失败:', error);
+        console.error('Failed to poll task status:', error);
         const timerId = setTimeout(poll, pollInterval * 2);
         set(state => ({
           pollingTimers: { ...state.pollingTimers, [taskId]: timerId }
@@ -326,7 +334,7 @@ const useImageStore = create((set, get) => ({
     
     if (hasChanges) {
       set({ processingTasks: newProcessingTasks });
-      console.log('已清理失败任务的处理状态');
+      console.log('Cleared processing state of failed tasks');
     }
   },
   
@@ -334,7 +342,7 @@ const useImageStore = create((set, get) => ({
   midjourneyAction: async (generationId, action, index) => {
     try {
       set({ generating: true });
-      message.loading('正在提交操作...', 0);
+      message.loading(i18n.t('image.submittingAction'), 0);
       
       const response = await api.post('/image/midjourney/action', {
         generation_id: generationId,
@@ -346,7 +354,7 @@ const useImageStore = create((set, get) => ({
       
       if (response.data.success) {
         const result = response.data.data;
-        message.success(result.message || '操作已提交');
+        message.success(result.message || i18n.t('image.actionSubmitted'));
         
         set(state => ({
           processingTasks: { ...state.processingTasks, [result.taskId]: true }
@@ -358,16 +366,16 @@ const useImageStore = create((set, get) => ({
         
         return result;
       } else {
-        message.error(response.data.message || '操作失败');
+        message.error(response.data.message || i18n.t('message.error'));
         return null;
       }
     } catch (error) {
       message.destroy();
-      console.error('Midjourney操作失败:', error);
+      console.error('Midjourney action failed:', error);
       if (error.response?.data?.message) {
         message.error(error.response.data.message);
       } else {
-        message.error('操作失败，请稍后重试');
+        message.error(i18n.t('image.actionFailedRetry'));
       }
       return null;
     } finally {
@@ -384,8 +392,8 @@ const useImageStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('获取任务列表失败:', error);
-      message.error('获取任务列表失败');
+      console.error('Failed to get task list:', error);
+      message.error(i18n.t('image.tasksLoadFailed'));
     }
   },
 
@@ -418,9 +426,9 @@ const useImageStore = create((set, get) => ({
         return response.data.data;
       }
     } catch (error) {
-      console.error('获取历史记录失败:', error);
+      console.error('Failed to get history:', error);
       if (!skipLoading) {
-        message.error('获取历史记录失败');
+        message.error(i18n.t('image.historyLoadFailed'));
       }
       set({ loading: false });
     }
@@ -431,14 +439,14 @@ const useImageStore = create((set, get) => ({
     try {
       const response = await api.delete(`/image/generation/${id}`);
       if (response.data.success) {
-        message.success('删除成功');
+        message.success(i18n.t('image.deleteSuccess'));
         get().getUserHistory();
         return true;
       }
       return false;
     } catch (error) {
-      console.error('删除失败:', error);
-      message.error('删除失败');
+      console.error('Failed to delete:', error);
+      message.error(i18n.t('image.deleteFailed'));
       return false;
     }
   },
@@ -454,8 +462,8 @@ const useImageStore = create((set, get) => ({
       }
       return false;
     } catch (error) {
-      console.error('批量删除失败:', error);
-      message.error('批量删除失败');
+      console.error('Batch delete failed:', error);
+      message.error(i18n.t('image.batchDeleteFailed'));
       return false;
     }
   },
@@ -470,13 +478,13 @@ const useImageStore = create((set, get) => ({
             item.id === id ? { ...item, is_favorite: !item.is_favorite } : item
           )
         }));
-        message.success('操作成功');
+        message.success(i18n.t('message.success'));
         return true;
       }
       return false;
     } catch (error) {
-      console.error('切换收藏失败:', error);
-      message.error('操作失败');
+      console.error('Failed to toggle favorite:', error);
+      message.error(i18n.t('message.error'));
       return false;
     }
   },
@@ -491,13 +499,13 @@ const useImageStore = create((set, get) => ({
             item.id === id ? { ...item, is_public: !item.is_public } : item
           )
         }));
-        message.success('操作成功');
+        message.success(i18n.t('message.success'));
         return true;
       }
       return false;
     } catch (error) {
-      console.error('切换公开状态失败:', error);
-      message.error('操作失败');
+      console.error('Failed to toggle public status:', error);
+      message.error(i18n.t('message.error'));
       return false;
     }
   },
@@ -518,8 +526,8 @@ const useImageStore = create((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('获取画廊失败:', error);
-      message.error('获取画廊失败');
+      console.error('Failed to get gallery:', error);
+      message.error(i18n.t('image.galleryLoadFailed'));
     } finally {
       set({ loading: false });
     }
@@ -533,7 +541,7 @@ const useImageStore = create((set, get) => ({
         set({ userStats: response.data.data });
       }
     } catch (error) {
-      console.error('获取统计信息失败:', error);
+      console.error('Failed to get stats:', error);
     }
   },
 

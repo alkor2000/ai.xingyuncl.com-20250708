@@ -1,10 +1,17 @@
 /**
  * 工作台页面
- * 
+ *
+ * v1.3 变更（i18n 修复）：
+ *   - getDateInfo 原有 if (i18n.language === 'en-US') / else 两个「完全相同」的分支，
+ *     属无意义死代码，已合并为单一返回；
+ *   - toLocaleTimeString 原写 `i18n.language === 'en-US' ? 'en-US' : 'zh-CN'` 三元硬编码，
+ *     改为直接传 i18n.language，新增语言时无需再改代码；
+ *   - 7 处 console.error 中文改英文：开发者日志与界面文案职责分离，不进语言包。
+ *
  * v1.2 变更（i18n）：
  *   - 功能模块卡片名称改用 getModuleDisplayName 工具：优先locale的module.{name}键，miss回退display_name
  *   - 解决模块名称（数据库中文字段）在英文界面下无法翻译的问题
- * 
+ *
  * v1.1 变更：
  *   - 普通用户读取组公告改用 /stats/my-group-announcement 端点（无需admin权限）
  *   - 管理员仍使用 /admin/user-groups/:id/announcement 端点（支持切换组查看）
@@ -44,7 +51,17 @@ import './Dashboard.less'
 const { Title, Paragraph, Text } = Typography
 const { TextArea } = Input
 
-// 图标映射
+/**
+ * 移动端断点
+ * 需与 Dashboard.less 中的媒体查询断点保持同步。
+ */
+const MOBILE_BREAKPOINT = 768
+
+/**
+ * 图标映射
+ * 只含图标组件引用，无任何文案，故可安全定义在模块级
+ * （含中文的配置必须放到渲染期，否则语言切换不重算）。
+ */
 const iconMap = {
   'MessageOutlined': MessageOutlined,
   'AppstoreOutlined': AppstoreOutlined,
@@ -55,7 +72,10 @@ const iconMap = {
   'TeamOutlined': TeamOutlined
 }
 
-// 模块颜色映射 - 更柔和的颜色
+/**
+ * 模块颜色映射 - 更柔和的颜色
+ * 同上，纯样式常量不含文案，可放模块级。
+ */
 const moduleColors = {
   'chat': { bg: '#e6f4ff', color: '#1677ff', icon: '#1677ff' },
   'knowledge': { bg: '#f9f0ff', color: '#722ed1', icon: '#722ed1' },
@@ -68,6 +88,9 @@ const moduleColors = {
   'admin_users': { bg: '#fff7e6', color: '#fa8c16', icon: '#fa8c16' },
   'admin_settings': { bg: '#f0f5ff', color: '#2f54eb', icon: '#2f54eb' }
 }
+
+/** 积分即将过期的提醒阈值（天） */
+const CREDITS_EXPIRING_WARN_DAYS = 7
 
 const Dashboard = () => {
   const { user } = useAuthStore()
@@ -100,13 +123,13 @@ const Dashboard = () => {
   const isAdmin = user?.role === 'admin'
   // 超管和组管理员都可以编辑组公告
   const canEditOrgAnnouncement = isSuperAdmin || isAdmin
-  
+
   // 检测是否为移动设备
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT)
+
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
@@ -129,13 +152,17 @@ const Dashboard = () => {
           setGroupList(response.data.data || [])
         }
       } catch (error) {
-        console.error('获取组列表失败:', error)
+        console.error('Failed to fetch group list:', error)
       }
     }
     fetchGroupList()
   }, [isSuperAdmin])
-  
-  // 获取当前时间段的问候语
+
+  /**
+   * 获取当前时间段的问候语
+   * 定义在渲染期，t() 天然跟随语言切换；
+   * 若提为模块级常量映射表则会固化首次加载的语言。
+   */
   const getGreeting = () => {
     const hour = new Date().getHours()
     if (hour < 6) return t('greeting.earlyMorning')
@@ -145,19 +172,26 @@ const Dashboard = () => {
     if (hour < 22) return t('greeting.evening')
     return t('greeting.night')
   }
-  
-  // 获取日期信息
+
+  /**
+   * 获取日期信息（月日 + 星期）
+   *
+   * 原实现写了 if (i18n.language === 'en-US') / else 两个「完全相同」的分支，
+   * 属无意义死代码，此处合并为单一返回。
+   *
+   * 当前中英两侧语序一致（均为「日期 + 星期」），故用空格连接：
+   *   zh-CN → "10月28日 周二"（time.monthDate = {{month}}月{{date}}日）
+   *   en-US → "10/28 Tuesday"（time.monthDate = {{month}}/{{date}}）
+   * 若将来要改成英文更地道的 "Tuesday, 10/28" 语序，必须在 common.json
+   * 新增整句插值键（如 time.dateWithWeekday），不可继续在此做字符串拼接。
+   */
   const getDateInfo = () => {
     const now = new Date()
     const month = now.getMonth() + 1
     const date = now.getDate()
+    // 星期键为 time.weekDays.0 ~ time.weekDays.6，与 Date.getDay() 返回值一一对应
     const weekDay = t(`time.weekDays.${now.getDay()}`)
-    
-    if (i18n.language === 'en-US') {
-      return t('time.monthDate', { month, date }) + ' ' + weekDay
-    } else {
-      return t('time.monthDate', { month, date }) + ' ' + weekDay
-    }
+    return `${t('time.monthDate', { month, date })} ${weekDay}`
   }
 
   // 加载用户积分统计
@@ -170,7 +204,7 @@ const Dashboard = () => {
           setCreditsData(response.data.data)
         }
       } catch (error) {
-        console.error('获取积分统计失败:', error)
+        console.error('Failed to fetch credits stats:', error)
       } finally {
         setLoading(false)
       }
@@ -178,7 +212,7 @@ const Dashboard = () => {
 
     fetchCreditsStats()
   }, [])
-  
+
   // 加载用户模块
   useEffect(() => {
     const fetchModules = async () => {
@@ -186,12 +220,12 @@ const Dashboard = () => {
         setModulesLoading(true)
         await getUserModules()
       } catch (error) {
-        console.error('获取模块失败:', error)
+        console.error('Failed to fetch modules:', error)
       } finally {
         setModulesLoading(false)
       }
     }
-    
+
     fetchModules()
   }, [getUserModules])
 
@@ -205,7 +239,7 @@ const Dashboard = () => {
           setAnnouncement(response.data.data)
         }
       } catch (error) {
-        console.error('获取系统公告失败:', error)
+        console.error('Failed to fetch system announcement:', error)
       } finally {
         setAnnouncementLoading(false)
       }
@@ -225,10 +259,10 @@ const Dashboard = () => {
       setOrgAnnouncementLoading(false)
       return
     }
-    
+
     try {
       setOrgAnnouncementLoading(true)
-      
+
       let response
       if (isSuperAdmin || isAdmin) {
         // 管理员使用admin端点，支持查看任意组的公告
@@ -237,16 +271,18 @@ const Dashboard = () => {
         // 普通用户使用stats端点，只能读取自己所在组的公告
         response = await apiClient.get('/stats/my-group-announcement')
       }
-      
+
       if (response.data.success) {
         setOrgAnnouncement(response.data.data)
       }
     } catch (error) {
-      console.error('获取组公告失败:', error)
+      console.error('Failed to fetch group announcement:', error)
       setOrgAnnouncement(null)
     } finally {
       setOrgAnnouncementLoading(false)
     }
+    // 依赖只含角色判定，不含 t：本回调不产生界面文案，
+    // 加入 t 会使语言切换触发公告重新请求
   }, [isSuperAdmin, isAdmin])
 
   // selectedGroupId 变化时重新加载组公告
@@ -275,14 +311,14 @@ const Dashboard = () => {
         enabled: true,
         format: 'markdown'
       })
-      
+
       if (response.data.success) {
         setAnnouncement(response.data.data)
         setIsEditingAnnouncement(false)
         message.success(t('dashboard.announcement.updateSuccess'))
       }
     } catch (error) {
-      console.error('更新系统公告失败:', error)
+      console.error('Failed to update system announcement:', error)
       message.error(t('dashboard.announcement.updateFailed'))
     } finally {
       setSavingAnnouncement(false)
@@ -321,14 +357,14 @@ const Dashboard = () => {
       const response = await apiClient.put(`/admin/user-groups/${targetGroupId}/announcement`, {
         content: editingOrgContent
       })
-      
+
       if (response.data.success) {
         setOrgAnnouncement(response.data.data)
         setIsEditingOrgAnnouncement(false)
         message.success(t('dashboard.announcement.orgUpdateSuccess'))
       }
     } catch (error) {
-      console.error('更新组公告失败:', error)
+      console.error('Failed to update group announcement:', error)
       message.error(t('dashboard.announcement.orgUpdateFailed'))
     } finally {
       setSavingOrgAnnouncement(false)
@@ -357,20 +393,20 @@ const Dashboard = () => {
     }
     setSelectedGroupId(groupId)
   }
-  
+
   // 获取模块图标
   const getModuleIcon = (iconName, module) => {
     if (iconMap[iconName]) {
       const IconComponent = iconMap[iconName]
       return <IconComponent />
     }
-    
+
     const IconComponent = Icons[iconName]
     if (IconComponent) {
       return <IconComponent />
     }
-    
-    switch(module?.name) {
+
+    switch (module?.name) {
       case 'chat':
         return <MessageOutlined />
       case 'knowledge':
@@ -383,7 +419,7 @@ const Dashboard = () => {
         return <AppstoreOutlined />
     }
   }
-  
+
   // 处理模块点击
   const handleModuleClick = (module) => {
     if (module.route_path) {
@@ -396,28 +432,31 @@ const Dashboard = () => {
       }
     }
   }
-  
+
   // 过滤并排序模块 - 排除dashboard
   const getDisplayModules = () => {
     if (!userModules || userModules.length === 0) return []
-    
-    const displayModules = userModules.filter(m => 
-      m.module_category === 'system' && 
+
+    const displayModules = userModules.filter(m =>
+      m.module_category === 'system' &&
       !m.name.startsWith('admin_') &&
       m.name !== 'dashboard' &&
       m.is_active
     )
-    
+
     return displayModules.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }
 
+  // 避免在 JSX 中重复调用过滤函数
+  const displayModules = getDisplayModules()
+
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '400px' 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '400px'
       }}>
         <Spin size="large" tip={t('status.loading')} />
       </div>
@@ -430,6 +469,7 @@ const Dashboard = () => {
       <div className="welcome-section-compact">
         <div className="welcome-content">
           <Title level={isMobile ? 5 : 4} style={{ margin: 0 }}>
+            {/* 整句插值：中英文的问候语与称呼语序不同，交由语言包组织 */}
             {t('dashboard.welcome', { greeting: getGreeting(), name: user?.username || user?.email })}
           </Title>
           <div className="date-info">
@@ -439,7 +479,11 @@ const Dashboard = () => {
               {!isMobile && (
                 <>
                   <ClockCircleOutlined />
-                  <Text>{new Date().toLocaleTimeString(i18n.language === 'en-US' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+                  {/* 直接传 i18n.language：原为 'en-US'/'zh-CN' 三元硬编码，
+                      新增语言时会漏改而回落到中文时间格式 */}
+                  <Text>
+                    {new Date().toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
                 </>
               )}
             </Space>
@@ -448,7 +492,7 @@ const Dashboard = () => {
       </div>
 
       {/* 功能模块区域 */}
-      <Card 
+      <Card
         className="modules-card"
         title={
           <Space>
@@ -459,13 +503,13 @@ const Dashboard = () => {
         loading={modulesLoading}
         style={{ marginBottom: 20 }}
       >
-        {getDisplayModules().length > 0 ? (
+        {displayModules.length > 0 ? (
           <Row gutter={[isMobile ? 12 : 16, isMobile ? 12 : 16]}>
-            {getDisplayModules().map(module => {
+            {displayModules.map(module => {
               const colorScheme = moduleColors[module.name] || moduleColors['chat']
               return (
                 <Col xs={24} sm={12} md={8} lg={6} key={module.id}>
-                  <div 
+                  <div
                     className={`module-card-optimized ${isMobile ? 'mobile' : ''}`}
                     onClick={() => handleModuleClick(module)}
                     style={{
@@ -478,10 +522,12 @@ const Dashboard = () => {
                     </div>
                     <div className="module-info">
                       <div className="module-name" style={{ color: colorScheme.color }}>
+                        {/* 模块名走 module.{name} 键，缺键时回退数据库 display_name */}
                         {getModuleDisplayName(module, t, i18n)}
                       </div>
                       {module.description && !isMobile && (
                         <div className="module-desc" style={{ color: colorScheme.color }}>
+                          {/* 描述为后台录入的业务数据，不翻译 */}
                           {module.description}
                         </div>
                       )}
@@ -497,7 +543,7 @@ const Dashboard = () => {
       </Card>
 
       {/* 精简的积分中心 */}
-      <Card 
+      <Card
         className="credits-card-compact"
         title={
           <Space>
@@ -514,13 +560,14 @@ const Dashboard = () => {
                 <BankOutlined /> {t('dashboard.creditsCenter.organization')}
               </div>
               <div className="stat-value">
+                {/* 组名为业务数据，取不到时才用默认组文案兜底 */}
                 <Tag color={creditsData?.group_color || '#1677ff'}>
                   {creditsData?.group_name || t('dashboard.creditsCenter.defaultGroup')}
                 </Tag>
               </div>
             </div>
           </Col>
-          
+
           <Col xs={12} sm={6}>
             <div className="stat-item">
               <div className="stat-label">
@@ -531,20 +578,20 @@ const Dashboard = () => {
               </div>
             </div>
           </Col>
-          
+
           <Col xs={12} sm={6}>
             <div className="stat-item">
               <div className="stat-label">
                 {t('dashboard.creditsCenter.currentCredits')}
               </div>
-              <div className="stat-value" style={{ 
-                color: creditsData?.credits_remaining > 0 ? '#52c41a' : '#ff4d4f' 
+              <div className="stat-value" style={{
+                color: creditsData?.credits_remaining > 0 ? '#52c41a' : '#ff4d4f'
               }}>
                 <DollarOutlined /> {creditsData?.credits_remaining || 0}
               </div>
             </div>
           </Col>
-          
+
           <Col xs={12} sm={6}>
             <div className="stat-item">
               <div className="stat-label">
@@ -565,8 +612,10 @@ const Dashboard = () => {
             style={{ marginTop: 16 }}
           />
         )}
-        
-        {!creditsData?.is_expired && creditsData?.remaining_days !== null && creditsData?.remaining_days <= 7 && (
+
+        {!creditsData?.is_expired
+          && creditsData?.remaining_days !== null
+          && creditsData?.remaining_days <= CREDITS_EXPIRING_WARN_DAYS && (
           <Alert
             message={t('dashboard.creditsCenter.expiringSoon', { days: creditsData.remaining_days })}
             type="warning"
@@ -580,7 +629,7 @@ const Dashboard = () => {
       <Row gutter={16}>
         <Col xs={24} md={12}>
           {/* 系统公告 */}
-          <Card 
+          <Card
             className="announcement-card-large"
             title={
               <Space>
@@ -590,9 +639,9 @@ const Dashboard = () => {
             }
             extra={
               isSuperAdmin && !isEditingAnnouncement && (
-                <Button 
-                  type="link" 
-                  icon={<EditOutlined />} 
+                <Button
+                  type="link"
+                  icon={<EditOutlined />}
                   onClick={handleEditAnnouncement}
                   size={isMobile ? 'small' : 'middle'}
                 >
@@ -612,23 +661,23 @@ const Dashboard = () => {
                   style={{ marginBottom: 16 }}
                 />
                 <Space wrap>
-                  <Button 
-                    type="primary" 
-                    icon={<SaveOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
                     onClick={handleSaveAnnouncement}
                     loading={savingAnnouncement}
                     size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.save')}
                   </Button>
-                  <Button 
+                  <Button
                     onClick={showPreview}
                     size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.preview')}
                   </Button>
-                  <Button 
-                    icon={<CloseOutlined />} 
+                  <Button
+                    icon={<CloseOutlined />}
                     onClick={handleCancelEdit}
                     disabled={savingAnnouncement}
                     size={isMobile ? 'small' : 'middle'}
@@ -639,8 +688,10 @@ const Dashboard = () => {
                 {!isMobile && (
                   <div className="announcement-edit-tips">
                     <div>{t('dashboard.announcement.tips')}</div>
+                    {/* Markdown 语法示例：符号本体属代码不译，
+                        示例内容（粗体/斜体等词）已在语言包内翻译 */}
                     <div className="example">
-                      {t('dashboard.announcement.example.bold')} {t('dashboard.announcement.example.italic')} {t('dashboard.announcement.example.link')} {t('dashboard.announcement.example.code')} 
+                      {t('dashboard.announcement.example.bold')} {t('dashboard.announcement.example.italic')} {t('dashboard.announcement.example.link')} {t('dashboard.announcement.example.code')}
                       {t('dashboard.announcement.example.h1')}
                       {t('dashboard.announcement.example.h2')}
                       {t('dashboard.announcement.example.list')}
@@ -652,6 +703,7 @@ const Dashboard = () => {
               <>
                 {announcement?.content ? (
                   <div className="markdown-content">
+                    {/* 公告正文为管理员录入的业务内容，不翻译 */}
                     <ReactMarkdown>{announcement.content}</ReactMarkdown>
                   </div>
                 ) : (
@@ -665,16 +717,16 @@ const Dashboard = () => {
             )}
           </Card>
         </Col>
-        
+
         <Col xs={24} md={12}>
           {/* 组织公告 */}
-          <Card 
+          <Card
             className="announcement-card-large"
             title={
               <Space>
                 <TeamOutlined style={{ color: '#fa8c16' }} />
                 <span>{t('dashboard.announcement.organization')}</span>
-                {/* 超管显示组选择下拉框 */}
+                {/* 超管显示组选择下拉框，组名为业务数据不翻译 */}
                 {isSuperAdmin && groupList.length > 0 && (
                   <Select
                     value={selectedGroupId}
@@ -691,9 +743,9 @@ const Dashboard = () => {
             }
             extra={
               canEditOrgAnnouncement && !isEditingOrgAnnouncement && (
-                <Button 
-                  type="link" 
-                  icon={<EditOutlined />} 
+                <Button
+                  type="link"
+                  icon={<EditOutlined />}
                   onClick={handleEditOrgAnnouncement}
                   size={isMobile ? 'small' : 'middle'}
                 >
@@ -713,23 +765,23 @@ const Dashboard = () => {
                   style={{ marginBottom: 16 }}
                 />
                 <Space wrap>
-                  <Button 
-                    type="primary" 
-                    icon={<SaveOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
                     onClick={handleSaveOrgAnnouncement}
                     loading={savingOrgAnnouncement}
                     size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.save')}
                   </Button>
-                  <Button 
+                  <Button
                     onClick={showOrgPreview}
                     size={isMobile ? 'small' : 'middle'}
                   >
                     {t('dashboard.announcement.preview')}
                   </Button>
-                  <Button 
-                    icon={<CloseOutlined />} 
+                  <Button
+                    icon={<CloseOutlined />}
                     onClick={handleCancelOrgEdit}
                     disabled={savingOrgAnnouncement}
                     size={isMobile ? 'small' : 'middle'}

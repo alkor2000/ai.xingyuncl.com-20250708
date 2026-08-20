@@ -1,18 +1,28 @@
 /**
  * 系统配置Store
  * 管理站点名称、Logo等全局配置（支持组级别配置）
+ * 
+ * v1.1 变更（i18n国际化适配）：
+ *   - 非React模块无法用useTranslation，改用i18next实例i18n.t()直接调用
+ *   - 初始状态literal中的site.description改为空字符串，不在模块加载时调用
+ *     i18n.t()（避免依赖模块加载时序），改由getSiteDescription()运行时兜底
+ *     承担实际语言判断（此时React已挂载，i18n必然初始化完成，零风险）
+ *   - getSiteDescription()的兜底文案复用common.json已有的app.description键
+ *     （二者语义与文案完全相同：站点/平台的默认描述文案）
+ *   - 纯开发者日志（console.log/warn/error）统一改英文，不进语言包
  */
 
 import { create } from 'zustand'
 import apiClient from '../utils/api'
 import useAuthStore from './authStore'
+import i18n from '../utils/i18n'
 
 const useSystemConfigStore = create((set, get) => ({
   // 系统配置
   systemConfig: {
     site: {
       name: 'AI Platform',
-      description: '企业级AI应用聚合平台',
+      description: '',
       logo: '',
       favicon: ''
     },
@@ -100,12 +110,12 @@ const useSystemConfigStore = create((set, get) => ({
               loading: false
             })
             
-            console.log('✅ 管理员系统配置初始化成功')
+            console.log('Admin system config initialized successfully')
             return
           }
         } catch (error) {
           // 管理员接口调用失败，但不应该阻止应用运行
-          console.warn('⚠️ 获取管理员配置失败，使用默认配置:', error.message)
+          console.warn('Failed to fetch admin config, using default config:', error.message)
         }
       } else {
         // 普通用户：尝试从公开接口获取基础配置
@@ -132,11 +142,11 @@ const useSystemConfigStore = create((set, get) => ({
               loading: false
             }))
             
-            console.log('✅ 普通用户配置初始化成功（使用公开配置）')
+            console.log('Regular user config initialized successfully (using public config)')
             return
           }
         } catch (error) {
-          console.warn('⚠️ 获取公开配置失败，使用默认配置:', error.message)
+          console.warn('Failed to fetch public config, using default config:', error.message)
         }
       }
       
@@ -145,10 +155,10 @@ const useSystemConfigStore = create((set, get) => ({
         initialized: true, 
         loading: false 
       })
-      console.log('ℹ️ 使用默认系统配置')
+      console.log('Using default system config')
       
     } catch (error) {
-      console.error('❌ 初始化系统配置失败:', error)
+      console.error('Failed to initialize system config:', error)
       set({ loading: false, initialized: true })
     }
   },
@@ -170,7 +180,7 @@ const useSystemConfigStore = create((set, get) => ({
       
       return { success: false, error: response.data.message }
     } catch (error) {
-      console.error('更新系统配置失败:', error)
+      console.error('Failed to update system config:', error)
       return { success: false, error: error.message }
     }
   },
@@ -204,7 +214,7 @@ const useSystemConfigStore = create((set, get) => ({
       
       return { success: false, error: response.data.message }
     } catch (error) {
-      console.error('上传Logo失败:', error)
+      console.error('Failed to upload logo:', error)
       return { success: false, error: error.message }
     }
   },
@@ -244,8 +254,8 @@ const useSystemConfigStore = create((set, get) => ({
   // 获取站点描述
   getSiteDescription: () => {
     const state = get()
-    // 描述始终使用系统配置
-    return state.systemConfig?.site?.description || '企业级AI应用聚合平台'
+    // 描述始终使用系统配置；未配置时回退平台默认描述文案（随当前语言变化）
+    return state.systemConfig?.site?.description || i18n.t('app.description')
   },
   
   // 获取默认AI模型
