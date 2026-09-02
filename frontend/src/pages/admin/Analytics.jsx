@@ -1,5 +1,15 @@
 /**
  * 数据分析BI面板页面 - iOS科技风格版本（增强用户分析表格）
+ *
+ * 更新记录：
+ * - v1.1 (本次): 筛选区分组下拉新增关键字搜索能力
+ *   问题背景：生产环境已有几百个用户组且持续增长，原分组下拉框无任何
+ *   搜索能力，只能靠鼠标滚动逐一查找目标分组，效率极低。
+ *   修复方案：为分组Select添加showSearch开启搜索输入框；沿用本项目
+ *   （UserSearchForm.jsx等）已采用的既定模式：给Option传递
+ *   label={group.name}属性，optionFilterProp指向该属性，filterOption
+ *   自定义按分组名小写模糊匹配，避免依赖Antd对children文本的隐式匹配
+ *   （更稳妥，且与其他分组选择器保持一致的实现方式）。
  */
 
 import React, { useEffect, useState } from 'react'
@@ -155,6 +165,14 @@ const Analytics = () => {
     } catch (error) {
       console.error('导出失败:', error)
     }
+  }
+
+  /**
+   * 分组下拉的自定义过滤函数
+   * 按分组名（option.label）小写模糊匹配，与input输入值大小写无关比较
+   */
+  const filterGroupOption = (input, option) => {
+    return (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
   }
 
   // iOS风格的图表颜色
@@ -793,9 +811,12 @@ const Analytics = () => {
               value={filters.groupId}
               onChange={handleGroupChange}
               allowClear
+              showSearch
+              optionFilterProp="label"
+              filterOption={filterGroupOption}
             >
               {userGroups.map(group => (
-                <Option key={group.id} value={group.id}>
+                <Option key={group.id} value={group.id} label={group.name}>
                   {group.name}
                 </Option>
               ))}

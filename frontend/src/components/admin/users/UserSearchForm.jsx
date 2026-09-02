@@ -1,5 +1,16 @@
 /**
  * 用户搜索表单组件 - 修复角色选择和搜索功能，支持重置回调
+ *
+ * 更新记录：
+ * - v1.1 (本次): 用户分组筛选下拉新增关键字搜索能力
+ *   问题背景：生产环境已有四五百个用户组，原下拉框无任何搜索能力，
+ *   只能靠鼠标滚动逐一查找目标分组，效率极低。
+ *   修复方案：为分组Select添加showSearch开启搜索输入框；
+ *   由于Option内容为带颜色样式的JSX（<span style={{color}}>{name}</span>）
+ *   而非纯文本，Antd默认的文本匹配无法直接生效，故采用本项目其他组件
+ *   （如UserFormModal.jsx/BatchCreateUsersModal.jsx）已采用的既定模式：
+ *   单独给Option传递label={group.name}属性，optionFilterProp指向该属性，
+ *   filterOption自定义按分组名小写模糊匹配，兼顾颜色展示与搜索过滤。
  */
 
 import React from 'react'
@@ -44,6 +55,14 @@ const UserSearchForm = ({
     onSearch(filteredValues)
   }
 
+  /**
+   * 用户分组下拉的自定义过滤函数
+   * 按分组名（option.label）小写模糊匹配，与input输入值大小写无关比较
+   */
+  const filterGroupOption = (input, option) => {
+    return (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+  }
+
   return (
     <Form
       form={form}
@@ -81,9 +100,12 @@ const UserSearchForm = ({
           <Select 
             placeholder={t('admin.users.form.group') || '选择分组'} 
             allowClear
+            showSearch
+            optionFilterProp="label"
+            filterOption={filterGroupOption}
           >
             {userGroups.map(group => (
-              <Select.Option key={group.id} value={group.id}>
+              <Select.Option key={group.id} value={group.id} label={group.name}>
                 <span style={{ color: group.color }}>{group.name}</span>
               </Select.Option>
             ))}
