@@ -6,6 +6,8 @@
  * - 用户分组管理
  * - 积分管理
  * - AI模型管理（v1.2新增拖拽排序）
+ * - AI渠道管理（v1.6新增：渠道=API接入点URL+Key，供AI模型创建时选择复用，
+ *   避免每个模型都要单独填一遍，存储于system_settings表，非新增数据库表）
  * - 系统模块管理
  * - API服务管理
  * - 系统提示词管理
@@ -39,6 +41,7 @@ const useAdminStore = create((set) => ({
   userCredits: {},
   creditsHistory: [],
   aiModels: [],
+  aiChannels: [],
   modules: [],
   apiServices: [],
   systemPrompts: [],
@@ -742,6 +745,54 @@ const useAdminStore = create((set) => ({
       return response.data.data
     } catch (error) {
       console.error('Failed to update model assigned groups:', error)
+      throw error
+    }
+  },
+
+  // ===== AI渠道管理（v1.6新增）=====
+  // 渠道=API接入点(名称+Base URL+Key)，创建/编辑AI模型时可选择渠道快捷填充，
+  // 避免每个模型都要单独填一遍URL和Key。渠道存储于system_settings表，
+  // 不涉及新增数据库表/字段，详见后端 services/admin/ChannelService.js
+
+  getAIChannels: async () => {
+    try {
+      const response = await apiClient.get('/admin/channels')
+      set({ aiChannels: response.data.data })
+      return response.data.data
+    } catch (error) {
+      console.error('Failed to get AI channel list:', error)
+      throw error
+    }
+  },
+
+  createAIChannel: async (channelData) => {
+    try {
+      const response = await apiClient.post('/admin/channels', channelData)
+      await useAdminStore.getState().getAIChannels()
+      return response.data.data
+    } catch (error) {
+      console.error('Failed to create AI channel:', error)
+      throw error
+    }
+  },
+
+  updateAIChannel: async (channelId, updateData) => {
+    try {
+      const response = await apiClient.put(`/admin/channels/${channelId}`, updateData)
+      await useAdminStore.getState().getAIChannels()
+      return response.data.data
+    } catch (error) {
+      console.error('Failed to update AI channel:', error)
+      throw error
+    }
+  },
+
+  deleteAIChannel: async (channelId) => {
+    try {
+      await apiClient.delete(`/admin/channels/${channelId}`)
+      await useAdminStore.getState().getAIChannels()
+    } catch (error) {
+      console.error('Failed to delete AI channel:', error)
       throw error
     }
   },

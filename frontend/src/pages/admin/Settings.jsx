@@ -2,6 +2,7 @@
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
  * 版本更新：
+ * - v2.1.0 (2026-09-03): 新增AI渠道管理入口，AI模型创建/编辑弹窗支持选择渠道快捷填充URL/Key
  * - v2.0.0 (2026-03-23): 移除系统提示词管理Tab（功能废弃）
  * - v1.9.0 (2026-03-16): 新增论坛管理Tab
  * - v1.8.0 (2026-02-27): 更新模型后自动测试 + 保存并测试回调
@@ -52,6 +53,7 @@ import {
   SystemStats,
   AIModelTable,
   AIModelFormModal,
+  AIChannelManageModal,
   SystemModuleTable,
   SystemModuleFormModal,
   BasicSettings,
@@ -117,6 +119,8 @@ const Settings = () => {
   
   const [isModelModalVisible, setIsModelModalVisible] = useState(false)
   const [isModuleModalVisible, setIsModuleModalVisible] = useState(false)
+  // v2.1 新增：渠道管理弹窗可见状态（渠道=API接入点URL+Key，供AI模型创建时选择复用）
+  const [isChannelModalVisible, setIsChannelModalVisible] = useState(false)
   const [editingModel, setEditingModel] = useState(null)
   const [editingModule, setEditingModule] = useState(null)
   const [testingModelId, setTestingModelId] = useState(null)
@@ -375,10 +379,16 @@ const Settings = () => {
           }
           extra={
             isSuperAdmin && (
-              <Button type="primary" icon={<PlusOutlined />}
-                onClick={() => { setEditingModel(null); modelForm.resetFields(); setIsModelModalVisible(true) }}>
-                {t('admin.models.addModel')}
-              </Button>
+              <Space>
+                {/* v2.1 新增：渠道管理入口，与"添加模型"并排 */}
+                <Button icon={<ApiOutlined />} onClick={() => setIsChannelModalVisible(true)}>
+                  {t('admin.models.channel.manage')}
+                </Button>
+                <Button type="primary" icon={<PlusOutlined />}
+                  onClick={() => { setEditingModel(null); modelForm.resetFields(); setIsModelModalVisible(true) }}>
+                  {t('admin.models.addModel')}
+                </Button>
+              </Space>
             )
           }
         >
@@ -545,6 +555,15 @@ const Settings = () => {
           onSubmit={editingModel ? handleUpdateModel : handleCreateModel}
           onCancel={() => { setIsModelModalVisible(false); setEditingModel(null); modelForm.resetFields() }}
           onSaveAndTest={handleSaveAndTest} testingModelId={testingModelId}
+          onManageChannels={() => setIsChannelModalVisible(true)}
+        />
+      )}
+
+      {/* v2.1 新增：渠道管理弹窗 */}
+      {isSuperAdmin && (
+        <AIChannelManageModal
+          visible={isChannelModalVisible}
+          onCancel={() => setIsChannelModalVisible(false)}
         />
       )}
 

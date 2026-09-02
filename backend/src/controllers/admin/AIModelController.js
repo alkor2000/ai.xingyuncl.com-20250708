@@ -1,12 +1,25 @@
 /**
  * AI模型管理控制器 - 支持基于角色的数据过滤、模型分组管理和拖拽排序
- * 
+ *
  * v1.1 新增 updateSortOrder 批量排序方法 - 2026-02-27
+ *
+ * v1.2 新增"渠道"快捷配置支持 - 2026-09-03：
+ *   背景：每个AI模型都要单独填一遍API密钥+API端点，当多个模型共用同一个
+ *   中转/代理服务商时非常繁琐。新增"渠道"概念——渠道=一个API接入点
+ *   (名称+Base URL+Key)，创建/编辑模型时若请求体带channel_id，本控制器会
+ *   实时解析该渠道当前的base_url+api_key并覆盖填入modelData，剩余流程
+ *   与手动填写完全一致(AIModel.create/model.update不感知渠道的存在)。
+ *   渠道存储于system_settings表(非新表)，详见services/admin/ChannelService.js。
+ *   注意：channel_id仅是"创建/编辑时的一次性填充助手"，不会持久化到
+ *   ai_models表，模型创建后与渠道无强关联；渠道密钥后续变更不会自动
+ *   同步到已创建的模型，需重新编辑并选择该渠道才会拉取最新值。
  */
 
 const AIModel = require('../../models/AIModel');
+const ChannelService = require('../../services/admin/ChannelService');
 const dbConnection = require('../../database/connection');
 const ResponseHelper = require('../../utils/response');
+const { ValidationError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { ROLES } = require('../../middleware/permissions');
 const CacheService = require('../../services/cacheService');
@@ -113,10 +126,26 @@ class AIModelController {
 
   /**
    * 创建AI模型 - 只有超级管理员可以操作
+   *
+   * v1.2: 若请求体携带channel_id，先解析渠道并覆盖填入api_key/api_endpoint，
+   * 再走原有创建流程；不携带channel_id时行为与之前完全一致(手动填写)。
    */
   static async createAIModel(req, res) {
     try {
-      const modelData = req.body;
+      const modelData = { ...req.body };
+
+      if (modelData.channel_id) {
+        const channel = await ChannelService.resolveChannelById(modelData.channel_id);
+        modelData.api_endpoint = channel.base_url;
+        modelData.api_key = channel.api_key;
+        logger.info('创建AI模型：使用渠道填充配置', {
+          adminId: req.user.id,
+          channelId: channel.id,
+          channelName: channel.name
+        });
+      }
+      delete modelData.channel_id; // AIModel.create不认识此字段，避免污染model_data
+
       const model = await AIModel.create(modelData);
 
       // 新建模型默认分配给所有激活的用户组
@@ -145,22 +174,41 @@ class AIModelController {
         adminId: req.user?.id, 
         error: error.message 
       });
+      if (error instanceof ValidationError) {
+        return ResponseHelper.validation(res, [error.message]);
+      }
       return ResponseHelper.error(res, '创建AI模型失败');
     }
   }
 
   /**
    * 更新AI模型 - 只有超级管理员可以操作
+   *
+   * v1.2: 若请求体携带channel_id，先解析渠道并覆盖填入api_key/api_endpoint，
+   * 再走原有更新流程(model.update内"留空保持原值"的逻辑对渠道填充的值同样生效)。
    */
   static async updateAIModel(req, res) {
     try {
       const { id } = req.params;
-      const updateData = req.body;
+      const updateData = { ...req.body };
 
       const model = await AIModel.findById(id);
       if (!model) {
         return ResponseHelper.notFound(res, 'AI模型不存在');
       }
+
+      if (updateData.channel_id) {
+        const channel = await ChannelService.resolveChannelById(updateData.channel_id);
+        updateData.api_endpoint = channel.base_url;
+        updateData.api_key = channel.api_key;
+        logger.info('更新AI模型：使用渠道填充配置', {
+          adminId: req.user.id,
+          modelId: id,
+          channelId: channel.id,
+          channelName: channel.name
+        });
+      }
+      delete updateData.channel_id;
 
       await model.update(updateData);
       
@@ -188,6 +236,9 @@ class AIModelController {
         modelId: req.params.id,
         error: error.message 
       });
+      if (error instanceof ValidationError) {
+        return ResponseHelper.validation(res, [error.message]);
+      }
       return ResponseHelper.error(res, '更新AI模型失败');
     }
   }

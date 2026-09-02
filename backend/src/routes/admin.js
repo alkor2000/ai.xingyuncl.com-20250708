@@ -20,6 +20,7 @@ const userRoutes = require('./admin/userRoutes');
 const creditsRoutes = require('./admin/creditsRoutes');
 const groupRoutes = require('./admin/groupRoutes');
 const modelRoutes = require('./admin/modelRoutes');
+const channelRoutes = require('./admin/channelRoutes'); // AI渠道管理路由（渠道=API接入点URL+Key，供AI模型创建时选择复用，避免逐模型重复填写）
 const statsRoutes = require('./admin/statsRoutes');
 const moduleRoutes = require('./admin/moduleRoutes'); // 新增模块路由
 const apiServiceRoutes = require('./admin/apiServiceRoutes'); // 新增API服务路由
@@ -95,6 +96,9 @@ router.use('/analytics', analyticsRoutes);
 
 // AI模型管理路由 - /api/admin/models/*
 router.use('/models', modelRoutes);
+
+// AI渠道管理路由 - /api/admin/channels/*
+router.use('/channels', channelRoutes);
 
 // 系统模块管理路由 - /api/admin/modules/*
 router.use('/modules', moduleRoutes);

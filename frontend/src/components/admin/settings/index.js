@@ -1,6 +1,7 @@
 export { default as SystemStats } from './SystemStats'
 export { default as AIModelTable } from './AIModelTable'
 export { default as AIModelFormModal } from './AIModelFormModal'
+export { default as AIChannelManageModal } from './AIChannelManageModal'
 export { default as SystemModuleTable } from './SystemModuleTable'
 export { default as SystemModuleFormModal } from './SystemModuleFormModal'
 export { default as BasicSettings } from './BasicSettings'
