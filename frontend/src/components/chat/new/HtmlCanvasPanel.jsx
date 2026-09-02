@@ -8,6 +8,7 @@
  *   - 真全屏预览（浏览器原生Fullscreen API，隐藏所有浏览器UI）
  *   - 多个HTML代码块时可切换查看
  *   - 流式输出时等待代码块闭合后再渲染
+ *   - 导出当前预览的HTML源码为本地文件下载（v1.1新增）
  *
  * 全屏实现：
  *   - 调用 element.requestFullscreen() 进入浏览器真全屏
@@ -24,6 +25,8 @@
  *   工具栏"复制代码"也复制到被截断的内容。
  *   现统一使用 utils/htmlBlockParser 的严格 CommonMark 逐行扫描解析器，
  *   与 Chat 页面（判断是否弹画布、统计块数）共用同一口径。
+ *   v1.1新增的"导出HTML"功能同样复用该解析结果（currentHtml），
+ *   确保下载内容与iframe渲染内容、复制内容三者完全一致。
  *
  * ============================================================
  * 国际化关键决策
@@ -62,7 +65,25 @@
  *   Error 对象不会展示给用户，只用于 Promise.reject 的控制流）、
  *   console.error 日志、iframe 的 title="HTML Preview"（技术标识，
  *   供屏幕阅读器识别 iframe 用途，非界面可见文案）、
- *   块序号 "1 / 3"（纯数字与符号）。
+ *   块序号 "1 / 3"（纯数字与符号）、从HTML内容<title>标签提取的文件名
+ *   （业务数据，用户自己生成的内容，不参与翻译）。
+ *
+ * 【6】v1.1新增：导出HTML为本地文件下载
+ *   - 技术方案与 Chat.jsx 的 handleExportChat（导出聊天记录）保持一致：
+ *     Blob + URL.createObjectURL + 隐藏 <a download> 元素触发浏览器下载，
+ *     全站已有该模式的先例，无需引入新依赖。
+ *   - 下载内容直接使用 currentHtml（严格 CommonMark 解析器提取的完整内容），
+ *     与当前iframe预览、复制代码功能三者内容完全一致，不会出现"导出的文件
+ *     和预览的不一样"的困惑。
+ *   - 文件名优先从HTML内容的 <title> 标签提取（更符合用户直觉，例如AI生成
+ *     的"贪吃蛇游戏"页面会下载为"贪吃蛇游戏.html"），提取失败或标签不存在
+ *     时回退为带时间戳的默认名"html-preview-{timestamp}.html"。
+ *   - 提取出的标题会做文件名非法字符清理（Windows/Mac文件系统均不允许的
+ *     字符 \ / : * ? " < > |），并将空白字符替换为下划线，避免下载失败。
+ *   - 多个HTML块场景下，文件名追加块序号（如"页面_1.html"/"页面_2.html"），
+ *     避免用户切换查看不同块后连续下载时互相覆盖同名文件。
+ *   - 成功/失败提示复用与 copyCode/copySuccess/copyFailed 同构的
+ *     export/exportSuccess/exportFailed 三键命名，保持语言包风格一致。
  *
  * Props:
  *   - messages: 消息列表
@@ -83,7 +104,8 @@ import {
   TabletOutlined,
   MobileOutlined,
   ReloadOutlined,
-  CopyOutlined
+  CopyOutlined,
+  DownloadOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { message as antMessage } from 'antd'
@@ -106,6 +128,21 @@ const DEVICE_SIZES = {
 
 /** iframe 聚焦延时：等待 iframe 完成渲染后再 focus */
 const FOCUS_DELAY_MS = 200
+
+/**
+ * 提取 <title> 标签内容的正则
+ * 只取第一个 title 标签，非贪婪匹配标签内文本
+ */
+const TITLE_TAG_RE = /<title[^>]*>([^<]*)<\/title>/i
+
+/**
+ * 文件名中不允许出现的字符（Windows/Mac文件系统共同限制）
+ * \ / : * ? " < > |
+ */
+const UNSAFE_FILENAME_CHARS_RE = /[\\/:*?"<>|]/g
+
+/** 从 <title> 提取的文件名最大长度，防止过长标题导致文件名过长 */
+const MAX_TITLE_FILENAME_LENGTH = 50
 
 // ================================================================
 // 浏览器原生Fullscreen API兼容性封装
@@ -173,6 +210,40 @@ const isFullscreenSupported = () => {
     || document.mozFullScreenEnabled
     || document.msFullscreenEnabled
   )
+}
+
+/**
+ * 生成下载文件名
+ *
+ * 优先从HTML内容的 <title> 标签提取文件名（提取到的标题为业务数据，
+ * 是用户/AI生成内容的一部分，不参与国际化翻译）；提取失败或标签为空时，
+ * 回退为带时间戳的默认名。多个HTML块时追加块序号，避免连续下载时
+ * 文件名重复导致相互覆盖。
+ *
+ * @param {string} html - 当前HTML代码内容
+ * @param {number} blockIndex - 当前块在全部块中的索引（从0开始）
+ * @param {number} totalBlocks - HTML块总数
+ * @returns {string} 安全的下载文件名（含 .html 后缀）
+ */
+const buildDownloadFileName = (html, blockIndex, totalBlocks) => {
+  const titleMatch = TITLE_TAG_RE.exec(html || '')
+  const rawTitle = titleMatch ? titleMatch[1].trim() : ''
+
+  // 清理文件名中的非法字符，并将空白字符统一替换为下划线
+  const safeTitle = rawTitle
+    .replace(UNSAFE_FILENAME_CHARS_RE, '')
+    .replace(/\s+/g, '_')
+    .slice(0, MAX_TITLE_FILENAME_LENGTH)
+
+  const suffix = totalBlocks > 1 ? `_${blockIndex + 1}` : ''
+
+  if (safeTitle) {
+    return `${safeTitle}${suffix}.html`
+  }
+
+  // 提取不到有效标题时，回退为带时间戳的默认名
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+  return `html-preview${suffix}-${timestamp}.html`
 }
 
 // ================================================================
@@ -378,6 +449,35 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     }
   }
 
+  /**
+   * 导出HTML为本地文件下载（v1.1新增）
+   *
+   * 使用 Blob + URL.createObjectURL + 隐藏 <a download> 元素触发浏览器下载，
+   * 技术方案与 Chat.jsx 的 handleExportChat（导出聊天记录）保持一致。
+   * 下载内容为 currentHtml（严格解析器提取的完整内容），与当前iframe
+   * 预览、复制代码功能三者内容完全一致。
+   */
+  const handleExportHtml = () => {
+    if (!currentHtml) return
+
+    try {
+      const fileName = buildDownloadFileName(currentHtml, currentIndex, htmlBlocks.length)
+      const blob = new Blob([currentHtml], { type: 'text/html;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      antMessage.success(t('chat.canvas.exportSuccess'))
+    } catch (error) {
+      console.error('Failed to export HTML file:', error)
+      antMessage.error(t('chat.canvas.exportFailed'))
+    }
+  }
+
   // ================================================================
   // 如果不可见或没有HTML内容，不渲染
   // ================================================================
@@ -471,12 +571,15 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
           <div className="toolbar-divider" />
 
-          {/* 刷新和复制 */}
+          {/* 刷新、复制、导出 */}
           <Tooltip title={t('chat.canvas.refresh')}>
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleRefresh} />
           </Tooltip>
           <Tooltip title={t('chat.canvas.copyCode')}>
             <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyHtml} />
+          </Tooltip>
+          <Tooltip title={t('chat.canvas.export')}>
+            <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleExportHtml} />
           </Tooltip>
 
           {/* 关闭按钮 */}
