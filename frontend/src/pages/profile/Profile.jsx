@@ -62,9 +62,13 @@ import {
   SaveOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 import useAuthStore from '../../stores/authStore'
 import './Profile.less'
 import IdentityAccountLinkPanel from '../../components/auth/IdentityAccountLinkPanel'
+import {
+  isPortalConnectProfileSearch
+} from '../../utils/portalIdentityConnect'
 
 const { Title, Text } = Typography
 const { TabPane } = Tabs
@@ -84,6 +88,12 @@ const CREDIT_HISTORY_PAGE_SIZE = 10
 const Profile = () => {
   // i18n 一并取出，供 toLocale*String 传入当前语言使用
   const { t, i18n } = useTranslation()
+  const location = useLocation()
+
+  const portalConnectRequested =
+    isPortalConnectProfileSearch(
+      location.search
+    )
   const { user, permissions, updateProfile, changePassword, getCreditHistory } = useAuthStore()
   const [profileForm] = Form.useForm()
   const [passwordForm] = Form.useForm()
@@ -398,7 +408,13 @@ const Profile = () => {
         {/* 右侧 - 标签页 */}
         <Col xs={24} lg={16}>
           <Card>
-            <Tabs defaultActiveKey="basic">
+            <Tabs
+              defaultActiveKey={
+                portalConnectRequested
+                  ? 'identity'
+                  : 'basic'
+              }
+            >
               <TabPane tab={t('profile.tabs.basic')} key="basic">
                 <Form
                   form={profileForm}

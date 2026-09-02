@@ -41,6 +41,7 @@ import Register from './pages/auth/Register'
 import OrgApplication from './pages/auth/OrgApplication'
 import SSOCallback from './pages/auth/SSOCallback'
 import IdentityCallback from './pages/auth/IdentityCallback'
+import PortalCapabilityEntry from './pages/auth/PortalCapabilityEntry'
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
 import Profile from './pages/profile/Profile'
@@ -346,6 +347,14 @@ const App = () => {
               <Route
                 path="/auth/identity/callback"
                 element={<IdentityCallback />}
+              />
+
+              {/* Identity Center Capability语义入口。
+                  这里只接受stable portal_capability，
+                  真实业务页面由AI平台内部Adapter解析。 */}
+              <Route
+                path="/portal-capability"
+                element={<PortalCapabilityEntry />}
               />
 
               {/* v1.4.0 思维导图公开分享路由 - 无需登录，登录用户也可访问 */}

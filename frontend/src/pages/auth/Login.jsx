@@ -8,6 +8,10 @@ import LanguageSwitch from '../../components/common/LanguageSwitch'
 import apiClient from '../../utils/api'
 import IdentityLoginEntry from '../../components/auth/IdentityLoginEntry'
 import { buildReturnToFromLocation } from '../../utils/identityNavigation'
+import {
+  buildPortalConnectPostLoginTarget,
+  isPortalConnectLoginLocation
+} from '../../utils/portalIdentityConnect'
 
 const { Title, Text, Paragraph } = Typography
 const { TabPane } = Tabs
@@ -24,6 +28,11 @@ const Login = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+
+  const portalConnectRequested =
+    isPortalConnectLoginLocation(
+      location
+    )
 
 
   // 获取公开系统配置
@@ -81,7 +90,17 @@ const Login = () => {
       }
       await login(loginData)
       message.success(t('auth.login.success'))
-      navigate(buildReturnToFromLocation(location), { replace: true })
+      navigate(
+        buildPortalConnectPostLoginTarget(
+          location
+        ) ||
+          buildReturnToFromLocation(
+            location
+          ),
+        {
+          replace: true
+        }
+      )
     } catch (error) {
       console.error('登录失败:', error)
       message.error(error.response?.data?.message || t('auth.login.failed'))
@@ -152,7 +171,17 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate(buildReturnToFromLocation(location), { replace: true })
+        navigate(
+        buildPortalConnectPostLoginTarget(
+          location
+        ) ||
+          buildReturnToFromLocation(
+            location
+          ),
+        {
+          replace: true
+        }
+      )
       }
     } catch (error) {
       console.error('验证码登录失败:', error)
@@ -199,7 +228,17 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate(buildReturnToFromLocation(location), { replace: true })
+        navigate(
+        buildPortalConnectPostLoginTarget(
+          location
+        ) ||
+          buildReturnToFromLocation(
+            location
+          ),
+        {
+          replace: true
+        }
+      )
       }
     } catch (error) {
       console.error('登录失败:', error)
@@ -380,7 +419,15 @@ const Login = () => {
               letterSpacing: '-0.5px'
             }}
           >
-            {t('auth.login.title')}
+            {portalConnectRequested
+              ? t(
+                  'auth.identity.portalConnectTitle',
+                  {
+                    defaultValue:
+                      '登录当前平台账号'
+                  }
+                )
+              : t('auth.login.title')}
           </Title>
           <Paragraph 
             type="secondary" 
@@ -391,7 +438,15 @@ const Login = () => {
               color: '#8e8e93'
             }}
           >
-            {t('auth.login.subtitle')}
+            {portalConnectRequested
+              ? t(
+                  'auth.identity.portalConnectSubtitle',
+                  {
+                    defaultValue:
+                      '首次连接请先验证你在当前平台已有的账号'
+                  }
+                )
+              : t('auth.login.subtitle')}
           </Paragraph>
         </div>
 
@@ -686,7 +741,9 @@ const Login = () => {
           </Form>
         )}
 
-                <IdentityLoginEntry />
+        {!portalConnectRequested && (
+          <IdentityLoginEntry />
+        )}
 
         {/* 简化的提示区域 */}
         <div style={{ 

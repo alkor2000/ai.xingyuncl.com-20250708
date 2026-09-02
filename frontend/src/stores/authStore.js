@@ -28,6 +28,9 @@ import tokenRefreshService from '../services/tokenRefreshService'
 // 修复：使用 ESM 静态 import 替代 require('./chatStore')
 import useChatStore from './chatStore'
 import i18n from '../utils/i18n'
+import {
+  getPortalConnectAuthFailureRedirect
+} from '../utils/portalIdentityConnect'
 
 /**
  * 登录成功后的统一处理逻辑（内部函数）
@@ -293,7 +296,11 @@ const useAuthStore = create(
       // 登出
       // ============================================================
 
-      logout: async () => {
+      logout: async (options = {}) => {
+        const redirectTo =
+          typeof options.redirectTo === 'string'
+            ? options.redirectTo
+            : '/'
         try {
           const state = get()
           if (state.accessToken) {
@@ -339,7 +346,7 @@ const useAuthStore = create(
           console.log('🚪 User logged out')
 
           // 跳转到首页
-          window.location.href = '/'
+          window.location.href = redirectTo
         }
       },
 
@@ -370,7 +377,10 @@ const useAuthStore = create(
         } catch (error) {
           console.error('Failed to get user info:', error)
           if (error.response?.status === 401) {
-            get().logout()
+            get().logout({
+              redirectTo:
+                getPortalConnectAuthFailureRedirect()
+            })
           }
           throw error
         }
@@ -521,7 +531,10 @@ const useAuthStore = create(
         } catch (error) {
           console.error('Token refresh failed:', error)
           tokenRefreshService.stopAutoRefresh()
-          get().logout()
+          get().logout({
+            redirectTo:
+              getPortalConnectAuthFailureRedirect()
+          })
           throw error
         }
       },

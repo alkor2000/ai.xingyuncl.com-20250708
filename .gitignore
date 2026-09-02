@@ -103,3 +103,10 @@ backend/coverage*/
 *.before_*
 # SonarQube 证据/导出文件（论文证据用，本地保留不入库）
 sonarqube_*.json
+
+# 开发过程临时备份目录（含.env.before等敏感信息与源码调试快照副本，不提交）
+backups/
+
+# 标记为有问题的调试备份文件（不提交）
+*.buggy.*
+*.buggy

@@ -1,14 +1,16 @@
 /**
  * 应用配置文件 - 完全支持环境变量和Docker部署
- * 
+ *
  * 职责：
  * 1. 集中管理所有配置项，统一从环境变量读取
  * 2. 智能检测运行环境（Docker / PM2 / 本地开发）
  * 3. 统一管理存储路径（支持 Docker 卷映射和本地目录）
- * 
+ * 4. 集中管理PKU AI Lab Identity Center公开协议参数与启用开关
+ *
  * 安全原则：
- * - 敏感配置（JWT密钥、数据库密码）必须通过环境变量提供
+ * - 敏感配置（JWT密钥、数据库密码、Identity Client Secret）必须通过环境变量提供
  * - 缺少必要配置时打印警告，不在源码中硬编码生产密钥
+ * - Identity Client Secret绝不进入前端配置、普通日志或HTTP响应
  */
 
 const path = require('path');
@@ -25,6 +27,7 @@ function validateRequiredConfig() {
   if (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32) {
     warnings.push('JWT_ACCESS_SECRET 未配置或强度不足（需要至少32字符）');
   }
+
   if (!process.env.JWT_REFRESH_SECRET || process.env.JWT_REFRESH_SECRET.length < 32) {
     warnings.push('JWT_REFRESH_SECRET 未配置或强度不足（需要至少32字符）');
   }
@@ -32,6 +35,15 @@ function validateRequiredConfig() {
   // 数据库密码检查
   if (!process.env.DB_PASSWORD) {
     warnings.push('DB_PASSWORD 未配置，使用默认值（仅限开发环境）');
+  }
+
+  // Identity只有明确启用后才要求Client Secret完整存在。
+  // 当前开发阶段可保持IDENTITY_ENABLED=false，不影响既有本地登录。
+  if (process.env.IDENTITY_ENABLED === 'true') {
+    if (!process.env.IDENTITY_CLIENT_SECRET ||
+        process.env.IDENTITY_CLIENT_SECRET.length < 32) {
+      warnings.push('IDENTITY_CLIENT_SECRET 未配置或强度不足（Identity已启用）');
+    }
   }
 
   // 在生产环境中打印严重警告
@@ -43,7 +55,7 @@ function validateRequiredConfig() {
       console.error(`║  - ${w}`);
     });
     console.error('╠══════════════════════════════════════════════════════╣');
-    console.error('║  请在 .env 文件中正确配置以上环境变量               ║');
+    console.error('║  请在生产环境变量中正确配置以上项目                  ║');
     console.error('╚══════════════════════════════════════════════════════╝');
   }
 }
@@ -51,7 +63,7 @@ function validateRequiredConfig() {
 /**
  * 获取存储根目录
  * 支持环境变量配置，完全兼容Docker和本地部署
- * 
+ *
  * 检测优先级：
  * 1. STORAGE_PATH 环境变量（显式指定）
  * 2. Docker 环境检测（/.dockerenv 文件 或 DOCKER_ENV 变量）
@@ -82,12 +94,14 @@ function getStorageRoot() {
       projectRoot = path.dirname(currentDir);
       break;
     }
+
     // 检查是否已经是项目根目录
     if (fs.existsSync(path.join(currentDir, 'backend')) &&
         fs.existsSync(path.join(currentDir, 'frontend'))) {
       projectRoot = currentDir;
       break;
     }
+
     currentDir = path.dirname(currentDir);
   }
 
@@ -122,10 +136,12 @@ function getJwtDefault(envKey, devDefault) {
   if (process.env[envKey]) {
     return process.env[envKey];
   }
+
   // 非生产环境提供开发默认值
   if (process.env.NODE_ENV !== 'production') {
     return devDefault;
   }
+
   // 生产环境：返回空字符串，启动时会在 server.js 中检测到并警告
   // 不在这里硬编码生产密钥，防止密钥泄露到源码仓库
   return '';
@@ -139,14 +155,15 @@ module.exports = {
     port: parseInt(process.env.PORT || process.env.BACKEND_PORT || '4000'),
     domain: process.env.APP_DOMAIN || 'ai.xingyuncl.com',
     env: process.env.NODE_ENV || 'production',
+
     // CORS 配置（供 app.js 使用）
-    corsOrigin: process.env.CORS_ORIGINS ?
-      process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) :
-      [
-        'https://ai.xingyuncl.com',
-        'http://localhost:3000',
-        'http://localhost:5173'
-      ]
+    corsOrigin: process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+      : [
+          'https://ai.xingyuncl.com',
+          'http://localhost:3000',
+          'http://localhost:5173'
+        ]
   },
 
   // 数据库配置
@@ -174,8 +191,14 @@ module.exports = {
   // JWT认证配置
   auth: {
     jwt: {
-      accessSecret: getJwtDefault('JWT_ACCESS_SECRET', 'dev-only-access-secret-not-for-production'),
-      refreshSecret: getJwtDefault('JWT_REFRESH_SECRET', 'dev-only-refresh-secret-not-for-production'),
+      accessSecret: getJwtDefault(
+        'JWT_ACCESS_SECRET',
+        'dev-only-access-secret-not-for-production'
+      ),
+      refreshSecret: getJwtDefault(
+        'JWT_REFRESH_SECRET',
+        'dev-only-refresh-secret-not-for-production'
+      ),
       accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '24h',
       refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '30d',
       issuer: 'ai-platform',
@@ -183,22 +206,68 @@ module.exports = {
     }
   },
 
+  /**
+   * PKU AI Lab Identity Center OIDC Client配置。
+   *
+   * P0安全边界：
+   * - Client身份固定ai-platform-client；
+   * - 生产Host固定ai.xingyuncl.com；
+   * - login与bind使用不同redirect_uri；
+   * - Client Secret只能来自后端环境变量；
+   * - enabled默认false，在双端配置与验收完成前绝不提前开放。
+   */
+  identity: {
+    enabled: process.env.IDENTITY_ENABLED === 'true',
+    issuer: process.env.IDENTITY_ISSUER || 'https://id.pkuailab.com',
+    clientId: process.env.IDENTITY_CLIENT_ID || 'ai-platform-client',
+    clientSecret: process.env.IDENTITY_CLIENT_SECRET || '',
+    tokenAuthMethod: process.env.IDENTITY_TOKEN_AUTH_METHOD || 'client_secret_post',
+
+    loginRedirectUri:
+      process.env.IDENTITY_LOGIN_REDIRECT_URI ||
+      'https://ai.xingyuncl.com/api/auth/identity/login/callback',
+
+    bindRedirectUri:
+      process.env.IDENTITY_BIND_REDIRECT_URI ||
+      'https://ai.xingyuncl.com/api/auth/identity/callback',
+
+    scopes: ['openid', 'profile', 'platform_link'],
+
+    flowTtlSeconds: parseInt(
+      process.env.IDENTITY_FLOW_TTL_SECONDS || '600'
+    ),
+
+    handoffTtlSeconds: parseInt(
+      process.env.IDENTITY_HANDOFF_TTL_SECONDS || '90'
+    ),
+
+    httpTimeoutMs: parseInt(
+      process.env.IDENTITY_HTTP_TIMEOUT_MS || '10000'
+    ),
+
+    jwksCacheSeconds: parseInt(
+      process.env.IDENTITY_JWKS_CACHE_SECONDS || '300'
+    )
+  },
+
   // 安全配置
   security: {
     cors: {
-      origin: process.env.CORS_ORIGINS ?
-        process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) :
-        [
-          'https://ai.xingyuncl.com',
-          'http://localhost:3000',
-          'http://localhost:5173'
-        ],
+      origin: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+        : [
+            'https://ai.xingyuncl.com',
+            'http://localhost:3000',
+            'http://localhost:5173'
+          ],
       credentials: true
     },
+
     rateLimit: {
       windowMs: 15 * 60 * 1000,
       max: parseInt(process.env.RATE_LIMIT_MAX || '1000')
     },
+
     helmet: {
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false
@@ -215,6 +284,7 @@ module.exports = {
   // 存储配置 - 统一管理所有存储路径
   storage: {
     root: getStorageRoot(),
+
     paths: {
       uploads: getStoragePath('uploads'),
       temp: getStoragePath('temp'),
@@ -234,7 +304,12 @@ module.exports = {
   // 文件上传配置
   upload: {
     maxFileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760'),
-    allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
+    allowedTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf'
+    ],
     uploadDir: getStoragePath('uploads')
   },
 
