@@ -4,6 +4,32 @@
  * 
  * 更新记录：
  * - 2025-12-24: 修复万相SSE响应解析 - 收集所有数据块中的图片
+ * - 2026-XX-XX (已回退): 尝试直传前端预设的"WxH"像素尺寸导致400错误。
+ * - 2026-XX-XX (已废弃): 曾用"提示词追加比例文字"的方式1方案作为临时兜底
+ *   （size传'2K'/'4K'档位 + prompt自然语言描述宽高比，由模型自行判断），
+ *   该方案已通过手动测试验证有效，但精度依赖模型对文本的理解，非API层面
+ *   精确控制。现已查阅火山引擎Seedream 4.5官方文档，改用更精确可靠的方案。
+ * - 2026-XX-XX (本次，最终方案): 依据官方文档实现"方式2"精确尺寸控制。
+ *
+ *   官方文档明确Seedream支持两种互斥（不可混用）的尺寸指定方式：
+ *   · 方式1：size传'2K'/'4K'档位枚举 + prompt自然语言描述宽高比，模型判断最终尺寸
+ *   · 方式2：size直传精确的"宽x高"像素值，但需同时满足：
+ *       - 总像素范围 [3686400, 16777216]（约2560x1440 ~ 4096x4096之间）
+ *       - 宽高比范围 [1/16, 16]
+ *
+ *   之前直传前端预览尺寸（如832x1248总像素仅1,038,336）触发400，
+ *   根因正是未达到方式2的总像素下限3,686,400。
+ *
+ *   官方文档同时给出了"2K/4K档位下各宽高比对应的精确像素映射表"，
+ *   这些数值本身就是已验证合法、满足方式2全部约束的精确WxH值。
+ *   本次改为：根据用户选择的比例，查表得到该官方精确像素值，
+ *   以方式2直传size参数，不再依赖prompt文字提示，实现真正的
+ *   API层面精确尺寸控制。
+ *
+ *   前端PRESET_SIZES.default预设的8个比例（1:1/4:3/3:4/16:9/9:16/
+ *   3:2/2:3/21:9）与官方映射表完全对应，故本次映射表可完全覆盖
+ *   现有前端选项，无需额外兜底计算逻辑（仍保留基础兜底防御未来
+ *   可能出现的异常输入）。
  */
 
 const axios = require('axios');
@@ -14,6 +40,43 @@ const ImageGeneration = require('../models/ImageGeneration');
 const User = require('../models/User');
 const ossService = require('./ossService');
 const logger = require('../utils/logger');
+
+/**
+ * Seedream API 方式2（精确宽高像素值）的比例->像素值映射表
+ *
+ * 数据来源：火山引擎Seedream 4.5官方文档"采用方式1时，模型实际映射的
+ * 宽高像素值"表格。这些数值虽然文档标注在方式1章节下，但其本身就是
+ * 已验证同时满足方式2约束（总像素[3686400,16777216]、宽高比[1/16,16]）
+ * 的合法精确像素值，故可直接复用作为方式2的精确输入。
+ *
+ * 当前固定使用2K档位（性价比与画质平衡，且与历史默认档位一致）；
+ * 4K映射表一并保留，供未来如需支持更高分辨率选项时直接启用。
+ */
+const SEEDREAM_RATIO_SIZE_MAP = {
+  '2K': {
+    '1:1': '2048x2048',
+    '4:3': '2304x1728',
+    '3:4': '1728x2304',
+    '16:9': '2848x1600',
+    '9:16': '1600x2848',
+    '3:2': '2496x1664',
+    '2:3': '1664x2496',
+    '21:9': '3136x1344'
+  },
+  '4K': {
+    '1:1': '4096x4096',
+    '4:3': '4704x3520',
+    '3:4': '3520x4704',
+    '16:9': '5504x3040',
+    '9:16': '3040x5504',
+    '3:2': '4992x3328',
+    '2:3': '3328x4992',
+    '21:9': '6240x2656'
+  }
+};
+
+/** 当前固定使用的分辨率档位；如需支持用户选择4K，可将其改为按参数传入 */
+const SEEDREAM_DEFAULT_RESOLUTION = '2K';
 
 class ImageService {
   // 判断是否为Seedream系列模型
@@ -38,15 +101,75 @@ class ImageService {
     return match ? `${match[1]}.${match[2]}` : '4.0';
   }
 
-  // 将标准尺寸转换为Seedream API格式
-  static convertSizeForSeedream(size) {
-    const sizeMapping = {
-      '1024x1024': '2K', '2048x2048': '4K', '864x1152': '2K',
-      '1152x864': '2K', '1280x720': '2K', '720x1280': '2K',
-      '2K': '2K', '4K': '4K',
-      '1:1': '2K', '4:3': '2K', '3:4': '2K', '16:9': '2K', '9:16': '2K'
+  /**
+   * 将前端传入的尺寸值解析为标准"宽:高"比例Key
+   *
+   * 前端参数面板传来的值可能是"864x1152"这种像素格式，也可能是历史
+   * 遗留的"16:9"比例格式。本方法统一识别并归一化为比例Key，用于后续
+   * 查询SEEDREAM_RATIO_SIZE_MAP官方精确像素表。
+   *
+   * @param {string} size 前端传入的尺寸值
+   * @returns {string|null} 形如"3:4"的比例Key；无法识别时返回null
+   */
+  static getRatioKeyForSize(size) {
+    if (!size) return null;
+
+    // 已经是"W:H"比例格式，直接使用
+    if (/^\d+:\d+$/.test(size)) {
+      return size;
+    }
+
+    // 前端PRESET_SIZES.default预设的8个像素尺寸对应的标准比例
+    const sizeToRatio = {
+      '1024x1024': '1:1',
+      '864x1152': '3:4',
+      '1152x864': '4:3',
+      '1280x720': '16:9',
+      '720x1280': '9:16',
+      '832x1248': '2:3',
+      '1248x832': '3:2',
+      '1512x648': '21:9'
     };
-    return sizeMapping[size] || '2K';
+    if (sizeToRatio[size]) {
+      return sizeToRatio[size];
+    }
+
+    // 兜底：对不在预设表中的"WxH"格式尺寸，按最大公约数计算最简比例
+    const match = size.match(/^(\d+)x(\d+)$/i);
+    if (match) {
+      const width = parseInt(match[1], 10);
+      const height = parseInt(match[2], 10);
+      if (width > 0 && height > 0) {
+        const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+        const divisor = gcd(width, height) || 1;
+        return `${width / divisor}:${height / divisor}`;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 将标准尺寸转换为Seedream API方式2所需的精确"宽x高"像素值
+   *
+   * 依据官方文档实现的最终方案：先把用户选择的尺寸解析为比例Key，
+   * 再从SEEDREAM_RATIO_SIZE_MAP官方精确映射表中查出对应的合法像素值
+   * 直传给API。该像素值已官方验证同时满足总像素范围[3686400,16777216]
+   * 与宽高比范围[1/16,16]两项约束，不会再触发400错误。
+   *
+   * 比例Key未命中官方表格时（理论上不应发生，因前端预设8个比例已
+   * 完全覆盖官方表格），兜底返回1:1的默认像素值，保证接口始终可用。
+   */
+  static convertSizeForSeedream(size) {
+    const ratioKey = this.getRatioKeyForSize(size);
+    const resolutionMap = SEEDREAM_RATIO_SIZE_MAP[SEEDREAM_DEFAULT_RESOLUTION];
+
+    if (ratioKey && resolutionMap[ratioKey]) {
+      return resolutionMap[ratioKey];
+    }
+
+    logger.warn('Seedream尺寸比例未命中官方映射表，使用1:1兜底', { size, ratioKey });
+    return resolutionMap['1:1'];
   }
 
   // 将标准尺寸转换为通义万相API格式
@@ -263,6 +386,39 @@ class ImageService {
   }
 
   /**
+   * 从axios错误对象中提取上游API返回的详细错误信息
+   *
+   * axios在HTTP非2xx响应时默认只在error.message里给出
+   * "Request failed with status code XXX"这类无信息量的通用文案，
+   * 真正的拒绝原因藏在error.response.data里（不同上游API的字段结构不同）。
+   * 本方法统一提取，供日志记录与错误消息使用。
+   *
+   * @param {Error} error axios抛出的错误对象
+   * @returns {{message: string, status: number|null, raw: any}}
+   */
+  static extractUpstreamError(error) {
+    const status = error.response?.status || null;
+    const data = error.response?.data;
+
+    if (!data) {
+      return { message: error.message, status, raw: null };
+    }
+
+    let message = null;
+    if (typeof data === 'string') {
+      message = data;
+    } else if (data.error) {
+      message = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+    } else if (data.message) {
+      message = data.message;
+    } else {
+      message = JSON.stringify(data);
+    }
+
+    return { message: message || error.message, status, raw: data };
+  }
+
+  /**
    * 批量生成图片
    */
   static async generateImages(userId, modelId, params, quantity = 1) {
@@ -376,10 +532,16 @@ class ImageService {
       if (isMidjourney) {
         requestData = { prompt: params.prompt, action: 'IMAGINE', index: 0 };
         if (params.size && params.size !== '1:1') requestData.prompt += ` --ar ${params.size}`;
-        response = await axios.post(requestUrl, requestData, {
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          timeout: 300000
-        });
+        try {
+          response = await axios.post(requestUrl, requestData, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            timeout: 300000
+          });
+        } catch (apiError) {
+          const upstream = this.extractUpstreamError(apiError);
+          logger.error('Midjourney API调用失败', { modelId, upstreamStatus: upstream.status, upstreamData: upstream.raw });
+          throw new Error(upstream.message);
+        }
       } else if (isWanxiang) {
         requestData = this.buildWanxiangRequest(model, params);
         logger.info('通义万相API请求', {
@@ -389,18 +551,36 @@ class ImageService {
         });
         response = await this.callWanxiangAPI(requestUrl, requestData, apiKey);
       } else if (isSeedream) {
+        const effectiveSize = params.size || model.default_size;
+
+        // 方式2：直传官方文档验证过的精确宽高像素值（不再依赖prompt文字，
+        // 两种方式官方文档说明不可混用，故prompt保持用户原始输入不变）
         requestData = { model: model.model_id, prompt: params.prompt };
         if (params.reference_images?.length > 0) requestData.image = params.reference_images;
-        requestData.size = this.convertSizeForSeedream(params.size);
+        requestData.size = this.convertSizeForSeedream(effectiveSize);
         requestData.response_format = 'url';
         requestData.stream = false;
         requestData.watermark = params.watermark !== false;
         if (params.guidance_scale) requestData.cfg_scale = params.guidance_scale;
         if (params.seed && params.seed !== -1) requestData.seed = params.seed;
-        response = await axios.post(requestUrl, requestData, {
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          timeout: 60000
+        logger.info('Seedream API请求', {
+          modelId: model.model_id,
+          requestedSize: effectiveSize,
+          finalSize: requestData.size
         });
+        try {
+          response = await axios.post(requestUrl, requestData, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            timeout: 60000
+          });
+        } catch (apiError) {
+          const upstream = this.extractUpstreamError(apiError);
+          logger.error('Seedream API调用失败', {
+            modelId, requestedSize: effectiveSize, finalSize: requestData.size,
+            upstreamStatus: upstream.status, upstreamData: upstream.raw
+          });
+          throw new Error(upstream.message);
+        }
       } else {
         requestData = {
           model: model.model_id, prompt: params.prompt, response_format: 'url',
@@ -409,10 +589,16 @@ class ImageService {
           watermark: params.watermark !== false
         };
         if (params.negative_prompt) requestData.negative_prompt = params.negative_prompt;
-        response = await axios.post(requestUrl, requestData, {
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          timeout: 60000
-        });
+        try {
+          response = await axios.post(requestUrl, requestData, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            timeout: 60000
+          });
+        } catch (apiError) {
+          const upstream = this.extractUpstreamError(apiError);
+          logger.error('图像生成API调用失败', { modelId, upstreamStatus: upstream.status, upstreamData: upstream.raw });
+          throw new Error(upstream.message);
+        }
       }
 
       logger.info(`生成第${index}张图片`, { userId, modelId, generationId, isWanxiang, provider: model.provider });
