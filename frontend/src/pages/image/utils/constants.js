@@ -24,12 +24,29 @@
  * 语言包中另有 image.param['--niji']（动漫风格）与 image.param['--style raw']
  * （原始风格）两个键，但下方 MIDJOURNEY_EXAMPLES 未收录这两个参数，
  * 用户在"参数助手"里点不到。属功能项遗漏，需产品确认后再补。
+ *
+ * ── 本次修复（2处Bug，零其他行为变更）──
+ * 1) 新增 SEEDREAM_ACTUAL_SIZES 映射表
+ *    背景：图片尺寸按钮下方展示的像素值（如"1024x1024"）取自本文件
+ *    PRESET_SIZES.default 的 value 字段，该字段是给所有provider通用的
+ *    预设像素值。但后端 backend/src/services/imageService.js 针对
+ *    Seedream模型（provider==='volcano'且model_id以doubao-seedream开头）
+ *    会调用 convertSizeForSeedream() 按官方2K档位映射表重新计算精确
+ *    像素值（如1:1比例实际传给API的是"2048x2048"而非"1024x1024"），
+ *    实际生成的图片也是该映射后的尺寸，导致前端展示值与真实生成结果
+ *    不符。本映射表与后端 SEEDREAM_RATIO_SIZE_MAP['2K'] 完全一致，
+ *    供 ParameterSettings.jsx 在选中Seedream模型时按比例反查展示真实
+ *    像素值。若后端未来切换4K档位或调整映射表数值，此处需同步更新。
+ *
+ * 2) DEFAULT_PARAMS.watermark 默认值由 true 改为 false
+ *    产品需求：图像生成模块的"添加水印"开关默认关闭，用户可自行开启。
  */
 
 /**
  * 预设尺寸配置
  * ratio 为界面按钮显示文本（国际通用比例写法，不翻译）；
- * value 为提交给后端的实际像素尺寸。
+ * value 为提交给后端的实际像素尺寸（非Seedream模型下与真实生成尺寸一致；
+ * Seedream模型下后端会重新映射，界面展示需改用SEEDREAM_ACTUAL_SIZES）。
  */
 export const PRESET_SIZES = {
   default: [
@@ -42,6 +59,29 @@ export const PRESET_SIZES = {
     { value: '1248x832', ratio: '3:2' },
     { value: '1512x648', ratio: '21:9' }
   ]
+};
+
+/**
+ * Seedream模型（火山引擎doubao-seedream系列）实际生成像素尺寸映射表
+ *
+ * 与后端 backend/src/services/imageService.js 的
+ * SEEDREAM_RATIO_SIZE_MAP['2K'] 保持完全一致，键为比例字符串（如"1:1"），
+ * 值为该比例下Seedream API实际使用、且已通过官方文档验证同时满足
+ * 总像素范围[3686400,16777216]与宽高比范围[1/16,16]约束的精确像素值。
+ *
+ * 仅供界面展示用，不参与实际请求参数的构建（实际参数仍传selectedSize，
+ * 由后端自行按此逻辑转换），故本表与后端表任一方修改都需同步另一方，
+ * 否则会重新出现"界面展示值与实际生成结果不符"的问题。
+ */
+export const SEEDREAM_ACTUAL_SIZES = {
+  '1:1': '2048x2048',
+  '4:3': '2304x1728',
+  '3:4': '1728x2304',
+  '16:9': '2848x1600',
+  '9:16': '1600x2848',
+  '3:2': '2496x1664',
+  '2:3': '1664x2496',
+  '21:9': '3136x1344'
 };
 
 /**
@@ -86,7 +126,8 @@ export const DEFAULT_PARAMS = {
   selectedSize: '1024x1024',
   seed: -1,
   guidanceScale: 2.5,
-  watermark: true,
+  // 添加水印默认关闭，用户可在高级选项中手动开启
+  watermark: false,
   quantity: 1
 };
 

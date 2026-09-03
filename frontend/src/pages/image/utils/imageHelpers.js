@@ -78,6 +78,25 @@ export const isMidjourneyModel = (model) => {
 };
 
 /**
+ * 判断是否为Seedream系列模型（火山引擎doubao-seedream）
+ *
+ * 判定逻辑需与后端 backend/src/services/imageService.js 的
+ * ImageService.isSeedreamModel 保持完全一致：provider为volcano且
+ * model_id以doubao-seedream开头。用于前端在展示图片尺寸时区分该
+ * 模型的真实生成像素值（后端会重新映射，与通用预设值不同）。
+ * @param {Object} model - 模型对象
+ * @returns {boolean}
+ */
+export const isSeedreamModel = (model) => {
+  return Boolean(
+    model &&
+    model.provider === 'volcano' &&
+    model.model_id &&
+    model.model_id.startsWith('doubao-seedream')
+  );
+};
+
+/**
  * 计算生成价格
  * @param {Object} model - 模型对象
  * @param {number} quantity - 数量

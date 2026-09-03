@@ -20,6 +20,18 @@
  *   - QUANTITY_OPTIONS 为纯数值数组 [1,2,3,4]（常量文件不存文案）
  *   - Segmented 的 options 在组件内用 t('image.imageCount', { count }) 实时生成，
  *     且 useMemo 依赖包含 t，保证语言切换后选项文案刷新
+ *
+ * ── 本次Bug修复：尺寸按钮下方展示值与实际生成尺寸不符 ──
+ * 背景：图片尺寸按钮下方原本直接展示 selectedSize（PRESET_SIZES.default
+ * 中的通用预设像素值，如"1024x1024"）。但后端 imageService.js 针对
+ * Seedream模型（provider==='volcano'且model_id以doubao-seedream开头）
+ * 会调用 convertSizeForSeedream() 按官方2K档位映射表重新计算精确像素值
+ * （如1:1比例实际传给API并实际生成的是"2048x2048"而非"1024x1024"），
+ * 导致界面展示值与真实生成结果不一致。
+ * 修复方式：新增 displaySize 计算——若当前选中模型为Seedream模型，
+ * 按selectedSize反查其比例，再从SEEDREAM_ACTUAL_SIZES映射表取出该比例
+ * 下的真实像素值展示；非Seedream模型（含标准OpenAI兼容/通义万相等）
+ * 后端不做二次映射，界面继续展示selectedSize本身即可，行为不变。
  */
 
 import React, { memo, useMemo } from 'react';
@@ -28,8 +40,8 @@ import { SendOutlined, CaretRightOutlined, SettingOutlined } from '@ant-design/i
 import { useTranslation } from 'react-i18next';
 import MidjourneyUploader from './MidjourneyUploader';
 import ReferenceUploader from './ReferenceUploader';
-import { PRESET_SIZES, QUANTITY_OPTIONS } from '../../utils/constants';
-import { isMidjourneyModel } from '../../utils/imageHelpers';
+import { PRESET_SIZES, QUANTITY_OPTIONS, SEEDREAM_ACTUAL_SIZES } from '../../utils/constants';
+import { isMidjourneyModel, isSeedreamModel } from '../../utils/imageHelpers';
 
 const { Panel } = Collapse;
 
@@ -87,6 +99,25 @@ const ParameterSettings = memo(({
     [t]
   );
 
+  /**
+   * 尺寸按钮下方展示的真实像素值
+   *
+   * Seedream模型下后端会按官方2K档位映射表重新计算精确尺寸（与通用
+   * 预设值不同），此处按selectedSize反查其比例后从SEEDREAM_ACTUAL_SIZES
+   * 取出真实值展示，避免界面展示与实际生成结果不符；非Seedream模型
+   * 后端不做二次映射，直接展示selectedSize本身。
+   */
+  const displaySize = useMemo(() => {
+    if (isSeedreamModel(selectedModel)) {
+      const preset = PRESET_SIZES.default.find(item => item.value === selectedSize);
+      const ratioKey = preset?.ratio;
+      if (ratioKey && SEEDREAM_ACTUAL_SIZES[ratioKey]) {
+        return SEEDREAM_ACTUAL_SIZES[ratioKey];
+      }
+    }
+    return selectedSize;
+  }, [selectedModel, selectedSize]);
+
   return (
     <Card title={t('image.parameterSettings')} className="parameters">
       {/* 生成数量 - Midjourney和图生图模式不显示 */}
@@ -134,8 +165,8 @@ const ParameterSettings = memo(({
               </Button>
             ))}
           </div>
-          {/* 像素尺寸为技术参数，不翻译 */}
-          <div className="size-display">{selectedSize}</div>
+          {/* 像素尺寸为技术参数，不翻译；Seedream模型展示后端实际映射后的真实值 */}
+          <div className="size-display">{displaySize}</div>
         </div>
       )}
 
