@@ -10,7 +10,8 @@ import {
   getPortalConnectAuthFailureRedirect,
   getPortalConnectCapabilityFromProfileSearch,
   isPortalConnectLoginLocation,
-  isPortalConnectProfileSearch
+  isPortalConnectProfileSearch,
+  shouldHoldPortalConnectLoginRoute
 } from './portalIdentityConnect'
 
 import {
@@ -145,6 +146,107 @@ describe(
               '/image'
           }
         })
+      }
+    )
+
+    it(
+      '已认证Portal Login保持挂载直到Identity顶层跳转',
+      () => {
+        const location = {
+          pathname: '/login',
+          search:
+            '?portal_connect=account',
+          hash: '',
+          state: null
+        }
+
+        expect(
+          shouldHoldPortalConnectLoginRoute(
+            location,
+            true
+          )
+        ).toBe(true)
+      }
+    )
+
+    it(
+      'ProtectedRoute保存的Portal来源在认证后也保持Login',
+      () => {
+        const location = {
+          pathname: '/login',
+          search: '',
+          hash: '',
+          state: {
+            from: {
+              pathname: '/profile',
+              search:
+                '?portal_connect=identity' +
+                '&portal_capability=ai-practice.image',
+              hash: ''
+            }
+          }
+        }
+
+        expect(
+          shouldHoldPortalConnectLoginRoute(
+            location,
+            true
+          )
+        ).toBe(true)
+      }
+    )
+
+    it(
+      '普通已认证Login仍按PublicRoute原规则跳转',
+      () => {
+        expect(
+          shouldHoldPortalConnectLoginRoute(
+            {
+              pathname: '/login',
+              search: '',
+              hash: '',
+              state: null
+            },
+            true
+          )
+        ).toBe(false)
+      }
+    )
+
+    it(
+      '未认证Portal Login不需要过渡保持',
+      () => {
+        expect(
+          shouldHoldPortalConnectLoginRoute(
+            {
+              pathname: '/login',
+              search:
+                '?portal_connect=account',
+              hash: '',
+              state: null
+            },
+            false
+          )
+        ).toBe(false)
+      }
+    )
+
+    it(
+      '污染Portal Query不能触发过渡保持',
+      () => {
+        expect(
+          shouldHoldPortalConnectLoginRoute(
+            {
+              pathname: '/login',
+              search:
+                '?portal_connect=account' +
+                '&target=https://example.com',
+              hash: '',
+              state: null
+            },
+            true
+          )
+        ).toBe(false)
       }
     )
 

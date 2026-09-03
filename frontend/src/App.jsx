@@ -31,6 +31,9 @@ import useAuthStore from './stores/authStore'
 import useSystemConfigStore from './stores/systemConfigStore'
 import apiClient from './utils/api'
 import { setSystemDefaultLanguage, hasUserSelectedLanguage } from './utils/i18n'
+import {
+  shouldHoldPortalConnectLoginRoute
+} from './utils/portalIdentityConnect'
 
 // 导入主题Provider
 import ThemeProvider from './components/ThemeProvider'
@@ -168,7 +171,19 @@ const PublicRoute = ({ children }) => {
   const location = useLocation()
   const { isAuthenticated } = useAuthStore()
 
-  if (isAuthenticated) {
+  // Portal首次连接本地登录成功后，认证状态会先于Identity跳转建立。
+  // 此时必须继续保持Login挂载，让既有Continuation完成connect/start，
+  // 否则普通PublicRoute逻辑会先把state.from=/profile渲染出来一帧。
+  const holdPortalConnectLogin =
+    shouldHoldPortalConnectLoginRoute(
+      location,
+      isAuthenticated
+    )
+
+  if (
+    isAuthenticated &&
+    !holdPortalConnectLogin
+  ) {
     const from =
       location.state?.from
 
