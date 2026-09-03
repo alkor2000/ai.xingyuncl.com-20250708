@@ -9,7 +9,9 @@ import apiClient from '../../utils/api'
 import IdentityLoginEntry from '../../components/auth/IdentityLoginEntry'
 import { buildReturnToFromLocation } from '../../utils/identityNavigation'
 import {
-  buildPortalConnectPostLoginTarget,
+  continuePortalConnectAfterLocalLogin
+} from '../../utils/portalIdentityConnectContinuation'
+import {
   isPortalConnectLoginLocation
 } from '../../utils/portalIdentityConnect'
 
@@ -34,6 +36,61 @@ const Login = () => {
       location
     )
 
+
+  /**
+   * 所有本地登录方式共用同一个成功出口。
+   *
+   * 普通登录继续进入原return_to；
+   * Portal首次连接则由独立Continuation模块自动续接现有connect/start。
+   */
+  const finishLocalLogin =
+    async () => {
+      const portalResult =
+        await continuePortalConnectAfterLocalLogin(
+          location
+        )
+
+      if (!portalResult.handled) {
+        navigate(
+          buildReturnToFromLocation(
+            location
+          ),
+          {
+            replace: true
+          }
+        )
+
+        return
+      }
+
+      if (!portalResult.error) {
+        return
+      }
+
+      console.error(
+        'Portal Connect continuation failed:',
+        portalResult.error
+      )
+
+      message.error(
+        portalResult.error.response?.data
+          ?.message ||
+        t(
+          'profile.identity.startFailed',
+          {
+            defaultValue:
+              '统一身份服务暂时不可用，请稍后重试。'
+          }
+        )
+      )
+
+      navigate(
+        portalResult.fallbackTarget,
+        {
+          replace: true
+        }
+      )
+    }
 
   // 获取公开系统配置
   useEffect(() => {
@@ -90,17 +147,7 @@ const Login = () => {
       }
       await login(loginData)
       message.success(t('auth.login.success'))
-      navigate(
-        buildPortalConnectPostLoginTarget(
-          location
-        ) ||
-          buildReturnToFromLocation(
-            location
-          ),
-        {
-          replace: true
-        }
-      )
+      await finishLocalLogin()
     } catch (error) {
       console.error('登录失败:', error)
       message.error(error.response?.data?.message || t('auth.login.failed'))
@@ -171,17 +218,7 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate(
-        buildPortalConnectPostLoginTarget(
-          location
-        ) ||
-          buildReturnToFromLocation(
-            location
-          ),
-        {
-          replace: true
-        }
-      )
+        await finishLocalLogin()
       }
     } catch (error) {
       console.error('验证码登录失败:', error)
@@ -228,17 +265,7 @@ const Login = () => {
         }
         
         message.success(t('auth.login.success'))
-        navigate(
-        buildPortalConnectPostLoginTarget(
-          location
-        ) ||
-          buildReturnToFromLocation(
-            location
-          ),
-        {
-          replace: true
-        }
-      )
+        await finishLocalLogin()
       }
     } catch (error) {
       console.error('登录失败:', error)
