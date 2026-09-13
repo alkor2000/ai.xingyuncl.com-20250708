@@ -5,16 +5,20 @@
  * 1. 集中管理所有配置项，统一从环境变量读取
  * 2. 智能检测运行环境（Docker / PM2 / 本地开发）
  * 3. 统一管理存储路径（支持 Docker 卷映射和本地目录）
- * 4. 集中管理PKU AI Lab Identity Center公开协议参数与启用开关
+ * 4. 通过独立模块加载Identity部署运行配置
  *
  * 安全原则：
- * - 敏感配置（JWT密钥、数据库密码、Identity Client Secret）必须通过环境变量提供
+ * - JWT密钥、数据库密码通过环境变量提供；Identity支持环境变量或私有Enrollment凭据文件
  * - 缺少必要配置时打印警告，不在源码中硬编码生产密钥
  * - Identity Client Secret绝不进入前端配置、普通日志或HTTP响应
  */
 
 const path = require('path');
 const fs = require('fs');
+const { loadIdentityDeploymentConfig } = require('./identityEnrollmentRuntimeConfig');
+
+// 启动时只加载一次。凭据文件不轮询、不热更新，后续激活必须通过受控发布流程。
+const identityConfig = loadIdentityDeploymentConfig(process.env);
 
 /**
  * 验证必要的环境变量是否已配置
@@ -37,12 +41,12 @@ function validateRequiredConfig() {
     warnings.push('DB_PASSWORD 未配置，使用默认值（仅限开发环境）');
   }
 
-  // Identity只有明确启用后才要求Client Secret完整存在。
-  // 当前开发阶段可保持IDENTITY_ENABLED=false，不影响既有本地登录。
-  if (process.env.IDENTITY_ENABLED === 'true') {
-    if (!process.env.IDENTITY_CLIENT_SECRET ||
-        process.env.IDENTITY_CLIENT_SECRET.length < 32) {
-      warnings.push('IDENTITY_CLIENT_SECRET 未配置或强度不足（Identity已启用）');
+  // 依据最终加载结果检查，文件模式不再误报环境变量Secret缺失；错误只显示固定说明。
+  if (identityConfig.enabled) {
+    if (identityConfig.credentialError) {
+      warnings.push('Identity部署凭据加载失败，请核验私有文件、部署身份及互斥配置');
+    } else if (!identityConfig.clientSecret || identityConfig.clientSecret.length < 32) {
+      warnings.push('Identity Client Secret 未配置或强度不足（Identity已启用）');
     }
   }
 
@@ -143,7 +147,7 @@ function getJwtDefault(envKey, devDefault) {
   }
 
   // 生产环境：返回空字符串，启动时会在 server.js 中检测到并警告
-  // 不在这里硬编码生产密钥，防止密钥泄露到源码仓库
+  // 不在这里硬编码密钥，防止密钥泄露到源码仓库
   return '';
 }
 
@@ -206,49 +210,8 @@ module.exports = {
     }
   },
 
-  /**
-   * PKU AI Lab Identity Center OIDC Client配置。
-   *
-   * P0安全边界：
-   * - Client身份固定ai-platform-client；
-   * - 生产Host固定ai.xingyuncl.com；
-   * - login与bind使用不同redirect_uri；
-   * - Client Secret只能来自后端环境变量；
-   * - enabled默认false，在双端配置与验收完成前绝不提前开放。
-   */
-  identity: {
-    enabled: process.env.IDENTITY_ENABLED === 'true',
-    issuer: process.env.IDENTITY_ISSUER || 'https://id.pkuailab.com',
-    clientId: process.env.IDENTITY_CLIENT_ID || 'ai-platform-client',
-    clientSecret: process.env.IDENTITY_CLIENT_SECRET || '',
-    tokenAuthMethod: process.env.IDENTITY_TOKEN_AUTH_METHOD || 'client_secret_post',
-
-    loginRedirectUri:
-      process.env.IDENTITY_LOGIN_REDIRECT_URI ||
-      'https://ai.xingyuncl.com/api/auth/identity/login/callback',
-
-    bindRedirectUri:
-      process.env.IDENTITY_BIND_REDIRECT_URI ||
-      'https://ai.xingyuncl.com/api/auth/identity/callback',
-
-    scopes: ['openid', 'profile', 'platform_link'],
-
-    flowTtlSeconds: parseInt(
-      process.env.IDENTITY_FLOW_TTL_SECONDS || '600'
-    ),
-
-    handoffTtlSeconds: parseInt(
-      process.env.IDENTITY_HANDOFF_TTL_SECONDS || '90'
-    ),
-
-    httpTimeoutMs: parseInt(
-      process.env.IDENTITY_HTTP_TIMEOUT_MS || '10000'
-    ),
-
-    jwksCacheSeconds: parseInt(
-      process.env.IDENTITY_JWKS_CACHE_SECONDS || '300'
-    )
-  },
+  // 仅后端持有部署合同；Identity协议请求前由独立模块严格校验。
+  identity: identityConfig,
 
   // 安全配置
   security: {

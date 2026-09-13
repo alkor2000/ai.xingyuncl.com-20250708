@@ -74,6 +74,25 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_DIR: /app/logs
+      # Identity仅作为后端运行配置注入，不进入镜像构建参数或前端环境。
+      # 未配置时保持关闭；已有部署的显式客户端及回调配置原样传递。
+      IDENTITY_ENABLED: "${IDENTITY_ENABLED:-false}"
+      IDENTITY_ISSUER: "${IDENTITY_ISSUER:-https://id.pkuailab.com}"
+      IDENTITY_PUBLIC_ORIGIN: "${IDENTITY_PUBLIC_ORIGIN:-}"
+      IDENTITY_CLIENT_ID: "${IDENTITY_CLIENT_ID:-}"
+      IDENTITY_CLIENT_SECRET: "${IDENTITY_CLIENT_SECRET:-}"
+      # 新增字段默认空，不改变旧环境变量接入方式；私有挂载由可选附加配置提供。
+      IDENTITY_DEPLOYMENT_INSTANCE_KEY: "${IDENTITY_DEPLOYMENT_INSTANCE_KEY:-}"
+      IDENTITY_CREDENTIALS_FILE: "${IDENTITY_CREDENTIALS_FILE:-}"
+      IDENTITY_TOKEN_AUTH_METHOD: "${IDENTITY_TOKEN_AUTH_METHOD:-client_secret_post}"
+      # 空值由后端按当前部署来源推导，避免在Compose中固定某一客户域名。
+      IDENTITY_LOGIN_REDIRECT_URI: "${IDENTITY_LOGIN_REDIRECT_URI:-}"
+      IDENTITY_BIND_REDIRECT_URI: "${IDENTITY_BIND_REDIRECT_URI:-}"
+      IDENTITY_BACKCHANNEL_URL: "${IDENTITY_BACKCHANNEL_URL:-}"
+      IDENTITY_FLOW_TTL_SECONDS: "${IDENTITY_FLOW_TTL_SECONDS:-600}"
+      IDENTITY_HANDOFF_TTL_SECONDS: "${IDENTITY_HANDOFF_TTL_SECONDS:-90}"
+      IDENTITY_HTTP_TIMEOUT_MS: "${IDENTITY_HTTP_TIMEOUT_MS:-10000}"
+      IDENTITY_JWKS_CACHE_SECONDS: "${IDENTITY_JWKS_CACHE_SECONDS:-300}"
     volumes:
       - ./storage/uploads:/app/storage/uploads
       - ./logs/backend:/app/logs

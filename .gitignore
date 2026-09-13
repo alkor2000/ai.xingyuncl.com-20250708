@@ -110,3 +110,8 @@ backups/
 # 标记为有问题的调试备份文件（不提交）
 *.buggy.*
 *.buggy
+
+# Identity 私有备份与运行目录（2026-09-13，与 .dockerignore 一致）
+.identity-backups/
+.identity-enrollment/
+.identity-secrets/

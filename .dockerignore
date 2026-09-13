@@ -58,3 +58,11 @@ scripts/
 # 临时文件
 tmp/
 temp/
+
+# Identity本任务备份与私有目录不得进入任一镜像构建上下文。
+# 正式凭据仍必须保存在项目之外；这些规则是额外防护，不能替代外部私有存储。
+**/.identity-backups/
+**/.identity-enrollment/
+**/.identity-secrets/
+**/*.backup.*
+**/*.bak.*

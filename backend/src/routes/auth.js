@@ -2,6 +2,7 @@
  * 认证路由 - 使用重构后的控制器（添加邀请码和验证端点支持）
  *
  * Identity Center安全边界：
+ * - /identity/config只公开经过校验的非敏感部署合同，不返回客户端Secret；
  * - /identity/login/start、login/callback、login/consume是登录用途公开协议入口；
  * - /identity/callback是bind/unlink OAuth回调，公开是OAuth协议要求；
  * - connect/start与unlink/start必须经过本地authenticate；
@@ -12,6 +13,7 @@ const express = require('express');
 
 const AuthControllerRefactored = require('../controllers/AuthControllerRefactored');
 const IdentityAuthController = require('../controllers/IdentityAuthController');
+const IdentityRuntimeConfigController = require('../controllers/IdentityRuntimeConfigController');
 
 const {
   authenticate
@@ -47,6 +49,12 @@ router.post(
 // ============================================================
 // PKU AI Lab Identity Center - 登录用途
 // ============================================================
+
+// 浏览器从同源后端获取公开合同；仅返回白名单字段，不建立或修改认证状态。
+router.get(
+  '/identity/config',
+  IdentityRuntimeConfigController.getPublicConfig
+);
 
 // 顶层导航入口：生成state/nonce/PKCE后302进入Identity Center。
 router.get(

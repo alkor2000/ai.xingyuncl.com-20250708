@@ -16,6 +16,16 @@
  *   - 支持键入分组名称模糊搜索
  *   - showSearch + optionFilterProp + filterOption三重组合
  *   - 因Option内为自定义渲染（含颜色和有效期），需要设置label属性供过滤匹配
+ * - v1.5 (2026-09-02): 邮箱改回必填项（最小化修复）
+ *   - 背景：v1.1把前端邮箱改为选填，但后端User.js的create()方法从未同步
+ *     放开对应校验，仍强制要求email非空，导致管理员在此弹窗不填邮箱创建
+ *     用户时提交必定失败（UI提示"选填"与实际报错自相矛盾）。
+ *   - 本次为最小改动策略：仅恢复前端邮箱必填校验，与后端现有行为保持一致，
+ *     不改动任何后端代码。若后续确需支持免邮箱创建用户，需先同步放开
+ *     backend/src/models/User.js的create()方法校验，再一并调整本文件。
+ *   - 移除了"（选填）"标签后缀与"可选，填写后支持邮箱登录"等选填类提示文案；
+ *     Ant Design的Form.Item在rules含required:true时会自动渲染红色星号，
+ *     无需额外添加必填标记文本。
  */
 
 import React, { useEffect, useState } from 'react'
@@ -294,7 +304,13 @@ const UserFormModal = ({
               </Form.Item>
             )}
 
-            {/* 邮箱字段：v1.1改为非必填 */}
+            {/*
+              邮箱字段：v1.5修复改回必填。
+              最小化改动策略仅调整本表单的校验规则与提示文案，
+              与后端User.js的create()方法现有的强制必填逻辑保持一致，
+              不改动任何后端代码。required:true会让Ant Design自动渲染
+              红色必填星号，故不再需要额外的"（选填）"/"可选"类提示文案。
+            */}
             {(!editingUser || canEditEmail()) && (
               <Form.Item
                 name="email"
@@ -302,17 +318,16 @@ const UserFormModal = ({
                   <Space>
                     <MailOutlined />
                     {t('admin.users.form.email')}
-                    <span style={{ color: '#999', fontSize: '12px' }}>（选填）</span>
                   </Space>
                 }
                 rules={[
-                  // v1.1: 邮箱改为非必填，但如果填了要验证格式
+                  { required: true, message: t('admin.users.form.email.required') },
                   { type: 'email', message: t('admin.users.form.email.invalid') }
                 ]}
-                extra={editingUser && isSuperAdmin ? '修改邮箱后，用户需使用新邮箱登录' : '可选，不填则用户只能通过用户名登录'}
+                extra={editingUser && isSuperAdmin ? '修改邮箱后，用户需使用新邮箱登录' : undefined}
               >
                 <Input 
-                  placeholder="可选，填写后支持邮箱登录" 
+                  placeholder={t('admin.users.form.email.required')} 
                   disabled={editingUser && !canEditEmail()}
                 />
               </Form.Item>

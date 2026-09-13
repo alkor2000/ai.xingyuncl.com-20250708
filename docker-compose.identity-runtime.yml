@@ -1,0 +1,24 @@
+# Enrollment文件接入的可选附加配置，由发布流程显式选择；不自动影响旧部署。
+# 仅作用于backend，不新增服务，不改变数据库、前端、启动命令或镜像构建参数。
+# 宿主机源目录必须在项目之外，按容器运行身份准备；不能直接挂载root消费者管理目录。
+# 需要支持bind.create_host_path的Compose版本；正式发布前须验证实际Compose合并结果。
+version: '3.8'
+services:
+  backend:
+    environment:
+      # 四个信任字段必须由本部署明确提供，不能由历史默认客户端或凭据正文补齐。
+      IDENTITY_ISSUER: "${IDENTITY_ISSUER:?IDENTITY_ISSUER_required}"
+      IDENTITY_PUBLIC_ORIGIN: "${IDENTITY_PUBLIC_ORIGIN:?IDENTITY_PUBLIC_ORIGIN_required}"
+      IDENTITY_CLIENT_ID: "${IDENTITY_CLIENT_ID:?IDENTITY_CLIENT_ID_required}"
+      IDENTITY_DEPLOYMENT_INSTANCE_KEY: "${IDENTITY_DEPLOYMENT_INSTANCE_KEY:?IDENTITY_DEPLOYMENT_INSTANCE_KEY_required}"
+      IDENTITY_CREDENTIALS_FILE: /run/ai-platform-identity/credentials.json
+      # Secret仍沿用基础配置传值；若旧Secret未清空，后端会拒绝混用而非悄悄覆盖。
+      # IDENTITY_ENABLED仍由基础配置控制，本文件不自动启用Identity。
+    volumes:
+      - type: bind
+        source: "${IDENTITY_RUNTIME_DIR:?IDENTITY_RUNTIME_DIR_required}"
+        target: /run/ai-platform-identity
+        read_only: true
+        bind:
+          # 源路径不存在时直接失败，避免Compose自动创建root空目录掩盖交付错误。
+          create_host_path: false
