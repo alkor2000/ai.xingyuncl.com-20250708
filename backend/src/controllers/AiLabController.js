@@ -1,7 +1,8 @@
 /**
  * AI训练专区控制器
  *
- * 功能：任务模板、项目 CRUD 与列表、数据集/类别管理、样本上传/更新/软删除、留出集锁定、
+ * 功能：任务模板、项目 CRUD 与列表、数据集/类别/列管理、样本上传/更新/软删除、留出集锁定、
+ *       预置数据包列表与导入、表格行样本、混入错标与恢复、
  *       模型版本保存与读取、评测记录与指标合并、过程事件写读、管理端项目列表
  *
  * 权限规则（契约 §4）：
@@ -18,12 +19,18 @@ const AiLabSample = require('../models/AiLabSample');
 const AiLabModel = require('../models/AiLabModel');
 const AiLabEvent = require('../models/AiLabEvent');
 const AiLabService = require('../services/aiLab/AiLabService');
+const AiLabPresetService = require('../services/aiLab/AiLabPresetService');
+const { isValidPackKey } = require('../services/aiLab/presetPacks');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { ValidationError } = require('../utils/errors');
-const { AI_LAB_TASKS, AI_LAB_EVENT_TYPES, AI_LAB_ENGINES, findTask } = require('../config/aiLabTasks');
+const {
+  AI_LAB_TASKS, AI_LAB_EVENT_TYPES, AI_LAB_ENGINES, AI_LAB_DATASET_KINDS, findTask, engineKind
+} = require('../config/aiLabTasks');
 
 const MAX_EVENTS_PER_BATCH = 50;
+const MAX_ROWS_PER_BATCH = 200;
+const DEFAULT_MISLABEL_RATIO = 0.2;
 const MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 const MAX_MODEL_CARD_FIELD_LENGTH = 2000;
 const MODEL_CARD_FIELDS = ['scope', 'not_scope', 'evidence', 'notes'];
@@ -50,6 +57,17 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
 
 /** undefined/null 原样返回，其余转成去首尾空白的字符串 */
 const cleanString = (value) => (value === undefined || value === null ? value : String(value).trim());
+
+/** seed：未提供则随机生成；提供则必须是 0..MAX_SEED 的整数，非法返回 null */
+const parseSeed = (value) => {
+  if (value === undefined || value === null || value === '') return AiLabService.generateSeed();
+  const seed = Number(value);
+  if (!Number.isInteger(seed) || seed < 0 || seed > AiLabService.MAX_SEED) return null;
+  return seed;
+};
+
+/** 任务模板对应的数据集 kind（text 任务不训练模型，数据集按默认 image 建） */
+const datasetKindForTask = (task) => (task && task.kind === 'table' ? 'table' : 'image');
 
 const parseClientTs = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -216,6 +234,7 @@ const createProject = async (req, res) => {
         project_id: newProjectId,
         user_id: userId,
         name: '数据集',
+        kind: datasetKindForTask(task),
         classes: task.default_classes || []
       }, query);
       return { projectId: newProjectId, datasetId: newDatasetId };
@@ -289,7 +308,7 @@ const updateProject = async (req, res) => {
  * 数据集
  * ================================================================ */
 
-/** POST /projects/:id/datasets {name, classes} */
+/** POST /projects/:id/datasets {name, classes, kind?, columns?}（kind 默认随任务模板；columns 仅表格） */
 const createDataset = async (req, res) => {
   try {
     const project = await resolveProject(req, res, req.params.id, { write: true });
@@ -299,11 +318,24 @@ const createDataset = async (req, res) => {
     if (!name) return badRequest(res, '数据集名称不能为空');
     if (name.length > 200) return badRequest(res, '数据集名称不能超过 200 字');
 
+    let kind = datasetKindForTask(findTask(project.task_key));
+    if (req.body.kind !== undefined && req.body.kind !== null) {
+      kind = String(req.body.kind);
+      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, 'kind 只能是 image 或 table');
+    }
+    let columns = null;
+    if (req.body.columns !== undefined && req.body.columns !== null) {
+      if (kind !== 'table') return badRequest(res, '只有表格数据集可以定义 columns');
+      columns = req.body.columns;
+    }
+
     const datasetId = await AiLabDataset.create({
       project_id: project.id,
       user_id: req.user.id,
       name,
-      classes: req.body.classes ?? []
+      kind,
+      classes: req.body.classes ?? [],
+      columns
     });
     const dataset = await AiLabDataset.findById(datasetId);
     dataset.counts = await AiLabDataset.getCounts(dataset.id, dataset.classes);
@@ -315,7 +347,11 @@ const createDataset = async (req, res) => {
   }
 };
 
-/** PATCH /datasets/:id {name?, classes?}：classes 只能新增或改 label，有样本的 key 不能删 */
+/**
+ * PATCH /datasets/:id {name?, classes?, columns?}
+ * - classes 只能新增或改 label，有样本的 key 不能删
+ * - columns 仅表格数据集；已有样本时只能新增列或改 label/unit，不能删除已有列
+ */
 const updateDataset = async (req, res) => {
   try {
     const resolved = await resolveDataset(req, res, req.params.id, { write: true });
@@ -338,6 +374,21 @@ const updateDataset = async (req, res) => {
         return badRequest(res, `类别 ${missing.join(', ')} 已有样本，不能删除`);
       }
       fields.classes = normalized;
+    }
+    if (req.body.columns !== undefined) {
+      if (dataset.kind !== 'table') return badRequest(res, '只有表格数据集可以定义 columns');
+      if (req.body.columns === null) {
+        if (dataset.sample_count > 0) return badRequest(res, '数据集已有样本，不能清空 columns');
+        fields.columns = null;
+      } else {
+        const normalized = AiLabDataset.validateColumns(req.body.columns);
+        if (dataset.sample_count > 0) {
+          const nextKeys = new Set(normalized.map(col => col.key));
+          const missing = (dataset.columns || []).filter(col => !nextKeys.has(col.key)).map(col => col.key);
+          if (missing.length > 0) return badRequest(res, `数据集已有样本，不能删除列 ${missing.join(', ')}`);
+        }
+        fields.columns = normalized;
+      }
     }
     if (Object.keys(fields).length === 0) return badRequest(res, '没有要更新的字段');
 
@@ -383,6 +434,7 @@ const uploadSamples = async (req, res) => {
     const resolved = await resolveDataset(req, res, req.params.id, { write: true });
     if (!resolved) return;
     const { dataset, project } = resolved;
+    if (dataset.kind === 'table') return badRequest(res, '表格数据集不能上传图片样本，请用 rows 接口添加行');
     const images = req.aiLabImages || [];
     if (images.length === 0) return badRequest(res, '请至少上传一张图片');
 
@@ -549,15 +601,8 @@ const lockDataset = async (req, res) => {
       ratio = Math.round(ratio * 100) / 100;
     }
 
-    let seed;
-    if (req.body.seed !== undefined && req.body.seed !== null && req.body.seed !== '') {
-      seed = Number(req.body.seed);
-      if (!Number.isInteger(seed) || seed < 0 || seed > AiLabService.MAX_SEED) {
-        return badRequest(res, `seed 必须是 0 到 ${AiLabService.MAX_SEED} 之间的整数`);
-      }
-    } else {
-      seed = AiLabService.generateSeed();
-    }
+    const seed = parseSeed(req.body.seed);
+    if (seed === null) return badRequest(res, `seed 必须是 0 到 ${AiLabService.MAX_SEED} 之间的整数`);
 
     const result = await AiLabService.lockDataset(dataset, { holdout_ratio: ratio, seed });
 
@@ -568,6 +613,192 @@ const lockDataset = async (req, res) => {
     return ResponseHelper.success(res, result, '留出集已锁定');
   } catch (error) {
     return handleError(res, error, '锁定留出集失败');
+  }
+};
+
+/* ================================================================
+ * 预置数据包
+ * ================================================================ */
+
+/** GET /presets?kind=image|table → 各包 manifest（去掉 files/rows）+ counts */
+const getPresets = async (req, res) => {
+  try {
+    let kind = null;
+    if (req.query.kind) {
+      kind = String(req.query.kind);
+      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, 'kind 只能是 image 或 table');
+    }
+    const packs = await AiLabPresetService.listPacks({ kind });
+    return ResponseHelper.success(res, packs, '获取预置数据包成功');
+  } catch (error) {
+    return handleError(res, error, '获取预置数据包失败');
+  }
+};
+
+/** POST /datasets/:id/import-preset {pack_key, per_class?, shift_sets?, include_train?=true} */
+const importPreset = async (req, res) => {
+  try {
+    const resolved = await resolveDataset(req, res, req.params.id, { write: true });
+    if (!resolved) return;
+    const { dataset, project } = resolved;
+
+    const packKey = cleanString(req.body.pack_key);
+    if (!packKey || !isValidPackKey(packKey)) return badRequest(res, 'pack_key 无效');
+    const pack = await AiLabPresetService.loadPack(packKey);
+    if (!pack) return badRequest(res, `预置包不存在: ${packKey}`);
+
+    let perClass = null;
+    if (req.body.per_class !== undefined && req.body.per_class !== null && req.body.per_class !== '') {
+      perClass = Number(req.body.per_class);
+      if (!Number.isInteger(perClass) || perClass <= 0) return badRequest(res, 'per_class 必须是正整数');
+    }
+
+    const availableSets = Object.keys(pack.kind === 'image' ? pack.files.shift : pack.rows.shift);
+    let shiftSets = availableSets;
+    if (req.body.shift_sets !== undefined && req.body.shift_sets !== null) {
+      if (!Array.isArray(req.body.shift_sets)) return badRequest(res, 'shift_sets 必须是数组');
+      shiftSets = [];
+      for (const raw of req.body.shift_sets) {
+        const name = cleanString(raw);
+        if (!name || !availableSets.includes(name)) return badRequest(res, `预置包 ${packKey} 没有 shift 集合: ${raw}`);
+        if (!shiftSets.includes(name)) shiftSets.push(name);
+      }
+    }
+
+    let includeTrain = true;
+    if (req.body.include_train !== undefined && req.body.include_train !== null) {
+      includeTrain = !(req.body.include_train === false || ['0', 'false'].includes(String(req.body.include_train)));
+    }
+    if (!includeTrain && shiftSets.length === 0) return badRequest(res, '没有要导入的内容（include_train=false 且 shift_sets 为空）');
+
+    const result = await AiLabPresetService.importPack({
+      userId: req.user.id, dataset, pack, perClass, shiftSets, includeTrain
+    });
+    await AiLabService.recalcProjectSummary(project.id);
+
+    logger.info('导入预置数据包成功', { datasetId: dataset.id, userId: req.user.id, pack: packKey, imported: result.imported });
+    return ResponseHelper.success(res, result, '导入预置数据包成功', 201);
+  } catch (error) {
+    return handleError(res, error, '导入预置数据包失败');
+  }
+};
+
+/* ================================================================
+ * 表格行样本 / 混入错标
+ * ================================================================ */
+
+/** POST /datasets/:id/rows {rows:[{class_key, payload, split?, shift_set?, condition_tags?, source?}]}（≤200 条，表格专用） */
+const createRows = async (req, res) => {
+  try {
+    const resolved = await resolveDataset(req, res, req.params.id, { write: true });
+    if (!resolved) return;
+    const { dataset, project } = resolved;
+    if (dataset.kind !== 'table') return badRequest(res, '只有表格数据集可以添加行样本');
+    if (!Array.isArray(dataset.columns) || dataset.columns.length === 0) {
+      return badRequest(res, '数据集尚未定义列（columns），请先导入预置包或设置列定义');
+    }
+
+    const rows = req.body.rows;
+    if (!Array.isArray(rows) || rows.length === 0) return badRequest(res, 'rows 必须是非空数组');
+    if (rows.length > MAX_ROWS_PER_BATCH) return badRequest(res, `一次最多添加 ${MAX_ROWS_PER_BATCH} 行`);
+
+    const items = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const where = `第 ${i + 1} 行`;
+      if (!isPlainObject(row)) return badRequest(res, `${where}格式无效`);
+
+      const classKey = cleanString(row.class_key);
+      if (!classKey || !dataset.classes.some(cls => cls.key === classKey)) {
+        return badRequest(res, `${where}的类别 ${classKey} 不存在，请先在数据集中添加该类别`);
+      }
+
+      const split = row.split ? String(row.split) : 'train';
+      if (!UPLOAD_SPLITS.includes(split)) return badRequest(res, `${where}的 split 只能是 train 或 shift`);
+      let shiftSet = null;
+      if (split === 'shift') {
+        shiftSet = cleanString(row.shift_set);
+        if (!shiftSet) return badRequest(res, `${where}：split=shift 时必须提供 shift_set`);
+        if (shiftSet.length > 50) return badRequest(res, `${where}的 shift_set 不能超过 50 字`);
+      }
+
+      const source = row.source ? String(row.source) : 'upload';
+      if (!AiLabSample.SOURCES.includes(source)) return badRequest(res, `${where}的 source 无效`);
+
+      let payload;
+      let conditionTags;
+      try {
+        payload = AiLabService.normalizeRowPayload(row.payload, dataset.columns);
+        conditionTags = AiLabService.validateConditionTags(row.condition_tags) ?? null;
+      } catch (error) {
+        if (error instanceof ValidationError) return badRequest(res, `${where}：${error.message}`);
+        throw error;
+      }
+
+      items.push({
+        dataset_id: dataset.id,
+        user_id: req.user.id,
+        class_key: classKey,
+        split,
+        shift_set: shiftSet,
+        condition_tags: conditionTags,
+        source,
+        file_path: null,
+        payload,
+        added_version: dataset.version
+      });
+    }
+
+    const created = await AiLabSample.createMany(items, async (query) => {
+      await AiLabDataset.adjustSampleCount(dataset.id, items.length, query);
+    });
+    await AiLabService.recalcProjectSummary(project.id);
+
+    logger.info('添加AI实验表格行样本', { datasetId: dataset.id, userId: req.user.id, count: created.length });
+    return ResponseHelper.success(res, created, '添加行样本成功', 201);
+  } catch (error) {
+    return handleError(res, error, '添加行样本失败');
+  }
+};
+
+/** POST /datasets/:id/mislabel {ratio=0.2, seed?}：train 样本按类别分层随机改标，original_class_key 记原值 */
+const mislabelDataset = async (req, res) => {
+  try {
+    const resolved = await resolveDataset(req, res, req.params.id, { write: true });
+    if (!resolved) return;
+    const { dataset } = resolved;
+
+    let ratio = DEFAULT_MISLABEL_RATIO;
+    if (req.body.ratio !== undefined && req.body.ratio !== null && req.body.ratio !== '') {
+      ratio = Number(req.body.ratio);
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) return badRequest(res, 'ratio 必须在 0 到 1 之间');
+      ratio = Math.round(ratio * 100) / 100;
+    }
+    const seed = parseSeed(req.body.seed);
+    if (seed === null) return badRequest(res, `seed 必须是 0 到 ${AiLabService.MAX_SEED} 之间的整数`);
+
+    const result = await AiLabService.mislabelDataset(dataset, { ratio, seed });
+
+    logger.info('混入错标', { datasetId: dataset.id, userId: req.user.id, ratio, seed, changed: result.changed });
+    return ResponseHelper.success(res, result, '已混入错标');
+  } catch (error) {
+    return handleError(res, error, '混入错标失败');
+  }
+};
+
+/** POST /datasets/:id/restore-labels：恢复全部被改过的标签 */
+const restoreLabels = async (req, res) => {
+  try {
+    const resolved = await resolveDataset(req, res, req.params.id, { write: true });
+    if (!resolved) return;
+    const { dataset } = resolved;
+
+    const restored = await AiLabSample.restoreLabels(dataset.id);
+
+    logger.info('恢复样本标签', { datasetId: dataset.id, userId: req.user.id, restored });
+    return ResponseHelper.success(res, { restored }, '标签已恢复');
+  } catch (error) {
+    return handleError(res, error, '恢复标签失败');
   }
 };
 
@@ -594,10 +825,14 @@ const createModel = async (req, res) => {
       if (!Number.isInteger(datasetVersion) || datasetVersion < 0) return badRequest(res, 'dataset_version 必须是非负整数');
     }
 
-    const engine = req.body.engine || 'image-knn';
+    const engine = req.body.engine || (dataset.kind === 'table' ? 'table-tree' : 'image-knn');
     if (!AI_LAB_ENGINES.includes(engine)) return badRequest(res, `无效的 engine: ${engine}`);
+    if (engineKind(engine) !== dataset.kind) {
+      return badRequest(res, `engine ${engine} 只能用于 ${engineKind(engine)} 类型的数据集（当前为 ${dataset.kind}）`);
+    }
 
-    const featureExtractor = cleanString(req.body.feature_extractor) || 'mobilenet_v1_050_224';
+    const featureExtractor = cleanString(req.body.feature_extractor)
+      || (dataset.kind === 'table' ? 'none' : 'mobilenet_v1_050_224');
     if (featureExtractor.length > 60) return badRequest(res, 'feature_extractor 不能超过 60 字');
 
     let params = null;
@@ -885,6 +1120,11 @@ module.exports = {
   deleteSample,
   updateSample,
   lockDataset,
+  getPresets,
+  importPreset,
+  createRows,
+  mislabelDataset,
+  restoreLabels,
   createModel,
   getModel,
   updateModel,

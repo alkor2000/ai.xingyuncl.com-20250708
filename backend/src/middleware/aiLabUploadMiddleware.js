@@ -108,5 +108,6 @@ module.exports = {
   ALLOWED_IMAGE_MIMES,
   MAX_FILES,
   MAX_FILE_SIZE,
-  MAX_EDGE
+  MAX_EDGE,
+  JPEG_QUALITY
 };

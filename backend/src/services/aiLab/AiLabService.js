@@ -5,9 +5,10 @@
  * - 权限判断：canAccess（所有者 / super_admin / 本组 admin 可读）、canWrite（仅所有者）
  * - 样本图片与模型 artifact 落盘（相对 storage/uploads 的 ai-lab/... 路径，由 /uploads 静态服务直出）
  * - 留出划分编排：候选样本 → splitHoldout（纯函数）→ 数据集 lock
+ * - 混入错标编排：候选样本 → pickMislabels（纯函数）→ 批量改标（version 不变）
  * - 评测指标合并进 models.metrics 并计算 generalization_gap
  * - 项目 summary 缓存重算
- * - condition_tags 校验
+ * - condition_tags 校验；表格行 payload 按 columns 规范化；classes/columns 按 key 合并
  *
  * 文件路径约定（契约 §1）：
  * - 样本：ai-lab/<user_id>/<dataset_id>/<时间戳>-<随机>.jpg
@@ -25,10 +26,12 @@ const AiLabDataset = require('../../models/AiLabDataset');
 const AiLabSample = require('../../models/AiLabSample');
 const AiLabModel = require('../../models/AiLabModel');
 const splitHoldout = require('./splitHoldout');
+const pickMislabels = require('./mislabel');
 
 const MAX_CONDITION_TAG_KEYS = 20;
 const MAX_CONDITION_TAG_KEY_LENGTH = 32;
 const MAX_CONDITION_TAG_VALUE_LENGTH = 50;
+const MAX_CATEGORY_VALUE_LENGTH = 50;
 const MAX_SEED = 2147483647;
 
 class AiLabService {
@@ -167,6 +170,32 @@ class AiLabService {
   }
 
   /* ================================================================
+   * 混入错标
+   * ================================================================ */
+
+  /**
+   * 对 train 且未被改过的样本按类别分层随机改标（dataset.version 不变）
+   * @param {Object} dataset - AiLabDataset.format 后的对象
+   * @param {{ratio:number, seed:number}} options
+   * @returns {{changed:number, sample_ids:Array<number>, ratio:number, seed:number, candidate_count:number}}
+   */
+  static async mislabelDataset(dataset, { ratio, seed }) {
+    const classKeys = dataset.classes.map(cls => cls.key);
+    if (classKeys.length < 2) throw new ValidationError('至少需要两个类别才能混入错标');
+
+    const candidates = await AiLabSample.findMislabelCandidates(dataset.id);
+    const changes = pickMislabels(candidates, ratio, seed, classKeys);
+    const changedIds = await AiLabSample.applyMislabels(dataset.id, changes);
+    return {
+      changed: changedIds.length,
+      sample_ids: changedIds,
+      ratio,
+      seed,
+      candidate_count: candidates.length
+    };
+  }
+
+  /* ================================================================
    * 校验
    * ================================================================ */
 
@@ -214,6 +243,62 @@ class AiLabService {
       normalized[cleanKey] = cleanValue;
     }
     return normalized;
+  }
+
+  /**
+   * 表格行 payload：键必须在 columns 内；number 列转数值（空值为 null），category 列转 ≤50 字的字符串
+   * @param {Object} payload
+   * @param {Array<{key:string,type:string}>} columns
+   * @returns {Object} 规范化后的 {col_key: value}
+   */
+  static normalizeRowPayload(payload, columns) {
+    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new ValidationError('payload 必须是键值对象');
+    }
+    const columnMap = new Map((Array.isArray(columns) ? columns : []).map(col => [col.key, col]));
+    if (columnMap.size === 0) throw new ValidationError('数据集尚未定义列（columns）');
+
+    const keys = Object.keys(payload);
+    if (keys.length === 0) throw new ValidationError('payload 不能为空');
+
+    const normalized = {};
+    for (const key of keys) {
+      const column = columnMap.get(key);
+      if (!column) throw new ValidationError(`payload 含未定义的列: ${key}`);
+      const raw = payload[key];
+      if (raw === null || raw === undefined || raw === '') {
+        normalized[key] = null;
+        continue;
+      }
+      if (column.type === 'number') {
+        const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+        if (!Number.isFinite(n)) throw new ValidationError(`列 ${key} 必须是数字`);
+        normalized[key] = n;
+      } else {
+        if (typeof raw === 'object') throw new ValidationError(`列 ${key} 的值必须是字符串`);
+        const text = String(raw).trim();
+        if (text.length > MAX_CATEGORY_VALUE_LENGTH) {
+          throw new ValidationError(`列 ${key} 的值不能超过 ${MAX_CATEGORY_VALUE_LENGTH} 字`);
+        }
+        normalized[key] = text;
+      }
+    }
+    return normalized;
+  }
+
+  /**
+   * 按 key 合并两组定义（classes / columns）：已有的保持不变，新的追加在后
+   */
+  static mergeByKey(existing, incoming) {
+    const result = Array.isArray(existing) ? existing.slice() : [];
+    const seen = new Set(result.map(item => item.key));
+    (Array.isArray(incoming) ? incoming : []).forEach(item => {
+      if (item && item.key && !seen.has(item.key)) {
+        seen.add(item.key);
+        result.push({ ...item });
+      }
+    });
+    return result;
   }
 
   /* ================================================================

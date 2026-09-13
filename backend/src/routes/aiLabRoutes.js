@@ -13,8 +13,9 @@ const AiLabController = require('../controllers/AiLabController');
 
 router.use(authenticate);
 
-/* 任务模板 */
+/* 任务模板 / 预置数据包 */
 router.get('/tasks', AiLabController.getTasks);
+router.get('/presets', AiLabController.getPresets);
 
 /* 项目 */
 router.get('/projects', AiLabController.getProjects);
@@ -31,6 +32,10 @@ router.patch('/datasets/:id', AiLabController.updateDataset);
 router.get('/datasets/:id/samples', AiLabController.getSamples);
 router.post('/datasets/:id/samples', handleSampleUpload, AiLabController.uploadSamples);
 router.post('/datasets/:id/lock', AiLabController.lockDataset);
+router.post('/datasets/:id/import-preset', AiLabController.importPreset);
+router.post('/datasets/:id/rows', AiLabController.createRows);
+router.post('/datasets/:id/mislabel', AiLabController.mislabelDataset);
+router.post('/datasets/:id/restore-labels', AiLabController.restoreLabels);
 router.delete('/samples/:id', AiLabController.deleteSample);
 router.patch('/samples/:id', AiLabController.updateSample);
 

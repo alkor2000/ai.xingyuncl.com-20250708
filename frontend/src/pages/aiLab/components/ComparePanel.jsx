@@ -25,8 +25,12 @@ const ComparePanel = ({ models }) => {
 
   const columns = [
     { title: t('aiLab.compare.version'), dataIndex: 'version', render: (v) => t('aiLab.version', { version: v }) },
+    { title: t('aiLab.compare.engine'), dataIndex: 'engine', render: (v) => (v ? t(`aiLab.engine.${v}`) : '—') },
     { title: t('aiLab.compare.datasetVersion'), dataIndex: 'dataset_version' },
     { title: t('aiLab.compare.trainCount'), dataIndex: 'train_sample_count' },
+    ...(models.some((m) => m.params?.per_class_limit) ? [{ title: t('aiLab.compare.perClass'), render: (_, m) => m.params?.per_class_limit || t('aiLab.preset.perClassAll') }] : []),
+    ...(models.some((m) => typeof m.params?.mislabeled_count === 'number') ? [{ title: t('aiLab.compare.mislabeled'), render: (_, m) => (typeof m.params?.mislabeled_count === 'number' ? m.params.mislabeled_count : '—') }] : []),
+    ...(models.some((m) => m.engine === 'table-tree') ? [{ title: t('aiLab.compare.depth'), render: (_, m) => (m.engine === 'table-tree' ? m.params?.depth ?? m.params?.max_depth : '—') }] : []),
     { title: t('aiLab.split.holdout'), render: (_, m) => formatPercent(m.metrics?.holdout?.accuracy) },
     ...shiftSets.map((s) => ({ title: `${t('aiLab.split.shift')} · ${s}`, render: (_, m) => formatPercent(m.metrics?.shift?.[s]?.accuracy) })),
     {

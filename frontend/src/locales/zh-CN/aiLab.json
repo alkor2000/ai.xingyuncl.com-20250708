@@ -19,9 +19,15 @@
       "titleRequired": "请输入实验名称",
       "titlePlaceholder": "例如：三年二班的文具识别",
       "participation": "参与方式",
-      "participationTip": "投屏：教师操作，学生预测与判断；小组：几个人共用一台设备；独立：自己完成全部步骤。参与方式决定哪些记录算个人证据。"
+      "participationTip": "投屏：教师操作，学生预测与判断；小组：几个人共用一台设备；独立：自己完成全部步骤。参与方式决定哪些记录算个人证据。",
+      "hours": "约 {{hours}} 课时",
+      "hasPresets": "有预置数据"
     },
-    "participation": { "individual": "独立设备", "group": "小组共用", "projected": "教师投屏" },
+    "participation": {
+      "individual": "独立设备",
+      "group": "小组共用",
+      "projected": "教师投屏"
+    },
     "task": {
       "P1": {
         "title": "模型认的是物体还是背景",
@@ -37,11 +43,58 @@
         "title": "自由实验",
         "desc": "自定类别、自采数据，走完整的训练与测试流程。",
         "predictPrompt": "动手前先写下：你想让模型认什么，你觉得它会在哪里出错？"
+      },
+      "L1": {
+        "title": "它能分清我的两样东西吗",
+        "desc": "选两样东西各拍 10 张，训练后用留出集和换条件集考一考它。",
+        "predictPrompt": "你选了哪两样东西？你觉得 AI 最容易把它们搞混的时候是什么样？"
+      },
+      "L3": {
+        "title": "给 AI 喂错数据会怎样",
+        "desc": "先用干净数据训练一版，再故意把两成标签贴错，训练第二版对照分数。",
+        "predictPrompt": "如果把 20% 的训练照片贴错标签，AI 的分数会掉多少？写下你的猜测。"
+      },
+      "L4": {
+        "title": "多少张够用",
+        "desc": "同一批数据，每类只用 3 张、10 张、30 张各训练一版，看准确率怎么变。",
+        "predictPrompt": "每类 3 张、10 张、30 张，你觉得分数会一直涨吗？还是到某个数就够了？"
+      },
+      "M1": {
+        "title": "校园侦探：一次完整的训练",
+        "desc": "先写数据卡，再采六类校园物品各 30 张，走完锁定、训练、测试、改进、模型卡全流程。",
+        "predictPrompt": "你打算认哪六样东西？采集时哪一类最难拍得像样？为什么？"
+      },
+      "P3": {
+        "title": "人工规则 vs 数据规则",
+        "desc": "用表格数据先自己写\"如果…那么…\"的规则，再让决策树从数据里学规则，同一批测试集对照。",
+        "predictPrompt": "你写的规则和机器从数据里学出来的规则，哪个在没见过的数据上更准？为什么？"
+      },
+      "P7": {
+        "title": "AI 给出的校园资讯可信吗",
+        "desc": "把一篇 AI 写的校园稿子拆成说法，逐条对照原始通知核实，再改写成可信的版本。",
+        "predictPrompt": "AI 写的稿子读起来很顺，你觉得里面会有几处和通知不符？哪一类信息最容易错？"
       }
     },
-    "card": { "samples": "样本 {{count}}", "models": "版本 {{count}}", "holdout": "留出集 {{value}}", "gap": "泛化差距 {{value}}" },
-    "admin": { "title": "实验", "student": "学生", "task": "任务", "mode": "参与方式", "models": "版本数", "holdout": "留出集准确率", "gap": "泛化差距", "updated": "最近更新" },
-    "workspace": { "readOnly": "只读", "readOnlyHint": "你正在查看别人的实验：可以看数据、指标和过程时间线，不能修改。" },
+    "card": {
+      "samples": "样本 {{count}}",
+      "models": "版本 {{count}}",
+      "holdout": "留出集 {{value}}",
+      "gap": "泛化差距 {{value}}"
+    },
+    "admin": {
+      "title": "实验",
+      "student": "学生",
+      "task": "任务",
+      "mode": "参与方式",
+      "models": "版本数",
+      "holdout": "留出集准确率",
+      "gap": "泛化差距",
+      "updated": "最近更新"
+    },
+    "workspace": {
+      "readOnly": "只读",
+      "readOnlyHint": "你正在查看别人的实验：可以看数据、指标和过程时间线，不能修改。"
+    },
     "step": {
       "predict": "写下预测",
       "collect": "采集训练数据",
@@ -52,7 +105,18 @@
       "condition_design": "设计测试条件表",
       "errors": "看错在哪里",
       "iterate": "改进并对照版本",
-      "model_card": "写模型卡"
+      "model_card": "写模型卡",
+      "import_preset": "导入预置数据",
+      "data_card": "写数据卡",
+      "mislabel": "混入错标",
+      "restore": "恢复正确标签",
+      "rules": "手写规则",
+      "compare": "规则 vs 决策树",
+      "material": "读材料",
+      "claims": "拆成说法",
+      "verdicts": "逐条核实",
+      "revise": "改写稿子",
+      "reflection": "反思"
     },
     "section": {
       "collectHint": "先定好类别，再给每一类拍照或上传。每类至少 {{min}} 张，记得填写采集条件。",
@@ -66,7 +130,19 @@
       "errorsWhere": "错误样本和热图在测试结果下方。",
       "errorsMark": "我已经看过错误样本",
       "iterateHint": "针对暴露出的问题补数据或调整类别，训练新版本，与旧版本并排对照。",
-      "modelCardHint": "用自己的话写清楚：这个模型能用在哪里、不能用在哪里、依据是什么。"
+      "modelCardHint": "用自己的话写清楚：这个模型能用在哪里、不能用在哪里、依据是什么。",
+      "importHint": "从预置数据包里导入训练集和换条件集，也可以再拍一些自己的照片补进去。",
+      "importTableHint": "导入一张预置的数据表。每一行是一个样本，最后一列是它的类别。",
+      "importEmpty": "这个实验用预置数据：先导入一个数据包。",
+      "dataCardHint": "动手采集前先规划：解决什么问题、认哪些类别、在什么条件下采多少、可能哪里不公平。",
+      "mislabelHint": "先用干净数据训练并测试一版；然后让系统故意贴错一部分训练标签，再训练一版对照。",
+      "restoreHint": "看完对照后恢复正确标签，再训练一版确认分数回来了。",
+      "rulesHint": "先看数据表和散点图，用\"如果…那么…\"写出你的判断规则，在训练集上试一试，再保存成一个版本。",
+      "treeHint": "让决策树从同一批训练行里自己找规则。深度越大规则越细，也越容易记住训练集里的巧合。",
+      "shiftRowsHint": "换条件集是另一批来源不同的行，在\"留出集测试\"卡片的第二个标签页里测试。",
+      "errorsRowsHint": "在测试结果里展开错误行，看看是哪条规则或哪个分叉把它判错了。",
+      "curveHint": "每类张数不同的版本并排看：分数是一直涨，还是到某个数就不怎么涨了？",
+      "compareHint": "同一批留出集和换条件集：你写的规则和决策树各得多少分？差在哪一类？"
     },
     "lock": {
       "counts": "当前训练样本 {{train}} 张，留出测试样本 {{holdout}} 张",
@@ -74,15 +150,30 @@
       "button": "锁定留出测试集（20%）",
       "relock": "为新加的样本再留出 20%",
       "done": "留出测试集已锁定",
-      "failed": "锁定失败"
+      "failed": "锁定失败",
+      "countsRows": "当前训练行 {{train}} 条，留出测试行 {{holdout}} 条"
     },
-    "split": { "train": "训练集", "holdout": "留出测试集", "shift": "换条件集" },
+    "split": {
+      "train": "训练集",
+      "holdout": "留出测试集",
+      "shift": "换条件集"
+    },
     "condition": {
-      "background": "背景", "angle": "角度", "light": "光线", "device": "设备",
-      "name": "条件", "namePlaceholder": "例如：窗边逆光",
-      "predicted": "预计准确率", "reason": "理由", "reasonPlaceholder": "为什么觉得会是这个结果",
-      "actual": "实测", "notTested": "未测", "addRow": "加一行", "save": "保存条件表",
-      "saved": "条件表已保存", "saveFailed": "保存失败"
+      "background": "背景",
+      "angle": "角度",
+      "light": "光线",
+      "device": "设备",
+      "name": "条件",
+      "namePlaceholder": "例如：窗边逆光",
+      "predicted": "预计准确率",
+      "reason": "理由",
+      "reasonPlaceholder": "为什么觉得会是这个结果",
+      "actual": "实测",
+      "notTested": "未测",
+      "addRow": "加一行",
+      "save": "保存条件表",
+      "saved": "条件表已保存",
+      "saveFailed": "保存失败"
     },
     "capture": {
       "startCamera": "打开摄像头",
@@ -115,9 +206,17 @@
       "noTrainSamples": "还没有训练样本",
       "renameClass": "重命名类别"
     },
-    "metrics": { "actualVsPredicted": "实际 ↓ / 预测 →", "sampleCount": "共 {{count}} 张测试样本" },
+    "metrics": {
+      "actualVsPredicted": "实际 ↓ / 预测 →",
+      "sampleCount": "共 {{count}} 张测试样本"
+    },
     "train": {
-      "extractor": { "idle": "特征提取器未加载", "loading": "正在加载特征提取器", "ready": "特征提取器就绪", "error": "特征提取器加载失败" },
+      "extractor": {
+        "idle": "特征提取器未加载",
+        "loading": "正在加载特征提取器",
+        "ready": "特征提取器就绪",
+        "error": "特征提取器加载失败"
+      },
       "backend": "计算后端 {{backend}}",
       "localOnly": "全部在本机浏览器内计算",
       "shortClasses": "以下类别不足 {{min}} 张，仍可训练，但结果可能不稳：{{classes}}",
@@ -125,9 +224,15 @@
       "needTwoClasses": "至少要有两个类别有训练样本",
       "notePlaceholder": "第 {{version}} 版和上一版比，改了什么？为什么？",
       "trainVersion": "训练第 {{version}} 版",
-      "stage": { "model": "加载模型…", "embed": "提取特征…", "save": "保存版本…" },
+      "stage": {
+        "model": "加载模型…",
+        "embed": "提取特征…",
+        "save": "保存版本…"
+      },
       "done": "第 {{version}} 版训练完成",
-      "failed": "训练失败"
+      "failed": "训练失败",
+      "perClassLimit": "每类用多少张训练",
+      "perClassLimitHint": "按样本编号取每类前 N 张，同一个数字每次结果一样。"
     },
     "evaluate": {
       "selectVersion": "选择版本",
@@ -143,7 +248,9 @@
       "gapLine": "留出集 {{holdout}} → 换条件 {{shift}}，差距就是模型对新环境的不适应程度。",
       "noModel": "先训练一个版本，再来测试。",
       "noSamples": "这个集合里没有可测试的样本",
-      "failed": "测试失败"
+      "failed": "测试失败",
+      "holdoutHintRows": "这些行训练时从没见过",
+      "shiftIntroRows": "换条件集是来源不同的另一批行（另一所学校、另一年），看规则和树能不能迁移。"
     },
     "errors": {
       "none": "这一组全部预测正确",
@@ -152,9 +259,22 @@
       "actual": "实际是",
       "predicted": "模型认成",
       "showHeatmap": "看模型在看哪里",
-      "heatmapHint": "越红的格子，遮住后模型越不认识：它就是靠这些地方判断的。"
+      "heatmapHint": "越红的格子，遮住后模型越不认识：它就是靠这些地方判断的。",
+      "countRows": "判错 {{count}} 行，展开看原因",
+      "explain": "判断依据"
     },
-    "compare": { "version": "版本", "datasetVersion": "数据集版本", "trainCount": "训练样本", "gap": "泛化差距", "note": "这一版改了什么", "empty": "还没有模型版本" },
+    "compare": {
+      "version": "版本",
+      "datasetVersion": "数据集版本",
+      "trainCount": "训练样本",
+      "gap": "泛化差距",
+      "note": "这一版改了什么",
+      "empty": "还没有模型版本",
+      "engine": "方法",
+      "perClass": "每类张数",
+      "mislabeled": "错标数",
+      "depth": "树深度"
+    },
     "modelCard": {
       "scope": "这个模型能用在哪里",
       "scopePlaceholder": "例如：在教室白桌上、白天、正面拍的文具",
@@ -168,8 +288,16 @@
       "saved": "模型卡已保存",
       "saveFailed": "保存失败"
     },
-    "predict": { "placeholder": "写下你的预测和理由", "save": "保存预测", "saved": "预测已保存", "saveFailed": "保存失败" },
-    "timeline": { "title": "过程时间线", "empty": "还没有记录" },
+    "predict": {
+      "placeholder": "写下你的预测和理由",
+      "save": "保存预测",
+      "saved": "预测已保存",
+      "saveFailed": "保存失败"
+    },
+    "timeline": {
+      "title": "过程时间线",
+      "empty": "还没有记录"
+    },
     "event": {
       "task_open": "打开任务",
       "predict_write": "写下预测",
@@ -184,7 +312,230 @@
       "help_request": "请求帮助",
       "model_compare": "对照版本",
       "reflection_write": "写下想法",
-      "model_card_write": "写模型卡"
+      "model_card_write": "写模型卡",
+      "preset_import": "导入预置数据",
+      "dataset_mislabel": "混入错标",
+      "dataset_restore": "恢复标签",
+      "rules_write": "写规则",
+      "data_card_write": "写数据卡",
+      "claim_write": "拆出说法",
+      "claim_verify": "核实说法",
+      "claim_revise": "改写稿子"
+    },
+    "grade": {
+      "L": "小学",
+      "P": "初中",
+      "M": "高中",
+      "H": "高阶"
+    },
+    "kind": {
+      "image": "图像",
+      "table": "表格",
+      "text": "文本"
+    },
+    "engine": {
+      "image-knn": "图像 kNN",
+      "table-tree": "决策树",
+      "table-rules": "手写规则"
+    },
+    "preset": {
+      "title": "导入预置数据",
+      "buttonOpen": "导入预置数据",
+      "import": "导入",
+      "imported": "已导入训练样本 {{train}} 条，换条件样本 {{shift}} 条",
+      "importFailed": "导入失败",
+      "loadFailed": "加载预置数据包失败",
+      "empty": "没有适合这个数据集类型的预置数据包",
+      "perClass": "每类导入多少张",
+      "perClassAll": "全部",
+      "shiftSets": "同时导入的换条件集",
+      "license": "许可证",
+      "source": "来源",
+      "classesLabel": "类别：{{classes}}",
+      "trainCount": "训练 {{count}}",
+      "shiftCount": "换条件 {{count}} 组",
+      "relockHint": "留出集已锁定：导入的样本先进训练集，再次锁定时会按同比例补入留出集。"
+    },
+    "presetPack": {
+      "fruits-mini": {
+        "title": "水果六类（白底）",
+        "desc": "Fruits-360 的六类水果白底照片；换条件集是同一批水果贴到彩色和深色背景上，看模型认的是水果还是白底。"
+      },
+      "shapes": {
+        "title": "几何图形三类（合成）",
+        "desc": "圆形、方形、三角形，浅色背景训练；深色背景与花纹背景两个换条件集。没有摄像头也能做。"
+      },
+      "campus-items": {
+        "title": "校园物品属性表（合成）",
+        "desc": "水杯、铅笔盒、书本、篮球的长宽高、重量、材质等；换条件集来自\"另一所学校\"，尺寸和材质分布不同。"
+      },
+      "penguins": {
+        "title": "帕尔默企鹅",
+        "desc": "三种企鹅的喙长、喙深、鳍长、体重、岛屿与性别；2007–2008 年记录训练，2009 年记录做换条件集。"
+      },
+      "iris": {
+        "title": "鸢尾花",
+        "desc": "三种鸢尾花的花萼与花瓣长宽，150 行；适合写一条\"花瓣长小于 2.5 就是山鸢尾\"再与决策树比。"
+      }
+    },
+    "curve": {
+      "empty": "先训练并测试至少一个版本",
+      "xLabel": "每类训练张数",
+      "hint": "横轴是每类用了多少张，纵轴是留出集准确率。"
+    },
+    "mislabel": {
+      "intro": "系统会随机把 {{pct}}% 的训练样本改成别的类别，并记住原来的标签。留出集不动。",
+      "needModel": "先用干净数据训练并测试一版，才有对照的基准。",
+      "status": "当前有 {{count}} 条训练样本被贴错了标签",
+      "clean": "训练集标签目前都是对的",
+      "button": "混入 {{pct}}% 错标",
+      "confirm": "确定要把一部分训练标签改错吗？之后可以恢复。",
+      "done": "已改错 {{count}} 条标签",
+      "failed": "操作失败",
+      "next": "下一步：回到\"训练模型\"训练新版本，再测一次留出集，对照表里比一比分数。",
+      "reveal": "揭晓：哪 {{count}} 张被改了",
+      "compareHint": "对照表的\"错标数\"一列记录了每个版本训练时训练集里有多少条错标。",
+      "restoreIntro": "把被改错的标签全部恢复原样，再训练一版确认分数回来了。",
+      "restoreButton": "恢复正确标签",
+      "restoreDone": "已恢复 {{count}} 条标签",
+      "restoreFailed": "恢复失败"
+    },
+    "dataCard": {
+      "goal": "要解决什么问题，给谁用",
+      "goalPlaceholder": "例如：帮值日生快速认出六种常见校园物品",
+      "classes": "打算认哪些类别",
+      "classesPlaceholder": "列出类别，说说为什么是这几类",
+      "plan": "在哪里、什么条件下、每类采多少",
+      "planPlaceholder": "例如：教室和走廊各一半，白天，每类 30 张，换 3 个角度",
+      "risks": "可能哪里出错或不公平",
+      "risksPlaceholder": "例如：只在一张桌子上拍，模型可能认背景",
+      "save": "保存数据卡",
+      "saved": "数据卡已保存",
+      "saveFailed": "保存失败"
+    },
+    "table": {
+      "type": {
+        "number": "数值",
+        "category": "类别"
+      },
+      "noColumns": "还没有列定义，导入一个预置数据表即可",
+      "classCol": "类别",
+      "columnCol": "列",
+      "noRows": "还没有训练行",
+      "rowsTab": "数据表",
+      "statsTab": "各类范围",
+      "scatterTab": "散点图",
+      "rowsShown": "显示训练集 {{count}} 行；留出集 {{holdout}} 行已隐藏",
+      "statsHint": "数值列显示 最小 – 中位数 – 最大；类别列显示最常见的取值。",
+      "xAxis": "横轴",
+      "yAxis": "纵轴",
+      "addRowHint": "也可以自己量一件东西，手工加一行到训练集：",
+      "addRow": "加一行",
+      "addRowDone": "已加入训练集",
+      "addRowFailed": "添加失败",
+      "fillAll": "每一列都要填",
+      "newValue": "输入新取值后回车"
+    },
+    "rules": {
+      "if": "如果",
+      "and": "且",
+      "then": "那么是",
+      "otherwise": "都不符合时",
+      "ruleNo": "规则 {{no}}",
+      "addRule": "加一条规则",
+      "addCondition": "加条件",
+      "leafStat": "（{{n}} 行，纯度 {{purity}}）",
+      "hitStat": "命中 {{hit}} 行，其中 {{correct}} 行判对",
+      "tryOnTrain": "在训练集上试一试",
+      "trainAccuracy": "训练集 {{count}} 行的准确率",
+      "trainAccuracyShort": "训练集 {{value}}",
+      "saveVersion": "保存为第 {{version}} 版（手写规则）",
+      "saved": "第 {{version}} 版（手写规则）已保存",
+      "saveFailed": "保存失败",
+      "invalid": "规则还有问题，先改好再试",
+      "notePlaceholder": "这一版规则和上一版比改了什么？",
+      "scatterHint": "虚线是你规则里的数值阈值",
+      "problems": "规则有问题：{{list}}",
+      "problem": {
+        "no_rules": "至少写一条规则",
+        "bad_label": "类别不存在",
+        "no_conditions": "规则缺少条件",
+        "bad_column": "列不存在",
+        "bad_op": "比较符不适用于这一列",
+        "no_value": "条件缺少取值",
+        "not_number": "数值列要填数字",
+        "bad_default": "默认类别不存在"
+      }
+    },
+    "tree": {
+      "intro": "决策树每一层问一个\"某列是否 ≤ 某个数\"的问题，把数据分成两堆，直到分得足够纯。",
+      "maxDepth": "最大深度",
+      "depthHint": "深度 1 只问一个问题；深度 6 能记住很多细节。",
+      "trainVersion": "训练第 {{version}} 版（决策树，深度 {{depth}}）",
+      "rowsUsed": "用训练集 {{count}} 行",
+      "depthLabel": "深度 {{depth}}",
+      "leaves": "{{count}} 个叶子",
+      "viewTree": "看树",
+      "viewRules": "看成规则",
+      "yes": "是",
+      "no": "否",
+      "nodeStat": "（{{n}} 行）"
+    },
+    "verify": {
+      "materialHint": "左边是可信的原始通知，右边是 AI 写的稿子。也可以贴自己的材料。",
+      "customMaterial": "用自己的材料",
+      "customTitle": "材料标题",
+      "customSource": "粘贴可信的原始材料（通知、公告、数据表）",
+      "customDraft": "粘贴 AI 写的稿子",
+      "sourceLabel": "原始通知",
+      "sourceHint": "可信来源，核实时以它为准",
+      "draftLabel": "AI 稿子",
+      "draftHint": "读起来很顺，但不一定对",
+      "materialUse": "就用这份材料",
+      "materialReplace": "换成这份材料（会清空已写的说法）",
+      "materialCurrent": "当前材料：{{title}}",
+      "materialRequired": "标题、原始材料和稿子都要填",
+      "materialSaved": "材料已保存",
+      "needMaterial": "先在上一步选定材料",
+      "claimsHint": "把稿子里每一个可以查证的说法拆成一行：时间、数字、地点、人、\"首次\"\"最大\"这类判断。",
+      "claimPlaceholder": "例如：运动会在 10 月 18 日举行",
+      "addClaim": "加一条",
+      "saveClaims": "保存说法清单",
+      "claimsRequired": "至少拆出一条说法",
+      "claimsSaved": "已保存 {{count}} 条说法",
+      "needClaims": "先在上一步拆出说法",
+      "verdictsHint": "逐条对照原始通知：证实、证伪，还是通知里根本没有、无法核实？写下依据。",
+      "claimCol": "说法",
+      "verdictCol": "判定",
+      "evidenceCol": "依据",
+      "choose": "选择",
+      "evidencePlaceholder": "引用通知原文或写明理由",
+      "verdict": {
+        "supported": "证实",
+        "refuted": "证伪",
+        "unverifiable": "无法核实"
+      },
+      "saveVerdicts": "保存判定",
+      "verdictRequired": "还有 {{count}} 条没有判定",
+      "verdictsSaved": "判定已保存",
+      "needVerdicts": "先在上一步完成判定",
+      "reviseHint": "把证伪的地方改对，把无法核实的说法删掉或标明\"待确认\"，改成一篇可以发出去的稿子。",
+      "saveRevision": "保存改写",
+      "revisionRequired": "改写内容不能为空",
+      "revisionSaved": "改写已保存",
+      "reveal": "揭晓：这份稿子埋了 {{errors}} 处错误，你判定证伪了 {{refuted}} 条",
+      "seededErrors": "埋下的错误",
+      "seededUnverifiable": "无法核实的说法",
+      "reflectionHint": "回头想一想：AI 错在哪一类信息上，你是怎么查出来的，下次拿到 AI 写的东西会先做什么。",
+      "reflect": {
+        "wrong": "AI 错在哪一类信息上",
+        "how": "你是怎么核实的",
+        "next": "下次拿到 AI 写的东西，会先做什么"
+      },
+      "saveReflection": "保存反思",
+      "reflectionRequired": "前两项要填",
+      "reflectionSaved": "反思已保存",
+      "saveFailed": "保存失败"
     }
   }
 }

@@ -183,6 +183,56 @@ const useAiLabStore = create((set, get) => ({
     return res.data.data
   },
 
+  // ===================== 预置数据包 / 表格行 / 错标实验 =====================
+  presets: [],
+  fetchPresets: async (kind) => {
+    const res = await apiClient.get('/ai-lab/presets', { params: kind ? { kind } : {} })
+    if (!res.data.success) throw new Error(res.data.message)
+    set({ presets: res.data.data || [] })
+    return res.data.data || []
+  },
+
+  /** 从预置包导入样本；payload = {pack_key, per_class?, shift_sets?, include_train?} */
+  importPreset: async (datasetId, payload) => {
+    const res = await apiClient.post(`/ai-lab/datasets/${datasetId}/import-preset`, payload, { timeout: 180000 })
+    if (!res.data.success) throw new Error(res.data.message)
+    get().invalidateSamples(datasetId)
+    await get().refreshProject()
+    return res.data.data
+  },
+
+  /** 表格数据集手工加行；rows = [{class_key, payload, split?, shift_set?}] */
+  addRows: async (datasetId, rows) => {
+    const res = await apiClient.post(`/ai-lab/datasets/${datasetId}/rows`, { rows })
+    if (!res.data.success) throw new Error(res.data.message)
+    get().invalidateSamples(datasetId)
+    await get().refreshProject()
+    return res.data.data || []
+  },
+
+  /** 混入错标（L3 实验）：服务器按类别分层随机改标签并记住原值 */
+  mislabelDataset: async (datasetId, ratio = 0.2, seed) => {
+    const res = await apiClient.post(`/ai-lab/datasets/${datasetId}/mislabel`, { ratio, seed })
+    if (!res.data.success) throw new Error(res.data.message)
+    get().invalidateSamples(datasetId)
+    await get().refreshProject()
+    return res.data.data
+  },
+
+  restoreLabels: async (datasetId) => {
+    const res = await apiClient.post(`/ai-lab/datasets/${datasetId}/restore-labels`)
+    if (!res.data.success) throw new Error(res.data.message)
+    get().invalidateSamples(datasetId)
+    await get().refreshProject()
+    return res.data.data
+  },
+
+  invalidateSamples: (datasetId) => set((state) => {
+    const next = { ...state.samplesByDataset }
+    delete next[datasetId]
+    return { samplesByDataset: next }
+  }),
+
   // ===================== 模型与评测 =====================
   saveModel: async (payload, liveModel) => {
     const { project } = get()

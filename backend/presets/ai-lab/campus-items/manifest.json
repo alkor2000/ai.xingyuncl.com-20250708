@@ -1,0 +1,3680 @@
+{
+  "key": "campus-items",
+  "kind": "table",
+  "title": "校园物品属性表（合成）",
+  "description": "四类校园物品的长宽高、重量、材质、形状、有无盖子。训练集来自\"本校\"，换条件集\"另一所学校\"的物品尺寸与材质分布不同，用来检验规则和决策树能否迁移。",
+  "license": "CC0",
+  "source": "本平台生成",
+  "attribution": "",
+  "grade_bands": [
+    "L",
+    "P"
+  ],
+  "classes": [
+    {
+      "key": "cup",
+      "label": "水杯"
+    },
+    {
+      "key": "pencil_case",
+      "label": "铅笔盒"
+    },
+    {
+      "key": "book",
+      "label": "书本"
+    },
+    {
+      "key": "basketball",
+      "label": "篮球"
+    }
+  ],
+  "columns": [
+    {
+      "key": "length_cm",
+      "label": "长度",
+      "type": "number",
+      "unit": "cm"
+    },
+    {
+      "key": "width_cm",
+      "label": "宽度",
+      "type": "number",
+      "unit": "cm"
+    },
+    {
+      "key": "height_cm",
+      "label": "高度",
+      "type": "number",
+      "unit": "cm"
+    },
+    {
+      "key": "weight_g",
+      "label": "重量",
+      "type": "number",
+      "unit": "g"
+    },
+    {
+      "key": "material",
+      "label": "材质",
+      "type": "category"
+    },
+    {
+      "key": "shape",
+      "label": "形状",
+      "type": "category"
+    },
+    {
+      "key": "has_lid",
+      "label": "有盖子",
+      "type": "category"
+    }
+  ],
+  "rows": {
+    "train": [
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 7.6,
+          "height_cm": 15.3,
+          "weight_g": 238.6,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 7.1,
+          "height_cm": 17.8,
+          "weight_g": 199.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.4,
+          "width_cm": 8.1,
+          "height_cm": 18.3,
+          "weight_g": 277.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.8,
+          "width_cm": 7.2,
+          "height_cm": 17,
+          "weight_g": 273.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 7.1,
+          "height_cm": 14.7,
+          "weight_g": 307.7,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.6,
+          "width_cm": 8.5,
+          "height_cm": 18.7,
+          "weight_g": 310.1,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.6,
+          "width_cm": 8.3,
+          "height_cm": 16.9,
+          "weight_g": 286,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.3,
+          "width_cm": 8.4,
+          "height_cm": 15.2,
+          "weight_g": 289.4,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.1,
+          "width_cm": 8,
+          "height_cm": 15.2,
+          "weight_g": 255.2,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.4,
+          "width_cm": 8.3,
+          "height_cm": 15.4,
+          "weight_g": 280.4,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 7.2,
+          "height_cm": 12.5,
+          "weight_g": 230.5,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.6,
+          "width_cm": 7.6,
+          "height_cm": 17.1,
+          "weight_g": 297.7,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.4,
+          "width_cm": 7.1,
+          "height_cm": 18.8,
+          "weight_g": 272.4,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.7,
+          "width_cm": 7.9,
+          "height_cm": 15.4,
+          "weight_g": 275,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.8,
+          "width_cm": 8.2,
+          "height_cm": 16,
+          "weight_g": 281.4,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 8,
+          "height_cm": 14.6,
+          "weight_g": 322.3,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.5,
+          "width_cm": 7.6,
+          "height_cm": 17.8,
+          "weight_g": 259.3,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.3,
+          "width_cm": 7.6,
+          "height_cm": 17.5,
+          "weight_g": 224.8,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.3,
+          "width_cm": 7.7,
+          "height_cm": 18.7,
+          "weight_g": 302.8,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.9,
+          "width_cm": 7.1,
+          "height_cm": 14.9,
+          "weight_g": 264.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 7.9,
+          "height_cm": 14.1,
+          "weight_g": 257.8,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.8,
+          "width_cm": 7.1,
+          "height_cm": 17.2,
+          "weight_g": 278.4,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.8,
+          "width_cm": 6.8,
+          "height_cm": 16.7,
+          "weight_g": 234.4,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 7.9,
+          "height_cm": 16.8,
+          "weight_g": 215.8,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.6,
+          "width_cm": 7,
+          "height_cm": 15.5,
+          "weight_g": 255.5,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.3,
+          "width_cm": 8.2,
+          "height_cm": 15.7,
+          "weight_g": 243.7,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.7,
+          "width_cm": 7.7,
+          "height_cm": 15.6,
+          "weight_g": 259.6,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.4,
+          "width_cm": 8.1,
+          "height_cm": 16.1,
+          "weight_g": 278.1,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.9,
+          "width_cm": 8.4,
+          "height_cm": 16.3,
+          "weight_g": 225.1,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.7,
+          "width_cm": 7.5,
+          "height_cm": 16.9,
+          "weight_g": 235.9,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 8.2,
+          "height_cm": 17.1,
+          "weight_g": 288.9,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.2,
+          "width_cm": 8.4,
+          "height_cm": 14.6,
+          "weight_g": 296.2,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.1,
+          "width_cm": 6.8,
+          "height_cm": 16.5,
+          "weight_g": 251.5,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 6.7,
+          "height_cm": 18.9,
+          "weight_g": 275.9,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.8,
+          "width_cm": 7.7,
+          "height_cm": 14.3,
+          "weight_g": 253.2,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.8,
+          "width_cm": 8.4,
+          "height_cm": 16.3,
+          "weight_g": 219,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7,
+          "width_cm": 6.6,
+          "height_cm": 13.8,
+          "weight_g": 294.6,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.7,
+          "width_cm": 8,
+          "height_cm": 18.8,
+          "weight_g": 249.8,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 7.4,
+          "height_cm": 17.6,
+          "weight_g": 223.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.5,
+          "width_cm": 7.6,
+          "height_cm": 18.6,
+          "weight_g": 310.6,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.2,
+          "width_cm": 8.2,
+          "height_cm": 15,
+          "weight_g": 292.2,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.1,
+          "width_cm": 7.5,
+          "height_cm": 17.2,
+          "weight_g": 285.3,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.4,
+          "width_cm": 7,
+          "height_cm": 16.3,
+          "weight_g": 271.6,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 7.2,
+          "height_cm": 16.9,
+          "weight_g": 220.1,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.1,
+          "width_cm": 7.3,
+          "height_cm": 18.7,
+          "weight_g": 218.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.9,
+          "width_cm": 7.3,
+          "height_cm": 18.3,
+          "weight_g": 224.5,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.1,
+          "width_cm": 6.4,
+          "height_cm": 17.9,
+          "weight_g": 278.3,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.2,
+          "width_cm": 7.1,
+          "height_cm": 15.4,
+          "weight_g": 265.8,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.7,
+          "width_cm": 8,
+          "height_cm": 16,
+          "weight_g": 229.2,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 8.7,
+          "width_cm": 7.6,
+          "height_cm": 14.3,
+          "weight_g": 208.5,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.8,
+          "width_cm": 8,
+          "height_cm": 18.8,
+          "weight_g": 299.2,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.9,
+          "width_cm": 6.9,
+          "height_cm": 13.7,
+          "weight_g": 282.9,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.6,
+          "width_cm": 8,
+          "height_cm": 16.7,
+          "weight_g": 275.7,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.8,
+          "width_cm": 7.1,
+          "height_cm": 16.3,
+          "weight_g": 305,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.5,
+          "width_cm": 8.3,
+          "height_cm": 17.5,
+          "weight_g": 238.4,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 7.2,
+          "height_cm": 18.2,
+          "weight_g": 287,
+          "material": "塑料",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.3,
+          "width_cm": 7.1,
+          "height_cm": 15.2,
+          "weight_g": 224.3,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 6.2,
+          "width_cm": 7.3,
+          "height_cm": 16,
+          "weight_g": 232,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.5,
+          "width_cm": 8.4,
+          "height_cm": 16.5,
+          "weight_g": 317.2,
+          "material": "金属",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "cup",
+        "payload": {
+          "length_cm": 7.2,
+          "width_cm": 8,
+          "height_cm": 15.6,
+          "weight_g": 272.9,
+          "material": "玻璃",
+          "shape": "圆柱",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.8,
+          "width_cm": 8.9,
+          "height_cm": 4.4,
+          "weight_g": 125.6,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.9,
+          "width_cm": 8.8,
+          "height_cm": 3.2,
+          "weight_g": 158.4,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 9.1,
+          "height_cm": 3.3,
+          "weight_g": 154.4,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 7.3,
+          "height_cm": 3.3,
+          "weight_g": 174.2,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.8,
+          "width_cm": 7.3,
+          "height_cm": 3.5,
+          "weight_g": 146.2,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.3,
+          "width_cm": 6.3,
+          "height_cm": 4,
+          "weight_g": 189,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.5,
+          "width_cm": 7.3,
+          "height_cm": 3.3,
+          "weight_g": 152.5,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 7.4,
+          "height_cm": 3.7,
+          "weight_g": 142.8,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.4,
+          "width_cm": 7.8,
+          "height_cm": 3.6,
+          "weight_g": 156.5,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.3,
+          "width_cm": 9.2,
+          "height_cm": 3.9,
+          "weight_g": 156.3,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 8.4,
+          "height_cm": 3.4,
+          "weight_g": 120.3,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 7.2,
+          "height_cm": 2.4,
+          "weight_g": 126.4,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.2,
+          "width_cm": 6.8,
+          "height_cm": 3.5,
+          "weight_g": 123.9,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.7,
+          "width_cm": 8.4,
+          "height_cm": 3.2,
+          "weight_g": 145.1,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 16.9,
+          "width_cm": 7.9,
+          "height_cm": 2.9,
+          "weight_g": 105.5,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.6,
+          "width_cm": 6.7,
+          "height_cm": 3.7,
+          "weight_g": 142.4,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.9,
+          "width_cm": 8.5,
+          "height_cm": 3,
+          "weight_g": 156.8,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.9,
+          "width_cm": 7.3,
+          "height_cm": 4.2,
+          "weight_g": 135.1,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.4,
+          "width_cm": 7,
+          "height_cm": 2.9,
+          "weight_g": 163.1,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 7.5,
+          "height_cm": 3.9,
+          "weight_g": 133.2,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.1,
+          "width_cm": 6.8,
+          "height_cm": 3.5,
+          "weight_g": 153.4,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.6,
+          "width_cm": 8.7,
+          "height_cm": 4.3,
+          "weight_g": 137.2,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 8,
+          "height_cm": 3,
+          "weight_g": 166.3,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.6,
+          "width_cm": 9.1,
+          "height_cm": 3.7,
+          "weight_g": 170.8,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.6,
+          "width_cm": 7.6,
+          "height_cm": 2.9,
+          "weight_g": 132.7,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.1,
+          "width_cm": 8.5,
+          "height_cm": 3.9,
+          "weight_g": 154.1,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.2,
+          "width_cm": 6.5,
+          "height_cm": 3.2,
+          "weight_g": 148.4,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.4,
+          "width_cm": 8.4,
+          "height_cm": 3.5,
+          "weight_g": 118.6,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 7.5,
+          "height_cm": 4.2,
+          "weight_g": 130.5,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 8.4,
+          "height_cm": 3.1,
+          "weight_g": 151.1,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.8,
+          "width_cm": 8.3,
+          "height_cm": 2.4,
+          "weight_g": 138,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.3,
+          "width_cm": 9,
+          "height_cm": 3.1,
+          "weight_g": 122.2,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.5,
+          "width_cm": 9,
+          "height_cm": 4,
+          "weight_g": 115.7,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.2,
+          "width_cm": 7.1,
+          "height_cm": 4,
+          "weight_g": 168.8,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.7,
+          "width_cm": 8,
+          "height_cm": 2.9,
+          "weight_g": 133.4,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 7.5,
+          "height_cm": 3.3,
+          "weight_g": 124.1,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.8,
+          "width_cm": 7.9,
+          "height_cm": 3.6,
+          "weight_g": 157.6,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.8,
+          "width_cm": 8.3,
+          "height_cm": 3.5,
+          "weight_g": 154.9,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.1,
+          "width_cm": 8,
+          "height_cm": 3.2,
+          "weight_g": 175.5,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 8.4,
+          "height_cm": 3.8,
+          "weight_g": 144,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.2,
+          "width_cm": 7.3,
+          "height_cm": 3.3,
+          "weight_g": 136,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.5,
+          "width_cm": 7.8,
+          "height_cm": 3.8,
+          "weight_g": 134.8,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.7,
+          "width_cm": 8.3,
+          "height_cm": 3.8,
+          "weight_g": 180.9,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19,
+          "width_cm": 7.1,
+          "height_cm": 3.8,
+          "weight_g": 142.8,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.6,
+          "width_cm": 7.5,
+          "height_cm": 4.4,
+          "weight_g": 118.8,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.9,
+          "width_cm": 7.6,
+          "height_cm": 3.3,
+          "weight_g": 116.7,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.5,
+          "width_cm": 8.2,
+          "height_cm": 3,
+          "weight_g": 189.9,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.8,
+          "width_cm": 7.3,
+          "height_cm": 3.8,
+          "weight_g": 142.8,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.3,
+          "width_cm": 7.7,
+          "height_cm": 3.5,
+          "weight_g": 129.3,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.5,
+          "width_cm": 7,
+          "height_cm": 3.4,
+          "weight_g": 159.1,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.4,
+          "width_cm": 8.6,
+          "height_cm": 3.8,
+          "weight_g": 135.8,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.4,
+          "width_cm": 7.5,
+          "height_cm": 2.8,
+          "weight_g": 110.6,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.3,
+          "width_cm": 8.8,
+          "height_cm": 3.5,
+          "weight_g": 143.1,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.6,
+          "width_cm": 7.3,
+          "height_cm": 3.7,
+          "weight_g": 194.3,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 9.2,
+          "height_cm": 3.6,
+          "weight_g": 130.9,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 18.7,
+          "width_cm": 7.6,
+          "height_cm": 4,
+          "weight_g": 171,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.5,
+          "width_cm": 8.3,
+          "height_cm": 3.7,
+          "weight_g": 95.5,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 17.6,
+          "width_cm": 7.1,
+          "height_cm": 3.6,
+          "weight_g": 146,
+          "material": "金属",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19,
+          "width_cm": 8.9,
+          "height_cm": 3.8,
+          "weight_g": 169.3,
+          "material": "塑料",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "pencil_case",
+        "payload": {
+          "length_cm": 19.6,
+          "width_cm": 7.4,
+          "height_cm": 2.8,
+          "weight_g": 142.5,
+          "material": "布",
+          "shape": "长方体",
+          "has_lid": "是"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.8,
+          "width_cm": 16,
+          "height_cm": 1.1,
+          "weight_g": 294.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.2,
+          "width_cm": 15.3,
+          "height_cm": 1.3,
+          "weight_g": 217.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 14.5,
+          "height_cm": 1.3,
+          "weight_g": 269.2,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 15.7,
+          "height_cm": 0.9,
+          "weight_g": 282.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.8,
+          "width_cm": 15.1,
+          "height_cm": 1.7,
+          "weight_g": 286.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.9,
+          "width_cm": 15.3,
+          "height_cm": 1.4,
+          "weight_g": 274.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.2,
+          "width_cm": 14.7,
+          "height_cm": 1.1,
+          "weight_g": 341.2,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 22.1,
+          "width_cm": 14.5,
+          "height_cm": 1.3,
+          "weight_g": 320.3,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 22.1,
+          "width_cm": 14.6,
+          "height_cm": 1,
+          "weight_g": 236.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.4,
+          "width_cm": 15.2,
+          "height_cm": 0.8,
+          "weight_g": 259,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.7,
+          "width_cm": 14.8,
+          "height_cm": 1.1,
+          "weight_g": 289.1,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.9,
+          "width_cm": 14.5,
+          "height_cm": 1.4,
+          "weight_g": 334.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.4,
+          "width_cm": 15.2,
+          "height_cm": 1.2,
+          "weight_g": 282.6,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.1,
+          "width_cm": 15.3,
+          "height_cm": 0.9,
+          "weight_g": 231.6,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.9,
+          "width_cm": 15.6,
+          "height_cm": 1.6,
+          "weight_g": 256.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.6,
+          "width_cm": 14.4,
+          "height_cm": 1.8,
+          "weight_g": 354.8,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.2,
+          "width_cm": 15.7,
+          "height_cm": 1.4,
+          "weight_g": 246.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 16.1,
+          "height_cm": 1.6,
+          "weight_g": 294.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 14.7,
+          "height_cm": 1,
+          "weight_g": 259.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.4,
+          "width_cm": 14.2,
+          "height_cm": 0.9,
+          "weight_g": 239,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.7,
+          "width_cm": 15.8,
+          "height_cm": 0.9,
+          "weight_g": 317.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 22.3,
+          "width_cm": 14.1,
+          "height_cm": 1.4,
+          "weight_g": 167.6,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.5,
+          "width_cm": 15.2,
+          "height_cm": 0.9,
+          "weight_g": 309.3,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.8,
+          "width_cm": 14.9,
+          "height_cm": 1.2,
+          "weight_g": 241.2,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.5,
+          "width_cm": 14.5,
+          "height_cm": 1.1,
+          "weight_g": 290.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.7,
+          "width_cm": 14.6,
+          "height_cm": 1.2,
+          "weight_g": 312.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.2,
+          "width_cm": 14.6,
+          "height_cm": 1,
+          "weight_g": 240.6,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.6,
+          "width_cm": 14,
+          "height_cm": 0.9,
+          "weight_g": 314.1,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 22.3,
+          "width_cm": 14.3,
+          "height_cm": 1.6,
+          "weight_g": 232.6,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.6,
+          "width_cm": 14.8,
+          "height_cm": 1.2,
+          "weight_g": 283.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 15,
+          "height_cm": 1.1,
+          "weight_g": 213.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.1,
+          "width_cm": 14.4,
+          "height_cm": 1.3,
+          "weight_g": 254.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.3,
+          "width_cm": 14.5,
+          "height_cm": 0.8,
+          "weight_g": 285.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.9,
+          "width_cm": 14.6,
+          "height_cm": 1.5,
+          "weight_g": 269.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.4,
+          "width_cm": 14.6,
+          "height_cm": 1.1,
+          "weight_g": 231.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.6,
+          "width_cm": 15.5,
+          "height_cm": 1.3,
+          "weight_g": 295.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.8,
+          "width_cm": 14.8,
+          "height_cm": 1.6,
+          "weight_g": 213.3,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.8,
+          "width_cm": 14,
+          "height_cm": 1.3,
+          "weight_g": 278.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.3,
+          "width_cm": 15.1,
+          "height_cm": 0.7,
+          "weight_g": 307.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.9,
+          "width_cm": 14.7,
+          "height_cm": 1.5,
+          "weight_g": 329.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.3,
+          "width_cm": 14.9,
+          "height_cm": 1,
+          "weight_g": 283.4,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.6,
+          "width_cm": 15,
+          "height_cm": 1.2,
+          "weight_g": 345.8,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.5,
+          "width_cm": 15.4,
+          "height_cm": 0.7,
+          "weight_g": 300.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.1,
+          "width_cm": 14,
+          "height_cm": 1,
+          "weight_g": 208.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.3,
+          "width_cm": 14.9,
+          "height_cm": 1.3,
+          "weight_g": 271.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.3,
+          "width_cm": 14.8,
+          "height_cm": 1.4,
+          "weight_g": 277.1,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.6,
+          "width_cm": 14.6,
+          "height_cm": 1.4,
+          "weight_g": 311.5,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.2,
+          "width_cm": 15.1,
+          "height_cm": 1.1,
+          "weight_g": 254.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.1,
+          "width_cm": 14.6,
+          "height_cm": 0.8,
+          "weight_g": 214.2,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.4,
+          "width_cm": 14.7,
+          "height_cm": 1.5,
+          "weight_g": 289,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.1,
+          "width_cm": 15.1,
+          "height_cm": 1.4,
+          "weight_g": 260.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.7,
+          "width_cm": 14.9,
+          "height_cm": 1.1,
+          "weight_g": 309.7,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.8,
+          "width_cm": 15.1,
+          "height_cm": 1.4,
+          "weight_g": 333.8,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.5,
+          "width_cm": 14.2,
+          "height_cm": 1.3,
+          "weight_g": 213.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 21.6,
+          "width_cm": 14.2,
+          "height_cm": 1.1,
+          "weight_g": 276.3,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.7,
+          "width_cm": 15.4,
+          "height_cm": 1,
+          "weight_g": 270.8,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.7,
+          "width_cm": 14.9,
+          "height_cm": 1.3,
+          "weight_g": 277.9,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 22.2,
+          "width_cm": 14.9,
+          "height_cm": 1.4,
+          "weight_g": 310,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 19.7,
+          "width_cm": 14.6,
+          "height_cm": 1.4,
+          "weight_g": 305,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "book",
+        "payload": {
+          "length_cm": 20.5,
+          "width_cm": 14.7,
+          "height_cm": 1.7,
+          "weight_g": 246,
+          "material": "纸",
+          "shape": "薄片",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 23.8,
+          "width_cm": 24.8,
+          "height_cm": 24.2,
+          "weight_g": 609.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.6,
+          "width_cm": 24.3,
+          "height_cm": 24.7,
+          "weight_g": 580.2,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24,
+          "width_cm": 24.6,
+          "height_cm": 24.4,
+          "weight_g": 543.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.8,
+          "width_cm": 24.8,
+          "height_cm": 24.9,
+          "weight_g": 608,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 23.9,
+          "height_cm": 24.4,
+          "weight_g": 582.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 23.7,
+          "width_cm": 23.4,
+          "height_cm": 24.5,
+          "weight_g": 622.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.7,
+          "height_cm": 25.2,
+          "weight_g": 604.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 24.7,
+          "height_cm": 24.6,
+          "weight_g": 604.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.7,
+          "width_cm": 24.5,
+          "height_cm": 24.7,
+          "weight_g": 595.9,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.1,
+          "width_cm": 24.5,
+          "height_cm": 24.3,
+          "weight_g": 571.7,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.1,
+          "width_cm": 24.7,
+          "height_cm": 24.7,
+          "weight_g": 579.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25.2,
+          "width_cm": 24.3,
+          "height_cm": 24.2,
+          "weight_g": 608.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25.2,
+          "width_cm": 25,
+          "height_cm": 25.3,
+          "weight_g": 607.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.9,
+          "height_cm": 25,
+          "weight_g": 582.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.6,
+          "width_cm": 24.2,
+          "height_cm": 23.9,
+          "weight_g": 609.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25,
+          "width_cm": 24.7,
+          "height_cm": 24.6,
+          "weight_g": 617.9,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 23.8,
+          "height_cm": 24.4,
+          "weight_g": 590.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.1,
+          "height_cm": 24.1,
+          "weight_g": 596.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.6,
+          "height_cm": 24.4,
+          "weight_g": 607.7,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 25.2,
+          "height_cm": 23.9,
+          "weight_g": 575,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.4,
+          "height_cm": 24,
+          "weight_g": 576.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 25,
+          "height_cm": 24.2,
+          "weight_g": 618.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.9,
+          "width_cm": 24.4,
+          "height_cm": 24.3,
+          "weight_g": 619.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.8,
+          "width_cm": 23.9,
+          "height_cm": 24,
+          "weight_g": 615.2,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.9,
+          "width_cm": 25.2,
+          "height_cm": 25,
+          "weight_g": 618.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 23.6,
+          "width_cm": 24.7,
+          "height_cm": 24.3,
+          "weight_g": 591.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24,
+          "width_cm": 25.3,
+          "height_cm": 24.8,
+          "weight_g": 594.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.9,
+          "width_cm": 24.6,
+          "height_cm": 23.6,
+          "weight_g": 566.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.5,
+          "height_cm": 24.4,
+          "weight_g": 599.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.1,
+          "width_cm": 25.3,
+          "height_cm": 24.2,
+          "weight_g": 613.9,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.1,
+          "width_cm": 25.1,
+          "height_cm": 23.7,
+          "weight_g": 613.9,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 23.9,
+          "height_cm": 24.1,
+          "weight_g": 603.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 25.1,
+          "height_cm": 24.6,
+          "weight_g": 605.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.4,
+          "width_cm": 24.4,
+          "height_cm": 24.8,
+          "weight_g": 608,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.4,
+          "width_cm": 24.4,
+          "height_cm": 23.8,
+          "weight_g": 573.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.4,
+          "width_cm": 24.3,
+          "height_cm": 24.4,
+          "weight_g": 602.2,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.7,
+          "width_cm": 24.2,
+          "height_cm": 24.4,
+          "weight_g": 591.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 24,
+          "height_cm": 24.8,
+          "weight_g": 588,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24,
+          "width_cm": 24.8,
+          "height_cm": 24.3,
+          "weight_g": 575.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.6,
+          "height_cm": 24.5,
+          "weight_g": 608.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 23.7,
+          "height_cm": 24.4,
+          "weight_g": 599.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25,
+          "width_cm": 25.3,
+          "height_cm": 24.2,
+          "weight_g": 620.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25,
+          "width_cm": 24.4,
+          "height_cm": 25.3,
+          "weight_g": 635.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.7,
+          "width_cm": 24.1,
+          "height_cm": 24.5,
+          "weight_g": 607.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.9,
+          "width_cm": 24.6,
+          "height_cm": 24.9,
+          "weight_g": 596.8,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.8,
+          "width_cm": 24.7,
+          "height_cm": 24.2,
+          "weight_g": 602.7,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24,
+          "height_cm": 24.2,
+          "weight_g": 599.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.3,
+          "height_cm": 25,
+          "weight_g": 623.2,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.7,
+          "height_cm": 24.7,
+          "weight_g": 623.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.6,
+          "height_cm": 24.1,
+          "weight_g": 580.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.7,
+          "width_cm": 24.5,
+          "height_cm": 24.8,
+          "weight_g": 598.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25.1,
+          "width_cm": 24,
+          "height_cm": 25.2,
+          "weight_g": 559.9,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.8,
+          "width_cm": 24.1,
+          "height_cm": 24.7,
+          "weight_g": 592.3,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.2,
+          "width_cm": 24.1,
+          "height_cm": 25.2,
+          "weight_g": 586.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.5,
+          "height_cm": 25.2,
+          "weight_g": 595.5,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.5,
+          "width_cm": 24.9,
+          "height_cm": 24.4,
+          "weight_g": 623.6,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.4,
+          "width_cm": 24.2,
+          "height_cm": 24.7,
+          "weight_g": 617.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.4,
+          "width_cm": 24.5,
+          "height_cm": 24.9,
+          "weight_g": 566.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 24.3,
+          "width_cm": 24.6,
+          "height_cm": 24.6,
+          "weight_g": 565.4,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      },
+      {
+        "class_key": "basketball",
+        "payload": {
+          "length_cm": 25.4,
+          "width_cm": 24.2,
+          "height_cm": 24,
+          "weight_g": 602.1,
+          "material": "橡胶",
+          "shape": "球",
+          "has_lid": "否"
+        }
+      }
+    ],
+    "shift": {
+      "另一所学校": [
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.2,
+            "width_cm": 8.3,
+            "height_cm": 20.3,
+            "weight_g": 388.7,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.4,
+            "width_cm": 9.2,
+            "height_cm": 19.5,
+            "weight_g": 344.9,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.1,
+            "width_cm": 9.3,
+            "height_cm": 18.1,
+            "weight_g": 395.4,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.5,
+            "width_cm": 9,
+            "height_cm": 20.2,
+            "weight_g": 326.8,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.5,
+            "width_cm": 10,
+            "height_cm": 18.5,
+            "weight_g": 390.4,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 10,
+            "width_cm": 9.6,
+            "height_cm": 20.5,
+            "weight_g": 379.8,
+            "material": "塑料",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.6,
+            "width_cm": 9.5,
+            "height_cm": 19.6,
+            "weight_g": 378.2,
+            "material": "塑料",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.3,
+            "width_cm": 9,
+            "height_cm": 23.1,
+            "weight_g": 405.2,
+            "material": "塑料",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.4,
+            "width_cm": 9.7,
+            "height_cm": 20.7,
+            "weight_g": 353.5,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.6,
+            "width_cm": 8.7,
+            "height_cm": 18.1,
+            "weight_g": 386.2,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.7,
+            "width_cm": 9.3,
+            "height_cm": 19.2,
+            "weight_g": 389.4,
+            "material": "塑料",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.9,
+            "width_cm": 10.3,
+            "height_cm": 19.3,
+            "weight_g": 394.8,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.8,
+            "width_cm": 9,
+            "height_cm": 20.6,
+            "weight_g": 388.7,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 9.5,
+            "width_cm": 8.6,
+            "height_cm": 21,
+            "weight_g": 384.8,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "cup",
+          "payload": {
+            "length_cm": 8.2,
+            "width_cm": 9.2,
+            "height_cm": 20.8,
+            "weight_g": 348.9,
+            "material": "金属",
+            "shape": "圆柱",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 19.3,
+            "width_cm": 8.8,
+            "height_cm": 4.9,
+            "weight_g": 201.4,
+            "material": "金属",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.9,
+            "width_cm": 8.5,
+            "height_cm": 4.6,
+            "weight_g": 211.9,
+            "material": "金属",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 20.7,
+            "width_cm": 7.3,
+            "height_cm": 5.2,
+            "weight_g": 239,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.9,
+            "width_cm": 7.5,
+            "height_cm": 4.8,
+            "weight_g": 212.1,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.4,
+            "width_cm": 8,
+            "height_cm": 5.4,
+            "weight_g": 220.4,
+            "material": "金属",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.4,
+            "width_cm": 8,
+            "height_cm": 4.7,
+            "weight_g": 215.9,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.4,
+            "width_cm": 7.5,
+            "height_cm": 4.5,
+            "weight_g": 238.6,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 22.3,
+            "width_cm": 7.2,
+            "height_cm": 3.8,
+            "weight_g": 219.5,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.4,
+            "width_cm": 7.3,
+            "height_cm": 5,
+            "weight_g": 192,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 22.3,
+            "width_cm": 7.1,
+            "height_cm": 4.2,
+            "weight_g": 227.6,
+            "material": "金属",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.1,
+            "width_cm": 8.8,
+            "height_cm": 5.7,
+            "weight_g": 206.3,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.4,
+            "width_cm": 8.2,
+            "height_cm": 5.8,
+            "weight_g": 212.5,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 22.5,
+            "width_cm": 7.5,
+            "height_cm": 4.7,
+            "weight_g": 196.5,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 21.2,
+            "width_cm": 8.2,
+            "height_cm": 4.9,
+            "weight_g": 194.4,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "pencil_case",
+          "payload": {
+            "length_cm": 23.3,
+            "width_cm": 8,
+            "height_cm": 4.8,
+            "weight_g": 201,
+            "material": "布",
+            "shape": "长方体",
+            "has_lid": "是"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 26.2,
+            "width_cm": 19,
+            "height_cm": 2.3,
+            "weight_g": 534.5,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.2,
+            "width_cm": 19.5,
+            "height_cm": 2.7,
+            "weight_g": 512.4,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 26.3,
+            "width_cm": 18.7,
+            "height_cm": 2.7,
+            "weight_g": 545.5,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 24.5,
+            "width_cm": 19,
+            "height_cm": 2.5,
+            "weight_g": 580.8,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.2,
+            "width_cm": 17.5,
+            "height_cm": 2.7,
+            "weight_g": 510.1,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.7,
+            "width_cm": 18.9,
+            "height_cm": 2.5,
+            "weight_g": 497.2,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.4,
+            "width_cm": 17.8,
+            "height_cm": 2.7,
+            "weight_g": 577.3,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 26,
+            "width_cm": 18.7,
+            "height_cm": 2.8,
+            "weight_g": 566.8,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.6,
+            "width_cm": 18.6,
+            "height_cm": 2.7,
+            "weight_g": 514.1,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 24.7,
+            "width_cm": 19.1,
+            "height_cm": 2.1,
+            "weight_g": 609.2,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.2,
+            "width_cm": 18.1,
+            "height_cm": 2.2,
+            "weight_g": 549.7,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 26.3,
+            "width_cm": 18.8,
+            "height_cm": 2.2,
+            "weight_g": 511.4,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 27.1,
+            "width_cm": 19,
+            "height_cm": 2.8,
+            "weight_g": 472.3,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 27,
+            "width_cm": 18.3,
+            "height_cm": 2.6,
+            "weight_g": 438.2,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "book",
+          "payload": {
+            "length_cm": 25.1,
+            "width_cm": 18.3,
+            "height_cm": 2.8,
+            "weight_g": 553.2,
+            "material": "纸",
+            "shape": "薄片",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.7,
+            "width_cm": 21.1,
+            "height_cm": 21.8,
+            "weight_g": 503.7,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.9,
+            "width_cm": 22.4,
+            "height_cm": 22,
+            "weight_g": 494.4,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22,
+            "width_cm": 21.6,
+            "height_cm": 21.6,
+            "weight_g": 538.5,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22.5,
+            "width_cm": 21.1,
+            "height_cm": 22.1,
+            "weight_g": 538,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.5,
+            "width_cm": 21.9,
+            "height_cm": 22,
+            "weight_g": 470.3,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.5,
+            "width_cm": 22,
+            "height_cm": 22,
+            "weight_g": 499.8,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22.3,
+            "width_cm": 22.5,
+            "height_cm": 21.6,
+            "weight_g": 522.1,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.9,
+            "width_cm": 21.9,
+            "height_cm": 22.2,
+            "weight_g": 497.4,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.5,
+            "width_cm": 22.3,
+            "height_cm": 22.1,
+            "weight_g": 472.3,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22.2,
+            "width_cm": 23,
+            "height_cm": 21.6,
+            "weight_g": 491.3,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.9,
+            "width_cm": 21.4,
+            "height_cm": 22.4,
+            "weight_g": 484.7,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22.4,
+            "width_cm": 21.6,
+            "height_cm": 22.8,
+            "weight_g": 476.9,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.2,
+            "width_cm": 21.9,
+            "height_cm": 22.2,
+            "weight_g": 522,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 21.5,
+            "width_cm": 22.3,
+            "height_cm": 21.8,
+            "weight_g": 472.9,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        },
+        {
+          "class_key": "basketball",
+          "payload": {
+            "length_cm": 22.1,
+            "width_cm": 21.5,
+            "height_cm": 21.3,
+            "weight_g": 491.2,
+            "material": "橡胶",
+            "shape": "球",
+            "has_lid": "否"
+          }
+        }
+      ]
+    }
+  }
+}

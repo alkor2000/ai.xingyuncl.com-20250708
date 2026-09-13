@@ -1,0 +1,236 @@
+{
+  "key": "shapes",
+  "kind": "image",
+  "title": "几何图形三类（合成）",
+  "description": "平台合成的圆形、方形、三角形，浅色背景训练；深色背景与花纹背景两个换条件集。适合没有摄像头的机器、低年级入门和\"多少张够用\"实验。",
+  "license": "CC0",
+  "source": "本平台生成",
+  "attribution": "",
+  "grade_bands": [
+    "L",
+    "P"
+  ],
+  "classes": [
+    {
+      "key": "circle",
+      "label": "圆形"
+    },
+    {
+      "key": "square",
+      "label": "方形"
+    },
+    {
+      "key": "triangle",
+      "label": "三角形"
+    }
+  ],
+  "files": {
+    "train": {
+      "circle": [
+        "train/circle/001.jpg",
+        "train/circle/002.jpg",
+        "train/circle/003.jpg",
+        "train/circle/004.jpg",
+        "train/circle/005.jpg",
+        "train/circle/006.jpg",
+        "train/circle/007.jpg",
+        "train/circle/008.jpg",
+        "train/circle/009.jpg",
+        "train/circle/010.jpg",
+        "train/circle/011.jpg",
+        "train/circle/012.jpg",
+        "train/circle/013.jpg",
+        "train/circle/014.jpg",
+        "train/circle/015.jpg",
+        "train/circle/016.jpg",
+        "train/circle/017.jpg",
+        "train/circle/018.jpg",
+        "train/circle/019.jpg",
+        "train/circle/020.jpg",
+        "train/circle/021.jpg",
+        "train/circle/022.jpg",
+        "train/circle/023.jpg",
+        "train/circle/024.jpg",
+        "train/circle/025.jpg",
+        "train/circle/026.jpg",
+        "train/circle/027.jpg",
+        "train/circle/028.jpg",
+        "train/circle/029.jpg",
+        "train/circle/030.jpg",
+        "train/circle/031.jpg",
+        "train/circle/032.jpg",
+        "train/circle/033.jpg",
+        "train/circle/034.jpg",
+        "train/circle/035.jpg",
+        "train/circle/036.jpg",
+        "train/circle/037.jpg",
+        "train/circle/038.jpg",
+        "train/circle/039.jpg",
+        "train/circle/040.jpg"
+      ],
+      "square": [
+        "train/square/001.jpg",
+        "train/square/002.jpg",
+        "train/square/003.jpg",
+        "train/square/004.jpg",
+        "train/square/005.jpg",
+        "train/square/006.jpg",
+        "train/square/007.jpg",
+        "train/square/008.jpg",
+        "train/square/009.jpg",
+        "train/square/010.jpg",
+        "train/square/011.jpg",
+        "train/square/012.jpg",
+        "train/square/013.jpg",
+        "train/square/014.jpg",
+        "train/square/015.jpg",
+        "train/square/016.jpg",
+        "train/square/017.jpg",
+        "train/square/018.jpg",
+        "train/square/019.jpg",
+        "train/square/020.jpg",
+        "train/square/021.jpg",
+        "train/square/022.jpg",
+        "train/square/023.jpg",
+        "train/square/024.jpg",
+        "train/square/025.jpg",
+        "train/square/026.jpg",
+        "train/square/027.jpg",
+        "train/square/028.jpg",
+        "train/square/029.jpg",
+        "train/square/030.jpg",
+        "train/square/031.jpg",
+        "train/square/032.jpg",
+        "train/square/033.jpg",
+        "train/square/034.jpg",
+        "train/square/035.jpg",
+        "train/square/036.jpg",
+        "train/square/037.jpg",
+        "train/square/038.jpg",
+        "train/square/039.jpg",
+        "train/square/040.jpg"
+      ],
+      "triangle": [
+        "train/triangle/001.jpg",
+        "train/triangle/002.jpg",
+        "train/triangle/003.jpg",
+        "train/triangle/004.jpg",
+        "train/triangle/005.jpg",
+        "train/triangle/006.jpg",
+        "train/triangle/007.jpg",
+        "train/triangle/008.jpg",
+        "train/triangle/009.jpg",
+        "train/triangle/010.jpg",
+        "train/triangle/011.jpg",
+        "train/triangle/012.jpg",
+        "train/triangle/013.jpg",
+        "train/triangle/014.jpg",
+        "train/triangle/015.jpg",
+        "train/triangle/016.jpg",
+        "train/triangle/017.jpg",
+        "train/triangle/018.jpg",
+        "train/triangle/019.jpg",
+        "train/triangle/020.jpg",
+        "train/triangle/021.jpg",
+        "train/triangle/022.jpg",
+        "train/triangle/023.jpg",
+        "train/triangle/024.jpg",
+        "train/triangle/025.jpg",
+        "train/triangle/026.jpg",
+        "train/triangle/027.jpg",
+        "train/triangle/028.jpg",
+        "train/triangle/029.jpg",
+        "train/triangle/030.jpg",
+        "train/triangle/031.jpg",
+        "train/triangle/032.jpg",
+        "train/triangle/033.jpg",
+        "train/triangle/034.jpg",
+        "train/triangle/035.jpg",
+        "train/triangle/036.jpg",
+        "train/triangle/037.jpg",
+        "train/triangle/038.jpg",
+        "train/triangle/039.jpg",
+        "train/triangle/040.jpg"
+      ]
+    },
+    "shift": {
+      "深色背景": {
+        "circle": [
+          "shift/dark/circle/001.jpg",
+          "shift/dark/circle/002.jpg",
+          "shift/dark/circle/003.jpg",
+          "shift/dark/circle/004.jpg",
+          "shift/dark/circle/005.jpg",
+          "shift/dark/circle/006.jpg",
+          "shift/dark/circle/007.jpg",
+          "shift/dark/circle/008.jpg"
+        ],
+        "square": [
+          "shift/dark/square/001.jpg",
+          "shift/dark/square/002.jpg",
+          "shift/dark/square/003.jpg",
+          "shift/dark/square/004.jpg",
+          "shift/dark/square/005.jpg",
+          "shift/dark/square/006.jpg",
+          "shift/dark/square/007.jpg",
+          "shift/dark/square/008.jpg"
+        ],
+        "triangle": [
+          "shift/dark/triangle/001.jpg",
+          "shift/dark/triangle/002.jpg",
+          "shift/dark/triangle/003.jpg",
+          "shift/dark/triangle/004.jpg",
+          "shift/dark/triangle/005.jpg",
+          "shift/dark/triangle/006.jpg",
+          "shift/dark/triangle/007.jpg",
+          "shift/dark/triangle/008.jpg"
+        ]
+      },
+      "花纹背景": {
+        "circle": [
+          "shift/pattern/circle/001.jpg",
+          "shift/pattern/circle/002.jpg",
+          "shift/pattern/circle/003.jpg",
+          "shift/pattern/circle/004.jpg",
+          "shift/pattern/circle/005.jpg",
+          "shift/pattern/circle/006.jpg",
+          "shift/pattern/circle/007.jpg",
+          "shift/pattern/circle/008.jpg"
+        ],
+        "square": [
+          "shift/pattern/square/001.jpg",
+          "shift/pattern/square/002.jpg",
+          "shift/pattern/square/003.jpg",
+          "shift/pattern/square/004.jpg",
+          "shift/pattern/square/005.jpg",
+          "shift/pattern/square/006.jpg",
+          "shift/pattern/square/007.jpg",
+          "shift/pattern/square/008.jpg"
+        ],
+        "triangle": [
+          "shift/pattern/triangle/001.jpg",
+          "shift/pattern/triangle/002.jpg",
+          "shift/pattern/triangle/003.jpg",
+          "shift/pattern/triangle/004.jpg",
+          "shift/pattern/triangle/005.jpg",
+          "shift/pattern/triangle/006.jpg",
+          "shift/pattern/triangle/007.jpg",
+          "shift/pattern/triangle/008.jpg"
+        ]
+      }
+    }
+  },
+  "condition_tags": {
+    "train": {
+      "background": "浅色"
+    },
+    "shift": {
+      "深色背景": {
+        "background": "深色"
+      },
+      "花纹背景": {
+        "background": "花纹"
+      }
+    }
+  }
+}

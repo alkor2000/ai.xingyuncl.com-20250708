@@ -19,9 +19,15 @@
       "titleRequired": "Please enter a name",
       "titlePlaceholder": "e.g. Class 3-2 stationery classifier",
       "participation": "Participation",
-      "participationTip": "Projected: the teacher operates, students predict and judge. Group: several students share one device. Individual: each student does every step. The mode decides which records count as personal evidence."
+      "participationTip": "Projected: the teacher operates, students predict and judge. Group: several students share one device. Individual: each student does every step. The mode decides which records count as personal evidence.",
+      "hours": "about {{hours}} lesson(s)",
+      "hasPresets": "Preset data"
     },
-    "participation": { "individual": "Own device", "group": "Shared device", "projected": "Teacher projects" },
+    "participation": {
+      "individual": "Own device",
+      "group": "Shared device",
+      "projected": "Teacher projects"
+    },
     "task": {
       "P1": {
         "title": "Object or background?",
@@ -37,11 +43,58 @@
         "title": "Free experiment",
         "desc": "Define your own classes, collect your own data and run the full train-and-test loop.",
         "predictPrompt": "Before you start: what should the model recognise, and where do you think it will fail?"
+      },
+      "L1": {
+        "title": "Can it tell my two things apart?",
+        "desc": "Pick two objects, take 10 photos of each, then test the model on held-out and shifted photos.",
+        "predictPrompt": "Which two objects did you pick? When do you think the AI will mix them up?"
+      },
+      "L3": {
+        "title": "What happens when AI is fed wrong data?",
+        "desc": "Train on clean data first, then deliberately mislabel 20% and train a second version to compare.",
+        "predictPrompt": "If 20% of the training photos get the wrong label, how much will the score drop? Write your guess."
+      },
+      "L4": {
+        "title": "How many is enough?",
+        "desc": "Same data, train one version with 3, 10 and 30 photos per class and watch the accuracy.",
+        "predictPrompt": "3, 10, 30 per class: will the score keep rising, or is there a point where more does not help?"
+      },
+      "M1": {
+        "title": "Campus detective: a full training run",
+        "desc": "Write a data card, collect 30 photos of six campus items each, then lock, train, test, improve and write a model card.",
+        "predictPrompt": "Which six items will you recognise? Which one will be hardest to photograph well, and why?"
+      },
+      "P3": {
+        "title": "Human rules vs data rules",
+        "desc": "On a table of data, write your own if-then rules first, then let a decision tree learn rules from the data and compare on the same test set.",
+        "predictPrompt": "Your rules or the rules the machine learns from data: which will be more accurate on unseen rows, and why?"
+      },
+      "P7": {
+        "title": "Can you trust AI-written campus news?",
+        "desc": "Split an AI-written campus article into claims, check each one against the original notice, then rewrite it into a trustworthy version.",
+        "predictPrompt": "The AI article reads smoothly. How many claims do you think disagree with the notice? Which kind of fact is most likely to be wrong?"
       }
     },
-    "card": { "samples": "{{count}} samples", "models": "{{count}} versions", "holdout": "Held-out {{value}}", "gap": "Gap {{value}}" },
-    "admin": { "title": "Experiment", "student": "Student", "task": "Task", "mode": "Participation", "models": "Versions", "holdout": "Held-out accuracy", "gap": "Generalisation gap", "updated": "Updated" },
-    "workspace": { "readOnly": "Read only", "readOnlyHint": "You are viewing someone else's experiment: data, metrics and the timeline are visible, nothing can be changed." },
+    "card": {
+      "samples": "{{count}} samples",
+      "models": "{{count}} versions",
+      "holdout": "Held-out {{value}}",
+      "gap": "Gap {{value}}"
+    },
+    "admin": {
+      "title": "Experiment",
+      "student": "Student",
+      "task": "Task",
+      "mode": "Participation",
+      "models": "Versions",
+      "holdout": "Held-out accuracy",
+      "gap": "Generalisation gap",
+      "updated": "Updated"
+    },
+    "workspace": {
+      "readOnly": "Read only",
+      "readOnlyHint": "You are viewing someone else's experiment: data, metrics and the timeline are visible, nothing can be changed."
+    },
     "step": {
       "predict": "Write a prediction",
       "collect": "Collect training data",
@@ -52,7 +105,18 @@
       "condition_design": "Design a condition table",
       "errors": "Look at the mistakes",
       "iterate": "Improve and compare versions",
-      "model_card": "Write the model card"
+      "model_card": "Write the model card",
+      "import_preset": "Import preset data",
+      "data_card": "Write a data card",
+      "mislabel": "Mix in wrong labels",
+      "restore": "Restore correct labels",
+      "rules": "Write rules",
+      "compare": "Rules vs tree",
+      "material": "Read the material",
+      "claims": "Split into claims",
+      "verdicts": "Verify each claim",
+      "revise": "Rewrite",
+      "reflection": "Reflect"
     },
     "section": {
       "collectHint": "Define the classes first, then photograph or upload for each class. At least {{min}} per class, and record the conditions.",
@@ -66,7 +130,19 @@
       "errorsWhere": "Misclassified samples and heat maps are below the test results.",
       "errorsMark": "I have looked at the mistakes",
       "iterateHint": "Add data or adjust classes to fix what the tests exposed, train a new version and compare it side by side.",
-      "modelCardHint": "In your own words: where this model can be used, where it cannot, and what the evidence is."
+      "modelCardHint": "In your own words: where this model can be used, where it cannot, and what the evidence is.",
+      "importHint": "Import a training set and shifted sets from a preset pack; you can add your own photos too.",
+      "importTableHint": "Import a preset table. Each row is one sample and its class.",
+      "importEmpty": "This experiment uses preset data: import a pack first.",
+      "dataCardHint": "Plan before collecting: the problem, the classes, where and how many to collect, and where it could be unfair.",
+      "mislabelHint": "Train and test a clean version first; then let the system mislabel part of the training set and train another version to compare.",
+      "restoreHint": "After comparing, restore the correct labels and train once more to confirm the score comes back.",
+      "rulesHint": "Look at the table and the scatter plot, write if-then rules, try them on the training rows, then save them as a version.",
+      "treeHint": "Let a decision tree find rules in the same training rows. Deeper trees make finer rules and memorise coincidences more easily.",
+      "shiftRowsHint": "The shifted set is another batch of rows from a different source; test it on the second tab of the held-out test card.",
+      "errorsRowsHint": "Expand the wrong rows in the test results to see which rule or branch decided them.",
+      "curveHint": "Compare versions with different photos per class: does the score keep rising, or level off?",
+      "compareHint": "Same held-out and shifted sets: how do your rules and the tree score, and on which class do they differ?"
     },
     "lock": {
       "counts": "{{train}} training samples, {{holdout}} held-out samples",
@@ -74,15 +150,30 @@
       "button": "Lock the held-out set (20%)",
       "relock": "Hold out 20% of the newly added samples",
       "done": "Held-out set locked",
-      "failed": "Locking failed"
+      "failed": "Locking failed",
+      "countsRows": "{{train}} training rows, {{holdout}} held-out rows"
     },
-    "split": { "train": "Training set", "holdout": "Held-out set", "shift": "Shifted set" },
+    "split": {
+      "train": "Training set",
+      "holdout": "Held-out set",
+      "shift": "Shifted set"
+    },
     "condition": {
-      "background": "Background", "angle": "Angle", "light": "Light", "device": "Device",
-      "name": "Condition", "namePlaceholder": "e.g. backlit by the window",
-      "predicted": "Predicted accuracy", "reason": "Reason", "reasonPlaceholder": "Why you expect this result",
-      "actual": "Measured", "notTested": "not tested", "addRow": "Add a row", "save": "Save table",
-      "saved": "Condition table saved", "saveFailed": "Save failed"
+      "background": "Background",
+      "angle": "Angle",
+      "light": "Light",
+      "device": "Device",
+      "name": "Condition",
+      "namePlaceholder": "e.g. backlit by the window",
+      "predicted": "Predicted accuracy",
+      "reason": "Reason",
+      "reasonPlaceholder": "Why you expect this result",
+      "actual": "Measured",
+      "notTested": "not tested",
+      "addRow": "Add a row",
+      "save": "Save table",
+      "saved": "Condition table saved",
+      "saveFailed": "Save failed"
     },
     "capture": {
       "startCamera": "Open camera",
@@ -115,9 +206,17 @@
       "noTrainSamples": "No training samples yet",
       "renameClass": "Rename class"
     },
-    "metrics": { "actualVsPredicted": "actual ↓ / predicted →", "sampleCount": "{{count}} test samples" },
+    "metrics": {
+      "actualVsPredicted": "actual ↓ / predicted →",
+      "sampleCount": "{{count}} test samples"
+    },
     "train": {
-      "extractor": { "idle": "Feature extractor not loaded", "loading": "Loading feature extractor", "ready": "Feature extractor ready", "error": "Feature extractor failed to load" },
+      "extractor": {
+        "idle": "Feature extractor not loaded",
+        "loading": "Loading feature extractor",
+        "ready": "Feature extractor ready",
+        "error": "Feature extractor failed to load"
+      },
       "backend": "Compute backend {{backend}}",
       "localOnly": "Everything runs in this browser",
       "shortClasses": "These classes have fewer than {{min}} samples; training still works but may be unstable: {{classes}}",
@@ -125,9 +224,15 @@
       "needTwoClasses": "At least two classes need training samples",
       "notePlaceholder": "What changed in v{{version}} compared with the previous version, and why?",
       "trainVersion": "Train v{{version}}",
-      "stage": { "model": "Loading model…", "embed": "Extracting features…", "save": "Saving version…" },
+      "stage": {
+        "model": "Loading model…",
+        "embed": "Extracting features…",
+        "save": "Saving version…"
+      },
       "done": "v{{version}} trained",
-      "failed": "Training failed"
+      "failed": "Training failed",
+      "perClassLimit": "Photos per class for training",
+      "perClassLimitHint": "Takes the first N photos of each class by id, so the same number gives the same result."
     },
     "evaluate": {
       "selectVersion": "Version",
@@ -143,7 +248,9 @@
       "gapLine": "Held-out {{holdout}} → shifted {{shift}}. The gap is how much the model struggles with a new setting.",
       "noModel": "Train a version first, then test it.",
       "noSamples": "This set has no testable samples",
-      "failed": "Test failed"
+      "failed": "Test failed",
+      "holdoutHintRows": "These rows were never seen in training",
+      "shiftIntroRows": "The shifted set is another batch of rows from a different source (another school, another year) to see whether rules and trees transfer."
     },
     "errors": {
       "none": "Every sample in this set was predicted correctly",
@@ -152,9 +259,22 @@
       "actual": "Actual",
       "predicted": "Predicted",
       "showHeatmap": "Show where the model looks",
-      "heatmapHint": "The redder a cell, the more the model loses when it is covered: those are the areas it relies on."
+      "heatmapHint": "The redder a cell, the more the model loses when it is covered: those are the areas it relies on.",
+      "countRows": "{{count}} rows wrong; expand to see why",
+      "explain": "Reason"
     },
-    "compare": { "version": "Version", "datasetVersion": "Dataset version", "trainCount": "Training samples", "gap": "Generalisation gap", "note": "What changed", "empty": "No model versions yet" },
+    "compare": {
+      "version": "Version",
+      "datasetVersion": "Dataset version",
+      "trainCount": "Training samples",
+      "gap": "Generalisation gap",
+      "note": "What changed",
+      "empty": "No model versions yet",
+      "engine": "Method",
+      "perClass": "Per class",
+      "mislabeled": "Mislabeled",
+      "depth": "Tree depth"
+    },
     "modelCard": {
       "scope": "Where this model can be used",
       "scopePlaceholder": "e.g. stationery on a white classroom desk, daylight, photographed from the front",
@@ -168,8 +288,16 @@
       "saved": "Model card saved",
       "saveFailed": "Save failed"
     },
-    "predict": { "placeholder": "Write your prediction and your reason", "save": "Save prediction", "saved": "Prediction saved", "saveFailed": "Save failed" },
-    "timeline": { "title": "Process timeline", "empty": "No records yet" },
+    "predict": {
+      "placeholder": "Write your prediction and your reason",
+      "save": "Save prediction",
+      "saved": "Prediction saved",
+      "saveFailed": "Save failed"
+    },
+    "timeline": {
+      "title": "Process timeline",
+      "empty": "No records yet"
+    },
     "event": {
       "task_open": "Opened the task",
       "predict_write": "Wrote a prediction",
@@ -184,7 +312,230 @@
       "help_request": "Asked for help",
       "model_compare": "Compared versions",
       "reflection_write": "Wrote a reflection",
-      "model_card_write": "Wrote the model card"
+      "model_card_write": "Wrote the model card",
+      "preset_import": "Imported preset data",
+      "dataset_mislabel": "Mixed in wrong labels",
+      "dataset_restore": "Restored labels",
+      "rules_write": "Wrote rules",
+      "data_card_write": "Wrote a data card",
+      "claim_write": "Split into claims",
+      "claim_verify": "Verified claims",
+      "claim_revise": "Rewrote the article"
+    },
+    "grade": {
+      "L": "Primary",
+      "P": "Middle school",
+      "M": "High school",
+      "H": "Advanced"
+    },
+    "kind": {
+      "image": "Images",
+      "table": "Table",
+      "text": "Text"
+    },
+    "engine": {
+      "image-knn": "Image kNN",
+      "table-tree": "Decision tree",
+      "table-rules": "Hand-written rules"
+    },
+    "preset": {
+      "title": "Import preset data",
+      "buttonOpen": "Import preset data",
+      "import": "Import",
+      "imported": "Imported {{train}} training and {{shift}} shifted samples",
+      "importFailed": "Import failed",
+      "loadFailed": "Failed to load preset packs",
+      "empty": "No preset pack matches this dataset type",
+      "perClass": "Samples per class",
+      "perClassAll": "All",
+      "shiftSets": "Shifted sets to import",
+      "license": "License",
+      "source": "Source",
+      "classesLabel": "Classes: {{classes}}",
+      "trainCount": "train {{count}}",
+      "shiftCount": "{{count}} shifted set(s)",
+      "relockHint": "The held-out set is locked: imported samples go to training first; lock again to top up the held-out set."
+    },
+    "presetPack": {
+      "fruits-mini": {
+        "title": "Six fruits (white background)",
+        "desc": "Six fruit classes from Fruits-360 on white; the shifted sets paste the same fruit onto colourful and dark backgrounds to test whether the model learned fruit or background."
+      },
+      "shapes": {
+        "title": "Three shapes (synthetic)",
+        "desc": "Circles, squares and triangles on light backgrounds; dark and patterned backgrounds as shifted sets. Works without a camera."
+      },
+      "campus-items": {
+        "title": "Campus items table (synthetic)",
+        "desc": "Size, weight and material of cups, pencil cases, books and basketballs; the shifted set comes from 'another school' with different sizes and materials."
+      },
+      "penguins": {
+        "title": "Palmer penguins",
+        "desc": "Bill, flipper, body mass, island and sex of three penguin species; 2007–2008 records for training, 2009 records as the shifted set."
+      },
+      "iris": {
+        "title": "Iris flowers",
+        "desc": "Sepal and petal sizes of three iris species, 150 rows; write a rule like 'petal length under 2.5 means setosa' and compare with a tree."
+      }
+    },
+    "curve": {
+      "empty": "Train and test at least one version first",
+      "xLabel": "Training photos per class",
+      "hint": "X axis: photos per class; Y axis: held-out accuracy."
+    },
+    "mislabel": {
+      "intro": "The system will randomly relabel {{pct}}% of the training samples and remember the original labels. The held-out set is untouched.",
+      "needModel": "Train and test a clean version first so you have a baseline.",
+      "status": "{{count}} training samples currently carry a wrong label",
+      "clean": "All training labels are currently correct",
+      "button": "Mislabel {{pct}}%",
+      "confirm": "Change some training labels to wrong ones? You can restore them later.",
+      "done": "{{count}} labels changed",
+      "failed": "Operation failed",
+      "next": "Next: go back to Train, train a new version, test the held-out set again and compare the scores.",
+      "reveal": "Reveal: which {{count}} were changed",
+      "compareHint": "The 'Mislabeled' column of the comparison table records how many wrong labels were in the training set for each version.",
+      "restoreIntro": "Restore every changed label, then train once more to confirm the score comes back.",
+      "restoreButton": "Restore correct labels",
+      "restoreDone": "{{count}} labels restored",
+      "restoreFailed": "Restore failed"
+    },
+    "dataCard": {
+      "goal": "What problem, for whom",
+      "goalPlaceholder": "e.g. help duty students recognise six common campus items quickly",
+      "classes": "Which classes",
+      "classesPlaceholder": "List the classes and why these",
+      "plan": "Where, under what conditions, how many per class",
+      "planPlaceholder": "e.g. half classroom, half corridor, daylight, 30 per class, 3 angles",
+      "risks": "Where it could go wrong or be unfair",
+      "risksPlaceholder": "e.g. all photos on one desk, the model may learn the background",
+      "save": "Save data card",
+      "saved": "Data card saved",
+      "saveFailed": "Save failed"
+    },
+    "table": {
+      "type": {
+        "number": "number",
+        "category": "category"
+      },
+      "noColumns": "No columns yet; import a preset table",
+      "classCol": "Class",
+      "columnCol": "Column",
+      "noRows": "No training rows yet",
+      "rowsTab": "Rows",
+      "statsTab": "Ranges per class",
+      "scatterTab": "Scatter plot",
+      "rowsShown": "Showing {{count}} training rows; {{holdout}} held-out rows hidden",
+      "statsHint": "Number columns show min – median – max; category columns show the most common values.",
+      "xAxis": "X",
+      "yAxis": "Y",
+      "addRowHint": "You can also measure something yourself and add a row to the training set:",
+      "addRow": "Add row",
+      "addRowDone": "Added to the training set",
+      "addRowFailed": "Failed to add",
+      "fillAll": "Fill in every column",
+      "newValue": "Type a new value and press Enter"
+    },
+    "rules": {
+      "if": "IF",
+      "and": "AND",
+      "then": "THEN",
+      "otherwise": "OTHERWISE",
+      "ruleNo": "Rule {{no}}",
+      "addRule": "Add rule",
+      "addCondition": "Add condition",
+      "leafStat": "({{n}} rows, purity {{purity}})",
+      "hitStat": "matched {{hit}} rows, {{correct}} correct",
+      "tryOnTrain": "Try on training rows",
+      "trainAccuracy": "accuracy on {{count}} training rows",
+      "trainAccuracyShort": "train {{value}}",
+      "saveVersion": "Save as v{{version}} (rules)",
+      "saved": "v{{version}} (rules) saved",
+      "saveFailed": "Save failed",
+      "invalid": "Fix the rules first",
+      "notePlaceholder": "What changed in this rule version?",
+      "scatterHint": "Dashed lines are the numeric thresholds in your rules",
+      "problems": "Rule problems: {{list}}",
+      "problem": {
+        "no_rules": "write at least one rule",
+        "bad_label": "unknown class",
+        "no_conditions": "a rule has no conditions",
+        "bad_column": "unknown column",
+        "bad_op": "operator not valid for this column",
+        "no_value": "a condition has no value",
+        "not_number": "number columns need a number",
+        "bad_default": "unknown default class"
+      }
+    },
+    "tree": {
+      "intro": "At each level the tree asks one question — is some column ≤ some value? — and splits the rows in two until they are pure enough.",
+      "maxDepth": "Max depth",
+      "depthHint": "Depth 1 asks one question; depth 6 can memorise many details.",
+      "trainVersion": "Train v{{version}} (tree, depth {{depth}})",
+      "rowsUsed": "using {{count}} training rows",
+      "depthLabel": "depth {{depth}}",
+      "leaves": "{{count}} leaves",
+      "viewTree": "Tree",
+      "viewRules": "As rules",
+      "yes": "yes",
+      "no": "no",
+      "nodeStat": "({{n}} rows)"
+    },
+    "verify": {
+      "materialHint": "Left: the trustworthy original notice. Right: the AI-written article. You can paste your own material instead.",
+      "customMaterial": "My own material",
+      "customTitle": "Material title",
+      "customSource": "Paste the trustworthy original (notice, announcement, data table)",
+      "customDraft": "Paste the AI-written article",
+      "sourceLabel": "Original notice",
+      "sourceHint": "Trusted source; verify against it",
+      "draftLabel": "AI article",
+      "draftHint": "Reads well, but may be wrong",
+      "materialUse": "Use this material",
+      "materialReplace": "Switch to this material (clears your claims)",
+      "materialCurrent": "Current material: {{title}}",
+      "materialRequired": "Title, source and article are all required",
+      "materialSaved": "Material saved",
+      "needMaterial": "Choose the material in the previous step first",
+      "claimsHint": "Split the article into checkable claims, one per line: dates, numbers, places, people, and judgements like 'first' or 'largest'.",
+      "claimPlaceholder": "e.g. The sports day is on 18 October",
+      "addClaim": "Add",
+      "saveClaims": "Save claims",
+      "claimsRequired": "Add at least one claim",
+      "claimsSaved": "{{count}} claims saved",
+      "needClaims": "Split the article into claims first",
+      "verdictsHint": "Check each claim against the notice: supported, refuted, or not in the notice at all (unverifiable)? Write your evidence.",
+      "claimCol": "Claim",
+      "verdictCol": "Verdict",
+      "evidenceCol": "Evidence",
+      "choose": "Choose",
+      "evidencePlaceholder": "Quote the notice or explain",
+      "verdict": {
+        "supported": "Supported",
+        "refuted": "Refuted",
+        "unverifiable": "Unverifiable"
+      },
+      "saveVerdicts": "Save verdicts",
+      "verdictRequired": "{{count}} claims still have no verdict",
+      "verdictsSaved": "Verdicts saved",
+      "needVerdicts": "Finish the verdicts first",
+      "reviseHint": "Fix what was refuted, remove or flag what cannot be verified, and turn it into an article you could publish.",
+      "saveRevision": "Save rewrite",
+      "revisionRequired": "The rewrite cannot be empty",
+      "revisionSaved": "Rewrite saved",
+      "reveal": "Reveal: {{errors}} errors were planted in this article; you refuted {{refuted}} claims",
+      "seededErrors": "Planted errors",
+      "seededUnverifiable": "Unverifiable claims",
+      "reflectionHint": "Look back: what kind of information did the AI get wrong, how did you find out, and what will you do first next time?",
+      "reflect": {
+        "wrong": "What kind of information did the AI get wrong",
+        "how": "How did you verify it",
+        "next": "Next time you get AI-written text, what will you do first"
+      },
+      "saveReflection": "Save reflection",
+      "reflectionRequired": "The first two are required",
+      "reflectionSaved": "Reflection saved",
+      "saveFailed": "Save failed"
     }
   }
 }

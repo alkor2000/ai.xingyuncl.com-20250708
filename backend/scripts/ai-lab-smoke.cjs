@@ -7,11 +7,16 @@
  * 流程：
  * 1. 连接本地库，创建两个临时用户（所有者 user + 同组 admin）
  * 2. 若 :4000 已有后端实例则复用，否则自行 spawn `node src/server.js`
- * 3. 登录（account + password）→ 任务模板 → 建项目 → 改类别 → 上传样本（sharp 生成纯色图）
+ * 3. v1：登录（account + password）→ 任务模板 → 建项目 → 改类别 → 上传样本（sharp 生成纯色图）
  *    → 查询/改标签/软删除 → lock（两轮，验证旧留出集不变）→ 保存模型 → 下载 artifact
  *    → 评测 holdout + shift（验证 generalization_gap）→ model_card → 事件 → 列表/归档
  *    → 权限（同组 admin 可读不可写、未登录 401）→ 管理端列表
- * 4. 清理：删除临时用户的 ai_lab_* 数据、样本与模型文件目录、临时用户本身；关闭自启的服务
+ * 4. v2：预置包列表 → 图像包导入（per_class、去重、kind 冲突）→ 混入错标/恢复
+ *    → 表格数据集（导入表格包、rows 新增、columns 修改、lock）→ engine=table-rules 模型与评测
+ *    → 新事件类型 → P7 文本任务建项目
+ *    预置包默认用 shapes（图像）与 penguins（表格）；可用 AI_LAB_SMOKE_IMAGE_PACK / AI_LAB_SMOKE_TABLE_PACK 指定；
+ *    两者都不存在时自动在 presets/ai-lab/_smoke-<stamp>-* 生成最小临时包，结束后删除
+ * 5. 清理：删除临时用户的 ai_lab_* 数据、样本与模型文件目录、临时包、临时用户本身；关闭自启的服务
  *
  * 环境变量：AI_LAB_SMOKE_BASE 可覆盖后端地址（默认 http://127.0.0.1:${PORT||4000}）
  * 退出码：全部检查通过 0，否则 1
@@ -30,6 +35,9 @@ const sharp = require('sharp');
 const dbConnection = require('../src/database/connection');
 const User = require('../src/models/User');
 const config = require('../src/config');
+const { holdoutCountFor } = require('../src/services/aiLab/splitHoldout');
+
+const PRESETS_ROOT = path.join(BACKEND_DIR, 'presets', 'ai-lab');
 
 const PORT = process.env.PORT || config.app.port || 4000;
 const BASE = process.env.AI_LAB_SMOKE_BASE || `http://127.0.0.1:${PORT}`;
@@ -107,7 +115,7 @@ function buildForm(buffers, fields) {
  * 主流程
  * ================================================================ */
 let serverProcess = null;
-const created = { userIds: [], ownerId: null, projectIds: [] };
+const created = { userIds: [], ownerId: null, projectIds: [], tempPackDirs: [] };
 
 async function ensureServer() {
   step('后端实例');
@@ -170,8 +178,9 @@ async function runFlow(owner, admin) {
 
   step('任务模板');
   let res = await api('GET', '/api/ai-lab/tasks', { token: ownerToken });
-  check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.length === 3, 'GET /tasks 返回 3 个模板', res.body);
-  check(res.body.data?.[0]?.key === 'P1' && res.body.data?.[0]?.default_classes?.length === 4, 'P1 模板含 4 个默认类别');
+  check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.length === 9, 'GET /tasks 返回 9 个模板', res.body);
+  const taskP1 = res.body.data?.find(t => t.key === 'P1');
+  check(taskP1 && taskP1.default_classes?.length === 4 && taskP1.kind === 'image' && taskP1.presets?.includes('fruits-mini'), 'P1 模板含 4 个默认类别、kind=image、presets 含 fruits-mini', taskP1);
 
   res = await api('GET', '/api/ai-lab/tasks');
   check(res.status === 401, '未登录访问返回 401', res.status);
@@ -365,6 +374,303 @@ async function runFlow(owner, admin) {
   check(res.status === 200 && res.body.data?.length === 1 && res.body.data[0].user?.username === owner.username, 'admin 按 user_id 查到本组项目并附 username', res.body);
   res = await api('GET', '/api/ai-lab/admin/projects', { token: ownerToken });
   check(res.status === 403, '普通用户访问 /admin/projects 返回 403', res.status);
+
+  return { ownerToken, adminToken };
+}
+
+/* ================================================================
+ * v2：预置包 / 错标 / 表格
+ * ================================================================ */
+
+/** 没有可用预置包时生成最小临时包（图像 3 类 × 6 train + 2 shift；表格 3 类 × 12 train + 3 shift） */
+async function makeTempPacks() {
+  const imageKey = `_smoke-${STAMP}-shapes`;
+  const tableKey = `_smoke-${STAMP}-penguins`;
+  const imageDir = path.join(PRESETS_ROOT, imageKey);
+  const tableDir = path.join(PRESETS_ROOT, tableKey);
+  created.tempPackDirs.push(imageDir, tableDir);
+
+  const classes = [{ key: 'circle', label: '圆形' }, { key: 'square', label: '方形' }, { key: 'triangle', label: '三角形' }];
+  const colors = { circle: [230, 60, 60], square: [60, 200, 80], triangle: [60, 80, 230] };
+  const files = { train: {}, shift: { '深色背景': {} } };
+  for (const cls of classes) {
+    files.train[cls.key] = [];
+    files.shift['深色背景'][cls.key] = [];
+    for (let i = 1; i <= 6; i++) {
+      const rel = `train/${cls.key}/${String(i).padStart(3, '0')}.jpg`;
+      fs.mkdirSync(path.dirname(path.join(imageDir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(imageDir, rel), await makeImage(...colors[cls.key], 200, 200));
+      files.train[cls.key].push(rel);
+    }
+    for (let i = 1; i <= 2; i++) {
+      const rel = `shift/dark/${cls.key}/${String(i).padStart(3, '0')}.jpg`;
+      fs.mkdirSync(path.dirname(path.join(imageDir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(imageDir, rel), await makeImage(colors[cls.key][0] / 3, colors[cls.key][1] / 3, colors[cls.key][2] / 3, 200, 200));
+      files.shift['深色背景'][cls.key].push(rel);
+    }
+  }
+  fs.writeFileSync(path.join(imageDir, 'manifest.json'), JSON.stringify({
+    key: imageKey, kind: 'image', title: '冒烟临时图形包', description: 'smoke', license: 'CC0', source: '', attribution: '',
+    grade_bands: ['L'], classes, files,
+    condition_tags: { train: { background: '浅色' }, shift: { '深色背景': { background: '深色' } } }
+  }, null, 2));
+
+  const tableClasses = [{ key: 'adelie', label: '阿德利' }, { key: 'chinstrap', label: '帽带' }, { key: 'gentoo', label: '巴布亚' }];
+  const columns = [
+    { key: 'bill_length_mm', label: '喙长', type: 'number', unit: 'mm' },
+    { key: 'body_mass_g', label: '体重', type: 'number', unit: 'g' },
+    { key: 'island', label: '岛屿', type: 'category' }
+  ];
+  const row = (cls, i, year) => ({ class_key: cls, payload: { bill_length_mm: 35 + i + (cls === 'gentoo' ? 10 : 0), body_mass_g: 3000 + i * 50 + year, island: i % 2 ? '甲岛' : '乙岛' } });
+  const rows = { train: [], shift: { '2009年': [] } };
+  tableClasses.forEach(cls => {
+    for (let i = 0; i < 12; i++) rows.train.push(row(cls.key, i, 0));
+    for (let i = 0; i < 3; i++) rows.shift['2009年'].push(row(cls.key, i, 9));
+  });
+  fs.mkdirSync(tableDir, { recursive: true });
+  fs.writeFileSync(path.join(tableDir, 'manifest.json'), JSON.stringify({
+    key: tableKey, kind: 'table', title: '冒烟临时企鹅包', description: 'smoke', license: 'CC0', source: '', attribution: '',
+    grade_bands: ['P'], classes: tableClasses, columns, rows
+  }, null, 2));
+  console.log(`  已生成临时预置包 ${imageKey} / ${tableKey}`);
+  return { imageKey, tableKey };
+}
+
+const sumValues = (obj) => Object.values(obj || {}).reduce((a, b) => a + Number(b || 0), 0);
+const minPerClassSum = (byClass, perClass) => Object.values(byClass || {}).reduce((a, n) => a + Math.min(Number(n || 0), perClass), 0);
+
+async function runV2Flow(owner, { ownerToken, adminToken }) {
+  let res;
+
+  step('任务模板 v2');
+  res = await api('GET', '/api/ai-lab/tasks', { token: ownerToken });
+  const tasks = res.body.data || [];
+  const byKey = Object.fromEntries(tasks.map(t => [t.key, t]));
+  check(['L1', 'L3', 'L4', 'M1', 'P1', 'P2', 'P3', 'P7', 'free'].every(key => byKey[key]), '模板含 L1/L3/L4/M1/P1/P2/P3/P7/free', Object.keys(byKey));
+  check(byKey.P3?.kind === 'table' && byKey.P3?.engine === 'table-tree' && byKey.P3?.config?.max_depth_options?.length === 5 && byKey.P3?.presets?.includes('penguins'), 'P3 为表格任务（table-tree、max_depth_options、presets）', byKey.P3);
+  check(byKey.L3?.config?.mislabel_ratio === 0.2 && byKey.L3?.steps?.includes('mislabel') && byKey.L3?.steps?.includes('restore'), 'L3 含 mislabel_ratio 与 mislabel/restore 步骤', byKey.L3);
+  check(byKey.L4?.config?.per_class_limits?.join(',') === '3,10,30' && byKey.L1?.default_classes?.length === 2 && byKey.M1?.default_classes?.length === 6 && byKey.M1?.min_train_per_class === 30, 'L4/L1/M1 配置正确', { L4: byKey.L4?.config, L1: byKey.L1?.default_classes, M1: byKey.M1?.min_train_per_class });
+  check(byKey.P7?.kind === 'text' && byKey.P7?.engine === 'verify' && byKey.P7?.steps?.join(',') === 'material,claims,verdicts,revise,reflection', 'P7 为文本核验任务', byKey.P7);
+
+  step('预置数据包列表');
+  res = await api('GET', '/api/ai-lab/presets', { token: ownerToken });
+  check(res.status === 200 && Array.isArray(res.body.data), 'GET /presets 返回数组', res.body);
+  let packs = res.body.data || [];
+  check(packs.every(p => p.files === undefined && p.rows === undefined && p.dir === undefined && p.counts && p.counts.train && p.counts.shift), '每个包不带 files/rows 且附 counts', packs.map(p => Object.keys(p)));
+  res = await api('GET', '/api/ai-lab/presets?kind=table', { token: ownerToken });
+  check(res.status === 200 && (res.body.data || []).every(p => p.kind === 'table'), 'kind=table 过滤生效', res.body.data?.map(p => p.key));
+  res = await api('GET', '/api/ai-lab/presets?kind=video', { token: ownerToken });
+  check(res.status === 400, '非法 kind 返回 400', res.status);
+
+  let imageKey = process.env.AI_LAB_SMOKE_IMAGE_PACK || (packs.some(p => p.key === 'shapes') ? 'shapes' : packs.find(p => p.kind === 'image')?.key);
+  let tableKey = process.env.AI_LAB_SMOKE_TABLE_PACK || (packs.some(p => p.key === 'penguins') ? 'penguins' : packs.find(p => p.kind === 'table')?.key);
+  if (!imageKey || !tableKey) {
+    const temp = await makeTempPacks();
+    imageKey = imageKey || temp.imageKey;
+    tableKey = tableKey || temp.tableKey;
+    packs = (await api('GET', '/api/ai-lab/presets', { token: ownerToken })).body.data || [];
+  }
+  const imagePack = packs.find(p => p.key === imageKey);
+  const tablePack = packs.find(p => p.key === tableKey);
+  check(imagePack?.kind === 'image' && tablePack?.kind === 'table', `使用图像包 ${imageKey} 与表格包 ${tableKey}`, { imagePack: imagePack?.kind, tablePack: tablePack?.kind });
+  if (!imagePack || !tablePack) throw new Error('缺少可用的预置包');
+  const imageShiftSets = Object.keys(imagePack.counts.shift);
+  const imageClassCount = imagePack.classes.length;
+
+  step('导入图像预置包（per_class / 去重 / kind 冲突）');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '多少张够用', task_key: 'L4' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'image' && res.body.data?.dataset?.classes?.length === 0, 'L4 项目的数据集 kind=image 且无默认类别', res.body.data?.dataset);
+  const imgProject = res.body.data.project;
+  const imgDataset = res.body.data.dataset;
+  created.projectIds.push(imgProject.id);
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 3 } });
+  const expectTrain3 = minPerClassSum(imagePack.counts.train, 3);
+  const expectShift3 = Object.fromEntries(imageShiftSets.map(set => [set, minPerClassSum(imagePack.counts.shift[set], 3)]));
+  check(res.status === 201 && res.body.data?.imported?.train === expectTrain3, `导入 per_class=3：train ${expectTrain3} 张`, res.body.data?.imported);
+  check(imageShiftSets.every(set => res.body.data?.imported?.shift?.[set] === expectShift3[set]), '默认导入全部 shift 集且计数正确', { got: res.body.data?.imported?.shift, expect: expectShift3 });
+  let ds = res.body.data?.dataset;
+  check(ds?.classes?.length === imageClassCount && imagePack.classes.every(c => ds.classes.some(d => d.key === c.key && d.label === c.label)), '包内类别已合并进数据集', ds?.classes);
+  check(ds?.sample_count === expectTrain3 + sumValues(expectShift3) && sumValues(ds?.counts?.train) === expectTrain3, 'sample_count 与 counts 一致', { sample_count: ds?.sample_count, counts: ds?.counts });
+
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  const presetSample = res.body.data?.[0];
+  const fileNamePattern = new RegExp(`^ai-lab/${owner.id}/${imgDataset.id}/preset-${imageKey}-\\d+\\.jpg$`);
+  check(presetSample?.source === 'preset' && String(presetSample?.origin_ref || '').startsWith(`${imageKey}:`) && fileNamePattern.test(presetSample?.file_path || ''), '预置样本 source=preset、origin_ref、文件名 preset-<pack>-<n>.jpg', presetSample);
+  check(presetSample?.width <= 320 && presetSample?.height <= 320 && presetSample?.payload === null && presetSample?.original_class_key === null, '预置图片已规范到 ≤320 且 payload/original_class_key 为 null', presetSample);
+  check(JSON.stringify(presetSample?.condition_tags) === JSON.stringify(imagePack.condition_tags?.train ?? null), 'condition_tags 取自 manifest', { got: presetSample?.condition_tags, expect: imagePack.condition_tags?.train });
+  const presetImg = await fetch(`${BASE}${presetSample.file_url}`);
+  check(presetImg.status === 200 && (presetImg.headers.get('content-type') || '').includes('image/jpeg'), '预置样本图片可通过 /uploads 读取', presetImg.status);
+  const trainCountAfter3 = res.body.data.length;
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 5, shift_sets: [] } });
+  const expectTrain5 = minPerClassSum(imagePack.counts.train, 5);
+  check(res.status === 201 && res.body.data?.imported?.train === expectTrain5 - expectTrain3 && res.body.data?.skipped?.train === expectTrain3 && sumValues(res.body.data?.imported?.shift) === 0, `再导入 per_class=5 只补 ${expectTrain5 - expectTrain3} 张（去重）且 shift_sets=[] 不导 shift`, res.body.data);
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  check(res.body.data.length === expectTrain5 && new Set(res.body.data.map(s => s.origin_ref)).size === expectTrain5, `train 共 ${expectTrain5} 张且 origin_ref 无重复`, res.body.data.length);
+  check(trainCountAfter3 === expectTrain3, '首轮导入后 train 数量正确');
+
+  if (imageShiftSets.length > 0) {
+    res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, include_train: false, shift_sets: [imageShiftSets[0]] } });
+    check(res.status === 201 && res.body.data?.imported?.train === 0 && Object.keys(res.body.data?.imported?.shift || {}).join() === imageShiftSets[0], 'include_train=false 只导指定 shift 集', res.body.data);
+  }
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: '../etc' } });
+  check(res.status === 400, '非法 pack_key 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: 'no-such-pack-xyz' } });
+  check(res.status === 400, '不存在的包返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, shift_sets: ['不存在的集合'] } });
+  check(res.status === 400, '不存在的 shift 集返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 0 } });
+  check(res.status === 400, 'per_class=0 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: tableKey } });
+  check(res.status === 400, '非空图像数据集导入表格包返回 400（kind 冲突）', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/import-preset`, { token: adminToken, body: { pack_key: imageKey } });
+  check(res.status === 403, '同组 admin 导入返回 403', res.status);
+
+  step('混入错标 / 恢复');
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/lock`, { token: ownerToken, body: { holdout_ratio: 0.2, seed: 3 } });
+  check(res.status === 200 && res.body.data?.dataset?.version === 1, '图像数据集 lock 后 version=1', res.body.data?.dataset);
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  const trainBefore = res.body.data;
+  const labelsBefore = Object.fromEntries(trainBefore.map(s => [s.id, s.class_key]));
+  const perClassTrain = {};
+  trainBefore.forEach(s => { perClassTrain[s.class_key] = (perClassTrain[s.class_key] || 0) + 1; });
+  const expectChanged = Object.values(perClassTrain).reduce((a, n) => a + holdoutCountFor(n, 0.2), 0);
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/mislabel`, { token: ownerToken, body: { ratio: 0.2, seed: 5 } });
+  check(res.status === 200 && res.body.data?.changed === expectChanged && res.body.data?.sample_ids?.length === expectChanged && res.body.data?.seed === 5, `mislabel 分层改标 ${expectChanged} 个`, res.body.data);
+  const changedIds = new Set(res.body.data?.sample_ids || []);
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  const mislabeled = res.body.data.filter(s => changedIds.has(s.id));
+  check(mislabeled.length === expectChanged && mislabeled.every(s => s.original_class_key === labelsBefore[s.id] && s.class_key !== s.original_class_key && ds.classes.some(c => c.key === s.class_key)), '被改样本 original_class_key=原值、class_key 变为其他类别', mislabeled.slice(0, 3));
+  check(res.body.data.filter(s => !changedIds.has(s.id)).every(s => s.original_class_key === null && s.class_key === labelsBefore[s.id]), '未选中样本不受影响');
+  res = await api('GET', `/api/ai-lab/projects/${imgProject.id}`, { token: ownerToken });
+  check(res.body.data?.datasets?.[0]?.version === 1, 'mislabel 不改变 dataset.version', res.body.data?.datasets?.[0]?.version);
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/mislabel`, { token: ownerToken, body: { ratio: 0.2, seed: 5 } });
+  const changed2 = res.body.data?.changed ?? -1;
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  check(changed2 >= 0 && res.body.data.filter(s => s.original_class_key !== null).length === expectChanged + changed2, '二次 mislabel 只作用于未改过的样本', { changed2, total: res.body.data.filter(s => s.original_class_key !== null).length });
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/mislabel`, { token: ownerToken, body: { ratio: 0 } });
+  check(res.status === 400, 'ratio=0 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/mislabel`, { token: ownerToken, body: { ratio: 1.5 } });
+  check(res.status === 400, 'ratio=1.5 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/mislabel`, { token: adminToken, body: {} });
+  check(res.status === 403, '同组 admin mislabel 返回 403', res.status);
+
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/restore-labels`, { token: ownerToken });
+  check(res.status === 200 && res.body.data?.restored === expectChanged + changed2, `restore-labels 恢复 ${expectChanged + changed2} 个`, res.body.data);
+  res = await api('GET', `/api/ai-lab/datasets/${imgDataset.id}/samples?split=train`, { token: ownerToken });
+  check(res.body.data.every(s => s.original_class_key === null && s.class_key === labelsBefore[s.id]), '恢复后标签与错标前完全一致');
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/restore-labels`, { token: ownerToken });
+  check(res.status === 200 && res.body.data?.restored === 0, '再次恢复 restored=0', res.body.data);
+
+  res = await api('POST', `/api/ai-lab/projects/${imgProject.id}/datasets`, { token: ownerToken, body: { name: '单类', classes: [{ key: 'only', label: '唯一' }] } });
+  res = await api('POST', `/api/ai-lab/datasets/${res.body.data.id}/mislabel`, { token: ownerToken, body: {} });
+  check(res.status === 400, '不足两个类别的数据集 mislabel 返回 400', res.status);
+
+  step('表格数据集：导入 / rows / columns / lock');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '人工规则 vs 数据规则', task_key: 'P3' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'table' && res.body.data?.dataset?.columns === null, 'P3 项目的数据集 kind=table、columns 为空', res.body.data?.dataset);
+  const tblProject = res.body.data.project;
+  const tblDataset = res.body.data.dataset;
+  created.projectIds.push(tblProject.id);
+
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'x', payload: { a: 1 } }] } });
+  check(res.status === 400, '未定义 columns 时 rows 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/samples`, { token: ownerToken, form: buildForm([await makeImage(1, 2, 3)], { class_key: 'x' }) });
+  check(res.status === 400, '表格数据集上传图片返回 400', res.status);
+
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: tableKey, per_class: 10 } });
+  const tableShiftSets = Object.keys(tablePack.counts.shift);
+  const expectRows = minPerClassSum(tablePack.counts.train, 10);
+  check(res.status === 201 && res.body.data?.imported?.train === expectRows, `导入表格包 per_class=10：train ${expectRows} 行`, res.body.data?.imported);
+  ds = res.body.data?.dataset;
+  /* MySQL JSON 列会重排对象键序，按字段逐项比较 */
+  const sameColumns = Array.isArray(ds?.columns) && ds.columns.length === tablePack.columns.length
+    && tablePack.columns.every((c, i) => ['key', 'label', 'type', 'unit'].every(f => (ds.columns[i][f] ?? null) === (c[f] ?? null)));
+  check(ds?.kind === 'table' && sameColumns && ds?.classes?.length === tablePack.classes.length, '表格数据集 columns/classes 来自包', { columns: ds?.columns, classes: ds?.classes });
+  res = await api('GET', `/api/ai-lab/datasets/${tblDataset.id}/samples?split=train`, { token: ownerToken });
+  const rowSample = res.body.data?.[0];
+  check(rowSample?.file_path === null && rowSample?.file_url === null && rowSample?.source === 'preset' && String(rowSample?.origin_ref || '').startsWith(`${tableKey}:rows/train/`), '行样本 file_path/file_url=null、origin_ref=<pack>:rows/train/<i>', rowSample);
+  check(rowSample && typeof rowSample.payload === 'object' && tablePack.columns.every(c => c.key in rowSample.payload), '行样本 payload 含全部列', rowSample?.payload);
+  if (tableShiftSets.length > 0) {
+    res = await api('GET', `/api/ai-lab/datasets/${tblDataset.id}/samples?split=shift&shift_set=${encodeURIComponent(tableShiftSets[0])}`, { token: ownerToken });
+    check(res.body.data.length === minPerClassSum(tablePack.counts.shift[tableShiftSets[0]], 10), `表格 shift 集 ${tableShiftSets[0]} 行数正确`, res.body.data.length);
+  }
+
+  const numberCol = tablePack.columns.find(c => c.type === 'number');
+  const categoryCol = tablePack.columns.find(c => c.type === 'category');
+  const cls0 = tablePack.classes[0].key;
+  const cls1 = tablePack.classes[1].key;
+  const validPayload = { [numberCol.key]: '12.5' };
+  if (categoryCol) validPayload[categoryCol.key] = ' 手填 ';
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: [
+    { class_key: cls0, payload: validPayload, condition_tags: { note: '手工' } },
+    { class_key: cls1, payload: { [numberCol.key]: 7 }, split: 'shift', shift_set: '自测' }
+  ] } });
+  check(res.status === 201 && res.body.data?.length === 2 && res.body.data[0].payload?.[numberCol.key] === 12.5 && res.body.data[0].source === 'upload' && res.body.data[0].condition_tags?.note === '手工', 'POST /rows 新增 2 行，number 列转数值', res.body.data);
+  check(!categoryCol || res.body.data[0].payload?.[categoryCol.key] === '手填', 'category 列去首尾空白', res.body.data?.[0]?.payload);
+  check(res.body.data?.[1]?.split === 'shift' && res.body.data[1].shift_set === '自测' && res.body.data[1].file_url === null, '行样本可进 shift 集', res.body.data?.[1]);
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: cls0, payload: { nope: 1 } }] } });
+  check(res.status === 400, 'payload 含未定义列返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: cls0, payload: { [numberCol.key]: 'abc' } }] } });
+  check(res.status === 400, 'number 列非数字返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'nope', payload: validPayload }] } });
+  check(res.status === 400, '未知类别返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/rows`, { token: ownerToken, body: { rows: Array.from({ length: 201 }, () => ({ class_key: cls0, payload: validPayload })) } });
+  check(res.status === 400, '超过 200 行返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${imgDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: imagePack.classes[0].key, payload: { a: 1 } }] } });
+  check(res.status === 400, '图像数据集调用 rows 返回 400', res.status);
+
+  res = await api('PATCH', `/api/ai-lab/datasets/${tblDataset.id}`, { token: ownerToken, body: { columns: [...tablePack.columns, { key: 'extra_col', label: '附加', type: 'number' }] } });
+  check(res.status === 200 && res.body.data?.columns?.length === tablePack.columns.length + 1, 'PATCH columns 可新增列', res.body.data?.columns?.map(c => c.key));
+  res = await api('PATCH', `/api/ai-lab/datasets/${tblDataset.id}`, { token: ownerToken, body: { columns: tablePack.columns.slice(1) } });
+  check(res.status === 400, '已有样本时删除列返回 400', res.status);
+  res = await api('PATCH', `/api/ai-lab/datasets/${imgDataset.id}`, { token: ownerToken, body: { columns: [{ key: 'a', type: 'number' }] } });
+  check(res.status === 400, '图像数据集设置 columns 返回 400', res.status);
+
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey } });
+  check(res.status === 400, '非空表格数据集导入图像包返回 400', res.status);
+
+  res = await api('POST', `/api/ai-lab/projects/${tblProject.id}/datasets`, { token: ownerToken, body: { name: '手建表格', kind: 'table', classes: [{ key: 'a' }, { key: 'b' }], columns: [{ key: 'x', type: 'number' }] } });
+  check(res.status === 201 && res.body.data?.kind === 'table' && res.body.data?.columns?.[0]?.key === 'x', 'POST /datasets 可指定 kind=table 与 columns', res.body.data);
+  const emptyTable = res.body.data;
+  res = await api('POST', `/api/ai-lab/datasets/${emptyTable.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 1, shift_sets: [] } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'image' && res.body.data?.dataset?.columns === null && res.body.data?.imported?.train === imageClassCount, '空表格数据集导入图像包 → kind 切换为 image、columns 清空', res.body.data?.dataset);
+
+  res = await api('POST', `/api/ai-lab/datasets/${tblDataset.id}/lock`, { token: ownerToken, body: { holdout_ratio: 0.2, seed: 11 } });
+  check(res.status === 200 && res.body.data?.dataset?.version === 1 && sumValues(res.body.data?.counts?.holdout) > 0, '表格数据集 lock 分层留出', res.body.data?.counts);
+
+  step('表格模型（table-rules / table-tree）与评测');
+  res = await api('POST', `/api/ai-lab/projects/${tblProject.id}/models`, { token: ownerToken, body: { dataset_id: tblDataset.id, dataset_version: 1, engine: 'table-rules', params: { rules: [{ if: `${numberCol.key} < 40`, then: cls0 }] }, class_keys: tablePack.classes.map(c => c.key), train_sample_count: expectRows, artifact: { rules: [{ feature: numberCol.key, op: '<', value: 40, label: cls0 }] }, note: '手写规则' } });
+  check(res.status === 201 && res.body.data?.engine === 'table-rules' && res.body.data?.feature_extractor === 'none' && res.body.data?.version === 1, 'POST /models engine=table-rules，feature_extractor 默认 none', res.body.data);
+  const rulesModel = res.body.data;
+  const rulesArtifact = await fetch(`${BASE}${rulesModel.artifact_url}`);
+  check(rulesArtifact.status === 200 && (await rulesArtifact.json())?.rules?.[0]?.feature === numberCol.key, '规则 artifact 可下载', rulesArtifact.status);
+  res = await api('POST', `/api/ai-lab/models/${rulesModel.id}/evaluations`, { token: ownerToken, body: { split: 'holdout', sample_count: 6, metrics: { accuracy: 0.67, per_class: {}, confusion: { labels: [], matrix: [] } } } });
+  check(res.status === 201 && res.body.data?.metrics?.holdout?.accuracy === 0.67, '规则模型 holdout 评测已记录', res.body.data?.metrics);
+  res = await api('POST', `/api/ai-lab/projects/${tblProject.id}/models`, { token: ownerToken, body: { dataset_id: tblDataset.id, engine: 'table-tree', feature_extractor: 'none', params: { max_depth: 2 }, class_keys: tablePack.classes.map(c => c.key), artifact: { tree: {} } } });
+  check(res.status === 201 && res.body.data?.engine === 'table-tree' && res.body.data?.version === 2, 'POST /models engine=table-tree version=2', res.body.data);
+  res = await api('POST', `/api/ai-lab/projects/${tblProject.id}/models`, { token: ownerToken, body: { dataset_id: tblDataset.id, engine: 'image-knn', class_keys: [cls0], artifact: {} } });
+  check(res.status === 400, '表格数据集用 image-knn 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${imgProject.id}/models`, { token: ownerToken, body: { dataset_id: imgDataset.id, engine: 'table-tree', class_keys: [imagePack.classes[0].key], artifact: {} } });
+  check(res.status === 400, '图像数据集用 table-tree 返回 400', res.status);
+  res = await api('GET', `/api/ai-lab/projects/${tblProject.id}`, { token: ownerToken });
+  check(res.body.data?.project?.summary?.model_count === 2 && res.body.data?.project?.summary?.best_holdout_accuracy === 0.67 && res.body.data?.datasets?.[0]?.kind === 'table', '表格项目 summary 与数据集 kind 正确', res.body.data?.project?.summary);
+
+  step('新事件类型');
+  const newTypes = ['preset.import', 'dataset.mislabel', 'dataset.restore', 'rules.write', 'data_card.write', 'claim.write', 'claim.verify', 'claim.revise'];
+  res = await api('POST', `/api/ai-lab/projects/${tblProject.id}/events`, { token: ownerToken, body: { events: newTypes.map(type => ({ type, payload: { smoke: true } })) } });
+  check(res.status === 201 && res.body.data?.inserted === newTypes.length, `8 种新事件类型均可写入`, res.body);
+  res = await api('GET', `/api/ai-lab/projects/${tblProject.id}/events`, { token: ownerToken });
+  check(res.body.data?.map(e => e.type).join(',') === newTypes.join(','), 'GET /events 按序返回新事件', res.body.data?.map(e => e.type));
+
+  step('P7 文本任务');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '校园资讯可信吗', task_key: 'P7' } });
+  check(res.status === 201 && res.body.data?.project?.task_key === 'P7' && res.body.data?.dataset?.id, 'P7 项目可创建（附默认数据集）', res.body.data?.project);
+  if (res.body.data?.project?.id) created.projectIds.push(res.body.data.project.id);
 }
 
 /* ================================================================
@@ -397,6 +703,12 @@ async function cleanup() {
       fs.rmSync(dir, { recursive: true, force: true });
       console.log(`  已删除文件目录 ${dir}`);
     }
+    for (const dir of created.tempPackDirs) {
+      if (dir.startsWith(PRESETS_ROOT + path.sep) && path.basename(dir).startsWith('_smoke-')) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`  已删除临时预置包 ${dir}`);
+      }
+    }
     if (created.userIds.length) {
       const ph = created.userIds.map(() => '?').join(',');
       await dbConnection.query(`DELETE FROM users WHERE id IN (${ph}) AND username LIKE 'ailab_smoke_%'`, created.userIds);
@@ -416,7 +728,8 @@ async function main() {
   try {
     users = await createTempUsers();
     await ensureServer();
-    await runFlow(users.owner, users.admin);
+    const tokens = await runFlow(users.owner, users.admin);
+    await runV2Flow(users.owner, tokens);
   } catch (error) {
     results.failed += 1;
     results.failures.push(`异常: ${error.message}`);

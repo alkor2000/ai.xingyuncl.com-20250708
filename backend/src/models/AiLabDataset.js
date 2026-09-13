@@ -3,12 +3,13 @@
  *
  * 功能：
  * - 类别定义校验（key 只允许 [a-z0-9_-]{1,32} 且唯一）
- * - 创建（可参与外部事务）、按 ID / 按项目查询、更新 name/classes
+ * - 表格列定义校验 columns = [{key, label, type:'number'|'category', unit?}]（key 规则同类别）
+ * - 创建（可参与外部事务）、按 ID / 按项目查询、更新 name/classes/kind/columns（可参与外部事务）
  * - 三集样本计数 counts = {train:{class_key:n}, holdout:{...}, shift:{'<set>':{class_key:n}}}
  * - lock：把选中的样本改为 holdout 并让 version+1（事务）
  * - sample_count 维护（增量与全量重算）
  *
- * 说明：holdout_ratio 是 DECIMAL，mysql2 返回字符串，读出时转 number
+ * 说明：holdout_ratio 是 DECIMAL，mysql2 返回字符串，读出时转 number；kind 为 image | table
  */
 
 const dbConnection = require('../database/connection');
@@ -17,6 +18,9 @@ const logger = require('../utils/logger');
 
 const CLASS_KEY_PATTERN = /^[a-z0-9_-]{1,32}$/;
 const MAX_CLASSES = 50;
+const KINDS = ['image', 'table'];
+const COLUMN_TYPES = ['number', 'category'];
+const MAX_COLUMNS = 50;
 
 class AiLabDataset {
   static parseJson(value, fallback = null) {
@@ -35,12 +39,15 @@ class AiLabDataset {
   static format(row) {
     if (!row) return null;
     const classes = AiLabDataset.parseJson(row.classes, []);
+    const columns = AiLabDataset.parseJson(row.columns, null);
     return {
       id: row.id,
       project_id: row.project_id,
       user_id: row.user_id,
       name: row.name,
+      kind: row.kind || 'image',
       classes: Array.isArray(classes) ? classes : [],
+      columns: Array.isArray(columns) ? columns : null,
       version: row.version,
       holdout_ratio: row.holdout_ratio === null || row.holdout_ratio === undefined ? null : parseFloat(row.holdout_ratio),
       seed: row.seed,
@@ -77,8 +84,42 @@ class AiLabDataset {
   }
 
   /**
+   * 校验并规范化表格列定义：[{key, label, type, unit?}]
+   * @returns {Array<{key:string,label:string,type:string,unit?:string}>}
+   */
+  static validateColumns(columns) {
+    if (!Array.isArray(columns)) throw new ValidationError('columns 必须是数组');
+    if (columns.length > MAX_COLUMNS) throw new ValidationError(`列数量不能超过 ${MAX_COLUMNS} 个`);
+
+    const seen = new Set();
+    return columns.map((item, index) => {
+      const key = typeof item === 'string' ? item : (item && item.key);
+      if (typeof key !== 'string' || !CLASS_KEY_PATTERN.test(key)) {
+        throw new ValidationError(`第 ${index + 1} 列的 key 无效：只允许小写字母、数字、下划线和短横线，1-32 位`);
+      }
+      if (seen.has(key)) throw new ValidationError(`列 key 重复：${key}`);
+      seen.add(key);
+
+      const type = item && typeof item === 'object' && item.type !== undefined ? String(item.type) : 'number';
+      if (!COLUMN_TYPES.includes(type)) throw new ValidationError(`列 ${key} 的 type 只能是 number 或 category`);
+
+      let label = item && typeof item === 'object' && item.label !== undefined ? String(item.label).trim() : '';
+      if (!label) label = key;
+      if (label.length > 50) throw new ValidationError(`列 ${key} 的名称不能超过 50 字`);
+
+      const column = { key, label, type };
+      if (item && typeof item === 'object' && item.unit !== undefined && item.unit !== null) {
+        const unit = String(item.unit).trim();
+        if (unit.length > 20) throw new ValidationError(`列 ${key} 的单位不能超过 20 字`);
+        if (unit) column.unit = unit;
+      }
+      return column;
+    });
+  }
+
+  /**
    * 创建数据集
-   * @param {Object} data - { project_id, user_id, name, classes }
+   * @param {Object} data - { project_id, user_id, name, classes, kind?, columns? }
    * @param {Function} [query] - 事务内查询函数
    * @returns {number} 新数据集 ID
    */
@@ -86,10 +127,15 @@ class AiLabDataset {
     const q = query || ((sql, params) => dbConnection.query(sql, params));
     try {
       const classes = AiLabDataset.validateClasses(data.classes || []);
+      const kind = data.kind || 'image';
+      if (!KINDS.includes(kind)) throw new ValidationError('kind 只能是 image 或 table');
+      const columns = data.columns === undefined || data.columns === null
+        ? null
+        : AiLabDataset.validateColumns(data.columns);
       const { rows } = await q(
-        `INSERT INTO ai_lab_datasets (project_id, user_id, name, classes, version, sample_count)
-         VALUES (?, ?, ?, ?, 0, 0)`,
-        [data.project_id, data.user_id, data.name, JSON.stringify(classes)]
+        `INSERT INTO ai_lab_datasets (project_id, user_id, name, kind, classes, columns, version, sample_count)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
+        [data.project_id, data.user_id, data.name, kind, JSON.stringify(classes), columns ? JSON.stringify(columns) : null]
       );
       return rows.insertId;
     } catch (error) {
@@ -123,9 +169,11 @@ class AiLabDataset {
   }
 
   /**
-   * 更新 name / classes（classes 需由调用方先做"不能删除有样本的 key"校验）
+   * 更新 name / classes / kind / columns（classes 需由调用方先做"不能删除有样本的 key"校验）
+   * @param {Function} [query] - 事务内查询函数（可选）
    */
-  static async update(id, fields = {}) {
+  static async update(id, fields = {}, query = null) {
+    const q = query || ((sql, params) => dbConnection.query(sql, params));
     try {
       const updateFields = [];
       const values = [];
@@ -138,10 +186,19 @@ class AiLabDataset {
         updateFields.push('classes = ?');
         values.push(JSON.stringify(AiLabDataset.validateClasses(fields.classes)));
       }
+      if (fields.kind !== undefined) {
+        if (!KINDS.includes(fields.kind)) throw new ValidationError('kind 只能是 image 或 table');
+        updateFields.push('kind = ?');
+        values.push(fields.kind);
+      }
+      if (fields.columns !== undefined) {
+        updateFields.push('columns = ?');
+        values.push(fields.columns === null ? null : JSON.stringify(AiLabDataset.validateColumns(fields.columns)));
+      }
       if (updateFields.length === 0) return false;
 
       values.push(id);
-      const { rows } = await dbConnection.query(
+      const { rows } = await q(
         `UPDATE ai_lab_datasets SET ${updateFields.join(', ')} WHERE id = ?`,
         values
       );
@@ -293,5 +350,7 @@ class AiLabDataset {
 }
 
 AiLabDataset.CLASS_KEY_PATTERN = CLASS_KEY_PATTERN;
+AiLabDataset.KINDS = KINDS;
+AiLabDataset.COLUMN_TYPES = COLUMN_TYPES;
 
 module.exports = AiLabDataset;

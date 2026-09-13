@@ -3,7 +3,7 @@
  * 训练全程在浏览器内完成；服务器只保存嵌入向量（artifact）与元数据。
  */
 import React, { useState } from 'react'
-import { Button, Progress, Alert, Input, Space, Tag, Typography, message } from 'antd'
+import { Button, Progress, Alert, Input, Space, Tag, Typography, Radio, message } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
@@ -13,13 +13,18 @@ import { trainKnn, serializeKnn, DEFAULT_K } from '../engine/knn'
 
 const { Text } = Typography
 
-const TrainPanel = ({ dataset, models, minPerClass, canEdit }) => {
+/**
+ * perClassLimits：给出时显示"每类用多少张"选项（L4 实验），训练只取每类前 N 张（按 id 排序，确定性）
+ * extraParams：并入 params 与 train.run 事实的附加信息（如当前错标数量）
+ */
+const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, extraParams }) => {
   const { t } = useTranslation()
   const { fetchSamples, saveModel, recordEvent, extractor, setExtractor } = useAiLabStore()
   const [stage, setStage] = useState('idle') // idle | model | embed | save
   const [progress, setProgress] = useState(0)
   const [note, setNote] = useState('')
   const [error, setError] = useState(null)
+  const [perClassLimit, setPerClassLimit] = useState(perClassLimits?.[0] || 'all')
 
   const classes = dataset?.classes || []
   const trainCounts = dataset?.counts?.train || {}
@@ -45,7 +50,14 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit }) => {
     try {
       setStage('model')
       await ensureExtractor()
-      const samples = await fetchSamples(dataset.id, { split: 'train' })
+      let samples = await fetchSamples(dataset.id, { split: 'train' })
+      if (perClassLimits?.length && perClassLimit !== 'all') {
+        const taken = {}
+        samples = [...samples].sort((a, b) => a.id - b.id).filter((s) => {
+          taken[s.class_key] = (taken[s.class_key] || 0) + 1
+          return taken[s.class_key] <= perClassLimit
+        })
+      }
       const present = new Set(samples.map((s) => s.class_key))
       if (present.size < 2) {
         message.warning(t('aiLab.train.needTwoClasses'))
@@ -69,7 +81,7 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit }) => {
         dataset_version: dataset.version,
         engine: 'image-knn',
         feature_extractor: FEATURE_EXTRACTOR_ID,
-        params: { k: knn.k, metric: 'cosine' },
+        params: { k: knn.k, metric: 'cosine', ...(perClassLimits?.length && perClassLimit !== 'all' ? { per_class_limit: perClassLimit } : {}), ...(extraParams || {}) },
         class_keys: knn.classKeys,
         train_sample_count: samples.length,
         artifact: serializeKnn(knn, { feature_extractor: FEATURE_EXTRACTOR_ID, dataset_version: dataset.version }),
@@ -82,6 +94,8 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit }) => {
         train_sample_count: samples.length,
         class_counts: classCounts,
         k: knn.k,
+        per_class_limit: perClassLimits?.length && perClassLimit !== 'all' ? perClassLimit : undefined,
+        ...(extraParams || {}),
         duration_ms: Date.now() - started,
         note: note.trim() || undefined
       })
@@ -119,6 +133,14 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit }) => {
       )}
       {!dataset?.locked_at && (
         <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={t('aiLab.train.lockFirst')} />
+      )}
+      {perClassLimits?.length > 0 && (
+        <div className="ailab-field">
+          <label>{t('aiLab.train.perClassLimit')}</label>
+          <Radio.Group value={perClassLimit} onChange={(e) => setPerClassLimit(e.target.value)} optionType="button" size="small" disabled={!canEdit}
+            options={[...perClassLimits.map((v) => ({ value: v, label: String(v) })), { value: 'all', label: t('aiLab.preset.perClassAll') }]} />
+          <span className="ailab-muted" style={{ marginLeft: 8 }}>{t('aiLab.train.perClassLimitHint')}</span>
+        </div>
       )}
       {nextVersion > 1 && canEdit && (
         <Input.TextArea

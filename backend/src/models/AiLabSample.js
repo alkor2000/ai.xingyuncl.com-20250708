@@ -1,14 +1,16 @@
 /**
- * AI训练专区 - 图片样本模型（ai_lab_samples）
+ * AI训练专区 - 样本模型（ai_lab_samples）：图片样本与表格行样本
  *
  * 功能：
- * - 批量创建（事务内逐条插入以拿到每条 insertId）
+ * - 批量创建（事务内逐条插入以拿到每条 insertId；insertMany 可挂到外部事务）
  * - 按 ID 查询、按数据集过滤列表（split / class_key / shift_set / include_removed）
  * - lock 候选查询（本轮新加、train、未删除）
  * - 白名单更新（class_key / condition_tags / split / shift_set）
  * - 软删除：removed_version 记当前 dataset.version，查询默认过滤 removed_version IS NULL
+ * - 混入错标：候选查询、批量改标（original_class_key 记原值）、全部恢复
+ * - 预置包来源去重：按 origin_ref 查询已导入的样本
  *
- * 对外对象统一附 file_url = '/uploads/' + file_path
+ * 对外对象统一附 file_url = '/uploads/' + file_path（表格行样本 file_path 为 NULL 时 file_url 为 null）
  */
 
 const dbConnection = require('../database/connection');
@@ -42,12 +44,15 @@ class AiLabSample {
       split: row.split,
       shift_set: row.shift_set,
       condition_tags: AiLabSample.parseJson(row.condition_tags, null),
+      original_class_key: row.original_class_key ?? null,
       source: row.source,
+      origin_ref: row.origin_ref ?? null,
       file_path: row.file_path,
-      file_url: '/uploads/' + row.file_path,
+      file_url: row.file_path ? '/uploads/' + row.file_path : null,
       width: row.width,
       height: row.height,
       file_size: row.file_size,
+      payload: AiLabSample.parseJson(row.payload, null),
       added_version: row.added_version,
       removed_version: row.removed_version,
       created_at: row.created_at
@@ -55,8 +60,44 @@ class AiLabSample {
   }
 
   /**
-   * 批量创建样本（事务）
-   * @param {Array<Object>} items - 每项 { dataset_id, user_id, class_key, split, shift_set, condition_tags, source, file_path, width, height, file_size, added_version }
+   * 在给定事务内逐条插入样本（不开事务、不查询回来）
+   * @param {Array<Object>} items - 每项 { dataset_id, user_id, class_key, split, shift_set, condition_tags, source, origin_ref, file_path, width, height, file_size, payload, added_version }
+   * @param {Function} query - 事务内查询函数
+   * @returns {Array<number>} 新样本 id（按插入顺序）
+   */
+  static async insertMany(items, query) {
+    const insertedIds = [];
+    for (const item of items) {
+      const { rows } = await query(
+        `INSERT INTO ai_lab_samples (
+           dataset_id, user_id, class_key, split, shift_set, condition_tags, source, origin_ref,
+           file_path, width, height, file_size, payload, added_version
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.dataset_id,
+          item.user_id,
+          item.class_key,
+          item.split || 'train',
+          item.shift_set || null,
+          item.condition_tags ? JSON.stringify(item.condition_tags) : null,
+          item.source || 'camera',
+          item.origin_ref || null,
+          item.file_path ?? null,
+          item.width ?? null,
+          item.height ?? null,
+          item.file_size ?? null,
+          item.payload ? JSON.stringify(item.payload) : null,
+          item.added_version ?? 0
+        ]
+      );
+      insertedIds.push(rows.insertId);
+    }
+    return insertedIds;
+  }
+
+  /**
+   * 批量创建样本（自开事务）
+   * @param {Array<Object>} items - 见 insertMany
    * @param {Function} [afterInsert] - 事务内回调 (query, insertedIds)，可用于同步维护计数
    * @returns {Array<Object>} 已创建的样本
    */
@@ -64,30 +105,7 @@ class AiLabSample {
     if (!items.length) return [];
     try {
       const ids = await dbConnection.transaction(async (query) => {
-        const insertedIds = [];
-        for (const item of items) {
-          const { rows } = await query(
-            `INSERT INTO ai_lab_samples (
-               dataset_id, user_id, class_key, split, shift_set, condition_tags, source,
-               file_path, width, height, file_size, added_version
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              item.dataset_id,
-              item.user_id,
-              item.class_key,
-              item.split || 'train',
-              item.shift_set || null,
-              item.condition_tags ? JSON.stringify(item.condition_tags) : null,
-              item.source || 'camera',
-              item.file_path,
-              item.width ?? null,
-              item.height ?? null,
-              item.file_size ?? null,
-              item.added_version ?? 0
-            ]
-          );
-          insertedIds.push(rows.insertId);
-        }
+        const insertedIds = await AiLabSample.insertMany(items, query);
         if (afterInsert) await afterInsert(query, insertedIds);
         return insertedIds;
       });
@@ -237,6 +255,97 @@ class AiLabSample {
     } catch (error) {
       logger.error('删除样本失败:', error);
       throw new DatabaseError('删除样本失败', error);
+    }
+  }
+  /* ================================================================
+   * 混入错标 / 恢复
+   * ================================================================ */
+
+  /**
+   * 错标候选：split='train'、未删除、标签未被改过
+   * @returns {Array<{id:number, class_key:string}>}
+   */
+  static async findMislabelCandidates(datasetId) {
+    try {
+      const { rows } = await dbConnection.query(
+        `SELECT id, class_key FROM ai_lab_samples
+         WHERE dataset_id = ? AND split = 'train' AND removed_version IS NULL AND original_class_key IS NULL
+         ORDER BY id ASC`,
+        [datasetId]
+      );
+      return rows;
+    } catch (error) {
+      logger.error('查询错标候选样本失败:', error);
+      throw new DatabaseError('查询错标候选失败', error);
+    }
+  }
+
+  /**
+   * 批量改标：original_class_key 记原值，class_key 改为目标类别（事务；只改仍未被改过的样本）
+   * @param {number} datasetId
+   * @param {Array<{id:number, to:string}>} changes
+   * @returns {Array<number>} 实际改动的样本 id
+   */
+  static async applyMislabels(datasetId, changes) {
+    if (!changes.length) return [];
+    try {
+      return await dbConnection.transaction(async (query) => {
+        const changedIds = [];
+        for (const change of changes) {
+          const { rows } = await query(
+            `UPDATE ai_lab_samples
+             SET original_class_key = class_key, class_key = ?
+             WHERE id = ? AND dataset_id = ? AND removed_version IS NULL AND original_class_key IS NULL`,
+            [change.to, change.id, datasetId]
+          );
+          if (rows.affectedRows > 0) changedIds.push(change.id);
+        }
+        return changedIds;
+      });
+    } catch (error) {
+      logger.error('混入错标失败:', error);
+      throw new DatabaseError('混入错标失败', error);
+    }
+  }
+
+  /**
+   * 恢复全部被改过的标签并清空 original_class_key
+   * @returns {number} 恢复条数
+   */
+  static async restoreLabels(datasetId) {
+    try {
+      const { rows } = await dbConnection.query(
+        `UPDATE ai_lab_samples
+         SET class_key = original_class_key, original_class_key = NULL
+         WHERE dataset_id = ? AND original_class_key IS NOT NULL`,
+        [datasetId]
+      );
+      return rows.affectedRows;
+    } catch (error) {
+      logger.error('恢复样本标签失败:', error);
+      throw new DatabaseError('恢复样本标签失败', error);
+    }
+  }
+
+  /* ================================================================
+   * 预置包来源
+   * ================================================================ */
+
+  /**
+   * 数据集内未删除样本的 origin_ref 集合（用于重复导入去重）
+   * @returns {Set<string>}
+   */
+  static async findOriginRefs(datasetId) {
+    try {
+      const { rows } = await dbConnection.query(
+        `SELECT origin_ref FROM ai_lab_samples
+         WHERE dataset_id = ? AND removed_version IS NULL AND origin_ref IS NOT NULL`,
+        [datasetId]
+      );
+      return new Set(rows.map(row => row.origin_ref));
+    } catch (error) {
+      logger.error('查询样本来源失败:', error);
+      throw new DatabaseError('查询样本来源失败', error);
     }
   }
 }

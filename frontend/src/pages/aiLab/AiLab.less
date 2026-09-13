@@ -88,3 +88,48 @@
   .ailab-capture { grid-template-columns: 1fr; }
   .ailab-task-radio { grid-template-columns: 1fr; }
 }
+
+// 第二批实验：预置包、表格数据、规则/决策树、核实工作台
+.ailab-preset-list { display: flex; flex-direction: column; gap: 6px; width: 100%;
+  .ailab-preset-option { display: flex; align-items: flex-start; padding: 8px 10px; border: 1px solid #f0f0f0; border-radius: 6px; margin: 0;
+    &.ant-radio-wrapper-checked { border-color: #1e4c8a; background: #f4f7fb; }
+    > span:last-child { flex: 1; min-width: 0; }
+  }
+  .ailab-preset-title { font-weight: 600; }
+  .ailab-preset-desc { font-size: 12.5px; color: rgba(0, 0, 0, 0.65); margin: 2px 0; }
+}
+.ailab-preset-options { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e8e8e8; }
+.ailab-task-group { margin-bottom: 10px; .ailab-task-group-title { font-size: 12px; color: rgba(0, 0, 0, 0.45); margin: 4px 0 6px; letter-spacing: 0.04em; } }
+.ailab-task-option-meta { margin-top: 4px; .ant-tag { margin-inline-end: 4px; font-size: 11px; line-height: 16px; } }
+
+.ailab-class-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 10px; border: 1px solid #f0f0f0; border-radius: 16px; background: #fafafa; b { margin-right: 4px; } .ant-tag { margin: 0; } }
+.ailab-stats td { text-align: center; white-space: nowrap; }
+.ailab-stat-range small { color: rgba(0, 0, 0, 0.35); }
+.ailab-add-row { margin-top: 12px; padding: 10px; border: 1px dashed #d9d9d9; border-radius: 6px; }
+.ailab-scatter { max-width: 560px; svg { width: 100%; height: auto; display: block; } }
+.ailab-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-top: 4px;
+  span { display: inline-flex; align-items: center; gap: 4px; }
+  i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+}
+.ailab-curve { max-width: 480px; svg { width: 100%; height: auto; display: block; } }
+
+.ailab-rule-editor { .ailab-rule-scatter { margin-bottom: 12px; } }
+.ailab-rule-card { border: 1px solid #ebeef0; border-left: 3px solid #1e4c8a; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; background: #fbfcfd; }
+.ailab-rule-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.ailab-rule-if, .ailab-rule-then, .ailab-rule-and { font-weight: 600; color: #1e4c8a; }
+.ailab-rule-and { color: #b0540e; }
+.ailab-rule-list { padding-left: 20px; margin: 0; li { margin: 4px 0; line-height: 1.8; } code { background: #f4f7f8; padding: 1px 5px; border-radius: 3px; } .ailab-muted { margin-left: 6px; } }
+.ailab-tree { font-size: 13px; line-height: 1.9; }
+.ailab-tree-node { display: flex; align-items: center; gap: 6px; code { background: #f4f7f8; padding: 1px 6px; border-radius: 3px; } &.leaf { } }
+.ailab-tree-branch { display: inline-block; min-width: 22px; text-align: center; font-size: 11px; border-radius: 3px; padding: 0 4px; background: #eef2f5; color: #555; &.yes { background: #e3f1ea; color: #2c7a5a; } &.no { background: #fbefe3; color: #b0540e; } }
+.ailab-thumb-mislabeled { outline: 2px solid #c0392b; }
+
+.ailab-verify-material { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+.ailab-verify-col { border: 1px solid #ebeef0; border-radius: 6px; padding: 10px 12px; background: #fbfcfd; min-width: 0; }
+.ailab-verify-label { font-size: 12px; color: rgba(0, 0, 0, 0.55); margin-bottom: 6px; }
+.ailab-verify-text { white-space: pre-wrap; font-size: 13.5px; line-height: 1.8; margin-bottom: 0 !important; }
+.ailab-claim-list { padding-left: 20px; li { display: flex; align-items: center; gap: 6px; margin: 3px 0; } }
+
+@media (max-width: 900px) {
+  .ailab-verify-material { grid-template-columns: 1fr; }
+}

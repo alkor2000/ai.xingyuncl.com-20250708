@@ -12,6 +12,7 @@ import { formatPercent } from './engine/metrics'
 import './AiLab.less'
 
 const { Title, Text, Paragraph } = Typography
+const GRADE_BANDS = ['L', 'P', 'M', 'H']
 
 const AiLab = () => {
   const { t, i18n } = useTranslation()
@@ -117,16 +118,28 @@ const AiLab = () => {
         confirmLoading={creating}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
-        width={640}
+        width={720}
       >
         <Form form={form} layout="vertical" onFinish={handleCreate} initialValues={{ task_key: tasks[0]?.key || 'P1', participation_mode: 'individual' }}>
           <Form.Item name="task_key" label={t('aiLab.form.task')} rules={[{ required: true }]}>
-            <Radio.Group className="ailab-task-radio">
-              {tasks.map((task) => (
-                <Radio.Button key={task.key} value={task.key} className="ailab-task-option">
-                  <div className="ailab-task-option-title">{taskTitle(task)}</div>
-                  <div className="ailab-task-option-desc">{taskDesc(task)}</div>
-                </Radio.Button>
+            <Radio.Group style={{ width: '100%' }}>
+              {GRADE_BANDS.filter((g) => tasks.some((task) => (task.grade_band || 'P') === g)).map((g) => (
+                <div className="ailab-task-group" key={g}>
+                  <div className="ailab-task-group-title">{t(`aiLab.grade.${g}`)}</div>
+                  <div className="ailab-task-radio">
+                    {tasks.filter((task) => (task.grade_band || 'P') === g).map((task) => (
+                      <Radio.Button key={task.key} value={task.key} className="ailab-task-option">
+                        <div className="ailab-task-option-title">{taskTitle(task)}</div>
+                        <div className="ailab-task-option-desc">{taskDesc(task)}</div>
+                        <div className="ailab-task-option-meta">
+                          <Tag>{t(`aiLab.kind.${task.kind || 'image'}`)}</Tag>
+                          {task.hours && <Tag>{t('aiLab.form.hours', { hours: task.hours })}</Tag>}
+                          {task.presets?.length > 0 && <Tag color="cyan">{t('aiLab.form.hasPresets')}</Tag>}
+                        </div>
+                      </Radio.Button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </Radio.Group>
           </Form.Item>

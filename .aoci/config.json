@@ -51,6 +51,18 @@
     },
     "rules": [
       {
+        "rule_id": "exclude-ai-lab-presets",
+        "action": "exclude",
+        "pattern": "backend/presets",
+        "pattern_kind": "directory",
+        "reason": "AI训练专区预置数据包（图片与数据表），是数据不是代码，不入认知索引",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "claude",
+        "order": 0,
+        "enabled": true
+      },
+      {
         "rule_id": "exclude-aoci-legacy-docs",
         "action": "exclude",
         "pattern": "docs/aoci-legacy",

@@ -30,6 +30,8 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
   const model = useMemo(() => models.find((m) => m.id === modelId) || models[models.length - 1], [models, modelId])
   useEffect(() => { if (model && modelId !== model.id) setModelId(model.id) }, [model, modelId])
   useEffect(() => { setResults({}) }, [modelId])
+  /* 训练出新版本后自动切到最新版，学生接着测的就是刚训练的那一版 */
+  useEffect(() => { const latest = models[models.length - 1]; if (latest) setModelId(latest.id) }, [models.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shiftSets = useMemo(() => Object.keys(dataset?.counts?.shift || {}), [dataset])
   useEffect(() => { if (!shiftSet && shiftSets.length) setShiftSet(shiftSets[0]) }, [shiftSets, shiftSet])
