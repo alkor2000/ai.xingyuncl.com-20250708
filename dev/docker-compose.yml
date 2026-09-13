@@ -1,0 +1,45 @@
+# 本地开发环境：MySQL 8.0（与线上同大版本）+ Redis 7
+# 用法（仓库根目录）：make db-up / make db-down，或
+#   docker compose --env-file backend/.env -f dev/docker-compose.yml up -d
+# DB_USER / DB_PASSWORD / DB_NAME 取自 backend/.env，因此后端配置与线上保持一致。
+# 端口用 3307 / 6380：本机 3306 / 6379 / 5432 已被 pkuailab-mysql / pkuailab-redis / tedna-postgres 占用。
+name: practice-dev
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: practice-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --max_allowed_packet=256M
+      - --innodb-buffer-pool-size=1G
+      - --innodb-flush-log-at-trx-commit=2
+      - --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:-devroot}
+      MYSQL_DATABASE: ${DB_NAME:-ai_platform}
+      MYSQL_USER: ${DB_USER:?set DB_USER in backend/.env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in backend/.env}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - practice-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DEV_MYSQL_ROOT_PASSWORD:-devroot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    container_name: practice-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - practice-redis-data:/data
+volumes:
+  practice-mysql-data:
+  practice-redis-data:

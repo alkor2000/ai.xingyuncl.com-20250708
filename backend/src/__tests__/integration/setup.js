@@ -16,12 +16,12 @@
 process.env.NODE_ENV = 'test';
 process.env.DB_NAME = 'ai_platform_test';
 process.env.DB_HOST = 'localhost';
-process.env.DB_PORT = '3306';
+process.env.DB_PORT = process.env.TEST_DB_PORT || '3306';
 process.env.DB_USER = 'ai_user';
 process.env.DB_PASSWORD = 'AiPlatform@2025!';
 process.env.DB_CONNECTION_LIMIT = '5';
 process.env.REDIS_HOST = 'localhost';
-process.env.REDIS_PORT = '6379';
+process.env.REDIS_PORT = process.env.TEST_REDIS_PORT || '6379';
 process.env.REDIS_DB = '1';
 process.env.REDIS_KEY_PREFIX = 'ai_test:';
 process.env.JWT_ACCESS_SECRET = 'integration-test-access-secret-key-32chars!!';

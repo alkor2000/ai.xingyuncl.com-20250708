@@ -1,0 +1,554 @@
+{
+  "version": 2,
+  "locale": "zh-CN",
+  "index_path": "aoci.txt",
+  "exclude_dirs": [
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    "coverage",
+    "tmp",
+    "uploads",
+    "backup",
+    "backups",
+    "artifacts",
+    ".output",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".nox",
+    "htmlcov"
+  ],
+  "exclude_files": [
+    "*.backup.*",
+    "*.bak",
+    ".coverage"
+  ],
+  "exclude_exts": [],
+  "curation_exclude": [],
+  "hook_strict": false,
+  "ledger_enabled": true,
+  "line_ending_tolerance": true,
+  "cognition_refresh_threshold": 30,
+  "overview_delivery": {
+    "chunk_tokens": 8000
+  },
+  "managed_scope": {
+    "version": "managed-scope-policy/v2",
+    "profile": "production",
+    "observe_change_policy": "review_required",
+    "approval_mode": "inherit",
+    "approval_thresholds": {
+      "entry_removal_count": 25,
+      "entry_removal_percent": 25
+    },
+    "rules": [
+      {
+        "rule_id": "exclude-aoci-legacy-docs",
+        "action": "exclude",
+        "pattern": "docs/aoci-legacy",
+        "pattern_kind": "directory",
+        "reason": "2026-09 旧索引拆分参考资料，不入索引",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-backend-archived",
+        "action": "exclude",
+        "pattern": "backend/archived_files",
+        "pattern_kind": "directory",
+        "reason": "已归档的旧控制器与备份副本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-backend-casbin-sync",
+        "action": "exclude",
+        "pattern": "backend/sync-auth-to-casbin.js",
+        "pattern_kind": "file",
+        "reason": "一次性数据同步脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-backend-oneoff",
+        "action": "exclude",
+        "pattern": "backend/test-*.js",
+        "pattern_kind": "glob",
+        "reason": "一次性联调脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-backend-test-sh",
+        "action": "exclude",
+        "pattern": "backend/test.sh",
+        "pattern_kind": "file",
+        "reason": "一次性联调脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-compose-old",
+        "action": "exclude",
+        "pattern": "docker-compose.yml.old.*",
+        "pattern_kind": "glob",
+        "reason": "旧 compose 副本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-copies-dot-ts",
+        "action": "exclude",
+        "pattern": "**/*.20??????_??????",
+        "pattern_kind": "glob",
+        "reason": "时间戳备份副本（.YYYYMMDD_HHMMSS 后缀）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-copies-us-ts",
+        "action": "exclude",
+        "pattern": "**/*_20??????_??????",
+        "pattern_kind": "glob",
+        "reason": "时间戳备份副本（_YYYYMMDD_HHMMSS 后缀）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-copies-us-ts-ext",
+        "action": "exclude",
+        "pattern": "**/*_20??????_??????.*",
+        "pattern_kind": "glob",
+        "reason": "时间戳备份副本（带扩展名）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-coverage-json",
+        "action": "exclude",
+        "pattern": "backend/coverage-combined.json",
+        "pattern_kind": "file",
+        "reason": "测试覆盖率产物",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-database-legacy",
+        "action": "exclude",
+        "pattern": "database",
+        "pattern_kind": "directory",
+        "reason": "历史 SQL 迁移与备份、含口令的迁移脚本；现役迁移在 backend/migrations",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-docker-mysql-init",
+        "action": "exclude",
+        "pattern": "docker/mysql-init",
+        "pattern_kind": "directory",
+        "reason": "数据库结构与初始数据 SQL，非代码认知",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-docs-aoci-old",
+        "action": "exclude",
+        "pattern": "docs/aoci",
+        "pattern_kind": "directory",
+        "reason": "2026-01 旧版索引原文，非源码",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-frontend-public",
+        "action": "exclude",
+        "pattern": "frontend/public",
+        "pattern_kind": "directory",
+        "reason": "favicon 与内置 TinyMCE 发行文件，非本项目源码",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-license",
+        "action": "exclude",
+        "pattern": "LICENSE",
+        "pattern_kind": "file",
+        "reason": "许可证文本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-nginx-dated",
+        "action": "exclude",
+        "pattern": "docker/nginx/*.2025*",
+        "pattern_kind": "glob",
+        "reason": "nginx 配置日期副本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-nginx-reference",
+        "action": "exclude",
+        "pattern": "docker/nginx/*.reference*",
+        "pattern_kind": "glob",
+        "reason": "nginx 配置参考副本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-ops-scripts",
+        "action": "exclude",
+        "pattern": "scripts",
+        "pattern_kind": "directory",
+        "reason": "运维脚本，含硬编码数据库口令，不进入认知",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-check-scripts",
+        "action": "exclude",
+        "pattern": "check_*",
+        "pattern_kind": "glob",
+        "reason": "根目录一次性检查脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-deploy-old",
+        "action": "exclude",
+        "pattern": "deploy*.sh",
+        "pattern_kind": "glob",
+        "reason": "被 rebuild.sh 取代的旧部署脚本（deploy.sh / deploy-docker.sh / deploy-frontend.sh）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-docker-scripts",
+        "action": "exclude",
+        "pattern": "docker_*",
+        "pattern_kind": "glob",
+        "reason": "旧 Docker 升级脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-fix-scripts",
+        "action": "exclude",
+        "pattern": "fix-*",
+        "pattern_kind": "glob",
+        "reason": "根目录一次性修复脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-hotfix",
+        "action": "exclude",
+        "pattern": "hotfix_*",
+        "pattern_kind": "glob",
+        "reason": "历史热修复脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-misc-scripts",
+        "action": "exclude",
+        "pattern": "{manage-services.sh,run-tests.sh,create-directories.sh,update-db-snapshot.sh,update-video-api-key.js,debug-profile-update.js}",
+        "pattern_kind": "glob",
+        "reason": "根目录一次性运维/调试脚本（update-db-snapshot.sh 含 root 口令）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-prod-scripts",
+        "action": "exclude",
+        "pattern": "production_*",
+        "pattern_kind": "glob",
+        "reason": "被 rebuild.sh 取代的旧升级脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-start",
+        "action": "exclude",
+        "pattern": "start*.sh",
+        "pattern_kind": "glob",
+        "reason": "被 PM2 ecosystem 取代的旧启动脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-test-scripts",
+        "action": "exclude",
+        "pattern": "test-*",
+        "pattern_kind": "glob",
+        "reason": "根目录一次性测试脚本与其备份",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-upgrade",
+        "action": "exclude",
+        "pattern": "upgrade*",
+        "pattern_kind": "glob",
+        "reason": "历史升级脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-root-verify-scripts",
+        "action": "exclude",
+        "pattern": "verify-*",
+        "pattern_kind": "glob",
+        "reason": "根目录一次性验证脚本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-teaching-fragment",
+        "action": "exclude",
+        "pattern": "backend/src/controllers/TeachingController.dual_layer_save.js",
+        "pattern_kind": "file",
+        "reason": "非模块的代码残片（class 外的 static 方法），node --check 不通过",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-teaching-js-new",
+        "action": "exclude",
+        "pattern": "backend/src/controllers/TeachingController.js.new",
+        "pattern_kind": "file",
+        "reason": "编辑残留副本",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-tools-db-upgrade",
+        "action": "exclude",
+        "pattern": "tools/database-upgrade",
+        "pattern_kind": "directory",
+        "reason": "历史数据库升级工具，非现役",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "observe-backend-tests",
+        "action": "observe",
+        "pattern": "backend/src/__tests__",
+        "pattern_kind": "directory",
+        "reason": "测试文件只观察不撰写条目（用户决定）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "observe-frontend-tests",
+        "action": "observe",
+        "pattern": "frontend/src/__tests__",
+        "pattern_kind": "directory",
+        "reason": "测试文件只观察不撰写条目（用户决定）",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "observe-identity-test-cjs",
+        "action": "observe",
+        "pattern": "backend/scripts/test-identity-*.cjs",
+        "pattern_kind": "glob",
+        "reason": "Identity 契约测试脚本只观察",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      }
+    ]
+  },
+  "cognition_budget": {
+    "version": "cognition-budget-policy/v1",
+    "mode": "enforce",
+    "whole_index": {
+      "target_tokens": 200000,
+      "warning_tokens": 300000,
+      "max_tokens": 400000
+    },
+    "r": [
+      {
+        "min_c": 1,
+        "max_c": 4,
+        "target_tokens": 25,
+        "max_tokens": 50
+      },
+      {
+        "min_c": 5,
+        "max_c": 7,
+        "target_tokens": 45,
+        "max_tokens": 90
+      },
+      {
+        "min_c": 8,
+        "max_c": 8,
+        "target_tokens": 70,
+        "max_tokens": 140
+      },
+      {
+        "min_c": 9,
+        "max_c": 9,
+        "target_tokens": 90,
+        "max_tokens": 180
+      }
+    ],
+    "s": [
+      {
+        "min_c": 1,
+        "max_c": 4,
+        "target_tokens": 20,
+        "max_tokens": 40
+      },
+      {
+        "min_c": 5,
+        "max_c": 7,
+        "target_tokens": 40,
+        "max_tokens": 80
+      },
+      {
+        "min_c": 8,
+        "max_c": 8,
+        "target_tokens": 70,
+        "max_tokens": 140
+      },
+      {
+        "min_c": 9,
+        "max_c": 9,
+        "target_tokens": 100,
+        "max_tokens": 200
+      }
+    ]
+  },
+  "installed_agents": [
+    "claude"
+  ],
+  "automation": {
+    "mode": "auto"
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "openai-compatible",
+    "base_url": "",
+    "model": "",
+    "api_key_env": "",
+    "timeout_seconds": 0,
+    "max_concurrency": 0,
+    "max_input_tokens": 0,
+    "token_accounting": "auto",
+    "prompt_snapshot": "redacted"
+  }
+}

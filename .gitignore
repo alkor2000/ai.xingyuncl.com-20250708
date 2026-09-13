@@ -115,3 +115,9 @@ backups/
 .identity-backups/
 .identity-enrollment/
 .identity-secrets/
+
+# AOCI agent host integration (machine-bound; do not commit)
+.mcp.json
+.mcp.json.backup.*
+.claude/settings.json
+.claude/settings.json.backup.*
