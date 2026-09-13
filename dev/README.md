@@ -58,7 +58,7 @@ make migrate-status                 # 看生产库 knex 迁移状态
 make migrate                        # 有迁移时：备份门后在生产执行 knex migrate:latest（顺序见 RELEASE.md）
 ```
 
-`make deploy` 前提：WSL 这把公钥在 GitHub 仓库 Settings → Deploy keys 里带 write 权限（或加到账号 SSH keys）。
+`make deploy` 前提：WSL 的 GitHub 专用公钥 `~/.ssh/id_ed25519_github.pub`（ssh 别名 `github-practice`，origin 已指向它）在本仓库 Settings → Deploy keys 里带 *Allow write access*。一把公钥在 GitHub 只能挂一处，所以不能复用挂在 pkuailab-platform 上的 `id_ed25519`。
 
 ## 目录里不该动的东西
 

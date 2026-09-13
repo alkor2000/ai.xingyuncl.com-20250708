@@ -25,7 +25,7 @@ make -s build
 
 echo "==> 推送到 GitHub ($BRANCH)..."
 if ! git push origin "$BRANCH"; then
-  echo "❌ 推送失败。WSL 这把公钥需要在 GitHub 仓库 Settings → Deploy keys 里以“Allow write access”加入，或加到账号 SSH keys。"
+  echo "❌ 推送失败。请把 ~/.ssh/id_ed25519_github.pub 加到本仓库 Settings → Deploy keys（勾选 Allow write access）；origin 走 ssh 别名 github-practice。"
   exit 1
 fi
 
