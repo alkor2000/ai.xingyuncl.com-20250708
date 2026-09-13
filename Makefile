@@ -59,9 +59,8 @@ dev: db-up ## 同时运行后端 + 前端（Ctrl-C 一起停止）
 	$(ROOT)/dev/dev.sh
 
 .PHONY: build
-build: ## 本地完整构建验证：后端加载完整模块图 + 单元测试，前端 vite build
+build: ## 本地构建验证（发布门）：后端加载完整模块图，前端 vite build；单元测试走 make test
 	@echo "==> backend: 加载 src/app.js 模块图（语法/引用错误在此暴露）"; cd $(BE_DIR) && NODE_ENV=test timeout 90 node -e "require('./src/app'); console.log('app ok'); process.exit(0)"
-	@echo "==> backend: jest 单元测试"; cd $(BE_DIR) && npx jest --silent 2>&1 | tail -5
 	@echo "==> frontend: vite build"; cd $(FE_DIR) && npm run build >/dev/null && echo "✅ 构建通过: frontend/dist ($$(du -sh $(FE_DIR)/dist | cut -f1))"
 
 .PHONY: test

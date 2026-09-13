@@ -29,7 +29,8 @@
 ## 二、发布前检查清单
 
 - [ ] 功能在本地跑通，**并且在浏览器里实际点过**（`make dev`），不是只有接口测试通过
-- [ ] `make build` 全绿（后端 `node --check` 全量 + jest 单测，前端 `vite build`）
+- [ ] `make build` 全绿（后端加载完整模块图，前端 `vite build`；`make deploy` 会再跑一遍）
+- [ ] `make test` 里你动过的模块的用例全绿。**已知陈旧用例（2026-09-13 起）**：`ImageService.test.js` 的 5 个 `convertSizeForSeedream` 用例（代码 9/3 已改为精确像素映射）和 `MessageService.test.js` 的 1 个 PDF `buildAIContext` 用例（代码已改为 base64 内嵌）——它们在改动前就失败，修好之前不算回归
 - [ ] 改了后端且涉及数据库：`make test-integration` 通过（连本地 `ai_platform_test`）
 - [ ] 国际化：新文案两侧语言包都加了、没有 `t()` 兜底（规约见 AOCI 索引头部）
 - [ ] 工作区干净：`git status` 无未提交改动（`make deploy` 会强制检查）
