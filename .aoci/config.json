@@ -183,6 +183,30 @@
         "enabled": true
       },
       {
+        "rule_id": "exclude-dev-tooling-dir",
+        "action": "exclude",
+        "pattern": "dev",
+        "pattern_kind": "directory",
+        "reason": "本地开发/发布工具链（compose、db-pull、deploy、README、RELEASE），不进入代码认知",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
+        "rule_id": "exclude-dev-tooling-makefile",
+        "action": "exclude",
+        "pattern": "Makefile",
+        "pattern_kind": "file",
+        "reason": "本地开发/发布工具链，由 CLAUDE.md 与 dev/README.md 描述，不进入代码认知",
+        "decision_basis": "maintainer_direction",
+        "source": "user",
+        "created_by": "human",
+        "order": 0,
+        "enabled": true
+      },
+      {
         "rule_id": "exclude-docker-mysql-init",
         "action": "exclude",
         "pattern": "docker/mysql-init",
