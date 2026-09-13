@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 
 # 数据迁移脚本
 set -e
@@ -13,7 +16,7 @@ NC='\033[0m'
 
 # 导出当前数据库
 echo -e "\n${GREEN}1. 导出当前数据库...${NC}"
-mysqldump -h localhost -u ai_user -p'AiPlatform@2025!' ai_platform > /tmp/ai_platform_export.sql
+mysqldump -h localhost -u ai_user -p"$DB_PASSWORD" ai_platform > /tmp/ai_platform_export.sql
 
 echo -e "\n${GREEN}2. 压缩数据库文件...${NC}"
 gzip /tmp/ai_platform_export.sql

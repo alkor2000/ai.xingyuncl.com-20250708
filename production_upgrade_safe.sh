@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 # 生产环境安全升级脚本 - 保留本地配置
 
 set -e  # 遇到错误立即退出
@@ -27,7 +30,7 @@ mkdir -p $BACKUP_DIR
 
 # 备份数据库
 echo "备份数据库..."
-docker exec ai-platform-mysql mysqldump -uai_user -p'Nebu@Platform#2025' ai_platform > $BACKUP_DIR/database.sql 2>/dev/null || {
+docker exec ai-platform-mysql mysqldump -uai_user -p"$DB_PASSWORD" ai_platform > $BACKUP_DIR/database.sql 2>/dev/null || {
     echo -e "${RED}数据库备份失败，请检查密码${NC}"
     exit 1
 }
@@ -67,7 +70,7 @@ echo -e "${GREEN}✓ 本地配置已恢复${NC}"
 # 5. 执行数据库迁移
 echo -e "${YELLOW}步骤5: 执行数据库迁移...${NC}"
 # 获取当前最新的迁移版本
-CURRENT_VERSION=$(docker exec ai-platform-mysql mysql -uai_user -p'Nebu@Platform#2025' ai_platform -N -e "
+CURRENT_VERSION=$(docker exec ai-platform-mysql mysql -uai_user -p"$DB_PASSWORD" ai_platform -N -e "
     SELECT COALESCE(MAX(CAST(SUBSTRING(version, 1, 3) AS UNSIGNED)), 0) 
     FROM schema_migrations 
     WHERE version REGEXP '^[0-9]{3}'" 2>/dev/null || echo "19")
@@ -79,7 +82,7 @@ for i in {20..28}; do
     migration_file=$(ls database/migrations/0${i}*.sql 2>/dev/null | head -1)
     if [ -f "$migration_file" ] && [ "$i" -gt "$CURRENT_VERSION" ]; then
         echo "执行迁移: $(basename $migration_file)"
-        docker exec -i ai-platform-mysql mysql -uai_user -p'Nebu@Platform#2025' ai_platform < "$migration_file" 2>&1 | grep -v "Warning" || true
+        docker exec -i ai-platform-mysql mysql -uai_user -p"$DB_PASSWORD" ai_platform < "$migration_file" 2>&1 | grep -v "Warning" || true
     fi
 done
 echo -e "${GREEN}✓ 数据库迁移完成${NC}"
@@ -149,7 +152,7 @@ fi
 
 # 检查数据库连接
 echo -n "数据库连接: "
-if docker exec ai-platform-mysql mysql -uai_user -p'Nebu@Platform#2025' -e "SELECT 1" > /dev/null 2>&1; then
+if docker exec ai-platform-mysql mysql -uai_user -p"$DB_PASSWORD" -e "SELECT 1" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ 正常${NC}"
 else
     echo -e "${RED}✗ 异常${NC}"
@@ -182,7 +185,7 @@ if [ "$HEALTH_OK" = false ]; then
     echo -e "${YELLOW}如需回滚，执行以下命令：${NC}"
     echo "cd /var/www/ai-platform"
     echo "docker-compose down"
-    echo "docker exec -i ai-platform-mysql mysql -uai_user -p'Nebu@Platform#2025' ai_platform < $BACKUP_DIR/database.sql"
+    echo "docker exec -i ai-platform-mysql mysql -uai_user -p\"\$DB_PASSWORD\" ai_platform < $BACKUP_DIR/database.sql"
     echo "cp $BACKUP_DIR/nginx_default.conf docker/nginx/default.conf"
     echo "docker-compose up -d"
 fi

@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 
 # AI Platform 完整功能测试脚本
 # 测试前后端所有核心功能
@@ -51,7 +54,7 @@ netstat -tlnp | grep -q ":3000.*LISTEN"
 test_result $? "前端端口3000监听"
 
 # 检查数据库连接
-mysql -u ai_user -p'AiPlatform@2025!' -e "SELECT 1;" ai_platform >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" -e "SELECT 1;" ai_platform >/dev/null 2>&1
 test_result $? "数据库连接"
 
 echo ""
@@ -215,19 +218,19 @@ echo -e "${BLUE}📋 6. 数据库完整性测试${NC}"
 echo "-------------------------"
 
 # 检查核心数据表
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "SELECT COUNT(*) FROM users;" >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) FROM users;" >/dev/null 2>&1
 test_result $? "用户表数据"
 
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "SELECT COUNT(*) FROM conversations;" >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) FROM conversations;" >/dev/null 2>&1
 test_result $? "对话表数据"
 
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "SELECT COUNT(*) FROM messages;" >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) FROM messages;" >/dev/null 2>&1
 test_result $? "消息表数据"
 
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "SELECT COUNT(*) FROM ai_models;" >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) FROM ai_models;" >/dev/null 2>&1
 test_result $? "AI模型表数据"
 
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "SELECT COUNT(*) FROM permissions;" >/dev/null 2>&1
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) FROM permissions;" >/dev/null 2>&1
 test_result $? "权限表数据"
 
 echo ""

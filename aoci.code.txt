@@ -18,11 +18,10 @@ docker-compose.yml[FV4S]: F:C·Docker主编排(客户交付基线)：mysql/redis
 ecosystem.config.js[OV6T]: F:C·PM2配置：ai-platform-auth(backend/src/server.js，fork单实例，PORT 4000，2G内存重启，日志logs/backend/auth)与ai-platform-frontend(start-production.cjs，PORT 3000) | R:code:backend/src/server.js,code:frontend/start-production.cjs,code:rebuild.sh | A:- | S:路径写死/var/www/ai-platform，本地不可直接用；ai-platform-frontend进程nginx并不使用，属历史遗留
 manage-services.sh[OV2T]: F:C·PM2服务管理脚本(start/stop/restart/reload/status/logs/build) | R:code:ecosystem.config.js | A:- | S:脚本内$1被写成\$1，case匹配永远失败，实际不可用
 package-lock.json[FV2L]: F:C·根目录package.json的锁文件(ali-oss/axios/colors/mysql2) | R:code:package.json | A:- | S:-
-package.json[FV3T]: F:C·根目录package.json：仅为一次性脚本提供ali-oss/axios/colors/mysql2依赖，无有效scripts，main指向ecosystem.config.js | R:code:ecosystem.config.js,code:update-video-api-key.js,code:backend/package.json | A:- | S:真正的应用依赖在backend/与frontend/各自的package.json
-rebuild.sh[OV7M]: F:C·生产重构部署脚本(--full默认/--restart/--build/--check)：环境检查(磁盘、nginx -t、pm2)→NODE_OPTIONS 4G构建前端→pm2 delete all并清日志后pm2 start ecosystem→/health重试10次 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:- | S:不装依赖、不跑迁移(由make deploy/make migrate负责)；会删掉全部PM2进程再重建，后端有秒级不可用；路径写死/var/www/ai-platform
+package.json[FV3T]: F:C·根目录package.json：仅为根目录一次性脚本提供ali-oss/axios/colors/mysql2依赖，无有效scripts，main指向ecosystem.config.js | R:code:ecosystem.config.js,code:backend/package.json | A:- | S:真正的应用依赖在backend/与frontend/各自的package.json
+rebuild.sh[OV7M]: F:C·生产重构部署脚本(--full默认/--restart/--build/--check)：环境检查(磁盘、nginx -t、pm2、MySQL)→NODE_OPTIONS 4G构建前端→pm2 delete all并清日志后pm2 start ecosystem→/health重试10次 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:- | S:不装依赖、不跑迁移(由make deploy/make migrate负责)；会删掉全部PM2进程再重建，后端有秒级不可用；MySQL检查口令取DB_PASSWORD或backend/.env，缺失只告警；路径写死/var/www/ai-platform
 run-tests.sh[TQ2T]: F:C·服务器上顺序跑backend npm test与frontend npm test --run并汇总 | R:code:frontend/vitest.config.js | A:- | S:路径写死/var/www/ai-platform
-update-db-snapshot.sh[OV2T]: F:C·mysqldump导出ai_platform全量快照并统计用户/对话/消息数 | R:code:docker/scripts/migrate-data.sh | A:- | S:命令行硬编码了root口令与服务器路径，公开仓库风险
-update-video-api-key.js[XB2T]: F:V·一次性脚本：用aes-256-cbc加密新API密钥后UPDATE video_models id=1 | R:code:backend/src/models/VideoModel.js | A:- | S:硬编码数据库口令、API密钥与加密盐，公开仓库风险；加密方式须与后端一致
+update-db-snapshot.sh[OV2T]: F:C·mysqldump导出ai_platform全量快照并统计用户/对话/消息数，root口令取环境变量MYSQL_ROOT_PASSWORD | R:code:docker/scripts/migrate-data.sh | A:- | S:未设MYSQL_ROOT_PASSWORD即退出；输出路径写死服务器目录
 
 ===/home/hanying/ai-platform/backend/===
 jest.combined.config.js[TQ4T]: F:C·Jest合并覆盖率配置：单元+集成测试一起跑，用integration/setup.js，串行30s，覆盖率输出coverage-combined | R:code:backend/src/__tests__/integration/setup.js,code:backend/jest.config.js | A:- | S:-
@@ -325,7 +324,7 @@ html_editor_route.conf[FN2T]: F:H·nginx片段：/pages/{userId}/{slug}反代bac
 ===/home/hanying/ai-platform/docker/scripts/===
 database-upgrade.sh[OD2T]: F:C·容器内数据库智能升级入口(db-upgrade)：等待5秒后在/app/tools/database-upgrade装依赖，以--dry-run运行upgrade.js对比schema/v1.2.0_complete.sql | R:code:docker/Dockerfile.backend | A:- | S:只做dy-run分析不改库
 init-customer.sh[OV4S]: F:C·客户部署初始化：按域名生成.env(随机DB/Redis口令与64字节JWT双密钥、APP_DOMAIN/CORS_ORIGINS)，certbot standalone签证书并写renewal配置，提示docker-compose up -d | R:code:docker-compose.yml,code:docker/Dockerfile.frontend | A:- | S:已有.env时中止不覆盖；需root、openssl、node、certbot且80端口空闲
-migrate-data.sh[OD2T]: F:C·旧服务器数据导出：mysqldump ai_platform并gzip，tar打包storage/uploads到/tmp供迁移 | R:- | A:- | S:文件内硬编码了数据库口令与服务器路径，不要再用
+migrate-data.sh[OV2T]: F:C·数据迁移导出：mysqldump ai_platform并gzip，打包storage/uploads，口令取环境变量DB_PASSWORD | R:code:docker/scripts/init-customer.sh,code:docker-compose.yml | A:- | S:未设DB_PASSWORD即退出；路径写死/var/www/ai-platform
 run-migrations.sh[OD4S]: F:C·容器启动迁移：nc等待MySQL就绪，建schema_migrations(主)与migrations_history(兼容)表并互相同步，按文件名顺序执行/app/database/migrations/*.sql中未记录的迁移并双表登记 | R:code:docker/Dockerfile.backend,code:backend/src/server.js | A:- | S:set -e，任一迁移SQL失败容器启动失败；本地/正式环境迁移走make migrate，不用此脚本
 
 ===/home/hanying/ai-platform/docs/===
@@ -339,7 +338,7 @@ package-lock.json[FV2L]: F:C·前端npm锁文件(lockfileVersion 3，约1000个�
 package.json[FV6T]: F:C·前端包定义(ESM)：React 18+Vite 5+Antd 5+Zustand+react-router 6+i18next+axios+socket.io-client，monaco/codemirror、echarts/d3/mermaid/markmap、reactflow、dnd-kit | R:code:frontend/vite.config.js,code:frontend/vitest.config.js,code:frontend/src/main.jsx | A:- | S:lint与type-check脚本只是echo占位；build需NODE_OPTIONS 4G否则内存溢出
 serve.json[FV2T]: F:C·serve静态服务配置：js/css一年immutable缓存，html不缓存 | R:code:frontend/start-production.cjs | A:- | S:仅历史ai-platform-frontend进程使用
 start-production.cjs[OV3T]: F:C·前端生产启动脚本：spawn serve -s dist -l 3000 --single，转发SIGTERM/SIGINT | R:code:ecosystem.config.js | A:- | S:线上nginx直出dist，此进程实际不承担流量
-vite.config.js[FV7S]: F:C·Vite配置：React插件+Monaco插件(html/css/json/ts worker)，dev :3000代理/api→localhost:4000，build按vendor手动分包(react/router/antd/monaco/prism/markdown)，别名@→/src | R:code:frontend/package.json,code:frontend/src/main.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:server.allowedHosts硬编码了生产域名与一台服务器IP，公开仓库注意；sourcemap关闭
+vite.config.js[FV7S]: F:C·Vite配置：React插件+Monaco插件(html/css/json/ts worker)，dev :3000代理/api→localhost:4000，build按vendor手动分包(react/router/antd/monaco/prism/markdown)，别名@→/src | R:code:frontend/package.json,code:frontend/src/main.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:server.allowedHosts仅生产域名/localhost/127.0.0.1，dev服务器不接受其他Host；sourcemap关闭
 vitest.config.js[TQ4T]: F:C·Vitest配置：jsdom环境，setup为src/__tests__/setup.js，include src/**/*.{test,spec}.{js,jsx}，v8覆盖率，别名@ | R:code:frontend/vite.config.js,code:frontend/package.json | A:- | S:测试目录在AOCI中仅observe不建条目
 
 ===/home/hanying/ai-platform/frontend/src/===

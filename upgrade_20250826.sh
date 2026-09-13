@@ -1,11 +1,14 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 # 第四次快速升级 - 仅代码更新
 
 cd /var/www/ai-platform
 
 # 备份
 echo "备份数据库..."
-docker-compose exec mysql mysqldump -uai_user -p'Nebu@Platform#2025' --no-tablespaces ai_platform > backup_$(date +%Y%m%d_%H%M%S).sql
+docker-compose exec mysql mysqldump -uai_user -p"$DB_PASSWORD" --no-tablespaces ai_platform > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 更新
 echo "拉取代码..."

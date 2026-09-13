@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${MYSQL_ROOT_PASSWORD:?请先设置环境变量 MYSQL_ROOT_PASSWORD}"
+
 
 echo "=== AI平台系统维护脚本 ==="
 echo "开始时间: $(date)"
@@ -12,7 +15,7 @@ echo ""
 
 # 2. 优化数据库表
 echo "2. 优化数据库表..."
-mysql -u root -pqazQ1233210 ai_platform -e "
+mysql -u root -p"$MYSQL_ROOT_PASSWORD" ai_platform -e "
 OPTIMIZE TABLE messages;
 OPTIMIZE TABLE conversations;
 OPTIMIZE TABLE user_activities;

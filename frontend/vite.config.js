@@ -42,8 +42,7 @@ export default defineConfig({
     allowedHosts: [
       'ai.xingyuncl.com',
       'localhost',
-      '127.0.0.1',
-      '47.236.40.252'
+      '127.0.0.1'
     ],
     proxy: {
       '/api': {

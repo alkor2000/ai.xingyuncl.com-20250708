@@ -16,6 +16,8 @@ ECOSYSTEM="${PROJECT_DIR}/ecosystem.config.js"
 HEALTH_URL="https://ai.xingyuncl.com/health"
 FRONTEND_DIR="${PROJECT_DIR}/frontend"
 BACKEND_DIR="${PROJECT_DIR}/backend"
+# 数据库口令：优先环境变量 DB_PASSWORD，其次读 backend/.env；都没有则跳过 MySQL 检查（不写死在脚本里）
+DB_PASSWORD="${DB_PASSWORD:-$(grep -E '^DB_PASSWORD=' "${BACKEND_DIR}/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//")}"
 LOG_DIR="${PROJECT_DIR}/logs"
 NODE_MEM="4096"           # 前端构建内存(MB)
 HEALTH_RETRIES=10         # 健康检查重试次数
@@ -80,9 +82,12 @@ check_environment() {
 
     # --- MySQL ---
     echo -e "\n${BLUE}🗄️  MySQL${NC}"
-    if mysqladmin ping -u ai_user -p'AiPlatform@2025!' --silent 2>/dev/null; then
+    if [ -z "${DB_PASSWORD}" ]; then
+        warn "未提供 DB_PASSWORD（环境变量或 backend/.env），跳过 MySQL 检查"
+        has_warning=1
+    elif mysqladmin ping -u ai_user -p"${DB_PASSWORD}" --silent 2>/dev/null; then
         local db_size
-        db_size=$(mysql -u ai_user -p'AiPlatform@2025!' -N -e \
+        db_size=$(mysql -u ai_user -p"${DB_PASSWORD}" -N -e \
             "SELECT ROUND(SUM(data_length + index_length)/1024/1024, 1) FROM information_schema.tables WHERE table_schema='ai_platform';" 2>/dev/null || echo "未知")
         info "连接正常，数据库大小: ${db_size}MB"
     else

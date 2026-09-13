@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 # 星云AI平台商用服务器升级脚本 - 2025年8月21日
 # 目标服务器: www.nebulink.com.cn
 
@@ -11,7 +14,7 @@ cd /var/www/ai-platform
 
 # 2. 备份当前数据库
 echo "备份数据库..."
-docker-compose exec mysql mysqldump -uai_user -p'Nebu@Platform#2025' --no-tablespaces ai_platform > backup_$(date +%Y%m%d_%H%M%S).sql
+docker-compose exec mysql mysqldump -uai_user -p"$DB_PASSWORD" --no-tablespaces ai_platform > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 3. 保存本地修改并拉取最新代码
 echo "拉取最新代码..."
@@ -20,7 +23,7 @@ git pull origin main
 
 # 4. 执行数据库升级（添加is_default字段）
 echo "升级数据库结构..."
-docker-compose exec mysql mysql -uai_user -p'Nebu@Platform#2025' ai_platform -e "
+docker-compose exec mysql mysql -uai_user -p"$DB_PASSWORD" ai_platform -e "
 -- 检查并添加is_default字段
 ALTER TABLE html_projects ADD COLUMN is_default TINYINT(1) DEFAULT 0 AFTER sort_order;
 -- 设置默认项目
@@ -29,7 +32,7 @@ UPDATE html_projects SET is_default = 1 WHERE name = '默认项目';
 
 # 5. 验证数据库升级
 echo "验证数据库结构..."
-docker-compose exec mysql mysql -uai_user -p'Nebu@Platform#2025' ai_platform -e "
+docker-compose exec mysql mysql -uai_user -p"$DB_PASSWORD" ai_platform -e "
 SELECT COUNT(*) as '字段数' FROM information_schema.columns 
 WHERE table_schema='ai_platform' AND table_name='html_projects';
 "

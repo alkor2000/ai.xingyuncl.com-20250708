@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 
 echo "🚀 AI Platform Environment Test"
 echo "================================"
@@ -14,7 +17,7 @@ systemctl is-active nginx
 
 echo ""
 echo "🔗 2. Testing Database Connection..."
-mysql -u ai_user -p'AiPlatform@2025!' -e "SELECT 'MySQL Connection OK' as status, NOW() as timestamp;"
+mysql -u ai_user -p"$DB_PASSWORD" -e "SELECT 'MySQL Connection OK' as status, NOW() as timestamp;"
 
 echo ""
 echo "💾 3. Testing Redis Connection..."

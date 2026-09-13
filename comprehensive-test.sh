@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 
 # AI Platform 完整功能测试脚本 (第六次迭代 - 积分系统版)
 # 测试前后端所有核心功能，包括积分系统
@@ -50,17 +53,17 @@ netstat -tlnp | grep -q ":3000.*LISTEN"
 check $? "前端端口3000监听"
 
 # 检查数据库
-mysql -uai_user -pAiPlatform@2025! -e "SELECT 1;" ai_platform >/dev/null 2>&1
+mysql -uai_user -p"$DB_PASSWORD" -e "SELECT 1;" ai_platform >/dev/null 2>&1
 check $? "MySQL数据库连接"
 
 # 检查关键数据表
-mysql -uai_user -pAiPlatform@2025! -e "SELECT COUNT(*) FROM users;" ai_platform >/dev/null 2>&1
+mysql -uai_user -p"$DB_PASSWORD" -e "SELECT COUNT(*) FROM users;" ai_platform >/dev/null 2>&1
 check $? "用户表数据"
 
-mysql -uai_user -pAiPlatform@2025! -e "SELECT COUNT(*) FROM credit_transactions;" ai_platform >/dev/null 2>&1
+mysql -uai_user -p"$DB_PASSWORD" -e "SELECT COUNT(*) FROM credit_transactions;" ai_platform >/dev/null 2>&1
 check $? "积分交易表数据"
 
-mysql -uai_user -pAiPlatform@2025! -e "SELECT COUNT(*) FROM ai_models;" ai_platform >/dev/null 2>&1
+mysql -uai_user -p"$DB_PASSWORD" -e "SELECT COUNT(*) FROM ai_models;" ai_platform >/dev/null 2>&1
 check $? "AI模型表数据"
 
 echo ""
@@ -342,7 +345,7 @@ echo -e "${GREEN}📋 8. 数据库积分一致性检查${NC}"
 echo "-------------------------------"
 
 # 检查积分交易记录完整性
-CREDIT_RECORDS=$(mysql -uai_user -pAiPlatform@2025! ai_platform -e "SELECT COUNT(*) as count FROM credit_transactions WHERE transaction_type='chat_consume';" 2>/dev/null | tail -1)
+CREDIT_RECORDS=$(mysql -uai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) as count FROM credit_transactions WHERE transaction_type='chat_consume';" 2>/dev/null | tail -1)
 
 if [ "$CREDIT_RECORDS" -gt 0 ]; then
     check 0 "积分消费记录存在"
@@ -351,7 +354,7 @@ else
 fi
 
 # 检查用户积分余额计算
-USER_BALANCE=$(mysql -uai_user -pAiPlatform@2025! ai_platform -e "SELECT (credits_quota - used_credits) as balance FROM users WHERE id=6;" 2>/dev/null | tail -1)
+USER_BALANCE=$(mysql -uai_user -p"$DB_PASSWORD" ai_platform -e "SELECT (credits_quota - used_credits) as balance FROM users WHERE id=6;" 2>/dev/null | tail -1)
 
 if [ -n "$USER_BALANCE" ]; then
     check 0 "用户积分余额计算"
@@ -360,7 +363,7 @@ else
 fi
 
 # 检查AI模型积分配置
-MODEL_CREDITS=$(mysql -uai_user -pAiPlatform@2025! ai_platform -e "SELECT COUNT(*) as count FROM ai_models WHERE credits_per_chat > 0;" 2>/dev/null | tail -1)
+MODEL_CREDITS=$(mysql -uai_user -p"$DB_PASSWORD" ai_platform -e "SELECT COUNT(*) as count FROM ai_models WHERE credits_per_chat > 0;" 2>/dev/null | tail -1)
 
 if [ "$MODEL_CREDITS" -gt 0 ]; then
     check 0 "AI模型积分配置"

@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${MYSQL_ROOT_PASSWORD:?请先设置环境变量 MYSQL_ROOT_PASSWORD}"
+
 
 echo "========================================="
 echo "正在导出数据库快照..."
@@ -6,7 +9,7 @@ echo "时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "========================================="
 
 # 导出数据库
-mysqldump -u root -p'Mkj1234!@#$' \
+mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" \
   --single-transaction \
   --routines \
   --triggers \

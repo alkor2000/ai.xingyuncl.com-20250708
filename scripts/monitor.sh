@@ -1,4 +1,7 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${MYSQL_ROOT_PASSWORD:?请先设置环境变量 MYSQL_ROOT_PASSWORD}"
+
 
 echo "=== AI平台系统监控 ==="
 echo "时间: $(date)"
@@ -24,7 +27,7 @@ echo ""
 
 # 3. 数据库状态
 echo "【数据库状态】"
-mysql -u root -pqazQ1233210 -e "
+mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "
 SELECT 
     'Active Connections' as Metric, 
     COUNT(*) as Value 
@@ -45,7 +48,7 @@ echo ""
 
 # 5. 今日统计
 echo "【今日统计】"
-mysql -u root -pqazQ1233210 -e "
+mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "
 SELECT 
     COUNT(DISTINCT user_id) as '活跃用户数',
     COUNT(*) as '消息总数',

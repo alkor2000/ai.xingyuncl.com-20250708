@@ -1,8 +1,11 @@
 #!/bin/bash
+# 数据库口令从环境变量读取，不再写死在脚本里（例：set -a; source backend/.env; set +a）
+: "${DB_PASSWORD:?请先设置环境变量 DB_PASSWORD}"
+
 
 echo "=== 检查数据分析功能所需的数据库表 ==="
 
-mysql -u ai_user -p'AiPlatform@2025!' ai_platform -e "
+mysql -u ai_user -p"$DB_PASSWORD" ai_platform -e "
 -- 检查必要的表
 SELECT 'credit_transactions' as table_name, COUNT(*) as exists_flag FROM information_schema.tables 
 WHERE table_schema = 'ai_platform' AND table_name = 'credit_transactions'
