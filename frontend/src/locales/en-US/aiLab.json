@@ -1,0 +1,190 @@
+{
+  "aiLab": {
+    "title": "AI Lab",
+    "subtitle": "Train real models on real data: a training set, a held-out test set and a shifted-condition test set. Every number comes from this run.",
+    "newProject": "New experiment",
+    "myProjects": "My experiments",
+    "groupProjects": "Experiments in my group",
+    "empty": "No experiments yet. Create one to start.",
+    "version": "v{{version}}",
+    "msg": {
+      "loadProjectsFailed": "Failed to load experiments",
+      "loadProjectFailed": "Failed to load the experiment",
+      "created": "Experiment created",
+      "createFailed": "Failed to create the experiment"
+    },
+    "form": {
+      "task": "Task",
+      "title": "Experiment name",
+      "titleRequired": "Please enter a name",
+      "titlePlaceholder": "e.g. Class 3-2 stationery classifier",
+      "participation": "Participation",
+      "participationTip": "Projected: the teacher operates, students predict and judge. Group: several students share one device. Individual: each student does every step. The mode decides which records count as personal evidence."
+    },
+    "participation": { "individual": "Own device", "group": "Shared device", "projected": "Teacher projects" },
+    "task": {
+      "P1": {
+        "title": "Object or background?",
+        "desc": "Photograph 4 kinds of objects on the same background, then test on a new background to see what the model really learned.",
+        "predictPrompt": "If every photo is taken on the same desk, will the trained model still recognise the objects somewhere else? Write your prediction and your reason."
+      },
+      "P2": {
+        "title": "Does it still work in a new setting?",
+        "desc": "Design your own table of test conditions, predict the accuracy, collect and verify each one, then add data and train a new version.",
+        "predictPrompt": "Which conditions will you change to challenge the model? Write the one most likely to break it, and why."
+      },
+      "free": {
+        "title": "Free experiment",
+        "desc": "Define your own classes, collect your own data and run the full train-and-test loop.",
+        "predictPrompt": "Before you start: what should the model recognise, and where do you think it will fail?"
+      }
+    },
+    "card": { "samples": "{{count}} samples", "models": "{{count}} versions", "holdout": "Held-out {{value}}", "gap": "Gap {{value}}" },
+    "admin": { "title": "Experiment", "student": "Student", "task": "Task", "mode": "Participation", "models": "Versions", "holdout": "Held-out accuracy", "gap": "Generalisation gap", "updated": "Updated" },
+    "workspace": { "readOnly": "Read only", "readOnlyHint": "You are viewing someone else's experiment: data, metrics and the timeline are visible, nothing can be changed." },
+    "step": {
+      "predict": "Write a prediction",
+      "collect": "Collect training data",
+      "lock": "Lock the held-out test set",
+      "train": "Train the model",
+      "test_holdout": "Held-out test",
+      "test_shift": "Shifted-condition test",
+      "condition_design": "Design a condition table",
+      "errors": "Look at the mistakes",
+      "iterate": "Improve and compare versions",
+      "model_card": "Write the model card"
+    },
+    "section": {
+      "collectHint": "Define the classes first, then photograph or upload for each class. At least {{min}} per class, and record the conditions.",
+      "lockHint": "Locking randomly holds out 20% of each class as the test set. Training never sees them, so the score you get is trustworthy.",
+      "trainHint": "Training runs inside your browser. Nothing is sent to an AI service.",
+      "testHint": "The held-out set answers \"did it learn?\"; the shifted set answers \"does it survive a new setting?\". The difference is the generalisation gap.",
+      "shiftHint": "New background, angle, light, device… collect and test them in the \"shifted-condition\" tab of the previous step.",
+      "shiftWhere": "Shifted-condition sets are collected and run in the second tab of the held-out test card.",
+      "conditionHint": "Write the condition and your predicted accuracy first, then collect and test. When the condition name matches a shifted set, the measured value fills in automatically.",
+      "errorsHint": "Open the misclassified samples in the test results and use the heat map to see where the model is looking.",
+      "errorsWhere": "Misclassified samples and heat maps are below the test results.",
+      "errorsMark": "I have looked at the mistakes",
+      "iterateHint": "Add data or adjust classes to fix what the tests exposed, train a new version and compare it side by side.",
+      "modelCardHint": "In your own words: where this model can be used, where it cannot, and what the evidence is."
+    },
+    "lock": {
+      "counts": "{{train}} training samples, {{holdout}} held-out samples",
+      "locked": "Locked (dataset version {{version}})",
+      "button": "Lock the held-out set (20%)",
+      "relock": "Hold out 20% of the newly added samples",
+      "done": "Held-out set locked",
+      "failed": "Locking failed"
+    },
+    "split": { "train": "Training set", "holdout": "Held-out set", "shift": "Shifted set" },
+    "condition": {
+      "background": "Background", "angle": "Angle", "light": "Light", "device": "Device",
+      "name": "Condition", "namePlaceholder": "e.g. backlit by the window",
+      "predicted": "Predicted accuracy", "reason": "Reason", "reasonPlaceholder": "Why you expect this result",
+      "actual": "Measured", "notTested": "not tested", "addRow": "Add a row", "save": "Save table",
+      "saved": "Condition table saved", "saveFailed": "Save failed"
+    },
+    "capture": {
+      "startCamera": "Open camera",
+      "cameraUnavailable": "The camera could not be opened. Upload images or use a preset pack instead.",
+      "burst": "Burst {{count}}",
+      "single": "Take one",
+      "stopCamera": "Close camera",
+      "fromFiles": "Upload images",
+      "targetClass": "Class",
+      "shiftSet": "Shifted set name",
+      "shiftSetPlaceholder": "e.g. new background / backlit",
+      "shiftSetRequired": "Give this shifted set a name first",
+      "conditions": "Capture conditions",
+      "conditionsTip": "Record the conditions these photos were taken in; you will need them when analysing mistakes.",
+      "pending": "{{count}} pending",
+      "clearPending": "Clear",
+      "uploadTo": "Upload {{count}} to the {{target}}",
+      "uploaded": "Uploaded {{count}}",
+      "uploadFailed": "Upload failed",
+      "imageOnly": "Only image files can be uploaded",
+      "afterLockHint": "The held-out set is locked: new samples go to the training set and get held out at the same ratio next time you lock."
+    },
+    "dataset": {
+      "newClassPlaceholder": "New class name, e.g. cup",
+      "addClass": "Add class",
+      "duplicateClass": "This class already exists",
+      "noClasses": "Add at least two classes first",
+      "holdoutHidden": "The held-out set is hidden on the training page and revealed only when you test",
+      "deleteConfirm": "Delete this sample? The deletion is recorded and visible in the timeline.",
+      "noTrainSamples": "No training samples yet",
+      "renameClass": "Rename class"
+    },
+    "metrics": { "actualVsPredicted": "actual ↓ / predicted →", "sampleCount": "{{count}} test samples" },
+    "train": {
+      "extractor": { "idle": "Feature extractor not loaded", "loading": "Loading feature extractor", "ready": "Feature extractor ready", "error": "Feature extractor failed to load" },
+      "backend": "Compute backend {{backend}}",
+      "localOnly": "Everything runs in this browser",
+      "shortClasses": "These classes have fewer than {{min}} samples; training still works but may be unstable: {{classes}}",
+      "lockFirst": "Lock the held-out set before training, otherwise there is no trustworthy test score.",
+      "needTwoClasses": "At least two classes need training samples",
+      "notePlaceholder": "What changed in v{{version}} compared with the previous version, and why?",
+      "trainVersion": "Train v{{version}}",
+      "stage": { "model": "Loading model…", "embed": "Extracting features…", "save": "Saving version…" },
+      "done": "v{{version}} trained",
+      "failed": "Training failed"
+    },
+    "evaluate": {
+      "selectVersion": "Version",
+      "gap": "Generalisation gap {{value}}",
+      "holdoutTab": "Held-out test ({{count}})",
+      "runHoldout": "Test the held-out set",
+      "holdoutHint": "The model has never seen these images",
+      "shiftTab": "Shifted-condition tests ({{count}} sets)",
+      "shiftIntro": "Collect shifted sets under conditions different from training: another background, angle, light or device, or let another group take the photos.",
+      "chooseShiftSet": "Shifted set",
+      "noShiftSets": "No shifted sets yet",
+      "runShift": "Test this set",
+      "gapLine": "Held-out {{holdout}} → shifted {{shift}}. The gap is how much the model struggles with a new setting.",
+      "noModel": "Train a version first, then test it.",
+      "noSamples": "This set has no testable samples",
+      "failed": "Test failed"
+    },
+    "errors": {
+      "none": "Every sample in this set was predicted correctly",
+      "count": "{{count}} misclassified, click to inspect",
+      "detailTitle": "Misclassified sample",
+      "actual": "Actual",
+      "predicted": "Predicted",
+      "showHeatmap": "Show where the model looks",
+      "heatmapHint": "The redder a cell, the more the model loses when it is covered: those are the areas it relies on."
+    },
+    "compare": { "version": "Version", "datasetVersion": "Dataset version", "trainCount": "Training samples", "gap": "Generalisation gap", "note": "What changed", "empty": "No model versions yet" },
+    "modelCard": {
+      "scope": "Where this model can be used",
+      "scopePlaceholder": "e.g. stationery on a white classroom desk, daylight, photographed from the front",
+      "notScope": "Where it cannot be used",
+      "notScopePlaceholder": "e.g. it fails backlit by the window because…",
+      "evidence": "Evidence",
+      "evidencePlaceholder": "Quote the numbers or the mistakes you saw",
+      "notes": "Notes",
+      "required": "This field is required",
+      "save": "Save model card",
+      "saved": "Model card saved",
+      "saveFailed": "Save failed"
+    },
+    "predict": { "placeholder": "Write your prediction and your reason", "save": "Save prediction", "saved": "Prediction saved", "saveFailed": "Save failed" },
+    "timeline": { "title": "Process timeline", "empty": "No records yet" },
+    "event": {
+      "task_open": "Opened the task",
+      "predict_write": "Wrote a prediction",
+      "dataset_add": "Added samples",
+      "dataset_remove": "Removed a sample",
+      "dataset_relabel": "Renamed a class",
+      "split_lock": "Locked the held-out set",
+      "train_run": "Trained a model",
+      "test_run": "Ran a test",
+      "error_view": "Inspected a mistake",
+      "condition_design": "Designed test conditions",
+      "help_request": "Asked for help",
+      "model_compare": "Compared versions",
+      "reflection_write": "Wrote a reflection",
+      "model_card_write": "Wrote the model card"
+    }
+  }
+}

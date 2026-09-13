@@ -205,6 +205,7 @@
   "module.knowledge": "Knowledge Cube",
   "module.html_editor": "HTML Editor",
   "module.calendar": "AI Calendar",
+  "module.ai_lab": "AI Lab",
   "module.image_generation": "Image Generation",
   "module.agent": "AI Workflow",
   "module.video_generation": "Video Generation",

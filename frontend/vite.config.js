@@ -49,6 +49,12 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
         secure: false
+      },
+      // 开发时样本图片与模型 artifact 由后端静态服务，需代理到 4000
+      '/uploads': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false
       }
     }
   },
@@ -69,6 +75,8 @@ export default defineConfig({
           // Monaco单独打包
           'monaco-vendor': ['monaco-editor'],
           'monaco-react': ['@monaco-editor/react'],
+          // TensorFlow.js 只被 AI训练专区用到，单独分包
+          'tfjs-vendor': ['@tensorflow/tfjs'],
           'prism-vendor': ['prismjs'],
           'markdown-vendor': ['react-markdown']
         }

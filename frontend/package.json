@@ -23,6 +23,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@monaco-editor/react": "^4.7.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "@uiw/react-codemirror": "^4.24.1",
     "antd": "^5.12.8",
     "axios": "^1.6.2",

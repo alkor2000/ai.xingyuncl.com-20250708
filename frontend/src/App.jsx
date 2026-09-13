@@ -60,6 +60,8 @@ const KnowledgeBase = React.lazy(() => import('./pages/knowledge/KnowledgeBase')
 
 // 图像生成页面组件 - 懒加载
 const ImageGeneration = React.lazy(() => import('./pages/image/ImageGeneration'))
+const AiLab = React.lazy(() => import('./pages/aiLab/AiLab'))
+const AiLabProject = React.lazy(() => import('./pages/aiLab/ProjectWorkspace'))
 
 // 视频生成页面组件 - 懒加载
 const VideoGeneration = React.lazy(() => import('./pages/video/VideoGeneration'))
@@ -425,6 +427,24 @@ const App = () => {
                           element={
                             <LazyLoadingWrapper>
                               <ImageGeneration />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        
+                        {/* AI训练专区路由 */}
+                        <Route 
+                          path="/ai-lab" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <AiLab />
+                            </LazyLoadingWrapper>
+                          } 
+                        />
+                        <Route 
+                          path="/ai-lab/projects/:id" 
+                          element={
+                            <LazyLoadingWrapper>
+                              <AiLabProject />
                             </LazyLoadingWrapper>
                           } 
                         />

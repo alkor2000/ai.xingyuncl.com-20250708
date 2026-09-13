@@ -35,7 +35,8 @@ import knowledge from './knowledge.json'    // 万智魔方（知识模块）
 import wiki from './wiki.json'              // 知识库 Wiki
 import forum from './forum.json'            // 社区论坛
 import agent from './agent.json'            // Agent 工作流
-import smartApps from './smartApps.json'    // 智能应用广场
+import smartApps from './smartApps.json'
+import aiLab from './aiLab.json'            // AI训练专区    // 智能应用广场
 
 // ===== AI 生成类模块 =====
 import image from './image.json'            // 图像生成
@@ -69,5 +70,6 @@ export default {
   ...wiki,
   ...forum,
   // 新增语言包一律追加到末尾，避免影响上方同名键的覆盖关系
-  ...smartApps
+  ...smartApps,
+  ...aiLab
 }

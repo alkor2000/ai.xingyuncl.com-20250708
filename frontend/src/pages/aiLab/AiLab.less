@@ -1,0 +1,90 @@
+// AI训练专区 样式
+.ailab-page { padding: 16px 24px 48px; }
+.ailab-loading { display: flex; justify-content: center; align-items: center; min-height: 320px; }
+.ailab-muted { color: rgba(0, 0, 0, 0.45); font-size: 12px; }
+.ailab-help { display: inline-block; margin-left: 6px; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: #e6eef7; color: #1e4c8a; font-size: 11px; cursor: help; }
+
+.ailab-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.ailab-project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.ailab-project-card { .ant-card-body { padding: 14px 16px; } }
+.ailab-project-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.ailab-project-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 12.5px; color: rgba(0, 0, 0, 0.65); margin-bottom: 6px; }
+
+.ailab-task-radio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%;
+  .ailab-task-option { height: auto; padding: 8px 10px; line-height: 1.4; white-space: normal; border-radius: 6px !important; }
+  .ailab-task-option::before { display: none !important; }
+  .ailab-task-option-title { font-weight: 600; }
+  .ailab-task-option-desc { font-size: 12px; color: rgba(0, 0, 0, 0.55); margin-top: 2px; }
+}
+
+.ailab-workspace-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.ailab-workspace { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
+.ailab-rail { position: sticky; top: 76px; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 14px 12px;
+  .ant-steps-item { cursor: pointer; }
+}
+.ailab-main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.ailab-section { .ant-card-head-title { font-weight: 600; } &.done .ailab-section-no { background: #2c7a5a; } }
+.ailab-section-no { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: #1e4c8a; color: #fff; font-size: 12px; margin-right: 8px; }
+.ailab-section-hint { color: rgba(0, 0, 0, 0.55); margin: -4px 0 12px; font-size: 13px; }
+
+// 采集
+.ailab-capture { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 20px; margin-top: 12px; }
+.ailab-video-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #111; border-radius: 8px; overflow: hidden; }
+.ailab-video { width: 100%; height: 100%; object-fit: cover; }
+.ailab-video-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f5f7f8; padding: 12px; }
+.ailab-field { margin-bottom: 10px; label { display: block; font-size: 12.5px; color: rgba(0, 0, 0, 0.65); margin-bottom: 4px; } }
+.ailab-conditions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ailab-pending { border: 1px dashed #d9d9d9; border-radius: 6px; padding: 8px; margin: 8px 0; min-height: 64px; }
+.ailab-pending-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+.ailab-pending-grid, .ailab-sample-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.ailab-thumb { position: relative; width: 84px; height: 84px; border-radius: 6px; overflow: hidden; background: #eee;
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ailab-thumb-del { position: absolute; top: 2px; right: 2px; border: none; background: rgba(0, 0, 0, 0.55); color: #fff; border-radius: 4px; width: 20px; height: 20px; line-height: 20px; padding: 0; cursor: pointer; display: none; }
+  &:hover .ailab-thumb-del { display: block; }
+  .ailab-thumb-caption { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 10.5px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+.ailab-thumb-error { cursor: zoom-in; outline: 2px solid #b0540e; }
+.ailab-sample-empty { color: rgba(0, 0, 0, 0.35); font-size: 12.5px; padding: 8px 0; }
+
+// 数据集
+.ailab-class-block { border-top: 1px solid #f0f0f0; padding: 10px 0; }
+.ailab-class-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.ailab-class-name { font-weight: 600; cursor: pointer; }
+.ailab-class-key { font-family: monospace; font-size: 11.5px; color: rgba(0, 0, 0, 0.4); }
+
+// 指标
+.ailab-metrics { margin-top: 8px; }
+.ailab-metrics-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
+.ailab-metrics-title { font-weight: 600; }
+.ailab-metrics-sub { font-size: 12px; color: rgba(0, 0, 0, 0.45); }
+.ailab-big-number { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; color: #1e4c8a; line-height: 1; }
+.ailab-recall-bars { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ailab-recall-row { display: grid; grid-template-columns: 90px 1fr 90px; align-items: center; gap: 8px; font-size: 12.5px; }
+.ailab-recall-track { height: 10px; background: #eef2f5; border-radius: 5px; overflow: hidden; }
+.ailab-recall-fill { height: 100%; background: #2c7a5a; }
+.ailab-recall-value { font-variant-numeric: tabular-nums; }
+.ailab-cm-wrap { overflow-x: auto; }
+.ailab-cm { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums;
+  th, td { border: 1px solid #e8e8e8; padding: 4px 10px; text-align: center; min-width: 56px; }
+  thead th { background: #f4f7f8; font-weight: 500; }
+  tbody th { background: #f4f7f8; font-weight: 500; text-align: left; }
+  .ailab-cm-corner { font-size: 11px; color: rgba(0, 0, 0, 0.45); font-weight: 400; }
+  td.diag { font-weight: 600; }
+}
+.ailab-gap-line { margin: 8px 0; padding: 8px 12px; background: #fbefe3; border-left: 3px solid #b0540e; font-size: 13px; }
+
+// 错误与热图
+.ailab-errors-head { font-size: 13px; margin-bottom: 8px; }
+.ailab-error-detail { display: flex; gap: 16px; align-items: flex-start; }
+.ailab-error-meta { flex: 1; p { margin: 0 0 8px; } }
+.ailab-heatmap { position: relative; border-radius: 6px; overflow: hidden;
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ailab-heatmap-grid { position: absolute; inset: 0; display: grid; }
+}
+
+@media (max-width: 900px) {
+  .ailab-workspace { grid-template-columns: 1fr; }
+  .ailab-rail { position: static; .ant-steps { flex-direction: row; overflow-x: auto; } }
+  .ailab-capture { grid-template-columns: 1fr; }
+  .ailab-task-radio { grid-template-columns: 1fr; }
+}

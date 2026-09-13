@@ -1,0 +1,190 @@
+{
+  "aiLab": {
+    "title": "AI训练专区",
+    "subtitle": "用真实数据训练真实模型：训练集、留出测试集、换条件测试集，每个数字都来自这一次计算。",
+    "newProject": "新建实验",
+    "myProjects": "我的实验",
+    "groupProjects": "本组学生的实验",
+    "empty": "还没有实验，先新建一个吧",
+    "version": "第 {{version}} 版",
+    "msg": {
+      "loadProjectsFailed": "加载实验列表失败",
+      "loadProjectFailed": "加载实验失败",
+      "created": "实验已创建",
+      "createFailed": "创建实验失败"
+    },
+    "form": {
+      "task": "选择任务",
+      "title": "实验名称",
+      "titleRequired": "请输入实验名称",
+      "titlePlaceholder": "例如：三年二班的文具识别",
+      "participation": "参与方式",
+      "participationTip": "投屏：教师操作，学生预测与判断；小组：几个人共用一台设备；独立：自己完成全部步骤。参与方式决定哪些记录算个人证据。"
+    },
+    "participation": { "individual": "独立设备", "group": "小组共用", "projected": "教师投屏" },
+    "task": {
+      "P1": {
+        "title": "模型认的是物体还是背景",
+        "desc": "同一背景拍 4 类物品训练，换背景再测，看模型到底学到了什么。",
+        "predictPrompt": "如果所有照片都在同一张桌子上拍，训练出来的模型换个地方还认得吗？写下你的预测和理由。"
+      },
+      "P2": {
+        "title": "换一个环境还能识别吗",
+        "desc": "自己设计一张测试条件表，预计准确率，采集后逐条验证，再补数据训练新版本。",
+        "predictPrompt": "你打算换哪些条件来考验模型？先写下最可能让它出错的一种，以及为什么。"
+      },
+      "free": {
+        "title": "自由实验",
+        "desc": "自定类别、自采数据，走完整的训练与测试流程。",
+        "predictPrompt": "动手前先写下：你想让模型认什么，你觉得它会在哪里出错？"
+      }
+    },
+    "card": { "samples": "样本 {{count}}", "models": "版本 {{count}}", "holdout": "留出集 {{value}}", "gap": "泛化差距 {{value}}" },
+    "admin": { "title": "实验", "student": "学生", "task": "任务", "mode": "参与方式", "models": "版本数", "holdout": "留出集准确率", "gap": "泛化差距", "updated": "最近更新" },
+    "workspace": { "readOnly": "只读", "readOnlyHint": "你正在查看别人的实验：可以看数据、指标和过程时间线，不能修改。" },
+    "step": {
+      "predict": "写下预测",
+      "collect": "采集训练数据",
+      "lock": "锁定留出测试集",
+      "train": "训练模型",
+      "test_holdout": "留出集测试",
+      "test_shift": "换条件测试",
+      "condition_design": "设计测试条件表",
+      "errors": "看错在哪里",
+      "iterate": "改进并对照版本",
+      "model_card": "写模型卡"
+    },
+    "section": {
+      "collectHint": "先定好类别，再给每一类拍照或上传。每类至少 {{min}} 张，记得填写采集条件。",
+      "lockHint": "锁定后，系统从每一类里随机留出 20% 作为测试集，训练时看不到它们；这样测出来的分数才可信。",
+      "trainHint": "训练在你的浏览器里完成，不上传到任何 AI 服务。",
+      "testHint": "留出集回答\"学会了吗\"，换条件集回答\"换个环境还行吗\"。两者之差就是泛化差距。",
+      "shiftHint": "换背景、换角度、换光线、换设备……在上一步的\"换条件测试\"标签页里采集并测试。",
+      "shiftWhere": "换条件测试集在\"留出集测试\"卡片的第二个标签页里采集和运行。",
+      "conditionHint": "先写条件和预计准确率，再去采集测试；条件名与换条件集名称一致时，实测值会自动填进来。",
+      "errorsHint": "在测试结果里点开错误样本，用热图看看模型到底在看哪里。",
+      "errorsWhere": "错误样本和热图在测试结果下方。",
+      "errorsMark": "我已经看过错误样本",
+      "iterateHint": "针对暴露出的问题补数据或调整类别，训练新版本，与旧版本并排对照。",
+      "modelCardHint": "用自己的话写清楚：这个模型能用在哪里、不能用在哪里、依据是什么。"
+    },
+    "lock": {
+      "counts": "当前训练样本 {{train}} 张，留出测试样本 {{holdout}} 张",
+      "locked": "已锁定（数据集第 {{version}} 版）",
+      "button": "锁定留出测试集（20%）",
+      "relock": "为新加的样本再留出 20%",
+      "done": "留出测试集已锁定",
+      "failed": "锁定失败"
+    },
+    "split": { "train": "训练集", "holdout": "留出测试集", "shift": "换条件集" },
+    "condition": {
+      "background": "背景", "angle": "角度", "light": "光线", "device": "设备",
+      "name": "条件", "namePlaceholder": "例如：窗边逆光",
+      "predicted": "预计准确率", "reason": "理由", "reasonPlaceholder": "为什么觉得会是这个结果",
+      "actual": "实测", "notTested": "未测", "addRow": "加一行", "save": "保存条件表",
+      "saved": "条件表已保存", "saveFailed": "保存失败"
+    },
+    "capture": {
+      "startCamera": "打开摄像头",
+      "cameraUnavailable": "打不开摄像头。可以改用上传图片，或使用预置数据。",
+      "burst": "连拍 {{count}} 张",
+      "single": "拍一张",
+      "stopCamera": "关闭摄像头",
+      "fromFiles": "上传图片",
+      "targetClass": "放进哪一类",
+      "shiftSet": "换条件集名称",
+      "shiftSetPlaceholder": "例如：换背景 / 窗边逆光",
+      "shiftSetRequired": "请先给这组换条件样本起个名字",
+      "conditions": "采集条件",
+      "conditionsTip": "记录这批照片是在什么条件下拍的，之后分析错误时用得上。",
+      "pending": "待上传 {{count}} 张",
+      "clearPending": "清空",
+      "uploadTo": "上传 {{count}} 张到{{target}}",
+      "uploaded": "已上传 {{count}} 张",
+      "uploadFailed": "上传失败",
+      "imageOnly": "只能上传图片文件",
+      "afterLockHint": "留出集已锁定：新加的样本先进训练集，再次锁定时会按同比例补入留出集。"
+    },
+    "dataset": {
+      "newClassPlaceholder": "新类别名称，例如：水杯",
+      "addClass": "添加类别",
+      "duplicateClass": "已经有这个类别了",
+      "noClasses": "先添加至少两个类别",
+      "holdoutHidden": "留出测试集在训练页不可见，测试时才会揭晓",
+      "deleteConfirm": "删除这张样本？删除会被记录，可在时间线里看到。",
+      "noTrainSamples": "还没有训练样本",
+      "renameClass": "重命名类别"
+    },
+    "metrics": { "actualVsPredicted": "实际 ↓ / 预测 →", "sampleCount": "共 {{count}} 张测试样本" },
+    "train": {
+      "extractor": { "idle": "特征提取器未加载", "loading": "正在加载特征提取器", "ready": "特征提取器就绪", "error": "特征提取器加载失败" },
+      "backend": "计算后端 {{backend}}",
+      "localOnly": "全部在本机浏览器内计算",
+      "shortClasses": "以下类别不足 {{min}} 张，仍可训练，但结果可能不稳：{{classes}}",
+      "lockFirst": "先锁定留出测试集，再训练；否则没有可信的测试分数。",
+      "needTwoClasses": "至少要有两个类别有训练样本",
+      "notePlaceholder": "第 {{version}} 版和上一版比，改了什么？为什么？",
+      "trainVersion": "训练第 {{version}} 版",
+      "stage": { "model": "加载模型…", "embed": "提取特征…", "save": "保存版本…" },
+      "done": "第 {{version}} 版训练完成",
+      "failed": "训练失败"
+    },
+    "evaluate": {
+      "selectVersion": "选择版本",
+      "gap": "泛化差距 {{value}}",
+      "holdoutTab": "留出集测试（{{count}} 张）",
+      "runHoldout": "测试留出集",
+      "holdoutHint": "这些图训练时从没见过",
+      "shiftTab": "换条件测试（{{count}} 组）",
+      "shiftIntro": "换条件集要在与训练集不同的条件下采集：换背景、换角度、换光线、换设备，或者由另一组同学来拍。",
+      "chooseShiftSet": "选择换条件集",
+      "noShiftSets": "还没有换条件集",
+      "runShift": "测试这组",
+      "gapLine": "留出集 {{holdout}} → 换条件 {{shift}}，差距就是模型对新环境的不适应程度。",
+      "noModel": "先训练一个版本，再来测试。",
+      "noSamples": "这个集合里没有可测试的样本",
+      "failed": "测试失败"
+    },
+    "errors": {
+      "none": "这一组全部预测正确",
+      "count": "测错 {{count}} 张，点开看看",
+      "detailTitle": "错误样本",
+      "actual": "实际是",
+      "predicted": "模型认成",
+      "showHeatmap": "看模型在看哪里",
+      "heatmapHint": "越红的格子，遮住后模型越不认识：它就是靠这些地方判断的。"
+    },
+    "compare": { "version": "版本", "datasetVersion": "数据集版本", "trainCount": "训练样本", "gap": "泛化差距", "note": "这一版改了什么", "empty": "还没有模型版本" },
+    "modelCard": {
+      "scope": "这个模型能用在哪里",
+      "scopePlaceholder": "例如：在教室白桌上、白天、正面拍的文具",
+      "notScope": "不能用在哪里",
+      "notScopePlaceholder": "例如：换到窗边逆光就不行，因为……",
+      "evidence": "依据是什么",
+      "evidencePlaceholder": "写出你看到的具体数字或错误样本",
+      "notes": "其他说明",
+      "required": "这一项要填",
+      "save": "保存模型卡",
+      "saved": "模型卡已保存",
+      "saveFailed": "保存失败"
+    },
+    "predict": { "placeholder": "写下你的预测和理由", "save": "保存预测", "saved": "预测已保存", "saveFailed": "保存失败" },
+    "timeline": { "title": "过程时间线", "empty": "还没有记录" },
+    "event": {
+      "task_open": "打开任务",
+      "predict_write": "写下预测",
+      "dataset_add": "添加样本",
+      "dataset_remove": "删除样本",
+      "dataset_relabel": "修改类别",
+      "split_lock": "锁定留出集",
+      "train_run": "训练模型",
+      "test_run": "运行测试",
+      "error_view": "查看错误样本",
+      "condition_design": "设计测试条件",
+      "help_request": "请求帮助",
+      "model_compare": "对照版本",
+      "reflection_write": "写下想法",
+      "model_card_write": "写模型卡"
+    }
+  }
+}
