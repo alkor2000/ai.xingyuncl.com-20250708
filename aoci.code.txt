@@ -319,7 +319,7 @@ response.js[CG5S]: F:C·统一响应格式：success/error/validation/unauthoriz
 tokenCalculator.js[KA5S]: F:C·Token估算工具：calculateTokens按中文字/英文单词/数字/标点/空白分类加权估算，formatTokenCount、calculateTotalTokens、getTokenStatus(默认上限100000) | R:code:backend/src/services/ragService.js,code:backend/src/models/KnowledgeModule.js,code:backend/src/models/SystemPrompt.js,code:backend/src/services/agent/nodes/KnowledgeNode.js | A:- | S:纯启发式估算，非tokenizer；前端utils/tokenCalculator.js有同名独立实现
 
 ===/home/hanying/ai-platform/docker/===
-Dockerfile.backend[OV4T]: F:C·后端镜像：node:18-alpine两阶段(生产依赖)，阿里apk源，复制src/knexfile/migrations与tools/database-upgrade，nodejs用户+tini，CMD先run-migrations.sh再启动src/server.js，HEALTHCHECK打/health | R:code:docker/scripts/run-migrations.sh,code:docker/scripts/database-upgrade.sh,code:backend/src/server.js,code:docker-compose.yml | A:- | S:构建上下文须是仓库根；COPY的database/schema与tools/database-upgrade必须存在
+Dockerfile.backend[OV4T]: F:C·后端镜像：node:18-alpine两阶段(生产依赖)，阿里apk源，复制src/knexfile/migrations/presets与database-upgrade，nodejs用户+tini，CMD先run-migrations.sh再启动server.js | R:code:docker/scripts/run-migrations.sh,code:docker/scripts/database-upgrade.sh,code:backend/src/server.js,code:docker-compose.yml | A:- | S:构建上下文须是仓库根；run-migrations.sh只跑SQL迁移，knex迁移须在容器内手动跑
 Dockerfile.frontend[OV4T]: F:C·前端镜像：node:18-alpine构建(npm ci，NODE_OPTIONS 4G)后拷到nginx:alpine，接收CUSTOMER_DOMAIN构建参数，default.conf.template放入/etc/nginx/templates由nginx镜像envsubst渲染 | R:code:docker/nginx/default.conf.template,code:docker-compose.yml,code:frontend/vite.config.js | A:- | S:compose若再挂载default.conf会覆盖模板渲染结果
 
 ===/home/hanying/ai-platform/docker/mysql/===

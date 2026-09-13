@@ -28,6 +28,8 @@ COPY --chown=nodejs:nodejs backend/src ./src
 # 复制 Knex 配置和迁移文件（2026-01-27 新增）
 COPY --chown=nodejs:nodejs backend/knexfile.js ./
 COPY --chown=nodejs:nodejs backend/migrations ./migrations
+# 复制 AI训练专区预置数据包（2026-09-14 新增；AiLabPresetService 默认读 /app/presets/ai-lab）
+COPY --chown=nodejs:nodejs backend/presets ./presets
 # 复制数据库迁移文件（旧的迁移方式，保留兼容）
 COPY --chown=nodejs:nodejs database/migrations ./database/migrations
 # 复制迁移脚本（root权限）
