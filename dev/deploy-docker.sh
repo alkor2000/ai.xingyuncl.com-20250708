@@ -90,7 +90,8 @@ fi
 
 # ---------- 3–5. 服务器上构建、备份、迁移、切换、清理 ----------
 echo "==> 服务器构建镜像并切换 ..."
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" <<'REMOTE'
+REMOTE_LOG="$(mktemp)"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
 cd "$REMOTE_DIR"
@@ -104,7 +105,7 @@ OLD_F=$(docker inspect ai-platform-frontend --format '{{.Config.Image}}' 2>/dev/
 AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 if [ "${AVAIL_GB:-0}" -lt 8 ]; then echo "    磁盘剩余 ${AVAIL_GB}G，先清构建缓存 ..."; docker builder prune -af >/dev/null; fi
 echo "    docker compose build backend frontend（日志 $REL/build.log）..."
-if ! docker compose build backend frontend > "$REL/build.log" 2>&1; then
+if ! docker compose build backend frontend </dev/null > "$REL/build.log" 2>&1; then
   echo "❌ 镜像构建失败，最后 40 行："; tail -40 "$REL/build.log"; exit 1
 fi
 docker tag ai-platform-backend:latest  "ai-platform-backend:${TAG}"
@@ -136,10 +137,11 @@ docker exec ai-platform-mysql sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWOR
 echo "    备份: $BK ($(du -h "$BK" | cut -f1))"; echo "DB_BACKUP=$BK" >> "$REL/RELEASE.txt"
 
 echo "    用新镜像执行 knex 迁移（切换前）..."
-docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T backend npx knex migrate:latest 2>&1 | grep -vE '^$|Using environment' | sed 's/^/      /' || { echo "❌ 迁移失败，容器未切换；库已备份到 $BK"; exit 1; }
+# 注意：本段脚本经 stdin 喂给远端 bash -s，任何会读 stdin 的命令都必须 </dev/null，否则会把脚本剩余部分吃掉
+docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T backend npx knex migrate:latest </dev/null 2>&1 | grep -vE '^$|Using environment|attribute .version. is obsolete' | sed 's/^/      /' || { echo "❌ 迁移失败，容器未切换；库已备份到 $BK"; exit 1; }
 
 echo "    切换容器 ..."
-docker compose -f docker-compose.yml -f "$REL/release.override.yml" up -d backend frontend >/dev/null 2>&1
+docker compose -f docker-compose.yml -f "$REL/release.override.yml" up -d backend frontend </dev/null >/dev/null 2>&1
 STATUS=starting
 for i in $(seq 1 36); do
   STATUS=$(docker inspect ai-platform-backend --format '{{.State.Health.Status}}' 2>/dev/null || echo starting)
@@ -163,7 +165,14 @@ done
 docker image prune -f >/dev/null 2>&1 || true
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"
 echo "    发布目录: $REL"
+echo "REMOTE_DONE"
 REMOTE
+
+grep -q '^REMOTE_DONE$' "$REMOTE_LOG" || { echo "❌ 服务器端脚本没有执行到底（容器可能没有切换），请看上面的输出与 make status-docker"; rm -f "$REMOTE_LOG"; exit 1; }
+rm -f "$REMOTE_LOG"
+if ! $SSH "docker inspect ai-platform-backend --format '{{.Config.Image}}'" | grep -q "v-$LOCAL_SHORT-"; then
+  echo "❌ 服务器 backend 容器没有运行本次镜像，请看 make status-docker"; exit 1
+fi
 
 # ---------- 6. 本地标签与线上健康检查 ----------
 TAG="deploy-docker-$(date +%Y%m%d_%H%M%S)"
