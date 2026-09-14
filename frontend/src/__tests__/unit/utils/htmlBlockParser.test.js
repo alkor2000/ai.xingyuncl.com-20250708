@@ -75,6 +75,45 @@ describe('extractArtifactBlocks()', () => {
     expect(blocks[0].code).not.toContain('json')
   })
 
+  it('pptx 里用裸 ``` 包了一段流程时，溢出到围栏外的后续页面会被找回', () => {
+    // 线上实际出现的截断：模型想用代码块画 "A → B → C"，第一个裸 ``` 把外层块闭合，
+    // 之后的整份课件都掉到了围栏外
+    const content = [
+      '```pptx', '# 封面', '---', '# 经典探究：绿叶在光下制造有机物',
+      '```', '暗处理 → 选叶遮光 → 光照照射 → 显色观察', '```',
+      '- **第一步：暗处理**', '  - 将天竺葵置于黑暗中一昼夜', '---', '# 结论', '- 光是必要条件', '```',
+      '', '这份课件共 3 页，可以按需修改。'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].kind).toBe('pptx')
+    expect(blocks[0].code).toContain('# 结论')
+    expect(blocks[0].code).toContain('暗处理 → 选叶遮光')
+    expect(blocks[0].code).not.toContain('这份课件共 3 页')
+  })
+
+  it('pptx 正常闭合后跟着说明要点和一个裸代码块时不会被吞并', () => {
+    const content = [
+      '```pptx', '# 封面', '---', '# 页', '- a', '```',
+      '说明：', '- 共 2 页', '- 可按需修改', '```', 'npm run build', '```'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].code).not.toContain('npm run build')
+    expect(blocks[0].code).not.toContain('共 2 页')
+  })
+
+  it('溢出修复遇到另一个产物块的开启围栏会停下', () => {
+    const content = [
+      '```pptx', '# 封面', '---', '# 页', '```', 'A → B', '```', '- 要点',
+      '```html', HTML_DOC, '```'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks[0].kind).toBe('pptx')
+    expect(blocks[0].code).not.toContain('<html>')
+    expect(blocks[0].code).not.toContain('- 要点')
+  })
+
   it('html / pdf 必须至少含一个标签，纯文本不算', () => {
     expect(extractArtifactBlocks('```pdf\n这只是一段没有标签的文字而已\n```')).toEqual([])
   })

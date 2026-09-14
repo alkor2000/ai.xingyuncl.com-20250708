@@ -157,7 +157,7 @@ const HTML_DOC_START_RE = /^\s*(<!doctype\s+html|<html[\s>])/i
 const HTML_DOC_END_RE = /<\/html\s*>/i
 
 /** 启发式修复时最多向后尝试的候选闭合围栏个数（防止无限扩张吞掉正文） */
-const MAX_REPAIR_ATTEMPTS = 8
+const MAX_REPAIR_ATTEMPTS = 16
 
 /** HTML 代码块最小有效长度（过滤掉无意义的空块） */
 const DEFAULT_MIN_LENGTH = 10
@@ -239,6 +239,51 @@ const countUnclosedInnerFences = (lines, fromExclusive, toExclusive, fenceChar) 
     else if (depth > 0) depth -= 1
   }
   return depth
+}
+
+/** 溢出判定用的文档结构行：幻灯片分页 --- 或 Markdown 标题 */
+const DOCUMENT_STRUCTURE_RE = /^[ \t]{0,3}(?:---[ \t]*|#{1,6}[ \t]+\S.*)$/
+
+/**
+ * v2.1: 区间内是否出现「另一个产物」的开启围栏（```html / ```pptx 等）
+ *
+ * 溢出修复向后扩展时的边界：内层 ```python 之类只是文档里的代码示例，可以吞进去；
+ * 但遇到另一个产物块的开启围栏必须停下，否则会把两个产物合成一个。
+ */
+const hasArtifactFenceBetween = (lines, fromExclusive, toExclusive, fenceChar) => {
+  for (let idx = fromExclusive + 1; idx < toExclusive; idx += 1) {
+    const openMatch = OPEN_FENCE_RE.exec(lines[idx])
+    if (!openMatch || openMatch[1][0] !== fenceChar) continue
+    const info = (openMatch[2] || '').trim()
+    if (info.length > 0 && ARTIFACT_LANG_MAP[parseLangFromInfo(info)]) return true
+  }
+  return false
+}
+
+/**
+ * v2.1: 找到「溢出到围栏外的文档正文」的真正闭合候选
+ *
+ * 场景：pptx / docx 里模型用不带语言标识的裸 ``` 包了一段东西（常见是想画
+ *      "A → B → C" 的流程），按 CommonMark 第一个裸 ``` 就把外层块闭合了，
+ *      后面的整份文档都掉到围栏外，画布只拿到半截。
+ * 判定：从当前闭合候选往后看每一对相邻候选之间的片段，只要片段里出现
+ *      幻灯片分页 --- 或 Markdown 标题，就说明正文溢出了，闭合围栏应推到
+ *      该片段之后；取满足条件的最后一个候选。说明性文字（"这份课件共 10 页"
+ *      之类）没有这些结构行，不会被误吞。
+ *
+ * @returns {number} 新的候选下标；无需扩展时返回 currentIndex
+ */
+const findSpilledDocumentEnd = (lines, candidates, currentIndex, fenceChar) => {
+  let best = currentIndex
+  for (let m = currentIndex + 1; m < candidates.length; m += 1) {
+    const from = candidates[m - 1]
+    const to = candidates[m]
+    if (hasArtifactFenceBetween(lines, from, to, fenceChar)) break
+    for (let idx = from + 1; idx < to; idx += 1) {
+      if (DOCUMENT_STRUCTURE_RE.test(lines[idx])) { best = m; break }
+    }
+  }
+  return best
 }
 
 /**
@@ -376,16 +421,26 @@ export const parseFencedBlocks = (content, options = {}) => {
     // 已选闭合围栏之前若还有未闭合的内层 ```lang，就把闭合围栏向后推到
     // 下一个候选，直到内层全部配平或候选用尽（见 countUnclosedInnerFences）。
     // ------------------------------------------------------------------
+    // v2.1 再加一条：内部用了裸 ``` 导致正文溢出到围栏外时，只要后面的候选
+    // 片段里还有分页/标题这类文档结构，就继续把闭合围栏往后推（见 findSpilledDocumentEnd）。
+    // 两条规则交替进行，直到都不再触发。
+    // ------------------------------------------------------------------
     if (closeLine >= 0 && MARKDOWN_KINDS.has(ARTIFACT_LANG_MAP[lang])) {
       let k = candidates.indexOf(closeLine)
-      while (
-        k >= 0 && k + 1 < candidates.length
-        && countUnclosedInnerFences(lines, i, candidates[k], fenceChar) > 0
-      ) {
-        k += 1
-        closeLine = candidates[k]
-        code = lines.slice(i + 1, closeLine).join('\n')
+      while (k >= 0 && k + 1 < candidates.length) {
+        if (countUnclosedInnerFences(lines, i, candidates[k], fenceChar) > 0) {
+          k += 1
+          continue
+        }
+        const spilled = findSpilledDocumentEnd(lines, candidates, k, fenceChar)
+        if (spilled > k) {
+          k = spilled
+          continue
+        }
+        break
       }
+      closeLine = candidates[k]
+      code = lines.slice(i + 1, closeLine).join('\n')
     }
 
     blocks.push({

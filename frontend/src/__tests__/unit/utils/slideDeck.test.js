@@ -238,4 +238,20 @@ describe('detectSmartLayout() 智能排版', () => {
     expect(deck.slides[4].layout).toBe(SLIDE_LAYOUTS.CLOSING)
     expect(deck.slides[4].subtitle).toBe('欢迎提问')
   })
+
+  it('"A → B → C" 箭头链（段落或裸代码块里）→ chain 块；整页只有一条链 → 流程图', () => {
+    const md = [
+      '# 封面', '---', '# 探究实验', '', '```', '暗处理 → 选叶遮光 → 光照照射 → 酒精脱色 → 清水漂洗', '```', '',
+      '- **第一步：暗处理**', '- **第二步：遮光**', '---', '# 步骤', '', '取材 -> 固定 -> 染色 -> 观察', '---',
+      '# 不是链', '', '只有一个 → 箭头'
+    ].join('\n')
+    const deck = parseSlideDeck(md)
+    const chain = deck.slides[1].blocks[0]
+    expect(chain.type).toBe('chain')
+    expect(chain.steps).toEqual(['暗处理', '选叶遮光', '光照照射', '酒精脱色', '清水漂洗'])
+    expect(deck.slides[1].smart).toBeNull()               // 链 + 要点列表：按普通块序列渲染
+    expect(deck.slides[2].smart.type).toBe(SMART_LAYOUTS.FLOW)
+    expect(deck.slides[2].smart.steps).toHaveLength(4)
+    expect(deck.slides[3].blocks.some(b => b.type === 'chain')).toBe(false)
+  })
 })

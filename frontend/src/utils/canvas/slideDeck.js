@@ -12,7 +12,7 @@
  *   { title, slides: [{ index, layout, title, subtitle, blocks, smart, notes, textLength }] }
  *   layout: 'title'（封面）| 'section'（章节页，只有标题，带 sectionIndex 序号）| 'content' |
  *           'closing'（结束页：标题是谢谢/Q&A 之类且最多两段短文字，按封面样式渲染）
- *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code'|'callout', ... }]
+ *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code'|'callout'|'chain', ... }]
  *     callout：以"结论：/要点：/注意：/提示：/Tips:"等开头的段落，渲染成高亮提示框（label + runs）
  *   smart: 内容页的智能排版（detectSmartLayout），null 表示普通"标题+要点"：
  *     columns   { columns: [{ title: runs, blocks }] }     同页 2–3 个 ##/### 小标题各带内容
@@ -55,6 +55,22 @@ const HTML_BREAK_RE = /<br\s*\/?>/gi
 const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g
 /** 提示框段落：以这些词开头并紧跟冒号 */
 const CALLOUT_RE = /^(结论|小结|总结|要点|重点|关键|注意|提示|提醒|思考|Tips?|Note|Key|Takeaway|Summary)\s*[：:]\s*(.+)$/i
+
+/** 箭头链分隔符："A → B → C"，也接受 -> / => / ⇒ / ➜ */
+const CHAIN_SPLIT_RE = /\s*(?:→|➜|⇒|->|=>)\s*/
+
+/**
+ * 一行 "A → B → C" 形式的箭头链 → 步骤数组；不是链（步骤少于 3 或某步太长）返回 null。
+ * 模型常想用这种写法画流程，甚至把它塞进代码块里；识别出来后按流程条渲染。
+ */
+const parseArrowChain = (text) => {
+  const trimmed = text.trim()
+  if (!trimmed || /\n/.test(trimmed)) return null
+  const steps = trimmed.split(CHAIN_SPLIT_RE).map(step => step.replace(/^\*\*|\*\*$/g, '').trim())
+  if (steps.length < 3 || steps.length > 8) return null
+  if (steps.some(step => !step || step.length > 20)) return null
+  return steps
+}
 
 /** 封面副标题最多接受的段落数与总长度（超过则按普通内容页处理） */
 const SUBTITLE_MAX_PARAGRAPHS = 2
@@ -212,8 +228,11 @@ const parseSlideBody = (lines) => {
     paragraph = []
     if (!text) return
     const callout = CALLOUT_RE.exec(text.replace(/^\*\*(.+?)\*\*/, '$1'))
+    const chain = callout ? null : parseArrowChain(text)
     if (callout) {
       blocks.push({ type: 'callout', label: callout[1], runs: parseInlineRuns(callout[2]) })
+    } else if (chain) {
+      blocks.push({ type: 'chain', steps: chain })
     } else {
       blocks.push({ type: 'paragraph', runs: parseInlineRuns(text) })
     }
@@ -236,7 +255,13 @@ const parseSlideBody = (lines) => {
         if (close && close[1][0] === marker[0] && close[1].length >= marker.length) { closed = true; break }
         codeLines.push(lines[j])
       }
-      blocks.push({ type: 'code', lang: fenceOpen[2] || '', text: codeLines.join('\n') })
+      const codeText = codeLines.join('\n')
+      const chain = (fenceOpen[2] || '').trim() ? null : parseArrowChain(codeText)
+      if (chain) {
+        blocks.push({ type: 'chain', steps: chain })
+      } else {
+        blocks.push({ type: 'code', lang: fenceOpen[2] || '', text: codeText })
+      }
       i = closed ? j + 1 : j
       continue
     }
@@ -338,6 +363,8 @@ const blockTextLength = (block) => {
       )
     case 'code':
       return block.text.length
+    case 'chain':
+      return block.steps.join('').length
     default:
       return 0
   }
@@ -399,6 +426,14 @@ const detectColumns = (blocks) => {
 
 /** 一个 3–6 步的有序列表（每步一句短语，无子级）→ 流程 */
 const detectFlow = (blocks) => {
+  // 整页只有一条 "A → B → C" 箭头链（可带一段引导）→ 直接当流程图
+  const chains = blocks.filter(b => b.type === 'chain')
+  if (chains.length === 1 && blocks.every(b => b.type === 'chain' || b.type === 'paragraph') && blocks.length <= 2) {
+    const steps = chains[0].steps
+    if (steps.length >= FLOW_MIN && steps.length <= FLOW_MAX) {
+      return { type: SMART_LAYOUTS.FLOW, intro: blocks.find(b => b.type === 'paragraph') || null, steps: steps.map(step => parseInlineRuns(step)) }
+    }
+  }
   const lists = blocks.filter(b => LIST_TYPES.has(b.type))
   const others = blocks.filter(b => !LIST_TYPES.has(b.type))
   if (lists.length !== 1 || lists[0].type !== 'numbered') return null

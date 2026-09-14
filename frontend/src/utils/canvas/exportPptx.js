@@ -189,6 +189,39 @@ const addCallout = (pptx, slide, block, theme, y, fontFace, box = BODY) => {
   return height
 }
 
+/**
+ * 箭头链 "A → B → C"：一行胶囊 + 小箭头的流程条；超过 4 步折两行（与预览 .slide-chain 一致）
+ */
+const addChain = (pptx, slide, block, theme, y, fontFace, box = BODY) => {
+  const steps = block.steps
+  const perRow = steps.length <= 4 ? steps.length : Math.ceil(steps.length / 2)
+  const rows = Math.ceil(steps.length / perRow)
+  const rowH = 0.5
+  const gapY = 0.14
+  const arrowW = 0.3
+  const pillW = (box.w - arrowW * (perRow - 1)) / perRow
+  const fontSize = perRow >= 4 ? 12 : 14
+  steps.forEach((step, idx) => {
+    const col = idx % perRow
+    const row = Math.floor(idx / perRow)
+    const x = box.x + col * (pillW + arrowW)
+    const py = y + row * (rowH + gapY)
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x, y: py, w: pillW, h: rowH, fill: { color: theme.surface }, line: { color: theme.accent, width: 1.25 }, rectRadius: 0.25
+    })
+    slide.addText(step, {
+      x, y: py, w: pillW, h: rowH, fontSize, bold: true, color: theme.title, fontFace, align: 'center', valign: 'middle', margin: 2
+    })
+    if (col < perRow - 1 && idx < steps.length - 1) {
+      slide.addText('→', {
+        x: x + pillW, y: py, w: arrowW, h: rowH, fontSize: 16, bold: true, color: theme.accent,
+        fontFace: 'Arial', align: 'center', valign: 'middle', margin: 0
+      })
+    }
+  })
+  return rows * rowH + (rows - 1) * gapY
+}
+
 const groupBlocks = (blocks) => {
   const groups = []
   let textBlocks = []
@@ -492,6 +525,7 @@ const addBlocksInBox = async (pptx, slide, blocks, theme, box, fontFace) => {
       case 'image': used = await addImage(slide, group.block, theme, y, available, fontFace, box); break
       case 'code': used = addCodeBlock(slide, group.block, theme, y, fontFace, box); break
       case 'callout': used = addCallout(pptx, slide, group.block, theme, y, fontFace, box); break
+      case 'chain': used = addChain(pptx, slide, group.block, theme, y, fontFace, box); break
       default: used = 0
     }
     y += used + BLOCK_GAP

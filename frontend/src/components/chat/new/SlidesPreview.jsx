@@ -126,6 +126,14 @@ const SlideBlock = ({ block }) => {
           <span className="slide-callout-text"><InlineRuns runs={block.runs} /></span>
         </div>
       )
+    case 'chain':
+      return (
+        <div className={`slide-chain ${block.steps.length > 4 ? 'two-rows' : ''} per-row-${block.steps.length <= 4 ? block.steps.length : Math.ceil(block.steps.length / 2)}`}>
+          {block.steps.map((step, idx) => (
+            <div className="slide-chain-step" key={idx}>{step}</div>
+          ))}
+        </div>
+      )
     case 'code':
       return <pre className="slide-codeblock"><code>{block.text}</code></pre>
     default:
