@@ -14,7 +14,9 @@ RUN npm ci --only=production
 FROM node:18-alpine
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 # 安装运行时依赖、mysql客户端、netcat和su-exec
-RUN apk add --no-cache tini mysql-client netcat-openbsd su-exec
+# mariadb-connector-c 提供 caching_sha2_password 客户端插件：Alpine 的 mysql-client 是 MariaDB 客户端，
+# 缺它连不上 MySQL 8 默认认证的账号（run-migrations.sh 会因此连不上库）
+RUN apk add --no-cache tini mysql-client mariadb-connector-c netcat-openbsd su-exec
 # 创建非root用户
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 # 设置工作目录
