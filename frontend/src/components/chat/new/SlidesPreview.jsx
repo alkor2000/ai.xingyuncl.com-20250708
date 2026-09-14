@@ -19,7 +19,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button, Typography } from 'antd'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { parseSlideDeck, SLIDE_LAYOUTS } from '../../../utils/canvas/slideDeck'
+import { parseSlideDeck, SLIDE_LAYOUTS, SMART_LAYOUTS } from '../../../utils/canvas/slideDeck'
 import { getSlideTheme, slideThemeToCssVars, slideThemeClassNames } from '../../../utils/canvas/slideThemes'
 import { renderCoverArt } from '../../../utils/canvas/slideArt'
 import { getThemeBackgrounds } from '../../../utils/canvas/slideBackgrounds'
@@ -123,6 +123,98 @@ const SlideBlock = ({ block }) => {
   }
 }
 
+// ============================================================================
+// 智能排版（slideDeck.detectSmartLayout 的结果）
+// ============================================================================
+
+const ColumnsView = ({ smart }) => (
+  <>
+    {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+    <div className={`slide-columns cols-${smart.columns.length}`}>
+      {smart.columns.map((col, idx) => (
+        <div className="slide-col" key={idx}>
+          <div className="slide-col-title"><InlineRuns runs={col.title} /></div>
+          {col.blocks.map((block, bIdx) => <SlideBlock key={bIdx} block={block} />)}
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+/** 超过 4 步折成两行（与 exportPptx.addSmartFlow 的分行规则一致），行尾不画箭头 */
+const FlowView = ({ smart }) => {
+  const n = smart.steps.length
+  const perRow = n <= 4 ? n : Math.ceil(n / 2)
+  const rows = []
+  for (let i = 0; i < n; i += perRow) rows.push(smart.steps.slice(i, i + perRow).map((runs, j) => ({ runs, idx: i + j })))
+  return (
+    <>
+      {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+      <div className={`slide-flow steps-${n}`}>
+        {rows.map((row, rIdx) => (
+          <div className="slide-flow-row" key={rIdx}>
+            {row.map(({ runs, idx }, j) => (
+              <React.Fragment key={idx}>
+                <div className="slide-flow-step">
+                  {/* 步骤序号为纯数字，无需国际化 */}
+                  <div className="slide-flow-badge">{idx + 1}</div>
+                  <div className="slide-flow-text"><InlineRuns runs={runs} /></div>
+                </div>
+                {j < row.length - 1 && <div className="slide-flow-arrow" aria-hidden="true">➜</div>}
+              </React.Fragment>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+const CardsView = ({ smart }) => (
+  <>
+    {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+    <div className={`slide-cards cards-${smart.cards.length}`}>
+      {smart.cards.map((card, idx) => (
+        <div className="slide-card" key={idx}>
+          <div className="slide-card-title"><InlineRuns runs={card.title} /></div>
+          <div className="slide-card-body"><InlineRuns runs={card.body} /></div>
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+const ImageTextView = ({ smart }) => (
+  <div className="slide-imagetext">
+    <div className="slide-imagetext-text">
+      {smart.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}
+    </div>
+    <div className="slide-imagetext-image">
+      <img src={smart.image.url} alt={smart.image.alt} />
+    </div>
+  </div>
+)
+
+const QuoteView = ({ smart }) => (
+  <div className="slide-bigquote">
+    <span className="slide-bigquote-mark" aria-hidden="true">“</span>
+    <div className="slide-bigquote-text"><InlineRuns runs={smart.runs} /></div>
+  </div>
+)
+
+const SMART_VIEWS = {
+  [SMART_LAYOUTS.COLUMNS]: ColumnsView,
+  [SMART_LAYOUTS.FLOW]: FlowView,
+  [SMART_LAYOUTS.CARDS]: CardsView,
+  [SMART_LAYOUTS.IMAGE_TEXT]: ImageTextView,
+  [SMART_LAYOUTS.QUOTE]: QuoteView
+}
+
+const SmartBody = ({ smart }) => {
+  const View = SMART_VIEWS[smart.type]
+  return View ? <View smart={smart} /> : null
+}
+
 /**
  * 内容量分级：与 exportPptx 的字号自适应对应，预览端用 CSS 类粗略缩字
  */
@@ -193,8 +285,10 @@ export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgroun
         <div className="slide-title"><InlineRuns runs={slide.title} /></div>
         <div className="slide-title-bar" />
       </div>
-      <div className="slide-body">
-        {slide.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}
+      <div className={`slide-body ${slide.smart ? `smart-${slide.smart.type}` : ''}`}>
+        {slide.smart
+          ? <SmartBody smart={slide.smart} />
+          : slide.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}
       </div>
       <div className="slide-footer">
         <span className="slide-footer-title">{deckTitle}</span>

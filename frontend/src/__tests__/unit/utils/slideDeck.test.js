@@ -2,7 +2,7 @@
  * slideDeck 解析器测试：Marp 风格 Markdown → 结构化 deck
  */
 import { describe, it, expect } from 'vitest'
-import { parseSlideDeck, parseInlineRuns, runsToText, SLIDE_LAYOUTS } from '../../../utils/canvas/slideDeck'
+import { parseSlideDeck, parseInlineRuns, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS } from '../../../utils/canvas/slideDeck'
 
 const SAMPLE = `---
 marp: true
@@ -140,5 +140,59 @@ describe('parseInlineRuns()', () => {
 
   it('去掉 HTML 标签，<br> 变空格', () => {
     expect(runsToText(parseInlineRuns('a<br>b <span>c</span>'))).toBe('a b c')
+  })
+})
+
+describe('detectSmartLayout() 智能排版', () => {
+  const deckOf = (body) => parseSlideDeck('# 封面\n---\n# 页\n\n' + body).slides[1]
+
+  it('同页两个小标题各带内容 → 分栏', () => {
+    const s = deckOf('## 优点\n- 快\n- 便宜\n\n## 缺点\n- 不稳定')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.COLUMNS)
+    expect(s.smart.columns.map(c => runsToText(c.title))).toEqual(['优点', '缺点'])
+    expect(s.smart.columns[0].blocks[0].items).toHaveLength(2)
+  })
+
+  it('小标题之前允许一段引导文字，超过或不是段落则不分栏', () => {
+    expect(deckOf('先说一句。\n\n## A\n- a\n\n## B\n- b').smart.type).toBe(SMART_LAYOUTS.COLUMNS)
+    expect(deckOf('- 要点\n\n## A\n- a\n\n## B\n- b').smart).toBeNull()
+  })
+
+  it('3–6 步短语的有序列表 → 流程；步骤太长或带子级则不是', () => {
+    const s = deckOf('1. 准备材料\n2. 暗处理一昼夜\n3. 部分遮光光照\n4. 脱色染色')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.FLOW)
+    expect(s.smart.steps).toHaveLength(4)
+    expect(deckOf('1. ' + '很长'.repeat(30) + '\n2. b\n3. c').smart).toBeNull()
+    expect(deckOf('1. a\n  - 子\n2. b\n3. c').smart).toBeNull()
+    expect(deckOf('1. a\n2. b').smart).toBeNull()
+  })
+
+  it('- **名称**：说明 ×3 → 卡片，标题去掉冒号；没有说明则退回普通要点', () => {
+    const s = deckOf('- **光**：提供能量\n- **叶绿体**：反应场所\n- **二氧化碳**：原料之一')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.CARDS)
+    expect(s.smart.cards.map(c => runsToText(c.title))).toEqual(['光', '叶绿体', '二氧化碳'])
+    expect(runsToText(s.smart.cards[0].body)).toBe('提供能量')
+    expect(deckOf('- **光**\n- **叶绿体**\n- **二氧化碳**').smart).toBeNull()
+  })
+
+  it('一张图 + 要点 → 图文；只有引文 → 引言', () => {
+    const it1 = deckOf('![叶片](https://example.com/a.png)\n\n- 上表皮\n- 叶肉')
+    expect(it1.smart.type).toBe(SMART_LAYOUTS.IMAGE_TEXT)
+    expect(it1.smart.image.url).toBe('https://example.com/a.png')
+    expect(deckOf('> 万物生长靠太阳').smart.type).toBe(SMART_LAYOUTS.QUOTE)
+  })
+
+  it('layout 指令可强制或关闭；封面/章节页没有 smart', () => {
+    expect(deckOf('<!-- layout: none -->\n\n1. 一\n2. 二\n3. 三').smart).toBeNull()
+    expect(deckOf('<!-- layout: flow -->\n\n1. 一\n2. 二\n3. 三').smart.type).toBe(SMART_LAYOUTS.FLOW)
+    // 结构不满足时忽略强制
+    expect(deckOf('<!-- layout: columns -->\n\n- a\n- b').smart).toBeNull()
+    const deck = parseSlideDeck('# 封面\n副标题\n---\n# 章节')
+    expect(deck.slides[0].smart).toBeNull()
+    expect(deck.slides[1].smart).toBeNull()
+  })
+
+  it('普通要点页 smart 为 null', () => {
+    expect(deckOf('- a\n- b\n- c').smart).toBeNull()
   })
 })

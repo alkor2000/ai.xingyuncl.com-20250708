@@ -9,9 +9,16 @@
  *   - HTML 注释 <!-- ... --> 视为演讲备注（形如 key: value 的 Marp 指令忽略）
  *
  * 输出：
- *   { title, slides: [{ index, layout, title, subtitle, blocks, notes, textLength }] }
+ *   { title, slides: [{ index, layout, title, subtitle, blocks, smart, notes, textLength }] }
  *   layout: 'title'（封面）| 'section'（章节页，只有标题）| 'content'
  *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code', ... }]
+ *   smart: 内容页的智能排版（detectSmartLayout），null 表示普通"标题+要点"：
+ *     columns   { columns: [{ title: runs, blocks }] }     同页 2–3 个 ##/### 小标题各带内容
+ *     flow      { steps: [runs] }                           一个 3–6 步的有序列表（每步一句短语）
+ *     cards     { cards: [{ title: runs, body: runs }] }   3–6 条 "- **名称**：说明"
+ *     imageText { image, blocks }                           一张图 + 文字
+ *     quote     { runs }                                    整页只有一段引文
+ *   可用 <!-- layout: columns|flow|cards|quote|imageText|none --> 强制或关闭（结构不满足时忽略）。
  *   文本一律拆成 runs（parseInlineRuns），预览与 pptx 导出共用同一份结构。
  */
 
@@ -151,17 +158,24 @@ const splitSlides = (lines) => {
 }
 
 /**
- * 抽出 HTML 注释：备注返回，Marp 指令丢弃
- * @returns {{ text: string, notes: string[] }}
+ * 抽出 HTML 注释：备注返回，形如 key: value 的指令收进 directives（只用 layout，其余 Marp 指令忽略）
+ * @returns {{ text: string, notes: string[], directives: Object }}
  */
 const extractComments = (text) => {
   const notes = []
+  const directives = {}
   const stripped = text.replace(COMMENT_RE, (_, body) => {
     const content = body.trim()
-    if (content && !DIRECTIVE_RE.test(content)) notes.push(content)
+    if (!content) return '\n'
+    if (DIRECTIVE_RE.test(content)) {
+      const m = /^\s*_?([A-Za-z][\w-]*)\s*:\s*(\S[\s\S]*?)\s*$/.exec(content)
+      if (m) directives[m[1].toLowerCase()] = m[2]
+    } else {
+      notes.push(content)
+    }
     return '\n'
   })
-  return { text: stripped, notes }
+  return { text: stripped, notes, directives }
 }
 
 const listLevel = (indent) => {
@@ -312,6 +326,121 @@ const blockTextLength = (block) => {
   }
 }
 
+// ============================================================================
+// 智能排版：按内容结构自动选版式（预览与 pptx 导出共用同一份判定）
+// ============================================================================
+
+export const SMART_LAYOUTS = Object.freeze({
+  COLUMNS: 'columns',
+  FLOW: 'flow',
+  CARDS: 'cards',
+  IMAGE_TEXT: 'imageText',
+  QUOTE: 'quote'
+})
+
+const FLOW_MIN = 3
+const FLOW_MAX = 6
+const FLOW_STEP_MAX_CHARS = 40
+const CARDS_MIN = 3
+const CARDS_MAX = 6
+const LIST_TYPES = new Set(['bullets', 'numbered'])
+
+/** 同页 2–3 个小标题各带内容 → 分栏（首个小标题之前最多允许一段引导文字） */
+const detectColumns = (blocks) => {
+  const headingIdx = blocks.map((b, i) => (b.type === 'heading' ? i : -1)).filter(i => i >= 0)
+  if (headingIdx.length < 2 || headingIdx.length > 3) return null
+  if (headingIdx[0] > 1) return null
+  if (headingIdx[0] === 1 && blocks[0].type !== 'paragraph') return null
+  const columns = []
+  for (let k = 0; k < headingIdx.length; k += 1) {
+    const from = headingIdx[k]
+    const to = k + 1 < headingIdx.length ? headingIdx[k + 1] : blocks.length
+    const inner = blocks.slice(from + 1, to)
+    if (inner.length === 0) return null
+    columns.push({ title: blocks[from].runs, blocks: inner })
+  }
+  return { type: SMART_LAYOUTS.COLUMNS, intro: headingIdx[0] === 1 ? blocks[0] : null, columns }
+}
+
+/** 一个 3–6 步的有序列表（每步一句短语，无子级）→ 流程 */
+const detectFlow = (blocks) => {
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  const others = blocks.filter(b => !LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || lists[0].type !== 'numbered') return null
+  if (others.some(b => b.type !== 'paragraph') || others.length > 1) return null
+  const items = lists[0].items
+  if (items.length < FLOW_MIN || items.length > FLOW_MAX) return null
+  if (items.some(item => item.level > 0 || runsToText(item.runs).length > FLOW_STEP_MAX_CHARS)) return null
+  return { type: SMART_LAYOUTS.FLOW, intro: others[0] || null, steps: items.map(item => item.runs) }
+}
+
+/** 3–6 条 "- **名称**：说明"（或 **名称** 后跟说明）→ 卡片 */
+const detectCards = (blocks) => {
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  const others = blocks.filter(b => !LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || others.some(b => b.type !== 'paragraph') || others.length > 1) return null
+  const items = lists[0].items
+  if (items.length < CARDS_MIN || items.length > CARDS_MAX) return null
+  if (items.some(item => item.level > 0)) return null
+  const cards = []
+  for (const item of items) {
+    const runs = item.runs
+    const lead = runs.findIndex(r => !r.bold && r.text.trim() !== '')
+    const bold = runs.filter((r, i) => (lead < 0 || i < lead) && r.bold)
+    if (bold.length === 0 || (lead >= 0 && runs.slice(0, lead).some(r => !r.bold && r.text.trim() !== ''))) return null
+    const titleText = runsToText(bold).replace(/[：:]\s*$/, '').trim()
+    if (!titleText) return null
+    const body = lead >= 0 ? runs.slice(lead) : []
+    if (body.length > 0) body[0] = { ...body[0], text: body[0].text.replace(/^\s*[：:—–-]\s*/, '') }
+    cards.push({ title: [{ text: titleText, bold: true }], body })
+  }
+  // 卡片要有说明才有意义，否则退回普通要点
+  if (cards.every(c => runsToText(c.body).trim() === '')) return null
+  return { type: SMART_LAYOUTS.CARDS, intro: others[0] || null, cards }
+}
+
+/** 一张图 + 文字 → 图文左右排 */
+const detectImageText = (blocks) => {
+  const images = blocks.filter(b => b.type === 'image')
+  if (images.length !== 1) return null
+  const rest = blocks.filter(b => b.type !== 'image')
+  if (rest.length === 0 || rest.some(b => b.type === 'table' || b.type === 'code')) return null
+  return { type: SMART_LAYOUTS.IMAGE_TEXT, image: images[0], blocks: rest }
+}
+
+/** 整页只有一段引文 → 大字引言 */
+const detectQuote = (blocks) => {
+  if (blocks.length !== 1 || blocks[0].type !== 'quote') return null
+  return { type: SMART_LAYOUTS.QUOTE, runs: blocks[0].runs }
+}
+
+const DETECTORS = {
+  [SMART_LAYOUTS.COLUMNS]: detectColumns,
+  [SMART_LAYOUTS.FLOW]: detectFlow,
+  [SMART_LAYOUTS.CARDS]: detectCards,
+  [SMART_LAYOUTS.IMAGE_TEXT]: detectImageText,
+  [SMART_LAYOUTS.QUOTE]: detectQuote
+}
+
+/**
+ * @param {Array} blocks - 内容页 blocks
+ * @param {string} [forced] - <!-- layout: x --> 指定的版式；none 关闭智能排版；不满足结构时忽略
+ * @returns {Object|null}
+ */
+export const detectSmartLayout = (blocks, forced) => {
+  const key = String(forced || '').trim().toLowerCase()
+  if (key === 'none' || key === 'default') return null
+  if (key) {
+    const detector = DETECTORS[Object.values(SMART_LAYOUTS).find(v => v.toLowerCase() === key)]
+    if (detector) return detector(blocks)
+  }
+  for (const detector of Object.values(DETECTORS)) {
+    const result = detector(blocks)
+    if (result) return result
+  }
+  return null
+}
+
 /**
  * 判断封面/章节页：只有标题，或标题加至多两段简短文字
  */
@@ -339,7 +468,7 @@ export const parseSlideDeck = (markdown) => {
 
   const slides = []
   for (const rawLines of rawSlides) {
-    const { text, notes } = extractComments(rawLines.join('\n'))
+    const { text, notes, directives } = extractComments(rawLines.join('\n'))
     const bodyLines = text.split('\n')
     const { title, blocks } = parseSlideBody(bodyLines)
     if (!title && blocks.length === 0) continue
@@ -356,6 +485,7 @@ export const parseSlideDeck = (markdown) => {
       titleText: runsToText(title || []),
       subtitle,
       blocks: isCover ? [] : blocks,
+      smart: isCover ? null : detectSmartLayout(blocks, directives.layout),
       notes: notes.join('\n'),
       textLength: blocks.reduce((sum, b) => sum + blockTextLength(b), 0)
     })
@@ -368,4 +498,4 @@ export const parseSlideDeck = (markdown) => {
   }
 }
 
-export default { parseSlideDeck, parseInlineRuns, runsToText, SLIDE_LAYOUTS }
+export default { parseSlideDeck, parseInlineRuns, runsToText, detectSmartLayout, SLIDE_LAYOUTS, SMART_LAYOUTS }

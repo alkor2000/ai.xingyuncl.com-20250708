@@ -12,10 +12,13 @@
  * v2.1 模板：封面背景 = 用户自备图（slideBackgrounds，盖 58% 主题色）> 程序生成图（slideArt）
  * > 纯色；内容页按主题 content 版式画 header（accent-bar / title-band / side-stripe / minimal /
  * card），正文区坐标由 addContentHeader 返回，元素落位函数都接收这个 box。
- * pptxgenjs 没有渐变填充，渐变一律走 canvas 生成的 PNG（背景/色带）。
+ * pptxgenjs 没有渐变填充，渐变一律走 canvas 生成的 JPEG（背景/色带）。
+ *
+ * v2.2 智能排版：deckSlide.smart（slideDeck.detectSmartLayout）非空时正文按分栏/流程图/
+ * 卡片/图文/引言用形状+文本框排，与 SlidesPreview 的对应视图同构。
  */
 
-import { parseSlideDeck, runsToText, SLIDE_LAYOUTS } from './slideDeck'
+import { parseSlideDeck, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS } from './slideDeck'
 import { getSlideTheme, SLIDE_CODE_FONT_FACE } from './slideThemes'
 import { renderCoverArt, renderBandArt } from './slideArt'
 import { getThemeBackgrounds } from './slideBackgrounds'
@@ -451,6 +454,171 @@ const addContentHeader = (pptx, slide, deckSlide, theme) => {
   return { body, footerX: inset }
 }
 
+// ============================================================================
+// 智能排版：与 SlidesPreview 的 ColumnsView / FlowView / CardsView / ImageTextView / QuoteView 对应
+// ============================================================================
+
+/** 正文块序列落到给定 box 里（分栏/图文共用），返回用掉的高度 */
+const addBlocksInBox = async (slide, blocks, theme, box, fontFace) => {
+  let y = box.y
+  const bottom = box.y + box.h
+  for (const group of groupBlocks(blocks)) {
+    const available = Math.max(0.5, bottom - y)
+    let used = 0
+    switch (group.type) {
+      case 'text': used = addTextGroup(slide, group, theme, y, available, fontFace, box); break
+      case 'table': used = addTable(slide, group.block, theme, y, fontFace, box); break
+      case 'image': used = await addImage(slide, group.block, theme, y, available, fontFace, box); break
+      case 'code': used = addCodeBlock(slide, group.block, theme, y, fontFace, box); break
+      default: used = 0
+    }
+    y += used + BLOCK_GAP
+  }
+  return y - box.y
+}
+
+const addIntro = (slide, intro, theme, box, fontFace) => {
+  if (!intro) return 0
+  const h = 0.45
+  slide.addText(intro.runs.map(run => runToTextObject(run, theme)), {
+    x: box.x, y: box.y, w: box.w, h, fontSize: 13, color: theme.muted, fontFace, valign: 'top', margin: 0
+  })
+  return h + 0.1
+}
+
+const addSmartColumns = async (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const n = smart.columns.length
+  const gap = 0.3
+  const colW = (box.w - gap * (n - 1)) / n
+  const titleH = 0.5
+  for (let i = 0; i < n; i += 1) {
+    const col = smart.columns[i]
+    const x = box.x + i * (colW + gap)
+    slide.addText(col.title.map(run => runToTextObject(run, theme)), {
+      x, y: box.y + top, w: colW, h: titleH, fontSize: n === 3 ? 15 : 17, bold: true,
+      color: theme.title, fontFace: theme.titleFont, valign: 'middle', margin: 0
+    })
+    addRect(pptx, slide, { x, y: box.y + top + titleH, w: colW, h: 0.035 }, theme.accent)
+    await addBlocksInBox(slide, col.blocks, theme, {
+      x, y: box.y + top + titleH + 0.15, w: colW, h: box.h - top - titleH - 0.15
+    }, fontFace)
+  }
+}
+
+const addSmartFlow = (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const steps = smart.steps
+  const n = steps.length
+  const perRow = n <= 4 ? n : Math.ceil(n / 2)
+  const rows = Math.ceil(n / perRow)
+  const arrowW = 0.35
+  const gap = 0.12
+  const cardW = (box.w - (perRow - 1) * (arrowW + gap * 2)) / perRow
+  const cardH = rows === 1 ? 1.5 : 1.25
+  const rowGap = 0.5
+  const blockH = rows * cardH + (rows - 1) * rowGap
+  const startY = box.y + top + Math.max(0, (box.h - top - blockH) / 2)
+  const badge = 0.42
+
+  steps.forEach((runs, idx) => {
+    const row = Math.floor(idx / perRow)
+    const colIdx = idx % perRow
+    const x = box.x + colIdx * (cardW + arrowW + gap * 2)
+    const y = startY + row * (cardH + rowGap)
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x, y, w: cardW, h: cardH, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.12
+    })
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: x + cardW / 2 - badge / 2, y: y - badge / 2, w: badge, h: badge,
+      fill: { color: theme.accent }, line: noLine(theme.accent)
+    })
+    slide.addText(String(idx + 1), {
+      x: x + cardW / 2 - badge / 2, y: y - badge / 2, w: badge, h: badge,
+      fontSize: 13, bold: true, color: theme.accentText, fontFace, align: 'center', valign: 'middle', margin: 0
+    })
+    slide.addText(runs.map(run => runToTextObject(run, theme)), {
+      x: x + 0.08, y: y + badge / 2, w: cardW - 0.16, h: cardH - badge / 2 - 0.08,
+      fontSize: n > 4 ? 12 : 14, color: theme.text, fontFace, align: 'center', valign: 'middle', margin: 2
+    })
+    if (colIdx < perRow - 1 && idx < n - 1) {
+      slide.addShape(pptx.ShapeType.rightArrow, {
+        x: x + cardW + gap, y: y + cardH / 2 - 0.16, w: arrowW, h: 0.32,
+        fill: { color: theme.accent }, line: noLine(theme.accent)
+      })
+    }
+  })
+}
+
+const addSmartCards = (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const cards = smart.cards
+  const n = cards.length
+  const cols = n <= 4 ? 2 : 3
+  const rows = Math.ceil(n / cols)
+  const gap = 0.2
+  const cardW = (box.w - gap * (cols - 1)) / cols
+  const cardH = Math.min(1.7, (box.h - top - gap * (rows - 1)) / rows)
+  const startY = box.y + top + Math.max(0, (box.h - top - (rows * cardH + (rows - 1) * gap)) / 2)
+
+  cards.forEach((card, idx) => {
+    const x = box.x + (idx % cols) * (cardW + gap)
+    const y = startY + Math.floor(idx / cols) * (cardH + gap)
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x, y, w: cardW, h: cardH, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.1
+    })
+    addRect(pptx, slide, { x: x + 0.15, y, w: cardW - 0.3, h: 0.05 }, theme.accent)
+    slide.addText(card.title.map(run => runToTextObject(run, theme)), {
+      x: x + 0.15, y: y + 0.12, w: cardW - 0.3, h: 0.42, fontSize: cols === 3 ? 14 : 16, bold: true,
+      color: theme.title, fontFace: theme.titleFont, valign: 'middle', margin: 0
+    })
+    slide.addText(card.body.length ? card.body.map(run => runToTextObject(run, theme)) : ' ', {
+      x: x + 0.15, y: y + 0.56, w: cardW - 0.3, h: cardH - 0.64, fontSize: cols === 3 ? 11 : 13,
+      color: theme.text, fontFace, valign: 'top', margin: 0
+    })
+  })
+}
+
+const addSmartImageText = async (slide, smart, theme, box, fontFace) => {
+  const textW = box.w * 0.52
+  const imgBox = { x: box.x + textW + 0.3, y: box.y, w: box.w - textW - 0.3, h: box.h }
+  await addBlocksInBox(slide, smart.blocks, theme, { x: box.x, y: box.y, w: textW, h: box.h }, fontFace)
+  const image = await fetchImageForEmbedding(smart.image.url)
+  if (!image) {
+    slide.addText(`[图片：${smart.image.alt || smart.image.url}]`, {
+      ...imgBox, fontSize: 12, color: theme.muted, fontFace, italic: true, align: 'center', valign: 'middle'
+    })
+    return
+  }
+  const ratio = image.width / image.height
+  let w = imgBox.w
+  let h = w / ratio
+  if (h > imgBox.h) { h = imgBox.h; w = h * ratio }
+  slide.addImage({ data: image.dataUrl, x: imgBox.x + (imgBox.w - w) / 2, y: imgBox.y + (imgBox.h - h) / 2, w, h, rounding: true })
+}
+
+const addSmartQuote = (slide, smart, theme, box, fontFace) => {
+  slide.addText('\u201C', {
+    x: box.x, y: box.y - 0.1, w: 1.2, h: 1.2, fontSize: 96, color: theme.accent, fontFace: 'Georgia',
+    transparency: 70, valign: 'top', margin: 0
+  })
+  slide.addText(smart.runs.map(run => runToTextObject(run, theme)), {
+    x: box.x + 0.6, y: box.y, w: box.w - 1.2, h: box.h, fontSize: 24, italic: true,
+    color: theme.title, fontFace: theme.titleFont, align: 'center', valign: 'middle'
+  })
+}
+
+const addSmartBody = async (pptx, slide, smart, theme, box, fontFace) => {
+  switch (smart.type) {
+    case SMART_LAYOUTS.COLUMNS: return addSmartColumns(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.FLOW: return addSmartFlow(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.CARDS: return addSmartCards(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.IMAGE_TEXT: return addSmartImageText(slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.QUOTE: return addSmartQuote(slide, smart, theme, box, fontFace)
+    default: return null
+  }
+}
+
 const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, backgrounds) => {
   const bodyFont = theme.bodyFont
   if (backgrounds.contentData) {
@@ -468,29 +636,11 @@ const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, backgro
     })
   }
 
-  // 正文
-  let y = body.y
-  const bottom = body.y + body.h
-  for (const group of groupBlocks(deckSlide.blocks)) {
-    const available = Math.max(0.5, bottom - y)
-    let used = 0
-    switch (group.type) {
-      case 'text':
-        used = addTextGroup(slide, group, theme, y, available, bodyFont, body)
-        break
-      case 'table':
-        used = addTable(slide, group.block, theme, y, bodyFont, body)
-        break
-      case 'image':
-        used = await addImage(slide, group.block, theme, y, available, bodyFont, body)
-        break
-      case 'code':
-        used = addCodeBlock(slide, group.block, theme, y, bodyFont, body)
-        break
-      default:
-        used = 0
-    }
-    y += used + BLOCK_GAP
+  // 正文：智能排版或普通块序列
+  if (deckSlide.smart) {
+    await addSmartBody(pptx, slide, deckSlide.smart, theme, body, bodyFont)
+  } else {
+    await addBlocksInBox(slide, deckSlide.blocks, theme, body, bodyFont)
   }
 
   // 页脚：左侧 deck 标题，右侧页码

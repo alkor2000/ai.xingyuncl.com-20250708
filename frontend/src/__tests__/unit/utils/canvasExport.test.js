@@ -123,3 +123,28 @@ describe('buildDocxBlob()', () => {
     await expect(buildDocxBlob('   ')).rejects.toThrow('EMPTY_DOCUMENT')
   })
 })
+
+describe('buildPptxBlob() 智能排版', () => {
+  const SMART_DECK = `# 封面\n---\n# 分栏\n\n## 优点\n- 快\n\n## 缺点\n- 贵\n---\n# 流程\n\n1. 准备\n2. 暗处理\n3. 光照\n4. 染色\n5. 观察\n---\n# 卡片\n\n- **光**：能量\n- **叶绿体**：场所\n- **水**：原料\n---\n# 引言\n\n> 万物生长靠太阳\n---\n# 图文\n\n![图](https://example.com/x.png)\n\n- 说明一\n- 说明二`
+
+  it('分栏/流程/卡片/引言/图文都能生成形状与文本', async () => {
+    const { blob, deck } = await buildPptxBlob(SMART_DECK, { themeKey: 'business' })
+    expect(deck.slides.map(s => s.smart?.type || null)).toEqual([null, 'columns', 'flow', 'cards', 'quote', 'imageText'])
+    const zip = await readZip(blob)
+    const columns = await zip.file('ppt/slides/slide2.xml').async('string')
+    expect(columns).toContain('优点')
+    expect(columns).toContain('缺点')
+    const flow = await zip.file('ppt/slides/slide3.xml').async('string')
+    expect((flow.match(/prst="rightArrow"/g) || []).length).toBe(3)   // 5 步两行：每行 3/2，箭头 2+1
+    expect((flow.match(/prst="ellipse"/g) || []).length).toBe(5)
+    expect(flow).toContain('暗处理')
+    const cards = await zip.file('ppt/slides/slide4.xml').async('string')
+    expect((cards.match(/prst="roundRect"/g) || []).length).toBe(3)
+    expect(cards).toContain('叶绿体')
+    const quote = await zip.file('ppt/slides/slide5.xml').async('string')
+    expect(quote).toContain('万物生长靠太阳')
+    const imageText = await zip.file('ppt/slides/slide6.xml').async('string')
+    expect(imageText).toContain('[图片：图]')
+    expect(imageText).toContain('说明一')
+  })
+})

@@ -337,6 +337,141 @@
     }
   }
 
+  // ---------------------------------------------------------------- 智能排版
+  .slide-intro { color: var(--slide-muted); font-size: 0.9em; margin-bottom: 12px; }
+
+  // 分栏：每栏小标题 + 强调色短线
+  .slide-columns {
+    display: grid;
+    gap: 0 28px;
+    height: 100%;
+    &.cols-2 { grid-template-columns: 1fr 1fr; }
+    &.cols-3 { grid-template-columns: 1fr 1fr 1fr; font-size: 0.9em; }
+    .slide-col { min-width: 0; }
+    .slide-col-title {
+      font-weight: 700;
+      color: var(--slide-title);
+      font-size: 1.05em;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      border-bottom: 3px solid var(--slide-accent);
+    }
+  }
+
+  // 流程：编号圆点 + 步骤卡 + 箭头，超过 4 步自动折成两行
+  .slide-flow {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 30px;
+    height: 100%;
+
+    .slide-flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .slide-flow-step {
+      position: relative;
+      flex: 0 0 180px;
+      min-height: 120px;
+      padding: 30px 14px 14px;
+      background: var(--slide-surface);
+      border-radius: 14px;
+      text-align: center;
+      font-size: 0.82em;
+      line-height: 1.35;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    &.steps-5 .slide-flow-step, &.steps-6 .slide-flow-step { flex-basis: 220px; min-height: 100px; }
+    .slide-flow-badge {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--slide-accent);
+      color: var(--slide-accent-text);
+      font-weight: 700;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    .slide-flow-arrow { color: var(--slide-accent); font-size: 26px; flex: 0 0 auto; padding: 0 2px; }
+  }
+
+  // 卡片网格
+  .slide-cards {
+    display: grid;
+    gap: 14px;
+    height: 100%;
+    align-content: center;
+    &.cards-3 { grid-template-columns: repeat(3, 1fr); }
+    &.cards-4 { grid-template-columns: repeat(2, 1fr); }
+    &.cards-5, &.cards-6 { grid-template-columns: repeat(3, 1fr); }
+    .slide-card {
+      background: var(--slide-surface);
+      border-radius: 14px;
+      padding: 16px 18px;
+      border-top: 4px solid var(--slide-accent);
+      min-height: 110px;
+    }
+    .slide-card-title { font-weight: 700; color: var(--slide-title); font-size: 0.95em; margin-bottom: 6px; }
+    .slide-card-body { font-size: 0.78em; line-height: 1.45; color: var(--slide-text); }
+  }
+
+  // 图文左右
+  .slide-imagetext {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 24px;
+    height: 100%;
+    align-items: center;
+    .slide-imagetext-text { min-width: 0; }
+    .slide-imagetext-image {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      img { max-width: 100%; max-height: 330px; object-fit: contain; border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+    }
+  }
+
+  // 大字引言
+  .slide-bigquote {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 60px;
+    .slide-bigquote-mark {
+      position: absolute;
+      top: -10px;
+      left: 10px;
+      font-size: 140px;
+      line-height: 1;
+      color: var(--slide-accent);
+      opacity: 0.25;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    .slide-bigquote-text {
+      font-size: 1.25em;
+      line-height: 1.6;
+      color: var(--slide-title);
+      text-align: center;
+      font-style: italic;
+    }
+  }
+
   // ---------------------------------------------------------------- 内容块
   .slide-paragraph { margin: 0 0 10px; }
 
