@@ -326,6 +326,35 @@ const injectPdfPreviewStyle = (html) => {
 // ================================================================
 // 主组件
 // ================================================================
+/** 值变化按 delay 节流（delay=0 直通）；用于流式内容驱动的重型渲染 */
+const useThrottledValue = (value, delay) => {
+  const [throttled, setThrottled] = useState(value)
+  const lastRef = useRef(0)
+  const timerRef = useRef(null)
+  useEffect(() => {
+    if (!delay) {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+      setThrottled(value)
+      lastRef.current = Date.now()
+      return undefined
+    }
+    const elapsed = Date.now() - lastRef.current
+    if (elapsed >= delay) {
+      setThrottled(value)
+      lastRef.current = Date.now()
+      return undefined
+    }
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      setThrottled(value)
+      lastRef.current = Date.now()
+      timerRef.current = null
+    }, delay - elapsed)
+    return () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null } }
+  }, [value, delay])
+  return delay ? throttled : value
+}
+
 const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const { t } = useTranslation()
 
@@ -350,7 +379,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   // 从消息中提取所有画布产物（html / pdf / pptx / docx）
   // ================================================================
   const artifacts = useMemo(() => {
-    return collectArtifactsFromMessages(messages)
+    return collectArtifactsFromMessages(messages, { includeStreaming: true })
   }, [messages])
 
   // 当有新产物时自动切换到最新的
@@ -385,7 +414,9 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     : (currentIndex >= 0 && currentIndex < artifacts.length ? currentIndex : artifacts.length - 1)
   const currentBlock = safeIndex >= 0 ? artifacts[safeIndex] : null
   const currentKind = currentBlock?.kind || ARTIFACT_KINDS.HTML
-  const currentCode = currentBlock?.code || ''
+  const currentStreaming = !!currentBlock?.streaming
+  // 流式中每个 chunk 都会改 messages；预览重解析 + 缩略图重渲染按 400ms 节流，生成完立即用最终内容
+  const currentCode = useThrottledValue(currentBlock?.code || '', currentStreaming ? 400 : 0)
   const currentHtml = isHtmlKind(currentKind) ? currentCode : ''
   // PDF 类产物预览时模拟纸张（见 injectPdfPreviewStyle）；复制/下载仍用 currentHtml
   const previewHtml = currentKind === ARTIFACT_KINDS.PDF ? injectPdfPreviewStyle(currentHtml) : currentHtml
@@ -629,7 +660,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   const kindMeta = KIND_META[currentKind] || KIND_META[ARTIFACT_KINDS.HTML]
   const KindIcon = kindMeta.Icon
-  const showStreamingHint = isStreaming && safeIndex === artifacts.length - 1
+  const showStreamingHint = currentStreaming || (isStreaming && safeIndex === artifacts.length - 1)
 
   // ================================================================
   // 渲染
@@ -762,6 +793,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                   size="small"
                   icon={<DownloadOutlined />}
                   loading={exporting}
+                  disabled={currentStreaming}
                   onClick={handleExportPptx}
                 >
                   .pptx
@@ -782,6 +814,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                   size="small"
                   icon={<DownloadOutlined />}
                   loading={exporting}
+                  disabled={currentStreaming}
                   onClick={handleExportDocx}
                 >
                   .docx
@@ -837,11 +870,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         )}
 
         {currentKind === ARTIFACT_KINDS.PPTX && (
-          <SlidesPreview key={safeIndex} markdown={currentCode} themeKey={slideTheme} />
+          <SlidesPreview key={safeIndex} markdown={currentCode} themeKey={slideTheme} streaming={currentStreaming} />
         )}
 
         {currentKind === ARTIFACT_KINDS.DOCX && (
-          <DocPreview key={safeIndex} markdown={currentCode} />
+          <DocPreview key={safeIndex} markdown={currentCode} streaming={currentStreaming} />
         )}
       </div>
 

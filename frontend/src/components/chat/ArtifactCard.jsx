@@ -26,7 +26,7 @@ const ArtifactCard = ({ card, messageId }) => {
   const Icon = KIND_ICONS[card.kind] || Html5Outlined
   const kindLabel = t(`chat.canvas.kind.${card.kind}`)
   const meta = !card.closed
-    ? t('chat.canvas.card.generating')
+    ? (card.kind === 'pptx' && card.pages ? t('chat.canvas.card.generatingPages', { count: card.pages }) : t('chat.canvas.card.generating'))
     : card.kind === 'pptx' && card.pages
       ? t('chat.canvas.card.pages', { count: card.pages })
       : kindLabel

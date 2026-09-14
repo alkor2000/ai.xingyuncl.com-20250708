@@ -176,7 +176,8 @@ const useViewportHeight = () => {
  * @returns {Array} 产物数组（含 kind / code / messageId 等元信息）
  */
 const useArtifacts = (messages) => {
-  return useMemo(() => collectArtifactsFromMessages(messages), [messages])
+  // 流式中的 pptx/docx 也算：模型一开始写课件画布就打开，用户看着页面长出来
+  return useMemo(() => collectArtifactsFromMessages(messages, { includeStreaming: true }), [messages])
 }
 
 // ================================================================

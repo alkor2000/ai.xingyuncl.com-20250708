@@ -166,6 +166,21 @@ describe('collectArtifactsFromMessages()', () => {
     expect(artifacts[2].index).toBe(2)
   })
 
+  it('includeStreaming：流式消息里未闭合的 pptx/docx 也收集并标 streaming，未闭合的 html 不收', () => {
+    const messages = [
+      { id: 'a', role: 'assistant', content: '```pptx\n# 封面\n---\n# 第二页\n- 还在写', streaming: true },
+      { id: 'b', role: 'assistant', content: '```html\n<!DOCTYPE html><html><body>半截', streaming: true }
+    ]
+    expect(collectArtifactsFromMessages(messages)).toEqual([])
+    const live = collectArtifactsFromMessages(messages, { includeStreaming: true })
+    expect(live).toHaveLength(1)
+    expect(live[0]).toMatchObject({ kind: 'pptx', messageId: 'a', blockIndex: 0, streaming: true })
+    expect(live[0].code).toContain('还在写')
+    // 没标 streaming 的消息即使 includeStreaming 也只取闭合块
+    const done = collectArtifactsFromMessages([{ id: 'c', role: 'assistant', content: '```pptx\n# 封面\n---\n# 页\n- a' }], { includeStreaming: true })
+    expect(done).toEqual([])
+  })
+
   it('旧接口 collectHtmlFromMessages 仍只返回 HTML 块', () => {
     const htmlBlocks = collectHtmlFromMessages(messages)
     expect(htmlBlocks).toHaveLength(1)

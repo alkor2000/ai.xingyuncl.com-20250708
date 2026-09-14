@@ -667,6 +667,7 @@ export const replaceArtifactBlocksWithCards = (content) => {
 
 /**
  * 从消息列表中收集全部画布产物（仅 AI 助手消息）
+ * options.includeStreaming=true 时，正在流式输出的消息里未闭合的 pptx/docx 块也算（带 streaming:true）。
  *
  * Chat 页面判断「是否弹出画布」「产物数量是否增加」与 HtmlCanvasPanel 的
  * 实际渲染都使用本函数，保证口径一致。html / pdf 产物同时提供 html 字段，
@@ -677,8 +678,9 @@ export const replaceArtifactBlocksWithCards = (content) => {
  *   index: number, kindOrdinal: number, blockIndex: number, messageIndex: number}>}
  *   kindOrdinal 为该种类内的 1-based 序号，供面板生成 "PPT #2" 这类标签
  */
-export const collectArtifactsFromMessages = (messages) => {
+export const collectArtifactsFromMessages = (messages, options = {}) => {
   if (!messages || messages.length === 0) return []
+  const { includeStreaming = false } = options
 
   const all = []
   const kindCounters = {}
@@ -686,8 +688,13 @@ export const collectArtifactsFromMessages = (messages) => {
   messages.forEach((msg, msgIndex) => {
     if (!msg || msg.role !== 'assistant') return
 
-    const blocks = extractArtifactBlocks(msg.content)
-    blocks.forEach(({ kind, code }, blockIndex) => {
+    // 流式输出中的消息（store 标了 streaming）允许带上尚未闭合的 pptx / docx 块：
+    // 幻灯片/文档预览能渲染半截 Markdown，用户就能看着页面一页页长出来；
+    // html / pdf 半截塞进 iframe 会闪烁、脚本还可能执行一半，仍只取闭合的。
+    const allowOpen = includeStreaming && msg.streaming === true
+    const blocks = extractArtifactBlocks(msg.content, { requireClosed: !allowOpen })
+    blocks.forEach(({ kind, code, closed }, blockIndex) => {
+      if (!closed && !MARKDOWN_KINDS.has(kind)) return
       kindCounters[kind] = (kindCounters[kind] || 0) + 1
       all.push({
         kind,
@@ -697,7 +704,8 @@ export const collectArtifactsFromMessages = (messages) => {
         index: all.length,
         kindOrdinal: kindCounters[kind],
         blockIndex,
-        messageIndex: msgIndex
+        messageIndex: msgIndex,
+        streaming: !closed
       })
     })
   })

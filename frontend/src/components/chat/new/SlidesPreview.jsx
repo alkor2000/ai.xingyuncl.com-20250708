@@ -437,7 +437,7 @@ export const THEME_SAMPLE_SLIDE = Object.freeze({
 // 预览主体
 // ============================================================================
 
-const SlidesPreview = ({ markdown, themeKey }) => {
+const SlidesPreview = ({ markdown, themeKey, streaming = false }) => {
   const { t } = useTranslation()
   const deck = useMemo(() => parseSlideDeck(markdown), [markdown])
   const theme = getSlideTheme(themeKey)
@@ -451,11 +451,28 @@ const SlidesPreview = ({ markdown, themeKey }) => {
 
   const total = deck.slides.length
 
-  // 内容变化回到第一页；页数减少时收敛到最后一页
-  useEffect(() => { setCurrent(0) }, [markdown])
+  // 流式生成中跟着最新一页走（用户手动翻页后就不再跟）；生成结束回到封面；页数减少时收敛到最后一页
+  const followLatestRef = useRef(true)
+  const wasStreamingRef = useRef(streaming)
+  useEffect(() => {
+    if (streaming) {
+      if (!wasStreamingRef.current) followLatestRef.current = true
+      if (followLatestRef.current) setCurrent(Math.max(0, total - 1))
+    } else if (wasStreamingRef.current) {
+      setCurrent(0)
+    }
+    wasStreamingRef.current = streaming
+  }, [streaming, total])
+  useEffect(() => {
+    if (!streaming) setCurrent(0)
+  }, [markdown, streaming])
   useEffect(() => {
     if (total > 0 && current > total - 1) setCurrent(total - 1)
   }, [total, current])
+  const navigate = useCallback((updater) => {
+    followLatestRef.current = false
+    setCurrent(updater)
+  }, [])
 
   // 按容器尺寸等比缩放逻辑画幅
   useEffect(() => {
@@ -472,14 +489,14 @@ const SlidesPreview = ({ markdown, themeKey }) => {
     return () => observer.disconnect()
   }, [])
 
-  const goPrev = useCallback(() => setCurrent(c => Math.max(0, c - 1)), [])
-  const goNext = useCallback(() => setCurrent(c => Math.min(total - 1, c + 1)), [total])
+  const goPrev = useCallback(() => navigate(c => Math.max(0, c - 1)), [navigate])
+  const goNext = useCallback(() => navigate(c => Math.min(total - 1, c + 1)), [navigate, total])
 
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goPrev() }
     else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); goNext() }
-    else if (e.key === 'Home') { e.preventDefault(); setCurrent(0) }
-    else if (e.key === 'End') { e.preventDefault(); setCurrent(Math.max(0, total - 1)) }
+    else if (e.key === 'Home') { e.preventDefault(); navigate(0) }
+    else if (e.key === 'End') { e.preventDefault(); navigate(Math.max(0, total - 1)) }
   }
 
   if (total === 0) {
@@ -542,7 +559,7 @@ const SlidesPreview = ({ markdown, themeKey }) => {
             type="button"
             key={idx}
             className={`slide-thumb ${idx === current ? 'active' : ''}`}
-            onClick={() => setCurrent(idx)}
+            onClick={() => navigate(idx)}
             style={{ width: SLIDE_LOGICAL_WIDTH * THUMB_SCALE, height: SLIDE_LOGICAL_HEIGHT * THUMB_SCALE }}
           >
             <div
