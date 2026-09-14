@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-14T15:22:56Z",
+  "updated_at": "2026-09-14T16:11:35Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "d4b04f0345a7e0b39b7c8496f9906efb80a0eaf3356594a47f9ffdbf9343238a",
-      "size": 289300,
-      "normalized_sha256": "d4b04f0345a7e0b39b7c8496f9906efb80a0eaf3356594a47f9ffdbf9343238a"
+      "sha256": "ab858adbb579468afaca20ba471ee930ee780f22b426581812982a7c0f9543df",
+      "size": 289302,
+      "normalized_sha256": "ab858adbb579468afaca20ba471ee930ee780f22b426581812982a7c0f9543df"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1688,9 +1688,9 @@
       "normalized_sha256": "8ed8343c7e9a44b865715d309e9121151fad6f770b6aa3c048d5624193e39732"
     },
     "backend/src/services/chat/outputFormatInstructions.js": {
-      "sha256": "315327c501ff8de0094964f5f1a573eb320bfe1f0ce82e8f6e0650503b0ac6be",
-      "size": 7669,
-      "normalized_sha256": "315327c501ff8de0094964f5f1a573eb320bfe1f0ce82e8f6e0650503b0ac6be"
+      "sha256": "5e057f755b668af511fb0d12d792fae85c7c8e5909f11855d349a8082da33bfe",
+      "size": 7847,
+      "normalized_sha256": "5e057f755b668af511fb0d12d792fae85c7c8e5909f11855d349a8082da33bfe"
     },
     "backend/src/services/documentParserService.js": {
       "role": "index",
@@ -2090,9 +2090,9 @@
     },
     "frontend/src/__tests__/unit/utils/htmlBlockParser.test.js": {
       "role": "observe",
-      "sha256": "f6ab3cda0b77c2de2b4b53a9e279edf43de0d6c48a14b712d210d124bb87d97e",
-      "size": 8281,
-      "normalized_sha256": "f6ab3cda0b77c2de2b4b53a9e279edf43de0d6c48a14b712d210d124bb87d97e"
+      "sha256": "755566798c8ba06cafedef559042c29d5e71a9ea0711d4c908a776fd34377f9f",
+      "size": 10014,
+      "normalized_sha256": "755566798c8ba06cafedef559042c29d5e71a9ea0711d4c908a776fd34377f9f"
     },
     "frontend/src/__tests__/unit/utils/latexToText.test.js": {
       "role": "observe",
@@ -4311,9 +4311,9 @@
       "normalized_sha256": "7c5ca21057508ab4a421723bff38f7f9822f1cf7fbdbbb211fa7ade66b725cf1"
     },
     "frontend/src/utils/htmlBlockParser.js": {
-      "sha256": "063649accb36c8b864c78f9b75351737ab21a2c859b6b284b4fd03d3e1f338d3",
-      "size": 29039,
-      "normalized_sha256": "063649accb36c8b864c78f9b75351737ab21a2c859b6b284b4fd03d3e1f338d3"
+      "sha256": "00ed9de3983b2bfc95c94cb4d909e6a213525cd1ad6d92441bf5001747f6ed63",
+      "size": 30002,
+      "normalized_sha256": "00ed9de3983b2bfc95c94cb4d909e6a213525cd1ad6d92441bf5001747f6ed63"
     },
     "frontend/src/utils/i18n.js": {
       "role": "index",
