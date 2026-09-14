@@ -7,6 +7,10 @@
  *   - sendStreamMessage: 新增第三个参数 fileIds，API请求传 file_ids
  *   - 临时消息同时设置 file（向后兼容）和 files（数组，多图渲染）
  * 
+ * v3.0 变更（画布多格式产物）：
+ *   - sendMessage / sendStreamMessage 新增第四个参数 options.outputFormat，
+ *     随请求传 output_format（html/pptx/docx/pdf），后端据此把格式指令追加到系统提示词
+ * 
  * v2.1 变更：
  *   - 流式超时检测从30秒放宽到90秒，支持AI大段代码生成场景
  *   - 超时警告从20秒改为60秒，减少误报
@@ -318,7 +322,7 @@ const useChatStore = create((set, get) => ({
    * v2.0: 新增第三个参数 fileIds，支持多文件上传
    * v2.3: 图像生成模型使用 300 秒超时，普通模型保持全局 120 秒
    */
-  sendMessage: async (content, fileInfo = null, fileIds = []) => {
+  sendMessage: async (content, fileInfo = null, fileIds = [], options = {}) => {
     const state = get()
     if (!state.currentConversation) return
     
@@ -337,7 +341,7 @@ const useChatStore = create((set, get) => ({
     
     if (useStream) {
       console.log('Using stream send')
-      return get().sendStreamMessage(content, fileInfo, fileIds)
+      return get().sendStreamMessage(content, fileInfo, fileIds, options)
     }
     
     console.log('Using non-stream send')
@@ -364,7 +368,9 @@ const useChatStore = create((set, get) => ({
         content,
         file_id: fileIds.length > 0 ? fileIds[0] : (fileInfo?.id || null),
         file_ids: fileIds.length > 0 ? fileIds : (fileInfo?.id ? [fileInfo.id] : []),
-        stream: false
+        stream: false,
+        // v3.0: 输出格式（html/pptx/docx/pdf），后端据此注入格式指令；空则普通对话
+        output_format: options.outputFormat || undefined
       }
       
       // v2.3: 图像生成模型 E2E 延迟较高，单独放宽超时至 300 秒
@@ -441,7 +447,7 @@ const useChatStore = create((set, get) => ({
    * v2.1: 放宽超时检测至90秒，配合后端心跳保活机制
    * v2.2: 新增onHeartbeat回调，后端心跳能正确重置超时计时器
    */
-  sendStreamMessage: async (content, fileInfo = null, fileIds = []) => {
+  sendStreamMessage: async (content, fileInfo = null, fileIds = [], options = {}) => {
     const state = get()
     if (!state.currentConversation) return
     
@@ -557,7 +563,9 @@ const useChatStore = create((set, get) => ({
         content,
         file_id: fileIds.length > 0 ? fileIds[0] : (fileInfo?.id || null),
         file_ids: fileIds.length > 0 ? fileIds : (fileInfo?.id ? [fileInfo.id] : []),
-        stream: true
+        stream: true,
+        // v3.0: 输出格式（html/pptx/docx/pdf），后端据此注入格式指令；空则普通对话
+        output_format: options.outputFormat || undefined
       }
       
       await apiClient.postStream(

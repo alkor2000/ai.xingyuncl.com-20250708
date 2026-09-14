@@ -1,0 +1,114 @@
+/**
+ * htmlBlockParser 测试
+ * - v2.0 画布产物多格式提取（html / pdf / pptx / docx 与别名）
+ * - 与后端 outputFormatInstructions 的约定：外层 ```kind 围栏、内部 ~~~ 围栏
+ */
+import { describe, it, expect } from 'vitest'
+import {
+  extractArtifactBlocks,
+  collectArtifactsFromMessages,
+  collectHtmlFromMessages,
+  ARTIFACT_KINDS
+} from '../../../utils/htmlBlockParser'
+
+const HTML_DOC = '<!DOCTYPE html>\n<html><head><title>T</title></head><body><p>hi</p></body></html>'
+
+describe('extractArtifactBlocks()', () => {
+  it('识别四种产物并保留顺序', () => {
+    const content = [
+      '说明文字',
+      '```html', HTML_DOC, '```',
+      '```pptx', '# 封面', '---', '# 第二页', '- 要点一', '```',
+      '```docx', '# 标题', '这是一段足够长的正文段落。', '```',
+      '```pdf', HTML_DOC, '```'
+    ].join('\n')
+
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks.map(b => b.kind)).toEqual(['html', 'pptx', 'docx', 'pdf'])
+    expect(blocks[1].code).toContain('# 第二页')
+  })
+
+  it('接受 ppt / slides / marp / doc / word 等别名', () => {
+    const content = [
+      '```ppt', '# a', '---', '# b', '- c', '```',
+      '```word', '# 标题', '正文内容足够长', '```'
+    ].join('\n')
+    expect(extractArtifactBlocks(content).map(b => b.kind)).toEqual(['pptx', 'docx'])
+  })
+
+  it('普通语言的代码块（js / json）不算产物', () => {
+    const content = '```js\nconsole.log(1)\nconsole.log(2)\n```\n```json\n{"a":1,"b":2}\n```'
+    expect(extractArtifactBlocks(content)).toEqual([])
+  })
+
+  it('流式输出中未闭合的块默认不提取', () => {
+    const content = '```pptx\n# 封面\n---\n# 第二页\n- 正在生成'
+    expect(extractArtifactBlocks(content)).toEqual([])
+    expect(extractArtifactBlocks(content, { requireClosed: false })).toHaveLength(1)
+  })
+
+  it('pptx / docx 内部的 ~~~ 代码围栏不会提前闭合外层块', () => {
+    const content = [
+      '```docx', '# 标题', '~~~python', 'print("x")', '~~~', '结尾段落', '```'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].code).toContain('结尾段落')
+  })
+
+  it('模型无视约定在 pptx 里嵌套 ```python 时，外层块不会被内层闭合围栏截断', () => {
+    const content = [
+      '```pptx', '# 封面', '---', '# 代码页', '```python', 'print(1)', '```', '---', '# 最后一页', '- 结束', '```',
+      '', '后面还有说明文字'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].kind).toBe('pptx')
+    expect(blocks[0].code).toContain('# 最后一页')
+    expect(blocks[0].code).not.toContain('后面还有说明文字')
+  })
+
+  it('pptx 块后面紧跟另一个普通代码块时不会被吞并', () => {
+    const content = '```pptx\n# 封面\n---\n# 页\n- a\n```\n\n```json\n{"a":1,"b":2}\n```'
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].code).not.toContain('json')
+  })
+
+  it('html / pdf 必须至少含一个标签，纯文本不算', () => {
+    expect(extractArtifactBlocks('```pdf\n这只是一段没有标签的文字而已\n```')).toEqual([])
+  })
+})
+
+describe('collectArtifactsFromMessages()', () => {
+  const messages = [
+    { id: 'u1', role: 'user', content: '```pptx\n# 用户自己贴的\n---\n# x\n- y\n```' },
+    { id: 'a1', role: 'assistant', content: '```html\n' + HTML_DOC + '\n```' },
+    { id: 'a2', role: 'assistant', content: '```pptx\n# A\n---\n# B\n- c\n```\n```pptx\n# C\n---\n# D\n- e\n```' }
+  ]
+
+  it('只收集助手消息，并为每种产物编独立序号', () => {
+    const artifacts = collectArtifactsFromMessages(messages)
+    expect(artifacts.map(a => a.kind)).toEqual(['html', 'pptx', 'pptx'])
+    expect(artifacts.map(a => a.kindOrdinal)).toEqual([1, 1, 2])
+    expect(artifacts.map(a => a.messageId)).toEqual(['a1', 'a2', 'a2'])
+    expect(artifacts[0].html).toBe(HTML_DOC)
+    expect(artifacts[1].html).toBeUndefined()
+    expect(artifacts[2].index).toBe(2)
+  })
+
+  it('旧接口 collectHtmlFromMessages 仍只返回 HTML 块', () => {
+    const htmlBlocks = collectHtmlFromMessages(messages)
+    expect(htmlBlocks).toHaveLength(1)
+    expect(htmlBlocks[0].html).toBe(HTML_DOC)
+  })
+
+  it('空列表返回空数组', () => {
+    expect(collectArtifactsFromMessages([])).toEqual([])
+    expect(collectArtifactsFromMessages(null)).toEqual([])
+  })
+
+  it('ARTIFACT_KINDS 与后端 OUTPUT_FORMATS 一致', () => {
+    expect(Object.values(ARTIFACT_KINDS).sort()).toEqual(['docx', 'html', 'pdf', 'pptx'])
+  })
+})

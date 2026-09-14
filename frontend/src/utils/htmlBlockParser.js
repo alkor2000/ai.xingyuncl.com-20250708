@@ -67,12 +67,30 @@
  *            渲染、剪贴板复制、HTML 语义均无任何影响，且结果更规范。
  * ============================================================================
  *
+ * ============================================================================
+ * 【v2.0：画布产物（artifact）多格式化】
+ *
+ * 画布不再只认 HTML。后端 services/chat/outputFormatInstructions.js 会按用户
+ * 选择的"输出格式"指示模型用下列语言标识的围栏代码块作答，本文件按同一约定
+ * 把它们提取成带 kind 的产物，交给 HtmlCanvasPanel 分别渲染与导出：
+ *
+ *   kind   语言标识（别名）             内容              画布行为
+ *   html   html / htm / xhtml           完整 HTML 文档    iframe 预览，下载 .html，打印为 PDF
+ *   pdf    pdf                          完整 HTML 文档    同 html，主操作是打印/另存为 PDF
+ *   pptx   pptx / ppt / slides / marp   Marp 风格 Markdown 幻灯片预览，生成 .pptx
+ *   docx   docx / doc / word            Markdown 全文     纸张预览，生成 .docx
+ *
+ * 两边的语言标识必须一致；新增格式时后端指令、这里的 ARTIFACT_LANG_MAP、
+ * 画布面板三处同步。
+ *
  * 对外导出：
- *   - parseFencedBlocks(content, options)  解析全部围栏代码块（通用）
- *   - extractHtmlBlocks(content, options)  提取 HTML 代码块内容数组
- *   - countHtmlBlocks(content)             统计 HTML 代码块数量
- *   - hasHtmlBlock(content)                是否存在 HTML 代码块
- *   - collectHtmlFromMessages(messages)    从消息列表收集 HTML 块（含元信息）
+ *   - parseFencedBlocks(content, options)      解析全部围栏代码块（通用）
+ *   - extractHtmlBlocks(content, options)      提取 HTML 代码块内容数组
+ *   - countHtmlBlocks(content)                 统计 HTML 代码块数量
+ *   - hasHtmlBlock(content)                    是否存在 HTML 代码块
+ *   - collectHtmlFromMessages(messages)        从消息列表收集 HTML 块（含元信息）
+ *   - extractArtifactBlocks(content, options)  提取全部画布产物 [{kind, code}]
+ *   - collectArtifactsFromMessages(messages)   从消息列表收集全部画布产物（含元信息）
  */
 
 // ============================================================================
@@ -99,6 +117,38 @@ const CLOSE_FENCE_RE = /^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$/
 
 /** 被视为 HTML 的语言标识集合 */
 const HTML_LANG_SET = new Set(['html', 'htm', 'xhtml'])
+
+/** 画布产物种类（与后端 outputFormatInstructions 的 OUTPUT_FORMATS 一致） */
+export const ARTIFACT_KINDS = Object.freeze({
+  HTML: 'html',
+  PDF: 'pdf',
+  PPTX: 'pptx',
+  DOCX: 'docx'
+})
+
+/**
+ * 语言标识 → 产物种类
+ * 别名只是容错（模型偶尔写 ppt / word），后端指令里要求的是主名。
+ */
+const ARTIFACT_LANG_MAP = Object.freeze({
+  html: ARTIFACT_KINDS.HTML,
+  htm: ARTIFACT_KINDS.HTML,
+  xhtml: ARTIFACT_KINDS.HTML,
+  pdf: ARTIFACT_KINDS.PDF,
+  pptx: ARTIFACT_KINDS.PPTX,
+  ppt: ARTIFACT_KINDS.PPTX,
+  slides: ARTIFACT_KINDS.PPTX,
+  marp: ARTIFACT_KINDS.PPTX,
+  docx: ARTIFACT_KINDS.DOCX,
+  doc: ARTIFACT_KINDS.DOCX,
+  word: ARTIFACT_KINDS.DOCX
+})
+
+/** 内容是完整 HTML 文档的产物种类（需要"至少含一个标签"校验与文档修复启发式） */
+const HTML_DOCUMENT_KINDS = new Set([ARTIFACT_KINDS.HTML, ARTIFACT_KINDS.PDF])
+
+/** 内容是 Markdown 的产物种类（需要"内部嵌套 ```lang 围栏"修复启发式） */
+const MARKDOWN_KINDS = new Set([ARTIFACT_KINDS.PPTX, ARTIFACT_KINDS.DOCX])
 
 /** 判断代码内容是否为「完整 HTML 文档」的起始 */
 const HTML_DOC_START_RE = /^\s*(<!doctype\s+html|<html[\s>])/i
@@ -163,6 +213,32 @@ const hasLabeledFenceBetween = (lines, fromExclusive, toExclusive, fenceChar) =>
     if (info.length > 0) return true
   }
   return false
+}
+
+/**
+ * v2.0: 统计区间内「同种围栏字符」的带语言标识开启围栏中未被闭合的个数
+ *
+ * 用途：pptx / docx 产物的内容是 Markdown，模型偶尔无视"内部用 ~~~"的约定，
+ *      在里面嵌套 ```python ... ```。按 CommonMark，内层的闭合 ``` 会把外层块
+ *      提前闭合。若已选的闭合围栏之前还留着未闭合的 ```lang，说明它闭合的
+ *      其实是内层块，外层应继续向后找真正的闭合围栏。
+ *
+ * @param {string[]} lines
+ * @param {number} fromExclusive - 外层开启围栏行号（不含）
+ * @param {number} toExclusive - 候选闭合围栏行号（不含）
+ * @param {string} fenceChar
+ * @returns {number} 未闭合的内层带标识围栏数量
+ */
+const countUnclosedInnerFences = (lines, fromExclusive, toExclusive, fenceChar) => {
+  let depth = 0
+  for (let idx = fromExclusive + 1; idx < toExclusive; idx += 1) {
+    const openMatch = OPEN_FENCE_RE.exec(lines[idx])
+    if (!openMatch || openMatch[1][0] !== fenceChar) continue
+    const info = (openMatch[2] || '').trim()
+    if (info.length > 0) depth += 1
+    else if (depth > 0) depth -= 1
+  }
+  return depth
 }
 
 /**
@@ -262,7 +338,7 @@ export const parseFencedBlocks = (content, options = {}) => {
     // ------------------------------------------------------------------
     // 启发式兜底：HTML 完整文档修复
     //
-    // 触发条件：代码块语言是 html 且内容以 <!DOCTYPE html> / <html> 开头，
+    // 触发条件：代码块是 HTML 文档类产物（html / pdf）且内容以 <!DOCTYPE html> / <html> 开头，
     //          但缺少 </html> 结束标签 —— 说明该块很可能被块内某个
     //          「行首裸 ``` 」提前闭合了（AI 输出不规范时可能出现）。
     // 处理方式：依次尝试后续候选闭合围栏，取第一个能让文档出现 </html> 的；
@@ -274,7 +350,7 @@ export const parseFencedBlocks = (content, options = {}) => {
     if (
       repairHtmlDocument
       && closeLine >= 0
-      && HTML_LANG_SET.has(lang)
+      && HTML_DOCUMENT_KINDS.has(ARTIFACT_LANG_MAP[lang])
       && HTML_DOC_START_RE.test(code)
       && !HTML_DOC_END_RE.test(code)
     ) {
@@ -292,6 +368,23 @@ export const parseFencedBlocks = (content, options = {}) => {
           code = extendedCode
           break
         }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // v2.0 启发式兜底：pptx / docx 内部嵌套 ```lang 围栏
+    // 已选闭合围栏之前若还有未闭合的内层 ```lang，就把闭合围栏向后推到
+    // 下一个候选，直到内层全部配平或候选用尽（见 countUnclosedInnerFences）。
+    // ------------------------------------------------------------------
+    if (closeLine >= 0 && MARKDOWN_KINDS.has(ARTIFACT_LANG_MAP[lang])) {
+      let k = candidates.indexOf(closeLine)
+      while (
+        k >= 0 && k + 1 < candidates.length
+        && countUnclosedInnerFences(lines, i, candidates[k], fenceChar) > 0
+      ) {
+        k += 1
+        closeLine = candidates[k]
+        code = lines.slice(i + 1, closeLine).join('\n')
       }
     }
 
@@ -403,10 +496,95 @@ export const collectHtmlFromMessages = (messages) => {
   return allBlocks
 }
 
+// ============================================================================
+// v2.0 画布产物（多格式）
+// ============================================================================
+
+/**
+ * 提取文本中全部画布产物
+ *
+ * 与 extractHtmlBlocks 同一套围栏解析，只是按 ARTIFACT_LANG_MAP 识别更多种类。
+ * HTML 文档类（html / pdf）沿用"至少含一个标签"的校验；pptx / docx 的内容是
+ * Markdown，只要求非空且达到最小长度。
+ *
+ * @param {string} content - Markdown 文本
+ * @param {Object} [options]
+ * @param {number} [options.minLength=10] - 最小有效长度
+ * @param {boolean} [options.requireClosed=true] - 只要已闭合的块（画布渲染必须为 true）
+ * @returns {Array<{kind: string, code: string}>}
+ */
+export const extractArtifactBlocks = (content, options = {}) => {
+  const {
+    minLength = DEFAULT_MIN_LENGTH,
+    requireClosed = true
+  } = options
+
+  const blocks = parseFencedBlocks(content)
+  const result = []
+
+  for (const block of blocks) {
+    if (requireClosed && !block.closed) continue
+
+    const kind = ARTIFACT_LANG_MAP[block.lang]
+    if (!kind) continue
+
+    const code = block.code.trim()
+    if (!code || code.length < minLength) continue
+    if (HTML_DOCUMENT_KINDS.has(kind) && !/<[a-zA-Z]/.test(code)) continue
+
+    result.push({ kind, code })
+  }
+
+  return result
+}
+
+/**
+ * 从消息列表中收集全部画布产物（仅 AI 助手消息）
+ *
+ * Chat 页面判断「是否弹出画布」「产物数量是否增加」与 HtmlCanvasPanel 的
+ * 实际渲染都使用本函数，保证口径一致。html / pdf 产物同时提供 html 字段，
+ * 与旧的 collectHtmlFromMessages 返回结构兼容。
+ *
+ * @param {Array} messages - 消息列表
+ * @returns {Array<{kind: string, code: string, html: (string|undefined), messageId: string,
+ *   index: number, kindOrdinal: number, blockIndex: number, messageIndex: number}>}
+ *   kindOrdinal 为该种类内的 1-based 序号，供面板生成 "PPT #2" 这类标签
+ */
+export const collectArtifactsFromMessages = (messages) => {
+  if (!messages || messages.length === 0) return []
+
+  const all = []
+  const kindCounters = {}
+
+  messages.forEach((msg, msgIndex) => {
+    if (!msg || msg.role !== 'assistant') return
+
+    const blocks = extractArtifactBlocks(msg.content)
+    blocks.forEach(({ kind, code }, blockIndex) => {
+      kindCounters[kind] = (kindCounters[kind] || 0) + 1
+      all.push({
+        kind,
+        code,
+        html: HTML_DOCUMENT_KINDS.has(kind) ? code : undefined,
+        messageId: msg.id,
+        index: all.length,
+        kindOrdinal: kindCounters[kind],
+        blockIndex,
+        messageIndex: msgIndex
+      })
+    })
+  })
+
+  return all
+}
+
 export default {
   parseFencedBlocks,
   extractHtmlBlocks,
   countHtmlBlocks,
   hasHtmlBlock,
-  collectHtmlFromMessages
+  collectHtmlFromMessages,
+  extractArtifactBlocks,
+  collectArtifactsFromMessages,
+  ARTIFACT_KINDS
 }

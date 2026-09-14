@@ -71,6 +71,13 @@
  *   - formatDateTime内toLocaleString硬编码'zh-CN'改为i18n.language动态传入，
  *     修复英文环境下导出文件时间仍按中文格式渲染的问题
  * 
+ * v5.0 变更（画布多格式：PPT / Word / PDF）：
+ *   - useHtmlBlocks → useArtifacts：改用 htmlBlockParser.collectArtifactsFromMessages，
+ *     画布对 html / pdf / pptx / docx 四种产物统一弹出与计数
+ *   - 输入区新增"输出格式"选择（outputFormat，按会话记忆），发送时经 sendMessage 的
+ *     第四参数带到后端 output_format，由后端把格式指令追加到系统提示词
+ *   - 选了非普通格式时自动开启画布开关（否则用户看不到预览与下载入口）
+ *
  * 修复记录：
  *   - 对话名称更新和置顶功能问题
  *   - 编辑非当前对话时配置覆盖错误 - 使用 editingConversation 状态
@@ -91,8 +98,8 @@ import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
 import apiClient from '../../utils/api'
 import { calculateTokens } from '../../utils/tokenCalculator'
-// v4.2: 与 HtmlCanvasPanel 共用的严格 CommonMark 围栏解析器
-import { collectHtmlFromMessages } from '../../utils/htmlBlockParser'
+// v4.2/v5.0: 与 HtmlCanvasPanel 共用的严格 CommonMark 围栏解析器（v5.0 起提取全部画布产物）
+import { collectArtifactsFromMessages } from '../../utils/htmlBlockParser'
 
 import {
   ConversationSidebar, ChatInputArea,
@@ -158,17 +165,17 @@ const useViewportHeight = () => {
 }
 
 /**
- * v4.2: 提取消息列表中所有已完成的 HTML 代码块
+ * v4.2/v5.0: 提取消息列表中所有已完成的画布产物（html / pdf / pptx / docx）
  *
  * 替代原来的 useHasHtmlContent / useHtmlBlockCount 两个正则 hook。
  * 与 HtmlCanvasPanel 共用 utils/htmlBlockParser 的严格 CommonMark 解析器，
- * 保证「是否弹出画布」「块数量统计」「实际渲染内容」三者口径完全一致。
+ * 保证「是否弹出画布」「产物数量统计」「实际渲染内容」三者口径完全一致。
  *
  * @param {Array} messages - 消息列表
- * @returns {Array} HTML 代码块数组（含 html / messageId 等元信息）
+ * @returns {Array} 产物数组（含 kind / code / messageId 等元信息）
  */
-const useHtmlBlocks = (messages) => {
-  return useMemo(() => collectHtmlFromMessages(messages), [messages])
+const useArtifacts = (messages) => {
+  return useMemo(() => collectArtifactsFromMessages(messages), [messages])
 }
 
 // ================================================================
@@ -246,15 +253,19 @@ const Chat = () => {
   const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
-  // v3.3: 用ref记录上一次的HTML代码块数量
+  // v3.3: 用ref记录上一次的画布产物数量
   const htmlBlockCountRef = useRef(0)
 
-  // v4.2: 一次解析得到 HTML 块数组，派生出「是否有内容」与「块数量」
-  const htmlBlocks = useHtmlBlocks(messages)
-  const hasHtmlContent = htmlBlocks.length > 0
-  const htmlBlockCount = htmlBlocks.length
+  // v4.2/v5.0: 一次解析得到产物数组，派生出「是否有内容」与「产物数量」
+  const artifacts = useArtifacts(messages)
+  const hasCanvasContent = artifacts.length > 0
+  const htmlBlockCount = artifacts.length
   // v3.1: 画布是否实际显示
-  const showCanvas = canvasEnabled && !canvasDismissed && hasHtmlContent && !isMobile
+  const showCanvas = canvasEnabled && !canvasDismissed && hasCanvasContent && !isMobile
+
+  // v5.0: 输出格式（none / html / pptx / docx / pdf），按会话记忆，切换会话时恢复
+  const [outputFormat, setOutputFormat] = useState('none')
+  const outputFormatByConversationRef = useRef(new Map())
 
   // ================================================================
   // v3.0/v3.1/v3.3: 画布开关和关闭处理
@@ -274,6 +285,24 @@ const Chat = () => {
   const handleDismissCanvas = useCallback(() => {
     setCanvasDismissed(true)
   }, [])
+
+  /**
+   * v5.0: 切换输出格式
+   * 选了非普通格式而画布开关是关的，就顺手打开：预览和下载入口都在画布上，
+   * 不开的话用户只会看到一大段 Markdown 源码。
+   */
+  const handleOutputFormatChange = useCallback((format) => {
+    setOutputFormat(format)
+    if (currentConversationId) outputFormatByConversationRef.current.set(currentConversationId, format)
+    if (format !== 'none') {
+      setCanvasEnabled(prev => {
+        if (prev) return prev
+        try { localStorage.setItem(CANVAS_ENABLED_KEY, 'true') } catch {}
+        return true
+      })
+      setCanvasDismissed(false)
+    }
+  }, [currentConversationId])
 
   /**
    * v4.0: 切换思考过程显示开关
@@ -316,13 +345,14 @@ const Chat = () => {
     }
   }, [currentConversationId, isMobile])
 
-  // 切换对话时清空输入、重置滚动、重置画布临时关闭状态
+  // 切换对话时清空输入、重置滚动、重置画布临时关闭状态、恢复该会话的输出格式
   useEffect(() => {
     setInputValue('')
     setUserScrolled(false)
     setLastScrollTop(0)
     setCanvasDismissed(false)
     htmlBlockCountRef.current = 0
+    setOutputFormat(outputFormatByConversationRef.current.get(currentConversationId) || 'none')
   }, [currentConversationId])
 
   // 完成输入后聚焦
@@ -563,7 +593,9 @@ const Chat = () => {
     setUploadedDocument(null)
 
     try {
-      await sendMessage(messageContent, fileInfo, fileIds)
+      await sendMessage(messageContent, fileInfo, fileIds, {
+        outputFormat: outputFormat !== 'none' ? outputFormat : null
+      })
       if (!isMobile) setTimeout(() => inputRef.current?.focus(), 100)
     } catch (error) {
       console.error('Send message error:', error)
@@ -575,7 +607,7 @@ const Chat = () => {
     } finally {
       setIsSending(false)
     }
-  }, [inputValue, uploadedImages, uploadedDocument, currentConversation, sendMessage, t, isMobile])
+  }, [inputValue, uploadedImages, uploadedDocument, currentConversation, sendMessage, t, isMobile, outputFormat])
 
   const handleStopStreaming = () => { stopStreaming(); message.info(t('chat.stopGeneration')) }
 
@@ -750,8 +782,9 @@ const Chat = () => {
 
   // ================================================================
   // 构建 ChatInputArea 通用 props
-  // v3.0: 新增 canvasEnabled / hasHtmlContent / onToggleCanvas
+  // v3.0: 新增 canvasEnabled / hasCanvasContent / onToggleCanvas
   // v4.0: 新增 showThinking / onToggleThinking
+  // v5.0: 新增 outputFormat / onOutputFormatChange
   // ================================================================
 
   const inputAreaProps = {
@@ -766,10 +799,12 @@ const Chat = () => {
     currentModel, availableModels,
     contextTokens,
     canvasEnabled,
-    hasHtmlContent,
+    hasCanvasContent,
     onToggleCanvas: handleToggleCanvas,
     showThinking,
     onToggleThinking: handleToggleThinking,
+    outputFormat,
+    onOutputFormatChange: handleOutputFormatChange,
     disabled: !currentConversation || isSending,
     onInputChange: handleInputChange,
     onKeyPress: handleKeyPress,
@@ -937,7 +972,7 @@ const Chat = () => {
             </Content>
           </div>
 
-          {/* v3.0/v3.1: 右侧：HTML画布面板 */}
+          {/* v3.0/v3.1/v5.0: 右侧：画布面板（HTML / PDF / PPT / Word） */}
           {showCanvas && (
             <div className="chat-canvas-area">
               <HtmlCanvasPanel

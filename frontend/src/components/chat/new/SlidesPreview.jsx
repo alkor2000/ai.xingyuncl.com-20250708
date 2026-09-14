@@ -1,0 +1,283 @@
+/**
+ * 幻灯片预览（画布 pptx 产物）
+ *
+ * - 用 utils/canvas/slideDeck 把 Marp 风格 Markdown 解析成 deck，
+ *   与 exportPptx 共用同一份结构和同一套主题色（slideThemes）
+ * - 固定 960×540 的"逻辑画幅"，按容器尺寸等比缩放（transform: scale），
+ *   全屏时自然铺满，不需要两套布局
+ * - 上一页/下一页、页码、底部缩略图条；容器聚焦后支持 ←/→/PageUp/PageDown/空格
+ * - 当前页索引由本组件持有，markdown 变化（换块或重新生成）时回到第一页
+ *
+ * 只负责"看"，导出与主题切换在 HtmlCanvasPanel 工具栏。
+ */
+
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { Button, Typography } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import { parseSlideDeck, SLIDE_LAYOUTS } from '../../../utils/canvas/slideDeck'
+import { getSlideTheme, slideThemeToCssVars } from '../../../utils/canvas/slideThemes'
+import './SlidesPreview.less'
+
+const { Text } = Typography
+
+/** 逻辑画幅（16:9），与 pptx 的 10in × 5.625in 同比例 */
+export const SLIDE_LOGICAL_WIDTH = 960
+export const SLIDE_LOGICAL_HEIGHT = 540
+/** 缩略图缩放比例 */
+const THUMB_SCALE = 0.12
+
+// ============================================================================
+// 行内 runs
+// ============================================================================
+
+const InlineRuns = ({ runs }) => (
+  <>
+    {(runs || []).map((run, idx) => {
+      let node = run.text
+      if (run.code) node = <code className="slide-code-inline">{node}</code>
+      if (run.bold) node = <strong>{node}</strong>
+      if (run.italic) node = <em>{node}</em>
+      if (run.strike) node = <s>{node}</s>
+      if (run.link) {
+        node = <a href={run.link} target="_blank" rel="noopener noreferrer">{node}</a>
+      }
+      return <React.Fragment key={idx}>{node}</React.Fragment>
+    })}
+  </>
+)
+
+// ============================================================================
+// 单页
+// ============================================================================
+
+const ListBlock = ({ block }) => {
+  const Tag = block.type === 'numbered' ? 'ol' : 'ul'
+  return (
+    <Tag className="slide-list">
+      {block.items.map((item, idx) => (
+        <li key={idx} className={`level-${item.level}`}>
+          <InlineRuns runs={item.runs} />
+        </li>
+      ))}
+    </Tag>
+  )
+}
+
+const TableBlock = ({ block }) => (
+  <table className="slide-table">
+    <thead>
+      <tr>
+        {block.header.map((cell, idx) => <th key={idx}><InlineRuns runs={cell} /></th>)}
+      </tr>
+    </thead>
+    <tbody>
+      {block.rows.map((row, rIdx) => (
+        <tr key={rIdx}>
+          {row.map((cell, cIdx) => <td key={cIdx}><InlineRuns runs={cell} /></td>)}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)
+
+const SlideBlock = ({ block }) => {
+  switch (block.type) {
+    case 'heading':
+      return <div className="slide-subheading"><InlineRuns runs={block.runs} /></div>
+    case 'bullets':
+    case 'numbered':
+      return <ListBlock block={block} />
+    case 'table':
+      return <TableBlock block={block} />
+    case 'image':
+      // alt 为业务数据；图片加载失败时浏览器显示 alt 文本
+      return <div className="slide-image"><img src={block.url} alt={block.alt} /></div>
+    case 'quote':
+      return <blockquote className="slide-quote"><InlineRuns runs={block.runs} /></blockquote>
+    case 'code':
+      return <pre className="slide-codeblock"><code>{block.text}</code></pre>
+    default:
+      return <p className="slide-paragraph"><InlineRuns runs={block.runs} /></p>
+  }
+}
+
+/**
+ * 内容量分级：与 exportPptx 的字号自适应对应，预览端用 CSS 类粗略缩字
+ */
+const densityClass = (slide) => {
+  if (slide.textLength > 520) return 'density-xs'
+  if (slide.textLength > 360) return 'density-sm'
+  if (slide.textLength > 220) return 'density-md'
+  return 'density-lg'
+}
+
+export const SlideView = ({ slide, deckTitle, total }) => {
+  if (!slide) return null
+
+  if (slide.layout === SLIDE_LAYOUTS.TITLE) {
+    return (
+      <div className="slide slide-cover">
+        <div className="slide-cover-title"><InlineRuns runs={slide.title} /></div>
+        {slide.subtitle && <div className="slide-cover-subtitle">{slide.subtitle}</div>}
+        <div className="slide-cover-bar" />
+      </div>
+    )
+  }
+
+  if (slide.layout === SLIDE_LAYOUTS.SECTION) {
+    return (
+      <div className="slide slide-section">
+        <div className="slide-section-title"><InlineRuns runs={slide.title} /></div>
+        <div className="slide-section-bar" />
+        {slide.subtitle && <div className="slide-section-subtitle">{slide.subtitle}</div>}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`slide slide-content ${densityClass(slide)}`}>
+      <div className="slide-title"><InlineRuns runs={slide.title} /></div>
+      <div className="slide-title-bar" />
+      <div className="slide-body">
+        {slide.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}
+      </div>
+      <div className="slide-footer">
+        <span className="slide-footer-title">{deckTitle}</span>
+        {/* 页码为纯数字，无需国际化 */}
+        <span className="slide-footer-number">{slide.index + 1} / {total}</span>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// 预览主体
+// ============================================================================
+
+const SlidesPreview = ({ markdown, themeKey }) => {
+  const { t } = useTranslation()
+  const deck = useMemo(() => parseSlideDeck(markdown), [markdown])
+  const theme = getSlideTheme(themeKey)
+  const cssVars = useMemo(() => slideThemeToCssVars(theme), [theme])
+
+  const [current, setCurrent] = useState(0)
+  const [scale, setScale] = useState(0.5)
+  const stageRef = useRef(null)
+  const rootRef = useRef(null)
+
+  const total = deck.slides.length
+
+  // 内容变化回到第一页；页数减少时收敛到最后一页
+  useEffect(() => { setCurrent(0) }, [markdown])
+  useEffect(() => {
+    if (total > 0 && current > total - 1) setCurrent(total - 1)
+  }, [total, current])
+
+  // 按容器尺寸等比缩放逻辑画幅
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof ResizeObserver === 'undefined') return undefined
+    const update = () => {
+      const rect = stage.getBoundingClientRect()
+      const next = Math.min(rect.width / SLIDE_LOGICAL_WIDTH, rect.height / SLIDE_LOGICAL_HEIGHT)
+      if (Number.isFinite(next) && next > 0) setScale(next)
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [])
+
+  const goPrev = useCallback(() => setCurrent(c => Math.max(0, c - 1)), [])
+  const goNext = useCallback(() => setCurrent(c => Math.min(total - 1, c + 1)), [total])
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goPrev() }
+    else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); goNext() }
+    else if (e.key === 'Home') { e.preventDefault(); setCurrent(0) }
+    else if (e.key === 'End') { e.preventDefault(); setCurrent(Math.max(0, total - 1)) }
+  }
+
+  if (total === 0) {
+    return (
+      <div className="slides-preview slides-preview-empty" style={cssVars}>
+        <Text type="secondary">{t('chat.canvas.slides.empty')}</Text>
+      </div>
+    )
+  }
+
+  const slide = deck.slides[current]
+
+  return (
+    <div
+      ref={rootRef}
+      className="slides-preview"
+      style={cssVars}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="slides-stage" ref={stageRef} onClick={() => rootRef.current?.focus()}>
+        <div
+          className="slide-frame"
+          style={{
+            width: SLIDE_LOGICAL_WIDTH,
+            height: SLIDE_LOGICAL_HEIGHT,
+            transform: `translate(-50%, -50%) scale(${scale})`
+          }}
+        >
+          {/* key 让翻页时整页重挂载：否则 React 会复用同位置的 div，全局
+              `* { transition: background-color }` 会把上一页装饰条的颜色渐变到正文区，闪一下蓝色 */}
+          <SlideView key={current} slide={slide} deckTitle={deck.title} total={total} />
+        </div>
+      </div>
+
+      <div className="slides-nav">
+        <Button
+          type="text"
+          size="small"
+          icon={<LeftOutlined />}
+          onClick={goPrev}
+          disabled={current <= 0}
+          aria-label={t('chat.canvas.slides.prev')}
+        />
+        {/* 页码为纯数字，无需国际化 */}
+        <span className="slides-counter">{current + 1} / {total}</span>
+        <Button
+          type="text"
+          size="small"
+          icon={<RightOutlined />}
+          onClick={goNext}
+          disabled={current >= total - 1}
+          aria-label={t('chat.canvas.slides.next')}
+        />
+      </div>
+
+      <div className="slides-thumbs">
+        {deck.slides.map((s, idx) => (
+          <button
+            type="button"
+            key={idx}
+            className={`slide-thumb ${idx === current ? 'active' : ''}`}
+            onClick={() => setCurrent(idx)}
+            style={{ width: SLIDE_LOGICAL_WIDTH * THUMB_SCALE, height: SLIDE_LOGICAL_HEIGHT * THUMB_SCALE }}
+          >
+            <div
+              className="slide-frame"
+              style={{
+                width: SLIDE_LOGICAL_WIDTH,
+                height: SLIDE_LOGICAL_HEIGHT,
+                transform: `scale(${THUMB_SCALE})`,
+                transformOrigin: 'top left'
+              }}
+            >
+              <SlideView slide={s} deckTitle={deck.title} total={total} />
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default SlidesPreview

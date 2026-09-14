@@ -373,6 +373,25 @@
             display: flex;
             align-items: center;
             gap: 8px;
+
+            // v5.0: 输出格式选择按钮（普通对话 / 网页 / PPT / Word / PDF）
+            .output-format-btn {
+              height: 28px;
+              padding: 0 8px;
+              border-radius: 6px;
+              color: #666;
+              transition: all 0.2s ease;
+
+              &.format-active {
+                color: #fa8c16;
+                background: rgba(250, 140, 22, 0.08);
+                font-weight: 500;
+
+                &:hover {
+                  background: rgba(250, 140, 22, 0.15) !important;
+                }
+              }
+            }
           }
           
           .right-tools {

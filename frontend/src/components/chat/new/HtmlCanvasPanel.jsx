@@ -1,8 +1,8 @@
 /**
- * HTML画布面板组件
+ * 画布面板组件（HTML / PDF / PPT / Word）
  *
  * 功能：
- *   - 自动渲染对话中AI回复的HTML代码
+ *   - 自动渲染对话中AI回复的HTML代码（v2.0 起还包括 pdf / pptx / docx 产物，见下文）
  *   - 从消息内容中提取 ```html ... ``` 代码块
  *   - iframe沙箱安全渲染
  *   - 真全屏预览（浏览器原生Fullscreen API，隐藏所有浏览器UI）
@@ -85,6 +85,27 @@
  *   - 成功/失败提示复用与 copyCode/copySuccess/copyFailed 同构的
  *     export/exportSuccess/exportFailed 三键命名，保持语言包风格一致。
  *
+ * ============================================================
+ * v2.0：画布产物多格式化（HTML / PDF / PPT / Word）
+ * ============================================================
+ *
+ * 画布不再只认 ```html。utils/htmlBlockParser.collectArtifactsFromMessages 按
+ * 语言标识把 AI 回复里的围栏代码块提取成带 kind 的产物，本面板按 kind 分发：
+ *
+ *   html  iframe 预览（原逻辑不变）+ 下载 .html + 打印/另存为 PDF
+ *   pdf   内容同样是完整 HTML（模型按 A4 打印样式写），iframe 预览，主操作是打印/另存为 PDF
+ *   pptx  SlidesPreview 幻灯片预览（主题可切换）+ pptxgenjs 生成 .pptx
+ *   docx  DocPreview A4 纸张预览 + docx 库生成 .docx
+ *
+ * 设计取舍：
+ *   - 浏览器没有原生 pptx/docx 渲染器，预览是同一份内容的 HTML 渲染，
+ *     下载是转换后的 Office 文件；结构一致，排版细节由 PowerPoint/Word 决定。
+ *   - PDF 走浏览器打印（iframe.contentWindow.print → 用户选"另存为 PDF"），
+ *     不用 jsPDF：它默认没有中文字体，html2canvas 截图版又不可选中文字。
+ *   - pptxgenjs / docx 体积不小，用动态 import 按需加载，不进主包。
+ *   - 幻灯片主题保存在 localStorage（chat_canvas_slide_theme），预览与导出共用。
+ *   - 块切换器对所有 kind 通用，标签用 t('chat.canvas.kind.*') + 种类内序号。
+ *
  * Props:
  *   - messages: 消息列表
  *   - isStreaming: 是否正在流式输出
@@ -93,7 +114,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Button, Tooltip, Typography, Space, Tag } from 'antd'
+import { Button, Tooltip, Typography, Space, Tag, Dropdown } from 'antd'
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
@@ -105,12 +126,22 @@ import {
   MobileOutlined,
   ReloadOutlined,
   CopyOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  PrinterOutlined,
+  BgColorsOutlined,
+  FilePptOutlined,
+  FileWordOutlined,
+  FilePdfOutlined,
+  Html5Outlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { message as antMessage } from 'antd'
 // 统一使用共享的 CommonMark 围栏解析器，替代原有易误闭合的正则
-import { collectHtmlFromMessages } from '../../../utils/htmlBlockParser'
+import { collectArtifactsFromMessages, ARTIFACT_KINDS } from '../../../utils/htmlBlockParser'
+import { SLIDE_THEMES, DEFAULT_SLIDE_THEME } from '../../../utils/canvas/slideThemes'
+import { buildSafeBaseName, downloadBlob } from '../../../utils/canvas/download'
+import SlidesPreview from './SlidesPreview'
+import DocPreview from './DocPreview'
 import './HtmlCanvasPanel.less'
 
 const { Text } = Typography
@@ -135,14 +166,28 @@ const FOCUS_DELAY_MS = 200
  */
 const TITLE_TAG_RE = /<title[^>]*>([^<]*)<\/title>/i
 
-/**
- * 文件名中不允许出现的字符（Windows/Mac文件系统共同限制）
- * \ / : * ? " < > |
- */
-const UNSAFE_FILENAME_CHARS_RE = /[\\/:*?"<>|]/g
+/** localStorage 中幻灯片主题的键名 */
+const SLIDE_THEME_KEY = 'chat_canvas_slide_theme'
 
-/** 从 <title> 提取的文件名最大长度，防止过长标题导致文件名过长 */
-const MAX_TITLE_FILENAME_LENGTH = 50
+/** 各产物种类在工具栏上的标签颜色与图标 */
+const KIND_META = {
+  [ARTIFACT_KINDS.HTML]: { color: 'blue', Icon: Html5Outlined },
+  [ARTIFACT_KINDS.PDF]: { color: 'red', Icon: FilePdfOutlined },
+  [ARTIFACT_KINDS.PPTX]: { color: 'orange', Icon: FilePptOutlined },
+  [ARTIFACT_KINDS.DOCX]: { color: 'geekblue', Icon: FileWordOutlined }
+}
+
+/** 内容是完整 HTML 文档、走 iframe 渲染的种类 */
+const isHtmlKind = (kind) => kind === ARTIFACT_KINDS.HTML || kind === ARTIFACT_KINDS.PDF
+
+const readSavedTheme = () => {
+  try {
+    const saved = localStorage.getItem(SLIDE_THEME_KEY)
+    return saved && SLIDE_THEMES[saved] ? saved : DEFAULT_SLIDE_THEME
+  } catch {
+    return DEFAULT_SLIDE_THEME
+  }
+}
 
 // ================================================================
 // 浏览器原生Fullscreen API兼容性封装
@@ -213,37 +258,44 @@ const isFullscreenSupported = () => {
 }
 
 /**
- * 生成下载文件名
+ * 生成 HTML 下载文件名
  *
  * 优先从HTML内容的 <title> 标签提取文件名（提取到的标题为业务数据，
  * 是用户/AI生成内容的一部分，不参与国际化翻译）；提取失败或标签为空时，
- * 回退为带时间戳的默认名。多个HTML块时追加块序号，避免连续下载时
+ * 回退为带时间戳的默认名。多个块时追加块序号，避免连续下载时
  * 文件名重复导致相互覆盖。
  *
  * @param {string} html - 当前HTML代码内容
  * @param {number} blockIndex - 当前块在全部块中的索引（从0开始）
- * @param {number} totalBlocks - HTML块总数
+ * @param {number} totalBlocks - 块总数
  * @returns {string} 安全的下载文件名（含 .html 后缀）
  */
 const buildDownloadFileName = (html, blockIndex, totalBlocks) => {
   const titleMatch = TITLE_TAG_RE.exec(html || '')
   const rawTitle = titleMatch ? titleMatch[1].trim() : ''
-
-  // 清理文件名中的非法字符，并将空白字符统一替换为下划线
-  const safeTitle = rawTitle
-    .replace(UNSAFE_FILENAME_CHARS_RE, '')
-    .replace(/\s+/g, '_')
-    .slice(0, MAX_TITLE_FILENAME_LENGTH)
-
   const suffix = totalBlocks > 1 ? `_${blockIndex + 1}` : ''
+  return `${buildSafeBaseName(rawTitle, 'html-preview', suffix)}.html`
+}
 
-  if (safeTitle) {
-    return `${safeTitle}${suffix}.html`
+/**
+ * 复制文本到剪贴板
+ * 兼容非 HTTPS / 老浏览器缺失 navigator.clipboard 的降级方案
+ */
+const copyText = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text)
+    return
   }
-
-  // 提取不到有效标题时，回退为带时间戳的默认名
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-  return `html-preview${suffix}-${timestamp}.html`
+  // 降级方案：临时 textarea + execCommand
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!ok) throw new Error('execCommand copy failed')
 }
 
 // ================================================================
@@ -254,34 +306,40 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   // 全屏状态（由fullscreenchange事件驱动更新，不直接由按钮控制）
   const [isFullscreen, setIsFullscreen] = useState(false)
-  // 当前查看的HTML块索引（默认最新）
+  // 当前查看的产物索引（默认最新）
   const [currentIndex, setCurrentIndex] = useState(-1)
-  // 设备预览模式
+  // 设备预览模式（仅 html / pdf）
   const [deviceMode, setDeviceMode] = useState('desktop')
   // iframe刷新key
   const [refreshKey, setRefreshKey] = useState(0)
+  // v2.0: 幻灯片主题（预览与 .pptx 导出共用）
+  const [slideTheme, setSlideTheme] = useState(readSavedTheme)
+  // v2.0: 正在生成文件（pptx / docx 转换是异步的，期间按钮显示 loading）
+  const [exporting, setExporting] = useState(false)
 
   // 画布根容器ref（用于requestFullscreen的目标元素）
   const panelRef = useRef(null)
   const iframeRef = useRef(null)
 
   // ================================================================
-  // 从消息中提取所有HTML代码块
+  // 从消息中提取所有画布产物（html / pdf / pptx / docx）
   // ================================================================
-  const htmlBlocks = useMemo(() => {
-    return collectHtmlFromMessages(messages)
+  const artifacts = useMemo(() => {
+    return collectArtifactsFromMessages(messages)
   }, [messages])
 
-  // 当有新HTML块时自动切换到最新的
+  // 当有新产物时自动切换到最新的
   useEffect(() => {
-    if (htmlBlocks.length > 0) {
-      setCurrentIndex(htmlBlocks.length - 1)
+    if (artifacts.length > 0) {
+      setCurrentIndex(artifacts.length - 1)
     }
-  }, [htmlBlocks.length])
+  }, [artifacts.length])
 
-  // 当前显示的HTML内容
-  const currentBlock = htmlBlocks[currentIndex] || null
-  const currentHtml = currentBlock?.html || ''
+  // 当前显示的产物
+  const currentBlock = artifacts[currentIndex] || null
+  const currentKind = currentBlock?.kind || ARTIFACT_KINDS.HTML
+  const currentCode = currentBlock?.code || ''
+  const currentHtml = isHtmlKind(currentKind) ? currentCode : ''
 
   // ================================================================
   // iframe自动聚焦（让键盘事件直接作用于HTML内容）
@@ -324,7 +382,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   }, [isFullscreen, visible, focusIframe, currentHtml])
 
   /**
-   * 切换HTML块或刷新后自动聚焦
+   * 切换块或刷新后自动聚焦
    */
   useEffect(() => {
     if (visible && currentHtml) {
@@ -406,12 +464,12 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     }
   }, [t])
 
-  /** 切换到上一个/下一个HTML块 */
+  /** 切换到上一个/下一个产物 */
   const handlePrev = () => {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1)
   }
   const handleNext = () => {
-    if (currentIndex < htmlBlocks.length - 1) setCurrentIndex(currentIndex + 1)
+    if (currentIndex < artifacts.length - 1) setCurrentIndex(currentIndex + 1)
   }
 
   /** 刷新iframe */
@@ -419,32 +477,23 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     setRefreshKey(prev => prev + 1)
   }
 
-  /**
-   * 复制HTML代码
-   * currentHtml 由严格解析器提供，不会被内部反引号截断
-   * 兼容非 HTTPS / 老浏览器缺失 navigator.clipboard 的降级方案
-   */
-  const handleCopyHtml = async () => {
-    if (!currentHtml) return
+  /** 切换幻灯片主题并记住 */
+  const handleThemeChange = (key) => {
+    setSlideTheme(key)
+    try { localStorage.setItem(SLIDE_THEME_KEY, key) } catch {}
+  }
 
+  /**
+   * 复制源码（html/pdf 为 HTML，pptx/docx 为 Markdown）
+   * currentCode 由严格解析器提供，不会被内部反引号截断
+   */
+  const handleCopyCode = async () => {
+    if (!currentCode) return
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(currentHtml)
-      } else {
-        // 降级方案：临时 textarea + execCommand
-        const textarea = document.createElement('textarea')
-        textarea.value = currentHtml
-        textarea.style.position = 'fixed'
-        textarea.style.left = '-9999px'
-        document.body.appendChild(textarea)
-        textarea.select()
-        const ok = document.execCommand('copy')
-        document.body.removeChild(textarea)
-        if (!ok) throw new Error('execCommand copy failed')
-      }
+      await copyText(currentCode)
       antMessage.success(t('chat.canvas.copySuccess'))
     } catch (error) {
-      console.error('Failed to copy HTML code:', error)
+      console.error('Failed to copy code:', error)
       antMessage.error(t('chat.canvas.copyFailed'))
     }
   }
@@ -452,8 +501,6 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   /**
    * 导出HTML为本地文件下载（v1.1新增）
    *
-   * 使用 Blob + URL.createObjectURL + 隐藏 <a download> 元素触发浏览器下载，
-   * 技术方案与 Chat.jsx 的 handleExportChat（导出聊天记录）保持一致。
    * 下载内容为 currentHtml（严格解析器提取的完整内容），与当前iframe
    * 预览、复制代码功能三者内容完全一致。
    */
@@ -461,16 +508,8 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     if (!currentHtml) return
 
     try {
-      const fileName = buildDownloadFileName(currentHtml, currentIndex, htmlBlocks.length)
-      const blob = new Blob([currentHtml], { type: 'text/html;charset=utf-8' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const fileName = buildDownloadFileName(currentHtml, currentIndex, artifacts.length)
+      downloadBlob(new Blob([currentHtml], { type: 'text/html;charset=utf-8' }), fileName)
       antMessage.success(t('chat.canvas.exportSuccess'))
     } catch (error) {
       console.error('Failed to export HTML file:', error)
@@ -478,11 +517,84 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     }
   }
 
+  /**
+   * v2.0: 打印 / 另存为 PDF
+   * 调用 iframe 自己的 print()，浏览器打印对话框里选"另存为 PDF"即得 PDF 文件。
+   * sandbox 已含 allow-modals（打印属于 modal 能力），同源 srcDoc 可以从父窗口调用。
+   */
+  const handlePrintPdf = () => {
+    const win = iframeRef.current?.contentWindow
+    if (!win) return
+    try {
+      win.focus()
+      win.print()
+      antMessage.info(t('chat.canvas.exportPdfHint'))
+    } catch (error) {
+      console.error('Failed to open print dialog:', error)
+      antMessage.error(t('chat.canvas.exportPdfFailed'))
+    }
+  }
+
+  /** v2.0: 生成并下载 .pptx */
+  const handleExportPptx = async () => {
+    if (!currentCode || exporting) return
+    setExporting(true)
+    try {
+      const { buildPptxBlob } = await import('../../../utils/canvas/exportPptx')
+      const { blob, deck } = await buildPptxBlob(currentCode, { themeKey: slideTheme })
+      const suffix = artifacts.length > 1 ? `_${currentIndex + 1}` : ''
+      downloadBlob(blob, `${buildSafeBaseName(deck.title, 'slides', suffix)}.pptx`)
+      antMessage.success(t('chat.canvas.exportSuccess'))
+    } catch (error) {
+      console.error('Failed to export pptx:', error)
+      antMessage.error(t('chat.canvas.exportFailed'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  /** v2.0: 生成并下载 .docx */
+  const handleExportDocx = async () => {
+    if (!currentCode || exporting) return
+    setExporting(true)
+    try {
+      const { buildDocxBlob } = await import('../../../utils/canvas/exportDocx')
+      const { blob, title } = await buildDocxBlob(currentCode)
+      const suffix = artifacts.length > 1 ? `_${currentIndex + 1}` : ''
+      downloadBlob(blob, `${buildSafeBaseName(title, 'document', suffix)}.docx`)
+      antMessage.success(t('chat.canvas.exportSuccess'))
+    } catch (error) {
+      console.error('Failed to export docx:', error)
+      antMessage.error(t('chat.canvas.exportFailed'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // ================================================================
-  // 如果不可见或没有HTML内容，不渲染
+  // 如果不可见或没有产物，不渲染
   // ================================================================
-  if (!visible || htmlBlocks.length === 0) {
+  if (!visible || artifacts.length === 0) {
     return null
+  }
+
+  const kindMeta = KIND_META[currentKind] || KIND_META[ARTIFACT_KINDS.HTML]
+  const KindIcon = kindMeta.Icon
+  const showStreamingHint = isStreaming && currentIndex === artifacts.length - 1
+
+  const themeMenu = {
+    selectable: true,
+    selectedKeys: [slideTheme],
+    onClick: ({ key }) => handleThemeChange(key),
+    items: Object.keys(SLIDE_THEMES).map(key => ({
+      key,
+      label: (
+        <span className="theme-menu-item">
+          <span className="theme-swatch" style={{ background: `#${SLIDE_THEMES[key].accent}` }} />
+          {t(`chat.canvas.theme.${key}`)}
+        </span>
+      )
+    }))
   }
 
   // ================================================================
@@ -491,11 +603,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   return (
     <div
       ref={panelRef}
-      className={`html-canvas-panel ${isFullscreen ? 'fullscreen' : ''}`}
+      className={`html-canvas-panel kind-${currentKind} ${isFullscreen ? 'fullscreen' : ''}`}
     >
       {/* 工具栏 */}
       <div className="canvas-toolbar">
-        {/* 左侧：全屏按钮（醒目） + HTML块切换器 */}
+        {/* 左侧：全屏按钮（醒目） + 产物种类 + 块切换器 */}
         <div className="toolbar-left">
           {/* 全屏/退出全屏 - 醒目的primary按钮 */}
           <Button
@@ -511,8 +623,14 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
             }
           </Button>
 
-          {/* 多个HTML块时显示切换器 */}
-          {htmlBlocks.length > 1 && (
+          {/* 产物种类标签：种类名 + 种类内序号（序号为纯数字） */}
+          <Tag color={kindMeta.color} icon={<KindIcon />} className="kind-tag">
+            {t(`chat.canvas.kind.${currentKind}`)}
+            {artifacts.length > 1 ? ` #${currentBlock.kindOrdinal}` : ''}
+          </Tag>
+
+          {/* 多个产物时显示切换器 */}
+          {artifacts.length > 1 && (
             <div className="block-switcher">
               <Button
                 type="text"
@@ -523,64 +641,126 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
               />
               {/* 纯数字与斜杠，无需国际化 */}
               <Tag color="blue" style={{ margin: '0 4px', userSelect: 'none' }}>
-                {currentIndex + 1} / {htmlBlocks.length}
+                {currentIndex + 1} / {artifacts.length}
               </Tag>
               <Button
                 type="text"
                 size="small"
                 icon={<RightOutlined />}
                 onClick={handleNext}
-                disabled={currentIndex >= htmlBlocks.length - 1}
+                disabled={currentIndex >= artifacts.length - 1}
               />
             </div>
           )}
         </div>
 
-        {/* 右侧：设备切换 + 操作按钮 */}
+        {/* 右侧：按种类不同的操作按钮 */}
         <div className="toolbar-right">
-          {/* 设备预览切换 */}
-          <Space size={2}>
-            <Tooltip title={t('chat.canvas.desktop')}>
-              <Button
-                type={deviceMode === 'desktop' ? 'primary' : 'text'}
-                size="small"
-                icon={<DesktopOutlined />}
-                onClick={() => setDeviceMode('desktop')}
-                ghost={deviceMode === 'desktop'}
-              />
-            </Tooltip>
-            <Tooltip title={t('chat.canvas.tablet')}>
-              <Button
-                type={deviceMode === 'tablet' ? 'primary' : 'text'}
-                size="small"
-                icon={<TabletOutlined />}
-                onClick={() => setDeviceMode('tablet')}
-                ghost={deviceMode === 'tablet'}
-              />
-            </Tooltip>
-            <Tooltip title={t('chat.canvas.mobile')}>
-              <Button
-                type={deviceMode === 'mobile' ? 'primary' : 'text'}
-                size="small"
-                icon={<MobileOutlined />}
-                onClick={() => setDeviceMode('mobile')}
-                ghost={deviceMode === 'mobile'}
-              />
-            </Tooltip>
-          </Space>
+          {isHtmlKind(currentKind) && (
+            <>
+              {/* 设备预览切换 */}
+              <Space size={2}>
+                <Tooltip title={t('chat.canvas.desktop')}>
+                  <Button
+                    type={deviceMode === 'desktop' ? 'primary' : 'text'}
+                    size="small"
+                    icon={<DesktopOutlined />}
+                    onClick={() => setDeviceMode('desktop')}
+                    ghost={deviceMode === 'desktop'}
+                  />
+                </Tooltip>
+                <Tooltip title={t('chat.canvas.tablet')}>
+                  <Button
+                    type={deviceMode === 'tablet' ? 'primary' : 'text'}
+                    size="small"
+                    icon={<TabletOutlined />}
+                    onClick={() => setDeviceMode('tablet')}
+                    ghost={deviceMode === 'tablet'}
+                  />
+                </Tooltip>
+                <Tooltip title={t('chat.canvas.mobile')}>
+                  <Button
+                    type={deviceMode === 'mobile' ? 'primary' : 'text'}
+                    size="small"
+                    icon={<MobileOutlined />}
+                    onClick={() => setDeviceMode('mobile')}
+                    ghost={deviceMode === 'mobile'}
+                  />
+                </Tooltip>
+              </Space>
 
-          <div className="toolbar-divider" />
+              <div className="toolbar-divider" />
 
-          {/* 刷新、复制、导出 */}
-          <Tooltip title={t('chat.canvas.refresh')}>
-            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </Tooltip>
-          <Tooltip title={t('chat.canvas.copyCode')}>
-            <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyHtml} />
-          </Tooltip>
-          <Tooltip title={t('chat.canvas.export')}>
-            <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleExportHtml} />
-          </Tooltip>
+              <Tooltip title={t('chat.canvas.refresh')}>
+                <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleRefresh} />
+              </Tooltip>
+              <Tooltip title={t('chat.canvas.copyCode')}>
+                <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyCode} />
+              </Tooltip>
+              <Tooltip title={t('chat.canvas.export')}>
+                <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleExportHtml} />
+              </Tooltip>
+              <Tooltip title={t('chat.canvas.exportPdf')}>
+                <Button
+                  type={currentKind === ARTIFACT_KINDS.PDF ? 'primary' : 'text'}
+                  ghost={currentKind === ARTIFACT_KINDS.PDF}
+                  size="small"
+                  icon={<PrinterOutlined />}
+                  onClick={handlePrintPdf}
+                />
+              </Tooltip>
+            </>
+          )}
+
+          {currentKind === ARTIFACT_KINDS.PPTX && (
+            <>
+              <Dropdown menu={themeMenu} trigger={['click']}>
+                <Tooltip title={t('chat.canvas.theme.label')}>
+                  <Button type="text" size="small" icon={<BgColorsOutlined />}>
+                    {t(`chat.canvas.theme.${slideTheme}`)}
+                  </Button>
+                </Tooltip>
+              </Dropdown>
+
+              <div className="toolbar-divider" />
+
+              <Tooltip title={t('chat.canvas.copyMarkdown')}>
+                <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyCode} />
+              </Tooltip>
+              <Tooltip title={t('chat.canvas.exportPptx')}>
+                <Button
+                  type="primary"
+                  ghost
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  loading={exporting}
+                  onClick={handleExportPptx}
+                >
+                  .pptx
+                </Button>
+              </Tooltip>
+            </>
+          )}
+
+          {currentKind === ARTIFACT_KINDS.DOCX && (
+            <>
+              <Tooltip title={t('chat.canvas.copyMarkdown')}>
+                <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyCode} />
+              </Tooltip>
+              <Tooltip title={t('chat.canvas.exportDocx')}>
+                <Button
+                  type="primary"
+                  ghost
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  loading={exporting}
+                  onClick={handleExportDocx}
+                >
+                  .docx
+                </Button>
+              </Tooltip>
+            </>
+          )}
 
           {/* 关闭按钮 */}
           <Tooltip title={t('chat.canvas.close')}>
@@ -595,36 +775,46 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         </div>
       </div>
 
-      {/* HTML渲染区域 */}
+      {/* 渲染区域 */}
       <div className="canvas-content">
-        <div
-          className={`iframe-wrapper device-${deviceMode}`}
-          style={{
-            maxWidth: deviceMode !== 'desktop' ? DEVICE_SIZES[deviceMode].width : '100%',
-            margin: deviceMode !== 'desktop' ? '0 auto' : undefined
-          }}
-        >
-          {/* 流式输出中且当前查看的是最新块时显示提示 */}
-          {isStreaming && currentIndex === htmlBlocks.length - 1 && (
-            <div className="streaming-hint">
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {t('chat.canvas.streaming')}
-              </Text>
-            </div>
-          )}
+        {/* 流式输出中且当前查看的是最新块时显示提示 */}
+        {showStreamingHint && (
+          <div className="streaming-hint">
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {t('chat.canvas.streaming')}
+            </Text>
+          </div>
+        )}
 
-          {/* title 为技术标识，供屏幕阅读器识别 iframe 用途，非界面可见文案 */}
-          <iframe
-            key={`${currentIndex}-${refreshKey}`}
-            ref={iframeRef}
-            srcDoc={currentHtml}
-            title="HTML Preview"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-            allow="fullscreen"
-            className="preview-iframe"
-            onLoad={handleIframeLoad}
-          />
-        </div>
+        {isHtmlKind(currentKind) && (
+          <div
+            className={`iframe-wrapper device-${deviceMode}`}
+            style={{
+              maxWidth: deviceMode !== 'desktop' ? DEVICE_SIZES[deviceMode].width : '100%',
+              margin: deviceMode !== 'desktop' ? '0 auto' : undefined
+            }}
+          >
+            {/* title 为技术标识，供屏幕阅读器识别 iframe 用途，非界面可见文案 */}
+            <iframe
+              key={`${currentIndex}-${refreshKey}`}
+              ref={iframeRef}
+              srcDoc={currentHtml}
+              title="HTML Preview"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+              allow="fullscreen"
+              className="preview-iframe"
+              onLoad={handleIframeLoad}
+            />
+          </div>
+        )}
+
+        {currentKind === ARTIFACT_KINDS.PPTX && (
+          <SlidesPreview key={currentIndex} markdown={currentCode} themeKey={slideTheme} />
+        )}
+
+        {currentKind === ARTIFACT_KINDS.DOCX && (
+          <DocPreview key={currentIndex} markdown={currentCode} />
+        )}
       </div>
 
       {/* ================================================================

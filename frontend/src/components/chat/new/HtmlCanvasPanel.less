@@ -1,8 +1,8 @@
 /**
- * HTML画布面板样式
+ * 画布面板样式（HTML / PDF / PPT / Word）
  *
  * 布局：
- *   - 作为对话页面右侧面板
+ *   - 作为对话页面右侧面板；幻灯片与文档预览各自的样式在 SlidesPreview.less / DocPreview.less
  *   - 真全屏模式由浏览器Fullscreen API处理（隐藏所有浏览器UI）
  *   - .fullscreen 类作为API不支持时的CSS模拟全屏降级方案
  *   - 设备预览模式切换（桌面/平板/手机）
@@ -123,6 +123,13 @@
         }
       }
 
+      // v2.0: 产物种类标签（HTML / PDF / PPT / Word）
+      .kind-tag {
+        margin: 0;
+        flex-shrink: 0;
+        user-select: none;
+      }
+
       .block-switcher {
         display: flex;
         align-items: center;
@@ -189,6 +196,20 @@
     align-items: stretch;
     justify-content: center;
 
+    // v2.0: 流式提示对所有种类通用，挂在内容区而非 iframe 容器上
+    .streaming-hint {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 4px 12px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      z-index: 10;
+      white-space: nowrap;
+    }
+
     .iframe-wrapper {
       width: 100%;
       height: 100%;
@@ -204,19 +225,6 @@
         margin: 16px auto;
         height: calc(100% - 32px);
         overflow: hidden;
-      }
-
-      .streaming-hint {
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.95);
-        padding: 4px 12px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        z-index: 10;
-        white-space: nowrap;
       }
 
       .preview-iframe {
@@ -263,6 +271,23 @@
     &:active {
       transform: scale(0.98);
     }
+  }
+}
+
+// ================================================================
+// v2.0: 幻灯片主题下拉菜单项（渲染在 body 下的 Dropdown 里，不能嵌在面板选择器内）
+// ================================================================
+.theme-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  .theme-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+    flex-shrink: 0;
   }
 }
 

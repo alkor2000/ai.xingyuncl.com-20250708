@@ -18,6 +18,10 @@
  *   附加修复：
  *   - 消除 recentMessages 与 currentContent 的重复处理
  *     （刚创建的 user 消息已在 recentMessages 中，不应再作为"当前消息"处理）
+ *
+ * v3.2：buildAIContext 新增 outputFormat（html/pptx/docx/pdf）——把
+ *   outputFormatInstructions 的格式指令追加到系统提示词末尾，让模型按前端
+ *   画布能识别的围栏代码块输出可预览、可下载的文件；指令不落库。
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -29,6 +33,7 @@ const AIService = require('../aiService');
 const AIStreamService = require('../aiStreamService');
 const CacheService = require('../cacheService');
 const StatsService = require('../statsService');
+const { buildOutputFormatInstruction } = require('./outputFormatInstructions');
 const logger = require('../../utils/logger');
 
 class MessageService {
@@ -269,7 +274,8 @@ class MessageService {
       moduleCombinationId, userId, aiModel,
       currentContent,
       currentFileInfos,
-      currentFileInfo
+      currentFileInfo,
+      outputFormat
     } = params;
 
     const aiMessages = [];
@@ -308,6 +314,14 @@ class MessageService {
       } catch (error) {
         logger.error('获取模块组合内容失败', { moduleCombinationId, userId, error: error.message });
       }
+    }
+
+    // ---- v3.2 输出格式指令：追加在系统提示词末尾（没有系统提示词时单独成为系统消息） ----
+    const formatInstruction = buildOutputFormatInstruction(outputFormat);
+    if (formatInstruction) {
+      systemPromptContent = systemPromptContent
+        ? `${systemPromptContent}\n\n${formatInstruction}`
+        : formatInstruction;
     }
 
     // ---- 添加系统提示词 ----

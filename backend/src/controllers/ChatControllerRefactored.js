@@ -21,6 +21,7 @@ const ConversationService = require('../services/chat/ConversationService');
 const MessageService = require('../services/chat/MessageService');
 const StreamMessageService = require('../services/chat/StreamMessageService');
 const NonStreamMessageService = require('../services/chat/NonStreamMessageService');
+const { normalizeOutputFormat } = require('../services/chat/outputFormatInstructions');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const File = require('../models/File');
@@ -242,7 +243,9 @@ class ChatControllerRefactored {
       const { id } = req.params;
       const userId = req.user.id;
       const userGroupId = req.user.group_id;
-      const { content, file_id, file_ids, stream = false } = req.body;
+      const { content, file_id, file_ids, stream = false, output_format } = req.body;
+      // 输出格式（html/pptx/docx/pdf）走白名单，非法值按普通对话处理
+      const outputFormat = normalizeOutputFormat(output_format);
 
       // 1. 权限验证
       const hasAccess = await Conversation.checkOwnership(id, userId);
@@ -288,7 +291,8 @@ class ChatControllerRefactored {
         userId, conversationId: id, requiredCredits,
         isFreeModel: requiredCredits === 0,
         currentBalance: user.getCredits(),
-        fileCount: allFileIds.length
+        fileCount: allFileIds.length,
+        outputFormat
       });
 
       const creditsResult = await user.consumeCredits(
@@ -320,7 +324,8 @@ class ChatControllerRefactored {
         moduleCombinationId: conversation.module_combination_id,
         userId, aiModel,
         currentContent: content,
-        currentFileInfos: fileInfos
+        currentFileInfos: fileInfos,
+        outputFormat
       });
 
       // 11. 根据模式发送

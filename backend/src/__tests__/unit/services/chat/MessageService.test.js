@@ -509,6 +509,47 @@ describe('MessageService - 消息服务', () => {
       const userMsg = result.find(m => m.role === 'user');
       expect(userMsg.image_url).toBe('https://old.jpg');
     });
+
+    // ---- v3.2 输出格式指令 ----
+    test('v3.2 outputFormat=pptx 且无系统提示词：应单独生成含 ```pptx 约定的系统消息', async () => {
+      const result = await MessageService.buildAIContext({
+        conversation: createMockConversation(),
+        recentMessages: [],
+        currentContent: '做一份关于光合作用的课件',
+        outputFormat: 'pptx'
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toContain('```pptx');
+      expect(result[0].content).toContain('---');
+      expect(result[1]).toEqual({ role: 'user', content: '做一份关于光合作用的课件' });
+    });
+
+    test('v3.2 outputFormat=docx 且有系统提示词：指令应追加在原提示词之后', async () => {
+      const result = await MessageService.buildAIContext({
+        conversation: createMockConversation({ system_prompt: '你是一位语文老师' }),
+        recentMessages: [],
+        currentContent: '写一份教案',
+        outputFormat: 'docx'
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content.startsWith('你是一位语文老师')).toBe(true);
+      expect(result[0].content).toContain('```docx');
+      expect(result.filter(m => m.role === 'system')).toHaveLength(1);
+    });
+
+    test('v3.2 outputFormat 非法或缺省：不应注入任何系统消息', async () => {
+      const result = await MessageService.buildAIContext({
+        conversation: createMockConversation(),
+        recentMessages: [],
+        currentContent: '你好',
+        outputFormat: 'exe'
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].role).toBe('user');
+    });
   });
 
   // ========== autoGenerateTitle() 测试 ==========

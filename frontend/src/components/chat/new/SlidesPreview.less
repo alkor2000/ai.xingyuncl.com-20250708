@@ -1,0 +1,310 @@
+/**
+ * 幻灯片预览样式
+ *
+ * 所有颜色来自 slideThemeToCssVars 注入的 --slide-* 变量（与 .pptx 导出同源），
+ * 页面尺寸是 960×540 的逻辑画幅，由组件按容器等比缩放。
+ * 字号按 densityClass 分四档，对应 exportPptx 的 20/18/16/14pt 自适应。
+ */
+
+.slides-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #e9ecf1;
+  outline: none;
+  font-family: var(--slide-font);
+
+  &.slides-preview-empty {
+    align-items: center;
+    justify-content: center;
+  }
+
+  // ---- 主舞台：等比缩放的当前页 ----
+  .slides-stage {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+
+    > .slide-frame {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+    }
+  }
+
+  // ---- 导航 ----
+  .slides-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 0;
+    flex-shrink: 0;
+    background: #f5f6f8;
+    border-top: 1px solid #e3e6ea;
+
+    .slides-counter {
+      font-size: 12px;
+      color: #666;
+      min-width: 56px;
+      text-align: center;
+      user-select: none;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  // ---- 缩略图条 ----
+  .slides-thumbs {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    background: #f5f6f8;
+    border-top: 1px solid #e3e6ea;
+
+    .slide-thumb {
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+
+      &:hover { transform: translateY(-1px); }
+      &.active { border-color: var(--slide-accent); }
+
+      .slide-frame {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+      }
+    }
+  }
+}
+
+// ================================================================
+// 单页（逻辑画幅 960×540 内的绝对尺寸，不用相对单位）
+// ================================================================
+.slide {
+  position: relative;
+  width: 960px;
+  height: 540px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--slide-bg);
+  color: var(--slide-text);
+  font-family: var(--slide-font);
+  line-height: 1.45;
+  text-align: left;
+
+  a { color: var(--slide-accent); text-decoration: underline; }
+
+  .slide-code-inline {
+    font-family: Consolas, "Courier New", monospace;
+    color: var(--slide-accent);
+    background: var(--slide-surface);
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+
+  // ---- 封面 ----
+  &.slide-cover {
+    background: var(--slide-cover-bg);
+    color: var(--slide-cover-fg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 70px 90px;
+    text-align: center;
+
+    .slide-cover-title {
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .slide-cover-subtitle {
+      margin-top: 22px;
+      font-size: 24px;
+      opacity: 0.85;
+    }
+    .slide-cover-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 36px;
+      background: var(--slide-accent);
+    }
+  }
+
+  // ---- 章节页 ----
+  &.slide-section {
+    background: var(--slide-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 70px;
+    text-align: center;
+
+    .slide-section-title {
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--slide-title);
+      line-height: 1.25;
+    }
+    .slide-section-bar {
+      width: 110px;
+      height: 6px;
+      margin: 22px auto 0;
+      background: var(--slide-accent);
+      border-radius: 3px;
+    }
+    .slide-section-subtitle {
+      margin-top: 18px;
+      font-size: 22px;
+      color: var(--slide-muted);
+    }
+  }
+
+  // ---- 内容页 ----
+  &.slide-content {
+    padding: 34px 48px 0;
+
+    .slide-title {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--slide-title);
+      line-height: 1.25;
+      min-height: 44px;
+      max-height: 88px;
+      overflow: hidden;
+    }
+    .slide-title-bar {
+      width: 96px;
+      height: 6px;
+      margin: 8px 0 16px;
+      background: var(--slide-accent);
+      border-radius: 3px;
+    }
+    .slide-body {
+      height: 355px;
+      overflow: hidden;
+      font-size: 24px;
+    }
+    &.density-md .slide-body { font-size: 21px; }
+    &.density-sm .slide-body { font-size: 18px; }
+    &.density-xs .slide-body { font-size: 16px; }
+
+    .slide-footer {
+      position: absolute;
+      left: 48px;
+      right: 48px;
+      bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--slide-muted);
+    }
+  }
+
+  // ---- 内容块 ----
+  .slide-paragraph { margin: 0 0 10px; }
+
+  .slide-subheading {
+    font-weight: 700;
+    color: var(--slide-title);
+    font-size: 1.08em;
+    margin: 8px 0 6px;
+  }
+
+  .slide-list {
+    margin: 0 0 10px;
+    padding-left: 1.3em;
+
+    li {
+      margin: 0 0 7px;
+      &.level-1 { margin-left: 1.3em; font-size: 0.92em; list-style-type: circle; }
+      &.level-2 { margin-left: 2.6em; font-size: 0.88em; list-style-type: square; }
+    }
+  }
+  ol.slide-list li.level-1,
+  ol.slide-list li.level-2 { list-style-type: decimal; }
+
+  .slide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78em;
+    margin: 6px 0 12px;
+
+    th, td {
+      border: 1px solid #d9dee7;
+      padding: 6px 10px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      background: var(--slide-accent);
+      color: var(--slide-accent-text);
+      font-weight: 600;
+    }
+    tbody tr:nth-child(even) td { background: var(--slide-surface); }
+  }
+
+  .slide-image {
+    text-align: center;
+    margin: 6px 0 10px;
+    img {
+      max-width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      border-radius: 4px;
+    }
+  }
+
+  .slide-quote {
+    margin: 6px 0 12px;
+    padding: 6px 0 6px 16px;
+    border-left: 5px solid var(--slide-accent);
+    color: var(--slide-muted);
+    font-style: italic;
+    font-size: 0.95em;
+  }
+
+  .slide-codeblock {
+    margin: 6px 0 12px;
+    padding: 10px 14px;
+    background: var(--slide-surface);
+    border-radius: 6px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.7em;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow: hidden;
+  }
+}
+
+// 全屏演示时只留舞台和翻页
+.html-canvas-panel:fullscreen,
+.html-canvas-panel.fullscreen {
+  .slides-preview {
+    background: #000;
+    .slides-thumbs { display: none; }
+    .slides-nav { background: #111; border-top-color: #222; .slides-counter { color: #bbb; } .ant-btn { color: #ddd; } }
+    .slides-stage > .slide-frame { box-shadow: none; }
+  }
+}

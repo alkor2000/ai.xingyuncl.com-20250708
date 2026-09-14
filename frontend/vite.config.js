@@ -79,7 +79,10 @@ export default defineConfig({
           // TensorFlow.js 只被 AI训练专区用到，单独分包
           'tfjs-vendor': ['@tensorflow/tfjs'],
           'prism-vendor': ['prismjs'],
-          'markdown-vendor': ['react-markdown']
+          'markdown-vendor': ['react-markdown'],
+          // 画布导出 PPT / Word 的转换库：只在点击下载时动态 import，单独分包
+          'pptx-vendor': ['pptxgenjs'],
+          'docx-vendor': ['docx']
         }
       }
     },

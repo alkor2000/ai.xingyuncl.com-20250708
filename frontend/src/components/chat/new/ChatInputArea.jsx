@@ -73,6 +73,7 @@ import {
   Badge,
   Space,
   Typography,
+  Dropdown,
   message as antMessage
 } from 'antd'
 import {
@@ -85,7 +86,13 @@ import {
   ClearOutlined,
   DatabaseOutlined,
   CodeOutlined,
-  BulbOutlined
+  BulbOutlined,
+  MessageOutlined,
+  Html5Outlined,
+  FilePptOutlined,
+  FileWordOutlined,
+  FilePdfOutlined,
+  DownOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
@@ -154,6 +161,20 @@ const TOKEN_COLOR_EMPTY = '#bfbfbf'
 /** 超过所有阈值时的颜色（红色 - 很多） */
 const TOKEN_COLOR_MAX = '#ff4d4f'
 
+// ==================== 输出格式（画布产物） ====================
+/**
+ * 输出格式选项，与后端 outputFormatInstructions 的 OUTPUT_FORMATS 及
+ * utils/htmlBlockParser 的 ARTIFACT_KINDS 一致；'none' 表示普通对话（不注入指令）。
+ * label 走 t('chat.outputFormat.<key>')，此处只放技术键与图标。
+ */
+export const OUTPUT_FORMAT_OPTIONS = [
+  { key: 'none', Icon: MessageOutlined },
+  { key: 'html', Icon: Html5Outlined },
+  { key: 'pptx', Icon: FilePptOutlined },
+  { key: 'docx', Icon: FileWordOutlined },
+  { key: 'pdf', Icon: FilePdfOutlined }
+]
+
 const ChatInputArea = forwardRef(({
   inputValue,
   uploadedImages = [],
@@ -168,10 +189,12 @@ const ChatInputArea = forwardRef(({
   availableModels,
   contextTokens,
   canvasEnabled,
-  hasHtmlContent,
+  hasCanvasContent,
   onToggleCanvas,
   showThinking,
   onToggleThinking,
+  outputFormat = 'none',
+  onOutputFormatChange,
   onInputChange,
   onSend,
   onStop,
@@ -338,9 +361,28 @@ const ChatInputArea = forwardRef(({
         ? t('chat.input.placeholderWithDocument.mobile')
         : t('chat.input.placeholderWithDocument')
     }
+    if (outputFormat && outputFormat !== 'none' && !isMobile) {
+      return t('chat.input.placeholderWithFormat', { format: t(`chat.outputFormat.${outputFormat}`) })
+    }
     return isMobile
       ? t('chat.input.placeholder.mobile')
       : t('chat.input.placeholder')
+  }
+
+  /**
+   * 输出格式下拉菜单（仅 PC 端：画布与下载都只在 PC 端可用，移动端不给入口以免走进死胡同）
+   */
+  const activeFormat = OUTPUT_FORMAT_OPTIONS.find(o => o.key === outputFormat) || OUTPUT_FORMAT_OPTIONS[0]
+  const formatActive = activeFormat.key !== 'none'
+  const outputFormatMenu = {
+    selectable: true,
+    selectedKeys: [activeFormat.key],
+    onClick: ({ key }) => onOutputFormatChange && onOutputFormatChange(key),
+    items: OUTPUT_FORMAT_OPTIONS.map(({ key, Icon }) => ({
+      key,
+      icon: <Icon />,
+      label: t(`chat.outputFormat.${key}`)
+    }))
   }
 
   // ---- 构建输入框样式：跟随系统字体设置 ----
@@ -503,6 +545,24 @@ const ChatInputArea = forwardRef(({
             disabled={typing || isStreaming}
             isMobile={isMobile}
           />
+
+          {/* 输出格式选择：普通对话 / 网页 / PPT / Word / PDF（仅 PC 端） */}
+          {!isMobile && onOutputFormatChange && (
+            <Dropdown menu={outputFormatMenu} trigger={['click']} disabled={typing || isStreaming}>
+              <Tooltip title={t('chat.outputFormat.tooltip')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<activeFormat.Icon />}
+                  className={`output-format-btn ${formatActive ? 'format-active' : ''}`}
+                  disabled={typing || isStreaming}
+                >
+                  {formatActive ? t(`chat.outputFormat.${activeFormat.key}`) : t('chat.outputFormat.label')}
+                  <DownOutlined style={{ fontSize: 10, marginLeft: 2 }} />
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          )}
 
           {/* 图片上传按钮 - 支持多选，未达上限且无文档时显示 */}
           {imageUploadEnabled && !uploadedDocument && !isImageLimitReached && (
