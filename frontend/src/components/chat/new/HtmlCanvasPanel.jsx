@@ -336,7 +336,13 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   }, [artifacts.length])
 
   // 当前显示的产物
-  const currentBlock = artifacts[currentIndex] || null
+  // v2.0.1: 渲染用的索引必须先钳位——首次渲染时 state 还是 -1（"切到最新"的 effect 在渲染之后才跑），
+  // 产物减少（删消息/清空）时 state 也可能越界；打开历史里已有 ≥2 个产物的会话曾因此
+  // 读 null.kindOrdinal 把整个对话页崩掉。越界一律回落到最新一块。
+  const safeIndex = artifacts.length === 0
+    ? -1
+    : (currentIndex >= 0 && currentIndex < artifacts.length ? currentIndex : artifacts.length - 1)
+  const currentBlock = safeIndex >= 0 ? artifacts[safeIndex] : null
   const currentKind = currentBlock?.kind || ARTIFACT_KINDS.HTML
   const currentCode = currentBlock?.code || ''
   const currentHtml = isHtmlKind(currentKind) ? currentCode : ''
@@ -388,7 +394,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     if (visible && currentHtml) {
       focusIframe()
     }
-  }, [currentIndex, refreshKey, visible, focusIframe, currentHtml])
+  }, [safeIndex, refreshKey, visible, focusIframe, currentHtml])
 
   // ================================================================
   // 浏览器原生全屏API：监听fullscreenchange事件
@@ -466,10 +472,10 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   /** 切换到上一个/下一个产物 */
   const handlePrev = () => {
-    if (currentIndex > 0) setCurrentIndex(currentIndex - 1)
+    if (safeIndex > 0) setCurrentIndex(safeIndex - 1)
   }
   const handleNext = () => {
-    if (currentIndex < artifacts.length - 1) setCurrentIndex(currentIndex + 1)
+    if (safeIndex < artifacts.length - 1) setCurrentIndex(safeIndex + 1)
   }
 
   /** 刷新iframe */
@@ -508,7 +514,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     if (!currentHtml) return
 
     try {
-      const fileName = buildDownloadFileName(currentHtml, currentIndex, artifacts.length)
+      const fileName = buildDownloadFileName(currentHtml, safeIndex, artifacts.length)
       downloadBlob(new Blob([currentHtml], { type: 'text/html;charset=utf-8' }), fileName)
       antMessage.success(t('chat.canvas.exportSuccess'))
     } catch (error) {
@@ -542,7 +548,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     try {
       const { buildPptxBlob } = await import('../../../utils/canvas/exportPptx')
       const { blob, deck } = await buildPptxBlob(currentCode, { themeKey: slideTheme })
-      const suffix = artifacts.length > 1 ? `_${currentIndex + 1}` : ''
+      const suffix = artifacts.length > 1 ? `_${safeIndex + 1}` : ''
       downloadBlob(blob, `${buildSafeBaseName(deck.title, 'slides', suffix)}.pptx`)
       antMessage.success(t('chat.canvas.exportSuccess'))
     } catch (error) {
@@ -560,7 +566,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
     try {
       const { buildDocxBlob } = await import('../../../utils/canvas/exportDocx')
       const { blob, title } = await buildDocxBlob(currentCode)
-      const suffix = artifacts.length > 1 ? `_${currentIndex + 1}` : ''
+      const suffix = artifacts.length > 1 ? `_${safeIndex + 1}` : ''
       downloadBlob(blob, `${buildSafeBaseName(title, 'document', suffix)}.docx`)
       antMessage.success(t('chat.canvas.exportSuccess'))
     } catch (error) {
@@ -580,7 +586,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
   const kindMeta = KIND_META[currentKind] || KIND_META[ARTIFACT_KINDS.HTML]
   const KindIcon = kindMeta.Icon
-  const showStreamingHint = isStreaming && currentIndex === artifacts.length - 1
+  const showStreamingHint = isStreaming && safeIndex === artifacts.length - 1
 
   const themeMenu = {
     selectable: true,
@@ -626,7 +632,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           {/* 产物种类标签：种类名 + 种类内序号（序号为纯数字） */}
           <Tag color={kindMeta.color} icon={<KindIcon />} className="kind-tag">
             {t(`chat.canvas.kind.${currentKind}`)}
-            {artifacts.length > 1 ? ` #${currentBlock.kindOrdinal}` : ''}
+            {artifacts.length > 1 && currentBlock ? ` #${currentBlock.kindOrdinal}` : ''}
           </Tag>
 
           {/* 多个产物时显示切换器 */}
@@ -637,18 +643,18 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                 size="small"
                 icon={<LeftOutlined />}
                 onClick={handlePrev}
-                disabled={currentIndex <= 0}
+                disabled={safeIndex <= 0}
               />
               {/* 纯数字与斜杠，无需国际化 */}
               <Tag color="blue" style={{ margin: '0 4px', userSelect: 'none' }}>
-                {currentIndex + 1} / {artifacts.length}
+                {safeIndex + 1} / {artifacts.length}
               </Tag>
               <Button
                 type="text"
                 size="small"
                 icon={<RightOutlined />}
                 onClick={handleNext}
-                disabled={currentIndex >= artifacts.length - 1}
+                disabled={safeIndex >= artifacts.length - 1}
               />
             </div>
           )}
@@ -796,7 +802,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           >
             {/* title 为技术标识，供屏幕阅读器识别 iframe 用途，非界面可见文案 */}
             <iframe
-              key={`${currentIndex}-${refreshKey}`}
+              key={`${safeIndex}-${refreshKey}`}
               ref={iframeRef}
               srcDoc={currentHtml}
               title="HTML Preview"
@@ -809,11 +815,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
         )}
 
         {currentKind === ARTIFACT_KINDS.PPTX && (
-          <SlidesPreview key={currentIndex} markdown={currentCode} themeKey={slideTheme} />
+          <SlidesPreview key={safeIndex} markdown={currentCode} themeKey={slideTheme} />
         )}
 
         {currentKind === ARTIFACT_KINDS.DOCX && (
-          <DocPreview key={currentIndex} markdown={currentCode} />
+          <DocPreview key={safeIndex} markdown={currentCode} />
         )}
       </div>
 
@@ -838,4 +844,57 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   )
 }
 
-export default HtmlCanvasPanel
+/**
+ * v2.0.1: 画布错误边界
+ * 画布只是对话页的附属面板，它自己的渲染异常绝不能把整个对话页拖垮
+ * （2026-09-14 线上事故：面板读 null.kindOrdinal 让有多个产物的会话整页白屏）。
+ * 出错时显示一条简短提示和关闭按钮，对话区照常可用；切换到别的产物/会话时重置。
+ */
+class CanvasErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Canvas panel crashed:', error, info?.componentStack)
+  }
+
+  componentDidUpdate(prevProps) {
+    // 消息列表变了（新产物/换会话）就给面板一次重试机会
+    if (this.state.hasError && prevProps.messages !== this.props.messages) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <CanvasCrashFallback onClose={this.props.onClose} />
+    }
+    return <HtmlCanvasPanel {...this.props} />
+  }
+}
+
+const CanvasCrashFallback = ({ onClose }) => {
+  const { t } = useTranslation()
+  return (
+    <div className="html-canvas-panel canvas-crashed">
+      <div className="canvas-toolbar">
+        <div className="toolbar-left">
+          <Text type="danger">{t('chat.canvas.renderError')}</Text>
+        </div>
+        <div className="toolbar-right">
+          <Tooltip title={t('chat.canvas.close')}>
+            <Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} className="close-btn" />
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default CanvasErrorBoundary

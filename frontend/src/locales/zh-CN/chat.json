@@ -208,6 +208,7 @@
   "chat.canvas.slides.prev": "上一页",
   "chat.canvas.slides.next": "下一页",
   "chat.canvas.slides.empty": "还没有可显示的幻灯片",
+  "chat.canvas.renderError": "画布渲染出错，已隐藏；对话不受影响",
   "chat.thinking.show": "显示思考过程",
   "chat.thinking.hide": "隐藏思考过程",
   "chat.thinking.tooltip": "Claude推理模型会输出思考过程，开启后可查看AI的推理链",

@@ -208,6 +208,7 @@
   "chat.canvas.slides.prev": "Previous slide",
   "chat.canvas.slides.next": "Next slide",
   "chat.canvas.slides.empty": "No slides to show yet",
+  "chat.canvas.renderError": "Canvas failed to render and was hidden; the chat is unaffected",
   "chat.thinking.show": "Show Thinking Process",
   "chat.thinking.hide": "Hide Thinking Process",
   "chat.thinking.tooltip": "Claude reasoning models output a thinking process. Enable to view the AI's reasoning chain",
