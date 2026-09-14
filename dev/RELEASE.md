@@ -1,8 +1,13 @@
 # 生产发布流程
 
-生产环境：`https://ai.xingyuncl.com`，服务器 SSH 别名 `practice`，代码目录 `/var/www/ai-platform`，PM2 进程 `ai-platform-auth`（后端 :4000）。
+两个生产站点，同一份 `main`，**发布路径固定为 WSL → ai.xingyuncl.com → ai.pkuailab.com**：
 
-本文是发布的唯一依据。不要绕过它直接 `ssh practice` 手改生产。
+| 站点 | 部署方式 | SSH 别名 | 代码目录 | 发布命令 |
+|---|---|---|---|---|
+| `https://ai.xingyuncl.com` | PM2 直跑（`ai-platform-auth` :4000）+ nginx 直出 dist | `practice` | `/var/www/ai-platform` | `make deploy` → `make migrate` |
+| `https://ai.pkuailab.com` | docker compose（mysql / redis / backend / frontend 四个容器） | `pkuailab` | `/var/www/ai-platform` | `make deploy-docker`（含迁移） |
+
+第一至六节讲 ai.xingyuncl.com，第七节讲 Docker 站点。本文是发布的唯一依据。不要绕过它直接 ssh 手改生产。
 
 ---
 
@@ -124,11 +129,45 @@ ssh practice 'cd /var/www/ai-platform && git checkout <上一个deploy-tag> && e
 
 ---
 
-## 七、不要做的事
+## 七、Docker 站点（ai.pkuailab.com）
+
+ai.xingyuncl.com 发布并验证后，再发 Docker 站点：
+
+```bash
+make deploy-docker
+```
+
+`dev/deploy-docker.sh` 做的事：
+
+1. 本地检查：工作区干净、在 main、HEAD 已推 GitHub；**核对 ai.xingyuncl.com 已发布到同一提交**，否则拒绝（`ARGS=--allow-ahead` 可跳过，不推荐）。
+2. 代码传输不走 GitHub（服务器直连 GitHub 常被掐断）：`git bundle` 打包服务器缺的提交，scp 过去，服务器 `git merge --ff-only`。服务器有未提交的跟踪文件改动时中止；未跟踪文件（门户页 `frontend/public/www/`、certbot 钩子 `reload-nginx-docker.sh`）不受影响。
+3. 服务器 `docker compose build backend frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定镜像标签 + `RELEASE.txt` + `build.log`），`releases/current` 软链指向它。
+4. 备份数据库（mysql 容器内 `mysqldump --single-transaction`，落 `/var/backups/ai-platform/mysql/`），**用新镜像先跑 `knex migrate:latest`**（`docker compose run --rm --no-deps backend …`，加法式迁移先行），再 `up -d backend frontend`，等 backend healthy（3 分钟），打印启动脚本的 SQL 迁移统计（应全是"跳过"）。
+5. 每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除；磁盘剩余不足 8G 时先 `docker builder prune -af`。
+6. 本地打 `deploy-docker-<时间戳>` 标签并推送，最后打 `/health`、`/api/ai-lab/tasks`（401 即正常）、`/login`。
+
+其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
+
+**回滚**：`make rollback-docker` 列出最近发布目录，然后在服务器上用上一个目录的 override 切回去（镜像还在）：
+
+```bash
+ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/<上一个目录>/release.override.yml up -d backend frontend'
+```
+
+数据库回滚从 `/var/backups/ai-platform/mysql/` 最近的 dump 恢复（加法式迁移通常不用）。
+
+**Docker 站点的已知差异**：
+- 容器启动脚本 `docker/scripts/run-migrations.sh` 只跑 `database/migrations/*.sql`（旧机制），knex 迁移由 `deploy-docker` 显式执行；两套记录表分别是 `schema_migrations` 与 `knex_migrations`。
+- 镜像里的 mysql 客户端是 MariaDB 的，需要 `--skip-ssl` 与 `mariadb-connector-c`（已在 Dockerfile/脚本里），否则启动脚本连不上 MySQL 8。
+- `.env` 在服务器项目根目录（compose 读），不是 `backend/.env`；换口令等要改它并重建容器才生效。
+- 服务器磁盘 40G，旧镜像和构建缓存要靠脚本清理。
+
+## 八、不要做的事
 
 - 不要 `make deploy ARGS=-y` 跳过确认
 - 不要在生产服务器上直接改代码（会导致下次 ff-only 合并失败；`deploy.sh` 会因工作区不干净拒绝）
 - 不要 `git push --force` 到 main
+- 不要跳过 ai.xingyuncl.com 直接发 Docker 站点；两站必须在同一提交
 - 不要在没备份的情况下执行任何 DDL
 - 不要把工具配置、索引文件混进功能发布的提交里
 - 不要跳过浏览器验证

@@ -7,11 +7,15 @@ ENV_FILE := $(BE_DIR)/.env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(ROOT)/dev/docker-compose.yml
 SSH_HOST ?= practice
 REMOTE_DIR ?= /var/www/ai-platform
+# Docker 站点（ai.pkuailab.com）：同一份 main，服务器上 docker compose 跑；发布顺序 make deploy → make deploy-docker
+DOCKER_SSH_HOST ?= pkuailab
+DOCKER_REMOTE_DIR ?= /var/www/ai-platform
+DOCKER_COMPOSE := cd $(DOCKER_REMOTE_DIR) && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/current/release.override.yml
 NVM := export NVM_DIR=$$HOME/.nvm; [ -s $$NVM_DIR/nvm.sh ] && . $$NVM_DIR/nvm.sh
 
 .PHONY: help
 help: ## 显示本帮助
-	@echo "AI应用与实践平台（ai.xingyuncl.com）— 本地开发/部署命令"
+	@echo "AI应用与实践平台 — 本地开发/部署命令（发布路径：WSL → ai.xingyuncl.com → ai.pkuailab.com）"
 	@echo ""
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
@@ -85,6 +89,34 @@ migrate: ## 在生产库执行待执行的 knex 迁移（先备份门，再 migr
 	@read -rp "确认在生产库执行 knex migrate:latest? [y/N] " a; [ "$$a" = y ] || exit 1
 	ssh $(SSH_HOST) 'APP_DIR=$(REMOTE_DIR) bash -s' < $(BE_DIR)/scripts/db_backup.sh
 	ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:latest && npx knex migrate:status'
+
+.PHONY: deploy-docker
+deploy-docker: ## 发布到 Docker 站点 ai.pkuailab.com（先 make deploy；bundle 传码 → 构建镜像 → 备份库 → 迁移 → 切换 → 健康检查）
+	$(ROOT)/dev/deploy-docker.sh $(ARGS)
+
+.PHONY: status-docker
+status-docker: ## 查看 Docker 站点 git 与容器状态
+	@echo "=== $(DOCKER_SSH_HOST) git ==="; ssh -n $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && git log --oneline -1 && git status -sb | head -1'
+	@echo "=== 容器 ==="; ssh -n $(DOCKER_SSH_HOST) 'docker ps --format "{{.Names}}  {{.Image}}  {{.Status}}" | grep ai-platform; curl -sf http://127.0.0.1:4000/health >/dev/null && echo "health: ok" || echo "health: FAIL"; df -h / | tail -1'
+	@echo "=== 最近发布 ==="; ssh -n $(DOCKER_SSH_HOST) 'ls -t /var/backups/ai-platform/releases | grep -v ^current | head -3'
+
+.PHONY: migrate-status-docker
+migrate-status-docker: ## 查看 Docker 站点 knex 迁移状态
+	ssh -n $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && docker exec ai-platform-backend npx knex migrate:status'
+
+.PHONY: migrate-docker
+migrate-docker: ## 在 Docker 站点单独执行待执行的 knex 迁移（先备份库；deploy-docker 已包含此步）
+	@read -rp "确认在 $(DOCKER_SSH_HOST) 的生产库执行 knex migrate:latest? [y/N] " a; [ "$$a" = y ] || exit 1
+	ssh -n $(DOCKER_SSH_HOST) 'mkdir -p /var/backups/ai-platform/mysql && F=/var/backups/ai-platform/mysql/ai_platform-$$(date +%Y%m%d_%H%M%S).sql.gz && docker exec ai-platform-mysql sh -c '"'"'mysqldump -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" --single-transaction --quick "$$MYSQL_DATABASE" 2>/dev/null'"'"' | gzip > $$F && ls -lh $$F && docker exec ai-platform-backend npx knex migrate:latest && docker exec ai-platform-backend npx knex migrate:status'
+
+.PHONY: logs-docker
+logs-docker: ## 看 Docker 站点后端最近日志
+	ssh -n $(DOCKER_SSH_HOST) 'docker logs --tail 60 ai-platform-backend 2>&1 | cut -c1-200'
+
+.PHONY: rollback-docker
+rollback-docker: ## 列出 Docker 站点最近的发布目录与库备份，回滚步骤见 dev/RELEASE.md 第七节
+	@ssh -n $(DOCKER_SSH_HOST) 'ls -t /var/backups/ai-platform/releases | grep -v ^current | head -5; echo "--- 库备份"; ls -t /var/backups/ai-platform/mysql/*.sql.gz 2>/dev/null | head -3'
+	@echo "回滚: ssh $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/<上一个目录>/release.override.yml up -d backend frontend'"
 
 .PHONY: rollback
 rollback: ## 列出最近的部署 tag 与服务器备份，回滚步骤见 dev/RELEASE.md 第六节

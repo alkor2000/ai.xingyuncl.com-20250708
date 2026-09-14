@@ -1,6 +1,6 @@
 # 本地开发指南（WSL / Linux）
 
-在 WSL Ubuntu 里开发本项目，代码走 GitHub，部署回生产服务器（ssh 别名 `practice`）。与 edu 项目（`~/pkuailab-platform`）同一套做法。
+在 WSL Ubuntu 里开发本项目，代码走 GitHub，部署到两个生产站点：ai.xingyuncl.com（PM2，ssh 别名 `practice`，`make deploy`）和 ai.pkuailab.com（Docker，ssh 别名 `pkuailab`，`make deploy-docker`），发布顺序固定为前者先、后者后，见 dev/RELEASE.md。与 edu 项目（`~/pkuailab-platform`）同一套做法。
 
 ## 架构回顾
 
