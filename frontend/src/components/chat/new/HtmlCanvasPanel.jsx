@@ -137,6 +137,7 @@ import { useTranslation } from 'react-i18next'
 import { message as antMessage } from 'antd'
 // 统一使用共享的 CommonMark 围栏解析器，替代原有易误闭合的正则
 import { collectArtifactsFromMessages, ARTIFACT_KINDS } from '../../../utils/htmlBlockParser'
+import { CANVAS_OPEN_EVENT, takePendingOpenRequest } from '../../../utils/canvasEvents'
 import { SLIDE_THEMES, DEFAULT_SLIDE_THEME } from '../../../utils/canvas/slideThemes'
 import { buildSafeBaseName, downloadBlob } from '../../../utils/canvas/download'
 import SlidesPreview from './SlidesPreview'
@@ -358,6 +359,22 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
       setCurrentIndex(artifacts.length - 1)
     }
   }, [artifacts.length])
+
+  // v2.1: 气泡里的产物卡片点了"在画布中查看"→ 切到那一块；
+  // 面板刚因此被打开（之前没挂载）时事件已经错过，挂载后再消费一次暂存的请求
+  const artifactsRef = useRef(artifacts)
+  artifactsRef.current = artifacts
+  useEffect(() => {
+    const focus = (detail) => {
+      if (!detail) return
+      const idx = artifactsRef.current.findIndex(a => String(a.messageId) === String(detail.messageId) && a.blockIndex === detail.ordinal)
+      if (idx >= 0) setCurrentIndex(idx)
+    }
+    const handler = (event) => focus(event.detail)
+    window.addEventListener(CANVAS_OPEN_EVENT, handler)
+    focus(takePendingOpenRequest())
+    return () => window.removeEventListener(CANVAS_OPEN_EVENT, handler)
+  }, [])
 
   // 当前显示的产物
   // v2.0.1: 渲染用的索引必须先钳位——首次渲染时 state 还是 -1（"切到最新"的 effect 在渲染之后才跑），

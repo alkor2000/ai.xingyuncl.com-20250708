@@ -587,10 +587,70 @@ export const extractArtifactBlocks = (content, options = {}) => {
     if (!code || code.length < minLength) continue
     if (HTML_DOCUMENT_KINDS.has(kind) && !/<[a-zA-Z]/.test(code)) continue
 
-    result.push({ kind, code })
+    result.push({ kind, code, closed: block.closed, startLine: block.startLine, endLine: block.endLine })
   }
 
   return result
+}
+
+/**
+ * 产物标题：pptx / docx 取第一个 # 标题，html / pdf 取 <title>（没有就 <h1>），都没有返回空串
+ * @param {string} kind
+ * @param {string} code
+ * @returns {string}
+ */
+export const artifactTitle = (kind, code) => {
+  const src = String(code || '')
+  if (MARKDOWN_KINDS.has(kind)) {
+    const m = /^[ \t]{0,3}#{1,2}[ \t]+(.+?)[ \t#]*$/m.exec(src)
+    return m ? m[1].replace(/[*_`]/g, '').trim() : ''
+  }
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(src) || /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(src)
+  return title ? title[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : ''
+}
+
+/** pptx 产物的页数（按 --- 分页粗算；预览里以 parseSlideDeck 为准） */
+const countSlides = (code) => String(code || '').split(/\n[ \t]{0,3}---[ \t]*\n/).length
+
+/** 消息正文里代表一个产物的链接协议；MessageContent 按它把链接渲染成卡片 */
+export const ARTIFACT_LINK_PROTOCOL = 'artifact://'
+
+/**
+ * 把消息正文里的产物代码块换成「卡片链接」
+ *
+ * 聊天气泡里直接显示一整份 PPT / Word 的 Markdown 源码没有意义，而且模型偶尔写出的
+ * 不规范围栏会让源码在气泡里显示成"断开"的样子（画布这边已经修复了，但气泡还是按
+ * 普通 Markdown 渲染）。这里把每个产物块整段（含修复后找回的溢出部分）替换成一行
+ * `[产物](artifact://<序号>)`，由 MessageContent 渲染成带"在画布中查看"的卡片。
+ * 流式输出中尚未闭合的块也替换（卡片显示生成中），气泡不会被源码刷屏。
+ *
+ * @param {string} content - 消息正文（已去掉 thinking）
+ * @returns {{ text: string, cards: Array<{ordinal:number, kind:string, title:string, closed:boolean, pages?:number}> }}
+ */
+export const replaceArtifactBlocksWithCards = (content) => {
+  const src = String(content || '')
+  if (!src.includes('```') && !src.includes('~~~')) return { text: src, cards: [] }
+  const blocks = extractArtifactBlocks(src, { requireClosed: false, minLength: 1 })
+  if (blocks.length === 0) return { text: src, cards: [] }
+
+  const lines = normalizeLineEndings(src).split('\n')
+  const out = []
+  const cards = []
+  let cursor = 0
+  blocks.forEach((block, ordinal) => {
+    out.push(...lines.slice(cursor, block.startLine))
+    out.push('', `[${block.kind}](${ARTIFACT_LINK_PROTOCOL}${ordinal})`, '')
+    cards.push({
+      ordinal,
+      kind: block.kind,
+      title: artifactTitle(block.kind, block.code),
+      closed: block.closed,
+      pages: block.kind === ARTIFACT_KINDS.PPTX ? countSlides(block.code) : undefined
+    })
+    cursor = block.endLine + 1
+  })
+  out.push(...lines.slice(cursor))
+  return { text: out.join('\n'), cards }
 }
 
 /**
@@ -636,6 +696,8 @@ export const collectArtifactsFromMessages = (messages) => {
 export default {
   parseFencedBlocks,
   extractHtmlBlocks,
+  artifactTitle,
+  replaceArtifactBlocksWithCards,
   countHtmlBlocks,
   hasHtmlBlock,
   collectHtmlFromMessages,

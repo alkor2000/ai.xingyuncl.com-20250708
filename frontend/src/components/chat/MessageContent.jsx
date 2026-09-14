@@ -34,10 +34,12 @@ import {
   ClockCircleOutlined, ThunderboltOutlined, PictureOutlined,
   BulbOutlined
 } from '@ant-design/icons'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from './CodeBlock'
+import ArtifactCard from './ArtifactCard'
+import { replaceArtifactBlocksWithCards, ARTIFACT_LINK_PROTOCOL } from '../../utils/htmlBlockParser'
 import useSystemConfigStore from '../../stores/systemConfigStore'
 import './MessageContent.less'
 
@@ -82,6 +84,9 @@ const extractThinkingContent = (content) => {
   return { cleanContent, thinkingBlocks }
 }
 
+/** react-markdown 默认只放行 http/https/mailto 等协议，artifact:// 要单独放行才能到 a 组件 */
+const artifactUrlTransform = (url) => (url.startsWith(ARTIFACT_LINK_PROTOCOL) ? url : defaultUrlTransform(url))
+
 const MessageContent = ({
   message,
   isStreaming = false,
@@ -112,6 +117,16 @@ const MessageContent = ({
 
   /* 实际用于渲染的正文内容（AI 消息使用过滤掉 thinking 后的内容） */
   const displayContent = isAssistant ? cleanContent : message.content
+
+  /**
+   * v5.1: 画布产物（```html / pdf / pptx / docx）在气泡里换成卡片
+   * 源码整段（含围栏修复后找回的部分）替换成 artifact:// 链接，由下面的 a 组件渲染成 ArtifactCard；
+   * 流式输出中未闭合的块也替换，气泡不会被 PPT 源码刷屏。
+   */
+  const { text: renderContent, cards: artifactCards } = useMemo(() => {
+    if (!isAssistant || !displayContent) return { text: displayContent || '', cards: [] }
+    return replaceArtifactBlocksWithCards(displayContent)
+  }, [displayContent, isAssistant])
 
   /**
    * 获取消息的附件文件列表
@@ -243,6 +258,14 @@ const MessageContent = ({
 
   /* Markdown 渲染配置：自定义各元素以应用系统字体设置 */
   const markdownComponents = {
+    /* artifact:// 链接 → 产物卡片；其他链接新窗口打开 */
+    a({ href, children, node, ...props }) {
+      if (href && href.startsWith(ARTIFACT_LINK_PROTOCOL)) {
+        const card = artifactCards[Number(href.slice(ARTIFACT_LINK_PROTOCOL.length))]
+        return card ? <ArtifactCard card={card} messageId={message.id} /> : null
+      }
+      return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+    },
     code({ node, inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '')
 
@@ -438,14 +461,14 @@ const MessageContent = ({
             ) : isStreaming && message.streaming ? (
               /* 流式输出中：正文 + 闪烁光标 */
               <div className="streaming-content">
-                <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                  {displayContent || ''}
+                <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} urlTransform={artifactUrlTransform}>
+                  {renderContent || ''}
                 </ReactMarkdown>
                 <span className="streaming-cursor"><LoadingOutlined /></span>
               </div>
             ) : (
-              <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                {displayContent}
+              <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} urlTransform={artifactUrlTransform}>
+                {renderContent}
               </ReactMarkdown>
             )}
           </>

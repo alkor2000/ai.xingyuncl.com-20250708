@@ -100,6 +100,7 @@ import apiClient from '../../utils/api'
 import { calculateTokens } from '../../utils/tokenCalculator'
 // v4.2/v5.0: 与 HtmlCanvasPanel 共用的严格 CommonMark 围栏解析器（v5.0 起提取全部画布产物）
 import { collectArtifactsFromMessages } from '../../utils/htmlBlockParser'
+import { CANVAS_OPEN_EVENT } from '../../utils/canvasEvents'
 
 import {
   ConversationSidebar, ChatInputArea,
@@ -314,6 +315,20 @@ const Chat = () => {
       try { localStorage.setItem(SHOW_THINKING_KEY, String(newValue)) } catch {}
       return newValue
     })
+  }, [])
+
+  // v5.1: 气泡里产物卡片的"在画布中查看"——打开画布（具体切到哪个产物由 HtmlCanvasPanel 处理）
+  useEffect(() => {
+    const handleOpenRequest = () => {
+      setCanvasEnabled(prev => {
+        if (prev) return prev
+        try { localStorage.setItem(CANVAS_ENABLED_KEY, 'true') } catch {}
+        return true
+      })
+      setCanvasDismissed(false)
+    }
+    window.addEventListener(CANVAS_OPEN_EVENT, handleOpenRequest)
+    return () => window.removeEventListener(CANVAS_OPEN_EVENT, handleOpenRequest)
   }, [])
 
   // v3.3: 监听HTML代码块数量变化

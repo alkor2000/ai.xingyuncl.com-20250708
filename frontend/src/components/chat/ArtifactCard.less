@@ -1,0 +1,51 @@
+// 消息气泡里的产物卡片（渲染在 <p> 内，故用 span + flex）
+.artifact-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+  padding: 10px 14px;
+  max-width: 420px;
+  border: 1px solid #e3e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+
+  .artifact-card-icon {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #fff;
+    background: #1677ff;
+  }
+  &.kind-pptx .artifact-card-icon { background: #d9480f; }
+  &.kind-docx .artifact-card-icon { background: #1d4ed8; }
+  &.kind-pdf .artifact-card-icon { background: #b91c1c; }
+  &.kind-html .artifact-card-icon { background: #0f766e; }
+  &.generating .artifact-card-icon { background: #94a3b8; }
+
+  .artifact-card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .artifact-card-title {
+    font-weight: 600;
+    color: #1f2937;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .artifact-card-meta {
+    font-size: 12px;
+    color: #64748b;
+  }
+  .ant-btn { flex: 0 0 auto; }
+}

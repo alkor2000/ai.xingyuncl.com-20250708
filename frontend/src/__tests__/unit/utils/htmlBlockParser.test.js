@@ -8,6 +8,8 @@ import {
   extractArtifactBlocks,
   collectArtifactsFromMessages,
   collectHtmlFromMessages,
+  replaceArtifactBlocksWithCards,
+  artifactTitle,
   ARTIFACT_KINDS
 } from '../../../utils/htmlBlockParser'
 
@@ -149,5 +151,33 @@ describe('collectArtifactsFromMessages()', () => {
 
   it('ARTIFACT_KINDS 与后端 OUTPUT_FORMATS 一致', () => {
     expect(Object.values(ARTIFACT_KINDS).sort()).toEqual(['docx', 'html', 'pdf', 'pptx'])
+  })
+})
+
+describe('replaceArtifactBlocksWithCards()', () => {
+  it('产物块整段（含找回的溢出部分）换成 artifact:// 链接，说明文字保留', () => {
+    const content = [
+      '这是课件：', '```pptx', '# 光合作用', '---', '# 实验', '```', '流程', '```', '- 步骤', '---', '# 结论', '```', '', '共 3 页。'
+    ].join('\n')
+    const { text, cards } = replaceArtifactBlocksWithCards(content)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toMatchObject({ ordinal: 0, kind: 'pptx', title: '光合作用', closed: true, pages: 3 })
+    expect(text).toContain('这是课件：')
+    expect(text).toContain('[pptx](artifact://0)')
+    expect(text).toContain('共 3 页。')
+    expect(text).not.toContain('# 结论')
+  })
+
+  it('流式输出中未闭合的块也换成卡片并标记 closed=false；没有产物时原样返回', () => {
+    const { text, cards } = replaceArtifactBlocksWithCards('先说明\n```docx\n# 报告\n\n正文还在写')
+    expect(cards[0]).toMatchObject({ kind: 'docx', title: '报告', closed: false })
+    expect(text).not.toContain('正文还在写')
+    expect(replaceArtifactBlocksWithCards('普通回答\n```js\nconsole.log(1)\n```')).toEqual({ text: '普通回答\n```js\nconsole.log(1)\n```', cards: [] })
+  })
+
+  it('artifactTitle：Markdown 取首个标题去掉强调，HTML 取 <title>', () => {
+    expect(artifactTitle('pptx', '# **光合作用** 🌿\n---')).toBe('光合作用 🌿')
+    expect(artifactTitle('html', '<html><head><title> 我的 网页 </title></head></html>')).toBe('我的 网页')
+    expect(artifactTitle('docx', '没有标题')).toBe('')
   })
 })
