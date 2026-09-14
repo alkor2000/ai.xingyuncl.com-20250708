@@ -20,8 +20,11 @@ const IDENTITY_AUTHORIZE_PATH =
 const IDENTITY_CLIENT_ID =
   'ai-platform-client'
 
+// 绑定回调随部署站点走（与后端 IDENTITY_PUBLIC_ORIGIN 推导规则一致），多域名部署无需改代码
 const IDENTITY_BIND_REDIRECT_URI =
-  'https://ai.xingyuncl.com/api/auth/identity/callback'
+  (typeof window !== 'undefined' && window.location && window.location.origin
+    ? window.location.origin
+    : 'https://ai.xingyuncl.com') + '/api/auth/identity/callback'
 
 const REQUIRED_SCOPES = [
   'openid',

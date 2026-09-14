@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-13T22:54:11Z",
+  "updated_at": "2026-09-14T01:00:40Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "18efc520442c353f901f4286fd3492eff3a82ebd5d2c5cc1cffd021890804a25",
-      "size": 265202,
-      "normalized_sha256": "18efc520442c353f901f4286fd3492eff3a82ebd5d2c5cc1cffd021890804a25"
+      "sha256": "ae9a193f18c5b06d05669a7c2146733d34c85257ac891ba156698c104ec0cd1e",
+      "size": 266816,
+      "normalized_sha256": "ae9a193f18c5b06d05669a7c2146733d34c85257ac891ba156698c104ec0cd1e"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -127,6 +127,11 @@
       "sha256": "2029c28bd201f640365e67619344a4b13b26672eaa9473acb148c9426665dd88",
       "size": 18073,
       "normalized_sha256": "2029c28bd201f640365e67619344a4b13b26672eaa9473acb148c9426665dd88"
+    },
+    "backend/migrations/20260901_001_add_mindmap_content_type.js": {
+      "sha256": "029e21c5f1b771e878996bc1ae3d28da39b3210f0160deb1e2d8dfde874acef0",
+      "size": 1237,
+      "normalized_sha256": "029e21c5f1b771e878996bc1ae3d28da39b3210f0160deb1e2d8dfde874acef0"
     },
     "backend/migrations/20260913_001_create_ai_lab_tables.js": {
       "role": "index",
@@ -262,9 +267,9 @@
     },
     "backend/src/__tests__/portal-capability/IdentityAccountReturnToPolicy.test.js": {
       "role": "observe",
-      "sha256": "f9133bc5bc316d111befd76d9d669944f88d7124efe437b4be01c0ef977a372c",
-      "size": 3373,
-      "normalized_sha256": "f9133bc5bc316d111befd76d9d669944f88d7124efe437b4be01c0ef977a372c"
+      "sha256": "1162e4e2947e2131105377193c67db64c9cc2f88dab4882fc985a7e21e237ff5",
+      "size": 3409,
+      "normalized_sha256": "1162e4e2947e2131105377193c67db64c9cc2f88dab4882fc985a7e21e237ff5"
     },
     "backend/src/__tests__/portal-capability/IdentityAuthControllerCapability.test.js": {
       "role": "observe",
@@ -453,10 +458,9 @@
       "normalized_sha256": "d27d5b030e53664356bf8886f33d41bea56f16c557daba17a81ffbae166954f3"
     },
     "backend/src/config/index.js": {
-      "role": "index",
-      "sha256": "e9fc2445a344c750755f408f2dd80afaede2bca75aa17b9587ffc1e1f85c329b",
-      "size": 10431,
-      "normalized_sha256": "e9fc2445a344c750755f408f2dd80afaede2bca75aa17b9587ffc1e1f85c329b"
+      "sha256": "88a9dda40f8a433be21339a0b5ae9dc28dc6a5c95744bf5a24d82d8261767c96",
+      "size": 10633,
+      "normalized_sha256": "88a9dda40f8a433be21339a0b5ae9dc28dc6a5c95744bf5a24d82d8261767c96"
     },
     "backend/src/controllers/AgentController.js": {
       "role": "index",
@@ -1545,10 +1549,9 @@
       "normalized_sha256": "5c918b233b73dfb0fabb18be9198259b6564713398e825487353adf6bfe9e584"
     },
     "backend/src/services/auth/IdentityAccountReturnToPolicy.js": {
-      "role": "index",
-      "sha256": "863c8bd8e77538739d775db1a641e8f0d8bd3e4e0241fd060aa5126b6f0132f2",
-      "size": 2286,
-      "normalized_sha256": "863c8bd8e77538739d775db1a641e8f0d8bd3e4e0241fd060aa5126b6f0132f2"
+      "sha256": "e82f48263933f0f44d5fcc32daa36369b67113261b2d7b357a7d22b5a459c2fd",
+      "size": 2316,
+      "normalized_sha256": "e82f48263933f0f44d5fcc32daa36369b67113261b2d7b357a7d22b5a459c2fd"
     },
     "backend/src/services/auth/IdentityEnrollmentClient.js": {
       "role": "index",
@@ -2000,10 +2003,9 @@
       "normalized_sha256": "20d89af8bcc70c9be0c1cdfff8d82588b16a5309f02455dfb267ec49d21e9291"
     },
     "frontend/src/App.jsx": {
-      "role": "index",
-      "sha256": "c85593bab4e3264876c9c74790704569da369a86e057f07f060b0f0463cba561",
-      "size": 21906,
-      "normalized_sha256": "c85593bab4e3264876c9c74790704569da369a86e057f07f060b0f0463cba561"
+      "sha256": "9636fa5431de0129b065d5e0362a1dea743925207fb7b720027ef9f61ff20b42",
+      "size": 22409,
+      "normalized_sha256": "9636fa5431de0129b065d5e0362a1dea743925207fb7b720027ef9f61ff20b42"
     },
     "frontend/src/__tests__/setup.js": {
       "role": "observe",
@@ -3500,10 +3502,9 @@
       "normalized_sha256": "a522de0af7f384d21abbaec68833f5d98a75e64cdb7bf8a869764557c9bea066"
     },
     "frontend/src/pages/auth/Login.jsx": {
-      "role": "index",
-      "sha256": "2fb64b0cf5b17352df44dfaaf8f13a4c9bc241804d1372e5edef0c7affc50cfe",
-      "size": 28375,
-      "normalized_sha256": "2fb64b0cf5b17352df44dfaaf8f13a4c9bc241804d1372e5edef0c7affc50cfe"
+      "sha256": "60635b57918a2a8cb5ce17ff91dd6e51db5563639ba185b1e085b7a389eaaf6c",
+      "size": 29017,
+      "normalized_sha256": "60635b57918a2a8cb5ce17ff91dd6e51db5563639ba185b1e085b7a389eaaf6c"
     },
     "frontend/src/pages/auth/OrgApplication.jsx": {
       "role": "index",
@@ -3722,10 +3723,9 @@
       "normalized_sha256": "0434faf68840e5fb422916cd3d513eb321db318b8046671f4198aae64ffbea66"
     },
     "frontend/src/pages/image/index.jsx": {
-      "role": "index",
-      "sha256": "1b6d28caaf6f02afdbfa00b58bbe24a2803684805e46aa81a98eebab84052244",
-      "size": 21613,
-      "normalized_sha256": "1b6d28caaf6f02afdbfa00b58bbe24a2803684805e46aa81a98eebab84052244"
+      "sha256": "aac97a9a0acdedc3dfa25a3bb36adc91a4d83dd1fe433b706197335a9378f8ce",
+      "size": 21716,
+      "normalized_sha256": "aac97a9a0acdedc3dfa25a3bb36adc91a4d83dd1fe433b706197335a9378f8ce"
     },
     "frontend/src/pages/image/utils/constants.js": {
       "role": "index",
@@ -4094,10 +4094,9 @@
       "normalized_sha256": "75f4ce7dacc8f1eb4135cd55c16c7c8ec659fadd668c69ef22089a8f2eeb2aeb"
     },
     "frontend/src/utils/identityAuthorization.js": {
-      "role": "index",
-      "sha256": "e085a6cf9c97e7ecdb355a89b3c4c46de23c79b5903e92339d71d13d34d9c25e",
-      "size": 3961,
-      "normalized_sha256": "e085a6cf9c97e7ecdb355a89b3c4c46de23c79b5903e92339d71d13d34d9c25e"
+      "sha256": "98c25088a267b95ddb07630b3f3b7dc41fd4f183b728f7f9a6cae45082131ed6",
+      "size": 4202,
+      "normalized_sha256": "98c25088a267b95ddb07630b3f3b7dc41fd4f183b728f7f9a6cae45082131ed6"
     },
     "frontend/src/utils/identityNavigation.js": {
       "role": "index",
@@ -4142,16 +4141,20 @@
       "normalized_sha256": "c8804ce0476dfcb253df5555b21f80eefc3b12456756b8a324b06bb67e5ebb31"
     },
     "frontend/src/utils/portalIdentityConnect.js": {
-      "role": "index",
-      "sha256": "40cbe03129889a9789f1fbf66afbb0364a76b9c2066989bed6bf7acd3f9a9ebb",
-      "size": 5633,
-      "normalized_sha256": "40cbe03129889a9789f1fbf66afbb0364a76b9c2066989bed6bf7acd3f9a9ebb"
+      "sha256": "652b5cc7ab06bfe89cb3174ee221bde6f56710b2a9a1a713c98519f53358ac47",
+      "size": 6397,
+      "normalized_sha256": "652b5cc7ab06bfe89cb3174ee221bde6f56710b2a9a1a713c98519f53358ac47"
     },
     "frontend/src/utils/portalIdentityConnectCapability.test.js": {
       "role": "observe",
-      "sha256": "8727b1e8d80dec4a15fc4c0d3ee636321fcde88d5cf35e2426effdf8322fdfe4",
-      "size": 3416,
-      "normalized_sha256": "8727b1e8d80dec4a15fc4c0d3ee636321fcde88d5cf35e2426effdf8322fdfe4"
+      "sha256": "212d2b88bae783e0fd3cb89786cca72a6c72bb066d0b90ad9d1e23208e0f68ac",
+      "size": 7848,
+      "normalized_sha256": "212d2b88bae783e0fd3cb89786cca72a6c72bb066d0b90ad9d1e23208e0f68ac"
+    },
+    "frontend/src/utils/portalIdentityConnectContinuation.js": {
+      "sha256": "8d55890172ec93d02d22f094df208680c4eb72aad80234ed1a1f5ab23d2b154b",
+      "size": 3215,
+      "normalized_sha256": "8d55890172ec93d02d22f094df208680c4eb72aad80234ed1a1f5ab23d2b154b"
     },
     "frontend/src/utils/socket.js": {
       "role": "index",
@@ -4178,10 +4181,9 @@
       "normalized_sha256": "188ccc2f35d3df0dc42c0a1d5585a8ee47da62878c77774dc3d4befbef06b019"
     },
     "frontend/vite.config.js": {
-      "role": "index",
-      "sha256": "d789daef609ba53174f88616131beaec7f1627ecd783a65b9184a5a586487559",
-      "size": 2915,
-      "normalized_sha256": "d789daef609ba53174f88616131beaec7f1627ecd783a65b9184a5a586487559"
+      "sha256": "bada58f98dc38b273ecc0a8469b7180a2632ed1358334d6e06e4fffe07116d0d",
+      "size": 2940,
+      "normalized_sha256": "bada58f98dc38b273ecc0a8469b7180a2632ed1358334d6e06e4fffe07116d0d"
     },
     "frontend/vitest.config.js": {
       "role": "index",

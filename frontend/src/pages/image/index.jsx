@@ -15,9 +15,8 @@
  * 'https://ai.xingyuncl.com'。现提取为模块级常量 IMAGE_HOST，
  * 取值完全不变、行为完全一致，仅把 3 个改动点收敛为 1 个。
  *
- * 【待决策的技术债】该常量理想实现应为 window.location.origin
- * （参考 MindmapShare 分享链接的做法），以支持更换域名或多域名部署。
- * 因涉及线上图片访问路径，属业务行为变更，未经确认不擅自修改。
+ * 2026-09-14：IMAGE_HOST 取 window.location.origin（与 MindmapShare 分享链接一致），
+ * 因为同一份代码同时部署在 ai.xingyuncl.com 与 ai.pkuailab.com；相对路径补全到访问者所在站点。
  *
  * ===== 已知遗留（本次不动）=====
  * Tabs 的 TabPane 子组件写法在 Antd v5 已废弃（建议改 items 属性），
@@ -69,7 +68,8 @@ const { Search } = Input;
  * 理想实现是 window.location.origin，但属业务行为变更，待确认后再调整。
  * 当前提取为单一常量，是为了让将来的修改只需动这一行。
  */
-const IMAGE_HOST = 'https://ai.xingyuncl.com';
+// 2026-09-14 起取当前站点 origin：同一份代码同时部署在 ai.xingyuncl.com 与 ai.pkuailab.com，相对路径补全到访问者所在站点
+const IMAGE_HOST = window.location.origin;
 
 /* 搜索关键词最大长度，与后端 normalizeKeyword 的截断长度保持一致 */
 const SEARCH_MAX_LENGTH = 100;

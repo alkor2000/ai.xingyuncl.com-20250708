@@ -151,20 +151,23 @@ function getJwtDefault(envKey, devDefault) {
   return '';
 }
 
+// 部署域名：ai.xingyuncl.com 与 ai.pkuailab.com 共用同一份代码，靠 APP_DOMAIN 区分（未设置时沿用旧默认）
+const APP_DOMAIN = process.env.APP_DOMAIN || 'ai.xingyuncl.com';
+
 module.exports = {
   // 应用配置
   app: {
     name: process.env.APP_NAME || 'AI Platform',
     version: '1.0.0',
     port: parseInt(process.env.PORT || process.env.BACKEND_PORT || '4000'),
-    domain: process.env.APP_DOMAIN || 'ai.xingyuncl.com',
+    domain: APP_DOMAIN,
     env: process.env.NODE_ENV || 'production',
 
-    // CORS 配置（供 app.js 使用）
+    // CORS 配置（供 app.js 使用）；未显式配置时按部署域名推导
     corsOrigin: process.env.CORS_ORIGINS
       ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
       : [
-          'https://ai.xingyuncl.com',
+          `https://${APP_DOMAIN}`,
           'http://localhost:3000',
           'http://localhost:5173'
         ]
@@ -219,7 +222,7 @@ module.exports = {
       origin: process.env.CORS_ORIGINS
         ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
         : [
-            'https://ai.xingyuncl.com',
+            `https://${APP_DOMAIN}`,
             'http://localhost:3000',
             'http://localhost:5173'
           ],

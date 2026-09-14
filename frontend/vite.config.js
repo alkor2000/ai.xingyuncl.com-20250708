@@ -41,6 +41,7 @@ export default defineConfig({
     port: 3000,
     allowedHosts: [
       'ai.xingyuncl.com',
+      'ai.pkuailab.com',
       'localhost',
       '127.0.0.1'
     ],
