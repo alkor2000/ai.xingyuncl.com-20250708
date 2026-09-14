@@ -9,3 +9,7 @@
 | campus-items | 表格 | CC0 | 平台合成 |
 | penguins | 表格 | CC0 | palmerpenguins |
 | iris | 表格 | CC BY 4.0 | UCI |
+| sounds-synth | 音频 | CC0 | 平台合成 |
+| campus-messages | 文本 | CC0 | 平台原创 |
+| animal-cards | 表格 | CC0 | 平台整理 |
+| garbage-cards | 表格 | CC0 | 平台整理 |

@@ -73,6 +73,46 @@
         "title": "Can you trust AI-written campus news?",
         "desc": "Split an AI-written campus article into claims, check each one against the original notice, then rewrite it into a trustworthy version.",
         "predictPrompt": "The AI article reads smoothly. How many claims do you think disagree with the notice? Which kind of fact is most likely to be wrong?"
+      },
+      "L2": {
+        "title": "Can sounds be recognised too?",
+        "desc": "Record 10 clips each of clapping, knocking and whistling, then test with another student's sounds and classroom noise.",
+        "predictPrompt": "If a different student claps, will the AI still hear clapping? What about with classroom noise on top? Write your prediction."
+      },
+      "P6": {
+        "title": "Campus sound map",
+        "desc": "Collect 15 clips of five campus sounds, test in new places and with noise, and build a sound map you can listen to.",
+        "predictPrompt": "Which five campus sounds will you record? Which two will the AI mix up most, and why?"
+      },
+      "M4": {
+        "title": "Keyword spotting: from sound to command",
+        "desc": "Record ten Chinese command words and test with other speakers and devices to see when voice commands break.",
+        "predictPrompt": "Will a model trained on your voice understand a classmate saying the same word? What about a recording from another phone?"
+      },
+      "M5": {
+        "title": "Emotion translator: text can be classified too",
+        "desc": "Two students label campus messages independently, measure agreement, train naive Bayes and test on a new topic.",
+        "predictPrompt": "Will two people give the same message the same emotion label? If the model learns canteen messages, will it still work on club messages?"
+      },
+      "M3": {
+        "title": "Decision tree vs neural network",
+        "desc": "Same table, same held-out set: train a tree and a small neural network and compare accuracy, explainability and shifted-set results.",
+        "predictPrompt": "A tree can be drawn; a neural network hides its rules. Which will be more accurate on unseen data?"
+      },
+      "L5": {
+        "title": "What is wrong in the AI's animal story?",
+        "desc": "The teacher projects an AI-written animal story; students find the hidden mistake using a field guide.",
+        "predictPrompt": "The AI's story sounds smooth. Do you think it could still be wrong somewhere?"
+      },
+      "L6": {
+        "title": "I make the rules",
+        "desc": "Write your own classification rules on animal or waste attribute cards, then compare with the rules the AI learns.",
+        "predictPrompt": "Which attribute will you use to split? Is one rule enough?"
+      },
+      "M2": {
+        "title": "Make the classifier fairer",
+        "desc": "Record who collected each photo, see how accuracy differs between collectors, then add data for the weaker group and retrain.",
+        "predictPrompt": "If most training photos come from one person, will the model be equally accurate on photos taken by others?"
       }
     },
     "card": {
@@ -116,7 +156,14 @@
       "claims": "Split into claims",
       "verdicts": "Verify each claim",
       "revise": "Rewrite",
-      "reflection": "Reflect"
+      "reflection": "Reflect",
+      "train_text": "Train the text classifier",
+      "train_tree": "Train a decision tree",
+      "train_mlp": "Train a neural network",
+      "annotate": "Label in pairs",
+      "agreement": "Label agreement",
+      "fairness": "Accuracy by group",
+      "compare_mlp": "Tree vs neural network"
     },
     "section": {
       "collectHint": "Define the classes first, then photograph or upload for each class. At least {{min}} per class, and record the conditions.",
@@ -142,7 +189,23 @@
       "shiftRowsHint": "The shifted set is another batch of rows from a different source; test it on the second tab of the held-out test card.",
       "errorsRowsHint": "Expand the wrong rows in the test results to see which rule or branch decided them.",
       "curveHint": "Compare versions with different photos per class: does the score keep rising, or level off?",
-      "compareHint": "Same held-out and shifted sets: how do your rules and the tree score, and on which class do they differ?"
+      "compareHint": "Same held-out and shifted sets: how do your rules and the tree score, and on which class do they differ?",
+      "collectAudioHint": "Define the classes, then record or upload for each. At least {{min}} one-second clips per class; note the speaker and place.",
+      "collectTextHint": "At least {{min}} sentences per class. Import a preset corpus or add sentences yourself.",
+      "importAudioHint": "Import a training set and shifted sets from a preset sound pack; add your own recordings if you have a microphone.",
+      "importTextHint": "Import a preset corpus: one sentence and its emotion label per row.",
+      "audioTrainHint": "Training runs in your browser: each clip becomes a spectrogram, then a pre-trained sound model extracts features.",
+      "textTrainHint": "Naive Bayes counts how often each word appears in each class; after training you can see the 'emotion words' it learned.",
+      "mlpHint": "Train a small neural network on the same training rows; watch the loss fall, then compare with the tree on the same test set.",
+      "annotateHint": "Two students label the training sentences independently — no discussing yet.",
+      "agreementHint": "Compute the agreement rate and kappa; discuss the disagreements and adopt one label.",
+      "fairnessHint": "Below the held-out results, group accuracy by '{{tag}}' to find whom the model treats unfairly, then go back and collect more data for that group.",
+      "fairnessWhere": "The per-group accuracy table is below the held-out test results.",
+      "fairnessDone": "Per-group accuracy viewed",
+      "shiftAudioHint": "Another speaker, another place, added noise, another device… record and test on the second tab of the held-out test card.",
+      "shiftTextHint": "The shifted set is messages on another topic; test it on the second tab of the held-out test card.",
+      "errorsAudioHint": "Open the wrong clips in the test results, listen and look at the spectrogram, and think about why they were misheard.",
+      "compareMlpHint": "Same held-out and shifted sets: how do the tree and the network score? Which is steadier, and which can explain itself?"
     },
     "lock": {
       "counts": "{{train}} training samples, {{holdout}} held-out samples",
@@ -173,7 +236,8 @@
       "addRow": "Add a row",
       "save": "Save table",
       "saved": "Condition table saved",
-      "saveFailed": "Save failed"
+      "saveFailed": "Save failed",
+      "collector": "Collector"
     },
     "capture": {
       "startCamera": "Open camera",
@@ -250,7 +314,9 @@
       "noSamples": "This set has no testable samples",
       "failed": "Test failed",
       "holdoutHintRows": "These rows were never seen in training",
-      "shiftIntroRows": "The shifted set is another batch of rows from a different source (another school, another year) to see whether rules and trees transfer."
+      "shiftIntroRows": "The shifted set is another batch of rows from a different source (another school, another year) to see whether rules and trees transfer.",
+      "holdoutHintAudio": "These clips were never heard in training",
+      "shiftIntroAudio": "Record the shifted set under different conditions from training: another student, another place, added noise, another device."
     },
     "errors": {
       "none": "Every sample in this set was predicted correctly",
@@ -320,7 +386,11 @@
       "data_card_write": "Wrote a data card",
       "claim_write": "Split into claims",
       "claim_verify": "Verified claims",
-      "claim_revise": "Rewrote the article"
+      "claim_revise": "Rewrote the article",
+      "annotation_write": "Wrote labels",
+      "agreement_compute": "Computed label agreement",
+      "fairness_view": "Viewed per-group accuracy",
+      "audio_play": "Played a sample"
     },
     "grade": {
       "L": "Primary",
@@ -331,12 +401,16 @@
     "kind": {
       "image": "Images",
       "table": "Table",
-      "text": "Text"
+      "text": "Text",
+      "audio": "Sound"
     },
     "engine": {
       "image-knn": "Image kNN",
       "table-tree": "Decision tree",
-      "table-rules": "Hand-written rules"
+      "table-rules": "Hand-written rules",
+      "audio-knn": "Sound kNN",
+      "text-nb": "Naive Bayes",
+      "table-mlp": "Neural network"
     },
     "preset": {
       "title": "Import preset data",
@@ -376,6 +450,22 @@
       "iris": {
         "title": "Iris flowers",
         "desc": "Sepal and petal sizes of three iris species, 150 rows; write a rule like 'petal length under 2.5 means setosa' and compare with a tree."
+      },
+      "sounds-synth": {
+        "title": "Three synthetic sounds",
+        "desc": "Whistles, knocks and rustles, 30 clips each; the 'added noise' set mixes in classroom noise, 'pitch shift' changes the pitch. Works without a microphone."
+      },
+      "campus-messages": {
+        "title": "Campus message emotions",
+        "desc": "150 original campus messages labelled positive/negative/neutral; the shifted set switches to club-and-event topics."
+      },
+      "animal-cards": {
+        "title": "Animal attribute cards",
+        "desc": "60 animal cards: legs, feathers, scales, habitat, flight, birth and more; the shifted set has exceptions like the platypus and the kiwi."
+      },
+      "garbage-cards": {
+        "title": "Waste sorting cards",
+        "desc": "60 item cards: material, recyclable, hazardous, rots, greasy → four waste classes."
       }
     },
     "curve": {
@@ -536,6 +626,94 @@
       "reflectionRequired": "The first two are required",
       "reflectionSaved": "Reflection saved",
       "saveFailed": "Save failed"
+    },
+    "audioCondition": {
+      "speaker": "Speaker",
+      "place": "Place",
+      "noise": "Noise",
+      "device": "Device"
+    },
+    "audio": {
+      "startMic": "Open microphone",
+      "stopMic": "Close microphone",
+      "recordOne": "Record 1 s",
+      "recording": "Recording…",
+      "fromFiles": "Upload audio",
+      "micUnavailable": "Cannot open the microphone. Upload audio files or use a preset sound pack instead.",
+      "tip": "Make the sound right after pressing 'Record 1 s'; the level bar shows the volume. A quieter room gives steadier results.",
+      "conditionsTip": "Note who made the sound, where, under what noise and with which device — useful when analysing errors later.",
+      "pending": "{{count}} clip(s) to upload",
+      "uploaded": "{{count}} clip(s) uploaded",
+      "audioOnly": "Audio files only",
+      "decodeFailed": "Could not decode this audio file",
+      "recordFailed": "Recording failed",
+      "format": "44.1 kHz mono WAV · 1 s",
+      "newClassPlaceholder": "New class name, e.g. clap",
+      "noTrainSamples": "No training clips yet",
+      "uploadTo": "Upload {{count}} clip(s) to {{target}}"
+    },
+    "text": {
+      "textCol": "Sentence",
+      "noRows": "No training sentences yet",
+      "rowsShown": "Showing {{count}} training sentences; {{holdout}} held-out sentences hidden",
+      "addHint": "You can also write a sentence and add it to the training set:",
+      "placeholder": "Write a campus message",
+      "addDone": "Added to the training set",
+      "trainIntro": "Each sentence is split into characters and adjacent character pairs; counting them per class is all the model knows.",
+      "rowsUsed": "using {{count}} training sentences",
+      "vocab": "vocabulary {{count}}",
+      "topTokensHint": "Most characteristic tokens per class (far more frequent here than elsewhere):",
+      "holdoutHint": "These sentences were never seen in training",
+      "shiftIntro": "The shifted set is messages on another topic — do the learned emotion words transfer?",
+      "pushedBy": "Tokens that pushed it towards the prediction (positive supports the predicted class, negative opposes it)",
+      "confidence": "Confidence"
+    },
+    "annotate": {
+      "intro": "Students A and B each choose labels without looking at each other. Save when done.",
+      "annotatorA": "Student A",
+      "annotatorB": "Student B",
+      "current": "Current label",
+      "save": "Save labels",
+      "saved": "Labels saved",
+      "saveFailed": "Save failed",
+      "filled": "A labelled {{a}}, B labelled {{b}}, of {{total}} sentences",
+      "agreementIntro": "Only sentences labelled by both count. Agreement is the plain share of matches; kappa discounts matches expected by chance.",
+      "compute": "Compute agreement",
+      "agreementRate": "agreement ({{n}} sentences)",
+      "kappa": "kappa {{value}}",
+      "kappaHint": "Kappa above 0.8 is strong agreement; below 0.4 means the labelling rules are unclear.",
+      "level": {
+        "excellent": "strong",
+        "good": "good",
+        "fair": "fair",
+        "poor": "poor",
+        "none": "—"
+      },
+      "resolve": "Adopt",
+      "adoptA": "Adopt A",
+      "adoptB": "Adopt B",
+      "adoptFailed": "Failed to relabel",
+      "noDisagreement": "The two labellers agree completely"
+    },
+    "mlp": {
+      "intro": "A neural network turns each row into numbers, passes them through a hidden layer of neurons and outputs class probabilities; training adjusts the weights round by round to reduce the loss.",
+      "hidden": "Hidden neurons",
+      "epochs": "Epochs",
+      "paramsHint": "More neurons and more epochs make it easier to memorise the training set.",
+      "trainVersion": "Train v{{version}} (neural network)",
+      "epochAxis": "Epoch ({{n}} total)",
+      "loss": "Loss",
+      "trainAcc": "Training accuracy",
+      "summary": "{{hidden}} neurons · {{epochs}} epochs · train {{acc}}"
+    },
+    "fairness": {
+      "title": "Accuracy by '{{tag}}'",
+      "group": "Group",
+      "count": "Samples",
+      "accuracy": "Accuracy",
+      "untagged": "not filled in",
+      "noTag": "The test samples have no '{{tag}}' tag, so they cannot be grouped. Fill it in when collecting.",
+      "spread": "The best group ({{best}}) and the worst group ({{worst}}) differ by {{value}}."
     }
   }
 }

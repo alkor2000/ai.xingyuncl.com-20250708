@@ -7,8 +7,9 @@ import { Button, Select, Space, Tabs, Alert, Progress, Tag, Typography, Divider,
 import { ExperimentOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
-import { loadExtractor, embedImages } from '../engine/featureExtractor'
-import { loadImageElement } from '../engine/imageUtils'
+import { imageModality } from '../engine/modalities'
+import AudioCapturePanel from './AudioCapturePanel'
+import SubgroupTable from './SubgroupTable'
 import { predictKnn, deserializeKnn } from '../engine/knn'
 import { computeMetrics, formatPercent, generalizationGap } from '../engine/metrics'
 import MetricsView from './MetricsView'
@@ -17,7 +18,7 @@ import CapturePanel from './CapturePanel'
 
 const { Text } = Typography
 
-const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
+const EvaluatePanel = ({ dataset, models, labelOf, canEdit, modality = imageModality, subgroupTag }) => {
   const { t } = useTranslation()
   const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent, uploadSamples, setExtractor, extractor, liveModels } = useAiLabStore()
   const [modelId, setModelId] = useState(null)
@@ -47,8 +48,8 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
     try {
       if (extractor.status !== 'ready') {
         setExtractor({ status: 'loading', progress: 0 })
-        await loadExtractor((f) => setExtractor({ progress: Math.round(f * 100) }))
-        setExtractor({ status: 'ready', progress: 100 })
+        await modality.load((f) => setExtractor({ progress: Math.round(f * 100) }))
+        setExtractor({ status: 'ready', progress: 100, backend: modality.backendName() })
       }
       const live = await loadLiveModel(model.id, deserializeKnn)
       const params = split === 'holdout' ? { split: 'holdout' } : { split: 'shift', shift_set: setName }
@@ -59,15 +60,10 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
         message.warning(t('aiLab.evaluate.noSamples'))
         return
       }
-      const images = []
-      for (let i = 0; i < testable.length; i += 1) {
-        // eslint-disable-next-line no-await-in-loop
-        images.push(await loadImageElement(testable[i].file_url))
-      }
-      const vectors = await embedImages(images, (d, tot) => setProgress(Math.round((d / tot) * 100)))
+      const vectors = await modality.embedSamples(testable, (d, tot) => setProgress(Math.round((d / tot) * 100)))
       const predictions = testable.map((s, i) => {
         const r = predictKnn(live, vectors[i])
-        return { id: s.id, actual: s.class_key, predicted: r.label, confidence: r.confidence, file_url: s.file_url }
+        return { id: s.id, actual: s.class_key, predicted: r.label, confidence: r.confidence, file_url: s.file_url, condition_tags: s.condition_tags || {} }
       })
       const metrics = computeMetrics(predictions, live.classKeys)
       const errors = predictions.filter((p) => p.actual !== p.predicted).slice(0, 200)
@@ -142,13 +138,14 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
                     {t('aiLab.evaluate.runHoldout')}
                   </Button>
                   {running === 'holdout' && <Progress percent={progress} size="small" style={{ width: 200 }} />}
-                  <Text type="secondary">{t('aiLab.evaluate.holdoutHint')}</Text>
+                  <Text type="secondary">{t(modality.id === 'audio' ? 'aiLab.evaluate.holdoutHintAudio' : 'aiLab.evaluate.holdoutHint')}</Text>
                 </Space>
                 <MetricsView metrics={holdoutMetrics} labelOf={labelOf} title={t('aiLab.split.holdout')} />
                 {results.holdout && (
                   <>
+                    {subgroupTag && <SubgroupTable predictions={results.holdout.predictions} tagKey={subgroupTag} model={model} split="holdout" />}
                     <Divider />
-                    <ErrorGallery predictions={results.holdout.predictions} liveModel={live} labelOf={labelOf} onView={onErrorView} />
+                    <ErrorGallery predictions={results.holdout.predictions} liveModel={live} labelOf={labelOf} onView={onErrorView} modality={modality} />
                   </>
                 )}
               </div>
@@ -159,8 +156,11 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
             label: t('aiLab.evaluate.shiftTab', { count: shiftSets.length }),
             children: (
               <div>
-                <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('aiLab.evaluate.shiftIntro')} />
-                {canEdit && (
+                <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t(modality.id === 'audio' ? 'aiLab.evaluate.shiftIntroAudio' : 'aiLab.evaluate.shiftIntro')} />
+                {canEdit && modality.id === 'audio' && (
+                  <AudioCapturePanel dataset={dataset} classes={dataset?.classes || []} split="shift" shiftSetOptions={shiftSets.map((s) => ({ value: s, label: s }))} onUpload={shiftUpload} />
+                )}
+                {canEdit && modality.id !== 'audio' && (
                   <CapturePanel
                     dataset={dataset}
                     classes={dataset?.classes || []}
@@ -189,7 +189,7 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
                     {results[`shift:${shiftSet}`] && (
                       <>
                         <Divider />
-                        <ErrorGallery predictions={results[`shift:${shiftSet}`].predictions} liveModel={live} labelOf={labelOf} onView={onErrorView} />
+                        <ErrorGallery predictions={results[`shift:${shiftSet}`].predictions} liveModel={live} labelOf={labelOf} onView={onErrorView} modality={modality} />
                       </>
                     )}
                   </>

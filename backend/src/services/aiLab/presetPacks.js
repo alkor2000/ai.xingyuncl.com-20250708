@@ -7,12 +7,27 @@
  * - resolvePackFile(packDir, rel)：解析为绝对路径并再次确认落在 packDir 内，否则抛错
  * - selectPerClass(list, perClass)：每类最多取前 perClass 个（保持 manifest 顺序）
  * - computeCounts(manifest)：{train:{class_key:n}, shift:{set:{class_key:n}}}
+ * - packUsesRows(kind)：table / text 包按 rows 计数与导入，image / audio 包按 files
+ * - AUDIO_FILE_EXTENSIONS：音频包 manifest 里允许的文件扩展名
  */
 
 const path = require('path');
 
 const PACK_KEY_PATTERN = /^[a-z0-9_-]{1,50}$/;
 const MAX_RELATIVE_PATH_LENGTH = 180;
+const AUDIO_FILE_EXTENSIONS = ['wav', 'webm', 'ogg', 'mp3'];
+
+/** table / text 包用 rows；image / audio 包用 files */
+function packUsesRows(kind) {
+  return kind === 'table' || kind === 'text';
+}
+
+/** 相对路径的扩展名（小写、不带点） */
+function fileExtension(rel) {
+  const name = String(rel || '').split('/').pop() || '';
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
 
 function isValidPackKey(key) {
   return typeof key === 'string' && PACK_KEY_PATTERN.test(key);
@@ -59,13 +74,13 @@ function selectPerClass(list, perClass) {
 }
 
 /**
- * 统计 manifest 中各集合每类的样本数（图像数 files，表格数 rows）
+ * 统计 manifest 中各集合每类的样本数（image / audio 数 files，table / text 数 rows）
  */
 function computeCounts(manifest) {
   const counts = { train: {}, shift: {} };
   if (!manifest || typeof manifest !== 'object') return counts;
 
-  if (manifest.kind === 'table') {
+  if (packUsesRows(manifest.kind)) {
     const rows = manifest.rows && typeof manifest.rows === 'object' ? manifest.rows : {};
     (Array.isArray(rows.train) ? rows.train : []).forEach(row => {
       const key = row && row.class_key;
@@ -100,9 +115,12 @@ function computeCounts(manifest) {
 
 module.exports = {
   PACK_KEY_PATTERN,
+  AUDIO_FILE_EXTENSIONS,
   isValidPackKey,
   isSafeRelativePath,
   resolvePackFile,
   selectPerClass,
-  computeCounts
+  computeCounts,
+  packUsesRows,
+  fileExtension
 };

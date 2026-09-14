@@ -9,14 +9,15 @@
  * - 评测记录：写入与按模型列出
  *
  * JSON 列：params / class_keys / metrics / model_card / evaluations.metrics / evaluations.errors
- * engine 白名单以 config/aiLabTasks.js 的 AI_LAB_ENGINES 为准（image-knn | image-dense | table-tree | table-rules）
+ * engine 白名单以 config/aiLabTasks.js 的 AI_LAB_ENGINES 为准
+ * （image-knn | image-dense | table-tree | table-rules | table-mlp | audio-knn | text-nb）
  */
 
 const dbConnection = require('../database/connection');
 const { DatabaseError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
-const ENGINES = ['image-knn', 'image-dense', 'table-tree', 'table-rules'];
+const { AI_LAB_ENGINES: ENGINES } = require('../config/aiLabTasks');
 const EVALUATION_SPLITS = ['holdout', 'shift'];
 const MAX_EVALUATION_ERRORS = 200;
 

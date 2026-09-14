@@ -104,7 +104,8 @@ app.use(morgan('combined', {
 /* 响应压缩 */
 app.use(compression());
 
-/* 请求体解析（10MB限制） */
+/* 请求体解析（10MB限制；AI训练专区保存模型 artifact 放宽到 20MB，须在全局解析器之前挂载） */
+app.use('/api/ai-lab/projects/:id/models', express.json({ limit: '20mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

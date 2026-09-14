@@ -9,18 +9,23 @@ import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
 import { predictTree, deserializeTree } from '../engine/tabular/decisionTree'
 import { evaluateRules, deserializeRules } from '../engine/tabular/rules'
+import { predictMlp, deserializeMlp } from '../engine/tabular/mlp'
 import { computeMetrics, formatPercent, generalizationGap } from '../engine/metrics'
 import MetricsView from './MetricsView'
 import { describeCondition } from './RuleList'
 
 const { Text } = Typography
 
-const deserializeAny = (json) => (json?.engine === 'table-rules' ? deserializeRules(json) : deserializeTree(json))
+const deserializeAny = (json) => {
+  if (json?.engine === 'table-rules') return deserializeRules(json)
+  if (json?.engine === 'table-mlp') return deserializeMlp(json)
+  return deserializeTree(json)
+}
 
 const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
   const { t } = useTranslation()
   const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent } = useAiLabStore()
-  const tableModels = useMemo(() => models.filter((m) => m.engine === 'table-rules' || m.engine === 'table-tree'), [models])
+  const tableModels = useMemo(() => models.filter((m) => m.engine === 'table-rules' || m.engine === 'table-tree' || m.engine === 'table-mlp'), [models])
   const [modelId, setModelId] = useState(null)
   const [running, setRunning] = useState(null)
   const [results, setResults] = useState({})
@@ -43,6 +48,10 @@ const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
     if (live.engine === 'table-rules') {
       const r = evaluateRules(live, payload, live.columns)
       return { label: r.label || '?', confidence: 1, explain: r.rule_index === -1 ? t('aiLab.rules.otherwise') : t('aiLab.rules.ruleNo', { no: r.rule_index + 1 }) }
+    }
+    if (live.engine === 'table-mlp') {
+      const r = predictMlp(live, payload)
+      return { label: r.label, confidence: r.confidence, explain: Object.entries(r.scores).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${labelOf(k)} ${formatPercent(v)}`).join(' · ') }
     }
     const r = predictTree(live, payload)
     return { label: r.label, confidence: r.confidence, explain: r.path.map((p) => describeCondition({ col: p.col, op: p.type === 'number' ? (p.left ? '<=' : '>') : (p.left ? '==' : '!='), value: p.type === 'number' ? p.threshold : p.value }, columnLabel, unit)).join(' → ') }

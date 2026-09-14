@@ -8,10 +8,12 @@ import HeatmapOverlay from './HeatmapOverlay'
 import { occlusionMap } from '../engine/occlusion'
 import { loadImageElement } from '../engine/imageUtils'
 import { formatPercent } from '../engine/metrics'
+import { imageModality } from '../engine/modalities'
+import AudioThumb from './AudioThumb'
 
 const { Text } = Typography
 
-const ErrorGallery = ({ predictions, liveModel, labelOf, onView }) => {
+const ErrorGallery = ({ predictions, liveModel, labelOf, onView, modality = imageModality }) => {
   const { t } = useTranslation()
   const [active, setActive] = useState(null)
   const [heatmap, setHeatmap] = useState(null)
@@ -47,7 +49,7 @@ const ErrorGallery = ({ predictions, liveModel, labelOf, onView }) => {
       <div className="ailab-sample-grid">
         {errors.map((p) => (
           <div className="ailab-thumb ailab-thumb-error" key={p.id} onClick={() => open(p)} role="presentation">
-            <img src={p.file_url} alt="" loading="lazy" />
+            {modality.id === 'audio' ? <AudioThumb sample={p} /> : <img src={p.file_url} alt="" loading="lazy" />}
             <div className="ailab-thumb-caption">{labelOf(p.actual)} → {labelOf(p.predicted)}</div>
           </div>
         ))}
@@ -55,15 +57,17 @@ const ErrorGallery = ({ predictions, liveModel, labelOf, onView }) => {
       <Modal open={!!active} onCancel={() => setActive(null)} footer={null} width={560} title={t('aiLab.errors.detailTitle')}>
         {active && (
           <div className="ailab-error-detail">
-            <HeatmapOverlay src={active.file_url} heatmap={heatmap} size={280} />
+            {modality.supportsHeatmap ? <HeatmapOverlay src={active.file_url} heatmap={heatmap} size={280} /> : <AudioThumb sample={active} size={280} withPlayer />}
             <div className="ailab-error-meta">
               <p><Text type="secondary">{t('aiLab.errors.actual')}</Text> <Tag color="green">{labelOf(active.actual)}</Tag></p>
               <p><Text type="secondary">{t('aiLab.errors.predicted')}</Text> <Tag color="red">{labelOf(active.predicted)}</Tag> <Text type="secondary">{formatPercent(active.confidence)}</Text></p>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Button type="primary" onClick={computeHeatmap} loading={computing} disabled={!liveModel}>{t('aiLab.errors.showHeatmap')}</Button>
-                {computing && <Progress percent={progress} size="small" />}
-                {heatmap && <Text type="secondary">{t('aiLab.errors.heatmapHint')}</Text>}
-              </Space>
+              {modality.supportsHeatmap && (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Button type="primary" onClick={computeHeatmap} loading={computing} disabled={!liveModel}>{t('aiLab.errors.showHeatmap')}</Button>
+                  {computing && <Progress percent={progress} size="small" />}
+                  {heatmap && <Text type="secondary">{t('aiLab.errors.heatmapHint')}</Text>}
+                </Space>
+              )}
             </div>
           </div>
         )}

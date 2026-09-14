@@ -16,7 +16,11 @@
  *    → 新事件类型 → P7 文本任务建项目
  *    预置包默认用 shapes（图像）与 penguins（表格）；可用 AI_LAB_SMOKE_IMAGE_PACK / AI_LAB_SMOKE_TABLE_PACK 指定；
  *    两者都不存在时自动在 presets/ai-lab/_smoke-<stamp>-* 生成最小临时包，结束后删除
- * 5. 清理：删除临时用户的 ai_lab_* 数据、样本与模型文件目录、临时包、临时用户本身；关闭自启的服务
+ * 5. v3：17 个模板 → 音频数据集（node 合成 1 秒正弦波 wav 上传、octet-stream 按扩展名放行、duration_ms、
+ *    类型/文件头/大小校验）→ 文本数据集（rows、固定 columns）→ audio-knn / text-nb / table-mlp 模型保存与评测
+ *    → kind 不匹配 400 → 20MB artifact → 四个新事件 → 预置包：sounds-synth / campus-messages 存在则各导入一次，
+ *    另生成带 durations 的临时音频包验证 duration_ms 映射
+ * 6. 清理：删除临时用户的 ai_lab_* 数据、样本与模型文件目录、临时包、临时用户本身；关闭自启的服务
  *
  * 环境变量：AI_LAB_SMOKE_BASE 可覆盖后端地址（默认 http://127.0.0.1:${PORT||4000}）
  * 退出码：全部检查通过 0，否则 1
@@ -178,7 +182,7 @@ async function runFlow(owner, admin) {
 
   step('任务模板');
   let res = await api('GET', '/api/ai-lab/tasks', { token: ownerToken });
-  check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.length === 9, 'GET /tasks 返回 9 个模板', res.body);
+  check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.length === 17, 'GET /tasks 返回 17 个模板', res.body?.data?.length);
   const taskP1 = res.body.data?.find(t => t.key === 'P1');
   check(taskP1 && taskP1.default_classes?.length === 4 && taskP1.kind === 'image' && taskP1.presets?.includes('fruits-mini'), 'P1 模板含 4 个默认类别、kind=image、presets 含 fruits-mini', taskP1);
 
@@ -673,6 +677,353 @@ async function runV2Flow(owner, { ownerToken, adminToken }) {
   if (res.body.data?.project?.id) created.projectIds.push(res.body.data.project.id);
 }
 
+
+/* ================================================================
+ * v3：音频 / 文本 / 新引擎 / 新事件
+ * ================================================================ */
+
+/** 16bit 单声道 PCM WAV：正弦波（默认 1 秒 440Hz、16kHz） */
+function makeWav({ seconds = 1, sampleRate = 16000, freq = 440, amplitude = 0.5 } = {}) {
+  const numSamples = Math.floor(seconds * sampleRate);
+  const dataSize = numSamples * 2;
+  const buf = Buffer.alloc(44 + dataSize);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + dataSize, 4);
+  buf.write('WAVE', 8);
+  buf.write('fmt ', 12);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(dataSize, 40);
+  for (let i = 0; i < numSamples; i++) {
+    buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * freq * i) / sampleRate) * amplitude * 32767), 44 + i * 2);
+  }
+  return buf;
+}
+
+function buildAudioForm(buffers, fields, { mime = 'audio/wav', ext = 'wav' } = {}) {
+  const form = new FormData();
+  buffers.forEach((buf, i) => form.append('files', new Blob([buf], { type: mime }), `clip-${i}.${ext}`));
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) form.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+  });
+  return form;
+}
+
+/** 带 durations 的最小临时音频包（2 类 × 3 train + 1 shift）与最小文本包（3 类 × 4 train + 2 shift） */
+function makeTempV3Packs() {
+  const audioKey = `_smoke-${STAMP}-sounds`;
+  const textKey = `_smoke-${STAMP}-messages`;
+  const audioDir = path.join(PRESETS_ROOT, audioKey);
+  const textDir = path.join(PRESETS_ROOT, textKey);
+  created.tempPackDirs.push(audioDir, textDir);
+
+  const classes = [{ key: 'beep', label: '蜂鸣' }, { key: 'hum', label: '低鸣' }];
+  const freqs = { beep: 880, hum: 110 };
+  const files = { train: {}, shift: { '换音高': {} } };
+  const durations = {};
+  classes.forEach(cls => {
+    files.train[cls.key] = [];
+    files.shift['换音高'][cls.key] = [];
+    for (let i = 1; i <= 3; i++) {
+      const rel = `train/${cls.key}/${String(i).padStart(3, '0')}.wav`;
+      fs.mkdirSync(path.dirname(path.join(audioDir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(audioDir, rel), makeWav({ seconds: 0.5 + i * 0.1, freq: freqs[cls.key] }));
+      files.train[cls.key].push(rel);
+      durations[rel] = 500 + i * 100;
+    }
+    const rel = `shift/pitch/${cls.key}/001.wav`;
+    fs.mkdirSync(path.dirname(path.join(audioDir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(audioDir, rel), makeWav({ seconds: 0.5, freq: freqs[cls.key] * 1.5 }));
+    files.shift['换音高'][cls.key].push(rel);
+    /* shift 文件故意不给 durations → duration_ms 应为 null */
+  });
+  fs.writeFileSync(path.join(audioDir, 'manifest.json'), JSON.stringify({
+    key: audioKey, kind: 'audio', title: '冒烟临时声音包', description: 'smoke', license: 'CC0', source: '', attribution: '',
+    grade_bands: ['L'], classes, files, durations,
+    condition_tags: { train: { noise: '安静' }, shift: { '换音高': { pitch: '偏高' } } }
+  }, null, 2));
+
+  const textClasses = [{ key: 'positive', label: '积极' }, { key: 'negative', label: '消极' }, { key: 'neutral', label: '中性' }];
+  const rows = { train: [], shift: { '另一话题': [] } };
+  textClasses.forEach(cls => {
+    for (let i = 0; i < 4; i++) rows.train.push({ class_key: cls.key, payload: { text: `${cls.label}留言 ${i}：今天的课很有意思。` } });
+    for (let i = 0; i < 2; i++) rows.shift['另一话题'].push({ class_key: cls.key, payload: { text: `${cls.label}社团 ${i}：活动安排如下。` } });
+  });
+  fs.mkdirSync(textDir, { recursive: true });
+  fs.writeFileSync(path.join(textDir, 'manifest.json'), JSON.stringify({
+    key: textKey, kind: 'text', title: '冒烟临时留言包', description: 'smoke', license: 'CC0', source: '', attribution: '',
+    grade_bands: ['M'], classes: textClasses, columns: [{ key: 'text', label: '留言', type: 'text' }], rows
+  }, null, 2));
+  return { audioKey, textKey };
+}
+
+async function runV3Flow(owner, { ownerToken, adminToken }) {
+  let res;
+
+  step('任务模板 v3');
+  res = await api('GET', '/api/ai-lab/tasks', { token: ownerToken });
+  const tasks = res.body.data || [];
+  const byKey = Object.fromEntries(tasks.map(t => [t.key, t]));
+  check(tasks.map(t => t.key).join(',') === 'L1,L2,L3,L4,L5,L6,M1,M2,M3,M4,M5,P1,P2,P3,P6,P7,free', '模板顺序 L1,L2,L3,L4,L5,L6,M1,M2,M3,M4,M5,P1,P2,P3,P6,P7,free', tasks.map(t => t.key));
+  check(byKey.L2?.kind === 'audio' && byKey.L2?.engine === 'audio-knn' && byKey.L2?.default_classes?.map(c => c.key).join() === 'clap,knock,whistle' && byKey.L2?.presets?.includes('sounds-synth'), 'L2 音频模板（audio-knn、3 类、sounds-synth）', byKey.L2);
+  check(byKey.P6?.kind === 'audio' && byKey.P6?.default_classes?.length === 5 && byKey.P6?.min_train_per_class === 15 && byKey.M4?.default_classes?.length === 10 && byKey.M4?.suggested_shift_sets?.map(s => s.key).join() === 'speaker,device', 'P6 五类 / M4 十个指令词', { P6: byKey.P6?.default_classes?.length, M4: byKey.M4?.default_classes?.length });
+  check(byKey.M5?.kind === 'text' && byKey.M5?.engine === 'text-nb' && byKey.M5?.min_train_per_class === 30 && byKey.M5?.steps?.includes('annotate') && byKey.M5?.steps?.includes('agreement') && byKey.M5?.presets?.includes('campus-messages'), 'M5 文本模板（text-nb、annotate/agreement、campus-messages）', byKey.M5);
+  check(byKey.M3?.kind === 'table' && byKey.M3?.steps?.includes('train_mlp') && byKey.M3?.config?.mlp?.hidden === 16 && byKey.M3?.config?.mlp?.epochs === 80 && byKey.M3?.config?.max_depth_options?.length === 5, 'M3 决策树 vs 神经网络（train_mlp、mlp 配置）', byKey.M3?.config);
+  check(byKey.L5?.kind === 'text' && byKey.L5?.engine === 'verify' && byKey.L5?.config?.material_set === 'animal' && byKey.L5?.config?.projected_default === true && byKey.L5?.steps?.join() === 'material,claims,verdicts,reflection', 'L5 动物故事核验（material_set=animal、projected_default）', byKey.L5);
+  check(byKey.L6?.kind === 'table' && byKey.L6?.engine === 'table-rules' && byKey.L6?.config?.max_depth_options?.join() === '1,2,3' && byKey.L6?.presets?.join() === 'animal-cards,garbage-cards', 'L6 规则是我定的（table-rules、animal-cards/garbage-cards）', byKey.L6);
+  check(byKey.M2?.kind === 'image' && byKey.M2?.config?.subgroup_tag === 'collector' && byKey.M2?.steps?.includes('fairness') && byKey.M2?.suggested_shift_sets?.[0]?.key === 'collector' && byKey.M2?.min_train_per_class === 20, 'M2 让分类器更公平（subgroup_tag=collector、fairness 步骤）', byKey.M2);
+  check(byKey.P7?.config?.material_set === 'campus', 'P7 config.material_set=campus', byKey.P7?.config);
+
+  step('预置数据包（四种 kind）');
+  for (const kind of ['image', 'table', 'audio', 'text']) {
+    res = await api('GET', `/api/ai-lab/presets?kind=${kind}`, { token: ownerToken });
+    check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.every(p => p.kind === kind), `GET /presets?kind=${kind} 只返回该类型`, res.body.data?.map(p => `${p.key}:${p.kind}`));
+  }
+  let packs = (await api('GET', '/api/ai-lab/presets', { token: ownerToken })).body.data || [];
+  const hasSounds = packs.some(p => p.key === 'sounds-synth' && p.kind === 'audio');
+  const hasMessages = packs.some(p => p.key === 'campus-messages' && p.kind === 'text');
+  console.log(`  sounds-synth: ${hasSounds ? '存在' : '不存在'}；campus-messages: ${hasMessages ? '存在' : '不存在'}`);
+  const temp = makeTempV3Packs();
+  packs = (await api('GET', '/api/ai-lab/presets', { token: ownerToken })).body.data || [];
+  const tempAudioPack = packs.find(p => p.key === temp.audioKey);
+  const tempTextPack = packs.find(p => p.key === temp.textKey);
+  check(tempAudioPack?.kind === 'audio' && tempAudioPack.durations === undefined && tempAudioPack.counts?.train?.beep === 3 && tempAudioPack.shift_sets?.join() === '换音高', '临时音频包可列出（不带 durations，counts 正确）', tempAudioPack);
+  check(tempTextPack?.kind === 'text' && tempTextPack.columns?.[0]?.type === 'text' && tempTextPack.counts?.train?.positive === 4, '临时文本包可列出（columns 为 text 列）', tempTextPack);
+
+  /* ---------------- 音频 ---------------- */
+  step('音频数据集：上传合成 wav');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '声音也能被认出来吗', task_key: 'L2' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'audio' && res.body.data?.dataset?.classes?.length === 3 && res.body.data?.dataset?.columns === null, 'L2 项目的数据集 kind=audio、3 类、无 columns', res.body.data?.dataset);
+  const audProject = res.body.data.project;
+  const audDataset = res.body.data.dataset;
+  created.projectIds.push(audProject.id);
+
+  const wavs = [makeWav({ freq: 440 }), makeWav({ freq: 523 }), makeWav({ freq: 659 }), makeWav({ freq: 784 })];
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm(wavs, { class_key: 'clap', split: 'train', source: 'camera', duration_ms: '1000', condition_tags: { speaker: 'A', noise: 'quiet' } }) });
+  check(res.status === 201 && res.body.data?.length === 4, '上传 4 个 wav 到 clap/train', res.body);
+  const audSample = res.body.data?.[0];
+  check(/^ai-lab\/\d+\/\d+\/[0-9a-f-]{36}\.wav$/.test(audSample?.file_path || '') && audSample?.file_url === '/uploads/' + audSample?.file_path, '音频文件名 <uuid>.wav 且带 file_url', audSample?.file_path);
+  check(audSample?.width === null && audSample?.height === null && audSample?.duration_ms === 1000 && audSample?.file_size === wavs[0].length && audSample?.condition_tags?.speaker === 'A', 'width/height=null、duration_ms=1000、file_size 为原始字节数（原样落盘）', audSample);
+  const audRes = await fetch(`${BASE}${audSample.file_url}`);
+  const audBytes = audRes.ok ? Buffer.from(await audRes.arrayBuffer()) : Buffer.alloc(0);
+  check(audRes.status === 200 && (audRes.headers.get('content-type') || '').includes('audio') && audBytes.equals(wavs[0]), '/uploads 可读取音频且字节与上传一致', { status: audRes.status, type: audRes.headers.get('content-type'), bytes: audBytes.length });
+
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav({ freq: 300 }), makeWav({ freq: 320 })], { class_key: 'knock', duration_ms: [600, 900] }) });
+  check(res.status === 201 && res.body.data?.map(s => s.duration_ms).join() === '600,900', 'duration_ms 数组逐文件生效', res.body.data?.map(s => s.duration_ms));
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav({ freq: 350 })], { class_key: 'knock' }, { mime: 'application/octet-stream', ext: 'wav' }) });
+  check(res.status === 201 && res.body.data?.[0]?.duration_ms === null && res.body.data?.[0]?.file_path?.endsWith('.wav'), 'application/octet-stream + .wav 按扩展名放行，未传 duration_ms 为 null', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav({ freq: 500 }), makeWav({ freq: 520 })], { class_key: 'whistle', split: 'shift', shift_set: 'speaker', source: 'upload' }) });
+  check(res.status === 201 && res.body.data?.length === 2 && res.body.data[0].split === 'shift' && res.body.data[0].shift_set === 'speaker', '音频可进 shift(speaker) 集', res.body.data?.[0]);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav({ freq: 500 })], { class_key: 'whistle' }) });
+  check(res.status === 201, '补 1 个 whistle/train', res.status);
+
+  step('音频上传校验');
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav()], { class_key: 'clap', duration_ms: 50 }) });
+  check(res.status === 400, 'duration_ms=50 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav()], { class_key: 'clap', duration_ms: 'abc' }) });
+  check(res.status === 400, 'duration_ms 非整数返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav(), makeWav()], { class_key: 'clap', duration_ms: [1000] }) });
+  check(res.status === 400, 'duration_ms 数组长度不匹配返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildForm([await makeImage(1, 2, 3)], { class_key: 'clap' }) });
+  check(res.status === 400 && /音频/.test(res.body.message || ''), '音频数据集上传 jpeg 返回 400', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([Buffer.from('this is definitely not a wav file, just text padding....')], { class_key: 'clap' }) });
+  check(res.status === 400, 'audio/wav 但文件头不对返回 400', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav()], { class_key: 'clap' }, { mime: 'application/octet-stream', ext: 'flac' }) });
+  check(res.status === 400, 'octet-stream + .flac 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav({ seconds: 25, sampleRate: 44100 })], { class_key: 'clap' }) });
+  check(res.status === 400 && /2MB/.test(res.body.message || ''), '超过 2MB 的音频返回 400', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav()], { class_key: 'nope' }) });
+  check(res.status === 400, '未知类别返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/samples`, { token: adminToken, form: buildAudioForm([makeWav()], { class_key: 'clap' }) });
+  check(res.status === 403, '同组 admin 上传音频返回 403', res.status);
+  /* 图像数据集拒收 wav */
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '图像对照', task_key: 'L1' } });
+  const imgCtl = res.body.data;
+  created.projectIds.push(imgCtl.project.id);
+  res = await api('POST', `/api/ai-lab/datasets/${imgCtl.dataset.id}/samples`, { token: ownerToken, form: buildAudioForm([makeWav()], { class_key: 'thing_a' }) });
+  check(res.status === 400 && /图片/.test(res.body.message || ''), '图像数据集上传 wav 返回 400', res.body);
+
+  step('音频：lock / audio-knn 模型 / 评测 / kind 不匹配');
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/lock`, { token: ownerToken, body: { holdout_ratio: 0.25, seed: 21 } });
+  check(res.status === 200 && res.body.data?.dataset?.version === 1 && res.body.data?.counts?.holdout?.clap === 1 && res.body.data?.counts?.holdout?.knock === 1, '音频数据集 lock 分层留出（clap 4→1、knock 3→1）', res.body.data?.counts);
+  const audioArtifact = { engine: 'audio-knn', k: 3, dim: 2000, vectors: Array.from({ length: 6 }, (_, i) => ({ label: i < 3 ? 'clap' : 'knock', v: Array.from({ length: 16 }, (_, j) => Math.sin(i + j)) })) };
+  res = await api('POST', `/api/ai-lab/projects/${audProject.id}/models`, { token: ownerToken, body: { dataset_id: audDataset.id, dataset_version: 1, params: { k: 3 }, class_keys: ['clap', 'knock', 'whistle'], train_sample_count: 6, artifact: audioArtifact, note: '声音第一版' } });
+  check(res.status === 201 && res.body.data?.engine === 'audio-knn' && res.body.data?.feature_extractor === 'speech_commands_18w' && res.body.data?.version === 1, '省略 engine 时音频数据集默认 audio-knn / speech_commands_18w', res.body.data);
+  const audModel = res.body.data;
+  const audArtifactRes = await fetch(`${BASE}${audModel.artifact_url}`);
+  check(audArtifactRes.status === 200 && (await audArtifactRes.json())?.vectors?.length === 6, 'audio-knn artifact 可下载', audArtifactRes.status);
+  res = await api('POST', `/api/ai-lab/models/${audModel.id}/evaluations`, { token: ownerToken, body: { split: 'holdout', sample_count: 2, metrics: { accuracy: 1, per_class: {}, confusion: { labels: ['clap', 'knock'], matrix: [[1, 0], [0, 1]] } } } });
+  check(res.status === 201 && res.body.data?.metrics?.holdout?.accuracy === 1, 'audio-knn holdout 评测已记录', res.body.data?.metrics);
+  res = await api('POST', `/api/ai-lab/models/${audModel.id}/evaluations`, { token: ownerToken, body: { split: 'shift', shift_set: 'speaker', sample_count: 2, metrics: { accuracy: 0.5 } } });
+  check(res.status === 201 && res.body.data?.metrics?.generalization_gap === 0.5, 'audio shift 评测，gap=0.5', res.body.data?.metrics);
+  res = await api('POST', `/api/ai-lab/projects/${audProject.id}/models`, { token: ownerToken, body: { dataset_id: audDataset.id, engine: 'image-knn', class_keys: ['clap'], artifact: {} } });
+  check(res.status === 400, '音频数据集用 image-knn 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${audProject.id}/models`, { token: ownerToken, body: { dataset_id: audDataset.id, engine: 'text-nb', class_keys: ['clap'], artifact: {} } });
+  check(res.status === 400, '音频数据集用 text-nb 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${imgCtl.project.id}/models`, { token: ownerToken, body: { dataset_id: imgCtl.dataset.id, engine: 'audio-knn', class_keys: ['thing_a'], artifact: {} } });
+  check(res.status === 400, '图像数据集用 audio-knn 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${audProject.id}/models`, { token: ownerToken, body: { dataset_id: audDataset.id, engine: 'audio-mystery', class_keys: ['clap'], artifact: {} } });
+  check(res.status === 400, '白名单外引擎返回 400', res.status);
+
+  step('音频预置包导入');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '校园声音地图', task_key: 'P6' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'audio' && res.body.data?.dataset?.classes?.length === 5, 'P6 项目的数据集 kind=audio、5 类', res.body.data?.dataset);
+  const p6Project = res.body.data.project;
+  const p6Dataset = res.body.data.dataset;
+  created.projectIds.push(p6Project.id);
+  res = await api('POST', `/api/ai-lab/datasets/${p6Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.audioKey, per_class: 2 } });
+  check(res.status === 201 && res.body.data?.imported?.train === 4 && res.body.data?.imported?.shift?.['换音高'] === 2 && res.body.data?.dataset?.classes?.length === 7, '临时音频包导入 per_class=2：train 4 / shift 2，类别合并为 7', res.body.data);
+  res = await api('GET', `/api/ai-lab/datasets/${p6Dataset.id}/samples`, { token: ownerToken });
+  const presetAudio = res.body.data || [];
+  const presetTrain = presetAudio.filter(s => s.split === 'train');
+  const presetShift = presetAudio.filter(s => s.split === 'shift');
+  check(presetTrain.length === 4 && presetTrain.every(s => s.source === 'preset' && /preset-_smoke-.*-\d+\.wav$/.test(s.file_path) && s.width === null && s.origin_ref.startsWith(`${temp.audioKey}:train/`)), '预置音频样本 source=preset、文件名 preset-<pack>-<n>.wav、origin_ref', presetTrain[0]);
+  check(presetTrain.map(s => s.duration_ms).sort().join() === '600,600,700,700' && presetShift.every(s => s.duration_ms === null), 'duration_ms 取自 manifest.durations，未给的为 null', { train: presetTrain.map(s => s.duration_ms), shift: presetShift.map(s => s.duration_ms) });
+  const srcRel = presetTrain[0].origin_ref.split(':')[1];
+  const srcBytes = fs.readFileSync(path.join(PRESETS_ROOT, temp.audioKey, srcRel));
+  const dstBytes = fs.readFileSync(path.join(config.storage.paths.uploads, presetTrain[0].file_path));
+  check(srcBytes.equals(dstBytes) && presetTrain[0].file_size === srcBytes.length, '音频预置文件原样复制（字节一致）', { src: srcBytes.length, dst: dstBytes.length });
+  check(presetTrain[0].condition_tags?.noise === '安静' && presetShift[0]?.condition_tags?.pitch === '偏高', '音频预置样本 condition_tags 取自 manifest', { train: presetTrain[0].condition_tags, shift: presetShift[0]?.condition_tags });
+  res = await api('POST', `/api/ai-lab/datasets/${p6Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.audioKey, per_class: 2 } });
+  check(res.status === 201 && res.body.data?.imported?.train === 0 && res.body.data?.skipped?.train === 4, '重复导入音频包去重', res.body.data);
+  res = await api('POST', `/api/ai-lab/datasets/${audDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.textKey } });
+  check(res.status === 400, '非空音频数据集导入文本包返回 400（kind 冲突）', res.status);
+  if (hasSounds) {
+    res = await api('POST', `/api/ai-lab/datasets/${p6Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: 'sounds-synth', per_class: 2 } });
+    const soundsPack = packs.find(p => p.key === 'sounds-synth');
+    const expectTrain = minPerClassSum(soundsPack.counts.train, 2);
+    check(res.status === 201 && res.body.data?.imported?.train === expectTrain, `导入 sounds-synth per_class=2：train ${expectTrain}`, res.body.data?.imported);
+    res = await api('GET', `/api/ai-lab/datasets/${p6Dataset.id}/samples?split=train`, { token: ownerToken });
+    const synth = (res.body.data || []).find(s => String(s.origin_ref || '').startsWith('sounds-synth:'));
+    const synthSrc = synth ? fs.readFileSync(path.join(PRESETS_ROOT, 'sounds-synth', synth.origin_ref.split(':')[1])) : null;
+    check(synth && synth.file_path.endsWith('.wav') && synthSrc && synth.file_size === synthSrc.length && synth.duration_ms === null, 'sounds-synth 样本 .wav 原样复制、无 durations 时 duration_ms=null', synth);
+  }
+
+  /* ---------------- 文本 ---------------- */
+  step('文本数据集：rows / 固定 columns');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '情绪翻译器', task_key: 'M5' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'text' && res.body.data?.dataset?.classes?.length === 3, 'M5 项目的数据集 kind=text、3 类', res.body.data?.dataset);
+  const txtProject = res.body.data.project;
+  const txtDataset = res.body.data.dataset;
+  created.projectIds.push(txtProject.id);
+  const sameTextColumns = Array.isArray(txtDataset.columns) && txtDataset.columns.length === 1
+    && txtDataset.columns[0].key === 'text' && txtDataset.columns[0].label === '文本' && txtDataset.columns[0].type === 'text';
+  check(sameTextColumns, "文本数据集 columns 自动固定为 [{key:'text',label:'文本',type:'text'}]", txtDataset.columns);
+
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [
+    { class_key: 'positive', payload: { text: '  今天食堂的番茄炒蛋特别好吃  ' }, condition_tags: { topic: '食堂' } },
+    { class_key: 'negative', payload: { text: '作业太多了，写到很晚。' } },
+    { class_key: 'neutral', payload: { text: '明天第二节是数学课。' } },
+    { class_key: 'positive', payload: { text: '社团活动很有趣' }, split: 'shift', shift_set: 'topic' },
+    { class_key: 'negative', payload: { text: 12345 } }
+  ] } });
+  check(res.status === 201 && res.body.data?.length === 5 && res.body.data[0].payload?.text === '今天食堂的番茄炒蛋特别好吃' && res.body.data[0].file_url === null && res.body.data[0].condition_tags?.topic === '食堂', 'POST /rows 文本行（trim、file_url=null、condition_tags）', res.body.data?.[0]);
+  check(res.body.data?.[3]?.split === 'shift' && res.body.data[3].shift_set === 'topic' && res.body.data?.[4]?.payload?.text === '12345', '文本行可进 shift 集；数字转字符串', { s3: res.body.data?.[3], s4: res.body.data?.[4] });
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'positive', payload: { text: '   ' } }] } });
+  check(res.status === 400 && /不能为空/.test(res.body.message || ''), '空白文本返回 400', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'positive', payload: { text: '字'.repeat(1001) } }] } });
+  check(res.status === 400 && /1000/.test(res.body.message || ''), '1001 字文本返回 400', res.body);
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'positive', payload: { text: '字'.repeat(1000) } }] } });
+  check(res.status === 201 && res.body.data?.[0]?.payload?.text?.length === 1000, '1000 字文本可写入', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'positive', payload: { body: 'x' } }] } });
+  check(res.status === 400, 'payload 含未定义列返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/rows`, { token: ownerToken, body: { rows: [{ class_key: 'positive', payload: { text: { a: 1 } } }] } });
+  check(res.status === 400, 'text 为对象返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/samples`, { token: ownerToken, form: buildForm([await makeImage(1, 2, 3)], { class_key: 'positive' }) });
+  check(res.status === 400 && /rows/.test(res.body.message || ''), '文本数据集上传文件返回 400', res.body);
+  res = await api('PATCH', `/api/ai-lab/datasets/${txtDataset.id}`, { token: ownerToken, body: { columns: [{ key: 'text', type: 'text' }, { key: 'extra', type: 'number' }] } });
+  check(res.status === 400, '文本数据集修改 columns 返回 400', res.status);
+  res = await api('PATCH', `/api/ai-lab/datasets/${txtDataset.id}`, { token: ownerToken, body: { name: '留言集' } });
+  check(res.status === 200 && res.body.data?.name === '留言集', '文本数据集可改名', res.body.data?.name);
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/datasets`, { token: ownerToken, body: { name: '手建文本', kind: 'text', classes: [{ key: 'a' }, { key: 'b' }] } });
+  check(res.status === 201 && res.body.data?.kind === 'text' && res.body.data?.columns?.[0]?.type === 'text', 'POST /datasets kind=text 自动填固定 columns', res.body.data);
+  const emptyText = res.body.data;
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/datasets`, { token: ownerToken, body: { name: '手建文本2', kind: 'text', classes: [], columns: [{ key: 'x', type: 'text' }] } });
+  check(res.status === 400, 'kind=text 传 columns 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/datasets`, { token: ownerToken, body: { name: '坏类型', kind: 'video', classes: [] } });
+  check(res.status === 400, 'kind=video 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${emptyText.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.audioKey, per_class: 1, shift_sets: [] } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'audio' && res.body.data?.dataset?.columns === null && res.body.data?.imported?.train === 2, '空文本数据集导入音频包 → kind 切换为 audio、columns 清空', res.body.data?.dataset);
+
+  step('文本预置包导入 / lock / text-nb 模型');
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.textKey, per_class: 3 } });
+  check(res.status === 201 && res.body.data?.imported?.train === 9 && res.body.data?.imported?.shift?.['另一话题'] === 6, '临时文本包导入 per_class=3：train 9 / shift 6', res.body.data?.imported);
+  res = await api('GET', `/api/ai-lab/datasets/${txtDataset.id}/samples?split=train`, { token: ownerToken });
+  const textPreset = (res.body.data || []).find(s => s.source === 'preset');
+  check(textPreset && textPreset.file_path === null && typeof textPreset.payload?.text === 'string' && textPreset.origin_ref.startsWith(`${temp.textKey}:rows/train/`), '文本预置样本 file_path=null、payload.text、origin_ref', textPreset);
+  check(res.body.data?.[0]?.columns === undefined && (await api('GET', `/api/ai-lab/projects/${txtProject.id}`, { token: ownerToken })).body.data?.datasets?.[0]?.columns?.length === 1, '导入文本包后 columns 仍为固定的一列', null);
+  if (hasMessages) {
+    const msgPack = packs.find(p => p.key === 'campus-messages');
+    res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: 'campus-messages', per_class: 5 } });
+    const expectTrain = minPerClassSum(msgPack.counts.train, 5);
+    check(res.status === 201 && res.body.data?.imported?.train === expectTrain, `导入 campus-messages per_class=5：train ${expectTrain}`, res.body.data?.imported);
+    res = await api('GET', `/api/ai-lab/datasets/${txtDataset.id}/samples?split=train`, { token: ownerToken });
+    const msg = (res.body.data || []).find(s => String(s.origin_ref || '').startsWith('campus-messages:'));
+    check(msg && typeof msg.payload?.text === 'string' && msg.payload.text.length > 0 && msg.file_path === null, 'campus-messages 样本 payload.text 落库', msg?.payload);
+  }
+  res = await api('POST', `/api/ai-lab/datasets/${txtDataset.id}/lock`, { token: ownerToken, body: { holdout_ratio: 0.2, seed: 31 } });
+  check(res.status === 200 && res.body.data?.dataset?.version === 1 && sumValues(res.body.data?.counts?.holdout) > 0, '文本数据集 lock 分层留出', res.body.data?.counts);
+  const vocab = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`词${i}`, { positive: i % 3, negative: (i + 1) % 3, neutral: (i + 2) % 3 }]));
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/models`, { token: ownerToken, body: { dataset_id: txtDataset.id, dataset_version: 1, params: { alpha: 1, ngram: 2 }, class_keys: ['positive', 'negative', 'neutral'], train_sample_count: 10, artifact: { engine: 'text-nb', vocab, priors: { positive: 0.4, negative: 0.3, neutral: 0.3 } }, note: '文本第一版' } });
+  check(res.status === 201 && res.body.data?.engine === 'text-nb' && res.body.data?.feature_extractor === 'char-ngram' && res.body.data?.version === 1, '省略 engine 时文本数据集默认 text-nb / char-ngram', res.body.data);
+  const txtModel = res.body.data;
+  const txtArtifactRes = await fetch(`${BASE}${txtModel.artifact_url}`);
+  check(txtArtifactRes.status === 200 && Object.keys((await txtArtifactRes.json())?.vocab || {}).length === 300, 'text-nb 词表 artifact 可下载', txtArtifactRes.status);
+  res = await api('POST', `/api/ai-lab/models/${txtModel.id}/evaluations`, { token: ownerToken, body: { split: 'holdout', sample_count: 3, metrics: { accuracy: 0.67, per_class: {}, confusion: { labels: [], matrix: [] } }, errors: [{ sample_id: textPreset.id, actual: 'positive', predicted: 'neutral', confidence: 0.4 }] } });
+  check(res.status === 201 && res.body.data?.metrics?.holdout?.accuracy === 0.67, 'text-nb holdout 评测已记录', res.body.data?.metrics);
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/models`, { token: ownerToken, body: { dataset_id: txtDataset.id, engine: 'table-tree', class_keys: ['positive'], artifact: {} } });
+  check(res.status === 400, '文本数据集用 table-tree 返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/models`, { token: ownerToken, body: { dataset_id: txtDataset.id, engine: 'image-dense', class_keys: ['positive'], artifact: {} } });
+  check(res.status === 400, '文本数据集用 image-dense 返回 400', res.status);
+
+  /* ---------------- 表格 table-mlp ---------------- */
+  step('table-mlp 模型 / 20MB artifact');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '决策树 vs 神经网络', task_key: 'M3' } });
+  check(res.status === 201 && res.body.data?.dataset?.kind === 'table', 'M3 项目的数据集 kind=table', res.body.data?.dataset);
+  const mlpProject = res.body.data.project;
+  const mlpDataset = res.body.data.dataset;
+  created.projectIds.push(mlpProject.id);
+  const tablePackKey = packs.some(p => p.key === 'penguins') ? 'penguins' : packs.find(p => p.kind === 'table')?.key;
+  res = await api('POST', `/api/ai-lab/datasets/${mlpDataset.id}/import-preset`, { token: ownerToken, body: { pack_key: tablePackKey, per_class: 6 } });
+  check(res.status === 201 && res.body.data?.imported?.train > 0, `导入表格包 ${tablePackKey}`, res.body.data?.imported);
+  const mlpClasses = res.body.data.dataset.classes.map(c => c.key);
+  const weights = { w1: Array.from({ length: 16 }, () => Array.from({ length: 8 }, (_, j) => j / 10)), b1: Array(16).fill(0.01), w2: Array.from({ length: mlpClasses.length }, () => Array(16).fill(0.02)), b2: Array(mlpClasses.length).fill(0) };
+  res = await api('POST', `/api/ai-lab/projects/${mlpProject.id}/models`, { token: ownerToken, body: { dataset_id: mlpDataset.id, engine: 'table-mlp', params: { hidden: 16, epochs: 80 }, class_keys: mlpClasses, train_sample_count: 18, artifact: { engine: 'table-mlp', ...weights }, note: '神经网络' } });
+  check(res.status === 201 && res.body.data?.engine === 'table-mlp' && res.body.data?.feature_extractor === 'none' && res.body.data?.params?.hidden === 16, 'POST /models engine=table-mlp，feature_extractor 默认 none', res.body.data);
+  const mlpModel = res.body.data;
+  res = await api('POST', `/api/ai-lab/models/${mlpModel.id}/evaluations`, { token: ownerToken, body: { split: 'holdout', sample_count: 5, metrics: { accuracy: 0.8, per_class: {}, confusion: { labels: [], matrix: [] } } } });
+  check(res.status === 201 && res.body.data?.metrics?.holdout?.accuracy === 0.8, 'table-mlp holdout 评测已记录', res.body.data?.metrics);
+  res = await api('POST', `/api/ai-lab/projects/${audProject.id}/models`, { token: ownerToken, body: { dataset_id: audDataset.id, engine: 'table-mlp', class_keys: ['clap'], artifact: {} } });
+  check(res.status === 400, '音频数据集用 table-mlp 返回 400', res.status);
+
+  const bigArtifact = { engine: 'audio-knn', blob: 'v'.repeat(11 * 1024 * 1024) };
+  res = await api('POST', `/api/ai-lab/projects/${mlpProject.id}/models`, { token: ownerToken, body: { dataset_id: mlpDataset.id, engine: 'table-mlp', class_keys: mlpClasses, artifact: bigArtifact, note: '11MB' } });
+  const bigOk = res.status === 201 && res.body.data?.artifact_path && fs.statSync(path.join(config.storage.paths.uploads, res.body.data.artifact_path)).size > 11 * 1024 * 1024;
+  check(bigOk, '11MB artifact（超过旧的 10MB 上限）可保存并落盘', { status: res.status, message: res.body?.message });
+
+  step('新事件类型 v3');
+  const newTypes = ['annotation.write', 'agreement.compute', 'fairness.view', 'audio.play'];
+  res = await api('POST', `/api/ai-lab/projects/${txtProject.id}/events`, { token: ownerToken, body: { events: newTypes.map(type => ({ type, payload: { smoke: true } })) } });
+  check(res.status === 201 && res.body.data?.inserted === 4, '4 种新事件类型均可写入', res.body);
+  res = await api('GET', `/api/ai-lab/projects/${txtProject.id}/events`, { token: ownerToken });
+  check(res.body.data?.map(e => e.type).join(',') === newTypes.join(','), 'GET /events 按序返回新事件', res.body.data?.map(e => e.type));
+
+  step('其余新模板可建项目');
+  for (const [key, kind] of [['L5', 'text'], ['L6', 'table'], ['M4', 'audio'], ['M2', 'image'], ['P7', 'text']]) {
+    res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: `模板 ${key}`, task_key: key } });
+    if (res.body.data?.project?.id) created.projectIds.push(res.body.data.project.id);
+    check(res.status === 201 && res.body.data?.dataset?.kind === kind, `${key} 项目的数据集 kind=${kind}`, res.body.data?.dataset?.kind);
+  }
+  res = await api('GET', `/api/ai-lab/projects/${audProject.id}`, { token: ownerToken });
+  check(res.body.data?.project?.summary?.model_count === 1 && res.body.data?.project?.summary?.generalization_gap === 0.5 && res.body.data?.datasets?.[0]?.kind === 'audio', '音频项目 summary 与数据集 kind 正确', res.body.data?.project?.summary);
+}
+
 /* ================================================================
  * 清理
  * ================================================================ */
@@ -730,6 +1081,7 @@ async function main() {
     await ensureServer();
     const tokens = await runFlow(users.owner, users.admin);
     await runV2Flow(users.owner, tokens);
+    await runV3Flow(users.owner, tokens);
   } catch (error) {
     results.failed += 1;
     results.failures.push(`异常: ${error.message}`);

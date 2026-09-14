@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-14T04:36:04Z",
+  "updated_at": "2026-09-14T05:59:57Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "4d36c61b59021684dc1df9c684f07bde5e9eb05dcce7e05207917c55392b4d8a",
-      "size": 266867,
-      "normalized_sha256": "4d36c61b59021684dc1df9c684f07bde5e9eb05dcce7e05207917c55392b4d8a"
+      "sha256": "65fc52b3cad38a90d3892cdbdf2b2681a563e5021e726005784008deff478bc8",
+      "size": 277428,
+      "normalized_sha256": "65fc52b3cad38a90d3892cdbdf2b2681a563e5021e726005784008deff478bc8"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -145,6 +145,11 @@
       "size": 5072,
       "normalized_sha256": "230a742609fa23810c8db592e4106c2f6872e7e4faa1496eef45d1ad0310dbde"
     },
+    "backend/migrations/20260915_001_ai_lab_audio_text.js": {
+      "sha256": "0cf170222b645070d4d778f5083f07c17347855698373d6719925088d696f0ce",
+      "size": 2886,
+      "normalized_sha256": "0cf170222b645070d4d778f5083f07c17347855698373d6719925088d696f0ce"
+    },
     "backend/package-lock.json": {
       "role": "index",
       "sha256": "87813106ddd7a436c0617e102b53c3bbac37ba66967174947201ffd9482b9bd2",
@@ -158,10 +163,9 @@
       "normalized_sha256": "0df614e9163cc33933b20f863f99136a71995640280dd2272b975a090f497cf8"
     },
     "backend/scripts/ai-lab-smoke.cjs": {
-      "role": "index",
-      "sha256": "ca285e79dd01b0d5ec16b4fb9333dcf5e7ccf9cbacf351d9db21f51a4c870d5a",
-      "size": 57512,
-      "normalized_sha256": "ca285e79dd01b0d5ec16b4fb9333dcf5e7ccf9cbacf351d9db21f51a4c870d5a"
+      "sha256": "bc7f4c8cdef1a9e192e6b0531e5c9f9cfe5a4e6a3050645a12d2de78eb98d166",
+      "size": 94864,
+      "normalized_sha256": "bc7f4c8cdef1a9e192e6b0531e5c9f9cfe5a4e6a3050645a12d2de78eb98d166"
     },
     "backend/scripts/db_backup.sh": {
       "role": "index",
@@ -283,11 +287,23 @@
       "size": 936,
       "normalized_sha256": "80a8691550aeff820e7edad5db59c35555179bf5300b57ce7c80a2398de821f7"
     },
+    "backend/src/__tests__/unit/config/aiLabTasks.test.js": {
+      "role": "observe",
+      "sha256": "fdd8767a734874e3b80433f1e14559753f7e49a326287d1fafeb731181bd7ba1",
+      "size": 5698,
+      "normalized_sha256": "fdd8767a734874e3b80433f1e14559753f7e49a326287d1fafeb731181bd7ba1"
+    },
     "backend/src/__tests__/unit/controllers/IdentityAuthController.test.js": {
       "role": "observe",
       "sha256": "d5d7c09528c8d06f6dbffab24fa89cad9ae24bfb508d84889d8a44366aeec83d",
       "size": 13587,
       "normalized_sha256": "d5d7c09528c8d06f6dbffab24fa89cad9ae24bfb508d84889d8a44366aeec83d"
+    },
+    "backend/src/__tests__/unit/middleware/aiLabUploadMiddleware.test.js": {
+      "role": "observe",
+      "sha256": "1b949004d4bc17b12c459e624dfa9d0ebdda4e12a786c9ac10f68f9a4d80f976",
+      "size": 4989,
+      "normalized_sha256": "1b949004d4bc17b12c459e624dfa9d0ebdda4e12a786c9ac10f68f9a4d80f976"
     },
     "backend/src/__tests__/unit/middleware/authMiddleware.test.js": {
       "role": "observe",
@@ -379,6 +395,12 @@
       "size": 6551,
       "normalized_sha256": "73696fe3e1bc2dccd314819cba0996bca87e1c6361163e69240b3244779e3f60"
     },
+    "backend/src/__tests__/unit/services/aiLab/rowPayload.test.js": {
+      "role": "observe",
+      "sha256": "843211dea0c918b67d2dda154a15d8cceacbfe78955076d7a13b38e50cee69b6",
+      "size": 4325,
+      "normalized_sha256": "843211dea0c918b67d2dda154a15d8cceacbfe78955076d7a13b38e50cee69b6"
+    },
     "backend/src/__tests__/unit/services/aiLab/splitHoldout.test.js": {
       "role": "observe",
       "sha256": "73b755b2fac65f5198b696cdd0e4913a020ac989785b00bdab6d957ffe03f8fe",
@@ -428,16 +450,14 @@
       "normalized_sha256": "44730fdfd3f35b620f34527c9f0585c2005ecbaef437fe973f78680e4ddbaf8f"
     },
     "backend/src/app.js": {
-      "role": "index",
-      "sha256": "0fb1088640da2552f75b9a49c043da6e7c2fb6a6c0c03ae2334764f38ee4d650",
-      "size": 8335,
-      "normalized_sha256": "0fb1088640da2552f75b9a49c043da6e7c2fb6a6c0c03ae2334764f38ee4d650"
+      "sha256": "5a43ce8846e2f18ce7eb02616418535bd49a0684bed20a8d99bd6e34e34b4164",
+      "size": 8501,
+      "normalized_sha256": "5a43ce8846e2f18ce7eb02616418535bd49a0684bed20a8d99bd6e34e34b4164"
     },
     "backend/src/config/aiLabTasks.js": {
-      "role": "index",
-      "sha256": "57db49c12537321c30d918af5dd19db86f904ef249e3b3ef1145290d0bdf75db",
-      "size": 8388,
-      "normalized_sha256": "57db49c12537321c30d918af5dd19db86f904ef249e3b3ef1145290d0bdf75db"
+      "sha256": "8cec8a7149e3fda9b3689def112cba59d00386bc8f215c51397885307dd32800",
+      "size": 15324,
+      "normalized_sha256": "8cec8a7149e3fda9b3689def112cba59d00386bc8f215c51397885307dd32800"
     },
     "backend/src/config/casbin/teaching_model.conf": {
       "role": "index",
@@ -475,10 +495,9 @@
       "normalized_sha256": "080b9f141704099304cd519847902985fb1349c6fcb6c4c312e037cafd5a404f"
     },
     "backend/src/controllers/AiLabController.js": {
-      "role": "index",
-      "sha256": "4b2da4676346ed10b6352de4b563204b70650446634f3b532c2c6104cc5f963c",
-      "size": 45968,
-      "normalized_sha256": "4b2da4676346ed10b6352de4b563204b70650446634f3b532c2c6104cc5f963c"
+      "sha256": "cf44d26011ae2cae910ec7762b0f57c3afae93780c06dd5dac777d0b8fab870b",
+      "size": 49581,
+      "normalized_sha256": "cf44d26011ae2cae910ec7762b0f57c3afae93780c06dd5dac777d0b8fab870b"
     },
     "backend/src/controllers/AuthControllerRefactored.js": {
       "role": "index",
@@ -733,10 +752,9 @@
       "normalized_sha256": "5b557b1159f3f9a45ccaf2ba7965f61099e4c5b0ce45016981cd77329037700a"
     },
     "backend/src/middleware/aiLabUploadMiddleware.js": {
-      "role": "index",
-      "sha256": "b5260b1405d4a7553e12b5ace1a8418f3b9c2c67754f13efc85bd03c3a71a6cf",
-      "size": 3884,
-      "normalized_sha256": "b5260b1405d4a7553e12b5ace1a8418f3b9c2c67754f13efc85bd03c3a71a6cf"
+      "sha256": "8a0b4c80c09fa3e90f54e5fe60adb9e92c6fdd43e0c228d0e6460e7b94eac022",
+      "size": 10552,
+      "normalized_sha256": "8a0b4c80c09fa3e90f54e5fe60adb9e92c6fdd43e0c228d0e6460e7b94eac022"
     },
     "backend/src/middleware/authMiddleware.js": {
       "role": "index",
@@ -859,10 +877,9 @@
       "normalized_sha256": "34996d9e47f99588b878d5cd2dab55701e08d399beaf1f7435e16ea33cdd0280"
     },
     "backend/src/models/AiLabDataset.js": {
-      "role": "index",
-      "sha256": "4600f722d8f8720d41eabb261f36b2737b84b2f6129fa7cdd4b0b762e34b2a47",
-      "size": 13489,
-      "normalized_sha256": "4600f722d8f8720d41eabb261f36b2737b84b2f6129fa7cdd4b0b762e34b2a47"
+      "sha256": "53b49f251cfae86054e372baf0bfc05d44ed0538c070a728b019e861d5fda010",
+      "size": 14218,
+      "normalized_sha256": "53b49f251cfae86054e372baf0bfc05d44ed0538c070a728b019e861d5fda010"
     },
     "backend/src/models/AiLabEvent.js": {
       "role": "index",
@@ -871,10 +888,9 @@
       "normalized_sha256": "b02cf11e4f5a5b9557e8ea9400cbde8b5b1ac10fe17e7249c73a73394bc4b101"
     },
     "backend/src/models/AiLabModel.js": {
-      "role": "index",
-      "sha256": "b39d1394e08a704482f3b11c80208eedf7d791ebf7399c0ec8db18944724c555",
-      "size": 8529,
-      "normalized_sha256": "b39d1394e08a704482f3b11c80208eedf7d791ebf7399c0ec8db18944724c555"
+      "sha256": "82e52a0f1dd5a65e9dda3a2ec0459a11665ed3cc5f1378d8608b4ea5e28bde16",
+      "size": 8561,
+      "normalized_sha256": "82e52a0f1dd5a65e9dda3a2ec0459a11665ed3cc5f1378d8608b4ea5e28bde16"
     },
     "backend/src/models/AiLabProject.js": {
       "role": "index",
@@ -883,10 +899,9 @@
       "normalized_sha256": "d3c80d3a39ac577466220d0b1af9d734f915f5286d1f8bd6f6b4449c21781911"
     },
     "backend/src/models/AiLabSample.js": {
-      "role": "index",
-      "sha256": "7da8342fdc4686512390c0db815a5ba47012be483b0bfa8f9e2ca51bd13a4b94",
-      "size": 12417,
-      "normalized_sha256": "7da8342fdc4686512390c0db815a5ba47012be483b0bfa8f9e2ca51bd13a4b94"
+      "sha256": "c544668135934be689a8550396516811ef5b16721d91e72104c18f399386afd3",
+      "size": 12628,
+      "normalized_sha256": "c544668135934be689a8550396516811ef5b16721d91e72104c18f399386afd3"
     },
     "backend/src/models/CalendarAIAnalysis.js": {
       "role": "index",
@@ -1243,10 +1258,9 @@
       "normalized_sha256": "7feba1f0b927336fd20bc6dcf95abc135107ee25d064d0c6e82976431944a167"
     },
     "backend/src/routes/aiLabRoutes.js": {
-      "role": "index",
-      "sha256": "e55691f70bdaf31510535278832cb51431925b36405f4e11bc44a88bad8f39d3",
-      "size": 2341,
-      "normalized_sha256": "e55691f70bdaf31510535278832cb51431925b36405f4e11bc44a88bad8f39d3"
+      "sha256": "f0829bef79c946d285fb3432e3dab8989bade4b910db7bf73f36c5f0dd19ec6d",
+      "size": 2625,
+      "normalized_sha256": "f0829bef79c946d285fb3432e3dab8989bade4b910db7bf73f36c5f0dd19ec6d"
     },
     "backend/src/routes/auth.js": {
       "role": "index",
@@ -1501,16 +1515,14 @@
       "normalized_sha256": "f8a7a91c43b1f3cd56d683b67fc3ef9946ab9186cd6be729ab669020af56d78c"
     },
     "backend/src/services/aiLab/AiLabPresetService.js": {
-      "role": "index",
-      "sha256": "2fd4fe4eac8c84b50b280d3bd92b355ac6b053c64ae920153b0b096552c7db82",
-      "size": 19055,
-      "normalized_sha256": "2fd4fe4eac8c84b50b280d3bd92b355ac6b053c64ae920153b0b096552c7db82"
+      "sha256": "7624a42d4413f08e9b8b55623e428d4a153af8f56f03468dd907b8edb21bbd3b",
+      "size": 23076,
+      "normalized_sha256": "7624a42d4413f08e9b8b55623e428d4a153af8f56f03468dd907b8edb21bbd3b"
     },
     "backend/src/services/aiLab/AiLabService.js": {
-      "role": "index",
-      "sha256": "3f01ef4910bd1b37f03976991791cdf6752219e9668bd880ec773bdde35cb438",
-      "size": 15595,
-      "normalized_sha256": "3f01ef4910bd1b37f03976991791cdf6752219e9668bd880ec773bdde35cb438"
+      "sha256": "f5c5e4bd883cfb695de92a2b4807540cfed9f60215837c65bb21dde60a0c8de8",
+      "size": 16012,
+      "normalized_sha256": "f5c5e4bd883cfb695de92a2b4807540cfed9f60215837c65bb21dde60a0c8de8"
     },
     "backend/src/services/aiLab/mislabel.js": {
       "role": "index",
@@ -1519,10 +1531,14 @@
       "normalized_sha256": "92020fe1ba98e41c41b5733ae283af63d2fa0594e3c0387a066f98a733022276"
     },
     "backend/src/services/aiLab/presetPacks.js": {
-      "role": "index",
-      "sha256": "375449b06ec94836aa8faabaed821c21056c38eb9eab9c5da9338bb8856dc9e4",
-      "size": 4224,
-      "normalized_sha256": "375449b06ec94836aa8faabaed821c21056c38eb9eab9c5da9338bb8856dc9e4"
+      "sha256": "bbaadd45bd7f3c13026527a7c5d15d9f18a0981e12e6def36981c7b1ea828fb0",
+      "size": 4914,
+      "normalized_sha256": "bbaadd45bd7f3c13026527a7c5d15d9f18a0981e12e6def36981c7b1ea828fb0"
+    },
+    "backend/src/services/aiLab/rowPayload.js": {
+      "sha256": "c0b8ffb40def56b58a767efc9b63522736964dce6d3a6f154dd8bad73580a901",
+      "size": 3059,
+      "normalized_sha256": "c0b8ffb40def56b58a767efc9b63522736964dce6d3a6f154dd8bad73580a901"
     },
     "backend/src/services/aiLab/splitHoldout.js": {
       "role": "index",
@@ -1954,10 +1970,9 @@
       "normalized_sha256": "7fb4de8eeb5a8025cfdf1d0cf13d1a8854f65589b9292b3cc3d53dcbe92454ae"
     },
     "docs/ai-lab/README.md": {
-      "role": "index",
-      "sha256": "db606273e1b4771f3a08581ba2c25b6c9e42eacaec11a6d240158890fffb10b8",
-      "size": 6391,
-      "normalized_sha256": "db606273e1b4771f3a08581ba2c25b6c9e42eacaec11a6d240158890fffb10b8"
+      "sha256": "25d7510a0f650b6be5ae72bc0ee8b6f8d5e3ec034d4dbbb9a80ae5e26da7578d",
+      "size": 8439,
+      "normalized_sha256": "25d7510a0f650b6be5ae72bc0ee8b6f8d5e3ec034d4dbbb9a80ae5e26da7578d"
     },
     "docs/docker-deploy-guide.md": {
       "role": "index",
@@ -2018,11 +2033,23 @@
       "size": 3200,
       "normalized_sha256": "5bb3c04b7c28089465e0712bed7a6815b45976e0e3ac13d87ff8b8d6dc184b66"
     },
+    "frontend/src/__tests__/unit/aiLab/mlp.test.js": {
+      "role": "observe",
+      "sha256": "2e733d0016adbc3d1ff61f422664dbfe26e58942a332b5998e1c0a582cbd45cf",
+      "size": 2064,
+      "normalized_sha256": "2e733d0016adbc3d1ff61f422664dbfe26e58942a332b5998e1c0a582cbd45cf"
+    },
     "frontend/src/__tests__/unit/aiLab/tabular.test.js": {
       "role": "observe",
       "sha256": "56fc60c13066c1d39f8e566186a852332edb20c8b2e9406f729d4adfcd518119",
       "size": 6053,
       "normalized_sha256": "56fc60c13066c1d39f8e566186a852332edb20c8b2e9406f729d4adfcd518119"
+    },
+    "frontend/src/__tests__/unit/aiLab/text.test.js": {
+      "role": "observe",
+      "sha256": "75f3b49411ab85a94cba14830c23a42893c19abea1e5ad26dbffb863c86b028c",
+      "size": 3307,
+      "normalized_sha256": "75f3b49411ab85a94cba14830c23a42893c19abea1e5ad26dbffb863c86b028c"
     },
     "frontend/src/__tests__/unit/components/ChatInputArea.test.jsx": {
       "role": "observe",
@@ -2901,10 +2928,9 @@
       "normalized_sha256": "2823f49bbab7f23aedc672de728797cd679eb307c74daa146b6d7e0f81a654de"
     },
     "frontend/src/locales/en-US/aiLab.json": {
-      "role": "index",
-      "sha256": "81011a2110317eebe464d48cf1b9ff40bd663ed9ab3953d020e7cfa4bdcf627a",
-      "size": 26731,
-      "normalized_sha256": "81011a2110317eebe464d48cf1b9ff40bd663ed9ab3953d020e7cfa4bdcf627a"
+      "sha256": "ef7e38acb800ee04e6284e591c6440a87fd9a903e4055a9fea52944364a218ae",
+      "size": 37557,
+      "normalized_sha256": "ef7e38acb800ee04e6284e591c6440a87fd9a903e4055a9fea52944364a218ae"
     },
     "frontend/src/locales/en-US/auth.json": {
       "role": "index",
@@ -3015,10 +3041,9 @@
       "normalized_sha256": "5a87d728f976f7bcce8a3dabff2eac84823acd823c3a570f8a2126723be479fb"
     },
     "frontend/src/locales/zh-CN/aiLab.json": {
-      "role": "index",
-      "sha256": "fbec4a099d63f33b5311771ae5582992b30fc7662ec91db028c79c271dce67c3",
-      "size": 26004,
-      "normalized_sha256": "fbec4a099d63f33b5311771ae5582992b30fc7662ec91db028c79c271dce67c3"
+      "sha256": "f5b82509c21789f3ff150ef6b3d60576e6ff23c6ddb4702308d08b68dded1100",
+      "size": 36428,
+      "normalized_sha256": "f5b82509c21789f3ff150ef6b3d60576e6ff23c6ddb4702308d08b68dded1100"
     },
     "frontend/src/locales/zh-CN/auth.json": {
       "role": "index",
@@ -3279,22 +3304,39 @@
       "normalized_sha256": "b6591af4a8fa88102920e5ddefee576ff223932bbe0c96612a28cb56f3ac59e5"
     },
     "frontend/src/pages/aiLab/AiLab.less": {
-      "role": "index",
-      "sha256": "9e7129cc867c3927f49fbec92d7a0d0d0d376ca9bc5721e759b2e8ae890bfb70",
-      "size": 10251,
-      "normalized_sha256": "9e7129cc867c3927f49fbec92d7a0d0d0d376ca9bc5721e759b2e8ae890bfb70"
+      "sha256": "a23a4925e868e05a6a1298e0b5f1f8f14150bc42c875315b0fb997ab0804777f",
+      "size": 11986,
+      "normalized_sha256": "a23a4925e868e05a6a1298e0b5f1f8f14150bc42c875315b0fb997ab0804777f"
     },
     "frontend/src/pages/aiLab/ProjectWorkspace.jsx": {
-      "role": "index",
-      "sha256": "3eb3b43d2767d78d36e2c69024b66791748e797ce839e2f6efb2a932cb627986",
-      "size": 16945,
-      "normalized_sha256": "3eb3b43d2767d78d36e2c69024b66791748e797ce839e2f6efb2a932cb627986"
+      "sha256": "3bd2b118cfe914f5c49f7f55fcb41defa0018f277d5d3b82c38388b7bad69014",
+      "size": 21403,
+      "normalized_sha256": "3bd2b118cfe914f5c49f7f55fcb41defa0018f277d5d3b82c38388b7bad69014"
+    },
+    "frontend/src/pages/aiLab/components/AnnotationPanel.jsx": {
+      "sha256": "802bd288d3ca0e72bfe690d23f0da06db1587cc7d375a96e9300f0f7ac469dd5",
+      "size": 7016,
+      "normalized_sha256": "802bd288d3ca0e72bfe690d23f0da06db1587cc7d375a96e9300f0f7ac469dd5"
+    },
+    "frontend/src/pages/aiLab/components/AudioCapturePanel.jsx": {
+      "sha256": "8363de174888fc0e7a0b670daa141e1585f048c6f72cb99f0ca5c941dd60a636",
+      "size": 8724,
+      "normalized_sha256": "8363de174888fc0e7a0b670daa141e1585f048c6f72cb99f0ca5c941dd60a636"
+    },
+    "frontend/src/pages/aiLab/components/AudioDatasetPanel.jsx": {
+      "sha256": "2da162dd8788eed8a12cf827fe4e6e91f034c8fbd2aa7a47c38d93f910444887",
+      "size": 4370,
+      "normalized_sha256": "2da162dd8788eed8a12cf827fe4e6e91f034c8fbd2aa7a47c38d93f910444887"
+    },
+    "frontend/src/pages/aiLab/components/AudioThumb.jsx": {
+      "sha256": "4613d1dc4d100fe310e1899879da828b8a80ffea7d7e1896c9d04c854acb0db2",
+      "size": 2018,
+      "normalized_sha256": "4613d1dc4d100fe310e1899879da828b8a80ffea7d7e1896c9d04c854acb0db2"
     },
     "frontend/src/pages/aiLab/components/CapturePanel.jsx": {
-      "role": "index",
-      "sha256": "5decfd5df6669f14cf11a10448c4ab97827117d4f8803887ef6cbcbe6761d2c3",
-      "size": 8957,
-      "normalized_sha256": "5decfd5df6669f14cf11a10448c4ab97827117d4f8803887ef6cbcbe6761d2c3"
+      "sha256": "f95c0ab79a1fb281b29e592df7f1c71fdfae17b848dad69ffbd7be8541eebc5d",
+      "size": 8970,
+      "normalized_sha256": "f95c0ab79a1fb281b29e592df7f1c71fdfae17b848dad69ffbd7be8541eebc5d"
     },
     "frontend/src/pages/aiLab/components/ComparePanel.jsx": {
       "role": "index",
@@ -3327,16 +3369,14 @@
       "normalized_sha256": "f5b74499939525d147731e47551da412cba5f517a7053be743ad0f76d89d024f"
     },
     "frontend/src/pages/aiLab/components/ErrorGallery.jsx": {
-      "role": "index",
-      "sha256": "824d023b714cad3ae617009d245a4a9fa79211744c8808c4378a77fa86330dad",
-      "size": 3229,
-      "normalized_sha256": "824d023b714cad3ae617009d245a4a9fa79211744c8808c4378a77fa86330dad"
+      "sha256": "4c2ba641756ec8ee0bd0c13edd5cf9c6b6418b84f34dbb2c5f587379da984006",
+      "size": 3558,
+      "normalized_sha256": "4c2ba641756ec8ee0bd0c13edd5cf9c6b6418b84f34dbb2c5f587379da984006"
     },
     "frontend/src/pages/aiLab/components/EvaluatePanel.jsx": {
-      "role": "index",
-      "sha256": "cb1874518b8000d28aadc970f00a07376eb0bee599691977199fd1aa2bb2d1fa",
-      "size": 10182,
-      "normalized_sha256": "cb1874518b8000d28aadc970f00a07376eb0bee599691977199fd1aa2bb2d1fa"
+      "sha256": "d10e7074ece9fa58c79f6cd1355eb6f2552c5bdfc95114be64e0a393cc3e294d",
+      "size": 10730,
+      "normalized_sha256": "d10e7074ece9fa58c79f6cd1355eb6f2552c5bdfc95114be64e0a393cc3e294d"
     },
     "frontend/src/pages/aiLab/components/HeatmapOverlay.jsx": {
       "role": "index",
@@ -3345,10 +3385,14 @@
       "normalized_sha256": "23ebfce4c433fae578594fb59ed41d23202fa91b9bf7a8e24e1d16b3caecdbfb"
     },
     "frontend/src/pages/aiLab/components/ImportPresetModal.jsx": {
-      "role": "index",
-      "sha256": "4dfcd42e1a5724f874b87b48ca342eff5dcae769cd83b538373938304c015702",
-      "size": 6472,
-      "normalized_sha256": "4dfcd42e1a5724f874b87b48ca342eff5dcae769cd83b538373938304c015702"
+      "sha256": "ada1e4a04b8eac26493e78f88f5bda83442651f2496b9e8f1bc2cf9afa460a1a",
+      "size": 6528,
+      "normalized_sha256": "ada1e4a04b8eac26493e78f88f5bda83442651f2496b9e8f1bc2cf9afa460a1a"
+    },
+    "frontend/src/pages/aiLab/components/LossCurve.jsx": {
+      "sha256": "b5b664089e2277bbd86700778ac5360e0570b8197e4dbf1ece92d394cb964c8c",
+      "size": 2069,
+      "normalized_sha256": "b5b664089e2277bbd86700778ac5360e0570b8197e4dbf1ece92d394cb964c8c"
     },
     "frontend/src/pages/aiLab/components/MetricsView.jsx": {
       "role": "index",
@@ -3361,6 +3405,11 @@
       "sha256": "0fd18f18149e3cbc37a238d8cf3fc5e71c6e5e19cebea4a6fc7b65cda4e71e23",
       "size": 4463,
       "normalized_sha256": "0fd18f18149e3cbc37a238d8cf3fc5e71c6e5e19cebea4a6fc7b65cda4e71e23"
+    },
+    "frontend/src/pages/aiLab/components/MlpTrainPanel.jsx": {
+      "sha256": "121dbdaf6feed160295b9bedde780399ac3e95b7cca758fb807a991a8c5e6a40",
+      "size": 5454,
+      "normalized_sha256": "121dbdaf6feed160295b9bedde780399ac3e95b7cca758fb807a991a8c5e6a40"
     },
     "frontend/src/pages/aiLab/components/ModelCardForm.jsx": {
       "role": "index",
@@ -3375,10 +3424,9 @@
       "normalized_sha256": "7de90d879f4d28aec65c5730e386567f742ac5da11acc3b08caaa01b1f4cfe1e"
     },
     "frontend/src/pages/aiLab/components/RuleEditor.jsx": {
-      "role": "index",
-      "sha256": "b4015e3ebe32c7fa3fc0e709a9a88254216b525c37397d70021a5ee45a9863bb",
-      "size": 12651,
-      "normalized_sha256": "b4015e3ebe32c7fa3fc0e709a9a88254216b525c37397d70021a5ee45a9863bb"
+      "sha256": "bc8250dae06db8cf2bc29b1f392b85f5d3530c8662f0311e82e777b0d3af20a0",
+      "size": 12686,
+      "normalized_sha256": "bc8250dae06db8cf2bc29b1f392b85f5d3530c8662f0311e82e777b0d3af20a0"
     },
     "frontend/src/pages/aiLab/components/RuleList.jsx": {
       "role": "index",
@@ -3398,17 +3446,35 @@
       "size": 3458,
       "normalized_sha256": "520b9577e3a4242eb4ec1718fd8c7e12660ecd472f57d8bacd0e8e9ef71a535a"
     },
+    "frontend/src/pages/aiLab/components/SubgroupTable.jsx": {
+      "sha256": "42bcb1184f6dcd9f3779aa2edc316ac61150d26954030ce3f7b234eb6578018f",
+      "size": 2932,
+      "normalized_sha256": "42bcb1184f6dcd9f3779aa2edc316ac61150d26954030ce3f7b234eb6578018f"
+    },
     "frontend/src/pages/aiLab/components/TableEvaluatePanel.jsx": {
-      "role": "index",
-      "sha256": "0b96777be20ea686bb4328c70f9d327bcbdf95b9c7885a480b74ed951862e089",
-      "size": 9916,
-      "normalized_sha256": "0b96777be20ea686bb4328c70f9d327bcbdf95b9c7885a480b74ed951862e089"
+      "sha256": "dfd120e843e5a42b12c6358551905b244f5070d899ad670f70f0c4077d7ea9a7",
+      "size": 10370,
+      "normalized_sha256": "dfd120e843e5a42b12c6358551905b244f5070d899ad670f70f0c4077d7ea9a7"
     },
     "frontend/src/pages/aiLab/components/TablePanel.jsx": {
-      "role": "index",
-      "sha256": "cfd6e5febde8139108be3286051f89453227775ead5d76f043d8b7801b0e5c23",
-      "size": 8993,
-      "normalized_sha256": "cfd6e5febde8139108be3286051f89453227775ead5d76f043d8b7801b0e5c23"
+      "sha256": "1cfb12f14655bccb10a42984c96456265de419955f24d1277536b6cac8c631ec",
+      "size": 9490,
+      "normalized_sha256": "1cfb12f14655bccb10a42984c96456265de419955f24d1277536b6cac8c631ec"
+    },
+    "frontend/src/pages/aiLab/components/TextEvaluatePanel.jsx": {
+      "sha256": "8c91067a6fe9781a29300667de235942b00db0088e445e90ec2baf6e73492eaa",
+      "size": 8625,
+      "normalized_sha256": "8c91067a6fe9781a29300667de235942b00db0088e445e90ec2baf6e73492eaa"
+    },
+    "frontend/src/pages/aiLab/components/TextPanel.jsx": {
+      "sha256": "2aa56a3d6cb191898955000fa83a009ddf2467c6b67bbe2c9267ae6448a8b03b",
+      "size": 4539,
+      "normalized_sha256": "2aa56a3d6cb191898955000fa83a009ddf2467c6b67bbe2c9267ae6448a8b03b"
+    },
+    "frontend/src/pages/aiLab/components/TextTrainPanel.jsx": {
+      "sha256": "ebd9447a8ae38eb20bac14d56c7cad19514ccd3989b2d4d3559122d93e85ebb3",
+      "size": 6168,
+      "normalized_sha256": "ebd9447a8ae38eb20bac14d56c7cad19514ccd3989b2d4d3559122d93e85ebb3"
     },
     "frontend/src/pages/aiLab/components/Timeline.jsx": {
       "role": "index",
@@ -3417,16 +3483,14 @@
       "normalized_sha256": "426c626101ec4887fd7caf219ef193874ae4f7f0286b96bf487719253918c8d7"
     },
     "frontend/src/pages/aiLab/components/TrainPanel.jsx": {
-      "role": "index",
-      "sha256": "9e87de7f25ea193affdd2a0ddd81fdd4662d98e3f609fc8f230ad34e44fbc471",
-      "size": 7521,
-      "normalized_sha256": "9e87de7f25ea193affdd2a0ddd81fdd4662d98e3f609fc8f230ad34e44fbc471"
+      "sha256": "c914dc4fb57aebddd0e3279b3389deff057d7e0389f2f941b08d5cd671d44564",
+      "size": 7267,
+      "normalized_sha256": "c914dc4fb57aebddd0e3279b3389deff057d7e0389f2f941b08d5cd671d44564"
     },
     "frontend/src/pages/aiLab/components/TreeTrainPanel.jsx": {
-      "role": "index",
-      "sha256": "518ff3fdd145304629ad42acc7221877a7e02fa2b558c64b8e30ce8beabec125",
-      "size": 7050,
-      "normalized_sha256": "518ff3fdd145304629ad42acc7221877a7e02fa2b558c64b8e30ce8beabec125"
+      "sha256": "31c4056bfed2c4ce7a720839b0cd5c995db3d62f64d52c5354e4aacbbedfdec1",
+      "size": 7085,
+      "normalized_sha256": "31c4056bfed2c4ce7a720839b0cd5c995db3d62f64d52c5354e4aacbbedfdec1"
     },
     "frontend/src/pages/aiLab/components/TreeView.jsx": {
       "role": "index",
@@ -3435,16 +3499,34 @@
       "normalized_sha256": "a5963fe2c17d9f54675acb1b753957c7cf6f46401de69fa77c48e7d1f2c3dcef"
     },
     "frontend/src/pages/aiLab/components/VerifyWorkspace.jsx": {
-      "role": "index",
-      "sha256": "0a14097f8cd1f361d324683b8d754aca36da9358e4266fecfbfe3ad974136fd2",
-      "size": 13120,
-      "normalized_sha256": "0a14097f8cd1f361d324683b8d754aca36da9358e4266fecfbfe3ad974136fd2"
+      "sha256": "c03f1177e276f872f1887b7ab1308852f9f004f15b5276d4a6b2ae3f609920bb",
+      "size": 13170,
+      "normalized_sha256": "c03f1177e276f872f1887b7ab1308852f9f004f15b5276d4a6b2ae3f609920bb"
     },
     "frontend/src/pages/aiLab/content/verifyMaterials.js": {
-      "role": "index",
-      "sha256": "4e8986897aaff6fd7a124aa3414e16f88a1ffd597000d0bd1bfba3596694722e",
-      "size": 6532,
-      "normalized_sha256": "4e8986897aaff6fd7a124aa3414e16f88a1ffd597000d0bd1bfba3596694722e"
+      "sha256": "c33eeb022a2c0c9c48e45aca8fb8e606a80641fbf9a001a081e453d3f4e60cde",
+      "size": 12570,
+      "normalized_sha256": "c33eeb022a2c0c9c48e45aca8fb8e606a80641fbf9a001a081e453d3f4e60cde"
+    },
+    "frontend/src/pages/aiLab/engine/audio/audioFeatureExtractor.js": {
+      "sha256": "d2b653c70aa3b9e83f99bae5bf52546d8ce34d101656ec158d7d523b4ceb001c",
+      "size": 1898,
+      "normalized_sha256": "d2b653c70aa3b9e83f99bae5bf52546d8ce34d101656ec158d7d523b4ceb001c"
+    },
+    "frontend/src/pages/aiLab/engine/audio/recorder.js": {
+      "sha256": "1111ed075071e70ed637c42aa79ffc5615fd061f9a067e9f957d3ff0bd03828b",
+      "size": 2377,
+      "normalized_sha256": "1111ed075071e70ed637c42aa79ffc5615fd061f9a067e9f957d3ff0bd03828b"
+    },
+    "frontend/src/pages/aiLab/engine/audio/spectrogram.js": {
+      "sha256": "3b3d7fcbf25aef0bf4d2e72044f822d06a6bb8bb3815ab5ab9776f47a9ac9d0f",
+      "size": 5042,
+      "normalized_sha256": "3b3d7fcbf25aef0bf4d2e72044f822d06a6bb8bb3815ab5ab9776f47a9ac9d0f"
+    },
+    "frontend/src/pages/aiLab/engine/audio/wav.js": {
+      "sha256": "a7ded511c8cfd4cae99ccdd077ce77001f481113167d8cb5fd95415676c49add",
+      "size": 1134,
+      "normalized_sha256": "a7ded511c8cfd4cae99ccdd077ce77001f481113167d8cb5fd95415676c49add"
     },
     "frontend/src/pages/aiLab/engine/featureExtractor.js": {
       "role": "index",
@@ -3470,6 +3552,11 @@
       "size": 1887,
       "normalized_sha256": "e1829bffbeba8f024e26ef04cd95d3a88e344f007fc7e5640f9737f4f36a3543"
     },
+    "frontend/src/pages/aiLab/engine/modalities.js": {
+      "sha256": "46753246728a3be6f711b7f34ad4de8d288859bb960f4c626ee7ff375a703f5c",
+      "size": 2620,
+      "normalized_sha256": "46753246728a3be6f711b7f34ad4de8d288859bb960f4c626ee7ff375a703f5c"
+    },
     "frontend/src/pages/aiLab/engine/occlusion.js": {
       "role": "index",
       "sha256": "28f30936e095d4ba02e2e53b81b83f4b60e57231b188732a1e797f1588b7aed1",
@@ -3482,6 +3569,11 @@
       "size": 6761,
       "normalized_sha256": "c57faf6a1557952089cb20581177fd14036c9e202cbddfc5d60f99fbdede4594"
     },
+    "frontend/src/pages/aiLab/engine/tabular/mlp.js": {
+      "sha256": "523e097b65e6343d0ae21a8d2530f09e2120bb0d41cae6e47705e4643a43cd9a",
+      "size": 4948,
+      "normalized_sha256": "523e097b65e6343d0ae21a8d2530f09e2120bb0d41cae6e47705e4643a43cd9a"
+    },
     "frontend/src/pages/aiLab/engine/tabular/rules.js": {
       "role": "index",
       "sha256": "c0ce5659404735fdea1b2324d35a91d2835ba41ce73909a14cf30cd87541a62c",
@@ -3493,6 +3585,21 @@
       "sha256": "fa77fd9a0e96ba13585166ab413c07d927a4aba37c6f38bb2a6043d017c43857",
       "size": 2575,
       "normalized_sha256": "fa77fd9a0e96ba13585166ab413c07d927a4aba37c6f38bb2a6043d017c43857"
+    },
+    "frontend/src/pages/aiLab/engine/text/agreement.js": {
+      "sha256": "d5ad26da35c600901221e75c0d06deee757e4922222711e9d9f6d3a0973b73e2",
+      "size": 1116,
+      "normalized_sha256": "d5ad26da35c600901221e75c0d06deee757e4922222711e9d9f6d3a0973b73e2"
+    },
+    "frontend/src/pages/aiLab/engine/text/naiveBayes.js": {
+      "sha256": "452ecfc3ed9ac918b50d5c0c60389d47fe7dd64131bebf0000dd0e87f58d8749",
+      "size": 4196,
+      "normalized_sha256": "452ecfc3ed9ac918b50d5c0c60389d47fe7dd64131bebf0000dd0e87f58d8749"
+    },
+    "frontend/src/pages/aiLab/engine/text/tokenize.js": {
+      "sha256": "3bccb063dc7436b3ba314abada6eab136b0b3441f230a84e88a7da82ec1b8aa1",
+      "size": 1092,
+      "normalized_sha256": "3bccb063dc7436b3ba314abada6eab136b0b3441f230a84e88a7da82ec1b8aa1"
     },
     "frontend/src/pages/auth/IdentityCallback.jsx": {
       "role": "index",
@@ -3937,10 +4044,9 @@
       "normalized_sha256": "4e071a471a46fd9d7af96d7b162bf06ff32d9075b4b459f3bfafaaaedb336853"
     },
     "frontend/src/stores/aiLabStore.js": {
-      "role": "index",
-      "sha256": "bc196aa457418f03edd23f49ec7e5083528cdf80b9f2367b6c45ad8553026b1d",
-      "size": 12720,
-      "normalized_sha256": "bc196aa457418f03edd23f49ec7e5083528cdf80b9f2367b6c45ad8553026b1d"
+      "sha256": "d2bbee6ee77b8b648a2d90b62a1abba6721cce275cdc71059ae18ed01641061f",
+      "size": 13352,
+      "normalized_sha256": "d2bbee6ee77b8b648a2d90b62a1abba6721cce275cdc71059ae18ed01641061f"
     },
     "frontend/src/stores/analyticsStore.js": {
       "role": "index",

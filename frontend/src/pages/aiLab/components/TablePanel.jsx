@@ -13,7 +13,9 @@ export const toRows = (samples, split = 'train') => (samples || []).filter((s) =
 
 const TablePanel = ({ dataset, samples, canEdit, labelOf, onImport, onAddRow }) => {
   const { t } = useTranslation()
-  const columns = dataset?.columns || []
+  const allColumns = dataset?.columns || []
+  const columns = allColumns.filter((c) => c.type !== 'text')
+  const textColumns = allColumns.filter((c) => c.type === 'text')
   const classes = dataset?.classes || []
   const counts = dataset?.counts || { train: {}, holdout: {}, shift: {} }
   const rows = useMemo(() => toRows(samples, 'train'), [samples])
@@ -37,7 +39,7 @@ const TablePanel = ({ dataset, samples, canEdit, labelOf, onImport, onAddRow }) 
 
   const submitRow = async () => {
     const payload = {}
-    for (const c of columns) {
+    for (const c of allColumns) {
       const v = draft[c.key]
       if (v === undefined || v === null || v === '') { message.warning(t('aiLab.table.fillAll')); return }
       payload[c.key] = c.type === 'number' ? Number(v) : String(v)
@@ -56,6 +58,7 @@ const TablePanel = ({ dataset, samples, canEdit, labelOf, onImport, onAddRow }) 
   }
 
   const tableColumns = [
+    ...textColumns.map((c) => ({ title: c.label, dataIndex: ['payload', c.key], width: 110, render: (v) => <b>{v ?? ''}</b> })),
     { title: t('aiLab.table.classCol'), dataIndex: 'label', width: 120, render: (v) => <Tag color="blue">{labelOf(v)}</Tag>, filters: classes.map((c) => ({ text: c.label, value: c.key })), onFilter: (v, r) => r.label === v },
     ...columns.map((c) => ({
       title: c.unit ? `${c.label} (${c.unit})` : c.label,
@@ -139,10 +142,11 @@ const TablePanel = ({ dataset, samples, canEdit, labelOf, onImport, onAddRow }) 
           ].filter(Boolean)}
         />
       )}
-      {canEdit && columns.length > 0 && onAddRow && (
+      {canEdit && allColumns.length > 0 && onAddRow && (
         <div className="ailab-add-row">
           <div className="ailab-muted" style={{ marginBottom: 6 }}>{t('aiLab.table.addRowHint')}</div>
           <Space wrap>
+            {textColumns.map((c) => <Input key={c.key} size="small" placeholder={c.label} value={draft[c.key] || ''} maxLength={60} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.target.value }))} style={{ width: 120 }} />)}
             {columns.map((c) => (c.type === 'number'
               ? <InputNumber key={c.key} size="small" placeholder={c.label} value={draft[c.key]} onChange={(v) => setDraft((d) => ({ ...d, [c.key]: v }))} style={{ width: 120 }} />
               : (

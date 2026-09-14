@@ -142,6 +142,7 @@ const useAiLabStore = create((set, get) => ({
     if (meta.shift_set) form.append('shift_set', meta.shift_set)
     if (meta.condition_tags) form.append('condition_tags', JSON.stringify(meta.condition_tags))
     form.append('source', meta.source || 'camera')
+    if (meta.duration_ms) form.append('duration_ms', String(meta.duration_ms))
     const res = await apiClient.post(`/ai-lab/datasets/${datasetId}/samples`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000
@@ -156,6 +157,19 @@ const useAiLabStore = create((set, get) => ({
     }))
     await get().refreshProject()
     return created
+  },
+
+  /** 改一条样本的类别（双人标注采纳时用） */
+  relabelSample: async (sample, classKey) => {
+    const res = await apiClient.patch(`/ai-lab/samples/${sample.id}`, { class_key: classKey })
+    if (!res.data.success) throw new Error(res.data.message)
+    set((state) => ({
+      samplesByDataset: {
+        ...state.samplesByDataset,
+        [sample.dataset_id]: (state.samplesByDataset[sample.dataset_id] || []).map((s) => (s.id === sample.id ? { ...s, class_key: classKey } : s))
+      }
+    }))
+    await get().refreshProject()
   },
 
   deleteSample: async (sample) => {

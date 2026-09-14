@@ -2,8 +2,9 @@
  * AI训练专区任务模板（代码常量，不进表）
  *
  * 每个模板描述一节"真实数据 → 真实训练 → 三集制测试"的实验课：
- * - kind                   数据类型：image 图片 | table 表格 | text 文本（P7 资讯核验，不训练模型）
- * - engine                 训练引擎：image-knn | image-dense | table-tree | table-rules | verify（仅 text 任务）
+ * - kind                   数据类型：image 图片 | table 表格 | audio 音频 | text 文本
+ * - engine                 训练引擎：image-knn | image-dense | table-tree | table-rules | table-mlp |
+ *                          audio-knn | text-nb | verify（P7/L5 资讯核验，不训练模型）
  * - default_classes        创建项目时自动建的数据集类别（空数组表示由学生自定或由预置包导入）
  * - min_train_per_class    建议每类至少采集的训练样本数
  * - holdout_ratio          lock 时默认的留出比例
@@ -13,8 +14,11 @@
  * - presets                推荐的预置数据包 key（见 backend/presets/ai-lab/<key>/manifest.json）
  * - config                 任务自由配置（如 mislabel_ratio、per_class_limits、max_depth_options）
  *
- * 另导出过程事件类型白名单 AI_LAB_EVENT_TYPES（POST /projects/:id/events 校验）
- * 与训练引擎白名单 AI_LAB_ENGINES（POST /projects/:id/models 校验）。
+ * 另导出过程事件类型白名单 AI_LAB_EVENT_TYPES（POST /projects/:id/events 校验）、
+ * 训练引擎白名单 AI_LAB_ENGINES（POST /projects/:id/models 校验）、数据集类型 AI_LAB_DATASET_KINDS，
+ * 以及 engineKind(engine)：引擎对应的数据集类型（audio-* → audio、text-* → text、table-* → table、其余 image）。
+ *
+ * 模板顺序：L1,L2,L3,L4,L5,L6,M1,M2,M3,M4,M5,P1,P2,P3,P6,P7,free
  */
 
 const IMAGE_SHIFT_SETS = [
@@ -42,6 +46,30 @@ const AI_LAB_TASKS = [
     steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'model_card'],
     abilities: ['intent', 'critical', 'externalize'],
     presets: ['shapes', 'fruits-mini'],
+    config: {}
+  },
+  {
+    key: 'L2',
+    version: '1',
+    title: '声音也能被认出来吗',
+    kind: 'audio',
+    grade_band: 'L',
+    engine: 'audio-knn',
+    hours: 1,
+    default_classes: [
+      { key: 'clap', label: '拍手' },
+      { key: 'knock', label: '敲桌' },
+      { key: 'whistle', label: '口哨' }
+    ],
+    min_train_per_class: 10,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [
+      { key: 'speaker', label: '换同学发声' },
+      { key: 'noise', label: '叠加教室噪声' }
+    ],
+    steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'model_card'],
+    abilities: ['intent', 'critical', 'iterate'],
+    presets: ['sounds-synth'],
     config: {}
   },
   {
@@ -79,6 +107,40 @@ const AI_LAB_TASKS = [
     config: { per_class_limits: [3, 10, 30] }
   },
   {
+    key: 'L5',
+    version: '1',
+    title: 'AI 讲的动物故事哪里不对',
+    kind: 'text',
+    grade_band: 'L',
+    engine: 'verify',
+    hours: 1,
+    default_classes: [],
+    min_train_per_class: 0,
+    holdout_ratio: null,
+    suggested_shift_sets: [],
+    steps: ['material', 'claims', 'verdicts', 'reflection'],
+    abilities: ['critical', 'multi'],
+    presets: [],
+    config: { material_set: 'animal', projected_default: true }
+  },
+  {
+    key: 'L6',
+    version: '1',
+    title: '规则是我定的',
+    kind: 'table',
+    grade_band: 'L',
+    engine: 'table-rules',
+    hours: 1,
+    default_classes: [],
+    min_train_per_class: 10,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [],
+    steps: ['predict', 'import_preset', 'lock', 'rules', 'train', 'test_holdout', 'compare', 'model_card'],
+    abilities: ['problem', 'externalize', 'pattern'],
+    presets: ['animal-cards', 'garbage-cards'],
+    config: { max_depth_options: [1, 2, 3] }
+  },
+  {
     key: 'M1',
     version: '1',
     title: '校园侦探：一次完整的训练',
@@ -100,6 +162,97 @@ const AI_LAB_TASKS = [
     steps: ['predict', 'data_card', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
     abilities: ['problem', 'intent', 'iterate'],
     presets: [],
+    config: {}
+  },
+  {
+    key: 'M2',
+    version: '1',
+    title: '让分类器更公平',
+    kind: 'image',
+    grade_band: 'M',
+    engine: 'image-knn',
+    hours: 2,
+    default_classes: [
+      { key: 'class_a', label: '物品A' },
+      { key: 'class_b', label: '物品B' },
+      { key: 'class_c', label: '物品C' },
+      { key: 'class_d', label: '物品D' }
+    ],
+    min_train_per_class: 20,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [{ key: 'collector', label: '换采集者' }],
+    steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'fairness', 'collect', 'train', 'test_holdout', 'iterate', 'model_card'],
+    abilities: ['multi', 'critical', 'problem'],
+    presets: [],
+    config: { subgroup_tag: 'collector' }
+  },
+  {
+    key: 'M3',
+    version: '1',
+    title: '决策树 vs 神经网络',
+    kind: 'table',
+    grade_band: 'M',
+    engine: 'table-tree',
+    hours: 2,
+    default_classes: [],
+    min_train_per_class: 10,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [],
+    steps: ['predict', 'import_preset', 'lock', 'train', 'train_mlp', 'test_holdout', 'test_shift', 'compare', 'model_card'],
+    abilities: ['pattern', 'externalize', 'multi'],
+    presets: ['penguins', 'iris', 'campus-items'],
+    config: { max_depth_options: [1, 2, 3, 4, 6], mlp: { hidden: 16, epochs: 80 } }
+  },
+  {
+    key: 'M4',
+    version: '1',
+    title: '听懂关键词：从声音到指令',
+    kind: 'audio',
+    grade_band: 'M',
+    engine: 'audio-knn',
+    hours: 2,
+    default_classes: [
+      { key: 'kai', label: '开' },
+      { key: 'guan', label: '关' },
+      { key: 'shang', label: '上' },
+      { key: 'xia', label: '下' },
+      { key: 'zuo', label: '左' },
+      { key: 'you', label: '右' },
+      { key: 'ting', label: '停' },
+      { key: 'zou', label: '走' },
+      { key: 'kuai', label: '快' },
+      { key: 'man', label: '慢' }
+    ],
+    min_train_per_class: 10,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [
+      { key: 'speaker', label: '换说话人' },
+      { key: 'device', label: '换设备' }
+    ],
+    steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
+    abilities: ['intent', 'iterate', 'resilience'],
+    presets: [],
+    config: {}
+  },
+  {
+    key: 'M5',
+    version: '1',
+    title: '情绪翻译器：文本也能分类',
+    kind: 'text',
+    grade_band: 'M',
+    engine: 'text-nb',
+    hours: 2,
+    default_classes: [
+      { key: 'positive', label: '积极' },
+      { key: 'negative', label: '消极' },
+      { key: 'neutral', label: '中性' }
+    ],
+    min_train_per_class: 30,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [{ key: 'topic', label: '另一话题' }],
+    steps: ['predict', 'import_preset', 'annotate', 'agreement', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
+    abilities: ['intent', 'critical', 'multi'],
+    presets: ['campus-messages'],
     config: {}
   },
   {
@@ -164,6 +317,32 @@ const AI_LAB_TASKS = [
     config: { max_depth_options: [1, 2, 3, 4, 6] }
   },
   {
+    key: 'P6',
+    version: '1',
+    title: '校园声音地图',
+    kind: 'audio',
+    grade_band: 'P',
+    engine: 'audio-knn',
+    hours: 2,
+    default_classes: [
+      { key: 'bell', label: '铃声' },
+      { key: 'footsteps', label: '脚步' },
+      { key: 'door', label: '开关门' },
+      { key: 'chatter', label: '说话声' },
+      { key: 'wind', label: '风声' }
+    ],
+    min_train_per_class: 15,
+    holdout_ratio: 0.2,
+    suggested_shift_sets: [
+      { key: 'place', label: '换地点' },
+      { key: 'noise', label: '加噪声' }
+    ],
+    steps: ['predict', 'data_card', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
+    abilities: ['intent', 'iterate', 'resilience'],
+    presets: ['sounds-synth'],
+    config: {}
+  },
+  {
     key: 'P7',
     version: '1',
     title: 'AI 给出的校园资讯可信吗',
@@ -178,7 +357,7 @@ const AI_LAB_TASKS = [
     steps: ['material', 'claims', 'verdicts', 'revise', 'reflection'],
     abilities: ['intent', 'critical', 'iterate'],
     presets: [],
-    config: {}
+    config: { material_set: 'campus' }
   },
   {
     key: 'free',
@@ -225,14 +404,33 @@ const AI_LAB_EVENT_TYPES = [
   'data_card.write',
   'claim.write',
   'claim.verify',
-  'claim.revise'
+  'claim.revise',
+  /* v3 */
+  'annotation.write',
+  'agreement.compute',
+  'fairness.view',
+  'audio.play'
 ];
 
 /** 训练引擎白名单（POST /projects/:id/models） */
-const AI_LAB_ENGINES = ['image-knn', 'image-dense', 'table-tree', 'table-rules'];
+const AI_LAB_ENGINES = ['image-knn', 'image-dense', 'table-tree', 'table-rules', 'table-mlp', 'audio-knn', 'text-nb'];
 
-/** 数据集类型（与 ai_lab_datasets.kind 枚举一致；text 任务不建表格/图片数据） */
-const AI_LAB_DATASET_KINDS = ['image', 'table'];
+/** 数据集类型（与 ai_lab_datasets.kind 枚举一致） */
+const AI_LAB_DATASET_KINDS = ['image', 'table', 'audio', 'text'];
+
+/** 各类数据集默认引擎与默认特征提取器 */
+const DEFAULT_ENGINE_BY_KIND = {
+  image: 'image-knn',
+  table: 'table-tree',
+  audio: 'audio-knn',
+  text: 'text-nb'
+};
+const DEFAULT_FEATURE_EXTRACTOR_BY_KIND = {
+  image: 'mobilenet_v1_050_224',
+  table: 'none',
+  audio: 'speech_commands_18w',
+  text: 'char-ngram'
+};
 
 /**
  * 按 key 取任务模板
@@ -244,10 +442,24 @@ function findTask(key) {
 }
 
 /**
- * 引擎对应的数据集类型：table-* → table，其余 → image
+ * 引擎对应的数据集类型：audio-* → audio，text-* → text，table-* → table，其余 → image
  */
 function engineKind(engine) {
-  return typeof engine === 'string' && engine.startsWith('table-') ? 'table' : 'image';
+  if (typeof engine !== 'string') return 'image';
+  if (engine.startsWith('audio-')) return 'audio';
+  if (engine.startsWith('text-')) return 'text';
+  if (engine.startsWith('table-')) return 'table';
+  return 'image';
+}
+
+/** 数据集类型对应的默认引擎（未知类型按 image） */
+function defaultEngineForKind(kind) {
+  return DEFAULT_ENGINE_BY_KIND[kind] || DEFAULT_ENGINE_BY_KIND.image;
+}
+
+/** 数据集类型对应的默认特征提取器（未知类型按 image） */
+function defaultFeatureExtractorForKind(kind) {
+  return DEFAULT_FEATURE_EXTRACTOR_BY_KIND[kind] || DEFAULT_FEATURE_EXTRACTOR_BY_KIND.image;
 }
 
 module.exports = AI_LAB_TASKS;
@@ -257,3 +469,5 @@ module.exports.AI_LAB_ENGINES = AI_LAB_ENGINES;
 module.exports.AI_LAB_DATASET_KINDS = AI_LAB_DATASET_KINDS;
 module.exports.findTask = findTask;
 module.exports.engineKind = engineKind;
+module.exports.defaultEngineForKind = defaultEngineForKind;
+module.exports.defaultFeatureExtractorForKind = defaultFeatureExtractorForKind;

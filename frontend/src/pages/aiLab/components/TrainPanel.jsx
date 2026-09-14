@@ -7,8 +7,7 @@ import { Button, Progress, Alert, Input, Space, Tag, Typography, Radio, message 
 import { ThunderboltOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
-import { loadExtractor, embedImages, FEATURE_EXTRACTOR_ID, getBackendName } from '../engine/featureExtractor'
-import { loadImageElement } from '../engine/imageUtils'
+import { imageModality } from '../engine/modalities'
 import { trainKnn, serializeKnn, DEFAULT_K } from '../engine/knn'
 
 const { Text } = Typography
@@ -17,7 +16,7 @@ const { Text } = Typography
  * perClassLimits：给出时显示"每类用多少张"选项（L4 实验），训练只取每类前 N 张（按 id 排序，确定性）
  * extraParams：并入 params 与 train.run 事实的附加信息（如当前错标数量）
  */
-const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, extraParams }) => {
+const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, extraParams, modality = imageModality }) => {
   const { t } = useTranslation()
   const { fetchSamples, saveModel, recordEvent, extractor, setExtractor } = useAiLabStore()
   const [stage, setStage] = useState('idle') // idle | model | embed | save
@@ -36,8 +35,8 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, ext
     if (extractor.status === 'ready') return
     setExtractor({ status: 'loading', progress: 0, error: null })
     try {
-      await loadExtractor((f) => setExtractor({ progress: Math.round(f * 100) }))
-      setExtractor({ status: 'ready', progress: 100, backend: getBackendName() })
+      await modality.load((f) => setExtractor({ progress: Math.round(f * 100) }))
+      setExtractor({ status: 'ready', progress: 100, backend: modality.backendName() })
     } catch (err) {
       setExtractor({ status: 'error', error: err.message })
       throw err
@@ -66,12 +65,7 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, ext
       }
       setStage('embed')
       setProgress(0)
-      const images = []
-      for (let i = 0; i < samples.length; i += 1) {
-        // eslint-disable-next-line no-await-in-loop
-        images.push(await loadImageElement(samples[i].file_url))
-      }
-      const vectors = await embedImages(images, (done, total) => setProgress(Math.round((done / total) * 100)))
+      const vectors = await modality.embedSamples(samples, (done, total) => setProgress(Math.round((done / total) * 100)))
       const knn = trainKnn(samples.map((s, i) => ({ id: s.id, label: s.class_key, vec: vectors[i] })), { k: DEFAULT_K })
       setStage('save')
       const classCounts = {}
@@ -79,12 +73,12 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, ext
       const model = await saveModel({
         dataset_id: dataset.id,
         dataset_version: dataset.version,
-        engine: 'image-knn',
-        feature_extractor: FEATURE_EXTRACTOR_ID,
+        engine: modality.engine,
+        feature_extractor: modality.featureExtractorId,
         params: { k: knn.k, metric: 'cosine', ...(perClassLimits?.length && perClassLimit !== 'all' ? { per_class_limit: perClassLimit } : {}), ...(extraParams || {}) },
         class_keys: knn.classKeys,
         train_sample_count: samples.length,
-        artifact: serializeKnn(knn, { feature_extractor: FEATURE_EXTRACTOR_ID, dataset_version: dataset.version }),
+        artifact: serializeKnn(knn, { feature_extractor: modality.featureExtractorId, dataset_version: dataset.version }),
         note: note.trim() || undefined
       }, knn)
       recordEvent('train.run', {

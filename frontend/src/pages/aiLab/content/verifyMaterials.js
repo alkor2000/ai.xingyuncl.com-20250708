@@ -40,9 +40,30 @@ const MATERIALS = [
   }
 ]
 
-export const getVerifyMaterials = (language) => {
+/* L5 "AI 讲的动物故事哪里不对"：AI 讲的动物小故事，每段预埋 1 处与图鉴不符的错误，低年级用绘本/图鉴核对 */
+const ANIMAL_MATERIALS = [
+  {
+    id: 'penguin',
+    zh: { title: '企鹅的一天', source: '【图鉴】企鹅是鸟类，有羽毛，不会飞；用翅膀在水里"飞"着游泳，最快每小时约 36 公里；帝企鹅可以潜到 500 米深；企鹅下蛋，帝企鹅爸爸在冬天用脚把蛋托在肚子下面孵化，大约 65 天；企鹅吃鱼、磷虾和乌贼；企鹅生活在南半球，南极、南非、澳大利亚等地都有。', draft: '企鹅是一种不会飞的鸟，浑身长着又密又短的羽毛。它们游泳的时候把翅膀当作船桨，一小时能游三十多公里。帝企鹅是潜水高手，能潜到五百米深的海里找鱼吃。到了冬天，企鹅妈妈把蛋放在脚上、盖在肚子下面，一动不动地站两个月把小企鹅孵出来。企鹅生活在南极和南半球的一些海岸边。', errors: ['孵蛋的是帝企鹅爸爸，不是妈妈'], unverifiable: [] },
+    en: { title: "A Penguin's Day", source: '[Field guide] Penguins are birds with feathers that cannot fly; they "fly" underwater with their wings at up to about 36 km/h; emperor penguins can dive to 500 m; penguins lay eggs, and the emperor penguin father keeps the egg on his feet under his belly through the winter for about 65 days; penguins eat fish, krill and squid; they live in the Southern Hemisphere: Antarctica, South Africa, Australia and more.', draft: 'A penguin is a bird that cannot fly, covered in short dense feathers. When it swims it uses its wings like paddles and can move at over thirty kilometres an hour. Emperor penguins are expert divers and can go five hundred metres down to find fish. In winter the penguin mother keeps the egg on her feet under her belly and stands still for two months until the chick hatches. Penguins live along the coasts of Antarctica and other parts of the Southern Hemisphere.', errors: ['It is the emperor penguin father who incubates the egg, not the mother'], unverifiable: [] }
+  },
+  {
+    id: 'bat',
+    zh: { title: '蝙蝠不是鸟', source: '【图鉴】蝙蝠是唯一会真正飞行的哺乳动物；身上有毛，没有羽毛；胎生，用乳汁喂小蝙蝠；多数蝙蝠白天倒挂着休息，晚上出来活动；许多蝙蝠靠发出超声波并听回声来辨别方向和找虫子；蝙蝠有的吃虫子，有的吃水果、花蜜；蝙蝠一年通常只生一只幼崽。', draft: '蝙蝠会飞，但它不是鸟，而是哺乳动物，身上长的是毛不是羽毛。蝙蝠妈妈不下蛋，小蝙蝠是直接生出来的，靠喝妈妈的奶长大。蝙蝠白天倒挂在山洞里睡觉，天黑以后才出门。它们在黑暗里不靠眼睛，而是一边飞一边发出人耳听不到的声音，用回声找到虫子。蝙蝠妈妈一年能生五六只小蝙蝠。', errors: ['蝙蝠一年通常只生一只幼崽，不是五六只'], unverifiable: [] },
+    en: { title: 'A Bat Is Not a Bird', source: '[Field guide] Bats are the only mammals that truly fly; they have fur, not feathers; they give birth to live young and feed them milk; most bats rest hanging upside down by day and are active at night; many bats find their way and their insects by sending out ultrasonic calls and listening for echoes; some eat insects, others fruit or nectar; a bat usually has one pup a year.', draft: 'Bats can fly, but they are not birds: they are mammals, with fur instead of feathers. A mother bat does not lay eggs; her pup is born alive and grows up drinking her milk. By day bats sleep hanging upside down in caves and only go out after dark. In the dark they do not rely on their eyes; as they fly they make sounds people cannot hear and use the echoes to find insects. A mother bat can have five or six pups a year.', errors: ['A bat usually has one pup a year, not five or six'], unverifiable: [] }
+  },
+  {
+    id: 'frog',
+    zh: { title: '青蛙的成长', source: '【图鉴】青蛙是两栖动物；把卵产在水里，卵孵出蝌蚪；蝌蚪用鳃呼吸、有尾巴、没有腿；蝌蚪先长出后腿，再长出前腿，尾巴慢慢缩短消失，变成小青蛙；成年青蛙用肺和皮肤呼吸，皮肤要保持湿润；青蛙吃虫子，用长长的舌头把虫子卷进嘴里；冬天青蛙会钻进泥里冬眠。', draft: '春天，青蛙妈妈把一团团卵产在池塘里。卵孵出来的是小蝌蚪，它们像小鱼一样用鳃呼吸，有一条长尾巴。慢慢地，蝌蚪先长出两条前腿，再长出后腿，尾巴越来越短，最后变成了小青蛙。长大的青蛙用肺和湿湿的皮肤呼吸，能用长舌头一下卷住飞过的虫子。到了冬天，青蛙会钻进泥里睡一整个冬天。', errors: ['蝌蚪先长后腿再长前腿，故事里说反了'], unverifiable: [] },
+    en: { title: 'How a Frog Grows Up', source: '[Field guide] Frogs are amphibians; they lay eggs in water and the eggs hatch into tadpoles; tadpoles breathe with gills, have tails and no legs; the back legs grow first, then the front legs, and the tail shrinks away to leave a froglet; adult frogs breathe with lungs and through moist skin; frogs eat insects, catching them with a long tongue; in winter frogs burrow into mud to hibernate.', draft: 'In spring the mother frog lays clumps of eggs in the pond. The eggs hatch into tadpoles, which breathe with gills like little fish and have long tails. Slowly the tadpole grows its two front legs first, then its back legs, and its tail gets shorter and shorter until it becomes a froglet. A grown frog breathes with its lungs and its moist skin, and can flick out its long tongue to catch a passing insect. In winter frogs burrow into the mud and sleep the whole season.', errors: ['Tadpoles grow their back legs first, then the front legs; the story has it backwards'], unverifiable: [] }
+  }
+]
+
+const SETS = { campus: MATERIALS, animal: ANIMAL_MATERIALS }
+
+export const getVerifyMaterials = (language, set = 'campus') => {
   const lang = String(language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
-  return MATERIALS.map((m) => ({ id: m.id, ...m[lang] }))
+  return (SETS[set] || MATERIALS).map((m) => ({ id: m.id, ...m[lang] }))
 }
 
 export default MATERIALS

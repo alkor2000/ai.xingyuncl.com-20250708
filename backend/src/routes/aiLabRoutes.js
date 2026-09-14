@@ -3,6 +3,8 @@
  *
  * 全部需要 authenticate；/admin/projects 额外 requireRole(['admin','super_admin'])。
  * 项目级读写权限在控制器内按 AiLabService.canAccess / canWrite 裁决。
+ * 样本上传先由 resolveUploadTarget 解析数据集，再由 handleSampleUpload 按 kind 走图片 / 音频管线。
+ * POST /projects/:id/models 的 JSON 上限 20MB 在 app.js 里按路径单独设置（其余接口沿用全局 10MB）。
  */
 
 const express = require('express');
@@ -30,7 +32,7 @@ router.post('/projects/:id/events', AiLabController.createEvents);
 /* 数据集与样本 */
 router.patch('/datasets/:id', AiLabController.updateDataset);
 router.get('/datasets/:id/samples', AiLabController.getSamples);
-router.post('/datasets/:id/samples', handleSampleUpload, AiLabController.uploadSamples);
+router.post('/datasets/:id/samples', AiLabController.resolveUploadTarget, handleSampleUpload, AiLabController.uploadSamples);
 router.post('/datasets/:id/lock', AiLabController.lockDataset);
 router.post('/datasets/:id/import-preset', AiLabController.importPreset);
 router.post('/datasets/:id/rows', AiLabController.createRows);

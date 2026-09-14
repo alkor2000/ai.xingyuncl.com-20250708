@@ -3,15 +3,16 @@
  *
  * 职责：
  * - 权限判断：canAccess（所有者 / super_admin / 本组 admin 可读）、canWrite（仅所有者）
- * - 样本图片与模型 artifact 落盘（相对 storage/uploads 的 ai-lab/... 路径，由 /uploads 静态服务直出）
+ * - 样本图片 / 音频与模型 artifact 落盘（相对 storage/uploads 的 ai-lab/... 路径，由 /uploads 静态服务直出）
  * - 留出划分编排：候选样本 → splitHoldout（纯函数）→ 数据集 lock
  * - 混入错标编排：候选样本 → pickMislabels（纯函数）→ 批量改标（version 不变）
  * - 评测指标合并进 models.metrics 并计算 generalization_gap
  * - 项目 summary 缓存重算
- * - condition_tags 校验；表格行 payload 按 columns 规范化；classes/columns 按 key 合并
+ * - condition_tags 校验；行 payload 按 columns 规范化（rowPayload.js，含 text 列）；classes/columns 按 key 合并
  *
- * 文件路径约定（契约 §1）：
- * - 样本：ai-lab/<user_id>/<dataset_id>/<时间戳>-<随机>.jpg
+ * 文件路径约定（契约 §1 / v3 §3）：
+ * - 图片样本：ai-lab/<user_id>/<dataset_id>/<时间戳>-<随机>.jpg
+ * - 音频样本：ai-lab/<user_id>/<dataset_id>/<uuid>.<wav|webm|ogg|mp3>（原样落盘，不转码）
  * - 模型：ai-lab/<user_id>/<project_id>/models/v<version>.json
  */
 
@@ -27,12 +28,13 @@ const AiLabSample = require('../../models/AiLabSample');
 const AiLabModel = require('../../models/AiLabModel');
 const splitHoldout = require('./splitHoldout');
 const pickMislabels = require('./mislabel');
+const normalizeRowPayload = require('./rowPayload');
 
 const MAX_CONDITION_TAG_KEYS = 20;
 const MAX_CONDITION_TAG_KEY_LENGTH = 32;
 const MAX_CONDITION_TAG_VALUE_LENGTH = 50;
-const MAX_CATEGORY_VALUE_LENGTH = 50;
 const MAX_SEED = 2147483647;
+const AUDIO_EXTENSIONS = ['wav', 'webm', 'ogg', 'mp3'];
 
 class AiLabService {
   /* ================================================================
@@ -112,6 +114,38 @@ class AiLabService {
   }
 
   /**
+   * 把音频文件原样写到 ai-lab/<user_id>/<dataset_id>/<uuid>.<ext> 下（不转码）
+   * @param {number} userId
+   * @param {number} datasetId
+   * @param {Array<{buffer:Buffer,ext:string,size:number}>} files
+   * @returns {Array<{file_path:string,file_size:number}>}
+   */
+  static async storeSampleAudio(userId, datasetId, files) {
+    const relativeDir = path.posix.join('ai-lab', String(userId), String(datasetId));
+    const absoluteDir = path.join(AiLabService.getUploadsDir(), relativeDir);
+    await AiLabService.ensureDir(absoluteDir);
+
+    const stored = [];
+    try {
+      for (const file of files) {
+        const ext = String(file.ext || '').toLowerCase();
+        if (!AUDIO_EXTENSIONS.includes(ext)) throw new ValidationError(`不支持的音频扩展名: ${ext}`);
+        const fileName = `${crypto.randomUUID()}.${ext}`;
+        await fs.writeFile(path.join(absoluteDir, fileName), file.buffer);
+        stored.push({
+          file_path: path.posix.join(relativeDir, fileName),
+          file_size: file.buffer.length
+        });
+      }
+    } catch (error) {
+      await AiLabService.removeFiles(stored.map(item => item.file_path));
+      if (!(error instanceof ValidationError)) logger.error('样本音频落盘失败:', error);
+      throw error;
+    }
+    return stored;
+  }
+
+  /**
    * 删除相对 uploads 的文件（失败只记日志）
    */
   static async removeFiles(relativePaths = []) {
@@ -127,7 +161,7 @@ class AiLabService {
   }
 
   /**
-   * 写模型 artifact JSON
+   * 写模型 artifact JSON（artifact 可以是对象，也可以是已序列化的 JSON 字符串）
    * @returns {string} 相对 uploads 的路径
    */
   static async writeModelArtifact(userId, projectId, version, artifact) {
@@ -135,7 +169,8 @@ class AiLabService {
     const absoluteDir = path.join(AiLabService.getUploadsDir(), relativeDir);
     await AiLabService.ensureDir(absoluteDir);
     const fileName = `v${version}.json`;
-    await fs.writeFile(path.join(absoluteDir, fileName), JSON.stringify(artifact));
+    const content = typeof artifact === 'string' ? artifact : JSON.stringify(artifact);
+    await fs.writeFile(path.join(absoluteDir, fileName), content);
     return path.posix.join(relativeDir, fileName);
   }
 
@@ -246,44 +281,14 @@ class AiLabService {
   }
 
   /**
-   * 表格行 payload：键必须在 columns 内；number 列转数值（空值为 null），category 列转 ≤50 字的字符串
+   * 行 payload：键必须在 columns 内；number 列转数值（空值为 null），category 列转 ≤50 字的字符串，
+   * text 列为 1–1000 字的字符串（见 rowPayload.js）
    * @param {Object} payload
    * @param {Array<{key:string,type:string}>} columns
    * @returns {Object} 规范化后的 {col_key: value}
    */
   static normalizeRowPayload(payload, columns) {
-    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-      throw new ValidationError('payload 必须是键值对象');
-    }
-    const columnMap = new Map((Array.isArray(columns) ? columns : []).map(col => [col.key, col]));
-    if (columnMap.size === 0) throw new ValidationError('数据集尚未定义列（columns）');
-
-    const keys = Object.keys(payload);
-    if (keys.length === 0) throw new ValidationError('payload 不能为空');
-
-    const normalized = {};
-    for (const key of keys) {
-      const column = columnMap.get(key);
-      if (!column) throw new ValidationError(`payload 含未定义的列: ${key}`);
-      const raw = payload[key];
-      if (raw === null || raw === undefined || raw === '') {
-        normalized[key] = null;
-        continue;
-      }
-      if (column.type === 'number') {
-        const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
-        if (!Number.isFinite(n)) throw new ValidationError(`列 ${key} 必须是数字`);
-        normalized[key] = n;
-      } else {
-        if (typeof raw === 'object') throw new ValidationError(`列 ${key} 的值必须是字符串`);
-        const text = String(raw).trim();
-        if (text.length > MAX_CATEGORY_VALUE_LENGTH) {
-          throw new ValidationError(`列 ${key} 的值不能超过 ${MAX_CATEGORY_VALUE_LENGTH} 字`);
-        }
-        normalized[key] = text;
-      }
-    }
-    return normalized;
+    return normalizeRowPayload(payload, columns);
   }
 
   /**
@@ -398,5 +403,6 @@ class AiLabService {
 }
 
 AiLabService.MAX_SEED = MAX_SEED;
+AiLabService.AUDIO_EXTENSIONS = AUDIO_EXTENSIONS;
 
 module.exports = AiLabService;

@@ -1,0 +1,1207 @@
+{
+  "key": "animal-cards",
+  "kind": "table",
+  "title": "动物属性卡",
+  "description": "60 张动物卡片：腿数、有无羽毛/鳞片、生活环境、会不会飞、下蛋还是胎生、体温、体长。先自己写\"如果…那么是…\"的分类规则，再看决策树怎么分；换条件集\"另一本图鉴\"里有鸭嘴兽、几维鸟、飞鱼这类不听话的例子。",
+  "license": "CC0",
+  "source": "本平台整理（常识性属性）",
+  "attribution": "",
+  "grade_bands": [
+    "L",
+    "P"
+  ],
+  "classes": [
+    {
+      "key": "mammal",
+      "label": "哺乳动物"
+    },
+    {
+      "key": "bird",
+      "label": "鸟类"
+    },
+    {
+      "key": "fish",
+      "label": "鱼类"
+    },
+    {
+      "key": "insect",
+      "label": "昆虫"
+    }
+  ],
+  "columns": [
+    {
+      "key": "name",
+      "label": "名字",
+      "type": "text"
+    },
+    {
+      "key": "legs",
+      "label": "腿数",
+      "type": "number"
+    },
+    {
+      "key": "feathers",
+      "label": "有羽毛",
+      "type": "category"
+    },
+    {
+      "key": "scales",
+      "label": "有鳞片",
+      "type": "category"
+    },
+    {
+      "key": "habitat",
+      "label": "生活环境",
+      "type": "category"
+    },
+    {
+      "key": "can_fly",
+      "label": "会飞",
+      "type": "category"
+    },
+    {
+      "key": "birth",
+      "label": "怎样出生",
+      "type": "category"
+    },
+    {
+      "key": "body_temp",
+      "label": "体温",
+      "type": "category"
+    },
+    {
+      "key": "length_cm",
+      "label": "体长",
+      "type": "number",
+      "unit": "cm"
+    }
+  ],
+  "rows": {
+    "train": [
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "狗",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 60
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "猫",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 45
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "牛",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 250
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "马",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 240
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "大象",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 600
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "老虎",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 280
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "兔子",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 40
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "松鼠",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 25
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "海豚",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 250
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "鲸",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 1500
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "蝙蝠",
+          "legs": 2,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 10
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "熊",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 200
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "猴子",
+          "legs": 2,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 60
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "老鼠",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 10
+        }
+      },
+      {
+        "class_key": "mammal",
+        "payload": {
+          "name": "羊",
+          "legs": 4,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "胎生",
+          "body_temp": "恒温",
+          "length_cm": 120
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "麻雀",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 14
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "燕子",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 18
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "老鹰",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 70
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "鸽子",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 30
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "企鹅",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 80
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "鸵鸟",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 220
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "鸡",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 40
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "鸭",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "水里",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 50
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "猫头鹰",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 40
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "孔雀",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 110
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "海鸥",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 45
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "乌鸦",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 50
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "天鹅",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "水里",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 140
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "鹦鹉",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 30
+        }
+      },
+      {
+        "class_key": "bird",
+        "payload": {
+          "name": "啄木鸟",
+          "legs": 2,
+          "feathers": "是",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "恒温",
+          "length_cm": 25
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鲤鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 50
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "金鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 12
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鲨鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 400
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "带鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 100
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "草鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 70
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鲈鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 40
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鳗鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 80
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "小丑鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 8
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "三文鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 90
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "黄鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 35
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鲶鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 60
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "海马",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 15
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "飞鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 30
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "比目鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 40
+        }
+      },
+      {
+        "class_key": "fish",
+        "payload": {
+          "name": "鳕鱼",
+          "legs": 0,
+          "feathers": "否",
+          "scales": "是",
+          "habitat": "水里",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 80
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蚂蚁",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 0.5
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蜜蜂",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 1.5
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蝴蝶",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 5
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蜻蜓",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 7
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "螳螂",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 8
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "甲虫",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 2
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蝉",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 4
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蚊子",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 0.6
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蟑螂",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 3
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蝗虫",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 5
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "萤火虫",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 1.2
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "七星瓢虫",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 0.7
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "苍蝇",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "空中",
+          "can_fly": "是",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 0.8
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蟋蟀",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 2.5
+        }
+      },
+      {
+        "class_key": "insect",
+        "payload": {
+          "name": "蜜蜂王",
+          "legs": 6,
+          "feathers": "否",
+          "scales": "否",
+          "habitat": "陆地",
+          "can_fly": "否",
+          "birth": "下蛋",
+          "body_temp": "变温",
+          "length_cm": 2
+        }
+      }
+    ],
+    "shift": {
+      "另一本图鉴": [
+        {
+          "class_key": "mammal",
+          "payload": {
+            "name": "鸭嘴兽",
+            "legs": 4,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 45
+          }
+        },
+        {
+          "class_key": "mammal",
+          "payload": {
+            "name": "海豹",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "胎生",
+            "body_temp": "恒温",
+            "length_cm": 170
+          }
+        },
+        {
+          "class_key": "mammal",
+          "payload": {
+            "name": "袋鼠",
+            "legs": 2,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "胎生",
+            "body_temp": "恒温",
+            "length_cm": 150
+          }
+        },
+        {
+          "class_key": "mammal",
+          "payload": {
+            "name": "刺猬",
+            "legs": 4,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "胎生",
+            "body_temp": "恒温",
+            "length_cm": 25
+          }
+        },
+        {
+          "class_key": "mammal",
+          "payload": {
+            "name": "海牛",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "胎生",
+            "body_temp": "恒温",
+            "length_cm": 300
+          }
+        },
+        {
+          "class_key": "bird",
+          "payload": {
+            "name": "几维鸟",
+            "legs": 2,
+            "feathers": "是",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 45
+          }
+        },
+        {
+          "class_key": "bird",
+          "payload": {
+            "name": "蜂鸟",
+            "legs": 2,
+            "feathers": "是",
+            "scales": "否",
+            "habitat": "空中",
+            "can_fly": "是",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 8
+          }
+        },
+        {
+          "class_key": "bird",
+          "payload": {
+            "name": "鸬鹚",
+            "legs": 2,
+            "feathers": "是",
+            "scales": "否",
+            "habitat": "水里",
+            "can_fly": "是",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 80
+          }
+        },
+        {
+          "class_key": "bird",
+          "payload": {
+            "name": "火鸡",
+            "legs": 2,
+            "feathers": "是",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 110
+          }
+        },
+        {
+          "class_key": "bird",
+          "payload": {
+            "name": "信天翁",
+            "legs": 2,
+            "feathers": "是",
+            "scales": "否",
+            "habitat": "空中",
+            "can_fly": "是",
+            "birth": "下蛋",
+            "body_temp": "恒温",
+            "length_cm": 120
+          }
+        },
+        {
+          "class_key": "fish",
+          "payload": {
+            "name": "电鳗",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "是",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 200
+          }
+        },
+        {
+          "class_key": "fish",
+          "payload": {
+            "name": "河豚",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "是",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 30
+          }
+        },
+        {
+          "class_key": "fish",
+          "payload": {
+            "name": "鳐鱼",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "是",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 150
+          }
+        },
+        {
+          "class_key": "fish",
+          "payload": {
+            "name": "泥鳅",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "是",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 20
+          }
+        },
+        {
+          "class_key": "fish",
+          "payload": {
+            "name": "鲟鱼",
+            "legs": 0,
+            "feathers": "否",
+            "scales": "是",
+            "habitat": "水里",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 300
+          }
+        },
+        {
+          "class_key": "insect",
+          "payload": {
+            "name": "竹节虫",
+            "legs": 6,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 12
+          }
+        },
+        {
+          "class_key": "insect",
+          "payload": {
+            "name": "独角仙",
+            "legs": 6,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "是",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 6
+          }
+        },
+        {
+          "class_key": "insect",
+          "payload": {
+            "name": "蚜虫",
+            "legs": 6,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 0.3
+          }
+        },
+        {
+          "class_key": "insect",
+          "payload": {
+            "name": "蜉蝣",
+            "legs": 6,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "空中",
+            "can_fly": "是",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 1.5
+          }
+        },
+        {
+          "class_key": "insect",
+          "payload": {
+            "name": "跳蚤",
+            "legs": 6,
+            "feathers": "否",
+            "scales": "否",
+            "habitat": "陆地",
+            "can_fly": "否",
+            "birth": "下蛋",
+            "body_temp": "变温",
+            "length_cm": 0.3
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,1036 @@
+{
+  "key": "garbage-cards",
+  "kind": "table",
+  "title": "垃圾分类卡",
+  "description": "60 张物品卡片：材质、能否回收、是否有害、会不会腐烂、有没有沾油污、大小 → 四类垃圾。适合先写规则再和决策树比；换条件集里有\"沾油的披萨盒\"\"脏塑料袋\"这类要看第二个条件的例子。",
+  "license": "CC0",
+  "source": "本平台整理（按常见分类指引）",
+  "attribution": "",
+  "grade_bands": [
+    "L",
+    "P"
+  ],
+  "classes": [
+    {
+      "key": "recyclable",
+      "label": "可回收物"
+    },
+    {
+      "key": "hazardous",
+      "label": "有害垃圾"
+    },
+    {
+      "key": "kitchen",
+      "label": "厨余垃圾"
+    },
+    {
+      "key": "other",
+      "label": "其他垃圾"
+    }
+  ],
+  "columns": [
+    {
+      "key": "name",
+      "label": "物品",
+      "type": "text"
+    },
+    {
+      "key": "material",
+      "label": "材质",
+      "type": "category"
+    },
+    {
+      "key": "recyclable",
+      "label": "能回收利用",
+      "type": "category"
+    },
+    {
+      "key": "harmful",
+      "label": "有毒有害",
+      "type": "category"
+    },
+    {
+      "key": "rots",
+      "label": "会腐烂",
+      "type": "category"
+    },
+    {
+      "key": "dirty",
+      "label": "沾油污或食物",
+      "type": "category"
+    },
+    {
+      "key": "size",
+      "label": "大小",
+      "type": "category"
+    }
+  ],
+  "rows": {
+    "train": [
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "矿泉水瓶",
+          "material": "塑料",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "旧报纸",
+          "material": "纸",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "易拉罐",
+          "material": "金属",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "纸箱",
+          "material": "纸",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "大"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "玻璃瓶",
+          "material": "玻璃",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "旧衣服",
+          "material": "布",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "牛奶盒(洗净)",
+          "material": "纸",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "铁罐头盒",
+          "material": "金属",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "塑料玩具",
+          "material": "塑料",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "旧书",
+          "material": "纸",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "铝箔",
+          "material": "金属",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "塑料脸盆",
+          "material": "塑料",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "废铜线",
+          "material": "金属",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "玻璃杯",
+          "material": "玻璃",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "recyclable",
+        "payload": {
+          "name": "快递纸袋",
+          "material": "纸",
+          "recyclable": "是",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "废电池",
+          "material": "金属",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "过期药品",
+          "material": "混合",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "荧光灯管",
+          "material": "玻璃",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "温度计(水银)",
+          "material": "玻璃",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "油漆桶",
+          "material": "金属",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "杀虫剂罐",
+          "material": "金属",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "废墨盒",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "指甲油瓶",
+          "material": "玻璃",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "充电宝",
+          "material": "混合",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "节能灯",
+          "material": "玻璃",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "农药瓶",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "胶水",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "相片底片",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "废机油瓶",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "hazardous",
+        "payload": {
+          "name": "纽扣电池",
+          "material": "金属",
+          "recyclable": "否",
+          "harmful": "是",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "苹果核",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "剩饭",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "香蕉皮",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "鱼骨头",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "菜叶",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "蛋壳",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "茶叶渣",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "西瓜皮",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "面包",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "橘子皮",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "鸡骨头",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "花生壳",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "过期面条",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "落叶",
+          "material": "植物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "kitchen",
+        "payload": {
+          "name": "咖啡渣",
+          "material": "食物",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "用过的纸巾",
+          "material": "纸",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "一次性筷子",
+          "material": "木",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "陶瓷碎片",
+          "material": "陶瓷",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "烟头",
+          "material": "混合",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "沾油的外卖盒",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "尘土",
+          "material": "其他",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "旧拖把",
+          "material": "混合",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "大"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "圆珠笔",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "胶带",
+          "material": "塑料",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "宠物粪便",
+          "material": "其他",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "是",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "破碗",
+          "material": "陶瓷",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "否",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "湿纸巾",
+          "material": "布",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "口香糖",
+          "material": "其他",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "小"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "猫砂",
+          "material": "其他",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "中"
+        }
+      },
+      {
+        "class_key": "other",
+        "payload": {
+          "name": "一次性口罩",
+          "material": "布",
+          "recyclable": "否",
+          "harmful": "否",
+          "rots": "否",
+          "dirty": "是",
+          "size": "小"
+        }
+      }
+    ],
+    "shift": {
+      "另一批物品": [
+        {
+          "class_key": "recyclable",
+          "payload": {
+            "name": "干净的塑料袋",
+            "material": "塑料",
+            "recyclable": "是",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "recyclable",
+          "payload": {
+            "name": "旧课本",
+            "material": "纸",
+            "recyclable": "是",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "recyclable",
+          "payload": {
+            "name": "金属水壶",
+            "material": "金属",
+            "recyclable": "是",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "中"
+          }
+        },
+        {
+          "class_key": "recyclable",
+          "payload": {
+            "name": "洗净的酸奶盒",
+            "material": "塑料",
+            "recyclable": "是",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "recyclable",
+          "payload": {
+            "name": "废纸板",
+            "material": "纸",
+            "recyclable": "是",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "大"
+          }
+        },
+        {
+          "class_key": "hazardous",
+          "payload": {
+            "name": "过期化妆品",
+            "material": "混合",
+            "recyclable": "否",
+            "harmful": "是",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "hazardous",
+          "payload": {
+            "name": "旧手机电池",
+            "material": "金属",
+            "recyclable": "否",
+            "harmful": "是",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "hazardous",
+          "payload": {
+            "name": "打火机",
+            "material": "金属",
+            "recyclable": "否",
+            "harmful": "是",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "hazardous",
+          "payload": {
+            "name": "杀鼠药",
+            "material": "混合",
+            "recyclable": "否",
+            "harmful": "是",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "hazardous",
+          "payload": {
+            "name": "LED灯泡",
+            "material": "玻璃",
+            "recyclable": "否",
+            "harmful": "是",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "kitchen",
+          "payload": {
+            "name": "玉米芯",
+            "material": "食物",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "是",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "kitchen",
+          "payload": {
+            "name": "虾壳",
+            "material": "食物",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "是",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "kitchen",
+          "payload": {
+            "name": "剩牛奶",
+            "material": "食物",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "是",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "kitchen",
+          "payload": {
+            "name": "坚果壳",
+            "material": "食物",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "是",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "kitchen",
+          "payload": {
+            "name": "过期饼干",
+            "material": "食物",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "是",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "other",
+          "payload": {
+            "name": "沾油的披萨盒",
+            "material": "纸",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "是",
+            "size": "中"
+          }
+        },
+        {
+          "class_key": "other",
+          "payload": {
+            "name": "用过的创可贴",
+            "material": "混合",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "是",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "other",
+          "payload": {
+            "name": "毛发",
+            "material": "其他",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "other",
+          "payload": {
+            "name": "碎镜子",
+            "material": "玻璃",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "否",
+            "size": "小"
+          }
+        },
+        {
+          "class_key": "other",
+          "payload": {
+            "name": "脏的塑料袋",
+            "material": "塑料",
+            "recyclable": "否",
+            "harmful": "否",
+            "rots": "否",
+            "dirty": "是",
+            "size": "小"
+          }
+        }
+      ]
+    }
+  }
+}

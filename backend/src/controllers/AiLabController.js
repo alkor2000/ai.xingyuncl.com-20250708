@@ -1,9 +1,9 @@
 /**
  * AI训练专区控制器
  *
- * 功能：任务模板、项目 CRUD 与列表、数据集/类别/列管理、样本上传/更新/软删除、留出集锁定、
- *       预置数据包列表与导入、表格行样本、混入错标与恢复、
- *       模型版本保存与读取、评测记录与指标合并、过程事件写读、管理端项目列表
+ * 功能：任务模板、项目 CRUD 与列表、数据集/类别/列管理、样本上传（图片 / 音频按 kind 分流）/更新/软删除、
+ *       留出集锁定、预置数据包列表与导入（image/table/audio/text）、表格与文本行样本、混入错标与恢复、
+ *       模型版本保存与读取（引擎须与数据集 kind 匹配）、评测记录与指标合并、过程事件写读、管理端项目列表
  *
  * 权限规则（契约 §4）：
  * - 读：所有者、super_admin、或与项目同组的 admin（AiLabService.canAccess）
@@ -20,12 +20,13 @@ const AiLabModel = require('../models/AiLabModel');
 const AiLabEvent = require('../models/AiLabEvent');
 const AiLabService = require('../services/aiLab/AiLabService');
 const AiLabPresetService = require('../services/aiLab/AiLabPresetService');
-const { isValidPackKey } = require('../services/aiLab/presetPacks');
+const { isValidPackKey, packUsesRows } = require('../services/aiLab/presetPacks');
 const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const { ValidationError } = require('../utils/errors');
 const {
-  AI_LAB_TASKS, AI_LAB_EVENT_TYPES, AI_LAB_ENGINES, AI_LAB_DATASET_KINDS, findTask, engineKind
+  AI_LAB_TASKS, AI_LAB_EVENT_TYPES, AI_LAB_ENGINES, AI_LAB_DATASET_KINDS, findTask, engineKind,
+  defaultEngineForKind, defaultFeatureExtractorForKind
 } = require('../config/aiLabTasks');
 
 const MAX_EVENTS_PER_BATCH = 50;
@@ -33,8 +34,13 @@ const MAX_ROWS_PER_BATCH = 200;
 const DEFAULT_MISLABEL_RATIO = 0.2;
 const MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 const MAX_MODEL_CARD_FIELD_LENGTH = 2000;
+const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;
 const MODEL_CARD_FIELDS = ['scope', 'not_scope', 'evidence', 'notes'];
 const UPLOAD_SPLITS = ['train', 'shift'];
+const ROW_DATASET_KINDS = ['table', 'text'];
+const MIN_DURATION_MS = 100;
+const MAX_DURATION_MS = 10000;
+const KIND_ERROR = 'kind 只能是 image、table、audio 或 text';
 
 /* ================================================================
  * 工具
@@ -66,8 +72,32 @@ const parseSeed = (value) => {
   return seed;
 };
 
-/** 任务模板对应的数据集 kind（text 任务不训练模型，数据集按默认 image 建） */
-const datasetKindForTask = (task) => (task && task.kind === 'table' ? 'table' : 'image');
+/** 任务模板对应的数据集 kind（模板 kind 不在四种之内时按 image 建） */
+const datasetKindForTask = (task) => (task && AI_LAB_DATASET_KINDS.includes(task.kind) ? task.kind : 'image');
+
+/**
+ * 音频上传的 duration_ms：单值（作用于全部文件）或与文件数等长的数组；整数 100–10000；未提供 → 全 null
+ * @returns {Array<number|null>|null} null 表示非法
+ */
+const parseDurations = (raw, count) => {
+  if (raw === undefined || raw === null || raw === '') return Array(count).fill(null);
+  let value = raw;
+  if (typeof value === 'string' && value.trim().startsWith('[')) {
+    try {
+      value = JSON.parse(value);
+    } catch (e) {
+      return null;
+    }
+  }
+  const toMs = (item) => {
+    if (item === null || item === undefined || item === '') return null;
+    const n = Number(item);
+    return Number.isInteger(n) && n >= MIN_DURATION_MS && n <= MAX_DURATION_MS ? n : NaN;
+  };
+  const list = Array.isArray(value) ? value.map(toMs) : Array(count).fill(toMs(value));
+  if (list.length !== count || list.some(item => Number.isNaN(item))) return null;
+  return list;
+};
 
 const parseClientTs = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -321,10 +351,11 @@ const createDataset = async (req, res) => {
     let kind = datasetKindForTask(findTask(project.task_key));
     if (req.body.kind !== undefined && req.body.kind !== null) {
       kind = String(req.body.kind);
-      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, 'kind 只能是 image 或 table');
+      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, KIND_ERROR);
     }
     let columns = null;
     if (req.body.columns !== undefined && req.body.columns !== null) {
+      if (kind === 'text') return badRequest(res, '文本数据集的 columns 固定为 text 列，无需传入');
       if (kind !== 'table') return badRequest(res, '只有表格数据集可以定义 columns');
       columns = req.body.columns;
     }
@@ -376,6 +407,7 @@ const updateDataset = async (req, res) => {
       fields.classes = normalized;
     }
     if (req.body.columns !== undefined) {
+      if (dataset.kind === 'text') return badRequest(res, '文本数据集的 columns 固定为 text 列，不能修改');
       if (dataset.kind !== 'table') return badRequest(res, '只有表格数据集可以定义 columns');
       if (req.body.columns === null) {
         if (dataset.sample_count > 0) return badRequest(res, '数据集已有样本，不能清空 columns');
@@ -428,15 +460,38 @@ const getSamples = async (req, res) => {
   }
 };
 
-/** POST /datasets/:id/samples multipart：files[]、class_key、split、shift_set、condition_tags、source */
-const uploadSamples = async (req, res) => {
+/**
+ * 上传前置：解析数据集（写权限），放到 req.aiLabUpload 供上传中间件按 kind 分流
+ * 路由：resolveUploadTarget → handleSampleUpload（image/audio 管线，table/text 直接 400）→ uploadSamples
+ */
+const resolveUploadTarget = async (req, res, next) => {
   try {
     const resolved = await resolveDataset(req, res, req.params.id, { write: true });
     if (!resolved) return;
+    req.aiLabUpload = resolved;
+    next();
+  } catch (error) {
+    return handleError(res, error, '上传样本失败');
+  }
+};
+
+/**
+ * POST /datasets/:id/samples multipart：files[]、class_key、split、shift_set、condition_tags、source、duration_ms（音频）
+ * - image：sharp 规范化后落盘（width/height）
+ * - audio：原样落盘 <uuid>.<ext>，width/height 为 null，duration_ms 取 body（可选，整数 100–10000，单值或与文件数等长的数组）
+ * - table/text：400（用 rows 接口）
+ */
+const uploadSamples = async (req, res) => {
+  try {
+    const resolved = req.aiLabUpload || await resolveDataset(req, res, req.params.id, { write: true });
+    if (!resolved) return;
     const { dataset, project } = resolved;
-    if (dataset.kind === 'table') return badRequest(res, '表格数据集不能上传图片样本，请用 rows 接口添加行');
-    const images = req.aiLabImages || [];
-    if (images.length === 0) return badRequest(res, '请至少上传一张图片');
+    if (ROW_DATASET_KINDS.includes(dataset.kind)) {
+      return badRequest(res, `${dataset.kind === 'text' ? '文本' : '表格'}数据集不能上传文件样本，请用 rows 接口添加行`);
+    }
+    const isAudio = dataset.kind === 'audio';
+    const files = isAudio ? (req.aiLabAudio || []) : (req.aiLabImages || []);
+    if (files.length === 0) return badRequest(res, isAudio ? '请至少上传一个音频文件' : '请至少上传一张图片');
 
     const classKey = cleanString(req.body.class_key);
     if (!classKey) return badRequest(res, 'class_key 不能为空');
@@ -460,12 +515,22 @@ const uploadSamples = async (req, res) => {
     const source = req.body.source ? String(req.body.source) : 'camera';
     if (!AiLabSample.SOURCES.includes(source)) return badRequest(res, '无效的 source');
 
-    const stored = await AiLabService.storeSampleImages(req.user.id, dataset.id, images);
+    let durations = Array(files.length).fill(null);
+    if (isAudio) {
+      durations = parseDurations(req.body.duration_ms, files.length);
+      if (!durations) {
+        return badRequest(res, `duration_ms 必须是 ${MIN_DURATION_MS}–${MAX_DURATION_MS} 的整数（单值或与文件数等长的数组）`);
+      }
+    }
+
+    const stored = isAudio
+      ? await AiLabService.storeSampleAudio(req.user.id, dataset.id, files)
+      : await AiLabService.storeSampleImages(req.user.id, dataset.id, files);
 
     let created;
     try {
       created = await AiLabSample.createMany(
-        stored.map(file => ({
+        stored.map((file, index) => ({
           dataset_id: dataset.id,
           user_id: req.user.id,
           class_key: classKey,
@@ -474,9 +539,10 @@ const uploadSamples = async (req, res) => {
           condition_tags: conditionTags,
           source,
           file_path: file.file_path,
-          width: file.width,
-          height: file.height,
+          width: isAudio ? null : file.width,
+          height: isAudio ? null : file.height,
           file_size: file.file_size,
+          duration_ms: isAudio ? durations[index] : null,
           added_version: dataset.version
         })),
         async (query) => {
@@ -491,7 +557,7 @@ const uploadSamples = async (req, res) => {
     await AiLabService.recalcProjectSummary(project.id);
 
     logger.info('上传AI实验样本成功', {
-      datasetId: dataset.id, userId: req.user.id, classKey, split, shiftSet, count: created.length
+      datasetId: dataset.id, kind: dataset.kind, userId: req.user.id, classKey, split, shiftSet, count: created.length
     });
     return ResponseHelper.success(res, created, '上传样本成功', 201);
   } catch (error) {
@@ -620,13 +686,13 @@ const lockDataset = async (req, res) => {
  * 预置数据包
  * ================================================================ */
 
-/** GET /presets?kind=image|table → 各包 manifest（去掉 files/rows）+ counts */
+/** GET /presets?kind=image|table|audio|text → 各包 manifest（去掉 files/rows）+ counts */
 const getPresets = async (req, res) => {
   try {
     let kind = null;
     if (req.query.kind) {
       kind = String(req.query.kind);
-      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, 'kind 只能是 image 或 table');
+      if (!AI_LAB_DATASET_KINDS.includes(kind)) return badRequest(res, KIND_ERROR);
     }
     const packs = await AiLabPresetService.listPacks({ kind });
     return ResponseHelper.success(res, packs, '获取预置数据包成功');
@@ -653,7 +719,7 @@ const importPreset = async (req, res) => {
       if (!Number.isInteger(perClass) || perClass <= 0) return badRequest(res, 'per_class 必须是正整数');
     }
 
-    const availableSets = Object.keys(pack.kind === 'image' ? pack.files.shift : pack.rows.shift);
+    const availableSets = Object.keys(packUsesRows(pack.kind) ? pack.rows.shift : pack.files.shift);
     let shiftSets = availableSets;
     if (req.body.shift_sets !== undefined && req.body.shift_sets !== null) {
       if (!Array.isArray(req.body.shift_sets)) return badRequest(res, 'shift_sets 必须是数组');
@@ -687,14 +753,18 @@ const importPreset = async (req, res) => {
  * 表格行样本 / 混入错标
  * ================================================================ */
 
-/** POST /datasets/:id/rows {rows:[{class_key, payload, split?, shift_set?, condition_tags?, source?}]}（≤200 条，表格专用） */
+/** POST /datasets/:id/rows {rows:[{class_key, payload, split?, shift_set?, condition_tags?, source?}]}（≤200 条，表格 / 文本专用） */
 const createRows = async (req, res) => {
   try {
     const resolved = await resolveDataset(req, res, req.params.id, { write: true });
     if (!resolved) return;
     const { dataset, project } = resolved;
-    if (dataset.kind !== 'table') return badRequest(res, '只有表格数据集可以添加行样本');
-    if (!Array.isArray(dataset.columns) || dataset.columns.length === 0) {
+    if (!ROW_DATASET_KINDS.includes(dataset.kind)) return badRequest(res, '只有表格或文本数据集可以添加行样本');
+    /* 文本数据集的列固定；旧数据缺列时按固定列处理 */
+    const columns = dataset.kind === 'text' && (!Array.isArray(dataset.columns) || dataset.columns.length === 0)
+      ? AiLabDataset.TEXT_COLUMNS
+      : dataset.columns;
+    if (!Array.isArray(columns) || columns.length === 0) {
       return badRequest(res, '数据集尚未定义列（columns），请先导入预置包或设置列定义');
     }
 
@@ -728,7 +798,7 @@ const createRows = async (req, res) => {
       let payload;
       let conditionTags;
       try {
-        payload = AiLabService.normalizeRowPayload(row.payload, dataset.columns);
+        payload = AiLabService.normalizeRowPayload(row.payload, columns);
         conditionTags = AiLabService.validateConditionTags(row.condition_tags) ?? null;
       } catch (error) {
         if (error instanceof ValidationError) return badRequest(res, `${where}：${error.message}`);
@@ -806,7 +876,7 @@ const restoreLabels = async (req, res) => {
  * 模型
  * ================================================================ */
 
-/** POST /projects/:id/models JSON（≤10MB） */
+/** POST /projects/:id/models JSON（artifact 序列化后 ≤20MB；engine 须与数据集 kind 匹配） */
 const createModel = async (req, res) => {
   try {
     const project = await resolveProject(req, res, req.params.id, { write: true });
@@ -825,14 +895,13 @@ const createModel = async (req, res) => {
       if (!Number.isInteger(datasetVersion) || datasetVersion < 0) return badRequest(res, 'dataset_version 必须是非负整数');
     }
 
-    const engine = req.body.engine || (dataset.kind === 'table' ? 'table-tree' : 'image-knn');
+    const engine = req.body.engine || defaultEngineForKind(dataset.kind);
     if (!AI_LAB_ENGINES.includes(engine)) return badRequest(res, `无效的 engine: ${engine}`);
     if (engineKind(engine) !== dataset.kind) {
       return badRequest(res, `engine ${engine} 只能用于 ${engineKind(engine)} 类型的数据集（当前为 ${dataset.kind}）`);
     }
 
-    const featureExtractor = cleanString(req.body.feature_extractor)
-      || (dataset.kind === 'table' ? 'none' : 'mobilenet_v1_050_224');
+    const featureExtractor = cleanString(req.body.feature_extractor) || defaultFeatureExtractorForKind(dataset.kind);
     if (featureExtractor.length > 60) return badRequest(res, 'feature_extractor 不能超过 60 字');
 
     let params = null;
@@ -854,7 +923,10 @@ const createModel = async (req, res) => {
     }
 
     if (req.body.artifact === undefined || req.body.artifact === null) return badRequest(res, 'artifact 不能为空');
-    const artifact = req.body.artifact;
+    const artifact = JSON.stringify(req.body.artifact);
+    if (Buffer.byteLength(artifact, 'utf8') > MAX_ARTIFACT_BYTES) {
+      return badRequest(res, `artifact 不能超过 ${MAX_ARTIFACT_BYTES / 1024 / 1024}MB`);
+    }
 
     let note = null;
     if (req.body.note !== undefined && req.body.note !== null) {
@@ -1116,6 +1188,7 @@ module.exports = {
   createDataset,
   updateDataset,
   getSamples,
+  resolveUploadTarget,
   uploadSamples,
   deleteSample,
   updateSample,

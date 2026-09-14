@@ -3,13 +3,14 @@
  *
  * 功能：
  * - 类别定义校验（key 只允许 [a-z0-9_-]{1,32} 且唯一）
- * - 表格列定义校验 columns = [{key, label, type:'number'|'category', unit?}]（key 规则同类别）
+ * - 列定义校验 columns = [{key, label, type:'number'|'category'|'text', unit?}]（key 规则同类别）
+ *   文本数据集的 columns 固定为 TEXT_COLUMNS = [{key:'text', label:'文本', type:'text'}]，创建时未传则自动填
  * - 创建（可参与外部事务）、按 ID / 按项目查询、更新 name/classes/kind/columns（可参与外部事务）
  * - 三集样本计数 counts = {train:{class_key:n}, holdout:{...}, shift:{'<set>':{class_key:n}}}
  * - lock：把选中的样本改为 holdout 并让 version+1（事务）
  * - sample_count 维护（增量与全量重算）
  *
- * 说明：holdout_ratio 是 DECIMAL，mysql2 返回字符串，读出时转 number；kind 为 image | table
+ * 说明：holdout_ratio 是 DECIMAL，mysql2 返回字符串，读出时转 number；kind 为 image | table | audio | text
  */
 
 const dbConnection = require('../database/connection');
@@ -18,9 +19,12 @@ const logger = require('../utils/logger');
 
 const CLASS_KEY_PATTERN = /^[a-z0-9_-]{1,32}$/;
 const MAX_CLASSES = 50;
-const KINDS = ['image', 'table'];
-const COLUMN_TYPES = ['number', 'category'];
+const KINDS = ['image', 'table', 'audio', 'text'];
+const COLUMN_TYPES = ['number', 'category', 'text'];
 const MAX_COLUMNS = 50;
+/** 文本数据集固定的列定义 */
+const TEXT_COLUMNS = [{ key: 'text', label: '文本', type: 'text' }];
+const KIND_ERROR = 'kind 只能是 image、table、audio 或 text';
 
 class AiLabDataset {
   static parseJson(value, fallback = null) {
@@ -101,7 +105,7 @@ class AiLabDataset {
       seen.add(key);
 
       const type = item && typeof item === 'object' && item.type !== undefined ? String(item.type) : 'number';
-      if (!COLUMN_TYPES.includes(type)) throw new ValidationError(`列 ${key} 的 type 只能是 number 或 category`);
+      if (!COLUMN_TYPES.includes(type)) throw new ValidationError(`列 ${key} 的 type 只能是 number、category 或 text`);
 
       let label = item && typeof item === 'object' && item.label !== undefined ? String(item.label).trim() : '';
       if (!label) label = key;
@@ -118,8 +122,17 @@ class AiLabDataset {
   }
 
   /**
+   * 某类数据集的列定义：text 固定 TEXT_COLUMNS；table 用传入值；image/audio 无列
+   */
+  static columnsForKind(kind, columns) {
+    if (kind === 'text') return TEXT_COLUMNS.map(col => ({ ...col }));
+    if (kind === 'table') return columns === undefined || columns === null ? null : AiLabDataset.validateColumns(columns);
+    return null;
+  }
+
+  /**
    * 创建数据集
-   * @param {Object} data - { project_id, user_id, name, classes, kind?, columns? }
+   * @param {Object} data - { project_id, user_id, name, classes, kind?, columns? }（text 的 columns 自动固定）
    * @param {Function} [query] - 事务内查询函数
    * @returns {number} 新数据集 ID
    */
@@ -128,10 +141,8 @@ class AiLabDataset {
     try {
       const classes = AiLabDataset.validateClasses(data.classes || []);
       const kind = data.kind || 'image';
-      if (!KINDS.includes(kind)) throw new ValidationError('kind 只能是 image 或 table');
-      const columns = data.columns === undefined || data.columns === null
-        ? null
-        : AiLabDataset.validateColumns(data.columns);
+      if (!KINDS.includes(kind)) throw new ValidationError(KIND_ERROR);
+      const columns = AiLabDataset.columnsForKind(kind, data.columns);
       const { rows } = await q(
         `INSERT INTO ai_lab_datasets (project_id, user_id, name, kind, classes, columns, version, sample_count)
          VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
@@ -187,7 +198,7 @@ class AiLabDataset {
         values.push(JSON.stringify(AiLabDataset.validateClasses(fields.classes)));
       }
       if (fields.kind !== undefined) {
-        if (!KINDS.includes(fields.kind)) throw new ValidationError('kind 只能是 image 或 table');
+        if (!KINDS.includes(fields.kind)) throw new ValidationError(KIND_ERROR);
         updateFields.push('kind = ?');
         values.push(fields.kind);
       }
@@ -352,5 +363,7 @@ class AiLabDataset {
 AiLabDataset.CLASS_KEY_PATTERN = CLASS_KEY_PATTERN;
 AiLabDataset.KINDS = KINDS;
 AiLabDataset.COLUMN_TYPES = COLUMN_TYPES;
+AiLabDataset.TEXT_COLUMNS = TEXT_COLUMNS;
+AiLabDataset.KIND_ERROR = KIND_ERROR;
 
 module.exports = AiLabDataset;

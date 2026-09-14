@@ -5,6 +5,8 @@
  *  - 图像（image-knn）：预测 → 采集/导入 → 锁定留出集 → 训练 → 留出测试 → 换条件测试 → 错误分析 → 对照 → 模型卡
  *    附加实验步骤：import_preset（导入预置包）、mislabel/restore（喂错数据）、data_card（数据卡）
  *  - 表格（table-tree / table-rules）：导入 → 锁定 → 手写规则 → 训练决策树 → 留出/换条件测试 → 对照 → 模型卡
+ *  - 声音（audio-knn）：与图像同一套面板，换成麦克风采集、频谱缩略图与声音特征提取器
+ *  - 文本分类（text-nb）：句子列表 → 双人标注与一致性 → 朴素贝叶斯 → 测试时看是哪些词推错的
  *  - 文本核实（verify）：材料 → 拆说法 → 判定 → 改写 → 反思
  * 左侧步骤栏按真实数据判断完成状态；每一步的关键动作都写一条过程事实（aiLabStore.recordEvent）。
  * 非所有者（教师/管理员）只读，可看时间线。
@@ -34,6 +36,14 @@ import TreeTrainPanel from './components/TreeTrainPanel'
 import TableEvaluatePanel from './components/TableEvaluatePanel'
 import SampleCurve from './components/SampleCurve'
 import VerifyWorkspace from './components/VerifyWorkspace'
+import AudioCapturePanel from './components/AudioCapturePanel'
+import AudioDatasetPanel from './components/AudioDatasetPanel'
+import TextPanel from './components/TextPanel'
+import TextTrainPanel from './components/TextTrainPanel'
+import TextEvaluatePanel from './components/TextEvaluatePanel'
+import AnnotationPanel from './components/AnnotationPanel'
+import MlpTrainPanel from './components/MlpTrainPanel'
+import { modalityFor } from './engine/modalities'
 import './AiLab.less'
 
 const { Title, Text } = Typography
@@ -82,6 +92,12 @@ const ProjectWorkspace = () => {
 
   const task = useMemo(() => tasks.find((x) => x.key === project?.task_key) || null, [tasks, project?.task_key])
   const kind = task?.kind || dataset?.kind || 'image'
+  const engine = task?.engine || (kind === 'table' ? 'table-tree' : kind === 'audio' ? 'audio-knn' : kind === 'text' ? 'text-nb' : 'image-knn')
+  const isVerify = engine === 'verify'
+  const isText = kind === 'text' && !isVerify
+  const isAudio = kind === 'audio'
+  const isTable = kind === 'table'
+  const modality = modalityFor(kind)
   const steps = useMemo(() => Array.from(new Set(task?.steps || DEFAULT_STEPS)), [task])
   const minPerClass = task?.min_train_per_class || 10
   const config = task?.config || {}
@@ -108,7 +124,11 @@ const ProjectWorkspace = () => {
     data_card: !!project?.context?.data_card?.goal,
     lock: !!dataset?.locked_at,
     rules: models.some((m) => m.engine === 'table-rules'),
-    train: models.some((m) => m.engine !== 'table-rules'),
+    train: models.some((m) => m.engine !== 'table-rules' && m.engine !== 'table-mlp') || (isText && models.some((m) => m.engine === 'text-nb')),
+    train_mlp: models.some((m) => m.engine === 'table-mlp'),
+    annotate: Object.keys(project?.context?.annotations || {}).length > 0,
+    agreement: hasEvent('agreement.compute'),
+    fairness: hasEvent('fairness.view'),
     test_holdout: hasHoldoutTest,
     test_shift: hasShiftTest,
     condition_design: (project?.context?.condition_table || []).length > 0,
@@ -127,6 +147,13 @@ const ProjectWorkspace = () => {
   const firstOpen = steps.findIndex((s) => !stepDone[s])
   const currentStep = firstOpen === -1 ? steps.length - 1 : firstOpen
 
+  /* 少数步骤的标题随实验类型变：compare 在 M3 里是树 vs 网络，train 在表格/文本里是树/文本分类器 */
+  const stepTitle = (key) => {
+    if (key === 'compare' && steps.includes('train_mlp')) return t('aiLab.step.compare_mlp')
+    if (key === 'train' && isText) return t('aiLab.step.train_text')
+    if (key === 'train' && isTable && steps.includes('train_mlp')) return t('aiLab.step.train_tree')
+    return t(`aiLab.step.${key}`)
+  }
   const scrollTo = (key) => document.getElementById(`ailab-step-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const handleTrainUpload = async (blobs, meta) => {
@@ -175,13 +202,15 @@ const ProjectWorkspace = () => {
   )
 
   const predictPrompt = i18n.exists(`aiLab.task.${project.task_key}.predictPrompt`) ? t(`aiLab.task.${project.task_key}.predictPrompt`) : t('aiLab.task.free.predictPrompt')
-  const isTable = kind === 'table'
-  const presetButton = canEdit && (task?.presets?.length > 0 || isTable) && (
+  const presetButton = canEdit && (task?.presets?.length > 0 || isTable || isText) && (
     <Button size="small" icon={<PlusOutlined />} onClick={() => setPresetOpen(true)}>{t('aiLab.preset.buttonOpen')}</Button>
   )
-  const dataView = isTable
-    ? <TablePanel dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} onAddRow={handleAddRow} />
-    : <DatasetPanel dataset={dataset} samples={samples} onAddClass={handleAddClass} onRenameClass={handleRenameClass} onDeleteSample={handleDeleteSample} canEdit={canEdit} />
+  let dataView
+  if (isTable) dataView = <TablePanel dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} onAddRow={handleAddRow} />
+  else if (isText) dataView = <TextPanel dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} onAddRow={handleAddRow} onDeleteSample={handleDeleteSample} />
+  else if (isAudio) dataView = <AudioDatasetPanel dataset={dataset} samples={samples} onAddClass={handleAddClass} onRenameClass={handleRenameClass} onDeleteSample={handleDeleteSample} canEdit={canEdit} />
+  else dataView = <DatasetPanel dataset={dataset} samples={samples} onAddClass={handleAddClass} onRenameClass={handleRenameClass} onDeleteSample={handleDeleteSample} canEdit={canEdit} />
+  const collectHintKey = isAudio ? 'aiLab.section.collectAudioHint' : isText ? 'aiLab.section.collectTextHint' : 'aiLab.section.collectHint'
 
   const lockSection = () => section('lock', t('aiLab.step.lock'), t('aiLab.section.lockHint'), (
     <Space direction="vertical" style={{ width: '100%' }}>
@@ -198,13 +227,14 @@ const ProjectWorkspace = () => {
   const sections = {
     predict: () => section('predict', t('aiLab.step.predict'), null, <PredictionCard project={project} prompt={predictPrompt} canEdit={canEdit} />),
     data_card: () => section('data_card', t('aiLab.step.data_card'), t('aiLab.section.dataCardHint'), <DataCardForm project={project} canEdit={canEdit} />),
-    collect: () => section('collect', t('aiLab.step.collect'), t('aiLab.section.collectHint', { min: minPerClass }), (
+    collect: () => section('collect', t('aiLab.step.collect'), t(collectHintKey, { min: minPerClass }), (
       <>
         {dataView}
-        {canEdit && !isTable && classes.length > 0 && <CapturePanel dataset={dataset} classes={classes} split="train" onUpload={handleTrainUpload} />}
+        {canEdit && isAudio && classes.length > 0 && <AudioCapturePanel dataset={dataset} classes={classes} split="train" onUpload={handleTrainUpload} />}
+        {canEdit && !isTable && !isText && !isAudio && classes.length > 0 && <CapturePanel dataset={dataset} classes={classes} split="train" onUpload={handleTrainUpload} />}
       </>
     ), presetButton),
-    import_preset: () => section('import_preset', t('aiLab.step.import_preset'), t(isTable ? 'aiLab.section.importTableHint' : 'aiLab.section.importHint'), (
+    import_preset: () => section('import_preset', t('aiLab.step.import_preset'), t(isTable ? 'aiLab.section.importTableHint' : isText ? 'aiLab.section.importTextHint' : isAudio ? 'aiLab.section.importAudioHint' : 'aiLab.section.importHint'), (
       <>
         {canEdit && trainTotal === 0 && (
           <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('aiLab.section.importEmpty')}
@@ -217,19 +247,38 @@ const ProjectWorkspace = () => {
     rules: () => section('rules', t('aiLab.step.rules'), t('aiLab.section.rulesHint'), (
       <RuleEditor dataset={dataset} samples={samples} models={models} project={project} canEdit={canEdit} labelOf={labelOf} />
     )),
-    train: () => section('train', t('aiLab.step.train'), t(isTable ? 'aiLab.section.treeHint' : 'aiLab.section.trainHint'), (
+    train: () => section('train', stepTitle('train'), t(isTable ? 'aiLab.section.treeHint' : isText ? 'aiLab.section.textTrainHint' : isAudio ? 'aiLab.section.audioTrainHint' : 'aiLab.section.trainHint'), (
       isTable
         ? <TreeTrainPanel dataset={dataset} samples={samples} models={models} canEdit={canEdit} labelOf={labelOf} depthOptions={config.max_depth_options} />
-        : <TrainPanel dataset={dataset} models={models} minPerClass={minPerClass} canEdit={canEdit} perClassLimits={config.per_class_limits} extraParams={steps.includes('mislabel') ? { mislabeled_count: mislabeledCount } : undefined} />
+        : isText
+          ? <TextTrainPanel dataset={dataset} samples={samples} models={models} canEdit={canEdit} labelOf={labelOf} minPerClass={minPerClass} />
+          : <TrainPanel dataset={dataset} models={models} minPerClass={minPerClass} canEdit={canEdit} modality={modality} perClassLimits={config.per_class_limits} extraParams={steps.includes('mislabel') ? { mislabeled_count: mislabeledCount } : undefined} />
+    )),
+    train_mlp: () => section('train_mlp', t('aiLab.step.train_mlp'), t('aiLab.section.mlpHint'), (
+      <MlpTrainPanel dataset={dataset} samples={samples} models={models} canEdit={canEdit} config={config.mlp} />
+    )),
+    annotate: () => section('annotate', t('aiLab.step.annotate'), t('aiLab.section.annotateHint'), (
+      <AnnotationPanel mode="annotate" project={project} dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} />
+    )),
+    agreement: () => section('agreement', t('aiLab.step.agreement'), t('aiLab.section.agreementHint'), (
+      <AnnotationPanel mode="agreement" project={project} dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} />
+    )),
+    fairness: () => section('fairness', t('aiLab.step.fairness'), t('aiLab.section.fairnessHint', { tag: t(`aiLab.condition.${config.subgroup_tag || 'collector'}`) }), (
+      <Space direction="vertical">
+        <Text type="secondary">{t('aiLab.section.fairnessWhere')}</Text>
+        {stepDone.fairness && <Tag color="green">{t('aiLab.section.fairnessDone')}</Tag>}
+      </Space>
     )),
     test_holdout: () => section('test_holdout', t('aiLab.step.test_holdout'), t('aiLab.section.testHint'), (
       isTable
         ? <TableEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} />
-        : <EvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} />
+        : isText
+          ? <TextEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} />
+          : <EvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} modality={modality} subgroupTag={steps.includes('fairness') ? (config.subgroup_tag || 'collector') : undefined} />
     )),
-    test_shift: () => section('test_shift', t('aiLab.step.test_shift'), t(isTable ? 'aiLab.section.shiftRowsHint' : 'aiLab.section.shiftHint'), <Text type="secondary">{t('aiLab.section.shiftWhere')}</Text>),
+    test_shift: () => section('test_shift', t('aiLab.step.test_shift'), t(isTable ? 'aiLab.section.shiftRowsHint' : isText ? 'aiLab.section.shiftTextHint' : isAudio ? 'aiLab.section.shiftAudioHint' : 'aiLab.section.shiftHint'), <Text type="secondary">{t('aiLab.section.shiftWhere')}</Text>),
     condition_design: () => section('condition_design', t('aiLab.step.condition_design'), t('aiLab.section.conditionHint'), <ConditionTable project={project} models={models} canEdit={canEdit} />),
-    errors: () => section('errors', t('aiLab.step.errors'), t(isTable ? 'aiLab.section.errorsRowsHint' : 'aiLab.section.errorsHint'), (
+    errors: () => section('errors', t('aiLab.step.errors'), t(isTable || isText ? 'aiLab.section.errorsRowsHint' : isAudio ? 'aiLab.section.errorsAudioHint' : 'aiLab.section.errorsHint'), (
       <Space>
         <Text type="secondary">{t('aiLab.section.errorsWhere')}</Text>
         {canEdit && !errorsViewed && <Button size="small" onClick={() => { setErrorsViewed(true); recordEvent('reflection.write', { step: 'errors', text: 'viewed' }) }}>{t('aiLab.section.errorsMark')}</Button>}
@@ -247,7 +296,7 @@ const ProjectWorkspace = () => {
         <ComparePanel models={models} />
       </>
     )),
-    compare: () => section('compare', t('aiLab.step.compare'), t('aiLab.section.compareHint'), <ComparePanel models={models} />),
+    compare: () => section('compare', stepTitle('compare'), t(steps.includes('train_mlp') ? 'aiLab.section.compareMlpHint' : 'aiLab.section.compareHint'), <ComparePanel models={models} />),
     model_card: () => section('model_card', t('aiLab.step.model_card'), t('aiLab.section.modelCardHint'), <ModelCardForm models={models} canEdit={canEdit} />)
   }
 
@@ -281,12 +330,12 @@ const ProjectWorkspace = () => {
             size="small"
             current={currentStep}
             onChange={(i) => scrollTo(steps[i])}
-            items={steps.map((s) => ({ title: t(`aiLab.step.${s}`), status: stepDone[s] ? 'finish' : undefined }))}
+            items={steps.map((s) => ({ title: stepTitle(s), status: stepDone[s] ? 'finish' : undefined }))}
           />
         </aside>
         <main className="ailab-main">
-          {kind === 'text'
-            ? <VerifyWorkspace project={project} canEdit={canEdit} steps={steps} renderSection={section} />
+          {isVerify
+            ? <VerifyWorkspace project={project} canEdit={canEdit} steps={steps} renderSection={section} materialSet={config.material_set || 'campus'} />
             : steps.map((s) => (sections[s] ? sections[s]() : null))}
           <Card className="ailab-section" title={t('aiLab.timeline.title')}>
             <Timeline />
@@ -294,7 +343,7 @@ const ProjectWorkspace = () => {
         </main>
       </div>
       {dataset && (
-        <ImportPresetModal open={presetOpen} onClose={() => setPresetOpen(false)} dataset={dataset} task={task} kind={isTable ? 'table' : 'image'} />
+        <ImportPresetModal open={presetOpen} onClose={() => setPresetOpen(false)} dataset={dataset} task={task} kind={isTable ? 'table' : isText ? 'text' : isAudio ? 'audio' : 'image'} />
       )}
     </div>
   )

@@ -19,7 +19,7 @@ const { Text } = Typography
 const TreeTrainPanel = ({ dataset, samples, models, canEdit, labelOf, depthOptions }) => {
   const { t } = useTranslation()
   const { saveModel, loadLiveModel, recordEvent, liveModels } = useAiLabStore()
-  const columns = dataset?.columns || []
+  const columns = (dataset?.columns || []).filter((c) => c.type !== 'text')
   const classes = dataset?.classes || []
   const rows = useMemo(() => toRows(samples, 'train'), [samples])
   const options = depthOptions?.length ? depthOptions : [1, 2, 3, 4, 6]

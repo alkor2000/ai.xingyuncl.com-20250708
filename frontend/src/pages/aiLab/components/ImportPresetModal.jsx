@@ -53,7 +53,7 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
     setImporting(true)
     try {
       const payload = { pack_key: pack.key, shift_sets: shiftSets }
-      if (targetKind === 'image' && perClass !== 'all') payload.per_class = perClass
+      if ((targetKind === 'image' || targetKind === 'audio') && perClass !== 'all') payload.per_class = perClass
       const result = await importPreset(dataset.id, payload)
       const shiftTotal = Object.values(result?.imported?.shift || {}).reduce((a, b) => a + b, 0)
       recordEvent('preset.import', { dataset_id: dataset.id, pack_key: pack.key, per_class: perClass === 'all' ? null : perClass, shift_sets: shiftSets, imported: result?.imported || null })
@@ -101,7 +101,7 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
           </Radio.Group>
           {pack && (
             <div className="ailab-preset-options">
-              {targetKind === 'image' && (
+              {(targetKind === 'image' || targetKind === 'audio') && (
                 <div className="ailab-field">
                   <label>{t('aiLab.preset.perClass')}</label>
                   <Radio.Group value={perClass} onChange={(e) => setPerClass(e.target.value)} optionType="button" size="small"

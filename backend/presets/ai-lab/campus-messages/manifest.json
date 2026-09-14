@@ -1,0 +1,1212 @@
+{
+  "key": "campus-messages",
+  "kind": "text",
+  "title": "校园留言情绪语料",
+  "description": "原创的校园留言短句，三类情绪（积极/消极/中性）。训练集话题是食堂、课堂作业、校园设施；换条件集换成社团与活动话题，看模型学到的\"情绪词\"能不能迁移。",
+  "license": "CC0",
+  "source": "本平台原创",
+  "attribution": "",
+  "grade_bands": [
+    "P",
+    "M"
+  ],
+  "classes": [
+    {
+      "key": "positive",
+      "label": "积极"
+    },
+    {
+      "key": "negative",
+      "label": "消极"
+    },
+    {
+      "key": "neutral",
+      "label": "中性"
+    }
+  ],
+  "columns": [
+    {
+      "key": "text",
+      "label": "留言",
+      "type": "text"
+    }
+  ],
+  "rows": {
+    "train": [
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天食堂的番茄炒蛋特别好吃，阿姨还多给了一勺。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "新开的面包窗口太棒了，早上终于不用饿着肚子上课。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "食堂换了新餐盘，干净又好看，吃饭心情都好了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "中午的糖醋排骨排队的人好多，但真的值得等。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "感谢食堂开了减辣窗口，我这种不能吃辣的人有救了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天的水果拼盘很新鲜，希望天天有。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "食堂大叔记得我不要香菜，太贴心了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "二楼新添了微波炉，带饭的同学方便多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "汤是免费续的，冬天喝一碗暖乎乎的。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天打饭速度很快，五分钟就吃上了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "数学老师今天讲的那道题思路太清楚了，一下就懂了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "这次作业量刚刚好，做完还能看会儿书。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "物理实验课自己动手接电路，比看书有意思多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "老师把上节课的错题又讲了一遍，我这回真的会了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "语文课的辩论环节太精彩了，大家都抢着发言。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "英语老师给我们放的短片很有意思，单词记得特别牢。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "小组合作做的历史海报得了第一，太开心了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天课堂练习全对，老师还表扬了我。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "新来的化学老师讲课幽默，全班都在笑着听。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "作业本上老师写了长长的评语，看完很受鼓励。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "体育课终于学到了篮球战术，打起来有章法了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "这周的阅读作业是我喜欢的书，一口气读完了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "老师允许我们用思维导图代替抄写，效率高多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "上课回答问题被老师夸思路新颖，一整天都很开心。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "课后老师耐心地帮我补了落下的课，很感激。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "教学楼的饮水机换成了直饮水，水又凉又干净。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "操场翻新后的跑道踩上去特别舒服。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "图书馆新增了很多座位，再也不用抢位子了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "宿舍装了新的洗衣机，洗衣服不用等了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "校园里新种的樱花开了，走在路上心情很好。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "厕所终于装了洗手液和烘干机，太好了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "实验楼的电梯修好了，搬器材轻松多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "校园网速度快了很多，查资料再也不卡。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "教室里新装的空调很给力，夏天上课不热了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "篮球场晚上开了灯，放学后还能打一会儿。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "楼道里贴的学生画作很好看，每次经过都想多看几眼。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "失物招领处帮我找回了丢了一周的水杯，谢谢。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "校医室的老师很温柔，处理伤口一点都不疼。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "新的储物柜又大又结实，书包终于有地方放了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "校车司机师傅每天准时，风雨无阻，辛苦了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天午休时间延长了十分钟，下午上课精神多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "广播站放的歌都是同学点的，中午吃饭很放松。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "班级图书角新到了一批书，大家争着借。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "学校发的新校服面料很舒服，颜色也好看。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "今天的升旗仪式上我们班被表扬了，特别自豪。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "课间操换成了新的舞蹈，比以前有趣多了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "值日的时候同学主动来帮忙，一会儿就打扫完了。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "校园里的流浪猫有了小窝，大家都很开心。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "黑板换成了触屏的，老师讲课能直接画图。"
+        }
+      },
+      {
+        "class_key": "positive",
+        "payload": {
+          "text": "期中考试后学校组织了放松活动，大家玩得很尽兴。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "今天食堂的米饭又硬又夹生，根本咽不下去。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "排队打饭排了二十分钟，轮到我菜都没了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "食堂的菜越来越咸，喝了三杯水还是渴。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "餐盘上还有上一个人的油渍，看着就没胃口。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "面窗口的阿姨态度很差，多问一句就不耐烦。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "今天的鸡腿还是凉的，吃了肚子不舒服。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "食堂涨价了，一份菜比上学期贵了两块钱。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "中午菜里吃出了一根头发，太恶心了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "饮料机坏了三天还没人修。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "晚饭只有两个菜可选，天天都是土豆。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "这周的作业太多了，每天写到十二点还写不完。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "老师讲课太快，还没记完笔记就翻页了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "同一道题老师讲了三遍我还是没听懂，好挫败。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "期中考试排名贴在墙上，看着很难受。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "小组作业别人都不做，全压在我一个人身上。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "课堂上老师只提问前排的同学，后排像透明人。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "抄写作业抄了五遍，手都酸了，一点用都没有。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "英语听力设备有杂音，根本听不清。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "体育课因为下雨改成了自习，已经第三次了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "作业发下来没有批改痕迹，不知道自己错在哪。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "老师拖堂十分钟，课间连厕所都来不及上。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "实验课器材不够，四个人挤一套，轮不到我动手。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "历史课全是背诵，一点也不想学。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "考试题目和平时讲的完全不一样，太难了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "老师当众念了我的分数，好尴尬。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "教学楼的厕所又堵了，味道飘到走廊里。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "饮水机的水有股怪味，没人敢喝。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "操场的跑道裂了好几处，跑步差点摔跤。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "宿舍晚上十点断电，作业还没写完就黑了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "图书馆的空调开得太冷，坐一会儿就手脚冰凉。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "教室的灯坏了两盏，下午看黑板很费劲。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "校园网天天掉线，查资料急死人。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "储物柜的锁坏了，东西丢了没人管。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "篮球场的篮筐歪了，投篮总是打铁。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "楼梯扶手松动了，走上去晃晃的很危险。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "校车总是晚点，每天都要在寒风里等。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "校医室下午没人，磕破了膝盖只能自己处理。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "走廊的地面刚拖完就很滑，好几个同学摔倒。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "实验室的通风扇不转，做完实验头晕。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "洗衣机排水管漏水，宿舍地面全湿了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "课间操音乐声音太大，震得耳朵疼。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "午休时间被占用来讲卷子，下午上课困得不行。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "学校规定不能带课外书，太不合理了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "升旗仪式站了四十分钟，好几个同学晕倒。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "校服的裤子太薄，冬天冷得发抖。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "值日表排得不公平，总是我们组扫厕所。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "广播站放的歌永远是那几首，听腻了。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "考试周和运动会撞在一起，根本忙不过来。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "黑板反光严重，坐在窗边什么都看不清。"
+        }
+      },
+      {
+        "class_key": "negative",
+        "payload": {
+          "text": "学校的失物招领从来找不回东西。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "食堂周三的菜单是红烧肉、清炒油麦菜和紫菜蛋花汤。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "打饭窗口从十一点半开到一点。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "二楼食堂可以刷校园卡，也可以扫码支付。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "今天中午食堂人比较多，大概排了十分钟。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "食堂门口贴了下周的菜单。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "米饭窗口在最里面，面条窗口靠门口。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "食堂新增了一个卖粥的窗口。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "周五晚上食堂六点半停止供餐。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "餐具回收处在出口左边。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "食堂的免费汤今天是冬瓜汤。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "明天数学课要带圆规和量角器。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "这次作业是课本第四十二页的第一到第五题。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "下周三进行物理单元测验。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "老师说下节课讲第三单元的第二节。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "语文作文题目是《我的一次尝试》，不少于六百字。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "英语听力练习安排在每周二和周四。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "小组作业的分工表发在班级群里了。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "课堂笔记要在周五前交给课代表检查。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "历史课的预习范围是第五章前两节。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "下次实验课在三楼的化学实验室上。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "体育课这学期考八百米和跳远。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "老师把课件放到了班级共享盘里。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "期中考试时间定在下下周的周一到周三。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "作业本用完了可以到教务处领新的。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "化学老师这周出差，课由另一位老师代上。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "图书馆开放时间是早八点到晚九点。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "教学楼三楼的饮水机在楼梯口旁边。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "操场东侧新装了两个篮球架。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "宿舍楼的洗衣房在一楼西头。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "校园卡充值机在食堂门口。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "失物招领处设在传达室。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "实验楼的电梯限载十三人。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "教室的投影仪遥控器放在讲台抽屉里。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "校医室的开放时间是上午八点到下午五点。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "校车每天早上七点从东门发车。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "储物柜的钥匙在班主任那里领。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "操场的跑道一圈是四百米。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "图书借阅期限为三十天。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "体育馆周末对学生开放。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "校园网账号是学号，初始密码是生日。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "本周升旗仪式由二年级三班负责。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "课间操从上午九点五十开始。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "广播站每周三招募新的播音员。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "校服订购表明天发到各班。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "这学期的班级图书角由生活委员管理。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "值日表贴在教室后门旁边。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "下周一学校组织消防演练。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "期中考试后有一天休息。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "黑板擦每周更换一次。"
+        }
+      },
+      {
+        "class_key": "neutral",
+        "payload": {
+          "text": "午休时间从十二点二十到一点十分。"
+        }
+      }
+    ],
+    "shift": {
+      "另一话题：社团与活动": [
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "社团招新那天摊位太热闹了，我一口气报了两个社团。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "合唱团这次演出拿了金奖，排练的辛苦都值了。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "机器人社的学长带我们组装了第一台小车，太酷了。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "运动会接力赛我们班逆转夺冠，全班都疯了。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "摄影社周末外拍，拍到了超美的夕阳。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "辩论社的第一次模拟赛我方赢了，大家击掌庆祝。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "戏剧社的演出座无虚席，谢幕时掌声不断。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "科技节我们的作品被评为最佳创意，太开心了。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "文学社的诗歌朗诵会氛围特别好。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "校园歌手大赛的决赛太精彩了，每个人都唱得很棒。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "志愿者活动去了敬老院，爷爷奶奶笑得很开心。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "篮球社的新教练很专业，训练进步很快。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "元旦晚会的节目一个比一个精彩。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "社团联合展示日人山人海，我们的展位很受欢迎。"
+          }
+        },
+        {
+          "class_key": "positive",
+          "payload": {
+            "text": "春游去了植物园，天气好，玩得很尽兴。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "社团招新排了半小时队，结果被告知名额已满。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "合唱团排练占用了每天的午休，累得受不了。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "运动会的项目分配没人商量，硬塞给我一个长跑。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "摄影社的相机坏了一半，轮不到我用。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "辩论社的赛程临时改了，通知得太晚。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "戏剧社选角不公平，总是那几个人当主角。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "科技节评审时间太短，我们的作品都没讲完就被叫停。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "文学社的活动一直在延期，都快忘了自己是社员。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "歌手大赛的音响出了问题，唱到一半没声音了。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "志愿者活动的时间和考试冲突，只能弃权。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "篮球社的场地被占用，训练改成了看视频。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "元旦晚会彩排到晚上九点，回家太晚了。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "社团联合展示日下起了雨，展板全湿了。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "春游的大巴迟到一个小时，行程全被打乱。"
+          }
+        },
+        {
+          "class_key": "negative",
+          "payload": {
+            "text": "社团费交了却没什么活动，感觉被骗了。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "社团招新在本周五下午的操场进行。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "合唱团每周二和周四放学后排练。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "机器人社的活动室在实验楼四楼。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "运动会报名表在体育委员那里。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "摄影社本周活动主题是校园建筑。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "辩论社的例会改到周三中午。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "戏剧社招募两名道具组成员。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "科技节作品提交截止日期是下月一日。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "文学社的稿件发到社团邮箱即可。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "校园歌手大赛初赛分三个场次。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "志愿者活动需要提前在系统里报名。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "篮球社训练场地是东侧篮球场。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "元旦晚会的节目单已经公布。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "社团联合展示日安排在体育馆。"
+          }
+        },
+        {
+          "class_key": "neutral",
+          "payload": {
+            "text": "春游的集合时间是早上七点半，地点在东门。"
+          }
+        }
+      ]
+    }
+  }
+}

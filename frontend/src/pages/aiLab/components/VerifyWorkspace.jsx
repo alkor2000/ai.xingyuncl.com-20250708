@@ -14,11 +14,11 @@ const { Text, Paragraph } = Typography
 const VERDICTS = ['supported', 'refuted', 'unverifiable']
 const VERDICT_COLOR = { supported: 'green', refuted: 'red', unverifiable: 'gold' }
 
-const VerifyWorkspace = ({ project, canEdit, steps, renderSection }) => {
+const VerifyWorkspace = ({ project, canEdit, steps, renderSection, materialSet = 'campus' }) => {
   const { t, i18n } = useTranslation()
   const { updateProject, recordEvent } = useAiLabStore()
   const verify = project?.context?.verify || {}
-  const materials = useMemo(() => getVerifyMaterials(i18n.language), [i18n.language])
+  const materials = useMemo(() => getVerifyMaterials(i18n.language, materialSet), [i18n.language, materialSet])
   const [materialId, setMaterialId] = useState(verify.material?.id || materials[0]?.id)
   const [custom, setCustom] = useState({ title: '', source: '', draft: '' })
   const [claims, setClaims] = useState(verify.claims || [])

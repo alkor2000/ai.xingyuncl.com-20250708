@@ -133,3 +133,21 @@
 @media (max-width: 900px) {
   .ailab-verify-material { grid-template-columns: 1fr; }
 }
+
+// 第三批：声音、文本、神经网络、公平性
+.ailab-mic-wrap { border: 1px solid #f0f0f0; border-radius: 8px; background: #f5f7f8; min-height: 120px; display: flex; flex-direction: column; justify-content: center; }
+.ailab-level { height: 6px; background: #e6ebee; border-radius: 3px; margin: 8px 12px 0; overflow: hidden; }
+.ailab-level-fill { height: 100%; background: linear-gradient(90deg, #2c7a5a, #b8860b, #c0392b); transition: width 80ms linear; }
+.ailab-audio-thumb { position: relative; width: 100%; height: 100%; background: #0b1d33; border-radius: 6px; overflow: hidden;
+  img { width: 100%; height: 100%; object-fit: fill; display: block; image-rendering: pixelated; }
+  .ailab-audio-thumb-loading { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #13263f, #13263f 6px, #0b1d33 6px, #0b1d33 12px); }
+  .ailab-audio-play { position: absolute; left: 2px; bottom: 2px; color: #fff; font-size: 18px; height: 24px; width: 24px; padding: 0; line-height: 1; &:hover { color: #ffd666; background: transparent; } }
+}
+.ailab-audio-capture .ailab-pending-grid .ailab-thumb { width: 104px; height: 72px; }
+.ailab-class-chip { cursor: pointer; &.active { border-color: #1e4c8a; background: #f4f7fb; } }
+.ailab-top-tokens { border: 1px solid #ebeef0; border-radius: 6px; padding: 8px 12px; background: #fbfcfd; }
+.ailab-token-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; }
+.ailab-token { display: inline-block; padding: 0 6px; border-radius: 10px; background: #eef2f5; font-size: 12.5px; line-height: 20px; margin-right: 4px;
+  &.pro { background: #e3f1ea; color: #2c7a5a; } &.con { background: #fbefe3; color: #b0540e; }
+}
+.ailab-fairness { margin: 12px 0; }

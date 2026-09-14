@@ -73,6 +73,46 @@
         "title": "AI 给出的校园资讯可信吗",
         "desc": "把一篇 AI 写的校园稿子拆成说法，逐条对照原始通知核实，再改写成可信的版本。",
         "predictPrompt": "AI 写的稿子读起来很顺，你觉得里面会有几处和通知不符？哪一类信息最容易错？"
+      },
+      "L2": {
+        "title": "声音也能被认出来吗",
+        "desc": "拍手、敲桌、口哨各录 10 段，训练后换同学发声、加教室噪声再测。",
+        "predictPrompt": "换一个同学来拍手，AI 还认得出是拍手吗？加上教室里的嘈杂声呢？写下你的预测。"
+      },
+      "P6": {
+        "title": "校园声音地图",
+        "desc": "采集五类校园声音各 15 段，换地点、加噪声测试，做一张能听的校园地图。",
+        "predictPrompt": "你打算录哪五种校园声音？哪两种最容易被 AI 混在一起？为什么？"
+      },
+      "M4": {
+        "title": "听懂关键词：从声音到指令",
+        "desc": "录十个中文指令词，换说话人、换设备测试，看语音指令在什么条件下失灵。",
+        "predictPrompt": "你的声音训练出来的模型，别的同学说同一个词它能听懂吗？换一部手机录呢？"
+      },
+      "M5": {
+        "title": "情绪翻译器：文本也能分类",
+        "desc": "两人独立给校园留言贴情绪标签、算一致性，训练朴素贝叶斯，换话题测试。",
+        "predictPrompt": "同一句留言，两个人贴的情绪标签会一样吗？模型学会了食堂留言的情绪，换成社团留言还准吗？"
+      },
+      "M3": {
+        "title": "决策树 vs 神经网络",
+        "desc": "同一张表、同一批留出集，决策树和小神经网络各训一版，比较准确率、可解释性和换条件表现。",
+        "predictPrompt": "决策树能画出来看，神经网络看不见规则。你猜哪个在没见过的数据上更准？"
+      },
+      "L5": {
+        "title": "AI 讲的动物故事哪里不对",
+        "desc": "教师投屏 AI 讲的动物小故事，学生对照图鉴找出藏着的那处错误。",
+        "predictPrompt": "AI 讲的故事听起来很顺，你觉得里面会不会有错？"
+      },
+      "L6": {
+        "title": "规则是我定的",
+        "desc": "用动物或垃圾的属性卡片，自己写分类规则，再和 AI 学出的规则比一比。",
+        "predictPrompt": "你打算用哪个属性来分？一条规则够吗？"
+      },
+      "M2": {
+        "title": "让分类器更公平",
+        "desc": "记录每张照片是谁采的，看模型对不同采集者的准确率差多少，补齐弱势组数据再训。",
+        "predictPrompt": "如果训练照片大多是一个人拍的，模型对其他人拍的照片会一样准吗？"
       }
     },
     "card": {
@@ -116,7 +156,14 @@
       "claims": "拆成说法",
       "verdicts": "逐条核实",
       "revise": "改写稿子",
-      "reflection": "反思"
+      "reflection": "反思",
+      "train_text": "训练文本分类器",
+      "train_tree": "训练决策树",
+      "train_mlp": "训练神经网络",
+      "annotate": "双人标注",
+      "agreement": "标注一致性",
+      "fairness": "分组看准确率",
+      "compare_mlp": "决策树 vs 神经网络"
     },
     "section": {
       "collectHint": "先定好类别，再给每一类拍照或上传。每类至少 {{min}} 张，记得填写采集条件。",
@@ -142,7 +189,23 @@
       "shiftRowsHint": "换条件集是另一批来源不同的行，在\"留出集测试\"卡片的第二个标签页里测试。",
       "errorsRowsHint": "在测试结果里展开错误行，看看是哪条规则或哪个分叉把它判错了。",
       "curveHint": "每类张数不同的版本并排看：分数是一直涨，还是到某个数就不怎么涨了？",
-      "compareHint": "同一批留出集和换条件集：你写的规则和决策树各得多少分？差在哪一类？"
+      "compareHint": "同一批留出集和换条件集：你写的规则和决策树各得多少分？差在哪一类？",
+      "collectAudioHint": "先定好类别，再给每一类录音或上传。每类至少 {{min}} 段，每段 1 秒，记得填写发声者和地点。",
+      "collectTextHint": "每类至少 {{min}} 句。可以导入预置语料，也可以自己一句句加。",
+      "importAudioHint": "从预置声音包导入训练集和换条件集；有麦克风的话再录一些自己的声音补进去。",
+      "importTextHint": "导入一份预置语料，每一行是一句话和它的情绪标签。",
+      "audioTrainHint": "训练在你的浏览器里完成：每段声音先变成频谱图，再交给预训练的声音模型提取特征。",
+      "textTrainHint": "朴素贝叶斯会数每一类里每个词出现了多少次，训练后能看到它学到的\"情绪词\"。",
+      "mlpHint": "同一批训练行再训一个小神经网络；看损失曲线怎么下降，再和决策树在同一批测试集上比。",
+      "annotateHint": "两位同学各自独立地给训练句子贴标签，先别商量。",
+      "agreementHint": "算一算两个人的一致率和 kappa；不一致的句子讨论后采纳一方的标签。",
+      "fairnessHint": "在留出集测试结果下方按\"{{tag}}\"分组看准确率，找出模型对谁不公平，然后回去补那一组的数据。",
+      "fairnessWhere": "分组准确率表在\"留出集测试\"结果的下方。",
+      "fairnessDone": "已查看分组准确率",
+      "shiftAudioHint": "换同学发声、换地点、叠加噪声、换设备……在\"留出集测试\"卡片的第二个标签页里录制并测试。",
+      "shiftTextHint": "换条件集是另一话题的留言，在\"留出集测试\"卡片的第二个标签页里测试。",
+      "errorsAudioHint": "在测试结果里点开错误片段，听一听、看频谱图，想想它为什么被认错。",
+      "compareMlpHint": "同一批留出集和换条件集：决策树和神经网络各得多少分？哪个更稳？哪个能说清楚理由？"
     },
     "lock": {
       "counts": "当前训练样本 {{train}} 张，留出测试样本 {{holdout}} 张",
@@ -173,7 +236,8 @@
       "addRow": "加一行",
       "save": "保存条件表",
       "saved": "条件表已保存",
-      "saveFailed": "保存失败"
+      "saveFailed": "保存失败",
+      "collector": "采集者"
     },
     "capture": {
       "startCamera": "打开摄像头",
@@ -219,7 +283,7 @@
       },
       "backend": "计算后端 {{backend}}",
       "localOnly": "全部在本机浏览器内计算",
-      "shortClasses": "以下类别不足 {{min}} 张，仍可训练，但结果可能不稳：{{classes}}",
+      "shortClasses": "以下类别不足 {{min}} 个样本，仍可训练，但结果可能不稳：{{classes}}",
       "lockFirst": "先锁定留出测试集，再训练；否则没有可信的测试分数。",
       "needTwoClasses": "至少要有两个类别有训练样本",
       "notePlaceholder": "第 {{version}} 版和上一版比，改了什么？为什么？",
@@ -250,7 +314,9 @@
       "noSamples": "这个集合里没有可测试的样本",
       "failed": "测试失败",
       "holdoutHintRows": "这些行训练时从没见过",
-      "shiftIntroRows": "换条件集是来源不同的另一批行（另一所学校、另一年），看规则和树能不能迁移。"
+      "shiftIntroRows": "换条件集是来源不同的另一批行（另一所学校、另一年），看规则和树能不能迁移。",
+      "holdoutHintAudio": "这些声音训练时从没听过",
+      "shiftIntroAudio": "换条件集要在与训练集不同的条件下录：换同学、换地点、加噪声、换设备。"
     },
     "errors": {
       "none": "这一组全部预测正确",
@@ -320,7 +386,11 @@
       "data_card_write": "写数据卡",
       "claim_write": "拆出说法",
       "claim_verify": "核实说法",
-      "claim_revise": "改写稿子"
+      "claim_revise": "改写稿子",
+      "annotation_write": "写入标注",
+      "agreement_compute": "计算标注一致性",
+      "fairness_view": "查看分组准确率",
+      "audio_play": "试听样本"
     },
     "grade": {
       "L": "小学",
@@ -331,12 +401,16 @@
     "kind": {
       "image": "图像",
       "table": "表格",
-      "text": "文本"
+      "text": "文本",
+      "audio": "声音"
     },
     "engine": {
       "image-knn": "图像 kNN",
       "table-tree": "决策树",
-      "table-rules": "手写规则"
+      "table-rules": "手写规则",
+      "audio-knn": "声音 kNN",
+      "text-nb": "朴素贝叶斯",
+      "table-mlp": "神经网络"
     },
     "preset": {
       "title": "导入预置数据",
@@ -376,6 +450,22 @@
       "iris": {
         "title": "鸢尾花",
         "desc": "三种鸢尾花的花萼与花瓣长宽，150 行；适合写一条\"花瓣长小于 2.5 就是山鸢尾\"再与决策树比。"
+      },
+      "sounds-synth": {
+        "title": "合成声音三类",
+        "desc": "哨音、敲击、沙沙声各 30 段；换条件集\"叠加噪声\"混入教室底噪，\"换音高\"整体变调。没有麦克风也能做。"
+      },
+      "campus-messages": {
+        "title": "校园留言情绪语料",
+        "desc": "原创校园留言 150 句，积极/消极/中性；换条件集换成社团与活动话题。"
+      },
+      "animal-cards": {
+        "title": "动物属性卡",
+        "desc": "60 张动物卡片的腿数、羽毛、鳞片、生活环境、会不会飞、出生方式等；换条件集有鸭嘴兽、几维鸟这类例外。"
+      },
+      "garbage-cards": {
+        "title": "垃圾分类卡",
+        "desc": "60 张物品卡片的材质、能否回收、是否有害、会不会腐烂、有无油污 → 四类垃圾。"
       }
     },
     "curve": {
@@ -536,6 +626,94 @@
       "reflectionRequired": "前两项要填",
       "reflectionSaved": "反思已保存",
       "saveFailed": "保存失败"
+    },
+    "audioCondition": {
+      "speaker": "发声者",
+      "place": "地点",
+      "noise": "噪声情况",
+      "device": "设备"
+    },
+    "audio": {
+      "startMic": "打开麦克风",
+      "stopMic": "关闭麦克风",
+      "recordOne": "录 1 秒",
+      "recording": "录音中…",
+      "fromFiles": "上传音频",
+      "micUnavailable": "打不开麦克风。可以改用上传音频，或使用预置声音包。",
+      "tip": "点\"录 1 秒\"后立刻发出声音；电平条能看到音量。安静一点的环境效果更稳定。",
+      "conditionsTip": "记录这批声音是谁、在哪、什么噪声条件、用什么设备录的，之后分析错误时用得上。",
+      "pending": "待上传 {{count}} 段",
+      "uploaded": "已上传 {{count}} 段",
+      "audioOnly": "只能上传音频文件",
+      "decodeFailed": "这个音频文件解析失败",
+      "recordFailed": "录音失败",
+      "format": "44.1kHz 单声道 WAV · 1 秒",
+      "newClassPlaceholder": "新类别名称，例如：拍手",
+      "noTrainSamples": "还没有训练片段",
+      "uploadTo": "上传 {{count}} 段到{{target}}"
+    },
+    "text": {
+      "textCol": "句子",
+      "noRows": "还没有训练句子",
+      "rowsShown": "显示训练集 {{count}} 句；留出集 {{holdout}} 句已隐藏",
+      "addHint": "也可以自己写一句加进训练集：",
+      "placeholder": "写一句校园留言",
+      "addDone": "已加入训练集",
+      "trainIntro": "把每句话拆成字和相邻的两字词，数每一类里各出现多少次，就是模型的全部知识。",
+      "rowsUsed": "用训练集 {{count}} 句",
+      "vocab": "词表 {{count}} 个",
+      "topTokensHint": "每一类最有代表性的词（在这一类里出现得比其他类多得多）：",
+      "holdoutHint": "这些句子训练时从没见过",
+      "shiftIntro": "换条件集是另一话题的留言，看模型学到的情绪词能不能迁移。",
+      "pushedBy": "把它推向预测结果的词（正数支持预测类，负数反对）",
+      "confidence": "把握"
+    },
+    "annotate": {
+      "intro": "A、B 两位同学各自选标签，先别看对方的。选完点保存。",
+      "annotatorA": "同学 A",
+      "annotatorB": "同学 B",
+      "current": "当前标签",
+      "save": "保存标注",
+      "saved": "标注已保存",
+      "saveFailed": "保存失败",
+      "filled": "A 已标 {{a}} 句，B 已标 {{b}} 句，共 {{total}} 句",
+      "agreementIntro": "两个人都标过的句子才参与计算。一致率是简单的相同比例，kappa 扣掉了碰巧一致的部分。",
+      "compute": "计算一致性",
+      "agreementRate": "两人一致率（{{n}} 句）",
+      "kappa": "kappa {{value}}",
+      "kappaHint": "kappa 0.8 以上算高度一致，0.4 以下说明标签标准没说清楚。",
+      "level": {
+        "excellent": "高度一致",
+        "good": "较一致",
+        "fair": "一般",
+        "poor": "不一致",
+        "none": "—"
+      },
+      "resolve": "采纳",
+      "adoptA": "采纳 A",
+      "adoptB": "采纳 B",
+      "adoptFailed": "修改标签失败",
+      "noDisagreement": "两人的标注完全一致"
+    },
+    "mlp": {
+      "intro": "神经网络把每一行变成一串数字，经过一层隐藏神经元再给出各类别的概率；训练就是一轮轮调整权重让损失下降。",
+      "hidden": "隐藏神经元",
+      "epochs": "训练轮数",
+      "paramsHint": "神经元越多、轮数越多，越容易记住训练集。",
+      "trainVersion": "训练第 {{version}} 版（神经网络）",
+      "epochAxis": "训练轮数（共 {{n}} 轮）",
+      "loss": "损失",
+      "trainAcc": "训练集准确率",
+      "summary": "{{hidden}} 神经元 · {{epochs}} 轮 · 训练集 {{acc}}"
+    },
+    "fairness": {
+      "title": "按\"{{tag}}\"分组的准确率",
+      "group": "分组",
+      "count": "样本数",
+      "accuracy": "准确率",
+      "untagged": "未填写",
+      "noTag": "测试样本没有填写\"{{tag}}\"，无法分组。采集时请填写这一项。",
+      "spread": "最好的组（{{best}}）和最差的组（{{worst}}）相差 {{value}}。"
     }
   }
 }

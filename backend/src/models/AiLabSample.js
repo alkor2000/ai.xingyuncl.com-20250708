@@ -1,5 +1,5 @@
 /**
- * AI训练专区 - 样本模型（ai_lab_samples）：图片样本与表格行样本
+ * AI训练专区 - 样本模型（ai_lab_samples）：图片 / 音频文件样本与表格 / 文本行样本
  *
  * 功能：
  * - 批量创建（事务内逐条插入以拿到每条 insertId；insertMany 可挂到外部事务）
@@ -10,7 +10,8 @@
  * - 混入错标：候选查询、批量改标（original_class_key 记原值）、全部恢复
  * - 预置包来源去重：按 origin_ref 查询已导入的样本
  *
- * 对外对象统一附 file_url = '/uploads/' + file_path（表格行样本 file_path 为 NULL 时 file_url 为 null）
+ * 对外对象统一附 file_url = '/uploads/' + file_path（行样本 file_path 为 NULL 时 file_url 为 null）；
+ * 音频样本带 duration_ms（毫秒，可为 NULL），width/height 为 NULL
  */
 
 const dbConnection = require('../database/connection');
@@ -52,6 +53,7 @@ class AiLabSample {
       width: row.width,
       height: row.height,
       file_size: row.file_size,
+      duration_ms: row.duration_ms ?? null,
       payload: AiLabSample.parseJson(row.payload, null),
       added_version: row.added_version,
       removed_version: row.removed_version,
@@ -61,7 +63,7 @@ class AiLabSample {
 
   /**
    * 在给定事务内逐条插入样本（不开事务、不查询回来）
-   * @param {Array<Object>} items - 每项 { dataset_id, user_id, class_key, split, shift_set, condition_tags, source, origin_ref, file_path, width, height, file_size, payload, added_version }
+   * @param {Array<Object>} items - 每项 { dataset_id, user_id, class_key, split, shift_set, condition_tags, source, origin_ref, file_path, width, height, file_size, duration_ms, payload, added_version }
    * @param {Function} query - 事务内查询函数
    * @returns {Array<number>} 新样本 id（按插入顺序）
    */
@@ -71,8 +73,8 @@ class AiLabSample {
       const { rows } = await query(
         `INSERT INTO ai_lab_samples (
            dataset_id, user_id, class_key, split, shift_set, condition_tags, source, origin_ref,
-           file_path, width, height, file_size, payload, added_version
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           file_path, width, height, file_size, duration_ms, payload, added_version
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.dataset_id,
           item.user_id,
@@ -86,6 +88,7 @@ class AiLabSample {
           item.width ?? null,
           item.height ?? null,
           item.file_size ?? null,
+          item.duration_ms ?? null,
           item.payload ? JSON.stringify(item.payload) : null,
           item.added_version ?? 0
         ]

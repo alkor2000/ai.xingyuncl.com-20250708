@@ -13,7 +13,7 @@ import { captureFrame, canvasToBlob } from '../engine/imageUtils'
 const BURST_INTERVAL_MS = 250
 const MAX_PENDING = 40
 
-const CONDITION_FIELDS = ['background', 'angle', 'light', 'device']
+const CONDITION_FIELDS = ['background', 'angle', 'light', 'device', 'collector']
 
 const CapturePanel = ({ dataset, classes, split = 'train', shiftSetOptions = [], onUpload, disabled }) => {
   const { t } = useTranslation()

@@ -20,7 +20,7 @@ const OP_TEXT = { '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=', '!=':
 const RuleEditor = ({ dataset, samples, models, project, canEdit, labelOf }) => {
   const { t } = useTranslation()
   const { saveModel, updateProject, recordEvent } = useAiLabStore()
-  const columns = dataset?.columns || []
+  const columns = (dataset?.columns || []).filter((c) => c.type !== 'text')
   const classes = dataset?.classes || []
   const rows = useMemo(() => toRows(samples, 'train'), [samples])
   const numeric = columns.filter((c) => c.type === 'number')
