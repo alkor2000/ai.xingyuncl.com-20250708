@@ -4,6 +4,7 @@
  * 所有颜色来自 slideThemeToCssVars 注入的 --slide-* 变量（与 .pptx 导出同源），
  * 页面尺寸是 960×540 的逻辑画幅，由组件按容器等比缩放。
  * 字号按 densityClass 分四档，对应 exportPptx 的 20/18/16/14pt 自适应。
+ * v2.1：封面/内容页按主题版式类名（cover-* / decor-* / layout-*）切换排版，见 slideThemes.js。
  */
 
 .slides-preview {
@@ -94,6 +95,11 @@
 
 // ================================================================
 // 单页（逻辑画幅 960×540 内的绝对尺寸，不用相对单位）
+// v2.1 版式类名由 slideThemeClassNames 给出：
+//   cover-{solid|gradient|split}  decor-{none|circles|lines}
+//   layout-{accent-bar|title-band|side-stripe|minimal|card}  serif-title
+// 结构约束：内容页 header 固定 118px、body 固定 355px、footer 贴底，
+// 这样不同版式下正文可用面积一致，exportPptx 的估行数才有意义。
 // ================================================================
 .slide {
   position: relative;
@@ -118,21 +124,29 @@
     font-size: 0.92em;
   }
 
-  // ---- 封面 ----
+  &.serif-title {
+    .slide-cover-title, .slide-section-title, .slide-title { font-family: var(--slide-title-font); }
+  }
+
+  // ---------------------------------------------------------------- 封面
   &.slide-cover {
-    background: var(--slide-cover-bg);
+    background: linear-gradient(135deg, var(--slide-cover-bg), var(--slide-cover-bg2));
     color: var(--slide-cover-fg);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 60px 70px 90px;
+    padding: 60px 80px 90px;
     text-align: center;
 
+    &.cover-solid { background: var(--slide-cover-bg); }
+
+    .slide-cover-inner { position: relative; z-index: 2; max-width: 800px; }
     .slide-cover-title {
       font-size: 52px;
       font-weight: 700;
       line-height: 1.25;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
     }
     .slide-cover-subtitle {
       margin-top: 22px;
@@ -141,15 +155,62 @@
     }
     .slide-cover-bar {
       position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      left: 0; right: 0; bottom: 0;
       height: 36px;
       background: var(--slide-accent);
+      z-index: 2;
+    }
+
+    // 装饰：半透明大圆
+    &.decor-circles::before,
+    &.decor-circles::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background: var(--slide-cover-fg);
+      opacity: 0.10;
+      z-index: 1;
+    }
+    &.decor-circles::before { width: 520px; height: 520px; right: -160px; top: -220px; }
+    &.decor-circles::after { width: 260px; height: 260px; left: -90px; bottom: -40px; background: var(--slide-accent2); opacity: 0.22; }
+
+    // 装饰：标题上下细线
+    &.decor-lines .slide-cover-title {
+      padding: 22px 0;
+      border-top: 2px solid var(--slide-cover-fg);
+      border-bottom: 2px solid var(--slide-cover-fg);
+      text-shadow: none;
+    }
+    &.decor-lines .slide-cover-bar { height: 12px; }
+
+    // 极简/学术这类浅色封面：文字用深色，不要投影
+    &.cover-solid.decor-lines .slide-cover-title { text-shadow: none; }
+
+    // 分割封面：左色块（背景图/渐变铺在色块里），右侧白底深色标题
+    &.cover-split {
+      background: var(--slide-bg);
+      color: var(--slide-title);
+      align-items: flex-start;
+      justify-content: center;
+      text-align: left;
+      padding: 60px 60px 60px 440px;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 400px;
+        background: var(--slide-split-image, linear-gradient(160deg, var(--slide-cover-bg), var(--slide-cover-bg2)));
+        background-size: cover;
+        background-position: center;
+      }
+      .slide-cover-title { text-shadow: none; font-size: 46px; }
+      .slide-cover-subtitle { color: var(--slide-muted); opacity: 1; }
+      .slide-cover-bar { left: 400px; height: 10px; }
     }
   }
 
-  // ---- 章节页 ----
+  // ---------------------------------------------------------------- 章节页
   &.slide-section {
     background: var(--slide-surface);
     display: flex;
@@ -179,23 +240,27 @@
     }
   }
 
-  // ---- 内容页 ----
+  // ---------------------------------------------------------------- 内容页
   &.slide-content {
     padding: 34px 48px 0;
 
+    .slide-header {
+      height: 118px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
     .slide-title {
       font-size: 34px;
       font-weight: 700;
       color: var(--slide-title);
       line-height: 1.25;
-      min-height: 44px;
-      max-height: 88px;
+      max-height: 86px;
       overflow: hidden;
     }
     .slide-title-bar {
       width: 96px;
       height: 6px;
-      margin: 8px 0 16px;
+      margin-top: 10px;
       background: var(--slide-accent);
       border-radius: 3px;
     }
@@ -203,6 +268,7 @@
       height: 355px;
       overflow: hidden;
       font-size: 24px;
+      position: relative;
     }
     &.density-md .slide-body { font-size: 21px; }
     &.density-sm .slide-body { font-size: 18px; }
@@ -218,9 +284,60 @@
       font-size: 13px;
       color: var(--slide-muted);
     }
+
+    // 顶部色带：标题反白压在主题主色带上
+    &.layout-title-band {
+      padding-top: 0;
+      .slide-header {
+        height: 152px;
+        margin: 0 -48px 0;
+        padding: 30px 48px 0;
+        background: linear-gradient(120deg, var(--slide-cover-bg), var(--slide-cover-bg2));
+      }
+      .slide-title { color: var(--slide-cover-fg); }
+      .slide-title-bar { background: var(--slide-accent); width: 70px; height: 5px; }
+    }
+
+    // 左侧竖条：双色渐变细条，内容整体右移
+    &.layout-side-stripe {
+      padding-left: 70px;
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 16px;
+        background: linear-gradient(180deg, var(--slide-accent), var(--slide-accent2));
+      }
+      .slide-footer { left: 70px; }
+    }
+
+    // 极简：全宽细线，标题略轻
+    &.layout-minimal {
+      .slide-title { font-weight: 600; }
+      .slide-title-bar { width: 100%; height: 2px; background: var(--slide-muted); opacity: 0.55; border-radius: 0; margin-top: 14px; }
+    }
+
+    // 卡片：正文装在圆角浅色卡片里
+    &.layout-card {
+      .slide-body {
+        background: var(--slide-surface);
+        border-radius: 16px;
+        padding: 18px 24px;
+        box-sizing: border-box;
+      }
+      .slide-title-bar { width: 60px; border-radius: 3px; }
+    }
+
+    // 用户自备内容页背景图：正文区盖一层底色保证可读
+    &.has-content-image .slide-body {
+      background: color-mix(in srgb, var(--slide-bg) 90%, transparent);
+      border-radius: 12px;
+      padding: 14px 18px;
+      box-sizing: border-box;
+    }
   }
 
-  // ---- 内容块 ----
+  // ---------------------------------------------------------------- 内容块
   .slide-paragraph { margin: 0 0 10px; }
 
   .slide-subheading {
@@ -239,6 +356,7 @@
       &.level-1 { margin-left: 1.3em; font-size: 0.92em; list-style-type: circle; }
       &.level-2 { margin-left: 2.6em; font-size: 0.88em; list-style-type: square; }
     }
+    li::marker { color: var(--slide-accent); }
   }
   ol.slide-list li.level-1,
   ol.slide-list li.level-2 { list-style-type: decimal; }
@@ -250,7 +368,7 @@
     margin: 6px 0 12px;
 
     th, td {
-      border: 1px solid #d9dee7;
+      border: 1px solid rgba(128, 136, 150, 0.38);   // 深浅背景都看得清
       padding: 6px 10px;
       text-align: left;
       vertical-align: middle;

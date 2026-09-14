@@ -2,11 +2,15 @@
  * 幻灯片预览（画布 pptx 产物）
  *
  * - 用 utils/canvas/slideDeck 把 Marp 风格 Markdown 解析成 deck，
- *   与 exportPptx 共用同一份结构和同一套主题色（slideThemes）
+ *   与 exportPptx 共用同一份结构、同一套主题（slideThemes）和同一张封面背景图（slideArt）
  * - 固定 960×540 的"逻辑画幅"，按容器尺寸等比缩放（transform: scale），
  *   全屏时自然铺满，不需要两套布局
  * - 上一页/下一页、页码、底部缩略图条；容器聚焦后支持 ←/→/PageUp/PageDown/空格
  * - 当前页索引由本组件持有，markdown 变化（换块或重新生成）时回到第一页
+ *
+ * v2.1 模板：主题带版式开关（cover/decor/content/art），SlideView 按 slideThemeClassNames
+ * 输出类名交给 SlidesPreview.less 排版；封面背景优先用户自备图（slideBackgrounds），
+ * 其次程序生成图（slideArt），最后纯色/渐变。SlideView 也被主题选择器的缩略图复用。
  *
  * 只负责"看"，导出与主题切换在 HtmlCanvasPanel 工具栏。
  */
@@ -16,7 +20,9 @@ import { Button, Typography } from 'antd'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { parseSlideDeck, SLIDE_LAYOUTS } from '../../../utils/canvas/slideDeck'
-import { getSlideTheme, slideThemeToCssVars } from '../../../utils/canvas/slideThemes'
+import { getSlideTheme, slideThemeToCssVars, slideThemeClassNames } from '../../../utils/canvas/slideThemes'
+import { renderCoverArt } from '../../../utils/canvas/slideArt'
+import { getThemeBackgrounds } from '../../../utils/canvas/slideBackgrounds'
 import './SlidesPreview.less'
 
 const { Text } = Typography
@@ -26,6 +32,21 @@ export const SLIDE_LOGICAL_WIDTH = 960
 export const SLIDE_LOGICAL_HEIGHT = 540
 /** 缩略图缩放比例 */
 const THUMB_SCALE = 0.12
+
+const hexToRgba = (hex, alpha) => {
+  const n = parseInt(String(hex).slice(0, 6), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+/**
+ * 主题的背景资源：用户图 > 程序生成图 > 无（由 CSS 渐变/纯色兜底）
+ * @returns {{ coverImage: string|null, coverIsPhoto: boolean, contentImage: string|null }}
+ */
+export const resolveThemeBackgrounds = (theme) => {
+  const custom = getThemeBackgrounds(theme.key)
+  if (custom.cover) return { coverImage: custom.cover, coverIsPhoto: true, contentImage: custom.content }
+  return { coverImage: renderCoverArt(theme.key), coverIsPhoto: false, contentImage: custom.content }
+}
 
 // ============================================================================
 // 行内 runs
@@ -112,14 +133,42 @@ const densityClass = (slide) => {
   return 'density-lg'
 }
 
-export const SlideView = ({ slide, deckTitle, total }) => {
+/**
+ * 封面背景样式：照片盖一层主题色半透明保证文字可读；程序生成图直接铺；split 只铺左色块
+ */
+const coverBackgroundStyle = (theme, backgrounds) => {
+  const { coverImage, coverIsPhoto } = backgrounds
+  if (!coverImage) return {}
+  const layer = coverIsPhoto
+    ? `linear-gradient(${hexToRgba(theme.coverBg, 0.58)}, ${hexToRgba(theme.coverBg, 0.58)}), url("${coverImage}")`
+    : `url("${coverImage}")`
+  if (theme.cover === 'split') {
+    return { '--slide-split-image': layer }
+  }
+  return { backgroundImage: layer, backgroundSize: 'cover', backgroundPosition: 'center' }
+}
+
+const contentBackgroundStyle = (backgrounds) => {
+  if (!backgrounds.contentImage) return {}
+  return { backgroundImage: `url("${backgrounds.contentImage}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+}
+
+/**
+ * 单页渲染。theme 缺省取 classic；backgrounds 由父级解析一次后传入（缩略图复用）。
+ */
+export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgrounds: backgroundsProp }) => {
   if (!slide) return null
+  const theme = themeProp || getSlideTheme()
+  const backgrounds = backgroundsProp || resolveThemeBackgrounds(theme)
+  const classes = slideThemeClassNames(theme)
 
   if (slide.layout === SLIDE_LAYOUTS.TITLE) {
     return (
-      <div className="slide slide-cover">
-        <div className="slide-cover-title"><InlineRuns runs={slide.title} /></div>
-        {slide.subtitle && <div className="slide-cover-subtitle">{slide.subtitle}</div>}
+      <div className={`slide slide-cover ${classes}`} style={coverBackgroundStyle(theme, backgrounds)}>
+        <div className="slide-cover-inner">
+          <div className="slide-cover-title"><InlineRuns runs={slide.title} /></div>
+          {slide.subtitle && <div className="slide-cover-subtitle">{slide.subtitle}</div>}
+        </div>
         <div className="slide-cover-bar" />
       </div>
     )
@@ -127,7 +176,7 @@ export const SlideView = ({ slide, deckTitle, total }) => {
 
   if (slide.layout === SLIDE_LAYOUTS.SECTION) {
     return (
-      <div className="slide slide-section">
+      <div className={`slide slide-section ${classes}`}>
         <div className="slide-section-title"><InlineRuns runs={slide.title} /></div>
         <div className="slide-section-bar" />
         {slide.subtitle && <div className="slide-section-subtitle">{slide.subtitle}</div>}
@@ -136,9 +185,14 @@ export const SlideView = ({ slide, deckTitle, total }) => {
   }
 
   return (
-    <div className={`slide slide-content ${densityClass(slide)}`}>
-      <div className="slide-title"><InlineRuns runs={slide.title} /></div>
-      <div className="slide-title-bar" />
+    <div
+      className={`slide slide-content ${densityClass(slide)} ${classes} ${backgrounds.contentImage ? 'has-content-image' : ''}`}
+      style={contentBackgroundStyle(backgrounds)}
+    >
+      <div className="slide-header">
+        <div className="slide-title"><InlineRuns runs={slide.title} /></div>
+        <div className="slide-title-bar" />
+      </div>
       <div className="slide-body">
         {slide.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}
       </div>
@@ -151,6 +205,12 @@ export const SlideView = ({ slide, deckTitle, total }) => {
   )
 }
 
+/** 主题选择器用的封面样张：不依赖 deck，用占位标题 */
+export const THEME_SAMPLE_SLIDE = Object.freeze({
+  index: 0, layout: SLIDE_LAYOUTS.TITLE, title: [{ text: 'Aa 标题' }], titleText: 'Aa 标题',
+  subtitle: '副标题 Subtitle', blocks: [], notes: '', textLength: 0
+})
+
 // ============================================================================
 // 预览主体
 // ============================================================================
@@ -160,6 +220,7 @@ const SlidesPreview = ({ markdown, themeKey }) => {
   const deck = useMemo(() => parseSlideDeck(markdown), [markdown])
   const theme = getSlideTheme(themeKey)
   const cssVars = useMemo(() => slideThemeToCssVars(theme), [theme])
+  const backgrounds = useMemo(() => resolveThemeBackgrounds(theme), [theme])
 
   const [current, setCurrent] = useState(0)
   const [scale, setScale] = useState(0.5)
@@ -228,7 +289,7 @@ const SlidesPreview = ({ markdown, themeKey }) => {
         >
           {/* key 让翻页时整页重挂载：否则 React 会复用同位置的 div，全局
               `* { transition: background-color }` 会把上一页装饰条的颜色渐变到正文区，闪一下蓝色 */}
-          <SlideView key={current} slide={slide} deckTitle={deck.title} total={total} />
+          <SlideView key={current} slide={slide} deckTitle={deck.title} total={total} theme={theme} backgrounds={backgrounds} />
         </div>
       </div>
 
@@ -271,7 +332,7 @@ const SlidesPreview = ({ markdown, themeKey }) => {
                 transformOrigin: 'top left'
               }}
             >
-              <SlideView slide={s} deckTitle={deck.title} total={total} />
+              <SlideView slide={s} deckTitle={deck.title} total={total} theme={theme} backgrounds={backgrounds} />
             </div>
           </button>
         ))}

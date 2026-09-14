@@ -114,7 +114,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Button, Tooltip, Typography, Space, Tag, Dropdown } from 'antd'
+import { Button, Tooltip, Typography, Space, Tag } from 'antd'
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
@@ -128,7 +128,6 @@ import {
   CopyOutlined,
   DownloadOutlined,
   PrinterOutlined,
-  BgColorsOutlined,
   FilePptOutlined,
   FileWordOutlined,
   FilePdfOutlined,
@@ -141,6 +140,7 @@ import { collectArtifactsFromMessages, ARTIFACT_KINDS } from '../../../utils/htm
 import { SLIDE_THEMES, DEFAULT_SLIDE_THEME } from '../../../utils/canvas/slideThemes'
 import { buildSafeBaseName, downloadBlob } from '../../../utils/canvas/download'
 import SlidesPreview from './SlidesPreview'
+import SlideThemePicker from './SlideThemePicker'
 import DocPreview from './DocPreview'
 import './HtmlCanvasPanel.less'
 
@@ -298,6 +298,30 @@ const copyText = async (text) => {
   if (!ok) throw new Error('execCommand copy failed')
 }
 
+/**
+ * v2.1: PDF 产物的屏幕预览样式
+ *
+ * iframe 里是普通网页视图（screen 媒体），模型写的 @page { margin } 只在打印时生效，
+ * 所以预览会贴边。这里往文档 <head> 末尾注入一段只对 screen 生效的样式：灰底 + A4 宽
+ * 白纸 + 20mm 内边距，让预览接近打印结果；@media screen 不影响 contentWindow.print()。
+ * 只用于 iframe 渲染，复制/下载仍是原始 HTML。
+ */
+const PDF_PREVIEW_STYLE = `<style id="__canvas_pdf_preview">@media screen {
+  html { background: #e9ecf1 !important; min-height: 100%; }
+  body { box-sizing: border-box !important; width: 210mm !important; max-width: calc(100% - 32px) !important;
+    min-height: 297mm; margin: 16px auto !important; padding: 20mm !important; background: #fff !important;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); }
+}</style>`
+
+const injectPdfPreviewStyle = (html) => {
+  if (!html) return html
+  const headClose = html.search(/<\/head\s*>/i)
+  if (headClose >= 0) return html.slice(0, headClose) + PDF_PREVIEW_STYLE + html.slice(headClose)
+  const bodyOpen = html.search(/<body[^>]*>/i)
+  if (bodyOpen >= 0) return html.slice(0, bodyOpen) + PDF_PREVIEW_STYLE + html.slice(bodyOpen)
+  return PDF_PREVIEW_STYLE + html
+}
+
 // ================================================================
 // 主组件
 // ================================================================
@@ -346,6 +370,8 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const currentKind = currentBlock?.kind || ARTIFACT_KINDS.HTML
   const currentCode = currentBlock?.code || ''
   const currentHtml = isHtmlKind(currentKind) ? currentCode : ''
+  // PDF 类产物预览时模拟纸张（见 injectPdfPreviewStyle）；复制/下载仍用 currentHtml
+  const previewHtml = currentKind === ARTIFACT_KINDS.PDF ? injectPdfPreviewStyle(currentHtml) : currentHtml
 
   // ================================================================
   // iframe自动聚焦（让键盘事件直接作用于HTML内容）
@@ -588,21 +614,6 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const KindIcon = kindMeta.Icon
   const showStreamingHint = isStreaming && safeIndex === artifacts.length - 1
 
-  const themeMenu = {
-    selectable: true,
-    selectedKeys: [slideTheme],
-    onClick: ({ key }) => handleThemeChange(key),
-    items: Object.keys(SLIDE_THEMES).map(key => ({
-      key,
-      label: (
-        <span className="theme-menu-item">
-          <span className="theme-swatch" style={{ background: `#${SLIDE_THEMES[key].accent}` }} />
-          {t(`chat.canvas.theme.${key}`)}
-        </span>
-      )
-    }))
-  }
-
   // ================================================================
   // 渲染
   // ================================================================
@@ -720,13 +731,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
 
           {currentKind === ARTIFACT_KINDS.PPTX && (
             <>
-              <Dropdown menu={themeMenu} trigger={['click']}>
-                <Tooltip title={t('chat.canvas.theme.label')}>
-                  <Button type="text" size="small" icon={<BgColorsOutlined />}>
-                    {t(`chat.canvas.theme.${slideTheme}`)}
-                  </Button>
-                </Tooltip>
-              </Dropdown>
+              <SlideThemePicker value={slideTheme} onChange={handleThemeChange} />
 
               <div className="toolbar-divider" />
 
@@ -804,7 +809,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
             <iframe
               key={`${safeIndex}-${refreshKey}`}
               ref={iframeRef}
-              srcDoc={currentHtml}
+              srcDoc={previewHtml}
               title="HTML Preview"
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
               allow="fullscreen"

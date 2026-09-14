@@ -8,19 +8,42 @@
  *
  * 图片：pptxgenjs 在浏览器里无法自己跨域取图，这里先 fetch 成 data URL 再
  * 内嵌；取不到就退化为一行文字占位，保证整份文件仍能导出。
+ *
+ * v2.1 模板：封面背景 = 用户自备图（slideBackgrounds，盖 58% 主题色）> 程序生成图（slideArt）
+ * > 纯色；内容页按主题 content 版式画 header（accent-bar / title-band / side-stripe / minimal /
+ * card），正文区坐标由 addContentHeader 返回，元素落位函数都接收这个 box。
+ * pptxgenjs 没有渐变填充，渐变一律走 canvas 生成的 PNG（背景/色带）。
  */
 
 import { parseSlideDeck, runsToText, SLIDE_LAYOUTS } from './slideDeck'
-import { getSlideTheme, SLIDE_FONT_FACE, SLIDE_CODE_FONT_FACE } from './slideThemes'
+import { getSlideTheme, SLIDE_CODE_FONT_FACE } from './slideThemes'
+import { renderCoverArt, renderBandArt } from './slideArt'
+import { getThemeBackgrounds } from './slideBackgrounds'
 import { fetchImageForEmbedding } from './download'
 
-// ---- 版面常量（英寸，16:9 = 10 × 5.625） ----
+// ---- 版面常量（英寸，16:9 = 10 × 5.625）；与 SlidesPreview.less 的 960×540 像素版面同比例 ----
 const SLIDE_W = 10
-const TITLE_BOX = { x: 0.5, y: 0.35, w: 9.0, h: 0.8 }
-const ACCENT_BAR = { x: 0.5, y: 1.17, w: 1.0, h: 0.06 }
-const BODY = { x: 0.5, y: 1.4, w: 9.0, h: 3.7 }
+const SLIDE_H = 5.625
+/** 内容页：header 152px → 1.58in，正文 355px → 3.7in，页脚贴底 */
+const TITLE_BOX = { x: 0.5, y: 0.35, w: 9.0, h: 0.9 }
+const ACCENT_BAR = { x: 0.5, y: 1.3, w: 1.0, h: 0.06 }
+const BODY = { x: 0.5, y: 1.58, w: 9.0, h: 3.7 }
 const FOOTER = { y: 5.2, h: 0.3 }
 const BLOCK_GAP = 0.12
+/** side-stripe 版式：内容整体右移 70px → 0.73in */
+const STRIPE_INSET = 0.73
+/** split 封面左色块宽 400px → 4.17in */
+const SPLIT_W = 4.17
+
+/** 无线条的形状描边（pptxgenjs 默认会画细线） */
+const noLine = (color) => ({ color, width: 0 })
+
+/** 背景是否偏暗（决定表格边框用浅灰还是深灰） */
+const isDarkHex = (hex) => {
+  const n = parseInt(String(hex).slice(0, 6), 16)
+  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)
+  return lum < 110
+}
 
 /** 正文候选字号，从大到小挑第一个装得下的 */
 const BODY_FONT_SIZES = [20, 18, 16, 14, 12]
@@ -176,20 +199,20 @@ const groupBlocks = (blocks) => {
 // 各类元素落到 slide 上
 // ============================================================================
 
-const addTextGroup = (slide, group, theme, y, availableHeight, fontFace) => {
+const addTextGroup = (slide, group, theme, y, availableHeight, fontFace, box = BODY) => {
   const paragraphs = textGroupParagraphs(group.blocks)
-  const fontSize = pickBodyFontSize(paragraphs, availableHeight, BODY.w)
-  const height = Math.max(0.4, estimateGroupHeight(paragraphs, fontSize, BODY.w))
+  const fontSize = pickBodyFontSize(paragraphs, availableHeight, box.w)
+  const height = Math.max(0.4, estimateGroupHeight(paragraphs, fontSize, box.w))
 
   slide.addText(textGroupToObjects(group.blocks, theme, fontSize), {
-    x: BODY.x, y, w: BODY.w, h: height,
+    x: box.x, y, w: box.w, h: height,
     fontSize, fontFace, color: theme.text,
     valign: 'top', margin: 2
   })
   return height
 }
 
-const addTable = (slide, block, theme, y, fontFace) => {
+const addTable = (slide, block, theme, y, fontFace, box = BODY) => {
   const cellText = (cellRuns) => runsToText(cellRuns) || ' '
   const header = block.header.map(cell => ({
     text: cellText(cell),
@@ -204,20 +227,20 @@ const addTable = (slide, block, theme, y, fontFace) => {
   const height = rowH * allRows.length
 
   slide.addTable(allRows, {
-    x: BODY.x, y, w: BODY.w, rowH,
+    x: box.x, y, w: box.w, rowH,
     fontSize: 12, fontFace, color: theme.text,
-    border: { type: 'solid', pt: 0.5, color: 'D9DEE7' },
+    border: { type: 'solid', pt: 0.5, color: isDarkHex(theme.bg) ? '3A4556' : 'D9DEE7' },
     valign: 'middle', autoPage: false
   })
   return height
 }
 
-const addImage = async (slide, block, theme, y, availableHeight, fontFace) => {
+const addImage = async (slide, block, theme, y, availableHeight, fontFace, box = BODY) => {
   const image = await fetchImageForEmbedding(block.url)
   if (!image) {
     const placeholder = `[图片：${block.alt || block.url}]`
     slide.addText(placeholder, {
-      x: BODY.x, y, w: BODY.w, h: 0.4,
+      x: box.x, y, w: box.w, h: 0.4,
       fontSize: 12, fontFace, color: theme.muted, italic: true
     })
     return 0.4
@@ -225,21 +248,21 @@ const addImage = async (slide, block, theme, y, availableHeight, fontFace) => {
 
   const maxH = Math.max(1.2, Math.min(availableHeight, 3.2))
   const ratio = image.width / image.height
-  let w = Math.min(BODY.w, maxH * ratio)
+  let w = Math.min(box.w, maxH * ratio)
   let h = w / ratio
   if (h > maxH) { h = maxH; w = h * ratio }
 
-  slide.addImage({ data: image.dataUrl, x: (SLIDE_W - w) / 2, y, w, h })
+  slide.addImage({ data: image.dataUrl, x: box.x + (box.w - w) / 2, y, w, h })
   return h
 }
 
-const addCodeBlock = (slide, block, theme, y, fontFace) => {
+const addCodeBlock = (slide, block, theme, y, fontFace, box = BODY) => {
   const lines = block.text.split('\n')
   const height = Math.min(3.0, lines.length * 0.22 + 0.2)
   slide.addText(
     lines.map((line, idx) => ({ text: line || ' ', options: { breakLine: idx < lines.length - 1 } })),
     {
-      x: BODY.x, y, w: BODY.w, h: height,
+      x: box.x, y, w: box.w, h: height,
       fontSize: 11, fontFace: SLIDE_CODE_FONT_FACE, color: theme.text,
       fill: { color: theme.surface }, valign: 'top', margin: 6
     }
@@ -247,84 +270,222 @@ const addCodeBlock = (slide, block, theme, y, fontFace) => {
   return height
 }
 
-const addCoverSlide = (pptx, slide, deckSlide, theme, fontFace) => {
-  slide.background = { color: theme.coverBg }
-  slide.addShape(pptx.ShapeType.rect, {
-    x: 0, y: 5.25, w: SLIDE_W, h: 0.375,
-    fill: { color: theme.accent }, line: { color: theme.accent, width: 0 }
-  })
+// ============================================================================
+// 背景：用户自备图 > 程序生成图 > 纯色
+// ============================================================================
+
+/**
+ * 解析主题背景资源（导出时）
+ * @returns {Promise<{ coverData: string|null, coverIsPhoto: boolean, contentData: string|null }>}
+ */
+const resolveBackgrounds = async (theme) => {
+  const custom = getThemeBackgrounds(theme.key)
+  let coverData = null
+  let coverIsPhoto = false
+  if (custom.cover) {
+    const img = await fetchImageForEmbedding(custom.cover)
+    if (img) { coverData = img.dataUrl; coverIsPhoto = true }
+  }
+  if (!coverData) coverData = renderCoverArt(theme.key)
+  let contentData = null
+  if (custom.content) {
+    const img = await fetchImageForEmbedding(custom.content)
+    if (img) contentData = img.dataUrl
+  }
+  return { coverData, coverIsPhoto, contentData }
+}
+
+const addRect = (pptx, slide, box, color, extra = {}) => {
+  slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color, ...extra }, line: noLine(color) })
+}
+
+// ============================================================================
+// 封面 / 章节页
+// ============================================================================
+
+const addCoverSlide = (pptx, slide, deckSlide, theme, backgrounds) => {
+  const titleFont = theme.titleFont
+  const bodyFont = theme.bodyFont
+  const { coverData, coverIsPhoto } = backgrounds
+  const isSplit = theme.cover === 'split'
+  const isLightCover = theme.cover === 'solid' && theme.decor === 'lines' // minimal / academic 这类浅底封面
+
+  if (isSplit) {
+    // 左色块（图或纯色）+ 右侧白底深色标题
+    slide.background = { color: theme.bg }
+    if (coverData) {
+      slide.addImage({ data: coverData, x: 0, y: 0, w: SPLIT_W, h: SLIDE_H, sizing: { type: 'cover', w: SPLIT_W, h: SLIDE_H } })
+      if (coverIsPhoto) addRect(pptx, slide, { x: 0, y: 0, w: SPLIT_W, h: SLIDE_H }, theme.coverBg, { transparency: 42 })
+    } else {
+      addRect(pptx, slide, { x: 0, y: 0, w: SPLIT_W, h: SLIDE_H }, theme.coverBg)
+    }
+    addRect(pptx, slide, { x: SPLIT_W, y: SLIDE_H - 0.1, w: SLIDE_W - SPLIT_W, h: 0.1 }, theme.accent)
+    slide.addText(deckSlide.titleText || ' ', {
+      x: SPLIT_W + 0.45, y: 1.4, w: SLIDE_W - SPLIT_W - 0.9, h: 1.7,
+      fontSize: deckSlide.titleText.length > 16 ? 30 : 36, bold: true,
+      color: theme.title, fontFace: titleFont, align: 'left', valign: 'middle'
+    })
+    if (deckSlide.subtitle) {
+      slide.addText(deckSlide.subtitle, {
+        x: SPLIT_W + 0.45, y: 3.15, w: SLIDE_W - SPLIT_W - 0.9, h: 0.9,
+        fontSize: 18, color: theme.muted, fontFace: bodyFont, align: 'left', valign: 'top'
+      })
+    }
+    return
+  }
+
+  // 整页背景
+  if (coverData) {
+    slide.background = { data: coverData }
+    if (coverIsPhoto) addRect(pptx, slide, { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H }, theme.coverBg, { transparency: 42 })
+  } else {
+    slide.background = { color: theme.coverBg }
+  }
+
+  // 装饰：半透明大圆
+  if (theme.decor === 'circles') {
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: 6.6, y: -2.3, w: 5.4, h: 5.4,
+      fill: { color: theme.coverFg, transparency: 90 }, line: noLine(theme.coverFg)
+    })
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: -0.9, y: 3.7, w: 2.7, h: 2.7,
+      fill: { color: theme.accent2, transparency: 78 }, line: noLine(theme.accent2)
+    })
+  }
+
+  // 底部强调条
+  addRect(pptx, slide, { x: 0, y: SLIDE_H - (theme.decor === 'lines' ? 0.125 : 0.375), w: SLIDE_W, h: theme.decor === 'lines' ? 0.125 : 0.375 }, theme.accent)
+
+  // 标题（decor=lines 时上下各一条细线）
+  const titleBox = { x: 0.8, y: 1.55, w: 8.4, h: 1.5 }
+  if (theme.decor === 'lines') {
+    addRect(pptx, slide, { x: 1.6, y: titleBox.y - 0.05, w: 6.8, h: 0.025 }, theme.coverFg)
+    addRect(pptx, slide, { x: 1.6, y: titleBox.y + titleBox.h + 0.02, w: 6.8, h: 0.025 }, theme.coverFg)
+  }
   slide.addText(deckSlide.titleText || ' ', {
-    x: 0.7, y: 1.5, w: 8.6, h: 1.5,
+    ...titleBox,
     fontSize: deckSlide.titleText.length > 18 ? 32 : 40, bold: true,
-    color: theme.coverFg, fontFace, align: 'center', valign: 'middle'
+    color: theme.coverFg, fontFace: titleFont, align: 'center', valign: 'middle',
+    shadow: isLightCover ? undefined : { type: 'outer', color: '000000', blur: 6, offset: 1, angle: 90, opacity: 0.18 }
   })
   if (deckSlide.subtitle) {
     slide.addText(deckSlide.subtitle, {
-      x: 1.0, y: 3.1, w: 8.0, h: 1.0,
-      fontSize: 20, color: theme.coverFg, fontFace, align: 'center', valign: 'top'
+      x: 1.0, y: 3.25, w: 8.0, h: 0.9,
+      fontSize: 20, color: theme.coverFg, fontFace: bodyFont, align: 'center', valign: 'top',
+      transparency: 15
     })
   }
 }
 
-const addSectionSlide = (pptx, slide, deckSlide, theme, fontFace) => {
+const addSectionSlide = (pptx, slide, deckSlide, theme) => {
   slide.background = { color: theme.surface }
   slide.addText(deckSlide.titleText || ' ', {
     x: 0.7, y: 1.8, w: 8.6, h: 1.3,
-    fontSize: 34, bold: true, color: theme.title, fontFace, align: 'center', valign: 'middle'
+    fontSize: 34, bold: true, color: theme.title, fontFace: theme.titleFont, align: 'center', valign: 'middle'
   })
-  slide.addShape(pptx.ShapeType.rect, {
-    x: 4.4, y: 3.2, w: 1.2, h: 0.06,
-    fill: { color: theme.accent }, line: { color: theme.accent, width: 0 }
-  })
+  addRect(pptx, slide, { x: 4.4, y: 3.2, w: 1.2, h: 0.06 }, theme.accent)
   if (deckSlide.subtitle) {
     slide.addText(deckSlide.subtitle, {
       x: 1.0, y: 3.45, w: 8.0, h: 0.9,
-      fontSize: 18, color: theme.muted, fontFace, align: 'center', valign: 'top'
+      fontSize: 18, color: theme.muted, fontFace: theme.bodyFont, align: 'center', valign: 'top'
     })
   }
 }
 
-const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, fontFace) => {
-  slide.background = { color: theme.bg }
+// ============================================================================
+// 内容页：按主题 content 版式排 header，正文区共用
+// ============================================================================
 
-  // 标题：过长时降字号
+/**
+ * 画 header 并返回正文区域 { x, y, w, h } 与页脚左边距
+ */
+const addContentHeader = (pptx, slide, deckSlide, theme) => {
+  const layout = theme.content
+  const titleFont = theme.titleFont
   const titleText = deckSlide.titleText
-  const titleFontSize = estimateLines(titleText, 28, TITLE_BOX.w) > 1 ? 22 : 28
-  slide.addText(
-    deckSlide.title.length > 0
-      ? deckSlide.title.map((run, idx) => {
-        const obj = runToTextObject(run, theme)
-        if (idx === deckSlide.title.length - 1) obj.options.breakLine = false
-        return obj
-      })
-      : ' ',
-    {
-      ...TITLE_BOX, fontSize: titleFontSize, bold: true,
-      color: theme.title, fontFace, valign: 'middle', margin: 0
+  const titleRuns = deckSlide.title.length > 0
+    ? deckSlide.title.map(run => runToTextObject(run, theme))
+    : ' '
+  const inset = layout === 'side-stripe' ? STRIPE_INSET : 0.5
+  const width = SLIDE_W - inset - 0.5
+  const titleFontSize = estimateLines(titleText, 28, width) > 1 ? 22 : 28
+
+  if (layout === 'title-band') {
+    const band = renderBandArt(theme.key)
+    if (band) {
+      slide.addImage({ data: band, x: 0, y: 0, w: SLIDE_W, h: BODY.y, sizing: { type: 'cover', w: SLIDE_W, h: BODY.y } })
+    } else {
+      addRect(pptx, slide, { x: 0, y: 0, w: SLIDE_W, h: BODY.y }, theme.coverBg)
     }
-  )
-  slide.addShape(pptx.ShapeType.rect, {
-    ...ACCENT_BAR, fill: { color: theme.accent }, line: { color: theme.accent, width: 0 }
-  })
+    slide.addText(titleRuns, {
+      x: 0.5, y: 0.3, w: 9.0, h: 0.9, fontSize: titleFontSize, bold: true,
+      color: theme.coverFg, fontFace: titleFont, valign: 'middle', margin: 0
+    })
+    addRect(pptx, slide, { x: 0.5, y: 1.25, w: 0.73, h: 0.05 }, theme.accent)
+  } else if (layout === 'minimal') {
+    slide.addText(titleRuns, {
+      ...TITLE_BOX, fontSize: titleFontSize, bold: true,
+      color: theme.title, fontFace: titleFont, valign: 'middle', margin: 0
+    })
+    addRect(pptx, slide, { x: 0.5, y: 1.36, w: 9.0, h: 0.02 }, theme.muted, { transparency: 45 })
+  } else {
+    if (layout === 'side-stripe') {
+      addRect(pptx, slide, { x: 0, y: 0, w: 0.167, h: SLIDE_H / 2 }, theme.accent)
+      addRect(pptx, slide, { x: 0, y: SLIDE_H / 2, w: 0.167, h: SLIDE_H / 2 }, theme.accent2)
+    }
+    slide.addText(titleRuns, {
+      x: inset, y: TITLE_BOX.y, w: width, h: TITLE_BOX.h, fontSize: titleFontSize, bold: true,
+      color: theme.title, fontFace: titleFont, valign: 'middle', margin: 0
+    })
+    addRect(pptx, slide, { x: inset, y: ACCENT_BAR.y, w: layout === 'card' ? 0.63 : ACCENT_BAR.w, h: ACCENT_BAR.h }, theme.accent)
+  }
+
+  let body = { x: inset, y: BODY.y, w: width, h: BODY.h }
+  if (layout === 'card') {
+    slide.addShape(pptx.ShapeType.roundRect, {
+      ...body, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.15
+    })
+    body = { x: body.x + 0.25, y: body.y + 0.18, w: body.w - 0.5, h: body.h - 0.36 }
+  }
+  return { body, footerX: inset }
+}
+
+const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, backgrounds) => {
+  const bodyFont = theme.bodyFont
+  if (backgrounds.contentData) {
+    slide.background = { data: backgrounds.contentData }
+  } else {
+    slide.background = { color: theme.bg }
+  }
+
+  const { body, footerX } = addContentHeader(pptx, slide, deckSlide, theme)
+
+  // 用户自备内容页背景：正文区盖一层底色保证可读（与预览一致）
+  if (backgrounds.contentData) {
+    slide.addShape(pptx.ShapeType.roundRect, {
+      ...body, fill: { color: theme.bg, transparency: 10 }, line: noLine(theme.bg), rectRadius: 0.12
+    })
+  }
 
   // 正文
-  let y = BODY.y
-  const bottom = BODY.y + BODY.h
+  let y = body.y
+  const bottom = body.y + body.h
   for (const group of groupBlocks(deckSlide.blocks)) {
     const available = Math.max(0.5, bottom - y)
     let used = 0
     switch (group.type) {
       case 'text':
-        used = addTextGroup(slide, group, theme, y, available, fontFace)
+        used = addTextGroup(slide, group, theme, y, available, bodyFont, body)
         break
       case 'table':
-        used = addTable(slide, group.block, theme, y, fontFace)
+        used = addTable(slide, group.block, theme, y, bodyFont, body)
         break
       case 'image':
-        used = await addImage(slide, group.block, theme, y, available, fontFace)
+        used = await addImage(slide, group.block, theme, y, available, bodyFont, body)
         break
       case 'code':
-        used = addCodeBlock(slide, group.block, theme, y, fontFace)
+        used = addCodeBlock(slide, group.block, theme, y, bodyFont, body)
         break
       default:
         used = 0
@@ -335,13 +496,13 @@ const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, fontFac
   // 页脚：左侧 deck 标题，右侧页码
   if (deckTitle) {
     slide.addText(deckTitle, {
-      x: 0.5, y: FOOTER.y, w: 6.5, h: FOOTER.h,
-      fontSize: 10, color: theme.muted, fontFace, valign: 'middle', margin: 0
+      x: footerX, y: FOOTER.y, w: 6.5, h: FOOTER.h,
+      fontSize: 10, color: theme.muted, fontFace: bodyFont, valign: 'middle', margin: 0
     })
   }
   slide.slideNumber = {
     x: 8.8, y: FOOTER.y, w: 0.7, h: FOOTER.h,
-    fontSize: 10, color: theme.muted, fontFace, align: 'right'
+    fontSize: 10, color: theme.muted, fontFace: bodyFont, align: 'right'
   }
 }
 
@@ -364,7 +525,7 @@ export const buildPptxBlob = async (markdown, { themeKey } = {}) => {
 
   const { default: PptxGenJS } = await import('pptxgenjs')
   const theme = getSlideTheme(themeKey)
-  const fontFace = SLIDE_FONT_FACE
+  const backgrounds = await resolveBackgrounds(theme)
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_16x9'
@@ -373,11 +534,11 @@ export const buildPptxBlob = async (markdown, { themeKey } = {}) => {
   for (const deckSlide of deck.slides) {
     const slide = pptx.addSlide()
     if (deckSlide.layout === SLIDE_LAYOUTS.TITLE) {
-      addCoverSlide(pptx, slide, deckSlide, theme, fontFace)
+      addCoverSlide(pptx, slide, deckSlide, theme, backgrounds)
     } else if (deckSlide.layout === SLIDE_LAYOUTS.SECTION) {
-      addSectionSlide(pptx, slide, deckSlide, theme, fontFace)
+      addSectionSlide(pptx, slide, deckSlide, theme)
     } else {
-      await addContentSlide(pptx, slide, deckSlide, deck.title, theme, fontFace)
+      await addContentSlide(pptx, slide, deckSlide, deck.title, theme, backgrounds)
     }
     if (deckSlide.notes) slide.addNotes(deckSlide.notes)
   }
