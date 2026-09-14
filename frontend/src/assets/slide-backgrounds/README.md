@@ -7,7 +7,8 @@
 | `<主题key>-cover.jpg` | 封面背景（16:9，建议 1920×1080，JPG 质量 80 左右，≤ 400KB） |
 | `<主题key>-content.jpg` | 内容页背景（可选；要很淡，正文区会再盖一层 90% 不透明的底色保证可读） |
 
-主题 key：`classic` 经典蓝 · `business` 商务藏青 · `tech` 科技渐变 · `minimal` 极简 · `academic` 学术宋体 ·
+主题 key（19 套）：`classic` 经典蓝 · `business` 商务藏青 · `tech` 科技渐变 · `aurora` 极光 · `sunset` 日落 · `ocean` 海洋 ·
+`geometric` 几何 · `blueprint` 蓝图 · `chalkboard` 黑板 · `luxury` 黑金 · `candy` 马卡龙 · `minimal` 极简黑白 · `academic` 学术宋体 ·
 `education` 教育活泼 · `ink` 墨蓝夜色 · `split` 分割橙 · `dark` 深色 · `warm` 暖橙 · `nature` 自然绿
 
 没有图的模板用程序生成的抽象背景（`utils/canvas/slideArt.js`），不会报错。
@@ -28,6 +29,14 @@
 - **dark 深色**：`dark charcoal abstract background with faint light blue rings, subtle grain`
 - **warm 暖橙**：`warm orange sunset gradient with soft diagonal light rays, cozy`
 - **nature 自然绿**：`soft green abstract background, blurred leaves and light spots, fresh, spring`
+- **aurora 极光**：`northern lights over a dark night sky, soft green and violet aurora curtains, tiny stars, deep indigo, dreamy`
+- **sunset 日落**：`warm sunset gradient from orange to magenta to purple, soft layered mountain silhouettes at the bottom, hazy`
+- **ocean 海洋**：`deep teal to turquoise underwater gradient, gentle light rays from above, soft wave layers, serene`
+- **geometric 几何**：`dark navy low-poly triangle mesh background, faint blue and violet facets, subtle highlights, modern tech`
+- **blueprint 蓝图**：`engineering blueprint background, dark blue with fine white grid lines, thin technical circles and arcs, drafting style`
+- **chalkboard 黑板**：`dark green chalkboard texture with light chalk dust, faint hand-drawn chalk stars and circles near the edges, classroom`
+- **luxury 黑金**：`black premium background with thin gold line frame and faint gold particles, elegant, luxury brand`
+- **candy 马卡龙**：`pastel pink, lavender and mint gradient with soft round blurred bubbles, sweet, macaron colors`
 
 内容页背景（`-content.jpg`）建议只要"很淡的纹理/光斑"：`very subtle light texture, almost white, faint <主题色> glow in one corner, extremely low contrast`。
 

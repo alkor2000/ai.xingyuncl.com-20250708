@@ -21,7 +21,7 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { parseSlideDeck, SLIDE_LAYOUTS, SMART_LAYOUTS } from '../../../utils/canvas/slideDeck'
 import { getSlideTheme, slideThemeToCssVars, slideThemeClassNames } from '../../../utils/canvas/slideThemes'
-import { renderCoverArt } from '../../../utils/canvas/slideArt'
+import { renderCoverArt, renderContentArt } from '../../../utils/canvas/slideArt'
 import { getThemeBackgrounds } from '../../../utils/canvas/slideBackgrounds'
 import './SlidesPreview.less'
 
@@ -40,12 +40,15 @@ const hexToRgba = (hex, alpha) => {
 
 /**
  * 主题的背景资源：用户图 > 程序生成图 > 无（由 CSS 渐变/纯色兜底）
- * @returns {{ coverImage: string|null, coverIsPhoto: boolean, contentImage: string|null }}
+ * @returns {{ coverImage: string|null, coverIsPhoto: boolean, contentImage: string|null, contentIsPhoto: boolean }}
  */
 export const resolveThemeBackgrounds = (theme) => {
   const custom = getThemeBackgrounds(theme.key)
-  if (custom.cover) return { coverImage: custom.cover, coverIsPhoto: true, contentImage: custom.content }
-  return { coverImage: renderCoverArt(theme.key), coverIsPhoto: false, contentImage: custom.content }
+  const content = custom.content
+    ? { contentImage: custom.content, contentIsPhoto: true }
+    : { contentImage: renderContentArt(theme.key), contentIsPhoto: false }
+  if (custom.cover) return { coverImage: custom.cover, coverIsPhoto: true, ...content }
+  return { coverImage: renderCoverArt(theme.key), coverIsPhoto: false, ...content }
 }
 
 // ============================================================================
@@ -116,6 +119,13 @@ const SlideBlock = ({ block }) => {
       return <div className="slide-image"><img src={block.url} alt={block.alt} /></div>
     case 'quote':
       return <blockquote className="slide-quote"><InlineRuns runs={block.runs} /></blockquote>
+    case 'callout':
+      return (
+        <div className="slide-callout">
+          <span className="slide-callout-label">{block.label}</span>
+          <span className="slide-callout-text"><InlineRuns runs={block.runs} /></span>
+        </div>
+      )
     case 'code':
       return <pre className="slide-codeblock"><code>{block.text}</code></pre>
     default:
@@ -202,10 +212,82 @@ const QuoteView = ({ smart }) => (
   </div>
 )
 
+/** 时间线：横向一条线，节点上标签、下说明 */
+const TimelineView = ({ smart }) => (
+  <>
+    {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+    <div className={`slide-timeline items-${smart.items.length}`}>
+      <div className="slide-timeline-line" />
+      {smart.items.map((item, idx) => (
+        <div className="slide-timeline-item" key={idx}>
+          <div className="slide-timeline-label">{item.label}</div>
+          <div className="slide-timeline-dot" />
+          <div className="slide-timeline-text"><InlineRuns runs={item.runs} /></div>
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+/** 数值字数决定字号档位（与 exportPptx.statValueFontSize 同一分档） */
+const statValueSizeClass = (value) => {
+  const len = [...String(value)].length
+  if (len >= 7) return 'value-xlong'
+  if (len >= 5) return 'value-long'
+  return ''
+}
+
+/** 数据亮点：大数字 + 说明 */
+const StatsView = ({ smart }) => (
+  <>
+    {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+    <div className={`slide-stats stats-${smart.stats.length}`}>
+      {smart.stats.map((stat, idx) => (
+        <div className="slide-stat" key={idx}>
+          <div className={`slide-stat-value ${statValueSizeClass(stat.value)}`}>{stat.value}</div>
+          <div className="slide-stat-label"><InlineRuns runs={stat.runs} /></div>
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+/** 图标列表：emoji 大图标 + 文字，两列 */
+const IconListView = ({ smart }) => (
+  <>
+    {smart.intro && <p className="slide-paragraph slide-intro"><InlineRuns runs={smart.intro.runs} /></p>}
+    <div className={`slide-iconlist items-${smart.items.length} ${smart.items.length >= 4 ? 'two-col' : ''}`}>
+      {smart.items.map((item, idx) => (
+        <div className="slide-iconlist-item" key={idx}>
+          <div className="slide-iconlist-icon">{item.icon}</div>
+          <div className="slide-iconlist-text"><InlineRuns runs={item.runs} /></div>
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+/** 目录：大编号 + 条目，超过 5 条分两列 */
+const AgendaView = ({ smart }) => (
+  <div className={`slide-agenda ${smart.items.length > 5 ? 'two-col' : ''}`}>
+    {smart.items.map((runs, idx) => (
+      <div className="slide-agenda-item" key={idx}>
+        {/* 编号为纯数字，无需国际化 */}
+        <div className="slide-agenda-num">{String(idx + 1).padStart(2, '0')}</div>
+        <div className="slide-agenda-text"><InlineRuns runs={runs} /></div>
+      </div>
+    ))}
+  </div>
+)
+
 const SMART_VIEWS = {
   [SMART_LAYOUTS.COLUMNS]: ColumnsView,
   [SMART_LAYOUTS.FLOW]: FlowView,
+  [SMART_LAYOUTS.TIMELINE]: TimelineView,
+  [SMART_LAYOUTS.STATS]: StatsView,
   [SMART_LAYOUTS.CARDS]: CardsView,
+  [SMART_LAYOUTS.ICON_LIST]: IconListView,
+  [SMART_LAYOUTS.AGENDA]: AgendaView,
   [SMART_LAYOUTS.IMAGE_TEXT]: ImageTextView,
   [SMART_LAYOUTS.QUOTE]: QuoteView
 }
@@ -254,9 +336,10 @@ export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgroun
   const backgrounds = backgroundsProp || resolveThemeBackgrounds(theme)
   const classes = slideThemeClassNames(theme)
 
-  if (slide.layout === SLIDE_LAYOUTS.TITLE) {
+  if (slide.layout === SLIDE_LAYOUTS.TITLE || slide.layout === SLIDE_LAYOUTS.CLOSING) {
+    const closing = slide.layout === SLIDE_LAYOUTS.CLOSING
     return (
-      <div className={`slide slide-cover ${classes}`} style={coverBackgroundStyle(theme, backgrounds)}>
+      <div className={`slide slide-cover ${closing ? 'slide-closing' : ''} ${classes}`} style={coverBackgroundStyle(theme, backgrounds)}>
         <div className="slide-cover-inner">
           <div className="slide-cover-title"><InlineRuns runs={slide.title} /></div>
           {slide.subtitle && <div className="slide-cover-subtitle">{slide.subtitle}</div>}
@@ -269,6 +352,8 @@ export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgroun
   if (slide.layout === SLIDE_LAYOUTS.SECTION) {
     return (
       <div className={`slide slide-section ${classes}`}>
+        {/* 章节序号为纯数字，无需国际化 */}
+        {slide.sectionIndex > 0 && <div className="slide-section-num">{String(slide.sectionIndex).padStart(2, '0')}</div>}
         <div className="slide-section-title"><InlineRuns runs={slide.title} /></div>
         <div className="slide-section-bar" />
         {slide.subtitle && <div className="slide-section-subtitle">{slide.subtitle}</div>}
@@ -278,7 +363,7 @@ export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgroun
 
   return (
     <div
-      className={`slide slide-content ${densityClass(slide)} ${classes} ${backgrounds.contentImage ? 'has-content-image' : ''}`}
+      className={`slide slide-content ${densityClass(slide)} ${classes} ${backgrounds.contentIsPhoto ? 'has-content-image' : ''}`}
       style={contentBackgroundStyle(backgrounds)}
     >
       <div className="slide-header">

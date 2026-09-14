@@ -10,22 +10,30 @@
  *
  * 输出：
  *   { title, slides: [{ index, layout, title, subtitle, blocks, smart, notes, textLength }] }
- *   layout: 'title'（封面）| 'section'（章节页，只有标题）| 'content'
- *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code', ... }]
+ *   layout: 'title'（封面）| 'section'（章节页，只有标题，带 sectionIndex 序号）| 'content' |
+ *           'closing'（结束页：标题是谢谢/Q&A 之类且最多两段短文字，按封面样式渲染）
+ *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code'|'callout', ... }]
+ *     callout：以"结论：/要点：/注意：/提示：/Tips:"等开头的段落，渲染成高亮提示框（label + runs）
  *   smart: 内容页的智能排版（detectSmartLayout），null 表示普通"标题+要点"：
  *     columns   { columns: [{ title: runs, blocks }] }     同页 2–3 个 ##/### 小标题各带内容
  *     flow      { steps: [runs] }                           一个 3–6 步的有序列表（每步一句短语）
+ *     timeline  { items: [{ label, runs }] }                3–6 条以年份/月份/阶段/Q1 等时间标签开头的条目
+ *     stats     { stats: [{ value, runs }] }                2–4 条以数字开头的条目（85%、3.2亿、120+）
  *     cards     { cards: [{ title: runs, body: runs }] }   3–6 条 "- **名称**：说明"
+ *     iconList  { items: [{ icon, runs }] }                 3–8 条以 emoji 开头的要点
+ *     agenda    { items: [runs] }                           标题是目录/议程/大纲/Agenda 的列表页
  *     imageText { image, blocks }                           一张图 + 文字
  *     quote     { runs }                                    整页只有一段引文
- *   可用 <!-- layout: columns|flow|cards|quote|imageText|none --> 强制或关闭（结构不满足时忽略）。
+ *   可用 <!-- layout: columns|flow|timeline|stats|cards|iconList|agenda|quote|imageText|none --> 强制或关闭
+ *   （结构不满足时忽略）。
  *   文本一律拆成 runs（parseInlineRuns），预览与 pptx 导出共用同一份结构。
  */
 
 export const SLIDE_LAYOUTS = Object.freeze({
   TITLE: 'title',
   SECTION: 'section',
-  CONTENT: 'content'
+  CONTENT: 'content',
+  CLOSING: 'closing'
 })
 
 export const MAX_LIST_LEVEL = 2
@@ -45,6 +53,8 @@ const COMMENT_RE = /<!--([\s\S]*?)-->/g
 const DIRECTIVE_RE = /^\s*_?[A-Za-z][\w-]*\s*:\s*\S[\s\S]*$/
 const HTML_BREAK_RE = /<br\s*\/?>/gi
 const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g
+/** 提示框段落：以这些词开头并紧跟冒号 */
+const CALLOUT_RE = /^(结论|小结|总结|要点|重点|关键|注意|提示|提醒|思考|Tips?|Note|Key|Takeaway|Summary)\s*[：:]\s*(.+)$/i
 
 /** 封面副标题最多接受的段落数与总长度（超过则按普通内容页处理） */
 const SUBTITLE_MAX_PARAGRAPHS = 2
@@ -200,7 +210,13 @@ const parseSlideBody = (lines) => {
     if (paragraph.length === 0) return
     const text = paragraph.join(' ').trim()
     paragraph = []
-    if (text) blocks.push({ type: 'paragraph', runs: parseInlineRuns(text) })
+    if (!text) return
+    const callout = CALLOUT_RE.exec(text.replace(/^\*\*(.+?)\*\*/, '$1'))
+    if (callout) {
+      blocks.push({ type: 'callout', label: callout[1], runs: parseInlineRuns(callout[2]) })
+    } else {
+      blocks.push({ type: 'paragraph', runs: parseInlineRuns(text) })
+    }
   }
 
   let i = 0
@@ -311,6 +327,7 @@ const blockTextLength = (block) => {
     case 'paragraph':
     case 'heading':
     case 'quote':
+    case 'callout':
       return runsToText(block.runs).length
     case 'bullets':
     case 'numbered':
@@ -333,10 +350,28 @@ const blockTextLength = (block) => {
 export const SMART_LAYOUTS = Object.freeze({
   COLUMNS: 'columns',
   FLOW: 'flow',
+  TIMELINE: 'timeline',
+  STATS: 'stats',
   CARDS: 'cards',
+  ICON_LIST: 'iconList',
+  AGENDA: 'agenda',
   IMAGE_TEXT: 'imageText',
   QUOTE: 'quote'
 })
+
+/** 时间线标签：年份 / 月份 / 第X阶段 / Q1 / Day 3 / Week 2 / 上半年 … */
+const TIMELINE_LABEL_RE = /^(\d{4}(?:\s*[-–~至]\s*\d{2,4})?\s*年?|\d{4}年\d{1,2}月|\d{1,2}月(?:\d{1,2}日)?|第[一二三四五六七八九十百\d]+(?:阶段|期|年|周|天|课时|季度)|(?:Day|Week|Phase|Stage|Q)\s*\d+|Q[1-4]|[上下]半年|(?:周|星期)[一二三四五六日天]|(?:早|中|晚)期|过去|现在|未来|(?:春|夏|秋|冬)季)$/i
+/** 数字亮点：85% / 3.2亿 / 120+ / 10x / ¥99 / 1/3 */
+const STAT_VALUE_RE = /^[¥$€]?\d[\d,.]*(?:\s*[%％+xX×])?(?:\s*[\u4e00-\u9fa5A-Za-z℃]{1,3})?(?:\s*\/\s*\d+)?$/
+const EMOJI_RE = /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u
+const AGENDA_TITLE_RE = /目录|议程|大纲|提纲|本节内容|今天(?:要)?(?:讲|学)|课程安排|内容概览|Agenda|Outline|Contents|Overview/i
+
+/** 拆出条目开头的"标签：正文" */
+const splitLead = (runs) => {
+  const text = runsToText(runs)
+  const m = /^(.{1,24}?)\s*[：:—–-]\s*(.+)$/.exec(text)
+  return m ? { lead: m[1].trim(), rest: m[2].trim() } : null
+}
 
 const FLOW_MIN = 3
 const FLOW_MAX = 6
@@ -372,6 +407,70 @@ const detectFlow = (blocks) => {
   if (items.length < FLOW_MIN || items.length > FLOW_MAX) return null
   if (items.some(item => item.level > 0 || runsToText(item.runs).length > FLOW_STEP_MAX_CHARS)) return null
   return { type: SMART_LAYOUTS.FLOW, intro: others[0] || null, steps: items.map(item => item.runs) }
+}
+
+/** 3–6 条以时间标签开头的条目 → 时间线 */
+const detectTimeline = (blocks) => {
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  const others = blocks.filter(b => !LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || others.some(b => b.type !== 'paragraph') || others.length > 1) return null
+  const items = lists[0].items
+  if (items.length < 3 || items.length > 6 || items.some(item => item.level > 0)) return null
+  const parsed = []
+  for (const item of items) {
+    const split = splitLead(item.runs)
+    if (!split || !TIMELINE_LABEL_RE.test(split.lead)) return null
+    parsed.push({ label: split.lead, runs: parseInlineRuns(split.rest) })
+  }
+  return { type: SMART_LAYOUTS.TIMELINE, intro: others[0] || null, items: parsed }
+}
+
+/** 2–4 条以数字开头的条目 → 数据亮点 */
+const detectStats = (blocks) => {
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  const others = blocks.filter(b => !LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || others.some(b => b.type !== 'paragraph') || others.length > 1) return null
+  const items = lists[0].items
+  if (items.length < 2 || items.length > 4 || items.some(item => item.level > 0)) return null
+  const stats = []
+  for (const item of items) {
+    const text = runsToText(item.runs)
+    const m = /^([¥$€]?[\d][^\s：:—–-]{0,9})\s*[：:—–-]?\s*(.+)$/.exec(text)
+    if (!m || !STAT_VALUE_RE.test(m[1].trim()) || m[2].trim().length > 40) return null
+    stats.push({ value: m[1].trim(), runs: parseInlineRuns(m[2].trim()) })
+  }
+  return { type: SMART_LAYOUTS.STATS, intro: others[0] || null, stats }
+}
+
+/** 3–8 条以 emoji 开头的要点 → 图标列表 */
+const detectIconList = (blocks) => {
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  const others = blocks.filter(b => !LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || others.some(b => b.type !== 'paragraph') || others.length > 1) return null
+  const items = lists[0].items
+  if (items.length < 3 || items.length > 8 || items.some(item => item.level > 0)) return null
+  const parsed = []
+  for (const item of items) {
+    const text = runsToText(item.runs)
+    const m = EMOJI_RE.exec(text)
+    if (!m) return null
+    const rest = text.slice(m[0].length).trim()
+    if (!rest) return null
+    // 保留原 runs 的粗体等格式：把首个 run 的 emoji 前缀剥掉
+    const runs = item.runs.map((r, i) => (i === 0 ? { ...r, text: r.text.replace(EMOJI_RE, '') } : r)).filter(r => r.text !== '')
+    parsed.push({ icon: m[1], runs })
+  }
+  return { type: SMART_LAYOUTS.ICON_LIST, intro: others[0] || null, items: parsed }
+}
+
+/** 目录/议程页：标题命中关键词且只有一个 3–8 条的列表 → 编号目录 */
+const detectAgenda = (blocks, titleText) => {
+  if (!AGENDA_TITLE_RE.test(titleText || '')) return null
+  const lists = blocks.filter(b => LIST_TYPES.has(b.type))
+  if (lists.length !== 1 || blocks.length > 2) return null
+  const items = lists[0].items.filter(item => item.level === 0)
+  if (items.length < 3 || items.length > 8) return null
+  return { type: SMART_LAYOUTS.AGENDA, items: items.map(item => item.runs) }
 }
 
 /** 3–6 条 "- **名称**：说明"（或 **名称** 后跟说明）→ 卡片 */
@@ -414,8 +513,13 @@ const detectQuote = (blocks) => {
   return { type: SMART_LAYOUTS.QUOTE, runs: blocks[0].runs }
 }
 
+/** 判定顺序即优先级：更具体的结构在前（目录 > 时间线 > 数字 > emoji > 流程 > 卡片 …） */
 const DETECTORS = {
+  [SMART_LAYOUTS.AGENDA]: detectAgenda,
   [SMART_LAYOUTS.COLUMNS]: detectColumns,
+  [SMART_LAYOUTS.TIMELINE]: detectTimeline,
+  [SMART_LAYOUTS.STATS]: detectStats,
+  [SMART_LAYOUTS.ICON_LIST]: detectIconList,
   [SMART_LAYOUTS.FLOW]: detectFlow,
   [SMART_LAYOUTS.CARDS]: detectCards,
   [SMART_LAYOUTS.IMAGE_TEXT]: detectImageText,
@@ -425,17 +529,18 @@ const DETECTORS = {
 /**
  * @param {Array} blocks - 内容页 blocks
  * @param {string} [forced] - <!-- layout: x --> 指定的版式；none 关闭智能排版；不满足结构时忽略
+ * @param {string} [titleText] - 页标题（目录页判定用）
  * @returns {Object|null}
  */
-export const detectSmartLayout = (blocks, forced) => {
+export const detectSmartLayout = (blocks, forced, titleText = '') => {
   const key = String(forced || '').trim().toLowerCase()
   if (key === 'none' || key === 'default') return null
   if (key) {
     const detector = DETECTORS[Object.values(SMART_LAYOUTS).find(v => v.toLowerCase() === key)]
-    if (detector) return detector(blocks)
+    if (detector) return detector(blocks, titleText)
   }
   for (const detector of Object.values(DETECTORS)) {
-    const result = detector(blocks)
+    const result = detector(blocks, titleText)
     if (result) return result
   }
   return null
@@ -444,13 +549,17 @@ export const detectSmartLayout = (blocks, forced) => {
 /**
  * 判断封面/章节页：只有标题，或标题加至多两段简短文字
  */
+const CLOSING_TITLE_RE = /^(谢谢|感谢|敬请|Thank|Thanks|Q\s*&\s*A|问答|答疑|讨论|结束|The End|再见|欢迎(?:提问|交流|讨论))/i
+
 const decideLayout = (slideIndex, title, blocks) => {
   if (!title) return SLIDE_LAYOUTS.CONTENT
   const onlyShortParagraphs = blocks.length <= SUBTITLE_MAX_PARAGRAPHS
     && blocks.every(b => b.type === 'paragraph')
     && blocks.reduce((sum, b) => sum + runsToText(b.runs).length, 0) <= SUBTITLE_MAX_LENGTH
   if (!onlyShortParagraphs) return SLIDE_LAYOUTS.CONTENT
-  return slideIndex === 0 ? SLIDE_LAYOUTS.TITLE : SLIDE_LAYOUTS.SECTION
+  if (slideIndex === 0) return SLIDE_LAYOUTS.TITLE
+  if (CLOSING_TITLE_RE.test(runsToText(title))) return SLIDE_LAYOUTS.CLOSING
+  return SLIDE_LAYOUTS.SECTION
 }
 
 // ============================================================================
@@ -467,6 +576,7 @@ export const parseSlideDeck = (markdown) => {
   const rawSlides = splitSlides(lines)
 
   const slides = []
+  let sectionCount = 0
   for (const rawLines of rawSlides) {
     const { text, notes, directives } = extractComments(rawLines.join('\n'))
     const bodyLines = text.split('\n')
@@ -477,15 +587,18 @@ export const parseSlideDeck = (markdown) => {
     const layout = decideLayout(index, title, blocks)
     const isCover = layout !== SLIDE_LAYOUTS.CONTENT
     const subtitle = isCover ? blocks.map(b => runsToText(b.runs)).join(' ').trim() : ''
+    const titleText = runsToText(title || [])
+    if (layout === SLIDE_LAYOUTS.SECTION) sectionCount += 1
 
     slides.push({
       index,
       layout,
       title: title || [],
-      titleText: runsToText(title || []),
+      titleText,
       subtitle,
+      sectionIndex: layout === SLIDE_LAYOUTS.SECTION ? sectionCount : 0,
       blocks: isCover ? [] : blocks,
-      smart: isCover ? null : detectSmartLayout(blocks, directives.layout),
+      smart: isCover ? null : detectSmartLayout(blocks, directives.layout, titleText),
       notes: notes.join('\n'),
       textLength: blocks.reduce((sum, b) => sum + blockTextLength(b), 0)
     })

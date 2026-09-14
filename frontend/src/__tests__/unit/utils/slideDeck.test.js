@@ -195,4 +195,47 @@ describe('detectSmartLayout() 智能排版', () => {
   it('普通要点页 smart 为 null', () => {
     expect(deckOf('- a\n- b\n- c').smart).toBeNull()
   })
+
+  it('年份/阶段标签开头的条目 → 时间线；"第一步"归流程不归时间线', () => {
+    const s = deckOf('- 1771年：普利斯特利发现植物更新空气\n- 1779年：英格豪斯证明需要光\n- 1864年：萨克斯证明产物是淀粉')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.TIMELINE)
+    expect(s.smart.items.map(i => i.label)).toEqual(['1771年', '1779年', '1864年'])
+    expect(runsToText(s.smart.items[1].runs)).toBe('英格豪斯证明需要光')
+    expect(deckOf('- 第一阶段：准备\n- 第二阶段：实施\n- 第三阶段：总结').smart.type).toBe(SMART_LAYOUTS.TIMELINE)
+    expect(deckOf('1. 第一步：准备\n2. 第二步：实施\n3. 第三步：总结').smart.type).toBe(SMART_LAYOUTS.FLOW)
+  })
+
+  it('数字开头的 2–4 条 → 数据亮点', () => {
+    const s = deckOf('- 90%：地球氧气来自光合作用\n- 1000亿吨：每年固定的碳\n- 6：叶绿体的六大结构')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.STATS)
+    expect(s.smart.stats.map(x => x.value)).toEqual(['90%', '1000亿吨', '6'])
+    expect(deckOf('- 90%：a\n- 80%：b\n- 70%：c\n- 60%：d\n- 50%：e').smart?.type).not.toBe(SMART_LAYOUTS.STATS)
+  })
+
+  it('emoji 开头的要点 → 图标列表，emoji 从文字里剥掉', () => {
+    const s = deckOf('- 🌱 理解光合作用的概念\n- 🔬 掌握探究实验的方法\n- 💡 认识其对生物圈的意义')
+    expect(s.smart.type).toBe(SMART_LAYOUTS.ICON_LIST)
+    expect(s.smart.items.map(i => i.icon)).toEqual(['🌱', '🔬', '💡'])
+    expect(runsToText(s.smart.items[0].runs)).toBe('理解光合作用的概念')
+  })
+
+  it('标题是目录/议程的列表页 → 目录；其他标题不算', () => {
+    const deck = parseSlideDeck('# 封面\n---\n# 目录\n\n- 概念\n- 实验\n- 意义\n---\n# 内容\n\n- 概念\n- 实验\n- 意义')
+    expect(deck.slides[1].smart.type).toBe(SMART_LAYOUTS.AGENDA)
+    expect(deck.slides[1].smart.items).toHaveLength(3)
+    expect(deck.slides[2].smart).toBeNull()
+  })
+
+  it('"结论：…"段落变成提示框块；谢谢页是结束页；章节页带序号', () => {
+    const deck = parseSlideDeck('# 封面\n---\n# 第一部分\n---\n# 页\n\n结论：光是必要条件。\n\n- a\n- b\n---\n# 第二部分\n---\n# 谢谢大家\n欢迎提问')
+    expect(deck.slides[1].layout).toBe(SLIDE_LAYOUTS.SECTION)
+    expect(deck.slides[1].sectionIndex).toBe(1)
+    expect(deck.slides[3].sectionIndex).toBe(2)
+    const callout = deck.slides[2].blocks[0]
+    expect(callout.type).toBe('callout')
+    expect(callout.label).toBe('结论')
+    expect(runsToText(callout.runs)).toBe('光是必要条件。')
+    expect(deck.slides[4].layout).toBe(SLIDE_LAYOUTS.CLOSING)
+    expect(deck.slides[4].subtitle).toBe('欢迎提问')
+  })
 })

@@ -4,15 +4,15 @@
  */
 import { describe, it, expect } from 'vitest'
 import { SLIDE_THEMES, DEFAULT_SLIDE_THEME, getSlideTheme, slideThemeToCssVars, slideThemeClassNames } from '../../../utils/canvas/slideThemes'
-import { renderCoverArt, renderBandArt } from '../../../utils/canvas/slideArt'
+import { renderCoverArt, renderBandArt, renderContentArt } from '../../../utils/canvas/slideArt'
 import { getThemeBackgrounds } from '../../../utils/canvas/slideBackgrounds'
 
 const HEX = /^[0-9A-F]{6}$/
 const COLOR_FIELDS = ['bg', 'surface', 'title', 'text', 'muted', 'accent', 'accent2', 'accentText', 'coverBg', 'coverBg2', 'coverFg']
 
 describe('SLIDE_THEMES', () => {
-  it('至少 11 个模板，默认模板存在', () => {
-    expect(Object.keys(SLIDE_THEMES).length).toBeGreaterThanOrEqual(11)
+  it('至少 19 个模板，默认模板存在', () => {
+    expect(Object.keys(SLIDE_THEMES).length).toBeGreaterThanOrEqual(19)
     expect(SLIDE_THEMES[DEFAULT_SLIDE_THEME]).toBeDefined()
     expect(getSlideTheme('no-such-theme').key).toBe(DEFAULT_SLIDE_THEME)
   })
@@ -23,8 +23,10 @@ describe('SLIDE_THEMES', () => {
       expect(['solid', 'gradient', 'split']).toContain(theme.cover)
       expect(['none', 'circles', 'lines']).toContain(theme.decor)
       expect(['accent-bar', 'title-band', 'side-stripe', 'minimal', 'card']).toContain(theme.content)
-      expect(['none', 'blobs', 'rings', 'diagonal', 'dots']).toContain(theme.art)
+      expect(['none', 'blobs', 'rings', 'diagonal', 'dots', 'waves', 'mesh', 'grid', 'glow', 'chalk', 'frame']).toContain(theme.art)
+      expect(['none', 'corner', 'grid', 'frame', 'chalk', 'waves']).toContain(theme.contentArt)
       expect(typeof theme.titleFont).toBe('string')
+      expect(typeof theme.titleStack).toBe('string')
       expect(typeof theme.bodyFont).toBe('string')
       for (const f of COLOR_FIELDS) expect(theme[f], `${key}.${f}`).toMatch(HEX)
     }
@@ -37,11 +39,15 @@ describe('SLIDE_THEMES', () => {
     expect(vars['--slide-cover-bg2']).toBe('#1F3B73')
     expect(slideThemeClassNames(theme)).toBe('cover-gradient decor-lines layout-title-band')
     expect(slideThemeClassNames(SLIDE_THEMES.academic)).toContain('serif-title')
+    expect(slideThemeClassNames(SLIDE_THEMES.aurora)).toContain('dark-bg')
+    expect(slideThemeClassNames(SLIDE_THEMES.chalkboard)).toContain('serif-title')
   })
 
   it('没有 canvas 的环境下背景图生成返回 null，不抛错；自备图缺省为空', () => {
     expect(renderCoverArt('tech')).toBeNull()
     expect(renderBandArt('business')).toBeNull()
+    expect(renderContentArt('aurora')).toBeNull()
+    expect(renderContentArt('classic')).toBeNull()
     expect(getThemeBackgrounds('tech')).toEqual({ cover: null, content: null })
   })
 })

@@ -19,8 +19,8 @@
  */
 
 import { parseSlideDeck, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS } from './slideDeck'
-import { getSlideTheme, SLIDE_CODE_FONT_FACE } from './slideThemes'
-import { renderCoverArt, renderBandArt } from './slideArt'
+import { getSlideTheme, isDarkHex, SLIDE_CODE_FONT_FACE } from './slideThemes'
+import { renderCoverArt, renderContentArt, renderBandArt } from './slideArt'
 import { getThemeBackgrounds } from './slideBackgrounds'
 import { fetchImageForEmbedding } from './download'
 
@@ -41,12 +41,6 @@ const SPLIT_W = 4.17
 /** 无线条的形状描边（pptxgenjs 默认会画细线） */
 const noLine = (color) => ({ color, width: 0 })
 
-/** 背景是否偏暗（决定表格边框用浅灰还是深灰） */
-const isDarkHex = (hex) => {
-  const n = parseInt(String(hex).slice(0, 6), 16)
-  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)
-  return lum < 110
-}
 
 /** 正文候选字号，从大到小挑第一个装得下的 */
 const BODY_FONT_SIZES = [20, 18, 16, 14, 12]
@@ -177,6 +171,24 @@ const textGroupToObjects = (blocks, theme, fontSize) => {
 
 const TEXT_BLOCK_TYPES = new Set(['paragraph', 'heading', 'bullets', 'numbered', 'quote'])
 
+/** 提示框：浅色圆角底 + 左侧强调条 + "标签：正文" */
+const addCallout = (pptx, slide, block, theme, y, fontFace, box = BODY) => {
+  const text = `${block.label}：${runsToText(block.runs)}`
+  const lines = estimateLines(text, 14, box.w - 0.5)
+  const height = Math.max(0.5, lines * lineHeightIn(14) + 0.22)
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: box.x, y, w: box.w, h: height, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.08
+  })
+  addRect(pptx, slide, { x: box.x, y: y + 0.06, w: 0.07, h: height - 0.12 }, theme.accent)
+  slide.addText([
+    { text: `${block.label}：`, options: { bold: true, color: theme.accent } },
+    ...block.runs.map(run => runToTextObject(run, theme))
+  ], {
+    x: box.x + 0.2, y, w: box.w - 0.3, h: height, fontSize: 14, color: theme.text, fontFace, valign: 'middle', margin: 2
+  })
+  return height
+}
+
 const groupBlocks = (blocks) => {
   const groups = []
   let textBlocks = []
@@ -291,11 +303,13 @@ const resolveBackgrounds = async (theme) => {
   }
   if (!coverData) coverData = renderCoverArt(theme.key)
   let contentData = null
+  let contentIsPhoto = false
   if (custom.content) {
     const img = await fetchImageForEmbedding(custom.content)
-    if (img) contentData = img.dataUrl
+    if (img) { contentData = img.dataUrl; contentIsPhoto = true }
   }
-  return { coverData, coverIsPhoto, contentData }
+  if (!contentData) contentData = renderContentArt(theme.key)
+  return { coverData, coverIsPhoto, contentData, contentIsPhoto }
 }
 
 const addRect = (pptx, slide, box, color, extra = {}) => {
@@ -383,6 +397,13 @@ const addCoverSlide = (pptx, slide, deckSlide, theme, backgrounds) => {
 
 const addSectionSlide = (pptx, slide, deckSlide, theme) => {
   slide.background = { color: theme.surface }
+  if (deckSlide.sectionIndex > 0) {
+    // 章节大编号：淡色压在右上（与预览的 .slide-section-num 一致）
+    slide.addText(String(deckSlide.sectionIndex).padStart(2, '0'), {
+      x: 5.4, y: 0.1, w: 4.3, h: 2.6, fontSize: 150, bold: true, color: theme.accent, transparency: 86,
+      fontFace: 'Arial', align: 'right', valign: 'top', margin: 0
+    })
+  }
   slide.addText(deckSlide.titleText || ' ', {
     x: 0.7, y: 1.8, w: 8.6, h: 1.3,
     fontSize: 34, bold: true, color: theme.title, fontFace: theme.titleFont, align: 'center', valign: 'middle'
@@ -459,7 +480,7 @@ const addContentHeader = (pptx, slide, deckSlide, theme) => {
 // ============================================================================
 
 /** 正文块序列落到给定 box 里（分栏/图文共用），返回用掉的高度 */
-const addBlocksInBox = async (slide, blocks, theme, box, fontFace) => {
+const addBlocksInBox = async (pptx, slide, blocks, theme, box, fontFace) => {
   let y = box.y
   const bottom = box.y + box.h
   for (const group of groupBlocks(blocks)) {
@@ -470,6 +491,7 @@ const addBlocksInBox = async (slide, blocks, theme, box, fontFace) => {
       case 'table': used = addTable(slide, group.block, theme, y, fontFace, box); break
       case 'image': used = await addImage(slide, group.block, theme, y, available, fontFace, box); break
       case 'code': used = addCodeBlock(slide, group.block, theme, y, fontFace, box); break
+      case 'callout': used = addCallout(pptx, slide, group.block, theme, y, fontFace, box); break
       default: used = 0
     }
     y += used + BLOCK_GAP
@@ -500,7 +522,7 @@ const addSmartColumns = async (pptx, slide, smart, theme, box, fontFace) => {
       color: theme.title, fontFace: theme.titleFont, valign: 'middle', margin: 0
     })
     addRect(pptx, slide, { x, y: box.y + top + titleH, w: colW, h: 0.035 }, theme.accent)
-    await addBlocksInBox(slide, col.blocks, theme, {
+    await addBlocksInBox(pptx, slide, col.blocks, theme, {
       x, y: box.y + top + titleH + 0.15, w: colW, h: box.h - top - titleH - 0.15
     }, fontFace)
   }
@@ -579,10 +601,10 @@ const addSmartCards = (pptx, slide, smart, theme, box, fontFace) => {
   })
 }
 
-const addSmartImageText = async (slide, smart, theme, box, fontFace) => {
+const addSmartImageText = async (pptx, slide, smart, theme, box, fontFace) => {
   const textW = box.w * 0.52
   const imgBox = { x: box.x + textW + 0.3, y: box.y, w: box.w - textW - 0.3, h: box.h }
-  await addBlocksInBox(slide, smart.blocks, theme, { x: box.x, y: box.y, w: textW, h: box.h }, fontFace)
+  await addBlocksInBox(pptx, slide, smart.blocks, theme, { x: box.x, y: box.y, w: textW, h: box.h }, fontFace)
   const image = await fetchImageForEmbedding(smart.image.url)
   if (!image) {
     slide.addText(`[图片：${smart.image.alt || smart.image.url}]`, {
@@ -608,12 +630,133 @@ const addSmartQuote = (slide, smart, theme, box, fontFace) => {
   })
 }
 
+const addSmartTimeline = (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const items = smart.items
+  const n = items.length
+  const lineY = box.y + top + 1.45
+  addRect(pptx, slide, { x: box.x + 0.3, y: lineY - 0.03, w: box.w - 0.6, h: 0.06 }, theme.accent, { transparency: 25 })
+  const slotW = box.w / n
+  items.forEach((item, idx) => {
+    const cx = box.x + slotW * idx + slotW / 2
+    slide.addText(item.label, {
+      x: cx - slotW / 2, y: lineY - 0.85, w: slotW, h: 0.5, fontSize: n > 4 ? 14 : 18, bold: true,
+      color: theme.accent, fontFace, align: 'center', valign: 'bottom', margin: 0
+    })
+    // 外圈淡色光环 + 实心描边圆点，对应预览的 box-shadow 光环
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: cx - 0.2, y: lineY - 0.2, w: 0.4, h: 0.4,
+      fill: { color: theme.accent, transparency: 78 }, line: noLine(theme.accent)
+    })
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: cx - 0.14, y: lineY - 0.14, w: 0.28, h: 0.28,
+      fill: { color: theme.bg }, line: { color: theme.accent, width: 3.5 }
+    })
+    slide.addText(item.runs.map(run => runToTextObject(run, theme)), {
+      x: cx - slotW / 2 + 0.05, y: lineY + 0.35, w: slotW - 0.1, h: box.h - top - 1.9, fontSize: n > 4 ? 11 : 13,
+      color: theme.text, fontFace, align: 'center', valign: 'top', margin: 0
+    })
+  })
+}
+
+/** 数值字号：按字数分三档（与预览 statValueSizeClass 一致） */
+const statValueFontSize = (value, n) => {
+  const len = [...String(value)].length
+  const tiers = n >= 4 ? [34, 27, 21] : [46, 36, 27]
+  return len >= 7 ? tiers[2] : len >= 5 ? tiers[1] : tiers[0]
+}
+
+const addSmartStats = (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const n = smart.stats.length
+  const gap = n >= 4 ? 0.18 : 0.25
+  const inset = n === 2 ? 0.6 : 0
+  const tileW = (box.w - inset * 2 - gap * (n - 1)) / n
+  const tileH = 2.5
+  const y = box.y + top + Math.max(0, (box.h - top - tileH) / 2)
+  smart.stats.forEach((stat, idx) => {
+    const x = box.x + inset + idx * (tileW + gap)
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x, y, w: tileW, h: tileH, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.14,
+      shadow: { type: 'outer', blur: 6, offset: 2, angle: 90, color: '000000', opacity: 0.08 }
+    })
+    addRect(pptx, slide, { x: x + 0.14, y: y + tileH - 0.08, w: tileW - 0.28, h: 0.08 }, theme.accent)
+    slide.addText(stat.value, {
+      x, y: y + 0.3, w: tileW, h: 1.1, fontSize: statValueFontSize(stat.value, n), bold: true, color: theme.accent,
+      fontFace: 'Arial', align: 'center', valign: 'middle', margin: 0
+    })
+    slide.addText(stat.runs.map(run => runToTextObject(run, theme)), {
+      x: x + 0.15, y: y + 1.5, w: tileW - 0.3, h: 0.85, fontSize: n >= 4 ? 12 : 14, color: theme.text,
+      fontFace, align: 'center', valign: 'top', margin: 0
+    })
+  })
+}
+
+const addSmartIconList = (pptx, slide, smart, theme, box, fontFace) => {
+  const top = addIntro(slide, smart.intro, theme, box, fontFace)
+  const items = smart.items
+  const cols = items.length >= 4 ? 2 : 1
+  const rows = Math.ceil(items.length / cols)
+  const gap = 0.16
+  const rowCap = items.length <= 4 ? 1.0 : items.length <= 6 ? 0.88 : 0.78   // 与预览 min-height 分档对应
+  const rowH = Math.min(rowCap, (box.h - top - gap * (rows - 1)) / rows)
+  const colW = (box.w - (cols - 1) * 0.25) / cols
+  const startY = box.y + top + Math.max(0, (box.h - top - (rows * rowH + (rows - 1) * gap)) / 2)
+  const badge = Math.min(0.62, rowH - 0.2)
+  items.forEach((item, idx) => {
+    const x = box.x + (idx % cols) * (colW + 0.25)
+    const y = startY + Math.floor(idx / cols) * (rowH + gap)
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x, y, w: colW, h: rowH, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.12
+    })
+    // 圆形淡色徽章托着 emoji
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: x + 0.18, y: y + (rowH - badge) / 2, w: badge, h: badge,
+      fill: { color: theme.accent, transparency: 84 }, line: noLine(theme.accent)
+    })
+    slide.addText(item.icon, {
+      x: x + 0.18, y: y + (rowH - badge) / 2, w: badge, h: badge, fontSize: cols === 2 ? 18 : 22, fontFace: 'Segoe UI Emoji',
+      align: 'center', valign: 'middle', margin: 0
+    })
+    slide.addText(item.runs.map(run => runToTextObject(run, theme)), {
+      x: x + 0.3 + badge, y, w: colW - badge - 0.45, h: rowH, fontSize: cols === 2 ? 14 : 18, color: theme.text,
+      fontFace, valign: 'middle', margin: 0
+    })
+  })
+}
+
+const addSmartAgenda = (pptx, slide, smart, theme, box, fontFace) => {
+  const items = smart.items
+  const cols = items.length > 5 ? 2 : 1
+  const rows = Math.ceil(items.length / cols)
+  const rowH = Math.min(0.72, box.h / rows)
+  const colW = (box.w - (cols - 1) * 0.5) / cols
+  const startY = box.y + Math.max(0, (box.h - rows * rowH) / 2)
+  items.forEach((runs, idx) => {
+    const x = box.x + (idx % cols) * (colW + 0.5)
+    const y = startY + Math.floor(idx / cols) * rowH
+    slide.addText(String(idx + 1).padStart(2, '0'), {
+      x, y, w: 0.8, h: rowH, fontSize: cols === 2 ? 20 : 26, bold: true, color: theme.accent,
+      fontFace: 'Arial', valign: 'middle', margin: 0
+    })
+    slide.addText(runs.map(run => runToTextObject(run, theme)), {
+      x: x + 0.85, y, w: colW - 0.85, h: rowH, fontSize: cols === 2 ? 15 : 18, color: theme.text,
+      fontFace, valign: 'middle', margin: 0
+    })
+    addRect(pptx, slide, { x, y: y + rowH - 0.02, w: colW, h: 0.012 }, theme.muted, { transparency: 60 })
+  })
+}
+
 const addSmartBody = async (pptx, slide, smart, theme, box, fontFace) => {
   switch (smart.type) {
     case SMART_LAYOUTS.COLUMNS: return addSmartColumns(pptx, slide, smart, theme, box, fontFace)
     case SMART_LAYOUTS.FLOW: return addSmartFlow(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.TIMELINE: return addSmartTimeline(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.STATS: return addSmartStats(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.ICON_LIST: return addSmartIconList(pptx, slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.AGENDA: return addSmartAgenda(pptx, slide, smart, theme, box, fontFace)
     case SMART_LAYOUTS.CARDS: return addSmartCards(pptx, slide, smart, theme, box, fontFace)
-    case SMART_LAYOUTS.IMAGE_TEXT: return addSmartImageText(slide, smart, theme, box, fontFace)
+    case SMART_LAYOUTS.IMAGE_TEXT: return addSmartImageText(pptx, slide, smart, theme, box, fontFace)
     case SMART_LAYOUTS.QUOTE: return addSmartQuote(slide, smart, theme, box, fontFace)
     default: return null
   }
@@ -629,8 +772,8 @@ const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, backgro
 
   const { body, footerX } = addContentHeader(pptx, slide, deckSlide, theme)
 
-  // 用户自备内容页背景：正文区盖一层底色保证可读（与预览一致）
-  if (backgrounds.contentData) {
+  // 用户自备内容页背景（照片）：正文区盖一层底色保证可读（与预览一致）；程序生成的装饰很淡，不盖
+  if (backgrounds.contentIsPhoto) {
     slide.addShape(pptx.ShapeType.roundRect, {
       ...body, fill: { color: theme.bg, transparency: 10 }, line: noLine(theme.bg), rectRadius: 0.12
     })
@@ -640,7 +783,7 @@ const addContentSlide = async (pptx, slide, deckSlide, deckTitle, theme, backgro
   if (deckSlide.smart) {
     await addSmartBody(pptx, slide, deckSlide.smart, theme, body, bodyFont)
   } else {
-    await addBlocksInBox(slide, deckSlide.blocks, theme, body, bodyFont)
+    await addBlocksInBox(pptx, slide, deckSlide.blocks, theme, body, bodyFont)
   }
 
   // 页脚：左侧 deck 标题，右侧页码
@@ -683,7 +826,7 @@ export const buildPptxBlob = async (markdown, { themeKey } = {}) => {
 
   for (const deckSlide of deck.slides) {
     const slide = pptx.addSlide()
-    if (deckSlide.layout === SLIDE_LAYOUTS.TITLE) {
+    if (deckSlide.layout === SLIDE_LAYOUTS.TITLE || deckSlide.layout === SLIDE_LAYOUTS.CLOSING) {
       addCoverSlide(pptx, slide, deckSlide, theme, backgrounds)
     } else if (deckSlide.layout === SLIDE_LAYOUTS.SECTION) {
       addSectionSlide(pptx, slide, deckSlide, theme)

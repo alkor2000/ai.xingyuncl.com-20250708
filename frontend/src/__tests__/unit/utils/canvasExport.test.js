@@ -125,11 +125,13 @@ describe('buildDocxBlob()', () => {
 })
 
 describe('buildPptxBlob() 智能排版', () => {
-  const SMART_DECK = `# 封面\n---\n# 分栏\n\n## 优点\n- 快\n\n## 缺点\n- 贵\n---\n# 流程\n\n1. 准备\n2. 暗处理\n3. 光照\n4. 染色\n5. 观察\n---\n# 卡片\n\n- **光**：能量\n- **叶绿体**：场所\n- **水**：原料\n---\n# 引言\n\n> 万物生长靠太阳\n---\n# 图文\n\n![图](https://example.com/x.png)\n\n- 说明一\n- 说明二`
+  const SMART_DECK = `# 封面\n---\n# 分栏\n\n## 优点\n- 快\n\n## 缺点\n- 贵\n---\n# 流程\n\n1. 准备\n2. 暗处理\n3. 光照\n4. 染色\n5. 观察\n---\n# 卡片\n\n- **光**：能量\n- **叶绿体**：场所\n- **水**：原料\n---\n# 引言\n\n> 万物生长靠太阳\n---\n# 图文\n\n![图](https://example.com/x.png)\n\n- 说明一\n- 说明二\n---\n# 目录\n\n- 一\n- 二\n- 三\n---\n# 发展史\n\n- 1771年：发现\n- 1779年：证明需要光\n- 1864年：证明产物\n---\n# 数据\n\n- 90%：氧气\n- 6：结构\n---\n# 目标\n\n- 🌱 理解概念\n- 🔬 掌握方法\n- 💡 认识意义\n---\n# 第一部分\n---\n# 提示\n\n结论：光是必要条件。\n\n- a\n---\n# 谢谢\n欢迎提问`
 
-  it('分栏/流程/卡片/引言/图文都能生成形状与文本', async () => {
+  it('分栏/流程/卡片/引言/图文/目录/时间线/数据/图标/提示框/章节/结束页都能生成', async () => {
     const { blob, deck } = await buildPptxBlob(SMART_DECK, { themeKey: 'business' })
-    expect(deck.slides.map(s => s.smart?.type || null)).toEqual([null, 'columns', 'flow', 'cards', 'quote', 'imageText'])
+    expect(deck.slides.map(s => s.smart?.type || null)).toEqual([null, 'columns', 'flow', 'cards', 'quote', 'imageText', 'agenda', 'timeline', 'stats', 'iconList', null, null, null])
+    expect(deck.slides[10].layout).toBe('section')
+    expect(deck.slides[12].layout).toBe('closing')
     const zip = await readZip(blob)
     const columns = await zip.file('ppt/slides/slide2.xml').async('string')
     expect(columns).toContain('优点')
@@ -146,5 +148,25 @@ describe('buildPptxBlob() 智能排版', () => {
     const imageText = await zip.file('ppt/slides/slide6.xml').async('string')
     expect(imageText).toContain('[图片：图]')
     expect(imageText).toContain('说明一')
+    const agenda = await zip.file('ppt/slides/slide7.xml').async('string')
+    expect(agenda).toContain('01')
+    expect(agenda).toContain('三')
+    const timeline = await zip.file('ppt/slides/slide8.xml').async('string')
+    expect((timeline.match(/prst="ellipse"/g) || []).length).toBe(6)   // 每个节点：光环 + 圆点
+    expect(timeline).toContain('1779年')
+    const stats = await zip.file('ppt/slides/slide9.xml').async('string')
+    expect(stats).toContain('90%')
+    expect((stats.match(/prst="roundRect"/g) || []).length).toBe(2)
+    const icons = await zip.file('ppt/slides/slide10.xml').async('string')
+    expect(icons).toContain('🌱')
+    expect(icons).toContain('理解概念')
+    const section = await zip.file('ppt/slides/slide11.xml').async('string')
+    expect(section).toContain('>01<')
+    const callout = await zip.file('ppt/slides/slide12.xml').async('string')
+    expect(callout).toContain('结论：')
+    expect(callout).toContain('光是必要条件')
+    const closing = await zip.file('ppt/slides/slide13.xml').async('string')
+    expect(closing).toContain('谢谢')
+    expect(closing).toContain('欢迎提问')
   })
 })
