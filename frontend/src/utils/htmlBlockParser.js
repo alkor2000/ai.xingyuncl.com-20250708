@@ -241,14 +241,16 @@ const countUnclosedInnerFences = (lines, fromExclusive, toExclusive, fenceChar) 
   return depth
 }
 
-/** 溢出判定用的文档结构行：幻灯片分页 --- 或 Markdown 标题 */
-const DOCUMENT_STRUCTURE_RE = /^[ \t]{0,3}(?:---[ \t]*|#{1,6}[ \t]+\S.*)$/
+/** 溢出判定用的文档结构行：分页 ---、标题、要点、编号、引用、表格行、备注注释 */
+const DOCUMENT_STRUCTURE_RE = /^[ \t]{0,3}(?:---[ \t]*|#{1,6}[ \t]+\S.*|[-*+][ \t]+\S.*|\d+[.)][ \t]+\S.*|>[ \t]*\S.*|\|.*\||<!--.*)$/
+/** 内层裸 ``` 块最多这么多行；再长就更像围栏外的说明文字了 */
+const INNER_BARE_BLOCK_MAX_LINES = 15
 
 /**
  * v2.1: 区间内是否出现「另一个产物」的开启围栏（```html / ```pptx 等）
  *
- * 溢出修复向后扩展时的边界：内层 ```python 之类只是文档里的代码示例，可以吞进去；
- * 但遇到另一个产物块的开启围栏必须停下，否则会把两个产物合成一个。
+ * 溢出修复向后扩展时的硬边界：遇到另一个产物块的开启围栏必须停下，
+ * 否则会把两个产物合成一个。
  */
 const hasArtifactFenceBetween = (lines, fromExclusive, toExclusive, fenceChar) => {
   for (let idx = fromExclusive + 1; idx < toExclusive; idx += 1) {
@@ -260,30 +262,40 @@ const hasArtifactFenceBetween = (lines, fromExclusive, toExclusive, fenceChar) =
   return false
 }
 
+const hasStructureBetween = (lines, fromExclusive, toExclusive) => {
+  for (let idx = fromExclusive + 1; idx < toExclusive; idx += 1) {
+    if (DOCUMENT_STRUCTURE_RE.test(lines[idx])) return true
+  }
+  return false
+}
+
 /**
- * v2.1: 找到「溢出到围栏外的文档正文」的真正闭合候选
+ * v2.1: 内层裸 ``` 导致的溢出——判断当前闭合候选其实是不是一个「内层裸块的开启」
  *
- * 场景：pptx / docx 里模型用不带语言标识的裸 ``` 包了一段东西（常见是想画
- *      "A → B → C" 的流程），按 CommonMark 第一个裸 ``` 就把外层块闭合了，
- *      后面的整份文档都掉到围栏外，画布只拿到半截。
- * 判定：从当前闭合候选往后看每一对相邻候选之间的片段，只要片段里出现
- *      幻灯片分页 --- 或 Markdown 标题，就说明正文溢出了，闭合围栏应推到
- *      该片段之后；取满足条件的最后一个候选。说明性文字（"这份课件共 10 页"
- *      之类）没有这些结构行，不会被误吞。
+ * 场景：pptx / docx 里模型用不带语言标识的裸 ``` 包了一段东西（画 "A → B → C" 流程、
+ *      "知识骨架"之类），按 CommonMark 第一个裸 ``` 就把外层块闭合了，后面的正文
+ *      都掉到围栏外，画布只拿到半截。
+ * 判定（两个条件都要）：
+ *   1. 候选 k 与下一个候选 k+1 之间像一个内层裸块：没有带语言标识的围栏、不超过
+ *      INNER_BARE_BLOCK_MAX_LINES 行——围栏外的说明段落通常带 ```python 之类的代码块
+ *      或者很长；
+ *   2. 候选 k+1 之后到候选 k+2 之间还有文档结构（分页/标题/要点/编号/引用…），说明正文
+ *      确实在裸块之后继续了；如果那里是另一个产物块的开启围栏则不扩展。
+ * 满足则外层块至少延续到候选 k+2（再由调用方继续判断）。这样"正常闭合 + 说明文字 +
+ * 一个裸代码块"不会被误吞：说明文字后面的裸块里没有文档结构。
  *
- * @returns {number} 新的候选下标；无需扩展时返回 currentIndex
+ * @returns {number} 新的候选下标（k+2）；无需扩展时返回 currentIndex
  */
 const findSpilledDocumentEnd = (lines, candidates, currentIndex, fenceChar) => {
-  let best = currentIndex
-  for (let m = currentIndex + 1; m < candidates.length; m += 1) {
-    const from = candidates[m - 1]
-    const to = candidates[m]
-    if (hasArtifactFenceBetween(lines, from, to, fenceChar)) break
-    for (let idx = from + 1; idx < to; idx += 1) {
-      if (DOCUMENT_STRUCTURE_RE.test(lines[idx])) { best = m; break }
-    }
-  }
-  return best
+  const open = candidates[currentIndex]
+  const innerClose = candidates[currentIndex + 1]
+  const nextClose = candidates[currentIndex + 2]
+  if (innerClose === undefined || nextClose === undefined) return currentIndex
+  if (innerClose - open - 1 > INNER_BARE_BLOCK_MAX_LINES) return currentIndex
+  if (hasLabeledFenceBetween(lines, open, innerClose, fenceChar)) return currentIndex
+  if (hasArtifactFenceBetween(lines, innerClose, nextClose, fenceChar)) return currentIndex
+  if (!hasStructureBetween(lines, innerClose, nextClose)) return currentIndex
+  return currentIndex + 2
 }
 
 /**
@@ -421,8 +433,8 @@ export const parseFencedBlocks = (content, options = {}) => {
     // 已选闭合围栏之前若还有未闭合的内层 ```lang，就把闭合围栏向后推到
     // 下一个候选，直到内层全部配平或候选用尽（见 countUnclosedInnerFences）。
     // ------------------------------------------------------------------
-    // v2.1 再加一条：内部用了裸 ``` 导致正文溢出到围栏外时，只要后面的候选
-    // 片段里还有分页/标题这类文档结构，就继续把闭合围栏往后推（见 findSpilledDocumentEnd）。
+    // v2.1 再加一条：当前闭合候选其实是内层裸 ``` 块的开启、正文在裸块之后还在继续时，
+    // 把闭合围栏推到裸块之后的下一个候选（见 findSpilledDocumentEnd）。
     // 两条规则交替进行，直到都不再触发。
     // ------------------------------------------------------------------
     if (closeLine >= 0 && MARKDOWN_KINDS.has(ARTIFACT_LANG_MAP[lang])) {

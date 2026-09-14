@@ -116,6 +116,34 @@ describe('extractArtifactBlocks()', () => {
     expect(blocks[0].code).not.toContain('- 要点')
   })
 
+  it('课件正常闭合后模型附赠 "---/### 配套脚本/```python" 一节时，不会被当成溢出吞进课件', () => {
+    // 线上实际出现：末页正文区出现了整段 python 源码
+    const content = [
+      '```pptx', '# 封面', '---', '# 思维复盘', '', '## 课后行动', '- 探究小实验', '> "万物生长靠太阳"', '```', '',
+      '---', '', '### 配套 Python 生成脚本（可选）', '', '若您需要在电脑上本地生成真正可放映的 pptx 文件，运行以下脚本即可：', '',
+      '```python', 'from pptx import Presentation', 'prs = Presentation()', '```', '', '运行后会在当前目录生成文件。'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].code).toContain('课后行动')
+    expect(blocks[0].code).not.toContain('from pptx import')
+    expect(blocks[0].code).not.toContain('配套 Python')
+  })
+
+  it('末页里的裸 ``` 知识骨架 + 后面的附赠脚本：找回末页正文但不吞脚本', () => {
+    const content = [
+      '```pptx', '# 封面', '---', '# 思维复盘与课后行动', '',
+      '```', '【知识骨架一览】', '一个核心场所：叶绿体', '```', '',
+      '## 课后趣味行动（二选一）', '1. **阳台水草实验**', '2. **微调查报告**', '```', '',
+      '---', '### 配套 Python 生成脚本', '```python', 'from pptx import Presentation', '```'
+    ].join('\n')
+    const blocks = extractArtifactBlocks(content)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].code).toContain('课后趣味行动')
+    expect(blocks[0].code).toContain('知识骨架一览')
+    expect(blocks[0].code).not.toContain('from pptx import')
+  })
+
   it('html / pdf 必须至少含一个标签，纯文本不算', () => {
     expect(extractArtifactBlocks('```pdf\n这只是一段没有标签的文字而已\n```')).toEqual([])
   })
