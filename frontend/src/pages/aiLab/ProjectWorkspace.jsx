@@ -8,13 +8,19 @@
  *  - 声音（audio-knn）：与图像同一套面板，换成麦克风采集、频谱缩略图与声音特征提取器
  *  - 文本分类（text-nb）：句子列表 → 双人标注与一致性 → 朴素贝叶斯 → 测试时看是哪些词推错的
  *  - 文本核实（verify）：材料 → 拆说法 → 判定 → 改写 → 反思
+ *
+ * 两种视图（?view=steps|all，记在 localStorage ailab.viewMode，默认一步一步）：
+ *  - steps：一次只展开一张步骤卡，底部"上一步/下一步"，左侧步骤栏可跳到任意一步；换条件测试、错误分析、
+ *    分组准确率这几步在这种视图里直接把测试面板放进卡片（默认切到对应标签页），孩子不用回上一张卡找。
+ *    过程时间线收进抽屉。首次打开停在第一个未完成的步骤，之后不自动跳步，由学生自己点"下一步"。
+ *  - all：全部步骤竖排展开（教师看全貌、自动化测试用），步骤栏点击是滚动定位。
  * 左侧步骤栏按真实数据判断完成状态；每一步的关键动作都写一条过程事实（aiLabStore.recordEvent）。
  * 非所有者（教师/管理员）只读，可看时间线。
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Steps, Card, Spin, Button, Space, Tag, Select, Alert, Typography, message } from 'antd'
-import { ArrowLeftOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons'
+import { Steps, Card, Spin, Button, Space, Tag, Select, Alert, Typography, Segmented, Drawer, Progress, Divider, message } from 'antd'
+import { ArrowLeftOutlined, LockOutlined, PlusOutlined, LeftOutlined, RightOutlined, CheckCircleFilled, HistoryOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../stores/aiLabStore'
 import useAuthStore from '../../stores/authStore'
@@ -49,6 +55,18 @@ import './AiLab.less'
 const { Title, Text } = Typography
 const DEFAULT_STEPS = ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card']
 const DEFAULT_HOLDOUT_RATIO = 0.2
+const VIEW_MODE_KEY = 'ailab.viewMode'
+
+/* 视图模式：URL ?view= 优先，其次本机记住的选择，默认一步一步 */
+const readViewMode = () => {
+  try {
+    const q = new URLSearchParams(window.location.search).get('view')
+    if (q === 'all' || q === 'steps') return q
+    const saved = window.localStorage.getItem(VIEW_MODE_KEY)
+    if (saved === 'all' || saved === 'steps') return saved
+  } catch (e) { /* 隐私模式等读不到本地存储时按默认 */ }
+  return 'steps'
+}
 
 const ProjectWorkspace = () => {
   const { id } = useParams()
@@ -56,19 +74,36 @@ const ProjectWorkspace = () => {
   const { t, i18n } = useTranslation()
   const { user } = useAuthStore()
   const {
-    project, datasets, models, samplesByDataset, projectLoading, tasks, events,
-    openProject, fetchTasks, fetchSamples, uploadSamples, deleteSample, lockSplit, addRows,
+    project, datasets, models, samplesByDataset, projectLoading, tasks, events, lastEval,
+    openProject, fetchTasks, fetchSamples, fetchEvents, uploadSamples, deleteSample, lockSplit, addRows,
     updateDataset, updateProject, recordEvent, flushEvents, reset
   } = useAiLabStore()
   const [locking, setLocking] = useState(false)
   const [errorsViewed, setErrorsViewed] = useState(false)
   const [presetOpen, setPresetOpen] = useState(false)
+  const [viewMode, setViewModeState] = useState(readViewMode)
+  const [activeStep, setActiveStep] = useState(null) // null = 还没定位，用第一个未完成的步骤
+  const [ready, setReady] = useState(false) // 项目、事件都已加载，才能判断"第一个未完成的步骤"
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const openedRef = useRef(null)
+  const wizard = viewMode === 'steps'
+
+  const setViewMode = (mode) => {
+    setViewModeState(mode)
+    try { window.localStorage.setItem(VIEW_MODE_KEY, mode) } catch (e) { /* 记不住也不影响使用 */ }
+  }
 
   useEffect(() => {
+    let cancelled = false
+    setActiveStep(null)
+    setReady(false)
+    setErrorsViewed(false)
     if (!tasks.length) fetchTasks()
-    openProject(id).catch(() => navigate('/ai-lab'))
-    return () => { flushEvents(); reset() }
+    openProject(id)
+      .then(() => fetchEvents().catch(() => {}))
+      .then(() => { if (!cancelled) setReady(true) })
+      .catch(() => navigate('/ai-lab'))
+    return () => { cancelled = true; flushEvents(); reset() }
     // 只在项目 id 变化时重新加载；不依赖 t
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -106,10 +141,12 @@ const ProjectWorkspace = () => {
   const labelOf = useCallback((key) => classes.find((c) => c.key === key)?.label || key, [classes])
   const taskTitle = (key) => (i18n.exists(`aiLab.task.${key}.title`) ? t(`aiLab.task.${key}.title`) : (task?.title || key))
   const samples = samplesByDataset[dataset?.id] || []
+  const samplesLoaded = !dataset || Array.isArray(samplesByDataset[dataset.id])
 
   const counts = dataset?.counts || { train: {}, holdout: {}, shift: {} }
   const trainTotal = Object.values(counts.train || {}).reduce((a, b) => a + b, 0)
-  const classesReady = classes.filter((c) => (counts.train?.[c.key] || 0) >= minPerClass).length
+  /* 采集是否够数按训练+留出合计算：锁定后留出集从训练里分走 20%，不能让"采集"这一步又变回未完成 */
+  const classesReady = classes.filter((c) => (counts.train?.[c.key] || 0) + (counts.holdout?.[c.key] || 0) >= minPerClass).length
   const hasShiftTest = models.some((m) => Object.keys(m.metrics?.shift || {}).length > 0)
   const hasHoldoutTest = models.some((m) => typeof m.metrics?.holdout?.accuracy === 'number')
   const latestCard = models[models.length - 1]?.model_card
@@ -146,6 +183,18 @@ const ProjectWorkspace = () => {
   }
   const firstOpen = steps.findIndex((s) => !stepDone[s])
   const currentStep = firstOpen === -1 ? steps.length - 1 : firstOpen
+  const doneCount = steps.filter((s) => stepDone[s]).length
+
+  /* 一步一步视图：数据到齐后停在第一个未完成的步骤；之后只由学生自己翻页，不自动跳 */
+  useEffect(() => {
+    if (activeStep === null && ready && project && samplesLoaded) setActiveStep(currentStep)
+  }, [activeStep, ready, project, samplesLoaded, currentStep])
+  const stepIndex = Math.min(wizard ? (activeStep ?? currentStep) : currentStep, steps.length - 1)
+  const activeKey = steps[stepIndex]
+  const goToStep = (i) => {
+    setActiveStep(Math.max(0, Math.min(steps.length - 1, i)))
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) { /* 旧浏览器 */ }
+  }
 
   /* 少数步骤的标题随实验类型变：compare 在 M3 里是树 vs 网络，train 在表格/文本里是树/文本分类器 */
   const stepTitle = (key) => {
@@ -176,11 +225,12 @@ const ProjectWorkspace = () => {
     const created = await addRows(dataset.id, [row])
     recordEvent('dataset.add', { dataset_id: dataset.id, split: 'train', class_key: row.class_key, count: created.length, source: 'manual', dataset_version: dataset.version })
   }
+  const holdoutRatio = (typeof task?.holdout_ratio === 'number' && task.holdout_ratio > 0 && task.holdout_ratio < 1) ? task.holdout_ratio : DEFAULT_HOLDOUT_RATIO
   const handleLock = async () => {
     setLocking(true)
     try {
-      const result = await lockSplit(dataset.id, DEFAULT_HOLDOUT_RATIO)
-      recordEvent('split.lock', { dataset_id: dataset.id, holdout_ratio: DEFAULT_HOLDOUT_RATIO, dataset_version: result?.dataset?.version, counts: result?.counts })
+      const result = await lockSplit(dataset.id, holdoutRatio)
+      recordEvent('split.lock', { dataset_id: dataset.id, holdout_ratio: holdoutRatio, dataset_version: result?.dataset?.version, counts: result?.counts })
       message.success(t('aiLab.lock.done'))
     } catch (err) {
       message.error(t('aiLab.lock.failed'))
@@ -193,13 +243,22 @@ const ProjectWorkspace = () => {
     return <div className="ailab-loading"><Spin size="large" /></div>
   }
 
-  const section = (key, title, hint, children, extra) => (
-    <Card id={`ailab-step-${key}`} className={`ailab-section ${stepDone[key] ? 'done' : ''}`} key={key}
-      title={<span><span className="ailab-section-no">{steps.indexOf(key) + 1}</span>{title}</span>} extra={extra}>
-      {hint && <p className="ailab-section-hint">{hint}</p>}
-      {children}
-    </Card>
-  )
+  /* 一张步骤卡。一步一步视图里只渲染当前这一步（VerifyWorkspace 也经这里出卡，所以顺带过滤了） */
+  const section = (key, title, hint, children, extra) => {
+    if (wizard && key !== activeKey) return null
+    return (
+      <Card id={`ailab-step-${key}`} className={`ailab-section ${stepDone[key] ? 'done' : ''} ${wizard ? 'ailab-wizard-card' : ''}`} key={key}
+        title={(
+          <span>
+            <span className="ailab-section-no">{steps.indexOf(key) + 1}</span>{title}
+            {stepDone[key] && <CheckCircleFilled className="ailab-section-check" aria-label={t('aiLab.wizard.done')} />}
+          </span>
+        )} extra={extra}>
+        {hint && <p className="ailab-section-hint">{hint}</p>}
+        {children}
+      </Card>
+    )
+  }
 
   const predictPrompt = i18n.exists(`aiLab.task.${project.task_key}.predictPrompt`) ? t(`aiLab.task.${project.task_key}.predictPrompt`) : t('aiLab.task.free.predictPrompt')
   const presetButton = canEdit && (task?.presets?.length > 0 || isTable || isText) && (
@@ -212,7 +271,18 @@ const ProjectWorkspace = () => {
   else dataView = <DatasetPanel dataset={dataset} samples={samples} onAddClass={handleAddClass} onRenameClass={handleRenameClass} onDeleteSample={handleDeleteSample} canEdit={canEdit} />
   const collectHintKey = isAudio ? 'aiLab.section.collectAudioHint' : isText ? 'aiLab.section.collectTextHint' : 'aiLab.section.collectHint'
 
-  const lockSection = () => section('lock', t('aiLab.step.lock'), t('aiLab.section.lockHint'), (
+  /* 测试面板按数据类型三选一；一步一步视图里换条件/错误/分组这几步也直接放这个面板，默认打开对应标签页 */
+  const subgroupTag = steps.includes('fairness') ? (config.subgroup_tag || 'collector') : undefined
+  const evaluatePanel = (defaultTab = 'holdout') => (
+    isTable
+      ? <TableEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} defaultTab={defaultTab} />
+      : isText
+        ? <TextEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} defaultTab={defaultTab} />
+        : <EvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} modality={modality} subgroupTag={subgroupTag} defaultTab={defaultTab} />
+  )
+  const lastEvalTab = lastEval?.key?.startsWith('shift:') ? 'shift' : 'holdout'
+
+  const lockSection = () => section('lock', t('aiLab.step.lock'), t('aiLab.section.lockHint', { pct: Math.round(holdoutRatio * 100) }), (
     <Space direction="vertical" style={{ width: '100%' }}>
       <Text>{t(isTable ? 'aiLab.lock.countsRows' : 'aiLab.lock.counts', { train: trainTotal, holdout: Object.values(counts.holdout || {}).reduce((a, b) => a + b, 0) })}</Text>
       {dataset?.locked_at && <Tag icon={<LockOutlined />} color="blue">{t('aiLab.lock.locked', { version: dataset.version })}</Tag>}
@@ -264,25 +334,27 @@ const ProjectWorkspace = () => {
       <AnnotationPanel mode="agreement" project={project} dataset={dataset} samples={samples} canEdit={canEdit} labelOf={labelOf} />
     )),
     fairness: () => section('fairness', t('aiLab.step.fairness'), t('aiLab.section.fairnessHint', { tag: t(`aiLab.condition.${config.subgroup_tag || 'collector'}`) }), (
-      <Space direction="vertical">
-        <Text type="secondary">{t('aiLab.section.fairnessWhere')}</Text>
-        {stepDone.fairness && <Tag color="green">{t('aiLab.section.fairnessDone')}</Tag>}
-      </Space>
+      wizard ? evaluatePanel('holdout') : (
+        <Space direction="vertical">
+          <Text type="secondary">{t('aiLab.section.fairnessWhere')}</Text>
+          {stepDone.fairness && <Tag color="green">{t('aiLab.section.fairnessDone')}</Tag>}
+        </Space>
+      )
     )),
-    test_holdout: () => section('test_holdout', t('aiLab.step.test_holdout'), t('aiLab.section.testHint'), (
-      isTable
-        ? <TableEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} />
-        : isText
-          ? <TextEvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} />
-          : <EvaluatePanel dataset={dataset} models={models} labelOf={labelOf} canEdit={canEdit} modality={modality} subgroupTag={steps.includes('fairness') ? (config.subgroup_tag || 'collector') : undefined} />
+    test_holdout: () => section('test_holdout', t('aiLab.step.test_holdout'), t('aiLab.section.testHint'), evaluatePanel('holdout')),
+    test_shift: () => section('test_shift', t('aiLab.step.test_shift'), t(isTable ? 'aiLab.section.shiftRowsHint' : isText ? 'aiLab.section.shiftTextHint' : isAudio ? 'aiLab.section.shiftAudioHint' : 'aiLab.section.shiftHint'), (
+      wizard ? evaluatePanel('shift') : <Text type="secondary">{t('aiLab.section.shiftWhere')}</Text>
     )),
-    test_shift: () => section('test_shift', t('aiLab.step.test_shift'), t(isTable ? 'aiLab.section.shiftRowsHint' : isText ? 'aiLab.section.shiftTextHint' : isAudio ? 'aiLab.section.shiftAudioHint' : 'aiLab.section.shiftHint'), <Text type="secondary">{t('aiLab.section.shiftWhere')}</Text>),
     condition_design: () => section('condition_design', t('aiLab.step.condition_design'), t('aiLab.section.conditionHint'), <ConditionTable project={project} models={models} canEdit={canEdit} />),
     errors: () => section('errors', t('aiLab.step.errors'), t(isTable || isText ? 'aiLab.section.errorsRowsHint' : isAudio ? 'aiLab.section.errorsAudioHint' : 'aiLab.section.errorsHint'), (
-      <Space>
-        <Text type="secondary">{t('aiLab.section.errorsWhere')}</Text>
-        {canEdit && !errorsViewed && <Button size="small" onClick={() => { setErrorsViewed(true); recordEvent('reflection.write', { step: 'errors', text: 'viewed' }) }}>{t('aiLab.section.errorsMark')}</Button>}
-      </Space>
+      <>
+        {wizard ? evaluatePanel(lastEvalTab) : null}
+        {wizard && <Divider />}
+        <Space>
+          {!wizard && <Text type="secondary">{t('aiLab.section.errorsWhere')}</Text>}
+          {canEdit && !errorsViewed && <Button size="small" onClick={() => { setErrorsViewed(true); recordEvent('reflection.write', { step: 'errors', text: 'viewed' }) }}>{t('aiLab.section.errorsMark')}</Button>}
+        </Space>
+      </>
     )),
     mislabel: () => section('mislabel', t('aiLab.step.mislabel'), t('aiLab.section.mislabelHint'), (
       <MislabelPanel mode="mislabel" dataset={dataset} samples={samples} models={models} canEdit={canEdit} ratio={config.mislabel_ratio || 0.2} labelOf={labelOf} />
@@ -300,17 +372,28 @@ const ProjectWorkspace = () => {
     model_card: () => section('model_card', t('aiLab.step.model_card'), t('aiLab.section.modelCardHint'), <ModelCardForm models={models} canEdit={canEdit} />)
   }
 
+  const body = isVerify
+    ? <VerifyWorkspace project={project} canEdit={canEdit} steps={steps} renderSection={section} materialSet={config.material_set || 'campus'} />
+    : (wizard ? (sections[activeKey] ? sections[activeKey]() : null) : steps.map((s) => (sections[s] ? sections[s]() : null)))
+
   return (
     <div className="ailab-page ailab-workspace-page">
       <div className="ailab-workspace-head">
-        <Space>
+        <Space wrap>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-lab')}>{t('common.back')}</Button>
           <Title level={4} style={{ margin: 0 }}>{project.title}</Title>
           <Tag color="geekblue">{taskTitle(project.task_key)}</Tag>
           <Tag>{t(`aiLab.kind.${kind}`)}</Tag>
           {!canEdit && <Tag>{t('aiLab.workspace.readOnly')}</Tag>}
         </Space>
-        <Space>
+        <Space wrap>
+          <Segmented
+            size="small"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[{ value: 'steps', label: t('aiLab.wizard.modeSteps') }, { value: 'all', label: t('aiLab.wizard.modeAll') }]}
+          />
+          {wizard && <Button size="small" icon={<HistoryOutlined />} onClick={() => setTimelineOpen(true)}>{t('aiLab.timeline.title')}</Button>}
           <Text type="secondary">{t('aiLab.form.participation')}</Text>
           <Select
             size="small"
@@ -328,20 +411,43 @@ const ProjectWorkspace = () => {
           <Steps
             direction="vertical"
             size="small"
-            current={currentStep}
-            onChange={(i) => scrollTo(steps[i])}
-            items={steps.map((s) => ({ title: stepTitle(s), status: stepDone[s] ? 'finish' : undefined }))}
+            current={stepIndex}
+            onChange={(i) => (wizard ? goToStep(i) : scrollTo(steps[i]))}
+            items={steps.map((s, i) => ({ title: stepTitle(s), status: stepDone[s] ? 'finish' : (i === stepIndex ? 'process' : 'wait') }))}
           />
         </aside>
         <main className="ailab-main">
-          {isVerify
-            ? <VerifyWorkspace project={project} canEdit={canEdit} steps={steps} renderSection={section} materialSet={config.material_set || 'campus'} />
-            : steps.map((s) => (sections[s] ? sections[s]() : null))}
-          <Card className="ailab-section" title={t('aiLab.timeline.title')}>
-            <Timeline />
-          </Card>
+          {wizard && (
+            <div className="ailab-wizard-bar">
+              <Text strong>{t('aiLab.wizard.progress', { n: stepIndex + 1, total: steps.length })}</Text>
+              <Progress percent={Math.round((doneCount / Math.max(1, steps.length)) * 100)} size="small" showInfo={false} strokeColor="#2c7a5a" className="ailab-wizard-progress" />
+              <Text type="secondary">{t('aiLab.wizard.doneCount', { done: doneCount, total: steps.length })}</Text>
+            </div>
+          )}
+          {body}
+          {wizard && (
+            <div className="ailab-wizard-nav">
+              <Button icon={<LeftOutlined />} disabled={stepIndex === 0} onClick={() => goToStep(stepIndex - 1)}>{t('aiLab.wizard.prev')}</Button>
+              {stepDone[activeKey]
+                ? <Tag color="green" icon={<CheckCircleFilled />}>{t('aiLab.wizard.done')}</Tag>
+                : <Tag>{t('aiLab.wizard.todo')}</Tag>}
+              {stepIndex < steps.length - 1
+                ? <Button type={stepDone[activeKey] ? 'primary' : 'default'} onClick={() => goToStep(stepIndex + 1)}>{t('aiLab.wizard.next')}<RightOutlined /></Button>
+                : <Button type="primary" onClick={() => navigate('/ai-lab')}>{t('aiLab.wizard.backToList')}</Button>}
+            </div>
+          )}
+          {!wizard && (
+            <Card className="ailab-section" title={t('aiLab.timeline.title')}>
+              <Timeline />
+            </Card>
+          )}
         </main>
       </div>
+      {wizard && (
+        <Drawer open={timelineOpen} onClose={() => setTimelineOpen(false)} title={t('aiLab.timeline.title')} width={440} destroyOnClose>
+          <Timeline />
+        </Drawer>
+      )}
       {dataset && (
         <ImportPresetModal open={presetOpen} onClose={() => setPresetOpen(false)} dataset={dataset} task={task} kind={isTable ? 'table' : isText ? 'text' : isAudio ? 'audio' : 'image'} />
       )}

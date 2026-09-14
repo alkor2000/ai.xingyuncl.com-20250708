@@ -167,7 +167,7 @@
     },
     "section": {
       "collectHint": "Define the classes first, then photograph or upload for each class. At least {{min}} per class, and record the conditions.",
-      "lockHint": "Locking randomly holds out 20% of each class as the test set. Training never sees them, so the score you get is trustworthy.",
+      "lockHint": "Locking randomly holds out {{pct}}% of each class as the test set. Training never sees them, so the score you get is trustworthy.",
       "trainHint": "Training runs inside your browser. Nothing is sent to an AI service.",
       "testHint": "The held-out set answers \"did it learn?\"; the shifted set answers \"does it survive a new setting?\". The difference is the generalisation gap.",
       "shiftHint": "New background, angle, light, device… collect and test them in the \"shifted-condition\" tab of the previous step.",
@@ -428,16 +428,14 @@
       "classesLabel": "Classes: {{classes}}",
       "trainCount": "train {{count}}",
       "shiftCount": "{{count}} shifted set(s)",
-      "relockHint": "The held-out set is locked: imported samples go to training first; lock again to top up the held-out set."
+      "relockHint": "The held-out set is locked: imported samples go to training first; lock again to top up the held-out set.",
+      "classes": "Which classes to import",
+      "classesMin": "Pick at least 2 classes to train a classifier"
     },
     "presetPack": {
-      "fruits-mini": {
-        "title": "Six fruits (white background)",
-        "desc": "Six fruit classes from Fruits-360 on white; the shifted sets paste the same fruit onto colourful and dark backgrounds to test whether the model learned fruit or background."
-      },
       "shapes": {
         "title": "Three shapes (synthetic)",
-        "desc": "Circles, squares and triangles on light backgrounds; dark and patterned backgrounds as shifted sets. Works without a camera."
+        "desc": "40 circles, squares and triangles each: filled or hollow, random size, stroke and colour, wobbly edges and distractor dots. Shifted sets: dark background, patterned background, hand-drawn. Works without a camera."
       },
       "campus-items": {
         "title": "Campus items table (synthetic)",
@@ -452,8 +450,8 @@
         "desc": "Sepal and petal sizes of three iris species, 150 rows; write a rule like 'petal length under 2.5 means setosa' and compare with a tree."
       },
       "sounds-synth": {
-        "title": "Three synthetic sounds",
-        "desc": "Whistles, knocks and rustles, 30 clips each; the 'added noise' set mixes in classroom noise, 'pitch shift' changes the pitch. Works without a microphone."
+        "title": "Four synthetic sounds",
+        "desc": "Whistles, knocks, claps and rustles, 30 clips each with varying pitch and rhythm; claps and knocks get confused with each other. Shifted sets: added classroom noise, different timbre, cheap microphone. Works without a microphone."
       },
       "campus-messages": {
         "title": "Campus message emotions",
@@ -466,6 +464,14 @@
       "garbage-cards": {
         "title": "Waste sorting cards",
         "desc": "60 item cards: material, recyclable, hazardous, rots, greasy → four waste classes."
+      },
+      "flowers": {
+        "title": "Five flowers (photos)",
+        "desc": "50 real photos each of sunflowers, roses, daisies, dandelions and tulips; within a class the size, angle and background all vary, so the held-out set produces real mistakes. Shifted sets: blurred, dark, zoomed-in."
+      },
+      "fruits-varied": {
+        "title": "Six fruits (mixed varieties)",
+        "desc": "Apples, bananas, cherries, grapes, oranges and peaches from Fruits-360, each class mixing several varieties; the 'new variety' set holds varieties never seen in training, the background sets paste the same fruit onto colourful and dark backgrounds."
       }
     },
     "curve": {
@@ -714,6 +720,17 @@
       "untagged": "not filled in",
       "noTag": "The test samples have no '{{tag}}' tag, so they cannot be grouped. Fill it in when collecting.",
       "spread": "The best group ({{best}}) and the worst group ({{worst}}) differ by {{value}}."
+    },
+    "wizard": {
+      "progress": "Step {{n}} of {{total}}",
+      "doneCount": "{{done}} of {{total}} done",
+      "prev": "Previous",
+      "next": "Next",
+      "done": "This step is done",
+      "todo": "Not done yet",
+      "modeSteps": "Step by step",
+      "modeAll": "Show all",
+      "backToList": "Back to experiments"
     }
   }
 }

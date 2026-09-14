@@ -28,6 +28,9 @@ const useAiLabStore = create((set, get) => ({
 
   /* 浏览器内训练好的分类器缓存：modelId -> knn 模型对象 */
   liveModels: {},
+  /* 本次会话里跑过的评测结果：modelId -> { holdout | 'shift:<集名>' : {metrics, predictions} }，供"看错在哪里"等步骤复用 */
+  evalResults: {},
+  lastEval: null, // {modelId, key}
   extractor: { status: 'idle', progress: 0, error: null },
 
   eventQueue: [],
@@ -341,7 +344,12 @@ const useAiLabStore = create((set, get) => ({
 
   setExtractor: (patch) => set((state) => ({ extractor: { ...state.extractor, ...patch } })),
 
-  reset: () => set({ project: null, datasets: [], models: [], samplesByDataset: {}, events: [], liveModels: {} })
+  setEvalResult: (modelId, key, value) => set((state) => ({
+    evalResults: { ...state.evalResults, [modelId]: { ...(state.evalResults[modelId] || {}), [key]: value } },
+    lastEval: { modelId, key }
+  })),
+
+  reset: () => set({ project: null, datasets: [], models: [], samplesByDataset: {}, events: [], liveModels: {}, evalResults: {}, lastEval: null })
 }))
 
 export default useAiLabStore

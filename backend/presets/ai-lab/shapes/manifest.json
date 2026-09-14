@@ -2,7 +2,7 @@
   "key": "shapes",
   "kind": "image",
   "title": "几何图形三类（合成）",
-  "description": "平台合成的圆形、方形、三角形，浅色背景训练；深色背景与花纹背景两个换条件集。适合没有摄像头的机器、低年级入门和\"多少张够用\"实验。",
+  "description": "平台合成的圆形、方形、三角形各 40 张：有实心有空心、大小粗细颜色都随机、边线有点歪、画面里还有干扰的小点。换条件集：深色背景、花纹背景、手绘（横线纸上的空心线稿）。适合没有摄像头的机器和低年级入门。",
   "license": "CC0",
   "source": "本平台生成",
   "attribution": "",
@@ -217,6 +217,38 @@
           "shift/pattern/triangle/007.jpg",
           "shift/pattern/triangle/008.jpg"
         ]
+      },
+      "手绘": {
+        "circle": [
+          "shift/hand/circle/001.jpg",
+          "shift/hand/circle/002.jpg",
+          "shift/hand/circle/003.jpg",
+          "shift/hand/circle/004.jpg",
+          "shift/hand/circle/005.jpg",
+          "shift/hand/circle/006.jpg",
+          "shift/hand/circle/007.jpg",
+          "shift/hand/circle/008.jpg"
+        ],
+        "square": [
+          "shift/hand/square/001.jpg",
+          "shift/hand/square/002.jpg",
+          "shift/hand/square/003.jpg",
+          "shift/hand/square/004.jpg",
+          "shift/hand/square/005.jpg",
+          "shift/hand/square/006.jpg",
+          "shift/hand/square/007.jpg",
+          "shift/hand/square/008.jpg"
+        ],
+        "triangle": [
+          "shift/hand/triangle/001.jpg",
+          "shift/hand/triangle/002.jpg",
+          "shift/hand/triangle/003.jpg",
+          "shift/hand/triangle/004.jpg",
+          "shift/hand/triangle/005.jpg",
+          "shift/hand/triangle/006.jpg",
+          "shift/hand/triangle/007.jpg",
+          "shift/hand/triangle/008.jpg"
+        ]
       }
     }
   },
@@ -230,6 +262,10 @@
       },
       "花纹背景": {
         "background": "花纹"
+      },
+      "手绘": {
+        "background": "横线纸",
+        "style": "手绘"
       }
     }
   }

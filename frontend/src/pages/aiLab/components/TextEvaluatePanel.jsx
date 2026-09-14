@@ -12,18 +12,17 @@ import MetricsView from './MetricsView'
 
 const { Text } = Typography
 
-const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
+const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'holdout' }) => {
   const { t } = useTranslation()
-  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent } = useAiLabStore()
+  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent, evalResults, setEvalResult } = useAiLabStore()
   const textModels = useMemo(() => models.filter((m) => m.engine === 'text-nb'), [models])
   const [modelId, setModelId] = useState(null)
   const [running, setRunning] = useState(null)
-  const [results, setResults] = useState({})
   const [shiftSet, setShiftSet] = useState(null)
   const [error, setError] = useState(null)
   const model = useMemo(() => textModels.find((m) => m.id === modelId) || textModels[textModels.length - 1], [textModels, modelId])
+  const results = (model && evalResults[model.id]) || {}
   useEffect(() => { if (model && modelId !== model.id) setModelId(model.id) }, [model, modelId])
-  useEffect(() => { setResults({}) }, [modelId])
   useEffect(() => { const latest = textModels[textModels.length - 1]; if (latest) setModelId(latest.id) }, [textModels.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const shiftSets = useMemo(() => Object.keys(dataset?.counts?.shift || {}), [dataset])
   useEffect(() => { if (!shiftSet && shiftSets.length) setShiftSet(shiftSets[0]) }, [shiftSets, shiftSet])
@@ -48,7 +47,7 @@ const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
       const errors = predictions.filter((p) => p.actual !== p.predicted).slice(0, 200).map(({ id, actual, predicted, confidence }) => ({ sample_id: id, actual, predicted, confidence }))
       await saveEvaluation(model.id, { split, shift_set: split === 'shift' ? setName : undefined, sample_count: predictions.length, metrics, errors })
       recordEvent('test.run', { model_id: model.id, version: model.version, engine: 'text-nb', split, shift_set: split === 'shift' ? setName : undefined, sample_count: predictions.length, accuracy: metrics.accuracy, error_count: errors.length })
-      setResults((prev) => ({ ...prev, [split === 'holdout' ? 'holdout' : `shift:${setName}`]: { metrics, predictions } }))
+      setEvalResult(model.id, split === 'holdout' ? 'holdout' : `shift:${setName}`, { metrics, predictions })
     } catch (err) {
       console.error('text evaluation failed:', err)
       setError(err.message)
@@ -99,7 +98,7 @@ const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
         {gap !== null && <Tag color={gap > 0.15 ? 'red' : gap > 0.05 ? 'orange' : 'green'}>{t('aiLab.evaluate.gap', { value: formatPercent(gap) })}</Tag>}
       </Space>
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
-      <Tabs items={[
+      <Tabs defaultActiveKey={defaultTab} items={[
         { key: 'holdout', label: t('aiLab.evaluate.holdoutTab', { count: holdoutTotal }), children: (
           <div>
             <Space style={{ marginBottom: 12 }} wrap>

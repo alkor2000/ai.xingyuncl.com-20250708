@@ -18,19 +18,18 @@ import CapturePanel from './CapturePanel'
 
 const { Text } = Typography
 
-const EvaluatePanel = ({ dataset, models, labelOf, canEdit, modality = imageModality, subgroupTag }) => {
+const EvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'holdout', modality = imageModality, subgroupTag }) => {
   const { t } = useTranslation()
-  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent, uploadSamples, setExtractor, extractor, liveModels } = useAiLabStore()
+  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent, uploadSamples, setExtractor, extractor, liveModels, evalResults, setEvalResult } = useAiLabStore()
   const [modelId, setModelId] = useState(null)
   const [running, setRunning] = useState(null) // 'holdout' | shift set name
   const [progress, setProgress] = useState(0)
-  const [results, setResults] = useState({}) // key -> {metrics, predictions}
   const [shiftSet, setShiftSet] = useState(null)
   const [error, setError] = useState(null)
 
   const model = useMemo(() => models.find((m) => m.id === modelId) || models[models.length - 1], [models, modelId])
+  const results = (model && evalResults[model.id]) || {}
   useEffect(() => { if (model && modelId !== model.id) setModelId(model.id) }, [model, modelId])
-  useEffect(() => { setResults({}) }, [modelId])
   /* 训练出新版本后自动切到最新版，学生接着测的就是刚训练的那一版 */
   useEffect(() => { const latest = models[models.length - 1]; if (latest) setModelId(latest.id) }, [models.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -84,7 +83,7 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit, modality = imageModa
         accuracy: metrics.accuracy,
         error_count: errors.length
       })
-      setResults((prev) => ({ ...prev, [split === 'holdout' ? 'holdout' : `shift:${setName}`]: { metrics, predictions } }))
+      setEvalResult(model.id, split === 'holdout' ? 'holdout' : `shift:${setName}`, { metrics, predictions })
     } catch (err) {
       console.error('evaluation failed:', err)
       setError(err.message)
@@ -127,6 +126,7 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit, modality = imageModa
       </Space>
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
       <Tabs
+        defaultActiveKey={defaultTab}
         items={[
           {
             key: 'holdout',

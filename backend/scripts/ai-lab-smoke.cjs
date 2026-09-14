@@ -184,7 +184,7 @@ async function runFlow(owner, admin) {
   let res = await api('GET', '/api/ai-lab/tasks', { token: ownerToken });
   check(res.status === 200 && Array.isArray(res.body.data) && res.body.data.length === 17, 'GET /tasks 返回 17 个模板', res.body?.data?.length);
   const taskP1 = res.body.data?.find(t => t.key === 'P1');
-  check(taskP1 && taskP1.default_classes?.length === 4 && taskP1.kind === 'image' && taskP1.presets?.includes('fruits-mini'), 'P1 模板含 4 个默认类别、kind=image、presets 含 fruits-mini', taskP1);
+  check(taskP1 && taskP1.default_classes?.length === 4 && taskP1.kind === 'image' && taskP1.presets?.includes('fruits-varied'), 'P1 模板含 4 个默认类别、kind=image、presets 含 fruits-varied', taskP1);
 
   res = await api('GET', '/api/ai-lab/tasks');
   check(res.status === 401, '未登录访问返回 401', res.status);
@@ -452,7 +452,7 @@ async function runV2Flow(owner, { ownerToken, adminToken }) {
   const byKey = Object.fromEntries(tasks.map(t => [t.key, t]));
   check(['L1', 'L3', 'L4', 'M1', 'P1', 'P2', 'P3', 'P7', 'free'].every(key => byKey[key]), '模板含 L1/L3/L4/M1/P1/P2/P3/P7/free', Object.keys(byKey));
   check(byKey.P3?.kind === 'table' && byKey.P3?.engine === 'table-tree' && byKey.P3?.config?.max_depth_options?.length === 5 && byKey.P3?.presets?.includes('penguins'), 'P3 为表格任务（table-tree、max_depth_options、presets）', byKey.P3);
-  check(byKey.L3?.config?.mislabel_ratio === 0.2 && byKey.L3?.steps?.includes('mislabel') && byKey.L3?.steps?.includes('restore'), 'L3 含 mislabel_ratio 与 mislabel/restore 步骤', byKey.L3);
+  check(byKey.L3?.config?.mislabel_ratio === 0.4 && byKey.L3?.steps?.includes('mislabel') && byKey.L3?.steps?.includes('restore'), 'L3 含 mislabel_ratio 与 mislabel/restore 步骤', byKey.L3);
   check(byKey.L4?.config?.per_class_limits?.join(',') === '3,10,30' && byKey.L1?.default_classes?.length === 2 && byKey.M1?.default_classes?.length === 6 && byKey.M1?.min_train_per_class === 30, 'L4/L1/M1 配置正确', { L4: byKey.L4?.config, L1: byKey.L1?.default_classes, M1: byKey.M1?.min_train_per_class });
   check(byKey.P7?.kind === 'text' && byKey.P7?.engine === 'verify' && byKey.P7?.steps?.join(',') === 'material,claims,verdicts,revise,reflection', 'P7 为文本核验任务', byKey.P7);
 
@@ -480,6 +480,25 @@ async function runV2Flow(owner, { ownerToken, adminToken }) {
   if (!imagePack || !tablePack) throw new Error('缺少可用的预置包');
   const imageShiftSets = Object.keys(imagePack.counts.shift);
   const imageClassCount = imagePack.classes.length;
+
+  step('导入图像预置包：只选部分类别（class_keys）');
+  res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '两样东西', task_key: 'L1' } });
+  check(res.status === 201 && res.body.data?.dataset?.classes?.length === 2, 'L1 项目带 2 个占位类别', res.body.data?.dataset?.classes);
+  const l1Project = res.body.data.project;
+  const l1Dataset = res.body.data.dataset;
+  created.projectIds.push(l1Project.id);
+  const twoKeys = imagePack.classes.slice(0, 2).map(c => c.key);
+  res = await api('POST', `/api/ai-lab/datasets/${l1Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 2, class_keys: twoKeys, shift_sets: [] } });
+  check(res.status === 201 && res.body.data?.imported?.train === 4, 'class_keys 只导入 2 类 × per_class=2 = 4 张', res.body.data?.imported);
+  check(res.body.data?.dataset?.classes?.map(c => c.key).join() === twoKeys.join(), '空数据集的占位类别被换成所选的 2 类（不合并占位类别）', res.body.data?.dataset?.classes);
+  res = await api('POST', `/api/ai-lab/datasets/${l1Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, class_keys: ['no-such-class'] } });
+  check(res.status === 400, 'class_keys 含包里没有的类别返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${l1Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, class_keys: 'apple' } });
+  check(res.status === 400, 'class_keys 不是数组返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${l1Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, class_keys: [] } });
+  check(res.status === 400, 'class_keys 为空数组返回 400', res.status);
+  res = await api('POST', `/api/ai-lab/datasets/${l1Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: imageKey, per_class: 1, class_keys: [imagePack.classes[2].key], shift_sets: [] } });
+  check(res.status === 201 && res.body.data?.dataset?.classes?.length === 3, '非空数据集再导入第 3 类：按 key 合并为 3 类', res.body.data?.dataset?.classes);
 
   step('导入图像预置包（per_class / 去重 / kind 冲突）');
   res = await api('POST', '/api/ai-lab/projects', { token: ownerToken, body: { title: '多少张够用', task_key: 'L4' } });
@@ -878,7 +897,7 @@ async function runV3Flow(owner, { ownerToken, adminToken }) {
   const p6Dataset = res.body.data.dataset;
   created.projectIds.push(p6Project.id);
   res = await api('POST', `/api/ai-lab/datasets/${p6Dataset.id}/import-preset`, { token: ownerToken, body: { pack_key: temp.audioKey, per_class: 2 } });
-  check(res.status === 201 && res.body.data?.imported?.train === 4 && res.body.data?.imported?.shift?.['换音高'] === 2 && res.body.data?.dataset?.classes?.length === 7, '临时音频包导入 per_class=2：train 4 / shift 2，类别合并为 7', res.body.data);
+  check(res.status === 201 && res.body.data?.imported?.train === 4 && res.body.data?.imported?.shift?.['换音高'] === 2 && res.body.data?.dataset?.classes?.length === 2, '临时音频包导入 per_class=2：train 4 / shift 2，空数据集的占位类别被包里的 2 类替换', res.body.data);
   res = await api('GET', `/api/ai-lab/datasets/${p6Dataset.id}/samples`, { token: ownerToken });
   const presetAudio = res.body.data || [];
   const presetTrain = presetAudio.filter(s => s.split === 'train');
@@ -902,7 +921,7 @@ async function runV3Flow(owner, { ownerToken, adminToken }) {
     res = await api('GET', `/api/ai-lab/datasets/${p6Dataset.id}/samples?split=train`, { token: ownerToken });
     const synth = (res.body.data || []).find(s => String(s.origin_ref || '').startsWith('sounds-synth:'));
     const synthSrc = synth ? fs.readFileSync(path.join(PRESETS_ROOT, 'sounds-synth', synth.origin_ref.split(':')[1])) : null;
-    check(synth && synth.file_path.endsWith('.wav') && synthSrc && synth.file_size === synthSrc.length && synth.duration_ms === null, 'sounds-synth 样本 .wav 原样复制、无 durations 时 duration_ms=null', synth);
+    check(synth && synth.file_path.endsWith('.wav') && synthSrc && synth.file_size === synthSrc.length && synth.duration_ms === 1000, 'sounds-synth 样本 .wav 原样复制、duration_ms 取 manifest.durations=1000', synth);
   }
 
   /* ---------------- 文本 ---------------- */

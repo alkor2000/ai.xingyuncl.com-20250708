@@ -22,18 +22,17 @@ const deserializeAny = (json) => {
   return deserializeTree(json)
 }
 
-const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
+const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'holdout' }) => {
   const { t } = useTranslation()
-  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent } = useAiLabStore()
+  const { fetchSamples, loadLiveModel, saveEvaluation, recordEvent, evalResults, setEvalResult } = useAiLabStore()
   const tableModels = useMemo(() => models.filter((m) => m.engine === 'table-rules' || m.engine === 'table-tree' || m.engine === 'table-mlp'), [models])
   const [modelId, setModelId] = useState(null)
   const [running, setRunning] = useState(null)
-  const [results, setResults] = useState({})
   const [shiftSet, setShiftSet] = useState(null)
   const [error, setError] = useState(null)
   const model = useMemo(() => tableModels.find((m) => m.id === modelId) || tableModels[tableModels.length - 1], [tableModels, modelId])
+  const results = (model && evalResults[model.id]) || {}
   useEffect(() => { if (model && modelId !== model.id) setModelId(model.id) }, [model, modelId])
-  useEffect(() => { setResults({}) }, [modelId])
   /* 训练出新版本后自动切到最新版，学生接着测的就是刚训练的那一版 */
   useEffect(() => { const latest = tableModels[tableModels.length - 1]; if (latest) setModelId(latest.id) }, [tableModels.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const shiftSets = useMemo(() => Object.keys(dataset?.counts?.shift || {}), [dataset])
@@ -76,7 +75,7 @@ const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
       const errors = predictions.filter((p) => p.actual !== p.predicted).slice(0, 200).map(({ id, actual, predicted, confidence }) => ({ sample_id: id, actual, predicted, confidence }))
       await saveEvaluation(model.id, { split, shift_set: split === 'shift' ? setName : undefined, sample_count: predictions.length, metrics, errors })
       recordEvent('test.run', { model_id: model.id, version: model.version, engine: model.engine, split, shift_set: split === 'shift' ? setName : undefined, sample_count: predictions.length, accuracy: metrics.accuracy, error_count: errors.length })
-      setResults((prev) => ({ ...prev, [split === 'holdout' ? 'holdout' : `shift:${setName}`]: { metrics, predictions } }))
+      setEvalResult(model.id, split === 'holdout' ? 'holdout' : `shift:${setName}`, { metrics, predictions })
     } catch (err) {
       console.error('table evaluation failed:', err)
       setError(err.message)
@@ -127,6 +126,7 @@ const TableEvaluatePanel = ({ dataset, models, labelOf, canEdit }) => {
       </Space>
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
       <Tabs
+        defaultActiveKey={defaultTab}
         items={[
           {
             key: 'holdout',

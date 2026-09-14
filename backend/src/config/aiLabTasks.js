@@ -7,12 +7,12 @@
  *                          audio-knn | text-nb | verify（P7/L5 资讯核验，不训练模型）
  * - default_classes        创建项目时自动建的数据集类别（空数组表示由学生自定或由预置包导入）
  * - min_train_per_class    建议每类至少采集的训练样本数
- * - holdout_ratio          lock 时默认的留出比例
+ * - holdout_ratio          lock 时默认的留出比例（前端锁定时按此值；L4 留 40%、L3 留 30%，测试集大一点曲线/错标效应才稳）
  * - suggested_shift_sets   建议的"换条件"测试集
  * - steps                  学习步骤顺序（前端按此渲染流程）
  * - abilities              对应的核心素养标签
  * - presets                推荐的预置数据包 key（见 backend/presets/ai-lab/<key>/manifest.json）
- * - config                 任务自由配置（如 mislabel_ratio、per_class_limits、max_depth_options）
+ * - config                 任务自由配置（如 mislabel_ratio、per_class_limits、max_depth_options、preset_class_count 导入预置包时默认只选前 n 类）
  *
  * 另导出过程事件类型白名单 AI_LAB_EVENT_TYPES（POST /projects/:id/events 校验）、
  * 训练引擎白名单 AI_LAB_ENGINES（POST /projects/:id/models 校验）、数据集类型 AI_LAB_DATASET_KINDS，
@@ -45,8 +45,8 @@ const AI_LAB_TASKS = [
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'model_card'],
     abilities: ['intent', 'critical', 'externalize'],
-    presets: ['shapes', 'fruits-mini'],
-    config: {}
+    presets: ['shapes', 'flowers'],
+    config: { preset_class_count: 2 }
   },
   {
     key: 'L2',
@@ -82,12 +82,12 @@ const AI_LAB_TASKS = [
     hours: 1,
     default_classes: [],
     min_train_per_class: 10,
-    holdout_ratio: 0.2,
+    holdout_ratio: 0.3,
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'import_preset', 'lock', 'train', 'test_holdout', 'mislabel', 'train', 'test_holdout', 'errors', 'restore', 'iterate', 'model_card'],
     abilities: ['critical', 'pattern', 'externalize'],
-    presets: ['fruits-mini', 'shapes'],
-    config: { mislabel_ratio: 0.2 }
+    presets: ['flowers', 'fruits-varied'],
+    config: { mislabel_ratio: 0.4 }
   },
   {
     key: 'L4',
@@ -99,11 +99,11 @@ const AI_LAB_TASKS = [
     hours: 1,
     default_classes: [],
     min_train_per_class: 3,
-    holdout_ratio: 0.2,
+    holdout_ratio: 0.4,
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'import_preset', 'lock', 'train', 'test_holdout', 'iterate', 'model_card'],
     abilities: ['pattern', 'iterate', 'metacognition'],
-    presets: ['shapes', 'fruits-mini'],
+    presets: ['flowers', 'fruits-varied', 'shapes'],
     config: { per_class_limits: [3, 10, 30] }
   },
   {
@@ -274,7 +274,7 @@ const AI_LAB_TASKS = [
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
     abilities: ['intent', 'critical'],
-    presets: ['fruits-mini', 'shapes'],
+    presets: ['fruits-varied', 'shapes'],
     config: {}
   },
   {
@@ -296,7 +296,7 @@ const AI_LAB_TASKS = [
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'collect', 'condition_design', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
     abilities: ['critical', 'iterate'],
-    presets: ['fruits-mini', 'shapes'],
+    presets: ['flowers', 'fruits-varied'],
     config: {}
   },
   {
@@ -373,7 +373,7 @@ const AI_LAB_TASKS = [
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['collect', 'lock', 'train', 'test_holdout', 'test_shift', 'errors', 'iterate', 'model_card'],
     abilities: ['intent', 'critical', 'iterate'],
-    presets: ['fruits-mini', 'shapes'],
+    presets: ['flowers', 'fruits-varied', 'shapes'],
     /* free 的数据集 kind 允许由首次导入的预置包决定（空数据集导入时以包的 kind 覆盖） */
     config: { kind_by_first_import: true }
   }

@@ -151,3 +151,18 @@
   &.pro { background: #e3f1ea; color: #2c7a5a; } &.con { background: #fbefe3; color: #b0540e; }
 }
 .ailab-fairness { margin: 12px 0; }
+
+// 一步一步视图（步骤卡向导）
+.ailab-section-check { color: #2c7a5a; margin-left: 8px; }
+.ailab-wizard-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px 16px;
+  .ailab-wizard-progress { width: 180px; margin: 0; }
+}
+.ailab-wizard-card { box-shadow: 0 4px 16px rgba(30, 76, 138, 0.08);
+  .ant-card-head-title { font-size: 16px; }
+  .ant-card-body { padding: 20px 24px; }
+}
+.ailab-wizard-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; position: sticky; bottom: 12px; z-index: 5; }
+@media (max-width: 900px) {
+  .ailab-wizard-bar .ailab-wizard-progress { width: 100px; }
+  .ailab-wizard-card .ant-card-body { padding: 14px 16px; }
+}

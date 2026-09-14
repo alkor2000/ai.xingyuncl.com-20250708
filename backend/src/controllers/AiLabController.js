@@ -701,7 +701,7 @@ const getPresets = async (req, res) => {
   }
 };
 
-/** POST /datasets/:id/import-preset {pack_key, per_class?, shift_sets?, include_train?=true} */
+/** POST /datasets/:id/import-preset {pack_key, per_class?, shift_sets?, include_train?=true, class_keys?} */
 const importPreset = async (req, res) => {
   try {
     const resolved = await resolveDataset(req, res, req.params.id, { write: true });
@@ -737,8 +737,21 @@ const importPreset = async (req, res) => {
     }
     if (!includeTrain && shiftSets.length === 0) return badRequest(res, '没有要导入的内容（include_train=false 且 shift_sets 为空）');
 
+    /* 只导入部分类别（低年级两类入门）；缺省导入全部类别 */
+    let classKeys = null;
+    if (req.body.class_keys !== undefined && req.body.class_keys !== null) {
+      if (!Array.isArray(req.body.class_keys)) return badRequest(res, 'class_keys 必须是数组');
+      classKeys = [];
+      for (const raw of req.body.class_keys) {
+        const key = cleanString(raw);
+        if (!key || !pack.classes.some(cls => cls.key === key)) return badRequest(res, `预置包 ${packKey} 没有类别: ${raw}`);
+        if (!classKeys.includes(key)) classKeys.push(key);
+      }
+      if (classKeys.length === 0) return badRequest(res, 'class_keys 不能为空');
+    }
+
     const result = await AiLabPresetService.importPack({
-      userId: req.user.id, dataset, pack, perClass, shiftSets, includeTrain
+      userId: req.user.id, dataset, pack, perClass, shiftSets, includeTrain, classKeys
     });
     await AiLabService.recalcProjectSummary(project.id);
 

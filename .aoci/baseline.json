@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-14T05:59:57Z",
+  "updated_at": "2026-09-14T09:11:04Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "65fc52b3cad38a90d3892cdbdf2b2681a563e5021e726005784008deff478bc8",
-      "size": 277428,
-      "normalized_sha256": "65fc52b3cad38a90d3892cdbdf2b2681a563e5021e726005784008deff478bc8"
+      "sha256": "33c9b544076541332a41206e1e4112762eb612fc63055b0a20e448fb3f71d974",
+      "size": 278101,
+      "normalized_sha256": "33c9b544076541332a41206e1e4112762eb612fc63055b0a20e448fb3f71d974"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -163,9 +163,9 @@
       "normalized_sha256": "0df614e9163cc33933b20f863f99136a71995640280dd2272b975a090f497cf8"
     },
     "backend/scripts/ai-lab-smoke.cjs": {
-      "sha256": "bc7f4c8cdef1a9e192e6b0531e5c9f9cfe5a4e6a3050645a12d2de78eb98d166",
-      "size": 94864,
-      "normalized_sha256": "bc7f4c8cdef1a9e192e6b0531e5c9f9cfe5a4e6a3050645a12d2de78eb98d166"
+      "sha256": "744cecf119b5613ae649037d2ef337372ce2d529329308808efd94ee039b9411",
+      "size": 97064,
+      "normalized_sha256": "744cecf119b5613ae649037d2ef337372ce2d529329308808efd94ee039b9411"
     },
     "backend/scripts/db_backup.sh": {
       "role": "index",
@@ -455,9 +455,9 @@
       "normalized_sha256": "5a43ce8846e2f18ce7eb02616418535bd49a0684bed20a8d99bd6e34e34b4164"
     },
     "backend/src/config/aiLabTasks.js": {
-      "sha256": "8cec8a7149e3fda9b3689def112cba59d00386bc8f215c51397885307dd32800",
-      "size": 15324,
-      "normalized_sha256": "8cec8a7149e3fda9b3689def112cba59d00386bc8f215c51397885307dd32800"
+      "sha256": "c8c01ad360274669e97d0654d8e0639db04946ebb78948952879c9f04f019c77",
+      "size": 15540,
+      "normalized_sha256": "c8c01ad360274669e97d0654d8e0639db04946ebb78948952879c9f04f019c77"
     },
     "backend/src/config/casbin/teaching_model.conf": {
       "role": "index",
@@ -495,9 +495,9 @@
       "normalized_sha256": "080b9f141704099304cd519847902985fb1349c6fcb6c4c312e037cafd5a404f"
     },
     "backend/src/controllers/AiLabController.js": {
-      "sha256": "cf44d26011ae2cae910ec7762b0f57c3afae93780c06dd5dac777d0b8fab870b",
-      "size": 49581,
-      "normalized_sha256": "cf44d26011ae2cae910ec7762b0f57c3afae93780c06dd5dac777d0b8fab870b"
+      "sha256": "ab80b79dd020459dae771a5f74f0c28bf1fbcde16a98e0eb23bf8d8936ba61c5",
+      "size": 50294,
+      "normalized_sha256": "ab80b79dd020459dae771a5f74f0c28bf1fbcde16a98e0eb23bf8d8936ba61c5"
     },
     "backend/src/controllers/AuthControllerRefactored.js": {
       "role": "index",
@@ -1515,9 +1515,9 @@
       "normalized_sha256": "f8a7a91c43b1f3cd56d683b67fc3ef9946ab9186cd6be729ab669020af56d78c"
     },
     "backend/src/services/aiLab/AiLabPresetService.js": {
-      "sha256": "7624a42d4413f08e9b8b55623e428d4a153af8f56f03468dd907b8edb21bbd3b",
-      "size": 23076,
-      "normalized_sha256": "7624a42d4413f08e9b8b55623e428d4a153af8f56f03468dd907b8edb21bbd3b"
+      "sha256": "1f2b4d59830825a3cbf2817ecf376cbf447cf232b4a7c70d6878021a3113804c",
+      "size": 23812,
+      "normalized_sha256": "1f2b4d59830825a3cbf2817ecf376cbf447cf232b4a7c70d6878021a3113804c"
     },
     "backend/src/services/aiLab/AiLabService.js": {
       "sha256": "f5c5e4bd883cfb695de92a2b4807540cfed9f60215837c65bb21dde60a0c8de8",
@@ -1970,9 +1970,9 @@
       "normalized_sha256": "7fb4de8eeb5a8025cfdf1d0cf13d1a8854f65589b9292b3cc3d53dcbe92454ae"
     },
     "docs/ai-lab/README.md": {
-      "sha256": "25d7510a0f650b6be5ae72bc0ee8b6f8d5e3ec034d4dbbb9a80ae5e26da7578d",
-      "size": 8439,
-      "normalized_sha256": "25d7510a0f650b6be5ae72bc0ee8b6f8d5e3ec034d4dbbb9a80ae5e26da7578d"
+      "sha256": "be48246234ceb6b176d6562902e74cdaf53c8d57b471968657763720a33df8e9",
+      "size": 9705,
+      "normalized_sha256": "be48246234ceb6b176d6562902e74cdaf53c8d57b471968657763720a33df8e9"
     },
     "docs/docker-deploy-guide.md": {
       "role": "index",
@@ -2928,9 +2928,9 @@
       "normalized_sha256": "2823f49bbab7f23aedc672de728797cd679eb307c74daa146b6d7e0f81a654de"
     },
     "frontend/src/locales/en-US/aiLab.json": {
-      "sha256": "ef7e38acb800ee04e6284e591c6440a87fd9a903e4055a9fea52944364a218ae",
-      "size": 37557,
-      "normalized_sha256": "ef7e38acb800ee04e6284e591c6440a87fd9a903e4055a9fea52944364a218ae"
+      "sha256": "0f47117330b687d442774a247be24ac41234231bb61f3a270798311f62f0df4d",
+      "size": 38553,
+      "normalized_sha256": "0f47117330b687d442774a247be24ac41234231bb61f3a270798311f62f0df4d"
     },
     "frontend/src/locales/en-US/auth.json": {
       "role": "index",
@@ -3041,9 +3041,9 @@
       "normalized_sha256": "5a87d728f976f7bcce8a3dabff2eac84823acd823c3a570f8a2126723be479fb"
     },
     "frontend/src/locales/zh-CN/aiLab.json": {
-      "sha256": "f5b82509c21789f3ff150ef6b3d60576e6ff23c6ddb4702308d08b68dded1100",
-      "size": 36428,
-      "normalized_sha256": "f5b82509c21789f3ff150ef6b3d60576e6ff23c6ddb4702308d08b68dded1100"
+      "sha256": "cc0277eaf44ca58545f2f231bf1b52bbee86df983ad5f185735d227458b49046",
+      "size": 37449,
+      "normalized_sha256": "cc0277eaf44ca58545f2f231bf1b52bbee86df983ad5f185735d227458b49046"
     },
     "frontend/src/locales/zh-CN/auth.json": {
       "role": "index",
@@ -3304,14 +3304,14 @@
       "normalized_sha256": "b6591af4a8fa88102920e5ddefee576ff223932bbe0c96612a28cb56f3ac59e5"
     },
     "frontend/src/pages/aiLab/AiLab.less": {
-      "sha256": "a23a4925e868e05a6a1298e0b5f1f8f14150bc42c875315b0fb997ab0804777f",
-      "size": 11986,
-      "normalized_sha256": "a23a4925e868e05a6a1298e0b5f1f8f14150bc42c875315b0fb997ab0804777f"
+      "sha256": "73b7b40605d27bff9ca62df14b465f18787302decbf806067e8d0d0ea62d161b",
+      "size": 12851,
+      "normalized_sha256": "73b7b40605d27bff9ca62df14b465f18787302decbf806067e8d0d0ea62d161b"
     },
     "frontend/src/pages/aiLab/ProjectWorkspace.jsx": {
-      "sha256": "3bd2b118cfe914f5c49f7f55fcb41defa0018f277d5d3b82c38388b7bad69014",
-      "size": 21403,
-      "normalized_sha256": "3bd2b118cfe914f5c49f7f55fcb41defa0018f277d5d3b82c38388b7bad69014"
+      "sha256": "8c3ba310710a9799ec793cca3da8cd2548d360881aff81f50907be15407d3937",
+      "size": 27708,
+      "normalized_sha256": "8c3ba310710a9799ec793cca3da8cd2548d360881aff81f50907be15407d3937"
     },
     "frontend/src/pages/aiLab/components/AnnotationPanel.jsx": {
       "sha256": "802bd288d3ca0e72bfe690d23f0da06db1587cc7d375a96e9300f0f7ac469dd5",
@@ -3374,9 +3374,9 @@
       "normalized_sha256": "4c2ba641756ec8ee0bd0c13edd5cf9c6b6418b84f34dbb2c5f587379da984006"
     },
     "frontend/src/pages/aiLab/components/EvaluatePanel.jsx": {
-      "sha256": "d10e7074ece9fa58c79f6cd1355eb6f2552c5bdfc95114be64e0a393cc3e294d",
-      "size": 10730,
-      "normalized_sha256": "d10e7074ece9fa58c79f6cd1355eb6f2552c5bdfc95114be64e0a393cc3e294d"
+      "sha256": "46d8b1014e6c135992bc4a282afb59b94fb6f413111fc2fe9a8727f893ab29ff",
+      "size": 10736,
+      "normalized_sha256": "46d8b1014e6c135992bc4a282afb59b94fb6f413111fc2fe9a8727f893ab29ff"
     },
     "frontend/src/pages/aiLab/components/HeatmapOverlay.jsx": {
       "role": "index",
@@ -3385,9 +3385,9 @@
       "normalized_sha256": "23ebfce4c433fae578594fb59ed41d23202fa91b9bf7a8e24e1d16b3caecdbfb"
     },
     "frontend/src/pages/aiLab/components/ImportPresetModal.jsx": {
-      "sha256": "ada1e4a04b8eac26493e78f88f5bda83442651f2496b9e8f1bc2cf9afa460a1a",
-      "size": 6528,
-      "normalized_sha256": "ada1e4a04b8eac26493e78f88f5bda83442651f2496b9e8f1bc2cf9afa460a1a"
+      "sha256": "fc96659a0ca2f11aa7f5f3302b41dce93b9a58935c444b1deca76870a9c8fbf3",
+      "size": 7768,
+      "normalized_sha256": "fc96659a0ca2f11aa7f5f3302b41dce93b9a58935c444b1deca76870a9c8fbf3"
     },
     "frontend/src/pages/aiLab/components/LossCurve.jsx": {
       "sha256": "b5b664089e2277bbd86700778ac5360e0570b8197e4dbf1ece92d394cb964c8c",
@@ -3452,9 +3452,9 @@
       "normalized_sha256": "42bcb1184f6dcd9f3779aa2edc316ac61150d26954030ce3f7b234eb6578018f"
     },
     "frontend/src/pages/aiLab/components/TableEvaluatePanel.jsx": {
-      "sha256": "dfd120e843e5a42b12c6358551905b244f5070d899ad670f70f0c4077d7ea9a7",
-      "size": 10370,
-      "normalized_sha256": "dfd120e843e5a42b12c6358551905b244f5070d899ad670f70f0c4077d7ea9a7"
+      "sha256": "5869a477e0e981ee43f1f41559a808b2308db1ce153482b5574a6609f9f32b3b",
+      "size": 10409,
+      "normalized_sha256": "5869a477e0e981ee43f1f41559a808b2308db1ce153482b5574a6609f9f32b3b"
     },
     "frontend/src/pages/aiLab/components/TablePanel.jsx": {
       "sha256": "1cfb12f14655bccb10a42984c96456265de419955f24d1277536b6cac8c631ec",
@@ -3462,9 +3462,9 @@
       "normalized_sha256": "1cfb12f14655bccb10a42984c96456265de419955f24d1277536b6cac8c631ec"
     },
     "frontend/src/pages/aiLab/components/TextEvaluatePanel.jsx": {
-      "sha256": "8c91067a6fe9781a29300667de235942b00db0088e445e90ec2baf6e73492eaa",
-      "size": 8625,
-      "normalized_sha256": "8c91067a6fe9781a29300667de235942b00db0088e445e90ec2baf6e73492eaa"
+      "sha256": "3966be00d9d61ab9859242c868bc494946202f4c0a766c8cfc06278ab3822cc1",
+      "size": 8656,
+      "normalized_sha256": "3966be00d9d61ab9859242c868bc494946202f4c0a766c8cfc06278ab3822cc1"
     },
     "frontend/src/pages/aiLab/components/TextPanel.jsx": {
       "sha256": "2aa56a3d6cb191898955000fa83a009ddf2467c6b67bbe2c9267ae6448a8b03b",
@@ -4044,9 +4044,9 @@
       "normalized_sha256": "4e071a471a46fd9d7af96d7b162bf06ff32d9075b4b459f3bfafaaaedb336853"
     },
     "frontend/src/stores/aiLabStore.js": {
-      "sha256": "d2bbee6ee77b8b648a2d90b62a1abba6721cce275cdc71059ae18ed01641061f",
-      "size": 13352,
-      "normalized_sha256": "d2bbee6ee77b8b648a2d90b62a1abba6721cce275cdc71059ae18ed01641061f"
+      "sha256": "c92ba1551524261dd63eb4766a002e58a152f704638b7500fa3274ba55f609ae",
+      "size": 13802,
+      "normalized_sha256": "c92ba1551524261dd63eb4766a002e58a152f704638b7500fa3274ba55f609ae"
     },
     "frontend/src/stores/analyticsStore.js": {
       "role": "index",

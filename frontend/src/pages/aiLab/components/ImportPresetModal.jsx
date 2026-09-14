@@ -17,6 +17,7 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
   const [packKey, setPackKey] = useState(null)
   const [perClass, setPerClass] = useState('all')
   const [shiftSets, setShiftSets] = useState([])
+  const [classKeys, setClassKeys] = useState([])
   const [importing, setImporting] = useState(false)
 
   const targetKind = kind || dataset?.kind || 'image'
@@ -42,8 +43,17 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
     if (!packKey && candidates.length) setPackKey(candidates[0].key)
   }, [candidates, packKey])
   useEffect(() => {
-    if (pack) setShiftSets(Object.keys(pack.counts?.shift || {}))
+    if (!pack) return
+    setShiftSets(Object.keys(pack.counts?.shift || {}))
+    /* 模板可要求默认只选前 n 类（如低年级两类入门），否则全选 */
+    const keys = (pack.classes || []).map((c) => c.key)
+    const n = Number(task?.config?.preset_class_count)
+    setClassKeys(Number.isInteger(n) && n >= 2 && n < keys.length ? keys.slice(0, n) : keys)
+    // 只在换包时重置，不依赖 task
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack])
+  const allClasses = (pack?.classes || []).map((c) => c.key)
+  const partial = classKeys.length > 0 && classKeys.length < allClasses.length
 
   const packTitle = (p) => (i18n.exists(`aiLab.presetPack.${p.key}.title`) ? t(`aiLab.presetPack.${p.key}.title`) : p.title)
   const packDesc = (p) => (i18n.exists(`aiLab.presetPack.${p.key}.desc`) ? t(`aiLab.presetPack.${p.key}.desc`) : p.description)
@@ -54,9 +64,10 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
     try {
       const payload = { pack_key: pack.key, shift_sets: shiftSets }
       if ((targetKind === 'image' || targetKind === 'audio') && perClass !== 'all') payload.per_class = perClass
+      if (partial) payload.class_keys = classKeys
       const result = await importPreset(dataset.id, payload)
       const shiftTotal = Object.values(result?.imported?.shift || {}).reduce((a, b) => a + b, 0)
-      recordEvent('preset.import', { dataset_id: dataset.id, pack_key: pack.key, per_class: perClass === 'all' ? null : perClass, shift_sets: shiftSets, imported: result?.imported || null })
+      recordEvent('preset.import', { dataset_id: dataset.id, pack_key: pack.key, per_class: perClass === 'all' ? null : perClass, shift_sets: shiftSets, class_keys: partial ? classKeys : null, imported: result?.imported || null })
       message.success(t('aiLab.preset.imported', { train: result?.imported?.train ?? 0, shift: shiftTotal }))
       if (onImported) onImported(result)
       onClose()
@@ -79,7 +90,7 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
       okText={t('aiLab.preset.import')}
       cancelText={t('common.cancel')}
       confirmLoading={importing}
-      okButtonProps={{ disabled: !pack }}
+      okButtonProps={{ disabled: !pack || classKeys.length < 2 }}
       width={640}
     >
       {loading ? <div className="ailab-loading"><Spin /></div> : (
@@ -101,6 +112,14 @@ const ImportPresetModal = ({ open, onClose, dataset, task, kind, onImported }) =
           </Radio.Group>
           {pack && (
             <div className="ailab-preset-options">
+              {allClasses.length > 2 && (
+                <div className="ailab-field">
+                  <label>{t('aiLab.preset.classes')}</label>
+                  <Checkbox.Group value={classKeys} onChange={setClassKeys}
+                    options={(pack.classes || []).map((c) => ({ value: c.key, label: `${c.label} (${pack.counts?.train?.[c.key] || 0})` }))} />
+                  {classKeys.length < 2 && <div><Text type="warning">{t('aiLab.preset.classesMin')}</Text></div>}
+                </div>
+              )}
               {(targetKind === 'image' || targetKind === 'audio') && (
                 <div className="ailab-field">
                   <label>{t('aiLab.preset.perClass')}</label>

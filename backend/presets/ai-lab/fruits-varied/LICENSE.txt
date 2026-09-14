@@ -1,0 +1,10 @@
+Images from Fruits-360 (https://github.com/fruits-360/fruits-360-100x100), Mihai Oltean, licensed under CC BY-SA 4.0.
+Shifted-background variants are derivative works under the same license.
+
+Varieties used:
+apple: 训练 Apple Braeburn 1 / Apple Golden 1 / Apple Granny Smith 1 / Apple Red 1 / Apple Pink Lady 1 / Apple Golden 3；换品种 Apple Red Delicious 1 / Apple Crimson Snow 1
+banana: 训练 Banana 1 / Banana 3 / Banana Lady Finger 1；换品种 Banana 4 / Banana Red 1
+cherry: 训练 Cherry 1 / Cherry 2 / Cherry Wax Red 1；换品种 Cherry 5 / Cherry Rainier 1
+grape: 训练 Grape Blue 1 / Grape White 1 / Grape Pink 1；换品种 Grape White 3 / Grape 1
+orange: 训练 Orange 1 / Orange 2；换品种 Orange 3
+peach: 训练 Peach 1 / Peach 2；换品种 Peach 3 / Peach 4

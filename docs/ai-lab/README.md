@@ -6,8 +6,8 @@
 | 键 | 学段 | 类型 / 引擎 | 一句话 |
 |---|---|---|---|
 | L1 它能分清我的两样东西吗 | 小学 | 图像 / image-knn | 两类各 10 张，留出集 + 换条件集考它 |
-| L3 给 AI 喂错数据会怎样 | 小学 | 图像 / image-knn | 干净版 → 混入 20% 错标再训一版 → 揭晓 → 恢复 |
-| L4 多少张够用 | 小学 | 图像 / image-knn | 每类 3 / 10 / 30 张各训一版，看样本量–准确率曲线 |
+| L3 给 AI 喂错数据会怎样 | 小学 | 图像 / image-knn | 干净版 → 混入 40% 错标再训一版 → 揭晓 → 恢复（留出 30%；kNN 对 20% 错标几乎无感，40% 才看得见） |
+| L4 多少张够用 | 小学 | 图像 / image-knn | 每类 3 / 10 / 30 张各训一版，看样本量–准确率曲线（留出 40%，测试集大一点曲线才稳） |
 | M1 校园侦探 | 高中 | 图像 / image-knn | 数据卡 → 六类各 30 张 → 完整流程 |
 | P1 模型认的是物体还是背景 | 初中 | 图像 / image-knn | 同背景训练，换背景测试 |
 | P2 换一个环境还能识别吗 | 初中 | 图像 / image-knn | 自设测试条件表，预计 vs 实测 |
@@ -26,16 +26,16 @@
 模板字段：`kind`（image / table / audio / text）、`engine`、`steps`（工作台按此渲染，重复步骤前端去重）、`presets`（推荐预置包）、`config`（`mislabel_ratio`、`per_class_limits`、`max_depth_options`）。
 
 ## 结构
-- 前端页面 `frontend/src/pages/aiLab/`：`AiLab.jsx` 列表与新建（按学段分组的任务卡）；`ProjectWorkspace.jsx` 工作台，按 `kind` 切换面板：图像用 DatasetPanel / CapturePanel / TrainPanel / EvaluatePanel，表格用 TablePanel / RuleEditor / TreeTrainPanel / TableEvaluatePanel，文本用 VerifyWorkspace；附加步骤 ImportPresetModal（导入预置包）、MislabelPanel（错标/恢复）、DataCardForm（数据卡）、SampleCurve（样本量曲线）。
+- 前端页面 `frontend/src/pages/aiLab/`：`AiLab.jsx` 列表与新建（按学段分组的任务卡）；`ProjectWorkspace.jsx` 工作台（默认"一步一步"视图：一次只展开一张步骤卡，底部上一步/下一步，左侧步骤栏可跳步，过程时间线收进抽屉；换条件测试/错误分析/分组准确率这几步直接把测试面板放进卡片并默认切到对应标签页；`?view=all` 或右上角切换到"全部展开"，选择记在 localStorage `ailab.viewMode`；评测结果放在 store 的 `evalResults`，跨步骤复用），按 `kind` 切换面板：图像用 DatasetPanel / CapturePanel / TrainPanel / EvaluatePanel，表格用 TablePanel / RuleEditor / TreeTrainPanel / TableEvaluatePanel，文本用 VerifyWorkspace；附加步骤 ImportPresetModal（导入预置包）、MislabelPanel（错标/恢复）、DataCardForm（数据卡）、SampleCurve（样本量曲线）。
 - 浏览器内引擎 `frontend/src/pages/aiLab/engine/`：`audio/spectrogram.js`（WAV → 44.1kHz 单声道 → OfflineAudioContext+AnalyserNode 取 43×232 dB 频谱图，参数与 speech-commands 一致）、`audio/audioFeatureExtractor.js`（自托管 speech-commands 18w 层模型截到 dense_1，2000 维嵌入）、`audio/recorder.js`（麦克风 1 秒录音 → WAV）、`text/tokenize.js`（单字+双字）、`text/naiveBayes.js`（多项式 NB + 逐词解释）、`text/agreement.js`（Cohen's kappa）、`tabular/mlp.js`（TF.js 单隐层 MLP，损失曲线，权重序列化）、`modalities.js`（图像/声音共用训练与测试面板的适配层）；`featureExtractor.js`（自托管 MobileNet v1 0.5，截到全局平均池化层，512 维嵌入）、`knn.js`（余弦 kNN）、`metrics.js`、`occlusion.js`（遮挡热图）、`tabular/decisionTree.js`（CART 基尼决策树，可展开成规则）、`tabular/rules.js`（手写规则求值与校验）、`tabular/stats.js`（各类范围、散点范围）。
 - 状态 `frontend/src/stores/aiLabStore.js`：项目/数据集/样本/模型/评测读写，预置包导入、表格加行、错标/恢复，过程事件 2 秒合并上报。
 - 模型权重 `frontend/public/models/mobilenet_v1_050_224/`（约 5MB）与 `speech_commands_18w/`（约 5.7MB），都不走外网。
 - 后端：`routes/aiLabRoutes.js`、`controllers/AiLabController.js`、`services/aiLab/`（AiLabService、AiLabPresetService、presetPacks、splitHoldout、mislabel）、迁移 `20260913_001_create_ai_lab_tables.js`（六张表 + 系统模块登记）与 `20260914_001_ai_lab_tabular_presets.js`（datasets.kind/columns，samples.payload/original_class_key/origin_ref，file_path 允许 NULL）。
-- 预置数据包 `backend/presets/ai-lab/<key>/manifest.json`：sounds-synth（合成哨音/敲击/沙沙声 WAV，换条件集叠加噪声/换音高）、campus-messages（原创校园留言 150+45 句，三类情绪）、animal-cards / garbage-cards（属性卡表格，`text` 列是名字不参与训练）、fruits-mini（Fruits-360 六类，CC BY-SA 4.0，换条件集由平台合成彩色/深色背景）、shapes（合成三类图形，CC0）、campus-items（合成校园物品属性表，CC0）、penguins（palmerpenguins，CC0，2009 年为换条件集）、iris（UCI，CC BY 4.0）。接口 `GET /presets`、`POST /datasets/:id/import-preset`；图片经 sharp 规范后复制到学生的 uploads 目录，`source='preset'`，按 `origin_ref` 去重。
+- 预置数据包 `backend/presets/ai-lab/<key>/manifest.json`：sounds-synth（合成哨音/敲击/拍手/沙沙声四类 22.05kHz WAV，音色参数随机；换条件集叠加噪声/换音色/换设备）、campus-messages（原创校园留言 150+45 句，三类情绪）、animal-cards / garbage-cards（属性卡表格，`text` 列是名字不参与训练）、flowers（tf_flowers 五类自然照片各 50 张，CC BY 2.0 逐张署名；换条件集模糊/暗光/局部放大；"真实数据"的那一个，留一法 72%，L3/L4 默认用它）、fruits-varied（Fruits-360 六类，每类混合多品种，CC BY-SA 4.0；换条件集"换品种"是训练没见过的品种 55%，彩色/深色背景由平台合成）、shapes（合成三类图形 v2：实心/空心、歪扭、干扰点，手绘换条件集，CC0）、campus-items（合成校园物品属性表，CC0）、penguins（palmerpenguins，CC0，2009 年为换条件集）、iris（UCI，CC BY 4.0）。接口 `GET /presets`、`POST /datasets/:id/import-preset`（`class_keys` 只导入部分类别，模板 `config.preset_class_count` 让弹窗默认只勾前 n 类；空数据集导入时模板的占位类别被包里的类别替换）；各包的区分度数值见 `backend/presets/ai-lab/README.md`；图片经 sharp 规范后复制到学生的 uploads 目录，`source='preset'`，按 `origin_ref` 去重。
 
 ## 三集制
 - 训练集：学生自采（摄像头连拍或上传）、手工加行，或预置包导入；样本带采集条件标签与来源。
-- 留出测试集：`POST /datasets/:id/lock` 在训练前按类别随机留出 20%（确定性种子），训练页不显示这些样本/行。
+- 留出测试集：`POST /datasets/:id/lock` 在训练前按类别随机留出模板 `holdout_ratio`（默认 20%，L3 30%、L4 40%；确定性种子），训练页不显示这些样本/行。
 - 换条件集：`split='shift'` + `shift_set` 名称；同分布准确率减去最差换条件准确率 = 泛化差距。表格包的换条件集是来源不同的另一批行（另一所学校、另一年）。
 
 ## 表格实验（P3）
@@ -53,7 +53,7 @@
 2. 后端迁移：`cd backend && npx knex migrate:latest`（本地 practice-mysql :3307）；生产走 `make migrate`。
 3. 登录后左侧菜单出现"AI训练专区"（系统模块 `ai_lab`，`allowed_groups` 为空即全员可见）。
 4. 训练在浏览器里跑：Chrome 内核建议 100+；无摄像头的机器用预置包或"上传图片"。
-5. 自测：`cd backend && node scripts/ai-lab-smoke.cjs`（144 项）；`cd frontend && npx vitest run src/__tests__/unit/aiLab`。
+5. 自测：`cd backend && node scripts/ai-lab-smoke.cjs`（245 项）；`npx jest src/__tests__/unit/services/aiLab`（56 项）；`cd frontend && npx vitest run src/__tests__/unit/aiLab`。
 
 ## 已知限制
 - 声音引擎只做 1 秒短音分类（speech-commands 特征），没有连续识别；P4/P5（聚类、推荐模拟）与 H 段实验未做；M4 没有预置中文关键词包，需自采。

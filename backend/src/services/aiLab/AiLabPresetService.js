@@ -288,14 +288,21 @@ class AiLabPresetService {
    * 导入
    * ================================================================ */
 
+  /** 只导入包里的部分类别（如低年级两类入门）；classKeys 为空则全部 */
+  static pickClasses(pack, classKeys) {
+    if (!Array.isArray(classKeys) || classKeys.length === 0) return pack.classes;
+    return pack.classes.filter(cls => classKeys.includes(cls.key));
+  }
+
   /**
    * 计算要导入的条目（未去重）
    * @returns {Array<{split:string, shift_set:string|null, class_key:string, ref:string, rel?:string, payload?:Object, condition_tags:Object|null}>}
    */
-  static planItems(pack, { perClass, shiftSets, includeTrain }) {
+  static planItems(pack, { perClass, shiftSets, includeTrain, classKeys = null }) {
     const items = [];
+    const classes = AiLabPresetService.pickClasses(pack, classKeys);
     const pushGroup = (split, shiftSet, tags) => {
-      pack.classes.forEach(cls => {
+      classes.forEach(cls => {
         if (!packUsesRows(pack.kind)) {
           const group = split === 'train' ? pack.files.train : (pack.files.shift[shiftSet] || {});
           selectPerClass(group[cls.key] || [], perClass).forEach(rel => {
@@ -417,10 +424,10 @@ class AiLabPresetService {
 
   /**
    * 导入包到数据集
-   * @param {Object} params - { userId, dataset, pack, perClass, shiftSets, includeTrain }
+   * @param {Object} params - { userId, dataset, pack, perClass, shiftSets, includeTrain, classKeys }
    * @returns {{imported:{train:number, shift:Object}, skipped:{train:number, shift:Object}, dataset:Object}}
    */
-  static async importPack({ userId, dataset, pack, perClass = null, shiftSets = [], includeTrain = true }) {
+  static async importPack({ userId, dataset, pack, perClass = null, shiftSets = [], includeTrain = true, classKeys = null }) {
     /* 1. kind 与 columns / classes 的变更 */
     const datasetUpdates = {};
     let columns = Array.isArray(dataset.columns) ? dataset.columns : [];
@@ -443,11 +450,15 @@ class AiLabPresetService {
       columns = AiLabDataset.TEXT_COLUMNS.map(col => ({ ...col }));
       datasetUpdates.columns = columns;
     }
-    const mergedClasses = AiLabService.mergeByKey(dataset.classes, pack.classes);
-    if (mergedClasses.length !== dataset.classes.length) datasetUpdates.classes = mergedClasses;
+    /* 空数据集：模板带的占位类别（物品A/物品B…）直接换成包里的类别；已有样本则按 key 合并 */
+    const packClasses = AiLabPresetService.pickClasses(pack, classKeys);
+    const mergedClasses = (dataset.sample_count || 0) === 0
+      ? packClasses.map(cls => ({ ...cls }))
+      : AiLabService.mergeByKey(dataset.classes, packClasses);
+    if (JSON.stringify(mergedClasses) !== JSON.stringify(dataset.classes)) datasetUpdates.classes = mergedClasses;
 
     /* 2. 计划 + 去重 */
-    const planned = AiLabPresetService.planItems(pack, { perClass, shiftSets, includeTrain });
+    const planned = AiLabPresetService.planItems(pack, { perClass, shiftSets, includeTrain, classKeys });
     const existingRefs = await AiLabSample.findOriginRefs(dataset.id);
     const imported = { train: 0, shift: {} };
     const skipped = { train: 0, shift: {} };
@@ -522,7 +533,7 @@ class AiLabPresetService {
     updated.counts = await AiLabDataset.getCounts(updated.id, updated.classes);
 
     logger.info('导入预置数据包', {
-      datasetId: dataset.id, userId, pack: pack.key, perClass, shiftSets, includeTrain,
+      datasetId: dataset.id, userId, pack: pack.key, perClass, shiftSets, includeTrain, classKeys,
       imported, skipped
     });
     return { imported, skipped, dataset: updated };

@@ -1,0 +1,375 @@
+Images from the tf_flowers dataset (https://www.tensorflow.org/datasets/catalog/tf_flowers), photographs by Flickr users,
+licensed under the Creative Commons Attribution 2.0 license (https://creativecommons.org/licenses/by/2.0/).
+Files under shift/ are blurred, darkened or cropped versions of the originals made by this platform.
+Each line below: <file in this pack> <- <original file> <credit>
+
+train/sunflowers/001.jpg <- sunflowers/1008566138_6927679c8a.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/1008566138/
+train/sunflowers/002.jpg <- sunflowers/10386702973_e74a34c806_n.jpg CC-BY by Don Graham - https://www.flickr.com/photos/23155134@N06/10386702973/
+train/sunflowers/003.jpg <- sunflowers/1240625276_fb3bd0c7b1.jpg CC-BY by Rob Young - https://www.flickr.com/photos/rob-young/1240625276/
+train/sunflowers/004.jpg <- sunflowers/13095941995_9a66faa713_n.jpg CC-BY by capt_tain Tom - https://www.flickr.com/photos/87744089@N08/13095941995/
+train/sunflowers/005.jpg <- sunflowers/14144522269_bc20029375_m.jpg CC-BY by A_Peach - https://www.flickr.com/photos/a_peach/14144522269/
+train/sunflowers/006.jpg <- sunflowers/145303599_2627e23815_n.jpg CC-BY by asdfawev - https://www.flickr.com/photos/bcballard/145303599/
+train/sunflowers/007.jpg <- sunflowers/14698136411_23bdcff7bf_n.jpg CC-BY by Forsaken Fotos - https://www.flickr.com/photos/55229469@N07/14698136411/
+train/sunflowers/008.jpg <- sunflowers/14858674096_ed0fc1a130.jpg CC-BY by travel oriented - https://www.flickr.com/photos/traveloriented/14858674096/
+train/sunflowers/009.jpg <- sunflowers/14925398301_55a180f919_n.jpg CC-BY by Ron Cogswell - https://www.flickr.com/photos/22711505@N05/14925398301/
+train/sunflowers/010.jpg <- sunflowers/15054750690_198b6ab0f2_n.jpg CC-BY by Erik Drost - https://www.flickr.com/photos/edrost88/15054750690/
+train/sunflowers/011.jpg <- sunflowers/15054866898_60ee50ec6b_n.jpg CC-BY by Erik Drost - https://www.flickr.com/photos/edrost88/15054866898/
+train/sunflowers/012.jpg <- sunflowers/15122871130_6a7d0b4372_n.jpg CC-BY by T.Kiya - https://www.flickr.com/photos/cq-biker/15122871130/
+train/sunflowers/013.jpg <- sunflowers/15241431045_65201cf15a_n.jpg CC-BY by Erik Drost - https://www.flickr.com/photos/edrost88/15241431045/
+train/sunflowers/014.jpg <- sunflowers/15683877266_42e0fe3782_n.jpg CC-BY by Eleazar - https://www.flickr.com/photos/imagineitall/15683877266/
+train/sunflowers/015.jpg <- sunflowers/164672339_f2b5b164f6.jpg CC-BY by David - https://www.flickr.com/photos/davidw/164672339/
+train/sunflowers/016.jpg <- sunflowers/17433282043_441b0a07f4_n.jpg CC-BY by Image Catalog - https://www.flickr.com/photos/image-catalog/17433282043/
+train/sunflowers/017.jpg <- sunflowers/184682652_c927a49226_m.jpg CC-BY by jespahjoy - https://www.flickr.com/photos/francapicc/184682652/
+train/sunflowers/018.jpg <- sunflowers/19349582128_68a662075e_n.jpg CC-BY by Mary Anne Morgan - https://www.flickr.com/photos/maryannemorgan/19349582128/
+train/sunflowers/019.jpg <- sunflowers/19697910486_0086d893a2.jpg CC-BY by RD_Elsie - https://www.flickr.com/photos/25168691@N06/19697910486/
+train/sunflowers/020.jpg <- sunflowers/200288046_0032f322ff_n.jpg CC-BY by derbokon - https://www.flickr.com/photos/39915395@N00/200288046/
+train/sunflowers/021.jpg <- sunflowers/201809908_0ef84bb351.jpg CC-BY by Audrey - https://www.flickr.com/photos/audreyjm529/201809908/
+train/sunflowers/022.jpg <- sunflowers/20410697750_c43973d1eb.jpg CC-BY by tdlucas5000 - https://www.flickr.com/photos/tdlucas5000/20410697750/
+train/sunflowers/023.jpg <- sunflowers/20777375650_ef854bf645.jpg CC-BY by Rob Bertholf - https://www.flickr.com/photos/robbertholf/20777375650/
+train/sunflowers/024.jpg <- sunflowers/21518663809_3d69f5b995_n.jpg CC-BY by Jens Holloch - https://www.flickr.com/photos/134055210@N07/21518663809/
+train/sunflowers/025.jpg <- sunflowers/22183521655_56221bf2a4_n.jpg CC-BY by James St. John - https://www.flickr.com/photos/jsjgeology/22183521655/
+train/sunflowers/026.jpg <- sunflowers/22478719251_276cb094f9_n.jpg CC-BY by tdlucas5000 - https://www.flickr.com/photos/tdlucas5000/22478719251/
+train/sunflowers/027.jpg <- sunflowers/23356825566_f5885875f2.jpg CC-BY by Chi-Hung Lin - https://www.flickr.com/photos/92585929@N06/23356825566/
+train/sunflowers/028.jpg <- sunflowers/24459750_eb49f6e4cb_m.jpg CC-BY by _e.t - https://www.flickr.com/photos/45688285@N00/24459750/
+train/sunflowers/029.jpg <- sunflowers/265450085_6e9f276e2e.jpg CC-BY by Martin Cathrae - https://www.flickr.com/photos/suckamc/265450085/
+train/sunflowers/030.jpg <- sunflowers/2723995667_31f32294b4.jpg CC-BY by Frank de Kleine - https://www.flickr.com/photos/frankdekleine/2723995667/
+train/sunflowers/031.jpg <- sunflowers/2803725948_5fd1f2fc99_n.jpg CC-BY by Lola Audu - https://www.flickr.com/photos/auduhomes/2803725948/
+train/sunflowers/032.jpg <- sunflowers/2895404754_6d9f9416d7_n.jpg CC-BY by Bert Kaufmann - https://www.flickr.com/photos/22746515@N02/2895404754/
+train/sunflowers/033.jpg <- sunflowers/2996573407_5e473b9359.jpg CC-BY by Ralph Hockens - https://www.flickr.com/photos/rhockens/2996573407/
+train/sunflowers/034.jpg <- sunflowers/3154932290_4bf43bd34f_n.jpg CC-BY by Rob and Stephanie Levy - https://www.flickr.com/photos/robandstephanielevy/3154932290/
+train/sunflowers/035.jpg <- sunflowers/3594967811_697184b026_n.jpg CC-BY by photogramma1 - https://www.flickr.com/photos/photogramma1/3594967811/
+train/sunflowers/036.jpg <- sunflowers/3766264038_ea701c7131_n.jpg CC-BY by Amanda Slater - https://www.flickr.com/photos/pikerslanefarm/3766264038/
+train/sunflowers/037.jpg <- sunflowers/3858508462_db2b9692d1.jpg CC-BY by Just a Prairie Boy - https://www.flickr.com/photos/justaprairieboy/3858508462/
+train/sunflowers/038.jpg <- sunflowers/39271782_b4335d09ae_n.jpg CC-BY by Kai Schreiber - https://www.flickr.com/photos/genista/39271782/
+train/sunflowers/039.jpg <- sunflowers/4042816698_578a1d599e.jpg CC-BY by Lu Yu - https://www.flickr.com/photos/yulucs/4042816698/
+train/sunflowers/040.jpg <- sunflowers/4341530649_c17bbc5d01.jpg CC-BY by Walt Hubis - https://www.flickr.com/photos/walthubis/4341530649/
+train/sunflowers/041.jpg <- sunflowers/45045005_57354ee844.jpg CC-BY by David Wiley - https://www.flickr.com/photos/davidwiley/45045005/
+train/sunflowers/042.jpg <- sunflowers/4745985619_249078cafa_n.jpg CC-BY by Maggie McCain - https://www.flickr.com/photos/vamcmag/4745985619/
+train/sunflowers/043.jpg <- sunflowers/4805544785_a63241f6d0_n.jpg CC-BY by Manu - https://www.flickr.com/photos/seven_of9/4805544785/
+train/sunflowers/044.jpg <- sunflowers/4848279231_c4960e28b2_n.jpg CC-BY by Stig Nygaard - https://www.flickr.com/photos/stignygaard/4848279231/
+train/sunflowers/045.jpg <- sunflowers/4893660821_eb7f02bef3_n.jpg CC-BY by Bill Burris - https://www.flickr.com/photos/billburris/4893660821/
+train/sunflowers/046.jpg <- sunflowers/4932143849_018486cbf7.jpg CC-BY by jim simonson - https://www.flickr.com/photos/rocketjim54/4932143849/
+train/sunflowers/047.jpg <- sunflowers/4933229357_1c5cc03f65_m.jpg CC-BY by jim simonson - https://www.flickr.com/photos/rocketjim54/4933229357/
+train/sunflowers/048.jpg <- sunflowers/4933821940_38064522a8.jpg CC-BY by jim simonson - https://www.flickr.com/photos/rocketjim54/4933821940/
+train/sunflowers/049.jpg <- sunflowers/4942258704_c4146b710a_n.jpg CC-BY by Lee Haywood - https://www.flickr.com/photos/leehaywood/4942258704/
+train/sunflowers/050.jpg <- sunflowers/5020805619_6c710793f7.jpg CC-BY by Matthew Black - https://www.flickr.com/photos/matthewblack/5020805619/
+shift/blur/sunflowers/001.jpg <- sunflowers/5043409856_395300dbe5_m.jpg CC-BY by Brent Schmidt - https://www.flickr.com/photos/brentschmidt/5043409856/
+shift/blur/sunflowers/002.jpg <- sunflowers/5139977423_d413b23fde_m.jpg CC-BY by Karen Roe - https://www.flickr.com/photos/karen_roe/5139977423/
+shift/blur/sunflowers/003.jpg <- sunflowers/5526324308_b333da0e57_n.jpg CC-BY by Michael Coghlan - https://www.flickr.com/photos/mikecogh/5526324308/
+shift/blur/sunflowers/004.jpg <- sunflowers/5923649444_a823e534e9.jpg CC-BY by Svetoslav Nikolov - https://www.flickr.com/photos/svenikolov/5923649444/
+shift/blur/sunflowers/005.jpg <- sunflowers/5967284308_85714d8cf7_m.jpg CC-BY by Stephane Mignon - https://www.flickr.com/photos/topsteph53/5967284308/
+shift/blur/sunflowers/006.jpg <- sunflowers/5979668702_fdaec9e164_n.jpg CC-BY by Leonora Enking - https://www.flickr.com/photos/33037982@N04/5979668702/
+shift/blur/sunflowers/007.jpg <- sunflowers/6050020905_881295ac72_n.jpg CC-BY by Maciej Lewandowski - https://www.flickr.com/photos/macieklew/6050020905/
+shift/blur/sunflowers/008.jpg <- sunflowers/6125761554_4e72819ce4_m.jpg CC-BY by Rachel Kramer - https://www.flickr.com/photos/rkramer62/6125761554/
+shift/dark/sunflowers/001.jpg <- sunflowers/6166888942_7058198713_m.jpg CC-BY by Enokson - https://www.flickr.com/photos/vblibrary/6166888942/
+shift/dark/sunflowers/002.jpg <- sunflowers/6495554833_86eb8faa8e_n.jpg CC-BY by psyberartist - https://www.flickr.com/photos/psyberartist/6495554833/
+shift/dark/sunflowers/003.jpg <- sunflowers/6606813305_c992231d29_m.jpg CC-BY by Bosque Village - https://www.flickr.com/photos/thebosque/6606813305/
+shift/dark/sunflowers/004.jpg <- sunflowers/6958724008_12259943a7.jpg CC-BY by psyberartist - https://www.flickr.com/photos/psyberartist/6958724008/
+shift/dark/sunflowers/005.jpg <- sunflowers/7510240282_87554c7418_n.jpg CC-BY by regan76 - https://www.flickr.com/photos/j_regan/7510240282/
+shift/dark/sunflowers/006.jpg <- sunflowers/7728953426_abd179ab63.jpg CC-BY by Elias Gayles - https://www.flickr.com/photos/elias_daniel/7728953426/
+shift/dark/sunflowers/007.jpg <- sunflowers/8014734302_65c6e83bb4_m.jpg CC-BY by Karen Blakeman - https://www.flickr.com/photos/rbainfo/8014734302/
+shift/dark/sunflowers/008.jpg <- sunflowers/8174941335_56389b53e9_n.jpg CC-BY by Stephane Mignon - https://www.flickr.com/photos/topsteph53/8174941335/
+shift/zoom/sunflowers/001.jpg <- sunflowers/8292914969_4a76608250_m.jpg CC-BY by Michael Coghlan - https://www.flickr.com/photos/mikecogh/8292914969/
+shift/zoom/sunflowers/002.jpg <- sunflowers/8705462313_4458d64cd4.jpg CC-BY by Patrick Feller - https://www.flickr.com/photos/nakrnsm/8705462313/
+shift/zoom/sunflowers/003.jpg <- sunflowers/9213511121_836a458021_m.jpg CC-BY by Donald Lee Pardue - https://www.flickr.com/photos/oldrebel/9213511121/
+shift/zoom/sunflowers/004.jpg <- sunflowers/9339697826_88c9c4dc50.jpg CC-BY by Forsaken Fotos - https://www.flickr.com/photos/55229469@N07/9339697826/
+shift/zoom/sunflowers/005.jpg <- sunflowers/9432335346_e298e47713_n.jpg CC-BY by Ruth Hartnup - https://www.flickr.com/photos/ruthanddave/9432335346/
+shift/zoom/sunflowers/006.jpg <- sunflowers/9485002920_59af6f4cac.jpg CC-BY by Forsaken Fotos - https://www.flickr.com/photos/55229469@N07/9485002920/
+shift/zoom/sunflowers/007.jpg <- sunflowers/9558628596_722c29ec60_m.jpg CC-BY by Paul Hayday - https://www.flickr.com/photos/hayzphotos/9558628596/
+shift/zoom/sunflowers/008.jpg <- sunflowers/9610373748_b9cb67bd55.jpg CC-BY by tfengreen - https://www.flickr.com/photos/tfengreen/9610373748/
+train/roses/001.jpg <- roses/10090824183_d02c613f10_m.jpg CC-BY by Von Fumetti - https://www.flickr.com/photos/104286287@N06/10090824183/
+train/roses/002.jpg <- roses/118974357_0faa23cce9_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/118974357/
+train/roses/003.jpg <- roses/12243068283_ee4c2683e2_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/12243068283/
+train/roses/004.jpg <- roses/12407768513_3440238148_n.jpg CC-BY by Taryn Nefdt - https://www.flickr.com/photos/taryn_nefdt/12407768513/
+train/roses/005.jpg <- roses/13342823005_16d3df58df_n.jpg CC-BY by Mark Engelbrecht - https://www.flickr.com/photos/menegue/13342823005/
+train/roses/006.jpg <- roses/14154164774_3b39d36778.jpg CC-BY by Ralph Daily - https://www.flickr.com/photos/ralphandjenny/14154164774/
+train/roses/007.jpg <- roses/14408977935_a397e796b8_m.jpg CC-BY by Kristine Paulus - https://www.flickr.com/photos/kpaulus/14408977935/
+train/roses/008.jpg <- roses/14573732424_1bb91e2e42_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/14573732424/
+train/roses/009.jpg <- roses/1485142251_ca89254442.jpg CC-BY by Karen - https://www.flickr.com/photos/56832361@N00/1485142251/
+train/roses/010.jpg <- roses/15060816740_68e1b2c31b.jpg CC-BY by Micolo J - https://www.flickr.com/photos/robin1966/15060816740/
+train/roses/011.jpg <- roses/15202632426_d88efb321a_n.jpg CC-BY by Iqbal Osman - https://www.flickr.com/photos/82066314@N06/15202632426/
+train/roses/012.jpg <- roses/15333843782_060cef3030.jpg CC-BY by Iqbal Osman - https://www.flickr.com/photos/82066314@N06/15333843782/
+train/roses/013.jpg <- roses/15602874619_03fd934bed.jpg CC-BY by fr4dd - https://www.flickr.com/photos/fr4dd/15602874619/
+train/roses/014.jpg <- roses/15761264350_4caaf080f6_m.jpg CC-BY by ProFlowers - https://www.flickr.com/photos/proflowers/15761264350/
+train/roses/015.jpg <- roses/15949087094_a8f565295c_m.jpg CC-BY by Biodiversity Heritage Library - https://www.flickr.com/photos/biodivlibrary/15949087094/
+train/roses/016.jpg <- roses/160954292_6c2b4fda65_n.jpg CC-BY by Alan Turkus - https://www.flickr.com/photos/aturkus/160954292/
+train/roses/017.jpg <- roses/16258946661_f9739cdc0a.jpg CC-BY by Prayitno / Thank you for (9 millions +) views - https://www.flickr.com/photos/prayitnophotography/16258946661/
+train/roses/018.jpg <- roses/16484100863_979beacb08.jpg CC-BY by Carodean Road Designs - https://www.flickr.com/photos/carodeanroaddesigns/16484100863/
+train/roses/019.jpg <- roses/16670921315_0fc48d7ab2_n.jpg CC-BY by Camera Eye Photography - https://www.flickr.com/photos/camera_is_a_mirror_with_memory/16670921315/
+train/roses/020.jpg <- roses/17077876795_6dd1b03f54_m.jpg CC-BY by Biodiversity Heritage Library - https://www.flickr.com/photos/biodivlibrary/17077876795/
+train/roses/021.jpg <- roses/17554868955_35f48516cd_m.jpg CC-BY by Tony Alter - https://www.flickr.com/photos/78428166@N00/17554868955/
+train/roses/022.jpg <- roses/17953368844_be3d18cf30_m.jpg CC-BY by Dave_S. - https://www.flickr.com/photos/david_e_smith/17953368844/
+train/roses/023.jpg <- roses/18563353954_b761d97155_m.jpg CC-BY by ozz13x - https://www.flickr.com/photos/24931020@N02/18563353954/
+train/roses/024.jpg <- roses/1949195327_75f76c12b1.jpg CC-BY by Clyde Robinson - https://www.flickr.com/photos/crobj/1949195327/
+train/roses/025.jpg <- roses/20596941736_f2c5f496cf.jpg CC-BY by Magnus Johansson - https://www.flickr.com/photos/120374925@N06/20596941736/
+train/roses/026.jpg <- roses/2141413229_3f0425f972_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/2141413229/
+train/roses/027.jpg <- roses/22385375599_1faf334f5d_n.jpg CC-BY by Faith (@101) - https://www.flickr.com/photos/137188566@N05/22385375599/
+train/roses/028.jpg <- roses/22982871191_ec61e36939_n.jpg CC-BY by StockyPics - https://www.flickr.com/photos/stockypics/22982871191/
+train/roses/029.jpg <- roses/2392457180_f02dab5c65.jpg CC-BY by Davide Restivo - https://www.flickr.com/photos/somemixedstuff/2392457180/
+train/roses/030.jpg <- roses/2501297526_cbd66a3f7e_m.jpg CC-BY by OliBac - https://www.flickr.com/photos/olibac/2501297526/
+train/roses/031.jpg <- roses/2609353769_dc3654f12f.jpg CC-BY by magdalena - https://www.flickr.com/photos/25182350@N03/2609353769/
+train/roses/032.jpg <- roses/2756028421_b3d5eea526_n.jpg CC-BY by Sharon Mollerus - https://www.flickr.com/photos/clairity/2756028421/
+train/roses/033.jpg <- roses/2960709681_e95940c0f0_n.jpg CC-BY by Ginny - https://www.flickr.com/photos/ginnerobot/2960709681/
+train/roses/034.jpg <- roses/3065719996_c16ecd5551.jpg CC-BY by Sharon Mollerus - https://www.flickr.com/photos/clairity/3065719996/
+train/roses/035.jpg <- roses/3145692843_d46ba4703c.jpg CC-BY by Koshy Koshy - https://www.flickr.com/photos/kkoshy/3145692843/
+train/roses/036.jpg <- roses/3253243865_435c1f2c2b_m.jpg CC-BY by psyberartist - https://www.flickr.com/photos/psyberartist/3253243865/
+train/roses/037.jpg <- roses/3292654244_4a220ab96f_m.jpg CC-BY by filtran - https://www.flickr.com/photos/filtran/3292654244/
+train/roses/038.jpg <- roses/3475572132_01ae28e834_n.jpg CC-BY by Parvin - https://www.flickr.com/photos/55948751@N00/3475572132/
+train/roses/039.jpg <- roses/3576488381_611f3446e0_n.jpg CC-BY by S.o.L.e - https://www.flickr.com/photos/24548102@N00/3576488381/
+train/roses/040.jpg <- roses/3663244576_97f595cf4a.jpg CC-BY by Akban Martial arts academy - https://www.flickr.com/photos/akban/3663244576/
+train/roses/041.jpg <- roses/3753920123_c7ebc18ee3.jpg CC-BY by Hellsgeriatric  - https://www.flickr.com/photos/hellsgeriatric/3753920123/
+train/roses/042.jpg <- roses/3948347096_42261f047a_m.jpg CC-BY by mcamcamca - https://www.flickr.com/photos/27461854@N04/3948347096/
+train/roses/043.jpg <- roses/410425647_4586667858.jpg CC-BY by Christine Majul - https://www.flickr.com/photos/kitkaphotogirl/410425647/
+train/roses/044.jpg <- roses/4292443009_3a2831b0b9_m.jpg CC-BY by Prayitno / Thank you for (9 millions +) views - https://www.flickr.com/photos/prayitnophotography/4292443009/
+train/roses/045.jpg <- roses/4503599544_3822e7d1be.jpg CC-BY by Lori Branham - https://www.flickr.com/photos/kjunstorm/4503599544/
+train/roses/046.jpg <- roses/459042023_6273adc312_n.jpg CC-BY by Pamela Carls - https://www.flickr.com/photos/irisdragon/459042023/
+train/roses/047.jpg <- roses/4675532860_890504a4a3_m.jpg CC-BY by TipsyCake Chicago - https://www.flickr.com/photos/23925460@N04/4675532860/
+train/roses/048.jpg <- roses/4735314389_94fe1b2a9f_n.jpg CC-BY by Clyde Robinson - https://www.flickr.com/photos/crobj/4735314389/
+train/roses/049.jpg <- roses/4809566219_88f9a1aea3.jpg CC-BY by garlandcannon - https://www.flickr.com/photos/garlandcannon/4809566219/
+train/roses/050.jpg <- roses/494803274_f84f21d53a.jpg CC-BY by Clyde Robinson - https://www.flickr.com/photos/crobj/494803274/
+shift/blur/roses/001.jpg <- roses/5073473370_bdbb5a99fc.jpg CC-BY by Deb Stgo - https://www.flickr.com/photos/d3bz/5073473370/
+shift/blur/roses/002.jpg <- roses/5148639829_781eb7d346.jpg CC-BY by Ian Scott - https://www.flickr.com/photos/ian-w-scott/5148639829/
+shift/blur/roses/003.jpg <- roses/5206847130_ee4bf0e4de_n.jpg CC-BY by Alexander - https://www.flickr.com/photos/alexyo1968/5206847130/
+shift/blur/roses/004.jpg <- roses/527513005_41497ca4dc.jpg CC-BY by ellhoisa - https://www.flickr.com/photos/51456203@N00/527513005/
+shift/blur/roses/005.jpg <- roses/5398569540_7d134c42cb_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/5398569540/
+shift/blur/roses/006.jpg <- roses/5537794501_a0767743fd_n.jpg CC-BY by Bill Harrison - https://www.flickr.com/photos/bill_harrison/5537794501/
+shift/blur/roses/007.jpg <- roses/5721768347_2ec4d2247b_n.jpg CC-BY by sophie - https://www.flickr.com/photos/sophiea/5721768347/
+shift/blur/roses/008.jpg <- roses/5892908233_6756199a43.jpg CC-BY by Archangel12 - https://www.flickr.com/photos/archangel12/5892908233/
+shift/dark/roses/001.jpg <- roses/6053143173_991c011b23.jpg CC-BY by Jack - https://www.flickr.com/photos/44458147@N00/6053143173/
+shift/dark/roses/002.jpg <- roses/6231418894_7946a7712b_n.jpg CC-BY by maf04 - https://www.flickr.com/photos/maf04/6231418894/
+shift/dark/roses/003.jpg <- roses/6363951285_a802238d4e.jpg CC-BY by maf04 - https://www.flickr.com/photos/maf04/6363951285/
+shift/dark/roses/004.jpg <- roses/6690926183_afedba9f15_n.jpg CC-BY by Prayitno / Thank you for (9 millions +) views - https://www.flickr.com/photos/prayitnophotography/6690926183/
+shift/dark/roses/005.jpg <- roses/6950609394_c53b8c6ac0_m.jpg CC-BY by Tracie Hall - https://www.flickr.com/photos/twobears2/6950609394/
+shift/dark/roses/006.jpg <- roses/7302931078_30054c1970_n.jpg CC-BY by © Atelier Flont- Roses & Other seasons - https://www.flickr.com/photos/35623827@N02/7302931078/
+shift/dark/roses/007.jpg <- roses/7455236056_b6d71a8dab.jpg CC-BY by Mark Fischer - https://www.flickr.com/photos/fischerfotos/7455236056/
+shift/dark/roses/008.jpg <- roses/8035908422_87220425d2_n.jpg CC-BY by ParisSharing - https://www.flickr.com/photos/parisharing/8035908422/
+shift/zoom/roses/001.jpg <- roses/8181940917_1ac63937d5_n.jpg CC-BY by Michael Coghlan - https://www.flickr.com/photos/mikecogh/8181940917/
+shift/zoom/roses/002.jpg <- roses/8502529435_c6e40d0df4.jpg CC-BY by Chrismatos ♥90% OFF, sorry - https://www.flickr.com/photos/chrismatos/8502529435/
+shift/zoom/roses/003.jpg <- roses/8622493424_877ae35ed7.jpg CC-BY by Teresa Grau Ros - https://www.flickr.com/photos/teresa_grau_ros/8622493424/
+shift/zoom/roses/004.jpg <- roses/8692051081_dffa8709e7_m.jpg CC-BY by anne arnould - https://www.flickr.com/photos/anne_arnould/8692051081/
+shift/zoom/roses/005.jpg <- roses/8949720453_66e8304c30.jpg CC-BY by minniemouseaunt - https://www.flickr.com/photos/minniemouseaunt/8949720453/
+shift/zoom/roses/006.jpg <- roses/9164924345_6b63637acf.jpg CC-BY by Pavlina Jane - https://www.flickr.com/photos/pavlinajane/9164924345/
+shift/zoom/roses/007.jpg <- roses/9300754115_dd79670066_n.jpg CC-BY by GabPRR - https://www.flickr.com/photos/gabprr/9300754115/
+shift/zoom/roses/008.jpg <- roses/9406573080_60eab9278e_n.jpg CC-BY by Shashank Mhasawade - https://www.flickr.com/photos/shanky-d-chosen1/9406573080/
+train/daisy/001.jpg <- daisy/100080576_f52e8ee070_n.jpg CC-BY by mario - https://www.flickr.com/photos/64738468@N00/100080576/
+train/daisy/002.jpg <- daisy/10437754174_22ec990b77_m.jpg CC-BY by Holly Victoria Norval - https://www.flickr.com/photos/hollystar47/10437754174/
+train/daisy/003.jpg <- daisy/105806915_a9c13e2106_n.jpg CC-BY by Paul Reynolds - https://www.flickr.com/photos/bigtallguy/105806915/
+train/daisy/004.jpg <- daisy/11023214096_b5b39fab08.jpg CC-BY by Andrew Moore - https://www.flickr.com/photos/andryn2006/11023214096/
+train/daisy/005.jpg <- daisy/11870378973_2ec1919f12.jpg CC-BY by Marilena Marchese - https://www.flickr.com/photos/marilenamarchese_photography/11870378973/
+train/daisy/006.jpg <- daisy/1285423653_18926dc2c8_n.jpg CC-BY by dion gillard - https://www.flickr.com/photos/diongillard/1285423653/
+train/daisy/007.jpg <- daisy/1344985627_c3115e2d71_n.jpg CC-BY by dion gillard - https://www.flickr.com/photos/diongillard/1344985627/
+train/daisy/008.jpg <- daisy/1392131677_116ec04751.jpg CC-BY by Audrey - https://www.flickr.com/photos/audreyjm529/1392131677/
+train/daisy/009.jpg <- daisy/14114116486_0bb6649bc1_m.jpg CC-BY by Margaux-Marguerite Duquesnoy - https://www.flickr.com/photos/124559226@N08/14114116486/
+train/daisy/010.jpg <- daisy/14245834619_153624f836.jpg CC-BY by taymtaym - https://www.flickr.com/photos/taymtaym/14245834619/
+train/daisy/011.jpg <- daisy/14372713423_61e2daae88.jpg CC-BY by Mats Hagwall - https://www.flickr.com/photos/hagwall/14372713423/
+train/daisy/012.jpg <- daisy/14485782498_fb342ec301.jpg CC-BY by Kate Ter Haar - https://www.flickr.com/photos/katerha/14485782498/
+train/daisy/013.jpg <- daisy/14600779226_7bbc288d40_m.jpg CC-BY by Javcon117* - https://www.flickr.com/photos/javcon117/14600779226/
+train/daisy/014.jpg <- daisy/14866200659_6462c723cb_m.jpg CC-BY by William Warby - https://www.flickr.com/photos/wwarby/14866200659/
+train/daisy/015.jpg <- daisy/154332674_453cea64f4.jpg CC-BY by Serena - https://www.flickr.com/photos/zenera/154332674/
+train/daisy/016.jpg <- daisy/16121105382_b96251e506_m.jpg CC-BY by Naomi Stoodley - https://www.flickr.com/photos/78271448@N07/16121105382/
+train/daisy/017.jpg <- daisy/16482676953_5296227d40_n.jpg CC-BY by Swallowtail Garden Seeds - https://www.flickr.com/photos/swallowtailgardenseeds/16482676953/
+train/daisy/018.jpg <- daisy/17101762155_2577a28395.jpg CC-BY by Audrey B. - https://www.flickr.com/photos/hetkabinet/17101762155/
+train/daisy/019.jpg <- daisy/175106495_53ebdef092_n.jpg CC-BY by Robert Meeks - https://www.flickr.com/photos/mahfrot/175106495/
+train/daisy/020.jpg <- daisy/18474740346_ffdaa18032.jpg CC-BY by Image Catalog - https://www.flickr.com/photos/image-catalog/18474740346/
+train/daisy/021.jpg <- daisy/19019544592_b64469bf84_n.jpg CC-BY by Elliott Brown - https://www.flickr.com/photos/ell-r-brown/19019544592/
+train/daisy/022.jpg <- daisy/19834392829_7d697871f6.jpg CC-BY by Stratosfeer - https://www.flickr.com/photos/stratosfeer/19834392829/
+train/daisy/023.jpg <- daisy/2057816617_18448093d0_n.jpg CC-BY by Audrey - https://www.flickr.com/photos/audreyjm529/2057816617/
+train/daisy/024.jpg <- daisy/20948886919_cac7844f34_n.jpg CC-BY by jimmcsweeney - https://www.flickr.com/photos/73118846@N04/20948886919/
+train/daisy/025.jpg <- daisy/2331133004_582772d58f_m.jpg CC-BY by Sabrina Campagna - https://www.flickr.com/photos/mar1lyn84/2331133004/
+train/daisy/026.jpg <- daisy/2473825306_62fd5f8785_n.jpg CC-BY by Audrey - https://www.flickr.com/photos/audreyjm529/2473825306/
+train/daisy/027.jpg <- daisy/2511306240_9047015f2d_n.jpg CC-BY by Jon Bragg - https://www.flickr.com/photos/festivefrog/2511306240/
+train/daisy/028.jpg <- daisy/2538504987_fe524b92a8_n.jpg CC-BY by xlibber - https://www.flickr.com/photos/xlibber/2538504987/
+train/daisy/029.jpg <- daisy/2579018590_74359dcf1a_m.jpg CC-BY by Rob Nunn - https://www.flickr.com/photos/scalespeeder/2579018590/
+train/daisy/030.jpg <- daisy/2621723097_736febb4a4_n.jpg CC-BY by Michael Gil - https://www.flickr.com/photos/msvg/2621723097/
+train/daisy/031.jpg <- daisy/2649404904_b7a91991bb_n.jpg CC-BY by Sharon Mollerus - https://www.flickr.com/photos/clairity/2649404904/
+train/daisy/032.jpg <- daisy/2877860110_a842f8b14a_m.jpg CC-BY by Kathy Kimpel - https://www.flickr.com/photos/kkimpel/2877860110/
+train/daisy/033.jpg <- daisy/302782756_d35cb3e468.jpg CC-BY by Audrey - https://www.flickr.com/photos/audreyjm529/302782756/
+train/daisy/034.jpg <- daisy/3326037909_b5ae370722_n.jpg CC-BY by Luke Andrew Scowen - https://www.flickr.com/photos/lukeas09/3326037909/
+train/daisy/035.jpg <- daisy/3410906335_37e8a24b1c_n.jpg CC-BY by Sara Alfred - https://www.flickr.com/photos/saraalfred/3410906335/
+train/daisy/036.jpg <- daisy/3475870145_685a19116d.jpg CC-BY by Fabrizio Sciami - https://www.flickr.com/photos/_fabrizio_/3475870145/
+train/daisy/037.jpg <- daisy/3552074420_2a0a7166db_m.jpg CC-BY by Mathias Erhart - https://www.flickr.com/photos/mathias-erhart/3552074420/
+train/daisy/038.jpg <- daisy/3639009391_0f910681b7.jpg CC-BY by Stewart Black - https://www.flickr.com/photos/s2ublack/3639009391/
+train/daisy/039.jpg <- daisy/3706420943_66f3214862_n.jpg CC-BY by grace_kat - https://www.flickr.com/photos/g_kat26/3706420943/
+train/daisy/040.jpg <- daisy/3758221664_b19116d61f.jpg CC-BY by Stephanie Kroos - https://www.flickr.com/photos/stephi2006/3758221664/
+train/daisy/041.jpg <- daisy/3939135368_0af5c4982a_n.jpg CC-BY by Peter O'Connor aka anemoneprojectors - https://www.flickr.com/photos/anemoneprojectors/3939135368/
+train/daisy/042.jpg <- daisy/4117918318_3c8935289b_m.jpg CC-BY by David J - https://www.flickr.com/photos/sebilden/4117918318/
+train/daisy/043.jpg <- daisy/4268817944_cdbdb226ae.jpg CC-BY by Horia Varlan - https://www.flickr.com/photos/horiavarlan/4268817944/
+train/daisy/044.jpg <- daisy/4333085242_bbeb3e2841_m.jpg CC-BY by James Russell - https://www.flickr.com/photos/theholyllama/4333085242/
+train/daisy/045.jpg <- daisy/4440480869_632ce6aff3_n.jpg CC-BY by Maja Dumat - https://www.flickr.com/photos/blumenbiene/4440480869/
+train/daisy/046.jpg <- daisy/4538877108_3c793f7987_m.jpg CC-BY by Barbara M. - https://www.flickr.com/photos/cannnela/4538877108/
+train/daisy/047.jpg <- daisy/4610018126_21f438d2dc_m.jpg CC-BY by Umberto Salvagnin - https://www.flickr.com/photos/kaibara/4610018126/
+train/daisy/048.jpg <- daisy/4694730335_2553e77aa5_z.jpg CC-BY by Sean McMenemy - https://www.flickr.com/photos/seanfx/4694730335/
+train/daisy/049.jpg <- daisy/476856232_7c35952f40_n.jpg CC-BY by sunshinecity - https://www.flickr.com/photos/sunshinecity/476856232/
+train/daisy/050.jpg <- daisy/4861391074_c3e122dab0_m.jpg CC-BY by Lorraine# - https://www.flickr.com/photos/lorraineemmans/4861391074/
+shift/blur/daisy/001.jpg <- daisy/4993492878_11fd4f5d12.jpg CC-BY by syauqee mohamad - https://www.flickr.com/photos/syauqee/4993492878/
+shift/blur/daisy/002.jpg <- daisy/5109508979_68e3530791_m.jpg CC-BY by William Warby - https://www.flickr.com/photos/wwarby/5109508979/
+shift/blur/daisy/003.jpg <- daisy/5135131051_102d4878ca_n.jpg CC-BY by Moyan Brenn - https://www.flickr.com/photos/aigle_dore/5135131051/
+shift/blur/daisy/004.jpg <- daisy/530738000_4df7e4786b.jpg CC-BY by Jon Gos - https://www.flickr.com/photos/jongos/530738000/
+shift/blur/daisy/005.jpg <- daisy/5435521200_92029bbe2b_n.jpg CC-BY by Javcon117* - https://www.flickr.com/photos/javcon117/5435521200/
+shift/blur/daisy/006.jpg <- daisy/5586977262_6b24412805_n.jpg CC-BY by Jeroen Moes - https://www.flickr.com/photos/jeroenmoes/5586977262/
+shift/blur/daisy/007.jpg <- daisy/5673551_01d1ea993e_n.jpg CC-BY by Teo - https://www.flickr.com/photos/teo/5673551/
+shift/blur/daisy/008.jpg <- daisy/5739768868_9f982684f9_n.jpg CC-BY by Barcelona · Three Looks - https://www.flickr.com/photos/vive-recordando/5739768868/
+shift/dark/daisy/001.jpg <- daisy/5811226952_4650ed70ae_n.jpg CC-BY by jenny downing - https://www.flickr.com/photos/jenny-pics/5811226952/
+shift/dark/daisy/002.jpg <- daisy/5885826924_38fdc6bcaa_n.jpg CC-BY by Christine Majul - https://www.flickr.com/photos/kitkaphotogirl/5885826924/
+shift/dark/daisy/003.jpg <- daisy/6095817094_3a5b1d793d.jpg CC-BY by n.karim - https://www.flickr.com/photos/nkarim/6095817094/
+shift/dark/daisy/004.jpg <- daisy/6323721068_3d3394af6d_n.jpg CC-BY by Sergio Tudela Romero - https://www.flickr.com/photos/ectopsyche/6323721068/
+shift/dark/daisy/005.jpg <- daisy/6910811638_aa6f17df23.jpg CC-BY by Luke Gray - https://www.flickr.com/photos/lukewes/6910811638/
+shift/dark/daisy/006.jpg <- daisy/7191221492_610035de7c_m.jpg CC-BY by Nana B Agyei - https://www.flickr.com/photos/nanagyei/7191221492/
+shift/dark/daisy/007.jpg <- daisy/7410356270_9dff4d0e2e_n.jpg CC-BY by martinak15 - https://www.flickr.com/photos/martinaphotography/7410356270/
+shift/dark/daisy/008.jpg <- daisy/7630517248_98fb8bee1f_n.jpg CC-BY by William Wootton - https://www.flickr.com/photos/wwootton/7630517248/
+shift/zoom/daisy/001.jpg <- daisy/799952628_bf836677fa_n.jpg CC-BY by Ryan Poplin - https://www.flickr.com/photos/poplinre/799952628/
+shift/zoom/daisy/002.jpg <- daisy/8127252886_96558c23d1.jpg CC-BY by Johan Neven - https://www.flickr.com/photos/enneafive/8127252886/
+shift/zoom/daisy/003.jpg <- daisy/8616684075_71923bb771_n.jpg CC-BY by jacinta lluch valero - https://www.flickr.com/photos/70626035@N00/8616684075/
+shift/zoom/daisy/004.jpg <- daisy/8709110478_60d12efcd4_n.jpg CC-BY by Andrew - https://www.flickr.com/photos/bud_um_tiss/8709110478/
+shift/zoom/daisy/005.jpg <- daisy/8882282142_9be2524d38_m.jpg CC-BY by Zoltán Vörös - https://www.flickr.com/photos/94941635@N07/8882282142/
+shift/zoom/daisy/006.jpg <- daisy/9120905231_329598304e.jpg CC-BY by Eric Kilby - https://www.flickr.com/photos/ekilby/9120905231/
+shift/zoom/daisy/007.jpg <- daisy/9244082319_b1f7e2d8b0_n.jpg CC-BY by Jérémy Lelièvre - https://www.flickr.com/photos/jrmllvr/9244082319/
+shift/zoom/daisy/008.jpg <- daisy/9489270024_1b05f08492_m.jpg CC-BY by Sheila Sund - https://www.flickr.com/photos/sheila_sund/9489270024/
+train/dandelion/001.jpg <- dandelion/10043234166_e6dd915111_n.jpg CC-BY by Vlastimil Koutecký - https://www.flickr.com/photos/vlastimil_koutecky/10043234166/
+train/dandelion/002.jpg <- dandelion/10778387133_9141024b10.jpg CC-BY by Artur (RUS) Potosi - https://www.flickr.com/photos/arturtula/10778387133/
+train/dandelion/003.jpg <- dandelion/11595255065_d9550012fc.jpg CC-BY by Josh Meek - https://www.flickr.com/photos/jmeekphotography/11595255065/
+train/dandelion/004.jpg <- dandelion/130733200_fbe28eea19.jpg CC-BY by Jeff Kubina - https://www.flickr.com/photos/kubina/130733200/
+train/dandelion/005.jpg <- dandelion/13734221225_0e04edc6b6.jpg CC-BY by Nicolas Raymond - https://www.flickr.com/photos/82955120@N05/13734221225/
+train/dandelion/006.jpg <- dandelion/13916196427_50a611008f.jpg CC-BY by Paul van de Velde - https://www.flickr.com/photos/dordrecht-holland/13916196427/
+train/dandelion/007.jpg <- dandelion/14053173516_a00150a919_m.jpg CC-BY by UnknownNet Photography - https://www.flickr.com/photos/threar/14053173516/
+train/dandelion/008.jpg <- dandelion/140951103_69847c0b7c.jpg CC-BY by sarah - https://www.flickr.com/photos/81143208@N00/140951103/
+train/dandelion/009.jpg <- dandelion/14202166370_e989588332.jpg CC-BY by Martin Fisch - https://www.flickr.com/photos/marfis75/14202166370/
+train/dandelion/010.jpg <- dandelion/14368895004_c486a29c1e_n.jpg CC-BY by James Petts - https://www.flickr.com/photos/14730981@N08/14368895004/
+train/dandelion/011.jpg <- dandelion/14469481104_d0e29f7ffd.jpg CC-BY by Susanne Nilsson - https://www.flickr.com/photos/infomastern/14469481104/
+train/dandelion/012.jpg <- dandelion/14805304536_c321a7b061_n.jpg CC-BY by Olga Filonenko - https://www.flickr.com/photos/olfiika/14805304536/
+train/dandelion/013.jpg <- dandelion/15123503538_8ee984abc6.jpg CC-BY by Gunilla G - https://www.flickr.com/photos/nillanilzon/15123503538/
+train/dandelion/014.jpg <- dandelion/15547944931_c1e095b185.jpg CC-BY by www.tOrange.biz Valdemar Fishmen - https://www.flickr.com/photos/torange-biz/15547944931/
+train/dandelion/015.jpg <- dandelion/16159487_3a6615a565_n.jpg CC-BY by Scott Robinson - https://www.flickr.com/photos/clearlyambiguous/16159487/
+train/dandelion/016.jpg <- dandelion/16699732794_5bfd639cf8_n.jpg CC-BY by Shaun Fisher - https://www.flickr.com/photos/87007001@N04/16699732794/
+train/dandelion/017.jpg <- dandelion/17020815734_81e8db8008_m.jpg CC-BY by Gunilla G - https://www.flickr.com/photos/nillanilzon/17020815734/
+train/dandelion/018.jpg <- dandelion/17175932454_c052e205c1_n.jpg CC-BY by Kate Fries - https://www.flickr.com/photos/saiberiac/17175932454/
+train/dandelion/019.jpg <- dandelion/17388697431_0d84c427d1_n.jpg CC-BY by Takuma Kimura - https://www.flickr.com/photos/photones/17388697431/
+train/dandelion/020.jpg <- dandelion/17821459748_873101edd0_m.jpg CC-BY by Ralf Κλενγελ - https://www.flickr.com/photos/klengel/17821459748/
+train/dandelion/021.jpg <- dandelion/18232119726_cef27eaaac_n.jpg CC-BY by Norbert Reimer - https://www.flickr.com/photos/norbertreimer/18232119726/
+train/dandelion/022.jpg <- dandelion/18687587599_3dd4fdf255.jpg CC-BY by Michel Craig - https://www.flickr.com/photos/mcdemtl/18687587599/
+train/dandelion/023.jpg <- dandelion/19067907051_16d530c7d2.jpg CC-BY by NY State IPM Program  at Cornell University - https://www.flickr.com/photos/99758165@N06/19067907051/
+train/dandelion/024.jpg <- dandelion/19551343814_48f764535f_m.jpg CC-BY by Kristina Kupstienė - https://www.flickr.com/photos/paintedbow/19551343814/
+train/dandelion/025.jpg <- dandelion/19621170705_30bf8bf0ba.jpg CC-BY by Susanne Nilsson - https://www.flickr.com/photos/infomastern/19621170705/
+train/dandelion/026.jpg <- dandelion/20983660733_06b35b9eb8.jpg CC-BY by Holly Lay - https://www.flickr.com/photos/hollylay/20983660733/
+train/dandelion/027.jpg <- dandelion/22679060358_561ec823ae_m.jpg CC-BY by Uroš Novina - https://www.flickr.com/photos/kharak/22679060358/
+train/dandelion/028.jpg <- dandelion/2387025546_6aecb1b984_n.jpg CC-BY by Nha Le Hoan - https://www.flickr.com/photos/vietnamfriendly/2387025546/
+train/dandelion/029.jpg <- dandelion/2462476884_58c617b26a.jpg CC-BY by Jean-Etienne Minh-Duy Poirrier - https://www.flickr.com/photos/jepoirrier/2462476884/
+train/dandelion/030.jpg <- dandelion/2478018280_1be353ca8c_m.jpg CC-BY by quapan - https://www.flickr.com/photos/hinkelstone/2478018280/
+train/dandelion/031.jpg <- dandelion/2503875867_2075a9225d_m.jpg CC-BY by OliBac - https://www.flickr.com/photos/olibac/2503875867/
+train/dandelion/032.jpg <- dandelion/2538797744_deb53ac253.jpg CC-BY by Craig Simpson - https://www.flickr.com/photos/hyperhaus/2538797744/
+train/dandelion/033.jpg <- dandelion/2625836599_03e192266f.jpg CC-BY by mhx - https://www.flickr.com/photos/mhx/2625836599/
+train/dandelion/034.jpg <- dandelion/2698102820_f15445a3f7.jpg CC-BY by pawpaw67 - https://www.flickr.com/photos/luschei/2698102820/
+train/dandelion/035.jpg <- dandelion/315645471_dda66c6338_m.jpg CC-BY by tetu - https://www.flickr.com/photos/tetutetu/315645471/
+train/dandelion/036.jpg <- dandelion/3419166382_a5e4b8fe6d_m.jpg CC-BY by Jean-Raphaël Guillaumin - https://www.flickr.com/photos/jrguillaumin/3419166382/
+train/dandelion/037.jpg <- dandelion/3464015936_6845f46f64.jpg CC-BY by Martin Fisch - https://www.flickr.com/photos/marfis75/3464015936/
+train/dandelion/038.jpg <- dandelion/3502447188_ab4a5055ac_m.jpg CC-BY by Paul Tomlin - https://www.flickr.com/photos/paultomlin/3502447188/
+train/dandelion/039.jpg <- dandelion/3554435478_1a7ab743e9_n.jpg CC-BY by Jeremy Mikkola - https://www.flickr.com/photos/jeremy512/3554435478/
+train/dandelion/040.jpg <- dandelion/3662701865_3ff283a33a_n.jpg CC-BY by Neal Fowler - https://www.flickr.com/photos/31878512@N06/3662701865/
+train/dandelion/041.jpg <- dandelion/3991962484_085ba2da94.jpg CC-BY by ClickFlashPhotos / Nicki Varkevisser - https://www.flickr.com/photos/clickflashphotos/3991962484/
+train/dandelion/042.jpg <- dandelion/4258272381_65bd4b8191_m.jpg CC-BY by Scott.Symonds - https://www.flickr.com/photos/spacemunkie/4258272381/
+train/dandelion/043.jpg <- dandelion/4514343281_26781484df.jpg CC-BY by Umberto Salvagnin - https://www.flickr.com/photos/kaibara/4514343281/
+train/dandelion/044.jpg <- dandelion/4558536575_d43a611bd4_n.jpg CC-BY by LadyDragonflyCC - >;< - https://www.flickr.com/photos/ladydragonflyherworld/4558536575/
+train/dandelion/045.jpg <- dandelion/4573886524_5161482ca7_n.jpg CC-BY by LadyDragonflyCC - >;< - https://www.flickr.com/photos/ladydragonflyherworld/4573886524/
+train/dandelion/046.jpg <- dandelion/4598938531_9749b3b56a.jpg CC-BY by Pete - https://www.flickr.com/photos/comedynose/4598938531/
+train/dandelion/047.jpg <- dandelion/4632761610_768360d425.jpg CC-BY by cloud2013 - https://www.flickr.com/photos/dennisredfield/4632761610/
+train/dandelion/048.jpg <- dandelion/4657801292_73bef15031.jpg CC-BY by David Long - https://www.flickr.com/photos/fromthefrontend/4657801292/
+train/dandelion/049.jpg <- dandelion/4716316039_044e4d2d1a.jpg CC-BY by mendhak - https://www.flickr.com/photos/mendhak/4716316039/
+train/dandelion/050.jpg <- dandelion/4862011506_4faf6d127e_n.jpg CC-BY by Alan Huett - https://www.flickr.com/photos/ahuett/4862011506/
+shift/blur/dandelion/001.jpg <- dandelion/5045509402_6e052ce443.jpg CC-BY by jeff_golden - https://www.flickr.com/photos/jeffanddayna/5045509402/
+shift/blur/dandelion/002.jpg <- dandelion/5140791232_52f2c5b41d_n.jpg CC-BY by countrygirl0 - https://www.flickr.com/photos/amberritchie/5140791232/
+shift/blur/dandelion/003.jpg <- dandelion/5607256228_2294c201b3.jpg CC-BY by David Reece - https://www.flickr.com/photos/spursfan_ace/5607256228/
+shift/blur/dandelion/004.jpg <- dandelion/5644234724_cb0917ee33_m.jpg CC-BY by Ross Elliott - https://www.flickr.com/photos/ross_elliott/5644234724/
+shift/blur/dandelion/005.jpg <- dandelion/5705695593_d79286ac0d.jpg CC-BY by Hieu LaVoce - https://www.flickr.com/photos/hieulavoce/5705695593/
+shift/blur/dandelion/006.jpg <- dandelion/5762590366_5cf7a32b87_n.jpg CC-BY by Kate Ter Haar - https://www.flickr.com/photos/katerha/5762590366/
+shift/blur/dandelion/007.jpg <- dandelion/5909154147_9da14d1730_n.jpg CC-BY by Alex Graves - https://www.flickr.com/photos/87244355@N00/5909154147/
+shift/blur/dandelion/008.jpg <- dandelion/6208857436_14a65fe4af_n.jpg CC-BY by AvidlyAbide - https://www.flickr.com/photos/avidlyabide/6208857436/
+shift/dark/dandelion/001.jpg <- dandelion/6918170172_3215766bf4_m.jpg CC-BY by Takuma Kimura - https://www.flickr.com/photos/photones/6918170172/
+shift/dark/dandelion/002.jpg <- dandelion/6994933428_307b092ce7_m.jpg CC-BY by LadyDragonflyCC - >;< - https://www.flickr.com/photos/ladydragonflyherworld/6994933428/
+shift/dark/dandelion/003.jpg <- dandelion/7141019507_4a44c6e888_m.jpg CC-BY by LadyDragonflyCC - >;< - https://www.flickr.com/photos/ladydragonflyherworld/7141019507/
+shift/dark/dandelion/004.jpg <- dandelion/7197581386_8a51f1bb12_n.jpg CC-BY by kaybee07 - https://www.flickr.com/photos/kurtbudiarto/7197581386/
+shift/dark/dandelion/005.jpg <- dandelion/7280217714_fb9ffccf2d_n.jpg CC-BY by Paul Hudson - https://www.flickr.com/photos/pahudson/7280217714/
+shift/dark/dandelion/006.jpg <- dandelion/7401173270_ebaf04c9b0_n.jpg CC-BY by manfred majer - https://www.flickr.com/photos/manfredmajer/7401173270/
+shift/dark/dandelion/007.jpg <- dandelion/7950901292_2dea05f9a2_n.jpg CC-BY by Rafa Machado Photography - https://www.flickr.com/photos/lensthrough/7950901292/
+shift/dark/dandelion/008.jpg <- dandelion/8220011556_28e0cab67f.jpg CC-BY by Thangaraj Kumaravel - https://www.flickr.com/photos/kumaravel/8220011556/
+shift/zoom/dandelion/001.jpg <- dandelion/8613502159_d9ea67ba63.jpg CC-BY by Yuri Levchenko - https://www.flickr.com/photos/i8ipod/8613502159/
+shift/zoom/dandelion/002.jpg <- dandelion/8691437509_9ac8441db7_n.jpg CC-BY by jenny downing - https://www.flickr.com/photos/jenny-pics/8691437509/
+shift/zoom/dandelion/003.jpg <- dandelion/8727612532_6f3d0904aa_n.jpg CC-BY by Takashi Hososhima - https://www.flickr.com/photos/htakashi/8727612532/
+shift/zoom/dandelion/004.jpg <- dandelion/8754822932_948afc7cef.jpg CC-BY by Yiannis Theologos Michellis - https://www.flickr.com/photos/zoonyzoozoodazoo/8754822932/
+shift/zoom/dandelion/005.jpg <- dandelion/8905148527_ba9f55cd78.jpg CC-BY by elPadawan - https://www.flickr.com/photos/elpadawan/8905148527/
+shift/zoom/dandelion/006.jpg <- dandelion/8979087213_28f572174c.jpg CC-BY by Mark Michaelis - https://www.flickr.com/photos/mmichaelis/8979087213/
+shift/zoom/dandelion/007.jpg <- dandelion/9029756865_db8891807a_n.jpg CC-BY by Hefin Owen - https://www.flickr.com/photos/47515486@N05/9029756865/
+shift/zoom/dandelion/008.jpg <- dandelion/9533964635_f38e6fa3c3.jpg CC-BY by Ervins Strauhmanis - https://www.flickr.com/photos/ervins_strauhmanis/9533964635/
+train/tulips/001.jpg <- tulips/100930342_92e8746431_n.jpg CC-BY by Jackie Curry - https://www.flickr.com/photos/octoberdog/100930342/
+train/tulips/002.jpg <- tulips/110147301_ad921e2828.jpg CC-BY by julie - https://www.flickr.com/photos/roosterfarm/110147301/
+train/tulips/003.jpg <- tulips/11441893003_ab83672800.jpg CC-BY by Elvert Barnes - https://www.flickr.com/photos/perspective/11441893003/
+train/tulips/004.jpg <- tulips/12163418275_bd6a1edd61.jpg CC-BY by Debbie Long - https://www.flickr.com/photos/98602044@N05/12163418275/
+train/tulips/005.jpg <- tulips/12916135413_dafcf3089e_n.jpg CC-BY by Mike Mozart - https://www.flickr.com/photos/jeepersmedia/12916135413/
+train/tulips/006.jpg <- tulips/13176576813_50e77cc1d9.jpg CC-BY by Samantha Forsberg - https://www.flickr.com/photos/74444001@N00/13176576813/
+train/tulips/007.jpg <- tulips/13472387874_d844478dbb.jpg CC-BY by nikontino - https://www.flickr.com/photos/nikontino/13472387874/
+train/tulips/008.jpg <- tulips/13514136074_ab1b827e4f.jpg CC-BY by nikontino - https://www.flickr.com/photos/nikontino/13514136074/
+train/tulips/009.jpg <- tulips/13539827514_79b60b6c22_n.jpg CC-BY by nikontino - https://www.flickr.com/photos/nikontino/13539827514/
+train/tulips/010.jpg <- tulips/13857267684_d2a4b2630f_n.jpg CC-BY by Elliott Brown - https://www.flickr.com/photos/ell-r-brown/13857267684/
+train/tulips/011.jpg <- tulips/13910479407_936fd3122d.jpg CC-BY by Nahid V - https://www.flickr.com/photos/nahidv/13910479407/
+train/tulips/012.jpg <- tulips/13954659583_03981dea99_n.jpg CC-BY by Sarah Zucca - https://www.flickr.com/photos/livetocreate_photography/13954659583/
+train/tulips/013.jpg <- tulips/13999392173_b1411f8b23_n.jpg CC-BY by travel oriented - https://www.flickr.com/photos/traveloriented/13999392173/
+train/tulips/014.jpg <- tulips/14044685976_0064faed21.jpg CC-BY by MelisaTG - https://www.flickr.com/photos/melisatg/14044685976/
+train/tulips/015.jpg <- tulips/14067476586_36bcddf111.jpg CC-BY by Blondinrikard Fröberg - https://www.flickr.com/photos/blondinrikard/14067476586/
+train/tulips/016.jpg <- tulips/14078067843_3573fcfc85_n.jpg CC-BY by betancourt - https://www.flickr.com/photos/thebetancourts/14078067843/
+train/tulips/017.jpg <- tulips/14088017343_dd158d2eb5.jpg CC-BY by MelisaTG - https://www.flickr.com/photos/melisatg/14088017343/
+train/tulips/018.jpg <- tulips/14097676864_4ca8e8b20d_n.jpg CC-BY by Nahid V - https://www.flickr.com/photos/nahidv/14097676864/
+train/tulips/019.jpg <- tulips/141479422_5a6fa1fd1b_m.jpg CC-BY by mojodaisy - https://www.flickr.com/photos/mojodaisy/141479422/
+train/tulips/020.jpg <- tulips/14266093711_66d18a1e44_n.jpg CC-BY by p.Gordon - https://www.flickr.com/photos/pgordon/14266093711/
+train/tulips/021.jpg <- tulips/14651385476_7ccb20e594_m.jpg CC-BY by Swallowtail Garden Seeds - https://www.flickr.com/photos/swallowtailgardenseeds/14651385476/
+train/tulips/022.jpg <- tulips/14957470_6a8c272a87_m.jpg CC-BY by Scott Robinson - https://www.flickr.com/photos/clearlyambiguous/14957470/
+train/tulips/023.jpg <- tulips/15275199229_962387f24d.jpg CC-BY by Francesca Cappa - https://www.flickr.com/photos/phalaenopsisaphrodite523/15275199229/
+train/tulips/024.jpg <- tulips/15881325303_f00807a051_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/15881325303/
+train/tulips/025.jpg <- tulips/16265876844_0a149c4f76.jpg CC-BY by aamanatullah - https://www.flickr.com/photos/ahmed_xp/16265876844/
+train/tulips/026.jpg <- tulips/16582481123_06e8e6b966_n.jpg CC-BY by matthew mclalin - https://www.flickr.com/photos/matthew_mclalin/16582481123/
+train/tulips/027.jpg <- tulips/16702117379_c25bff70e9.jpg CC-BY by aamanatullah - https://www.flickr.com/photos/ahmed_xp/16702117379/
+train/tulips/028.jpg <- tulips/16904202259_8f45d045c3_m.jpg CC-BY by Eric.Ray - https://www.flickr.com/photos/12707238@N00/16904202259/
+train/tulips/029.jpg <- tulips/17078576150_6f272ce73f_n.jpg CC-BY by Andersen Pecorone - https://www.flickr.com/photos/131036015@N03/17078576150/
+train/tulips/030.jpg <- tulips/17199496791_3caaf5e278_m.jpg CC-BY by Tony Monblat - https://www.flickr.com/photos/128484499@N06/17199496791/
+train/tulips/031.jpg <- tulips/17469578564_35a8360f58.jpg CC-BY by Vladimir Kud - https://www.flickr.com/photos/131947100@N08/17469578564/
+train/tulips/032.jpg <- tulips/18245124970_e68fd3f3c3.jpg CC-BY by farhad sadykov - https://www.flickr.com/photos/fsadykov/18245124970/
+train/tulips/033.jpg <- tulips/2232289392_9a79a0c5cb_n.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/2232289392/
+train/tulips/034.jpg <- tulips/2322670828_34115a7050.jpg CC-BY by liz west - https://www.flickr.com/photos/calliope/2322670828/
+train/tulips/035.jpg <- tulips/2421740440_f82ced8582.jpg CC-BY by Deb Watson - https://www.flickr.com/photos/debiwatson/2421740440/
+train/tulips/036.jpg <- tulips/2440874162_27a7030402_n.jpg CC-BY by Jon - https://www.flickr.com/photos/jonparry/2440874162/
+train/tulips/037.jpg <- tulips/2813658587_337eeef124_n.jpg CC-BY by Vince Alongi - https://www.flickr.com/photos/vincealongi/2813658587/
+train/tulips/038.jpg <- tulips/3213012716_b4c0f7db88.jpg CC-BY by tiegeltuf - https://www.flickr.com/photos/11596438@N00/3213012716/
+train/tulips/039.jpg <- tulips/3446285408_4be9c0fded_m.jpg CC-BY by minniemouseaunt - https://www.flickr.com/photos/minniemouseaunt/3446285408/
+train/tulips/040.jpg <- tulips/3501996215_1c6d1a3386_n.jpg CC-BY by Michela Simoncini - https://www.flickr.com/photos/comunicati/3501996215/
+train/tulips/041.jpg <- tulips/3511104954_54eace015c_n.jpg CC-BY by Alan Light - https://www.flickr.com/photos/alan-light/3511104954/
+train/tulips/042.jpg <- tulips/3614805920_7a6610aa4b_n.jpg CC-BY by Sasja  Milenkovic - https://www.flickr.com/photos/sasjamilenkovic/3614805920/
+train/tulips/043.jpg <- tulips/4042180234_64cd2859c9_m.jpg CC-BY by Tristan Martin - https://www.flickr.com/photos/mukumbura/4042180234/
+train/tulips/044.jpg <- tulips/4353419275_79d3904074_n.jpg CC-BY by Manu - https://www.flickr.com/photos/seven_of9/4353419275/
+train/tulips/045.jpg <- tulips/4516198427_0e5099cd8e.jpg CC-BY by Madhan Karthikeyan - https://www.flickr.com/photos/madhanac/4516198427/
+train/tulips/046.jpg <- tulips/4546316433_202cc68c55.jpg CC-BY by Andrea_44 - https://www.flickr.com/photos/andrea_44/4546316433/
+train/tulips/047.jpg <- tulips/4571353297_5634177744_n.jpg CC-BY by digital cat - https://www.flickr.com/photos/14646075@N03/4571353297/
+train/tulips/048.jpg <- tulips/4587872443_a86c692cb8.jpg CC-BY by Benjamin J. DeLong - https://www.flickr.com/photos/bozdoz/4587872443/
+train/tulips/049.jpg <- tulips/4624404489_11e10fcd33_n.jpg CC-BY by Nana B Agyei - https://www.flickr.com/photos/nanagyei/4624404489/
+train/tulips/050.jpg <- tulips/4838669164_ffb6f67139.jpg CC-BY by Erik Eskedal - https://www.flickr.com/photos/eskedal/4838669164/
+shift/blur/tulips/001.jpg <- tulips/4955884820_7e4ce4d7e5_m.jpg CC-BY by Risa Edelstein - https://www.flickr.com/photos/risaedelstein/4955884820/
+shift/blur/tulips/002.jpg <- tulips/5430796647_f21b7b0fea.jpg CC-BY by jenny downing - https://www.flickr.com/photos/jenny-pics/5430796647/
+shift/blur/tulips/003.jpg <- tulips/5603625247_e4ff1828af_m.jpg CC-BY by Singh - https://www.flickr.com/photos/singhmv/5603625247/
+shift/blur/tulips/004.jpg <- tulips/5661431592_cea1108261_n.jpg CC-BY by Manu - https://www.flickr.com/photos/seven_of9/5661431592/
+shift/blur/tulips/005.jpg <- tulips/5674695558_61397a1584.jpg CC-BY by gnuckx - https://www.flickr.com/photos/gnuckx/5674695558/
+shift/blur/tulips/006.jpg <- tulips/5698944116_fd35fe6bea.jpg CC-BY by Kain Kalju - https://www.flickr.com/photos/kainkalju/5698944116/
+shift/blur/tulips/007.jpg <- tulips/5757091018_cdfd79dfa6_m.jpg CC-BY by Beckwith-Zink (Diane) - https://www.flickr.com/photos/dianezink1021/5757091018/
+shift/blur/tulips/008.jpg <- tulips/6325571510_7544b27e57_n.jpg CC-BY by Cycletours Holidays - https://www.flickr.com/photos/cycletours_holidays/6325571510/
+shift/dark/tulips/001.jpg <- tulips/6931708704_fccb06fea8.jpg CC-BY by Elvert Barnes - https://www.flickr.com/photos/perspective/6931708704/
+shift/dark/tulips/002.jpg <- tulips/6970683464_f70838ca3a_n.jpg CC-BY by AvidlyAbide - https://www.flickr.com/photos/avidlyabide/6970683464/
+shift/dark/tulips/003.jpg <- tulips/7055500907_dcf2bb50e0.jpg CC-BY by m01229 - https://www.flickr.com/photos/39908901@N06/7055500907/
+shift/dark/tulips/004.jpg <- tulips/7144016605_e159b6c06b_m.jpg CC-BY by Bill Young - https://www.flickr.com/photos/by_photo/7144016605/
+shift/dark/tulips/005.jpg <- tulips/7166618384_850905fc63_n.jpg CC-BY by Olga - https://www.flickr.com/photos/13020283@N03/7166618384/
+shift/dark/tulips/006.jpg <- tulips/7266196114_c2a736a15a_m.jpg CC-BY by aksem - https://www.flickr.com/photos/aksem62/7266196114/
+shift/dark/tulips/007.jpg <- tulips/8394186551_28eed83a94_m.jpg CC-BY by Gytha69 - https://www.flickr.com/photos/76255570@N03/8394186551/
+shift/dark/tulips/008.jpg <- tulips/8555123165_2fe57eff4f.jpg CC-BY by Dwight Sipler - https://www.flickr.com/photos/photofarmer/8555123165/
+shift/zoom/tulips/001.jpg <- tulips/8628453641_6f87755815_m.jpg CC-BY by brillianthues - https://www.flickr.com/photos/brillianthues/8628453641/
+shift/zoom/tulips/002.jpg <- tulips/8686332852_c6dcb2e86b.jpg CC-BY by George Rex - https://www.flickr.com/photos/rogersg/8686332852/
+shift/zoom/tulips/003.jpg <- tulips/8708209606_d3aede4801.jpg CC-BY by Robert Taylor - https://www.flickr.com/photos/bobolink/8708209606/
+shift/zoom/tulips/004.jpg <- tulips/8712267813_f7a9be2ec5.jpg CC-BY by PS-OV-ART Patty Sue O'Hair-Vicknair, Artist - https://www.flickr.com/photos/psovart/8712267813/
+shift/zoom/tulips/005.jpg <- tulips/8713390684_041148dd3e_n.jpg CC-BY by PS-OV-ART Patty Sue O'Hair-Vicknair, Artist - https://www.flickr.com/photos/psovart/8713390684/
+shift/zoom/tulips/006.jpg <- tulips/8717900362_2aa508e9e5.jpg CC-BY by Stephen Bowler - https://www.flickr.com/photos/50826080@N00/8717900362/
+shift/zoom/tulips/007.jpg <- tulips/8817622133_a42bb90e38_n.jpg CC-BY by kkmarais - https://www.flickr.com/photos/29946195@N07/8817622133/
+shift/zoom/tulips/008.jpg <- tulips/9030467406_05e93ff171_n.jpg CC-BY by m01229 - https://www.flickr.com/photos/39908901@N06/9030467406/
