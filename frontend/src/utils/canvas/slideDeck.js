@@ -138,6 +138,17 @@ export const parseInlineRuns = (text, inherit = {}) => {
 /** runs → 纯文本 */
 export const runsToText = (runs) => (runs || []).map(r => r.text).join('')
 
+/**
+ * 标题一行放得下就用紧凑页眉（页眉 80px 而不是 118px，正文多出 38px）。
+ * 按字宽估：CJK/emoji 算 1，其他字符算 0.55；预览 34px 字 / pptx 28pt 字下 22 个汉字宽都在一行内。
+ * 预览与 exportPptx 共用这一判定，两边的正文起点才一致。
+ */
+export const isCompactTitle = (titleText) => {
+  // 用整数权重（汉字 20、其他 11）避免 0.55 累加的浮点误差
+  const weight = [...String(titleText || '')].reduce((sum, ch) => sum + (/[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]|\p{Extended_Pictographic}/u.test(ch) ? 20 : 11), 0)
+  return weight <= 440
+}
+
 // ============================================================================
 // 内部工具
 // ============================================================================
@@ -660,4 +671,4 @@ export const parseSlideDeck = (markdown) => {
   }
 }
 
-export default { parseSlideDeck, parseInlineRuns, runsToText, detectSmartLayout, SLIDE_LAYOUTS, SMART_LAYOUTS }
+export default { parseSlideDeck, parseInlineRuns, runsToText, detectSmartLayout, isCompactTitle, SLIDE_LAYOUTS, SMART_LAYOUTS }

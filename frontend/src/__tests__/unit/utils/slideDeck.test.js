@@ -2,7 +2,7 @@
  * slideDeck 解析器测试：Marp 风格 Markdown → 结构化 deck
  */
 import { describe, it, expect } from 'vitest'
-import { parseSlideDeck, parseInlineRuns, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS } from '../../../utils/canvas/slideDeck'
+import { parseSlideDeck, parseInlineRuns, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS, isCompactTitle } from '../../../utils/canvas/slideDeck'
 
 const SAMPLE = `---
 marp: true
@@ -264,5 +264,12 @@ describe('detectSmartLayout() 智能排版', () => {
     expect(formula.text).toBe('二氧化碳 + 水 ─光能（叶绿体）→ 有机物 + 氧气')
     expect(runsToText(list.items[0].runs)).toBe('反应物：CO₂ 与 H₂O')
     expect(runsToText(list.items[1].runs)).toBe('能量 E = mc²')
+  })
+
+  it('isCompactTitle：22 个汉字宽以内用紧凑页眉，emoji 算一个字，英文按 0.55', () => {
+    expect(isCompactTitle('探究实验：绿叶在光下造淀粉 🧪')).toBe(true)
+    expect(isCompactTitle('这是一个很长很长的标题，用来测试两行标题时页眉是否仍然是常规高度')).toBe(false)
+    expect(isCompactTitle('Photosynthesis: light reactions overview')).toBe(true)
+    expect(isCompactTitle('')).toBe(true)
   })
 })

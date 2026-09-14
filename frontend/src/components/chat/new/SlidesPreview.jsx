@@ -15,11 +15,11 @@
  * 只负责"看"，导出与主题切换在 HtmlCanvasPanel 工具栏。
  */
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button, Typography } from 'antd'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { parseSlideDeck, SLIDE_LAYOUTS, SMART_LAYOUTS } from '../../../utils/canvas/slideDeck'
+import { parseSlideDeck, SLIDE_LAYOUTS, SMART_LAYOUTS, isCompactTitle } from '../../../utils/canvas/slideDeck'
 import { getSlideTheme, slideThemeToCssVars, slideThemeClassNames } from '../../../utils/canvas/slideThemes'
 import { renderCoverArt, renderContentArt } from '../../../utils/canvas/slideArt'
 import { getThemeBackgrounds } from '../../../utils/canvas/slideBackgrounds'
@@ -340,7 +340,40 @@ const contentBackgroundStyle = (backgrounds) => {
 /**
  * 单页渲染。theme 缺省取 classic；backgrounds 由父级解析一次后传入（缩略图复用）。
  */
+/** 正文最小字号（逻辑 px）；再小就不缩了，让 overflow:hidden 截掉 */
+const MIN_BODY_FONT_PX = 13
+
+/**
+ * 正文缩放到能放下：从密度档位的字号开始，每次减 1px，直到 scrollHeight 不超过盒高。
+ * 所有正文尺寸都用 em，缩字号就等于整体缩排版；transform 缩放不影响 scrollHeight，缩略图同样适用。
+ */
+const useFitBody = (bodyRef) => {
+  // 不给依赖：主题/字体/内容任何一项变了都要重新量；只在溢出时才会进循环，代价很小
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (!el) return undefined
+    const fit = () => {
+      el.style.fontSize = ''
+      let size = parseFloat(window.getComputedStyle(el).fontSize)
+      if (!Number.isFinite(size)) return
+      for (let guard = 0; guard < 16 && el.scrollHeight > el.clientHeight + 1 && size > MIN_BODY_FONT_PX; guard += 1) {
+        size -= 1
+        el.style.fontSize = `${size}px`
+      }
+    }
+    fit()
+    // 网页字体晚于首次渲染加载完时，字宽会变，再算一次
+    let cancelled = false
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => { if (!cancelled) fit() })
+    }
+    return () => { cancelled = true }
+  })
+}
+
 export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgrounds: backgroundsProp }) => {
+  const bodyRef = useRef(null)
+  useFitBody(bodyRef)
   if (!slide) return null
   const theme = themeProp || getSlideTheme()
   const backgrounds = backgroundsProp || resolveThemeBackgrounds(theme)
@@ -373,14 +406,14 @@ export const SlideView = ({ slide, deckTitle, total, theme: themeProp, backgroun
 
   return (
     <div
-      className={`slide slide-content ${densityClass(slide)} ${classes} ${backgrounds.contentIsPhoto ? 'has-content-image' : ''}`}
+      className={`slide slide-content ${densityClass(slide)} ${isCompactTitle(slide.titleText) ? 'compact-header' : ''} ${classes} ${backgrounds.contentIsPhoto ? 'has-content-image' : ''}`}
       style={contentBackgroundStyle(backgrounds)}
     >
       <div className="slide-header">
         <div className="slide-title"><InlineRuns runs={slide.title} /></div>
         <div className="slide-title-bar" />
       </div>
-      <div className={`slide-body ${slide.smart ? `smart-${slide.smart.type}` : ''}`}>
+      <div ref={bodyRef} className={`slide-body ${slide.smart ? `smart-${slide.smart.type}` : ''}`}>
         {slide.smart
           ? <SmartBody smart={slide.smart} />
           : slide.blocks.map((block, idx) => <SlideBlock key={idx} block={block} />)}

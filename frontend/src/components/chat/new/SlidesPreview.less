@@ -297,6 +297,12 @@
     &.density-sm .slide-body { font-size: 18px; }
     &.density-xs .slide-body { font-size: 16px; }
 
+    // 标题一行放得下：页眉收到 80px，正文多 38px（与 exportPptx 的 COMPACT 几何一致）
+    &.compact-header {
+      .slide-header { height: 80px; }
+      .slide-body { height: 393px; }
+    }
+
     .slide-footer {
       position: absolute;
       left: 48px;
@@ -317,6 +323,7 @@
         padding: 30px 48px 0;
         background: linear-gradient(120deg, var(--slide-cover-bg), var(--slide-cover-bg2));
       }
+      &.compact-header .slide-header { height: 114px; }
       .slide-title { color: var(--slide-cover-fg); }
       .slide-title-bar { background: var(--slide-accent); width: 70px; height: 5px; }
     }
@@ -687,7 +694,7 @@
 
     .slide-chain-step {
       position: relative;
-      min-height: 48px;
+      min-height: 2em;
       margin-right: 30px;
       padding: 6px 10px;
       display: flex;

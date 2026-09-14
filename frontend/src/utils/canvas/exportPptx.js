@@ -18,7 +18,7 @@
  * 卡片/图文/引言用形状+文本框排，与 SlidesPreview 的对应视图同构。
  */
 
-import { parseSlideDeck, runsToText, SLIDE_LAYOUTS, SMART_LAYOUTS } from './slideDeck'
+import { parseSlideDeck, runsToText, isCompactTitle, SLIDE_LAYOUTS, SMART_LAYOUTS } from './slideDeck'
 import { getSlideTheme, isDarkHex, SLIDE_CODE_FONT_FACE } from './slideThemes'
 import { renderCoverArt, renderContentArt, renderBandArt } from './slideArt'
 import { getThemeBackgrounds } from './slideBackgrounds'
@@ -31,6 +31,9 @@ const SLIDE_H = 5.625
 const TITLE_BOX = { x: 0.5, y: 0.35, w: 9.0, h: 0.9 }
 const ACCENT_BAR = { x: 0.5, y: 1.3, w: 1.0, h: 0.06 }
 const BODY = { x: 0.5, y: 1.58, w: 9.0, h: 3.7 }
+/** 标题一行放得下时的紧凑页眉：header 114px → 1.19in，正文 393px → 4.09in（与预览 .compact-header 一致） */
+const COMPACT = { titleH: 0.55, barY: 0.97, bodyY: 1.19, bodyH: 4.09, bandTitleY: 0.3, bandBarY: 0.9, minimalLineY: 0.98 }
+const REGULAR = { titleH: 0.9, barY: 1.3, bodyY: 1.58, bodyH: 3.7, bandTitleY: 0.3, bandBarY: 1.25, minimalLineY: 1.36 }
 const FOOTER = { y: 5.2, h: 0.3 }
 const BLOCK_GAP = 0.12
 /** side-stripe 版式：内容整体右移 70px → 0.73in */
@@ -42,9 +45,9 @@ const SPLIT_W = 4.17
 const noLine = (color) => ({ color, width: 0 })
 
 
-/** 正文候选字号，从大到小挑第一个装得下的 */
-const BODY_FONT_SIZES = [20, 18, 16, 14, 12]
-const MIN_BODY_FONT_SIZE = 12
+/** 正文候选字号，从大到小挑第一个装得下的（预览缩到 13px≈10pt 为止，这里同样到 10） */
+const BODY_FONT_SIZES = [20, 18, 16, 14, 12, 11, 10]
+const MIN_BODY_FONT_SIZE = 10
 const LINE_HEIGHT_RATIO = 1.45
 const CJK_RE = /[⺀-鿿豈-﫿＀-￯]/
 
@@ -265,12 +268,13 @@ const groupBlocks = (blocks) => {
 const addTextGroup = (slide, group, theme, y, availableHeight, fontFace, box = BODY) => {
   const paragraphs = textGroupParagraphs(group.blocks)
   const fontSize = pickBodyFontSize(paragraphs, availableHeight, box.w)
-  const height = Math.max(0.4, estimateGroupHeight(paragraphs, fontSize, box.w))
+  // 文本框不越出正文区；估行数偏小时让 PowerPoint 自己再缩（normAutofit）
+  const height = Math.min(Math.max(0.4, estimateGroupHeight(paragraphs, fontSize, box.w)), Math.max(0.4, availableHeight))
 
   slide.addText(textGroupToObjects(group.blocks, theme, fontSize), {
     x: box.x, y, w: box.w, h: height,
     fontSize, fontFace, color: theme.text,
-    valign: 'top', margin: 2
+    valign: 'top', margin: 2, fit: 'shrink'
   })
   return height
 }
@@ -481,39 +485,40 @@ const addContentHeader = (pptx, slide, deckSlide, theme) => {
     : ' '
   const inset = layout === 'side-stripe' ? STRIPE_INSET : 0.5
   const width = SLIDE_W - inset - 0.5
+  const geo = isCompactTitle(titleText) ? COMPACT : REGULAR
   const titleFontSize = estimateLines(titleText, 28, width) > 1 ? 22 : 28
 
   if (layout === 'title-band') {
     const band = renderBandArt(theme.key)
     if (band) {
-      slide.addImage({ data: band, x: 0, y: 0, w: SLIDE_W, h: BODY.y, sizing: { type: 'cover', w: SLIDE_W, h: BODY.y } })
+      slide.addImage({ data: band, x: 0, y: 0, w: SLIDE_W, h: geo.bodyY, sizing: { type: 'cover', w: SLIDE_W, h: geo.bodyY } })
     } else {
-      addRect(pptx, slide, { x: 0, y: 0, w: SLIDE_W, h: BODY.y }, theme.coverBg)
+      addRect(pptx, slide, { x: 0, y: 0, w: SLIDE_W, h: geo.bodyY }, theme.coverBg)
     }
     slide.addText(titleRuns, {
-      x: 0.5, y: 0.3, w: 9.0, h: 0.9, fontSize: titleFontSize, bold: true,
+      x: 0.5, y: geo.bandTitleY, w: 9.0, h: geo.titleH, fontSize: titleFontSize, bold: true,
       color: theme.coverFg, fontFace: titleFont, valign: 'middle', margin: 0
     })
-    addRect(pptx, slide, { x: 0.5, y: 1.25, w: 0.73, h: 0.05 }, theme.accent)
+    addRect(pptx, slide, { x: 0.5, y: geo.bandBarY, w: 0.73, h: 0.05 }, theme.accent)
   } else if (layout === 'minimal') {
     slide.addText(titleRuns, {
-      ...TITLE_BOX, fontSize: titleFontSize, bold: true,
+      ...TITLE_BOX, h: geo.titleH, fontSize: titleFontSize, bold: true,
       color: theme.title, fontFace: titleFont, valign: 'middle', margin: 0
     })
-    addRect(pptx, slide, { x: 0.5, y: 1.36, w: 9.0, h: 0.02 }, theme.muted, { transparency: 45 })
+    addRect(pptx, slide, { x: 0.5, y: geo.minimalLineY, w: 9.0, h: 0.02 }, theme.muted, { transparency: 45 })
   } else {
     if (layout === 'side-stripe') {
       addRect(pptx, slide, { x: 0, y: 0, w: 0.167, h: SLIDE_H / 2 }, theme.accent)
       addRect(pptx, slide, { x: 0, y: SLIDE_H / 2, w: 0.167, h: SLIDE_H / 2 }, theme.accent2)
     }
     slide.addText(titleRuns, {
-      x: inset, y: TITLE_BOX.y, w: width, h: TITLE_BOX.h, fontSize: titleFontSize, bold: true,
+      x: inset, y: TITLE_BOX.y, w: width, h: geo.titleH, fontSize: titleFontSize, bold: true,
       color: theme.title, fontFace: titleFont, valign: 'middle', margin: 0
     })
-    addRect(pptx, slide, { x: inset, y: ACCENT_BAR.y, w: layout === 'card' ? 0.63 : ACCENT_BAR.w, h: ACCENT_BAR.h }, theme.accent)
+    addRect(pptx, slide, { x: inset, y: geo.barY, w: layout === 'card' ? 0.63 : ACCENT_BAR.w, h: ACCENT_BAR.h }, theme.accent)
   }
 
-  let body = { x: inset, y: BODY.y, w: width, h: BODY.h }
+  let body = { x: inset, y: geo.bodyY, w: width, h: geo.bodyH }
   if (layout === 'card') {
     slide.addShape(pptx.ShapeType.roundRect, {
       ...body, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.15
