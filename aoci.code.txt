@@ -338,7 +338,7 @@ html_editor_route.conf[FN2T]: F:H·nginx片段：/pages/{userId}/{slug}反代bac
 database-upgrade.sh[OD2T]: F:C·容器内数据库智能升级入口(db-upgrade)：等待5秒后在/app/tools/database-upgrade装依赖，以--dry-run运行upgrade.js对比schema/v1.2.0_complete.sql | R:code:docker/Dockerfile.backend | A:- | S:只做dy-run分析不改库
 init-customer.sh[OV4S]: F:C·客户部署初始化：按域名生成.env(随机DB/Redis口令与64字节JWT双密钥、APP_DOMAIN/CORS_ORIGINS)，certbot standalone签证书并写renewal配置，提示docker-compose up -d | R:code:docker-compose.yml,code:docker/Dockerfile.frontend | A:- | S:已有.env时中止不覆盖；需root、openssl、node、certbot且80端口空闲
 migrate-data.sh[OV2T]: F:C·数据迁移导出：mysqldump ai_platform并gzip，打包storage/uploads，口令取环境变量DB_PASSWORD | R:code:docker/scripts/init-customer.sh,code:docker-compose.yml | A:- | S:未设DB_PASSWORD即退出；路径写死/var/www/ai-platform
-run-migrations.sh[OD4S]: F:C·容器启动迁移：nc等待MySQL就绪，建schema_migrations(主)与migrations_history(兼容)表并互相同步，按文件名顺序执行/app/database/migrations/*.sql中未记录的迁移并双表登记 | R:code:docker/Dockerfile.backend,code:backend/src/server.js | A:- | S:set -e，任一迁移SQL失败容器启动失败；本地/正式环境迁移走make migrate，不用此脚本
+run-migrations.sh[OD4S]: F:C·容器启动迁移：nc等待MySQL就绪，mysql客户端--skip-ssl，建schema_migrations(主)与migrations_history(兼容)表并互相同步，按文件名顺序执行/app/database/migrations/*.sql中未登记的迁移并双表登记 | R:code:docker/Dockerfile.backend,code:backend/src/server.js | A:- | S:SQL失败只警告不阻止启动；既有库先补齐schema_migrations否则旧SQL被重跑；正式环境用make migrate
 
 ===/home/hanying/ai-platform/docs/===
 SECURITY.md[SS3T]: F:C·安全配置说明：JWT强密钥、.env权限600、备份清理、scripts/generate-secrets与security-check、日志轮转，及密钥/权限/备份最佳实践 | R:- | A:- | S:提到的scripts/目录已被AOCI排除，内容为历史快照

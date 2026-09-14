@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-14T01:00:40Z",
+  "updated_at": "2026-09-14T02:11:38Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "ae9a193f18c5b06d05669a7c2146733d34c85257ac891ba156698c104ec0cd1e",
-      "size": 266816,
-      "normalized_sha256": "ae9a193f18c5b06d05669a7c2146733d34c85257ac891ba156698c104ec0cd1e"
+      "sha256": "8264995bba28e1019d5605458245e65708ba8ab645139f76cb5dbaa8510355cd",
+      "size": 266856,
+      "normalized_sha256": "8264995bba28e1019d5605458245e65708ba8ab645139f76cb5dbaa8510355cd"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1943,10 +1943,9 @@
       "normalized_sha256": "3aba8d4102c58b25b2af607845370b56bcaded1297f5461d74114a542c0945b0"
     },
     "docker/scripts/run-migrations.sh": {
-      "role": "index",
-      "sha256": "50cbd058f1cd13ee5eae264c0cf9893d27e8e4574202809b4470e7a492f40ad0",
-      "size": 3715,
-      "normalized_sha256": "50cbd058f1cd13ee5eae264c0cf9893d27e8e4574202809b4470e7a492f40ad0"
+      "sha256": "bbc01bd2cdcd910b1f57181c5ebc29ad08aaba84d9ba763809f550e9d54d92f6",
+      "size": 3945,
+      "normalized_sha256": "bbc01bd2cdcd910b1f57181c5ebc29ad08aaba84d9ba763809f550e9d54d92f6"
     },
     "docs/SECURITY.md": {
       "role": "index",

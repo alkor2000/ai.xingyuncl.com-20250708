@@ -20,7 +20,9 @@ echo "数据库已就绪，等待2秒确保稳定..."
 sleep 2
 
 # MySQL连接参数
-MYSQL_CMD="mysql -h${DB_HOST} -u${DB_USER} -p${DB_PASSWORD} ${DB_NAME}"
+# Alpine 的 mysql-client 是 MariaDB 11.4 客户端，默认校验 TLS 证书，对 MySQL 8 的自签名证书会报
+# "self-signed certificate in certificate chain"；库在 compose 内网，这里明确关闭 TLS。
+MYSQL_CMD="mysql --skip-ssl -h${DB_HOST} -u${DB_USER} -p${DB_PASSWORD} ${DB_NAME}"
 
 # 创建迁移跟踪表（保持向后兼容）
 echo "创建迁移跟踪表..."
