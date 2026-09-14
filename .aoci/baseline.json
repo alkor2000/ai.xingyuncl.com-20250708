@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-14T11:00:31Z",
+  "updated_at": "2026-09-14T12:15:59Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "74326a0cd0684f38a4bea0aade0c13fa0c8e6816c7ad8e27b967659b5077794f",
-      "size": 283943,
-      "normalized_sha256": "74326a0cd0684f38a4bea0aade0c13fa0c8e6816c7ad8e27b967659b5077794f"
+      "sha256": "4cf8204944dbb9a9585b7e89432c2c43d6534b1f6d2b32a5d980648bf110ad2a",
+      "size": 286478,
+      "normalized_sha256": "4cf8204944dbb9a9585b7e89432c2c43d6534b1f6d2b32a5d980648bf110ad2a"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2070,6 +2070,12 @@
       "size": 1681,
       "normalized_sha256": "29702cdd14a2e95d07b3e29fe2ded68e7ae2630e1ee1fe74ad20cb4ffe3e932e"
     },
+    "frontend/src/__tests__/unit/components/HtmlCanvasPanel.test.jsx": {
+      "role": "observe",
+      "sha256": "a97206883db85deb1de1652cb3c60a080de80576dc43c443431cd87a862e2349",
+      "size": 2420,
+      "normalized_sha256": "a97206883db85deb1de1652cb3c60a080de80576dc43c443431cd87a862e2349"
+    },
     "frontend/src/__tests__/unit/stores/authStore.test.js": {
       "role": "observe",
       "sha256": "7569b8c1c80613744938a212d1487570ad56b30b6265045c0b191328c3dcd157",
@@ -2094,11 +2100,22 @@
       "size": 4559,
       "normalized_sha256": "3778237af2e6945e403295901f3a44e1f621057afd1b178e71e7b86d44af50ee"
     },
+    "frontend/src/__tests__/unit/utils/slideThemes.test.js": {
+      "role": "observe",
+      "sha256": "fb5b116caf144e4149a947d22d73c858467d0b8a1ef13dad33aede4a248e2b82",
+      "size": 2410,
+      "normalized_sha256": "fb5b116caf144e4149a947d22d73c858467d0b8a1ef13dad33aede4a248e2b82"
+    },
     "frontend/src/__tests__/utils/testUtils.jsx": {
       "role": "observe",
       "sha256": "f1a1439c4254434c8978485ad6356ee2fc0e537ba39fef1c81fdaee2ffdd3f1b",
       "size": 1542,
       "normalized_sha256": "f1a1439c4254434c8978485ad6356ee2fc0e537ba39fef1c81fdaee2ffdd3f1b"
+    },
+    "frontend/src/assets/slide-backgrounds/README.md": {
+      "sha256": "aa3bb29df74b44a5158c38547fac524c164b2cf082330005c5eeaeb7feeb7a47",
+      "size": 2968,
+      "normalized_sha256": "aa3bb29df74b44a5158c38547fac524c164b2cf082330005c5eeaeb7feeb7a47"
     },
     "frontend/src/components/Layout/MainLayout.jsx": {
       "role": "index",
@@ -2728,14 +2745,14 @@
       "normalized_sha256": "880df41fb9bee5a5dc2d459916f9b018aa84b98eb6fa9e583b28524d7dd25ba5"
     },
     "frontend/src/components/chat/new/HtmlCanvasPanel.jsx": {
-      "sha256": "c84fd2521dd6996bacac6cd1e6457a99e37a36f96531422f2a9041e37b11ef28",
-      "size": 33219,
-      "normalized_sha256": "c84fd2521dd6996bacac6cd1e6457a99e37a36f96531422f2a9041e37b11ef28"
+      "sha256": "03dbebb83bf4cc166869787ab2f4e0d8abcf499dc0aaaaff4fd00bc8e17f15d0",
+      "size": 36188,
+      "normalized_sha256": "03dbebb83bf4cc166869787ab2f4e0d8abcf499dc0aaaaff4fd00bc8e17f15d0"
     },
     "frontend/src/components/chat/new/HtmlCanvasPanel.less": {
-      "sha256": "d08091a04fe0f3c5be14eb1a2d62bf46caac727050a6877ab4a3b7de968ab232",
-      "size": 8242,
-      "normalized_sha256": "d08091a04fe0f3c5be14eb1a2d62bf46caac727050a6877ab4a3b7de968ab232"
+      "sha256": "45df3d0649cd4e66799ee898ec6f1bb30eb2b7916fa97094cb0cb42febcd8cf5",
+      "size": 7783,
+      "normalized_sha256": "45df3d0649cd4e66799ee898ec6f1bb30eb2b7916fa97094cb0cb42febcd8cf5"
     },
     "frontend/src/components/chat/new/MobileChatInput.jsx": {
       "role": "index",
@@ -2767,15 +2784,25 @@
       "size": 8008,
       "normalized_sha256": "ea1e32cb0b9217a63b1f33d115b72552a9e65abef59fb1ecdb6e79830c976ba5"
     },
+    "frontend/src/components/chat/new/SlideThemePicker.jsx": {
+      "sha256": "a81d7e9762316808a85842f20c2462192bacf4df2f211f1bcf0c82f861378174",
+      "size": 3240,
+      "normalized_sha256": "a81d7e9762316808a85842f20c2462192bacf4df2f211f1bcf0c82f861378174"
+    },
+    "frontend/src/components/chat/new/SlideThemePicker.less": {
+      "sha256": "742aecbae8e8494c60d85ee6b928941cb5a6b0942d68c94890d01cbdda6faf72",
+      "size": 1634,
+      "normalized_sha256": "742aecbae8e8494c60d85ee6b928941cb5a6b0942d68c94890d01cbdda6faf72"
+    },
     "frontend/src/components/chat/new/SlidesPreview.jsx": {
-      "sha256": "a34681c3e3762d04e4fefd6c9a3dbf3416a2d47a910fab137332c4718a64912d",
-      "size": 9899,
-      "normalized_sha256": "a34681c3e3762d04e4fefd6c9a3dbf3416a2d47a910fab137332c4718a64912d"
+      "sha256": "756161f36fe5d005391dcbaf1e58d39fcb064f7fe9ee5e447746a6053e1164e1",
+      "size": 13045,
+      "normalized_sha256": "756161f36fe5d005391dcbaf1e58d39fcb064f7fe9ee5e447746a6053e1164e1"
     },
     "frontend/src/components/chat/new/SlidesPreview.less": {
-      "sha256": "f1d270bf2222d90a45d39dd56c8ef0c128641a77ac501a8272cd72719d47a161",
-      "size": 7068,
-      "normalized_sha256": "f1d270bf2222d90a45d39dd56c8ef0c128641a77ac501a8272cd72719d47a161"
+      "sha256": "3b20a091febee264e1f35282412e7c0a97337c9988372c3514a0442f8ea8b12b",
+      "size": 11723,
+      "normalized_sha256": "3b20a091febee264e1f35282412e7c0a97337c9988372c3514a0442f8ea8b12b"
     },
     "frontend/src/components/chat/new/index.js": {
       "role": "index",
@@ -2987,9 +3014,9 @@
       "normalized_sha256": "dacf8a30faa7a0794accc6ea1d99519b8fe0ae69813a6d04e0b60b025f19fadd"
     },
     "frontend/src/locales/en-US/chat.json": {
-      "sha256": "58741660093217a646660cab3e0e7b3cafb087adfd3522e0bf067fc998205faa",
-      "size": 14588,
-      "normalized_sha256": "58741660093217a646660cab3e0e7b3cafb087adfd3522e0bf067fc998205faa"
+      "sha256": "5993ca8d9caf6f9e699f3859042e1072d2270b6d770d567b4111944d35de93e9",
+      "size": 15069,
+      "normalized_sha256": "5993ca8d9caf6f9e699f3859042e1072d2270b6d770d567b4111944d35de93e9"
     },
     "frontend/src/locales/en-US/common.json": {
       "role": "index",
@@ -3099,9 +3126,9 @@
       "normalized_sha256": "e5c65f85c2a06d741d116739815031134ec79b7d6874a9bf3a7c12c8a0d1f78a"
     },
     "frontend/src/locales/zh-CN/chat.json": {
-      "sha256": "c54232464a11e925dd501b898ba1ce9b84f939764b1f314cc052896ba2e5bb84",
-      "size": 13833,
-      "normalized_sha256": "c54232464a11e925dd501b898ba1ce9b84f939764b1f314cc052896ba2e5bb84"
+      "sha256": "a11637ebfb917625b56acfb75088e3339f8fe6ea7f84960e2134f2a5920224a6",
+      "size": 14301,
+      "normalized_sha256": "a11637ebfb917625b56acfb75088e3339f8fe6ea7f84960e2134f2a5920224a6"
     },
     "frontend/src/locales/zh-CN/common.json": {
       "role": "index",
@@ -4228,9 +4255,19 @@
       "normalized_sha256": "4cc3ad6e5b7d2cc468bc05640255c90f312321f2a3cc0e693eac71e9c41d06db"
     },
     "frontend/src/utils/canvas/exportPptx.js": {
-      "sha256": "205845d20b93cba57993f73d9ca2624ce90e54f43a08c2d17b0e4ed274d5f93f",
-      "size": 13524,
-      "normalized_sha256": "205845d20b93cba57993f73d9ca2624ce90e54f43a08c2d17b0e4ed274d5f93f"
+      "sha256": "79a45a10433038348ce00ed3a3a32aa2b7f796c14811b6cbee764ca131a39cf0",
+      "size": 21068,
+      "normalized_sha256": "79a45a10433038348ce00ed3a3a32aa2b7f796c14811b6cbee764ca131a39cf0"
+    },
+    "frontend/src/utils/canvas/slideArt.js": {
+      "sha256": "4d6390bec4001af500264598e5a2b8867fa268ebb1b4a4b3d523d867c3411d35",
+      "size": 6608,
+      "normalized_sha256": "4d6390bec4001af500264598e5a2b8867fa268ebb1b4a4b3d523d867c3411d35"
+    },
+    "frontend/src/utils/canvas/slideBackgrounds.js": {
+      "sha256": "24b993e4cf3307f1cfa39548980c11b6b3e876299cea0611fafd719a11a5d65d",
+      "size": 1643,
+      "normalized_sha256": "24b993e4cf3307f1cfa39548980c11b6b3e876299cea0611fafd719a11a5d65d"
     },
     "frontend/src/utils/canvas/slideDeck.js": {
       "sha256": "a8d99afb12b572159dc035bf844504532e6ef9ecc591d0c0aabe2778b382ee88",
@@ -4238,9 +4275,9 @@
       "normalized_sha256": "a8d99afb12b572159dc035bf844504532e6ef9ecc591d0c0aabe2778b382ee88"
     },
     "frontend/src/utils/canvas/slideThemes.js": {
-      "sha256": "c67ff502ae8fd257ca56d66c1ff9f96b7f6b64616b89d264021a06a9ac82bb3d",
-      "size": 2521,
-      "normalized_sha256": "c67ff502ae8fd257ca56d66c1ff9f96b7f6b64616b89d264021a06a9ac82bb3d"
+      "sha256": "9a330b62fe05e41463ca51f7b828243f2439dd46adf71f547fdbac579a19d6cf",
+      "size": 7036,
+      "normalized_sha256": "9a330b62fe05e41463ca51f7b828243f2439dd46adf71f547fdbac579a19d6cf"
     },
     "frontend/src/utils/dateFormat.js": {
       "role": "index",
