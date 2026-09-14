@@ -134,6 +134,8 @@ const SlideBlock = ({ block }) => {
           ))}
         </div>
       )
+    case 'formula':
+      return <div className="slide-formula">{block.text}</div>
     case 'code':
       return <pre className="slide-codeblock"><code>{block.text}</code></pre>
     default:

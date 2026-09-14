@@ -254,4 +254,15 @@ describe('detectSmartLayout() 智能排版', () => {
     expect(deck.slides[2].smart.steps).toHaveLength(4)
     expect(deck.slides[3].blocks.some(b => b.type === 'chain')).toBe(false)
   })
+
+  it('$$…$$ 整段 → 公式块（折成 Unicode）；行内 $…$ 与列表里的公式就地转换', () => {
+    const md = ['# 封面', '---', '# 光合作用', '', '$$', '\\text{二氧化碳} + \\text{水} \\xrightarrow[\\text{叶绿体}]{\\text{光能}} \\text{有机物} + \\text{氧气}', '$$', '',
+      '- 反应物：$CO_2$ 与 $H_2O$', '- 能量 $E = mc^2$'].join('\n')
+    const deck = parseSlideDeck(md)
+    const [formula, list] = deck.slides[1].blocks
+    expect(formula.type).toBe('formula')
+    expect(formula.text).toBe('二氧化碳 + 水 ─光能（叶绿体）→ 有机物 + 氧气')
+    expect(runsToText(list.items[0].runs)).toBe('反应物：CO₂ 与 H₂O')
+    expect(runsToText(list.items[1].runs)).toBe('能量 E = mc²')
+  })
 })

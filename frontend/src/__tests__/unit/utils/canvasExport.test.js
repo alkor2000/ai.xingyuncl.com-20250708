@@ -77,6 +77,8 @@ describe('buildPptxBlob()', () => {
 
 const DOC = `# 实验报告
 
+反应式 $CO_2 + H_2O$，能量 $$E = mc^2$$
+
 ## 目的
 
 验证 **光** 是光合作用的条件，参考 [教材](https://example.com)。
@@ -116,6 +118,9 @@ describe('buildDocxBlob()', () => {
     expect(xml).toContain('[图片：图]')
     expect(xml).toContain('<w:tbl>')
     expect(xml).toContain('<w:numPr>')
+    expect(xml).toContain('CO₂ + H₂O')      // 公式折成 Unicode 文本
+    expect(xml).toContain('E = mc²')
+    expect(xml).not.toContain('$')
     expect(await zip.file('word/numbering.xml').async('string')).toContain('w:numFmt w:val="decimal"')
   })
 

@@ -12,6 +12,7 @@
 
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
+import { convertMathInMarkdown } from './latexToText'
 import remarkGfm from 'remark-gfm'
 import { fetchImageForEmbedding } from './download'
 
@@ -364,7 +365,8 @@ export const buildDocxBlob = async (markdown) => {
   // remark 系列已随 react-markdown 进主包，只有 docx 库需要按需加载
   const docx = await import('docx')
 
-  const tree = unified().use(remarkParse).use(remarkGfm).parse(String(markdown || ''))
+  // $$…$$ / $…$ 公式先折成 Unicode 文本（docx 没有公式排版）
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(convertMathInMarkdown(String(markdown || '')))
   const title = extractTitle(tree)
   const converter = new MarkdownToDocx(docx)
   const children = await converter.convert(tree)

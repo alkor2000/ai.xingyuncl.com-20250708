@@ -8,13 +8,14 @@
 
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
+import { convertMathInMarkdown } from '../../../utils/canvas/latexToText'
 import remarkGfm from 'remark-gfm'
 import './DocPreview.less'
 
 const DocPreview = ({ markdown }) => (
   <div className="doc-preview">
     <article className="doc-paper">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown || ''}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{convertMathInMarkdown(markdown || '')}</ReactMarkdown>
     </article>
   </div>
 )

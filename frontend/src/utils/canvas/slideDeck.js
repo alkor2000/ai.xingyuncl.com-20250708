@@ -12,7 +12,7 @@
  *   { title, slides: [{ index, layout, title, subtitle, blocks, smart, notes, textLength }] }
  *   layout: 'title'（封面）| 'section'（章节页，只有标题，带 sectionIndex 序号）| 'content' |
  *           'closing'（结束页：标题是谢谢/Q&A 之类且最多两段短文字，按封面样式渲染）
- *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code'|'callout'|'chain', ... }]
+ *   blocks: [{ type: 'paragraph'|'heading'|'bullets'|'numbered'|'table'|'image'|'quote'|'code'|'callout'|'chain'|'formula', ... }]
  *     callout：以"结论：/要点：/注意：/提示：/Tips:"等开头的段落，渲染成高亮提示框（label + runs）
  *   smart: 内容页的智能排版（detectSmartLayout），null 表示普通"标题+要点"：
  *     columns   { columns: [{ title: runs, blocks }] }     同页 2–3 个 ##/### 小标题各带内容
@@ -28,6 +28,8 @@
  *   （结构不满足时忽略）。
  *   文本一律拆成 runs（parseInlineRuns），预览与 pptx 导出共用同一份结构。
  */
+
+import { latexToText, convertMathInMarkdown, hasMath } from './latexToText'
 
 export const SLIDE_LAYOUTS = Object.freeze({
   TITLE: 'title',
@@ -55,6 +57,9 @@ const HTML_BREAK_RE = /<br\s*\/?>/gi
 const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g
 /** 提示框段落：以这些词开头并紧跟冒号 */
 const CALLOUT_RE = /^(结论|小结|总结|要点|重点|关键|注意|提示|提醒|思考|Tips?|Note|Key|Takeaway|Summary)\s*[：:]\s*(.+)$/i
+
+/** 整段只是一个 $$…$$ / \[…\] 公式 → 公式块（居中大字） */
+const DISPLAY_MATH_BLOCK_RE = /^\$\$([\s\S]+?)\$\$$|^\\\[([\s\S]+?)\\\]$/
 
 /** 箭头链分隔符："A → B → C"，也接受 -> / => / ⇒ / ➜ */
 const CHAIN_SPLIT_RE = /\s*(?:→|➜|⇒|->|=>)\s*/
@@ -90,7 +95,9 @@ const SUBTITLE_MAX_LENGTH = 120
  * @returns {Array<{text: string, bold?: boolean, italic?: boolean, code?: boolean, strike?: boolean, link?: string}>}
  */
 export const parseInlineRuns = (text, inherit = {}) => {
-  const source = String(text || '')
+  const raw = String(text || '')
+  // 行内公式 $H_2O$ / \(x^2\) 先折成 Unicode 文本，再做 Markdown 行内解析
+  const source = (hasMath(raw) ? convertMathInMarkdown(raw) : raw)
     .replace(HTML_BREAK_RE, ' ')
     .replace(HTML_TAG_RE, '')
   if (!source) return []
@@ -227,6 +234,11 @@ const parseSlideBody = (lines) => {
     const text = paragraph.join(' ').trim()
     paragraph = []
     if (!text) return
+    const display = DISPLAY_MATH_BLOCK_RE.exec(text)
+    if (display) {
+      blocks.push({ type: 'formula', text: latexToText(display[1] ?? display[2]) })
+      return
+    }
     const callout = CALLOUT_RE.exec(text.replace(/^\*\*(.+?)\*\*/, '$1'))
     const chain = callout ? null : parseArrowChain(text)
     if (callout) {
@@ -365,6 +377,8 @@ const blockTextLength = (block) => {
       return block.text.length
     case 'chain':
       return block.steps.join('').length
+    case 'formula':
+      return block.text.length
     default:
       return 0
   }

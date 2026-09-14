@@ -222,6 +222,21 @@ const addChain = (pptx, slide, block, theme, y, fontFace, box = BODY) => {
   return rows * rowH + (rows - 1) * gapY
 }
 
+/** 公式块：浅底居中大字（文本已由 latexToText 折成 Unicode） */
+const addFormula = (pptx, slide, block, theme, y, fontFace, box = BODY) => {
+  const fontSize = 16
+  const lines = block.text.split('\n').reduce((sum, line) => sum + estimateLines(line, fontSize, box.w - 0.6), 0)
+  const height = Math.max(0.55, lines * lineHeightIn(fontSize) * 1.15 + 0.3)
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: box.x, y, w: box.w, h: height, fill: { color: theme.surface }, line: noLine(theme.surface), rectRadius: 0.1
+  })
+  slide.addText(block.text, {
+    x: box.x + 0.2, y, w: box.w - 0.4, h: height, fontSize, bold: true, color: theme.title, fontFace,
+    align: 'center', valign: 'middle', margin: 2
+  })
+  return height
+}
+
 const groupBlocks = (blocks) => {
   const groups = []
   let textBlocks = []
@@ -526,6 +541,7 @@ const addBlocksInBox = async (pptx, slide, blocks, theme, box, fontFace) => {
       case 'code': used = addCodeBlock(slide, group.block, theme, y, fontFace, box); break
       case 'callout': used = addCallout(pptx, slide, group.block, theme, y, fontFace, box); break
       case 'chain': used = addChain(pptx, slide, group.block, theme, y, fontFace, box); break
+      case 'formula': used = addFormula(pptx, slide, group.block, theme, y, fontFace, box); break
       default: used = 0
     }
     y += used + BLOCK_GAP
