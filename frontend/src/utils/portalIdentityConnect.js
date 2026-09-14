@@ -229,6 +229,33 @@ export function isPortalConnectLoginLocation(
   )
 }
 
+/**
+ * Portal首次连接本地认证完成后的PublicRoute过渡保护。
+ *
+ * 本地认证成功会先建立isAuthenticated，
+ * 随后Login才异步请求既有connect/start并跳往Identity。
+ *
+ * 如果PublicRoute此时按普通已登录规则恢复state.from，
+ * 会先渲染/profile一帧，形成视觉闪屏。
+ *
+ * 这里只允许已经通过严格Portal Connect来源校验的Login保持挂载：
+ * - 普通Login不受影响；
+ * - 污染、重复、未知Query仍然fail closed；
+ * - 不启动Identity协议；
+ * - 不改变Profile失败回退。
+ */
+export function shouldHoldPortalConnectLoginRoute(
+  location,
+  isAuthenticated
+) {
+  return Boolean(
+    isAuthenticated &&
+    isPortalConnectLoginLocation(
+      location
+    )
+  )
+}
+
 function buildPortalConnectPath(
   pathname,
   connectValue,

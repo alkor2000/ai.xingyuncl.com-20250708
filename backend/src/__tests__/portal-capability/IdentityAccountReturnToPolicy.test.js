@@ -48,12 +48,13 @@ describe(
   'IdentityAccountReturnToPolicy',
   () => {
     test(
-      'bind允许Profile和8个Capability landing',
+      'bind允许Profile、Dashboard和8个Capability landing',
       () => {
         expect(
           ACCOUNT_BIND_RETURN_TO_PATHS
         ).toEqual([
           '/profile',
+          '/dashboard',
           '/chat',
           '/image',
           '/video',

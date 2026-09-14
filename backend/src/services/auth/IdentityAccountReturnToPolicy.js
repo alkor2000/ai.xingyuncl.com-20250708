@@ -3,7 +3,7 @@
  *
  * 职责：
  * 1. 复用IdentityFlowService的通用站内return_to安全校验；
- * 2. bind只允许返回个人中心或已冻结的8个AI能力工作区；
+ * 2. bind只允许返回个人中心、Dashboard或已冻结的8个AI能力工作区；
  * 3. unlink始终只能返回个人中心；
  * 4. 不接受任意站内路径，更不接受站外URL。
  *
@@ -22,6 +22,7 @@ const ACCOUNT_RESULT_PATH =
 const ACCOUNT_BIND_RETURN_TO_PATHS =
   Object.freeze([
     '/profile',
+    '/dashboard',
     '/chat',
     '/image',
     '/video',
