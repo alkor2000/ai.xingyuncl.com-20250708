@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-15T02:01:20Z",
+  "updated_at": "2026-09-15T08:07:25Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "7d681a98d510b730ac193e649263e81613785818ca42f030919912121dd56b0d",
-      "size": 292483,
-      "normalized_sha256": "7d681a98d510b730ac193e649263e81613785818ca42f030919912121dd56b0d"
+      "sha256": "a424ae3b1ec6117bac8bf29108562be67547d6973118f6e7f29aa5c7b94d4ed0",
+      "size": 300521,
+      "normalized_sha256": "a424ae3b1ec6117bac8bf29108562be67547d6973118f6e7f29aa5c7b94d4ed0"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -150,17 +150,20 @@
       "size": 2886,
       "normalized_sha256": "0cf170222b645070d4d778f5083f07c17347855698373d6719925088d696f0ce"
     },
+    "backend/migrations/20260916_001_create_doc_templates.js": {
+      "sha256": "5b286b5db2212d5a7fb1d8859288ef46ee99473d9570f97a84a1a9181c62ff85",
+      "size": 3212,
+      "normalized_sha256": "5b286b5db2212d5a7fb1d8859288ef46ee99473d9570f97a84a1a9181c62ff85"
+    },
     "backend/package-lock.json": {
-      "role": "index",
-      "sha256": "87813106ddd7a436c0617e102b53c3bbac37ba66967174947201ffd9482b9bd2",
-      "size": 348208,
-      "normalized_sha256": "87813106ddd7a436c0617e102b53c3bbac37ba66967174947201ffd9482b9bd2"
+      "sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c",
+      "size": 348273,
+      "normalized_sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c"
     },
     "backend/package.json": {
-      "role": "index",
-      "sha256": "0df614e9163cc33933b20f863f99136a71995640280dd2272b975a090f497cf8",
-      "size": 1684,
-      "normalized_sha256": "0df614e9163cc33933b20f863f99136a71995640280dd2272b975a090f497cf8"
+      "sha256": "ba1f66b4a92216e12848532217f6e178ef8674cdacc1abf6a5cfafad0ad7117c",
+      "size": 1741,
+      "normalized_sha256": "ba1f66b4a92216e12848532217f6e178ef8674cdacc1abf6a5cfafad0ad7117c"
     },
     "backend/scripts/ai-lab-smoke.cjs": {
       "sha256": "744cecf119b5613ae649037d2ef337372ce2d529329308808efd94ee039b9411",
@@ -172,6 +175,11 @@
       "sha256": "27906288ee872520077c3ac1226bcaccd78276f7b4abf8eba1836ccb30104602",
       "size": 2268,
       "normalized_sha256": "27906288ee872520077c3ac1226bcaccd78276f7b4abf8eba1836ccb30104602"
+    },
+    "backend/scripts/doc-template-smoke.cjs": {
+      "sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266",
+      "size": 14075,
+      "normalized_sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266"
     },
     "backend/scripts/identity-enroll.cjs": {
       "role": "index",
@@ -238,6 +246,12 @@
       "sha256": "76d485ce8773dbcb2f6bc8b768063c7237348ad57d3d7714ff34641c44093d9e",
       "size": 3956,
       "normalized_sha256": "76d485ce8773dbcb2f6bc8b768063c7237348ad57d3d7714ff34641c44093d9e"
+    },
+    "backend/src/__tests__/helpers/docxFixture.js": {
+      "role": "observe",
+      "sha256": "852518fc586cc119092aa2e65a8724f830610c450e6fb55b8c98df61fea2d6d4",
+      "size": 8099,
+      "normalized_sha256": "852518fc586cc119092aa2e65a8724f830610c450e6fb55b8c98df61fea2d6d4"
     },
     "backend/src/__tests__/integration/auth.integration.test.js": {
       "role": "observe",
@@ -437,6 +451,12 @@
       "size": 2199,
       "normalized_sha256": "96d1923c9c8c9bf05525a94657b7a5faaf474d0041ac67e9de5e1404b66317b5"
     },
+    "backend/src/__tests__/unit/services/docTemplate/docxEngine.test.js": {
+      "role": "observe",
+      "sha256": "f6b28db9fd172134f640fc7c7603aedbf61e05b07b50e07c79220b77d07f11ea",
+      "size": 9899,
+      "normalized_sha256": "f6b28db9fd172134f640fc7c7603aedbf61e05b07b50e07c79220b77d07f11ea"
+    },
     "backend/src/__tests__/unit/utils/errors.test.js": {
       "role": "observe",
       "sha256": "bdd344b278b381ade334bc8726857bfd7d00302c6a15a22efb334a363f2f898c",
@@ -456,9 +476,9 @@
       "normalized_sha256": "44730fdfd3f35b620f34527c9f0585c2005ecbaef437fe973f78680e4ddbaf8f"
     },
     "backend/src/app.js": {
-      "sha256": "5a43ce8846e2f18ce7eb02616418535bd49a0684bed20a8d99bd6e34e34b4164",
-      "size": 8501,
-      "normalized_sha256": "5a43ce8846e2f18ce7eb02616418535bd49a0684bed20a8d99bd6e34e34b4164"
+      "sha256": "cf78e3c565256d74ee425c8d11cb528f35d5089950da10d15a71cc530fae577b",
+      "size": 8616,
+      "normalized_sha256": "cf78e3c565256d74ee425c8d11cb528f35d5089950da10d15a71cc530fae577b"
     },
     "backend/src/config/aiLabTasks.js": {
       "sha256": "032c0e91b7ee12ac65335cdb16793855301f51694b7f147cfc6d551348147e39",
@@ -521,6 +541,11 @@
       "sha256": "969a128a4144dcdf3da3ab0fb4ba4a4cf472fd36e902b0630b8a750f0c5d838a",
       "size": 27591,
       "normalized_sha256": "969a128a4144dcdf3da3ab0fb4ba4a4cf472fd36e902b0630b8a750f0c5d838a"
+    },
+    "backend/src/controllers/DocTemplateController.js": {
+      "sha256": "04bbf8bca80a4558aa366ce745f6dbe6af1e66553858539e73073bf00b768a1c",
+      "size": 8943,
+      "normalized_sha256": "04bbf8bca80a4558aa366ce745f6dbe6af1e66553858539e73073bf00b768a1c"
     },
     "backend/src/controllers/ForumController.js": {
       "role": "index",
@@ -956,6 +981,11 @@
       "size": 14099,
       "normalized_sha256": "e7bbf75b02b777e4c59e03d145c579f0e107708442f901ceed1d72f1aad488bb"
     },
+    "backend/src/models/DocTemplate.js": {
+      "sha256": "8a8ba37eb66ff8ffd7f1ae3e9b5704e1fee738ecabbe0890cf6e1d4099621cf3",
+      "size": 5452,
+      "normalized_sha256": "8a8ba37eb66ff8ffd7f1ae3e9b5704e1fee738ecabbe0890cf6e1d4099621cf3"
+    },
     "backend/src/models/File.js": {
       "role": "index",
       "sha256": "e4e872fe3bea34132ba6808c62cb78a80a2e1bdc65f1e5bfbe904b221227aba0",
@@ -1284,6 +1314,11 @@
       "sha256": "fdf2f7e8684a9e24223787f09a0de0d203fff372e37780767e520a976409776f",
       "size": 5191,
       "normalized_sha256": "fdf2f7e8684a9e24223787f09a0de0d203fff372e37780767e520a976409776f"
+    },
+    "backend/src/routes/docTemplateRoutes.js": {
+      "sha256": "bbdc1c86915374756a84dcc8e385eb913427fc62d43c0093e9f5fc1b14cd16c5",
+      "size": 788,
+      "normalized_sha256": "bbdc1c86915374756a84dcc8e385eb913427fc62d43c0093e9f5fc1b14cd16c5"
     },
     "backend/src/routes/forum.js": {
       "role": "index",
@@ -1688,9 +1723,19 @@
       "normalized_sha256": "8ed8343c7e9a44b865715d309e9121151fad6f770b6aa3c048d5624193e39732"
     },
     "backend/src/services/chat/outputFormatInstructions.js": {
-      "sha256": "5e057f755b668af511fb0d12d792fae85c7c8e5909f11855d349a8082da33bfe",
-      "size": 7847,
-      "normalized_sha256": "5e057f755b668af511fb0d12d792fae85c7c8e5909f11855d349a8082da33bfe"
+      "sha256": "3ca7b2019087552f62a4d42da2a9a97d83d504e068b097850ee20182b1015dfc",
+      "size": 8349,
+      "normalized_sha256": "3ca7b2019087552f62a4d42da2a9a97d83d504e068b097850ee20182b1015dfc"
+    },
+    "backend/src/services/docTemplate/DocTemplateService.js": {
+      "sha256": "fcd0a6b50217613fc645332c2e0bc26dbfa93f2fa708797c142ef92a75985120",
+      "size": 10148,
+      "normalized_sha256": "fcd0a6b50217613fc645332c2e0bc26dbfa93f2fa708797c142ef92a75985120"
+    },
+    "backend/src/services/docTemplate/docxEngine.js": {
+      "sha256": "7e8779535ace685a851b632896bccf1db560c76031e31cdc7530bc51168a9ed9",
+      "size": 29856,
+      "normalized_sha256": "7e8779535ace685a851b632896bccf1db560c76031e31cdc7530bc51168a9ed9"
     },
     "backend/src/services/documentParserService.js": {
       "role": "index",
@@ -1988,6 +2033,11 @@
       "size": 7534,
       "normalized_sha256": "5bdf37f2bae93063fa61dc3dfb6f6f1275cf906ab967dbc7429a00d714d8b38c"
     },
+    "docs/chat/doc-templates.md": {
+      "sha256": "236ade518bea927e41ab6da36f18ca9d47ecf9f330c17facde50cdda52402a5d",
+      "size": 4932,
+      "normalized_sha256": "236ade518bea927e41ab6da36f18ca9d47ecf9f330c17facde50cdda52402a5d"
+    },
     "docs/docker-deploy-guide.md": {
       "role": "index",
       "sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24",
@@ -2080,6 +2130,12 @@
       "sha256": "a97206883db85deb1de1652cb3c60a080de80576dc43c443431cd87a862e2349",
       "size": 2420,
       "normalized_sha256": "a97206883db85deb1de1652cb3c60a080de80576dc43c443431cd87a862e2349"
+    },
+    "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
+      "role": "observe",
+      "sha256": "5ce160ad7e4af26b77a2be7b6d709f15a6baf6bf9c114e63afdc714cd9ea88bd",
+      "size": 3248,
+      "normalized_sha256": "5ce160ad7e4af26b77a2be7b6d709f15a6baf6bf9c114e63afdc714cd9ea88bd"
     },
     "frontend/src/__tests__/unit/stores/authStore.test.js": {
       "role": "observe",
@@ -2720,9 +2776,9 @@
       "normalized_sha256": "218c4e81b8dcfb11d693e8a80e65f545512dc63549726cf1e062ee39f0dbcc76"
     },
     "frontend/src/components/chat/new/ChatInputArea.jsx": {
-      "sha256": "fd03773ff723f4ba8f653bac84bfe0102fab7a3d63efc4195f955ce94379db17",
-      "size": 26922,
-      "normalized_sha256": "fd03773ff723f4ba8f653bac84bfe0102fab7a3d63efc4195f955ce94379db17"
+      "sha256": "63865968899d7528391360d42dc088c65bce9e3d7d24be70fa5d3fef7cd45ebf",
+      "size": 27878,
+      "normalized_sha256": "63865968899d7528391360d42dc088c65bce9e3d7d24be70fa5d3fef7cd45ebf"
     },
     "frontend/src/components/chat/new/ConversationFormModal.jsx": {
       "role": "index",
@@ -2765,9 +2821,9 @@
       "normalized_sha256": "880df41fb9bee5a5dc2d459916f9b018aa84b98eb6fa9e583b28524d7dd25ba5"
     },
     "frontend/src/components/chat/new/HtmlCanvasPanel.jsx": {
-      "sha256": "38c6100f9934a204d33f346f7a1d7a5de06edb935f43f8a1d6384d1faa0a9dad",
-      "size": 38485,
-      "normalized_sha256": "38c6100f9934a204d33f346f7a1d7a5de06edb935f43f8a1d6384d1faa0a9dad"
+      "sha256": "2c1a300f807a67d167a622b08ae8fa74a4fbbb3a0986b527e8b67bc2e25a2dfc",
+      "size": 39242,
+      "normalized_sha256": "2c1a300f807a67d167a622b08ae8fa74a4fbbb3a0986b527e8b67bc2e25a2dfc"
     },
     "frontend/src/components/chat/new/HtmlCanvasPanel.less": {
       "sha256": "45df3d0649cd4e66799ee898ec6f1bb30eb2b7916fa97094cb0cb42febcd8cf5",
@@ -2847,6 +2903,36 @@
       "sha256": "c57a98bd219ee82ad482d39ae6d674797ec8ad336564982e9d40a3a80216387a",
       "size": 1932,
       "normalized_sha256": "c57a98bd219ee82ad482d39ae6d674797ec8ad336564982e9d40a3a80216387a"
+    },
+    "frontend/src/components/docTemplate/ApplyPanel.jsx": {
+      "sha256": "c7fa08e1308ef8025cb5a6795a6f75e7a716210140a538a7899205f2499dc08b",
+      "size": 6907,
+      "normalized_sha256": "c7fa08e1308ef8025cb5a6795a6f75e7a716210140a538a7899205f2499dc08b"
+    },
+    "frontend/src/components/docTemplate/DocTemplateApplyModal.jsx": {
+      "sha256": "62b5f695328d416b49cc2dfc6c00acfd5fd680dba135552508f592090b2e8b32",
+      "size": 1160,
+      "normalized_sha256": "62b5f695328d416b49cc2dfc6c00acfd5fd680dba135552508f592090b2e8b32"
+    },
+    "frontend/src/components/docTemplate/DocTemplateManager.jsx": {
+      "sha256": "292905f9d45905988c87522845e98540080515119e30fac0c19e0b3aa0fe705f",
+      "size": 11234,
+      "normalized_sha256": "292905f9d45905988c87522845e98540080515119e30fac0c19e0b3aa0fe705f"
+    },
+    "frontend/src/components/docTemplate/RoleLabeler.jsx": {
+      "sha256": "2a6e4b0452db10267346ecc33eeea12bf0c04c45ec1b94fe7554acae14fe9963",
+      "size": 3867,
+      "normalized_sha256": "2a6e4b0452db10267346ecc33eeea12bf0c04c45ec1b94fe7554acae14fe9963"
+    },
+    "frontend/src/components/docTemplate/docTemplate.less": {
+      "sha256": "2a49429533e13dd81c26f3d298b5cd0f0909f5e383d538e337d312fe2ff4cb51",
+      "size": 2061,
+      "normalized_sha256": "2a49429533e13dd81c26f3d298b5cd0f0909f5e383d538e337d312fe2ff4cb51"
+    },
+    "frontend/src/components/docTemplate/roleMeta.js": {
+      "sha256": "15f2ea46b5ce4208e8f048e1f943827b1ef5a10b2c0b718b6b3bf04bfef35cf6",
+      "size": 732,
+      "normalized_sha256": "15f2ea46b5ce4208e8f048e1f943827b1ef5a10b2c0b718b6b3bf04bfef35cf6"
     },
     "frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx": {
       "role": "index",
@@ -3034,9 +3120,9 @@
       "normalized_sha256": "dacf8a30faa7a0794accc6ea1d99519b8fe0ae69813a6d04e0b60b025f19fadd"
     },
     "frontend/src/locales/en-US/chat.json": {
-      "sha256": "c1d0b487583f387d90c647f1aa8d311bc1cf0cafef670394c1b5ca4a350ef63a",
-      "size": 15660,
-      "normalized_sha256": "c1d0b487583f387d90c647f1aa8d311bc1cf0cafef670394c1b5ca4a350ef63a"
+      "sha256": "d2ec8ee42f8c6f12eb3be767c0caf5762ce80000da0cbd266f24edc123328562",
+      "size": 22306,
+      "normalized_sha256": "d2ec8ee42f8c6f12eb3be767c0caf5762ce80000da0cbd266f24edc123328562"
     },
     "frontend/src/locales/en-US/common.json": {
       "role": "index",
@@ -3146,9 +3232,9 @@
       "normalized_sha256": "e5c65f85c2a06d741d116739815031134ec79b7d6874a9bf3a7c12c8a0d1f78a"
     },
     "frontend/src/locales/zh-CN/chat.json": {
-      "sha256": "6b3fccecfb9092039c3a7553a2c2dd837314e283eaec22e6329514ae7d105b63",
-      "size": 14890,
-      "normalized_sha256": "6b3fccecfb9092039c3a7553a2c2dd837314e283eaec22e6329514ae7d105b63"
+      "sha256": "bcedbbf503316b9d8e7c4e0e84f9260b8df76e459f686ebc89f58ad025c920e5",
+      "size": 21605,
+      "normalized_sha256": "bcedbbf503316b9d8e7c4e0e84f9260b8df76e459f686ebc89f58ad025c920e5"
     },
     "frontend/src/locales/zh-CN/common.json": {
       "role": "index",
@@ -4163,6 +4249,11 @@
       "size": 36052,
       "normalized_sha256": "c16bec273528f94d28eb01100722c1077aaa62502c886e936f201e0221d8e04c"
     },
+    "frontend/src/stores/docTemplateStore.js": {
+      "sha256": "2027c9afa4c57147369f5de39f3549713f9faa8227ab2f0197bf162aa7573c11",
+      "size": 3279,
+      "normalized_sha256": "2027c9afa4c57147369f5de39f3549713f9faa8227ab2f0197bf162aa7573c11"
+    },
     "frontend/src/stores/forumStore.js": {
       "role": "index",
       "sha256": "8410f1681ee41df4d0c54f43eb8e022cff50a9c730bc80e05ecc9ef08d7ab5f2",
@@ -4321,6 +4412,11 @@
       "sha256": "7c5ca21057508ab4a421723bff38f7f9822f1cf7fbdbbb211fa7ade66b725cf1",
       "size": 3013,
       "normalized_sha256": "7c5ca21057508ab4a421723bff38f7f9822f1cf7fbdbbb211fa7ade66b725cf1"
+    },
+    "frontend/src/utils/docTemplate/markdownToBlocks.js": {
+      "sha256": "83ad1fcd61d96fc40c25a2e750ff3a1e91065d735abc183d64eb6bbbc6839ddc",
+      "size": 8095,
+      "normalized_sha256": "83ad1fcd61d96fc40c25a2e750ff3a1e91065d735abc183d64eb6bbbc6839ddc"
     },
     "frontend/src/utils/htmlBlockParser.js": {
       "sha256": "3d3d71bbd01612ae2ea6d49fb8d2ce8d31eaf5ef69c36d22a486a481592071a4",
