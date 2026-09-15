@@ -8,7 +8,7 @@ import { ThunderboltOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
 import { imageModality } from '../engine/modalities'
-import { trainKnn, serializeKnn, DEFAULT_K } from '../engine/knn'
+import { trainKnn, serializeKnn, DEFAULT_K, effectiveK } from '../engine/knn'
 
 const { Text } = Typography
 
@@ -66,7 +66,8 @@ const TrainPanel = ({ dataset, models, minPerClass, canEdit, perClassLimits, ext
       setStage('embed')
       setProgress(0)
       const vectors = await modality.embedSamples(samples, (done, total) => setProgress(Math.round((done / total) * 100)))
-      const knn = trainKnn(samples.map((s, i) => ({ id: s.id, label: s.class_key, vec: vectors[i] })), { k: DEFAULT_K })
+      const items = samples.map((s, i) => ({ id: s.id, label: s.class_key, vec: vectors[i] }))
+      const knn = trainKnn(items, { k: effectiveK(items, DEFAULT_K) })
       setStage('save')
       const classCounts = {}
       samples.forEach((s) => { classCounts[s.class_key] = (classCounts[s.class_key] || 0) + 1 })

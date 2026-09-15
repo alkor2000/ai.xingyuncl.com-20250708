@@ -76,3 +76,23 @@ describe('metrics', () => {
     expect(formatPercent(null)).toBe('—')
   })
 })
+
+describe('rigor helpers', () => {
+  it('wilsonInterval 覆盖观测比例且随样本量收窄', async () => {
+    const { wilsonInterval } = await import('../../../pages/aiLab/engine/metrics')
+    const small = wilsonInterval(18, 20)
+    const large = wilsonInterval(180, 200)
+    expect(small.low).toBeLessThan(0.9); expect(small.high).toBeGreaterThan(0.9)
+    expect(large.high - large.low).toBeLessThan(small.high - small.low)
+    expect(wilsonInterval(0, 10).low).toBe(0)
+    expect(wilsonInterval(10, 10).high).toBe(1)
+    expect(wilsonInterval(0, 0)).toBeNull()
+  })
+  it('effectiveK 不超过最小类的样本数', async () => {
+    const { effectiveK } = await import('../../../pages/aiLab/engine/knn')
+    const mk = (label, n) => Array.from({ length: n }, (_, i) => ({ id: `${label}${i}`, label, vec: [1, 0] }))
+    expect(effectiveK([...mk('a', 3), ...mk('b', 40)])).toBe(3)
+    expect(effectiveK([...mk('a', 30), ...mk('b', 40)])).toBe(5)
+    expect(effectiveK([...mk('a', 1), ...mk('b', 1)])).toBe(1)
+  })
+})

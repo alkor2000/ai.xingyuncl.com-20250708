@@ -41,7 +41,7 @@ const AI_LAB_TASKS = [
       { key: 'thing_b', label: '物品B' }
     ],
     min_train_per_class: 10,
-    holdout_ratio: 0.2,
+    holdout_ratio: 0.3,
     suggested_shift_sets: IMAGE_SHIFT_SETS,
     steps: ['predict', 'collect', 'lock', 'train', 'test_holdout', 'test_shift', 'model_card'],
     abilities: ['intent', 'critical', 'externalize'],

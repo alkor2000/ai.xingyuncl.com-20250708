@@ -5,7 +5,19 @@
  */
 import * as tf from '@tensorflow/tfjs'
 
-export const DEFAULT_MLP = { hidden: 16, epochs: 80, learningRate: 0.03, batchSize: 16 }
+export const DEFAULT_MLP = { hidden: 16, epochs: 80, learningRate: 0.03, batchSize: 16, seed: 42 }
+
+/* 与后端 splitHoldout 同一个 mulberry32：同一 seed 下权重初始化与样本顺序都固定，M3 对照才能复现 */
+function mulberry32(a) {
+  let state = a >>> 0
+  return () => { state = (state + 0x6D2B79F5) | 0; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+}
+function shuffled(rows, seed) {
+  const rnd = mulberry32(seed)
+  const out = rows.slice()
+  for (let i = out.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]] }
+  return out
+}
 
 /** 从训练行学出编码器：数值列 mean/std，类别列取值表；text 列忽略 */
 export function buildEncoder(rows, columns) {
@@ -42,10 +54,10 @@ export function encodeRow(encoder, payload) {
   return x
 }
 
-function buildModel(dim, hidden, nClasses) {
+function buildModel(dim, hidden, nClasses, seed) {
   const model = tf.sequential()
-  model.add(tf.layers.dense({ inputShape: [dim], units: hidden, activation: 'relu' }))
-  model.add(tf.layers.dense({ units: nClasses, activation: 'softmax' }))
+  model.add(tf.layers.dense({ inputShape: [dim], units: hidden, activation: 'relu', kernelInitializer: tf.initializers.glorotUniform({ seed }) }))
+  model.add(tf.layers.dense({ units: nClasses, activation: 'softmax', kernelInitializer: tf.initializers.glorotUniform({ seed: seed + 1 }) }))
   return model
 }
 
@@ -59,20 +71,22 @@ export async function trainMlp(rows, columns, params = {}) {
   const p = { ...DEFAULT_MLP, ...params }
   const encoder = buildEncoder(rows, columns)
   const classKeys = Array.from(new Set(rows.map((r) => r.label)))
-  const xs = tf.tensor2d(rows.map((r) => Array.from(encodeRow(encoder, r.payload))), [rows.length, encoder.dim])
-  const ys = tf.oneHot(tf.tensor1d(rows.map((r) => classKeys.indexOf(r.label)), 'int32'), classKeys.length)
-  const model = buildModel(encoder.dim, p.hidden, classKeys.length)
+  const seed = Number.isInteger(p.seed) ? p.seed : DEFAULT_MLP.seed
+  const ordered = shuffled(rows, seed)
+  const xs = tf.tensor2d(ordered.map((r) => Array.from(encodeRow(encoder, r.payload))), [ordered.length, encoder.dim])
+  const ys = tf.oneHot(tf.tensor1d(ordered.map((r) => classKeys.indexOf(r.label)), 'int32'), classKeys.length)
+  const model = buildModel(encoder.dim, p.hidden, classKeys.length, seed)
   model.compile({ optimizer: tf.train.adam(p.learningRate), loss: 'categoricalCrossentropy', metrics: ['accuracy'] })
   const history = []
   await model.fit(xs, ys, {
     epochs: p.epochs,
     batchSize: Math.min(p.batchSize, rows.length),
-    shuffle: true,
+    shuffle: false, // 顺序已用 seed 洗好，关掉 TF.js 自带的不可复现洗牌
     verbose: 0,
     callbacks: { onEpochEnd: (epoch, logs) => { history.push({ epoch: epoch + 1, loss: logs.loss, acc: logs.acc ?? logs.accuracy }); if (p.onEpoch) p.onEpoch(epoch + 1, p.epochs, logs) } }
   })
   xs.dispose(); ys.dispose()
-  return { engine: 'table-mlp', model, encoder, classKeys, hidden: p.hidden, epochs: p.epochs, learningRate: p.learningRate, history, trainIds: rows.map((r) => r.id) }
+  return { engine: 'table-mlp', model, encoder, classKeys, hidden: p.hidden, epochs: p.epochs, learningRate: p.learningRate, seed, history, trainIds: rows.map((r) => r.id) }
 }
 
 export function predictMlp(mlp, payload) {
@@ -87,12 +101,12 @@ export function predictMlp(mlp, payload) {
 
 export function serializeMlp(mlp, extra = {}) {
   const weights = mlp.model.getWeights().map((w) => ({ shape: w.shape, data: Array.from(w.dataSync()).map((v) => Number(v.toFixed(6))) }))
-  return { engine: 'table-mlp', encoder: mlp.encoder, classKeys: mlp.classKeys, hidden: mlp.hidden, epochs: mlp.epochs, learningRate: mlp.learningRate, history: mlp.history, weights, trainIds: mlp.trainIds, ...extra }
+  return { engine: 'table-mlp', encoder: mlp.encoder, classKeys: mlp.classKeys, hidden: mlp.hidden, epochs: mlp.epochs, learningRate: mlp.learningRate, seed: mlp.seed, history: mlp.history, weights, trainIds: mlp.trainIds, ...extra }
 }
 
 export function deserializeMlp(json) {
   if (!json || json.engine !== 'table-mlp' || !json.weights) throw new Error('not a table-mlp artifact')
-  const model = buildModel(json.encoder.dim, json.hidden, json.classKeys.length)
+  const model = buildModel(json.encoder.dim, json.hidden, json.classKeys.length, Number.isInteger(json.seed) ? json.seed : DEFAULT_MLP.seed)
   model.setWeights(json.weights.map((w) => tf.tensor(w.data, w.shape)))
-  return { engine: 'table-mlp', model, encoder: json.encoder, classKeys: json.classKeys, hidden: json.hidden, epochs: json.epochs, learningRate: json.learningRate, history: json.history || [], trainIds: json.trainIds || [] }
+  return { engine: 'table-mlp', model, encoder: json.encoder, classKeys: json.classKeys, hidden: json.hidden, epochs: json.epochs, learningRate: json.learningRate, seed: json.seed, history: json.history || [], trainIds: json.trainIds || [] }
 }

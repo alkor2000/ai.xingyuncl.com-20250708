@@ -36,3 +36,15 @@ describe('mlp', () => {
     expect(() => deserializeMlp({ engine: 'table-tree' })).toThrow()
   }, 60000)
 })
+
+describe('mlp reproducibility', () => {
+  it('same seed → identical loss curve; different seed → different curve', async () => {
+    const a = await trainMlp(rows, columns, { epochs: 12, hidden: 8, seed: 7 })
+    const b = await trainMlp(rows, columns, { epochs: 12, hidden: 8, seed: 7 })
+    const c = await trainMlp(rows, columns, { epochs: 12, hidden: 8, seed: 8 })
+    expect(a.history.map((h) => h.loss.toFixed(6))).toEqual(b.history.map((h) => h.loss.toFixed(6)))
+    expect(a.history[0].loss).not.toBeCloseTo(c.history[0].loss, 6)
+    expect(serializeMlp(a).seed).toBe(7)
+    expect(deserializeMlp(serializeMlp(a)).seed).toBe(7)
+  })
+})

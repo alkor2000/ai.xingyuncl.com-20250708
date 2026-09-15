@@ -19,8 +19,11 @@
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Steps, Card, Spin, Button, Space, Tag, Select, Alert, Typography, Segmented, Drawer, Progress, Divider, message } from 'antd'
+import { Steps, Card, Spin, Button, Space, Tag, Select, Alert, Typography, Segmented, Drawer, Divider, message } from 'antd'
 import { ArrowLeftOutlined, LockOutlined, PlusOutlined, LeftOutlined, RightOutlined, CheckCircleFilled, HistoryOutlined } from '@ant-design/icons'
+import { AiLabUiContext } from './uiContext'
+import { StepBadge, stepMeta, kindMeta } from './stepMeta.jsx'
+import Celebration from './components/Celebration'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../stores/aiLabStore'
 import useAuthStore from '../../stores/authStore'
@@ -85,7 +88,10 @@ const ProjectWorkspace = () => {
   const [activeStep, setActiveStep] = useState(null) // null = 还没定位，用第一个未完成的步骤
   const [ready, setReady] = useState(false) // 项目、事件都已加载，才能判断"第一个未完成的步骤"
   const [timelineOpen, setTimelineOpen] = useState(false)
+  const [cheer, setCheer] = useState(0) // 每次某一步刚完成 +1，触发一次庆祝动画
   const openedRef = useRef(null)
+  const armedAtRef = useRef(0) // 向导定位到第一步的时刻；之后 2 秒内的"完成"是数据加载造成的，不庆祝
+  const prevDoneRef = useRef(null) // 当前步骤上一次渲染时的完成状态
   const wizard = viewMode === 'steps'
 
   const setViewMode = (mode) => {
@@ -136,6 +142,9 @@ const ProjectWorkspace = () => {
   const steps = useMemo(() => Array.from(new Set(task?.steps || DEFAULT_STEPS)), [task])
   const minPerClass = task?.min_train_per_class || 10
   const config = task?.config || {}
+  const band = task?.grade_band || 'P'
+  const kid = band === 'L' // 小学：步骤用孩子的说法，正式术语退到小字
+  const uiContext = useMemo(() => ({ band, kid }), [band, kid])
   const canEdit = !!(project && user && project.user_id === user.id)
   const classes = dataset?.classes || []
   const labelOf = useCallback((key) => classes.find((c) => c.key === key)?.label || key, [classes])
@@ -187,10 +196,22 @@ const ProjectWorkspace = () => {
 
   /* 一步一步视图：数据到齐后停在第一个未完成的步骤；之后只由学生自己翻页，不自动跳 */
   useEffect(() => {
-    if (activeStep === null && ready && project && samplesLoaded) setActiveStep(currentStep)
+    if (activeStep === null && ready && project && samplesLoaded) { setActiveStep(currentStep); armedAtRef.current = Date.now() }
   }, [activeStep, ready, project, samplesLoaded, currentStep])
   const stepIndex = Math.min(wizard ? (activeStep ?? currentStep) : currentStep, steps.length - 1)
   const activeKey = steps[stepIndex]
+  const activeDone = !!stepDone[activeKey]
+  /* 当前这一步从"没完成"变成"完成了"：庆祝一下（只在一步一步视图，且不是刚打开时数据加载造成的） */
+  useEffect(() => {
+    const prev = prevDoneRef.current
+    prevDoneRef.current = { key: activeKey, done: activeDone }
+    if (!wizard || !canEdit || activeStep === null) return
+    if (prev && prev.key === activeKey && !prev.done && activeDone && Date.now() - armedAtRef.current > 2000) {
+      setCheer((c) => c + 1)
+      message.success({ content: t('aiLab.wizard.cheer'), duration: 2.5 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, activeDone, wizard, canEdit, activeStep])
   const goToStep = (i) => {
     setActiveStep(Math.max(0, Math.min(steps.length - 1, i)))
     try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) { /* 旧浏览器 */ }
@@ -203,6 +224,10 @@ const ProjectWorkspace = () => {
     if (key === 'train' && isTable && steps.includes('train_mlp')) return t('aiLab.step.train_tree')
     return t(`aiLab.step.${key}`)
   }
+  /* 小学模式：孩子的说法（"考一考 AI"）；没有对应文案的步骤仍用正式标题 */
+  const kidTitle = (key) => (kid && i18n.exists(`aiLab.kidStep.${key}`) ? t(`aiLab.kidStep.${key}`) : stepTitle(key))
+  const hintParams = { min: minPerClass, pct: Math.round(((typeof task?.holdout_ratio === 'number' && task.holdout_ratio > 0 && task.holdout_ratio < 1) ? task.holdout_ratio : DEFAULT_HOLDOUT_RATIO) * 100) }
+  const kidHint = (key, fallback) => (kid && i18n.exists(`aiLab.kidHint.${key}`) ? t(`aiLab.kidHint.${key}`, hintParams) : fallback)
   const scrollTo = (key) => document.getElementById(`ailab-step-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const handleTrainUpload = async (blobs, meta) => {
@@ -246,15 +271,22 @@ const ProjectWorkspace = () => {
   /* 一张步骤卡。一步一步视图里只渲染当前这一步（VerifyWorkspace 也经这里出卡，所以顺带过滤了） */
   const section = (key, title, hint, children, extra) => {
     if (wizard && key !== activeKey) return null
+    const main = kidTitle(key)
+    const shownHint = kidHint(key, hint)
     return (
-      <Card id={`ailab-step-${key}`} className={`ailab-section ${stepDone[key] ? 'done' : ''} ${wizard ? 'ailab-wizard-card' : ''}`} key={key}
+      <Card id={`ailab-step-${key}`} className={`ailab-section ${stepDone[key] ? 'done' : ''} ${wizard ? 'ailab-wizard-card' : ''} ${kid ? 'ailab-kid' : ''}`} key={key}
+        style={{ '--step-color': stepMeta(key, kind).color, '--step-tint': `${stepMeta(key, kind).color}14` }}
         title={(
-          <span>
-            <span className="ailab-section-no">{steps.indexOf(key) + 1}</span>{title}
+          <span className="ailab-section-head">
+            <StepBadge stepKey={key} kind={kind} size={wizard ? 36 : 28} done={stepDone[key]} index={steps.indexOf(key) + 1} />
+            <span className="ailab-section-titles">
+              <span className="ailab-section-title">{main}</span>
+              {main !== title && <span className="ailab-section-formal">{title}</span>}
+            </span>
             {stepDone[key] && <CheckCircleFilled className="ailab-section-check" aria-label={t('aiLab.wizard.done')} />}
           </span>
         )} extra={extra}>
-        {hint && <p className="ailab-section-hint">{hint}</p>}
+        {shownHint && <p className="ailab-section-hint">{shownHint}</p>}
         {children}
       </Card>
     )
@@ -288,14 +320,14 @@ const ProjectWorkspace = () => {
       {dataset?.locked_at && <Tag icon={<LockOutlined />} color="blue">{t('aiLab.lock.locked', { version: dataset.version })}</Tag>}
       {canEdit && (
         <Button type="primary" icon={<LockOutlined />} onClick={handleLock} loading={locking} disabled={trainTotal < 4 || classes.length < 2}>
-          {dataset?.locked_at ? t('aiLab.lock.relock') : t('aiLab.lock.button')}
+          {dataset?.locked_at ? t('aiLab.lock.relock', { pct: Math.round(holdoutRatio * 100) }) : t('aiLab.lock.button', { pct: Math.round(holdoutRatio * 100) })}
         </Button>
       )}
     </Space>
   ))
 
   const sections = {
-    predict: () => section('predict', t('aiLab.step.predict'), null, <PredictionCard project={project} prompt={predictPrompt} canEdit={canEdit} />),
+    predict: () => section('predict', t('aiLab.step.predict'), null, <PredictionCard project={project} prompt={predictPrompt} canEdit={canEdit} locked={models.length > 0} />),
     data_card: () => section('data_card', t('aiLab.step.data_card'), t('aiLab.section.dataCardHint'), <DataCardForm project={project} canEdit={canEdit} />),
     collect: () => section('collect', t('aiLab.step.collect'), t(collectHintKey, { min: minPerClass }), (
       <>
@@ -377,10 +409,13 @@ const ProjectWorkspace = () => {
     : (wizard ? (sections[activeKey] ? sections[activeKey]() : null) : steps.map((s) => (sections[s] ? sections[s]() : null)))
 
   return (
-    <div className="ailab-page ailab-workspace-page">
+    <AiLabUiContext.Provider value={uiContext}>
+    <div className={`ailab-page ailab-workspace-page ${kid ? 'ailab-kid-page' : ''}`}>
+      {cheer > 0 && <Celebration key={cheer} />}
       <div className="ailab-workspace-head">
         <Space wrap>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-lab')}>{t('common.back')}</Button>
+          <span className="ailab-kind-icon" style={{ '--kind-color': kindMeta(kind).color }}>{React.createElement(kindMeta(kind).icon)}</span>
           <Title level={4} style={{ margin: 0 }}>{project.title}</Title>
           <Tag color="geekblue">{taskTitle(project.task_key)}</Tag>
           <Tag>{t(`aiLab.kind.${kind}`)}</Tag>
@@ -413,14 +448,21 @@ const ProjectWorkspace = () => {
             size="small"
             current={stepIndex}
             onChange={(i) => (wizard ? goToStep(i) : scrollTo(steps[i]))}
-            items={steps.map((s, i) => ({ title: stepTitle(s), status: stepDone[s] ? 'finish' : (i === stepIndex ? 'process' : 'wait') }))}
+            items={steps.map((s, i) => ({
+              title: kidTitle(s),
+              description: kid && kidTitle(s) !== stepTitle(s) ? stepTitle(s) : undefined,
+              icon: <StepBadge stepKey={s} kind={kind} size={26} done={!!stepDone[s]} active={i === stepIndex} />,
+              status: stepDone[s] ? 'finish' : (i === stepIndex ? 'process' : 'wait')
+            }))}
           />
         </aside>
         <main className="ailab-main">
           {wizard && (
             <div className="ailab-wizard-bar">
-              <Text strong>{t('aiLab.wizard.progress', { n: stepIndex + 1, total: steps.length })}</Text>
-              <Progress percent={Math.round((doneCount / Math.max(1, steps.length)) * 100)} size="small" showInfo={false} strokeColor="#2c7a5a" className="ailab-wizard-progress" />
+              <Text strong className="ailab-wizard-where">{t('aiLab.wizard.progress', { n: stepIndex + 1, total: steps.length })}</Text>
+              <span className="ailab-wizard-dots" aria-hidden="true">
+                {steps.map((s, i) => <i key={s} className={`${stepDone[s] ? 'done' : ''} ${i === stepIndex ? 'current' : ''}`} onClick={() => goToStep(i)} />)}
+              </span>
               <Text type="secondary">{t('aiLab.wizard.doneCount', { done: doneCount, total: steps.length })}</Text>
             </div>
           )}
@@ -430,7 +472,7 @@ const ProjectWorkspace = () => {
               <Button icon={<LeftOutlined />} disabled={stepIndex === 0} onClick={() => goToStep(stepIndex - 1)}>{t('aiLab.wizard.prev')}</Button>
               {stepDone[activeKey]
                 ? <Tag color="green" icon={<CheckCircleFilled />}>{t('aiLab.wizard.done')}</Tag>
-                : <Tag>{t('aiLab.wizard.todo')}</Tag>}
+                : <Tag>{t(kid ? 'aiLab.wizard.todoKid' : 'aiLab.wizard.todo')}</Tag>}
               {stepIndex < steps.length - 1
                 ? <Button type={stepDone[activeKey] ? 'primary' : 'default'} onClick={() => goToStep(stepIndex + 1)}>{t('aiLab.wizard.next')}<RightOutlined /></Button>
                 : <Button type="primary" onClick={() => navigate('/ai-lab')}>{t('aiLab.wizard.backToList')}</Button>}
@@ -452,6 +494,7 @@ const ProjectWorkspace = () => {
         <ImportPresetModal open={presetOpen} onClose={() => setPresetOpen(false)} dataset={dataset} task={task} kind={isTable ? 'table' : isText ? 'text' : isAudio ? 'audio' : 'image'} />
       )}
     </div>
+    </AiLabUiContext.Provider>
   )
 }
 

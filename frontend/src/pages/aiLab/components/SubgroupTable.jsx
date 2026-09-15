@@ -50,6 +50,7 @@ const SubgroupTable = ({ predictions, tagKey, model, split }) => {
         ]}
       />
       {spread !== null && <div className="ailab-gap-line">{t('aiLab.fairness.spread', { value: formatPercent(spread), best: tagged[tagged.length - 1].group, worst: tagged[0].group })}</div>}
+      {tagged.some((g) => g.total < 10) && <Text type="warning" className="ailab-muted">{t('aiLab.fairness.smallGroups', { min: 10 })}</Text>}
     </div>
   )
 }

@@ -105,7 +105,7 @@ const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'ho
               <Button type="primary" icon={<ExperimentOutlined />} onClick={() => runTest('holdout')} loading={running === 'holdout'} disabled={!canEdit || !holdoutTotal || !!running}>{t('aiLab.evaluate.runHoldout')}</Button>
               <Text type="secondary">{t('aiLab.text.holdoutHint')}</Text>
             </Space>
-            <MetricsView metrics={holdoutMetrics} labelOf={labelOf} title={t('aiLab.split.holdout')} />
+            <MetricsView unit="sentence" metrics={holdoutMetrics} labelOf={labelOf} title={t('aiLab.split.holdout')} />
             {results.holdout && <><Divider />{errorTable(results.holdout.predictions)}</>}
           </div>
         ) },
@@ -119,7 +119,7 @@ const TextEvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'ho
             </Space>
             {shiftSet && (
               <>
-                <MetricsView metrics={shiftMetricsOf(shiftSet)} labelOf={labelOf} title={`${t('aiLab.split.shift')} · ${shiftSet}`} />
+                <MetricsView unit="sentence" metrics={shiftMetricsOf(shiftSet)} labelOf={labelOf} title={`${t('aiLab.split.shift')} · ${shiftSet}`} />
                 {holdoutMetrics && shiftMetricsOf(shiftSet) && <div className="ailab-gap-line">{t('aiLab.evaluate.gapLine', { holdout: formatPercent(holdoutMetrics.accuracy), shift: formatPercent(shiftMetricsOf(shiftSet).accuracy) })}</div>}
                 {results[`shift:${shiftSet}`] && <><Divider />{errorTable(results[`shift:${shiftSet}`].predictions)}</>}
               </>

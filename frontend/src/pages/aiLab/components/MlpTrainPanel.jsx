@@ -38,7 +38,7 @@ const MlpTrainPanel = ({ dataset, samples, models, canEdit, config }) => {
       const trainAcc = computeMetrics(preds, mlp.classKeys).accuracy
       const model = await saveModel({
         dataset_id: dataset.id, dataset_version: dataset.version, engine: 'table-mlp', feature_extractor: 'none',
-        params: { hidden, epochs, learning_rate: mlp.learningRate, input_dim: mlp.encoder.dim, train_accuracy: trainAcc, final_loss: mlp.history[mlp.history.length - 1]?.loss, history: mlp.history.filter((_, i) => i % Math.max(1, Math.floor(mlp.history.length / 40)) === 0 || i === mlp.history.length - 1) },
+        params: { hidden, epochs, learning_rate: mlp.learningRate, seed: mlp.seed, input_dim: mlp.encoder.dim, train_accuracy: trainAcc, final_loss: mlp.history[mlp.history.length - 1]?.loss, history: mlp.history.filter((_, i) => i % Math.max(1, Math.floor(mlp.history.length / 40)) === 0 || i === mlp.history.length - 1) },
         class_keys: mlp.classKeys, train_sample_count: rows.length,
         artifact: serializeMlp(mlp, { dataset_version: dataset.version }), note: note.trim() || undefined
       }, mlp)

@@ -5,7 +5,7 @@ import React, { useEffect, useMemo } from 'react'
 import { Table, Tag, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../../stores/aiLabStore'
-import { formatPercent } from '../engine/metrics'
+import { formatPercent, wilsonInterval } from '../engine/metrics'
 
 const { Text } = Typography
 
@@ -43,16 +43,29 @@ const ComparePanel = ({ models }) => {
     },
     { title: t('aiLab.compare.note'), dataIndex: 'note', render: (v) => v || <Text type="secondary">—</Text> }
   ]
+  /* 留出集只有几十张时，两版分数差在 ±(区间半宽) 之内不能说谁更好；按最近一版的留出集大小算 */
+  const latestHoldout = [...models].reverse().find((m) => typeof m.metrics?.holdout?.accuracy === 'number' && m.metrics.holdout.sample_count)?.metrics.holdout
+  const ci = latestHoldout ? wilsonInterval(Math.round(latestHoldout.accuracy * latestHoldout.sample_count), latestHoldout.sample_count) : null
   return (
-    <Table
-      size="small"
-      rowKey="id"
-      pagination={false}
-      dataSource={models}
-      columns={columns}
-      scroll={{ x: true }}
-      locale={{ emptyText: t('aiLab.compare.empty') }}
-    />
+    <div>
+      <Table
+        size="small"
+        rowKey="id"
+        pagination={false}
+        dataSource={models}
+        columns={columns}
+        scroll={{ x: true }}
+        locale={{ emptyText: t('aiLab.compare.empty') }}
+      />
+      {models.length >= 2 && new Set(models.map((m) => m.dataset_version)).size > 1 && (
+        <Text type="warning" className="ailab-muted" style={{ display: 'block', marginTop: 8 }}>{t('aiLab.compare.datasetDiffers')}</Text>
+      )}
+      {models.length >= 2 && (
+        <Text type="secondary" className="ailab-muted" style={{ display: 'block', marginTop: 8 }}>
+          {ci ? t('aiLab.compare.noise', { n: latestHoldout.sample_count, half: formatPercent((ci.high - ci.low) / 2) }) : ''} {t('aiLab.compare.reuseNote')}
+        </Text>
+      )}
+    </div>
   )
 }
 

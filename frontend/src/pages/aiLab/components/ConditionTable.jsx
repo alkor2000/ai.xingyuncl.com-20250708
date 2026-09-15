@@ -45,7 +45,8 @@ const ConditionTable = ({ project, models, canEdit }) => {
 
   const columns = [
     { title: t('aiLab.condition.name'), dataIndex: 'condition', render: (v, r) => <Input value={v} maxLength={50} disabled={!canEdit} onChange={(e) => update(r.id, { condition: e.target.value })} placeholder={t('aiLab.condition.namePlaceholder')} /> },
-    { title: t('aiLab.condition.predicted'), dataIndex: 'predicted', width: 130, render: (v, r) => <InputNumber value={v} min={0} max={100} disabled={!canEdit} addonAfter="%" onChange={(val) => update(r.id, { predicted: val })} /> },
+    /* 某个条件已经实测过后，它的预计值就锁定：预测必须先于观察，事后改预测就不是预测了 */
+    { title: t('aiLab.condition.predicted'), dataIndex: 'predicted', width: 130, render: (v, r) => <InputNumber value={v} min={0} max={100} disabled={!canEdit || !!actualOf(r.condition.trim())} addonAfter="%" onChange={(val) => update(r.id, { predicted: val })} title={actualOf(r.condition.trim()) ? t('aiLab.condition.predictedLocked') : undefined} /> },
     { title: t('aiLab.condition.reason'), dataIndex: 'reason', render: (v, r) => <Input value={v} maxLength={200} disabled={!canEdit} onChange={(e) => update(r.id, { reason: e.target.value })} placeholder={t('aiLab.condition.reasonPlaceholder')} /> },
     {
       title: t('aiLab.condition.actual'),

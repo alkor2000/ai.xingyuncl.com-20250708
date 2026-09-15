@@ -3,8 +3,9 @@
  */
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Modal, Form, Input, Radio, Tag, Empty, Spin, Tabs, Table, Typography, Space, message } from 'antd'
+import { Button, Card, Modal, Form, Input, Radio, Tag, Spin, Tabs, Table, Typography, Space, Progress, message } from 'antd'
 import { PlusOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { kindMeta, GRADE_COLORS } from './stepMeta.jsx'
 import { useTranslation } from 'react-i18next'
 import useAiLabStore from '../../stores/aiLabStore'
 import useAuthStore from '../../stores/authStore'
@@ -45,28 +46,60 @@ const AiLab = () => {
     }
   }
 
-  const projectCard = (p) => (
-    <Card key={p.id} hoverable className="ailab-project-card" onClick={() => navigate(`/ai-lab/projects/${p.id}`)}>
-      <div className="ailab-project-title">{p.title}</div>
-      <Space wrap size={4} style={{ marginBottom: 8 }}>
-        <Tag color="geekblue">{i18n.exists(`aiLab.task.${p.task_key}.title`) ? t(`aiLab.task.${p.task_key}.title`) : p.task_key}</Tag>
-        <Tag>{t(`aiLab.participation.${p.participation_mode}`)}</Tag>
-      </Space>
-      <div className="ailab-project-stats">
-        <span>{t('aiLab.card.samples', { count: p.summary?.sample_count ?? 0 })}</span>
-        <span>{t('aiLab.card.models', { count: p.summary?.model_count ?? 0 })}</span>
-        <span>{t('aiLab.card.holdout', { value: formatPercent(p.summary?.best_holdout_accuracy) })}</span>
-        <span>{t('aiLab.card.gap', { value: formatPercent(p.summary?.generalization_gap) })}</span>
-      </div>
-      <Text type="secondary" className="ailab-muted">{new Date(p.updated_at).toLocaleString(i18n.language)}</Text>
-    </Card>
+  const taskOf = (key) => tasks.find((x) => x.key === key)
+  /* 粗略进度：有样本 1/4，有版本 2/4，测过留出集 3/4，测过换条件集 4/4 */
+  const progressOf = (p) => {
+    const sm = p.summary || {}
+    let n = 0
+    if ((sm.sample_count ?? 0) > 0) n += 1
+    if ((sm.model_count ?? 0) > 0) n += 1
+    if (typeof sm.best_holdout_accuracy === 'number') n += 1
+    if (typeof sm.generalization_gap === 'number') n += 1
+    return Math.round((n / 4) * 100)
+  }
+  const projectCard = (p) => {
+    const kind = taskOf(p.task_key)?.kind || 'image'
+    const km = kindMeta(kind)
+    const acc = p.summary?.best_holdout_accuracy
+    return (
+      <Card key={p.id} hoverable className="ailab-project-card" style={{ '--kind-color': km.color }} onClick={() => navigate(`/ai-lab/projects/${p.id}`)}>
+        <div className="ailab-project-top">
+          <span className="ailab-kind-icon"><km.icon /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="ailab-project-title">{p.title}</div>
+            <Text type="secondary" className="ailab-muted">{i18n.exists(`aiLab.task.${p.task_key}.title`) ? t(`aiLab.task.${p.task_key}.title`) : p.task_key} · {t(`aiLab.participation.${p.participation_mode}`)}</Text>
+          </div>
+        </div>
+        <div className="ailab-project-progress"><Progress percent={progressOf(p)} size="small" showInfo={false} strokeColor={km.color} /></div>
+        <div className="ailab-project-stats">
+          <span>{t('aiLab.card.samples', { count: p.summary?.sample_count ?? 0 })}</span>
+          <span>{t('aiLab.card.models', { count: p.summary?.model_count ?? 0 })}</span>
+          <span>{typeof acc === 'number' ? t('aiLab.card.holdout', { value: formatPercent(acc) }) : t('aiLab.card.notTested')}</span>
+          <span>{typeof p.summary?.generalization_gap === 'number' ? t('aiLab.card.gap', { value: formatPercent(p.summary.generalization_gap) }) : ''}</span>
+        </div>
+        <Text type="secondary" className="ailab-muted">{new Date(p.updated_at).toLocaleString(i18n.language)}</Text>
+      </Card>
+    )
+  }
+  const emptyHero = (
+    <div className="ailab-empty-hero">
+      <svg viewBox="0 0 140 140" aria-hidden="true">
+        <defs><linearGradient id="ailabFlask" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f28c28" /><stop offset="1" stopColor="#e64980" /></linearGradient></defs>
+        <path d="M54 18h32v10h-6v26l30 46a10 10 0 0 1-8 15H38a10 10 0 0 1-8-15l30-46V28h-6z" fill="#fff" stroke="#1f2a37" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M46 84h48l16 24a4 4 0 0 1-3 6H33a4 4 0 0 1-3-6z" fill="url(#ailabFlask)" />
+        <circle cx="62" cy="98" r="4" fill="#fff" opacity="0.8" /><circle cx="78" cy="104" r="3" fill="#fff" opacity="0.8" /><circle cx="70" cy="90" r="2.5" fill="#fff" opacity="0.8" />
+        <path d="M104 22l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#f59f00" /><path d="M26 44l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#12b886" />
+      </svg>
+      <h3>{t('aiLab.emptyTitle')}</h3>
+      <p>{t('aiLab.empty')}</p>
+      <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{t('aiLab.newProject')}</Button>
+    </div>
   )
 
   const myTab = (
     <div>
       {projectsLoading ? <div className="ailab-loading"><Spin /></div> : (
-        projects.length ? <div className="ailab-project-grid">{projects.map(projectCard)}</div>
-          : <Empty description={t('aiLab.empty')}><Button type="primary" onClick={() => setOpen(true)}>{t('aiLab.newProject')}</Button></Empty>
+        projects.length ? <div className="ailab-project-grid">{projects.map(projectCard)}</div> : emptyHero
       )}
     </div>
   )
@@ -94,9 +127,12 @@ const AiLab = () => {
   return (
     <div className="ailab-page">
       <div className="ailab-head">
-        <div>
-          <Title level={3} style={{ margin: 0 }}><ExperimentOutlined /> {t('aiLab.title')}</Title>
-          <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>{t('aiLab.subtitle')}</Paragraph>
+        <div className="ailab-head-hero">
+          <span className="ailab-kind-icon"><ExperimentOutlined /></span>
+          <div>
+            <Title level={3} style={{ margin: 0 }}>{t('aiLab.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>{t('aiLab.subtitle')}</Paragraph>
+          </div>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{t('aiLab.newProject')}</Button>
       </div>
@@ -125,11 +161,11 @@ const AiLab = () => {
             <Radio.Group style={{ width: '100%' }}>
               {GRADE_BANDS.filter((g) => tasks.some((task) => (task.grade_band || 'P') === g)).map((g) => (
                 <div className="ailab-task-group" key={g}>
-                  <div className="ailab-task-group-title">{t(`aiLab.grade.${g}`)}</div>
+                  <div className="ailab-task-group-title"><span className="ailab-grade-pill" style={{ '--grade-color': GRADE_COLORS[g] }}>{t(`aiLab.grade.${g}`)}</span></div>
                   <div className="ailab-task-radio">
                     {tasks.filter((task) => (task.grade_band || 'P') === g).map((task) => (
-                      <Radio.Button key={task.key} value={task.key} className="ailab-task-option">
-                        <div className="ailab-task-option-title">{taskTitle(task)}</div>
+                      <Radio.Button key={task.key} value={task.key} className="ailab-task-option" style={{ '--kind-color': kindMeta(task.kind || 'image').color }}>
+                        <div className="ailab-task-option-title">{React.createElement(kindMeta(task.kind || 'image').icon)} {taskTitle(task)}</div>
                         <div className="ailab-task-option-desc">{taskDesc(task)}</div>
                         <div className="ailab-task-option-meta">
                           <Tag>{t(`aiLab.kind.${task.kind || 'image'}`)}</Tag>

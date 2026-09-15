@@ -119,7 +119,8 @@
       "samples": "{{count}} samples",
       "models": "{{count}} versions",
       "holdout": "Held-out {{value}}",
-      "gap": "Gap {{value}}"
+      "gap": "Gap {{value}}",
+      "notTested": "not tested yet"
     },
     "admin": {
       "title": "Experiment",
@@ -210,8 +211,8 @@
     "lock": {
       "counts": "{{train}} training samples, {{holdout}} held-out samples",
       "locked": "Locked (dataset version {{version}})",
-      "button": "Lock the held-out set (20%)",
-      "relock": "Hold out 20% of the newly added samples",
+      "button": "Lock the held-out test set ({{pct}}%)",
+      "relock": "Hold out another {{pct}}% of the new samples",
       "done": "Held-out set locked",
       "failed": "Locking failed",
       "countsRows": "{{train}} training rows, {{holdout}} held-out rows"
@@ -237,7 +238,8 @@
       "save": "Save table",
       "saved": "Condition table saved",
       "saveFailed": "Save failed",
-      "collector": "Collector"
+      "collector": "Collector",
+      "predictedLocked": "This condition has been measured; the predicted value is locked"
     },
     "capture": {
       "startCamera": "Open camera",
@@ -339,7 +341,10 @@
       "engine": "Method",
       "perClass": "Per class",
       "mislabeled": "Mislabeled",
-      "depth": "Tree depth"
+      "depth": "Tree depth",
+      "noise": "The held-out set has only {{n}} samples, so scores wobble by about ±{{half}}: two versions closer than that are not clearly different.",
+      "reuseNote": "Reusing the same held-out set to pick versions makes scores optimistic; confirm final conclusions on a shifted set or a freshly collected batch.",
+      "datasetDiffers": "Note: these versions have different dataset versions (data was added and re-locked in between), so their held-out sets are not the same questions and the scores are not directly comparable."
     },
     "modelCard": {
       "scope": "Where this model can be used",
@@ -358,7 +363,14 @@
       "placeholder": "Write your prediction and your reason",
       "save": "Save prediction",
       "saved": "Prediction saved",
-      "saveFailed": "Save failed"
+      "saveFailed": "Save failed",
+      "locked": "Prediction locked (cannot change once training starts)",
+      "none": "(no prediction was written)",
+      "lockHint": "Once training starts the prediction is frozen, so you can see how good your guess was.",
+      "reflectionPrompt": "Now that you have seen the results: was it like your prediction? What was different, and why?",
+      "reflectionPlaceholder": "What you found when comparing with your prediction",
+      "saveReflection": "Save thoughts",
+      "reflectionSaved": "Thoughts saved"
     },
     "timeline": {
       "title": "Process timeline",
@@ -471,7 +483,7 @@
       },
       "fruits-varied": {
         "title": "Six fruits (mixed varieties)",
-        "desc": "Apples, bananas, cherries, grapes, oranges and peaches from Fruits-360, each class mixing several varieties; the 'new variety' set holds varieties never seen in training, the background sets paste the same fruit onto colourful and dark backgrounds."
+        "desc": "Apples, bananas, cherries, grapes, oranges and peaches from Fruits-360, each class mixing several varieties; the 'new variety' set holds varieties never seen in training, the background sets paste the same fruit onto colourful and dark backgrounds. Frames of the same fruit look alike, so the held-out score is optimistic; the real test is 'new variety'."
       }
     },
     "curve": {
@@ -719,7 +731,8 @@
       "accuracy": "Accuracy",
       "untagged": "not filled in",
       "noTag": "The test samples have no '{{tag}}' tag, so they cannot be grouped. Fill it in when collecting.",
-      "spread": "The best group ({{best}}) and the worst group ({{worst}}) differ by {{value}}."
+      "spread": "The best group ({{best}}) and the worst group ({{worst}}) differ by {{value}}.",
+      "smallGroups": "Some groups have fewer than {{min}} samples; a gap computed from so few may be chance. Collect more before concluding."
     },
     "wizard": {
       "progress": "Step {{n}} of {{total}}",
@@ -730,7 +743,71 @@
       "todo": "Not done yet",
       "modeSteps": "Step by step",
       "modeAll": "Show all",
-      "backToList": "Back to experiments"
-    }
+      "backToList": "Back to experiments",
+      "cheer": "Great, this step is done!",
+      "todoKid": "Not finished yet"
+    },
+    "score": {
+      "count_image": "{{correct}} of {{total}} images right",
+      "count_audio": "{{correct}} of {{total}} clips right",
+      "count_row": "{{correct}} of {{total}} rows right",
+      "count_sentence": "{{correct}} of {{total}} sentences right",
+      "mood_great": "Excellent, almost all right!",
+      "mood_good": "Good, only a few mistakes",
+      "mood_soso": "So-so, quite a few mistakes; go see where",
+      "mood_low": "The AI is confused: too little data, too similar, or wrong labels?",
+      "mood_none": "",
+      "ci": "95% confidence interval {{low}}–{{high}} ({{n}} test samples)",
+      "ciTip": "With only a few dozen test samples the score itself wobbles. The true level most likely lies in this range; when two versions' ranges overlap, neither is clearly better.",
+      "confusionTitle": "Who was mistaken for whom"
+    },
+    "kidStep": {
+      "predict": "Make a guess first",
+      "collect": "Prepare study material",
+      "import_preset": "Use a ready-made data pack",
+      "data_card": "Write the data sheet",
+      "lock": "Hide some as test questions",
+      "rules": "I make the rules",
+      "train": "Let the AI learn",
+      "train_mlp": "Train a small neural network",
+      "annotate": "Label the sentences",
+      "agreement": "Did both of you label alike?",
+      "fairness": "Who is the AI unfair to?",
+      "test_holdout": "Quiz the AI",
+      "test_shift": "Quiz it in a new setting",
+      "condition_design": "Design the test conditions",
+      "errors": "See where it went wrong",
+      "mislabel": "Mislabel on purpose",
+      "restore": "Put the labels back",
+      "iterate": "Improve and compare",
+      "compare": "Which is more accurate?",
+      "model_card": "Write the AI's name card",
+      "material": "Read the material",
+      "claims": "Split into claims",
+      "verdicts": "Check claim by claim",
+      "revise": "Rewrite the draft",
+      "reflection": "Think it over"
+    },
+    "kidHint": {
+      "predict": "Before doing anything, guess what will happen and why. Come back later to see how close you were.",
+      "collect": "Decide which things to recognise, then photograph or upload at least {{min}} of each. Variety helps: change angles, backgrounds and lighting.",
+      "import_preset": "No camera needed this time: use a ready-made data pack. After importing, browse what each class looks like.",
+      "lock": "Hide {{pct}}% of each class as test questions the AI never sees while learning. Only unseen questions give an honest score.",
+      "train": "One click and the AI learns from these pictures right in your browser. Each run makes a new version you can quiz.",
+      "test_holdout": "Quiz the AI with the hidden questions. See how many it got right and which ones it missed.",
+      "test_shift": "Quiz it again in a new setting: different background, angle, light, or a classmate's photos. How much does the score drop?",
+      "errors": "Open the ones it got wrong and think: what is the AI actually looking at? Background, colour, or shape?",
+      "mislabel": "First learn and quiz with correct labels. Then deliberately mislabel some, learn again, quiz again, and compare.",
+      "restore": "Put the labels back, learn once more and check the score recovers.",
+      "iterate": "Compare the versions side by side: what changed and by how much? With only a few dozen test items, one or two points is not a real difference.",
+      "model_card": "In your own words: what can this AI recognise, when does it fail, and how do you know?",
+      "rules": "Look at the table first: which column separates them best? Write if-then rules and try them on the training set.",
+      "compare": "Same quiz for both: how do your rules and the AI's own rules score? Which class is the difference in?",
+      "material": "Read the original material and the AI's draft, and spot what differs.",
+      "claims": "Split the AI's draft into single claims, one fact each.",
+      "verdicts": "Check each claim against the original: supported, refuted, or cannot be verified?",
+      "reflection": "Look back: where was the AI wrong, how did you find out, and what will you do next time?"
+    },
+    "emptyTitle": "Run your first AI experiment"
   }
 }

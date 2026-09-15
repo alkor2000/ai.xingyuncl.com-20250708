@@ -46,6 +46,20 @@ export function generalizationGap(holdoutAccuracy, shiftAccuracies) {
   return holdoutAccuracy - Math.min(...values)
 }
 
+/**
+ * 准确率的 95% 置信区间（Wilson 区间）：测试集只有几十张时，分数本身有 ±10% 左右的抖动，
+ * 比较两个版本前先看区间是否重叠。correct/total 为整数；total=0 时返回 null。
+ */
+export function wilsonInterval(correct, total, z = 1.96) {
+  if (!Number.isFinite(correct) || !Number.isFinite(total) || total <= 0) return null
+  const p = correct / total
+  const z2 = z * z
+  const denom = 1 + z2 / total
+  const center = (p + z2 / (2 * total)) / denom
+  const half = (z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total))) / denom
+  return { low: Math.max(0, center - half), high: Math.min(1, center + half) }
+}
+
 export function formatPercent(v, digits = 0) {
   if (typeof v !== 'number' || Number.isNaN(v)) return '—'
   return `${(v * 100).toFixed(digits)}%`

@@ -2,7 +2,7 @@
  * 数据集面板：类别管理 + 各类别训练样本网格；留出集只显示数量，训练页不可见
  */
 import React, { useEffect, useState } from 'react'
-import { Button, Input, Space, Tag, Popconfirm, Empty, Tooltip, message, Modal } from 'antd'
+import { Button, Input, Space, Tag, Empty, Tooltip, message, Modal } from 'antd'
 import { PlusOutlined, DeleteOutlined, LockOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -24,6 +24,8 @@ const DatasetPanel = ({ dataset, samples, onAddClass, onRenameClass, onDeleteSam
 
   useEffect(() => { setEditing(null) }, [dataset?.id])
 
+  /* 几百张缩略图各挂一个 Popconfirm 会生成几百个弹层实例（曾触发 React 嵌套更新告警），改为共用一个确认框 */
+  const confirmDelete = (sample) => Modal.confirm({ title: t('aiLab.dataset.deleteConfirm'), okText: t('common.confirm'), cancelText: t('common.cancel'), onOk: () => onDeleteSample(sample) })
   const handleAdd = async () => {
     const label = newLabel.trim()
     if (!label) return
@@ -62,9 +64,7 @@ const DatasetPanel = ({ dataset, samples, onAddClass, onRenameClass, onDeleteSam
                 <div className="ailab-thumb" key={s.id} title={Object.entries(s.condition_tags || {}).map(([k, v]) => `${t(`aiLab.condition.${k}`)}: ${v}`).join(' / ')}>
                   <img src={s.file_url} alt="" loading="lazy" />
                   {canEdit && (
-                    <Popconfirm title={t('aiLab.dataset.deleteConfirm')} onConfirm={() => onDeleteSample(s)} okText={t('common.confirm')} cancelText={t('common.cancel')}>
-                      <button type="button" className="ailab-thumb-del" aria-label="delete"><DeleteOutlined /></button>
-                    </Popconfirm>
+                    <button type="button" className="ailab-thumb-del" aria-label="delete" onClick={(e) => { e.stopPropagation(); confirmDelete(s) }}><DeleteOutlined /></button>
                   )}
                 </div>
               ))}

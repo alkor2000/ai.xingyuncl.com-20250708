@@ -140,7 +140,7 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'holdou
                   {running === 'holdout' && <Progress percent={progress} size="small" style={{ width: 200 }} />}
                   <Text type="secondary">{t(modality.id === 'audio' ? 'aiLab.evaluate.holdoutHintAudio' : 'aiLab.evaluate.holdoutHint')}</Text>
                 </Space>
-                <MetricsView metrics={holdoutMetrics} labelOf={labelOf} title={t('aiLab.split.holdout')} />
+                <MetricsView unit={modality.id} metrics={holdoutMetrics} labelOf={labelOf} title={t('aiLab.split.holdout')} />
                 {results.holdout && (
                   <>
                     {subgroupTag && <SubgroupTable predictions={results.holdout.predictions} tagKey={subgroupTag} model={model} split="holdout" />}
@@ -180,7 +180,7 @@ const EvaluatePanel = ({ dataset, models, labelOf, canEdit, defaultTab = 'holdou
                 </Space>
                 {shiftSet && (
                   <>
-                    <MetricsView metrics={shiftMetricsOf(shiftSet)} labelOf={labelOf} title={`${t('aiLab.split.shift')} · ${shiftSet}`} />
+                    <MetricsView unit={modality.id} metrics={shiftMetricsOf(shiftSet)} labelOf={labelOf} title={`${t('aiLab.split.shift')} · ${shiftSet}`} />
                     {holdoutMetrics && shiftMetricsOf(shiftSet) && (
                       <div className="ailab-gap-line">
                         {t('aiLab.evaluate.gapLine', { holdout: formatPercent(holdoutMetrics.accuracy), shift: formatPercent(shiftMetricsOf(shiftSet).accuracy) })}

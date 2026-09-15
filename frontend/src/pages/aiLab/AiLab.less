@@ -1,5 +1,5 @@
 // AI训练专区 样式
-.ailab-page { padding: 16px 24px 48px; }
+.ailab-page { padding: 16px 24px 48px; background: #f7f5ef; min-height: 100%; }
 .ailab-loading { display: flex; justify-content: center; align-items: center; min-height: 320px; }
 .ailab-muted { color: rgba(0, 0, 0, 0.45); font-size: 12px; }
 .ailab-help { display: inline-block; margin-left: 6px; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: #e6eef7; color: #1e4c8a; font-size: 11px; cursor: help; }
@@ -18,14 +18,30 @@
 }
 
 .ailab-workspace-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-.ailab-workspace { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
-.ailab-rail { position: sticky; top: 76px; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 14px 12px;
+.ailab-workspace { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 20px; align-items: start; }
+.ailab-rail { position: sticky; top: 76px; background: #fff; border: none; border-radius: 14px; padding: 16px 14px; box-shadow: 0 2px 10px rgba(63, 50, 30, 0.06);
   .ant-steps-item { cursor: pointer; }
+  .ant-steps-item-icon { line-height: 1; }
+  .ant-steps-item-process .ant-steps-item-title { font-weight: 700; color: #1f2a37; }
+  .ant-steps-item-description { font-size: 11.5px !important; }
+  .ant-steps-item-tail::after { background: #e9e5da !important; }
 }
 .ailab-main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-.ailab-section { .ant-card-head-title { font-weight: 600; } &.done .ailab-section-no { background: #2c7a5a; } }
+.ailab-section { border: none; border-radius: 14px; box-shadow: 0 2px 10px rgba(63, 50, 30, 0.06); overflow: hidden;
+  .ant-card-head { background: linear-gradient(var(--step-tint, #f4f6f8), var(--step-tint, #f4f6f8)); border-bottom: 2px solid var(--step-color, #e8e8e8); min-height: 56px; }
+  .ant-card-head-title { font-weight: 600; padding: 10px 0; }
+  &.done .ailab-section-no { background: #2c7a5a; }
+}
+.ailab-section-head { display: inline-flex; align-items: center; gap: 12px; }
+.ailab-section-titles { display: flex; flex-direction: column; line-height: 1.25; }
+.ailab-section-title { font-size: 17px; color: #1f2a37; }
+.ailab-section-formal { font-size: 12px; font-weight: 400; color: rgba(31, 42, 55, 0.5); margin-top: 2px; }
+.ailab-step-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; flex: none; transition: transform 0.2s;
+  &.active { transform: scale(1.06); }
+  .ailab-step-badge-no { position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 3px; border-radius: 8px; background: #fff; color: #1f2a37; font-size: 10px; font-style: normal; font-weight: 700; text-align: center; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.08); }
+}
 .ailab-section-no { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: #1e4c8a; color: #fff; font-size: 12px; margin-right: 8px; }
-.ailab-section-hint { color: rgba(0, 0, 0, 0.55); margin: -4px 0 12px; font-size: 13px; }
+.ailab-section-hint { color: rgba(31, 42, 55, 0.62); margin: 0 0 14px; font-size: 13.5px; line-height: 1.7; padding: 8px 12px; background: #faf8f2; border-radius: 8px; }
 
 // 采集
 .ailab-capture { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 20px; margin-top: 12px; }
@@ -58,10 +74,20 @@
 .ailab-metrics-title { font-weight: 600; }
 .ailab-metrics-sub { font-size: 12px; color: rgba(0, 0, 0, 0.45); }
 .ailab-big-number { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; color: #1e4c8a; line-height: 1; }
+.ailab-scorecard { display: flex; align-items: center; gap: 18px; padding: 12px 16px; border-radius: 12px; background: #faf8f2; margin-bottom: 12px; }
+.ailab-score-ring { position: relative; width: 96px; height: 96px; flex: none; svg { display: block; }
+  .ailab-big-number { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #1f2a37; }
+}
+.ailab-score-text { min-width: 0; .ailab-metrics-title { font-size: 14px; color: rgba(31, 42, 55, 0.6); font-weight: 500; } }
+.ailab-score-count { font-size: 20px; font-weight: 700; color: #1f2a37; margin: 2px 0; }
+.ailab-score-mood { font-size: 14.5px; color: #1f2a37; }
+.ailab-score-ci { font-size: 12px; color: rgba(31, 42, 55, 0.55); margin-top: 4px; cursor: help; border-bottom: 1px dashed rgba(31, 42, 55, 0.3); display: inline-block; }
+.ailab-mood-great .ailab-score-mood { color: #2c7a5a; } .ailab-mood-good .ailab-score-mood { color: #12b886; } .ailab-mood-soso .ailab-score-mood { color: #d9480f; } .ailab-mood-low .ailab-score-mood { color: #e03131; }
+.ailab-cm-title { font-size: 13px; font-weight: 600; color: rgba(31, 42, 55, 0.7); margin: 4px 0 6px; }
 .ailab-recall-bars { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .ailab-recall-row { display: grid; grid-template-columns: 90px 1fr 90px; align-items: center; gap: 8px; font-size: 12.5px; }
-.ailab-recall-track { height: 10px; background: #eef2f5; border-radius: 5px; overflow: hidden; }
-.ailab-recall-fill { height: 100%; background: #2c7a5a; }
+.ailab-recall-track { height: 14px; background: #eef1f4; border-radius: 7px; overflow: hidden; }
+.ailab-recall-fill { height: 100%; background: linear-gradient(90deg, #12b886, #2c7a5a); border-radius: 7px; transition: width 0.6s ease; }
 .ailab-recall-value { font-variant-numeric: tabular-nums; }
 .ailab-cm-wrap { overflow-x: auto; }
 .ailab-cm { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums;
@@ -154,14 +180,57 @@
 
 // 一步一步视图（步骤卡向导）
 .ailab-section-check { color: #2c7a5a; margin-left: 8px; }
-.ailab-wizard-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px 16px;
-  .ailab-wizard-progress { width: 180px; margin: 0; }
+.ailab-wizard-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff; border: none; border-radius: 999px; padding: 10px 20px; box-shadow: 0 2px 10px rgba(63, 50, 30, 0.06);
+  .ailab-wizard-where { font-size: 15px; }
+  .ailab-wizard-dots { display: inline-flex; align-items: center; gap: 8px;
+    i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #e9e5da; cursor: pointer; transition: transform 0.15s;
+      &.done { background: #2c7a5a; }
+      &.current { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #f28c28; transform: scale(1.1); }
+      &:hover { transform: scale(1.25); }
+    }
+  }
 }
-.ailab-wizard-card { box-shadow: 0 4px 16px rgba(30, 76, 138, 0.08);
-  .ant-card-head-title { font-size: 16px; }
+.ailab-wizard-card { box-shadow: 0 8px 24px rgba(63, 50, 30, 0.09);
   .ant-card-body { padding: 20px 24px; }
 }
-.ailab-wizard-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; position: sticky; bottom: 12px; z-index: 5; }
+.ailab-wizard-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border: none; border-radius: 999px; padding: 10px 14px; position: sticky; bottom: 12px; z-index: 5; box-shadow: 0 6px 20px rgba(63, 50, 30, 0.12);
+  .ant-btn { border-radius: 999px; }
+}
+// 小学模式：字大一点、按钮大一点、圆一点
+.ailab-kid-page { font-size: 15px;
+  .ailab-section-title { font-size: 19px; }
+  .ailab-section-hint { font-size: 14.5px; }
+  .ant-btn-primary { height: 40px; padding: 0 20px; font-size: 15px; border-radius: 12px; }
+  .ailab-wizard-nav .ant-btn-primary { height: 40px; }
+  .ant-tag { font-size: 13px; padding: 2px 10px; border-radius: 10px; }
+}
+.ailab-prediction-locked { margin: 8px 0 14px; padding: 10px 14px; border-left: 3px solid #4c6ef5; background: #f4f6fb; border-radius: 0 8px 8px 0; }
+// 庆祝彩纸
+.ailab-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 1200; overflow: hidden;
+  i { position: absolute; top: -16px; width: 10px; height: 16px; border-radius: 2px; opacity: 0.95; animation: ailab-fall 1.7s cubic-bezier(0.25, 0.6, 0.4, 1) forwards; }
+}
+@keyframes ailab-fall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .ailab-confetti { display: none; } .ailab-recall-fill { transition: none; } }
+// 实验列表：类型色条与图标、进度
+.ailab-project-card { border: none; border-radius: 14px; box-shadow: 0 2px 10px rgba(63, 50, 30, 0.06); position: relative; overflow: hidden; transition: transform 0.15s, box-shadow 0.15s;
+  &::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--kind-color, #4c6ef5); }
+  &:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(63, 50, 30, 0.12); }
+  .ant-card-body { padding: 14px 16px 12px 20px; }
+}
+.ailab-project-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ailab-kind-icon { width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; flex: none; background: var(--kind-color, #4c6ef5); }
+.ailab-project-progress { margin: 6px 0 4px; .ant-progress { margin: 0; } }
+.ailab-empty-hero { text-align: center; padding: 40px 16px 48px; background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(63, 50, 30, 0.06);
+  svg { width: 140px; height: 140px; display: block; margin: 0 auto 12px; }
+  h3 { margin: 0 0 6px; font-size: 20px; color: #1f2a37; }
+  p { color: rgba(31, 42, 55, 0.6); margin: 0 0 18px; }
+}
+.ailab-head-hero { display: flex; align-items: center; gap: 14px; .ailab-kind-icon { width: 44px; height: 44px; font-size: 22px; border-radius: 14px; background: linear-gradient(135deg, #f28c28, #e64980); } }
+.ailab-task-radio .ailab-task-option { border-radius: 12px !important; border-left: 5px solid var(--kind-color, #4c6ef5) !important;
+  .ailab-task-option-title { display: flex; align-items: center; gap: 6px; .anticon { color: var(--kind-color, #4c6ef5); } }
+  &.ant-radio-button-wrapper-checked { box-shadow: 0 0 0 2px var(--kind-color, #4c6ef5) inset; }
+}
+.ailab-grade-pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; background: var(--grade-color, #4c6ef5); }
 @media (max-width: 900px) {
   .ailab-wizard-bar .ailab-wizard-progress { width: 100px; }
   .ailab-wizard-card .ant-card-body { padding: 14px 16px; }

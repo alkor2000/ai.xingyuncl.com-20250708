@@ -8,6 +8,17 @@
 export const DEFAULT_K = 5
 
 /**
+ * 实际使用的 k：不超过训练集里样本最少的那一类的数量（每类只有 3 张时 k=5 会让多数票被其他类稀释），
+ * 且至少为 1。学习曲线实验（每类 3/10/30 张）靠这个保证小样本点公平。
+ */
+export function effectiveK(samples, k = DEFAULT_K) {
+  const counts = {}
+  samples.forEach((s) => { counts[s.label] = (counts[s.label] || 0) + 1 })
+  const smallest = Math.min(...Object.values(counts))
+  return Math.max(1, Math.min(k, Number.isFinite(smallest) ? smallest : k))
+}
+
+/**
  * @param {{id:number|string, label:string, vec:Float32Array|number[]}[]} samples
  * @param {{k?:number}} [params]
  */

@@ -2,7 +2,7 @@
  * 声音数据集面板：类别管理 + 各类别训练片段（频谱缩略图 + 试听）；留出集只显示数量
  */
 import React, { useEffect, useState } from 'react'
-import { Button, Input, Space, Tag, Popconfirm, Empty, Tooltip, message, Modal } from 'antd'
+import { Button, Input, Space, Tag, Empty, Tooltip, message, Modal } from 'antd'
 import { PlusOutlined, DeleteOutlined, LockOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import AudioThumb from './AudioThumb'
@@ -24,6 +24,8 @@ const AudioDatasetPanel = ({ dataset, samples, onAddClass, onRenameClass, onDele
   const counts = dataset?.counts || { train: {}, holdout: {}, shift: {} }
   useEffect(() => { setEditing(null) }, [dataset?.id])
 
+  /* 几百张缩略图各挂一个 Popconfirm 会生成几百个弹层实例（曾触发 React 嵌套更新告警），改为共用一个确认框 */
+  const confirmDelete = (sample) => Modal.confirm({ title: t('aiLab.dataset.deleteConfirm'), okText: t('common.confirm'), cancelText: t('common.cancel'), onOk: () => onDeleteSample(sample) })
   const handleAdd = async () => {
     const label = newLabel.trim()
     if (!label) return
@@ -59,9 +61,7 @@ const AudioDatasetPanel = ({ dataset, samples, onAddClass, onRenameClass, onDele
                 <div className="ailab-thumb" key={s.id} title={Object.entries(s.condition_tags || {}).map(([k, v]) => `${t(`aiLab.audioCondition.${k}`, { defaultValue: k })}: ${v}`).join(' / ')}>
                   <AudioThumb sample={s} />
                   {canEdit && (
-                    <Popconfirm title={t('aiLab.dataset.deleteConfirm')} onConfirm={() => onDeleteSample(s)} okText={t('common.confirm')} cancelText={t('common.cancel')}>
-                      <button type="button" className="ailab-thumb-del" aria-label="delete"><DeleteOutlined /></button>
-                    </Popconfirm>
+                    <button type="button" className="ailab-thumb-del" aria-label="delete" onClick={(e) => { e.stopPropagation(); confirmDelete(s) }}><DeleteOutlined /></button>
                   )}
                 </div>
               ))}

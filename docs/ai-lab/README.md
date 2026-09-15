@@ -5,7 +5,7 @@
 ## 任务模板（backend/src/config/aiLabTasks.js）
 | 键 | 学段 | 类型 / 引擎 | 一句话 |
 |---|---|---|---|
-| L1 它能分清我的两样东西吗 | 小学 | 图像 / image-knn | 两类各 10 张，留出集 + 换条件集考它 |
+| L1 它能分清我的两样东西吗 | 小学 | 图像 / image-knn | 两类各 10 张，留出集 + 换条件集考它（留出 30%） |
 | L3 给 AI 喂错数据会怎样 | 小学 | 图像 / image-knn | 干净版 → 混入 40% 错标再训一版 → 揭晓 → 恢复（留出 30%；kNN 对 20% 错标几乎无感，40% 才看得见） |
 | L4 多少张够用 | 小学 | 图像 / image-knn | 每类 3 / 10 / 30 张各训一版，看样本量–准确率曲线（留出 40%，测试集大一点曲线才稳） |
 | M1 校园侦探 | 高中 | 图像 / image-knn | 数据卡 → 六类各 30 张 → 完整流程 |
@@ -26,7 +26,7 @@
 模板字段：`kind`（image / table / audio / text）、`engine`、`steps`（工作台按此渲染，重复步骤前端去重）、`presets`（推荐预置包）、`config`（`mislabel_ratio`、`per_class_limits`、`max_depth_options`）。
 
 ## 结构
-- 前端页面 `frontend/src/pages/aiLab/`：`AiLab.jsx` 列表与新建（按学段分组的任务卡）；`ProjectWorkspace.jsx` 工作台（默认"一步一步"视图：一次只展开一张步骤卡，底部上一步/下一步，左侧步骤栏可跳步，过程时间线收进抽屉；换条件测试/错误分析/分组准确率这几步直接把测试面板放进卡片并默认切到对应标签页；`?view=all` 或右上角切换到"全部展开"，选择记在 localStorage `ailab.viewMode`；评测结果放在 store 的 `evalResults`，跨步骤复用），按 `kind` 切换面板：图像用 DatasetPanel / CapturePanel / TrainPanel / EvaluatePanel，表格用 TablePanel / RuleEditor / TreeTrainPanel / TableEvaluatePanel，文本用 VerifyWorkspace；附加步骤 ImportPresetModal（导入预置包）、MislabelPanel（错标/恢复）、DataCardForm（数据卡）、SampleCurve（样本量曲线）。
+- 前端页面 `frontend/src/pages/aiLab/`：`AiLab.jsx` 列表与新建（按学段分组的任务卡）；`ProjectWorkspace.jsx` 工作台（小学模板走"小学模式"：步骤用孩子的说法 `aiLab.kidStep.*`/`aiLab.kidHint.*`，正式术语退到小字，通过 `uiContext.js` 下发；`stepMeta.jsx` 给每步图标与颜色；一步完成时 `Celebration` 撒彩纸；默认"一步一步"视图：一次只展开一张步骤卡，底部上一步/下一步，左侧步骤栏可跳步，过程时间线收进抽屉；换条件测试/错误分析/分组准确率这几步直接把测试面板放进卡片并默认切到对应标签页；`?view=all` 或右上角切换到"全部展开"，选择记在 localStorage `ailab.viewMode`；评测结果放在 store 的 `evalResults`，跨步骤复用），按 `kind` 切换面板：图像用 DatasetPanel / CapturePanel / TrainPanel / EvaluatePanel，表格用 TablePanel / RuleEditor / TreeTrainPanel / TableEvaluatePanel，文本用 VerifyWorkspace；附加步骤 ImportPresetModal（导入预置包）、MislabelPanel（错标/恢复）、DataCardForm（数据卡）、SampleCurve（样本量曲线）。
 - 浏览器内引擎 `frontend/src/pages/aiLab/engine/`：`audio/spectrogram.js`（WAV → 44.1kHz 单声道 → OfflineAudioContext+AnalyserNode 取 43×232 dB 频谱图，参数与 speech-commands 一致）、`audio/audioFeatureExtractor.js`（自托管 speech-commands 18w 层模型截到 dense_1，2000 维嵌入）、`audio/recorder.js`（麦克风 1 秒录音 → WAV）、`text/tokenize.js`（单字+双字）、`text/naiveBayes.js`（多项式 NB + 逐词解释）、`text/agreement.js`（Cohen's kappa）、`tabular/mlp.js`（TF.js 单隐层 MLP，损失曲线，权重序列化）、`modalities.js`（图像/声音共用训练与测试面板的适配层）；`featureExtractor.js`（自托管 MobileNet v1 0.5，截到全局平均池化层，512 维嵌入）、`knn.js`（余弦 kNN）、`metrics.js`、`occlusion.js`（遮挡热图）、`tabular/decisionTree.js`（CART 基尼决策树，可展开成规则）、`tabular/rules.js`（手写规则求值与校验）、`tabular/stats.js`（各类范围、散点范围）。
 - 状态 `frontend/src/stores/aiLabStore.js`：项目/数据集/样本/模型/评测读写，预置包导入、表格加行、错标/恢复，过程事件 2 秒合并上报。
 - 模型权重 `frontend/public/models/mobilenet_v1_050_224/`（约 5MB）与 `speech_commands_18w/`（约 5.7MB），都不走外网。
@@ -35,7 +35,7 @@
 
 ## 三集制
 - 训练集：学生自采（摄像头连拍或上传）、手工加行，或预置包导入；样本带采集条件标签与来源。
-- 留出测试集：`POST /datasets/:id/lock` 在训练前按类别随机留出模板 `holdout_ratio`（默认 20%，L3 30%、L4 40%；确定性种子），训练页不显示这些样本/行。
+- 留出测试集：`POST /datasets/:id/lock` 在训练前按类别随机留出模板 `holdout_ratio`（默认 20%，L1/L3 30%、L4 40%；确定性种子），训练页不显示这些样本/行。
 - 换条件集：`split='shift'` + `shift_set` 名称；同分布准确率减去最差换条件准确率 = 泛化差距。表格包的换条件集是来源不同的另一批行（另一所学校、另一年）。
 
 ## 表格实验（P3）
@@ -53,7 +53,10 @@
 2. 后端迁移：`cd backend && npx knex migrate:latest`（本地 practice-mysql :3307）；生产走 `make migrate`。
 3. 登录后左侧菜单出现"AI训练专区"（系统模块 `ai_lab`，`allowed_groups` 为空即全员可见）。
 4. 训练在浏览器里跑：Chrome 内核建议 100+；无摄像头的机器用预置包或"上传图片"。
-5. 自测：`cd backend && node scripts/ai-lab-smoke.cjs`（245 项）；`npx jest src/__tests__/unit/services/aiLab`（56 项）；`cd frontend && npx vitest run src/__tests__/unit/aiLab`。
+5. 自测：`cd backend && node scripts/ai-lab-smoke.cjs`（245 项）；`npx jest src/__tests__/unit/services/aiLab`（56 项）；`cd frontend && npx vitest run src/__tests__/unit/aiLab`（24 项）。
+
+## 学术严谨性
+逐模板的核对表、通用保证（留出集训练前锁定、预测在观察前锁定、只改一个变量、分数带样本量与 95% Wilson 区间、kNN 的 k 随最小类调整、神经网络固定 seed）与仍存在的局限见 `docs/ai-lab/rigor-audit.md`。
 
 ## 已知限制
 - 声音引擎只做 1 秒短音分类（speech-commands 特征），没有连续识别；P4/P5（聚类、推荐模拟）与 H 段实验未做；M4 没有预置中文关键词包，需自采。
