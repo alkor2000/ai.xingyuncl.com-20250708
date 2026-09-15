@@ -6,7 +6,8 @@
 const {
   OUTPUT_FORMATS,
   normalizeOutputFormat,
-  buildOutputFormatInstruction
+  buildOutputFormatInstruction,
+  buildOutputFormatReminder
 } = require('../../../../services/chat/outputFormatInstructions');
 
 describe('outputFormatInstructions', () => {
@@ -48,9 +49,27 @@ describe('outputFormatInstructions', () => {
       expect(buildOutputFormatInstruction('pdf')).toContain('@page');
     });
 
+    test('每种格式都写死回答结构：一句话 + 一个代码块，闭合即停，不附赠脚本', () => {
+      OUTPUT_FORMATS.forEach(format => {
+        const text = buildOutputFormatInstruction(format);
+        expect(text).toContain('回答固定为两部分');
+        expect(text).toContain('代码块闭合后立即停止回答');
+        expect(text).toContain('生成脚本');
+      });
+    });
+
     test('非法格式返回空串', () => {
       expect(buildOutputFormatInstruction(null)).toBe('');
       expect(buildOutputFormatInstruction('exe')).toBe('');
+    });
+  });
+
+  describe('buildOutputFormatReminder()', () => {
+    test('合法格式给出一行带围栏语言标识的提醒，非法格式返回空串', () => {
+      expect(buildOutputFormatReminder('pptx')).toContain('```pptx');
+      expect(buildOutputFormatReminder('docx')).toContain('【格式提醒】');
+      expect(buildOutputFormatReminder('exe')).toBe('');
+      expect(buildOutputFormatReminder(null)).toBe('');
     });
   });
 });

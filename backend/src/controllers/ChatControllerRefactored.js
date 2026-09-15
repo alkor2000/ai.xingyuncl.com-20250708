@@ -335,7 +335,8 @@ class ChatControllerRefactored {
         try {
           aiMessageId = await StreamMessageService.sendStreamMessage({
             res, conversation, aiMessages, userMessage,
-            user, userId, creditsConsumed, creditsResult, content
+            user, userId, creditsConsumed, creditsResult, content,
+            outputFormat
           });
           return;
         } catch (error) {
@@ -345,7 +346,8 @@ class ChatControllerRefactored {
       } else {
         const responseData = await NonStreamMessageService.sendNonStreamMessage({
           conversation, aiMessages, userMessage,
-          user, userId, creditsConsumed, creditsResult, content
+          user, userId, creditsConsumed, creditsResult, content,
+          outputFormat
         });
         return ResponseHelper.success(res, responseData, 'AI对话完成');
       }

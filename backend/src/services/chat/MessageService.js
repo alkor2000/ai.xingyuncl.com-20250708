@@ -19,6 +19,9 @@
  *   - 消除 recentMessages 与 currentContent 的重复处理
  *     （刚创建的 user 消息已在 recentMessages 中，不应再作为"当前消息"处理）
  *
+ * v3.3：格式模式下再把一行格式提醒追加到当前用户消息末尾（只进上下文不落库），
+ *   压制模型"写完产物又附赠生成脚本"的惯性。
+ *
  * v3.2：buildAIContext 新增 outputFormat（html/pptx/docx/pdf）——把
  *   outputFormatInstructions 的格式指令追加到系统提示词末尾，让模型按前端
  *   画布能识别的围栏代码块输出可预览、可下载的文件；指令不落库。
@@ -33,7 +36,7 @@ const AIService = require('../aiService');
 const AIStreamService = require('../aiStreamService');
 const CacheService = require('../cacheService');
 const StatsService = require('../statsService');
-const { buildOutputFormatInstruction } = require('./outputFormatInstructions');
+const { buildOutputFormatInstruction, buildOutputFormatReminder } = require('./outputFormatInstructions');
 const logger = require('../../utils/logger');
 
 class MessageService {
@@ -451,6 +454,13 @@ class MessageService {
       aiMessages.push(aiMsg);
     }
 
+    // ---- v3.3 输出格式提醒：追加在当前用户消息末尾（只进上下文，不落库） ----
+    // 系统提示词在长对话里容易被模型忽略，"写完产物又附赠 Python 脚本"这种
+    // 惯性用用户轮的一行提醒压制最有效。
+    if (formatInstruction) {
+      this._appendToLastUserMessage(aiMessages, `\n\n${buildOutputFormatReminder(outputFormat)}`);
+    }
+
     logger.info('PDF多轮对话优化：附件分配完成', {
       totalMessages: allMessagesForPlan.length,
       pdfFullLoadCount: totalPdfFullLoad,
@@ -461,6 +471,29 @@ class MessageService {
     });
 
     return aiMessages;
+  }
+
+  /**
+   * 把一段文字追加到上下文里最后一条用户消息的文本末尾（兼容多模态数组内容）
+   * @param {Array} aiMessages - 已构建的上下文
+   * @param {string} text - 要追加的文字
+   */
+  static _appendToLastUserMessage(aiMessages, text) {
+    for (let i = aiMessages.length - 1; i >= 0; i--) {
+      const msg = aiMessages[i];
+      if (msg.role !== 'user') continue;
+      if (typeof msg.content === 'string') {
+        msg.content = msg.content + text;
+      } else if (Array.isArray(msg.content)) {
+        const firstText = msg.content.find(b => b.type === 'text');
+        if (firstText) {
+          firstText.text = firstText.text + text;
+        } else {
+          msg.content.push({ type: 'text', text: text.trim() });
+        }
+      }
+      return;
+    }
   }
 
   /**

@@ -3,6 +3,10 @@
  * 
  * v2.0 变更：
  *   - prepareResponseData: 支持 file_ids 多文件，附加 files 数组
+ *
+ * v3.0 变更：
+ *   - sendNonStreamMessage: 接收 outputFormat，格式模式下用 ArtifactStreamGuard
+ *     截掉产物之后附赠的生成脚本（与流式行为一致）
  * 
  * 修复记录：
  *   - MySQL JSON字段自动解析导致的图片数据处理问题
@@ -12,6 +16,7 @@ const Message = require('../../models/Message');
 const File = require('../../models/File');
 const AIService = require('../aiService');
 const MessageService = require('./MessageService');
+const { ArtifactStreamGuard } = require('./artifactStreamGuard');
 const logger = require('../../utils/logger');
 
 class NonStreamMessageService {
@@ -23,7 +28,8 @@ class NonStreamMessageService {
   static async sendNonStreamMessage(params) {
     const {
       conversation, aiMessages, userMessage,
-      user, userId, creditsConsumed, creditsResult, content
+      user, userId, creditsConsumed, creditsResult, content,
+      outputFormat
     } = params;
 
     try {
@@ -33,12 +39,26 @@ class NonStreamMessageService {
         { temperature: conversation.getTemperature(), messageId: userMessage.id }
       );
 
+      // v3.0: 输出格式模式下，产物之后附赠的生成脚本一律截掉（非流式省不了 token，但消息要干净、与流式一致）
+      let finalContent = aiResponse.content;
+      if (outputFormat && typeof finalContent === 'string') {
+        const guard = new ArtifactStreamGuard();
+        guard.push(finalContent);
+        if (guard.end().stop) {
+          logger.info('产物守卫截断（非流式）：模型在产物之后附赠代码块', {
+            conversationId: conversation.id, reason: guard.reason,
+            originalLength: finalContent.length
+          });
+          finalContent = guard.cutContent(finalContent);
+        }
+      }
+
       // 准备AI消息数据
       const aiMessageData = {
         conversation_id: conversation.id,
         role: 'assistant',
-        content: aiResponse.content,
-        tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(aiResponse.content),
+        content: finalContent,
+        tokens: aiResponse.usage?.completion_tokens || Message.estimateTokens(finalContent),
         model_name: conversation.model_name,
         status: 'completed'
       };

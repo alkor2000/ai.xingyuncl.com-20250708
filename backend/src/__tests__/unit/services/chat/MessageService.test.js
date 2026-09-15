@@ -522,7 +522,11 @@ describe('MessageService - 消息服务', () => {
       expect(result[0].role).toBe('system');
       expect(result[0].content).toContain('```pptx');
       expect(result[0].content).toContain('---');
-      expect(result[1]).toEqual({ role: 'user', content: '做一份关于光合作用的课件' });
+      // v3.3：当前用户消息末尾追加一行格式提醒（只进上下文）
+      expect(result[1].role).toBe('user');
+      expect(result[1].content.startsWith('做一份关于光合作用的课件')).toBe(true);
+      expect(result[1].content).toContain('【格式提醒】');
+      expect(result[1].content).toContain('```pptx');
     });
 
     test('v3.2 outputFormat=docx 且有系统提示词：指令应追加在原提示词之后', async () => {
@@ -549,6 +553,7 @@ describe('MessageService - 消息服务', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].role).toBe('user');
+      expect(result[0].content).toBe('你好');
     });
   });
 

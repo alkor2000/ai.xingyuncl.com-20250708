@@ -17,6 +17,12 @@
  *   - 图像生成模型必须走非流式（stream_enabled=0），否则会返回空响应
  *   - 此保护把"配置错误导致的诡异空响应"转为"清晰的错误提示"
  *     防止管理员误开图像模型流式开关后难以排查
+ *
+ * v5.3 变更（2026-09-15 产物守卫）：
+ *   - options.contentGuard（ArtifactStreamGuard）：输出格式模式下，模型写完
+ *     ```pptx/docx 产物块又开始附赠 Python 脚本时，把内容截到产物末尾、
+ *     补发一次 message 事件并 _abortUpstream 断开上游，正常走 done/onComplete
+ *   - 守卫主动断开后上游流的 error 事件不再当故障记录
  */
 
 const axios = require('axios');
@@ -445,6 +451,7 @@ class AIStreamService {
     let buffer = '';
     let isDone = false;
     let chunkCount = 0;
+    const guard = options.contentGuard || null; // ArtifactStreamGuard（格式模式下由 StreamMessageService 传入）
 
     const heartbeatTimer = AIStreamService.startHeartbeat(res);
 
@@ -456,6 +463,7 @@ class AIStreamService {
       };
 
       response.data.on('data', (chunk) => {
+        if (isDone) return;
         try {
           chunkCount++;
           buffer += chunk.toString();
@@ -487,6 +495,21 @@ class AIStreamService {
               const delta = parsed.choices?.[0]?.delta?.content;
               if (delta) {
                 fullContent += delta;
+                // 产物守卫：模型写完产物代码块后又开始附赠脚本 → 截到产物末尾，停止读上游
+                if (guard && guard.push(delta).stop) {
+                  fullContent = guard.cutContent(fullContent);
+                  isDone = true;
+                  cleanup();
+                  logger.info('产物守卫截断：模型在产物之后附赠代码块，已停止上游生成', {
+                    model: model.name, messageId: options.messageId, reason: guard.reason,
+                    keptLength: fullContent.length, chunkCount, totalTimeMs: Date.now() - startTime
+                  });
+                  AIStreamService.sendSSE(res, 'message', { delta: '', fullContent });
+                  AIStreamService._abortUpstream(response);
+                  AIStreamService._finishStream(res, fullContent, options);
+                  resolve({ content: fullContent, truncatedByGuard: true });
+                  return;
+                }
                 AIStreamService.sendSSE(res, 'message', { delta, fullContent });
               }
               if (parsed.choices?.[0]?.finish_reason === 'stop' && !isDone) {
@@ -523,6 +546,7 @@ class AIStreamService {
 
       response.data.on('error', (error) => {
         cleanup();
+        if (isDone) return; // 守卫主动掐断上游时的收尾错误，不是故障
         logger.error('流式响应错误:', error);
         const errorInfo = AIStreamService.parseAPIError(error, model);
         if (!res.writableEnded) {
@@ -547,6 +571,16 @@ class AIStreamService {
         }
       });
     });
+  }
+
+  /** 内部方法：主动断开上游连接（产物守卫触发时），让模型停止继续生成 */
+  static _abortUpstream(response) {
+    try {
+      if (response.data && typeof response.data.destroy === 'function') response.data.destroy();
+      if (response.request && typeof response.request.destroy === 'function') response.request.destroy();
+    } catch (error) {
+      logger.warn('断开上游流失败（忽略）:', { error: error.message });
+    }
   }
 
   /** 内部方法：完成流式响应 */

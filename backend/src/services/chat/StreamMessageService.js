@@ -7,6 +7,10 @@
  * v3.0 变更：
  *   - sendStreamMessage: 从 conversation 读取 enable_thinking，传递给 AIStreamService
  *   - 支持对话级别的深度思考开关，控制是否允许模型输出推理过程
+ *
+ * v4.0 变更：
+ *   - sendStreamMessage: 接收 outputFormat，格式模式下给 AIStreamService 挂
+ *     ArtifactStreamGuard（产物之后附赠脚本 → 截断并停止上游）
  * 
  * 修复记录：
  *   - 空内容检查，失败时标记消息并退还积分
@@ -17,6 +21,7 @@ const Message = require('../../models/Message');
 const File = require('../../models/File');
 const AIStreamService = require('../aiStreamService');
 const MessageService = require('./MessageService');
+const { ArtifactStreamGuard } = require('./artifactStreamGuard');
 const logger = require('../../utils/logger');
 
 class StreamMessageService {
@@ -30,7 +35,8 @@ class StreamMessageService {
   static async sendStreamMessage(params) {
     const {
       res, conversation, aiMessages, userMessage,
-      user, userId, creditsConsumed, creditsResult, content
+      user, userId, creditsConsumed, creditsResult, content,
+      outputFormat
     } = params;
 
     const aiMessageId = uuidv4();
@@ -65,6 +71,8 @@ class StreamMessageService {
       messageId: aiMessageId,
       conversationId: conversation.id,
       userId: userId,
+      // v4.0: 输出格式模式下挂产物守卫——模型写完产物块又附赠脚本时截断并停止上游
+      contentGuard: outputFormat ? new ArtifactStreamGuard() : undefined,
       userMessage: userMessageData,
       creditsInfo: {
         credits_consumed: creditsConsumed,
