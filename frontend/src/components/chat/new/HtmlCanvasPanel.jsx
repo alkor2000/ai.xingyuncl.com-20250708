@@ -143,6 +143,7 @@ import { buildSafeBaseName, downloadBlob } from '../../../utils/canvas/download'
 import SlidesPreview from './SlidesPreview'
 import SlideThemePicker from './SlideThemePicker'
 import DocPreview from './DocPreview'
+import DocTemplateApplyModal from '../../docTemplate/DocTemplateApplyModal'
 import './HtmlCanvasPanel.less'
 
 const { Text } = Typography
@@ -368,6 +369,8 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
   const [refreshKey, setRefreshKey] = useState(0)
   // v2.0: 幻灯片主题（预览与 .pptx 导出共用）
   const [slideTheme, setSlideTheme] = useState(readSavedTheme)
+  // v3.0: 套用公文模板（把 docx 产物按老师上传的 Word 样板生成，见 components/docTemplate）
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
   // v2.0: 正在生成文件（pptx / docx 转换是异步的，期间按钮显示 loading）
   const [exporting, setExporting] = useState(false)
 
@@ -820,6 +823,11 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
                   .docx
                 </Button>
               </Tooltip>
+              <Tooltip title={t('chat.docTemplate.canvasButtonTip')}>
+                <Button size="small" icon={<FileWordOutlined />} disabled={currentStreaming} onClick={() => setTemplateModalOpen(true)}>
+                  {t('chat.docTemplate.canvasButton')}
+                </Button>
+              </Tooltip>
             </>
           )}
 
@@ -877,6 +885,10 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
           <DocPreview key={safeIndex} markdown={currentCode} streaming={currentStreaming} />
         )}
       </div>
+
+      {currentKind === ARTIFACT_KINDS.DOCX && (
+        <DocTemplateApplyModal open={templateModalOpen} onClose={() => setTemplateModalOpen(false)} markdown={currentCode} />
+      )}
 
       {/* ================================================================
           全屏模式下的悬浮退出按钮

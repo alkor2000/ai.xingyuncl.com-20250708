@@ -64,7 +64,7 @@
  *   空串不是文案，无需国际化。
  */
 
-import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
+import React, { useRef, forwardRef, useImperativeHandle, useState, useEffect, lazy, Suspense } from 'react'
 import {
   Input,
   Button,
@@ -175,6 +175,9 @@ export const OUTPUT_FORMAT_OPTIONS = [
   { key: 'pdf', Icon: FilePdfOutlined }
 ]
 
+const DocTemplateManagerLazy = lazy(() => import('../../docTemplate/DocTemplateManager'))
+const DocTemplateManager = (props) => (props.open ? <Suspense fallback={null}><DocTemplateManagerLazy {...props} /></Suspense> : null)
+
 const ChatInputArea = forwardRef(({
   inputValue,
   uploadedImages = [],
@@ -218,6 +221,7 @@ const ChatInputArea = forwardRef(({
 
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT)
+  const [docTemplateOpen, setDocTemplateOpen] = useState(false)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
@@ -562,6 +566,18 @@ const ChatInputArea = forwardRef(({
                 </Button>
               </Tooltip>
             </Dropdown>
+          )}
+
+          {/* 公文模板库（PC 端）：上传单位的 Word 样板，AI 写的公文或自己的草稿按它生成 .docx */}
+          {!isMobile && onOutputFormatChange && (
+            <>
+              <Tooltip title={t('chat.docTemplate.inputButtonTip')}>
+                <Button type="text" size="small" icon={<FileWordOutlined />} className="output-format-btn" onClick={() => setDocTemplateOpen(true)}>
+                  {t('chat.docTemplate.inputButton')}
+                </Button>
+              </Tooltip>
+              <DocTemplateManager open={docTemplateOpen} onClose={() => setDocTemplateOpen(false)} />
+            </>
           )}
 
           {/* 图片上传按钮 - 支持多选，未达上限且无文档时显示 */}
