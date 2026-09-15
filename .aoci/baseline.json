@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-15T08:07:25Z",
+  "updated_at": "2026-09-15T09:03:36Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -52,9 +52,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "a424ae3b1ec6117bac8bf29108562be67547d6973118f6e7f29aa5c7b94d4ed0",
-      "size": 300521,
-      "normalized_sha256": "a424ae3b1ec6117bac8bf29108562be67547d6973118f6e7f29aa5c7b94d4ed0"
+      "sha256": "a49b51f248a30fb6d6efb03578b74d0a70ff0bb2d621e617d73a74255041fa58",
+      "size": 302554,
+      "normalized_sha256": "a49b51f248a30fb6d6efb03578b74d0a70ff0bb2d621e617d73a74255041fa58"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -169,6 +169,11 @@
       "sha256": "744cecf119b5613ae649037d2ef337372ce2d529329308808efd94ee039b9411",
       "size": 97064,
       "normalized_sha256": "744cecf119b5613ae649037d2ef337372ce2d529329308808efd94ee039b9411"
+    },
+    "backend/scripts/artifact-guard-smoke.cjs": {
+      "sha256": "ea02921bec725615d5584831e82ac545ad4394333c5fe0fa0292844c61312263",
+      "size": 12956,
+      "normalized_sha256": "ea02921bec725615d5584831e82ac545ad4394333c5fe0fa0292844c61312263"
     },
     "backend/scripts/db_backup.sh": {
       "role": "index",
@@ -441,15 +446,27 @@
     },
     "backend/src/__tests__/unit/services/chat/MessageService.test.js": {
       "role": "observe",
-      "sha256": "4e2116a0bcd602cd16e0e5a831b2fdf1ebad87ffeab27f294f9622c4a02360df",
-      "size": 22069,
-      "normalized_sha256": "4e2116a0bcd602cd16e0e5a831b2fdf1ebad87ffeab27f294f9622c4a02360df"
+      "sha256": "b5630d86c10642af710375dfb0577587073af2c82c387737e45cf1f9789f6cd1",
+      "size": 22360,
+      "normalized_sha256": "b5630d86c10642af710375dfb0577587073af2c82c387737e45cf1f9789f6cd1"
+    },
+    "backend/src/__tests__/unit/services/chat/aiStreamGuard.integration.test.js": {
+      "role": "observe",
+      "sha256": "dd2a9fc3a8f9a10139e01d3d0130cd2ff0fe5b06b0b7a84aeb1261b0ff885af5",
+      "size": 4808,
+      "normalized_sha256": "dd2a9fc3a8f9a10139e01d3d0130cd2ff0fe5b06b0b7a84aeb1261b0ff885af5"
+    },
+    "backend/src/__tests__/unit/services/chat/artifactStreamGuard.test.js": {
+      "role": "observe",
+      "sha256": "f7a65bbac569c28c12b9e808bbb43178a56aa2d9e50a9cbbf701eb265c588164",
+      "size": 5731,
+      "normalized_sha256": "f7a65bbac569c28c12b9e808bbb43178a56aa2d9e50a9cbbf701eb265c588164"
     },
     "backend/src/__tests__/unit/services/chat/outputFormatInstructions.test.js": {
       "role": "observe",
-      "sha256": "96d1923c9c8c9bf05525a94657b7a5faaf474d0041ac67e9de5e1404b66317b5",
-      "size": 2199,
-      "normalized_sha256": "96d1923c9c8c9bf05525a94657b7a5faaf474d0041ac67e9de5e1404b66317b5"
+      "sha256": "ee7c25408aa9a04f21ac5d5800489a899c0a0c75fb3e55e01fbe1699d791abb8",
+      "size": 3075,
+      "normalized_sha256": "ee7c25408aa9a04f21ac5d5800489a899c0a0c75fb3e55e01fbe1699d791abb8"
     },
     "backend/src/__tests__/unit/services/docTemplate/docxEngine.test.js": {
       "role": "observe",
@@ -538,9 +555,9 @@
       "normalized_sha256": "79e9b75086134901441a61ed68ce8df023fe84da478adfe150807432aa4c40dd"
     },
     "backend/src/controllers/ChatControllerRefactored.js": {
-      "sha256": "969a128a4144dcdf3da3ab0fb4ba4a4cf472fd36e902b0630b8a750f0c5d838a",
-      "size": 27591,
-      "normalized_sha256": "969a128a4144dcdf3da3ab0fb4ba4a4cf472fd36e902b0630b8a750f0c5d838a"
+      "sha256": "aa35f0417a339198011ab6c21010b800e77487e571058707e0b0c4f957e051e7",
+      "size": 27641,
+      "normalized_sha256": "aa35f0417a339198011ab6c21010b800e77487e571058707e0b0c4f957e051e7"
     },
     "backend/src/controllers/DocTemplateController.js": {
       "sha256": "04bbf8bca80a4558aa366ce745f6dbe6af1e66553858539e73073bf00b768a1c",
@@ -1593,10 +1610,9 @@
       "normalized_sha256": "364e327d51c56bb75b6b7dcf40762ec6092eb5c6201358820511b4c86d0eb19e"
     },
     "backend/src/services/aiStreamService.js": {
-      "role": "index",
-      "sha256": "dab3cc716d145e7224ff31b555ba1459c9571c5d6dc3561d0c5708a7a7fb8be7",
-      "size": 26257,
-      "normalized_sha256": "dab3cc716d145e7224ff31b555ba1459c9571c5d6dc3561d0c5708a7a7fb8be7"
+      "sha256": "a4f1589055081abb56657eb09431b3603791ce41097e9f6e71655b7fc5570db1",
+      "size": 28355,
+      "normalized_sha256": "a4f1589055081abb56657eb09431b3603791ce41097e9f6e71655b7fc5570db1"
     },
     "backend/src/services/auth/EmailAuthService.js": {
       "role": "index",
@@ -1706,26 +1722,29 @@
       "normalized_sha256": "7d9660f333c29168e6cead5e4881e8e8911df0a68906c91317811b250e1210ba"
     },
     "backend/src/services/chat/MessageService.js": {
-      "sha256": "29b839d302bc6c64d9934457b96d4fae5d889f9dbc4327a18c10125828c0754c",
-      "size": 18206,
-      "normalized_sha256": "29b839d302bc6c64d9934457b96d4fae5d889f9dbc4327a18c10125828c0754c"
+      "sha256": "9cbe103bb6dc6fa2bc3f070a5b3b92fa01ba94b18ff0941e9f19a786ae02929f",
+      "size": 19639,
+      "normalized_sha256": "9cbe103bb6dc6fa2bc3f070a5b3b92fa01ba94b18ff0941e9f19a786ae02929f"
     },
     "backend/src/services/chat/NonStreamMessageService.js": {
-      "role": "index",
-      "sha256": "763d32507e1f6c7ac3b06b4a99ae2ab95c06160a91056947c07f792aff38d664",
-      "size": 6091,
-      "normalized_sha256": "763d32507e1f6c7ac3b06b4a99ae2ab95c06160a91056947c07f792aff38d664"
+      "sha256": "b081814dc686209a43e07183ab82870502b1b1bcffb6a2be7c5e13dae11de352",
+      "size": 7031,
+      "normalized_sha256": "b081814dc686209a43e07183ab82870502b1b1bcffb6a2be7c5e13dae11de352"
     },
     "backend/src/services/chat/StreamMessageService.js": {
-      "role": "index",
-      "sha256": "8ed8343c7e9a44b865715d309e9121151fad6f770b6aa3c048d5624193e39732",
-      "size": 7068,
-      "normalized_sha256": "8ed8343c7e9a44b865715d309e9121151fad6f770b6aa3c048d5624193e39732"
+      "sha256": "f4b3b8fc981de773945875f33994440ab670ba964fc4724354c0c4f457d8bbe4",
+      "size": 7537,
+      "normalized_sha256": "f4b3b8fc981de773945875f33994440ab670ba964fc4724354c0c4f457d8bbe4"
+    },
+    "backend/src/services/chat/artifactStreamGuard.js": {
+      "sha256": "b1945ade1de09cf952b594225cc2bc4717e7b47147a4743debdb96cf2e1f38a5",
+      "size": 6547,
+      "normalized_sha256": "b1945ade1de09cf952b594225cc2bc4717e7b47147a4743debdb96cf2e1f38a5"
     },
     "backend/src/services/chat/outputFormatInstructions.js": {
-      "sha256": "3ca7b2019087552f62a4d42da2a9a97d83d504e068b097850ee20182b1015dfc",
-      "size": 8349,
-      "normalized_sha256": "3ca7b2019087552f62a4d42da2a9a97d83d504e068b097850ee20182b1015dfc"
+      "sha256": "86c316b990c73014de994a3c3393b92dc4e3fc6f02f21fb2993237cfe6be80b1",
+      "size": 9685,
+      "normalized_sha256": "86c316b990c73014de994a3c3393b92dc4e3fc6f02f21fb2993237cfe6be80b1"
     },
     "backend/src/services/docTemplate/DocTemplateService.js": {
       "sha256": "fcd0a6b50217613fc645332c2e0bc26dbfa93f2fa708797c142ef92a75985120",
