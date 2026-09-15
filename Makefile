@@ -116,7 +116,7 @@ logs-docker: ## 看 Docker 站点后端最近日志
 .PHONY: rollback-docker
 rollback-docker: ## 列出 Docker 站点最近的发布目录与库备份，回滚步骤见 dev/RELEASE.md 第七节
 	@ssh -n $(DOCKER_SSH_HOST) 'ls -t /var/backups/ai-platform/releases | grep -v ^current | head -5; echo "--- 库备份"; ls -t /var/backups/ai-platform/mysql/*.sql.gz 2>/dev/null | head -3'
-	@echo "回滚: ssh $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/<上一个目录>/release.override.yml up -d backend frontend'"
+	@echo "回滚到本次发布前的镜像: ssh $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/current/rollback.override.yml up -d backend frontend'"
 
 .PHONY: rollback
 rollback: ## 列出最近的部署 tag 与服务器备份，回滚步骤见 dev/RELEASE.md 第六节

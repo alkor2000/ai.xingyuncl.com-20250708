@@ -101,6 +101,9 @@ REL="/var/backups/ai-platform/releases/ai-platform-${TAG}"
 mkdir -p "$REL" /var/backups/ai-platform/mysql
 OLD_B=$(docker inspect ai-platform-backend --format '{{.Config.Image}}' 2>/dev/null || echo none)
 OLD_F=$(docker inspect ai-platform-frontend --format '{{.Config.Image}}' 2>/dev/null || echo none)
+# 回滚标签按镜像 ID 打，而不是按标签名：正在跑的容器的标签可能已被清理掉（2026-09-15 出过 "No such image"）
+OLD_B_ID=$(docker inspect ai-platform-backend --format '{{.Image}}' 2>/dev/null || echo none)
+OLD_F_ID=$(docker inspect ai-platform-frontend --format '{{.Image}}' 2>/dev/null || echo none)
 
 AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 if [ "${AVAIL_GB:-0}" -lt 8 ]; then echo "    磁盘剩余 ${AVAIL_GB}G，先清构建缓存 ..."; docker builder prune -af >/dev/null; fi
@@ -110,8 +113,8 @@ if ! docker compose build backend frontend </dev/null > "$REL/build.log" 2>&1; t
 fi
 docker tag ai-platform-backend:latest  "ai-platform-backend:${TAG}"
 docker tag ai-platform-frontend:latest "ai-platform-frontend:${TAG}"
-[ "$OLD_B" != none ] && docker tag "$OLD_B" "ai-platform-backend:rollback-${TS}"
-[ "$OLD_F" != none ] && docker tag "$OLD_F" "ai-platform-frontend:rollback-${TS}"
+[ "$OLD_B_ID" != none ] && docker tag "$OLD_B_ID" "ai-platform-backend:rollback-${TS}"
+[ "$OLD_F_ID" != none ] && docker tag "$OLD_F_ID" "ai-platform-frontend:rollback-${TS}"
 cat > "$REL/release.override.yml" <<YML
 services:
   backend:
@@ -119,6 +122,16 @@ services:
   frontend:
     image: ai-platform-frontend:${TAG}
 YML
+# 回滚用：指向本次发布前正在运行的镜像（rollback-<TS> 标签按镜像 ID 打，不受旧标签被清理影响）
+if [ "$OLD_B_ID" != none ] && [ "$OLD_F_ID" != none ]; then
+cat > "$REL/rollback.override.yml" <<YML
+services:
+  backend:
+    image: ai-platform-backend:rollback-${TS}
+  frontend:
+    image: ai-platform-frontend:rollback-${TS}
+YML
+fi
 {
   echo "TASK_ID=deploy-docker"
   echo "RELEASE_TIME=$TS"
@@ -149,7 +162,7 @@ for i in $(seq 1 36); do
 done
 if [ "$STATUS" != healthy ]; then
   echo "❌ backend 3 分钟内未 healthy（$STATUS）。回滚命令："
-  echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f <上一个 release 的 release.override.yml> up -d backend frontend"
+  echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"
   docker logs --tail 40 ai-platform-backend 2>&1 | cut -c1-160; exit 1
 fi
 L=$(docker logs ai-platform-backend 2>&1 || true)
@@ -157,10 +170,18 @@ echo "    启动脚本 SQL 迁移：执行 $(echo "$L" | grep -c '^执行迁移'
 docker ps --format '    {{.Names}}  {{.Image}}  {{.Status}}' | grep ai-platform
 echo "FINAL_STATUS=RELEASED" >> "$REL/RELEASE.txt"
 
-echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback）..."
+echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback；正在运行的镜像永远不删）..."
+# 标签形如 v-<sha>-<YYYYmmdd_HHMMSS> / rollback-<YYYYmmdd_HHMMSS>：按末尾 15 位完整时间戳倒序才是按时间。
+# 以前按 "_" 后的时分秒排序，把当天凌晨发布的当成最旧删掉了，连正在跑的容器的标签都被清掉
+RUN_IDS="$(docker inspect ai-platform-backend ai-platform-frontend --format '{{.Image}}' 2>/dev/null || true)"
 for repo in ai-platform-backend ai-platform-frontend; do
-  docker images --format '{{.Tag}}' "$repo" | grep -E '^v-' | sort -t_ -k2,3 -r | tail -n +$((KEEP + 1)) | while read -r t; do docker rmi "$repo:$t" >/dev/null 2>&1 || true; done
-  docker images --format '{{.Tag}}' "$repo" | grep -E '^rollback-' | sort -r | tail -n +$((KEEP + 1)) | while read -r t; do docker rmi "$repo:$t" >/dev/null 2>&1 || true; done
+  for pat in '^v-' '^rollback-'; do
+    docker images --format '{{.Tag}}' "$repo" | grep -E "$pat" | awk '{ print substr($0, length($0) - 14) "\t" $0 }' | sort -r | cut -f2 | tail -n +$((KEEP + 1)) | while read -r t; do
+      id=$(docker image inspect "$repo:$t" --format '{{.Id}}' 2>/dev/null || true)
+      [ -n "$id" ] && echo "$RUN_IDS" | grep -q "$id" && continue
+      docker rmi "$repo:$t" >/dev/null 2>&1 || true
+    done
+  done
 done
 docker image prune -f >/dev/null 2>&1 || true
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"

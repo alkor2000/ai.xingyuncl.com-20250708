@@ -141,17 +141,17 @@ make deploy-docker
 
 1. 本地检查：工作区干净、在 main、HEAD 已推 GitHub；**核对 ai.xingyuncl.com 已发布到同一提交**，否则拒绝（`ARGS=--allow-ahead` 可跳过，不推荐）。
 2. 代码传输不走 GitHub（服务器直连 GitHub 常被掐断）：`git bundle` 打包服务器缺的提交，scp 过去，服务器 `git merge --ff-only`。服务器有未提交的跟踪文件改动时中止；未跟踪文件（门户页 `frontend/public/www/`、certbot 钩子 `reload-nginx-docker.sh`）不受影响。
-3. 服务器 `docker compose build backend frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定镜像标签 + `RELEASE.txt` + `build.log`），`releases/current` 软链指向它。
+3. 服务器 `docker compose build backend frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像（按镜像 ID，不怕旧标签已被清理）打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定本次镜像标签、`rollback.override.yml` 指向发布前的镜像、`RELEASE.txt`、`build.log`），`releases/current` 软链指向它。旧镜像按标签末尾的时间戳只保留最近 3 个，正在运行的镜像永远不删。
 4. 备份数据库（mysql 容器内 `mysqldump --single-transaction`，落 `/var/backups/ai-platform/mysql/`），**用新镜像先跑 `knex migrate:latest`**（`docker compose run --rm --no-deps backend …`，加法式迁移先行），再 `up -d backend frontend`，等 backend healthy（3 分钟），打印启动脚本的 SQL 迁移统计（应全是"跳过"）。
 5. 每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除；磁盘剩余不足 8G 时先 `docker builder prune -af`。
 6. 本地打 `deploy-docker-<时间戳>` 标签并推送，最后打 `/health`、`/api/ai-lab/tasks`（401 即正常）、`/login`。
 
 其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
 
-**回滚**：`make rollback-docker` 列出最近发布目录，然后在服务器上用上一个目录的 override 切回去（镜像还在）：
+**回滚**：`make rollback-docker` 列出最近发布目录，然后在服务器上用当前发布目录里的 `rollback.override.yml` 切回发布前的镜像（`rollback-<时间戳>` 标签）：
 
 ```bash
-ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/<上一个目录>/release.override.yml up -d backend frontend'
+ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/current/rollback.override.yml up -d backend frontend'
 ```
 
 数据库回滚从 `/var/backups/ai-platform/mysql/` 最近的 dump 恢复（加法式迁移通常不用）。
