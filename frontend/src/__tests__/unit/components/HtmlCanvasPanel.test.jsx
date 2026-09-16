@@ -8,7 +8,9 @@ import { render, screen } from '@testing-library/react'
 import HtmlCanvasPanel from '../../../components/chat/new/HtmlCanvasPanel'
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key) => key })
+  useTranslation: () => ({ t: (key) => key }),
+  // 公文模板功能让面板间接引入 utils/api → utils/i18n，后者在模块顶层注册 initReactI18next
+  initReactI18next: { type: '3rdParty', init: () => {} }
 }))
 
 const HTML = (title) => '<!DOCTYPE html><html><head><title>' + title + '</title></head><body><p>' + title + '</p></body></html>'

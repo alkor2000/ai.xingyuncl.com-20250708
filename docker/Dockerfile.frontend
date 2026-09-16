@@ -2,6 +2,8 @@ FROM node:18-alpine AS builder
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 WORKDIR /app
 COPY frontend/package*.json ./
+# patch-package 在 postinstall 里给依赖打补丁（去 lookbehind 正则，iOS ≤16.3 才能渲染聊天），补丁文件要先于 npm ci 进镜像
+COPY frontend/patches ./patches
 RUN npm ci
 COPY frontend/ .
 
