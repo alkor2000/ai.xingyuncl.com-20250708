@@ -233,15 +233,17 @@ export const latexToText = (latex) => convertNodes(String(latex || ''))
 // ---------------------------------------------------------------------------
 
 const DISPLAY_MATH_RE = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]/g
-// 行内 $…$：开头紧跟非空白、结尾前非空白、后面不接数字（避免把 "$5 和 $10" 当公式）
-const INLINE_MATH_RE = /(?<![\\$\w])\$(?=\S)((?:[^$\n\\]|\\.)+?)(?<=\S)\$(?![\d$])|\\\(([\s\S]+?)\\\)/g
+// 行内 $…$：前一个字符不能是 \ $ 或单词字符，开头紧跟非空白、结尾前非空白、后面不接数字（避免把 "$5 和 $10" 当公式）。
+// 不用 lookbehind：Safari 16.4 才支持，iOS 16.0–16.3 会在模块加载时抛 SyntaxError 导致整个应用白屏；
+// 前导字符改用捕获组 1 保留，替换时原样放回。
+const INLINE_MATH_RE = /(^|[^\\$\w])\$(?=\S)((?:[^$\n\\]|\\.)*?(?:[^$\n\\\s]|\\\S))\$(?![\d$])|\\\(([\s\S]+?)\\\)/g
 
 const convertMathInText = (text) => text
   .replace(DISPLAY_MATH_RE, (_, a, b) => latexToText(a ?? b))
-  .replace(INLINE_MATH_RE, (_, a, b) => latexToText(a ?? b))
+  .replace(INLINE_MATH_RE, (_, lead, a, b) => (lead ?? '') + latexToText(a ?? b))
 
-/** 是否像公式：含反斜杠命令、上下标或希腊字母等，避免把普通 "$a$" 之类误转 */
-export const hasMath = (text) => /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|(?<![\\$\w])\$(?=\S)(?:[^$\n\\]|\\.)+?(?<=\S)\$(?![\d$])/.test(text)
+/** 是否像公式：含反斜杠命令、上下标或希腊字母等，避免把普通 "$a$" 之类误转（同样不用 lookbehind） */
+export const hasMath = (text) => /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|(?:^|[^\\$\w])\$(?=\S)(?:[^$\n\\]|\\.)*?(?:[^$\n\\\s]|\\\S)\$(?![\d$])/.test(text)
 
 /**
  * 整段 Markdown 里的公式就地替换成可读文本；围栏代码块和行内代码原样保留

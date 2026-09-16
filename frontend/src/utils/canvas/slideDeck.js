@@ -102,8 +102,9 @@ export const parseInlineRuns = (text, inherit = {}) => {
     .replace(HTML_TAG_RE, '')
   if (!source) return []
 
-  // 分组：2 行内代码 | 3 粗斜(***) | 4/5 粗体 | 6/7 斜体 | 8 删除线 | 9+10 链接
-  const pattern = /(`+)([^`]+?)\1|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|__(.+?)__|\*([^*\s](?:[^*]*?[^*\s])?)\*|(?<![A-Za-z0-9])_([^_\s](?:[^_]*?[^_\s])?)_(?![A-Za-z0-9])|~~(.+?)~~|\[([^\]]+)\]\(([^)\s]+)\)/g
+  // 分组：2 行内代码 | 3 粗斜(***) | 4/5 粗体 | 6 斜体(*) | 7 下划线斜体的前导字符 + 8 斜体(_) | 9 删除线 | 10+11 链接
+  // 下划线斜体前不能是字母数字：不用 lookbehind（Safari 16.4 才支持），改为捕获前导字符（组 7）并在下面原样放回。
+  const pattern = /(`+)([^`]+?)\1|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|__(.+?)__|\*([^*\s](?:[^*]*?[^*\s])?)\*|(^|[^A-Za-z0-9])_([^_\s](?:[^_]*?[^_\s])?)_(?![A-Za-z0-9])|~~(.+?)~~|\[([^\]]+)\]\(([^)\s]+)\)/g
   const runs = []
   let last = 0
   let match
@@ -122,12 +123,15 @@ export const parseInlineRuns = (text, inherit = {}) => {
       runs.push(...parseInlineRuns(match[3], { ...inherit, bold: true, italic: true }))
     } else if (match[4] !== undefined || match[5] !== undefined) {
       runs.push(...parseInlineRuns(match[4] ?? match[5], { ...inherit, bold: true }))
-    } else if (match[6] !== undefined || match[7] !== undefined) {
-      runs.push(...parseInlineRuns(match[6] ?? match[7], { ...inherit, italic: true }))
+    } else if (match[6] !== undefined) {
+      runs.push(...parseInlineRuns(match[6], { ...inherit, italic: true }))
     } else if (match[8] !== undefined) {
-      runs.push(...parseInlineRuns(match[8], { ...inherit, strike: true }))
+      pushPlain(match[7])
+      runs.push(...parseInlineRuns(match[8], { ...inherit, italic: true }))
+    } else if (match[9] !== undefined) {
+      runs.push(...parseInlineRuns(match[9], { ...inherit, strike: true }))
     } else {
-      runs.push(...parseInlineRuns(match[9], { ...inherit, link: match[10] }))
+      runs.push(...parseInlineRuns(match[10], { ...inherit, link: match[11] }))
     }
   }
   pushPlain(source.slice(last))
@@ -229,7 +233,8 @@ const listLevel = (indent) => {
 
 const splitTableRow = (line) => {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
-  return trimmed.split(/(?<!\\)\|/).map(cell => parseInlineRuns(cell.replace(/\\\|/g, '|').trim()))
+  // 按未转义的 | 分列：先把 \| 换成占位符再 split，避免 lookbehind（Safari 16.4 才支持）
+  return trimmed.replace(/\\\|/g, '\u0000').split('|').map(cell => parseInlineRuns(cell.replace(/\u0000/g, '|').trim()))
 }
 
 /**
