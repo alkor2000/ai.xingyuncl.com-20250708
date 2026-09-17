@@ -1,4 +1,11 @@
 {
+  "admin.modules.checkHealth.reason.builtin": "内置模块由平台提供，本检查不验证具体业务功能",
+  "admin.modules.checkHealth.reason.reachable": "模块地址可达（HTTP {{status}}），登录后功能仍需单独验证",
+  "admin.modules.checkHealth.reason.auth_required": "模块可达，但需要认证或授权（HTTP {{status}}）",
+  "admin.modules.checkHealth.reason.http_error": "模块返回异常状态（HTTP {{status}}）",
+  "admin.modules.checkHealth.reason.timeout": "连接超时，5 秒内未收到响应",
+  "admin.modules.checkHealth.reason.connection_error": "连接失败，请检查服务、网络或证书",
+  "admin.modules.checkHealth.reason.invalid_url": "请先配置有效的 HTTP/HTTPS 模块地址",
   "admin.title": "系统管理",
   "admin.users.title": "用户管理",
   "admin.users.list": "用户列表",

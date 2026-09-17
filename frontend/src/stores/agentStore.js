@@ -19,6 +19,8 @@ import apiClient from '../utils/api'
 import { message } from 'antd'
 import i18n from '../utils/i18n'
 
+let executionsRequestId = 0
+
 const useAgentStore = create((set, get) => ({
   /* ========== 状态 ========== */
 
@@ -38,6 +40,7 @@ const useAgentStore = create((set, get) => ({
 
   executions: [],
   executionsLoading: false,
+  executionsError: false,
   executionsPagination: { current: 1, pageSize: 20, total: 0 },
 
   currentExecution: null,
@@ -232,13 +235,13 @@ const useAgentStore = create((set, get) => ({
       const response = await apiClient.post(
         `/agent/workflows/${id}/execute`,
         { input_data: inputData },
-        { timeout: 120000 }
+        { timeout: 600000 }
       )
       if (response.data.success) {
         message.success(i18n.t('agent.store.executeSuccess'))
-        await get().fetchExecutions({ current: 1 })
         return response.data.data
       }
+      throw new Error(response.data.message || i18n.t('agent.store.executeFailed'))
     } catch (error) {
       console.error('Failed to execute workflow:', error)
       if (error.response?.status === 402) message.error(i18n.t('agent.store.insufficientCredits'))
@@ -418,32 +421,25 @@ const useAgentStore = create((set, get) => ({
   /* ========== 执行历史 ========== */
 
   fetchExecutions: async (params = {}) => {
-    set({ executionsLoading: true })
+    const requestId = ++executionsRequestId
+    set({ executionsLoading: true, executionsError: false })
     try {
       const { current = 1, pageSize = 20, workflow_id, status } = params
       const qp = new URLSearchParams({ page: current, limit: pageSize })
       if (workflow_id) qp.append('workflow_id', workflow_id)
       if (status) qp.append('status', status)
-
       const response = await apiClient.get(`/agent/executions?${qp}`)
-      if (response.data.success) {
-        const data = response.data.data
-        const list = data.executions || data.data || []
-        const pagination = data.pagination || {}
-        set({
-          executions: list,
-          executionsPagination: {
-            current: pagination.page || current,
-            pageSize: pagination.limit || pageSize,
-            total: pagination.total || 0
-          },
-          executionsLoading: false
-        })
-      }
-    } catch (error) {
-      console.error('Failed to get execution history:', error)
-      message.error(i18n.t('agent.store.executionsLoadFailed'))
-      set({ executionsLoading: false })
+      if (!response.data.success) throw new Error(response.data.message)
+      if (requestId !== executionsRequestId) return
+      const data = response.data.data
+      const pagination = data.pagination || {}
+      set({ executions: data.executions || data.data || [],
+        executionsPagination: { current: pagination.page || current,
+          pageSize: pagination.limit || pageSize, total: pagination.total || 0 } })
+    } catch {
+      if (requestId === executionsRequestId) set({ executionsError: true })
+    } finally {
+      if (requestId === executionsRequestId) set({ executionsLoading: false })
     }
   },
 
@@ -455,6 +451,7 @@ const useAgentStore = create((set, get) => ({
         set({ currentExecution: response.data.data, currentExecutionLoading: false })
         return response.data.data
       }
+      throw new Error(response.data.message)
     } catch (error) {
       console.error('Failed to get execution detail:', error)
       message.error(i18n.t('agent.store.executionDetailLoadFailed'))
@@ -468,9 +465,9 @@ const useAgentStore = create((set, get) => ({
       const response = await apiClient.delete(`/agent/executions/${id}`)
       if (response.data.success) {
         message.success(i18n.t('agent.store.executionDeleteSuccess'))
-        await get().fetchExecutions()
         return true
       }
+      throw new Error(response.data.message || i18n.t('agent.store.executionDeleteFailed'))
     } catch (error) {
       console.error('Failed to delete execution record:', error)
       message.error(i18n.t('agent.store.executionDeleteFailed'))

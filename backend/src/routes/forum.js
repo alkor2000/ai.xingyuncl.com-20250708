@@ -135,6 +135,7 @@ router.delete('/attachments/:id', ForumController.deleteAttachment);
 /* 通知 */
 router.get('/notifications', ForumController.getNotifications);
 router.put('/notifications/read-all', ForumController.markAllNotificationsRead);
+router.put('/notifications/:id/read', ForumController.markNotificationRead);
 router.get('/notifications/unread-count', ForumController.getUnreadCount);
 
 /* 用户搜索 */

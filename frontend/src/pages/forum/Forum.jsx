@@ -25,6 +25,7 @@ import PostDetail from './components/PostDetail';
 import PostEditor from './components/PostEditor';
 import MyPostsView from './components/MyPostsView';
 import FavoritesView from './components/FavoritesView';
+import NotificationsView from './components/NotificationsView';
 import './Forum.less';
 
 const Forum = () => {
@@ -176,6 +177,9 @@ const Forum = () => {
             onPostClick={(post) => navigate('postDetail', { postId: post.id })}
           />
         );
+
+      case 'notifications':
+        return <NotificationsView onBack={goBack} onPostClick={(post) => navigate('postDetail', { postId: post.id })} />;
 
       default:
         return null;

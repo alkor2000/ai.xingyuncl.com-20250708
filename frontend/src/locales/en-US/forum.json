@@ -105,6 +105,13 @@
     },
 
     "notification": {
+      "filter": "Notification type",
+      "all": "All notifications",
+      "retry": "Retry",
+      "viewPost": "View post",
+      "markRead": "Mark as read",
+      "loadFailed": "Could not load notifications. Please retry.",
+      "markFailed": "Could not mark notifications as read. Please retry.",
       "title": "Forum Notifications",
       "empty": "No notifications",
       "markAllRead": "Mark All Read",

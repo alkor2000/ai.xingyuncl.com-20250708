@@ -54,6 +54,19 @@
       "publishFirst": "请先发布工作流后再执行"
     },
     "execution": {
+      "back": "返回工作流",
+      "filter": "状态筛选",
+      "allStatuses": "全部状态",
+      "actions": "操作",
+      "deleteConfirm": "确定删除这条执行记录？",
+      "seconds": "{{count}} 秒",
+      "log": "执行日志",
+      "textMode": "文字输入",
+      "invalidJson": "请输入有效的 JSON 对象",
+      "runHint": "运行已保存的工作流，按实际执行扣除积分。文字输入作为 query 传入；自定义参数请使用 JSON。",
+      "runningHint": "工作流正在运行，请勿重复提交。执行记录可在历史中查看。",
+      "checkHistoryAfterError": "未收到执行结果。任务可能仍在运行，请先查看执行历史再决定是否重试。",
+      "resultMeta": "执行 #{{id}} · 消耗 {{credits}} 积分",
       "history": "执行历史",
       "detail": "执行详情",
       "status": {

@@ -7,6 +7,7 @@ const ResponseHelper = require('../../utils/response');
 const JWTService = require('../../services/jwtService');
 const logger = require('../../utils/logger');
 const CacheService = require('../../services/cacheService');
+const moduleHealthService = require('../../services/moduleHealthService');
 
 class ModuleController {
   /**
@@ -389,25 +390,13 @@ class ModuleController {
         return ResponseHelper.notFound(res, '模块不存在');
       }
 
-      // 系统模块始终返回在线状态
-      if (module.module_category === 'system') {
-        return ResponseHelper.success(res, {
-          moduleId: id,
-          moduleName: module.name,
-          moduleCategory: module.module_category,
-          status: 'online',
-          message: '系统内置模块运行正常'
-        });
-      }
-
-      // 外部模块暂时返回固定的健康状态
-      // TODO: 实现真实的健康检查逻辑
+      const health = await moduleHealthService.checkModuleHealth(module);
       return ResponseHelper.success(res, {
         moduleId: id,
         moduleName: module.name,
         moduleCategory: module.module_category,
-        status: 'online',
-        message: '模块运行正常'
+        ...health,
+        checked_at: new Date().toISOString()
       });
     } catch (error) {
       console.error('健康检查失败:', error);

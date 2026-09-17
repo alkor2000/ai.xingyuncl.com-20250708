@@ -234,7 +234,7 @@ class ForumNotificationService {
         FROM forum_notifications n
         LEFT JOIN users s ON n.sender_id = s.id
         ${whereClause}
-        ORDER BY n.created_at DESC
+        ORDER BY n.created_at DESC, n.id DESC
         LIMIT ? OFFSET ?
       `;
       const { rows } = await dbConnection.simpleQuery(dataSql, [...params, safeLimit, offset]);
@@ -304,6 +304,7 @@ class ForumNotificationService {
       await dbConnection.query(sql, [notificationId, userId]);
     } catch (error) {
       logger.warn('标记已读失败:', { notificationId, userId, error: error.message });
+      throw new DatabaseError('标记已读失败', error);
     }
   }
 }

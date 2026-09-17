@@ -542,6 +542,18 @@ const ForumController = {
     }
   },
 
+  async markNotificationRead(req, res) {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id <= 0) return ResponseHelper.error(res, '通知ID无效', 400);
+      await ForumNotificationService.markRead(id, req.user.id);
+      ResponseHelper.success(res, null, '已标记为已读');
+    } catch (error) {
+      logger.error('标记已读失败:', error);
+      ResponseHelper.error(res, '操作失败');
+    }
+  },
+
   async markAllNotificationsRead(req, res) {
     try {
       const count = await ForumNotificationService.markAllRead(req.user.id);

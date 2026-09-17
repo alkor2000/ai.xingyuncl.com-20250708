@@ -304,8 +304,13 @@ const Settings = () => {
     setCheckingModuleId(moduleId)
     try {
       const result = await checkModuleHealth(moduleId)
-      if (result.success) { message.success(t('admin.modules.checkHealth.success')) }
-      else { message.warning(t('admin.modules.checkHealth.failed')) }
+      const health = result.data
+      if (!result.success || !health) { message.error(t('admin.modules.checkHealth.error')); return }
+      const reasonKnown = ['builtin', 'reachable', 'auth_required', 'http_error', 'timeout', 'connection_error', 'invalid_url'].includes(health.reason)
+      const text = reasonKnown ? t(`admin.modules.checkHealth.reason.${health.reason}`, { status: health.http_status }) : t('admin.modules.checkHealth.failed')
+      if (health.status === 'online') message.success(text)
+      else if (health.status === 'offline') message.error(text)
+      else message.warning(text)
     } catch (error) { message.error(t('admin.modules.checkHealth.error')) }
     finally { setCheckingModuleId(null) }
   }

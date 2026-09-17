@@ -416,6 +416,9 @@ const WorkflowList = () => {
           </h2>
         </div>
         <div className="header-right">
+          <Button icon={<ClockCircleOutlined />} onClick={() => navigate('/agent/executions')}>
+            {t('agent.execution.history')}
+          </Button>
           <Input
             placeholder={t('agent.workflow.searchPlaceholder')}
             prefix={<SearchOutlined />}

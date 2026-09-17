@@ -89,6 +89,8 @@ const Calendar = React.lazy(() => import('./pages/calendar/Calendar'))
 
 // Agent工作流主工作区 - 懒加载
 const AgentWorkspace = React.lazy(() => import('./pages/agent/AgentWorkspace'))
+const WorkflowRun = React.lazy(() => import('./pages/agent/WorkflowRun'))
+const ExecutionHistory = React.lazy(() => import('./pages/agent/ExecutionHistory'))
 
 // Agent工作流编辑器 - 懒加载
 const WorkflowEditor = React.lazy(() => import('./pages/agent/editor/WorkflowEditor'))
@@ -534,6 +536,9 @@ const App = () => {
                           } 
                         />
                         
+                        <Route path="/agent/execute/:id" element={<LazyLoadingWrapper><WorkflowRun /></LazyLoadingWrapper>} />
+                        <Route path="/agent/executions" element={<LazyLoadingWrapper><ExecutionHistory /></LazyLoadingWrapper>} />
+
                         {/* Agent工作流编辑器路由 */}
                         <Route 
                           path="/agent/editor/:id" 

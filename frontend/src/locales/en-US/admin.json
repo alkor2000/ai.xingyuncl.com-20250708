@@ -1,4 +1,11 @@
 {
+  "admin.modules.checkHealth.reason.builtin": "Built-in module; individual features are not checked here.",
+  "admin.modules.checkHealth.reason.reachable": "Module address reachable (HTTP {{status}}). Authenticated features need separate verification.",
+  "admin.modules.checkHealth.reason.auth_required": "Module reachable but requires authentication or authorization (HTTP {{status}}).",
+  "admin.modules.checkHealth.reason.http_error": "Module returned HTTP {{status}}.",
+  "admin.modules.checkHealth.reason.timeout": "No response within 5 seconds.",
+  "admin.modules.checkHealth.reason.connection_error": "Connection failed. Check the service, network, or certificate.",
+  "admin.modules.checkHealth.reason.invalid_url": "Configure a valid HTTP/HTTPS module URL first.",
   "admin.title": "System Management",
   "admin.users.title": "User Management",
   "admin.users.list": "User List",

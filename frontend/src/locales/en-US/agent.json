@@ -54,6 +54,19 @@
       "publishFirst": "Please publish the workflow before running it"
     },
     "execution": {
+      "back": "Back to workflows",
+      "filter": "Filter by status",
+      "allStatuses": "All statuses",
+      "actions": "Actions",
+      "deleteConfirm": "Delete this execution record?",
+      "seconds": "{{count}} s",
+      "log": "Execution log",
+      "textMode": "Text input",
+      "invalidJson": "Enter a valid JSON object",
+      "runHint": "Run the saved workflow. Credits are charged for execution. Text is passed as query; use JSON for custom parameters.",
+      "runningHint": "The workflow is running. Please do not submit again. You can check execution history.",
+      "checkHistoryAfterError": "No execution result was received. The task may still be running; check execution history before retrying.",
+      "resultMeta": "Execution #{{id}} · {{credits}} credits used",
       "history": "Execution History",
       "detail": "Execution Detail",
       "status": {

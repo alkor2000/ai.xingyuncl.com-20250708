@@ -22,6 +22,8 @@ import { message } from 'antd';
 import apiClient from '../utils/api';
 import i18n from '../utils/i18n';
 
+let notificationRequestId = 0;
+
 const useForumStore = create((set, get) => ({
 
   /* ================================================================
@@ -51,6 +53,9 @@ const useForumStore = create((set, get) => ({
   favoritesPagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
   notifications: [],
   notificationsLoading: false,
+  notificationsError: false,
+  notificationsPagination: { page: 1, limit: 20, total: 0 },
+  notificationQuery: { page: 1, limit: 20 },
   unreadCount: 0,
   adminBoards: [],
   adminBoardsLoading: false,
@@ -351,22 +356,46 @@ const useForumStore = create((set, get) => ({
    * 通知
    * ================================================================ */
   fetchNotifications: async (options = {}) => {
-    set({ notificationsLoading: true });
+    const requestId = ++notificationRequestId;
+    const query = { page: 1, limit: 20, ...options };
+    set({ notificationsLoading: true, notificationsError: false, notificationQuery: query });
     try {
-      const { page = 1, limit = 20, type } = options;
-      const res = await apiClient.get('/forum/notifications', { params: { page, limit, type } });
-      if (res.data.success) {
-        const data = res.data.data || {};
-        set({ notifications: data.items || [], unreadCount: data.unreadCount || 0, notificationsLoading: false });
-      } else set({ notificationsLoading: false });
-    } catch (error) { set({ notificationsLoading: false }); }
+      const res = await apiClient.get('/forum/notifications', { params: query });
+      if (!res.data.success) throw new Error(res.data.message);
+      if (requestId !== notificationRequestId) return;
+      const data = res.data.data || {};
+      set({ notifications: data.items || [], unreadCount: data.unreadCount || 0,
+        notificationsPagination: data.pagination || { page: query.page, limit: query.limit, total: 0 } });
+    } catch {
+      if (requestId === notificationRequestId) set({ notificationsError: true });
+    } finally {
+      if (requestId === notificationRequestId) set({ notificationsLoading: false });
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    try {
+      const res = await apiClient.put(`/forum/notifications/${id}/read`);
+      if (!res.data.success) throw new Error(res.data.message);
+      set(state => ({
+        unreadCount: Math.max(0, state.unreadCount - (state.notifications.some(n => n.id === id && !n.is_read) ? 1 : 0)),
+        notifications: state.notifications.map(n => n.id === id ? { ...n, is_read: 1 } : n)
+      }));
+    } catch (error) {
+      message.error(i18n.t('forum.notification.markFailed'));
+      throw error;
+    }
   },
 
   markAllNotificationsRead: async () => {
     try {
       const res = await apiClient.put('/forum/notifications/read-all');
-      if (res.data.success) set(state => ({ notifications: state.notifications.map(n => ({ ...n, is_read: 1 })), unreadCount: 0 }));
-    } catch (error) { console.error('Failed to mark all as read:', error); }
+      if (!res.data.success) throw new Error(res.data.message);
+      await get().fetchNotifications(get().notificationQuery);
+    } catch (error) {
+      message.error(i18n.t('forum.notification.markFailed'));
+      throw error;
+    }
   },
 
   fetchUnreadCount: async () => {

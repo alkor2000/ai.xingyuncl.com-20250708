@@ -105,6 +105,13 @@
     },
 
     "notification": {
+      "filter": "通知类型",
+      "all": "全部通知",
+      "retry": "重试",
+      "viewPost": "查看帖子",
+      "markRead": "标记已读",
+      "loadFailed": "通知加载失败，请重试",
+      "markFailed": "标记已读失败，请重试",
       "title": "论坛通知",
       "empty": "暂无通知",
       "markAllRead": "全部已读",
