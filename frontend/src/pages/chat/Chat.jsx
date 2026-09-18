@@ -19,7 +19,7 @@
  *   - PC端左右双栏布局（对话区 + 画布区），画布开关默认开启
  *   - 画布开关状态保存到 localStorage
  *   - 支持全屏预览和返回
- *   - 移动端不显示画布（仅PC端可用）
+ *   - 移动端通过产物卡片在抽屉中打开画布
  * 
  * v3.1 修复：
  *   - 画布关闭按钮(X)只隐藏当前画布，不关闭canvasEnabled开关
@@ -145,26 +145,6 @@ const useIsMobile = () => {
   return isMobile
 }
 
-/** 获取实际视口高度（解决iOS Safari的100vh问题） */
-const useViewportHeight = () => {
-  const [viewportHeight, setViewportHeight] = useState(window.innerHeight)
-  useEffect(() => {
-    const updateHeight = () => {
-      const vh = window.innerHeight
-      setViewportHeight(vh)
-      document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`)
-    }
-    updateHeight()
-    window.addEventListener('resize', updateHeight)
-    window.addEventListener('orientationchange', updateHeight)
-    return () => {
-      window.removeEventListener('resize', updateHeight)
-      window.removeEventListener('orientationchange', updateHeight)
-    }
-  }, [])
-  return viewportHeight
-}
-
 /**
  * v4.2/v5.0: 提取消息列表中所有已完成的画布产物（html / pdf / pptx / docx）
  *
@@ -189,7 +169,6 @@ const Chat = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
-  const viewportHeight = useViewportHeight()
 
   // 从store获取状态和方法
   const {
@@ -226,6 +205,7 @@ const Chat = () => {
 
   // v3.1: 画布临时关闭状态
   const [canvasDismissed, setCanvasDismissed] = useState(false)
+  const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false)
 
   /**
    * v4.0: 思考过程显示开关
@@ -286,6 +266,7 @@ const Chat = () => {
   /** v3.1: 关闭画布（画布面板的X按钮触发） */
   const handleDismissCanvas = useCallback(() => {
     setCanvasDismissed(true)
+    setMobileCanvasOpen(false)
   }, [])
 
   /**
@@ -327,6 +308,7 @@ const Chat = () => {
         return true
       })
       setCanvasDismissed(false)
+      setMobileCanvasOpen(true)
     }
     window.addEventListener(CANVAS_OPEN_EVENT, handleOpenRequest)
     return () => window.removeEventListener(CANVAS_OPEN_EVENT, handleOpenRequest)
@@ -367,6 +349,7 @@ const Chat = () => {
     setUserScrolled(false)
     setLastScrollTop(0)
     setCanvasDismissed(false)
+    setMobileCanvasOpen(false)
     htmlBlockCountRef.current = 0
     setOutputFormat(outputFormatByConversationRef.current.get(currentConversationId) || 'none')
   }, [currentConversationId])
@@ -850,7 +833,7 @@ const Chat = () => {
   // ================================================================
 
   const renderMobileListView = () => (
-    <div className="mobile-conversations-view" style={{ height: viewportHeight }}>
+    <div className="mobile-conversations-view">
       <div className="mobile-header">
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleBackToHome} style={{ marginRight: 8 }} />
         <h3 style={{ flex: 1, margin: 0 }}>{t('chat.conversations')}</h3>
@@ -869,7 +852,7 @@ const Chat = () => {
   )
 
   const renderMobileChatView = () => (
-    <div className="mobile-chat-view" style={{ height: viewportHeight }}>
+    <div className="mobile-chat-view">
       <div className="mobile-chat-header">
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleMobileBack} />
         <div className="mobile-chat-title">{currentConversation?.title || t('chat.newConversation')}</div>
@@ -923,6 +906,12 @@ const Chat = () => {
           />
         </Drawer>
 
+        <Drawer open={mobileCanvasOpen && hasCanvasContent} onClose={handleDismissCanvas}
+          width="100%" title={t('chat.canvas.title')} rootClassName="mobile-canvas-drawer"
+          styles={{ body: { padding: 0, overflow: 'hidden' } }} destroyOnClose>
+          <HtmlCanvasPanel messages={messages} isStreaming={isStreaming}
+            visible={mobileCanvasOpen} onClose={handleDismissCanvas} />
+        </Drawer>
         <ConversationSettingsDrawer visible={showSettings} conversation={editingConversation}
           aiModels={aiModels} form={settingsForm} onClose={handleCloseSettings} onSubmit={handleUpdateSettings} />
         <ConversationFormModal visible={showNewChatModal} aiModels={aiModels}

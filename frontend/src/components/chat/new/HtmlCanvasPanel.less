@@ -300,12 +300,14 @@
 }
 
 // ================================================================
-// 响应式 - 移动端画布不可见（仅PC端使用）
+// 响应式 - 移动端通过抽屉显示画布
 // 阈值与 Chat.less 保持一致 1024px
 // ================================================================
 @media (max-width: 1024px) {
   .html-canvas-panel {
-    display: none !important;
+    border-left: 0;
+    .canvas-toolbar { flex-wrap: wrap; }
+    .canvas-toolbar .toolbar-left, .canvas-toolbar .toolbar-right { flex-wrap: wrap; overflow: visible; max-width: 100%; }
   }
 }
 

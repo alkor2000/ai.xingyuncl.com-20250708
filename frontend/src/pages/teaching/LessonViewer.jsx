@@ -361,8 +361,9 @@ const LessonViewer = () => {
   return (
     <div 
       ref={containerRef}
+      className="lesson-viewer-page"
       style={{ 
-        height: '100vh', 
+        height: '100%',
         display: 'flex', 
         flexDirection: 'column',
         background: isFullscreen ? '#000' : '#F2F2F7',
@@ -377,7 +378,7 @@ const LessonViewer = () => {
             onBack={handleBack}
             backText={t('teaching.backToPageList')}
             actions={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="lesson-viewer-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ 
                   display: 'flex', 
                   alignItems: 'center',
@@ -419,7 +420,7 @@ const LessonViewer = () => {
             }
           />
 
-          <div style={{
+          <div className="lesson-viewer-pagination" style={{
             background: 'white',
             padding: '12px 24px',
             borderBottom: '1px solid #E5E5EA',

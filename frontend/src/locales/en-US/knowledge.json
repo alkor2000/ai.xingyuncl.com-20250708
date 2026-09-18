@@ -145,5 +145,7 @@
   "knowledge.form.systemPermission2": "Specific groups selected: Only users in selected groups can use",
   "knowledge.form.createdBy": "This module was created by {{creator}}",
   "knowledge.form.noGroupPermission": "Cannot get group tags, please confirm you have joined a group",
-  "knowledge.form.operationFailed": "Operation failed"
+  "knowledge.form.operationFailed": "Operation failed",
+  "knowledge.addToCanvas": "Add to assembly",
+  "knowledge.reorder": "Drag to reorder"
 }

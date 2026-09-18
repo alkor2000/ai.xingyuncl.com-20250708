@@ -230,7 +230,7 @@ const Register = () => {
           borderRadius: '8px'
         }}
       >
-        <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <div className="register-language" style={{ position: 'absolute', top: 16, right: 16 }}>
           <LanguageSwitch />
         </div>
         

@@ -145,5 +145,7 @@
   "knowledge.form.systemPermission2": "选择特定用户组：只有选中的组内用户可以使用",
   "knowledge.form.createdBy": "该模块由 {{creator}} 创建",
   "knowledge.form.noGroupPermission": "无法获取组标签，请确认您已加入组",
-  "knowledge.form.operationFailed": "操作失败"
+  "knowledge.form.operationFailed": "操作失败",
+  "knowledge.addToCanvas": "添加到组装区",
+  "knowledge.reorder": "拖动调整顺序"
 }

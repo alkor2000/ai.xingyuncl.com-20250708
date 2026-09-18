@@ -61,3 +61,11 @@
   }
   &.active .slide-theme-name { color: #1890ff; font-weight: 500; }
 }
+
+@media (max-width: 540px) {
+  .slide-theme-popover { max-width: calc(100vw - 16px); }
+  .slide-theme-grid { grid-template-columns: repeat(2, 144px); max-width: calc(100vw - 48px); }
+}
+@media (max-width: 359px) {
+  .slide-theme-grid { grid-template-columns: 144px; }
+}

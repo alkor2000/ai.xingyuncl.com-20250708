@@ -4,7 +4,7 @@
  */
 
 .image-generation-page {
-  height: 100vh;
+  height: 100%;
   background: #f5f5f5;
   display: flex;
   
@@ -17,7 +17,7 @@
   .generation-sider {
     background: #fff;
     border-right: 1px solid #f0f0f0;
-    height: 100vh; // 明确设置高度
+    height: 100%; // 明确设置高度
     display: flex; // 使用flex布局
     flex-direction: column; // 垂直方向
     
@@ -36,7 +36,7 @@
     overflow-y: auto; // 启用垂直滚动
     overflow-x: hidden; // 禁用水平滚动
     padding: 12px;
-    max-height: 100vh; // 限制最大高度
+    max-height: 100%; // 限制最大高度
     
     // 美化滚动条
     &::-webkit-scrollbar {
@@ -1027,5 +1027,13 @@
       width: 100%;
       flex: 1 1 auto;
     }
+  }
+}
+
+@media (max-width: 768px) {
+  .image-generation-page.ant-layout { flex-direction: column; height: auto; min-height: 100%;
+    .generation-sider { flex: none !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; height: auto; }
+    .generation-container { flex: none; overflow: visible; }
+    .history-content { flex: none; width: 100%; min-height: 420px; height: auto; overflow: visible; }
   }
 }

@@ -1020,3 +1020,14 @@
     }
   }
 }
+
+@media (max-width: 1024px) {
+  .basic-layout-content:has(.chat-mobile-container) { height: 100%; }
+  .chat-mobile-container, .chat-mobile-container .mobile-chat-view,
+  .chat-mobile-container .mobile-conversations-view { min-height: 0; }
+  .chat-mobile-container .mobile-input-container .input-container .input-header {
+    flex-wrap: wrap;
+    .left-tools { flex-wrap: wrap; flex-basis: 100%; }
+    .right-tools { margin-left: auto; }
+  }
+}

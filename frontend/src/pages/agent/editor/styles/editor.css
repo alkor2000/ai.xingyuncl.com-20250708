@@ -23,7 +23,7 @@
 .workflow-editor {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: #f0f2f5;
   overflow: hidden;
   /* v4.3: 绝对定位占满父容器，确保不会被外层滚动影响 */
@@ -564,7 +564,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  height: 100%;
   font-size: 16px;
   color: #8c8c8c;
 }
@@ -583,4 +583,13 @@
   .floating-node-panel { width: 240px; left: 16px; top: 72px; }
   .node-panel-trigger { top: 12px; left: 12px; }
   .workflow-editor-body .ant-drawer-content-wrapper { width: 100% !important; }
+}
+
+@media (max-width: 768px) {
+  .workflow-editor-toolbar { flex-wrap: wrap; gap: 8px; }
+  .workflow-editor-toolbar .toolbar-left { min-width: 0; width: 100%; overflow: visible; }
+  .workflow-editor-toolbar .workflow-info { min-width: 0; overflow-wrap: anywhere; }
+  .workflow-editor-toolbar .toolbar-right { min-width: 0; max-width: 100%; }
+  .workflow-editor-toolbar .toolbar-right > .ant-space { flex-wrap: wrap; }
+  .floating-node-panel { max-width: calc(100% - 32px); max-height: calc(100% - 88px); }
 }

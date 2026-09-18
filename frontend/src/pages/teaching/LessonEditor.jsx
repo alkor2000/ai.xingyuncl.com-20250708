@@ -496,15 +496,15 @@ const LessonEditor = () => {
   }
 
   return (
-    <div style={{ 
-      height: '100vh', 
+    <div className="lesson-editor-page" style={{
+      height: '100%',
       background: iosColors.bgSecondary,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
       {/* 顶部操作栏 - 白色卡片 */}
-      <div style={{
+      <div className="lesson-editor-toolbar" style={{
         background: iosColors.cardWhite,
         padding: '16px 24px',
         borderRadius: '0 0 20px 20px',
@@ -704,7 +704,7 @@ const LessonEditor = () => {
       </div>
 
       {/* 主体内容 - 三栏布局 */}
-      <div style={{
+      <div className="lesson-editor-panes" style={{
         flex: 1,
         display: 'flex',
         gap: 16,
@@ -712,7 +712,7 @@ const LessonEditor = () => {
         overflow: 'hidden'
       }}>
         {/* 左侧 - 页面列表（白色卡片）*/}
-        <div style={{
+        <div className="lesson-editor-pages" style={{
           width: 300,
           background: iosColors.cardWhite,
           borderRadius: 20,
@@ -901,7 +901,7 @@ const LessonEditor = () => {
         </div>
 
         {/* 中间 - Monaco编辑器（白色卡片）*/}
-        <div style={{ 
+        <div className="lesson-editor-code" style={{
           flex: 1,
           display: 'flex', 
           flexDirection: 'column',
@@ -963,7 +963,7 @@ const LessonEditor = () => {
         </div>
 
         {/* 右侧 - 实时预览（白色卡片）*/}
-        <div style={{
+        <div className="lesson-editor-preview" style={{
           width: 800,
           background: iosColors.cardWhite,
           borderRadius: 20,

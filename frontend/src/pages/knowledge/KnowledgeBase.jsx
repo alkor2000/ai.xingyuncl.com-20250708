@@ -124,9 +124,8 @@ const SlotModule = ({ module, onRemove, index }) => {
       ref={setNodeRef}
       style={style}
       className={`slot-module ${getModuleColor()} ${isDragging ? 'dragging' : ''}`}
-      {...attributes}
-      {...listeners}
     >
+      <button className="module-drag-handle" aria-label={t('knowledge.reorder')} {...attributes} {...listeners}>⋮⋮</button>
       <div className="module-badges-bar">
         {module.prompt_type === 'system' && (
           <Tag className="system-prompt-tag">
@@ -165,7 +164,7 @@ const SlotModule = ({ module, onRemove, index }) => {
 // ==========================================
 // 模块广场卡片 - v2.3 新增引用数显示
 // ==========================================
-const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete }) => {
+const ModuleCard = ({ module, onDragStart, onAdd, onEdit, onDelete, canEdit, canDelete }) => {
   const { t } = useTranslation()
   const [isDragging, setIsDragging] = useState(false)
 
@@ -197,11 +196,12 @@ const ModuleCard = ({ module, onDragStart, onEdit, onDelete, canEdit, canDelete 
   }
 
   // 操作菜单
-  const menuItems = []
+  const menuItems = [{ key: 'add', label: t('knowledge.addToCanvas'), icon: <PlusOutlined /> }]
   if (canEdit)   menuItems.push({ key: 'edit',   label: t('knowledge.edit'),   icon: <EditOutlined /> })
   if (canDelete) menuItems.push({ key: 'delete', label: t('knowledge.delete'), icon: <DeleteOutlined />, danger: true })
 
   const handleMenuClick = ({ key }) => {
+    if (key === 'add') onAdd(module)
     if (key === 'edit'   && onEdit)   onEdit(module)
     if (key === 'delete' && onDelete) onDelete(module.id)
   }
@@ -482,6 +482,27 @@ const KnowledgeBase = () => {
 
   const handleDragStart = (module) => setDraggedModule(module)
 
+  const handleAddModule = (module) => {
+    if (canvasModules.find(m => m.id === module.id)) return
+
+    if (canvasModules.length >= slotCount) {
+      message.warning(t('knowledge.maxModules'))
+      return
+    }
+
+    const newTotalTokens = totalCanvasTokens + (module.token_count || 0)
+    if (newTotalTokens > 100000) {
+      message.warning(t('knowledge.tokenExceeded', {
+        moduleTokens: formatTokenCount(module.token_count),
+        totalTokens:  formatTokenCount(newTotalTokens)
+      }))
+      return
+    }
+
+    setCanvasModules([...canvasModules, module])
+    message.success(t('knowledge.moduleAdded'))
+  }
+
   // 组装区拖入
   const handleCanvasDrop = (e) => {
     e.preventDefault()
@@ -494,24 +515,7 @@ const KnowledgeBase = () => {
       if (!moduleData) return
       const module = JSON.parse(moduleData)
 
-      if (canvasModules.find(m => m.id === module.id)) return
-
-      if (canvasModules.length >= slotCount) {
-        message.warning(t('knowledge.maxModules'))
-        return
-      }
-
-      const newTotalTokens = totalCanvasTokens + (module.token_count || 0)
-      if (newTotalTokens > 100000) {
-        message.warning(t('knowledge.tokenExceeded', {
-          moduleTokens: formatTokenCount(module.token_count),
-          totalTokens:  formatTokenCount(newTotalTokens)
-        }))
-        return
-      }
-
-      setCanvasModules([...canvasModules, module])
-      message.success(t('knowledge.moduleAdded'))
+      handleAddModule(module)
 
     } else if (dragType === 'combination') {
       const combinationData = e.dataTransfer.getData('combination')
@@ -529,7 +533,7 @@ const KnowledgeBase = () => {
 
   const handleDragEnd = (event) => {
     const { active, over } = event
-    if (active.id !== over?.id) {
+    if (over && active.id !== over.id) {
       const oldIndex = canvasModules.findIndex(m => m.id === active.id)
       const newIndex = canvasModules.findIndex(m => m.id === over.id)
       setCanvasModules(arrayMove(canvasModules, oldIndex, newIndex))
@@ -719,6 +723,7 @@ const KnowledgeBase = () => {
                     key={module.id}
                     module={module}
                     onDragStart={handleDragStart}
+                    onAdd={handleAddModule}
                     onEdit={handleEditModule}
                     onDelete={handleDeleteModule}
                     canEdit={canEditModule(module)}

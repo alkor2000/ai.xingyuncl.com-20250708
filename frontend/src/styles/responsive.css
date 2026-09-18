@@ -1,0 +1,56 @@
+/* Shared phone layout rules. Wide data remains scrollable inside its own table. */
+@media (max-width: 767px) {
+  .basic-layout-content :is(.page-container, .profile-container) { padding: 12px; }
+  .basic-layout-content :is(.ant-card, .ant-tabs, .ant-tabs-content-holder, .ant-tabs-tabpane, .ant-table-wrapper) { min-width: 0; max-width: 100%; }
+  .basic-layout-content .ant-card-body { padding: 16px; }
+  .basic-layout-content .ant-card-head { padding-inline: 16px; }
+  .basic-layout-content .ant-card-head-wrapper { flex-wrap: wrap; gap: 8px; padding-block: 8px; }
+  .basic-layout-content .ant-card-head-title { white-space: normal; overflow-wrap: anywhere; }
+  .basic-layout-content .ant-card-extra { margin-inline-start: 0; max-width: 100%; }
+  .basic-layout-content .ant-space-horizontal { flex-wrap: wrap; max-width: 100%; }
+  .basic-layout-content .ant-space-item { min-width: 0; max-width: 100%; }
+  .basic-layout-content .ant-space-item > :is(.ant-input-affix-wrapper, .ant-input-search, .ant-select, .ant-picker) { max-width: 100%; }
+  .basic-layout-content .ant-table-content { overflow-x: auto; overscroll-behavior-x: contain; }
+  .basic-layout-content .ant-table-content > table { min-width: 600px; }
+  .basic-layout-content .ant-pagination { flex-wrap: wrap; }
+  .basic-layout-content :is(.page-container, .profile-container) :is(.ant-col-6, .ant-col-8, .ant-col-12) { flex: 0 0 100%; max-width: 100%; }
+  .ant-modal .ant-space-horizontal { flex-wrap: wrap; max-width: 100%; }
+  .ant-modal .ant-space-item { min-width: 0; max-width: 100%; }
+  .ant-modal :is(.ant-col-8, .ant-col-12) { flex: 0 0 100%; max-width: 100%; }
+  .ant-modal .ant-table-content { overflow-x: auto; }
+  .ant-modal .ant-table-content > table { min-width: 560px; }
+  .ant-drawer-content-wrapper { max-width: 100vw; }
+  .ant-drawer-body { min-width: 0; overflow-wrap: anywhere; }
+  .ant-drawer-body .ant-table-content { overflow-x: auto; }
+  .ant-modal-content { padding: 16px !important; }
+  .ant-modal-title, .ant-drawer-title { overflow-wrap: anywhere; }
+  .ant-modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .ant-modal-footer > .ant-btn + .ant-btn { margin-inline-start: 0; }
+}
+
+/* Legacy lesson tools also remain reachable through their direct routes. */
+.lesson-editor-panes > div { min-width: 0; }
+@media (max-width: 991px) {
+  .lesson-editor-page { height: auto !important; min-height: 100%; overflow: visible !important; }
+  .lesson-editor-toolbar { padding: 12px !important; margin: 0 12px 12px !important; }
+  .lesson-editor-toolbar > div { flex-wrap: wrap; gap: 12px; }
+  .lesson-editor-toolbar > div > div:first-child { flex-basis: 100% !important; }
+  .lesson-editor-panes { flex-direction: column; flex: none !important; overflow: visible !important; padding: 0 12px 12px !important; }
+  .lesson-editor-panes > div { width: 100% !important; flex: none !important; }
+  .lesson-editor-pages { max-height: 300px; }
+  .lesson-editor-code, .lesson-editor-preview { height: 450px; }
+  .lesson-viewer-page .ios-nav-bar { height: auto; flex-wrap: wrap; gap: 12px; padding: 12px; }
+  .lesson-viewer-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .lesson-viewer-pagination { flex-wrap: wrap; gap: 8px !important; padding: 8px !important; }
+  .lesson-viewer-pagination > div { min-width: 64px !important; padding: 8px !important; }
+  .lesson-viewer-page .ios-button { white-space: nowrap; flex-shrink: 0; }
+}
+/* Global touch button minimums must not stretch Ant Design's switch track. */
+@media (max-width: 767px), (pointer: coarse) {
+  .ant-switch { min-height: 0; }
+  .ant-switch.ant-switch-small { min-width: 28px; }
+}
+
+@media (max-width: 767px) {
+  .platform-auth .register-language { position: static !important; text-align: right; margin-bottom: 12px; }
+}

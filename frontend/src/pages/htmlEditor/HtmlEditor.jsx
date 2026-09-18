@@ -41,7 +41,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout, Button, Space, message, Modal, Form, Input, Select,
-  Empty, Tag, Divider, Typography, Spin, Tooltip
+  Empty, Tag, Divider, Typography, Spin, Tooltip, Grid
 } from 'antd';
 import {
   FolderOutlined, PlusOutlined, SaveOutlined, CopyOutlined,
@@ -79,6 +79,9 @@ const MonacoEditor = React.lazy(() => import('@monaco-editor/react'));
 
 const HtmlEditor = () => {
   const { t } = useTranslation();
+  const screens = Grid.useBreakpoint();
+  const isCompact = !screens.lg;
+  const [mobilePane, setMobilePane] = useState('editor');
   const { user, getCurrentUser } = useAuthStore();
   const {
     projects, pages, currentPage,
@@ -111,7 +114,8 @@ const HtmlEditor = () => {
   const [renameForm] = Form.useForm();
   const [isSaving, setIsSaving] = useState(false);
   const [compiledContent, setCompiledContent] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 992);
+  useEffect(() => { setSidebarCollapsed(isCompact); }, [isCompact]);
   const [editorTheme, setEditorTheme] = useState('vs-dark');
   const [creditsConfig, setCreditsConfig] = useState({ credits_per_page: 10, credits_per_update: 2, credits_per_publish: 5 });
   const [userCredits, setUserCredits] = useState(0);
@@ -328,7 +332,7 @@ const HtmlEditor = () => {
 
   // ============ 样式（iOS 风格，与语言无关） ============
   const S = {
-    container: { height: 'calc(100vh - 60px)', background: '#F2F2F7', overflow: 'hidden' },
+    container: { height: '100%', background: '#F2F2F7', overflow: 'hidden' },
     header: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(60,60,67,0.12)', height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
     sidebar: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(60,60,67,0.12)' },
     sidebarContent: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
@@ -352,12 +356,12 @@ const HtmlEditor = () => {
 
   // ============ 渲染 ============
   return (
-    <Layout style={S.container}>
-      <Header style={S.header}>
+    <Layout className="html-editor-workspace" style={S.container}>
+      <Header className="html-editor-toolbar" style={S.header}>
         <Space size={8}>
-          <Button style={S.iconBtn} icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
+          <Button aria-label={t('htmlEditor.projects')} style={S.iconBtn} icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
           <Button type="primary" style={S.btn('linear-gradient(135deg,#34C759,#30B854)')} icon={<SaveOutlined />} onClick={handleSavePage} loading={isSaving} disabled={!selectedPageId}>{t('htmlEditor.save')} {fmtCreditsSave(creditsConfig.credits_per_update)}</Button>
-          <Button style={S.btn('linear-gradient(135deg,#AF52DE,#9F44D3)')} icon={<EyeOutlined />} onClick={handlePreview}>{t('htmlEditor.preview')}</Button>
+          <Button style={S.btn('linear-gradient(135deg,#AF52DE,#9F44D3)')} icon={<EyeOutlined />} onClick={() => { handlePreview(); if (isCompact) { setMobilePane(p => p === 'preview' ? 'editor' : 'preview'); setSidebarCollapsed(true); } }}>{isCompact && mobilePane === 'preview' ? t('htmlEditor.title') : t('htmlEditor.preview')}</Button>
           <Button style={S.btn('rgba(142,142,147,0.12)', '#3C3C43')} icon={<CopyOutlined />} onClick={handleCopy}>{t('htmlEditor.copy')}</Button>
           <Button style={S.btn('linear-gradient(135deg,#FF9500,#FF8200)')} icon={<ClearOutlined />} onClick={handleClear}>{t('htmlEditor.clear')}</Button>
         </Space>
@@ -380,8 +384,8 @@ const HtmlEditor = () => {
         </Space>
       </Header>
 
-      <Layout style={{ background: 'transparent', flex: 1, overflow: 'hidden' }}>
-        <Sider width={300} collapsed={sidebarCollapsed} collapsedWidth={0} style={S.sidebar}>
+      <Layout className="html-editor-body" style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <Sider className="html-editor-sidebar" width={300} collapsed={sidebarCollapsed} collapsedWidth={0} style={S.sidebar}>
           <div style={S.sidebarContent}>
             {/* 项目列表 */}
             <div style={S.sidebarSection}>
@@ -409,7 +413,7 @@ const HtmlEditor = () => {
                 </div>
                 {loadingPages ? <div style={{ textAlign: 'center', padding: 40 }}><Spin tip={t('htmlEditor.page.loadingPages')} /></div>
                 : pages.length > 0 ? <div style={S.pageScroll}>{pages.map(p => (
-                  <div key={p.id} style={S.pageCard(selectedPageId === p.id)} onClick={() => handleSelectPage(p)}>
+                  <div key={p.id} style={S.pageCard(selectedPageId === p.id)} onClick={() => { handleSelectPage(p); if (isCompact) setSidebarCollapsed(true); }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       {/* 页面标题与 slug 均为业务数据，不翻译 */}
                       <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{p.title}</div><div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>{p.slug}</div></div>
@@ -427,10 +431,11 @@ const HtmlEditor = () => {
           </div>
         </Sider>
 
-        <Content style={{ display: 'flex', background: 'transparent', padding: 0, overflow: 'hidden' }}>
+        {isCompact && !sidebarCollapsed && <button className="html-editor-sidebar-mask" aria-label={t('htmlEditor.action.close')} onClick={() => setSidebarCollapsed(true)} />}
+        <Content className={`html-editor-panes mobile-pane-${mobilePane}`} style={{ display: 'flex', minWidth: 0, background: 'transparent', padding: 0, overflow: 'hidden' }}>
           {/* 编辑器区域 */}
-          <div style={S.edSec}>
-            <div style={S.edHead}>
+          <div className="html-editor-code" style={S.edSec}>
+            <div className="html-editor-pane-head" style={S.edHead}>
               <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}</span>
               <Space size={8}>
                 <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? t('htmlEditor.editor.basicMode') : t('htmlEditor.loadingEditor')}</span>
@@ -452,13 +457,13 @@ const HtmlEditor = () => {
             </div>
           </div>
           {/* 预览区域 */}
-          <div style={S.pvSec}>
-            <div style={S.edHead}>
+          <div className="html-editor-preview" style={S.pvSec}>
+            <div className="html-editor-pane-head" style={S.edHead}>
               <span style={{ fontWeight: 600, fontSize: 15 }}><EyeOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.realTimePreview')}</span>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>{previewMode === 'desktop' ? t('htmlEditor.desktop') : previewMode === 'tablet' ? t('htmlEditor.tablet') : t('htmlEditor.mobile')}</span>
             </div>
             <div style={S.pvContent}>
-              <div style={{ ...S.pvFrame, width: previewMode === 'desktop' ? '100%' : previewMode === 'tablet' ? 768 : 375, height: '100%', maxHeight: '90%' }}>
+              <div style={{ ...S.pvFrame, width: previewMode === 'desktop' ? '100%' : previewMode === 'tablet' ? 768 : 375, height: '100%', maxHeight: '90%', maxWidth: '100%' }}>
                 <iframe title="preview" srcDoc={compiledContent} style={{ width: '100%', height: '100%', border: 'none' }} sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" />
               </div>
             </div>

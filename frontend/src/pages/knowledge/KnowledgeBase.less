@@ -1086,3 +1086,21 @@
     padding-bottom: 20px;
   }
 }
+
+@media (max-width: 992px) {
+  .knowledge-wizard-ios {
+    height: auto; min-height: 100%; overflow: visible;
+    .wizard-body { flex-direction: column; overflow: visible;
+      .panel-left, .panel-center, .panel-right { display: flex; flex: none; width: 100%; max-width: none; height: auto; }
+      .panel-left .panel-content, .panel-right .panel-content { max-height: 360px; overflow-y: auto; }
+      .panel-center .panel-content { overflow: visible; }
+      .panel-header, .header-actions { flex-wrap: wrap; gap: 8px; }
+      .panel-left .module-grid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); }
+    }
+  }
+}
+
+.module-drag-handle { touch-action: none; cursor: grab; position: absolute; bottom: 4px; left: 6px; border: 0; border-radius: 4px; background: transparent; padding: 6px 10px; }
+@media (hover: none) {
+  .knowledge-wizard-ios .module-more-btn, .knowledge-wizard-ios .module-remove { opacity: 1; visibility: visible; }
+}

@@ -365,7 +365,7 @@ const ChatInputArea = forwardRef(({
         ? t('chat.input.placeholderWithDocument.mobile')
         : t('chat.input.placeholderWithDocument')
     }
-    if (outputFormat && outputFormat !== 'none' && !isMobile) {
+    if (outputFormat && outputFormat !== 'none') {
       return t('chat.input.placeholderWithFormat', { format: t(`chat.outputFormat.${outputFormat}`) })
     }
     return isMobile
@@ -550,8 +550,8 @@ const ChatInputArea = forwardRef(({
             isMobile={isMobile}
           />
 
-          {/* 输出格式选择：普通对话 / 网页 / PPT / Word / PDF（仅 PC 端） */}
-          {!isMobile && onOutputFormatChange && (
+          {/* 输出格式选择：普通对话 / 网页 / PPT / Word / PDF */}
+          {onOutputFormatChange && (
             <Dropdown menu={outputFormatMenu} trigger={['click']} disabled={typing || isStreaming}>
               <Tooltip title={t('chat.outputFormat.tooltip')}>
                 <Button
@@ -568,8 +568,8 @@ const ChatInputArea = forwardRef(({
             </Dropdown>
           )}
 
-          {/* 公文模板库（PC 端）：上传单位的 Word 样板，AI 写的公文或自己的草稿按它生成 .docx */}
-          {!isMobile && onOutputFormatChange && (
+          {/* 公文模板库：上传单位的 Word 样板，AI 写的公文或自己的草稿按它生成 .docx */}
+          {onOutputFormatChange && (
             <>
               <Tooltip title={t('chat.docTemplate.inputButtonTip')}>
                 <Button type="text" size="small" icon={<FileWordOutlined />} className="output-format-btn" onClick={() => setDocTemplateOpen(true)}>

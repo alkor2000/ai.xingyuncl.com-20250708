@@ -235,3 +235,19 @@
   .ailab-wizard-bar .ailab-wizard-progress { width: 100px; }
   .ailab-wizard-card .ant-card-body { padding: 14px 16px; }
 }
+
+@media (max-width: 900px) {
+  .ailab-workspace, .ailab-capture, .ailab-task-radio { grid-template-columns: minmax(0, 1fr); }
+  .ailab-rail { min-width: 0; }
+}
+@media (max-width: 767px) {
+  .ailab-page { padding: 12px 12px 32px; }
+  .ailab-head { flex-wrap: wrap; }
+  .ailab-project-grid { grid-template-columns: minmax(0, 1fr); }
+  .ailab-section .ant-card-body > *, .ailab-capture > * { min-width: 0; max-width: 100%; }
+  .ailab-section .ant-alert { flex-wrap: wrap; gap: 8px; }
+  .ailab-section .ant-alert-action { margin-left: 0; }
+  .ailab-scorecard { flex-wrap: wrap; }
+  .ailab-recall-row { grid-template-columns: 70px minmax(0, 1fr) 70px; }
+}
+@media (hover: none) { .ailab-thumb .ailab-thumb-del { display: block; } }
