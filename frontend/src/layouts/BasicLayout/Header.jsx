@@ -75,6 +75,7 @@ const Header = ({ isMobile, onMenuClick }) => {
                 height: '32px',
                 width: 'auto',
                 objectFit: 'contain',
+                borderRadius: '8px',
                 marginRight: '8px'
               }}
             />
