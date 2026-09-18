@@ -214,7 +214,7 @@ const Register = () => {
   }
 
   return (
-    <div style={{
+    <div className="platform-auth" style={{
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',

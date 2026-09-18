@@ -4,6 +4,7 @@ import App from './App.jsx'
 import './utils/i18n' // 导入i18n配置
 import networkService from './services/networkService' // 导入网络监测服务
 import './index.css'
+import './styles/platform-chrome.css'
 
 // 初始化网络监测服务
 if (typeof window !== 'undefined') {

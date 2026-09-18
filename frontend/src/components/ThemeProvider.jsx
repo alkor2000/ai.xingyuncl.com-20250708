@@ -1,35 +1,32 @@
-/**
- * 主题Provider组件
- * 负责在应用加载时从系统配置中获取主题并应用
- */
-
-import { useEffect } from 'react'
+/** Apply the existing saved theme to both CSS chrome and Ant Design controls. */
+import { useEffect, useMemo } from 'react'
+import { ConfigProvider } from 'antd'
 import useSystemConfigStore from '../stores/systemConfigStore'
+import { applyThemeColors, brandForeground, DEFAULT_THEME_COLORS } from '../styles/platform-theme'
 
 const ThemeProvider = ({ children }) => {
   const { systemConfig } = useSystemConfigStore()
-
-  useEffect(() => {
-    // 应用主题
-    if (systemConfig?.theme?.colors) {
-      applyTheme(systemConfig.theme.colors)
-    }
-  }, [systemConfig])
-
-  const applyTheme = (colors) => {
-    const root = document.documentElement
-    
-    // 确保colors是一个对象
-    if (typeof colors === 'object' && colors !== null) {
-      Object.entries(colors).forEach(([key, value]) => {
-        // 将驼峰命名转换为 kebab-case
-        const cssVarName = `--${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`
-        root.style.setProperty(cssVarName, value)
-      })
-    }
-  }
-
-  return children
+  const colors = systemConfig?.theme?.colors
+  const theme = useMemo(() => {
+    const palette = { ...DEFAULT_THEME_COLORS, ...colors }
+    return { token: {
+      colorPrimary: palette.primaryColor,
+      colorInfo: palette.primaryColor,
+      colorSuccess: palette.successColor,
+      colorWarning: palette.warningColor,
+      colorError: palette.errorColor,
+      colorText: palette.textColor,
+      colorTextSecondary: palette.textColorSecondary,
+      colorBgLayout: palette.bodyBg,
+      colorBgContainer: palette.componentBg,
+      colorBorder: palette.borderColor,
+      colorBorderSecondary: palette.borderColorSplit,
+      colorTextLightSolid: brandForeground(palette.primaryColor),
+      borderRadius: 9,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+    } }
+  }, [colors])
+  useEffect(() => { applyThemeColors(colors) }, [colors])
+  return <ConfigProvider theme={theme}>{children}</ConfigProvider>
 }
-
 export default ThemeProvider
