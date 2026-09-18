@@ -1,5 +1,17 @@
 # P03 教师选定成果：源侧第一单
 
+## 2026-09-19 续单：先开放选中内容下载
+
+用户明确选择先开放本机下载，TE-DNA 保存后续接入。真实聊天的助手回答下增加“下载成果”，可选整条或原文片段，并显式勾选可读 TXT/Markdown 附件。ZIP 包含 `answer.md`、`source.json` 与选定附件；来源清单固定对象、内容版本、所选范围、生成时间和内容摘要，不调用模型总结、不抓取链接、不导出其他消息或 thinking。
+
+生产接口为 `GET /api/artifact-exports/messages/:id` 和 `POST /api/artifact-exports/messages/:id/download`。POST 仅接受 `schema_version:1`、`expected_version`、`selection:{start,end}`、`attachments:[{source_id,expected_version}]`；每次重新检查当前登录账号、会话归属、完成状态、版本与附件访问。源变化返回 409，需显式重新加载；无权访问返回 404。严格 JSON、未知字段拒绝、16 KiB 请求上限、no-store、安全错误信封与 request_id；不接 query，不记录正文。
+
+每次请求即时生成下载包，不在服务器留存成果，不建资源库或数据库表。固定 ZIP 元数据使同版同范围重试字节一致；前端锁阻止连点，失败可重试。复用 `artifactHandoff/selection.js` 的范围与清单准备，开发快照服务仍单独保留草案标记和持久化。`practice-selected-export/v1` 仅是本机归档格式，不是 I03/T11 正式接收契约。
+
+本次无数据库迁移、无新增依赖。跨端保存及假接收方仍只在开发门禁内，线上没有 TE-DNA 保存入口或成功提示。登录者只能下载本人内容；这不等于教师跨端身份已验证，也不替代 P01 学生边界验收。
+
+可重复验证：后端 `artifactExport.test.js` + `artifactHandoff.test.js`，前端 `ArtifactExport.test.jsx` + `MessageContentExport.test.jsx` + `ArtifactHandoffDev.test.jsx`；合成浏览器用 `P03_DEMO_PORT=3005 node dev/p03-demo.mjs --export-only`，检查真实 ZIP、准确片段、勾选附件、来源变化错误及手机显示。以下章节为首单的历史验证和待联调贡献；发布结果以工作区独立回执为准。
+
 日期：2026-09-18。基线：`4a2b00e`（保留该导航改动及之前已完成的发布）。本次是源侧开发/模拟验证，没有发布到两个生产站点，没有数据库迁移。
 
 ## 规划与交付边界

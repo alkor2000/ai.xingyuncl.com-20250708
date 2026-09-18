@@ -10,6 +10,8 @@ const frontend = createRequire(path.join(root, 'frontend/package.json'))
 const express = backend('express')
 const { fixture } = backend('./src/__tests__/helpers/p03Fixture')
 const { createRouter } = backend('./src/routes/artifactHandoffDev')
+const { createRouter: createExportRouter } = backend('./src/routes/artifactExports')
+const { ArtifactExportService } = backend('./src/services/artifactExportService')
 const { createServer } = await import(path.join(path.dirname(frontend.resolve('vite/package.json')), 'dist/node/index.js'))
 const demoDirectory = path.join(root, 'storage/private/p03-demo')
 if (process.argv.includes('--fresh')) {
@@ -18,6 +20,9 @@ if (process.argv.includes('--fresh')) {
 }
 const f = await fixture(demoDirectory)
 const app = express()
+app.use('/api/artifact-exports', createExportRouter({ service: new ArtifactExportService(f.source), authenticate: (req, res, next) => {
+  req.user = { id: 101 }; next() // Same synthetic fixture; this process only listens on loopback.
+} }))
 const env = { NODE_ENV: 'development', P03_DEV_ENABLED: 'true', P03_DEV_USER_IDS: '101' }
 app.use('/api/dev/p03', createRouter({ service: f.service, env, authenticate: (req, res, next) => {
   req.user = { id: 101 }; next() // Fixed SYNTHETIC tester, only in this loopback demo process.
@@ -27,11 +32,11 @@ const api = await new Promise(resolve => {
 })
 const vite = await createServer({
   root: path.join(root, 'frontend'), configFile: path.join(root, 'frontend/vite.config.js'),
-  define: { 'import.meta.env.VITE_P03_DEV_ENABLED': JSON.stringify('true') },
-  server: { host: '127.0.0.1', port: 3004, strictPort: true, proxy: { '/api': { target: `http://127.0.0.1:${api.address().port}` } } }
+  define: { 'import.meta.env.VITE_P03_DEV_ENABLED': JSON.stringify(process.argv.includes('--export-only') ? 'false' : 'true') },
+  server: { host: '127.0.0.1', port: Number(process.env.P03_DEMO_PORT || 3004), strictPort: true, proxy: { '/api': { target: `http://127.0.0.1:${api.address().port}` } } }
 })
 await vite.listen()
-console.log('P03 synthetic demo: http://localhost:3004/dev/p03.html (mock receiver only)')
+console.log(`P03 synthetic demo: http://localhost:${vite.config.server.port}/dev/p03.html (synthetic data; no real receiver)`)
 async function stop() { await vite.close(); api.closeAllConnections(); api.close(); process.exit(0) }
 process.on('SIGINT', stop)
 process.on('SIGTERM', stop)

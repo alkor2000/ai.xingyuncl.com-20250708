@@ -98,6 +98,9 @@ app.use(cors({
 /* P03 source prototype: opt-in development/test only, own strict parser, no request-body/query logging. */
 require('./routes/artifactHandoffDev').mount(app);
 
+/* Selected-answer downloads: strict parser and no request/body logging. */
+require('./routes/artifactExports').mount(app);
+
 /* 请求日志（Morgan -> Winston） */
 app.use(morgan('combined', {
   stream: {

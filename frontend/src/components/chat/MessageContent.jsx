@@ -39,6 +39,7 @@ import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from './CodeBlock'
 import ArtifactCard from './ArtifactCard'
+import ArtifactExport from './ArtifactExport'
 import { replaceArtifactBlocksWithCards, ARTIFACT_LINK_PROTOCOL } from '../../utils/htmlBlockParser'
 import useSystemConfigStore from '../../stores/systemConfigStore'
 import './MessageContent.less'
@@ -581,6 +582,10 @@ const MessageContent = ({
 
           {/* 消息操作按钮 */}
           <Space size="small" className="message-actions">
+            {/* Live stream completion omits status; the export API always checks persisted completion. */}
+            {isAssistant && (message.status === 'completed' || message.status == null) && !message.temp && !message.error && message.id && cleanContent?.trim() && (
+              <ArtifactExport key={message.id} messageId={message.id} />
+            )}
             {ArtifactHandoffDev && isAssistant && message.status !== 'failed' && message.id && (
               <React.Suspense fallback={null}><ArtifactHandoffDev messageId={message.id} /></React.Suspense>
             )}
