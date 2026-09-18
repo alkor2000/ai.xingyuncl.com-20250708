@@ -369,7 +369,7 @@ vitest.config.js[TQ4T]: F:C·Vitest配置：jsdom环境，setup为src/__tests__/
 ===/home/hanying/ai-platform/frontend/src/===
 App.jsx[EG9L]: F:前端路由根：中英locale与主题、系统语言/favicon/title初始化，公开与登录守卫，BasicLayout内懒加载业务页，含AI训练与Agent执行和历史 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/layouts/BasicLayout/index.jsx,code:frontend/src/utils/portalIdentityConnect.js,code:frontend/src/pages/agent/WorkflowRun.jsx,code:frontend/src/pages/agent/ExecutionHistory.jsx | A:/agent/execute/:id,/agent/executions | S:守卫内联而非components/ProtectedRoute；已登录Portal首次连接可留/login续接；导图分享免守卫；未匹配跳/dashboard；用户手选语言不被系统默认覆盖；模块导航是否可见由模块配置决定
 index.css[CU5L]: F:C·全局样式：引入styles/theme-variables.css，.app/.page-*布局、.chat-*对话布局、通用滚动条与Markdown样式，由main.jsx引入 | R:code:frontend/src/styles/theme-variables.css,code:frontend/src/main.jsx | A:- | S:与ios-unified-theme.css同时生效，后者在App.jsx引入
-main.jsx[EG8T]: F:前端入口：导入i18n、index.css与统一外观CSS，初始化networkService挂到window，网络恢复刷新用户，仅开发环境包StrictMode渲染App | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/src/index.css,code:frontend/src/styles/platform-chrome.css | A:- | S:生产不用StrictMode避免双重渲染；window.useAuthStore由authStore挂载
+main.jsx[EG8T]: F:前端入口：导入i18n及基础、统一外观、响应式样式，初始化网络服务与恢复监听，渲染App并在卸载时清理服务 | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/src/styles/platform-chrome.css,code:frontend/src/styles/responsive.css | A:- | S:仅开发环境使用StrictMode；响应式覆盖在统一外观样式之后导入
 
 ===/home/hanying/ai-platform/frontend/src/components/Layout/===
 MainLayout.jsx[AU2M]: F:C·旧版主布局：Sider菜单(首页/对话/管理子菜单按roles过滤)+Header用户下拉+Outlet | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import，当前布局是layouts/BasicLayout
@@ -498,14 +498,14 @@ ArtifactHandoffDev.jsx[AM7S]: F:T·P03开发弹窗：整条或选段预览、附
 
 ===/home/hanying/ai-platform/frontend/src/components/chat/new/===
 ChatHeader.jsx[AU3T]: F:T·对话头部简化版：标题与设置按钮 | R:code:frontend/src/components/chat/new/index.js | A:- | S:index.js导出但Chat页未使用
-ChatInputArea.jsx[AU7L]: F:T·聊天输入区：多图上传(最多5张、每张5MB)与Ctrl/Cmd+V粘贴、文档上传(与图片互斥)、ModelSelector切换模型、输出格式下拉(普通/网页/PPT/Word/PDF)、公文模板库入口(懒加载弹窗)、contextTokens显示、发送/停止 | R:code:frontend/src/components/chat/new/ModelSelector.jsx,code:frontend/src/components/docTemplate/DocTemplateManager.jsx,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/pages/chat/Chat.jsx | A:- | S:图片上传开关取模型image_upload_enabled；图片与文档二选一；OUTPUT_FORMAT_OPTIONS键须与后端OUTPUT_FORMATS一致，格式下拉与公文模板按钮仅PC端显示
+ChatInputArea.jsx[AU7L]: F:聊天输入区：多图粘贴上传、文档上传、模型与输出格式选择、公文模板库弹窗、Token提示和发送停止；手机与桌面均提供格式和模板入口 | R:code:frontend/src/components/chat/new/ModelSelector.jsx,code:frontend/src/components/docTemplate/DocTemplateManager.jsx,code:frontend/src/pages/chat/Chat.jsx | A:- | S:图片与文档互斥；图片最多5张各5MB且受模型开关控制；格式键须与后端OUTPUT_FORMATS一致
 ConversationFormModal.jsx[AU6L]: F:T·新建对话弹窗：title/model_name/module_combination_id/system_prompt_id或自定义system_prompt/context_length/ai_temperature/priority，Azure模型温度限制，走chatStore | R:code:frontend/src/stores/chatStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/pages/chat/Chat.jsx | A:- | S:不要按m.is_active过滤aiModels：后端/api/chat/models已只返回激活模型且不带该字段，过滤会导致下拉为空
 ConversationSettingsDrawer.jsx[AU6L]: F:T·对话设置抽屉：编辑title/模型/模块组合/系统提示词/context_length/ai_temperature/priority，Claude系模型显示enable_thinking深度思考开关，走chatStore | R:code:frontend/src/stores/chatStore.js,code:frontend/src/pages/chat/Chat.jsx,code:backend/src/services/chat/StreamMessageService.js | A:- | S:同样不能按is_active过滤aiModels；enable_thinking仅按模型名含claude判断显示
 ConversationSidebar.jsx[AU5L]: F:T·会话侧边栏(iOS风格)：新建/折叠按钮，会话列表(标题、消息数、最后活跃、置顶)，设置/删除/置顶快捷操作，展示userCredits | R:code:frontend/src/pages/chat/Chat.jsx | A:- | S:-
 EmptyConversation.jsx[AU4S]: F:T·空对话态：拉/admin/announcement以Markdown展示系统公告 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/chat/Chat.jsx,code:frontend/src/components/chat/new/EmptyConversation.less | A:- | S:公告标题键chat.announcement.title与Dashboard的键刻意分离
 EmptyConversation.less[CU2S]: F:T·空对话态样式：容器与公告Markdown | R:code:frontend/src/components/chat/new/EmptyConversation.jsx | A:- | S:-
 HtmlCanvasPanel.jsx[AU7L]: F:T·画布面板：collectArtifactsFromMessages提取html/pdf/pptx/docx产物(含流式中的)，按种类分发iframe沙箱/SlidesPreview/DocPreview，多块切换(含气泡卡片打开请求)，真全屏，复制，下载，打印另存PDF，模板选择器，docx套公文模板，错误边界 | R:code:frontend/src/utils/htmlBlockParser.js,code:frontend/src/components/chat/new/SlidesPreview.jsx,code:frontend/src/components/chat/new/SlideThemePicker.jsx,code:frontend/src/utils/canvas/exportPptx.js,code:frontend/src/components/docTemplate/DocTemplateApplyModal.jsx | A:- | S:渲染索引先钳位(首渲染state为-1曾读null崩整页)；iframe sandbox含allow-modals；PDF预览往head注入仅screen生效的A4样式，复制/下载仍是原文；流式内容400ms节流且禁导出；挂载时消费暂存
-HtmlCanvasPanel.less[CU3M]: F:T·画布面板样式：.html-canvas-panel布局、工具栏、种类标签、全屏态、流式提示、崩溃兜底态 | R:code:frontend/src/components/chat/new/HtmlCanvasPanel.jsx | A:- | S:-
+HtmlCanvasPanel.less[CU3M]: F:画布面板布局、工具栏、种类标签、全屏与生成中及错误状态；≤1024px工具栏换行，支持手机抽屉显示 | R:code:frontend/src/components/chat/new/HtmlCanvasPanel.jsx | A:- | S:-
 MobileChatInput.jsx[AU2S]: F:T·移动端聊天输入(动态高度) | R:code:frontend/src/components/chat/new/MobileChatInput.less | A:- | S:无任何文件import，也未在index.js导出
 MobileChatInput.less[CU2S]: F:T·移动端输入样式 | R:code:frontend/src/components/chat/new/MobileChatInput.jsx | A:- | S:-
 ModelSelector.jsx[AU4S]: F:T·对话内模型快速切换Popover(移动端显示完整别名)，Antd v5 open/onOpenChange写法 | R:code:frontend/src/components/chat/new/ChatInputArea.jsx,code:frontend/src/components/chat/new/ModelSelector.less | A:- | S:-
@@ -513,11 +513,11 @@ ModelSelector.less[CU2M]: F:T·模型选择器样式：按钮、popover、列表
 OptimizedChatInput.jsx[AU2M]: F:T·隔离输入状态的聊天输入组件(含ModelSelector)，避免父组件重渲染 | R:code:frontend/src/components/chat/new/ModelSelector.jsx | A:- | S:index.js导出但无页面使用，现用ChatInputArea
 index.js[CU3T]: F:T·chat/new组件桶文件：导出Sidebar/Header/InputArea/OptimizedChatInput/SettingsDrawer/FormModal/EmptyConversation/ModelSelector/HtmlCanvasPanel | R:code:frontend/src/pages/chat/Chat.jsx | A:- | S:-
 DocPreview.jsx[AU4T]: F:T·画布Word产物预览：react-markdown+remark-gfm把docx代码块渲染成A4纸张样式，公式先经convertMathInMarkdown折成Unicode，流式生成时随内容滚到底 | R:code:frontend/src/components/chat/new/HtmlCanvasPanel.jsx,code:frontend/src/utils/canvas/exportDocx.js,code:frontend/src/utils/canvas/latexToText.js | A:- | S:与exportDocx同用remark解析，预览层级与下载的.docx对应
-DocPreview.less[CU2S]: F:T·Word预览样式：灰底A4白纸、标题深蓝、表格/代码/引用与exportDocx默认样式同源 | R:code:frontend/src/components/chat/new/DocPreview.jsx | A:- | S:-
+DocPreview.less[CU2S]: F:Word产物预览的灰底白纸、标题表格代码样式与全屏放宽；≤600px缩小纸张内边距以保留手机正文空间 | R:code:frontend/src/components/chat/new/DocPreview.jsx | A:- | S:-
 SlidesPreview.jsx[AU6L]: F:T·画布PPT产物预览：parseSlideDeck解析Marp风格Markdown，960×540逻辑画幅等比缩放，SlideView按主题类名渲染封面/章节/内容/结束页，smart按各版式视图排，提示框/箭头链/公式块，标题短则紧凑页眉，正文溢出自动缩字号，流式时跟着最新页 | R:code:frontend/src/utils/canvas/slideDeck.js,code:frontend/src/utils/canvas/slideThemes.js,code:frontend/src/utils/canvas/slideArt.js,code:frontend/src/components/chat/new/HtmlCanvasPanel.jsx | A:- | S:翻页时SlideView用key重挂载(全局* transition会把复用div的旧颜色渐变到正文区)；useFitBody量scrollHeight逐px缩到13px为止；流式跟随手动翻页后停、生成完回封面；分档须与exportPptx一致
 SlidesPreview.less[CU4L]: F:T·幻灯片预览样式：舞台/导航/缩略图条；.slide按cover-*/decor-*/layout-*类名切换封面与内容页版式，compact-header收紧页眉；分栏/流程/时间线/数据卡/图标列表/目录/卡片/图文/引言/提示框/箭头链/公式块/结束页与章节大编号样式 | R:code:frontend/src/components/chat/new/SlidesPreview.jsx,code:frontend/src/utils/canvas/slideThemes.js | A:- | S:页眉118px/正文355px，紧凑80px/393px，须与exportPptx几何一致；正文尺寸用em才能整体缩
 SlideThemePicker.jsx[AU4T]: F:T·幻灯片模板选择器：Popover网格，每个模板用SlideView缩放0.15渲染真实封面样张做缩略图，标出当前选中与有自备图的模板 | R:code:frontend/src/components/chat/new/SlidesPreview.jsx,code:frontend/src/components/chat/new/HtmlCanvasPanel.jsx | A:- | S:缩略图与预览/导出同一套主题定义与背景图，所见即所得
-SlideThemePicker.less[CU2T]: F:T·模板选择器样式：三列网格卡片、选中高亮、自备图角标，网格限高可滚动 | R:code:frontend/src/components/chat/new/SlideThemePicker.jsx | A:- | S:-
+SlideThemePicker.less[CU2T]: F:幻灯片模板选择弹层的缩略卡片网格、选中与自备图角标；默认三列，≤540px两列、≤359px单列并限制弹层宽度 | R:code:frontend/src/components/chat/new/SlideThemePicker.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/components/common/===
 ImageViewer.jsx[AU5L]: F:I·通用图片查看器：缩放、拖动、多图切换、下载、键盘快捷键，i18n化文案 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/components/common/ImageViewer.less | A:- | S:-
@@ -557,11 +557,11 @@ AuthLayout.jsx[AI2T]: F:A·认证页布局：已登录则Navigate到/dashboard�
 MainLayout.jsx[AU2M]: F:C·旧版主布局(dashboard/chat/admin菜单)与components/Layout/MainLayout重复 | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import
 
 ===/home/hanying/ai-platform/frontend/src/layouts/BasicLayout/===
-Header.jsx[AU5S]: F:C·全局顶栏：组优先品牌、默认门户Logo、语言切换、个人中心与退出、手机菜单触发器及桌面返回统一门户链接 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:Header(isMobile/onMenuClick),handleLogout | S:返回固定Identity的ai-practice导航端点，当前标签页打开，不调用登录退出
+Header.jsx[AU5S]: F:全局顶栏：组优先品牌与圆角Logo、语言切换、账号菜单、手机导航按钮和桌面返回统一门户链接 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:Header(isMobile/onMenuClick),handleLogout | S:返回固定Identity的ai-practice导航端点，当前标签页打开，不调用登录退出
 MobileDrawer.jsx[AU4T]: F:C·手机抽屉显示统一门户Logo，按menuItems递归渲染动态图标菜单并提供固定Identity返回链接 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:MobileDrawer,convertMenuItems | S:返回当前标签页并关闭抽屉，不调用登录退出
 Sidebar.jsx[AU4S]: F:C·桌面侧栏：按menuItems渲染带Popover的图标导航，onMenuClick回调 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
 index.jsx[AG7M]: F:C·主布局：按moduleStore.userModules动态生成菜单(system模块走route_path，external模块按open_mode跳转并经/admin/modules/:id/auth-url取SSO地址)，admin子菜单按权限角色过滤，初始化统计socket，<768px移动端 | R:code:frontend/src/stores/moduleStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/statsStore.js,code:frontend/src/utils/api.js,code:frontend/src/utils/moduleName.js,code:frontend/src/layouts/BasicLayout/Header.jsx,code:frontend/src/App.jsx | A:- | S:菜单完全由后台"系统模块"配置驱动，新页面要在模块表登记route_path才出现在导航；admin组菜单要求user.manage或user.manage.group权限
-style.css[CU3L]: F:C·主布局样式：.basic-layout头部/侧栏/内容区与移动端断点 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
+style.css[CU3L]: F:主布局顶栏、侧栏及内容区样式；100dvh容器与可收缩正文，手机用户名截断、窄屏隐藏用户名和品牌文字，保证菜单与账号入口可见 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/locales/en-US/===
 admin.json[FL5L]: F:英文后台扁平文案admin.*：用户、分组、设置与模块健康原因提示，包含可达、需认证、HTTP失败、超时、连接失败、无效地址和内置模块 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/admin.json | A:- | S:与common同名键按index.js后展开的admin取值；健康HTTP码使用status插值
@@ -575,7 +575,7 @@ forum.json[FL4M]: F:英文论坛嵌套文案forum.*：版块、帖子、回复�
 htmlEditor.json[FL4S]: F:H·英文HTML编辑器文案：htmlEditor.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/htmlEditor.json | A:- | S:-
 image.json[FL4S]: F:I·英文图像生成文案：image.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/image.json | A:- | S:-
 index.js[FL6T]: F:C·英文语言包入口：导入18个命名空间json并按固定顺序展开为单一translation对象(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/zh-CN/index.js | A:- | S:导入清单与展开顺序必须与zh-CN/index.js完全一致，否则缺失命名空间会回退中文或同名键取值错位；新语言包只能追加到末尾
-knowledge.json[FL4S]: F:K·英文知识模块文案：knowledge.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/knowledge.json | A:- | S:-
+knowledge.json[FL4S]: F:英文knowledge.*扁平文案：模块与组合管理、权限表单、Token提示，以及点选添加到组装区和拖动排序的入口 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·英文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/profile.json | A:- | S:-
 smartApps.json[FL4T]: F:P·英文智能应用文案：smartApps.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/smartApps.json | A:- | S:-
 storage.json[FL4S]: F:S·英文云盘文案：storage.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/storage.json | A:- | S:-
@@ -596,7 +596,7 @@ forum.json[FL4M]: F:中文论坛嵌套文案forum.*：版块、帖子、回复�
 htmlEditor.json[FL4S]: F:H·中文HTML编辑器文案：htmlEditor.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/htmlEditor.json | A:- | S:-
 image.json[FL4S]: F:I·中文图像生成文案：image.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/image.json | A:- | S:-
 index.js[FL6T]: F:C·中文语言包入口(回退语言)：导入18个命名空间json并按既有顺序展开(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/en-US/index.js | A:- | S:展开顺序是既有行为不可调整(admin覆盖common的14个同名键与后端语义一致)；新增语言包须两侧同步且只追加末尾
-knowledge.json[FL4S]: F:K·中文知识模块文案：knowledge.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/knowledge.json | A:- | S:-
+knowledge.json[FL4S]: F:中文knowledge.*扁平文案：模块与组合管理、权限表单、Token提示，以及点选添加到组装区和拖动排序的入口 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·中文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/profile.json | A:- | S:-
 smartApps.json[FL4T]: F:P·中文智能应用文案：smartApps.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/smartApps.json | A:- | S:-
 storage.json[FL4S]: F:S·中文云盘文案：storage.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/storage.json | A:- | S:-
@@ -642,7 +642,7 @@ LLMNode.jsx[AU4S]: F:G·LLM节点画布组件：显示模型(优先config.model_
 StartNode.jsx[AU4T]: F:G·开始节点画布组件：显示输入参数定义，仅source Handle | R:code:frontend/src/pages/agent/editor/WorkflowEditor.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/agent/editor/styles/===
-editor.css[CU3L]: F:G·编辑器样式：.workflow-editor布局、工具栏、浮动节点面板、各节点卡片配色、ReactFlow覆盖 | R:code:frontend/src/pages/agent/editor/WorkflowEditor.jsx | A:- | S:-
+editor.css[CU3L]: F:工作流编辑器填满父容器，提供工具栏、浮动节点面板和ReactFlow节点样式；手机工具栏换行、浮层限宽限高、配置抽屉铺满 | R:code:frontend/src/pages/agent/editor/WorkflowEditor.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/agent/editor/utils/===
 nodeLabelHelper.js[KL5S]: F:G·节点标签国际化：isDefaultNodeLabel识别历史flow_data中写死的中文/英文默认标签，resolveNodeLabel按当前语言替换，getDefaultNodeLabel取翻译 | R:code:frontend/src/pages/agent/editor/WorkflowEditor.jsx,code:frontend/src/locales/zh-CN/agent.json | A:- | S:用户自定义标签原样保留，只替换默认标签集合内的值
@@ -652,7 +652,7 @@ IdentityCallback.jsx[EI7M]: F:A·Identity登录回调页：只接受URL中一次
 Login.jsx[EI7L]: F:A·登录页：按/public/system-config的login.mode渲染standard(账号密码或邮箱验证码)或其他模式，IdentityLoginEntry入口，机构申请入口按form-config显示，本地登录成功后先尝试Portal首次连接自动续接再回跳 | R:code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:frontend/src/components/auth/IdentityLoginEntry.jsx,code:frontend/src/utils/portalIdentityConnectContinuation.js,code:frontend/src/utils/identityNavigation.js,code:frontend/src/App.jsx | A:- | S:账号密码登录字段为account+password；邮箱码登录走/auth/send-email-code与/auth/login-by-code；续接未处理或失败时按return_to回跳，失败只console.error
 OrgApplication.jsx[EU5L]: F:A·机构申请公开页：按/public/org-application/form-config动态标签渲染表单，上传营业执照，POST /public/org-application/submit | R:code:frontend/src/utils/api.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:backend/src/routes/public.js | A:- | S:-
 PortalCapabilityEntry.jsx[EI6S]: F:A·Identity Center能力入口页：读取URL中stable portal_capability，用readStandalonePortalCapability翻译成站内landing并跳转buildPortalCapabilityIdentityStartPath进入Identity登录链 | R:code:frontend/src/utils/portalCapabilityEntry.js,code:frontend/src/App.jsx | A:- | S:startedRef防止StrictMode或重渲染重复发起
-Register.jsx[EI5L]: F:A·注册页：按/public/system-config决定是否开放注册与是否需邀请码(先/auth/verify-invitation-code)，authStore.register后跳转 | R:code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:frontend/src/App.jsx | A:- | S:-
+Register.jsx[EI5L]: F:注册表单：从公开配置判断注册与邀请码要求，校验邀请码及账号字段，经authStore注册后跳转；语言切换提供手机布局样式钩子 | R:code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:frontend/src/styles/responsive.css | A:- | S:-
 SSOCallback.jsx[EI6M]: F:A·SSO回调页：从URL取token(与可选refreshToken/redirect)，写入authStore持久化的auth-storage键后调/auth/me建立登录态再跳redirect | R:code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:frontend/src/App.jsx | A:- | S:localStorage键名须与authStore的persist配置一致；默认落地/dashboard
 
 ===/home/hanying/ai-platform/frontend/src/pages/calendar/===
@@ -660,8 +660,8 @@ Calendar.jsx[AU3L]: F:L·智能日历页(模块已停用)：月视图/事项/分
 Calendar.less[CU2L]: F:L·日历页样式(模块已停用) | R:code:frontend/src/pages/calendar/Calendar.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/chat/===
-Chat.jsx[AG8L]: F:T·对话主页：会话侧栏/消息列表/输入区/设置抽屉/新建弹窗/画布组合，多图与文档上传，输出格式选择(按会话记忆)，流式发送与停止，上下文Token计算，showThinking与画布开关存localStorage，气泡卡片的打开请求会重新打开画布，≤1024px移动端 | R:code:frontend/src/stores/chatStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/chat/MessageList.jsx,code:frontend/src/components/chat/new/index.js,code:frontend/src/utils/htmlBlockParser.js,code:frontend/src/utils/canvasEvents.js,code:frontend/src/utils/tokenCalculator.js,code:frontend/src/App.jsx | A:- | S:画布产物提取与HtmlCanvasPanel共用collectArtifactsFromMessages(含流式)保证一致；选非普通输出格式时自动开启画布开关；window.useChatStore暴露供调试；文档上传与图片互斥
-Chat.less[CU3L]: F:T·对话页样式：PC双栏(.chat-container)与画布布局、输出格式按钮激活态、移动端.chat-mobile-container，断点1024px，暗色模式用CSS变量 | R:code:frontend/src/pages/chat/Chat.jsx | A:- | S:≤1024px即走移动端布局(iPhone Safari视口常报800-980px)
+Chat.jsx[AG8L]: F:对话主页编排会话、消息、输入、上传、流式发送、设置及画布；输出格式按会话记忆，≤1024px采用手机布局并以产物卡片打开全宽画布抽屉 | R:code:frontend/src/stores/chatStore.js,code:frontend/src/components/chat/MessageList.jsx,code:frontend/src/components/chat/new/index.js,code:frontend/src/utils/htmlBlockParser.js,code:frontend/src/utils/canvasEvents.js | A:- | S:画布与主页共用collectArtifactsFromMessages含流式产物；手机抽屉只因查看请求打开，换会话关闭；图片和文档上传互斥
+Chat.less[CU3L]: F:对话桌面双栏与画布、手机会话列表与聊天区样式；≤1024px输入工具换行并填满主布局正文，暗色样式使用主题变量 | R:code:frontend/src/pages/chat/Chat.jsx | A:- | S:-
 Chat_optimized_v1.jsx[AU2L]: F:T·对话页旧版副本(仅加输入防抖)，无任何模块引用，未接入路由 | R:code:frontend/src/pages/chat/Chat.jsx | A:- | S:死文件，修改对话页只改Chat.jsx
 
 ===/home/hanying/ai-platform/frontend/src/pages/dashboard/===
@@ -686,12 +686,12 @@ NotificationsView.jsx[AU5T]: F:论坛通知页：类型筛选、20条分页、�
 
 ===/home/hanying/ai-platform/frontend/src/pages/htmlEditor/===
 FallbackEditor.jsx[CU3S]: F:H·Monaco加载失败时的原生textarea降级编辑器：Tab插入两空格、明暗主题、重试按钮 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
-HtmlEditor.jsx[AB7L]: F:H·HTML编辑器页：项目/页面管理、Monaco懒加载(15s超时降级FallbackEditor)、保存/预览/复制、发布生成永久链接/pages/:userId/:slug，按credits-config校验积分 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx,code:backend/src/routes/htmlEditor.js,code:backend/src/controllers/HtmlEditorController.js | A:- | S:默认项目匹配依赖字面量'默认项目'(兼容旧数据)不可翻译；积分初始化5s超时不阻塞页面；Monaco右键菜单文案切语言后需刷新
-HtmlEditor.less[CU2M]: F:H·HTML编辑器页样式，断点1200/768px | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
+HtmlEditor.jsx[AB7L]: F:HTML项目与页面管理、Monaco编辑及基础编辑器降级、保存预览复制发布与积分检查；<992px侧栏覆盖显示、编辑预览单面板切换 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.less | A:- | S:默认项目仍按字面量'默认项目'匹配旧数据；Monaco加载15秒降级，积分初始化5秒超时不阻塞页面
+HtmlEditor.less[CU2M]: F:HTML编辑器样式：工具栏与面板标题换行；≤991px项目侧栏及遮罩覆盖正文，编辑预览按mobile-pane类切换单栏 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/===
 ImageGeneration.jsx[EU3T]: F:I·图像生成页入口壳：仅re-export ./index，App.jsx懒加载此文件 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/App.jsx | A:- | S:-
-ImageGeneration.less[CU2L]: F:I·图像生成页样式：生成面板、图库卡片、失败卡、历史卡，断点1200/768px | R:code:frontend/src/pages/image/index.jsx | A:- | S:顶层.ant-select-dropdown规则未加作用域，影响全站下拉
+ImageGeneration.less[CU2L]: F:图像生成面板、历史图库与卡片样式，桌面填满父容器；≤768px强制上下排列且自然高度，历史区可通过页面滚动到达 | R:code:frontend/src/pages/image/index.jsx | A:- | S:顶层.ant-select-dropdown规则影响全站下拉
 index.jsx[AB7L]: F:I·图像生成页主体：模型/提示词/参数面板(懒加载)，我的图片/收藏/公开图库三Tab分页与关键词搜索(IME保护，≤100字)，Midjourney动作，ImageViewer预览 | R:code:frontend/src/stores/imageStore.js,code:frontend/src/pages/image/hooks/useImageGeneration.js,code:frontend/src/pages/image/components/ImageGallery/ImageCard.jsx,code:frontend/src/components/common/ImageViewer.jsx,code:backend/src/routes/image.js | A:- | S:相对图片路径用IMAGE_HOST=window.location.origin补全(两站点共用同一份代码)；Tabs仍用已废弃的TabPane写法
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/components/GenerationPanel/===
@@ -716,8 +716,8 @@ constants.js[FU4S]: F:I·图像模块常量：尺寸预设与Seedream实际像�
 imageHelpers.js[KU4S]: F:I·图像辅助函数：base64转换、文件校验、下载、模型判定(midjourney/async；volcano Seedream)、计价(MJ×4)、URL与任务状态判定 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/services/imageService.js | A:- | S:isSeedreamModel判定须与后端ImageService一致
 
 ===/home/hanying/ai-platform/frontend/src/pages/knowledge/===
-KnowledgeBase.jsx[AB7L]: F:K·万智魔方页：模块库(个人/团队/系统范围筛选)拖入组装区卡槽(1-20，按用户id存localStorage)，dnd-kit排序，组合保存/加载/删除，总Token状态(上限10万) | R:code:frontend/src/stores/knowledgeStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx,code:frontend/src/utils/tokenCalculator.js,code:backend/src/routes/knowledgeRoutes.js | A:- | S:团队模块需user.group_id，系统模块仅super_admin可建
-KnowledgeBase.less[CU2L]: F:K·万智魔方页iOS风格样式 | R:code:frontend/src/pages/knowledge/KnowledgeBase.jsx | A:- | S:-
+KnowledgeBase.jsx[AB7L]: F:万智魔方：筛选模块库，以拖入或菜单点选加入1–20个卡槽，独立拖动手柄排序，保存加载删除组合并计算Token总量 | R:code:frontend/src/stores/knowledgeStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx,code:frontend/src/utils/tokenCalculator.js | A:- | S:两种添加入口共用重复、卡槽与10万Token校验；卡槽数按用户存localStorage；团队模块须有组，系统模块仅超管可建
+KnowledgeBase.less[CU2L]: F:万智魔方三面板与模块卡片样式；≤992px模块库、组装区、已存组合纵向显示，列表限高滚动，触屏操作按钮常显且拖动手柄禁原生手势 | R:code:frontend/src/pages/knowledge/KnowledgeBase.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/mindmap/===
 Mindmap.jsx[AB7L]: F:O·思维导图页：markdown(markmap)/mermaid/svg三模式编辑预览，项目保存/列表/重命名/另存为(/mindmap CRUD)，分享链接(/mindmap/:id/share)，导出SVG/PNG/PDF按次计费(/mindmap/charge-export) | R:code:frontend/src/utils/api.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/mindmapRoutes.js | A:- | S:积分配置来自/mindmap/credits-config，操作前canAfford校验余额；mermaid以securityLevel loose初始化
@@ -750,18 +750,18 @@ SmartApps.less[CU2L]: F:P·智能应用广场样式 | R:code:frontend/src/pages/
 
 ===/home/hanying/ai-platform/frontend/src/pages/storage/===
 StorageManager.jsx[AB7L]: F:S·智能云盘文件管理器：文件夹树/面包屑、拖拽上传与拖拽移动、多选(Shift/Ctrl)、右键菜单、重命名、预览/下载/复制oss_url、按creditConfig计上传积分 | R:code:frontend/src/stores/storageStore.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/storageRoutes.js | A:- | S:上传成功后主动刷新getCurrentUser同步积分；单文件上限取creditConfig.max_file_size否则用本地兜底
-StorageManager.less[CU2L]: F:S·云盘Windows风格样式 | R:code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
+StorageManager.less[CU2L]: F:云盘文件夹、文件列表、搜索工具栏与上传悬钮样式；手机以自然高度纵向滚动，面包屑换行、搜索框伸缩、悬钮避开底部安全区 | R:code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/teaching/===
 LessonDetail.jsx[AU5L]: F:E·课程详情页(/teaching/lessons/:id)：课程信息编辑、资料展示/管理、页面纵向列表跳转查看器或编辑器 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsDisplay.jsx,code:frontend/src/components/teaching/MaterialsManager.jsx | A:- | S:编辑权限=super_admin或模块user_permission为edit
-LessonEditor.jsx[AB6L]: F:E·课程编辑器(/teaching/lessons/:id/edit)：三栏(页面管理/Monaco HTML/预览)，页面集以JSON{pages}存lesson.content，教案用动态加载的/tinymce编辑并经saveTeachingPlan保存 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/pages/teaching/LessonDetail.jsx,code:backend/src/routes/teachingRoutes.js | A:- | S:TinyMCE从public/tinymce脚本注入window.tinymce，卸载时须tinymce.remove
-LessonViewer.jsx[AU6L]: F:E·课程页面查看器(/teaching/lessons/:id/pages/:pageNumber)：iframe srcDoc渲染页面HTML，全屏控制栏与方向键翻页，教案抽屉，recordView上报浏览时长 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/pages/teaching/LessonDetail.jsx | A:- | S:iframe sandbox含allow-same-origin+allow-scripts，页面HTML视为可信内容
+LessonEditor.jsx[AB6L]: F:课程页面编辑器：页面列表、Monaco HTML与预览、课程信息和教案管理；页面集保存为lesson.content的JSON，面板类名接入共享手机纵向布局 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css,code:backend/src/routes/teachingRoutes.js | A:- | S:TinyMCE从public/tinymce注入window，卸载须remove；页面内容与教案分别保存
+LessonViewer.jsx[AU6L]: F:课程页面查看器：iframe显示HTML、全屏与方向键翻页、教案抽屉和浏览时长上报；填满父容器，导航及分页接入手机换行样式 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/pages/teaching/LessonDetail.jsx,code:frontend/src/styles/responsive.css | A:- | S:iframe同时允许allow-same-origin与allow-scripts，页面HTML视为可信内容
 ModuleDetail.jsx[AU5L]: F:E·教学模块详情(/teaching/modules/:id)：模块编辑/删除，课程创建/编辑/删除与跳转，课程资料管理 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:- | S:编辑权限=super_admin或currentModule.user_permission为edit
 Teaching.jsx[EU3T]: F:E·教学系统入口页(/teaching)，仅渲染ModuleList | R:code:frontend/src/components/teaching/ModuleList.jsx,code:frontend/src/App.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/video/===
 VideoGeneration.jsx[AB7L]: F:V·视频生成页：模型选择与分辨率/时长/比例定价，文生视频/首帧/首尾帧模式(首尾帧经/video/upload-frame)，历史/收藏/公开三Tab与关键词搜索(IME保护) | R:code:frontend/src/stores/videoStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:backend/src/routes/video.js | A:- | S:last_frame单独尾帧模式已隐藏(火山seedance不支持)，useEffect兜底回退text_to_video；价格=基价×分辨率系数×时长系数向上取整
-VideoGeneration.less[CU2L]: F:V·视频生成页样式 | R:code:frontend/src/pages/video/VideoGeneration.jsx | A:- | S:-
+VideoGeneration.less[CU2L]: F:视频生成参数面板、历史与收藏画廊样式；≤768px覆盖Antd横排为自然高度纵排，历史区域可通过页面滚动访问 | R:code:frontend/src/pages/video/VideoGeneration.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/wiki/===
 Wiki.jsx[AB7L]: F:W·知识库页：文本型(内容≤10万字+备注+链接，多版本切换/新建/删除)与RAG文档型(上传pdf/docx/txt/md、构建索引、chunk预览)，个人/团队/系统范围，置顶与删除 | R:code:frontend/src/stores/wikiStore.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/wikiRoutes.js | A:- | S:删除仅creator或super_admin；仍在useEffect里按语言调用全局dayjs.locale，非实例级
@@ -802,6 +802,7 @@ ios-unified-theme.css[CU3L]: F:E·教学平台iOS统一设计系统(变量、卡
 theme-variables.css[CU3T]: F:C·全局主题CSS变量(:root颜色/间距)，index.css引入 | R:code:frontend/src/index.css | A:- | S:-
 platform-chrome.css[FU5S]: F:统一认证页与BasicLayout下导航、对话、后台和工具外观，暖白背景、品牌色按钮、浅边框及手机顶栏布局，复用既有主题变量 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js,code:frontend/src/layouts/BasicLayout/style.css | A:- | S:不覆盖编辑器内容、教学图片或图表配色；语义危险按钮及禁用态保留
 platform-theme.js[CU5T]: F:共享默认色板、HEX与RGB主色亮度计算、保存颜色覆盖默认并写入根CSS变量，补充品牌按钮文字对比色 | R:code:frontend/src/components/ThemeProvider.jsx,code:frontend/src/components/admin/settings/ThemeSettings.jsx | A:DEFAULT_THEME_COLORS,brandForeground,applyThemeColors | S:调用只修改样式，不保存配置；原代码块独立配色保留
+responsive.css[CU5T]: F:共享手机样式：卡片工具栏及表单换行、表格内部滚动、弹窗抽屉限宽；教学编辑器纵排、查看器导航折行、触屏开关高度修正和注册语言入口避让 | R:code:frontend/src/main.jsx,code:frontend/src/layouts/BasicLayout/style.css,code:frontend/src/pages/teaching/LessonEditor.jsx | A:- | S:主站控件规则限制在BasicLayout正文；浮层挂body须独立选择器；教学断点991px，其余手机规则767px
 
 ===/home/hanying/ai-platform/frontend/src/utils/===
 api.js[CN9L]: F:C·axios客户端(/api，120s)：注入token、401队列刷新最多3次及重放/清会话、可取消请求、SSE流及心跳、取消流/请求、可选择关闭开发调试日志 | R:code:frontend/src/utils/i18n.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/chatStore.js,code:backend/src/routes/auth.js,code:backend/src/middleware/authMiddleware.js | A:- | S:auth-storage与authStore同源；auth接口401不自刷新；SSE冒号行是心跳；TOO_MANY_ATTEMPTS为分支标识；请求清理用then双分支避免悬空finally拒绝；skipDebugLogging禁止私有交接请求体进入开发日志
@@ -837,7 +838,7 @@ product-plan-history.md[SB6L]: F:归档ChatGPT《评价人工智能课程》的�
 
 ===/home/hanying/ai-platform/frontend/src/pages/aiLab/===
 AiLab.jsx[AU6S]: F:N·AI训练专区首页：我的实验卡片(类型色条与图标、四段进度条、样本/版本/留出准确率)，空状态插画与大按钮，新建实验弹窗按学段(L/P/M/H)彩色分组的任务卡(类型图标/课时/有预置数据)与参与方式，admin与超管多一个"本组学生的实验"表格 | R:code:frontend/src/stores/aiLabStore.js,code:frontend/src/pages/aiLab/stepMeta.jsx,code:frontend/src/pages/aiLab/ProjectWorkspace.jsx,code:frontend/src/App.jsx | A:- | S:任务标题优先取locale的aiLab.task.{key}.title，缺键回退后端模板title；grade_band缺省按P分组；卡片进度只是粗略四段(有样本/有版本/测过留出/测过换条件)
-AiLab.less[CU2S]: F:N·AI训练专区样式(学生友好版)：暖纸色底与圆角卡、按步骤着色的卡头(--step-color/--step-tint)与徽章、步骤栏、向导圆点条与底部导航、成绩单圆环、小学模式放大字号与按钮、彩纸动画、实验列表类型色条与空状态、采集/缩略图/混淆矩阵/热图/表格/规则树/核实/公平性，≤900px单列 | R:code:frontend/src/pages/aiLab/ProjectWorkspace.jsx,code:frontend/src/pages/aiLab/stepMeta.jsx | A:- | S:减少动态效果时彩纸不显示
+AiLab.less[CU2M]: F:AI训练专区实验列表、步骤向导、采集、成绩单、规则与表格样式；≤900px可收缩单列，手机卡片和告警换行、触屏显示样本删除按钮 | R:code:frontend/src/pages/aiLab/ProjectWorkspace.jsx,code:frontend/src/pages/aiLab/stepMeta.jsx | A:- | S:减少动态效果时不显示彩纸
 ProjectWorkspace.jsx[AB8L]: F:N·实验工作台：按模板steps渲染步骤栏与着色步骤卡，小学模板用孩子的说法，默认一步一步(单卡+上一步/下一步+跳步+圆点进度+时间线抽屉+完成撒彩纸)或全部展开；按kind/engine切面板：图像声音共用采集/训练/测试，表格用规则/树/网络，文本用标注/朴素贝叶斯，verify用核实工作台 | R:code:frontend/src/stores/aiLabStore.js,code:frontend/src/pages/aiLab/uiContext.js,code:frontend/src/pages/aiLab/stepMeta.jsx,code:frontend/src/pages/aiLab/components/EvaluatePanel.jsx,code:frontend/src/pages/aiLab/components/VerifyWorkspace.jsx,code:backend/src/config/aiLabTasks.js | A:- | S:完成状态由真实数据与事件判断，打开项目时拉取事件，采集够数按训练+留出合计；视图取?view=或localStorage默认steps，单步时section()对非当前步返回null，换条件/错误/分组步内嵌测试面板并默认切对应标签页，评测结果存store.evalResults；首次停在首个未完成步不自动跳；庆祝只在当前步刚完成且定位2秒后触发
 stepMeta.jsx[CU3T]: F:N·步骤/数据类型/学段的图标与颜色表：每个实验步骤一个antd图标和色值(collect按kind换图标)，kindMeta与GRADE_COLORS，StepBadge圆形徽章(序号/完成/激活态) | R:code:frontend/src/pages/aiLab/ProjectWorkspace.jsx,code:frontend/src/pages/aiLab/AiLab.jsx | A:- | S:含JSX必须是.jsx，引用处写全扩展名
 uiContext.js[CU2T]: F:N·工作台界面上下文：学段band与小学模式kid开关，由ProjectWorkspace下发，成绩单等组件用useAiLabUi读取 | R:code:frontend/src/pages/aiLab/ProjectWorkspace.jsx,code:frontend/src/pages/aiLab/components/MetricsView.jsx | A:- | S:默认值band=P、kid=false
