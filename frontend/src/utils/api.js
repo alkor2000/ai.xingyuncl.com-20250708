@@ -348,9 +348,10 @@ const createCancelableRequest = (method, url, dataOrConfig, config) => {
     ? apiClient.request({ method, url, ...dataOrConfig, ...finalConfig })
     : apiClient.request({ method, url, data: dataOrConfig, ...finalConfig })
 
-  request.finally(() => {
-    activeRequestControllers.delete(requestId)
-  })
+  // A detached finally() would create a second rejected promise even when callers
+  // handle the request error (e.g. P03's deliberate receiver-failure simulation).
+  const cleanup = () => { activeRequestControllers.delete(requestId) }
+  request.then(cleanup, cleanup)
 
   request.cancel = () => {
     controller.abort()
@@ -623,6 +624,7 @@ apiClient.cancelRequestByUrl = (url) => {
 apiClient.debug = (enabled = true) => {
   if (enabled) {
     apiClient.interceptors.request.use(request => {
+      if (request.skipDebugLogging) return request
       console.log('API Request:', {
         method: request.method?.toUpperCase(),
         url: request.url,
@@ -639,6 +641,7 @@ apiClient.debug = (enabled = true) => {
 
     apiClient.interceptors.response.use(
       response => {
+        if (response.config?.skipDebugLogging) return response
         console.log('API Response:', {
           status: response.status,
           url: response.config.url,
@@ -649,6 +652,7 @@ apiClient.debug = (enabled = true) => {
         return response
       },
       error => {
+        if (error.config?.skipDebugLogging) return Promise.reject(error)
         console.log('API Error:', {
           status: error.response?.status,
           url: error.config?.url,

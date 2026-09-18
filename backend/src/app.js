@@ -92,8 +92,11 @@ app.use(cors({
   origin: corsOrigin,
   credentials: corsCredentials,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Service-ID', 'X-API-Key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Service-ID', 'X-API-Key', 'Idempotency-Key']
 }));
+
+/* P03 source prototype: opt-in development/test only, own strict parser, no request-body/query logging. */
+require('./routes/artifactHandoffDev').mount(app);
 
 /* 请求日志（Morgan -> Winston） */
 app.use(morgan('combined', {

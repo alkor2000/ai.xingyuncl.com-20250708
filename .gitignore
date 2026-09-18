@@ -43,6 +43,7 @@ archive/
 # 上传文件
 storage/uploads/
 uploads/
+storage/private/
 
 # 数据库备份
 *.sql

@@ -41,6 +41,7 @@ build/
 
 # 上传文件（应该通过volume挂载）
 storage/uploads/
+storage/private/
 uploads/
 
 # PM2

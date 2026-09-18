@@ -1,0 +1,52 @@
+{
+  "manifest": {
+    "draft_version": "p03-content-proposal-20260918.1",
+    "source": {
+      "platform": "practice",
+      "kind": "assistant_message",
+      "object_id": "a0300000-0000-4000-8000-000000000001",
+      "conversation_id": "a0300000-0000-4000-8000-000000000003",
+      "version": "sha256:60493bc925186568874804bbff0bca6c6b234b1ca44ae01182513d6367d008bc",
+      "generated_at": 1789689600,
+      "model_name": null
+    },
+    "locator": {
+      "basis": "answer_without_thinking_utf16",
+      "start": 11,
+      "end": 25
+    },
+    "format": "text/markdown",
+    "byte_length": 42,
+    "content_sha256": "1ee6bd2d2b0df7025ddd081b06e8b751917bdc6d3fbc730bf0a065bf5d4a60bc",
+    "summary": {
+      "kind": "verbatim_excerpt",
+      "text": "先观察，再记录两杯水的变化。"
+    },
+    "purpose": "reference",
+    "visibility": "private",
+    "material_status": "ai_output_unreviewed",
+    "web_links": "references_only_not_fetched",
+    "attachments": [
+      {
+        "source_id": "a0300000-0000-4000-8000-000000000004",
+        "name": "activity.md",
+        "format": "text/markdown",
+        "version": "sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778",
+        "byte_length": 58
+      }
+    ]
+  },
+  "payload": {
+    "text": "先观察，再记录两杯水的变化。",
+    "attachments": [
+      {
+        "source_id": "a0300000-0000-4000-8000-000000000004",
+        "name": "activity.md",
+        "format": "text/markdown",
+        "version": "sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778",
+        "byte_length": 58,
+        "text": "# 合成材料\n让学生观察两杯水的蒸发现象。\n"
+      }
+    ]
+  }
+}

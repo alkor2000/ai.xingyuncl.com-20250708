@@ -45,6 +45,10 @@ import './MessageContent.less'
 
 const { Text } = Typography
 
+// Removed from production builds even if an environment file accidentally enables the flag.
+const ArtifactHandoffDev = import.meta.env.DEV && import.meta.env.VITE_P03_DEV_ENABLED === 'true'
+  ? React.lazy(() => import('./ArtifactHandoffDev')) : null
+
 /** 思考过程折叠区的最大高度（像素），超出后内部滚动 */
 const THINKING_BLOCK_MAX_HEIGHT = 300
 
@@ -577,6 +581,9 @@ const MessageContent = ({
 
           {/* 消息操作按钮 */}
           <Space size="small" className="message-actions">
+            {ArtifactHandoffDev && isAssistant && message.status !== 'failed' && message.id && (
+              <React.Suspense fallback={null}><ArtifactHandoffDev messageId={message.id} /></React.Suspense>
+            )}
             <Button
               type="text"
               size="small"
