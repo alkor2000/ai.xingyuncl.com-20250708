@@ -81,6 +81,8 @@ make deploy（部署"不再使用该列"的代码）→ 观察一段时间 → m
 
 ## 四、部署代码
 
+本次约定“首站 → GitHub → Docker”时，使用 `make deploy ARGS=--server-first`：本地构建并检查上游已合入，完成预览确认与数据库备份后，通过 git bundle 向首站传递已提交代码并 ff-only 合并；首站构建与健康检查通过后才推 GitHub。任一步失败停止，不继续 Docker。仍保留交互确认与版本复核，不直接改服务器源码。
+
 ```bash
 make deploy
 ```
