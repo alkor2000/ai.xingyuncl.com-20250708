@@ -494,7 +494,7 @@ MessageList.less[CU3S]: F:T·消息列表样式：.chat-empty公告区、.chat-m
 VirtualMessageList.jsx[AU2L]: F:T·react-window VariableSizeList虚拟滚动消息列表：动态测高缓存、公告空态 | R:code:frontend/src/components/chat/MessageContent.jsx,code:frontend/src/components/chat/MessageList.less | A:- | S:无任何文件import，Chat页用MessageList
 ArtifactCard.jsx[AU5T]: F:T·消息气泡里的产物卡片：按种类图标+标题+页数，生成中显示已写页数，"在画布中查看"按钮经requestOpenCanvas让画布打开并切到该产物 | R:code:frontend/src/components/chat/MessageContent.jsx,code:frontend/src/utils/canvasEvents.js,code:frontend/src/components/chat/ArtifactCard.less | A:- | S:渲染在react-markdown生成的<p>里，外层只能用span
 ArtifactCard.less[CU2T]: F:T·产物卡片样式：span+flex横排，按kind-pptx/docx/pdf/html换图标底色，generating态灰色 | R:code:frontend/src/components/chat/ArtifactCard.jsx | A:- | S:-
-ArtifactHandoffDev.jsx[AM7S]: F:T·P03开发弹窗：原文选段/附件预览、用途、固定快照、下载清单、模拟授权与接收、查询及刷新恢复 | R:code:frontend/src/components/chat/MessageContent.jsx,code:frontend/src/utils/api.js,code:frontend/src/utils/canvas/download.js,code:backend/src/routes/artifactHandoffDev.js | A:- | S:范围只发ID/版本/偏移，不发会话正文；请求禁调试日志；失败重用请求键；下载重验权限；始终标明未写TE-DNA
+ArtifactHandoffDev.jsx[AM7S]: F:T·P03开发弹窗：整条或选段预览、附件及用途、快照下载与恢复；技术信息和模拟交接仅显式p03Debug=1展示 | R:code:frontend/src/components/chat/MessageContent.jsx,code:frontend/src/utils/api.js,code:frontend/src/utils/canvas/download.js,code:backend/src/routes/artifactHandoffDev.js | A:- | S:范围只发ID/版本/偏移，不发会话正文；请求禁调试日志；失败重用请求键；下载重验权限；始终标明未写TE-DNA
 
 ===/home/hanying/ai-platform/frontend/src/components/chat/new/===
 ChatHeader.jsx[AU3T]: F:T·对话头部简化版：标题与设置按钮 | R:code:frontend/src/components/chat/new/index.js | A:- | S:index.js导出但Chat页未使用
@@ -568,7 +568,7 @@ admin.json[FL5L]: F:英文后台扁平文案admin.*：用户、分组、设置�
 agent.json[FL4L]: F:英文Agent嵌套文案agent.*：工作流编辑、执行、历史筛选详情删除，文本与JSON输入、执行中和失败后核对历史的提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/agent.json | A:- | S:-
 auth.json[FL4S]: F:A·英文认证文案：auth.login/register/sso/identity等扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/auth.json | A:- | S:-
 calendar.json[FL2S]: F:L·英文日历文案(模块已停用) | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/calendar.json | A:- | S:-
-chat.json[FL5M]: F:T·英文对话扁平文案：消息/思考/公告/模型/输出格式、画布/主题/导出、文档模板、P03选择/私有快照/模拟接收与错误 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/chat.json | A:- | S:-
+chat.json[FL5M]: F:T·英文对话扁平文案：消息/思考/公告/模型/输出格式、画布/主题/导出、文档模板、P03简洁选择/快照/折叠验证及错误 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/chat.json | A:- | S:-
 common.json[FL5M]: F:C·英文通用扁平翻译键，覆盖app/button/nav/status/dashboard与module菜单，含返回统一门户文案 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/common.json | A:nav.returnPortal | S:同名键会被后展开的admin.json覆盖
 errors.json[FL3T]: F:C·英文错误与404文案：error.*共8键 | R:code:frontend/src/locales/en-US/index.js | A:- | S:-
 forum.json[FL4M]: F:英文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/forum.json | A:- | S:-
@@ -589,7 +589,7 @@ admin.json[FL5L]: F:中文后台扁平文案admin.*：用户、分组、设置�
 agent.json[FL4L]: F:中文Agent嵌套文案agent.*：工作流编辑、执行、历史筛选详情删除，文本与JSON输入、执行中和失败后核对历史的提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/agent.json | A:- | S:-
 auth.json[FL4S]: F:A·中文认证文案：auth.login/register/sso/identity等扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/auth.json | A:- | S:-
 calendar.json[FL2S]: F:L·中文日历文案(模块已停用) | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/calendar.json | A:- | S:-
-chat.json[FL5M]: F:T·中文对话扁平文案：消息/思考/公告/模型/输出格式、画布/主题/导出、文档模板、P03选择/私有快照/模拟接收与错误 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/chat.json | A:- | S:-
+chat.json[FL5M]: F:T·中文对话扁平文案：消息/思考/公告/模型/输出格式、画布/主题/导出、文档模板、P03简洁选择/快照/折叠验证及错误 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/chat.json | A:- | S:-
 common.json[FL5M]: F:C·中文通用扁平翻译键，覆盖app/button/nav/status/dashboard与module菜单，含返回统一门户文案 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/common.json | A:nav.returnPortal | S:同名键被后展开的admin.json覆盖，如role.admin显示组管理员
 errors.json[FL3T]: F:C·中文错误与404文案：error.*共8键 | R:code:frontend/src/locales/zh-CN/index.js | A:- | S:-
 forum.json[FL4M]: F:中文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/forum.json | A:- | S:-
@@ -948,9 +948,9 @@ source.js[IM8S]: F:T·复用消息/会话/文件模型回源：限本人未清�
 store.js[PM7T]: F:T·开发私有暂存：保存快照、幂等键哈希、模拟授权、操作和假接收记录；同目录进程内排队，原子替换及fsync | R:code:backend/src/services/artifactHandoff/service.js,code:backend/src/routes/artifactHandoffDev.js | A:- | S:24h为逻辑有效期，访问时清理；事务失败只保存过期清理，不提交业务变更；不支持生产多进程并发
 
 ===/home/hanying/ai-platform/docs/integrations/===
-p03-source-handoff.md[SM6S]: F:T·P03交接：北极星边界、现有身份/版本/导出盘点、本地运行及验证、I03/T11内容贡献与待决清单 | R:code:backend/src/routes/artifactHandoffDev.js,code:docs/integrations/p03-synthetic-packet.json,code:dev/p03-demo.mjs | A:- | S:只交源侧原型；共同人级草案归I03主笔；真实教师联调、学生边界及生产发布未验
+p03-source-handoff.md[SM6S]: F:T·P03交接：北极星边界、身份/版本/导出盘点、本地演示与显式调试入口、验证记录、I03/T11贡献及待决清单 | R:code:backend/src/routes/artifactHandoffDev.js,code:docs/integrations/p03-synthetic-packet.json,code:dev/p03-demo.mjs | A:- | S:只交源侧原型；共同人级草案归I03主笔；真实教师联调、学生边界及生产发布未验
 p03-synthetic-packet.json[FM4T]: F:T·P03合成包：单回答选段、来源版及位置、原文摘要、私有用途与一份Markdown附件实际文本 | R:code:docs/integrations/p03-source-handoff.md | A:- | S:非正式跨端契约或真实教学数据
 
 ===/home/hanying/ai-platform/frontend/dev/===
 p03.html[EM4T]: F:T·P03合成演示HTML入口：挂载开发React页面并提供移动viewport | R:code:frontend/dev/p03.jsx | A:- | S:未列入生产构建入口
-p03.jsx[AM4T]: F:T·合成演示页：复用MessageContent显示助手方案和未选提示词，展示模拟边界并提供成果准备入口 | R:code:frontend/src/components/chat/MessageContent.jsx,code:dev/p03-demo.mjs | A:- | S:固定合成ID，非真实教师身份或数据
+p03.jsx[AM4T]: F:T·合成成果演示页：复用主站主题与平台样式，显示单条助手方案、演示提示和成果准备入口 | R:code:frontend/src/components/chat/MessageContent.jsx,code:frontend/src/components/ThemeProvider.jsx | A:- | S:固定合成ID，非真实教师身份或数据
