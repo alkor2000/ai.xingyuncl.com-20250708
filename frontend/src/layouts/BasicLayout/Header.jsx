@@ -4,7 +4,8 @@ import {
   MenuOutlined,
   UserOutlined,
   LogoutOutlined,
-  BellOutlined
+  BellOutlined,
+  HomeOutlined
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -86,6 +87,7 @@ const Header = ({ isMobile, onMenuClick }) => {
 
       <div className="header-right">
         <Space size="middle">
+          {!isMobile && <Button href="https://id.pkuailab.com/portal/return/ai-practice" target="_blank" rel="noopener noreferrer" icon={<HomeOutlined />}>{t('nav.returnPortal')}</Button>}
           {/* 语言切换 */}
           <LanguageSwitch />
           

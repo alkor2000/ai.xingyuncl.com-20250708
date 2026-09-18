@@ -555,8 +555,8 @@ AuthLayout.jsx[AI2T]: F:A·认证页布局：已登录则Navigate到/dashboard�
 MainLayout.jsx[AU2M]: F:C·旧版主布局(dashboard/chat/admin菜单)与components/Layout/MainLayout重复 | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import
 
 ===/home/hanying/ai-platform/frontend/src/layouts/BasicLayout/===
-Header.jsx[AU5S]: F:C·全局顶栏：站点Logo与名称(组自定义优先)、LanguageSwitch、用户下拉(个人中心/退出)、移动端菜单按钮 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
-MobileDrawer.jsx[AU4T]: F:C·移动端抽屉菜单：按menuItems渲染，图标名动态取@ant-design/icons，onMenuClick回调 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
+Header.jsx[AU5S]: F:C·全局顶栏：组优先品牌、语言切换、个人中心与退出、手机菜单触发器及桌面返回统一门户链接 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:Header(isMobile/onMenuClick),handleLogout | S:返回固定Identity的ai-practice导航端点，新标签页且隔离opener，不调用登录退出
+MobileDrawer.jsx[AU4T]: F:C·手机抽屉按menuItems递归渲染动态图标菜单，另提供固定Identity返回链接 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:MobileDrawer,convertMenuItems | S:返回新标签页并关闭抽屉，原编辑页面保留
 Sidebar.jsx[AU4S]: F:C·桌面侧栏：按menuItems渲染带Popover的图标导航，onMenuClick回调 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
 index.jsx[AG7M]: F:C·主布局：按moduleStore.userModules动态生成菜单(system模块走route_path，external模块按open_mode跳转并经/admin/modules/:id/auth-url取SSO地址)，admin子菜单按权限角色过滤，初始化统计socket，<768px移动端 | R:code:frontend/src/stores/moduleStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/statsStore.js,code:frontend/src/utils/api.js,code:frontend/src/utils/moduleName.js,code:frontend/src/layouts/BasicLayout/Header.jsx,code:frontend/src/App.jsx | A:- | S:菜单完全由后台"系统模块"配置驱动，新页面要在模块表登记route_path才出现在导航；admin组菜单要求user.manage或user.manage.group权限
 style.css[CU3L]: F:C·主布局样式：.basic-layout头部/侧栏/内容区与移动端断点 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
@@ -567,7 +567,7 @@ agent.json[FL4L]: F:英文Agent嵌套文案agent.*：工作流编辑、执行、
 auth.json[FL4S]: F:A·英文认证文案：auth.login/register/sso/identity等扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/auth.json | A:- | S:-
 calendar.json[FL2S]: F:L·英文日历文案(模块已停用) | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/calendar.json | A:- | S:-
 chat.json[FL5M]: F:T·英文对话文案：chat.*含message/thinking/announcement/model/outputFormat/canvas(kind、card、19个theme、slides、导出、streaming、renderError)/docTemplate(模板库、贴角色、套用字段、草稿)等扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/chat.json | A:- | S:-
-common.json[FL5M]: F:C·英文通用文案：app/button/nav/status/dashboard与module.*菜单名(含module.ai_lab)等扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/common.json | A:- | S:同名键会被后展开的admin.json覆盖
+common.json[FL5M]: F:C·英文通用扁平翻译键，覆盖app/button/nav/status/dashboard与module菜单，含返回统一门户文案 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/common.json | A:nav.returnPortal | S:同名键会被后展开的admin.json覆盖
 errors.json[FL3T]: F:C·英文错误与404文案：error.*共8键 | R:code:frontend/src/locales/en-US/index.js | A:- | S:-
 forum.json[FL4M]: F:英文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/forum.json | A:- | S:-
 htmlEditor.json[FL4S]: F:H·英文HTML编辑器文案：htmlEditor.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/htmlEditor.json | A:- | S:-
@@ -588,7 +588,7 @@ agent.json[FL4L]: F:中文Agent嵌套文案agent.*：工作流编辑、执行、
 auth.json[FL4S]: F:A·中文认证文案：auth.login/register/sso/identity等扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/auth.json | A:- | S:-
 calendar.json[FL2S]: F:L·中文日历文案(模块已停用) | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/calendar.json | A:- | S:-
 chat.json[FL5M]: F:T·中文对话文案：chat.*含message/thinking/announcement/model/outputFormat/canvas(kind、card、19个theme、slides、导出、streaming、renderError)/docTemplate(模板库、贴角色、套用字段、草稿)等扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/chat.json | A:- | S:-
-common.json[FL5M]: F:C·中文通用文案：app/button/nav/status/dashboard与module.*菜单名(含module.ai_lab)等扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/common.json | A:- | S:同名键被后展开的admin.json覆盖，如role.admin实际显示"组管理员"
+common.json[FL5M]: F:C·中文通用扁平翻译键，覆盖app/button/nav/status/dashboard与module菜单，含返回统一门户文案 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/common.json | A:nav.returnPortal | S:同名键被后展开的admin.json覆盖，如role.admin显示组管理员
 errors.json[FL3T]: F:C·中文错误与404文案：error.*共8键 | R:code:frontend/src/locales/zh-CN/index.js | A:- | S:-
 forum.json[FL4M]: F:中文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/forum.json | A:- | S:-
 htmlEditor.json[FL4S]: F:H·中文HTML编辑器文案：htmlEditor.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/htmlEditor.json | A:- | S:-
