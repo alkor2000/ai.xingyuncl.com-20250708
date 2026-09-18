@@ -358,7 +358,7 @@ docker-deploy-guide.md[SV2T]: F:C·Docker部署下数据库自动迁移说明：
 system_prompts_implementation.md[SB3S]: F:T·系统提示词功能实现总结：表结构、迁移、/api/admin/system-prompts与/api/chat接口、默认提示词、Docker部署注意与实现细节 | R:code:backend/src/controllers/admin/SystemPromptController.js,code:backend/src/models/SystemPrompt.js | A:- | S:历史文档，以源码为准
 
 ===/home/hanying/ai-platform/frontend/===
-index.html[EU4T]: F:C·Vite入口页：lang=zh-CN，默认favicon指向/favicon.svg(id=favicon-link供运行时替换)，默认标题AI Platform，挂载#root并加载/src/main.jsx | R:code:frontend/src/main.jsx,code:frontend/src/App.jsx | A:- | S:favicon与title由App.jsx按系统配置动态覆盖
+index.html[EU4T]: F:C·Vite入口页：中文lang、统一门户PNG favicon、默认标题AI Platform、挂载#root并加载/src/main.jsx | R:code:frontend/src/main.jsx,code:frontend/src/App.jsx | A:- | S:favicon与title由App.jsx按系统配置动态覆盖
 package-lock.json[FV2L]: F:C·前端npm锁文件(lockfileVersion 3，约1100个包，含@tensorflow/tfjs、pptxgenjs、docx、patch-package) | R:code:frontend/package.json | A:- | S:CI与Dockerfile用npm ci，改依赖后须同步提交
 package.json[FV6T]: F:C·前端包定义(ESM)：React 18+Vite 5+Antd 5+Zustand+router+i18next+axios，monaco/codemirror、echarts/d3/mermaid、reactflow、tfjs、pptxgenjs/docx；postinstall用patch-package | R:code:frontend/vite.config.js,code:frontend/vitest.config.js,code:frontend/src/main.jsx,code:frontend/patches/mdast-util-gfm-autolink-literal+2.0.1.patch | A:- | S:lint与type-check脚本只是echo占位；build需NODE_OPTIONS 4G否则内存溢出；升级被打补丁的依赖要重新生成patches
 serve.json[FV2T]: F:C·serve静态服务配置：js/css一年immutable缓存，html不缓存 | R:code:frontend/start-production.cjs | A:- | S:仅历史ai-platform-frontend进程使用
@@ -557,8 +557,8 @@ AuthLayout.jsx[AI2T]: F:A·认证页布局：已登录则Navigate到/dashboard�
 MainLayout.jsx[AU2M]: F:C·旧版主布局(dashboard/chat/admin菜单)与components/Layout/MainLayout重复 | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import
 
 ===/home/hanying/ai-platform/frontend/src/layouts/BasicLayout/===
-Header.jsx[AU5S]: F:C·全局顶栏：组优先品牌、语言切换、个人中心与退出、手机菜单触发器及桌面返回统一门户链接 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:Header(isMobile/onMenuClick),handleLogout | S:返回固定Identity的ai-practice导航端点，新标签页且隔离opener，不调用登录退出
-MobileDrawer.jsx[AU4T]: F:C·手机抽屉按menuItems递归渲染动态图标菜单，另提供固定Identity返回链接 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:MobileDrawer,convertMenuItems | S:返回新标签页并关闭抽屉，原编辑页面保留
+Header.jsx[AU5S]: F:C·全局顶栏：组优先品牌、默认门户Logo、语言切换、个人中心与退出、手机菜单触发器及桌面返回统一门户链接 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/common/LanguageSwitch.jsx,code:frontend/src/layouts/BasicLayout/index.jsx | A:Header(isMobile/onMenuClick),handleLogout | S:返回固定Identity的ai-practice导航端点，当前标签页打开，不调用登录退出
+MobileDrawer.jsx[AU4T]: F:C·手机抽屉显示统一门户Logo，按menuItems递归渲染动态图标菜单并提供固定Identity返回链接 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:MobileDrawer,convertMenuItems | S:返回当前标签页并关闭抽屉，不调用登录退出
 Sidebar.jsx[AU4S]: F:C·桌面侧栏：按menuItems渲染带Popover的图标导航，onMenuClick回调 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-
 index.jsx[AG7M]: F:C·主布局：按moduleStore.userModules动态生成菜单(system模块走route_path，external模块按open_mode跳转并经/admin/modules/:id/auth-url取SSO地址)，admin子菜单按权限角色过滤，初始化统计socket，<768px移动端 | R:code:frontend/src/stores/moduleStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/statsStore.js,code:frontend/src/utils/api.js,code:frontend/src/utils/moduleName.js,code:frontend/src/layouts/BasicLayout/Header.jsx,code:frontend/src/App.jsx | A:- | S:菜单完全由后台"系统模块"配置驱动，新页面要在模块表登记route_path才出现在导航；admin组菜单要求user.manage或user.manage.group权限
 style.css[CU3L]: F:C·主布局样式：.basic-layout头部/侧栏/内容区与移动端断点 | R:code:frontend/src/layouts/BasicLayout/index.jsx | A:- | S:-

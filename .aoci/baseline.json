@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-18T22:41:39Z",
+  "updated_at": "2026-09-18T22:48:41Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "df60fe0a24275dd90957b068c393bd2a838aa5d3775ec4131230ed81341520b5",
-      "size": 310929,
-      "normalized_sha256": "df60fe0a24275dd90957b068c393bd2a838aa5d3775ec4131230ed81341520b5"
+      "sha256": "220df18ab1b182d311ceae34820036863085ece25fc293af86850b34242bc541",
+      "size": 310924,
+      "normalized_sha256": "220df18ab1b182d311ceae34820036863085ece25fc293af86850b34242bc541"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2148,10 +2148,9 @@
       "normalized_sha256": "f15a3966f759b24183692c9f0b70edeaae2fc8e0a59d122ec64e082b9520f703"
     },
     "frontend/index.html": {
-      "role": "index",
-      "sha256": "06cd6933ad282b038e1a1596c6fab1bfedfa706f52826fa92a9f7cafdb42191d",
-      "size": 581,
-      "normalized_sha256": "06cd6933ad282b038e1a1596c6fab1bfedfa706f52826fa92a9f7cafdb42191d"
+      "sha256": "fa28d15f54bd01418f7d89833a0bd5bb33aaeaa222c28c916b1f99be039e766e",
+      "size": 588,
+      "normalized_sha256": "fa28d15f54bd01418f7d89833a0bd5bb33aaeaa222c28c916b1f99be039e766e"
     },
     "frontend/package-lock.json": {
       "sha256": "4c8e9395bd8909d96e349572706793297b82fc50605f32db9b46a299f471febe",
@@ -3184,14 +3183,14 @@
       "normalized_sha256": "16579688c1b71bef061a6743cb9c18d5b3a414ea69de40d46a6cb9cbfbdc6431"
     },
     "frontend/src/layouts/BasicLayout/Header.jsx": {
-      "sha256": "786b19f813d3e3355b319d22b4475dcb3598f6f8b2e52b36cfb4cf7e96f43401",
-      "size": 3561,
-      "normalized_sha256": "786b19f813d3e3355b319d22b4475dcb3598f6f8b2e52b36cfb4cf7e96f43401"
+      "sha256": "e6100745c056a56e0dd42ad102fa0a58cdb52deae5de1ef94324aaf3d26f1a66",
+      "size": 3633,
+      "normalized_sha256": "e6100745c056a56e0dd42ad102fa0a58cdb52deae5de1ef94324aaf3d26f1a66"
     },
     "frontend/src/layouts/BasicLayout/MobileDrawer.jsx": {
-      "sha256": "99f3deafb3d432afe4f36ce829620fa85c0748e9dc9b891d3ad1620916228a96",
-      "size": 2019,
-      "normalized_sha256": "99f3deafb3d432afe4f36ce829620fa85c0748e9dc9b891d3ad1620916228a96"
+      "sha256": "fe78d806bcdd881404fd0aed96c7e99978a1b4b5cfc2d8d20ae829e5d7f6c8a0",
+      "size": 2106,
+      "normalized_sha256": "fe78d806bcdd881404fd0aed96c7e99978a1b4b5cfc2d8d20ae829e5d7f6c8a0"
     },
     "frontend/src/layouts/BasicLayout/Sidebar.jsx": {
       "role": "index",
