@@ -79,7 +79,7 @@ const Header = ({ isMobile, onMenuClick }) => {
               }}
             />
           ) : (
-            <span className="logo-icon" style={{ marginRight: '8px' }}>AI</span>
+            <img src="/portal-logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', borderRadius: 8, flexShrink: 0, marginRight: 8 }} />
           )}
           <span className="logo-text">{siteName}</span>
         </div>

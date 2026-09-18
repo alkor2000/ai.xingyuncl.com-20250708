@@ -43,7 +43,7 @@ const MobileDrawer = ({ visible, menuItems, selectedKey, onClose, onMenuClick })
     <Drawer
       title={
         <div className="mobile-drawer-header">
-          <span className="logo-icon">AI</span>
+          <img src="/portal-logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
           <span className="logo-text">{t('app.name')}</span>
         </div>
       }
