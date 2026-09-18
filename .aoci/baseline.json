@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-18T15:57:18Z",
+  "updated_at": "2026-09-18T17:20:22Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "53b52a1c38afc8859d71a003cbd9e3e9c4c26568c978c59381b94584cae68013",
-      "size": 309971,
-      "normalized_sha256": "53b52a1c38afc8859d71a003cbd9e3e9c4c26568c978c59381b94584cae68013"
+      "sha256": "9e6a2f5cb65f664eb180da794868a508dcc7047eb2ab4bdf36c894defc6bdffa",
+      "size": 310885,
+      "normalized_sha256": "9e6a2f5cb65f664eb180da794868a508dcc7047eb2ab4bdf36c894defc6bdffa"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2175,9 +2175,9 @@
       "normalized_sha256": "20d89af8bcc70c9be0c1cdfff8d82588b16a5309f02455dfb267ec49d21e9291"
     },
     "frontend/src/App.jsx": {
-      "sha256": "652ce7af2301c7635b15f08f93b9a2f9ca38fc5b2a87b8eb36c1de6227c0dc61",
-      "size": 22826,
-      "normalized_sha256": "652ce7af2301c7635b15f08f93b9a2f9ca38fc5b2a87b8eb36c1de6227c0dc61"
+      "sha256": "d3340977be118e18e5b888d432e1fc19a95477f8c1062b62717e687e3f716c2f",
+      "size": 22791,
+      "normalized_sha256": "d3340977be118e18e5b888d432e1fc19a95477f8c1062b62717e687e3f716c2f"
     },
     "frontend/src/__tests__/setup.js": {
       "role": "observe",
@@ -2317,10 +2317,9 @@
       "normalized_sha256": "77009a34d9a5c38891564cbdd850bcc4e86f9db5e207691e76f8491e2dd57261"
     },
     "frontend/src/components/ThemeProvider.jsx": {
-      "role": "index",
-      "sha256": "552cff02a514df9b435d1898b3bf439efe6bd70c8920be37025cd1f3bf0b547e",
-      "size": 919,
-      "normalized_sha256": "552cff02a514df9b435d1898b3bf439efe6bd70c8920be37025cd1f3bf0b547e"
+      "sha256": "8570537ba89e397a2a69a0b4522ca2cd222ff3e64ee33636487274769b22766c",
+      "size": 1426,
+      "normalized_sha256": "8570537ba89e397a2a69a0b4522ca2cd222ff3e64ee33636487274769b22766c"
     },
     "frontend/src/components/admin/settings/AIChannelManageModal.jsx": {
       "role": "index",
@@ -2653,10 +2652,9 @@
       "normalized_sha256": "961e8d5a0054b83949a563bcb20c257464c752483ea6d8f52b4eadd7a74d7be8"
     },
     "frontend/src/components/admin/settings/ThemeSettings.jsx": {
-      "role": "index",
-      "sha256": "b739b4968d58e3f38d528eb2e7aacf86f2912f8cb20de0a251534bc6977b7435",
-      "size": 17192,
-      "normalized_sha256": "b739b4968d58e3f38d528eb2e7aacf86f2912f8cb20de0a251534bc6977b7435"
+      "sha256": "70ee9554aec309de62955b3b54ac766483c730ad8395da4ed21430af1bdddab8",
+      "size": 15555,
+      "normalized_sha256": "70ee9554aec309de62955b3b54ac766483c730ad8395da4ed21430af1bdddab8"
     },
     "frontend/src/components/admin/settings/UsageLogs.jsx": {
       "role": "index",
@@ -3430,10 +3428,9 @@
       "normalized_sha256": "d8b10d2fc195ef38a9f3d3fea23deac5c9cb1df802f11ab496543e357b465bf2"
     },
     "frontend/src/main.jsx": {
-      "role": "index",
-      "sha256": "05d142bcf575e107baab56264006a428a6a890fdc78cafee847bfb56c6f115cd",
-      "size": 1345,
-      "normalized_sha256": "05d142bcf575e107baab56264006a428a6a890fdc78cafee847bfb56c6f115cd"
+      "sha256": "7e26db588fa7e2031caf74e144b36995c48db98b13125b1e544e7a5d2a274fae",
+      "size": 1383,
+      "normalized_sha256": "7e26db588fa7e2031caf74e144b36995c48db98b13125b1e544e7a5d2a274fae"
     },
     "frontend/src/pages/CustomLanding.jsx": {
       "role": "index",
@@ -3905,15 +3902,14 @@
       "normalized_sha256": "a522de0af7f384d21abbaec68833f5d98a75e64cdb7bf8a869764557c9bea066"
     },
     "frontend/src/pages/auth/Login.jsx": {
-      "sha256": "60635b57918a2a8cb5ce17ff91dd6e51db5563639ba185b1e085b7a389eaaf6c",
-      "size": 29017,
-      "normalized_sha256": "60635b57918a2a8cb5ce17ff91dd6e51db5563639ba185b1e085b7a389eaaf6c"
+      "sha256": "4ff30e29c1130262fa80f81b8fbac08e53b04d39d3fb9d2d05fe31bf266efb6e",
+      "size": 29043,
+      "normalized_sha256": "4ff30e29c1130262fa80f81b8fbac08e53b04d39d3fb9d2d05fe31bf266efb6e"
     },
     "frontend/src/pages/auth/OrgApplication.jsx": {
-      "role": "index",
-      "sha256": "46200d1fa86e777f01f9938691dcde30e504389e131c33c4c493cb72091977a0",
-      "size": 13612,
-      "normalized_sha256": "46200d1fa86e777f01f9938691dcde30e504389e131c33c4c493cb72091977a0"
+      "sha256": "91765c618fdd5cf457522c3b05d5ab89008ca0508aad940a830ac9f545271ee8",
+      "size": 13638,
+      "normalized_sha256": "91765c618fdd5cf457522c3b05d5ab89008ca0508aad940a830ac9f545271ee8"
     },
     "frontend/src/pages/auth/PortalCapabilityEntry.jsx": {
       "role": "index",
@@ -3922,10 +3918,9 @@
       "normalized_sha256": "d52c6c4075ff46831d6e37ca0865728796f8ddc1becee47f3280d2119cd9600e"
     },
     "frontend/src/pages/auth/Register.jsx": {
-      "role": "index",
-      "sha256": "14f31ecd28fdacbb532afff5666d12db46608766aa377e97afb4de3df2e90e7e",
-      "size": 15150,
-      "normalized_sha256": "14f31ecd28fdacbb532afff5666d12db46608766aa377e97afb4de3df2e90e7e"
+      "sha256": "5abec12474dead465c99ab92b381452bd26201da32734625a60f194bba867fd1",
+      "size": 15176,
+      "normalized_sha256": "5abec12474dead465c99ab92b381452bd26201da32734625a60f194bba867fd1"
     },
     "frontend/src/pages/auth/SSOCallback.jsx": {
       "role": "index",
@@ -4468,6 +4463,16 @@
       "sha256": "7081fc4146d86d984dd4717984a31756e411cc6c69e7b36d3d4fd0623cf241b2",
       "size": 10507,
       "normalized_sha256": "7081fc4146d86d984dd4717984a31756e411cc6c69e7b36d3d4fd0623cf241b2"
+    },
+    "frontend/src/styles/platform-chrome.css": {
+      "sha256": "eb964181357f8c0c1ee83acb216c26d1722cd9edc714c5f27a7125cbef467bb2",
+      "size": 13125,
+      "normalized_sha256": "eb964181357f8c0c1ee83acb216c26d1722cd9edc714c5f27a7125cbef467bb2"
+    },
+    "frontend/src/styles/platform-theme.js": {
+      "sha256": "d3ddf2b105aadc0e28960caf02cb22ec1821e24bac38e4a59f72b8f03abd0ecf",
+      "size": 2483,
+      "normalized_sha256": "d3ddf2b105aadc0e28960caf02cb22ec1821e24bac38e4a59f72b8f03abd0ecf"
     },
     "frontend/src/styles/theme-variables.css": {
       "role": "index",

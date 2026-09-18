@@ -369,14 +369,14 @@ vitest.config.js[TQ4T]: F:C·Vitest配置：jsdom环境，setup为src/__tests__/
 ===/home/hanying/ai-platform/frontend/src/===
 App.jsx[EG9L]: F:前端路由根：中英locale与主题、系统语言/favicon/title初始化，公开与登录守卫，BasicLayout内懒加载业务页，含AI训练与Agent执行和历史 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/layouts/BasicLayout/index.jsx,code:frontend/src/utils/portalIdentityConnect.js,code:frontend/src/pages/agent/WorkflowRun.jsx,code:frontend/src/pages/agent/ExecutionHistory.jsx | A:/agent/execute/:id,/agent/executions | S:守卫内联而非components/ProtectedRoute；已登录Portal首次连接可留/login续接；导图分享免守卫；未匹配跳/dashboard；用户手选语言不被系统默认覆盖；模块导航是否可见由模块配置决定
 index.css[CU5L]: F:C·全局样式：引入styles/theme-variables.css，.app/.page-*布局、.chat-*对话布局、通用滚动条与Markdown样式，由main.jsx引入 | R:code:frontend/src/styles/theme-variables.css,code:frontend/src/main.jsx | A:- | S:与ios-unified-theme.css同时生效，后者在App.jsx引入
-main.jsx[EG8T]: F:C·前端入口：导入i18n配置与index.css，初始化networkService并挂到window，网络恢复时刷新authStore用户信息，仅开发环境包StrictMode渲染App | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/src/index.css | A:- | S:生产不用StrictMode以避免双重渲染；依赖window.useAuthStore由authStore自行挂载
+main.jsx[EG8T]: F:前端入口：导入i18n、index.css与统一外观CSS，初始化networkService挂到window，网络恢复刷新用户，仅开发环境包StrictMode渲染App | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/src/index.css,code:frontend/src/styles/platform-chrome.css | A:- | S:生产不用StrictMode避免双重渲染；window.useAuthStore由authStore挂载
 
 ===/home/hanying/ai-platform/frontend/src/components/Layout/===
 MainLayout.jsx[AU2M]: F:C·旧版主布局：Sider菜单(首页/对话/管理子菜单按roles过滤)+Header用户下拉+Outlet | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import，当前布局是layouts/BasicLayout
 
 ===/home/hanying/ai-platform/frontend/src/components/===
 ProtectedRoute.jsx[AI2T]: F:C·通用路由守卫：未登录跳/login，按permissions(全部满足)与roles(任一)校验否则显示无权限 | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import，App.jsx内联了自己的ProtectedRoute
-ThemeProvider.jsx[AU4T]: F:C·主题Provider：把systemConfig.theme.colors各键转kebab-case写成:root的CSS变量 | R:code:frontend/src/stores/systemConfigStore.js,code:frontend/src/App.jsx | A:- | S:-
+ThemeProvider.jsx[AU4T]: F:以共享默认色补齐已保存主题，同时提供AntD token及根CSS变量，按主色亮度选择按钮文字色 | R:code:frontend/src/stores/systemConfigStore.js,code:frontend/src/styles/platform-theme.js | A:- | S:保存的颜色优先；外层App仍控制locale
 
 ===/home/hanying/ai-platform/frontend/src/components/admin/settings/===
 AIChannelManageModal.jsx[AC5M]: F:C·AI渠道管理弹窗：列表/新增/编辑/删除渠道(name、base_url、api_key)，走adminStore的aiChannels方法 | R:code:frontend/src/stores/adminStore.js,code:frontend/src/components/admin/settings/AIModelFormModal.jsx,code:frontend/src/pages/admin/Settings.jsx | A:- | S:渠道api_key后端脱敏返回，编辑留空表示不改
@@ -412,7 +412,7 @@ SystemPromptSettings.jsx[AU4T]: F:T·系统提示词设置容器：加载getSyst
 SystemPromptTable.jsx[AU4M]: F:T·系统提示词表格：功能总开关(toggleSystemPromptsFeature)、启停/编辑/删除、分组标签展示 | R:code:frontend/src/stores/adminStore.js,code:frontend/src/components/admin/settings/SystemPromptSettings.jsx | A:- | S:-
 SystemStats.jsx[AU3S]: F:C·系统统计卡片：按props.systemStats展示用户/活跃/积分配额/会话/消息等Statistic | R:code:frontend/src/pages/admin/Settings.jsx | A:- | S:-
 TeachingManagement.jsx[AU3L]: F:E·教学管理后台(模块已停用)：授权管理/模块管理(批量更新、可见性、状态)/分组管理/页面头部配置四个Tab，走teachingStore与systemConfigStore | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/admin/settings/ModuleAuthorizationManagement.jsx | A:- | S:-
-ThemeSettings.jsx[AU5L]: F:C·主题设置：PRESET_THEMES预设与自定义colors表单，实时applyTheme写CSS变量预览，经adminStore.updateSystemSettings保存theme{preset,custom,colors} | R:code:frontend/src/stores/adminStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/components/ThemeProvider.jsx,code:frontend/src/pages/admin/Settings.jsx | A:- | S:预览会直接改document根变量，取消需重置
+ThemeSettings.jsx[AU5L]: F:默认与自定义主题表单复用共享色板及CSS应用函数，实时预览，经adminStore保存theme{preset,custom,colors} | R:code:frontend/src/stores/adminStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/styles/platform-theme.js,code:frontend/src/pages/admin/Settings.jsx | A:- | S:预览直接改根变量，取消需重置；保留disabled只读权限
 UsageLogs.jsx[AU5L]: F:C·使用记录：筛选分页表格(getUsageLogs)、Excel导出、ECharts积分消耗柱状图(/admin/usage-logs/chart)，can-view-chat决定是否可打开对话内容抽屉 | R:code:frontend/src/stores/adminStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/admin/settings/ConversationContentDrawer.jsx,code:frontend/src/pages/admin/Settings.jsx | A:- | S:ECharts实例手动init/dispose；图表按粒度重新拉取
 VideoModelSettings.jsx[AU6L]: F:V·视频模型管理：列表/新建/编辑/启停/删除走/video/admin/models*，provider(volcano/kling/sora2)差异字段(可灵密钥/版本/模式)、base_price、时长/比例/分辨率支持、首尾帧与图生视频开关 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/controllers/videoController.js | A:- | S:新建时model_id自动同步到name；可灵密钥存api_config
 index.js[CU4T]: F:C·管理设置组件桶文件：导出31个设置组件供Settings页 | R:code:frontend/src/pages/admin/Settings.jsx | A:- | S:ModuleAuthorizationManagement导出解析到同名.jsx而非目录
@@ -800,6 +800,8 @@ Analytics.ios.css[CU2L]: F:C·数据分析页iOS风格样式，仅Analytics.jsx�
 ios-tech-theme.css[CU2S]: F:C·iOS科技风CSS变量与玻璃态样式，仅OcrTool.less引入 | R:code:frontend/src/pages/ocr/OcrTool.less | A:- | S:-
 ios-unified-theme.css[CU3L]: F:E·教学平台iOS统一设计系统(变量、卡片、按钮，暗色媒体查询)，App.jsx全局引入 | R:code:frontend/src/App.jsx,code:frontend/src/components/teaching/ModuleList.jsx | A:- | S:全局生效，选择器改动影响全站
 theme-variables.css[CU3T]: F:C·全局主题CSS变量(:root颜色/间距)，index.css引入 | R:code:frontend/src/index.css | A:- | S:-
+platform-chrome.css[FU5S]: F:统一认证页与BasicLayout下导航、对话、后台和工具外观，暖白背景、品牌色按钮、浅边框及手机顶栏布局，复用既有主题变量 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js,code:frontend/src/layouts/BasicLayout/style.css | A:- | S:不覆盖编辑器内容、教学图片或图表配色；语义危险按钮及禁用态保留
+platform-theme.js[CU5T]: F:共享默认色板、HEX与RGB主色亮度计算、保存颜色覆盖默认并写入根CSS变量，补充品牌按钮文字对比色 | R:code:frontend/src/components/ThemeProvider.jsx,code:frontend/src/components/admin/settings/ThemeSettings.jsx | A:DEFAULT_THEME_COLORS,brandForeground,applyThemeColors | S:调用只修改样式，不保存配置；原代码块独立配色保留
 
 ===/home/hanying/ai-platform/frontend/src/utils/===
 api.js[CN9L]: F:C·axios客户端(/api，120s)：注入token、401队列刷新最多3次及重放/清会话、可取消请求、SSE流及心跳、取消流/请求、可选择关闭开发调试日志 | R:code:frontend/src/utils/i18n.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/chatStore.js,code:backend/src/routes/auth.js,code:backend/src/middleware/authMiddleware.js | A:- | S:auth-storage与authStore同源；auth接口401不自刷新；SSE冒号行是心跳；TOO_MANY_ATTEMPTS为分支标识；请求清理用then双分支避免悬空finally拒绝；skipDebugLogging禁止私有交接请求体进入开发日志
