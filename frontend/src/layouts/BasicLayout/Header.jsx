@@ -87,7 +87,7 @@ const Header = ({ isMobile, onMenuClick }) => {
 
       <div className="header-right">
         <Space size="middle">
-          {!isMobile && <Button href="https://id.pkuailab.com/portal/return/ai-practice" target="_blank" rel="noopener noreferrer" icon={<HomeOutlined />}>{t('nav.returnPortal')}</Button>}
+          {!isMobile && <Button href="https://id.pkuailab.com/portal/return/ai-practice" target="_self" rel="noopener noreferrer" icon={<HomeOutlined />}>{t('nav.returnPortal')}</Button>}
           {/* 语言切换 */}
           <LanguageSwitch />
           

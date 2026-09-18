@@ -54,7 +54,7 @@ const MobileDrawer = ({ visible, menuItems, selectedKey, onClose, onMenuClick })
       className="mobile-menu-drawer"
       bodyStyle={{ padding: 0 }}
     >
-      <a href="https://id.pkuailab.com/portal/return/ai-practice" target="_blank" rel="noopener noreferrer"
+      <a href="https://id.pkuailab.com/portal/return/ai-practice" target="_self" rel="noopener noreferrer"
         onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 24px' }}>
         <Icons.HomeOutlined />{t('nav.returnPortal')}
       </a>
