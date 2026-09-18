@@ -5,11 +5,14 @@ import api from '../../utils/api'
 import { downloadBlob } from '../../utils/canvas/download'
 
 const ROOT = '/dev/p03'
-const preStyle = { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 240, overflowY: 'auto', padding: 12, background: 'var(--user-message-bg, #f6f7f9)' }
+const preStyle = { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 240, overflowY: 'auto', margin: 0, padding: 16, borderRadius: 8, fontFamily: 'inherit', lineHeight: 1.7, background: 'var(--user-message-bg, #f6f7f9)' }
+const detailsStyle = { borderTop: '1px solid var(--border-color, #eee)', paddingTop: 12 }
 
 // Imported only by the opt-in Vite development branch in MessageContent.
 export default function ArtifactHandoffDev({ messageId }) {
   const { t, i18n } = useTranslation()
+  // Diagnostics belong to the explicit local test URL, never the normal teacher flow.
+  const showDiagnostics = import.meta.env.DEV && new URLSearchParams(window.location.search).get('p03Debug') === '1'
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
@@ -78,69 +81,90 @@ export default function ArtifactHandoffDev({ messageId }) {
     downloadBlob(new Blob([body], { type: format === 'json' ? 'application/json' : 'text/markdown;charset=utf-8' }), `practice-${fresh.id}.${format}`)
   })
   const prefix = 'chat.p03.'
-  const renderFiles = items => items.map(item => <div key={item.source_id}>
-    <Typography.Text>{item.name || item.source_id}</Typography.Text>
+  const readyFiles = preview?.attachments.filter(item => item.status === 'ready') || []
+  const unavailableFiles = preview?.attachments.filter(item => item.status !== 'ready') || []
+  const renderFiles = items => items.map(item => <details key={item.source_id}>
+    <summary style={{ cursor: 'pointer' }}>{t(`${prefix}previewFile`, { name: item.name || t(`${prefix}unnamedFile`) })}</summary>
     <pre style={preStyle}>{item.text}</pre>
-  </div>)
+  </details>)
   return <>
     <Button size="small" type="text" onClick={() => { setOpen(true); load() }}>{t(`${prefix}entry`)}</Button>
-    <Modal open={open} title={t(`${prefix}title`)} width={800} footer={null}
+    <Modal open={open} title={t(`${prefix}title`)} width={680} footer={null}
       onCancel={() => { if (!busy) setOpen(false) }} closable={!busy} maskClosable={false}>
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Alert type="warning" showIcon message={t(`${prefix}devOnly`)} description={t(`${prefix}boundary`)} />
+        <Typography.Text type="secondary">{t(`${prefix}devOnly`)}</Typography.Text>
         {error && <Alert type="error" showIcon message={t(`${prefix}failed`)}
-          description={<>{t(`${prefix}error.${i18n.exists(`${prefix}error.${error.code}`) ? error.code : 'unknown'}`)} {error.requestId && <code>{error.requestId}</code>}</>} />}
+          description={t(`${prefix}error.${i18n.exists(`${prefix}error.${error.code}`) ? error.code : 'unknown'}`)} />}
         {busy && <Spin />}
         {!preview && !busy && <Button onClick={load}>{t(`${prefix}reload`)}</Button>}
         {preview && !snapshot && <>
-          <Typography.Text style={{ overflowWrap: 'anywhere' }}>{t(`${prefix}source`, { id: preview.source.object_id, version: preview.source.version })}</Typography.Text>
-          <Typography.Text>{t(`${prefix}selectHint`)}</Typography.Text>
-          <Radio.Group value={scope} onChange={e => setScope(e.target.value)} disabled={busy}>
+          <Radio.Group value={scope} onChange={e => { setScope(e.target.value); if (e.target.value === 'range') setRange({ start: 0, end: 0 }) }} disabled={busy}>
             <Radio value="all">{t(`${prefix}whole`)}</Radio><Radio value="range">{t(`${prefix}range`)}</Radio>
           </Radio.Group>
-          <Input.TextArea aria-label={t(`${prefix}original`)} value={preview.text} readOnly rows={8}
-            onSelect={e => { setRange({ start: e.target.selectionStart, end: e.target.selectionEnd }); if (e.target.selectionEnd > e.target.selectionStart) setScope('range') }} />
-          <Typography.Text>{t(`${prefix}scope`, { start: selected.start, end: selected.end, count: selectedText.length })}</Typography.Text>
-          <pre data-testid="handoff-selection" style={preStyle}>{selectedText}</pre>
-          <Typography.Text>{t(`${prefix}attachments`)}</Typography.Text>
-          {preview.attachments.length === 0 && <Typography.Text type="secondary">{t(`${prefix}noAttachments`)}</Typography.Text>}
-          {preview.attachments.map(item => <Checkbox key={item.source_id} checked={files.includes(item.source_id)}
-            disabled={busy || item.status !== 'ready' || (!files.includes(item.source_id) && files.length >= 3)}
-            onChange={e => setFiles(current => e.target.checked ? [...current, item.source_id] : current.filter(id => id !== item.source_id))}>
-            {item.name || item.source_id} — {t(`${prefix}file.${item.status}`)}
-          </Checkbox>)}
-          {preview.attachments_truncated && <Typography.Text>{t(`${prefix}truncated`)}</Typography.Text>}
+          {scope === 'range' && <>
+            <Typography.Text type="secondary">{t(`${prefix}selectHint`)}</Typography.Text>
+            <Input.TextArea aria-label={t(`${prefix}original`)} value={preview.text} readOnly rows={5} disabled={busy}
+              onSelect={e => setRange({ start: e.target.selectionStart, end: e.target.selectionEnd })} />
+          </>}
+          <div>
+            <Typography.Paragraph strong style={{ marginBottom: 8 }}>{t(`${prefix}preview`)}</Typography.Paragraph>
+            <pre data-testid="handoff-selection" style={preStyle}>{selectedText || t(`${prefix}emptySelection`)}</pre>
+          </div>
+          {readyFiles.length > 0 && <div>
+            <Typography.Paragraph strong style={{ marginBottom: 8 }}>{t(`${prefix}attachments`)}</Typography.Paragraph>
+            <Space direction="vertical">{readyFiles.map(item => <Checkbox key={item.source_id} checked={files.includes(item.source_id)}
+              disabled={busy || (!files.includes(item.source_id) && files.length >= 3)}
+              onChange={e => setFiles(current => e.target.checked ? [...current, item.source_id] : current.filter(id => id !== item.source_id))}>
+              {item.name || t(`${prefix}unnamedFile`)}
+            </Checkbox>)}</Space>
+          </div>}
           {renderFiles(preview.attachments.filter(item => files.includes(item.source_id)))}
           <label>{t(`${prefix}purpose`)} <Select aria-label={t(`${prefix}purpose`)} value={purpose} disabled={busy} onChange={setPurpose} style={{ minWidth: 200 }}
             options={['reference', 'lesson_preparation', 'courseware'].map(value => ({ value, label: t(`${prefix}purpose.${value}`) }))} /></label>
           <Space wrap>
             <Button type="primary" disabled={busy || !selectedText.trim()} onClick={freeze}>{t(`${prefix}freeze`)}</Button>
-            <Button disabled={busy} onClick={load}>{t(`${prefix}reload`)}</Button>
             {preview.latest_snapshot_id && <Button disabled={busy} onClick={resume}>{t(`${prefix}resume`)}</Button>}
           </Space>
         </>}
         {snapshot && <>
           <Alert type={status?.state === 'mock_received' ? 'success' : 'info'} message={t(`${prefix}status.${status?.state || 'prepared'}`)} />
-          <Typography.Text style={{ overflowWrap: 'anywhere' }}>{t(`${prefix}source`, { id: snapshot.manifest.source.object_id, version: snapshot.manifest.source.version })}</Typography.Text>
-          <Typography.Text>{t(`${prefix}frozen`, { expires: new Date(snapshot.expires_at * 1000).toLocaleString(i18n.language) })}</Typography.Text>
           <Typography.Text>{t(`${prefix}purpose`)}: {t(`${prefix}purpose.${snapshot.manifest.purpose}`)}</Typography.Text>
-          {snapshot.replayed && <Typography.Text type="secondary">{t(`${prefix}reused`)}</Typography.Text>}
           <pre style={preStyle}>{snapshot.payload.text}</pre>
           {renderFiles(snapshot.payload.attachments)}
           <Space wrap>
-            <Button disabled={busy} onClick={() => download('md')}>{t(`${prefix}downloadText`)}</Button>
-            <Button disabled={busy} onClick={() => download('json')}>{t(`${prefix}downloadManifest`)}</Button>
+            <Button type="primary" disabled={busy} onClick={() => download('md')}>{t(`${prefix}downloadText`)}</Button>
             <Button disabled={busy} onClick={load}>{t(`${prefix}newSelection`)}</Button>
           </Space>
-          <label>{t(`${prefix}authorization`)} <Select aria-label={t(`${prefix}authorization`)} value={authorization} disabled={busy} style={{ minWidth: 200 }}
-            onChange={value => { setAuthorization(value); grant.current = null }} options={['valid', 'expired', 'revoked'].map(value => ({ value, label: t(`${prefix}auth.${value}`) }))} /></label>
-          <label>{t(`${prefix}receiver`)} <Select aria-label={t(`${prefix}receiver`)} value={simulation} disabled={busy} style={{ minWidth: 200 }}
-            onChange={setSimulation} options={['success', 'reject', 'lose_response'].map(value => ({ value, label: t(`${prefix}simulation.${value}`) }))} /></label>
-          <Space wrap>
-            <Button disabled={busy} onClick={deliver}>{t(`${prefix}deliver`)}</Button>
-            <Button disabled={busy} onClick={() => run(async () => setStatus(await get(`/snapshots/${snapshot.id}/status`)))}>{t(`${prefix}query`)}</Button>
-          </Space>
         </>}
+        {showDiagnostics && preview && <details key={snapshot ? 'prepared-details' : 'selection-details'} style={detailsStyle}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-secondary, #666)' }}>{t(`${prefix}technicalDetails`)}</summary>
+          <Space direction="vertical" style={{ width: '100%', paddingTop: 12 }} size="middle">
+            <Typography.Text type="secondary">{t(`${prefix}boundary`)}</Typography.Text>
+            <Typography.Text style={{ overflowWrap: 'anywhere' }}>{t(`${prefix}source`, { id: preview.source.object_id, version: snapshot?.manifest.source.version || preview.source.version })}</Typography.Text>
+            {error?.requestId && <code style={{ overflowWrap: 'anywhere' }}>{error.requestId}</code>}
+            {!snapshot && <>
+              <Typography.Text>{t(`${prefix}scope`, { start: selected.start, end: selected.end, count: selectedText.length })}</Typography.Text>
+              {unavailableFiles.map(item => <Typography.Text key={item.source_id} type="secondary">
+                {item.name || t(`${prefix}unnamedFile`)} — {t(`${prefix}file.${item.status}`)}
+              </Typography.Text>)}
+              {preview.attachments_truncated && <Typography.Text>{t(`${prefix}truncated`)}</Typography.Text>}
+              <Button disabled={busy} onClick={load}>{t(`${prefix}reload`)}</Button>
+            </>}
+            {snapshot && <>
+              <Typography.Text>{t(`${prefix}frozen`, { expires: new Date(snapshot.expires_at * 1000).toLocaleString(i18n.language) })}</Typography.Text>
+              {snapshot.replayed && <Typography.Text type="secondary">{t(`${prefix}reused`)}</Typography.Text>}
+              <Button disabled={busy} onClick={() => download('json')}>{t(`${prefix}downloadManifest`)}</Button>
+              <label>{t(`${prefix}authorization`)} <Select aria-label={t(`${prefix}authorization`)} value={authorization} disabled={busy} style={{ width: '100%' }}
+                onChange={value => { setAuthorization(value); grant.current = null }} options={['valid', 'expired', 'revoked'].map(value => ({ value, label: t(`${prefix}auth.${value}`) }))} /></label>
+              <label>{t(`${prefix}receiver`)} <Select aria-label={t(`${prefix}receiver`)} value={simulation} disabled={busy} style={{ width: '100%' }}
+                onChange={setSimulation} options={['success', 'reject', 'lose_response'].map(value => ({ value, label: t(`${prefix}simulation.${value}`) }))} /></label>
+              <Space wrap>
+                <Button disabled={busy} onClick={deliver}>{t(`${prefix}deliver`)}</Button>
+                <Button disabled={busy} onClick={() => run(async () => setStatus(await get(`/snapshots/${snapshot.id}/status`)))}>{t(`${prefix}query`)}</Button>
+              </Space>
+            </>}
+          </Space>
+        </details>}
       </Space>
     </Modal>
   </>

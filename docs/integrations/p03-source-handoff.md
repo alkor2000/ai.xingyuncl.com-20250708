@@ -50,6 +50,8 @@ node dev/p03-demo.mjs
 # 打开 http://localhost:3004/dev/p03.html
 ```
 
+普通演示页复用主站 ThemeProvider 和平台样式，只展示成果选择、准备与下载。来源哈希、范围偏移、不可用附件诊断、JSON 清单及模拟授权/收发仅在显式测试地址 `http://localhost:3004/dev/p03.html?p03Debug=1` 的开发详情区提供；普通界面没有调试入口。此参数仅控制开发界面展示，不代替任何服务端权限检查。
+
 此演示复用实际 MessageContent、P03 界面、源适配器和快照服务；只将模型读取与认证替换为固定合成来源/模拟账号，监听 loopback。合成状态位于 `storage/private/p03-demo`，与真实本地应用的开发暂存分开。`node dev/p03-demo.mjs --fresh` 只清除这份合成接收状态，便于重复浏览器测试；没有访问真实教师数据库。
 
 接入本地已有聊天时，后端启动环境设置 `NODE_ENV=development P03_DEV_ENABLED=true P03_DEV_USER_IDS=<本地测试账号ID列表>`，沿 `dev/README.md` 启动 `backend/src/server.js`；前端启动时设置 `VITE_P03_DEV_ENABLED=true`。这些是本机测试开关，不是教师资格、跨平台身份或正式协议。
