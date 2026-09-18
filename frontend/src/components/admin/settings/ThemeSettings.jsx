@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons'
 import useAdminStore from '../../../stores/adminStore'
 import useSystemConfigStore from '../../../stores/systemConfigStore'
+import { DEFAULT_THEME_COLORS, applyThemeColors } from '../../../styles/platform-theme'
 
 const { Title, Text } = Typography
 
@@ -37,59 +38,7 @@ const PRESET_THEMES = {
   default: {
     name: '默认主题',
     description: '系统默认配色方案',
-    colors: {
-      // 基础颜色
-      primaryColor: '#1677ff',
-      successColor: '#52c41a',
-      warningColor: '#faad14',
-      errorColor: '#ff4d4f',
-      
-      // 背景颜色
-      bodyBg: '#f5f5f5',
-      componentBg: '#ffffff',
-      headerBg: '#ffffff',
-      sidebarBg: '#ffffff',
-      
-      // 文字颜色
-      textColor: 'rgba(0, 0, 0, 0.85)',
-      textColorSecondary: 'rgba(0, 0, 0, 0.65)',
-      textColorTertiary: 'rgba(0, 0, 0, 0.45)',
-      
-      // 边框和分割线
-      borderColor: '#f0f0f0',
-      borderColorSplit: '#f0f0f0',
-      
-      // 顶部导航栏
-      navHeaderBg: '#ffffff',
-      navHeaderText: 'rgba(0, 0, 0, 0.85)',
-      navHeaderBorder: '#f0f0f0',
-      navLogoBg: '#1677ff',
-      navLogoText: '#ffffff',
-      
-      // 侧边栏
-      sidebarMenuBg: '#ffffff',
-      sidebarMenuText: 'rgba(0, 0, 0, 0.65)',
-      sidebarMenuActiveBg: '#e6f4ff',
-      sidebarMenuActiveText: '#1677ff',
-      sidebarMenuHoverBg: '#f0f0f0',
-      sidebarMenuHoverText: '#1677ff',
-      sidebarSubmenuBg: '#ffffff',
-      
-      // 聊天界面专属
-      chatBg: '#fafafa',
-      chatSidebarBg: '#ffffff',
-      userMessageBg: '#e3f2fd',
-      userMessageText: 'rgba(0, 0, 0, 0.85)',
-      aiMessageBg: '#f5f5f5',
-      aiMessageText: 'rgba(0, 0, 0, 0.85)',
-      inputBg: '#ffffff',
-      inputBorder: '#d9d9d9',
-      
-      // 代码块
-      codeBlockBg: '#2d3748',
-      codeBlockText: '#e2e8f0',
-      codeBlockHeaderBg: '#f6f8fa'
-    }
+    colors: DEFAULT_THEME_COLORS
   }
 }
 
@@ -164,14 +113,7 @@ const ThemeSettings = ({ disabled = false }) => {
   }
 
   // 应用主题到页面
-  const applyTheme = (colors) => {
-    const root = document.documentElement
-    Object.entries(colors).forEach(([key, value]) => {
-      // 将驼峰命名转换为 kebab-case
-      const cssVarName = `--${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`
-      root.style.setProperty(cssVarName, value)
-    })
-  }
+  const applyTheme = applyThemeColors
 
   // 保存主题配置
   const handleSave = async () => {
