@@ -212,10 +212,11 @@ class StreamMessageService {
       userId: user.id, creditsToRefund: creditsConsumed, aiError: error.message
     });
 
-    await MessageService.refundCredits(
+    const refunded = await MessageService.refundCredits(
       user, creditsConsumed,
       `流式AI调用失败退款 - ${error.message}`
     );
+    if (refunded) error.creditsRefunded = true;
   }
 }
 

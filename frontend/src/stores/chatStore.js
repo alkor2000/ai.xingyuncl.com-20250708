@@ -370,7 +370,8 @@ const useChatStore = create((set, get) => ({
         file_ids: fileIds.length > 0 ? fileIds : (fileInfo?.id ? [fileInfo.id] : []),
         stream: false,
         // v3.0: 输出格式（html/pptx/docx/pdf），后端据此注入格式指令；空则普通对话
-        output_format: options.outputFormat || undefined
+        output_format: options.outputFormat || undefined,
+        summary_mode: options.summaryMode || undefined
       }
       
       // v2.3: 图像生成模型 E2E 延迟较高，单独放宽超时至 300 秒
@@ -565,7 +566,8 @@ const useChatStore = create((set, get) => ({
         file_ids: fileIds.length > 0 ? fileIds : (fileInfo?.id ? [fileInfo.id] : []),
         stream: true,
         // v3.0: 输出格式（html/pptx/docx/pdf），后端据此注入格式指令；空则普通对话
-        output_format: options.outputFormat || undefined
+        output_format: options.outputFormat || undefined,
+        summary_mode: options.summaryMode || undefined
       }
       
       await apiClient.postStream(

@@ -22,6 +22,7 @@ const MessageService = require('../services/chat/MessageService');
 const StreamMessageService = require('../services/chat/StreamMessageService');
 const NonStreamMessageService = require('../services/chat/NonStreamMessageService');
 const { normalizeOutputFormat } = require('../services/chat/outputFormatInstructions');
+const { buildDiscussionSummary } = require('../services/chat/discussionSummary');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const File = require('../models/File');
@@ -243,7 +244,14 @@ class ChatControllerRefactored {
       const { id } = req.params;
       const userId = req.user.id;
       const userGroupId = req.user.group_id;
-      const { content, file_id, file_ids, stream = false, output_format } = req.body;
+      const { content, file_id, file_ids, stream = false, output_format, summary_mode } = req.body;
+      if (summary_mode !== undefined && summary_mode !== 'discussion') {
+        return ResponseHelper.error(res, '不支持的讨论整理方式', 400);
+      }
+      const isSummary = summary_mode === 'discussion';
+      if (isSummary && (file_id || (file_ids && (!Array.isArray(file_ids) || file_ids.length)) || output_format)) {
+        return ResponseHelper.error(res, '整理讨论只读取已有文字，不附带新文件或画布格式', 400);
+      }
       // 输出格式（html/pptx/docx/pdf）走白名单，非法值按普通对话处理
       const outputFormat = normalizeOutputFormat(output_format);
 
@@ -280,11 +288,15 @@ class ChatControllerRefactored {
         requiredCredits
       });
 
+      // Preflight the complete text scope before billing or creating a message.
+      const summaryContext = isSummary
+        ? await buildDiscussionSummary({ conversationId: id, aiModel, user }) : null;
+
       // 5. 处理多文件附件
       const { fileInfos } = await MessageService.processFileAttachments(allFileIds, userId, aiModel);
 
       // 6. 清除草稿
-      await CacheService.deleteDraft(userId, id);
+      if (!isSummary) await CacheService.deleteDraft(userId, id);
 
       // 7. 扣减积分（预扣减，失败时在 catch 中退还）
       logger.info('预扣减积分开始', {
@@ -315,10 +327,10 @@ class ChatControllerRefactored {
       });
 
       // 9. 获取历史消息
-      const recentMessages = await Message.getRecentMessages(id);
+      const recentMessages = isSummary ? [] : await Message.getRecentMessages(id);
 
       // 10. 构建AI上下文
-      const aiMessages = await MessageService.buildAIContext({
+      const aiMessages = summaryContext || await MessageService.buildAIContext({
         conversation, recentMessages,
         systemPromptId: conversation.system_prompt_id,
         moduleCombinationId: conversation.module_combination_id,
@@ -359,7 +371,7 @@ class ChatControllerRefactored {
       });
 
       // 积分退还保护：如果已扣减积分但消息发送失败，退还积分
-      if (creditsConsumed > 0 && user) {
+      if (creditsConsumed > 0 && user && !error.creditsRefunded) {
         try {
           await MessageService.refundCredits(
             user, creditsConsumed,
@@ -379,7 +391,7 @@ class ChatControllerRefactored {
       }
 
       if (!res.headersSent) {
-        return ResponseHelper.error(res, error.message || '消息发送失败');
+        return ResponseHelper.error(res, error.message || '消息发送失败', error.statusCode || 500);
       }
     }
   }

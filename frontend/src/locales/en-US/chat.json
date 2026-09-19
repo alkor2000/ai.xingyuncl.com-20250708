@@ -448,5 +448,11 @@
   "chat.export.error.rate_limited": "Too many requests. Please try again shortly.",
   "chat.export.error.internal_error": "Download is unavailable. Please try again shortly.",
   "chat.export.error.network_error": "Connection interrupted. Please try downloading again.",
-  "chat.export.error.unknown": "Download failed. Please try again shortly."
+  "chat.export.error.unknown": "Download failed. Please try again shortly.",
+  "chat.summary.title": "Turn this discussion into a useful draft",
+  "chat.summary.hint": "Summarize completed text messages at the current model’s rate. Review, refine in chat, then download.",
+  "chat.summary.action": "Summarize",
+  "chat.summary.request": "Summarize the goals, agreed plans, key reasoning and open questions in this discussion into a reusable draft.",
+  "chat.summary.failed": "No complete result was received. Your discussion and unsent draft are preserved. Check the conversation for an answer before retrying.",
+  "chat.summary.failedDetail": "Summary not completed: {{reason}}"
 }

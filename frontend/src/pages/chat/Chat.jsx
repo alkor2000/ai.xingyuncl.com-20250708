@@ -96,6 +96,7 @@ import {
 import useChatStore from '../../stores/chatStore'
 import useAuthStore from '../../stores/authStore'
 import MessageList from '../../components/chat/MessageList'
+import DiscussionSummary from '../../components/chat/DiscussionSummary'
 import apiClient from '../../utils/api'
 import { calculateTokens } from '../../utils/tokenCalculator'
 // v4.2/v5.0: 与 HtmlCanvasPanel 共用的严格 CommonMark 围栏解析器（v5.0 起提取全部画布产物）
@@ -610,6 +611,17 @@ const Chat = () => {
 
   const handleStopStreaming = () => { stopStreaming(); message.info(t('chat.stopGeneration')) }
 
+  const handleSummarize = async (request) => {
+    if (!currentConversation || typing || isStreaming || isSending) return
+    setUserScrolled(false)
+    setIsSending(true)
+    try {
+      // Preserve the unsent draft, selected attachments and output format.
+      // Summary is a fresh text answer; review/refine it in chat before downloading.
+      await sendMessage(request, null, [], { summaryMode: 'discussion' })
+    } finally { setIsSending(false) }
+  }
+
   const handleDeleteMessage = async (aiMessageId) => {
     try { await deleteMessagePair(aiMessageId) } catch (error) { console.error('Delete message error:', error); throw error }
   }
@@ -778,6 +790,10 @@ const Chat = () => {
   // 白名单中不含 is_active 字段，旧的 filter(m => m.is_active) 会因字段缺失把列表
   // 全部过滤为空，导致模型选择器"暂无数据"。此处直接透传 aiModels 即可。
   const availableModels = aiModels
+  const summaryAction = <DiscussionSummary key={currentConversationId}
+    available={messages.some(item => item.role === 'assistant' && !item.temp && !item.error && !item.streaming && (!item.status || item.status === 'completed'))}
+    disabled={messagesLoading || typing || isStreaming || isSending}
+    onSummarize={handleSummarize} />
 
   // ================================================================
   // 构建 ChatInputArea 通用 props
@@ -875,6 +891,7 @@ const Chat = () => {
               <div ref={messagesEndRef} />
             </div>
             <div className="mobile-input-container">
+              {summaryAction}
               <ChatInputArea {...inputAreaProps} />
             </div>
           </>
@@ -971,6 +988,7 @@ const Chat = () => {
                       showThinking={showThinking} />
                     <div ref={messagesEndRef} />
                   </div>
+                  {summaryAction}
                   <ChatInputArea {...inputAreaProps} />
                 </>
               )}

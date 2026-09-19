@@ -101,4 +101,4 @@ function createSourceAdapter({ Message, Conversation, File, uploadRoot }) {
   }
   return { load, attachment, inspect };
 }
-module.exports = { createSourceAdapter, HandoffError, fail, digest };
+module.exports = { createSourceAdapter, HandoffError, fail, digest, answerText };

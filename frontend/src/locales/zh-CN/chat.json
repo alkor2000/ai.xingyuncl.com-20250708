@@ -448,5 +448,11 @@
   "chat.export.error.rate_limited": "操作过于频繁，请稍后重试。",
   "chat.export.error.internal_error": "下载暂不可用，请稍后重试。",
   "chat.export.error.network_error": "网络连接中断，请重试下载。",
-  "chat.export.error.unknown": "下载失败，请稍后重试。"
+  "chat.export.error.unknown": "下载失败，请稍后重试。",
+  "chat.summary.title": "把讨论整理成可复用的成果",
+  "chat.summary.hint": "汇总已完成的文字讨论，按当前模型计费。核对后可继续修改或下载。",
+  "chat.summary.action": "整理成果",
+  "chat.summary.request": "请整理本次讨论中的目标、已定方案、关键依据和待确认项，形成一份可复用的成果草稿。",
+  "chat.summary.failed": "暂未收到完整结果，原讨论和未发送内容仍保留。请先查看会话中的回答，再决定是否重试。",
+  "chat.summary.failedDetail": "暂未完成整理：{{reason}}"
 }

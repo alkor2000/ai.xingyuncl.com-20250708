@@ -107,10 +107,11 @@ class NonStreamMessageService {
         creditsToRefund: creditsConsumed, aiError: aiError.message
       });
 
-      await MessageService.refundCredits(
+      const refunded = await MessageService.refundCredits(
         user, creditsConsumed,
         `AI调用失败退款 - ${aiError.message}`
       );
+      if (refunded) aiError.creditsRefunded = true;
 
       throw aiError;
     }

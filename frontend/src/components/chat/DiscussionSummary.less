@@ -1,0 +1,22 @@
+.discussion-summary {
+  flex-shrink: 0;
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  color: var(--text-primary, #1f2937);
+  background: var(--bg-secondary, #fafafa);
+
+  .discussion-summary-row { display: flex; align-items: center; gap: 12px; }
+  .discussion-summary-copy { flex: 1; min-width: 0; }
+  strong, span { display: block; }
+  strong { font-size: 13px; font-weight: 500; }
+  .discussion-summary-copy span { margin-top: 3px; font-size: 12px; color: var(--text-secondary, #6b7280); line-height: 1.5; }
+  .ant-btn { min-height: 44px; height: auto; flex-shrink: 0; white-space: normal; }
+  .ant-alert { margin-top: 8px; }
+}
+@media (max-width: 600px) {
+  .discussion-summary { margin: 0 8px 6px; padding: 8px 10px; }
+  .discussion-summary .discussion-summary-row { align-items: center; gap: 8px; }
+  .discussion-summary .ant-btn { max-width: 112px; }
+}
