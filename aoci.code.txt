@@ -371,7 +371,7 @@ vitest.config.js[TQ4T]: F:C·Vitest配置：jsdom环境，setup为src/__tests__/
 ===/home/hanying/ai-platform/frontend/src/===
 App.jsx[EG9L]: F:前端路由根，协调中英界面、主题、系统默认语言与站点图标标题，提供公开页、登录守卫及业务路由 | R:code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/layouts/BasicLayout/index.jsx,code:frontend/src/utils/portalIdentityConnect.js | A:/agent/execute/:id,/agent/executions | S:用户手选语言不被系统默认覆盖；已登录门户首次连接允许留在登录页；导图分享公开；已知默认站点描述转为当前语言标题，管理员自定义描述保留
 index.css[CU5L]: F:C·全局样式：引入styles/theme-variables.css，.app/.page-*布局、.chat-*对话布局、通用滚动条与Markdown样式，由main.jsx引入 | R:code:frontend/src/styles/theme-variables.css,code:frontend/src/main.jsx | A:- | S:与ios-unified-theme.css同时生效，后者在App.jsx引入
-main.jsx[EG8T]: F:前端启动入口，初始化语言、站内Monaco及中文资源、网络恢复监听与全局样式，并挂载App | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/vite.config.js | A:/monaco/vs | S:仅开发环境StrictMode；Monaco语言按当前i18n配置且语言变更更新加载器；已创建编辑器语言受Monaco单例生命周期约束
+main.jsx[EG8T]: F:前端启动入口，初始化语言、站内Monaco语言表、网络恢复监听与全局样式，并挂载App | R:code:frontend/src/App.jsx,code:frontend/src/utils/i18n.js,code:frontend/src/services/networkService.js,code:frontend/vite.config.js | A:/monaco/vs | S:先加载同版本官方中文NLS表再渲染App，避免AMD并行加载在慢网络下固化英文菜单；英文模式清除中文表并用默认英文；语言变更同步NLS与加载器但不重载编辑器或丢弃草稿；仅开发环境StrictMode
 
 ===/home/hanying/ai-platform/frontend/src/components/Layout/===
 MainLayout.jsx[AU2M]: F:C·旧版主布局：Sider菜单(首页/对话/管理子菜单按roles过滤)+Header用户下拉+Outlet | R:code:frontend/src/stores/authStore.js | A:- | S:无任何文件import，当前布局是layouts/BasicLayout

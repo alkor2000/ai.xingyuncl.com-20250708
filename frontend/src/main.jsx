@@ -3,11 +3,19 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import i18n from './utils/i18n' // 导入i18n配置
 import { loader } from '@monaco-editor/react'
+import 'monaco-editor/esm/nls.messages.zh-cn.js'
 
-const configureEditorLanguage = () => loader.config({
-  paths: { vs: '/monaco/vs' },
-  'vs/nls': { availableLanguages: { '*': i18n.language?.startsWith('zh') ? 'zh-cn' : 'en' } }
-})
+// Monaco 0.54 的 AMD 依赖并行加载；先初始化语言表，避免慢网络下菜单先固化为英文。
+const chineseEditorMessages = globalThis._VSCODE_NLS_MESSAGES
+const configureEditorLanguage = () => {
+  const language = i18n.language?.startsWith('zh') ? 'zh-cn' : 'en'
+  globalThis._VSCODE_NLS_MESSAGES = language === 'zh-cn' ? chineseEditorMessages : undefined
+  globalThis._VSCODE_NLS_LANGUAGE = language
+  loader.config({
+    paths: { vs: '/monaco/vs' },
+    'vs/nls': { availableLanguages: { '*': language } }
+  })
+}
 configureEditorLanguage()
 i18n.on('languageChanged', configureEditorLanguage)
 import networkService from './services/networkService' // 导入网络监测服务
