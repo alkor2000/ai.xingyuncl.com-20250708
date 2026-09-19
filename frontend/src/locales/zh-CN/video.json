@@ -66,7 +66,7 @@
   "video.insufficientCredits": "积分不足！需要 {{required}} 积分，当前余额 {{current}} 积分",
   "video.pleaseInputPrompt": "请输入提示词",
   "video.pleaseSelectModel": "请选择模型",
-  "video.modelNotConfigured": "该模型尚未配置API密钥，请联系管理员",
+  "video.modelNotConfigured": "该模型尚未配置接口密钥，请联系管理员",
   "video.pleaseUploadFirstFrame": "请上传首帧图片",
   "video.pleaseUploadLastFrame": "请上传尾帧图片",
   "video.pleaseUploadBothFrames": "请上传首帧和尾帧图片",

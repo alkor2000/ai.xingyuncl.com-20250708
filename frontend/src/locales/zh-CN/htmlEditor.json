@@ -103,7 +103,7 @@
   "htmlEditor.credits.refreshFailed": "刷新用户积分失败",
   
   "htmlEditor.link.generate": "生成永久链接",
-  "htmlEditor.link.generateConfirm": "生成永久链接后，页面将可以通过固定URL访问",
+  "htmlEditor.link.generateConfirm": "生成永久链接后，页面将可以通过固定地址访问",
   "htmlEditor.link.costCredits": "需要消耗",
   "htmlEditor.link.confirmGenerate": "确认生成",
   "htmlEditor.link.generateFailed": "生成链接失败",

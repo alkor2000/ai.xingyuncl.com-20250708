@@ -441,7 +441,7 @@ const VideoModelSettings = () => {
               message="可灵AI配置说明"
               description={
                 <div>
-                  <p>可灵AI使用JWT认证方式，需要提供Access Key和Secret Key。</p>
+                  <p>可灵AI使用JWT认证方式，需要提供访问密钥编号和访问密钥。</p>
                   <p>支持多个模型版本，包括V1、V1.5、V1.6、V2等，不同版本支持不同功能。</p>
                 </div>
               }
@@ -497,13 +497,13 @@ const VideoModelSettings = () => {
 
           {selectedProvider === 'kling' ? (
             <>
-              <Form.Item name="kling_access_key" label="Access Key"
-                rules={[{ required: !editingModel, message: '请输入Access Key' }]}>
-                <Input.Password placeholder="请输入Access Key" />
+              <Form.Item name="kling_access_key" label="访问密钥编号"
+                rules={[{ required: !editingModel, message: "请输入访问密钥编号" }]}>
+                <Input.Password placeholder="请输入访问密钥编号" />
               </Form.Item>
-              <Form.Item name="kling_secret_key" label="Secret Key"
-                rules={[{ required: !editingModel, message: '请输入Secret Key' }]}>
-                <Input.Password placeholder="请输入Secret Key" />
+              <Form.Item name="kling_secret_key" label="访问密钥"
+                rules={[{ required: !editingModel, message: "请输入访问密钥" }]}>
+                <Input.Password placeholder="请输入访问密钥" />
               </Form.Item>
               <Form.Item name="kling_model_version" label="模型版本"
                 rules={[{ required: true, message: '请选择模型版本' }]}>

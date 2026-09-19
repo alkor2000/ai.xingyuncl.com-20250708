@@ -86,7 +86,7 @@ const LLMNode = ({ data, selected }) => {
               <span className="param-value">{temperature}</span>
             </div>
             <div className="param-item">
-              <span className="param-name">最大Token</span>
+              <span className="param-name">最大词元</span>
               <span className="param-value">{maxTokens}</span>
             </div>
           </div>

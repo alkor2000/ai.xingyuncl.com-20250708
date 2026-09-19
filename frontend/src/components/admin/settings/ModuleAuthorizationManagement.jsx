@@ -1698,15 +1698,15 @@ const ModuleAuthorizationManagement = () => {
           <div>
             <Space direction="vertical" size={4}>
               <div>
-                <Tag color="cyan"><ReadOutlined /> Level 1 - 查看课程</Tag>
+                <Tag color="cyan"><ReadOutlined /> 一级 - 查看课程</Tag>
                 学生权限，仅能查看课程内容
               </div>
               <div>
-                <Tag color="blue"><FileTextOutlined /> Level 2 - 查看教案</Tag>
+                <Tag color="blue"><FileTextOutlined /> 二级 - 查看教案</Tag>
                 教师权限，可查看课程+教案
               </div>
               <div>
-                <Tag color="purple"><EditOutlined /> Level 3 - 编辑权限</Tag>
+                <Tag color="purple"><EditOutlined /> 三级 - 编辑权限</Tag>
                 完全控制，可查看课程+教案+编辑
               </div>
               <Divider style={{ margin: '8px 0' }} />

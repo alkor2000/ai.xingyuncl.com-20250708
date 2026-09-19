@@ -131,7 +131,7 @@ const KnowledgeNode = ({ data, selected }) => {
       }}>
         {totalTokens > 0 ? (
           <span style={{ color: '#389e0d', fontSize: '12px', fontWeight: 500 }}>
-            📊 总计 {formatTokens(totalTokens)} tokens
+            📊 总计 {formatTokens(totalTokens)} 词元
           </span>
         ) : (
           <span className="node-hint">请配置知识库</span>

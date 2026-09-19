@@ -133,7 +133,7 @@ const BasicSettings = ({
   onSubmit,
   disabled = false
 }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { uploadSiteLogo, systemConfig } = useSystemConfigStore()
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoUrl, setLogoUrl] = useState(systemConfig?.site?.logo || '')
@@ -218,8 +218,8 @@ const BasicSettings = ({
             {/* 站点设置 */}
             <Card title={t('admin.settings.site.title')} size="small" style={{ marginBottom: 16 }}>
               <Form.Item name={['site', 'name']} label={t('admin.settings.site.name')}>
-                {/* "AI Platform" 为产品名示例，不翻译 */}
-                <Input placeholder="AI Platform" disabled={disabled} />
+                {/* 站点名称示例跟随当前语言 */}
+                <Input placeholder={t('app.name')} disabled={disabled} />
               </Form.Item>
 
               <Form.Item name={['site', 'logo']} label={t('admin.settings.site.logo')}>
@@ -283,7 +283,7 @@ const BasicSettings = ({
                     <Select.Option key={lang.value} value={lang.value}>
                       <Space>
                         <span>{lang.flag}</span>
-                        <span>{lang.label}</span>
+                        <span>{lang.value === 'en-US' && i18n.language.startsWith('zh') ? '英文' : lang.label}</span>
                       </Space>
                     </Select.Option>
                   ))}

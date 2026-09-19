@@ -1,7 +1,15 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import './utils/i18n' // 导入i18n配置
+import i18n from './utils/i18n' // 导入i18n配置
+import { loader } from '@monaco-editor/react'
+
+const configureEditorLanguage = () => loader.config({
+  paths: { vs: '/monaco/vs' },
+  'vs/nls': { availableLanguages: { '*': i18n.language?.startsWith('zh') ? 'zh-cn' : 'en' } }
+})
+configureEditorLanguage()
+i18n.on('languageChanged', configureEditorLanguage)
 import networkService from './services/networkService' // 导入网络监测服务
 import './index.css'
 import './styles/platform-chrome.css'

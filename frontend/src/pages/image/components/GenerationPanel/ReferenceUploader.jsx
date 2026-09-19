@@ -155,7 +155,7 @@ const ReferenceUploader = ({
       {/* 图片预览Modal */}
       {previewUrl && (
         <div className="image-preview-modal" onClick={handleClosePreview}>
-          <img src={previewUrl} alt="Preview" />
+          <img src={previewUrl} alt={t('common.preview')} />
           <Button 
             className="close-button" 
             icon={<DeleteOutlined />} 

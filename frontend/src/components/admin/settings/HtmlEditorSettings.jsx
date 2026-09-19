@@ -229,7 +229,7 @@ const HtmlEditorSettings = ({ disabled = false }) => {
                 name="enable_oss"
                 label="启用OSS存储"
                 valuePropName="checked"
-                tooltip="开启后可以将文件上传到阿里云OSS"
+                tooltip="开启后可以将文件上传到阿里云对象存储"
               >
                 <Switch 
                   disabled={disabled || loading}

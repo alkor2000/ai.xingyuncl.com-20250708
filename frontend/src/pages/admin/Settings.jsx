@@ -437,7 +437,7 @@ const Settings = () => {
       },
       {
         key: 'embeddingSettings',
-        label: <span><ThunderboltOutlined />Embedding配置</span>,
+        label: <span><ThunderboltOutlined />向量化配置</span>,
         children: <EmbeddingSettings disabled={!isSuperAdmin} />
       },
       /* v2.0: 系统提示词Tab已移除 */

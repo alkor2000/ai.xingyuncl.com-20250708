@@ -26,7 +26,7 @@
     "moduleDescription": "模块描述",
     "moduleDescriptionPlaceholder": "描述模块的教学内容和目标",
     "coverImage": "封面图片",
-    "coverImagePlaceholder": "输入图片URL或上传图片",
+    "coverImagePlaceholder": "输入图片地址或上传图片",
     
     "module": "模块",
     "modules": "模块",
@@ -79,7 +79,7 @@
     "materialTitlePlaceholder": "例如：课后作业、参考文档",
     "materialUrl": "资料链接",
     "materialUrlRequired": "请输入资料链接",
-    "materialUrlPlaceholder": "输入云盘链接或文档URL",
+    "materialUrlPlaceholder": "输入云盘链接或文档地址",
     "materialDescription": "资料描述",
     "materialDescriptionPlaceholder": "简要描述资料内容（可选）",
     "deleteMaterial": "删除资料",

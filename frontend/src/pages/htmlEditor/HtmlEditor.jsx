@@ -451,7 +451,7 @@ const HtmlEditor = () => {
                 <FallbackEditor value={htmlContent} onChange={setHtmlContent} theme={editorTheme} onRetry={handleRetryMonaco} />
               ) : (
                 <React.Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: 16, background: '#1e1e1e' }}><Spin size="large" /><div style={{ color: '#8E8E93' }}>{t('htmlEditor.loadingEditor')}</div></div>}>
-                  <MonacoEditor height="100%" language="html" theme={editorTheme} value={htmlContent} onChange={setHtmlContent} options={editorOptions} onMount={handleEditorMount} />
+                  <MonacoEditor loading={t('common.loading')} height="100%" language="html" theme={editorTheme} value={htmlContent} onChange={setHtmlContent} options={editorOptions} onMount={handleEditorMount} />
                 </React.Suspense>
               )}
             </div>

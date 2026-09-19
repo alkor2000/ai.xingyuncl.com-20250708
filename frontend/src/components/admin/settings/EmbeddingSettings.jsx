@@ -80,7 +80,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
 
       const response = await apiClient.put('/wiki/embedding-config', updateData)
       if (response.data.success) {
-        message.success('Embedding配置已保存')
+        message.success("向量化配置已保存")
         form.setFieldValue('api_key', '')
         await fetchConfig()
       } else {
@@ -105,14 +105,14 @@ const EmbeddingSettings = ({ disabled = false }) => {
         top_k: 1
       })
       /* 即使没有结果，只要不报500就说明Embedding API可用 */
-      setTestResult({ success: true, message: 'Embedding API连接正常' })
-      message.success('Embedding API连接正常')
+      setTestResult({ success: true, message: "向量化 API连接正常" })
+      message.success("向量化 API连接正常")
     } catch (error) {
       const errMsg = error.response?.data?.message || error.message || '连接失败'
       /* 404是因为wiki_id=0不存在，但如果错误不是Embedding相关的，说明API本身是通的 */
       if (error.response?.status === 404) {
-        setTestResult({ success: true, message: 'Embedding API连接正常（知识库不存在是正常的）' })
-        message.success('Embedding API配置正确')
+        setTestResult({ success: true, message: "向量化 API连接正常（知识库不存在是正常的）" })
+        message.success("向量化 API配置正确")
       } else {
         setTestResult({ success: false, message: errMsg })
         message.error(`测试失败: ${errMsg}`)
@@ -155,19 +155,19 @@ const EmbeddingSettings = ({ disabled = false }) => {
       title={
         <Space>
           <ThunderboltOutlined style={{ color: '#722ed1' }} />
-          <span>Embedding 向量化配置</span>
+          <span>向量化配置</span>
           <Tag color="purple">RAG知识库</Tag>
         </Space>
       }
     >
       {/* 说明 */}
       <Alert
-        message="Embedding 服务说明"
+        message="向量化 服务说明"
         description={
           <div>
-            <p>Embedding服务将文本转换为向量，用于RAG知识库的语义检索。配置步骤：</p>
+            <p>向量化服务将文本转换为向量，用于RAG知识库的语义检索。配置步骤：</p>
             <ol style={{ paddingLeft: 20, marginBottom: 0 }}>
-              <li>选择Embedding服务商，填入API Key</li>
+              <li>选择向量化服务商，填入接口密钥</li>
               <li>在知识库中上传文档并构建向量索引</li>
               <li>在Agent工作流的知识节点中选择RAG模式即可使用</li>
             </ol>
@@ -209,7 +209,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
             </Col>
 
             <Col span={16}>
-              <Form.Item label="API Endpoint" name="api_endpoint"
+              <Form.Item label="接口地址" name="api_endpoint"
                 rules={[{ required: true, message: '请输入API端点' }]}>
                 <Input placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings" />
               </Form.Item>
@@ -226,7 +226,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
               <Form.Item
                 label={
                   <Space>
-                    <span>API Key</span>
+                    <span>接口密钥</span>
                     {hasApiKey && <Text type="success" style={{ fontSize: 12 }}>(已配置)</Text>}
                   </Space>
                 }
@@ -251,7 +251,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
 
             <Col span={6}>
               <Form.Item label="向量维度" name="dimensions"
-                tooltip="Embedding模型输出的向量维度，需与模型匹配"
+                tooltip="向量化模型输出的向量维度，需与模型匹配"
                 rules={[{ required: true, message: '请输入维度' }]}>
                 <InputNumber min={128} max={4096} style={{ width: '100%' }} />
               </Form.Item>
@@ -259,7 +259,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
 
             <Col span={6}>
               <Form.Item label="分块大小" name="chunk_size"
-                tooltip="每个文本块的最大Token数，推荐256-1024"
+                tooltip="每个文本块的最大词元数，推荐256-1024"
                 rules={[{ required: true, message: '请输入分块大小' }]}>
                 <InputNumber min={64} max={2048} style={{ width: '100%' }} addonAfter="tokens" />
               </Form.Item>
@@ -267,7 +267,7 @@ const EmbeddingSettings = ({ disabled = false }) => {
 
             <Col span={6}>
               <Form.Item label="块间重叠" name="chunk_overlap"
-                tooltip="相邻块之间的重叠Token数，保持上下文连贯性"
+                tooltip="相邻块之间的重叠词元数，保持上下文连贯性"
                 rules={[{ required: true, message: '请输入重叠大小' }]}>
                 <InputNumber min={0} max={200} style={{ width: '100%' }} addonAfter="tokens" />
               </Form.Item>

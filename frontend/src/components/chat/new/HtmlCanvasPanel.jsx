@@ -868,7 +868,7 @@ const HtmlCanvasPanel = ({ messages, isStreaming, visible, onClose }) => {
               key={`${safeIndex}-${refreshKey}`}
               ref={iframeRef}
               srcDoc={previewHtml}
-              title="HTML Preview"
+              title="网页预览"
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
               allow="fullscreen"
               className="preview-iframe"

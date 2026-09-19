@@ -27,6 +27,24 @@ import { message } from 'antd'
 import i18n from './i18n'
 
 // 创建 axios 实例
+// Translate standard transport failures only; business error codes and custom details stay intact.
+const chineseTransportMessage = (text) => {
+  const messages = {
+    'Network Error': '网络连接失败，请检查网络后重试',
+    'Failed to fetch': '网络连接失败，请检查网络后重试',
+    'Internal Server Error': '服务器内部错误，请稍后重试',
+    'Bad Request': '请求参数有误，请检查后重试',
+    'Unauthorized': '登录状态已失效，请重新登录',
+    'Forbidden': '没有权限执行此操作',
+    'Not Found': '请求的资源不存在',
+    'Too Many Requests': '请求过于频繁，请稍后再试'
+  }
+  if (messages[text]) return messages[text]
+  if (/^timeout of \d+ms exceeded$/.test(text || '')) return '请求超时，请稍后重试'
+  const status = /^Request failed with status code (\d+)$/.exec(text || '')
+  return status ? `请求失败（状态码 ${status[1]}）` : text
+}
+
 const apiClient = axios.create({
   baseURL: '/api',
   timeout: 120000, // 全局默认120秒超时，防止请求无限挂起
@@ -286,7 +304,8 @@ apiClient.interceptors.response.use(
     // 其他HTTP错误状态处理
     if (error.response) {
       const { status, data } = error.response
-      const errorMessage = data?.message || i18n.t('common.api.requestFailed', { status })
+      const rawMessage = data?.message || i18n.t('common.api.requestFailed', { status })
+      const errorMessage = i18n.language?.startsWith('zh') ? chineseTransportMessage(rawMessage) : rawMessage
 
       switch (status) {
         case 400:
@@ -670,3 +689,14 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 export default apiClient
+
+// Final display normalization runs after authentication and offline handling.
+apiClient.interceptors.response.use(undefined, error => {
+  if (i18n.language?.startsWith('zh')) {
+    error.message = chineseTransportMessage(error.message)
+    if (typeof error.response?.data?.message === 'string') {
+      error.response.data.message = chineseTransportMessage(error.response.data.message)
+    }
+  }
+  return Promise.reject(error)
+})

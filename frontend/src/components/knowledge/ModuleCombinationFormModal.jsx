@@ -290,7 +290,7 @@ const ModuleCombinationFormModal = ({
       )
     },
     {
-      title: 'Tokens',
+      title: "词元",
       dataIndex: 'token_count',
       width: 100,
       render: (tokens) => (

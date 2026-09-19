@@ -2,15 +2,17 @@
  * 自定义首页展示组件 - 修改登录按钮文字
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Spin, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { LoginOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import apiClient from '../utils/api'
 import useAuthStore from '../stores/authStore'
 
 const CustomLanding = () => {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState('')
   // 获取认证状态
@@ -31,16 +33,16 @@ const CustomLanding = () => {
           setContent(content)
         } else {
           // 如果未启用或没有内容，显示默认页面
-          setContent(getDefaultContent())
+          setContent('')
         }
       } else {
         // 显示默认页面
-        setContent(getDefaultContent())
+        setContent('')
       }
     } catch (error) {
       console.error('加载自定义首页失败:', error)
       // 出错时显示默认页面
-      setContent(getDefaultContent())
+      setContent('')
     } finally {
       setLoading(false)
     }
@@ -50,7 +52,7 @@ const CustomLanding = () => {
   const getDefaultContent = () => {
     return `
       <!DOCTYPE html>
-      <html>
+      <html lang="${i18n.language}">
       <head>
         <style>
           body {
@@ -95,13 +97,41 @@ const CustomLanding = () => {
       <body>
         <div class="welcome-container">
           <img src="/portal-logo.png" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:16px;margin-bottom:24px" />
-          <h1>Welcome to AI Platform</h1>
-          <p>Enterprise AI Application Platform</p>
+          <h1>${t('landing.title')}</h1>
+          <p>${t('landing.description')}</p>
         </div>
       </body>
       </html>
     `
   }
+
+  // The shipped bilingual template has separate language nodes. Remove only its
+  // known duplicate English copy in Chinese mode; preserve scripts, links and media.
+  const displayContent = useMemo(() => {
+    if (!content || !i18n.language.startsWith('zh')) return content
+    const page = new DOMParser().parseFromString(content, 'text/html')
+    const heading = page.querySelector('.hero-subtitle')
+    if (heading?.textContent.trim() !== 'AI Model Application Platform') return content
+    const chineseHeading = page.querySelector('.hero-subtitle-zh')
+    if (chineseHeading) {
+      heading.textContent = chineseHeading.textContent
+      chineseHeading.remove()
+    }
+    page.querySelectorAll('.badge-en, .hero-description').forEach(node => node.remove())
+    page.querySelectorAll('.cta-buttons .btn-text').forEach(node => {
+      if (['Get Started', 'Learn More'].includes(node.textContent.trim())) node.remove()
+    })
+    const systemInfo = '系统特性：\n\n• 多模型人工智能对话\n• 智能文档处理\n• 图像生成与分析\n• 流式响应\n• 积分管理\n• 多用户权限管理\n\n点击“立即开始”登录体验！'
+    page.querySelectorAll('script').forEach(script => {
+      script.textContent = script.textContent.replace(
+        /alert\('AI Platform Features \/ 系统特性：[^']*'\)/,
+        `alert(${JSON.stringify(systemInfo)})`
+      )
+    })
+    page.documentElement.lang = 'zh-CN'
+    page.title = '人工智能模型应用平台'
+    return page.documentElement.outerHTML
+  }, [content, i18n.language])
 
   // 处理Login按钮点击
   const handleLogin = () => {
@@ -132,13 +162,13 @@ const CustomLanding = () => {
           onClick={handleLogin}
           className="landing-login"
         >
-          登录 / Login
+          {t('button.login')}
         </Button>
       )}
 
       {/* 自定义内容iframe */}
       <iframe
-        title="Custom Homepage"
+        title={t('landing.frameTitle')}
         style={{
           width: '100%',
           height: '100%',
@@ -146,8 +176,8 @@ const CustomLanding = () => {
           margin: 0,
           padding: 0
         }}
-        srcDoc={content}
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        srcDoc={displayContent || getDefaultContent()}
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
       />
     </div>
   )

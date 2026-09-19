@@ -108,7 +108,7 @@ export const getCurrentLanguage = () => {
 export const getSupportedLanguages = () => {
   return [
     { code: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
-    { code: 'en-US', name: 'English', flag: '🇺🇸' }
+    { code: 'en-US', name: getCurrentLanguage().startsWith('zh') ? '英文' : 'English', flag: '🇺🇸' }
   ]
 }
 

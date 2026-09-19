@@ -1,4 +1,8 @@
 {
+  "landing.title": "Welcome to AI Platform",
+  "landing.description": "Enterprise AI Application Platform",
+  "landing.frameTitle": "Platform homepage",
+
   "nav.returnPortal": "Return to ID Center",
   "app.name": "AI Platform",
   "app.description": "Enterprise AI Application Platform",

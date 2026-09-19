@@ -334,7 +334,7 @@ const tokenMethods = [
   { value: 'query', label: 'URL参数', description: '将token作为URL参数传递（推荐）' },
   { value: 'header', label: 'Header', description: '在Authorization header中传递' },
   { value: 'cookie', label: 'Cookie', description: '通过Cookie传递' },
-  { value: 'post', label: 'POST Body', description: '作为POST表单数据提交' }
+  { value: 'post', label: "请求正文", description: '作为POST表单数据提交' }
 ]
 
 // 可用的用户字段（用于Payload配置）
@@ -718,7 +718,7 @@ const SystemModuleFormModal = ({
                   <Space>
                     <LockOutlined />
                     <span>JWT认证</span>
-                    <span style={{ color: '#999', fontSize: 12 }}>自动生成并传递JWT Token（SSO）</span>
+                    <span style={{ color: '#999', fontSize: 12 }}>自动生成并传递签名登录凭证（SSO）</span>
                   </Space>
                 </Select.Option>
                 <Select.Option value="oauth" disabled>
@@ -736,9 +736,9 @@ const SystemModuleFormModal = ({
                   message="JWT单点登录(SSO)配置"
                   description={
                     <div>
-                      <p>系统会在用户访问模块时自动生成JWT Token并传递给目标系统。</p>
-                      <p>目标系统可以通过验证Token获取用户信息，实现自动登录。</p>
-                      <p><strong>重要：</strong>Token中包含用户UUID，对方系统可用此创建或登录用户。</p>
+                      <p>系统会在用户访问模块时自动生成签名登录凭证并传递给目标系统。</p>
+                      <p>目标系统可以通过验证登录凭证获取用户信息，实现自动登录。</p>
+                      <p><strong>重要：</strong>登录凭证中包含用户UUID，对方系统可用此创建或登录用户。</p>
                     </div>
                   }
                   type="info"
@@ -759,7 +759,7 @@ const SystemModuleFormModal = ({
                   <Col span={16}>
                     <Form.Item
                       name="jwt_secret"
-                      label="密钥 (Secret)"
+                      label="签名密钥"
                       rules={[{ required: authMode === 'jwt', message: '请输入JWT密钥' }]}
                       extra="请与目标系统保持一致，用于签名验证"
                     >
@@ -790,7 +790,7 @@ const SystemModuleFormModal = ({
                   <Col span={8}>
                     <Form.Item
                       name="jwt_expires_in"
-                      label="Token有效期（秒）"
+                      label="登录凭证有效期（秒）"
                       rules={[{ required: authMode === 'jwt' }]}
                       tooltip="建议设置较短的有效期（如300秒）以提高安全性"
                     >
@@ -805,7 +805,7 @@ const SystemModuleFormModal = ({
                   <Col span={8}>
                     <Form.Item
                       name="jwt_token_method"
-                      label="Token传递方式"
+                      label="登录凭证传递方式"
                       rules={[{ required: authMode === 'jwt' }]}
                     >
                       <Select onChange={(value) => setTokenMethod(value)}>
@@ -878,12 +878,12 @@ const SystemModuleFormModal = ({
                 <Divider orientation="left" style={{ fontSize: 14 }}>
                   <Space>
                     <UserOutlined />
-                    Payload字段配置
+                    载荷字段配置
                   </Space>
                 </Divider>
                 
                 <Alert
-                  message="选择要包含在JWT Token中的用户信息"
+                  message="选择要包含在签名登录凭证中的用户信息"
                   description="UUID是SSO的关键字段，建议始终包含"
                   type="info"
                   style={{ marginBottom: 16 }}
@@ -928,14 +928,14 @@ const SystemModuleFormModal = ({
                       <p>假设配置如下：</p>
                       <ul>
                         <li>SSO端点: /api/sso/login</li>
-                        <li>Token传递方式: URL参数 (token)</li>
+                        <li>登录凭证传递方式: URL参数 (token)</li>
                         <li>包含字段: uuid, username, email</li>
                       </ul>
                       <p>用户点击模块时会跳转到:</p>
                       <code style={{ display: 'block', padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
                         https://academy.nebulink.com.cn/api/sso/login?token=eyJhbGciOiJIUzI1NiIs...
                       </code>
-                      <p style={{ marginTop: 8 }}>Token解码后包含:</p>
+                      <p style={{ marginTop: 8 }}>登录凭证解码后包含:</p>
                       <code style={{ display: 'block', padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
                         {JSON.stringify({ uuid: "xxx-xxx-xxx", username: "user1", email: "user@example.com" }, null, 2)}
                       </code>

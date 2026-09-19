@@ -417,10 +417,10 @@
       "audio": "声音"
     },
     "engine": {
-      "image-knn": "图像 kNN",
+      "image-knn": "图像近邻分类",
       "table-tree": "决策树",
       "table-rules": "手写规则",
-      "audio-knn": "声音 kNN",
+      "audio-knn": "声音近邻分类",
       "text-nb": "朴素贝叶斯",
       "table-mlp": "神经网络"
     },
@@ -698,7 +698,7 @@
       "agreementIntro": "两个人都标过的句子才参与计算。一致率是简单的相同比例，kappa 扣掉了碰巧一致的部分。",
       "compute": "计算一致性",
       "agreementRate": "两人一致率（{{n}} 句）",
-      "kappa": "kappa {{value}}",
+      "kappa": "一致性系数 {{value}}",
       "kappaHint": "kappa 0.8 以上算高度一致，0.4 以下说明标签标准没说清楚。",
       "level": {
         "excellent": "高度一致",

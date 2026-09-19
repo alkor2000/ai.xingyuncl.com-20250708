@@ -21,7 +21,7 @@ const useSystemConfigStore = create((set, get) => ({
   // 系统配置
   systemConfig: {
     site: {
-      name: 'AI Platform',
+      name: '',
       description: '',
       logo: '',
       favicon: ''
@@ -229,7 +229,8 @@ const useSystemConfigStore = create((set, get) => ({
     }
     
     // 否则使用系统配置
-    return state.systemConfig?.site?.name || 'AI Platform'
+    const name = state.systemConfig?.site?.name
+    return !name || name === 'AI Platform' ? i18n.t('app.name') : name
   },
   
   // 获取站点Logo（优先使用用户站点配置）

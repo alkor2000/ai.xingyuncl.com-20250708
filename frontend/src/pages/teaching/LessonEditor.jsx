@@ -61,7 +61,7 @@ const iosColors = {
 };
 
 const LessonEditor = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -379,7 +379,7 @@ const LessonEditor = () => {
             base_url: '/tinymce',
             suffix: '.min',
             height: 500,
-            language: 'en',
+            language: i18n.language.startsWith('zh') ? 'zh_CN' : 'en',
             menubar: true,
             plugins: [
               'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
@@ -953,6 +953,7 @@ const LessonEditor = () => {
             overflow: 'hidden'
           }}>
             <Editor
+              loading={t('common.loading')}
               height="100%"
               language="html"
               theme="vs-dark"
@@ -1008,7 +1009,7 @@ const LessonEditor = () => {
                 display: 'block'
               }}
               sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
-              title="Preview"
+              title={t('common.preview')}
             />
           </div>
         </div>

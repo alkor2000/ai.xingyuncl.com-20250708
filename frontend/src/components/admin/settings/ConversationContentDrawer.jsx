@@ -179,7 +179,7 @@ const ConversationContentDrawer = ({
             </Text>
           </Space>
           {message.tokens > 0 && (
-            <Tag>{message.tokens} tokens</Tag>
+            <Tag>{message.tokens} 词元</Tag>
           )}
         </Space>
         <div style={{ marginTop: 8 }}>
@@ -218,7 +218,7 @@ const ConversationContentDrawer = ({
           )}
           {conversation.total_tokens > 0 && (
             <div>
-              <Text strong>总Token数：</Text>
+              <Text strong>总词元数：</Text>
               <Text>{conversation.total_tokens.toLocaleString()}</Text>
             </div>
           )}

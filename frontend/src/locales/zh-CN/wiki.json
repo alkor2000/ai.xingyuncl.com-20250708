@@ -23,7 +23,7 @@
       "label": "类型",
       "text": "📝 文本知识库",
       "textDesc": "手动编辑文本内容",
-      "file": "🔍 RAG文档知识库",
+      "file": "🔍 文档检索知识库",
       "fileDesc": "上传文档，AI语义检索"
     },
 
@@ -48,7 +48,7 @@
     },
 
     "card": {
-      "ragTag": "RAG",
+      "ragTag": "语义检索",
       "chunkCount": "{{count}}块"
     },
 
@@ -57,7 +57,7 @@
     },
 
     "editDrawer": {
-      "ragTag": "RAG文档",
+      "ragTag": "检索文档",
       "versionTotal": "({{count}}个版本)"
     },
 
@@ -134,15 +134,15 @@
       "rebuildIndex": "重建索引",
 
       "chunkCount": "分块数",
-      "totalTokens": "总Tokens",
+      "totalTokens": "总词元",
       "indexedAt": "索引时间",
-      "embeddingModel": "Embedding模型",
+      "embeddingModel": "向量化模型",
       "vectorReady": "向量已就绪",
 
       "chunkPreview": "文档分块预览",
       "chunkTotal": "共 {{count}} 个分块",
       "chunkEmpty": "暂无分块数据",
-      "tokens": "{{count}} tokens",
+      "tokens": "{{count}} 词元",
 
       "showParsedText": "查看解析后的原始文本",
       "hideParsedText": "收起解析文本",

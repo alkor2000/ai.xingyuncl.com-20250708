@@ -39,7 +39,7 @@ const OSSSettings = () => {
         form.setFieldsValue(response.data.data)
       }
     } catch (error) {
-      message.error('获取OSS配置失败')
+      message.error("获取对象存储配置失败")
     } finally {
       setLoading(false)
     }
@@ -55,7 +55,7 @@ const OSSSettings = () => {
       setLoading(true)
       const response = await apiClient.post('/admin/oss/config', values)
       if (response.data.success) {
-        message.success('OSS配置保存成功')
+        message.success("对象存储配置保存成功")
       }
     } catch (error) {
       message.error('保存失败: ' + (error.response?.data?.message || '未知错误'))
@@ -71,7 +71,7 @@ const OSSSettings = () => {
       const values = await form.validateFields()
       const response = await apiClient.post('/admin/oss/test', values)
       if (response.data.success) {
-        message.success('OSS连接测试成功')
+        message.success("对象存储连接测试成功")
       }
     } catch (error) {
       message.error('连接失败: ' + (error.response?.data?.message || '未知错误'))
@@ -85,14 +85,14 @@ const OSSSettings = () => {
       title={
         <Space>
           <CloudServerOutlined />
-          <span>阿里云OSS配置</span>
+          <span>阿里云对象存储配置</span>
         </Space>
       }
       loading={loading}
     >
       <Alert
         message="配置说明"
-        description="请在阿里云OSS控制台创建Bucket，并获取AccessKey ID和AccessKey Secret。建议创建专门的RAM子账号并授予OSS权限。"
+        description="请在阿里云对象存储控制台创建存储桶，并获取访问密钥编号和访问密钥。建议创建专门的RAM子账号并授予OSS权限。"
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
@@ -112,47 +112,47 @@ const OSSSettings = () => {
         </Form.Item>
 
         <Form.Item
-          label="OSS Provider"
+          label="存储服务商"
           name="provider"
-          rules={[{ required: true, message: '请选择OSS提供商' }]}
+          rules={[{ required: true, message: "请选择存储服务商" }]}
           initialValue="aliyun"
         >
           <Select>
-            <Option value="aliyun">阿里云OSS</Option>
+            <Option value="aliyun">阿里云对象存储</Option>
             <Option value="local">本地存储</Option>
           </Select>
         </Form.Item>
 
         <Form.Item
-          label="Region"
+          label="区域"
           name="region"
-          rules={[{ required: true, message: '请输入Region' }]}
+          rules={[{ required: true, message: "请输入区域" }]}
         >
           <Input placeholder="例如: oss-cn-hangzhou" />
         </Form.Item>
 
         <Form.Item
-          label="Bucket"
+          label="存储桶"
           name="bucket"
-          rules={[{ required: true, message: '请输入Bucket名称' }]}
+          rules={[{ required: true, message: "请输入存储桶名称" }]}
         >
-          <Input placeholder="您的Bucket名称" />
+          <Input placeholder="您的存储桶名称" />
         </Form.Item>
 
         <Form.Item
-          label="Access Key ID"
+          label="访问密钥编号"
           name="accessKeyId"
-          rules={[{ required: true, message: '请输入Access Key ID' }]}
+          rules={[{ required: true, message: "请输入访问密钥编号" }]}
         >
-          <Input.Password placeholder="Access Key ID" />
+          <Input.Password placeholder="访问密钥编号" />
         </Form.Item>
 
         <Form.Item
-          label="Access Key Secret"
+          label="访问密钥"
           name="accessKeySecret"
-          rules={[{ required: true, message: '请输入Access Key Secret' }]}
+          rules={[{ required: true, message: "请输入访问密钥" }]}
         >
-          <Input.Password placeholder="Access Key Secret" />
+          <Input.Password placeholder="访问密钥" />
         </Form.Item>
 
         <Form.Item

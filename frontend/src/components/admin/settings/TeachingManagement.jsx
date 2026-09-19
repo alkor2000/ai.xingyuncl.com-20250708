@@ -855,6 +855,7 @@ const TeachingManagement = () => {
           
           <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden' }}>
             <MonacoEditor
+              loading={t('common.loading')}
               height="400px"
               language="html"
               value={headerHtml}

@@ -322,7 +322,7 @@ const ConfigPanel = ({
                 </Tag>
               )}
               <Tag color="default" style={{ margin: 0, fontSize: 11 }}>
-                {wiki.tokens_display} tokens
+                {wiki.tokens_display} 词元
               </Tag>
             </Space>
           </div>
@@ -423,7 +423,7 @@ const ConfigPanel = ({
                     description={
                       <Space size={4}>
                         <Tag color="processing" style={{ fontSize: '11px' }}>
-                          {wiki.tokens_display} tokens
+                          {wiki.tokens_display} 词元
                         </Tag>
                         {wiki.rag_enabled && wiki.index_status === 'completed' && (
                           <Tag color="purple" style={{ fontSize: '11px' }}>

@@ -219,7 +219,7 @@ const HomeRoute = () => {
 }
 
 const App = () => {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const currentLanguage = i18n.language
   const locale = currentLanguage === 'zh-CN' ? zhCN : enUS
   
@@ -297,14 +297,14 @@ const App = () => {
       }
       
       const siteDescription = getSiteDescription()
-      if (siteDescription && siteDescription !== '企业级AI应用聚合平台') {
-        document.title = siteDescription
+      if (siteDescription) {
+        document.title = ['企业级AI应用聚合平台', 'AI Platform', 'Enterprise AI Application Platform'].includes(siteDescription) ? t('app.name') : siteDescription
         console.log('✅ 页面标题已更新:', siteDescription)
       }
     } catch (error) {
       console.error('❌ 更新favicon或title失败:', error)
     }
-  }, [initialized, systemConfig, getSiteLogo, getSiteDescription])
+  }, [initialized, systemConfig, getSiteLogo, getSiteDescription, t, currentLanguage])
 
   if (!languageInitialized) {
     return (

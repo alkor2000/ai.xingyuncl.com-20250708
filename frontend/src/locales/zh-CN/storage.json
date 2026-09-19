@@ -126,6 +126,6 @@
   "storage.getFoldersFailed": "获取文件夹列表失败",
   "storage.getFolderTreeFailed": "获取文件夹树失败",
   "storage.deleteFolderFailed": "删除文件夹失败",
-  "storage.saveOSSConfigFailed": "保存OSS配置失败",
+  "storage.saveOSSConfigFailed": "保存对象存储配置失败",
   "storage.updateCreditConfigFailed": "更新积分配置失败"
 }

@@ -121,7 +121,7 @@ const ModuleCombinationList = ({ combinations, onEdit, onCreate, onRefresh }) =>
       )
     },
     {
-      title: 'Token数',
+      title: "词元数",
       dataIndex: 'estimated_tokens',
       key: 'estimated_tokens',
       width: 150,

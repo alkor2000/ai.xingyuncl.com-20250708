@@ -73,7 +73,7 @@ const Register = () => {
         // 失败时使用默认配置
         setPublicConfig({
           site: {
-            name: 'AI Platform',
+            name: '',
             description: '企业级AI应用聚合平台',
             logo: ''
           },

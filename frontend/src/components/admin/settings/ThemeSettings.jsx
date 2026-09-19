@@ -314,13 +314,13 @@ const ThemeSettings = ({ disabled = false }) => {
                   fieldName="colors.navHeaderText"
                 />
               </Form.Item>
-              <Form.Item name={['colors', 'navLogoBg']} label="Logo背景">
+              <Form.Item name={['colors', 'navLogoBg']} label="标志背景">
                 <ColorInput 
                   disabled={disabled || currentTheme !== 'custom'} 
                   fieldName="colors.navLogoBg"
                 />
               </Form.Item>
-              <Form.Item name={['colors', 'navLogoText']} label="Logo文字">
+              <Form.Item name={['colors', 'navLogoText']} label="标志文字">
                 <ColorInput 
                   disabled={disabled || currentTheme !== 'custom'} 
                   fieldName="colors.navLogoText"

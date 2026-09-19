@@ -58,13 +58,13 @@ const GroupSiteConfigModal = ({
       if (file.response && file.response.success) {
         const logoUrl = file.response.data.logo_url
         setUploadedLogoUrl(logoUrl)
-        message.success('Logo上传成功')
+        message.success("标志上传成功")
       } else {
         message.error(file.response?.message || 'Logo上传失败')
       }
     } else if (file.status === 'error') {
       setUploading(false)
-      message.error('Logo上传失败')
+      message.error("标志上传失败")
     }
   }
 
@@ -166,7 +166,7 @@ const GroupSiteConfigModal = ({
         message="提示"
         description={
           <div>
-            <p>配置本组专属的站点名称和Logo，组内用户登录后将看到自定义的站点信息。</p>
+            <p>配置本组专属的站点名称和标志，组内用户登录后将看到自定义的站点信息。</p>
             <p>留空则使用系统默认配置。</p>
           </div>
         }
@@ -195,7 +195,7 @@ const GroupSiteConfigModal = ({
         </Form.Item>
         
         <Form.Item
-          label="站点Logo"
+          label="站点标志"
           extra="上传本组的Logo图片，支持JPG、PNG、GIF格式，最大2MB"
         >
           <Upload

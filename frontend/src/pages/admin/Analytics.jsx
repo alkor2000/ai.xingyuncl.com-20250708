@@ -874,7 +874,7 @@ const Analytics = () => {
           {/* TOP用户表格 - 增强版 */}
           <div className="ios-card">
             <div className="chart-title">
-              TOP 20 用户消耗排行榜（含模块明细）
+              前 20 名 用户消耗排行榜（含模块明细）
             </div>
             {renderTopUsersTable()}
           </div>

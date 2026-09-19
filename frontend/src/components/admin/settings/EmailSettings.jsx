@@ -158,7 +158,7 @@ const EmailSettings = ({ disabled = false }) => {
           name="smtp_from"
         >
           <Input 
-            placeholder="例如：AI Platform（可选）" 
+            placeholder="例如：人工智能实践平台（可选）"
           />
         </Form.Item>
 

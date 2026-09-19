@@ -140,7 +140,7 @@ const SystemStats = ({ systemStats = {} }) => {
                         </Tooltip>
                         {model.total_tokens > 0 && (
                           <span style={{ color: '#999' }}>
-                            {model.total_tokens?.toLocaleString()} tokens
+                            {model.total_tokens?.toLocaleString()} 词元
                           </span>
                         )}
                       </>
