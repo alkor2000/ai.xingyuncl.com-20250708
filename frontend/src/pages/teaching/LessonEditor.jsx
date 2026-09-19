@@ -43,19 +43,19 @@ const { Sider, Content } = Layout;
 
 // iOS科技风配色方案（纯白底）
 const iosColors = {
-  primary: '#0A84FF',
+  primary: 'var(--primary-color)',
   success: '#30D158',
   warning: '#FF9F0A',
   danger: '#FF453A',
-  bgPrimary: '#FFFFFF',
-  bgSecondary: '#F5F7FA',
-  cardWhite: '#FFFFFF',
-  border: 'rgba(0, 0, 0, 0.06)',
-  textPrimary: '#1a1a1a',
-  textSecondary: '#666666',
-  textTertiary: '#999999',
-  selectedBg: '#F0F8FF',
-  hoverBg: '#F8FAFB',
+  bgPrimary: 'var(--component-bg)',
+  bgSecondary: 'var(--body-bg)',
+  cardWhite: 'var(--component-bg)',
+  border: 'var(--border-color)',
+  textPrimary: 'var(--text-color)',
+  textSecondary: 'var(--text-color-secondary)',
+  textTertiary: 'var(--text-color-tertiary)',
+  selectedBg: 'var(--brand-soft)',
+  hoverBg: 'var(--body-bg)',
   shadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
   shadowHover: '0 4px 16px rgba(0, 0, 0, 0.08)'
 };
@@ -606,25 +606,25 @@ const LessonEditor = () => {
               loading={isSaving}
               disabled={!lessonInfo.title.trim()}
               style={{
-                background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+                background: iosColors.primary,
+                  color: 'var(--brand-on-primary)',
                 border: 'none',
                 borderRadius: 10,
-                color: '#FFFFFF',
                 height: 40,
                 padding: '0 24px',
                 fontWeight: 600,
-                boxShadow: `0 4px 12px rgba(10, 132, 255, 0.3)`,
+                boxShadow: 'none',
                 transition: 'all 0.2s'
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = `0 6px 20px rgba(10, 132, 255, 0.4)`;
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(48, 37, 28, 0.10)';
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = `0 4px 12px rgba(10, 132, 255, 0.3)`;
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
               {t('common.save')}
@@ -751,7 +751,8 @@ const LessonEditor = () => {
                 showZero 
                 style={{ 
                   background: iosColors.primary,
-                  boxShadow: `0 2px 8px rgba(10, 132, 255, 0.3)`
+                  color: 'var(--brand-on-primary)',
+                  boxShadow: 'none'
                 }}
               />
             </div>
@@ -1022,7 +1023,8 @@ const LessonEditor = () => {
         cancelText={t('common.cancel')}
         okButtonProps={{
           style: {
-            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+            background: iosColors.primary,
+                  color: 'var(--brand-on-primary)',
             border: 'none',
             borderRadius: 8,
             height: 40,
@@ -1062,7 +1064,8 @@ const LessonEditor = () => {
         width={600}
         okButtonProps={{
           style: {
-            background: `linear-gradient(135deg, ${iosColors.primary}, #5AC8FA)`,
+            background: iosColors.primary,
+                  color: 'var(--brand-on-primary)',
             border: 'none',
             borderRadius: 8,
             height: 40,

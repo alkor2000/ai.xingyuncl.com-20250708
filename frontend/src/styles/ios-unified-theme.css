@@ -7,16 +7,16 @@
 /* ==================== 设计变量定义 ==================== */
 :root {
   /* 核心颜色 */
-  --ios-blue: #007AFF;
-  --ios-blue-hover: #0051D5;
-  --ios-gray-bg: #F2F2F7;
-  --ios-white: #FFFFFF;
+  --ios-blue: var(--primary-color);
+  --ios-blue-hover: var(--primary-color);
+  --ios-gray-bg: var(--body-bg);
+  --ios-white: var(--component-bg);
   --ios-black: #000000;
-  --ios-text-primary: #000000;
-  --ios-text-secondary: #666666;
-  --ios-text-tertiary: #999999;
-  --ios-border: #E5E5EA;
-  --ios-border-light: #F0F0F0;
+  --ios-text-primary: var(--text-color);
+  --ios-text-secondary: var(--text-color-secondary);
+  --ios-text-tertiary: var(--text-color-tertiary);
+  --ios-border: var(--border-color);
+  --ios-border-light: var(--border-color-split);
   
   /* 语义颜色 */
   --ios-success: #34C759;
@@ -250,7 +250,7 @@
 
 .ios-button-primary {
   background: var(--ios-blue);
-  color: var(--ios-white);
+  color: var(--brand-on-primary);
 }
 
 .ios-button-primary:hover {
@@ -274,7 +274,7 @@
 }
 
 .ios-button-ghost:hover {
-  background: rgba(0, 122, 255, 0.08);
+  background: var(--brand-soft);
 }
 
 .ios-button-danger {

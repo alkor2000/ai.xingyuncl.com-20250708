@@ -613,8 +613,8 @@ CustomLanding.jsx[AU5S]: F:C·未登录首页：拉/public/custom-homepage，启
 
 ===/home/hanying/ai-platform/frontend/src/pages/admin/===
 Analytics.jsx[AU6L]: F:C·BI数据分析页(iOS风格)：筛选(时间/分组可搜索/用户)，概览/用户分析/模型分析三Tab，ECharts图表与用户排行表，走analyticsStore.getAnalytics与exportAnalytics | R:code:frontend/src/stores/analyticsStore.js,code:frontend/src/stores/adminStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/styles/Analytics.ios.css,code:backend/src/services/admin/AnalyticsService.js | A:- | S:分组下拉带关键字搜索以应对数百个组
-Settings.jsx[AG7L]: F:后台设置主页：按角色组合统计、模型、模块、论坛、存储、主题及认证面板，管理模块CRUD与健康检查，按状态和已知原因显示本地化提示 | R:code:frontend/src/components/admin/settings/index.js,code:frontend/src/stores/adminStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/utils/permissions.js | A:- | S:模块与API服务只由超管加载；AI模型保存后自动测试；健康检查HTTP成功仍可能提示离线；未知原因显示通用失败文案，内置模块不声称外部探测成功
-Users.jsx[AG7L]: F:A·用户管理主页：用户列表(搜索/分页/CRUD/重置密码/模型限制/标签/移出组/有效期)与分组管理(积分池/组员上限/有效期/站点配置/邀请码/学校导入)，分组详情Tab含标签管理与统计 | R:code:frontend/src/components/admin/users/index.js,code:frontend/src/components/admin/tags/index.js,code:frontend/src/stores/adminStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/App.jsx | A:- | S:组管理员(role=admin)只能操作本组；超管才见学校导入与批量创建全组
+Settings.jsx[AG7L]: F:后台设置按角色组合统计、模型、模块、论坛、存储、主题与认证面板；桌面标签和手机下拉共享当前面板 | R:code:frontend/src/components/admin/settings/index.js,code:frontend/src/stores/adminStore.js | A:tabItems维持角色过滤；Tabs及Select共用有效选中项，权限改变时回退首项，视口切换保留面板；模块CRUD、健康检查与模型保存测试走原store | S:模块和API服务仅超管加载；模型保存后自动测试；健康检查HTTP成功不代表在线
+Users.jsx[AG7L]: F:用户搜索分页、CRUD、密码和模型权限、标签及分组管理；分析、批量创建和学校导入按钮采用主题次级样式 | R:code:frontend/src/components/admin/users/index.js,code:frontend/src/stores/adminStore.js | A:用户与分组双面板；分组含积分池、人数与有效期、站点配置、邀请码和学校导入；细节标签含统计及标签管理 | S:组管理员只能操作本组；学校导入与全组批量创建仅超管可用
 
 ===/home/hanying/ai-platform/frontend/src/pages/agent/===
 AgentWorkspace.jsx[EU4T]: F:G·Agent工作区路由容器：仅渲染WorkflowList | R:code:frontend/src/pages/agent/WorkflowList.jsx,code:frontend/src/App.jsx | A:- | S:-
@@ -689,7 +689,7 @@ NotificationsView.jsx[AU5T]: F:论坛通知页：类型筛选、20条分页、�
 
 ===/home/hanying/ai-platform/frontend/src/pages/htmlEditor/===
 FallbackEditor.jsx[CU3S]: F:H·Monaco加载失败时的原生textarea降级编辑器：Tab插入两空格、明暗主题、重试按钮 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
-HtmlEditor.jsx[AB7L]: F:HTML项目与页面管理、Monaco编辑及基础编辑器降级、保存预览复制发布与积分检查；<992px侧栏覆盖显示、编辑预览单面板切换 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.less | A:- | S:默认项目仍按字面量'默认项目'匹配旧数据；Monaco加载15秒降级，积分初始化5秒超时不阻塞页面
+HtmlEditor.jsx[AB7L]: F:HTML项目页面管理、Monaco及降级编辑、保存预览复制发布与积分检查；门户配色区分主要、次要及清空操作 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx | A:小于992px采用覆盖侧栏与编辑预览切换；界面状态跟随主题，Monaco主题和HTML预览独立保留 | S:默认项目按字面量默认项目匹配旧数据；Monaco加载15秒降级，积分初始化5秒超时不阻塞页面
 HtmlEditor.less[CU2M]: F:HTML编辑器样式：工具栏与面板标题换行；≤991px项目侧栏及遮罩覆盖正文，编辑预览按mobile-pane类切换单栏 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/===
@@ -756,10 +756,10 @@ StorageManager.jsx[AB7L]: F:S·智能云盘文件管理器：文件夹树/面包
 StorageManager.less[CU2L]: F:云盘文件夹、文件列表、搜索工具栏与上传悬钮样式；手机以自然高度纵向滚动，面包屑换行、搜索框伸缩、悬钮避开底部安全区 | R:code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/teaching/===
-LessonDetail.jsx[AU5L]: F:E·课程详情页(/teaching/lessons/:id)：课程信息编辑、资料展示/管理、页面纵向列表跳转查看器或编辑器 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsDisplay.jsx,code:frontend/src/components/teaching/MaterialsManager.jsx | A:- | S:编辑权限=super_admin或模块user_permission为edit
-LessonEditor.jsx[AB6L]: F:课程页面编辑器：页面列表、Monaco HTML与预览、课程信息和教案管理；页面集保存为lesson.content的JSON，面板类名接入共享手机纵向布局 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css,code:backend/src/routes/teachingRoutes.js | A:- | S:TinyMCE从public/tinymce注入window，卸载须remove；页面内容与教案分别保存
-LessonViewer.jsx[AU6L]: F:课程页面查看器：iframe显示HTML、全屏与方向键翻页、教案抽屉和浏览时长上报；填满父容器，导航及分页接入手机换行样式 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/pages/teaching/LessonDetail.jsx,code:frontend/src/styles/responsive.css | A:- | S:iframe同时允许allow-same-origin与allow-scripts，页面HTML视为可信内容
-ModuleDetail.jsx[AU5L]: F:E·教学模块详情(/teaching/modules/:id)：模块编辑/删除，课程创建/编辑/删除与跳转，课程资料管理 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:- | S:编辑权限=super_admin或currentModule.user_permission为edit
+LessonDetail.jsx[AU5L]: F:课程详情、信息编辑和资料管理，页面列表以门户品牌徽章链接查看器及编辑器 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/lessons/:id展示课程和页面列表；只调整界面主题与阴影，页面数据保持原值 | S:编辑权限取super_admin或模块user_permission为edit
+LessonEditor.jsx[AB6L]: F:课程页面列表、Monaco HTML与独立预览、课程信息及教案编辑；外层面板与选中状态跟随门户主题 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css | A:页面集保存为lesson.content的JSON；手机面板纵向排列；编辑器代码面及教学HTML独立于界面配色 | S:TinyMCE从public/tinymce注入window，卸载须remove；页面内容与教案分别保存
+LessonViewer.jsx[AU6L]: F:课程HTML查看器，全屏与方向键翻页、教案抽屉及浏览时长上报；外层导航、进度和分页控件接入门户配色 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css | A:iframe保留课程原始样式；全屏保留黑色外围；手机导航分页换行 | S:iframe同时允许allow-same-origin和allow-scripts，HTML沿用既有可信内容假设
+ModuleDetail.jsx[AU5L]: F:教学模块详情、编辑删除、课程创建编辑与跳转、资料管理；模块图标采用门户主题 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/modules/:id；保留课程图片及内容类型颜色，仅调整界面图标和操作强调色 | S:编辑权限取super_admin或currentModule.user_permission为edit
 Teaching.jsx[EU3T]: F:E·教学系统入口页(/teaching)，仅渲染ModuleList | R:code:frontend/src/components/teaching/ModuleList.jsx,code:frontend/src/App.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/video/===
@@ -801,9 +801,9 @@ docTemplateStore.js[AB5T]: F:T·公文模板zustand仓：列表/上传(FormData)
 ===/home/hanying/ai-platform/frontend/src/styles/===
 Analytics.ios.css[CU2L]: F:C·数据分析页iOS风格样式，仅Analytics.jsx引入 | R:code:frontend/src/pages/admin/Analytics.jsx | A:- | S:-
 ios-tech-theme.css[CU2S]: F:C·iOS科技风CSS变量与玻璃态样式，仅OcrTool.less引入 | R:code:frontend/src/pages/ocr/OcrTool.less | A:- | S:-
-ios-unified-theme.css[CU3L]: F:E·教学平台iOS统一设计系统(变量、卡片、按钮，暗色媒体查询)，App.jsx全局引入 | R:code:frontend/src/App.jsx,code:frontend/src/components/teaching/ModuleList.jsx | A:- | S:全局生效，选择器改动影响全站
+ios-unified-theme.css[CU3L]: F:教学平台的卡片、导航、按钮及响应式外观，基础变量继承已保存门户主题 | R:code:frontend/src/components/teaching/ModuleList.jsx | A:品牌、背景、文本与边框引用全局CSS变量，主要按钮前景使用brand-on-primary；保留语义状态及图片object-fit | S:按路由加载仍作用全局，不能重置品牌令牌
 theme-variables.css[CU3T]: F:C·全局主题CSS变量(:root颜色/间距)，index.css引入 | R:code:frontend/src/index.css | A:- | S:-
-platform-chrome.css[FU5S]: F:统一认证页与BasicLayout下导航、对话、后台和工具外观，暖白背景、品牌色按钮、浅边框及手机顶栏布局，复用既有主题变量 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js,code:frontend/src/layouts/BasicLayout/style.css | A:- | S:不覆盖编辑器内容、教学图片或图表配色；语义危险按钮及禁用态保留
+platform-chrome.css[FU5M]: F:统一认证、导航、对话、后台及存储知识库导图等工具的界面主题，补齐旧样式优先级和响应式编辑分栏 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js | A:使用已保存品牌与浅色表面令牌；窄屏设置下拉替代标签栏但保留内容；导图编辑与预览按屏宽分栏或堆叠 | S:选择器限定应用外层与命名控件，不覆盖教学HTML、图片、图表或流程节点类型色；保留危险与禁用语义
 platform-theme.js[CU5T]: F:共享默认色板、HEX与RGB主色亮度计算、保存颜色覆盖默认并写入根CSS变量，补充品牌按钮文字对比色 | R:code:frontend/src/components/ThemeProvider.jsx,code:frontend/src/components/admin/settings/ThemeSettings.jsx | A:DEFAULT_THEME_COLORS,brandForeground,applyThemeColors | S:调用只修改样式，不保存配置；原代码块独立配色保留
 responsive.css[CU5T]: F:共享手机样式：卡片工具栏及表单换行、表格内部滚动、弹窗抽屉限宽；教学编辑器纵排、查看器导航折行、触屏开关高度修正和注册语言入口避让 | R:code:frontend/src/main.jsx,code:frontend/src/layouts/BasicLayout/style.css,code:frontend/src/pages/teaching/LessonEditor.jsx | A:- | S:主站控件规则限制在BasicLayout正文；浮层挂body须独立选择器；教学断点991px，其余手机规则767px
 

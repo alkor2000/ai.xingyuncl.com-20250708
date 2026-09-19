@@ -332,24 +332,24 @@ const HtmlEditor = () => {
 
   // ============ 样式（iOS 风格，与语言无关） ============
   const S = {
-    container: { height: '100%', background: '#F2F2F7', overflow: 'hidden' },
-    header: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(60,60,67,0.12)', height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
-    sidebar: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(60,60,67,0.12)' },
+    container: { height: '100%', background: 'var(--body-bg)', overflow: 'hidden' },
+    header: { background: 'var(--component-bg)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border-color)', height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
+    sidebar: { background: 'var(--component-bg)', backdropFilter: 'blur(20px)', borderRight: '1px solid var(--border-color)' },
     sidebarContent: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-    sidebarSection: { padding: 20, borderBottom: '1px solid rgba(60,60,67,0.08)', flexShrink: 0 },
+    sidebarSection: { padding: 20, borderBottom: '1px solid var(--border-color)', flexShrink: 0 },
     pageSection: { padding: 20, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' },
     pageScroll: { flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingRight: 4, minHeight: 0 },
     secHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    secTitle: { fontSize: 17, fontWeight: 600, color: '#000', margin: 0, display: 'flex', alignItems: 'center', gap: 8 },
-    projItem: (sel) => ({ padding: '10px 14px', cursor: 'pointer', borderRadius: 10, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...(sel ? { background: 'linear-gradient(135deg,#007AFF,#0051D5)', color: 'white' } : { background: 'rgba(60,60,67,0.03)' }) }),
-    pageCard: (sel) => ({ background: 'white', borderRadius: 10, padding: '12px 14px', marginBottom: 8, cursor: 'pointer', ...(sel ? { border: '2px solid #007AFF', background: 'rgba(0,122,255,0.02)' } : { border: '1px solid rgba(60,60,67,0.08)' }) }),
-    edSec: { flex: 1, display: 'flex', flexDirection: 'column', background: 'white', overflow: 'hidden' },
-    edHead: { padding: '14px 20px', background: 'rgba(255,255,255,0.98)', borderBottom: '1px solid rgba(60,60,67,0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    pvSec: { width: '50%', display: 'flex', flexDirection: 'column', background: '#F2F2F7' },
+    secTitle: { fontSize: 17, fontWeight: 600, color: 'var(--text-color)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 },
+    projItem: (sel) => ({ padding: '10px 14px', cursor: 'pointer', borderRadius: 10, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...(sel ? { background: 'var(--primary-color)', color: 'var(--brand-on-primary)' } : { background: 'var(--body-bg)' }) }),
+    pageCard: (sel) => ({ background: 'var(--component-bg)', borderRadius: 10, padding: '12px 14px', marginBottom: 8, cursor: 'pointer', ...(sel ? { border: '2px solid var(--primary-color)', background: 'var(--brand-soft)' } : { border: '1px solid var(--border-color)' }) }),
+    edSec: { flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--component-bg)', overflow: 'hidden' },
+    edHead: { padding: '14px 20px', background: 'var(--component-bg)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    pvSec: { width: '50%', display: 'flex', flexDirection: 'column', background: 'var(--body-bg)' },
     pvContent: { flex: 1, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    pvFrame: { background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' },
-    btn: (bg, color = 'white') => ({ background: bg, borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 34, color }),
-    iconBtn: { borderRadius: 8, width: 34, height: 34, background: 'rgba(142,142,147,0.12)', border: 'none' },
+    pvFrame: { background: 'var(--component-bg)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' },
+    btn: (bg, color = 'var(--brand-on-primary)') => ({ background: bg, borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 34, color }),
+    iconBtn: { borderRadius: 8, width: 34, height: 34, background: 'var(--body-bg)', border: 'none' },
     tag: { borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, border: 'none' },
     smallBtn: (bg) => ({ borderRadius: 6, fontSize: 13, height: 30, fontWeight: 600, background: bg, borderColor: 'transparent' }),
   };
@@ -360,23 +360,23 @@ const HtmlEditor = () => {
       <Header className="html-editor-toolbar" style={S.header}>
         <Space size={8}>
           <Button aria-label={t('htmlEditor.projects')} style={S.iconBtn} icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-          <Button type="primary" style={S.btn('linear-gradient(135deg,#34C759,#30B854)')} icon={<SaveOutlined />} onClick={handleSavePage} loading={isSaving} disabled={!selectedPageId}>{t('htmlEditor.save')} {fmtCreditsSave(creditsConfig.credits_per_update)}</Button>
-          <Button style={S.btn('linear-gradient(135deg,#AF52DE,#9F44D3)')} icon={<EyeOutlined />} onClick={() => { handlePreview(); if (isCompact) { setMobilePane(p => p === 'preview' ? 'editor' : 'preview'); setSidebarCollapsed(true); } }}>{isCompact && mobilePane === 'preview' ? t('htmlEditor.title') : t('htmlEditor.preview')}</Button>
-          <Button style={S.btn('rgba(142,142,147,0.12)', '#3C3C43')} icon={<CopyOutlined />} onClick={handleCopy}>{t('htmlEditor.copy')}</Button>
-          <Button style={S.btn('linear-gradient(135deg,#FF9500,#FF8200)')} icon={<ClearOutlined />} onClick={handleClear}>{t('htmlEditor.clear')}</Button>
+          <Button type="primary" style={S.btn('var(--primary-color)')} icon={<SaveOutlined />} onClick={handleSavePage} loading={isSaving} disabled={!selectedPageId}>{t('htmlEditor.save')} {fmtCreditsSave(creditsConfig.credits_per_update)}</Button>
+          <Button style={S.btn('var(--brand-soft)', 'var(--primary-color)')} icon={<EyeOutlined />} onClick={() => { handlePreview(); if (isCompact) { setMobilePane(p => p === 'preview' ? 'editor' : 'preview'); setSidebarCollapsed(true); } }}>{isCompact && mobilePane === 'preview' ? t('htmlEditor.title') : t('htmlEditor.preview')}</Button>
+          <Button style={S.btn('var(--body-bg)', 'var(--text-color)')} icon={<CopyOutlined />} onClick={handleCopy}>{t('htmlEditor.copy')}</Button>
+          <Button danger style={{ borderRadius: 8, height: 34, fontWeight: 600 }} icon={<ClearOutlined />} onClick={handleClear}>{t('htmlEditor.clear')}</Button>
         </Space>
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           {currentPage && <Space size={6}>
             {/* 页面标题为用户录入的业务数据，不翻译 */}
-            <Tag style={{ ...S.tag, background: 'linear-gradient(135deg,#007AFF,#0051D5)', color: 'white' }}><Html5Outlined /> {currentPage.title}</Tag>
+            <Tag style={{ ...S.tag, background: 'var(--brand-soft)', color: 'var(--primary-color)' }}><Html5Outlined /> {currentPage.title}</Tag>
             {currentPage.is_published && <Tag style={{ ...S.tag, background: 'linear-gradient(135deg,#34C759,#30B854)', color: 'white' }}><GlobalOutlined /> {t('htmlEditor.published')}</Tag>}
           </Space>}
         </div>
         <Space size={8}>
           <Tooltip title={`${t('htmlEditor.generateLink')} (${fmtCredits(creditsConfig.credits_per_publish)})`}>
-            <Button style={{ ...S.btn('linear-gradient(135deg,#007AFF,#0051D5)'), width: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId} />
+            <Button style={{ ...S.btn('var(--primary-color)'), width: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId} />
           </Tooltip>
-          <Tag style={{ ...S.tag, background: creditsLoading ? '#C7C7CC' : 'linear-gradient(135deg,#FFD60A,#FFCC00)', color: creditsLoading ? '#666' : '#000' }}>
+          <Tag style={{ ...S.tag, background: 'var(--body-bg)', color: 'var(--text-color-secondary)' }}>
             {creditsLoading ? <><LoadingOutlined spin /> {t('htmlEditor.loading')}</> : <><DollarOutlined /> {t('htmlEditor.credits')}: {userCredits}</>}
           </Tag>
           <Select value={previewMode} onChange={setPreviewMode} style={{ width: 80 }} size="small" options={[{ value: 'desktop', label: t('htmlEditor.desktop') }, { value: 'tablet', label: t('htmlEditor.tablet') }, { value: 'mobile', label: t('htmlEditor.mobile') }]} />
@@ -390,15 +390,15 @@ const HtmlEditor = () => {
             {/* 项目列表 */}
             <div style={S.sidebarSection}>
               <div style={S.secHeader}>
-                <h3 style={S.secTitle}><AppstoreOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.projects')}</h3>
-                <Button type="primary" size="small" style={S.smallBtn('linear-gradient(135deg,#007AFF,#0051D5)')} icon={<PlusOutlined />} onClick={() => setShowProjectModal(true)}>{t('htmlEditor.new')}</Button>
+                <h3 style={S.secTitle}><AppstoreOutlined style={{ color: 'var(--primary-color)' }} /> {t('htmlEditor.projects')}</h3>
+                <Button type="primary" size="small" style={S.smallBtn('var(--primary-color)')} icon={<PlusOutlined />} onClick={() => setShowProjectModal(true)}>{t('htmlEditor.new')}</Button>
               </div>
               {projects.length > 0 ? projects.map(p => (
                 <div key={p.id} style={S.projItem(selectedProject?.id === p.id)} onClick={() => handleSelectProject(p)}>
                   {/* 项目名为用户录入的业务数据，不翻译 */}
-                  <Space size={8}><FolderOutlined /><span style={{ fontWeight: 500 }}>{p.name}</span>{p.is_default === 1 && <Tag style={{ ...S.tag, background: 'rgba(0,122,255,0.1)', color: '#007AFF', padding: '2px 6px', fontSize: 11 }}>{t('htmlEditor.default')}</Tag>}</Space>
+                  <Space size={8}><FolderOutlined /><span style={{ fontWeight: 500 }}>{p.name}</span>{p.is_default === 1 && <Tag style={{ ...S.tag, background: 'var(--brand-soft)', color: 'var(--primary-color)', padding: '2px 6px', fontSize: 11 }}>{t('htmlEditor.default')}</Tag>}</Space>
                   <Space size={4}>
-                    <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); handleEditProject(p); }} style={{ color: selectedProject?.id === p.id ? 'white' : '#8E8E93' }} />
+                    <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); handleEditProject(p); }} style={{ color: selectedProject?.id === p.id ? 'var(--brand-on-primary)' : 'var(--text-color-secondary)' }} />
                     {p.is_default !== 1 && <Button type="text" size="small" icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); handleDeleteProject(p); }} style={{ color: selectedProject?.id === p.id ? '#FFD1DC' : '#FF3B30' }} />}
                   </Space>
                 </div>
@@ -408,8 +408,8 @@ const HtmlEditor = () => {
             {selectedProject ? (
               <div style={S.pageSection}>
                 <div style={S.secHeader}>
-                  <h3 style={S.secTitle}><FileTextOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.pages')}</h3>
-                  <Button type="primary" size="small" style={S.smallBtn('linear-gradient(135deg,#AF52DE,#9F44D3)')} icon={<PlusOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.new')}</Button>
+                  <h3 style={S.secTitle}><FileTextOutlined style={{ color: 'var(--primary-color)' }} /> {t('htmlEditor.pages')}</h3>
+                  <Button type="primary" size="small" style={S.smallBtn('var(--primary-color)')} icon={<PlusOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.new')}</Button>
                 </div>
                 {loadingPages ? <div style={{ textAlign: 'center', padding: 40 }}><Spin tip={t('htmlEditor.page.loadingPages')} /></div>
                 : pages.length > 0 ? <div style={S.pageScroll}>{pages.map(p => (
@@ -425,7 +425,7 @@ const HtmlEditor = () => {
                     </div>
                   </div>
                 ))}</div>
-                : <Empty description={t('htmlEditor.noPages')} style={{ marginTop: 40 }}><Button type="primary" style={{ borderRadius: 8, marginTop: 16, background: 'linear-gradient(135deg,#AF52DE,#9F44D3)', border: 'none' }} icon={<FileAddOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.createFirstPage')}</Button></Empty>}
+                : <Empty description={t('htmlEditor.noPages')} style={{ marginTop: 40 }}><Button type="primary" style={{ borderRadius: 8, marginTop: 16, background: 'var(--primary-color)', border: 'none' }} icon={<FileAddOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.createFirstPage')}</Button></Empty>}
               </div>
             ) : <div style={{ padding: 40, textAlign: 'center' }}><Empty description={t('htmlEditor.selectProject')} /></div>}
           </div>
@@ -436,7 +436,7 @@ const HtmlEditor = () => {
           {/* 编辑器区域 */}
           <div className="html-editor-code" style={S.edSec}>
             <div className="html-editor-pane-head" style={S.edHead}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.title')}</span>
+              <span style={{ fontWeight: 600, fontSize: 15 }}><CodeOutlined style={{ color: 'var(--primary-color)' }} /> {t('htmlEditor.title')}</span>
               <Space size={8}>
                 <span style={{ fontSize: 12, color: '#8E8E93' }}>{monacoStatus === 'ready' ? t('htmlEditor.ready') : monacoStatus === 'failed' ? t('htmlEditor.editor.basicMode') : t('htmlEditor.loadingEditor')}</span>
                 <Tooltip title={monacoStatus === 'failed' ? t('htmlEditor.editor.switchToAdvanced') : t('htmlEditor.editor.switchToBasic')}>
@@ -459,7 +459,7 @@ const HtmlEditor = () => {
           {/* 预览区域 */}
           <div className="html-editor-preview" style={S.pvSec}>
             <div className="html-editor-pane-head" style={S.edHead}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}><EyeOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.realTimePreview')}</span>
+              <span style={{ fontWeight: 600, fontSize: 15 }}><EyeOutlined style={{ color: 'var(--primary-color)' }} /> {t('htmlEditor.realTimePreview')}</span>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>{previewMode === 'desktop' ? t('htmlEditor.desktop') : previewMode === 'tablet' ? t('htmlEditor.tablet') : t('htmlEditor.mobile')}</span>
             </div>
             <div style={S.pvContent}>

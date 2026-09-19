@@ -727,9 +727,9 @@ const Users = () => {
               icon={<BarChartOutlined />}
               onClick={handleGoToAnalytics}
               style={{ 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                border: 'none'
+                background: 'var(--component-bg)',
+                    color: 'var(--primary-color)',
+                    border: '1px solid var(--brand-border)'
               }}
             >
               {t('admin.analytics.title')}
@@ -825,9 +825,9 @@ const Users = () => {
                   icon={<UsergroupAddOutlined />}
                   onClick={() => setIsBatchCreateModalVisible(true)}
                   style={{
-                    background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-                    color: 'white',
-                    border: 'none'
+                    background: 'var(--component-bg)',
+                    color: 'var(--primary-color)',
+                    border: '1px solid var(--brand-border)'
                   }}
                 >
                   批量创建
@@ -911,9 +911,9 @@ const Users = () => {
                           icon={<BankOutlined />}
                           onClick={() => setIsSchoolImportModalVisible(true)}
                           style={{
-                            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                            color: 'white',
-                            border: 'none'
+                            background: 'var(--component-bg)',
+                    color: 'var(--primary-color)',
+                    border: '1px solid var(--brand-border)'
                           }}
                         >
                           批量导入学校
