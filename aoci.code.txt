@@ -365,7 +365,7 @@ package-lock.json[FV2L]: F:前端依赖锁文件，固定构建与界面库解�
 package.json[FV6T]: F:前端ESM项目依赖和构建脚本，提供React/Vite/Antd、状态路由语言、可视化、文档导出及编辑器工具链 | R:code:frontend/vite.config.js,code:frontend/vitest.config.js,code:frontend/src/main.jsx,code:frontend/patches/mdast-util-gfm-autolink-literal+2.0.1.patch | A:dev,build,preview,test | S:Monaco固定0.54.0匹配加载器模块导出；build设4G堆；安装执行patch-package；lint与type-check仍为占位脚本
 serve.json[FV2T]: F:C·serve静态服务配置：js/css一年immutable缓存，html不缓存 | R:code:frontend/start-production.cjs | A:- | S:仅历史ai-platform-frontend进程使用
 start-production.cjs[OV3T]: F:C·前端生产启动脚本：spawn serve -s dist -l 3000 --single，转发SIGTERM/SIGINT | R:code:ecosystem.config.js | A:- | S:线上nginx直出dist，此进程实际不承担流量
-vite.config.js[FV7S]: F:Vite构建配置，设置React、Monaco工作线程、依赖分包及开发代理，并将编辑器运行时和语言资源随站点构建发布 | R:code:frontend/package.json,code:frontend/src/main.jsx | A:/monaco/vs开发静态资源与生产构建目录；/api和/uploads开发代理4000端口 | S:编辑器资源从已安装monaco-editor的min/vs复制；开发资源路径限制在该目录；只允许两生产域名和本机开发Host；关闭源码映射
+vite.config.js[FV7S]: F:Vite前端构建配置，提供React和编辑器工作线程、依赖分包及开发代理，将Monaco运行时与各语言资源复制为站内静态文件 | R:code:frontend/package.json,code:frontend/src/main.jsx | A:/monaco/vs开发服务和生产资源；/api与/uploads开发代理到4000 | S:编辑器仅由AMD加载器初始化；不得另行把monaco-editor的ESM主模块手动分包，否则两套运行时会竞争并覆盖中文菜单；资源限定在安装包min/vs目录；允许Host限定业务域名及本机
 vitest.config.js[TQ4T]: F:C·Vitest配置：jsdom环境，setup为src/__tests__/setup.js，include src/**/*.{test,spec}.{js,jsx}，v8覆盖率，别名@ | R:code:frontend/vite.config.js,code:frontend/package.json | A:- | S:测试目录在AOCI中仅observe不建条目
 
 ===/home/hanying/ai-platform/frontend/src/===

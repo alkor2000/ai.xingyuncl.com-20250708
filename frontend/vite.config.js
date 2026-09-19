@@ -99,8 +99,7 @@ export default defineConfig({
           'router-vendor': ['react-router-dom'],
           'utils-vendor': ['axios', 'zustand'],
           'antd-vendor': ['antd', '@ant-design/icons'],
-          // Monaco单独打包
-          'monaco-vendor': ['monaco-editor'],
+          // Monaco运行时由站内AMD加载器提供；不要同时打包ESM副本覆盖其语言。
           'monaco-react': ['@monaco-editor/react'],
           // TensorFlow.js 只被 AI训练专区用到，单独分包
           'tfjs-vendor': ['@tensorflow/tfjs'],
