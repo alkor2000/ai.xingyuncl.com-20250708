@@ -12,7 +12,7 @@
  * 导出: SVG / PNG / PDF / 源代码，按次积分计费
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Button, Input, Tabs, Space, message, Modal, Dropdown, Tooltip,
   Drawer, List, Tag, Popconfirm, Spin, Empty
@@ -112,38 +112,60 @@ const Mindmap = () => {
   }
 
   // ============ 渲染 ============
-  const renderPreview = useCallback(async () => {
+  useEffect(() => {
     const el = previewRef.current
     if (!el) return
-    const value = contentRef.current
-    try {
-      if (mode === 'markdown') {
-        el.innerHTML = '<svg style="width:100%;height:100%" class="markmap-svg"></svg>'
-        const svg = el.querySelector('svg')
-        const { root } = transformer.transform(value || '')
-        markmapRef.current = Markmap.create(svg, { autoFit: true }, root)
-        svgRef.current = svg
-      } else if (mode === 'mermaid') {
-        const { svg } = await mermaid.render(`mermaid-${Date.now()}`, value || 'graph TD\n  A')
-        el.innerHTML = svg
-        svgRef.current = el.querySelector('svg')
-        markmapRef.current = null
-      } else {
-        el.innerHTML = value || ''
-        svgRef.current = el.querySelector('svg')
+    let cancelled = false
+    let instance = null
+    let renderedSvg = null
+
+    const render = async () => {
+      try {
+        if (mode === 'markdown') {
+          el.innerHTML = '<svg style="width:100%;height:100%" class="markmap-svg"></svg>'
+          renderedSvg = el.querySelector('svg')
+          const { root } = transformer.transform(content || '')
+          // Create without data so its asynchronous initial fit belongs to this effect.
+          instance = Markmap.create(renderedSvg, { autoFit: true })
+          // D3's default extent reads relative SVGLength values after a removed SVG
+          // loses its viewport. Numeric bounds remain safe during mode changes.
+          instance.zoom.extent(() => [[0, 0], [renderedSvg.clientWidth, renderedSvg.clientHeight]])
+          markmapRef.current = instance
+          svgRef.current = renderedSvg
+          await instance.setData(root)
+          if (!cancelled) await instance.fit()
+        } else if (mode === 'mermaid') {
+          const { svg } = await mermaid.render(`mermaid-${Date.now()}`, content || 'graph TD\n  A')
+          if (cancelled) return
+          el.innerHTML = svg
+          renderedSvg = el.querySelector('svg')
+          svgRef.current = renderedSvg
+        } else {
+          el.innerHTML = content || ''
+          renderedSvg = el.querySelector('svg')
+          svgRef.current = renderedSvg
+        }
+      } catch (e) {
+        if (cancelled) return
+        el.innerHTML = `<div style="color:#ff4d4f;padding:20px;">${t('mindmap.message.renderError')}</div>`
+        svgRef.current = null
         markmapRef.current = null
       }
-    } catch (e) {
-      el.innerHTML = `<div style="color:#ff4d4f;padding:20px;">${t('mindmap.message.renderError')}</div>`
-      svgRef.current = null
-      markmapRef.current = null
     }
-  }, [mode, t])
 
-  useEffect(() => {
-    const timer = setTimeout(renderPreview, 400)
-    return () => clearTimeout(timer)
-  }, [content, mode, renderPreview])
+    const timer = setTimeout(render, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      if (instance) {
+        instance.svg.interrupt()
+        instance.svg.selectAll('*').interrupt()
+        instance.destroy()
+      }
+      if (markmapRef.current === instance) markmapRef.current = null
+      if (svgRef.current === renderedSvg) svgRef.current = null
+    }
+  }, [content, mode, t])
 
   // 切换模式：内容为空或等于其它模式默认值时填充该模式默认内容
   const handleModeChange = (key) => {

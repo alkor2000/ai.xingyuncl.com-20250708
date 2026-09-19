@@ -877,10 +877,11 @@ const Users = () => {
           <Card>
             <Tabs activeKey={activeGroupTab} onChange={setActiveGroupTab}>
               <TabPane tab="分组信息" key="info">
-                <Card 
+                <Card
+                  className="user-groups-card"
                   title={
                     /* v1.3 修改：标题区改为左右布局，左侧标题 + 中间搜索框 */
-                    <Space size="middle" style={{ width: '100%' }} wrap>
+                    <Space className="user-groups-heading" size="middle" style={{ width: '100%' }} wrap>
                       <span>{t('admin.groups.title')}</span>
                       {/* v1.3 新增：分组搜索框（按名称/描述/邀请码模糊匹配） */}
                       <Input

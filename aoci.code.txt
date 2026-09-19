@@ -402,7 +402,7 @@ ModuleAuthorizationManagement.jsx[AI4L]: F:E·教学授权管理单文件版v2.1
 OSSSettings.jsx[AU5S]: F:S·OSS存储设置：enabled/provider/region/bucket/accessKeyId/accessKeySecret/customDomain/pathPrefix，读/admin/oss/config、POST保存、/admin/oss/test测试 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/services/ossService.js | A:- | S:accessKeySecret后端掩码为******，原样回传即不修改；保存后后端ossService需重启才生效
 OcrSettings.jsx[AU3M]: F:O·OCR设置(模块已停用)：enabled/mistral_model/mistral_api_key/单张与每页积分/文件大小与PDF页数上限，读/ocr/config写/ocr/admin/config | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx | A:- | S:-
 OrgApplicationManagement.jsx[AU5L]: F:A·机构申请管理：申请列表与审批(选组入驻)、邀请码CRUD、表单配置(字段标签自定义)三个Tab，走/admin/org-applications/*与/admin/user-groups | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/controllers/admin/OrgApplicationController.js | A:- | S:三个自定义字段custom_field_4-6的列标签取自form-config；审批时创建组并回填
-RateLimitSettings.jsx[AU5M]: F:C·速率限制设置：auth/emailCode/global/adminRead/adminWrite/chat六类windowMs/max/enabled卡片，PRESETS预设模板，读写/admin/settings/rate-limit | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/services/rateLimitService.js | A:- | S:保存后后端立即清缓存生效，无需重启
+RateLimitSettings.jsx[AU5M]: F:六类请求限流窗口、次数及开关配置，含预设、保存与刷新；专用卡片类支持手机标题与操作区换行 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx | A:读写/admin/settings/rate-limit；disabled限制编辑；保留auth、emailCode、global、adminRead、adminWrite、chat类别 | S:-
 SSOSettings.jsx[AU6L]: F:A·SSO设置：全局enabled/shared_secret/target_group_id/default_credits/签名有效期/IP白名单，多平台platforms列表(platform_key独立密钥与组)，生成密钥接口 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/services/auth/SSOConfigService.js | A:- | S:密钥掩码回传含*视为未改；修改platform_key后必须重填密钥
 SmartAppSettings.jsx[AU6L]: F:P·智能应用管理：应用CRUD(name/icon/color/description/system_prompt/model_id/temperature/context_length/credits_per_use/is_stream/category_ids)、发布切换、分类CRUD | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx,code:backend/src/routes/smartAppRoutes.js | A:- | S:两个useEffect依赖数组刻意不含t以免语言切换重复加载
 StorageCreditsConfig.jsx[AU4S]: F:S·存储积分配置：base_credits/credits_per_5mb/max_file_size，读写/admin/storage-credits/config | R:code:frontend/src/utils/api.js,code:frontend/src/pages/admin/Settings.jsx | A:- | S:-
@@ -609,12 +609,12 @@ wiki.json[FL4S]: F:W·中文知识库文案：嵌套对象wiki.* | R:code:fronte
 aiLab.json[FL5L]: F:N·AI训练专区中文文案(aiLab命名空间，647键)：17个任务模板、步骤与小学说法(kidStep/kidHint)、成绩单评语与置信区间、预测锁定与反思、一步一步向导、预置包(含选类别)、采集/训练/测试/规则/决策树/神经网络/表格/文本/标注/公平性/错标/数据卡/核实/模型卡/时间线与26种事件名 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/aiLab.json | A:- | S:键集须与en-US/aiLab.json完全一致；事件键用下划线(task_open)对应事件类型的点号；预置包标题键aiLab.presetPack.{key}；score.mood_*/count_*动态拼键
 
 ===/home/hanying/ai-platform/frontend/src/pages/===
-CustomLanding.jsx[AU5S]: F:C·未登录首页：拉/public/custom-homepage，启用时用iframe隔离渲染自定义HTML并叠加登录按钮，未启用则跳转/login | R:code:frontend/src/utils/api.js,code:frontend/src/App.jsx,code:frontend/src/components/admin/settings/CustomHomepage.jsx | A:- | S:-
+CustomLanding.jsx[AU5S]: F:读取自定义首页HTML并用iframe展示，未启用或读取失败显示门户Logo与浅色欢迎页；未认证时叠加主题化登录按钮 | R:code:frontend/src/utils/api.js,code:frontend/src/App.jsx,code:frontend/src/styles/platform-chrome.css | A:GET /public/custom-homepage取enabled/content；外层登录按钮导航/login | S:自定义HTML由站点配置提供，外层CSS不进入iframe；内容保留原脚本及媒体
 
 ===/home/hanying/ai-platform/frontend/src/pages/admin/===
 Analytics.jsx[AU6L]: F:C·BI数据分析页(iOS风格)：筛选(时间/分组可搜索/用户)，概览/用户分析/模型分析三Tab，ECharts图表与用户排行表，走analyticsStore.getAnalytics与exportAnalytics | R:code:frontend/src/stores/analyticsStore.js,code:frontend/src/stores/adminStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/styles/Analytics.ios.css,code:backend/src/services/admin/AnalyticsService.js | A:- | S:分组下拉带关键字搜索以应对数百个组
 Settings.jsx[AG7L]: F:后台设置按角色组合统计、模型、模块、论坛、存储、主题与认证面板；桌面标签和手机下拉共享当前面板 | R:code:frontend/src/components/admin/settings/index.js,code:frontend/src/stores/adminStore.js | A:tabItems维持角色过滤；Tabs及Select共用有效选中项，权限改变时回退首项，视口切换保留面板；模块CRUD、健康检查与模型保存测试走原store | S:模块和API服务仅超管加载；模型保存后自动测试；健康检查HTTP成功不代表在线
-Users.jsx[AG7L]: F:用户搜索分页、CRUD、密码和模型权限、标签及分组管理；分析、批量创建和学校导入按钮采用主题次级样式 | R:code:frontend/src/components/admin/users/index.js,code:frontend/src/stores/adminStore.js | A:用户与分组双面板；分组含积分池、人数与有效期、站点配置、邀请码和学校导入；细节标签含统计及标签管理 | S:组管理员只能操作本组；学校导入与全组批量创建仅超管可用
+Users.jsx[AG7L]: F:用户搜索分页、CRUD、密码及模型权限、标签和分组管理；分组标题与搜索框通过专用类适配手机，批量与分析按钮使用次级主题 | R:code:frontend/src/components/admin/users/index.js,code:frontend/src/stores/adminStore.js | A:用户和分组双面板；分组含积分池、人数和有效期、站点配置、邀请码及学校导入 | S:组管理员只操作本组；学校导入和全组批量创建仅超管可用
 
 ===/home/hanying/ai-platform/frontend/src/pages/agent/===
 AgentWorkspace.jsx[EU4T]: F:G·Agent工作区路由容器：仅渲染WorkflowList | R:code:frontend/src/pages/agent/WorkflowList.jsx,code:frontend/src/App.jsx | A:- | S:-
@@ -723,7 +723,7 @@ KnowledgeBase.jsx[AB7L]: F:万智魔方：筛选模块库，以拖入或菜单�
 KnowledgeBase.less[CU2L]: F:万智魔方三面板与模块卡片样式；≤992px模块库、组装区、已存组合纵向显示，列表限高滚动，触屏操作按钮常显且拖动手柄禁原生手势 | R:code:frontend/src/pages/knowledge/KnowledgeBase.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/mindmap/===
-Mindmap.jsx[AB7L]: F:O·思维导图页：markdown(markmap)/mermaid/svg三模式编辑预览，项目保存/列表/重命名/另存为(/mindmap CRUD)，分享链接(/mindmap/:id/share)，导出SVG/PNG/PDF按次计费(/mindmap/charge-export) | R:code:frontend/src/utils/api.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/mindmapRoutes.js | A:- | S:积分配置来自/mindmap/credits-config，操作前canAfford校验余额；mermaid以securityLevel loose初始化
+Mindmap.jsx[AB7L]: F:Markdown、Mermaid和SVG导图编辑预览，项目保存、列表、重命名、另存、分享与计费导出；渲染effect负责实例销毁和过期结果丢弃 | R:code:frontend/src/utils/api.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/mindmapRoutes.js | A:/mindmap CRUD及share、credits-config、charge-export；SVG/PNG/PDF/源码导出 | S:Markmap缩放用数值视口，清理时打断D3动画再销毁，避免脱离DOM后读取相对SVGLength；Mermaid异步结果须检查取消标记
 Mindmap.less[CU2L]: F:O·思维导图页与分享页样式 | R:code:frontend/src/pages/mindmap/Mindmap.jsx,code:frontend/src/pages/mindmap/MindmapShare.jsx | A:- | S:-
 MindmapShare.jsx[EU6M]: F:O·思维导图公开分享只读页(/mindmap/share/:id/:token，免登录)：GET /mindmap/share/:id/:token，按content_type渲染markmap/Mermaid/SVG预览 | R:code:frontend/src/pages/mindmap/components/MermaidPreview.jsx,code:frontend/src/pages/mindmap/components/SvgPreview.jsx,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/App.jsx | A:- | S:错误状态存{key,detail}渲染时才t()，保证错误页切语言即时生效
 
@@ -757,14 +757,14 @@ StorageManager.less[CU2L]: F:云盘文件夹、文件列表、搜索工具栏与
 
 ===/home/hanying/ai-platform/frontend/src/pages/teaching/===
 LessonDetail.jsx[AU5L]: F:课程详情、信息编辑和资料管理，页面列表以门户品牌徽章链接查看器及编辑器 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/lessons/:id展示课程和页面列表；只调整界面主题与阴影，页面数据保持原值 | S:编辑权限取super_admin或模块user_permission为edit
-LessonEditor.jsx[AB6L]: F:课程页面列表、Monaco HTML与独立预览、课程信息及教案编辑；外层面板与选中状态跟随门户主题 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css | A:页面集保存为lesson.content的JSON；手机面板纵向排列；编辑器代码面及教学HTML独立于界面配色 | S:TinyMCE从public/tinymce注入window，卸载须remove；页面内容与教案分别保存
+LessonEditor.jsx[AB6L]: F:课程页面列表、Monaco HTML编辑、实时预览、课程信息与教案编辑；桌面缩窄页面列表，代码和预览弹性分配宽度 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css | A:页面集合以JSON保存到lesson.content；中屏预览移至代码下方，手机面板纵排；教学HTML独立于界面主题 | S:TinyMCE从public/tinymce注入window，卸载须remove；页面内容与教案分别保存
 LessonViewer.jsx[AU6L]: F:课程HTML查看器，全屏与方向键翻页、教案抽屉及浏览时长上报；外层导航、进度和分页控件接入门户配色 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/styles/responsive.css | A:iframe保留课程原始样式；全屏保留黑色外围；手机导航分页换行 | S:iframe同时允许allow-same-origin和allow-scripts，HTML沿用既有可信内容假设
-ModuleDetail.jsx[AU5L]: F:教学模块详情、编辑删除、课程创建编辑与跳转、资料管理；模块图标采用门户主题 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/modules/:id；保留课程图片及内容类型颜色，仅调整界面图标和操作强调色 | S:编辑权限取super_admin或currentModule.user_permission为edit
+ModuleDetail.jsx[AU5L]: F:教学模块详情、编辑删除、课程创建编辑和跳转、资料管理；无图片课程封面使用浅品牌底与深色文件图标 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/modules/:id；保留课程图片、内容类型标签颜色与原操作 | S:编辑权限取super_admin或currentModule.user_permission为edit
 Teaching.jsx[EU3T]: F:E·教学系统入口页(/teaching)，仅渲染ModuleList | R:code:frontend/src/components/teaching/ModuleList.jsx,code:frontend/src/App.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/video/===
 VideoGeneration.jsx[AB7L]: F:V·视频生成页：模型选择与分辨率/时长/比例定价，文生视频/首帧/首尾帧模式(首尾帧经/video/upload-frame)，历史/收藏/公开三Tab与关键词搜索(IME保护) | R:code:frontend/src/stores/videoStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/utils/api.js,code:backend/src/routes/video.js | A:- | S:last_frame单独尾帧模式已隐藏(火山seedance不支持)，useEffect兜底回退text_to_video；价格=基价×分辨率系数×时长系数向上取整
-VideoGeneration.less[CU2L]: F:视频生成参数面板、历史与收藏画廊样式；≤768px覆盖Antd横排为自然高度纵排，历史区域可通过页面滚动访问 | R:code:frontend/src/pages/video/VideoGeneration.jsx | A:- | S:-
+VideoGeneration.less[CU2L]: F:视频参数、历史和收藏画廊布局；手机采用自然高度纵排并显式重设历史区域宽度为100%，支持页面滚动 | R:code:frontend/src/pages/video/VideoGeneration.jsx | A:- | S:纵排后仍需覆盖Ant Layout的零宽内容默认值
 
 ===/home/hanying/ai-platform/frontend/src/pages/wiki/===
 Wiki.jsx[AB7L]: F:W·知识库页：文本型(内容≤10万字+备注+链接，多版本切换/新建/删除)与RAG文档型(上传pdf/docx/txt/md、构建索引、chunk预览)，个人/团队/系统范围，置顶与删除 | R:code:frontend/src/stores/wikiStore.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/wikiRoutes.js | A:- | S:删除仅creator或super_admin；仍在useEffect里按语言调用全局dayjs.locale，非实例级
@@ -803,9 +803,9 @@ Analytics.ios.css[CU2L]: F:C·数据分析页iOS风格样式，仅Analytics.jsx�
 ios-tech-theme.css[CU2S]: F:C·iOS科技风CSS变量与玻璃态样式，仅OcrTool.less引入 | R:code:frontend/src/pages/ocr/OcrTool.less | A:- | S:-
 ios-unified-theme.css[CU3L]: F:教学平台的卡片、导航、按钮及响应式外观，基础变量继承已保存门户主题 | R:code:frontend/src/components/teaching/ModuleList.jsx | A:品牌、背景、文本与边框引用全局CSS变量，主要按钮前景使用brand-on-primary；保留语义状态及图片object-fit | S:按路由加载仍作用全局，不能重置品牌令牌
 theme-variables.css[CU3T]: F:C·全局主题CSS变量(:root颜色/间距)，index.css引入 | R:code:frontend/src/index.css | A:- | S:-
-platform-chrome.css[FU5M]: F:统一认证、导航、对话、后台及存储知识库导图等工具的界面主题，补齐旧样式优先级和响应式编辑分栏 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js | A:使用已保存品牌与浅色表面令牌；窄屏设置下拉替代标签栏但保留内容；导图编辑与预览按屏宽分栏或堆叠 | S:选择器限定应用外层与命名控件，不覆盖教学HTML、图片、图表或流程节点类型色；保留危险与禁用语义
+platform-chrome.css[FU5M]: F:认证、导航、对话、后台和工具的统一界面主题，含导图分栏、手机速率及分组卡片工具栏、自定义首页外层登录按钮 | R:code:frontend/src/main.jsx,code:frontend/src/styles/platform-theme.js | A:使用品牌、浅色表面和前景令牌；窄屏设置标签由下拉替代，保留内容区；专用类限定新增工具栏布局 | S:仅覆盖应用界面，不覆盖教学HTML、图片、图表与节点类型色；保留危险和禁用语义
 platform-theme.js[CU5T]: F:共享默认色板、HEX与RGB主色亮度计算、保存颜色覆盖默认并写入根CSS变量，补充品牌按钮文字对比色 | R:code:frontend/src/components/ThemeProvider.jsx,code:frontend/src/components/admin/settings/ThemeSettings.jsx | A:DEFAULT_THEME_COLORS,brandForeground,applyThemeColors | S:调用只修改样式，不保存配置；原代码块独立配色保留
-responsive.css[CU5T]: F:共享手机样式：卡片工具栏及表单换行、表格内部滚动、弹窗抽屉限宽；教学编辑器纵排、查看器导航折行、触屏开关高度修正和注册语言入口避让 | R:code:frontend/src/main.jsx,code:frontend/src/layouts/BasicLayout/style.css,code:frontend/src/pages/teaching/LessonEditor.jsx | A:- | S:主站控件规则限制在BasicLayout正文；浮层挂body须独立选择器；教学断点991px，其余手机规则767px
+responsive.css[CU5T]: F:共享窄屏工具栏、表单、表格滚动和浮层布局；课程编辑器中屏采用列表与上下编辑预览，手机纵排；修正触屏开关和注册语言位置 | R:code:frontend/src/main.jsx,code:frontend/src/pages/teaching/LessonEditor.jsx | A:992至1199px课程分栏，991px以下纵排，其余手机规则767px | S:正文控件限定BasicLayout范围，body浮层采用独立选择器
 
 ===/home/hanying/ai-platform/frontend/src/utils/===
 api.js[CN9L]: F:C·axios客户端(/api，120s)：注入token、401队列刷新最多3次及重放/清会话、可取消请求、SSE流及心跳、取消流/请求、可选择关闭开发调试日志 | R:code:frontend/src/utils/i18n.js,code:frontend/src/stores/authStore.js,code:frontend/src/stores/chatStore.js,code:backend/src/routes/auth.js,code:backend/src/middleware/authMiddleware.js | A:- | S:auth-storage与authStore同源；auth接口401不自刷新；SSE冒号行是心跳；TOO_MANY_ATTEMPTS为分支标识；请求清理用then双分支避免悬空finally拒绝；skipDebugLogging禁止私有交接请求体进入开发日志

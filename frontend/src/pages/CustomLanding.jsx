@@ -57,7 +57,7 @@ const CustomLanding = () => {
             margin: 0;
             padding: 0;
             height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f7f5f2;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -65,19 +65,19 @@ const CustomLanding = () => {
           }
           .welcome-container {
             text-align: center;
-            color: white;
+            color: #272525;
             padding: 40px;
           }
           h1 {
-            font-size: 48px;
+            font-size: clamp(28px, 5vw, 48px);
             margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-weight: 650;
             animation: fadeIn 1s ease-in;
           }
           p {
             font-size: 20px;
             opacity: 0.9;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            color: #65615f;
             animation: fadeIn 1.5s ease-in;
           }
           @keyframes fadeIn {
@@ -94,6 +94,7 @@ const CustomLanding = () => {
       </head>
       <body>
         <div class="welcome-container">
+          <img src="/portal-logo.png" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:16px;margin-bottom:24px" />
           <h1>Welcome to AI Platform</h1>
           <p>Enterprise AI Application Platform</p>
         </div>
@@ -122,37 +123,14 @@ const CustomLanding = () => {
 
   // 使用iframe显示内容，确保安全隔离
   return (
-    <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0, position: 'relative' }}>
+    <div className="custom-landing" style={{ width: '100%', height: '100vh', margin: 0, padding: 0, position: 'relative' }}>
       {/* Login按钮 - 固定在右上角，只在未登录时显示 */}
       {!isAuthenticated && (
         <Button
           type="primary"
           icon={<LoginOutlined />}
           onClick={handleLogin}
-          style={{
-            position: 'fixed',
-            top: 24,
-            right: 24,
-            zIndex: 1000,
-            borderRadius: 20,
-            paddingLeft: 20,
-            paddingRight: 20,
-            height: 40,
-            fontSize: 16,
-            fontWeight: 500,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)'
-            e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.5)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)'
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
-          }}
+          className="landing-login"
         >
           登录 / Login
         </Button>

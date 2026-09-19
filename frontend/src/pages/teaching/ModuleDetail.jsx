@@ -433,17 +433,13 @@ const ModuleDetail = () => {
                       <div style={{
                         width: '100%',
                         height: '100%',
-                        background: `linear-gradient(135deg, ${
-                          contentTypeColors[lesson.content_type] === 'blue' ? '#007AFF, #5856D6' :
-                          contentTypeColors[lesson.content_type] === 'cyan' ? '#30cfd0, #330867' :
-                          contentTypeColors[lesson.content_type] === 'purple' ? '#a8c0ff, #3f2b96' :
-                          '#fa709a, #fee140'
-                        })`,
+                        background: 'var(--brand-soft)',
+                        color: 'var(--text-color)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}>
-                        <FileTextOutlined style={{ fontSize: 40, color: 'white', opacity: 0.9 }} />
+                        <FileTextOutlined style={{ fontSize: 40, color: 'currentColor' }} />
                       </div>
                     )}
                     

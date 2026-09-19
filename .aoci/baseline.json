@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-19T01:03:47Z",
+  "updated_at": "2026-09-19T02:21:27Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "93175604372fe347487274a27523b5d7b5557002643a800a45dbcbe2f168195e",
-      "size": 313588,
-      "normalized_sha256": "93175604372fe347487274a27523b5d7b5557002643a800a45dbcbe2f168195e"
+      "sha256": "e7aceea1063e4c7bca88715deebf25fd720106ee77e3aedf5901b9849bf017aa",
+      "size": 313803,
+      "normalized_sha256": "e7aceea1063e4c7bca88715deebf25fd720106ee77e3aedf5901b9849bf017aa"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2612,10 +2612,9 @@
       "normalized_sha256": "356e9a03fe24c1201a0da5d48722117172ffca0cc3e2277ae43a6e620905317c"
     },
     "frontend/src/components/admin/settings/RateLimitSettings.jsx": {
-      "role": "index",
-      "sha256": "ff1bc4c412c706b76581c78cc58865032bf51afc0dcd7ec9c7c89deeb4e1d003",
-      "size": 11473,
-      "normalized_sha256": "ff1bc4c412c706b76581c78cc58865032bf51afc0dcd7ec9c7c89deeb4e1d003"
+      "sha256": "0eed4bd011ea9b15fd5d1f92f0e9c10b3473217c6b37426d94c4710d721fc772",
+      "size": 11518,
+      "normalized_sha256": "0eed4bd011ea9b15fd5d1f92f0e9c10b3473217c6b37426d94c4710d721fc772"
     },
     "frontend/src/components/admin/settings/SSOSettings.jsx": {
       "role": "index",
@@ -3467,10 +3466,9 @@
       "normalized_sha256": "58051881254c7104678bd2d6b15c8c465908f5f570a8edc67060411b0338cbc6"
     },
     "frontend/src/pages/CustomLanding.jsx": {
-      "role": "index",
-      "sha256": "5a3f66c35eafaf09456411e4a981719a536a20482ce055e00bbc4a77736077b5",
-      "size": 4863,
-      "normalized_sha256": "5a3f66c35eafaf09456411e4a981719a536a20482ce055e00bbc4a77736077b5"
+      "sha256": "5462375d3c8851218df5030cb9fa448b028cbc07fe3ad71cfca97066717d4bbe",
+      "size": 4093,
+      "normalized_sha256": "5462375d3c8851218df5030cb9fa448b028cbc07fe3ad71cfca97066717d4bbe"
     },
     "frontend/src/pages/admin/Analytics.jsx": {
       "role": "index",
@@ -3484,9 +3482,9 @@
       "normalized_sha256": "4bf838961c97f807bd6632ff77ada754fee49dfb001dc9d3b08ce49747c4abe4"
     },
     "frontend/src/pages/admin/Users.jsx": {
-      "sha256": "210a35e5d8a1bb33505d9f467854625f0ab9b75e3de38efc0342d5d0ae54dcc3",
-      "size": 40624,
-      "normalized_sha256": "210a35e5d8a1bb33505d9f467854625f0ab9b75e3de38efc0342d5d0ae54dcc3"
+      "sha256": "6073ef3d91dd672f5b8747d87fe9a57ae79c34bc5c34024cdf9bb5224114053e",
+      "size": 40702,
+      "normalized_sha256": "6073ef3d91dd672f5b8747d87fe9a57ae79c34bc5c34024cdf9bb5224114053e"
     },
     "frontend/src/pages/agent/AgentWorkspace.jsx": {
       "role": "index",
@@ -4179,10 +4177,9 @@
       "normalized_sha256": "ff697ef267a99f7fd74d54769fe7850f1b788871f38b05bf1604b41cde7deac2"
     },
     "frontend/src/pages/mindmap/Mindmap.jsx": {
-      "role": "index",
-      "sha256": "6a6a22cb1e85e4f5ff78ecb60e7f1c4dd22f016db708c4ce38f5dab37f77ff81",
-      "size": 23913,
-      "normalized_sha256": "6a6a22cb1e85e4f5ff78ecb60e7f1c4dd22f016db708c4ce38f5dab37f77ff81"
+      "sha256": "18e536637f5e9de19f162cb2255fc841741bac57404ef536b24e7372aa0414ad",
+      "size": 24798,
+      "normalized_sha256": "18e536637f5e9de19f162cb2255fc841741bac57404ef536b24e7372aa0414ad"
     },
     "frontend/src/pages/mindmap/Mindmap.less": {
       "role": "index",
@@ -4285,9 +4282,9 @@
       "normalized_sha256": "a429b271319061ef73f59c45d18481ad106257f8ca1d89d2d3f054dc31a78b24"
     },
     "frontend/src/pages/teaching/LessonEditor.jsx": {
-      "sha256": "3c799080fa698372d1f08abb4f98483e170b312ba9a82d53be326fc5df4f23c5",
-      "size": 39788,
-      "normalized_sha256": "3c799080fa698372d1f08abb4f98483e170b312ba9a82d53be326fc5df4f23c5"
+      "sha256": "256e3fa8ff4beee6fbed959a70e326b56d177406a6883fef95d56b9223139d43",
+      "size": 39810,
+      "normalized_sha256": "256e3fa8ff4beee6fbed959a70e326b56d177406a6883fef95d56b9223139d43"
     },
     "frontend/src/pages/teaching/LessonViewer.jsx": {
       "sha256": "1ec0cff2c86bb1941eea9829a1cfe15f59eeb24791ae180d51470070ddc052a6",
@@ -4295,9 +4292,9 @@
       "normalized_sha256": "1ec0cff2c86bb1941eea9829a1cfe15f59eeb24791ae180d51470070ddc052a6"
     },
     "frontend/src/pages/teaching/ModuleDetail.jsx": {
-      "sha256": "7fa6ed5e20d93578aa2d46f735adf460a30e40bea5c2fa47af6ede8c7f8d02cf",
-      "size": 25772,
-      "normalized_sha256": "7fa6ed5e20d93578aa2d46f735adf460a30e40bea5c2fa47af6ede8c7f8d02cf"
+      "sha256": "1f91b9ad2bd6a9e0b885eaf29d8716a2f5af17532070493f87682dfaa0cdc9a7",
+      "size": 25437,
+      "normalized_sha256": "1f91b9ad2bd6a9e0b885eaf29d8716a2f5af17532070493f87682dfaa0cdc9a7"
     },
     "frontend/src/pages/teaching/Teaching.jsx": {
       "role": "index",
@@ -4312,9 +4309,9 @@
       "normalized_sha256": "abcd0c1b1519794e4caebfaf64d6008fdf32437a59282a5a724f0f6c5cf0ae5f"
     },
     "frontend/src/pages/video/VideoGeneration.less": {
-      "sha256": "33b0f99eec5bf496975e827a4a7d6e42b61ef55cd7b7e270a35cbe08146b1167",
-      "size": 9331,
-      "normalized_sha256": "33b0f99eec5bf496975e827a4a7d6e42b61ef55cd7b7e270a35cbe08146b1167"
+      "sha256": "17a74872a6cf5d33320fbd3a13b1eecfc603a777ca32e99b088fc1985f1795bf",
+      "size": 9368,
+      "normalized_sha256": "17a74872a6cf5d33320fbd3a13b1eecfc603a777ca32e99b088fc1985f1795bf"
     },
     "frontend/src/pages/wiki/Wiki.jsx": {
       "role": "index",
@@ -4485,9 +4482,9 @@
       "normalized_sha256": "f8e6b1e3aa9bebfde3c4934418eea9f65c7234f6e5eab20554b17299faa66c66"
     },
     "frontend/src/styles/platform-chrome.css": {
-      "sha256": "e256cd5d71955ce751bee0bbee80bf1820e16468a9a975ef2fe75af488c2261b",
-      "size": 24799,
-      "normalized_sha256": "e256cd5d71955ce751bee0bbee80bf1820e16468a9a975ef2fe75af488c2261b"
+      "sha256": "926b600af06b37b328bf12702ba6d1b0d9a5cb21c19584e39442dd7e202b5b07",
+      "size": 26187,
+      "normalized_sha256": "926b600af06b37b328bf12702ba6d1b0d9a5cb21c19584e39442dd7e202b5b07"
     },
     "frontend/src/styles/platform-theme.js": {
       "sha256": "d3ddf2b105aadc0e28960caf02cb22ec1821e24bac38e4a59f72b8f03abd0ecf",
@@ -4495,9 +4492,9 @@
       "normalized_sha256": "d3ddf2b105aadc0e28960caf02cb22ec1821e24bac38e4a59f72b8f03abd0ecf"
     },
     "frontend/src/styles/responsive.css": {
-      "sha256": "88c8baf765e45042d8f7531ff27dc2f8284a81ba10bd0f3c38e903b9baf8782f",
-      "size": 3802,
-      "normalized_sha256": "88c8baf765e45042d8f7531ff27dc2f8284a81ba10bd0f3c38e903b9baf8782f"
+      "sha256": "5d60ceeca9ae15eeb8368be60bc3b8beaa922c7c0297fa13ea26a7358ef0df55",
+      "size": 4356,
+      "normalized_sha256": "5d60ceeca9ae15eeb8368be60bc3b8beaa922c7c0297fa13ea26a7358ef0df55"
     },
     "frontend/src/styles/theme-variables.css": {
       "role": "index",

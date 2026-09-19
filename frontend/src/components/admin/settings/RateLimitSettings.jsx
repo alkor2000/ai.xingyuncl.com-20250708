@@ -179,6 +179,7 @@ const RateLimitSettings = ({ disabled = false }) => {
       )}
 
       <Card
+        className="rate-limit-settings-card"
         title={
           <Space>
             <ThunderboltOutlined />

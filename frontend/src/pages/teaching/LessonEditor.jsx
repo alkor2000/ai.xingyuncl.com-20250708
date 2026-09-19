@@ -713,7 +713,8 @@ const LessonEditor = () => {
       }}>
         {/* 左侧 - 页面列表（白色卡片）*/}
         <div className="lesson-editor-pages" style={{
-          width: 300,
+          width: 240,
+          flexShrink: 0,
           background: iosColors.cardWhite,
           borderRadius: 20,
           border: `1px solid ${iosColors.border}`,
@@ -965,7 +966,7 @@ const LessonEditor = () => {
 
         {/* 右侧 - 实时预览（白色卡片）*/}
         <div className="lesson-editor-preview" style={{
-          width: 800,
+          flex: 1,
           background: iosColors.cardWhite,
           borderRadius: 20,
           border: `1px solid ${iosColors.border}`,

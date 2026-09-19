@@ -199,3 +199,14 @@ body, .app, .basic-layout, .basic-layout-content, .basic-layout > .ant-layout { 
   .basic-layout .mindmap-page .editor-panel { flex: 0 0 300px; min-width: 0; }
   .basic-layout .mindmap-page .preview-panel { flex: 0 0 400px; }
 }
+
+@media (max-width: 767px) {
+  .basic-layout :is(.rate-limit-settings-card,.user-groups-card) > .ant-card-head > .ant-card-head-wrapper { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 0; }
+  .basic-layout :is(.rate-limit-settings-card,.user-groups-card) > .ant-card-head .ant-card-extra { margin-inline-start: 0; }
+  .basic-layout :is(.rate-limit-settings-card,.user-groups-card) > .ant-card-head .ant-card-extra > .ant-space { flex-wrap: wrap; }
+  .basic-layout .user-groups-heading { display: flex; flex-direction: column; align-items: stretch; gap: 8px !important; }
+  .basic-layout .user-groups-heading .ant-input-affix-wrapper { width: 100% !important; }
+}
+.custom-landing .landing-login { position: fixed; top: 24px; right: 24px; z-index: 1000; height: 40px; padding-inline: 20px; font-size: 16px; font-weight: 500; border-radius: 10px; background: var(--primary-color); color: var(--brand-on-primary); border: 1px solid var(--primary-color); box-shadow: 0 4px 12px #30251c12; }
+.custom-landing .landing-login:hover { background: color-mix(in srgb, var(--primary-color), black 8%) !important; color: var(--brand-on-primary) !important; border-color: color-mix(in srgb, var(--primary-color), black 8%) !important; }
+@media (max-width: 767px) { .custom-landing .landing-login { top: 12px; right: 12px; height: 36px; font-size: 14px; padding-inline: 14px; } }

@@ -54,3 +54,11 @@
 @media (max-width: 767px) {
   .platform-auth .register-language { position: static !important; text-align: right; margin-bottom: 12px; }
 }
+
+/* Medium screens keep a usable code pane and full preview below it. */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .lesson-editor-page { height: auto !important; min-height: 100%; overflow: visible !important; }
+  .lesson-editor-panes { display: grid !important; grid-template-columns: 220px minmax(0, 1fr); flex: none !important; overflow: visible !important; }
+  .lesson-editor-pages { grid-row: span 2; width: auto !important; max-height: 920px; }
+  .lesson-editor-code, .lesson-editor-preview { width: auto !important; height: 450px; }
+}
