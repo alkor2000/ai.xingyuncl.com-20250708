@@ -326,9 +326,61 @@
     > .ant-space { flex-wrap: wrap; max-width: 100%; }
     .ant-tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   }
-  .html-editor-body { position: relative; }
+  .html-editor-body { position: relative; container: html-editor-body / size; }
+  .html-editor-sidebar-content {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .html-editor-projects, .html-editor-pages {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px;
+    overflow: hidden;
+  }
+  .html-editor-projects {
+    flex: 0 1 auto;
+    max-height: 40%;
+    border-bottom: 1px solid rgba(60,60,67,0.08);
+  }
+  .html-editor-pages { flex: 1; }
+  .html-editor-project-list, .html-editor-page-list {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .html-editor-page-list { flex: 1; }
+  .html-editor-project-item {
+    gap: 8px;
+    > .ant-space:first-child { min-width: 0; }
+    > .ant-space:first-child > .ant-space-item { min-width: 0; overflow-wrap: anywhere; }
+    > .ant-space:last-child { flex-shrink: 0; }
+  }
   .html-editor-code, .html-editor-preview { min-width: 0; min-height: 0; }
   .html-editor-pane-head { flex-wrap: wrap; gap: 8px; }
+}
+
+.html-editor-short-sidebar() {
+  .html-editor-workspace {
+    .html-editor-sidebar-content { display: block; overflow-y: auto; overscroll-behavior-y: contain; }
+    .html-editor-projects { max-height: 180px; }
+    .html-editor-pages, .html-editor-page-list { overflow: visible; }
+  }
+}
+
+// 按工具栏以下的实际高度切换；窄屏换行、横屏和软键盘都可能压低列表。
+@container html-editor-body (max-height: 360px) {
+  .html-editor-short-sidebar();
+}
+// 不支持容器查询的旧浏览器仍可在矮屏上访问整个列表。
+@media (max-height: 600px) {
+  .html-editor-short-sidebar();
 }
 @media (max-width: 991px) {
   .html-editor-workspace {

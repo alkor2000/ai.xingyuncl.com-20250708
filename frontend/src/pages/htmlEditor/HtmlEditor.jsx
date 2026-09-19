@@ -335,11 +335,7 @@ const HtmlEditor = () => {
     container: { height: '100%', background: '#F2F2F7', overflow: 'hidden' },
     header: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(60,60,67,0.12)', height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
     sidebar: { background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(60,60,67,0.12)' },
-    sidebarContent: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-    sidebarSection: { padding: 20, borderBottom: '1px solid rgba(60,60,67,0.08)', flexShrink: 0 },
-    pageSection: { padding: 20, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' },
-    pageScroll: { flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingRight: 4, minHeight: 0 },
-    secHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    secHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0 },
     secTitle: { fontSize: 17, fontWeight: 600, color: '#000', margin: 0, display: 'flex', alignItems: 'center', gap: 8 },
     projItem: (sel) => ({ padding: '10px 14px', cursor: 'pointer', borderRadius: 10, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...(sel ? { background: 'linear-gradient(135deg,#007AFF,#0051D5)', color: 'white' } : { background: 'rgba(60,60,67,0.03)' }) }),
     pageCard: (sel) => ({ background: 'white', borderRadius: 10, padding: '12px 14px', marginBottom: 8, cursor: 'pointer', ...(sel ? { border: '2px solid #007AFF', background: 'rgba(0,122,255,0.02)' } : { border: '1px solid rgba(60,60,67,0.08)' }) }),
@@ -386,15 +382,16 @@ const HtmlEditor = () => {
 
       <Layout className="html-editor-body" style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <Sider className="html-editor-sidebar" width={300} collapsed={sidebarCollapsed} collapsedWidth={0} style={S.sidebar}>
-          <div style={S.sidebarContent}>
+          <div className="html-editor-sidebar-content">
             {/* 项目列表 */}
-            <div style={S.sidebarSection}>
+            <div className="html-editor-projects">
               <div style={S.secHeader}>
                 <h3 style={S.secTitle}><AppstoreOutlined style={{ color: '#007AFF' }} /> {t('htmlEditor.projects')}</h3>
                 <Button type="primary" size="small" style={S.smallBtn('linear-gradient(135deg,#007AFF,#0051D5)')} icon={<PlusOutlined />} onClick={() => setShowProjectModal(true)}>{t('htmlEditor.new')}</Button>
               </div>
+              <div className="html-editor-project-list" role="region" aria-label={t('htmlEditor.projects')} tabIndex={0}>
               {projects.length > 0 ? projects.map(p => (
-                <div key={p.id} style={S.projItem(selectedProject?.id === p.id)} onClick={() => handleSelectProject(p)}>
+                <div className="html-editor-project-item" key={p.id} style={S.projItem(selectedProject?.id === p.id)} onClick={() => handleSelectProject(p)}>
                   {/* 项目名为用户录入的业务数据，不翻译 */}
                   <Space size={8}><FolderOutlined /><span style={{ fontWeight: 500 }}>{p.name}</span>{p.is_default === 1 && <Tag style={{ ...S.tag, background: 'rgba(0,122,255,0.1)', color: '#007AFF', padding: '2px 6px', fontSize: 11 }}>{t('htmlEditor.default')}</Tag>}</Space>
                   <Space size={4}>
@@ -403,20 +400,22 @@ const HtmlEditor = () => {
                   </Space>
                 </div>
               )) : <Empty description={t('htmlEditor.noProjects')} style={{ marginTop: 40 }} />}
+              </div>
             </div>
             {/* 页面列表 */}
             {selectedProject ? (
-              <div style={S.pageSection}>
+              <div className="html-editor-pages">
                 <div style={S.secHeader}>
                   <h3 style={S.secTitle}><FileTextOutlined style={{ color: '#AF52DE' }} /> {t('htmlEditor.pages')}</h3>
                   <Button type="primary" size="small" style={S.smallBtn('linear-gradient(135deg,#AF52DE,#9F44D3)')} icon={<PlusOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.new')}</Button>
                 </div>
+                <div className="html-editor-page-list" role="region" aria-label={t('htmlEditor.pages')} tabIndex={0}>
                 {loadingPages ? <div style={{ textAlign: 'center', padding: 40 }}><Spin tip={t('htmlEditor.page.loadingPages')} /></div>
-                : pages.length > 0 ? <div style={S.pageScroll}>{pages.map(p => (
-                  <div key={p.id} style={S.pageCard(selectedPageId === p.id)} onClick={() => { handleSelectPage(p); if (isCompact) setSidebarCollapsed(true); }}>
+                : pages.length > 0 ? pages.map(p => (
+                  <div className="html-editor-page-item" key={p.id} style={S.pageCard(selectedPageId === p.id)} onClick={() => { handleSelectPage(p); if (isCompact) setSidebarCollapsed(true); }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       {/* 页面标题与 slug 均为业务数据，不翻译 */}
-                      <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{p.title}</div><div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>{p.slug}</div></div>
+                      <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}><div style={{ fontWeight: 600, fontSize: 14 }}>{p.title}</div><div style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>{p.slug}</div></div>
                       <Space size={6}>
                         <Button type="text" size="small" icon={<EditOutlined />} onClick={e => { e.stopPropagation(); handleEditPage(p); }} style={{ color: '#8E8E93' }} />
                         {p.is_published && <CheckCircleOutlined style={{ color: '#34C759', fontSize: 16 }} />}
@@ -424,8 +423,9 @@ const HtmlEditor = () => {
                       </Space>
                     </div>
                   </div>
-                ))}</div>
+                ))
                 : <Empty description={t('htmlEditor.noPages')} style={{ marginTop: 40 }}><Button type="primary" style={{ borderRadius: 8, marginTop: 16, background: 'linear-gradient(135deg,#AF52DE,#9F44D3)', border: 'none' }} icon={<FileAddOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.createFirstPage')}</Button></Empty>}
+                </div>
               </div>
             ) : <div style={{ padding: 40, textAlign: 'center' }}><Empty description={t('htmlEditor.selectProject')} /></div>}
           </div>
