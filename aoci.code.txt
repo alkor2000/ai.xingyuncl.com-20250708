@@ -689,8 +689,8 @@ NotificationsView.jsx[AU5T]: F:论坛通知页：类型筛选、20条分页、�
 
 ===/home/hanying/ai-platform/frontend/src/pages/htmlEditor/===
 FallbackEditor.jsx[CU3S]: F:H·Monaco加载失败时的原生textarea降级编辑器：Tab插入两空格、明暗主题、重试按钮 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
-HtmlEditor.jsx[AB7L]: F:HTML项目与页面管理、Monaco编辑及基础编辑器降级、保存预览复制发布与积分检查；<992px侧栏覆盖显示、编辑预览单面板切换 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.less | A:- | S:默认项目仍按字面量'默认项目'匹配旧数据；Monaco加载15秒降级，积分初始化5秒超时不阻塞页面
-HtmlEditor.less[CU2M]: F:HTML编辑器样式：工具栏与面板标题换行；≤991px项目侧栏及遮罩覆盖正文，编辑预览按mobile-pane类切换单栏 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
+HtmlEditor.jsx[AB7L]: F:HTML项目与页面管理、Monaco及基础编辑器、保存预览复制发布与积分检查；项目和页面各设滚动区，<992px侧栏覆盖及编辑预览切换 | R:code:frontend/src/stores/htmlEditorStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/htmlEditor/FallbackEditor.jsx,code:frontend/src/pages/htmlEditor/HtmlEditor.less | A:- | S:默认项目按'默认项目'兼容旧数据；Monaco加载15秒降级，积分初始化5秒超时不阻塞页面
+HtmlEditor.less[CU2M]: F:HTML工具栏换行与手机覆盖侧栏、编辑预览切换；项目限高40%并与页面独立滚动，正文≤360px或视口≤600px高时整栏滚动，长项目名换行 | R:code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/===
 ImageGeneration.jsx[EU3T]: F:I·图像生成页入口壳：仅re-export ./index，App.jsx懒加载此文件 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/App.jsx | A:- | S:-
