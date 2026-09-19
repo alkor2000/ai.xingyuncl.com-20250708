@@ -351,12 +351,12 @@ const ModuleDetail = () => {
               width: 64,
               height: 64,
               borderRadius: 12,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'var(--primary-color)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <BookOutlined style={{ fontSize: 32, color: 'white' }} />
+              <BookOutlined style={{ fontSize: 32, color: 'var(--brand-on-primary)' }} />
             </div>
             <div style={{ flex: 1 }}>
               <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 600 }}>
@@ -461,8 +461,8 @@ const ModuleDetail = () => {
                         gap: 4,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                       }}>
-                        <CloudOutlined style={{ fontSize: 12, color: '#007AFF' }} />
-                        <span style={{ fontSize: 11, color: '#007AFF', fontWeight: 500 }}>
+                        <CloudOutlined style={{ fontSize: 12, color: 'var(--primary-color)' }} />
+                        <span style={{ fontSize: 11, color: 'var(--primary-color)', fontWeight: 500 }}>
                           {lesson.materials.length}
                         </span>
                       </div>
@@ -494,7 +494,7 @@ const ModuleDetail = () => {
                               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                             }}
                           >
-                            <EditOutlined style={{ fontSize: 14, color: '#007AFF' }} />
+                            <EditOutlined style={{ fontSize: 14, color: 'var(--primary-color)' }} />
                           </div>
                         </Tooltip>
                         <Dropdown 

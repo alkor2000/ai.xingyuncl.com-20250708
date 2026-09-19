@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { Card, Button, Tabs, Form, message, Space, Tag } from 'antd'
+import { Card, Button, Tabs, Select, Form, message, Space, Tag } from 'antd'
 import {
   BarChartOutlined,
   RobotOutlined,
@@ -81,6 +81,7 @@ import {
 } from '../../components/admin/settings'
 
 const Settings = () => {
+  const [activeTab, setActiveTab] = useState('statistics')
   const { t } = useTranslation()
   const { user, hasRole } = useAuthStore()
   const { updateSystemConfig } = useSystemConfigStore()
@@ -539,20 +540,19 @@ const Settings = () => {
       }
     ] : [])
   ]
-  
+  // Keep navigation valid when the available tabs change with the user's role.
+  const selectedTab = tabItems.some(({ key }) => key === activeTab) ? activeTab : tabItems[0]?.key
+
   return (
-    <div className="page-container">
-      <style>
-        {`
-          .settings-tabs .ant-tabs-nav-wrap { flex-wrap: wrap !important; height: auto !important; }
-          .settings-tabs .ant-tabs-nav-list { flex-wrap: wrap !important; height: auto !important; }
-          .settings-tabs .ant-tabs-tab { margin-bottom: 8px !important; }
-          .settings-tabs .ant-tabs-ink-bar { display: none !important; }
-          .settings-tabs .ant-tabs-nav::before { border-bottom: none !important; }
-        `}
-      </style>
-      
-      <Tabs defaultActiveKey="statistics" type="card" className="settings-tabs" items={tabItems} />
+    <div className="page-container settings-page">
+      <Select
+        className="settings-mobile-nav"
+        aria-label={t('admin.settings.title')}
+        value={selectedTab}
+        onChange={setActiveTab}
+        options={tabItems.map(({ key, label }) => ({ value: key, label }))}
+      />
+      <Tabs activeKey={selectedTab} onChange={setActiveTab} type="card" className="settings-tabs" items={tabItems} />
 
       {isSuperAdmin && (
         <AIModelFormModal

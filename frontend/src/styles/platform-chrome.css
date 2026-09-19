@@ -111,3 +111,91 @@ body, .app, .basic-layout, .basic-layout-content, .basic-layout > .ant-layout { 
 .basic-layout .storage-manager .storage-info-card { background: var(--primary-color); color: var(--brand-on-primary); box-shadow: none; }
 
 .basic-layout .ocr-tool-container .info-icon { background: none !important; color: var(--primary-color) !important; -webkit-text-fill-color: var(--primary-color) !important; }
+
+/* Remaining tool chrome: deliberately scoped away from authored HTML, charts and graph nodes. */
+.basic-layout .storage-manager .storage-sidebar .folder-tree-header { background: var(--brand-soft); color: var(--primary-color); border-bottom: 1px solid var(--brand-border); }
+.basic-layout .storage-manager .storage-sidebar .storage-info-card { background: var(--component-bg); color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
+.basic-layout .storage-manager .storage-info-card .storage-progress .ant-progress-inner { background: var(--brand-soft); }
+.basic-layout .storage-manager .storage-info-card .storage-progress .ant-progress-bg { background: var(--primary-color); }
+.basic-layout .storage-manager .folder-tree .ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected { background: var(--brand-soft); color: var(--primary-color); }
+.basic-layout .storage-manager .folder-tree .ant-tree .ant-tree-node-selected .ant-tree-iconEle { color: var(--primary-color); }
+.basic-layout .storage-manager :is(.folder-list-title,.status-bar) { background: var(--body-bg); border-color: var(--border-color); color: var(--text-color-secondary); }
+.basic-layout .storage-manager .storage-content .empty-state .empty-icon { background: none; color: var(--primary-color); -webkit-text-fill-color: var(--primary-color); }
+.basic-layout .storage-manager .upload-fab { background: var(--primary-color); color: var(--brand-on-primary); box-shadow: 0 4px 16px #30251c18; }
+.basic-layout .storage-manager .upload-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 20px #30251c20; }
+.basic-layout .knowledge-wizard-ios .wizard-header .header-left h1 { background: none; color: var(--text-color); -webkit-text-fill-color: var(--text-color); }
+.basic-layout .knowledge-wizard-ios .wizard-body :is(.panel-left,.panel-center,.panel-right) .panel-header { background: var(--component-bg); border-color: var(--border-color); }
+.basic-layout .knowledge-wizard-ios .wizard-body :is(.panel-left,.panel-center,.panel-right) .panel-header :is(h3,.ant-badge-count) { color: var(--text-color); }
+.basic-layout .knowledge-wizard-ios .wizard-body :is(.panel-left,.panel-center,.panel-right) .panel-header .ant-badge-count { background: var(--brand-soft); color: var(--primary-color); box-shadow: none; }
+.basic-layout .knowledge-wizard-ios .wizard-body .panel-center .slots-container .module-slot .empty-slot { background: var(--body-bg); border: 1px dashed var(--border-color); box-shadow: none; }
+.basic-layout .knowledge-wizard-ios .wizard-body .panel-center .slots-container .module-slot .empty-slot::before { background: none; }
+.basic-layout .knowledge-wizard-ios .wizard-body .panel-center .slots-container .module-slot .empty-slot :is(.slot-number,.slot-hint) { color: var(--text-color-secondary); text-shadow: none; }
+.basic-layout .knowledge-wizard-ios .wizard-body .panel-center .slots-container .module-slot .empty-slot:hover { border-color: var(--brand-border); background: var(--brand-soft); }
+.basic-layout :is(.agent-workspace,.workflow-list-container,.workflow-editor,.mindmap-page) { background: var(--body-bg); }
+.basic-layout .workflow-list-header .page-title { color: var(--text-color); }
+.basic-layout .workflow-list-header .page-title .anticon { color: var(--primary-color); }
+.basic-layout .workflow-list-filter .ant-segmented { background: var(--component-bg); border: 1px solid var(--border-color); }
+.basic-layout .workflow-list-filter .ant-segmented-item-selected { background: var(--brand-soft); color: var(--primary-color); box-shadow: none; }
+.basic-layout .workflow-card { background: var(--component-bg); border-color: var(--border-color); box-shadow: none; }
+.basic-layout .workflow-card:hover { border-color: var(--brand-border); box-shadow: 0 4px 16px #30251c0a; transform: translateY(-2px); }
+.basic-layout .workflow-card .workflow-card-header .workflow-icon { background: var(--brand-soft); }
+.basic-layout .workflow-card .workflow-card-header .workflow-icon .anticon { color: var(--primary-color); }
+.basic-layout .workflow-editor-toolbar, .basic-layout .workflow-editor .floating-node-panel { background: var(--component-bg); border-color: var(--border-color); box-shadow: none; }
+.basic-layout .workflow-editor .workflow-info h3 { color: var(--text-color); }
+.basic-layout .workflow-editor-body :is(.ant-drawer-content,.ant-drawer-header,.ant-drawer-body) { background: var(--component-bg); border-color: var(--border-color); }
+.basic-layout .workflow-editor-body :is(.ant-drawer-title,.ant-drawer-close) { color: var(--text-color) !important; }
+.basic-layout .workflow-editor .node-panel-trigger-btn { box-shadow: 0 4px 12px #30251c18; }
+.basic-layout .mindmap-page :is(.mindmap-toolbar,.mode-tabs,.editor-panel,.preview-panel,.panel-header) { background: var(--component-bg); border-color: var(--border-color); box-shadow: none; color: var(--text-color); }
+.basic-layout .mindmap-page .editor-panel .code-editor { box-sizing: border-box; width: 100%; height: 100%; min-height: 200px; padding: 16px; resize: none; border: 0; background: var(--input-bg); color: var(--text-color); font: 13px/1.7 'SF Mono', Monaco, Consolas, monospace; }
+.basic-layout .mindmap-page .editor-panel .code-editor:focus-visible { outline: 2px solid var(--brand-border); outline-offset: -2px; }
+.basic-layout .calendar-page .is-selected { background: var(--primary-color) !important; border-color: var(--primary-color) !important; box-shadow: 0 0 0 2px var(--brand-border) !important; }
+.basic-layout .calendar-page .is-selected :is(.cell-weekday,.cell-date) { color: var(--brand-on-primary) !important; }
+.basic-layout .calendar-page .mobile-bottom-tabs { background: var(--component-bg); border-color: var(--border-color); box-shadow: none; }
+.basic-layout .calendar-page .mobile-bottom-tabs .tab-item.active { color: var(--primary-color); }
+.basic-layout .smart-apps-container .category-filter .category-segmented .ant-segmented-item-selected { background: var(--primary-color); color: var(--brand-on-primary); }
+.basic-layout .html-editor-workspace :is(.html-editor-toolbar,.html-editor-sidebar,.html-editor-pane-head) { background: var(--component-bg) !important; border-color: var(--border-color) !important; backdrop-filter: none !important; }
+.basic-layout .html-editor-workspace .ant-btn:disabled { background: var(--body-bg) !important; color: var(--text-color-tertiary) !important; border-color: var(--border-color) !important; }
+.basic-layout .settings-page .settings-mobile-nav { display: none; }
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav .ant-tabs-nav-wrap,
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav .ant-tabs-nav-list { flex-wrap: wrap; height: auto; }
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav .ant-tabs-tab { margin-bottom: 8px; border-radius: 8px; background: var(--component-bg); border: 1px solid var(--border-color); }
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav .ant-tabs-tab-active { background: var(--brand-soft); border-color: var(--brand-border); }
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav .ant-tabs-ink-bar,
+.basic-layout .settings-page .settings-tabs > .ant-tabs-nav::before { display: none; }
+.basic-layout .settings-page .ant-alert-info { background: var(--brand-soft); border-color: var(--brand-border); }
+.basic-layout .settings-page .ant-alert-info :is(.ant-alert-message,.ant-alert-description) { color: var(--text-color); }
+.basic-layout .settings-page .ant-alert-info .ant-alert-icon { color: var(--primary-color); }
+@media (max-width: 767px) {
+  .basic-layout .settings-page .settings-mobile-nav { display: block; width: 100%; margin-bottom: 16px; }
+  .basic-layout .settings-page .settings-tabs > .ant-tabs-nav { display: none; }
+  .basic-layout .settings-page .settings-tabs > .ant-tabs-content-holder { min-width: 0; }
+}
+/* Deep legacy selectors load with their routes, so these named controls use explicit priority. */
+.basic-layout .storage-manager .folder-tree-header { background: var(--brand-soft) !important; color: var(--primary-color) !important; border-bottom: 1px solid var(--brand-border); }
+.basic-layout .storage-manager .folder-tree .ant-tree-node-content-wrapper.ant-tree-node-selected { background: var(--brand-soft) !important; color: var(--primary-color) !important; }
+.basic-layout .storage-manager .folder-tree .ant-tree-node-selected .ant-tree-iconEle { color: var(--primary-color) !important; }
+.basic-layout .storage-manager .current-folder-name { background: var(--brand-soft) !important; color: var(--primary-color) !important; box-shadow: none !important; }
+.basic-layout .storage-manager .storage-toolbar .ant-btn:not(.ant-btn-danger):not(.ant-btn-dangerous):not(:disabled) { background: var(--component-bg) !important; color: var(--primary-color) !important; border: 1px solid var(--brand-border); box-shadow: none; }
+.basic-layout .storage-manager .view-switcher button.active { background: var(--primary-color) !important; color: var(--brand-on-primary) !important; }
+.basic-layout .storage-manager .storage-statusbar { background: var(--component-bg); border-color: var(--border-color); color: var(--text-color-secondary); }
+.basic-layout .knowledge-wizard-ios .filter-tag.active { background: var(--primary-color) !important; color: var(--brand-on-primary) !important; box-shadow: none !important; }
+.basic-layout .knowledge-wizard-ios .slot-count-control { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 16px 8px; color: var(--text-color-secondary); font-size: 12px; }
+.basic-layout .knowledge-wizard-ios .slot-ctrl-btn { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border-color); border-radius: 8px; color: var(--primary-color); background: var(--component-bg); cursor: pointer; }
+.basic-layout .knowledge-wizard-ios .slot-ctrl-info { display: flex; gap: 4px; align-items: baseline; }
+.basic-layout .knowledge-wizard-ios .slot-ctrl-count { font-weight: 600; color: var(--text-color); }
+.basic-layout .mindmap-page .mindmap-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border-color); }
+.basic-layout .mindmap-page .mode-tabs { padding: 0 20px; flex-shrink: 0; }
+.basic-layout .mindmap-page .mode-tabs .ant-tabs-nav { margin-bottom: 0; }
+.basic-layout .mindmap-page .editor-panel { flex: 0 0 34%; min-width: 260px; }
+.basic-layout .mindmap-page .preview-panel { flex: 1; min-width: 0; }
+.basic-layout .mindmap-page :is(.editor-panel,.preview-panel) { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); border-radius: 12px; }
+.basic-layout .mindmap-page .panel-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 48px; padding: 10px 14px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: 600; flex-shrink: 0; }
+.basic-layout .mindmap-page .editor-panel .code-editor { flex: 1; min-height: 0; }
+.basic-layout .mindmap-page .preview-content { flex: 1; min-height: 0; overflow: auto; }
+.basic-layout .settings-page .settings-mobile-nav .ant-select-selection-item > span { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 767px) {
+  .basic-layout .mindmap-page .mindmap-toolbar { padding: 12px; }
+  .basic-layout .mindmap-page .mindmap-body { flex-direction: column; overflow: auto; }
+  .basic-layout .mindmap-page .editor-panel { flex: 0 0 300px; min-width: 0; }
+  .basic-layout .mindmap-page .preview-panel { flex: 0 0 400px; }
+}

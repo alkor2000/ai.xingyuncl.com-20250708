@@ -313,12 +313,12 @@ const LessonDetail = () => {
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'var(--primary-color)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <FileTextOutlined style={{ fontSize: 18, color: '#fff' }} />
+                <FileTextOutlined style={{ fontSize: 18, color: 'var(--brand-on-primary)' }} />
               </div>
               <span style={{ fontSize: 20, fontWeight: 600 }}>
                 {t('teaching.coursePageList')}
@@ -326,11 +326,11 @@ const LessonDetail = () => {
               <span style={{
                 marginLeft: 'auto',
                 padding: '4px 12px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'var(--primary-color)',
                 borderRadius: 20,
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#fff'
+                color: 'var(--brand-on-primary)'
               }}>
                 {totalPages} {t('teaching.pages')}
               </span>
@@ -387,7 +387,7 @@ const LessonDetail = () => {
                     style={{
                       padding: '16px 20px',
                       background: 'white',
-                      border: '1px solid #f0f0f0',
+                      border: '1px solid var(--border-color)',
                       borderRadius: 12,
                       cursor: 'pointer',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -397,13 +397,13 @@ const LessonDetail = () => {
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-4px)';
-                      e.currentTarget.style.boxShadow = '0 12px 32px rgba(102, 126, 234, 0.15)';
-                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.boxShadow = '0 4px 16px rgba(48, 37, 28, 0.08)';
+                      e.currentTarget.style.borderColor = 'var(--primary-color)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'translateY(0)';
                       e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.borderColor = '#f0f0f0';
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
                     }}
                   >
                     {/* 左侧：渐变序号徽章 */}
@@ -411,15 +411,15 @@ const LessonDetail = () => {
                       width: 40,
                       height: 40,
                       borderRadius: 10,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: 'var(--primary-color)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: 16,
                       fontWeight: 700,
-                      color: '#fff',
+                      color: 'var(--brand-on-primary)',
                       flexShrink: 0,  // 固定宽度，不缩小
-                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+                      boxShadow: 'none'
                     }}>
                       {pageNumber < 10 ? `0${pageNumber}` : pageNumber}
                     </div>
@@ -442,7 +442,7 @@ const LessonDetail = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      color: '#667eea',
+                      color: 'var(--primary-color)',
                       fontSize: 14,
                       fontWeight: 500,
                       flexShrink: 0  // 固定宽度，不缩小
@@ -485,7 +485,7 @@ const LessonDetail = () => {
               alignItems: 'center',
               gap: 12
             }}>
-              <EditOutlined style={{ color: '#667eea' }} />
+              <EditOutlined style={{ color: 'var(--primary-color)' }} />
               {t('teaching.editLessonInfo')}
             </div>
           }
@@ -507,7 +507,7 @@ const LessonDetail = () => {
           }}
           okButtonProps={{
             style: {
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'var(--primary-color)',
               border: 'none',
               height: 40,
               borderRadius: 10,

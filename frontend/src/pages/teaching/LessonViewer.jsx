@@ -366,7 +366,7 @@ const LessonViewer = () => {
         height: '100%',
         display: 'flex', 
         flexDirection: 'column',
-        background: isFullscreen ? '#000' : '#F2F2F7',
+        background: isFullscreen ? '#000' : 'var(--body-bg)',
         position: 'relative',
         overflow: 'hidden'
       }}
@@ -384,11 +384,11 @@ const LessonViewer = () => {
                   alignItems: 'center',
                   gap: 8,
                   padding: '6px 12px',
-                  background: 'rgba(0, 122, 255, 0.08)',
+                  background: 'var(--brand-soft)',
                   borderRadius: 20
                 }}>
-                  <AimOutlined style={{ color: '#007AFF', fontSize: 14 }} />
-                  <span style={{ fontSize: 13, color: '#007AFF', fontWeight: 500 }}>
+                  <AimOutlined style={{ color: 'var(--primary-color)', fontSize: 14 }} />
+                  <span style={{ fontSize: 13, color: 'var(--primary-color)', fontWeight: 500 }}>
                     {progress}%
                   </span>
                 </div>
@@ -421,9 +421,9 @@ const LessonViewer = () => {
           />
 
           <div className="lesson-viewer-pagination" style={{
-            background: 'white',
+            background: 'var(--component-bg)',
             padding: '12px 24px',
-            borderBottom: '1px solid #E5E5EA',
+            borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -443,7 +443,7 @@ const LessonViewer = () => {
               alignItems: 'center',
               gap: 8,
               padding: '8px 16px',
-              background: '#F2F2F7',
+              background: 'var(--body-bg)',
               borderRadius: 20,
               minWidth: 140,
               justifyContent: 'center'
@@ -451,7 +451,7 @@ const LessonViewer = () => {
               <span style={{ 
                 fontSize: 18, 
                 fontWeight: 600,
-                color: '#007AFF'
+                color: 'var(--primary-color)'
               }}>
                 {currentPage < 10 ? `0${currentPage}` : currentPage}
               </span>
@@ -601,7 +601,7 @@ const LessonViewer = () => {
               gap: 6,
               justifyContent: 'center'
             }}>
-              <span style={{ fontSize: 18, color: '#007AFF' }}>{currentPage}</span>
+              <span style={{ fontSize: 18, color: 'var(--primary-color)' }}>{currentPage}</span>
               <span style={{ opacity: 0.5, fontSize: 13 }}>/</span>
               <span style={{ fontSize: 13, opacity: 0.8 }}>{totalPages}</span>
             </div>
@@ -655,7 +655,7 @@ const LessonViewer = () => {
                 <div style={{
                   width: `${progress}%`,
                   height: '100%',
-                  background: 'linear-gradient(90deg, #007AFF, #5856D6)',
+                  background: 'var(--primary-color)',
                   borderRadius: 2,
                   transition: 'width 0.3s'
                 }} />
@@ -888,7 +888,7 @@ const LessonViewer = () => {
                         marginTop: 16,
                         borderRadius: 8,
                         height: 40,
-                        background: 'linear-gradient(135deg, #007AFF, #5856D6)',
+                        background: 'var(--primary-color)',
                         border: 'none'
                       }}
                     >

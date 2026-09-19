@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-19T00:18:43Z",
+  "updated_at": "2026-09-19T01:03:47Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "cca37176b311a21d9f9b71e0c4dd9e79e32010bc0b3f1d12d6b5ebc214c244f2",
-      "size": 313197,
-      "normalized_sha256": "cca37176b311a21d9f9b71e0c4dd9e79e32010bc0b3f1d12d6b5ebc214c244f2"
+      "sha256": "93175604372fe347487274a27523b5d7b5557002643a800a45dbcbe2f168195e",
+      "size": 313588,
+      "normalized_sha256": "93175604372fe347487274a27523b5d7b5557002643a800a45dbcbe2f168195e"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -3479,15 +3479,14 @@
       "normalized_sha256": "71cdbaa4706cac9e94d4f3fb8607053a06cc5d8b94584cd7a9828e4584e67336"
     },
     "frontend/src/pages/admin/Settings.jsx": {
-      "sha256": "42b3dfc11283bb32471b788306390f30e1eb54074de441040a2d0d81f30cb006",
-      "size": 22574,
-      "normalized_sha256": "42b3dfc11283bb32471b788306390f30e1eb54074de441040a2d0d81f30cb006"
+      "sha256": "4bf838961c97f807bd6632ff77ada754fee49dfb001dc9d3b08ce49747c4abe4",
+      "size": 22606,
+      "normalized_sha256": "4bf838961c97f807bd6632ff77ada754fee49dfb001dc9d3b08ce49747c4abe4"
     },
     "frontend/src/pages/admin/Users.jsx": {
-      "role": "index",
-      "sha256": "48e49e0498d160158a2b4ceb870aae8ce03f706c2bfc64b081284b6c57fb39bf",
-      "size": 40602,
-      "normalized_sha256": "48e49e0498d160158a2b4ceb870aae8ce03f706c2bfc64b081284b6c57fb39bf"
+      "sha256": "210a35e5d8a1bb33505d9f467854625f0ab9b75e3de38efc0342d5d0ae54dcc3",
+      "size": 40624,
+      "normalized_sha256": "210a35e5d8a1bb33505d9f467854625f0ab9b75e3de38efc0342d5d0ae54dcc3"
     },
     "frontend/src/pages/agent/AgentWorkspace.jsx": {
       "role": "index",
@@ -4066,9 +4065,9 @@
       "normalized_sha256": "e7f293c1a788288cb8c4e1a319c17673c6f2343d69fd69f706401d5bb65231eb"
     },
     "frontend/src/pages/htmlEditor/HtmlEditor.jsx": {
-      "sha256": "4f947963c7c3f1cfd8e8850b3a9959465ce89be7e265dcdf80793d5bdab99001",
-      "size": 38315,
-      "normalized_sha256": "4f947963c7c3f1cfd8e8850b3a9959465ce89be7e265dcdf80793d5bdab99001"
+      "sha256": "d4ee598eb38b237811d094a92cf151ed51117cbbe0b34c91afb4db4e5d0cdec6",
+      "size": 38342,
+      "normalized_sha256": "d4ee598eb38b237811d094a92cf151ed51117cbbe0b34c91afb4db4e5d0cdec6"
     },
     "frontend/src/pages/htmlEditor/HtmlEditor.less": {
       "sha256": "38bafbfcc4aa28e6b087664e708046f4b227cfc85eec1c01694d03b0279eec07",
@@ -4281,26 +4280,24 @@
       "normalized_sha256": "074bf47e55cad5f753c6d6c21aaa34368bb7fe00e0c6304a51fa561e4256cb09"
     },
     "frontend/src/pages/teaching/LessonDetail.jsx": {
-      "role": "index",
-      "sha256": "335678a8a53a1d50b9b5f3cfdf8412b1071d64b4a7a02fa4ad0b4a0a5dbad606",
-      "size": 20906,
-      "normalized_sha256": "335678a8a53a1d50b9b5f3cfdf8412b1071d64b4a7a02fa4ad0b4a0a5dbad606"
+      "sha256": "a429b271319061ef73f59c45d18481ad106257f8ca1d89d2d3f054dc31a78b24",
+      "size": 20875,
+      "normalized_sha256": "a429b271319061ef73f59c45d18481ad106257f8ca1d89d2d3f054dc31a78b24"
     },
     "frontend/src/pages/teaching/LessonEditor.jsx": {
-      "sha256": "00dd5d08d9e6c572492ddc689b0e24b4386ec2594c80eeaa34e9b2e18ea8217a",
-      "size": 39711,
-      "normalized_sha256": "00dd5d08d9e6c572492ddc689b0e24b4386ec2594c80eeaa34e9b2e18ea8217a"
+      "sha256": "3c799080fa698372d1f08abb4f98483e170b312ba9a82d53be326fc5df4f23c5",
+      "size": 39788,
+      "normalized_sha256": "3c799080fa698372d1f08abb4f98483e170b312ba9a82d53be326fc5df4f23c5"
     },
     "frontend/src/pages/teaching/LessonViewer.jsx": {
-      "sha256": "90a38dc1e9e27e67f8767e4a8afc585408218d8476afc8254ace26c59a3731bd",
-      "size": 28313,
-      "normalized_sha256": "90a38dc1e9e27e67f8767e4a8afc585408218d8476afc8254ace26c59a3731bd"
+      "sha256": "1ec0cff2c86bb1941eea9829a1cfe15f59eeb24791ae180d51470070ddc052a6",
+      "size": 28358,
+      "normalized_sha256": "1ec0cff2c86bb1941eea9829a1cfe15f59eeb24791ae180d51470070ddc052a6"
     },
     "frontend/src/pages/teaching/ModuleDetail.jsx": {
-      "role": "index",
-      "sha256": "8fa462218fbeefbe10b5de3bc1f695eb89effc43421ab3f0935098fb872255af",
-      "size": 25744,
-      "normalized_sha256": "8fa462218fbeefbe10b5de3bc1f695eb89effc43421ab3f0935098fb872255af"
+      "sha256": "7fa6ed5e20d93578aa2d46f735adf460a30e40bea5c2fa47af6ede8c7f8d02cf",
+      "size": 25772,
+      "normalized_sha256": "7fa6ed5e20d93578aa2d46f735adf460a30e40bea5c2fa47af6ede8c7f8d02cf"
     },
     "frontend/src/pages/teaching/Teaching.jsx": {
       "role": "index",
@@ -4483,15 +4480,14 @@
       "normalized_sha256": "3febe5925573df17e218ed18ab94990874ed52dc062789750d2df05a6b3f058d"
     },
     "frontend/src/styles/ios-unified-theme.css": {
-      "role": "index",
-      "sha256": "7081fc4146d86d984dd4717984a31756e411cc6c69e7b36d3d4fd0623cf241b2",
-      "size": 10507,
-      "normalized_sha256": "7081fc4146d86d984dd4717984a31756e411cc6c69e7b36d3d4fd0623cf241b2"
+      "sha256": "f8e6b1e3aa9bebfde3c4934418eea9f65c7234f6e5eab20554b17299faa66c66",
+      "size": 10632,
+      "normalized_sha256": "f8e6b1e3aa9bebfde3c4934418eea9f65c7234f6e5eab20554b17299faa66c66"
     },
     "frontend/src/styles/platform-chrome.css": {
-      "sha256": "eb964181357f8c0c1ee83acb216c26d1722cd9edc714c5f27a7125cbef467bb2",
-      "size": 13125,
-      "normalized_sha256": "eb964181357f8c0c1ee83acb216c26d1722cd9edc714c5f27a7125cbef467bb2"
+      "sha256": "e256cd5d71955ce751bee0bbee80bf1820e16468a9a975ef2fe75af488c2261b",
+      "size": 24799,
+      "normalized_sha256": "e256cd5d71955ce751bee0bbee80bf1820e16468a9a975ef2fe75af488c2261b"
     },
     "frontend/src/styles/platform-theme.js": {
       "sha256": "d3ddf2b105aadc0e28960caf02cb22ec1821e24bac38e4a59f72b8f03abd0ecf",
