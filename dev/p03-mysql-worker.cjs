@@ -26,7 +26,8 @@ async function run(r) {
       }
       return result;
     };
-    fixture = await mysqlFixture(r.mysql, client, () => now, r.owner || 'p-teacher', r.wireVersion ? { wireVersion: r.wireVersion } : {});
+    const options = { ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}), ...(r.recoveryAttemptLimit ? { recoveryAttemptLimit: r.recoveryAttemptLimit } : {}) };
+    fixture = await mysqlFixture(r.mysql, client, () => now, r.owner || 'p-teacher', options);
     return { ready: true, owner: fixture.owner };
   }
   if (!fixture) fail('invalid_request');
