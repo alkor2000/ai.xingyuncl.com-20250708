@@ -1,3 +1,5 @@
+import MyFeedbackPage from './pages/feedback/MyFeedbackPage'
+import FeedbackHubPage from './pages/feedback/FeedbackHubPage'
 /**
  * 应用主入口组件
  * 
@@ -397,6 +399,10 @@ const App = () => {
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/chat" element={<Chat />} />
                         <Route path="/profile" element={<Profile />} />
+                        <Route path="/feedback" element={<MyFeedbackPage />} />
+                        <Route path="/feedback/:id" element={<MyFeedbackPage />} />
+                        <Route path="/feedback/hub" element={<FeedbackHubPage />} />
+                        <Route path="/feedback/hub/:id" element={<FeedbackHubPage />} />
                         
                         {/* 智能应用广场路由 */}
                         <Route 

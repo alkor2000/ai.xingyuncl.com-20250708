@@ -1,4 +1,5 @@
 import React from 'react'
+import FeedbackHeaderEntry from '../../components/product-feedback/FeedbackHeaderEntry'
 import { Layout, Space, Badge, Dropdown, Button } from 'antd'
 import {
   MenuOutlined,
@@ -88,6 +89,7 @@ const Header = ({ isMobile, onMenuClick }) => {
 
       <div className="header-right">
         <Space size="middle">
+          <FeedbackHeaderEntry />
           {!isMobile && <Button href="https://id.pkuailab.com/portal/return/ai-practice" target="_self" rel="noopener noreferrer" icon={<HomeOutlined />}>{t('nav.returnPortal')}</Button>}
           {/* 语言切换 */}
           <LanguageSwitch />

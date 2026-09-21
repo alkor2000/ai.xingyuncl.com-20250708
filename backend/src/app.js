@@ -101,6 +101,9 @@ require('./routes/artifactHandoffDev').mount(app);
 /* Selected-answer downloads: strict parser and no request/body logging. */
 require('./routes/artifactExports').mount(app);
 
+/* Signed product feedback bridge owns its bounded raw body parser and excludes request logging. */
+require('./routes/productFeedback').mount(app);
+
 /* 请求日志（Morgan -> Winston） */
 app.use(morgan('combined', {
   stream: {

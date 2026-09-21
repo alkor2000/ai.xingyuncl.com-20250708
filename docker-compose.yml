@@ -74,6 +74,11 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_DIR: /app/logs
+      # 产品反馈：仅注入后端运行时，各部署实例使用独立凭据。
+      PRODUCT_FEEDBACK_HUB_URL: "${PRODUCT_FEEDBACK_HUB_URL:-}"
+      PRODUCT_FEEDBACK_CLIENT_ID: "${PRODUCT_FEEDBACK_CLIENT_ID:-}"
+      PRODUCT_FEEDBACK_CLIENT_SECRET: "${PRODUCT_FEEDBACK_CLIENT_SECRET:-}"
+      PRODUCT_FEEDBACK_SUBJECT_SECRET: "${PRODUCT_FEEDBACK_SUBJECT_SECRET:-}"
       # Identity仅作为后端运行配置注入，不进入镜像构建参数或前端环境。
       # 未配置时保持关闭；已有部署的显式客户端及回调配置原样传递。
       IDENTITY_ENABLED: "${IDENTITY_ENABLED:-false}"
