@@ -10,7 +10,7 @@
 | 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象；**发起资格候选 `handoffAuthority.js` 已接真实用户模型：活跃/未过期/非影子（`users.uuid_source='sso'`）** | 未接：学生组映射列（决-12）未入库；逐附件持久复制权待事实；教师由 TE-DNA 判定 |
 | Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13 与正式三端：真实 `internal/artifacthandoff` 提供方（rc3 固定包 14b9852，`EnableFormalCandidate()` + formal policy 行 + `formal_pairs`，实验时钟注入）** | 未接：正式 profile 未冻结登记，`cmd/pkuailab-id` 不开启候选，生产无 policy/pairs 行 |
 | 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest）；**同版三端：未修改的 T11 `cmd/t11-lab`（真实 store/handlers，PG16 隔离库，Identity 拆分角色模型）draft 八场景与正式 wire（e1，`formal:true`）八场景均通过** | 未接：T11 候选未合入/未发布/未启用；生产迁移与生产角色未建 |
-| 传输 | 回环 HTTP（draft 客户端）；**正式：`I03FormalClient` 经 `I03HttpsTransport`（固定 origin/443/系统 CA），实验 TLS 对端 5 项业务链 + 21 项传输；三端源跳数走 TLS 对 TE e1 与 r2 各八场景通过（Identity G7 提供方 49224e1 / 9b6ca01）** | 生产 TLS 事实（证书链、出网）未在生产核验 |
+| 传输 | 回环 HTTP（draft 客户端）；**正式：`I03FormalClient` 经 `I03HttpsTransport`（固定 origin/443/系统 CA），实验 TLS 对端 5 项业务链 + 21 项传输；三端源跳数走 TLS 对 TE e1 与 r2 各八场景通过；Identity 以 051652b 字节在真实 main 上三跳全 TLS 五门 + 4/4（`identity-i03-g7-all-tls-20260921T131735Z`）** | 生产 TLS 事实（证书链、出网）未在生产核验 |
 | 时间源 | 注入时钟（Jest/实验 clock 服务） | 生产依赖 NTP，未验证 |
 
 ## 2 V10–13 结果（源侧定向证据；假对端）
