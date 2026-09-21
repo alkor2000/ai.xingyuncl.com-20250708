@@ -25,7 +25,8 @@
       "public_origin": "https://ai.xingyuncl.com",
       "handoff": {
         "enabled": false,
-        "reason": "Not in the first instance pair. 2026-09-20 11:35 read-only metadata: explicit instance key and client id differ from the pku candidate; database identity fingerprint differs from the pku site. Registry-side proof of a distinct dataset belongs to Identity's platformctl status, not to this repository."
+        "reason": "User decision 2026-09-21 (J2): ai.xingyuncl.com does not participate in the TE-DNA handoff. Earlier read-only metadata (2026-09-20 11:35) already showed a distinct instance key, client id and database fingerprint from the pku site.",
+        "decision": "user_2026-09-21_no_tedna_handoff"
       }
     }
   },
@@ -57,5 +58,11 @@
       "tagged_at": "2026-09-21T11:06:16+08:00"
     },
     "note": "tags prove which commit the tooling deployed, not the running process; the pku .env instance key was not re-read (production reads denied this session)"
+  },
+  "eligibility_candidate": {
+    "source": "account exists, status active, not expired, not student-mode/shadow (marker pending 决议12/C5); no teacher inference at the source",
+    "identity": "same-person link required; unlinked accounts fail at issue (source_link_unavailable)",
+    "target": "TE-DNA local teacher account decides teacher status and library write; loss of teacher status ends the handoff",
+    "reference": "docs/integrations/p03-product-decisions-20260921.md"
   }
 }
