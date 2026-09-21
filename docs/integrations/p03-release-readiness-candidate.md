@@ -56,7 +56,7 @@
 | 路由 | 未挂 | 无生产路由读取持久层；正式保存入口关闭 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
-| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），沿用 2026-09-20 11:35 记录；用户可自行运行 `bash dev/p03-prod-readonly-facts.sh`（只打印 HEAD、白名单变量、授权/schema 布尔与计数）并把输出贴回，本仓据此更新 |
+| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），2026-09-21 18:55 用户自行运行 `dev/p03-prod-readonly-facts.sh` 取得：两站 HEAD `c4a6e86`、跟踪文件干净；**北大站运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空**（确认 9/20 事实）、`IDENTITY_CLIENT_ID=ai-platform-client` 与候选一致；星云站显式为 `xingyun-ai-platform-test` / `ai-platform-xingyun-test-client`（不接交接）。两站 DB 授权/schema 事实首轮未取到（星云非交互 shell 无 node；北大 `docker compose exec` 吞了脚本 stdin），脚本已修，待复跑 |
 
 ## 6 接续包
 

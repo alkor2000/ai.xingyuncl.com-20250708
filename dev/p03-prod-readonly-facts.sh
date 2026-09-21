@@ -33,17 +33,21 @@ practice() {
   echo "== ai.xingyuncl.com ($PRACTICE_HOST, PM2) =="
   $SSH "$PRACTICE_HOST" "bash -s $ARGS" <<'REMOTE'
 DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"
+# Non-interactive ssh shells do not load nvm; find the same node/pm2 the deploy user runs with.
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1
+NODE_BIN="$(command -v node 2>/dev/null || ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)"
+PM2_BIN="$(command -v pm2 2>/dev/null || ls -d "$HOME"/.nvm/versions/node/*/bin/pm2 2>/dev/null | sort -V | tail -1)"
 cd "$DIR" || { echo "remote_dir_missing"; exit 1; }
 echo "head=$(git rev-parse HEAD)  dirty_tracked=$(git status --porcelain | grep -vc '^??')"
 echo "-- backend/.env (allow-listed names only)"
 grep -E "$ALLOW" backend/.env 2>/dev/null | sort || echo "(none set)"
 echo "-- pm2 process env (allow-listed names only)"
-if command -v pm2 >/dev/null 2>&1; then
-  ID=$(pm2 id ai-platform-auth 2>/dev/null | tr -d '[] ' | head -1)
-  [ -n "$ID" ] && pm2 env "$ID" 2>/dev/null | grep -E '^(IDENTITY_(ENABLED|ISSUER|PUBLIC_ORIGIN|CLIENT_ID|DEPLOYMENT_INSTANCE_KEY|TOKEN_AUTH_METHOD)|P03_HANDOFF_[A-Z_]+):' | sort || echo "(pm2 process not found)"
-else echo "(pm2 not on PATH for this shell)"; fi
+if [ -n "$PM2_BIN" ]; then
+  ID=$("$PM2_BIN" id ai-platform-auth </dev/null 2>/dev/null | tr -d '[] ' | head -1)
+  if [ -n "$ID" ]; then "$PM2_BIN" env "$ID" </dev/null 2>/dev/null | grep -E '^(IDENTITY_(ENABLED|ISSUER|PUBLIC_ORIGIN|CLIENT_ID|DEPLOYMENT_INSTANCE_KEY|TOKEN_AUTH_METHOD)|P03_HANDOFF_[A-Z_]+):' | sort; else echo "(pm2 process ai-platform-auth not found)"; fi
+else echo "(pm2 not found)"; fi
 echo "-- database facts (application connection, read-only)"
-cd backend && node -r dotenv/config -e "$NODE_FACTS"
+if [ -n "$NODE_BIN" ]; then (cd backend && "$NODE_BIN" -r dotenv/config -e "$NODE_FACTS" </dev/null); else echo "(node not found)"; fi
 REMOTE
 }
 
@@ -54,9 +58,9 @@ DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"
 cd "$DIR" || { echo "remote_dir_missing"; exit 1; }
 echo "head=$(git rev-parse HEAD)  dirty_tracked=$(git status --porcelain | grep -vc '^??')"
 echo "-- running backend container env (allow-listed names only)"
-docker compose exec -T backend sh -c "env | grep -E '$ALLOW' | sort" || echo "(container env unavailable)"
+docker compose exec -T backend sh -c "env | grep -E '$ALLOW' | sort" </dev/null 2>/dev/null || echo "(container env unavailable)"
 echo "-- database facts (application connection inside the container, read-only)"
-docker compose exec -T -e NODE_FACTS="$NODE_FACTS" backend sh -c 'cd /app && node -e "$NODE_FACTS"'
+docker compose exec -T -e NODE_FACTS="$NODE_FACTS" backend sh -c 'cd /app && node -e "$NODE_FACTS"' </dev/null 2>/dev/null || echo "(container db facts unavailable)"
 REMOTE
 }
 

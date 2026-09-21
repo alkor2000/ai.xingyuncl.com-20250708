@@ -43,7 +43,6 @@
     "P03_HANDOFF_TARGET_ORIGIN": "https://workflow.pkuailab.com"
   },
   "not_proven_here": [
-    "IDENTITY_DEPLOYMENT_INSTANCE_KEY is not set on the pku site today (2026-09-20 read-only check); the candidate value must be set through the enrollment/consumer flow, not by editing .env by hand",
     "Xingyun Registry entry and dataset distinctness are Identity-side facts; the source repository only records that its client, instance and database differ",
     "no P03_HANDOFF_* variable is read by any mounted code path; P03_HANDOFF_ENABLED=false is the required default when a loader exists"
   ],
@@ -67,5 +66,38 @@
     "target": "TE-DNA local teacher account decides teacher status and library write; loss of teacher status ends the handoff",
     "reference": "docs/integrations/p03-product-decisions-20260921.md"
   },
-  "read_only_recheck": "dev/p03-prod-readonly-facts.sh (run by the user; prints deployed HEAD, allow-listed public Identity/P03 variable names and values, DB grant booleans and schema facts only)"
+  "read_only_recheck": "dev/p03-prod-readonly-facts.sh (run by the user; prints deployed HEAD, allow-listed public Identity/P03 variable names and values, DB grant booleans and schema facts only)",
+  "read_only_facts_20260921": {
+    "read_by": "the user running dev/p03-prod-readonly-facts.sh at 2026-09-21 18:55 (Asia/Singapore); values below are the allow-listed public facts it printed",
+    "xingyun": {
+      "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tracked_dirty": 0,
+      "IDENTITY_ENABLED": "true",
+      "IDENTITY_ISSUER": "https://id.pkuailab.com",
+      "IDENTITY_PUBLIC_ORIGIN": "https://ai.xingyuncl.com",
+      "IDENTITY_CLIENT_ID": "ai-platform-xingyun-test-client",
+      "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "xingyun-ai-platform-test",
+      "IDENTITY_TOKEN_AUTH_METHOD": "client_secret_post",
+      "P03_HANDOFF_*": "not set",
+      "db_facts": "not read yet (node not on the non-interactive ssh PATH; script fixed, re-run pending)"
+    },
+    "pku": {
+      "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tracked_dirty": 0,
+      "IDENTITY_ENABLED": "true",
+      "IDENTITY_ISSUER": "https://id.pkuailab.com",
+      "IDENTITY_PUBLIC_ORIGIN": "",
+      "IDENTITY_CLIENT_ID": "ai-platform-client",
+      "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "",
+      "IDENTITY_BACKCHANNEL_URL": "",
+      "IDENTITY_TOKEN_AUTH_METHOD": "client_secret_post",
+      "P03_HANDOFF_*": "not set",
+      "db_facts": "not read yet (first script version let docker compose exec drain the remote script; fixed, re-run pending)"
+    },
+    "conclusions": [
+      "pku running container still has no explicit deployment instance key (empty), confirming the 2026-09-20 fact; the candidate value pku-ai-platform-prod must arrive through the enrollment/consumer flow before any formal handoff",
+      "pku client id ai-platform-client matches the candidate; xingyun runs its own test client and instance key and stays out of the handoff (J2)",
+      "both sites run c4a6e86 with clean tracked trees, matching the deploy tags"
+    ]
+  }
 }
