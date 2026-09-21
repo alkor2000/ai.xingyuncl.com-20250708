@@ -162,7 +162,10 @@ class I03DraftSource {
         if (['prepare', 'commit'].includes(phase) && op.operation_expires_at != null && nowS >= op.operation_expires_at) fail('operation_expired', 410);
         if (!op.identity_attempted) op.issue_settles_at = this.now() + this.issueWindowMs; // first issue may still be in flight until then
       }
-      op.identity_attempted = true; op.status = 'unknown'; op.pending_phase = phase; op.pending_attempt = attempt;
+      // Only a write is unknown while in flight. A read-only status query never rewrites knowledge that an
+      // accepted receipt already backs (prepared/succeeded/recycled/deleted...): the ledger keeps the last receipt.
+      op.identity_attempted = true; op.pending_phase = phase; op.pending_attempt = attempt;
+      if (!(phase === 'status' && op.receipt)) op.status = 'unknown';
     });
     try {
       const response = await this.client.send(owner, record, phase, packet, { onIssued: grant => this.learnDeadline(owner, record, grant) });
@@ -172,7 +175,8 @@ class I03DraftSource {
         // A parallel cancel/status may already have installed a newer receipt.
         // Its result must not be replaced by a delayed error from this request.
         if (op.pending_attempt !== attempt) return;
-        op.status = 'unknown'; op.last_error = error.code || 'target_unavailable';
+        if (!(phase === 'status' && op.receipt)) op.status = 'unknown';
+        op.last_error = error.code || 'target_unavailable';
         op.retry_at = this.now() + (error.retryAfter || 1) * 1000;
         if (this.formal && op.operation_expires_at == null && error.retryable) {
           // Bounded recovery without a trusted W: keep only minimal failure metadata, never bodies.
@@ -300,7 +304,7 @@ class I03DraftSource {
     const keys = ['outcome', 'basis', 'attempts_ended', 'identity_history_checked', 'target_receipt_checked'];
     if (!closure || typeof closure !== 'object' || Array.isArray(closure) || Object.keys(closure).some(k => !keys.includes(k)) ||
         keys.some(k => !(k in closure)) || !RECONCILIATION_OUTCOMES.includes(closure.outcome) ||
-        typeof closure.basis !== 'string' || !closure.basis.trim() || Array.from(closure.basis).length > 512 || /[ -]/.test(closure.basis) ||
+        typeof closure.basis !== 'string' || !closure.basis.trim() || Array.from(closure.basis).length > 512 || /[\x00-\x1f\x7f]/.test(closure.basis) ||
         [closure.attempts_ended, closure.identity_history_checked, closure.target_receipt_checked].some(v => v !== true)) fail('invalid_request');
     if (!validUUID(id)) fail('snapshot_unavailable', 404);
     return this.exclusive(id, async () => this.view(await this.tx(owner, state => {

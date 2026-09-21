@@ -58,10 +58,21 @@ describe('I03 formal candidate recycle bin (rc3 §4, synthetic peers)', () => {
     expect(gone.status).toBe('deleted'); expect(gone.resource_ref).toBeUndefined(); expect(gone.recycle_until).toBeUndefined();
     peers.target.get(id).state = 'succeeded'; // a tombstone cannot be talked back into a resource
     await expect(f.service.status(f.owner, id)).rejects.toMatchObject({ code: 'receipt_invalid' });
-    expect(await f.service.get(f.owner, id)).toMatchObject({ status: 'unknown', error_code: 'receipt_invalid' });
+    // The refused receipt is recorded as an error only; the tombstone itself is never un-settled (triad finding 2026-09-21).
+    const kept = await f.service.get(f.owner, id);
+    expect(kept).toMatchObject({ status: 'deleted', error_code: 'receipt_invalid' }); expect(kept.resource_ref).toBeUndefined();
     peers.target.get(id).state = 'deleted'; clock += 2000; // honest peer again, after the recorded backoff
     expect((await f.service.resume(f.owner, id)).status).toBe('deleted');
     expect(peers.phases.filter(p => p === 'commit')).toHaveLength(1);
+  });
+  test('V17: a failed read-only status query keeps the receipt-backed status; only writes are unknown in flight', async () => {
+    peers.script.dropRedeem = 'status'; // transient target failure on the query itself
+    await expect(f.service.status(f.owner, id)).rejects.toMatchObject({ code: 'target_unavailable' });
+    expect(await f.service.get(f.owner, id)).toMatchObject({ status: 'succeeded', error_code: 'target_unavailable', resource_ref: done.resource_ref });
+    clock += 2000;
+    expect(await f.service.resume(f.owner, id)).toMatchObject({ status: 'succeeded', resource_ref: done.resource_ref });
+    expect((await record()).last_error).toBeUndefined();
+    expect(peers.phases.filter(p => p === 'commit')).toHaveLength(1); // writes that fail stay unknown until queried (window tests)
   });
   test('receipt shape: recycled needs the resource identity and an integer recycle_until; succeeded must not carry it; the draft rejects both', () => {
     const base = { schema_version: 1, protocol_version: FORMAL_VERSION, request_id: 'r1', operation_id: id, replayed: false };
