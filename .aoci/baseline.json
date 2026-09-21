@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-21T10:23:18Z",
+  "updated_at": "2026-09-21T10:50:50Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "f85d1c54e7f205f5095d58c1c82ca63dc92b0afd1d6682e454dc0749bc7a1e16",
-      "size": 323044,
-      "normalized_sha256": "f85d1c54e7f205f5095d58c1c82ca63dc92b0afd1d6682e454dc0749bc7a1e16"
+      "sha256": "ffd42300e4f5f007003e8d1d66da8771d7548f67375e4b887d73579417b54d49",
+      "size": 323304,
+      "normalized_sha256": "ffd42300e4f5f007003e8d1d66da8771d7548f67375e4b887d73579417b54d49"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -461,9 +461,9 @@
     },
     "backend/src/__tests__/unit/services/artifactHandoffAuthority.test.js": {
       "role": "observe",
-      "sha256": "1080e3ad4e3fda7327acfeeeda91005d99a76cff21222f606bd7b16f5eb36e27",
-      "size": 3504,
-      "normalized_sha256": "1080e3ad4e3fda7327acfeeeda91005d99a76cff21222f606bd7b16f5eb36e27"
+      "sha256": "f717e292ffc9bc746398af86338365ad4a386bc45b18e9a5d2a5bb03c0f12971",
+      "size": 4282,
+      "normalized_sha256": "f717e292ffc9bc746398af86338365ad4a386bc45b18e9a5d2a5bb03c0f12971"
     },
     "backend/src/__tests__/unit/services/artifactHandoffBindingCandidate.test.js": {
       "role": "observe",
@@ -1738,9 +1738,9 @@
       "normalized_sha256": "6886b6a208722e55a46013ade1da56a89e1c04c2aec41badbeb4baba002829cf"
     },
     "backend/src/services/artifactHandoff/handoffAuthority.js": {
-      "sha256": "2229a4dd4af63d467dd010b427ccc97c983554577c3665fa4b9f16102265cd5f",
-      "size": 3008,
-      "normalized_sha256": "2229a4dd4af63d467dd010b427ccc97c983554577c3665fa4b9f16102265cd5f"
+      "sha256": "9cd224e1acdd13a29e259e914ee12d49368ee23577ef29ff0bf4000ccaf595ff",
+      "size": 3410,
+      "normalized_sha256": "9cd224e1acdd13a29e259e914ee12d49368ee23577ef29ff0bf4000ccaf595ff"
     },
     "backend/src/services/artifactHandoff/i03Client.js": {
       "sha256": "b0a799d6d940906a1613771de388d37f3e37b8159d40ae33b24d99225217c0e7",
@@ -2265,14 +2265,14 @@
       "normalized_sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2"
     },
     "docs/integrations/p03-instance-binding-candidate.json": {
-      "sha256": "8470c5bbcdd6f2e3c29a407af1c71c9140d5c951bfcf863cd77b91c78b5b243c",
-      "size": 4289,
-      "normalized_sha256": "8470c5bbcdd6f2e3c29a407af1c71c9140d5c951bfcf863cd77b91c78b5b243c"
+      "sha256": "d0b84a1004613a1853e32f4d380471e32ee7a45f8388bf77a6cadd875b174884",
+      "size": 4671,
+      "normalized_sha256": "d0b84a1004613a1853e32f4d380471e32ee7a45f8388bf77a6cadd875b174884"
     },
     "docs/integrations/p03-product-decisions-20260921.md": {
-      "sha256": "bf85548773e3de5dbdf2c7953d550f2c7c4091189100e06917d2d41d495f6327",
-      "size": 6676,
-      "normalized_sha256": "bf85548773e3de5dbdf2c7953d550f2c7c4091189100e06917d2d41d495f6327"
+      "sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe",
+      "size": 7411,
+      "normalized_sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe"
     },
     "docs/integrations/p03-profile-v1-rc2-review.md": {
       "sha256": "fa745f398f2f791fec2647275e2ecc7bd69ef466a1b2f4fad8e7fc492b923a50",
@@ -2285,14 +2285,14 @@
       "normalized_sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583"
     },
     "docs/integrations/p03-release-readiness-candidate.md": {
-      "sha256": "f9d29088c1b20a0b4c58392a9e78da5681943c97b03326ff04c3fd9d867e1d95",
-      "size": 9187,
-      "normalized_sha256": "f9d29088c1b20a0b4c58392a9e78da5681943c97b03326ff04c3fd9d867e1d95"
+      "sha256": "ec6686ecaad02eec3f74fc4f1387f383e766d888336f9d98de96b92a9fcdd23a",
+      "size": 9537,
+      "normalized_sha256": "ec6686ecaad02eec3f74fc4f1387f383e766d888336f9d98de96b92a9fcdd23a"
     },
     "docs/integrations/p03-source-handoff.md": {
-      "sha256": "9b1c2ca5b1755210ebde25f406f94dd710359e103e081febd7aac824234b8f1d",
-      "size": 66409,
-      "normalized_sha256": "9b1c2ca5b1755210ebde25f406f94dd710359e103e081febd7aac824234b8f1d"
+      "sha256": "d8c3bbe8d79ac39af79aebe2dd2009881ce3896eaf1de2333d0cd15e68b07a49",
+      "size": 67217,
+      "normalized_sha256": "d8c3bbe8d79ac39af79aebe2dd2009881ce3896eaf1de2333d0cd15e68b07a49"
     },
     "docs/integrations/p03-synthetic-packet.json": {
       "sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183",

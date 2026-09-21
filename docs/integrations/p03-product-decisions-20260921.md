@@ -31,7 +31,8 @@
 
 ## P03 本轮据此实施
 
-- 源侧资格候选 `handoffAuthority.js`：按 J2 用真实用户模型判断账号有效/非学生/未过期，附件仅本会话所有者的文本文件，源锁使用 `MySQLHandoffStore.withOwnerLock`；不推断教师；默认关闭、未挂路由。
+- 源侧资格候选 `handoffAuthority.js`：按 J2 用真实用户模型判断账号有效/未过期/非影子或学生，附件仅本会话所有者的文本文件，源锁使用 `MySQLHandoffStore.withOwnerLock`；不推断教师；默认关闭、未挂路由。
+- **影子账号谓词（2026-09-21 18:5x 落到真实 schema 事实）**：决-9 / docs/02 §3 规定学生只有 edu 账号、实践账号是 SSO 自动建的影子——本仓 `users.uuid_source='sso'` 正是这一标记（建号时写入一次、无编辑入口、密码登录已拒绝该来源；Identity 关联的教师账号保持 `'system'`）。`checkSubject` 默认据此拒绝（`subject_not_eligible`），调用方注入的更严谓词只能叠加不能放宽。决-12 的学生组映射列（`user_groups.edu_school_id + cohort`）尚未入库，入库后把"组为映射学生组"并入谓词即可；本地线上副本显示星云站有 438 个 `sso` 影子账号、`user_groups` 无映射列、无 P03 表。
 - 候选配置：星云站 `handoff.enabled=false` 附用户决定引用。
 
 ## rc3 消费（2026-09-21 18:3x）

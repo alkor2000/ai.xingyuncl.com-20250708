@@ -62,9 +62,10 @@
     "note": "tags prove which commit the tooling deployed, not the running process; the pku .env instance key was not re-read (production reads denied this session)"
   },
   "eligibility_candidate": {
-    "source": "account exists, status active, not expired, not student-mode/shadow (marker pending 决议12/C5); no teacher inference at the source",
+    "source": "account exists, status active, not expired, not a shadow account (users.uuid_source='sso', the edu-SSO auto-created shadow per 决-9/docs 02 §3; set once at creation, never editable) and not in a mapped student group once 决-12 columns (user_groups.edu_school_id + cohort) exist; no teacher inference at the source",
     "identity": "same-person link required; unlinked accounts fail at issue (source_link_unavailable)",
     "target": "TE-DNA local teacher account decides teacher status and library write; loss of teacher status ends the handoff",
     "reference": "docs/integrations/p03-product-decisions-20260921.md"
-  }
+  },
+  "read_only_recheck": "dev/p03-prod-readonly-facts.sh (run by the user; prints deployed HEAD, allow-listed public Identity/P03 variable names and values, DB grant booleans and schema facts only)"
 }

@@ -5,10 +5,13 @@
 // Copy rights (J1): only the owner's own conversation and its attachments (already enforced by the source
 // adapter); deletion at either end never touches the other end's original. Unmounted, default-off candidate.
 const { fail } = require('./source');
-// 决议 12 / C5: student-mode accounts hang on a school student group. That marker is not in the schema yet,
-// so the predicate is injected; the default excludes nothing and must be replaced before any enablement.
-const noStudentMarker = () => false;
-function createHandoffAuthority({ User, Message, Conversation, store, isStudentAccount = noStudentMarker }) {
+// Shadow accounts (决-9 / docs/02 §3): a student has only the edu account; the practice account is its shadow,
+// auto-created by the SSO path with users.uuid_source='sso' (set once at creation, never editable; password login
+// already refuses it; Identity-linked teacher accounts stay 'system'). Such an account can never start a handoff.
+// 决-12 student mode additionally hangs on a mapped school student group (edu_school_id + cohort); those columns are
+// not in the schema yet, so a caller may inject a stricter predicate; the default never excludes less than this.
+const shadowAccount = user => user.uuid_source === 'sso';
+function createHandoffAuthority({ User, Message, Conversation, store, isStudentAccount = shadowAccount }) {
   if (!User || !Message || !Conversation || !store || typeof store.withOwnerLock !== 'function' || typeof isStudentAccount !== 'function') fail('invalid_draft_configuration');
   async function account(owner) {
     if (!/^[1-9][0-9]{0,17}$/.test(String(owner))) fail('subject_disabled', 403);
@@ -20,7 +23,7 @@ function createHandoffAuthority({ User, Message, Conversation, store, isStudentA
   const authority = {
     async checkSubject(owner) {
       const user = await account(owner);
-      if (await isStudentAccount(user)) fail('subject_not_eligible', 403);
+      if (shadowAccount(user) || await isStudentAccount(user)) fail('subject_not_eligible', 403);
     },
     // The selected message must belong to a conversation this account owns and still be readable.
     async checkExport(owner, messageId) {

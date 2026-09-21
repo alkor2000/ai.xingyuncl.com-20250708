@@ -7,7 +7,7 @@
 | 组件 | 本轮实际使用 | 真实生产/正式对端 |
 |---|---|---|
 | 源持久层 | 隔离 `mysql:8.0` 容器、随机库、实验创建的受限角色；`MySQLHandoffStore` 多 owner 锚锁 | 未接：生产应用账号仍 ALL PRIVILEGES，受限角色未创建，业务侧锚锁未接线 |
-| 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象 | 未接：真实教师判据与逐附件持久复制权待事实 |
+| 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象；**发起资格候选 `handoffAuthority.js` 已接真实用户模型：活跃/未过期/非影子（`users.uuid_source='sso'`）** | 未接：学生组映射列（决-12）未入库；逐附件持久复制权待事实；教师由 TE-DNA 判定 |
 | Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13：真实 `internal/artifacthandoff` 提供方候选（Identity 固定包 25b5ff1，`EnableFormalCandidate()` + formal policy 行，实验时钟注入）** | 未接：正式 profile 未批准，`cmd/pkuailab-id` 不开启候选 |
 | 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest）；**同版三端：未修改的 T11 `cmd/t11-lab`（真实 store/handlers，PG16 隔离库，Identity 拆分角色模型）八场景通过** | 未接：T11 候选未合入/未发布/未启用；生产迁移与生产角色未建 |
 | 传输 | 回环 HTTP（draft 客户端）；本机 TLS 假对端（HTTPS 传输 21 项） | 未接：`I03HttpsTransport` 未装配到编排 |
@@ -56,7 +56,7 @@
 | 路由 | 未挂 | 无生产路由读取持久层；正式保存入口关闭 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
-| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），沿用 2026-09-20 11:35 记录 |
+| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），沿用 2026-09-20 11:35 记录；用户可自行运行 `bash dev/p03-prod-readonly-facts.sh`（只打印 HEAD、白名单变量、授权/schema 布尔与计数）并把输出贴回，本仓据此更新 |
 
 ## 6 接续包
 

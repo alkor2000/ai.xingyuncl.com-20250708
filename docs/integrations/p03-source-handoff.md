@@ -47,6 +47,12 @@ TE 刷新候选 `20260921-t11-refresh`（父版 `5089cb6`；最终以第一包 2
 
 边界：仍是 `i03-draft-0.1` 隔离联验——未证明正式 wire/W/R/`recycled`/pairs、TLS、真实教师/实机、生产迁移与生产角色（目标角色为实验库内按 Identity 模型建的角色；源角色为实验创建的受限角色）；不是冻结、启用或发布授权。三端时钟：源与 Identity 用墙钟；`cmd/t11-lab` 按其设计把时钟钉在场景起始秒（仅 `clock` 命令推进），三端相差 <100 s，在 ±300 s 新鲜度之内；本联验不含 2 天原生期限断言。复现：更新 `dev/p03-triad/candidate.json` 后 `python3 dev/p03-triad/check.py`（需本地 mysql:8.0 / postgres:16 / postgres:18 镜像与 Go；自建随机容器并清理；不写 Identity/TE 仓库）。
 
+### 2026-09-21 18:5x：影子账号谓词落到 schema 事实；分支已推送
+
+- 用户授权后分支 `codex/p03-handoff-adapter` 已推送到 GitHub（未合并、未发布；与 origin/main `c4a6e86` merge-tree 干跑无冲突）。
+- `handoffAuthority.js` 默认谓词由"占位不排除"改为真实事实：`users.uuid_source='sso'`（edu SSO 自动建的影子账号，决-9 / docs/02 §3）不能发起交接；注入谓词只能叠加。学生组映射列（决-12）仍未入库。这是 Identity rc3 §3 资格装配一直等的源侧事实。
+- 新增 `dev/p03-prod-readonly-facts.sh` 供用户本人运行双站只读事实核对（HEAD、白名单非密变量、DB 授权布尔、`users`/`user_groups` 列、影子账号计数、P03 表计数），替代会话内被拦截的生产读取。
+
 ### 候选参数与限制（明示，非协议值）
 
 - 首次 issue 结算窗 = 客户端超时 + 30 s；无 W 的可重试失败上限 5 次；本地元数据在 R 之后再保留 1 天供展示，R 起不再申请授权。生产接线时须与 Identity/T11 的实际请求上界对齐。
