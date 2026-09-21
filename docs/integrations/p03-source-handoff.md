@@ -25,6 +25,10 @@
 
 私有证据：`storage/private/p03-handoff-validation/durable-release-candidate-20260921.json`（绑定本轮源文件 SHA、Jest 结果、实验结果 SHA）、`durable-source-result.json`/`durable-source-tests.log`（实验机器结果）、`durable-release-candidate-20260921-jest.log`。复现：`cd backend && npx jest src/__tests__/unit/services/artifactHandoff`；实验 `PATH=/usr/local/go/bin:$PATH PYTHONDONTWRITEBYTECODE=1 python3 dev/p03-durable-check.py /home/hanying/pkuailab-id`（需本地 `mysql:8.0`/`postgres:18` 镜像与 Go，自建随机容器并清理）。
 
+### 2026-09-21 16:5x：V10–13 在真实 Identity 提供方候选上通过
+
+Identity BATCH-01 第 2 项固定包（commit `25b5ff1`、rc2 `af86a5cd…`、候选 wire `teacher-artifact-handoff/1`、`Provider.EnableFormalCandidate()` 仅 development）到达后，新增 `dev/p03-formal-provider-check.py`：隔离 mysql:8.0 + postgres:18，Go overlay 在 Identity `internal/artifacthandoff` 测试包内启用 formal 候选并暴露实验时钟，P03 MySQL worker 以 formal wire 经回环 relay（只做丢请求/丢响应/停机注入）访问真实提供方，目标为向真实提供方兑换票据的 Node 假目标。9 场景通过、race、0 跳过；观测到真实提供方 W−1 的 commit 票 `expires_at=W`、R−1 的 status 票 `expires_at=R`、重试/重启后 W 不变、结算窗内 not_prepared 不当作未创建、无 W 的有界失败进入对账 hold。未发现与本仓 formal 客户端的接口差异。仍为模拟/注入：目标、时间源、教师与复制权事实；T11 接收侧 W 保存与锁后核 W 未验。证据 `storage/private/p03-handoff-validation/formal-provider/result.json`。
+
 ### 候选参数与限制（明示，非协议值）
 
 - 首次 issue 结算窗 = 客户端超时 + 30 s；无 W 的可重试失败上限 5 次；本地元数据在 R 之后再保留 1 天供展示，R 起不再申请授权。生产接线时须与 Identity/T11 的实际请求上界对齐。

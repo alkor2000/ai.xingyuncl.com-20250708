@@ -43,5 +43,19 @@
     "IDENTITY_DEPLOYMENT_INSTANCE_KEY is not set on the pku site today (2026-09-20 read-only check); the candidate value must be set through the enrollment/consumer flow, not by editing .env by hand",
     "Xingyun Registry entry and dataset distinctness are Identity-side facts; the source repository only records that its client, instance and database differ",
     "no P03_HANDOFF_* variable is read by any mounted code path; P03_HANDOFF_ENABLED=false is the required default when a loader exists"
-  ]
+  ],
+  "deployed_version_evidence": {
+    "source": "release tooling tags fetched read-only from GitHub (dev/deploy.sh and dev/deploy-docker.sh push a tag after a successful deploy)",
+    "xingyun": {
+      "tag": "deploy-20260921_110105",
+      "commit": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tagged_at": "2026-09-21T11:01:05+08:00"
+    },
+    "pku": {
+      "tag": "deploy-docker-20260921_110616",
+      "commit": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tagged_at": "2026-09-21T11:06:16+08:00"
+    },
+    "note": "tags prove which commit the tooling deployed, not the running process; the pku .env instance key was not re-read (production reads denied this session)"
+  }
 }

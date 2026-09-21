@@ -8,7 +8,7 @@
 |---|---|---|
 | 源持久层 | 隔离 `mysql:8.0` 容器、随机库、实验创建的受限角色；`MySQLHandoffStore` 多 owner 锚锁 | 未接：生产应用账号仍 ALL PRIVILEGES，受限角色未创建，业务侧锚锁未接线 |
 | 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象 | 未接：真实教师判据与逐附件持久复制权待事实 |
-| Identity（issue/revoke） | I03 Go/PG18 实验提供方（draft：不返回 `operation_expires_at`、票不截断）；V10–13 用进程内/回环假 Identity | 未接：正式 profile 与提供方实现待 Identity BATCH-01 固定包 |
+| Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13：真实 `internal/artifacthandoff` 提供方候选（Identity 固定包 25b5ff1，`EnableFormalCandidate()` + formal policy 行，实验时钟注入）** | 未接：正式 profile 未批准，`cmd/pkuailab-id` 不开启候选 |
 | 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest） | 未接：T11 候选仍基于 `b548f3e`，须在 S05 稳定父版刷新后同版联验 |
 | 传输 | 回环 HTTP（draft 客户端）；本机 TLS 假对端（HTTPS 传输 21 项） | 未接：`I03HttpsTransport` 未装配到编排 |
 | 时间源 | 注入时钟（Jest/实验 clock 服务） | 生产依赖 NTP，未验证 |
@@ -23,13 +23,13 @@
 | V12b 查询票截至 R | 通过：R-1 票 `expires_at=R`；到 R 不申授权、cancel 拒绝、只读旧结果；R+1d 后元数据删除 | 同上 |
 | V13 L≤now<W | 通过：未 release 记 expired；已成功者在正文清理后仍恢复成功 | 同上 |
 
-真实提供方运行 V10–13：**未做**，等待 Identity 固定包（commit/契约 SHA/启动入口）。
+真实提供方运行 V10–13：**已做**（`dev/p03-formal-provider-check.py`，2026-09-21 16:5x）。Identity 固定包 25b5ff1（契约 rc2 `af86a5cd…`）；9 场景在真实 Go/PG18 提供方上通过、race、0 跳过：formal_success、v10_lost_first_issue（W 保持首次持久值）、v10_first_issue_in_flight（结算窗内 not_prepared 只 retry_later，W 取第二次持久值）、v11_recovery_window（freeze+30d+1 仍签 status 票 now+60）、v12a_write_ticket_cut（**真实提供方在 W−1 签出的 commit 票 `expires_at=W`**，跨 W 兑换 401 ticket_expired，目标无资源）、v12b_status_ticket_cut（**R−1 的 status 票 `expires_at=R`**；R 时源不申授权、cancel 拒绝；提供方直接探测 410 operation_expired）、v13 两半、reconciliation_exit（提供方零操作、hold 行不清理、运维关闭后回收）。真实：提供方与其 PG 持久化；模拟/注入：目标（Node 假目标向真实提供方兑换）、时间源（三端注入时钟）、教师/复制权事实。证据 `storage/private/p03-handoff-validation/formal-provider/`。
 
 ## 3 本轮改动清单（分支 `codex/p03-handoff-adapter`）
 
 - 源侧：`backend/src/services/artifactHandoff/{mysqlStore,store,i03Source,i03Client,i03Draft,i03HttpsTransport}.js`
 - 测试：`backend/src/__tests__/unit/services/artifactHandoff{I03Window,I03FormalClient,BindingCandidate}.test.js`，helpers `p03FormalPeers.js`、`p03I03Fixture.js`
-- 隔离实验：`dev/p03-mysql-fixture.cjs`、`dev/p03-mysql-worker.cjs`、`dev/p03-durable-scenarios.py`、`dev/p03-durable-check.py`、`dev/p03-provider-overlay.go`
+- 隔离实验：`dev/p03-mysql-fixture.cjs`、`dev/p03-mysql-worker.cjs`、`dev/p03-durable-scenarios.py`、`dev/p03-durable-check.py`、`dev/p03-provider-overlay.go`；真实提供方 V10–13：`dev/p03-formal-provider-check.py`、`dev/p03-formal-scenarios.py`、`dev/p03-formal-provider-overlay.go`、`dev/p03-formal-target.cjs`
 - 文档：`docs/integrations/p03-source-handoff.md`（9/21 节）、`docs/integrations/p03-instance-binding-candidate.json`、本文
 - 私有证据（不入库）：`storage/private/p03-handoff-validation/durable-release-candidate-20260921.json` 及其引用文件
 
@@ -38,7 +38,8 @@
 | 项 | 值 |
 |---|---|
 | 源工作副本 | `codex/p03-handoff-adapter` @ `e4d52d1`（未提交改动经本分支后续提交固化；文件 SHA 在私有证据 `input_sha256`） |
-| Identity 实验提供方 | `/home/hanying/pkuailab-id` @ `b0a551ee18169aec2c376117826f6697e31ea05f`，`dev/i03/provider`（draft） |
+| Identity 实验提供方（持久层实验） | `/home/hanying/pkuailab-id` @ `b0a551ee18169aec2c376117826f6697e31ea05f`，`dev/i03/provider`（draft） |
+| Identity 真实提供方候选（V10–13） | 固定包 commit `25b5ff104cf987cb27b43b44bb4b9e7738e6422f`（运行时 HEAD f2bcfec，提供方路径与固定包一致），`internal/artifacthandoff`，候选文档 `dev/i03/review/profile-v1-rc2-provider-candidate.md` SHA `df54623c…`、`verification.json` SHA `f5fb41d6…` |
 | T11 候选 | parent `b548f3e14589fcd99e024b3472b16422cd7058c8`，manifest `d706d420…`（本轮未使用 T11 真实接收） |
 | 契约 | rc1 `aa685614…`、rc2 `af86a5cd…`；运行 wire `i03-draft-0.1`；formal 候选 `teacher-artifact-handoff/1` |
 | 镜像 | mysql:8.0 `sha256:7dcddc01…`、postgres:18 `sha256:4ef4dbc9…` |
@@ -55,10 +56,10 @@
 | 路由 | 未挂 | 无生产路由读取持久层；正式保存入口关闭 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
-| 只读核对 | 待授权 | 北大站 HEAD/实例键、两站 DB 与 Identity 元数据重读被会话审核拒绝（Production Reads），沿用 2026-09-20 11:35 记录，不重复 ssh |
+| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），沿用 2026-09-20 11:35 记录 |
 
 ## 6 接续包
 
-- Identity 固定包到达后：核 commit/契约 SHA/启动入口 → 用 `dev/p03-durable-check.py` 同类隔离容器在真实 Go/PG 提供方上运行 V10–13（把 `p03FormalPeers` 的假 Identity 换成真实提供方，目标可先假），记录真实/仍为 fake 的组件。
+- Identity 固定包已消费（见 §2）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 25b5ff1 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。
 - TE T11 固定候选到达后：同版三端隔离联验（源 MySQL、Identity PG、T11 真实存储），一次协调具名端口/隔离库；重试/超时/重启/撤销/过期/版本关系各一场景。
 - 以上完成前不开放正式保存，不解除 D03/教师/实例/profile 条件。
