@@ -50,13 +50,13 @@
 | 项 | 状态 | 依据/缺口 |
 |---|---|---|
 | 加法迁移 | 未建 | 候选 DDL 只在 `mysqlStore.SCHEMA`；契约冻结后再入 `backend/migrations`，先备份（dev/RELEASE.md 第三节） |
-| 数据库角色 | 未建 | `restrictedRoleGrants()` 语句就绪；需运维创建用户/口令并在两站分别授权；生产账号仍 ALL PRIVILEGES |
+| 数据库角色 | 未建 | `restrictedRoleGrants()` 语句就绪；需运维创建用户/口令并在北大站授权（星云不接）；2026-09-21 19:2x 只读确认生产应用账号仍 ALL PRIVILEGES，星云更是全局 `ON *.*`——这本身是与 P03 无关的加固项（见凭据轮换方案） |
 | 配置 | 候选 | `p03-instance-binding-candidate.json`；`P03_HANDOFF_ENABLED=false` 为默认；北大站缺显式实例键（须经 enrollment 流程） |
 | 编排装配 | 未做 | `I03DraftSource` 仍拒绝 production；formal 客户端未接 HTTPS 传输 |
 | 路由 | 未挂 | 无生产路由读取持久层；正式保存入口关闭 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
-| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），2026-09-21 18:55 用户自行运行 `dev/p03-prod-readonly-facts.sh` 取得：两站 HEAD `c4a6e86`、跟踪文件干净；**北大站运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空**（确认 9/20 事实）、`IDENTITY_CLIENT_ID=ai-platform-client` 与候选一致；星云站显式为 `xingyun-ai-platform-test` / `ai-platform-xingyun-test-client`（不接交接）。两站 DB 授权/schema 事实首轮未取到（星云非交互 shell 无 node；北大 `docker compose exec` 吞了脚本 stdin），脚本已修，待复跑 |
+| 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），2026-09-21 18:55 用户自行运行 `dev/p03-prod-readonly-facts.sh` 取得：两站 HEAD `c4a6e86`、跟踪文件干净；**北大站运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空**（确认 9/20 事实）、`IDENTITY_CLIENT_ID=ai-platform-client` 与候选一致；星云站显式为 `xingyun-ai-platform-test` / `ai-platform-xingyun-test-client`（不接交接）。19:2x 复跑取得两站 DB 事实：应用账号均 ALL PRIVILEGES（**星云为全局 `ON *.*`**，北大限本库）；`users.uuid_source` 两站均在（影子账号星云 439 / 北大 11）；`user_groups` 无决-12 映射列；两站均无 `p03_handoff_*` 表（候选零部署）；MySQL 8.0.46 / 8.0.43 |
 
 ## 6 接续包
 

@@ -51,7 +51,7 @@ TE 刷新候选 `20260921-t11-refresh`（父版 `5089cb6`；最终以第一包 2
 
 - 用户授权后分支 `codex/p03-handoff-adapter` 已推送到 GitHub（未合并、未发布；与 origin/main `c4a6e86` merge-tree 干跑无冲突）。
 - `handoffAuthority.js` 默认谓词由"占位不排除"改为真实事实：`users.uuid_source='sso'`（edu SSO 自动建的影子账号，决-9 / docs/02 §3）不能发起交接；注入谓词只能叠加。学生组映射列（决-12）仍未入库。这是 Identity rc3 §3 资格装配一直等的源侧事实。
-- 新增 `dev/p03-prod-readonly-facts.sh` 供用户本人运行双站只读事实核对（HEAD、白名单非密变量、DB 授权布尔、`users`/`user_groups` 列、影子账号计数、P03 表计数），替代会话内被拦截的生产读取。
+- 新增 `dev/p03-prod-readonly-facts.sh` 供用户本人运行双站只读事实核对（HEAD、白名单非密变量、DB 授权布尔、`users`/`user_groups` 列、影子账号计数、P03 表计数），替代会话内被拦截的生产读取。**用户 18:55/19:2x 两轮运行结果**（记入 `p03-instance-binding-candidate.json` `read_only_facts_20260921`）：两站 HEAD `c4a6e86` 干净；北大运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空、`IDENTITY_CLIENT_ID=ai-platform-client`；星云为 `xingyun-ai-platform-test` 测试实例；两站应用账号仍 ALL PRIVILEGES（星云全局 `ON *.*`）；`users.uuid_source` 两站均在（影子账号 439 / 11）；无决-12 映射列；无 `p03_handoff_*` 表。首轮脚本两个缺陷（非交互 shell 无 nvm、`docker compose exec` 吞脚本 stdin）已修。
 
 ### 候选参数与限制（明示，非协议值）
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-21T10:50:50Z",
+  "updated_at": "2026-09-21T11:03:06Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "ffd42300e4f5f007003e8d1d66da8771d7548f67375e4b887d73579417b54d49",
-      "size": 323304,
-      "normalized_sha256": "ffd42300e4f5f007003e8d1d66da8771d7548f67375e4b887d73579417b54d49"
+      "sha256": "fad271f115a847ed6ce5a56c906c6218e186861f63fedba89eece9c046aeff1b",
+      "size": 323429,
+      "normalized_sha256": "fad271f115a847ed6ce5a56c906c6218e186861f63fedba89eece9c046aeff1b"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2265,9 +2265,9 @@
       "normalized_sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2"
     },
     "docs/integrations/p03-instance-binding-candidate.json": {
-      "sha256": "d0b84a1004613a1853e32f4d380471e32ee7a45f8388bf77a6cadd875b174884",
-      "size": 4671,
-      "normalized_sha256": "d0b84a1004613a1853e32f4d380471e32ee7a45f8388bf77a6cadd875b174884"
+      "sha256": "2843ef755000da84c8176f59348b90d8362366c6888cde325c5acb4f2253edbd",
+      "size": 7532,
+      "normalized_sha256": "2843ef755000da84c8176f59348b90d8362366c6888cde325c5acb4f2253edbd"
     },
     "docs/integrations/p03-product-decisions-20260921.md": {
       "sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe",
@@ -2285,14 +2285,14 @@
       "normalized_sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583"
     },
     "docs/integrations/p03-release-readiness-candidate.md": {
-      "sha256": "ec6686ecaad02eec3f74fc4f1387f383e766d888336f9d98de96b92a9fcdd23a",
-      "size": 9537,
-      "normalized_sha256": "ec6686ecaad02eec3f74fc4f1387f383e766d888336f9d98de96b92a9fcdd23a"
+      "sha256": "b0c4f0edca947bb36fc00ed8555de5cada734373d7d0ca73a1fd6efb3e7ff7ff",
+      "size": 10174,
+      "normalized_sha256": "b0c4f0edca947bb36fc00ed8555de5cada734373d7d0ca73a1fd6efb3e7ff7ff"
     },
     "docs/integrations/p03-source-handoff.md": {
-      "sha256": "d8c3bbe8d79ac39af79aebe2dd2009881ce3896eaf1de2333d0cd15e68b07a49",
-      "size": 67217,
-      "normalized_sha256": "d8c3bbe8d79ac39af79aebe2dd2009881ce3896eaf1de2333d0cd15e68b07a49"
+      "sha256": "d97f3e04d2d96da6595cd4118a42db6b3e91db251dfcaaa71b78005e8b674c3b",
+      "size": 67804,
+      "normalized_sha256": "d97f3e04d2d96da6595cd4118a42db6b3e91db251dfcaaa71b78005e8b674c3b"
     },
     "docs/integrations/p03-synthetic-packet.json": {
       "sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183",

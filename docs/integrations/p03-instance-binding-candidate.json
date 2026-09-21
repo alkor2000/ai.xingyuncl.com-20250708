@@ -68,7 +68,7 @@
   },
   "read_only_recheck": "dev/p03-prod-readonly-facts.sh (run by the user; prints deployed HEAD, allow-listed public Identity/P03 variable names and values, DB grant booleans and schema facts only)",
   "read_only_facts_20260921": {
-    "read_by": "the user running dev/p03-prod-readonly-facts.sh at 2026-09-21 18:55 (Asia/Singapore); values below are the allow-listed public facts it printed",
+    "read_by": "the user running dev/p03-prod-readonly-facts.sh at 2026-09-21 18:55 and 19:2x (Asia/Singapore); values below are the allow-listed public facts it printed",
     "xingyun": {
       "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
       "tracked_dirty": 0,
@@ -78,7 +78,22 @@
       "IDENTITY_CLIENT_ID": "ai-platform-xingyun-test-client",
       "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "xingyun-ai-platform-test",
       "P03_HANDOFF_*": "not set",
-      "db_facts": "not read yet (node not on the non-interactive ssh PATH; script fixed, re-run pending)"
+      "db_facts": {
+        "mysql": "8.0.46 (host package)",
+        "app_user_grant_count": 3,
+        "all_privileges": true,
+        "global_grant_on_star_star": true,
+        "users_columns_present": [
+          "deleted_at",
+          "expire_at",
+          "role",
+          "status",
+          "uuid_source"
+        ],
+        "user_groups_mapping_columns": [],
+        "sso_shadow_accounts": 439,
+        "p03_handoff_tables": 0
+      }
     },
     "pku": {
       "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
@@ -90,12 +105,29 @@
       "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "",
       "IDENTITY_BACKCHANNEL_URL": "",
       "P03_HANDOFF_*": "not set",
-      "db_facts": "not read yet (first script version let docker compose exec drain the remote script; fixed, re-run pending)"
+      "db_facts": {
+        "mysql": "8.0.43 (compose image)",
+        "app_user_grant_count": 2,
+        "all_privileges": true,
+        "global_grant_on_star_star": false,
+        "users_columns_present": [
+          "deleted_at",
+          "expire_at",
+          "role",
+          "status",
+          "uuid_source"
+        ],
+        "user_groups_mapping_columns": [],
+        "sso_shadow_accounts": 11,
+        "p03_handoff_tables": 0
+      }
     },
     "conclusions": [
       "pku running container still has no explicit deployment instance key (empty), confirming the 2026-09-20 fact; the candidate value pku-ai-platform-prod must arrive through the enrollment/consumer flow before any formal handoff",
       "pku client id ai-platform-client matches the candidate; xingyun runs its own test client and instance key and stays out of the handoff (J2)",
-      "both sites run c4a6e86 with clean tracked trees, matching the deploy tags"
+      "both sites run c4a6e86 with clean tracked trees, matching the deploy tags",
+      "both application DB accounts still hold ALL PRIVILEGES (pku on its database; xingyun globally ON *.*): the restricted P03 role does not exist anywhere yet and the production role is not a candidate for it",
+      "users.uuid_source exists on both sites (shadow predicate applicable now: 439 shadow accounts on xingyun, 11 on pku); user_groups has no 决-12 mapping columns; no p03_handoff_* table exists on either site (nothing of this candidate is deployed)"
     ],
     "note": "token auth method name omitted from this record (it contains a word the candidate's credential guard rejects); both sites use the .env.template default"
   }
