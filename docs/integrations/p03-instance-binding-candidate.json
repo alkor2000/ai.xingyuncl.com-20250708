@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "candidate": "p03-instance-binding/1",
+  "status": "candidate_not_deployed",
+  "recorded_at": "2026-09-21",
+  "purpose": "Explicit deployment-instance binding for the P03 teacher-artifact handoff first instance pair (rc1 D05/J2). Nothing here is applied to any server; values are public identifiers already pinned in backend/src/services/artifactHandoff/i03HttpsTransport.js.",
+  "sites": {
+    "pku": {
+      "public_origin": "https://ai.pkuailab.com",
+      "identity_issuer": "https://id.pkuailab.com",
+      "client_id": "ai-platform-client",
+      "deployment_instance_key": "pku-ai-platform-prod",
+      "handoff": {
+        "enabled": false,
+        "wire_version": "teacher-artifact-handoff/1",
+        "store": "mysql",
+        "source_instance": "pku-ai-platform-prod",
+        "target_instance": "pku-tedna-prod",
+        "target_origin": "https://workflow.pkuailab.com",
+        "target_client_id": "tedna-client",
+        "db_role_candidate": "restricted role per backend/src/services/artifactHandoff/mysqlStore.js restrictedRoleGrants(): DML on p03_handoff_* only plus SELECT on source-fact tables; the production application user currently holds ALL PRIVILEGES (fact recorded 2026-09-20, not changed by this candidate)"
+      }
+    },
+    "xingyun": {
+      "public_origin": "https://ai.xingyuncl.com",
+      "handoff": {
+        "enabled": false,
+        "reason": "Not in the first instance pair. 2026-09-20 11:35 read-only metadata: explicit instance key and client id differ from the pku candidate; database identity fingerprint differs from the pku site. Registry-side proof of a distinct dataset belongs to Identity's platformctl status, not to this repository."
+      }
+    }
+  },
+  "env_candidate_pku": {
+    "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "pku-ai-platform-prod",
+    "P03_HANDOFF_ENABLED": "false",
+    "P03_HANDOFF_STORE": "mysql",
+    "P03_HANDOFF_WIRE_VERSION": "teacher-artifact-handoff/1",
+    "P03_HANDOFF_SOURCE_INSTANCE": "pku-ai-platform-prod",
+    "P03_HANDOFF_TARGET_INSTANCE": "pku-tedna-prod",
+    "P03_HANDOFF_IDENTITY_ORIGIN": "https://id.pkuailab.com",
+    "P03_HANDOFF_TARGET_ORIGIN": "https://workflow.pkuailab.com"
+  },
+  "not_proven_here": [
+    "IDENTITY_DEPLOYMENT_INSTANCE_KEY is not set on the pku site today (2026-09-20 read-only check); the candidate value must be set through the enrollment/consumer flow, not by editing .env by hand",
+    "Xingyun Registry entry and dataset distinctness are Identity-side facts; the source repository only records that its client, instance and database differ",
+    "no P03_HANDOFF_* variable is read by any mounted code path; P03_HANDOFF_ENABLED=false is the required default when a loader exists"
+  ]
+}
