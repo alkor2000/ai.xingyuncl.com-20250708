@@ -23,13 +23,17 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-PIN = json.loads((HERE / 'candidate.json').read_text())
+# `--candidate=<file>` selects another pinned candidate (e.g. candidate-formal.json for the formal wire); the
+# candidate file names the overlay, driver and Go test that run it.
+PIN = json.loads((HERE / next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--candidate=')), 'candidate.json')).read_text())
 IDENTITY = Path(os.environ.get('P03_IDENTITY_ROOT', '/home/hanying/pkuailab-id')).resolve()
 RELEASE = Path(PIN['release']).resolve()
 T11 = RELEASE / 'source'
 CASES = PIN['cases']
-OVERLAY_SOURCE = IDENTITY / 'dev/i03/current-triad/provider_test.go.txt'
+OVERLAY_SOURCE = (IDENTITY if PIN.get('overlay_owner', 'identity') == 'identity' else ROOT) / PIN.get('overlay', 'dev/i03/current-triad/provider_test.go.txt')
 PROBE_SOURCE = IDENTITY / 'dev/i03/current-triad/error_probe.cjs'
+DRIVER = HERE / PIN.get('driver', 'scenarios.py')
+TEST_NAME = PIN.get('test_name', 'TestCurrentP03T11Main')
 SCHEMA = RELEASE / 'post-s05b-expected-schema.sql'
 MIGRATION = T11 / 'backend/migrations' / PIN['migration']
 # The sanitized schema dump carries neither owners nor privileges. The S05b immutable-snapshot privilege facts
@@ -73,7 +77,7 @@ def fingerprints():
              *(IDENTITY / 'internal/artifacthandoff').glob('*.go'), IDENTITY / 'dev/i03/native/schema.sql', IDENTITY / 'dev/i03/fixtures.json',
              OVERLAY_SOURCE, PROBE_SOURCE, IDENTITY / 'go.mod', IDENTITY / 'go.sum',
              *(ROOT / 'backend/src/services/artifactHandoff').glob('*.js'), ROOT / 'dev/p03-mysql-worker.cjs', ROOT / 'dev/p03-mysql-fixture.cjs',
-             HERE / 'check.py', HERE / 'scenarios.py', HERE / 'candidate.json']
+             HERE / 'check.py', DRIVER, OVERLAY_SOURCE, *(HERE.glob('candidate*.json'))]
     return {str(p): sha(p) for p in sorted(set(files)) if p.is_file()}
 
 
@@ -99,7 +103,7 @@ def main():
     rehearsal = '--rehearsal' in sys.argv[1:]
     role_model = 'broad' if '--target-role=broad' in sys.argv[1:] else 'split'
     os.umask(0o077)
-    evidence = ROOT / 'storage/private/p03-handoff-validation' / (('triad-rehearsal' if rehearsal else 'triad-' + PIN['candidate']) + ('-broad' if role_model == 'broad' else ''))
+    evidence = ROOT / 'storage/private/p03-handoff-validation' / (('triad-rehearsal' + PIN.get('evidence_suffix', '') if rehearsal else 'triad-' + PIN['candidate']) + ('-broad' if role_model == 'broad' else ''))
     evidence.mkdir(parents=True, exist_ok=True)
     manifest, pinned, drift = verify_inputs(rehearsal)
     before = fingerprints()
@@ -113,11 +117,11 @@ def main():
               'manifest_sha256': sha(RELEASE / 'source-manifest.json'), 'closure_sha256': sha(RELEASE / 'closure.json'), 'schema_input_sha256': sha(SCHEMA),
               'target_migration': PIN['migration'], 'identity_head': run(['git', 'rev-parse', 'HEAD'], cwd=IDENTITY), 'identity_provider_commit': PIN['identity_provider_commit'],
               'source_head': run(['git', 'rev-parse', 'HEAD'], cwd=ROOT), 'source_dirty': run(['git', 'status', '--porcelain', '--', 'backend/src/services/artifactHandoff', 'dev'], cwd=ROOT) != '',
-              'source': 'P03 MySQL 8 durable candidate under the restricted lab role, native draft profile, wall clock',
-              'identity': 'real Go/PG18 provider (internal/artifacthandoff) through its own current-triad overlay, synthetic facts, draft policy; not the complete Identity main',
+              'source': PIN.get('source_description', 'P03 MySQL 8 durable candidate under the restricted lab role, native draft profile, wall clock'),
+              'identity': PIN.get('identity_description', 'real Go/PG18 provider (internal/artifacthandoff) through its own current-triad overlay, synthetic facts, draft policy; not the complete Identity main'),
               'target': 'unmodified T11 cmd/t11-lab (real store/handlers) on PG16: sanitized S05b post-schema + ' + PIN['migration'] + ' up/verify in one transaction',
               'target_role_model': role_model, 'target_role_grants': ROLE_MODELS[role_model], 'target_preimage_privileges': TARGET_PREIMAGE_PRIVILEGES,
-              'clocks': 'source and Identity on wall time; t11-lab clock pinned to each case start second (its own design)',
+              'clocks': PIN.get('clocks', 'source and Identity on wall time; t11-lab clock pinned to each case start second (its own design)'),
               'network': 'containers on loopback-published ports; databases disposable; no namespace isolation',
               'real_teacher_authority': False, 'identity_full_main': False, 'input_sha256': before}
     env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'GOFLAGS': '-mod=mod'}
@@ -182,12 +186,12 @@ def main():
             run(['go', 'build', '-race', '-o', str(receiver), './cmd/t11-lab'], cwd=T11 / 'backend', env=env, timeout=600)
             driver = tmp / 'driver'
             driver.mkdir()
-            shutil.copy(HERE / 'scenarios.py', driver / 'scenarios.py')
+            shutil.copy(DRIVER, driver / 'scenarios.py')  # the overlay always invokes <driver dir>/scenarios.py
             shutil.copy(PROBE_SOURCE, driver / 'error_probe.cjs')
             overlay = tmp / 'overlay.json'
-            overlay.write_text(json.dumps({'Replace': {str(IDENTITY / 'internal/artifacthandoff/current_triad_test.go'): str(OVERLAY_SOURCE)}}))
+            overlay.write_text(json.dumps({'Replace': {str(IDENTITY / 'internal/artifacthandoff/p03_triad_overlay_test.go'): str(OVERLAY_SOURCE)}}))
             result['binary_sha256'] = {'t11_lab': sha(receiver)}
-            print('Unmodified T11 cmd/t11-lab built with -race; Identity overlay and error probe used verbatim.', flush=True)
+            print('Unmodified T11 cmd/t11-lab built with -race; overlay ' + str(OVERLAY_SOURCE.name) + ' and Identity error probe in place.', flush=True)
             config = {'cases': CASES, 'practice_root': str(ROOT), 'receiver': str(receiver), 'evidence': str(evidence),
                       'target': {'container': names['target'], 'database': target_db,
                                  'dsn': f"postgres://tedna_t11_lab:{lab_password}@127.0.0.1:{ports['target']}/{target_db}?sslmode=disable"},
@@ -195,7 +199,7 @@ def main():
             go_env = {**env, 'I03_NATIVE_DATABASE_URL': f"postgres://postgres:{passwords['identity']}@127.0.0.1:{ports['identity']}/i03_native?sslmode=disable",
                       'I03_NATIVE_ISOLATED': '1', 'I03_CURRENT_CONFIG': json.dumps(config), 'I03_TRIAD_DRIVER': str(driver), 'I03_TRIAD_EVIDENCE': str(evidence)}
             result['stage'] = 'triad'
-            proc = subprocess.run(['go', 'test', '-race', '-count=1', '-json', '-overlay', str(overlay), '-run', '^TestCurrentP03T11Main$', './internal/artifacthandoff'],
+            proc = subprocess.run(['go', 'test', '-race', '-count=1', '-json', '-overlay', str(overlay), '-run', '^' + TEST_NAME + '$', './internal/artifacthandoff'],
                                   cwd=IDENTITY, env=go_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1500)
             events = []
             for line in proc.stdout.splitlines():
@@ -214,7 +218,7 @@ def main():
             skipped = [e.get('Test', 'package') for e in events if e.get('Action') == 'skip']
             result.update(passed=passed, failed=failed, skipped=skipped, returncode=proc.returncode, race=True)
             print(json.dumps({'returncode': proc.returncode, 'passed': passed, 'failed': failed, 'skipped': skipped}, ensure_ascii=False), flush=True)
-            expected = {'TestCurrentP03T11Main', *('TestCurrentP03T11Main/' + c for c in CASES)}
+            expected = {TEST_NAME, *(TEST_NAME + '/' + c for c in CASES)}
             ok = proc.returncode == 0 and not failed and not skipped and set(passed) == expected
         after = fingerprints()
         result['inputs_unchanged'] = before == after
