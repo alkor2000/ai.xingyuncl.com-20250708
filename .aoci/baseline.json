@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-21T09:18:58Z",
+  "updated_at": "2026-09-21T10:23:18Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "ca911e213a11ba872d243152953decc715f57177e212c9b2db52e35c1061316f",
-      "size": 322862,
-      "normalized_sha256": "ca911e213a11ba872d243152953decc715f57177e212c9b2db52e35c1061316f"
+      "sha256": "f85d1c54e7f205f5095d58c1c82ca63dc92b0afd1d6682e454dc0749bc7a1e16",
+      "size": 323044,
+      "normalized_sha256": "f85d1c54e7f205f5095d58c1c82ca63dc92b0afd1d6682e454dc0749bc7a1e16"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -497,9 +497,9 @@
     },
     "backend/src/__tests__/unit/services/artifactHandoffI03Recycle.test.js": {
       "role": "observe",
-      "sha256": "655ff46428b6012b2bbf87be4125b943f78ab31726303772422551e6d652ae60",
-      "size": 6333,
-      "normalized_sha256": "655ff46428b6012b2bbf87be4125b943f78ab31726303772422551e6d652ae60"
+      "sha256": "3faee87d3d383f2d9cb95796fff8729a382f751b73441b2675b651f7a07dad69",
+      "size": 7331,
+      "normalized_sha256": "3faee87d3d383f2d9cb95796fff8729a382f751b73441b2675b651f7a07dad69"
     },
     "backend/src/__tests__/unit/services/artifactHandoffI03Source.test.js": {
       "role": "observe",
@@ -1758,9 +1758,9 @@
       "normalized_sha256": "fc7da306cde59ee1a9e2c8fff018356ef7515380da4953d554584c110555f769"
     },
     "backend/src/services/artifactHandoff/i03Source.js": {
-      "sha256": "685e54723701f889245f8a8a4141973422a57d0d8256cb9bc8564e88a7eb0e1b",
-      "size": 21820,
-      "normalized_sha256": "685e54723701f889245f8a8a4141973422a57d0d8256cb9bc8564e88a7eb0e1b"
+      "sha256": "c6ab32c0c5913e63230799ec09ccfd8f7bd4206fc0485d877f6b2286f0e5dd81",
+      "size": 22150,
+      "normalized_sha256": "c6ab32c0c5913e63230799ec09ccfd8f7bd4206fc0485d877f6b2286f0e5dd81"
     },
     "backend/src/services/artifactHandoff/mysqlStore.js": {
       "sha256": "065beb58ac682af4e755da8ff5a2e2676c1e0a3b1bd1c9b425a02b54e49b80c3",
@@ -2270,9 +2270,9 @@
       "normalized_sha256": "8470c5bbcdd6f2e3c29a407af1c71c9140d5c951bfcf863cd77b91c78b5b243c"
     },
     "docs/integrations/p03-product-decisions-20260921.md": {
-      "sha256": "978eb725fb195e4b520e23ce77d143320c0ac616ecfd63b1d298117ca0113051",
-      "size": 5297,
-      "normalized_sha256": "978eb725fb195e4b520e23ce77d143320c0ac616ecfd63b1d298117ca0113051"
+      "sha256": "bf85548773e3de5dbdf2c7953d550f2c7c4091189100e06917d2d41d495f6327",
+      "size": 6676,
+      "normalized_sha256": "bf85548773e3de5dbdf2c7953d550f2c7c4091189100e06917d2d41d495f6327"
     },
     "docs/integrations/p03-profile-v1-rc2-review.md": {
       "sha256": "fa745f398f2f791fec2647275e2ecc7bd69ef466a1b2f4fad8e7fc492b923a50",
@@ -2285,14 +2285,14 @@
       "normalized_sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583"
     },
     "docs/integrations/p03-release-readiness-candidate.md": {
-      "sha256": "1f059094d9e8051f340a69771157b6f7ae73ed154ed3f67d9078b8500f2633cc",
-      "size": 8240,
-      "normalized_sha256": "1f059094d9e8051f340a69771157b6f7ae73ed154ed3f67d9078b8500f2633cc"
+      "sha256": "f9d29088c1b20a0b4c58392a9e78da5681943c97b03326ff04c3fd9d867e1d95",
+      "size": 9187,
+      "normalized_sha256": "f9d29088c1b20a0b4c58392a9e78da5681943c97b03326ff04c3fd9d867e1d95"
     },
     "docs/integrations/p03-source-handoff.md": {
-      "sha256": "6d1af35d402a9c9d55329ab5ca1225befd852f4e77d89393d8f1a05a56013365",
-      "size": 58926,
-      "normalized_sha256": "6d1af35d402a9c9d55329ab5ca1225befd852f4e77d89393d8f1a05a56013365"
+      "sha256": "9b1c2ca5b1755210ebde25f406f94dd710359e103e081febd7aac824234b8f1d",
+      "size": 66409,
+      "normalized_sha256": "9b1c2ca5b1755210ebde25f406f94dd710359e103e081febd7aac824234b8f1d"
     },
     "docs/integrations/p03-synthetic-packet.json": {
       "sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183",

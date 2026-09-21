@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 IDENTITY = Path(sys.argv[1] if len(sys.argv) > 1 else '/home/hanying/pkuailab-id').resolve()
 EVIDENCE = ROOT / 'storage/private/p03-handoff-validation/formal-provider'
 PROVIDER_COMMIT = '14b9852035d908bc27af9ce3691ef613fdd1b062'  # Identity rc3 candidate (pairs allow-list); rc2 provider 25b5ff1 retained underneath
+# The rc3 review document moves without provider code changes (.3 idempotent replay wording, .4 user decision J3);
+# it is pinned to the consumed revision instead of "unchanged since the fixed commit".
+RC3_REVIEW_SHA256 = '8126f53909211a7c82725c913a784b903c2c6e6bf6edae34555a741d4fb4afdf'  # i03-review-20260921.4
 CASES = ['formal_success', 'v10_lost_first_issue', 'v10_first_issue_in_flight', 'v11_recovery_window', 'v12a_write_ticket_cut',
          'v12b_status_ticket_cut', 'v13_local_deadline', 'v13_success_survives_local_deadline', 'reconciliation_exit']
 
@@ -50,8 +53,10 @@ def main():
     # The fixed package must be an ancestor and the provider/candidate paths unchanged since it.
     subprocess.run(['git', 'merge-base', '--is-ancestor', PROVIDER_COMMIT, 'HEAD'], cwd=IDENTITY, check=True)
     provider_paths = ['internal/artifacthandoff', 'dev/i03/native', 'dev/i03/review/profile-v1-rc1.md', 'dev/i03/review/profile-v1-rc2.md',
-                      'dev/i03/review/profile-v1-rc3.md', 'dev/i03/review/profile-v1-rc2-provider-candidate.md', 'dev/i03/fixtures.json',
-                      'dev/i03/rc2-provider-candidate/verification.json', 'dev/i03/rc3-candidate/verification.json', 'go.mod', 'go.sum']
+                      'dev/i03/review/profile-v1-rc2-provider-candidate.md', 'dev/i03/fixtures.json',
+                      'dev/i03/rc2-provider-candidate/verification.json', 'go.mod', 'go.sum']
+    # rc3 review text is pinned to the consumed revision; its verification record accrues consumption entries and is only recorded.
+    assert sha(IDENTITY / 'dev/i03/review/profile-v1-rc3.md') == RC3_REVIEW_SHA256, 'rc3_review_revision_unknown'
     assert run(['git', 'diff', '--stat', PROVIDER_COMMIT, 'HEAD', '--', *provider_paths], cwd=IDENTITY) == '', 'provider_paths_changed_since_fixed_package'
     assert run(['git', 'status', '--porcelain', '--', *provider_paths], cwd=IDENTITY) == '', 'provider_paths_dirty'
     before = fingerprints()
@@ -110,7 +115,7 @@ def main():
         after = fingerprints()
         evidence = {'draft_only': False, 'formal_wire': 'teacher-artifact-handoff/1', 'status': 'passed' if ok and before == after else 'failed',
                     'identity': 'real Go/PG18 provider (internal/artifacthandoff) with EnableFormalCandidate and formal policy row; injected lab clock',
-                    'identity_commit': identity_head, 'fixed_package_commit': PROVIDER_COMMIT, 'provider_paths_unchanged_since_fixed_package': True,
+                    'identity_commit': identity_head, 'fixed_package_commit': PROVIDER_COMMIT, 'provider_paths_unchanged_since_fixed_package': True, 'rc3_review_sha256': RC3_REVIEW_SHA256, 'rc3_verification_record_sha256': sha(IDENTITY / 'dev/i03/rc3-candidate/verification.json'),
                     'source': 'P03 MySQL8 worker under the restricted lab role, formal wire',
                     'target': 'synthetic Node target redeeming tickets at the real provider (not T11)',
                     'time_source': 'injected: provider lab clock, worker command clock, target control clock (not wall time)',

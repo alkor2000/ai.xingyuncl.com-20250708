@@ -5,18 +5,22 @@ const { mysqlFixture } = require('./p03-mysql-fixture.cjs');
 const { I03DraftClient } = require('../backend/src/services/artifactHandoff/i03Client');
 const { HandoffError, fail, digest } = require('../backend/src/services/artifactHandoff/source');
 const { TABLES } = require('../backend/src/services/artifactHandoff/mysqlStore');
-let fixture, now, afterPrepare, cleanupStop, cleanupErrors = 0;
+let fixture, now, afterPrepare, cleanupStop, cleanupErrors = 0, wallClock = false;
 const DENIED = new Set(['ER_TABLEACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR', 'ER_SPECIFIC_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR', 'ER_KILL_DENIED_ERROR', 'ER_PROCACCESS_DENIED_ERROR']);
 async function run(r) {
-  if (Number.isSafeInteger(r.now)) now = r.now;
+  if (Number.isSafeInteger(r.now) && !wallClock) now = r.now;
   if (r.command === 'init') {
     if (fixture) fail('invalid_request');
+    // Triads with real peers on wall time use Date.now; a frozen per-command clock would reject
+    // tickets minted across a second tick. Injected-clock labs keep the per-command value.
+    if (r.wallClock === true) { wallClock = true; now = undefined; }
     const auth = r.authorization;
     // Same stdin protocol as p03-i03-source-worker.cjs so a triad driver can point at the MySQL-backed
     // source; endpointProfile/wireVersion select native paths and the formal candidate when a peer supports it.
+    const clock = () => (wallClock ? Date.now() : now);
     const client = new I03DraftClient({ identityOrigin: r.identityOrigin, targetOrigin: r.targetOrigin,
       ...(r.endpointProfile ? { endpointProfile: r.endpointProfile } : {}), ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}),
-      getAuthorization: async () => auth, now: () => now, env: { NODE_ENV: 'test' } });
+      getAuthorization: async () => auth, now: clock, env: { NODE_ENV: 'test' } });
     const send = client.send.bind(client);
     client.send = async (...args) => {
       const result = await send(...args);
@@ -27,7 +31,7 @@ async function run(r) {
       return result;
     };
     const options = { ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}), ...(r.recoveryAttemptLimit ? { recoveryAttemptLimit: r.recoveryAttemptLimit } : {}) };
-    fixture = await mysqlFixture(r.mysql, client, () => now, r.owner || 'p-teacher', options);
+    fixture = await mysqlFixture(r.mysql, client, clock, r.owner || 'p-teacher', options);
     return { ready: true, owner: fixture.owner };
   }
   if (!fixture) fail('invalid_request');
@@ -35,7 +39,12 @@ async function run(r) {
   if (r.command === 'freeze') return service.freeze(owner,
     { ...await fixture.selection(), ...(r.purpose ? { purpose: r.purpose } : {}) }, r.key || randomUUID(), '水循环探究合成片段');
   if (['resume', 'status', 'get', 'cancel'].includes(r.command)) return service[r.command](owner, r.operation_id);
-  if (r.command === 'duplicates') return Promise.all(Array.from({ length: 4 }, () => service.resume(owner, r.operation_id)));
+  if (r.command === 'duplicates') {
+    // Four simultaneous clicks meet the bounded cross-process wait (GET_LOCK 2s): each one reports either its
+    // settled view or operation_busy (503, retryable) for the caller to retry; nothing is retried here.
+    const clicks = await Promise.allSettled(Array.from({ length: 4 }, () => service.resume(owner, r.operation_id)));
+    return clicks.map(c => (c.status === 'fulfilled' ? { ok: true, result: c.value } : { ok: false, code: c.reason instanceof HandoffError ? c.reason.code : 'local_failure' }));
+  }
   if (r.command === 'reconcile') return service.reconcile('ops-reconciler', owner, r.operation_id, r.closure);
   if (r.command === 'mutate') {
     await fixture.mutate(r.kind, r.hold, () => {
@@ -98,6 +107,16 @@ async function run(r) {
       deadline_moved: await attempt(s => { s.operations[r.operation_id].operation_expires_at = 2000086401; }),
       deadline_cleared: await attempt(s => { s.operations[r.operation_id].operation_expires_at = null; })
     };
+  }
+  if (r.command === 'age') {
+    // Test-only: shift this operation's local deadlines into the past on the lab pool (the business side),
+    // so a restart scenario can prove that expired source bytes are gone while status still recovers.
+    if (!Number.isSafeInteger(r.milliseconds) || r.milliseconds <= 0) fail('invalid_request');
+    await lab.execute(`UPDATE ${TABLES.operations} SET record=JSON_SET(record,'$.write_until',JSON_EXTRACT(record,'$.write_until')-?) WHERE id=?`, [r.milliseconds, r.operation_id]);
+    for (const name of ['snapshots', 'keys']) {
+      await lab.execute(`UPDATE ${TABLES[name]} SET expires_at=expires_at-?, record=JSON_SET(record,'$.expires_at',JSON_EXTRACT(record,'$.expires_at')-?) WHERE operation_id=?`, [r.milliseconds, r.milliseconds, r.operation_id]);
+    }
+    return { aged: true };
   }
   if (r.command === 'hold') {
     await store.transaction(owner, s => { s.operations[r.operation_id].hold = r.value === true; });

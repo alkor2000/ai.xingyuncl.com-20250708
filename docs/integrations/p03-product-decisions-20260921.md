@@ -41,4 +41,8 @@ Identity 候选 `teacher-artifact-handoff/1-rc3`（`dev/i03/review/profile-v1-rc
 - 状态模型（§4）：formal 路径接受 `recycled`（保留 `resource_ref`/`resource_version`/`open_target`，必带整数 `recycle_until`），`deleted` 保持墓碑终态；源侧转移规则 succeeded⇄recycled 同资源身份、recycled/succeeded→deleted、deleted 后任何变化拒绝、`recycle_until` 一次设定不得变化；recycled 不写不重传、不被本地 L 改写为 expired；`cancel` 在 recycled 上接受 `cancel_outcome: already_succeeded`。draft wire 继续拒绝 `recycled` 与 `recycle_until`。V14–V16 源侧测试通过。
 - 仅北大实例对（§2）：真实提供方 V10–13 九场景在 rc3 提供方（含 `artifact_handoff_formal_pairs` 白名单）上重跑通过；源侧不感知 pairs 表，只承受 403 `action_not_allowed`。
 - 资格（§3）：确认源侧学生/影子占位谓词不满足启用条件；入口保持关闭直到可信标记入库。
-- **真实接口差异（已报 Identity）**：§4.2 矩阵中 succeeded 状态下的 prepare/commit 返回 `409 state_conflict`，该码不在共同稿固定安全码列表内，P03 客户端会按 `receipt_invalid` 拒绝；须在冻结前将其加入固定码表或改用既有码。其余字段/枚举与本仓实现一致。
+- **真实接口差异（已报 Identity，已解决）**：§4.2 矩阵中 succeeded 状态下的 prepare/commit 原写 `409 state_conflict`，该码不在共同稿固定安全码列表内，P03 客户端会按 `receipt_invalid` 拒绝。Identity 评审修订 `.3`（SHA `1bf29999…`）采纳本仓第二选项：不新增错误码，目标对已成功操作的 prepare/commit 幂等回放原成功（`status:succeeded, replayed:true` + 原资源身份）；源侧无改动（本仓 `remember()` 已按同资源身份接受回放）。其余字段/枚举与本仓实现一致。
+
+### rc3 评审修订 .4（J3，2026-09-21 17:38）
+
+Identity 固定版本更新为 `i03-review-20260921.4`（`profile-v1-rc3.md` SHA `8126f53909211a7c82725c913a784b903c2c6e6bf6edae34555a741d4fb4afdf`，作废 `1bf29999…`；提交 6969c1f；事件 `identity-i03-rc3-review4-j3-20260921T093849Z`）。差别只在 §1 新增用户决定 J3——**目标教师范围为所有教师，含普通教师**（用户原话"对，所有老师，包含普通老师"）；§3 目标谓词由 TE 提案改为已定（`users.status='active'` 且 `role ∈ {viewer, operator, senior_operator}`，在 owner 行锁后核，`subject_disabled`/`subject_not_eligible` 均在固定码表）。对源侧：**无任何改动**——教师判定在 TE 本地；源侧仍只判可信发起（账号有效、非学生/影子、已同人关联）；rc1/rc2 字节与提供方代码 `14b9852` 不变，V10–13 复跑与 rc3 消费结果继续适用。Identity 仍等本仓真实学生/影子谓词；其 current-triad 重绑已锚定本仓 `3e43420` 的客户端字节（`i03Client.js` `b0a799d6…`、客户端测试 `efec186c…`，本轮未变）。

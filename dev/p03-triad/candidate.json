@@ -1,0 +1,32 @@
+{
+  "candidate": "20260921-t11-refresh-rebase",
+  "release": "/home/hanying/tedna-sync/releases/20260921-t11-refresh",
+  "target_parent": "5089cb645147df626705ab906c79c617f016dd7f",
+  "manifest_sha256": "0eff21a1825f9463a3eba91dc87096806f940bd12520e0323d53d59c2e10f607",
+  "closure_sha256": "3dc4d0cd5483fc253dae7e002221991b35417e3b4b995eda0e4130370c916841",
+  "schema_input_sha256": "f4264ea8b58f6d02ac1216dcf1c49cb62f1a3f1617e97857db9d8593a4e3c217",
+  "migration": "20260921_03_teacher_artifact_imports",
+  "identity_provider_commit": "14b9852035d908bc27af9ce3691ef613fdd1b062",
+  "identity_paths": [
+    "internal/artifacthandoff",
+    "dev/i03/native",
+    "dev/i03/fixtures.json",
+    "dev/i03/current-triad/provider_test.go.txt",
+    "dev/i03/current-triad/error_probe.cjs",
+    "go.mod",
+    "go.sum"
+  ],
+  "wire": "i03-draft-0.1",
+  "cases": [
+    "duplicates",
+    "revoke",
+    "version",
+    "attachment",
+    "lost_commit_restart",
+    "deleted_restore",
+    "target_disabled",
+    "error_envelope"
+  ],
+  "tedna_event": "tedna-t11-first-package-rebase-20260921T101319Z",
+  "identity_rebind_event": "identity-i03-triad-rebind-passed-20260921T101655Z"
+}
