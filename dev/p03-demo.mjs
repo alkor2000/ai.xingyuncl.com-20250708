@@ -16,7 +16,9 @@ const { createServer } = await import(path.join(path.dirname(frontend.resolve('v
 const demoDirectory = path.join(root, 'storage/private/p03-demo')
 if (process.argv.includes('--fresh')) {
   // Only the fixed synthetic demo state; never touches the authenticated app's p03-dev spool.
-  await fs.unlink(path.join(demoDirectory, 'private/state.json')).catch(error => { if (error.code !== 'ENOENT') throw error })
+  for (const file of ['private/state.json', 'private/mock-receiver/state.json']) {
+    await fs.unlink(path.join(demoDirectory, file)).catch(error => { if (error.code !== 'ENOENT') throw error })
+  }
 }
 const f = await fixture(demoDirectory)
 const app = express()

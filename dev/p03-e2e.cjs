@@ -3,7 +3,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('fs/promises');
 const path = require('path');
 const assert = require('node:assert/strict');
-const root = 'http://localhost:3004';
+const root = process.env.P03_DEMO_URL || 'http://localhost:3004';
 const output = process.env.P03_EVIDENCE_DIR || '/tmp/ai-platform-p03';
 
 (async () => {
@@ -13,8 +13,12 @@ const output = process.env.P03_EVIDENCE_DIR || '/tmp/ai-platform-p03';
     const page = await browser.newPage({ viewport: { width: 1280, height: 1000 }, acceptDownloads: true });
     const errors = [];
     const external = [];
+    let deliveries = 0;
     page.on('pageerror', error => errors.push(error.message));
-    page.on('request', req => { if (!req.url().startsWith(root) && !req.url().startsWith('http://127.0.0.1:3004')) external.push(req.url()); });
+    page.on('request', req => {
+      if (!req.url().startsWith(root)) external.push(req.url());
+      if (req.url().endsWith('/deliver')) deliveries++;
+    });
     await page.goto(`${root}/dev/p03.html`);
     await page.getByRole('button', { name: '准备成果' }).waitFor();
     assert.equal(await page.getByRole('button', { name: '准备成果' }).count(), 1);
@@ -72,16 +76,21 @@ const output = process.env.P03_EVIDENCE_DIR || '/tmp/ai-platform-p03';
     }
     await choose('模拟接收场景', '接收成功但响应丢失');
     await page.getByRole('button', { name: '模拟发送 / 重试' }).click();
-    await page.getByText('模拟结果待确认，可以重试', { exact: true }).waitFor();
+    await page.getByText('模拟接收完成，未写入 TE-DNA', { exact: true }).waitFor();
+    const recovered = JSON.parse(await page.getByTestId('handoff-receipt').textContent());
+    assert.equal(recovered.continuation.state, 'not_started');
+    assert.equal(recovered.continuation.resource_id, recovered.receipt.resource_id);
+    assert.equal(recovered.continuation.resource_version, recovered.receipt.resource_version);
+    assert.equal(deliveries, 1);
     await page.screenshot({ path: path.join(output, 'response-lost.png'), fullPage: true, animations: 'disabled' });
     // Reload browser, resume the server-side snapshot and reconcile the already accepted operation.
     await page.reload();
     await page.getByRole('button', { name: '准备成果' }).click();
     await page.getByRole('button', { name: '继续上次准备' }).click();
     await page.getByText('开发验证与详情', { exact: true }).click();
-    await page.getByText('模拟结果待确认，可以重试', { exact: true }).waitFor();
-    await page.getByRole('button', { name: '模拟发送 / 重试' }).click();
     await page.getByText('模拟接收完成，未写入 TE-DNA', { exact: true }).waitFor();
+    assert.deepEqual(JSON.parse(await page.getByTestId('handoff-receipt').textContent()), recovered);
+    assert.equal(deliveries, 1);
     assert.equal(await page.getByText('已保存到 TE-DNA', { exact: true }).count(), 0);
     await page.getByText('开发验证与详情', { exact: true }).click();
     await page.screenshot({ path: path.join(output, 'desktop-recovered.png'), fullPage: true, animations: 'disabled' });
@@ -92,7 +101,7 @@ const output = process.env.P03_EVIDENCE_DIR || '/tmp/ai-platform-p03';
     assert.deepEqual(external, []);
     await fs.writeFile(path.join(output, 'browser-result.json'), JSON.stringify({ passed: true, checks: [
       'assistant-only-entry', 'teacher-flow-hides-diagnostics', 'shared-platform-theme', 'technical-details-collapsed', 'empty-range-blocked', 'exact-selected-text', 'explicit-owned-attachment', 'download-packet-isolation',
-      'lost-response', 'reload-resume', 'mock-only-result', 'mobile-no-horizontal-overflow', 'no-external-requests'
+      'lost-response-status-recovery-without-resend', 'reload-same-resource-receipt', 'continuation-not-started', 'mock-only-result', 'mobile-no-horizontal-overflow', 'no-external-requests'
     ], viewport: [1280, 390], pageErrors: errors }, null, 2));
     console.log('P03 browser checks passed; evidence: ' + output);
   } finally { await browser.close(); }

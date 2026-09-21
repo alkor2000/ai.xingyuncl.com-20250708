@@ -26,6 +26,20 @@ async function freeze() {
   await screen.findByText('chat.p03.status.prepared')
 }
 describe('P03 scope and recovery UI', () => {
+  it('recovers by status query after response loss and shows the bound receipt only in diagnostics', async () => {
+    window.history.replaceState({}, '', '/?p03Debug=1')
+    await open(); await freeze()
+    api.post.mockResolvedValueOnce(data({ grant_id: 'simulated-grant' }))
+      .mockRejectedValueOnce({ response: { data: { error: { code: 'response_lost' } } } })
+    api.get.mockResolvedValueOnce(data({ state: 'mock_received', receipt: { resource_id: 'mock-resource' },
+      continuation: { resource_id: 'mock-resource', state: 'not_started' } }))
+    click('deliver')
+    await screen.findByText('chat.p03.status.mock_received')
+    expect(screen.queryByText('chat.p03.error.response_lost')).not.toBeInTheDocument()
+    expect(screen.getByTestId('handoff-receipt')).toHaveTextContent('mock-resource')
+    expect(screen.getByTestId('handoff-receipt')).toHaveTextContent('not_started')
+    expect(api.post.mock.calls.filter(call => call[0].endsWith('/deliver'))).toHaveLength(1)
+  })
   it('shows exact substring and sends only source ID/version/offsets, never the conversation body', async () => {
     await open()
     expect(screen.queryByText('chat.p03.technicalDetails')).not.toBeInTheDocument()

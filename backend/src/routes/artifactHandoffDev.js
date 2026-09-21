@@ -19,6 +19,7 @@ const messages = {
   snapshot_unavailable: '快照已不可访问或已过期', authorization_expired: '模拟授权已过期或已撤销，请重新授权',
   idempotency_conflict: '同一幂等键不能用于不同请求', draft_limit: '开发快照数量已达上限',
   receiver_unavailable: '模拟接收方暂不可用，可重试', response_lost: '模拟响应丢失，请查询并恢复同一操作',
+  receipt_invalid: '接收回执未通过核对，请查询原操作，不要另建资源',
   rate_limited: '请求过于频繁，请稍后重试', internal_error: '成果准备暂不可用'
 };
 function createRouter({ service, authenticate, env = process.env }) {
