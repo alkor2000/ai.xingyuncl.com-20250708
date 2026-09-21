@@ -61,5 +61,5 @@
 ## 6 接续包
 
 - Identity rc2 提供方与 rc3 候选均已消费（见 §2 与 `p03-product-decisions-20260921.md` rc3 节）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。rc3 状态模型 `recycled`/`deleted` 已在源侧 formal 路径实现并测试（V14–V16），等待同版冻结后对端才会发出。
-- 同版三端隔离联验（draft wire）已完成：`dev/p03-triad/check.py` 固定运行八场景通过（证据 `storage/private/p03-handoff-validation/triad-20260921-t11-refresh-rebase/`），Identity 自己的重绑同版通过。正式 wire 三端运行器亦就绪（`check.py --candidate=candidate-formal.json`，本仓 overlay 启用 Identity 正式候选 + TE fc1 目标 `formal:true`），首次运行 1/8：其余 7 场景卡在清单 `protocol_version` 的真实接口差异（源=operation wire，TE=固定 draft；fc1 无正式清单向量），已报 Identity 裁定，裁定后重跑即可。
+- 同版三端隔离联验（draft wire）已完成：`dev/p03-triad/check.py` 固定运行八场景通过（证据 `storage/private/p03-handoff-validation/triad-20260921-t11-refresh-rebase/`），Identity 自己的重绑同版通过。正式 wire 三端运行器亦就绪（`check.py --candidate=candidate-formal.json`，本仓 overlay 启用 Identity 正式候选 + TE fc1 目标 `formal:true`），首次运行 1/8：其余 7 场景卡在清单 `protocol_version` 的真实接口差异；Identity fc1 勘误 01 已采纳源侧读法（清单随 operation wire，正式向量 `fixtures-formal.json` 本仓编码器逐字节复现），TE 改 `package.go` 出新候选后更新 SHA 重跑即可。
 - 以上完成前不开放正式保存，不解除 D03/教师/实例/profile 条件。

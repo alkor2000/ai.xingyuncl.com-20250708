@@ -94,6 +94,9 @@ def verify_inputs(rehearsal):
         assert not drift, 'candidate_files_changed'
     provider = PIN['identity_provider_commit']
     subprocess.run(['git', 'merge-base', '--is-ancestor', provider, 'HEAD'], cwd=IDENTITY, check=True)
+    # Documents and vectors that legitimately post-date the provider commit are pinned by content instead.
+    for rel, digest in PIN.get('identity_pinned_files', {}).items():
+        assert sha(IDENTITY / rel) == digest, 'identity_pinned_file_changed'
     assert run(['git', 'diff', '--stat', provider, 'HEAD', '--', *PIN['identity_paths']], cwd=IDENTITY) == '', 'identity_provider_paths_changed'
     assert run(['git', 'status', '--porcelain', '--', *PIN['identity_paths']], cwd=IDENTITY) == '', 'identity_provider_paths_dirty'
     return manifest, pinned, drift

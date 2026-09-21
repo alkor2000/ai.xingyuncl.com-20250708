@@ -59,6 +59,10 @@ TE 正式 wire 目标候选（`/home/hanying/tedna-sync/releases/20260921-t11-fo
 
 **首次固定运行（`storage/private/p03-handoff-validation/triad-20260921-t11-formal-fc1/result.json` SHA `60de83a4…`）：1/8 通过（wire_gate_off——未开 `TEDNA_T11_FORMAL` 的接收方在 Identity 兑换前就以 400 `unsupported_schema` 拒绝正式 wire，与 TE 回执一致），其余 7 场景全部在 prepare 卡在同一处**：Identity 正式签发与兑换成功（`redeemed=1`），随后目标 400 `unsupported_schema`。原因是 **包清单（manifest）的 `protocol_version`**：本仓源按 rc1"改消息版本须重出清单/请求/摘要向量、不混用新旧消息"把清单 `protocol_version` 写成该 operation 的 wire（`teacher-artifact-handoff/1`，`i03Draft.js`）；TE fc1 的 `artifactimport/package.go:146` 仍要求清单 `protocol_version == 'i03-draft-0.1'`（其正式 wire 测试用 `testdata/i03-package.json` 的 draft 清单），只把请求/回执的 `protocol_version` 换成正式 wire。Identity 的黄金向量（`dev/i03/fixtures.json`）只有 draft 清单，正式清单向量尚未出——即 fc1 冻结对象里没有任何一层固定过正式 wire 下清单 `protocol_version` 的取值。这是真实接口差异，已按共同边报 Identity 裁定（建议：清单版本随 operation wire，并出正式清单/请求/摘要向量；若裁定清单保持 draft 版本，本仓只需改 `i03Draft.js` 一处并重出向量）。裁定前正式 wire 三端不能继续；draft 三端结论不受影响。
 
+### 2026-09-21 20:2x：fc1 勘误 01 采纳源侧读法；正式向量已由源侧编码器逐字节复现
+
+Identity 裁定（`dev/i03/review/profile-v1-fc1-erratum-01.md` SHA `17ce8217…`，fc1 后继一层，登记与否由总控定；事件 `identity-i03-fc1-erratum01-formal-plan-20260921T114455Z`）：正式 wire 下包清单 `protocol_version` 随 operation 的 wire——本仓 `i03Draft.js` 已符合、客户端字节 `b0a799d6…` 不变；TE 须改 `package.go` 按 operation 的 wire 校验并改用正式清单测试。正式向量 `dev/i03/fixtures-formal.json`（SHA `8b1b3aab…`）：`selection_sha256` 与 draft 相同 `5bae9fb3…`，`manifest_sha256 6271cb44…`、`binding_sha256 1e32df0c…`。新增单测 `artifactHandoffDraft.test.js`"formal-wire golden vectors"：源侧编码器以 `wireVersion=teacher-artifact-handoff/1` 逐字节复现这三个摘要与两份 blob 摘要，且 draft 向量保持不同。`candidate-formal.json` 现按内容固定勘误与向量文件；TE 出新 manifest/closure 后只需更新两处 SHA 重跑 `check.py --candidate=candidate-formal.json`。Identity 自己的正式三端驱动（`dev/i03/formal-triad`，提取本仓 7596aaa 字节、MySQL 源经 socket 桥、生产 `I03HttpsTransport` 经隔离 CA）演练与本仓 1/8 同因受阻，待 TE 新候选后正式执行。
+
 ### 候选参数与限制（明示，非协议值）
 
 - 首次 issue 结算窗 = 客户端超时 + 30 s；无 W 的可重试失败上限 5 次；本地元数据在 R 之后再保留 1 天供展示，R 起不再申请授权。生产接线时须与 Identity/T11 的实际请求上界对齐。

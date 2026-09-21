@@ -1,4 +1,4 @@
-const { encodeDraft, bindingHash, selectionHash } = require('../../../services/artifactHandoff/i03Draft');
+const { encodeDraft, bindingHash, selectionHash, FORMAL_VERSION } = require('../../../services/artifactHandoff/i03Draft');
 
 // Published synthetic vector: Identity dev/i03/fixtures.json, i03-draft-0.1 (2026-09-19).
 // Kept here so the test is independent of another checkout or live Identity service.
@@ -27,6 +27,20 @@ test('Node source encoder matches independent Identity Python/Go golden byte and
   expect(Buffer.from(output.package.blobs[0].data_b64, 'base64').toString()).toBe(sample().payload.text);
   expect(JSON.stringify(output.binding)).not.toMatch(/两杯|合成|摘要|text|title|local_account|global_person/);
   expect(JSON.stringify(manifest)).not.toContain('DO_NOT_SEND_TO_IDENTITY');
+});
+// Published synthetic formal vector: Identity dev/i03/fixtures-formal.json (fc1 erratum 01, 2026-09-21): the manifest
+// carries the operation's wire, so manifest/binding digests differ from the draft while the selection digest is shared.
+test('Node source encoder matches the Identity formal-wire golden vectors (manifest protocol_version follows the wire)', () => {
+  const output = encodeDraft(sample(), { ...options, wireVersion: FORMAL_VERSION });
+  const manifest = JSON.parse(Buffer.from(output.package.manifest_b64, 'base64'));
+  expect(manifest.protocol_version).toBe('teacher-artifact-handoff/1');
+  expect(output.protocol_version).toBe('teacher-artifact-handoff/1');
+  expect(output.binding.manifest_sha256).toBe('6271cb4460544483dc1a0e560447b47b4e8e8b83a4c10098c89fa76dbbd0aab6');
+  expect(output.binding.selection_sha256).toBe('5bae9fb31c0ca861c4d71f60420a91ce8086b63f4e16bad50e4d835da0e6d10f');
+  expect(output.binding_sha256).toBe('1e32df0ca794222c9934c94d587b51fdc4fa8bf5f869a14bbafa78a85f2831c7');
+  expect(manifest.blobs.map(b => b.sha256)).toEqual(['8d1c6778ce308befc023e90d1e9bb4fc1451174d2dfbf6aec4e0415d6f141ee1',
+    '9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778']);
+  expect(encodeDraft(sample(), options).binding.manifest_sha256).not.toBe(output.binding.manifest_sha256); // the draft vector stays distinct
 });
 test('purpose/operation change keeps selection identity but changes complete binding', () => {
   const input = sample(), original = encodeDraft(input, options);
