@@ -18,7 +18,8 @@
         "target_instance": "pku-tedna-prod",
         "target_origin": "https://workflow.pkuailab.com",
         "target_client_id": "tedna-client",
-        "db_role_candidate": "restricted role per backend/src/services/artifactHandoff/mysqlStore.js restrictedRoleGrants(): DML on p03_handoff_* only plus SELECT on source-fact tables; the production application user currently holds ALL PRIVILEGES (fact recorded 2026-09-20, not changed by this candidate)"
+        "db_role_candidate": "restricted role per backend/src/services/artifactHandoff/mysqlStore.js restrictedRoleGrants(): DML on p03_handoff_* only plus SELECT on source-fact tables; the production application user currently holds ALL PRIVILEGES (fact recorded 2026-09-20, not changed by this candidate)",
+        "identity_rc3_requirement": "formal wire additionally requires the pair (pku-ai-platform-prod -> pku-tedna-prod) to be listed in identity.artifact_handoff_formal_pairs (operator-seeded, app read-only); a policy row alone yields 403 action_not_allowed"
       }
     },
     "xingyun": {
@@ -26,7 +27,8 @@
       "handoff": {
         "enabled": false,
         "reason": "User decision 2026-09-21 (J2): ai.xingyuncl.com does not participate in the TE-DNA handoff. Earlier read-only metadata (2026-09-20 11:35) already showed a distinct instance key, client id and database fingerprint from the pku site.",
-        "decision": "user_2026-09-21_no_tedna_handoff"
+        "decision": "user_2026-09-21_no_tedna_handoff",
+        "identity_rc3_requirement": "explicitly refused: not listed in artifact_handoff_formal_pairs even if a formal policy row exists"
       }
     }
   },

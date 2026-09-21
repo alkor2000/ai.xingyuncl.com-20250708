@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-21T08:55:02Z",
+  "updated_at": "2026-09-21T09:18:58Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "20272ef0bf0f0cc5046c98fb8c7fd4aa92eff2953d1d448497637f76344f5f2a",
-      "size": 322529,
-      "normalized_sha256": "20272ef0bf0f0cc5046c98fb8c7fd4aa92eff2953d1d448497637f76344f5f2a"
+      "sha256": "ca911e213a11ba872d243152953decc715f57177e212c9b2db52e35c1061316f",
+      "size": 322862,
+      "normalized_sha256": "ca911e213a11ba872d243152953decc715f57177e212c9b2db52e35c1061316f"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -269,9 +269,9 @@
     },
     "backend/src/__tests__/helpers/p03FormalPeers.js": {
       "role": "observe",
-      "sha256": "59110539057f504f93e77168e590605c04dcfcbcf6f0d47a270d1fd18b4dc261",
-      "size": 4675,
-      "normalized_sha256": "59110539057f504f93e77168e590605c04dcfcbcf6f0d47a270d1fd18b4dc261"
+      "sha256": "40cc65b41b6fb0d4ed88a061c34b2f26d81eb18fd5e5d36901b905ffcc41811c",
+      "size": 5581,
+      "normalized_sha256": "40cc65b41b6fb0d4ed88a061c34b2f26d81eb18fd5e5d36901b905ffcc41811c"
     },
     "backend/src/__tests__/helpers/p03I03Fixture.js": {
       "role": "observe",
@@ -494,6 +494,12 @@
       "sha256": "bc4daf38f27db340f704f9958df4c76426e042eac6e1b52375f4e8549e0591f2",
       "size": 9476,
       "normalized_sha256": "bc4daf38f27db340f704f9958df4c76426e042eac6e1b52375f4e8549e0591f2"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03Recycle.test.js": {
+      "role": "observe",
+      "sha256": "655ff46428b6012b2bbf87be4125b943f78ab31726303772422551e6d652ae60",
+      "size": 6333,
+      "normalized_sha256": "655ff46428b6012b2bbf87be4125b943f78ab31726303772422551e6d652ae60"
     },
     "backend/src/__tests__/unit/services/artifactHandoffI03Source.test.js": {
       "role": "observe",
@@ -1737,9 +1743,9 @@
       "normalized_sha256": "2229a4dd4af63d467dd010b427ccc97c983554577c3665fa4b9f16102265cd5f"
     },
     "backend/src/services/artifactHandoff/i03Client.js": {
-      "sha256": "88a3cb77d58a36a76a30bd48d746bad6e351a2e74aa17ede82ea3ea7b1281e92",
-      "size": 12220,
-      "normalized_sha256": "88a3cb77d58a36a76a30bd48d746bad6e351a2e74aa17ede82ea3ea7b1281e92"
+      "sha256": "b0a799d6d940906a1613771de388d37f3e37b8159d40ae33b24d99225217c0e7",
+      "size": 12763,
+      "normalized_sha256": "b0a799d6d940906a1613771de388d37f3e37b8159d40ae33b24d99225217c0e7"
     },
     "backend/src/services/artifactHandoff/i03Draft.js": {
       "sha256": "7e21dfda6616d2b573cbed283204835a7d7ecb6f4d41c6060c64e6c6c9fd2ef0",
@@ -1752,9 +1758,9 @@
       "normalized_sha256": "fc7da306cde59ee1a9e2c8fff018356ef7515380da4953d554584c110555f769"
     },
     "backend/src/services/artifactHandoff/i03Source.js": {
-      "sha256": "4553259e580f586afc2dc6b2c43d4ee40ac53ad7c5aac5775aaad188cfe0550b",
-      "size": 21054,
-      "normalized_sha256": "4553259e580f586afc2dc6b2c43d4ee40ac53ad7c5aac5775aaad188cfe0550b"
+      "sha256": "685e54723701f889245f8a8a4141973422a57d0d8256cb9bc8564e88a7eb0e1b",
+      "size": 21820,
+      "normalized_sha256": "685e54723701f889245f8a8a4141973422a57d0d8256cb9bc8564e88a7eb0e1b"
     },
     "backend/src/services/artifactHandoff/mysqlStore.js": {
       "sha256": "065beb58ac682af4e755da8ff5a2e2676c1e0a3b1bd1c9b425a02b54e49b80c3",
@@ -2259,14 +2265,14 @@
       "normalized_sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2"
     },
     "docs/integrations/p03-instance-binding-candidate.json": {
-      "sha256": "4c93e2c8d631858a3a754cf56df73d9af10f337d021dd8746cf4e1ccb9fb2e55",
-      "size": 3890,
-      "normalized_sha256": "4c93e2c8d631858a3a754cf56df73d9af10f337d021dd8746cf4e1ccb9fb2e55"
+      "sha256": "8470c5bbcdd6f2e3c29a407af1c71c9140d5c951bfcf863cd77b91c78b5b243c",
+      "size": 4289,
+      "normalized_sha256": "8470c5bbcdd6f2e3c29a407af1c71c9140d5c951bfcf863cd77b91c78b5b243c"
     },
     "docs/integrations/p03-product-decisions-20260921.md": {
-      "sha256": "e5b64ba1f34d1a51b8b8484c0398da4049204668a5788d556a193232b366c966",
-      "size": 3887,
-      "normalized_sha256": "e5b64ba1f34d1a51b8b8484c0398da4049204668a5788d556a193232b366c966"
+      "sha256": "978eb725fb195e4b520e23ce77d143320c0ac616ecfd63b1d298117ca0113051",
+      "size": 5297,
+      "normalized_sha256": "978eb725fb195e4b520e23ce77d143320c0ac616ecfd63b1d298117ca0113051"
     },
     "docs/integrations/p03-profile-v1-rc2-review.md": {
       "sha256": "fa745f398f2f791fec2647275e2ecc7bd69ef466a1b2f4fad8e7fc492b923a50",
@@ -2279,9 +2285,9 @@
       "normalized_sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583"
     },
     "docs/integrations/p03-release-readiness-candidate.md": {
-      "sha256": "f3407faf5318aed44a1f457db6e93c0ed04bed86e897a7a7566ff55f07a5968b",
-      "size": 8024,
-      "normalized_sha256": "f3407faf5318aed44a1f457db6e93c0ed04bed86e897a7a7566ff55f07a5968b"
+      "sha256": "1f059094d9e8051f340a69771157b6f7ae73ed154ed3f67d9078b8500f2633cc",
+      "size": 8240,
+      "normalized_sha256": "1f059094d9e8051f340a69771157b6f7ae73ed154ed3f67d9078b8500f2633cc"
     },
     "docs/integrations/p03-source-handoff.md": {
       "sha256": "6d1af35d402a9c9d55329ab5ca1225befd852f4e77d89393d8f1a05a56013365",

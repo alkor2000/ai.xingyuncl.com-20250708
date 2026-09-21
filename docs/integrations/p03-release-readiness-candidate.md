@@ -39,7 +39,7 @@
 |---|---|
 | 源工作副本 | `codex/p03-handoff-adapter` @ `e4d52d1`（未提交改动经本分支后续提交固化；文件 SHA 在私有证据 `input_sha256`） |
 | Identity 实验提供方（持久层实验） | `/home/hanying/pkuailab-id` @ `b0a551ee18169aec2c376117826f6697e31ea05f`，`dev/i03/provider`（draft） |
-| Identity 真实提供方候选（V10–13） | 固定包 commit `25b5ff104cf987cb27b43b44bb4b9e7738e6422f`（运行时 HEAD f2bcfec，提供方路径与固定包一致），`internal/artifacthandoff`，候选文档 `dev/i03/review/profile-v1-rc2-provider-candidate.md` SHA `df54623c…`、`verification.json` SHA `f5fb41d6…` |
+| Identity 真实提供方候选（V10–13） | 首跑固定包 `25b5ff1`（rc2 提供方）；复跑 rc3 `14b9852035d908bc27af9ce3691ef613fdd1b062`（新增 formal_pairs 白名单，运行时 HEAD 941fa66，提供方路径与固定包一致），`internal/artifacthandoff`；候选文档 rc2-provider SHA `df54623c…`、rc3 SHA `90c21a95…` |
 | T11 候选 | parent `b548f3e14589fcd99e024b3472b16422cd7058c8`，manifest `d706d420…`（本轮未使用 T11 真实接收） |
 | 契约 | rc1 `aa685614…`、rc2 `af86a5cd…`；运行 wire `i03-draft-0.1`；formal 候选 `teacher-artifact-handoff/1` |
 | 镜像 | mysql:8.0 `sha256:7dcddc01…`、postgres:18 `sha256:4ef4dbc9…` |
@@ -60,6 +60,6 @@
 
 ## 6 接续包
 
-- Identity 固定包已消费（见 §2）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 25b5ff1 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。
+- Identity rc2 提供方与 rc3 候选均已消费（见 §2 与 `p03-product-decisions-20260921.md` rc3 节）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。rc3 状态模型 `recycled`/`deleted` 已在源侧 formal 路径实现并测试（V14–V16），等待同版冻结后对端才会发出。
 - TE T11 固定候选到达后：同版三端隔离联验（源 MySQL、Identity PG、T11 真实存储），一次协调具名端口/隔离库；重试/超时/重启/撤销/过期/版本关系各一场景。
 - 以上完成前不开放正式保存，不解除 D03/教师/实例/profile 条件。

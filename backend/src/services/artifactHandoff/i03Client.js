@@ -35,19 +35,24 @@ function validRequestID(v) {
 function envelope(v, wire = VERSION) {
   if (v.schema_version !== 1 || v.protocol_version !== wire || !validRequestID(v.request_id)) fail('receipt_invalid', 502, true);
 }
+// rc3 (formal only): `recycled` keeps the resource identity and adds recycle_until; `deleted` stays the
+// bodiless tombstone. The draft wire still rejects both the status and the field as unknown.
 function targetReceipt(v, operationId, wire = VERSION) {
   if (!WIRE_VERSIONS.includes(wire)) fail('invalid_draft_configuration');
+  const formal = wire === FORMAL_VERSION;
   fields(v, ['schema_version', 'protocol_version', 'request_id', 'operation_id', 'status', 'replayed'],
-    ['resource_ref', 'resource_version', 'open_target', 'cancel_outcome']);
+    ['resource_ref', 'resource_version', 'open_target', 'cancel_outcome', ...(formal ? ['recycle_until'] : [])]);
   envelope(v, wire);
-  if (v.operation_id !== operationId || typeof v.replayed !== 'boolean' ||
-      !['not_received', 'prepared', 'succeeded', 'cancelled', 'expired', 'deleted', 'rejected'].includes(v.status)) fail('receipt_invalid', 502, true);
-  if (v.status === 'succeeded') {
+  const statuses = ['not_received', 'prepared', 'succeeded', 'cancelled', 'expired', 'deleted', 'rejected', ...(formal ? ['recycled'] : [])];
+  if (v.operation_id !== operationId || typeof v.replayed !== 'boolean' || !statuses.includes(v.status)) fail('receipt_invalid', 502, true);
+  const withResource = v.status === 'succeeded' || v.status === 'recycled';
+  if (withResource) {
     if (!validUUID(v.resource_ref) || !/^sha256:[a-f0-9]{64}$/.test(v.resource_version)) fail('receipt_invalid', 502, true);
     fields(v.open_target, ['kind', 'operation_id']);
     if (v.open_target.kind !== 'import_result' || v.open_target.operation_id !== operationId) fail('receipt_invalid', 502, true);
   } else if (['resource_ref', 'resource_version', 'open_target'].some(k => k in v)) fail('receipt_invalid', 502, true);
-  if ('cancel_outcome' in v && (v.status !== 'succeeded' || v.cancel_outcome !== 'already_succeeded')) fail('receipt_invalid', 502, true);
+  if (v.status === 'recycled' ? !Number.isSafeInteger(v.recycle_until) || v.recycle_until <= 0 : 'recycle_until' in v) fail('receipt_invalid', 502, true);
+  if ('cancel_outcome' in v && (!withResource || v.cancel_outcome !== 'already_succeeded')) fail('receipt_invalid', 502, true);
   return structuredClone(v);
 }
 function loopback(value) {

@@ -19,7 +19,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 IDENTITY = Path(sys.argv[1] if len(sys.argv) > 1 else '/home/hanying/pkuailab-id').resolve()
 EVIDENCE = ROOT / 'storage/private/p03-handoff-validation/formal-provider'
-PROVIDER_COMMIT = '25b5ff104cf987cb27b43b44bb4b9e7738e6422f'  # Identity BATCH-01 item 2 fixed package
+PROVIDER_COMMIT = '14b9852035d908bc27af9ce3691ef613fdd1b062'  # Identity rc3 candidate (pairs allow-list); rc2 provider 25b5ff1 retained underneath
 CASES = ['formal_success', 'v10_lost_first_issue', 'v10_first_issue_in_flight', 'v11_recovery_window', 'v12a_write_ticket_cut',
          'v12b_status_ticket_cut', 'v13_local_deadline', 'v13_success_survives_local_deadline', 'reconciliation_exit']
 
@@ -34,9 +34,9 @@ def sha(path):
 
 def fingerprints():
     files = [*(IDENTITY / 'internal/artifacthandoff').glob('*.go'), IDENTITY / 'dev/i03/native/schema.sql', IDENTITY / 'dev/i03/fixtures.json',
-             IDENTITY / 'dev/i03/review/profile-v1-rc2.md', IDENTITY / 'dev/i03/review/profile-v1-rc1.md',
+             IDENTITY / 'dev/i03/review/profile-v1-rc2.md', IDENTITY / 'dev/i03/review/profile-v1-rc1.md', IDENTITY / 'dev/i03/review/profile-v1-rc3.md',
              IDENTITY / 'dev/i03/review/profile-v1-rc2-provider-candidate.md', IDENTITY / 'dev/i03/rc2-provider-candidate/verification.json',
-             IDENTITY / 'go.mod', IDENTITY / 'go.sum']
+             IDENTITY / 'dev/i03/rc3-candidate/verification.json', IDENTITY / 'go.mod', IDENTITY / 'go.sum']
     files += list((ROOT / 'backend/src/services/artifactHandoff').glob('*.js'))
     files += [ROOT / 'dev' / name for name in ['p03-formal-provider-check.py', 'p03-formal-scenarios.py', 'p03-formal-provider-overlay.go',
                                               'p03-formal-target.cjs', 'p03-mysql-worker.cjs', 'p03-mysql-fixture.cjs']]
@@ -50,7 +50,8 @@ def main():
     # The fixed package must be an ancestor and the provider/candidate paths unchanged since it.
     subprocess.run(['git', 'merge-base', '--is-ancestor', PROVIDER_COMMIT, 'HEAD'], cwd=IDENTITY, check=True)
     provider_paths = ['internal/artifacthandoff', 'dev/i03/native', 'dev/i03/review/profile-v1-rc1.md', 'dev/i03/review/profile-v1-rc2.md',
-                      'dev/i03/review/profile-v1-rc2-provider-candidate.md', 'dev/i03/fixtures.json', 'dev/i03/rc2-provider-candidate/verification.json', 'go.mod', 'go.sum']
+                      'dev/i03/review/profile-v1-rc3.md', 'dev/i03/review/profile-v1-rc2-provider-candidate.md', 'dev/i03/fixtures.json',
+                      'dev/i03/rc2-provider-candidate/verification.json', 'dev/i03/rc3-candidate/verification.json', 'go.mod', 'go.sum']
     assert run(['git', 'diff', '--stat', PROVIDER_COMMIT, 'HEAD', '--', *provider_paths], cwd=IDENTITY) == '', 'provider_paths_changed_since_fixed_package'
     assert run(['git', 'status', '--porcelain', '--', *provider_paths], cwd=IDENTITY) == '', 'provider_paths_dirty'
     before = fingerprints()

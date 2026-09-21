@@ -25,7 +25,7 @@
 
 ## 仍需共同稿增补的接口点（由总控转 Identity/TE）
 
-1. 回收站期间与恢复后的 `status` 语义：建议回收站内返回 `deleted`，恢复后回到 `succeeded` 且 `resource_ref`/`resource_version` 不变；源侧 `remember()` 目前把 `deleted` 视为终态并拒绝其后的状态变化，待共同稿确认后再放开"同资源身份的 deleted→succeeded"。
+1. 回收站期间与恢复后的 `status` 语义：**已由 rc3 §4 解决**——新增 `recycled`（保留资源身份 + `recycle_until`），`deleted` 保持墓碑终态，恢复为 recycled→succeeded 同资源身份；源侧已按此实现（见下"rc3 消费"）。
 2. 30 天到期永久清除后，`status` 仍返回 `deleted`（墓碑保留），新 operation 不复活同一选择（沿 rc2 §2.5）。
 3. 采用即复制是否进入 T11 正式范围，以及删除前引用数提示。
 
@@ -33,3 +33,12 @@
 
 - 源侧资格候选 `handoffAuthority.js`：按 J2 用真实用户模型判断账号有效/非学生/未过期，附件仅本会话所有者的文本文件，源锁使用 `MySQLHandoffStore.withOwnerLock`；不推断教师；默认关闭、未挂路由。
 - 候选配置：星云站 `handoff.enabled=false` 附用户决定引用。
+
+## rc3 消费（2026-09-21 18:3x）
+
+Identity 候选 `teacher-artifact-handoff/1-rc3`（`dev/i03/review/profile-v1-rc3.md` SHA `90c21a95…`，代码 `14b9852`，rc2 提供方 25b5ff1 保留）已在源侧消费：
+
+- 状态模型（§4）：formal 路径接受 `recycled`（保留 `resource_ref`/`resource_version`/`open_target`，必带整数 `recycle_until`），`deleted` 保持墓碑终态；源侧转移规则 succeeded⇄recycled 同资源身份、recycled/succeeded→deleted、deleted 后任何变化拒绝、`recycle_until` 一次设定不得变化；recycled 不写不重传、不被本地 L 改写为 expired；`cancel` 在 recycled 上接受 `cancel_outcome: already_succeeded`。draft wire 继续拒绝 `recycled` 与 `recycle_until`。V14–V16 源侧测试通过。
+- 仅北大实例对（§2）：真实提供方 V10–13 九场景在 rc3 提供方（含 `artifact_handoff_formal_pairs` 白名单）上重跑通过；源侧不感知 pairs 表，只承受 403 `action_not_allowed`。
+- 资格（§3）：确认源侧学生/影子占位谓词不满足启用条件；入口保持关闭直到可信标记入库。
+- **真实接口差异（已报 Identity）**：§4.2 矩阵中 succeeded 状态下的 prepare/commit 返回 `409 state_conflict`，该码不在共同稿固定安全码列表内，P03 客户端会按 `receipt_invalid` 拒绝；须在冻结前将其加入固定码表或改用既有码。其余字段/枚举与本仓实现一致。

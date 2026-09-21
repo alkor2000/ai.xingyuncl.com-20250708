@@ -47,15 +47,22 @@ class FormalPeers {
       if (t.state === 'prepared') { t.state = 'succeeded'; t.resource = randomUUID(); t.version = `sha256:${record.binding.manifest_sha256}`; }
       else if (t.state !== 'succeeded') throw peerError(t.state === 'expired' ? 'operation_expired' : 'not_prepared', 409, false, 'target');
     } else if (phase === 'cancel') {
-      if (!['succeeded', 'deleted'].includes(t.state)) t.state = 'cancelled';
+      if (!['succeeded', 'recycled', 'deleted'].includes(t.state)) t.state = 'cancelled';
     }
     if (this.script.loseRedeem === phase) { this.script.loseRedeem = null; throw peerError('target_unavailable', 503, true); }
+    const withResource = t.state === 'succeeded' || t.state === 'recycled';
     return { schema_version: 1, protocol_version: FORMAL_VERSION, request_id: randomUUID().replace(/-/g, ''),
       operation_id: record.id, status: t.state, replayed: false,
-      ...(t.state === 'succeeded' ? { resource_ref: t.resource, resource_version: t.version,
+      ...(withResource ? { resource_ref: this.script.resourceOverride ?? t.resource, resource_version: t.version,
         open_target: { kind: 'import_result', operation_id: record.id },
-        ...(phase === 'cancel' ? { cancel_outcome: 'already_succeeded' } : {}) } : {}) };
+        ...(phase === 'cancel' ? { cancel_outcome: 'already_succeeded' } : {}) } : {}),
+      ...(t.state === 'recycled' ? { recycle_until: this.script.recycleUntilOverride ?? t.recycle_until } : {}) };
   }
+  // rc3 §4.1 target-owner actions (not reachable through the handoff wire): delete to the recycle bin,
+  // restore within recycle_until, purge to the tombstone.
+  recycle(id) { const t = this.target.get(id); if (t.state !== 'succeeded') throw new Error('not_succeeded'); t.state = 'recycled'; t.recycle_until = this.now() + 30 * DAY; }
+  restore(id) { const t = this.target.get(id); if (t.state !== 'recycled' || this.now() >= t.recycle_until) throw new Error('not_restorable'); t.state = 'succeeded'; delete t.recycle_until; }
+  purge(id) { const t = this.target.get(id); if (t.state !== 'recycled') throw new Error('not_recycled'); t.state = 'deleted'; delete t.recycle_until; }
   async revoke(owner, record) {
     if (this.script.identityDown) throw peerError('identity_unavailable', 503, true);
     const op = this.identity.get(record.id);

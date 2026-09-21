@@ -19,6 +19,9 @@ const METADATA_GRACE_SECONDS = 86400;
 const RECONCILIATION_OUTCOMES = ['not_created', 'cancelled', 'expired', 'rejected', 'deleted'];
 const queues = new Map();
 const terminal = status => ['succeeded', 'cancelled', 'expired', 'deleted', 'rejected'].includes(status);
+// rc3: a recycled resource keeps its identity and may be restored by the target owner; the source never
+// writes again, never rewrites it as expired, and shows it until the target reports deleted or succeeded.
+const settled = status => terminal(status) || status === 'recycled';
 const seconds = ms => Math.floor(ms / 1000);
 class I03DraftSource {
   constructor({ source, store, authority, client, sourceInstance, targetInstance, now = Date.now, env = process.env,
@@ -46,9 +49,10 @@ class I03DraftSource {
       ...(record.reconciliation ? (record.reconciliation.closed_at
         ? { reconciliation_closed: { outcome: record.reconciliation.outcome, closed_at: record.reconciliation.closed_at, actor: record.reconciliation.actor } }
         : { reconciliation_required: true }) : {}),
-      ...(record.status === 'succeeded' ? { resource_ref: record.receipt.resource_ref,
-        resource_version: record.receipt.resource_version, open_target: record.receipt.open_target,
-        continuation: { status: 'not_started', landing: record.binding.landing } } : {}) };
+      ...(record.status === 'succeeded' || record.status === 'recycled' ? { resource_ref: record.receipt.resource_ref,
+        resource_version: record.receipt.resource_version, open_target: record.receipt.open_target } : {}),
+      ...(record.status === 'succeeded' ? { continuation: { status: 'not_started', landing: record.binding.landing } } : {}),
+      ...(record.status === 'recycled' ? { recycle_until: record.receipt.recycle_until } : {}) };
   }
   // Hold keeps a record out of automatic cleanup: its first issue has no trusted W yet, or reconciliation is open.
   settle(op) {
@@ -129,11 +133,16 @@ class I03DraftSource {
     return this.mutate(owner, record.id, current => {
       if (this.formal && current.operation_expires_at == null) fail('receipt_invalid', 502, true); // no target result without trusted W
       const old = current.receipt;
-      if (old && ((old.status === 'succeeded' && !['succeeded', 'deleted'].includes(receipt.status)) ||
-          (['deleted', 'cancelled', 'expired', 'rejected'].includes(old.status) && receipt.status !== old.status) ||
-          (old.status === 'prepared' && receipt.status === 'not_received') ||
-          (old.resource_ref && receipt.status === 'succeeded' &&
-            (old.resource_ref !== receipt.resource_ref || old.resource_version !== receipt.resource_version)))) fail('receipt_invalid', 502, true);
+      if (old) {
+        // rc3 §4.1: succeeded ⇄ recycled keep one resource identity; deleted is the tombstone terminal state.
+        const sameResource = old.resource_ref === receipt.resource_ref && old.resource_version === receipt.resource_version;
+        const kept = ['succeeded', 'recycled'].includes(receipt.status) && sameResource &&
+          !(old.status === 'recycled' && receipt.status === 'recycled' && old.recycle_until !== receipt.recycle_until);
+        const ok = ['succeeded', 'recycled'].includes(old.status) ? kept || receipt.status === 'deleted'
+          : ['deleted', 'cancelled', 'expired', 'rejected'].includes(old.status) ? receipt.status === old.status
+            : !(old.status === 'prepared' && receipt.status === 'not_received');
+        if (!ok) fail('receipt_invalid', 502, true);
+      }
       current.receipt = receipt; current.status = receipt.status;
       delete current.last_error; delete current.retry_at; delete current.pending_attempt; delete current.pending_phase;
     });
@@ -245,7 +254,7 @@ class I03DraftSource {
       if (this.formal && record.reconciliation && !record.reconciliation.closed_at) fail('reconciliation_required', 409);
       if (record.retry_at > this.now()) fail('retry_later', 429, true);
       record = await this.query(owner, record); // Every retry reconciles first; no automatic retry loop.
-      if (terminal(record.status)) return this.view(record);
+      if (settled(record.status)) return this.view(record);
       // Only after the fresh query above: a success or an unknown result is never rewritten as expired (rc2 V13).
       if (record.write_until <= this.now() || (this.formal && record.operation_expires_at != null && seconds(this.now()) >= record.operation_expires_at)) {
         return this.view(await this.mutate(owner, id, op => { op.status = 'expired'; }));
@@ -257,7 +266,7 @@ class I03DraftSource {
         await this.authority.withSourceLock(owner, record.source_id, () => this.checkSource(owner, record, snapshot));
         record = await this.send(owner, record, 'prepare', snapshot.packet);
       }
-      if (terminal(record.status)) return this.view(record);
+      if (settled(record.status)) return this.view(record);
       if (record.status !== 'prepared') fail('receipt_invalid', 502, true);
       if (!record.released_at) {
         try {
