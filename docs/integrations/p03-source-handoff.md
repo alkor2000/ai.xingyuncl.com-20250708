@@ -63,6 +63,25 @@ TE 正式 wire 目标候选（`/home/hanying/tedna-sync/releases/20260921-t11-fo
 
 Identity 裁定（`dev/i03/review/profile-v1-fc1-erratum-01.md` SHA `17ce8217…`，fc1 后继一层，登记与否由总控定；事件 `identity-i03-fc1-erratum01-formal-plan-20260921T114455Z`）：正式 wire 下包清单 `protocol_version` 随 operation 的 wire——本仓 `i03Draft.js` 已符合、客户端字节 `b0a799d6…` 不变；TE 须改 `package.go` 按 operation 的 wire 校验并改用正式清单测试。正式向量 `dev/i03/fixtures-formal.json`（SHA `8b1b3aab…`）：`selection_sha256` 与 draft 相同 `5bae9fb3…`，`manifest_sha256 6271cb44…`、`binding_sha256 1e32df0c…`。新增单测 `artifactHandoffDraft.test.js`"formal-wire golden vectors"：源侧编码器以 `wireVersion=teacher-artifact-handoff/1` 逐字节复现这三个摘要与两份 blob 摘要，且 draft 向量保持不同。`candidate-formal.json` 现按内容固定勘误与向量文件；TE 出新 manifest/closure 后只需更新两处 SHA 重跑 `check.py --candidate=candidate-formal.json`。Identity 自己的正式三端驱动（`dev/i03/formal-triad`，提取本仓 7596aaa 字节、MySQL 源经 socket 桥、生产 `I03HttpsTransport` 经隔离 CA）演练与本仓 1/8 同因受阻，待 TE 新候选后正式执行。
 
+### 2026-09-21 20:4x：正式 wire 同版三端隔离联验通过（MySQL 持久源 × 原生 Identity 正式候选 × TE e1 `cmd/t11-lab formal:true`）
+
+TE 按勘误 01 改清单校验后出 e1 候选（`/home/hanying/tedna-sync/releases/20260921-t11-formal-e1/source`，父 `5089cb6`，37 源，manifest `bdc6dacef901472f0a91029795b174029832fff645210967efb82ed60f5edf52`、closure `ee554bc6…`，`ValidatePackage(raw, binding, wire)` 按 operation 的 wire 校验清单）。`candidate-formal.json` 更新两处 SHA 后固定运行：**八场景全部通过**（`storage/private/p03-handoff-validation/triad-20260921-t11-formal-e1/result.json` SHA `9b62f2f5…`；Go 9 通过 / 0 失败 / 0 跳过、`-race` 无告警；1959 项输入前后一致；候选逐文件 SHA 一致；Identity 提供方路径自 `14b9852` 未变，勘误与正式向量按内容固定）。
+
+| 场景 | 三端实跑事实（Identity overlay 核对的签发相位 / 兑换次数 / operation 数） |
+|---|---|
+| formal_success | 回执 wire `teacher-artifact-handoff/1`、`operation_expires_at = t0+24h`、`recovery_until = W+29d`；目标行绑定 wire 与 W（`teacher_artifact_imports.protocol_version/operation_expires_at`）；私有包逐字节相等；真实引用服务采用 — prepare,commit / 2 / 1 |
+| duplicates | 四次同时点击一份副本（本次 4 次即时成功、0 次 busy） — 5 次兑换 / 1 op |
+| w_target_check | 首个 commit 由 relay 以 503 挡回（目标已 prepared）；三端到 W−1，Identity 签出 `expires_at=W` 的 commit 票；**目标单独拨到 W，在 owner/operation 锁后核 W → 410 `operation_expired`**，无资源无孤儿版本；三端到 W 后源结算 `expired`、不再写 — prepare,commit,status,commit,status / 4 / 1 |
+| replay_after_w | W+1 与 R−1 的 status 重放同一资源/版本；R 起源侧不再申请授权、保留最后已知结果且不记失败 — 5 次兑换 / 1 op |
+| recycled_restore_purge | 删除 → `recycled` + 整数 `recycle_until`（= 删除+30d）同资源身份；cancel 在 recycled 上返回 recycled（源本地/目标 `already_succeeded`）；restore → `succeeded` 同资源并可采用；再删 → recycled；目标单独拨到 `recycle_until` 清除 → `deleted` 墓碑；新源库对同选择的新 operation → 410 `operation_deleted` — 9 次兑换 / 2 op |
+| wire_gate_off | 未开 `TEDNA_T11_FORMAL` 的目标在兑换前 400 `unsupported_schema`；源记 unknown+安全码 — prepare / **0 次兑换** / 1 op |
+| target_disabled | 正式 prepare 后停用 owner → commit 经守卫原语 403 `subject_disabled`，无资源 — 2 / 1 |
+| lost_commit_restart | t11-lab 丢弃 commit 响应；Node 终止、接收方 SIGKILL；三端拨到两天后重启：持久 W 仍在、只查状态取回同一资源、正文快照已清、不再写 — **prepare,commit,status** / 3 / 1 |
+
+目标角色沿 Identity 拆分模型（锁原语存在、登录角色对 `users` 无 UPDATE、`FOR UPDATE users` 被拒）。与 Identity 同日的正式三端（`dev/i03/formal-triad/runs/20260921T120337Z`，9/9，源为本仓 7596aaa 字节经 socket 桥、生产 `I03HttpsTransport` 经隔离 CA）互证；本运行的差别是源侧为受限角色 MySQL 账本、逐命令注入时钟、覆盖 W 边界/回收站/门控三类正式场景。
+
+**观察（非差异，供产品与 UI 参考）**：`recycle_until = 删除 + 30d`，而 R = W + 29d = t0 + 30d，故删除时刻 ≥ t0 时 `recycle_until ≥ R`——正式 wire 上源侧在 R 之后不再查询，因此源侧能看到 `recycled`，却只能在目标提前清除或实验时钟偏斜时看到 `deleted` 墓碑；产品上源侧"最后已知状态"停在 recycled 是常态，文案应写"已在目标回收站"而非"已删除"。边界不变：隔离联验，不是冻结、启用或发布授权；无真实教师/实机、生产角色/迁移/证书。
+
 ### 候选参数与限制（明示，非协议值）
 
 - 首次 issue 结算窗 = 客户端超时 + 30 s；无 W 的可重试失败上限 5 次；本地元数据在 R 之后再保留 1 天供展示，R 起不再申请授权。生产接线时须与 Identity/T11 的实际请求上界对齐。

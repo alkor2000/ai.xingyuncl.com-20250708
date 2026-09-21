@@ -8,8 +8,8 @@
 |---|---|---|
 | 源持久层 | 隔离 `mysql:8.0` 容器、随机库、实验创建的受限角色；`MySQLHandoffStore` 多 owner 锚锁 | 未接：生产应用账号仍 ALL PRIVILEGES，受限角色未创建，业务侧锚锁未接线 |
 | 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象；**发起资格候选 `handoffAuthority.js` 已接真实用户模型：活跃/未过期/非影子（`users.uuid_source='sso'`）** | 未接：学生组映射列（决-12）未入库；逐附件持久复制权待事实；教师由 TE-DNA 判定 |
-| Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13：真实 `internal/artifacthandoff` 提供方候选（Identity 固定包 25b5ff1，`EnableFormalCandidate()` + formal policy 行，实验时钟注入）** | 未接：正式 profile 未批准，`cmd/pkuailab-id` 不开启候选 |
-| 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest）；**同版三端：未修改的 T11 `cmd/t11-lab`（真实 store/handlers，PG16 隔离库，Identity 拆分角色模型）八场景通过** | 未接：T11 候选未合入/未发布/未启用；生产迁移与生产角色未建 |
+| Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13 与正式三端：真实 `internal/artifacthandoff` 提供方（rc3 固定包 14b9852，`EnableFormalCandidate()` + formal policy 行 + `formal_pairs`，实验时钟注入）** | 未接：正式 profile 未冻结登记，`cmd/pkuailab-id` 不开启候选，生产无 policy/pairs 行 |
+| 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest）；**同版三端：未修改的 T11 `cmd/t11-lab`（真实 store/handlers，PG16 隔离库，Identity 拆分角色模型）draft 八场景与正式 wire（e1，`formal:true`）八场景均通过** | 未接：T11 候选未合入/未发布/未启用；生产迁移与生产角色未建 |
 | 传输 | 回环 HTTP（draft 客户端）；本机 TLS 假对端（HTTPS 传输 21 项） | 未接：`I03HttpsTransport` 未装配到编排 |
 | 时间源 | 注入时钟（Jest/实验 clock 服务） | 生产依赖 NTP，未验证 |
 
@@ -61,5 +61,5 @@
 ## 6 接续包
 
 - Identity rc2 提供方与 rc3 候选均已消费（见 §2 与 `p03-product-decisions-20260921.md` rc3 节）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。rc3 状态模型 `recycled`/`deleted` 已在源侧 formal 路径实现并测试（V14–V16），等待同版冻结后对端才会发出。
-- 同版三端隔离联验（draft wire）已完成：`dev/p03-triad/check.py` 固定运行八场景通过（证据 `storage/private/p03-handoff-validation/triad-20260921-t11-refresh-rebase/`），Identity 自己的重绑同版通过。正式 wire 三端运行器亦就绪（`check.py --candidate=candidate-formal.json`，本仓 overlay 启用 Identity 正式候选 + TE fc1 目标 `formal:true`），首次运行 1/8：其余 7 场景卡在清单 `protocol_version` 的真实接口差异；Identity fc1 勘误 01 已采纳源侧读法（清单随 operation wire，正式向量 `fixtures-formal.json` 本仓编码器逐字节复现），TE 改 `package.go` 出新候选后更新 SHA 重跑即可。
+- 同版三端隔离联验（draft wire）已完成：`dev/p03-triad/check.py` 固定运行八场景通过（证据 `storage/private/p03-handoff-validation/triad-20260921-t11-refresh-rebase/`），Identity 自己的重绑同版通过。正式 wire 三端运行器亦就绪（`check.py --candidate=candidate-formal.json`，本仓 overlay 启用 Identity 正式候选 + TE fc1 目标 `formal:true`），对 fc1 首跑 1/8 暴露清单 `protocol_version` 差异 → Identity 勘误 01 采纳源侧读法（正式向量本仓逐字节复现）→ TE e1 候选（manifest `bdc6dace…`）后固定运行 **8/8 通过**（证据 `triad-20260921-t11-formal-e1/`），与 Identity 同日正式三端 9/9 互证。
 - 以上完成前不开放正式保存，不解除 D03/教师/实例/profile 条件。
