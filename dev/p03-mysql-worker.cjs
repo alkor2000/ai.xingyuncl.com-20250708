@@ -12,7 +12,10 @@ async function run(r) {
   if (r.command === 'init') {
     if (fixture) fail('invalid_request');
     const auth = r.authorization;
+    // Same stdin protocol as p03-i03-source-worker.cjs so a triad driver can point at the MySQL-backed
+    // source; endpointProfile/wireVersion select native paths and the formal candidate when a peer supports it.
     const client = new I03DraftClient({ identityOrigin: r.identityOrigin, targetOrigin: r.targetOrigin,
+      ...(r.endpointProfile ? { endpointProfile: r.endpointProfile } : {}), ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}),
       getAuthorization: async () => auth, now: () => now, env: { NODE_ENV: 'test' } });
     const send = client.send.bind(client);
     client.send = async (...args) => {
@@ -23,7 +26,7 @@ async function run(r) {
       }
       return result;
     };
-    fixture = await mysqlFixture(r.mysql, client, () => now, r.owner || 'p-teacher');
+    fixture = await mysqlFixture(r.mysql, client, () => now, r.owner || 'p-teacher', r.wireVersion ? { wireVersion: r.wireVersion } : {});
     return { ready: true, owner: fixture.owner };
   }
   if (!fixture) fail('invalid_request');
@@ -31,6 +34,8 @@ async function run(r) {
   if (r.command === 'freeze') return service.freeze(owner,
     { ...await fixture.selection(), ...(r.purpose ? { purpose: r.purpose } : {}) }, r.key || randomUUID(), '水循环探究合成片段');
   if (['resume', 'status', 'get', 'cancel'].includes(r.command)) return service[r.command](owner, r.operation_id);
+  if (r.command === 'duplicates') return Promise.all(Array.from({ length: 4 }, () => service.resume(owner, r.operation_id)));
+  if (r.command === 'reconcile') return service.reconcile('ops-reconciler', owner, r.operation_id, r.closure);
   if (r.command === 'mutate') {
     await fixture.mutate(r.kind, r.hold, () => {
       if (r.notify_lock) process.stdout.write(JSON.stringify({ ok: true, result: { locked: true } }) + '\n');

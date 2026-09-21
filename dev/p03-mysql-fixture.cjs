@@ -13,7 +13,7 @@ const FACTS = `CREATE TABLE p03_lab_facts(owner VARCHAR(128) CHARACTER SET ascii
 const parse = value => typeof value === 'string' ? JSON.parse(value) : value;
 const connect = (config, user, password) => mysql.createPool({ host: config.host, port: config.port, user, password,
   database: config.database, connectionLimit: 12, charset: 'utf8mb4', connectTimeout: 5000 });
-async function mysqlFixture(config, client, now, owner = 'p-teacher') {
+async function mysqlFixture(config, client, now, owner = 'p-teacher', options = {}) {
   if (config.host !== '127.0.0.1' || !/^p03_lab_[a-f0-9]{12}$/.test(config.database) || !/^p03_app_[a-f0-9]{12}$/.test(config.app_user) ||
       typeof config.app_password !== 'string' || config.app_password.length < 16 || !OWNERS.includes(owner)) fail('invalid_draft_configuration');
   // The lab pool stands for the business application (source-fact mutations, seeding, probes);
@@ -60,7 +60,7 @@ async function mysqlFixture(config, client, now, owner = 'p-teacher') {
     Conversation: { findById: async id => (await facts()).conversations[id] },
     File: { findById: async id => (await facts()).files[id] }, uploadRoot: path.join(config.directory, owner, 'uploads')
   });
-  const service = new I03DraftSource({ source, store, authority, client, now,
+  const service = new I03DraftSource({ source, store, authority, client, now, ...options,
     sourceInstance: 'practice-synthetic', targetInstance: 'tedna-synthetic', env: { NODE_ENV: 'test' } });
   // Business-side mutation (revocation, edit, deletion, deactivation) on the lab pool: it takes the same
   // anchor row lock the store uses, which is what a production mutation path must do to be ordered.
