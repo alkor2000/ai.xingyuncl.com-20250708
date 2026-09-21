@@ -10,7 +10,7 @@
 | 源来源事实（教师资格/复制权/内容） | 合成 `p03_lab_facts` 行；Jest 用显式策略对象；**发起资格候选 `handoffAuthority.js` 已接真实用户模型：活跃/未过期/非影子（`users.uuid_source='sso'`）** | 未接：学生组映射列（决-12）未入库；逐附件持久复制权待事实；教师由 TE-DNA 判定 |
 | Identity（issue/revoke） | 持久层实验：I03 Go/PG18 旧实验提供方（draft）；**V10–13 与正式三端：真实 `internal/artifacthandoff` 提供方（rc3 固定包 14b9852，`EnableFormalCandidate()` + formal policy 行 + `formal_pairs`，实验时钟注入）** | 未接：正式 profile 未冻结登记，`cmd/pkuailab-id` 不开启候选，生产无 policy/pairs 行 |
 | 目标 TE-DNA | 假 SQLite 目标（实验）；假目标对象（Jest）；**同版三端：未修改的 T11 `cmd/t11-lab`（真实 store/handlers，PG16 隔离库，Identity 拆分角色模型）draft 八场景与正式 wire（e1，`formal:true`）八场景均通过** | 未接：T11 候选未合入/未发布/未启用；生产迁移与生产角色未建 |
-| 传输 | 回环 HTTP（draft 客户端）；本机 TLS 假对端（HTTPS 传输 21 项） | 未接：`I03HttpsTransport` 未装配到编排 |
+| 传输 | 回环 HTTP（draft 客户端）；**正式：`I03FormalClient` 经 `I03HttpsTransport`（固定 origin/443/系统 CA），实验 TLS 对端 5 项业务链 + 21 项传输；三端源跳数走 TLS 对 TE e1 与 r2 各八场景通过（Identity G7 提供方 49224e1 / 9b6ca01）** | 生产 TLS 事实（证书链、出网）未在生产核验 |
 | 时间源 | 注入时钟（Jest/实验 clock 服务） | 生产依赖 NTP，未验证 |
 
 ## 2 V10–13 结果（源侧定向证据；假对端）
@@ -49,11 +49,11 @@
 
 | 项 | 状态 | 依据/缺口 |
 |---|---|---|
-| 加法迁移 | 未建 | 候选 DDL 只在 `mysqlStore.SCHEMA`；契约冻结后再入 `backend/migrations`，先备份（dev/RELEASE.md 第三节） |
-| 数据库角色 | 未建 | `restrictedRoleGrants()` 语句就绪；需运维创建用户/口令并在北大站授权（星云不接）；2026-09-21 19:2x 只读确认生产应用账号仍 ALL PRIVILEGES，星云更是全局 `ON *.*`——这本身是与 P03 无关的加固项（见凭据轮换方案） |
+| 加法迁移 | **候选就绪，未晋级** | `backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js`（knex，复用 `SCHEMA`）；隔离演练通过（up/幂等/down/备份恢复/部分状态/失败迁移账号）；**进入 `backend/migrations/` 即在下次 `make deploy-docker` 自动执行**，G3/G4 授权前保持候选目录 |
+| 数据库角色 | 未建（手册就绪） | `docs/integrations/p03-restricted-role-runbook.md`：精确 GRANT、只读核验脚本 `backend/scripts/p03-ledger-readiness.cjs`、回退；运行时以 `SHOW GRANTS` 精确核验，应用账号被拒；生产应用账号仍 ALL PRIVILEGES（星云全局 `ON *.*`，独立加固项） |
 | 配置 | 候选 | `p03-instance-binding-candidate.json`；`P03_HANDOFF_ENABLED=false` 为默认；北大站缺显式实例键（须经 enrollment 流程） |
-| 编排装配 | 未做 | `I03DraftSource` 仍拒绝 production；formal 客户端未接 HTTPS 传输 |
-| 路由 | 未挂 | 无生产路由读取持久层；正式保存入口关闭 |
+| 编排装配 | **已做（默认关闭）** | `formalRuntime.js` + `server.js` 启动钩子：`P03_HANDOFF_ENABLED` 未设/false 关闭；true 严格构造并就绪核验，任一事实缺失启动失败关闭；非法值配置错误；`I03DraftSource` 的 production 拒绝原样 |
+| 路由 | 未挂 | 运行时对象由 `app.locals.p03Handoff` 持有，无任何公开路由读取它；正式保存入口关闭 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
 | 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），2026-09-21 18:55 用户自行运行 `dev/p03-prod-readonly-facts.sh` 取得：两站 HEAD `c4a6e86`、跟踪文件干净；**北大站运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空**（确认 9/20 事实）、`IDENTITY_CLIENT_ID=ai-platform-client` 与候选一致；星云站显式为 `xingyun-ai-platform-test` / `ai-platform-xingyun-test-client`（不接交接）。19:2x 复跑取得两站 DB 事实：应用账号均 ALL PRIVILEGES（**星云为全局 `ON *.*`**，北大限本库）；`users.uuid_source` 两站均在（影子账号星云 439 / 北大 11）；`user_groups` 无决-12 映射列；两站均无 `p03_handoff_*` 表（候选零部署）；MySQL 8.0.46 / 8.0.43 |

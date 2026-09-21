@@ -127,7 +127,7 @@ def main():
               'clocks': PIN.get('clocks', 'source and Identity on wall time; t11-lab clock pinned to each case start second (its own design)'),
               'network': 'containers on loopback-published ports; databases disposable; no namespace isolation',
               'real_teacher_authority': False, 'identity_full_main': False, 'input_sha256': before}
-    env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'GOFLAGS': '-mod=mod'}
+    env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'GOFLAGS': '-mod=readonly'}
     ok = False
     try:
         def start(kind):
@@ -194,8 +194,22 @@ def main():
             overlay = tmp / 'overlay.json'
             overlay.write_text(json.dumps({'Replace': {str(IDENTITY / 'internal/artifacthandoff/p03_triad_overlay_test.go'): str(OVERLAY_SOURCE)}}))
             result['binary_sha256'] = {'t11_lab': sha(receiver)}
+            tls = None
+            if PIN.get('tls'):
+                # Ephemeral isolated CA and a certificate for the production hostnames; the source's transport trusts
+                # only this CA for the run (system roots replaced), everything else about its TLS policy is production.
+                certs = tmp / 'tls'
+                certs.mkdir()
+                openssl = lambda *a: run(['openssl', *a], cwd=certs, timeout=60)
+                openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'ca.key', '-out', 'ca.pem', '-days', '1', '-subj', '/CN=P03 triad isolated CA', '-addext', 'basicConstraints=critical,CA:TRUE')
+                openssl('req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'peer.key', '-out', 'peer.csr', '-subj', '/CN=P03 triad lab peer')
+                (certs / 'peer.ext').write_text('subjectAltName=DNS:id.pkuailab.com,DNS:workflow.pkuailab.com\nextendedKeyUsage=serverAuth\n')
+                openssl('x509', '-req', '-in', 'peer.csr', '-CA', 'ca.pem', '-CAkey', 'ca.key', '-CAcreateserial', '-out', 'peer.pem', '-days', '1', '-extfile', 'peer.ext')
+                tls = {'ca': str(certs / 'ca.pem'), 'cert': str(certs / 'peer.pem'), 'key': str(certs / 'peer.key')}
+                result['tls'] = {'isolated_ca_sha256': sha(certs / 'ca.pem'), 'peer_certificate_sha256': sha(certs / 'peer.pem'), 'hostnames': ['id.pkuailab.com', 'workflow.pkuailab.com'],
+                                 'note': 'source hops (issue/revoke, prepare/commit/status/cancel) over TLS with hostname verification; target->Identity redeem stays loopback HTTP'}
             print('Unmodified T11 cmd/t11-lab built with -race; overlay ' + str(OVERLAY_SOURCE.name) + ' and Identity error probe in place.', flush=True)
-            config = {'cases': CASES, 'practice_root': str(ROOT), 'receiver': str(receiver), 'evidence': str(evidence),
+            config = {'cases': CASES, 'practice_root': str(ROOT), 'receiver': str(receiver), 'evidence': str(evidence), **({'tls': tls} if tls else {}),
                       'target': {'container': names['target'], 'database': target_db,
                                  'dsn': f"postgres://tedna_t11_lab:{lab_password}@127.0.0.1:{ports['target']}/{target_db}?sslmode=disable"},
                       'mysql': {'host': '127.0.0.1', 'port': ports['mysql'], 'user': 'root', 'password': passwords['mysql']}}

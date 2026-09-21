@@ -122,3 +122,7 @@ backups/
 .mcp.json.backup.*
 .claude/settings.json
 .claude/settings.json.backup.*
+
+# Python bytecode from dev/ lab scripts
+__pycache__/
+*.pyc

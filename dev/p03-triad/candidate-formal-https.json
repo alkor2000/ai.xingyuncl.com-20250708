@@ -1,12 +1,12 @@
 {
-  "candidate": "20260921-t11-formal-e1",
-  "release": "/home/hanying/tedna-sync/releases/20260921-t11-formal-e1",
-  "target_parent": "5089cb645147df626705ab906c79c617f016dd7f",
-  "manifest_sha256": "bdc6dacef901472f0a91029795b174029832fff645210967efb82ed60f5edf52",
-  "closure_sha256": "ee554bc6dd6b4ed2471e467fe13800ffc64b78e0924ed51d24a56333cf3eae40",
+  "candidate": "20260921-t11-runtime-r2-https",
+  "release": "/home/hanying/tedna-sync/releases/20260921-t11-runtime-r2",
+  "target_parent": "a5dc5d15eac56f9e234ac278de128aaa1fb334bc",
+  "manifest_sha256": "f34fc3aecf6754d11ef2bc081abb4c2f9872117f84b47ca7a1494a92b1535411",
+  "closure_sha256": "a3593e089a56245fa226f97526823d519e8390301e5d1d2fa9b1159893f9186a",
   "schema_input_sha256": "f4264ea8b58f6d02ac1216dcf1c49cb62f1a3f1617e97857db9d8593a4e3c217",
   "migration": "20260921_03_teacher_artifact_imports",
-  "identity_provider_commit": "49224e1199094c2afd2dbd1f24fd2031678b82a1",
+  "identity_provider_commit": "9b6ca011c605aafba33566a6ca4ef1c3cf83c2ea",
   "identity_paths": [
     "internal/artifacthandoff",
     "dev/i03/native",
@@ -16,16 +16,16 @@
     "go.sum"
   ],
   "fc1_registration_sha256": "a4f4b067ba41c2c06258224acb9d553f7a7caf7bae8541b06b6bf0be6c58d68b",
-  "tedna_event": "TE e1 candidate (erratum-01 manifest check) as pinned by identity-i03-formal-triad-passed-20260921T120813Z; TE notice received by Identity",
+  "tedna_event": "tedna-t11-formal-runtime-r2-20260921T125634Z",
   "wire": "teacher-artifact-handoff/1",
   "overlay_owner": "practice",
   "overlay": "dev/p03-triad/formal_overlay.go",
   "driver": "formal_scenarios.py",
   "test_name": "TestP03FormalTriad",
-  "evidence_suffix": "-formal",
+  "evidence_suffix": "-formal-https",
   "identity_description": "real Go/PG18 provider (internal/artifacthandoff) with EnableFormalCandidate, formal policy row and formal_pairs allow-list through this repository's overlay; injected lab clock; synthetic facts; not the complete Identity main",
-  "source_description": "P03 MySQL 8 durable candidate under the restricted lab role, native-draft endpoint profile on wire teacher-artifact-handoff/1, injected per-command clock",
-  "clocks": "all three sides injected (Identity lab clock via control endpoint, t11-lab clock command, source per-command now); deliberately skewed only where a case says so",
+  "source_description": "P03 MySQL 8 durable candidate under the restricted lab role; production I03FormalClient + I03HttpsTransport over TLS to the fixed hostnames (isolated CA replaces system roots, loopback resolver, lab ports; development/test-only routing), injected per-command clock",
+  "clocks": "all three sides injected; source hops over TLS; target->Identity redeem loopback HTTP",
   "cases": [
     "formal_success",
     "duplicates",
@@ -43,6 +43,13 @@
   "manifest_protocol_version_rule": "fc1 erratum 01: the package manifest carries the operation wire; e1 ValidatePackage(raw, binding, wire) checks it per operation",
   "identity_formal_triad_event": "identity-i03-formal-triad-passed-20260921T120813Z",
   "identity_erratum_event": "identity-i03-fc1-erratum01-formal-plan-20260921T114455Z",
+  "tls": true,
   "identity_provider_delta_note": "G7 delta over fc1 provider 14b9852: readiness.go (+test) and store.go formal/draft gating (NewFormal production constructor; EnableFormalCandidate lab path unchanged: formal beside draft). Recorded per fc1+e1 rule: new runtime versions need their own integration evidence.",
-  "identity_provider_fc1_commit": "14b9852035d908bc27af9ce3691ef613fdd1b062"
+  "identity_provider_fc1_commit": "14b9852035d908bc27af9ce3691ef613fdd1b062",
+  "identity_formal_main_event": "identity-i03-g7-te-r2 (docs/progress/20260921-Identity-I03-G7-te-r2.md, result e1613d85…)",
+  "previous_candidate": {
+    "name": "20260921-t11-formal-e1-https",
+    "manifest_sha256": "bdc6dacef901472f0a91029795b174029832fff645210967efb82ed60f5edf52",
+    "result_sha256_prefix": "6d23ef60"
+  }
 }

@@ -24,11 +24,29 @@ const ROUTES = Object.freeze({
   cancel: ['target', '/api/v1/integrations/teacher-artifacts/cancel']
 });
 
+// Isolated-laboratory socket routing: an extra trust anchor (which *replaces* the system roots for this
+// instance), a hostname resolver and per-peer ports, so the fixed production hostnames, SNI, certificate and
+// hostname verification are exercised against lab TLS peers. Accepted only in development/test; production
+// construction refuses the key outright, so it can never become a verification bypass.
+function laboratory(config, env) {
+  const lab = config.laboratory;
+  if (lab === undefined) return null;
+  if (!['development', 'test'].includes(env.NODE_ENV) || !lab || typeof lab !== 'object' || Array.isArray(lab) ||
+      Object.keys(lab).some(key => !['ca', 'lookup', 'ports'].includes(key)) ||
+      !(Buffer.isBuffer(lab.ca) || (typeof lab.ca === 'string' && lab.ca.includes('-----BEGIN CERTIFICATE-----'))) ||
+      typeof lab.lookup !== 'function' || !lab.ports || typeof lab.ports !== 'object' ||
+      ['identity', 'target'].some(peer => !Number.isInteger(lab.ports[peer]) || lab.ports[peer] < 1 || lab.ports[peer] > 65535)) {
+    fail('invalid_handoff_configuration');
+  }
+  return { ca: lab.ca, lookup: lab.lookup, ports: { identity: lab.ports.identity, target: lab.ports.target } };
+}
+
 class I03HttpsTransport {
   #authorization;
   #timeoutMs;
-  constructor(config) {
-    const keys = [...Object.keys(TRUST), 'getAuthorization', 'timeoutMs'];
+  #laboratory;
+  constructor(config, env = process.env) {
+    const keys = [...Object.keys(TRUST), 'getAuthorization', 'timeoutMs', 'laboratory'];
     if (!config || Object.keys(config).some(key => !keys.includes(key)) ||
         Object.entries(TRUST).some(([key, value]) => config[key] !== value) ||
         typeof config.getAuthorization !== 'function' ||
@@ -39,6 +57,7 @@ class I03HttpsTransport {
     // fallback from Host, callback URL, IdP response or another site's client.
     this.#authorization = config.getAuthorization;
     this.#timeoutMs = config.timeoutMs;
+    this.#laboratory = laboratory(config, env);
   }
 
   async post(action, payload, idempotencyKey) {
@@ -54,7 +73,8 @@ class I03HttpsTransport {
     const [peer, path] = ROUTES[action];
     const unavailable = peer === 'identity' ? 'identity_unavailable' : 'target_unavailable';
     const hostname = new URL(TRUST[`${peer}Origin`]).hostname;
-    const headers = { 'Content-Type': 'application/json', 'Content-Length': data.length,
+    // Host is the fixed hostname even when a laboratory routes the socket to another port.
+    const headers = { Host: hostname, 'Content-Type': 'application/json', 'Content-Length': data.length,
       'Idempotency-Key': idempotencyKey, 'Cache-Control': 'no-store' };
     if (peer === 'identity') {
       // Synchronous access to already-loaded backend credentials; never call an
@@ -76,9 +96,11 @@ class I03HttpsTransport {
         reject(new HandoffError(code, code === 'receipt_invalid' ? 502 : 503, true));
       };
       try {
-        request = https.request({ protocol: 'https:', hostname, port: 443, servername: hostname,
+        const lab = this.#laboratory;
+        request = https.request({ protocol: 'https:', hostname, port: lab ? lab.ports[peer] : 443, servername: hostname,
           path, method: 'POST', headers, agent: false, rejectUnauthorized: true,
-          checkServerIdentity: tls.checkServerIdentity, minVersion: 'TLSv1.2', maxHeaderSize: 16384 }, response => {
+          checkServerIdentity: tls.checkServerIdentity, minVersion: 'TLSv1.2', maxHeaderSize: 16384,
+          ...(lab ? { ca: lab.ca, lookup: lab.lookup } : {}) }, response => {
           if (response.statusCode < 200 || response.statusCode >= 600 ||
               (response.statusCode >= 300 && response.statusCode < 400) ||
               response.headers['content-type']?.split(';')[0] !== 'application/json' ||

@@ -40,11 +40,14 @@
     "P03_HANDOFF_SOURCE_INSTANCE": "pku-ai-platform-prod",
     "P03_HANDOFF_TARGET_INSTANCE": "pku-tedna-prod",
     "P03_HANDOFF_IDENTITY_ORIGIN": "https://id.pkuailab.com",
-    "P03_HANDOFF_TARGET_ORIGIN": "https://workflow.pkuailab.com"
+    "P03_HANDOFF_TARGET_ORIGIN": "https://workflow.pkuailab.com",
+    "P03_HANDOFF_DB_USER": "<restricted ledger role, never DB_USER>",
+    "P03_HANDOFF_TIMEOUT_MS": "5000 (optional, 1000-30000)",
+    "P03_HANDOFF_DB_CREDENTIAL": "the ledger role credential variable is operator-held and never appears in this repository; name in docs/integrations/p03-restricted-role-runbook.md"
   },
   "not_proven_here": [
     "Xingyun Registry entry and dataset distinctness are Identity-side facts; the source repository only records that its client, instance and database differ",
-    "no P03_HANDOFF_* variable is read by any mounted code path; P03_HANDOFF_ENABLED=false is the required default when a loader exists"
+    "P03_HANDOFF_* variables are read only by formalRuntime.js and only take effect with P03_HANDOFF_ENABLED=true; nothing else reads them"
   ],
   "deployed_version_evidence": {
     "source": "release tooling tags fetched read-only from GitHub (dev/deploy.sh and dev/deploy-docker.sh push a tag after a successful deploy)",
@@ -130,5 +133,23 @@
       "users.uuid_source exists on both sites (shadow predicate applicable now: 439 shadow accounts on xingyun, 11 on pku); user_groups has no 决-12 mapping columns; no p03_handoff_* table exists on either site (nothing of this candidate is deployed)"
     ],
     "note": "token auth method name omitted from this record (it contains a word the candidate's credential guard rejects); both sites use the .env.template default"
+  },
+  "runtime_contract": {
+    "module": "backend/src/services/artifactHandoff/formalRuntime.js (bootstrapped in server.js after database init)",
+    "switch": "P03_HANDOFF_ENABLED: unset or \"false\" -> disabled (no pool, no credential read, no peer call); \"true\" -> strict construction; any other value -> invalid_handoff_configuration and startup fails closed",
+    "facts_checked_when_enabled": [
+      "Identity deployment config valid and enabled",
+      "issuer/public origin/client id/instance key equal the TRUST constants",
+      "P03_HANDOFF_STORE/WIRE_VERSION/SOURCE_INSTANCE/TARGET_INSTANCE/IDENTITY_ORIGIN/TARGET_ORIGIN equal the pinned values",
+      "restricted ledger role present and distinct from the application account",
+      "ledger readiness: database name, MySQL 8, exact grants, four tables with expected columns",
+      "HTTPS transport pinned to the fixed origins on 443 with system roots; laboratory routing refused outside development/test"
+    ],
+    "public_save_entry": "not mounted",
+    "not_proven_here": [
+      "production TLS reachability",
+      "production policy/pairs rows",
+      "real teacher acceptance"
+    ]
   }
 }

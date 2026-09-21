@@ -16,6 +16,7 @@ from pathlib import Path
 import secrets
 import select
 import signal
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -55,12 +56,18 @@ class Clocks:
 
 
 class Source:
-    """The MySQL-backed P03 worker on the formal wire with an injected per-command clock."""
+    """The MySQL-backed P03 worker on the formal wire with an injected per-command clock. With `tls` in the
+    config it runs the production formal client + pinned HTTPS transport (lab CA / loopback resolver / per-peer
+    ports) instead of the loopback draft transport."""
 
     def __init__(self, c, clocks, mysql, identity, target):
         self.root, self.clocks, self.process = c['practice_root'], clocks, None
-        self.config = dict(mysql=mysql, identityOrigin=identity, targetOrigin=target, authorization=c['source_auth'],
-                           owner='p-teacher', endpointProfile='native-draft', wireVersion=WIRE)
+        if c.get('tls'):
+            ports = {'identity': int(c['identity_tls_url'].rsplit(':', 1)[1]), 'target': int(target.rsplit(':', 1)[1])}
+            self.config = dict(mysql=mysql, authorization=c['source_auth'], owner='p-teacher', formalHttps={'caPath': c['tls']['ca'], 'ports': ports, 'timeoutMs': 5000})
+        else:
+            self.config = dict(mysql=mysql, identityOrigin=identity, targetOrigin=target, authorization=c['source_auth'],
+                               owner='p-teacher', endpointProfile='native-draft', wireVersion=WIRE)
         self.start()
 
     def start(self):
@@ -173,7 +180,7 @@ class Relay:
     target_unavailable); advance_target_at_commit (t11-lab clock moved to `target_time` right before the commit is
     forwarded, so the target's own lock-then-check of W is exercised)."""
 
-    def __init__(self, receiver, mode):
+    def __init__(self, receiver, mode, tls=None):
         self.events, self.error, self.mode, self.target_time, self.failed_once = [], None, mode, None, False
         state = self
 
@@ -201,9 +208,15 @@ class Relay:
                     host, port = receiver.url.replace('http://', '').split(':')
                     with closing(http.client.HTTPConnection(host, int(port), timeout=20)) as upstream:
                         headers = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection')}
-                        upstream.request('POST', self.path, raw, headers)
-                        reply = upstream.getresponse()
-                        body = reply.read()
+                        try:
+                            upstream.request('POST', self.path, raw, headers)
+                            reply = upstream.getresponse()
+                            body = reply.read()
+                        except (OSError, http.client.HTTPException):
+                            # The receiver dropped its response (a scripted loss, e.g. drop_commit): pass the loss on as-is.
+                            state.events.append({'path': self.path.rsplit('/', 1)[-1], 'status': None, 'upstream': 'response_lost'})
+                            self.close_connection = True
+                            return
                         parsed = {}
                         try:
                             parsed = json.loads(body)
@@ -226,9 +239,15 @@ class Relay:
                     state.error = 'transport_relay_failed'
                     self.close_connection = True
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        if tls:
+            # Laboratory TLS front for workflow.pkuailab.com: the receiver itself stays plain loopback HTTP.
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.load_cert_chain(tls['cert'], tls['key'])
+            self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
-        self.url = f'http://127.0.0.1:{self.server.server_port}'
+        self.url = f'{"https" if tls else "http"}://127.0.0.1:{self.server.server_port}'
 
     def close(self):
         self.server.shutdown()
@@ -260,7 +279,9 @@ def main():
               'source_store': 'P03 MySQL 8 durable candidate (isolated container, restricted lab role), formal wire',
               'identity': 'native Provider/Registry/Links with formal candidate, formal policy row and formal_pairs; pku_identity_app; Gin request ID; synthetic facts',
               'target': 'unmodified T11 cmd/t11-lab formal:true on isolated PG16 (S05b post-schema + 20260921_03 migration incl. protocol_version/operation_expires_at)',
-              'clocks': 'injected on all three sides and moved together; skews listed per step'}
+              'clocks': 'injected on all three sides and moved together; skews listed per step',
+              'source_hops': ('production I03FormalClient + I03HttpsTransport over TLS to id.pkuailab.com / workflow.pkuailab.com (lab CA, loopback resolver, lab ports); '
+                              'target->Identity redeem stays loopback HTTP (target transport)') if c.get('tls') else 'loopback HTTP draft transport on the formal wire'}
     clocks = Clocks(c)
 
     def adopt(op, version):
@@ -286,8 +307,8 @@ def main():
             clocks.identity(epoch)
             receiver = Receiver(c, clocks, formal=case != 'wire_gate_off')
             stage = 'receiver_start'
-            if case in ('target_disabled', 'w_target_check'):
-                relay = Relay(receiver, 'disable' if case == 'target_disabled' else 'fail_first_commit')
+            if case in ('target_disabled', 'w_target_check') or c.get('tls'):
+                relay = Relay(receiver, {'target_disabled': 'disable', 'w_target_check': 'fail_first_commit'}.get(case, 'observe'), tls=c.get('tls'))
             mysql = fresh_database(c)
             stage = 'source_start'
             worker = Source(c, clocks, mysql, c['identity_url'], relay.url if relay else receiver.url)
@@ -361,7 +382,7 @@ def main():
                 gone = worker.call('status', operation_id=op)
                 need(gone['status'] == 'deleted' and 'resource_ref' not in gone, 'tombstone_not_visible')
                 worker.close()
-                worker = Source(c, clocks, fresh_database(c), c['identity_url'], receiver.url)
+                worker = Source(c, clocks, fresh_database(c), c['identity_url'], relay.url if relay else receiver.url)
                 another = worker.call('freeze')['operation_id']
                 need(another != op, 'new_operation_missing')
                 worker.call('resume', operation_id=another, expected='operation_deleted')
@@ -391,7 +412,7 @@ def main():
                 receiver.stop(crash=True)
                 clocks.set(epoch + 2 * DAY)  # past L and W: only status may be asked, nothing may be written
                 receiver.start()
-                worker = Source(c, clocks, mysql, c['identity_url'], receiver.url)
+                worker = Source(c, clocks, mysql, c['identity_url'], relay.url if relay else receiver.url)
                 stage = 'recover_after_crash'
                 recovered = worker.call('resume', operation_id=op)
                 need(recovered['status'] == 'succeeded' and recovered['resource_ref'] == original and recovered['operation_expires_at'] == W and receiver.count() == 1, 'duplicate_after_crash')

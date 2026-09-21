@@ -1,5 +1,7 @@
-// Actual source orchestration for the draft and the formal candidate, unmounted and development/test only.
-// Authority must supply current subject/copy checks and a lock shared with source mutations.
+// Actual source orchestration for the draft and the formal wire. HandoffSource is the shared core;
+// I03DraftSource keeps the draft's development/test-only gate and loopback client; I03FormalSource is the
+// formal-wire orchestration the default-off formal runtime assembles (formalRuntime.js). Neither is mounted
+// on a public route here. Authority must supply current subject/copy checks and a lock shared with source mutations.
 // A store may supply cross-process exclusion. Native application authority/teacher policy remain separate work.
 // Formal wire (rc2): W = Identity's first persisted issue + 86400 arrives as operation_expires_at and never
 // changes; R = W + 29d bounds status/cancel authorization; L = local snapshot deadline (freeze + 24h).
@@ -23,10 +25,9 @@ const terminal = status => ['succeeded', 'cancelled', 'expired', 'deleted', 'rej
 // writes again, never rewrites it as expired, and shows it until the target reports deleted or succeeded.
 const settled = status => terminal(status) || status === 'recycled';
 const seconds = ms => Math.floor(ms / 1000);
-class I03DraftSource {
-  constructor({ source, store, authority, client, sourceInstance, targetInstance, now = Date.now, env = process.env,
+class HandoffSource {
+  constructor({ source, store, authority, client, sourceInstance, targetInstance, now = Date.now,
     wireVersion = VERSION, recoveryAttemptLimit = RECOVERY_ATTEMPT_LIMIT }) {
-    if (!['development', 'test'].includes(env.NODE_ENV)) fail('disabled', 404);
     if (!authority || ['checkSubject', 'checkExport', 'withSourceLock'].some(k => typeof authority[k] !== 'function')) fail('invalid_draft_configuration');
     if (!WIRE_VERSIONS.includes(wireVersion) || !Number.isSafeInteger(recoveryAttemptLimit) || recoveryAttemptLimit < 1 || recoveryAttemptLimit > 50) fail('invalid_draft_configuration');
     Object.assign(this, { source, store, authority, client, sourceInstance, targetInstance, now, wireVersion, recoveryAttemptLimit,
@@ -321,4 +322,21 @@ class I03DraftSource {
     })));
   }
 }
-module.exports = { I03DraftSource, ISSUE_SETTLE_MS, RECOVERY_ATTEMPT_LIMIT, METADATA_GRACE_SECONDS };
+// Draft orchestration: development/test only, exactly as before the formal runtime existed.
+class I03DraftSource extends HandoffSource {
+  constructor({ env = process.env, ...options }) {
+    if (!['development', 'test'].includes(env.NODE_ENV)) fail('disabled', 404);
+    super(options);
+  }
+}
+// Formal orchestration for the runtime: formal wire only, a formal client (HTTPS transport), a store with
+// cross-process owner anchors and exclusion. It carries no environment gate of its own — construction is
+// governed by the explicit runtime switch and readiness checks in formalRuntime.js, never by NODE_ENV.
+class I03FormalSource extends HandoffSource {
+  constructor({ client, store, wireVersion = FORMAL_VERSION, ...options }) {
+    if (wireVersion !== FORMAL_VERSION || !client || client.formal !== true || typeof client.send !== 'function' ||
+        !store || ['transaction', 'withOwnerLock', 'exclusive'].some(k => typeof store[k] !== 'function')) fail('invalid_handoff_configuration');
+    super({ client, store, wireVersion, ...options });
+  }
+}
+module.exports = { HandoffSource, I03DraftSource, I03FormalSource, ISSUE_SETTLE_MS, RECOVERY_ATTEMPT_LIMIT, METADATA_GRACE_SECONDS };

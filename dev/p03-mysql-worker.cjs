@@ -2,7 +2,9 @@
 const readline = require('readline');
 const { randomUUID, randomBytes } = require('crypto');
 const { mysqlFixture } = require('./p03-mysql-fixture.cjs');
-const { I03DraftClient } = require('../backend/src/services/artifactHandoff/i03Client');
+const fs = require('fs');
+const { I03DraftClient, I03FormalClient } = require('../backend/src/services/artifactHandoff/i03Client');
+const { I03HttpsTransport, TRUST } = require('../backend/src/services/artifactHandoff/i03HttpsTransport');
 const { HandoffError, fail, digest } = require('../backend/src/services/artifactHandoff/source');
 const { TABLES } = require('../backend/src/services/artifactHandoff/mysqlStore');
 let fixture, now, afterPrepare, cleanupStop, cleanupErrors = 0, wallClock = false;
@@ -18,9 +20,23 @@ async function run(r) {
     // Same stdin protocol as p03-i03-source-worker.cjs so a triad driver can point at the MySQL-backed
     // source; endpointProfile/wireVersion select native paths and the formal candidate when a peer supports it.
     const clock = () => (wallClock ? Date.now() : now);
-    const client = new I03DraftClient({ identityOrigin: r.identityOrigin, targetOrigin: r.targetOrigin,
-      ...(r.endpointProfile ? { endpointProfile: r.endpointProfile } : {}), ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}),
-      getAuthorization: async () => auth, now: clock, env: { NODE_ENV: 'test' } });
+    let client;
+    if (r.formalHttps) {
+      // The production formal client and pinned HTTPS transport; only the transport's development/test laboratory
+      // routing (isolated CA replacing system roots, loopback resolver, per-peer ports) points the fixed hostnames
+      // at the lab TLS peers. Hostname verification, SNI, TLS 1.2+, no redirect, no plaintext are unchanged.
+      const lab = r.formalHttps;
+      const transport = new I03HttpsTransport({ ...TRUST, getAuthorization: () => auth, timeoutMs: lab.timeoutMs || 5000,
+        laboratory: { ca: fs.readFileSync(lab.caPath), ports: { identity: lab.ports.identity, target: lab.ports.target },
+          lookup: (_host, options, done) => (options && options.all ? done(null, [{ address: '127.0.0.1', family: 4 }]) : done(null, '127.0.0.1', 4)) } },
+      { NODE_ENV: 'test' });
+      client = new I03FormalClient({ transport, now: clock, timeoutMs: lab.timeoutMs || 5000 });
+      r.wireVersion = client.wireVersion;
+    } else {
+      client = new I03DraftClient({ identityOrigin: r.identityOrigin, targetOrigin: r.targetOrigin,
+        ...(r.endpointProfile ? { endpointProfile: r.endpointProfile } : {}), ...(r.wireVersion ? { wireVersion: r.wireVersion } : {}),
+        getAuthorization: async () => auth, now: clock, env: { NODE_ENV: 'test' } });
+    }
     const send = client.send.bind(client);
     client.send = async (...args) => {
       const result = await send(...args);

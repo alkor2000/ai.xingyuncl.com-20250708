@@ -44,6 +44,11 @@ async function startServer() {
       logger.warn('应用将在没有缓存的情况下运行');
     }
 
+    // 2.5 P03 教师成果正式交接运行时：默认关闭（不连账本、不读凭据、不调对端）。显式 P03_HANDOFF_ENABLED=true
+    //     但身份/实例/受限账本/可信 HTTPS 任一事实不全时抛出固定码，启动失败关闭，不会带着半开的开关运行。
+    //     公开保存入口仍未挂载；这里只持有运行时对象。
+    app.locals.p03Handoff = await require('./services/artifactHandoff/formalRuntime').bootstrapFormalHandoff({ env: process.env, logger });
+
     // 3. 启动HTTP服务器
     const PORT = process.env.PORT || config.app.port || 4000;
 
@@ -106,6 +111,13 @@ async function startServer() {
           } catch (redisErr) {
             logger.error('Redis连接关闭失败:', redisErr);
           }
+        }
+
+        // 4.2b 停止 P03 交接运行时的清理任务并释放受限账本连接池（关闭状态下为空操作）
+        try {
+          await app.locals.p03Handoff?.close?.();
+        } catch (handoffErr) {
+          logger.error('P03 交接运行时关闭失败:', handoffErr?.code || handoffErr);
         }
 
         // 4.3 关闭数据库连接池

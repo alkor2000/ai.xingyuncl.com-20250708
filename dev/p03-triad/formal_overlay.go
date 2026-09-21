@@ -9,6 +9,7 @@ package artifacthandoff
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -88,7 +89,20 @@ func TestP03FormalTriad(t *testing.T) {
 					t.Error("native request ID absent")
 				}
 			})
-			l.server = httptest.NewServer(router)
+			l.server = httptest.NewServer(router) // plain loopback: the target's redeem path (its own transport)
+			// Optional laboratory TLS front for the source's hops: the same provider handler behind a certificate
+			// for the production hostname signed by the driver's isolated CA. Nothing about the provider changes.
+			var secure *httptest.Server
+			if spec, ok := config["tls"].(map[string]any); ok {
+				pair, e := tls.LoadX509KeyPair(spec["cert"].(string), spec["key"].(string))
+				if e != nil {
+					t.Fatal("laboratory certificate unavailable")
+				}
+				secure = httptest.NewUnstartedServer(router)
+				secure.TLS = &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12}
+				secure.StartTLS()
+				defer secure.Close()
+			}
 			// Injected lab clock for the driver: whole seconds inside [epoch, epoch+40d]; nothing else is exposed.
 			clock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var change struct {
@@ -108,6 +122,9 @@ func TestP03FormalTriad(t *testing.T) {
 				cfg[k] = v
 			}
 			cfg["case"], cfg["owner"], cfg["identity_url"], cfg["clock_url"], cfg["epoch"] = scenario, owner, l.server.URL, clock.URL, epoch
+			if secure != nil {
+				cfg["identity_tls_url"] = secure.URL
+			}
 			cfg["source_auth"] = "Basic " + base64.StdEncoding.EncodeToString([]byte("ai-platform-client:"+sourceSecret))
 			cfg["target_secret"] = targetSecret
 			input, _ := json.Marshal(cfg)
@@ -156,7 +173,8 @@ func TestP03FormalTriad(t *testing.T) {
 				t.Fatal("restart wrote again")
 			}
 			encoded, _ := json.Marshal(map[string]any{"case": scenario, "issue_phases": phases, "redeemed": redeemed, "legacy_calls": legacy,
-				"operation_count": expected, "wire": FormalVersion, "provider_role": "pku_identity_app", "formal_pairs": "practice-synthetic -> tedna-synthetic"})
+				"operation_count": expected, "wire": FormalVersion, "provider_role": "pku_identity_app", "formal_pairs": "practice-synthetic -> tedna-synthetic",
+				"source_hops_tls": secure != nil})
 			if os.WriteFile(filepath.Join(os.Getenv("I03_TRIAD_EVIDENCE"), "identity-"+scenario+".json"), encoded, 0600) != nil {
 				t.Fatal("evidence write")
 			}
