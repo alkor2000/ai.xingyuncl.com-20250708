@@ -41,8 +41,8 @@
 
 ## 5 R 之后的源侧显示
 
-正式 wire 上 `recycle_until = 删除+30d ≥ R`，源侧在 R 后**不再申请授权、不再查询**，`recycled` 因而是常见的最后观测状态。当前**没有面向用户的交接状态页**（只有开发验证路由 `/api/dev/p03`，默认关闭）。将来若展示：写"已在目标回收站（最后同步 <时间>）"而非"已删除"，展示 `view()` 里的最后已知状态与本地记录时间，**不承诺实时、不自动续查 R 后状态**；`recovery_until` 到期后只显示最后已知结果。
+正式 wire 上 `recycle_until = 删除+30d ≥ R`，源侧在 R 后**不再申请授权、不再查询**，`recycled` 因而是常见的最后观测状态。2026-09-22 起产品入口的状态卡（`ArtifactHandoff.jsx`）按此展示：`recycled` 写「已在目标回收站」并列出回收站保留至/最后同步时间，`deleted` 写「目标已清除」，过 `recovery_until` 后隐藏刷新/重试只留最后同步结果，**不承诺实时、不自动续查 R 后状态**；开发验证路由 `/api/dev/p03` 仍默认关闭。
 
 ## 6 运行时门（工程就绪 ≠ 产品准入）
 
-`P03_HANDOFF_ENABLED=true` 时逐项核验并在任一缺失时启动失败关闭：Identity 配置有效且实例/issuer/client/公开 origin 与 `TRUST` 相等 → `P03_HANDOFF_*` 六项逐字相等 → 受限账本账号（非应用账号、口令 ≥16）→ 账本就绪（库名相等、MySQL 8、授权恰为四表 DML、四表列齐）→ 传输固定 origin/443/系统 CA（实验注入仅 development/test）。Ready 只代表工程条件齐备，**不代表** D04、备份、教师实机、生产 policy/pairs、发布授权已获批；公开保存入口仍未挂载。
+`P03_HANDOFF_ENABLED=true` 时逐项核验并在任一缺失时启动失败关闭：Identity 配置有效且实例/issuer/client/公开 origin 与 `TRUST` 相等 → `P03_HANDOFF_*` 六项逐字相等 → 受限账本账号（非应用账号、口令 ≥16）→ 账本就绪（库名相等、MySQL 8、授权恰为四表 DML、四表列齐）→ 传输固定 origin/443/系统 CA（实验注入仅 development/test）。Ready 只代表工程条件齐备，**不代表** D04、备份、教师实机、生产 policy/pairs、发布授权已获批。登录保护的保存入口 `/api/p03/handoffs` 已挂载但只在该运行时 enabled 时做事（否则 `503 handoff_disabled`，前端不渲染入口）；`P03_HANDOFF_LAB` 实验注入在 production 被拒绝。

@@ -31,6 +31,7 @@
 - 测试：`backend/src/__tests__/unit/services/artifactHandoff{I03Window,I03FormalClient,BindingCandidate}.test.js`，helpers `p03FormalPeers.js`、`p03I03Fixture.js`
 - 隔离实验：`dev/p03-mysql-fixture.cjs`、`dev/p03-mysql-worker.cjs`、`dev/p03-durable-scenarios.py`、`dev/p03-durable-check.py`、`dev/p03-provider-overlay.go`；真实提供方 V10–13：`dev/p03-formal-provider-check.py`、`dev/p03-formal-scenarios.py`、`dev/p03-formal-provider-overlay.go`、`dev/p03-formal-target.cjs`
 - 文档：`docs/integrations/p03-source-handoff.md`（9/21 节）、`docs/integrations/p03-instance-binding-candidate.json`、本文
+- 2026-09-22 产品入口（ENTRY-01）：`backend/src/routes/artifactHandoffEntry.js`、`frontend/src/components/chat/ArtifactHandoff.jsx`、`formalRuntime.js`（`P03_HANDOFF_LAB`）、`i03Source.js`（`list`）、`dev/p03-triad/{entry_overlay.go,entry_scenarios.py,candidate-entry.json}`、`dev/p03-entry-{e2e.cjs,web.mjs}`；精确清单与候选部署包见 `docs/integrations/p03-entry-deploy-candidate.md`
 - 私有证据（不入库）：`storage/private/p03-handoff-validation/durable-release-candidate-20260921.json` 及其引用文件
 
 ## 4 同版运行清单（本轮实验使用的版本）
@@ -53,7 +54,7 @@
 | 数据库角色 | 未建（手册就绪） | `docs/integrations/p03-restricted-role-runbook.md`：精确 GRANT、只读核验脚本 `backend/scripts/p03-ledger-readiness.cjs`、回退；运行时以 `SHOW GRANTS` 精确核验，应用账号被拒；生产应用账号仍 ALL PRIVILEGES（星云全局 `ON *.*`，独立加固项） |
 | 配置 | 候选 | `p03-instance-binding-candidate.json`；`P03_HANDOFF_ENABLED=false` 为默认；北大站缺显式实例键（须经 enrollment 流程） |
 | 编排装配 | **已做（默认关闭）** | `formalRuntime.js` + `server.js` 启动钩子：`P03_HANDOFF_ENABLED` 未设/false 关闭；true 严格构造并就绪核验，任一事实缺失启动失败关闭；非法值配置错误；`I03DraftSource` 的 production 拒绝原样 |
-| 路由 | 未挂 | 运行时对象由 `app.locals.p03Handoff` 持有，无任何公开路由读取它；正式保存入口关闭 |
+| 路由 | **已挂，默认不可用** | `/api/p03/handoffs`（`routes/artifactHandoffEntry.js`，登录后）只读 `app.locals.p03Handoff`：运行时未开启时 capability 回 `available:false`、其余 `503 handoff_disabled`，不建池/读凭据/调对端；前端入口只在 capability 为 true 时渲染。真实链路隔离验收见 `p03-entry-deploy-candidate.md` §3 |
 | 回滚 | 就绪但未演练 | 关闭开关即停；DDL 为加法可保留；数据库回滚沿 `/var/backups/ai-platform/mysql/` 最近 dump（dev/RELEASE.md 第六节）；未在生产演练 |
 | 发布顺序 | 沿 dev/RELEASE.md | 先 ai.xingyuncl.com `make deploy` 再 `make deploy-docker`，两站同一提交；本候选不进入该队列 |
 | 只读核对 | 部分 | 两站当前发布版本由发布工具推到 GitHub 的标签证明：`deploy-20260921_110105`（ai.xingyuncl.com）与 `deploy-docker-20260921_110616`（ai.pkuailab.com）均指向 `c4a6e86`（与星云站磁盘 HEAD 只读一致）。北大站实例键、两站 DB 与 Identity 元数据重读仍被会话审核拒绝（Production Reads，已试两次，不再重试），2026-09-21 18:55 用户自行运行 `dev/p03-prod-readonly-facts.sh` 取得：两站 HEAD `c4a6e86`、跟踪文件干净；**北大站运行容器 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 为空**（确认 9/20 事实）、`IDENTITY_CLIENT_ID=ai-platform-client` 与候选一致；星云站显式为 `xingyun-ai-platform-test` / `ai-platform-xingyun-test-client`（不接交接）。19:2x 复跑取得两站 DB 事实：应用账号均 ALL PRIVILEGES（**星云为全局 `ON *.*`**，北大限本库）；`users.uuid_source` 两站均在（影子账号星云 439 / 北大 11）；`user_groups` 无决-12 映射列；两站均无 `p03_handoff_*` 表（候选零部署）；MySQL 8.0.46 / 8.0.43 |
@@ -62,4 +63,5 @@
 
 - Identity rc2 提供方与 rc3 候选均已消费（见 §2 与 `p03-product-decisions-20260921.md` rc3 节）；若 Identity 再出新候选版本，重跑 `dev/p03-formal-provider-check.py`（它核对固定 commit 为祖先且提供方路径未变，版本变化须先更新 `PROVIDER_COMMIT`）。rc3 状态模型 `recycled`/`deleted` 已在源侧 formal 路径实现并测试（V14–V16），等待同版冻结后对端才会发出。
 - 同版三端隔离联验（draft wire）已完成：`dev/p03-triad/check.py` 固定运行八场景通过（证据 `storage/private/p03-handoff-validation/triad-20260921-t11-refresh-rebase/`），Identity 自己的重绑同版通过。正式 wire 三端运行器亦就绪（`check.py --candidate=candidate-formal.json`，本仓 overlay 启用 Identity 正式候选 + TE fc1 目标 `formal:true`），对 fc1 首跑 1/8 暴露清单 `protocol_version` 差异 → Identity 勘误 01 采纳源侧读法（正式向量本仓逐字节复现）→ TE e1 候选（manifest `bdc6dace…`）后固定运行 **8/8 通过**（证据 `triad-20260921-t11-formal-e1/`），与 Identity 同日正式三端 9/9 互证。
+- 2026-09-22：产品入口（选择→预览→明确保存→状态/重试）与登录保护后端入口已接到正式运行时，默认关闭；真实 `src/server.js` × 真实 Identity 提供方 × TE r2 `t11-lab` 的浏览器验收（桌面 + 360/390/430）通过（`triad-20260922-entry-browser-r2/`）。候选部署顺序与缺口见 `p03-entry-deploy-candidate.md` §5/§6。
 - 以上完成前不开放正式保存，不解除 D03/教师/实例/profile 条件。

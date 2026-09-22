@@ -1,6 +1,6 @@
 # P03 教师选定成果：源侧交接
 
-当前状态（2026-09-21）：双站整理/下载于 9 月 19 日发布 e4d52d1，之后并行反馈项目已把双站发布到 c4a6e86；本仓工作副本仍以 e4d52d1 为基线，正式保存仍关闭。最新源侧受限持久 release 候选与 V10–13 见下一节，当前源与 T11 主应用候选的八场景隔离联验见文末；以下按阶段保留历史证据，各阶段的版本、测试条件和未验项不互相替代。
+当前状态（2026-09-22）：双站整理/下载于 9 月 19 日发布 e4d52d1，之后并行反馈项目已把双站发布到 c4a6e86；本分支已有默认关闭的正式运行时与「保存到备课资源库」产品入口（隔离真实链路验收通过，见 9/22 节与 `p03-entry-deploy-candidate.md`），正式保存在生产仍关闭。最新源侧受限持久 release 候选与 V10–13 见下一节，当前源与 T11 主应用候选的八场景隔离联验见文末；以下按阶段保留历史证据，各阶段的版本、测试条件和未验项不互相替代。
 
 ## 2026-09-21：受限 MySQL 8 持久 release 候选与 rc2 V10–13 源侧落地
 
@@ -99,6 +99,14 @@ fc1+e1 已登记为开发/隔离联验冻结基线后，本包把既有部件组
 - **对端消费（2026-09-21 21:17）**：Identity 三端 plan 新增 `practice_https` 固定本仓 `051652b`（12 文件 SHA），`run_main.py --te-formal-profile --practice-https` 在**真实 Identity main（G7 门）**上跑通：本仓生产 `I03FormalClient + I03HttpsTransport` 经每案隔离 CA、SNI 前置的真实 TLS 到真实 main 与 TE r2，TE 正式档经 HTTPS 兑换真实 main，五门 + 4/4（正式转移采用、pairs/policy 门、资格、幂等回放），Host 前置 0 事件；**业务链三跳皆 TLS，此前"目标→Identity 兑换回环 HTTP"的边界解除**；无新接口差异。记录 `dev/i03/formal-triad/runs-main/20260921T131530Z/result.json`（SHA `8a8725b9…`），回执 `20260921-Identity-I03-G7-all-tls.md`，事件 `identity-i03-g7-all-tls-20260921T131735Z`。仍为隔离非生产；G7 发布/G9 启用归总控。
 
 P03 13 套 158 项通过；后端全量 818 通过、6 项为 HEAD 既有失败（ImageService/MessageService）。边界：代码 + 隔离验证 + 就绪材料；无合并、发布、生产读写、DDL/角色/enrollment/开关。
+
+### 2026-09-22 07:5x：「保存到备课资源库」产品入口 + 真实链路浏览器验收（CTRL-20260922-PRACTICE-P03-ENTRY-01）
+
+- **入口**：`frontend/src/components/chat/ArtifactHandoff.jsx` 挂在助手回答动作条（与「下载成果」同门禁）：选择内容（整条/片段、≤3 文本附件、标题、用途）→ 预览（内容/标题/来源/目标/附件、边界说明）→ 明确「确认保存到备课资源库」→ 状态卡（`ready/unknown/prepared/succeeded/recycled/deleted/...` 固定文案；重试/刷新/取消/重新选择；过 R 只显示最后同步结果）。确认前零 POST；同一选择同一 `Idempotency-Key`；页面刷新从本地列表恢复不调对端。只有 `GET /api/p03/handoffs/capability` 报 `available:true` 才渲染，默认关闭时页面上没有这个入口。
+- **后端**：`backend/src/routes/artifactHandoffEntry.js` 挂 `/api/p03/handoffs`（登录后；capability / 预览 / 列表 / 冻结 / save / 视图 / refresh / cancel），只读 `app.locals.p03Handoff`，运行时未开启一律 `503 handoff_disabled`（不建池、不读凭据、不调对端）；教师身份只来自会话；资格/实例/policy/关联全部沿运行时与对端既有拒绝路径。`i03Source.list()` 与 `frozen_at/last_synced_at` 视图字段为此新增。
+- **运行时实验注入**：`formalRuntime.js` 接受 `P03_HANDOFF_LAB`（JSON：隔离 CA、实验端口、合成实例对）——只在 development/test 生效，production 直接 `invalid_handoff_configuration`；开启后契约 `P03_HANDOFF_*_INSTANCE` 与 `IDENTITY_DEPLOYMENT_INSTANCE_KEY` 都必须写同一合成实例名。
+- **真实链路验收**（`check.py --candidate=candidate-entry.json`，`triad-20260922-entry-browser-r2/result.json` SHA `45cdd8ef…`，`passed`，输入指纹一致）：**真实 `src/server.js`**（正式运行时开启、受限角色、账本候选迁移由 knex 执行）+ 真实前端（Vite）+ Playwright，经生产 `I03FormalClient/I03HttpsTransport` 的 TLS 到真实 Identity 提供方（G7 `9b6ca011`，本仓 `entry_overlay.go`：墙钟、TLS 前端、实践账号 101 替换 fixture 源关联）与未修改的 TE r2 `cmd/t11-lab formal:true`（TLS 中继前端）。桌面 1280 与 360/390/430 八个场景全部通过：默认关闭（无入口、capability false、直接冻结 503）、桌面片段+附件保存（确认前 0 POST，目标包恰为片段 + 所选附件）、刷新恢复（只本地列表）、重复点击（1 冻结 + 1 save）、失败恢复（首次 commit 503 → unknown + 重试同一操作成功）、回收/恢复/清除（目标 delete/restore/purge → recycled/succeeded/deleted）、影子账号拒绝（零发送）、未关联教师被 Identity 拒绝（目标未收、Identity 未建操作）。Identity 侧操作数 4 = 驱动记账；25 张截图与逐场景事实见 `docs/integrations/p03-entry-deploy-candidate.md`。
+- 变更清单、候选部署包顺序与剩余准入缺口：`docs/integrations/p03-entry-deploy-candidate.md`。P03 14 套 165 项通过；后端全量 825 通过（6 项 HEAD 既有失败）；前端 159 项通过、`vite build` 通过。边界：合成账号、隔离 CA、无真实教师实机、无合并/发布/生产读写/DDL/角色/enrollment/开关。
 
 ### 候选参数与限制（明示，非协议值）
 
