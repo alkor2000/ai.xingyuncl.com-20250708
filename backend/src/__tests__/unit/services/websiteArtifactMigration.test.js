@@ -9,15 +9,26 @@ const MIGRATION = path.join(__dirname, '../../../../migrations-candidates/p09/20
 
 // A knex stub with the two things the migration now depends on: a pinned transaction connection and a
 // server that reports whether the exclusive lock is actually held.
-function stubKnex({ columns, interrupted = 0, lock = 'granted', held = true }) {
+function stubKnex({ columns, interrupted = 0, lock = 'granted', held = true, waitOut = null,
+  sessionTimeout = 31536000 }) {
   const statements = [];
   let samples = 0;
+  let transactions = 0;
   const raw = async (sql, bindings = []) => {
     const text = sql.replace(/\s+/g, ' ').trim();
     statements.push({ sql: text, bindings });
+    // `waitOut` names the statement that runs out of patience, the way a busy ledger makes one. It is
+    // checked before anything else answers, so it can stand in for the very first ledger read.
+    if (waitOut && new RegExp(waitOut).test(text)) {
+      const error = new Error('Lock wait timeout exceeded');
+      error.code = 'ER_LOCK_WAIT_TIMEOUT';
+      error.errno = 1205;
+      throw error;
+    }
     if (/information_schema/.test(sql)) return [columns.map(name => ({ c: name }))];
     if (/applied_write_seq > write_seq/.test(sql) && /COUNT/.test(sql)) return [[{ n: interrupted }]];
     if (/^SELECT DATABASE/.test(text)) return [[{ db: 'ledger' }]];
+    if (/@@SESSION.lock_wait_timeout/.test(text)) return [[{ value: sessionTimeout }]];
     if (/^LOCK TABLES/.test(text)) {
       if (lock !== 'granted') { const error = new Error('denied'); error.code = 'ER_TABLEACCESS_DENIED_ERROR'; throw error; }
       return [{}];
@@ -27,8 +38,8 @@ function stubKnex({ columns, interrupted = 0, lock = 'granted', held = true }) {
     if (/MAX\(value\)/.test(sql)) return [[{ value: 1 }]];
     return [{ affectedRows: 0 }];
   };
-  const knex = { raw, transaction: async work => work({ raw }) };
-  return { knex, statements };
+  const knex = { raw, transaction: async work => { transactions += 1; return work({ raw }); } };
+  return { knex, statements, transactionCount: () => transactions };
 }
 const writes = statements => statements.filter(item => /^(ALTER|UPDATE)/.test(item.sql));
 const locked = statements => statements.some(item => /^LOCK TABLES/.test(item.sql));
@@ -119,6 +130,49 @@ describe('P09 write-sequence migration candidate', () => {
     const additive = stubKnex({ columns: [] });
     await migration.up(additive.knex);
     expect(locked(additive.statements)).toBe(false);
+  });
+
+  test('the wait is bounded and the session is handed back as it was found', async () => {
+    // MySQL's own default is a year: without a limit of its own, a release that cannot get the lock
+    // does not refuse — it hangs. And a connection that carries a 15s limit back into the pool would
+    // change somebody else's request, so the old value goes back before it is returned.
+    const { knex, statements } = stubKnex({ columns: ['write_seq', 'applied_write_seq'], interrupted: 1,
+      sessionTimeout: 4242 });
+    await require(MIGRATION).up(knex);
+    const settings = statements.filter(item => /^SET SESSION lock_wait_timeout/.test(item.sql));
+    expect(settings.map(item => item.sql)).toEqual([
+      'SET SESSION lock_wait_timeout = 15', 'SET SESSION lock_wait_timeout = 4242']);
+  });
+
+  test('a ledger that is busy is refused by name, and the refusal is not delayed by its own diagnosis', async () => {
+    // The first ledger read waits on the same lock the migration would ask for, so this is where a busy
+    // ledger actually stops it — before LOCK TABLES is even requested.
+    const { knex, statements } = stubKnex({ columns: ['write_seq', 'applied_write_seq'], interrupted: 1,
+      waitOut: '^SELECT COUNT' });
+    await expect(require(MIGRATION).up(knex)).rejects.toMatchObject({ code: 'p09_exclusive_entry_unavailable' });
+    expect(writes(statements)).toHaveLength(0);
+    // Whatever is attached to that refusal may not read the tables that are busy: the old version's
+    // ledger sample blocked on exactly those, and on a small pool it asked for a second connection.
+    const afterFailure = statements.slice(statements.findIndex(item => /^SELECT COUNT/.test(item.sql)) + 1);
+    expect(afterFailure.filter(item => /FROM `?p09_(links|event_sequence)`?/.test(item.sql))).toHaveLength(0);
+    expect(afterFailure.some(item => /^SHOW OPEN TABLES/.test(item.sql))).toBe(true);
+  });
+
+  test('a lock that runs out of patience is the same refusal, and still writes nothing', async () => {
+    const { knex, statements } = stubKnex({ columns: ['applied_write_seq'], waitOut: '^LOCK TABLES' });
+    await expect(require(MIGRATION).up(knex)).rejects.toMatchObject({ code: 'p09_exclusive_entry_unavailable' });
+    expect(writes(statements)).toHaveLength(0);
+  });
+
+  test('the whole migration runs on one pinned connection', async () => {
+    // `knex.raw()` takes a connection from the pool per statement, so a second transaction is a second
+    // connection — and on a small pool the second one is the one this migration is already holding.
+    const { knex, transactionCount } = stubKnex({ columns: ['write_seq', 'applied_write_seq'], interrupted: 1 });
+    await require(MIGRATION).up(knex);
+    expect(transactionCount()).toBe(1);
+    const down = stubKnex({ columns: ['write_seq', 'applied_write_seq'] });
+    await require(MIGRATION).down(down.knex);
+    expect(down.transactionCount()).toBe(1);
   });
 
   test('down writes the backlog down as a marker before it drops the evidence of it', async () => {
