@@ -95,7 +95,7 @@
 - 成功：`{ "schema_version": 1, …, "request_id": "…" }`；失败：`{ "error": { "code", "message", "retryable" }, "request_id" }`（**错误信封没有 `schema_version`**）。
 - 常用码：`website_artifacts_disabled`(503)、`task_context_unavailable`(503)、`task_context_required`(401)、`task_context_invalid`(401)、`task_context_expired`(401)、`task_context_replayed`(409)、`task_context_instance_mismatch`(403)、`subject_mismatch`(403)、`link_exists`(409)、`project_already_linked`(409)、`project_empty`(409)、`cursor_invalid`(400)、`range_too_large`(400)、`school_not_provisioned`(404)、`eligibility_unavailable`(503)、`not_eligible`(403)、`review_session_consumed`(401)、`review_session_binding`(403)、`issuer_revoked`(403)、`owner_unavailable`(403)、`storage_unavailable`(503)、`rate_limited`(429)。
 - 全表在 `backend/src/services/websiteArtifact/errors.js`（42 条，固定中文运营语，不回显请求字节）。
-- **固定版本里被拒绝的资源**另有一组原因码（只出现在 manifest 的 `refused_assets`，不是 HTTP 错误）：`ownership_unproven`、`other_project_resource`、`remote_object_storage`、`symlink_refused`、`path_rejected`、`outside_upload_root`、`path_changed`、`file_missing`、`unsupported_type`、`asset_too_large`、`asset_limit_reached`、`asset_freezing_unavailable`。edu 可以照这组向学生/老师解释"这张图为什么没进评阅版本"。
+- **固定版本里被拒绝的资源**另有一组原因码（只出现在 manifest 的 `refused_assets`，不是 HTTP 错误）：`ownership_unproven`、`other_project_resource`、`remote_object_storage`、`symlink_refused`、`path_rejected`、`outside_upload_root`、`path_anchoring_unavailable`、`file_missing`、`unsupported_type`、`asset_too_large`、`asset_limit_reached`、`asset_freezing_unavailable`。edu 可以照这组向学生/老师解释"这张图为什么没进评阅版本"。
 
 ## 8 真实身份链缺口列表
 

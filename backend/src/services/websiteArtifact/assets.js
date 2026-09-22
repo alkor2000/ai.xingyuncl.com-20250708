@@ -18,10 +18,16 @@
 //      (`ownership_unproven`). The owner always comes from the authenticated session, never from the
 //      page, and a row belonging to another student is not a match — it is a refusal.
 //   2. The bytes must be a regular file inside the upload root, reached WITHOUT following a symlink at
-//      any position — not just the last one. `O_NOFOLLOW` only refuses a final symlink, so a directory
-//      link in the middle (`uploads/nested` → somewhere else) used to walk straight out of the root.
-//      The file is therefore opened first and then proven: the path must resolve to itself under the
-//      real upload root, and the object the descriptor holds must be the object that path names now.
+//      any position — not just the last one. Checking that by path cannot work: whatever a check
+//      resolves, the name can be swapped before the next call, and a scheduled swap (open through a
+//      parent symlink → replace the parent with a real directory → put the symlink back) satisfied
+//      both a `realpath` comparison and an inode comparison while the descriptor held a file outside
+//      the root. So the path is not verified — it is *walked*: each component is opened through the
+//      descriptor of the directory above it (`/proc/self/fd/<dirfd>/<name>`, which the kernel resolves
+//      to the inode that descriptor holds, not to the name), with `O_DIRECTORY|O_NOFOLLOW` refusing any
+//      link the moment it is met. A rename after a component has been opened cannot redirect anything.
+//      Where that anchoring is not available (no procfs), the resolver refuses by name rather than
+//      falling back to a check it cannot stand behind.
 //   3. Type and size must be inside the recorded limits.
 // Nothing is ever fetched over the network: an off-site http(s) or protocol-relative reference stays
 // external and unfrozen, and object-storage rows whose bytes are not local are refused as
@@ -36,6 +42,9 @@ const { createHash } = require('node:crypto');
 const MAX_ASSET_BYTES = 2 * 1024 * 1024;
 const MAX_ASSETS = 40;
 const UPLOAD_PREFIX = '/uploads/';
+// The kernel's own answer to "which object does this descriptor hold": resolving a path through
+// /proc/self/fd/<n> follows the descriptor, not the name it was opened by.
+const PROC_FD = '/proc/self/fd';
 // Types a frozen page may carry. Anything else (video, archives, executables) is refused by type so a
 // revision can never become a delivery vehicle for unrelated content.
 const TYPES = Object.freeze({
@@ -91,8 +100,16 @@ function collect(text, ownHosts = []) {
 
 // Ownership lookup across the three models that can actually prove it. `ownerUserId` is the
 // authenticated student; a row belonging to anybody else is not a match, it is a refusal.
-function createAssetResolver({ models, uploadRoot, ownHosts = [], maxBytes = MAX_ASSET_BYTES, maxAssets = MAX_ASSETS }) {
+function createAssetResolver({ models, uploadRoot, ownHosts = [], maxBytes = MAX_ASSET_BYTES, maxAssets = MAX_ASSETS,
+  procFdDir = PROC_FD }) {
   const hosts = [...new Set(ownHosts.map(host => String(host).toLowerCase()).filter(Boolean))];
+  // Anchoring needs procfs. It is checked once, and its absence closes asset freezing by name instead
+  // of silently returning to a by-path check that a scheduled swap can defeat.
+  let anchoring = null;
+  const anchoringAvailable = async () => {
+    if (anchoring === null) anchoring = await fs.stat(procFdDir).then(entry => entry.isDirectory()).catch(() => false);
+    return anchoring;
+  };
   // The key a stored path or URL refers to, in the one form the request also speaks. A row is only
   // accepted when this is EXACTLY the requested key: `%` and `_` are ordinary characters in a file
   // name but wildcards in LIKE, so a lookup alone could hand back a different file the same student
@@ -172,38 +189,55 @@ function createAssetResolver({ models, uploadRoot, ownHosts = [], maxBytes = MAX
     return { refuse: 'ownership_unproven' };
   }
 
-  // Read the bytes of exactly the object the reference names. The descriptor is opened first and the
-  // path is proven afterwards, so nothing can be checked and then swapped: the path must resolve to
-  // itself under the real upload root (no symlink at any position, no `..`), and the object that path
-  // names right now must be the very object the descriptor holds.
+  // Walk the key one component at a time, each step anchored to the descriptor of the step above it.
+  // Nothing here re-resolves a name after it has been verified, so there is no window to swap.
+  async function anchoredOpen(key) {
+    const parts = key.split('/').filter(part => part !== '');
+    if (!parts.length || parts.some(part => part === '.' || part === '..')) return { refuse: 'path_rejected' };
+    if (!(await anchoringAvailable())) return { refuse: 'path_anchoring_unavailable' };
+    const open = [];
+    try {
+      // The upload root itself is deployment configuration, not attacker input, so it is opened by its
+      // configured path; everything below it is opened through the descriptor above.
+      let directory = await fs.open(uploadRoot, constants.O_RDONLY | constants.O_DIRECTORY);
+      open.push(directory);
+      for (const part of parts.slice(0, -1)) {
+        directory = await fs.open(`${procFdDir}/${directory.fd}/${part}`,
+          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+        open.push(directory);
+      }
+      const file = await fs.open(`${procFdDir}/${directory.fd}/${parts[parts.length - 1]}`,
+        constants.O_RDONLY | constants.O_NOFOLLOW);
+      return { file, release: async () => { await file.close().catch(() => {}); await Promise.all(open.map(handle => handle.close().catch(() => {}))); } };
+    } catch (error) {
+      await Promise.all(open.map(handle => handle.close().catch(() => {})));
+      const code = error && error.code;
+      // A symlink met at any position surfaces as ELOOP (final) or ENOTDIR (a directory component).
+      if (code === 'ELOOP' || code === 'ENOTDIR' || code === 'EMLINK') return { refuse: 'symlink_refused' };
+      if (code === 'ENOENT') return { refuse: 'file_missing' };
+      if (code === 'EACCES' || code === 'EPERM') return { refuse: 'unreadable' };
+      if (code === 'ENAMETOOLONG' || code === 'EINVAL') return { refuse: 'path_rejected' };
+      return { refuse: 'unreadable' };
+    }
+  }
+
+  // Read the bytes of exactly the object the reference names, through the anchored walk above.
   async function read(key) {
     if (typeof key !== 'string' || key === '' || key.includes('..') || key.includes('\u0000')) {
       return { refuse: 'path_rejected' };
     }
-    let handle;
+    const opened = await anchoredOpen(key.replace(/^\/+/, ''));
+    if (opened.refuse) return { refuse: opened.refuse };
     try {
-      const realRoot = await fs.realpath(uploadRoot);
-      const target = path.resolve(realRoot, key.replace(/^\/+/, ''));
-      const relative = path.relative(realRoot, target);
-      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return { refuse: 'outside_upload_root' };
-      handle = await fs.open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
-      const opened = await handle.stat();
-      if (!opened.isFile()) return { refuse: 'not_a_regular_file' };
-      // Every component resolved: anything but the path itself means a link was in the way.
-      const resolved = await fs.realpath(target);
-      if (resolved !== target) return { refuse: 'symlink_refused' };
-      const named = await fs.stat(resolved);
-      if (named.ino !== opened.ino || named.dev !== opened.dev) return { refuse: 'path_changed' };
-      if (opened.size > maxBytes) return { refuse: 'asset_too_large' };
-      const buffer = Buffer.alloc(opened.size);
-      const { bytesRead } = await handle.read(buffer, 0, opened.size, 0);
+      const stat = await opened.file.stat();
+      if (!stat.isFile()) return { refuse: 'not_a_regular_file' };
+      if (stat.size > maxBytes) return { refuse: 'asset_too_large' };
+      const buffer = Buffer.alloc(stat.size);
+      const { bytesRead } = await opened.file.read(buffer, 0, stat.size, 0);
       return { bytes: buffer.subarray(0, bytesRead) };
-    } catch (error) {
-      if (error && (error.code === 'ELOOP' || error.code === 'EMLINK')) return { refuse: 'symlink_refused' };
-      if (error && error.code === 'ENOENT') return { refuse: 'file_missing' };
-      if (error && (error.code === 'EACCES' || error.code === 'EPERM')) return { refuse: 'unreadable' };
+    } catch {
       return { refuse: 'unreadable' };
-    } finally { await handle?.close().catch(() => {}); }
+    } finally { await opened.release(); }
   }
 
   // Resolve one referenced upload into either frozen bytes or a named refusal.

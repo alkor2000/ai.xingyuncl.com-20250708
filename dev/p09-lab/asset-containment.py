@@ -139,7 +139,10 @@ def main():
             'parent_symlink_escaped': cases['parent_directory_symlink'].get('returned_bytes') == outside['owned'],
             'multi_level_symlink_escaped': cases['multi_level_symlink'].get('returned_bytes') == outside['deeper'],
             'wildcard_matched_another_object': cases['like_wildcard_key'].get('returned_bytes') == outside['axb'],
-            'offsite_left_external': cases['offsite_url'].get('classified') == 'external'
+            'offsite_left_external': cases['offsite_url'].get('classified') == 'external',
+            'scheduled_swap_returned_outside_bytes': cases['scheduled_parent_swap'].get('returned_outside_bytes') is True,
+            'scheduled_swap_refused': 'refused' in cases['scheduled_parent_swap'],
+            'unknown_bytes_never_returned': cases['scheduled_parent_swap'].get('returned_unknown_bytes') is False
         }
         report['status'] = 'recorded'
         report['stage'] = 'complete'

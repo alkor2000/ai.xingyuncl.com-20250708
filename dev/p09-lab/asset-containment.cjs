@@ -77,7 +77,54 @@ async function main() {
     return { reference, ...(out.refused ? { refused: out.refused }
       : { returned_bytes: digest(out.content), owned_by: out.owned_by, byte_length: out.byte_length }) };
   };
+  // The controller's schedule, run against this repository's resolver: the descriptor is opened through
+  // a parent symlink, the parent is then replaced by a real directory so any by-name re-resolution
+  // looks innocent, and swapped back before the identity check so that check agrees too. A resolver
+  // that verifies by path rather than through the descriptor it holds returns the outside bytes.
+  async function swapRace() {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'p09-swap-'));
+    const root = path.join(base, 'uploads');
+    const outside = path.join(base, 'outside');
+    const parent = path.join(root, 'nested');
+    const target = path.join(parent, 'owned.png');
+    fs.mkdirSync(root); fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'owned.png'), 'SYNTHETIC_OUTSIDE');
+    fs.symlinkSync(outside, parent);
+    const promises = require('node:fs/promises');
+    const realpath = promises.realpath;
+    const schedule = [];
+    let armed = true;
+    promises.realpath = async function hooked(p, ...rest) {
+      if (String(p) === target && armed) {
+        armed = false;
+        schedule.push('after the descriptor was opened through the parent symlink: replace the parent with a real directory');
+        fs.unlinkSync(parent); fs.mkdirSync(parent); fs.writeFileSync(target, 'SYNTHETIC_INSIDE');
+        const resolved = await realpath.call(this, p, ...rest);
+        schedule.push('after realpath agreed with the requested path: put the parent symlink back');
+        fs.renameSync(parent, path.join(root, 'parked')); fs.symlinkSync(outside, parent);
+        return resolved;
+      }
+      return realpath.call(this, p, ...rest);
+    };
+    try {
+      const raced = createAssetResolver({
+        uploadRoot: root, ownHosts: [APP_HOST],
+        models: { query: async sql => (sql.includes('FROM files')
+          ? [{ id: 1, user_id: OWNER, status: 'ready', local_path: 'nested/owned.png' }] : []) }
+      });
+      const out = await raced.resolve({ ownerUserId: OWNER, projectId: 3, reference: raced.classify('/uploads/nested/owned.png') });
+      const text = out.content ? out.content.toString() : null;
+      return { schedule, ...(out.refused ? { refused: out.refused } : { returned_bytes: digest(out.content) }),
+        returned_outside_bytes: text === 'SYNTHETIC_OUTSIDE',
+        returned_unknown_bytes: text !== null && text !== 'SYNTHETIC_OUTSIDE' && text !== 'SYNTHETIC_INSIDE' };
+    } finally {
+      promises.realpath = realpath;
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  }
+
   const cases = {
+    scheduled_parent_swap: await swapRace(),
     own_regular_file: await ask('/uploads/chat-images/2026-09/mine.png'),
     own_absolute_url: await ask(`http://${APP_HOST}/uploads/chat-images/2026-09/mine.png`),
     another_students_file: await ask('/uploads/chat-images/2026-09/theirs.png'),
