@@ -78,7 +78,7 @@ function buildRuntime({ previewEnabled = true, issuers = true } = {}) {
       preview: previewEnabled ? { origin: 'http://preview.localhost:4599', hostname: 'preview.localhost', port: 4599 } : null,
       clients: [{ clientKey: 'edu', keyId: 'k1', secret: CLIENT_SECRET,
         actions: ['artifacts:read', 'artifacts:review', 'artifacts:freeze'], schoolRefs: ['123'] }],
-      readiness: { task_context_configured: parsed.length > 0 }
+      readiness: { task_context_configured: parsed.length > 0, eligibility_provider: 'absent' }
     }
   };
 }
@@ -138,7 +138,10 @@ describe('P09 HTTP surfaces', () => {
 
     const created = await request(port, { ...base, headers: { 'Idempotency-Key': randomUUID(), [GRANT_HEADER]: makeGrant() } });
     expect(created.status).toBe(200);
-    expect(created.json).toMatchObject({ schema_version: 1, link: { assignment_ref: 'assign-1', work_state: 'preview_ready' } });
+    // The seeded project was written before P09 watched it: the surface says 未知 with its reason, and
+    // never a guessed 未开始 or a claimed 制作中.
+    expect(created.json).toMatchObject({ schema_version: 1, link: { assignment_ref: 'assign-1', work_state: 'unknown',
+      has_effective_save: null, save_evidence: 'legacy_unknown', save_evidence_reason: 'history_before_observation' } });
   });
 
   test('edu reads need a service credential and stay inside the school scope', async () => {
@@ -171,7 +174,7 @@ describe('P09 HTTP surfaces', () => {
     expect(swapped.status).toBe(401);
   });
 
-  test('the isolated preview origin exchanges a one-time handoff for a cookie and refuses a forwarded link', async () => {
+  test('the isolated preview origin exchanges a fragment handoff for a browser-bound cookie', async () => {
     const { runtime, context } = buildRuntime();
     server = await listen(buildApp(runtime));
     const port = server.address().port;
@@ -181,38 +184,54 @@ describe('P09 HTTP surfaces', () => {
     const links = await context.service.ownerLinks(101);
     const opened = await request(port, { method: 'POST', path: `/api/p09/website-artifacts/links/${links[0].link_id}/preview-sessions` });
     expect(opened.status).toBe(200);
-    expect(opened.json.session.open_url).toContain('http://preview.localhost:4599/p09/preview/open?h=');
+    // The handoff travels in the fragment: it never reaches a server log or a Referer header.
+    expect(opened.json.session.open_url).toContain('http://preview.localhost:4599/p09/preview/open#h=');
+    expect(opened.json.session.open_url).not.toContain('?');
     expect(linked.json.link.artifact_ref).toBe(opened.json.session.artifact_ref);
 
     const preview = await listen(createPreviewApp({ runtime, frameAncestors: "'none'", secureCookie: false }));
     try {
       const previewPort = preview.address().port;
-      const handoff = new URL(opened.json.session.open_url).searchParams.get('h');
+      const handoff = opened.json.session.open_url.split('#h=')[1];
+      const teacher = { 'User-Agent': 'TeacherBrowser/1.0', 'Accept-Language': 'zh-CN' };
+      const thief = { 'User-Agent': 'OtherBrowser/9.9', 'Accept-Language': 'en-US' };
       // Served only on the isolated hostname: the same path on any other Host is a 404.
-      const wrongHost = await request(previewPort, { path: `/p09/preview/open?h=${encodeURIComponent(handoff)}`, host: 'ai.example.com' });
+      const wrongHost = await request(previewPort, { path: '/p09/preview/open', host: 'ai.example.com' });
       expect(wrongHost.status).toBe(404);
 
-      const open = await request(previewPort, { path: `/p09/preview/open?h=${encodeURIComponent(handoff)}`, host: 'preview.localhost' });
-      expect(open.status).toBe(302);
-      const cookie = String(open.headers['set-cookie'][0]);
+      // The bootstrap page carries no token and runs under its own strict policy (not the sandbox one).
+      const bootstrap = await request(previewPort, { path: '/p09/preview/open', host: 'preview.localhost', headers: teacher });
+      expect(bootstrap.status).toBe(200);
+      expect(bootstrap.text).not.toContain(handoff);
+      expect(bootstrap.headers['content-security-policy']).toContain("default-src 'none'");
+
+      const exchange = await request(previewPort, { method: 'POST', path: '/p09/preview/exchange', host: 'preview.localhost',
+        headers: teacher, body: { handoff } });
+      expect(exchange.status).toBe(200);
+      const cookie = String(exchange.headers['set-cookie'][0]);
       expect(cookie).toContain('HttpOnly');
-      expect(cookie).toContain('SameSite=Lax')   // http laboratory origin; https deployments send None+Secure;
-      const page = await request(previewPort, { path: open.headers.location, host: 'preview.localhost',
-        headers: { Cookie: cookie.split(';')[0] } });
+      expect(cookie).toContain('SameSite=Lax');  // http laboratory origin; https deployments send None+Secure
+      const page = await request(previewPort, { path: exchange.json.location, host: 'preview.localhost',
+        headers: { ...teacher, Cookie: cookie.split(';')[0] } });
       expect(page.status).toBe(200);
       expect(page.text).toContain('校园节水');
       expect(page.headers['content-security-policy']).toContain('sandbox allow-scripts');
       expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'");
       expect(page.headers['x-content-type-options']).toBe('nosniff');
 
-      // Forwarded opening link (handoff already used) and a cookie-less request both get nothing.
-      const forwarded = await request(previewPort, { path: `/p09/preview/open?h=${encodeURIComponent(handoff)}`, host: 'preview.localhost' });
-      expect(forwarded.status).toBe(401);
-      const noCookie = await request(previewPort, { path: open.headers.location, host: 'preview.localhost' });
+      // The cookie is bound to the browser that redeemed the handoff…
+      const stolenCookie = await request(previewPort, { path: exchange.json.location, host: 'preview.localhost',
+        headers: { ...thief, Cookie: cookie.split(';')[0] } });
+      expect(stolenCookie.status).toBe(403);
+      // …the handoff itself is single use, and a cookie-less request gets nothing.
+      const replay = await request(previewPort, { method: 'POST', path: '/p09/preview/exchange', host: 'preview.localhost',
+        headers: thief, body: { handoff } });
+      expect(replay.status).toBe(401);
+      const noCookie = await request(previewPort, { path: exchange.json.location, host: 'preview.localhost', headers: teacher });
       expect(noCookie.status).toBe(401);
       // Path traversal out of the bundle is refused.
-      const escape = await request(previewPort, { path: `/p09/preview/${open.headers.location.split('/')[3]}/../../etc/passwd`,
-        host: 'preview.localhost', headers: { Cookie: cookie.split(';')[0] } });
+      const escape = await request(previewPort, { path: `/p09/preview/${exchange.json.location.split('/')[3]}/../../etc/passwd`,
+        host: 'preview.localhost', headers: { ...teacher, Cookie: cookie.split(';')[0] } });
       expect([400, 401, 404]).toContain(escape.status);
     } finally { await close(preview); }
   });

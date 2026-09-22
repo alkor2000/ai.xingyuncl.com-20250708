@@ -161,5 +161,19 @@
   "htmlEditor.p09.error.source_deleted": "The source work was deleted.",
   "htmlEditor.p09.error.preview_unavailable": "There is nothing to preview right now.",
   "htmlEditor.p09.error.revision_too_large": "The work exceeds the review-version size limit.",
-  "htmlEditor.p09.error.rate_limited": "Too many requests; try again later."
+  "htmlEditor.p09.error.rate_limited": "Too many requests; try again later.",
+  "htmlEditor.p09.state.unknown": "Progress unknown",
+  "htmlEditor.p09.evidence.observed": "{{at}}",
+  "htmlEditor.p09.evidence.legacy_unknown": "Unknown (this work changed before P09 began observing saves)",
+  "htmlEditor.p09.evidence.none": "Never saved yet",
+  "htmlEditor.p09.evidenceLabel": "Save evidence",
+  "htmlEditor.p09.frozenScopeHint": "A fixed review version freezes the pages of this project and your own uploaded files; external URLs, web fonts and APIs are not frozen.",
+  "htmlEditor.p09.error.eligibility_unavailable": "This site has no reviewer-eligibility provider yet, so a teacher preview cannot be opened.",
+  "htmlEditor.p09.error.not_eligible": "The viewer is no longer eligible to review this work.",
+  "htmlEditor.p09.error.review_session_binding": "This review entry only opens in the browser that redeemed it.",
+  "htmlEditor.p09.error.review_session_invalid": "The review entry is invalid or has expired; please open it again.",
+  "htmlEditor.p09.error.review_session_consumed": "This review entry has already been used; please open it again.",
+  "htmlEditor.p09.error.issuer_revoked": "The issuer of this review entry has been disabled.",
+  "htmlEditor.p09.error.owner_unavailable": "The account that owns this work is currently unavailable.",
+  "htmlEditor.p09.error.asset_unavailable": "That resource does not belong to this work or cannot be read."
 }

@@ -38,7 +38,9 @@ export function loadCapability(client = api) {
 }
 export function resetCapabilityCache() { capabilityPromise = null }
 
-const STATE_TONE = { linked: 'default', working: 'processing', preview_ready: 'success', unavailable: 'warning' }
+// `unknown` is not a failure: it is what the platform says when the evidence of a real save does not
+// reach back far enough. It must never look like 未开始.
+const STATE_TONE = { linked: 'default', working: 'processing', preview_ready: 'success', unknown: 'warning', unavailable: 'warning' }
 const time = (ms, locale) => (ms ? new Date(ms).toLocaleString(locale) : '—')
 
 export default function TaskArtifactPanel({ project, pages = [], client = api }) {
@@ -131,17 +133,20 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
           <Descriptions size="small" column={1} colon={false} items={[
             { key: 'assignment', label: t(`${prefix}assignment`), children: current.assignment_ref },
             { key: 'entry', label: t(`${prefix}entry`), children: entryTitle || current.entry_ref?.slice(0, 8) },
-            { key: 'saved', label: t(`${prefix}savedAt`), children: time(current.saved_at, i18n.language) },
+            { key: 'saved', label: t(`${prefix}evidenceLabel`), children: current.save_evidence === 'observed'
+              ? t(`${prefix}evidence.observed`, { at: time(current.last_real_save_at ?? current.saved_at, i18n.language) })
+              : t(`${prefix}evidence.${current.save_evidence || 'none'}`) },
             { key: 'revision', label: t(`${prefix}revision`), children: latest
               ? t(`${prefix}revisionValue`, { no: latest.revision_no, at: time(latest.created_at, i18n.language) })
               : t(`${prefix}revisionNone`) }
           ]} />
           <Typography.Text type="secondary">{t(`${prefix}submitHint`)}</Typography.Text>
+          <Typography.Text type="secondary">{t(`${prefix}frozenScopeHint`)}</Typography.Text>
           <Space wrap>
             <Button icon={<EyeOutlined />} disabled={busy || !current.preview_available} onClick={() => openPreview(null)} data-testid="p09-preview">
               {t(`${prefix}preview`)}
             </Button>
-            <Button type="primary" icon={<PushpinOutlined />} disabled={busy || !current.has_effective_save}
+            <Button type="primary" icon={<PushpinOutlined />} disabled={busy || current.has_effective_save === false}
               onClick={freeze} data-testid="p09-freeze">{t(`${prefix}freeze`)}</Button>
             {latest && <Button disabled={busy} onClick={() => openPreview(latest.revision_ref)} data-testid="p09-open-revision">
               {t(`${prefix}openRevision`)}</Button>}

@@ -12,7 +12,8 @@ const project = { id: 3, name: '校园节水网站' }
 const pages = [{ id: 7, title: '首页', slug: 'home' }, { id: 8, title: '数据', slug: 'data' }]
 const linkRow = (extra = {}) => ({ link_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', project_id: 3, entry_page_id: 7,
   artifact_ref: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', assignment_ref: 'assign-1', state: 'active',
-  work_state: 'preview_ready', has_effective_save: true, preview_available: true, saved_at: Date.now(), revisions: [], ...extra })
+  work_state: 'preview_ready', has_effective_save: true, save_evidence: 'observed', save_evidence_reason: 'observed_save',
+  preview_available: true, real_save_count: 2, last_real_save_at: Date.now(), saved_at: Date.now(), revisions: [], ...extra })
 
 function routes({ available = true, links = [] } = {}) {
   api.get.mockImplementation(path => {
@@ -24,6 +25,17 @@ function routes({ available = true, links = [] } = {}) {
 beforeEach(() => { vi.clearAllMocks(); api.get.mockReset(); api.post.mockReset(); resetCapabilityCache(); setTaskContext(null) })
 
 describe('assignment artifact panel', () => {
+  it('shows 未知 with its reason when the save evidence does not reach back, and still allows freezing', async () => {
+    routes({ links: [linkRow({ work_state: 'unknown', has_effective_save: null, save_evidence: 'legacy_unknown',
+      save_evidence_reason: 'history_before_observation', last_real_save_at: null, saved_at: null })] })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    const tag = await screen.findByTestId('p09-state')
+    // Never 未开始: the state and the field both say the evidence is what is unknown.
+    expect(tag.textContent).toBe('htmlEditor.p09.state.unknown')
+    expect(screen.getByText('htmlEditor.p09.evidence.legacy_unknown')).toBeTruthy()
+    expect(screen.getByTestId('p09-freeze').disabled).toBe(false)
+  })
+
   it('renders nothing when the site has not opened website artifacts', async () => {
     routes({ available: false })
     render(<TaskArtifactPanel project={project} pages={pages} />)

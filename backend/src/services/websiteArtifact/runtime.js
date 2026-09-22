@@ -14,6 +14,8 @@ const { fail, P09Error } = require('./errors');
 const { WebsiteArtifactStore, TABLES } = require('./store');
 const { TaskGrantVerifier, parseIssuers } = require('./taskGrant');
 const { createSourceReader } = require('./snapshot');
+const { createAssetResolver } = require('./assets');
+const { createEligibilityProvider } = require('./eligibility');
 const { createWebsiteArtifactService } = require('./service');
 
 const SWITCH = 'P09_WEBSITE_ARTIFACTS_ENABLED';
@@ -35,7 +37,7 @@ function laboratory(env) {
   if (!['development', 'test'].includes(env.NODE_ENV)) fail('invalid_request');
   let spec;
   try { spec = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('invalid_request'); }
-  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients'];
+  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients', 'eligibility'];
   if (!spec || typeof spec !== 'object' || Array.isArray(spec) || Object.keys(spec).some(k => !keys.includes(k)) ||
       typeof spec.source_instance !== 'string' || !INSTANCE.test(spec.source_instance)) fail('invalid_request');
   return spec;
@@ -135,6 +137,27 @@ async function probeLedger(pool, database) {
   }
 }
 
+// Where the platform actually writes uploads. P09 only ever reads inside this root, and only files a
+// model row proves belong to the student whose work is being frozen.
+function uploadRootFrom(env) {
+  try { return require('../../config').getStoragePath('uploads'); }
+  catch { return require('node:path').resolve(env.STORAGE_PATH || process.cwd(), 'uploads'); }
+}
+// How often the background catch-up runs. Bounded by the service's own per-sweep limits; a deployment
+// may slow it down but not switch it off, because that is what makes a lost marker recoverable.
+function sweepIntervalFrom(env) {
+  const raw = Number(env.P09_SYNC_INTERVAL_MS ?? 60000);
+  if (!Number.isFinite(raw)) fail('invalid_request');
+  return Math.min(Math.max(Math.trunc(raw), 5000), 600000);
+}
+// How long a work may go unverified before the self-healing pass re-reads it against the source. It is
+// the recovery window for a change whose durable marker was itself lost.
+function verifyAfterFrom(env) {
+  const raw = Number(env.P09_SYNC_VERIFY_MS ?? 300000);
+  if (!Number.isFinite(raw)) fail('invalid_request');
+  return Math.min(Math.max(Math.trunc(raw), 10000), 3600000);
+}
+
 async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {}) {
   if (resolveSwitch(env) === 'disabled') return Object.freeze({ enabled: false, switch: 'disabled', close: async () => {} });
   const lab = laboratory(env);
@@ -151,23 +174,39 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
   catch (error) { await pool.end().catch(() => {}); throw error; }
   const store = new WebsiteArtifactStore({ pool, now });
   const models = deps.models || { User: require('../../models/User'), HtmlProject: require('../../models/HtmlProject'), HtmlPage: require('../../models/HtmlPage') };
-  const reader = createSourceReader({ HtmlProject: models.HtmlProject, HtmlPage: models.HtmlPage, sourceInstance });
+  const source = deps.sourceQuery || ((sql, params) => require('../../database/connection').query(sql, params));
+  const assets = createAssetResolver({ models: { query: source }, uploadRoot: deps.uploadRoot || uploadRootFrom(env) });
+  const reader = createSourceReader({ HtmlProject: models.HtmlProject, HtmlPage: models.HtmlPage, sourceInstance, assets });
   const grants = new TaskGrantVerifier({ issuers, audience: sourceInstance, now });
-  const service = createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled: !!preview, now });
+  // Reviewer eligibility: absent in a deployment (the interface refuses), a fixed roster in the lab.
+  const eligibility = lab && lab.eligibility ? createEligibilityProvider(lab.eligibility, { env }) : null;
+  // A grant signed by a key this deployment no longer configures cannot keep a session alive.
+  const issuerKeys = new Set(issuers.map(i => `${i.issuer}:${i.keyId}`));
+  const issuerActive = key => issuerKeys.has(String(key));
+  const verifyAfterMs = verifyAfterFrom(env);
+  const service = createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled: !!preview,
+    now, assets, eligibility, issuerActive, verifyAfterMs, logger: deps.logger || null });
+  // Background catch-up: bounded, unreferenced, and never a substitute for the durable pending marker.
+  const sweepIntervalMs = sweepIntervalFrom(env);
+  const timer = setInterval(() => { service.sweep().catch(() => {}); }, sweepIntervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
   return Object.freeze({
-    enabled: true, switch: 'enabled', sourceInstance, service, store, grants, preview,
+    enabled: true, switch: 'enabled', sourceInstance, service, store, grants, preview, assets,
     clients: Object.freeze(clients),
     readiness: Object.freeze({ ...readiness, source_instance: sourceInstance, task_context_configured: issuers.length > 0,
       task_issuers: issuers.map(i => `${i.issuer}:${i.keyId}`), integration_clients: clients.map(c => `${c.clientKey}:${c.keyId}`),
-      preview_origin: preview ? preview.origin : null, laboratory: !!lab, checked_at: new Date(now()).toISOString() }),
-    async close() { await pool.end().catch(() => {}); }
+      preview_origin: preview ? preview.origin : null, laboratory: !!lab,
+      eligibility_provider: eligibility ? eligibility.mode : 'absent', sync_interval_ms: sweepIntervalMs,
+      sync_verify_ms: verifyAfterMs,
+      checked_at: new Date(now()).toISOString() }),
+    async close() { clearInterval(timer); await pool.end().catch(() => {}); }
   });
 }
 
 async function bootstrapWebsiteArtifacts({ env = process.env, logger = console, deps } = {}) {
   const runtime = await createWebsiteArtifactRuntime({ env, deps });
   if (runtime.enabled) {
-    logger.info(`P09 website artifacts ready (instance ${runtime.sourceInstance}, task context ${runtime.readiness.task_context_configured ? 'configured' : 'absent: every grant refused'}, preview ${runtime.preview ? 'isolated origin' : 'off'})`);
+    logger.info(`P09 website artifacts ready (instance ${runtime.sourceInstance}, task context ${runtime.readiness.task_context_configured ? 'configured' : 'absent: every grant refused'}, preview ${runtime.preview ? 'isolated origin' : 'off'}, reviewer eligibility ${runtime.readiness.eligibility_provider})`);
   } else {
     logger.info('P09 website artifacts disabled (default); no ledger connection, credential read or preview origin');
   }

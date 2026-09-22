@@ -57,7 +57,15 @@ async function startServer() {
         runtime: app.locals.p09Website,
         host: process.env.P09_PREVIEW_BIND || '127.0.0.1',
         frameAncestors: process.env.P09_PREVIEW_FRAME_ANCESTORS || "'none'",
-        secureCookie: process.env.NODE_ENV === 'production'
+        // The isolated origin may terminate TLS itself; behind a proxy these stay unset.
+        tls: process.env.P09_PREVIEW_TLS_KEY && process.env.P09_PREVIEW_TLS_CERT
+          ? { key: require('fs').readFileSync(process.env.P09_PREVIEW_TLS_KEY),
+            cert: require('fs').readFileSync(process.env.P09_PREVIEW_TLS_CERT) }
+          : null,
+        // The cookie follows the scheme the browser actually uses: an https isolated origin gets
+        // SameSite=None + Secure, which is also what lets a sandboxed (opaque-origin) document send it
+        // with the work's own images and stylesheet.
+        secureCookie: app.locals.p09Website.preview.origin.startsWith('https:')
       });
       logger.info(`P09 隔离预览域监听 ${app.locals.p09Website.preview.origin}（端口 ${app.locals.p09PreviewServer.port}）`);
     }

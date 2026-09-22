@@ -190,7 +190,7 @@ class HtmlEditorController {
 
       logger.info('删除HTML项目成功', { userId, projectId: id, projectName: project.name });
 
-      noteWebsiteArtifactChange(req, { projectId: id, deleted: true });
+      await noteWebsiteArtifactChange(req, { projectId: id, deleted: true });
       return ResponseHelper.success(res, null, '项目删除成功');
     } catch (error) {
       logger.error('删除项目失败:', error);
@@ -309,7 +309,7 @@ class HtmlEditorController {
       
       logger.info('创建HTML页面成功', { userId, pageId, title, creditsConsumed: creditsRequired });
       
-      noteWebsiteArtifactChange(req, { projectId: newPage?.project_id || project_id });
+      await noteWebsiteArtifactChange(req, { projectId: newPage?.project_id || project_id, contentSave: false });
       return ResponseHelper.success(res, newPage, '页面创建成功');
     } catch (error) {
       logger.error('创建页面失败:', error);
@@ -426,7 +426,9 @@ class HtmlEditorController {
         isOnlyUpdatingTitle 
       });
       
-      noteWebsiteArtifactChange(req, { projectId: updatedPage?.project_id });
+      // The one real save signal on the platform: an authenticated update that carried page content.
+      await noteWebsiteArtifactChange(req, { projectId: updatedPage?.project_id,
+        contentSave: !isOnlyUpdatingTitle && (html_content !== undefined || css_content !== undefined || js_content !== undefined) });
       return ResponseHelper.success(res, updatedPage, '页面更新成功');
     } catch (error) {
       logger.error('更新页面失败:', error);
@@ -499,7 +501,7 @@ class HtmlEditorController {
       
       const message = newStatus ? '页面已发布，永久链接已生成' : '页面已取消发布';
       
-      noteWebsiteArtifactChange(req, { projectId: updatedPage?.project_id });
+      await noteWebsiteArtifactChange(req, { projectId: updatedPage?.project_id, contentSave: false });
       return ResponseHelper.success(res, updatedPage, message);
     } catch (error) {
       logger.error('切换发布状态失败:', error);
@@ -531,7 +533,7 @@ class HtmlEditorController {
         return ResponseHelper.error(res, '删除失败');
       }
 
-      noteWebsiteArtifactChange(req, { projectId: page?.project_id });
+      await noteWebsiteArtifactChange(req, { projectId: page?.project_id, contentSave: false });
       return ResponseHelper.success(res, null, '页面删除成功');
     } catch (error) {
       logger.error('删除页面失败:', error);

@@ -22,6 +22,10 @@ const SCHEMA = Object.freeze([
   `CREATE TABLE IF NOT EXISTS ${TABLES.refs}(kind VARCHAR(16) ${ASCII} NOT NULL, source_instance VARCHAR(64) ${ASCII} NOT NULL,
     local_id VARCHAR(64) ${ASCII} NOT NULL, ref CHAR(36) ${ASCII} NOT NULL, created_at BIGINT NOT NULL,
     PRIMARY KEY(kind,source_instance,local_id), UNIQUE KEY ref(ref)) ENGINE=InnoDB`,
+  // Two generated keys carry the "one current work" rules. They are NULL for anything that is not
+  // active, and MySQL lets NULLs repeat in a UNIQUE index — so history stays, while at any moment a
+  // student has one work per assignment AND a project belongs to one assignment (candidate v2: the
+  // first version keyed the project by assignment, which let one project answer two assignments).
   `CREATE TABLE IF NOT EXISTS ${TABLES.links}(id CHAR(36) ${ASCII} NOT NULL, source_instance VARCHAR(64) ${ASCII} NOT NULL,
     artifact_ref CHAR(36) ${ASCII} NOT NULL, project_ref CHAR(36) ${ASCII} NOT NULL, entry_ref CHAR(36) ${ASCII} NOT NULL,
     owner_user_id BIGINT NOT NULL, student_uuid VARCHAR(100) ${ASCII} NOT NULL, project_id BIGINT NOT NULL,
@@ -31,9 +35,17 @@ const SCHEMA = Object.freeze([
     work_state VARCHAR(16) ${ASCII} NOT NULL, has_effective_save TINYINT NOT NULL DEFAULT 0,
     preview_available TINYINT NOT NULL DEFAULT 0, saved_at BIGINT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
     revoked_at BIGINT NULL, revoked_reason VARCHAR(32) ${ASCII} NULL,
-    PRIMARY KEY(id), UNIQUE KEY artifact(artifact_ref), UNIQUE KEY one_work(source_instance,assignment_ref,owner_user_id),
-    UNIQUE KEY one_project(source_instance,assignment_ref,project_id), KEY owner(owner_user_id,state),
-    KEY project(source_instance,project_id,state), KEY scope(source_instance,school_ref,created_at)) ENGINE=InnoDB`,
+    content_digest CHAR(64) ${ASCII} NULL, change_no INT NOT NULL DEFAULT 0,
+    save_evidence VARCHAR(16) ${ASCII} NOT NULL DEFAULT 'none', save_reason VARCHAR(32) ${ASCII} NULL,
+    real_save_count INT NOT NULL DEFAULT 0, page_count INT NOT NULL DEFAULT 0,
+    last_real_save_at BIGINT NULL, sync_pending_at BIGINT NULL, sync_attempts INT NOT NULL DEFAULT 0,
+    reconciled_at BIGINT NULL, reconcile_error VARCHAR(32) ${ASCII} NULL,
+    active_work_key VARCHAR(224) ${ASCII} AS (IF(state='active', CONCAT(source_instance,'|',assignment_ref,'|',owner_user_id), NULL)) STORED,
+    active_project_key VARCHAR(160) ${ASCII} AS (IF(state='active', CONCAT(source_instance,'|',project_id), NULL)) STORED,
+    PRIMARY KEY(id), UNIQUE KEY artifact(artifact_ref), UNIQUE KEY one_active_work(active_work_key),
+    UNIQUE KEY one_active_project(active_project_key), KEY owner(owner_user_id,state),
+    KEY project(source_instance,project_id,state), KEY scope(source_instance,school_ref,created_at),
+    KEY pending(sync_pending_at)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS ${TABLES.revisions}(id CHAR(36) ${ASCII} NOT NULL, link_id CHAR(36) ${ASCII} NOT NULL,
     revision_no INT NOT NULL, content_sha256 CHAR(64) ${ASCII} NOT NULL, byte_length BIGINT NOT NULL,
     manifest JSON NOT NULL, request_key CHAR(64) ${ASCII} NOT NULL, created_at BIGINT NOT NULL,
@@ -52,10 +64,13 @@ const SCHEMA = Object.freeze([
     PRIMARY KEY(event_seq), UNIQUE KEY fact(fact_id), KEY scope(source_instance,school_ref,event_seq),
     CONSTRAINT fk_p09_events_link FOREIGN KEY(link_id) REFERENCES ${TABLES.links}(id)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS ${TABLES.sessions}(id CHAR(36) ${ASCII} NOT NULL, link_id CHAR(36) ${ASCII} NOT NULL,
-    revision_id CHAR(36) ${ASCII} NULL, audience CHAR(64) ${ASCII} NOT NULL, grant_id CHAR(36) ${ASCII} NOT NULL,
-    handoff_sha256 CHAR(64) ${ASCII} NULL, secret_sha256 CHAR(64) ${ASCII} NULL, issued_at BIGINT NOT NULL,
-    expires_at BIGINT NOT NULL, consumed_at BIGINT NULL, revoked_at BIGINT NULL,
-    PRIMARY KEY(id), UNIQUE KEY handoff(handoff_sha256), KEY prune(expires_at),
+    revision_id CHAR(36) ${ASCII} NULL, audience VARCHAR(80) ${ASCII} NOT NULL, audience_kind VARCHAR(16) ${ASCII} NOT NULL,
+    grant_id CHAR(36) ${ASCII} NOT NULL, issuer_key VARCHAR(64) ${ASCII} NOT NULL,
+    handoff_sha256 CHAR(64) ${ASCII} NULL, secret_sha256 CHAR(64) ${ASCII} NULL,
+    client_sha256 CHAR(64) ${ASCII} NULL, issued_at BIGINT NOT NULL, handoff_expires_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL, consumed_at BIGINT NULL, consumed_client_sha256 CHAR(64) ${ASCII} NULL,
+    revoked_at BIGINT NULL, revoked_reason VARCHAR(32) ${ASCII} NULL, last_access_at BIGINT NULL, access_count INT NOT NULL DEFAULT 0,
+    PRIMARY KEY(id), UNIQUE KEY handoff(handoff_sha256), KEY prune(expires_at), KEY by_link(link_id,revoked_at),
     CONSTRAINT fk_p09_sessions_link FOREIGN KEY(link_id) REFERENCES ${TABLES.links}(id)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS ${TABLES.idempotency}(scope VARCHAR(32) ${ASCII} NOT NULL, key_sha256 CHAR(64) ${ASCII} NOT NULL,
     request_sha256 CHAR(64) ${ASCII} NOT NULL, response JSON NOT NULL, created_at BIGINT NOT NULL,
@@ -166,12 +181,74 @@ class Tx {
   async linkByArtifact(sourceInstance, artifactRef) {
     return this.one(`SELECT * FROM ${TABLES.links} WHERE source_instance=? AND artifact_ref=?`, [sourceInstance, artifactRef]);
   }
+  // The current row for this student on this assignment: an active one if there is one, otherwise the
+  // most recent history row (a student may re-link after revoking, and both rows stay).
   async activeLinkForAssignment(sourceInstance, assignmentRef, ownerUserId) {
-    return this.one(`SELECT * FROM ${TABLES.links} WHERE source_instance=? AND assignment_ref=? AND owner_user_id=? FOR UPDATE`,
-      [sourceInstance, assignmentRef, ownerUserId]);
+    return this.one(`SELECT * FROM ${TABLES.links} WHERE source_instance=? AND assignment_ref=? AND owner_user_id=?
+      ORDER BY state='active' DESC, created_at DESC LIMIT 1 FOR UPDATE`, [sourceInstance, assignmentRef, ownerUserId]);
   }
   async linksForProject(sourceInstance, projectId) {
     return this.query(`SELECT * FROM ${TABLES.links} WHERE source_instance=? AND project_id=? AND state='active'`, [sourceInstance, projectId]);
+  }
+  // Durable "this work changed" marker. It is written by the editor's own request path before any
+  // reconciliation is attempted, so a crash between the source write and the projection leaves the row
+  // pending instead of silently stale.
+  async markPending(sourceInstance, projectId, at) {
+    const rows = await this.query(`UPDATE ${TABLES.links} SET sync_pending_at=COALESCE(sync_pending_at,?), updated_at=?
+      WHERE source_instance=? AND project_id=? AND state='active'`, [at, at, sourceInstance, projectId]);
+    return rows?.affectedRows ?? 0;
+  }
+  async markLinkPending(id, at) {
+    await this.query(`UPDATE ${TABLES.links} SET sync_pending_at=COALESCE(sync_pending_at,?) WHERE id=?`, [at, id]);
+  }
+  // Oldest pending work first; a scope restricts a read-time sweep to what the caller is asking about.
+  async pendingLinks({ sourceInstance = null, schoolRef = null, limit = 50 } = {}) {
+    const params = [];
+    let sql = `SELECT * FROM ${TABLES.links} WHERE sync_pending_at IS NOT NULL AND state='active'`;
+    if (sourceInstance) { sql += ' AND source_instance=?'; params.push(sourceInstance); }
+    if (schoolRef) { sql += ' AND school_ref=?'; params.push(schoolRef); }
+    sql += ` ORDER BY sync_pending_at ASC LIMIT ${Number(limit)}`;
+    return this.query(sql, params);
+  }
+  async clearPending(id, at, { error = null, attempts = null } = {}) {
+    if (error) {
+      await this.query(`UPDATE ${TABLES.links} SET sync_attempts=sync_attempts+1, reconcile_error=?, reconciled_at=? WHERE id=?`,
+        [String(error).slice(0, 32), at, id]);
+      return;
+    }
+    await this.query(`UPDATE ${TABLES.links} SET sync_pending_at=NULL, sync_attempts=?, reconcile_error=NULL, reconciled_at=? WHERE id=?`,
+      [attempts ?? 0, at, id]);
+  }
+  // The durable fact behind 制作事实: the editor's authenticated save path wrote content for this work.
+  // Written in the same request that saved, so it survives a crash of the reconciliation that follows.
+  async recordRealSave(id, at) {
+    await this.query(`UPDATE ${TABLES.links} SET real_save_count=real_save_count+1, last_real_save_at=?,
+      save_evidence='observed', save_reason='observed_save', sync_pending_at=COALESCE(sync_pending_at,?), updated_at=?
+      WHERE id=? AND state='active'`, [at, at, at, id]);
+  }
+  // Self-healing pass: active works whose projection has not been verified recently. It is what closes
+  // the window where a pending marker itself was lost (crash between the source write and the marker).
+  async staleLinks({ sourceInstance = null, schoolRef = null, olderThan, limit = 20 } = {}) {
+    const params = [olderThan];
+    let sql = `SELECT * FROM ${TABLES.links} WHERE state='active' AND sync_pending_at IS NULL
+      AND (reconciled_at IS NULL OR reconciled_at<?)`;
+    if (sourceInstance) { sql += ' AND source_instance=?'; params.push(sourceInstance); }
+    if (schoolRef) { sql += ' AND school_ref=?'; params.push(schoolRef); }
+    sql += ` ORDER BY reconciled_at IS NOT NULL, reconciled_at ASC LIMIT ${Number(limit)}`;
+    return this.query(sql, params);
+  }
+  async pendingCount({ sourceInstance, schoolRef = null }) {
+    // No school named means "the whole instance": a NULL comparison would silently count nothing.
+    const row = await this.one(`SELECT COUNT(*) AS n FROM ${TABLES.links}
+      WHERE sync_pending_at IS NOT NULL AND state='active' AND source_instance=?${schoolRef ? ' AND school_ref=?' : ''}`,
+    schoolRef ? [sourceInstance, schoolRef] : [sourceInstance]);
+    return Number(row?.n || 0);
+  }
+  // An active link for this project, whatever assignment it belongs to: the "one project, one current
+  // assignment" rule is checked against this, not against the assignment the caller happens to name.
+  async activeLinkForProject(sourceInstance, projectId) {
+    return this.one(`SELECT * FROM ${TABLES.links} WHERE source_instance=? AND project_id=? AND state='active' FOR UPDATE`,
+      [sourceInstance, projectId]);
   }
   async linksForOwner(ownerUserId) {
     return this.query(`SELECT * FROM ${TABLES.links} WHERE owner_user_id=? ORDER BY created_at DESC LIMIT 200`, [ownerUserId]);
@@ -194,7 +271,8 @@ class Tx {
   async insertLink(row) {
     const columns = ['id', 'source_instance', 'artifact_ref', 'project_ref', 'entry_ref', 'owner_user_id', 'student_uuid', 'project_id',
       'entry_page_id', 'assignment_ref', 'lesson_ref', 'school_ref', 'issuer_key', 'grant_id', 'state', 'work_state',
-      'has_effective_save', 'preview_available', 'saved_at', 'created_at', 'updated_at'];
+      'has_effective_save', 'preview_available', 'saved_at', 'created_at', 'updated_at', 'content_digest', 'change_no',
+      'save_evidence', 'save_reason', 'real_save_count', 'page_count', 'last_real_save_at', 'reconciled_at'];
     await this.query(`INSERT INTO ${TABLES.links}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`,
       columns.map(c => row[c]));
     return row;
@@ -230,21 +308,39 @@ class Tx {
     return this.one(`SELECT path,media_type,byte_length,sha256,content FROM ${TABLES.files} WHERE revision_id=? AND path=?`, [revisionId, path]);
   }
   async insertSession(row) {
-    await this.query(`INSERT INTO ${TABLES.sessions}(id,link_id,revision_id,audience,grant_id,handoff_sha256,issued_at,expires_at)
-      VALUES(?,?,?,?,?,?,?,?)`, [row.id, row.link_id, row.revision_id, row.audience, row.grant_id, row.handoff_sha256,
-      row.issued_at, row.expires_at]);
+    await this.query(`INSERT INTO ${TABLES.sessions}(id,link_id,revision_id,audience,audience_kind,grant_id,issuer_key,
+      handoff_sha256,issued_at,handoff_expires_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    [row.id, row.link_id, row.revision_id, row.audience, row.audience_kind, row.grant_id, row.issuer_key,
+      row.handoff_sha256, row.issued_at, row.handoff_expires_at, row.expires_at]);
     return row;
+  }
+  async touchSession(id, at) {
+    await this.query(`UPDATE ${TABLES.sessions} SET last_access_at=?, access_count=access_count+1 WHERE id=?`, [at, id]);
+  }
+  async revokeSessionsForOwner(ownerUserId, at, reason) {
+    await this.query(`UPDATE ${TABLES.sessions} s JOIN ${TABLES.links} l ON s.link_id=l.id
+      SET s.revoked_at=?, s.revoked_reason=? WHERE l.owner_user_id=? AND s.revoked_at IS NULL`,
+    [at, String(reason).slice(0, 32), ownerUserId]);
+  }
+  async revokeSessionsForIssuer(issuerKey, at, reason) {
+    await this.query(`UPDATE ${TABLES.sessions} SET revoked_at=?, revoked_reason=? WHERE issuer_key=? AND revoked_at IS NULL`,
+      [at, String(reason).slice(0, 32), issuerKey]);
   }
   async sessionByHandoff(hash, { forUpdate = false } = {}) {
     return this.one(`SELECT * FROM ${TABLES.sessions} WHERE handoff_sha256=?${forUpdate ? ' FOR UPDATE' : ''}`, [hash]);
   }
   async sessionById(id) { return this.one(`SELECT * FROM ${TABLES.sessions} WHERE id=?`, [id]); }
-  async consumeSession(id, secretHash) {
-    await this.query(`UPDATE ${TABLES.sessions} SET consumed_at=?, secret_sha256=?, handoff_sha256=NULL WHERE id=?`,
-      [this.now(), secretHash, id]);
+  // Consumption is a single conditional update: the first redeemer wins and the handoff stops existing,
+  // so a stolen copy of the token cannot be redeemed a second time even under a race.
+  async consumeSession(id, secretHash, clientHash) {
+    const result = await this.query(`UPDATE ${TABLES.sessions} SET consumed_at=?, secret_sha256=?, client_sha256=?,
+      consumed_client_sha256=?, handoff_sha256=NULL WHERE id=? AND consumed_at IS NULL AND handoff_sha256 IS NOT NULL`,
+    [this.now(), secretHash, clientHash, clientHash, id]);
+    return (result?.affectedRows ?? 0) === 1;
   }
-  async revokeSessions(linkId) {
-    await this.query(`UPDATE ${TABLES.sessions} SET revoked_at=? WHERE link_id=? AND revoked_at IS NULL`, [this.now(), linkId]);
+  async revokeSessions(linkId, reason = 'link_revoked') {
+    await this.query(`UPDATE ${TABLES.sessions} SET revoked_at=?, revoked_reason=? WHERE link_id=? AND revoked_at IS NULL`,
+      [this.now(), String(reason).slice(0, 32), linkId]);
   }
   async idempotent(scope, keyHash) { return this.one(`SELECT * FROM ${TABLES.idempotency} WHERE scope=? AND key_sha256=?`, [scope, keyHash]); }
   async rememberIdempotent(scope, keyHash, requestHash, response) {

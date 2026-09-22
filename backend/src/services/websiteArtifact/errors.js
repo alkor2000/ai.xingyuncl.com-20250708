@@ -46,6 +46,12 @@ const MESSAGES = Object.freeze({
   preview_origin_required: '预览必须在隔离域名上打开',
   preview_unavailable: '当前没有可打开的预览',
   audience_mismatch: '评阅会话不属于当前访问者',
+  review_session_binding: '评阅入口只能在领取它的浏览器中打开',
+  eligibility_unavailable: '本实例尚未接入评阅资格提供方',
+  not_eligible: '当前访问者已不具备该作品的评阅资格',
+  issuer_revoked: '签发该评阅入口的发行方已停用',
+  owner_unavailable: '作品所属账号当前不可用',
+  asset_unavailable: '该资源不属于本作品或不可读取',
   // Incremental read
   cursor_invalid: '游标无效',
   range_too_large: '查询范围过大',

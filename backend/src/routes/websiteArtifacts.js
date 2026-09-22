@@ -88,7 +88,11 @@ function createStudentRouter({ authenticate }) {
     return { available: true, source_instance: runtime.sourceInstance,
       task_context_configured: runtime.readiness.task_context_configured,
       preview_configured: !!runtime.preview,
-      limits: { max_pages: 50, max_bundle_bytes: 8 * 1024 * 1024 } };
+      // Named so the UI can say what a fixed version will and will not contain before the student asks
+      // for one: pages and the student's own local files, up to these limits.
+      reviewer_eligibility: runtime.readiness.eligibility_provider,
+      frozen_scope: 'pages_and_owned_local_assets',
+      limits: { max_pages: 50, max_bundle_bytes: 12 * 1024 * 1024, max_assets: 40, max_asset_bytes: 2 * 1024 * 1024 } };
   }));
 
   router.get('/links', run(async req => ({ links: await runtimeOf(req).service.ownerLinks(req.user.id) })));
@@ -138,12 +142,14 @@ function createStudentRouter({ authenticate }) {
   return router;
 }
 
-// The handoff is one-time and the URL it sits in is inert after use; the preview origin exchanges it
-// for an HttpOnly cookie on its own origin.
+// The handoff is one-time and the URL it sits in is inert after use. It travels in the FRAGMENT, so it
+// never reaches a server log or a Referer header; the preview origin's bootstrap page exchanges it over
+// POST for an HttpOnly cookie bound to the browser that redeemed it.
 function openUrl(runtime, session) {
-  return { session_id: session.session_id, expires_at: session.expires_at, target: session.target,
-    artifact_ref: session.artifact_ref,
-    open_url: runtime.preview ? `${runtime.preview.origin}/p09/preview/open?h=${encodeURIComponent(session.handoff)}` : null };
+  return { session_id: session.session_id, expires_at: session.expires_at,
+    handoff_expires_at: session.handoff_expires_at, eligibility: session.eligibility,
+    target: session.target, artifact_ref: session.artifact_ref,
+    open_url: runtime.preview ? `${runtime.preview.origin}/p09/preview/open#h=${session.handoff}` : null };
 }
 
 // ---------------------------------------------------------------------------------------------

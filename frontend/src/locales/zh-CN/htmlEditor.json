@@ -161,5 +161,19 @@
   "htmlEditor.p09.error.source_deleted": "源作品已删除。",
   "htmlEditor.p09.error.preview_unavailable": "现在没有可打开的预览。",
   "htmlEditor.p09.error.revision_too_large": "作品超过评阅版本的大小限制。",
-  "htmlEditor.p09.error.rate_limited": "操作过于频繁，请稍后重试。"
+  "htmlEditor.p09.error.rate_limited": "操作过于频繁，请稍后重试。",
+  "htmlEditor.p09.state.unknown": "制作情况未知",
+  "htmlEditor.p09.evidence.observed": "{{at}}",
+  "htmlEditor.p09.evidence.legacy_unknown": "未知（这份作品在本功能开始记录之前就有改动）",
+  "htmlEditor.p09.evidence.none": "还没有保存过",
+  "htmlEditor.p09.evidenceLabel": "制作事实",
+  "htmlEditor.p09.frozenScopeHint": "评阅版本会固定项目里的页面和你自己上传的图片等本地文件；外部网址、在线字体和接口不会被固定。",
+  "htmlEditor.p09.error.eligibility_unavailable": "本站点尚未接入评阅资格核验，暂时不能打开老师评阅入口。",
+  "htmlEditor.p09.error.not_eligible": "当前访问者已不具备这份作品的评阅资格。",
+  "htmlEditor.p09.error.review_session_binding": "这个评阅入口只能在领取它的浏览器中打开。",
+  "htmlEditor.p09.error.review_session_invalid": "评阅入口无效或已过期，请重新打开。",
+  "htmlEditor.p09.error.review_session_consumed": "这个评阅入口已经被使用过了，请重新打开。",
+  "htmlEditor.p09.error.issuer_revoked": "签发该评阅入口的发行方已停用。",
+  "htmlEditor.p09.error.owner_unavailable": "作品所属账号当前不可用。",
+  "htmlEditor.p09.error.asset_unavailable": "该资源不属于本作品或不可读取。"
 }
