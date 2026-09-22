@@ -16,7 +16,7 @@
 | backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js | ec84f6773d43d654cf72da6c8f2ce090f92cac75fa1e4ea7532ca4c6bbab4fdb |
 | backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | 523fb445ffde22c75ce15c8f20161873ae4c1502afbfe1f8003953d578784312 |
 | backend/src/routes/websiteArtifacts.js | cf0d2bcfbf8fefbf923e3de684c8ff32b808dd02aa8fada3039d28115046eb88 |
-| backend/src/services/websiteArtifact/assets.js | 32565504d5069cfbd94b2b0b482f02faef80e3052d4aaf740e104f44abb948e8 |
+| backend/src/services/websiteArtifact/assets.js | 9941a9703c82764d1a2a4e9a6e8f8e35069bd4a65268a1974d0b72e59ac7b71c |
 | backend/src/services/websiteArtifact/eligibility.js | c9d64e20b65b5d65eed8e289a2852b43898bcb9a73f0f7847176f2d2a68f0e11 |
 | backend/src/services/websiteArtifact/errors.js | e79cc85714f34fb00df0b2216a3cf788878b9c99129f0dbd679ea4141373d82b |
 | backend/src/services/websiteArtifact/previewServer.js | 81234d02987fa2cb11ebbc419d0f3f778e86c9b0706e6187dd8192c26a5309bb |
@@ -26,9 +26,9 @@
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
 | backend/src/services/websiteArtifact/store.js | ef9667c53223aa082ab3244bd11306ccf535ec14343598bf7aff619ffb115c2c |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 2fdd7cee81d559872f334bf7c108ce3d8e81abcfd27fae14db82d14bac5e8994 |
-| docs/integrations/p09-e09-consumer-package.md | 78bd5ac9c690b06343deea80ce665d034ca7b0e4ef2fc1b408ebdb2bd14abd45 |
-| docs/integrations/WEBSITE-REVIEW-TEST.md | c3bb8cdec49298c74bda73724f16152eda8432e5abddd8d11615a4cd0b3d88b7 |
+| docs/integrations/p09-website-artifact-source-candidate.md | 3d8072c34430f4ca29c0e8fb3ba26bd0e0766ecc4321a32b1b9988a0fc4538e8 |
+| docs/integrations/p09-e09-consumer-package.md | b101ce2f84a7e108d1c82d9461da5294e2c58078b89e04d8bd495ff644fb6d40 |
+| docs/integrations/WEBSITE-REVIEW-TEST.md | 62e177f75a5701b778a0e356f653a19f441a990a467f59e763675abb280c5743 |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```
@@ -46,7 +46,7 @@ p09-website-artifact-source-candidate.md[SN6M]: F:N·P09 源侧交付文档：�
 TaskArtifactPanel.jsx[AU7S]: F:N·网页编辑器里的教学任务作品面板：能力关闭即不渲染，选入口页关联、状态与制作事实(含未知及原因)、生成评阅版本、打开隔离预览、取消关联 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/htmlEditor/HtmlEditor.jsx,code:backend/src/routes/websiteArtifacts.js,code:frontend/src/main.jsx | A:TaskArtifactPanel,captureTaskContext,setTaskContext,loadCapability | S:任务上下文只从 URL 片段取、启动即清、只在内存不进 localStorage；请求体不带作业或学生身份；has_effective_save 三值故只在明确 false 时禁用生成评阅版本；面板从不显示"已提交"
 p09-e09-consumer-package.md[SN6M]: F:N·edu E09 消费就绪包：固定源与独立启动方式、候选端点与签名、词表字段样例、计数器与事件的区别、watermark/complete 读取语义、三类例子、错误码与向量、真实身份链缺口清单 | R:code:backend/src/routes/websiteArtifacts.js,code:backend/src/services/websiteArtifact/service.js,code:docs/integrations/p09-website-artifact-source-candidate.md,code:dev/p09-lab/check.py | A:- | S:签名任务上下文不是 C05、浏览器请求头不是身份认证、无资格提供方继续拒绝；把"需 edu/Identity 实现的接口"与"确需产品决定的留存"分开列，不代 edu 编正式契约
 WEBSITE-REVIEW-TEST.md[SU4S]: F:N·给普通同事的人工测试单：入口、关联与一次性、真保存才算制作中、评阅版本不随改稿变、图片仍可见、无资格看不到、未同步不是未开始、取消关联 | R:code:frontend/src/components/htmlEditor/TaskArtifactPanel.jsx,code:docs/integrations/p09-e09-consumer-package.md | A:- | S:不写任何账号口令；实践的"关联"不等于"已提交"；edu 界面与资格核验尚不存在的部分明确标注"暂不能在正式 edu 测"；所有预期都待真人验证，程序验收另档
-assets.js[SN7S]: F:N·固定版本的本地资源：按真实归属模型(files/user_files/html_resources)证明文件属于本人，再在上传根内不跟随符号链接地读取字节，超限或证明不了一律具名拒绝 | R:code:backend/src/services/websiteArtifact/snapshot.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/models/UserFile.js | A:createAssetResolver(resolve/collect/classify),TYPES,MAX_ASSET_BYTES,MAX_ASSETS | S:网页编辑器自己没有上传口、html_resources 全仓无写入方，学生粘来的 URL 才是真实来源，故按 files/user_files/image_generations/forum_attachments 四张已有归属表核验，不新造表也不新造上传口；本部署自己域名下的 /uploads 绝对 URL 视为同一本地对象，站外 URL 只登记不拉取；只按路径存在一律不复制(ownership_unproven)；对象存储字节不下载(remote_object_storage)；O_NOFOLLOW+realpath 拒绝符号链接逃逸与路径穿越；无网络请求故无 SSRF 面
+assets.js[SN7S]: F:N·固定版本的本地资源：按真实归属模型(files/user_files/html_resources)证明文件属于本人，再在上传根内不跟随符号链接地读取字节，超限或证明不了一律具名拒绝 | R:code:backend/src/services/websiteArtifact/snapshot.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/models/UserFile.js | A:createAssetResolver(resolve/collect/classify),TYPES,MAX_ASSET_BYTES,MAX_ASSETS | S:网页编辑器自己没有上传口、html_resources 全仓无写入方，学生粘来的 URL 才是真实来源，故按 files/user_files/image_generations/forum_attachments 四张已有归属表核验，不新造表也不新造上传口；本部署自己域名下的 /uploads 绝对 URL 视为同一本地对象，站外 URL 只登记不拉取；归属行只证明归属、读的永远是页面命名的 key，LIKE 通配符转义且规范化后须精确相等否则 ownership_unproven；路径先开后证——O_NOFOLLOW 只拦最后一段故另require realpath 逐字相同(任一段软链接或 .. 即拒)、落在 realpath(上传根)内、且描述符 inode 与该路径此刻命名的 inode 相同(防先查后换)；无网络请求故无 SSRF 面；不扩大任何文件系统权限
 eligibility.js[AN5T]: F:N·评阅资格提供方接口：未配置即接口存在并一律拒绝，实验静态名册仅 development/test；每次访问重问，不缓存成"已核" | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/runtime.js | A:createEligibilityProvider,absentProvider,reviewerHash | S:一张已消费的票不代表持续资格；教师引用按 issuer+ref 哈希比对，不保存 edu 本地 id；cache_ms 上限 60s 且默认 0
 ```
 
