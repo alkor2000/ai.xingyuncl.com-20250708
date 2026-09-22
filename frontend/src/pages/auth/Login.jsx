@@ -7,6 +7,7 @@ import useAuthStore from '../../stores/authStore'
 import LanguageSwitch from '../../components/common/LanguageSwitch'
 import apiClient from '../../utils/api'
 import IdentityLoginEntry from '../../components/auth/IdentityLoginEntry'
+import StudentLoginEntry from '../../components/auth/StudentLoginEntry'
 import { buildReturnToFromLocation } from '../../utils/identityNavigation'
 import {
   continuePortalConnectAfterLocalLogin
@@ -769,7 +770,12 @@ const Login = () => {
         )}
 
         {!portalConnectRequested && (
-          <IdentityLoginEntry />
+          <>
+            <IdentityLoginEntry />
+
+            {/* C05学校学生入口：后端未开启时本组件不渲染任何内容 */}
+            <StudentLoginEntry />
+          </>
         )}
 
         {/* 简化的提示区域 */}

@@ -45,6 +45,7 @@ import OrgApplication from './pages/auth/OrgApplication'
 import SSOCallback from './pages/auth/SSOCallback'
 import IdentityCallback from './pages/auth/IdentityCallback'
 import PortalCapabilityEntry from './pages/auth/PortalCapabilityEntry'
+import StudentEntryConsume from './pages/auth/StudentEntryConsume'
 import Dashboard from './pages/dashboard/Dashboard'
 import Chat from './pages/chat/Chat'
 import Profile from './pages/profile/Profile'
@@ -359,6 +360,13 @@ const App = () => {
               <Route 
                 path="/auth/sso-callback" 
                 element={<SSOCallback />} 
+              />
+
+              {/* C05学校学生一次性交接落地页（默认关闭）。
+                  与Identity回调同理不包裹PublicRoute：会话由后端consume建立后立即跳落地页。 */}
+              <Route
+                path="/auth/sso/consume"
+                element={<StudentEntryConsume />}
               />
 
               {/* PKU AI Lab Identity Center登录回调。

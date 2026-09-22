@@ -1,0 +1,103 @@
+'use strict';
+
+// C05 student entry: edu's server exchanges a signed assertion for a one-time handoff, and the
+// student's browser spends that handoff for an ordinary practice session. While the entry is switched
+// off both endpoints answer a fixed refusal without touching Redis, a credential or the database.
+//
+// The legacy /api/auth/sso endpoint is untouched: this is a sibling path, not a replacement.
+const express = require('express');
+const { randomUUID } = require('node:crypto');
+const rateLimit = require('express-rate-limit');
+const { C05Error, message } = require('../services/studentEntry/errors');
+const { loadRuntime } = require('../services/studentEntry/runtime');
+
+const SCHEMA_VERSION = 1;
+const TICKET = /^[A-Za-z0-9_-]{43}$/;
+
+// Nothing this router answers may be stored by a cache or a proxy, and nothing may leak a referrer.
+function envelope(req, res, next) {
+  req.c05RequestId = randomUUID();
+  res.set({ 'Cache-Control': 'no-store', Pragma: 'no-cache', 'Referrer-Policy': 'no-referrer',
+    'X-Request-ID': req.c05RequestId });
+  next();
+}
+const refuse = (res, error, requestId) => {
+  const known = error instanceof C05Error;
+  const code = known ? error.code : 'internal_error';
+  if (known && error.retryable) res.set('Retry-After', '2');
+  return res.status(known ? error.status : 500)
+    .json({ error: { code, message: message(code), retryable: !!(known && error.retryable) }, request_id: requestId });
+};
+
+function createStudentEntryRouter({ deps = {}, env = process.env } = {}) {
+  const router = express.Router();
+  // `envelope` is attached per route rather than with router.use: this router is mounted at
+  // /api/auth/sso so that the two sub-paths reach it before the legacy router's authenticate, and a
+  // router-level middleware would also run for the legacy POST /api/auth/sso that falls through here.
+  // Per-route means the historic endpoint's response is byte-for-byte what it was.
+
+  // edu → practice. The raw bytes are what the signature covers, so the body is not parsed first.
+  router.post('/exchange', envelope,
+    rateLimit({ windowMs: 60_000, max: 120, keyGenerator: req => String(req.headers['x-edu-nonce'] || req.ip).slice(0, 64),
+      handler: (req, res) => refuse(res, new C05Error('rate_limited', 429, true), req.c05RequestId) }),
+    express.raw({ type: '*/*', limit: '16kb' }),
+    async (req, res) => {
+      try {
+        const runtime = await loadRuntime({ env, deps });
+        if (!runtime.enabled) throw new C05Error(runtime.reason || 'student_entry_disabled', 503);
+        const result = await runtime.service.exchange({ rawBody: req.body, headers: req.headers, req });
+        return res.json({ ...result, request_id: req.c05RequestId });
+      } catch (error) { return refuse(res, error, req.c05RequestId); }
+    });
+
+  // browser → practice. The handoff is spent here; the response is an ordinary login payload.
+  router.post('/consume', envelope,
+    rateLimit({ windowMs: 60_000, max: 60, handler: (req, res) => refuse(res, new C05Error('rate_limited', 429, true), req.c05RequestId) }),
+    express.json({ limit: '2kb', strict: true }),
+    async (req, res) => {
+      try {
+        const runtime = await loadRuntime({ env, deps });
+        if (!runtime.enabled) throw new C05Error(runtime.reason || 'student_entry_disabled', 503);
+        const ticket = req.body && typeof req.body.handoff === 'string' ? req.body.handoff : null;
+        if (!ticket || !TICKET.test(ticket)) throw new C05Error('handoff_invalid', 401);
+        const { user, entry, context } = await runtime.service.consume(ticket);
+
+        // Exactly what an ordinary login returns, from the same two places AuthController uses.
+        const TokenService = deps.TokenService || require('../services/auth/TokenService');
+        const SiteConfigService = deps.SiteConfigService || require('../services/auth/SiteConfigService');
+        const tokens = await TokenService.generateTokenPair(user, true);
+        const permissions = await user.getPermissions();
+        const siteConfig = await SiteConfigService.getUserSiteConfig(user);
+        await user.updateLastLogin();
+
+        // The contract leaves "no long-lived refresh" or "refresh 24h" open. The conservative half is
+        // the default: unless a deployment says otherwise, the browser gets no refresh token at all.
+        const session = { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn };
+        if (runtime.settings.issueRefresh) session.refreshToken = tokens.refreshToken;
+        return res.json({
+          schema_version: SCHEMA_VERSION,
+          user: user.toJSON(), permissions, siteConfig, ...session,
+          landing: { entry },
+          // The lesson/assignment the student came from, for the page to OFFER a link. It is not a task
+          // grant: associating a work still needs its own signed context and its own confirmation.
+          context: context || null,
+          request_id: req.c05RequestId
+        });
+      } catch (error) { return refuse(res, error, req.c05RequestId); }
+    });
+
+  // What the login page may show about this entry, without revealing any configuration.
+  router.get('/capability', envelope, async (req, res) => {
+    try {
+      const runtime = await loadRuntime({ env, deps });
+      if (!runtime.enabled) return res.json({ schema_version: SCHEMA_VERSION, available: false, request_id: req.c05RequestId });
+      // Only what the login page needs to decide whether to draw the button and where it goes. No
+      // school map, no policy, no secret — and nothing at all while the entry is switched off.
+      return res.json({ schema_version: SCHEMA_VERSION, available: true,
+        launch_url: runtime.settings.launchUrl || null, request_id: req.c05RequestId });
+    } catch (error) { return refuse(res, error, req.c05RequestId); }
+  });
+
+  return router;
+}
+module.exports = { createStudentEntryRouter };

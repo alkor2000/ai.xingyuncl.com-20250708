@@ -1,0 +1,58 @@
+# C05 认知索引条目候选（待合入主工作副本后由 aoci_maintain/aoci_update_entry 正式写入）
+
+本包在独立 worktree `~/ai-platform-c05-20260923` 开发，而本会话的 AOCI MCP 服务绑定在主工作副本
+`~/ai-platform`（Volumes v1 只能经 MCP 写入）。因此**本包没有、也不能在本会话把这些条目写进正式索引**：
+下面是按当前 Meta 字典（`aoci.meta.txt`）预先写好的完整条目与绑定摘要，合入主副本后调用一次
+`aoci_maintain` → `aoci_update_entry`（批次内逐条带 `source_sha256`）即可对齐。
+标注如实：**这些条目描述的是一个默认关闭、未晋级迁移、未接真实 edu 的候选实现。**
+
+## 新增对象（missing）
+
+| 仓内路径 | source_sha256 |
+|---|---|
+| backend/migrations-candidates/c05/20260923_001_c05_school_mapping.js | be54a9801142ca586628bb48a6d9e449f902c6b5120da8b0c332b744174db718 |
+| backend/src/routes/studentEntry.js | 751cf29bc85865e913136ee87aad3b0973e825ed743a86dcf2a4974b0fd7348a |
+| backend/src/services/studentEntry/config.js | f02490713684b0778c318ccd35ecf27aab37be67f8638374a7f68e8ae4ad95ed |
+| backend/src/services/studentEntry/errors.js | a4717530f7b17ad1a01a9e0290f3c8d8baf122dfb4d819a09da38e8a3653e4f7 |
+| backend/src/services/studentEntry/exchange.js | 3920acb1611af0062dfb87ad8a8fb3efddcac0bf3b8168b98fdab2371b2804c5 |
+| backend/src/services/studentEntry/handoff.js | 63a0a8f34e4c1a7edc41156da3045d5da43e8d00aec9bab24a79b2cffc009ecf |
+| backend/src/services/studentEntry/landings.js | 7b284cb057fcaa41f6232e6b7e699d2c3098cb549123268068788b18f26eff57 |
+| backend/src/services/studentEntry/runtime.js | 1bab3f8199aef0ce15fb69fe1c71194c2ab1eaa7c2b707ea6c56ec837f7b19eb |
+| backend/src/services/studentEntry/schoolMapping.js | d996a9ed38c3c48d9fdf785f67875cefd071c448ccc4d0c3ba9d24278dc60a02 |
+| backend/src/services/studentEntry/shadowAccount.js | e2316f30f8deb3faa3c253f20595e4e460032fb11f9d6b551e6e52232e2371e8 |
+| frontend/src/components/auth/StudentLoginEntry.jsx | b1b98db7651cc4a2acf28a3633ff4cbbd83567763c41e8725096e98b71a96b93 |
+| frontend/src/pages/auth/StudentEntryConsume.jsx | 2fbb213c9cc1ac86fafb49860c7c4a29648de1cb8f6a95262d749346e84900a5 |
+| docs/integrations/c05-student-entry-provider-candidate.md | c7c10d0aa41ccdc8368c484ca0af64ed961a96e763cd42dbe505ea5c211fb903 |
+| docs/integrations/STUDENT-ENTRY-TEST.md | cb0ea135a0994a1b4320c8c9629ce8331106922c4acda38eb1d7109c8d74ea1e |
+
+```
+20260923_001_c05_school_mapping.js[PI4T]: F:I·C05 学校映射候选迁移：只给既有 user_groups 加 edu_school_id/cohort 两列与部分唯一键，不建表不改行；up/down 都按 information_schema 现状幂等 | R:code:backend/src/services/studentEntry/schoolMapping.js,code:backend/knexfile.js,code:docs/integrations/c05-student-entry-provider-candidate.md | A:exports.up/down/columns/index | S:位于候选目录不被 knex 扫描，进入 backend/migrations/ 即在下次发布自动改表，授权前不得晋级；仍有行带 edu_school_id 时 down 具名拒绝 c05_school_mapping_in_use，因为那两列是"哪个组属于哪所学校"的唯一记录；MySQL 唯一键允许多个 NULL，故非 edu 学生组完全不受约束
+studentEntry.js[EI7T]: F:I·C05 学生入口的三个 HTTP 面：edu 服务端签名交换、浏览器消费一次性 handoff、登录页问能力；统一 no-store 信封与固定错误码 | R:code:backend/src/services/studentEntry/runtime.js,code:backend/src/services/studentEntry/errors.js,code:backend/src/services/auth/TokenService.js,code:backend/src/services/auth/SiteConfigService.js,code:backend/src/app.js | A:createStudentEntryRouter,/api/auth/sso/{exchange,consume,capability} | S:必须挂在 authRoutes 之前(后者公开路由后有 router.use(authenticate) 会把未匹配路径拦成401)，且中间件按路由挂载而非 router.use，故历史 POST /api/auth/sso 响应逐字节不变；exchange 读的是 app.js 在全局 JSON 解析器之前挂的 express.raw 原始字节(签名对象=解析对象)；关闭时固定 503 student_entry_disabled，不读配置不碰 Redis；capability 只回"开没开"与固定 launch 地址，不泄露学校映射与策略；默认不签发 refresh
+config.js[FI6S]: F:I·C05 部署事实的唯一来源：从既有 sso_config.platforms[].c05 读出学校映射、落地白名单、发放/换组/席位策略、代理跳数、launch 地址，并把契约里的二选一固定成具名候选 | R:code:backend/src/models/SystemConfig.js,code:backend/src/services/studentEntry/runtime.js,code:backend/src/services/studentEntry/landings.js,code:docs/integrations/c05-student-entry-provider-candidate.md | A:studentEntrySettings,readPlatform | S:没有 c05 块=关闭而不是默认值；密钥<32字符、算法非 sha256、学校映射非法、落地键非法、launch 非 https、开了白名单却没写地址，一律 config_invalid(503) 而不是退回宽松；issuance 缺失时不填默认额度(D-13未定)；group_change 默认按契约§4 move_and_recycle，user_limit 默认 ignore(不动管理员设的数)，issue_refresh 默认 false；每请求读一次故改配置不用重启、改坏了立刻拒绝
+errors.js[CI4T]: F:I·C05 固定错误分类：C05Error/fail 与面向运维的中文短句表，含契约§6 的码与本部署自有的具名拒绝 | R:code:backend/src/services/studentEntry/exchange.js,code:backend/src/routes/studentEntry.js,code:docs/integrations/c05-student-entry-provider-candidate.md | A:C05Error,fail,MESSAGES,message | S:message 不含请求原文、uuid、密钥、堆栈或他平台标识；契约§6 的码是共享契约面，改动须同步 edu；issuance_policy_missing/group_change_refused/subject_not_student/config_invalid 是本部署自有码，含义写在交付文档
+exchange.js[AI8S]: F:I·C05 提供方编排：来源地址→nonce→时间戳→验签→烧 nonce→解析→按 uuid 限流→影子账号事务→发一次性 handoff；以及浏览器侧消费 | R:code:backend/src/services/studentEntry/handoff.js,code:backend/src/services/studentEntry/shadowAccount.js,code:backend/src/services/studentEntry/schoolMapping.js,code:backend/src/services/studentEntry/landings.js,code:backend/src/database/connection.js | A:createStudentEntry(exchange/consume),expectedSignature,sourceAddress,parsePayload,withRetry | S:签的是实际解析的原始字节故无规范化空隙；代理头只在部署声明跳数时采信(计数方式同 Express trust proxy)，否则只认 socket；先验签后写 nonce(契约把 nonce 排在前，这里是收紧：没验签就写会让任何人占坑)；未知字段一律拒绝；bcrypt 在事务外算好再进事务；并发首登的 InnoDB 死锁重试3次后归为 storage_unavailable(retryable) 而不是谎称学生有问题；返回体只有 handoff，绝不含 uuid/JWT/姓名
+handoff.js[AI6T]: F:I·一次性交接票据与重放防护：nonce 的 SETNX、票据只存 sha256、getDel 原子消费、按 uuid 的分钟计数 | R:code:backend/src/database/redis.js,code:backend/src/services/studentEntry/exchange.js | A:createHandoffStore(rememberNonce/issue/consume/hitSubject/available),signatureMatches,sha256 | S:Redis 是硬依赖不是缓存——没有它就没有原子消费，故一律 storage_unavailable(503,retryable) 而不是降级成可能被用两次；明文票据只在 exchange 响应里出现一次；键名用 c05: 前缀与旧 SSO 的 sso:nonce 隔开；签名比对常量时间且不报哪一半不同
+landings.js[CI3T]: F:I·落地白名单：portal capability 能力键加 dashboard，并把契约正文与示例的两种写法归一 | R:code:frontend/src/utils/portalCapabilityEntry.js,code:backend/src/services/studentEntry/config.js | A:CAPABILITY_KEYS,DEFAULT_LANDINGS,normaliseEntry | S:后端不能 import 前端模块故此处是镜像，单元测试读前端源码比对，两侧不一致即测试失败而不是悄悄放宽或收紧；契约正文说白名单是能力键、§2 示例写 "chat"，故两种都收且归一成完整键，差异已写入交付文档请 edu 发完整键
+runtime.js[AI5T]: F:I·默认关闭的 C05 运行时装配：开关解析、每请求读配置、Redis 就绪核验，并给出不泄露配置的就绪事实 | R:code:backend/src/services/studentEntry/config.js,code:backend/src/services/studentEntry/handoff.js,code:backend/src/services/studentEntry/exchange.js,code:backend/src/routes/studentEntry.js | A:loadRuntime,resolveSwitch,SWITCH | S:C05_STUDENT_ENTRY_ENABLED 未设/空/false 即关闭且零副作用(不读 system_settings、不连 Redis、不碰库)，写成别的值是 config_invalid 而不是"大概是想开"；每请求装配故配置改动即时生效、坏配置即时拒绝；readiness 只给计数与策略名，不含密钥、学校映射或地址
+schoolMapping.js[DI4T]: F:I·school_ref→学生组：预配置映射或候选列查库两条明确路径 | R:code:backend/src/services/studentEntry/config.js,code:backend/migrations-candidates/c05/20260923_001_c05_school_mapping.js,code:backend/src/services/studentEntry/shadowAccount.js | A:resolveSchoolGroup,columnsPresent | S:绝不按组名/标签/"唯一像学生组的组"猜归属；说了 database 却没有候选列是 config_invalid 而不是悄悄退回配置；查到 0 条或 2 条都是 school_not_provisioned(409)
+shadowAccount.js[DI7M]: F:I·影子学生账号的单事务写入：锁用户行与组行、建号或更新、从组池发放或回收、覆盖写年级/班级标签 | R:code:backend/src/models/User.js,code:backend/src/services/admin/UserTagService.js,code:backend/src/services/studentEntry/exchange.js,code:docs/integrations/c05-student-entry-provider-candidate.md | A:upsertStudent,writeTags,planIssue,applySeatPolicy,recycleToPool,nameOf | S:锁顺序固定为"先用户行后组行(按 id 升序)"故并发首登不死锁；role!=user 或 uuid_source!=sso 一律 subject_not_student(学生断言不得接管教师/管理员/本地账号)；积分只在映射学生组自己的池里动——池不足发 0 不报错不外借，换校把未花完的还回原组池且不低于零，换校后不补发(契约§4 没写补发，是业务缺口不是实现缺口)；账号真建出来之后才扣池，故用户名重试或并发输掉的那次不会扣了钱没有人；标签按平台自身语义覆盖写并同步 users.tag_count；发放参数缺失时首登具名 issuance_policy_missing(D-13未定)，老学生不受影响
+StudentEntryConsume.jsx[EU5S]: F:I·C05 落地页：花掉一次性 handoff 换本平台会话，清地址栏，按后端返回的 entry 进站内页，失败固定回登录页 | R:code:frontend/src/stores/authStore.js,code:frontend/src/utils/portalCapabilityEntry.js,code:frontend/src/App.jsx,code:backend/src/routes/studentEntry.js | A:StudentEntryConsume | S:URL 只接受 43 字符 handoff，读完立刻 replaceState 清掉(成败都清)；按票据用模块级 Map 共享同一个 Promise，故 StrictMode 双跑或重新挂载只发一次 POST——否则第二次必然 handoff_invalid，会把一次成功的登录显示成失败(已在真实浏览器复现并修复)；落地只认后端返回的稳定能力键经本地表解析，URL 上的 entry 一律忽略，未知键回 dashboard，故任意回跳地址落不进来；失败只显示固定中文，不显示服务端码
+StudentLoginEntry.jsx[EU4S]: F:I·登录页的"学校学生登录"入口：问一次能力，开了才渲染，点击跳固定 launch 地址 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/auth/Login.jsx,code:backend/src/routes/studentEntry.js | A:StudentLoginEntry | S:入口关闭或请求失败时完全不渲染(登录页与开关打开前一致，不弹错)；launch 地址只由后端给且必须 https，否则不渲染；不拼装任何 SSO 参数、不带账号与回跳地址
+c05-student-entry-provider-candidate.md[SI6M]: F:I·C05 提供方交付文档：端点与挂载顺序、固定签名向量、响应形状、错误码全表、配置形状、账号与学校映射、与契约的十条差异与业务缺口、隔离验收范围 | R:code:backend/src/routes/studentEntry.js,code:backend/src/services/studentEntry/exchange.js,code:backend/src/services/studentEntry/shadowAccount.js,code:dev/c05-lab/check.py | A:- | S:候选未冻结未发布未接真实 edu；refresh/席位/落地键写法三处二选一取保守半并具名记录，不静默改共享契约；sso_sessions 台账、换校后补发、C08 开通流程、教师通道均为明确缺口而非已实现
+STUDENT-ENTRY-TEST.md[SU4T]: F:I·给普通同事的人工测试单：入口在不在、正常进入、同一链接再点一次、看得懂的失败、身份与标签、登录不等于交作业、原有登录没坏 | R:code:frontend/src/components/auth/StudentLoginEntry.jsx,code:frontend/src/pages/auth/StudentEntryConsume.jsx,code:docs/integrations/c05-student-entry-provider-candidate.md | A:- | S:不写任何口令、不要求连服务器或改配置、不要求用真实学生账号；开关默认关闭故"看不到入口"不算缺陷；程序验收另档(dev/c05-lab/check.py)
+```
+
+## 受影响对象（stale，只需按下列改动重写既有条目）
+
+| 仓内路径 | source_sha256 | 本包改动 |
+|---|---|---|
+| backend/src/app.js | dde0aec21d9da1ee3eb2b2977d74ac014ee0bcb3a2a932dc928add897455bbc1 | 全局 JSON 解析器之前为 `/api/auth/sso/exchange` 挂 `express.raw`（16KB）；在 `authRoutes` **之前**挂 `/api/auth/sso` 的 C05 路由 |
+| frontend/src/App.jsx | 69ce41095aecdd5213cbed62ebbb84d8150e9094b239c291fe72c2a68183c9a8 | 新增公开路由 `/auth/sso/consume`（不包 PublicRoute，会话由后端 consume 建立） |
+| frontend/src/stores/authStore.js | 5ad9c13cdc8ecf5293ba79dc969d6eea34cbdaf98adb50fc60f8367276de53b9 | 新增 `loginWithStudentHandoff`：POST `/auth/sso/consume`，复用既有 `_handleLoginSuccess`，返回 entry 与作业上下文 |
+| frontend/src/pages/auth/Login.jsx | 21c98a6b0a4de79ae167c22ab0b25e2ea18e833a14d19401e011b082ff8df0dd | 统一身份入口下方渲染 `<StudentLoginEntry />`（后端未开启时该组件不渲染任何内容） |
+
+## 测试目录（Managed Scope 只 observe，不写条目）
+
+- `backend/src/__tests__/unit/services/studentEntry.test.js`（36 条）与 `backend/src/__tests__/helpers/c05Fixture.js`
+- `frontend/src/__tests__/unit/components/StudentEntry.test.jsx`（10 条）
+- `dev/c05-lab/{check.py,browser.cjs}`：隔离验收（自起 mysql/redis、真实前后端、四宽度浏览器）

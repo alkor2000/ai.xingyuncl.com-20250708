@@ -25,6 +25,7 @@ const rateLimitService = require('./services/rateLimitService');
  * 导入路由模块
  * ============================================================ */
 const authRoutes = require('./routes/auth');
+const { createStudentEntryRouter } = require('./routes/studentEntry');
 const adminRoutes = require('./routes/admin');
 const chatRoutes = require('./routes/chat');
 const statsRoutes = require('./routes/stats');
@@ -122,6 +123,9 @@ app.use(compression());
 
 /* 请求体解析（10MB限制；AI训练专区保存模型 artifact 放宽到 20MB，须在全局解析器之前挂载） */
 app.use('/api/ai-lab/projects/:id/models', express.json({ limit: '20mb' }));
+/* C05学生入口的签名覆盖的是请求原始字节，必须在全局JSON解析器吃掉流之前按Buffer读入（16KB上限）。
+   该路径默认关闭；未开启时路由只返回固定拒绝，不读密钥、不碰Redis与数据库。 */
+app.use('/api/auth/sso/exchange', express.raw({ type: '*/*', limit: '16kb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -207,6 +211,11 @@ app.get('/health/detailed', authenticate, requireRole(['super_admin', 'admin']),
  * ============================================================ */
 
 /* 认证与管理 */
+/* C05学生一次性登录交接（默认关闭）。必须挂在 authRoutes 之前：后者在公开路由之后有一个
+   router.use(authenticate)，任何未匹配的 /api/auth/* 都会先被它拦成401。
+   本路由只定义 /exchange、/consume、/capability 三个子路径，且中间件按路由挂载，
+   历史 POST /api/auth/sso 原样落到 authRoutes，行为与响应头完全不变。 */
+app.use('/api/auth/sso', createStudentEntryRouter());
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/smart-apps', smartAppAdminRoutes);

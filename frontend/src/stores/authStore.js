@@ -293,6 +293,63 @@ const useAuthStore = create(
       },
 
       // ============================================================
+      // C05学校学生一次性交接（默认关闭；未开启时登录页不会出现该入口）
+      // ============================================================
+
+      /**
+       * 用edu签发的一次性handoff换取本平台普通会话。
+       *
+       * 浏览器全程只持有handoff：签名载荷、密钥与学生uuid都不经过前端，
+       * 作业上下文只作为"从哪节课来"的展示线索返回，不代表任何任务关联。
+       */
+      loginWithStudentHandoff: async (handoff) => {
+        set({
+          loading: true
+        })
+
+        try {
+          const response =
+            await apiClient.post(
+              '/auth/sso/consume',
+              {
+                handoff
+              }
+            )
+
+          const data =
+            response.data?.data ||
+            response.data
+
+          _handleLoginSuccess(
+            set,
+            get,
+            data,
+            'Student Entry Login'
+          )
+
+          return {
+            entry:
+              data?.landing?.entry ||
+              null,
+            context:
+              data?.context ||
+              null
+          }
+        } catch (error) {
+          set({
+            loading: false
+          })
+
+          console.error(
+            '❌ Student entry handoff failed:',
+            error
+          )
+
+          throw error
+        }
+      },
+
+      // ============================================================
       // 登出
       // ============================================================
 
