@@ -6,7 +6,7 @@
 下面是按当前 Meta 字典（`aoci.meta.txt`）预先创作好的完整条目与绑定摘要，合入主副本后调用一次
 `aoci_maintain` → `aoci_update_entry`（批次内逐条带 `source_sha256`）即可对齐，届时以机器签发的候选身份为准。
 
-`aoci check`（在本 worktree 运行）当前报告：15 条 missing、7 条 stale、observed_pending（测试目录只 observe）。
+`aoci check`（在本 worktree 运行）当前报告：17 条 missing、7 条 stale、observed_pending（测试目录只 observe）。
 接续单 CTRL-20260922-PRACTICE-P09-RELIABILITY-01 在同一 worktree 继续，因此下表的正文与摘要是**接续后的最终状态**（新增 `assets.js`、`eligibility.js`，并重写了 service/snapshot/store/previewServer/runtime/sourceHook/面板/交付文档六条以上条目的语义与约束位）。
 
 ## 新增对象（missing）
@@ -14,19 +14,21 @@
 | 仓内路径 | source_sha256 |
 |---|---|
 | backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js | ec84f6773d43d654cf72da6c8f2ce090f92cac75fa1e4ea7532ca4c6bbab4fdb |
-| backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | 41fd6d3d5a5754c09395726258b03ef8496420fc3d856c154f71fc33fc71f29f |
+| backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | 523fb445ffde22c75ce15c8f20161873ae4c1502afbfe1f8003953d578784312 |
 | backend/src/routes/websiteArtifacts.js | cf0d2bcfbf8fefbf923e3de684c8ff32b808dd02aa8fada3039d28115046eb88 |
-| backend/src/services/websiteArtifact/assets.js | 41c40a5e27f2b04e3319c58192b9636d308a10368b47db6d6b0c25a09236494e |
+| backend/src/services/websiteArtifact/assets.js | 32565504d5069cfbd94b2b0b482f02faef80e3052d4aaf740e104f44abb948e8 |
 | backend/src/services/websiteArtifact/eligibility.js | c9d64e20b65b5d65eed8e289a2852b43898bcb9a73f0f7847176f2d2a68f0e11 |
 | backend/src/services/websiteArtifact/errors.js | e79cc85714f34fb00df0b2216a3cf788878b9c99129f0dbd679ea4141373d82b |
 | backend/src/services/websiteArtifact/previewServer.js | 81234d02987fa2cb11ebbc419d0f3f778e86c9b0706e6187dd8192c26a5309bb |
-| backend/src/services/websiteArtifact/runtime.js | e3afc843c9d930ff5bee81e301b653bc63dfc5069d21dd2c22e41bed42be2b96 |
+| backend/src/services/websiteArtifact/runtime.js | 3eab3cceddc68d77e57b78832990f330e8a5b9d9542a8bfafe8ab201917753e2 |
 | backend/src/services/websiteArtifact/service.js | 39e1418a50fee259962854b6eee44a7f535972e3f72c98b3e902ec4bb717e8a0 |
 | backend/src/services/websiteArtifact/snapshot.js | db93d230d7e989729aeb9d8efe1fe82172d3c88be4dc1ccc2217ba0d33f46a72 |
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
 | backend/src/services/websiteArtifact/store.js | ef9667c53223aa082ab3244bd11306ccf535ec14343598bf7aff619ffb115c2c |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 31f2dee96d38c88deb479a362447e036af7e4bc46b5d96b9711f6943e3290a90 |
+| docs/integrations/p09-website-artifact-source-candidate.md | 2fdd7cee81d559872f334bf7c108ce3d8e81abcfd27fae14db82d14bac5e8994 |
+| docs/integrations/p09-e09-consumer-package.md | 78bd5ac9c690b06343deea80ce665d034ca7b0e4ef2fc1b408ebdb2bd14abd45 |
+| docs/integrations/WEBSITE-REVIEW-TEST.md | c3bb8cdec49298c74bda73724f16152eda8432e5abddd8d11615a4cd0b3d88b7 |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```
@@ -42,7 +44,9 @@ sourceHook.js[CN4T]: F:N·网页编辑器写入成功后的 P09 通知点：先�
 store.js[PN8L]: F:N·P09 账本候选（八表 v2）：opaque 对象引用、关联(含保存证据/变化号/待对账/受众绑定列)、不可变版本与字节、提交序事件、评阅会话与幂等记录；导出 DDL 与最小权限授权语句 | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js | A:WebsiteArtifactStore(transaction/read),TABLES,SCHEMA,restrictedRoleGrants,Tx(recordRealSave/pendingLinks/staleLinks/consumeSession) | S:event_seq 由同事务内加锁计数器发放=提交顺序，无空洞无迟到可见；两条 STORED 生成列唯一键保证"一学生一作业一作品"与"一项目一当前作业"，撤销后为 NULL 故可重关联且历史保留；consumeSession 是条件更新，先到者赢；驱动错误一律归一为 storage_unavailable
 p09-website-artifact-source-candidate.md[SN6M]: F:N·P09 源侧交付文档：先核事实(C05/学校映射/C06/编辑器保存信号/上传归属模型/实例)、信任链与严格拒绝、制作事实三值、关联约束、固定版本范围、增量补齐与私有评阅受众、隔离验收、剩余缺口、edu 消费输入 | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/assets.js,code:backend/src/routes/websiteArtifacts.js,code:dev/p09-lab/check.py | A:- | S:候选未冻结未发布；C05 未实现且本包的独立签名上下文不是 C05；浏览器绑定只防转发不证明教师身份；留存期未定故不自动清理证据
 TaskArtifactPanel.jsx[AU7S]: F:N·网页编辑器里的教学任务作品面板：能力关闭即不渲染，选入口页关联、状态与制作事实(含未知及原因)、生成评阅版本、打开隔离预览、取消关联 | R:code:frontend/src/utils/api.js,code:frontend/src/pages/htmlEditor/HtmlEditor.jsx,code:backend/src/routes/websiteArtifacts.js,code:frontend/src/main.jsx | A:TaskArtifactPanel,captureTaskContext,setTaskContext,loadCapability | S:任务上下文只从 URL 片段取、启动即清、只在内存不进 localStorage；请求体不带作业或学生身份；has_effective_save 三值故只在明确 false 时禁用生成评阅版本；面板从不显示"已提交"
-assets.js[SN7S]: F:N·固定版本的本地资源：按真实归属模型(files/user_files/html_resources)证明文件属于本人，再在上传根内不跟随符号链接地读取字节，超限或证明不了一律具名拒绝 | R:code:backend/src/services/websiteArtifact/snapshot.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/models/UserFile.js | A:createAssetResolver(resolve/collect/classify),TYPES,MAX_ASSET_BYTES,MAX_ASSETS | S:只按路径存在一律不复制(ownership_unproven)；对象存储的字节不下载(remote_object_storage)；O_NOFOLLOW+realpath 包含性拒绝符号链接逃逸与路径穿越；不发任何网络请求故无 SSRF 面；类型白名单挡住视频/压缩包/可执行
+p09-e09-consumer-package.md[SN6M]: F:N·edu E09 消费就绪包：固定源与独立启动方式、候选端点与签名、词表字段样例、计数器与事件的区别、watermark/complete 读取语义、三类例子、错误码与向量、真实身份链缺口清单 | R:code:backend/src/routes/websiteArtifacts.js,code:backend/src/services/websiteArtifact/service.js,code:docs/integrations/p09-website-artifact-source-candidate.md,code:dev/p09-lab/check.py | A:- | S:签名任务上下文不是 C05、浏览器请求头不是身份认证、无资格提供方继续拒绝；把"需 edu/Identity 实现的接口"与"确需产品决定的留存"分开列，不代 edu 编正式契约
+WEBSITE-REVIEW-TEST.md[SU4S]: F:N·给普通同事的人工测试单：入口、关联与一次性、真保存才算制作中、评阅版本不随改稿变、图片仍可见、无资格看不到、未同步不是未开始、取消关联 | R:code:frontend/src/components/htmlEditor/TaskArtifactPanel.jsx,code:docs/integrations/p09-e09-consumer-package.md | A:- | S:不写任何账号口令；实践的"关联"不等于"已提交"；edu 界面与资格核验尚不存在的部分明确标注"暂不能在正式 edu 测"；所有预期都待真人验证，程序验收另档
+assets.js[SN7S]: F:N·固定版本的本地资源：按真实归属模型(files/user_files/html_resources)证明文件属于本人，再在上传根内不跟随符号链接地读取字节，超限或证明不了一律具名拒绝 | R:code:backend/src/services/websiteArtifact/snapshot.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/models/UserFile.js | A:createAssetResolver(resolve/collect/classify),TYPES,MAX_ASSET_BYTES,MAX_ASSETS | S:网页编辑器自己没有上传口、html_resources 全仓无写入方，学生粘来的 URL 才是真实来源，故按 files/user_files/image_generations/forum_attachments 四张已有归属表核验，不新造表也不新造上传口；本部署自己域名下的 /uploads 绝对 URL 视为同一本地对象，站外 URL 只登记不拉取；只按路径存在一律不复制(ownership_unproven)；对象存储字节不下载(remote_object_storage)；O_NOFOLLOW+realpath 拒绝符号链接逃逸与路径穿越；无网络请求故无 SSRF 面
 eligibility.js[AN5T]: F:N·评阅资格提供方接口：未配置即接口存在并一律拒绝，实验静态名册仅 development/test；每次访问重问，不缓存成"已核" | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/runtime.js | A:createEligibilityProvider,absentProvider,reviewerHash | S:一张已消费的票不代表持续资格；教师引用按 issuer+ref 哈希比对，不保存 edu 本地 id；cache_ms 上限 60s 且默认 0
 ```
 
