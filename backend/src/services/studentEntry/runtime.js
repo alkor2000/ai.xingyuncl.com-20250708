@@ -8,8 +8,19 @@ const { C05Error, fail } = require('./errors');
 const { studentEntrySettings } = require('./config');
 const { createHandoffStore } = require('./handoff');
 const { createStudentEntry } = require('./exchange');
+const sessionContext = require('./sessionContext');
 
 const SWITCH = 'C05_STUDENT_ENTRY_ENABLED';
+
+// Checked once per process after it first succeeds: the table cannot disappear under a running
+// deployment without someone doing it on purpose, and a missing one is re-checked every request.
+let sessionStorePresent = false;
+async function sessionStoreReady(db) {
+  if (sessionStorePresent) return true;
+  try { sessionStorePresent = await db.transaction(query => sessionContext.ready(query)); }
+  catch { fail('storage_unavailable', 503, true); }
+  return sessionStorePresent;
+}
 
 function resolveSwitch(env = process.env) {
   const value = env[SWITCH];
@@ -31,15 +42,25 @@ async function loadRuntime({ env = process.env, deps = {} } = {}) {
   let ssoConfig = null;
   try { ssoConfig = await SystemConfig.getSetting('sso_config'); }
   catch { fail('storage_unavailable', 503, true); }
-  const settings = studentEntrySettings(ssoConfig, { platformKey: env.C05_PLATFORM_KEY || 'edu' });
+  const settings = studentEntrySettings(ssoConfig, {
+    platformKey: env.C05_PLATFORM_KEY || 'edu',
+    instanceKey: env.IDENTITY_DEPLOYMENT_INSTANCE_KEY || null
+  });
   if (!settings.enabled) return { enabled: false, reason: settings.reason };
   // The atomic one-time handoff is the whole point of the flow; without Redis there is no entry.
   if (!redis || redis.isConnected !== true) fail('storage_unavailable', 503, true);
+  // A session has to be able to remember where the student came from (contract §4). The table for that
+  // is a candidate migration, so a deployment that switched the entry on without applying it is told
+  // now — not after a student has already spent a ticket on a session that would remember nothing.
+  if (!(await sessionStoreReady(db))) fail('session_store_unavailable', 503, true);
 
   const store = createHandoffStore({ redis, now: deps.now });
-  const service = createStudentEntry({ settings, store, db, models, now: deps.now, logger });
+  const service = createStudentEntry({ settings, store, db, models, now: deps.now, logger,
+    deps: { TokenService: deps.TokenService } });
   return {
     enabled: true, settings, service, store,
+    // One read, by the session itself. Kept here rather than in the route so the route never writes SQL.
+    readContext: ({ jti, userId }) => db.transaction(query => sessionContext.read(query, { jti, userId })),
     readiness: Object.freeze({
       platform_key: settings.platformKey,
       schools_mapped: Object.keys(settings.schools).length,
@@ -50,8 +71,12 @@ async function loadRuntime({ env = process.env, deps = {} } = {}) {
       ip_whitelist: settings.ipWhitelistEnabled,
       trusted_proxy_hops: settings.trustedProxyHops,
       issues_refresh_token: settings.issueRefresh,
-      handoff_ttl_seconds: settings.handoffTtlSeconds
+      handoff_ttl_seconds: settings.handoffTtlSeconds,
+      access_ttl: settings.accessTtl,
+      instance_pinned: Boolean(settings.instanceKey),
+      session_context_table: sessionContext.TABLE
     })
   };
 }
 module.exports = { loadRuntime, resolveSwitch, SWITCH, C05Error };
+module.exports.__resetSessionStoreProbe = () => { sessionStorePresent = false; };

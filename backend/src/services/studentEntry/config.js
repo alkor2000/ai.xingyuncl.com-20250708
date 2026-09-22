@@ -20,6 +20,9 @@
 const { fail } = require('./errors');
 const { DEFAULT_LANDINGS } = require('./landings');
 
+// Contract §5: an access token from this entry lives 12 hours. A deployment whose own tokens are
+// shorter keeps the shorter one; a deployment whose tokens are longer does not get to stretch this one.
+const ACCESS_TTL = '12h';
 const SCHOOL_REF = /^[A-Za-z0-9._:-]{1,64}$/;
 const ENTRY = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 
@@ -31,7 +34,7 @@ function readPlatform(ssoConfig, platformKey = 'edu') {
 
 // Returns the validated C05 settings, or a named refusal. Never throws for "switched off": that is a
 // state the caller reports as `student_entry_disabled`.
-function studentEntrySettings(ssoConfig, { platformKey = 'edu' } = {}) {
+function studentEntrySettings(ssoConfig, { platformKey = 'edu', instanceKey = null } = {}) {
   const platform = readPlatform(ssoConfig, platformKey);
   if (!platform || platform.enabled === false) return { enabled: false, reason: 'platform_disabled' };
   const block = platform.c05;
@@ -78,6 +81,8 @@ function studentEntrySettings(ssoConfig, { platformKey = 'edu' } = {}) {
     launchUrl = parsed.toString();
   }
 
+  if (block.issue_refresh === true) fail('refresh_not_supported', 503);
+
   const groupChange = block.group_change === 'refuse' ? 'refuse' : 'move_and_recycle';
   // Contract §4 leaves "user_limit does not apply to the mapped student group, or is raised by one"
   // open. The default is the half that changes nothing an administrator set; `auto_expand` is the other.
@@ -90,6 +95,9 @@ function studentEntrySettings(ssoConfig, { platformKey = 'edu' } = {}) {
   return Object.freeze({
     enabled: true,
     platformKey,
+    // Which deployment issued a ticket. Two practice sites share this code and could share a secret by
+    // mistake; a ticket that names another deployment is refused rather than quietly accepted here.
+    instanceKey: instanceKey || null,
     secret: platform.secret,
     ipWhitelistEnabled: platform.ip_whitelist_enabled === true,
     allowedIps: Object.freeze(allowedIps),
@@ -106,10 +114,14 @@ function studentEntrySettings(ssoConfig, { platformKey = 'edu' } = {}) {
       ? Math.min(Math.max(block.subject_rate_per_minute, 1), 600) : 10,
     signatureValidSeconds: Number.isInteger(ssoConfig.signature_valid_minutes)
       ? Math.min(Math.max(ssoConfig.signature_valid_minutes, 1), 10) * 60 : 300,
-    accessTtl: typeof block.access_ttl === 'string' ? block.access_ttl : '12h',
-    // The contract offers "no long-lived refresh, or 24h". The conservative half is the default and the
-    // choice is recorded rather than silently taken.
-    issueRefresh: block.issue_refresh === true,
+    accessTtl: typeof block.access_ttl === 'string' ? block.access_ttl : ACCESS_TTL,
+    // The contract offers "no long-lived refresh, or 24h". This candidate implements the first half
+    // only, and says so instead of accepting a setting it cannot honour: the platform's refresh
+    // endpoint re-mints a pair through the ordinary path, which would hand back a deployment-length
+    // refresh (14 days by default), lose this session's context and never re-check that the account is
+    // still a student. Capping that safely means changing a login path every account shares, which is
+    // not this package's to change — so `issue_refresh: true` is refused by name.
+    issueRefresh: false,
     handoffTtlSeconds: 60
   });
 }

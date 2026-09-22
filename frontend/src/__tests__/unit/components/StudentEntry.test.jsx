@@ -122,6 +122,18 @@ describe('C05 consume page', () => {
     expect(screen.queryByText(/学校账号登录未完成/)).not.toBeInTheDocument()
   })
 
+  it('carries the lesson cue without acting on it: no association call, no submission', async () => {
+    // 登录线索不等于作业关联：落地页只是进站，关联要学生自己再确认一次。
+    const spy = loginWith(async () => ({ entry: 'ai-practice.chat',
+      context: { lesson_id: '456', assignment_id: '77' } }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('chat-page')
+    expect(spy).toHaveBeenCalledTimes(1)
+    // 除了那一次 consume，页面没有替学生发出任何请求（关联/提交都不在这里发生）
+    expect(api.post).not.toHaveBeenCalled()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
   it('shows one fixed message when the handoff is refused, without any server detail', async () => {
     loginWith(async () => {
       const error = new Error('refused')
@@ -131,5 +143,20 @@ describe('C05 consume page', () => {
     renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
     await screen.findByText(/学校账号登录未完成/)
     expect(screen.queryByText(/handoff_invalid/)).not.toBeInTheDocument()
+  })
+
+  it('says the same fixed thing when the refusal is about role, school or scope', async () => {
+    // 兑换时的现态拒绝（角色变了、学校撤下、换了组）对学生是同一件事：回作业页重新进来。
+    for (const code of ['subject_not_student', 'school_not_provisioned', 'session_scope_changed']) {
+      loginWith(async () => {
+        const error = new Error('refused')
+        error.response = { data: { error: { code, message: '服务端中文短句' } } }
+        throw error
+      })
+      const view = renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+      await screen.findByText(/学校账号登录未完成/)
+      expect(screen.queryByText(new RegExp(code))).not.toBeInTheDocument()
+      view.unmount()
+    }
   })
 })

@@ -71,12 +71,21 @@ async function lockGroups(query, ids) {
 }
 
 // How much this first login may grant. Pure: the caller charges the pool only once the account exists.
+//
+// Contract §4 is "初始额度按学生组发放策略（D-13）… 不足则 0，不报错" — a share is issued whole or not at
+// all. A part share is not a smaller version of the same thing: it would hand one student whatever
+// happened to be left, silently, with nothing in the account to say the policy was not met. So a pool
+// that cannot afford the configured amount grants zero, creates the account anyway, and leaves the pool
+// untouched for an administrator to top up.
 function planIssue(group, issuance) {
   if (!issuance) fail('issuance_policy_missing', 503);
   if (issuance.mode === 'none') return { granted: 0, fromPool: false, expireDays: null };
+  const amount = Math.max(0, Number(issuance.amount || 0));
   const remaining = Math.max(0, Number(group.credits_pool || 0) - Number(group.credits_pool_used || 0));
   return {
-    granted: Math.min(Math.max(0, Number(issuance.amount || 0)), remaining),
+    granted: remaining >= amount ? amount : 0,
+    short: remaining < amount,
+    pool_remaining: remaining,
     fromPool: true,
     expireDays: Number.isInteger(issuance.expire_days) ? issuance.expire_days : 365
   };
@@ -206,6 +215,7 @@ async function upsertStudent(query, {
   if (userId === null) fail('username_conflict', 409);
   await chargePool(query, groupId, plan.fromPool ? plan.granted : 0);
   const tagged = await writeTags(query, { userId, groupId, tags, operatorId });
-  return { userId, created: true, username, granted: plan.granted, moved: null, tags: tagged, ...seat };
+  return { userId, created: true, username, granted: plan.granted, pool_short: Boolean(plan.short),
+    moved: null, tags: tagged, ...seat };
 }
 module.exports = { upsertStudent, writeTags, planIssue, applySeatPolicy, recycleToPool, nameOf };

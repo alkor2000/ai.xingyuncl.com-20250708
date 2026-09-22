@@ -32,6 +32,12 @@ const MESSAGES = Object.freeze({
   issuance_policy_missing: '学生组发放策略尚未确定，入口对生产关闭',
   group_change_refused: '本部署未开启换组/换校处理，请联系管理员',
   subject_not_student: '该 uuid 已属于非学生账号，不能被学生断言接管',
+  subject_expired: '该学生账号已过期，请联系管理员续期',
+  // 交换与兑换之间隔着最多 60 秒，这些码说的是"那 60 秒里现态变了"
+  session_scope_changed: '登录信息已过期，请回到作业页面重新进入',
+  session_store_unavailable: '会话上下文暂不可用，请稍后重试',
+  context_unavailable: '当前会话没有可读的作业线索',
+  refresh_not_supported: '本入口不签发长效登录凭证，请勿开启该配置',
   username_conflict: '无法为该学生分配用户名',
   invalid_request: '请求格式不正确',
   internal_error: '暂不可用，请稍后重试'

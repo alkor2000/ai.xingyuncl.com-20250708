@@ -224,6 +224,14 @@ class Lab:
         ]
         self.sql(rows)
 
+    # The C05 session context table. Its bytes come from the same module the candidate migration
+    # replays; applying them directly here leaves knex's own history untouched, so the migration stage
+    # later in this run still exercises the candidate migration for real.
+    def apply_session_table(self):
+        statements = node("process.stdout.write(JSON.stringify("
+                          "require('./backend/src/services/studentEntry/sessionContext').SCHEMA));", {})
+        self.sql(list(statements))
+
     def write_config(self, c05):
         value = json.dumps({
             'enabled': True, 'signature_valid_minutes': 5,
@@ -440,9 +448,11 @@ def main():
         need('edu_school_id' not in preimage, 'preimage_already_has_candidate_columns')
         lab.build_database(preimage, knex_rows.stdout.decode())
         lab.seed()
+        lab.apply_session_table()
         lab.write_config(C05_CONFIG)
         issuer = Issuer(lab.issuer_secret)
-        report['database'] = {'tables': len(lab.sql([
+        report['database'] = {'session_context_table': 'applied from sessionContext.SCHEMA (candidate)',
+            'tables': len(lab.sql([
             f"SELECT table_name FROM information_schema.tables WHERE table_schema='{lab.database}'"])[0]),
             'source': 'structure-only dump of the local development database (no rows)'}
 

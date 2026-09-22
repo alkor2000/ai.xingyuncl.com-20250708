@@ -52,12 +52,19 @@ class TokenService {
 
   /**
    * 生成访问令牌和刷新令牌
-   * 
+   *
    * @param {Object} user - 用户实例
    * @param {boolean} isSSOUser - 是否SSO用户
-   * @returns {Object} { accessToken, refreshToken, expiresIn }
+   * @param {Object} [options] - 可选覆盖；不传时行为与以前逐字节相同
+   * @param {string} [options.accessExpiresIn] - 覆盖访问令牌有效期（只对本次调用生效，
+   *        用于契约规定了上限的入口，例如 C05 学生入口的 12h；不改全局配置、不影响其它登录方式）
+   * @param {boolean} [options.issueRefresh=true] - false 时完全不生成刷新令牌，
+   *        也不去读 system_settings 的刷新期限（调用方在事务里也能安全使用）
+   * @returns {Object} { accessToken, refreshToken?, expiresIn, jti }
    */
-  static async generateTokenPair(user, isSSOUser = false) {
+  static async generateTokenPair(user, isSSOUser = false, options = {}) {
+    const issueRefresh = options.issueRefresh !== false;
+    const accessExpiresIn = options.accessExpiresIn || config.auth.jwt.accessExpiresIn;
     // 生成唯一标识符
     const jti = TokenService._generateJti(user.id);
 
@@ -81,11 +88,16 @@ class TokenService {
       tokenPayload,
       config.auth.jwt.accessSecret,
       {
-        expiresIn: config.auth.jwt.accessExpiresIn,
+        expiresIn: accessExpiresIn,
         issuer: config.auth.jwt.issuer,
         audience: config.auth.jwt.audience
       }
     );
+
+    // 调用方明确不要刷新令牌时，连刷新期限都不去读：这样本方法可以在事务内安全调用
+    if (!issueRefresh) {
+      return { accessToken, expiresIn: accessExpiresIn, jti };
+    }
 
     // 获取动态的刷新令牌过期时间
     const refreshTokenExpiry = await TokenService.getRefreshTokenExpiry();
@@ -107,7 +119,8 @@ class TokenService {
     return {
       accessToken,
       refreshToken,
-      expiresIn: config.auth.jwt.accessExpiresIn
+      expiresIn: accessExpiresIn,
+      jti
     };
   }
 

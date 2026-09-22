@@ -8,7 +8,8 @@ const path = require('node:path');
 const { studentEntrySettings } = require('../../../services/studentEntry/config');
 const { DEFAULT_LANDINGS, CAPABILITY_KEYS, normaliseEntry } = require('../../../services/studentEntry/landings');
 const { createHandoffStore, signatureMatches, sha256 } = require('../../../services/studentEntry/handoff');
-const { createStudentEntry, expectedSignature, sourceAddress } = require('../../../services/studentEntry/exchange');
+const { createStudentEntry, expectedSignature, sourceAddress,
+  accessSeconds } = require('../../../services/studentEntry/exchange');
 const { upsertStudent } = require('../../../services/studentEntry/shadowAccount');
 const { resolveSchoolGroup } = require('../../../services/studentEntry/schoolMapping');
 const { loadRuntime } = require('../../../services/studentEntry/runtime');
@@ -52,8 +53,17 @@ function harness({ c05, platform, groups, users, columns } = {}) {
     const row = db.data.users.get(Number(id));
     return row ? { ...row, toJSON: () => row } : null;
   } } };
-  const service = createStudentEntry({ settings, store, db, models });
-  return { settings, redis, store, db, service, sign: createIssuer({ secret: SECRET }) };
+  // The real TokenService is not exercised here (the isolated harness signs real JWTs); what matters at
+  // this level is that consume mints exactly once, inside the transaction, from the row it verified.
+  let minted = 0;
+  const TokenService = { async generateTokenPair(user, isSSO, options) {
+    minted += 1;
+    return { accessToken: `token-${user.id}-${minted}`, expiresIn: options?.accessExpiresIn,
+      jti: `${user.id}-jti-${minted}`, issueRefreshAsked: options?.issueRefresh };
+  } };
+  const service = createStudentEntry({ settings, store, db, models, deps: { TokenService } });
+  return { settings, redis, store, db, service, minted: () => minted,
+    sign: createIssuer({ secret: SECRET }) };
 }
 const refusal = async promise => {
   try { await promise; return { code: null }; } catch (error) { return { code: error.code, status: error.status }; }
@@ -229,6 +239,8 @@ describe('C05 handoff', () => {
     const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
     const session = await lab.service.consume(handoff);
     expect(session.entry).toBe('ai-practice.chat');
+    expect(session.tokens.accessToken).toBeTruthy();
+    expect(session.tokens.issueRefreshAsked).toBe(false);   // §5: this entry never mints a refresh
     expect(session.context).toEqual({ lesson_id: '456', assignment_id: null });
     const { code, status } = await refusal(lab.service.consume(handoff));
     expect([code, status]).toEqual(['handoff_invalid', 401]);
@@ -267,11 +279,13 @@ describe('C05 shadow account', () => {
     expect(db.data.groups.get(7).credits_pool_used).toBe(40);
   });
 
-  test('a partially funded pool grants what is left, and no more', async () => {
+  test('a pool that cannot afford a whole share grants none of it, and is left alone', async () => {
+    // Contract §4: 不足则 0. A part share would hand this student whatever happened to be left, with
+    // nothing anywhere saying the policy was not met.
     const db = createMemoryDb({ groups: [{ id: 7, credits_pool: 100, credits_pool_used: 70 }] });
     const account = await db.transaction(query => upsertStudent(query, { ...base, groupId: 7 }));
-    expect(account.granted).toBe(30);
-    expect(db.data.groups.get(7).credits_pool_used).toBe(100);
+    expect([account.created, account.granted, account.pool_short]).toEqual([true, 0, true]);
+    expect(db.data.groups.get(7).credits_pool_used).toBe(70);
   });
 
   test('a missing issuance policy closes first login by name and leaves the pool alone', async () => {
@@ -361,6 +375,105 @@ describe('C05 shadow account', () => {
   });
 });
 
+describe('C05 consume re-checks the present, not the past', () => {
+  // A ticket lives sixty seconds. Everything it claimed has to be true again when it is spent.
+  const spend = async (lab, mutate, payload = {}) => {
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor(payload))));
+    await mutate(lab);
+    return refusal(lab.service.consume(handoff));
+  };
+  const student = lab => [...lab.db.data.users.values()].find(row => row.uuid === UUID);
+
+  test('an account promoted between exchange and consume cannot spend the ticket', async () => {
+    const lab = harness();
+    const { code, status } = await spend(lab, () => { student(lab).role = 'admin'; });
+    expect([code, status]).toEqual(['subject_not_student', 403]);
+    expect(lab.minted()).toBe(0);                       // nothing was signed for the promoted account
+  });
+
+  test('an account switched off or expired cannot spend the ticket', async () => {
+    const off = harness();
+    expect((await spend(off, () => { student(off).status = 'inactive'; })).code).toBe('subject_disabled');
+    const expired = harness();
+    expect((await spend(expired, () => { student(expired).expire_at = new Date(Date.now() - 86400000); })).code)
+      .toBe('subject_expired');
+  });
+
+  test('a school closed or unmapped in those sixty seconds cannot spend the ticket', async () => {
+    const closed = harness();
+    expect((await spend(closed, () => { closed.db.data.groups.get(7).is_active = 0; })).code)
+      .toBe('school_not_provisioned');
+  });
+
+  test('a ticket cannot follow the student to a different group, in either direction', async () => {
+    const moved = harness({ groups: [{ id: 7, credits_pool: 1000 }, { id: 8, credits_pool: 1000 }] });
+    expect((await spend(moved, () => { student(moved).group_id = 8; })).code).toBe('session_scope_changed');
+
+    // The mapping itself now points somewhere else: the old ticket names the old group.
+    const repointed = harness({ groups: [{ id: 7, credits_pool: 1000 }, { id: 8, credits_pool: 1000 }] });
+    const { handoff } = await repointed.service.exchange(request(repointed.sign(payloadFor())));
+    const elsewhere = createStudentEntry({ ...repointed, settings: settingsWith({ school_groups: { 123: 8 } }),
+      models: { User: { findById: async id => ({ ...repointed.db.data.users.get(Number(id)) }) } },
+      deps: { TokenService: { generateTokenPair: async () => ({ accessToken: 'x', jti: 'y' }) } } });
+    expect((await refusal(elsewhere.consume(handoff))).code).toBe('session_scope_changed');
+  });
+
+  test('a ticket issued by another deployment or platform is not this one to spend', async () => {
+    const lab = harness();
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
+    const other = createStudentEntry({ ...lab, settings: { ...lab.settings, instanceKey: 'another-site' },
+      models: { User: { findById: async id => ({ ...lab.db.data.users.get(Number(id)) }) } },
+      deps: { TokenService: { generateTokenPair: async () => ({ accessToken: 'x', jti: 'y' }) } } });
+    expect((await refusal(other.consume(handoff))).code).toBe('session_scope_changed');
+  });
+
+  test('the session that is created remembers where the student came from, and stores no token', async () => {
+    const lab = harness();
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
+    const session = await lab.service.consume(handoff);
+    const [row] = lab.db.data.sessions;
+    expect(row).toMatchObject({ school_ref: '123', group_id: 7, lesson_ref: '456', assignment_ref: null,
+      platform_key: 'edu' });
+    expect(row.handoff_digest).toBe(sha256(handoff));
+    expect(JSON.stringify(row)).not.toContain(session.tokens.accessToken);
+    expect(JSON.stringify(row)).not.toContain(handoff);
+  });
+
+  test('a refused consume leaves no session behind, and the ticket is still spent', async () => {
+    const lab = harness();
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
+    student(lab).role = 'admin';
+    await refusal(lab.service.consume(handoff));
+    expect(lab.db.data.sessions).toHaveLength(0);
+    student(lab).role = 'user';
+    // The ticket was spent by the refused attempt: a one-time ticket is never revived by a refusal.
+    expect((await refusal(lab.service.consume(handoff))).code).toBe('handoff_invalid');
+  });
+});
+
+describe('C05 token lifetimes', () => {
+  test('the access token is asked for at the contract ceiling and no refresh is ever requested', async () => {
+    const lab = harness();
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
+    const session = await lab.service.consume(handoff);
+    expect(session.tokens.expiresIn).toBe('12h');
+    expect(session.tokens.issueRefreshAsked).toBe(false);
+  });
+
+  test('a deployment asking for a refresh token is refused by name, not quietly accepted', async () => {
+    // The platform's refresh endpoint re-mints through the ordinary path: a deployment-length refresh,
+    // no C05 re-check, no context. Capping that safely is a change to a login path every account
+    // shares, so this candidate implements only the half of §5 it can honour, and says so.
+    expect(() => settingsWith({ issue_refresh: true })).toThrow(/refresh_not_supported/);
+    expect(settingsWith().issueRefresh).toBe(false);
+  });
+
+  test('a ttl string becomes the seconds a session is recorded as living', () => {
+    expect([accessSeconds('12h'), accessSeconds('45m'), accessSeconds('1d'), accessSeconds('nonsense')])
+      .toEqual([43200, 2700, 86400, 43200]);
+  });
+});
+
 describe('C05 school mapping', () => {
   test('the configured map is used as written and an unmapped school is refused', async () => {
     const db = createMemoryDb({ groups: [{ id: 7 }] });
@@ -405,10 +518,11 @@ describe('C05 runtime switch', () => {
   });
 
   test('switched on without Redis refuses, and reports what it would run with', async () => {
+    require('../../../services/studentEntry/runtime').__resetSessionStoreProbe();
     const deps = {
       SystemConfig: { getSetting: async () => ssoConfigWith() },
       redis: { isConnected: false },
-      db: {}, models: {}
+      db: createMemoryDb({ groups: [{ id: 7 }] }), models: {}
     };
     await expect(loadRuntime({ env: { C05_STUDENT_ENTRY_ENABLED: 'true' }, deps }))
       .rejects.toMatchObject({ code: 'storage_unavailable' });
@@ -417,6 +531,7 @@ describe('C05 runtime switch', () => {
       env: { C05_STUDENT_ENTRY_ENABLED: 'true' },
       deps: { ...deps, redis: createMemoryRedis(), db: createMemoryDb({ groups: [{ id: 7 }] }) } });
     expect(ready.readiness).toMatchObject({ platform_key: 'edu', schools_mapped: 1,
-      issuance_policy: 'from_group_pool', issues_refresh_token: false, handoff_ttl_seconds: 60 });
+      issuance_policy: 'from_group_pool', issues_refresh_token: false, handoff_ttl_seconds: 60,
+      access_ttl: '12h', session_context_table: 'c05_sessions' });
   });
 });

@@ -12,6 +12,7 @@ const { signatureMatches } = require('./handoff');
 const { upsertStudent } = require('./shadowAccount');
 const { resolveSchoolGroup } = require('./schoolMapping');
 const { normaliseEntry } = require('./landings');
+const sessionContext = require('./sessionContext');
 
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 const REF = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -92,8 +93,19 @@ async function withRetry(work, attempts = 3) {
   }
 }
 
-function createStudentEntry({ settings, store, db, models, now = Date.now, logger = null }) {
+// '12h' / '45m' / '3600' → seconds. Only used to record when the session stops being valid; the token
+// itself is signed by TokenService from the same string.
+const TTL = /^(\d+)\s*([smhd])?$/;
+function accessSeconds(value) {
+  const match = TTL.exec(String(value || '').trim());
+  if (!match) return 12 * 3600;
+  const unit = { s: 1, m: 60, h: 3600, d: 86400 }[match[2] || 's'];
+  return Number(match[1]) * unit;
+}
+
+function createStudentEntry({ settings, store, db, models, now = Date.now, logger = null, deps = {} }) {
   if (!settings || !settings.enabled || !store || !db) fail('student_entry_disabled', 503);
+  if (!deps.TokenService) deps = { ...deps, TokenService: require('../auth/TokenService') };
 
   // edu → practice. Server to server, signed, IP-bounded, single use per nonce.
   async function exchange({ rawBody, headers, req }) {
@@ -128,18 +140,24 @@ function createStudentEntry({ settings, store, db, models, now = Date.now, logge
     // the pool is charged or repaid and the tags are rewritten — or none of it happens.
     const account = await withRetry(() => db.transaction(async query => {
       const groupId = await resolveSchoolGroup(query, settings, org.school_ref);
-      return upsertStudent(query, {
+      const result = await upsertStudent(query, {
         uuid: subject.uuid, profile, org, groupId, passwordHash,
         issuance: settings.issuance, groupChange: settings.groupChange, userLimit: settings.userLimit
       });
+      return { ...result, groupId };
     }));
 
+    // The ticket pins what this login is for. Sixty seconds later `consume` reads the current state and
+    // requires it to still match: who the account is, which deployment and platform issued the ticket,
+    // which school it was issued for and which group that school mapped to at the time.
     const issued = await store.issue({
       user_id: account.userId, uuid: subject.uuid, entry,
+      platform_key: settings.platformKey, instance: settings.instanceKey || null,
+      school_ref: org.school_ref, group_id: account.groupId,
       // The lesson/assignment the student came from travels with the session for P09 to *offer* a
       // link. It is not a task grant: associating a work still needs its own signed context.
       context: context ? { lesson_id: context.lesson_id ?? null, assignment_id: context.assignment_id ?? null } : null,
-      school_ref: org.school_ref, issued_at: now()
+      issued_at: now()
     }, settings.handoffTtlSeconds);
 
     if (logger) {
@@ -153,15 +171,64 @@ function createStudentEntry({ settings, store, db, models, now = Date.now, logge
       landing: { entry }, account: { created: account.created } };
   }
 
-  // browser → practice. The ticket is spent here and never appears again.
+  // browser → practice. The ticket is spent here — atomically, once — and everything the ticket claimed
+  // is checked again against the state as it is NOW, not as it was when edu asked.
+  //
+  // A ticket is not a decision that keeps. In the sixty seconds it lives, an administrator can promote
+  // the account, switch it off, let it expire, close the school, point the school at a different group,
+  // or another login can move the student; each of those must stop this ticket rather than be carried
+  // past by it. The re-check, the token and the session row happen in ONE transaction from ONE read, so
+  // nothing signs a token for an identity that was read at some other moment.
   async function consume(ticket) {
     const payload = await store.consume(ticket);
-    const user = await models.User.findById(Number(payload.user_id));
-    if (!user || user.status !== 'active') fail('subject_disabled', 403);
-    if (user.uuid_source !== 'sso' || user.uuid !== payload.uuid) fail('handoff_invalid', 401);
-    return { user, entry: payload.entry, context: payload.context ?? null, school_ref: payload.school_ref ?? null };
+    if (!payload || !payload.user_id) fail('handoff_invalid', 401);
+    // A ticket issued by a different deployment, or under a different platform key, is not this
+    // deployment's to spend. (Checked before any read: it says nothing about the account.)
+    if ((payload.platform_key || settings.platformKey) !== settings.platformKey) fail('session_scope_changed', 409);
+    if ((payload.instance || null) !== (settings.instanceKey || null)) fail('session_scope_changed', 409);
+
+    const verified = await withRetry(() => db.transaction(async query => {
+      const { rows } = await query(
+        `SELECT id, uuid, uuid_source, role, status, group_id, expire_at
+           FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`, [Number(payload.user_id)]);
+      const row = rows[0];
+      // The account: still there, still this student, still a student.
+      if (!row || row.uuid !== payload.uuid || row.uuid_source !== 'sso') fail('handoff_invalid', 401);
+      if (row.role !== 'user') fail('subject_not_student', 403);
+      if (row.status !== 'active') fail('subject_disabled', 403);
+      if (row.expire_at && new Date(row.expire_at).getTime() <= now()) fail('subject_expired', 403);
+
+      // The school: still provisioned, still the same group, and the student still in it.
+      const groupId = await resolveSchoolGroup(query, settings, payload.school_ref);
+      if (Number(groupId) !== Number(payload.group_id)) fail('session_scope_changed', 409);
+      if (Number(row.group_id) !== Number(payload.group_id)) fail('session_scope_changed', 409);
+      const { rows: groupRows } = await query(
+        'SELECT id, is_active FROM user_groups WHERE id = ? LIMIT 1', [groupId]);
+      if (!groupRows[0] || Number(groupRows[0].is_active) !== 1) fail('school_not_provisioned', 409);
+
+      // Only now is there something to sign. The token is minted from the row just verified, and the
+      // session that remembers where the student came from is written beside it: the commit makes both
+      // real or neither. `issueRefresh: false` keeps this call free of any other database read.
+      const user = await models.User.findById(row.id);
+      if (!user || user.status !== 'active' || user.role !== 'user') fail('subject_disabled', 403);
+      const tokens = await deps.TokenService.generateTokenPair(user, true,
+        { accessExpiresIn: settings.accessTtl, issueRefresh: false });
+      const expiresAt = now() + accessSeconds(settings.accessTtl) * 1000;
+      await sessionContext.record(query, {
+        jti: tokens.jti, userId: row.id, platformKey: settings.platformKey,
+        instanceKey: settings.instanceKey || null, schoolRef: payload.school_ref, groupId,
+        lessonRef: payload.context ? payload.context.lesson_id ?? null : null,
+        assignmentRef: payload.context ? payload.context.assignment_id ?? null : null,
+        handoffDigest: sha256(ticket), expiresAt
+      });
+      return { user, tokens, groupId, expiresAt };
+    }));
+
+    return { user: verified.user, tokens: verified.tokens, entry: payload.entry,
+      context: payload.context ?? null, school_ref: payload.school_ref ?? null,
+      group_id: verified.groupId, expires_at: verified.expiresAt };
   }
 
   return { exchange, consume, expectedSignature, sourceAddress };
 }
-module.exports = { createStudentEntry, expectedSignature, sourceAddress, parsePayload, withRetry };
+module.exports = { createStudentEntry, expectedSignature, sourceAddress, parsePayload, withRetry, accessSeconds };

@@ -10,6 +10,7 @@ const { randomUUID } = require('node:crypto');
 const rateLimit = require('express-rate-limit');
 const { C05Error, message } = require('../services/studentEntry/errors');
 const { loadRuntime } = require('../services/studentEntry/runtime');
+const { authenticate } = require('../middleware/authMiddleware');
 
 const SCHEMA_VERSION = 1;
 const TICKET = /^[A-Za-z0-9_-]{43}$/;
@@ -60,20 +61,20 @@ function createStudentEntryRouter({ deps = {}, env = process.env } = {}) {
         if (!runtime.enabled) throw new C05Error(runtime.reason || 'student_entry_disabled', 503);
         const ticket = req.body && typeof req.body.handoff === 'string' ? req.body.handoff : null;
         if (!ticket || !TICKET.test(ticket)) throw new C05Error('handoff_invalid', 401);
-        const { user, entry, context } = await runtime.service.consume(ticket);
+        // The service spends the ticket, re-checks the current state and mints the token inside one
+        // transaction, so nothing here can hand back a session for an identity read at another moment.
+        const { user, tokens, entry, context } = await runtime.service.consume(ticket);
 
-        // Exactly what an ordinary login returns, from the same two places AuthController uses.
-        const TokenService = deps.TokenService || require('../services/auth/TokenService');
+        // The rest of an ordinary login, from the same two places AuthController uses.
         const SiteConfigService = deps.SiteConfigService || require('../services/auth/SiteConfigService');
-        const tokens = await TokenService.generateTokenPair(user, true);
         const permissions = await user.getPermissions();
         const siteConfig = await SiteConfigService.getUserSiteConfig(user);
         await user.updateLastLogin();
 
-        // The contract leaves "no long-lived refresh" or "refresh 24h" open. The conservative half is
-        // the default: unless a deployment says otherwise, the browser gets no refresh token at all.
+        // Contract §5 leaves "no long-lived refresh" or "refresh 24h" open; this candidate implements
+        // the first half only (a deployment asking for the second is refused by name in config.js), so
+        // the browser never receives a refresh token from this entry.
         const session = { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn };
-        if (runtime.settings.issueRefresh) session.refreshToken = tokens.refreshToken;
         return res.json({
           schema_version: SCHEMA_VERSION,
           user: user.toJSON(), permissions, siteConfig, ...session,
@@ -85,6 +86,34 @@ function createStudentEntryRouter({ deps = {}, env = process.env } = {}) {
         });
       } catch (error) { return refuse(res, error, req.c05RequestId); }
     });
+
+  // What this session is allowed to remember: the lesson the student came from, and the school and
+  // group the session was issued for. Read by the session itself — the jti comes from the verified
+  // token and the account from the verified user, so another account's token finds nothing.
+  //
+  // It is a cue, not a grant. Associating a work with that lesson still needs P09's own signed task
+  // context and the student's own confirmation; nothing here authorizes anything.
+  router.get('/context', envelope, authenticate, async (req, res) => {
+    try {
+      const runtime = await loadRuntime({ env, deps });
+      if (!runtime.enabled) throw new C05Error(runtime.reason || 'student_entry_disabled', 503);
+      const jti = req.tokenPayload && req.tokenPayload.jti;
+      if (!jti || !req.user) throw new C05Error('context_unavailable', 404);
+      const row = await runtime.readContext({ jti, userId: req.user.id });
+      if (!row) throw new C05Error('context_unavailable', 404);
+      return res.json({
+        schema_version: SCHEMA_VERSION,
+        context: { lesson_id: row.lesson_ref ?? null, assignment_id: row.assignment_ref ?? null },
+        scope: { school_ref: row.school_ref, group_id: Number(row.group_id),
+          platform_key: row.platform_key, instance_key: row.instance_key ?? null },
+        issued_at: row.issued_at, expires_at: row.expires_at,
+        // Said in the payload as well as in the code: this is where the student came from, not a claim
+        // about any work, and not a submission.
+        is_task_association: false,
+        request_id: req.c05RequestId
+      });
+    } catch (error) { return refuse(res, error, req.c05RequestId); }
+  });
 
   // What the login page may show about this entry, without revealing any configuration.
   router.get('/capability', envelope, async (req, res) => {

@@ -17,7 +17,7 @@ function createMemoryDb({ groups = [], users = [], columns = { edu_school_id: fa
       id: Number(row.id ?? index + 1), uuid_source: 'sso', role: 'user', status: 'active',
       credits_quota: 0, used_credits: 0, deleted_at: null, tag_count: 0, ...row
     }])),
-    tags: new Map(), relations: [], nextUser: 100, nextTag: 500, statements: []
+    tags: new Map(), relations: [], sessions: [], nextUser: 100, nextTag: 500, statements: []
   };
   const duplicate = key => {
     const error = new Error(`Duplicate entry for key '${key}'`);
@@ -31,6 +31,30 @@ function createMemoryDb({ groups = [], users = [], columns = { edu_school_id: fa
     const text = String(sql).replace(/\s+/g, ' ').trim();
     data.statements.push(text);
 
+    if (text.includes('information_schema.tables')) {
+      return { rows: [{ present: columns.c05_sessions === false ? 0 : 1 }] };
+    }
+    if (text.startsWith('SELECT id, uuid, uuid_source, role, status, group_id, expire_at')) {
+      const row = data.users.get(Number(params[0]));
+      return { rows: row && row.deleted_at === null ? [{ ...row }] : [] };
+    }
+    if (text.startsWith('SELECT id, is_active FROM user_groups')) {
+      const group = data.groups.get(Number(params[0]));
+      return { rows: group ? [{ id: group.id, is_active: group.is_active }] : [] };
+    }
+    if (text.startsWith('INSERT INTO `c05_sessions`')) {
+      const [jti, userId, platformKey, instanceKey, schoolRef, groupId, lessonRef, assignmentRef, digest] = params;
+      if (data.sessions.some(row => row.handoff_digest === digest || row.jti === jti)) throw duplicate('c05_sessions.jti');
+      data.sessions.push({ jti, user_id: Number(userId), platform_key: platformKey, instance_key: instanceKey,
+        school_ref: schoolRef, group_id: Number(groupId), lesson_ref: lessonRef, assignment_ref: assignmentRef,
+        handoff_digest: digest, issued_at: new Date(), expires_at: params[9], revoked_at: null });
+      return { rows: { insertId: data.sessions.length } };
+    }
+    if (text.includes('FROM `c05_sessions`')) {
+      return { rows: data.sessions
+        .filter(row => row.jti === params[0] && row.user_id === Number(params[1]) && row.revoked_at === null)
+        .map(row => ({ ...row })) };
+    }
     if (text.includes('information_schema.columns')) {
       const present = (columns.edu_school_id ? 1 : 0) + (columns.cohort ? 1 : 0);
       return { rows: [{ present }] };
