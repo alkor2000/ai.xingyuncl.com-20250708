@@ -6,7 +6,7 @@
 下面是按当前 Meta 字典（`aoci.meta.txt`）预先创作好的完整条目与绑定摘要，合入主副本后调用一次
 `aoci_maintain` → `aoci_update_entry`（批次内逐条带 `source_sha256`）即可对齐，届时以机器签发的候选身份为准。
 
-`aoci check`（在本 worktree 运行）当前报告：14 条 missing、7 条 stale、observed_pending（测试目录只 observe）。
+`aoci check`（在本 worktree 运行）当前报告：15 条 missing、7 条 stale、observed_pending（测试目录只 observe）。
 接续单 CTRL-20260922-PRACTICE-P09-RELIABILITY-01 在同一 worktree 继续，因此下表的正文与摘要是**接续后的最终状态**（新增 `assets.js`、`eligibility.js`，并重写了 service/snapshot/store/previewServer/runtime/sourceHook/面板/交付文档六条以上条目的语义与约束位）。
 
 ## 新增对象（missing）
@@ -14,22 +14,24 @@
 | 仓内路径 | source_sha256 |
 |---|---|
 | backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js | ec84f6773d43d654cf72da6c8f2ce090f92cac75fa1e4ea7532ca4c6bbab4fdb |
+| backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | 734a78286edc9095379de0f1fbdb3b75b3a5e7970a2d37893ca8e8ee08229058 |
 | backend/src/routes/websiteArtifacts.js | cf0d2bcfbf8fefbf923e3de684c8ff32b808dd02aa8fada3039d28115046eb88 |
 | backend/src/services/websiteArtifact/assets.js | 41c40a5e27f2b04e3319c58192b9636d308a10368b47db6d6b0c25a09236494e |
 | backend/src/services/websiteArtifact/eligibility.js | c9d64e20b65b5d65eed8e289a2852b43898bcb9a73f0f7847176f2d2a68f0e11 |
 | backend/src/services/websiteArtifact/errors.js | e79cc85714f34fb00df0b2216a3cf788878b9c99129f0dbd679ea4141373d82b |
 | backend/src/services/websiteArtifact/previewServer.js | 81234d02987fa2cb11ebbc419d0f3f778e86c9b0706e6187dd8192c26a5309bb |
 | backend/src/services/websiteArtifact/runtime.js | e3afc843c9d930ff5bee81e301b653bc63dfc5069d21dd2c22e41bed42be2b96 |
-| backend/src/services/websiteArtifact/service.js | 715e6bcf9075eb3a541e054007f85a9746377a6376826de2b047a3b630b086f4 |
+| backend/src/services/websiteArtifact/service.js | 39e1418a50fee259962854b6eee44a7f535972e3f72c98b3e902ec4bb717e8a0 |
 | backend/src/services/websiteArtifact/snapshot.js | db93d230d7e989729aeb9d8efe1fe82172d3c88be4dc1ccc2217ba0d33f46a72 |
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
-| backend/src/services/websiteArtifact/store.js | b01c6da19ca8fe655ce607554951a892ed0da6c22c5ae8fca86eb846c43ac9ff |
+| backend/src/services/websiteArtifact/store.js | ef9667c53223aa082ab3244bd11306ccf535ec14343598bf7aff619ffb115c2c |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 2bc00621e44101cb455611a17a71f72fe9cabeeab7c5591a6710eab94daace73 |
+| docs/integrations/p09-website-artifact-source-candidate.md | 2eb7424868487be5d538b062af37bdcd5a41d5b6bb37a1b023d4bea30f2062be |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```
 20260922_001_p09_website_artifacts.js[PD6T]: F:T·P09 网站作品账本八表的 knex 迁移候选：up 逐字重放 websiteArtifact/store.js SCHEMA，down 按外键顺序删表；位于候选目录不被 knex 扫描 | R:code:backend/src/services/websiteArtifact/store.js,code:backend/knexfile.js,code:docs/integrations/p09-website-artifact-source-candidate.md | A:exports.up/down/tables | S:进入 backend/migrations/ 即在下次 make deploy-docker 自动建表，授权前不得晋级；down 丢账本与固定版本字节须先备份
+20260922_002_p09_write_sequence.js[PD4T]: F:T·P09 账本候选迁移 002：为既有库补 write_seq/applied_write_seq 两列并把已有行的两个计数对齐，按 information_schema 判存在故可重跑 | R:code:backend/src/services/websiteArtifact/store.js,code:backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js,code:dev/p09-lab/reconcile-order.py | A:exports.up/down/columns | S:新库由 001 的 SCHEMA 直接建出这两列，本迁移只为旧库；升级后把 applied_write_seq 对齐到 write_seq，避免升级本身把每个作品标成未完成；仍在候选目录，晋级是另一次授权
 websiteArtifacts.js[EN8M]: F:N·P09 两个 HTTP 面：学生端关联/撤销/生成评阅版本/自建预览会话，edu 服务端当前状态、增量事件、提交冻结与评阅会话；统一请求 ID 与安全错误信封 | R:code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/services/websiteArtifact/service.js,code:backend/src/middleware/authMiddleware.js,code:frontend/src/components/htmlEditor/TaskArtifactPanel.jsx,code:backend/src/app.js | A:/api/p09/website-artifacts/{capability、links[/:id/{unlink、revisions、preview-sessions}]},/api/integrations/edu/website-artifacts/{state、events、revisions、review-sessions} | S:运行时未开启一律 503 website_artifacts_disabled；作业与学生身份只来自签名任务上下文请求头，请求体未知字段拒绝；edu 面按静态服务凭据签名(方法+路径+排序query+体摘要)与 school_refs 授权；16KiB 严格 JSON
 errors.js[CN5T]: F:N·P09 固定错误分类：P09Error/fail 与面向运维的中文短句表（任务上下文、来源、评阅会话、游标、基础设施） | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/routes/websiteArtifacts.js | A:P09Error,fail,MESSAGES,message | S:message 不含请求原文、他平台标识、凭据或堆栈；码即契约面，改动须同步 edu 消费方
 previewServer.js[EN8S]: F:N·隔离预览域：独立监听器(可自终结 TLS)，Host 不符即 404；引导页从 URL 片段取一次性 handoff 并 POST 兑换 HttpOnly Cookie，再按会话逐次校验后输出页面与资源字节 | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/server.js | A:GET /p09/preview/open,POST /p09/preview/exchange,GET /p09/preview/:sessionId/*,createPreviewApp,startPreviewServer,clientBinding | S:handoff 只在片段里故不进访问日志/Referer；兑换把会话绑定到该浏览器指纹(防转发，不是身份认证)；CSP sandbox 不给 allow-same-origin，源列表写隔离域真名而非 'self'(不透明来源下 'self' 谁都不匹配会挡住作品自己的图片样式)；https 用 SameSite=None+Secure，否则退回 Lax

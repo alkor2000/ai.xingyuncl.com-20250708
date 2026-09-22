@@ -79,12 +79,16 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 
 **变化身份**：`change_no` 是每个作品自己的单调变化号，事件事实 id = `updated:<change_no>:<内容摘要>`。同一次变化重复上报还是同一条事实（重试不重复），**A→B→A 是三次变化三条事实**（首包按内容永久去重，回到旧内容会丢事件，这是本次修掉的缺口）。
 
+**对账顺序（不会把旧结果写回去）**：对账必须在事务外读来源（文件读取不能待在事务里），所以它提交时来源可能已经又变了。因此每个作品有一个**耐久的写序号** `write_seq`：编辑器每观察到一次来源写入就 +1；对账**在读来源之前**取下这个号，提交时在行锁内比对，**不相等就丢弃自己的结果**（`skipped: source_moved`）并把标记留给拥有新写入的那次对账。已应用到投影的号记在 `applied_write_seq`，所以"标记被清掉"再也不能让一个落后的投影看起来完成：`applied_write_seq < write_seq` 本身就是未完成。**首包没有这个序号，迟到的对账会把旧内容写回去、把新标记一并清掉，随后 `complete:true`——这是本次修掉的缺口，先在真实 MySQL 屏障里复现，再修。**
+
 **可恢复的投影**：编辑器保存的那次请求里先**等待写入**耐久标记（`sync_pending_at`，正文保存同时记 `real_save_count`），之后才异步对账。所以：进程崩溃、账本短断、重启都只会留下"待对账"，不会留下永远陈旧的投影。三层补齐——(1) 每次 edu 读 `state`/`events` 先做一次**有界**清扫，(2) 后台定时清扫（`P09_SYNC_INTERVAL_MS`，默认 60s，下限 5s），(3) 标记本身丢了也能自愈：最久未核对的活跃作品会被重新与来源比对（`P09_SYNC_VERIFY_MS`，默认 5 分钟）。对账失败保留标记并计数，不吞错。
-`state` 只有在**没被截断且没有待对账**时才 `complete:true`，另给 `pending_reconcile` 与 `item_limit`；`events` 同样带 `pending_reconcile`。**负载只给测量、不自定课堂轮询周期**：`service.syncStatus()` 报 `sweeps/reconciled/events/failures/last_duration_ms/max_duration_ms` 与当前预算（单次 ≤25 个作品、≤400ms、自愈批 ≤5）；真正做了事（或用尽预算）的清扫会在服务端日志留一行计数（条数/耗时/是否用尽预算，不含任何学生标识或正文），运维据此度量。隔离验收里实测到 8 次这样的清扫，单次 16–39 ms。
+**一次可信的读取边界**：`state` 与 `events` 的水位、行与未完成计数取自**同一个事务快照**，水位先取——所以返回的行只会比水位新（消费方重放，绝不跳过），不会比它旧。`complete:true` 只描述这一份快照：未截断、返回的每条都不欠对账、且这次清扫既没用尽预算也没读失败。读取边界之后才提交的保存不属于这份快照，它由水位之后的增量事件送达。`state` 另给 `pending_reconcile`（本次返回里欠对账的条数）、`scope_pending_reconcile`（整个学校范围的未完成数，过滤查询时用来看见被过滤掉的欠账）、`truncated` 与 `item_limit`；`events` 同样带 `pending_reconcile` 与 `sweep_incomplete`。**负载只给测量、不自定课堂轮询周期**：`service.syncStatus()` 报 `sweeps/reconciled/events/failures/last_duration_ms/max_duration_ms` 与当前预算（单次 ≤25 个作品、≤400ms、自愈批 ≤5）；真正做了事（或用尽预算）的清扫会在服务端日志留一行计数（条数/耗时/是否用尽预算，不含任何学生标识或正文），运维据此度量。隔离验收里实测到 8 次这样的清扫，单次 16–39 ms。
+
+**逐次保存的历史，到哪为止**：耐久记录每一次观察到的保存的是**计数器**——`real_save_count`、`last_real_save_at` 与 `write_seq`（每次来源写入 +1）。内容事件（`artifact.updated`）是**每一次被对账的变化**一条：若 A→B→A 三次保存在任何对账之前发生，中间的字节已经不存在了，只会得到一条净变化事件（净内容与上次投影相同时，连这一条都没有，只有证据从 `none` 变 `observed` 那一条）。**所以不能把"最终状态补齐了"说成"每一次历史变化都已恢复"**：edu 想数保存次数看计数器，想看变化看事件，两者口径不同。
 
 **私有评阅的受众**：
 - 会话记 `audience_kind`（reviewer/owner）、受众哈希、`issuer_key`，一次性 handoff **60 秒内**必须兑换，兑换后会话 **10 分钟**；会话寿命与 grant 到期**无关**（grant 只授权"这一次打开"，不是租约，不能续期，过期只能由 edu 重新签发）。
-- 兑换是**条件更新**：先到者赢，handoff 立刻消失；兑换时把会话**绑定到兑换它的浏览器**（UA+Accept-Language 指纹哈希），之后每个字节都要求同一浏览器。**这是防转发/防盗用 Cookie 的措施，不是身份认证**（同一台机器上的同一浏览器仍然可以被本人之外的人使用——见 §8 缺口 1）。
+- 兑换是**条件更新**：先到者赢，handoff 立刻消失；兑换时把会话**绑定到兑换它的浏览器**（UA+Accept-Language 指纹哈希），之后每个字节都要求同一指纹。**这不是身份认证，也不是"转发必拒"**：UA 与 Accept-Language 都是可复制的请求头，把 Cookie 连同相同的头一起转发是**不会**被这一层拒绝的；它挡住的是"换一个浏览器/设备打开"这一类常见转发，真正的受众约束来自一次性兑换、短会话寿命与每次访问的资格核验。真实的教师身份链见 §8 缺口 1。
 - 每个字节都重核：会话（未撤销/未过期/绑定一致）、关联状态、**作品所有者账号仍可用**（停用即拒 `owner_unavailable` 并吊销该学生全部会话）、**签发方密钥仍在配置里**（撤下即 `issuer_revoked`）、**评阅资格提供方仍然说 yes**（`not_eligible`）。**固定版本的静态字节走同一条检查，不存在"快照绕过资格"**。
 - 学生本人的预览不问 edu：他的资格就是自己的登录会话 + 账号状态 + 关联归属（`eligibility: owner_session`）。
 - 隔离域：独立监听器、Host 门、`CSP: sandbox allow-scripts`（无 `allow-same-origin`，文档是不透明来源，读不到本域 Cookie/存储）、`frame-ancestors` 显式配置、`nosniff`、`no-store`。**CSP 源列表写隔离域的真名而不是 `'self'`**——不透明来源下 `'self'` 谁都不匹配，会把作品自己的图片和样式表也挡掉（实测发现）。隔离域用 HTTPS 时 Cookie 是 `SameSite=None; Secure`，这也是不透明来源文档能把 Cookie 带给自己子资源的唯一方式。
@@ -97,6 +101,8 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 
 单元测试：后端 P09 44 项（29 服务 + 5 路由含真实 socket 与预览域 + 10 运行时/上下文/凭据）、前端面板 7 项。
 
+**对账顺序屏障（真实 MySQL 账本）**：`python3 dev/p09-lab/reconcile-order.py`——一次性 `mysql:8.0` + knex 执行的候选迁移（001 建表、002 为既有库补列）+ 真实 store/service/snapshot reader，来源项目是内存夹具，屏障是对来源读取加的闸门和插在读取边界里的一次保存。四条：迟到对账不得覆盖新保存、迟到对账不得清掉新标记、清扫与读取之间的保存不得被当作完整、以及合并保存的历史口径。**修复前先按当前固定提交复现（三条全中），修复后同一脚本转为期望行为**；两次运行的 `result.json` 都保留。002 迁移另做升级隔离演练：模拟旧库缺列 → 迁移补列 → 行与默认值都在。
+
 本次定稿运行：`storage/private/p09-validation/run-20260922T144849Z`（`result.json` SHA `3892d98125e69cd46ab994081672b6337b8ae5104ead0816c25f5350da193725`，绑定提交 `c3f377a`、`source_dirty:false`，21 个场景、21 条 checks、19 张截图）。本节末尾的运行编号由紧随其后的文档提交写入，因此该提交本身不在这次运行的绑定范围内——这是记录顺序，不是未验证的改动。
 
 ## 8 剩余缺口（冻结前必须由两端共同决定，本包不代决）
@@ -105,7 +111,7 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 2. `contracts/integration-clients.md` 缺失：服务凭据形态是本项目候选，需要与 C06 基线一起评审。
 3. 词表差异需 edu 确认后才能写回共同契约：事件 `artifact.unlinked`、`artifact.revision_fixed`；状态 `linked`、`unknown`；字段 `save_evidence/save_evidence_reason/real_save_count/change_no/pending_reconcile/source_touched_at`；`has_effective_save` 现在是三值（true/false/**null=未知**）。
 4. 留存期未定：固定版本、事件、会话记录的留存与删除规则由作业留存规则决定，本包不自选期限、不自动清理。
-5. `html_resources` 表在本仓**没有写入路径**（线上为空），编辑器目前把图片放在别处；因此"编辑器里插入的图片"能否被证明归属，取决于它实际写进了哪个模型。**证明不了就具名拒绝**，需要产品决定是否给编辑器补一条资源归属写入。
+5. `html_resources` 表在本仓**没有写入路径**（线上为空）：编辑器里插入的图片当前是否留下任何归属行，取决于学生用的是哪条上传入口（对话上传落 `files`、云盘落 `user_files`、编辑器自带资源表没有写入方）。**证明不了就具名拒绝**，这是本包的行为；**待查的具体工程路径**是把编辑器的插入图片流程接到已有的某个归属模型（或给 `html_resources` 补一条写入），需要先核实前端实际调用的是哪个上传端点——属于工程排查，不是要用户批准的决定。
 6. 对象存储部署：`user_files` 在 OSS 模式下字节在远端，本包只具名拒绝、不下载；是否允许固定版本从对象存储取字节须由存储与合规决定。
 7. 刷新负载：轮询秒数、最大延迟与重试预算未定；本包给测量与有界预算，不含调度。
 8. 生产条件：实例键（北大站为空）、隔离预览域名与证书、受限账本角色与迁移晋级、开关、`frame-ancestors` 名单均未执行、未授权。

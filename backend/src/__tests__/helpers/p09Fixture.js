@@ -15,6 +15,7 @@ function createMemoryStore({ now = Date.now } = {}) {
   const duplicate = () => { const error = new Error('duplicate'); error.duplicate = true; return error; };
   const clone = value => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
   const active = row => row.state === 'active';
+  const outstanding = row => row.sync_pending_at != null || Number(row.applied_write_seq || 0) < Number(row.write_seq || 0);
 
   const tx = {
     async ref(kind, instance, localId) {
@@ -71,14 +72,18 @@ function createMemoryStore({ now = Date.now } = {}) {
     },
     async updateLink(id, patch) { Object.assign(data.links.get(id), patch, { updated_at: now() }); },
     // Durable markers for the reconciliation the editor's own request leaves behind.
+    // One observed source write: the durable order a reconciliation compares against.
     async markLinkPending(id, at) {
       const row = data.links.get(id);
-      if (row && row.sync_pending_at == null) row.sync_pending_at = at;
+      if (!row || !active(row)) return;
+      row.write_seq = Number(row.write_seq || 0) + 1;
+      if (row.sync_pending_at == null) row.sync_pending_at = at;
     },
     async markPending(instance, projectId, at) {
       let marked = 0;
       for (const row of data.links.values()) {
         if (row.source_instance === instance && String(row.project_id) === String(projectId) && active(row)) {
+          row.write_seq = Number(row.write_seq || 0) + 1;
           if (row.sync_pending_at == null) row.sync_pending_at = at;
           marked += 1;
         }
@@ -92,12 +97,12 @@ function createMemoryStore({ now = Date.now } = {}) {
         save_evidence: 'observed', save_reason: 'observed_save', sync_pending_at: row.sync_pending_at ?? at });
     },
     async pendingLinks({ sourceInstance = null, schoolRef = null, limit = 50 } = {}) {
-      return [...data.links.values()].filter(row => row.sync_pending_at != null && active(row) &&
+      return [...data.links.values()].filter(row => outstanding(row) && active(row) &&
         (!sourceInstance || row.source_instance === sourceInstance) && (!schoolRef || row.school_ref === schoolRef))
-        .sort((a, b) => a.sync_pending_at - b.sync_pending_at).slice(0, limit).map(clone);
+        .sort((a, b) => (a.sync_pending_at ?? 0) - (b.sync_pending_at ?? 0)).slice(0, limit).map(clone);
     },
     async staleLinks({ sourceInstance = null, schoolRef = null, olderThan, limit = 20 } = {}) {
-      return [...data.links.values()].filter(row => active(row) && row.sync_pending_at == null &&
+      return [...data.links.values()].filter(row => active(row) && !outstanding(row) &&
         (row.reconciled_at == null || row.reconciled_at < olderThan) &&
         (!sourceInstance || row.source_instance === sourceInstance) && (!schoolRef || row.school_ref === schoolRef))
         .slice(0, limit).map(clone);
@@ -109,7 +114,7 @@ function createMemoryStore({ now = Date.now } = {}) {
       Object.assign(row, { sync_pending_at: null, sync_attempts: attempts ?? 0, reconcile_error: null, reconciled_at: at });
     },
     async pendingCount({ sourceInstance, schoolRef }) {
-      return [...data.links.values()].filter(row => row.sync_pending_at != null && active(row) &&
+      return [...data.links.values()].filter(row => outstanding(row) && active(row) &&
         row.source_instance === sourceInstance && (!schoolRef || row.school_ref === schoolRef)).length;
     },
     async revisions(linkId) {

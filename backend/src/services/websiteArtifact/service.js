@@ -53,7 +53,7 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
   if (!store || !reader || !models?.User || typeof sourceInstance !== 'string' || typeof now !== 'function') fail('invalid_request');
   // Candidate load measurement: what one deployment actually spent reconciling, reported by syncStatus()
   // so a polling period can be chosen from numbers instead of being invented here.
-  const metrics = { sweeps: 0, reconciled: 0, events: 0, failures: 0, last_duration_ms: 0, max_duration_ms: 0 };
+  const metrics = { sweeps: 0, reconciled: 0, events: 0, failures: 0, skipped: 0, last_duration_ms: 0, max_duration_ms: 0 };
   const eligibilityCache = new Map();
 
   // ---- subjects -------------------------------------------------------------------------------
@@ -174,7 +174,9 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
         state: 'active', work_state: 'linked', has_effective_save: 0, preview_available: 0,
         saved_at: facts.source_touched_at, created_at: nowMs, updated_at: nowMs,
         content_digest: facts.content_digest, change_no: 0, ...evidence,
-        real_save_count: 0, page_count: facts.page_count, last_real_save_at: null, reconciled_at: nowMs
+        real_save_count: 0, page_count: facts.page_count, last_real_save_at: null, reconciled_at: nowMs,
+        // The projection starts level with the writes observed so far: none.
+        write_seq: 0, applied_write_seq: 0
       };
       // Something to show is not the same as something saved: an unknown-history work can be previewed,
       // a provably untouched one cannot.
@@ -245,9 +247,15 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     return results;
   }
 
+  // A reconciliation reads the source outside the transaction (a file read must never sit inside one),
+  // so by the time it commits the source may already have moved on. It therefore samples the work's
+  // durable write sequence BEFORE reading, and under the row lock applies its result only while that
+  // number is unchanged: a late worker discards its own stale answer and leaves the marker for the
+  // reconciliation that owns the newer write. The projection never moves backwards.
   async function reconcileLink(linkId, { deleted = false } = {}) {
     const row = await store.read(tx => tx.linkById(linkId));
     if (!row || row.state !== 'active') return null;
+    const seenWrite = Number(row.write_seq || 0);
     let facts = null;
     let gone = deleted;
     let title = row.title ?? null;
@@ -266,10 +274,16 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
       const result = await store.transaction(async tx => {
         const current = await tx.linkById(row.id, { forUpdate: true });
         if (!current || current.state !== 'active') return null;
+        // Compare-and-swap under the lock: an observed write arrived after this snapshot was taken.
+        if (Number(current.write_seq || 0) !== seenWrite) {
+          metrics.skipped += 1;
+          return { skipped: 'source_moved', seen_write_seq: seenWrite, write_seq: Number(current.write_seq || 0) };
+        }
         if (gone) {
           const reasonCode = gone === 'entry_removed' ? 'entry_removed' : 'source_deleted';
           await tx.updateLink(current.id, { state: 'deleted', work_state: 'unavailable', preview_available: 0,
-            sync_pending_at: null, reconciled_at: at, reconcile_error: null, revoked_at: at, revoked_reason: reasonCode });
+            sync_pending_at: null, applied_write_seq: seenWrite, reconciled_at: at, reconcile_error: null,
+            revoked_at: at, revoked_reason: reasonCode });
           await tx.revokeSessions(current.id, 'source_deleted');
           const dead = { ...current, state: 'deleted', preview_available: 0, title, revoked_reason: reasonCode };
           if (current.preview_available) {
@@ -303,7 +317,7 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
           content_digest: facts.content_digest, change_no: changeNo, page_count: facts.page_count,
           save_evidence: evidence, save_reason: reason,
           has_effective_save: evidence === 'observed' ? 1 : 0, preview_available: previewAvailable ? 1 : 0,
-          saved_at: facts.source_touched_at, sync_pending_at: null, sync_attempts: 0,
+          saved_at: facts.source_touched_at, sync_pending_at: null, applied_write_seq: seenWrite, sync_attempts: 0,
           reconciled_at: at, reconcile_error: null
         };
         patch.work_state = workState({ ...current, ...patch });
@@ -345,15 +359,22 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     let exhausted = false;
     let work = [];
     try { work = [...await store.read(tx => tx.pendingLinks({ sourceInstance, schoolRef, limit }))]; }
-    catch { return { swept: 0, remaining: null, budget_exhausted: true, duration_ms: 0 }; }
+    catch { return { swept: 0, remaining: null, budget_exhausted: true, read_failed: true, duration_ms: 0 }; }
     if (verify && work.length < limit) {
       const stale = await store.read(tx => tx.staleLinks({ sourceInstance, schoolRef,
         olderThan: now() - verifyAfterMs, limit: Math.min(SWEEP.verifyBatch, limit - work.length) })).catch(() => []);
       work.push(...stale);
     }
+    let skipped = 0;
     for (const row of work) {
       if (Date.now() - started > budgetMs) { exhausted = true; break; }
-      try { await reconcileLink(row.id); swept += 1; } catch { exhausted = true; }
+      try {
+        let result = await reconcileLink(row.id);
+        // A save landed while this work was being read: one immediate retry usually catches up, and
+        // anything still outstanding stays marked for the next pass rather than being called done.
+        if (result && result.skipped) result = await reconcileLink(row.id);
+        if (result && result.skipped) skipped += 1; else swept += 1;
+      } catch { exhausted = true; }
     }
     const duration = Date.now() - started;
     metrics.sweeps += 1;
@@ -361,13 +382,13 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     metrics.max_duration_ms = Math.max(metrics.max_duration_ms, duration);
     // The candidate load measurement an operator can actually read: only when work was done, and only
     // counters — never a student uuid, a title or a byte of content.
-    if (logger && (swept > 0 || exhausted)) {
-      try { logger.info('P09 sweep', { swept, duration_ms: duration, budget_exhausted: exhausted, sweeps: metrics.sweeps, failures: metrics.failures }); }
+    if (logger && (swept > 0 || skipped > 0 || exhausted)) {
+      try { logger.info('P09 sweep', { swept, skipped, duration_ms: duration, budget_exhausted: exhausted, sweeps: metrics.sweeps, failures: metrics.failures }); }
       catch { /* measurement must never break the sweep */ }
     }
     const remaining = await store.read(tx => tx.pendingCount({ sourceInstance, schoolRef: schoolRef ?? null }))
       .catch(() => null);
-    return { swept, remaining, budget_exhausted: exhausted, duration_ms: duration };
+    return { swept, skipped, remaining, budget_exhausted: exhausted, read_failed: false, duration_ms: duration };
   }
   const syncStatus = () => ({ ...metrics, sweep_limit: SWEEP.limit, sweep_budget_ms: SWEEP.budgetMs,
     verify_after_ms: verifyAfterMs });
@@ -437,7 +458,10 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     saved_at: row.last_real_save_at ? Number(row.last_real_save_at) : null,
     source_touched_at: row.saved_at ? Number(row.saved_at) : null,
     synced_at: row.reconciled_at ? Number(row.reconciled_at) : null,
-    pending_reconcile: !!row.sync_pending_at,
+    // Outstanding, not "recently touched": a cleared marker never hides a projection that is behind.
+    pending_reconcile: !!row.sync_pending_at || Number(row.write_seq || 0) > Number(row.applied_write_seq || 0),
+    unprojected_writes: Math.max(0, Number(row.write_seq || 0) - Number(row.applied_write_seq || 0)),
+    observed_writes: Number(row.write_seq || 0),
     linked_at: Number(row.created_at),
     revoked_at: row.revoked_at ? Number(row.revoked_at) : null, revoked_reason: row.revoked_reason ?? null
   });
@@ -453,7 +477,10 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
   // short AND nothing is still waiting to be reconciled, so a stale projection is never sold as whole.
   async function state(scope, { assignmentRefs = null, studentUuids = null } = {}) {
     const sync = await sweep({ schoolRef: scope.schoolRef });
-    return store.read(async tx => {
+    // One transaction, one snapshot: the watermark, the rows and the outstanding count are the same
+    // moment. The watermark is read first, so anything committed afterwards is replayed rather than
+    // skipped when edu resumes — and `complete` describes exactly this snapshot, nothing later.
+    return store.transaction(async tx => {
       const watermark = await tx.watermark();
       const links = await tx.linksInScope(scope, { assignmentRefs, studentUuids });
       const items = [];
@@ -465,9 +492,13 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
             content_sha256: revision.content_sha256, byte_length: Number(revision.byte_length), created_at: Number(revision.created_at) }))
         });
       }
-      const pending = sync.remaining ?? items.filter(item => item.pending_reconcile).length;
-      return { items, complete: items.length < LINK_PAGE_LIMIT && pending === 0 && !sync.budget_exhausted,
-        pending_reconcile: pending, item_limit: LINK_PAGE_LIMIT, watermark, synced_at: now() };
+      const outstanding = items.filter(item => item.pending_reconcile).length;
+      const scopeOutstanding = await tx.pendingCount({ sourceInstance, schoolRef: scope.schoolRef });
+      const truncated = items.length >= LINK_PAGE_LIMIT;
+      // Unknown, unverified, outstanding or a sweep that could not read: none of them is "complete".
+      return { items, complete: !truncated && outstanding === 0 && !sync.budget_exhausted && !sync.read_failed,
+        pending_reconcile: outstanding, scope_pending_reconcile: scopeOutstanding, truncated,
+        item_limit: LINK_PAGE_LIMIT, watermark, read_at: now(), synced_at: now() };
     });
   }
 
@@ -488,7 +519,7 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_EVENT_LIMIT) fail('range_too_large');
     const after = decodeCursor(scope, cursor);
     const sync = await sweep({ schoolRef: scope.schoolRef });
-    return store.read(async tx => {
+    return store.transaction(async tx => {
       const watermark = await tx.watermark();
       const rows = await tx.events(scope, after, limit);
       const facts = rows.map(row => ({
@@ -497,8 +528,10 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
         ...(typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload)
       }));
       const last = rows.length ? Number(rows[rows.length - 1].event_seq) : after;
+      const pending = await tx.pendingCount({ sourceInstance, schoolRef: scope.schoolRef });
       return { facts, next_cursor: rows.length === limit ? encodeCursor(scope, last) : null,
-        cursor: encodeCursor(scope, last), watermark, pending_reconcile: sync.remaining ?? null, synced_at: now() };
+        cursor: encodeCursor(scope, last), watermark, pending_reconcile: pending,
+        sweep_incomplete: !!(sync.budget_exhausted || sync.read_failed), read_at: now(), synced_at: now() };
     });
   }
 

@@ -38,6 +38,7 @@ const SCHEMA = Object.freeze([
     content_digest CHAR(64) ${ASCII} NULL, change_no INT NOT NULL DEFAULT 0,
     save_evidence VARCHAR(16) ${ASCII} NOT NULL DEFAULT 'none', save_reason VARCHAR(32) ${ASCII} NULL,
     real_save_count INT NOT NULL DEFAULT 0, page_count INT NOT NULL DEFAULT 0,
+    write_seq BIGINT NOT NULL DEFAULT 0, applied_write_seq BIGINT NOT NULL DEFAULT 0,
     last_real_save_at BIGINT NULL, sync_pending_at BIGINT NULL, sync_attempts INT NOT NULL DEFAULT 0,
     reconciled_at BIGINT NULL, reconcile_error VARCHAR(32) ${ASCII} NULL,
     active_work_key VARCHAR(224) ${ASCII} AS (IF(state='active', CONCAT(source_instance,'|',assignment_ref,'|',owner_user_id), NULL)) STORED,
@@ -194,17 +195,23 @@ class Tx {
   // reconciliation is attempted, so a crash between the source write and the projection leaves the row
   // pending instead of silently stale.
   async markPending(sourceInstance, projectId, at) {
-    const rows = await this.query(`UPDATE ${TABLES.links} SET sync_pending_at=COALESCE(sync_pending_at,?), updated_at=?
+    const rows = await this.query(`UPDATE ${TABLES.links} SET write_seq=write_seq+1,
+      sync_pending_at=COALESCE(sync_pending_at,?), updated_at=?
       WHERE source_instance=? AND project_id=? AND state='active'`, [at, at, sourceInstance, projectId]);
     return rows?.affectedRows ?? 0;
   }
+  // One observed source write. `write_seq` is the durable order of those writes for this work: a
+  // reconciliation samples it before it reads the source and may only apply its result while it is
+  // still the same number, so a slow reader can never write an older projection over a newer one.
   async markLinkPending(id, at) {
-    await this.query(`UPDATE ${TABLES.links} SET sync_pending_at=COALESCE(sync_pending_at,?) WHERE id=?`, [at, id]);
+    await this.query(`UPDATE ${TABLES.links} SET write_seq=write_seq+1, sync_pending_at=COALESCE(sync_pending_at,?),
+      updated_at=? WHERE id=? AND state='active'`, [at, at, id]);
   }
   // Oldest pending work first; a scope restricts a read-time sweep to what the caller is asking about.
   async pendingLinks({ sourceInstance = null, schoolRef = null, limit = 50 } = {}) {
     const params = [];
-    let sql = `SELECT * FROM ${TABLES.links} WHERE sync_pending_at IS NOT NULL AND state='active'`;
+    let sql = `SELECT * FROM ${TABLES.links}
+      WHERE state='active' AND (sync_pending_at IS NOT NULL OR applied_write_seq<write_seq)`;
     if (sourceInstance) { sql += ' AND source_instance=?'; params.push(sourceInstance); }
     if (schoolRef) { sql += ' AND school_ref=?'; params.push(schoolRef); }
     sql += ` ORDER BY sync_pending_at ASC LIMIT ${Number(limit)}`;
@@ -231,7 +238,7 @@ class Tx {
   async staleLinks({ sourceInstance = null, schoolRef = null, olderThan, limit = 20 } = {}) {
     const params = [olderThan];
     let sql = `SELECT * FROM ${TABLES.links} WHERE state='active' AND sync_pending_at IS NULL
-      AND (reconciled_at IS NULL OR reconciled_at<?)`;
+      AND applied_write_seq>=write_seq AND (reconciled_at IS NULL OR reconciled_at<?)`;
     if (sourceInstance) { sql += ' AND source_instance=?'; params.push(sourceInstance); }
     if (schoolRef) { sql += ' AND school_ref=?'; params.push(schoolRef); }
     sql += ` ORDER BY reconciled_at IS NOT NULL, reconciled_at ASC LIMIT ${Number(limit)}`;
@@ -239,8 +246,11 @@ class Tx {
   }
   async pendingCount({ sourceInstance, schoolRef = null }) {
     // No school named means "the whole instance": a NULL comparison would silently count nothing.
+    // Outstanding means either a marker is still set OR the projection has not caught up with the
+    // observed writes — a cleared marker alone never makes a stale projection look finished.
     const row = await this.one(`SELECT COUNT(*) AS n FROM ${TABLES.links}
-      WHERE sync_pending_at IS NOT NULL AND state='active' AND source_instance=?${schoolRef ? ' AND school_ref=?' : ''}`,
+      WHERE state='active' AND (sync_pending_at IS NOT NULL OR applied_write_seq<write_seq)
+      AND source_instance=?${schoolRef ? ' AND school_ref=?' : ''}`,
     schoolRef ? [sourceInstance, schoolRef] : [sourceInstance]);
     return Number(row?.n || 0);
   }
@@ -272,7 +282,8 @@ class Tx {
     const columns = ['id', 'source_instance', 'artifact_ref', 'project_ref', 'entry_ref', 'owner_user_id', 'student_uuid', 'project_id',
       'entry_page_id', 'assignment_ref', 'lesson_ref', 'school_ref', 'issuer_key', 'grant_id', 'state', 'work_state',
       'has_effective_save', 'preview_available', 'saved_at', 'created_at', 'updated_at', 'content_digest', 'change_no',
-      'save_evidence', 'save_reason', 'real_save_count', 'page_count', 'last_real_save_at', 'reconciled_at'];
+      'save_evidence', 'save_reason', 'real_save_count', 'page_count', 'write_seq', 'applied_write_seq',
+      'last_real_save_at', 'reconciled_at'];
     await this.query(`INSERT INTO ${TABLES.links}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`,
       columns.map(c => row[c]));
     return row;

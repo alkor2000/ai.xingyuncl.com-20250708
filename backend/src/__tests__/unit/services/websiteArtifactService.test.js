@@ -246,6 +246,123 @@ describe('P09 change identity and recoverable reconciliation', () => {
     expect(context.store.data.events.filter(event => event.type === 'artifact.updated')).toHaveLength(2);
   });
 
+  test('a reconciliation that read older bytes cannot overwrite a newer one, and does not eat its marker', async () => {
+    const context = await linkedProject();
+    const linkId = context.linkId;
+    // Hold a reconciliation at the moment it has its snapshot but has not written anything yet.
+    const load = context.reader.load.bind(context.reader);
+    let release;
+    let ready;
+    const gate = new Promise(resolve => { release = resolve; });
+    const hit = new Promise(resolve => { ready = resolve; });
+    let armed = true;
+    context.reader.load = async (...args) => {
+      const source = await load(...args);
+      if (armed) { armed = false; ready(); await gate; }
+      return source;
+    };
+    context.fixture.edit(7, `${CONTENT}<p>B</p>`);
+    await context.service.recordSourceWrite({ ownerUserId: 101, projectId: 3, contentSave: true });
+    const stale = context.service.reconcileLink(linkId);
+    await hit;
+    // A newer save lands and is reconciled while the older one is still holding its snapshot.
+    context.fixture.edit(7, `${CONTENT}<p>C</p>`);
+    await context.service.noteSourceChange({ ownerUserId: 101, projectId: 3, contentSave: true });
+    const afterC = { ...context.store.data.links.get(linkId) };
+    release();
+    expect(await stale).toMatchObject({ skipped: 'source_moved' });
+    context.reader.load = load;
+
+    const row = context.store.data.links.get(linkId);
+    expect(row.content_digest).toBe(afterC.content_digest);     // the projection never went backwards
+    expect(row.change_no).toBe(afterC.change_no);
+    expect(row.applied_write_seq).toBe(row.write_seq);
+    const state = await context.service.state(SCOPE);
+    expect(state).toMatchObject({ complete: true, pending_reconcile: 0 });
+    expect(state.items[0].unprojected_writes).toBe(0);
+  });
+
+  test('a stale worker never clears a marker it did not cover; the next sweep still catches up', async () => {
+    const context = await linkedProject();
+    const linkId = context.linkId;
+    const load = context.reader.load.bind(context.reader);
+    let release;
+    let ready;
+    const gate = new Promise(resolve => { release = resolve; });
+    const hit = new Promise(resolve => { ready = resolve; });
+    let armed = true;
+    context.reader.load = async (...args) => {
+      const source = await load(...args);
+      if (armed) { armed = false; ready(); await gate; }
+      return source;
+    };
+    context.fixture.edit(7, `${CONTENT}<p>B</p>`);
+    await context.service.recordSourceWrite({ ownerUserId: 101, projectId: 3, contentSave: true });
+    const stale = context.service.reconcileLink(linkId);
+    await hit;
+    // This newer save is only marked — nothing has reconciled it yet.
+    context.fixture.edit(7, `${CONTENT}<p>C</p>`);
+    await context.service.recordSourceWrite({ ownerUserId: 101, projectId: 3, contentSave: true });
+    release();
+    expect(await stale).toMatchObject({ skipped: 'source_moved' });
+    context.reader.load = load;
+
+    const held = context.store.data.links.get(linkId);
+    expect(held.sync_pending_at).not.toBeNull();                 // the newer marker survived
+    expect(Number(held.applied_write_seq)).toBeLessThan(Number(held.write_seq));
+    const swept = await context.service.sweep({ schoolRef: '123', verify: false });
+    expect(swept.swept).toBe(1);
+    const after = context.store.data.links.get(linkId);
+    expect(after.sync_pending_at).toBeNull();
+    expect(after.applied_write_seq).toBe(after.write_seq);
+    const state = await context.service.state(SCOPE);
+    expect(state.complete).toBe(true);
+    expect(state.items[0].save_evidence).toBe('observed');
+  });
+
+  test('a save landing between the sweep and the read is never counted as a complete snapshot', async () => {
+    const context = await linkedProject();
+    const real = context.store.transaction.bind(context.store);
+    let armed = true;
+    context.store.transaction = fn => real(async tx => {
+      if (armed && typeof tx.watermark === 'function') {
+        const watermark = tx.watermark.bind(tx);
+        tx.watermark = async () => {
+          armed = false;
+          tx.watermark = watermark;                               // exactly once, at the read boundary
+          context.fixture.edit(7, `${CONTENT}<p>D</p>`);
+          await context.service.recordSourceWrite({ ownerUserId: 101, projectId: 3, contentSave: true });
+          return watermark();
+        };
+      }
+      return fn(tx);
+    });
+    const state = await context.service.state(SCOPE);
+    context.store.transaction = real;
+    expect(state.complete).toBe(false);
+    expect(state.pending_reconcile).toBe(1);
+    expect(state.items[0]).toMatchObject({ pending_reconcile: true, unprojected_writes: 1 });
+    // And the next read, after the work is reconciled, is complete again.
+    const settled = await context.service.state(SCOPE);
+    expect(settled).toMatchObject({ complete: true, pending_reconcile: 0 });
+  });
+
+  test('saves merged before any reconciliation: the counters keep every save, the events keep the net change', async () => {
+    const context = await linkedProject();
+    const before = context.store.data.events.filter(event => event.type === 'artifact.updated').length;
+    for (const html of [`${CONTENT}<p>A</p>`, `${CONTENT}<p>B</p>`, `${CONTENT}<p>A</p>`]) {
+      context.fixture.edit(7, html);
+      await context.service.recordSourceWrite({ ownerUserId: 101, projectId: 3, contentSave: true });
+    }
+    await context.service.reconcileLink(context.linkId);
+    const row = context.store.data.links.get(context.linkId);
+    // Three real saves are durably counted; the content events describe reconciled changes, so the two
+    // that were never observed separately are one net change. practice does not claim otherwise.
+    expect(Number(row.real_save_count)).toBe(4);                  // the linked save plus these three
+    expect(context.store.data.events.filter(event => event.type === 'artifact.updated').length).toBe(before + 1);
+    expect(row.applied_write_seq).toBe(row.write_seq);
+  });
+
   test('a ledger outage during reconciliation keeps the work pending and the read says so', async () => {
     const context = await linkedProject();
     context.fixture.edit(7, `${CONTENT}<p>账本短断</p>`);
@@ -428,11 +545,12 @@ describe('P09 incremental read', () => {
     const full = await context.service.state(SCOPE);
     expect(full).toMatchObject({ complete: true, pending_reconcile: 0, item_limit: 1000 });
     // A scope with more works than one page can carry: edu must not read "everyone else has nothing".
-    const real = context.store.read.bind(context.store);
+    const real = context.store.transaction.bind(context.store);
     const one = (await context.store.read(tx => tx.linksInScope(SCOPE)))[0];
-    context.store.read = fn => real(tx => fn({ ...tx, linksInScope: async () => Array.from({ length: 1000 }, () => ({ ...one })) }));
-    expect((await context.service.state(SCOPE)).complete).toBe(false);
-    context.store.read = real;
+    context.store.transaction = fn => real(tx => fn({ ...tx, linksInScope: async () => Array.from({ length: 1000 }, () => ({ ...one })) }));
+    const truncated = await context.service.state(SCOPE);
+    expect(truncated).toMatchObject({ complete: false, truncated: true });
+    context.store.transaction = real;
     // An outstanding marker is finished by the read itself, so the snapshot edu gets is not behind.
     context.store.data.links.get(context.linkId).sync_pending_at = Date.now();
     const swept = await context.service.state(SCOPE);
