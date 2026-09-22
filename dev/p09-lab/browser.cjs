@@ -13,7 +13,7 @@ function track(page) {
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.origin !== state.web && !url.origin.startsWith('http://127.0.0.1') && !url.origin.includes('preview')) state.external.push(url.origin);
-    if (url.pathname.startsWith('/api/p09')) {
+    if (url.pathname.startsWith('/api/p09') || /^\/api\/html-editor\/pages/.test(url.pathname)) {
       let body = null;
       try { body = request.method() === 'POST' ? request.postDataJSON() : null; } catch { body = null; }
       state.requests.push({ method: request.method(), path: url.pathname, body,
@@ -23,7 +23,7 @@ function track(page) {
   });
   page.on('response', response => {
     const url = new URL(response.url());
-    if (!url.pathname.startsWith('/api/p09')) return;
+    if (!(url.pathname.startsWith('/api/p09') || /^\/api\/html-editor\/pages/.test(url.pathname))) return;
     const entry = [...state.requests].reverse().find(item => item.status === null && item.path === url.pathname && item.method === response.request().method());
     if (entry) entry.status = response.status();
   });
@@ -72,6 +72,20 @@ async function openEditor(projectName, taskContext) {
 }
 const panel = () => state.page.locator('.html-editor-task-panel');
 
+// Select a page in the sidebar and press 保存: the authenticated update the platform charges credits
+// for, and the one signal P09 accepts as a student save.
+async function savePage(pageTitle) {
+  const page = state.page;
+  const item = page.getByText(pageTitle, { exact: true }).first();
+  await item.waitFor({ state: 'visible', timeout: 20000 });
+  try { await item.click({ timeout: 8000 }); } catch { await item.evaluate(node => node.click()); }
+  await page.waitForTimeout(900);
+  const button = page.getByRole('button', { name: /保存/ }).first();
+  await button.waitFor({ state: 'visible', timeout: 15000 });
+  await button.click();
+  await page.waitForTimeout(1800);
+}
+
 const commands = {
   async start(command) {
     state.web = command.web; state.evidence = command.evidence;
@@ -112,6 +126,12 @@ const commands = {
     if (command.screenshot) await shot(command.screenshot);
     return { ok: true, state: tag, error, requests: state.requests };
   },
+  async save(command) {
+    state.requests = [];
+    await savePage(command.page_title);
+    const saves = state.requests.filter(item => item.method === 'PUT');
+    return { ok: true, saves, errors: state.errors };
+  },
   async act(command) {
     state.requests = [];
     const target = panel().getByTestId(command.testid);
@@ -133,16 +153,46 @@ const commands = {
     return { ok: true, fields: Object.fromEntries(rows),
       state: await panel().getByTestId('p09-state').count() ? await panel().getByTestId('p09-state').textContent() : null };
   },
-  // A teacher's browser: a fresh context (no student session at all) opening the handoff URL.
+  // A teacher's browser: a fresh context (no student session at all). The handoff arrives in the URL
+  // fragment, so the page itself exchanges it over POST for the cookie — exactly what a teacher's
+  // browser does. `user_agent`/`cookies` let the laboratory replay a stolen entry or a stolen cookie in
+  // a different browser, and `direct_url` skips the exchange entirely.
   async review(command) {
-    const context = await state.browser.newContext({ viewport: command.viewport || { width: 1280, height: 900 }, locale: 'zh-CN' });
+    // The isolated origin uses a throwaway certificate in the laboratory; a deployment uses a real one.
+    const context = await state.browser.newContext({ viewport: command.viewport || { width: 1280, height: 900 },
+      locale: 'zh-CN', ignoreHTTPSErrors: true, ...(command.user_agent ? { userAgent: command.user_agent } : {}) });
+    if (command.cookies) await context.addCookies(command.cookies);
     const page = await context.newPage();
     const errors = [];
+    const seen = [];
     page.on('pageerror', error => errors.push(String(error.message).slice(0, 200)));
+    page.on('response', response => seen.push({ url: response.url(), status: response.status(), headers: response.headers() }));
+    const documentOf = () => seen.filter(item => item.url === page.url()).pop() || null;
     try {
-      const response = await page.goto(command.open_url, { waitUntil: 'domcontentloaded' });
-      const body = await page.content();
-      const headers = response ? response.headers() : {};
+      await page.goto(command.direct_url || command.open_url, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(command.wait || 1600);
+      const exchange = seen.filter(item => item.url.includes('/p09/preview/exchange')).pop() || null;
+      // A failed exchange never redirects: the bootstrap page stays and reports the refusal.
+      const document = documentOf();
+      const status = exchange && exchange.status !== 200 ? exchange.status : (document ? document.status : null);
+      let body = await page.content();
+      let url = page.url();
+      // Follow an intra-project link inside the frozen copy: multi-page navigation must work offline.
+      let followed = null;
+      if (command.follow_link && status === 200) {
+        const link = page.getByRole('link', { name: command.follow_link }).first();
+        if (await link.count()) {
+          await link.click();
+          await page.waitForTimeout(900);
+          const followedBody = await page.content();
+          followed = { url: page.url().split('/').pop(), status: (documentOf() || {}).status ?? null,
+            contains: (command.follow_contains || []).map(text => followedBody.includes(text)) };
+          await page.goBack().catch(() => {});
+          await page.waitForTimeout(500);
+          body = await page.content();
+          url = page.url();
+        } else { followed = { url: null, status: null, contains: [], missing: true }; }
+      }
       // Can a script in the student page reach this origin's cookies or storage? It must not.
       const probe = await page.evaluate(() => {
         const result = { cookie: null, storage: null, origin: null };
@@ -156,10 +206,15 @@ const commands = {
         await page.screenshot({ path: path.join(state.evidence, `${command.screenshot}.png`), fullPage: false, animations: 'disabled' });
       }
       const cookies = await context.cookies();
-      return { ok: true, status: response ? response.status() : null, url: page.url(),
+      const headers = (document && document.headers) || {};
+      return { ok: true, status, exchange_status: exchange ? exchange.status : null,
+        url: url.replace(/p09g\.[A-Za-z0-9_.-]+/, 'p09g.<redacted>'),
         contains: (command.contains || []).map(text => body.includes(text)),
         csp: headers['content-security-policy'] || null, nosniff: headers['x-content-type-options'] || null,
-        probe, errors, cookie_names: cookies.map(cookie => cookie.name),
+        probe, errors, followed,
+        resources: seen.filter(item => /\/(assets|uploads)\//.test(item.url))
+          .map(item => ({ file: item.url.split('/').pop().slice(0, 48), status: item.status })),
+        cookie_names: cookies.map(cookie => cookie.name), cookies,
         cookie_http_only: cookies.every(cookie => cookie.httpOnly) };
     } finally { await context.close(); }
   },
