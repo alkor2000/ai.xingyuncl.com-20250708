@@ -26,7 +26,7 @@
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
 | backend/src/services/websiteArtifact/store.js | ef9667c53223aa082ab3244bd11306ccf535ec14343598bf7aff619ffb115c2c |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 2eb7424868487be5d538b062af37bdcd5a41d5b6bb37a1b023d4bea30f2062be |
+| docs/integrations/p09-website-artifact-source-candidate.md | 321918927b9bcd23fdcbd691d775f7aa591a11a164b1032b5bbea56bed3d621b |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```
