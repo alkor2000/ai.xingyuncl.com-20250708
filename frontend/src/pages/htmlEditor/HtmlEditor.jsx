@@ -55,7 +55,8 @@ import useHtmlEditorStore from '../../stores/htmlEditorStore';
 import useAuthStore from '../../stores/authStore';
 import apiClient from '../../utils/api';
 import moment from 'moment';
-import FallbackEditor from './FallbackEditor';
+import FallbackEditor from './FallbackEditor'
+import TaskArtifactPanel from '../../components/htmlEditor/TaskArtifactPanel';
 import './HtmlEditor.less';
 
 const { Sider, Content, Header } = Layout;
@@ -426,6 +427,8 @@ const HtmlEditor = () => {
                 ))
                 : <Empty description={t('htmlEditor.noPages')} style={{ marginTop: 40 }}><Button type="primary" style={{ borderRadius: 8, marginTop: 16, background: 'var(--primary-color)', border: 'none' }} icon={<FileAddOutlined />} onClick={handleOpenPageModal} disabled={creditsLoading}>{t('htmlEditor.createFirstPage')}</Button></Empty>}
                 </div>
+                {/* 教学任务作品：站点未开放时整块不渲染；任务上下文只来自 edu 的签名，不从这里发明 */}
+                <TaskArtifactPanel project={selectedProject} pages={pages} />
               </div>
             ) : <div style={{ padding: 40, textAlign: 'center' }}><Empty description={t('htmlEditor.selectProject')} /></div>}
           </div>
