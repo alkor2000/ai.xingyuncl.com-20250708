@@ -45,7 +45,7 @@ function mount(app) {
         keyGenerator: (req) => String(req.user.id),
       }),
     );
-    router.use(express.raw({ type: () => true, limit: "6mb" }));
+    router.use(express.raw({ type: () => true, limit: "26mb" }));
     router.use(async (req, res) => {
       const requestID = res.getHeader("X-Request-ID");
       res.set("X-Request-ID", requestID);

@@ -42,8 +42,8 @@ async function createProductFeedback(input) {
       client_context: input.client_context,
     }),
   );
-  if (input.screenshot) {
-    form.append("screenshot", input.screenshot, input.screenshot.name);
+  for (const screenshot of (input.screenshots ?? (input.screenshot ? [input.screenshot] : []))) {
+    form.append('screenshot', screenshot, screenshot.name)
   }
   const resp = await apiClient.post("/product-feedback", form);
   const data = unwrap(resp);

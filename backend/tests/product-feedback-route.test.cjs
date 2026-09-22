@@ -87,3 +87,24 @@ test("feedback routes preserve source identity, scope and private errors", async
   });
   assert.equal(response.status, 404);
 });
+
+test('multi image proxy accepts 8MiB and rejects over 26MiB before forwarding', async t => {
+ let calls=0;
+ const payload=Buffer.alloc(8*1024*1024,120);
+ const hub=http.createServer(async (req,res)=>{
+  calls++;
+  const chunks=[];for await(const chunk of req) chunks.push(chunk);
+  assert.deepEqual(Buffer.concat(chunks),payload);
+  assert.equal(req.headers['x-pf-admin'],'0');assert.equal(req.headers.authorization,undefined);
+  res.setHeader('content-type','application/json');res.end(JSON.stringify({code:0,data:{id:'fixture'}}));
+ });
+ const origin=await listen(hub);
+ Object.assign(process.env,{PRODUCT_FEEDBACK_HUB_URL:origin,PRODUCT_FEEDBACK_ALLOW_LOOPBACK:'true',NODE_ENV:'test',PRODUCT_FEEDBACK_CLIENT_ID:'ai-test',PRODUCT_FEEDBACK_CLIENT_SECRET:'fixture-only-signing-secret-00000000',PRODUCT_FEEDBACK_SUBJECT_SECRET:'fixture-only-subject-secret-00000000'});
+ const app=express();mount(app);const server=http.createServer(app),source=await listen(server);
+ t.after(()=>{for(const s of [hub,server]){s.closeAllConnections();s.close();}});
+ for(const size of [8,27]){
+  const res=await fetch(source+'/api/product-feedback',{method:'POST',headers:{authorization:'Bearer source-only-fixture','content-type':'multipart/form-data; boundary=fixture','idempotency-key':'00000000-0000-4000-8000-000000000001'},body:size===8?payload:Buffer.alloc(size*1024*1024)});
+  assert.equal(res.status,size===8?200:413);await res.text();
+ }
+ assert.equal(calls,1);
+});

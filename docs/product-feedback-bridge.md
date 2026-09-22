@@ -28,7 +28,7 @@ Idempotency-Key（GET 空字符串）
 SHA256(原始请求体)
 ```
 
-窗口 ±300 秒；nonce 在中央数据库唯一登记防跨进程重放，过期自动清理。POST 不带 query。JSON 恰好一个对象并拒绝未知字段；multipart 只允许 payload JSON 和一个可选 screenshot。截图按既有真实签名验证，≤5MiB；整请求 ≤6MiB，JSON ≤128KiB（对通用16KiB规则的明确例外）。浏览器不能指定可信身份；源后端覆盖所有服务身份头且仅转发允许的反馈路径、方法和查询字段。服务 URL 只由后端配置，禁跟随重定向；生产只用 HTTPS，本机联测允许显式回环 HTTP。
+窗口 ±300 秒；nonce 在中央数据库唯一登记防跨进程重放，过期自动清理。POST 不带 query。JSON 恰好一个对象并拒绝未知字段；multipart 只允许一个 payload JSON 和零至五个同名 screenshot 文件，保持提交顺序，兼容旧单图客户端。每张非空 PNG/JPEG/WebP 按真实签名验证且 ≤5MiB；中央整请求 ≤25MiB+256KiB，源平台代理 ≤26MiB，JSON ≤128KiB（对通用16KiB规则的明确例外）。浏览器不能指定可信身份；源后端覆盖所有服务身份头且仅转发允许的反馈路径、方法和查询字段。服务 URL 只由后端配置，禁跟随重定向；生产只用 HTTPS，本机联测允许显式回环 HTTP。
 
 ## 幂等与隔离
 
@@ -40,7 +40,7 @@ SHA256(原始请求体)
 
 保留既有 `{code,message,data}` 反馈响应，中央接入边界添加 `schema_version:1`、`request_id`、`replayed`；错误另带 `{error:{code,message,retryable}}`。截图以独立鉴权二进制响应返回。所有响应 no-store、no-referrer、nosniff；错误不含原始输入或内部异常。
 
-源平台反馈入口轮询中央持久事件形成通知列表/未读数，已读记录绑定不透明主体。排期、待验收通知提交人；拒收重开和AI P0通知本实例管理员。通知点击原平台反馈详情；无需跨域回调、迁移用户账号或本地复制反馈。服务不可用时显示可重试失败，不回报假成功。
+源平台反馈入口轮询中央持久事件形成通知列表/未读数，已读记录绑定不透明主体。排期、待验收通知提交人；新提交（不论AI优先级）、拒收重开和AI P0通知本实例管理员。中央管理员保留跨平台治理通知权限。提交通知使用既有 submitted 事件，升级后历史未读提交也会进入事件通知；不会重复创建提交事件。通知点击原平台反馈详情；无需跨域回调、迁移用户账号或本地复制反馈。服务不可用时显示可重试失败，不回报假成功。
 
 ## 不变量
 
@@ -61,3 +61,7 @@ Express路由在通用请求日志/解析前装配，独立有界raw body与本�
 后端配置 `PRODUCT_FEEDBACK_HUB_URL`（HTTPS origin）、`PRODUCT_FEEDBACK_CLIENT_ID`、`PRODUCT_FEEDBACK_CLIENT_SECRET`、`PRODUCT_FEEDBACK_SUBJECT_SECRET`。subject secret与服务签名密钥独立且持久，不随签名密钥轮换。两个域名是否为同实例须据实际部署核对；独立实例分别登记client/instance与密钥。先部署中央迁移及注册配置，再发布本平台。不新增本地数据库表。
 
 测试：根目录 `node --test backend/tests/product-feedback-*.test.cjs`；frontend下 `npm run build`。全流程/响应式浏览器证据保存在独立 `feedback-sync-ws` 的 output/browser。生产登录联验与真机软键盘仍在发布验收阶段。
+
+## 2026-09-22 多图兼容扩展
+
+三端支持选择多图、连续粘贴追加与逐张移除；超限或非法图片整批拒绝，保留已选图片。中央将全部截图与反馈及幂等收据一起保存，失败不产生部分反馈；多模态评估按上传顺序读取全部可用图片，模型不支持时保留明确的纯文本降级。先发布兼容中央，再发布源端。无需数据库迁移或变更主体密钥。站内通知沿用现有页面刷新机制，不代表唤醒开发任务。

@@ -1246,3 +1246,9 @@
 .pf-notification-list button { display:block; overflow-wrap:anywhere; }
 .pf-unread { background:#dc2626; color:white; padding:1px 5px; border-radius:12px; font-size:11px; }
 .pf-launcher-menu small { display:block; color:var(--pf-text-muted); }
+
+/* Keep all selected images and removal controls reachable in short viewports. */
+.pf-upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 12px; width: 100%; }
+.pf-upload-item { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pf-upload-item small { max-width: 100%; overflow-wrap: anywhere; }
+.pf-upload-item .pf-screenshot-preview { max-width: 100%; width: 100%; height: 120px; object-fit: contain; }
