@@ -184,8 +184,9 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
   const issuerKeys = new Set(issuers.map(i => `${i.issuer}:${i.keyId}`));
   const issuerActive = key => issuerKeys.has(String(key));
   const verifyAfterMs = verifyAfterFrom(env);
+  const logger = deps.logger || (() => { try { return require('../../utils/logger'); } catch { return null; } })();
   const service = createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled: !!preview,
-    now, assets, eligibility, issuerActive, verifyAfterMs, logger: deps.logger || null });
+    now, assets, eligibility, issuerActive, verifyAfterMs, logger });
   // Background catch-up: bounded, unreferenced, and never a substitute for the durable pending marker.
   const sweepIntervalMs = sweepIntervalFrom(env);
   const timer = setInterval(() => { service.sweep().catch(() => {}); }, sweepIntervalMs);

@@ -359,6 +359,12 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     metrics.sweeps += 1;
     metrics.last_duration_ms = duration;
     metrics.max_duration_ms = Math.max(metrics.max_duration_ms, duration);
+    // The candidate load measurement an operator can actually read: only when work was done, and only
+    // counters — never a student uuid, a title or a byte of content.
+    if (logger && (swept > 0 || exhausted)) {
+      try { logger.info('P09 sweep', { swept, duration_ms: duration, budget_exhausted: exhausted, sweeps: metrics.sweeps, failures: metrics.failures }); }
+      catch { /* measurement must never break the sweep */ }
+    }
     const remaining = await store.read(tx => tx.pendingCount({ sourceInstance, schoolRef: schoolRef ?? null }))
       .catch(() => null);
     return { swept, remaining, budget_exhausted: exhausted, duration_ms: duration };

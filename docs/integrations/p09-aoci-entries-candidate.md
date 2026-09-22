@@ -19,13 +19,13 @@
 | backend/src/services/websiteArtifact/eligibility.js | c9d64e20b65b5d65eed8e289a2852b43898bcb9a73f0f7847176f2d2a68f0e11 |
 | backend/src/services/websiteArtifact/errors.js | e79cc85714f34fb00df0b2216a3cf788878b9c99129f0dbd679ea4141373d82b |
 | backend/src/services/websiteArtifact/previewServer.js | 81234d02987fa2cb11ebbc419d0f3f778e86c9b0706e6187dd8192c26a5309bb |
-| backend/src/services/websiteArtifact/runtime.js | 6aeaafe6e81578034a21586e95c4eccabb0df2abac9079e22403e185fc99ee64 |
-| backend/src/services/websiteArtifact/service.js | 47722032ff46af22c67642ebee4aeba79dbf344461a8ab0ae0b8d8a8a86f4837 |
+| backend/src/services/websiteArtifact/runtime.js | e3afc843c9d930ff5bee81e301b653bc63dfc5069d21dd2c22e41bed42be2b96 |
+| backend/src/services/websiteArtifact/service.js | 715e6bcf9075eb3a541e054007f85a9746377a6376826de2b047a3b630b086f4 |
 | backend/src/services/websiteArtifact/snapshot.js | db93d230d7e989729aeb9d8efe1fe82172d3c88be4dc1ccc2217ba0d33f46a72 |
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
 | backend/src/services/websiteArtifact/store.js | b01c6da19ca8fe655ce607554951a892ed0da6c22c5ae8fca86eb846c43ac9ff |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 4590161409d178679174cb0d05d65b0acf9521b8ff7933ded97a77c782d882d4 |
+| docs/integrations/p09-website-artifact-source-candidate.md | 586aee47c3aa37e67cdbb80c7c96c2d300301661211b77696c4cf6da38b4adc3 |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```

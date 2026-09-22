@@ -1001,8 +1001,15 @@ def main():
             final_item = next(item for item in concurrent_state['items'] if item['assignment_ref'] == 'assign-3')
             need(final_item['change_no'] == numbers[-1] and final_item['pending_reconcile'] is False,
                  'concurrent_projection_' + str(final_item['change_no']) + '_' + str(numbers[-1]))
+            # Candidate load measurement: the server's own sweep lines, read back from its log.
+            sweep_lines = [line for line in (Path(scratch) / f'backend-{primary.name}-on.log').read_text(errors='replace').splitlines()
+                           if 'P09 sweep' in line]
+            need(sweep_lines, 'no_sweep_measurement_logged')
+            durations = [int(m.group(1)) for m in (re.search(r'"duration_ms":(\d+)', line) for line in sweep_lines) if m]
             report['scenarios'].append({'name': 'concurrent_saves', 'threads': 4, 'change_numbers': numbers[-6:],
-                                        'sequences_monotonic': True, 'final_change_no': final_item['change_no']})
+                                        'sequences_monotonic': True, 'final_change_no': final_item['change_no'],
+                                        'sweep_measurements': len(sweep_lines),
+                                        'sweep_duration_ms': {'max': max(durations or [0]), 'samples': durations[-5:]}})
             report['checks'].append('four concurrent saves plus a final one leave a strictly increasing sequence, no duplicated fact and a projection that matches the last change')
 
             # 17. full read and incremental read hand over without a gap, and limits are enforced

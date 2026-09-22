@@ -54,10 +54,10 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 | `save_evidence` | `work_state` | `has_effective_save` | 何时出现 |
 |---|---|---|---|
 | `observed` | `working` / `preview_ready` | `true` | 编辑器的保存路径带正文写成功，账本在**同一次请求里**记下 `real_save_count+1`、`last_real_save_at` |
-| `none` | `linked` | `false` | 项目里每一页都从未被写过（`html_pages.version = 1` 且 `updated_at == created_at`）。空默认项目、编辑器自动建的空白页都落在这里，edu 据此显示未开始 |
+| `none` | `linked` | `false` | 项目里每一页都从未被写过（`html_pages.version = 1`，且 `updated_at` 与 `created_at` 相差不到一秒）。空默认项目、编辑器自动建的空白页都落在这里，edu 据此显示未开始 |
 | `legacy_unknown` | `unknown` | `null` | 关联时就发现行被写过、但 P09 没看见那次写（`history_before_observation`），或正文在没有任何观察的情况下变了（`change_without_observed_save`）。**答未知并给原因，绝不猜未开始，也不冒称制作中** |
 
-- 判据不再有任何字节数或时间差：23 字节的合法页面、创建后一秒内保存都算数；纯改名、发布开关、删页都不算（它们会经过同一个钩子，但不带正文）。
+- 判据不再有任何字节数或时间差：31 字节的合法短页面、创建后一秒内保存都算数；纯改名、发布开关、删页都不算（它们会经过同一个钩子，但不带正文）。
 - `real_save_count` / `last_real_save_at` / `change_no` 随状态和事件一起给 edu，`saved_at` 只在 `observed` 时有值；来源行的最后改动时间另给 `source_touched_at`（**保存时间与同步时间分离**：事件的 `occurred_at` 是来源时间，`recorded_at` 是账本提交时间，`synced_at` 是投影时间）。
 - 候选字段与迁移只在本项目候选目录（`backend/migrations-candidates/p09/`）与本项目文档里；**没有改动任何共享 contracts 基线**。
 
@@ -93,7 +93,7 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 
 `python3 dev/p09-lab/check.py`。两套实例（各自数据库、实例名、端口；**实例 B 故意不配评阅资格提供方**）+ 一次性 `mysql:8.0`（本地 schema 结构前像 + knex 执行账本候选迁移 + 受限账本角色）+ 真实 `node src/server.js` + 真实前端 Vite + Playwright（1280/360/390/430）+ 自签证书的 HTTPS 隔离预览域。真实与合成分列见 `result.json` 的 `real`/`synthetic`/`not_covered`；**失败运行的日志与截图一并保留在证据目录**（本次共三次失败运行，见进度文档）。运行编号与 `result.json` 摘要写在工作区进度文档里。
 
-首包 13 条之外新增覆盖：真实 UI 点"保存"之后才 `制作中`｜改名不算保存｜23 字节页面算保存｜旧项目报未知及原因｜A→B→A 三条事实、重试零条｜崩溃后重启按耐久标记补齐｜标记丢失由自愈通道补齐｜四路并发保存序号不倒退且投影与最后一次变化一致｜全量与增量水位交接、`limit>500` 拒绝、分页续读｜固定版本冻结本人图片与样式表并改写链接，多页导航与资源在改稿+删原图后仍工作，证明不了归属的文件具名拒绝且在评阅里是可见的缺图｜无资格提供方的实例一律拒绝｜非本作业教师被拒｜一次性入口被先用者烧掉｜Cookie 换浏览器即拒、同浏览器仍可用｜撤下发行方密钥与停用学生账号都立即停字节。
+首包 13 条之外新增覆盖：真实 UI 点"保存"之后才 `制作中`｜改名不算保存｜31 字节短页面算保存｜旧项目报未知及原因｜A→B→A 三条事实、重试零条｜崩溃后重启按耐久标记补齐｜标记丢失由自愈通道补齐｜四路并发保存序号不倒退且投影与最后一次变化一致｜全量与增量水位交接、`limit>500` 拒绝、分页续读｜固定版本冻结本人图片与样式表并改写链接，多页导航与资源在改稿+删原图后仍工作，证明不了归属的文件具名拒绝且在评阅里是可见的缺图｜无资格提供方的实例一律拒绝｜非本作业教师被拒｜一次性入口被先用者烧掉｜Cookie 换浏览器即拒、同浏览器仍可用｜撤下发行方密钥与停用学生账号都立即停字节。
 
 单元测试：后端 P09 43 项（28 服务 + 5 路由含真实 socket 与预览域 + 10 运行时/上下文/凭据）、前端面板 7 项。
 
