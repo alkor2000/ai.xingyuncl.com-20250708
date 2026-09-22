@@ -77,7 +77,8 @@ def fingerprints():
              *(IDENTITY / 'internal/artifacthandoff').glob('*.go'), IDENTITY / 'dev/i03/native/schema.sql', IDENTITY / 'dev/i03/fixtures.json',
              OVERLAY_SOURCE, PROBE_SOURCE, IDENTITY / 'go.mod', IDENTITY / 'go.sum',
              *(ROOT / 'backend/src/services/artifactHandoff').glob('*.js'), ROOT / 'dev/p03-mysql-worker.cjs', ROOT / 'dev/p03-mysql-fixture.cjs',
-             HERE / 'check.py', DRIVER, OVERLAY_SOURCE, *(HERE.glob('candidate*.json'))]
+             *(ROOT / 'dev').glob('p03-entry-*'), ROOT / 'backend/src/routes/artifactHandoffEntry.js', ROOT / 'frontend/src/components/chat/ArtifactHandoff.jsx',
+             HERE / 'check.py', HERE / 'formal_scenarios.py', DRIVER, OVERLAY_SOURCE, *(HERE.glob('candidate*.json'))]
     return {str(p): sha(p) for p in sorted(set(files)) if p.is_file()}
 
 
@@ -190,6 +191,7 @@ def main():
             driver = tmp / 'driver'
             driver.mkdir()
             shutil.copy(DRIVER, driver / 'scenarios.py')  # the overlay always invokes <driver dir>/scenarios.py
+            shutil.copy(HERE / 'formal_scenarios.py', driver / 'formal_scenarios.py')  # shared receiver/relay helpers for the entry driver
             shutil.copy(PROBE_SOURCE, driver / 'error_probe.cjs')
             overlay = tmp / 'overlay.json'
             overlay.write_text(json.dumps({'Replace': {str(IDENTITY / 'internal/artifacthandoff/p03_triad_overlay_test.go'): str(OVERLAY_SOURCE)}}))
@@ -210,14 +212,15 @@ def main():
                                  'note': 'source hops (issue/revoke, prepare/commit/status/cancel) over TLS with hostname verification; target->Identity redeem stays loopback HTTP'}
             print('Unmodified T11 cmd/t11-lab built with -race; overlay ' + str(OVERLAY_SOURCE.name) + ' and Identity error probe in place.', flush=True)
             config = {'cases': CASES, 'practice_root': str(ROOT), 'receiver': str(receiver), 'evidence': str(evidence), **({'tls': tls} if tls else {}),
+                      **({'linked_source_accounts': PIN['linked_source_accounts']} if 'linked_source_accounts' in PIN else {}),
                       'target': {'container': names['target'], 'database': target_db,
                                  'dsn': f"postgres://tedna_t11_lab:{lab_password}@127.0.0.1:{ports['target']}/{target_db}?sslmode=disable"},
                       'mysql': {'host': '127.0.0.1', 'port': ports['mysql'], 'user': 'root', 'password': passwords['mysql']}}
             go_env = {**env, 'I03_NATIVE_DATABASE_URL': f"postgres://postgres:{passwords['identity']}@127.0.0.1:{ports['identity']}/i03_native?sslmode=disable",
                       'I03_NATIVE_ISOLATED': '1', 'I03_CURRENT_CONFIG': json.dumps(config), 'I03_TRIAD_DRIVER': str(driver), 'I03_TRIAD_EVIDENCE': str(evidence)}
             result['stage'] = 'triad'
-            proc = subprocess.run(['go', 'test', '-race', '-count=1', '-json', '-overlay', str(overlay), '-run', '^' + TEST_NAME + '$', './internal/artifacthandoff'],
-                                  cwd=IDENTITY, env=go_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1500)
+            proc = subprocess.run(['go', 'test', '-race', '-count=1', '-json', '-timeout', PIN.get('go_test_timeout', '10m'), '-overlay', str(overlay), '-run', '^' + TEST_NAME + '$', './internal/artifacthandoff'],
+                                  cwd=IDENTITY, env=go_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=PIN.get('runner_timeout_seconds', 1500))
             events = []
             for line in proc.stdout.splitlines():
                 try:
