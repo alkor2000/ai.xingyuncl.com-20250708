@@ -17,7 +17,11 @@
 //      A path that merely exists under the upload root proves nothing and is refused
 //      (`ownership_unproven`). The owner always comes from the authenticated session, never from the
 //      page, and a row belonging to another student is not a match — it is a refusal.
-//   2. The bytes must be a regular file inside the upload root, reached without following a symlink.
+//   2. The bytes must be a regular file inside the upload root, reached WITHOUT following a symlink at
+//      any position — not just the last one. `O_NOFOLLOW` only refuses a final symlink, so a directory
+//      link in the middle (`uploads/nested` → somewhere else) used to walk straight out of the root.
+//      The file is therefore opened first and then proven: the path must resolve to itself under the
+//      real upload root, and the object the descriptor holds must be the object that path names now.
 //   3. Type and size must be inside the recorded limits.
 // Nothing is ever fetched over the network: an off-site http(s) or protocol-relative reference stays
 // external and unfrozen, and object-storage rows whose bytes are not local are refused as
@@ -89,82 +93,115 @@ function collect(text, ownHosts = []) {
 // authenticated student; a row belonging to anybody else is not a match, it is a refusal.
 function createAssetResolver({ models, uploadRoot, ownHosts = [], maxBytes = MAX_ASSET_BYTES, maxAssets = MAX_ASSETS }) {
   const hosts = [...new Set(ownHosts.map(host => String(host).toLowerCase()).filter(Boolean))];
+  // The key a stored path or URL refers to, in the one form the request also speaks. A row is only
+  // accepted when this is EXACTLY the requested key: `%` and `_` are ordinary characters in a file
+  // name but wildcards in LIKE, so a lookup alone could hand back a different file the same student
+  // owns (`a_b.png` matching `axb.png`), and the revision would then freeze the wrong object.
+  function keyOf(stored) {
+    let value = String(stored || '');
+    if (/^https?:\/\//i.test(value)) {
+      const host = hostOf(value);
+      if (!host || !hosts.includes(host)) return null;                    // someone else's site proves nothing
+      try { value = new URL(value).pathname; } catch { return null; }
+    }
+    const marker = value.lastIndexOf(UPLOAD_PREFIX);
+    if (marker >= 0) value = value.slice(marker + UPLOAD_PREFIX.length);
+    else if (value.startsWith('uploads/')) value = value.slice('uploads/'.length);
+    return value.replace(/^\/+/, '');
+  }
+  const escapeLike = value => String(value).replace(/[\\%_]/g, character => `\\${character}`);
+
   async function owned(ownerUserId, projectId, key) {
-    const like = `%${key}`;
+    const like = `%${escapeLike(key)}`;
     const checks = [
       { table: 'files', sql: `SELECT id, user_id, file_path AS local_path, mime_type, status FROM files
-          WHERE user_id = ? AND file_path LIKE ? ORDER BY id DESC LIMIT 1`, params: [ownerUserId, like],
-      accept: row => (row.status === 'ready' ? { source: 'files', local: row.local_path } : { refuse: 'source_not_ready' }) },
+          WHERE user_id = ? AND file_path LIKE ? ESCAPE '\\\\' ORDER BY id DESC LIMIT 5`, params: [ownerUserId, like],
+      accept: row => (row.status === 'ready' ? { source: 'files', local: row.local_path }
+        : { refuse: 'source_not_ready', stored: row.local_path }) },
       { table: 'user_files', sql: `SELECT id, user_id, oss_key, mime_type, is_deleted FROM user_files
           WHERE user_id = ? AND oss_key = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 1`, params: [ownerUserId, key],
       accept: row => ({ source: 'user_files', local: row.oss_key }) },
       { table: 'html_resources', sql: `SELECT id, user_id, project_id, storage_path, storage_type, oss_key, mime_type
-          FROM html_resources WHERE user_id = ? AND (storage_path = ? OR storage_path LIKE ? OR oss_key = ?) ORDER BY id DESC LIMIT 1`,
+          FROM html_resources WHERE user_id = ? AND (storage_path = ? OR storage_path LIKE ? ESCAPE '\\\\' OR oss_key = ?)
+          ORDER BY id DESC LIMIT 5`,
       params: [ownerUserId, key, like, key],
-      accept: row => (row.storage_type === 'oss' ? { refuse: 'remote_object_storage' }
+      accept: row => (row.storage_type === 'oss' ? { refuse: 'remote_object_storage', stored: row.oss_key || row.storage_path }
         : { source: 'html_resources', local: row.storage_path || row.oss_key,
           projectMismatch: row.project_id != null && String(row.project_id) !== String(projectId) }) },
       // The AI image module keeps the owner and the stored copy: `local_path` is an absolute URL on this
       // deployment in local-storage mode, and an off-site URL when object storage is on — the second
       // case is refused rather than downloaded. A thumbnail is the student's own file too.
       { table: 'image_generations', sql: `SELECT id, user_id, local_path, thumbnail_path, status
-          FROM image_generations WHERE user_id = ? AND (local_path LIKE ? OR thumbnail_path LIKE ?) ORDER BY id DESC LIMIT 1`,
+          FROM image_generations WHERE user_id = ? AND (local_path LIKE ? ESCAPE '\\\\' OR thumbnail_path LIKE ? ESCAPE '\\\\')
+          ORDER BY id DESC LIMIT 5`,
       params: [ownerUserId, like, like],
       accept: row => {
         if (row.status && !['success', 'completed', 'ready'].includes(String(row.status))) return { refuse: 'source_not_ready' };
         const stored = String(row.local_path || '').includes(key) ? row.local_path : row.thumbnail_path;
         const host = hostOf(stored);
-        if (/^https?:\/\//i.test(String(stored)) && host && !hosts.includes(host)) return { refuse: 'remote_object_storage' };
+        if (/^https?:\/\//i.test(String(stored)) && host && !hosts.includes(host)) return { refuse: 'remote_object_storage', stored };
         return { source: 'image_generations', local: stored };
       } },
       // Forum posts record who attached the file; the bytes are local unless the board is on object
       // storage, in which case the row says so and it is refused by name.
       { table: 'forum_attachments', sql: `SELECT id, user_id, file_path, storage_mode, mime_type
-          FROM forum_attachments WHERE user_id = ? AND (file_path = ? OR file_path LIKE ?) ORDER BY id DESC LIMIT 1`,
+          FROM forum_attachments WHERE user_id = ? AND (file_path = ? OR file_path LIKE ? ESCAPE '\\\\')
+          ORDER BY id DESC LIMIT 5`,
       params: [ownerUserId, key, like],
       accept: row => (row.storage_mode && !['local', 'disk', 'default'].includes(String(row.storage_mode))
-        ? { refuse: 'remote_object_storage' } : { source: 'forum_attachments', local: row.file_path }) }
+        ? { refuse: 'remote_object_storage', stored: row.file_path } : { source: 'forum_attachments', local: row.file_path }) }
     ];
     for (const check of checks) {
       let rows;
       try { rows = await models.query(check.sql, check.params); }
       catch { return { refuse: 'ownership_lookup_failed' }; }
-      const row = Array.isArray(rows) ? rows[0] : rows?.rows?.[0];
-      if (!row) continue;
-      const verdict = check.accept(row);
-      if (verdict.refuse) return verdict;
-      if (verdict.projectMismatch) return { refuse: 'other_project_resource' };
-      return verdict;
+      const candidates = (Array.isArray(rows) ? rows : rows?.rows) || [];
+      for (const row of candidates) {
+        const verdict = check.accept(row);
+        // A refusal the row itself declares (object storage, not ready, another project) stands only
+        // when the row really is about this object; otherwise it is simply not the row we asked for.
+        if (keyOf(verdict.local ?? verdict.stored ?? null) !== key && verdict.refuse !== 'remote_object_storage') {
+          if (verdict.refuse) continue;
+          if (keyOf(verdict.local) !== key) continue;
+        }
+        if (verdict.refuse) return verdict;
+        if (verdict.projectMismatch) return { refuse: 'other_project_resource' };
+        return { source: verdict.source };
+      }
     }
     return { refuse: 'ownership_unproven' };
   }
 
-  // Read the bytes without following a symlink and without leaving the upload root.
-  async function read(localPath, key) {
-    let candidate = typeof localPath === 'string' ? localPath : '';
-    // Stored paths differ per deployment (absolute under /var/www or /app in production, relative in the
-    // cloud-disk model). Everything up to and including the last "uploads/" segment is deployment
-    // prefix; what follows is the key inside the upload root — and containment is checked anyway.
-    const marker = candidate.lastIndexOf('uploads/');
-    if (marker >= 0) candidate = candidate.slice(marker + 'uploads/'.length);
-    if (candidate === '') candidate = key;
-    if (candidate.includes('..') || candidate.includes('\u0000')) return { refuse: 'path_rejected' };
-    const target = path.resolve(uploadRoot, candidate.replace(/^\/+/, ''));
+  // Read the bytes of exactly the object the reference names. The descriptor is opened first and the
+  // path is proven afterwards, so nothing can be checked and then swapped: the path must resolve to
+  // itself under the real upload root (no symlink at any position, no `..`), and the object that path
+  // names right now must be the very object the descriptor holds.
+  async function read(key) {
+    if (typeof key !== 'string' || key === '' || key.includes('..') || key.includes('\u0000')) {
+      return { refuse: 'path_rejected' };
+    }
     let handle;
     try {
-      const root = await fs.realpath(uploadRoot);
-      const relative = path.relative(root, target);
+      const realRoot = await fs.realpath(uploadRoot);
+      const target = path.resolve(realRoot, key.replace(/^\/+/, ''));
+      const relative = path.relative(realRoot, target);
       if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return { refuse: 'outside_upload_root' };
       handle = await fs.open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
-      const stat = await handle.stat();
-      if (!stat.isFile()) return { refuse: 'not_a_regular_file' };
-      if (stat.size > maxBytes) return { refuse: 'asset_too_large' };
-      const buffer = Buffer.alloc(stat.size);
-      const { bytesRead } = await handle.read(buffer, 0, stat.size, 0);
+      const opened = await handle.stat();
+      if (!opened.isFile()) return { refuse: 'not_a_regular_file' };
+      // Every component resolved: anything but the path itself means a link was in the way.
+      const resolved = await fs.realpath(target);
+      if (resolved !== target) return { refuse: 'symlink_refused' };
+      const named = await fs.stat(resolved);
+      if (named.ino !== opened.ino || named.dev !== opened.dev) return { refuse: 'path_changed' };
+      if (opened.size > maxBytes) return { refuse: 'asset_too_large' };
+      const buffer = Buffer.alloc(opened.size);
+      const { bytesRead } = await handle.read(buffer, 0, opened.size, 0);
       return { bytes: buffer.subarray(0, bytesRead) };
     } catch (error) {
       if (error && (error.code === 'ELOOP' || error.code === 'EMLINK')) return { refuse: 'symlink_refused' };
       if (error && error.code === 'ENOENT') return { refuse: 'file_missing' };
+      if (error && (error.code === 'EACCES' || error.code === 'EPERM')) return { refuse: 'unreadable' };
       return { refuse: 'unreadable' };
     } finally { await handle?.close().catch(() => {}); }
   }
@@ -176,7 +213,9 @@ function createAssetResolver({ models, uploadRoot, ownHosts = [], maxBytes = MAX
     if (!mediaType) return { refused: 'unsupported_type' };
     const ownership = await owned(ownerUserId, projectId, reference.key);
     if (ownership.refuse) return { refused: ownership.refuse };
-    const bytes = await read(ownership.local, reference.key);
+    // The row proved whose the object is; the object itself is the one the page named, read from the
+    // configured upload root — a stored path from another deployment can never redirect the read.
+    const bytes = await read(reference.key);
     if (bytes.refuse) return { refused: bytes.refuse };
     const digest = sha256(bytes.bytes);
     return { path: `assets/${digest.slice(0, 16)}${extension}`, media_type: mediaType, byte_length: bytes.bytes.length,

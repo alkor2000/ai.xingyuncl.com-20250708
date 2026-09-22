@@ -80,10 +80,12 @@ def main():
         subprocess.run(['docker', 'run', '-d', '--pull=never', '--name', container, '--label', 'pkuailab.task=p09-assets',
                         '-p', '127.0.0.1::3306', '-e', 'MYSQL_ROOT_PASSWORD', check.MYSQL_IMAGE],
                        env={**os.environ, 'MYSQL_ROOT_PASSWORD': root_password}, check=True, stdout=subprocess.DEVNULL, timeout=60)
+        # The image runs a temporary init server first, so the real one is the SECOND "ready for
+        # connections" — and even then the listener needs a moment, hence the retried probe below.
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
-            logs = subprocess.run(['docker', 'logs', container], capture_output=True, text=True).stderr
-            if logs.count('ready for connections') >= 2:      # the init server is not the real one
+            logs = subprocess.run(['docker', 'logs', container], capture_output=True, text=True)
+            if (logs.stdout + logs.stderr).count('ready for connections') >= 2:
                 time.sleep(3)
                 break
             time.sleep(2)
@@ -91,6 +93,16 @@ def main():
             need(False, 'database_start_timeout')
         port = int(subprocess.run(['docker', 'port', container, '3306/tcp'], text=True, capture_output=True).stdout.strip().rsplit(':', 1)[1])
         mysql = {'host': '127.0.0.1', 'port': port, 'user': 'root', 'password': root_password}
+        probe = """const mysql=require('./backend/node_modules/mysql2/promise');let s='';
+process.stdin.on('data',b=>s+=b).on('end',async()=>{const c=JSON.parse(s);const db=await mysql.createConnection(c);
+const [r]=await db.query('SELECT 1 AS ok');await db.end();process.stdout.write(JSON.stringify(r));});"""
+        for attempt in range(15):
+            try:
+                node(probe, mysql, redact=[root_password])
+                break
+            except RuntimeError:
+                need(attempt < 14, 'database_never_accepted_connections')
+                time.sleep(2)
 
         local = check.dotenv(check.LOCAL_ENV)
         dump = ['docker', 'exec', '-e', 'MYSQL_PWD=' + local['DB_PASSWORD'], 'practice-mysql', 'mysqldump',

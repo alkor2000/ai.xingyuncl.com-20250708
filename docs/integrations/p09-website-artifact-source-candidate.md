@@ -71,7 +71,10 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 
 - 范围 `frozen_scope: pages_and_owned_local_assets`：项目内**全部页面** + **能证明归属于本人**的本地资源（图片、CSS、JS、字体、文本，单文件 ≤2 MiB、单版本 ≤40 个、整包 ≤12 MiB）。
 - 每个冻结资源在 manifest 里记 `path / reference / byte_length / media_type / sha256 / owned_by`（哪个模型证明的归属），与不可变版本绑定；页面文件平铺（入口 `index.html`，其余 `p-<slug>-<id>.html`），**项目内页面链接与 `/uploads/...` 引用被改写成版本内路径**，所以改稿、删页、删原图之后旧版本仍然整份打开（多页导航、图片、样式表都验过）。
-- 拒绝一律**具名**进 manifest 的 `refused_assets`：`ownership_unproven`（只按路径存在，没有任何行能证明是本人的）、`other_project_resource`、`remote_object_storage`（字节在对象存储，不下载）、`symlink_refused`、`path_rejected`、`outside_upload_root`、`file_missing`、`unsupported_type`、`asset_too_large`、`asset_limit_reached`。
+- 拒绝一律**具名**进 manifest 的 `refused_assets`：`ownership_unproven`（没有任何行**精确**命名这个对象）、`other_project_resource`、`remote_object_storage`（字节在对象存储，不下载）、`symlink_refused`（路径上**任何一段**是软链接）、`path_rejected`、`outside_upload_root`、`path_changed`（打开之后那条路径已不是同一个对象）、`file_missing`、`unsupported_type`、`asset_too_large`、`asset_limit_reached`。
+
+**路径边界怎么保证的（以及残余）**：`O_NOFOLLOW` 只拦最后一段，中间目录是软链接照样能走出上传根——这条实测成立过，所以现在改成**先打开、再证明**：① 先 `open(O_NOFOLLOW)` 拿到文件描述符；② `realpath` 解析**每一段**，要求解析结果与请求路径**逐字相同**（任一段是链接或含 `..` 都不相同）；③ 要求该路径**此刻**命名的 inode（dev+ino）与描述符持有的对象**是同一个**，所以"先检查后打开另一个对象"的竞态会被抓住；④ 请求路径必须落在 `realpath(上传根)` 之内。读取的对象**永远是页面写的那个 key**，不是归属行里的存储路径——另一套部署写进来的路径不可能把读取重定向到别处。**残余**：这条链依赖进程对上传根的常规文件系统权限（部署里就是应用账号），**本包没有、也不需要扩大任何文件系统访问权限**；如果上传根本身被换成软链接，`realpath(上传根)` 解析后比较仍然成立；能绕过的只剩"有人能在上传根里直接放文件并伪造归属行"，那已是数据库写权限问题，不在本层。
+- **对象对应**：归属行只证明"这东西是谁的"，不决定读哪个文件。`%` 与 `_` 在文件名里是普通字符、在 `LIKE` 里是通配符，曾经能让 `a_b.png` 匹配到同一个学生自己的 `axb.png` 并把**另一个对象**的字节冻进去（实测可达；因为查询按 `user_id` 限定，够不到别人的文件）。现在 LIKE 参数转义并带 `ESCAPE`，取回的候选行还要把存储路径/本域 URL **规范化后与请求 key 精确相等**才算数，否则 `ownership_unproven`。
 - 外部依赖（http(s)/协议相对 URL）只登记在 `external_dependencies`，**明确未冻结**；任何 URL 都不会被拉取。读取只在上传根内、不跟随符号链接（`O_NOFOLLOW`）、realpath 包含性校验、拒绝 `..` 与 NUL。**没有 SSRF 面：整条路径里没有出网请求。**
 - 没有留存期决定，所以**不自动清理任何证据**：撤销关联不删已固定版本，本包也不自选删除周期（§8 缺口 4）。
 

@@ -430,14 +430,21 @@ describe('P09 fixed review revisions', () => {
       fs.writeFileSync(path.join(uploadRoot, 'images', 'somebody-elses.png'), png);
       fs.writeFileSync(path.join(uploadRoot, 'images', 'photo.jpg'), Buffer.concat([png, Buffer.from('jpg')]));
       fs.writeFileSync(path.join(uploadRoot, 'images', 'other-project.png'), png);
-      fs.symlinkSync('/etc/hostname', path.join(uploadRoot, 'images', 'escape.png'));
+      // Every path in this test lives in its own temporary tree: nothing points at a host file.
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'p09-outside-'));
+      fs.writeFileSync(path.join(outside, 'escape-target.png'), png);
+      fs.writeFileSync(path.join(outside, 'behind-the-link.png'), png);
+      fs.symlinkSync(path.join(outside, 'escape-target.png'), path.join(uploadRoot, 'images', 'escape.png'));
+      fs.symlinkSync(outside, path.join(uploadRoot, 'nested'));            // a PARENT directory link
       const context = createService({
         eligibility: reviewerProvider(),
         assets: { uploadRoot, owned: [
           { table: 'files', user_id: 101, key: 'images/pond.png' },
           { table: 'html_resources', user_id: 101, key: 'images/site.css', project_id: 3 },
           { table: 'files', user_id: 101, key: 'images/escape.png' },
-          { table: 'files', user_id: 101, key: 'images/traversal.png', local: '../../etc/passwd' },
+          { table: 'files', user_id: 101, key: 'images/traversal.png' },
+          { table: 'files', user_id: 101, key: 'nested/behind-the-link.png' },
+          { table: 'files', user_id: 101, key: 'images/axb.png' },
           { table: 'user_files', user_id: 101, key: 'images/photo.jpg' },
           { table: 'html_resources', user_id: 101, key: 'images/other-project.png', project_id: 99 },
           { table: 'html_resources', user_id: 101, key: 'images/cloud.png', storage_type: 'oss', project_id: 3 }
@@ -448,7 +455,9 @@ describe('P09 fixed review revisions', () => {
         <img src="/uploads/images/pond.png" alt="池塘">
         <img src="/uploads/images/somebody-elses.png" alt="别人的图">
         <img src="/uploads/images/escape.png" alt="符号链接">
-        <img src="/uploads/images/traversal.png" alt="穿越">
+        <img src="/uploads/images/traversal.png" alt="行在文件不在">
+        <img src="/uploads/nested/behind-the-link.png" alt="父目录软链接">
+        <img src="/uploads/images/a_b.png" alt="通配符键">
         <img src="/uploads/images/photo.jpg" alt="我的照片">
         <img src="/uploads/images/other-project.png" alt="别的项目">
         <img src="/uploads/images/cloud.png" alt="云端">
@@ -475,7 +484,11 @@ describe('P09 fixed review revisions', () => {
       expect(refused).toEqual({
         '/uploads/images/somebody-elses.png': 'ownership_unproven',
         '/uploads/images/escape.png': 'symlink_refused',
-        '/uploads/images/traversal.png': 'path_rejected',
+        // A row exists but the file does not; a link in the middle of the path never opens; and a key
+        // whose `_` would match another owned file under LIKE names no object at all.
+        '/uploads/images/traversal.png': 'file_missing',
+        '/uploads/nested/behind-the-link.png': 'symlink_refused',
+        '/uploads/images/a_b.png': 'ownership_unproven',
         '/uploads/images/other-project.png': 'other_project_resource',
         '/uploads/images/cloud.png': 'remote_object_storage'
       });
