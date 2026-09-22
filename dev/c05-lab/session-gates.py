@@ -303,24 +303,31 @@ def main():
         lab.stop()
         lab.write_config(config)
 
-        # ---- 5 会话表候选迁移：有活会话时 down 具名拒绝 -------------------------------------
+        # ---- 5 会话表候选迁移：任何历史行都挡住回退 -----------------------------------------
+        # （TX-ROLLBACK-01 起规则收紧：令牌过期不等于这段历史可以删，只有空表能回退。
+        #   计数与 DROP 的独占窗口与并发写入边界在 dev/c05-lab/tx-pool.py 里单独验。）
         report['stage'] = 'session_table_migration'
+        rows = int(lab.sql(['SELECT COUNT(*) AS n FROM c05_sessions'])[0][0]['n'])
         live = int(lab.sql(['SELECT COUNT(*) AS n FROM c05_sessions WHERE expires_at > NOW()'])[0][0]['n'])
-        refused = node(lab_mod.NODE_KNEX, {'port': lab.mysql['port'], 'user': lab.app_user,
-                                           'password': lab.app_password, 'database': lab.database,
-                                           'directory': str(migrations), 'down': True})
+        down = lambda: node(lab_mod.NODE_KNEX, {'port': lab.mysql['port'], 'user': lab.app_user,
+                                                'password': lab.app_password, 'database': lab.database,
+                                                'directory': str(migrations), 'down': True})
+        refused = down()
         lab.sql(['UPDATE c05_sessions SET expires_at = DATE_SUB(NOW(), INTERVAL 1 DAY)'])
-        rolled = node(lab_mod.NODE_KNEX, {'port': lab.mysql['port'], 'user': lab.app_user,
-                                          'password': lab.app_password, 'database': lab.database,
-                                          'directory': str(migrations), 'down': True})
+        still_refused = down()
+        lab.sql(['DELETE FROM c05_sessions'])
+        rolled = down()
         gone = int(lab.sql(["SELECT COUNT(*) AS n FROM information_schema.tables "
                             "WHERE table_schema=DATABASE() AND table_name='c05_sessions'"])[0][0]['n'])
         report['observed']['session_table_migration'] = {
-            'live_sessions': live, 'down_while_live': refused, 'down_after_expiry': rolled.get('result'),
+            'rows': rows, 'live_sessions': live, 'down_while_live': refused,
+            'down_after_everything_expired': still_refused, 'down_on_an_empty_table': rolled.get('result'),
             'table_after_down': gone}
         verdict('down_refuses_while_a_session_still_has_its_context',
-                live > 0 and refused.get('ok') is False and 'c05_sessions_in_use' in refused.get('error', ''))
-        verdict('down_removes_the_table_once_nothing_is_live', rolled.get('ok') and gone == 0)
+                rows > 0 and refused.get('ok') is False and 'c05_sessions_not_empty' in refused.get('error', ''))
+        verdict('expiring_the_tokens_does_not_make_the_history_deletable',
+                still_refused.get('ok') is False and 'c05_sessions_not_empty' in still_refused.get('error', ''))
+        verdict('down_removes_the_table_once_the_history_is_gone', rolled.get('ok') and gone == 0)
 
         report['passed'] = all(item['ok'] for item in report['verdicts'].values())
         report['stage'] = 'done'

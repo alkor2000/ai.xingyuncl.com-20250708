@@ -427,6 +427,19 @@ describe('C05 consume re-checks the present, not the past', () => {
     expect((await refusal(other.consume(handoff))).code).toBe('session_scope_changed');
   });
 
+  test('the user is read through the transaction, never through a second pooled connection', async () => {
+    // Proved on real MySQL with an application pool of one: the model's default path asks the pool for
+    // another connection, and the connection it needs is the one this transaction holds.
+    const lab = harness();
+    const asked = [];
+    const models = { User: { async findById(id, query) { asked.push(typeof query); return null; } } };
+    const probe = createStudentEntry({ ...lab, models,
+      deps: { TokenService: { generateTokenPair: async () => ({ accessToken: 'x', jti: 'y' }) } } });
+    const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));
+    await refusal(probe.consume(handoff));
+    expect(asked).toEqual(['function']);
+  });
+
   test('the session that is created remembers where the student came from, and stores no token', async () => {
     const lab = harness();
     const { handoff } = await lab.service.exchange(request(lab.sign(payloadFor())));

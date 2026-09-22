@@ -63,8 +63,14 @@ class User {
 
   /**
    * 根据ID查找用户（自动过滤已删除）
+   *
+   * @param {number} id - 用户ID
+   * @param {Function} [query] - 可选：用调用方自己的查询函数执行（签名与 dbConnection.query 相同）。
+   *        传入事务的 query 时，这次读取走的是**该事务已经持有的那条连接**，不会再向全局连接池要第二条。
+   *        调用方在事务里需要一个完整 User 对象时必须传它：否则在连接池吃紧时会等待自己持有的连接
+   *        （应用池上限 1 时必然死等）。不传时行为与以前完全相同。
    */
-  static async findById(id) {
+  static async findById(id, query = null) {
     try {
       const sql = `
         SELECT u.*, 
@@ -78,7 +84,7 @@ class User {
         LEFT JOIN user_groups g ON u.group_id = g.id
         WHERE u.id = ? AND u.deleted_at IS NULL
       `;
-      const { rows } = await dbConnection.query(sql, [id]);
+      const { rows } = await (query ? query(sql, [id]) : dbConnection.query(sql, [id]));
       
       if (rows.length === 0) {
         return null;

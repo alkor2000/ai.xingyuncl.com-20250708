@@ -202,14 +202,22 @@ function createStudentEntry({ settings, store, db, models, now = Date.now, logge
       const groupId = await resolveSchoolGroup(query, settings, payload.school_ref);
       if (Number(groupId) !== Number(payload.group_id)) fail('session_scope_changed', 409);
       if (Number(row.group_id) !== Number(payload.group_id)) fail('session_scope_changed', 409);
+      // Locked, in the same order the rest of this entry uses (the user row, then the group row): a
+      // school switched off after this read but before the commit would otherwise still get a session,
+      // because a plain read here decides nothing about what other transactions may do next.
       const { rows: groupRows } = await query(
-        'SELECT id, is_active FROM user_groups WHERE id = ? LIMIT 1', [groupId]);
+        'SELECT id, is_active FROM user_groups WHERE id = ? LIMIT 1 FOR UPDATE', [groupId]);
       if (!groupRows[0] || Number(groupRows[0].is_active) !== 1) fail('school_not_provisioned', 409);
 
       // Only now is there something to sign. The token is minted from the row just verified, and the
       // session that remembers where the student came from is written beside it: the commit makes both
       // real or neither. `issueRefresh: false` keeps this call free of any other database read.
-      const user = await models.User.findById(row.id);
+      //
+      // The full login object is read through THIS transaction's query, not the model's default path:
+      // `dbConnection.query` goes to the pool for another connection, and the connection it would need
+      // is the one this transaction is holding. With a small application pool that is a wait on itself
+      // — at a pool of one it never returns. (Reproduced on real MySQL: dev/c05-lab/tx-pool.py.)
+      const user = await models.User.findById(row.id, query);
       if (!user || user.status !== 'active' || user.role !== 'user') fail('subject_disabled', 403);
       const tokens = await deps.TokenService.generateTokenPair(user, true,
         { accessExpiresIn: settings.accessTtl, issueRefresh: false });
