@@ -49,6 +49,19 @@ async function startServer() {
     //     保存入口（/api/p03/handoffs）只在这个对象 enabled 时才会做事，否则统一回答 handoff_disabled。
     app.locals.p03Handoff = await require('./services/artifactHandoff/formalRuntime').bootstrapFormalHandoff({ env: process.env, logger });
 
+    // 2.6 P09 网站作品接入运行时：默认关闭（不连账本、不读发行方凭据、不开预览域）。开启时任务上下文发行方缺失
+    //     只会让带授权的接口一律拒绝，不会放行；学生页面只在隔离预览域运行，与应用不同源。
+    app.locals.p09Website = await require('./services/websiteArtifact/runtime').bootstrapWebsiteArtifacts({ env: process.env, logger });
+    if (app.locals.p09Website.enabled && app.locals.p09Website.preview) {
+      app.locals.p09PreviewServer = await require('./services/websiteArtifact/previewServer').startPreviewServer({
+        runtime: app.locals.p09Website,
+        host: process.env.P09_PREVIEW_BIND || '127.0.0.1',
+        frameAncestors: process.env.P09_PREVIEW_FRAME_ANCESTORS || "'none'",
+        secureCookie: process.env.NODE_ENV === 'production'
+      });
+      logger.info(`P09 隔离预览域监听 ${app.locals.p09Website.preview.origin}（端口 ${app.locals.p09PreviewServer.port}）`);
+    }
+
     // 3. 启动HTTP服务器
     const PORT = process.env.PORT || config.app.port || 4000;
 
@@ -118,6 +131,14 @@ async function startServer() {
           await app.locals.p03Handoff?.close?.();
         } catch (handoffErr) {
           logger.error('P03 交接运行时关闭失败:', handoffErr?.code || handoffErr);
+        }
+
+        // 4.2c 关闭 P09 隔离预览监听与账本连接池（关闭状态下为空操作）
+        try {
+          await app.locals.p09PreviewServer?.close?.();
+          await app.locals.p09Website?.close?.();
+        } catch (websiteErr) {
+          logger.error('P09 网站作品运行时关闭失败:', websiteErr?.code || websiteErr);
         }
 
         // 4.3 关闭数据库连接池

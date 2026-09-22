@@ -105,6 +105,11 @@ require('./routes/artifactExports').mount(app);
    (server.js sets it after database init); while disabled every call answers handoff_disabled. */
 require('./routes/artifactHandoffEntry').mount(app);
 
+/* P09 website artifacts: student association/revisions and edu's server-side reads. Both speak only to
+   the default-off runtime in app.locals.p09Website; while disabled every call answers
+   website_artifacts_disabled. Student HTML is never served from this origin. */
+require('./routes/websiteArtifacts').mount(app);
+
 /* 请求日志（Morgan -> Winston） */
 app.use(morgan('combined', {
   stream: {
