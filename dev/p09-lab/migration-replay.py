@@ -144,11 +144,13 @@ def main():
             # A half state has one of the two columns missing, so ask for what is actually there.
             present = columns(database)
             selected = ', '.join(['id', 'sync_pending_at', 'state', 'real_save_count', *present])
-            rows = sql([f'SELECT {selected} FROM p09_links ORDER BY created_at'], database=database)[0]
+            # Ordered by assignment so before/after rows line up: the seeded rows share created_at.
+            rows = sql([f'SELECT {selected}, assignment_ref FROM p09_links ORDER BY assignment_ref'], database=database)[0]
             return [{'write_seq': int(r['write_seq']) if r.get('write_seq') is not None else None,
                      'applied_write_seq': int(r['applied_write_seq']) if r.get('applied_write_seq') is not None else None,
                      'marker': None if r['sync_pending_at'] is None else int(r['sync_pending_at']),
-                     'state': r['state'], 'real_save_count': int(r['real_save_count'])} for r in rows]
+                     'state': r['state'], 'real_save_count': int(r['real_save_count']),
+                     'assignment': r['assignment_ref']} for r in rows]
 
         def seed_row(database, assignment, write_seq=None, applied=None, marker=None, project_id=3):
             row_id = str(uuid.uuid4())
@@ -299,8 +301,8 @@ def main():
         again = helper('down', database)
         report['cases'].append({'case': 'down_marks_backlog', 'before': before, 'after': after,
                                 'columns_after': columns_after, 'migration': [ran, again],
-                                'backlog_kept_as_marker': after[0]['marker'] is not None,
-                                'level_work_untouched': after[1]['marker'] is None})
+                                'backlog_kept_as_marker': next(r for r in after if r['assignment'].endswith('backlog'))['marker'] is not None,
+                                'level_work_untouched': next(r for r in after if r['assignment'].endswith('level'))['marker'] is None})
 
         # ---- 6. the outstanding work a conservative migration leaves is cleared by the service -----
         report['stage'] = 'swept'
