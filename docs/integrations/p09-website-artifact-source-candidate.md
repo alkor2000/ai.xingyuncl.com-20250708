@@ -25,6 +25,28 @@
 - **交付方式固定为 URL 片段**：edu 打开实践编辑器时用 `…/html-editor#p09_task=<token>`；评阅入口是 `…/p09/preview/open#h=<handoff>`。片段不会发往任何服务器，因此不会进入访问日志、`Referer` 或代理记录。**隔离验收中先用 query 参数实现，实跑日志里发现 token 随 `Referer` 进入了后端访问日志，据此改为片段**——这条是实测发现，不是设计推演。
 - edu 服务端读取另用静态服务凭据（`x-p09-client/key-id/timestamp/nonce/signature`，HMAC over 方法+路径+排序 query+体摘要），按 `actions` 与 `school_refs` 授权。`contracts/integration-clients.md` 尚不存在，这套凭据形态是**本项目候选**。
 
+## 2b 协议向量（可复算，供 edu 对齐实现）
+
+两条向量都由本仓代码真实算出，签名密钥只是向量用的假值：
+
+**任务上下文（`website_artifact_link`）** — `secret = p09-vector-secret-0123456789abcdef0123456789abcdef`，载荷按下列顺序序列化（签名覆盖的是被解析的那串字节，不做任何再规范化）：
+
+```json
+{"schema_version":1,"issuer":"edu","key_id":"k1","grant_id":"6f1a7a3e-0e6d-4a70-9d6a-2b7f5a0c1e33","audience":"practice-vector","purpose":"website_artifact_link","school_ref":"school-1","assignment_ref":"assign-1","lesson_ref":null,"subject":{"uuid":"edu-uuid-0001","cohort":"student"},"issued_at":1790000000,"expires_at":1790000300}
+```
+
+```
+p09g.eyJzY2hlbWFfdmVyc2lvbiI6MSwiaXNzdWVyIjoiZWR1Iiwia2V5X2lkIjoiazEiLCJncmFudF9pZCI6IjZmMWE3YTNlLTBlNmQtNGE3MC05ZDZhLTJiN2Y1YTBjMWUzMyIsImF1ZGllbmNlIjoicHJhY3RpY2UtdmVjdG9yIiwicHVycG9zZSI6IndlYnNpdGVfYXJ0aWZhY3RfbGluayIsInNjaG9vbF9yZWYiOiJzY2hvb2wtMSIsImFzc2lnbm1lbnRfcmVmIjoiYXNzaWduLTEiLCJsZXNzb25fcmVmIjpudWxsLCJzdWJqZWN0Ijp7InV1aWQiOiJlZHUtdXVpZC0wMDAxIiwiY29ob3J0Ijoic3R1ZGVudCJ9LCJpc3N1ZWRfYXQiOjE3OTAwMDAwMDAsImV4cGlyZXNfYXQiOjE3OTAwMDAzMDB9.rYYeapjRlkVMgBqGfI8vKSiZ41Q7_aEfjMbrg9FAIDE
+```
+
+**服务凭据签名（`GET /state?school_ref=school-1`）** — `secret = p09-vector-client-0123456789abcdef0123456789ab`，`timestamp=1790000000`，`nonce=a1b2c3d4e5f60718293a4b5c6d7e8f90`。规范串是方法、路径、**按名排序**的 query、体摘要（GET 为空串的 sha256），用 `\n` 连接：
+
+```
+GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+`signature = sha256(secret + "\n" + timestamp + "\n" + nonce + "\n" + sha256(规范串))` = `d39709ccecbaa53454ab1fe3d04bfc04304215e60cf6eacc69a37f5591b190c7`。POST 的体摘要是 `JSON.stringify(已解析的体)` 的 sha256（无空格、按插入顺序）。
+
 ## 3 制作事实：只从观察到的保存来
 
 三值，永不猜：

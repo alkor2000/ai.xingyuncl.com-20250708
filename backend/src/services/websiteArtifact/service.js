@@ -383,13 +383,15 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     // A work nothing has ever been saved into is not a version; an unknown history still is (the bytes
     // exist, and the manifest records what the evidence was at the moment of freezing).
     if (existingLink.save_evidence === 'none' && !facts.source_ever_updated) fail('project_empty', 409);
+    // Object refs are minted first and the bundle (which reads files from disk) is built outside the
+    // writing transaction: a revision must not hold the work's row locked while it reads bytes.
+    const refs = await store.transaction(tx => refsFor(tx, existingLink.project_id, source.pages.map(page => page.id)));
+    const bundle = await reader.bundle(source, existingLink.entry_page_id, refs, { ownerUserId: existingLink.owner_user_id });
     return store.transaction(async tx => {
       const row = await tx.linkById(linkId, { forUpdate: true });
       if (!row || row.state !== 'active') fail('link_unavailable', 404);
       const again = await tx.revisionByRequest(linkId, sha256(requestKey));
       if (again) return { revision: revisionView(row, again), replayed: true };
-      const refs = await refsFor(tx, row.project_id, source.pages.map(page => page.id));
-      const bundle = await reader.bundle(source, row.entry_page_id, refs, { ownerUserId: row.owner_user_id });
       const previous = await tx.revisions(linkId);
       const manifest = { ...bundle.manifest, save_evidence: row.save_evidence,
         save_evidence_reason: row.save_reason ?? null, real_save_count: Number(row.real_save_count || 0),

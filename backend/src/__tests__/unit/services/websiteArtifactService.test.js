@@ -423,6 +423,23 @@ describe('P09 incremental read', () => {
     expect(state.items[0].revisions).toHaveLength(2);
   });
 
+  test('a truncated page and an unfinished reconciliation both refuse to call the snapshot complete', async () => {
+    const context = await linkedProject();
+    const full = await context.service.state(SCOPE);
+    expect(full).toMatchObject({ complete: true, pending_reconcile: 0, item_limit: 1000 });
+    // A scope with more works than one page can carry: edu must not read "everyone else has nothing".
+    const real = context.store.read.bind(context.store);
+    const one = (await context.store.read(tx => tx.linksInScope(SCOPE)))[0];
+    context.store.read = fn => real(tx => fn({ ...tx, linksInScope: async () => Array.from({ length: 1000 }, () => ({ ...one })) }));
+    expect((await context.service.state(SCOPE)).complete).toBe(false);
+    context.store.read = real;
+    // An outstanding marker is finished by the read itself, so the snapshot edu gets is not behind.
+    context.store.data.links.get(context.linkId).sync_pending_at = Date.now();
+    const swept = await context.service.state(SCOPE);
+    expect(swept).toMatchObject({ complete: true, pending_reconcile: 0 });
+    expect(context.store.data.links.get(context.linkId).sync_pending_at).toBeNull();
+  });
+
   test('deleting the source stops access and records deletion; unlinking is a separate, reversible act', async () => {
     const first = await linkedProject();
     first.fixture.deleteProject();
