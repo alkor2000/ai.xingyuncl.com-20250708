@@ -262,31 +262,40 @@ def main():
                                              if 'reset' in stages else
                                              'a committed boundary of the current migration: the next run finishes it')})
 
-        # ---- 5b2. the repair branch refuses while the ledger is being written --------------------
-        report['stage'] = 'busy_refusal'
-        busy = database_for('busy')
-        need(knex_migrate(busy).get('files') == files, 'busy_migrations')
-        busy_row = seed_row(busy, 'assign-busy', write_seq=5, applied=5, marker=None)
-        sql(['ALTER TABLE p09_links DROP COLUMN write_seq'], database=busy)     # the half state to repair
-        before = links(busy)
-        import threading
-        def touch():
-            time.sleep(0.25)                      # inside the migration's two-sample window
-            sql([{'sql': 'UPDATE p09_links SET updated_at = ? WHERE id = ?', 'params': [1790000007000, busy_row]}],
-                database=busy)
-        worker = threading.Thread(target=touch)
-        worker.start()
-        try:
-            refusal = helper('up', busy)
-        finally:
-            worker.join()
-        after = links(busy)
-        columns_after_refusal = columns(busy)     # read before the retry, so it describes the refusal
-        quiet = helper('up', busy)                # nothing moving now: the same call goes through
-        report['cases'].append({'case': 'repair_refuses_while_ledger_busy', 'before': before,
+        # ---- 5b2. a data decision without a provable exclusive window is refused by name ----------
+        # The account here may write the ledger but may not lock it, which is exactly the deployment
+        # shape where exclusivity cannot be proven. The migration must refuse and change nothing.
+        report['stage'] = 'exclusive_entry_refusal'
+        guarded = database_for('guarded')
+        need(knex_migrate(guarded).get('files') == files, 'guarded_migrations')
+        seed_row(guarded, 'assign-guarded', write_seq=5, applied=5, marker=None)
+        sql(['ALTER TABLE p09_links DROP COLUMN write_seq'], database=guarded)   # the half state to repair
+        before = links(guarded)
+        weak_user = 'p09_weak_' + secrets.token_hex(3)
+        weak_password = secrets.token_urlsafe(24)
+        sql([f"CREATE USER '{weak_user}'@'%' IDENTIFIED BY '{weak_password}'",
+             f"GRANT SELECT, INSERT, UPDATE, DELETE, ALTER, CREATE, DROP, INDEX, REFERENCES ON `{guarded}`.* TO '{weak_user}'@'%'"],
+            redact_extra=[weak_password])
+        refusal = node('dev/p09-lab/migration-replay.cjs',
+                       {'op': 'up', 'connection': {'host': '127.0.0.1', 'port': port, 'user': weak_user,
+                                                   'password': weak_password, 'database': guarded}},
+                       redact=[weak_password, app_password, root_password], is_file=True)
+        after = links(guarded)
+        columns_after_refusal = columns(guarded)
+        granted = helper('up', guarded)           # the migration account may lock: the same call goes through
+        report['cases'].append({'case': 'repair_refuses_without_provable_exclusivity', 'before': before,
                                 'refusal': refusal, 'after_refusal': after, 'columns_after_refusal': columns_after_refusal,
-                                'after_quiet_run': links(busy), 'quiet_run': quiet,
-                                'refused_by_name': isinstance(refusal, dict) and 'busy' in str(refusal.get('refused', ''))})
+                                'after_granted_run': links(guarded), 'granted_run': granted,
+                                'refused_by_name': isinstance(refusal, dict) and 'exclusive_entry' in str(refusal.get('refused', '')),
+                                'nothing_changed_by_refusal': before == after})
+
+        # ---- 5b3. is there a mechanism that really excludes every other writer? -------------------
+        report['stage'] = 'exclusive_entry'
+        gate = database_for('gate')
+        need(knex_migrate(gate).get('files') == files, 'gate_migrations')
+        seed_row(gate, 'assign-gate', write_seq=5, applied=5, marker=None)
+        report['cases'].append({'case': 'exclusive_entry_mechanism', 'probe': helper('lockprobe', gate),
+                                'rows_after': links(gate)})
 
         # ---- 5c. down keeps the outstanding signal before it drops the only evidence of it ---------
         report['stage'] = 'down_marks_backlog'

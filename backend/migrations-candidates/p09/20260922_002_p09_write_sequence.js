@@ -18,18 +18,26 @@
 // next run returned immediately. dev/p09-lab/migration-replay.py reproduces both on real MySQL.
 //
 // Premises, stated separately because they differ:
-//   * P09 switched off (the deployed default): nothing writes the ledger, every branch is safe as is.
+//   * P09 switched off (the deployed default): nothing writes the ledger. That is the ordinary case —
+//     but a switch is a per-process setting, so this migration never treats "it should be off" as proof
+//     that every writer is stopped.
 //   * P09 switched on: the ordinary branches are a no-op or one additive DDL, and a P09 write refused
 //     during that DDL costs nothing (the student's save is unaffected, the hook swallows it and the work
-//     stays outstanding for the sweep). The half-state repair is different — while one column is missing
-//     the running service cannot record writes at all — so that branch does not take anybody's word for
-//     quiescence: it samples the ledger twice and refuses if anything moved. Turning the switch off is
-//     the operator's decision and this migration neither performs it nor assumes it.
+//     stays outstanding for the sweep).
+//   * Anything that DECIDES data — the half-state repair and `down` — runs inside an exclusive window
+//     the server itself can confirm: the migration pins one connection, takes `LOCK TABLES … WRITE` on
+//     the ledger tables, and checks that the server reports the lock held before it writes anything.
+//     Every other session is blocked for the whole window, whatever role it uses. If the lock cannot be
+//     taken or cannot be verified, the migration REFUSES BY NAME and says what to fix; it never falls
+//     back to "the ledger looked quiet for a moment". A short activity observation still exists, but
+//     only to describe the refusal — it authorizes nothing.
+//   Measured, not assumed: dev/p09-lab/migration-replay.py holds the lock, proves a second connection's
+//   write is blocked across both the DDL and the updates, and lands only after the window closes.
 const { TABLES } = require('../../src/services/websiteArtifact/store');
 
 const DDL = Object.freeze({ write_seq: 'BIGINT NOT NULL DEFAULT 0', applied_write_seq: 'BIGINT NOT NULL DEFAULT 0' });
 const NAMES = Object.freeze(Object.keys(DDL));
-const QUIET_SAMPLE_MS = 600;
+const ACTIVITY_SAMPLE_MS = 600;
 
 async function present(knex) {
   const [rows] = await knex.raw(
@@ -51,8 +59,10 @@ async function interruptedRepairs(knex) {
   return Number(rows[0].n);
 }
 
-// Two samples of the ledger's own moving parts. Bounded: two reads, one short wait, no retry loop.
-async function requireQuietLedger(knex) {
+// Activity detection, NOT a guarantee: two samples of the ledger's moving parts, used only to describe
+// a refusal. Writes can begin the moment the second sample is taken, which is exactly why nothing is
+// authorized by it. Bounded: two reads, one short wait, no retry loop.
+async function observeActivity(knex) {
   const sample = async () => {
     const [[links]] = await knex.raw(
       `SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), 0) AS newest FROM \`${TABLES.links}\``);
@@ -61,15 +71,38 @@ async function requireQuietLedger(knex) {
     return `${links.n}/${links.newest}/${sequence.value}`;
   };
   const before = await sample();
-  await new Promise(resolve => setTimeout(resolve, QUIET_SAMPLE_MS));
-  if (await sample() !== before) {
-    const error = new Error('p09_ledger_busy_during_half_state_repair: the P09 ledger changed while this ' +
-      'migration was preparing to repair an interrupted column upgrade. Switch P09 off ' +
-      '(P09_WEBSITE_ARTIFACTS_ENABLED) so nothing writes the ledger, then run the migration again. ' +
-      'Nothing has been changed by this run.');
-    error.code = 'p09_ledger_busy_during_half_state_repair';
-    throw error;
-  }
+  await new Promise(resolve => setTimeout(resolve, ACTIVITY_SAMPLE_MS));
+  return (await sample()) === before ? 'no activity observed in a 600ms window (not a guarantee)'
+    : 'the ledger changed while this migration was starting';
+}
+
+const refuse = (code, message) => { const error = new Error(`${code}: ${message}`); error.code = code; throw error; };
+
+// The exclusive window every data decision runs inside. The server itself confirms the lock: without
+// that confirmation the migration writes nothing at all.
+async function withExclusiveLedger(knex, work) {
+  return knex.transaction(async trx => {
+    const [[current]] = await trx.raw('SELECT DATABASE() AS db');
+    try {
+      await trx.raw(`LOCK TABLES \`${TABLES.links}\` WRITE, \`${TABLES.sequence}\` WRITE`);
+    } catch (error) {
+      const hint = await observeActivity(knex).catch(() => 'activity could not be observed');
+      refuse('p09_exclusive_entry_unavailable',
+        'this migration must hold an exclusive lock on the P09 ledger before it may decide anything, and ' +
+        `the server refused to grant it (${error.code || error.message}). Grant LOCK TABLES on ` +
+        `\`${TABLES.links}\` and \`${TABLES.sequence}\` to the account that runs migrations, then run it ` +
+        `again. Nothing has been changed by this run. Activity detection, for context only: ${hint}.`);
+    }
+    try {
+      const [held] = await trx.raw(`SHOW OPEN TABLES FROM \`${current.db}\` WHERE In_use > 0`);
+      if (!held.some(row => row.Table === TABLES.links)) {
+        refuse('p09_exclusive_entry_unverified',
+          'the lock was requested but the server does not report it as held, so exclusivity cannot be ' +
+          'confirmed and nothing has been changed by this run.');
+      }
+      return await work(trx);
+    } finally { await trx.raw('UNLOCK TABLES').catch(() => {}); }
+  });
 }
 
 // The repair itself, in the only order that survives an interruption: mark first, then drop the claim.
@@ -88,8 +121,10 @@ exports.up = async function up(knex) {
   //    is an interrupted repair; a plain outstanding backlog (7/3) is left exactly as it is.
   if (columns.write_seq && columns.applied_write_seq) {
     if (await interruptedRepairs(knex) === 0) return;
-    await requireQuietLedger(knex);
-    await repair(knex);
+    await withExclusiveLedger(knex, async trx => {
+      if (await interruptedRepairs(trx) === 0) return;      // someone finished it while we took the lock
+      await repair(trx);
+    });
     return;
   }
 
@@ -111,23 +146,29 @@ exports.up = async function up(knex) {
   //    sequence it counted against is gone, so the claim cannot be verified. Every active work is marked
   //    for reconciliation first, and only then is the claim discarded — an interruption in between
   //    leaves the marker, and the next run finishes through case 1.
-  await requireQuietLedger(knex);
-  await add(knex, ['write_seq']);
-  await repair(knex);
+  await withExclusiveLedger(knex, async trx => {
+    const inside = await present(trx);                      // re-read under the lock
+    if (!inside.write_seq) await add(trx, ['write_seq']);
+    await repair(trx);
+  });
 };
 
 // Dropping the columns removes the only evidence that a work still owes reconciliation, so the backlog
 // is written down as a pending marker first. Level works are left alone, and re-running changes nothing.
 exports.down = async function down(knex) {
   const columns = await present(knex);
-  const drop = NAMES.filter(name => columns[name]);
-  if (!drop.length) return;
-  if (columns.write_seq && columns.applied_write_seq) {
-    await knex.raw(
-      `UPDATE \`${TABLES.links}\` SET sync_pending_at = COALESCE(sync_pending_at, ?)
-       WHERE state = 'active' AND applied_write_seq < write_seq`, [Date.now()]);
-  }
-  await knex.raw(`ALTER TABLE \`${TABLES.links}\` ${drop.map(name => `DROP COLUMN \`${name}\``).join(', ')}`);
+  if (!NAMES.some(name => columns[name])) return;
+  await withExclusiveLedger(knex, async trx => {
+    const inside = await present(trx);
+    const drop = NAMES.filter(name => inside[name]);
+    if (!drop.length) return;
+    if (inside.write_seq && inside.applied_write_seq) {
+      await trx.raw(
+        `UPDATE \`${TABLES.links}\` SET sync_pending_at = COALESCE(sync_pending_at, ?)
+         WHERE state = 'active' AND applied_write_seq < write_seq`, [Date.now()]);
+    }
+    await trx.raw(`ALTER TABLE \`${TABLES.links}\` ${drop.map(name => `DROP COLUMN \`${name}\``).join(', ')}`);
+  });
 };
 
 exports.columns = NAMES;

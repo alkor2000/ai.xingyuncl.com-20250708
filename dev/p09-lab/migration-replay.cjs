@@ -74,9 +74,46 @@ async function seedLink(connection, { sourceInstance, schoolRef, ownerUserId, pr
   } finally { await pool.end().catch(() => {}); }
 }
 
+// Can a migration hold a window in which no other session can write the ledger, and still do its own
+// DDL and updates inside it? This is the mechanism the half-state repair needs, so it is measured
+// rather than assumed: a second connection tries to write while the lock is held.
+async function lockProbe(connection) {
+  const knex = connect(connection);
+  const other = connect(connection);
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const result = { mechanism: 'LOCK TABLES ... WRITE on a pinned connection' };
+  try {
+    await knex.transaction(async trx => {
+      await trx.raw('LOCK TABLES `p09_links` WRITE, `p09_event_sequence` WRITE');
+      const [[held]] = await trx.raw("SHOW OPEN TABLES FROM `" + connection.database + "` WHERE In_use > 0");
+      result.lock_visible_to_the_server = !!held;
+      const started = Date.now();
+      let landed = null;
+      const writer = other.raw("UPDATE `p09_links` SET updated_at = ? WHERE 1", [Date.now()])
+        .then(() => { landed = Date.now() - started; })
+        .catch(error => { landed = 'error:' + (error.code || error.message); });
+      await wait(500);
+      result.writer_blocked_while_locked = landed === null;
+      try { await trx.raw('ALTER TABLE `p09_links` ADD COLUMN `lock_probe` TINYINT NOT NULL DEFAULT 0'); result.ddl_under_lock = 'ok'; }
+      catch (error) { result.ddl_under_lock = error.code || error.message; }
+      result.writer_still_blocked_after_ddl = landed === null;
+      try { await trx.raw("UPDATE `p09_links` SET lock_probe = 1 WHERE 1"); result.dml_under_lock = 'ok'; }
+      catch (error) { result.dml_under_lock = error.code || error.message; }
+      await trx.raw('UNLOCK TABLES');
+      await writer;
+      result.writer_landed_after_ms = landed;
+    });
+    await knex.raw('ALTER TABLE `p09_links` DROP COLUMN `lock_probe`').catch(() => {});
+  } catch (error) {
+    result.failed = String(error && (error.code || error.message)).slice(0, 200);
+  } finally { await knex.destroy(); await other.destroy(); }
+  return result;
+}
+
 (async () => {
   const input = await read();
   const handlers = { up: () => migrate(input.connection, 'up'), down: () => migrate(input.connection, 'down'),
+    lockprobe: () => lockProbe(input.connection),
     sweep: () => sweep(input.connection, input.work), seed: () => seedLink(input.connection, input.work) };
   process.stdout.write(JSON.stringify(await handlers[input.op]()));
 })().catch(error => { process.stderr.write(String(error && error.stack).slice(0, 2000)); process.exitCode = 1; });

@@ -37,7 +37,7 @@ function laboratory(env) {
   if (!['development', 'test'].includes(env.NODE_ENV)) fail('invalid_request');
   let spec;
   try { spec = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('invalid_request'); }
-  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients', 'eligibility'];
+  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients', 'eligibility', 'app_hosts'];
   if (!spec || typeof spec !== 'object' || Array.isArray(spec) || Object.keys(spec).some(k => !keys.includes(k)) ||
       typeof spec.source_instance !== 'string' || !INSTANCE.test(spec.source_instance)) fail('invalid_request');
   return spec;
@@ -175,7 +175,13 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
   const store = new WebsiteArtifactStore({ pool, now });
   const models = deps.models || { User: require('../../models/User'), HtmlProject: require('../../models/HtmlProject'), HtmlPage: require('../../models/HtmlPage') };
   const source = deps.sourceQuery || ((sql, params) => require('../../database/connection').query(sql, params));
-  const assets = createAssetResolver({ models: { query: source }, uploadRoot: deps.uploadRoot || uploadRootFrom(env) });
+  // This deployment's own hostnames. The platform hands students absolute upload URLs on its own
+  // domain (ossService builds them), so those references are the same local object — anything else
+  // stays external and is never fetched.
+  const ownHosts = [env.APP_DOMAIN, ...(lab && Array.isArray(lab.app_hosts) ? lab.app_hosts : [])]
+    .filter(host => typeof host === 'string' && host !== '')
+    .map(host => String(host).replace(/^https?:\/\//, '').split('/')[0].toLowerCase());
+  const assets = createAssetResolver({ models: { query: source }, uploadRoot: deps.uploadRoot || uploadRootFrom(env), ownHosts });
   const reader = createSourceReader({ HtmlProject: models.HtmlProject, HtmlPage: models.HtmlPage, sourceInstance, assets });
   const grants = new TaskGrantVerifier({ issuers, audience: sourceInstance, now });
   // Reviewer eligibility: absent in a deployment (the interface refuses), a fixed roster in the lab.
@@ -197,7 +203,8 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
     readiness: Object.freeze({ ...readiness, source_instance: sourceInstance, task_context_configured: issuers.length > 0,
       task_issuers: issuers.map(i => `${i.issuer}:${i.keyId}`), integration_clients: clients.map(c => `${c.clientKey}:${c.keyId}`),
       preview_origin: preview ? preview.origin : null, laboratory: !!lab,
-      eligibility_provider: eligibility ? eligibility.mode : 'absent', sync_interval_ms: sweepIntervalMs,
+      eligibility_provider: eligibility ? eligibility.mode : 'absent', own_hosts: ownHosts,
+      sync_interval_ms: sweepIntervalMs,
       sync_verify_ms: verifyAfterMs,
       checked_at: new Date(now()).toISOString() }),
     async close() { clearInterval(timer); await pool.end().catch(() => {}); }

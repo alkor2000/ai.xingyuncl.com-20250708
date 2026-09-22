@@ -7,22 +7,31 @@
 const path = require('node:path');
 const MIGRATION = path.join(__dirname, '../../../../migrations-candidates/p09/20260922_002_p09_write_sequence.js');
 
-function stubKnex({ columns, interrupted = 0, moving = false }) {
+// A knex stub with the two things the migration now depends on: a pinned transaction connection and a
+// server that reports whether the exclusive lock is actually held.
+function stubKnex({ columns, interrupted = 0, lock = 'granted', held = true }) {
   const statements = [];
   let samples = 0;
-  const knex = {
-    raw: async (sql, bindings = []) => {
-      statements.push({ sql: sql.replace(/\s+/g, ' ').trim(), bindings });
-      if (/information_schema/.test(sql)) return [columns.map(name => ({ c: name }))];
-      if (/applied_write_seq > write_seq/.test(sql) && /COUNT/.test(sql)) return [[{ n: interrupted }]];
-      if (/MAX\(updated_at\)/.test(sql)) { samples += 1; return [[{ n: 1, newest: moving ? samples : 1 }]]; }
-      if (/MAX\(value\)/.test(sql)) return [[{ value: 1 }]];
-      return [{ affectedRows: 0 }];
+  const raw = async (sql, bindings = []) => {
+    const text = sql.replace(/\s+/g, ' ').trim();
+    statements.push({ sql: text, bindings });
+    if (/information_schema/.test(sql)) return [columns.map(name => ({ c: name }))];
+    if (/applied_write_seq > write_seq/.test(sql) && /COUNT/.test(sql)) return [[{ n: interrupted }]];
+    if (/^SELECT DATABASE/.test(text)) return [[{ db: 'ledger' }]];
+    if (/^LOCK TABLES/.test(text)) {
+      if (lock !== 'granted') { const error = new Error('denied'); error.code = 'ER_TABLEACCESS_DENIED_ERROR'; throw error; }
+      return [{}];
     }
+    if (/^SHOW OPEN TABLES/.test(text)) return [held ? [{ Table: 'p09_links', In_use: 1 }] : []];
+    if (/MAX\(updated_at\)/.test(sql)) { samples += 1; return [[{ n: 1, newest: samples }]]; }
+    if (/MAX\(value\)/.test(sql)) return [[{ value: 1 }]];
+    return [{ affectedRows: 0 }];
   };
+  const knex = { raw, transaction: async work => work({ raw }) };
   return { knex, statements };
 }
 const writes = statements => statements.filter(item => /^(ALTER|UPDATE)/.test(item.sql));
+const locked = statements => statements.some(item => /^LOCK TABLES/.test(item.sql));
 
 describe('P09 write-sequence migration candidate', () => {
   test('a ledger that already has both columns is left completely alone, however often it runs', async () => {
@@ -84,11 +93,32 @@ describe('P09 write-sequence migration candidate', () => {
     expect(writes(settled.statements)).toEqual([]);
   });
 
-  test('the repair refuses while the ledger is moving, and writes nothing', async () => {
+  test('a data decision without a lock the server confirms is refused by name, and writes nothing', async () => {
     const migration = require(MIGRATION);
-    const { knex, statements } = stubKnex({ columns: ['applied_write_seq'], moving: true });
-    await expect(migration.up(knex)).rejects.toMatchObject({ code: 'p09_ledger_busy_during_half_state_repair' });
-    expect(writes(statements)).toEqual([]);      // not even the ALTER ran
+    // The account may write the ledger but may not lock it: exclusivity cannot be proven.
+    const denied = stubKnex({ columns: ['applied_write_seq'], lock: 'denied' });
+    await expect(migration.up(denied.knex)).rejects.toMatchObject({ code: 'p09_exclusive_entry_unavailable' });
+    expect(writes(denied.statements)).toEqual([]);      // not even the ALTER ran
+    // The lock was requested but the server does not report it held: still not good enough.
+    const unconfirmed = stubKnex({ columns: ['applied_write_seq'], held: false });
+    await expect(migration.up(unconfirmed.knex)).rejects.toMatchObject({ code: 'p09_exclusive_entry_unverified' });
+    expect(writes(unconfirmed.statements)).toEqual([]);
+    // And the refusal message points at the fix rather than at a moment of quiet.
+    await expect(migration.up(stubKnex({ columns: ['applied_write_seq'], lock: 'denied' }).knex))
+      .rejects.toThrow(/Grant LOCK TABLES/);
+  });
+
+  test('every data decision happens inside the exclusive window; pure additive DDL does not need one', async () => {
+    const migration = require(MIGRATION);
+    const repair = stubKnex({ columns: ['write_seq', 'applied_write_seq'], interrupted: 1 });
+    await migration.up(repair.knex);
+    expect(locked(repair.statements)).toBe(true);
+    const rollback = stubKnex({ columns: ['write_seq', 'applied_write_seq'] });
+    await migration.down(rollback.knex);
+    expect(locked(rollback.statements)).toBe(true);
+    const additive = stubKnex({ columns: [] });
+    await migration.up(additive.knex);
+    expect(locked(additive.statements)).toBe(false);
   });
 
   test('down writes the backlog down as a marker before it drops the evidence of it', async () => {
