@@ -80,11 +80,11 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 **变化身份**：`change_no` 是每个作品自己的单调变化号，事件事实 id = `updated:<change_no>:<内容摘要>`。同一次变化重复上报还是同一条事实（重试不重复），**A→B→A 是三次变化三条事实**（首包按内容永久去重，回到旧内容会丢事件，这是本次修掉的缺口）。
 
 **可恢复的投影**：编辑器保存的那次请求里先**等待写入**耐久标记（`sync_pending_at`，正文保存同时记 `real_save_count`），之后才异步对账。所以：进程崩溃、账本短断、重启都只会留下"待对账"，不会留下永远陈旧的投影。三层补齐——(1) 每次 edu 读 `state`/`events` 先做一次**有界**清扫，(2) 后台定时清扫（`P09_SYNC_INTERVAL_MS`，默认 60s，下限 5s），(3) 标记本身丢了也能自愈：最久未核对的活跃作品会被重新与来源比对（`P09_SYNC_VERIFY_MS`，默认 5 分钟）。对账失败保留标记并计数，不吞错。
-`state` 只有在**没被截断且没有待对账**时才 `complete:true`，另给 `pending_reconcile` 与 `item_limit`；`events` 同样带 `pending_reconcile`。**负载只给测量、不自定课堂轮询周期**：`service.syncStatus()` 报 `sweeps/reconciled/events/failures/last_duration_ms/max_duration_ms` 与当前预算（单次 ≤25 个作品、≤400ms、自愈批 ≤5）。
+`state` 只有在**没被截断且没有待对账**时才 `complete:true`，另给 `pending_reconcile` 与 `item_limit`；`events` 同样带 `pending_reconcile`。**负载只给测量、不自定课堂轮询周期**：`service.syncStatus()` 报 `sweeps/reconciled/events/failures/last_duration_ms/max_duration_ms` 与当前预算（单次 ≤25 个作品、≤400ms、自愈批 ≤5）；真正做了事（或用尽预算）的清扫会在服务端日志留一行计数（条数/耗时/是否用尽预算，不含任何学生标识或正文），运维据此度量。隔离验收里实测到 8 次这样的清扫，单次 16–39 ms。
 
 **私有评阅的受众**：
 - 会话记 `audience_kind`（reviewer/owner）、受众哈希、`issuer_key`，一次性 handoff **60 秒内**必须兑换，兑换后会话 **10 分钟**；会话寿命与 grant 到期**无关**（grant 只授权"这一次打开"，不是租约，不能续期，过期只能由 edu 重新签发）。
-- 兑换是**条件更新**：先到者赢，handoff 立刻消失；兑换时把会话**绑定到兑换它的浏览器**（UA+Accept-Language 指纹哈希），之后每个字节都要求同一浏览器。**这是防转发/防盗用 Cookie 的措施，不是身份认证**（同一台机器上的同一浏览器仍然可以被本人之外的人使用——见 §7 缺口 1）。
+- 兑换是**条件更新**：先到者赢，handoff 立刻消失；兑换时把会话**绑定到兑换它的浏览器**（UA+Accept-Language 指纹哈希），之后每个字节都要求同一浏览器。**这是防转发/防盗用 Cookie 的措施，不是身份认证**（同一台机器上的同一浏览器仍然可以被本人之外的人使用——见 §8 缺口 1）。
 - 每个字节都重核：会话（未撤销/未过期/绑定一致）、关联状态、**作品所有者账号仍可用**（停用即拒 `owner_unavailable` 并吊销该学生全部会话）、**签发方密钥仍在配置里**（撤下即 `issuer_revoked`）、**评阅资格提供方仍然说 yes**（`not_eligible`）。**固定版本的静态字节走同一条检查，不存在"快照绕过资格"**。
 - 学生本人的预览不问 edu：他的资格就是自己的登录会话 + 账号状态 + 关联归属（`eligibility: owner_session`）。
 - 隔离域：独立监听器、Host 门、`CSP: sandbox allow-scripts`（无 `allow-same-origin`，文档是不透明来源，读不到本域 Cookie/存储）、`frame-ancestors` 显式配置、`nosniff`、`no-store`。**CSP 源列表写隔离域的真名而不是 `'self'`**——不透明来源下 `'self'` 谁都不匹配，会把作品自己的图片和样式表也挡掉（实测发现）。隔离域用 HTTPS 时 Cookie 是 `SameSite=None; Secure`，这也是不透明来源文档能把 Cookie 带给自己子资源的唯一方式。
@@ -95,7 +95,9 @@ GET\n/api/integrations/edu/website-artifacts/state\nschool_ref=school-1\ne3b0c44
 
 首包 13 条之外新增覆盖：真实 UI 点"保存"之后才 `制作中`｜改名不算保存｜31 字节短页面算保存｜旧项目报未知及原因｜A→B→A 三条事实、重试零条｜崩溃后重启按耐久标记补齐｜标记丢失由自愈通道补齐｜四路并发保存序号不倒退且投影与最后一次变化一致｜全量与增量水位交接、`limit>500` 拒绝、分页续读｜固定版本冻结本人图片与样式表并改写链接，多页导航与资源在改稿+删原图后仍工作，证明不了归属的文件具名拒绝且在评阅里是可见的缺图｜无资格提供方的实例一律拒绝｜非本作业教师被拒｜一次性入口被先用者烧掉｜Cookie 换浏览器即拒、同浏览器仍可用｜撤下发行方密钥与停用学生账号都立即停字节。
 
-单元测试：后端 P09 43 项（28 服务 + 5 路由含真实 socket 与预览域 + 10 运行时/上下文/凭据）、前端面板 7 项。
+单元测试：后端 P09 44 项（29 服务 + 5 路由含真实 socket 与预览域 + 10 运行时/上下文/凭据）、前端面板 7 项。
+
+本次定稿运行：`storage/private/p09-validation/run-20260922T144849Z`（`result.json` SHA `3892d98125e69cd46ab994081672b6337b8ae5104ead0816c25f5350da193725`，绑定提交 `c3f377a`、`source_dirty:false`，21 个场景、21 条 checks、19 张截图）。本节末尾的运行编号由紧随其后的文档提交写入，因此该提交本身不在这次运行的绑定范围内——这是记录顺序，不是未验证的改动。
 
 ## 8 剩余缺口（冻结前必须由两端共同决定，本包不代决）
 
