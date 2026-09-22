@@ -14,7 +14,7 @@
 | 仓内路径 | source_sha256 |
 |---|---|
 | backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js | ec84f6773d43d654cf72da6c8f2ce090f92cac75fa1e4ea7532ca4c6bbab4fdb |
-| backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | d080e3bd77d6ddf62537886d89b203abab54ee5ce226dd524326865da7f1a56a |
+| backend/migrations-candidates/p09/20260922_002_p09_write_sequence.js | 41fd6d3d5a5754c09395726258b03ef8496420fc3d856c154f71fc33fc71f29f |
 | backend/src/routes/websiteArtifacts.js | cf0d2bcfbf8fefbf923e3de684c8ff32b808dd02aa8fada3039d28115046eb88 |
 | backend/src/services/websiteArtifact/assets.js | 41c40a5e27f2b04e3319c58192b9636d308a10368b47db6d6b0c25a09236494e |
 | backend/src/services/websiteArtifact/eligibility.js | c9d64e20b65b5d65eed8e289a2852b43898bcb9a73f0f7847176f2d2a68f0e11 |
@@ -26,12 +26,12 @@
 | backend/src/services/websiteArtifact/sourceHook.js | d651a041eab70dcada1ef7d16c9bf7ea48e9be18f8b2beb373142e351e26a8b9 |
 | backend/src/services/websiteArtifact/store.js | ef9667c53223aa082ab3244bd11306ccf535ec14343598bf7aff619ffb115c2c |
 | backend/src/services/websiteArtifact/taskGrant.js | b21c74c93c338d9aeed66b75565671ea7050f941d65a199061f5d4f953707ca5 |
-| docs/integrations/p09-website-artifact-source-candidate.md | 1081da54c7ed64eb9f1a3c05a654e5222c479259a1fc28f4b8be1e6226714f1a |
+| docs/integrations/p09-website-artifact-source-candidate.md | 31f2dee96d38c88deb479a362447e036af7e4bc46b5d96b9711f6943e3290a90 |
 | frontend/src/components/htmlEditor/TaskArtifactPanel.jsx | d20ace9464d0e95c1dd998e124e59d0e164af48219c3f882ed0a886806bfeb58 |
 
 ```
 20260922_001_p09_website_artifacts.js[PD6T]: F:T·P09 网站作品账本八表的 knex 迁移候选：up 逐字重放 websiteArtifact/store.js SCHEMA，down 按外键顺序删表；位于候选目录不被 knex 扫描 | R:code:backend/src/services/websiteArtifact/store.js,code:backend/knexfile.js,code:docs/integrations/p09-website-artifact-source-candidate.md | A:exports.up/down/tables | S:进入 backend/migrations/ 即在下次 make deploy-docker 自动建表，授权前不得晋级；down 丢账本与固定版本字节须先备份
-20260922_002_p09_write_sequence.js[PD4T]: F:T·P09 账本候选迁移 002：只为既有库补 write_seq/applied_write_seq，两列都在即空操作，两列都缺一条语句补齐，半状态按保守方向处理 | R:code:backend/src/services/websiteArtifact/store.js,code:backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js,code:dev/p09-lab/migration-replay.py | A:exports.up/down/columns | S:迁移只加缺的列，绝不替业务对账宣布完成——重复执行必须保住 write_seq 与 applied_write_seq 的差值(欠账)；只剩 applied_write_seq 时该声明无法验证故丢弃并给活跃作品打待对账标记；从不清除已有 sync_pending_at；仍在候选目录，晋级是另一次授权
+20260922_002_p09_write_sequence.js[PD4T]: F:T·P09 账本候选迁移 002：只为既有库补 write_seq/applied_write_seq，两列都在即空操作，两列都缺一条语句补齐，半状态按保守方向处理 | R:code:backend/src/services/websiteArtifact/store.js,code:backend/migrations-candidates/p09/20260922_001_p09_website_artifacts.js,code:dev/p09-lab/migration-replay.py | A:exports.up/down/columns | S:迁移只加缺的列，绝不替业务对账宣布完成——重复执行必须保住 write_seq 与 applied_write_seq 的差值(欠账)；半状态修复先打标记后丢无法验证的声明，applied>write 是"修复被中断"的指纹，up 进来先找它并接着做完；down 先把只存在于计数里的欠账写成标记再删列；半状态修复前两次采样账本，有变动即具名拒绝 p09_ledger_busy_during_half_state_repair 且不改任何字节；从不清除已有 sync_pending_at；仍在候选目录，晋级是另一次授权
 websiteArtifacts.js[EN8M]: F:N·P09 两个 HTTP 面：学生端关联/撤销/生成评阅版本/自建预览会话，edu 服务端当前状态、增量事件、提交冻结与评阅会话；统一请求 ID 与安全错误信封 | R:code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/services/websiteArtifact/service.js,code:backend/src/middleware/authMiddleware.js,code:frontend/src/components/htmlEditor/TaskArtifactPanel.jsx,code:backend/src/app.js | A:/api/p09/website-artifacts/{capability、links[/:id/{unlink、revisions、preview-sessions}]},/api/integrations/edu/website-artifacts/{state、events、revisions、review-sessions} | S:运行时未开启一律 503 website_artifacts_disabled；作业与学生身份只来自签名任务上下文请求头，请求体未知字段拒绝；edu 面按静态服务凭据签名(方法+路径+排序query+体摘要)与 school_refs 授权；16KiB 严格 JSON
 errors.js[CN5T]: F:N·P09 固定错误分类：P09Error/fail 与面向运维的中文短句表（任务上下文、来源、评阅会话、游标、基础设施） | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/routes/websiteArtifacts.js | A:P09Error,fail,MESSAGES,message | S:message 不含请求原文、他平台标识、凭据或堆栈；码即契约面，改动须同步 edu 消费方
 previewServer.js[EN8S]: F:N·隔离预览域：独立监听器(可自终结 TLS)，Host 不符即 404；引导页从 URL 片段取一次性 handoff 并 POST 兑换 HttpOnly Cookie，再按会话逐次校验后输出页面与资源字节 | R:code:backend/src/services/websiteArtifact/service.js,code:backend/src/services/websiteArtifact/runtime.js,code:backend/src/server.js | A:GET /p09/preview/open,POST /p09/preview/exchange,GET /p09/preview/:sessionId/*,createPreviewApp,startPreviewServer,clientBinding | S:handoff 只在片段里故不进访问日志/Referer；兑换把会话绑定到该浏览器指纹(防转发，不是身份认证)；CSP sandbox 不给 allow-same-origin，源列表写隔离域真名而非 'self'(不透明来源下 'self' 谁都不匹配会挡住作品自己的图片样式)；https 用 SameSite=None+Secure，否则退回 Lax

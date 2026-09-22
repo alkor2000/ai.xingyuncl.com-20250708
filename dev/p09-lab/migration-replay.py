@@ -222,6 +222,86 @@ def main():
                                     'after_second_up': links(database), 'migration': [ran, second],
                                     'columns': columns(database)})
 
+        # ---- 5b. interruption inside the half-state repair, at each committed boundary ------------
+        # The repair of an applied-only half state is what the earlier candidate did in three separate
+        # statements. Each committed boundary is recreated here with raw SQL and then handed to `up`:
+        # the migration has to finish the job, never conclude that a cleared claim means "done".
+        for case, stages in (('interrupt_after_alter', ['alter']),
+                             ('interrupt_after_mark', ['alter', 'mark']),
+                             ('legacy_interrupt_after_reset', ['alter', 'reset'])):
+            report['stage'] = case
+            database = database_for(case)
+            need(knex_migrate(database).get('files') == files, case + '_migrations')
+            seed_row(database, 'assign-' + case, write_seq=5, applied=5, marker=None)
+            seed_row(database, 'assign-' + case + '-marked', write_seq=5, applied=5, marker=1790000005000, project_id=4)
+            sql(['ALTER TABLE p09_links DROP COLUMN write_seq'], database=database)      # the half state
+            before = links(database)
+            # Replay the committed stages of the repair, then stop where the process would have died.
+            if 'alter' in stages:
+                sql(['ALTER TABLE p09_links ADD COLUMN write_seq BIGINT NOT NULL DEFAULT 0'], database=database)
+            if 'mark' in stages:      # the current order marks before it drops the claim
+                sql([{'sql': "UPDATE p09_links SET sync_pending_at = COALESCE(sync_pending_at, ?) WHERE state='active'",
+                      'params': [1790000006000]}], database=database)
+            if 'reset' in stages:     # the order the EARLIER candidate used: clear first, mark later
+                sql(['UPDATE p09_links SET applied_write_seq = 0 WHERE applied_write_seq <> 0'], database=database)
+            interrupted = links(database)
+            ran = helper('up', database)
+            after = links(database)
+            second = helper('up', database)
+            report['cases'].append({'case': case, 'stages_committed': stages, 'before_half_state': before,
+                                    'after_interruption': interrupted, 'migration': [ran, second],
+                                    'after_up': after, 'after_second_up': links(database),
+                                    'signal_kept': all(row['marker'] is not None or
+                                                       (row['applied_write_seq'] or 0) < (row['write_seq'] or 0)
+                                                       for row in after),
+                                    'note': ('a state only the earlier candidate could commit: 0/0 with no marker is '
+                                             'indistinguishable from a level work, so `up` leaves it alone and the '
+                                             'recovery is the service\'s periodic self-healing verify pass'
+                                             if 'reset' in stages else
+                                             'a committed boundary of the current migration: the next run finishes it')})
+
+        # ---- 5b2. the repair branch refuses while the ledger is being written --------------------
+        report['stage'] = 'busy_refusal'
+        busy = database_for('busy')
+        need(knex_migrate(busy).get('files') == files, 'busy_migrations')
+        busy_row = seed_row(busy, 'assign-busy', write_seq=5, applied=5, marker=None)
+        sql(['ALTER TABLE p09_links DROP COLUMN write_seq'], database=busy)     # the half state to repair
+        before = links(busy)
+        import threading
+        def touch():
+            time.sleep(0.25)                      # inside the migration's two-sample window
+            sql([{'sql': 'UPDATE p09_links SET updated_at = ? WHERE id = ?', 'params': [1790000007000, busy_row]}],
+                database=busy)
+        worker = threading.Thread(target=touch)
+        worker.start()
+        try:
+            refusal = helper('up', busy)
+        finally:
+            worker.join()
+        after = links(busy)
+        columns_after_refusal = columns(busy)     # read before the retry, so it describes the refusal
+        quiet = helper('up', busy)                # nothing moving now: the same call goes through
+        report['cases'].append({'case': 'repair_refuses_while_ledger_busy', 'before': before,
+                                'refusal': refusal, 'after_refusal': after, 'columns_after_refusal': columns_after_refusal,
+                                'after_quiet_run': links(busy), 'quiet_run': quiet,
+                                'refused_by_name': isinstance(refusal, dict) and 'busy' in str(refusal.get('refused', ''))})
+
+        # ---- 5c. down keeps the outstanding signal before it drops the only evidence of it ---------
+        report['stage'] = 'down_marks_backlog'
+        database = database_for('down')
+        need(knex_migrate(database).get('files') == files, 'down_migrations')
+        seed_row(database, 'assign-down-backlog', write_seq=7, applied=3, marker=None)
+        seed_row(database, 'assign-down-level', write_seq=9, applied=9, marker=None, project_id=4)
+        before = links(database)
+        ran = helper('down', database)
+        after = links(database)
+        columns_after = columns(database)
+        again = helper('down', database)
+        report['cases'].append({'case': 'down_marks_backlog', 'before': before, 'after': after,
+                                'columns_after': columns_after, 'migration': [ran, again],
+                                'backlog_kept_as_marker': after[0]['marker'] is not None,
+                                'level_work_untouched': after[1]['marker'] is None})
+
         # ---- 6. the outstanding work a conservative migration leaves is cleared by the service -----
         report['stage'] = 'swept'
         swept = database_for('swept')
