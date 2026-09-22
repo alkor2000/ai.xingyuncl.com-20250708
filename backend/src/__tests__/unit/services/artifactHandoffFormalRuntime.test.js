@@ -120,6 +120,39 @@ describe('P03 formal runtime switch', () => {
     await runtime.close();
     expect(pools[0].ended).toBe(true);
   });
+  test('P03_HANDOFF_LAB: refused outside development/test; in test it renames the synthetic pair and routes to lab ports only', async () => {
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p03-lab-'));
+    const ca = path.join(dir, 'ca.pem'); fs.writeFileSync(ca, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
+    const spec = path.join(dir, 'lab.json');
+    const write = value => fs.writeFileSync(spec, JSON.stringify(value));
+    write({ ca, ports: { identity: 4431, target: 4432 }, source_instance: 'practice-synthetic', target_instance: 'tedna-synthetic' });
+    const labEnv = { ...enabledEnv, P03_HANDOFF_LAB: spec, P03_HANDOFF_SOURCE_INSTANCE: 'practice-synthetic', P03_HANDOFF_TARGET_INSTANCE: 'tedna-synthetic',
+      IDENTITY_DEPLOYMENT_INSTANCE_KEY: 'practice-synthetic' };
+    // Production never honours the variable, whatever the file says.
+    await expect(build({ ...labEnv, NODE_ENV: 'production' }).promise).rejects.toMatchObject({ code: 'invalid_handoff_configuration' });
+    await expect(build({ ...labEnv, NODE_ENV: undefined }).promise).rejects.toMatchObject({ code: 'invalid_handoff_configuration' });
+    // The configuration contract and the Identity deployment key must state the synthetic pair themselves.
+    await expect(build({ ...labEnv, P03_HANDOFF_SOURCE_INSTANCE: TRUST.sourceInstance }).promise).rejects.toMatchObject({ code: 'handoff_instance_mismatch' });
+    await expect(build({ ...labEnv, IDENTITY_DEPLOYMENT_INSTANCE_KEY: TRUST.sourceInstance }).promise).rejects.toMatchObject({ code: 'handoff_instance_mismatch' });
+    const runtime = await build(labEnv).promise;
+    expect(runtime.readiness).toMatchObject({ laboratory: true, source_instance: 'practice-synthetic', target_instance: 'tedna-synthetic', instance_key: 'practice-synthetic' });
+    expect(runtime.service.sourceInstance).toBe('practice-synthetic');
+    expect(runtime.service.targetInstance).toBe('tedna-synthetic');
+    await runtime.close();
+    // Malformed laboratory files are configuration errors, never partial routing.
+    for (const bad of [{ ca, ports: { identity: 1, target: 2 }, source_instance: 'Practice', target_instance: 'tedna-synthetic' },
+      { ca, ports: { identity: 1, target: 2 }, source_instance: 'same-key', target_instance: 'same-key' },
+      { ca, ports: { identity: 1 }, source_instance: 'practice-synthetic', target_instance: 'tedna-synthetic' },
+      { ca: path.join(dir, 'missing.pem'), ports: { identity: 1, target: 2 }, source_instance: 'practice-synthetic', target_instance: 'tedna-synthetic' },
+      { ca, ports: { identity: 1, target: 2 }, source_instance: 'practice-synthetic', target_instance: 'tedna-synthetic', extra: true }]) {
+      write(bad);
+      await expect(build(labEnv).promise).rejects.toMatchObject({ code: 'invalid_handoff_configuration' });
+    }
+    fs.writeFileSync(spec, '{not json');
+    await expect(build(labEnv).promise).rejects.toMatchObject({ code: 'invalid_handoff_configuration' });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   test('grant assessment is exact about privilege sets and targets', () => {
     expect(() => assessGrants(goodGrants(), 'ai_platform')).not.toThrow();
     expect(() => assessGrants([{ Grants: 'GRANT SELECT ON *.* TO `x`@`%`' }, ...goodGrants().slice(1)], 'ai_platform')).toThrow('handoff_ledger_role_too_broad');

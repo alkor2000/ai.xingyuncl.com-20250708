@@ -3,7 +3,8 @@
 // Default-off formal runtime for the teacher artifact handoff (wire teacher-artifact-handoff/1, fc1+e1).
 // It composes the pieces that already exist — the pinned HTTPS transport, the formal wire client, the MySQL
 // durable ledger, the real-user eligibility authority and the formal orchestration — into one object the
-// server may hold. It never mounts a public route: the save entry stays closed until separately authorized.
+// server may hold. It mounts nothing itself: the login-protected entry (routes/artifactHandoffEntry.js) answers
+// handoff_disabled whenever this object is not enabled.
 //
 // Switch: P03_HANDOFF_ENABLED unset or exactly "false" -> disabled (no pool, no peer call, no new table, no
 // credential read); exactly "true" -> strict construction; any other value -> configuration error, never on.
@@ -18,18 +19,22 @@ const { createSourceAdapter, fail, HandoffError } = require('./source');
 const { FORMAL_VERSION } = require('./i03Draft');
 const { loadIdentityDeploymentConfig } = require('../../config/identityEnrollmentRuntimeConfig');
 const { validateIdentityRuntimeConfig } = require('../../config/identityRuntimeConfig');
+const fs = require('node:fs');
 
 const SWITCH = 'P03_HANDOFF_ENABLED';
 // Explicit configuration contract (docs/integrations/p03-instance-binding-candidate.json, env_candidate_pku):
 // every value must be present and equal to the pinned trust constant. Nothing is defaulted or inferred.
-const REQUIRED = Object.freeze({
+const required = trust => Object.freeze({
   P03_HANDOFF_STORE: 'mysql',
   P03_HANDOFF_WIRE_VERSION: FORMAL_VERSION,
-  P03_HANDOFF_SOURCE_INSTANCE: TRUST.sourceInstance,
-  P03_HANDOFF_TARGET_INSTANCE: TRUST.targetInstance,
-  P03_HANDOFF_IDENTITY_ORIGIN: TRUST.identityOrigin,
-  P03_HANDOFF_TARGET_ORIGIN: TRUST.targetOrigin
+  P03_HANDOFF_SOURCE_INSTANCE: trust.sourceInstance,
+  P03_HANDOFF_TARGET_INSTANCE: trust.targetInstance,
+  P03_HANDOFF_IDENTITY_ORIGIN: trust.identityOrigin,
+  P03_HANDOFF_TARGET_ORIGIN: trust.targetOrigin
 });
+const REQUIRED = required(TRUST);
+const LAB = 'P03_HANDOFF_LAB';
+const INSTANCE_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Expected ledger shape, the same tables mysqlStore.SCHEMA creates and the migration candidate installs.
 const COLUMNS = Object.freeze({
   [TABLES.owners]: ['owner', 'created_at'],
@@ -46,20 +51,43 @@ function resolveFormalHandoffSwitch(env = process.env) {
   fail('invalid_handoff_configuration');
 }
 
+// Isolated-laboratory facts for a non-production run of the real server (browser acceptance against lab peers):
+// P03_HANDOFF_LAB names a JSON file {ca, ports:{identity,target}, source_instance, target_instance}. It is honoured
+// only in development/test — production construction refuses the variable outright — and it can only add the
+// isolated trust anchor / loopback routing the transport itself restricts to those environments and rename the
+// synthetic instance pair the binding and the configuration contract must then both state. Hostnames, SNI, TLS
+// policy, credentials, eligibility, the restricted ledger and every other gate stay exactly as in production.
+function laboratoryFacts(env, deps) {
+  const file = env[LAB];
+  if (file === undefined || file === '') return deps.laboratory ? { laboratory: deps.laboratory, instances: null } : null;
+  if (!['development', 'test'].includes(env.NODE_ENV)) fail('invalid_handoff_configuration');
+  let spec, ca;
+  try { spec = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('invalid_handoff_configuration'); }
+  const keys = ['ca', 'ports', 'source_instance', 'target_instance'];
+  const instance = value => typeof value === 'string' && value.length >= 2 && value.length <= 128 && INSTANCE_KEY.test(value);
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec) || Object.keys(spec).some(k => !keys.includes(k)) || keys.some(k => !(k in spec)) ||
+      typeof spec.ca !== 'string' || !instance(spec.source_instance) || !instance(spec.target_instance) || spec.source_instance === spec.target_instance) {
+    fail('invalid_handoff_configuration');
+  }
+  try { ca = fs.readFileSync(spec.ca, 'utf8'); } catch { fail('invalid_handoff_configuration'); }
+  const lookup = (_host, options, done) => (options && options.all ? done(null, [{ address: '127.0.0.1', family: 4 }]) : done(null, '127.0.0.1', 4));
+  return { laboratory: { ca, ports: spec.ports, lookup }, instances: { source: spec.source_instance, target: spec.target_instance } };
+}
+
 // Identity facts come from the already-validated deployment configuration, never from request data.
-function identityFacts(env) {
+function identityFacts(env, trust = TRUST) {
   const config = loadIdentityDeploymentConfig(env);
   if (!config.enabled || config.credentialError) fail('handoff_identity_not_ready', 503);
-  if (config.issuer !== TRUST.identityOrigin || config.publicOrigin !== TRUST.sourceOrigin ||
-      config.clientId !== TRUST.clientId || config.deploymentInstanceKey !== TRUST.sourceInstance) fail('handoff_instance_mismatch', 503);
+  if (config.issuer !== trust.identityOrigin || config.publicOrigin !== trust.sourceOrigin ||
+      config.clientId !== trust.clientId || config.deploymentInstanceKey !== trust.sourceInstance) fail('handoff_instance_mismatch', 503);
   try { validateIdentityRuntimeConfig(config); } catch { fail('handoff_identity_not_ready', 503); }
   // The backchannel Basic credential is derived once; the transport re-validates its shape on every request.
   const authorization = 'Basic ' + Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
   return { authorization, instanceKey: config.deploymentInstanceKey, clientId: config.clientId };
 }
 
-function ledgerConnection(env) {
-  for (const [name, expected] of Object.entries(REQUIRED)) if (env[name] !== expected) fail('handoff_instance_mismatch', 503);
+function ledgerConnection(env, trust = TRUST) {
+  for (const [name, expected] of Object.entries(required(trust))) if (env[name] !== expected) fail('handoff_instance_mismatch', 503);
   const user = env.P03_HANDOFF_DB_USER, password = env.P03_HANDOFF_DB_PASSWORD;
   if (typeof user !== 'string' || !/^[A-Za-z0-9_]{1,32}$/.test(user) || typeof password !== 'string' || password.length < 16 ||
       user === env.DB_USER) fail('handoff_ledger_role_missing', 503); // the ALL PRIVILEGES application account is never the ledger role
@@ -118,16 +146,19 @@ async function probeLedger(pool, database) {
 }
 
 // Builds the runtime. `deps` allows tests and laboratories to inject the pool factory, models, clock and the
-// isolated TLS routing (which the transport itself only accepts in development/test).
+// isolated TLS routing (which the transport itself only accepts in development/test); P03_HANDOFF_LAB does the
+// same for a real server process under the same environment restriction.
 async function createFormalHandoffRuntime({ env = process.env, deps = {} } = {}) {
   const state = resolveFormalHandoffSwitch(env);
   if (state === 'disabled') return Object.freeze({ enabled: false, switch: 'disabled', close: async () => {} });
-  const identity = identityFacts(env);
-  const connection = ledgerConnection(env);
+  const lab = laboratoryFacts(env, deps);
+  const trust = lab?.instances ? Object.freeze({ ...TRUST, sourceInstance: lab.instances.source, targetInstance: lab.instances.target }) : TRUST;
+  const identity = identityFacts(env, trust);
+  const connection = ledgerConnection(env, trust);
   const timeoutMs = env.P03_HANDOFF_TIMEOUT_MS === undefined ? 5000 : Number(env.P03_HANDOFF_TIMEOUT_MS);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) fail('invalid_handoff_configuration');
   const transport = new I03HttpsTransport({ ...TRUST, getAuthorization: () => identity.authorization, timeoutMs,
-    ...(deps.laboratory ? { laboratory: deps.laboratory } : {}) }, env);
+    ...(lab ? { laboratory: lab.laboratory } : {}) }, env);
   const now = deps.now || Date.now;
   const client = new I03FormalClient({ transport, now, timeoutMs });
   const createPool = deps.createPool || (options => require('mysql2/promise').createPool(options));
@@ -147,12 +178,12 @@ async function createFormalHandoffRuntime({ env = process.env, deps = {} } = {})
   const source = createSourceAdapter({ Message: models.Message, Conversation: models.Conversation, File: models.File, uploadRoot });
   const authority = createHandoffAuthority({ User: models.User, Message: models.Message, Conversation: models.Conversation, store,
     ...(deps.isStudentAccount ? { isStudentAccount: deps.isStudentAccount } : {}) });
-  const service = new I03FormalSource({ source, store, authority, client, now, sourceInstance: TRUST.sourceInstance, targetInstance: TRUST.targetInstance });
+  const service = new I03FormalSource({ source, store, authority, client, now, sourceInstance: trust.sourceInstance, targetInstance: trust.targetInstance });
   let stopCleanup = null;
   return Object.freeze({
     enabled: true, switch: 'enabled', wire: FORMAL_VERSION, service, store, transport,
     readiness: Object.freeze({ ...readiness, identity_client_id: identity.clientId, instance_key: identity.instanceKey,
-      source_instance: TRUST.sourceInstance, target_instance: TRUST.targetInstance, checked_at: new Date(now()).toISOString() }),
+      source_instance: trust.sourceInstance, target_instance: trust.targetInstance, laboratory: !!lab?.instances, checked_at: new Date(now()).toISOString() }),
     startCleanup(options = {}) {
       if (!stopCleanup) stopCleanup = store.startCleanup({ intervalMs: 60000, ...options });
       return stopCleanup;
@@ -169,11 +200,11 @@ async function bootstrapFormalHandoff({ env = process.env, logger = console, dep
   const runtime = await createFormalHandoffRuntime({ env, deps });
   if (runtime.enabled) {
     runtime.startCleanup();
-    logger.info(`P03 formal handoff runtime ready (wire ${runtime.wire}, instance ${runtime.readiness.instance_key}); public save entry stays closed`);
+    logger.info(`P03 formal handoff runtime ready (wire ${runtime.wire}, instance ${runtime.readiness.instance_key}${runtime.readiness.laboratory ? ', isolated laboratory' : ''}); the save entry answers only for eligible sessions`);
   } else {
     logger.info('P03 formal handoff runtime disabled (default); no ledger connection or peer call');
   }
   return runtime;
 }
 
-module.exports = { createFormalHandoffRuntime, bootstrapFormalHandoff, resolveFormalHandoffSwitch, probeLedger, assessGrants, REQUIRED, COLUMNS, SWITCH };
+module.exports = { createFormalHandoffRuntime, bootstrapFormalHandoff, resolveFormalHandoffSwitch, probeLedger, assessGrants, REQUIRED, COLUMNS, SWITCH, LAB };

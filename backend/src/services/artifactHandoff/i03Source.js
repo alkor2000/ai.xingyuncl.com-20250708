@@ -43,7 +43,9 @@ class HandoffSource {
   tx(owner, fn, options) { return this.store.transaction(String(owner), fn, options); }
   view(record) {
     return { schema_version: 1, protocol_version: record.protocol_version || VERSION, draft_only: true, operation_id: record.id,
-      status: record.status, ...(record.last_error ? { error_code: record.last_error } : {}),
+      status: record.status, ...(record.source_id ? { message_id: record.source_id } : {}),
+      ...(record.frozen_at ? { frozen_at: record.frozen_at } : {}), ...(record.receipt_at ? { last_synced_at: record.receipt_at } : {}),
+      ...(record.last_error ? { error_code: record.last_error } : {}),
       ...(record.retry_at ? { retry_at: Math.ceil(record.retry_at / 1000) } : {}),
       ...(record.operation_expires_at != null ? { operation_expires_at: record.operation_expires_at,
         recovery_until: record.operation_expires_at + RECOVERY_SECONDS } : {}),
@@ -103,7 +105,7 @@ class HandoffSource {
           current = { id, owner: String(owner), choice, source_id: body.message_id, protocol_version: this.wireVersion, binding: encoded.binding,
             binding_sha256: encoded.binding_sha256, content_sha256: selected.manifest.content_sha256,
             status: 'ready', identity_attempted: false, released_at: null, cancel_requested: false,
-            operation_expires_at: null, recovery_until: null, hold: false,
+            operation_expires_at: null, recovery_until: null, hold: false, frozen_at: this.now(),
             write_until: this.now() + DAY, expires_at: this.now() + 30 * DAY };
           state.operations[id] = current;
           state.snapshots[id] = { packet: encoded.package, request: structuredClone(body), expires_at: current.write_until };
@@ -117,6 +119,14 @@ class HandoffSource {
     });
   }
   async get(owner, id) { return this.view(await this.owned(owner, id)); }
+  // Local views of this owner's operations for one source message, newest first; nothing is asked of any peer.
+  async list(owner, messageId) {
+    await this.authority.checkSubject(owner);
+    if (!validUUID(messageId)) fail('invalid_request');
+    const records = await this.tx(owner, state => Object.values(state.operations)
+      .filter(op => op.owner === String(owner) && op.source_id === messageId && (op.protocol_version || VERSION) === this.wireVersion));
+    return records.sort((a, b) => (b.frozen_at || 0) - (a.frozen_at || 0)).map(record => this.view(record));
+  }
   // The trusted deadline is persisted from the validated grant before the target request. It is set
   // once; a different value for the same operation is a binding mismatch (rc1 §3.1).
   async learnDeadline(owner, record, grant) {
@@ -144,7 +154,7 @@ class HandoffSource {
             : !(old.status === 'prepared' && receipt.status === 'not_received');
         if (!ok) fail('receipt_invalid', 502, true);
       }
-      current.receipt = receipt; current.status = receipt.status;
+      current.receipt = receipt; current.status = receipt.status; current.receipt_at = this.now();
       delete current.last_error; delete current.retry_at; delete current.pending_attempt; delete current.pending_phase;
     });
   }

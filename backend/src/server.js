@@ -46,7 +46,7 @@ async function startServer() {
 
     // 2.5 P03 教师成果正式交接运行时：默认关闭（不连账本、不读凭据、不调对端）。显式 P03_HANDOFF_ENABLED=true
     //     但身份/实例/受限账本/可信 HTTPS 任一事实不全时抛出固定码，启动失败关闭，不会带着半开的开关运行。
-    //     公开保存入口仍未挂载；这里只持有运行时对象。
+    //     保存入口（/api/p03/handoffs）只在这个对象 enabled 时才会做事，否则统一回答 handoff_disabled。
     app.locals.p03Handoff = await require('./services/artifactHandoff/formalRuntime').bootstrapFormalHandoff({ env: process.env, logger });
 
     // 3. 启动HTTP服务器

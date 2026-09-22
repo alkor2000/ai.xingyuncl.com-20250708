@@ -101,6 +101,10 @@ require('./routes/artifactHandoffDev').mount(app);
 /* Selected-answer downloads: strict parser and no request/body logging. */
 require('./routes/artifactExports').mount(app);
 
+/* Save-to-lesson-library entry: speaks only to the default-off formal runtime in app.locals.p03Handoff
+   (server.js sets it after database init); while disabled every call answers handoff_disabled. */
+require('./routes/artifactHandoffEntry').mount(app);
+
 /* 请求日志（Morgan -> Winston） */
 app.use(morgan('combined', {
   stream: {
