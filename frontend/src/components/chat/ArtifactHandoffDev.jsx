@@ -71,7 +71,11 @@ export default function ArtifactHandoffDev({ messageId }) {
       setStatus(result)
     } catch (e) {
       if (e.response?.data?.error?.code === 'authorization_expired') grant.current = null
-      try { setStatus(await get(`/snapshots/${snapshot.id}/status`)) } catch { /* Preserve the original failure. */ }
+      try {
+        const recovered = await get(`/snapshots/${snapshot.id}/status`)
+        setStatus(recovered)
+        if (recovered.state === 'mock_received') return
+      } catch { /* Preserve the original failure. */ }
       throw e
     }
   })
@@ -162,6 +166,9 @@ export default function ArtifactHandoffDev({ messageId }) {
                 <Button disabled={busy} onClick={deliver}>{t(`${prefix}deliver`)}</Button>
                 <Button disabled={busy} onClick={() => run(async () => setStatus(await get(`/snapshots/${snapshot.id}/status`)))}>{t(`${prefix}query`)}</Button>
               </Space>
+              {status?.receipt && <pre data-testid="handoff-receipt" style={preStyle}>
+                {JSON.stringify({ receipt: status.receipt, continuation: status.continuation }, null, 2)}
+              </pre>}
             </>}
           </Space>
         </details>}

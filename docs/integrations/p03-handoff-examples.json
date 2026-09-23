@@ -1,0 +1,192 @@
+{
+  "example_only": true,
+  "draft_version": "p03-content-proposal-20260919.2",
+  "protocol_status": "awaiting_I03_T11",
+  "authorization": "synthetic_local_tester_not_verified_teacher",
+  "limits": {
+    "answer_bytes": 131072,
+    "attachment_bytes_each": 65536,
+    "attachment_count": 3
+  },
+  "inventory": [
+    {
+      "source_id": "a0300000-0000-4000-8000-000000000004",
+      "name": "activity.md",
+      "format": "text/markdown",
+      "version": "sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778",
+      "byte_length": 58,
+      "status": "ready"
+    },
+    {
+      "source_id": "a0300000-0000-4000-8000-000000000005",
+      "status": "attachment_unavailable"
+    },
+    {
+      "source_id": "a0300000-0000-4000-8000-000000000006",
+      "status": "attachment_unsupported"
+    }
+  ],
+  "selected": {
+    "binding": {
+      "operation_id": "8865d44a-4e87-4dd7-8bdf-92513041a460",
+      "snapshot_id": "cec4b809-9af0-42a8-9ef0-f33454a5f04f",
+      "receiver": "mock-tedna",
+      "packet_sha256": "6fe0f22f8338aba83b65c13341b5fa7ce0e2c41a8261517b4d9e0b9282ae6d39"
+    },
+    "source_checks": {
+      "source_access": "allowed",
+      "selected_attachments": "readable",
+      "checked_at": 1789804800,
+      "cross_platform_authority": "simulated_only"
+    },
+    "manifest": {
+      "source": {
+        "platform": "practice",
+        "kind": "assistant_message",
+        "object_id": "a0300000-0000-4000-8000-000000000001",
+        "conversation_id": "a0300000-0000-4000-8000-000000000003",
+        "version": "sha256:60493bc925186568874804bbff0bca6c6b234b1ca44ae01182513d6367d008bc",
+        "generated_at": 1789689600,
+        "model_name": null
+      },
+      "locator": {
+        "basis": "answer_without_thinking_utf16",
+        "start": 11,
+        "end": 25
+      },
+      "format": "text/markdown",
+      "byte_length": 42,
+      "content_sha256": "1ee6bd2d2b0df7025ddd081b06e8b751917bdc6d3fbc730bf0a065bf5d4a60bc",
+      "summary": {
+        "kind": "verbatim_excerpt",
+        "text": "先观察，再记录两杯水的变化。"
+      },
+      "purpose": "lesson_preparation",
+      "visibility": "private",
+      "material_status": "ai_output_unreviewed",
+      "web_links": "references_only_not_fetched",
+      "attachments": [
+        {
+          "source_id": "a0300000-0000-4000-8000-000000000004",
+          "name": "activity.md",
+          "format": "text/markdown",
+          "version": "sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778",
+          "byte_length": 58
+        }
+      ],
+      "draft_version": "p03-content-proposal-20260919.2"
+    },
+    "payload": {
+      "text": "先观察，再记录两杯水的变化。",
+      "attachments": [
+        {
+          "source_id": "a0300000-0000-4000-8000-000000000004",
+          "name": "activity.md",
+          "format": "text/markdown",
+          "version": "sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778",
+          "byte_length": 58,
+          "text": "# 合成材料\n让学生观察两杯水的蒸发现象。\n"
+        }
+      ]
+    }
+  },
+  "whole_answer_without_attachments": {
+    "manifest": {
+      "source": {
+        "platform": "practice",
+        "kind": "assistant_message",
+        "object_id": "a0300000-0000-4000-8000-000000000001",
+        "conversation_id": "a0300000-0000-4000-8000-000000000003",
+        "version": "sha256:60493bc925186568874804bbff0bca6c6b234b1ca44ae01182513d6367d008bc",
+        "generated_at": 1789689600,
+        "model_name": null
+      },
+      "locator": {
+        "basis": "answer_without_thinking_utf16",
+        "start": 0,
+        "end": 96
+      },
+      "format": "text/markdown",
+      "byte_length": 206,
+      "content_sha256": "0b10c7ee810f6a957c7d9fba07aac639e198a86bd0797b163479075bd55289a1",
+      "summary": {
+        "kind": "verbatim_excerpt",
+        "text": "# 水循环探究方案\n\n先观察，再记录两杯水的变化。\n\n比较结果，讨论影响蒸发的条件。🌧️\n\n参考链接：https://example.org/water-cycle（仅链接，未抓取正文）。\n"
+      },
+      "purpose": "lesson_preparation",
+      "visibility": "private",
+      "material_status": "ai_output_unreviewed",
+      "web_links": "references_only_not_fetched",
+      "attachments": [],
+      "draft_version": "p03-content-proposal-20260919.2"
+    },
+    "payload": {
+      "text": "# 水循环探究方案\n\n先观察，再记录两杯水的变化。\n\n比较结果，讨论影响蒸发的条件。🌧️\n\n参考链接：https://example.org/water-cycle（仅链接，未抓取正文）。\n",
+      "attachments": []
+    }
+  },
+  "exact_packet_utf8": "{\"manifest\":{\"source\":{\"platform\":\"practice\",\"kind\":\"assistant_message\",\"object_id\":\"a0300000-0000-4000-8000-000000000001\",\"conversation_id\":\"a0300000-0000-4000-8000-000000000003\",\"version\":\"sha256:60493bc925186568874804bbff0bca6c6b234b1ca44ae01182513d6367d008bc\",\"generated_at\":1789689600,\"model_name\":null},\"locator\":{\"basis\":\"answer_without_thinking_utf16\",\"start\":11,\"end\":25},\"format\":\"text/markdown\",\"byte_length\":42,\"content_sha256\":\"1ee6bd2d2b0df7025ddd081b06e8b751917bdc6d3fbc730bf0a065bf5d4a60bc\",\"summary\":{\"kind\":\"verbatim_excerpt\",\"text\":\"先观察，再记录两杯水的变化。\"},\"purpose\":\"lesson_preparation\",\"visibility\":\"private\",\"material_status\":\"ai_output_unreviewed\",\"web_links\":\"references_only_not_fetched\",\"attachments\":[{\"source_id\":\"a0300000-0000-4000-8000-000000000004\",\"name\":\"activity.md\",\"format\":\"text/markdown\",\"version\":\"sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778\",\"byte_length\":58}],\"draft_version\":\"p03-content-proposal-20260919.2\"},\"payload\":{\"text\":\"先观察，再记录两杯水的变化。\",\"attachments\":[{\"source_id\":\"a0300000-0000-4000-8000-000000000004\",\"name\":\"activity.md\",\"format\":\"text/markdown\",\"version\":\"sha256:9f8492116085df1855ab5b5735f52eaae1a56eb6ba4253eb2cc576c51d374778\",\"byte_length\":58,\"text\":\"# 合成材料\\n让学生观察两杯水的蒸发现象。\\n\"}]}}",
+  "recovered": {
+    "state": "mock_received",
+    "operation_id": "8865d44a-4e87-4dd7-8bdf-92513041a460",
+    "snapshot_id": "cec4b809-9af0-42a8-9ef0-f33454a5f04f",
+    "receiver": "mock-tedna",
+    "packet_sha256": "6fe0f22f8338aba83b65c13341b5fa7ce0e2c41a8261517b4d9e0b9282ae6d39",
+    "receipt_id": "92f92da5-bff9-4c00-9b1c-098e6f9b22f0",
+    "receipt": {
+      "receipt_version": "p03-mock-receipt/1",
+      "operation_id": "8865d44a-4e87-4dd7-8bdf-92513041a460",
+      "snapshot_id": "cec4b809-9af0-42a8-9ef0-f33454a5f04f",
+      "receiver": "mock-tedna",
+      "packet_sha256": "6fe0f22f8338aba83b65c13341b5fa7ce0e2c41a8261517b4d9e0b9282ae6d39",
+      "receipt_id": "92f92da5-bff9-4c00-9b1c-098e6f9b22f0",
+      "resource_id": "85e32f93-dfb1-4919-bf97-30dab2d1a9aa",
+      "resource_version": "sha256:6fe0f22f8338aba83b65c13341b5fa7ce0e2c41a8261517b4d9e0b9282ae6d39",
+      "accepted_at": 1789804800,
+      "persistence": "durable",
+      "visibility": "private",
+      "simulated": true
+    },
+    "replayed": true,
+    "continuation": {
+      "state": "not_started",
+      "action": "select_resource",
+      "receiver": "mock-tedna",
+      "resource_id": "85e32f93-dfb1-4919-bf97-30dab2d1a9aa",
+      "resource_version": "sha256:6fe0f22f8338aba83b65c13341b5fa7ce0e2c41a8261517b4d9e0b9282ae6d39",
+      "purpose": "lesson_preparation"
+    }
+  },
+  "i03_draft": {
+    "protocol_version": "i03-draft-0.1",
+    "binding": {
+      "operation_id": "8865d44a-4e87-4dd7-8bdf-92513041a460",
+      "source_instance": "practice-synthetic",
+      "target_instance": "tedna-synthetic",
+      "action": "teacher_artifact_import",
+      "artifact_id": "cec4b809-9af0-42a8-9ef0-f33454a5f04f",
+      "artifact_version": "sha256:60493bc925186568874804bbff0bca6c6b234b1ca44ae01182513d6367d008bc",
+      "manifest_sha256": "7722779d083bf289f263c7f9101049fd1c66c7ac984232148e44ff05b5fe084a",
+      "selection_sha256": "89875fd273071bc844e2ca34b9aff60d120ebfacf983b0279f210b23118e5a49",
+      "byte_length": 100,
+      "destination": "personal_library",
+      "landing": "lesson_preparation",
+      "return_kind": "practice_artifact",
+      "rights": "persistent_private_copy"
+    },
+    "binding_sha256": "745e335c128b0aa58c1eb3c7324e580cb60fe3baa1e1a074d3fad1857101a4e1",
+    "package": {
+      "manifest_b64": "eyJzY2hlbWFfdmVyc2lvbiI6MSwicHJvdG9jb2xfdmVyc2lvbiI6ImkwMy1kcmFmdC0wLjEiLCJzb3VyY2UiOnsicGxhdGZvcm0iOiJwcmFjdGljZSIsImluc3RhbmNlIjoicHJhY3RpY2Utc3ludGhldGljIiwia2luZCI6ImFzc2lzdGFudF9tZXNzYWdlIiwib2JqZWN0X2lkIjoiYTAzMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwiY29udmVyc2F0aW9uX2lkIjoiYTAzMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIiwidmVyc2lvbiI6InNoYTI1Njo2MDQ5M2JjOTI1MTg2NTY4ODc0ODA0YmJmZjBiY2E2YzZiMjM0YjFjYTQ0YWUwMTE4MjUxM2Q2MzY3ZDAwOGJjIiwiZ2VuZXJhdGVkX2F0IjoxNzg5Njg5NjAwLCJtb2RlbF9uYW1lIjpudWxsfSwibG9jYXRvciI6eyJiYXNpcyI6ImFuc3dlcl93aXRob3V0X3RoaW5raW5nX3V0ZjE2Iiwic3RhcnQiOjExLCJlbmQiOjI1fSwidGl0bGUiOiLkuKTmna/msLTop4Llr5/mlrnmoYjvvIjlkIjmiJDvvIkiLCJwdXJwb3NlIjoibGVzc29uX3ByZXBhcmF0aW9uIiwidmlzaWJpbGl0eSI6InByaXZhdGUiLCJtYXRlcmlhbF9zdGF0dXMiOiJhaV9vdXRwdXRfdW5yZXZpZXdlZCIsIndlYl9saW5rcyI6InJlZmVyZW5jZXNfb25seV9ub3RfZmV0Y2hlZCIsInJpZ2h0cyI6InBlcnNpc3RlbnRfcHJpdmF0ZV9jb3B5IiwiYmxvYnMiOlt7ImJsb2JfaWQiOiJhbnN3ZXIiLCJzb3VyY2VfaWQiOiJhMDMwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJuYW1lIjoiYW5zd2VyLm1kIiwibWltZSI6InRleHQvbWFya2Rvd24iLCJieXRlX2xlbmd0aCI6NDIsInNoYTI1NiI6IjhkMWM2Nzc4Y2UzMDhiZWZjMDIzZTkwZDFlOWJiNGZjMTQ1MTE3NGQyZGZiZjZhZWM0ZTA0MTVkNmYxNDFlZTEiLCJ2ZXJzaW9uIjoic2hhMjU2OjYwNDkzYmM5MjUxODY1Njg4NzQ4MDRiYmZmMGJjYTZjNmIyMzRiMWNhNDRhZTAxMTgyNTEzZDYzNjdkMDA4YmMifSx7ImJsb2JfaWQiOiJhMDMwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDQiLCJzb3VyY2VfaWQiOiJhMDMwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDQiLCJuYW1lIjoiYWN0aXZpdHkubWQiLCJtaW1lIjoidGV4dC9tYXJrZG93biIsImJ5dGVfbGVuZ3RoIjo1OCwic2hhMjU2IjoiOWY4NDkyMTE2MDg1ZGYxODU1YWI1YjU3MzVmNTJlYWFlMWE1NmViNmJhNDI1M2ViMmNjNTc2YzUxZDM3NDc3OCIsInZlcnNpb24iOiJzaGEyNTY6OWY4NDkyMTE2MDg1ZGYxODU1YWI1YjU3MzVmNTJlYWFlMWE1NmViNmJhNDI1M2ViMmNjNTc2YzUxZDM3NDc3OCJ9XX0=",
+      "blobs": [
+        {
+          "blob_id": "answer",
+          "data_b64": "5YWI6KeC5a+f77yM5YaN6K6w5b2V5Lik5p2v5rC055qE5Y+Y5YyW44CC"
+        },
+        {
+          "blob_id": "a0300000-0000-4000-8000-000000000004",
+          "data_b64": "IyDlkIjmiJDmnZDmlpkK6K6p5a2m55Sf6KeC5a+f5Lik5p2v5rC055qE6JK45Y+R546w6LGh44CCCg=="
+        }
+      ]
+    }
+  }
+}

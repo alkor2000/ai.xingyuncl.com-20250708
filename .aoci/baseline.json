@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-19T03:48:31Z",
+  "updated_at": "2026-09-23T12:37:39Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -21,9 +21,9 @@
       "normalized_sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476"
     },
     ".gitignore": {
-      "sha256": "2c0ebf5afcbd3fecd4d90765373202542ddc7497cbc3aba4abd6ee19eeadf895",
-      "size": 1762,
-      "normalized_sha256": "2c0ebf5afcbd3fecd4d90765373202542ddc7497cbc3aba4abd6ee19eeadf895"
+      "sha256": "a0b41287319582b46c4a2c45fc54865dcd94bd16618cba6262b6c3dc968fa3ac",
+      "size": 1822,
+      "normalized_sha256": "a0b41287319582b46c4a2c45fc54865dcd94bd16618cba6262b6c3dc968fa3ac"
     },
     "AGENTS.md": {
       "role": "index",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "13a4d3dc587eb4abe0c3de8b096c7ada291be90ab01fc89d7015b1408e139072",
-      "size": 313494,
-      "normalized_sha256": "13a4d3dc587eb4abe0c3de8b096c7ada291be90ab01fc89d7015b1408e139072"
+      "sha256": "005deb7ddf07cdcb4257ae0f92088071463c7c1009fa0a7dd70353fb0b2c6ff8",
+      "size": 337622,
+      "normalized_sha256": "005deb7ddf07cdcb4257ae0f92088071463c7c1009fa0a7dd70353fb0b2c6ff8"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,6 +89,11 @@
       "sha256": "7bc324752b3edaacff16a7ac036ee44c3988818ef46cfa689bf19b8b323a43ef",
       "size": 1244,
       "normalized_sha256": "7bc324752b3edaacff16a7ac036ee44c3988818ef46cfa689bf19b8b323a43ef"
+    },
+    "backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js": {
+      "sha256": "2720c8ac9893cc8ba9e48ffe31905b4cfb417d6bfee29b91795937d25b6778eb",
+      "size": 2757,
+      "normalized_sha256": "2720c8ac9893cc8ba9e48ffe31905b4cfb417d6bfee29b91795937d25b6778eb"
     },
     "backend/migrations/000_baseline.sql": {
       "role": "index",
@@ -190,6 +195,11 @@
       "size": 4120,
       "normalized_sha256": "9fceb954d5241025a0f04f069d3bae53f18b74caaa24ecf0283a4ea8f03af848"
     },
+    "backend/scripts/p03-ledger-readiness.cjs": {
+      "sha256": "2276db45099f00e892e09b52b627321da01bf36b484941fbc696de3bce389a49",
+      "size": 1978,
+      "normalized_sha256": "2276db45099f00e892e09b52b627321da01bf36b484941fbc696de3bce389a49"
+    },
     "backend/scripts/test-identity-enrollment-runtime.cjs": {
       "role": "observe",
       "sha256": "76e69a9d9fba79145cb1a5cb826474a9c4a959bc48af72ec0b5d901aea04580f",
@@ -266,6 +276,18 @@
       "sha256": "99b4be75f2051ab659ca8cd8743845cb6e1343504c3ede91f78f3e9b0a4f64cb",
       "size": 2719,
       "normalized_sha256": "99b4be75f2051ab659ca8cd8743845cb6e1343504c3ede91f78f3e9b0a4f64cb"
+    },
+    "backend/src/__tests__/helpers/p03FormalPeers.js": {
+      "role": "observe",
+      "sha256": "40cc65b41b6fb0d4ed88a061c34b2f26d81eb18fd5e5d36901b905ffcc41811c",
+      "size": 5581,
+      "normalized_sha256": "40cc65b41b6fb0d4ed88a061c34b2f26d81eb18fd5e5d36901b905ffcc41811c"
+    },
+    "backend/src/__tests__/helpers/p03I03Fixture.js": {
+      "role": "observe",
+      "sha256": "074ad5d90085fd324a67dc436df861e658de1bd2d034fcd55ca3db6281810cb2",
+      "size": 2389,
+      "normalized_sha256": "074ad5d90085fd324a67dc436df861e658de1bd2d034fcd55ca3db6281810cb2"
     },
     "backend/src/__tests__/integration/auth.integration.test.js": {
       "role": "observe",
@@ -369,6 +391,12 @@
       "size": 14726,
       "normalized_sha256": "d7627ba936b75a2076fac991149b483a87ad6c74e1c9d81879a688b60d0f2147"
     },
+    "backend/src/__tests__/unit/routes/artifactHandoffEntry.test.js": {
+      "role": "observe",
+      "sha256": "4481434ba958478320324f4ac8b5e1a3b05d4687789ee8eaf10ef7246979ab38",
+      "size": 16399,
+      "normalized_sha256": "4481434ba958478320324f4ac8b5e1a3b05d4687789ee8eaf10ef7246979ab38"
+    },
     "backend/src/__tests__/unit/services/CreditsService.test.js": {
       "role": "observe",
       "sha256": "751a616d29fa4231a5a954e7aa26033b43f3c0a1dfed9c3a44e5c9fd2838af37",
@@ -443,9 +471,81 @@
     },
     "backend/src/__tests__/unit/services/artifactHandoff.test.js": {
       "role": "observe",
-      "sha256": "c97d3d296efd514bea7ec5844b91acbd679a81a8652388c64e7ea3fbb2386e11",
-      "size": 16356,
-      "normalized_sha256": "c97d3d296efd514bea7ec5844b91acbd679a81a8652388c64e7ea3fbb2386e11"
+      "sha256": "c649b4a97b767057f8a9d6db9b3a346914b53aadfd449fc00887fa485c33b5e8",
+      "size": 22010,
+      "normalized_sha256": "c649b4a97b767057f8a9d6db9b3a346914b53aadfd449fc00887fa485c33b5e8"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffAuthority.test.js": {
+      "role": "observe",
+      "sha256": "f717e292ffc9bc746398af86338365ad4a386bc45b18e9a5d2a5bb03c0f12971",
+      "size": 4282,
+      "normalized_sha256": "f717e292ffc9bc746398af86338365ad4a386bc45b18e9a5d2a5bb03c0f12971"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffBindingCandidate.test.js": {
+      "role": "observe",
+      "sha256": "6e433d973d19af33384a71427d490785b7269e2217b5b2dd24b6c3eb43b88132",
+      "size": 1857,
+      "normalized_sha256": "6e433d973d19af33384a71427d490785b7269e2217b5b2dd24b6c3eb43b88132"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffDraft.test.js": {
+      "role": "observe",
+      "sha256": "b4c8de38b6192219b40cc3203b622e50febb145e83be71a10b5c996db304d96b",
+      "size": 5452,
+      "normalized_sha256": "b4c8de38b6192219b40cc3203b622e50febb145e83be71a10b5c996db304d96b"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffFormalHttps.test.js": {
+      "role": "observe",
+      "sha256": "d2c04507188bb3cdbad419cee0033003e520d7b847ba1a76d711dfa41620cc85",
+      "size": 13991,
+      "normalized_sha256": "d2c04507188bb3cdbad419cee0033003e520d7b847ba1a76d711dfa41620cc85"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffFormalRuntime.test.js": {
+      "role": "observe",
+      "sha256": "eb66271dfcc048119f2a9932c1588d4b98882dfac54745a3d24fcdfdd87e7968",
+      "size": 12403,
+      "normalized_sha256": "eb66271dfcc048119f2a9932c1588d4b98882dfac54745a3d24fcdfdd87e7968"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffHttpsTransport.test.js": {
+      "role": "observe",
+      "sha256": "eff79424795b39f4ad939d37384875053805139ea665f0cdd904af8671747ddc",
+      "size": 10700,
+      "normalized_sha256": "eff79424795b39f4ad939d37384875053805139ea665f0cdd904af8671747ddc"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03Client.test.js": {
+      "role": "observe",
+      "sha256": "efec186c5578adda94a72d6ed462a7d64ea6a1b3c8bf67fe01006ae36b70ab16",
+      "size": 9720,
+      "normalized_sha256": "efec186c5578adda94a72d6ed462a7d64ea6a1b3c8bf67fe01006ae36b70ab16"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03FormalClient.test.js": {
+      "role": "observe",
+      "sha256": "bc4daf38f27db340f704f9958df4c76426e042eac6e1b52375f4e8549e0591f2",
+      "size": 9476,
+      "normalized_sha256": "bc4daf38f27db340f704f9958df4c76426e042eac6e1b52375f4e8549e0591f2"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03Recycle.test.js": {
+      "role": "observe",
+      "sha256": "3faee87d3d383f2d9cb95796fff8729a382f751b73441b2675b651f7a07dad69",
+      "size": 7331,
+      "normalized_sha256": "3faee87d3d383f2d9cb95796fff8729a382f751b73441b2675b651f7a07dad69"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03Source.test.js": {
+      "role": "observe",
+      "sha256": "fd9d018144b54b8f264ab35f29f1597be49a061877a3bec04693032b85891614",
+      "size": 12184,
+      "normalized_sha256": "fd9d018144b54b8f264ab35f29f1597be49a061877a3bec04693032b85891614"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffI03Window.test.js": {
+      "role": "observe",
+      "sha256": "bfa5e3b72d883fd1168c52cf9953a997c55635eb81d2dd4447b00e6cbfc983f9",
+      "size": 16407,
+      "normalized_sha256": "bfa5e3b72d883fd1168c52cf9953a997c55635eb81d2dd4447b00e6cbfc983f9"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffMigrationCandidate.test.js": {
+      "role": "observe",
+      "sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b",
+      "size": 1666,
+      "normalized_sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b"
     },
     "backend/src/__tests__/unit/services/auth/IdentityIntegrationServices.test.js": {
       "role": "observe",
@@ -482,6 +582,18 @@
       "sha256": "f7a65bbac569c28c12b9e808bbb43178a56aa2d9e50a9cbbf701eb265c588164",
       "size": 5731,
       "normalized_sha256": "f7a65bbac569c28c12b9e808bbb43178a56aa2d9e50a9cbbf701eb265c588164"
+    },
+    "backend/src/__tests__/unit/services/chat/discussionSummary.test.js": {
+      "role": "observe",
+      "sha256": "0f27c10358675666180a3a699a0c0aa23d3e56b681fe226cf7dc110cfbc21b40",
+      "size": 3247,
+      "normalized_sha256": "0f27c10358675666180a3a699a0c0aa23d3e56b681fe226cf7dc110cfbc21b40"
+    },
+    "backend/src/__tests__/unit/services/chat/discussionSummaryController.test.js": {
+      "role": "observe",
+      "sha256": "4d6a839c71f1bbbe607b430e13d06221ce09af4af56b9e11343e8d3e883c5339",
+      "size": 6181,
+      "normalized_sha256": "4d6a839c71f1bbbe607b430e13d06221ce09af4af56b9e11343e8d3e883c5339"
     },
     "backend/src/__tests__/unit/services/chat/outputFormatInstructions.test.js": {
       "role": "observe",
@@ -526,9 +638,9 @@
       "normalized_sha256": "44730fdfd3f35b620f34527c9f0585c2005ecbaef437fe973f78680e4ddbaf8f"
     },
     "backend/src/app.js": {
-      "sha256": "ea03695cab96bb6eaa1d1a8701a445c930a2134199996c1923e0a1f5013929c4",
-      "size": 8920,
-      "normalized_sha256": "ea03695cab96bb6eaa1d1a8701a445c930a2134199996c1923e0a1f5013929c4"
+      "sha256": "8fdd2778984c3d4f4876a67f0449854507fc118f416c8c0f0123580ec9cb3efe",
+      "size": 9326,
+      "normalized_sha256": "8fdd2778984c3d4f4876a67f0449854507fc118f416c8c0f0123580ec9cb3efe"
     },
     "backend/src/config/aiLabTasks.js": {
       "sha256": "032c0e91b7ee12ac65335cdb16793855301f51694b7f147cfc6d551348147e39",
@@ -588,9 +700,9 @@
       "normalized_sha256": "79e9b75086134901441a61ed68ce8df023fe84da478adfe150807432aa4c40dd"
     },
     "backend/src/controllers/ChatControllerRefactored.js": {
-      "sha256": "aa35f0417a339198011ab6c21010b800e77487e571058707e0b0c4f957e051e7",
-      "size": 27641,
-      "normalized_sha256": "aa35f0417a339198011ab6c21010b800e77487e571058707e0b0c4f957e051e7"
+      "sha256": "10392ab7a71a98610bf3cede1face6f04ed301d9adf1fafc5d8d4fb3377d1447",
+      "size": 28507,
+      "normalized_sha256": "10392ab7a71a98610bf3cede1face6f04ed301d9adf1fafc5d8d4fb3377d1447"
     },
     "backend/src/controllers/DocTemplateController.js": {
       "sha256": "04bbf8bca80a4558aa366ce745f6dbe6af1e66553858539e73073bf00b768a1c",
@@ -1351,9 +1463,14 @@
       "normalized_sha256": "281eb14b77f34f761a31ac2375cb524939e5b2b2030d24e326e9f5f513cbc097"
     },
     "backend/src/routes/artifactHandoffDev.js": {
-      "sha256": "d7f0d2b0dd41d7d1617f1cbb1b99b8f1777155fbab10cdc4813f111cce494288",
-      "size": 5642,
-      "normalized_sha256": "d7f0d2b0dd41d7d1617f1cbb1b99b8f1777155fbab10cdc4813f111cce494288"
+      "sha256": "2056c167e7e1be71c6185c314e085f0a842b35df12d98cb2cabe22ffbd8e259f",
+      "size": 5734,
+      "normalized_sha256": "2056c167e7e1be71c6185c314e085f0a842b35df12d98cb2cabe22ffbd8e259f"
+    },
+    "backend/src/routes/artifactHandoffEntry.js": {
+      "sha256": "113e030e79d51d5416781777cc5c09ed79697c6dbb19207b5c332b26c2d4d09e",
+      "size": 10587,
+      "normalized_sha256": "113e030e79d51d5416781777cc5c09ed79697c6dbb19207b5c332b26c2d4d09e"
     },
     "backend/src/routes/auth.js": {
       "role": "index",
@@ -1413,6 +1530,11 @@
       "size": 1706,
       "normalized_sha256": "80516c3e85d55e45ee8560406d11ece5966ab6990e1d700b409036fe3f762500"
     },
+    "backend/src/routes/productFeedback.js": {
+      "sha256": "ef42b47ddc8530fe4ea9cb7b1e6b75bec8c1e105997d73e15fdff489d362dd3c",
+      "size": 4082,
+      "normalized_sha256": "ef42b47ddc8530fe4ea9cb7b1e6b75bec8c1e105997d73e15fdff489d362dd3c"
+    },
     "backend/src/routes/public.js": {
       "role": "index",
       "sha256": "703c3e9792ff56d63e885d23b308faded4bc06e49f41aacb7964acd8e046bb54",
@@ -1462,10 +1584,9 @@
       "normalized_sha256": "947e9a47e58d03d4e9dc73a2ccd23b6799301b069aff1bb7592528617f076422"
     },
     "backend/src/server.js": {
-      "role": "index",
-      "sha256": "e19245db37e779907e0033612cc2a82a4d69f0a37cc544599a458c6286431e98",
-      "size": 4624,
-      "normalized_sha256": "e19245db37e779907e0033612cc2a82a4d69f0a37cc544599a458c6286431e98"
+      "sha256": "34f305434c8765e7d4a1442a979adec751b84b6a24f036ccac65ccd8fdea376e",
+      "size": 5511,
+      "normalized_sha256": "34f305434c8765e7d4a1442a979adec751b84b6a24f036ccac65ccd8fdea376e"
     },
     "backend/src/services/CalendarService.js": {
       "role": "index",
@@ -1659,25 +1780,65 @@
       "size": 1728,
       "normalized_sha256": "6886b6a208722e55a46013ade1da56a89e1c04c2aec41badbeb4baba002829cf"
     },
+    "backend/src/services/artifactHandoff/formalRuntime.js": {
+      "sha256": "42619a958ee0119ea8ab1bce3782e0d46b1a73d7e29052793d6fc227c2515a2d",
+      "size": 13706,
+      "normalized_sha256": "42619a958ee0119ea8ab1bce3782e0d46b1a73d7e29052793d6fc227c2515a2d"
+    },
+    "backend/src/services/artifactHandoff/handoffAuthority.js": {
+      "sha256": "9cd224e1acdd13a29e259e914ee12d49368ee23577ef29ff0bf4000ccaf595ff",
+      "size": 3410,
+      "normalized_sha256": "9cd224e1acdd13a29e259e914ee12d49368ee23577ef29ff0bf4000ccaf595ff"
+    },
+    "backend/src/services/artifactHandoff/i03Client.js": {
+      "sha256": "02f95f3e51d84728d52400ed071d876f38ad8b820ac0f66407966340dbc03c19",
+      "size": 14789,
+      "normalized_sha256": "02f95f3e51d84728d52400ed071d876f38ad8b820ac0f66407966340dbc03c19"
+    },
+    "backend/src/services/artifactHandoff/i03Draft.js": {
+      "sha256": "7e21dfda6616d2b573cbed283204835a7d7ecb6f4d41c6060c64e6c6c9fd2ef0",
+      "size": 6580,
+      "normalized_sha256": "7e21dfda6616d2b573cbed283204835a7d7ecb6f4d41c6060c64e6c6c9fd2ef0"
+    },
+    "backend/src/services/artifactHandoff/i03HttpsTransport.js": {
+      "sha256": "66e674135fdc460cfa274c3b8116bda5b7cdb24efe880636a080e0213d06df20",
+      "size": 7607,
+      "normalized_sha256": "66e674135fdc460cfa274c3b8116bda5b7cdb24efe880636a080e0213d06df20"
+    },
+    "backend/src/services/artifactHandoff/i03Source.js": {
+      "sha256": "c4c1ff6c1ffb248264322990dcdc15572bdee4b88c6089985cb1e611e9322a4e",
+      "size": 24215,
+      "normalized_sha256": "c4c1ff6c1ffb248264322990dcdc15572bdee4b88c6089985cb1e611e9322a4e"
+    },
+    "backend/src/services/artifactHandoff/mysqlStore.js": {
+      "sha256": "065beb58ac682af4e755da8ff5a2e2676c1e0a3b1bd1c9b425a02b54e49b80c3",
+      "size": 13227,
+      "normalized_sha256": "065beb58ac682af4e755da8ff5a2e2676c1e0a3b1bd1c9b425a02b54e49b80c3"
+    },
+    "backend/src/services/artifactHandoff/receiver.js": {
+      "sha256": "eb94be2a5f44080b1780bb48c232f85a00d3ae1858c0d22b7b3cd9f643c13b94",
+      "size": 3224,
+      "normalized_sha256": "eb94be2a5f44080b1780bb48c232f85a00d3ae1858c0d22b7b3cd9f643c13b94"
+    },
     "backend/src/services/artifactHandoff/selection.js": {
       "sha256": "0ec494fed420cc295990ee31444dcca69f6eac9533b93d972518830a44f54708",
       "size": 3754,
       "normalized_sha256": "0ec494fed420cc295990ee31444dcca69f6eac9533b93d972518830a44f54708"
     },
     "backend/src/services/artifactHandoff/service.js": {
-      "sha256": "b1fbf6ddea435b222d3b8c317a77194a85e81eadfc07eb9f15952dbfd00ee5ec",
-      "size": 7458,
-      "normalized_sha256": "b1fbf6ddea435b222d3b8c317a77194a85e81eadfc07eb9f15952dbfd00ee5ec"
+      "sha256": "c769495007ca1333d3ea692b7034dc99371f78377dcb06773ba9035cf8f55d3d",
+      "size": 9825,
+      "normalized_sha256": "c769495007ca1333d3ea692b7034dc99371f78377dcb06773ba9035cf8f55d3d"
     },
     "backend/src/services/artifactHandoff/source.js": {
-      "sha256": "9a50d03744961cc71ad57198e985b89916487f2c031259ce68ae861069c50820",
-      "size": 5590,
-      "normalized_sha256": "9a50d03744961cc71ad57198e985b89916487f2c031259ce68ae861069c50820"
+      "sha256": "625a8702ddb1bdcc92266962d347b722c6795fe87846e6e187de128d4865e0d7",
+      "size": 5602,
+      "normalized_sha256": "625a8702ddb1bdcc92266962d347b722c6795fe87846e6e187de128d4865e0d7"
     },
     "backend/src/services/artifactHandoff/store.js": {
-      "sha256": "3a0aca8baa077c536189758fd0876302d401437ed654b542a462740028797b76",
-      "size": 2119,
-      "normalized_sha256": "3a0aca8baa077c536189758fd0876302d401437ed654b542a462740028797b76"
+      "sha256": "3df986c65dc87f0dc56e2c2834467efd196bf94db07cd22b42092cb1aab5ed16",
+      "size": 2566,
+      "normalized_sha256": "3df986c65dc87f0dc56e2c2834467efd196bf94db07cd22b42092cb1aab5ed16"
     },
     "backend/src/services/auth/EmailAuthService.js": {
       "role": "index",
@@ -1792,19 +1953,24 @@
       "normalized_sha256": "9cbe103bb6dc6fa2bc3f070a5b3b92fa01ba94b18ff0941e9f19a786ae02929f"
     },
     "backend/src/services/chat/NonStreamMessageService.js": {
-      "sha256": "b081814dc686209a43e07183ab82870502b1b1bcffb6a2be7c5e13dae11de352",
-      "size": 7031,
-      "normalized_sha256": "b081814dc686209a43e07183ab82870502b1b1bcffb6a2be7c5e13dae11de352"
+      "sha256": "bb23f62aace73da3e90d25afe1c8d6d508ea9de150af00556adbae3ce2e9c66d",
+      "size": 7100,
+      "normalized_sha256": "bb23f62aace73da3e90d25afe1c8d6d508ea9de150af00556adbae3ce2e9c66d"
     },
     "backend/src/services/chat/StreamMessageService.js": {
-      "sha256": "f4b3b8fc981de773945875f33994440ab670ba964fc4724354c0c4f457d8bbe4",
-      "size": 7537,
-      "normalized_sha256": "f4b3b8fc981de773945875f33994440ab670ba964fc4724354c0c4f457d8bbe4"
+      "sha256": "3ccb3e55d7b58fc8b88bf742da34a3fca1c7a95e032a98a669ec08df649b34f7",
+      "size": 7602,
+      "normalized_sha256": "3ccb3e55d7b58fc8b88bf742da34a3fca1c7a95e032a98a669ec08df649b34f7"
     },
     "backend/src/services/chat/artifactStreamGuard.js": {
       "sha256": "b1945ade1de09cf952b594225cc2bc4717e7b47147a4743debdb96cf2e1f38a5",
       "size": 6547,
       "normalized_sha256": "b1945ade1de09cf952b594225cc2bc4717e7b47147a4743debdb96cf2e1f38a5"
+    },
+    "backend/src/services/chat/discussionSummary.js": {
+      "sha256": "b7d11324ce9796a83e000cd8d8b3bd48d67f0bf9e8d9bc73b63667d4ec99ed31",
+      "size": 3915,
+      "normalized_sha256": "b7d11324ce9796a83e000cd8d8b3bd48d67f0bf9e8d9bc73b63667d4ec99ed31"
     },
     "backend/src/services/chat/outputFormatInstructions.js": {
       "sha256": "86c316b990c73014de994a3c3393b92dc4e3fc6f02f21fb2993237cfe6be80b1",
@@ -1921,6 +2087,11 @@
       "size": 11721,
       "normalized_sha256": "b30abf2f77ff2e7247aff8f368c2b31e32302aab544241a90fdbb6ad8cf28271"
     },
+    "backend/src/services/productFeedback/bridge.js": {
+      "sha256": "2166d8c4234f0cdb57991dbb7db01b996277c36c240b3debc2146e13fbc39741",
+      "size": 5180,
+      "normalized_sha256": "2166d8c4234f0cdb57991dbb7db01b996277c36c240b3debc2146e13fbc39741"
+    },
     "backend/src/services/ragService.js": {
       "role": "index",
       "sha256": "f6f6fae33b7a09c5f627f50a54d7b8f23d7c2842f5b5106b67fb5cd8a1dabcf9",
@@ -1987,6 +2158,18 @@
       "size": 3630,
       "normalized_sha256": "67c758cec8a2274c45a729643ab147223a08fb47742a4e57e74b6f5b74062b9c"
     },
+    "backend/tests/product-feedback-bridge.test.cjs": {
+      "role": "observe",
+      "sha256": "fedc0a0a957cba674c963ae5115c0dcb2ed504b29d82f3b2115c5e09e5124fdf",
+      "size": 3670,
+      "normalized_sha256": "fedc0a0a957cba674c963ae5115c0dcb2ed504b29d82f3b2115c5e09e5124fdf"
+    },
+    "backend/tests/product-feedback-route.test.cjs": {
+      "role": "observe",
+      "sha256": "270f9c2ea56c211ee24cbcd8d56ee7c8934f40856a73c16b30b319d136cc37a5",
+      "size": 4537,
+      "normalized_sha256": "270f9c2ea56c211ee24cbcd8d56ee7c8934f40856a73c16b30b319d136cc37a5"
+    },
     "comprehensive-test.sh": {
       "role": "observe",
       "sha256": "2a191a52ca89a20675671b043b0bec6dddf2c93b12d62781835d1ba91503888c",
@@ -2024,10 +2207,9 @@
       "normalized_sha256": "1905816993fe89f8bae9b7a207ac118dc936569bac2f00cfbe8dc606137b8c71"
     },
     "docker-compose.yml": {
-      "role": "index",
-      "sha256": "f65c8e402515bf98087a6171230588e90150db1268aa92919b3ca15459208514",
-      "size": 4646,
-      "normalized_sha256": "f65c8e402515bf98087a6171230588e90150db1268aa92919b3ca15459208514"
+      "sha256": "a8be9b51adcc31ac4e817112c78e9054bf2f39cc169209643f19ce57028b2bc6",
+      "size": 5019,
+      "normalized_sha256": "a8be9b51adcc31ac4e817112c78e9054bf2f39cc169209643f19ce57028b2bc6"
     },
     "docker/Dockerfile.backend": {
       "sha256": "1c4b27c7c88611547ea9d8d7521989498f5ae801af7fba0e1aaa7e1a88ec1a2c",
@@ -2136,15 +2318,85 @@
       "size": 756,
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
     },
+    "docs/integrations/P03-SAVE-TO-LIBRARY-TEST.md": {
+      "sha256": "eeeb8e614df23d3d8ebc2a207be7e8613726667fa84f4e0580534808b762fd3f",
+      "size": 3774,
+      "normalized_sha256": "eeeb8e614df23d3d8ebc2a207be7e8613726667fa84f4e0580534808b762fd3f"
+    },
+    "docs/integrations/p03-admission-checklist.md": {
+      "sha256": "5f4377170ee9209eb77c5ee008ea9cbc149c84599ce3260f237c5cd17e6bcfe5",
+      "size": 6005,
+      "normalized_sha256": "5f4377170ee9209eb77c5ee008ea9cbc149c84599ce3260f237c5cd17e6bcfe5"
+    },
+    "docs/integrations/p03-current-rc-candidate.md": {
+      "sha256": "8908ec5e70edda6a0a17d8f39cfaff590c176261cfca71f06c3754eadba6971d",
+      "size": 5715,
+      "normalized_sha256": "8908ec5e70edda6a0a17d8f39cfaff590c176261cfca71f06c3754eadba6971d"
+    },
+    "docs/integrations/p03-discussion-summary.md": {
+      "sha256": "7bc1d3a7887a0a57e9ab41967cbbc13053ac8c33c821c4085b4733242e3267a9",
+      "size": 5856,
+      "normalized_sha256": "7bc1d3a7887a0a57e9ab41967cbbc13053ac8c33c821c4085b4733242e3267a9"
+    },
+    "docs/integrations/p03-entry-deploy-candidate.md": {
+      "sha256": "9981455517e011f0506ad84917c2132300a75ca768a87579837937c4fb78160d",
+      "size": 16884,
+      "normalized_sha256": "9981455517e011f0506ad84917c2132300a75ca768a87579837937c4fb78160d"
+    },
+    "docs/integrations/p03-handoff-examples.json": {
+      "sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2",
+      "size": 10542,
+      "normalized_sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2"
+    },
+    "docs/integrations/p03-instance-binding-candidate.json": {
+      "sha256": "afaabe8912a481b22fa7a85b4477bf24286218e6079706f6d790bc1309301825",
+      "size": 9010,
+      "normalized_sha256": "afaabe8912a481b22fa7a85b4477bf24286218e6079706f6d790bc1309301825"
+    },
+    "docs/integrations/p03-product-decisions-20260921.md": {
+      "sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe",
+      "size": 7411,
+      "normalized_sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe"
+    },
+    "docs/integrations/p03-profile-v1-rc2-review.md": {
+      "sha256": "fa745f398f2f791fec2647275e2ecc7bd69ef466a1b2f4fad8e7fc492b923a50",
+      "size": 3842,
+      "normalized_sha256": "fa745f398f2f791fec2647275e2ecc7bd69ef466a1b2f4fad8e7fc492b923a50"
+    },
+    "docs/integrations/p03-profile-v1-review.md": {
+      "sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583",
+      "size": 11214,
+      "normalized_sha256": "43326bfbec576d67527f004174dc5236f6c8d72c60be3ac0536141d84c21b583"
+    },
+    "docs/integrations/p03-rc-aoci-candidate.md": {
+      "sha256": "0f1a24c9ee1ffaa89a4fb60d64d8b38e8f9638a4a292ba99bd3c8d9bdd92f458",
+      "size": 3885,
+      "normalized_sha256": "0f1a24c9ee1ffaa89a4fb60d64d8b38e8f9638a4a292ba99bd3c8d9bdd92f458"
+    },
+    "docs/integrations/p03-release-readiness-candidate.md": {
+      "sha256": "a973eb0aef502dc1240f63901466cfaca5ce6074ab963ad89600166fde369f36",
+      "size": 12316,
+      "normalized_sha256": "a973eb0aef502dc1240f63901466cfaca5ce6074ab963ad89600166fde369f36"
+    },
+    "docs/integrations/p03-restricted-role-runbook.md": {
+      "sha256": "24605e0a73180d0a0c6b3021100e21a21365c458571d0283a0b49877d8777574",
+      "size": 4243,
+      "normalized_sha256": "24605e0a73180d0a0c6b3021100e21a21365c458571d0283a0b49877d8777574"
+    },
     "docs/integrations/p03-source-handoff.md": {
-      "sha256": "70687d2598c7499a3c16b3d446ca1234f9362c2f7d18a2d8cfd300d9e82700b0",
-      "size": 16749,
-      "normalized_sha256": "70687d2598c7499a3c16b3d446ca1234f9362c2f7d18a2d8cfd300d9e82700b0"
+      "sha256": "b7c28f0981a7e0e66c6594c3b2e751923dd139ebe646a2d1e9317ae9bed9b748",
+      "size": 87762,
+      "normalized_sha256": "b7c28f0981a7e0e66c6594c3b2e751923dd139ebe646a2d1e9317ae9bed9b748"
     },
     "docs/integrations/p03-synthetic-packet.json": {
       "sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183",
       "size": 1700,
       "normalized_sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183"
+    },
+    "docs/product-feedback-bridge.md": {
+      "sha256": "1591181bb5129a18994d53a202b2f90c6658a1f7f4054ec65590ef5caa835058",
+      "size": 6630,
+      "normalized_sha256": "1591181bb5129a18994d53a202b2f90c6658a1f7f4054ec65590ef5caa835058"
     },
     "docs/system_prompts_implementation.md": {
       "role": "index",
@@ -2157,6 +2409,16 @@
       "sha256": "ba00893c8953a874282e09da2b96d30c170a0ff17d7fed3064955e3557d8fc20",
       "size": 1646,
       "normalized_sha256": "ba00893c8953a874282e09da2b96d30c170a0ff17d7fed3064955e3557d8fc20"
+    },
+    "frontend/dev/p03-summary.html": {
+      "sha256": "ce5309f3db260d2b3dae82967751fde83251a110d7f66bfad8a3b35432ea1898",
+      "size": 290,
+      "normalized_sha256": "ce5309f3db260d2b3dae82967751fde83251a110d7f66bfad8a3b35432ea1898"
+    },
+    "frontend/dev/p03-summary.jsx": {
+      "sha256": "7bfb513543c51dcbf58de5f32c7e28ab3efa8fce396fe8e4a1d88daff717fdde",
+      "size": 979,
+      "normalized_sha256": "7bfb513543c51dcbf58de5f32c7e28ab3efa8fce396fe8e4a1d88daff717fdde"
     },
     "frontend/dev/p03.html": {
       "sha256": "9c1c2367dbb5a025204c06a00ef48d5787d3e9a7755eeefc00a81f1b63bca8b8",
@@ -2195,9 +2457,9 @@
       "normalized_sha256": "20d89af8bcc70c9be0c1cdfff8d82588b16a5309f02455dfb267ec49d21e9291"
     },
     "frontend/src/App.jsx": {
-      "sha256": "289632cca3c6c6f67c66728cda19bc84243ad74ed9768547991f52c25b46f5c0",
-      "size": 22890,
-      "normalized_sha256": "289632cca3c6c6f67c66728cda19bc84243ad74ed9768547991f52c25b46f5c0"
+      "sha256": "36063db15b9aca924f1f8383018c89973ac871524794a733d4de2678d79510b4",
+      "size": 23352,
+      "normalized_sha256": "36063db15b9aca924f1f8383018c89973ac871524794a733d4de2678d79510b4"
     },
     "frontend/src/__tests__/setup.js": {
       "role": "observe",
@@ -2235,17 +2497,29 @@
       "size": 3901,
       "normalized_sha256": "7cd0ccd533402b86a368f04372a1da97eba08f14e12ea8fce3d1ad6349084fd9"
     },
+    "frontend/src/__tests__/unit/components/ArtifactHandoff.test.jsx": {
+      "role": "observe",
+      "sha256": "abddd6a2dd188fe9717b79f0e7aa6863c4a59e56f13bdbc1c6c93a36ce3c4091",
+      "size": 17443,
+      "normalized_sha256": "abddd6a2dd188fe9717b79f0e7aa6863c4a59e56f13bdbc1c6c93a36ce3c4091"
+    },
     "frontend/src/__tests__/unit/components/ArtifactHandoffDev.test.jsx": {
       "role": "observe",
-      "sha256": "732e3788f6bfb8eee6a15e783c8309317b2f4510c11e457982afcc4c251882c1",
-      "size": 5028,
-      "normalized_sha256": "732e3788f6bfb8eee6a15e783c8309317b2f4510c11e457982afcc4c251882c1"
+      "sha256": "d3140742d8271dbfa4065a751a3fecc7b869c5a804cb75c8ea7f7f5ae530e749",
+      "size": 6019,
+      "normalized_sha256": "d3140742d8271dbfa4065a751a3fecc7b869c5a804cb75c8ea7f7f5ae530e749"
     },
     "frontend/src/__tests__/unit/components/ChatInputArea.test.jsx": {
       "role": "observe",
       "sha256": "21dd3b2e6927898156781304be19a32d89d1f1b032a2231f1600701e7cb0aae5",
       "size": 3786,
       "normalized_sha256": "21dd3b2e6927898156781304be19a32d89d1f1b032a2231f1600701e7cb0aae5"
+    },
+    "frontend/src/__tests__/unit/components/DiscussionSummary.test.jsx": {
+      "role": "observe",
+      "sha256": "423521c25aef3c1de97f4e9330c17f1761f376aac6cf742bf926d4a7cffe06e4",
+      "size": 1615,
+      "normalized_sha256": "423521c25aef3c1de97f4e9330c17f1761f376aac6cf742bf926d4a7cffe06e4"
     },
     "frontend/src/__tests__/unit/components/EmptyConversation.test.jsx": {
       "role": "observe",
@@ -2330,6 +2604,16 @@
       "sha256": "f1a1439c4254434c8978485ad6356ee2fc0e537ba39fef1c81fdaee2ffdd3f1b",
       "size": 1542,
       "normalized_sha256": "f1a1439c4254434c8978485ad6356ee2fc0e537ba39fef1c81fdaee2ffdd3f1b"
+    },
+    "frontend/src/api/feedbackTransport.js": {
+      "sha256": "1190da551f9f56bfaf79d5b47415ef60ecd4c3e83c956c738c32b058a7a2d5d2",
+      "size": 2019,
+      "normalized_sha256": "1190da551f9f56bfaf79d5b47415ef60ecd4c3e83c956c738c32b058a7a2d5d2"
+    },
+    "frontend/src/api/productFeedback.js": {
+      "sha256": "24b62787a96ccfb3b38efd73684392385f613a66573f13d27a2b504fa319af2a",
+      "size": 5272,
+      "normalized_sha256": "24b62787a96ccfb3b38efd73684392385f613a66573f13d27a2b504fa319af2a"
     },
     "frontend/src/assets/slide-backgrounds/README.md": {
       "sha256": "bbdb486a180b4dcc8db8692ccf3b6b59a36d55f2f984126510092f74fbb3c346",
@@ -2869,10 +3153,15 @@
       "size": 5680,
       "normalized_sha256": "528f1e6130cad213c48a395a3e0bc54d833675603af2bf38551e2fdd374943ee"
     },
+    "frontend/src/components/chat/ArtifactHandoff.jsx": {
+      "sha256": "68315d5ef28e5ff6837ea2be187d014ea8106274f23767b77041ad2bd96825bb",
+      "size": 16765,
+      "normalized_sha256": "68315d5ef28e5ff6837ea2be187d014ea8106274f23767b77041ad2bd96825bb"
+    },
     "frontend/src/components/chat/ArtifactHandoffDev.jsx": {
-      "sha256": "d23f1457267de65c41cfafd4dc402bdb25a4213a830ddd061ae1a84a033289a9",
-      "size": 12210,
-      "normalized_sha256": "d23f1457267de65c41cfafd4dc402bdb25a4213a830ddd061ae1a84a033289a9"
+      "sha256": "f70ca98e798e9ea8baa949ed078212962cfce6e4143feb2c4f721b1133f6fa94",
+      "size": 12531,
+      "normalized_sha256": "f70ca98e798e9ea8baa949ed078212962cfce6e4143feb2c4f721b1133f6fa94"
     },
     "frontend/src/components/chat/CodeBlock.jsx": {
       "role": "index",
@@ -2886,10 +3175,20 @@
       "size": 6896,
       "normalized_sha256": "46811777a8b617790550e25bb3b558c9966d77ef732536a7bf28f64a4e33d7cc"
     },
+    "frontend/src/components/chat/DiscussionSummary.jsx": {
+      "sha256": "c90a5739669922de5234578073019b364900e411aefd9373d028a4dcc52c2ed9",
+      "size": 1635,
+      "normalized_sha256": "c90a5739669922de5234578073019b364900e411aefd9373d028a4dcc52c2ed9"
+    },
+    "frontend/src/components/chat/DiscussionSummary.less": {
+      "sha256": "a039189561b13ed4263a7bb9a91ff2f24b04d86541e2ae97f6f27296863d66ab",
+      "size": 930,
+      "normalized_sha256": "a039189561b13ed4263a7bb9a91ff2f24b04d86541e2ae97f6f27296863d66ab"
+    },
     "frontend/src/components/chat/MessageContent.jsx": {
-      "sha256": "3073b2cf2ab6e3025818a7c0af5545f559cf9dfd3a28053ca5ec0092b654a218",
-      "size": 23814,
-      "normalized_sha256": "3073b2cf2ab6e3025818a7c0af5545f559cf9dfd3a28053ca5ec0092b654a218"
+      "sha256": "439cf6e826d56350e2c1074cf8f110740832ac92fb96ba785ddf7fe47d39051e",
+      "size": 24089,
+      "normalized_sha256": "439cf6e826d56350e2c1074cf8f110740832ac92fb96ba785ddf7fe47d39051e"
     },
     "frontend/src/components/chat/MessageContent.less": {
       "role": "index",
@@ -3114,6 +3413,81 @@
       "size": 448,
       "normalized_sha256": "084f7b4dcd5b8bbb8e395635371c02d2e631e85e2f6f98c884950051b6e02d1e"
     },
+    "frontend/src/components/product-feedback/FeedbackAIAssessmentCard.jsx": {
+      "sha256": "164977920d9ac0161aa944b2af01069fdfa4f996dc05f562f7b1bbea33b20596",
+      "size": 4758,
+      "normalized_sha256": "164977920d9ac0161aa944b2af01069fdfa4f996dc05f562f7b1bbea33b20596"
+    },
+    "frontend/src/components/product-feedback/FeedbackBadges.jsx": {
+      "sha256": "ee5e7ddd499661a61941251a4b6c2f1a33bedb776b154a517ec4b73391976feb",
+      "size": 832,
+      "normalized_sha256": "ee5e7ddd499661a61941251a4b6c2f1a33bedb776b154a517ec4b73391976feb"
+    },
+    "frontend/src/components/product-feedback/FeedbackDetailPanel.jsx": {
+      "sha256": "1d4c4bcd517af51481c2278047d2f27fdc4110b1b917839ccbfaf8ee3b099f3d",
+      "size": 14036,
+      "normalized_sha256": "1d4c4bcd517af51481c2278047d2f27fdc4110b1b917839ccbfaf8ee3b099f3d"
+    },
+    "frontend/src/components/product-feedback/FeedbackDialog.jsx": {
+      "sha256": "2fed900cbccfe343c43d6e4ddad9b31302e52a83b21e43793668488af91a123b",
+      "size": 12343,
+      "normalized_sha256": "2fed900cbccfe343c43d6e4ddad9b31302e52a83b21e43793668488af91a123b"
+    },
+    "frontend/src/components/product-feedback/FeedbackEvidenceImage.jsx": {
+      "sha256": "1e3b7df7364e92cc9c3c61787d6c0f1de7c5b26c1dcd916c7884bc96c1209d05",
+      "size": 2118,
+      "normalized_sha256": "1e3b7df7364e92cc9c3c61787d6c0f1de7c5b26c1dcd916c7884bc96c1209d05"
+    },
+    "frontend/src/components/product-feedback/FeedbackHeaderEntry.jsx": {
+      "sha256": "96f9cd0d1a5717528cc6fa13e86de672894d9b6c6097b4108cc72c2c02f614c3",
+      "size": 8437,
+      "normalized_sha256": "96f9cd0d1a5717528cc6fa13e86de672894d9b6c6097b4108cc72c2c02f614c3"
+    },
+    "frontend/src/components/product-feedback/FeedbackPipeline.jsx": {
+      "sha256": "2501f523a799960b519799f9d2495ecf63e46ca2896761a1ad91b003d972bf4b",
+      "size": 1261,
+      "normalized_sha256": "2501f523a799960b519799f9d2495ecf63e46ca2896761a1ad91b003d972bf4b"
+    },
+    "frontend/src/components/product-feedback/FeedbackQueueItem.jsx": {
+      "sha256": "5568d8df8fdb23bc8e946d8ac4ec04237967e2deb236dbea0c30fd43b4a2e3bd",
+      "size": 4907,
+      "normalized_sha256": "5568d8df8fdb23bc8e946d8ac4ec04237967e2deb236dbea0c30fd43b4a2e3bd"
+    },
+    "frontend/src/components/product-feedback/FeedbackSummaryStrip.jsx": {
+      "sha256": "f92d66687a6b548c487b157cdd4281f3b8d085f8109a7f6b7f3902a3a029367d",
+      "size": 1715,
+      "normalized_sha256": "f92d66687a6b548c487b157cdd4281f3b8d085f8109a7f6b7f3902a3a029367d"
+    },
+    "frontend/src/components/product-feedback/FeedbackTimeline.jsx": {
+      "sha256": "68c9578ff576e574c4e0d5078517ae99a6b4873c21c54dee6cdc0731aa1f2a2b",
+      "size": 1846,
+      "normalized_sha256": "68c9578ff576e574c4e0d5078517ae99a6b4873c21c54dee6cdc0731aa1f2a2b"
+    },
+    "frontend/src/components/product-feedback/PortalLogo.jsx": {
+      "sha256": "6afa14562b300d530b792a25791ece93ea22a905c430026c6c953df98ae8b20f",
+      "size": 121,
+      "normalized_sha256": "6afa14562b300d530b792a25791ece93ea22a905c430026c6c953df98ae8b20f"
+    },
+    "frontend/src/components/product-feedback/auth.js": {
+      "sha256": "55c41c5f69a7b9e49bd4a44701756ef2c83cd8306413810cdd777bd7db7b0900",
+      "size": 244,
+      "normalized_sha256": "55c41c5f69a7b9e49bd4a44701756ef2c83cd8306413810cdd777bd7db7b0900"
+    },
+    "frontend/src/components/product-feedback/feedbackLabels.js": {
+      "sha256": "eb48a1b83ec1dffb9a15a81e3b6ec5badce966161b7b171528964efa5604300e",
+      "size": 9593,
+      "normalized_sha256": "eb48a1b83ec1dffb9a15a81e3b6ec5badce966161b7b171528964efa5604300e"
+    },
+    "frontend/src/components/product-feedback/icons.jsx": {
+      "sha256": "1dbb2cdf8ce81443826a058de694124352cfb1b73ae5b5702f3bded10b7b21d9",
+      "size": 697,
+      "normalized_sha256": "1dbb2cdf8ce81443826a058de694124352cfb1b73ae5b5702f3bded10b7b21d9"
+    },
+    "frontend/src/components/product-feedback/product-feedback.css": {
+      "sha256": "71ce0dda867385f06e7c61e0f6f43b4991785c501105489ad12801deab3eae70",
+      "size": 24988,
+      "normalized_sha256": "71ce0dda867385f06e7c61e0f6f43b4991785c501105489ad12801deab3eae70"
+    },
     "frontend/src/components/smartApps/SmartAppChatModal.jsx": {
       "role": "index",
       "sha256": "561dbd902bfd44cd746e897cc394bc222bf556ee2e75d5d8490bd50deb77e7d7",
@@ -3205,9 +3579,9 @@
       "normalized_sha256": "16579688c1b71bef061a6743cb9c18d5b3a414ea69de40d46a6cb9cbfbdc6431"
     },
     "frontend/src/layouts/BasicLayout/Header.jsx": {
-      "sha256": "4ddaa25f77cc4116600b8e5a0304dc4064af7cb0e520d2a899635e095b33db94",
-      "size": 3670,
-      "normalized_sha256": "4ddaa25f77cc4116600b8e5a0304dc4064af7cb0e520d2a899635e095b33db94"
+      "sha256": "dab11788d520e2b507c21221d5e8e098ce3b244125b5b9fc3bb00652d920c9c6",
+      "size": 3792,
+      "normalized_sha256": "dab11788d520e2b507c21221d5e8e098ce3b244125b5b9fc3bb00652d920c9c6"
     },
     "frontend/src/layouts/BasicLayout/MobileDrawer.jsx": {
       "sha256": "fe78d806bcdd881404fd0aed96c7e99978a1b4b5cfc2d8d20ae829e5d7f6c8a0",
@@ -3259,9 +3633,9 @@
       "normalized_sha256": "dacf8a30faa7a0794accc6ea1d99519b8fe0ae69813a6d04e0b60b025f19fadd"
     },
     "frontend/src/locales/en-US/chat.json": {
-      "sha256": "cc520de95f0bd3aa1bc35dbe434d88781da6b4db351a923fbdd111b211d53523",
-      "size": 28969,
-      "normalized_sha256": "cc520de95f0bd3aa1bc35dbe434d88781da6b4db351a923fbdd111b211d53523"
+      "sha256": "d50c757bebd2d7476f99344b13e2b8a866dfa0e495f0a9f39d38e658fc00e03c",
+      "size": 35230,
+      "normalized_sha256": "d50c757bebd2d7476f99344b13e2b8a866dfa0e495f0a9f39d38e658fc00e03c"
     },
     "frontend/src/locales/en-US/common.json": {
       "sha256": "8e4df326c09ca75f0f5cb9c74d5b3dd31722616b51cf530e465c7c9cc84558d7",
@@ -3365,9 +3739,9 @@
       "normalized_sha256": "e5c65f85c2a06d741d116739815031134ec79b7d6874a9bf3a7c12c8a0d1f78a"
     },
     "frontend/src/locales/zh-CN/chat.json": {
-      "sha256": "c1cb71de7415ceaa3869f54782a33769af7b840e582ee862998e4fd1aa64e7f7",
-      "size": 27920,
-      "normalized_sha256": "c1cb71de7415ceaa3869f54782a33769af7b840e582ee862998e4fd1aa64e7f7"
+      "sha256": "b5bb7ed4da5bb250c2cac3bc3fe616d9a8b02ab13d21bbe4fc73c8a34f7e42e6",
+      "size": 34176,
+      "normalized_sha256": "b5bb7ed4da5bb250c2cac3bc3fe616d9a8b02ab13d21bbe4fc73c8a34f7e42e6"
     },
     "frontend/src/locales/zh-CN/common.json": {
       "sha256": "3771d0509d45f138cf3a279b69640cf96f1522992c6a51373b494a869536fa8f",
@@ -3946,9 +4320,9 @@
       "normalized_sha256": "4058190fb9028e5a8987e410b9a564a2241d13fe61a0bce876526e174c28f28f"
     },
     "frontend/src/pages/chat/Chat.jsx": {
-      "sha256": "3607e513f10f959b0594b817f376ad032e7a1166bc7b61f7e8c0eca71b01b1ee",
-      "size": 44584,
-      "normalized_sha256": "3607e513f10f959b0594b817f376ad032e7a1166bc7b61f7e8c0eca71b01b1ee"
+      "sha256": "3be92ea03eeb6a3b52ba5a9796373c8cddfcd8a22f292fa78b3dc12f764a9f5b",
+      "size": 45520,
+      "normalized_sha256": "3be92ea03eeb6a3b52ba5a9796373c8cddfcd8a22f292fa78b3dc12f764a9f5b"
     },
     "frontend/src/pages/chat/Chat.less": {
       "sha256": "70dbe572ad802f5336533fa362211ecc72457edb5ed21d0e115e43d58b37fd36",
@@ -3978,6 +4352,21 @@
       "sha256": "1399dd622c4f34f483baf002a8bde4143c722766037ace9f1611aa4b1480ba23",
       "size": 1855,
       "normalized_sha256": "1399dd622c4f34f483baf002a8bde4143c722766037ace9f1611aa4b1480ba23"
+    },
+    "frontend/src/pages/feedback/FeedbackHubPage.jsx": {
+      "sha256": "693184b96a4100b226531211c88f80fd7f39ae7add22fc487d72741e56944a27",
+      "size": 169,
+      "normalized_sha256": "693184b96a4100b226531211c88f80fd7f39ae7add22fc487d72741e56944a27"
+    },
+    "frontend/src/pages/feedback/FeedbackWorkspace.jsx": {
+      "sha256": "6069443f3a91aac568fbf7c03e7f142fb40287d2e95d94f17bbc9ce995cc9c78",
+      "size": 19712,
+      "normalized_sha256": "6069443f3a91aac568fbf7c03e7f142fb40287d2e95d94f17bbc9ce995cc9c78"
+    },
+    "frontend/src/pages/feedback/MyFeedbackPage.jsx": {
+      "sha256": "02dfa428d6a9b95ff4fa7df23a8f1fb1f870683d2fcc4f2303dcbc23a9217ead",
+      "size": 166,
+      "normalized_sha256": "02dfa428d6a9b95ff4fa7df23a8f1fb1f870683d2fcc4f2303dcbc23a9217ead"
     },
     "frontend/src/pages/forum/Forum.jsx": {
       "sha256": "c1d3f0a48eca900910473aff26d334d513fc132abf84d485b966448253a92d2a",
@@ -4352,9 +4741,9 @@
       "normalized_sha256": "d3ad681559f566f56c5934ce9d664168537c39440b26f68b07261f9c03587432"
     },
     "frontend/src/stores/chatStore.js": {
-      "sha256": "c16bec273528f94d28eb01100722c1077aaa62502c886e936f201e0221d8e04c",
-      "size": 36052,
-      "normalized_sha256": "c16bec273528f94d28eb01100722c1077aaa62502c886e936f201e0221d8e04c"
+      "sha256": "1d44bdae7b95a795fbfa65a0c4e2bb772afb7174d5baa8701811c266dac021d2",
+      "size": 36164,
+      "normalized_sha256": "1d44bdae7b95a795fbfa65a0c4e2bb772afb7174d5baa8701811c266dac021d2"
     },
     "frontend/src/stores/docTemplateStore.js": {
       "sha256": "2027c9afa4c57147369f5de39f3549713f9faa8227ab2f0197bf162aa7573c11",
@@ -4476,9 +4865,9 @@
       "normalized_sha256": "4336c69f22da500776e8ba9dd3338e271c8dd0eef93b9f99697d84a9724ade7f"
     },
     "frontend/src/utils/api.js": {
-      "sha256": "8fffd307b960bedfa41230b5d3ca871f9ecb627de312231580d13c1b23c83657",
-      "size": 22007,
-      "normalized_sha256": "8fffd307b960bedfa41230b5d3ca871f9ecb627de312231580d13c1b23c83657"
+      "sha256": "3fe0a840320e26bc93c8d8942f857cc6de78dfd79fadf301fefb3ec124cb972f",
+      "size": 22212,
+      "normalized_sha256": "3fe0a840320e26bc93c8d8942f857cc6de78dfd79fadf301fefb3ec124cb972f"
     },
     "frontend/src/utils/canvas/download.js": {
       "sha256": "f3b8d351275ee7101286de25d743b524d5ca165034b61f332da38db4fd494107",

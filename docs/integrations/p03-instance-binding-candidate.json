@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "candidate": "p03-instance-binding/1",
+  "status": "candidate_not_deployed",
+  "recorded_at": "2026-09-21",
+  "purpose": "Explicit deployment-instance binding for the P03 teacher-artifact handoff first instance pair (rc1 D05/J2). Nothing here is applied to any server; values are public identifiers already pinned in backend/src/services/artifactHandoff/i03HttpsTransport.js.",
+  "sites": {
+    "pku": {
+      "public_origin": "https://ai.pkuailab.com",
+      "identity_issuer": "https://id.pkuailab.com",
+      "client_id": "ai-platform-client",
+      "deployment_instance_key": "pku-ai-platform-prod",
+      "handoff": {
+        "enabled": false,
+        "wire_version": "teacher-artifact-handoff/1",
+        "store": "mysql",
+        "source_instance": "pku-ai-platform-prod",
+        "target_instance": "pku-tedna-prod",
+        "target_origin": "https://workflow.pkuailab.com",
+        "target_client_id": "tedna-client",
+        "db_role_candidate": "restricted role per backend/src/services/artifactHandoff/mysqlStore.js restrictedRoleGrants(): DML on p03_handoff_* only plus SELECT on source-fact tables; the production application user currently holds ALL PRIVILEGES (fact recorded 2026-09-20, not changed by this candidate)",
+        "identity_rc3_requirement": "formal wire additionally requires the pair (pku-ai-platform-prod -> pku-tedna-prod) to be listed in identity.artifact_handoff_formal_pairs (operator-seeded, app read-only); a policy row alone yields 403 action_not_allowed"
+      }
+    },
+    "xingyun": {
+      "public_origin": "https://ai.xingyuncl.com",
+      "handoff": {
+        "enabled": false,
+        "reason": "User decision 2026-09-21 (J2): ai.xingyuncl.com does not participate in the TE-DNA handoff. Earlier read-only metadata (2026-09-20 11:35) already showed a distinct instance key, client id and database fingerprint from the pku site.",
+        "decision": "user_2026-09-21_no_tedna_handoff",
+        "identity_rc3_requirement": "explicitly refused: not listed in artifact_handoff_formal_pairs even if a formal policy row exists"
+      }
+    }
+  },
+  "env_candidate_pku": {
+    "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "pku-ai-platform-prod",
+    "P03_HANDOFF_ENABLED": "false",
+    "P03_HANDOFF_STORE": "mysql",
+    "P03_HANDOFF_WIRE_VERSION": "teacher-artifact-handoff/1",
+    "P03_HANDOFF_SOURCE_INSTANCE": "pku-ai-platform-prod",
+    "P03_HANDOFF_TARGET_INSTANCE": "pku-tedna-prod",
+    "P03_HANDOFF_IDENTITY_ORIGIN": "https://id.pkuailab.com",
+    "P03_HANDOFF_TARGET_ORIGIN": "https://workflow.pkuailab.com",
+    "P03_HANDOFF_DB_USER": "<restricted ledger role, never DB_USER>",
+    "P03_HANDOFF_TIMEOUT_MS": "5000 (optional, 1000-30000)",
+    "P03_HANDOFF_DB_CREDENTIAL": "the ledger role credential variable is operator-held and never appears in this repository; name in docs/integrations/p03-restricted-role-runbook.md"
+  },
+  "not_proven_here": [
+    "Xingyun Registry entry and dataset distinctness are Identity-side facts; the source repository only records that its client, instance and database differ",
+    "P03_HANDOFF_* variables are read only by formalRuntime.js and only take effect with P03_HANDOFF_ENABLED=true; nothing else reads them"
+  ],
+  "deployed_version_evidence": {
+    "source": "release tooling tags fetched read-only from GitHub (dev/deploy.sh and dev/deploy-docker.sh push a tag after a successful deploy)",
+    "xingyun": {
+      "tag": "deploy-20260921_110105",
+      "commit": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tagged_at": "2026-09-21T11:01:05+08:00"
+    },
+    "pku": {
+      "tag": "deploy-docker-20260921_110616",
+      "commit": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tagged_at": "2026-09-21T11:06:16+08:00"
+    },
+    "note": "tags prove which commit the tooling deployed, not the running process; the pku .env instance key was not re-read (production reads denied this session)"
+  },
+  "eligibility_candidate": {
+    "source": "account exists, status active, not expired, not a shadow account (users.uuid_source='sso', the edu-SSO auto-created shadow per 决-9/docs 02 §3; set once at creation, never editable) and not in a mapped student group once 决-12 columns (user_groups.edu_school_id + cohort) exist; no teacher inference at the source",
+    "identity": "same-person link required; unlinked accounts fail at issue (source_link_unavailable)",
+    "target": "TE-DNA local teacher account decides teacher status and library write; loss of teacher status ends the handoff",
+    "reference": "docs/integrations/p03-product-decisions-20260921.md"
+  },
+  "read_only_recheck": "dev/p03-prod-readonly-facts.sh (run by the user; prints deployed HEAD, allow-listed public Identity/P03 variable names and values, DB grant booleans and schema facts only)",
+  "read_only_facts_20260921": {
+    "read_by": "the user running dev/p03-prod-readonly-facts.sh at 2026-09-21 18:55 and 19:2x (Asia/Singapore); values below are the allow-listed public facts it printed",
+    "xingyun": {
+      "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tracked_dirty": 0,
+      "IDENTITY_ENABLED": "true",
+      "IDENTITY_ISSUER": "https://id.pkuailab.com",
+      "IDENTITY_PUBLIC_ORIGIN": "https://ai.xingyuncl.com",
+      "IDENTITY_CLIENT_ID": "ai-platform-xingyun-test-client",
+      "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "xingyun-ai-platform-test",
+      "P03_HANDOFF_*": "not set",
+      "db_facts": {
+        "mysql": "8.0.46 (host package)",
+        "app_user_grant_count": 3,
+        "all_privileges": true,
+        "global_grant_on_star_star": true,
+        "users_columns_present": [
+          "deleted_at",
+          "expire_at",
+          "role",
+          "status",
+          "uuid_source"
+        ],
+        "user_groups_mapping_columns": [],
+        "sso_shadow_accounts": 439,
+        "p03_handoff_tables": 0
+      }
+    },
+    "pku": {
+      "deployed_head": "c4a6e86d2f3a4a6640be37ac9e014264b4cee03b",
+      "tracked_dirty": 0,
+      "IDENTITY_ENABLED": "true",
+      "IDENTITY_ISSUER": "https://id.pkuailab.com",
+      "IDENTITY_PUBLIC_ORIGIN": "",
+      "IDENTITY_CLIENT_ID": "ai-platform-client",
+      "IDENTITY_DEPLOYMENT_INSTANCE_KEY": "",
+      "IDENTITY_BACKCHANNEL_URL": "",
+      "P03_HANDOFF_*": "not set",
+      "db_facts": {
+        "mysql": "8.0.43 (compose image)",
+        "app_user_grant_count": 2,
+        "all_privileges": true,
+        "global_grant_on_star_star": false,
+        "users_columns_present": [
+          "deleted_at",
+          "expire_at",
+          "role",
+          "status",
+          "uuid_source"
+        ],
+        "user_groups_mapping_columns": [],
+        "sso_shadow_accounts": 11,
+        "p03_handoff_tables": 0
+      }
+    },
+    "conclusions": [
+      "pku running container still has no explicit deployment instance key (empty), confirming the 2026-09-20 fact; the candidate value pku-ai-platform-prod must arrive through the enrollment/consumer flow before any formal handoff",
+      "pku client id ai-platform-client matches the candidate; xingyun runs its own test client and instance key and stays out of the handoff (J2)",
+      "both sites run c4a6e86 with clean tracked trees, matching the deploy tags",
+      "both application DB accounts still hold ALL PRIVILEGES (pku on its database; xingyun globally ON *.*): the restricted P03 role does not exist anywhere yet and the production role is not a candidate for it",
+      "users.uuid_source exists on both sites (shadow predicate applicable now: 439 shadow accounts on xingyun, 11 on pku); user_groups has no 决-12 mapping columns; no p03_handoff_* table exists on either site (nothing of this candidate is deployed)"
+    ],
+    "note": "token auth method name omitted from this record (it contains a word the candidate's credential guard rejects); both sites use the .env.template default"
+  },
+  "runtime_contract": {
+    "module": "backend/src/services/artifactHandoff/formalRuntime.js (bootstrapped in server.js after database init)",
+    "switch": "P03_HANDOFF_ENABLED: unset or \"false\" -> disabled (no pool, no credential read, no peer call); \"true\" -> strict construction; any other value -> invalid_handoff_configuration and startup fails closed",
+    "facts_checked_when_enabled": [
+      "Identity deployment config valid and enabled",
+      "issuer/public origin/client id/instance key equal the TRUST constants",
+      "P03_HANDOFF_STORE/WIRE_VERSION/SOURCE_INSTANCE/TARGET_INSTANCE/IDENTITY_ORIGIN/TARGET_ORIGIN equal the pinned values",
+      "restricted ledger role present and distinct from the application account",
+      "ledger readiness: database name, MySQL 8, exact grants, four tables with expected columns",
+      "HTTPS transport pinned to the fixed origins on 443 with system roots; laboratory routing refused outside development/test"
+    ],
+    "public_save_entry": "not mounted",
+    "not_proven_here": [
+      "production TLS reachability",
+      "production policy/pairs rows",
+      "real teacher acceptance"
+    ]
+  }
+}

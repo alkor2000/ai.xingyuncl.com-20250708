@@ -1,13 +1,24 @@
 const { randomUUID } = require('crypto');
+const path = require('path');
 const { fail, digest } = require('./source');
-const { TTL_MS } = require('./store');
+const { TTL_MS, DraftStore } = require('./store');
+const { TARGET, delivery, validateReceipt, MockArtifactReceiver } = require('./receiver');
 
-const DRAFT_VERSION = 'p03-content-proposal-20260918.1';
-const TARGET = 'mock-tedna';
+const DRAFT_VERSION = 'p03-content-proposal-20260919.2';
 const { SCHEMA_VERSION, validUUID, request, validateSelection, prepareSelection } = require('./selection');
+const operations = new Map();
 
 class ArtifactHandoffService {
-  constructor({ source, store, now = Date.now }) { Object.assign(this, { source, store, now }); }
+  constructor({ source, store, now = Date.now, receiver }) {
+    Object.assign(this, { source, store, now });
+    this.receiver = receiver || new MockArtifactReceiver({ store: new DraftStore(path.join(store.directory, 'mock-receiver'), now), now });
+  }
+  async exclusive(id, fn) {
+    const key = `${this.store.directory}:${id}`;
+    const task = (operations.get(key) || Promise.resolve()).catch(() => {}).then(fn);
+    operations.set(key, task);
+    try { return await task; } finally { if (operations.get(key) === task) operations.delete(key); }
+  }
   key(owner, key) {
     if (!validUUID(key)) fail('invalid_idempotency_key');
     return digest(`${owner}:${key}`);
@@ -35,7 +46,7 @@ class ArtifactHandoffService {
       if (!record) {
         if (Object.values(state.snapshots).filter(item => item.owner === String(owner)).length >= 50) fail('draft_limit', 429);
         const created = this.now();
-        record = { id: randomUUID(), owner: String(owner), logical_key: logicalKey, manifest, payload,
+        record = { id: randomUUID(), operation_id: randomUUID(), owner: String(owner), logical_key: logicalKey, manifest, payload,
           created_at: Math.floor(created / 1000), expires_at: created + TTL_MS };
         state.snapshots[record.id] = record;
       }
@@ -46,7 +57,10 @@ class ArtifactHandoffService {
   }
   publicSnapshot(record) {
     return { id: record.id, created_at: record.created_at, expires_at: Math.floor(record.expires_at / 1000),
-      manifest: record.manifest, payload: record.payload, receiver: TARGET };
+      manifest: record.manifest, payload: record.payload, receiver: TARGET,
+      binding: delivery(record).binding,
+      source_checks: { source_access: 'allowed', selected_attachments: 'readable',
+        checked_at: Math.floor(this.now() / 1000), cross_platform_authority: 'simulated_only' } };
   }
   async owned(owner, id) {
     if (!validUUID(id)) fail('snapshot_unavailable', 404);
@@ -78,7 +92,7 @@ class ArtifactHandoffService {
       const prior = state.grants[keyHash];
       if (prior && prior.fingerprint !== fingerprint) fail('idempotency_conflict', 409);
       const grant = prior || { id: randomUUID(), owner: String(owner), snapshot_id: id,
-        content_sha256: record.manifest.content_sha256, target: TARGET, fingerprint,
+        content_sha256: record.manifest.content_sha256, target: TARGET, fingerprint, binding: delivery(record).binding,
         valid_until: this.now() + (body.simulation === 'expired' ? -1 : 5 * 60 * 1000),
         revoked: body.simulation === 'revoked', expires_at: record.expires_at };
       state.grants[keyHash] = grant;
@@ -86,43 +100,69 @@ class ArtifactHandoffService {
     });
   }
   async status(owner, id) {
-    await this.owned(owner, id);
-    return this.store.transaction(state => state.operations[id]?.result || { state: 'prepared', receiver: TARGET });
+    return this.exclusive(id, async () => {
+      const record = await this.owned(owner, id);
+      const accepted = await this.lookupReceipt(record);
+      if (accepted) return this.recordReceipt(owner, record, accepted, true);
+      return this.store.transaction(state => state.operations[id]?.result ||
+        { state: 'prepared', ...delivery(record).binding });
+    });
+  }
+  async lookupReceipt(record) {
+    const accepted = await this.receiver.lookup(delivery(record).binding);
+    const previous = await this.store.transaction(state => state.operations[record.id]?.result);
+    // Losing a known receiver record is an inconsistency, not permission to recreate its resource.
+    if (!accepted && previous?.state === 'mock_received') fail('receipt_invalid', 502, true);
+    return accepted;
+  }
+  async recordReceipt(owner, record, response, replayed) {
+    const receipt = validateReceipt(response, delivery(record).binding, this.now());
+    // A completed transfer does not grant permanent access to a now revoked source.
+    await this.owned(owner, record.id);
+    return this.store.transaction(state => {
+      const previous = state.operations[record.id]?.result?.receipt;
+      if (previous && JSON.stringify(previous) !== JSON.stringify(receipt)) fail('receipt_invalid', 502, true);
+      const result = { state: 'mock_received', ...delivery(record).binding, receipt_id: receipt.receipt_id, receipt, replayed,
+        continuation: { state: 'not_started', action: 'select_resource', receiver: TARGET,
+          resource_id: receipt.resource_id, resource_version: receipt.resource_version, purpose: record.manifest.purpose } };
+      state.operations[record.id] = { result, expires_at: record.expires_at };
+      return result;
+    });
   }
   async deliver(owner, id, body, key) {
     request(body, ['grant_id', 'simulation']);
     if (!validUUID(body.grant_id) || !['success', 'reject', 'lose_response'].includes(body.simulation)) fail('invalid_request');
     const keyHash = `deliver:${this.key(owner, key)}`;
-    const record = await this.owned(owner, id);
-    const result = await this.store.transaction(state => {
-      if (state.keys[keyHash] && state.keys[keyHash].snapshot_id !== id) fail('idempotency_conflict', 409);
-      state.keys[keyHash] = { snapshot_id: id, expires_at: record.expires_at };
-      // Recovery of an already accepted operation is independent of consumed/expired simulation grants.
-      const accepted = state.received[id];
-      if (accepted) {
-        const result = { state: 'mock_received', receiver: TARGET, receipt_id: accepted.receipt_id, replayed: true };
-        state.operations[id] = { result, expires_at: record.expires_at };
-        return { result };
+    return this.exclusive(id, async () => {
+      const record = await this.owned(owner, id);
+      const packet = delivery(record);
+      await this.store.transaction(state => {
+        if (state.keys[keyHash] && state.keys[keyHash].snapshot_id !== id) fail('idempotency_conflict', 409);
+        state.keys[keyHash] = { snapshot_id: id, expires_at: record.expires_at };
+      });
+      // Query the independently durable receiver BEFORE considering new authorization or a resend.
+      const accepted = await this.lookupReceipt(record);
+      if (accepted) return this.recordReceipt(owner, record, accepted, true);
+      await this.store.transaction(state => {
+        const grant = Object.values(state.grants).find(item => item.id === body.grant_id);
+        if (!grant || grant.owner !== String(owner) || grant.snapshot_id !== id || grant.target !== TARGET ||
+            grant.content_sha256 !== record.manifest.content_sha256 || grant.revoked || grant.valid_until <= this.now() ||
+            JSON.stringify(grant.binding) !== JSON.stringify(packet.binding)) fail('authorization_expired', 403);
+        // Durable source intent precedes any receiver mutation. Restart can query even after a crash here.
+        state.operations[id] = { result: { state: 'outcome_unknown', ...packet.binding }, expires_at: record.expires_at };
+      });
+      try {
+        await this.owned(owner, id);
+        const receipt = await this.receiver.accept(packet, body.simulation);
+        return await this.recordReceipt(owner, record, receipt, false);
+      } catch (error) {
+        // Only the fake receiver's explicit pre-acceptance rejection proves that nothing was stored.
+        if (error.code === 'receiver_unavailable') await this.store.transaction(state => {
+          state.operations[id] = { result: { state: 'retryable_failure', ...packet.binding }, expires_at: record.expires_at };
+        });
+        throw error;
       }
-      const grant = Object.values(state.grants).find(item => item.id === body.grant_id);
-      if (!grant || grant.owner !== String(owner) || grant.snapshot_id !== id || grant.target !== TARGET ||
-          grant.content_sha256 !== record.manifest.content_sha256 || grant.revoked || grant.valid_until <= this.now()) {
-        fail('authorization_expired', 403);
-      }
-      if (body.simulation === 'reject') {
-        state.operations[id] = { result: { state: 'retryable_failure', receiver: TARGET }, expires_at: record.expires_at };
-        return { error: 'receiver_unavailable' };
-      }
-      // Fake receiver durable acceptance. This packet contains no conversation history or account tokens.
-      const packet = { manifest: record.manifest, payload: record.payload };
-      state.received[id] = { receipt_id: randomUUID(), packet, expires_at: record.expires_at };
-      const result = { state: body.simulation === 'lose_response' ? 'outcome_unknown' : 'mock_received', receiver: TARGET };
-      if (result.state === 'mock_received') result.receipt_id = state.received[id].receipt_id;
-      state.operations[id] = { result, expires_at: record.expires_at };
-      return body.simulation === 'lose_response' ? { error: 'response_lost' } : { result };
     });
-    if (result.error) fail(result.error, 503, true);
-    return result.result;
   }
 }
 module.exports = { ArtifactHandoffService, SCHEMA_VERSION, DRAFT_VERSION, request, validUUID };
