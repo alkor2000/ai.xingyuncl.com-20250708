@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-23T16:35:56Z",
+  "updated_at": "2026-09-23T16:46:05Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "e6d7d0c51e61ee2607182824ab04cf07276838fb95873a7e9b2c7f2cad30f2f4",
-      "size": 354195,
-      "normalized_sha256": "e6d7d0c51e61ee2607182824ab04cf07276838fb95873a7e9b2c7f2cad30f2f4"
+      "sha256": "d01ee2d0354136181c268c6f631c9c6bd1bafe8384294c2ba14947589fb90dfe",
+      "size": 354804,
+      "normalized_sha256": "d01ee2d0354136181c268c6f631c9c6bd1bafe8384294c2ba14947589fb90dfe"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2350,19 +2350,19 @@
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
     },
     "docs/integrations/JOINT-ENTRY-TEST.md": {
-      "sha256": "fc35d29fac0028cc0eb8739b050173d2cba6e15b35ad250c45a8447ed4d2605c",
-      "size": 9217,
-      "normalized_sha256": "fc35d29fac0028cc0eb8739b050173d2cba6e15b35ad250c45a8447ed4d2605c"
+      "sha256": "6240e8c88769c29c53d7af19340f74d5e3f188e1e951a188a607c90441dda50e",
+      "size": 9698,
+      "normalized_sha256": "6240e8c88769c29c53d7af19340f74d5e3f188e1e951a188a607c90441dda50e"
     },
     "docs/integrations/STUDENT-ENTRY-TEST.md": {
-      "sha256": "0e54d4a540666f25979b03af792f69c0fceb29f542d58f3a7e12c78cdea1a567",
-      "size": 6786,
-      "normalized_sha256": "0e54d4a540666f25979b03af792f69c0fceb29f542d58f3a7e12c78cdea1a567"
+      "sha256": "6be66786125d953abb302537f29027755375e9114e3774c13528e5046b40068d",
+      "size": 7267,
+      "normalized_sha256": "6be66786125d953abb302537f29027755375e9114e3774c13528e5046b40068d"
     },
     "docs/integrations/WEBSITE-REVIEW-TEST.md": {
-      "sha256": "7ccc0acc15e97ef0824f5f4222507617a81483eaa541d60ee44f563a388d9305",
-      "size": 8164,
-      "normalized_sha256": "7ccc0acc15e97ef0824f5f4222507617a81483eaa541d60ee44f563a388d9305"
+      "sha256": "6c97c273aecf4f87b93505a6801fe85901b5caa840890f04a4b494ac9215fa70",
+      "size": 8645,
+      "normalized_sha256": "6c97c273aecf4f87b93505a6801fe85901b5caa840890f04a4b494ac9215fa70"
     },
     "docs/integrations/c05-aoci-entries-candidate.md": {
       "sha256": "2715d9e7fc66967b0f6afdf4322f721e63cc534368c428705af1e5350ecbbc43",
@@ -2378,6 +2378,11 @@
       "sha256": "cd3345bbb133fcf1f616070596c3c04544965808c3693d0b9f38c4c5e03c933f",
       "size": 9117,
       "normalized_sha256": "cd3345bbb133fcf1f616070596c3c04544965808c3693d0b9f38c4c5e03c933f"
+    },
+    "docs/integrations/c05-p09-mainline-release.md": {
+      "sha256": "a5dae048a684f731c9fdd9f11ea1510b0f91dba2fd3311d362eb471f96c28d6a",
+      "size": 3852,
+      "normalized_sha256": "a5dae048a684f731c9fdd9f11ea1510b0f91dba2fd3311d362eb471f96c28d6a"
     },
     "docs/integrations/c05-student-entry-provider-candidate.md": {
       "sha256": "bb7980cc81c50d01c0d5ee2887e7ee9578a37255573f5cb3b2108aece86fd367",
