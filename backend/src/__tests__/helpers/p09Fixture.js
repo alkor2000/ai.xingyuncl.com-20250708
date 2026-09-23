@@ -6,10 +6,11 @@
 // tests; the isolated harness runs the same service against real MySQL 8.
 const { randomUUID } = require('node:crypto');
 const { createSourceReader } = require('../../services/websiteArtifact/snapshot');
+const { titleKey } = require('../../services/websiteArtifact/store');
 const { createAssetResolver } = require('../../services/websiteArtifact/assets');
 const { createWebsiteArtifactService } = require('../../services/websiteArtifact/service');
 
-function createMemoryStore({ now = Date.now } = {}) {
+function createMemoryStore({ now = Date.now, projects = null } = {}) {
   const data = { refs: new Map(), links: new Map(), revisions: new Map(), files: new Map(), events: [],
     sessions: new Map(), idempotency: new Map(), seq: 0 };
   const duplicate = () => { const error = new Error('duplicate'); error.duplicate = true; return error; };
@@ -36,6 +37,20 @@ function createMemoryStore({ now = Date.now } = {}) {
         row.event_seq > afterSeq).sort((a, b) => a.event_seq - b.event_seq).slice(0, limit).map(clone);
     },
     async watermark() { return data.seq; },
+    // The real store reads the name on its own connection and keys it by owner+project; here the same
+    // rule is applied to the fixture's project, including "the source is gone" answering with nothing.
+    async sourceTitles(rows) {
+      const out = new Map();
+      if (!projects) return out;
+      for (const row of rows || []) {
+        const project = await projects(row.project_id);
+        if (project && String(project.user_id) === String(row.owner_user_id) &&
+            typeof project.name === 'string' && project.name.trim() !== '') {
+          out.set(titleKey(project.user_id, project.id), project.name);
+        }
+      }
+      return out;
+    },
     async linkById(id) { return clone(data.links.get(id)) || null; },
     async linkByArtifact(instance, artifactRef) {
       return clone([...data.links.values()].find(row => row.source_instance === instance && row.artifact_ref === artifactRef)) || null;
@@ -213,6 +228,8 @@ function createSourceFixture({ ownerUserId = 101, projectId = 3, name = '校园�
       Object.assign(page, { title, updated_at, version: Number(page.version || 1) + 1 });
     },
     removePage(id) { state.pages = state.pages.filter(page => String(page.id) !== String(id)); },
+    // The student renames the work itself. No content is written, so it is not a save.
+    renameProject(name) { state.project = { ...state.project, name }; },
     deleteProject() { state.deleted = true; }
   };
 }
@@ -239,7 +256,7 @@ function createAssetFixture({ uploadRoot, owned = [] }) {
 function createService({ ownerUserId = 101, studentUuid = 'edu-uuid-0001', sourceInstance = 'practice-lab',
   previewEnabled = true, now = Date.now, assets = null, eligibility = null, issuerActive = null } = {}) {
   const fixture = createSourceFixture({ ownerUserId });
-  const store = createMemoryStore({ now });
+  const store = createMemoryStore({ now, projects: id => fixture.models.HtmlProject.findById(id) });
   const user = { id: ownerUserId, uuid: studentUuid, uuid_source: 'sso', status: 'active', deleted_at: null,
     isAccountExpired: () => false };
   const models = { User: { findById: async id => (String(id) === String(ownerUserId) ? user : null) }, ...fixture.models };

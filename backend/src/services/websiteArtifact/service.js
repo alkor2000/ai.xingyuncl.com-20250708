@@ -15,6 +15,7 @@
 //     reach, the answer is 未知 with a reason — never a guessed 未开始.
 const { randomUUID, createHash, randomBytes, timingSafeEqual } = require('node:crypto');
 const { fail } = require('./errors');
+const { titleKey } = require('./store');
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const short = value => sha256(value).slice(0, 16);
@@ -483,11 +484,18 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     return store.transaction(async tx => {
       const watermark = await tx.watermark();
       const links = await tx.linksInScope(scope, { assignmentRefs, studentUuids });
+      // The name of each work, from the source this server can verify, inside this same snapshot. The
+      // ledger keeps no copy of it: a link row has never had a title column, so `view()` has been
+      // answering null since the first day even though the consumer package documents the field. What
+      // travels here is the name the work carries NOW — a rename shows up on the next read, and a
+      // project that is gone has no provable name, so it stays null rather than being guessed from an
+      // older fact. The events keep the name as it was AT each fact; the two are different on purpose.
+      const titles = await tx.sourceTitles(links);
       const items = [];
       for (const row of links) {
         const revisions = await tx.revisions(row.id);
         items.push({
-          ...view(row),
+          ...view({ ...row, title: titles.get(titleKey(row.owner_user_id, row.project_id)) ?? null }),
           revisions: revisions.map(revision => ({ revision_ref: revision.id, revision_no: revision.revision_no,
             content_sha256: revision.content_sha256, byte_length: Number(revision.byte_length), created_at: Number(revision.created_at) }))
         });

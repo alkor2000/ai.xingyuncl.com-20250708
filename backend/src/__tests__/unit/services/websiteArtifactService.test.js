@@ -48,6 +48,78 @@ async function linkedProject(options = {}) {
 const types = store => store.data.events.map(event => event.type);
 const stateOf = async service => (await service.state(SCOPE)).items[0];
 
+describe('P09 the name of a work in a school read', () => {
+  // The consumer package has always documented `title` on a state item, and it has always been null:
+  // the ledger has no title column, so `view()` read a field that was never there. It is filled from
+  // the source this server can verify, in the same snapshot as the watermark and the rows.
+  test('a work in a school read carries the name the student gave it', async () => {
+    const { service } = await linkedProject();
+    const state = await service.state(SCOPE);
+    expect(state.items[0].title).toBe('校园节水网站');
+    // Filling it changes nothing else about the snapshot.
+    expect(state.complete).toBe(true);
+    expect(state.pending_reconcile).toBe(0);
+    expect(typeof state.watermark).toBe('number');
+  });
+
+  test('the name is the one the work carries now, and a rename shows up on the next read', async () => {
+    const { service, fixture, store } = await linkedProject();
+    expect((await service.state(SCOPE)).items[0].title).toBe('校园节水网站');
+    fixture.renameProject('校园节水网站（第二稿）');
+    expect((await service.state(SCOPE)).items[0].title).toBe('校园节水网站（第二稿）');
+    // A rename is not a save: no new fact was recorded, and the events still carry the name as it was
+    // at each fact. The two answer different questions and neither is rewritten.
+    expect(types(store)).toEqual(['artifact.created', 'artifact.updated', 'artifact.preview_ready']);
+    expect(store.data.events[0].payload.artifact.title).toBe('校园节水网站');
+  });
+
+  test('a source that is gone has no provable name, so the field is null rather than an old guess', async () => {
+    const { service, fixture, store } = await linkedProject();
+    fixture.deleteProject();
+    await service.reconcileLink(store.data.events[0].link_id, { deleted: true });
+    const item = (await service.state(SCOPE)).items[0];
+    expect(item.title).toBeNull();
+    expect(item.state).toBe('deleted');
+    // And the deletion fact cannot name it either: the ledger never kept a copy, and by the time the
+    // fact is recorded the source is already gone. The earlier facts still carry the name they saw.
+    // This is a limit of keeping no copy, written down rather than papered over with an older guess.
+    expect(store.data.events.at(-1).type).toBe('artifact.deleted');
+    expect(store.data.events.at(-1).payload.artifact.title).toBeNull();
+    expect(store.data.events[0].payload.artifact.title).toBe('校园节水网站');
+  });
+
+  test('an entry page that is gone still leaves a project that can be named', async () => {
+    const { service, fixture, store } = await linkedProject();
+    // The other deletion path: the project is still there, only the entry page went away. The source
+    // can still be read, so both the fact and the read carry the name — unlike a deleted project.
+    fixture.removePage(7);
+    await service.reconcileLink(store.data.events[0].link_id);
+    const last = store.data.events.at(-1);
+    expect(last.type).toBe('artifact.deleted');
+    expect(last.payload.reason).toBe('entry_removed');
+    expect(last.payload.artifact.title).toBe('校园节水网站');
+    expect((await service.state(SCOPE)).items[0].title).toBe('校园节水网站');
+  });
+
+  test('a project row that belongs to someone else never lends its name', async () => {
+    const { service, store } = await linkedProject();
+    // The same project id, now owned by another account: the ownership rule is in the lookup key, so
+    // there is nothing to fall back on.
+    const [row] = [...store.data.links.values()];
+    row.owner_user_id = 999;
+    expect((await service.state(SCOPE)).items[0].title).toBeNull();
+  });
+
+  test('nothing a client sends can become the name', async () => {
+    const { service } = await linkedProject();
+    // `link` takes an owner, a grant, a project and an entry page — there is no title input at all,
+    // and the state read goes to the source rather than to anything a request carried.
+    const state = await service.state(SCOPE);
+    expect(state.items[0].title).toBe('校园节水网站');
+    expect(Object.keys(state.items[0])).toContain('title');
+  });
+});
+
 describe('P09 association', () => {
   test('one own project + entry page becomes a task link; the assignment comes only from the grant', async () => {
     const { service, store, link } = await linkedProject();
