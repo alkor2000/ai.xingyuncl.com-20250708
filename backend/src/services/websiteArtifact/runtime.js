@@ -91,6 +91,21 @@ function integrationClients(env, lab) {
   });
 }
 
+// The eligibility provider's configuration. `P09_ELIGIBILITY_FILE` is the deployment form (http only,
+// readable in any NODE_ENV); P09_LAB's inline spec stays development/test, exactly as before.
+function eligibilitySpec(env, lab) {
+  const file = env.P09_ELIGIBILITY_FILE;
+  if (typeof file === 'string' && file !== '') {
+    let raw;
+    try { raw = fs.readFileSync(file, 'utf8'); } catch { fail('invalid_request'); }
+    let spec;
+    try { spec = JSON.parse(raw); } catch { fail('invalid_request'); }
+    if (!spec || spec.mode !== 'http') fail('invalid_request');   // the file form is for the real provider
+    return createEligibilityProvider(spec, { env });
+  }
+  return lab && lab.eligibility ? createEligibilityProvider(lab.eligibility, { env }) : null;
+}
+
 function previewOrigin(env, lab) {
   const value = lab ? lab.preview_origin : env.P09_PREVIEW_ORIGIN;
   if (value === undefined || value === null || value === '') return null;
@@ -184,8 +199,10 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
   const assets = createAssetResolver({ models: { query: source }, uploadRoot: deps.uploadRoot || uploadRootFrom(env), ownHosts });
   const reader = createSourceReader({ HtmlProject: models.HtmlProject, HtmlPage: models.HtmlPage, sourceInstance, assets });
   const grants = new TaskGrantVerifier({ issuers, audience: sourceInstance, now });
-  // Reviewer eligibility: absent in a deployment (the interface refuses), a fixed roster in the lab.
-  const eligibility = lab && lab.eligibility ? createEligibilityProvider(lab.eligibility, { env }) : null;
+  // Reviewer eligibility. A deployment asks edu itself through `mode: 'http'`, named in its own file;
+  // the laboratory's fixed roster is still only reachable through P09_LAB. Absent either way, the
+  // interface exists and refuses — a teacher is never let in because nobody could be asked.
+  const eligibility = eligibilitySpec(env, lab);
   // A grant signed by a key this deployment no longer configures cannot keep a session alive.
   const issuerKeys = new Set(issuers.map(i => `${i.issuer}:${i.keyId}`));
   const issuerActive = key => issuerKeys.has(String(key));
@@ -203,7 +220,11 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
     readiness: Object.freeze({ ...readiness, source_instance: sourceInstance, task_context_configured: issuers.length > 0,
       task_issuers: issuers.map(i => `${i.issuer}:${i.keyId}`), integration_clients: clients.map(c => `${c.clientKey}:${c.keyId}`),
       preview_origin: preview ? preview.origin : null, laboratory: !!lab,
-      eligibility_provider: eligibility ? eligibility.mode : 'absent', own_hosts: ownHosts,
+      eligibility_provider: eligibility ? eligibility.mode : 'absent',
+      // Enough to tell two deployments apart in a log line, and nothing that could leak a credential.
+      eligibility_endpoint: eligibility && eligibility.endpointHost ? eligibility.endpointHost : null,
+      eligibility_reviewer_ref: eligibility && eligibility.reviewerRefMode ? eligibility.reviewerRefMode : null,
+      eligibility_cache_ms: eligibility ? eligibility.cacheMs : null, own_hosts: ownHosts,
       sync_interval_ms: sweepIntervalMs,
       sync_verify_ms: verifyAfterMs,
       checked_at: new Date(now()).toISOString() }),
