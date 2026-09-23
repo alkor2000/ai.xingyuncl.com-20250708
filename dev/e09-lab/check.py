@@ -257,25 +257,16 @@ def main():
                 and any(item['status'] == 200 for item in viewed['resources']),
                 '资格由 HTTP 提供方逐次回答（线形与签名真实，判定来自替身名单）')
 
-        # ---- 2 撤资格之后，已打开的会话下一次字节读取就被拒 ----------------------------------
-        report['stage'] = 'revoked_between_reads'
-        second = review_session()
-        need(second[0] == 200, 'second_session_refused')
-        open_url = second[1]['session']['open_url']
-        before = browser.call('review', open_url=open_url, contains=['校园节水'], screenshot='e09-2-before-revoke')
-        site.write_roster([])                        # edu 名单里这位老师没有了
-        after = browser.call('review', open_url=open_url, contains=['校园节水'], screenshot='e09-3-after-revoke')
+        # ---- 2 撤资格的证据搬走了：本文件曾经的做法是错的 ------------------------------------
+        # 这里原来用同一个 open_url 调了两次 `review`，而那个命令每次都新建 context 并在 finally 关闭，
+        # 于是第二次实际上是拿**已经用掉的一次性 handoff 再兑换一次**：401 来自票据一次性，与资格无关；
+        # 那次也没有再取任何图片，`resources` 为空却被 all(...) 判成"图片已被拒"。
+        # 有效证据（一次兑换 + 同一个 context/Cookie + 按真实 URL 重读 + 资格调用计数）见
+        # dev/e09-lab/revocation.py，那里还带着"不撤资格也 401"的对照。
         report['seams']['revoked_between_reads'] = {
-            'before': {'status': before['status'], 'contains': before['contains']},
-            'after': {'status': after['status'], 'contains': after['contains'],
-                      'resources': after['resources']},
-            'cache_ms': 0}
-        verdict('a_revoked_reviewer_is_refused_at_the_very_next_byte',
-                before['status'] == 200 and after['status'] >= 400 and after['contains'] == [False],
-                'cache_ms=0：同一个已打开的会话，下一次读取就不再放行')
-        verdict('the_fixed_revision_and_its_image_do_not_slip_through',
-                all(item['status'] >= 400 for item in after['resources']) or after['resources'] == [],
-                '固定版本与图片走的是同一次资格判定')
+            'moved_to': 'dev/e09-lab/revocation.py',
+            'why': ('同一个 open_url 调两次 review 不能证明资格：第二次是重兑一次性 handoff；'
+                    '空 resources 也不能当作图片被拒。本文件不再据此判定。')}
 
         # ---- 3 他班老师、不是本作业、学生离班：按名拒绝 ---------------------------------------
         report['stage'] = 'named_refusals'

@@ -8,7 +8,7 @@
 // so with no provider configured the interface exists and refuses (`eligibility_unavailable`), exactly
 // like the task-context issuers. The static provider below is a laboratory stand-in for edu's future
 // endpoint and is accepted only in development/test.
-const { createHash } = require('node:crypto');
+const { createHash, randomBytes } = require('node:crypto');
 const https = require('node:https');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -101,7 +101,7 @@ function signEligibility({ secret, method, path, query = '', body = '', timestam
   return createHash('sha256').update(`${secret}\n${timestamp}\n${nonce}\n${inner}`).digest('hex');
 }
 
-function httpSpec(spec) {
+function httpSpec(spec, env) {
   const allowed = ['mode', 'endpoint', 'client_key', 'key_id', 'secret', 'source_instance', 'purpose',
     'timeout_ms', 'max_bytes', 'ca_file', 'cache_ms', 'reviewer_ref', 'reviewer_refs'];
   if (typeof spec !== 'object' || Array.isArray(spec) ||
@@ -116,6 +116,15 @@ function httpSpec(spec) {
   if (typeof spec.client_key !== 'string' || !/^[a-z0-9_-]{2,32}$/.test(spec.client_key) ||
       typeof spec.key_id !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(spec.key_id) ||
       typeof spec.secret !== 'string' || spec.secret.length < 32) fail('invalid_request');
+  // A named mapping holds edu's own teacher references inside this deployment's configuration. The
+  // workspace rule is that this platform does not keep another platform's local teacher ids, so the
+  // mapping exists for a laboratory fixture and nowhere else: a production configuration that asks for
+  // it — or that carries plaintext references at all — is refused by name rather than by a sentence in
+  // a document. The formal candidate path is `audience_hash`, and the reference form is edu's to fix.
+  const laboratory = ['development', 'test'].includes(env && env.NODE_ENV);
+  if (!laboratory && (spec.reviewer_ref === 'mapping' || spec.reviewer_refs !== undefined)) {
+    fail('invalid_request');
+  }
   const reviewerRefMode = spec.reviewer_ref === 'mapping' ? 'mapping' : 'audience_hash';
   const mapping = new Map();
   if (spec.reviewer_refs !== undefined) {
@@ -147,10 +156,17 @@ function httpSpec(spec) {
 
 // One request, bounded in time and in bytes, with no redirect ever followed: a 3xx is an answer this
 // provider does not understand, and the signature is never replayed to a location someone else chose.
+//
+// `timeout_ms` is an ABSOLUTE budget, not only a gap between bytes. A socket timeout fires when nothing
+// arrives; a provider that drips one byte at a time — each sooner than the timeout, all of them under
+// the size cap — would otherwise hold a student's page open for as long as it liked. (Measured before
+// this was added: 6.2 seconds against a 400ms configuration.) The deadline covers connect to end, and
+// every way out of here clears the timer and destroys the request.
 function askEdu(config, payload, { request, now }) {
   const body = JSON.stringify(payload);
   const timestamp = Math.floor(now() / 1000);
-  const nonce = createHash('sha256').update(`${timestamp}:${Math.random()}:${body}`).digest('hex').slice(0, 32);
+  // Cryptographic randomness, not Math.random: this nonce is what stops a replay at edu's verifier.
+  const nonce = randomBytes(16).toString('hex');
   const headers = {
     'content-type': 'application/json',
     'content-length': Buffer.byteLength(body),
@@ -164,7 +180,15 @@ function askEdu(config, payload, { request, now }) {
   const transport = config.endpoint.protocol === 'https:' ? https : http;
   return new Promise(resolve => {
     let settled = false;
-    const finish = value => { if (!settled) { settled = true; resolve(value); } };
+    let request = null;
+    const deadline = setTimeout(() => finish({ status: null, text: null }), config.timeoutMs);
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      try { if (request) request.destroy(); } catch { /* already gone */ }
+      resolve(value);
+    }
     const req = transport.request(config.endpoint, {
       method: 'POST', headers, timeout: config.timeoutMs,
       ...(config.ca ? { ca: config.ca } : {}), rejectUnauthorized: true,
@@ -183,7 +207,8 @@ function askEdu(config, payload, { request, now }) {
       response.on('end', () => finish({ status: response.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
       response.on('error', () => finish({ status: null, text: null }));
     });
-    req.on('timeout', () => { req.destroy(); finish({ status: null, text: null }); });
+    request = req;
+    req.on('timeout', () => finish({ status: null, text: null }));      // no byte for timeout_ms
     req.on('error', () => finish({ status: null, text: null }));
     req.end(body);
   });
@@ -216,7 +241,7 @@ function readAnswer({ status, text }) {
 }
 
 function createHttpProvider(spec, { env, request, now }) {
-  const config = httpSpec(spec);
+  const config = httpSpec(spec, env);
   return Object.freeze({
     mode: 'http', cacheMs: config.cacheMs, endpointHost: config.endpoint.host,
     reviewerRefMode: config.reviewerRefMode,

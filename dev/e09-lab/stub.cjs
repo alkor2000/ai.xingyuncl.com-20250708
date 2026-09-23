@@ -28,6 +28,13 @@ const equal = (a, b) => {
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const answerOf = () => JSON.parse(fs.readFileSync(config.roster_file, 'utf8'));
 const seen = new Map();
+// 每一次**通过凭据校验**的询问都记一行：测试据此证明"资格端点确实又被问了一次"，
+// 而不是靠一个可能根本没发生的调用去解释状态码。
+const record = entry => {
+  if (!config.call_log) return;
+  try { fs.appendFileSync(config.call_log, JSON.stringify({ at: Date.now(), ...entry }) + '\n'); }
+  catch { /* 日志失败不影响判定 */ }
+};
 
 const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: fs.readFileSync(config.tls_cert) },
   (req, res) => {
@@ -65,8 +72,11 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
         return send(400, { error: { code: 'invalid_request' } });
       }
       const decided = Math.floor(Date.now() / 1000);
-      const refuse = reason => send(403,
-        { error: { code: 'not_eligible', message: reason, retryable: false }, decided_at: decided });
+      const refuse = reason => {
+        record({ decision: 'refused', reason, reviewer_ref: payload.reviewer_ref,
+          assignment_ref: payload.assignment_ref, student_uuid: payload.student_uuid });
+        return send(403, { error: { code: 'not_eligible', message: reason, retryable: false }, decided_at: decided });
+      };
       if (payload.schema_version !== 1 || !payload.school_ref || !payload.assignment_ref ||
           !payload.reviewer_ref || !payload.student_uuid) return refuse('request_incomplete');
       if (payload.purpose && payload.purpose !== 'website_artifact_review') return refuse('purpose_unsupported');
@@ -76,6 +86,8 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
         item.assignment_ref === payload.assignment_ref && item.student_uuid === payload.student_uuid);
       if (!rule) return refuse(REASONS.includes(roster.default_reason) ? roster.default_reason : 'not_eligible');
       if (rule.reason) return refuse(REASONS.includes(rule.reason) ? rule.reason : 'not_eligible');
+      record({ decision: 'eligible', reviewer_ref: payload.reviewer_ref,
+        assignment_ref: payload.assignment_ref, student_uuid: payload.student_uuid });
       return send(200, { schema_version: 1, eligible: true, decided_at: decided, expires_at: decided + 120 });
     });
   });

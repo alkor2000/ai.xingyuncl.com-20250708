@@ -86,12 +86,17 @@ schema_version, source_instance, school_ref, assignment_ref, reviewer_ref, stude
 
 | `reviewer_ref` | practice 发出去的 | 今天 edu 的反应 |
 | --- | --- | --- |
-| `audience_hash`（默认） | `sha256(issuer\nreviewer_ref)` | `ParseUint` 失败 → 403 `reviewer_unknown`（fail-closed） |
-| `mapping` | 按部署配置的映射查明文；查不到**不发请求**直接拒 | 正常判定 |
+| `audience_hash`（默认，**正式候选只走这条**） | `sha256(issuer\nreviewer_ref)` | `ParseUint` 失败 → 403 `reviewer_unknown`（fail-closed） |
+| `mapping` | 按映射查明文；查不到**不发请求**直接拒 | 能判定 |
 
-**最小差异（建议 edu 侧补）**：`teaches()` 之前先按 `sha256("edu\n" + strconv(user.id))` 比对一次，
-即说明里写的那条；这样 practice 不必持有任何 edu 的 id，`mapping` 这个过渡配置也可以撤掉。
-在此之前，`mapping` 是唯一能让真实链路跑通的形态，而它要求部署方逐个登记教师，**不适合生产**。
+**`mapping` 现在有可执行的门，不是一句"不适合生产"**：`httpSpec` 在 `NODE_ENV` 不是 development/test 时，
+对 `reviewer_ref: "mapping"` **以及任何带 `reviewer_refs` 的配置**具名拒绝（`invalid_request`）。
+工作区硬约束是"本平台不持有他平台教师的本地 id"，所以这条过渡只存在于实验 fixture 里。
+
+**差异该怎么补，是 edu 那边的事，另单负责。** 这里只说清楚 practice 这边有什么：
+会话里只有 `sha256(issuer + "\n" + reviewer_ref)`，而 **edu 自己签发的 `reviewer_ref` 形如 `teacher-<id>`**，
+所以那个哈希是对 `teacher-<id>` 取的，**不是对裸数字 id 取的**——不要按裸 id 去比对。
+practice 不需要、也不应该拿到任何 edu 的本地 id。
 
 ### 3.2 拒绝不是 `{eligible:false}`，是 403 + error 信封
 
@@ -121,6 +126,11 @@ edu 实际会答：`request_incomplete` / `purpose_unsupported` / `instance_mism
 - 403 → 不通过，reason 取白名单内的 `error.message`（否则 `not_eligible`）。
 - **400 / 401 / 5xx / 超时 / TLS 失败 / 重定向 / 超长 → `eligibility_unavailable`**，
   它的意思是"这次问不到"，**不是**"这位老师不能看"，更不是"学生没做"。
+- `timeout_ms` 是**从发起到结束的绝对预算**，不只是字节之间的间隔。只有 socket 超时是不够的：
+  一个每隔 150ms 滴一个字节、总量不超上限的提供方可以把请求拖到任意长——**实测 400ms 的配置被拖到 6.2 秒**。
+  现在有一个覆盖连接到结束的 deadline，所有出口都清 timer 并 destroy 请求（修后同一反例 401ms 返回）。
+  没有加任何重试，也没有降低 TLS 门。
+- nonce 用 `crypto.randomBytes`，不是 `Math.random`：它是 edu 验证方拦重放的那一个值。
 - 绝不回退到 `static`，绝不复用上一次成功的答案（实测：成功之后把提供方停掉，下一次就是 unavailable）。
 
 ## 5 缓存：说明写的是四元组，实际不是
@@ -142,13 +152,36 @@ edu 实际会答：`request_incomplete` / `purpose_unsupported` / `instance_mism
 | 衔接 | 实测 |
 | --- | --- |
 | 本班老师打开被点名的那一版 | 200，页面与图片都渲染（资源按内容寻址改名） |
-| **撤资格后下一次字节** | 同一个**已打开**的会话：撤销前 200，撤销后 **401**，图片一并没有被放出 |
 | 他班老师 / 不是本作业 / 学生离班 | 403 `not_eligible`（按 edu 的 reason 词汇） |
 | 提供方离线 / 畸形回答 / 错签名 / 错 CA / 根本没提供方 | 全部 **503 `eligibility_unavailable`** |
 | 部署形态 `P09_ELIGIBILITY_FILE` | 正常装配并作答 |
 
-单测 17 条（`websiteArtifactEligibility.test.js`）：签名向量、请求字段集合、403/401/400/5xx/HTML/重定向/
-超长/超时/错 CA、严格布尔、不复用上次成功、mapping 未登记不发请求、production 下 http 可装 static 不可装。
+### 6.1 撤资格的证据：先更正，再重做
+
+**f9cc1b5 的 `revoked_between_reads` 不成立，这里出具更正。** 那一条用同一个 `open_url` 调了两次
+`review`，而继承来的 worker 每次都新建 context 并在 finally 关闭，所以第二次是**拿已经用掉的一次性
+handoff 再兑换一次**：401 来自票据一次性，与资格判定无关；那次也没有再取任何图片，`resources` 为空
+却被 `all(...)` 判成"图片已被拒"（空列表恒真）。**对照实测**（`dev/e09-lab/revocation.py`，
+名单一个字不改）：第一次 200、第二次 **401** —— 撤不撤资格都一样。
+
+有效证据（同一次运行，`cache_ms: 0`）：**只兑换一次 handoff，之后一直用同一个 context 与
+`p09_preview` Cookie，按去掉片段后的真实 URL 重读**。
+
+| 步骤 | 固定页 | 那张图片 | 资格端点被问的次数 |
+| --- | --- | --- | --- |
+| 什么都不改，重读 | **200** | **200** | +3 |
+| **只改替身名单**（会话未过期、未撤销） | **403** | **403** | +2 |
+| 提供方离线 | **503** | — | — |
+| 把这位老师放回名单 | **200** | **200** | — |
+
+三点因此是立住的：重读走的是真实 URL 而**不是重兑票据**；被拒的那次**确实又问了一次资格端点**；
+`503`（问不到）与 `403`（不能看）**分得开**，而且拒绝页里没有"未做/未开始/没有作品"这类字样。
+放回名单后同一个会话又能读，说明前面的拒绝是资格判定而不是会话坏了。
+
+单测 **21 条**（`websiteArtifactEligibility.test.js`）：签名向量、请求字段集合、403/401/400/5xx/HTML/重定向/
+超长/超时/错 CA、严格布尔、不复用上次成功、mapping 未登记不发请求、production 下 http 可装 static 不可装、
+**滴字节的提供方拖不过预算**、正常回答仍在预算内、nonce 来自密码学随机源、
+**production 配置里不允许出现 mapping 或任何明文 `reviewer_refs`**。
 
 **没有验到的一件事，必须照写**：**edu 的真实 Go handler 与它的名单库没有在本轮执行**。
 本轮 edu 端由 `dev/e09-lab/stub.cjs` 扮演——它按 edu 源码的**线形**回答、用 edu 的**同一套签名构造**校验

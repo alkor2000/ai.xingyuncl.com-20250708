@@ -178,6 +178,57 @@ describe('nothing that is not an answer becomes a pass', () => {
   });
 });
 
+describe('the call is bounded from start to finish, not just between bytes', () => {
+  // A socket timeout only fires when nothing arrives. A provider that drips one byte at a time, each
+  // one sooner than the timeout and all of them under the size cap, keeps the request open for as long
+  // as it likes — the budget the deployment configured would mean nothing.
+  const drip = (bytes, everyMs) => serve((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    let sent = 0;
+    const tick = setInterval(() => {
+      if (sent >= bytes) { clearInterval(tick); res.end(); return; }
+      res.write(' ');
+      sent += 1;
+    }, everyMs);
+    res.on('close', () => clearInterval(tick));
+  });
+
+  test('a provider that drips bytes cannot hold the call past its budget', async () => {
+    const lab = await drip(40, 150);                 // 40 bytes, one every 150ms => about 6s if unbounded
+    try {
+      const started = Date.now();
+      const verdict = await ask(providerFor(lab.port, { timeout_ms: 400, max_bytes: 4096 }));
+      const elapsed = Date.now() - started;
+      expect(verdict).toEqual({ eligible: false, reason: 'eligibility_unavailable' });
+      // The whole call, connect to end, must respect the configured budget with a little slack.
+      expect(elapsed).toBeLessThan(1500);
+    } finally { await close(lab); }
+  });
+
+  test('a normal answer still comes back well inside the budget', async () => {
+    const lab = await serve((req, res) => answer(res, 200, { schema_version: 1, eligible: true }));
+    try {
+      const started = Date.now();
+      expect(await ask(providerFor(lab.port, { timeout_ms: 1000 }))).toEqual({ eligible: true });
+      expect(Date.now() - started).toBeLessThan(1000);
+    } finally { await close(lab); }
+  });
+
+  test('the nonce comes from the cryptographic source, not Math.random', async () => {
+    const nonces = new Set();
+    const lab = await serve((req, res) => {
+      nonces.add(req.headers['x-p09-nonce']);
+      answer(res, 200, { schema_version: 1, eligible: true });
+    });
+    try {
+      const provider = providerFor(lab.port);
+      for (let i = 0; i < 5; i += 1) await ask(provider);
+      expect(nonces.size).toBe(5);
+      for (const nonce of nonces) expect(nonce).toMatch(/^[0-9a-f]{32}$/);
+    } finally { await close(lab); }
+  });
+});
+
 describe('what this deployment can prove about a reviewer', () => {
   test("edu's handler wants its own reviewer id, and this repository keeps only the hash", async () => {
     let seen = null;
@@ -201,13 +252,33 @@ describe('what this deployment can prove about a reviewer', () => {
       answer(res, 200, { schema_version: 1, eligible: true });
     });
     try {
-      const mapped = providerFor(lab.port, { reviewer_ref: 'mapping', reviewer_refs: { [AUDIENCE]: '4021' } });
+      const mapped = createEligibilityProvider({
+        mode: 'http', endpoint: `https://localhost:${lab.port}${PATH}`, client_key: 'practice', key_id: 'k1',
+        secret: SECRET, source_instance: 'practice-integration', ca_file: tls.cert,
+        reviewer_ref: 'mapping', reviewer_refs: { [AUDIENCE]: '4021' }
+      }, { env: { NODE_ENV: 'test' } });        // 映射只在实验环境存在
       expect(await ask(mapped)).toEqual({ eligible: true });
       expect(await mapped.check({ audienceRef: reviewerHash('edu', '9999'), schoolRef: 'school-1',
         assignmentRef: 'assign-1', studentUuid: 'edu-uuid-0001' }))
         .toEqual({ eligible: false, reason: 'reviewer_unknown' });
       expect(called).toBe(1);                       // the unmapped one never reached the network
     } finally { await close(lab); }
+  });
+
+  test('a production configuration may not hold edu teacher references at all', () => {
+    // Not "unfit for production" in a document — refused by the code that reads the configuration.
+    const mapping = { reviewer_ref: 'mapping', reviewer_refs: { [AUDIENCE]: '4021' } };
+    expect(() => createEligibilityProvider({ mode: 'http', endpoint: `https://edu.example${PATH}`,
+      client_key: 'practice', key_id: 'k1', secret: SECRET, ...mapping }, { env: { NODE_ENV: 'production' } }))
+      .toThrow();
+    // Even with the default mode, a configuration carrying plaintext references is refused.
+    expect(() => createEligibilityProvider({ mode: 'http', endpoint: `https://edu.example${PATH}`,
+      client_key: 'practice', key_id: 'k1', secret: SECRET, reviewer_refs: { [AUDIENCE]: '4021' } },
+    { env: { NODE_ENV: 'production' } })).toThrow();
+    // The laboratory fixture still works where fixtures belong.
+    expect(createEligibilityProvider({ mode: 'http', endpoint: `https://edu.example${PATH}`,
+      client_key: 'practice', key_id: 'k1', secret: SECRET, ...mapping }, { env: { NODE_ENV: 'test' } })
+      .reviewerRefMode).toBe('mapping');
   });
 
   test('http may be assembled in a production configuration; static may not', () => {
