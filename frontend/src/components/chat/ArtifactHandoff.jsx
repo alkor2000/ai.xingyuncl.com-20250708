@@ -26,6 +26,14 @@ const terminal = status => ['deleted', 'cancelled', 'expired', 'rejected'].inclu
 // Status tone for the status card; the copy itself comes from i18n.
 const tone = status => ({ succeeded: 'success', recycled: 'warning', unknown: 'warning', deleted: 'default', cancelled: 'default', expired: 'default', rejected: 'error' }[status] || 'processing')
 const formatTime = (ms, locale) => (ms ? new Date(ms).toLocaleString(locale) : '')
+const epochMs = seconds => (Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0)
+const retryAfterDeadline = headers => {
+  const value = headers?.get?.('retry-after') ?? headers?.['retry-after'] ?? headers?.['Retry-After']
+  if (value == null) return 0
+  const text = String(value).trim()
+  const deadline = /^\d+$/.test(text) ? Date.now() + Number(text) * 1000 : Date.parse(text)
+  return Number.isFinite(deadline) && deadline > Date.now() ? deadline : 0
+}
 
 export default function ArtifactHandoff({ messageId, client = api }) {
   const { t, i18n } = useTranslation()
@@ -43,6 +51,21 @@ export default function ArtifactHandoff({ messageId, client = api }) {
   const [title, setTitle] = useState('')
   const [operation, setOperation] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [retryAfterUntil, setRetryAfterUntil] = useState(0)
+  const [now, setNow] = useState(Date.now)
+  const retryUntil = Math.max(retryAfterUntil, epochMs(operation?.retry_at))
+  const recoveryUntil = epochMs(operation?.recovery_until)
+  const retrySeconds = Math.max(0, Math.ceil((retryUntil - now) / 1000))
+  // Only update the visible clock. Expiry never sends a request or restarts a save.
+  useEffect(() => {
+    if (!open || (recoveryUntil && now >= recoveryUntil)) return
+    const deadlines = [retryUntil, recoveryUntil].filter(time => time > now)
+    if (!deadlines.length) return
+    const nextDeadline = Math.min(...deadlines) - now
+    const delay = retryUntil > now ? Math.min(1000, nextDeadline) : nextDeadline
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(delay, 2147483647))
+    return () => clearTimeout(timer)
+  }, [open, now, retryUntil, recoveryUntil])
   const freezeKey = useRef(null)
   useEffect(() => { let alive = true; loadCapability(client).then(c => { if (alive) setCapability(c) }); return () => { alive = false } }, [client])
   const run = async fn => {
@@ -51,6 +74,8 @@ export default function ArtifactHandoff({ messageId, client = api }) {
     setBusy(true); setError(null)
     try { await fn() } catch (e) {
       const data = e.response?.data
+      setRetryAfterUntil(current => Math.max(current, retryAfterDeadline(e.response?.headers)))
+      setNow(Date.now())
       setError({ code: data?.error?.code || 'network_error', retryable: !!data?.error?.retryable, requestId: data?.request_id })
     } finally { lock.current = false; setBusy(false) }
   }
@@ -58,7 +83,15 @@ export default function ArtifactHandoff({ messageId, client = api }) {
   const options = { skipDebugLogging: true, skipErrorMessage: true }
   const get = async path => (await client.get(`${ROOT}${path}`, options)).data
   const post = async (path, body, key) => (await client.post(`${ROOT}${path}`, body, { ...options, headers: key ? { 'Idempotency-Key': key } : {} })).data
+  const updateOperation = async (current, action) => {
+    try { setOperation(await post(`/${current.operation_id}/${action}`)) } catch (e) {
+      // Failures can persist a later retry_at. Read local metadata once, never query a peer here.
+      setOperation(await get(`/${current.operation_id}`).then(view => (view?.operation_id === current.operation_id ? view : current)).catch(() => current))
+      throw e
+    }
+  }
   const load = () => run(async () => {
+    setNow(Date.now())
     setPreview(null); setFiles([]); setScope('all'); setRange({ start: 0, end: 0 }); setOperation(null); setStep(0); freezeKey.current = null
     // A reload recovers this account's existing saves for the message from the server; nothing is asked of any peer.
     const existing = (await get(`?message_id=${messageId}`)).operations || []
@@ -69,6 +102,7 @@ export default function ArtifactHandoff({ messageId, client = api }) {
     setTitle(Array.from(data.text.replace(/\s+/g, ' ').trim()).slice(0, 40).join('') || t('chat.handoff.defaultTitle'))
   })
   const startFresh = () => run(async () => {
+    setNow(Date.now())
     setOperation(null); setStep(0); freezeKey.current = null
     const data = await get(`/messages/${messageId}`)
     setPreview(data); setRange({ start: 0, end: data.text.length }); setFiles([]); setScope('all')
@@ -81,26 +115,25 @@ export default function ArtifactHandoff({ messageId, client = api }) {
     attachments: chosenFiles.map(item => ({ source_id: item.source_id, expected_version: item.version })), purpose, title: title.trim() })
   // Freeze + save happen only here, after the teacher has read the preview and pressed the explicit button.
   const save = () => run(async () => {
+    if (Date.now() < retryUntil) return
     setSaving(true)
-    let frozen = null
     try {
       const body = request()
       const serialized = JSON.stringify(body)
       if (freezeKey.current?.serialized !== serialized) freezeKey.current = { serialized, key: crypto.randomUUID() }
-      frozen = await post('', body, freezeKey.current.key)
+      const frozen = await post('', body, freezeKey.current.key)
       setOperation(frozen); setStep(2)
-      setOperation(await post(`/${frozen.operation_id}/save`))
-    } catch (e) {
-      // A frozen operation stays recoverable on the server: show its real state next to the error instead of losing it.
-      if (frozen) setOperation(await get(`/${frozen.operation_id}`).then(view => (view?.operation_id ? view : frozen)).catch(() => frozen))
-      throw e
+      // An idempotent freeze may recover an older operation that is already in backoff or past R.
+      if (Date.now() < epochMs(frozen.retry_at) || (epochMs(frozen.recovery_until) && Date.now() >= epochMs(frozen.recovery_until))) return
+      await updateOperation(frozen, 'save')
     } finally { setSaving(false) }
   })
-  const retry = () => run(async () => { setSaving(true); try { setOperation(await post(`/${operation.operation_id}/save`)) } finally { setSaving(false) } })
-  const refresh = () => run(async () => { setOperation(await post(`/${operation.operation_id}/refresh`)) })
+  const peerActionAllowed = () => Date.now() >= retryUntil && (!recoveryUntil || Date.now() < recoveryUntil)
+  const retry = () => run(async () => { if (!peerActionAllowed()) return; setSaving(true); try { await updateOperation(operation, 'save') } finally { setSaving(false) } })
+  const refresh = () => run(async () => { if (peerActionAllowed()) await updateOperation(operation, 'refresh') })
   const cancel = () => run(async () => { setOperation(await post(`/${operation.operation_id}/cancel`)) })
   const readyFiles = preview?.attachments.filter(item => item.status === 'ready') || []
-  const nowS = Math.floor(Date.now() / 1000)
+  const nowS = Math.floor(now / 1000)
   const pastR = operation?.recovery_until && nowS >= operation.recovery_until
   const canRetry = operation && !settled(operation.status) && !pastR && operation.status !== 'prepared'
   const errorKey = code => (i18n.exists(`chat.handoff.error.${code}`) ? `chat.handoff.error.${code}` : 'chat.handoff.error.unknown')
@@ -114,6 +147,7 @@ export default function ArtifactHandoff({ messageId, client = api }) {
         <Steps size="small" current={step} responsive={false} items={[{ title: t(`${prefix}step.select`) }, { title: t(`${prefix}step.preview`) }, { title: t(`${prefix}step.status`) }]} />
         {error && <Alert type={error.retryable ? 'warning' : 'error'} showIcon message={t(errorKey(error.code))}
           description={error.requestId ? t(`${prefix}requestId`, { id: error.requestId }) : null} data-testid="handoff-error" />}
+        {retrySeconds > 0 && !pastR && <Typography.Text role="status" data-testid="handoff-cooldown">{t(`${prefix}retryCountdown`, { seconds: retrySeconds })}</Typography.Text>}
         {busy && !preview && !operation && <Spin />}
         {step === 0 && preview && <>
           <Radio.Group value={scope} onChange={e => { setScope(e.target.value); setRange({ start: 0, end: 0 }) }} disabled={busy}>
@@ -159,7 +193,7 @@ export default function ArtifactHandoff({ messageId, client = api }) {
           <Typography.Text type="secondary">{t('chat.p03.boundary')}</Typography.Text>
           <Space wrap>
             <Button disabled={busy} onClick={() => setStep(0)}>{t(`${prefix}back`)}</Button>
-            <Button type="primary" icon={<BookOutlined aria-hidden="true" />} loading={busy} disabled={busy} onClick={save} data-testid="handoff-confirm">{t(`${prefix}confirm`)}</Button>
+            <Button type="primary" icon={<BookOutlined aria-hidden="true" />} loading={busy} disabled={busy || retrySeconds > 0} onClick={save} data-testid="handoff-confirm">{t(`${prefix}confirm`)}</Button>
           </Space>
         </>}
         {step === 2 && operation && <>
@@ -176,8 +210,8 @@ export default function ArtifactHandoff({ messageId, client = api }) {
           ]} />
           <Typography.Text type="secondary">{t(`${prefix}statusHint.${pastR ? 'pastR' : operation.status === 'recycled' ? 'recycled' : operation.status === 'succeeded' ? 'succeeded' : 'generic'}`)}</Typography.Text>
           <Space wrap>
-            {canRetry && !saving && <Button type="primary" icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} onClick={retry} data-testid="handoff-retry">{t(`${prefix}retry`)}</Button>}
-            {!pastR && !saving && <Button disabled={busy} onClick={refresh} data-testid="handoff-refresh">{t(`${prefix}refresh`)}</Button>}
+            {canRetry && !saving && <Button type="primary" icon={<ReloadOutlined aria-hidden="true" />} disabled={busy || retrySeconds > 0} onClick={retry} data-testid="handoff-retry">{t(`${prefix}retry`)}</Button>}
+            {!pastR && !saving && <Button disabled={busy || retrySeconds > 0} onClick={refresh} data-testid="handoff-refresh">{t(`${prefix}refresh`)}</Button>}
             {operation.status === 'ready' && !saving && <Button danger disabled={busy} onClick={cancel}>{t(`${prefix}cancel`)}</Button>}
             {!saving && <Button disabled={busy} onClick={startFresh}>{t('chat.p03.newSelection')}</Button>}
             <Button disabled={busy} onClick={() => setOpen(false)}>{t(`${prefix}close`)}</Button>

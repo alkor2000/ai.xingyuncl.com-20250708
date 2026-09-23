@@ -476,6 +476,7 @@
   "chat.handoff.lastSynced": "Last synced",
   "chat.handoff.recoveryUntil": "Status available until",
   "chat.handoff.retry": "Retry save",
+  "chat.handoff.retryCountdown": "Wait {{seconds}} seconds before saving again or refreshing the status. Nothing will be sent automatically.",
   "chat.handoff.refresh": "Refresh status",
   "chat.handoff.cancel": "Cancel this save",
   "chat.handoff.close": "Close",

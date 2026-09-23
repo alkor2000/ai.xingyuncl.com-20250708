@@ -149,6 +149,34 @@ const commands = {
     if (c.screenshots) await shot(`${c.screenshots}-3-status`);
     return { ok: true, selection, attachments_offered: attachmentsOffered, preview, preview_fields: Object.fromEntries(previewFields), posts_before_confirm: postsBeforeConfirm, view, requests: state.requests, errors: state.errors };
   },
+  // The retry cooldown, as the page really shows it: what the countdown says, whether the three outward
+  // buttons are there at all and whether they are disabled, and every entry request the page made while
+  // we watched. `watch_ms` keeps looking after the countdown has run out, which is where "zero automatic
+  // requests" has to be proved rather than assumed.
+  async cooldown(c) {
+    const page = state.page;
+    if (c.reset_requests !== false) state.requests = [];
+    const readButton = async testid => {
+      const node = page.getByTestId(testid);
+      if (!(await node.count())) return { present: false, disabled: null };
+      return { present: true, disabled: await node.first().isDisabled() };
+    };
+    const read = async () => ({
+      cooldown: await page.getByTestId('handoff-cooldown').count()
+        ? (await page.getByTestId('handoff-cooldown').textContent()) : null,
+      status: await page.getByTestId('handoff-status').count()
+        ? (await page.getByTestId('handoff-status').textContent()) : null,
+      confirm: await readButton('handoff-confirm'),
+      retry: await readButton('handoff-retry'),
+      refresh: await readButton('handoff-refresh')
+    });
+    const during = await read();
+    if (c.watch_ms) await page.waitForTimeout(c.watch_ms);
+    const after = await read();
+    if (c.screenshot) await shot(c.screenshot);
+    return { ok: true, during, after, requests: state.requests, errors: state.errors };
+  },
+
   async reopen(c) {
     const page = state.page;
     await page.keyboard.press('Escape').catch(() => {});

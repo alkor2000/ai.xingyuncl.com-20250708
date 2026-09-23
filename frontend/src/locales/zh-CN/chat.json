@@ -476,6 +476,7 @@
   "chat.handoff.lastSynced": "最后同步",
   "chat.handoff.recoveryUntil": "状态可查询至",
   "chat.handoff.retry": "重试保存",
+  "chat.handoff.retryCountdown": "请等待 {{seconds}} 秒后再重试保存或刷新状态；系统不会自动重新发送。",
   "chat.handoff.refresh": "刷新状态",
   "chat.handoff.cancel": "取消本次保存",
   "chat.handoff.close": "关闭",
