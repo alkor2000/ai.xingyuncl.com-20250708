@@ -44,6 +44,27 @@ async function startServer() {
       logger.warn('应用将在没有缓存的情况下运行');
     }
 
+    // 2.5 P09 网站作品接入运行时：默认关闭（不连账本、不读发行方凭据、不开预览域）。开启时任务上下文发行方缺失
+    //     只会让带授权的接口一律拒绝，不会放行；学生页面只在隔离预览域运行，与应用不同源。
+    app.locals.p09Website = await require('./services/websiteArtifact/runtime').bootstrapWebsiteArtifacts({ env: process.env, logger });
+    if (app.locals.p09Website.enabled && app.locals.p09Website.preview) {
+      app.locals.p09PreviewServer = await require('./services/websiteArtifact/previewServer').startPreviewServer({
+        runtime: app.locals.p09Website,
+        host: process.env.P09_PREVIEW_BIND || '127.0.0.1',
+        frameAncestors: process.env.P09_PREVIEW_FRAME_ANCESTORS || "'none'",
+        // The isolated origin may terminate TLS itself; behind a proxy these stay unset.
+        tls: process.env.P09_PREVIEW_TLS_KEY && process.env.P09_PREVIEW_TLS_CERT
+          ? { key: require('fs').readFileSync(process.env.P09_PREVIEW_TLS_KEY),
+            cert: require('fs').readFileSync(process.env.P09_PREVIEW_TLS_CERT) }
+          : null,
+        // The cookie follows the scheme the browser actually uses: an https isolated origin gets
+        // SameSite=None + Secure, which is also what lets a sandboxed (opaque-origin) document send it
+        // with the work's own images and stylesheet.
+        secureCookie: app.locals.p09Website.preview.origin.startsWith('https:')
+      });
+      logger.info(`P09 隔离预览域监听 ${app.locals.p09Website.preview.origin}（端口 ${app.locals.p09PreviewServer.port}）`);
+    }
+
     // 3. 启动HTTP服务器
     const PORT = process.env.PORT || config.app.port || 4000;
 
@@ -106,6 +127,14 @@ async function startServer() {
           } catch (redisErr) {
             logger.error('Redis连接关闭失败:', redisErr);
           }
+        }
+
+        // 4.2b 关闭 P09 隔离预览监听与账本连接池（关闭状态下为空操作）
+        try {
+          await app.locals.p09PreviewServer?.close?.();
+          await app.locals.p09Website?.close?.();
+        } catch (websiteErr) {
+          logger.error('P09 网站作品运行时关闭失败:', websiteErr?.code || websiteErr);
         }
 
         // 4.3 关闭数据库连接池

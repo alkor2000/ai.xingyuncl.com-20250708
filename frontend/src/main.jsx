@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { captureTaskContext } from './components/htmlEditor/TaskArtifactPanel'
 import i18n from './utils/i18n' // 导入i18n配置
 import { loader } from '@monaco-editor/react'
 import 'monaco-editor/esm/nls.messages.zh-cn.js'
@@ -43,6 +44,9 @@ if (typeof window !== 'undefined') {
     }
   })
 }
+
+// 教学任务上下文是凭据：在应用发出任何请求、渲染任何页面之前，从地址栏片段取走并清掉，只留在内存里。
+captureTaskContext()
 
 // 生产环境不使用StrictMode，避免双重渲染
 const rootElement = document.getElementById('root')

@@ -122,3 +122,7 @@ backups/
 .mcp.json.backup.*
 .claude/settings.json
 .claude/settings.json.backup.*
+
+# Python 字节码（实验脚本运行时生成）
+__pycache__/
+*.pyc
