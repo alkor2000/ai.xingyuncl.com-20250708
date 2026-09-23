@@ -80,6 +80,9 @@ const SCHEMA = Object.freeze([
 const identifier = (value, max) => typeof value === 'string' && value.length >= 1 && value.length <= max && /^[A-Za-z0-9_]+$/.test(value);
 // Restricted application-role candidate: DML on the P09 ledger and SELECT on the named read-only source
 // tables (projects/pages/users), nothing else. CREATE USER and the password stay with the operator.
+// owner + project, the pair the snapshot reader checks before it reads anything of a student's.
+const titleKey = (ownerUserId, projectId) => `${ownerUserId}\u0000${projectId}`;
+
 function restrictedRoleGrants({ database, user, host = '127.0.0.1', sourceTables = [] }) {
   if (!identifier(database, 64) || !identifier(user, 32) || typeof host !== 'string' || !/^[A-Za-z0-9_.%-]{1,60}$/.test(host) ||
       !Array.isArray(sourceTables) || sourceTables.some(t => !identifier(t, 64) || Object.values(TABLES).includes(t))) fail('invalid_request');
@@ -278,6 +281,31 @@ class Tx {
     sql += ' ORDER BY created_at ASC LIMIT 1000';
     return this.query(sql, params);
   }
+  // The name of each work in a page of links, read on THIS transaction's connection.
+  //
+  // Three things this is careful about:
+  //   * it is the same snapshot as the watermark and the rows — a name from another moment would make
+  //     `complete` describe something the names do not belong to;
+  //   * it never asks the pool for a second connection. The C05 entry learned that the hard way: a
+  //     transaction that goes back to the pool waits for the connection it is already holding;
+  //   * ownership is in the key, not in a later filter. A row's name is only used when the project row
+  //     belongs to the same account the link names, which is the rule the snapshot reader applies.
+  // A deployment whose ledger role was not granted SELECT on the source table gets no names rather than
+  // a failed read: the caller sees `title: null`, which already means "not provable here".
+  async sourceTitles(rows) {
+    const wanted = [...new Set((rows || []).map(row => Number(row.project_id)).filter(Number.isInteger))];
+    if (!wanted.length) return new Map();
+    let found;
+    try {
+      found = await this.query(
+        `SELECT id, user_id, name FROM \`html_projects\` WHERE id IN (${wanted.map(() => '?').join(',')})`,
+        wanted);
+    } catch (error) {
+      return new Map();
+    }
+    return new Map(found.map(row => [titleKey(row.user_id, row.id),
+      typeof row.name === 'string' && row.name.trim() !== '' ? row.name : null]));
+  }
   async insertLink(row) {
     const columns = ['id', 'source_instance', 'artifact_ref', 'project_ref', 'entry_ref', 'owner_user_id', 'student_uuid', 'project_id',
       'entry_page_id', 'assignment_ref', 'lesson_ref', 'school_ref', 'issuer_key', 'grant_id', 'state', 'work_state',
@@ -363,4 +391,4 @@ class Tx {
     await this.query(`DELETE FROM ${TABLES.idempotency} WHERE created_at<?`, [before]);
   }
 }
-module.exports = { WebsiteArtifactStore, Tx, TABLES, SCHEMA, restrictedRoleGrants, sha256, decode };
+module.exports = { WebsiteArtifactStore, Tx, TABLES, SCHEMA, restrictedRoleGrants, sha256, decode, titleKey };

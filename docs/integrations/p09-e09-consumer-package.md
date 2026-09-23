@@ -58,6 +58,10 @@
 }
 ```
 
+- `title` 是**读取当时的作品名**，不是关联时的名字：`/state` 在取水位和取行的**同一个事务快照**里，按（作品所有者 + 项目）去实践自己的来源表读这件作品现在叫什么。名字只能来自服务端已经核过的来源，**没有任何请求字段能把名字送进来**。
+  - 学生改名 → 下一次 `/state` 就是新名字；改名**不是保存**，第 4 节的口径不变（不产生新事件、不加保存次数）。
+  - 来源已删、名字为空、或这行账本此刻证明不了名字（例如读取来源的权限被收窄）→ **`null`**，不拿旧名字顶替。`null` 的意思是"此刻无法证明"，请显示明示回退（如"未命名作品"），**不要**回事件里翻旧名字当现名。
+- **事件里的 title 是"那件事发生时的名字"**，两处不一致是对的：列表显示用 `/state`，历史叙述用事件。`artifact.created / updated / preview_ready / revision_fixed` 带当时读到的名字；`artifact.deleted / preview_revoked` 分两种——项目还在、只是入口页没了（`entry_removed`）带名字，整个来源已经没了（`source_deleted`）带 **`title: null`**（那一刻已经无源可证）。账本从不留名字的副本，这是它的代价，写在这里而不是用旧值糊过去。
 - `work_state` ∈ `linked | working | preview_ready | unknown | unavailable`（`unknown` 与 `linked` 是本项目候选新增）。
 - `has_effective_save` 是**三值**：`true` / `false` / **`null`（未知）**。`null` 不是 `false`。
 - 事件类型：`artifact.created / updated / preview_ready / preview_revoked / deleted` + 本项目候选的 `artifact.unlinked / artifact.revision_fixed`。
