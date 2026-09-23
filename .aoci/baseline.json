@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-23T12:37:39Z",
+  "updated_at": "2026-09-23T13:54:46Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "005deb7ddf07cdcb4257ae0f92088071463c7c1009fa0a7dd70353fb0b2c6ff8",
-      "size": 337622,
-      "normalized_sha256": "005deb7ddf07cdcb4257ae0f92088071463c7c1009fa0a7dd70353fb0b2c6ff8"
+      "sha256": "1ecc78013c84d1689e909ef6733b42eac0a1925a915ef92a9ae495daadd69dc6",
+      "size": 338572,
+      "normalized_sha256": "1ecc78013c84d1689e909ef6733b42eac0a1925a915ef92a9ae495daadd69dc6"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -199,6 +199,11 @@
       "sha256": "2276db45099f00e892e09b52b627321da01bf36b484941fbc696de3bce389a49",
       "size": 1978,
       "normalized_sha256": "2276db45099f00e892e09b52b627321da01bf36b484941fbc696de3bce389a49"
+    },
+    "backend/scripts/p03-migration-package.cjs": {
+      "sha256": "564802b3f93f0542abceba7a4aefe11c0fd4f75ab8de443d6cda6bebde4f9170",
+      "size": 8135,
+      "normalized_sha256": "564802b3f93f0542abceba7a4aefe11c0fd4f75ab8de443d6cda6bebde4f9170"
     },
     "backend/scripts/test-identity-enrollment-runtime.cjs": {
       "role": "observe",
@@ -2158,6 +2163,12 @@
       "size": 3630,
       "normalized_sha256": "67c758cec8a2274c45a729643ab147223a08fb47742a4e57e74b6f5b74062b9c"
     },
+    "backend/tests/p03-migration-package.test.cjs": {
+      "role": "observe",
+      "sha256": "1d3fb544424f33fcb13d84aead60ebd0b4a5b80d5d4214e437345cb47ee4cb5e",
+      "size": 5428,
+      "normalized_sha256": "1d3fb544424f33fcb13d84aead60ebd0b4a5b80d5d4214e437345cb47ee4cb5e"
+    },
     "backend/tests/product-feedback-bridge.test.cjs": {
       "role": "observe",
       "sha256": "fedc0a0a957cba674c963ae5115c0dcb2ed504b29d82f3b2115c5e09e5124fdf",
@@ -2352,6 +2363,11 @@
       "sha256": "afaabe8912a481b22fa7a85b4477bf24286218e6079706f6d790bc1309301825",
       "size": 9010,
       "normalized_sha256": "afaabe8912a481b22fa7a85b4477bf24286218e6079706f6d790bc1309301825"
+    },
+    "docs/integrations/p03-migration-package.md": {
+      "sha256": "7cee0fb02df2d4b3c9e826684f171ebed4559a7cb5cd1c05e456d6fcd9a9882d",
+      "size": 4499,
+      "normalized_sha256": "7cee0fb02df2d4b3c9e826684f171ebed4559a7cb5cd1c05e456d6fcd9a9882d"
     },
     "docs/integrations/p03-product-decisions-20260921.md": {
       "sha256": "31d8b5ecfc77a65925305c9ad78dc9c157eb1310987b1458b04e3b9f3bd545fe",

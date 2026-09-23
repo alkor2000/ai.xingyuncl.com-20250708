@@ -52,6 +52,7 @@ doc-template-smoke.cjs[TB4S]: F:T·公文模板冒烟脚本：复用或自起:40
 artifact-guard-smoke.cjs[TB4S]: F:T·产物守卫冒烟：起假OpenAI上游(写完课件再附赠python-pptx脚本)，建临时用户与假模型，经真实HTTP核对格式指令/用户轮提醒进了上下文、流式在脚本开头被截断且上游被断开、落库为截断内容、非流式同样截断、普通模式原样透传 | R:code:backend/src/services/chat/artifactStreamGuard.js,code:backend/src/services/aiStreamService.js | A:- | S:假上游占127.0.0.1:4599；临时ai_models行credits_per_chat=0并挂到第一个组；结束删guard_smoke_%用户
 workflow-closure-smoke.cjs[TB4S]: F:本地HTTP冒烟：创建临时用户、通知、工作流和外部模块，检查通知分页/已读隔离、Agent执行历史与权限、模块探测状态，结束清理 | R:code:backend/src/app.js,code:backend/src/routes/forum.js,code:backend/src/routes/agent.js,code:backend/src/controllers/admin/ModuleController.js | A:- | S:拒绝production和非本机数据库；自建127.0.0.1随机端口HTTP服务，需要本地库可写
 p03-ledger-readiness.cjs[XO4T]: F:T·只读核验P03受限账本角色与四表就绪的运维脚本：用P03_HANDOFF_DB_*凭据调probeLedger，只印事实或固定码，退出码0/1/2 | R:code:backend/src/services/artifactHandoff/formalRuntime.js | A:node scripts/p03-ledger-readiness.cjs | S:不写不启用；应用账号充当账本角色直接拒绝；不打印凭据/授权文本/地址
+p03-migration-package.cjs[OV6S]: F:T·离线核对77a固定迁移与依赖前像，生成并校验临时发布布局，修正mysqlStore相对导入 | R:code:backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js,code:backend/src/services/artifactHandoff/mysqlStore.js | A:默认dry-run,--write-staging,--verify-staging,assemble,plan,verifyStaging | S:只认固定提交及北大目标；默认零文件写入；显式写入只建新临时树；不读env或连库；拒符号链接/错前像/已晋级/额外文件
 
 ===/home/hanying/ai-platform/backend/src/===
 app.js[EG9M]: F:C·装配Express安全、CORS、静态文件、健康与业务路由；成果下载、正式保存和中央反馈独立挂载 | R:code:backend/src/server.js,code:backend/src/routes/artifactExports.js,code:backend/src/routes/artifactHandoffEntry.js,code:backend/src/routes/productFeedback.js | A:/health,/api,/api/v1/agent,/pages/:userId/:slug | S:只导出app不监听；三个成果/反馈边界均位于Morgan和全局解析前；保存只读app.locals.p03Handoff且默认关闭；反馈独立raw解析上限26MiB不能改成通用JSON；agent外部CORS不带cookie；全局限流装配失败放行
@@ -984,6 +985,7 @@ p03-entry-deploy-candidate.md[SV6S]: F:T·描述成果保存入口、状态及�
 P03-SAVE-TO-LIBRARY-TEST.md[SQ5T]: F:T·供教师记录选段保存、重试倒计时、重开恢复、期限结束及中英文界面验收的步骤 | R:code:frontend/src/components/chat/ArtifactHandoff.jsx | A:- | S:环境待开；故障与期限由技术人员准备；真人未执行的条目只能记待验
 p03-current-rc-candidate.md[SV6S]: F:T·固定f737a89父版上的重试等待集成候选，列源码摘要、构建结果与后续版本匹配缺口 | R:code:docs/integrations/p03-entry-deploy-candidate.md,code:docs/integrations/p03-rc-aoci-candidate.md | A:- | S:记录的是未合main的历史候选；15项为模拟API组件测试；入口浏览器被准入门阻断，不能当三端通过
 p03-rc-aoci-candidate.md[SV5T]: F:T·记录旧RC未纳入认知资产的原因、源文件摘要和重试等待语义候选 | R:code:docs/integrations/p03-current-rc-candidate.md | A:- | S:描述当时仅使用绑定主副本的MCP限制；内含候选条目不等正式索引或浏览器通过
+p03-migration-package.md[SV6T]: F:T·迁移装配准备单：固定输入、临时布局及摘要、隔离验证、最小生产授权清单和教师测试依赖 | R:code:backend/scripts/p03-migration-package.cjs,code:docs/integrations/P03-SAVE-TO-LIBRARY-TEST.md | A:- | S:仅文件装配和隔离数据库已验；生产GRANT未执行；不向共享自动迁移目录晋级；Identity/TE固定版本与真人引用仍待
 
 ===/home/hanying/ai-platform/frontend/dev/===
 p03.html[EM4T]: F:T·P03合成演示HTML入口：挂载开发React页面并提供移动viewport | R:code:frontend/dev/p03.jsx | A:- | S:未列入生产构建入口
