@@ -209,7 +209,10 @@ const commands = {
     state.requests = [];
     const button = panel().getByTestId('p09-submit');
     if (!(await button.count())) return { ok: true, present: false };
-    if (command.double) { await button.dispatchEvent('click'); await button.dispatchEvent('click'); }
+    const disabled = await button.isDisabled();
+    // 按钮被挡住时也要真的去按一下：证明的是"学生猛点也发不出去"，而不是"我们没点"。
+    if (disabled) await button.dispatchEvent('click');
+    else if (command.double) { await button.dispatchEvent('click'); await button.dispatchEvent('click'); }
     else await button.click();
     await state.page.waitForTimeout(command.wait || 1800);
     const read = async testid => (await panel().getByTestId(testid).count()
@@ -218,7 +221,7 @@ const commands = {
     const at_answer = count();
     if (command.settle) await state.page.waitForTimeout(command.settle);
     if (command.screenshot) await shot(command.screenshot);
-    return { ok: true, present: true,
+    return { ok: true, present: true, disabled,
       submitted: await read('p09-submitted'), refusal: await read('p09-submit-refusal'),
       unknown: await read('p09-submit-unknown'), error: await read('p09-error'),
       submit_requests: at_answer, submit_requests_after_settle: count(),
@@ -258,6 +261,22 @@ const commands = {
       unlink_class: await unlink.count() ? await unlink.getAttribute('class') : null,
       freeze_class: await panel().getByTestId('p09-freeze').count()
         ? await panel().getByTestId('p09-freeze').getAttribute('class') : null };
+  },
+  // 这一次到达的作业、面板上写的作业、以及「交作业」能不能按——误交那一格全靠这三样说话。
+  async assignmentView(command) {
+    const has = async testid => Boolean(await panel().getByTestId(testid).count());
+    const submit = panel().getByTestId('p09-submit');
+    const rows = await panel().locator('.ant-descriptions-item').evaluateAll(nodes => nodes.map(node => [
+      node.querySelector('.ant-descriptions-item-label')?.textContent?.trim(),
+      node.querySelector('.ant-descriptions-item-content')?.textContent?.trim()]));
+    if (command && command.screenshot) await shot(command.screenshot);
+    return { ok: true,
+      notice: await has('p09-other-assignment')
+        ? (await panel().getByTestId('p09-other-assignment').textContent()) : null,
+      link_button: await has('p09-link'), no_context_hint: await has('p09-no-context'),
+      submit_present: Boolean(await submit.count()),
+      submit_disabled: await submit.count() ? await submit.isDisabled() : null,
+      fields: Object.fromEntries(rows) };
   },
   async facts() {
     const rows = await panel().locator('.ant-descriptions-item').evaluateAll(nodes => nodes.map(node => [

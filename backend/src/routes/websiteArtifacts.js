@@ -100,6 +100,18 @@ function createStudentRouter({ authenticate }) {
 
   router.get('/links', run(async req => ({ links: await runtimeOf(req).service.ownerLinks(req.user.id) })));
 
+  // Which assignment did this arrival bring? A look, not a spend.
+  //
+  // The editor needs this to tell a student that the project in front of them belongs to a different
+  // assignment than the one they just came in for. The name has to be trustworthy, so it comes from the
+  // verified grant and never from the browser's copy of it; and because it is only a look, the grant is
+  // not burned here and nothing is written — the student's one-time entry ticket stays spendable.
+  router.get('/task-context', run(async req => {
+    const runtime = runtimeOf(req);
+    const grant = runtime.grants.verify(req.get(GRANT_HEADER), 'website_artifact_link');
+    return { target: await runtime.service.describeTaskContext({ ownerUserId: req.user.id, grant }) };
+  }));
+
   // Associate one of my own projects with the task the grant names. The grant travels in a header, is
   // verified before anything is read, and is single use.
   router.post('/links', run(async req => {

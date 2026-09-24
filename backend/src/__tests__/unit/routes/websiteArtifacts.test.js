@@ -144,6 +144,37 @@ describe('P09 HTTP surfaces', () => {
       has_effective_save: null, save_evidence: 'legacy_unknown', save_evidence_reason: 'history_before_observation' } });
   });
 
+  test('asking which assignment this arrival is for costs nothing: it verifies, it does not spend', async () => {
+    // 学生带着 B 的入口打开了关联着 A 的旧项目时，面板要能说出这件事——名字得由服务端验签后给，
+    // 但"看一眼"不能把那张一次性入场券花掉，也不能写出任何关联。
+    const { runtime, context } = buildRuntime();
+    server = await listen(buildApp(runtime));
+    const port = server.address().port;
+    const grant = makeGrant({ assignment: 'assign-new-2' });
+    const path = '/api/p09/website-artifacts/task-context';
+
+    const asked = await request(port, { path, headers: { [GRANT_HEADER]: grant } });
+    expect(asked.status).toBe(200);
+    expect(asked.json).toMatchObject({ schema_version: 1, target: { assignment_ref: 'assign-new-2' } });
+    expect(context.store.data.links.size).toBe(0);                 // 没有建任何关联
+
+    // 同一张授权随后仍然能真的用来关联：刚才那一眼没有烧掉它。
+    const created = await request(port, { method: 'POST', path: '/api/p09/website-artifacts/links',
+      headers: { 'Idempotency-Key': randomUUID(), [GRANT_HEADER]: grant },
+      body: { schema_version: 1, project_id: 3, entry_page_id: 7 } });
+    expect(created.status).toBe(200);
+    expect(created.json.link).toMatchObject({ assignment_ref: 'assign-new-2' });
+
+    // 没有授权、别人的授权、伪造签名：一律按名拒绝，不泄露任何作业名。
+    const bare = await request(port, { path });
+    expect(bare.json.error.code).toBe('task_context_required');
+    const forged = await request(port, { path, headers: { [GRANT_HEADER]: makeGrant({ secret: 'z'.repeat(40) }) } });
+    expect(forged.json.error.code).toBe('task_context_invalid');
+    const stranger = await request(port, { path, headers: { [GRANT_HEADER]: makeGrant({ uuid: 'edu-uuid-9999' }) } });
+    expect(stranger.status).toBe(403);
+    expect(JSON.stringify(stranger.json)).not.toContain('assign');
+  });
+
   test('edu reads need a service credential and stay inside the school scope', async () => {
     const { runtime } = buildRuntime();
     server = await listen(buildApp(runtime));

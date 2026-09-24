@@ -147,6 +147,17 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
 
   // ---- association ----------------------------------------------------------------------------
   // The student picks one of their own projects and an entry page; the assignment comes from the grant.
+  // "这一次进来的是哪份作业" —— 只看，不动。
+  //
+  // 学生带着 B 的入口进来，打开的却是早就关联着 A 的老项目时，面板必须能说出这件事；而要说得准，
+  // 作业名只能来自服务端验过签的授权，不能来自浏览器手里那段没验过的载荷。所以这里用与关联完全
+  // 相同的尺子（签名、受众、学校、学生、时效由 grants.verify 与 student 把关），但**不烧授权、
+  // 不写账本、不建任何关联**：看一眼不该消耗掉学生那张一次性入场券。
+  async function describeTaskContext({ ownerUserId, grant }) {
+    await student(ownerUserId, grant);
+    return { assignment_ref: grant.assignmentRef };
+  }
+
   async function link({ ownerUserId, grant, projectId, entryPageId }) {
     const user = await student(ownerUserId, grant);
     const source = await reader.load(user.id, projectId);
@@ -757,7 +768,7 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
       immutable: false };
   }
 
-  return { link, unlink, freezeRevision, submitLink, noteSourceChange, recordSourceWrite, reconcileLink, sweep,
+  return { describeTaskContext, link, unlink, freezeRevision, submitLink, noteSourceChange, recordSourceWrite, reconcileLink, sweep,
     syncStatus, state, events, ownerLinks, openReviewSession, consumeHandoff, resolvePreview, view, workState,
     EVENT_TYPES, encodeCursor, SWEEP };
 }

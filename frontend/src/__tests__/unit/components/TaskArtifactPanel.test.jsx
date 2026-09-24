@@ -16,14 +16,21 @@ const linkRow = (extra = {}) => ({ link_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa
   work_state: 'preview_ready', has_effective_save: true, save_evidence: 'observed', save_evidence_reason: 'observed_save',
   preview_available: true, real_save_count: 2, last_real_save_at: Date.now(), saved_at: Date.now(), revisions: [], ...extra })
 
-function routes({ available = true, links = [], submitConfigured = false } = {}) {
+// `arrived` 是服务端验签之后说的"这一次进来的是哪份作业"；给 'unavailable' 表示问不到。
+function routes({ available = true, links = [], submitConfigured = false, arrived = 'assign-1' } = {}) {
   api.get.mockImplementation(path => {
     if (path === `${ROOT}/capability`) return Promise.resolve({ data: { available, source_instance: 'practice-lab',
       task_context_configured: true, submit_configured: submitConfigured } })
     if (path === `${ROOT}/links`) return Promise.resolve({ data: { links } })
+    if (path === `${ROOT}/task-context`) {
+      return arrived === 'unavailable'
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve({ data: { target: { assignment_ref: arrived } } })
+    }
     return Promise.reject(new Error(`unexpected GET ${path}`))
   })
 }
+const TASK = `p09g.${'e'.repeat(240)}.${'s'.repeat(43)}`
 beforeEach(() => { vi.clearAllMocks(); api.get.mockReset(); api.post.mockReset(); resetCapabilityCache(); setTaskContext(null) })
 
 describe('assignment artifact panel', () => {
@@ -239,6 +246,63 @@ describe('assignment artifact panel', () => {
     render(<TaskArtifactPanel project={project} pages={pages} />)
     await waitFor(() => expect(screen.getByTestId('p09-no-context')).toBeTruthy())
     expect(screen.queryByTestId('p09-link')).toBeNull()
+  })
+
+  // ---- 带着这一次的入口，打开的却是别的作业的项目 ------------------------------------------------
+  // 这一组是冲着真实走查里那张截图写的：学生带作业 B 进来，面板却列着旧作业 A，
+  // 「交作业」照样能按——按下去就交到 A 了。
+
+  it('says the project belongs to another assignment and holds 交作业 back', async () => {
+    resetTaskContexts(); setTaskContext(TASK)                       // 这一次带的是 B
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })], arrived: 'assign-B' })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    const notice = await screen.findByTestId('p09-other-assignment')
+    expect(notice.textContent).toContain('htmlEditor.p09.otherAssignment')
+    expect(screen.getByTestId('p09-submit').disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('p09-submit'))
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(`${ROOT}/task-context`, expect.anything()))
+    expect(api.post).not.toHaveBeenCalled()                          // 一个字节都没往外发
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+  })
+
+  it('holds 交作业 back the same way when this arrival cannot be confirmed', async () => {
+    resetTaskContexts(); setTaskContext(TASK)
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })], arrived: 'unavailable' })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await screen.findByTestId('p09-other-assignment')
+    expect(screen.getByText('htmlEditor.p09.otherAssignmentUnknown')).toBeTruthy()
+    expect(screen.getByTestId('p09-submit').disabled).toBe(true)
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('leaves the same assignment exactly as it was: no notice, 交作业 works', async () => {
+    resetTaskContexts(); setTaskContext(TASK)
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })], arrived: 'assign-A' })
+    api.post.mockResolvedValue({ data: { submission: { submitted: true, outcome: 'submitted',
+      revision_ref: 'e9a1', revision_no: 1, submitted_at: 1 } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await waitFor(() => expect(screen.getByTestId('p09-submit').disabled).toBe(false))
+    expect(screen.queryByTestId('p09-other-assignment')).toBeNull()
+    fireEvent.click(screen.getByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submitted')).toBeTruthy())
+  })
+
+  it('never asks about an arrival that is not there, and leaves direct entry alone', async () => {
+    resetTaskContexts(); setTaskContext(null)                        // 直接进编辑器，没有本次上下文
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })] })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await waitFor(() => expect(screen.getByTestId('p09-submit').disabled).toBe(false))
+    expect(screen.queryByTestId('p09-other-assignment')).toBeNull()
+    expect(api.get).not.toHaveBeenCalledWith(`${ROOT}/task-context`, expect.anything())
+  })
+
+  it('an unlinked project keeps the ordinary link flow, with no warning in the way', async () => {
+    resetTaskContexts(); setTaskContext(TASK)
+    routes({ submitConfigured: true, links: [], arrived: 'assign-B' })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await screen.findByTestId('p09-link')
+    expect(screen.queryByTestId('p09-other-assignment')).toBeNull()
+    expect(api.post).not.toHaveBeenCalled()
   })
 
   it('a double click is one submission', async () => {

@@ -83,9 +83,24 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   // What edu answered about handing in, this session only. Nothing is remembered as 已交 across a
   // reload: the submission fact belongs to edu, and a stale tick here would be a lie about their state.
   const [submission, setSubmission] = useState(null)
+  // 这一次进来的是哪份作业。只认服务端验签后给的名字：浏览器手里那段载荷没验过，不能当作业名，
+  // 更不能当授权。null=还在问，'unavailable'=问不到。
+  const [target, setTarget] = useState(null)
   const lock = useRef(false)
 
   useEffect(() => { let alive = true; loadCapability(client).then(value => { if (alive) setCapability(value) }); return () => { alive = false } }, [client])
+
+  // 每换一次到达上下文就重新问一次；没有上下文就没有"这一次的作业"，一切照旧。
+  useEffect(() => {
+    let alive = true
+    if (!capability?.available || !context) { setTarget(null); return undefined }
+    setTarget(null)
+    client.get(`${ROOT}/task-context`, { headers: { 'X-P09-Task-Context': context },
+      skipDebugLogging: true, skipErrorMessage: true })
+      .then(({ data }) => { if (alive) setTarget(data?.target?.assignment_ref ? data.target : 'unavailable') })
+      .catch(() => { if (alive) setTarget('unavailable') })
+    return () => { alive = false }
+  }, [capability, client, context])
 
   const refresh = useCallback(async () => {
     if (!capability?.available) return
@@ -159,6 +174,12 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   const prefix = 'htmlEditor.p09.'
   const latest = current?.revisions?.length ? current.revisions[current.revisions.length - 1] : null
   const submitConfigured = capability?.submit_configured === true
+  // 带着这一次的入口，打开的却是关联着另一份作业的项目——这是最容易误交的一格：学生看到的是
+  // 一个能按的「交作业」，按下去交的却是上一份作业。确认不了也按同样处理：宁可挡住，不可误投。
+  const arrivalDecided = !context || (target !== null && target !== 'unavailable')
+  const otherAssignment = !!current && !!context &&
+    (target === 'unavailable' || (arrivalDecided && target.assignment_ref !== current.assignment_ref))
+  const checkingArrival = !!current && !!context && target === null
   // Linked but nothing saved since: the way forward is to save again, not to unlink and start over.
   const needsSaveAfterLink = !!current && current.save_evidence !== 'observed'
 
@@ -219,14 +240,25 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
                   </>} />
                 : null}
 
-          {submitConfigured
-            ? <Typography.Text type="secondary">{t(`${prefix}submitWhereYouWork`)}</Typography.Text>
-            : <Typography.Text type="secondary">{t(`${prefix}submitHint`)}</Typography.Text>}
+          {otherAssignment
+            ? <Alert type="warning" showIcon data-testid="p09-other-assignment"
+              message={t(`${prefix}otherAssignment`, { linked: current.assignment_ref })}
+              description={<>
+                <div>{target === 'unavailable'
+                  ? t(`${prefix}otherAssignmentUnknown`)
+                  : t(`${prefix}otherAssignmentArrived`, { arrived: target.assignment_ref })}</div>
+                <div style={{ marginTop: 6 }}>{t(`${prefix}otherAssignmentNext`)}</div>
+              </>} />
+            : submitConfigured
+              ? <Typography.Text type="secondary">{t(`${prefix}submitWhereYouWork`)}</Typography.Text>
+              : <Typography.Text type="secondary">{t(`${prefix}submitHint`)}</Typography.Text>}
           {needsSaveAfterLink && <Alert type="info" showIcon data-testid="p09-save-after-link"
             message={t(`${prefix}saveAfterLink`)} />}
           <Typography.Text type="secondary">{t(`${prefix}frozenScopeHint`)}</Typography.Text>
           <Space wrap>
-            {submitConfigured && <Button type="primary" icon={<SendOutlined />} disabled={busy} loading={busy}
+            {/* 这一次的作业与本项目的活关联对不上，或者还没确认上，就不让普通「交作业」发出去。 */}
+            {submitConfigured && <Button type="primary" icon={<SendOutlined />}
+              disabled={busy || otherAssignment || checkingArrival} loading={busy}
               onClick={submit} data-testid="p09-submit">{t(`${prefix}submit`)}</Button>}
             <Button icon={<EyeOutlined />} disabled={busy || !current.preview_available} onClick={() => openPreview(null)} data-testid="p09-preview">
               {t(`${prefix}preview`)}
