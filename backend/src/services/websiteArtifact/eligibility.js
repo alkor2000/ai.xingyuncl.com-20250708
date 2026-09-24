@@ -8,11 +8,10 @@
 // so with no provider configured the interface exists and refuses (`eligibility_unavailable`), exactly
 // like the task-context issuers. The static provider below is a laboratory stand-in for edu's future
 // endpoint and is accepted only in development/test.
-const { createHash, randomBytes } = require('node:crypto');
-const https = require('node:https');
-const http = require('node:http');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const { fail } = require('./errors');
+const { signCall, postToEdu } = require('./eduCall');
 
 const REF = /^[A-Za-z0-9._:-]{1,128}$/;
 // The reasons edu's provider can answer with, read from its own source at d2f54c9e
@@ -95,11 +94,9 @@ const SIGNED_HEADERS = Object.freeze(['x-p09-client', 'x-p09-key-id', 'x-p09-tim
 
 // The construction edu's Verifier checks (signing.go): sha256 over method, path, the query sorted by
 // name, and the body digest, then sha256 over secret, timestamp, nonce and that inner digest.
-function signEligibility({ secret, method, path, query = '', body = '', timestamp, nonce }) {
-  const canonical = [method, path, query, createHash('sha256').update(body).digest('hex')].join('\n');
-  const inner = createHash('sha256').update(canonical).digest('hex');
-  return createHash('sha256').update(`${secret}\n${timestamp}\n${nonce}\n${inner}`).digest('hex');
-}
+// The signature and the bounded call now live in eduCall.js, shared with the 交作业 relay so the two
+// outbound integrations cannot drift apart on the canonical string, the absolute budget or the byte cap.
+const signEligibility = signCall;
 
 function httpSpec(spec, env) {
   const allowed = ['mode', 'endpoint', 'client_key', 'key_id', 'secret', 'source_instance', 'purpose',
@@ -162,57 +159,7 @@ function httpSpec(spec, env) {
 // the size cap — would otherwise hold a student's page open for as long as it liked. (Measured before
 // this was added: 6.2 seconds against a 400ms configuration.) The deadline covers connect to end, and
 // every way out of here clears the timer and destroys the request.
-function askEdu(config, payload, { request, now }) {
-  const body = JSON.stringify(payload);
-  const timestamp = Math.floor(now() / 1000);
-  // Cryptographic randomness, not Math.random: this nonce is what stops a replay at edu's verifier.
-  const nonce = randomBytes(16).toString('hex');
-  const headers = {
-    'content-type': 'application/json',
-    'content-length': Buffer.byteLength(body),
-    'x-p09-client': config.clientKey, 'x-p09-key-id': config.keyId,
-    'x-p09-timestamp': String(timestamp), 'x-p09-nonce': nonce,
-    'x-p09-signature': signEligibility({
-      secret: config.secret, method: 'POST', path: config.endpoint.pathname,
-      query: config.endpoint.search.replace(/^\?/, ''), body, timestamp, nonce })
-  };
-  if (typeof request === 'function') return request({ config, body, headers });   // tests only
-  const transport = config.endpoint.protocol === 'https:' ? https : http;
-  return new Promise(resolve => {
-    let settled = false;
-    let request = null;
-    const deadline = setTimeout(() => finish({ status: null, text: null }), config.timeoutMs);
-    function finish(value) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(deadline);
-      try { if (request) request.destroy(); } catch { /* already gone */ }
-      resolve(value);
-    }
-    const req = transport.request(config.endpoint, {
-      method: 'POST', headers, timeout: config.timeoutMs,
-      ...(config.ca ? { ca: config.ca } : {}), rejectUnauthorized: true,
-      // SNI carries a host name, never an address literal: sending an IP there is not valid TLS and
-      // some servers drop the connection for it.
-      ...(/^[\d.]+$/.test(config.endpoint.hostname) || config.endpoint.hostname.includes(':')
-        ? {} : { servername: config.endpoint.hostname })
-    }, response => {
-      const chunks = [];
-      let size = 0;
-      response.on('data', chunk => {
-        size += chunk.length;
-        if (size > config.maxBytes) { response.destroy(); finish({ status: null, text: null }); return; }
-        chunks.push(chunk);
-      });
-      response.on('end', () => finish({ status: response.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
-      response.on('error', () => finish({ status: null, text: null }));
-    });
-    request = req;
-    req.on('timeout', () => finish({ status: null, text: null }));      // no byte for timeout_ms
-    req.on('error', () => finish({ status: null, text: null }));
-    req.end(body);
-  });
-}
+const askEdu = (config, payload, io) => postToEdu(config, payload, io);
 
 // Nothing here is turned into a pass by coercion: `eligible` must be exactly true, and the string
 // "true" or an empty body or an error page is a refusal, not an answer.

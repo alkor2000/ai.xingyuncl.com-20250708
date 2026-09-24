@@ -254,7 +254,8 @@ function createAssetFixture({ uploadRoot, owned = [] }) {
 }
 
 function createService({ ownerUserId = 101, studentUuid = 'edu-uuid-0001', sourceInstance = 'practice-lab',
-  previewEnabled = true, now = Date.now, assets = null, eligibility = null, issuerActive = null } = {}) {
+  previewEnabled = true, now = Date.now, assets = null, eligibility = null, submitRelay = null,
+  issuerActive = null } = {}) {
   const fixture = createSourceFixture({ ownerUserId });
   const store = createMemoryStore({ now, projects: id => fixture.models.HtmlProject.findById(id) });
   const user = { id: ownerUserId, uuid: studentUuid, uuid_source: 'sso', status: 'active', deleted_at: null,
@@ -263,7 +264,7 @@ function createService({ ownerUserId = 101, studentUuid = 'edu-uuid-0001', sourc
   const resolver = assets ? createAssetFixture(assets) : null;
   const reader = createSourceReader({ HtmlProject: models.HtmlProject, HtmlPage: models.HtmlPage, sourceInstance, assets: resolver });
   const service = createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled, now,
-    assets: resolver, eligibility, issuerActive });
+    assets: resolver, eligibility, submitRelay, issuerActive });
   return { service, store, fixture, user, models, sourceInstance, resolver, reader };
 }
 

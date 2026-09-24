@@ -15,9 +15,10 @@ const linkRow = (extra = {}) => ({ link_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa
   work_state: 'preview_ready', has_effective_save: true, save_evidence: 'observed', save_evidence_reason: 'observed_save',
   preview_available: true, real_save_count: 2, last_real_save_at: Date.now(), saved_at: Date.now(), revisions: [], ...extra })
 
-function routes({ available = true, links = [] } = {}) {
+function routes({ available = true, links = [], submitConfigured = false } = {}) {
   api.get.mockImplementation(path => {
-    if (path === `${ROOT}/capability`) return Promise.resolve({ data: { available, source_instance: 'practice-lab', task_context_configured: true } })
+    if (path === `${ROOT}/capability`) return Promise.resolve({ data: { available, source_instance: 'practice-lab',
+      task_context_configured: true, submit_configured: submitConfigured } })
     if (path === `${ROOT}/links`) return Promise.resolve({ data: { links } })
     return Promise.reject(new Error(`unexpected GET ${path}`))
   })
@@ -105,5 +106,75 @@ describe('assignment artifact panel', () => {
     fireEvent.click(screen.getByTestId('p09-unlink'))
     fireEvent.click(await screen.findByTestId('p09-unlink-ok'))
     await waitFor(() => expect(screen.getByTestId('p09-error').textContent).toContain('htmlEditor.p09.error.link_revoked'))
+  })
+
+  // ---- 交作业 from the editor ---------------------------------------------------------------------
+  it('makes 交作业 the primary action and shows the version edu fixed, not one of our own', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockResolvedValue({ data: { submission: { submitted: true, revision_ref: 'e9a1', revision_no: 2,
+      submitted_at: 1790234708549, assignment_ref: 'assign-1' } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    const button = await screen.findByTestId('p09-submit')
+    fireEvent.click(button)
+    await waitFor(() => expect(screen.getByTestId('p09-submitted')).toBeTruthy())
+    expect(api.post).toHaveBeenCalledWith(`${ROOT}/links/${linkRow().link_id}/submissions`, { schema_version: 1 },
+      expect.objectContaining({ skipDebugLogging: true }))
+    // The student is told which version the teacher will see; freezing is no longer the primary button.
+    expect(screen.getByTestId('p09-submitted').textContent).toContain('htmlEditor.p09.submitted:2')
+    expect(screen.getByTestId('p09-freeze').className).not.toContain('ant-btn-primary')
+  })
+
+  it('shows edu\u2019s refusal as a refusal, never as handed in', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockResolvedValue({ data: { submission: { submitted: false, code: 'submission_limit',
+      message: '提交次数已用完', retryable: false } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submit-refusal')).toBeTruthy())
+    // edu's own sentence, shown as it is; nothing claims 已交.
+    expect(screen.getByText('提交次数已用完')).toBeTruthy()
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+  })
+
+  it('a timeout says not handed in yet and does not offer unlink as the retry', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockResolvedValue({ data: { submission: { submitted: false, code: 'submit_unavailable', retryable: true } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submit-refusal')).toBeTruthy())
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+    expect(screen.getByText('htmlEditor.p09.submitRetry')).toBeTruthy()
+  })
+
+  it('a double click is one submission', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    let release
+    api.post.mockImplementation(() => new Promise(resolve => { release = () => resolve({ data: { submission: { submitted: true,
+      revision_ref: 'e9a1', revision_no: 1, submitted_at: 1 } } }) }))
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    const button = await screen.findByTestId('p09-submit')
+    fireEvent.click(button); fireEvent.click(button)
+    release()
+    await waitFor(() => expect(screen.getByTestId('p09-submitted')).toBeTruthy())
+    expect(api.post.mock.calls.filter(call => String(call[0]).endsWith('/submissions'))).toHaveLength(1)
+  })
+
+  it('tells a student who saved before linking to save again, and keeps unlink small and explicit', async () => {
+    routes({ submitConfigured: true, links: [linkRow({ save_evidence: 'none', has_effective_save: false, work_state: 'linked' })] })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    expect(await screen.findByTestId('p09-save-after-link')).toBeTruthy()
+    const unlink = screen.getByTestId('p09-unlink')
+    // Secondary, not the way out of a stuck state: a text button, and its confirmation says what it destroys.
+    expect(unlink.className).toContain('ant-btn-text')
+    expect(unlink.className).toContain('ant-btn-dangerous')
+  })
+
+  it('without the relay configured there is no 交作业 button at all', async () => {
+    routes({ submitConfigured: false, links: [linkRow()] })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await screen.findByTestId('p09-freeze')
+    expect(screen.queryByTestId('p09-submit')).toBeNull()
+    // The non-E09 path keeps what it had: freezing is still the primary action there.
+    expect(screen.getByTestId('p09-freeze').className).toContain('ant-btn-primary')
   })
 })

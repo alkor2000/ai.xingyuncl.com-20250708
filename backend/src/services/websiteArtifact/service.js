@@ -50,12 +50,14 @@ const hasEffectiveSave = link => (link.save_evidence === 'observed' ? true
 
 function createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled = false,
   now = Date.now, reviewSessionMs = REVIEW_SESSION_MS, handoffMs = HANDOFF_MS, assets = null,
-  eligibility = null, issuerActive = null, logger = null, verifyAfterMs = SWEEP.verifyAfterMs }) {
+  eligibility = null, submitRelay = null, issuerActive = null, logger = null, verifyAfterMs = SWEEP.verifyAfterMs }) {
   if (!store || !reader || !models?.User || typeof sourceInstance !== 'string' || typeof now !== 'function') fail('invalid_request');
   // Candidate load measurement: what one deployment actually spent reconciling, reported by syncStatus()
   // so a polling period can be chosen from numbers instead of being invented here.
   const metrics = { sweeps: 0, reconciled: 0, events: 0, failures: 0, skipped: 0, last_duration_ms: 0, max_duration_ms: 0 };
   const eligibilityCache = new Map();
+  // One press at a time per link: a double click, or a second tab, must not become two relayed presses.
+  const submitsInFlight = new Map();
 
   // ---- subjects -------------------------------------------------------------------------------
   // The student subject is the SSO shadow account whose uuid the grant names. Matching happens on the
@@ -556,6 +558,46 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
     });
   }
 
+  // ---- handing the work in ------------------------------------------------------------------------
+  // The student presses 交作业 where they are working, and this carries that press to edu. Everything
+  // the request says about who and what comes from the ledger row of THEIR OWN active link — never from
+  // the browser — and edu decides whether the press is a submission at all.
+  //
+  // Nothing is written here. This platform does not keep a submission state of its own: it would be a
+  // second opinion about a fact that is edu's, and the first time the two disagreed the student would be
+  // told something untrue. The answer is returned and shown; the next read asks edu again.
+  async function submitLink({ ownerUserId, linkId }) {
+    const row = await store.read(tx => tx.linkById(linkId));
+    // Someone else's link is answered exactly like a link that does not exist: the reply may not become
+    // a way to learn that another student's work is there.
+    if (!row || String(row.owner_user_id) !== String(ownerUserId)) fail('link_unavailable', 404);
+    if (row.state !== 'active') fail('link_unavailable', 409);
+    // The course-session ref is what edu resolves the assignment by; an empty one is a configuration
+    // gap on the teacher's side, and saying so is more useful than sending a request that cannot match.
+    if (typeof row.assignment_ref !== 'string' || row.assignment_ref.trim() === '') fail('assignment_ref_missing', 409);
+    if (!submitRelay) fail('submit_unconfigured', 503);
+    if (submitsInFlight.has(row.id)) return submitsInFlight.get(row.id);
+
+    const attempt = (async () => {
+      const verdict = await submitRelay.relay({
+        sourceInstance, schoolRef: row.school_ref, assignmentRef: row.assignment_ref,
+        studentUuid: row.student_uuid, artifactRef: row.artifact_ref
+      });
+      if (logger) {
+        // Counters only: never a uuid, a school, an assignment or edu's message.
+        try { logger.info('P09 submit relayed', { submitted: verdict.submitted === true, code: verdict.code || null }); }
+        catch { /* never fatal */ }
+      }
+      return verdict.submitted === true
+        ? { submitted: true, revision_ref: verdict.revisionRef, revision_no: verdict.revisionNo,
+          submitted_at: verdict.submittedAt, artifact_ref: row.artifact_ref, assignment_ref: row.assignment_ref }
+        : { submitted: false, code: verdict.code, message: verdict.message ?? null,
+          retryable: verdict.retryable === true, artifact_ref: row.artifact_ref, assignment_ref: row.assignment_ref };
+    })();
+    submitsInFlight.set(row.id, attempt);
+    try { return await attempt; } finally { submitsInFlight.delete(row.id); }
+  }
+
   // ---- private review sessions ------------------------------------------------------------------
   // Eligibility is asked again on every access. A grant authorises ONE opening; it is not a lease, and a
   // consumed ticket never stands in for "this teacher still teaches this class".
@@ -711,8 +753,8 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
       immutable: false };
   }
 
-  return { link, unlink, freezeRevision, noteSourceChange, recordSourceWrite, reconcileLink, sweep, syncStatus,
-    state, events, ownerLinks, openReviewSession, consumeHandoff, resolvePreview, view, workState,
+  return { link, unlink, freezeRevision, submitLink, noteSourceChange, recordSourceWrite, reconcileLink, sweep,
+    syncStatus, state, events, ownerLinks, openReviewSession, consumeHandoff, resolvePreview, view, workState,
     EVENT_TYPES, encodeCursor, SWEEP };
 }
 module.exports = { createWebsiteArtifactService, EVENT_TYPES, workState, hasEffectiveSave, REVIEW_SESSION_MS, HANDOFF_MS };

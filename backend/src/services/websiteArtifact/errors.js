@@ -40,6 +40,12 @@ const MESSAGES = Object.freeze({
   source_deleted: '源作品已删除',
   revision_unavailable: '评阅版本不存在',
   revision_too_large: '作品超过评阅版本的大小限制',
+  // Handing the work in (edu decides; these are only this platform's own refusals)
+  submit_unconfigured: '本实例尚未接入作业提交通道',
+  assignment_ref_missing: '这次作业没有填课次编号，请老师补齐后再交',
+  submit_unavailable: '没有交上，请稍后再试',
+  submit_answer_invalid: '没有交上，请稍后再试',
+  submit_refused: '这次提交被拒绝了',
   // Review access
   review_session_invalid: '评阅会话无效或已过期',
   review_session_consumed: '评阅入口已被使用',

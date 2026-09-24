@@ -16,6 +16,7 @@ const { TaskGrantVerifier, parseIssuers } = require('./taskGrant');
 const { createSourceReader } = require('./snapshot');
 const { createAssetResolver } = require('./assets');
 const { createEligibilityProvider } = require('./eligibility');
+const { createSubmitRelay } = require('./submitRelay');
 const { createWebsiteArtifactService } = require('./service');
 
 const SWITCH = 'P09_WEBSITE_ARTIFACTS_ENABLED';
@@ -37,7 +38,7 @@ function laboratory(env) {
   if (!['development', 'test'].includes(env.NODE_ENV)) fail('invalid_request');
   let spec;
   try { spec = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('invalid_request'); }
-  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients', 'eligibility', 'app_hosts'];
+  const keys = ['source_instance', 'issuers', 'preview_origin', 'integration_clients', 'eligibility', 'submit', 'app_hosts'];
   if (!spec || typeof spec !== 'object' || Array.isArray(spec) || Object.keys(spec).some(k => !keys.includes(k)) ||
       typeof spec.source_instance !== 'string' || !INSTANCE.test(spec.source_instance)) fail('invalid_request');
   return spec;
@@ -93,17 +94,45 @@ function integrationClients(env, lab) {
 
 // The eligibility provider's configuration. `P09_ELIGIBILITY_FILE` is the deployment form (http only,
 // readable in any NODE_ENV); P09_LAB's inline spec stays development/test, exactly as before.
-function eligibilitySpec(env, lab) {
+function eduIntegrationFile(env) {
   const file = env.P09_ELIGIBILITY_FILE;
-  if (typeof file === 'string' && file !== '') {
-    let raw;
-    try { raw = fs.readFileSync(file, 'utf8'); } catch { fail('invalid_request'); }
-    let spec;
-    try { spec = JSON.parse(raw); } catch { fail('invalid_request'); }
-    if (!spec || spec.mode !== 'http') fail('invalid_request');   // the file form is for the real provider
-    return createEligibilityProvider(spec, { env });
+  if (typeof file !== 'string' || file === '') return null;
+  let raw;
+  try { raw = fs.readFileSync(file, 'utf8'); } catch { fail('invalid_request'); }
+  let spec;
+  try { spec = JSON.parse(raw); } catch { fail('invalid_request'); }
+  if (!spec || spec.mode !== 'http') fail('invalid_request');     // the file form is for the real provider
+  return spec;
+}
+
+function eligibilitySpec(env, lab, file) {
+  if (file) {
+    // The optional `submit` block travels in the same file because it is the same credential pair on
+    // the same channel (edu 134d1d8 §3); it is split off here so the provider keeps its strict shape.
+    const { submit, ...eligibility } = file;
+    return createEligibilityProvider(eligibility, { env });
   }
   return lab && lab.eligibility ? createEligibilityProvider(lab.eligibility, { env }) : null;
+}
+
+// The 交作业 relay. It is configured only where the reviewer provider is — one credential, one channel —
+// and it stays absent unless a deployment names edu's submit endpoint. Absent means the button refuses
+// by name (`submit_unconfigured`) and nothing leaves this process.
+function submitRelaySpec(env, lab, file) {
+  const block = file ? file.submit : (lab ? lab.submit : null);
+  if (!block || typeof block !== 'object' || Array.isArray(block)) return null;
+  const inherit = file || (lab && lab.eligibility) || {};
+  const spec = {
+    client_key: block.client_key ?? inherit.client_key,
+    key_id: block.key_id ?? inherit.key_id,
+    secret: block.secret ?? inherit.secret,
+    endpoint: block.endpoint,
+    ...(block.source_instance ?? inherit.source_instance ? { source_instance: block.source_instance ?? inherit.source_instance } : {}),
+    ...(block.ca_file ?? inherit.ca_file ? { ca_file: block.ca_file ?? inherit.ca_file } : {}),
+    ...(block.timeout_ms !== undefined ? { timeout_ms: block.timeout_ms } : {}),
+    ...(block.max_bytes !== undefined ? { max_bytes: block.max_bytes } : {})
+  };
+  return createSubmitRelay(spec, { env });
 }
 
 function previewOrigin(env, lab) {
@@ -202,14 +231,17 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
   // Reviewer eligibility. A deployment asks edu itself through `mode: 'http'`, named in its own file;
   // the laboratory's fixed roster is still only reachable through P09_LAB. Absent either way, the
   // interface exists and refuses — a teacher is never let in because nobody could be asked.
-  const eligibility = eligibilitySpec(env, lab);
+  const eduFile = eduIntegrationFile(env);
+  const eligibility = eligibilitySpec(env, lab, eduFile);
+  // Handing the work in: same file, same credential, one fixed endpoint, never configured by a browser.
+  const submitRelay = submitRelaySpec(env, lab, eduFile);
   // A grant signed by a key this deployment no longer configures cannot keep a session alive.
   const issuerKeys = new Set(issuers.map(i => `${i.issuer}:${i.keyId}`));
   const issuerActive = key => issuerKeys.has(String(key));
   const verifyAfterMs = verifyAfterFrom(env);
   const logger = deps.logger || (() => { try { return require('../../utils/logger'); } catch { return null; } })();
   const service = createWebsiteArtifactService({ store, reader, models, sourceInstance, previewEnabled: !!preview,
-    now, assets, eligibility, issuerActive, verifyAfterMs, logger });
+    now, assets, eligibility, submitRelay, issuerActive, verifyAfterMs, logger });
   // Background catch-up: bounded, unreferenced, and never a substitute for the durable pending marker.
   const sweepIntervalMs = sweepIntervalFrom(env);
   const timer = setInterval(() => { service.sweep().catch(() => {}); }, sweepIntervalMs);
@@ -225,6 +257,9 @@ async function createWebsiteArtifactRuntime({ env = process.env, deps = {} } = {
       eligibility_endpoint: eligibility && eligibility.endpointHost ? eligibility.endpointHost : null,
       eligibility_reviewer_ref: eligibility && eligibility.reviewerRefMode ? eligibility.reviewerRefMode : null,
       eligibility_cache_ms: eligibility ? eligibility.cacheMs : null, own_hosts: ownHosts,
+      submit_relay: submitRelay ? 'http' : 'absent',
+      submit_endpoint: submitRelay ? submitRelay.endpointHost : null,
+      submit_timeout_ms: submitRelay ? submitRelay.timeoutMs : null,
       sync_interval_ms: sweepIntervalMs,
       sync_verify_ms: verifyAfterMs,
       checked_at: new Date(now()).toISOString() }),

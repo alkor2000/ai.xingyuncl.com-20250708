@@ -88,6 +88,9 @@ function createStudentRouter({ authenticate }) {
     return { available: true, source_instance: runtime.sourceInstance,
       task_context_configured: runtime.readiness.task_context_configured,
       preview_configured: !!runtime.preview,
+      // Whether 交作业 can even be relayed. False means the editor says so up front instead of letting a
+      // student press a button that can only refuse.
+      submit_configured: runtime.readiness.submit_relay === 'http',
       // Named so the UI can say what a fixed version will and will not contain before the student asks
       // for one: pages and the student's own local files, up to these limits.
       reviewer_eligibility: runtime.readiness.eligibility_provider,
@@ -125,6 +128,19 @@ function createStudentRouter({ authenticate }) {
     const key = requireKey(req);
     const result = await runtime.service.freezeRevision({ ownerUserId: req.user.id, linkId: req.params.id, requestKey: key });
     return { revision: result.revision, replayed: result.replayed };
+  }));
+
+  // 交作业: relay this student's own press to edu, which decides whether it is a submission at all.
+  // No idempotency key is required from the browser — edu derives its own from (assignment, student,
+  // instance, artifact, change_no), so a resend is the same submission there and does not spend a try.
+  router.post('/links/:id/submissions', run(async req => {
+    const runtime = runtimeOf(req);
+    if (!UUID.test(req.params.id)) throw new P09Error('link_unavailable', 404);
+    if (req.body && Object.keys(req.body).length) body(req, []);      // nothing but schema_version
+    const result = await runtime.service.submitLink({ ownerUserId: req.user.id, linkId: req.params.id });
+    // A refusal is an answer, not an error: it carries edu's own code and sentence to the student, and
+    // the envelope never turns it into 已交. Only `submitted: true` may be read that way.
+    return { submission: result };
   }));
 
   // My own private preview of my own work, on the isolated origin (never on the app origin).

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Modal, Select, Space, Tag, Typography } from 'antd'
-import { BookOutlined, EyeOutlined, LinkOutlined, PushpinOutlined } from '@ant-design/icons'
+import { BookOutlined, EyeOutlined, LinkOutlined, PushpinOutlined, SendOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import api from '../../utils/api'
 
@@ -52,6 +52,9 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   const [linking, setLinking] = useState(false)
   const [entryPageId, setEntryPageId] = useState(null)
   const [context, setContext] = useState(() => captureTaskContext())
+  // What edu answered about handing in, this session only. Nothing is remembered as 已交 across a
+  // reload: the submission fact belongs to edu, and a stale tick here would be a lie about their state.
+  const [submission, setSubmission] = useState(null)
   const lock = useRef(false)
 
   useEffect(() => { let alive = true; loadCapability(client).then(value => { if (alive) setCapability(value) }); return () => { alive = false } }, [client])
@@ -80,6 +83,8 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
 
   const current = useMemo(() => links.find(item => String(item.project_id) === String(project?.id) && item.state === 'active') || null, [links, project])
   const entryTitle = useMemo(() => pages.find(page => String(page.id) === String(current?.entry_page_id))?.title || null, [pages, current])
+  // A different work, or a link that went away, must not keep showing the previous answer.
+  useEffect(() => { setSubmission(null) }, [current?.link_id])
 
   const associate = () => run(async () => {
     await post('/links', { schema_version: 1, project_id: Number(project.id), entry_page_id: Number(entryPageId) }, crypto.randomUUID())
@@ -89,6 +94,15 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   })
   const freeze = () => run(async () => {
     await post(`/links/${current.link_id}/revisions`, { schema_version: 1 }, crypto.randomUUID())
+    await refresh()
+  })
+  // 交作业. edu fixes the version and decides whether this counts; this only carries the press and shows
+  // the answer. `run` holds a lock, so a double click is one request, and only submitted === true is
+  // ever displayed as 已交.
+  const submit = () => run(async () => {
+    setSubmission(null)
+    const data = await post(`/links/${current.link_id}/submissions`, { schema_version: 1 })
+    setSubmission(data?.submission || null)
     await refresh()
   })
   const unlink = () => run(async () => {
@@ -103,6 +117,9 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   if (!capability?.available) return null
   const prefix = 'htmlEditor.p09.'
   const latest = current?.revisions?.length ? current.revisions[current.revisions.length - 1] : null
+  const submitConfigured = capability?.submit_configured === true
+  // Linked but nothing saved since: the way forward is to save again, not to unlink and start over.
+  const needsSaveAfterLink = !!current && current.save_evidence !== 'observed'
 
   return (
     <div className="html-editor-task-panel" style={{ padding: 12, borderTop: '1px solid var(--border-color, #eee)' }}>
@@ -140,22 +157,44 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
               ? t(`${prefix}revisionValue`, { no: latest.revision_no, at: time(latest.created_at, i18n.language) })
               : t(`${prefix}revisionNone`) }
           ]} />
-          <Typography.Text type="secondary">{t(`${prefix}submitHint`)}</Typography.Text>
+          {submission?.submitted === true
+            ? <Alert type="success" showIcon data-testid="p09-submitted"
+              message={t(`${prefix}submitted`, { no: submission.revision_no, at: time(submission.submitted_at, i18n.language) })}
+              description={t(`${prefix}submittedHint`)} />
+            : submission
+              ? <Alert type={submission.retryable ? 'warning' : 'error'} showIcon data-testid="p09-submit-refusal"
+                message={submission.message || t(`${prefix}submitRefusal.${submission.code}`,
+                  { defaultValue: t(`${prefix}submitRefusal.unknown`) })}
+                description={t(`${prefix}${submission.retryable ? 'submitRetry' : 'submitStop'}`)} />
+              : null}
+
+          {submitConfigured
+            ? <Typography.Text type="secondary">{t(`${prefix}submitWhereYouWork`)}</Typography.Text>
+            : <Typography.Text type="secondary">{t(`${prefix}submitHint`)}</Typography.Text>}
+          {needsSaveAfterLink && <Alert type="info" showIcon data-testid="p09-save-after-link"
+            message={t(`${prefix}saveAfterLink`)} />}
           <Typography.Text type="secondary">{t(`${prefix}frozenScopeHint`)}</Typography.Text>
           <Space wrap>
+            {submitConfigured && <Button type="primary" icon={<SendOutlined />} disabled={busy} loading={busy}
+              onClick={submit} data-testid="p09-submit">{t(`${prefix}submit`)}</Button>}
             <Button icon={<EyeOutlined />} disabled={busy || !current.preview_available} onClick={() => openPreview(null)} data-testid="p09-preview">
               {t(`${prefix}preview`)}
             </Button>
-            <Button type="primary" icon={<PushpinOutlined />} disabled={busy || current.has_effective_save === false}
+            {/* Freezing by hand stays for the paths that are not an edu submission; when 交作业 is wired
+                it is no longer the primary action, because edu fixes the version as part of submitting. */}
+            <Button type={submitConfigured ? 'default' : 'primary'} icon={<PushpinOutlined />}
+              disabled={busy || current.has_effective_save === false}
               onClick={freeze} data-testid="p09-freeze">{t(`${prefix}freeze`)}</Button>
             {latest && <Button disabled={busy} onClick={() => openPreview(latest.revision_ref)} data-testid="p09-open-revision">
               {t(`${prefix}openRevision`)}</Button>}
-            <Button danger disabled={busy} onClick={() => Modal.confirm({
+          </Space>
+          {/* Unlinking is a way out, not a retry: it is small, last, and says what it destroys. */}
+          <Button type="text" danger size="small" disabled={busy} style={{ paddingLeft: 0 }}
+            onClick={() => Modal.confirm({
               title: t(`${prefix}unlinkConfirm`), content: t(`${prefix}unlinkHint`), okText: t(`${prefix}unlink`),
               okType: 'danger', okButtonProps: { 'data-testid': 'p09-unlink-ok' },
               cancelText: t('common.cancel'), onOk: unlink
             })} data-testid="p09-unlink">{t(`${prefix}unlink`)}</Button>
-          </Space>
         </>}
       </Space>
 

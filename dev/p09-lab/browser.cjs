@@ -146,6 +146,35 @@ const commands = {
     if (command.screenshot) await shot(command.screenshot);
     return { ok: true, disabled, state: tag, error, requests: state.requests };
   },
+  // 交作业：点一次按钮，把面板上真正显示给学生的那段文字读回来。成功与拒绝分开取，
+  // 因为这正是本轮要守的边界——只有成功框出现才算"已交"。
+  async submit(command) {
+    state.requests = [];
+    const button = panel().getByTestId('p09-submit');
+    if (!(await button.count())) return { ok: true, present: false };
+    if (command.double) { await button.dispatchEvent('click'); await button.dispatchEvent('click'); }
+    else await button.click();
+    await state.page.waitForTimeout(command.wait || 1800);
+    const read = async testid => (await panel().getByTestId(testid).count()
+      ? (await panel().getByTestId(testid).textContent()) : null);
+    if (command.screenshot) await shot(command.screenshot);
+    return { ok: true, present: true,
+      submitted: await read('p09-submitted'), refusal: await read('p09-submit-refusal'),
+      error: await read('p09-error'),
+      submit_requests: state.requests.filter(item => String(item.path || '').endsWith('/submissions')).length,
+      requests: state.requests };
+  },
+  // 面板上那几处必须看得见的文字与按钮层级，一次读回来。
+  async panelShape() {
+    const has = async testid => Boolean(await panel().getByTestId(testid).count());
+    const unlink = panel().getByTestId('p09-unlink');
+    return { ok: true,
+      submit_button: await has('p09-submit'), freeze_button: await has('p09-freeze'),
+      save_after_link_hint: await has('p09-save-after-link'),
+      unlink_class: await unlink.count() ? await unlink.getAttribute('class') : null,
+      freeze_class: await panel().getByTestId('p09-freeze').count()
+        ? await panel().getByTestId('p09-freeze').getAttribute('class') : null };
+  },
   async facts() {
     const rows = await panel().locator('.ant-descriptions-item').evaluateAll(nodes => nodes.map(node => [
       node.querySelector('.ant-descriptions-item-label')?.textContent?.trim(),

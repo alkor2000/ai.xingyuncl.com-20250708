@@ -11,6 +11,14 @@ const https = require('node:https');
 const { createHash, timingSafeEqual } = require('node:crypto');
 
 const PATH = '/api/integrations/practice/e09/eligibility';
+// 同一条签名通道上的第二条路由：学生按下「交作业」之后实践转达到这里。
+// 形状照 edu 固定导出 134d1d8 的 SUBMIT-WHERE-THEY-WORK.md §3 与 homework_website_inbound.go；
+// **它同样不是 edu 的判定代码**，答什么由 harness 写在同一个 JSON 文件里。
+const SUBMIT_PATH = '/api/integrations/practice/e09/submit';
+const SUBMIT_REFUSALS = { invalid_request: 400, credential_refused: 401, instance_mismatch: 403,
+  not_targeted: 403, assignment_unknown: 404, assignment_closed: 409, deadline_passed: 409,
+  submission_limit: 409, link_absent: 409, artifact_mismatch: 409, no_effective_save: 409,
+  source_unavailable: 503, revision_unavailable: 503, credentials_unavailable: 503 };
 const REASONS = ['request_incomplete', 'purpose_unsupported', 'instance_mismatch', 'reviewer_unknown',
   'assignment_unknown', 'school_mismatch', 'assignment_closed', 'school_unmapped',
   'student_not_in_roster', 'link_revoked', 'not_eligible'];
@@ -54,11 +62,12 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
       const nonce = String(req.headers['x-p09-nonce'] || '');
       const refuseCredential = () => send(401,
         { error: { code: 'credential_refused', message: '调用方凭据未通过', retryable: false } });
-      if (req.method !== 'POST' || url.pathname !== PATH) return send(404, { error: { code: 'not_found' } });
+      const submitting = url.pathname === SUBMIT_PATH;
+      if (req.method !== 'POST' || (url.pathname !== PATH && !submitting)) return send(404, { error: { code: 'not_found' } });
       if (req.headers['x-p09-client'] !== config.client || req.headers['x-p09-key-id'] !== config.key_id) return refuseCredential();
       if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300) return refuseCredential();
       if (nonce.length < 16 || nonce.length > 128 || seen.has(nonce)) return refuseCredential();
-      const want = sign({ secret: config.secret, method: 'POST', path: PATH,
+      const want = sign({ secret: config.secret, method: 'POST', path: url.pathname,
         query: url.search.replace(/^\?/, ''), body, timestamp, nonce });
       if (!equal(want, req.headers['x-p09-signature'] || '')) return refuseCredential();
       seen.set(nonce, Date.now());
@@ -66,6 +75,29 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
 
       let payload = null;
       try { payload = JSON.parse(body); } catch { return send(400, { error: { code: 'invalid_request' } }); }
+      if (submitting) {
+        const plan = roster.submit || { mode: 'ok' };
+        const fields = ['schema_version', 'source_instance', 'school_ref', 'assignment_ref', 'student_uuid', 'artifact_ref'];
+        if (!payload || typeof payload !== 'object' || Object.keys(payload).some(k => !fields.includes(k)) ||
+            payload.schema_version !== 1 || !payload.school_ref || !payload.assignment_ref || !payload.student_uuid) {
+          record({ route: 'submit', decision: 'invalid_request' });
+          return send(400, { error: { code: 'invalid_request', message: '请求参数不完整', retryable: false } });
+        }
+        record({ route: 'submit', decision: plan.mode, assignment_ref: payload.assignment_ref,
+          student_uuid: payload.student_uuid, artifact_ref: payload.artifact_ref });
+        if (plan.mode === 'refuse') {
+          const code = SUBMIT_REFUSALS[plan.code] ? plan.code : 'assignment_closed';
+          return send(SUBMIT_REFUSALS[code], { error: { code, message: plan.message || code,
+            retryable: SUBMIT_REFUSALS[code] >= 500 } });
+        }
+        if (plan.mode === 'unknown') { req.socket.destroy(); return; }
+        // 挂住不答：让实践侧走到自己的绝对截止时间，这是超时，而不是连接被断。
+        if (plan.mode === 'stall') return;
+        // 伪成功：200 但缺固定版字段——实践侧必须**不**显示已交。
+        if (plan.mode === 'fake') return send(200, { schema_version: 1, submitted: true });
+        return send(200, { schema_version: 1, submitted: true, revision_ref: plan.revision_ref || 'e9a1b2c3-1111-4222-8333-444455556666',
+          revision_no: Number.isInteger(plan.revision_no) ? plan.revision_no : 1, submitted_at: Date.now() });
+      }
       const known = ['schema_version', 'source_instance', 'school_ref', 'assignment_ref', 'reviewer_ref',
         'student_uuid', 'purpose'];
       if (!payload || typeof payload !== 'object' || Object.keys(payload).some(k => !known.includes(k))) {
