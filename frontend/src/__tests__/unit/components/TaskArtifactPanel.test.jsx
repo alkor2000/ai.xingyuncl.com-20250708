@@ -126,8 +126,8 @@ describe('assignment artifact panel', () => {
 
   it('shows edu\u2019s refusal as a refusal, never as handed in', async () => {
     routes({ submitConfigured: true, links: [linkRow()] })
-    api.post.mockResolvedValue({ data: { submission: { submitted: false, code: 'submission_limit',
-      message: '提交次数已用完', retryable: false } } })
+    api.post.mockResolvedValue({ data: { submission: { submitted: false, outcome: 'refused',
+      code: 'submission_limit', message: '提交次数已用完', retryable: false } } })
     render(<TaskArtifactPanel project={project} pages={pages} />)
     fireEvent.click(await screen.findByTestId('p09-submit'))
     await waitFor(() => expect(screen.getByTestId('p09-submit-refusal')).toBeTruthy())
@@ -136,14 +136,31 @@ describe('assignment artifact panel', () => {
     expect(screen.queryByTestId('p09-submitted')).toBeNull()
   })
 
-  it('a timeout says not handed in yet and does not offer unlink as the retry', async () => {
+  it('a lost answer says the result cannot be confirmed — not that it was refused or not handed in', async () => {
     routes({ submitConfigured: true, links: [linkRow()] })
-    api.post.mockResolvedValue({ data: { submission: { submitted: false, code: 'submit_unavailable', retryable: true } } })
+    api.post.mockResolvedValue({ data: { submission: { submitted: false, outcome: 'unknown',
+      code: 'submit_unavailable', retryable: true } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    // Its own box, not the refusal box: edu may already hold this submission.
+    await waitFor(() => expect(screen.getByTestId('p09-submit-unknown')).toBeTruthy())
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+    expect(screen.queryByTestId('p09-submit-refusal')).toBeNull()
+    expect(screen.getByText('htmlEditor.p09.submitUnknown')).toBeTruthy()
+    expect(screen.getByText('htmlEditor.p09.submitUnknownHint')).toBeTruthy()
+    // Pressing again is the student's decision after checking, so nothing retried by itself.
+    expect(api.post).toHaveBeenCalledTimes(1)
+  })
+
+  it('an edu outage is still edu’s own answer, shown as a refusal that can be retried', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockResolvedValue({ data: { submission: { submitted: false, outcome: 'refused',
+      code: 'source_unavailable', message: '稍后再试', retryable: true } } })
     render(<TaskArtifactPanel project={project} pages={pages} />)
     fireEvent.click(await screen.findByTestId('p09-submit'))
     await waitFor(() => expect(screen.getByTestId('p09-submit-refusal')).toBeTruthy())
-    expect(screen.queryByTestId('p09-submitted')).toBeNull()
-    expect(screen.getByText('htmlEditor.p09.submitRetry')).toBeTruthy()
+    expect(screen.getByText('稍后再试')).toBeTruthy()
+    expect(screen.queryByTestId('p09-submit-unknown')).toBeNull()
   })
 
   it('a double click is one submission', async () => {

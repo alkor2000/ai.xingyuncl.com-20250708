@@ -114,22 +114,44 @@ describe('P09 交作业 relay', () => {
     const { service, linkId } = await readyToSubmit({
       reply: () => said(409, { error: { code: 'submission_limit', message: '提交次数已用完' } }) });
     const result = await service.submitLink({ ownerUserId: 101, linkId });
-    expect(result).toMatchObject({ submitted: false, code: 'submission_limit', message: '提交次数已用完', retryable: false });
+    expect(result).toMatchObject({ submitted: false, outcome: 'refused', code: 'submission_limit',
+      message: '提交次数已用完', retryable: false });
   });
 
-  test('a deadline refusal is final, an edu outage is retryable, and neither is 已交', async () => {
+  test('a deadline refusal is final, an edu outage is retryable, and both are answers', async () => {
     const late = await readyToSubmit({ reply: () => said(409, { error: { code: 'deadline_passed', message: '已过截止时间' } }) });
     await expect(late.service.submitLink({ ownerUserId: 101, linkId: late.linkId }))
-      .resolves.toMatchObject({ submitted: false, code: 'deadline_passed', retryable: false });
+      .resolves.toMatchObject({ submitted: false, outcome: 'refused', code: 'deadline_passed', retryable: false });
     const down = await readyToSubmit({ reply: () => said(503, { error: { code: 'source_unavailable', message: '稍后再试' } }) });
     await expect(down.service.submitLink({ ownerUserId: 101, linkId: down.linkId }))
-      .resolves.toMatchObject({ submitted: false, code: 'source_unavailable', retryable: true });
+      .resolves.toMatchObject({ submitted: false, outcome: 'refused', code: 'source_unavailable', retryable: true });
   });
 
-  test('a timeout is an unknown, never a submission', async () => {
+  test('a lost answer is an unknown, not a refusal: edu may already hold the submission', async () => {
+    // The receiver stored the submission and then the answer went missing. Nothing this side sees can
+    // tell that apart from a request that never arrived, so the only honest outcome is `unknown`.
     const { service, linkId } = await readyToSubmit({ reply: () => ({ status: null, text: null }) });
+    const result = await service.submitLink({ ownerUserId: 101, linkId });
+    expect(result).toMatchObject({ submitted: false, outcome: 'unknown', code: 'submit_unavailable', retryable: true });
+    expect(result.outcome).not.toBe('refused');
+  });
+
+  test('edu’s own retryable flag is what decides retryability, on its real wire shape', async () => {
+    // fixed 07aa2b0 handlers/e09_eligibility.go: error.code / error.message / error.retryable:boolean.
+    const held = await readyToSubmit({
+      reply: () => said(503, { error: { code: 'source_unavailable', message: '稍后再试', retryable: false } }) });
+    await expect(held.service.submitLink({ ownerUserId: 101, linkId: held.linkId }))
+      .resolves.toMatchObject({ submitted: false, outcome: 'refused', code: 'source_unavailable', retryable: false });
+    const open = await readyToSubmit({
+      reply: () => said(409, { error: { code: 'assignment_closed', message: '已结束', retryable: true } }) });
+    await expect(open.service.submitLink({ ownerUserId: 101, linkId: open.linkId }))
+      .resolves.toMatchObject({ submitted: false, outcome: 'refused', code: 'assignment_closed', retryable: true });
+  });
+
+  test('a 5xx without one of edu’s own codes is unknown, because it can follow the write', async () => {
+    const { service, linkId } = await readyToSubmit({ reply: () => said(500, { error: { code: 'boom' } }) });
     await expect(service.submitLink({ ownerUserId: 101, linkId }))
-      .resolves.toMatchObject({ submitted: false, code: 'submit_unavailable', retryable: true });
+      .resolves.toMatchObject({ submitted: false, outcome: 'unknown', code: 'submit_unavailable' });
   });
 
   test('a 200 that only looks successful is not accepted as handed in', async () => {
@@ -141,12 +163,12 @@ describe('P09 交作业 relay', () => {
     ]) {
       const { service, linkId } = await readyToSubmit({ reply: () => said(200, payload) });
       await expect(service.submitLink({ ownerUserId: 101, linkId }))
-        .resolves.toMatchObject({ submitted: false, code: 'submit_answer_invalid', retryable: true });
+        .resolves.toMatchObject({ submitted: false, outcome: 'unknown', code: 'submit_answer_invalid', retryable: true });
     }
     // An HTML error page from a proxy is the same kind of non-answer.
     const proxied = await readyToSubmit({ reply: () => ({ status: 502, text: '<html>bad gateway</html>' }) });
     await expect(proxied.service.submitLink({ ownerUserId: 101, linkId: proxied.linkId }))
-      .resolves.toMatchObject({ submitted: false, retryable: true });
+      .resolves.toMatchObject({ submitted: false, outcome: 'unknown', retryable: true });
   });
 
   test('relaying writes nothing to this platform’s ledger: the submission fact is edu’s', async () => {

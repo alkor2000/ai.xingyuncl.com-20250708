@@ -11,8 +11,10 @@
 //   * only `submitted: true` with a complete fixed-version answer may ever be shown as 已交;
 //   * a refusal must arrive synchronously and be shown as the refusal it is — accepting now and sorting
 //     it out later would put a tick in front of a student edu never heard of;
-//   * an unknown — timeout, malformed body, a 200 that does not validate — is neither. It says "not
-//     handed in yet, try again", and it never occupies the student's submission count on our word.
+//   * an unknown — timeout, a lost response, a body we cannot read, a 200 that does not validate — is
+//     neither, and it is NOT a failure either. edu may already have stored the submission before the
+//     answer went missing, so this side reports "cannot tell yet, check on edu" and never claims the
+//     work was not handed in, nor that the student's allowance was left unspent.
 //
 // The caller's identity is a service credential: it says WHICH SYSTEM is calling and nothing about who
 // is logged in there. Who the student is comes from the ledger row of their own active link, never from
@@ -31,7 +33,9 @@ const REFUSALS = Object.freeze(new Set([
 ]));
 // The three edu documents as "edu cannot answer this time"; they are retryable by its own table.
 const UNAVAILABLE_CODES = Object.freeze(new Set(['source_unavailable', 'revision_unavailable', 'credentials_unavailable']));
-const unknown = code => Object.freeze({ submitted: false, code, retryable: true, message: null });
+// `resolved:false` is the important bit: edu never gave us a usable answer, so its state is unknown
+// to us. Everything else carries edu's own verdict and may be shown as one.
+const unknown = code => Object.freeze({ submitted: false, resolved: false, code, retryable: true, message: null });
 
 function submitSpec(spec, env) {
   const allowed = ['endpoint', 'client_key', 'key_id', 'secret', 'source_instance', 'timeout_ms', 'max_bytes', 'ca_file'];
@@ -91,17 +95,26 @@ function readAnswer({ status, text }) {
   if (!error || typeof error !== 'object' || Array.isArray(error)) return unknown('submit_unavailable');
   const code = typeof error.code === 'string' ? error.code : '';
   const message = typeof error.message === 'string' && error.message.length <= 200 ? error.message : null;
-  if (UNAVAILABLE_CODES.has(code) || status >= 500) {
-    return Object.freeze({ submitted: false, code: UNAVAILABLE_CODES.has(code) ? code : 'source_unavailable',
-      retryable: true, message });
+  if (UNAVAILABLE_CODES.has(code)) {
+    // edu's own three: it is telling us it could not do the work this time, so this is an answer.
+    // `error.retryable` is a real boolean on edu's wire (fixed 07aa2b0, handlers/e09_eligibility.go
+    // websiteRelayFailure), so its value wins; absent, these three are retryable by their own meaning.
+    return Object.freeze({ submitted: false, resolved: true, code,
+      retryable: typeof error.retryable === 'boolean' ? error.retryable : true, message });
   }
+  // Any other server error is not an answer about the submission: a 5xx can happen after the row was
+  // written, so we may not report it as "not handed in".
+  if (status >= 500) return unknown('submit_unavailable');
   if (REFUSALS.has(code)) {
-    // edu's own table: every named refusal on this route is final. `retryable` is honoured when it is
-    // present and a boolean, so a future edu that marks one of them retryable is not overridden here.
-    return Object.freeze({ submitted: false, code, message,
+    // edu's own table: every named refusal on this route is final unless edu itself says otherwise.
+    // `retryable` is honoured when it is present and a boolean, so a future edu that marks one of them
+    // retryable is not overridden here. Note what it does NOT mean: retryable says this call may be
+    // repeated, never that nothing was written on the other side.
+    return Object.freeze({ submitted: false, resolved: true, code, message,
       retryable: typeof error.retryable === 'boolean' ? error.retryable : false });
   }
-  return Object.freeze({ submitted: false, code: 'submit_refused', message, retryable: false });
+  return Object.freeze({ submitted: false, resolved: true, code: 'submit_refused', message,
+    retryable: typeof error.retryable === 'boolean' ? error.retryable : false });
 }
 
 function createSubmitRelay(spec, { env = process.env, request = null, now = Date.now } = {}) {
@@ -118,7 +131,7 @@ function createSubmitRelay(spec, { env = process.env, request = null, now = Date
       try {
         return readAnswer(await postToEdu(config, payload, { request, now }));
       } catch {
-        return unknown('submit_unavailable');            // a throw is an outage, never a submission
+        return unknown('submit_unavailable');            // a throw tells us nothing about edu's state
       }
     }
   });

@@ -92,7 +92,8 @@ def main():
               'real': ['本候选树的后端与真实 Vite 前端', '真实 Chromium：1280 与 390 各一次',
                        '一次性 mysql:8.0 + redis、两组候选迁移', '真实 HTTPS 与真实服务凭据签名'],
               'synthetic': ["edu 的提交端点是 dev/e09-lab/stub.cjs（线形与签名真实，**不是 edu 的判定代码**）",
-                            '学校、作业、师生 uuid 全为合成'],
+                            '学校、作业、师生 uuid 全为合成',
+                            '"已落库但答复丢失"由替身按剧本造出，真实 edu 的落库时机未验'],
               'not_executed': ["edu 的 Go（跨仓审核 HOLD）", '生产', 'edu 正在跑的演示资源 18191/18192/18194'],
               'stage': 'start', 'checks': {}, 'verdicts': {}, 'passed': False}
     EVIDENCE.mkdir(parents=True, exist_ok=True)
@@ -196,6 +197,7 @@ def main():
             ('timeout', {'mode': 'stall'}, None, 9000),   # 替身挂住不答：走到本侧 4s 绝对截止
             ('fake_success', {'mode': 'fake'}, None, 1800)
         ):
+            is_refusal = plan['mode'] == 'refuse'
             report['stage'] = name
             site.plan(**plan)
             browser.call('open', viewport=DESKTOP, token=token, user_id=user_id, project='校园节水网站',
@@ -203,13 +205,40 @@ def main():
             before_calls = site.edu_calls()
             pressed = browser.call('submit', screenshot=f'submit-{name}-pressed', wait=wait,
                                    timeout=60 + wait // 1000)
-            report['checks'][name] = {k: pressed.get(k) for k in ('present', 'submitted', 'refusal', 'submit_requests')}
+            report['checks'][name] = {k: pressed.get(k) for k in
+                                      ('present', 'submitted', 'refusal', 'unknown', 'submit_requests')}
             report['checks'][name]['edu_calls'] = site.edu_calls() - before_calls
+            shown = pressed['refusal'] if is_refusal else pressed['unknown']
             verdict(f'a_{name}_never_shows_as_handed_in',
-                    not pressed['submitted'] and bool(pressed['refusal'])
+                    not pressed['submitted'] and bool(shown)
                     and report['checks'][name]['edu_calls'] == 1
-                    and (expect is None or expect in pressed['refusal']),
-                    'edu 的原句/未知提示出现在按钮旁，成功框不出现；这一次确实问过对面')
+                    and (expect is None or expect in shown)
+                    # 没有答复时，"没有交上"这句本身就是越界断言。
+                    and (is_refusal or ('暂时无法确认' in shown and '没有交上' not in shown)),
+                    'edu 的原句在拒绝框里；没有答复时只说暂时无法确认，成功框与"没有交上"都不出现')
+
+        # ---- 反例：对面已经落库，答复却丢了 ---------------------------------------------------------
+        # 这一格才证明"未知不等于没交上"：替身这边确实记下了一次提交，学生那边什么答复都没收到。
+        report['stage'] = 'committed_then_answer_lost'
+        site.plan(mode='record_then_lose', revision_no=7, delay_ms=5000)   # 拖过本侧 4s 绝对预算再断
+        browser.call('open', viewport=DESKTOP, token=token, user_id=user_id, project='校园节水网站', timeout=420)
+        before_calls = site.edu_calls()
+        lost = browser.call('submit', screenshot='submit-committed-then-lost', wait=9000, settle=6000, timeout=90)
+        committed = sum(1 for line in site.call_log.read_text().splitlines()
+                        if '"committed":true' in line.replace(' ', ''))
+        report['checks']['committed_then_answer_lost'] = {
+            **{k: lost.get(k) for k in ('submitted', 'refusal', 'unknown',
+                                        'submit_requests', 'submit_requests_after_settle')},
+            'edu_calls': site.edu_calls() - before_calls, 'edu_committed_rows': committed}
+        verdict('a_lost_answer_is_shown_as_unknown_not_as_not_submitted',
+                committed == 1 and not lost['submitted'] and not lost['refusal']
+                and bool(lost['unknown']) and '暂时无法确认' in lost['unknown']
+                and '没有交上' not in lost['unknown'] and 'edu' in lost['unknown'],
+                '对面已落一条提交，本侧只说暂时无法确认并指向去 edu 作业页核对，不说没交上、也不说已交')
+        verdict('a_lost_answer_never_retries_by_itself',
+                lost['submit_requests'] == 1 and lost['submit_requests_after_settle'] == 1
+                and (site.edu_calls() - before_calls) == 1,
+                '答复丢了以后再等 6 秒：没有第二条 /submissions，替身也没有被第二次叫')
 
         # ---- 双击只提交一次 ----------------------------------------------------------------------
         report['stage'] = 'double_click'

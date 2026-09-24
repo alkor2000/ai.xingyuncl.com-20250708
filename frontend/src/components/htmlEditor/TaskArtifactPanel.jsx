@@ -98,7 +98,8 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   })
   // 交作业. edu fixes the version and decides whether this counts; this only carries the press and shows
   // the answer. `run` holds a lock, so a double click is one request, and only submitted === true is
-  // ever displayed as 已交.
+  // ever displayed as 已交. Nothing here retries on its own: when the answer is lost, edu's state is
+  // unknown to us, and pressing again is the student's decision to make after checking there.
   const submit = () => run(async () => {
     setSubmission(null)
     const data = await post(`/links/${current.link_id}/submissions`, { schema_version: 1 })
@@ -157,16 +158,26 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
               ? t(`${prefix}revisionValue`, { no: latest.revision_no, at: time(latest.created_at, i18n.language) })
               : t(`${prefix}revisionNone`) }
           ]} />
+          {/* Three outcomes, kept apart on purpose. A refusal is edu's own answer and is shown as its own
+              sentence; an unknown is the absence of an answer, and it may NOT be read as "not handed in" —
+              edu may already hold this submission, so the student is sent there to check. */}
           {submission?.submitted === true
             ? <Alert type="success" showIcon data-testid="p09-submitted"
               message={t(`${prefix}submitted`, { no: submission.revision_no, at: time(submission.submitted_at, i18n.language) })}
               description={t(`${prefix}submittedHint`)} />
-            : submission
+            : submission?.outcome === 'refused'
               ? <Alert type={submission.retryable ? 'warning' : 'error'} showIcon data-testid="p09-submit-refusal"
                 message={submission.message || t(`${prefix}submitRefusal.${submission.code}`,
                   { defaultValue: t(`${prefix}submitRefusal.unknown`) })}
                 description={t(`${prefix}${submission.retryable ? 'submitRetry' : 'submitStop'}`)} />
-              : null}
+              : submission
+                ? <Alert type="warning" showIcon data-testid="p09-submit-unknown"
+                  message={t(`${prefix}submitUnknown`)}
+                  description={<>
+                    <div>{t(`${prefix}submitUnknownHint`)}</div>
+                    <div style={{ marginTop: 6 }}>{t(`${prefix}submitUnknownAgain`)}</div>
+                  </>} />
+                : null}
 
           {submitConfigured
             ? <Typography.Text type="secondary">{t(`${prefix}submitWhereYouWork`)}</Typography.Text>

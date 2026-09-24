@@ -84,7 +84,11 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
           return send(400, { error: { code: 'invalid_request', message: '请求参数不完整', retryable: false } });
         }
         record({ route: 'submit', decision: plan.mode, assignment_ref: payload.assignment_ref,
-          student_uuid: payload.student_uuid, artifact_ref: payload.artifact_ref });
+          student_uuid: payload.student_uuid, artifact_ref: payload.artifact_ref,
+          // 这一格代表"对面已经把这次提交落下了"，答复才丢的。
+          ...(plan.mode === 'record_then_lose'
+            ? { committed: true, revision_no: Number.isInteger(plan.revision_no) ? plan.revision_no : 1 }
+            : {}) });
         if (plan.mode === 'refuse') {
           const code = SUBMIT_REFUSALS[plan.code] ? plan.code : 'assignment_closed';
           return send(SUBMIT_REFUSALS[code], { error: { code, message: plan.message || code,
@@ -93,6 +97,14 @@ const server = https.createServer({ key: fs.readFileSync(config.tls_key), cert: 
         if (plan.mode === 'unknown') { req.socket.destroy(); return; }
         // 挂住不答：让实践侧走到自己的绝对截止时间，这是超时，而不是连接被断。
         if (plan.mode === 'stall') return;
+        // **先落库、再丢答复**：这一格才是"未知不等于没交上"的反例——对面这边已经记下一次成功提交，
+        // 学生那边却什么答复都没收到。延迟给了就拖过实践侧的绝对预算再断，等于答复丢在路上。
+        if (plan.mode === 'record_then_lose') {
+          const drop = () => { try { req.socket.destroy(); } catch { /* 已经断了 */ } };
+          if (Number.isInteger(plan.delay_ms) && plan.delay_ms > 0) setTimeout(drop, plan.delay_ms).unref();
+          else drop();
+          return;
+        }
         // 伪成功：200 但缺固定版字段——实践侧必须**不**显示已交。
         if (plan.mode === 'fake') return send(200, { schema_version: 1, submitted: true });
         return send(200, { schema_version: 1, submitted: true, revision_ref: plan.revision_ref || 'e9a1b2c3-1111-4222-8333-444455556666',

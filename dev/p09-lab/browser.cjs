@@ -146,8 +146,9 @@ const commands = {
     if (command.screenshot) await shot(command.screenshot);
     return { ok: true, disabled, state: tag, error, requests: state.requests };
   },
-  // 交作业：点一次按钮，把面板上真正显示给学生的那段文字读回来。成功与拒绝分开取，
-  // 因为这正是本轮要守的边界——只有成功框出现才算"已交"。
+  // 交作业：点一次按钮，把面板上真正显示给学生的那段文字读回来。成功、拒绝、未知**分三处**取，
+  // 因为这正是本轮要守的边界——只有成功框出现才算"已交"，而没有答复时连"没交上"都不能说。
+  // settle 是按完之后再等的一段时间：用来证明这段时间里面板没有自己重发。
   async submit(command) {
     state.requests = [];
     const button = panel().getByTestId('p09-submit');
@@ -157,11 +158,14 @@ const commands = {
     await state.page.waitForTimeout(command.wait || 1800);
     const read = async testid => (await panel().getByTestId(testid).count()
       ? (await panel().getByTestId(testid).textContent()) : null);
+    const count = () => state.requests.filter(item => String(item.path || '').endsWith('/submissions')).length;
+    const at_answer = count();
+    if (command.settle) await state.page.waitForTimeout(command.settle);
     if (command.screenshot) await shot(command.screenshot);
     return { ok: true, present: true,
       submitted: await read('p09-submitted'), refusal: await read('p09-submit-refusal'),
-      error: await read('p09-error'),
-      submit_requests: state.requests.filter(item => String(item.path || '').endsWith('/submissions')).length,
+      unknown: await read('p09-submit-unknown'), error: await read('p09-error'),
+      submit_requests: at_answer, submit_requests_after_settle: count(),
       requests: state.requests };
   },
   // 面板上那几处必须看得见的文字与按钮层级，一次读回来。
@@ -171,6 +175,7 @@ const commands = {
     return { ok: true,
       submit_button: await has('p09-submit'), freeze_button: await has('p09-freeze'),
       save_after_link_hint: await has('p09-save-after-link'),
+      unknown_box: await has('p09-submit-unknown'),
       unlink_class: await unlink.count() ? await unlink.getAttribute('class') : null,
       freeze_class: await panel().getByTestId('p09-freeze').count()
         ? await panel().getByTestId('p09-freeze').getAttribute('class') : null };

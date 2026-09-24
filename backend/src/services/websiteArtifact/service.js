@@ -585,13 +585,17 @@ function createWebsiteArtifactService({ store, reader, models, sourceInstance, p
       });
       if (logger) {
         // Counters only: never a uuid, a school, an assignment or edu's message.
-        try { logger.info('P09 submit relayed', { submitted: verdict.submitted === true, code: verdict.code || null }); }
+        try { logger.info('P09 submit relayed', { submitted: verdict.submitted === true,
+          resolved: verdict.submitted === true || verdict.resolved === true, code: verdict.code || null }); }
         catch { /* never fatal */ }
       }
+      // Three outcomes, never two. `unknown` is not a failure: edu may already hold this submission,
+      // so the student is told to check there rather than being told it did not go through.
       return verdict.submitted === true
-        ? { submitted: true, revision_ref: verdict.revisionRef, revision_no: verdict.revisionNo,
+        ? { submitted: true, outcome: 'submitted', revision_ref: verdict.revisionRef, revision_no: verdict.revisionNo,
           submitted_at: verdict.submittedAt, artifact_ref: row.artifact_ref, assignment_ref: row.assignment_ref }
-        : { submitted: false, code: verdict.code, message: verdict.message ?? null,
+        : { submitted: false, outcome: verdict.resolved === true ? 'refused' : 'unknown',
+          code: verdict.code, message: verdict.message ?? null,
           retryable: verdict.retryable === true, artifact_ref: row.artifact_ref, assignment_ref: row.assignment_ref };
     })();
     submitsInFlight.set(row.id, attempt);
