@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-24T00:12:21Z",
+  "updated_at": "2026-09-24T01:32:20Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "6b2ad9bd8918b4c09918dffc0b0a7a714a428a585c443021880c8428371fb81c",
-      "size": 371728,
-      "normalized_sha256": "6b2ad9bd8918b4c09918dffc0b0a7a714a428a585c443021880c8428371fb81c"
+      "sha256": "8ebe1bea5738ca67a569f384164424b4326683a5a4c0c84d067c97436cb3f72f",
+      "size": 373231,
+      "normalized_sha256": "8ebe1bea5738ca67a569f384164424b4326683a5a4c0c84d067c97436cb3f72f"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2493,6 +2493,16 @@
       "sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24",
       "size": 756,
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
+    },
+    "docs/integrations/E09-OPEN-THE-GATE-PRACTICE.md": {
+      "sha256": "0fec07f3c0b50ecd46ca293fd265f01d8e81c3cc7d1429e39145056947f19a62",
+      "size": 17126,
+      "normalized_sha256": "0fec07f3c0b50ecd46ca293fd265f01d8e81c3cc7d1429e39145056947f19a62"
+    },
+    "docs/integrations/E09-TWO-SIDED-STARTUP-TABLE.md": {
+      "sha256": "16b6b535bfbc71e1fccdf24de86cb2611463a8b1e43cdafcfbb97dd5f7b1ded7",
+      "size": 3996,
+      "normalized_sha256": "16b6b535bfbc71e1fccdf24de86cb2611463a8b1e43cdafcfbb97dd5f7b1ded7"
     },
     "docs/integrations/JOINT-ENTRY-TEST.md": {
       "sha256": "6240e8c88769c29c53d7af19340f74d5e3f188e1e951a188a607c90441dda50e",
