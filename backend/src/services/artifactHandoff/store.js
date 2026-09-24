@@ -2,6 +2,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { randomUUID } = require('crypto');
+const { retained } = require('./mysqlStore');
 const queues = new Map();
 const TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -10,7 +11,10 @@ class DraftStore {
     this.directory = path.resolve(directory);
     this.now = now;
   }
-  async transaction(fn) {
+  // Accepts the owner-scoped signature of the durable candidate; one dev spool holds every owner.
+  async transaction(owner, fn) {
+    if (typeof owner === 'function') fn = owner;
+    if (typeof fn !== 'function') throw new TypeError('transaction callback required');
     const previous = queues.get(this.directory) || Promise.resolve();
     const task = previous.catch(() => {}).then(async () => {
       await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -24,7 +28,8 @@ class DraftStore {
       if (state.version !== 1) throw new Error('Unsupported draft spool');
       for (const collection of ['snapshots', 'keys', 'grants', 'operations', 'received']) {
         for (const [id, item] of Object.entries(state[collection])) {
-          if (item.expires_at <= this.now()) delete state[collection][id];
+          // Operations follow the durable retention rule (recovery window, reconciliation hold).
+          if (collection === 'operations' ? !retained(item, this.now()) : item.expires_at <= this.now()) delete state[collection][id];
         }
       }
       const pruned = structuredClone(state);

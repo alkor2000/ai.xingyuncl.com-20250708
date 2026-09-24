@@ -37,7 +37,7 @@ test('exports exactly one selected passage, no prompts, thinking, account data, 
   expect(snapshot.manifest.source.version).toMatch(/^sha256:[a-f0-9]{64}$/);
   expect(snapshot.manifest.summary).toEqual({ kind: 'verbatim_excerpt', text: selected });
   await deliver(snapshot.id);
-  const received = await f.store.transaction(state => state.received[snapshot.id].packet);
+  const received = await f.service.receiver.store.transaction(state => state.received[snapshot.binding.operation_id].packet);
   expect(received).toEqual({ manifest: snapshot.manifest, payload: snapshot.payload });
   const packet = JSON.stringify(received);
   for (const excluded of ['UNSELECTED_PRIVATE_PROMPT', 'PRIVATE_THINKING', 'file_path', 'owner', 'global_person_id', 'example.org']) expect(packet).not.toContain(excluded);
@@ -70,7 +70,7 @@ test('concurrent double clicks and new HTTP keys converge on one snapshot and re
   const auth = await grant(id);
   const results = await Promise.all(Array.from({ length: 6 }, () => deliver(id, 'success', auth)));
   expect(new Set(results.map(item => item.receipt_id)).size).toBe(1);
-  expect(await f.store.transaction(state => Object.keys(state.received).length)).toBe(1);
+  expect(await f.service.receiver.store.transaction(state => Object.keys(state.received).length)).toBe(1);
 });
 
 test('same idempotency key rejects different content and survives service restart', async () => {
@@ -85,7 +85,7 @@ test('same idempotency key rejects different content and survives service restar
 test.each(['expired', 'revoked'])('rejects %s authorization, then recovers without a new snapshot', async simulation => {
   const snapshot = await freeze();
   await expect(deliver(snapshot.id, 'success', await grant(snapshot.id, simulation))).rejects.toMatchObject({ code: 'authorization_expired' });
-  expect(await f.store.transaction(state => Object.keys(state.received).length)).toBe(0);
+  expect(await f.service.receiver.store.transaction(state => Object.keys(state.received).length)).toBe(0);
   expect((await deliver(snapshot.id)).state).toBe('mock_received');
 });
 
@@ -100,12 +100,12 @@ test('accepted-but-response-lost survives restart and expired grant without dupl
   const snapshot = await freeze();
   const auth = await grant(snapshot.id);
   await expect(deliver(snapshot.id, 'lose_response', auth)).rejects.toMatchObject({ code: 'response_lost' });
-  expect((await f.service.status(101, snapshot.id)).state).toBe('outcome_unknown');
+  expect(await f.store.transaction(state => state.operations[snapshot.id].result.state)).toBe('outcome_unknown');
   clock += 10 * 60 * 1000;
   f.service = new ArtifactHandoffService({ source: f.source, store: new DraftStore(path.join(directory, 'private'), () => clock), now: () => clock });
   expect((await deliver(snapshot.id, 'success', auth)).replayed).toBe(true);
   expect((await f.service.status(101, snapshot.id)).state).toBe('mock_received');
-  expect(await f.store.transaction(state => Object.keys(state.received).length)).toBe(1);
+  expect(await f.service.receiver.store.transaction(state => Object.keys(state.received).length)).toBe(1);
 });
 
 test('source/receiver access never bypasses ownership, even after acceptance', async () => {
@@ -262,4 +262,88 @@ test('production and default configurations cannot mount the prototype, even wit
 test('local user/admin role is not treated as verified teacher authority', async () => {
   const call = await http({ NODE_ENV: 'test', P03_DEV_ENABLED: 'true', P03_DEV_USER_IDS: '202' });
   expect((await call(`/messages/${ids.message}`)).response.status).toBe(403);
+});
+
+test('status alone recovers a durable target resource after restart and expiry without resending content', async () => {
+  const snapshot = await freeze({ purpose: 'lesson_preparation' });
+  const auth = await grant(snapshot.id);
+  await expect(deliver(snapshot.id, 'lose_response', auth)).rejects.toMatchObject({ code: 'response_lost' });
+  clock += 10 * 60 * 1000;
+  f.service = new ArtifactHandoffService({ source: f.source, store: new DraftStore(path.join(directory, 'private'), () => clock), now: () => clock });
+  const accept = jest.spyOn(f.service.receiver, 'accept');
+  const result = await f.service.status(101, snapshot.id);
+  expect(result).toMatchObject({ state: 'mock_received', ...snapshot.binding, replayed: true,
+    receipt: { ...snapshot.binding, persistence: 'durable', visibility: 'private', simulated: true },
+    continuation: { state: 'not_started', action: 'select_resource', purpose: 'lesson_preparation' } });
+  expect(result.continuation.resource_id).toBe(result.receipt.resource_id);
+  expect(result.continuation.resource_version).toBe(result.receipt.resource_version);
+  expect(result.receipt.resource_id).not.toBe(snapshot.id);
+  expect(accept).not.toHaveBeenCalled();
+  expect(await f.service.status(101, snapshot.id)).toEqual(result);
+});
+
+test('receiver acceptance survives a crash before the source saves its result', async () => {
+  const snapshot = await freeze();
+  const writeResult = jest.spyOn(f.service, 'recordReceipt').mockRejectedValueOnce(new Error('simulated process termination'));
+  await expect(deliver(snapshot.id)).rejects.toThrow('simulated process termination');
+  writeResult.mockRestore();
+  expect(await f.store.transaction(state => state.operations[snapshot.id].result.state)).toBe('outcome_unknown');
+  expect((await f.service.status(101, snapshot.id)).state).toBe('mock_received');
+  expect(await f.service.receiver.store.transaction(state => Object.keys(state.received).length)).toBe(1);
+});
+
+test.each([
+  { operation_id: randomUUID() }, { snapshot_id: randomUUID() }, { receiver: 'tedna' },
+  { packet_sha256: '0'.repeat(64) }, { resource_id: null }, { resource_version: 'latest' },
+  { persistence: 'queued' }, { visibility: 'public' }, { simulated: false }
+])('an unbound or non-durable receipt is never success: %j', async mutation => {
+  const snapshot = await freeze();
+  const realAccept = f.service.receiver.accept.bind(f.service.receiver);
+  jest.spyOn(f.service.receiver, 'accept').mockImplementation(async (...args) => ({ ...await realAccept(...args), ...mutation }));
+  await expect(deliver(snapshot.id)).rejects.toMatchObject({ code: 'receipt_invalid' });
+  expect(await f.store.transaction(state => state.operations[snapshot.id].result.state)).toBe('outcome_unknown');
+  // The independent query returns the authentic acceptance, without another import.
+  expect((await f.service.status(101, snapshot.id)).state).toBe('mock_received');
+});
+
+test('receiver identity cannot change on later status queries; arbitrary landing URLs are discarded', async () => {
+  const snapshot = await freeze();
+  const result = await deliver(snapshot.id);
+  const lookup = jest.spyOn(f.service.receiver, 'lookup');
+  lookup.mockResolvedValueOnce({ ...result.receipt, continue_url: 'https://untrusted.invalid/', local_account_id: 'secret' });
+  const safe = await f.service.status(101, snapshot.id);
+  expect(JSON.stringify(safe)).not.toMatch(/untrusted|local_account_id|secret/);
+  lookup.mockResolvedValueOnce({ ...result.receipt, resource_id: randomUUID() });
+  await expect(f.service.status(101, snapshot.id)).rejects.toMatchObject({ code: 'receipt_invalid' });
+});
+
+test('query outage cannot trigger a resend or report success, and revocation blocks query recovery', async () => {
+  const snapshot = await freeze();
+  await expect(deliver(snapshot.id, 'lose_response')).rejects.toMatchObject({ code: 'response_lost' });
+  const accept = jest.spyOn(f.service.receiver, 'accept');
+  const lookup = jest.spyOn(f.service.receiver, 'lookup').mockRejectedValueOnce(new Error('query unavailable'));
+  await expect(deliver(snapshot.id)).rejects.toThrow('query unavailable');
+  expect(accept).not.toHaveBeenCalled();
+  lookup.mockRestore();
+  f.conversations[ids.conversation].user_id = 202;
+  await expect(f.service.status(101, snapshot.id)).rejects.toMatchObject({ code: 'source_unavailable' });
+});
+
+test('missing selected attachment after preparation blocks delivery and reception', async () => {
+  const p = await f.service.inspect(101, ids.message);
+  const snapshot = await freeze({ attachments: [{ source_id: ids.file, expected_version: p.attachments[0].version }] });
+  const auth = await grant(snapshot.id);
+  await fs.unlink(f.files[ids.file].file_path);
+  await expect(deliver(snapshot.id, 'success', auth)).rejects.toMatchObject({ code: 'attachment_unavailable' });
+  expect(await f.service.receiver.store.transaction(state => Object.keys(state.received).length)).toBe(0);
+});
+
+test('missing previously accepted receiver record cannot return stale success or create a new resource', async () => {
+  const snapshot = await freeze();
+  await deliver(snapshot.id);
+  await f.service.receiver.store.transaction(state => { delete state.received[snapshot.binding.operation_id]; });
+  const accept = jest.spyOn(f.service.receiver, 'accept');
+  await expect(f.service.status(101, snapshot.id)).rejects.toMatchObject({ code: 'receipt_invalid' });
+  await expect(deliver(snapshot.id)).rejects.toMatchObject({ code: 'receipt_invalid' });
+  expect(accept).not.toHaveBeenCalled();
 });

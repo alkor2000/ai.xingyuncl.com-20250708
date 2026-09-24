@@ -156,6 +156,16 @@ def main():
         off['p09_links'] = {'status': status, 'code': (body.get('error') or {}).get('code')}
         status, body, _ = lab.call('GET', '/api/integrations/edu/website-artifacts/state?school_ref=school-1')
         off['p09_edu_state'] = {'status': status, 'code': (body.get('error') or {}).get('code')}
+        # P03 的保存入口：同一棵树上第三个默认关闭的东西，能力探测答得出来，其余具名拒绝。
+        status, body, _ = lab.call('GET', '/api/p03/handoffs/capability', headers=auth)
+        off['p03_capability'] = {'status': status, 'available': body.get('available'),
+                                 'code': (body.get('error') or {}).get('code')}
+        status, body, _ = lab.call('GET', '/api/p03/handoffs?message_id=1', headers=auth)
+        off['p03_list'] = {'status': status, 'code': (body.get('error') or {}).get('code')}
+        status, body, _ = lab.call('POST', '/api/p03/handoffs',
+                                   body={'schema_version': 1, 'message_id': 1, 'selection': []},
+                                   headers={**auth, 'Idempotency-Key': '00000000-0000-4000-8000-000000000001'})
+        off['p03_create'] = {'status': status, 'code': (body.get('error') or {}).get('code')}
         report['checks']['switched_off'] = off
         if MODE == 'integrated':
             verdict('c05_is_present_and_refuses_by_name',
@@ -163,6 +173,11 @@ def main():
                     and off['c05_consume']['code'] == 'student_entry_disabled'
                     and off['c05_capability']['status'] == 200 and off['c05_capability']['available'] is False,
                     '能力探测明说"没开"，其余一律具名拒绝')
+            verdict('p03_is_present_and_refuses_by_name',
+                    off['p03_capability']['status'] == 200 and off['p03_capability']['available'] is False
+                    and off['p03_list']['code'] == 'handoff_disabled'
+                    and off['p03_create']['code'] == 'handoff_disabled',
+                    '第三个开关也关着：能力探测明说没开，其余一律 handoff_disabled')
             verdict('p09_exposes_no_entry_while_off',
                     off['p09_capability']['available'] is False and off['p09_capability']['reason'] == 'disabled'
                     and off['p09_links']['code'] == 'website_artifacts_disabled'
@@ -187,6 +202,18 @@ def main():
         # ---- 浏览器：桌面与 390 各一次 ----------------------------------------------------------
         report['stage'] = 'browser'
         web = p09lab.Web(lab.api_port, scratch)
+        # Vite 第一次请求要把整个应用编译一遍；机器忙的时候会超过浏览器默认的 30 秒导航上限。
+        # 先用普通 HTTP 把它焐热，再让浏览器进来——等的是实验室，不是产品。
+        import urllib.request as _request
+        warm_deadline = time.monotonic() + 240
+        while time.monotonic() < warm_deadline:
+            try:
+                with _request.urlopen(f'{web.url}/login', timeout=30) as response:
+                    if response.status == 200 and response.read(64):
+                        break
+            except Exception:
+                time.sleep(3)
+        report['checks']['web_warmup_seconds'] = round(240 - (warm_deadline - time.monotonic()), 1)
         browser = c05lab.Browser(scratch, web.url, EVIDENCE)
         pages = {}
         for label, viewport in (('desktop', {'width': 1280, 'height': 900}), ('narrow', {'width': 390, 'height': 844})):

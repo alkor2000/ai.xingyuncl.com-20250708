@@ -44,7 +44,12 @@ async function startServer() {
       logger.warn('应用将在没有缓存的情况下运行');
     }
 
-    // 2.5 P09 网站作品接入运行时：默认关闭（不连账本、不读发行方凭据、不开预览域）。开启时任务上下文发行方缺失
+    // 2.5 P03 教师成果正式交接运行时：默认关闭（不连账本、不读凭据、不调对端）。显式 P03_HANDOFF_ENABLED=true
+    //     但身份/实例/受限账本/可信 HTTPS 任一事实不全时抛出固定码，启动失败关闭，不会带着半开的开关运行。
+    //     保存入口（/api/p03/handoffs）只在这个对象 enabled 时才会做事，否则统一回答 handoff_disabled。
+    app.locals.p03Handoff = await require('./services/artifactHandoff/formalRuntime').bootstrapFormalHandoff({ env: process.env, logger });
+
+    // 2.6 P09 网站作品接入运行时：默认关闭（不连账本、不读发行方凭据、不开预览域）。开启时任务上下文发行方缺失
     //     只会让带授权的接口一律拒绝，不会放行；学生页面只在隔离预览域运行，与应用不同源。
     app.locals.p09Website = await require('./services/websiteArtifact/runtime').bootstrapWebsiteArtifacts({ env: process.env, logger });
     if (app.locals.p09Website.enabled && app.locals.p09Website.preview) {
@@ -129,7 +134,14 @@ async function startServer() {
           }
         }
 
-        // 4.2b 关闭 P09 隔离预览监听与账本连接池（关闭状态下为空操作）
+        // 4.2b 停止 P03 交接运行时的清理任务并释放受限账本连接池（关闭状态下为空操作）
+        try {
+          await app.locals.p03Handoff?.close?.();
+        } catch (handoffErr) {
+          logger.error('P03 交接运行时关闭失败:', handoffErr?.code || handoffErr);
+        }
+
+        // 4.2c 关闭 P09 隔离预览监听与账本连接池（关闭状态下为空操作）
         try {
           await app.locals.p09PreviewServer?.close?.();
           await app.locals.p09Website?.close?.();

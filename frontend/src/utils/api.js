@@ -301,6 +301,9 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // 调用方自行展示精确错误（如交接状态卡片）时可关闭这里的通用提示；401 刷新逻辑不受影响。
+    if (error.config?.skipErrorMessage) return Promise.reject(error)
+
     // 其他HTTP错误状态处理
     if (error.response) {
       const { status, data } = error.response
