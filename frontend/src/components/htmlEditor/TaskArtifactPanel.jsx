@@ -40,6 +40,18 @@ export function resetCapabilityCache() { capabilityPromise = null }
 
 // `unknown` is not a failure: it is what the platform says when the evidence of a real save does not
 // reach back far enough. It must never look like 未开始.
+// Codes this platform's own submit route answers with before anything leaves it. They are definite, so
+// they stay named errors; treating them as "cannot tell" would hide a real configuration or link fault.
+const BEFORE_ANY_CALL = new Set(['link_unavailable', 'assignment_ref_missing', 'submit_unconfigured',
+  'website_artifacts_disabled', 'invalid_request', 'unauthorized', 'forbidden'])
+// What this side shows when the press left the browser but no readable answer came back. It is the same
+// box as a lost edu answer because the student's situation is the same: it may already be handed in.
+const ANSWER_LOST = Object.freeze({ submitted: false, outcome: 'unknown', code: 'submit_answer_lost', retryable: true })
+const readable = answer => !!answer && typeof answer === 'object' && !Array.isArray(answer) &&
+  (answer.submitted === true
+    ? Number.isInteger(answer.revision_no) && typeof answer.revision_ref === 'string'
+    : answer.outcome === 'refused' || answer.outcome === 'unknown')
+
 const STATE_TONE = { linked: 'default', working: 'processing', preview_ready: 'success', unknown: 'warning', unavailable: 'warning' }
 const time = (ms, locale) => (ms ? new Date(ms).toLocaleString(locale) : '—')
 
@@ -102,9 +114,21 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   // unknown to us, and pressing again is the student's decision to make after checking there.
   const submit = () => run(async () => {
     setSubmission(null)
-    const data = await post(`/links/${current.link_id}/submissions`, { schema_version: 1 })
-    setSubmission(data?.submission || null)
-    await refresh()
+    let data
+    try {
+      data = await post(`/links/${current.link_id}/submissions`, { schema_version: 1 })
+    } catch (e) {
+      // Only these are proof that nothing was relayed: this platform's own route produces them before
+      // it ever calls edu. Everything else — a transport reject, a gateway error, a body with no code —
+      // leaves the press possibly finished at edu, so it is the same unknown as a lost edu answer.
+      if (BEFORE_ANY_CALL.has(e.response?.data?.error?.code)) throw e
+      setSubmission(ANSWER_LOST)
+      return
+    }
+    // A 2xx we cannot read is not "nothing happened": the work may be handed in and this is only the
+    // answer being unusable. Silently clearing it would let the student believe the press did nothing.
+    setSubmission(readable(data?.submission) ? data.submission : ANSWER_LOST)
+    if (readable(data?.submission)) await refresh()
   })
   const unlink = () => run(async () => {
     await post(`/links/${current.link_id}/unlink`)

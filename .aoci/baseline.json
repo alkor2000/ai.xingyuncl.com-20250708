@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-24T09:41:49Z",
+  "updated_at": "2026-09-24T10:02:49Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "8d945d246b5e09fdf1b6c7206e0aea3ee858e8a62d7ed6173463f760ce868942",
-      "size": 374871,
-      "normalized_sha256": "8d945d246b5e09fdf1b6c7206e0aea3ee858e8a62d7ed6173463f760ce868942"
+      "sha256": "37a6b0146388e75ea83b181a4069ddfa12cf5f62a22c5242f4d1e59f274b6061",
+      "size": 374898,
+      "normalized_sha256": "37a6b0146388e75ea83b181a4069ddfa12cf5f62a22c5242f4d1e59f274b6061"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2511,9 +2511,9 @@
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
     },
     "docs/integrations/E09-SUBMIT-TEST.md": {
-      "sha256": "3854405b20d4a2a27a1a94ad1c57f5c46eebda1a1ff2dc4175d6cc0120d24ff3",
-      "size": 6283,
-      "normalized_sha256": "3854405b20d4a2a27a1a94ad1c57f5c46eebda1a1ff2dc4175d6cc0120d24ff3"
+      "sha256": "930d7d3aec222c6c308dd4671f29edd0b0abb5a069afeed27eae7595abc2e434",
+      "size": 6609,
+      "normalized_sha256": "930d7d3aec222c6c308dd4671f29edd0b0abb5a069afeed27eae7595abc2e434"
     },
     "docs/integrations/JOINT-ENTRY-TEST.md": {
       "sha256": "6240e8c88769c29c53d7af19340f74d5e3f188e1e951a188a607c90441dda50e",
@@ -2576,9 +2576,9 @@
       "normalized_sha256": "1f01588e60fe84d1d924922f462d363f71cffcbf5ccbe7bf12ce91bcc6ce3575"
     },
     "docs/integrations/e09-editor-submit-candidate.md": {
-      "sha256": "b595938e4349a0bf32429a41a0f39744794ff646df337ade814974c699f384e7",
-      "size": 11959,
-      "normalized_sha256": "b595938e4349a0bf32429a41a0f39744794ff646df337ade814974c699f384e7"
+      "sha256": "391e4aa067f9bd347229a32b8acd114f0e5d83d4e616c9a12fc21f0361a47f0f",
+      "size": 13726,
+      "normalized_sha256": "391e4aa067f9bd347229a32b8acd114f0e5d83d4e616c9a12fc21f0361a47f0f"
     },
     "docs/integrations/e09-http-eligibility.md": {
       "sha256": "64b0f1bf93747930b7109bad5e9ea484677d9ec8e35b0b13a69026c020d42d59",
@@ -2834,9 +2834,9 @@
     },
     "frontend/src/__tests__/unit/components/TaskArtifactPanel.test.jsx": {
       "role": "observe",
-      "sha256": "1c9289034389783045e6fccc160a12fde0fd80105b56efd439aadfaebed3cf30",
-      "size": 12537,
-      "normalized_sha256": "1c9289034389783045e6fccc160a12fde0fd80105b56efd439aadfaebed3cf30"
+      "sha256": "98efd25aa58d20d2d5c14c59754c6ff7e1fcec9424ace7a421579627e7bc68d7",
+      "size": 15471,
+      "normalized_sha256": "98efd25aa58d20d2d5c14c59754c6ff7e1fcec9424ace7a421579627e7bc68d7"
     },
     "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
       "role": "observe",
@@ -3684,9 +3684,9 @@
       "normalized_sha256": "15f2ea46b5ce4208e8f048e1f943827b1ef5a10b2c0b718b6b3bf04bfef35cf6"
     },
     "frontend/src/components/htmlEditor/TaskArtifactPanel.jsx": {
-      "sha256": "299c14c6aa3b549846e9030f78a047933c8744ec5fd5d88fd2cea8139699fcff",
-      "size": 13511,
-      "normalized_sha256": "299c14c6aa3b549846e9030f78a047933c8744ec5fd5d88fd2cea8139699fcff"
+      "sha256": "4c38531b76341876029291f382aee1a770bdd4179ddffe6a33ac06cefe581f95",
+      "size": 15253,
+      "normalized_sha256": "4c38531b76341876029291f382aee1a770bdd4179ddffe6a33ac06cefe581f95"
     },
     "frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx": {
       "role": "index",

@@ -163,6 +163,51 @@ describe('assignment artifact panel', () => {
     expect(screen.queryByTestId('p09-submit-unknown')).toBeNull()
   })
 
+  // ---- 最后一跳：本侧答复没能到浏览器 -------------------------------------------------------------
+  // 这几例是冲着旧代码写的：旧的 submit 直接 await post，断连落进通用 catch 只显示"连接中断"，
+  // 2xx 读不出来就静默清空——两种情况下 edu 都可能已经落库。
+
+  it('a submission whose answer never reaches the browser is unknown, not a network error', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockRejectedValue(Object.assign(new Error('Network Error'), { request: {} }))
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submit-unknown')).toBeTruthy())
+    expect(screen.getByText('htmlEditor.p09.submitUnknownHint')).toBeTruthy()
+    expect(screen.queryByTestId('p09-error')).toBeNull()          // 不能说成"连接中断，请稍后重试"
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+    expect(screen.queryByTestId('p09-submit-refusal')).toBeNull()
+    expect(api.post).toHaveBeenCalledTimes(1)                     // 不自己重发
+  })
+
+  it('a gateway error with no code of ours is unknown too: the press may have finished at edu', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockRejectedValue({ response: { status: 504, data: '<html>gateway timeout</html>' } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submit-unknown')).toBeTruthy())
+    expect(screen.queryByTestId('p09-error')).toBeNull()
+  })
+
+  it('a 2xx the browser cannot read is unknown, not a silent nothing', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockResolvedValue({ data: '{"submission":{"submitt' })   // 答复被截断
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-submit-unknown')).toBeTruthy())
+    expect(screen.queryByTestId('p09-submitted')).toBeNull()
+  })
+
+  it('a refusal this platform makes before calling edu stays a named error, not an unknown', async () => {
+    routes({ submitConfigured: true, links: [linkRow()] })
+    api.post.mockRejectedValue({ response: { data: { error: { code: 'assignment_ref_missing' } } } })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    fireEvent.click(await screen.findByTestId('p09-submit'))
+    await waitFor(() => expect(screen.getByTestId('p09-error').textContent)
+      .toContain('htmlEditor.p09.error.assignment_ref_missing'))
+    expect(screen.queryByTestId('p09-submit-unknown')).toBeNull()   // 什么都没发出去，别说"可能已提交"
+  })
+
   it('a double click is one submission', async () => {
     routes({ submitConfigured: true, links: [linkRow()] })
     let release

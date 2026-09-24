@@ -5,7 +5,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const readline = require('node:readline');
 const path = require('node:path');
 
-const state = { browser: null, context: null, page: null, web: null, evidence: null, requests: [], external: [], errors: [] };
+const state = { browser: null, context: null, page: null, web: null, evidence: null, requests: [], external: [], errors: [], intercept: null };
 const answer = value => process.stdout.write(JSON.stringify(value) + '\n');
 
 function track(page) {
@@ -166,7 +166,30 @@ const commands = {
       submitted: await read('p09-submitted'), refusal: await read('p09-submit-refusal'),
       unknown: await read('p09-submit-unknown'), error: await read('p09-error'),
       submit_requests: at_answer, submit_requests_after_settle: count(),
-      requests: state.requests };
+      intercept: state.intercept, requests: state.requests };
+  },
+  // 最后一跳的反例：让提交**真的**打到后端（转达真的发生、对面真的落库），只把回给页面的答复弄丢。
+  // mode=drop 整条答复丢掉；mode=truncate 把 200 的正文截在半路；mode=off 撤掉拦截。
+  // 截断位置与后端原本的答复都记下来，这样"对面已经记下了"不是推测。
+  async interceptSubmit(command) {
+    const pattern = '**/api/p09/website-artifacts/links/*/submissions';
+    await state.page.unroute(pattern).catch(() => {});
+    state.intercept = null;
+    if (command.mode === 'off') return { ok: true, mode: 'off' };
+    await state.page.route(pattern, async route => {
+      const response = await route.fetch();                 // 真请求、真后端、真转达
+      const body = await response.text();
+      const cut = Math.max(12, Math.floor(body.length / 3));
+      state.intercept = { mode: command.mode, upstream_status: response.status(),
+        upstream_body: body.slice(0, 300), upstream_bytes: body.length,
+        cut_at: command.mode === 'truncate' ? cut : 0 };
+      if (command.mode === 'truncate') {
+        await route.fulfill({ status: response.status(), contentType: 'application/json', body: body.slice(0, cut) });
+      } else {
+        await route.abort('connectionaborted');
+      }
+    });
+    return { ok: true, mode: command.mode };
   },
   // 面板上那几处必须看得见的文字与按钮层级，一次读回来。
   async panelShape() {

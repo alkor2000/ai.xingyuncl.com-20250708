@@ -93,7 +93,8 @@ def main():
                        '一次性 mysql:8.0 + redis、两组候选迁移', '真实 HTTPS 与真实服务凭据签名'],
               'synthetic': ["edu 的提交端点是 dev/e09-lab/stub.cjs（线形与签名真实，**不是 edu 的判定代码**）",
                             '学校、作业、师生 uuid 全为合成',
-                            '"已落库但答复丢失"由替身按剧本造出，真实 edu 的落库时机未验'],
+                            '"已落库但答复丢失"由替身按剧本造出，真实 edu 的落库时机未验',
+                            '实践→浏览器那一跳的丢答复/截断由 Playwright 路由拦截造出（真请求真后端，只丢答复）'],
               'not_executed': ["edu 的 Go（跨仓审核 HOLD）", '生产', 'edu 正在跑的演示资源 18191/18192/18194'],
               'stage': 'start', 'checks': {}, 'verdicts': {}, 'passed': False}
     EVIDENCE.mkdir(parents=True, exist_ok=True)
@@ -239,6 +240,38 @@ def main():
                 lost['submit_requests'] == 1 and lost['submit_requests_after_settle'] == 1
                 and (site.edu_calls() - before_calls) == 1,
                 '答复丢了以后再等 6 秒：没有第二条 /submissions，替身也没有被第二次叫')
+
+        # ---- 反例二：提交已经走完本侧、对面也记下了，答复却没能回到浏览器 ----------------------------
+        # 与上一格的区别在**断点位置**：上一格断在 edu→实践，这一格断在实践→浏览器。
+        # 纯离线（请求根本没发出去）不算，所以这里让请求真的打到后端，只把回给页面的答复丢掉或截断。
+        report['stage'] = 'answer_lost_to_browser'
+        site.plan(mode='ok', revision_no=9)
+        browser.call('open', viewport=DESKTOP, token=token, user_id=user_id, project='校园节水网站', timeout=420)
+        for label, mode in (('dropped', 'drop'), ('truncated', 'truncate')):
+            browser.call('interceptSubmit', mode=mode)
+            before_calls = site.edu_calls()
+            pressed = browser.call('submit', screenshot=f'submit-browser-{label}', wait=4000, settle=6000, timeout=90)
+            intercept = pressed.get('intercept') or {}
+            check = {**{k: pressed.get(k) for k in ('submitted', 'refusal', 'unknown',
+                                                    'submit_requests', 'submit_requests_after_settle')},
+                     'edu_calls': site.edu_calls() - before_calls,
+                     'upstream_status': intercept.get('upstream_status'),
+                     'upstream_bytes': intercept.get('upstream_bytes'),
+                     'cut_at': intercept.get('cut_at'),
+                     'upstream_said_submitted': '"submitted":true' in (intercept.get('upstream_body') or ''),
+                     'upstream_body': (intercept.get('upstream_body') or '')[:160]}
+            report['checks'][f'answer_lost_to_browser_{label}'] = check
+            verdict(f'a_{label}_answer_to_the_browser_is_unknown_not_a_network_error',
+                    check['upstream_said_submitted'] and check['edu_calls'] == 1
+                    and not pressed['submitted'] and not pressed['refusal']
+                    and bool(pressed['unknown']) and '暂时无法确认' in pressed['unknown']
+                    and '没有交上' not in pressed['unknown'] and not pressed['error'],
+                    '后端确实答了 submitted:true（对面已记下），页面却没收到：只显示未知，不显示已交、拒绝或"连接中断"')
+            verdict(f'a_{label}_answer_to_the_browser_never_retries_by_itself',
+                    pressed['submit_requests'] == 1 and pressed['submit_requests_after_settle'] == 1
+                    and (site.edu_calls() - before_calls) == 1,
+                    '再等 6 秒：浏览器仍只发过一条 /submissions，替身也只被叫一次')
+        browser.call('interceptSubmit', mode='off')
 
         # ---- 双击只提交一次 ----------------------------------------------------------------------
         report['stage'] = 'double_click'
