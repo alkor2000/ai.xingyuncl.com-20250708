@@ -143,10 +143,11 @@ make deploy-docker
 
 1. 本地检查：工作区干净、在 main、HEAD 已推 GitHub；**核对 ai.xingyuncl.com 已发布到同一提交**，否则拒绝（`ARGS=--allow-ahead` 可跳过，不推荐）。
 2. 代码传输不走 GitHub（服务器直连 GitHub 常被掐断）：`git bundle` 打包服务器缺的提交，scp 过去，服务器 `git merge --ff-only`。服务器有未提交的跟踪文件改动时中止；未跟踪文件（门户页 `frontend/public/www/`、certbot 钩子 `reload-nginx-docker.sh`）不受影响。
-3. 服务器 `docker compose build backend frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像（按镜像 ID，不怕旧标签已被清理）打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定本次镜像标签、`rollback.override.yml` 指向发布前的镜像、`RELEASE.txt`、`build.log`），`releases/current` 软链指向它。旧镜像按标签末尾的时间戳只保留最近 3 个，正在运行的镜像永远不删。
-4. 备份数据库（mysql 容器内 `mysqldump --single-transaction`，落 `/var/backups/ai-platform/mysql/`），**用新镜像先跑 `knex migrate:latest`**（`docker compose run --rm --no-deps backend …`，加法式迁移先行），再 `up -d backend frontend`，等 backend healthy（3 分钟），打印启动脚本的 SQL 迁移统计（应全是"跳过"）。
-5. 每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除；磁盘剩余不足 8G 时先 `docker builder prune -af`。
-6. 本地打 `deploy-docker-<时间戳>` 标签并推送，最后打 `/health`、`/api/ai-lab/tasks`（401 即正常）、`/login`。
+3. 服务器资源复核后依次执行 `docker compose build backend` 和 `docker compose build frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像（按镜像 ID，不怕旧标签已被清理）打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定本次镜像标签、`rollback.override.yml` 指向发布前的镜像、`RELEASE.txt`、`build.log`），`releases/current` 软链指向它。旧镜像按标签末尾的时间戳只保留最近 3 个，正在运行的镜像永远不删。
+4. 备份数据库（mysql 容器内 `mysqldump --single-transaction`，落 `/var/backups/ai-platform/mysql/`），**用新镜像先跑 `knex migrate:latest`**（`docker compose run --rm --no-deps backend …`，加法式迁移先行），再 `up -d backend frontend`，等双容器均运行目标镜像且 healthy（3 分钟），打印启动脚本的 SQL 迁移统计（应全是"跳过"）。
+5. 发布前（代码传输前）和每个镜像构建前核磁盘可用字节、内存可用量及 inode；读取失败或低于阈值即停止，不自动清理缓存。后端、前端依次构建，降低同时构建的峰值。默认最低 8 GiB 磁盘、5120 MiB 可用内存、100000 inode；可用 `DOCKER_MIN_FREE_GIB`、`DOCKER_MIN_AVAILABLE_MIB`、`DOCKER_MIN_FREE_INODES` 调整。8 GiB 延续原 40 GiB 服务器的构建余量门；前端 Dockerfile 允许 Node 使用 4 GiB 堆，再预留约 1 GiB 给构建器与既有服务；inode 门防止 npm 安装因文件项耗尽。这是发布前守卫，不保证构建过程永不耗尽，门槛调整需按目标主机实际容量评估。
+6. 同一 Git 提交仅在后端与前端容器均使用该提交的发布镜像 ID，且 `State.Running=true`、`State.Paused=false`、`State.Restarting=false`、健康状态为 healthy，且公网健康检查通过时跳过；否则仍走预览、人工确认、资源门、构建和切换。每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除。
+7. 切换和远端收尾后，检查公网 `/health` 和关键路由，再本地打 `deploy-docker-<时间戳>` 标签并推送。
 
 其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
 

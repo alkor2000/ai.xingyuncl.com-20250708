@@ -2,7 +2,7 @@
 # Docker 站点发布（ai.pkuailab.com）。发布路径固定为 WSL → ai.xingyuncl.com（make deploy）→ ai.pkuailab.com（本脚本）：
 #   1. 本地检查：工作区干净、在 main、HEAD 已推 GitHub、ai.xingyuncl.com 已发布到同一提交（发布路径顺序）
 #   2. 代码到服务器：git bundle + scp，再 ff-only 合并（服务器直连 GitHub 常被掐断，不依赖它）
-#   3. 服务器：构建 backend/frontend 镜像并打发布标签、给旧镜像打 rollback 标签、写 release 目录（override + RELEASE.txt）
+#   3. 服务器：资源复核后依次构建 backend/frontend 镜像并打发布标签、给旧镜像打 rollback 标签、写 release 目录（override + RELEASE.txt）
 #   4. 备份数据库 → 用新镜像先跑 knex 迁移（加法式迁移先行）→ 切换容器 → 等 backend healthy → 健康检查
 #   5. 清理旧镜像（每个仓库只留最近 3 个发布标签及其 rollback 标签）
 #   6. 本地打 deploy-docker-<时间戳> 标签并推送
@@ -12,6 +12,7 @@
 #       make deploy-docker ARGS=--rebuild  （服务器已在同一提交时仍重新构建切换）
 # 环境变量: DOCKER_SSH_HOST=pkuailab  DOCKER_REMOTE_DIR=/var/www/ai-platform  DOCKER_HEALTH_URL=https://ai.pkuailab.com/health
 #           PM2_SSH_HOST=practice（用来核对 ai.xingyuncl.com 已发布的提交）
+#           DOCKER_MIN_FREE_GIB=8 DOCKER_MIN_AVAILABLE_MIB=5120 DOCKER_MIN_FREE_INODES=100000
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_HOST="${DOCKER_SSH_HOST:-pkuailab}"
@@ -20,6 +21,9 @@ HEALTH_URL="${DOCKER_HEALTH_URL:-https://ai.pkuailab.com/health}"
 SITE_ORIGIN="${HEALTH_URL%/health}"
 PM2_HOST="${PM2_SSH_HOST:-practice}"
 KEEP_RELEASES="${DOCKER_KEEP_RELEASES:-3}"
+MIN_FREE_GIB="${DOCKER_MIN_FREE_GIB:-8}"
+MIN_AVAILABLE_MIB="${DOCKER_MIN_AVAILABLE_MIB:-5120}"
+MIN_FREE_INODES="${DOCKER_MIN_FREE_INODES:-100000}"
 ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0
 for a in "$@"; do
   case "$a" in
@@ -58,7 +62,11 @@ if [ "$REMOTE_DIRTY" != 0 ]; then
   echo "❌ 服务器工作区有未提交的改动（有人直接改了生产文件），中止："; $SSH "cd $REMOTE_DIR && git status --short | grep -v '^??'"; exit 1
 fi
 if [ "$REMOTE_SHA" = "$LOCAL_SHA" ] && [ "$REBUILD" != 1 ]; then
-  echo "✅ 服务器已在 $LOCAL_SHORT，无需发布（要强制重建：make deploy-docker ARGS=--rebuild）"; exit 0
+  RUNTIME=$($SSH bash -s -- runtime "$LOCAL_SHORT" < "$ROOT/dev/docker-release-preflight.sh")
+  if [ "$RUNTIME" = CURRENT ] && curl -sf -m 15 "$HEALTH_URL" >/dev/null; then
+    echo "✅ 代码、双容器镜像及健康检查均为 $LOCAL_SHORT，无需发布"; exit 0
+  fi
+  echo "⚠ Git 已在目标提交，但运行容器或健康检查未达到该版本，继续走确认、构建与切换：$RUNTIME"
 fi
 if ! git cat-file -e "$REMOTE_SHA" 2>/dev/null || ! git merge-base --is-ancestor "$REMOTE_SHA" "$LOCAL_SHA"; then
   echo "❌ 服务器提交 ${REMOTE_SHA:0:7} 不是本地 HEAD 的祖先（服务器分叉或本地不认识它），中止。"; exit 1
@@ -79,6 +87,9 @@ if [ "$ASSUME_YES" != 1 ]; then
   [ "$ans" = y ] || [ "$ans" = Y ] || { echo "已取消"; exit 1; }
 fi
 
+# 代码传输和任何服务器写入前，先以本地候选检查远端可用资源。
+$SSH bash -s -- resources "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES" < "$ROOT/dev/docker-release-preflight.sh"
+
 if [ "$REMOTE_SHA" != "$LOCAL_SHA" ]; then
   BUNDLE="/tmp/ai-platform-$LOCAL_SHORT.bundle"
   echo "==> 打包 ${REMOTE_SHA:0:7}..$LOCAL_SHORT 并传到服务器 ..."
@@ -91,10 +102,13 @@ fi
 # ---------- 3–5. 服务器上构建、备份、迁移、切换、清理 ----------
 echo "==> 服务器构建镜像并切换 ..."
 REMOTE_LOG="$(mktemp)"
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" <<'REMOTE' | tee "$REMOTE_LOG"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
+MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"
 cd "$REMOTE_DIR"
+# 传输/排队期间资源可能变化；创建发布目录前重新检查。
+bash dev/docker-release-preflight.sh resources "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES"
 TS=$(date +%Y%m%d_%H%M%S)
 TAG="v-${SHORT}-${TS}"
 REL="/var/backups/ai-platform/releases/ai-platform-${TAG}"
@@ -105,10 +119,14 @@ OLD_F=$(docker inspect ai-platform-frontend --format '{{.Config.Image}}' 2>/dev/
 OLD_B_ID=$(docker inspect ai-platform-backend --format '{{.Image}}' 2>/dev/null || echo none)
 OLD_F_ID=$(docker inspect ai-platform-frontend --format '{{.Image}}' 2>/dev/null || echo none)
 
-AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
-if [ "${AVAIL_GB:-0}" -lt 8 ]; then echo "    磁盘剩余 ${AVAIL_GB}G，先清构建缓存 ..."; docker builder prune -af >/dev/null; fi
-echo "    docker compose build backend frontend（日志 $REL/build.log）..."
-if ! docker compose build backend frontend </dev/null > "$REL/build.log" 2>&1; then
+echo "    docker compose build backend（日志 $REL/build.log）..."
+if ! docker compose build backend </dev/null > "$REL/build.log" 2>&1; then
+  echo "❌ 后端镜像构建失败，最后 40 行："; tail -40 "$REL/build.log"; exit 1
+fi
+# backend 构建会消耗磁盘/inode；再核一次才允许构建 frontend。
+bash dev/docker-release-preflight.sh resources "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES"
+echo "    docker compose build frontend（日志 $REL/build.log）..."
+if ! docker compose build frontend </dev/null >> "$REL/build.log" 2>&1; then
   echo "❌ 镜像构建失败，最后 40 行："; tail -40 "$REL/build.log"; exit 1
 fi
 docker tag ai-platform-backend:latest  "ai-platform-backend:${TAG}"
@@ -140,6 +158,7 @@ fi
   echo "PREVIOUS_FRONTEND_TAG=$OLD_F"
   echo "CANDIDATE_TAG=$TAG"
   echo "ROLLBACK_TAG=rollback-$TS"
+  echo "IMAGES_BUILT=backend,frontend"
 } > "$REL/RELEASE.txt"
 ln -sfn "$REL" /var/backups/ai-platform/releases/current
 
@@ -152,22 +171,25 @@ echo "    备份: $BK ($(du -h "$BK" | cut -f1))"; echo "DB_BACKUP=$BK" >> "$REL
 echo "    用新镜像执行 knex 迁移（切换前）..."
 # 注意：本段脚本经 stdin 喂给远端 bash -s，任何会读 stdin 的命令都必须 </dev/null，否则会把脚本剩余部分吃掉
 docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T backend npx knex migrate:latest </dev/null 2>&1 | grep -vE '^$|Using environment|attribute .version. is obsolete' | sed 's/^/      /' || { echo "❌ 迁移失败，容器未切换；库已备份到 $BK"; exit 1; }
+echo "DB_MIGRATED=1" >> "$REL/RELEASE.txt"
 
 echo "    切换容器 ..."
 docker compose -f docker-compose.yml -f "$REL/release.override.yml" up -d backend frontend </dev/null >/dev/null 2>&1
-STATUS=starting
+echo "CONTAINERS_SWITCHED=1" >> "$REL/RELEASE.txt"
+RUNTIME_STATUS=starting
 for i in $(seq 1 36); do
-  STATUS=$(docker inspect ai-platform-backend --format '{{.State.Health.Status}}' 2>/dev/null || echo starting)
-  [ "$STATUS" = healthy ] && break; sleep 5
+  RUNTIME_STATUS=$(bash dev/docker-release-preflight.sh runtime "$SHORT")
+  [ "$RUNTIME_STATUS" = CURRENT ] && break; sleep 5
 done
-if [ "$STATUS" != healthy ]; then
-  echo "❌ backend 3 分钟内未 healthy（$STATUS）。回滚命令："
+if [ "$RUNTIME_STATUS" != CURRENT ]; then
+  echo "❌ 双容器 3 分钟内未运行本次镜像且 healthy（$RUNTIME_STATUS）。回滚命令："
   echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"
   docker logs --tail 40 ai-platform-backend 2>&1 | cut -c1-160; exit 1
 fi
 L=$(docker logs ai-platform-backend 2>&1 || true)
 echo "    启动脚本 SQL 迁移：执行 $(echo "$L" | grep -c '^执行迁移' || true) 跳过 $(echo "$L" | grep -c '跳过已执行' || true) 失败 $(echo "$L" | grep -c '执行失败' || true)"
 docker ps --format '    {{.Names}}  {{.Image}}  {{.Status}}' | grep ai-platform
+echo "REMOTE_HEALTHY=1" >> "$REL/RELEASE.txt"
 echo "FINAL_STATUS=RELEASED" >> "$REL/RELEASE.txt"
 
 echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback；正在运行的镜像永远不删）..."
@@ -191,15 +213,16 @@ REMOTE
 
 grep -q '^REMOTE_DONE$' "$REMOTE_LOG" || { echo "❌ 服务器端脚本没有执行到底（容器可能没有切换），请看上面的输出与 make status-docker"; rm -f "$REMOTE_LOG"; exit 1; }
 rm -f "$REMOTE_LOG"
-if ! $SSH "docker inspect ai-platform-backend --format '{{.Config.Image}}'" | grep -q "v-$LOCAL_SHORT-"; then
-  echo "❌ 服务器 backend 容器没有运行本次镜像，请看 make status-docker"; exit 1
+RUNTIME_POST=$($SSH bash -s -- runtime "$LOCAL_SHORT" < "$ROOT/dev/docker-release-preflight.sh")
+if [ "$RUNTIME_POST" != CURRENT ]; then
+  echo "❌ 服务器双容器未运行本次镜像或健康异常：$RUNTIME_POST；请看 make status-docker"; exit 1
 fi
 
 # ---------- 6. 本地标签与线上健康检查 ----------
+echo ""
+echo "   线上健康检查:"; curl -sf -m 15 "$HEALTH_URL" && echo || { echo "❌ 健康检查失败"; exit 1; }
+for u in /api/ai-lab/tasks /login; do printf "   %-22s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$SITE_ORIGIN$u")"; done
 TAG="deploy-docker-$(date +%Y%m%d_%H%M%S)"
 git tag -a "$TAG" -m "deploy $LOCAL_SHORT to $SSH_HOST (docker)"
 git push -q origin "$TAG" 2>/dev/null || echo "⚠ tag 推送失败（本地已打 $TAG）"
-echo ""
 echo "✅ Docker 发布完成，已打标签 $TAG"
-echo "   线上健康检查:"; curl -sf -m 15 "$HEALTH_URL" && echo || { echo "❌ 健康检查失败"; exit 1; }
-for u in /api/ai-lab/tasks /login; do printf "   %-22s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$SITE_ORIGIN$u")"; done
