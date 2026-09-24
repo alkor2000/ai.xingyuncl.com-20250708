@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import StudentLoginEntry from '../../../components/auth/StudentLoginEntry'
 import StudentEntryConsume from '../../../pages/auth/StudentEntryConsume'
 import api from '../../../utils/api'
@@ -31,6 +31,13 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/')
   resetTaskContexts()
 })
+
+// 同一条路由不卸载，换一张票再来一次：点一下就把地址换成新票（和用户在同一个标签页里又点了一次
+// 作业页入口是一样的），落地页组件自己不会重新挂载，只有 effect 会再跑。
+const Switcher = ({ to }) => {
+  const navigate = useNavigate()
+  return <button data-testid="switch-ticket" onClick={() => navigate(to, { replace: true })} />
+}
 
 const renderAt = (url, element, path) => render(
   <MemoryRouter initialEntries={[url]}>
@@ -276,6 +283,56 @@ describe('C05 consume page', () => {
     await screen.findByTestId('editor-page')
     expect(spy).toHaveBeenCalledTimes(1)
     expect(takeCarriedTaskContext()).toBe(TASK)
+  })
+
+  // ---- 同一条路由不卸载，从票 A 换到票 B --------------------------------------------------------
+  // 这一组是冲着"整个组件只记住第一次的片段"写的：A 还没完成或已经失败时换到 B，
+  // effect 会再跑，但它读到的必须是 B 这一次到达的东西。
+
+  const renderSwitchable = (first, then) => render(
+    <MemoryRouter initialEntries={[first]}>
+      <Routes>
+        <Route path="/auth/sso/consume" element={<><StudentEntryConsume /><Switcher to={then} /></>} />
+        <Route path="/login" element={<div data-testid="login-page" />} />
+        <Route path="/chat" element={<div data-testid="chat-page" />} />
+        <Route path="/html-editor" element={<div data-testid="editor-page" />} />
+        <Route path="/dashboard" element={<div data-testid="dashboard-page" />} />
+      </Routes>
+    </MemoryRouter>
+  )
+
+  it('takes ticket B’s own context when the first login is still in flight', async () => {
+    const OTHER = `p09g.${'b'.repeat(240)}.${'t'.repeat(43)}`
+    const answers = new Map()
+    const spy = vi.fn().mockImplementation(handoff => answers.get(handoff))
+    vi.spyOn(useAuthStore, 'getState').mockReturnValue({ loginWithStudentHandoff: spy })
+    const a = ticket()
+    const b = ticket()
+    answers.set(a, new Promise(() => {}))                       // A 卡住不返回
+    answers.set(b, Promise.resolve({ entry: 'ai-practice.html' }))
+    renderSwitchable(`/auth/sso/consume?handoff=${a}#p09_task=${TASK}`,
+      `/auth/sso/consume?handoff=${b}#p09_task=${OTHER}`)
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(a))
+    fireEvent.click(screen.getByTestId('switch-ticket'))
+    await screen.findByTestId('editor-page')
+    expect(spy).toHaveBeenCalledWith(b)
+    expect(takeCarriedTaskContext()).toBe(OTHER)                // B 的，不是 A 的
+  })
+
+  it('carries nothing into ticket B when B brings no context of its own', async () => {
+    const answers = new Map()
+    const spy = vi.fn().mockImplementation(handoff => answers.get(handoff))
+    vi.spyOn(useAuthStore, 'getState').mockReturnValue({ loginWithStudentHandoff: spy })
+    const a = ticket()
+    const b = ticket()
+    answers.set(a, Promise.reject(new Error('refused')))        // A 先失败
+    answers.set(b, Promise.resolve({ entry: 'ai-practice.html' }))
+    renderSwitchable(`/auth/sso/consume?handoff=${a}#p09_task=${TASK}`,
+      `/auth/sso/consume?handoff=${b}`)
+    await screen.findByText(/学校账号登录未完成/)
+    fireEvent.click(screen.getByTestId('switch-ticket'))
+    await screen.findByTestId('editor-page')
+    expect(takeCarriedTaskContext()).toBeNull()                 // A 的作业不能接着用
   })
 
   it('leaves a login without any context exactly as it was', async () => {

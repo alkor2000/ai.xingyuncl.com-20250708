@@ -20,7 +20,6 @@
 
 import React, {
   useEffect,
-  useRef,
   useState
 } from 'react'
 
@@ -162,12 +161,12 @@ const StudentEntryConsume = () => {
   const location =
     useLocation()
 
-  // 片段只在进这一页的那一刻有意义：之后的清理和跳转都会改地址，这里先原样记住一次。
+  // 片段属于**这一次到达**，不属于这个组件。同一条路由不卸载也可能换一张票再来一次
+  // （学生在同一个标签页里又从作业页点了一次），那时 effect 会带着新票重跑：
+  // 记死第一次的片段，就会把上一次的作业按到新票上，或者把新票自己带来的那份弄丢。
   const arrivalHash =
-    useRef(
-      location.hash ||
-        window.location.hash
-    ).current
+    location.hash ||
+    window.location.hash
 
   const { t } =
     useTranslation()
