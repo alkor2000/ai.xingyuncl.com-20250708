@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import TaskArtifactPanel, { resetCapabilityCache, setTaskContext, captureTaskContext } from '../../../components/htmlEditor/TaskArtifactPanel'
 import api from '../../../utils/api'
-import { carryTaskContext, resetTaskContexts } from '../../../utils/taskContextHandoff'
+import { beginSchoolLogin, carryTaskContext, resetTaskContexts } from '../../../utils/taskContextHandoff'
 
 vi.mock('../../../utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key, opts) => (opts?.no ? `${key}:${opts.no}` : key), i18n: { language: 'zh-CN' } }) }))
@@ -303,6 +303,54 @@ describe('assignment artifact panel', () => {
     await screen.findByTestId('p09-link')
     expect(screen.queryByTestId('p09-other-assignment')).toBeNull()
     expect(api.post).not.toHaveBeenCalled()
+  })
+
+  // 这一条是总控核收时精确复现出来的：B 的授权用掉之后，"这一次是哪份作业"不能跟着没了。
+  it('keeps this arrival’s assignment after the grant is spent, so switching back to A still blocks', async () => {
+    resetTaskContexts(); setTaskContext(TASK)
+    const old = linkRow({ project_id: 3, assignment_ref: 'assign-A' })
+    const freshProject = { id: 4, name: '这一次的新作品' }
+    const fresh = linkRow({ project_id: 4, assignment_ref: 'assign-B',
+      link_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })
+    routes({ submitConfigured: true, links: [old], arrived: 'assign-B' })
+    const view = render(<TaskArtifactPanel project={freshProject} pages={pages} />)
+    await screen.findByTestId('p09-link')
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(`${ROOT}/task-context`, expect.anything()))
+    api.post.mockImplementation(async path => {
+      if (path === `${ROOT}/links`) {
+        routes({ submitConfigured: true, links: [old, fresh], arrived: 'assign-B' })
+        return { data: { link: fresh } }
+      }
+      return { data: { submission: { submitted: true, outcome: 'submitted', revision_ref: 'old-version', revision_no: 1 } } }
+    })
+    // 学生亲自把 B 关联到空项目上：一次性授权就此用掉。
+    fireEvent.click(screen.getByTestId('p09-link'))
+    fireEvent.click(await screen.findByRole('button', { name: 'htmlEditor.p09.confirmLink' }))
+    await waitFor(() => expect(screen.getByTestId('p09-submit').disabled).toBe(false))
+    expect(api.post.mock.calls[0][0]).toBe(`${ROOT}/links`)
+    // 同一个页面切回关联着 A 的旧项目：授权没了，但"这一次是 B"必须还在。
+    view.rerender(<TaskArtifactPanel project={project} pages={pages} />)
+    await waitFor(() => expect(screen.getByText('assign-A')).toBeTruthy())
+    await screen.findByTestId('p09-other-assignment')
+    expect(screen.getByTestId('p09-submit').disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('p09-submit'))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(api.post.mock.calls.map(call => call[0])).toEqual([`${ROOT}/links`])   // 只有那一次关联
+  })
+
+  it('does not carry one trip’s assignment into the next login', async () => {
+    resetTaskContexts(); setTaskContext(TASK)
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })], arrived: 'assign-B' })
+    const view = render(<TaskArtifactPanel project={project} pages={pages} />)
+    await screen.findByTestId('p09-other-assignment')
+    view.unmount()
+    // 又一次学校登录：上一趟的目标连同授权一起作废（落地页正是这么开场的）。
+    beginSchoolLogin(null)
+    setTaskContext(null)
+    routes({ submitConfigured: true, links: [linkRow({ assignment_ref: 'assign-A' })] })
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await waitFor(() => expect(screen.getByTestId('p09-submit').disabled).toBe(false))
+    expect(screen.queryByTestId('p09-other-assignment')).toBeNull()
   })
 
   it('a double click is one submission', async () => {

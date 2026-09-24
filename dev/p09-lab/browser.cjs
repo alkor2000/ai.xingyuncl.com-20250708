@@ -262,6 +262,21 @@ const commands = {
       freeze_class: await panel().getByTestId('p09-freeze').count()
         ? await panel().getByTestId('p09-freeze').getAttribute('class') : null };
   },
+  // 同一个页面里换一个项目（就是学生在左边点另一个作品），不重新加载、不重新登录。
+  async selectProject(command) {
+    const page = state.page;
+    state.requests = [];
+    if ((page.viewportSize()?.width || 1280) < 992) {
+      await page.getByRole('button', { name: '项目' }).first().click().catch(() => {});
+      await page.waitForTimeout(600);
+    }
+    const item = page.getByText(command.project, { exact: true }).first();
+    await item.waitFor({ state: 'visible', timeout: 20000 });
+    try { await item.click({ timeout: 8000 }); } catch { await item.evaluate(node => node.click()); }
+    await page.waitForTimeout(1200);
+    if (command.screenshot) await shot(command.screenshot);
+    return { ok: true, requests: state.requests };
+  },
   // 这一次到达的作业、面板上写的作业、以及「交作业」能不能按——误交那一格全靠这三样说话。
   async assignmentView(command) {
     const has = async testid => Boolean(await panel().getByTestId(testid).count());

@@ -49,6 +49,11 @@ let carried = null
 let current = null
 // 这个文档里已经开始过几次学校登录。整页打开时是 0，站内再登录一次才加一。
 let loginRounds = 0
+// 这一趟到达是哪份作业——服务端验签后给的作业名，或者 'unavailable'（问不到）。
+//
+// 它**不是凭据**：授权是一次性的，学生一关联就用掉了，绝不保留、绝不重用；但"这一趟进来的是哪份作业"
+// 必须活得比那张授权长一点，否则关联完 B 再切回旧项目 A，面板就又变回那个能按的「交作业」了。
+let arrivalTargetRef = null
 
 /** 登录成功、且服务端 entry 正是本站编辑器时才调用；其它任何情况都不要调用。 */
 export function carryTaskContext(value) {
@@ -70,6 +75,15 @@ export function takeCarriedTaskContext() {
  * 2. 这是本文档的第一次登录，那么应用启动时寄存的那个就是这次到达带来的。
  * 本文档里的第二次登录还想拿上一次寄存的，那就是拿旧作业接着用——这里直接拒绝。
  */
+/** 记住这一趟的作业名（或 'unavailable'）。只存名字，不存授权。 */
+export function rememberArrivalTarget(value) {
+  arrivalTargetRef = value === 'unavailable' || (typeof value === 'string' && value) ? value : null
+}
+
+export function arrivalTarget() {
+  return arrivalTargetRef
+}
+
 export function beginSchoolLogin(fromArrivalUrl) {
   const arrival = isCanonicalTaskContext(fromArrivalUrl)
     ? fromArrivalUrl
@@ -77,6 +91,7 @@ export function beginSchoolLogin(fromArrivalUrl) {
   loginRounds += 1
   carried = null
   current = null
+  arrivalTargetRef = null            // 上一趟的作业名不能跟到这一趟来
   return arrival
 }
 
@@ -84,6 +99,7 @@ export function beginSchoolLogin(fromArrivalUrl) {
 export function resetTaskContexts() {
   carried = null
   current = null
+  arrivalTargetRef = null
   loginRounds = 0
 }
 

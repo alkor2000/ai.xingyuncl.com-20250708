@@ -181,6 +181,35 @@ def main():
                 and any(r['assignment_ref'] == ASSIGN_A and int(r['project_id']) == 9801 for r in rows),
                 '这次作业落到自己的项目上，旧作业那条关联原样还在')
 
+        # ---- 关联完 B 之后，在同一个页面切回旧项目：授权用掉了，说明不能跟着没 ---------------------
+        # 这一格是总控核收时精确复现出来的缺口：切回 A 时按钮又变成可按的，一按就交到上一次作业。
+        report['stage'] = 'switch_back_after_linking'
+        browser.call('selectProject', project=OLD_WORK, screenshot='active-10-switched-back-to-old')
+        back = browser.call('assignmentView')
+        before_calls = site.edu_calls()
+        pressed = browser.call('submit', screenshot='active-11-held-back', wait=2500)
+        report['checks']['switch_back_after_linking'] = {
+            'panel_assignment': back['fields'].get('作业'), 'notice': (back['notice'] or '')[:90],
+            'submit_disabled': back['submit_disabled'],
+            'pressed': {k: pressed.get(k) for k in ('disabled', 'submitted', 'submit_requests')},
+            'edu_calls': site.edu_calls() - before_calls}
+        verdict('switching_back_to_the_old_project_still_blocks_after_the_grant_was_spent',
+                bool(back['notice']) and back['submit_disabled'] is True
+                and pressed['submit_requests'] == 0 and (site.edu_calls() - before_calls) == 0
+                and not pressed['submitted'],
+                '一次性授权已经用掉，但"这一趟进来的是哪份作业"还在：切回旧项目照样挡住，0 发出')
+
+        report['stage'] = 'back_on_its_own_project'
+        browser.call('selectProject', project=NEW_WORK, screenshot='active-12-back-to-new')
+        own = browser.call('assignmentView')
+        report['checks']['back_on_its_own_project'] = {'panel_assignment': own['fields'].get('作业'),
+                                                       'notice': own['notice'],
+                                                       'submit_disabled': own['submit_disabled']}
+        verdict('the_new_assignment_is_still_normal_on_its_own_project',
+                own['notice'] is None and own['submit_disabled'] is False
+                and own['fields'].get('作业') == ASSIGN_B,
+                '回到这次作业自己的项目上：没有提示，按钮照常')
+
         report['passed'] = all(item['ok'] for item in report['verdicts'].values())
         report['stage'] = 'done'
     except Exception as error:

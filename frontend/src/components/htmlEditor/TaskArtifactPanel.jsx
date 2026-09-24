@@ -4,7 +4,8 @@ import { BookOutlined, EyeOutlined, LinkOutlined, PushpinOutlined, SendOutlined 
 import { useTranslation } from 'react-i18next'
 import api from '../../utils/api'
 import {
-  adoptTaskContext, carryTaskContext, currentTaskContext, readTaskContextFromHash, takeCarriedTaskContext
+  adoptTaskContext, arrivalTarget, carryTaskContext, currentTaskContext, readTaskContextFromHash,
+  rememberArrivalTarget, takeCarriedTaskContext
 } from '../../utils/taskContextHandoff'
 
 // "关联到教学任务": the student picks the entry page of one of their own projects and links it to the
@@ -84,8 +85,11 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   // reload: the submission fact belongs to edu, and a stale tick here would be a lie about their state.
   const [submission, setSubmission] = useState(null)
   // 这一次进来的是哪份作业。只认服务端验签后给的名字：浏览器手里那段载荷没验过，不能当作业名，
-  // 更不能当授权。null=还在问，'unavailable'=问不到。
-  const [target, setTarget] = useState(null)
+  // 更不能当授权。null=还不知道，'unavailable'=问不到。
+  //
+  // 它比那张一次性授权活得久：学生把这次作业关联到空项目上时授权就用掉了（context 随即清空），
+  // 但只要这一趟还没结束，切回别的项目仍然要能说出"你这次进来的是哪一份"。换一趟登录才会清零。
+  const [target, setTarget] = useState(() => arrivalTarget())
   const lock = useRef(false)
 
   useEffect(() => { let alive = true; loadCapability(client).then(value => { if (alive) setCapability(value) }); return () => { alive = false } }, [client])
@@ -93,12 +97,13 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   // 每换一次到达上下文就重新问一次；没有上下文就没有"这一次的作业"，一切照旧。
   useEffect(() => {
     let alive = true
-    if (!capability?.available || !context) { setTarget(null); return undefined }
-    setTarget(null)
+    // 没有能力面、没有到达上下文、或者这一趟已经问出来了，就不再问——授权用掉之后也不会因此丢掉答案。
+    if (!capability?.available || !context || arrivalTarget()) return undefined
+    const keep = value => { if (!alive) return; rememberArrivalTarget(value); setTarget(arrivalTarget()) }
     client.get(`${ROOT}/task-context`, { headers: { 'X-P09-Task-Context': context },
       skipDebugLogging: true, skipErrorMessage: true })
-      .then(({ data }) => { if (alive) setTarget(data?.target?.assignment_ref ? data.target : 'unavailable') })
-      .catch(() => { if (alive) setTarget('unavailable') })
+      .then(({ data }) => keep(data?.target?.assignment_ref || 'unavailable'))
+      .catch(() => keep('unavailable'))
     return () => { alive = false }
   }, [capability, client, context])
 
@@ -130,8 +135,11 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   useEffect(() => { setSubmission(null) }, [current?.link_id])
 
   const associate = () => run(async () => {
-    await post('/links', { schema_version: 1, project_id: Number(project.id), entry_page_id: Number(entryPageId) }, crypto.randomUUID())
-    // The context is single use on the server; drop it here too so a second click cannot reuse it.
+    const data = await post('/links', { schema_version: 1, project_id: Number(project.id), entry_page_id: Number(entryPageId) }, crypto.randomUUID())
+    // The context is single use on the server; drop it here too so a second click cannot reuse it. What
+    // stays is only the name of the assignment this trip is for — taken from the link the server just
+    // created, so that switching to another project still knows which assignment the student came for.
+    if (data?.link?.assignment_ref) { rememberArrivalTarget(data.link.assignment_ref); setTarget(arrivalTarget()) }
     setTaskContext(null); setContext(null); setLinking(false)
     await refresh()
   })
@@ -176,9 +184,9 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   const submitConfigured = capability?.submit_configured === true
   // 带着这一次的入口，打开的却是关联着另一份作业的项目——这是最容易误交的一格：学生看到的是
   // 一个能按的「交作业」，按下去交的却是上一份作业。确认不了也按同样处理：宁可挡住，不可误投。
-  const arrivalDecided = !context || (target !== null && target !== 'unavailable')
-  const otherAssignment = !!current && !!context &&
-    (target === 'unavailable' || (arrivalDecided && target.assignment_ref !== current.assignment_ref))
+  // 判断依据是"这一趟的作业"，不是"手里还有没有授权"：授权是一次性的，说明不该跟着它一起消失。
+  const otherAssignment = !!current && target !== null &&
+    (target === 'unavailable' || target !== current.assignment_ref)
   const checkingArrival = !!current && !!context && target === null
   // Linked but nothing saved since: the way forward is to save again, not to unlink and start over.
   const needsSaveAfterLink = !!current && current.save_evidence !== 'observed'
@@ -246,7 +254,7 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
               description={<>
                 <div>{target === 'unavailable'
                   ? t(`${prefix}otherAssignmentUnknown`)
-                  : t(`${prefix}otherAssignmentArrived`, { arrived: target.assignment_ref })}</div>
+                  : t(`${prefix}otherAssignmentArrived`, { arrived: target })}</div>
                 <div style={{ marginTop: 6 }}>{t(`${prefix}otherAssignmentNext`)}</div>
               </>} />
             : submitConfigured

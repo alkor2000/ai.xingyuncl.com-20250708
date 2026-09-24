@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-24T16:55:28Z",
+  "updated_at": "2026-09-24T17:08:30Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "5041a37d468a4ad610e8b58aefc6af2c0bba212ffd755143ca2f9cfcb1d12ca5",
-      "size": 377563,
-      "normalized_sha256": "5041a37d468a4ad610e8b58aefc6af2c0bba212ffd755143ca2f9cfcb1d12ca5"
+      "sha256": "c77106fffe5a88e694141c2d36023cf425f019dfd3d3cff6a959b061afcbf5d2",
+      "size": 377617,
+      "normalized_sha256": "c77106fffe5a88e694141c2d36023cf425f019dfd3d3cff6a959b061afcbf5d2"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2566,9 +2566,9 @@
       "normalized_sha256": "bb7980cc81c50d01c0d5ee2887e7ee9578a37255573f5cb3b2108aece86fd367"
     },
     "docs/integrations/e09-active-assignment-candidate.md": {
-      "sha256": "0931e08f187021601655b049fab31056c4e5fef2b32c65a70a69f9daea61de90",
-      "size": 4871,
-      "normalized_sha256": "0931e08f187021601655b049fab31056c4e5fef2b32c65a70a69f9daea61de90"
+      "sha256": "be724be6d4309dc19ed3c83f3a384f3f594528ba4637cd32bb4802d936055050",
+      "size": 6428,
+      "normalized_sha256": "be724be6d4309dc19ed3c83f3a384f3f594528ba4637cd32bb4802d936055050"
     },
     "docs/integrations/e09-aoci-entries-candidate.md": {
       "sha256": "2465917372e4aad633657c406b599d96fc55d6f3a3fd747f7d361cec61f19221",
@@ -2849,9 +2849,9 @@
     },
     "frontend/src/__tests__/unit/components/TaskArtifactPanel.test.jsx": {
       "role": "observe",
-      "sha256": "9659a00aed22cb9c1cb00d7ac3de569fe6dbd5da0bd5f742f6743abea157ab57",
-      "size": 21314,
-      "normalized_sha256": "9659a00aed22cb9c1cb00d7ac3de569fe6dbd5da0bd5f742f6743abea157ab57"
+      "sha256": "d0aedd866829b25c65a77d3639074196319a7eed374c52ce99609e769fad1e0a",
+      "size": 24390,
+      "normalized_sha256": "d0aedd866829b25c65a77d3639074196319a7eed374c52ce99609e769fad1e0a"
     },
     "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
       "role": "observe",
@@ -3699,9 +3699,9 @@
       "normalized_sha256": "15f2ea46b5ce4208e8f048e1f943827b1ef5a10b2c0b718b6b3bf04bfef35cf6"
     },
     "frontend/src/components/htmlEditor/TaskArtifactPanel.jsx": {
-      "sha256": "f3b8ff237d8e6b3cc2d4adc55ded4fe4913ba6c03bbb013242a0549ec6127b69",
-      "size": 18586,
-      "normalized_sha256": "f3b8ff237d8e6b3cc2d4adc55ded4fe4913ba6c03bbb013242a0549ec6127b69"
+      "sha256": "3039b5167e7e591ff7544ec18792e1e2b6aad3a05a2f31a6300f16a228e8ddd5",
+      "size": 19467,
+      "normalized_sha256": "3039b5167e7e591ff7544ec18792e1e2b6aad3a05a2f31a6300f16a228e8ddd5"
     },
     "frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx": {
       "role": "index",
@@ -5338,9 +5338,9 @@
       "normalized_sha256": "2651a1deef2e70cadaad182e89c8aa903e04d43a0a4c38ddb822863b7a661c64"
     },
     "frontend/src/utils/taskContextHandoff.js": {
-      "sha256": "b4f92e8462eaf7cb03064d6f364e4bb71831d142f2fa51390bf5a5477b66bf97",
-      "size": 4149,
-      "normalized_sha256": "b4f92e8462eaf7cb03064d6f364e4bb71831d142f2fa51390bf5a5477b66bf97"
+      "sha256": "e471c3de2da967d8eaa4fc43cc45fdd3888db76bcad70b92aea3fe239171e89b",
+      "size": 4996,
+      "normalized_sha256": "e471c3de2da967d8eaa4fc43cc45fdd3888db76bcad70b92aea3fe239171e89b"
     },
     "frontend/src/utils/tokenCalculator.js": {
       "role": "index",
