@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import TaskArtifactPanel, { resetCapabilityCache, setTaskContext, captureTaskContext } from '../../../components/htmlEditor/TaskArtifactPanel'
 import api from '../../../utils/api'
+import { carryTaskContext, resetTaskContexts } from '../../../utils/taskContextHandoff'
 
 vi.mock('../../../utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key, opts) => (opts?.no ? `${key}:${opts.no}` : key), i18n: { language: 'zh-CN' } }) }))
@@ -206,6 +207,38 @@ describe('assignment artifact panel', () => {
     await waitFor(() => expect(screen.getByTestId('p09-error').textContent)
       .toContain('htmlEditor.p09.error.assignment_ref_missing'))
     expect(screen.queryByTestId('p09-submit-unknown')).toBeNull()   // 什么都没发出去，别说"可能已提交"
+  })
+
+  // ---- 一次进入：登录那一跳交过来的上下文 ----------------------------------------------------------
+
+  it('picks up the context the school login handed over, without it ever being in this URL', async () => {
+    const TASK = `p09g.${'e'.repeat(240)}.${'s'.repeat(43)}`
+    resetTaskContexts()
+    setTaskContext(null)
+    carryTaskContext(TASK)                                   // 登录落地页刚交过来的那一个
+    routes({ links: [] })
+    window.history.replaceState({}, '', '/html-editor?project=3')   // 地址栏干干净净
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    // 学生看到的是"可以关联"，不是"没有作业上下文"——不用回 edu 点第二次。
+    const link = await screen.findByTestId('p09-link')
+    expect(link).toBeTruthy()
+    expect(screen.queryByTestId('p09-no-context')).toBeNull()
+    expect(window.location.hash).toBe('')
+    expect(api.post).not.toHaveBeenCalled()                  // 关联仍然只由学生点出来
+    fireEvent.click(link)
+    fireEvent.click(await screen.findByRole('button', { name: 'htmlEditor.p09.confirmLink' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+    expect(api.post.mock.calls[0][2].headers['X-P09-Task-Context']).toBe(TASK)
+  })
+
+  it('shows the plain no-context state when the login handed nothing over', async () => {
+    resetTaskContexts()
+    setTaskContext(null)
+    routes({ links: [] })
+    window.history.replaceState({}, '', '/html-editor?project=3')
+    render(<TaskArtifactPanel project={project} pages={pages} />)
+    await waitFor(() => expect(screen.getByTestId('p09-no-context')).toBeTruthy())
+    expect(screen.queryByTestId('p09-link')).toBeNull()
   })
 
   it('a double click is one submission', async () => {

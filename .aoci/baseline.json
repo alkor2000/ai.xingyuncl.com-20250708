@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-24T10:02:49Z",
+  "updated_at": "2026-09-24T10:40:42Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "37a6b0146388e75ea83b181a4069ddfa12cf5f62a22c5242f4d1e59f274b6061",
-      "size": 374898,
-      "normalized_sha256": "37a6b0146388e75ea83b181a4069ddfa12cf5f62a22c5242f4d1e59f274b6061"
+      "sha256": "0373888520f354133f0b24b99b5fa696c66b5cfcd91d7bbc6a12839f6e597f49",
+      "size": 376821,
+      "normalized_sha256": "0373888520f354133f0b24b99b5fa696c66b5cfcd91d7bbc6a12839f6e597f49"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2510,6 +2510,11 @@
       "size": 756,
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
     },
+    "docs/integrations/E09-ONE-ENTRY-TEST.md": {
+      "sha256": "eb5bf8a7cabb2c458d81fdbac8c5d04bd09bd8dcbed12b904232cd6ce5446a3c",
+      "size": 4568,
+      "normalized_sha256": "eb5bf8a7cabb2c458d81fdbac8c5d04bd09bd8dcbed12b904232cd6ce5446a3c"
+    },
     "docs/integrations/E09-SUBMIT-TEST.md": {
       "sha256": "930d7d3aec222c6c308dd4671f29edd0b0abb5a069afeed27eae7595abc2e434",
       "size": 6609,
@@ -2584,6 +2589,11 @@
       "sha256": "64b0f1bf93747930b7109bad5e9ea484677d9ec8e35b0b13a69026c020d42d59",
       "size": 12563,
       "normalized_sha256": "64b0f1bf93747930b7109bad5e9ea484677d9ec8e35b0b13a69026c020d42d59"
+    },
+    "docs/integrations/e09-one-entry-candidate.md": {
+      "sha256": "e1e3677ef2f4ae242c270fa1f3a1d609f996e78fa61823271408f62f4aa33060",
+      "size": 8752,
+      "normalized_sha256": "e1e3677ef2f4ae242c270fa1f3a1d609f996e78fa61823271408f62f4aa33060"
     },
     "docs/integrations/p03-admission-checklist.md": {
       "sha256": "5f4377170ee9209eb77c5ee008ea9cbc149c84599ce3260f237c5cd17e6bcfe5",
@@ -2828,15 +2838,15 @@
     },
     "frontend/src/__tests__/unit/components/StudentEntry.test.jsx": {
       "role": "observe",
-      "sha256": "a3b74c54d27d5db5105930e5f600e64c0c72589174c1ba2d49411a5f2c68bf79",
-      "size": 7984,
-      "normalized_sha256": "a3b74c54d27d5db5105930e5f600e64c0c72589174c1ba2d49411a5f2c68bf79"
+      "sha256": "6166746ce992423005bc5c8638a16f60c2953fba781f0f53afb58042ef5b29c0",
+      "size": 16210,
+      "normalized_sha256": "6166746ce992423005bc5c8638a16f60c2953fba781f0f53afb58042ef5b29c0"
     },
     "frontend/src/__tests__/unit/components/TaskArtifactPanel.test.jsx": {
       "role": "observe",
-      "sha256": "98efd25aa58d20d2d5c14c59754c6ff7e1fcec9424ace7a421579627e7bc68d7",
-      "size": 15471,
-      "normalized_sha256": "98efd25aa58d20d2d5c14c59754c6ff7e1fcec9424ace7a421579627e7bc68d7"
+      "sha256": "0326732363e4aa050d44d0f9eb0a56ebb5212611f76e5a38f8f5507f554f50d1",
+      "size": 17296,
+      "normalized_sha256": "0326732363e4aa050d44d0f9eb0a56ebb5212611f76e5a38f8f5507f554f50d1"
     },
     "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
       "role": "observe",
@@ -3684,9 +3694,9 @@
       "normalized_sha256": "15f2ea46b5ce4208e8f048e1f943827b1ef5a10b2c0b718b6b3bf04bfef35cf6"
     },
     "frontend/src/components/htmlEditor/TaskArtifactPanel.jsx": {
-      "sha256": "4c38531b76341876029291f382aee1a770bdd4179ddffe6a33ac06cefe581f95",
-      "size": 15253,
-      "normalized_sha256": "4c38531b76341876029291f382aee1a770bdd4179ddffe6a33ac06cefe581f95"
+      "sha256": "d528605ec01b4e20e2c99814137b99a32bcef45253401277250214dc95b949c4",
+      "size": 16360,
+      "normalized_sha256": "d528605ec01b4e20e2c99814137b99a32bcef45253401277250214dc95b949c4"
     },
     "frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx": {
       "role": "index",
@@ -4616,9 +4626,9 @@
       "normalized_sha256": "f9e4a8860d565ba1e66885b132082e34316352df47e0e117694bba73b602b4ae"
     },
     "frontend/src/pages/auth/StudentEntryConsume.jsx": {
-      "sha256": "2fbb213c9cc1ac86fafb49860c7c4a29648de1cb8f6a95262d749346e84900a5",
-      "size": 5500,
-      "normalized_sha256": "2fbb213c9cc1ac86fafb49860c7c4a29648de1cb8f6a95262d749346e84900a5"
+      "sha256": "aae0c2a09bc2dc66b2d71779176083751fc5f6c7d965c8c4ca0cef8841456250",
+      "size": 8773,
+      "normalized_sha256": "aae0c2a09bc2dc66b2d71779176083751fc5f6c7d965c8c4ca0cef8841456250"
     },
     "frontend/src/pages/calendar/Calendar.jsx": {
       "role": "index",
@@ -5321,6 +5331,11 @@
       "sha256": "2651a1deef2e70cadaad182e89c8aa903e04d43a0a4c38ddb822863b7a661c64",
       "size": 2525,
       "normalized_sha256": "2651a1deef2e70cadaad182e89c8aa903e04d43a0a4c38ddb822863b7a661c64"
+    },
+    "frontend/src/utils/taskContextHandoff.js": {
+      "sha256": "b4f92e8462eaf7cb03064d6f364e4bb71831d142f2fa51390bf5a5477b66bf97",
+      "size": 4149,
+      "normalized_sha256": "b4f92e8462eaf7cb03064d6f364e4bb71831d142f2fa51390bf5a5477b66bf97"
     },
     "frontend/src/utils/tokenCalculator.js": {
       "role": "index",

@@ -5,11 +5,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const readline = require('node:readline');
 const path = require('node:path');
 
-const state = { browser: null, context: null, page: null, web: null, evidence: null, requests: [], external: [], errors: [], intercept: null };
+const state = { browser: null, context: null, page: null, web: null, evidence: null, requests: [], external: [], errors: [], intercept: null, console: [] };
 const answer = value => process.stdout.write(JSON.stringify(value) + '\n');
 
 function track(page) {
   page.on('pageerror', error => state.errors.push(String(error.message).slice(0, 200)));
+  // 只记"有没有把凭据写进控制台"，所以每条截短即可；原值绝不回传。
+  page.on('console', message => state.console.push(String(message.text()).slice(0, 300)));
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.origin !== state.web && !url.origin.startsWith('http://127.0.0.1') && !url.origin.includes('preview')) state.external.push(url.origin);
@@ -91,6 +93,60 @@ const commands = {
     state.web = command.web; state.evidence = command.evidence;
     state.browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
     return { ok: true };
+  },
+  // 一次学校登录直接进编辑器：没有任何既有会话，从 edu 给的那条 C05 消费链接开始，
+  // 作业上下文照 edu 的原样放在片段里。这里要证明的是"点一次就到了带作业的编辑器"，
+  // 以及"凭据没有留在地址栏、存储、请求或控制台里"。
+  async enterFromLogin(command) {
+    const page = await fresh(command.viewport);
+    state.requests = []; state.errors = []; state.console = [];
+    const url = `${state.web}/auth/sso/consume?handoff=${encodeURIComponent(command.handoff)}` +
+      (command.task_context ? `#p09_task=${encodeURIComponent(command.task_context)}` : '');
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    // 学生只做这一次点击（就是从 edu 点进来的那一次），之后完全不动手。
+    await page.waitForURL(u => !u.pathname.startsWith('/auth/sso/consume'), { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    const landed = new URL(page.url());
+    const compact = (page.viewportSize()?.width || 1280) < 992;
+    if (landed.pathname === '/html-editor' && command.project) {
+      if (compact) {
+        await page.getByRole('button', { name: '项目' }).first().click().catch(() => {});
+        await page.waitForTimeout(700);
+      }
+      const project = page.getByText(command.project, { exact: true }).first();
+      await project.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+      try { await project.click({ timeout: 8000 }); } catch { await project.evaluate(node => node.click()).catch(() => {}); }
+      await page.waitForTimeout(900);
+    }
+    const leak = await page.evaluate(() => {
+      const scan = store => {
+        const hits = [];
+        try {
+          for (let i = 0; i < store.length; i += 1) {
+            const key = store.key(i);
+            if (String(store.getItem(key) || '').includes('p09g.')) hits.push(key);
+          }
+        } catch { hits.push('unreadable'); }
+        return hits;
+      };
+      return { local: scan(window.localStorage), session: scan(window.sessionStorage),
+        cookie: document.cookie.includes('p09g.'), hash: window.location.hash, search: window.location.search };
+    });
+    const visible = await panel().count();
+    if (command.screenshot) await shot(command.screenshot);
+    return { ok: true, landed_path: landed.pathname,
+      url_has_context: page.url().includes('p09_task') || page.url().includes('p09g.'),
+      url_has_handoff: page.url().includes('handoff'),
+      panel_visible: visible > 0,
+      link_button: visible ? await panel().getByTestId('p09-link').count() : 0,
+      no_context_hint: visible ? await panel().getByTestId('p09-no-context').count() : 0,
+      storage_hits: leak.local.concat(leak.session), cookie_leak: leak.cookie,
+      residual_hash: leak.hash, residual_search: leak.search,
+      console_leak: state.console.filter(line => line.includes('p09g.') || line.includes('p09_task')).length,
+      link_posts: state.requests.filter(r => r.method === 'POST' && /\/links$/.test(r.path)).length,
+      submit_posts: state.requests.filter(r => r.method === 'POST' && /\/submissions$/.test(r.path)).length,
+      context_in_request_url: state.requests.filter(r => String(r.path).includes('p09g.')).length,
+      errors: state.errors, requests: state.requests };
   },
   async open(command) {
     const page = await fresh(command.viewport);

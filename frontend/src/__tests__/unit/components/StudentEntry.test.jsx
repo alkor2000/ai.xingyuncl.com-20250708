@@ -6,6 +6,9 @@ import StudentLoginEntry from '../../../components/auth/StudentLoginEntry'
 import StudentEntryConsume from '../../../pages/auth/StudentEntryConsume'
 import api from '../../../utils/api'
 import useAuthStore from '../../../stores/authStore'
+import {
+  adoptTaskContext, carryTaskContext, currentTaskContext, resetTaskContexts, takeCarriedTaskContext
+} from '../../../utils/taskContextHandoff'
 
 vi.mock('../../../utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('react-i18next', async importOriginal => ({
@@ -19,9 +22,14 @@ const LAUNCH = 'https://edu.example.edu/sso/practice/launch?entry=dashboard'
 let issued = 0
 const ticket = () => String(issued++).padStart(43, 'h')
 
+// 一份形状合规的作业上下文：edu 签的那种 p09g.<载荷>.<签名>。内容是合成的，签名由后端校验，
+// 这一层只关心"有没有被带过去、会不会泄漏"。
+const TASK = `p09g.${'e'.repeat(240)}.${'s'.repeat(43)}`
+
 beforeEach(() => {
   vi.clearAllMocks()
   window.history.replaceState({}, '', '/')
+  resetTaskContexts()
 })
 
 const renderAt = (url, element, path) => render(
@@ -30,6 +38,7 @@ const renderAt = (url, element, path) => render(
       <Route path={path} element={element} />
       <Route path="/login" element={<div data-testid="login-page" />} />
       <Route path="/chat" element={<div data-testid="chat-page" />} />
+      <Route path="/html-editor" element={<div data-testid="editor-page" />} />
       <Route path="/dashboard" element={<div data-testid="dashboard-page" />} />
     </Routes>
   </MemoryRouter>
@@ -131,6 +140,150 @@ describe('C05 consume page', () => {
     expect(spy).toHaveBeenCalledTimes(1)
     // 除了那一次 consume，页面没有替学生发出任何请求（关联/提交都不在这里发生）
     expect(api.post).not.toHaveBeenCalled()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
+  // ---- 一次进入：登录成功之后，作业上下文还在不在 ------------------------------------------------
+
+  it('carries the assignment context through the login when the server lands on the editor', async () => {
+    const spy = loginWith(async () => ({ entry: 'ai-practice.html' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    expect(spy).toHaveBeenCalledWith(expect.any(String))      // 登录请求里只有 handoff
+    expect(spy.mock.calls[0]).toHaveLength(1)
+    expect(takeCarriedTaskContext()).toBe(TASK)               // 编辑器来取的时候还在
+  })
+
+  it('approves what the app parked at boot, which is how a real page load arrives', async () => {
+    // 真实浏览器里片段在应用启动时就被取走清掉了，等落地页渲染时地址上已经没有它——
+    // 这一例就是那条路径：页面自己看不到片段，只有寄存的那一个。
+    carryTaskContext(TASK)
+    loginWith(async () => ({ entry: 'ai-practice.html' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    expect(takeCarriedTaskContext()).toBe(TASK)
+  })
+
+  it('does not hand over what the app parked when the login lands anywhere else', async () => {
+    carryTaskContext(TASK)
+    loginWith(async () => ({ entry: 'ai-practice.chat' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('chat-page')
+    expect(takeCarriedTaskContext()).toBeNull()
+  })
+
+  it('never leaves the assignment context in the address bar, storage or a log line', async () => {
+    const stored = []
+    const setLocal = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((k, v) => { stored.push([k, v]) })
+    const logs = []
+    for (const level of ['log', 'info', 'warn', 'error']) {
+      vi.spyOn(console, level).mockImplementation((...args) => { logs.push(args.join(' ')) })
+    }
+    loginWith(async () => ({ entry: 'ai-practice.html' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    expect(window.location.hash).toBe('')
+    expect(window.location.search).toBe('')
+    expect(stored.some(([, value]) => String(value).includes(TASK))).toBe(false)
+    expect(document.cookie).not.toContain('p09g.')
+    expect(logs.some(line => line.includes(TASK))).toBe(false)
+    expect(logs.some(line => line.includes('p09_task'))).toBe(false)
+    setLocal.mockRestore()
+    vi.restoreAllMocks()
+  })
+
+  it('drops the context when the server lands anywhere but the editor', async () => {
+    loginWith(async () => ({ entry: 'ai-practice.chat' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('chat-page')
+    expect(takeCarriedTaskContext()).toBeNull()
+  })
+
+  it('drops the context when the login itself fails', async () => {
+    loginWith(async () => { throw new Error('refused') })
+    renderAt(`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByText(/学校账号登录未完成/)
+    expect(takeCarriedTaskContext()).toBeNull()
+  })
+
+  it('takes nothing from a duplicated, malformed or foreign fragment', async () => {
+    for (const fragment of [
+      `p09_task=${TASK}&p09_task=${TASK}`,               // 两个：不猜信哪个
+      'p09_task=../../admin',                            // 畸形
+      'p09_task=https://elsewhere.example/steal',        // 外部地址当上下文
+      'return_to=https://elsewhere.example/steal',       // 无关片段
+      `entry=ai-practice.html&p09_task=`                 // 空值
+    ]) {
+      loginWith(async () => ({ entry: 'ai-practice.html' }))
+      const view = renderAt(`/auth/sso/consume?handoff=${ticket()}#${fragment}`,
+        <StudentEntryConsume />, '/auth/sso/consume')
+      await screen.findByTestId('editor-page')            // 登录照常成功
+      expect(takeCarriedTaskContext()).toBeNull()         // 但什么都没带过去
+      view.unmount()
+    }
+  })
+
+  it('does not let one login’s context be picked up by the next login', async () => {
+    loginWith(async () => ({ entry: 'ai-practice.html' }))
+    const first = renderAt(`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`,
+      <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    adoptTaskContext(takeCarriedTaskContext())      // 编辑器面板拿走它，就像真的进了编辑器一样
+    expect(currentTaskContext()).toBe(TASK)
+    first.unmount()
+    // 第二次登录：另一张票、没有上下文。上一次那个不能被这次接着用。
+    loginWith(async () => ({ entry: 'ai-practice.html' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    expect(takeCarriedTaskContext()).toBeNull()
+    expect(currentTaskContext()).toBeNull()
+  })
+
+  it('spends one ticket once under StrictMode and still hands the context over', async () => {
+    const spy = loginWith(async () => ({ entry: 'ai-practice.html' }))
+    render(
+      <MemoryRouter initialEntries={[`/auth/sso/consume?handoff=${ticket()}#p09_task=${TASK}`]}>
+        <Routes>
+          <Route path="/auth/sso/consume" element={
+            <React.StrictMode><StudentEntryConsume /></React.StrictMode>} />
+          <Route path="/html-editor" element={<div data-testid="editor-page" />} />
+          <Route path="/login" element={<div data-testid="login-page" />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-page" />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    await screen.findByTestId('editor-page')
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(takeCarriedTaskContext()).toBe(TASK)
+  })
+
+  it('keeps the parked context through a StrictMode double effect, the real dev-mode path', async () => {
+    // 真实浏览器里两件事同时成立：片段在启动时就被取走寄存了，而 StrictMode 会把 effect 跑两遍。
+    // 判定是消耗性的，所以必须按票只判一次——否则第二遍拿到空手，学生的作业就没了。
+    carryTaskContext(TASK)
+    const spy = loginWith(async () => ({ entry: 'ai-practice.html' }))
+    render(
+      <MemoryRouter initialEntries={[`/auth/sso/consume?handoff=${ticket()}`]}>
+        <Routes>
+          <Route path="/auth/sso/consume" element={
+            <React.StrictMode><StudentEntryConsume /></React.StrictMode>} />
+          <Route path="/html-editor" element={<div data-testid="editor-page" />} />
+          <Route path="/login" element={<div data-testid="login-page" />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-page" />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    await screen.findByTestId('editor-page')
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(takeCarriedTaskContext()).toBe(TASK)
+  })
+
+  it('leaves a login without any context exactly as it was', async () => {
+    loginWith(async () => ({ entry: 'ai-practice.html' }))
+    renderAt(`/auth/sso/consume?handoff=${ticket()}`, <StudentEntryConsume />, '/auth/sso/consume')
+    await screen.findByTestId('editor-page')
+    expect(takeCarriedTaskContext()).toBeNull()
+    expect(api.post).not.toHaveBeenCalled()               // 落地页从不替学生关联或提交
     expect(api.get).not.toHaveBeenCalled()
   })
 

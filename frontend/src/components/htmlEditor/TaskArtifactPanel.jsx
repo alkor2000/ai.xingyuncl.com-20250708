@@ -3,6 +3,9 @@ import { Alert, Button, Descriptions, Modal, Select, Space, Tag, Typography } fr
 import { BookOutlined, EyeOutlined, LinkOutlined, PushpinOutlined, SendOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import api from '../../utils/api'
+import {
+  adoptTaskContext, carryTaskContext, currentTaskContext, readTaskContextFromHash, takeCarriedTaskContext
+} from '../../utils/taskContextHandoff'
 
 // "关联到教学任务": the student picks the entry page of one of their own projects and links it to the
 // task they arrived from. Everything about the task (assignment, school, their own student identity)
@@ -11,21 +14,34 @@ import api from '../../utils/api'
 const ROOT = '/p09/website-artifacts'
 // The task context is a credential. edu hands it over in the URL *fragment* (`#p09_task=…`): a fragment
 // is never sent to any server, never appears in an access log and never leaks through Referer. It is
-// kept in memory for this tab only, removed from the address bar at once, and never persisted.
-let taskContext = null
+// kept in memory for this tab only (utils/taskContextHandoff), removed from the address bar at once,
+// and never persisted. Two ways in, one holder: straight from this page's own fragment, or handed over
+// by the school login that just landed the student here — the student pressed once, so the editor must
+// not ask them to go back to edu for the same context.
+// Called at boot (main.jsx) before anything renders: get the credential out of the address bar at once
+// and *park* it. Parking, not using: on a school-login landing the consume page decides whether this
+// arrival may keep it, and only an editor landing does.
 export function captureTaskContext(hash = window.location.hash) {
+  const value = readTaskContextFromHash(hash)
+  if (!value) return null
+  carryTaskContext(value)
   try {
     const params = new URLSearchParams(String(hash || '').replace(/^#/, ''))
-    const value = params.get('p09_task')
-    if (!value) return taskContext
-    taskContext = value
     params.delete('p09_task')
     const rest = params.toString()
     window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}${rest ? `#${rest}` : ''}`)
   } catch { /* a hostile URL must not break the editor */ }
-  return taskContext
+  return value
 }
-export function setTaskContext(value) { taskContext = value || null }
+// The editor takes what is parked, exactly once, and holds it for this tab: the link request carries it
+// as a header. Arriving straight at /html-editor#p09_task=… and arriving through the school login are
+// the same thing here — by this point the value is parked either way.
+function adoptArrivedTaskContext() {
+  captureTaskContext()
+  if (!currentTaskContext()) adoptTaskContext(takeCarriedTaskContext())
+  return currentTaskContext()
+}
+export function setTaskContext(value) { adoptTaskContext(value) }
 
 let capabilityPromise = null
 export function loadCapability(client = api) {
@@ -63,7 +79,7 @@ export default function TaskArtifactPanel({ project, pages = [], client = api })
   const [error, setError] = useState(null)
   const [linking, setLinking] = useState(false)
   const [entryPageId, setEntryPageId] = useState(null)
-  const [context, setContext] = useState(() => captureTaskContext())
+  const [context, setContext] = useState(() => adoptArrivedTaskContext())
   // What edu answered about handing in, this session only. Nothing is remembered as 已交 across a
   // reload: the submission fact belongs to edu, and a stale tick here would be a lie about their state.
   const [submission, setSubmission] = useState(null)
