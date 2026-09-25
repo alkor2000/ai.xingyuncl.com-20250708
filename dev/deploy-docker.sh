@@ -205,7 +205,6 @@ for repo in ai-platform-backend ai-platform-frontend; do
     done
   done
 done
-docker image prune -f >/dev/null 2>&1 || true
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"
 echo "    发布目录: $REL"
 echo "REMOTE_DONE"

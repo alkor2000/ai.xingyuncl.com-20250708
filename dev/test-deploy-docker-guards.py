@@ -156,5 +156,89 @@ esac
         self.assertNotIn("scp", self.trace.read_text())
 
 
+class RemoteSuccessCleanupTests(unittest.TestCase):
+    """Run the successful remote path against fake commands, never Docker or SSH."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.remote = base / "remote"
+        (self.remote / "dev").mkdir(parents=True)
+        executable(self.remote / "dev" / "docker-release-preflight.sh", '''
+if [ "$1" = runtime ]; then echo CURRENT; fi
+''')
+        self.bin = base / "bin"
+        self.bin.mkdir()
+        self.trace = base / "docker-trace"
+        executable(self.bin / "docker", '''
+echo "docker $*" >> "$TRACE"
+if [[ "$1" == image && "$2" == inspect ]]; then echo sha256:old; exit 0; fi
+if [[ "$1" == inspect ]]; then
+  if [[ "$*" == *"{{.Config.Image}}"* ]]; then
+    case "$*" in *backend*) echo ai-platform-backend:v-old;; *) echo ai-platform-frontend:v-old;; esac
+  elif [[ "$*" == *"{{.State.Health.Status}}"* ]]; then echo healthy
+  elif [[ "$*" == *"{{.Image}}"* ]]; then echo sha256:running
+  fi
+  exit 0
+fi
+if [[ "$1" == exec ]]; then echo 'CREATE TABLE fake_backup (id INT);'; exit 0; fi
+if [[ "$1" == images ]]; then
+  for n in 1 2 3 4; do echo "v-abcdef0-2026092${n}_010000"; done
+  for n in 1 2 3 4; do echo "rollback-2026092${n}_010000"; done
+  exit 0
+fi
+if [[ "$1" == ps ]]; then echo 'ai-platform-backend running'; exit 0; fi
+if [[ "$1" == compose && " $* " == *" run "* ]]; then echo 'migration applied'; exit 0; fi
+exit 0
+''')
+        executable(self.bin / "git", '''
+if [[ "$*" == 'rev-parse HEAD' ]]; then echo abcdef0123456789; fi
+''')
+        self.env = os.environ | {
+            "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
+            "TRACE": str(self.trace),
+        }
+        self.backups = base / "backups"
+
+    def run_remote(self, add_unsafe_prune=False):
+        script = DEPLOY.read_text()
+        marker = '<<\'REMOTE\' | tee "$REMOTE_LOG"\n'
+        start = script.index(marker) + len(marker)
+        end = script.index("\nREMOTE\n", start)
+        body = script[start:end].replace(
+            "/var/backups/ai-platform", str(self.backups)) + "\n"
+        if add_unsafe_prune:
+            body = body.replace('echo "    磁盘:',
+                                'docker image prune -f >/dev/null 2>&1 || true\n'
+                                'echo "    磁盘:', 1)
+        self.trace.write_text("")
+        result = subprocess.run(
+            ["bash", "-s", str(self.remote), "abcdef0", "3", "8", "5120", "100000"],
+            input=body, env=self.env, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("REMOTE_DONE", result.stdout)
+        return self.trace.read_text().splitlines()
+
+    def test_success_path_keeps_scoped_retention_without_global_prune(self):
+        unsafe_trace = self.run_remote(add_unsafe_prune=True)
+        self.assertTrue(any("docker image prune -f" in call for call in unsafe_trace),
+                        "negative control must reach the old unsafe cleanup")
+
+        trace = self.run_remote()
+        self.assertFalse(any("docker image prune" in call for call in trace))
+        self.assertTrue(any(call.startswith("docker rmi ai-platform-backend:") for call in trace))
+        self.assertTrue(any(call.startswith("docker rmi ai-platform-frontend:") for call in trace))
+        rollback = next(i for i, call in enumerate(trace)
+                        if call.startswith("docker tag sha256:running ai-platform-backend:rollback-"))
+        backup = next(i for i, call in enumerate(trace) if call.startswith("docker exec ai-platform-mysql"))
+        switch = next(i for i, call in enumerate(trace) if "compose " in call and " up -d " in call)
+        cleanup = next(i for i, call in enumerate(trace) if call.startswith("docker rmi "))
+        self.assertLess(rollback, backup)
+        self.assertLess(backup, switch)
+        self.assertLess(switch, cleanup)
+
+
 if __name__ == "__main__":
     unittest.main()
