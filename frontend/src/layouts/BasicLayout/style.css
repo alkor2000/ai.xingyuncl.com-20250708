@@ -449,3 +449,17 @@
   .basic-layout-header .user-info { padding: 6px 8px; }
   .basic-layout-header .header-logo { padding-inline: 0; flex-shrink: 0; }
 }
+
+/* Only chat uses a single mobile header; other routes retain the site chrome. */
+.basic-layout.basic-layout-chat-mobile {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  padding-top: env(safe-area-inset-top);
+}
+.basic-layout-chat-mobile > .basic-layout-body { min-height: 0; height: 100%; }
+.basic-layout-chat-mobile .basic-layout-content { overflow: hidden; }
+.chat-site-drawer .chat-site-account { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+.chat-site-drawer .chat-site-account > span { width: 100%; overflow-wrap: anywhere; }
+.chat-site-drawer .ant-btn { min-height: 44px; }
+.chat-site-drawer .ant-btn-block { margin-top: 12px; }

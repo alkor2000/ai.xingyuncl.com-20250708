@@ -1031,3 +1031,47 @@
     .right-tools { margin-left: auto; }
   }
 }
+
+// Keep messages visible while the composer grows or the keyboard reduces height.
+@media (max-width: 1024px) {
+  .chat-mobile-container .mobile-chat-view .mobile-chat-content {
+    min-height: 0;
+    height: auto;
+    .mobile-messages-container { min-height: 0; overscroll-behavior-y: contain; }
+    .mobile-input-container {
+      padding: 6px 8px max(6px, env(safe-area-inset-bottom));
+      .mobile-composer-meta {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        margin-bottom: 4px;
+        .model-selector-button { flex: 1; min-width: 0; max-width: 100%; width: auto !important; min-height: 36px; }
+        .model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .credits-display { flex-shrink: 0; }
+        .summary-expand-button { flex-shrink: 0; min-height: 44px; padding-inline: 8px; }
+      }
+      .input-container .input-wrapper {
+        gap: 6px;
+        .message-input { min-width: 0; min-height: 44px; padding: 8px 10px; max-height: min(130px, 24dvh) !important; overflow-y: auto !important; }
+        .mobile-tools-trigger { flex-shrink: 0; width: 40px; height: 44px; padding: 0; font-size: 20px; }
+      }
+      .uploaded-images-preview { flex-wrap: nowrap !important; overflow-x: auto; max-height: 84px; }
+      .uploaded-images-preview > .ant-badge { flex-shrink: 0; }
+      .uploaded-document-preview { max-height: 84px; overflow: auto; }
+    }
+  }
+  .chat-mobile-container .mobile-header {
+    gap: 4px; padding: 6px 8px; flex-shrink: 0;
+    h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ant-btn { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  }
+  .chat-mobile-container .mobile-conversations-list { min-height: 0; overflow-y: auto; }
+}
+.chat-tools-drawer {
+  .input-header, .left-tools, .right-tools .ant-space { display: flex; flex-wrap: wrap; gap: 8px; }
+  .input-header { flex-direction: column; }
+  .left-tools > .ant-upload-wrapper { display: inline-block; }
+  .ant-btn { min-height: 44px; height: auto; white-space: normal; text-align: start; }
+  .context-token-indicator { flex-basis: 100%; }
+}

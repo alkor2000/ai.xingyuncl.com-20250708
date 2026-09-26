@@ -526,5 +526,12 @@
   "chat.handoff.error.snapshot_unavailable": "This save expired or does not exist; select again.",
   "chat.handoff.error.operation_busy": "The same save is being processed; try again shortly.",
   "chat.handoff.error.binding_mismatch": "Source version mismatch; select again.",
-  "chat.handoff.error.invalid_request": "Invalid request; reload the page and retry."
+  "chat.handoff.error.invalid_request": "Invalid request; reload the page and retry.",
+  "chat.mobile.siteMenu": "Navigation and account",
+  "chat.mobile.more": "Conversation actions",
+  "chat.mobile.tools": "Tools and attachments",
+  "chat.mobile.message": "Message",
+  "chat.mobile.removeImage": "Remove image: {{name}}",
+  "chat.mobile.removeDocument": "Remove document",
+  "chat.summary.confirm": "Generate summary (current model charges apply)"
 }

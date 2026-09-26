@@ -85,7 +85,7 @@
  *   - 滚动逻辑优化，解决代码块输出时的滚动冲突
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, useContext } from 'react'
 import { Layout, Modal, Form, message, Spin, Drawer, Button, Dropdown } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -109,6 +109,7 @@ import {
   HtmlCanvasPanel
 } from '../../components/chat/new'
 
+import { MobileChatNavigationContext } from '../../layouts/BasicLayout'
 import './Chat.less'
 
 // 设置全局引用供authStore使用
@@ -170,6 +171,7 @@ const Chat = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
+  const openSiteMenu = useContext(MobileChatNavigationContext)
 
   // 从store获取状态和方法
   const {
@@ -344,9 +346,20 @@ const Chat = () => {
     }
   }, [currentConversationId, isMobile])
 
-  // 切换对话时清空输入、重置滚动、重置画布临时关闭状态、恢复该会话的输出格式
+  // Keep in-progress drafts and selected attachments with their conversation.
+  const draftsRef = useRef(new Map())
+  const draftConversationRef = useRef(currentConversationId)
+  const draftRef = useRef(null)
+  draftRef.current = { inputValue, uploadedImages, uploadedDocument }
   useEffect(() => {
-    setInputValue('')
+    if (draftConversationRef.current !== currentConversationId) {
+      if (draftConversationRef.current) draftsRef.current.set(draftConversationRef.current, draftRef.current)
+      const draft = draftsRef.current.get(currentConversationId)
+      setInputValue(draft?.inputValue || '')
+      setUploadedImages(draft?.uploadedImages || [])
+      setUploadedDocument(draft?.uploadedDocument || null)
+      draftConversationRef.current = currentConversationId
+    }
     setUserScrolled(false)
     setLastScrollTop(0)
     setCanvasDismissed(false)
@@ -790,7 +803,7 @@ const Chat = () => {
   // 白名单中不含 is_active 字段，旧的 filter(m => m.is_active) 会因字段缺失把列表
   // 全部过滤为空，导致模型选择器"暂无数据"。此处直接透传 aiModels 即可。
   const availableModels = aiModels
-  const summaryAction = <DiscussionSummary key={currentConversationId}
+  const summaryAction = <DiscussionSummary key={currentConversationId} compact={isMobile}
     available={messages.some(item => item.role === 'assistant' && !item.temp && !item.error && !item.streaming && (!item.status || item.status === 'completed'))}
     disabled={messagesLoading || typing || isStreaming || isSending}
     onSummarize={handleSummarize} />
@@ -831,7 +844,8 @@ const Chat = () => {
     onRemoveDocument: () => setUploadedDocument(null),
     onExportChat: handleExportChat,
     onClearChat: handleClearChat,
-    onModelChange: handleModelChange
+    onModelChange: handleModelChange,
+    summaryAction: isMobile ? summaryAction : null
   }
 
   // ================================================================
@@ -839,6 +853,7 @@ const Chat = () => {
   // ================================================================
 
   const chatMenuItems = [
+    ...(openSiteMenu ? [{ key: 'site', icon: <MenuOutlined />, label: t('chat.mobile.siteMenu'), onClick: openSiteMenu }] : []),
     { key: 'home', icon: <HomeOutlined />, label: t('chat.menu.backToDashboard'), onClick: handleBackToHome },
     { key: 'settings', icon: <SettingOutlined />, label: t('chat.conversation.settings'), onClick: () => { if (currentConversation) handleEditConversation(currentConversation) } },
     { key: 'conversations', icon: <MenuOutlined />, label: t('chat.conversations'), onClick: () => setMobileDrawerVisible(true) }
@@ -851,9 +866,10 @@ const Chat = () => {
   const renderMobileListView = () => (
     <div className="mobile-conversations-view">
       <div className="mobile-header">
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleBackToHome} style={{ marginRight: 8 }} />
-        <h3 style={{ flex: 1, margin: 0 }}>{t('chat.conversations')}</h3>
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleBackToHome} aria-label={t('chat.menu.backToDashboard')} style={{ marginRight: 8 }} />
+        <h3 style={{ flex: 1, minWidth: 0, margin: 0 }}>{t('chat.conversations')}</h3>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowNewChatModal(true)}>{t('chat.new')}</Button>
+        {openSiteMenu && <Button type="text" icon={<MenuOutlined />} aria-label={t('chat.mobile.siteMenu')} onClick={openSiteMenu} />}
       </div>
       <div className="mobile-conversations-list">
         <ConversationSidebar conversations={conversations} conversationsLoading={conversationsLoading}
@@ -870,10 +886,10 @@ const Chat = () => {
   const renderMobileChatView = () => (
     <div className="mobile-chat-view">
       <div className="mobile-chat-header">
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleMobileBack} />
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleMobileBack} aria-label={t('chat.conversations')} />
         <div className="mobile-chat-title">{currentConversation?.title || t('chat.newConversation')}</div>
         <Dropdown menu={{ items: chatMenuItems }} trigger={['click']} placement="bottomRight">
-          <Button type="text" icon={<MoreOutlined />} />
+          <Button type="text" icon={<MoreOutlined />} aria-label={t('chat.mobile.more')} />
         </Dropdown>
       </div>
       <div className="mobile-chat-content">
@@ -891,7 +907,6 @@ const Chat = () => {
               <div ref={messagesEndRef} />
             </div>
             <div className="mobile-input-container">
-              {summaryAction}
               <ChatInputArea {...inputAreaProps} />
             </div>
           </>

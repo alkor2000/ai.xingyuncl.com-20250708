@@ -74,6 +74,7 @@ import {
   Space,
   Typography,
   Dropdown,
+  Drawer,
   message as antMessage
 } from 'antd'
 import {
@@ -92,7 +93,8 @@ import {
   FilePptOutlined,
   FileWordOutlined,
   FilePdfOutlined,
-  DownOutlined
+  DownOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import ModelSelector from './ModelSelector'
@@ -119,11 +121,11 @@ const DOCUMENT_ACCEPT =
 
 // ==================== 响应式与布局 ====================
 /** 移动端断点，须与 Chat.less 的媒体查询保持一致 */
-const MOBILE_BREAKPOINT = 768
+const MOBILE_BREAKPOINT = 1024
 
 /** 输入框行数：移动端与 PC 端分别配置 */
 const TEXTAREA_ROWS = {
-  mobile: { min: 2, max: 8 },
+  mobile: { min: 1, max: 4 },
   desktop: { min: 3, max: 16 }
 }
 
@@ -208,7 +210,8 @@ const ChatInputArea = forwardRef(({
   onKeyPress,
   onExportChat,
   onClearChat,
-  onModelChange
+  onModelChange,
+  summaryAction
 }, ref) => {
   // i18n 实例用于 toLocaleString 取当前语言，t 用于文案
   const { t, i18n } = useTranslation()
@@ -221,6 +224,7 @@ const ChatInputArea = forwardRef(({
 
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT)
+  const [toolsOpen, setToolsOpen] = useState(false)
   const [docTemplateOpen, setDocTemplateOpen] = useState(false)
 
   useEffect(() => {
@@ -346,6 +350,7 @@ const ChatInputArea = forwardRef(({
       const validFiles = filesToUpload.filter(f => f.size <= MAX_IMAGE_SIZE)
       if (validFiles.length > 0) {
         onImageUpload(validFiles)
+        setToolsOpen(false)
       }
     }
 
@@ -374,7 +379,7 @@ const ChatInputArea = forwardRef(({
   }
 
   /**
-   * 输出格式下拉菜单（仅 PC 端：画布与下载都只在 PC 端可用，移动端不给入口以免走进死胡同）
+   * 输出格式选择在桌面工具栏或手机工具抽屉中提供。
    */
   const activeFormat = OUTPUT_FORMAT_OPTIONS.find(o => o.key === outputFormat) || OUTPUT_FORMAT_OPTIONS[0]
   const formatActive = activeFormat.key !== 'none'
@@ -453,6 +458,177 @@ const ChatInputArea = forwardRef(({
 
   const textareaRows = isMobile ? TEXTAREA_ROWS.mobile : TEXTAREA_ROWS.desktop
 
+  const toolbar = (
+    <div className="input-header">
+        <div className="left-tools">
+          {!isMobile && <ModelSelector
+            currentModel={currentModel}
+            availableModels={availableModels}
+            onModelChange={onModelChange}
+            disabled={typing || isStreaming}
+            isMobile={isMobile}
+          />}
+
+          {/* 输出格式选择：普通对话 / 网页 / PPT / Word / PDF */}
+          {onOutputFormatChange && (
+            <Dropdown menu={outputFormatMenu} trigger={['click']} disabled={typing || isStreaming}>
+              <Tooltip title={t('chat.outputFormat.tooltip')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<activeFormat.Icon />}
+                  className={`output-format-btn ${formatActive ? 'format-active' : ''}`}
+                  disabled={typing || isStreaming}
+                >
+                  {formatActive ? t(`chat.outputFormat.${activeFormat.key}`) : t('chat.outputFormat.label')}
+                  <DownOutlined style={{ fontSize: 10, marginLeft: 2 }} />
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          )}
+
+          {/* 公文模板库：上传单位的 Word 样板，AI 写的公文或自己的草稿按它生成 .docx */}
+          {onOutputFormatChange && (
+            <>
+              <Tooltip title={t('chat.docTemplate.inputButtonTip')}>
+                <Button type="text" size="small" icon={<FileWordOutlined />} aria-label={t('chat.docTemplate.inputButton')} className="output-format-btn" onClick={() => { setToolsOpen(false); setDocTemplateOpen(true) }}>
+                  {t('chat.docTemplate.inputButton')}
+                </Button>
+              </Tooltip>
+            </>
+          )}
+
+          {/* 图片上传按钮 - 支持多选，未达上限且无文档时显示 */}
+          {imageUploadEnabled && !uploadedDocument && !isImageLimitReached && (
+            <Upload
+              beforeUpload={handleBeforeUpload}
+              showUploadList={false}
+              accept="image/*"
+              multiple
+              disabled={uploading || typing || isStreaming}
+            >
+              <Tooltip title={getImageUploadTooltip()}>
+                <Button aria-label={t('chat.upload.image')}
+                  type="text"
+                  icon={<PictureOutlined />}
+                  loading={uploading}
+                  disabled={typing || isStreaming}
+                  className="mobile-action-btn"
+                >{isMobile && t('chat.upload.image')}</Button>
+              </Tooltip>
+            </Upload>
+          )}
+
+          {/* 文档上传按钮 - 无图片上传时才显示 */}
+          {documentUploadEnabled && uploadedImages.length === 0 && !uploadedDocument && (
+            <Upload
+              beforeUpload={file => { onDocumentUpload?.(file); setToolsOpen(false); return false }}
+              showUploadList={false}
+              accept={DOCUMENT_ACCEPT}
+              disabled={uploading || typing || isStreaming}
+            >
+              <Tooltip title={isMobile ? '' : t('chat.upload.document')}>
+                <Button aria-label={t('chat.upload.document')}
+                  type="text"
+                  icon={<FileTextOutlined />}
+                  loading={uploading}
+                  disabled={typing || isStreaming}
+                  className="mobile-action-btn"
+                >{isMobile && t('chat.upload.document')}</Button>
+              </Tooltip>
+            </Upload>
+          )}
+
+          {/* 上下文Token数量显示 */}
+          {contextTokens > 0 && (
+            <Tooltip title={getTokenTooltip()}>
+              <span className="context-token-indicator" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: isMobile ? '2px 6px' : '2px 8px',
+                borderRadius: '10px',
+                fontSize: isMobile ? '11px' : '12px',
+                color: getTokenColor(contextTokens),
+                background: 'rgba(0,0,0,0.04)',
+                cursor: 'default',
+                whiteSpace: 'nowrap',
+                lineHeight: '20px',
+                userSelect: 'none'
+              }}>
+                <DatabaseOutlined style={{ fontSize: isMobile ? '11px' : '12px' }} />
+                <span>{isMobile ? getTokenTooltip() : formatTokenCount(contextTokens)}</span>
+              </span>
+            </Tooltip>
+          )}
+        </div>
+
+        <div className="right-tools">
+          <Space size={4}>
+            {/* 思考过程开关按钮 - 仅PC端显示 */}
+            {onToggleThinking && (
+              <Tooltip title={
+                showThinking
+                  ? t('chat.thinking.hide')
+                  : t('chat.thinking.show')
+              }>
+                <Button aria-label={t(showThinking ? 'chat.thinking.hide' : 'chat.thinking.show')}
+                  type="text"
+                  icon={<BulbOutlined />}
+                  onClick={onToggleThinking}
+                  className={`mobile-action-btn thinking-toggle-btn ${showThinking ? 'thinking-active' : ''}`}
+                  style={{
+                    color: showThinking ? '#fa8c16' : undefined,
+                    background: showThinking ? 'rgba(250, 140, 22, 0.08)' : undefined,
+                    borderRadius: '6px'
+                  }}
+                >{isMobile && t(showThinking ? 'chat.thinking.hide' : 'chat.thinking.show')}</Button>
+              </Tooltip>
+            )}
+
+            {/* HTML画布开关按钮 - 仅PC端显示 */}
+            {onToggleCanvas && (
+              <Tooltip title={
+                canvasEnabled
+                  ? t('chat.canvas.disable')
+                  : t('chat.canvas.enable')
+              }>
+                <Button aria-label={t(canvasEnabled ? 'chat.canvas.disable' : 'chat.canvas.enable')}
+                  type="text"
+                  icon={<CodeOutlined />}
+                  onClick={onToggleCanvas}
+                  className={`mobile-action-btn canvas-toggle-btn ${canvasEnabled ? 'canvas-active' : ''}`}
+                  style={{
+                    color: canvasEnabled ? '#1890ff' : undefined,
+                    background: canvasEnabled ? 'rgba(24, 144, 255, 0.08)' : undefined,
+                    borderRadius: '6px'
+                  }}
+                >{isMobile && t(canvasEnabled ? 'chat.canvas.disable' : 'chat.canvas.enable')}</Button>
+              </Tooltip>
+            )}
+            <Tooltip title={isMobile ? '' : t('chat.export')}>
+              <Button aria-label={t('chat.export')}
+                type="text"
+                icon={<DownloadOutlined />}
+                onClick={onExportChat}
+                disabled={!hasMessages || typing || isStreaming}
+                className="mobile-action-btn"
+              >{isMobile && t('chat.export')}</Button>
+            </Tooltip>
+            <Tooltip title={isMobile ? '' : t('chat.clear')}>
+              <Button aria-label={t('chat.clear')}
+                type="text"
+                icon={<ClearOutlined />}
+                onClick={onClearChat}
+                disabled={!hasMessages || typing || isStreaming}
+                className="mobile-action-btn"
+              >{isMobile && t('chat.clear')}</Button>
+            </Tooltip>
+          </Space>
+        </div>
+      </div>
+  )
+
   return (
     <div className="input-container" ref={inputWrapperRef}>
       {/* 多图预览区域 */}
@@ -472,6 +648,7 @@ const ChatInputArea = forwardRef(({
                   type="text"
                   size="small"
                   icon={<CloseOutlined />}
+                  aria-label={t('chat.mobile.removeImage', { name: img.original_name })}
                   onClick={() => onRemoveImage && onRemoveImage(index)}
                   className="remove-image-btn"
                   style={{
@@ -520,6 +697,7 @@ const ChatInputArea = forwardRef(({
                 type="text"
                 size="small"
                 icon={<CloseOutlined />}
+                aria-label={t('chat.mobile.removeDocument')}
                 onClick={onRemoveDocument}
                 className="remove-document-btn"
               />
@@ -539,181 +717,27 @@ const ChatInputArea = forwardRef(({
         </div>
       )}
 
-      {/* 模型选择器和工具栏 */}
-      <div className="input-header">
-        <div className="left-tools">
-          <ModelSelector
-            currentModel={currentModel}
-            availableModels={availableModels}
-            onModelChange={onModelChange}
-            disabled={typing || isStreaming}
-            isMobile={isMobile}
-          />
-
-          {/* 输出格式选择：普通对话 / 网页 / PPT / Word / PDF */}
-          {onOutputFormatChange && (
-            <Dropdown menu={outputFormatMenu} trigger={['click']} disabled={typing || isStreaming}>
-              <Tooltip title={t('chat.outputFormat.tooltip')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<activeFormat.Icon />}
-                  className={`output-format-btn ${formatActive ? 'format-active' : ''}`}
-                  disabled={typing || isStreaming}
-                >
-                  {formatActive ? t(`chat.outputFormat.${activeFormat.key}`) : t('chat.outputFormat.label')}
-                  <DownOutlined style={{ fontSize: 10, marginLeft: 2 }} />
-                </Button>
-              </Tooltip>
-            </Dropdown>
-          )}
-
-          {/* 公文模板库：上传单位的 Word 样板，AI 写的公文或自己的草稿按它生成 .docx */}
-          {onOutputFormatChange && (
-            <>
-              <Tooltip title={t('chat.docTemplate.inputButtonTip')}>
-                <Button type="text" size="small" icon={<FileWordOutlined />} className="output-format-btn" onClick={() => setDocTemplateOpen(true)}>
-                  {t('chat.docTemplate.inputButton')}
-                </Button>
-              </Tooltip>
-              <DocTemplateManager open={docTemplateOpen} onClose={() => setDocTemplateOpen(false)} />
-            </>
-          )}
-
-          {/* 图片上传按钮 - 支持多选，未达上限且无文档时显示 */}
-          {imageUploadEnabled && !uploadedDocument && !isImageLimitReached && (
-            <Upload
-              beforeUpload={handleBeforeUpload}
-              showUploadList={false}
-              accept="image/*"
-              multiple
-              disabled={uploading || typing || isStreaming}
-            >
-              <Tooltip title={getImageUploadTooltip()}>
-                <Button
-                  type="text"
-                  icon={<PictureOutlined />}
-                  loading={uploading}
-                  disabled={typing || isStreaming}
-                  className="mobile-action-btn"
-                />
-              </Tooltip>
-            </Upload>
-          )}
-
-          {/* 文档上传按钮 - 无图片上传时才显示 */}
-          {documentUploadEnabled && uploadedImages.length === 0 && !uploadedDocument && (
-            <Upload
-              beforeUpload={onDocumentUpload}
-              showUploadList={false}
-              accept={DOCUMENT_ACCEPT}
-              disabled={uploading || typing || isStreaming}
-            >
-              <Tooltip title={isMobile ? '' : t('chat.upload.document')}>
-                <Button
-                  type="text"
-                  icon={<FileTextOutlined />}
-                  loading={uploading}
-                  disabled={typing || isStreaming}
-                  className="mobile-action-btn"
-                />
-              </Tooltip>
-            </Upload>
-          )}
-
-          {/* 上下文Token数量显示 */}
-          {contextTokens > 0 && (
-            <Tooltip title={getTokenTooltip()}>
-              <span className="context-token-indicator" style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                padding: isMobile ? '2px 6px' : '2px 8px',
-                borderRadius: '10px',
-                fontSize: isMobile ? '11px' : '12px',
-                color: getTokenColor(contextTokens),
-                background: 'rgba(0,0,0,0.04)',
-                cursor: 'default',
-                whiteSpace: 'nowrap',
-                lineHeight: '20px',
-                userSelect: 'none'
-              }}>
-                <DatabaseOutlined style={{ fontSize: isMobile ? '11px' : '12px' }} />
-                <span>{formatTokenCount(contextTokens)}</span>
-              </span>
-            </Tooltip>
-          )}
+      {isMobile ? <>
+        <div className="mobile-composer-meta">
+          <ModelSelector currentModel={currentModel} availableModels={availableModels}
+            onModelChange={onModelChange} disabled={typing || isStreaming} isMobile />
+          {summaryAction}
         </div>
-
-        <div className="right-tools">
-          <Space size={4}>
-            {/* 思考过程开关按钮 - 仅PC端显示 */}
-            {!isMobile && onToggleThinking && (
-              <Tooltip title={
-                showThinking
-                  ? t('chat.thinking.hide')
-                  : t('chat.thinking.show')
-              }>
-                <Button
-                  type="text"
-                  icon={<BulbOutlined />}
-                  onClick={onToggleThinking}
-                  className={`mobile-action-btn thinking-toggle-btn ${showThinking ? 'thinking-active' : ''}`}
-                  style={{
-                    color: showThinking ? '#fa8c16' : undefined,
-                    background: showThinking ? 'rgba(250, 140, 22, 0.08)' : undefined,
-                    borderRadius: '6px'
-                  }}
-                />
-              </Tooltip>
-            )}
-
-            {/* HTML画布开关按钮 - 仅PC端显示 */}
-            {!isMobile && onToggleCanvas && (
-              <Tooltip title={
-                canvasEnabled
-                  ? t('chat.canvas.disable')
-                  : t('chat.canvas.enable')
-              }>
-                <Button
-                  type="text"
-                  icon={<CodeOutlined />}
-                  onClick={onToggleCanvas}
-                  className={`mobile-action-btn canvas-toggle-btn ${canvasEnabled ? 'canvas-active' : ''}`}
-                  style={{
-                    color: canvasEnabled ? '#1890ff' : undefined,
-                    background: canvasEnabled ? 'rgba(24, 144, 255, 0.08)' : undefined,
-                    borderRadius: '6px'
-                  }}
-                />
-              </Tooltip>
-            )}
-            <Tooltip title={isMobile ? '' : t('chat.export')}>
-              <Button
-                type="text"
-                icon={<DownloadOutlined />}
-                onClick={onExportChat}
-                disabled={!hasMessages || typing || isStreaming}
-                className="mobile-action-btn"
-              />
-            </Tooltip>
-            <Tooltip title={isMobile ? '' : t('chat.clear')}>
-              <Button
-                type="text"
-                icon={<ClearOutlined />}
-                onClick={onClearChat}
-                disabled={!hasMessages || typing || isStreaming}
-                className="mobile-action-btn"
-              />
-            </Tooltip>
-          </Space>
-        </div>
-      </div>
+        <Drawer open={toolsOpen} onClose={() => setToolsOpen(false)} placement="bottom"
+          height="min(480px, 80dvh)" title={t('chat.mobile.tools')} rootClassName="chat-tools-drawer">
+          {toolbar}
+        </Drawer>
+      </> : toolbar}
+      <DocTemplateManager open={docTemplateOpen} onClose={() => setDocTemplateOpen(false)} />
 
       {/* 输入框 */}
       <div className="input-wrapper">
+        {isMobile && <Button type="text" icon={<PlusOutlined />} className="mobile-tools-trigger"
+          aria-label={t('chat.mobile.tools')} aria-expanded={toolsOpen}
+          onClick={() => { inputRef.current?.blur(); setToolsOpen(true) }} />}
         <TextArea
           ref={inputRef}
+          aria-label={t('chat.mobile.message')}
           value={inputValue}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={onKeyPress}
@@ -727,13 +751,14 @@ const ChatInputArea = forwardRef(({
         <div className="input-actions-right">
           {isStreaming ? (
             <Tooltip title={isMobile ? '' : t('chat.stop')}>
-              <Button type="primary" danger icon={<StopOutlined />} onClick={onStop} className="mobile-send-btn" />
+              <Button aria-label={t('chat.stop')} type="primary" danger icon={<StopOutlined />} onClick={onStop} className="mobile-send-btn" />
             </Tooltip>
           ) : (
             <Tooltip title={isMobile ? '' : t('chat.send')}>
               <Button
                 type="primary"
                 icon={<SendOutlined />}
+                aria-label={t('chat.send')}
                 onClick={onSend}
                 disabled={(!inputValue.trim() && !hasUploadedFile) || typing}
                 loading={typing}

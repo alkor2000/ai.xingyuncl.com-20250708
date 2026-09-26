@@ -526,5 +526,12 @@
   "chat.handoff.error.snapshot_unavailable": "本次保存已过期或不存在，请重新选择。",
   "chat.handoff.error.operation_busy": "正在处理同一保存，请稍候再试。",
   "chat.handoff.error.binding_mismatch": "来源版本不一致，请重新选择。",
-  "chat.handoff.error.invalid_request": "请求无效，请刷新页面后重试。"
+  "chat.handoff.error.invalid_request": "请求无效，请刷新页面后重试。",
+  "chat.mobile.siteMenu": "站点导航与账号",
+  "chat.mobile.more": "更多对话操作",
+  "chat.mobile.tools": "更多工具与附件",
+  "chat.mobile.message": "输入消息",
+  "chat.mobile.removeImage": "移除图片：{{name}}",
+  "chat.mobile.removeDocument": "移除文档",
+  "chat.summary.confirm": "确认整理（按当前模型计费）"
 }

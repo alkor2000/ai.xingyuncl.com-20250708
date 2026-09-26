@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { createContext, useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, message } from 'antd'
+import { Layout, message, Drawer, Menu, Button } from 'antd'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../stores/authStore'
 import useStatsStore from '../../stores/statsStore'
@@ -10,14 +10,18 @@ import { getModuleDisplayName } from '../../utils/moduleName'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import MobileDrawer from './MobileDrawer'
+import LanguageSwitch from '../../components/common/LanguageSwitch'
+import FeedbackHeaderEntry from '../../components/product-feedback/FeedbackHeaderEntry'
 import './style.css'
+
+export const MobileChatNavigationContext = createContext(null)
 
 const { Content } = Layout
 
 const BasicLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, hasPermission, hasRole } = useAuthStore()
+  const { user, hasPermission, hasRole, logout } = useAuthStore()
   const { initializeSocket, disconnectSocket } = useStatsStore()
   const { userModules, getUserModules } = useModuleStore()
   // i18n实例用于getModuleDisplayName的exists判断；i18n.language加入依赖保证切换语言时菜单label重建
@@ -27,7 +31,10 @@ const BasicLayout = ({ children }) => {
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
   
   // 响应式检测
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [chatWidth, setChatWidth] = useState(window.innerWidth <= 1024)
+  const compactChat = location.pathname.replace(/\/$/, '') === '/chat' && chatWidth
+  const [chatViewport, setChatViewport] = useState(null)
   
   // 动态菜单项
   const [dynamicMenuItems, setDynamicMenuItems] = useState([])
@@ -35,6 +42,7 @@ const BasicLayout = ({ children }) => {
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
+      setChatWidth(window.innerWidth <= 1024)
     }
     
     checkMobile()
@@ -44,6 +52,28 @@ const BasicLayout = ({ children }) => {
       window.removeEventListener('resize', checkMobile)
     }
   }, [])
+
+  // The keyboard can resize only the visual viewport, especially in mobile Safari.
+  useEffect(() => {
+    if (!compactChat) { setChatViewport(null); return }
+    const viewport = window.visualViewport
+    const update = () => {
+      if (!viewport || viewport.scale === 1) {
+        setChatViewport({ height: viewport?.height || window.innerHeight, top: viewport?.offsetTop || 0 })
+      }
+    }
+    update()
+    viewport?.addEventListener('resize', update)
+    viewport?.addEventListener('scroll', update)
+    window.addEventListener('resize', update)
+    return () => {
+      viewport?.removeEventListener('resize', update)
+      viewport?.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [compactChat])
+
+  useEffect(() => { setMobileMenuVisible(false) }, [location.pathname])
 
   // 初始化WebSocket连接
   useEffect(() => {
@@ -261,7 +291,7 @@ const BasicLayout = ({ children }) => {
     // 如果是外部模块且设置为iframe模式，导航到模块页面
     if (menuItem?.isModule && menuItem?.openMode === 'iframe') {
       navigate(key)
-      if (isMobile) {
+      if (isMobile || compactChat) {
         setMobileMenuVisible(false)
       }
       return
@@ -271,7 +301,7 @@ const BasicLayout = ({ children }) => {
     if (key !== 'admin') {
       navigate(key)
       // 移动端点击后关闭菜单
-      if (isMobile) {
+      if (isMobile || compactChat) {
         setMobileMenuVisible(false)
       }
     }
@@ -297,18 +327,24 @@ const BasicLayout = ({ children }) => {
     handleMenuClick(key, menuItem)
   }
 
+  const drawerItems = items => items.map(({ key, label, children }) => ({
+    key, label, ...(children ? { children: drawerItems(children) } : {})
+  }))
+
   return (
-    <Layout className="basic-layout">
+    <MobileChatNavigationContext.Provider value={compactChat ? () => setMobileMenuVisible(true) : null}>
+    <Layout className={`basic-layout${compactChat ? ' basic-layout-chat-mobile' : ''}`}
+      style={compactChat && chatViewport ? { height: chatViewport.height, top: chatViewport.top } : undefined}>
       {/* 顶部导航栏 - 横向拉通 */}
-      <Header 
+      {!compactChat && <Header
         isMobile={isMobile}
         onMenuClick={() => setMobileMenuVisible(true)}
-      />
+      />}
       
       {/* 主体布局 */}
       <Layout className="basic-layout-body">
         {/* PC端侧边栏 */}
-        {!isMobile && (
+        {!isMobile && !compactChat && (
           <Sidebar
             menuItems={filteredMenuItems}
             selectedKey={location.pathname}
@@ -317,7 +353,7 @@ const BasicLayout = ({ children }) => {
         )}
         
         {/* 移动端抽屉菜单 */}
-        {isMobile && (
+        {isMobile && !compactChat && (
           <MobileDrawer
             visible={mobileMenuVisible}
             menuItems={filteredMenuItems}
@@ -327,12 +363,27 @@ const BasicLayout = ({ children }) => {
           />
         )}
         
+        {compactChat && <Drawer open={mobileMenuVisible} onClose={() => setMobileMenuVisible(false)}
+          title={t('chat.mobile.siteMenu')} width="min(340px, 100%)" rootClassName="chat-site-drawer">
+          <div className="chat-site-account">
+            <span>{user?.username || user?.email}</span>
+            <LanguageSwitch />
+            <Button onClick={() => handleMenuClickWrapper('/profile')}>{t('nav.profile')}</Button>
+            <FeedbackHeaderEntry />
+          </div>
+          <Menu mode="inline" selectedKeys={[location.pathname]} items={drawerItems(filteredMenuItems)}
+            onClick={({ key }) => handleMenuClickWrapper(key)} />
+          <Button block href="https://id.pkuailab.com/portal/return/ai-practice">{t('nav.returnPortal')}</Button>
+          <Button block onClick={async () => { await logout(); navigate('/login') }}>{t('nav.logout')}</Button>
+        </Drawer>}
+
         {/* 内容区域 */}
         <Content className="basic-layout-content">
           {children || <Outlet />}
         </Content>
       </Layout>
     </Layout>
+    </MobileChatNavigationContext.Provider>
   )
 }
 
