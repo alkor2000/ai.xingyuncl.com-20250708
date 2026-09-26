@@ -240,5 +240,24 @@ if [[ "$*" == 'rev-parse HEAD' ]]; then echo abcdef0123456789; fi
         self.assertLess(switch, cleanup)
 
 
+class RealResourceProbe(unittest.TestCase):
+    """假命令测不到的那一格：资源预检要在真机上真的跑得通。
+
+    这次发布就是栽在这里——`df -i --output=iavail` 被 coreutils 判为互斥选项，预检直接 exit 1，
+    整条 Docker 发布在动任何东西之前就停了。假命令夹具永远不会真的调用 df，
+    所以这条用例故意不打桩，直接在本机跑一次真实的资源分支。
+    """
+
+    def test_resources_branch_runs_on_this_machine(self):
+        script = Path(__file__).resolve().parent / "docker-release-preflight.sh"
+        done = subprocess.run(["bash", str(script), "resources", "1", "1", "1"],
+                              capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("resources ready:", done.stdout)
+        for field in ("disk=", "memory=", "inodes="):
+            self.assertIn(field, done.stdout)
+        self.assertNotIn("unreadable", done.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

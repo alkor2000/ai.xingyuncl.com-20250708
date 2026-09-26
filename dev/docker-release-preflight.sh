@@ -35,7 +35,8 @@ case "${1:-}" in
       [[ "$value" =~ ^[0-9]+$ ]] || { echo "invalid resource threshold" >&2; exit 2; }
     done
     disk=$(df -B1 --output=avail / | awk 'NR==2 {print $1}') || { echo "disk availability unreadable" >&2; exit 1; }
-    inodes=$(df -i --output=iavail / | awk 'NR==2 {print $1}') || { echo "inode availability unreadable" >&2; exit 1; }
+    # `--output=iavail` 本身就是 inode 余量，再带 -i 会被 coreutils 判为互斥选项而整条预检失败。
+    inodes=$(df --output=iavail / | awk 'NR==2 {print $1}') || { echo "inode availability unreadable" >&2; exit 1; }
     memory=$(free -b | awk '$1=="Mem:" {print $7}') || { echo "memory availability unreadable" >&2; exit 1; }
     for value in "$disk" "$inodes" "$memory"; do
       [[ "$value" =~ ^[0-9]+$ ]] || { echo "resource availability unknown" >&2; exit 1; }
