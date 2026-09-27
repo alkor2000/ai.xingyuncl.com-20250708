@@ -1098,4 +1098,4 @@ PromptComposer.jsx[AU5T]: F:I·底部输入条：提示词框常驻，模型小�
 StudioLayout.jsx[AU6T]: F:I·新版工作台布局：上面对话区、下面输入条、图库收在右侧抽屉(窄屏改底部)；与经典视图共用同一套数据与处理函数 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/pages/image/components/Studio/ConversationArea.jsx,code:frontend/src/pages/image/components/Studio/GallerySection.jsx,code:frontend/src/pages/image/components/Studio/PromptComposer.jsx | A:t、compact、onExitStudio、generation、upload、parameterPanel、galleryProps、handleGenerate、renderActions、handleViewImage、turns | S:收藏/公开/删除只在图库抽屉里，对话区不放管理动作；对话区按id回查galleryProps.getCurrentData()的实时条目，不自存副本
 
 ===/home/hanying/ai-platform/docs/image/===
-studio-candidate.md[SU4S]: F:I·图像对话式工作台的候选包说明：上线清单与本地演示件分开、界面与计费口径、同版本验证结果、没验证过的六项、回滚面、发布前待办 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/routes/promptAssist.js | A:- | S:未发布候选(父2a56c39)的当时快照，不是发布授权；这一包默认就是新版视图
+studio-candidate.md[SU4S]: F:I·图像对话式工作台的候选包说明：上线清单与本地演示件分开、界面与计费口径、同版本验证结果、没验证过的六项、回滚面、发布前待办，末尾附给师生的白话使用说明 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/routes/promptAssist.js | A:- | S:未发布候选(父2a56c39)的当时快照，不是发布授权；这一包默认就是新版视图
