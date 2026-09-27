@@ -99,12 +99,12 @@ export default function GallerySection({
                 isGallery={activeTab === TAB_KEYS.PUBLIC}
                 isOwner={activeTab !== TAB_KEYS.PUBLIC || item.user_id === user?.id}
                 processingTasks={processingTasks}
-                generationProgress={generation.generationProgress}
+                generationProgress={generationProgress}
                 onView={handleViewImage}
                 onToggleFavorite={handleToggleFavorite}
                 onTogglePublic={handleTogglePublic}
                 onDelete={handleDelete}
-                  renderActions={renderActions}
+                renderActions={renderActions}
               />
             ))
           ) : (

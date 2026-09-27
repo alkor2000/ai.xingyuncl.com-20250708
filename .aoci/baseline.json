@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-26T08:03:48Z",
+  "updated_at": "2026-09-27T06:25:31Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -429,6 +429,12 @@
       "size": 16399,
       "normalized_sha256": "4481434ba958478320324f4ac8b5e1a3b05d4687789ee8eaf10ef7246979ab38"
     },
+    "backend/src/__tests__/unit/routes/promptAssist.test.js": {
+      "role": "observe",
+      "sha256": "d028f89d61db1813af10ddb70d52d9a3715997a5afd5ec7f9d5808158ab32abf",
+      "size": 5279,
+      "normalized_sha256": "d028f89d61db1813af10ddb70d52d9a3715997a5afd5ec7f9d5808158ab32abf"
+    },
     "backend/src/__tests__/unit/routes/websiteArtifacts.test.js": {
       "role": "observe",
       "sha256": "8f286869fb35f446b0ff035b37e6ff1f42cd6a330ddb9e4a6246716e18dd3cdb",
@@ -656,6 +662,12 @@
       "sha256": "2b3912ae5de779f28c6439ec091002b75aa813076cf75b13ebc5d34b57e2f4a4",
       "size": 2441,
       "normalized_sha256": "2b3912ae5de779f28c6439ec091002b75aa813076cf75b13ebc5d34b57e2f4a4"
+    },
+    "backend/src/__tests__/unit/services/promptAssist.test.js": {
+      "role": "observe",
+      "sha256": "1e0662a4c159f241697a6275ccb51ed883c8915f919f026dd4009d2449e1cb4c",
+      "size": 2572,
+      "normalized_sha256": "1e0662a4c159f241697a6275ccb51ed883c8915f919f026dd4009d2449e1cb4c"
     },
     "backend/src/__tests__/unit/services/studentEntry.test.js": {
       "role": "observe",
@@ -2844,6 +2856,12 @@
       "sha256": "8d5f68038a52e461d394e96dd1a7230f2d93bc27b385183a79d0027b8e454b70",
       "size": 2595,
       "normalized_sha256": "8d5f68038a52e461d394e96dd1a7230f2d93bc27b385183a79d0027b8e454b70"
+    },
+    "frontend/src/__tests__/unit/components/ImageStudio.test.jsx": {
+      "role": "observe",
+      "sha256": "4dd7b01693c4f8aae7650a5a565306f1a3c3e3bb462f1a39dd3ad42772d62d93",
+      "size": 3609,
+      "normalized_sha256": "4dd7b01693c4f8aae7650a5a565306f1a3c3e3bb462f1a39dd3ad42772d62d93"
     },
     "frontend/src/__tests__/unit/components/MessageContentExport.test.jsx": {
       "role": "observe",

@@ -2,6 +2,8 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import PromptComposer from '../../../pages/image/components/Studio/PromptComposer'
+import GallerySection from '../../../pages/image/components/Studio/GallerySection'
+import ConversationArea from '../../../pages/image/components/Studio/ConversationArea'
 import api from '../../../utils/api'
 
 vi.mock('../../../utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
@@ -71,5 +73,59 @@ describe('图像工作台的底部输入条', () => {
     composer({ selectedModel: null, prompt: '校园' })
     expect(screen.getByTestId('studio-no-model')).toBeTruthy()
     expect(screen.getByTestId('studio-generate')).toBeDisabled()
+  })
+})
+
+/* 图库这一块是从原页面整段搬出来的，搬家最容易丢的就是"原来在外层作用域里的东西"。
+   所以这里必须真的渲染出一张卡片——只渲染空图库是看不出来的。 */
+vi.mock('../../../pages/image/components/ImageGallery/ImageCard', () => ({
+  default: ({ item, generationProgress }) => (
+    <div data-testid={`card-${item.id}`} data-progress={String(generationProgress)}>{item.prompt}</div>
+  )
+}))
+
+const item = { id: 11, prompt: '操场的黄昏', status: 'success', local_path: '/u/11.png', user_id: 7 }
+
+function gallery(extra = {}) {
+  const props = {
+    t, user: { id: 7 }, activeTab: 'all', handleTabChange: vi.fn(),
+    searchInput: '', setSearchInput: vi.fn(), handleSearch: vi.fn(),
+    isComposingRef: { current: false }, viewMode: 'grid', setViewMode: vi.fn(),
+    handleRefresh: vi.fn(), loading: false, isSearchActive: false, currentTotal: 1, keyword: '',
+    getCurrentData: () => [item], getCurrentPagination: { current: 1, pageSize: 12, total: 1 },
+    handlePageChange: vi.fn(), processingTasks: {}, generationProgress: 42,
+    handleViewImage: vi.fn(), handleToggleFavorite: vi.fn(), handleTogglePublic: vi.fn(),
+    handleDelete: vi.fn(), ...extra
+  }
+  return { props, ...render(<GallerySection {...props} />) }
+}
+
+describe('图库这一块（经典视图与新版抽屉共用同一份）', () => {
+  it('有图片时画得出来，进度用传进来的那个，不去摸外层的 generation', () => {
+    gallery()
+    const card = screen.getByTestId('card-11')
+    expect(card.textContent).toContain('操场的黄昏')
+    expect(card.getAttribute('data-progress')).toBe('42')
+  })
+})
+
+describe('对话区', () => {
+  const turns = [{ key: 'k1', prompt: '操场的黄昏', ids: [11] }]
+  const itemById = id => (id === 11 ? item : undefined)
+
+  it('只显示本次生成的轮次，收藏/公开/删除不出现在对话里', () => {
+    render(<ConversationArea t={t} turns={turns} itemById={itemById}
+      generating={false} progress={0} onView={vi.fn()} onRerun={vi.fn()} />)
+    expect(screen.getAllByTestId('studio-turn').length).toBe(1)
+    expect(screen.getByText('操场的黄昏')).toBeTruthy()
+    for (const key of ['image.favorite', 'image.setPublic', 'common.delete']) {
+      expect(screen.queryByText(key)).toBeNull()
+    }
+  })
+
+  it('一张都还没生成时给一句话，而不是空白', () => {
+    render(<ConversationArea t={t} turns={[]} itemById={itemById}
+      generating={false} progress={0} onView={vi.fn()} onRerun={vi.fn()} />)
+    expect(screen.getByTestId('studio-conversation').className).toContain('empty')
   })
 })
