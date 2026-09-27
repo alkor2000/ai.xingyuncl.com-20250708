@@ -34,7 +34,7 @@ export default function ConversationArea({ t, turns, itemById, generating, progr
                 const url = getImageUrl(item);
                 return url ? (
                   <Image key={item.id} src={url} alt={turn.prompt} preview={false}
-                    onClick={() => onView(item)} placeholder={<Spin />} />
+                    onClick={() => onView(item, turn)} placeholder={<Spin />} />
                 ) : (
                   <div className="studio-turn-pending" key={item.id}>
                     <Spin size="small" />

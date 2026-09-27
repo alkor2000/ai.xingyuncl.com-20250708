@@ -14,15 +14,20 @@ import PromptComposer from './PromptComposer';
 export default function StudioLayout(props) {
   const {
     t, compact, onExitStudio, generation, upload, parameterPanel, galleryProps,
-    handleGenerate, renderActions, handleViewImage, turns
+    handleGenerate, renderActions, handleViewImage, handleViewTurnImage, turns, turnItems
   } = props;
   const [galleryOpen, setGalleryOpen] = useState(false);
 
-  /* 对话区按 id 回查实时条目，状态变化（排队→完成）会自己跟上 */
+  /**
+   * 对话区的图只从页面给的 turnItems 里取。
+   * 这里**不能**去读 galleryProps.getCurrentData()：那是图库当前 Tab / 搜索 / 分页的切片，
+   * 一切 Tab 或一搜索，本轮的图就会被过滤掉、在对话区凭空消失。
+   */
   const byId = useMemo(() => {
-    const map = new Map((galleryProps.getCurrentData() || []).map(item => [item.id, item]));
+    const map = turnItems instanceof Map ? turnItems : new Map(Object.entries(turnItems || {}));
     return id => map.get(id);
-  }, [galleryProps]);
+  }, [turnItems]);
+  const viewTurnImage = handleViewTurnImage || handleViewImage;
 
   const rerun = useCallback((prompt) => {
     generation.setPrompt(prompt);            // 只是把提示词放回输入框，要不要再生成由学生自己按
@@ -43,7 +48,7 @@ export default function StudioLayout(props) {
         <ConversationArea
           t={t} turns={turns} itemById={byId}
           generating={generation.generating} progress={generation.generationProgress}
-          onView={handleViewImage} onRerun={rerun}
+          onView={viewTurnImage} onRerun={rerun}
         />
       </div>
 
