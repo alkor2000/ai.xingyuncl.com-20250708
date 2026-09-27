@@ -67,8 +67,12 @@ const StudioLayout = React.lazy(() => import('./components/Studio/StudioLayout')
 import GallerySection from './components/Studio/GallerySection';
 
 /**
- * 两套布局并存的唯一理由：老师们已经用惯了左边那根参数栏。
- * 新来的默认进「工作台」（结果为主、输入在手边），想回去随时切，偏好只记在这台设备上。
+ * 两套布局并存：老师们已经用惯了左边那根参数栏，新版工作台是结果为主、输入在手边。
+ *
+ * **谁能看到新版，由服务端资格说了算**（和「帮我写」读同一个判定）。这里这个值只是
+ * "有资格的人这台设备上次选了哪一套"的偏好——没资格时它一点作用都没有，
+ * 改这个缺省字符串也开不了门。没资格、没装配、查不到，一律留在原来的经典生图与图库上，
+ * 已经公开的功能一个都不收回。
  */
 const LAYOUT_KEY = 'image.layoutMode';
 const readLayout = () => {
@@ -170,23 +174,32 @@ const ImageGeneration = () => {
   }, [generationHistory, turnItems]);
 
   /**
-   * 「帮我写提示词」这个新能力能不能用，只问服务端（GET /api/prompt-assist/capability）。
+   * 这一页的新东西能不能用，只问服务端（GET /api/prompt-assist/capability）。
    *
-   * 本机的 image.layoutMode 只决定**看到哪一套布局**，跟能不能用新能力没有关系——
-   * 前端不做资格判断，也不拿本机偏好开门；问不到就当不可用，按钮直接不出现。
-   * 已有的生图与图库不受这个开关影响。
+   * 管两件事，读的是同一个答案：**新版工作台能不能出现**，以及**「帮我写」能不能用**。
+   * 按用户定的规矩，新增能力与显著的体验变化都先给试点学校、由 admin 一次开放整批，
+   * 所以藏一个按钮是不够的，整套新布局也要走同一个门。
+   *
+   * 前端不做任何资格判断，也不拿本机偏好开门；没拿到明确的"可用"就当没有——
+   * 留在原来的经典生图与图库上，已经公开的功能一个都不收回。
    */
-  const [assist, setAssist] = useState({ available: false, message: null, checked: false });
+  const [pilot, setPilot] = useState({ available: false, message: null, checked: false });
   useEffect(() => {
     let alive = true;
+    /* 答案迟迟不来也不能一直转圈：到点就按"没资格"渲染经典视图，真答案到了再纠正。
+       方向只有一个——**没拿到明确的"可用"就不给新体验**。 */
+    const fallback = setTimeout(() => {
+      setPilot(prev => (prev.checked ? prev : { ...prev, available: false, checked: true }));
+    }, 2000);
     api.get('/prompt-assist/capability')
       .then(({ data }) => {
         if (!alive) return;
         const d = data?.data || {};
-        setAssist({ available: d.available === true, message: d.message || null, checked: true });
+        setPilot({ available: d.available === true, message: d.message || null, checked: true });
       })
-      .catch(() => { if (alive) setAssist({ available: false, message: null, checked: true }); });
-    return () => { alive = false; };
+      .catch(() => { if (alive) setPilot({ available: false, message: null, checked: true }); })
+      .finally(() => clearTimeout(fallback));
+    return () => { alive = false; clearTimeout(fallback); };
   }, []);
 
   const [layoutMode, setLayoutMode] = useState(readLayout);
@@ -557,7 +570,13 @@ const ImageGeneration = () => {
     </React.Suspense>
   );
 
-  if (layoutMode === 'studio') {
+  /* 有资格才谈偏好；没资格、没装配、查不到，都走经典视图 */
+  const studioAllowed = pilot.available === true;
+  if (!pilot.checked) {
+    return <div className="loading-container"><Spin size="large" /></div>;
+  }
+
+  if (studioAllowed && layoutMode === 'studio') {
     return (
       <React.Suspense fallback={<div className="loading-container"><Spin size="large" /></div>}>
         <StudioLayout
@@ -565,7 +584,7 @@ const ImageGeneration = () => {
           generation={generation} upload={upload} parameterPanel={parameterPanel}
           galleryProps={galleryProps} handleGenerate={handleGenerate} renderActions={renderActions}
           handleViewImage={handleViewImage} handleViewTurnImage={handleViewTurnImage}
-          turns={turns} turnItems={turnItems} assist={assist}
+          turns={turns} turnItems={turnItems} assist={pilot}
         />
         <ImageViewer
           visible={viewerVisible} images={viewerImages} initialIndex={viewerInitialIndex}
@@ -579,8 +598,11 @@ const ImageGeneration = () => {
     <Layout className="image-generation-page">
       <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
-          <Button size="small" type="text" className="studio-switch" onClick={() => switchLayout('studio')}
-            data-testid="classic-to-studio">{t('image.studio.tryStudio')}</Button>
+          {/* 入口也要过同一个门：没资格的人看不到，也切不过去 */}
+          {studioAllowed && (
+            <Button size="small" type="text" className="studio-switch" onClick={() => switchLayout('studio')}
+              data-testid="classic-to-studio">{t('image.studio.tryStudio')}</Button>
+          )}
           <ModelSelector
             models={generation.models}
             selectedModel={generation.selectedModel}

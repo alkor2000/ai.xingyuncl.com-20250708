@@ -27,6 +27,11 @@ const REASONS = Object.freeze(new Set([
 const refuse = (reason, { retryable = false } = {}) =>
   Object.freeze({ available: false, reason, retryable, batchRef: null });
 
+/**
+ * 到点就不再等了。注意这**只是停止等待**：底层请求没有被取消（没有 AbortSignal），
+ * provider.check 也是先被求值的，它要是同步阻塞，这 2 秒根本管不着。
+ * 将来接真实 provider 时，有界与释放 I/O 是**它自己**的责任，不能靠这层包装。
+ */
 function withTimeout(promise, ms) {
   let timer = null;
   return Promise.race([
@@ -59,8 +64,13 @@ async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return refuse(UNAVAILABLE, { retryable: true });
   }
 
-  if (!verdict || typeof verdict !== 'object') return refuse(UNAVAILABLE, { retryable: true });
-  if (verdict.eligible !== true) {
+  // 只认严格布尔。{}、[]、eligible:'true' 这些都是**装配错了**，不是"这个人没资格"——
+  // 报成没资格会让人以为是学生的问题，还丢掉可重试这层口径。
+  if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) {
+    return refuse(UNAVAILABLE, { retryable: true });
+  }
+  if (typeof verdict.eligible !== 'boolean') return refuse(UNAVAILABLE, { retryable: true });
+  if (verdict.eligible === false) {
     const reason = typeof verdict.reason === 'string' && REASONS.has(verdict.reason)
       ? verdict.reason : 'not_eligible';
     return refuse(reason);

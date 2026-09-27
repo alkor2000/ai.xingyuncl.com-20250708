@@ -56,14 +56,19 @@ const row = (id, prompt, extra = {}) => ({
 const MODEL = { id: 1, name: 'sd', display_name: '模型甲', provider: 'openai', generation_type: 'sync' }
 const MJ_MODEL = { id: 2, name: 'mj', display_name: 'MJ', provider: 'midjourney', generation_type: 'async' }
 
-/* 默认：服务端说这台部署还没对谁开放（和真实缺省一致——没装配资格提供方就一律拒绝） */
+/* 服务端的资格答案。真实缺省是"没装配就一律拒绝"，
+   但大多数用例要进到新版工作台里去测接线，所以这里默认给"有资格"，
+   门本身的用例在最后那一组里单独证。 */
 const capability = (data) => api.get.mockResolvedValue({ data: { success: true, data: data } })
+const ELIGIBLE = { available: true, reason: null, message: null, batch_ref: 'm0-demo' }
+const REFUSED = { available: false, reason: 'pilot_provider_not_installed', retryable: false,
+  message: '这个功能还没有对你所在的学校开放' }
 
 beforeEach(() => {
   viewer.props = null
   localStorage.clear()
   api.get.mockReset(); api.post.mockReset()
-  capability({ available: false, reason: 'pilot_provider_not_installed', message: '这个功能还没有对你所在的学校开放' })
+  capability(ELIGIBLE)
   store = {
     generationHistory: [],
     historyPagination: { total: 0, page: 1 },
@@ -187,34 +192,44 @@ describe('本轮是哪几张只认生成响应', () => {
   })
 })
 
-describe('新能力的门只由服务端决定', () => {
-  it('服务端说不可用：「帮我写」不出现，生图与图库照旧可用', async () => {
+describe('整套新体验的门只由服务端决定', () => {
+  it('没资格：连新版工作台都不出现，留在经典生图与图库上', async () => {
+    capability(REFUSED)
     store.generationHistory = [row(41, '操场的黄昏')]
-    await studio()
+    render(<ImageGeneration />)
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/prompt-assist/capability'))
+    await screen.findByPlaceholderText('image.searchPlaceholder')      // 经典视图的图库搜索框
+    expect(screen.queryByTestId('image-studio')).toBeNull()
+    expect(screen.queryByTestId('classic-to-studio')).toBeNull()       // 切过去的入口也没有
     expect(screen.queryByTestId('studio-assist')).toBeNull()
-    expect(screen.getByTestId('studio-generate')).toBeTruthy()
-    expect(screen.getByTestId('studio-open-gallery')).toBeTruthy()
   })
 
-  it('本机 localStorage 塞什么都开不了这个门', async () => {
+  it('没资格时，本机 localStorage 强设 studio 也进不去', async () => {
+    capability(REFUSED)
+    localStorage.setItem('image.layoutMode', 'studio')
     localStorage.setItem('image.assist.enabled', 'true')
-    localStorage.setItem('image.pilot', 'pku')
-    await studio()
+    render(<ImageGeneration />)
     await waitFor(() => expect(api.get).toHaveBeenCalled())
-    expect(screen.queryByTestId('studio-assist')).toBeNull()
+    await screen.findByPlaceholderText('image.searchPlaceholder')
+    expect(screen.queryByTestId('image-studio')).toBeNull()
   })
 
-  it('服务端说可用才出现', async () => {
-    capability({ available: true, reason: null, message: null, batch_ref: 'm0-2026-09' })
-    await studio()
-    expect(await screen.findByTestId('studio-assist')).toBeTruthy()
-  })
-
-  it('能力查询自己失败时当作不可用，不冒充可用', async () => {
+  it('能力查询自己失败时当作没资格，不冒充可用', async () => {
     api.get.mockRejectedValue(new Error('网络不通'))
-    await studio()
+    localStorage.setItem('image.layoutMode', 'studio')
+    render(<ImageGeneration />)
     await waitFor(() => expect(api.get).toHaveBeenCalled())
-    expect(screen.queryByTestId('studio-assist')).toBeNull()
+    await screen.findByPlaceholderText('image.searchPlaceholder')
+    expect(screen.queryByTestId('image-studio')).toBeNull()
+  })
+
+  it('有资格：进新版工作台，「帮我写」也在；切回经典后入口还在，能再切回来', async () => {
+    await studio()
+    expect(screen.getByTestId('studio-assist')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('studio-to-classic'))
+    const back = await screen.findByTestId('classic-to-studio')
+    expect(screen.queryByTestId('image-studio')).toBeNull()
+    fireEvent.click(back)
+    expect(await screen.findByTestId('image-studio')).toBeTruthy()
   })
 })

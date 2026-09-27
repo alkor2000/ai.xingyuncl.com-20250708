@@ -1,9 +1,9 @@
 /**
- * 真实 Chromium 跑一遍这次改过的东西（桌面 + 三个窄屏）。
+ * 真实 Chromium（**headless、隔离容器**，不是真机）跑一遍这次改过的东西，桌面 + 三个窄屏。
  *
  * 连的是本机演示服务（假接口），所以这里**只能**证明界面接线与布局，
- * 不证明真实生成、真实扣分。浏览器本身跑在总控给的 tedna-ppt-browser-probe 镜像里，
- * 宿主缺 libnspr4.so 的限制由此绕开——没装任何系统库。
+ * 不证明真实生成、真实扣分，也不代表真机上的表现。浏览器跑在总控给的
+ * tedna-ppt-browser-probe 镜像里，宿主缺 libnspr4.so 的限制由此绕开——没装任何系统库。
  */
 const { chromium } = require('playwright');
 const fs = require('node:fs');
@@ -30,17 +30,35 @@ async function shoot(page, name) {
   page.on('pageerror', e => noise.push({ kind: 'pageerror', text: String(e && e.message || e) }));
   page.on('console', m => { if (m.type() === 'error') noise.push({ kind: 'console', text: m.text().slice(0, 300) }); });
 
-  // 1 进页面
+  // 1 缺省（未装配资格提供方）：整套新体验都不该出现，留在原来的经典生图与图库上
+  await page.request.get(`${BASE}/preview-assist/off`);
   await page.goto(`${BASE}/preview-login`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-testid="image-studio"]', { timeout: 20000 });
-  record('桌面 1280×900 打开新版工作台', true);
-  await shoot(page, '01-studio-desktop');
+  await page.waitForSelector('.image-generation-page', { timeout: 20000 });
+  const noStudio = await page.locator('[data-testid="image-studio"]').count();
+  const noEntry = await page.locator('[data-testid="classic-to-studio"]').count();
+  const classicGen = await page.locator('.generation-container').count();
+  record('缺省没资格：不进新版工作台，也没有切过去的入口', noStudio === 0 && noEntry === 0,
+    `studio=${noStudio} 入口=${noEntry}`);
+  record('同时经典生图与图库照旧在（已公开的功能没被收回）', classicGen === 1);
+  await shoot(page, '00-classic-when-not-eligible');
 
-  // 2 新能力的门：缺省不出现
-  const assistHidden = await page.locator('[data-testid="studio-assist"]').count();
-  record('缺省（未装配资格提供方）时「帮我写」不出现', assistHidden === 0, `按钮数=${assistHidden}`);
+  // 1b 本机强设 studio 偏好也进不去
+  await page.evaluate(() => localStorage.setItem('image.layoutMode', 'studio'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.image-generation-page', { timeout: 20000 });
+  const forced = await page.locator('[data-testid="image-studio"]').count();
+  record('本机 localStorage 强设 studio，没资格照样进不去', forced === 0, `studio=${forced}`);
+
+  // 2 有资格之后才进新版
+  await page.request.get(`${BASE}/preview-assist/on`);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="image-studio"]', { timeout: 20000 });
+  record('桌面 1280×900：有资格才打开新版工作台', true);
+  await shoot(page, '01-studio-desktop');
+  const assistShown = await page.locator('[data-testid="studio-assist"]').count();
+  record('同一份资格同时放开「帮我写」', assistShown === 1, `按钮数=${assistShown}`);
   const genVisible = await page.locator('[data-testid="studio-generate"]').isVisible();
-  record('同时生图按钮照旧可见（经典能力没被门挡住）', genVisible);
+  record('生图按钮照旧可见', genVisible);
 
   // 3 真的生成一轮
   await page.fill('[data-testid="studio-prompt"]', '夕阳下的校园水池，暖色调，低角度');
@@ -69,20 +87,18 @@ async function shoot(page, name) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
 
-  // 6 装配后「帮我写」才出现（演示开关，不是产品里的东西）
-  await page.request.get(`${BASE}/preview-assist/on`);
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-testid="image-studio"]');
-  const shown = await page.locator('[data-testid="studio-assist"]').count();
-  record('服务端说可用之后「帮我写」才出现', shown === 1, `按钮数=${shown}`);
-  if (shown === 1) {
-    await page.click('[data-testid="studio-assist"]');
-    await page.waitForSelector('[data-testid="assist-ask"]', { timeout: 10000 });
-    await shoot(page, '05-assist-panel');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(400);
-  }
+  // 6 「帮我写」抽屉能打开；随后把资格撤掉，新版整套跟着退回经典
+  await page.click('[data-testid="studio-assist"]');
+  await page.waitForSelector('[data-testid="assist-ask"]', { timeout: 10000 });
+  await shoot(page, '05-assist-panel');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
   await page.request.get(`${BASE}/preview-assist/off`);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.image-generation-page', { timeout: 20000 });
+  const revoked = await page.locator('[data-testid="image-studio"]').count();
+  record('资格撤销后再进来：退回经典视图，不残留新版', revoked === 0, `studio=${revoked}`);
+  await page.request.get(`${BASE}/preview-assist/on`);
 
   // 7 三个窄屏
   for (const width of [430, 390, 360]) {
@@ -117,7 +133,7 @@ async function shoot(page, name) {
     at: new Date().toISOString(),
     runtime: 'tedna-ppt-browser-probe:local + ~/.cache/ms-playwright（只读挂载），宿主未装系统库',
     target: BASE,
-    what_this_proves: '界面接线与布局（假接口）。不证明真实生成、真实扣分、真实资格提供方。',
+    what_this_proves: 'headless 隔离容器里的界面接线与布局（假接口）。不是真机；不证明真实生成、真实扣分、真实资格提供方。',
     cases, screenshots: shots, console_noise: noise,
     result: failed.length === 0 ? 'passed' : 'failed'
   };

@@ -212,3 +212,35 @@ describe('试点资格：能力查询与真正的调用读同一个判定', () =
     expect(res.body.data.batch_ref).toBe('m0-2026-09');
   });
 });
+
+describe('提供方答得不成样子、答得太慢、答得太迟', () => {
+  test.each([
+    ['空对象 {}', {}],
+    ['数组 []', []],
+    ["eligible 是字符串 'true'", { eligible: 'true', batch_ref: 'batch-a' }],
+    ['eligible 是数字 1', { eligible: 1, batch_ref: 'batch-a' }]
+  ])('%s：算装配故障（503 可重试），不算学生没资格', async (_name, verdict) => {
+    const consume = user();
+    const res = await call({ target: 'image', draft: '校园' }, verdict);
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('pilot_provider_unavailable');
+    expect(writeCandidates).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  test('一直不回答：到点就拒，模型与扣分都没发生；之后它才回 true 也不续跑', async () => {
+    const consume = user();
+    let settle;
+    const late = new Promise(resolve => { settle = resolve; });
+    const res = await call({ target: 'image', draft: '校园' }, () => late);
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('pilot_provider_unavailable');
+
+    // 迟到的"有资格"：请求早就回完了，不该再去调模型或扣分
+    settle({ eligible: true, batch_ref: 'm0-2026-09' });
+    await late;
+    await new Promise(r => setImmediate(r));
+    expect(writeCandidates).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+  }, 15000);
+});
