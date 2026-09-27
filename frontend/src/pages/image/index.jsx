@@ -75,6 +75,19 @@ const IMAGE_HOST = window.location.origin;
 const SEARCH_MAX_LENGTH = 100;
 
 const ParameterPanel = React.lazy(() => import('./components/GenerationPanel/ParameterSettings'));
+const StudioLayout = React.lazy(() => import('./components/Studio/StudioLayout'));
+import GallerySection from './components/Studio/GallerySection';
+
+/**
+ * 两套布局并存的唯一理由：老师们已经用惯了左边那根参数栏。
+ * 新来的默认进「工作台」（结果为主、输入在手边），想回去随时切，偏好只记在这台设备上。
+ */
+const LAYOUT_KEY = 'image.layoutMode';
+const readLayout = () => {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'classic' ? 'classic' : 'studio'; }
+  catch { return 'studio'; }
+};
+const writeLayout = (mode) => { try { localStorage.setItem(LAYOUT_KEY, mode); } catch { /* 隐私模式下不记就是了 */ } };
 const MidjourneyActions = React.lazy(() => import('./components/ImageGallery/MidjourneyActions'));
 
 const ImageGeneration = () => {
@@ -104,6 +117,23 @@ const ImageGeneration = () => {
   const upload = useImageUpload();
   const historyPaging = usePagination();
   const publicPaging = usePagination();
+
+  /**
+   * 对话区只放"这一次打开以来生成的"。
+   * 这里只记每一轮的提示词和产出的 id，图本身仍然回查历史里的实时条目——
+   * Midjourney 那种先排队后出图的，状态会自己跟着更新，不需要另存一份可能过期的副本。
+   */
+  const [turns, setTurns] = useState([]);
+
+  const [layoutMode, setLayoutMode] = useState(readLayout);
+  /* 窄屏只是"摆得更紧"，信息架构和桌面是同一套 */
+  const [compact, setCompact] = useState(() => window.innerWidth <= 1024);
+  useEffect(() => {
+    const onResize = () => setCompact(window.innerWidth <= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const switchLayout = useCallback((mode) => { setLayoutMode(mode); writeLayout(mode); }, []);
 
   const [viewMode, setViewMode] = useState(VIEW_MODES.GRID);
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
@@ -165,6 +195,7 @@ const ImageGeneration = () => {
    * 用户会误以为生成失败。
    */
   const handleGenerate = useCallback(async () => {
+    const promptOfTurn = generation.prompt.trim();
     const result = await generation.handleGenerate(upload.referenceImages);
     if (result) {
       if (isMidjourneyModel(generation.selectedModel)) {
@@ -180,7 +211,13 @@ const ImageGeneration = () => {
       if (activeTab !== TAB_KEYS.ALL) {
         setActiveTab(TAB_KEYS.ALL);
       }
-      getUserHistory({ page: 1, limit: historyPaging.pageSize });
+      const refreshed = await getUserHistory({ page: 1, limit: historyPaging.pageSize });
+      /* 刚刷出来的最前面那几条就是这一轮的产出（Midjourney 一次一条，内含四宫格） */
+      const expected = isMidjourneyModel(generation.selectedModel) ? 1 : (generation.quantity || 1);
+      const ids = (refreshed?.data || []).slice(0, expected).map(item => item.id);
+      if (ids.length > 0) {
+        setTurns(prev => [...prev, { key: `${Date.now()}`, prompt: promptOfTurn, at: Date.now(), ids }]);
+      }
     }
   }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab]);
 
@@ -402,10 +439,66 @@ const ImageGeneration = () => {
   /* 是否处于搜索态，决定计数提示与空状态文案 */
   const isSearchActive = keyword && keyword.trim().length > 0;
 
+  /* 画廊那一块两套布局共用同一份实现，这里只负责把它需要的东西凑齐 */
+  const galleryProps = {
+    t, user, activeTab, handleTabChange, searchInput, setSearchInput, handleSearch, isComposingRef,
+    viewMode, setViewMode, handleRefresh, loading, isSearchActive, currentTotal, keyword,
+    getCurrentData, getCurrentPagination, handlePageChange, processingTasks,
+    generationProgress: generation.generationProgress,
+    handleViewImage, handleToggleFavorite, handleTogglePublic, handleDelete
+  };
+  const renderActions = (actionItem) => (
+    <React.Suspense fallback={null}>
+      <MidjourneyActions item={actionItem} onAction={handleMidjourneyAction} />
+    </React.Suspense>
+  );
+  const parameterPanel = (
+    <React.Suspense fallback={<Spin />}>
+      <ParameterPanel
+        selectedModel={generation.selectedModel}
+        selectedSize={generation.selectedSize}
+        seed={generation.seed}
+        guidanceScale={generation.guidanceScale}
+        watermark={generation.watermark}
+        quantity={generation.quantity}
+        referenceImages={upload.referenceImages}
+        onSizeChange={generation.setSelectedSize}
+        onSeedChange={generation.setSeed}
+        onGuidanceScaleChange={generation.setGuidanceScale}
+        onWatermarkChange={generation.setWatermark}
+        onQuantityChange={generation.setQuantity}
+        onReferenceUpload={upload.handleReferenceUpload}
+        onRemoveReference={upload.handleRemoveReference}
+        onGenerate={handleGenerate}
+        generating={generation.generating}
+        getTotalPrice={generation.getTotalPrice}
+      />
+    </React.Suspense>
+  );
+
+  if (layoutMode === 'studio') {
+    return (
+      <React.Suspense fallback={<div className="loading-container"><Spin size="large" /></div>}>
+        <StudioLayout
+          t={t} compact={compact} onExitStudio={() => switchLayout('classic')}
+          generation={generation} upload={upload} parameterPanel={parameterPanel}
+          galleryProps={galleryProps} handleGenerate={handleGenerate} renderActions={renderActions}
+          handleViewImage={handleViewImage} turns={turns}
+        />
+        <ImageViewer
+          visible={viewerVisible} images={viewerImages} initialIndex={viewerInitialIndex}
+          onClose={() => setViewerVisible(false)} showDownload showThumbnails={viewerImages.length > 1}
+        />
+      </React.Suspense>
+    );
+  }
+
   return (
     <Layout className="image-generation-page">
       <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
+          <Button size="small" type="text" className="studio-switch" onClick={() => switchLayout('studio')}
+            data-testid="classic-to-studio">{t('image.studio.tryStudio')}</Button>
           <ModelSelector
             models={generation.models}
             selectedModel={generation.selectedModel}
@@ -442,114 +535,8 @@ const ImageGeneration = () => {
         </div>
       </Sider>
 
-      <Content className="history-content">
-        <div className="history-header-wrapper">
-          <div className="history-header">
-            <Tabs activeKey={activeTab} onChange={handleTabChange} className="history-tabs">
-              <TabPane tab={t('image.myImages')} key={TAB_KEYS.ALL} />
-              <TabPane tab={t('image.myFavorites')} key={TAB_KEYS.FAVORITES} />
-              <TabPane
-                tab={<span><GlobalOutlined /> {t('image.publicGallery')}</span>}
-                key={TAB_KEYS.PUBLIC}
-              />
-            </Tabs>
-            <Space className="history-actions" wrap>
-              {/* 搜索框：IME 保护 + 提示词/模型名模糊搜索 */}
-              <Search
-                className="history-search"
-                placeholder={t('image.searchPlaceholder')}
-                allowClear
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onSearch={handleSearch}
-                onCompositionStart={() => { isComposingRef.current = true; }}
-                onCompositionEnd={() => { isComposingRef.current = false; }}
-                enterButton={<SearchOutlined />}
-                maxLength={SEARCH_MAX_LENGTH}
-              />
-              <Button
-                icon={viewMode === VIEW_MODES.GRID ? <AppstoreOutlined /> : <UnorderedListOutlined />}
-                onClick={() => setViewMode(
-                  viewMode === VIEW_MODES.GRID ? VIEW_MODES.LIST : VIEW_MODES.GRID
-                )}
-              />
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRefresh}
-              >
-                {t('common.refresh')}
-              </Button>
-            </Space>
-          </div>
+      <GallerySection {...galleryProps} renderActions={renderActions} />
 
-          {/* 搜索结果计数提示：整句插值，不用 <strong> 包裹以避免插值转义问题 */}
-          {!loading && isSearchActive && (
-            <div className="search-result-tip">
-              {currentTotal > 0
-                ? <span>{t('image.searchFound', { count: currentTotal, keyword })}</span>
-                : <span>{t('image.searchNoMatch', { keyword })}</span>
-              }
-            </div>
-          )}
-
-          {!loading && getCurrentData().length > 0 && (
-            <div className="history-pagination">
-              <Pagination
-                {...getCurrentPagination}
-                onChange={handlePageChange}
-                onShowSizeChange={handlePageChange}
-                size="small"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="history-grid-container">
-          <div className={`history-grid ${viewMode}`}>
-            {loading ? (
-              <div className="loading-container">
-                <Spin size="large" />
-              </div>
-            ) : getCurrentData().length > 0 ? (
-              getCurrentData().map(item => (
-                <ImageCard
-                  key={item.id}
-                  item={item}
-                  isGallery={activeTab === TAB_KEYS.PUBLIC}
-                  isOwner={activeTab !== TAB_KEYS.PUBLIC || item.user_id === user?.id}
-                  processingTasks={processingTasks}
-                  generationProgress={generation.generationProgress}
-                  onView={handleViewImage}
-                  onToggleFavorite={handleToggleFavorite}
-                  onTogglePublic={handleTogglePublic}
-                  onDelete={handleDelete}
-                  renderActions={(actionItem) => (
-                    <React.Suspense fallback={null}>
-                      <MidjourneyActions
-                        item={actionItem}
-                        onAction={handleMidjourneyAction}
-                      />
-                    </React.Suspense>
-                  )}
-                />
-              ))
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  isSearchActive
-                    ? t('image.searchNoImage', { keyword })
-                    : activeTab === TAB_KEYS.PUBLIC
-                      ? t('image.noPublicImages')
-                      : activeTab === TAB_KEYS.FAVORITES
-                        ? t('image.noFavorites')
-                        : t('image.noHistory')
-                }
-              />
-            )}
-          </div>
-        </div>
-      </Content>
 
       <ImageViewer
         visible={viewerVisible}

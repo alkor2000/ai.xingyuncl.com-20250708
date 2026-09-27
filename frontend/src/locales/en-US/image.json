@@ -6,18 +6,15 @@
   "image.noPublicImages": "No public images",
   "image.noFavorites": "No favorite images",
   "image.noHistory": "No generation history",
-  
   "image.searchPlaceholder": "Search prompt or model name...",
   "image.searchFound": "Found {{count}} result(s) matching \"{{keyword}}\"",
   "image.searchNoMatch": "No results matching \"{{keyword}}\"",
   "image.searchNoImage": "No images matching \"{{keyword}}\"",
-  
   "image.selectModel": "Select Model",
   "image.selectModelPlaceholder": "Please select a generation model",
   "image.creditsPerGroup": "{{credits}} credits/group",
   "image.creditsPerImage": "{{credits}} credits",
   "image.asyncGeneration": "Async Generation",
-  
   "image.inputPrompt": "Input Prompt",
   "image.promptPlaceholder": "Describe the image you want to generate...",
   "image.mjPromptPlaceholder": "Describe your image, can add parameters like --ar 16:9 --v 6 --s 750...",
@@ -25,7 +22,6 @@
   "image.negativePromptPlaceholder": "Describe what you don't want in the image...",
   "image.parameterHelper": "Parameter Helper",
   "image.parameterSettings": "Parameter Settings",
-  
   "image.imageSize": "Image Size",
   "image.imageCount": "{{count}} image(s)",
   "image.seed": "Seed",
@@ -38,7 +34,6 @@
   "image.quantity": "Quantity",
   "image.quantityTip": "Generate multiple images at once, each with different random seed",
   "image.batchGenerateInfo": "Batch generation will cost {{credits}} credits",
-  
   "image.referenceImage": "Reference Image",
   "image.referenceImages": "Reference Images",
   "image.referenceImagesTip": "Upload reference images for image-to-image",
@@ -59,7 +54,6 @@
   "image.image2imageMode": "Image-to-Image Mode",
   "image.image2imageDesc": "Will generate new image based on reference, batch generation disabled",
   "image.mayNotSupport": "May not support in image-to-image mode",
-  
   "image.generate": "Generate",
   "image.generateImage": "Generate Image",
   "image.generateFromImage": "Image to Image",
@@ -68,9 +62,7 @@
   "image.totalCost": "Total: {{cost}} credits",
   "image.insufficientCredits": "Insufficient credits",
   "image.pleaseRecharge": "Please recharge first",
-  
   "image.advancedOptions": "Advanced Options",
-  
   "image.confirmAction": "Confirm Action",
   "image.confirmActionDesc": "Are you sure to {{action}}? This will cost {{credits}} credits",
   "image.confirmDelete": "Confirm Delete",
@@ -80,7 +72,6 @@
   "image.deleteFailed": "Failed to delete",
   "image.generateFailed": "Generation Failed",
   "image.loadFailed": "Failed to load image",
-  
   "image.action.upscale": "Upscale",
   "image.action.variation": "Variation",
   "image.action.reroll": "Reroll",
@@ -101,10 +92,8 @@
   "image.viewLarge": "View Large",
   "image.favorite": "Favorite",
   "image.unfavorite": "Unfavorite",
-  
   "image.modelDeleted": "Model Deleted",
   "image.creditsConsumed": "{{credits}} credits",
-  
   "image.viewer.zoomIn": "Zoom In (+)",
   "image.viewer.zoomOut": "Zoom Out (-)",
   "image.viewer.fitScreen": "Fit to Screen (0)",
@@ -112,20 +101,16 @@
   "image.viewer.reset": "Reset",
   "image.viewer.close": "Close (ESC)",
   "image.viewer.downloadStarted": "Download started",
-  
   "image.status.pending": "Pending",
   "image.status.processing": "Processing",
   "image.status.completed": "Completed",
   "image.status.failed": "Failed",
-  
   "image.filter.all": "All",
   "image.filter.favorites": "Favorites",
   "image.filter.public": "Public",
-  
   "image.sort.newest": "Newest",
   "image.sort.oldest": "Oldest",
   "image.sort.popular": "Most Popular",
-  
   "image.info.prompt": "Prompt",
   "image.info.negativePrompt": "Negative Prompt",
   "image.info.model": "Model",
@@ -134,14 +119,12 @@
   "image.info.guidance": "Guidance",
   "image.info.createdAt": "Created",
   "image.info.creator": "Creator",
-  
   "image.error.loadFailed": "Failed to load image",
   "image.error.generateFailed": "Generation failed: {{error}}",
   "image.error.uploadFailed": "Upload failed",
   "image.error.invalidImage": "Invalid image file",
   "image.error.imageTooLarge": "Image file too large",
   "image.error.networkError": "Network error, please retry",
-  
   "image.modelsLoadFailed": "Failed to get model list",
   "image.pleaseSelectModelFirst": "Please select a model first",
   "image.submittingMjTask": "Submitting Midjourney task...",
@@ -162,7 +145,6 @@
   "image.historyLoadFailed": "Failed to get history",
   "image.batchDeleteFailed": "Batch delete failed",
   "image.galleryLoadFailed": "Failed to get gallery",
-  
   "image.param.--ar 16:9": "Wide Aspect",
   "image.param.--ar 9:16": "Tall Aspect",
   "image.param.--ar 3:2": "Wide 3:2",
@@ -172,5 +154,29 @@
   "image.param.--no text": "Exclude Text",
   "image.param.--iw 2": "Enhance Reference Weight",
   "image.param.--niji": "Anime Style",
-  "image.param.--style raw": "Raw Style"
+  "image.param.--style raw": "Raw Style",
+  "image.studio.gallery": "Gallery",
+  "image.studio.classic": "Classic view",
+  "image.studio.classicHint": "Back to the old side panel (this device only)",
+  "image.studio.tryStudio": "Try the new layout",
+  "image.studio.parameters": "Settings",
+  "image.studio.placeholder": "Describe the picture you want, e.g. a schoolyard pond at sunset, warm light, low angle",
+  "image.studio.generateWithPrice": "Generate ({{price}} credits)",
+  "image.studio.pickModelFirst": "Pick a model first",
+  "image.studio.withReference": "{{count}} reference image(s)",
+  "image.assist.title": "Help me write the prompt",
+  "image.assist.short": "Help me write",
+  "image.assist.hint": "Keep what you have written, say what you want, and AI offers a few wordings. Using them is up to you.",
+  "image.assist.requestPlaceholder": "e.g. better as a slide cover, make it night, keep it simpler",
+  "image.assist.ask": "Write for me",
+  "image.assist.again": "Another round",
+  "image.assist.replace": "Replace",
+  "image.assist.append": "Append",
+  "image.assist.replaced": "Prompt replaced",
+  "image.assist.appended": "Appended to your prompt",
+  "image.assist.charged": "This cost {{credits}} credits",
+  "image.assist.failed": "Could not write one this time — try again later (no credits charged)",
+  "image.studio.emptyConversation": "Describe the picture you want and press Generate. What you make stays below; older images live in the Gallery.",
+  "image.studio.rerun": "Use this prompt again",
+  "image.studio.stillRunning": "still running"
 }

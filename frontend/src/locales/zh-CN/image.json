@@ -6,18 +6,15 @@
   "image.noPublicImages": "暂无公开的图片",
   "image.noFavorites": "暂无收藏的图片",
   "image.noHistory": "暂无生成记录",
-  
   "image.searchPlaceholder": "搜索提示词或模型名...",
   "image.searchFound": "找到 {{count}} 条匹配 \"{{keyword}}\" 的结果",
   "image.searchNoMatch": "没有匹配 \"{{keyword}}\" 的结果",
   "image.searchNoImage": "没有匹配 \"{{keyword}}\" 的图片",
-  
   "image.selectModel": "选择模型",
   "image.selectModelPlaceholder": "请选择生成模型",
   "image.creditsPerGroup": "{{credits}} 积分/组",
   "image.creditsPerImage": "{{credits}} 积分",
   "image.asyncGeneration": "异步生成",
-  
   "image.inputPrompt": "输入提示词",
   "image.promptPlaceholder": "描述你想生成的图片内容...",
   "image.mjPromptPlaceholder": "描述你想生成的图片，可直接添加参数如 --ar 16:9 --v 6 --s 750...",
@@ -25,7 +22,6 @@
   "image.negativePromptPlaceholder": "描述你不想在图片中出现的内容...",
   "image.parameterHelper": "参数助手",
   "image.parameterSettings": "参数设置",
-  
   "image.imageSize": "图片尺寸",
   "image.imageCount": "{{count}}张",
   "image.seed": "随机种子",
@@ -38,7 +34,6 @@
   "image.quantity": "生成数量",
   "image.quantityTip": "一次生成多张图片，每张使用不同的随机种子",
   "image.batchGenerateInfo": "批量生成将消耗 {{credits}} 积分",
-  
   "image.referenceImage": "参考图片",
   "image.referenceImages": "参考图片",
   "image.referenceImagesTip": "上传参考图片进行图生图",
@@ -59,7 +54,6 @@
   "image.image2imageMode": "图生图模式",
   "image.image2imageDesc": "将基于参考图片生成新图片，批量生成功能已禁用",
   "image.mayNotSupport": "图生图模式可能不支持",
-  
   "image.generate": "生成",
   "image.generateImage": "生成图片",
   "image.generateFromImage": "图生图",
@@ -68,9 +62,7 @@
   "image.totalCost": "总计：{{cost}} 积分",
   "image.insufficientCredits": "积分不足",
   "image.pleaseRecharge": "请先充值",
-  
   "image.advancedOptions": "高级选项",
-  
   "image.confirmAction": "确认操作",
   "image.confirmActionDesc": "确定要{{action}}吗？此操作将消耗 {{credits}} 积分",
   "image.confirmDelete": "确认删除",
@@ -80,7 +72,6 @@
   "image.deleteFailed": "删除失败",
   "image.generateFailed": "生成失败",
   "image.loadFailed": "图片加载失败",
-  
   "image.action.upscale": "放大",
   "image.action.variation": "变体",
   "image.action.reroll": "重新生成",
@@ -101,10 +92,8 @@
   "image.viewLarge": "查看大图",
   "image.favorite": "收藏",
   "image.unfavorite": "取消收藏",
-  
   "image.modelDeleted": "模型已删除",
   "image.creditsConsumed": "{{credits}} 积分",
-  
   "image.viewer.zoomIn": "放大 (+)",
   "image.viewer.zoomOut": "缩小 (-)",
   "image.viewer.fitScreen": "适应屏幕 (0)",
@@ -112,20 +101,16 @@
   "image.viewer.reset": "重置",
   "image.viewer.close": "关闭 (ESC)",
   "image.viewer.downloadStarted": "开始下载",
-  
   "image.status.pending": "等待中",
   "image.status.processing": "处理中",
   "image.status.completed": "已完成",
   "image.status.failed": "失败",
-  
   "image.filter.all": "全部",
   "image.filter.favorites": "收藏",
   "image.filter.public": "公开",
-  
   "image.sort.newest": "最新",
   "image.sort.oldest": "最早",
   "image.sort.popular": "最热门",
-  
   "image.info.prompt": "提示词",
   "image.info.negativePrompt": "负面提示词",
   "image.info.model": "模型",
@@ -134,14 +119,12 @@
   "image.info.guidance": "引导",
   "image.info.createdAt": "创建时间",
   "image.info.creator": "创建者",
-  
   "image.error.loadFailed": "图片加载失败",
   "image.error.generateFailed": "生成失败：{{error}}",
   "image.error.uploadFailed": "上传失败",
   "image.error.invalidImage": "无效的图片文件",
   "image.error.imageTooLarge": "图片文件过大",
   "image.error.networkError": "网络错误，请重试",
-  
   "image.modelsLoadFailed": "获取模型列表失败",
   "image.pleaseSelectModelFirst": "请先选择模型",
   "image.submittingMjTask": "正在提交Midjourney任务...",
@@ -162,7 +145,6 @@
   "image.historyLoadFailed": "获取历史记录失败",
   "image.batchDeleteFailed": "批量删除失败",
   "image.galleryLoadFailed": "获取画廊失败",
-  
   "image.param.--ar 16:9": "宽屏比例",
   "image.param.--ar 9:16": "竖屏比例",
   "image.param.--ar 3:2": "横屏3:2",
@@ -172,5 +154,29 @@
   "image.param.--no text": "排除文字",
   "image.param.--iw 2": "增强参考图权重",
   "image.param.--niji": "动漫风格",
-  "image.param.--style raw": "原始风格"
+  "image.param.--style raw": "原始风格",
+  "image.studio.gallery": "图库",
+  "image.studio.classic": "经典视图",
+  "image.studio.classicHint": "切回左侧参数栏那种老样子（只影响这台设备）",
+  "image.studio.tryStudio": "试试新版布局",
+  "image.studio.parameters": "参数",
+  "image.studio.placeholder": "描述你想要的画面，比如：夕阳下的校园水池，暖色调，低角度",
+  "image.studio.generateWithPrice": "生成（{{price}} 积分）",
+  "image.studio.pickModelFirst": "先在左上角选一个模型",
+  "image.studio.withReference": "参考图 {{count}} 张",
+  "image.assist.title": "帮我写提示词",
+  "image.assist.short": "帮我写",
+  "image.assist.hint": "把你已经写的那半句留着，再说一句想要什么，AI 给你几种写法；用不用你自己定。",
+  "image.assist.requestPlaceholder": "例如：更适合做课件封面、换成夜景、画面再简洁一点",
+  "image.assist.ask": "帮我写",
+  "image.assist.again": "再来一版",
+  "image.assist.replace": "替换",
+  "image.assist.append": "追加",
+  "image.assist.replaced": "已替换输入框里的提示词",
+  "image.assist.appended": "已接在原来那句后面",
+  "image.assist.charged": "本次消耗 {{credits}} 积分",
+  "image.assist.failed": "这次没能写出来，请稍后再试（未扣积分）",
+  "image.studio.emptyConversation": "写一句你想要的画面，点右下角「生成」。生成过的都会留在下面，历史图在右上角「图库」里。",
+  "image.studio.rerun": "再写一次",
+  "image.studio.stillRunning": "还在生成"
 }
