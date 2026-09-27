@@ -18,6 +18,7 @@ function composer(extra = {}) {
     t, models, selectedModel: models[0], onModelChange: vi.fn(),
     prompt: '', onPromptChange: vi.fn(), onGenerate: vi.fn(), generating: false,
     totalPrice: 6, quantity: 1, selectedSize: '1024x1024', seed: -1,
+    assist: { available: true, message: null, checked: true },
     parameterPanel: <div data-testid="params-body" />, ...extra
   }
   return { props, ...render(<PromptComposer {...props} />) }
@@ -67,6 +68,22 @@ describe('图像工作台的底部输入条', () => {
     fireEvent.click(await screen.findByTestId('assist-ask'))
     await waitFor(() => expect(screen.getByTestId('assist-failed').textContent).toContain('积分不足'))
     expect(onPromptChange).not.toHaveBeenCalled()
+  })
+
+  it('服务端没说可用时，「帮我写」这个按钮根本不出现（本机偏好也开不了它）', () => {
+    localStorage.setItem('image.layoutMode', 'studio')
+    localStorage.setItem('image.assist.enabled', 'true')        // 有人手动塞也不管用
+    composer({ assist: { available: false, message: '还没对你所在的学校开放', checked: true } })
+    expect(screen.queryByTestId('studio-assist')).toBeNull()
+    expect(screen.getByTestId('studio-generate')).toBeTruthy()   // 生图本身照旧
+  })
+
+  it('还没问到结果时也不先显示，问到可用才显示', () => {
+    const { unmount } = composer({ assist: { available: false, message: null, checked: false } })
+    expect(screen.queryByTestId('studio-assist')).toBeNull()
+    unmount()
+    composer()
+    expect(screen.getByTestId('studio-assist')).toBeTruthy()
   })
 
   it('没选模型时说清楚，而不是让人对着灰按钮猜', () => {

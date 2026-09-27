@@ -12,7 +12,7 @@
 | 提交 | `eb6c59b` 功能 → `849e7d2` 图库白屏修复 → `2ec6dac` 认知索引 → `c457425`/`2a7f1ca`/`1c7847e` 候选文档 → `9e8f085` 本次生成接线修复（两处，见第 5 节） |
 | 新依赖 | 无。`package.json` / `package-lock.json` 未改 |
 | 数据库 | 未改。无新表、无新列、无迁移 |
-| 构建 | vite 5.4.21 / node v22.23.2 通过，`dist/index.html` sha256 `3a835b0356fa47da…`，dist 59M |
+| 构建 | vite 5.4.21 / node v22.23.2 通过，`dist/index.html` sha256 `ae720cd28f56f6a7…`，dist 59M |
 | 认知索引 | `aoci verify` governance_aligned=true；`aoci check` ok=true findings=[]；`aoci index agent guide` stage=aligned complete=true next_action=none |
 
 ## 2 要随发布上线的产品文件（就这些）
@@ -20,7 +20,8 @@
 | 文件 | 变化 |
 |---|---|
 | `backend/src/services/promptAssistService.js` | 新增。拼提示词、解析候选，不碰钱不碰权限 |
-| `backend/src/routes/promptAssist.js` | 新增。`POST /api/prompt-assist`，`router.use(authenticate)` |
+| `backend/src/routes/promptAssist.js` | 新增。`POST /api/prompt-assist` + `GET /capability`，`router.use(authenticate)`，先过试点资格 |
+| `backend/src/services/imagePilot/eligibility.js` | 新增。只读、可注入、**默认不装配即拒绝**的试点资格判定（第 10 节） |
 | `backend/src/app.js` | +3 行，挂上面这个路由 |
 | `frontend/src/pages/image/index.jsx` | 新旧两套视图共用同一套生成 / 图库逻辑；记 `localStorage` 的 `image.layoutMode` |
 | `frontend/src/pages/image/components/Studio/`（5 个） | 新增：整体布局、对话区、底部输入条、写提示词抽屉、图库 |
@@ -41,6 +42,7 @@
 
 | 情况 | 结果 |
 |---|---|
+| 试点资格（最先判） | 判不过就到此为止：不查模型、不查积分、不调模型、不扣分（第 10 节） |
 | 可用模型 | `AIModel.getUserAvailableModels(userId, groupId)`，组权限与个人限制都不放宽 |
 | 不指定模型 | 取 `credits_per_chat` 最便宜的那个 |
 | 点名一个不在自己名单里的模型 | 403 `model_not_allowed`，**不回退到缺省模型** |
@@ -58,9 +60,9 @@
 | 验证 | 结果 |
 |---|---|
 | `backend .../services/promptAssist.test.js` | 7 项通过 |
-| `backend .../routes/promptAssist.test.js` | 7 项通过。用本仓库一贯的 `app.listen(0)` + `http.request`（仓库里没有 supertest） |
-| `frontend ImageStudio.test.jsx` | 9 项通过（输入条 6、图库 1、对话区 2） |
-| `frontend ImageStudioWiring.test.jsx` | 5 项通过。页面接线定向反例：切公开画廊、搜索换页、大图只在本轮、部分成功不补旧图、异步完成跟上且旧图不进来 |
+| `backend .../routes/promptAssist.test.js` | 16 项通过（原 7 项钱与权限 + 9 项试点资格拒绝/放行）。用本仓库一贯的 `app.listen(0)` + `http.request`（仓库里没有 supertest） |
+| `frontend ImageStudio.test.jsx` | 11 项通过（输入条 6、图库 1、对话区 2、新能力的门 2） |
+| `frontend ImageStudioWiring.test.jsx` | 9 项通过。页面接线定向反例：切公开画廊、搜索换页、大图只在本轮、部分成功不补旧图、异步完成跟上且旧图不进来；另 4 项证明新能力的门只由服务端决定（localStorage 开不了、查询失败不冒充可用） |
 | 语言包 | zh 180 / en 180，单边键 0 |
 | `no-undef`（eslint 10.11.0，临时配置不入仓） | Studio 五个组件 + `image/index.jsx`，6 个文件 0 错 |
 | 构建 | 通过（见第 1 节） |
@@ -89,11 +91,12 @@
 ## 6 没验证过的（发布前请当成风险看）
 
 1. **真实付费链路一次都没跑**：真实模型返回的候选质量、真实扣分入账，都只有隔离打桩证据。
-2. **真实生图链路没跑**：预览用的是假接口。也就是说"这一轮生成了哪几张"的记账（刷新后取历史前 N 条、Midjourney 按 1 条）没有在真实生成上验证过。
+2. **真实生图链路没跑**：预览用的是假接口。"这一轮生成了哪几张"现在按生成响应登记，并有定向反例（含部分成功与异步完成），但**没有在真实生成上跑过**——真实响应的字段形状只核到源码（`imageService.generateImages` 的 `results`/`succeeded`、`midjourneyService.submitImagine` 的 `taskId`/`generationId`），没有实测。
 3. **浏览器多宽度验收没做**：本机两套 chromium 都缺 `libnspr4.so`，装系统库要 sudo，没装。只有桌面宽度的人工点击，没有 360/390/430 的真机或截图证据。
 4. **图库抽屉带真实数据没人点过**：白屏是测试发现并修掉的，不是人点出来的。
 5. **英文文案没有人校**：只机器校对了键名对齐。
 6. **视频页没动**，「图像分对话」的表和迁移也没动。
+7. **试点资格只有本地这一片**：provider 接口、capability 与 POST 共用判定、六类拒绝都有用例，但**没有接任何真实对端**——真实学校来源与批次消费的契约还在 edu/Identity 与 M0 主责手里（第 10.2 节）。没有注册任何真实批次，也没有装配过任何 provider。
 
 ## 7 回滚面
 
@@ -118,6 +121,8 @@
 | 真实站点上用真账号试一次「帮我写提示词」与一次真实生图，确认扣分与记账 | 用户（生产环境，我这边被拒绝执行生产命令） |
 | `make deploy`（xingyuncl）→ `make deploy-docker`（pkuailab，需本地分支 `main` 且两站同 SHA） | 用户执行；发布前需要把本分支并入 `main` |
 | 窄屏真机看一眼（手机打开图像页） | 用户 |
+| 拿到可信学校映射与批次只读契约后接线（第 10.2 节） | edu/Identity 校籍主责 + M0 作者先给契约，之后才轮到我接 |
+| 决定在拿到真实输入前要不要先装一个临时 provider（缺省是谁都不开，「帮我写」按钮不出现） | 用户与总控 |
 | 视频页照搬、「图像分对话」建表与迁移 | 待另行派单；动数据库前我会先把回滚脚本给用户看 |
 
 ## 9 怎么用（给老师和学生看的短说明）
@@ -133,21 +138,52 @@
 
 两件要知道的事：对话区只显示**这次打开页面之后**生成的，刷新页面就空了（图本身都还在图库里，一张都不会丢）；「帮我写」会花积分，即使最后一张图都没生成。
 
-## 10 若要按学校/批次做试点：最小接线设计（本包只交设计，未实现、未开启）
+## 10 试点资格：本地这一片已经做实（2026-09-28 修订，未开放、未注册任何真实批次）
 
-先把话说清楚：**现在 `/api/prompt-assist` 的门槛只有"登录 + 平台既有的模型权限 + 积分"**（`router.use(authenticate)` 之后按 `AIModel.getUserAvailableModels` 与 `credits_per_chat` 判定）。它没有、也不该自己造一个"可信学校"与"当前更新批次"的判断。前端的 `image.layoutMode` 更不是门。
+### 10.0 先更正上一版写错的两处事实
 
-### 10.1 最小接线（三件事，都不新建表）
+上一版这里写"实践侧没有任何 school 字段、C05 在别的分支未合入"——**两句都不准确，作废**。核过的同源事实：
 
-1. **一个只读的能力端点**，沿用本仓库已有的 capability 写法（参照 `GET /api/p03/handoffs/capability`：运行时没开就回 `available:false`，前端什么都不渲染）。图像这边同理：`GET /api/prompt-assist/capability` 回 `{ available, reason }`，前端据此决定是否显示「帮我写」与是否默认进新版工作台。**判定只在服务端**，前端不参与。
-2. **判定输入从既有身份读，不新增字段**：`req.user.id` / `role` / `group_id` / `status` / `expire_at`，以及 `users.uuid_source`+`sso_id`（标识这是不是 edu SSO 影子账号）。
-3. **开放范围只从配置读**：允许的 `group_id` 名单与允许的批次标识写在部署配置里（`.env` → `app.locals`，与 P03 运行时同一套做法），缺省为空即"谁都不开"。这样既不建表，也不需要第二套 admin 开通流程——**现有的分组管理就是唯一的开通入口**。
+- `backend/src/services/studentEntry/sessionContext.js` 与 `exchange.js` **就在本候选源码里**（随父版本 `2a56c39` 一起）。edu 签名带来的 `school_ref` 经映射与 consume 复核后，写进一行绑定 `jti` + `user_id` 的 `c05_sessions`；`GET /api/auth/sso/context` 只把本人这条会话的来源回给本人。
+- 但它**只是会话来源证据**：不是实时校籍，不是新功能的授权，也不覆盖教师与非 C05 账号；默认关闭，建表还停在 `backend/migrations-candidates/c05/`（没进 `backend/migrations`）。**本包不启用 C05、不迁移、不造任何凭据。**
+- 仍然成立的那半句：组名（`user_groups` 是管理员自建的）、`uuid_source='sso'`、实例名，**都不替代被证过的学校身份**。
 
-### 10.2 现在真的缺什么（不能靠本地推断补上）
+另外，上一版 10.1 第 3 条"允许的 group_id 名单 + 批次字符串写进部署配置，现有分组管理就是唯一开通入口"——**这条替代路线已撤销**。本地组名单加一个批次字符串，既推不出"这是可信的 PKU 学校"，也推不出"admin 批准过这一批"。开放只认既定的 admin 对整批的一次确认。
 
-| 缺的输入 | 现状 | 谁能给 |
+### 10.1 已经做实的部分（不依赖对端，本包内可审）
+
+```
+现有认证(authenticate) → 可注入的只读资格 provider → capability 与 POST 读同一个判定
+```
+
+- `backend/src/services/imagePilot/eligibility.js`：**只读、可注入、默认不装配即拒绝**。装配契约就一个方法：
+  `{ check({ userId, groupId, role }) -> { eligible, reason?, batch_ref? } }`，放在 `app.locals.imagePilotEligibility`。
+  判定输入只给平台里已经有的既有身份，不多给一个字段。
+- 放行的回答**必须带 `batch_ref`**（这次是按哪一批放的）。没带就按"装配没写完"拒绝——一次 admin 确认一整批，事后要能说清按的是哪一批。`batch_ref` 的取值与"当前是哪一批"由装配方从批次主责那里取，本文件不猜、不填、不校验语义。
+- `GET /api/prompt-assist/capability` 与 `POST /api/prompt-assist` **读同一个 `decide()`**，不允许两边各判一次。POST 的资格判定在最前面：判不过就到此为止，**不查模型、不查积分、不调模型、不扣分**。
+- 拒绝清单（每一条都有用例）：
+
+| 情况 | 回什么 |
+|---|---|
+| 没装配 provider（**缺省就是这个**） | `403 pilot_provider_not_installed` |
+| 不在试点学校 | `403 school_not_in_pilot` |
+| 学校身份过期 | `403 identity_expired` |
+| 未登记 / 暂停 / 换批 | `403 not_registered` / `suspended` / `batch_changed` |
+| provider 抛错、超时（2s）、答非所问、放行但没说批次 | `503 pilot_provider_unavailable`（可重试）——**绝不因为问不到就放行** |
+
+- 前端：开页问一次 capability，**服务端没说可用就连按钮都不出现**；`image.layoutMode` 只决定看到哪一套布局，**本机 localStorage 塞什么都开不了这个门**（有用例按着）。能力查询自己失败时当作不可用，不冒充可用。
+- **既有的生图与图库完全不受这个门影响**，经典视图照旧。被门挡住的只有「帮我写提示词」这一个新能力。
+- 没有新建表、没有新增 env、没有任何真实凭据、没有注册任何真实批次、没有碰 C05 开关。
+
+### 10.2 还缺的输入与主责（不猜字段、不伪装真实试点）
+
+| 缺的 | 现状 | 主责 |
 |---|---|---|
-| **可信学校身份** | 实践侧没有任何 school/tenant/campus 字段。`user_groups` 是管理员自己建的分组，名字可以随便写，**不是被权威证过的学校身份**；`uuid_source='sso'` 只说明账号来自 edu SSO，不带学校 | 学校登录带进来的原身份（C05 一次性登录候选在 `codex/c05-student-entry` 分支，默认关闭、未合入），或总控给出一份分组↔学校的对照并由管理员落到分组上 |
-| **当前更新批次（总控口径里的 M0 输入）** | 实践侧**完全没有**批次概念：没有字段、没有配置、没有接口 | 总控/PKU 侧给出批次标识与"当前批次是哪一个"的判据，才能写进 10.1 第 3 条的配置 |
+| **可信学校身份** | C04 规定 Identity 同人 Ticket → edu 本人 org-snapshot（含 `school.ref`），C08 规定可信学校到实践教师/学生组的映射——**都是可复用契约，但实践侧源码里找不到 C04 的消费者**，不能写成"已经在跑" | 原 edu / Identity 校籍主责，并需与本会话核定 edu `school.ref` ↔ TE 的固定 PKU UUID 的可信映射、当前会话本人绑定、教师与非 C05 账号的覆盖、失效复核 |
+| **当前更新批次** | M0 已有 `BatchMemberAllowed`（读成员 gate_key、批次状态、真实发布证明）与 `/api/v1/release-adoption/batches/current`（沿 TE JWT）——**是可复用的规则与批次源，还不是实践账号能直接调的资格接口** | 原 M0 作者提供供实践消费的最窄只读判定契约：绑定实践实例/能力成员、当前批次与发布身份、状态与失效边界，并说清既有调用的认证/授权是否覆盖 |
 
-这两项在实践侧都**未证齐**，所以本包不实现试点门。按边界：不新建表、不启用 C05、不另造 admin 开通流程、不放宽任何既有权限。
+两条硬规矩：**不借用、不挪用**。C04 的本人校籍、E09 的作品资格（有界签名 HTTP，只证明某件作品的审阅权）、P03 的实例权利（固定 `pku-ai-platform-prod → pku-tedna-prod`），都不能互相当成"这个图像用户属于 PKU 学校"，也不能借它们的 secret。**不借 TE JWT 或 P03 凭据推定自己可调。**
+
+### 10.3 发布后的实际状态（要提前知道）
+
+按上面的缺省，**这一版发布后「帮我写提示词」对所有人都不可用**（按钮不出现），直到有人把真实的资格 provider 装配进来。生图、图库、经典视图一切照旧。要不要在拿到上面两项可信输入之前先装一个临时 provider，是用户与总控的决定，不是我自己能定的——本包没有装配任何 provider。

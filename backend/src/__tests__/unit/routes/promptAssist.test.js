@@ -1,7 +1,8 @@
 /**
  * 「帮我写提示词」这条路由的钱与权限：全部用隔离替身证明，不发一次真实付费请求。
  *
- * 要守住的三件事：能用的模型由平台既有权限说了算、成功才扣分、失败一分不扣。
+ * 要守住的四件事：先过试点资格（默认没装配就一律拒绝）、能用的模型由平台既有权限说了算、
+ * 成功才扣分、失败一分不扣。
  */
 const express = require('express');
 const http = require('node:http');
@@ -27,6 +28,22 @@ function post(port, path, body) {
   });
 }
 
+function get(port, path) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method: 'GET', path }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        let json = null;
+        try { json = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { /* 同上 */ }
+        resolve({ status: res.statusCode, body: json });
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 jest.mock('../../../middleware/authMiddleware', () => ({
   authenticate: (req, _res, next) => { req.user = { id: 7, group_id: 3 }; next(); }
 }));
@@ -44,17 +61,31 @@ const { writeCandidates } = require('../../../services/promptAssistService');
 const cheap = { id: 11, name: 'cheap', display_name: '便宜的', credits_per_chat: 3, has_api_key: true };
 const pricey = { id: 12, name: 'pricey', display_name: '贵的', credits_per_chat: 30, has_api_key: true };
 
-function app() {
+/* eligible=null 表示"这台部署根本没装配资格提供方" */
+function app(eligible = { eligible: true, batch_ref: 'm0-2026-09' }) {
   const server = express();
   server.use(express.json());
+  if (eligible !== null) {
+    server.locals.imagePilotEligibility = {
+      check: typeof eligible === 'function' ? eligible : async () => eligible
+    };
+  }
   server.use('/api/prompt-assist', require('../../../routes/promptAssist'));
   return server;
 }
-let server;
-afterEach(async () => { if (server) { await close(server); server = null; } });
-async function call(body) {
-  server = await listen(app());
-  return post(server.address().port, '/api/prompt-assist', body);
+/* 一个用例里可能连开两个服务（先查能力、再 POST），全都要收掉，否则 jest 不退出 */
+const servers = [];
+afterEach(async () => { while (servers.length) await close(servers.pop()); });
+async function serve(eligible) {
+  const s = await listen(eligible === undefined ? app() : app(eligible));
+  servers.push(s);
+  return s.address().port;
+}
+async function call(body, eligible) {
+  return post(await serve(eligible), '/api/prompt-assist', body);
+}
+async function capability(eligible) {
+  return get(await serve(eligible), '/api/prompt-assist/capability');
 }
 function user({ credits = true } = {}) {
   const consumeCredits = jest.fn().mockResolvedValue(true);
@@ -124,5 +155,60 @@ describe('POST /api/prompt-assist', () => {
     const res = await call({ target: 'image', draft: 'x'.repeat(2000) });
     expect(res.status).toBe(400);
     expect(writeCandidates).not.toHaveBeenCalled();
+  });
+});
+
+describe('试点资格：能力查询与真正的调用读同一个判定', () => {
+  test('没装配资格提供方：能力查询说不可用，POST 直接拒，不查模型不调模型不扣分', async () => {
+    const consume = user();
+    const cap = await capability(null);
+    expect(cap.status).toBe(200);
+    expect(cap.body.data.available).toBe(false);
+    expect(cap.body.data.reason).toBe('pilot_provider_not_installed');
+    expect(cap.body.data.message).toBeTruthy();          // 给人看的一句话，不暴露内部状态
+
+    const res = await call({ target: 'image', draft: '校园' }, null);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('pilot_provider_not_installed');
+    expect(AIModel.getUserAvailableModels).not.toHaveBeenCalled();
+    expect(writeCandidates).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['school_not_in_pilot'], ['not_registered'], ['suspended'],
+    ['identity_expired'], ['batch_changed']
+  ])('提供方说 %s：403，照它的理由拒，一分不扣', async (reason) => {
+    const consume = user();
+    const res = await call({ target: 'image', draft: '校园' }, { eligible: false, reason });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe(reason);
+    expect(writeCandidates).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  test('提供方查不到（抛错）：503 可重试，绝不因为问不到就放行', async () => {
+    const consume = user();
+    const res = await call({ target: 'image', draft: '校园' }, () => { throw new Error('对端不通'); });
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('pilot_provider_unavailable');
+    expect(writeCandidates).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  test('放行但没说是按哪一批：按装配没写完拒绝，不猜批次', async () => {
+    const res = await call({ target: 'image', draft: '校园' }, { eligible: true });
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('pilot_provider_unavailable');
+    expect(writeCandidates).not.toHaveBeenCalled();
+  });
+
+  test('放行时能力查询回批次，成功的响应也带着批次，事后能说清按哪一批放的', async () => {
+    user();
+    const cap = await capability();
+    expect(cap.body.data).toMatchObject({ available: true, reason: null, batch_ref: 'm0-2026-09' });
+    const res = await call({ target: 'image', draft: '校园' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.batch_ref).toBe('m0-2026-09');
   });
 });

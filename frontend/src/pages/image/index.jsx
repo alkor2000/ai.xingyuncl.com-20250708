@@ -32,6 +32,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Layout, Button, Spin, Modal, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import api from '../../utils/api';
 import useImageStore from '../../stores/imageStore';
 import useAuthStore from '../../stores/authStore';
 
@@ -167,6 +168,26 @@ const ImageGeneration = () => {
       return next || prev;
     });
   }, [generationHistory, turnItems]);
+
+  /**
+   * 「帮我写提示词」这个新能力能不能用，只问服务端（GET /api/prompt-assist/capability）。
+   *
+   * 本机的 image.layoutMode 只决定**看到哪一套布局**，跟能不能用新能力没有关系——
+   * 前端不做资格判断，也不拿本机偏好开门；问不到就当不可用，按钮直接不出现。
+   * 已有的生图与图库不受这个开关影响。
+   */
+  const [assist, setAssist] = useState({ available: false, message: null, checked: false });
+  useEffect(() => {
+    let alive = true;
+    api.get('/prompt-assist/capability')
+      .then(({ data }) => {
+        if (!alive) return;
+        const d = data?.data || {};
+        setAssist({ available: d.available === true, message: d.message || null, checked: true });
+      })
+      .catch(() => { if (alive) setAssist({ available: false, message: null, checked: true }); });
+    return () => { alive = false; };
+  }, []);
 
   const [layoutMode, setLayoutMode] = useState(readLayout);
   /* 窄屏只是"摆得更紧"，信息架构和桌面是同一套 */
@@ -544,7 +565,7 @@ const ImageGeneration = () => {
           generation={generation} upload={upload} parameterPanel={parameterPanel}
           galleryProps={galleryProps} handleGenerate={handleGenerate} renderActions={renderActions}
           handleViewImage={handleViewImage} handleViewTurnImage={handleViewTurnImage}
-          turns={turns} turnItems={turnItems}
+          turns={turns} turnItems={turnItems} assist={assist}
         />
         <ImageViewer
           visible={viewerVisible} images={viewerImages} initialIndex={viewerInitialIndex}

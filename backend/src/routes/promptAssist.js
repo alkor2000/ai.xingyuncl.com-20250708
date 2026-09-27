@@ -4,6 +4,8 @@
  * POST /api/prompt-assist —— 「帮我写提示词」的唯一入口（图像与视频共用）。
  *
  * 边界，一条都不放宽：
+ *  - 先过试点资格：没装配资格提供方、没登记、暂停、换批、查不到，一律拒绝，
+ *    **能力查询与真正的调用读同一个判定**，前端拿不到"可用"就什么都不显示；
  *  - 只用这个学生本来就能用的模型（组权限 + 个人限制），传了不在名单里的就按名拒绝；
  *  - 计费与对话同规则（该模型的 credits_per_chat），**先成功再扣分**：模型没给出东西就不收费；
  *  - 不建会话、不存消息、不写历史，提示词只回给页面；
@@ -19,11 +21,39 @@ const logger = require('../utils/logger');
 const {
   writeCandidates, TARGETS, MAX_DRAFT, MAX_REQUEST, MAX_CANDIDATES
 } = require('../services/promptAssistService');
+const { decide, NOT_INSTALLED, UNAVAILABLE } = require('../services/imagePilot/eligibility');
 
 router.use(authenticate);
 
 const fail = (res, status, code, message) =>
   res.status(status).json({ success: false, error: { code, message } });
+
+/* 试点资格的说法按理由给一句人话；没装配时不解释内部状态，只说还没开放 */
+const REFUSAL_TEXT = Object.freeze({
+  [NOT_INSTALLED]: '这个功能还没有对你所在的学校开放',
+  [UNAVAILABLE]: '暂时问不到你的使用资格，请稍后再试',
+  school_not_in_pilot: '这个功能还没有对你所在的学校开放',
+  identity_expired: '你的学校身份信息已过期，请重新从学校入口进来',
+  not_registered: '这个功能还没有对你所在的学校开放',
+  suspended: '这个功能在你所在的学校已暂停',
+  batch_changed: '开放批次已经变了，请联系老师',
+  not_eligible: '你暂时还不能用这个功能'
+});
+
+/* 能力查询与 POST 共用这一个判定，不允许两边各判一次 */
+router.get('/capability', async (req, res) => {
+  const verdict = await decide(req.app, req.user);
+  return res.json({
+    success: true,
+    data: {
+      available: verdict.available,
+      reason: verdict.reason,
+      retryable: verdict.retryable,
+      message: verdict.available ? null : (REFUSAL_TEXT[verdict.reason] || REFUSAL_TEXT.not_eligible),
+      batch_ref: verdict.batchRef
+    }
+  });
+});
 
 router.post('/', async (req, res) => {
   const userId = req.user.id;
@@ -42,6 +72,13 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    /* 资格先判，判不过就到此为止：不查模型、不查积分、不调模型、当然也不扣分 */
+    const verdict = await decide(req.app, req.user);
+    if (!verdict.available) {
+      return fail(res, verdict.retryable ? 503 : 403, verdict.reason,
+        REFUSAL_TEXT[verdict.reason] || REFUSAL_TEXT.not_eligible);
+    }
+
     // 能用哪些模型，由平台既有的组权限与个人限制说了算，这里只读不放宽。
     const available = await AIModel.getUserAvailableModels(userId, req.user.group_id);
     if (!available || available.length === 0) {
@@ -71,7 +108,8 @@ router.post('/', async (req, res) => {
       data: {
         candidates,
         model: { id: model.id, name: model.name, display_name: model.display_name },
-        credits_charged: price
+        credits_charged: price,
+        batch_ref: verdict.batchRef
       }
     });
   } catch (error) {

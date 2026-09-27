@@ -14,7 +14,7 @@ import PromptComposer from './PromptComposer';
 export default function StudioLayout(props) {
   const {
     t, compact, onExitStudio, generation, upload, parameterPanel, galleryProps,
-    handleGenerate, renderActions, handleViewImage, handleViewTurnImage, turns, turnItems
+    handleGenerate, renderActions, handleViewImage, handleViewTurnImage, turns, turnItems, assist
   } = props;
   const [galleryOpen, setGalleryOpen] = useState(false);
 
@@ -56,6 +56,7 @@ export default function StudioLayout(props) {
         t={t} compact={compact}
         models={generation.models} selectedModel={generation.selectedModel}
         onModelChange={generation.handleModelChange}
+        assist={assist}
         prompt={generation.prompt} onPromptChange={generation.setPrompt}
         onGenerate={handleGenerate} generating={generation.generating}
         totalPrice={generation.getTotalPrice()} quantity={generation.quantity}

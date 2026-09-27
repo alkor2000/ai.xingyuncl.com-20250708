@@ -23,6 +23,7 @@ vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal()),
   useTranslation: () => ({ t: (key, opts) => (opts && opts.price !== undefined ? `${key}:${opts.price}` : key) })
 }))
+vi.mock('../../../utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('../../../stores/imageStore', () => ({ default: () => store }))
 vi.mock('../../../stores/authStore', () => ({ default: () => ({ user: { id: 7 } }) }))
 vi.mock('../../../pages/image/hooks/useImageGeneration', () => ({ useImageGeneration: () => generation }))
@@ -45,6 +46,7 @@ vi.mock('../../../pages/image/components/ImageGallery/MidjourneyActions', () => 
   default: () => <div data-testid="mj-actions" />
 }))
 
+import api from '../../../utils/api'
 import ImageGeneration from '../../../pages/image/index'
 
 const row = (id, prompt, extra = {}) => ({
@@ -54,9 +56,14 @@ const row = (id, prompt, extra = {}) => ({
 const MODEL = { id: 1, name: 'sd', display_name: '模型甲', provider: 'openai', generation_type: 'sync' }
 const MJ_MODEL = { id: 2, name: 'mj', display_name: 'MJ', provider: 'midjourney', generation_type: 'async' }
 
+/* 默认：服务端说这台部署还没对谁开放（和真实缺省一致——没装配资格提供方就一律拒绝） */
+const capability = (data) => api.get.mockResolvedValue({ data: { success: true, data: data } })
+
 beforeEach(() => {
   viewer.props = null
   localStorage.clear()
+  api.get.mockReset(); api.post.mockReset()
+  capability({ available: false, reason: 'pilot_provider_not_installed', message: '这个功能还没有对你所在的学校开放' })
   store = {
     generationHistory: [],
     historyPagination: { total: 0, page: 1 },
@@ -177,5 +184,37 @@ describe('本轮是哪几张只认生成响应', () => {
     view.rerender(<ImageGeneration />)
     await waitFor(() => expect(turnImageIds()).toEqual(['/u/31.png']))
     expect(screen.queryByText('上一次的旧图')).toBeNull()
+  })
+})
+
+describe('新能力的门只由服务端决定', () => {
+  it('服务端说不可用：「帮我写」不出现，生图与图库照旧可用', async () => {
+    store.generationHistory = [row(41, '操场的黄昏')]
+    await studio()
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/prompt-assist/capability'))
+    expect(screen.queryByTestId('studio-assist')).toBeNull()
+    expect(screen.getByTestId('studio-generate')).toBeTruthy()
+    expect(screen.getByTestId('studio-open-gallery')).toBeTruthy()
+  })
+
+  it('本机 localStorage 塞什么都开不了这个门', async () => {
+    localStorage.setItem('image.assist.enabled', 'true')
+    localStorage.setItem('image.pilot', 'pku')
+    await studio()
+    await waitFor(() => expect(api.get).toHaveBeenCalled())
+    expect(screen.queryByTestId('studio-assist')).toBeNull()
+  })
+
+  it('服务端说可用才出现', async () => {
+    capability({ available: true, reason: null, message: null, batch_ref: 'm0-2026-09' })
+    await studio()
+    expect(await screen.findByTestId('studio-assist')).toBeTruthy()
+  })
+
+  it('能力查询自己失败时当作不可用，不冒充可用', async () => {
+    api.get.mockRejectedValue(new Error('网络不通'))
+    await studio()
+    await waitFor(() => expect(api.get).toHaveBeenCalled())
+    expect(screen.queryByTestId('studio-assist')).toBeNull()
   })
 })

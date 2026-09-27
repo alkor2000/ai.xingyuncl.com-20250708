@@ -16,7 +16,7 @@ import PromptAssistPanel from './PromptAssistPanel';
 export default function PromptComposer({
   t, models = [], selectedModel, onModelChange, prompt, onPromptChange,
   onGenerate, generating, totalPrice, quantity, selectedSize, seed, referenceCount = 0,
-  parameterPanel, compact = false
+  parameterPanel, compact = false, assist = null
 }) {
   const [paramsOpen, setParamsOpen] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
@@ -53,11 +53,14 @@ export default function PromptComposer({
           data-testid="studio-prompt"
         />
         <Space direction={compact ? 'horizontal' : 'vertical'} className="studio-actions">
-          <Tooltip title={t('image.assist.title')}>
-            <Button icon={<BulbOutlined />} onClick={() => setAssistOpen(true)} data-testid="studio-assist">
-              {compact ? null : t('image.assist.short')}
-            </Button>
-          </Tooltip>
+          {/* 「帮我写」只在服务端说可用时才出现；本机偏好开不了它 */}
+          {assist?.available === true && (
+            <Tooltip title={t('image.assist.title')}>
+              <Button icon={<BulbOutlined />} onClick={() => setAssistOpen(true)} data-testid="studio-assist">
+                {compact ? null : t('image.assist.short')}
+              </Button>
+            </Tooltip>
+          )}
           <Button type="primary" icon={<SendOutlined />} loading={generating} disabled={!canGenerate}
             onClick={onGenerate} data-testid="studio-generate">
             {generating ? t('image.generating') : t('image.studio.generateWithPrice', { price: totalPrice })}
@@ -77,7 +80,8 @@ export default function PromptComposer({
       </Drawer>
 
       <PromptAssistPanel
-        open={assistOpen} onClose={() => setAssistOpen(false)} t={t} target="image" draft={prompt}
+        open={assistOpen && assist?.available === true}
+        onClose={() => setAssistOpen(false)} t={t} target="image" draft={prompt}
         onUse={(text, mode) => {
           onPromptChange(mode === 'append' && prompt.trim() ? `${prompt.trim()}，${text}` : text);
           setAssistOpen(false);
