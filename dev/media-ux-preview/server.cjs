@@ -5,6 +5,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 
 const DIST = path.resolve(__dirname, '../../frontend/dist');
 const PORT = Number(process.env.PORT || 4399);
@@ -17,7 +18,7 @@ const now = Date.now();
 const fake = (id, prompt) => ({
   id, prompt, model_name: '模型甲（演示）', status: 'success', is_favorite: id % 3 === 0, is_public: false,
   created_at: new Date(now - id * 6e4).toISOString(), user_id: 1, width: 1024, height: 1024,
-  credits_used: 6, image_url: `https://picsum.photos/seed/p${id}/640/640`
+  credits_used: 6, image_url: `/preview-img/${id}.png`
 });
 const history = [
   fake(1, '夕阳下的校园水池，暖色调，低角度'), fake(2, '雨后操场，水洼倒影，冷色调'),
@@ -25,10 +26,54 @@ const history = [
   fake(5, '秋天的银杏道，浅景深'), fake(6, '教室窗台上的绿植，晨光')
 ];
 
+/* 演示图就地画：8×8 的纯色 PNG。原来引外部 picsum，没外网时图片一直加载不出来，
+   浏览器用例看不到真正的 <img>——演示件不该有这种外部依赖。 */
+const crcTable = (() => {
+  const table = new Int32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c;
+  }
+  return table;
+})();
+const crc32 = buf => {
+  let c = -1;
+  for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+};
+const chunk = (type, data) => {
+  const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([len, body, crc]);
+};
+function solidPng(id) {
+  const size = 8;
+  const hue = (id * 47) % 360;
+  const rgb = [0, 2, 4].map(k => {
+    const v = Math.abs(((hue / 60 + k) % 6) - 3) - 1;
+    return Math.round(255 * (0.35 + 0.5 * Math.min(1, Math.max(0, v))));
+  });
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; ihdr[9] = 2; // 8bit RGB
+  const raw = Buffer.concat(Array.from({ length: size }, () => Buffer.concat([
+    Buffer.from([0]), ...Array.from({ length: size }, () => Buffer.from(rgb))
+  ])));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
 const send = (res, code, body, type = 'application/json') => {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 };
+
+/* 只在这个本地演示里存在的开关：产品里能不能用「帮我写」由服务端资格判定说了算 */
+let assistAvailable = process.env.PREVIEW_ASSIST === '1';
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
@@ -36,7 +81,10 @@ const server = http.createServer((req, res) => {
 
   // 一进来先把假登录塞好，再跳到图像页——省得你自己造 token
   if (p === '/preview-login') {
-    const session = JSON.stringify({ state: { user: { id: 1, username: 'demo', nickname: '演示老师', group_id: 1 },
+    // credits_stats 必须有：useImageGeneration 直接读 user.credits_stats.remaining（真实用户由
+    // User.toSafeJSON 一定带上），假身份少了它，点生成会抛 TypeError，页面什么都不发。
+    const session = JSON.stringify({ state: { user: { id: 1, username: 'demo', nickname: '演示老师', group_id: 1,
+        credits_stats: { total: 5000, used: 120, remaining: 4880 } },
       permissions: ['*'], accessToken: 'preview-token', refreshToken: null,
       tokenExpiresAt: Date.now() + 36e5, isAuthenticated: true }, version: 0 });
     return send(res, 200, `<!doctype html><meta charset="utf-8"><title>预览</title>
@@ -45,13 +93,27 @@ const server = http.createServer((req, res) => {
 localStorage.removeItem('image.layoutMode');location.replace('/image');</script></body>`, TYPES['.html']);
   }
 
+  if (p.startsWith('/preview-img/')) {
+    const id = Number(p.slice('/preview-img/'.length).replace(/\.png$/, '')) || 1;
+    return send(res, 200, solidPng(id), TYPES['.png']);
+  }
+
+  if (p === '/preview-assist/on' || p === '/preview-assist/off') {
+    assistAvailable = p.endsWith('/on');
+    return send(res, 200, { assistAvailable });
+  }
+
   if (p.startsWith('/api/')) {
     if (p.endsWith('/image/models')) {
       return send(res, 200, { success: true, data: [
-        { id: 1, name: 'sd-demo', display_name: '模型甲（演示）', provider: 'openai', credits_per_image: 6,
-          has_api_key: true, is_active: true, supports_image_to_image: true },
-        { id: 2, name: 'mj-demo', display_name: '模型乙（演示）', provider: 'openai', credits_per_image: 12,
-          has_api_key: true, is_active: true, supports_image_to_image: false }] });
+        // 价钱字段是 price_per_image（ImageModel 就是这么回的）；写成 credits_per_image
+        // 按钮上会显示「生成（0 积分）」——演示里看着像不要钱，验收时会误导人。
+        { id: 1, name: 'sd-demo', display_name: '模型甲（演示）', provider: 'openai', price_per_image: 6,
+          generation_type: 'sync', has_api_key: true, is_active: true, sizes_supported: ['1024x1024'],
+          api_config: { supports_image2image: true } },
+        { id: 2, name: 'mj-demo', display_name: '模型乙（演示）', provider: 'openai', price_per_image: 12,
+          generation_type: 'sync', has_api_key: true, is_active: true, sizes_supported: ['1024x1024'],
+          api_config: { supports_image2image: false } }] });
     }
     if (p.endsWith('/image/history')) {
       // store 读的是 response.data.data.data 与 .pagination，形状必须一模一样，
@@ -67,13 +129,33 @@ localStorage.removeItem('image.layoutMode');location.replace('/image');</script>
       return send(res, 200, { success: true, data: { total: history.length, favorites: 2, public: 0 } });
     }
     if (p.endsWith('/image/generate')) {
-      // 演示用的假生成：造一张新图放到历史最前面，让对话区真的长出一条
-      const id = 100 + history.length;
-      const made = fake(id, '（演示）刚刚生成的一张');
-      made.created_at = new Date().toISOString();
-      history.unshift(made);
-      return send(res, 200, { success: true, data: { id, images: [made], creditsConsumed: 6,
-        succeeded: 1, requested: 1 } });
+      // 演示用的假生成。形状照真实响应来：单张就是那条记录本身（ImageService.generateImage
+      // 回的是 results[0]），多张是 {requested,succeeded,failed,results,errors}——
+      // 页面现在按响应登记本轮结果，形状不对就测不出真东西。
+      let body = '';
+      req.on('data', c => { body += c; });
+      return req.on('end', () => {
+        let quantity = 1;
+        try { quantity = Number(JSON.parse(body || '{}').quantity) || 1; } catch { /* 演示，随它 */ }
+        const made = [];
+        for (let i = 0; i < quantity; i += 1) {
+          const row = fake(100 + history.length + i, '（演示）刚刚生成的一张');
+          row.created_at = new Date().toISOString();
+          made.push(row);
+        }
+        made.slice().reverse().forEach(row => history.unshift(row));
+        if (quantity === 1) return send(res, 200, { success: true, data: made[0] });
+        return send(res, 200, { success: true, data: { success: true, requested: quantity,
+          succeeded: made.length, failed: 0, creditsConsumed: 6 * made.length, results: made, errors: [] } });
+      });
+    }
+    if (p.endsWith('/prompt-assist/capability')) {
+      // 真实缺省是"没装配资格提供方就一律拒绝"，演示也照这个缺省；
+      // 想看开着的样子：访问 /preview-assist/on（仅本地演示用的开关，产品里没有这种东西）
+      return send(res, 200, { success: true, data: assistAvailable
+        ? { available: true, reason: null, retryable: false, message: null, batch_ref: 'demo-batch' }
+        : { available: false, reason: 'pilot_provider_not_installed', retryable: false,
+            message: '这个功能还没有对你所在的学校开放（演示：未装配资格提供方）', batch_ref: null } });
     }
     if (p.endsWith('/prompt-assist')) {
       // 演示用的假候选，不调模型、不扣分
@@ -84,7 +166,13 @@ localStorage.removeItem('image.layoutMode');location.replace('/image');</script>
       ], model: { id: 1, display_name: '模型甲（演示）' }, credits_charged: 3 } });
     }
     if (p.includes('/auth/me') || p.includes('/users/profile')) {
-      return send(res, 200, { success: true, data: { id: 1, nickname: '演示老师', group_id: 1, credits: 5000 } });
+      // authStore.getCurrentUser 解的是 data.user / data.permissions；
+      // 直接把用户对象当 data 回，会把已登录的 user 覆盖成 undefined，
+      // 然后 useImageGeneration 读 user.credits_stats 直接抛错、点生成什么都不发。
+      return send(res, 200, { success: true, data: {
+        user: { id: 1, username: 'demo', nickname: '演示老师', group_id: 1, role: 'user',
+          credits_stats: { total: 5000, used: 120, remaining: 4880 } },
+        permissions: ['*'] } });
     }
     return send(res, 200, { success: true, data: [] });
   }
