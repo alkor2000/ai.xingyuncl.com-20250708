@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-27T06:41:15Z",
+  "updated_at": "2026-09-27T16:11:41Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "0e8ee3781ab0db2b80db71e1b62da6fe77e88565d3f3fce72079e9c212361ece",
-      "size": 385174,
-      "normalized_sha256": "0e8ee3781ab0db2b80db71e1b62da6fe77e88565d3f3fce72079e9c212361ece"
+      "sha256": "f4db56d6923cd014de93e4a4f87208d918c2e1d4f9629dc31e2b4f9319ed214b",
+      "size": 385265,
+      "normalized_sha256": "f4db56d6923cd014de93e4a4f87208d918c2e1d4f9629dc31e2b4f9319ed214b"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2533,9 +2533,9 @@
       "normalized_sha256": "fb6f2194eb93c70e85987950b8c06144313457f5467a14c1953656a0be6cac24"
     },
     "docs/image/studio-candidate.md": {
-      "sha256": "3536a2536bc88f53093cede15e14f4999eca6f6593b8d958b8c909afc20ef82f",
-      "size": 10127,
-      "normalized_sha256": "3536a2536bc88f53093cede15e14f4999eca6f6593b8d958b8c909afc20ef82f"
+      "sha256": "3bc62b684dea8a39116bdb3bfd9d3781c85883eca499ce9478121b225ef56a8c",
+      "size": 15272,
+      "normalized_sha256": "3bc62b684dea8a39116bdb3bfd9d3781c85883eca499ce9478121b225ef56a8c"
     },
     "docs/integrations/E09-ONE-ENTRY-TEST.md": {
       "sha256": "e37a064869981d53758fa0e01d2bd2c6e580b4d16a4ab7ae91290b8abc136720",
@@ -2877,6 +2877,12 @@
       "sha256": "4f281013654e73306c2e88df6cb878a99c733e880b6790dc6bb32bfcc244443c",
       "size": 6410,
       "normalized_sha256": "4f281013654e73306c2e88df6cb878a99c733e880b6790dc6bb32bfcc244443c"
+    },
+    "frontend/src/__tests__/unit/components/ImageStudioWiring.test.jsx": {
+      "role": "observe",
+      "sha256": "af0372690358fe2f7aa90ff1a32b3f35f35dbb593d48905b1879b5a89f6fbbbe",
+      "size": 8296,
+      "normalized_sha256": "af0372690358fe2f7aa90ff1a32b3f35f35dbb593d48905b1879b5a89f6fbbbe"
     },
     "frontend/src/__tests__/unit/components/MessageContentExport.test.jsx": {
       "role": "observe",
@@ -4863,9 +4869,9 @@
       "normalized_sha256": "caa927044a045fe1278e38c68206b6da1d42781c64c3d6107b6a44fbbaed913f"
     },
     "frontend/src/pages/image/components/Studio/ConversationArea.jsx": {
-      "sha256": "048de85cf426852e897df9e920fcac477eb5b076e9b4356c831ce84f9e2d290e",
-      "size": 2600,
-      "normalized_sha256": "048de85cf426852e897df9e920fcac477eb5b076e9b4356c831ce84f9e2d290e"
+      "sha256": "c0676b77484c07ab6d89c3fddf4fee6bf569ed038f3a3393aa2f5d36c52eb9b8",
+      "size": 2606,
+      "normalized_sha256": "c0676b77484c07ab6d89c3fddf4fee6bf569ed038f3a3393aa2f5d36c52eb9b8"
     },
     "frontend/src/pages/image/components/Studio/GallerySection.jsx": {
       "sha256": "f5d194fb0da9092d756157ce7f9884290ede638aef9e8288dba6b147b4001a55",
@@ -4883,9 +4889,9 @@
       "normalized_sha256": "4e0aa6af65051cfe17a1e4c43ed119b17c9987b11c54db7f4b8f1cfb91f3d665"
     },
     "frontend/src/pages/image/components/Studio/StudioLayout.jsx": {
-      "sha256": "171e200e11a7fd7cf71adaceb780164a73b7e91043e473be96706f67956a2ca2",
-      "size": 3396,
-      "normalized_sha256": "171e200e11a7fd7cf71adaceb780164a73b7e91043e473be96706f67956a2ca2"
+      "sha256": "3249bed36815becf5fedd79bcc14a70df441629f1f3f71e935d8e53674f840dc",
+      "size": 3673,
+      "normalized_sha256": "3249bed36815becf5fedd79bcc14a70df441629f1f3f71e935d8e53674f840dc"
     },
     "frontend/src/pages/image/hooks/useImageGeneration.js": {
       "role": "index",
@@ -4906,9 +4912,9 @@
       "normalized_sha256": "0434faf68840e5fb422916cd3d513eb321db318b8046671f4198aae64ffbea66"
     },
     "frontend/src/pages/image/index.jsx": {
-      "sha256": "e05bad351a351b7ab485eadd6d3d8ffcbe2309ab16dad4e408b3722770c2d4c9",
-      "size": 22060,
-      "normalized_sha256": "e05bad351a351b7ab485eadd6d3d8ffcbe2309ab16dad4e408b3722770c2d4c9"
+      "sha256": "cd88bcef29495bda737cb19cca2f793ef07714e5d973514e008c7fe837f5db2f",
+      "size": 25127,
+      "normalized_sha256": "cd88bcef29495bda737cb19cca2f793ef07714e5d973514e008c7fe837f5db2f"
     },
     "frontend/src/pages/image/utils/constants.js": {
       "role": "index",
