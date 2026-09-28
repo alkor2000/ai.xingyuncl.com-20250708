@@ -14,6 +14,10 @@
 const REF = /^[A-Za-z0-9._:-]{1,128}$/;
 const DEFAULT_TIMEOUT_MS = 2000;
 
+// 能问的能力只有这几个，名字由本仓库定，不接受调用方随便传
+const CAPABILITIES = Object.freeze(['image_studio', 'video_studio']);
+const DEFAULT_CAPABILITY = 'image_studio';
+
 // 本地这一层自己能得出的两个结论
 const NOT_INSTALLED = 'pilot_provider_not_installed';
 const UNAVAILABLE = 'pilot_provider_unavailable';
@@ -43,13 +47,17 @@ function withTimeout(promise, ms) {
 /**
  * 装配契约（部署方自己实现并放进 app.locals.imagePilotEligibility）：
  *
- *   { check({ userId, groupId, role }) -> { eligible: boolean, reason?: string, batch_ref?: string } }
+ *   { check({ capability, userId, groupId, role })
+ *       -> { eligible: boolean, reason?: string, batch_ref?: string, capability?: string } }
  *
+ * capability 是"在问哪一个能力"（image_studio / video_studio）。**一个能力一个答案**：
+ * 图像放行不代表视频放行；provider 若在回答里写了 capability，必须与所问的一致。
  * 判定输入只给它已经在本平台里的既有身份，不多给。放行的回答必须带上 batch_ref
  * （这次是按哪一批放的），否则算装配没写完——一次 admin 确认一整批，事后要能说清是哪一批。
  * batch_ref 的取值与"当前是哪一批"由装配方从 M0 那边拿，本文件不猜、不填、不校验语义。
  */
-async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS, capability = DEFAULT_CAPABILITY } = {}) {
+  if (!CAPABILITIES.includes(capability)) return refuse('not_eligible');
   const provider = app && app.locals ? app.locals.imagePilotEligibility : null;
   if (!provider || typeof provider.check !== 'function') return refuse(NOT_INSTALLED);
   if (!user || user.id === undefined || user.id === null) return refuse('not_eligible');
@@ -57,7 +65,7 @@ async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   let verdict;
   try {
     verdict = await withTimeout(provider.check({
-      userId: user.id, groupId: user.group_id ?? null, role: user.role ?? null
+      capability, userId: user.id, groupId: user.group_id ?? null, role: user.role ?? null
     }), timeoutMs);
   } catch {
     // 问不到就是拒绝，绝不因为"对端没答上来"而放行
@@ -77,7 +85,11 @@ async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   }
   const batchRef = typeof verdict.batch_ref === 'string' ? verdict.batch_ref.trim() : '';
   if (!batchRef || !REF.test(batchRef)) return refuse(UNAVAILABLE, { retryable: true });
-  return Object.freeze({ available: true, reason: null, retryable: false, batchRef });
+  // provider 可以顺手声明这条放行是给哪个能力的；说了就必须对得上，避免把图像的放行当成视频的
+  if (verdict.capability !== undefined && verdict.capability !== capability) {
+    return refuse('not_eligible');
+  }
+  return Object.freeze({ available: true, reason: null, retryable: false, batchRef, capability });
 }
 
-module.exports = { decide, REASONS, NOT_INSTALLED, UNAVAILABLE, DEFAULT_TIMEOUT_MS };
+module.exports = { decide, REASONS, NOT_INSTALLED, UNAVAILABLE, DEFAULT_TIMEOUT_MS, CAPABILITIES, DEFAULT_CAPABILITY };

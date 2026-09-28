@@ -36,6 +36,22 @@ import useAuthStore from '../../stores/authStore';
 import apiClient from '../../utils/api';
 import './VideoGeneration.less';
 
+const StudioLayout = React.lazy(() => import('./components/Studio/StudioLayout'));
+
+/**
+ * 两套布局并存：老师们用惯了左边那根参数栏，新版工作台是结果为主、输入在手边。
+ *
+ * **谁能看到新版，由服务端资格说了算**（GET /api/studio-pilot/capability?capability=video_studio）。
+ * 下面这个值只是"有资格的人这台设备上次选了哪一套"的偏好——没资格时它一点作用都没有，
+ * 改这个缺省字符串也开不了门。**图像的放行不等于视频的放行**，两个能力各问各的。
+ */
+const LAYOUT_KEY = 'video.layoutMode';
+const readLayout = () => {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'classic' ? 'classic' : 'studio'; }
+  catch { return 'studio'; }
+};
+const writeLayout = (mode) => { try { localStorage.setItem(LAYOUT_KEY, mode); } catch { /* 隐私模式下不记就是了 */ } };
+
 const { Content, Sider } = Layout;
 const { TextArea, Search } = Input;
 const { TabPane } = Tabs;
@@ -95,6 +111,45 @@ const VideoGeneration = () => {
   
   const [searchInput, setSearchInput] = useState(keyword || '');
   const isComposingRef = useRef(false);
+
+  /* 这一页的新体验能不能用，只问服务端；问不到就当没有，留在经典视图 */
+  const [pilot, setPilot] = useState({ available: false, message: null, checked: false });
+  useEffect(() => {
+    let alive = true;
+    const fallback = setTimeout(() => {
+      setPilot(prev => (prev.checked ? prev : { ...prev, available: false, checked: true }));
+    }, 2000);
+    apiClient.get('/studio-pilot/capability', { params: { capability: 'video_studio' } })
+      .then(({ data }) => {
+        if (!alive) return;
+        const d = data?.data || {};
+        setPilot({ available: d.available === true, message: d.message || null, checked: true });
+      })
+      .catch(() => { if (alive) setPilot({ available: false, message: null, checked: true }); })
+      .finally(() => clearTimeout(fallback));
+    return () => { alive = false; clearTimeout(fallback); };
+  }, []);
+
+  const [layoutMode, setLayoutMode] = useState(readLayout);
+  const switchLayout = useCallback((mode) => { setLayoutMode(mode); writeLayout(mode); }, []);
+  /* 窄屏只是摆得更紧，信息架构和桌面同一套 */
+  const [compact, setCompact] = useState(() => window.innerWidth <= 1024);
+  useEffect(() => {
+    const onResize = () => setCompact(window.innerWidth <= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  /**
+   * 对话区只放"这一次打开以来做的"。
+   *
+   * 每一轮记提示词和这一轮真实拿到的 id；视频本身**由页面自己留一份**（turnItems），
+   * 不去读图库那份切片——图库一切页签、一搜索、一翻页就换人，本轮结果不能跟着消失。
+   * 状态靠下面那个 effect 从历史里按 id / task_id 认出来更新，认不出就保持原样。
+   */
+  const [turns, setTurns] = useState([]);
+  const [turnItems, setTurnItems] = useState(() => new Map());
+
 
   const loadList = useCallback((tab, page, size, overrideKeyword) => {
     const k = overrideKeyword !== undefined ? overrideKeyword : keyword;
@@ -269,9 +324,12 @@ const VideoGeneration = () => {
       params.last_frame_image = lastFrameImage;
     }
 
+    const promptOfTurn = prompt.trim();
     const result = await generateVideo(params);
 
     if (result) {
+      /* 先按响应登记这一轮，再让图库自己去刷新；顺序反过来也不影响判定 */
+      registerTurn(promptOfTurn, result);
       if (keyword || searchInput) {
         setKeyword('');
         setSearchInput('');
@@ -284,6 +342,51 @@ const VideoGeneration = () => {
       message.success(t('video.submitSuccess'));
     }
   };
+
+  /**
+   * 这一轮算哪一条，只认 /video/generate 的响应：generationId（必要时配 taskId）。
+   * 视频天然是异步任务，提交时还没有片子，所以先挂一条"排队中"。
+   * **绝不拿刷新后历史的前 N 条当本轮产出**——那在部分失败或刚提交时会把上一次的旧视频算进来。
+   */
+  const registerTurn = useCallback((promptOfTurn, result) => {
+    const id = result?.generationId ?? result?.generation_id ?? result?.id ?? null;
+    if (id === null || id === undefined) return;      // 没拿到真实 id 就不登记，也不猜
+    const seed = {
+      id, prompt: promptOfTurn, status: 'queued', progress: 0,
+      task_id: result?.taskId ?? result?.task_id ?? null
+    };
+    setTurnItems(prev => { const next = new Map(prev); next.set(id, seed); return next; });
+    setTurns(prev => [...prev, {
+      key: `${Date.now()}-${id}`, prompt: promptOfTurn, at: Date.now(), ids: [id],
+      taskId: seed.task_id
+    }]);
+  }, []);
+
+  /* 历史里出现同一条的新状态（排队→生成→完成/失败）就更新自己那份；只更新，不删除 */
+  useEffect(() => {
+    if (turnItems.size === 0 || generationHistory.length === 0) return;
+    setTurnItems(prev => {
+      let next = null;
+      for (const fresh of generationHistory) {
+        const known = prev.get(fresh.id)
+          || (fresh.task_id ? [...prev.values()].find(v => v.task_id && v.task_id === fresh.task_id) : null);
+        if (!known) continue;
+        if (known.status === fresh.status && known.progress === fresh.progress
+          && known.local_path === fresh.local_path && known.error_message === fresh.error_message) continue;
+        next = next || new Map(prev);
+        next.set(known.id, { ...fresh, id: known.id });
+      }
+      return next || prev;
+    });
+  }, [generationHistory, turnItems]);
+
+  /* 图库里删掉的，对话区也不再显示 */
+  const forgetInTurns = useCallback((id) => {
+    setTurnItems(prev => { if (!prev.has(id)) return prev; const next = new Map(prev); next.delete(id); return next; });
+    setTurns(prev => prev
+      .map(turn => (turn.ids.includes(id) ? { ...turn, ids: turn.ids.filter(x => x !== id) } : turn))
+      .filter(turn => turn.ids.length > 0));
+  }, []);
 
   const handleTabChange = (key) => {
     setActiveTab(key);
@@ -436,7 +539,7 @@ const VideoGeneration = () => {
                   )}
                   <Popconfirm
                     title={t('video.confirmDelete')}
-                    onConfirm={(e) => { if (e) e.stopPropagation(); deleteGeneration(item.id); }}
+                    onConfirm={(e) => { if (e) e.stopPropagation(); deleteGeneration(item.id); forgetInTurns(item.id); }}
                     onCancel={(e) => { if (e) e.stopPropagation(); }}
                     okText={t('common.confirm')}
                     cancelText={t('common.cancel')}
@@ -543,42 +646,14 @@ const VideoGeneration = () => {
   const isSearchActive = keyword && keyword.trim().length > 0;
   const currentTotal = activeTab === 'public' ? galleryPagination.total : historyPagination.total;
 
-  return (
-    <Layout className="video-generation-page">
-      <Sider width={380} className="generation-sider" theme="light">
-        <div className="generation-container">
-          <Card title={t('video.selectModel')} className="model-selection">
-            <Select
-              className="model-select"
-              placeholder={t('video.selectModelPlaceholder')}
-              value={selectedModel?.id}
-              onChange={handleModelChange}
-              style={{ width: '100%' }}
-            >
-              {models.map(model => (
-                <Option key={model.id} value={model.id}>
-                  <Space>
-                    <VideoCameraOutlined />
-                    <span>{model.display_name}</span>
-                    {!model.has_api_key && (<Tag color="orange">{t('video.notConfigured')}</Tag>)}
-                  </Space>
-                </Option>
-              ))}
-            </Select>
-            {selectedModel && (
-              <div className="model-info">
-                <p>{selectedModel.description}</p>
-                <Space wrap>
-                  {selectedModel.supports_text_to_video && <Tag color="green">{t('video.textToVideo')}</Tag>}
-                  {selectedModel.supports_first_frame && <Tag color="blue">{t('video.firstFrameToVideo')}</Tag>}
-                  {/* v1.3 隐藏单独尾帧标签（火山不支持单独 last_frame） */}
-                  {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
-                    <Tag color="purple">{t('video.firstLastFrameToVideo')}</Tag>}
-                </Space>
-              </div>
-            )}
-          </Card>
-
+  /**
+   * 参数区只写一份，经典视图的左栏和新版工作台的抽屉共用。
+   *
+   * 刻意**不搬到别的文件**：这些 JSX 依赖组件里的十几个 state 与处理函数，
+   * 搬家最容易把外层作用域里的东西漏在原地（图像那边就是这么白屏的）。
+   * 留在本组件里只是起个名字，闭包一个都不会丢。
+   */
+  const modeCard = (
           <Card title={t('video.generationMode')}>
             <Select value={generationMode} onChange={setGenerationMode} style={{ width: '100%' }}>
               <Option value="text_to_video" disabled={!selectedModel?.supports_text_to_video}>
@@ -600,17 +675,9 @@ const VideoGeneration = () => {
               <Alert message={t('video.firstLastFrameDesc')} type="info" showIcon style={{ marginTop: 10 }}/>
             )}
           </Card>
-
-          <Card title={t('video.inputPrompt')}>
-            <TextArea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={t('video.promptPlaceholder')}
-              rows={4}
-              maxLength={selectedModel?.max_prompt_length || 500}
-              showCount
-            />
-            
+  );
+  const frameUploaders = (
+    <>
             {(generationMode === 'first_frame' || generationMode === 'first_last_frame') && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>
@@ -667,8 +734,9 @@ const VideoGeneration = () => {
                 {t('video.imageFormatTip')}
               </div>
             )}
-          </Card>
-
+    </>
+  );
+  const parameterCards = (
           <Card title={t('video.parameters')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div>
@@ -714,6 +782,119 @@ const VideoGeneration = () => {
             </Space>
           </Card>
 
+  );
+  /* 新版工作台抽屉里按顺序放：模式 → 首尾帧 → 参数 */
+  const studioParameterPanel = (
+    <>
+      {modeCard}
+      <div style={{ marginTop: 16 }}>{frameUploaders}</div>
+      <div style={{ marginTop: 16 }}>{parameterCards}</div>
+    </>
+  );
+
+  /* 两套视图共用同一份数据与处理函数：新版只是换个摆法 */
+  const composerProps = {
+    models, selectedModel, onModelChange: handleModelChange,
+    prompt, onPromptChange: setPrompt, onGenerate: handleGenerate, generating,
+    price: calculatePrice(), resolution, duration, ratio, generationMode,
+    frameCount: (firstFrameImage ? 1 : 0) + (lastFrameImage ? 1 : 0),
+    parameterPanel: studioParameterPanel
+  };
+  const galleryProps = {
+    t, activeTab, onTabChange: handleTabChange, searchInput, onSearchInput: setSearchInput,
+    onSearch: handleSearch, isComposingRef, loading, isSearchActive, keyword, currentTotal,
+    items: getCurrentData(), currentPage, pageSize, total: getCurrentPagination().total,
+    onPageChange: handlePageChange, renderCard: renderVideoCard
+  };
+
+  /* 有资格才谈偏好；没资格、没装配、查不到，都走经典视图 */
+  const studioAllowed = pilot.available === true;
+  if (!pilot.checked) {
+    return <div className="loading-container"><Spin size="large" /></div>;
+  }
+
+  if (studioAllowed && layoutMode === 'studio') {
+    return (
+      <React.Suspense fallback={<div className="loading-container"><Spin size="large" /></div>}>
+        <StudioLayout
+          t={t} compact={compact} onExitStudio={() => switchLayout('classic')}
+          composer={composerProps} galleryProps={galleryProps}
+          turns={turns} turnItems={turnItems}
+          onRerun={(text) => setPrompt(text)} onOpen={handlePreviewVideo}
+        />
+        <Modal
+          title={previewVideo?.prompt || t('video.videoPreview')}
+          open={!!previewVideo} onCancel={() => setPreviewVideo(null)} footer={null}
+          width="90%" style={{ maxWidth: '1200px' }} centered
+          bodyStyle={{ padding: 0, background: '#000', display: 'flex',
+            justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}
+        >
+          {previewVideo && (
+            <video src={previewVideo.local_path} controls autoPlay
+              style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+          )}
+        </Modal>
+      </React.Suspense>
+    );
+  }
+
+  return (
+    <Layout className="video-generation-page">
+      <Sider width={380} className="generation-sider" theme="light">
+        <div className="generation-container">
+          {/* 入口也要过同一个门：没资格的人看不到，也切不过去 */}
+          {studioAllowed && (
+            <Button size="small" type="text" className="studio-switch" onClick={() => switchLayout('studio')}
+              data-testid="classic-to-studio">{t('video.studio.tryStudio')}</Button>
+          )}
+          <Card title={t('video.selectModel')} className="model-selection">
+            <Select
+              className="model-select"
+              placeholder={t('video.selectModelPlaceholder')}
+              value={selectedModel?.id}
+              onChange={handleModelChange}
+              style={{ width: '100%' }}
+            >
+              {models.map(model => (
+                <Option key={model.id} value={model.id}>
+                  <Space>
+                    <VideoCameraOutlined />
+                    <span>{model.display_name}</span>
+                    {!model.has_api_key && (<Tag color="orange">{t('video.notConfigured')}</Tag>)}
+                  </Space>
+                </Option>
+              ))}
+            </Select>
+            {selectedModel && (
+              <div className="model-info">
+                <p>{selectedModel.description}</p>
+                <Space wrap>
+                  {selectedModel.supports_text_to_video && <Tag color="green">{t('video.textToVideo')}</Tag>}
+                  {selectedModel.supports_first_frame && <Tag color="blue">{t('video.firstFrameToVideo')}</Tag>}
+                  {/* v1.3 隐藏单独尾帧标签（火山不支持单独 last_frame） */}
+                  {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
+                    <Tag color="purple">{t('video.firstLastFrameToVideo')}</Tag>}
+                </Space>
+              </div>
+            )}
+          </Card>
+
+          {modeCard}
+
+          <Card title={t('video.inputPrompt')}>
+            <TextArea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder={t('video.promptPlaceholder')}
+              rows={4}
+              maxLength={selectedModel?.max_prompt_length || 500}
+              showCount
+            />
+            
+            {frameUploaders}
+          </Card>
+
+          {parameterCards}
           <div className="generate-button-section">
             <Button
               type="primary" size="large"
