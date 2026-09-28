@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-27T18:00:00Z",
+  "updated_at": "2026-09-28T00:41:36Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "53f74fdbf369dd88139605371fb4caa7d5e4086249f7337c584c266b8d3cc095",
-      "size": 386165,
-      "normalized_sha256": "53f74fdbf369dd88139605371fb4caa7d5e4086249f7337c584c266b8d3cc095"
+      "sha256": "05df3bd8a3bfc041684bd5bec46f89a7dc48b7d67ac544f980a5b4436d87c745",
+      "size": 389824,
+      "normalized_sha256": "05df3bd8a3bfc041684bd5bec46f89a7dc48b7d67ac544f980a5b4436d87c745"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -435,6 +435,12 @@
       "size": 10557,
       "normalized_sha256": "bd8bf9207060c40a0de2497cc42d88883b0c609b739eadc1972be2f38f187bb0"
     },
+    "backend/src/__tests__/unit/routes/studioPilot.test.js": {
+      "role": "observe",
+      "sha256": "a07a6ad361915b7348352300d70d3b64bff63a59905f2536cb3e6c657007ba28",
+      "size": 4472,
+      "normalized_sha256": "a07a6ad361915b7348352300d70d3b64bff63a59905f2536cb3e6c657007ba28"
+    },
     "backend/src/__tests__/unit/routes/websiteArtifacts.test.js": {
       "role": "observe",
       "sha256": "8f286869fb35f446b0ff035b37e6ff1f42cd6a330ddb9e4a6246716e18dd3cdb",
@@ -730,9 +736,9 @@
       "normalized_sha256": "44730fdfd3f35b620f34527c9f0585c2005ecbaef437fe973f78680e4ddbaf8f"
     },
     "backend/src/app.js": {
-      "sha256": "1a7a9a3e93da97531f503c7eeafcbf63656d12d64e6c065a3ca0c71ae3cc229e",
-      "size": 10724,
-      "normalized_sha256": "1a7a9a3e93da97531f503c7eeafcbf63656d12d64e6c065a3ca0c71ae3cc229e"
+      "sha256": "5e4e334ff922d6aa7f1b4e6a75f41a4dde5d0e989e46eb947cee28dd501f4f3c",
+      "size": 10938,
+      "normalized_sha256": "5e4e334ff922d6aa7f1b4e6a75f41a4dde5d0e989e46eb947cee28dd501f4f3c"
     },
     "backend/src/config/aiLabTasks.js": {
       "sha256": "032c0e91b7ee12ac65335cdb16793855301f51694b7f147cfc6d551348147e39",
@@ -1665,6 +1671,11 @@
       "size": 7680,
       "normalized_sha256": "a2338b7d9688cc146c9f9ca3adbd0ea45768465367a2bc16f0af7908f6963337"
     },
+    "backend/src/routes/studioPilot.js": {
+      "sha256": "c7d4cfe6f6cd5dab6468d4816b4c982d2ef4c28164eb4c763429800ab5a68ea9",
+      "size": 2539,
+      "normalized_sha256": "c7d4cfe6f6cd5dab6468d4816b4c982d2ef4c28164eb4c763429800ab5a68ea9"
+    },
     "backend/src/routes/teachingRoutes.js": {
       "role": "index",
       "sha256": "9eddbeae0fa5985e95d57a72253cad24efa7bc5cf2a89da44ee99d9e10e452ec",
@@ -2145,9 +2156,9 @@
       "normalized_sha256": "f6000266f88f094510fb2e95a766f6645ab606768a246945212253b7985f7af8"
     },
     "backend/src/services/imagePilot/eligibility.js": {
-      "sha256": "c418ebab21116a251c8fc7440ca4b32334041eb86310a944c71eebb820822ceb",
-      "size": 4539,
-      "normalized_sha256": "c418ebab21116a251c8fc7440ca4b32334041eb86310a944c71eebb820822ceb"
+      "sha256": "0ef94c0db64dc038eac1eb57bb0c180e5fa83f5b31016fe2a772201ec5e12936",
+      "size": 5419,
+      "normalized_sha256": "0ef94c0db64dc038eac1eb57bb0c180e5fa83f5b31016fe2a772201ec5e12936"
     },
     "backend/src/services/imageService.js": {
       "role": "index",
@@ -2748,6 +2759,11 @@
       "size": 3037,
       "normalized_sha256": "1179c3c2e112953b5ada86a6ac12e6538c234fc24c5ccc1fa7c86d8956914273"
     },
+    "docs/video/studio-candidate.md": {
+      "sha256": "1b37f805ee71e1f2082609a93e28f4d23f696e1476e37f709a0791ebee4f5ede",
+      "size": 10893,
+      "normalized_sha256": "1b37f805ee71e1f2082609a93e28f4d23f696e1476e37f709a0791ebee4f5ede"
+    },
     "ecosystem.config.js": {
       "role": "index",
       "sha256": "ba00893c8953a874282e09da2b96d30c170a0ff17d7fed3064955e3557d8fc20",
@@ -2906,6 +2922,18 @@
       "sha256": "d0aedd866829b25c65a77d3639074196319a7eed374c52ce99609e769fad1e0a",
       "size": 24390,
       "normalized_sha256": "d0aedd866829b25c65a77d3639074196319a7eed374c52ce99609e769fad1e0a"
+    },
+    "frontend/src/__tests__/unit/components/VideoStudioComposer.test.jsx": {
+      "role": "observe",
+      "sha256": "4f868a9043fc32dd6c968bd48e48d6fc73c309fa59b2f5f615a2f37466307bcf",
+      "size": 2609,
+      "normalized_sha256": "4f868a9043fc32dd6c968bd48e48d6fc73c309fa59b2f5f615a2f37466307bcf"
+    },
+    "frontend/src/__tests__/unit/components/VideoStudioWiring.test.jsx": {
+      "role": "observe",
+      "sha256": "a875a42c362fd629a69c32d322812a1afbb8d20b7f6eb6a029f72427f6414940",
+      "size": 9411,
+      "normalized_sha256": "a875a42c362fd629a69c32d322812a1afbb8d20b7f6eb6a029f72427f6414940"
     },
     "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
       "role": "observe",
@@ -4076,10 +4104,9 @@
       "normalized_sha256": "6800cdca886f6e9ea8eeacf7a9cbdbcd75dfbdd4eb82acc4f9785e407c37183b"
     },
     "frontend/src/locales/en-US/video.json": {
-      "role": "index",
-      "sha256": "92a323e94d2ef795142bbb6737e1ae5fc80e53ff6b7b42f5f4fd8727227822b1",
-      "size": 5742,
-      "normalized_sha256": "92a323e94d2ef795142bbb6737e1ae5fc80e53ff6b7b42f5f4fd8727227822b1"
+      "sha256": "a589e4998ae57e692d8c9a42f4acaeb2d09d5e836d44cb08838cce6fa86ffc7a",
+      "size": 6632,
+      "normalized_sha256": "a589e4998ae57e692d8c9a42f4acaeb2d09d5e836d44cb08838cce6fa86ffc7a"
     },
     "frontend/src/locales/en-US/wiki.json": {
       "role": "index",
@@ -4178,9 +4205,9 @@
       "normalized_sha256": "f51a4ec23cda942f6c1e722fe8badae129dac128c6d8305734cb6f75a7830ac8"
     },
     "frontend/src/locales/zh-CN/video.json": {
-      "sha256": "0946d7a5c61a6e0294ec325f662029b6d2339ef18f161ddf095c9434f3262cf0",
-      "size": 5468,
-      "normalized_sha256": "0946d7a5c61a6e0294ec325f662029b6d2339ef18f161ddf095c9434f3262cf0"
+      "sha256": "f1ad06f5ea12ef47d36eda96fd95b97d1ad4f3be1acefe345d55006c48f32cf5",
+      "size": 6412,
+      "normalized_sha256": "f1ad06f5ea12ef47d36eda96fd95b97d1ad4f3be1acefe345d55006c48f32cf5"
     },
     "frontend/src/locales/zh-CN/wiki.json": {
       "sha256": "92bb2a5b09495128efa624ebd73eee11052c68efdb2b4c9320c38f9dad20f0c9",
@@ -5070,15 +5097,34 @@
       "normalized_sha256": "75605837d1eed456c9c8199978881f4852cb19445bf8d355c7835fe612ca685e"
     },
     "frontend/src/pages/video/VideoGeneration.jsx": {
-      "role": "index",
-      "sha256": "abcd0c1b1519794e4caebfaf64d6008fdf32437a59282a5a724f0f6c5cf0ae5f",
-      "size": 33585,
-      "normalized_sha256": "abcd0c1b1519794e4caebfaf64d6008fdf32437a59282a5a724f0f6c5cf0ae5f"
+      "sha256": "b0301bee284d2a32dd305feec66237fef3f55e0aaa4c2cb274c7cae5dd5d25b8",
+      "size": 42195,
+      "normalized_sha256": "b0301bee284d2a32dd305feec66237fef3f55e0aaa4c2cb274c7cae5dd5d25b8"
     },
     "frontend/src/pages/video/VideoGeneration.less": {
-      "sha256": "17a74872a6cf5d33320fbd3a13b1eecfc603a777ca32e99b088fc1985f1795bf",
-      "size": 9368,
-      "normalized_sha256": "17a74872a6cf5d33320fbd3a13b1eecfc603a777ca32e99b088fc1985f1795bf"
+      "sha256": "987e5f986cfcd7084f8f430118cef937d54858a408e91aacc25ee06fd4783612",
+      "size": 12604,
+      "normalized_sha256": "987e5f986cfcd7084f8f430118cef937d54858a408e91aacc25ee06fd4783612"
+    },
+    "frontend/src/pages/video/components/Studio/ConversationArea.jsx": {
+      "sha256": "786645a6cf642f094d119d8af53e9a49e5e1570d9ff00c7381d7a07ee01864fd",
+      "size": 4123,
+      "normalized_sha256": "786645a6cf642f094d119d8af53e9a49e5e1570d9ff00c7381d7a07ee01864fd"
+    },
+    "frontend/src/pages/video/components/Studio/GallerySection.jsx": {
+      "sha256": "65453bba04f8c2a4296267710eba89023099e530ce8745459793ba5156cdb47b",
+      "size": 2819,
+      "normalized_sha256": "65453bba04f8c2a4296267710eba89023099e530ce8745459793ba5156cdb47b"
+    },
+    "frontend/src/pages/video/components/Studio/PromptComposer.jsx": {
+      "sha256": "c5c1c1ae4aacd9156adef611daed07b1494a6f2a9739180c1b1242779f969f93",
+      "size": 4265,
+      "normalized_sha256": "c5c1c1ae4aacd9156adef611daed07b1494a6f2a9739180c1b1242779f969f93"
+    },
+    "frontend/src/pages/video/components/Studio/StudioLayout.jsx": {
+      "sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c",
+      "size": 2715,
+      "normalized_sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c"
     },
     "frontend/src/pages/wiki/Wiki.jsx": {
       "role": "index",
