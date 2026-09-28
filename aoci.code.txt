@@ -778,7 +778,7 @@ ModuleDetail.jsx[AU5L]: F:教学模块详情、编辑删除、课程创建编辑
 Teaching.jsx[EU3T]: F:E·教学系统入口页(/teaching)，仅渲染ModuleList | R:code:frontend/src/components/teaching/ModuleList.jsx,code:frontend/src/App.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/video/===
-VideoGeneration.jsx[AB7L]: F:V·视频生成页：开页问一次服务端资格，有资格才给新版工作台，否则留经典；本轮按生成响应id登记并自留一份；模型/分辨率/时长/比例定价，文生视频/首帧/首尾帧，三Tab历史与搜索 | R:code:frontend/src/stores/videoStore.js,code:backend/src/routes/studioPilot.js,code:frontend/src/pages/video/components/Studio/StudioLayout.jsx,code:frontend/src/utils/api.js,code:backend/src/routes/video.js | A:- | S:本轮只认generationId/taskId；状态从历史与taskSnapshots两处收，只靠历史在搜索/翻页后收不了尾；删除成功才摘轮次；没拿到明确可用不渲染新版(2秒兜底)；last_frame单独模式已隐藏
+VideoGeneration.jsx[AB7L]: F:V·视频生成页：开页问一次服务端资格，有资格才给新版工作台，否则留经典；本轮按生成响应id登记并自留一份；模型/分辨率/时长/比例定价，文生视频/首帧/首尾帧，三Tab历史与搜索 | R:code:frontend/src/stores/videoStore.js,code:backend/src/routes/studioPilot.js,code:frontend/src/pages/video/components/Studio/StudioLayout.jsx,code:frontend/src/utils/api.js,code:backend/src/routes/video.js | A:- | S:本轮只认generationId/taskId；状态由mergeTurnItems从历史与taskSnapshots两处合；删除成功才摘轮次；没拿到明确可用不渲染新版(2秒兜底)；last_frame单独模式已隐藏
 VideoGeneration.less[CU2L]: F:视频参数、历史与收藏画廊布局；手机纵排并重设历史区宽度100%；另有.video-studio新版工作台(结果区独立滚动、输入条常驻底部)与≤1024px压紧变体 | R:code:frontend/src/pages/video/VideoGeneration.jsx,code:frontend/src/pages/video/components/Studio/StudioLayout.jsx | A:- | S:纵排后仍需覆盖Ant Layout的零宽内容默认值
 
 ===/home/hanying/ai-platform/frontend/src/pages/wiki/===
@@ -1112,3 +1112,6 @@ ConversationArea.jsx[AU5T]: F:V·对话区：只显示本次打开以来的每�
 GallerySection.jsx[AU4S]: F:V·我的视频/收藏/公开三Tab图库：搜索(IME保护)、分页、格子；卡片仍由页面的renderCard渲染 | R:code:frontend/src/pages/video/VideoGeneration.jsx,code:frontend/src/pages/video/components/Studio/StudioLayout.jsx | A:受控组件：activeTab/onTabChange/searchInput/onSearch/items/total/onPageChange/renderCard 全由页面传入 | S:卡片不复制第二份(播放器/进度/失败原因/收藏公开删除都在页面那份)；数据必须走props
 PromptComposer.jsx[AU5T]: F:V·底部输入条：提示词常驻，模型小选择器，模式/分辨率/时长/比例做成chip点开才是抽屉，生成按钮上写明这次要花多少积分 | R:code:frontend/src/pages/video/components/Studio/StudioLayout.jsx | A:models、selectedModel、prompt、onPromptChange、onGenerate、price、parameterPanel | S:首帧/首尾帧模式缺图时禁用并说明缺什么；模型没配密钥不让点；不自己算价也不自己调接口，都用页面原有那份
 StudioLayout.jsx[AU6T]: F:V·新版视频工作台布局：上面对话区、下面输入条、图库收在右侧抽屉(窄屏改底部)；与经典视图共用同一套数据与处理函数 | R:code:frontend/src/pages/video/VideoGeneration.jsx,code:frontend/src/pages/video/components/Studio/ConversationArea.jsx,code:frontend/src/pages/video/components/Studio/GallerySection.jsx,code:frontend/src/pages/video/components/Studio/PromptComposer.jsx | A:t、compact、onExitStudio、composer、galleryProps、turns、turnItems、onRerun/onOpen | S:对话区只从turnItems取，绝不能读图库当前页切片——一切页签或一搜索本轮的视频就消失；收藏公开删除只在图库抽屉
+
+===/home/hanying/ai-platform/frontend/src/pages/video/utils/===
+mergeTurnItems.js[KU5T]: F:V·把本轮几条的状态从图库历史与轮询快照两处合出来：按权威度定谁说了算，再比最终形态决定要不要换对象 | R:code:frontend/src/pages/video/VideoGeneration.jsx,code:frontend/src/stores/videoStore.js | A:mergeTurnItems(prev,history,snapshots)→没有有效变化时返回传进来的prev本身 | S:快照>历史；终态不接受被非终态覆盖，晚到的旧历史直接丢；内容没变必须返回原对象——页面effect依赖turnItems，返回内容相同的新Map会让它一直自己叫醒自己

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-28T00:56:33Z",
+  "updated_at": "2026-09-28T01:06:26Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "45ab386721e6a517f955886d2b97c4b58731474eba2a26d34858be56dbc24cad",
-      "size": 390114,
-      "normalized_sha256": "45ab386721e6a517f955886d2b97c4b58731474eba2a26d34858be56dbc24cad"
+      "sha256": "c26cf010ffb3f6974ac32d3e85a2c97f9b31c044279a3f3003c9b4a64acb19a3",
+      "size": 390729,
+      "normalized_sha256": "c26cf010ffb3f6974ac32d3e85a2c97f9b31c044279a3f3003c9b4a64acb19a3"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2760,9 +2760,9 @@
       "normalized_sha256": "1179c3c2e112953b5ada86a6ac12e6538c234fc24c5ccc1fa7c86d8956914273"
     },
     "docs/video/studio-candidate.md": {
-      "sha256": "948ecddf2e5cf919852191734dc2b9b5288f311d1b55eabcc75f6c994c322fec",
-      "size": 12753,
-      "normalized_sha256": "948ecddf2e5cf919852191734dc2b9b5288f311d1b55eabcc75f6c994c322fec"
+      "sha256": "de349d888874c918541509a6b8c4457e36d20f6a51432043529e50e4c1b91a74",
+      "size": 13781,
+      "normalized_sha256": "de349d888874c918541509a6b8c4457e36d20f6a51432043529e50e4c1b91a74"
     },
     "ecosystem.config.js": {
       "role": "index",
@@ -2934,6 +2934,12 @@
       "sha256": "4c94e4a7d187477e407dc64fba7ce5182927fc4f7c360b03fa02e11fe90848aa",
       "size": 13456,
       "normalized_sha256": "4c94e4a7d187477e407dc64fba7ce5182927fc4f7c360b03fa02e11fe90848aa"
+    },
+    "frontend/src/__tests__/unit/components/VideoTurnMerge.test.js": {
+      "role": "observe",
+      "sha256": "079b1aca3890f6df0a2518c1baa67d50cce4c4a53fea27e72cfd84c2eae3fae6",
+      "size": 3866,
+      "normalized_sha256": "079b1aca3890f6df0a2518c1baa67d50cce4c4a53fea27e72cfd84c2eae3fae6"
     },
     "frontend/src/__tests__/unit/docTemplate/markdownToBlocks.test.js": {
       "role": "observe",
@@ -5097,9 +5103,9 @@
       "normalized_sha256": "75605837d1eed456c9c8199978881f4852cb19445bf8d355c7835fe612ca685e"
     },
     "frontend/src/pages/video/VideoGeneration.jsx": {
-      "sha256": "8e3865ef9d728ce13b90255874d99ecad2522b8771df06aaa5cc504321f86db7",
-      "size": 43198,
-      "normalized_sha256": "8e3865ef9d728ce13b90255874d99ecad2522b8771df06aaa5cc504321f86db7"
+      "sha256": "6840baf3900c7033b335b40e9097a59a3a943d13b92dc489942dc6d3b2344dba",
+      "size": 42467,
+      "normalized_sha256": "6840baf3900c7033b335b40e9097a59a3a943d13b92dc489942dc6d3b2344dba"
     },
     "frontend/src/pages/video/VideoGeneration.less": {
       "sha256": "987e5f986cfcd7084f8f430118cef937d54858a408e91aacc25ee06fd4783612",
@@ -5125,6 +5131,11 @@
       "sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c",
       "size": 2715,
       "normalized_sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c"
+    },
+    "frontend/src/pages/video/utils/mergeTurnItems.js": {
+      "sha256": "9f9c8de2d2dce36198051bd6e1c199a826c5c376c1884815326765598599b437",
+      "size": 3836,
+      "normalized_sha256": "9f9c8de2d2dce36198051bd6e1c199a826c5c376c1884815326765598599b437"
     },
     "frontend/src/pages/wiki/Wiki.jsx": {
       "role": "index",
