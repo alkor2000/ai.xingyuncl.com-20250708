@@ -1,4 +1,4 @@
-# 视频生成「对话式工作台」：候选包、验证到哪一步、发布前还缺什么（2026-09-28，rev2 按定点核收修订，未发布）
+# 视频生成「对话式工作台」：候选包、验证到哪一步、发布前还缺什么（2026-09-28，rev3 按定点核收修订，未发布）
 
 派单 CTRL-20260928-PRACTICE-VIDEO-STUDIO-CANDIDATE-01。独立工作树 `/home/hanying/ai-platform-video-ux-20260928`，分支 `codex/video-ux-20260928`，父版本 `cee42f7`（图像候选收口那一版，本包只读引用它的设计与组件，**没有改动图像固定件**）。
 
@@ -23,6 +23,7 @@
 | `backend/src/app.js` | +2 行，挂上面那个只读路由 |
 | `frontend/src/pages/video/VideoGeneration.jsx` | 开页问一次资格；本轮按真实响应 id 登记并自留一份；状态从历史与任务快照两处收；删除成功才摘轮次；参数区抽成同作用域变量供两边共用 |
 | `frontend/src/stores/videoStore.js` | +`taskSnapshots`：同一条轮询顺手留一份**与图库切片无关**的任务快照（不新增任何请求），删除时同步清掉 |
+| `frontend/src/pages/video/utils/mergeTurnItems.js` | 新增。纯函数：按权威度合并两个来源、比最终形态、没变就返回原对象、终态不回退 |
 | `frontend/src/pages/video/components/Studio/`（4 个） | 新增：整体布局、对话区、底部输入条、图库（卡片仍由页面渲染） |
 | `frontend/src/pages/video/VideoGeneration.less` | 新增 `.video-studio` 样式与 ≤1024px 压紧变体 |
 | `frontend/src/locales/{zh-CN,en-US}/video.json` | 各 +15 键（`video.studio.*`），两边一一对应 |
@@ -43,7 +44,9 @@
 
 页面自己留一份 `turnItems`：图库切页签、搜索、翻页都会换掉那份列表，本轮结果不跟着走。
 
-状态从**两处**收（rev2 按核收改）：历史列表，以及 store 里**与图库切片无关的任务快照**。只靠历史不够——真实的 `videoStore.pollTaskStatus` 只 map 当前那份 `generationHistory`，用户在片子做完之前搜索或翻页，这一条就不在列表里了，完成时带回来的 `local_path` 会跟着丢，轮次会永远停在排队中（核收用真实 store + 假计时器复现过）。现在同一条轮询顺手把每次结果按 `taskId` 留一份权威副本，**没有新增任何请求、没有第二条轮询**；页面按 id 或 task_id 对上就更新，认不出保持原样，**从不因为查不到而把这一轮丢掉**。
+状态从**两处**收（rev2 按核收改；rev3 又把合并本身修对了）：历史列表，以及 store 里**与图库切片无关的任务快照**。只靠历史不够——真实的 `videoStore.pollTaskStatus` 只 map 当前那份 `generationHistory`，用户在片子做完之前搜索或翻页，这一条就不在列表里了，完成时带回来的 `local_path` 会跟着丢，轮次会永远停在排队中（核收用真实 store + 假计时器复现过）。现在同一条轮询顺手把每次结果按 `taskId` 留一份权威副本，**没有新增任何请求、没有第二条轮询**；页面按 id 或 task_id 对上就更新，认不出保持原样，**从不因为查不到而把这一轮丢掉**。
+
+合并规则单独放在纯函数 `frontend/src/pages/video/utils/mergeTurnItems.js` 里（rev3）：**先按权威度定谁说了算**（轮询快照 > 图库历史），**再比最终形态**，没有有效变化就原样返回同一个对象；**晚到的旧历史不许把终态推回排队中**。上一版是"先按历史覆盖、再让快照盖回去"，最终内容没变也每次产生新 Map，而 effect 依赖 `turnItems`，于是一直自己叫醒自己（核收把我的 updater 原样抽出来跑，第 2–4 次都是 new_map=true 而 logical_value_changed=false）。
 
 图库里删除**成功了才**把这一轮摘掉；后端拒了或抛了，这一轮照样留着（rev2 按核收改）。
 
@@ -69,6 +72,7 @@
 |---|---|
 | `backend studioPilot.test.js` | 8 项通过：未装配、只放图像的 provider 问视频照样拒、写错能力名按没批准、**老图像契约（不写 capability）图像放行/视频拒**、放行视频必须点名、放行带批次、能力名不在白名单 400 且不问 provider、查不到 503 |
 | `backend promptAssist（路由 21 + 服务 7）` | 28 项通过，图像那一片加了能力维度后语义不变 |
+| `frontend VideoTurnMerge.test.js` | 8 项通过：陈旧历史 + 完成快照听快照的、**再跑三次原样返回同一个对象**、晚到旧历史/生成中推不回终态、真前进时照常更新、别人的 id 不进来 |
 | `frontend VideoStudioWiring.test.jsx` | 16 项通过：搜索/翻页后靠任务快照仍能收尾（完成与失败各一）、别的任务的快照不会窜进来、删除失败保留轮次/成功才摘掉，以及 排队→生成中→出片、失败写原因不补旧视频、没有真实 id 不登记、切公开画廊/搜索后本轮仍在、图库真的画出卡片、没资格不进新版（含 localStorage 强设）、查询失败不冒充可用、经典与新版来回切 |
 | `frontend VideoStudioComposer.test.jsx` | 5 项通过：价钱写在按钮上、首尾帧缺图不让生成、两张齐了能生成、参数收在抽屉、模型没配密钥不让点 |
 | `frontend 图像两套用例` | 20 项仍通过（本包没有改图像页；资格层加能力维度后图像语义不变） |

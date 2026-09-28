@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
 import useAuthStore from '../../stores/authStore';
 import apiClient from '../../utils/api';
+import { mergeTurnItems } from './utils/mergeTurnItems';
 import './VideoGeneration.less';
 
 const StudioLayout = React.lazy(() => import('./components/Studio/StudioLayout'));
@@ -363,37 +364,18 @@ const VideoGeneration = () => {
   }, []);
 
   /**
-   * 本轮状态从两处收：历史列表，和**与图库切片无关的任务快照**。
+   * 本轮状态从两处收：图库历史，和**与图库切片无关的任务快照**。
    *
    * 只靠历史是不够的：轮询只能 map 当前那份 generationHistory，用户一搜索或翻页，
    * 这一条就不在列表里了，完成时带回来的 local_path 会跟着丢，轮次永远停在排队中。
-   * 快照由同一条轮询顺手写下（没有新增任何请求），所以搜索/翻页之后也能正常收尾。
-   * 两边都只更新、不删除。
+   * 快照由同一条轮询顺手写下（没有新增任何请求）。
+   *
+   * 合并规则与"没变就别换对象"都在 mergeTurnItems 里（纯函数，单独有反例守着）：
+   * 这个 effect 依赖 turnItems，返回内容相同的新 Map 会让它一直自己叫醒自己。
    */
   useEffect(() => {
     if (turnItems.size === 0) return;
-    setTurnItems(prev => {
-      let next = null;
-      const put = (id, patch) => {
-        const known = (next || prev).get(id);
-        if (!known) return;
-        if (known.status === patch.status && known.progress === patch.progress
-          && known.local_path === patch.local_path && known.error_message === patch.error_message) return;
-        next = next || new Map(prev);
-        next.set(id, { ...known, ...patch, id });
-      };
-      for (const fresh of generationHistory) {
-        const known = prev.get(fresh.id)
-          || (fresh.task_id ? [...prev.values()].find(v => v.task_id && v.task_id === fresh.task_id) : null);
-        if (known) put(known.id, fresh);
-      }
-      for (const snap of Object.values(taskSnapshots || {})) {
-        const known = (snap.generationId !== undefined && prev.get(snap.generationId))
-          || [...prev.values()].find(v => v.task_id && v.task_id === snap.taskId);
-        if (known) put(known.id, snap);
-      }
-      return next || prev;
-    });
+    setTurnItems(prev => mergeTurnItems(prev, generationHistory, taskSnapshots));
   }, [generationHistory, taskSnapshots, turnItems]);
 
   /* 图库里删掉的，对话区也不再显示 */
