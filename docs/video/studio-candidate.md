@@ -1,4 +1,4 @@
-# 视频生成「对话式工作台」：候选包、验证到哪一步、发布前还缺什么（2026-09-28，未发布）
+# 视频生成「对话式工作台」：候选包、验证到哪一步、发布前还缺什么（2026-09-28，rev2 按定点核收修订，未发布）
 
 派单 CTRL-20260928-PRACTICE-VIDEO-STUDIO-CANDIDATE-01。独立工作树 `/home/hanying/ai-platform-video-ux-20260928`，分支 `codex/video-ux-20260928`，父版本 `cee42f7`（图像候选收口那一版，本包只读引用它的设计与组件，**没有改动图像固定件**）。
 
@@ -21,12 +21,13 @@
 | `backend/src/routes/studioPilot.js` | 新增。`GET /api/studio-pilot/capability?capability=video_studio`，只读 |
 | `backend/src/services/imagePilot/eligibility.js` | 加一个 `capability` 维度：**一个能力一个答案**，图像放行不等于视频放行 |
 | `backend/src/app.js` | +2 行，挂上面那个只读路由 |
-| `frontend/src/pages/video/VideoGeneration.jsx` | 开页问一次资格；本轮按真实响应 id 登记并自留一份；两套布局共用同一份数据与处理函数；参数区抽成同作用域变量供两边共用 |
+| `frontend/src/pages/video/VideoGeneration.jsx` | 开页问一次资格；本轮按真实响应 id 登记并自留一份；状态从历史与任务快照两处收；删除成功才摘轮次；参数区抽成同作用域变量供两边共用 |
+| `frontend/src/stores/videoStore.js` | +`taskSnapshots`：同一条轮询顺手留一份**与图库切片无关**的任务快照（不新增任何请求），删除时同步清掉 |
 | `frontend/src/pages/video/components/Studio/`（4 个） | 新增：整体布局、对话区、底部输入条、图库（卡片仍由页面渲染） |
 | `frontend/src/pages/video/VideoGeneration.less` | 新增 `.video-studio` 样式与 ≤1024px 压紧变体 |
 | `frontend/src/locales/{zh-CN,en-US}/video.json` | 各 +15 键（`video.studio.*`），两边一一对应 |
 
-**不上线的本地件**：`dev/video-ux-preview/server.cjs`（假数据本地预览，默认 127.0.0.1:4401）、`dev/video-ux-preview/browser-check.cjs`（headless 隔离容器里跑那 13 项）、三个测试文件。`dev/` 本来就被认知索引 exclude、也不进镜像。
+**不上线的本地件**：`dev/video-ux-preview/server.cjs`（假数据本地预览，默认 127.0.0.1:4401；两个入口：`/preview-login` 按真实缺省进经典页，`/preview-login-pilot` 把**本地演示开关**打开再进、用来看新版——那个开关只存在于演示服务里，不是 provider，也不改变产品缺省）、`dev/video-ux-preview/browser-check.cjs`（headless 隔离容器里跑那 13 项）、三个测试文件。`dev/` 本来就被认知索引 exclude、也不进镜像。
 
 ## 3 产品口径
 
@@ -40,9 +41,13 @@
 
 登记只认 `/video/generate` 的响应：`generationId`（必要时配 `taskId`）。**绝不拿刷新后历史的前 N 条当本轮产出**——那在部分失败或刚提交时会把上一次的旧视频算进来。响应里没有真实 id 就不登记，也不猜。
 
-页面自己留一份 `turnItems`：图库切页签、搜索、翻页都会换掉那份列表，本轮结果不跟着走。历史里认出同一条（按 `id`，或 `task_id`）就更新状态与进度，认不出保持原样，**从不因为查不到而把这一轮丢掉**。
+页面自己留一份 `turnItems`：图库切页签、搜索、翻页都会换掉那份列表，本轮结果不跟着走。
 
-这条线有反面证据：把登记改成"取历史第一条"后，`VideoStudioWiring.test.jsx` 立刻红 5 项（`output/practice-video-studio-20260928/turn-binding-mutation-red.txt`）。
+状态从**两处**收（rev2 按核收改）：历史列表，以及 store 里**与图库切片无关的任务快照**。只靠历史不够——真实的 `videoStore.pollTaskStatus` 只 map 当前那份 `generationHistory`，用户在片子做完之前搜索或翻页，这一条就不在列表里了，完成时带回来的 `local_path` 会跟着丢，轮次会永远停在排队中（核收用真实 store + 假计时器复现过）。现在同一条轮询顺手把每次结果按 `taskId` 留一份权威副本，**没有新增任何请求、没有第二条轮询**；页面按 id 或 task_id 对上就更新，认不出保持原样，**从不因为查不到而把这一轮丢掉**。
+
+图库里删除**成功了才**把这一轮摘掉；后端拒了或抛了，这一轮照样留着（rev2 按核收改）。
+
+这条线有两份反面证据：把登记改成"取历史第一条"后 `VideoStudioWiring.test.jsx` 立刻红 5 项（`turn-binding-mutation-red.txt`）；把任务快照那一路摘掉后，"搜索/翻页之后仍然收得了尾"那两项立刻红（`rev2-20260928/snapshot-merge-mutation-red.txt`）。
 
 ## 5 试点资格：缺省关闭，图像的放行不算视频的批准
 
@@ -50,7 +55,8 @@
 现有认证(authenticate) → 可注入的只读资格 provider → capability 查询与页面读同一个判定
 ```
 
-- 沿用图像那一片的 provider 模式（`app.locals.imagePilotEligibility`），但**加了能力维度**：`check({ capability, userId, groupId, role })`，`capability` 取 `image_studio` / `video_studio`。provider 若在回答里写了 `capability`，必须与所问的一致，否则按没资格——**不允许把图像的成员资格挪来开视频**。
+- 沿用图像那一片的 provider 模式（`app.locals.imagePilotEligibility`），但**加了能力维度**：`check({ capability, userId, groupId, role })`，`capability` 取 `image_studio` / `video_studio`。
+- **放行视频必须点名**（rev2 按核收改）：只有图像保留"答案里不写 capability 就算图像"的老契约（有意兼容、有用例守着）；**其他能力的放行必须在答案里写明 capability 且与所问一致**，否则回 `pilot_capability_not_granted`。只让 provider 可选回显是不够的——一个只认识图像的老 provider（`{eligible:true, batch_ref}`）会把视频一起放出去，这正是核收复现出来的那条。
 - 新增只读端点 `GET /api/studio-pilot/capability?capability=video_studio`。为什么不复用图像那个：那个挂在 `/api/prompt-assist/capability` 下面是历史原因（当时只有「帮我写」一个新能力），视频工作台跟写提示词没关系。**判定仍是同一个 `decide()`**，没有第二套逻辑、第二份缺省。
 - 拒绝清单与图像一致：未装配（**缺省就是这个**）/ 非试点学校 / 身份过期 / 未登记 / 暂停 / 换批 → 403；抛错、2s 超时、答复不成样子、放行没带批次 → 503 可重试。**绝不因为问不到就放行。** 那 2 秒只是停止等待，不是取消底层 I/O，真实 provider 必须自己有界。
 - 前端：没拿到明确「可用」之前两套都不渲染（转圈，2 秒兜底走经典）；没资格时连「试试新版布局」入口都没有；`video.layoutMode` 只在有资格的人之间记偏好，**本机塞什么都开不了门**。
@@ -61,11 +67,11 @@
 
 | 验证 | 结果 |
 |---|---|
-| `backend studioPilot.test.js` | 6 项通过：未装配、只放图像的 provider 问视频照样拒、回答里写错能力名按没资格、放行带批次、能力名不在白名单 400 且不问 provider、查不到 503 |
+| `backend studioPilot.test.js` | 8 项通过：未装配、只放图像的 provider 问视频照样拒、写错能力名按没批准、**老图像契约（不写 capability）图像放行/视频拒**、放行视频必须点名、放行带批次、能力名不在白名单 400 且不问 provider、查不到 503 |
 | `backend promptAssist（路由 21 + 服务 7）` | 28 项通过，图像那一片加了能力维度后语义不变 |
-| `frontend VideoStudioWiring.test.jsx` | 11 项通过：排队→生成中→出片、失败写原因不补旧视频、没有真实 id 不登记、切公开画廊/搜索后本轮仍在、图库真的画出卡片、没资格不进新版（含 localStorage 强设）、查询失败不冒充可用、经典与新版来回切 |
+| `frontend VideoStudioWiring.test.jsx` | 16 项通过：搜索/翻页后靠任务快照仍能收尾（完成与失败各一）、别的任务的快照不会窜进来、删除失败保留轮次/成功才摘掉，以及 排队→生成中→出片、失败写原因不补旧视频、没有真实 id 不登记、切公开画廊/搜索后本轮仍在、图库真的画出卡片、没资格不进新版（含 localStorage 强设）、查询失败不冒充可用、经典与新版来回切 |
 | `frontend VideoStudioComposer.test.jsx` | 5 项通过：价钱写在按钮上、首尾帧缺图不让生成、两张齐了能生成、参数收在抽屉、模型没配密钥不让点 |
-| `frontend 图像两套用例` | 20 项仍通过（本包没有改图像页） |
+| `frontend 图像两套用例` | 20 项仍通过（本包没有改图像页；资格层加能力维度后图像语义不变） |
 | 真实 Chromium（**headless 隔离容器**）13 项 | 全通过、0 控制台报错、9 张截图：桌面 1280×900 与 390/360 窄屏，含没资格/强设偏好/资格撤销三种门的行为 |
 | 语言包 | zh 128 / en 128，单边键 0 |
 

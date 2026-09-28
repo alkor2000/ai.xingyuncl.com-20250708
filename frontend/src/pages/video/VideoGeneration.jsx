@@ -64,7 +64,7 @@ const VideoGeneration = () => {
     models, selectedModel, generating, generationProgress,
     generationHistory, historyPagination,
     publicGallery, galleryPagination,
-    loading, userStats, processingTasks,
+    loading, userStats, processingTasks, taskSnapshots,
     keyword, setKeyword,
     getModels, selectModel, generateVideo,
     getUserHistory, getPublicGallery,
@@ -362,23 +362,39 @@ const VideoGeneration = () => {
     }]);
   }, []);
 
-  /* 历史里出现同一条的新状态（排队→生成→完成/失败）就更新自己那份；只更新，不删除 */
+  /**
+   * 本轮状态从两处收：历史列表，和**与图库切片无关的任务快照**。
+   *
+   * 只靠历史是不够的：轮询只能 map 当前那份 generationHistory，用户一搜索或翻页，
+   * 这一条就不在列表里了，完成时带回来的 local_path 会跟着丢，轮次永远停在排队中。
+   * 快照由同一条轮询顺手写下（没有新增任何请求），所以搜索/翻页之后也能正常收尾。
+   * 两边都只更新、不删除。
+   */
   useEffect(() => {
-    if (turnItems.size === 0 || generationHistory.length === 0) return;
+    if (turnItems.size === 0) return;
     setTurnItems(prev => {
       let next = null;
+      const put = (id, patch) => {
+        const known = (next || prev).get(id);
+        if (!known) return;
+        if (known.status === patch.status && known.progress === patch.progress
+          && known.local_path === patch.local_path && known.error_message === patch.error_message) return;
+        next = next || new Map(prev);
+        next.set(id, { ...known, ...patch, id });
+      };
       for (const fresh of generationHistory) {
         const known = prev.get(fresh.id)
           || (fresh.task_id ? [...prev.values()].find(v => v.task_id && v.task_id === fresh.task_id) : null);
-        if (!known) continue;
-        if (known.status === fresh.status && known.progress === fresh.progress
-          && known.local_path === fresh.local_path && known.error_message === fresh.error_message) continue;
-        next = next || new Map(prev);
-        next.set(known.id, { ...fresh, id: known.id });
+        if (known) put(known.id, fresh);
+      }
+      for (const snap of Object.values(taskSnapshots || {})) {
+        const known = (snap.generationId !== undefined && prev.get(snap.generationId))
+          || [...prev.values()].find(v => v.task_id && v.task_id === snap.taskId);
+        if (known) put(known.id, snap);
       }
       return next || prev;
     });
-  }, [generationHistory, turnItems]);
+  }, [generationHistory, taskSnapshots, turnItems]);
 
   /* 图库里删掉的，对话区也不再显示 */
   const forgetInTurns = useCallback((id) => {
@@ -539,7 +555,12 @@ const VideoGeneration = () => {
                   )}
                   <Popconfirm
                     title={t('video.confirmDelete')}
-                    onConfirm={(e) => { if (e) e.stopPropagation(); deleteGeneration(item.id); forgetInTurns(item.id); }}
+                    onConfirm={async (e) => {
+                      if (e) e.stopPropagation();
+                      /* 删成功了才从本轮摘掉；后端拒了或抛了，这一轮照样留着 */
+                      const removed = await deleteGeneration(item.id);
+                      if (removed) forgetInTurns(item.id);
+                    }}
                     onCancel={(e) => { if (e) e.stopPropagation(); }}
                     okText={t('common.confirm')}
                     cancelText={t('common.cancel')}

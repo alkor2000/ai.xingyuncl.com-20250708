@@ -87,6 +87,18 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const p = url.pathname;
 
+  /**
+   * 两个演示入口，区别只有一件事：进去时**本地演示开关**是开还是关。
+   *   /preview-login        —— 按真实缺省（未装配资格提供方）：看到的是经典视频页
+   *   /preview-login-pilot  —— 把本地开关打开再进：看到新版工作台
+   * 这个开关只存在于本演示服务里，**不是 provider、也不改变产品缺省**。
+   */
+  if (p === '/preview-login-pilot') {
+    pilotAvailable = true;
+    res.writeHead(302, { Location: '/preview-login', 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+
   if (p === '/preview-login') {
     const session = JSON.stringify({ state: { user: { id: 1, username: 'demo', nickname: '演示老师',
         group_id: 1, credits_stats: { total: 8000, used: 200, remaining: 7800 } },

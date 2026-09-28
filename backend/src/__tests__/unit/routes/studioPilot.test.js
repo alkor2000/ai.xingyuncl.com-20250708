@@ -74,11 +74,30 @@ describe('GET /api/studio-pilot/capability', () => {
     expect(imageOnly.check).toHaveBeenCalledWith(expect.objectContaining({ capability: 'video_studio' }));
   });
 
-  test('provider 回答里写错了能力名：按没资格处理，不把别的能力的放行挪过来', async () => {
+  test('provider 回答里写错了能力名：按没批准处理，不把别的能力的放行挪过来', async () => {
     const crossGrant = { check: async () => ({ eligible: true, batch_ref: 'b-1', capability: 'image_studio' }) };
     const res = await ask('video_studio', crossGrant);
     expect(res.body.data.available).toBe(false);
-    expect(res.body.data.reason).toBe('not_eligible');
+    expect(res.body.data.reason).toBe('pilot_capability_not_granted');
+  });
+
+  test('**老图像 provider**（只回 eligible+batch_ref、根本不写 capability）：图像照旧放行，视频必须拒', async () => {
+    const legacy = { check: jest.fn(async () => ({ eligible: true, batch_ref: 'legacy-image-only' })) };
+
+    const image = await ask('image_studio', legacy);
+    expect(image.body.data).toMatchObject({ available: true, batch_ref: 'legacy-image-only' });  // 老契约有意兼容
+
+    const video = await ask('video_studio', legacy);
+    expect(video.body.data.available).toBe(false);
+    expect(video.body.data.reason).toBe('pilot_capability_not_granted');
+    expect(video.body.data.message).toBeTruthy();
+  });
+
+  test('放行视频必须点名：答案里不写 capability 就不算批准', async () => {
+    const vague = { check: async () => ({ eligible: true, batch_ref: 'm0-video-01' }) };
+    const res = await ask('video_studio', vague);
+    expect(res.body.data.available).toBe(false);
+    expect(res.body.data.reason).toBe('pilot_capability_not_granted');
   });
 
   test('放行视频时带上批次，事后说得清按哪一批放的', async () => {

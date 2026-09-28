@@ -30,6 +30,7 @@ const REFUSAL_TEXT = Object.freeze({
   not_registered: '这个功能还没有对你所在的学校开放',
   suspended: '这个功能在你所在的学校已暂停',
   batch_changed: '开放批次已经变了，请联系老师',
+  pilot_capability_not_granted: '这个功能还没有单独对你所在的学校开放',
   not_eligible: '你暂时还不能用这个功能'
 });
 

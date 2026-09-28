@@ -18,6 +18,17 @@ const DEFAULT_TIMEOUT_MS = 2000;
 const CAPABILITIES = Object.freeze(['image_studio', 'video_studio']);
 const DEFAULT_CAPABILITY = 'image_studio';
 
+/**
+ * 只有图像这一个能力保留老契约：provider 不写 capability 时，按图像的答案算。
+ * 那是图像候选先落地时就有的形状，**有意保留并有用例守着**。
+ *
+ * 除此以外的能力（现在是 video_studio）**必须拿到点名的放行**：
+ * 答案里没写 capability，或写的是别的能力，一律当"这个能力没被批准"。
+ * 只让 provider 可选回显是不够的——一个只认识图像的老 provider 会把视频一起放出去。
+ */
+const LEGACY_IMPLICIT_CAPABILITY = 'image_studio';
+const CAPABILITY_NOT_GRANTED = 'pilot_capability_not_granted';
+
 // 本地这一层自己能得出的两个结论
 const NOT_INSTALLED = 'pilot_provider_not_installed';
 const UNAVAILABLE = 'pilot_provider_unavailable';
@@ -51,7 +62,8 @@ function withTimeout(promise, ms) {
  *       -> { eligible: boolean, reason?: string, batch_ref?: string, capability?: string } }
  *
  * capability 是"在问哪一个能力"（image_studio / video_studio）。**一个能力一个答案**：
- * 图像放行不代表视频放行；provider 若在回答里写了 capability，必须与所问的一致。
+ * 图像放行不代表视频放行。除图像外的能力，放行的答案里**必须**写明 capability 且与所问一致；
+ * 只有图像保留"不写就算图像"的老契约。
  * 判定输入只给它已经在本平台里的既有身份，不多给。放行的回答必须带上 batch_ref
  * （这次是按哪一批放的），否则算装配没写完——一次 admin 确认一整批，事后要能说清是哪一批。
  * batch_ref 的取值与"当前是哪一批"由装配方从 M0 那边拿，本文件不猜、不填、不校验语义。
@@ -85,11 +97,15 @@ async function decide(app, user, { timeoutMs = DEFAULT_TIMEOUT_MS, capability = 
   }
   const batchRef = typeof verdict.batch_ref === 'string' ? verdict.batch_ref.trim() : '';
   if (!batchRef || !REF.test(batchRef)) return refuse(UNAVAILABLE, { retryable: true });
-  // provider 可以顺手声明这条放行是给哪个能力的；说了就必须对得上，避免把图像的放行当成视频的
-  if (verdict.capability !== undefined && verdict.capability !== capability) {
-    return refuse('not_eligible');
+  // 放行必须点名到能力：老契约只在图像上继续成立，别的能力没点名就是没批准
+  const answered = typeof verdict.capability === 'string' ? verdict.capability : null;
+  if (answered === null) {
+    if (capability !== LEGACY_IMPLICIT_CAPABILITY) return refuse(CAPABILITY_NOT_GRANTED);
+  } else if (answered !== capability) {
+    return refuse(CAPABILITY_NOT_GRANTED);
   }
   return Object.freeze({ available: true, reason: null, retryable: false, batchRef, capability });
 }
 
-module.exports = { decide, REASONS, NOT_INSTALLED, UNAVAILABLE, DEFAULT_TIMEOUT_MS, CAPABILITIES, DEFAULT_CAPABILITY };
+module.exports = { decide, REASONS, NOT_INSTALLED, UNAVAILABLE, CAPABILITY_NOT_GRANTED,
+  DEFAULT_TIMEOUT_MS, CAPABILITIES, DEFAULT_CAPABILITY, LEGACY_IMPLICIT_CAPABILITY };

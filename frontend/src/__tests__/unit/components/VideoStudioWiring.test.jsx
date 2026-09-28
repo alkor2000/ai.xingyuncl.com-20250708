@@ -46,7 +46,7 @@ beforeEach(() => {
     models: [MODEL], selectedModel: MODEL, generating: false, generationProgress: 0,
     generationHistory: [], historyPagination: { total: 0 },
     publicGallery: [], galleryPagination: { total: 0 },
-    loading: false, userStats: {}, processingTasks: {},
+    loading: false, userStats: {}, processingTasks: {}, taskSnapshots: {},
     keyword: '', setKeyword: vi.fn(k => { store.keyword = k }),
     getModels: vi.fn(), selectModel: vi.fn(), generateVideo: vi.fn(),
     getUserHistory: vi.fn(async () => ({ data: store.generationHistory })),
@@ -193,5 +193,82 @@ describe('整套新体验的门只由服务端决定', () => {
     expect(screen.queryByTestId('video-studio')).toBeNull()
     fireEvent.click(back)
     expect(await screen.findByTestId('video-studio')).toBeTruthy()
+  })
+})
+
+describe('搜索/翻页把这一条从历史里换走之后，这一轮仍然能收尾', () => {
+  it('完成：历史里已经没有这一条，靠轮询留下的任务快照也能出片', async () => {
+    const view = await studio()
+    await generateOnce({ taskId: 't-601', generationId: 601 })
+    expect(screen.getByTestId('studio-turn-pending')).toBeTruthy()
+
+    /* 用户搜了一个别的词：历史整页换人，这一条不在里面了 */
+    store.generationHistory = [row(77, { prompt: '毫不相干' })]
+    view.rerender(<VideoGeneration />)
+    expect(screen.getByTestId('studio-turn-pending')).toBeTruthy()      // 还在等，没乱变
+
+    /* 同一条轮询（store 自己那条）写下的快照：与图库切片无关 */
+    store.taskSnapshots = { 't-601': { taskId: 't-601', generationId: 601, status: 'succeeded',
+      progress: 100, local_path: '/v/601.mp4', thumbnail_path: '/v/601.jpg', error_message: null } }
+    view.rerender(<VideoGeneration />)
+    await waitFor(() => expect(turnVideos()).toEqual(['/v/601.mp4']))
+    expect(screen.queryByText('毫不相干')).toBeNull()                    // 别人的片子没混进本轮
+  })
+
+  it('失败：同样收得了尾，写明原因而不是一直排队', async () => {
+    const view = await studio()
+    await generateOnce({ taskId: 't-602', generationId: 602 })
+    store.generationHistory = [row(77, { prompt: '毫不相干' })]
+    store.taskSnapshots = { 't-602': { taskId: 't-602', generationId: 602, status: 'failed',
+      progress: 0, local_path: null, thumbnail_path: null, error_message: '上游渲染超时' } }
+    view.rerender(<VideoGeneration />)
+    await waitFor(() => expect(screen.getByTestId('studio-turn-failed')).toBeTruthy())
+    expect(screen.getByText('上游渲染超时')).toBeTruthy()
+    expect(turnVideos()).toEqual([])
+  })
+
+  it('快照只更新自己那一轮，别的任务的快照不会窜进来', async () => {
+    const view = await studio()
+    await generateOnce({ taskId: 't-603', generationId: 603 })
+    store.taskSnapshots = { 't-999': { taskId: 't-999', generationId: 999, status: 'succeeded',
+      progress: 100, local_path: '/v/999.mp4', thumbnail_path: null, error_message: null } }
+    view.rerender(<VideoGeneration />)
+    await new Promise(r => setTimeout(r, 50))
+    expect(turnVideos()).toEqual([])
+    expect(screen.getByTestId('studio-turn-pending')).toBeTruthy()
+  })
+})
+
+describe('图库里删除失败时，这一轮不能凭空消失', () => {
+  it('后端拒绝删除：轮次保留', async () => {
+    const view = await studio()
+    await generateOnce({ taskId: 't-604', generationId: 604 })
+    store.generationHistory = [row(604)]
+    view.rerender(<VideoGeneration />)
+    await waitFor(() => expect(turnVideos()).toEqual(['/v/604.mp4']))
+
+    store.deleteGeneration.mockResolvedValue(false)
+    fireEvent.click(screen.getByTestId('studio-open-gallery'))
+    const del = (await screen.findAllByRole('button')).find(b => b.querySelector('.anticon-delete'))
+    fireEvent.click(del)
+    fireEvent.click(await screen.findByText('common.confirm'))
+    await waitFor(() => expect(store.deleteGeneration).toHaveBeenCalledWith(604))
+    await new Promise(r => setTimeout(r, 50))
+    expect(screen.getAllByTestId('studio-turn').length).toBe(1)          // 没删掉就还在
+  })
+
+  it('删成功了才从本轮摘掉', async () => {
+    const view = await studio()
+    await generateOnce({ taskId: 't-605', generationId: 605 })
+    store.generationHistory = [row(605)]
+    view.rerender(<VideoGeneration />)
+    await waitFor(() => expect(turnVideos()).toEqual(['/v/605.mp4']))
+
+    store.deleteGeneration.mockResolvedValue(true)
+    fireEvent.click(screen.getByTestId('studio-open-gallery'))
+    const del = (await screen.findAllByRole('button')).find(b => b.querySelector('.anticon-delete'))
+    fireEvent.click(del)
+    fireEvent.click(await screen.findByText('common.confirm'))
+    await waitFor(() => expect(screen.queryAllByTestId('studio-turn').length).toBe(0))
   })
 })

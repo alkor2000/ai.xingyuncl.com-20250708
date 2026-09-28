@@ -34,6 +34,10 @@ const useVideoStore = create((set, get) => ({
   userStats: null,
   processingTasks: {}, // 正在处理的任务
   completedTasks: {}, // 已完成的任务（避免状态回退）
+  // 每次轮询顺手留下的任务快照：**与图库当前切片无关**。
+  // 历史被搜索/翻页换走时，pollTaskStatus 只能 map 到当前切片，完成时的 local_path 会跟着丢；
+  // 这里按 taskId 留一份权威副本，页面据此更新那一轮。不新增任何请求。
+  taskSnapshots: {},
   
   // v1.1 关键词搜索状态（页面切换Tab时保留）
   keyword: '',
@@ -138,7 +142,23 @@ const useVideoStore = create((set, get) => ({
         
         if (response.data.success) {
           const taskData = response.data.data;
-          
+
+          /* 先把这一次的结果原样留一份（与历史切片无关），再去更新列表 */
+          set(state => ({
+            taskSnapshots: {
+              ...state.taskSnapshots,
+              [taskId]: {
+                taskId, generationId,
+                status: taskData.status,
+                progress: taskData.progress ?? null,
+                local_path: taskData.local_path ?? null,
+                thumbnail_path: taskData.thumbnail_path ?? null,
+                error_message: taskData.error_message ?? null,
+                at: Date.now()
+              }
+            }
+          }));
+
           set(state => ({
             generationHistory: state.generationHistory.map(item => {
               if (item.id === generationId || item.task_id === taskId) {
@@ -353,6 +373,11 @@ const useVideoStore = create((set, get) => ({
             const newCompleted = { ...state.completedTasks };
             delete newCompleted[itemToDelete.task_id];
             newState.completedTasks = newCompleted;
+
+            /* 快照跟着一起清掉，别让已删除的东西又从快照里冒出来 */
+            const newSnapshots = { ...state.taskSnapshots };
+            delete newSnapshots[itemToDelete.task_id];
+            newState.taskSnapshots = newSnapshots;
           }
           
           return newState;
