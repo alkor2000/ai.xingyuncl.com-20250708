@@ -72,10 +72,10 @@ Identity 侧核对（overlay）：issue 相位 `prepare/commit/status` 共 16 �
 ## 5 候选部署包（顺序；本包不执行任何一步）
 
 1. **代码**：本分支提交（见 §4）经合并进入 main 后按 dev/RELEASE.md 走 `make deploy`（星云）→ `make deploy-docker`（北大）。入口对两站默认无害：开关未设 → `capability available:false` → 前端不渲染入口；直接调用 → `503 handoff_disabled`。星云站即便设开关也因实例键不等于 `pku-ai-platform-prod` 启动失败关闭（J2）。
-2. **账本表**：`backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js` 在 G3/G4 授权后**晋级到 `backend/migrations/`**（北大站 `make deploy-docker` 自动执行；星云站不建）。加法 DDL，回退为 `down`。
+2. **账本表**：`backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js` 在 G3/G4 授权后**晋级到 `backend/migrations/`**（北大站 `make deploy-docker` 自动执行；星云站不建）。加法 DDL，回退为 `down`。（2026-10-03 更正：进入共享的 `backend/migrations/` 后，星云站的 `make migrate` 也会执行它；迁移装配包 c99943b 要求北大专用的迁移安排，具体做法待定。）
 3. **受限角色**：按 `p03-restricted-role-runbook.md` 建 `P03_HANDOFF_DB_USER`（只对四表 DML），`backend/scripts/p03-ledger-readiness.cjs` 只读核验。
 4. **Identity**：北大站经 enrollment 写入 `IDENTITY_DEPLOYMENT_INSTANCE_KEY=pku-ai-platform-prod`（当前为空）；Identity 侧生产 policy 行 + `formal_pairs`（G6）；TE 生产目标发布。
-5. **开启**：北大容器设 `P03_HANDOFF_ENABLED=true` 与 `P03_HANDOFF_*` 六项（`p03-instance-binding-candidate.json` `env_candidate_pku`）+ 角色凭据，重启；启动日志出现 `P03 formal handoff runtime ready`；用一个已关联教师会话核对 `GET /api/p03/handoffs/capability` → `available:true`。任一事实缺失时进程启动失败关闭，不会半开。
+5. **开启**：北大容器设 `P03_HANDOFF_ENABLED=true` 与 `P03_HANDOFF_*` 六项（`p03-instance-binding-candidate.json` `env_candidate_pku`）+ 角色凭据，重启。这些值写在服务器的 compose `.env` 里，经 `docker-compose.yml` 中 backend 的 `P03_HANDOFF_*` 透传进入容器（2026-10-03 起；之前的编排不传这些变量，写了也到不了运行时）；启动日志出现 `P03 formal handoff runtime ready`；用一个已关联教师会话核对 `GET /api/p03/handoffs/capability` → `available:true`。任一事实缺失时进程启动失败关闭，不会半开。
 6. **回滚**：去掉开关重启即隐藏入口（本地记录保留，账本表保留）；数据库回滚沿 `/var/backups/ai-platform/mysql/`。
 7. **不含**：`P03_HANDOFF_LAB` 在 production 被拒绝，不能用于生产；`dev/` 运行器只在本机实验。
 

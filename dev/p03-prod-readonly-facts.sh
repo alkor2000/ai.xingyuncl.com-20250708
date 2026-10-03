@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # P03 双站生产只读事实核对 —— 由用户本人在本机运行（会话内的生产读取会被审核拦截）。
-# 只打印：部署 HEAD 与脏文件计数、Identity/P03 配置中白名单内的非密变量、数据库授权与 schema 的布尔/计数事实。
+# 只打印：部署 HEAD 与脏文件计数、Identity/P03 配置中白名单内的非密变量、凭据类变量"有没有"、数据库授权与 schema 的布尔/计数事实。
 # 不打印密钥、口令、连接地址、用户记录或任何正文；不修改任何服务器上的东西。
 # 用法：bash dev/p03-prod-readonly-facts.sh            （两站）
 #       bash dev/p03-prod-readonly-facts.sh practice   （只查星云站 PM2）
@@ -10,8 +10,12 @@ PRACTICE_HOST="${PRACTICE_SSH_HOST:-practice}"
 PKU_HOST="${DOCKER_SSH_HOST:-pkuailab}"
 REMOTE_DIR="${REMOTE_DIR:-/var/www/ai-platform}"
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20"
-# 允许打印的变量名（公开标识/开关；CLIENT_SECRET、CREDENTIALS_FILE、RUNTIME_DIR、DB_* 一律不打印）
-ALLOW='^(IDENTITY_ENABLED|IDENTITY_ISSUER|IDENTITY_PUBLIC_ORIGIN|IDENTITY_CLIENT_ID|IDENTITY_DEPLOYMENT_INSTANCE_KEY|IDENTITY_TOKEN_AUTH_METHOD|IDENTITY_BACKCHANNEL_URL|P03_HANDOFF_[A-Z_]+)='
+# 允许打印值的变量名（公开标识/开关；CLIENT_SECRET、CREDENTIALS_FILE、RUNTIME_DIR、DB_* 一律不打印）。
+# P03 只列出非密的那几项：账本账号/口令和 LAB 不能靠前缀放行，否则口令会被原样打印。
+P03_PUBLIC='P03_HANDOFF_(ENABLED|STORE|WIRE_VERSION|SOURCE_INSTANCE|TARGET_INSTANCE|IDENTITY_ORIGIN|TARGET_ORIGIN|TIMEOUT_MS)'
+ALLOW="^(IDENTITY_ENABLED|IDENTITY_ISSUER|IDENTITY_PUBLIC_ORIGIN|IDENTITY_CLIENT_ID|IDENTITY_DEPLOYMENT_INSTANCE_KEY|IDENTITY_TOKEN_AUTH_METHOD|IDENTITY_BACKCHANNEL_URL|${P03_PUBLIC})="
+# 只报"有没有"、从不打印值的变量名
+PRESENCE='IDENTITY_CLIENT_SECRET IDENTITY_CREDENTIALS_FILE P03_HANDOFF_DB_USER P03_HANDOFF_DB_PASSWORD P03_HANDOFF_LAB'
 # 应用自己的数据库连接内只读查询：授权类别、users/user_groups 是否已有 P03 资格链所需列、影子账号计数、P03 表是否存在
 read -r -d '' NODE_FACTS <<'JS'
 const m=require('mysql2/promise');(async()=>{const e=process.env;
@@ -27,12 +31,12 @@ console.log(JSON.stringify({mysql:v.v,grant_count:g.length,all_privileges:/ALL P
 })().catch(e=>{console.log(JSON.stringify({db_error:e.code||'failed'}));process.exit(1)});
 JS
 NODE_FACTS="${NODE_FACTS//$'\n'/ }"   # one line, so printf %q stays plain backslash quoting for any remote shell
-ARGS="$(printf '%q ' "$REMOTE_DIR" "$ALLOW" "$NODE_FACTS")"
+ARGS="$(printf '%q ' "$REMOTE_DIR" "$ALLOW" "$NODE_FACTS" "$PRESENCE" "$P03_PUBLIC")"
 
 practice() {
   echo "== ai.xingyuncl.com ($PRACTICE_HOST, PM2) =="
   $SSH "$PRACTICE_HOST" "bash -s $ARGS" <<'REMOTE'
-DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"
+DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"; PRESENCE="$4"; P03_PUBLIC="$5"
 # Non-interactive ssh shells do not load nvm; find the same node/pm2 the deploy user runs with.
 [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1
 NODE_BIN="$(command -v node 2>/dev/null || ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)"
@@ -41,10 +45,16 @@ cd "$DIR" || { echo "remote_dir_missing"; exit 1; }
 echo "head=$(git rev-parse HEAD)  dirty_tracked=$(git status --porcelain | grep -vc '^??')"
 echo "-- backend/.env (allow-listed names only)"
 grep -E "$ALLOW" backend/.env 2>/dev/null | sort || echo "(none set)"
+for k in $PRESENCE; do if grep -qE "^$k=.+" backend/.env 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi; done
 echo "-- pm2 process env (allow-listed names only)"
 if [ -n "$PM2_BIN" ]; then
   ID=$("$PM2_BIN" id ai-platform-auth </dev/null 2>/dev/null | tr -d '[] ' | head -1)
-  if [ -n "$ID" ]; then "$PM2_BIN" env "$ID" </dev/null 2>/dev/null | grep -E '^(IDENTITY_(ENABLED|ISSUER|PUBLIC_ORIGIN|CLIENT_ID|DEPLOYMENT_INSTANCE_KEY|TOKEN_AUTH_METHOD)|P03_HANDOFF_[A-Z_]+):' | sort; else echo "(pm2 process ai-platform-auth not found)"; fi
+  if [ -n "$ID" ]; then
+    # Held only in this shell variable; the presence loop below never prints a value.
+    PM2_ENV="$("$PM2_BIN" env "$ID" </dev/null 2>/dev/null)"
+    printf '%s\n' "$PM2_ENV" | grep -E "^(IDENTITY_(ENABLED|ISSUER|PUBLIC_ORIGIN|CLIENT_ID|DEPLOYMENT_INSTANCE_KEY|TOKEN_AUTH_METHOD)|$P03_PUBLIC):" | sort
+    for k in $PRESENCE; do if printf '%s\n' "$PM2_ENV" | grep -qE "^$k: .+"; then echo "$k: <set>"; else echo "$k: <unset>"; fi; done
+  else echo "(pm2 process ai-platform-auth not found)"; fi
 else echo "(pm2 not found)"; fi
 echo "-- database facts (application connection, read-only)"
 if [ -n "$NODE_BIN" ]; then (cd backend && "$NODE_BIN" -r dotenv/config -e "$NODE_FACTS" </dev/null); else echo "(node not found)"; fi
@@ -54,11 +64,13 @@ REMOTE
 pku() {
   echo "== ai.pkuailab.com ($PKU_HOST, Docker) =="
   $SSH "$PKU_HOST" "bash -s $ARGS" <<'REMOTE'
-DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"
+DIR="$1"; ALLOW="$2"; NODE_FACTS="$3"; PRESENCE="$4"
 cd "$DIR" || { echo "remote_dir_missing"; exit 1; }
 echo "head=$(git rev-parse HEAD)  dirty_tracked=$(git status --porcelain | grep -vc '^??')"
 echo "-- running backend container env (allow-listed names only)"
 docker compose exec -T backend sh -c "env | grep -E '$ALLOW' | sort" </dev/null 2>/dev/null || echo "(container env unavailable)"
+# Presence only: the value stays inside the command substitution and is never echoed.
+docker compose exec -T backend sh -c "for k in $PRESENCE; do if [ -n \"\$(printenv \"\$k\")\" ]; then echo \"\$k=<set>\"; else echo \"\$k=<unset>\"; fi; done" </dev/null 2>/dev/null || echo "(container presence unavailable)"
 echo "-- database facts (application connection inside the container, read-only)"
 docker compose exec -T -e NODE_FACTS="$NODE_FACTS" backend sh -c 'cd /app && node -e "$NODE_FACTS"' </dev/null 2>/dev/null || echo "(container db facts unavailable)"
 REMOTE

@@ -98,6 +98,22 @@ services:
       IDENTITY_HANDOFF_TTL_SECONDS: "${IDENTITY_HANDOFF_TTL_SECONDS:-90}"
       IDENTITY_HTTP_TIMEOUT_MS: "${IDENTITY_HTTP_TIMEOUT_MS:-10000}"
       IDENTITY_JWKS_CACHE_SECONDS: "${IDENTITY_JWKS_CACHE_SECONDS:-300}"
+      # P03教师成果正式交接：只作为后端运行配置注入，默认关闭。
+      # 开关为空即关闭（不建连接池、不读凭据、不调对端）；只有开关为true时才严格核验其余各项，
+      # 缺任何一项启动即失败。信任常量不设默认值，必须由部署方逐项写明。
+      # 账本账号是只对四张账本表有DML权限的独立账号，口令只写在服务器.env。
+      # 不传P03_HANDOFF_LAB：实验路由只在development/test有效，生产会直接拒绝。
+      P03_HANDOFF_ENABLED: "${P03_HANDOFF_ENABLED:-}"
+      P03_HANDOFF_STORE: "${P03_HANDOFF_STORE:-}"
+      P03_HANDOFF_WIRE_VERSION: "${P03_HANDOFF_WIRE_VERSION:-}"
+      P03_HANDOFF_SOURCE_INSTANCE: "${P03_HANDOFF_SOURCE_INSTANCE:-}"
+      P03_HANDOFF_TARGET_INSTANCE: "${P03_HANDOFF_TARGET_INSTANCE:-}"
+      P03_HANDOFF_IDENTITY_ORIGIN: "${P03_HANDOFF_IDENTITY_ORIGIN:-}"
+      P03_HANDOFF_TARGET_ORIGIN: "${P03_HANDOFF_TARGET_ORIGIN:-}"
+      P03_HANDOFF_DB_USER: "${P03_HANDOFF_DB_USER:-}"
+      P03_HANDOFF_DB_PASSWORD: "${P03_HANDOFF_DB_PASSWORD:-}"
+      # 空串会被当成0而判为无效，所以默认给运行时自己的缺省值5000。
+      P03_HANDOFF_TIMEOUT_MS: "${P03_HANDOFF_TIMEOUT_MS:-5000}"
     volumes:
       - ./storage/uploads:/app/storage/uploads
       - ./logs/backend:/app/logs

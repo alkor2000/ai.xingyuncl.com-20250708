@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-09-26T08:03:48Z",
+  "updated_at": "2026-10-03T07:19:43Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "40c2705e18f98cc118b67cd370479c71630912a4c8cbe4578d4b28ac506534e4",
-      "size": 379387,
-      "normalized_sha256": "40c2705e18f98cc118b67cd370479c71630912a4c8cbe4578d4b28ac506534e4"
+      "sha256": "b2eb82f1e3caec015836a8c09506740ab3cffb51881dee06ef31fff221306461",
+      "size": 379471,
+      "normalized_sha256": "b2eb82f1e3caec015836a8c09506740ab3cffb51881dee06ef31fff221306461"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2399,9 +2399,9 @@
       "normalized_sha256": "1905816993fe89f8bae9b7a207ac118dc936569bac2f00cfbe8dc606137b8c71"
     },
     "docker-compose.yml": {
-      "sha256": "a8be9b51adcc31ac4e817112c78e9054bf2f39cc169209643f19ce57028b2bc6",
-      "size": 5019,
-      "normalized_sha256": "a8be9b51adcc31ac4e817112c78e9054bf2f39cc169209643f19ce57028b2bc6"
+      "sha256": "0a9b2dcc3a1442283b969b1667e39cd28a64d67e245e6242128041fa9f70a649",
+      "size": 6275,
+      "normalized_sha256": "0a9b2dcc3a1442283b969b1667e39cd28a64d67e245e6242128041fa9f70a649"
     },
     "docker/Dockerfile.backend": {
       "sha256": "1c4b27c7c88611547ea9d8d7521989498f5ae801af7fba0e1aaa7e1a88ec1a2c",
@@ -2631,9 +2631,9 @@
       "normalized_sha256": "7bc1d3a7887a0a57e9ab41967cbbc13053ac8c33c821c4085b4733242e3267a9"
     },
     "docs/integrations/p03-entry-deploy-candidate.md": {
-      "sha256": "9981455517e011f0506ad84917c2132300a75ca768a87579837937c4fb78160d",
-      "size": 16884,
-      "normalized_sha256": "9981455517e011f0506ad84917c2132300a75ca768a87579837937c4fb78160d"
+      "sha256": "2203e78df9686970010ffaaa4adb38c1ab4442210b55743d4c1a493b5e2a631b",
+      "size": 17294,
+      "normalized_sha256": "2203e78df9686970010ffaaa4adb38c1ab4442210b55743d4c1a493b5e2a631b"
     },
     "docs/integrations/p03-handoff-examples.json": {
       "sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2",
