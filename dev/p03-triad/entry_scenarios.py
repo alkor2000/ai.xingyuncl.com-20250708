@@ -166,8 +166,8 @@ class PracticeLab:
         # restricted role receives exactly the four-table DML grants of mysqlStore.restrictedRoleGrants.
         migrations = self.scratch / 'migrations'
         shutil.copytree(self.root / 'backend/migrations', migrations)
-        candidate = self.root / 'backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js'
-        (migrations / candidate.name).write_text(candidate.read_text().replace("require('../../src/services/artifactHandoff/mysqlStore')", 'require(' + json.dumps(str(self.root / 'backend/src/services/artifactHandoff/mysqlStore')) + ')'))
+        candidate = self.root / 'backend/migrations/20260921_001_p03_handoff_ledger.js'  # promoted 2026-10-04
+        (migrations / candidate.name).write_text(candidate.read_text().replace("require('../src/services/artifactHandoff/mysqlStore')", 'require(' + json.dumps(str(self.root / 'backend/src/services/artifactHandoff/mysqlStore')) + ')'))
         migrated = self.node(NODE_KNEX, {'port': self.mysql['port'], 'user': self.app_user, 'password': self.app_password, 'database': db, 'directory': str(migrations)})
         need(migrated.get('files') == [candidate.name], 'ledger_candidate_not_applied')
         self.sql(grants)

@@ -1,7 +1,7 @@
-"""Isolated rehearsal of the P03 ledger migration candidate and the restricted role on a disposable mysql:8.0.
+"""Isolated rehearsal of the P03 ledger migration and the restricted role on a disposable mysql:8.0.
 
 Pre-image: the schema (no data) plus the knex_migrations rows of the local production copy (practice-mysql),
-so knex sees exactly what production would: every recorded migration present, only the candidate pending.
+so knex sees exactly what production would: every recorded migration present, only the ledger migration pending.
 Steps: migrate up -> post-image, byte equality with mysqlStore.SCHEMA applied directly, idempotent re-run,
 restricted role passes the runtime readiness probe while ALL PRIVILEGES / partial / wrong-database / missing
 table are refused, backup -> down -> restore -> ready again, partial pre-existing table, failing migrator.
@@ -22,7 +22,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / 'backend'
-CANDIDATE = BACKEND / 'migrations-candidates/p03/20260921_001_p03_handoff_ledger.js'
+CANDIDATE = BACKEND / 'migrations/20260921_001_p03_handoff_ledger.js'  # promoted 2026-10-04
 EVIDENCE = ROOT / 'storage/private/p03-handoff-validation/ledger-migration'
 TABLES = ['p03_handoff_owners', 'p03_handoff_operations', 'p03_handoff_snapshots', 'p03_handoff_keys']
 LOCAL = {'container': 'practice-mysql'}
@@ -105,8 +105,8 @@ def main():
             tmp = Path(temp)
             migrations = tmp / 'migrations'
             shutil.copytree(BACKEND / 'migrations', migrations)  # every recorded file present, as in production
-            # The candidate requires mysqlStore relative to backend/migrations-candidates/p03; point the copies at the same module.
-            portable = CANDIDATE.read_text().replace("require('../../src/services/artifactHandoff/mysqlStore')", f"require({json.dumps(str(BACKEND / 'src/services/artifactHandoff/mysqlStore'))})")
+            # The migration requires mysqlStore relative to backend/migrations; point the copies at the same module.
+            portable = CANDIDATE.read_text().replace("require('../src/services/artifactHandoff/mysqlStore')", f"require({json.dumps(str(BACKEND / 'src/services/artifactHandoff/mysqlStore'))})")
             (migrations / CANDIDATE.name).write_text(portable)
             only = tmp / 'candidate-only'  # for side databases without the production pre-image
             only.mkdir()
@@ -227,7 +227,7 @@ def main():
         result['status'] = 'passed'
         result['stage'] = 'complete'
         result['auto_execution_facts'] = {
-            'knexfile_directory': './migrations', 'candidate_directory': 'backend/migrations-candidates/p03 (not scanned by knex)',
+            'knexfile_directory': './migrations', 'ledger_migration': 'backend/migrations/20260921_001_p03_handoff_ledger.js (promoted 2026-10-04)',
             'docker_site': 'make deploy-docker runs knex migrate:latest before switching containers; a file in backend/migrations executes at the next deploy',
             'pm2_site': 'make migrate (manual, backup gate)', 'container_entrypoint': 'run-migrations.sh runs database/migrations/*.sql only'}
     except Exception as error:

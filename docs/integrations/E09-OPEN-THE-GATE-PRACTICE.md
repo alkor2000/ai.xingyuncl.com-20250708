@@ -39,8 +39,8 @@
 | 4 | `backend/migrations-candidates/c05/20260923_002_c05_session_context.js` | 建 1 张表 `c05_sessions` | 无 |
 
 > **`c05_sessions` 是实践的表**，edu 库里不该出现；反过来 edu 的 7 张 `hw_website_*` 也不该出现在实践库里。
-> **P03 的候选迁移 `backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js` 不在本清单内**，
-> 本次开门**不要**执行它，也不要打开 `P03_HANDOFF_ENABLED`。
+> **P03 的账本迁移不在本清单内**：它已于 2026-10-04 晋级为 `backend/migrations/20260921_001_p03_handoff_ledger.js`
+> （产品负责人决定两站都建），随正常发布由 knex 执行，不需要在这里单独处理；本次开门**不要**打开 `P03_HANDOFF_ENABLED`。
 
 ### 1.2 怎么执行（这一段是实测出来的，照做）
 

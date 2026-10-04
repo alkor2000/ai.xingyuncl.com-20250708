@@ -4,7 +4,7 @@
 
 ## 顺序
 
-1. **建表**：把 `backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js` 晋级到 `backend/migrations/`（授权后），按 dev/RELEASE.md 第三节"加法式，迁移先行"执行（北大站 `make deploy-docker` 自动跑 knex，星云站 `make migrate`）。表结构与 `mysqlStore.SCHEMA` 逐字一致。
+1. **建表**：账本迁移已于 2026-10-04 晋级为 `backend/migrations/20260921_001_p03_handoff_ledger.js`（产品负责人决定两站都建；星云那四张表保持为空），随发布执行（北大站 `make deploy-docker` 自动跑 knex，星云站 `make migrate`）。表结构与 `mysqlStore.SCHEMA` 逐字一致。
 2. **建账号**：运维在 MySQL 8 上创建登录账号（口令由运维生成、只进部署配置，不进仓库、不进日志）：
    ```sql
    CREATE USER 'p03_handoff'@'<应用连接来源主机>' IDENTIFIED BY '<运维生成的口令>';

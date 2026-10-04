@@ -1,5 +1,5 @@
 /**
- * 迁移候选：P03 教师成果交接源侧持久账本（p03_handoff_owners / operations / snapshots / keys）
+ * 迁移：P03 教师成果交接源侧持久账本（p03_handoff_owners / operations / snapshots / keys）
  *
  * 为什么改：teacher-artifact-handoff/1（fc1+e1）正式运行时需要跨重启的 owner 锚锁、W/R 恢复窗口与幂等键，
  *          文件暂存只用于开发草案；账本表由 backend/src/services/artifactHandoff/mysqlStore.js 的 SCHEMA 定义，
@@ -9,18 +9,15 @@
  * down：真的回退——按外键顺序删除四张表（keys / snapshots → operations → owners）。**回退会丢失账本数据**，
  *       只在确认没有在途 operation（或已按 dev/RELEASE.md 备份门备份）后执行。
  *
- * 为什么在 backend/migrations-candidates/ 而不是 backend/migrations/：
- *   knexfile.js 的 migrations.directory 是 ./migrations；ai.pkuailab.com 的 `make deploy-docker` 会在切换容器前
- *   自动执行 `knex migrate:latest`，ai.xingyuncl.com 由 `make migrate` 执行。也就是说，文件一旦进入
- *   backend/migrations/ 并合并到 main，下一次 Docker 发布就会在生产建表。本候选在 fc1+e1 登记、G3/G4 生产
- *   迁移授权（见 docs/integrations/p03-release-readiness-candidate.md）之前保持在候选目录，任何启动路径都不会读到它。
- * 晋级步骤（授权后）：`git mv backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js backend/migrations/`
- *   → 本地 `cd backend && npx knex migrate:latest` 演练 → 按 dev/RELEASE.md 第三节"加法式，迁移先行"发布。
+ * 2026-10-04 从 backend/migrations-candidates/p03/ 晋级：产品负责人决定两站都建表。
+ *   ai.xingyuncl.com 由 `make migrate` 执行，那里的四张表保持为空——发送方按代码只能是北大实例，星云开不起来；
+ *   ai.pkuailab.com 由 `make deploy-docker` 在切换容器前执行。建表不打开任何功能：P03_HANDOFF_ENABLED 仍默认关闭。
+ *   相对候选的唯一代码改动是下面 mysqlStore 的相对路径（../../src → ../src），与 c99943b 迁移装配包核过的变换一致。
  *   受限角色（GRANT 语句）见 docs/integrations/p03-restricted-role-runbook.md，由运维在建表后另行执行。
  *
  * 创建时间：2026-09-21
  */
-const { SCHEMA, TABLES } = require('../../src/services/artifactHandoff/mysqlStore');
+const { SCHEMA, TABLES } = require('../src/services/artifactHandoff/mysqlStore');
 
 exports.up = async function up(knex) {
   for (const statement of SCHEMA) {

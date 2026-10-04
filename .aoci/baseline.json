@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-03T07:19:43Z",
+  "updated_at": "2026-10-04T15:44:20Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,10 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "b2eb82f1e3caec015836a8c09506740ab3cffb51881dee06ef31fff221306461",
-      "size": 379471,
-      "normalized_sha256": "b2eb82f1e3caec015836a8c09506740ab3cffb51881dee06ef31fff221306461"
+      "role": "index",
+      "sha256": "079e511cf128e8e51f7a97fb81ea660668e823f23a9dbaefc2ea97b8e32513d8",
+      "size": 379395,
+      "normalized_sha256": "079e511cf128e8e51f7a97fb81ea660668e823f23a9dbaefc2ea97b8e32513d8"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -177,6 +178,11 @@
       "sha256": "5b286b5db2212d5a7fb1d8859288ef46ee99473d9570f97a84a1a9181c62ff85",
       "size": 3212,
       "normalized_sha256": "5b286b5db2212d5a7fb1d8859288ef46ee99473d9570f97a84a1a9181c62ff85"
+    },
+    "backend/migrations/20260921_001_p03_handoff_ledger.js": {
+      "sha256": "a27aeb38d05ec71d031a77b8ea6c944b76bff19e224252ae941de962ad6997e2",
+      "size": 2427,
+      "normalized_sha256": "a27aeb38d05ec71d031a77b8ea6c944b76bff19e224252ae941de962ad6997e2"
     },
     "backend/package-lock.json": {
       "sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c",
@@ -579,11 +585,11 @@
       "size": 16407,
       "normalized_sha256": "bfa5e3b72d883fd1168c52cf9953a997c55635eb81d2dd4447b00e6cbfc983f9"
     },
-    "backend/src/__tests__/unit/services/artifactHandoffMigrationCandidate.test.js": {
+    "backend/src/__tests__/unit/services/artifactHandoffLedgerMigration.test.js": {
       "role": "observe",
-      "sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b",
-      "size": 1666,
-      "normalized_sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b"
+      "sha256": "a05bf79e3e760f5a0086788c95a25918f4489b657580ca7fb0cb43f89dd026ad",
+      "size": 2049,
+      "normalized_sha256": "a05bf79e3e760f5a0086788c95a25918f4489b657580ca7fb0cb43f89dd026ad"
     },
     "backend/src/__tests__/unit/services/auth/IdentityIntegrationServices.test.js": {
       "role": "observe",
@@ -2516,9 +2522,9 @@
       "normalized_sha256": "e37a064869981d53758fa0e01d2bd2c6e580b4d16a4ab7ae91290b8abc136720"
     },
     "docs/integrations/E09-OPEN-THE-GATE-PRACTICE.md": {
-      "sha256": "f70ae87b81c563b78a5cc02b996d348cb43cdffe96f413c1d18121393fee43c6",
-      "size": 22639,
-      "normalized_sha256": "f70ae87b81c563b78a5cc02b996d348cb43cdffe96f413c1d18121393fee43c6"
+      "sha256": "68db863388f6729906b12a68f445bee63ce0e553f4fb2e4656e78a0c170a6da7",
+      "size": 22740,
+      "normalized_sha256": "68db863388f6729906b12a68f445bee63ce0e553f4fb2e4656e78a0c170a6da7"
     },
     "docs/integrations/E09-SUBMIT-TEST.md": {
       "sha256": "930d7d3aec222c6c308dd4671f29edd0b0abb5a069afeed27eae7595abc2e434",
@@ -2631,9 +2637,9 @@
       "normalized_sha256": "7bc1d3a7887a0a57e9ab41967cbbc13053ac8c33c821c4085b4733242e3267a9"
     },
     "docs/integrations/p03-entry-deploy-candidate.md": {
-      "sha256": "2203e78df9686970010ffaaa4adb38c1ab4442210b55743d4c1a493b5e2a631b",
-      "size": 17294,
-      "normalized_sha256": "2203e78df9686970010ffaaa4adb38c1ab4442210b55743d4c1a493b5e2a631b"
+      "sha256": "8eb505ac3c23d03cfdd764911338a731b6929b6ed41daf22fab28a6f7a0a0637",
+      "size": 17165,
+      "normalized_sha256": "8eb505ac3c23d03cfdd764911338a731b6929b6ed41daf22fab28a6f7a0a0637"
     },
     "docs/integrations/p03-handoff-examples.json": {
       "sha256": "cb4ad6fe5ee1064565411ec378ae7d7af8895536df8575bd17088e18c644c7d2",
@@ -2666,19 +2672,19 @@
       "normalized_sha256": "0f1a24c9ee1ffaa89a4fb60d64d8b38e8f9638a4a292ba99bd3c8d9bdd92f458"
     },
     "docs/integrations/p03-release-readiness-candidate.md": {
-      "sha256": "a973eb0aef502dc1240f63901466cfaca5ce6074ab963ad89600166fde369f36",
-      "size": 12316,
-      "normalized_sha256": "a973eb0aef502dc1240f63901466cfaca5ce6074ab963ad89600166fde369f36"
+      "sha256": "3b4a218d1a098209f9bf02a57b6219464e1731fc19be8851c2bcdf5508680cb5",
+      "size": 12301,
+      "normalized_sha256": "3b4a218d1a098209f9bf02a57b6219464e1731fc19be8851c2bcdf5508680cb5"
     },
     "docs/integrations/p03-restricted-role-runbook.md": {
-      "sha256": "24605e0a73180d0a0c6b3021100e21a21365c458571d0283a0b49877d8777574",
-      "size": 4243,
-      "normalized_sha256": "24605e0a73180d0a0c6b3021100e21a21365c458571d0283a0b49877d8777574"
+      "sha256": "e848680d2e3cafb1fe48174adcde1f2502cba1bb54743c6d993fe8e2f3ad08f0",
+      "size": 4244,
+      "normalized_sha256": "e848680d2e3cafb1fe48174adcde1f2502cba1bb54743c6d993fe8e2f3ad08f0"
     },
     "docs/integrations/p03-source-handoff.md": {
-      "sha256": "b7c28f0981a7e0e66c6594c3b2e751923dd139ebe646a2d1e9317ae9bed9b748",
-      "size": 87762,
-      "normalized_sha256": "b7c28f0981a7e0e66c6594c3b2e751923dd139ebe646a2d1e9317ae9bed9b748"
+      "sha256": "7db35910452673387870491410edf3cea80bc69d4da746653926b304e3a48e53",
+      "size": 87671,
+      "normalized_sha256": "7db35910452673387870491410edf3cea80bc69d4da746653926b304e3a48e53"
     },
     "docs/integrations/p03-synthetic-packet.json": {
       "sha256": "d8f6cc5f14e6e56e1184440393f935179fd5f5442f86184194595347f5b9c183",

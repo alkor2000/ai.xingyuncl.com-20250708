@@ -50,7 +50,7 @@
 
 | 项 | 状态 | 依据/缺口 |
 |---|---|---|
-| 加法迁移 | **候选就绪，未晋级** | `backend/migrations-candidates/p03/20260921_001_p03_handoff_ledger.js`（knex，复用 `SCHEMA`）；隔离演练通过（up/幂等/down/备份恢复/部分状态/失败迁移账号）；**进入 `backend/migrations/` 即在下次 `make deploy-docker` 自动执行**，G3/G4 授权前保持候选目录 |
+| 加法迁移 | **已晋级（2026-10-04）** | `backend/migrations/20260921_001_p03_handoff_ledger.js`（knex，复用 `SCHEMA`；产品负责人决定两站都建）；隔离演练通过（up/幂等/down/备份恢复/部分状态/失败迁移账号）；随下次 `make deploy-docker`（北大）与 `make migrate`（星云）建表 |
 | 数据库角色 | 未建（手册就绪） | `docs/integrations/p03-restricted-role-runbook.md`：精确 GRANT、只读核验脚本 `backend/scripts/p03-ledger-readiness.cjs`、回退；运行时以 `SHOW GRANTS` 精确核验，应用账号被拒；生产应用账号仍 ALL PRIVILEGES（星云全局 `ON *.*`，独立加固项） |
 | 配置 | 候选 | `p03-instance-binding-candidate.json`；`P03_HANDOFF_ENABLED=false` 为默认；北大站缺显式实例键（须经 enrollment 流程） |
 | 编排装配 | **已做（默认关闭）** | `formalRuntime.js` + `server.js` 启动钩子：`P03_HANDOFF_ENABLED` 未设/false 关闭；true 严格构造并就绪核验，任一事实缺失启动失败关闭；非法值配置错误；`I03DraftSource` 的 production 拒绝原样 |
