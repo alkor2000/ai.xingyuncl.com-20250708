@@ -4,7 +4,7 @@
 #   2. 代码到服务器：git bundle + scp，再 ff-only 合并（服务器直连 GitHub 常被掐断，不依赖它）
 #   3. 服务器：资源复核后依次构建 backend/frontend 镜像并打发布标签、给旧镜像打 rollback 标签、写 release 目录（override + RELEASE.txt）
 #   4. 备份数据库 → 用新镜像先跑 knex 迁移（加法式迁移先行）→ 切换容器 → 等 backend healthy → 健康检查
-#   5. 清理旧镜像（每个仓库只留最近 3 个发布标签及其 rollback 标签）
+#   5. 清理旧镜像（每个仓库只留最近 3 个发布标签及其 rollback 标签）和旧库备份（只留最近 7 份，切换成功后才删）
 #   6. 本地打 deploy-docker-<时间戳> 标签并推送
 # 用法: make deploy-docker                 （预览并二次确认）
 #       make deploy-docker ARGS=-y         （跳过确认，仅用于自动化）
@@ -13,6 +13,7 @@
 # 环境变量: DOCKER_SSH_HOST=pkuailab  DOCKER_REMOTE_DIR=/var/www/ai-platform  DOCKER_HEALTH_URL=https://ai.pkuailab.com/health
 #           PM2_SSH_HOST=practice（用来核对 ai.xingyuncl.com 已发布的提交）
 #           DOCKER_MIN_FREE_GIB=8 DOCKER_MIN_AVAILABLE_MIB=5120 DOCKER_MIN_FREE_INODES=100000
+#           DOCKER_KEEP_DB_BACKUPS=7（保留的库备份份数，至少 1）
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_HOST="${DOCKER_SSH_HOST:-pkuailab}"
@@ -24,6 +25,9 @@ KEEP_RELEASES="${DOCKER_KEEP_RELEASES:-3}"
 MIN_FREE_GIB="${DOCKER_MIN_FREE_GIB:-8}"
 MIN_AVAILABLE_MIB="${DOCKER_MIN_AVAILABLE_MIB:-5120}"
 MIN_FREE_INODES="${DOCKER_MIN_FREE_INODES:-100000}"
+KEEP_DB_BACKUPS="${DOCKER_KEEP_DB_BACKUPS:-7}"
+# 0 或非数字会让清理删光全部备份，动手前就拒绝。
+[[ "$KEEP_DB_BACKUPS" =~ ^[1-9][0-9]*$ ]] || { echo "❌ DOCKER_KEEP_DB_BACKUPS 必须是正整数（当前: $KEEP_DB_BACKUPS）"; exit 1; }
 ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0
 for a in "$@"; do
   case "$a" in
@@ -102,10 +106,10 @@ fi
 # ---------- 3–5. 服务器上构建、备份、迁移、切换、清理 ----------
 echo "==> 服务器构建镜像并切换 ..."
 REMOTE_LOG="$(mktemp)"
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES" <<'REMOTE' | tee "$REMOTE_LOG"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
-MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"
+MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"; KEEP_DB="${7:-7}"
 cd "$REMOTE_DIR"
 # 传输/排队期间资源可能变化；创建发布目录前重新检查。
 bash dev/docker-release-preflight.sh resources "$MIN_FREE_GIB" "$MIN_AVAILABLE_MIB" "$MIN_FREE_INODES"
@@ -205,6 +209,18 @@ for repo in ai-platform-backend ai-platform-frontend; do
     done
   done
 done
+echo "    清理旧库备份（只保留最近 $KEEP_DB 份；本次发布前的备份最新，一定保留）..."
+# 只在切换成功后执行，失败的发布不删任何备份。名字形如 ai_platform-<YYYYmmdd_HHMMSS>.sql.gz（本脚本与
+# make migrate-docker 都这样命名），按名字倒序就是按时间倒序；不符合这个形式的文件一律不碰。
+# 2026-10-03 北大就是因为备份攒到 22 份（6.7G）把磁盘挤到资源门以下，前端构建前被拦停。
+if [[ "$KEEP_DB" =~ ^[1-9][0-9]*$ ]]; then
+  mapfile -t BACKUPS < <(ls -1 /var/backups/ai-platform/mysql/ 2>/dev/null | grep -E '^ai_platform-[0-9]{8}_[0-9]{6}\.sql\.gz$' | sort -r || true)
+  for f in "${BACKUPS[@]:$KEEP_DB}"; do
+    rm -f -- "/var/backups/ai-platform/mysql/$f" 2>/dev/null && echo "      删除 $f" || echo "      ⚠ 无法删除 $f"
+  done
+else
+  echo "    ⚠ 备份保留份数无效（$KEEP_DB），本次不清理旧备份"
+fi
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"
 echo "    发布目录: $REL"
 echo "REMOTE_DONE"

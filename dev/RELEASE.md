@@ -146,7 +146,7 @@ make deploy-docker
 3. 服务器资源复核后依次执行 `docker compose build backend` 和 `docker compose build frontend`，镜像打标签 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`，当前运行的镜像（按镜像 ID，不怕旧标签已被清理）打 `rollback-<时间戳>`；写 `/var/backups/ai-platform/releases/ai-platform-v-…/`（`release.override.yml` 固定本次镜像标签、`rollback.override.yml` 指向发布前的镜像、`RELEASE.txt`、`build.log`），`releases/current` 软链指向它。旧镜像按标签末尾的时间戳只保留最近 3 个，正在运行的镜像永远不删。
 4. 备份数据库（mysql 容器内 `mysqldump --single-transaction`，落 `/var/backups/ai-platform/mysql/`），**用新镜像先跑 `knex migrate:latest`**（`docker compose run --rm --no-deps backend …`，加法式迁移先行），再 `up -d backend frontend`，等双容器均运行目标镜像且 healthy（3 分钟），打印启动脚本的 SQL 迁移统计（应全是"跳过"）。
 5. 发布前（代码传输前）和每个镜像构建前核磁盘可用字节、内存可用量及 inode；读取失败或低于阈值即停止，不自动清理缓存。后端、前端依次构建，降低同时构建的峰值。默认最低 8 GiB 磁盘、5120 MiB 可用内存、100000 inode；可用 `DOCKER_MIN_FREE_GIB`、`DOCKER_MIN_AVAILABLE_MIB`、`DOCKER_MIN_FREE_INODES` 调整。8 GiB 延续原 40 GiB 服务器的构建余量门；前端 Dockerfile 允许 Node 使用 4 GiB 堆，再预留约 1 GiB 给构建器与既有服务；inode 门防止 npm 安装因文件项耗尽。这是发布前守卫，不保证构建过程永不耗尽，门槛调整需按目标主机实际容量评估。
-6. 同一 Git 提交仅在后端与前端容器均使用该提交的发布镜像 ID，且 `State.Running=true`、`State.Paused=false`、`State.Restarting=false`、健康状态为 healthy，且公网健康检查通过时跳过；否则仍走预览、人工确认、资源门、构建和切换。每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除。
+6. 同一 Git 提交仅在后端与前端容器均使用该提交的发布镜像 ID，且 `State.Running=true`、`State.Paused=false`、`State.Restarting=false`、健康状态为 healthy，且公网健康检查通过时跳过；否则仍走预览、人工确认、资源门、构建和切换。每个镜像仓库只保留最近 3 个发布标签及其 rollback 标签，其余删除；库备份只保留最近 7 份（`ai_platform-<时间戳>.sql.gz`，切换成功后才删，失败的发布一份不删；`DOCKER_KEEP_DB_BACKUPS` 可调，至少 1，0 或非数字在动手前就拒绝），其他名字的文件不碰。
 7. 切换和远端收尾后，检查公网 `/health` 和关键路由，再本地打 `deploy-docker-<时间戳>` 标签并推送。
 
 其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
@@ -163,7 +163,7 @@ ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f
 - 容器启动脚本 `docker/scripts/run-migrations.sh` 只跑 `database/migrations/*.sql`（旧机制），knex 迁移由 `deploy-docker` 显式执行；两套记录表分别是 `schema_migrations` 与 `knex_migrations`。
 - 镜像里的 mysql 客户端是 MariaDB 的，需要 `--skip-ssl` 与 `mariadb-connector-c`（已在 Dockerfile/脚本里），否则启动脚本连不上 MySQL 8。
 - `.env` 在服务器项目根目录（compose 读），不是 `backend/.env`；换口令等要改它并重建容器才生效。
-- 服务器磁盘 40G，旧镜像和构建缓存要靠脚本清理。
+- 服务器磁盘 40G，旧镜像和构建缓存要靠脚本清理。库备份每份约 330M，2026-10-03 曾攒到 22 份（6.7G），把可用空间压到资源门以下、前端构建前被拦停；现在由脚本只留最近 7 份。发布前仍先看一眼 `make status-docker` 的磁盘行。
 
 ## 八、不要做的事
 

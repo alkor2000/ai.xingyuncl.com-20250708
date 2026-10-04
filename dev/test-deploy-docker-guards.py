@@ -155,6 +155,15 @@ esac
         self.assertIn("resources", self.trace.read_text())
         self.assertNotIn("scp", self.trace.read_text())
 
+    def test_unsafe_backup_retention_is_refused_before_any_connection(self):
+        for value in ("0", "-1", "seven"):
+            result = subprocess.run(["bash", "dev/deploy-docker.sh", "-y"], cwd=self.repo,
+                                    env=self.env | {"FAKE_REMOTE_SHA": self.old_sha, "DOCKER_KEEP_DB_BACKUPS": value},
+                                    text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("DOCKER_KEEP_DB_BACKUPS", result.stdout)
+            self.assertFalse(self.trace.exists(), "no ssh/scp may run before the value is accepted")
+
 
 class RemoteSuccessCleanupTests(unittest.TestCase):
     """Run the successful remote path against fake commands, never Docker or SSH."""
@@ -201,7 +210,7 @@ if [[ "$*" == 'rev-parse HEAD' ]]; then echo abcdef0123456789; fi
         }
         self.backups = base / "backups"
 
-    def run_remote(self, add_unsafe_prune=False):
+    def run_remote(self, add_unsafe_prune=False, keep_db="7"):
         script = DEPLOY.read_text()
         marker = '<<\'REMOTE\' | tee "$REMOTE_LOG"\n'
         start = script.index(marker) + len(marker)
@@ -214,12 +223,41 @@ if [[ "$*" == 'rev-parse HEAD' ]]; then echo abcdef0123456789; fi
                                 'echo "    磁盘:', 1)
         self.trace.write_text("")
         result = subprocess.run(
-            ["bash", "-s", str(self.remote), "abcdef0", "3", "8", "5120", "100000"],
+            ["bash", "-s", str(self.remote), "abcdef0", "3", "8", "5120", "100000", keep_db],
             input=body, env=self.env, text=True, capture_output=True,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("REMOTE_DONE", result.stdout)
+        self.output = result.stdout
         return self.trace.read_text().splitlines()
+
+    def seed_backups(self):
+        mysql = self.backups / "mysql"
+        mysql.mkdir(parents=True, exist_ok=True)
+        old = [f"ai_platform-202609{day:02d}_010000.sql.gz" for day in range(10, 19)]  # nine older dumps
+        for name in old + ["ai_platform-manual-copy.sql.gz", "notes.txt"]:
+            (mysql / name).write_text("x")
+        return mysql, old
+
+    def test_success_path_keeps_only_the_newest_db_backups(self):
+        mysql, old = self.seed_backups()
+        self.run_remote()
+        dumps = sorted(p.name for p in mysql.glob("ai_platform-*_*.sql.gz") if p.name != "ai_platform-manual-copy.sql.gz")
+        # this run's own backup plus the six newest seeded ones survive; the three oldest are gone
+        self.assertEqual(len(dumps), 7)
+        self.assertEqual(dumps[:6], old[3:])
+        self.assertGreater(dumps[6], old[-1])
+        for name in old[:3]:
+            self.assertIn(f"删除 {name}", self.output)
+        # anything not shaped like a release dump is never touched
+        self.assertTrue((mysql / "ai_platform-manual-copy.sql.gz").exists())
+        self.assertTrue((mysql / "notes.txt").exists())
+
+    def test_invalid_backup_retention_on_the_server_deletes_nothing(self):
+        mysql, old = self.seed_backups()
+        self.run_remote(keep_db="0")
+        self.assertTrue(all((mysql / name).exists() for name in old))
+        self.assertIn("备份保留份数无效", self.output)
 
     def test_success_path_keeps_scoped_retention_without_global_prune(self):
         unsafe_trace = self.run_remote(add_unsafe_prune=True)
