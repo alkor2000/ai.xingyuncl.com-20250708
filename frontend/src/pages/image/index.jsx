@@ -19,8 +19,8 @@
  * 因为同一份代码同时部署在 ai.xingyuncl.com 与 ai.pkuailab.com；相对路径补全到访问者所在站点。
  *
  * ===== 已知遗留（本次不动）=====
- * Tabs 的 TabPane 子组件写法在 Antd v5 已废弃（建议改 items 属性），
- * 改造会影响 Tab 结构与样式，需单独验证，故本次保留。
+ * 图库那三个 Tab 仍是 Antd v5 已废弃的 TabPane 写法；那段代码现在在
+ * components/Studio/GallerySection.jsx 里，改造会影响结构与样式，需单独验证。
  *
  * ===== 原有功能说明（逻辑未变更）=====
  * - IME 输入法保护：中文拼写态下回车不触发搜索
@@ -29,16 +29,10 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Layout, Button, Space, Tabs, Empty, Spin, Pagination, Modal, message, Input } from 'antd';
-import {
-  ReloadOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined,
-  GlobalOutlined,
-  SearchOutlined
-} from '@ant-design/icons';
+import { Layout, Button, Spin, Modal, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import api from '../../utils/api';
 import useImageStore from '../../stores/imageStore';
 import useAuthStore from '../../stores/authStore';
 
@@ -48,7 +42,6 @@ import { usePagination } from './hooks/usePagination';
 
 import ModelSelector from './components/GenerationPanel/ModelSelector';
 import PromptInput from './components/GenerationPanel/PromptInput';
-import ImageCard from './components/ImageGallery/ImageCard';
 import ImageViewer from '../../components/common/ImageViewer';
 
 import { TAB_KEYS, VIEW_MODES, ACTION_LABELS } from './utils/constants';
@@ -56,9 +49,7 @@ import { isMidjourneyModel } from './utils/imageHelpers';
 
 import './ImageGeneration.less';
 
-const { Content, Sider } = Layout;
-const { TabPane } = Tabs;
-const { Search } = Input;
+const { Sider } = Layout;
 
 /**
  * 图片资源域名前缀
@@ -71,10 +62,24 @@ const { Search } = Input;
 // 2026-09-14 起取当前站点 origin：同一份代码同时部署在 ai.xingyuncl.com 与 ai.pkuailab.com，相对路径补全到访问者所在站点
 const IMAGE_HOST = window.location.origin;
 
-/* 搜索关键词最大长度，与后端 normalizeKeyword 的截断长度保持一致 */
-const SEARCH_MAX_LENGTH = 100;
-
 const ParameterPanel = React.lazy(() => import('./components/GenerationPanel/ParameterSettings'));
+const StudioLayout = React.lazy(() => import('./components/Studio/StudioLayout'));
+import GallerySection from './components/Studio/GallerySection';
+
+/**
+ * 两套布局并存：老师们已经用惯了左边那根参数栏，新版工作台是结果为主、输入在手边。
+ *
+ * **谁能看到新版，由服务端资格说了算**（和「帮我写」读同一个判定）。这里这个值只是
+ * "有资格的人这台设备上次选了哪一套"的偏好——没资格时它一点作用都没有，
+ * 改这个缺省字符串也开不了门。没资格、没装配、查不到，一律留在原来的经典生图与图库上，
+ * 已经公开的功能一个都不收回。
+ */
+const LAYOUT_KEY = 'image.layoutMode';
+const readLayout = () => {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'classic' ? 'classic' : 'studio'; }
+  catch { return 'studio'; }
+};
+const writeLayout = (mode) => { try { localStorage.setItem(LAYOUT_KEY, mode); } catch { /* 隐私模式下不记就是了 */ } };
 const MidjourneyActions = React.lazy(() => import('./components/ImageGallery/MidjourneyActions'));
 
 const ImageGeneration = () => {
@@ -104,6 +109,108 @@ const ImageGeneration = () => {
   const upload = useImageUpload();
   const historyPaging = usePagination();
   const publicPaging = usePagination();
+
+  /**
+   * 对话区只放"这一次打开以来生成的"。
+   *
+   * 每一轮记提示词和这一轮的 id；图本身**由对话区自己留一份**（turnItems），
+   * 不去读图库那份切片——图库一切 Tab、一搜索、一翻页就换人，本轮结果不能跟着消失。
+   * 排队中的（Midjourney）靠下面那个 effect 从历史里认出同一个 id 来更新状态，
+   * 认不出就保持原样，从不因为查不到而把图丢掉。
+   */
+  const [turns, setTurns] = useState([]);
+  const [turnItems, setTurnItems] = useState(() => new Map());
+
+  /**
+   * 这一轮到底算哪几张图，只认生成响应本身：
+   *   - 同步：成功的 results（单张时响应就是那一条记录），部分成功就只有成功的那几张，
+   *     失败的位置**不补旧图**；
+   *   - 异步（Midjourney）：图还没出来，先按 generationId 挂一条"还在生成"；
+   *   - 一张都没成功：不留轮次。
+   * 刷新历史只是让图库跟上，不参与判定——拿"历史最前面 N 条"当本轮产出，
+   * 在部分成功或异步刚提交时就会把上一次的旧图算进来。
+   */
+  const registerTurn = useCallback((promptOfTurn, result) => {
+    const rows = Array.isArray(result?.results)
+      ? result.results.filter(Boolean)
+      : (result && result.id !== undefined && result.id !== null ? [result] : []);
+    const pending = [];
+    if (rows.length === 0 && result?.generationId !== undefined && result?.generationId !== null) {
+      pending.push({
+        id: result.generationId, prompt: promptOfTurn,
+        task_id: result.taskId ?? null, status: 'generating'
+      });
+    }
+    const registered = [...rows, ...pending];
+    if (registered.length === 0) return;
+    setTurnItems(prev => {
+      const next = new Map(prev);
+      registered.forEach(item => next.set(item.id, item));
+      return next;
+    });
+    setTurns(prev => [...prev, {
+      key: `${Date.now()}-${registered[0].id}`, prompt: promptOfTurn, at: Date.now(),
+      ids: registered.map(item => item.id),
+      requested: result?.requested ?? registered.length,
+      failed: result?.failed ?? 0
+    }]);
+  }, []);
+
+  /* 历史里出现同一个 id 的新状态（排队→完成）时，更新自己那份；只更新，不删除 */
+  useEffect(() => {
+    if (turnItems.size === 0 || generationHistory.length === 0) return;
+    setTurnItems(prev => {
+      let next = null;
+      for (const fresh of generationHistory) {
+        const known = prev.get(fresh.id);
+        if (!known || known === fresh) continue;
+        if (known.status === fresh.status && known.local_path === fresh.local_path
+          && known.thumbnail_path === fresh.thumbnail_path && known.image_url === fresh.image_url) continue;
+        next = next || new Map(prev);
+        next.set(fresh.id, fresh);
+      }
+      return next || prev;
+    });
+  }, [generationHistory, turnItems]);
+
+  /**
+   * 这一页的新东西能不能用，只问服务端（GET /api/prompt-assist/capability）。
+   *
+   * 管两件事，读的是同一个答案：**新版工作台能不能出现**，以及**「帮我写」能不能用**。
+   * 按用户定的规矩，新增能力与显著的体验变化都先给试点学校、由 admin 一次开放整批，
+   * 所以藏一个按钮是不够的，整套新布局也要走同一个门。
+   *
+   * 前端不做任何资格判断，也不拿本机偏好开门；没拿到明确的"可用"就当没有——
+   * 留在原来的经典生图与图库上，已经公开的功能一个都不收回。
+   */
+  const [pilot, setPilot] = useState({ available: false, message: null, checked: false });
+  useEffect(() => {
+    let alive = true;
+    /* 答案迟迟不来也不能一直转圈：到点就按"没资格"渲染经典视图，真答案到了再纠正。
+       方向只有一个——**没拿到明确的"可用"就不给新体验**。 */
+    const fallback = setTimeout(() => {
+      setPilot(prev => (prev.checked ? prev : { ...prev, available: false, checked: true }));
+    }, 2000);
+    api.get('/prompt-assist/capability')
+      .then(({ data }) => {
+        if (!alive) return;
+        const d = data?.data || {};
+        setPilot({ available: d.available === true, message: d.message || null, checked: true });
+      })
+      .catch(() => { if (alive) setPilot({ available: false, message: null, checked: true }); })
+      .finally(() => clearTimeout(fallback));
+    return () => { alive = false; clearTimeout(fallback); };
+  }, []);
+
+  const [layoutMode, setLayoutMode] = useState(readLayout);
+  /* 窄屏只是"摆得更紧"，信息架构和桌面是同一套 */
+  const [compact, setCompact] = useState(() => window.innerWidth <= 1024);
+  useEffect(() => {
+    const onResize = () => setCompact(window.innerWidth <= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const switchLayout = useCallback((mode) => { setLayoutMode(mode); writeLayout(mode); }, []);
 
   const [viewMode, setViewMode] = useState(VIEW_MODES.GRID);
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
@@ -165,6 +272,7 @@ const ImageGeneration = () => {
    * 用户会误以为生成失败。
    */
   const handleGenerate = useCallback(async () => {
+    const promptOfTurn = generation.prompt.trim();
     const result = await generation.handleGenerate(upload.referenceImages);
     if (result) {
       if (isMidjourneyModel(generation.selectedModel)) {
@@ -180,9 +288,11 @@ const ImageGeneration = () => {
       if (activeTab !== TAB_KEYS.ALL) {
         setActiveTab(TAB_KEYS.ALL);
       }
-      getUserHistory({ page: 1, limit: historyPaging.pageSize });
+      /* 先按响应登记这一轮，再刷新历史让图库跟上；顺序反过来也不影响判定 */
+      registerTurn(promptOfTurn, result);
+      await getUserHistory({ page: 1, limit: historyPaging.pageSize });
     }
-  }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab]);
+  }, [generation, upload, historyPaging, getUserHistory, keyword, searchInput, setKeyword, activeTab, registerTurn]);
 
   /**
    * 生成 Midjourney 操作的确认文案
@@ -321,9 +431,12 @@ const ImageGeneration = () => {
    * 打开大图查看器
    * 把当前列表整体转成查看器所需结构，便于左右切换浏览
    */
-  const handleViewImage = (item) => {
-    const currentData = activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
-    const allImages = currentData.map(img => {
+  /**
+   * 打开大图。翻页范围由调用方给定：
+   * 图库点开就在图库当前页里翻，对话区点开就只在那一轮里翻——两边不能混。
+   */
+  const openViewer = useCallback((rows, targetId) => {
+    const allImages = (rows || []).map(img => {
       const url = getBestImageUrl(img);
       if (!url) return null;
       return {
@@ -349,12 +462,22 @@ const ImageGeneration = () => {
       return;
     }
     /* 按 id 精确定位当前图片的下标，避免过滤后索引错位 */
-    const correctIndex = validImages.findIndex(img => img.id === item.id);
+    const correctIndex = validImages.findIndex(img => img.id === targetId);
     const finalIndex = correctIndex >= 0 ? correctIndex : 0;
     setViewerImages(validImages);
     setViewerInitialIndex(finalIndex);
     setViewerVisible(true);
-  };
+  }, [t]);
+
+  const handleViewImage = useCallback((item) => {
+    openViewer(activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory, item.id);
+  }, [openViewer, activeTab, publicGallery, generationHistory]);
+
+  /* 对话区点开的大图只在这一轮里翻，与图库当前是哪个 Tab、搜了什么、翻到第几页无关 */
+  const handleViewTurnImage = useCallback((item, turn) => {
+    const rows = (turn?.ids || [item.id]).map(id => turnItems.get(id)).filter(Boolean);
+    openViewer(rows.length > 0 ? rows : [item], item.id);
+  }, [openViewer, turnItems]);
 
   const getCurrentData = () => {
     return activeTab === TAB_KEYS.PUBLIC ? publicGallery : generationHistory;
@@ -375,6 +498,14 @@ const ImageGeneration = () => {
   const handleDelete = useCallback(async (id) => {
     const success = await deleteGeneration(id);
     if (success) {
+      /* 图库里删掉的，对话区也不再显示；同一轮的其他图不受影响 */
+      setTurnItems(prev => {
+        if (!prev.has(id)) return prev;
+        const next = new Map(prev); next.delete(id); return next;
+      });
+      setTurns(prev => prev
+        .map(turn => (turn.ids.includes(id) ? { ...turn, ids: turn.ids.filter(x => x !== id) } : turn))
+        .filter(turn => turn.ids.length > 0));
       reloadCurrentTab(activeTab, historyPaging.currentPage);
     }
   }, [deleteGeneration, reloadCurrentTab, historyPaging, activeTab]);
@@ -402,10 +533,76 @@ const ImageGeneration = () => {
   /* 是否处于搜索态，决定计数提示与空状态文案 */
   const isSearchActive = keyword && keyword.trim().length > 0;
 
+  /* 画廊那一块两套布局共用同一份实现，这里只负责把它需要的东西凑齐 */
+  const galleryProps = {
+    t, user, activeTab, handleTabChange, searchInput, setSearchInput, handleSearch, isComposingRef,
+    viewMode, setViewMode, handleRefresh, loading, isSearchActive, currentTotal, keyword,
+    getCurrentData, getCurrentPagination, handlePageChange, processingTasks,
+    generationProgress: generation.generationProgress,
+    handleViewImage, handleToggleFavorite, handleTogglePublic, handleDelete
+  };
+  const renderActions = (actionItem) => (
+    <React.Suspense fallback={null}>
+      <MidjourneyActions item={actionItem} onAction={handleMidjourneyAction} />
+    </React.Suspense>
+  );
+  const parameterPanel = (
+    <React.Suspense fallback={<Spin />}>
+      <ParameterPanel
+        selectedModel={generation.selectedModel}
+        selectedSize={generation.selectedSize}
+        seed={generation.seed}
+        guidanceScale={generation.guidanceScale}
+        watermark={generation.watermark}
+        quantity={generation.quantity}
+        referenceImages={upload.referenceImages}
+        onSizeChange={generation.setSelectedSize}
+        onSeedChange={generation.setSeed}
+        onGuidanceScaleChange={generation.setGuidanceScale}
+        onWatermarkChange={generation.setWatermark}
+        onQuantityChange={generation.setQuantity}
+        onReferenceUpload={upload.handleReferenceUpload}
+        onRemoveReference={upload.handleRemoveReference}
+        onGenerate={handleGenerate}
+        generating={generation.generating}
+        getTotalPrice={generation.getTotalPrice}
+      />
+    </React.Suspense>
+  );
+
+  /* 有资格才谈偏好；没资格、没装配、查不到，都走经典视图 */
+  const studioAllowed = pilot.available === true;
+  if (!pilot.checked) {
+    return <div className="loading-container"><Spin size="large" /></div>;
+  }
+
+  if (studioAllowed && layoutMode === 'studio') {
+    return (
+      <React.Suspense fallback={<div className="loading-container"><Spin size="large" /></div>}>
+        <StudioLayout
+          t={t} compact={compact} onExitStudio={() => switchLayout('classic')}
+          generation={generation} upload={upload} parameterPanel={parameterPanel}
+          galleryProps={galleryProps} handleGenerate={handleGenerate} renderActions={renderActions}
+          handleViewImage={handleViewImage} handleViewTurnImage={handleViewTurnImage}
+          turns={turns} turnItems={turnItems} assist={pilot}
+        />
+        <ImageViewer
+          visible={viewerVisible} images={viewerImages} initialIndex={viewerInitialIndex}
+          onClose={() => setViewerVisible(false)} showDownload showThumbnails={viewerImages.length > 1}
+        />
+      </React.Suspense>
+    );
+  }
+
   return (
     <Layout className="image-generation-page">
       <Sider width={380} className="generation-sider" theme="light">
         <div className="generation-container">
+          {/* 入口也要过同一个门：没资格的人看不到，也切不过去 */}
+          {studioAllowed && (
+            <Button size="small" type="text" className="studio-switch" onClick={() => switchLayout('studio')}
+              data-testid="classic-to-studio">{t('image.studio.tryStudio')}</Button>
+          )}
           <ModelSelector
             models={generation.models}
             selectedModel={generation.selectedModel}
@@ -442,114 +639,8 @@ const ImageGeneration = () => {
         </div>
       </Sider>
 
-      <Content className="history-content">
-        <div className="history-header-wrapper">
-          <div className="history-header">
-            <Tabs activeKey={activeTab} onChange={handleTabChange} className="history-tabs">
-              <TabPane tab={t('image.myImages')} key={TAB_KEYS.ALL} />
-              <TabPane tab={t('image.myFavorites')} key={TAB_KEYS.FAVORITES} />
-              <TabPane
-                tab={<span><GlobalOutlined /> {t('image.publicGallery')}</span>}
-                key={TAB_KEYS.PUBLIC}
-              />
-            </Tabs>
-            <Space className="history-actions" wrap>
-              {/* 搜索框：IME 保护 + 提示词/模型名模糊搜索 */}
-              <Search
-                className="history-search"
-                placeholder={t('image.searchPlaceholder')}
-                allowClear
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onSearch={handleSearch}
-                onCompositionStart={() => { isComposingRef.current = true; }}
-                onCompositionEnd={() => { isComposingRef.current = false; }}
-                enterButton={<SearchOutlined />}
-                maxLength={SEARCH_MAX_LENGTH}
-              />
-              <Button
-                icon={viewMode === VIEW_MODES.GRID ? <AppstoreOutlined /> : <UnorderedListOutlined />}
-                onClick={() => setViewMode(
-                  viewMode === VIEW_MODES.GRID ? VIEW_MODES.LIST : VIEW_MODES.GRID
-                )}
-              />
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRefresh}
-              >
-                {t('common.refresh')}
-              </Button>
-            </Space>
-          </div>
+      <GallerySection {...galleryProps} renderActions={renderActions} />
 
-          {/* 搜索结果计数提示：整句插值，不用 <strong> 包裹以避免插值转义问题 */}
-          {!loading && isSearchActive && (
-            <div className="search-result-tip">
-              {currentTotal > 0
-                ? <span>{t('image.searchFound', { count: currentTotal, keyword })}</span>
-                : <span>{t('image.searchNoMatch', { keyword })}</span>
-              }
-            </div>
-          )}
-
-          {!loading && getCurrentData().length > 0 && (
-            <div className="history-pagination">
-              <Pagination
-                {...getCurrentPagination}
-                onChange={handlePageChange}
-                onShowSizeChange={handlePageChange}
-                size="small"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="history-grid-container">
-          <div className={`history-grid ${viewMode}`}>
-            {loading ? (
-              <div className="loading-container">
-                <Spin size="large" />
-              </div>
-            ) : getCurrentData().length > 0 ? (
-              getCurrentData().map(item => (
-                <ImageCard
-                  key={item.id}
-                  item={item}
-                  isGallery={activeTab === TAB_KEYS.PUBLIC}
-                  isOwner={activeTab !== TAB_KEYS.PUBLIC || item.user_id === user?.id}
-                  processingTasks={processingTasks}
-                  generationProgress={generation.generationProgress}
-                  onView={handleViewImage}
-                  onToggleFavorite={handleToggleFavorite}
-                  onTogglePublic={handleTogglePublic}
-                  onDelete={handleDelete}
-                  renderActions={(actionItem) => (
-                    <React.Suspense fallback={null}>
-                      <MidjourneyActions
-                        item={actionItem}
-                        onAction={handleMidjourneyAction}
-                      />
-                    </React.Suspense>
-                  )}
-                />
-              ))
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  isSearchActive
-                    ? t('image.searchNoImage', { keyword })
-                    : activeTab === TAB_KEYS.PUBLIC
-                      ? t('image.noPublicImages')
-                      : activeTab === TAB_KEYS.FAVORITES
-                        ? t('image.noFavorites')
-                        : t('image.noHistory')
-                }
-              />
-            )}
-          </div>
-        </div>
-      </Content>
 
       <ImageViewer
         visible={viewerVisible}

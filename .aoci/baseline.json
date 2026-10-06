@@ -5415,6 +5415,81 @@
       "sha256": "72d521ae611e667b6ea2e46c0ca6a30d9ee5a610c2e75a62b6f59664f52a851e",
       "size": 1266,
       "normalized_sha256": "72d521ae611e667b6ea2e46c0ca6a30d9ee5a610c2e75a62b6f59664f52a851e"
+    },
+    "backend/src/__tests__/unit/routes/promptAssist.test.js": {
+      "role": "observe",
+      "sha256": "bd8bf9207060c40a0de2497cc42d88883b0c609b739eadc1972be2f38f187bb0",
+      "size": 10557,
+      "normalized_sha256": "bd8bf9207060c40a0de2497cc42d88883b0c609b739eadc1972be2f38f187bb0"
+    },
+    "backend/src/__tests__/unit/services/artifactHandoffMigrationCandidate.test.js": {
+      "role": "observe",
+      "sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b",
+      "size": 1666,
+      "normalized_sha256": "73e73129cf26c5bee944c6c396e1ab531544a9a923f32f842a28c5064127d49b"
+    },
+    "backend/src/__tests__/unit/services/promptAssist.test.js": {
+      "role": "observe",
+      "sha256": "1e0662a4c159f241697a6275ccb51ed883c8915f919f026dd4009d2449e1cb4c",
+      "size": 2572,
+      "normalized_sha256": "1e0662a4c159f241697a6275ccb51ed883c8915f919f026dd4009d2449e1cb4c"
+    },
+    "backend/src/routes/promptAssist.js": {
+      "sha256": "92909e89f028a22d2ec487e6541af5f29eed8fb09454ba7838e4c97849c35e14",
+      "size": 5699,
+      "normalized_sha256": "92909e89f028a22d2ec487e6541af5f29eed8fb09454ba7838e4c97849c35e14"
+    },
+    "backend/src/services/imagePilot/eligibility.js": {
+      "sha256": "c418ebab21116a251c8fc7440ca4b32334041eb86310a944c71eebb820822ceb",
+      "size": 4539,
+      "normalized_sha256": "c418ebab21116a251c8fc7440ca4b32334041eb86310a944c71eebb820822ceb"
+    },
+    "backend/src/services/promptAssistService.js": {
+      "sha256": "196cd3610916c69115e1c762b53e9dc03aec67e28872607519d0afc969675439",
+      "size": 3816,
+      "normalized_sha256": "196cd3610916c69115e1c762b53e9dc03aec67e28872607519d0afc969675439"
+    },
+    "docs/image/studio-candidate.md": {
+      "sha256": "f8c492435516b79bfcd6ce5fc74cc8feeac965c32a52762f2171f56828c27a97",
+      "size": 24309,
+      "normalized_sha256": "f8c492435516b79bfcd6ce5fc74cc8feeac965c32a52762f2171f56828c27a97"
+    },
+    "frontend/src/__tests__/unit/components/ImageStudio.test.jsx": {
+      "role": "observe",
+      "sha256": "52e3cb530c3701168b0bee821ef5175e0771d3233c0bb51121690e19d69937e2",
+      "size": 7336,
+      "normalized_sha256": "52e3cb530c3701168b0bee821ef5175e0771d3233c0bb51121690e19d69937e2"
+    },
+    "frontend/src/__tests__/unit/components/ImageStudioWiring.test.jsx": {
+      "role": "observe",
+      "sha256": "72396805e02bdfb0331ee2a46754f69fefb6a6b8650ad917da763b2caa203564",
+      "size": 11115,
+      "normalized_sha256": "72396805e02bdfb0331ee2a46754f69fefb6a6b8650ad917da763b2caa203564"
+    },
+    "frontend/src/pages/image/components/Studio/ConversationArea.jsx": {
+      "sha256": "c0676b77484c07ab6d89c3fddf4fee6bf569ed038f3a3393aa2f5d36c52eb9b8",
+      "size": 2606,
+      "normalized_sha256": "c0676b77484c07ab6d89c3fddf4fee6bf569ed038f3a3393aa2f5d36c52eb9b8"
+    },
+    "frontend/src/pages/image/components/Studio/GallerySection.jsx": {
+      "sha256": "f5d194fb0da9092d756157ce7f9884290ede638aef9e8288dba6b147b4001a55",
+      "size": 5077,
+      "normalized_sha256": "f5d194fb0da9092d756157ce7f9884290ede638aef9e8288dba6b147b4001a55"
+    },
+    "frontend/src/pages/image/components/Studio/PromptAssistPanel.jsx": {
+      "sha256": "f985523acb3b78805fc795d451acdb397399e816aa1669e716731bb2dca58186",
+      "size": 4040,
+      "normalized_sha256": "f985523acb3b78805fc795d451acdb397399e816aa1669e716731bb2dca58186"
+    },
+    "frontend/src/pages/image/components/Studio/PromptComposer.jsx": {
+      "sha256": "be0b7fbf63f68f2abaacc94c2792930b9bb8f9492f30405c9db83b3d1b0236e3",
+      "size": 4622,
+      "normalized_sha256": "be0b7fbf63f68f2abaacc94c2792930b9bb8f9492f30405c9db83b3d1b0236e3"
+    },
+    "frontend/src/pages/image/components/Studio/StudioLayout.jsx": {
+      "sha256": "7d6624071693b6840e24540a4c9250a5c57d19172df0af785878e6d4c62a09b6",
+      "size": 3705,
+      "normalized_sha256": "7d6624071693b6840e24540a4c9250a5c57d19172df0af785878e6d4c62a09b6"
     }
   },
   "managed_scope": {

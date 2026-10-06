@@ -34,6 +34,7 @@ const servicesRoutes = require('./routes/services');
 const knowledgeRoutes = require('./routes/knowledgeRoutes');
 const imageRoutes = require('./routes/image');
 const videoRoutes = require('./routes/video');
+const promptAssistRoutes = require('./routes/promptAssist');
 const htmlEditorRoutes = require('./routes/htmlEditor');
 const storageRoutes = require('./routes/storageRoutes');
 const mindmapRoutes = require('./routes/mindmapRoutes');
@@ -233,6 +234,8 @@ app.use('/api/knowledge', knowledgeRoutes);
 /* AI生成 */
 app.use('/api/image', imageRoutes);
 app.use('/api/video', videoRoutes);
+// 图像与视频共用的「帮我写提示词」：一次性问答，不建会话
+app.use('/api/prompt-assist', promptAssistRoutes);
 
 /* 工具模块 */
 app.use('/api/html-editor', htmlEditorRoutes);
