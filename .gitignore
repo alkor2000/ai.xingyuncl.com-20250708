@@ -19,6 +19,8 @@ pm2.log
 
 # 依赖
 node_modules/
+# 隔离工作树里 node_modules 常常是指向别处的软链，"node_modules/" 只匹配目录、匹配不到软链
+node_modules
 dist/
 dist-ssr/
 *.local

@@ -5490,6 +5490,65 @@
       "sha256": "7d6624071693b6840e24540a4c9250a5c57d19172df0af785878e6d4c62a09b6",
       "size": 3705,
       "normalized_sha256": "7d6624071693b6840e24540a4c9250a5c57d19172df0af785878e6d4c62a09b6"
+    },
+    "backend/src/__tests__/unit/routes/studioPilot.test.js": {
+      "role": "observe",
+      "sha256": "9bfb858e7e0d804b1caf2849ef135db984b5d80e632fee667e8974fb08bf93bd",
+      "size": 5507,
+      "normalized_sha256": "9bfb858e7e0d804b1caf2849ef135db984b5d80e632fee667e8974fb08bf93bd"
+    },
+    "backend/src/routes/studioPilot.js": {
+      "sha256": "bf1b33594f55d14b8f7e09e0c4875d9b7ac9c3112a7d0be7d7fe696fec6c26df",
+      "size": 2629,
+      "normalized_sha256": "bf1b33594f55d14b8f7e09e0c4875d9b7ac9c3112a7d0be7d7fe696fec6c26df"
+    },
+    "docs/video/studio-candidate.md": {
+      "sha256": "de349d888874c918541509a6b8c4457e36d20f6a51432043529e50e4c1b91a74",
+      "size": 13781,
+      "normalized_sha256": "de349d888874c918541509a6b8c4457e36d20f6a51432043529e50e4c1b91a74"
+    },
+    "frontend/src/__tests__/unit/components/VideoStudioComposer.test.jsx": {
+      "role": "observe",
+      "sha256": "4f868a9043fc32dd6c968bd48e48d6fc73c309fa59b2f5f615a2f37466307bcf",
+      "size": 2609,
+      "normalized_sha256": "4f868a9043fc32dd6c968bd48e48d6fc73c309fa59b2f5f615a2f37466307bcf"
+    },
+    "frontend/src/__tests__/unit/components/VideoStudioWiring.test.jsx": {
+      "role": "observe",
+      "sha256": "4c94e4a7d187477e407dc64fba7ce5182927fc4f7c360b03fa02e11fe90848aa",
+      "size": 13456,
+      "normalized_sha256": "4c94e4a7d187477e407dc64fba7ce5182927fc4f7c360b03fa02e11fe90848aa"
+    },
+    "frontend/src/__tests__/unit/components/VideoTurnMerge.test.js": {
+      "role": "observe",
+      "sha256": "079b1aca3890f6df0a2518c1baa67d50cce4c4a53fea27e72cfd84c2eae3fae6",
+      "size": 3866,
+      "normalized_sha256": "079b1aca3890f6df0a2518c1baa67d50cce4c4a53fea27e72cfd84c2eae3fae6"
+    },
+    "frontend/src/pages/video/components/Studio/ConversationArea.jsx": {
+      "sha256": "786645a6cf642f094d119d8af53e9a49e5e1570d9ff00c7381d7a07ee01864fd",
+      "size": 4123,
+      "normalized_sha256": "786645a6cf642f094d119d8af53e9a49e5e1570d9ff00c7381d7a07ee01864fd"
+    },
+    "frontend/src/pages/video/components/Studio/GallerySection.jsx": {
+      "sha256": "65453bba04f8c2a4296267710eba89023099e530ce8745459793ba5156cdb47b",
+      "size": 2819,
+      "normalized_sha256": "65453bba04f8c2a4296267710eba89023099e530ce8745459793ba5156cdb47b"
+    },
+    "frontend/src/pages/video/components/Studio/PromptComposer.jsx": {
+      "sha256": "c5c1c1ae4aacd9156adef611daed07b1494a6f2a9739180c1b1242779f969f93",
+      "size": 4265,
+      "normalized_sha256": "c5c1c1ae4aacd9156adef611daed07b1494a6f2a9739180c1b1242779f969f93"
+    },
+    "frontend/src/pages/video/components/Studio/StudioLayout.jsx": {
+      "sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c",
+      "size": 2715,
+      "normalized_sha256": "4929e824af50bd9475b8985f04d6e3aa2b0039942cd00295a79c7154c204132c"
+    },
+    "frontend/src/pages/video/utils/mergeTurnItems.js": {
+      "sha256": "9f9c8de2d2dce36198051bd6e1c199a826c5c376c1884815326765598599b437",
+      "size": 3836,
+      "normalized_sha256": "9f9c8de2d2dce36198051bd6e1c199a826c5c376c1884815326765598599b437"
     }
   },
   "managed_scope": {

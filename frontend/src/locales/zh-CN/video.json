@@ -4,7 +4,6 @@
   "video.myFavorites": "我的收藏",
   "video.publicGallery": "公开画廊",
   "video.noVideos": "暂无视频",
-  
   "video.selectModel": "选择模型",
   "video.selectModelPlaceholder": "请选择视频生成模型",
   "video.notConfigured": "未配置",
@@ -13,7 +12,6 @@
   "video.firstFrameToVideo": "首帧图生",
   "video.lastFrameToVideo": "尾帧图生",
   "video.firstLastFrameToVideo": "首尾帧图生",
-  
   "video.generationMode": "生成模式",
   "video.modeTextToVideo": "文字生成视频",
   "video.modeFirstFrame": "首帧图生成视频",
@@ -22,7 +20,6 @@
   "video.firstFrameDesc": "首帧图生成：提供视频的第一帧图片，AI会根据图片和提示词生成后续内容",
   "video.lastFrameDesc": "尾帧图生成：提供视频的最后一帧图片，AI会生成到达该画面的过程",
   "video.firstLastFrameDesc": "首尾帧图生成：提供首尾两帧图片，AI会生成从首帧到尾帧的过渡视频",
-  
   "video.inputPrompt": "输入提示词",
   "video.promptPlaceholder": "描述你想生成的视频内容...",
   "video.firstFrameImage": "首帧图片",
@@ -37,7 +34,6 @@
   "video.imageFormatTip": "支持 JPG、PNG、WEBP 格式，最大 10MB",
   "video.onlyImage": "只能上传图片文件！",
   "video.imageSizeLimit": "图片大小不能超过 10MB！",
-  
   "video.parameters": "参数设置",
   "video.resolution": "分辨率",
   "video.resolution480p": "480P (标清)",
@@ -59,7 +55,6 @@
   "video.noWatermark": "无水印",
   "video.fixedCamera": "固定镜头",
   "video.movingCamera": "运动镜头",
-  
   "video.generate": "生成视频",
   "video.generating": "生成中...",
   "video.credits": "{{credits}} 积分",
@@ -70,7 +65,6 @@
   "video.pleaseUploadFirstFrame": "请上传首帧图片",
   "video.pleaseUploadLastFrame": "请上传尾帧图片",
   "video.pleaseUploadBothFrames": "请上传首帧和尾帧图片",
-  
   "video.processing": "生成中...",
   "video.processingText": "处理中",
   "video.failed": "生成失败",
@@ -84,7 +78,6 @@
   "video.confirmDelete": "确定删除这个视频吗？",
   "video.fullscreenPreview": "大屏预览",
   "video.videoPreview": "视频预览",
-  
   "video.searchPlaceholder": "搜索提示词或模型名...",
   "video.promptCopied": "提示词已复制",
   "video.copyFailed": "复制失败",
@@ -93,16 +86,13 @@
   "video.searchFound": "找到 {{count}} 条匹配 \"{{keyword}}\" 的结果",
   "video.searchNoMatch": "没有匹配 \"{{keyword}}\" 的结果",
   "video.searchNoVideo": "没有匹配 \"{{keyword}}\" 的视频",
-  
   "video.status.submitted": "已提交",
   "video.status.queued": "排队中",
   "video.status.running": "处理中",
   "video.status.succeeded": "已完成",
   "video.status.failed": "失败",
-  
   "video.generatedBy": "生成模型",
   "video.total": "共 {{total}} 个视频",
-  
   "video.provider.volcano": "火山引擎",
   "video.provider.kling": "可灵",
   "video.provider.sora2_goapi": "OpenAI Sora 2",
@@ -111,7 +101,6 @@
   "video.provider.runway": "Runway",
   "video.provider.pika": "Pika",
   "video.provider.sora": "Sora",
-  
   "video.modelsLoadFailed": "获取视频模型失败",
   "video.taskSubmitted": "视频生成任务已提交",
   "video.generationFailedDefault": "视频生成失败",
@@ -122,5 +111,20 @@
   "video.favoritedResult": "已收藏",
   "video.unfavoritedResult": "已取消收藏",
   "video.setPublicResult": "已设为公开",
-  "video.setPrivateResult": "已设为私密"
+  "video.setPrivateResult": "已设为私密",
+  "video.studio.gallery": "图库",
+  "video.studio.classic": "经典视图",
+  "video.studio.classicHint": "切回左侧参数栏那种老样子（只影响这台设备）",
+  "video.studio.tryStudio": "试试新版布局",
+  "video.studio.placeholder": "描述你想要的画面与镜头，比如：镜头缓缓推近，夕阳下的校园水池，暖色调",
+  "video.studio.generateWithPrice": "生成（{{price}} 积分）",
+  "video.studio.pickModelFirst": "先在左上角选一个模型",
+  "video.studio.withFrames": "参考帧 {{count}} 张",
+  "video.studio.emptyConversation": "写一句你想要的画面，点右下角「生成」。做好的都会留在下面，历史视频在右上角「图库」里。",
+  "video.studio.rerun": "再写一次",
+  "video.studio.queued": "排队中",
+  "video.studio.rendering": "生成中",
+  "video.studio.failed": "这一条没做成",
+  "video.studio.noVideoYet": "还没有视频",
+  "video.studio.fullscreen": "全屏看"
 }
